@@ -1,11 +1,68 @@
 package embedding
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+// TestExtractPy_SameMethodNameAcrossClasses_DistinctIDs is the
+// upstream regression guard for the "node not added" panic the hnsw
+// store hit. Before `makeUnitID` added the `#L<line>` suffix, two
+// methods named `run` in different classes of the same file both
+// serialized to `path:run` → duplicate record IDs → hnsw Add panic.
+// With the line suffix, each method gets its own ID.
+func TestExtractPy_SameMethodNameAcrossClasses_DistinctIDs(t *testing.T) {
+	dir := t.TempDir()
+	path := writeTempPyFile(dir, "collisions.py", `class A:
+    def run(self):
+        return "a"
+
+class B:
+    def run(self):
+        return "b"
+`)
+	units, err := ExtractFromFile(path)
+	if err != nil {
+		t.Fatalf("ExtractFromFile: %v", err)
+	}
+
+	seen := map[string]string{}
+	for _, u := range units {
+		if prev, ok := seen[u.ID]; ok {
+			t.Errorf("duplicate ID %q (first body: %q; second body: %q) — line disambiguation regressed", u.ID, prev, u.Body)
+		}
+		seen[u.ID] = u.Body
+	}
+
+	// Sanity: both A.run and B.run should be extracted, with distinct IDs.
+	var aRunID, bRunID string
+	for _, u := range units {
+		switch u.Name {
+		case "A.run":
+			aRunID = u.ID
+		case "B.run":
+			bRunID = u.ID
+		}
+	}
+	if aRunID == "" || bRunID == "" {
+		t.Fatalf("missing A.run or B.run in extracted units (names found: %v)", names(units))
+	}
+	if aRunID == bRunID {
+		t.Fatalf("A.run and B.run share an ID %q — line suffix not applied", aRunID)
+	}
+}
+
+// names returns the Name field of each unit, for diagnostic test output.
+func names(units []CodeUnit) []string {
+	out := make([]string, len(units))
+	for i, u := range units {
+		out[i] = u.Name
+	}
+	return out
+}
 
 // writeTempPyFile creates a temp .py file with the given content and returns its path.
 func writeTempPyFile(dir, name, content string) string {
@@ -46,7 +103,7 @@ func TestExtractPyBasicFunction(t *testing.T) {
 		t.Errorf("expected file %q, got %q", path, u.File)
 	}
 
-	expectedID := path + ":greet"
+	expectedID := fmt.Sprintf("%s:greet#L%d", path, u.StartLine)
 	if u.ID != expectedID {
 		t.Errorf("expected ID %q, got %q", expectedID, u.ID)
 	}
@@ -150,10 +207,12 @@ func TestExtractPyClassWithMethods(t *testing.T) {
 		}
 	}
 
-	// Verify method IDs use the format file:ClassName.method_name.
+	// Verify method IDs use the format file:ClassName.method_name#L<startLine>.
+	// The #L suffix disambiguates same-named methods across classes in the
+	// same file (see embedding/extractor.go:makeUnitID for context).
 	for _, u := range units {
 		if strings.Contains(u.Name, ".") {
-			expectedID := path + ":" + u.Name
+			expectedID := fmt.Sprintf("%s:%s#L%d", path, u.Name, u.StartLine)
 			if u.ID != expectedID {
 				t.Errorf("method %q: expected ID %q, got %q", u.Name, expectedID, u.ID)
 			}
@@ -163,7 +222,7 @@ func TestExtractPyClassWithMethods(t *testing.T) {
 	// Verify class ID.
 	classUnit := units[0]
 	if classUnit.Name == "Counter" {
-		expectedID := path + ":Counter"
+		expectedID := fmt.Sprintf("%s:Counter#L%d", path, classUnit.StartLine)
 		if classUnit.ID != expectedID {
 			t.Errorf("class: expected ID %q, got %q", expectedID, classUnit.ID)
 		}

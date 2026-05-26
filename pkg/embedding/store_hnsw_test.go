@@ -300,3 +300,48 @@ func TestHNSWStoreReplaceAll(t *testing.T) {
 	require.True(t, names["alpha"])
 	require.True(t, names["beta"])
 }
+
+// TestHNSWStoreReplaceAll_DuplicateIDsDoNotPanic reproduces the crash
+// reported in a live sprout session:
+//
+//	panic: node not added
+//	github.com/coder/hnsw.(*Graph[...]).Add  graph.go:405
+//	(*HNSWStore).ReplaceAll                  store_hnsw.go:426
+//	(*EmbeddingManager).AutoBuildWhenReady   manager.go:365
+//
+// The hnsw library's Add() invariant `g.Len() == preLen+1` is violated
+// when an existing key is replaced — Delete decrements Len, Insert
+// increments it, net change 0, panic. Our upstream extractors
+// (extractor_py.go, extractor_ts.go) can produce duplicate IDs of the
+// form "path:methodname" when two same-named methods live in different
+// classes of the same file. ReplaceAll now dedupes before calling Add;
+// this test pins that behavior.
+func TestHNSWStoreReplaceAll_DuplicateIDsDoNotPanic(t *testing.T) {
+	s := newTestHNSWStore(t)
+
+	// Two records share an ID — mirrors what
+	// `extractor_py.go: fmt.Sprintf("%s:%s", path, methodName)` produces
+	// for `class A: def run` and `class B: def run` in the same file.
+	now := time.Now()
+	records := []VectorRecord{
+		{ID: "shared.py:run", File: "shared.py", Name: "A.run", Embedding: []float32{1, 0, 0}, IndexedAt: now},
+		{ID: "shared.py:run", File: "shared.py", Name: "B.run", Embedding: []float32{0, 1, 0}, IndexedAt: now},
+		{ID: "other.py:once", File: "other.py", Name: "once", Embedding: []float32{0, 0, 1}, IndexedAt: now},
+	}
+
+	require.NotPanics(t, func() {
+		require.NoError(t, s.ReplaceAll(records))
+	}, "ReplaceAll must dedupe duplicate IDs before hitting the hnsw graph")
+
+	// Last-write-wins semantics — the SECOND `shared.py:run` should be
+	// the one in the store, matching the map-population order.
+	require.Equal(t, 2, s.Size(), "deduped store should hold 2 unique IDs")
+	all, err := s.LoadAll()
+	require.NoError(t, err)
+
+	for _, r := range all {
+		if r.ID == "shared.py:run" {
+			require.Equal(t, "B.run", r.Name, "last record with duplicate ID should win")
+		}
+	}
+}

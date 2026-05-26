@@ -178,3 +178,32 @@ export async function createBillingPortalSession(returnUrl: string): Promise<str
     return null;
   }
 }
+
+export interface Charge {
+  id: string;
+  user_id: string;
+  type: string;
+  amount: number;
+  stripe_payment_id: string;
+  created_at: string;
+  is_refundable: boolean;
+}
+
+export async function getCharges(limit?: number, offset?: number): Promise<{ charges: Charge[]; total: number }> {
+  const adapter = getAdapter();
+  if (!adapter) return { charges: [], total: 0 };
+  try {
+    const params = new URLSearchParams();
+    if (limit) params.set('limit', String(limit));
+    if (offset) params.set('offset', String(offset));
+    const qs = params.toString();
+    const url = `/api/admin/billing/charges${qs ? `?${qs}` : ''}`;
+    const response = await adapter.fetch(url);
+    if (!response.ok) throw new Error(`Status: ${response.status}`);
+    const data = await response.json();
+    return { charges: data.charges || [], total: data.charges?.length || 0 };
+  } catch (error) {
+    debugLog('Failed to fetch charges', error);
+    return { charges: [], total: 0 };
+  }
+}

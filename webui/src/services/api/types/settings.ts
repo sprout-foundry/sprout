@@ -4,15 +4,21 @@
 
 export interface SproutSettings {
   reasoning_effort: string;
+  disable_thinking?: boolean;
+  risk_profile?: string;
   system_prompt_text: string;
   skip_prompt: boolean;
   enable_pre_write_validation: boolean;
   enable_zsh_command_detection: boolean;
   auto_execute_detected_commands: boolean;
+  allow_orchestrator_git_write?: boolean;
   history_scope: string;
   self_review_gate_mode: string;
   subagent_provider: string;
   subagent_model: string;
+  subagent_max_depth?: number;
+  subagent_max_parallel?: number;
+  subagent_parallel_enabled?: boolean;
   default_subagent_persona: string;
   pdf_ocr_enabled: boolean;
   pdf_ocr_provider: string;
@@ -22,6 +28,7 @@ export interface SproutSettings {
     first_chunk_timeout_sec: number;
     chunk_timeout_sec: number;
     overall_timeout_sec: number;
+    commit_message_timeout_sec?: number;
   } | null;
   mcp: {
     enabled: boolean;

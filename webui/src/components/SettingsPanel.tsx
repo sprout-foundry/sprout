@@ -18,9 +18,11 @@ import AgentBehaviorSettingsTab from './settings/AgentBehaviorSettingsTab';
 import CommitReviewSettingsTab from './settings/CommitReviewSettingsTab';
 import EmbeddingSettingsTab from './settings/EmbeddingSettingsTab';
 import GeneralSettingsTab from './settings/GeneralSettingsTab';
+import LanguageServersSettingsTab from './settings/LanguageServersSettingsTab';
 import MCPSettingsTab from './settings/MCPSettingsTab';
 import OcrSettingsTab from './settings/OcrSettingsTab';
 import PerformanceSettingsTab from './settings/PerformanceSettingsTab';
+import PersistentContextSettingsTab from './settings/PersistentContextSettingsTab';
 import ProviderSettingsTab from './settings/ProviderSettingsTab';
 import SecuritySettingsTab from './settings/SecuritySettingsTab';
 import SkillsSettingsTab from './settings/SkillsSettingsTab';
@@ -211,6 +213,7 @@ function SettingsPanel({
       case 'agent-general':
         return (
           <AgentBehaviorSettingsTab
+            settings={activeSettings ?? settings}
             renderToggle={fieldRenderers.renderToggle}
             renderSelect={fieldRenderers.renderSelect}
             renderTextareaInput={fieldRenderers.renderTextareaInput}
@@ -220,9 +223,11 @@ function SettingsPanel({
       case 'agent-behavior':
         return (
           <SecuritySettingsTab
+            settings={activeSettings ?? settings}
             renderToggle={fieldRenderers.renderToggle}
             renderNumberInput={fieldRenderers.renderNumberInput}
             renderSelect={fieldRenderers.renderSelect}
+            updateSetting={mutations.updateSetting}
           />
         );
 
@@ -250,12 +255,29 @@ function SettingsPanel({
       case 'agent-roles':
         return <RolesSettingsTab addNotification={state.addNotification} />;
 
+      case 'agent-memory':
+        return (
+          <PersistentContextSettingsTab
+            settings={activeSettings ?? settings}
+            updateSetting={mutations.updateSetting}
+          />
+        );
+
       /* ── Workspace section ─────────────────────────── */
       case 'workspace-embeddings':
         return (
           <EmbeddingSettingsTab
+            settings={activeSettings ?? settings}
             renderToggle={fieldRenderers.renderToggle}
             renderTextInput={fieldRenderers.renderTextInput}
+            updateSetting={mutations.updateSetting}
+          />
+        );
+
+      case 'workspace-lsp':
+        return (
+          <LanguageServersSettingsTab
+            settings={activeSettings ?? settings}
             updateSetting={mutations.updateSetting}
           />
         );
@@ -338,7 +360,12 @@ function SettingsPanel({
         );
 
       case 'env-performance':
-        return <PerformanceSettingsTab renderNumberInput={fieldRenderers.renderNumberInput} />;
+        return (
+          <PerformanceSettingsTab
+            renderNumberInput={fieldRenderers.renderNumberInput}
+            renderTextInput={fieldRenderers.renderTextInput}
+          />
+        );
 
       case 'env-commit-review':
         return (

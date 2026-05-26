@@ -125,7 +125,7 @@ func buildPyUnitFromSymbol(path string, sym ast.ScopedSymbol, src []byte, bt *go
 			name = sym.Scope + "." + sym.Name
 		}
 		unit := &CodeUnit{
-			ID:        fmt.Sprintf("%s:%s", path, name),
+			ID:        makeUnitID(path, name, sym.StartLine),
 			File:      path,
 			Name:      name,
 			Signature: signature,
@@ -149,7 +149,7 @@ func buildPyUnitFromSymbol(path string, sym ast.ScopedSymbol, src []byte, bt *go
 	}
 
 	unit := &CodeUnit{
-		ID:        fmt.Sprintf("%s:%s", path, name),
+		ID:        makeUnitID(path, name, sym.StartLine),
 		File:      path,
 		Name:      name,
 		Signature: signature,

@@ -22,6 +22,7 @@
  * Target: ~650 lines (SP-010 Phase 1).
  */
 
+import { history } from '@codemirror/commands';
 import { indentUnit } from '@codemirror/language';
 import { EditorState, Transaction } from '@codemirror/state';
 import type { Compartment } from '@codemirror/state';
@@ -75,6 +76,7 @@ export interface FileIOStateSetters {
 /** Compartment reconfiguration helpers — passed from useEditorExtensions. */
 export interface FileIOCompartments {
   tabSize: Compartment;
+  history: Compartment;
 }
 
 /** Return type of the hook. */
@@ -483,6 +485,17 @@ export function useEditorFileIO(
 
     // Set current buffer tracking BEFORE any early returns below
     currentBufferIdRef.current = buffer.id;
+
+    // Reset CodeMirror's undo history when switching buffers.  Without this
+    // the history field is shared across files: pressing Cmd-Z after a
+    // buffer switch would revert the *previous* file's edits into the new
+    // buffer's view.  Reconfiguring the history compartment installs a
+    // fresh history() extension with an empty stack.
+    if (viewRef.current) {
+      viewRef.current.dispatch({
+        effects: compartments.history.reconfigure(history()),
+      });
+    }
 
     // Skip if same buffer and same file already loaded (covers switching
     // away and back to the same buffer).

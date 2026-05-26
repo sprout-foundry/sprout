@@ -103,6 +103,12 @@ type Symbol struct {
 
 	// EndByte is the 0-based byte offset where the symbol ends.
 	EndByte int
+
+	// Body is the source text of the function/method body (between braces
+	// or after colon). Empty for non-function symbols (classes, types,
+	// variables, etc.), except for Python classes where the block IS the
+	// body.
+	Body string
 }
 
 // langEntry caches a resolved Language so we only load the grammar blob once
@@ -282,13 +288,13 @@ func extractSymbols(root *gotreesitter.Node, bt *gotreesitter.BoundTree, lang st
 func extractSymbol(node *gotreesitter.Node, bt *gotreesitter.BoundTree, nodeType, lang string) (Symbol, bool) {
 	switch lang {
 	case "go":
-		return extractGoSymbol(node, bt, nodeType)
+		return extractGoSymbol(node, bt, nodeType, lang)
 	case "typescript", "tsx":
-		return extractTSSymbol(node, bt, nodeType)
+		return extractTSSymbol(node, bt, nodeType, lang)
 	case "javascript":
-		return extractTSSymbol(node, bt, nodeType) // JS shares TS node types
+		return extractTSSymbol(node, bt, nodeType, lang) // JS shares TS node types
 	case "python":
-		return extractPythonSymbol(node, bt, nodeType)
+		return extractPythonSymbol(node, bt, nodeType, lang)
 	default:
 		return Symbol{}, false
 	}
@@ -296,15 +302,15 @@ func extractSymbol(node *gotreesitter.Node, bt *gotreesitter.BoundTree, nodeType
 
 // --- Go symbol extraction ----------------------------------------------------
 
-func extractGoSymbol(node *gotreesitter.Node, bt *gotreesitter.BoundTree, nodeType string) (Symbol, bool) {
+func extractGoSymbol(node *gotreesitter.Node, bt *gotreesitter.BoundTree, nodeType, lang string) (Symbol, bool) {
 	switch nodeType {
 	case "function_declaration":
 		name := childText(node, bt, "name")
-		return makeSymbol(name, "function", node), name != ""
+		return makeSymbolWithBody(name, "function", node, bt, lang), name != ""
 
 	case "method_declaration":
 		name := childText(node, bt, "name")
-		return makeSymbol(name, "method", node), name != ""
+		return makeSymbolWithBody(name, "method", node, bt, lang), name != ""
 
 	case "type_declaration":
 		// type_declaration can contain type_spec (struct/interface/alias)
@@ -350,16 +356,16 @@ func extractGoSymbol(node *gotreesitter.Node, bt *gotreesitter.BoundTree, nodeTy
 
 // --- TypeScript / JavaScript symbol extraction --------------------------------
 
-func extractTSSymbol(node *gotreesitter.Node, bt *gotreesitter.BoundTree, nodeType string) (Symbol, bool) {
+func extractTSSymbol(node *gotreesitter.Node, bt *gotreesitter.BoundTree, nodeType, lang string) (Symbol, bool) {
 	switch nodeType {
 	case "function_declaration":
 		name := childText(node, bt, "name")
-		return makeSymbol(name, "function", node), name != ""
+		return makeSymbolWithBody(name, "function", node, bt, lang), name != ""
 
 	case "function":
 		// Arrow / function expressions assigned to variables.
 		name := childText(node, bt, "name")
-		return makeSymbol(name, "function", node), name != ""
+		return makeSymbolWithBody(name, "function", node, bt, lang), name != ""
 
 	case "class_declaration":
 		name := childText(node, bt, "name")
@@ -407,7 +413,7 @@ func extractTSSymbol(node *gotreesitter.Node, bt *gotreesitter.BoundTree, nodeTy
 				continue
 			}
 			ctype := bt.NodeType(child)
-			if sym, ok := extractTSSymbol(child, bt, ctype); ok {
+			if sym, ok := extractTSSymbol(child, bt, ctype, lang); ok {
 				return sym, true
 			}
 		}
@@ -420,7 +426,7 @@ func extractTSSymbol(node *gotreesitter.Node, bt *gotreesitter.BoundTree, nodeTy
 				continue
 			}
 			ctype := bt.NodeType(child)
-			if sym, ok := extractTSSymbol(child, bt, ctype); ok {
+			if sym, ok := extractTSSymbol(child, bt, ctype, lang); ok {
 				return sym, true
 			}
 		}
@@ -428,7 +434,7 @@ func extractTSSymbol(node *gotreesitter.Node, bt *gotreesitter.BoundTree, nodeTy
 
 	case "method_definition":
 		name := childText(node, bt, "name")
-		return makeSymbol(name, "method", node), name != ""
+		return makeSymbolWithBody(name, "method", node, bt, lang), name != ""
 
 	case "public_field_definition", "property_signature":
 		name := childText(node, bt, "name")
@@ -441,15 +447,15 @@ func extractTSSymbol(node *gotreesitter.Node, bt *gotreesitter.BoundTree, nodeTy
 
 // --- Python symbol extraction -------------------------------------------------
 
-func extractPythonSymbol(node *gotreesitter.Node, bt *gotreesitter.BoundTree, nodeType string) (Symbol, bool) {
+func extractPythonSymbol(node *gotreesitter.Node, bt *gotreesitter.BoundTree, nodeType, lang string) (Symbol, bool) {
 	switch nodeType {
 	case "function_definition", "async_function_definition":
 		name := childText(node, bt, "name")
-		return makeSymbol(name, "function", node), name != ""
+		return makeSymbolWithBody(name, "function", node, bt, lang), name != ""
 
 	case "class_definition":
 		name := childText(node, bt, "name")
-		return makeSymbol(name, "class", node), name != ""
+		return makeSymbolWithBody(name, "class", node, bt, lang), name != ""
 
 	case "decorated_definition":
 		// Unwrap decorator and extract the underlying definition.
@@ -462,7 +468,7 @@ func extractPythonSymbol(node *gotreesitter.Node, bt *gotreesitter.BoundTree, no
 			if ctype == "decorator" {
 				continue
 			}
-			if sym, ok := extractPythonSymbol(child, bt, ctype); ok {
+			if sym, ok := extractPythonSymbol(child, bt, ctype, lang); ok {
 				// Override start to include the decorator, but keep the inner
 				// node's end — giving a span that covers decorator + definition.
 				sym.StartLine = int(node.StartPoint().Row) + 1
@@ -491,6 +497,12 @@ func makeSymbol(name, kind string, node *gotreesitter.Node) Symbol {
 		StartByte: int(node.StartByte()),
 		EndByte:   int(node.EndByte()),
 	}
+}
+
+func makeSymbolWithBody(name, kind string, node *gotreesitter.Node, bt *gotreesitter.BoundTree, lang string) Symbol {
+	s := makeSymbol(name, kind, node)
+	s.Body = extractBody(node, bt, lang)
+	return s
 }
 
 // childText returns the text of the named child field, or "" if not found.

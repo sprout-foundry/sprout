@@ -9,6 +9,17 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/clihooks"
 )
 
+// SecurityPromptHook, when non-nil, replaces the line-based key entry in
+// AskForApprovalWithOptions with an interactive picker (arrow-key SelectList
+// in pkg/console).  Registered at pkg/console init() time.  Leaving the hook
+// nil keeps the legacy "[y/n/a/e]" path so this package stays leaf-level —
+// no upward dependency on pkg/console.
+var SecurityPromptHook func(prompt, command string) ApprovalChoice
+
+// FilesystemSecurityPromptHook is the matching hook for AskForFilesystemApproval.
+// Same registration pattern as SecurityPromptHook.
+var FilesystemSecurityPromptHook func(prompt, path, folder string, tier FilesystemPromptTier) ApprovalChoice
+
 // ApprovalChoice is the typed result of AskForApprovalWithOptions — the
 // 4-option CLI prompt that lets the user respond to a security gate with
 // Deny / Approve once / Always approve / Elevate.
@@ -66,6 +77,15 @@ func (w *Logger) AskForApprovalWithOptions(prompt, command string) ApprovalChoic
 	if !interactive {
 		w.Log("Skipping user confirmation in non-interactive mode — denying for safety.")
 		return ApprovalChoiceDeny
+	}
+
+	// If pkg/console has registered an arrow-key picker, prefer it for
+	// visual consistency with the rest of the CLI (model picker, session
+	// picker, etc.).  The hook itself handles clihooks / TTY suspension
+	// and its own non-TTY fallback, so we bypass the legacy code path
+	// entirely when it's available.
+	if SecurityPromptHook != nil {
+		return SecurityPromptHook(prompt, command)
 	}
 
 	clihooks.SuspendIndicator()
@@ -143,6 +163,12 @@ func (w *Logger) AskForFilesystemApproval(prompt, path, folder string, tier File
 	if !interactive {
 		w.Log("Skipping filesystem approval in non-interactive mode — denying for safety.")
 		return ApprovalChoiceDeny
+	}
+
+	// Prefer the arrow-key picker (registered by pkg/console at init) when
+	// available, same as AskForApprovalWithOptions above.
+	if FilesystemSecurityPromptHook != nil {
+		return FilesystemSecurityPromptHook(prompt, path, folder, tier)
 	}
 
 	clihooks.SuspendIndicator()

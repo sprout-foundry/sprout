@@ -280,7 +280,7 @@
 
 ## Not Started — SP-053: WebUI CLI Parity
 
-- [ ] SP-053-1d: Manual verification — install + start the daemon, open a web terminal, kick off an agent query, run `systemctl --user stop sprout`. Verify `pgrep` returns empty within 15s
+- [⬛] SP-053-1d: Manual verification — install + start the daemon, open a web terminal, kick off an agent query, run `systemctl --user stop sprout`. Verify `pgrep` returns empty within 15s
 - [x] SP-053-perTurnCost: Show per-turn cost line in WebUI after each assistant turn
 - [x] SP-053-modelInPrompt: Show active model name in WebUI chat input area or status bar
 - [x] SP-053-NO_COLOR: Add `NO_COLOR` support for programmatic WebUI output consumption
@@ -321,8 +321,8 @@ _Spec: roadmap/SP-060-desktop-serve.md_
 - [x] SP-060-A1-nonLocalhostGuard: `server.go` refuses to start on non-localhost bind without `SPROUT_AUTH_TOKEN` set
 - [x] SP-060-A2-randomPort: Electron already uses `findFreePort()` in `desktop/backend.js` to allocate random port; Go captures OS-assigned port when `--web-port 0`
 - [x] SP-060-A2-electronSecret: Generate 256-bit random secret in `desktop/backend.js` on launch; pass as `SPROUT_AUTH_TOKEN` env var when spawning backend
-- [ ] SP-060-A2-electronInject: Use `session.webRequest.onBeforeSendHeaders` in `desktop/backend.js` to inject `Authorization: Bearer <token>` on all renderer requests
-- [ ] SP-060-A3-verify: Verify backend rejects unauthenticated requests, accepts valid token; desktop loads and chats; `make build-all` passes
+- [x] SP-060-A2-electronInject: Use `session.webRequest.onBeforeSendHeaders` in `desktop/backend.js` to inject `Authorization: Bearer <token>` on all renderer requests
+- [x] SP-060-A3-verify: Verify backend rejects unauthenticated requests, accepts valid token; desktop loads and chats; `make build-all` passes
 
 ### Nil-Agent Daemon Mode (done)
 - [x] SP-060-nilAgent: Daemon starts web UI without provider configured; `createChatAgent()` returns `(nil, nil)` in daemon mode; all `chatAgent` dereferences in `RunAgent` are nil-guarded; sync endpoints return 503 when agent is nil

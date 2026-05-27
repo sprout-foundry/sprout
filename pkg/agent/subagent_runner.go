@@ -512,8 +512,10 @@ func (r *SubagentRunner) runTask(
 	var progressLog []SubagentProgressEntry
 	var progressMu sync.Mutex
 	stopProgress := make(chan struct{})
+	progressSubName := ""
 	if eventBus != nil {
-		eventCh := eventBus.Subscribe(fmt.Sprintf("subagent-progress-%s", taskID))
+		progressSubName = fmt.Sprintf("subagent-progress-%s", taskID)
+		eventCh := eventBus.Subscribe(progressSubName)
 		go func() {
 			for {
 				select {
@@ -552,7 +554,18 @@ func (r *SubagentRunner) runTask(
 			}
 		}()
 	}
+	// CRITICAL: order matters here. Unsubscribe BEFORE closing stopProgress
+	// so the bus stops trying to write to our channel before our consumer
+	// goroutine exits. The reverse order leaks the subscriber registration:
+	// stop the consumer, leave the channel in eb.subscribers, bus keeps
+	// writing, channel fills past cap=100, every subsequent publish on
+	// every event type spams "Dropped X event for slow subscriber". With
+	// long-running nested EA workflows that's many subscribers leaking, one
+	// per spawned subagent — minutes of log noise per session.
 	defer close(stopProgress)
+	if eventBus != nil && progressSubName != "" {
+		defer eventBus.Unsubscribe(progressSubName)
+	}
 
 	// Determine a mutex for thread-safe output across parallel subagents.
 	// Use the parent agent's output mutex if available; otherwise create

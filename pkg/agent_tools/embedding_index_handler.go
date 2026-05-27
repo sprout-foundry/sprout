@@ -93,11 +93,20 @@ func (h *embeddingIndexHandler) Execute(ctx context.Context, env ToolEnv, args m
 
 	switch operation {
 	case "status":
+		// Status is a directory walk; doesn't need an embedding manager.
 		return h.handleStatus(embeddingCfg, workspaceRoot)
 	case "build":
-		return h.handleBuild(ctx, embeddingCfg, workspaceRoot)
+		mgr, ownsMgr := pickEmbeddingMgr(env, embeddingCfg, workspaceRoot)
+		if ownsMgr {
+			defer mgr.Close()
+		}
+		return h.handleBuild(ctx, mgr)
 	case "update":
-		return h.handleUpdate(ctx, embeddingCfg, workspaceRoot)
+		mgr, ownsMgr := pickEmbeddingMgr(env, embeddingCfg, workspaceRoot)
+		if ownsMgr {
+			defer mgr.Close()
+		}
+		return h.handleUpdate(ctx, mgr)
 	default:
 		hadError = true
 		return ToolResult{
@@ -105,6 +114,16 @@ func (h *embeddingIndexHandler) Execute(ctx context.Context, env ToolEnv, args m
 			IsError: true,
 		}, nil
 	}
+}
+
+// pickEmbeddingMgr returns the agent-owned manager when available, otherwise
+// constructs a transient one (the caller is responsible for closing it; the
+// second return value is true when the caller owns the lifecycle).
+func pickEmbeddingMgr(env ToolEnv, cfg *configuration.EmbeddingIndexConfig, workspaceRoot string) (*embedding.EmbeddingManager, bool) {
+	if env.EmbeddingMgr != nil {
+		return env.EmbeddingMgr, false
+	}
+	return embedding.NewEmbeddingManager(cfg, workspaceRoot), true
 }
 
 func (h *embeddingIndexHandler) handleStatus(cfg *configuration.EmbeddingIndexConfig, workspaceRoot string) (ToolResult, error) {
@@ -162,10 +181,7 @@ func (h *embeddingIndexHandler) handleStatus(cfg *configuration.EmbeddingIndexCo
 	}, nil
 }
 
-func (h *embeddingIndexHandler) handleBuild(ctx context.Context, cfg *configuration.EmbeddingIndexConfig, workspaceRoot string) (ToolResult, error) {
-	mgr := embedding.NewEmbeddingManager(cfg, workspaceRoot)
-	defer mgr.Close()
-
+func (h *embeddingIndexHandler) handleBuild(ctx context.Context, mgr *embedding.EmbeddingManager) (ToolResult, error) {
 	// Use a timeout for the build
 	buildCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
@@ -191,10 +207,7 @@ func (h *embeddingIndexHandler) handleBuild(ctx context.Context, cfg *configurat
 	}, nil
 }
 
-func (h *embeddingIndexHandler) handleUpdate(ctx context.Context, cfg *configuration.EmbeddingIndexConfig, workspaceRoot string) (ToolResult, error) {
-	mgr := embedding.NewEmbeddingManager(cfg, workspaceRoot)
-	defer mgr.Close()
-
+func (h *embeddingIndexHandler) handleUpdate(ctx context.Context, mgr *embedding.EmbeddingManager) (ToolResult, error) {
 	// Use a timeout for the update
 	updateCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()

@@ -93,6 +93,20 @@ type SubagentReturn struct {
 	// TokensUsed/Cost/ToolCallCount string fields above for callers
 	// that prefer typed access.
 	Metrics SubagentRunMetrics `json:"metrics"`
+	// ProgressLog is a capped timeline of subagent activity events
+	// (spawn / output / complete) so the primary's LLM can reason about
+	// what the subagent actually did, not just its final assistant
+	// message. nil when no events were captured. SP-059 Phase 3a.
+	ProgressLog []ProgressEntry `json:"progress_log,omitempty"`
+}
+
+// ProgressEntry is the envelope-facing form of SubagentProgressEntry,
+// kept separately from the runner-internal type so the runner struct
+// can change without affecting the wire shape.
+type ProgressEntry struct {
+	OffsetMS int64  `json:"offset_ms"`
+	Phase    string `json:"phase"`
+	Message  string `json:"message"`
 }
 
 // MarshalJSONIndent renders the envelope as a 2-space-indented JSON

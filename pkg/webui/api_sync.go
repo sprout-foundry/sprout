@@ -34,6 +34,11 @@ func (ws *ReactWebServer) handleAPISyncOp(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	if ws.agent == nil {
+		http.Error(w, "agent not initialized", http.StatusServiceUnavailable)
+		return
+	}
+
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 	result := ws.agent.ApplySyncOp(op, workspaceRoot)
 
@@ -70,6 +75,11 @@ func (ws *ReactWebServer) handleAPISyncBatch(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	if ws.agent == nil {
+		http.Error(w, "agent not initialized", http.StatusServiceUnavailable)
+		return
+	}
+
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
 	results := ws.agent.ApplySyncOpBatch(req.Ops, workspaceRoot)
 
@@ -83,6 +93,14 @@ func (ws *ReactWebServer) handleAPISyncBatch(w http.ResponseWriter, r *http.Requ
 func (ws *ReactWebServer) handleAPISyncStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if ws.agent == nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"files": interface{}(nil),
+		})
 		return
 	}
 

@@ -359,7 +359,14 @@ func (ws *ReactWebServer) setClientWorkspaceRoot(clientID, path string) (string,
 	ws.mutex.Lock()
 	defer ws.mutex.Unlock()
 
-	if !isWithinWorkspace(workspaceRoot, ws.daemonRoot) && workspaceRoot != ws.daemonRoot {
+	// Resolve daemonRoot the same way to handle symlink differences
+	// (macOS /var/folders has symlinks that can cause mismatches).
+	resolvedDaemonRoot := ws.daemonRoot
+	if evaled, err := filepath.EvalSymlinks(ws.daemonRoot); err == nil {
+		resolvedDaemonRoot = evaled
+	}
+
+	if !isWithinWorkspace(workspaceRoot, resolvedDaemonRoot) && workspaceRoot != resolvedDaemonRoot {
 		return "", fmt.Errorf("workspace root must stay within daemon root %s", ws.daemonRoot)
 	}
 
@@ -567,14 +574,14 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 		return createErr
 	})
 	if err != nil {
-		if errors.Is(err, agent.ErrModelNotAvailable) {
-			return nil, agent.ErrModelNotAvailable
+		if errors.Is(err, agent.ErrModelNotAvailable) || errors.Is(err, agent.ErrProviderNotConfigured) {
+			return nil, err
 		}
 		return nil, fmt.Errorf("create agent in workspace: %w", err)
 	}
 	if createErr != nil {
-		if errors.Is(createErr, agent.ErrModelNotAvailable) {
-			return nil, agent.ErrModelNotAvailable
+		if errors.Is(createErr, agent.ErrModelNotAvailable) || errors.Is(createErr, agent.ErrProviderNotConfigured) {
+			return nil, createErr
 		}
 		return nil, fmt.Errorf("create agent: %w", createErr)
 	}
@@ -760,8 +767,8 @@ func (ws *ReactWebServer) getChatAgent(clientID, chatID string) (*agent.Agent, e
 
 	agentInst, err := cs.getOrCreateAgent(workspaceRoot, configBase, workspaceDir, eventBus, clientID, userID, ws.withAgentWorkspace)
 	if err != nil {
-		if errors.Is(err, agent.ErrModelNotAvailable) {
-			return nil, agent.ErrModelNotAvailable
+		if errors.Is(err, agent.ErrModelNotAvailable) || errors.Is(err, agent.ErrProviderNotConfigured) {
+			return nil, err
 		}
 		return nil, fmt.Errorf("get or create chat agent: %w", err)
 	}

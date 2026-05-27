@@ -221,6 +221,20 @@ func resolveBackend() (Backend, error) {
 		return NewFileBackend(), nil
 	}
 
+	// Under `go test`, skip keyring entirely and pick the file backend,
+	// regardless of what mode is persisted on disk.  This prevents test data
+	// from leaking into the developer's real login keychain and avoids
+	// confusing failures when Save() (file path) and Resolve() (active
+	// backend) target different stores.
+	//
+	// Escape hatch: tests that need to verify the persisted-mode or autodetect
+	// paths set SPROUT_CREDENTIALS_TEST_ALLOW_AUTODETECT=1 and use
+	// keyring.MockInit() to keep the probe in-memory.
+	if inTestBinary() && strings.TrimSpace(os.Getenv("SPROUT_CREDENTIALS_TEST_ALLOW_AUTODETECT")) == "" {
+		log.Printf("[credentials] Test binary detected — using file backend (skipping keyring auto-detect)")
+		return NewFileBackend(), nil
+	}
+
 	// Check persisted mode
 	persistedMode, err := GetStorageMode()
 	if err != nil {
@@ -237,25 +251,6 @@ func resolveBackend() (Backend, error) {
 	}
 
 	// Auto-detect: try to use keyring, fall back to file.
-	//
-	// Under `go test`, skip the keyring probe entirely and pick the file
-	// backend.  The probe is silent on macOS (no prompt), but a subsequent
-	// SetToActiveBackend call would write test data into the developer's
-	// real login keychain — polluting it across runs and producing
-	// confusing test failures when Save() (file path) and Resolve()
-	// (active backend) target different stores.  Tests that explicitly
-	// want the keyring path still set SPROUT_CREDENTIAL_BACKEND=keyring
-	// and use keyring.MockInit() — both code paths handled above remain
-	// fully functional.
-	//
-	// Escape hatch: tests that need to verify the autodetect logic itself
-	// (e.g. TestGetStorageBackend_AutoDetect) set
-	// SPROUT_CREDENTIALS_TEST_ALLOW_AUTODETECT=1 to opt into the real
-	// probe.  They must use keyring.MockInit() to keep the probe in-memory.
-	if inTestBinary() && strings.TrimSpace(os.Getenv("SPROUT_CREDENTIALS_TEST_ALLOW_AUTODETECT")) == "" {
-		log.Printf("[credentials] Test binary detected — using file backend (skipping keyring auto-detect)")
-		return NewFileBackend(), nil
-	}
 
 	log.Printf("[credentials] Auto-detecting storage backend...")
 	if IsKeyringAvailable() {

@@ -252,8 +252,17 @@ func promptForGitHubPAT(reader *bufio.Reader) (string, error) {
 	return token, nil
 }
 
-// openBrowser attempts to open a URL in the user's default browser.
+// openBrowserFn is the function used to open a URL in the user's default browser.
+// It can be overridden in tests to prevent opening real browser windows.
+var openBrowserFn = defaultOpenBrowser
+
+// openBrowser opens a URL using the current openBrowserFn.
 func openBrowser(url string) error {
+	return openBrowserFn(url)
+}
+
+// defaultOpenBrowser attempts to open a URL in the user's default browser.
+func defaultOpenBrowser(url string) error {
 	var cmd *exec.Cmd
 
 	switch {

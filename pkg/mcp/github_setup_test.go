@@ -352,11 +352,21 @@ func TestShouldPromptGitHubSetup_NilDismissedPrompts(t *testing.T) {
 	assert.IsType(t, false, result) // valid bool returned
 }
 
+// disableOpenBrowser replaces openBrowserFn with a no-op for the duration of the test.
+// This prevents tests from opening real browser tabs.
+func disableOpenBrowser(t *testing.T) {
+	t.Helper()
+	orig := openBrowserFn
+	openBrowserFn = func(string) error { return nil }
+	t.Cleanup(func() { openBrowserFn = orig })
+}
+
 // ---------------------------------------------------------------------------
 // Test: RunGitHubMCPSetup()
 // ---------------------------------------------------------------------------
 
 func TestRunGitHubMCPSetup_Choice1Remote(t *testing.T) {
+	disableOpenBrowser(t)
 	repo := &GitHubRepoInfo{
 		Owner: "test-owner",
 		Repo:  "test-repo",
@@ -379,6 +389,7 @@ func TestRunGitHubMCPSetup_Choice1Remote(t *testing.T) {
 }
 
 func TestRunGitHubMCPSetup_Choice2Docker(t *testing.T) {
+	disableOpenBrowser(t)
 	repo := &GitHubRepoInfo{
 		Owner: "test-owner",
 		Repo:  "test-repo",
@@ -403,6 +414,7 @@ func TestRunGitHubMCPSetup_Choice2Docker(t *testing.T) {
 }
 
 func TestRunGitHubMCPSetup_Choice3NPX(t *testing.T) {
+	disableOpenBrowser(t)
 	repo := &GitHubRepoInfo{
 		Owner: "test-owner",
 		Repo:  "test-repo",
@@ -427,6 +439,7 @@ func TestRunGitHubMCPSetup_Choice3NPX(t *testing.T) {
 }
 
 func TestRunGitHubMCPSetup_EmptyChoiceDefaultsTo1(t *testing.T) {
+	disableOpenBrowser(t)
 	repo := &GitHubRepoInfo{
 		Owner: "test-owner",
 		Repo:  "test-repo",
@@ -447,6 +460,7 @@ func TestRunGitHubMCPSetup_EmptyChoiceDefaultsTo1(t *testing.T) {
 }
 
 func TestRunGitHubMCPSetup_InvalidChoice(t *testing.T) {
+	disableOpenBrowser(t)
 	repo := &GitHubRepoInfo{
 		Owner: "test-owner",
 		Repo:  "test-repo",
@@ -465,6 +479,7 @@ func TestRunGitHubMCPSetup_InvalidChoice(t *testing.T) {
 }
 
 func TestRunGitHubMCPSetup_CancelTokenInput(t *testing.T) {
+	disableOpenBrowser(t)
 	repo := &GitHubRepoInfo{
 		Owner: "test-owner",
 		Repo:  "test-repo",
@@ -482,6 +497,7 @@ func TestRunGitHubMCPSetup_CancelTokenInput(t *testing.T) {
 }
 
 func TestRunGitHubMCPSetup_ShortTokenRejected(t *testing.T) {
+	disableOpenBrowser(t)
 	repo := &GitHubRepoInfo{
 		Owner: "test-owner",
 		Repo:  "test-repo",
@@ -500,6 +516,7 @@ func TestRunGitHubMCPSetup_ShortTokenRejected(t *testing.T) {
 }
 
 func TestRunGitHubMCPSetup_NilRepo(t *testing.T) {
+	disableOpenBrowser(t)
 	reader := bufio.NewReader(strings.NewReader("1\n"))
 
 	ctx := context.Background()
@@ -592,6 +609,7 @@ func TestOpenBrowser_RequiresSystem(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestPromptForGitHubPAT_ValidToken(t *testing.T) {
+	disableOpenBrowser(t)
 	reader := bufio.NewReader(strings.NewReader("github_pat_1234567890abcdefghijklmnop\n"))
 
 	token, err := promptForGitHubPAT(reader)
@@ -601,6 +619,7 @@ func TestPromptForGitHubPAT_ValidToken(t *testing.T) {
 }
 
 func TestPromptForGitHubPAT_EmptyToken(t *testing.T) {
+	disableOpenBrowser(t)
 	reader := bufio.NewReader(strings.NewReader("\n"))
 
 	token, err := promptForGitHubPAT(reader)
@@ -610,6 +629,7 @@ func TestPromptForGitHubPAT_EmptyToken(t *testing.T) {
 }
 
 func TestPromptForGitHubPAT_ShortToken(t *testing.T) {
+	disableOpenBrowser(t)
 	reader := bufio.NewReader(strings.NewReader("short\n"))
 
 	token, err := promptForGitHubPAT(reader)
@@ -620,6 +640,7 @@ func TestPromptForGitHubPAT_ShortToken(t *testing.T) {
 }
 
 func TestPromptForGitHubPAT_WhitespaceToken(t *testing.T) {
+	disableOpenBrowser(t)
 	reader := bufio.NewReader(strings.NewReader("   github_pat_1234567890abcdefghijklmnop   \n"))
 
 	token, err := promptForGitHubPAT(reader)

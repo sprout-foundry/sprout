@@ -139,9 +139,14 @@ func TestNormalizeWorkingDirectoryAbsPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// Should return the cleaned absolute path
-	if got != tmp {
-		t.Errorf("normalizeWorkingDirectory(%q) = %q; want %q", tmp, got, tmp)
+	// Should return the symlink-resolved cleaned absolute path.
+	// On macOS, /var → /private/var so t.TempDir()'s path gets resolved.
+	resolved, err := filepath.EvalSymlinks(tmp)
+	if err != nil {
+		t.Fatalf("EvalSymlinks: %v", err)
+	}
+	if got != resolved {
+		t.Errorf("normalizeWorkingDirectory(%q) = %q; want %q", tmp, got, resolved)
 	}
 }
 

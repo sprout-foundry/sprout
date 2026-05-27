@@ -8,7 +8,7 @@ import (
 // the expected number of tools after the refactor.
 func TestNewDefaultToolRegistry_Count(t *testing.T) {
 	registry := newDefaultToolRegistry()
-	expectedCount := 35
+	expectedCount := 38
 	if len(registry.tools) != expectedCount {
 		t.Errorf("expected %d registered tools, got %d", expectedCount, len(registry.tools))
 	}
@@ -33,7 +33,11 @@ func TestNewDefaultToolRegistry_AllToolsRegistered(t *testing.T) {
 		"ask_user",
 		"run_subagent",
 		"run_parallel_subagents",
+		"delegate",
+		"delegate_status",
 		"search_files",
+		"request_clarification",
+		"respond_clarification",
 		"repo_map",
 		"web_search",
 		"fetch_url",
@@ -50,8 +54,7 @@ func TestNewDefaultToolRegistry_AllToolsRegistered(t *testing.T) {
 		"list_memories",
 		"delete_memory",
 		"search_memories",
-		"embedding_index",
-		"semantic_search",
+		"manage_settings",
 		"task_queue_read",
 		"task_queue_publish",
 		"task_queue_add",
@@ -118,8 +121,9 @@ func TestNewDefaultToolRegistry_ToolParameters(t *testing.T) {
 		"list_memories":          {paramCount: 0, requiredCount: 0, requiredNames: []string{}},
 		"delete_memory":          {paramCount: 1, requiredCount: 1, requiredNames: []string{"name"}},
 		"search_memories":        {paramCount: 3, requiredCount: 1, requiredNames: []string{"query"}},
-		"embedding_index":        {paramCount: 1, requiredCount: 1, requiredNames: []string{"operation"}},
-		"semantic_search":        {paramCount: 3, requiredCount: 1, requiredNames: []string{"query"}},
+		"delegate":               {paramCount: 10, requiredCount: 1, requiredNames: []string{"prompt"}},
+		"delegate_status":        {paramCount: 1, requiredCount: 1, requiredNames: []string{"delegate_id"}},
+		"manage_settings":        {paramCount: 4, requiredCount: 1, requiredNames: []string{"operation"}},
 		"task_queue_read":        {paramCount: 2, requiredCount: 0, requiredNames: []string{}},
 		"task_queue_publish":     {paramCount: 4, requiredCount: 2, requiredNames: []string{"task_id", "status"}},
 		"task_queue_add":         {paramCount: 5, requiredCount: 1, requiredNames: []string{"title"}},
@@ -329,10 +333,21 @@ func TestNewDefaultToolRegistry_ParameterTypes(t *testing.T) {
 		{"search_memories", "query", "string"},
 		{"search_memories", "threshold", "number"},
 		{"search_memories", "top_k", "integer"},
-		{"embedding_index", "operation", "string"},
-		{"semantic_search", "query", "string"},
-		{"semantic_search", "top_k", "integer"},
-		{"semantic_search", "threshold", "number"},
+		{"delegate", "prompt", "string"},
+		{"delegate", "role", "string"},
+		{"delegate", "provider", "string"},
+		{"delegate", "model", "string"},
+		{"delegate", "tools", "array"},
+		{"delegate", "context", "string"},
+		{"delegate", "max_iterations", "integer"},
+		{"delegate", "files", "array"},
+		{"delegate", "follow_up", "array"},
+		{"delegate", "async", "boolean"},
+		{"delegate_status", "delegate_id", "string"},
+		{"manage_settings", "operation", "string"},
+		{"manage_settings", "key", "string"},
+		{"manage_settings", "value", "string"},
+		{"manage_settings", "provider", "string"},
 		{"task_queue_read", "status", "string"},
 		{"task_queue_read", "limit", "integer"},
 		{"task_queue_publish", "task_id", "string"},

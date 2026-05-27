@@ -359,7 +359,14 @@ func (ws *ReactWebServer) setClientWorkspaceRoot(clientID, path string) (string,
 	ws.mutex.Lock()
 	defer ws.mutex.Unlock()
 
-	if !isWithinWorkspace(workspaceRoot, ws.daemonRoot) && workspaceRoot != ws.daemonRoot {
+	// Resolve daemonRoot the same way to handle symlink differences
+	// (macOS /var/folders has symlinks that can cause mismatches).
+	resolvedDaemonRoot := ws.daemonRoot
+	if evaled, err := filepath.EvalSymlinks(ws.daemonRoot); err == nil {
+		resolvedDaemonRoot = evaled
+	}
+
+	if !isWithinWorkspace(workspaceRoot, resolvedDaemonRoot) && workspaceRoot != resolvedDaemonRoot {
 		return "", fmt.Errorf("workspace root must stay within daemon root %s", ws.daemonRoot)
 	}
 

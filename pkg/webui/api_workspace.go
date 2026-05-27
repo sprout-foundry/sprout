@@ -215,17 +215,24 @@ func (ws *ReactWebServer) handleAPIWorkspaceBrowse(w http.ResponseWriter, r *htt
 	}
 
 	daemonRoot := ws.GetDaemonRoot()
+	// Resolve symlinks so the comparison against canonicalDir (which has
+	// symlinks resolved by canonicalizePath) works on macOS where
+	// /var/folders is a symlink to /private/var/folders.
+	resolvedDaemonRoot := daemonRoot
+	if evaled, err := filepath.EvalSymlinks(daemonRoot); err == nil {
+		resolvedDaemonRoot = evaled
+	}
 	dir := strings.TrimSpace(r.URL.Query().Get("path"))
 	if dir == "" {
-		dir = daemonRoot
+		dir = resolvedDaemonRoot
 	}
 
-	canonicalDir, err := canonicalizePath(dir, daemonRoot, false)
+	canonicalDir, err := canonicalizePath(dir, resolvedDaemonRoot, false)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Invalid directory: %v", err), http.StatusBadRequest)
 		return
 	}
-	if canonicalDir != daemonRoot && !isWithinWorkspace(canonicalDir, daemonRoot) {
+	if canonicalDir != resolvedDaemonRoot && !isWithinWorkspace(canonicalDir, resolvedDaemonRoot) {
 		http.Error(w, "Directory outside daemon root", http.StatusForbidden)
 		return
 	}

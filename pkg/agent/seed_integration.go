@@ -632,7 +632,11 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	// prior user messages) or the session was just restored from persistence
 	// AND proactive context has not already been injected this session.
 	existingSupplement := a.state.GetPendingSystemSupplement()
-	alreadyInjected := strings.Contains(existingSupplement, "Previous Work (Contextual Memory)")
+	// Match the current header from FormatProactiveContext. Kept as a
+	// distinctive substring so cosmetic edits to the wording don't break
+	// the dedup guard (the prior literal drifted and re-injected context
+	// on every cold restore).
+	alreadyInjected := strings.Contains(existingSupplement, "Previous Work (Read-Only Reference)")
 	shouldInjectProactiveContext := !alreadyInjected &&
 		(len(a.state.GetMessages()) == 0 || a.state.GetPreviousSummary() != "")
 	if shouldInjectProactiveContext {

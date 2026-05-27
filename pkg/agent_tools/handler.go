@@ -53,6 +53,7 @@ import (
 	"io"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/embedding"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
@@ -98,6 +99,11 @@ type ToolEnv struct {
 	MaxTokensFunc func() int
 	// ConfigManager provides configuration access for tools that need it (e.g., API keys for web fetching)
 	ConfigManager *configuration.Manager
+	// EmbeddingMgr is the agent's long-lived embedding manager. When set, tools
+	// must reuse it instead of constructing their own — the manager holds the
+	// loaded ONNX model and an open HNSW handle, so per-call construction is
+	// both slow and unsafe under concurrent writes.
+	EmbeddingMgr *embedding.EmbeddingManager
 }
 
 // ApprovalResult contains the outcome of an approval request.

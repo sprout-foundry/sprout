@@ -383,7 +383,13 @@ func (a *Agent) InjectProactiveContext(ctx context.Context, query string) error 
 		return nil
 	}
 
-	config := DefaultProactiveContextConfig()
+	// Honor the user's PersistentContextConfig (Agent → Memory settings).
+	// When ProactiveContextEnabled is false, skip retrieval entirely.
+	config := a.proactiveContextConfigFromUserSettings()
+	if !a.proactiveContextEnabled() {
+		a.Logger().Debug("[proactive-context] skipping: disabled in user settings\n")
+		return nil
+	}
 	workingDir := a.currentWorkspaceRoot()
 	now := time.Now().UTC()
 
@@ -422,6 +428,43 @@ func (a *Agent) InjectProactiveContext(ctx context.Context, query string) error 
 		len(results), len(formatted))
 
 	return nil
+}
+
+// proactiveContextEnabled returns whether proactive context retrieval is on
+// for this agent's config. Defaults to true when the user hasn't customized
+// PersistentContext.
+func (a *Agent) proactiveContextEnabled() bool {
+	if a == nil {
+		return false
+	}
+	cfg := a.GetConfig()
+	if cfg == nil || cfg.PersistentContext == nil {
+		return true
+	}
+	return cfg.PersistentContext.ProactiveContextEnabled
+}
+
+// proactiveContextConfigFromUserSettings maps the user's PersistentContext
+// configuration into the internal ProactiveContextConfig. Falls back to
+// built-in defaults when the user hasn't customized anything.
+func (a *Agent) proactiveContextConfigFromUserSettings() ProactiveContextConfig {
+	defaults := DefaultProactiveContextConfig()
+	if a == nil {
+		return defaults
+	}
+	cfg := a.GetConfig()
+	if cfg == nil {
+		return defaults
+	}
+	resolved := cfg.PersistentContext.Resolve()
+	return ProactiveContextConfig{
+		MinRelevanceScore:    resolved.MinRelevanceScore,
+		MaxContextualResults: resolved.MaxContextualResults,
+		MaxContextChars:      resolved.MaxContextChars,
+		// WorkspaceScopedRetrieval is a bool, so it carries through directly.
+		WorkspaceScoped: resolved.WorkspaceScopedRetrieval,
+		RetentionDays:   resolved.RetentionDays,
+	}
 }
 
 // formatRelativeTime returns a human-readable relative time string such as

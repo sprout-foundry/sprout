@@ -2,6 +2,8 @@ package agent
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -532,5 +534,73 @@ func TestPrependFilesModifiedHeader_HandlesUnknownOp(t *testing.T) {
 	}
 	if !strings.Contains(out, "trailing message") {
 		t.Errorf("original output should be preserved; got %q", out)
+	}
+}
+
+// TestSubagentManifestEndToEnd is the integration check the user
+// asked for: confirm a shell-mutated file flows from a subagent's
+// ChangeTracker → result.FileChanges → SubagentReturn.FilesModified
+// → tool-result JSON the primary's LLM sees. Verifies the full chain
+// without spinning up a real subagent (we drive the tracker manually
+// at the same layer the runner does).
+func TestSubagentManifestEndToEnd(t *testing.T) {
+	dir := t.TempDir()
+	original := filepath.Join(dir, "config.toml")
+	if err := os.WriteFile(original, []byte("port = 8080"), 0o644); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+
+	// 1. Construct a tracker mimicking what the subagent runner sets
+	//    up: shell walk enabled, primed against the workspace.
+	tracker := &ChangeTracker{
+		enabled:          true,
+		shellWalkEnabled: true,
+	}
+	tracker.PrimeShellTracking(dir)
+
+	// 2. Simulate a shell_command modifying the file (sed-i style).
+	if err := os.WriteFile(original, []byte("port = 9090"), 0o644); err != nil {
+		t.Fatalf("mutate: %v", err)
+	}
+	bumpMtime(t, original)
+	tracker.TrackShellTurn(dir, "shell_command")
+
+	if len(tracker.changes) != 1 {
+		t.Fatalf("tracker should have captured the shell mutation; got %d changes: %+v",
+			len(tracker.changes), tracker.changes)
+	}
+
+	// 3. Mimic the runner's payload assembly: result.FileChanges =
+	//    tracker.GetChanges(); buildSubagentReturn produces the JSON
+	//    envelope the primary's LLM consumes.
+	result := &SubagentResult{
+		FileChanges: tracker.GetChanges(),
+	}
+	resultMap := map[string]string{
+		"stdout":    "Updated port number.",
+		"exit_code": "0",
+	}
+	ret := buildSubagentReturn(resultMap, result, SubagentStatusCompleted)
+
+	// 4. Critical assertions: the structured field carries the path
+	//    with the right op vocabulary, and the prose manifest header
+	//    is prepended to stdout for LLM visibility.
+	if len(ret.FilesModified) != 1 {
+		t.Fatalf("FilesModified should have 1 entry; got %d: %+v", len(ret.FilesModified), ret.FilesModified)
+	}
+	if ret.FilesModified[0].Path != original {
+		t.Errorf("manifest path mismatch: got %q, want %q", ret.FilesModified[0].Path, original)
+	}
+	if ret.FilesModified[0].Op != "modified" {
+		t.Errorf("manifest op should be 'modified' for shell edit; got %q", ret.FilesModified[0].Op)
+	}
+	if !strings.Contains(ret.Output, "[subagent files modified]") {
+		t.Errorf("Output should carry the prose manifest header so the LLM can't miss it; got:\n%s", ret.Output)
+	}
+	if !strings.Contains(ret.Output, "M "+original) {
+		t.Errorf("Output should reference the modified file in git-style; got:\n%s", ret.Output)
+	}
+	if !strings.Contains(ret.Output, "Updated port number.") {
+		t.Errorf("original stdout should still be present after the header; got:\n%s", ret.Output)
 	}
 }

@@ -1,8 +1,22 @@
 package agent
 
-import "fmt"
+import (
+	"fmt"
+	"time"
 
-// EnableChangeTracking enables change tracking for this agent session
+	"github.com/sprout-foundry/sprout/pkg/configuration"
+)
+
+// EnableChangeTracking enables change tracking for this agent session.
+//
+// Side effect: primes the shell-mutation snapshot cache against the
+// agent's workspace root. This is the one-time cost (~280 ms on a
+// 5000-file workspace) that lets every subsequent shell_command be
+// tracked via a cheap stat-only diff. Without this prime the first
+// shell command's mutations would silently establish the baseline
+// (auto-prime in TrackShellTurn) and go un-recorded — fine for
+// read-only commands, but a real loss if the first shell does any
+// writes.
 func (a *Agent) EnableChangeTracking(instructions string) {
 	if a.debug {
 		a.Logger().Debug("DEBUG: EnableChangeTracking called (tracker nil: %v)\n", a.changeTracker == nil)
@@ -20,6 +34,45 @@ func (a *Agent) EnableChangeTracking(instructions string) {
 			a.Logger().Debug("DEBUG: Reset existing change tracker and enabled it\n")
 		}
 	}
+
+	// Apply ChangeTrackingConfig: read the user/workspace setting and
+	// stamp it into the tracker so per-tracker overrides take effect
+	// before the prime walk runs.
+	a.applyChangeTrackingConfig()
+
+	if root := a.effectiveCwd(); root != "" {
+		a.changeTracker.PrimeShellTracking(root)
+	}
+}
+
+// applyChangeTrackingConfig reads the configuration.ChangeTracking
+// section (if present), resolves defaults, and stamps the values onto
+// the active changeTracker. Called from EnableChangeTracking before
+// PrimeShellTracking so the prime walk honors any custom budgets.
+// When the agent has no config manager (test path) or no
+// ChangeTracking override, defaults apply.
+func (a *Agent) applyChangeTrackingConfig() {
+	if a.changeTracker == nil {
+		return
+	}
+	var raw *configuration.ChangeTrackingConfig
+	if a.configManager != nil {
+		cfg := a.configManager.GetConfig()
+		if cfg != nil {
+			raw = cfg.ChangeTracking
+		}
+	}
+	resolved := raw.Resolve()
+
+	enabled := true
+	if resolved.ShellWalkEnabled != nil {
+		enabled = *resolved.ShellWalkEnabled
+	}
+	a.changeTracker.shellWalkEnabled = enabled
+	a.changeTracker.shellMaxFiles = resolved.MaxFiles
+	a.changeTracker.shellMaxTotalBytes = resolved.MaxTotalBytes
+	a.changeTracker.shellMaxDuration = time.Duration(resolved.MaxDurationMs) * time.Millisecond
+	a.changeTracker.shellAutoSkipFileCountThreshold = resolved.AutoSkipFileCountThreshold
 }
 
 // DisableChangeTracking disables change tracking
@@ -100,7 +153,13 @@ func (a *Agent) ClearTrackedChanges() {
 // TrackFileWrite is called by the WriteFile tool to track file writes
 func (a *Agent) TrackFileWrite(filePath string, content string) error {
 	if a.changeTracker != nil && a.changeTracker.IsEnabled() {
-		return a.changeTracker.TrackFileWrite(filePath, content)
+		err := a.changeTracker.TrackFileWrite(filePath, content)
+		// Keep the shell-snapshot cache in sync so the next
+		// TrackShellTurn walk doesn't see this write as a stat
+		// mismatch and record a duplicate entry attributed to
+		// shell_command.
+		a.changeTracker.SyncShellCacheForPath(filePath)
+		return err
 	}
 
 	// Also record as a task action for conversation summary
@@ -112,7 +171,9 @@ func (a *Agent) TrackFileWrite(filePath string, content string) error {
 // TrackFileEdit is called by the EditFile tool to track file edits
 func (a *Agent) TrackFileEdit(filePath string, originalContent string, newContent string) error {
 	if a.changeTracker != nil && a.changeTracker.IsEnabled() {
-		return a.changeTracker.TrackFileEdit(filePath, originalContent, newContent)
+		err := a.changeTracker.TrackFileEdit(filePath, originalContent, newContent)
+		a.changeTracker.SyncShellCacheForPath(filePath)
+		return err
 	}
 
 	// Also record as a task action for conversation summary

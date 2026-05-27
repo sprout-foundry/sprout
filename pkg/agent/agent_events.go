@@ -81,6 +81,16 @@ func (a *Agent) PublishTodoUpdate(todos []map[string]interface{}) {
 // This is the single unified routing point for all agent output.
 // Safe to call even when eventBus is nil (CLI-only mode) — the
 // internal publishEvent method checks for nil before publishing.
+// PublishFileChange emits a file_changed event so the WebUI activity
+// feed can reflect ChangeTracker-detected mutations (including
+// shell-driven ones, not just direct write_file/edit_file calls).
+// Content is the captured original (for deletes/edits) — pass empty
+// for creates, where there's no prior content. Action: "created" /
+// "modified" / "deleted" — matches events.FileChangedEvent vocabulary.
+func (a *Agent) PublishFileChange(filePath, action, content string) {
+	a.publishEvent(events.EventTypeFileChanged, events.FileChangedEvent(filePath, action, content))
+}
+
 func (a *Agent) PublishAgentMessage(category, message string, extra map[string]interface{}) {
 	a.publishEvent(events.EventTypeAgentMessage, events.AgentMessageEvent(category, message, extra))
 }

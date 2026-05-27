@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
@@ -32,6 +33,43 @@ type ChangeTracker struct {
 	// checkpoint's manifest scopes to its own turn's writes, not the
 	// cumulative session.
 	checkpointedChangeCount int
+
+	// shellCache is the long-lived baseline used by the shell-mutation
+	// diff path (change_tracking_shell.go). Keyed by absolute path,
+	// each entry holds the file's content (or a path-only sentinel)
+	// plus stat metadata for the fast path. Built once via prime, then
+	// rebased on every shell_command — content is re-read only for
+	// files whose (size, mtime) actually changed. nil until first
+	// shell tracking call.
+	shellCache   map[string]*shellSnapshotEntry
+	shellCacheMu sync.Mutex
+
+	// autoSkipDirs is the adaptive companion to shellSnapshotSkipDirs.
+	// Static skip list catches the well-known bloat (node_modules,
+	// .git, …); this set catches per-user surprises: a workspace that
+	// happens to contain a giant `releases/` directory, a misplaced
+	// data dump, an unexpected vendor mirror — anything we don't know
+	// the name of in advance. Populated at walk end by analyzing
+	// per-directory file counts; consulted by the next walk so the
+	// cost is paid at most once per session per fat directory.
+	// Absolute paths, not bare names — we want to skip *this* `data/`
+	// dir, not all directories named `data`.
+	autoSkipDirs map[string]bool
+
+	// shellWalkEnabled gates the per-shell_command walk. When false,
+	// TrackShellTurn is a no-op and direct-tool hooks are the only
+	// source of change records. Set from configuration.ChangeTracking.
+	// Defaults to true; nil is treated as true.
+	shellWalkEnabled bool
+
+	// Per-tracker overrides for the shell-walk budgets / thresholds.
+	// Zero values mean "use the package-level defaults"; positive
+	// values replace them for this tracker only. Configured by
+	// EnableChangeTracking via configuration.ChangeTracking.Resolve().
+	shellMaxFiles                   int
+	shellMaxTotalBytes              int64
+	shellMaxDuration                time.Duration
+	shellAutoSkipFileCountThreshold int
 }
 
 // TrackedFileChange represents a file change made during agent execution
@@ -253,12 +291,23 @@ func (ct *ChangeTracker) GetChanges() []TrackedFileChange {
 	return changesCopy
 }
 
-// Clear clears all tracked changes (but keeps the tracker enabled)
+// Clear clears all tracked changes (but keeps the tracker enabled).
+// Also resets the shell-snapshot cache so a subsequent
+// EnableChangeTracking / PrimeShellTracking call re-baselines against
+// current disk state — otherwise a stale cache would attribute
+// post-Clear shell mutations to "the workspace as it looked at session
+// start", which is wrong after a Reset. The autoSkipDirs adaptive set
+// is preserved across Clear (it's an optimization, not state about
+// the user's changes); a Reset that wants to re-learn from scratch
+// can null it manually.
 func (ct *ChangeTracker) Clear() {
 	ct.changes = ct.changes[:0]
 	ct.baseRevisionRecorded = false
 	ct.committedChangeCount = 0
 	ct.checkpointedChangeCount = 0
+	ct.shellCacheMu.Lock()
+	ct.shellCache = nil
+	ct.shellCacheMu.Unlock()
 }
 
 // CollectFileChangesForCheckpoint returns the (path, op) manifest of

@@ -1,6 +1,7 @@
 import { LiveLog } from '@sprout/ui';
-import { Bot, ChevronDown, ChevronRight, BarChart3 } from 'lucide-react';
-import React from 'react';
+import { Bot, ChevronDown, ChevronRight, BarChart3, Square } from 'lucide-react';
+import React, { useState } from 'react';
+import { cancelSubagent } from '../../services/api/subagentApi';
 import { stripAnsiCodes } from '../../utils/ansi';
 import { getSubagentResultPreview, formatToolDetail } from '../../utils/resultSummary';
 import { getPersonaColor, getStatusIcon, formatDuration, formatTime } from './helpers';
@@ -36,6 +37,26 @@ export function SubagentsTab({
   // Auto-scroll live subagent activity lists
   const liveActivityListRef = React.useRef<HTMLDivElement | null>(null);
   const liveActivityScrollTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Per-section "currently cancelling" set so we can show progress and prevent
+  // double-clicks. Keyed by the tool.id of the section because a parallel
+  // run can issue several cancels under one section.
+  const [cancellingTools, setCancellingTools] = useState<Set<string>>(new Set());
+
+  const handleCancelSection = async (toolId: string, runnerTaskIds: string[]) => {
+    if (cancellingTools.has(toolId) || runnerTaskIds.length === 0) return;
+    setCancellingTools((prev) => new Set(prev).add(toolId));
+    try {
+      // Fire all cancels in parallel — they're idempotent and each one is fast.
+      await Promise.allSettled(runnerTaskIds.map((id) => cancelSubagent(window.fetch.bind(window), id)));
+    } finally {
+      setCancellingTools((prev) => {
+        const next = new Set(prev);
+        next.delete(toolId);
+        return next;
+      });
+    }
+  };
 
   React.useEffect(() => {
     const el = liveActivityListRef.current;
@@ -214,6 +235,32 @@ export function SubagentsTab({
               )}
 
               <div className="subagent-card-actions">
+                {isActive && (() => {
+                  // Distinct runner task IDs in this section. For a single
+                  // run_subagent call there's one; for run_parallel_subagents
+                  // there's one per task. We cancel them in one click.
+                  const runnerTaskIds = Array.from(
+                    new Set(activities.map((a) => a.taskId).filter((v): v is string => !!v)),
+                  );
+                  if (runnerTaskIds.length === 0) return null;
+                  const cancelling = cancellingTools.has(tool.id);
+                  return (
+                    <button
+                      type="button"
+                      className="subagent-link-btn subagent-link-btn-stop"
+                      onClick={() => void handleCancelSection(tool.id, runnerTaskIds)}
+                      disabled={cancelling}
+                      title={
+                        runnerTaskIds.length > 1
+                          ? `Cancel ${runnerTaskIds.length} running subagents`
+                          : 'Cancel this subagent'
+                      }
+                    >
+                      <Square size={11} />
+                      {cancelling ? 'Cancelling…' : runnerTaskIds.length > 1 ? `Stop (${runnerTaskIds.length})` : 'Stop'}
+                    </button>
+                  );
+                })()}
                 {activities.length > 3 && (
                   <button className="subagent-link-btn" onClick={() => toggleSubagentExpansion(tool.id)}>
                     {expanded ? 'Show fewer updates' : 'Show all updates'}

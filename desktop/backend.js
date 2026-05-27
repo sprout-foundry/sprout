@@ -4,6 +4,7 @@
 
 const { app } = require('electron');
 const { spawn } = require('node:child_process');
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const http = require('node:http');
 const net = require('node:net');
@@ -12,6 +13,17 @@ const { shellEscape } = require('./utils');
 const { openBackendLogStream } = require('./state-manager');
 const { toWslPath, ensureWslBackendBinary } = require('./wsl');
 const { renderErrorPage } = require('./error-pages');
+
+// 256-bit random auth secret for Electron ↔ backend communication.
+// Generated once per app lifecycle.
+let authToken;
+
+function generateSecret() {
+  if (!authToken) {
+    authToken = crypto.randomBytes(32).toString('hex');
+  }
+  return authToken;
+}
 
 function resolveBackendBinary() {
   const platform = arguments[0] || (process.platform === 'win32' ? 'windows' : process.platform);
@@ -74,6 +86,7 @@ function waitForHealth(port, timeoutMs = 20000) {
 }
 
 async function startBackendForWorkspace(workspaceEntry) {
+  generateSecret();
   const port = await findFreePort();
   const backendMode = workspaceEntry.backendMode === 'wsl' ? 'wsl' : 'native';
 
@@ -87,7 +100,7 @@ async function startBackendForWorkspace(workspaceEntry) {
     const workspaceWslPath = toWslPath(workspaceEntry.workspacePath, distro);
     const command = `cd ${shellEscape(workspaceWslPath)} && SPROUT_DESKTOP=1 SPROUT_HOST_PLATFORM=windows SPROUT_DESKTOP_BACKEND_MODE=wsl BROWSER=none ${shellEscape(backendBinary)} --isolated-config agent --daemon --web-port ${shellEscape(String(port))}`;
     const child = spawn('wsl.exe', ['-d', distro, '--', 'bash', '-lc', command], {
-      env: { ...process.env },
+      env: { ...process.env, SPROUT_AUTH_TOKEN: authToken },
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
     });
@@ -121,6 +134,7 @@ async function startBackendForWorkspace(workspaceEntry) {
       SPROUT_HOST_PLATFORM: process.platform === 'win32' ? 'windows' : process.platform,
       SPROUT_DESKTOP_BACKEND_MODE: 'native',
       BROWSER: 'none',
+      SPROUT_AUTH_TOKEN: authToken,
     },
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
@@ -169,4 +183,5 @@ module.exports = {
   waitForHealth,
   startBackendForWorkspace,
   registerExitHandler,
+  generateSecret,
 };

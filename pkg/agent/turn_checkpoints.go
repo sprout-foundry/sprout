@@ -9,6 +9,62 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/redact"
 )
 
+// collectCheckpointFileMetadata returns the file-change manifest + revision
+// ID to embed in the turn checkpoint about to be recorded. Pulls from the
+// agent's ChangeTracker via its checkpoint watermark so each checkpoint's
+// manifest covers only the turn's own writes. Returns (nil, "") when
+// tracking isn't enabled.
+func (a *Agent) collectCheckpointFileMetadata() ([]CheckpointFileChange, string) {
+	if a == nil {
+		return nil, ""
+	}
+	tracker := a.GetChangeTracker()
+	if tracker == nil {
+		return nil, ""
+	}
+	return tracker.CollectFileChangesForCheckpoint()
+}
+
+// appendFileMetadataToSummary glues the git-style file manifest + revision
+// pointer onto the end of an actionable summary string so the model sees
+// them once this turn is substituted for its summary text. Returns the
+// original string unchanged when no metadata is available.
+//
+// Output shape (added as additional bullet lines):
+//
+//	- Files: A pkg/auth/session.go, M pkg/auth/jwt.go
+//	- Revision: rev-7a3c2e (call view_history with this revision_id to inspect the diff)
+func appendFileMetadataToSummary(summary string, changes []CheckpointFileChange, revisionID string) string {
+	if len(changes) == 0 && revisionID == "" {
+		return summary
+	}
+	var b strings.Builder
+	b.WriteString(strings.TrimRight(summary, "\n"))
+	if len(changes) > 0 {
+		if b.Len() > 0 {
+			b.WriteString("\n")
+		}
+		b.WriteString("- Files: ")
+		for i, c := range changes {
+			if i > 0 {
+				b.WriteString(", ")
+			}
+			b.WriteString(c.Op)
+			b.WriteString(" ")
+			b.WriteString(c.Path)
+		}
+	}
+	if revisionID != "" {
+		if b.Len() > 0 {
+			b.WriteString("\n")
+		}
+		b.WriteString("- Revision: ")
+		b.WriteString(revisionID)
+		b.WriteString(" (call view_history with this revision_id to inspect the diff)")
+	}
+	return b.String()
+}
+
 func (a *Agent) shiftTurnCheckpoints(delta int) {
 	if a == nil || delta == 0 {
 		return
@@ -71,11 +127,26 @@ func (a *Agent) recordTurnCheckpointFromMessages(startIndex, endIndex int, turnM
 
 	actionableSummary := a.buildActionableTurnCheckpointSummary(turnMessages)
 
+	// Capture file-change manifest + revision pointer from the agent's
+	// ChangeTracker (if tracking is enabled). Seed's checkpoint substitution
+	// surfaces these to the model so it can call view_history when it needs
+	// the exact diff for a turn that's been collapsed to a summary.
+	fileChanges, revisionID := a.collectCheckpointFileMetadata()
+
+	// Append the git-style manifest + revision pointer to the actionable
+	// summary text so the model sees them when this turn is later
+	// substituted for its summary. Without this the structured fields in
+	// the TurnCheckpoint are model-invisible (only Summary/ActionableSummary
+	// reach the prompt via BuildCheckpointCompactedMessages).
+	actionableSummary = appendFileMetadataToSummary(actionableSummary, fileChanges, revisionID)
+
 	checkpoint := TurnCheckpoint{
 		StartIndex:        startIndex,
 		EndIndex:          endIndex,
 		Summary:           summary,
 		ActionableSummary: actionableSummary,
+		FileChanges:       fileChanges,
+		RevisionID:        revisionID,
 	}
 
 	// Extract the first user message content for embedding.

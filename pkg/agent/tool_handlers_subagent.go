@@ -1072,6 +1072,22 @@ func buildSubagentReturn(m map[string]string, result *SubagentResult, status Sub
 			}
 			r.FilesModified = files
 		}
+		// SP-059 Phase 3a: pass the progress timeline through so the
+		// primary's LLM sees what the subagent did, not just the
+		// final answer. Type conversion exists because the runner's
+		// SubagentProgressEntry is internal — envelope ships its own
+		// ProgressEntry so the wire format is decoupled.
+		if len(result.ProgressLog) > 0 {
+			log := make([]ProgressEntry, 0, len(result.ProgressLog))
+			for _, p := range result.ProgressLog {
+				log = append(log, ProgressEntry{
+					OffsetMS: p.OffsetMS,
+					Phase:    p.Phase,
+					Message:  p.Message,
+				})
+			}
+			r.ProgressLog = log
+		}
 	}
 	return r
 }

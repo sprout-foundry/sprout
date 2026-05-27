@@ -425,15 +425,26 @@ func (sp *sproutProvider) GetModel() string {
 }
 
 func (sp *sproutProvider) EstimateTokens(req *core.ChatRequest) int {
-	if req == nil || len(req.Messages) == 0 {
+	if req == nil {
 		return 0
 	}
-	// Fallback: ~4 chars per token
-	total := 0
-	for _, msg := range req.Messages {
-		total += len(msg.Content) + len(msg.ReasoningContent)
-	}
-	return total / 4
+	// Delegate to sprout's centralized estimator, which accounts for:
+	//   - per-message content + reasoning content (tiktoken-ish word/char hybrid)
+	//   - tool-call payloads (id + name + args + overhead)
+	//   - tool-result tool_call_id overhead
+	//   - image attachments
+	//   - per-message role/wrapper overhead
+	//   - tool catalog (200 tokens × len(tools))
+	//   - system-instruction buffer
+	//
+	// The previous "len(content) / 4" stub under-counted by an order of
+	// magnitude on tool-heavy iter-0 prompts (the entire tool catalog and
+	// every assistant tool_call payload went uncounted), making compaction
+	// triggers and max_tokens math both stale on every call.
+	//
+	// core.Message and core.Tool are type aliases for api.Message / api.Tool
+	// (see pkg/agent_api/types.go), so we can pass through directly.
+	return api.EstimateInputTokens(req.Messages, req.Tools)
 }
 
 // ---------------------------------------------------------------------------

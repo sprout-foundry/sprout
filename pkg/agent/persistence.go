@@ -102,6 +102,13 @@ func normalizeWorkingDirectory(workingDir string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve absolute working directory %q: %w", trimmed, err)
 	}
+	// Resolve symlinks for consistent path comparison. On macOS,
+	// /var → /private/var and os.Getwd() returns the resolved path,
+	// while t.TempDir() returns the unresolved path.
+	resolved, err := filepath.EvalSymlinks(abs)
+	if err == nil {
+		return filepath.Clean(resolved), nil
+	}
 	return filepath.Clean(abs), nil
 }
 

@@ -478,11 +478,15 @@ func classifyWriteOperation(args map[string]interface{}) SecurityResult {
 		"/usr/", "/etc/", "/bin/", "/sbin/", "/var/", "/opt/", "/boot/", "/lib/", "/lib64/",
 	} {
 		if path == critical || strings.HasPrefix(path, critical) {
+			// Allow macOS temp directories (/var/folders/...) and /tmp paths
+			if (strings.HasPrefix(path, "/var/folders/") || strings.HasPrefix(path, "/var/tmp/")) && strings.HasPrefix(critical, "/var/") {
+				continue
+			}
 			return SecurityResult{Risk: SecurityDangerous, Reasoning: "Writing to critical system file or directory: " + path, ShouldBlock: true, ShouldPrompt: true, IsHardBlock: true, RiskType: "system_integrity", Category: RiskCategoryDestructive}
 		}
 	}
 
-	if strings.HasPrefix(path, "/tmp/") || path == "/tmp" {
+	if strings.HasPrefix(path, "/tmp/") || strings.HasPrefix(path, "/private/tmp/") || strings.HasPrefix(path, "/var/folders/") || strings.HasPrefix(path, "/private/var/folders/") || path == "/tmp" {
 		return SecurityResult{Risk: SecuritySafe, Reasoning: "Writing to temporary directory", Category: RiskCategoryFileWrite}
 	}
 

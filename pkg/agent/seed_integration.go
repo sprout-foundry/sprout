@@ -747,11 +747,24 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	if cps := a.state.GetTurnCheckpoints(); len(cps) > 0 {
 		seedCPs := make([]core.TurnCheckpoint, len(cps))
 		for i, cp := range cps {
+			// Convert sprout's CheckpointFileChange manifest to seed's
+			// FileChange slice so the model sees the git-style turn
+			// manifest and can resolve revision_id via the view_history
+			// tool when it needs the full diff.
+			var seedChanges []core.FileChange
+			if len(cp.FileChanges) > 0 {
+				seedChanges = make([]core.FileChange, len(cp.FileChanges))
+				for j, fc := range cp.FileChanges {
+					seedChanges[j] = core.FileChange{Path: fc.Path, Op: fc.Op}
+				}
+			}
 			seedCPs[i] = core.TurnCheckpoint{
 				StartIndex:        cp.StartIndex,
 				EndIndex:          cp.EndIndex,
 				Summary:           cp.Summary,
 				ActionableSummary: cp.ActionableSummary,
+				FileChanges:       seedChanges,
+				RevisionID:        cp.RevisionID,
 			}
 		}
 		opts.InitialCheckpoints = seedCPs

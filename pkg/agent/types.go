@@ -34,6 +34,24 @@ type TurnCheckpoint struct {
 	EndIndex          int    `json:"end_index"`
 	Summary           string `json:"summary"`
 	ActionableSummary string `json:"actionable_summary,omitempty"`
+	// FileChanges is the git-style manifest (M/A/D/R) of files touched
+	// during this turn. Populated from the agent's ChangeTracker at
+	// checkpoint-record time. Empty when tracking is disabled or the turn
+	// didn't write any files.
+	FileChanges []CheckpointFileChange `json:"file_changes,omitempty"`
+	// RevisionID is the ChangeTracker revision that was active when this
+	// turn ran. When set, the summary text references it so the model can
+	// call the view_history tool to recover the exact diff. Empty when
+	// tracking is disabled.
+	RevisionID string `json:"revision_id,omitempty"`
+}
+
+// CheckpointFileChange is a single file-change entry in a TurnCheckpoint's
+// manifest. Op is one of "A" (added), "M" (modified), "D" (deleted), "R"
+// (renamed) to mirror git's status codes; anything else is "?" (other).
+type CheckpointFileChange struct {
+	Path string `json:"path"`
+	Op   string `json:"op"`
 }
 
 // AgentState represents the state of an agent that can be persisted

@@ -181,7 +181,9 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 	// Always wire the agent's event bus so terminal subscribers (activity
 	// indicator, tool timeline) receive PublishToolStart / PublishToolEnd
 	// even when the WebUI is disabled. SP-048-1.
-	chatAgent.SetEventBus(eventBus)
+	if chatAgent != nil {
+		chatAgent.SetEventBus(eventBus)
+	}
 
 	// Create a single cancellable context for the entire application
 	ctx, cancel := context.WithCancel(context.Background())
@@ -250,12 +252,15 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 			// Inject webui-owned managers into the agent so that security
 			// prompts and ask_user requests route through the same instances
 			// the webui handlers resolve responses on — no global singletons.
-			chatAgent.InjectWebUIManagers(webServer.GetSecurityPromptMgr(), webServer.GetAskUserMgr())
+			// Skip this when agent is nil (provider not configured in daemon mode).
+			if chatAgent != nil {
+				chatAgent.InjectWebUIManagers(webServer.GetSecurityPromptMgr(), webServer.GetAskUserMgr())
 
-			// Wire up the WebUI client check so security prompts route
-			// correctly: use the event bus only when a browser tab is open,
-			// otherwise fall back to CLI prompting (avoids 5-min timeouts).
-			chatAgent.SetHasActiveWebUIClients(webServer.HasActiveWebUIClients)
+				// Wire up the WebUI client check so security prompts route
+				// correctly: use the event bus only when a browser tab is open,
+				// otherwise fall back to CLI prompting (avoids 5-min timeouts).
+				chatAgent.SetHasActiveWebUIClients(webServer.HasActiveWebUIClients)
+			}
 
 			startInstanceTracker(ctx, port, chatAgent)
 
@@ -350,11 +355,13 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 				// SIGHUP: reload on-disk config without shutting down.
 				if sig == syscall.SIGHUP {
 					fmt.Printf("\n[RELOAD] Received SIGHUP, reloading configuration...\n")
-					if mgr := chatAgent.GetConfigManager(); mgr != nil {
-						if err := mgr.Reload(); err != nil {
-							fmt.Printf("[RELOAD] Failed: %v\n", err)
-						} else {
-							fmt.Printf("[RELOAD] Configuration reloaded successfully.\n")
+					if chatAgent != nil {
+						if mgr := chatAgent.GetConfigManager(); mgr != nil {
+							if err := mgr.Reload(); err != nil {
+								fmt.Printf("[RELOAD] Failed: %v\n", err)
+							} else {
+								fmt.Printf("[RELOAD] Configuration reloaded successfully.\n")
+							}
 						}
 					}
 					continue
@@ -374,7 +381,9 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 					fmt.Println()
 					console.GlyphPaused.Printf("Received signal %v, interrupting active task...", sig)
 					console.GlyphDim.Printf("  (Press Ctrl+C again quickly to force quit)")
-					chatAgent.TriggerInterrupt()
+					if chatAgent != nil {
+						chatAgent.TriggerInterrupt()
+					}
 					continue
 				}
 
@@ -429,12 +438,26 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 	// prompt text on stderr while the prompt is on stdout.
 	console.RegisterGlobalIndicator(indicator)
 
-	// Set up event publishing for agent
-	SetupAgentEvents(chatAgent, eventBus, indicator)
+	// Set up event publishing for agent (skip when agent is nil in daemon mode)
+	if chatAgent != nil {
+		SetupAgentEvents(chatAgent, eventBus, indicator)
+	}
 
 	// Check for queue mode before interactive mode
-	if chatAgent.GetConfigManager().GetConfig().GetEAMode() == "queue" {
+	// (skip when agent is nil in daemon mode — provider not configured yet)
+	if chatAgent != nil && chatAgent.GetConfigManager().GetConfig().GetEAMode() == "queue" {
 		return runQueueMode(ctx, chatAgent, eventBus)
+	}
+
+	// When agent is nil (provider not configured in daemon mode), skip to
+	// the daemon wait path. The web UI handles provider setup interactively.
+	if chatAgent == nil && daemonMode && webServer != nil && webServer.IsRunning() {
+		fmt.Printf("\n[web] Web UI running at http://%s:%d (no provider configured — configure via web UI)\n", webui.DisplayAddr(bindAddr), webServer.GetPort())
+		if !isServiceMode() {
+			fmt.Println("Press Ctrl+C to stop the server.")
+		}
+		<-ctx.Done()
+		return nil
 	}
 
 	// Handle different modes

@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/noninteractive"
 	"github.com/sprout-foundry/sprout/pkg/security"
@@ -86,6 +87,13 @@ func createChatAgent() (*agent.Agent, error) {
 	}
 
 	if err != nil {
+		// In daemon mode, if the provider isn't configured or the model isn't
+		// available, gracefully proceed without an agent. The web UI will
+		// allow the user to configure a provider interactively.
+		if daemonMode && (errors.Is(err, agent.ErrProviderNotConfigured) || errors.Is(err, agent.ErrModelNotAvailable)) {
+			console.GlyphWarning.Fprintf(os.Stderr, "Provider not configured: %v. Starting web UI for interactive setup.", err)
+			return nil, nil
+		}
 		if noninteractive.IsNonInteractiveHint(err) {
 			// The agent startup failed specifically because no provider is
 			// configured and stdin is not a terminal. Print the guidance
@@ -288,9 +296,26 @@ Examples:
 			os.Setenv("SPROUT_NO_PROJECT_SKILLS", "1")
 		}
 
+		// Propagate daemon mode before agent creation so that
+		// isSSHDaemon() returns true during provider resolution.
+		// Without this, NewAgent() fails in non-interactive mode
+		// before RunAgent has a chance to set the env var.
+		if daemonMode {
+			os.Setenv("SPROUT_DAEMON", "1")
+		}
+
 		chatAgent, err := createChatAgent()
 		if err != nil {
 			return fmt.Errorf("failed to create chat agent: %w", err)
+		}
+
+		// In daemon mode, the agent may be nil if the provider isn't configured.
+		// The web UI will handle provider setup. Skip all agent-specific setup.
+		if chatAgent == nil && daemonMode {
+			isCI := os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != ""
+			stdinIsTerminal := term.IsTerminal(int(os.Stdin.Fd()))
+			isInteractive := len(args) == 0 && !isCI && stdinIsTerminal
+			return RunAgent(nil, isInteractive, args)
 		}
 
 		// Initialize trace session if requested

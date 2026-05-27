@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/events"
@@ -35,6 +36,24 @@ type OutputRouter struct {
 	eventBus                 *events.EventBus
 	agent                    *Agent
 	reasoningTerminalEnabled bool
+
+	// externalWriteHook fires immediately before any non-stream terminal
+	// write (tool log, agent message, etc). Used by the CLI's assistant
+	// turn renderer to finalize the current prose "segment" so the
+	// upcoming non-prose output doesn't get reformatted away at turn-end.
+	// May be nil. Caller is responsible for thread-safety inside the
+	// hook (renderer uses its own mutex).
+	externalWriteHook func()
+}
+
+// SetExternalWriteHook registers a callback that fires before every
+// writeTerminalMessage emission. Pass nil to clear. Intended for the
+// AssistantTurnRenderer in pkg/console to break its prose segment when
+// chrome (tool logs / agent messages) interrupts the model's stream.
+func (r *OutputRouter) SetExternalWriteHook(fn func()) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.externalWriteHook = fn
 }
 
 // NewOutputRouter creates an output router.
@@ -194,6 +213,18 @@ func (r *OutputRouter) writeTerminalMessage(message string) {
 		return
 	}
 
+	// Fire the external-write hook BEFORE printing so the CLI assistant
+	// renderer can finalize its current prose segment (and skip
+	// re-rendering content that's about to be interrupted by chrome).
+	// Snapshot the hook under the read lock so a concurrent SetExternalWriteHook
+	// doesn't race with the call.
+	r.mu.RLock()
+	hook := r.externalWriteHook
+	r.mu.RUnlock()
+	if hook != nil {
+		hook()
+	}
+
 	// Ensure newline
 	if !strings.HasSuffix(message, "\n") {
 		message += "\n"
@@ -242,10 +273,17 @@ func (r *OutputRouter) writeTerminalMessage(message string) {
 }
 
 // RouteToolLog routes a tool execution log message with iteration and context info.
+//
+// Terminal rendering: a glyph-prefixed dim line. The iter/context info is
+// kept on the WebUI event (for the activity feed) but elided from the
+// terminal — that data already lives on the status footer, and pulling it
+// into every tool-log line just adds noise. Format:
+//
+//	→ shell_command ls -la /path
 func (r *OutputRouter) RouteToolLog(action string, target string) {
 	agent := r.agent
 
-	// Calculate context usage percentage
+	// Calculate context usage percentage (still needed for the WebUI event).
 	var contextPercent string
 	var currentIter int
 	if agent != nil {
@@ -257,7 +295,8 @@ func (r *OutputRouter) RouteToolLog(action string, target string) {
 	}
 	iterInfo := fmt.Sprintf("[%d%s]", currentIter, contextPercent)
 
-	// Always publish structured event for WebUI (even without agent, for robustness)
+	// Always publish structured event for WebUI (even without agent, for robustness).
+	// WebUI keeps the full "[iter] action target" because it has the space.
 	extra := map[string]interface{}{
 		"action":    action,
 		"target":    target,
@@ -270,18 +309,68 @@ func (r *OutputRouter) RouteToolLog(action string, target string) {
 		r.publish(events.EventTypeAgentMessage, events.AgentMessageEvent("tool_log", fmt.Sprintf("%s %s", iterInfo, action), extra))
 	}
 
-	// Terminal output: format with ANSI colors
-	const darkGray = "\033[90m"
-	const slightlyLighterGray = "\033[38;5;246m"
+	// Terminal output: dim arrow + target only (drop the iter/context prefix).
+	// `action` ("executing tool" / "executed") is implied by the arrow glyph
+	// and elided to keep the line scannable.
+	const dim = "\033[2m"
 	const reset = "\033[0m"
 
 	var message string
 	if target != "" {
-		message = fmt.Sprintf("%s%s %s%s%s", darkGray, iterInfo, slightlyLighterGray, target, reset)
+		message = fmt.Sprintf("%s→ %s%s", dim, target, reset)
 	} else {
-		message = fmt.Sprintf("%s%s%s", darkGray, iterInfo, reset)
+		message = fmt.Sprintf("%s→ %s%s", dim, action, reset)
 	}
 	r.writeTerminalMessage(message)
+}
+
+// RouteToolCompletion emits the inline duration / outcome chip that follows
+// a tool-log line. Kept separate from RouteToolLog because tool_start fires
+// before the work begins and tool_end fires after — the two are paired by
+// toolCallID at the call site (richEventPublisher / tool_executor).
+//
+// Format: `  ✓ 124ms` (indented under the prior tool-log line, dim green).
+// On failure: `  ✗ 124ms — <short error>`.
+func (r *OutputRouter) RouteToolCompletion(ok bool, duration time.Duration, errMsg string) {
+	const dim = "\033[2m"
+	const reset = "\033[0m"
+	const greenDim = "\033[2;32m"
+	const redDim = "\033[2;31m"
+
+	dur := formatToolDuration(duration)
+	var line string
+	if ok {
+		line = fmt.Sprintf("%s  ✓ %s%s", greenDim, dur, reset)
+	} else {
+		short := errMsg
+		if len(short) > 80 {
+			short = short[:77] + "..."
+		}
+		if short != "" {
+			line = fmt.Sprintf("%s  ✗ %s%s %s— %s%s", redDim, dur, reset, dim, short, reset)
+		} else {
+			line = fmt.Sprintf("%s  ✗ %s%s", redDim, dur, reset)
+		}
+	}
+	r.writeTerminalMessage(line)
+}
+
+// formatToolDuration picks a sensible unit for short tool runs: <1s → ms,
+// <60s → seconds with one decimal, ≥1m → "<m>m<s>s". Keeps the chip narrow.
+func formatToolDuration(d time.Duration) string {
+	if d < time.Second {
+		ms := d.Milliseconds()
+		if ms < 1 {
+			return "<1ms"
+		}
+		return fmt.Sprintf("%dms", ms)
+	}
+	if d < time.Minute {
+		return fmt.Sprintf("%.1fs", d.Seconds())
+	}
+	m := int(d / time.Minute)
+	s := int((d % time.Minute) / time.Second)
+	return fmt.Sprintf("%dm%02ds", m, s)
 }
 
 // isEventSourced returns true if the router is in event-sourced mode

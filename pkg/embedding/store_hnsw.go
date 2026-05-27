@@ -193,7 +193,10 @@ func NewHNSWStore(indexPath string, modelHash string) (*HNSWStore, error) {
 		store.clear()
 	}
 
-	// Check model hash.
+	// Check model hash. Persist the current hash whenever the meta is
+	// missing OR stale — otherwise a hash mismatch would clear the store
+	// every startup forever (the next run would re-read the same stale
+	// hash, log the same "model hash changed" message, and re-clear).
 	storedHash, err := store.loadMeta()
 	if err != nil {
 		log.Printf("embedding: warn: failed to read hnsw meta: %v (skipping hash check)", err)
@@ -203,8 +206,7 @@ func NewHNSWStore(indexPath string, modelHash string) (*HNSWStore, error) {
 		store.clear()
 	}
 
-	// Save meta on first creation.
-	if storedHash == "" {
+	if err == nil && storedHash != modelHash {
 		if err := store.saveMeta(modelHash); err != nil {
 			log.Printf("embedding: warn: failed to write hnsw meta: %v", err)
 		}

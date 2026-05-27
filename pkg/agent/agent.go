@@ -124,6 +124,10 @@ type Agent struct {
 	// Embedding index manager for duplicate detection on file writes.
 	embeddingMgr *embedding.EmbeddingManager
 
+	// backgroundWg tracks background goroutines that use embeddingMgr or other
+	// resources. Shutdown() waits for these before closing resources.
+	backgroundWg sync.WaitGroup
+
 	// SubagentRunner manages in-process subagent execution.
 	subagentRunner *SubagentRunner
 

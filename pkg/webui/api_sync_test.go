@@ -271,6 +271,29 @@ func TestHandleAPISyncOp_PathTraversal(t *testing.T) {
 	}
 }
 
+func TestHandleAPISyncOp_AgentNil_Returns503(t *testing.T) {
+	// When agent is nil (daemon mode with no provider configured),
+	// handleAPISyncOp should return 503 "agent not initialized".
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// ws.agent is nil by default — do not set it.
+
+	body := `{"op_type":"write","path":"hello.txt","content":"world","browser_seq":1,"timestamp":1000}`
+	req := httptest.NewRequest(http.MethodPost, "/api/sync/op", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	ws.handleAPISyncOp(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 for nil agent, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	if !strings.Contains(rec.Body.String(), "agent not initialized") {
+		t.Errorf("expected response body to contain 'agent not initialized', got: %s", rec.Body.String())
+	}
+}
+
 // ---------- handleAPISyncBatch ----------
 
 func TestHandleAPISyncBatch_MethodNotAllowed(t *testing.T) {
@@ -427,6 +450,31 @@ func TestHandleAPISyncBatch_StopsOnConflict(t *testing.T) {
 	}
 	if !strings.Contains(resp.Results[2].Error, "skipped") {
 		t.Errorf("third op error should mention skipped, got %q", resp.Results[2].Error)
+	}
+}
+
+func TestHandleAPISyncBatch_AgentNil_Returns503(t *testing.T) {
+	// When agent is nil (daemon mode with no provider configured),
+	// handleAPISyncBatch should return 503 "agent not initialized".
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// ws.agent is nil by default — do not set it.
+
+	body := `{"ops":[
+		{"op_type":"write","path":"a.txt","content":"one","browser_seq":1,"timestamp":1000}
+	]}`
+	req := httptest.NewRequest(http.MethodPost, "/api/sync/batch", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	ws.handleAPISyncBatch(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 for nil agent, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	if !strings.Contains(rec.Body.String(), "agent not initialized") {
+		t.Errorf("expected response body to contain 'agent not initialized', got: %s", rec.Body.String())
 	}
 }
 

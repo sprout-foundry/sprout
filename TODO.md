@@ -320,7 +320,7 @@ _Spec: roadmap/SP-060-desktop-serve.md_
 - [x] SP-060-A1-authTests: 19 unit tests in `pkg/webui/auth_middleware_test.go` (valid token, invalid token, missing token, GET/HEAD/OPTIONS pass-through, WebSocket pass-through, non-API path pass-through, case sensitivity, error response structure)
 - [x] SP-060-A1-nonLocalhostGuard: `server.go` refuses to start on non-localhost bind without `SPROUT_AUTH_TOKEN` set
 - [x] SP-060-A2-randomPort: Electron already uses `findFreePort()` in `desktop/backend.js` to allocate random port; Go captures OS-assigned port when `--web-port 0`
-- [ ] SP-060-A2-electronSecret: Generate 256-bit random secret in `desktop/backend.js` on launch; pass as `SPROUT_AUTH_TOKEN` env var when spawning backend
+- [x] SP-060-A2-electronSecret: Generate 256-bit random secret in `desktop/backend.js` on launch; pass as `SPROUT_AUTH_TOKEN` env var when spawning backend
 - [ ] SP-060-A2-electronInject: Use `session.webRequest.onBeforeSendHeaders` in `desktop/backend.js` to inject `Authorization: Bearer <token>` on all renderer requests
 - [ ] SP-060-A3-verify: Verify backend rejects unauthenticated requests, accepts valid token; desktop loads and chats; `make build-all` passes
 

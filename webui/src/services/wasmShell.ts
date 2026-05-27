@@ -175,6 +175,13 @@ export interface SproutWasmAPI {
   deleteFile(path: string): string;
   getHistory(): string;
   getEnv(): string;
+  // ── AST / symbol extraction (cmd/wasm/ast_funcs.go) ──
+  // Inputs are JSON-encoded payloads from the Go side; consumers should
+  // JSON.parse() the return value. Content bytes accept Uint8Array or
+  // ArrayBuffer. On error the result includes an "error" field.
+  parseFile?(filePath: string, content: Uint8Array | ArrayBuffer): string;
+  extractSymbols?(filePath: string, content: Uint8Array | ArrayBuffer): string;
+  supportedLanguages?(): string;
 }
 
 declare global {

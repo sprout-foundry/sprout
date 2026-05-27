@@ -429,15 +429,9 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Handler: handleSearchMemories,
 	})
 
-	// Register embedding_index tool
-	registry.RegisterTool(ToolConfig{
-		Name:        "embedding_index",
-		Description: "Manage the embedding index for duplicate detection and semantic search. Use 'build' to create a full index, 'update' to incrementally update changed files, or 'status' to check index state.",
-		Parameters: []ParameterConfig{
-			{"operation", "string", true, []string{}, "Operation to perform: 'build' (full re-index), 'update' (incremental via git diff), or 'status' (check index state)"},
-		},
-		Handler: handleEmbeddingIndex,
-	})
+	// embedding_index is registered against the new ToolHandler registry in
+	// pkg/agent_tools/all.go. Dual-dispatch (tool_executor_sequential.go)
+	// reaches it via env.EmbeddingMgr — no legacy entry needed here.
 
 	// Register manage_settings tool
 	registry.RegisterTool(ToolConfig{
@@ -452,17 +446,8 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Handler: handleManageSettings,
 	})
 
-	// Register semantic_search tool
-	registry.RegisterTool(ToolConfig{
-		Name:        "semantic_search",
-		Description: "Search the codebase for semantically similar code using embedding vectors. Unlike text search, this finds code that does the same thing even with different names or implementations.",
-		Parameters: []ParameterConfig{
-			{"query", "string", true, []string{}, "Natural language description of what you're looking for"},
-			{"top_k", "integer", false, []string{}, "Maximum results to return (default: 5)"},
-			{"threshold", "number", false, []string{}, "Minimum similarity score 0.0-1.0 (default: 0.75)"},
-		},
-		Handler: handleSemanticSearch,
-	})
+	// semantic_search is registered against the new ToolHandler registry in
+	// pkg/agent_tools/all.go. See the embedding_index comment above.
 
 	// Register task_queue_read tool
 	registry.RegisterTool(ToolConfig{

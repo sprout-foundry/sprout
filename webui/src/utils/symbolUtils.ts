@@ -184,15 +184,149 @@ const GENERIC_PATTERNS: PatternEntry[] = [
   ],
 ];
 
+// ── WASM-backed extraction (tree-sitter) ─────────────────────────────────
+
+/** Symbol kinds returned by pkg/ast/symbols.go's guessKind. Anything outside
+ *  this set falls back to a regex-defined SymbolKind. */
+type WasmSymbol = {
+  name?: string;
+  kind?: string;
+  startLine?: number;
+  endLine?: number;
+};
+
+/** Map ast.Symbol.Kind values to local SymbolKind. */
+const WASM_KIND_MAP: Record<string, SymbolKind> = {
+  function: 'function',
+  method: 'method',
+  class: 'class',
+  interface: 'interface',
+  type: 'type',
+  enum: 'type',
+  variable: 'variable',
+  constant: 'constant',
+  property: 'variable',
+  // import/decorator/module/symbol are not surfaced — they aren't useful in
+  // the outline/breadcrumb consumers of this function.
+};
+
+/** Map a language extension (".ts", ".py", ...) to the language identifier
+ *  the Go side reports via SproutWasm.supportedLanguages(). */
+function wasmLanguageForExt(ext: string | undefined): string | null {
+  switch (ext) {
+    case '.go':
+      return 'go';
+    case '.py':
+      return 'python';
+    case '.ts':
+      return 'typescript';
+    case '.tsx':
+      return 'tsx';
+    case '.js':
+    case '.jsx':
+    case '.mjs':
+      return 'javascript';
+    default:
+      return null;
+  }
+}
+
+/** Cache the set of WASM-supported languages between calls (it doesn't
+ *  change at runtime). null = not yet probed; Set may be empty if WASM
+ *  hasn't loaded yet. */
+let wasmLangCache: Set<string> | null = null;
+
+function getWasmSupportedLangs(): Set<string> | null {
+  if (wasmLangCache) return wasmLangCache;
+  const api = typeof window === 'undefined' ? undefined : window.SproutWasm;
+  if (!api || typeof api.supportedLanguages !== 'function') return null;
+  try {
+    const raw = api.supportedLanguages();
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      wasmLangCache = new Set(parsed.map((s) => String(s).toLowerCase()));
+      return wasmLangCache;
+    }
+  } catch {
+    // fall through to null
+  }
+  return null;
+}
+
+/** Memoization key → result. Same content string → same symbols. extractSymbols
+ *  is called per-keystroke from sticky-scroll and outline panels, so this avoids
+ *  repeatedly going through WASM for unchanged content. */
+const symbolCache = new Map<string, SymbolInfo[]>();
+const SYMBOL_CACHE_MAX = 32;
+
+function cacheKey(ext: string | undefined, content: string): string {
+  // Lightweight FNV-1a 32-bit hash — collisions across different content are
+  // extremely unlikely at this size, and we key on (ext, hash) anyway.
+  let h = 0x811c9dc5;
+  for (let i = 0; i < content.length; i++) {
+    h ^= content.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return `${ext ?? ''}:${(h >>> 0).toString(16)}:${content.length}`;
+}
+
+function extractSymbolsViaWasm(content: string, language: string): SymbolInfo[] | null {
+  const api = window.SproutWasm;
+  if (!api || typeof api.extractSymbols !== 'function') return null;
+  try {
+    // WASM takes Uint8Array of bytes; use TextEncoder to handle UTF-8.
+    const bytes = new TextEncoder().encode(content);
+    // The Go side reads filePath only for language detection; pass a stub
+    // that matches the language we're forcing.
+    const path = `_inline.${language === 'tsx' ? 'tsx' : language === 'typescript' ? 'ts' : language === 'javascript' ? 'js' : language === 'python' ? 'py' : language}`;
+    const raw = api.extractSymbols(path, bytes);
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return null;
+    const out: SymbolInfo[] = [];
+    for (const s of parsed as WasmSymbol[]) {
+      if (!s || typeof s.name !== 'string' || !s.name) continue;
+      const kind = WASM_KIND_MAP[String(s.kind ?? '').toLowerCase()];
+      if (!kind) continue;
+      const line = typeof s.startLine === 'number' ? s.startLine : 0;
+      if (line <= 0) continue;
+      out.push({ name: s.name, line, kind });
+      if (out.length >= MAX_SYMBOLS) break;
+    }
+    return out;
+  } catch {
+    return null;
+  }
+}
+
 // ── Symbol extraction ────────────────────────────────────────────────────
 
 /**
- * Extract symbols from `content` using regex patterns that are chosen based
- * on the file extension (`languageId`).  Falls back to generic patterns when
- * the language is unrecognised.
+ * Extract symbols from `content` using the WASM tree-sitter parser when
+ * available for the language (go, javascript, python, tsx, typescript),
+ * falling back to regex patterns otherwise. Results are memoized by
+ * (extension, content hash) since callers re-invoke this per keystroke.
  */
 export function extractSymbols(content: string, languageId?: string): SymbolInfo[] {
   const ext = languageId?.toLowerCase();
+
+  // Fast cache check.
+  const key = cacheKey(ext, content);
+  const cached = symbolCache.get(key);
+  if (cached) return cached;
+
+  // Try WASM-backed extraction first when the language is supported.
+  const wasmLang = wasmLanguageForExt(ext);
+  if (wasmLang) {
+    const supported = getWasmSupportedLangs();
+    if (supported && supported.has(wasmLang)) {
+      const viaWasm = extractSymbolsViaWasm(content, wasmLang);
+      if (viaWasm) {
+        rememberSymbols(key, viaWasm);
+        return viaWasm;
+      }
+    }
+  }
+
   let patterns: PatternEntry[];
 
   if (ext === '.go') {
@@ -250,16 +384,26 @@ export function extractSymbols(content: string, languageId?: string): SymbolInfo
         // Using name:line as key allows same-named symbols in different
         // classes (different lines) while still preventing duplicate
         // extractions from multiple patterns matching on the same line.
-        const key = `${name}:${i + 1}`;
-        if (seen.has(key)) continue;
-        seen.set(key, i + 1);
+        const dedupKey = `${name}:${i + 1}`;
+        if (seen.has(dedupKey)) continue;
+        seen.set(dedupKey, i + 1);
         symbols.push({ name, line: i + 1, kind });
         break; // only one symbol per line
       }
     }
   }
 
+  rememberSymbols(key, symbols);
   return symbols;
+}
+
+function rememberSymbols(key: string, symbols: SymbolInfo[]): void {
+  // Bound the cache so it can't grow unboundedly as users open many files.
+  if (symbolCache.size >= SYMBOL_CACHE_MAX) {
+    const oldestKey = symbolCache.keys().next().value;
+    if (oldestKey !== undefined) symbolCache.delete(oldestKey);
+  }
+  symbolCache.set(key, symbols);
 }
 
 // ── Enclosing-symbol detection ───────────────────────────────────────────

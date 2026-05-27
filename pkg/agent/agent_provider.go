@@ -22,6 +22,12 @@ import (
 // present a model selection UI rather than hard-failing.
 var ErrModelNotAvailable = errors.New("configured model is not available for this provider")
 
+// ErrProviderNotConfigured is returned when the provider cannot be initialized
+// (unrecognized provider, missing API key, etc.) in daemon mode. This allows the
+// web UI to start without an agent and present a provider configuration UI instead
+// of crashing the daemon.
+var ErrProviderNotConfigured = errors.New("provider is not configured — configure via webui settings")
+
 // isNonInteractive returns true if the process is running in non-interactive
 // mode (stdin is not a terminal). Used to prevent blocking prompts when
 // running as a daemon, in tests, or piped input.
@@ -120,11 +126,12 @@ func recoverProviderStartup(configManager *configuration.Manager, failedProvider
 	// the user the option to pick a different model on the same provider.
 	isModelError := isModelNotFoundError(startupErr)
 
-	// Non-interactive mode. In daemon mode (web UI), if the error is model-not-found,
-	// return a sentinel so the web UI can offer model selection. Otherwise fail.
+	// Non-interactive mode. In daemon mode (web UI), return ErrProviderNotConfigured
+	// for ANY provider error (not just model-not-found) so the web UI can present a
+	// provider configuration UI. For regular non-interactive mode, fail with a hint.
 	if isNonInteractive() {
-		if isSSHDaemon() && isModelError {
-			return "", "", ErrModelNotAvailable
+		if isSSHDaemon() {
+			return "", "", ErrProviderNotConfigured
 		}
 		return "", "", agenterrors.NewProviderError(fmt.Sprintf("failed to initialize provider %s: Running in non-interactive mode. %s", failedProviderName, noninteractive.HelpHint), startupErr, "", "")
 	}

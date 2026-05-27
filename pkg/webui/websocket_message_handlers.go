@@ -22,7 +22,7 @@ func (ws *ReactWebServer) handleProviderChangeMessage(safeConn *SafeConn, data *
 	if err != nil || clientAgent == nil {
 		// If no provider is configured (editor mode) or the configured model is not available,
 		// update the config first so that a new agent can be created with the requested provider.
-		if errors.Is(err, ErrNoProviderConfigured) || errors.Is(err, agent.ErrModelNotAvailable) || (err != nil && isProviderConfigError(err)) {
+		if errors.Is(err, ErrNoProviderConfigured) || errors.Is(err, agent.ErrModelNotAvailable) || errors.Is(err, agent.ErrProviderNotConfigured) || (err != nil && isProviderConfigError(err)) {
 			// Use a layered config manager to update the provider directly.
 			cm, createErr := ws.getLayeredConfigManager(clientID)
 			if createErr != nil {
@@ -157,8 +157,9 @@ func (ws *ReactWebServer) handleModelChangeMessage(safeConn *SafeConn, data *Mod
 
 	clientAgent, err := ws.getChatAgent(clientID, activeChatID)
 	if err != nil || clientAgent == nil {
-		// Return a specific error for model-not-found so the web UI can show model selection
-		if errors.Is(err, agent.ErrModelNotAvailable) {
+		// Return a specific error for model-not-found or provider-not-configured
+		// so the web UI can show model/provider selection
+		if errors.Is(err, ErrNoProviderConfigured) || errors.Is(err, agent.ErrModelNotAvailable) || errors.Is(err, agent.ErrProviderNotConfigured) || (err != nil && isProviderConfigError(err)) {
 			_ = safeConn.WriteJSON(map[string]interface{}{
 				"type": "error",
 				"data": map[string]string{

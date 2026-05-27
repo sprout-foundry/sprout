@@ -20,6 +20,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	core "github.com/sprout-foundry/seed/core"
@@ -47,9 +48,10 @@ const (
 
 // sproutProvider adapts sprout's ClientInterface to seed's Provider interface.
 type sproutProvider struct {
-	agent      *Agent
-	client     api.ClientInterface
-	pastedImages map[string][]api.ImageData // path → image data (for multimodal attachment)
+	agent          *Agent
+	client         api.ClientInterface
+	pastedImages   map[string][]api.ImageData // path → image data (for multimodal attachment)
+	pastedImagesMu sync.RWMutex
 }
 
 // NewSproutProvider creates a Provider that wraps a sprout ClientInterface.
@@ -70,9 +72,11 @@ func (sp *sproutProvider) RegisterPastedImages(images map[string][]api.ImageData
 	if images == nil {
 		return
 	}
+	sp.pastedImagesMu.Lock()
 	for k, v := range images {
 		sp.pastedImages[k] = v
 	}
+	sp.pastedImagesMu.Unlock()
 }
 
 // isRetryableError checks whether an error is transient and should be retried.
@@ -267,6 +271,9 @@ func (h *streamHandler) OnError(err error) {
 // user message in the request. This makes pasted images available to the
 // vision model through the seed request pipeline.
 func (sp *sproutProvider) attachPastedImages(messages []core.Message) []core.Message {
+	sp.pastedImagesMu.RLock()
+	defer sp.pastedImagesMu.RUnlock()
+
 	if len(sp.pastedImages) == 0 {
 		return messages
 	}

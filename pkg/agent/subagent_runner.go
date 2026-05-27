@@ -67,7 +67,30 @@ type SubagentResult struct {
 	Cancelled       bool
 	BudgetExceeded  bool  // true if task was skipped because fleet budget was already exceeded before starting
 	Truncated       bool  // true if subagent was cut short due to fleet budget exceeded mid-run
+	// FileChanges is the manifest of writes/edits this subagent performed,
+	// captured via its own ChangeTracker. nil when tracking wasn't
+	// initialized for this run. SP-059 Phase 2c.
+	FileChanges     []TrackedFileChange
+	// ProgressLog is a per-run timeline of notable subagent events
+	// (spawn, output, complete). Surfaced to the primary's LLM via the
+	// SubagentReturn envelope so the model can reason about *what* the
+	// subagent did, not just the final assistant message. Capped to
+	// subagentProgressLogCap entries. SP-059 Phase 3a.
+	ProgressLog     []SubagentProgressEntry
 }
+
+// SubagentProgressEntry is one timeline entry from a subagent run. Kept
+// minimal to avoid bloating the envelope the primary's LLM sees.
+type SubagentProgressEntry struct {
+	OffsetMS int64  `json:"offset_ms"` // ms since subagent started
+	Phase    string `json:"phase"`     // "spawn" | "output" | "complete"
+	Message  string `json:"message"`
+}
+
+// subagentProgressLogCap bounds the per-run progress log. Beyond this,
+// the buffer becomes head-trimmed (oldest entries dropped) so the LLM
+// always sees the most recent activity.
+const subagentProgressLogCap = 50
 
 // SubagentTask represents a single parallel subagent task
 type SubagentTask struct {
@@ -347,27 +370,78 @@ func (r *SubagentRunner) GetActiveSubagents() []*runningSubagent {
 	return active
 }
 
-// CancelSubagent cancels a specific running subagent by ID
+// CancelSubagent cancels a specific running subagent by ID.
+// Cancels both the run context (truncates pending work) and the subagent
+// agent's interrupt signal (preempts the in-flight ProcessQuery loop,
+// which doesn't observe runCtx — see SP-059 Phase 1a).
 func (r *SubagentRunner) CancelSubagent(id string) bool {
 	if val, ok := r.active.Load(id); ok {
 		if sub, ok := val.(*runningSubagent); ok {
-			sub.Cancel()
+			cancelRunningSubagent(sub)
 			return true
 		}
 	}
 	return false
 }
 
-// CancelAll cancels all running subagents
+// CancelAll cancels all running subagents. Called when the user clicks
+// Stop on the primary — without this, the primary's TriggerInterrupt
+// returns but subagent work continues until self-completion.
 func (r *SubagentRunner) CancelAll() {
 	r.active.Range(func(key, value interface{}) bool {
 		if sub, ok := value.(*runningSubagent); ok {
 			if !sub.Completed.Load() {
-				sub.Cancel()
+				cancelRunningSubagent(sub)
 			}
 		}
 		return true
 	})
+}
+
+// InjectInputIntoActive delivers a steering message to the deepest
+// (most-recently-started) running subagent. Returns the target ID when
+// delivery succeeds, or empty string when no subagent is currently active
+// — the caller falls back to the primary's input channel in that case.
+//
+// "Deepest" wins so that nested-subagent setups route to the one the
+// user is most likely watching activity from in the Subagents tab.
+// Selection ties broken by start time (latest wins).
+func (r *SubagentRunner) InjectInputIntoActive(input string) (string, bool) {
+	if r == nil || input == "" {
+		return "", false
+	}
+	var best *runningSubagent
+	r.active.Range(func(_, value interface{}) bool {
+		sub, ok := value.(*runningSubagent)
+		if !ok || sub == nil || sub.Completed.Load() {
+			return true
+		}
+		if best == nil || sub.StartedAt.After(best.StartedAt) {
+			best = sub
+		}
+		return true
+	})
+	if best == nil || best.Agent == nil {
+		return "", false
+	}
+	if err := best.Agent.InjectInputContext(input); err != nil {
+		// Buffer full or other transient — caller falls back to primary.
+		return "", false
+	}
+	return best.ID, true
+}
+
+// cancelRunningSubagent signals both cancel paths the subagent observes:
+// the context (for tool calls and outbound LLM requests) and the agent's
+// interrupt mechanism (for the seed conversation loop, which has no
+// context.Context parameter on ProcessQuery).
+func cancelRunningSubagent(sub *runningSubagent) {
+	if sub.Cancel != nil {
+		sub.Cancel()
+	}
+	if sub.Agent != nil {
+		sub.Agent.TriggerInterrupt()
+	}
 }
 
 // runTask executes a single subagent task.  When cumulativeTokens is non-nil
@@ -428,6 +502,57 @@ func (r *SubagentRunner) runTask(
 	eventBus := r.shared.EventBus
 	router := NewOutputRouter(subAgent, eventBus)
 	subAgent.output.SetOutputRouter(router)
+
+	// SP-059 Phase 3a: capture a per-run progress log by subscribing to
+	// the shared event bus and filtering for subagent_activity events
+	// whose task_id matches this run. Without this the primary's LLM
+	// only sees the final stdout — no insight into *what* the subagent
+	// did along the way. Bounded to subagentProgressLogCap entries
+	// (head-trimmed) so a chatty subagent can't bloat the envelope.
+	var progressLog []SubagentProgressEntry
+	var progressMu sync.Mutex
+	stopProgress := make(chan struct{})
+	if eventBus != nil {
+		eventCh := eventBus.Subscribe(fmt.Sprintf("subagent-progress-%s", taskID))
+		go func() {
+			for {
+				select {
+				case <-stopProgress:
+					return
+				case ev, ok := <-eventCh:
+					if !ok {
+						return
+					}
+					if ev.Type != "subagent_activity" {
+						continue
+					}
+					data, dataOk := ev.Data.(map[string]interface{})
+					if !dataOk {
+						continue
+					}
+					if tid, _ := data["task_id"].(string); tid != taskID {
+						continue
+					}
+					phase, _ := data["phase"].(string)
+					message, _ := data["message"].(string)
+					progressMu.Lock()
+					if len(progressLog) >= subagentProgressLogCap {
+						// Head-trim so the most recent entries are
+						// always visible. Cheap because slice header
+						// just moves; underlying array is reused.
+						progressLog = progressLog[1:]
+					}
+					progressLog = append(progressLog, SubagentProgressEntry{
+						OffsetMS: time.Since(startTime).Milliseconds(),
+						Phase:    phase,
+						Message:  message,
+					})
+					progressMu.Unlock()
+				}
+			}
+		}()
+	}
+	defer close(stopProgress)
 
 	// Determine a mutex for thread-safe output across parallel subagents.
 	// Use the parent agent's output mutex if available; otherwise create
@@ -589,6 +714,22 @@ func (r *SubagentRunner) runTask(
 		result.Cancelled = cancelled
 		result.BudgetExceeded = budgetExceeded.Load()
 		result.Truncated = subAgent.FleetBudgetExceeded()
+		// SP-059 Phase 2c: snapshot the subagent's change tracker so
+		// the parent can surface a structured FilesModified manifest
+		// to the LLM. Snapshot is a defensive copy (GetChanges returns
+		// a copy), safe to keep after the subagent is torn down.
+		if tracker := subAgent.GetChangeTracker(); tracker != nil {
+			result.FileChanges = tracker.GetChanges()
+		}
+		// SP-059 Phase 3a: copy the captured progress log into the
+		// result. Snapshot under the mutex so a late event arriving
+		// after subAgent.ProcessQuery returned can't race the read.
+		progressMu.Lock()
+		if len(progressLog) > 0 {
+			result.ProgressLog = make([]SubagentProgressEntry, len(progressLog))
+			copy(result.ProgressLog, progressLog)
+		}
+		progressMu.Unlock()
 	}
 
 	// Clean up tracking
@@ -682,6 +823,14 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions) (*Agent, error) {
 		eventBus:      r.shared.EventBus,
 		embeddingMgr:  r.shared.EmbeddingMgr,
 	}
+
+	// SP-059 Phase 2c: enable a lightweight change tracker on the subagent
+	// so the returned envelope can include a structured FilesModified
+	// manifest. Tracking just records writes in memory; it does not
+	// participate in the parent's revision/commit flow unless the parent
+	// also has tracking enabled (handled elsewhere). Cheap to keep always
+	// on — the cost is one entry per write.
+	agent.EnableChangeTracking("subagent run")
 
 	// Inherit the parent's TerminalManager. Without this, subagents (and
 	// recursively their own subagents) try to call shell_command with

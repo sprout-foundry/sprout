@@ -781,7 +781,10 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		WorkingDir:   workingDir,
 	})
 
-	// Convert SubagentResult to resultMap format for backward compatibility
+	// SP-059 Phase 2a: build the typed envelope. resultMap is preserved
+	// for the legacy code paths below that still mutate it via string
+	// keys (file change extraction, security re-prompt, etc.) — both
+	// views are kept in sync at the marshal site.
 	resultMap := map[string]string{
 		"stdout":          result.Output,
 		"stderr":          "",
@@ -812,7 +815,11 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		}
 	}
 
-	// Extract summary from stdout
+	// Extract summary from stdout (human-readable file changes, build/test
+	// status, etc.). SP-059 Phase 2b: token/cost tracking switched to the
+	// structured SubagentResult fields below, no longer regex-scraped from
+	// SUBAGENT_METRICS: lines (which silently regressed if a model dropped
+	// the line).
 	if stdout, ok := resultMap["stdout"]; ok {
 		summary := extractSubagentSummary(stdout)
 		summaryJSON, err := json.MarshalIndent(summary, "", "  ")
@@ -823,29 +830,16 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 			resultMap["summary"] = string(summaryJSON)
 			a.Logger().Debug("Extracted subagent summary: %s\n", string(summaryJSON))
 		}
+	}
 
-		// Track subagent costs in parent agent's totals
-		// Parse the cost metrics from the summary and add to parent's tracking
-		if totalTokensStr, ok := summary["subagent_total_tokens"]; ok {
-			if totalCostStr, ok := summary["subagent_total_cost"]; ok {
-				promptTokensStr := summary["subagent_prompt_tokens"]
-				completionTokensStr := summary["subagent_completion_tokens"]
-				cachedTokensStr := summary["subagent_cached_tokens"]
-
-				// Parse the values
-				var totalTokens, promptTokens, completionTokens, cachedTokens int
-				var totalCost float64
-				fmt.Sscanf(totalTokensStr, "%d", &totalTokens)
-				fmt.Sscanf(promptTokensStr, "%d", &promptTokens)
-				fmt.Sscanf(completionTokensStr, "%d", &completionTokens)
-				fmt.Sscanf(cachedTokensStr, "%d", &cachedTokens)
-				fmt.Sscanf(totalCostStr, "%f", &totalCost)
-
-				// Add to parent agent's totals using TrackMetricsFromResponse
-				a.TrackMetricsFromResponse(promptTokens, completionTokens, totalTokens, totalCost, cachedTokens)
-				a.Logger().Debug("Tracked subagent costs: %d tokens, $%.6f\n", totalTokens, totalCost)
-			}
-		}
+	// Roll the subagent's token/cost into the parent agent's totals from
+	// the structured SubagentResult — no stdout scraping. Prompt /
+	// completion / cached splits are not exposed by SubagentResult today,
+	// so they're left at zero; TrackMetricsFromResponse treats them as
+	// "unknown split" and still applies the totals correctly.
+	if result.TokensUsed > 0 || result.Cost > 0 {
+		a.TrackMetricsFromResponse(0, 0, int(result.TokensUsed), result.Cost, 0)
+		a.Logger().Debug("Tracked subagent costs: %d tokens, $%.6f\n", result.TokensUsed, result.Cost)
 	}
 
 	// Add context_used field
@@ -991,14 +985,119 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		resultMap["error"] = fmt.Sprintf("Subagent failed with exit code %s. Error output: %s", exitCode, stderr)
 	}
 
-	// Convert map result to JSON for return
-	jsonBytes, jsonErr := json.MarshalIndent(resultMap, "", "  ")
+	// SP-059 Phase 2a/2d: marshal the typed envelope (preserves all old
+	// JSON keys for LLM compat) plus the new status / metrics / manifest
+	// fields. The Status enum supersedes the SUBAGENT_* sentinel string
+	// prefixes for in-process callers — the sentinels themselves still
+	// appear in earlier returned error messages so model-side behavior is
+	// unchanged.
+	ret := buildSubagentReturn(resultMap, result, statusFromResult(result, resultMap))
+	jsonStr, jsonErr := ret.MarshalJSONIndent()
 	if jsonErr != nil {
 		return "", fmt.Errorf("failed to marshal subagent result: %w", jsonErr)
 	}
 
-	a.Logger().Debug("Subagent spawn result: %s\n", string(jsonBytes))
-	return string(jsonBytes), nil
+	a.Logger().Debug("Subagent spawn result: %s\n", jsonStr)
+	return jsonStr, nil
+}
+
+// statusFromResult maps the legacy resultMap state to a typed Status.
+func statusFromResult(result *SubagentResult, m map[string]string) SubagentStatus {
+	if result != nil && result.BudgetExceeded {
+		return SubagentStatusBudgetExceeded
+	}
+	if m["exit_code"] != "0" {
+		stderr := m["stderr"]
+		stdout := m["stdout"]
+		if strings.Contains(stderr, "ErrOutsideWorkingDirectory") ||
+			strings.Contains(stderr, "ErrWriteOutsideWorkingDirectory") ||
+			strings.Contains(stderr, "security") ||
+			strings.Contains(stdout, "SUBAGENT_SECURITY_ERROR") {
+			return SubagentStatusSecurityBlocked
+		}
+		return SubagentStatusFailed
+	}
+	return SubagentStatusCompleted
+}
+
+// buildSubagentReturn assembles the typed envelope from the legacy
+// resultMap plus the SubagentResult struct. Mirrors all existing string
+// keys for LLM-shape compatibility and layers on the typed fields.
+func buildSubagentReturn(m map[string]string, result *SubagentResult, status SubagentStatus) *SubagentReturn {
+	r := &SubagentReturn{
+		Output:         m["stdout"],
+		Stderr:         m["stderr"],
+		ExitCode:       firstNonEmpty(m["exit_code"], "0"),
+		Completed:      firstNonEmpty(m["completed"], "true"),
+		TimedOut:       firstNonEmpty(m["timed_out"], "false"),
+		BudgetExceeded: firstNonEmpty(m["budget_exceeded"], "false"),
+		ElapsedSeconds: m["elapsed_seconds"],
+		TokensUsed:     m["tokens_used"],
+		Cost:           m["cost"],
+		ToolCallCount:  m["tool_calls"],
+		Summary:        m["summary"],
+		ContextUsed:    m["context_used"],
+		FilesUsed:      m["files_used"],
+		WorkingDir:     m["working_dir"],
+		Status:         status,
+	}
+	if status != SubagentStatusCompleted {
+		// Surface stderr as the human-readable reason. The legacy
+		// "error" key on resultMap (added in the failure path above)
+		// is more descriptive when present.
+		if reason, ok := m["error"]; ok {
+			r.ErrorReason = reason
+		} else if m["stderr"] != "" {
+			r.ErrorReason = m["stderr"]
+		}
+	}
+	if result != nil {
+		r.Metrics = SubagentRunMetrics{
+			TokensUsed: result.TokensUsed,
+			Cost:       result.Cost,
+			ToolCalls:  result.ToolCalls,
+		}
+		// SP-059 Phase 2c: structured file manifest, no more regex
+		// scraping. Map ChangeTracker's operation labels (write/edit/
+		// create) to the simpler created/modified/deleted vocabulary
+		// the envelope exposes. Both "write" and "create" map to
+		// "created" because the tracker doesn't distinguish them.
+		if len(result.FileChanges) > 0 {
+			files := make([]FileChange, 0, len(result.FileChanges))
+			for _, ch := range result.FileChanges {
+				files = append(files, FileChange{
+					Path: ch.FilePath,
+					Op:   normalizeChangeOp(ch.Operation),
+				})
+			}
+			r.FilesModified = files
+		}
+	}
+	return r
+}
+
+func normalizeChangeOp(op string) string {
+	switch op {
+	case "write", "create":
+		return "created"
+	case "edit":
+		return "modified"
+	case "delete":
+		return "deleted"
+	default:
+		// Pass through unknown verbs so future ChangeTracker additions
+		// surface in the manifest without code changes here.
+		return op
+	}
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {

@@ -94,35 +94,45 @@ func (h *semanticSearchHandler) Execute(ctx context.Context, env ToolEnv, args m
 		threshold = 1
 	}
 
-	// Get config
-	var cfg *configuration.Config
-	if env.ConfigManager != nil {
-		cfg = env.ConfigManager.GetConfig()
-	} else {
-		mgr, err := configuration.NewManager()
-		if err != nil {
-			hadError = true
-			return ToolResult{
-				Output:  fmt.Sprintf("Error getting configuration: %v", err),
-				IsError: true,
-			}, nil
+	// Prefer the agent's long-lived embedding manager. It holds the loaded
+	// ONNX model and an open HNSW handle; constructing a fresh one per call
+	// re-downloads the model on first use, double-opens the HNSW store, and
+	// can race the writer in the agent. Only fall back to a transient
+	// manager when running outside an agent context (CLI tools, tests).
+	mgr := env.EmbeddingMgr
+	ownsMgr := false
+	if mgr == nil {
+		var cfg *configuration.Config
+		if env.ConfigManager != nil {
+			cfg = env.ConfigManager.GetConfig()
+		} else {
+			cfgMgr, err := configuration.NewManager()
+			if err != nil {
+				hadError = true
+				return ToolResult{
+					Output:  fmt.Sprintf("Error getting configuration: %v", err),
+					IsError: true,
+				}, nil
+			}
+			cfg = cfgMgr.GetConfig()
 		}
-		cfg = mgr.GetConfig()
-	}
 
-	workspaceRoot := env.WorkspaceRoot
-	if workspaceRoot == "" {
-		workspaceRoot = "."
-	}
+		workspaceRoot := env.WorkspaceRoot
+		if workspaceRoot == "" {
+			workspaceRoot = "."
+		}
 
-	embeddingCfg := cfg.EmbeddingIndex
-	if embeddingCfg == nil {
-		embeddingCfg = &configuration.EmbeddingIndexConfig{}
-	}
+		embeddingCfg := cfg.EmbeddingIndex
+		if embeddingCfg == nil {
+			embeddingCfg = &configuration.EmbeddingIndexConfig{}
+		}
 
-	// Create embedding manager and query
-	mgr := embedding.NewEmbeddingManager(embeddingCfg, workspaceRoot)
-	defer mgr.Close()
+		mgr = embedding.NewEmbeddingManager(embeddingCfg, workspaceRoot)
+		ownsMgr = true
+	}
+	if ownsMgr {
+		defer mgr.Close()
+	}
 
 	if err := mgr.Init(ctx); err != nil {
 		hadError = true

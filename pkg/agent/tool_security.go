@@ -181,6 +181,9 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 				if note != "" {
 					output = output + note
 				}
+				// Keep the index fresh — async so the agent response
+				// isn't blocked on re-embedding.
+				reindexFileAfterWrite(agent, path)
 			}
 		}
 	}

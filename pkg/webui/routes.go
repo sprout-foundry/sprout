@@ -207,6 +207,7 @@ func (ws *ReactWebServer) registerSearchRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/search/semantic/status", ws.handleAPISemanticStatus)
 	mux.HandleFunc("/api/search/semantic/build", ws.handleAPISemanticBuild)
 	mux.HandleFunc("/api/search/semantic/preview", ws.handleAPISemanticPreview)
+	mux.HandleFunc("/api/search/semantic/preview-context", ws.handleAPISemanticPreviewContext)
 	mux.HandleFunc("/api/search/semantic", ws.handleAPISemanticSearch)
 	mux.HandleFunc("/api/search/replace", ws.handleAPIQuerySearchReplace)
 	mux.HandleFunc("/api/upload/image", ws.handleUploadImage)

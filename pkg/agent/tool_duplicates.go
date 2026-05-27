@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // writeTools maps tool names that are file-write operations and should trigger
@@ -91,4 +92,51 @@ func runDuplicateCheck(ctx context.Context, agent *Agent, filePath string) strin
 		return result.WarningText
 	}
 	return ""
+}
+
+// reindexFileAfterWrite refreshes the embedding index entry for filePath in
+// the background. Without this, the index grows stale during a session and
+// semantic_search returns hits against an old file body. The duplicate-check
+// hook is the natural twin: it already runs after every successful write,
+// and gating + path-resolution logic is shared.
+//
+// Runs in its own goroutine with a bounded context so a slow embed never
+// stalls the agent's response. Errors are debug-only — staleness is annoying
+// but never a hard failure for the user.
+func reindexFileAfterWrite(agent *Agent, filePath string) {
+	if agent == nil {
+		return
+	}
+	em := agent.GetEmbeddingManager()
+	if em == nil {
+		return
+	}
+
+	absPath, err := filepath.Abs(filePath)
+	if err != nil {
+		return
+	}
+	workspaceRoot := agent.GetWorkspaceRoot()
+	if workspaceRoot == "" {
+		if cwd, err := os.Getwd(); err == nil {
+			workspaceRoot = cwd
+		} else {
+			return
+		}
+	}
+	absRoot, err := filepath.Abs(workspaceRoot)
+	if err != nil {
+		return
+	}
+	if !strings.HasPrefix(absPath, absRoot+string(os.PathSeparator)) && absPath != absRoot {
+		return
+	}
+
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := em.UpdateFile(ctx, absPath); err != nil && agent.debug {
+			agent.debugLog("[EMBEDDING] reindex failed for %s: %v\n", absPath, err)
+		}
+	}()
 }

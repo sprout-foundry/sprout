@@ -543,12 +543,13 @@ func postProcessResult(ctx context.Context, agent *Agent, toolName string, args 
 		}
 	}
 
-	// 4. Duplicate embedding check for write tools
+	// 4. Duplicate embedding check + async re-index for write tools
 	if shouldCheckDuplicates(toolName, agent) {
 		if path, ok := args["path"].(string); ok && path != "" {
 			if note := runDuplicateCheck(ctx, agent, path); note != "" {
 				result = result + note
 			}
+			reindexFileAfterWrite(agent, path)
 		}
 	}
 

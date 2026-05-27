@@ -146,6 +146,7 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 					WorkspaceRoot: te.agent.GetWorkspaceRoot(),
 					ConfigManager: te.agent.GetConfigManager(),
 					EventBus:      te.agent.GetEventBus(),
+					EmbeddingMgr:  te.agent.GetEmbeddingManager(),
 				}
 				// Validate arguments before execution.
 				if err := handler.Validate(args); err != nil {

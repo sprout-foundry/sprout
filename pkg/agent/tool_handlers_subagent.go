@@ -1071,6 +1071,14 @@ func buildSubagentReturn(m map[string]string, result *SubagentResult, status Sub
 				})
 			}
 			r.FilesModified = files
+			// Prepend a plain-text manifest to the Output so the primary's
+			// LLM cannot miss it — the structured FilesModified field is
+			// also present, but a header in the text field surfaces the
+			// information at the very top of what the model reads. The
+			// observed failure mode was a primary that read the Output
+			// and reverted "unfamiliar" diff because it didn't realize
+			// the JSON envelope carried an authoritative file list.
+			r.Output = prependFilesModifiedHeader(r.Output, files)
 		}
 		// SP-059 Phase 3a: pass the progress timeline through so the
 		// primary's LLM sees what the subagent did, not just the
@@ -1090,6 +1098,63 @@ func buildSubagentReturn(m map[string]string, result *SubagentResult, status Sub
 		}
 	}
 	return r
+}
+
+// prependFilesModifiedHeader renders a git-style manifest of files the
+// subagent touched and prepends it to the subagent's final assistant
+// output. The format mirrors the inline checkpoint summary syntax used
+// elsewhere (A/M/D one-letter ops) so the primary's LLM sees a
+// consistent vocabulary across in-turn and subagent boundaries.
+//
+// Example header:
+//
+//	[subagent files modified]
+//	M pkg/foo.go
+//	A pkg/new.go
+//	D pkg/old.go
+//	[/subagent files modified]
+//
+// The wrapping sentinel tags make it grep-friendly for downstream
+// consumers (logs, tests) and unambiguous as a section boundary inside
+// what is otherwise free-form prose.
+func prependFilesModifiedHeader(output string, files []FileChange) string {
+	if len(files) == 0 {
+		return output
+	}
+	var b strings.Builder
+	b.WriteString("[subagent files modified]\n")
+	for _, f := range files {
+		b.WriteString(opLetter(f.Op))
+		b.WriteByte(' ')
+		b.WriteString(f.Path)
+		b.WriteByte('\n')
+	}
+	b.WriteString("[/subagent files modified]\n\n")
+	b.WriteString(output)
+	return b.String()
+}
+
+// opLetter compresses the verbose envelope op vocabulary back to the
+// one-letter git-style code used in the manifest header. Mirrors
+// pkg/agent/turn_checkpoints.go's appendFileMetadataToSummary.
+func opLetter(op string) string {
+	switch op {
+	case "created":
+		return "A"
+	case "modified":
+		return "M"
+	case "deleted":
+		return "D"
+	case "renamed":
+		return "R"
+	default:
+		// Unknown op — pass through uppercase first letter so the manifest
+		// still parses as one-letter codes for grep / tooling.
+		if op == "" {
+			return "?"
+		}
+		return strings.ToUpper(op[:1])
+	}
 }
 
 func normalizeChangeOp(op string) string {

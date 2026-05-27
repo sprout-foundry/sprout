@@ -19,6 +19,8 @@ var (
 	webPort            int
 	webBindAddr        string
 	daemonMode         bool
+	bindSocket         string
+	secretToken        string
 )
 
 func init() {
@@ -29,6 +31,8 @@ func init() {
 	agentCmd.Flags().MarkHidden("port")
 	agentCmd.Flags().StringVar(&webBindAddr, "bind", "", "Bind address for web UI (default: 127.0.0.1, or set SPROUT_BIND_ADDR)")
 	agentCmd.Flags().BoolVarP(&daemonMode, "daemon", "d", false, "Run in daemon mode - keep web UI running without interactive prompt")
+	agentCmd.Flags().StringVar(&bindSocket, "bind-socket", "", "Listen on a Unix domain socket at path instead of TCP")
+	agentCmd.Flags().StringVar(&secretToken, "secret", "", "Auth token for write endpoints (alternative to SPROUT_AUTH_TOKEN env var)")
 }
 
 // Ensure imports are used

@@ -345,3 +345,37 @@ func TestHNSWStoreReplaceAll_DuplicateIDsDoNotPanic(t *testing.T) {
 		}
 	}
 }
+
+// TestHNSWStoreHashMismatchPersistsNewHash verifies that when the model hash
+// changes, the new hash is persisted to the .meta file after clearing the
+// store. Without this, every subsequent startup would re-read the same stale
+// hash, log "model hash changed", and re-clear — perpetually.
+func TestHNSWStoreHashMismatchPersistsNewHash(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "test.hnsw")
+
+	// First open: seeds the meta file with the original hash.
+	store1, err := NewHNSWStore(path, "hash-original")
+	require.NoError(t, err)
+	require.NoError(t, store1.Close())
+
+	metaBefore, err := os.ReadFile(path + ".meta")
+	require.NoError(t, err)
+	require.Contains(t, string(metaBefore), "hash-original")
+
+	// Second open with a different hash: must clear AND update the meta.
+	store2, err := NewHNSWStore(path, "hash-new")
+	require.NoError(t, err)
+	require.NoError(t, store2.Close())
+
+	metaAfter, err := os.ReadFile(path + ".meta")
+	require.NoError(t, err)
+	require.Contains(t, string(metaAfter), "hash-new",
+		"meta file must reflect the new hash after a mismatch — otherwise the next startup re-fires the same 'model hash changed' log and re-clears the store")
+	require.NotContains(t, string(metaAfter), "hash-original")
+
+	// Third open with the new hash: must be silent (no mismatch).
+	store3, err := NewHNSWStore(path, "hash-new")
+	require.NoError(t, err)
+	require.NoError(t, store3.Close())
+}

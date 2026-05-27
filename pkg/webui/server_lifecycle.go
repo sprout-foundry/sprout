@@ -10,6 +10,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -64,18 +65,48 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 		Handler: handler,
 	}
 
-	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", ws.server.Addr)
-	if err != nil {
-		return fmt.Errorf("failed to bind web server on %s: %w", ws.server.Addr, err)
-	}
+	var listener net.Listener
+	var err error
 
-	// When the configured port is 0, the OS assigns a random free port.
-	// Capture the actual port from the listener so GetPort() and logging
-	// report the real value.
-	if ws.port == 0 {
-		actualPort := listener.Addr().(*net.TCPAddr).Port
-		ws.port = actualPort
-		ws.server.Addr = formatListenAddr(ws.bindAddr, actualPort)
+	if ws.socketPath != "" {
+		// Unix socket mode
+		// Check for stale socket file: try to dial it to see if something is already listening
+		if _, statErr := os.Stat(ws.socketPath); statErr == nil {
+			dialConn, dialErr := net.Dial("unix", ws.socketPath)
+			if dialErr != nil {
+				// Dial failed — nothing is listening, so remove the stale socket file
+				os.Remove(ws.socketPath)
+			} else {
+				// Dial succeeded — something IS listening on this socket
+				dialConn.Close()
+				return fmt.Errorf("failed to bind web server on unix socket %s: address already in use", ws.socketPath)
+			}
+		}
+
+		listener, err = net.Listen("unix", ws.socketPath)
+		if err != nil {
+			return fmt.Errorf("failed to bind web server on unix socket %s: %w", ws.socketPath, err)
+		}
+		// Set restrictive permissions (owner read/write only)
+		if chmodErr := os.Chmod(ws.socketPath, 0600); chmodErr != nil {
+			listener.Close()
+			return fmt.Errorf("failed to set permissions on unix socket %s: %w", ws.socketPath, chmodErr)
+		}
+	} else {
+		// TCP mode
+		listener, err = (&net.ListenConfig{}).Listen(ctx, "tcp", ws.server.Addr)
+		if err != nil {
+			return fmt.Errorf("failed to bind web server on %s: %w", ws.server.Addr, err)
+		}
+
+		// When the configured port is 0, the OS assigns a random free port.
+		// Capture the actual port from the listener so GetPort() and logging
+		// report the real value.
+		if ws.port == 0 {
+			actualPort := listener.Addr().(*net.TCPAddr).Port
+			ws.port = actualPort
+			ws.server.Addr = formatListenAddr(ws.bindAddr, actualPort)
+		}
 	}
 
 	ws.mutex.Lock()
@@ -90,7 +121,11 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 
 	// Start server in goroutine
 	go func() {
-		log.Printf("[web] Web UI starting at http://%s:%d", DisplayAddr(ws.bindAddr), ws.port)
+		if ws.socketPath != "" {
+			log.Printf("[web] Web UI starting on unix socket %s", ws.socketPath)
+		} else {
+			log.Printf("[web] Web UI starting at http://%s:%d", DisplayAddr(ws.bindAddr), ws.port)
+		}
 		if err := ws.server.Serve(listener); err != nil && !isExpectedServerCloseError(err) {
 			log.Printf("Web server error: %v", err)
 		}
@@ -168,6 +203,11 @@ func (ws *ReactWebServer) Shutdown() error {
 
 	if listener != nil {
 		_ = listener.Close()
+	}
+
+	// Remove the Unix socket file if we were using one
+	if ws.socketPath != "" {
+		os.Remove(ws.socketPath)
 	}
 
 	if err := ws.server.Shutdown(ctx); err != nil && !isExpectedServerCloseError(err) {

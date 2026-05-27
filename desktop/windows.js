@@ -17,7 +17,7 @@ const {
   getRecentWorktrees,
 } = require('./state-manager');
 const { renderLoadingPage, renderErrorPage } = require('./error-pages');
-const { startBackendForWorkspace, registerExitHandler } = require('./backend');
+const { startBackendForWorkspace, registerExitHandler, generateSecret } = require('./backend');
 const { startSSHBackendForHost } = require('./ssh');
 const { resolveWorkspaceDirectory, promptForWorkspace } = require('./workspace');
 
@@ -252,6 +252,19 @@ function attachNavigationHandlers(browserWindow) {
   });
 }
 
+function injectAuthHeaders(browserWindow) {
+  const session = browserWindow.webContents.session;
+  const token = generateSecret();
+  session.webRequest.onBeforeSendHeaders(
+    { urls: ['http://127.0.0.1:*/*'] },
+    (details, callback) => {
+      const headers = { ...details.requestHeaders };
+      headers['Authorization'] = `Bearer ${token}`;
+      callback({ requestHeaders: headers });
+    }
+  );
+}
+
 async function createWorkspaceWindow(options = {}) {
   const backendMode = options.backendMode === 'wsl' ? 'wsl' : 'native';
   const wslDistro = options.wslDistro || null;
@@ -317,6 +330,7 @@ async function createWorkspaceWindow(options = {}) {
     }
   });
   attachNavigationHandlers(browserWindow);
+  injectAuthHeaders(browserWindow);
 
   const backend = await startBackendForWorkspace(workspaceEntry);
   ctx.instanceRegistry.set(browserWindow.id, { ...backend, ...workspaceEntry });
@@ -433,6 +447,7 @@ async function createSSHWorkspaceWindow(options = {}) {
   browserWindow.loadURL(renderLoadingPage(`ssh://${hostAlias}`));
   browserWindow.once('ready-to-show', () => browserWindow.show());
   attachNavigationHandlers(browserWindow);
+  injectAuthHeaders(browserWindow);
 
   const backend = await startSSHBackendForHost({ hostAlias, remoteWorkspacePath });
   ctx.instanceRegistry.set(browserWindow.id, {
@@ -487,4 +502,5 @@ module.exports = {
   buildMenu,
   createWorkspaceWindow,
   createSSHWorkspaceWindow,
+  injectAuthHeaders,
 };

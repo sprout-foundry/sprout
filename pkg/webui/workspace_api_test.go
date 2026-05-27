@@ -18,6 +18,14 @@ func TestHandleAPIWorkspaceSetUpdatesWorkspaceRoot(t *testing.T) {
 	if err := os.Mkdir(nextRoot, 0o755); err != nil {
 		t.Fatalf("mkdir next root: %v", err)
 	}
+
+	// Resolve symlinks so the expected path matches what filepathAbsEval
+	// produces inside handleAPIWorkspace (macOS /var → /private/var).
+	resolvedNext, err := filepath.EvalSymlinks(nextRoot)
+	if err != nil {
+		t.Fatalf("eval symlinks: %v", err)
+	}
+
 	server := &ReactWebServer{
 		daemonRoot:      initialRoot,
 		workspaceRoot:   initialRoot,
@@ -38,16 +46,16 @@ func TestHandleAPIWorkspaceSetUpdatesWorkspaceRoot(t *testing.T) {
 		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	if got := server.GetWorkspaceRoot(); got != nextRoot {
-		t.Fatalf("expected workspace root %q, got %q", nextRoot, got)
+	if got := server.GetWorkspaceRoot(); got != resolvedNext {
+		t.Fatalf("expected workspace root %q, got %q", resolvedNext, got)
 	}
 
 	if server.terminalManager == nil {
 		t.Fatal("expected terminal manager to be reset")
 	}
 
-	if got := server.terminalManager.workspaceRoot; got != nextRoot {
-		t.Fatalf("expected terminal manager root %q, got %q", nextRoot, got)
+	if got := server.terminalManager.workspaceRoot; got != resolvedNext {
+		t.Fatalf("expected terminal manager root %q, got %q", resolvedNext, got)
 	}
 
 }

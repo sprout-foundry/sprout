@@ -108,11 +108,14 @@ func TestSemanticSearchHandler_Execute_DefaultArgs(t *testing.T) {
 	res, err := h.Execute(context.Background(), env, map[string]any{
 		"query": "test query",
 	})
-	// ONNX may or may not be available. If unavailable, expect an error.
+	// ONNX may or may not be available. If unavailable, expect an error result.
 	// If available, we expect either success (index found) or an error (no index built).
 	// In either case, the handler should not panic.
-	if err != nil {
-		require.True(t, res.IsError, "should set IsError when error is returned")
+	require.NoError(t, err, "handler should not return a Go error")
+	if res.IsError {
+		// ONNX unavailable or no index — graceful degradation
+		require.Contains(t, res.Output, "Semantic search unavailable",
+			"error output should explain the issue")
 	} else {
 		// No error — either found results or returned empty results (not an error)
 		require.Contains(t, res.Output, "result", "should return some output even with no index")

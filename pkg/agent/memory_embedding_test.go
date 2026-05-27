@@ -218,8 +218,8 @@ func setupMemoryEmbeddingManager(t *testing.T) *embedding.EmbeddingManager {
 	mgr := embedding.NewEmbeddingManager(cfg, tempDir)
 
 	if err := mgr.Init(ctx); err != nil {
-		if strings.Contains(err.Error(), "ONNX runtime not available") {
-			t.Skip("Skipping: ONNX not available")
+		if strings.Contains(err.Error(), "ONNX") || strings.Contains(err.Error(), "onnx") {
+			t.Skip("Skipping: ONNX runtime not available")
 		}
 		t.Fatalf("failed to init embedding manager: %v", err)
 	}

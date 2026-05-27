@@ -365,6 +365,15 @@ func (ct *ChangeTracker) isOutsideWorkspace(filePath string) bool {
 		return false // If we can't resolve workspace, don't redact
 	}
 
+	// Resolve symlinks on both sides for consistent comparison.
+	// On macOS, /var → /private/var and os.Chdir may resolve the symlink
+	// in the process's CWD, causing absFile and absWorkspace to diverge.
+	absFile = resolveSymlinksPath(absFile)
+	resolvedWorkspace, werr := filepath.EvalSymlinks(absWorkspace)
+	if werr == nil {
+		absWorkspace = resolvedWorkspace
+	}
+
 	rel, err := filepath.Rel(absWorkspace, absFile)
 	if err != nil {
 		return false
@@ -372,6 +381,31 @@ func (ct *ChangeTracker) isOutsideWorkspace(filePath string) bool {
 
 	// If the relative path starts with "..", it's outside the workspace
 	return strings.HasPrefix(rel, "..")
+}
+
+// resolveSymlinksPath resolves symlinks in a path, handling non-existent
+// files/directories by walking up to the nearest existing ancestor and
+// appending the remaining components.
+func resolveSymlinksPath(path string) string {
+	resolved, err := filepath.EvalSymlinks(path)
+	if err == nil {
+		return resolved
+	}
+	// Walk up the directory tree until we find an existing ancestor.
+	dir := filepath.Dir(path)
+	base := filepath.Base(path)
+	for {
+		resolvedDir, derr := filepath.EvalSymlinks(dir)
+		if derr == nil {
+			return filepath.Join(resolvedDir, base)
+		}
+		base = filepath.Join(filepath.Base(dir), base)
+		dir = filepath.Dir(dir)
+		if dir == "/" || dir == "." {
+			// Reached the root without resolving; return original.
+			return path
+		}
+	}
 }
 
 func generateSessionID() string {

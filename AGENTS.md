@@ -70,6 +70,7 @@ these specifications first to ensure alignment with the project direction.
 - **SP-055** CLI Pinned Input — Always-On Steering Panel (proposed)
 - **SP-056** Remove Static Embedding Provider (proposed)
 - **SP-059** Subagent ↔ Primary Interaction Overhaul (proposed)
+- **SP-060** Desktop App — Per-Workspace Server Mode (proposed)
 
 ## Testing
 

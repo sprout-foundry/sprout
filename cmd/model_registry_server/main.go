@@ -220,7 +220,13 @@ func handleModels(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "file not found", http.StatusNotFound)
 		return
 	}
-	resolvedRel, err := filepath.Rel(registryDirClean, resolvedPath)
+	// Resolve the registry dir the same way so the Rel comparison works
+	// on macOS where /var/folders is a symlink to /private/var/folders.
+	resolvedRegistryDir := registryDirClean
+	if evaled, err := filepath.EvalSymlinks(registryDirClean); err == nil {
+		resolvedRegistryDir = evaled
+	}
+	resolvedRel, err := filepath.Rel(resolvedRegistryDir, resolvedPath)
 	if err != nil || strings.HasPrefix(resolvedRel, ".."+string(filepath.Separator)) || resolvedRel == ".." {
 		http.Error(w, "file not found", http.StatusNotFound)
 		return

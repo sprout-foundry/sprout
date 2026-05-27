@@ -72,17 +72,25 @@ type ReactWebServer struct {
 	trustedUserHeader               string   // Header name for user ID extraction in service mode
 	serviceMode                     bool     // true when running as a managed service (SPROUT_SERVICE=1)
 	authToken                       string   // Auth token for write endpoint protection (SPROUT_AUTH_TOKEN)
+	socketPath                      string   // Unix domain socket path (when non-empty, listen on socket instead of TCP)
 	startOnce                       sync.Once // Ensures background workers are started exactly once
 	serverCtx                       atomic.Value // context.Context — safe to read without ws.mutex
 }
 
 // NewReactWebServer creates a new React web server
-func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, bindAddr string) (*ReactWebServer, error) {
-	if port == 0 {
-		port = DaemonPort
-	}
-	if bindAddr == "" {
-		bindAddr = "127.0.0.1"
+func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, bindAddr string, socketPath string, authToken string) (*ReactWebServer, error) {
+	// Socket mode is mutually exclusive with TCP
+	if socketPath != "" {
+		// In socket mode, port and bindAddr are irrelevant
+		port = 0
+		bindAddr = ""
+	} else {
+		if port == 0 {
+			port = DaemonPort
+		}
+		if bindAddr == "" {
+			bindAddr = "127.0.0.1"
+		}
 	}
 
 	workspaceRoot, err := os.Getwd()
@@ -162,16 +170,21 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 		}
 	}
 
-	// Parse auth token for write endpoint protection
-	authToken := strings.TrimSpace(configuration.GetEnvSimple("AUTH_TOKEN"))
-	if authToken != "" {
+	// Parse auth token: explicit parameter takes precedence over env var
+	resolvedAuthToken := authToken
+	if resolvedAuthToken == "" {
+		resolvedAuthToken = strings.TrimSpace(configuration.GetEnvSimple("AUTH_TOKEN"))
+	}
+	if resolvedAuthToken != "" {
 		log.Printf("[web] Auth token configured: write endpoints require authentication")
 	}
 
 	// Security: refuse to start if bound to a non-localhost address without
 	// an auth token.  Exposing the web UI on a public interface without any
 	// authentication is a serious security risk.
-	if !isLocalhostAddr(bindAddr) && authToken == "" {
+	// Skip this check for Unix socket mode (socketPath is non-empty) since
+	// Unix sockets are inherently local-only.
+	if socketPath == "" && !isLocalhostAddr(bindAddr) && resolvedAuthToken == "" {
 		return nil, fmt.Errorf("Refusing to start: SPROUT_BIND_ADDR=%s requires SPROUT_AUTH_TOKEN to be set.", bindAddr)
 	}
 
@@ -192,6 +205,7 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 		chatSubscribers:   newChatSubscribersRegistry(),
 		port:              port,
 		bindAddr:          bindAddr,
+		socketPath:        socketPath,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: newCheckOriginFunc(bindAddr, normalizedAllowedOrigins),
 		},
@@ -204,7 +218,7 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 		normalizedAllowedOrigins: normalizedAllowedOrigins,
 		trustedUserHeader:        trustedUserHeader,
 		serviceMode:              serviceMode,
-		authToken:                authToken,
+		authToken:                resolvedAuthToken,
 	}, nil
 }
 

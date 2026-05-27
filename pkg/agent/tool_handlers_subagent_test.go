@@ -453,3 +453,84 @@ func setupTestSubagentRunner(agent *Agent) {
 		WorkspaceRoot: agent.workspaceRoot,
 	})
 }
+
+// TestBuildSubagentReturn_PrependsFilesModifiedHeader verifies the fix for
+// the failure mode observed 2026-05-27: a primary agent receiving a
+// subagent's result couldn't tell which files the subagent edited and
+// ended up reverting "unfamiliar" diff. The structured FilesModified
+// field WAS populated, but the primary's LLM didn't latch onto it. Fix:
+// prepend a plain-text manifest to Output so the file list sits at the
+// very top of what the model reads.
+func TestBuildSubagentReturn_PrependsFilesModifiedHeader(t *testing.T) {
+	m := map[string]string{
+		"stdout":    "Done. Refactored the auth layer.",
+		"exit_code": "0",
+	}
+	result := &SubagentResult{
+		FileChanges: []TrackedFileChange{
+			{FilePath: "pkg/auth/session.go", Operation: "write"},
+			{FilePath: "pkg/auth/jwt.go", Operation: "edit"},
+			{FilePath: "pkg/auth/legacy.go", Operation: "delete"},
+		},
+	}
+
+	ret := buildSubagentReturn(m, result, SubagentStatusCompleted)
+
+	if !strings.Contains(ret.Output, "[subagent files modified]") {
+		t.Fatalf("Output should start with the manifest sentinel\nOutput: %q", ret.Output)
+	}
+	if !strings.Contains(ret.Output, "A pkg/auth/session.go") {
+		t.Errorf("manifest should map write→A:\nOutput: %q", ret.Output)
+	}
+	if !strings.Contains(ret.Output, "M pkg/auth/jwt.go") {
+		t.Errorf("manifest should map edit→M:\nOutput: %q", ret.Output)
+	}
+	if !strings.Contains(ret.Output, "D pkg/auth/legacy.go") {
+		t.Errorf("manifest should map delete→D:\nOutput: %q", ret.Output)
+	}
+	if !strings.Contains(ret.Output, "Done. Refactored the auth layer.") {
+		t.Errorf("original output should still be present after the header:\nOutput: %q", ret.Output)
+	}
+	// Structured field must still be populated alongside the prose
+	// header — callers parsing the envelope shouldn't have to scrape
+	// the manifest sentinels.
+	if len(ret.FilesModified) != 3 {
+		t.Errorf("FilesModified should have 3 entries, got %d", len(ret.FilesModified))
+	}
+	// Manifest sentinel pair appears intact (open + close on separate
+	// lines so grep matches don't false-positive on a stray bracket).
+	if !strings.Contains(ret.Output, "[/subagent files modified]\n") {
+		t.Errorf("closing sentinel missing from Output:\n%q", ret.Output)
+	}
+}
+
+func TestBuildSubagentReturn_NoFilesModifiedHeader_WhenNoChanges(t *testing.T) {
+	m := map[string]string{
+		"stdout":    "Investigated; no changes needed.",
+		"exit_code": "0",
+	}
+	result := &SubagentResult{} // empty FileChanges
+
+	ret := buildSubagentReturn(m, result, SubagentStatusCompleted)
+
+	if strings.Contains(ret.Output, "[subagent files modified]") {
+		t.Errorf("manifest header should not appear when no files were modified:\n%q", ret.Output)
+	}
+	if ret.Output != "Investigated; no changes needed." {
+		t.Errorf("Output should be untouched when no files modified, got %q", ret.Output)
+	}
+}
+
+func TestPrependFilesModifiedHeader_HandlesUnknownOp(t *testing.T) {
+	// Unknown op should still produce a single-letter code in the
+	// manifest so downstream tooling doesn't see ragged formatting.
+	out := prependFilesModifiedHeader("trailing message", []FileChange{
+		{Path: "weird/file.go", Op: "uplifted"},
+	})
+	if !strings.Contains(out, "U weird/file.go") {
+		t.Errorf("unknown op should pass through as uppercase first letter; got %q", out)
+	}
+	if !strings.Contains(out, "trailing message") {
+		t.Errorf("original output should be preserved; got %q", out)
+	}
+}

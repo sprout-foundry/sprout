@@ -236,26 +236,42 @@ func (r *richEventPublisher) enrichEventData(data any, eventType string) any {
 	}
 
 	// Emit CLI tool_log for tool execution progress.
-	// tool_start: "executing tool [ToolName args...]" (always, so the user sees it immediately)
-	// tool_end: "executed [ToolName args...]" (only when not streaming, since streaming shows live progress)
-	// Subagents: also emit — the subagent's streaming callback prefixes with [persona],
-	// giving full visibility for CLI auditing. Parallel subagents include a task index.
+	//
+	// tool_start: a single dim "→ <displayName>" line at the moment the
+	//   tool begins. Uses the cleaner buildDisplayName format (no
+	//   nested brackets / quoted JSON) — the structured payload still
+	//   carries the raw args for WebUI consumers.
+	// tool_end:   an indented duration / outcome chip ("  ✓ 124ms") that
+	//   visually pairs with the line above. Emitted unconditionally so
+	//   the user always sees how long a tool took; streaming or not.
 	if r.agent != nil {
 		if eventType == core.EventTypeToolStart {
-			// Build a ToolCall from the event payload so we can use the rich formatToolCall formatter.
-			arguments, _ := payload["arguments"].(string)
-			tc := api.ToolCall{
-				Function: api.ToolCallFunction{
-					Name:      toolName,
-					Arguments: arguments,
-				},
+			r.agent.ToolLog("executing tool", displayName)
+		} else if eventType == core.EventTypeToolEnd {
+			if router := r.agent.OutputRouter(); router != nil {
+				duration := extractDurationMs(payload)
+				status, _ := payload["status"].(string)
+				errMsg, _ := payload["error"].(string)
+				router.RouteToolCompletion(status != "failed", duration, errMsg)
 			}
-			r.agent.ToolLog("executing tool", formatToolCall(tc))
-		} else if eventType == core.EventTypeToolEnd && !r.agent.IsStreamingEnabled() {
-			r.agent.ToolLog("executed", displayName)
 		}
 	}
 	return payload
+}
+
+// extractDurationMs reads the duration_ms field from a tool_end payload.
+// seed publishes this as either an int or a float depending on whether the
+// duration is whole milliseconds — handle both.
+func extractDurationMs(payload map[string]interface{}) time.Duration {
+	switch v := payload["duration_ms"].(type) {
+	case int:
+		return time.Duration(v) * time.Millisecond
+	case int64:
+		return time.Duration(v) * time.Millisecond
+	case float64:
+		return time.Duration(v * float64(time.Millisecond))
+	}
+	return 0
 }
 
 // buildDisplayName constructs a human-readable tool name by appending the

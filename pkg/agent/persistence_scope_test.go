@@ -111,8 +111,13 @@ func TestSaveStateScoped_WritesScopedPath(t *testing.T) {
 	if state.SessionID != "workflow" {
 		t.Fatalf("unexpected session id: %q", state.SessionID)
 	}
-	if state.WorkingDirectory != workingDir {
-		t.Fatalf("unexpected working directory: %q", state.WorkingDirectory)
+	// The stored working directory is symlink-resolved (normalized).
+	normalizedWD, err := filepath.EvalSymlinks(workingDir)
+	if err != nil {
+		t.Fatalf("eval symlinks: %v", err)
+	}
+	if state.WorkingDirectory != normalizedWD {
+		t.Fatalf("unexpected working directory: %q (want %q)", state.WorkingDirectory, normalizedWD)
 	}
 }
 

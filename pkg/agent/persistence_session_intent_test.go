@@ -80,7 +80,13 @@ func TestSessionIntentEmbeddingNil(t *testing.T) {
 	assert.Nil(t, loadedState.SessionIntentEmbedding, "SessionIntentEmbedding should be nil after load when not originally set")
 
 	// Verify the JSON file doesn't contain a session_intent_embedding field when nil
-	stateFile := filepath.Join(tmpDir, "scoped", workingDirectoryScopeHash(tmpDir), "session_test-nil-embedding-session.json")
+	// Verify the JSON file doesn't contain a session_intent_embedding field when nil.
+	// Normalize to match the symlink-resolved path used by SaveStateScoped.
+	normalizedTmpDir, evalErr := filepath.EvalSymlinks(tmpDir)
+	if evalErr != nil {
+		t.Fatalf("eval symlinks: %v", evalErr)
+	}
+	stateFile := filepath.Join(tmpDir, "scoped", workingDirectoryScopeHash(normalizedTmpDir), "session_test-nil-embedding-session.json")
 	data, err := os.ReadFile(stateFile)
 	require.NoError(t, err)
 	assert.NotContains(t, string(data), "session_intent_embedding", "JSON should not contain session_intent_embedding field when nil")

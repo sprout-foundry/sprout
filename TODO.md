@@ -333,7 +333,8 @@ _Spec: roadmap/SP-060-desktop-serve.md_
 - [ ] SP-060-B1-socketTests: Unit tests for socket listener (bind, connect, permissions, cleanup)
 - [ ] SP-060-B2-electronProxy: Create internal HTTP proxy in Electron main process — `http.createServer` → forward to Unix socket, random TCP port for BrowserWindow, inject auth header
 - [ ] SP-060-B2-socketSpawn: Generate random socket path, spawn backend with `--bind-socket <path> --secret <token>`
-- [ ] SP-060-B3-verify: Verify socket not TCP-accessible, correct permissions, desktop works through proxy, stale socket cleanup, Windows fallback; `make build-all` passes
+- [ ] SP-060-B3-verify: Verify socket not TCP-accessible, correct permissions, desktop works through proxy, stale socket cleanup; `make build-all` passes
+- [ ] SP-060-B4-windowsFallback: On Windows, skip socket — use TCP+auth (Option C) code path in `desktop/backend.js`; Go process listens on `127.0.0.1:RANDOM` with `SPROUT_AUTH_TOKEN`; verify desktop loads and chats on Windows
 
 ### Deferred: Phase C — `desktop-serve` Command
 _Deferred to future work. The nil-agent daemon mode already provides the core functionality (web UI without provider, user configures via UI, chat works). A dedicated `sprout desktop-serve` command can be extracted later when additional value over daemon mode is clear._

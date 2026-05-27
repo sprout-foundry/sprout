@@ -134,12 +134,25 @@ These are the last two pieces needed for Phase A.
 - **BrowserWindow**: Loads `http://127.0.0.1:RANDOM` (the Electron proxy port, not the Go process).
 - **Windows fallback**: Windows doesn't have Unix sockets. Fall back to localhost+auth (Option C behavior) — random port with auth token via `SPROUT_AUTH_TOKEN`.
 
+### Windows Fallback
+
+Windows requires a different IPC strategy. Despite Windows 10+ supporting AF_UNIX at the OS level, Node.js does **not** support Unix domain socket file paths — it routes them through named pipes internally, and `http.request({socketPath})` fails with `ENOTSOCK`. This is blocked on [libuv#2537](https://github.com/libuv/libuv/issues/2537) with no resolution timeline.
+
+**On Windows, the Electron proxy falls back to TCP + auth (Option C behavior):**
+- Go process listens on `127.0.0.1:RANDOM` (no `--bind-socket`)
+- Electron generates a random auth token and passes it via `SPROUT_AUTH_TOKEN`
+- Electron injects `Authorization: Bearer <token>` via `session.webRequest`
+- This is the same security level as the current architecture but with auth added
+
+**Implementation**: `desktop/backend.js` detects `process.platform === 'win32'` and takes the TCP+auth code path instead of the socket+proxy code path. The Go `--bind-socket` flag is simply not passed on Windows.
+
 ### Key Design Decisions
 
-- Unix socket is the primary transport — no TCP port exposed by the Go process on Unix platforms.
+- Unix socket is the primary transport on macOS and Linux — no TCP port exposed by the Go process.
+- Windows uses TCP+auth (Option C). This is a conscious tradeoff: the security is weaker than Unix sockets (TCP port is discoverable, token visible in `/proc` equivalent), but it's a significant improvement over the current unauthenticated TCP on a fixed port.
 - The Electron proxy on `127.0.0.1:RANDOM` is an implementation detail — not externally discoverable because the port is random and changes every launch.
 - `--bind-socket` is a general-purpose flag usable beyond the desktop app (any CLI scenario wanting socket-based access).
-- On Windows, fall back to localhost+auth (the Option C path that will be complete after Phase A Electron changes).
+- Auth middleware (`pkg/webui/auth_middleware.go`) already works for both TCP and socket transports — no changes needed.
 
 ## Deferred: Phase C — `desktop-serve` Command
 
@@ -152,5 +165,5 @@ A dedicated `sprout desktop-serve` command (separate from `sprout agent --daemon
 1. **Should `--bind-socket` be added to the standard `agent --daemon` command?** — Likely yes. It's a general-purpose flag useful for non-desktop scenarios where you want socket-based access.
 2. **Should we keep `SPROUT_DESKTOP=1` env var?** — Potentially useful for telemetry/debugging to distinguish desktop-launched vs CLI-launched servers, but should not gate any behavior.
 3. **Should the desktop app pass `--no-project-skills`?** — Project skills are useful in the desktop context, so probably not.
-4. **Windows named pipes vs localhost+auth?** — Windows doesn't have Unix domain sockets (it has named pipes). The fallback is localhost+auth (Option C). Named pipes could be explored later if the localhost fallback is deemed insufficient.
+4. **Windows: TCP+auth is the permanent fallback.** Named pipes were considered but add complexity for marginal security benefit over TCP+auth. If libuv adds AF_UNIX support for Windows in the future, the socket code path can be enabled for Windows too.
 5. **Should `SPROUT_AUTH_TOKEN` also protect GET endpoints in desktop mode?** — Current implementation only protects write methods. This is intentional — GETs are read-only and the main risk is unauthorized writes. But worth revisiting if a stricter model is needed.

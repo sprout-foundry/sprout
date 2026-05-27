@@ -63,6 +63,8 @@ func (ws *ReactWebServer) registerQueryRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/query/steer", ws.handleAPIQuerySteer)
 	mux.HandleFunc("/api/query/stop", ws.handleAPIQueryStop)
 	mux.HandleFunc("/api/query/status", ws.handleAPIQueryStatus)
+	// SP-059: per-subagent cancel; path is /api/subagent/{id}/cancel.
+	mux.HandleFunc("/api/subagent/", ws.handleAPISubagentCancel)
 	// Foundry proxy endpoints — accept the translated chat format from CloudAdapter
 	mux.HandleFunc("/api/proxy/chat", ws.handleAPIProxyChat)
 	mux.HandleFunc("/api/proxy/chat/stop", ws.handleAPIProxyChatStop)

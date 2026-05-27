@@ -1443,6 +1443,56 @@
   background: var(--bg-elevated);
 }
 
+.subagent-link-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
+.subagent-link-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* SP-059 Phase 1c: variant for the Stop button, distinguished by an
+ * accent-error tinted border so users can find it at a glance among the
+ * neutral action buttons. Same hover/focus contract as the base. */
+.subagent-link-btn-stop {
+  color: var(--accent-error);
+  border-color: color-mix(in srgb, var(--accent-error) 50%, transparent);
+  background: color-mix(in srgb, var(--accent-error) 8%, transparent);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.subagent-link-btn-stop:hover:not(:disabled) {
+  color: var(--accent-fg);
+  border-color: var(--accent-error);
+  background: var(--accent-error);
+}
+
+/* SP-059 Phase 1c: routing-pill shown above the subagent activity feed
+ * when a subagent is the current input target. The styling intentionally
+ * mirrors a status pill so it reads as a quiet hint, not a banner. */
+.subagent-routing-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  margin-bottom: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 35%, transparent);
+  color: var(--accent-primary);
+  font-size: 11px;
+  font-weight: 500;
+  width: max-content;
+}
+
+.subagent-routing-icon {
+  flex-shrink: 0;
+}
+
 @media (max-width: 768px) {
   .chat-main {
     flex-direction: column;

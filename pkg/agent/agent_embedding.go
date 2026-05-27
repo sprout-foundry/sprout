@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -38,7 +37,11 @@ func (a *Agent) EnableEmbeddingIndex() error {
 	go a.embeddingMgr.AutoBuildWhenReady()
 
 	// Run one-time memory migration: embed all existing memories into conversation store
-	go MigrateMemories(context.Background(), a.embeddingMgr)
+	a.backgroundWg.Add(1)
+	go func() {
+		defer a.backgroundWg.Done()
+		MigrateMemories(a.interruptCtx, a.embeddingMgr)
+	}()
 
 	// Persist the preference to workspace config
 	a.persistEmbeddingIndexPreference(workspaceRoot, true)

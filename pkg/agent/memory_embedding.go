@@ -122,6 +122,14 @@ func MigrateMemories(ctx context.Context, mgr *embedding.EmbeddingManager) {
 
 		migrated := 0
 		for _, mem := range memories {
+			// Check for cancellation before each memory migration
+			select {
+			case <-ctx.Done():
+				debugLogf("[memory-embedding] migration: cancelled, stopping after %d memories", migrated)
+				return
+			default:
+			}
+
 			recordID := "memory:" + mem.Name
 			if existingIDs[recordID] {
 				continue // already migrated

@@ -95,8 +95,8 @@
     "@storybook/addon-essentials": "^8.6.14",
     "@storybook/addon-links": "^8.6.18",
     "@storybook/react-vite": "^8.6.18",
-    "electron": "^37.2.0",
-    "electron-builder": "^26.0.12"
+    "electron": "^37.10.3",
+    "electron-builder": "^26.8.1"
   },
   "homepage": "https://github.com/sprout-foundry/sprout#readme",
   "keywords": [],

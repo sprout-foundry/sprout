@@ -130,7 +130,12 @@ func TestResourceDirectory_UsesConfigFallbackAndIsRelativeToWorkingDir(t *testin
 
 	a := &Agent{configManager: manager}
 	got := a.resourceDirectory()
-	want := filepath.Join(workDir, "captures")
+	// resourceDirectory resolves symlinks via normalizeWorkingDirectory.
+	resolvedWorkDir, err := filepath.EvalSymlinks(workDir)
+	if err != nil {
+		t.Fatalf("eval symlinks: %v", err)
+	}
+	want := filepath.Join(resolvedWorkDir, "captures")
 	if got != want {
 		t.Fatalf("expected %s, got %s", want, got)
 	}
@@ -155,7 +160,12 @@ func TestResourceDirectory_NormalizesAbsoluteEnvToRelativeWorkingDir(t *testing.
 
 	a := &Agent{}
 	got := a.resourceDirectory()
-	want := filepath.Join(workDir, "tmp", "captures")
+	// resourceDirectory resolves symlinks via normalizeWorkingDirectory.
+	resolvedWorkDir, err := filepath.EvalSymlinks(workDir)
+	if err != nil {
+		t.Fatalf("eval symlinks: %v", err)
+	}
+	want := filepath.Join(resolvedWorkDir, "tmp", "captures")
 	if got != want {
 		t.Fatalf("expected normalized relative path %s, got %s", want, got)
 	}

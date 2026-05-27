@@ -459,19 +459,37 @@ func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if err := clientAgent.InjectInputContext(query.Query); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to steer active query: %v", err), http.StatusConflict)
-		return
+	// SP-059 Phase 1b: if a subagent is the active executor, route the
+	// steer to it instead of letting the message sit in the primary's
+	// queue (where it wouldn't be read until the subagent returns).
+	target := "primary"
+	subagentID := ""
+	if runner := clientAgent.GetSubagentRunner(); runner != nil {
+		if id, ok := runner.InjectInputIntoActive(query.Query); ok {
+			target = "subagent"
+			subagentID = id
+		}
+	}
+	if target == "primary" {
+		if err := clientAgent.InjectInputContext(query.Query); err != nil {
+			http.Error(w, fmt.Sprintf("Failed to steer active query: %v", err), http.StatusConflict)
+			return
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	resp := map[string]interface{}{
 		"accepted":  true,
 		"mode":      "steer",
 		"query":     query.Query,
+		"target":    target,
 		"timestamp": time.Now().Unix(),
-	})
+	}
+	if subagentID != "" {
+		resp["subagent_id"] = subagentID
+	}
+	json.NewEncoder(w).Encode(resp)
 }
 
 // handleAPIQueryStop interrupts the currently running query loop.
@@ -511,12 +529,26 @@ func (ws *ReactWebServer) handleAPIQueryStop(w http.ResponseWriter, r *http.Requ
 
 	clientAgent.TriggerInterrupt()
 
+	// SP-059 Phase 1a: also cancel any running subagents. Without this,
+	// the primary's TriggerInterrupt unblocks its own loop but the
+	// subagent's ProcessQuery continues until it finishes naturally —
+	// the user sees the Stop button do nothing for tens of seconds.
+	cancelledSubagents := 0
+	if runner := clientAgent.GetSubagentRunner(); runner != nil {
+		for _, sub := range runner.GetActiveSubagents() {
+			if runner.CancelSubagent(sub.ID) {
+				cancelledSubagents++
+			}
+		}
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"accepted":  true,
-		"mode":      "stop",
-		"timestamp": time.Now().Unix(),
+		"accepted":            true,
+		"mode":                "stop",
+		"timestamp":           time.Now().Unix(),
+		"cancelled_subagents": cancelledSubagents,
 	})
 }
 

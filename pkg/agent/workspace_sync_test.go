@@ -9,6 +9,19 @@ import (
 	"time"
 )
 
+// mustEvalSymlinks resolves symlinks in path, failing the test on error.
+// On macOS, t.TempDir() returns /var/folders/... which is a symlink to
+// /private/var/folders/..., so we must resolve before comparing with
+// resolveWorkspacePath which calls filepath.EvalSymlinks internally.
+func mustEvalSymlinks(t *testing.T, path string) string {
+	t.Helper()
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		t.Fatalf("EvalSymlinks(%q): %v", path, err)
+	}
+	return resolved
+}
+
 // TestCheckWriteStaleness_NewFileAllowed pins the "creating a new file
 // never needs a prior read" branch — every other SP-046 §7 check is
 // skipped when os.Stat returns a not-exist error.
@@ -318,7 +331,7 @@ func TestResolveWorkspacePath_ValidPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	want := filepath.Join(dir, "src/main.go")
+	want := filepath.Join(mustEvalSymlinks(t, dir), "src/main.go")
 	if resolved != want {
 		t.Errorf("resolved = %q, want %q", resolved, want)
 	}
@@ -332,7 +345,7 @@ func TestResolveWorkspacePath_NestedPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	want := filepath.Join(dir, "a/b/c/d.txt")
+	want := filepath.Join(mustEvalSymlinks(t, dir), "a/b/c/d.txt")
 	if resolved != want {
 		t.Errorf("resolved = %q, want %q", resolved, want)
 	}
@@ -372,7 +385,7 @@ func TestResolveWorkspacePath_NonexistentPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error for nonexistent file: %v", err)
 	}
-	want := filepath.Join(dir, "new-dir/new-file.txt")
+	want := filepath.Join(mustEvalSymlinks(t, dir), "new-dir/new-file.txt")
 	if resolved != want {
 		t.Errorf("resolved = %q, want %q", resolved, want)
 	}

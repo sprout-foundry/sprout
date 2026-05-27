@@ -324,6 +324,10 @@ func TestGitHubRepoInfo_Structure(t *testing.T) {
 
 // TestRunGitHubMCPSetup_Choices tests all three setup choices
 func TestRunGitHubMCPSetup_Choices(t *testing.T) {
+	origOpenBrowser := openBrowserFn
+	openBrowserFn = func(string) error { return nil }
+	defer func() { openBrowserFn = origOpenBrowser }()
+
 	repo := &GitHubRepoInfo{
 		Owner: "testowner",
 		Repo:  "testrepo",

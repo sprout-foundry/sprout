@@ -311,3 +311,30 @@ _Spec: roadmap/SP-056-remove-static-embeddings.md_
 - [x] SP-056-P5-memorySearch: Simplify `queryMemoriesAcrossStores` in `pkg/agent/memory_search_handler.go` to single-store query (no RRF merge)
 - [x] SP-056-P6-tests: Remove static provider tests (`static_test.go` already deleted in P1); remove RRF merge tests from `manager_test.go`; update memory embedding tests for single-store behavior; verify all ONNX tests still pass
 - [x] SP-056-P7-buildDocs: Remove `staticmodel` build tag from Makefile/build scripts; update `docs/WASM_API.md` to remove `setStaticModel` section and document ONNX-only path; update error messages to be provider-agnostic
+
+## SP-060: Desktop App — Per-Workspace Server Mode
+_Spec: roadmap/SP-060-desktop-serve.md_
+
+### Phase A: Auth Token + Random Port (Option C — Quick Security Fix)
+- [x] SP-060-A1-serverAuth: Add `SPROUT_AUTH_TOKEN` middleware to `pkg/webui/auth_middleware.go` — checks `Authorization: Bearer <token>` on write methods (POST/PUT/PATCH/DELETE) to `/api/*` paths; wired in `server_lifecycle.go`; logs "Auth token configured" on startup
+- [x] SP-060-A1-authTests: 19 unit tests in `pkg/webui/auth_middleware_test.go` (valid token, invalid token, missing token, GET/HEAD/OPTIONS pass-through, WebSocket pass-through, non-API path pass-through, case sensitivity, error response structure)
+- [x] SP-060-A1-nonLocalhostGuard: `server.go` refuses to start on non-localhost bind without `SPROUT_AUTH_TOKEN` set
+- [x] SP-060-A2-randomPort: Electron already uses `findFreePort()` in `desktop/backend.js` to allocate random port; Go captures OS-assigned port when `--web-port 0`
+- [ ] SP-060-A2-electronSecret: Generate 256-bit random secret in `desktop/backend.js` on launch; pass as `SPROUT_AUTH_TOKEN` env var when spawning backend
+- [ ] SP-060-A2-electronInject: Use `session.webRequest.onBeforeSendHeaders` in `desktop/backend.js` to inject `Authorization: Bearer <token>` on all renderer requests
+- [ ] SP-060-A3-verify: Verify backend rejects unauthenticated requests, accepts valid token; desktop loads and chats; `make build-all` passes
+
+### Nil-Agent Daemon Mode (done)
+- [x] SP-060-nilAgent: Daemon starts web UI without provider configured; `createChatAgent()` returns `(nil, nil)` in daemon mode; all `chatAgent` dereferences in `RunAgent` are nil-guarded; sync endpoints return 503 when agent is nil
+
+### Phase B: Unix Domain Socket (Option B — Proper Security)
+- [ ] SP-060-B1-bindSocket: Add `--bind-socket <path>` flag; implement Unix socket listener in `pkg/webui/server.go` with `net.Listen("unix", path)`, `0600` permissions, stale socket cleanup, signal handler cleanup
+- [ ] SP-060-B1-secretFlag: Add `--secret <token>` flag for auth token (same behavior as env var, explicit flag)
+- [ ] SP-060-B1-socketTests: Unit tests for socket listener (bind, connect, permissions, cleanup)
+- [ ] SP-060-B2-electronProxy: Create internal HTTP proxy in Electron main process — `http.createServer` → forward to Unix socket, random TCP port for BrowserWindow, inject auth header
+- [ ] SP-060-B2-socketSpawn: Generate random socket path, spawn backend with `--bind-socket <path> --secret <token>`
+- [ ] SP-060-B3-verify: Verify socket not TCP-accessible, correct permissions, desktop works through proxy, stale socket cleanup; `make build-all` passes
+- [ ] SP-060-B4-windowsFallback: On Windows, skip socket — use TCP+auth (Option C) code path in `desktop/backend.js`; Go process listens on `127.0.0.1:RANDOM` with `SPROUT_AUTH_TOKEN`; verify desktop loads and chats on Windows
+
+### Deferred: Phase C — `desktop-serve` Command
+_Deferred to future work. The nil-agent daemon mode already provides the core functionality (web UI without provider, user configures via UI, chat works). A dedicated `sprout desktop-serve` command can be extracted later when additional value over daemon mode is clear._

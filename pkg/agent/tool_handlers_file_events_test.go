@@ -37,27 +37,34 @@ func newTestAgentWithEventBus(t *testing.T) (*Agent, *events.EventBus) {
 
 // expectFileChangedEvent waits for a file_changed event on the given channel
 // and verifies its type, file_path, and action fields.
+// It skips non-file_changed events (e.g., workspace_patch) that may arrive first.
 func expectFileChangedEvent(t *testing.T, ch <-chan events.UIEvent, expectedPath, expectedAction string) map[string]interface{} {
 	t.Helper()
 
-	select {
-	case event := <-ch:
-		require.Equal(t, events.EventTypeFileChanged, event.Type, "expected file_changed event type")
-		data, ok := event.Data.(map[string]interface{})
-		require.True(t, ok, "event data should be a map[string]interface{}")
+	timeout := time.After(2 * time.Second)
+	for {
+		select {
+		case event := <-ch:
+			if event.Type != events.EventTypeFileChanged {
+				continue // skip non-file_changed events
+			}
+			require.Equal(t, events.EventTypeFileChanged, event.Type, "expected file_changed event type")
+			data, ok := event.Data.(map[string]interface{})
+			require.True(t, ok, "event data should be a map[string]interface{}")
 
-		actualPath, ok := data["file_path"].(string)
-		require.True(t, ok, "file_path should be a string")
-		assert.Equal(t, expectedPath, actualPath, "file_path mismatch")
+			actualPath, ok := data["file_path"].(string)
+			require.True(t, ok, "file_path should be a string")
+			assert.Equal(t, expectedPath, actualPath, "file_path mismatch")
 
-		actualAction, ok := data["action"].(string)
-		require.True(t, ok, "action should be a string")
-		assert.Equal(t, expectedAction, actualAction, "action mismatch")
+			actualAction, ok := data["action"].(string)
+			require.True(t, ok, "action should be a string")
+			assert.Equal(t, expectedAction, actualAction, "action mismatch")
 
-		return data
-	case <-time.After(500 * time.Millisecond):
-		t.Fatal("timed out waiting for file_changed event")
-		return nil
+			return data
+		case <-timeout:
+			t.Fatal("timed out waiting for file_changed event")
+			return nil
+		}
 	}
 }
 

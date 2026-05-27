@@ -172,6 +172,12 @@ type Config struct {
 	// Persistent Context Configuration
 	PersistentContext *PersistentContextConfig `json:"persistent_context,omitempty"`
 
+	// Change Tracking Configuration — controls the shell-mutation
+	// snapshot pass. Direct file-tool hooks (write_file, edit_file,
+	// patch_structured_file) are always tracked; this struct only
+	// gates the walker that detects shell_command mutations.
+	ChangeTracking *ChangeTrackingConfig `json:"change_tracking,omitempty"`
+
 	// Skills Configuration
 	Skills map[string]Skill `json:"skills,omitempty"` // Agent Skills that can be loaded into context
 
@@ -1013,6 +1019,73 @@ func (c *PersistentContextConfig) Resolve() PersistentContextConfig {
 		if c.RetentionDays > 0 {
 			result.RetentionDays = c.RetentionDays
 		}
+	}
+	return result
+}
+
+// ChangeTrackingConfig gates and tunes the ChangeTracker's
+// shell-mutation snapshot pass. Direct file-tool tracking (write_file,
+// edit_file, patch_structured_file) is always on; this struct only
+// touches the walker that runs before/after every shell_command.
+type ChangeTrackingConfig struct {
+	// ShellWalkEnabled controls whether the per-shell_command snapshot
+	// walk runs at all. Disable for workspaces where the walk cost is
+	// unacceptable (e.g., very-large monorepos with novel bloat
+	// directories) or for users who don't care about recovering
+	// shell-deleted untracked files. Direct file-tool tracking is
+	// unaffected. Default: true.
+	ShellWalkEnabled *bool `json:"shell_walk_enabled,omitempty"`
+
+	// MaxFiles caps the number of files visited in a single walk.
+	// Larger workspaces hit the cap and yield partial coverage with a
+	// truncation log. Default: 50000.
+	MaxFiles int `json:"max_files,omitempty"`
+
+	// MaxTotalBytes caps cumulative content bytes captured per walk.
+	// Files past this cap get path-only entries (still appear in
+	// list_changes / FilesModified, but report recoverable=false).
+	// Default: 32 MiB (33554432).
+	MaxTotalBytes int64 `json:"max_total_bytes,omitempty"`
+
+	// MaxDurationMs is the wall-clock budget for a single walk, in
+	// milliseconds. Exceeding it aborts the walk with a partial-
+	// coverage log. Default: 500 ms.
+	MaxDurationMs int `json:"max_duration_ms,omitempty"`
+
+	// AutoSkipFileCountThreshold is the per-directory immediate child
+	// file count that triggers adaptive auto-skip. Default: 1500.
+	AutoSkipFileCountThreshold int `json:"auto_skip_file_count_threshold,omitempty"`
+}
+
+// Resolve fills in defaults for any zero-value fields and returns a
+// fully-populated config. Safe to call on nil — yields all-defaults.
+func (c *ChangeTrackingConfig) Resolve() ChangeTrackingConfig {
+	result := ChangeTrackingConfig{
+		MaxFiles:                   50000,
+		MaxTotalBytes:              32 * 1024 * 1024,
+		MaxDurationMs:              500,
+		AutoSkipFileCountThreshold: 1500,
+	}
+	enabled := true
+	result.ShellWalkEnabled = &enabled
+	if c == nil {
+		return result
+	}
+	if c.ShellWalkEnabled != nil {
+		flag := *c.ShellWalkEnabled
+		result.ShellWalkEnabled = &flag
+	}
+	if c.MaxFiles > 0 {
+		result.MaxFiles = c.MaxFiles
+	}
+	if c.MaxTotalBytes > 0 {
+		result.MaxTotalBytes = c.MaxTotalBytes
+	}
+	if c.MaxDurationMs > 0 {
+		result.MaxDurationMs = c.MaxDurationMs
+	}
+	if c.AutoSkipFileCountThreshold > 0 {
+		result.AutoSkipFileCountThreshold = c.AutoSkipFileCountThreshold
 	}
 	return result
 }

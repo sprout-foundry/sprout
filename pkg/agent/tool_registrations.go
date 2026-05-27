@@ -130,6 +130,25 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Handler:     handleTodoRead,
 	})
 
+	// list_changes - Returns the change tracker's current manifest of
+	// files modified, created, or deleted in this session.
+	registry.RegisterTool(ToolConfig{
+		Name: "list_changes",
+		Description: "List every file you (the agent) have created, modified, or deleted in this session. Returns a JSON object with revision_id and a files array. Each file entry has: path, op (\"create\" | \"edit\" | \"delete\"), tool (which tool made the change), and recoverable (true if the original bytes were captured and can be restored via recover_file).\n\n**When to use this**:\n• Before reporting a task as complete, to verify you actually changed what you intended.\n• When generating a commit message, to list the exact files touched.\n• When summarizing your work for the user or a parent agent.\n• When you're about to undo something and need to know what's tracked.\n\nThe manifest is authoritative: shell commands (sed, mv, rm, tee, etc.) that bypass write_file / edit_file are still tracked via a workspace-walk diff around every shell_command invocation. Files outside the workspace, binaries, and files >1 MiB are reported with `recoverable: false` (they appear in the manifest but their original content isn't preserved). No parameters.",
+		Parameters:  []ParameterConfig{},
+		Handler:     handleListChanges,
+	})
+
+	// recover_file - Restores a file from the change tracker's session buffer.
+	registry.RegisterTool(ToolConfig{
+		Name: "recover_file",
+		Description: "Restore a file you (the agent) changed earlier this session to its pre-change state, using the ChangeTracker's captured original content. Works for files edited or deleted via any tool — write_file, edit_file, or shell_command (rm, sed -i, mv, etc.).\n\n**Behavior by op**:\n• edit / modified → original bytes written back to disk\n• delete → original bytes written back to disk (file is un-deleted)\n• create → file is removed (restoring the workspace to pre-creation state)\n\n**When to use this**:\n• The user told you to undo a change you just made.\n• You realize a shell command (rm, sed -i, mv) destroyed something it shouldn't have.\n• A subagent's manifest shows it deleted a file you didn't want deleted.\n\n**Safety**:\n• Only files the tracker has a record of can be recovered — call list_changes first to see what's available.\n• Files reported as `recoverable: false` in list_changes (binary, >1 MiB, outside workspace, never tracked) cannot be restored via this tool.\n• Returns a JSON object: `{recovered: bool, path, action, message}`.",
+		Parameters: []ParameterConfig{
+			{"path", "string", true, []string{"file_path"}, "Absolute or relative path to the file to recover."},
+		},
+		Handler: handleRecoverFile,
+	})
+
 	// ask_user - Ask user a question and wait for response
 	registry.RegisterTool(ToolConfig{
 		Name:        "ask_user",

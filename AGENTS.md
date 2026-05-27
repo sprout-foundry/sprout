@@ -295,6 +295,114 @@ sed regex bug produced `252%` mid-refactor).
 - **Self-documenting code**: Descriptive names; comments only for "why"
 - **Incremental refactoring**: Build after each extraction step
 
+## Change Tracking
+
+The `ChangeTracker` (in `pkg/agent/change_tracking*.go`) records every
+file mutation an agent (primary or subagent) performs during a session.
+It powers three user-facing surfaces:
+
+- `list_changes` — LLM tool returning the current manifest of created /
+  modified / deleted files with a `recoverable` flag per entry.
+- `recover_file` — LLM tool that restores a file to its captured
+  pre-change state. Reverses edits, un-deletes deletes, and removes
+  agent-created files.
+- `SubagentReturn.FilesModified` — the subagent → primary handoff
+  payload that tells the primary exactly which files the subagent
+  edited. Authoritative; the primary should NOT revert files outside
+  this list. A `[subagent files modified] … [/subagent files modified]`
+  manifest header is also prepended to the subagent's stdout so the
+  LLM can't miss it.
+
+### What gets tracked
+
+Three sources feed the tracker:
+
+1. **Direct file-tool hooks**: `write_file`, `edit_file`,
+   `patch_structured_file`, `write_structured_file` all call
+   `TrackFileWrite` / `TrackFileEdit`. Original + new content captured
+   verbatim.
+2. **Shell-mutation snapshot diff**: a workspace walk runs around every
+   `shell_command` invocation. Detects mutations from `sed -i`, `mv`,
+   `rm`, `cp`, `tee`, `awk -i inplace`, build scripts, formatters,
+   anything else that bypasses the structured tools. Original bytes
+   captured before the shell runs so deleted files are recoverable
+   even when they're untracked-by-git.
+3. **Subagent rollup**: each subagent runs its own tracker; on
+   completion the runner copies the tracker's changes into
+   `SubagentResult.FileChanges`, which become the primary-visible
+   `files_modified` manifest.
+
+### Performance characteristics
+
+- **Read-only short-circuit**: shell commands proven read-only by
+  `shellLooksReadOnly` skip the walk entirely (~1.7 µs per check).
+  `ls`, `grep`, `cat`, `git status`, etc. — the vast majority of agent
+  shell invocations cost nothing to track.
+- **Stat-based fast path**: when a file's `(size, mtime)` matches the
+  cache, content is reused without re-reading. Typical warm walk on a
+  5000-file workspace: ~10–15 ms. Cold prime: ~30 ms.
+- **Walk budgets**: hard caps at 50,000 files and 500 ms per walk.
+  Trips abort cleanly with a truncation log; deletion records under
+  newly-truncated dirs are suppressed (no false positives).
+- **Adaptive auto-skip**: directories with >1500 immediate child files
+  get added to a per-tracker skip set. Persists to
+  `~/.config/sprout/shell_skip_dirs.json` (workspace-keyed) so the
+  next session in the same workspace starts pre-tuned.
+- **Memory**: bounded at ~32 MiB content cap + ~10 MB map overhead per
+  tracker. Subagents each have their own (multiply by fleet size).
+
+### Safety filters
+
+- Symlinks are never dereferenced (no `/etc/passwd` leaks through
+  workspace links).
+- Binaries skipped via null-byte sniff in the first 8 KiB.
+- Files >1 MiB recorded as path-only entries (manifest reports
+  `recoverable: false`).
+- Pre-baked skip list catches `.git`, `node_modules`, `dist`,
+  `build`, `.sprout`, `.next`, `__pycache__`, `.venv`, etc.
+
+### Configuration
+
+`config.json` accepts a `change_tracking` object:
+
+```json
+{
+  "change_tracking": {
+    "shell_walk_enabled": true,
+    "max_files": 50000,
+    "max_total_bytes": 33554432,
+    "max_duration_ms": 500,
+    "auto_skip_file_count_threshold": 1500
+  }
+}
+```
+
+All fields optional. `shell_walk_enabled: false` disables the walker
+(direct file-tool hooks still work) — useful for users in pathological
+workspaces or who don't care about shell-driven mutation tracking.
+
+### Subagent return contract
+
+When a subagent finishes, its result JSON includes:
+
+```json
+{
+  "status": "completed",
+  "files_modified": [
+    {"path": "/abs/path/foo.go", "op": "modified"},
+    {"path": "/abs/path/new.go", "op": "created"},
+    {"path": "/abs/path/old.go", "op": "deleted"}
+  ],
+  "stdout": "[subagent files modified]\nM /abs/path/foo.go\nA /abs/path/new.go\nD /abs/path/old.go\n[/subagent files modified]\n\n<subagent's final assistant message>"
+}
+```
+
+The primary's `run_subagent` / `run_parallel_subagents` tool
+descriptions explicitly state: **trust `files_modified`**. Do NOT
+revert files outside that list. If the working tree contains diff you
+don't recognize, check the subagent's manifest before treating it as
+out-of-scope.
+
 ## Integration with Sprout Foundry
 
 This repo (`sprout`) integrates with the [`sprout-foundry`](../sprout-foundry) repository. Both repos must stay in sync.

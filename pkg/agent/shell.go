@@ -59,6 +59,30 @@ func (a *Agent) executeShellCommandWithTruncation(ctx context.Context, command s
 
 	fullResult, err := tools.ExecuteShellCommand(ctx, command)
 
+	// Diff the workspace against the ChangeTracker's cached baseline and
+	// record any file mutations the shell introduced (sed -i, mv, rm,
+	// cp, tee, etc.). The tracker keeps a long-lived snapshot rebased
+	// after every call, so the typical cost per shell_command is one
+	// stat-only walk (~5–20 ms on a 5000-file workspace) rather than
+	// two full content reads (~280 ms each). Cold prime happens once
+	// at EnableChangeTracking time.
+	//
+	// Short-circuit: skip the walk entirely for shell commands that
+	// shellLooksReadOnly can prove make no filesystem changes (ls,
+	// grep, cat, git status, …). Conservative — anything ambiguous
+	// (redirects, chaining, unknown programs) falls through to the
+	// full walk. Saves ~10 ms × however many read-only shells the
+	// agent runs (typically the majority).
+	//
+	// Runs unconditionally on the post-side (even when the shell
+	// errored) — a partial command may still have written something
+	// we want to remember.
+	if tracker := a.GetChangeTracker(); tracker != nil && tracker.IsEnabled() {
+		if !shellLooksReadOnly(command) {
+			tracker.TrackShellTurn(a.effectiveCwd(), "shell_command")
+		}
+	}
+
 	a.Logger().Debug("Shell command result: %s, error: %v\n", fullResult, err)
 
 	// Determine what to return (truncated or full)

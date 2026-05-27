@@ -1,9 +1,9 @@
 # SP-060: Desktop App — Per-Workspace Server Mode
 
-**Status:** 📋 Proposed  
+**Status:** 🚧 In Progress (Phase A partial, Phase B planned)  
 **Depends on:** SP-001 (Agent Core Architecture), SP-003 (WebUI & Frontend Architecture)  
 **Priority:** High  
-**Effort Estimate:** ~1-2 weeks (3 phases)
+**Effort Estimate:** ~1 week (Phase B focused)
 
 ## Problem
 
@@ -95,155 +95,62 @@ Current (broken):
 - **Pros**: Minimal changes; works today; adds real auth.
 - **Cons**: Still TCP-visible; secret visible in `/proc`; security-by-obscurity for the port.
 
-## Recommended Approach
+## Current State
 
-**Start with Option C** (can be done in an hour or two), **then move to Option B** when you have time for a proper solution. Option A is deferred indefinitely — the engineering cost doesn't justify the marginal security improvement over Option B.
+### Already Implemented (Go Backend)
 
-The phases below implement this recommendation: Phase A is Option C, Phase B is Option B, Phase C is the `desktop-serve` command cleanup.
+- **Auth middleware** (`pkg/webui/auth_middleware.go`): Fully implemented and wired into `server_lifecycle.go`. Checks `Authorization: Bearer <token>` on write methods (POST/PUT/PATCH/DELETE) to `/api/*` paths. Exempts GET, HEAD, OPTIONS, WebSocket upgrades (`/ws`, `/terminal`, `/api/lsp/ws`), and non-API paths. Uses `crypto/subtle` constant-time comparison. 19 unit tests in `auth_middleware_test.go`.
+- **Auth token from env** (`pkg/webui/server.go`): Reads `SPROUT_AUTH_TOKEN` env var at startup. Logs "Auth token configured: write endpoints require authentication" (never logs the token value).
+- **Non-localhost protection** (`pkg/webui/server.go`): Refuses to start if `SPROUT_BIND_ADDR` is a non-localhost address without `SPROUT_AUTH_TOKEN` set. Returns clear error: "Refusing to start: SPROUT_BIND_ADDR=%s requires SPROUT_AUTH_TOKEN to be set."
+- **Random port** (`desktop/backend.js`): Already uses `findFreePort()` (Node `net.createServer().listen(0)`) to allocate a random port, then passes `--web-port PORT` to the Go process. The Go side also captures OS-assigned port when `--web-port 0` is used.
+- **Nil-agent daemon mode** (`cmd/agent_modes.go`): The daemon can start the web UI without a provider configured. `createChatAgent()` returns `(nil, nil)` in daemon mode when provider is missing. All `chatAgent` dereferences in `RunAgent` are nil-guarded. When agent is nil and daemon mode, it prints a web UI URL and waits for Ctrl+C. Sync endpoints return 503 when agent is nil.
 
-## Implementation Phases
+### What Electron Is Missing (Phase A completion)
 
-### Phase A: Auth Token + Random Port (Option C — Quick Security Fix)
+- **Secret generation**: `desktop/backend.js` does NOT yet generate a 256-bit secret or pass `SPROUT_AUTH_TOKEN` to the child process.
+- **Auth header injection**: `desktop/backend.js` does NOT yet use `session.webRequest.onBeforeSendHeaders` to inject the `Authorization` header on renderer requests.
 
-**Goal**: Make the current daemon-approach secure enough for immediate use.
+These are the last two pieces needed for Phase A.
 
-**Go backend changes:**
-- `pkg/webui/server.go` — Support `SPROUT_AUTH_TOKEN` env var. If set, require `Authorization: Bearer <token>` on every request (except `/health`). Return 401 for missing/invalid tokens.
-- `cmd/agent.go` or daemon startup — When `SPROUT_AUTH_TOKEN` is set, log "auth token enabled" (don't log the token itself).
+## Remaining Work: Phase B — Unix Domain Socket
 
-**Electron changes:**
-- `desktop/backend.js` — Generate 256-bit random secret via `crypto.randomBytes(32).toString('hex')`. Pass it as `SPROUT_AUTH_TOKEN` env var when spawning the backend.
-- `desktop/backend.js` — Use `session.webRequest.onBeforeSendHeaders` to inject `Authorization: Bearer <token>` on every request from the renderer.
-- `desktop/backend.js` — Change `--web-port 0` (or let the OS pick a random port) instead of using a fixed port.
-- Read the actual assigned port from backend stdout/health response.
+**Goal**: Replace TCP binding with Unix domain socket for desktop mode. This is the main remaining work.
 
-**Key design decisions:**
-- `/health` endpoint remains unauthenticated (needed for readiness probe before renderer loads)
-- Token is generated fresh each app launch (no persistence)
-- If `SPROUT_AUTH_TOKEN` is not set, server works as before (backward compatible for CLI users)
+### Go Backend Changes
 
-### Phase B: Unix Domain Socket (Option B — Proper Security)
+- **`--bind-socket <path>` flag**: Add to the agent command. When set, listen on `net.Listen("unix", path)` instead of TCP.
+- **`--secret <token>` flag**: Same auth token behavior as `SPROUT_AUTH_TOKEN` env var, but as an explicit CLI flag. Useful for Electron to pass directly instead of via environment.
+- **Socket file permissions**: `0600` (owner read/write only) via `os.Chmod()` after creation.
+- **Stale socket cleanup**: Remove existing socket file on startup if present (left by a crashed process).
+- **Signal handler cleanup**: On SIGTERM/SIGINT, remove the socket file before exiting.
+- **Integration**: The auth middleware already works with any `net.Listener` — no changes needed there.
+- **Unit tests**: Bind to socket, connect via `net.Dial("unix", path)`, verify permissions, verify cleanup.
 
-**Goal**: Replace TCP binding with Unix domain socket for desktop mode.
+### Electron Changes
 
-**Go backend changes:**
-- New flag: `--bind-socket <path>` — Listen on Unix domain socket instead of TCP.
-- `pkg/webui/server.go` — Support `http.Server` listening on `net.Listener` from `net.Listen("unix", path)`.
-- Socket file permissions: `0600` (owner read/write only).
-- Socket cleanup: Remove stale socket file on startup, install signal handler to clean up on exit.
-- `--secret <token>` flag — Require this token as `Authorization: Bearer` on every request (same as Phase A but as explicit flag).
+- **Internal HTTP proxy**: Create in `desktop/backend.js` using `http.createServer()`. Listens on `127.0.0.1:RANDOM` (random TCP port). Forwards requests to the Unix socket via `http.request()` with `socketPath` option. Injects `Authorization: Bearer <token>` on forwarding.
+- **Socket path generation**: `os.tmpdir()` + random suffix (e.g. `/tmp/sprout-desktop-<hex>.sock`).
+- **Spawn command**: `sprout agent --daemon --bind-socket /tmp/sprout-desktop-<random>.sock --secret <token> --web-port 0` (web-port unused when socket is set, but kept for backward compat).
+- **BrowserWindow**: Loads `http://127.0.0.1:RANDOM` (the Electron proxy port, not the Go process).
+- **Windows fallback**: Windows doesn't have Unix sockets. Fall back to localhost+auth (Option C behavior) — random port with auth token via `SPROUT_AUTH_TOKEN`.
 
-**Electron changes:**
-- `desktop/backend.js` — Spawn with `--bind-socket /tmp/sprout-desktop-<random>.sock --secret <token>`.
-- Internal HTTP proxy in Electron main process:
-  - Listen on `127.0.0.1:RANDOM` (random TCP port, only accessible within Electron).
-  - `BrowserWindow` loads `http://127.0.0.1:RANDOM`.
-  - Proxy forwards requests to the Unix socket, injecting the `Authorization` header.
-- Use Node.js `http.createServer()` + `http.request()` with `socketPath` option for proxying.
-- Socket path uses `os.tmpdir()` + random suffix for cross-platform compatibility.
+### Key Design Decisions
 
-**Key design decisions:**
-- Unix socket is the primary transport — no TCP port exposed by the Go process.
-- The Electron proxy on `127.0.0.1:RANDOM` is an implementation detail — it's not externally discoverable because the port is random and changes every launch.
-- `--bind-socket` is a general-purpose flag usable beyond the desktop app.
-- On Windows (no Unix sockets), fall back to named pipes or localhost+auth (Option C behavior).
+- Unix socket is the primary transport — no TCP port exposed by the Go process on Unix platforms.
+- The Electron proxy on `127.0.0.1:RANDOM` is an implementation detail — not externally discoverable because the port is random and changes every launch.
+- `--bind-socket` is a general-purpose flag usable beyond the desktop app (any CLI scenario wanting socket-based access).
+- On Windows, fall back to localhost+auth (the Option C path that will be complete after Phase A Electron changes).
 
-### Phase C: `desktop-serve` Command (Architecture Cleanup)
+## Deferred: Phase C — `desktop-serve` Command
 
-**Goal**: Replace the daemon-mode spawn with a purpose-built command.
+**Status**: Deferred to future work.
 
-**New Go command:**
-- `cmd/desktop_serve.go` — Cobra command: `sprout desktop-serve --port PORT --workspace /path`
-- `cmd/desktop_serve_modes.go` — Server lifecycle: start, health check, graceful shutdown
-- Register in `cmd/root.go`
-
-**Command flags:**
-- `--port` — TCP port for Electron proxy to connect to (Phase B: unused, proxy connects via socket)
-- `--workspace` — Workspace directory (defaults to cwd)
-- `--bind-socket <path>` — Unix socket path (Phase B)
-- `--secret <token>` — Auth token (Phase A/B)
-
-**Key design decisions:**
-- **No `SPROUT_DAEMON` env** — Not a daemon. No log rotation, no supervisor, no port competition logic.
-- **Workspace-scoped config** — Use `--isolated-config` under the hood (workspace-scoped `.sprout/` dir), but without daemon-mode env vars.
-- **Lazy agent initialization** — Create agent on first chat request, not at startup. Matches daemon behavior where `chatAgent` can be nil initially.
-- **Graceful shutdown** — SIGTERM → cancel context → stop HTTP server → exit 0. 10-second force-kill timeout.
-- **No stdin** — Runs with stdin disabled (already the case with `stdio: ['ignore']`).
-
-**Electron migration:**
-- `desktop/backend.js` — Change spawn command from `sprout --isolated-config agent --daemon --web-port PORT` to `sprout desktop-serve --port PORT --workspace /path`
-- Remove `--daemon` flag, `--isolated-config` flag, `SPROUT_DAEMON=1` env
-- Update WSL spawn path similarly
-
-**Cleanup:**
-- Remove desktop-specific workarounds in daemon mode code (e.g., `SPROUT_DESKTOP` env checks)
-- Keep `SPROUT_DESKTOP=1` as optional telemetry/debugging hint, but gate no behavior on it
-
-## TODO Checklist
-
-### Phase A: Auth Token + Random Port (Option C)
-- [ ] **Go**: Add `SPROUT_AUTH_TOKEN` support to `pkg/webui/server.go` — middleware that checks `Authorization: Bearer <token>` on all routes except `/health`
-- [ ] **Go**: Log "auth token enabled" on startup when env var is set (don't log token value)
-- [ ] **Go**: Unit tests for auth middleware (valid token, invalid token, missing token, health exempt)
-- [ ] **Electron**: Generate 256-bit random secret in `desktop/backend.js` on launch
-- [ ] **Electron**: Pass secret as `SPROUT_AUTH_TOKEN` env var when spawning backend
-- [ ] **Electron**: Use `session.webRequest.onBeforeSendHeaders` to inject auth header on all renderer requests
-- [ ] **Electron**: Use random port (`--web-port 0` or OS-assigned) instead of fixed port
-- [ ] **Electron**: Read assigned port from backend startup output or health response
-- [ ] **Verify**: Backend rejects unauthenticated requests when token is set
-- [ ] **Verify**: Backend accepts requests with valid token
-- [ ] **Verify**: `/health` works without token
-- [ ] **Verify**: Desktop app loads and chats successfully
-- [ ] **Verify**: `make build-all` passes
-
-### Phase B: Unix Domain Socket (Option B)
-- [ ] **Go**: Add `--bind-socket <path>` flag to agent command
-- [ ] **Go**: Implement Unix socket listener in `pkg/webui/server.go` with `net.Listen("unix", path)`
-- [ ] **Go**: Set socket file permissions to `0600` (owner-only)
-- [ ] **Go**: Clean up stale socket file on startup
-- [ ] **Go**: Install signal handler to remove socket on exit
-- [ ] **Go**: Add `--secret <token>` flag for auth token (same behavior as env var, but explicit)
-- [ ] **Go**: Unit tests for socket listener (bind, connect, permissions, cleanup)
-- [ ] **Electron**: Create internal HTTP proxy in main process (`http.createServer` → forward to Unix socket)
-- [ ] **Electron**: Generate random socket path (`os.tmpdir()` + random suffix)
-- [ ] **Electron**: Spawn backend with `--bind-socket <path> --secret <token>`
-- [ ] **Electron**: BrowserWindow loads `http://127.0.0.1:RANDOM` (Electron proxy port)
-- [ ] **Electron**: Proxy injects `Authorization: Bearer <token>` header on forwarding
-- [ ] **Verify**: Backend socket is not TCP-accessible (only via Unix socket)
-- [ ] **Verify**: Socket file has correct permissions
-- [ ] **Verify**: Desktop app loads and chats through proxy
-- [ ] **Verify**: Stale socket cleaned up on crash/restart
-- [ ] **Verify**: Windows fallback (named pipes or localhost+auth) works if applicable
-- [ ] **Verify**: `make build-all` passes
-
-### Phase C: `desktop-serve` Command
-- [ ] **Go**: Create `cmd/desktop_serve.go` with Cobra command definition
-- [ ] **Go**: Create `cmd/desktop_serve_modes.go` with server lifecycle logic (start, health, shutdown)
-- [ ] **Go**: Implement workspace-scoped config (reuse isolated-config logic without daemon env)
-- [ ] **Go**: Implement lazy agent initialization (on first chat request)
-- [ ] **Go**: Implement graceful shutdown (SIGTERM → cancel → stop → exit, 10s force-kill)
-- [ ] **Go**: Register `desktopServeCmd` in `cmd/root.go`
-- [ ] **Go**: Verify `--port`, `--workspace`, `--bind-socket`, `--secret` flags
-- [ ] **Go**: Verify `/health` endpoint responds
-- [ ] **Go**: Unit tests for command flags and server lifecycle
-- [ ] **Electron**: Update `desktop/backend.js` — change spawn to `sprout desktop-serve`
-- [ ] **Electron**: Remove `--daemon`, `--isolated-config` flags and `SPROUT_DAEMON=1` env
-- [ ] **Electron**: Update WSL spawn path similarly
-- [ ] **Electron**: Verify health polling and crash detection still work
-- [ ] **Cleanup**: Review daemon mode for desktop-specific workarounds to remove
-- [ ] **Cleanup**: Decide on `SPROUT_DESKTOP` env var retention (keep as telemetry hint only)
-- [ ] **Test**: Workspace open → chat → close window → backend exits
-- [ ] **Test**: Workspace without provider → configure via web UI → chat
-- [ ] **Test**: Two simultaneous workspaces (separate ports/processes)
-- [ ] **Test**: Backend crash → Electron shows error page
-- [ ] **Test**: WSL workspace (if applicable)
-- [ ] **Verify**: `make build-all` passes
-- [ ] **Verify**: CI passes
+A dedicated `sprout desktop-serve` command (separate from `sprout agent --daemon`) was originally planned as a third phase. However, the nil-agent daemon mode already provides the core functionality needed by the desktop app: the web UI starts without a provider, the user configures via the UI, and chat works. A dedicated command can be extracted later when the team has capacity and can clearly articulate the additional value over the existing daemon mode.
 
 ## Open Questions
 
-1. **Should `desktop-serve` reuse `--isolated-config` logic?** — Likely yes. The workspace-scoped config is the right behavior. We just don't need the daemon baggage.
+1. **Should `--bind-socket` be added to the standard `agent --daemon` command?** — Likely yes. It's a general-purpose flag useful for non-desktop scenarios where you want socket-based access.
 2. **Should we keep `SPROUT_DESKTOP=1` env var?** — Potentially useful for telemetry/debugging to distinguish desktop-launched vs CLI-launched servers, but should not gate any behavior.
-3. **Should the desktop app pass `--no-project-skills`?** — Project skills are useful in the desktop context, so probably not. But worth confirming.
-4. **Windows named pipes vs localhost+auth?** — Windows doesn't have Unix domain sockets (it has named pipes). Need to decide: use named pipes (requires different Go code path) or fall back to localhost+auth (Option C behavior) on Windows.
-5. **Should `--bind-socket` be added to the standard `agent --daemon` command too?** — Potentially useful for non-desktop scenarios where you want socket-based access. Consider making it a general-purpose flag.
+3. **Should the desktop app pass `--no-project-skills`?** — Project skills are useful in the desktop context, so probably not.
+4. **Windows named pipes vs localhost+auth?** — Windows doesn't have Unix domain sockets (it has named pipes). The fallback is localhost+auth (Option C). Named pipes could be explored later if the localhost fallback is deemed insufficient.
+5. **Should `SPROUT_AUTH_TOKEN` also protect GET endpoints in desktop mode?** — Current implementation only protects write methods. This is intentional — GETs are read-only and the main risk is unauthorized writes. But worth revisiting if a stricter model is needed.

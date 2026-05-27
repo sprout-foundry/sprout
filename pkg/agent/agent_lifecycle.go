@@ -36,6 +36,10 @@ func (a *Agent) Shutdown() {
 		a.interruptCancel()
 	}
 
+	// Wait for background goroutines (memory migration, etc.) to finish
+	// before closing the resources they depend on.
+	a.backgroundWg.Wait()
+
 	// Close async output worker
 	if a.output != nil {
 		if ch := a.output.GetAsyncOutput(); ch != nil {

@@ -244,7 +244,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 
 		if enableWebUI {
 			var webErr error
-			webServer, webErr = webui.NewReactWebServer(chatAgent, eventBus, port, bindAddr)
+			webServer, webErr = webui.NewReactWebServer(chatAgent, eventBus, port, bindAddr, bindSocket, secretToken)
 			if webErr != nil {
 				log.Fatalf("%v", webErr)
 			}
@@ -679,17 +679,19 @@ func SetupAgentEvents(chatAgent *agent.Agent, eventBus *events.EventBus, indicat
 	// assistant text. The OutputRouter's RouteStreamChunk publishes
 	// the event AND calls this callback — no duplicate events or writes.
 	//
-	// A LineCapWriter clamps the visual length of each line so that
-	// minified files / unbroken log lines streamed into the response
-	// don't soft-wrap into hundreds of terminal rows. The clip is
-	// purely cosmetic — the LLM still sees the full content. The cap
-	// is 2× the current terminal width (with a fixed floor) so normal
-	// prose is never clipped.
+	// Routing: if a per-turn AssistantTurnRenderer is active (set up by
+	// the REPL loop), the chunk goes through it for indent + segment
+	// tracking. Otherwise it falls back to raw fmt.Print (non-REPL
+	// callers like queue mode).
+	//
+	// Assistant prose flows verbatim end-to-end: the terminal handles
+	// soft-wrap on long lines. We deliberately do NOT clamp line length
+	// here — prior versions truncated lines beyond `terminalWidth × 2`,
+	// which clipped long prose paragraphs that lacked `\n` breaks
+	// ("text being shown to the user shouldn't be cut off"). Tool
+	// results don't reach this callback (they route via RouteAgentMessage
+	// / RouteTerminalOnly), so there's no blob-output risk on this path.
 	if !agentNoStreaming {
-		lineCap := terminalLineCapChars()
-		capper := console.NewLineCapWriter(lineCap, func(s string) {
-			fmt.Print(s)
-		})
 		chatAgent.EnableStreaming(func(chunk string) {
 			indicator.Stop()
 			if chunk != "" {
@@ -698,19 +700,21 @@ func SetupAgentEvents(chatAgent *agent.Agent, eventBus *events.EventBus, indicat
 				// timestamp later yields "first token landed at X".
 				noteFirstStreamChunk()
 			}
-			capper.Write(chunk)
+			if r := currentTurnRenderer.Load(); r != nil {
+				r.WriteChunk(chunk)
+				return
+			}
+			fmt.Print(chunk)
 		})
 	}
 }
 
-// terminalLineCapChars decides how many characters of a single line we
-// let through before truncating. Anchored to terminal width so the
-// truncation marker lands a row or two beyond the visible area rather
-// than at an arbitrary fixed column. Floor of 200 covers narrow
-// terminals + edge cases where stdout isn't a TTY.
-func terminalLineCapChars() int {
-	return max(GetTerminalWidth()*2, 200)
-}
+// currentTurnRenderer holds the AssistantTurnRenderer for the in-progress
+// REPL turn (or nil between turns / outside the REPL). The streaming
+// callback registered in SetupAgentEvents loads from this pointer on each
+// chunk so per-turn renderers can be swapped without re-registering the
+// callback. Safe because only one turn is active at a time in a CLI REPL.
+var currentTurnRenderer atomic.Pointer[console.AssistantTurnRenderer]
 
 // runQueueMode handles autonomous EA queue mode. It reads pending tasks from
 // the persistent task queue and processes each one by delegating to the agent
@@ -1056,6 +1060,28 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			// silently joining whatever ran in the prior turn.
 			resetSpawnTracking()
 
+			// Role header so the boundary between user input and assistant
+			// reply is visually obvious. Uses a brand-colored bar + dim
+			// "assistant" label — pops out in scrollback without being noisy.
+			// Paired at the bottom with the existing dim `⎯ this turn: … ⎯`
+			// summary line, which acts as the closing separator.
+			fmt.Println()
+			printAssistantHeader(chatAgent.GetModel())
+
+			// Per-turn assistant renderer: indents prose with "  " as it
+			// streams, and at turn-end optionally re-renders the final
+			// prose segment with markdown formatting (cursor-clear +
+			// reprint). Wire OnExternalWrite into the OutputRouter so
+			// tool-log lines break the current prose segment cleanly.
+			turnRenderer := console.NewAssistantTurnRenderer(
+				GetTerminalWidth(),
+				console.NewMarkdownFormatter(true, true),
+			)
+			currentTurnRenderer.Store(turnRenderer)
+			if router := chatAgent.OutputRouter(); router != nil {
+				router.SetExternalWriteHook(turnRenderer.OnExternalWrite)
+			}
+
 			// SP-048-1b: spinner during the gap between submit and first
 			// stream chunk (or first tool event). The streaming callback
 			// registered in SetupAgentEvents stops it on first chunk; we
@@ -1093,6 +1119,16 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			// Defensive: ensure the spinner is cleared at the end of every turn
 			// even if the streamFn never fired (e.g. zsh fast-path executed).
 			indicator.Stop()
+			// Finalize the assistant renderer: re-renders the final prose
+			// segment with markdown formatting when it's substantial
+			// enough to be worth the cursor-clear flicker. Tear down the
+			// external-write hook BEFORE FinalizeAtTurnEnd so the
+			// re-render's own writes don't loop back through it.
+			if router := chatAgent.OutputRouter(); router != nil {
+				router.SetExternalWriteHook(nil)
+			}
+			turnRenderer.FinalizeAtTurnEnd()
+			currentTurnRenderer.Store(nil)
 			// SP-048-3: refresh the footer at turn-end so cost / context /
 			// model changes (e.g. /model switch) land immediately.
 			footer.Refresh()
@@ -1102,6 +1138,20 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			printPerTurnSummary(chatAgent, turnStart, turnPromptStart, turnCompletionStart, turnCostStart)
 		}
 	}
+}
+
+// printAssistantHeader writes the dim "▌ assistant · <model>" header that
+// marks the start of an assistant turn. Honors NO_COLOR via the existing
+// color preference resolver. The brand cyan `▌` aligns visually with the
+// glyph vocabulary in pkg/console; the model name sits in dim grey so the
+// eye is drawn to the bar, not the metadata.
+func printAssistantHeader(model string) {
+	colorOn := envutil.ResolveColorPreference(true)
+	if !colorOn {
+		fmt.Printf("▌ assistant · %s\n", model)
+		return
+	}
+	fmt.Printf("\033[1;96m▌\033[0m \033[2massistant · %s\033[0m\n", model)
 }
 
 // shouldShowTurnStats returns true when stderr is connected to a TTY.

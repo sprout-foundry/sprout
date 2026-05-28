@@ -10,7 +10,7 @@ import (
 )
 
 func TestTouchClientLastSeen_ExistingContext(t *testing.T) {
-	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -30,7 +30,7 @@ func TestTouchClientLastSeen_ExistingContext(t *testing.T) {
 }
 
 func TestTouchClientLastSeen_DefaultClientID(t *testing.T) {
-	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +50,7 @@ func TestTouchClientLastSeen_DefaultClientID(t *testing.T) {
 }
 
 func TestTouchClientLastSeen_NonexistentContext(t *testing.T) {
-	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +69,7 @@ func TestTouchClientLastSeen_NonexistentContext(t *testing.T) {
 }
 
 func TestTouchClientLastSeen_WhitespaceClientID(t *testing.T) {
-	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

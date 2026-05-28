@@ -9,7 +9,7 @@ import (
 )
 
 func TestCloseSSHSessionEmptyKey(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -24,7 +24,7 @@ func TestCloseSSHSessionEmptyKey(t *testing.T) {
 }
 
 func TestCloseSSHSessionWhitespaceKey(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +36,7 @@ func TestCloseSSHSessionWhitespaceKey(t *testing.T) {
 }
 
 func TestCloseSSHSessionNonexistentKey(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +49,7 @@ func TestCloseSSHSessionNonexistentKey(t *testing.T) {
 }
 
 func TestShutdownSSHSessionsEmpty(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

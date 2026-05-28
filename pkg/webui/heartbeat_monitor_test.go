@@ -15,7 +15,7 @@ import (
 // heartbeat monitor tests.
 func newTestMonitorServer(t *testing.T) *ReactWebServer {
 	t.Helper()
-	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

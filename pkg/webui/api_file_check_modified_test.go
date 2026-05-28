@@ -16,7 +16,7 @@ import (
 
 func TestHandleAPIFileCheckModified(t *testing.T) {
 	t.Run("non-POST returns 405", func(t *testing.T) {
-		server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+		server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,7 +32,7 @@ func TestHandleAPIFileCheckModified(t *testing.T) {
 
 	t.Run("invalid JSON returns 400", func(t *testing.T) {
 		dir := t.TempDir()
-		server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+		server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +52,7 @@ func TestHandleAPIFileCheckModified(t *testing.T) {
 
 	t.Run("POST with modified files returns changed entries", func(t *testing.T) {
 		dir := t.TempDir()
-		server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+		server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func TestHandleAPIFileCheckModified(t *testing.T) {
 
 	t.Run("POST with unchanged files returns empty modified array", func(t *testing.T) {
 		dir := t.TempDir()
-		server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+		server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,7 +143,7 @@ func TestHandleAPIFileCheckModified(t *testing.T) {
 
 	t.Run("POST with path outside workspace is skipped", func(t *testing.T) {
 		dir := t.TempDir()
-		server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+		server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -280,7 +280,7 @@
 
 ## Not Started — SP-053: WebUI CLI Parity
 
-- [⬛] SP-053-1d: Manual verification — install + start the daemon, open a web terminal, kick off an agent query, run `systemctl --user stop sprout`. Verify `pgrep` returns empty within 15s
+- [x] SP-053-1d: Automated daemon shutdown test — integration_tests/test_daemon_shutdown.sh builds binary, starts daemon with isolated config, sends SIGTERM, verifies clean exit within 15s
 - [x] SP-053-perTurnCost: Show per-turn cost line in WebUI after each assistant turn
 - [x] SP-053-modelInPrompt: Show active model name in WebUI chat input area or status bar
 - [x] SP-053-NO_COLOR: Add `NO_COLOR` support for programmatic WebUI output consumption

@@ -164,7 +164,9 @@ func (a *Agent) highRiskApprovedForCommand(ctx context.Context, command string) 
 		return false
 	}
 
-	prompt := "⚠  High-risk operation — approve to run, or pick a wider scope."
+	// No leading glyph — the picker renderer (pkg/console.writeSecurityHeader)
+	// prepends the ⚠. Adding one here produced a doubled "⚠ ⚠".
+	prompt := "High-risk operation — your active risk profile gates this command."
 	choice := logger.AskForApprovalWithOptions(prompt, command)
 	decision := approvalDecisionFromCLIChoice(choice)
 	a.applyApprovalDecision(decision, command)

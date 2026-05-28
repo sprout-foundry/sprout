@@ -2,7 +2,9 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	core "github.com/sprout-foundry/seed/core"
@@ -209,7 +211,7 @@ func (r *richEventPublisher) enrichEventData(data any, eventType string) any {
 		return data
 	}
 
-	displayName := buildDisplayName(toolName, payload)
+	displayName := buildDisplayName(toolName, argsFromPayload(payload))
 	isSubagent := isSubagentTool(toolName)
 	var subagentType string
 	if isSubagent {
@@ -274,6 +276,28 @@ func extractDurationMs(payload map[string]interface{}) time.Duration {
 	return 0
 }
 
+// argsFromPayload returns the tool's argument map from a tool event
+// payload. seed core publishes the args as a JSON string under
+// "arguments" (see core.EventTypeToolStart), so the primary-arg keys
+// buildDisplayName looks for ("command", "path", …) are NOT top-level —
+// without decoding, every shell line rendered as a bare "shell_command".
+// Falls back to a structured "args"/"input" map, then to the payload
+// itself, so older event shapes still work.
+func argsFromPayload(payload map[string]interface{}) map[string]interface{} {
+	for _, k := range []string{"args", "input", "parameters"} {
+		if m, ok := payload[k].(map[string]interface{}); ok {
+			return m
+		}
+	}
+	if s, ok := payload["arguments"].(string); ok && s != "" {
+		var m map[string]interface{}
+		if err := json.Unmarshal([]byte(s), &m); err == nil {
+			return m
+		}
+	}
+	return payload
+}
+
 // buildDisplayName constructs a human-readable tool name by appending the
 // primary argument to the tool name. For example:
 //   - read_file /path/to/file → "read_file /path/to/file"
@@ -287,7 +311,9 @@ func buildDisplayName(toolName string, payload map[string]interface{}) string {
 		}
 	case "shell_command":
 		if cmd, ok := payload["command"].(string); ok && cmd != "" {
-			// Truncate long commands for readability
+			// Collapse newlines / whitespace runs so a multi-line command
+			// renders as a single scannable line, then truncate.
+			cmd = strings.Join(strings.Fields(cmd), " ")
 			if len(cmd) > 80 {
 				return fmt.Sprintf("%s %s...", toolName, cmd[:77])
 			}
@@ -608,10 +634,14 @@ func newPreExecuteHook(agent *Agent) func(name string, args map[string]interface
 			return nil // safe, no action needed
 		}
 
-		// Unsafe mode bypasses all security checks
-		if agent.GetUnsafeMode() {
+		// Unsafe mode or session elevation skips the interactive prompt
+		// for non-hard-block operations. Shared policy with
+		// ToolRegistry.ExecuteTool via staticGateAutoApprove, so clicking
+		// "Elevate (session)" actually suppresses subsequent static-classifier
+		// prompts on the live seed path (not just the filesystem gate).
+		if agent.staticGateAutoApprove(secResult) {
 			if agent.debug {
-				agent.debugLog("[UNLOCK] Unsafe mode: bypassing security validation for %s (risk: %s)\n", name, secResult.Risk)
+				agent.debugLog("[UNLOCK] Static gate auto-approve (unsafe/elevated): bypassing security validation for %s (risk: %s)\n", name, secResult.Risk)
 			}
 			return nil
 		}
@@ -684,7 +714,7 @@ func newPreExecuteHook(agent *Agent) func(name string, args map[string]interface
 			// classic yes/no path until the dialog is generalized.
 			if name == "shell_command" {
 				if cmd, ok := args["command"].(string); ok && cmd != "" {
-					prompt := buildSecurityPrompt(name, args, secResult)
+					prompt := buildShellApprovalPrompt(secResult)
 					choice := logger.AskForApprovalWithOptions(prompt, cmd)
 					decision := approvalDecisionFromCLIChoice(choice)
 					if !decision.Approved() {

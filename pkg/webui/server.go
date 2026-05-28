@@ -102,13 +102,21 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 		workspaceRoot = "."
 	}
 
-
 	// daemonRoot is the user's home directory — this scopes daemon-level
 	// storage (sessions, SSH tunnels, config) to the user rather than a
 	// specific project workspace.
 	daemonRoot, err := os.UserHomeDir()
 	if err != nil {
 		daemonRoot = workspaceRoot
+	}
+
+	// In service mode, the CWD from launchd/systemd may not be the user's
+	// home directory (e.g. /usr/home instead of /Users/<name>).  The web UI
+	// is designed to start at the user's home so they can navigate to projects.
+	// Always use daemonRoot as the initial workspace in service mode.
+	serviceMode := configuration.GetEnvSimple("SERVICE") == "1"
+	if serviceMode {
+		workspaceRoot = daemonRoot
 	}
 
 	// Initialize recent workspace tracking.
@@ -159,8 +167,7 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 		log.Printf("[web] Allowed origins: %v", normalizedAllowedOrigins)
 	}
 
-	// Parse service mode and trusted user header
-	serviceMode := configuration.GetEnvSimple("SERVICE") == "1"
+	// Parse trusted user header (serviceMode already resolved above)
 	trustedUserHeader := strings.TrimSpace(configuration.GetEnvSimple("TRUSTED_USER_HEADER"))
 	if serviceMode {
 		if trustedUserHeader != "" {

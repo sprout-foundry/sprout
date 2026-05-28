@@ -641,6 +641,19 @@ export function useEventHandler({
 
           return { logs: appendCappedLog(prev.logs, logEntry), fileEdits: updatedFileEdits };
         });
+        // Surface a window-level event so the AgentChangesPanel (and
+        // any other component that cares about agent-side mutations)
+        // can flash + refresh without subscribing to the full event
+        // stream. Pulling `path` / `action` from the same fields the
+        // FileEdit derivation uses keeps the contracts aligned.
+        window.dispatchEvent(
+          new CustomEvent('agent-file-changed', {
+            detail: {
+              path: String(eventData.path || eventData.file_path || ''),
+              action: String(eventData.action || eventData.operation || 'edited'),
+            },
+          }),
+        );
         debugLog('[edit] File changed:', eventData.path);
         break;
 

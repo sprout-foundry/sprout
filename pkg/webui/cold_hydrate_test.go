@@ -1246,7 +1246,7 @@ func TestHandleWebSocketMessage_HydrateRequest(t *testing.T) {
 func setupHydrateIntegrationServer(t *testing.T, workspaceRoot string) (*httptest.Server, *websocket.Conn, func()) {
 	t.Helper()
 	bus := events.NewEventBus()
-	ws, err := NewReactWebServer(nil, bus, 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, bus, 0, "127.0.0.1", "", "")
 	if err != nil {
 		// Fall back to minimal server — NewReactWebServer may fail
 		// in some test environments (e.g., missing home dir)

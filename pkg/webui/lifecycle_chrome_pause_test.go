@@ -13,7 +13,7 @@ import (
 // --- gatherStatsForClientIDLocked: is_processing ---
 
 func TestGatherStatsForClientIDLocked_ActiveQuery_ReturnsIsProcessingTrue(t *testing.T) {
-	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -30,7 +30,7 @@ func TestGatherStatsForClientIDLocked_ActiveQuery_ReturnsIsProcessingTrue(t *tes
 }
 
 func TestGatherStatsForClientIDLocked_NoActiveQuery_ReturnsIsProcessingFalse(t *testing.T) {
-	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +49,7 @@ func TestGatherStatsForClientIDLocked_NoActiveQuery_ReturnsIsProcessingFalse(t *
 // --- gatherStatsForClientIDLocked: current_query ---
 
 func TestGatherStatsForClientIDLocked_ActiveQueryWithText_ReturnsCurrentQuery(t *testing.T) {
-	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,7 +67,7 @@ func TestGatherStatsForClientIDLocked_ActiveQueryWithText_ReturnsCurrentQuery(t 
 }
 
 func TestGatherStatsForClientIDLocked_NoActiveQuery_DoesNotReturnCurrentQuery(t *testing.T) {
-	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func TestGatherStatsForClientIDLocked_NoActiveQuery_DoesNotReturnCurrentQuery(t 
 }
 
 func TestGatherStatsForClientIDLocked_ActiveQueryButEmptyText_DoesNotReturnCurrentQuery(t *testing.T) {
-	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +118,7 @@ func TestSetClientWorkspaceRoot_ClearsCurrentQuery(t *testing.T) {
 		t.Fatalf("mkdir workspace-b: %v", err)
 	}
 
-	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +158,7 @@ func TestSetClientWorkspaceRoot_ClearsCurrentQuery(t *testing.T) {
 // --- decrementActiveQueries clears CurrentQuery ---
 
 func TestDecrementActiveQueries_ClearsCurrentQuery(t *testing.T) {
-	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,7 +193,7 @@ func TestDecrementActiveQueries_ClearsCurrentQuery(t *testing.T) {
 }
 
 func TestDecrementActiveQueries_NonexistentClient_DoesNotPanic(t *testing.T) {
-	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,7 +203,7 @@ func TestDecrementActiveQueries_NonexistentClient_DoesNotPanic(t *testing.T) {
 }
 
 func TestDecrementActiveQueries_AlreadyZero_DoesNotGoNegative(t *testing.T) {
-	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -232,7 +232,7 @@ func TestDecrementActiveQueries_AlreadyZero_DoesNotGoNegative(t *testing.T) {
 // --- Cross-client isolation: is_processing is per-client ---
 
 func TestGatherStatsForClientIDLocked_IsProcessingPerClient(t *testing.T) {
-	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -269,7 +269,7 @@ func TestGatherStatsForClientIDLocked_IsProcessingPerClient(t *testing.T) {
 // --- Full flow: increment + decrement clears state correctly ---
 
 func TestIncrementThenDecrementClearsQueryState(t *testing.T) {
-	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -38,7 +38,7 @@ func TestMultiWindowClientIsolationForWorkspaceSessionAndModel(t *testing.T) {
 		t.Fatalf("mkdir workspaceB: %v", err)
 	}
 
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,7 +179,7 @@ func TestActiveQueryIsolationAllowsOtherWindowWorkspaceSwitch(t *testing.T) {
 		}
 	}
 
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -241,7 +241,7 @@ func TestSetClientWorkspaceRootResetsAgentSessionState(t *testing.T) {
 		t.Fatalf("mkdir next workspace: %v", err)
 	}
 
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -298,7 +298,7 @@ func TestSetClientWorkspaceRootResetsAgentSessionState(t *testing.T) {
 }
 
 func TestShouldForwardEventToConnectionRequiresClientIDExceptGlobal(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -335,7 +335,7 @@ func TestShouldForwardEventToConnectionRequiresClientIDExceptGlobal(t *testing.T
 }
 
 func TestShouldForwardEventToConnectionChatIDFiltering(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -396,7 +396,7 @@ func TestShouldForwardEventToConnectionChatIDFiltering(t *testing.T) {
 }
 
 func TestStopSSHSessionLockedClearsMatchingClientSSHContext(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -440,7 +440,7 @@ func TestStopSSHSessionLockedClearsMatchingClientSSHContext(t *testing.T) {
 func TestCleanupInactiveClientContextsRemovesOnlyStaleInactiveDisconnectedClients(t *testing.T) {
 	daemonRoot := t.TempDir()
 
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

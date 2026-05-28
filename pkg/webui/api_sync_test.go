@@ -33,7 +33,7 @@ func TestHandleAPISyncOp_MethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPISyncOp_InvalidJSON(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +47,7 @@ func TestHandleAPISyncOp_InvalidJSON(t *testing.T) {
 }
 
 func TestHandleAPISyncOp_EmptyPath(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func TestHandleAPISyncOp_EmptyPath(t *testing.T) {
 
 func TestHandleAPISyncOp_WriteOp(t *testing.T) {
 	dir := t.TempDir()
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +109,7 @@ func TestHandleAPISyncOp_DeleteOp(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +150,7 @@ func TestHandleAPISyncOp_RenameOp(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,7 +199,7 @@ func TestHandleAPISyncOp_ConflictDetection(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -242,7 +242,7 @@ func TestHandleAPISyncOp_ConflictDetection(t *testing.T) {
 
 func TestHandleAPISyncOp_PathTraversal(t *testing.T) {
 	dir := t.TempDir()
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -274,7 +274,7 @@ func TestHandleAPISyncOp_PathTraversal(t *testing.T) {
 func TestHandleAPISyncOp_AgentNil_Returns503(t *testing.T) {
 	// When agent is nil (daemon mode with no provider configured),
 	// handleAPISyncOp should return 503 "agent not initialized".
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -308,7 +308,7 @@ func TestHandleAPISyncBatch_MethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPISyncBatch_InvalidJSON(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -322,7 +322,7 @@ func TestHandleAPISyncBatch_InvalidJSON(t *testing.T) {
 }
 
 func TestHandleAPISyncBatch_EmptyOps(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -338,7 +338,7 @@ func TestHandleAPISyncBatch_EmptyOps(t *testing.T) {
 
 func TestHandleAPISyncBatch_MultipleOps(t *testing.T) {
 	dir := t.TempDir()
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -396,7 +396,7 @@ func TestHandleAPISyncBatch_StopsOnConflict(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -456,7 +456,7 @@ func TestHandleAPISyncBatch_StopsOnConflict(t *testing.T) {
 func TestHandleAPISyncBatch_AgentNil_Returns503(t *testing.T) {
 	// When agent is nil (daemon mode with no provider configured),
 	// handleAPISyncBatch should return 503 "agent not initialized".
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -492,7 +492,7 @@ func TestHandleAPISyncStatus_MethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPISyncStatus_EmptyState(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -516,7 +516,7 @@ func TestHandleAPISyncStatus_EmptyState(t *testing.T) {
 }
 
 func TestHandleAPISyncStatus_WithMetadata(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -15,7 +15,7 @@ import (
 )
 
 func TestRootAssetHandlersServeEmbeddedFiles(t *testing.T) {
-	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +87,7 @@ func TestRootAssetHandlersServeEmbeddedFiles(t *testing.T) {
 }
 
 func TestStaticFilesServesHashedMainBundle(t *testing.T) {
-	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +142,7 @@ func TestEmbeddedIndexReferencesAvailableRootAssets(t *testing.T) {
 
 	for _, match := range matches {
 		assetName := path.Base(match[1])
-		server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+		server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +153,7 @@ func TestEmbeddedIndexReferencesAvailableRootAssets(t *testing.T) {
 }
 
 func TestHandleAssetsServesEmbeddedFilesWithMIMETypes(t *testing.T) {
-	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -251,7 +251,7 @@ func TestHandleAssetsServesEmbeddedFilesWithMIMETypes(t *testing.T) {
 }
 
 func TestHandleAssetsReturns404ForNonExistentFile(t *testing.T) {
-	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -267,7 +267,7 @@ func TestHandleAssetsReturns404ForNonExistentFile(t *testing.T) {
 }
 
 func TestHandleIndexDoesNotServeAPIPaths(t *testing.T) {
-	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

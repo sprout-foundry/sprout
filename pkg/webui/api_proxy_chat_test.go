@@ -26,7 +26,7 @@ func setupProxyChatTestServer(t *testing.T) *ReactWebServer {
 		t.Fatalf("mkdir workspace: %v", err)
 	}
 
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

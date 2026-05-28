@@ -65,7 +65,7 @@ func newTestingConnPair(t *testing.T) *testingConnPair {
 // heartbeat-related tests.
 func newTestHeartbeatServer(t *testing.T) *ReactWebServer {
 	t.Helper()
-	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

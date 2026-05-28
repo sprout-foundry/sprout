@@ -31,7 +31,7 @@ type testServer struct {
 func newTestServer(t *testing.T, preConfigure func(*ReactWebServer)) *testServer {
 	t.Helper()
 	bus := events.NewEventBus()
-	srv, err := NewReactWebServer(nil, bus, 0, "127.0.0.1")
+	srv, err := NewReactWebServer(nil, bus, 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatalf("NewReactWebServer: %v", err)
 	}
@@ -428,7 +428,7 @@ func newWaitForTakeoverTestServer(t *testing.T, srv *ReactWebServer) *httptest.S
 }
 
 func TestWaitForTakeover_Confirms(t *testing.T) {
-	srv, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	srv, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatalf("NewReactWebServer: %v", err)
 	}
@@ -458,7 +458,7 @@ func TestWaitForTakeover_Confirms(t *testing.T) {
 }
 
 func TestWaitForTakeover_ClientDisconnects(t *testing.T) {
-	srv, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	srv, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatalf("NewReactWebServer: %v", err)
 	}
@@ -483,7 +483,7 @@ func TestWaitForTakeover_ClientDisconnects(t *testing.T) {
 }
 
 func TestWaitForTakeover_WrongMessageType(t *testing.T) {
-	srv, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	srv, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatalf("NewReactWebServer: %v", err)
 	}
@@ -513,7 +513,7 @@ func TestWaitForTakeover_WrongMessageType(t *testing.T) {
 }
 
 func TestWaitForTakeover_InvalidJSON(t *testing.T) {
-	srv, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	srv, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatalf("NewReactWebServer: %v", err)
 	}
@@ -541,7 +541,7 @@ func TestWaitForTakeover_InvalidJSON(t *testing.T) {
 }
 
 func TestWaitForTakeover_UnknownMessageType(t *testing.T) {
-	srv, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	srv, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatalf("NewReactWebServer: %v", err)
 	}

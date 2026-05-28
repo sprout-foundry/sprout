@@ -275,6 +275,48 @@ func TestCheckWriteStaleness_FreeTierDegenerate(t *testing.T) {
 	}
 }
 
+// TestCheckWriteStaleness_PathNormalization pins the fix for the bug
+// where read_file("roadmap/spec.md") (relative) and write_file("/abs/path/roadmap/spec.md")
+// (absolute) used different map keys in the turn tracker. The staleness
+// check must normalize both to the same canonical form so the read
+// satisfies the write.
+func TestCheckWriteStaleness_PathNormalization(t *testing.T) {
+	dir := t.TempDir()
+	absPath := filepath.Join(dir, "subdir", "file.txt")
+	relPath := "subdir/file.txt"
+	if err := os.MkdirAll(filepath.Dir(absPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(absPath, []byte("data"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-2 * stalenessFreshnessWindow)
+	if err := os.Chtimes(absPath, old, old); err != nil {
+		t.Fatal(err)
+	}
+
+	// Case 1: relative read, absolute write
+	a := &Agent{workspaceRoot: dir}
+	a.RecordFileReadThisTurn(relPath)
+	if err := a.checkWriteStaleness(absPath); err != nil {
+		t.Errorf("read with relative %q should satisfy write with absolute %q: %v", relPath, absPath, err)
+	}
+
+	// Case 2: absolute read, relative write
+	a2 := &Agent{workspaceRoot: dir}
+	a2.RecordFileReadThisTurn(absPath)
+	if err := a2.checkWriteStaleness(relPath); err != nil {
+		t.Errorf("read with absolute %q should satisfy write with relative %q: %v", absPath, relPath, err)
+	}
+
+	// Case 3: both absolute (baseline — this should always work)
+	a3 := &Agent{workspaceRoot: dir}
+	a3.RecordFileReadThisTurn(absPath)
+	if err := a3.checkWriteStaleness(absPath); err != nil {
+		t.Errorf("read with absolute %q should satisfy write with same absolute: %v", absPath, err)
+	}
+}
+
 // TestSetFileMetadata_RoundTrip verifies that the in-memory store
 // preserves values across set/get cycles, including overwriting a prior
 // entry (the sync layer expects to call SetFileMetadata repeatedly as

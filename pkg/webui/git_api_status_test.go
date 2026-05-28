@@ -34,7 +34,7 @@ func TestHandleAPIGitStageMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIGitStageMissingPath(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +49,7 @@ func TestHandleAPIGitStageMissingPath(t *testing.T) {
 }
 
 func TestHandleAPIGitStageInvalidJSON(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +130,7 @@ func TestHandleAPIGitCheckoutMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIGitCheckoutMissingBranch(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,7 +145,7 @@ func TestHandleAPIGitCheckoutMissingBranch(t *testing.T) {
 }
 
 func TestHandleAPIGitCheckoutInvalidBranchName(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +160,7 @@ func TestHandleAPIGitCheckoutInvalidBranchName(t *testing.T) {
 }
 
 func TestHandleAPIGitCheckoutInvalidJSON(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,7 +186,7 @@ func TestHandleAPIGitCreateBranchMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIGitCreateBranchMissingName(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -234,7 +234,7 @@ func TestHandleAPIGitCommitMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIGitCommitMissingMessage(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -249,7 +249,7 @@ func TestHandleAPIGitCommitMissingMessage(t *testing.T) {
 }
 
 func TestHandleAPIGitCommitInvalidJSON(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -286,7 +286,7 @@ func TestHandleAPIGitRevertMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIGitRevertMissingCommit(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -301,7 +301,7 @@ func TestHandleAPIGitRevertMissingCommit(t *testing.T) {
 }
 
 func TestHandleAPIGitRevertInvalidCommit(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -316,7 +316,7 @@ func TestHandleAPIGitRevertInvalidCommit(t *testing.T) {
 }
 
 func TestHandleAPIGitRevertInvalidJSON(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

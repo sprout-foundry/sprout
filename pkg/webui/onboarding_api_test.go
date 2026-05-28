@@ -59,7 +59,7 @@ func setupOnboardingTestServer(t *testing.T) (*ReactWebServer, string) {
 	workspaceDir := filepath.Join(daemonRoot, "workspace")
 	require.NoError(t, os.MkdirAll(workspaceDir, 0o755))
 
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

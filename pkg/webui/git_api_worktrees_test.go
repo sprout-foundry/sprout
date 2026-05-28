@@ -138,7 +138,7 @@ func TestHandleAPIGitWorktreesMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIGitWorktreesNotGitRepo(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +164,7 @@ func TestHandleAPIGitWorktreeCreateMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIGitWorktreeCreateMissingPath(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,7 +179,7 @@ func TestHandleAPIGitWorktreeCreateMissingPath(t *testing.T) {
 }
 
 func TestHandleAPIGitWorktreeCreateMissingBranch(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,7 +194,7 @@ func TestHandleAPIGitWorktreeCreateMissingBranch(t *testing.T) {
 }
 
 func TestHandleAPIGitWorktreeCreateInvalidJSON(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,7 +220,7 @@ func TestHandleAPIGitWorktreeRemoveMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIGitWorktreeRemoveMissingPath(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,7 +235,7 @@ func TestHandleAPIGitWorktreeRemoveMissingPath(t *testing.T) {
 }
 
 func TestHandleAPIGitWorktreeRemoveInvalidJSON(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -261,7 +261,7 @@ func TestHandleAPIGitWorktreeCheckoutMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIGitWorktreeCheckoutMissingPath(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -276,7 +276,7 @@ func TestHandleAPIGitWorktreeCheckoutMissingPath(t *testing.T) {
 }
 
 func TestHandleAPIGitWorktreeCheckoutInvalidJSON(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

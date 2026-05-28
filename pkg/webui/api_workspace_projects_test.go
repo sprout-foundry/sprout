@@ -41,7 +41,7 @@ func TestHandleAPIWorkspaceProjects_Success(t *testing.T) {
 		t.Fatalf("failed to create go.mod: %v", err)
 	}
 
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +91,7 @@ func TestHandleAPIWorkspaceProjects_EmptyResults(t *testing.T) {
 	daemonRoot := t.TempDir()
 	// Leave the directory empty — no project markers, no subdirectories
 
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +132,7 @@ func TestHandleAPIWorkspaceProjects_MethodNotAllowed(t *testing.T) {
 	resetProjectsCache()
 	t.Cleanup(resetProjectsCache)
 
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +158,7 @@ func TestHandleAPIWorkspaceProjects_Caching(t *testing.T) {
 		t.Fatalf("failed to create test project dir: %v", err)
 	}
 
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

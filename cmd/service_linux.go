@@ -60,13 +60,14 @@ KillMode=mixed
 KillSignal=SIGTERM
 Environment=SPROUT_SERVICE=1
 Environment=HOME=%s
+Environment=SPROUT_DAEMON_ROOT=%s
 EnvironmentFile=-%s
 StandardOutput=null
 StandardError=null
 
 [Install]
 WantedBy=default.target
-`, systemdExecArg(binaryPath), homeDir, homeDir, envFile)
+`, systemdExecArg(binaryPath), homeDir, homeDir, homeDir, envFile)
 
 	return []byte(unit), nil
 }

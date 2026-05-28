@@ -35,6 +35,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 // auditLogger is the package-level audit logger for security decisions.
@@ -55,6 +57,36 @@ func SetAuditLogger(l *AuditLogger) {
 // Examples matched: |bash, | bash, |  bash, | /bin/bash, | /usr/bin/env bash, |zsh, |bash -c 'cmd'
 // NOT matched: |sort, |shasum, |shfmt (shell name must be followed by a valid boundary)
 var pipeToShellPattern = regexp.MustCompile(`\|\s*(?:[^\s|&;]+/\s*)*(?:env\s+)?(?:bash|zsh|dash|fish|ksh|csh|tcsh|python[23]?|perl|ruby|node|sh)(?:\s|[;&|]|$)`)
+
+// pipeToModulePattern matches a pipe into an interpreter run in module
+// mode (python -m <module>). In that form stdin is consumed as DATA by
+// the named module rather than executed as code — e.g.
+// `curl … | python3 -m json.tool` pretty-prints JSON; it does not run
+// the downloaded bytes. RE2 has no negative lookahead, so isPipeToShell
+// subtracts these matches before deciding.
+var pipeToModulePattern = regexp.MustCompile(`\|\s*(?:[^\s|&;]+/\s*)*(?:env\s+)?python[23]?\s+-m\s`)
+
+// isPipeToShell reports whether s pipes output into a shell/interpreter
+// that would EXECUTE the piped bytes as code. The python `-m <module>`
+// form is treated as data-consuming, not code execution, so a command
+// whose only interpreter pipe is a module run (e.g. json.tool) is not
+// flagged. Any other pipe-to-interpreter (| bash, bare | python, | sh)
+// still matches.
+func isPipeToShell(s string) bool {
+	lc := strings.ToLower(s)
+	if !pipeToShellPattern.MatchString(lc) {
+		return false
+	}
+	// Remove python -m module-mode pipes; if nothing code-executing
+	// remains, the command only fed data to a module → not RCE.
+	if pipeToModulePattern.MatchString(lc) {
+		stripped := pipeToModulePattern.ReplaceAllString(lc, " ")
+		if !pipeToShellPattern.MatchString(stripped) {
+			return false
+		}
+	}
+	return true
+}
 
 // SecurityRisk represents the risk level of a tool call
 type SecurityRisk int
@@ -269,7 +301,7 @@ func classifyChainedCommand(cmd string) []SecurityRisk {
 	// Use regex to handle any whitespace and multiple shell interpreters.
 	cmdLower := strings.ToLower(cmd)
 	stripped := stripQuotedSections(cmdLower)
-	if pipeToShellPattern.MatchString(stripped) {
+	if isPipeToShell(stripped) {
 		return []SecurityRisk{SecurityDangerous}
 	}
 
@@ -530,7 +562,12 @@ func classifyGitOperation(args map[string]interface{}) SecurityResult {
 	return SecurityResult{Risk: SecurityCaution, Reasoning: "Unknown git operation: " + op, ShouldPrompt: true, Category: RiskCategoryUnknown}
 }
 
-// isCriticalSystemOperation checks for critical system operations that should always be blocked
+// isCriticalSystemOperation reports whether a shell tool call is a
+// critical system operation that must always be hard-blocked. The
+// canonical pattern list lives in configuration.IsCriticalOperation so
+// the static classifier (this gate) and the persona risk cascade
+// (configuration.EvaluateOperationRisk) agree on what "critical" means —
+// see the unification note on IsCriticalOperation.
 func isCriticalSystemOperation(toolName string, args map[string]interface{}) bool {
 	if toolName != "shell_command" {
 		return false
@@ -541,58 +578,6 @@ func isCriticalSystemOperation(toolName string, args map[string]interface{}) boo
 		return false
 	}
 
-	cmd := strings.TrimSpace(cmdRaw)
-
-	// Check for rm -rf / or rm -rf . or rm -rf ~ or rm -rf * (with flags or no flags)
-	// Split command into parts to handle variations like "rm -rf / --no-preserve-root" or "rm -rf  /"
-	// Also handles "sudo rm -rf /" by checking any consecutive token pair.
-	parts := strings.Fields(cmd)
-	for i := 0; i+2 < len(parts); i++ {
-		if strings.ToLower(parts[i]) == "rm" && strings.ToLower(parts[i+1]) == "-rf" {
-			// Check if the next part is exactly /, ., ~, or *
-			target := parts[i+2]
-			if target == "/" || target == "." || target == "~" || target == "*" {
-				return true
-			}
-		}
-	}
-
-	// mkfs and disk formatting
-	if strings.HasPrefix(cmd, "mkfs") || strings.HasPrefix(cmd, "mkfs.") {
-		return true
-	}
-
-	// Fork bomb
-	if strings.Contains(cmd, "() { :|: }") || strings.Contains(cmd, "fork bomb") ||
-		cmd == ":(){:|:&};" || strings.Contains(cmd, ":(){:|:&};:") {
-		return true
-	}
-
-	// killall -9
-	if strings.HasPrefix(cmd, "killall -9") || strings.HasPrefix(cmd, "killall -KILL") {
-		return true
-	}
-
-	// chmod 000 /
-	if strings.Contains(cmd, "chmod 000 /") || strings.Contains(cmd, "chmod 000 /usr") || strings.Contains(cmd, "chmod 000 /etc") {
-		return true
-	}
-
-	// dd to primary disk
-	primaryDisks := []string{"/dev/sda", "/dev/sdb", "/dev/nvme", "/dev/vda"}
-	for _, disk := range primaryDisks {
-		if strings.Contains(cmd, "dd if="+disk) || strings.Contains(cmd, "dd of="+disk) || strings.Contains(cmd, "dd if=/dev/zero of="+disk) {
-			return true
-		}
-	}
-
-	// Writes to critical system files
-	for _, file := range []string{"/etc/shadow", "/etc/passwd", "/etc/sudoers", "/root/.ssh/authorized_keys"} {
-		if strings.Contains(cmd, "echo "+file) || strings.Contains(cmd, "> "+file) || strings.Contains(cmd, ">> "+file) {
-			return true
-		}
-	}
-
-	return false
+	return configuration.IsCriticalOperation(cmdRaw)
 }
 

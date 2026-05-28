@@ -452,14 +452,23 @@ func AutoApproveRulesForProfile(profile RiskProfile) AutoApproveRules {
 // approval. Reserved for operations that can permanently destroy the
 // system or leave it in an unrecoverable state.
 //
-// Currently covers:
-//   - rm -rf targeting root (`/`, `/*`, `~`, `$HOME`)
+// This is the single source of truth for "critical" across every
+// security gate: the static classifier (agent_tools.isCriticalSystemOperation
+// delegates here) and the persona risk cascade (EvaluateOperationRisk)
+// both consult it, so the two gates can't disagree on what's critical.
+//
+// Covers:
+//   - rm -rf targeting root or the current dir (`/`, `/*`, `~`, `$HOME`, `.`, `*`)
 //   - Classic fork-bomb pattern `:(){:|:&};:`
+//   - Filesystem creation / raw disk overwrite (mkfs, dd to a block device)
+//   - Mass process kills (killall -9 / -KILL)
+//   - chmod 000 on a system root path
+//   - Overwriting critical auth/system files (/etc/shadow, /etc/passwd, …)
 //
 // Tokenized matching matches invokesCommand semantics so a benign
 // substring inside a path or argument can't trigger a false positive.
 func IsCriticalOperation(command string) bool {
-	cmdLower := strings.ToLower(command)
+	cmdLower := strings.ToLower(strings.TrimSpace(command))
 
 	// Fork bomb — the literal `:()` shell-function-named-colon is a
 	// reliable signal. The token is unusual enough that false
@@ -470,8 +479,8 @@ func IsCriticalOperation(command string) bool {
 
 	fields := strings.Fields(cmdLower)
 
-	// rm -rf <root-equivalent>. We need rm invoked as a command,
-	// with a recursive flag, AND a root-equivalent target.
+	// rm -rf <root-equivalent or cwd wildcard>. We need rm invoked as a
+	// command, with a recursive flag, AND a destructive target.
 	if invokesCommand(fields, "rm") {
 		hasRecursive := false
 		for _, f := range fields {
@@ -487,10 +496,41 @@ func IsCriticalOperation(command string) bool {
 		if hasRecursive {
 			for _, f := range fields {
 				switch f {
-				case "/", "/*", "~", "~/", "$home", "${home}", "${home}/", "$home/":
+				case "/", "/*", "~", "~/", "$home", "${home}", "${home}/", "$home/", ".", "*":
 					return true
 				}
 			}
+		}
+	}
+
+	// mkfs / mkfs.* — formatting a filesystem destroys everything on the target.
+	if len(fields) > 0 && (fields[0] == "mkfs" || strings.HasPrefix(fields[0], "mkfs.")) {
+		return true
+	}
+
+	// dd reading from / writing to a primary block device.
+	if invokesCommand(fields, "dd") {
+		for _, disk := range []string{"/dev/sda", "/dev/sdb", "/dev/nvme", "/dev/vda"} {
+			if strings.Contains(cmdLower, "of="+disk) || strings.Contains(cmdLower, "if="+disk) {
+				return true
+			}
+		}
+	}
+
+	// killall -9 / -KILL — mass process termination.
+	if strings.HasPrefix(cmdLower, "killall -9") || strings.HasPrefix(cmdLower, "killall -kill") {
+		return true
+	}
+
+	// chmod 000 on a system root path (locks everyone out).
+	if strings.Contains(cmdLower, "chmod 000 /") {
+		return true
+	}
+
+	// Overwriting critical auth/system files.
+	for _, file := range []string{"/etc/shadow", "/etc/passwd", "/etc/sudoers", "/root/.ssh/authorized_keys"} {
+		if strings.Contains(cmdLower, "> "+file) || strings.Contains(cmdLower, ">> "+file) || strings.Contains(cmdLower, "echo "+file) {
+			return true
 		}
 	}
 

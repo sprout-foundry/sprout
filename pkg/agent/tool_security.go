@@ -49,18 +49,11 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 
 	// Security validation — classify and block/prompt dangerous operations
 	if secResult := tools.ClassifyToolCall(toolName, args); secResult.ShouldBlock || secResult.ShouldPrompt {
-		if agent != nil && agent.GetUnsafeMode() {
-			// Unsafe mode: bypass all security checks
+		if agent != nil && agent.staticGateAutoApprove(secResult) {
+			// Unsafe mode or session elevation — skip the prompt for
+			// non-hard-block operations. See staticGateAutoApprove.
 			if agent.debug {
-				agent.debugLog("[UNLOCK] Unsafe mode: bypassing security validation for %s (risk: %s)\n", toolName, secResult.Risk)
-			}
-		} else if agent != nil && agent.IsSessionElevated() && !secResult.IsHardBlock {
-			// Session elevation: user clicked "Elevate (session)" on a prior
-			// approval dialog, which set the risk profile to permissive.
-			// Skip prompts for non-critical operations. Hard blocks
-			// (critical system operations like rm -rf /) still enforce.
-			if agent.debug {
-				agent.debugLog("[UNLOCK] Session elevated (permissive/unrestricted): bypassing security validation for %s (risk: %s)\n", toolName, secResult.Risk)
+				agent.debugLog("[UNLOCK] Static gate auto-approve (unsafe/elevated): bypassing security validation for %s (risk: %s)\n", toolName, secResult.Risk)
 			}
 		} else if agent != nil {
 			// Check if we're running as a subagent — subagents cannot prompt
@@ -199,6 +192,36 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 	return images, output, nil
 }
 
+// staticGateAutoApprove reports whether a tool call that the static
+// classifier (Gate 1) flagged as risky should skip the interactive
+// approval prompt because the session is in a bypass state:
+//
+//   - Unsafe mode: every security check is off.
+//   - Session elevation: the active risk profile is permissive or
+//     unrestricted (the user clicked "Elevate (session)" on a prior
+//     dialog or ran /risk-profile permissive), so non-hard-block
+//     operations auto-approve for the rest of the session.
+//
+// Hard blocks (critical system operations such as rm -rf /) are never
+// auto-approved here — they fall through to the caller's block/prompt
+// handling regardless of elevation.
+//
+// Both Gate-1 entry points call this — ToolRegistry.ExecuteTool and the
+// live seed pre-execute hook (newPreExecuteHook) — so the bypass policy
+// lives in exactly one place and the two paths can't drift.
+func (a *Agent) staticGateAutoApprove(secResult tools.SecurityResult) bool {
+	if a == nil {
+		return false
+	}
+	if a.GetUnsafeMode() {
+		return true
+	}
+	if a.IsSessionElevated() && !secResult.IsHardBlock {
+		return true
+	}
+	return false
+}
+
 // buildSecurityPrompt constructs a detailed security approval prompt for the user
 func buildSecurityPrompt(toolName string, args map[string]interface{}, secResult tools.SecurityResult) string {
 	var sb strings.Builder
@@ -231,6 +254,28 @@ func buildSecurityPrompt(toolName string, args map[string]interface{}, secResult
 	// produce "...(yes/no):  [y/N]:" (duplicate suffix).
 	sb.WriteString("Do you want to proceed?")
 
+	return sb.String()
+}
+
+// buildShellApprovalPrompt builds the header text for the 4-option shell
+// approval picker (AskForApprovalWithOptions → the SelectList renderer).
+//
+// Unlike buildSecurityPrompt (used by the raw yes/no AskForConfirmation
+// path), it deliberately omits the leading warning glyph AND the command
+// block: the picker's renderer (pkg/console.writeSecurityHeader) prepends
+// the ⚠ glyph and prints the command on its own block. Including them here
+// double-rendered both — the source of the "⚠ ⚠" and the duplicated
+// "Command:" block. The picker itself asks the question, so no trailing
+// "Do you want to proceed?" either.
+func buildShellApprovalPrompt(secResult tools.SecurityResult) string {
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("Security Warning — %s", secResult.Risk))
+	if secResult.RiskType != "" {
+		sb.WriteString(fmt.Sprintf("\n\nRisk category: %s", formatRiskType(secResult.RiskType)))
+	}
+	if secResult.Reasoning != "" {
+		sb.WriteString(fmt.Sprintf("\n\nReasoning: %s", secResult.Reasoning))
+	}
 	return sb.String()
 }
 
@@ -341,7 +386,8 @@ func handleFileSecurityError(ctx context.Context, agent *Agent, toolName, filePa
 		if tier == PathTierSensitive {
 			promptTier = utils.FilesystemPromptSensitive
 		}
-		prompt := fmt.Sprintf("⚠  Filesystem Security Warning\n\nThe tool '%s' is attempting to access a file outside the working directory.", toolName)
+		// No leading glyph — the picker renderer prepends the ⚠ (avoids "⚠ ⚠").
+		prompt := fmt.Sprintf("Filesystem Security Warning\n\nThe tool '%s' is attempting to access a file outside the working directory.", toolName)
 		choice := logger.AskForFilesystemApproval(prompt, filePath, folder, promptTier)
 		decision := filesystemDecisionFromCLIChoice(choice)
 		return applyFilesystemDecision(ctx, agent, decision, filePath, folder, tier)

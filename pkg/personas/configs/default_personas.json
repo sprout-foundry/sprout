@@ -37,7 +37,11 @@
         "list_memories",
         "delete_memory",
         "list_changes",
-        "recover_file"
+        "recover_file",
+        "show_my_change",
+        "revert_my_changes",
+        "summarize_my_session",
+        "my_recent_changes"
       ],
       "delegatable": false,
       "description": "Planning and delegation persona: classify -> activate skills -> delegate -> verify. Git-write operations (commit, stage, push) are gated by the 'AllowOrchestratorGitWrite' config flag; when enabled, the 'commit' tool and git policy guidance become active.",
@@ -69,7 +73,11 @@
         "TodoWrite",
         "TodoRead",
         "list_changes",
-        "recover_file"
+        "recover_file",
+        "show_my_change",
+        "revert_my_changes",
+        "summarize_my_session",
+        "my_recent_changes"
       ],
       "delegatable": true,
       "description": "General-purpose persona for tasks that do not require deep specialization",
@@ -102,7 +110,11 @@
         "list_skills",
         "activate_skill",
         "list_changes",
-        "recover_file"
+        "recover_file",
+        "show_my_change",
+        "revert_my_changes",
+        "summarize_my_session",
+        "my_recent_changes"
       ],
       "delegatable": true,
       "description": "Feature implementation and production code writing specialist",
@@ -129,7 +141,11 @@
         "list_skills",
         "activate_skill",
         "list_changes",
-        "recover_file"
+        "recover_file",
+        "show_my_change",
+        "revert_my_changes",
+        "summarize_my_session",
+        "my_recent_changes"
       ],
       "delegatable": true,
       "description": "Behavior-preserving refactoring specialist focused on low-risk, incremental improvements",
@@ -159,7 +175,11 @@
         "list_skills",
         "activate_skill",
         "list_changes",
-        "recover_file"
+        "recover_file",
+        "show_my_change",
+        "revert_my_changes",
+        "summarize_my_session",
+        "my_recent_changes"
       ],
       "delegatable": true,
       "description": "Bug investigation, root cause analysis, and targeted fixes specialist",
@@ -188,7 +208,11 @@
         "list_skills",
         "activate_skill",
         "list_changes",
-        "recover_file"
+        "recover_file",
+        "show_my_change",
+        "revert_my_changes",
+        "summarize_my_session",
+        "my_recent_changes"
       ],
       "delegatable": true,
       "description": "Unit test writing and test coverage specialist",
@@ -219,7 +243,11 @@
         "list_skills",
         "activate_skill",
         "list_changes",
-        "recover_file"
+        "recover_file",
+        "show_my_change",
+        "revert_my_changes",
+        "summarize_my_session",
+        "my_recent_changes"
       ],
       "delegatable": true,
       "description": "Code review, security review, and best-practices specialist",
@@ -243,7 +271,9 @@
         "TodoRead",
         "list_skills",
         "activate_skill",
-        "list_changes"
+        "list_changes",
+        "summarize_my_session",
+        "my_recent_changes"
       ],
       "delegatable": true,
       "description": "Combined local codebase analysis and external research specialist",
@@ -274,7 +304,11 @@
         "TodoWrite",
         "TodoRead",
         "list_changes",
-        "recover_file"
+        "recover_file",
+        "show_my_change",
+        "revert_my_changes",
+        "summarize_my_session",
+        "my_recent_changes"
       ],
       "delegatable": true,
       "description": "Web extraction and structured content collection specialist",
@@ -306,7 +340,11 @@
         "TodoWrite",
         "TodoRead",
         "list_changes",
-        "recover_file"
+        "recover_file",
+        "show_my_change",
+        "revert_my_changes",
+        "summarize_my_session",
+        "my_recent_changes"
       ],
       "delegatable": true,
       "description": "Hands-on system administration and engineering execution persona",

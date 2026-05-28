@@ -102,19 +102,38 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 		workspaceRoot = "."
 	}
 
-	// daemonRoot is the user's home directory — this scopes daemon-level
-	// storage (sessions, SSH tunnels, config) to the user rather than a
-	// specific project workspace.
-	daemonRoot, err := os.UserHomeDir()
-	if err != nil {
+	// daemonRoot is the user's home directory — it scopes daemon-level
+	// storage (sessions, SSH tunnels, config) AND the workspace browser
+	// (handleAPIWorkspaceBrowse) to the user rather than a specific project.
+	//
+	// Resolution, most authoritative first:
+	//   1. SPROUT_DAEMON_ROOT — baked into the launchd/systemd unit at install
+	//      time when $HOME is reliable. Source of truth for managed services,
+	//      where the runtime $HOME may be unset.
+	//   2. os.UserHomeDir() ($HOME) — the normal interactive case.
+	//   3. workspaceRoot (the CWD) — last resort only.
+	//
+	// Falling back to the CWD is dangerous under a service manager: launchd /
+	// systemd can start the daemon in "/" or another system dir, and because
+	// the workspace browser is scoped to daemonRoot the user would be unable
+	// to reach their projects. Warn loudly if that happens.
+	serviceMode := configuration.GetEnvSimple("SERVICE") == "1"
+	daemonRoot := configuration.GetEnvSimple("DAEMON_ROOT")
+	if daemonRoot == "" {
+		if home, homeErr := os.UserHomeDir(); homeErr == nil && home != "" {
+			daemonRoot = home
+		}
+	}
+	if daemonRoot == "" {
 		daemonRoot = workspaceRoot
+		if serviceMode {
+			log.Printf("[web] WARNING: could not resolve user home (SPROUT_DAEMON_ROOT and $HOME both unset); "+
+				"workspace browser is scoped to the daemon working dir %q and may not reach your projects — "+
+				"reinstall the service (sprout service uninstall && sprout service install) to regenerate the unit", workspaceRoot)
+		}
 	}
 
-	// In service mode, the CWD from launchd/systemd may not be the user's
-	// home directory (e.g. /usr/home instead of /Users/<name>).  The web UI
-	// is designed to start at the user's home so they can navigate to projects.
-	// Always use daemonRoot as the initial workspace in service mode.
-	serviceMode := configuration.GetEnvSimple("SERVICE") == "1"
+	log.Printf("[web] startup: cwd=%s home=%s service=%v", workspaceRoot, daemonRoot, serviceMode)
 	if serviceMode {
 		workspaceRoot = daemonRoot
 	}

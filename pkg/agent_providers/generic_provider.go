@@ -255,12 +255,12 @@ func (p *GenericProvider) SendChatRequest(ctx context.Context, messages []api.Me
 				return nil, formattedErr
 			}
 
-			var retryResponse api.ChatResponse
-			if err := json.NewDecoder(retryResp.Body).Decode(&retryResponse); err != nil {
+			retryResponse, err := decodeChatResponseWithCost(retryResp.Body)
+			if err != nil {
 				logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, false, "decode_response", err)
 				return nil, fmt.Errorf("failed to decode response: %w", err)
 			}
-			return &retryResponse, nil
+			return retryResponse, nil
 		}
 
 		// Log request on API error
@@ -271,14 +271,36 @@ func (p *GenericProvider) SendChatRequest(ctx context.Context, messages []api.Me
 	}
 	defer resp.Body.Close()
 
-	var response api.ChatResponse
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+	response, err := decodeChatResponseWithCost(resp.Body)
+	if err != nil {
 		// Log request on decode error
 		logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, false, "decode_response", err)
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
 	// Success - don't log the request
+	return response, nil
+}
+
+// decodeChatResponseWithCost decodes a chat-completion body into the typed
+// ChatResponse, then — when no cost arrived via the canonical typed fields —
+// probes the raw JSON for a cost reported under a differently-named property
+// (see api.CostFromJSON). This keeps cost capture working across providers
+// that report cost under non-standard property names.
+func decodeChatResponseWithCost(r io.Reader) (*api.ChatResponse, error) {
+	body, err := io.ReadAll(r)
+	if err != nil {
+		return nil, err
+	}
+	var response api.ChatResponse
+	if err := json.Unmarshal(body, &response); err != nil {
+		return nil, err
+	}
+	if api.UsageCost(response.Usage) == 0 {
+		if cost, ok := api.CostFromJSON(body); ok {
+			response.Usage.EstimatedCost = cost
+		}
+	}
 	return &response, nil
 }
 

@@ -49,6 +49,10 @@ func generateLaunchdPlist(binaryPath, homeDir string) ([]byte, error) {
 	}
 	addEnvEntry("SPROUT_SERVICE", "1")
 	addEnvEntry("HOME", homeDir)
+	// Authoritative daemon root, baked in at install time when $HOME is
+	// reliable. The runtime reads this first so the workspace browser is
+	// scoped to the user's home even if launchd doesn't propagate $HOME.
+	addEnvEntry("SPROUT_DAEMON_ROOT", homeDir)
 	// Include the user's PATH so the daemon can locate developer tools.
 	if path := os.Getenv("PATH"); path != "" {
 		addEnvEntry("PATH", path)

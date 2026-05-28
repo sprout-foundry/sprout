@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { mkdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -80,6 +80,25 @@ const ldflags = [
   `-X 'github.com/sprout-foundry/sprout/cmd.gitTag=${pkgVersion}'`,
 ].join(' ');
 
+// pkg/ast/grammars_embed.go unconditionally //go:embed's five tree-sitter
+// grammar blobs that are gitignored and copied from the gotreesitter module
+// cache by scripts/prepare-grammars.sh. A fresh checkout (e.g. CI) doesn't
+// have them, so `go build` fails on the embed directive. Ensure they exist
+// before building. Only shells out when missing, so a dev tree that already
+// ran `make build-all` (and machines without bash) are unaffected.
+const grammarBinDir = join(repoRoot, 'pkg', 'ast', 'grammars', 'bin');
+const requiredBlobs = ['go.bin', 'typescript.bin', 'tsx.bin', 'javascript.bin', 'python.bin'];
+if (!requiredBlobs.every((b) => existsSync(join(grammarBinDir, b)))) {
+  const prep = spawnSync('bash', [join(repoRoot, 'scripts', 'prepare-grammars.sh')], {
+    cwd: repoRoot,
+    stdio: 'inherit',
+  });
+  if (prep.status !== 0) {
+    console.error('Failed to prepare tree-sitter grammar blobs (scripts/prepare-grammars.sh).');
+    process.exit(prep.status ?? 1);
+  }
+}
+
 for (const target of targets) {
   const binaryName = target.platform === 'windows' ? 'sprout.exe' : 'sprout';
   const outputDir = join(backendOutDir, `${target.platform}-${target.arch}`);
@@ -88,7 +107,7 @@ for (const target of targets) {
   rmSync(outputDir, { recursive: true, force: true });
   mkdirSync(outputDir, { recursive: true });
 
-  const result = spawnSync('go', ['build', `-ldflags=${ldflags}`, '-o', outputPath, '.'], {
+  const result = spawnSync('go', ['build', '-tags', 'grammar_blobs_external', `-ldflags=${ldflags}`, '-o', outputPath, '.'], {
     cwd: repoRoot,
     stdio: 'inherit',
     env: {

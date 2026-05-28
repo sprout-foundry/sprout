@@ -46,6 +46,22 @@ type StreamingToolCallFunction struct {
 	Arguments string `json:"arguments,omitempty"`
 }
 
+// StreamingUsage is the usage block on a streaming chunk (providers send it
+// on the final data object). Named (not anonymous) so the flexible cost
+// fallback in ParseSSEData can allocate one when a provider reports cost
+// without the standard token block.
+type StreamingUsage struct {
+	PromptTokens        int     `json:"prompt_tokens"`
+	CompletionTokens    int     `json:"completion_tokens"`
+	TotalTokens         int     `json:"total_tokens"`
+	EstimatedCost       float64 `json:"estimated_cost"`
+	Cost                float64 `json:"cost,omitempty"` // OpenRouter returns cost directly
+	PromptTokensDetails struct {
+		CachedTokens     int  `json:"cached_tokens"`
+		CacheWriteTokens *int `json:"cache_write_tokens"`
+	} `json:"prompt_tokens_details,omitempty"`
+}
+
 // StreamingChatResponse represents a streaming response chunk
 type StreamingChatResponse struct {
 	ID      string            `json:"id"`
@@ -53,17 +69,7 @@ type StreamingChatResponse struct {
 	Created int64             `json:"created"`
 	Model   string            `json:"model"`
 	Choices []StreamingChoice `json:"choices"`
-	Usage   *struct {
-		PromptTokens        int     `json:"prompt_tokens"`
-		CompletionTokens    int     `json:"completion_tokens"`
-		TotalTokens         int     `json:"total_tokens"`
-		EstimatedCost       float64 `json:"estimated_cost"`
-		Cost                float64 `json:"cost,omitempty"` // OpenRouter returns cost directly
-		PromptTokensDetails struct {
-			CachedTokens     int  `json:"cached_tokens"`
-			CacheWriteTokens *int `json:"cache_write_tokens"`
-		} `json:"prompt_tokens_details,omitempty"`
-	} `json:"usage,omitempty"`
+	Usage   *StreamingUsage   `json:"usage,omitempty"`
 }
 
 // StreamingResponseBuilder accumulates streaming chunks into a complete response
@@ -400,6 +406,19 @@ func ParseSSEData(data string) (*StreamingChatResponse, error) {
 	var chunk StreamingChatResponse
 	if err := json.Unmarshal([]byte(data), &chunk); err != nil {
 		return nil, fmt.Errorf("failed to parse SSE data: %w", err)
+	}
+
+	// Flexible cost fallback: if the typed decode didn't capture a cost
+	// (provider reported it under a non-standard property name), probe the
+	// raw chunk. Providers attach cost to the final data object, so this
+	// only matters on that chunk.
+	if chunk.Usage == nil || (chunk.Usage.EstimatedCost == 0 && chunk.Usage.Cost == 0) {
+		if cost, ok := CostFromJSON([]byte(data)); ok {
+			if chunk.Usage == nil {
+				chunk.Usage = &StreamingUsage{}
+			}
+			chunk.Usage.EstimatedCost = cost
+		}
 	}
 
 	return &chunk, nil

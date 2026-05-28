@@ -192,6 +192,66 @@ func (a *Agent) ClearTrackedChanges() {
 	}
 }
 
+// ---------------------------------------------------------------------------
+// Public façade for the WebUI / external callers.
+//
+// These mirror the LLM-facing tools (list_changes, show_my_change,
+// revert_my_changes, summarize_my_session, my_recent_changes,
+// recover_file) but skip the registry's general-purpose execution
+// path — these handlers are pure operations on the in-memory tracker
+// and don't need security gates or circuit-breaker accounting. The
+// WebUI uses these so its JSON shape matches the model's exactly.
+// ---------------------------------------------------------------------------
+
+// ListChanges returns the session manifest. args may include
+// "since" (RFC3339), "tool", "path_pattern". Returns the raw JSON
+// string identical to what the LLM tool produces.
+func (a *Agent) ListChanges(args map[string]interface{}) (string, error) {
+	return handleListChanges(nil, a, args)
+}
+
+// ShowMyChange returns a unified diff JSON envelope for `path`.
+func (a *Agent) ShowMyChange(path string) (string, error) {
+	return handleShowMyChange(nil, a, map[string]interface{}{"path": path})
+}
+
+// RevertMyChanges performs a bulk revert. Exactly one of scope/file/
+// since should be non-empty; scope="all" is the default when all are
+// empty.
+func (a *Agent) RevertMyChanges(scope, file, since string) (string, error) {
+	args := map[string]interface{}{}
+	if scope != "" {
+		args["scope"] = scope
+	}
+	if file != "" {
+		args["file"] = file
+	}
+	if since != "" {
+		args["since"] = since
+	}
+	return handleRevertMyChanges(nil, a, args)
+}
+
+// SummarizeMySession returns the activity-block digest.
+func (a *Agent) SummarizeMySession() (string, error) {
+	return handleSummarizeMySession(nil, a, nil)
+}
+
+// MyRecentChanges returns the cross-session timeline. `since` accepts
+// RFC3339, durations ("2d"), or empty for everything.
+func (a *Agent) MyRecentChanges(since string) (string, error) {
+	args := map[string]interface{}{}
+	if since != "" {
+		args["since"] = since
+	}
+	return handleMyRecentChanges(nil, a, args)
+}
+
+// RecoverFile restores one file from the tracker's session buffer.
+func (a *Agent) RecoverFile(path string) (string, error) {
+	return handleRecoverFile(nil, a, map[string]interface{}{"path": path})
+}
+
 // TrackFileWrite is called by the WriteFile tool to track file writes
 func (a *Agent) TrackFileWrite(filePath string, content string) error {
 	if a.changeTracker != nil && a.changeTracker.IsEnabled() {

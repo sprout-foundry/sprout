@@ -26,6 +26,7 @@ import {
   Settings,
   Search,
   GitBranch,
+  History,
   type LucideIcon,
   // New icons for platform nav items
   CreditCard,
@@ -34,6 +35,7 @@ import {
   LayoutDashboard,
   ExternalLink,
 } from 'lucide-react';
+import AgentChangesPanel from './AgentChangesPanel';
 import SearchView from './SearchView';
 import SidebarFilesSection, { type FileTreeHandle } from './SidebarFilesSection';
 import SidebarGitSection from './SidebarGitSection';
@@ -130,6 +132,7 @@ const MAIN_SECTION_TABS: { id: SectionTab; icon: LucideIcon; label: string }[] =
   { id: 'git', icon: GitBranch, label: 'Git' },
   { id: 'files', icon: FolderCog, label: 'Files' },
   { id: 'search', icon: Search, label: 'Search' },
+  { id: 'changes', icon: History, label: 'Agent Changes' },
 ];
 
 /** Valid platform view IDs for type-safe navigation */
@@ -315,6 +318,8 @@ function Sidebar({
         );
       case 'search':
         return renderSearchSection();
+      case 'changes':
+        return <AgentChangesPanel onFileClick={onFileClick} />;
       case 'settings':
         return supportsSettings ? (
           <SidebarSettingsSection

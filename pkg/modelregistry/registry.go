@@ -15,7 +15,13 @@ import (
 
 	"golang.org/x/sync/singleflight"
 	"github.com/sprout-foundry/sprout/pkg/envutil"
+	"github.com/sprout-foundry/sprout/pkg/modelcontract"
 )
+
+// maxSchemaVersion is the highest published schema version this client can
+// parse. Files newer than this are rejected, and callers gracefully fall back
+// to the live provider API.
+const maxSchemaVersion = modelcontract.SchemaVersion
 
 const (
 	defaultTTL         = 5 * time.Minute
@@ -39,6 +45,7 @@ type ModelInfo struct {
 	OutputCost    float64  `json:"output_cost,omitempty"`
 	ContextLength int      `json:"context_length,omitempty"`
 	Tags          []string `json:"tags,omitempty"`
+	EligibleRoles []string `json:"eligible_roles,omitempty"`
 }
 
 // RawModel is a provider-agnostic model representation used for cache storage
@@ -54,6 +61,7 @@ type RawModel struct {
 	OutputCost    float64  `json:"output_cost,omitempty"`
 	ContextLength int      `json:"context_length,omitempty"`
 	Tags          []string `json:"tags,omitempty"`
+	EligibleRoles []string `json:"eligible_roles,omitempty"`
 }
 
 // providerResponse is the JSON schema for a per-provider model file.
@@ -269,21 +277,47 @@ func FetchModels(ctx context.Context, providerID string) ([]RawModel, error) {
 			return nil, fmt.Errorf("modelregistry: fetch %s: HTTP %d", providerID, resp.StatusCode)
 		}
 
-		var payload providerResponse
-		if decodeErr := json.NewDecoder(io.LimitReader(resp.Body, maxResponseBytes)).Decode(&payload); decodeErr != nil {
-			return nil, fmt.Errorf("modelregistry: decode %s: %w", providerID, decodeErr)
+		body, readErr := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
+		if readErr != nil {
+			return nil, fmt.Errorf("modelregistry: read %s: %w", providerID, readErr)
 		}
 
-		if payload.SchemaVersion != 0 && payload.SchemaVersion != 1 {
-			return nil, fmt.Errorf("modelregistry: unsupported schema version %d for %s", payload.SchemaVersion, providerID)
+		var probe struct {
+			SchemaVersion int `json:"schema_version"`
+		}
+		_ = json.Unmarshal(body, &probe)
+
+		var models []ModelInfo
+		switch {
+		case probe.SchemaVersion >= 2:
+			if probe.SchemaVersion > maxSchemaVersion {
+				return nil, fmt.Errorf("modelregistry: unsupported schema version %d for %s", probe.SchemaVersion, providerID)
+			}
+			// Canonical contract (schema 2+): parse and flatten to the legacy
+			// ModelInfo shape current consumers expect.
+			var pf modelcontract.ProviderFile
+			if decodeErr := json.Unmarshal(body, &pf); decodeErr != nil {
+				return nil, fmt.Errorf("modelregistry: decode %s: %w", providerID, decodeErr)
+			}
+			models = make([]ModelInfo, len(pf.Models))
+			for i := range pf.Models {
+				models[i] = canonicalToLegacy(pf.Models[i])
+			}
+		default:
+			// Legacy flat schema (0 / 1).
+			var payload providerResponse
+			if decodeErr := json.Unmarshal(body, &payload); decodeErr != nil {
+				return nil, fmt.Errorf("modelregistry: decode %s: %w", providerID, decodeErr)
+			}
+			models = payload.Models
 		}
 
 		// Store in cache.
 		mu.Lock()
-		cache[providerID] = cacheEntry{models: payload.Models, fetchedAt: time.Now()}
+		cache[providerID] = cacheEntry{models: models, fetchedAt: time.Now()}
 		mu.Unlock()
 
-		return convertToRaw(payload.Models), nil
+		return convertToRaw(models), nil
 	})
 
 	if err != nil {
@@ -303,6 +337,28 @@ func ClearCache() {
 	negativeCache = make(map[string]time.Time)
 }
 
+// canonicalToLegacy flattens a canonical model into the legacy ModelInfo shape,
+// surfacing known-true capabilities as Tags. Used when parsing schema-2+ files.
+func canonicalToLegacy(cm modelcontract.CanonicalModel) ModelInfo {
+	mi := ModelInfo{
+		ID:            cm.ID,
+		Name:          cm.DisplayName,
+		Description:   cm.Description,
+		Provider:      cm.Provider,
+		ContextLength: cm.ContextWindow,
+		Tags:          modelcontract.CapabilityTags(cm.Capabilities),
+		EligibleRoles: append([]string(nil), cm.EligibleRoles...),
+	}
+	if cm.Pricing != nil {
+		mi.InputCost = cm.Pricing.InputPerMTok
+		mi.OutputCost = cm.Pricing.OutputPerMTok
+		if mi.InputCost > 0 || mi.OutputCost > 0 {
+			mi.Cost = (mi.InputCost + mi.OutputCost) / 2.0
+		}
+	}
+	return mi
+}
+
 func convertToRaw(models []ModelInfo) []RawModel {
 	out := make([]RawModel, len(models))
 	for i, m := range models {
@@ -317,6 +373,7 @@ func convertToRaw(models []ModelInfo) []RawModel {
 			OutputCost:    m.OutputCost,
 			ContextLength: m.ContextLength,
 			Tags:          append([]string(nil), m.Tags...),
+			EligibleRoles: append([]string(nil), m.EligibleRoles...),
 		}
 	}
 	return out

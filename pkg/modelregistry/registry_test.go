@@ -234,8 +234,9 @@ func TestFetchModels_UnsupportedSchemaVersion(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		// Schema version 2 is not supported (only 0 and 1 are allowed)
-		w.Write([]byte(`{"schema_version": 2, "updated_at": "2024-01-01T00:00:00Z", "models": [{"id": "test"}]}`))
+		// Schema version 3 is newer than this client supports → rejected, so the
+		// caller gracefully falls back to the live provider API.
+		w.Write([]byte(`{"schema_version": 3, "models": [{"id": "test"}]}`))
 	}))
 	defer srv.Close()
 
@@ -251,6 +252,49 @@ func TestFetchModels_UnsupportedSchemaVersion(t *testing.T) {
 	}
 	if models != nil {
 		t.Fatalf("expected nil models for unsupported schema version, got: %v", models)
+	}
+}
+
+func TestFetchModels_CanonicalSchemaV2(t *testing.T) {
+	originalURL := baseURLCopy()
+	defer func() { SetBaseURL(originalURL) }()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"schema_version":2,"provider":"openrouter","generated_at":"2024-01-01T00:00:00Z","models":[
+			{"id":"openai/gpt-x","provider":"openrouter","display_name":"GPT-X","context_window":200000,
+			 "pricing":{"input_per_mtok":2,"output_per_mtok":8,"currency":"USD"},
+			 "capabilities":{"tools":true,"vision":true},
+			 "eligible_roles":["primary","subagent"]}
+		]}`))
+	}))
+	defer srv.Close()
+
+	SetBaseURL(srv.URL)
+	ClearCache()
+
+	models, err := FetchModels(context.Background(), "openrouter")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(models) != 1 {
+		t.Fatalf("expected 1 model, got %d", len(models))
+	}
+	m := models[0]
+	if m.ID != "openai/gpt-x" || m.ContextLength != 200000 || m.InputCost != 2 {
+		t.Errorf("flattened fields wrong: %+v", m)
+	}
+	hasTools := false
+	for _, tag := range m.Tags {
+		if tag == "tools" {
+			hasTools = true
+		}
+	}
+	if !hasTools {
+		t.Errorf("expected capabilities flattened to tags, got %v", m.Tags)
+	}
+	if len(m.EligibleRoles) != 2 {
+		t.Errorf("expected eligible_roles carried through, got %v", m.EligibleRoles)
 	}
 }
 

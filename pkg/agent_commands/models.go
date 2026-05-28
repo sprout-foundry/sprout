@@ -98,6 +98,9 @@ func (m *ModelsCommand) listModels(chatAgent *agent.Agent) error {
 		if model.ContextLength > 0 {
 			fmt.Printf("   Context: %d tokens\n", model.ContextLength)
 		}
+		if len(model.EligibleRoles) > 0 {
+			fmt.Printf("   Eligible for: %s\n", strings.Join(model.EligibleRoles, ", "))
+		}
 		if len(model.Tags) > 0 {
 			// Highlight tool support
 			hasTools := false
@@ -232,6 +235,11 @@ func modelDetailString(model api.ModelInfo) string {
 	// Context length
 	if model.ContextLength > 0 {
 		parts = append(parts, fmt.Sprintf("%dK", model.ContextLength/1000))
+	}
+
+	// Agentic eligibility (deterministic pre-filter)
+	if len(model.EligibleRoles) > 0 {
+		parts = append(parts, strings.Join(model.EligibleRoles, "+"))
 	}
 
 	if len(parts) == 0 {

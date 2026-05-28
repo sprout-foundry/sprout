@@ -58,7 +58,7 @@ func ExecuteShellCommandWithSafety(ctx context.Context, command string, interact
 				finalOutput := buildShellOutputWithStatus(output, command, exitCode, nil)
 
 				// Print truncated preview unless in tests/CI
-				truncatedOutput := truncateOutput(output, 2)
+				truncatedOutput := truncateOutput(output, 8)
 				if truncatedOutput != "" && shouldPrintCapturedShellPreview() {
 					fmt.Printf("%s\n", truncatedOutput)
 				}

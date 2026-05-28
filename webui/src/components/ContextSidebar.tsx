@@ -23,7 +23,6 @@ export interface ContextSidebarProps {
   isProcessing: boolean;
   lastError: string | null;
   queryProgress: QueryProgress | null;
-  onOpenRevisionDiff: (options: { path: string; diff: string; title: string }) => void;
 }
 
 const ContextSidebar: React.FC<ContextSidebarProps> = ({
@@ -41,7 +40,6 @@ const ContextSidebar: React.FC<ContextSidebarProps> = ({
   isProcessing,
   lastError,
   queryProgress,
-  onOpenRevisionDiff,
 }) => {
   const [panelWidth, setPanelWidth] = React.useState(() => {
     if (typeof window === 'undefined') return 360;
@@ -127,11 +125,8 @@ const ContextSidebar: React.FC<ContextSidebarProps> = ({
         onCollapsedChange={setIsContextPanelCollapsed}
         panelWidth={panelWidth}
         onPanelWidthChange={setPanelWidth}
-        onOpenRevisionDiff={onOpenRevisionDiff}
-        onLoadRevisionHistory={() => apiService.getChangelog()}
         onLoadSessions={() => apiService.getSessions()}
         onRestoreSession={(sessionId) => apiService.restoreSession(sessionId)}
-        onLoadRevisionDetails={(revisionId) => apiService.getRevisionDetails(revisionId)}
       />
     </ErrorBoundary>
   );

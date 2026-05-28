@@ -186,10 +186,9 @@ func (ws *ReactWebServer) registerTerminalRoutes(mux *http.ServeMux, ctx context
 func (ws *ReactWebServer) registerSessionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/sessions", ws.handleAPISessions)
 	mux.HandleFunc("/api/sessions/restore", ws.handleAPIRestoreSession)
-	mux.HandleFunc("/api/history/changelog", ws.handleAPIHistoryChangelog)
-	mux.HandleFunc("/api/history/revision", ws.handleAPIHistoryRevision)
-	mux.HandleFunc("/api/history/rollback", ws.handleAPIHistoryRollback)
-	mux.HandleFunc("/api/history/changes", ws.handleAPIHistoryChanges)
+	// Revision history + rollback now flow through /api/changes/* (the
+	// ChangeTracker session buffer) and the LLM rollback_changes tool.
+	// The old /api/history/* endpoints were removed with RevisionListPanel.
 	mux.HandleFunc("/api/chat-sessions", ws.handleAPIChatSessions)
 	mux.HandleFunc("/api/chat-sessions/create", ws.handleAPIChatSessionsCreate)
 	mux.HandleFunc("/api/chat-sessions/create-in-worktree", ws.handleAPIChatSessionCreateInWorktree)

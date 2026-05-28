@@ -1,15 +1,14 @@
 import { Activity, Bot, Wrench, FileCode, BarChart3 } from 'lucide-react';
 import { formatDurationMs, formatTokens, formatCost } from './helpers';
-import type { ChatContextPanelProps, StatusMetrics, Revision } from './types';
+import type { ChatContextPanelProps, StatusMetrics } from './types';
 
 interface StatusTabProps {
   chatProps: ChatContextPanelProps | null;
   statusMetrics: StatusMetrics;
   liveDurationMs: number | null;
-  revisions: Revision[];
 }
 
-export function StatusTab({ chatProps, statusMetrics, liveDurationMs, revisions }: StatusTabProps) {
+export function StatusTab({ chatProps, statusMetrics, liveDurationMs }: StatusTabProps) {
   const chatLastError = chatProps?.lastError ?? null;
   const chatQueryProgress = chatProps?.queryProgress ?? null;
   const chatIsProcessing = chatProps?.isProcessing ?? false;
@@ -128,12 +127,6 @@ export function StatusTab({ chatProps, statusMetrics, liveDurationMs, revisions 
             <span className="status-metric-value status-metric-del">-{statusMetrics.totalDeletions}</span>
             <span className="status-metric-label">Removed</span>
           </div>
-          {revisions.length > 0 && (
-            <div className="status-metric">
-              <span className="status-metric-value">{revisions.length}</span>
-              <span className="status-metric-label">Revisions</span>
-            </div>
-          )}
         </div>
       </div>
 

@@ -34,15 +34,6 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Default retry configuration (mimics old APIClient defaults)
-// ---------------------------------------------------------------------------
-
-const (
-	defaultMaxRetries   = 3
-	defaultBaseRetryDelay = 1 * time.Second
-)
-
-// ---------------------------------------------------------------------------
 // sproutProvider — implements seed/core.Provider by wrapping api.ClientInterface
 // ---------------------------------------------------------------------------
 
@@ -77,29 +68,6 @@ func (sp *sproutProvider) RegisterPastedImages(images map[string][]api.ImageData
 		sp.pastedImages[k] = v
 	}
 	sp.pastedImagesMu.Unlock()
-}
-
-// isRetryableError checks whether an error is transient and should be retried.
-func isRetryableError(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := err.Error()
-	retryKeywords := []string{
-		"stream error",
-		"INTERNAL_ERROR",
-		"connection reset",
-		"EOF",
-		"timeout",
-		"502",
-		"upstream error",
-	}
-	for _, kw := range retryKeywords {
-		if strings.Contains(strings.ToLower(msg), strings.ToLower(kw)) {
-			return true
-		}
-	}
-	return false
 }
 
 // extractHTTPStatusCode parses common HTTP error patterns to extract the status code.
@@ -148,47 +116,21 @@ func (sp *sproutProvider) clearProviderError() {
 	sp.agent.state.SetLastProviderError(nil)
 }
 
-// doChatWithRetry executes a chat request with exponential backoff retry.
+// doChatWithRetry performs a single chat request with fleet budget tracking and error recording.
+// Retry logic is handled by the seed core's chatFn in conversation.go;
+// this layer no longer retries to avoid nested retry explosion.
 func (sp *sproutProvider) doChatWithRetry(ctx context.Context, req *core.ChatRequest) (*core.ChatResponse, error) {
-	var lastErr error
-	for attempt := 0; attempt <= defaultMaxRetries; attempt++ {
-		if attempt > 0 {
-			// Exponential backoff with jitter
-			delay := defaultBaseRetryDelay * time.Duration(1<<(attempt-1))
-			// Add jitter (0 to 500ms)
-			jitter := time.Duration(time.Now().UnixNano()%500000000)
-			if delay+jitter > 0 {
-				select {
-				case <-time.After(delay + jitter):
-				case <-ctx.Done():
-					return nil, ctx.Err()
-				}
-			}
-		}
-
-		resp, err := sp.doChatOnce(ctx, req)
-		if err == nil {
-			// Clear any previous provider error on success
-			sp.clearProviderError()
-			// Fleet budget tracking: debit tokens after each LLM call.
-			// If budget is exceeded, propagate the error so the conversation loop stops.
-			if budgetErr := sp.trackFleetBudgetForResponse(resp); budgetErr != nil {
-				return nil, budgetErr
-			}
-			return resp, nil
-		}
-		lastErr = err
-
-		if !isRetryableError(err) {
-			// Non-retryable error — record and return immediately
-			sp.recordProviderError(err, attempt)
-			return nil, err
-		}
+	resp, err := sp.doChatOnce(ctx, req)
+	if err != nil {
+		sp.recordProviderError(err, 0)
+		return nil, err
 	}
-
-	// Max retries exhausted — record the error
-	sp.recordProviderError(lastErr, defaultMaxRetries)
-	return nil, fmt.Errorf("transient error during chat (%s): %w", sp.GetModel(), lastErr)
+	sp.clearProviderError()
+	// Fleet budget tracking: debit tokens after each LLM call.
+	if budgetErr := sp.trackFleetBudgetForResponse(resp); budgetErr != nil {
+		return nil, budgetErr
+	}
+	return resp, nil
 }
 
 // doChatOnce performs a single chat request, attaching pasted images to the
@@ -393,44 +335,21 @@ func (sp *sproutProvider) ChatStream(ctx context.Context, req *core.ChatRequest,
 	return nil
 }
 
-// doChatWithRetryStreaming performs a streaming chat request with retry.
+// doChatWithRetryStreaming performs a single streaming chat request with fleet budget tracking and error recording.
+// Retry logic is handled by the seed core's chatFn in conversation.go;
+// this layer no longer retries to avoid nested retry explosion.
 func (sp *sproutProvider) doChatWithRetryStreaming(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, callback api.StreamCallback) (*api.ChatResponse, error) {
-	var lastErr error
-	for attempt := 0; attempt <= defaultMaxRetries; attempt++ {
-		if attempt > 0 {
-			delay := defaultBaseRetryDelay * time.Duration(1<<(attempt-1))
-			jitter := time.Duration(time.Now().UnixNano()%500000000)
-			if delay+jitter > 0 {
-				select {
-				case <-time.After(delay + jitter):
-				case <-ctx.Done():
-					return nil, ctx.Err()
-				}
-			}
-		}
-
-		resp, err := sp.client.SendChatRequestStream(ctx, messages, tools, reasoning, false, callback)
-		if err == nil {
-			// Clear any previous provider error on success
-			sp.clearProviderError()
-			// Fleet budget tracking: debit tokens after each LLM call
-			if budgetErr := sp.trackFleetBudgetForResponse(resp); budgetErr != nil {
-				return nil, budgetErr
-			}
-			return resp, nil
-		}
-		lastErr = err
-
-		if !isRetryableError(err) {
-			// Non-retryable error — record and return immediately
-			sp.recordProviderError(err, attempt)
-			return nil, err
-		}
+	resp, err := sp.client.SendChatRequestStream(ctx, messages, tools, reasoning, false, callback)
+	if err != nil {
+		sp.recordProviderError(err, 0)
+		return nil, err
 	}
-
-	// Max retries exhausted — record the error
-	sp.recordProviderError(lastErr, defaultMaxRetries)
-	return nil, fmt.Errorf("transient error during chat (%s): %w", sp.GetModel(), lastErr)
+	sp.clearProviderError()
+	// Fleet budget tracking: debit tokens after each LLM call
+	if budgetErr := sp.trackFleetBudgetForResponse(resp); budgetErr != nil {
+		return nil, budgetErr
+	}
+	return resp, nil
 }
 
 func (sp *sproutProvider) Info() core.ProviderInfo {

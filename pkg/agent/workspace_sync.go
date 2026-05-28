@@ -299,9 +299,30 @@ func (a *Agent) CheckPatchConflict(path string) (bool, string) {
 	return false, ""
 }
 
+// normalizeFilePath resolves a path to its absolute form so that the
+// staleness tracker's map keys match regardless of whether the LLM passes
+// a relative path ("foo/bar.go") or an absolute one ("/home/user/foo/bar.go").
+// Uses workspaceRoot to resolve relative paths. Falls back to filepath.Abs
+// if workspaceRoot is empty.
+func normalizeFilePath(path, workspaceRoot string) string {
+	if filepath.IsAbs(path) {
+		return filepath.Clean(path)
+	}
+	base := workspaceRoot
+	if base == "" {
+		var err error
+		base, err = os.Getwd()
+		if err != nil {
+			return path
+		}
+	}
+	return filepath.Clean(filepath.Join(base, path))
+}
+
 // turnFileTracker records which files the agent has called read_file on
 // during the current turn. Used by the staleness rule's "must read before
-// write this turn" check.
+// write this turn" check. All paths are normalized to absolute form so
+// that relative and absolute references to the same file share one key.
 type turnFileTracker struct {
 	mu    sync.Mutex
 	reads map[string]time.Time
@@ -311,7 +332,7 @@ func newTurnFileTracker() *turnFileTracker {
 	return &turnFileTracker{reads: make(map[string]time.Time)}
 }
 
-func (t *turnFileTracker) recordRead(path string) {
+func (t *turnFileTracker) recordRead(path, workspaceRoot string) {
 	if t == nil {
 		return
 	}
@@ -320,17 +341,29 @@ func (t *turnFileTracker) recordRead(path string) {
 	if t.reads == nil {
 		t.reads = make(map[string]time.Time)
 	}
-	t.reads[path] = time.Now()
+	t.reads[normalizeFilePath(path, workspaceRoot)] = time.Now()
 }
 
-func (t *turnFileTracker) hasReadThisTurn(path string) bool {
+func (t *turnFileTracker) hasReadThisTurn(path, workspaceRoot string) bool {
 	if t == nil {
 		return false
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	_, ok := t.reads[path]
+	_, ok := t.reads[normalizeFilePath(path, workspaceRoot)]
 	return ok
+}
+
+// getReadTime returns the time the file was read this turn (zero time if not read).
+// Caller must NOT hold t.mu.
+func (t *turnFileTracker) getReadTime(path, workspaceRoot string) (time.Time, bool) {
+	if t == nil {
+		return time.Time{}, false
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	readAt, ok := t.reads[normalizeFilePath(path, workspaceRoot)]
+	return readAt, ok
 }
 
 func (t *turnFileTracker) reset() {
@@ -354,7 +387,7 @@ func (a *Agent) RecordFileReadThisTurn(path string) {
 		a.filesReadThisTurn = newTurnFileTracker()
 	}
 	a.fileReadsMu.Unlock()
-	a.filesReadThisTurn.recordRead(path)
+	a.filesReadThisTurn.recordRead(path, a.currentWorkspaceRoot())
 }
 
 // ResetFileReadsForNewTurn clears the per-turn read tracker. Called at
@@ -421,11 +454,12 @@ func (a *Agent) checkWriteStaleness(path string) error {
 	}
 
 	hasReadThisTurn := false
+	workspaceRoot := a.currentWorkspaceRoot()
 	a.fileReadsMu.Lock()
 	tracker := a.filesReadThisTurn
 	a.fileReadsMu.Unlock()
 	if tracker != nil {
-		hasReadThisTurn = tracker.hasReadThisTurn(path)
+		hasReadThisTurn = tracker.hasReadThisTurn(path, workspaceRoot)
 	}
 
 	if !hasReadThisTurn {
@@ -441,9 +475,7 @@ func (a *Agent) checkWriteStaleness(path string) error {
 	// "modified by something other than the agent's read" with: ModTime
 	// is more recent than when the agent recorded the read.
 	if tracker != nil {
-		tracker.mu.Lock()
-		readAt, ok := tracker.reads[path]
-		tracker.mu.Unlock()
+		readAt, ok := tracker.getReadTime(path, workspaceRoot)
 		if ok && info.ModTime().After(readAt) &&
 			time.Since(info.ModTime()) < stalenessFreshnessWindow {
 			return fmt.Errorf(

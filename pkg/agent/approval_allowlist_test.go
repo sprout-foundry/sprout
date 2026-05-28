@@ -2,9 +2,12 @@ package agent
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
 func TestIsShellCommandAllowlisted(t *testing.T) {
@@ -104,5 +107,63 @@ func TestHighRiskApprovedForCommand_AllowlistShortCircuit(t *testing.T) {
 	// With no interactive logger AND no event bus, it must reject.
 	if a.highRiskApprovedForCommand(ctx, "rm -rf /tmp/sprout-different-path") {
 		t.Error("non-allowlisted command should not be auto-approved")
+	}
+}
+
+// TestIsSessionElevated verifies that IsSessionElevated returns true only
+// when the active risk profile is permissive or unrestricted, and false
+// for default/cautious/readonly profiles.
+func TestIsSessionElevated(t *testing.T) {
+	cases := []struct {
+		profile configuration.RiskProfile
+		want    bool
+	}{
+		{configuration.RiskProfileDefault, false},
+		{configuration.RiskProfileCautious, false},
+		{configuration.RiskProfileReadonly, false},
+		{configuration.RiskProfilePermissive, true},
+		{configuration.RiskProfileUnrestricted, true},
+	}
+	for _, tc := range cases {
+		t.Run(string(tc.profile), func(t *testing.T) {
+			a := newIsolatedTestAgent(t)
+			defer a.Shutdown()
+			a.SetRiskProfileOverride(tc.profile)
+			if got := a.IsSessionElevated(); got != tc.want {
+				t.Errorf("IsSessionElevated() with profile %q = %v, want %v", tc.profile, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestElevationBypassesFilesystemGate verifies that IsSessionElevated
+// causes handleFileSecurityError to auto-approve external-path accesses
+// that would normally prompt. Sensitive-tier paths still prompt.
+func TestElevationBypassesFilesystemGate(t *testing.T) {
+	a := newIsolatedTestAgent(t)
+	defer a.Shutdown()
+	a.ElevateSessionToPermissive()
+
+	if !a.IsSessionElevated() {
+		t.Fatal("ElevateSessionToPermissive should set IsSessionElevated = true")
+	}
+
+	// External path: should auto-approve under elevation.
+	extDir := t.TempDir()
+	extPath := filepath.Join(extDir, "outside-workspace", "file.txt")
+	if err := os.MkdirAll(filepath.Dir(extPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(extPath, []byte("data"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := context.Background()
+	newCtx, approved := handleFileSecurityError(ctx, a, "read_file", extPath, filesystem.ErrOutsideWorkingDirectory)
+	if !approved {
+		t.Error("external path should be auto-approved under session elevation")
+	}
+	if newCtx == ctx {
+		t.Error("context should have been wrapped with security bypass")
 	}
 }

@@ -591,6 +591,18 @@ func (a *Agent) GetActiveRiskProfile() configuration.RiskProfile {
 	return a.activeRiskProfile()
 }
 
+// IsSessionElevated reports whether the user has elevated the session
+// to a permissive or unrestricted risk profile. When true, all three
+// security gates (static classifier, filesystem tier, shell risk
+// cascade) must skip their interactive prompts and auto-approve —
+// the user explicitly opted out of per-operation prompts for this
+// session. Critical-tier operations (rm -rf /, fork bombs) are NOT
+// covered by elevation and always block regardless.
+func (a *Agent) IsSessionElevated() bool {
+	profile := a.activeRiskProfile()
+	return profile == configuration.RiskProfilePermissive || profile == configuration.RiskProfileUnrestricted
+}
+
 // GenerateResponse generates a simple response using the current model without tool calls.
 //
 // TODO(SP-034-1c): accept a ctx parameter and forward it so callers can abort

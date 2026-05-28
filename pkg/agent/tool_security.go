@@ -54,6 +54,14 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 			if agent.debug {
 				agent.debugLog("[UNLOCK] Unsafe mode: bypassing security validation for %s (risk: %s)\n", toolName, secResult.Risk)
 			}
+		} else if agent != nil && agent.IsSessionElevated() && !secResult.IsHardBlock {
+			// Session elevation: user clicked "Elevate (session)" on a prior
+			// approval dialog, which set the risk profile to permissive.
+			// Skip prompts for non-critical operations. Hard blocks
+			// (critical system operations like rm -rf /) still enforce.
+			if agent.debug {
+				agent.debugLog("[UNLOCK] Session elevated (permissive/unrestricted): bypassing security validation for %s (risk: %s)\n", toolName, secResult.Risk)
+			}
 		} else if agent != nil {
 			// Check if we're running as a subagent — subagents cannot prompt
 			isSubagent := agent.IsSubagent()
@@ -270,6 +278,20 @@ func handleFileSecurityError(ctx context.Context, agent *Agent, toolName, filePa
 		return filesystem.WithSecurityBypass(ctx), true
 	}
 
+	// Session elevation (user clicked "Elevate (session)" on a prior
+	// approval) bypasses filesystem prompts for non-sensitive paths.
+	// Sensitive-tier paths (system dirs, off-CWD home) still prompt
+	// even under elevation — they're never session-allowlisted.
+	if agent.IsSessionElevated() {
+		tier := ClassifyPathAccess(filePath, agent.GetWorkspaceRoot(), detectHomeDir(), agent.effectiveCwd())
+		if tier != PathTierSensitive {
+			agent.debugLog("[UNLOCK] Session elevated: automatically allowing file access outside working directory: %s (tier=%s)\n", filePath, tier)
+			return filesystem.WithSecurityBypass(ctx), true
+		}
+		// Sensitive path under elevation: fall through to normal prompt.
+		agent.debugLog("[APPROVAL] Sensitive-tier path still prompts under elevation: %s\n", filePath)
+	}
+
 	// Per-folder session allowlist short-circuit. If this path sits
 	// under a folder the user previously approved, skip the prompt.
 	if agent.IsFolderSessionAllowed(filePath) {
@@ -365,9 +387,16 @@ func applyFilesystemDecision(ctx context.Context, agent *Agent, decision securit
 		agent.debugLog("[APPROVAL] User approved folder %s for the rest of this session (path: %s)\n", folder, filePath)
 		agent.AddSessionAllowedFolder(folder)
 		return filesystem.WithSecurityBypass(ctx), true
+	case security.ApprovalElevate:
+		// User clicked "Elevate (session)" on a filesystem dialog.
+		// Apply the session-wide elevation so ALL subsequent gates
+		// (static classifier, filesystem, shell cascade) skip prompts.
+		agent.ElevateSessionToPermissive()
+		agent.debugLog("[APPROVAL] Session elevated from filesystem dialog for: %s\n", filePath)
+		return filesystem.WithSecurityBypass(ctx), true
 	default:
-		// ApprovalApproveOnce + any shell-only decision that doesn't
-		// belong here collapse to a single-invocation approval.
+		// ApprovalApproveOnce + any other decision collapses to a
+		// single-invocation approval.
 		agent.debugLog("[APPROVAL] User approved file access (one-shot): %s\n", filePath)
 		return filesystem.WithSecurityBypass(ctx), true
 	}

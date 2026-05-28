@@ -497,3 +497,38 @@ func TestPostProcessResult_TruncateToolResult(t *testing.T) {
 		t.Errorf("expected truncation notice in result: %s", result)
 	}
 }
+
+// TestArgsFromPayloadDecodesSeedArguments verifies that the seed tool_start
+// payload shape (args as a JSON string under "arguments") is decoded so
+// buildDisplayName can surface the command — otherwise the CLI tool log
+// renders a bare "shell_command" with no command (the reported regression).
+func TestArgsFromPayloadDecodesSeedArguments(t *testing.T) {
+	// Seed core publishes: tool_name, tool_call_id, arguments(JSON), tool_index.
+	payload := map[string]interface{}{
+		"tool_name":    "shell_command",
+		"tool_call_id": "abc",
+		"arguments":    `{"command":"curl -s https://x | python3 -m json.tool"}`,
+		"tool_index":   0,
+	}
+	got := buildDisplayName("shell_command", argsFromPayload(payload))
+	if !strings.HasPrefix(got, "shell_command curl -s https://x") {
+		t.Errorf("display name did not surface the command: %q", got)
+	}
+
+	// Multi-line command collapses to a single scannable line.
+	multiline := map[string]interface{}{
+		"tool_name": "shell_command",
+		"arguments": "{\"command\":\"curl -s https://x \\\\\\n  -H 'a: b' \\\\\\n  -d '{}'\"}",
+	}
+	got = buildDisplayName("shell_command", argsFromPayload(multiline))
+	if strings.Contains(got, "\n") {
+		t.Errorf("multi-line command should be collapsed to one line: %q", got)
+	}
+
+	// Structured args map (non-seed shape) still works.
+	structured := map[string]interface{}{"args": map[string]interface{}{"path": "/tmp/f.go"}}
+	got = buildDisplayName("read_file", argsFromPayload(structured))
+	if got != "read_file /tmp/f.go" {
+		t.Errorf("structured args not handled: %q", got)
+	}
+}

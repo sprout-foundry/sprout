@@ -334,9 +334,10 @@ func TestRouteToolLog_FormatsTerminalOutput(t *testing.T) {
 	io.Copy(&buf, r)
 	output := buf.String()
 
-	// Should contain ANSI codes
-	assert.Contains(t, output, "\033[90m", "should contain dark gray ANSI code")
-	assert.Contains(t, output, "\033[38;5;246m", "should contain slightly lighter gray ANSI code")
+	// Should contain ANSI codes: RouteToolLog renders the line dim
+	// (\033[2m … \033[0m), not the dark/lighter-gray scheme this test
+	// originally asserted.
+	assert.Contains(t, output, "\033[2m", "should contain dim ANSI code")
 	assert.Contains(t, output, "\033[0m", "should contain reset ANSI code")
 	// Terminal output now only shows target, not action
 	assert.NotContains(t, output, "read_file", "should not contain tool name in terminal output")

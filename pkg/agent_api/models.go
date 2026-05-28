@@ -12,9 +12,11 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/credentials"
+	"github.com/sprout-foundry/sprout/pkg/modelcontract"
 	"github.com/sprout-foundry/sprout/pkg/modelregistry"
 	"github.com/sprout-foundry/sprout/pkg/providercatalog"
 	"github.com/sprout-foundry/sprout/pkg/envutil"
@@ -151,6 +153,48 @@ type ModelInfo struct {
 	OutputCost    float64  `json:"output_cost,omitempty"`
 	ContextLength int      `json:"context_length,omitempty"`
 	Tags          []string `json:"tags,omitempty"`
+	// EligibleRoles lists the agentic roles a model meets the minimum
+	// deterministic bar for ("primary", "subagent"). This is an
+	// eligibility pre-filter (currently context-window based), NOT a
+	// quality recommendation — the capability probe provides the
+	// authoritative agentic-capable signal. Empty means below the bar or
+	// unknown. Additive/omitempty so older clients ignore it.
+	EligibleRoles []string `json:"eligible_roles,omitempty"`
+}
+
+// Agentic-coding eligibility thresholds. These set the *minimum* context
+// window for a role and are a deterministic placeholder for the capability
+// probe (which will provide the authoritative agentic-capable signal).
+// Eligibility ≠ recommendation.
+const (
+	subagentMinContext = 32_000
+	primaryMinContext  = 128_000
+)
+
+// ClassifyEligibleRoles returns the agentic roles a model meets the minimum
+// deterministic bar for, based on its context window. Returns nil when the
+// model is below the subagent threshold or its context length is unknown.
+func ClassifyEligibleRoles(m ModelInfo) []string {
+	switch {
+	case m.ContextLength >= primaryMinContext:
+		return []string{"primary", "subagent"}
+	case m.ContextLength >= subagentMinContext:
+		return []string{"subagent"}
+	default:
+		return nil
+	}
+}
+
+// fillEligibleRoles populates EligibleRoles for any model that doesn't already
+// carry it, so live-API models get the heuristic while registry- or
+// probe-provided roles are preserved.
+func fillEligibleRoles(models []ModelInfo) []ModelInfo {
+	for i := range models {
+		if len(models[i].EligibleRoles) == 0 {
+			models[i].EligibleRoles = ClassifyEligibleRoles(models[i])
+		}
+	}
+	return models
 }
 
 // ModelsListInterface defines methods for listing available models
@@ -184,8 +228,24 @@ func GetModelsForProviderCtx(ctx context.Context, clientType ClientType) ([]Mode
 	providerID := string(clientType)
 	if _, exists := providercatalog.FindProvider(providerID); exists {
 		if registryModels, err := modelregistry.FetchModels(ctx, providerID); err == nil && registryModels != nil {
-			return convertRegistryModels(registryModels), nil
+			return fillEligibleRoles(convertRegistryModels(registryModels)), nil
 		}
+	}
+
+	// Canonical adapters are the source of truth for live listing where one
+	// exists — they normalize the provider's native API into the canonical
+	// contract (capabilities, pricing, context, lifecycle) before projecting
+	// down to ModelInfo for existing consumers.
+	if canon, handled, listErr := canonicalAdapterModels(ctx, providerID); handled {
+		if listErr != nil {
+			return nil, fmt.Errorf("failed to list models for %s: %w", clientType, listErr)
+		}
+		modelcontract.FillEligibleRoles(canon)
+		out := make([]ModelInfo, len(canon))
+		for i := range canon {
+			out[i] = CanonicalToModelInfo(canon[i])
+		}
+		return out, nil
 	}
 
 	// Fall back to the provider's direct ListModels method.
@@ -203,7 +263,122 @@ func GetModelsForProviderCtx(ctx context.Context, clientType ClientType) ([]Mode
 		return nil, fmt.Errorf("failed to list models for %s: %w", clientType, listErr)
 	}
 
-	return models, nil
+	return fillEligibleRoles(models), nil
+}
+
+// openRouterReference lazily builds (once per process) the OpenRouter-derived
+// reference catalog used to enrich providers with sparse native metadata (e.g.
+// OpenAI). Best-effort: a fetch failure yields nil and enrichment is skipped.
+var (
+	openRouterRefOnce sync.Once
+	openRouterRefCat  *modelcontract.ReferenceCatalog
+)
+
+func openRouterReference(ctx context.Context) *modelcontract.ReferenceCatalog {
+	openRouterRefOnce.Do(func() {
+		canon, err := (modelcontract.OpenRouterAdapter{}).ListModels(ctx)
+		if err == nil && len(canon) > 0 {
+			openRouterRefCat = modelcontract.NewReferenceCatalog(canon)
+		}
+	})
+	return openRouterRefCat
+}
+
+// canonicalAdapterModels returns canonical models from a provider's adapter,
+// injecting any dependencies it needs (OpenAI requires an API key and the
+// OpenRouter reference catalog). The bool reports whether an adapter handled
+// the provider; providers without one fall back to the legacy ListModels path.
+func canonicalAdapterModels(ctx context.Context, providerID string) ([]modelcontract.CanonicalModel, bool, error) {
+	switch strings.ToLower(strings.TrimSpace(providerID)) {
+	case "deepinfra":
+		m, err := modelcontract.DeepInfraAdapter{}.ListModels(ctx)
+		return m, true, err
+	case "openrouter":
+		m, err := modelcontract.OpenRouterAdapter{}.ListModels(ctx)
+		return m, true, err
+	case "openai":
+		apiKey, _ := credentials.ResolveProviderAPIKey("openai", "OpenAI")
+		m, err := modelcontract.OpenAIAdapter{APIKey: apiKey, Reference: openRouterReference(ctx)}.ListModels(ctx)
+		return m, true, err
+	default:
+		return nil, false, nil
+	}
+}
+
+// CanonicalToModelInfo projects a canonical model down to the ModelInfo shape
+// existing consumers expect. Known-true capabilities are surfaced as Tags so
+// callers that inspect tags (e.g. the CLI "Supports tools" line) work unchanged.
+// Exported for the registry publisher (cmd/refresh_provider_catalog).
+func CanonicalToModelInfo(m modelcontract.CanonicalModel) ModelInfo {
+	mi := ModelInfo{
+		ID:            m.ID,
+		Name:          m.DisplayName,
+		Description:   m.Description,
+		Provider:      m.Provider,
+		ContextLength: m.ContextWindow,
+		EligibleRoles: m.EligibleRoles,
+		Tags:          modelcontract.CapabilityTags(m.Capabilities),
+	}
+	if mi.Name == "" {
+		mi.Name = m.ID
+	}
+	if m.Pricing != nil {
+		mi.InputCost = m.Pricing.InputPerMTok
+		mi.OutputCost = m.Pricing.OutputPerMTok
+		if mi.InputCost > 0 || mi.OutputCost > 0 {
+			mi.Cost = (mi.InputCost + mi.OutputCost) / 2.0
+		}
+	}
+	return mi
+}
+
+// modelInfoToCanonical projects a legacy ModelInfo up to the canonical shape.
+// Used for providers that don't yet have a canonical adapter, so the publisher
+// can emit a uniform canonical file. Capabilities are recovered from Tags
+// (known-true on presence; unknown otherwise).
+func modelInfoToCanonical(m ModelInfo) modelcontract.CanonicalModel {
+	cm := modelcontract.CanonicalModel{
+		ID:            m.ID,
+		Provider:      m.Provider,
+		DisplayName:   m.Name,
+		Description:   m.Description,
+		ContextWindow: m.ContextLength,
+		Status:        modelcontract.StatusActive,
+		Capabilities:  modelcontract.CapabilitiesFromTags(m.Tags),
+		EligibleRoles: m.EligibleRoles,
+	}
+	if m.InputCost > 0 || m.OutputCost > 0 {
+		cm.Pricing = &modelcontract.Pricing{
+			InputPerMTok:  m.InputCost,
+			OutputPerMTok: m.OutputCost,
+			Currency:      "USD",
+		}
+	}
+	return cm
+}
+
+// GetCanonicalModelsForProvider returns canonical models for a provider — from
+// its adapter where one exists, otherwise by projecting the legacy ModelInfo
+// path up to canonical. Used by the registry publisher to emit the canonical
+// per-provider file.
+func GetCanonicalModelsForProvider(ctx context.Context, clientType ClientType) ([]modelcontract.CanonicalModel, error) {
+	if canon, handled, err := canonicalAdapterModels(ctx, string(clientType)); handled {
+		if err != nil {
+			return nil, fmt.Errorf("failed to list models for %s: %w", clientType, err)
+		}
+		modelcontract.FillEligibleRoles(canon)
+		return canon, nil
+	}
+	models, err := GetModelsForProviderCtx(ctx, clientType)
+	if err != nil {
+		return nil, err
+	}
+	canon := make([]modelcontract.CanonicalModel, len(models))
+	for i := range models {
+		canon[i] = modelInfoToCanonical(models[i])
+	}
+	modelcontract.FillEligibleRoles(canon)
+	return canon, nil
 }
 
 // convertRegistryModels converts modelregistry.RawModel slices to ModelInfo.
@@ -221,6 +396,7 @@ func convertRegistryModels(raw []modelregistry.RawModel) []ModelInfo {
 			OutputCost:    m.OutputCost,
 			ContextLength: m.ContextLength,
 			Tags:          append([]string(nil), m.Tags...),
+			EligibleRoles: append([]string(nil), m.EligibleRoles...),
 		}
 	}
 	return out
@@ -460,20 +636,21 @@ func (w *openRouterListModelsWrapper) ListModels(ctx context.Context) ([]ModelIn
 type deepInfraListModelsWrapper struct{}
 
 func (w *deepInfraListModelsWrapper) ListModels(ctx context.Context) ([]ModelInfo, error) {
-	// DeepInfra's OpenAI-compatible model list is public — resolve the key
-	// best-effort and only attach it when present. Listing must not require a key.
+	// DeepInfra's native /models/list is public and far richer than its
+	// OpenAI-compatible /v1/openai/models endpoint (which omits context size
+	// and pricing): it reports max_tokens (context), per-token pricing,
+	// capability tags, a type, and a deprecated flag. Listing must not require
+	// a key — resolve best-effort and only attach when present.
 	apiKey, _ := credentials.ResolveProviderAPIKey("deepinfra", "DeepInfra")
 
-	// Use the OpenAI-compatible endpoint like the DeepInfra provider does
-	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.deepinfra.com/v1/openai/models", nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.deepinfra.com/models/list", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
-
 	if apiKey != "" {
 		req.Header.Set("Authorization", "Bearer "+apiKey)
 	}
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
 
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
@@ -487,59 +664,51 @@ func (w *deepInfraListModelsWrapper) ListModels(ctx context.Context) ([]ModelInf
 		return nil, fmt.Errorf("failed to fetch DeepInfra models: %w", FormatHTTPResponseError(resp.StatusCode, resp.Header, body))
 	}
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	// Decode core fields with the typed struct, and the same entries as raw
-	// maps so pricing can be probed across differing property names/units
-	// (ModelPricingPerMillion). DeepInfra's OpenAI-compatible endpoint and its
-	// native listing disagree on where/how pricing is reported.
-	var response struct {
-		Data []struct {
-			ID            string `json:"id"`
-			Name          string `json:"name"`
-			Description   string `json:"description"`
-			ContextLength int    `json:"context_length"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(body, &response); err != nil {
+	// Decode as raw entries so pricing can be probed via ModelPricingPerMillion
+	// (DeepInfra reports cents-per-token under pricing.cents_per_*_token).
+	var entries []map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&entries); err != nil {
 		return nil, fmt.Errorf("failed to decode DeepInfra models: %w", err)
 	}
 
-	var rawList struct {
-		Data []map[string]any `json:"data"`
-	}
-	_ = json.Unmarshal(body, &rawList)
-
-	// Convert to ModelInfo format with full details
-	models := make([]ModelInfo, len(response.Data))
-	for i, model := range response.Data {
-		modelInfo := ModelInfo{
-			ID:       model.ID,
-			Name:     model.Name,
-			Provider: "deepinfra",
+	models := make([]ModelInfo, 0, len(entries))
+	for _, e := range entries {
+		// Skip deprecated entries and anything that isn't a chat/agentic text
+		// model (image, audio, embedding, …).
+		if deprecated, _ := e["deprecated"].(bool); deprecated {
+			continue
+		}
+		modelType, _ := e["reported_type"].(string)
+		if modelType == "" {
+			modelType, _ = e["type"].(string)
+		}
+		if modelType != "text-generation" {
+			continue
+		}
+		name, _ := e["model_name"].(string)
+		if name == "" {
+			continue
 		}
 
-		if model.Description != "" {
-			modelInfo.Description = model.Description
+		m := ModelInfo{ID: name, Name: name, Provider: "deepinfra"}
+		if d, ok := e["description"].(string); ok {
+			m.Description = d
 		}
-		if model.ContextLength > 0 {
-			modelInfo.ContextLength = model.ContextLength
+		if mt, ok := e["max_tokens"].(float64); ok {
+			m.ContextLength = int(mt)
 		}
-
-		// Flexible pricing: probe candidate field names/units on the raw entry.
-		if i < len(rawList.Data) {
-			inputCost, outputCost := ModelPricingPerMillion(rawList.Data[i])
-			modelInfo.InputCost = inputCost
-			modelInfo.OutputCost = outputCost
-			if inputCost > 0 || outputCost > 0 {
-				modelInfo.Cost = (inputCost + outputCost) / 2.0
+		if tags, ok := e["tags"].([]any); ok {
+			for _, t := range tags {
+				if s, ok := t.(string); ok {
+					m.Tags = append(m.Tags, s)
+				}
 			}
 		}
-
-		models[i] = modelInfo
+		if in, out := ModelPricingPerMillion(e); in > 0 || out > 0 {
+			m.InputCost, m.OutputCost = in, out
+			m.Cost = (in + out) / 2.0
+		}
+		models = append(models, m)
 	}
 
 	return models, nil

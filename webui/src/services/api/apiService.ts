@@ -8,6 +8,7 @@
 
 import type { ShellInfo } from '@sprout/ui';
 import { clientFetch } from '../clientSession';
+import * as changesApi from './changesApi';
 import * as chatApi from './chatApi';
 import * as credentialsApi from './credentialsApi';
 import * as editorApi from './editorApi';
@@ -705,6 +706,30 @@ class ApiService {
 
   async rollbackToRevision(revisionId: string): Promise<RollbackResponse> {
     return miscApi.rollbackToRevision(clientFetch, revisionId);
+  }
+
+  // ── Agent Changes (ChangeTracker session buffer) ─────────────────
+
+  async getAgentSessionChanges(
+    filter: changesApi.SessionChangesFilter = {},
+  ): Promise<changesApi.SessionChangesResponse> {
+    return changesApi.getSessionChanges(clientFetch, filter);
+  }
+
+  async getAgentChangeDiff(path: string): Promise<changesApi.ChangeDiffResponse> {
+    return changesApi.getChangeDiff(clientFetch, path);
+  }
+
+  async getAgentSessionSummary(): Promise<changesApi.SessionSummaryResponse> {
+    return changesApi.getSessionSummary(clientFetch);
+  }
+
+  async getAgentChangesTimeline(since?: string): Promise<changesApi.TimelineResponse> {
+    return changesApi.getChangesTimeline(clientFetch, since);
+  }
+
+  async revertAgentChanges(req: changesApi.RevertRequest): Promise<changesApi.RevertResponse> {
+    return changesApi.revertChanges(clientFetch, req);
   }
 
   // ── Sessions ───────────────────────────────────────────────────

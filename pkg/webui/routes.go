@@ -29,6 +29,7 @@ func (ws *ReactWebServer) setupRoutes(ctx context.Context) *http.ServeMux {
 	ws.registerGitRoutes(mux)
 	ws.registerSessionRoutes(mux)
 	ws.registerSearchRoutes(mux)
+	ws.registerChangesRoutes(mux)
 
 	return mux
 }

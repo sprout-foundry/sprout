@@ -9,7 +9,7 @@ vi.mock('./SettingsPanel', () => ({ default: () => null }));
 vi.mock('./FileTree', () => ({ default: () => null }));
 vi.mock('./SearchView', () => ({ default: () => null }));
 vi.mock('./GitSidebarPanel', () => ({ default: () => null }));
-vi.mock('./RevisionListPanel', () => ({ default: () => null }));
+vi.mock('./AgentChangesPanel', () => ({ default: () => null }));
 vi.mock('./SproutLogo', () => ({ default: () => null }));
 vi.mock('./LocationSwitcher', () => ({ default: () => null }));
 vi.mock('./ResizeHandle', () => ({ default: () => null }));

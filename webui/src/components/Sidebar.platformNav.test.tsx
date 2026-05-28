@@ -107,7 +107,7 @@ vi.mock('./SettingsPanel', () => ({ default: () => createElement('div', { classN
 vi.mock('./FileTree', () => ({ default: () => createElement('div', { className: 'mock-filetree' }) }));
 vi.mock('./SearchView', () => ({ default: () => createElement('div', { className: 'mock-search' }) }));
 vi.mock('./GitSidebarPanel', () => ({ default: () => createElement('div', { className: 'mock-git' }) }));
-vi.mock('./RevisionListPanel', () => ({ default: () => createElement('div', { className: 'mock-revisions' }) }));
+vi.mock('./AgentChangesPanel', () => ({ default: () => createElement('div', { className: 'mock-changes' }) }));
 vi.mock('./SproutLogo', () => ({ default: () => createElement('svg', { className: 'mock-logo' }) }));
 vi.mock('./LocationSwitcher', () => ({ default: () => createElement('div', { className: 'mock-location-switcher' }) }));
 vi.mock('./ResizeHandle', () => ({ default: () => createElement('div', { className: 'mock-resize-handle' }) }));

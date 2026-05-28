@@ -245,34 +245,6 @@ const AppContent: React.FC<AppContentProps> = ({
     window.dispatchEvent(new CustomEvent('toggle-context-panel'));
   };
 
-  const handleOpenRevisionDiff = useCallback(
-    (options: { path: string; diff: string; title: string }) => {
-      onViewChange('editor');
-      openWorkspaceBuffer({
-        kind: 'diff',
-        path: `__workspace/revision/${options.path}-${Date.now()}`,
-        title: `${options.title}: ${options.path.split('/').pop() || options.path}`,
-        ext: '.diff',
-        metadata: {
-          sourcePath: options.path,
-          diff: {
-            message: 'success',
-            path: options.path,
-            has_staged: false,
-            has_unstaged: false,
-            staged_diff: '',
-            unstaged_diff: '',
-            diff: options.diff,
-          },
-          diffMode: 'combined',
-          modeOptions: ['combined'],
-          title: options.title,
-        },
-      });
-    },
-    [onViewChange, openWorkspaceBuffer],
-  );
-
   const { handleOpenHotkeysConfig } = useAppContentHotkeys({
     activeBufferId,
     buffersRef,
@@ -574,7 +546,6 @@ const AppContent: React.FC<AppContentProps> = ({
             isProcessing={state.isProcessing}
             lastError={state.lastError}
             queryProgress={state.queryProgress}
-            onOpenRevisionDiff={handleOpenRevisionDiff}
           />
         </div>
         <Status isConnected={state.isConnected} stats={state.stats} />

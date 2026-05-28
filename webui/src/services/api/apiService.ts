@@ -22,10 +22,6 @@ import * as settingsApi from './settingsApi';
 import * as sshApi from './sshApi';
 import * as terminalApi from './terminalApi';
 import type {
-  ChangelogResponse,
-  ChangesResponse,
-  RevisionDetailResponse,
-  RollbackResponse,
   StatsResponse,
   FilesResponse,
   ProviderOption,
@@ -688,24 +684,6 @@ class ApiService {
     total: number;
   }> {
     return editorApi.getWorkspaceSymbols(clientFetch, query);
-  }
-
-  // ── History/Changelog ────────────────────────────────────────────
-
-  async getChangelog(): Promise<ChangelogResponse> {
-    return miscApi.getChangelog(clientFetch);
-  }
-
-  async getChanges(): Promise<ChangesResponse> {
-    return miscApi.getChanges(clientFetch);
-  }
-
-  async getRevisionDetails(revisionId: string): Promise<RevisionDetailResponse> {
-    return miscApi.getRevisionDetails(clientFetch, revisionId);
-  }
-
-  async rollbackToRevision(revisionId: string): Promise<RollbackResponse> {
-    return miscApi.rollbackToRevision(clientFetch, revisionId);
   }
 
   // ── Agent Changes (ChangeTracker session buffer) ─────────────────

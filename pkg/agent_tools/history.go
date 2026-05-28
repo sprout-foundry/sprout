@@ -58,11 +58,25 @@ func ViewHistory(limit int, fileFilter string, since *time.Time, showContent boo
 		changes = changes[:limit]
 	}
 
+	// Collect the distinct revision IDs the view touched so the caller
+	// can bump activity timestamps (cold→warm promotion under the
+	// compaction policy).
+	seen := make(map[string]bool, len(changes))
+	revisionIDs := make([]string, 0, len(changes))
+	for _, c := range changes {
+		if c.RequestHash == "" || seen[c.RequestHash] {
+			continue
+		}
+		seen[c.RequestHash] = true
+		revisionIDs = append(revisionIDs, c.RequestHash)
+	}
+
 	metadata := map[string]interface{}{
-		"limit":        limit,
-		"file_filter":  fileFilter,
-		"show_content": showContent,
-		"entry_count":  len(changes),
+		"limit":         limit,
+		"file_filter":   fileFilter,
+		"show_content":  showContent,
+		"entry_count":   len(changes),
+		"revision_ids":  revisionIDs,
 	}
 	if since != nil {
 		metadata["since"] = since.Format(time.RFC3339)
@@ -226,6 +240,14 @@ func formatRevision(group revisionGroup, opts formatRevisionOpts) string {
 	b.WriteString(fmt.Sprintf("**Model:** %s\n", changes[0].AgentModel))
 	b.WriteString(fmt.Sprintf("**Time:** %s\n", changes[0].Timestamp.Format(opts.TimeFormat)))
 	b.WriteString(fmt.Sprintf("%s%d\n", opts.FilesLabel, len(changes)))
+
+	// Surface tier so the LLM knows when conversation context isn't
+	// available for an old revision. All other data is intact for any
+	// surfaced entry (compacted revisions either keep diffs or are
+	// dropped entirely — there's no middle tier where diffs vanish).
+	if changes[0].Tier != "" && changes[0].Tier != "hot" {
+		b.WriteString(fmt.Sprintf("**Storage:** %s (conversation context unavailable)\n", changes[0].Tier))
+	}
 
 	if opts.ShowInstructions && changes[0].Instructions != "" {
 		b.WriteString(fmt.Sprintf("**Instructions:** %s\n", changes[0].Instructions))

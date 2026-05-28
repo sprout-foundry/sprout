@@ -134,9 +134,53 @@ func newDefaultToolRegistry() *ToolRegistry {
 	// files modified, created, or deleted in this session.
 	registry.RegisterTool(ToolConfig{
 		Name: "list_changes",
-		Description: "List every file you (the agent) have created, modified, or deleted in this session. Returns a JSON object with revision_id and a files array. Each file entry has: path, op (\"create\" | \"edit\" | \"delete\"), tool (which tool made the change), and recoverable (true if the original bytes were captured and can be restored via recover_file).\n\n**When to use this**:\n• Before reporting a task as complete, to verify you actually changed what you intended.\n• When generating a commit message, to list the exact files touched.\n• When summarizing your work for the user or a parent agent.\n• When you're about to undo something and need to know what's tracked.\n\nThe manifest is authoritative: shell commands (sed, mv, rm, tee, etc.) that bypass write_file / edit_file are still tracked via a workspace-walk diff around every shell_command invocation. Files outside the workspace, binaries, and files >1 MiB are reported with `recoverable: false` (they appear in the manifest but their original content isn't preserved). No parameters.",
+		Description: "List every file you (the agent) have created, modified, or deleted in this session. Returns a JSON object with revision_id and a files array. Each file entry has: path, op (\"create\" | \"edit\" | \"delete\"), tool, timestamp, and recoverable (true if the original bytes were captured and can be restored via recover_file or revert_my_changes).\n\n**Optional filters**:\n• `since` (RFC3339 timestamp, e.g. \"2026-05-27T10:00:00Z\") — only changes recorded after this time.\n• `tool` (string) — only changes recorded by this tool name.\n• `path_pattern` (glob) — only files matching the pattern (e.g. \"pkg/auth/*.go\").\n\n**When to use this**:\n• Before reporting a task as complete, to verify you actually changed what you intended.\n• When generating a commit message, to list the exact files touched.\n• When summarizing your work for the user or a parent agent.\n• When you're about to undo something and need to know what's tracked.\n\nThe manifest is authoritative: shell commands (sed, mv, rm, tee, etc.) that bypass write_file / edit_file are still tracked via a workspace-walk diff around every shell_command invocation. Files outside the workspace, binaries, and files >1 MiB are reported with `recoverable: false`.",
+		Parameters: []ParameterConfig{
+			{"since", "string", false, []string{}, "Optional RFC3339 cutoff — only changes recorded at or after this time."},
+			{"tool", "string", false, []string{}, "Optional tool name filter (e.g. write_file, edit_file, shell_command)."},
+			{"path_pattern", "string", false, []string{}, "Optional path glob filter (e.g. pkg/auth/*.go)."},
+		},
+		Handler: handleListChanges,
+	})
+
+	// show_my_change - Inline diff for a single file from session buffer.
+	registry.RegisterTool(ToolConfig{
+		Name: "show_my_change",
+		Description: "Show the unified diff between a file's pre-session state and its current intended state, using the change tracker's captured originals. Lets you see exactly what your edits to a specific file did this session without having to remember or re-read.\n\nReturns JSON: `{found, path, op, tool, stats, diff}`. `diff` is a standard unified diff string suitable for direct inclusion in a reply or commit message. `op` is the aggregate outcome (\"create\" / \"edit\" / \"delete\") across all your edits to this path this session.\n\n**When to use this**:\n• You want to remember what you actually changed in a specific file.\n• You're about to revert and want to confirm the diff first.\n• You're writing a commit message or explaining your work to the user.\n• A user asks \"what did you change in foo.go?\" — call this with path=foo.go.\n\nReturns `found: false` when the path has no tracked changes in this session.",
+		Parameters: []ParameterConfig{
+			{"path", "string", true, []string{"file_path"}, "Absolute or relative path of the file to diff."},
+		},
+		Handler: handleShowMyChange,
+	})
+
+	// revert_my_changes - Bulk undo with scopes (all / file / since).
+	registry.RegisterTool(ToolConfig{
+		Name: "revert_my_changes",
+		Description: "Restore files to their pre-session state in bulk. Uses the ChangeTracker's captured originals — does NOT touch git, does NOT affect work the user or another agent did, only undoes YOUR own edits this session.\n\n**Scope arguments** (mutually exclusive; pick one):\n• `scope=\"all\"` (default if no other arg given) — revert every file the tracker recorded this session.\n• `file=<path>` — revert ONE file to the state it was in before your first edit this session.\n• `since=<RFC3339>` — revert all changes you made at or after the given timestamp.\n\nFor each file: edits → write original bytes back; deletes → un-delete (re-write the file); creates → remove the file.\n\nReturns JSON: `{restored, failed, summary, entries: [{path, action, ok, message}]}`.\n\n**When to use this**:\n• User says \"undo what you just did\" / \"revert that change\" / \"go back to before you started\".\n• You realize a destructive shell command (rm, sed -i, mv) did the wrong thing.\n• A test broke and you want to bisect by reverting recent edits.\n\n**Prefer this over `git checkout`**: this tool is scoped to YOUR session, won't disturb the user's in-progress work in the working tree, and uses content you've captured directly rather than relying on git's index state.",
+		Parameters: []ParameterConfig{
+			{"scope", "string", false, []string{}, "\"all\" to revert every change this session. Default when no other filter is provided."},
+			{"file", "string", false, []string{"file_path", "path"}, "Revert one file to its pre-session state (latest matching entry's original content)."},
+			{"since", "string", false, []string{}, "RFC3339 timestamp — revert all changes recorded at or after this moment."},
+		},
+		Handler: handleRevertMyChanges,
+	})
+
+	// summarize_my_session - Grouped digest of work this session.
+	registry.RegisterTool(ToolConfig{
+		Name: "summarize_my_session",
+		Description: "Return a grouped digest of what you've done this session, broken into contiguous activity blocks (changes within 30 seconds of each other belong to the same block — roughly one block per agent turn).\n\nReturns JSON: `{enabled, blocks: [{started_at, ended_at, tools: {tool: count}, files: [{path, op}]}], totals: {changes, files}}`.\n\n**When to use this**:\n• User asks \"what have you been doing?\" / \"what did you change?\" / \"summarize your work\".\n• You want to ground yourself in what you actually did before continuing a long task.\n• You're writing a progress report or a commit message.\n• A subagent is about to return and wants a coherent summary for the primary.\n\nCheaper to call than `list_changes` for large sessions since the output is digested. No parameters.",
 		Parameters:  []ParameterConfig{},
-		Handler:     handleListChanges,
+		Handler:     handleSummarizeMySession,
+	})
+
+	// my_recent_changes - Cross-session unified timeline (Phase 1.5).
+	registry.RegisterTool(ToolConfig{
+		Name: "my_recent_changes",
+		Description: "Unified chronological timeline of file changes spanning the current in-memory session buffer AND the persistent revision store (hot+warm tiers). Lets you reason about \"what have I been working on over the last X days\" across agent restarts.\n\nEach item has: path, op, tool, source (\"session\" or \"persisted\"), revision_id (when source=persisted), timestamp, tier (hot/warm).\n\n**`since` argument** accepts three forms:\n• RFC3339 timestamp: `2026-05-27T10:00:00Z`\n• Duration: `2d`, `12h`, `30m`, `300s`\n• Empty: returns everything available\n\n**When to use this**:\n• User asks \"what have you been doing on this project?\" — spans previous sessions.\n• You need to reason about your historical work on a feature.\n• Differentiate between work YOU did vs working-tree changes from the user / git operations.\n\n`view_history` is the lower-level alternative for digging into one revision's full conversation + diffs.",
+		Parameters: []ParameterConfig{
+			{"since", "string", false, []string{}, "Optional cutoff: RFC3339 timestamp, duration like \"2d\", or empty for all."},
+		},
+		Handler: handleMyRecentChanges,
 	})
 
 	// recover_file - Restores a file from the change tracker's session buffer.

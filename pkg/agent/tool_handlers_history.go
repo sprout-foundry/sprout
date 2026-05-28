@@ -9,6 +9,7 @@ import (
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/history"
 )
 
 // Tool handler implementations for history operations
@@ -58,6 +59,18 @@ func handleViewHistory(ctx context.Context, a *Agent, args map[string]interface{
 	res, err := tools.ViewHistory(limit, fileFilter, sincePtr, showContent)
 	if err != nil {
 		return "", agenterrors.NewTransientError("failed to view history", err)
+	}
+
+	// Activity-based promotion: bump mtime on every revision this view
+	// touched so the next compaction pass considers it "recently
+	// used" and keeps it (or promotes it back from cold). Deduped via
+	// the metadata map so we don't touch the same revision twice.
+	if revisionsRaw, ok := res.Metadata["revision_ids"]; ok {
+		if revIDs, ok := revisionsRaw.([]string); ok {
+			for _, id := range revIDs {
+				_ = history.TouchRevision(id)
+			}
+		}
 	}
 
 	a.Logger().Debug("view_history metadata: %+v\n", res.Metadata)

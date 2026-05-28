@@ -248,7 +248,7 @@ func getShellCommandRiskType(cmd string, risk SecurityRisk, isCritical bool) str
 		return "insecure_permissions"
 	}
 	// Pipe to any shell or script interpreter — arbitrary code execution via pipe
-	if pipeToShellPattern.MatchString(strings.ToLower(cmd)) {
+	if isPipeToShell(cmd) {
 		return "remote_code_execution"
 	}
 	if strings.HasPrefix(cmdLower, "eval ") || cmd == "eval" {

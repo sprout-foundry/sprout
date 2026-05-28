@@ -200,17 +200,7 @@ func TestStreamingResponseBuilder(t *testing.T) {
 					FinishReason: stringPtr("stop"),
 				},
 			},
-			Usage: &struct {
-				PromptTokens        int     `json:"prompt_tokens"`
-				CompletionTokens    int     `json:"completion_tokens"`
-				TotalTokens         int     `json:"total_tokens"`
-				EstimatedCost       float64 `json:"estimated_cost"`
-				Cost                float64 `json:"cost,omitempty"`
-				PromptTokensDetails struct {
-					CachedTokens     int  `json:"cached_tokens"`
-					CacheWriteTokens *int `json:"cache_write_tokens"`
-				} `json:"prompt_tokens_details,omitempty"`
-			}{
+			Usage: &StreamingUsage{
 				PromptTokens:     10,
 				CompletionTokens: 2,
 				TotalTokens:      12,
@@ -683,17 +673,7 @@ func TestStreamingResponseBuilder_ZAIReasoningAndContent(t *testing.T) {
 				FinishReason: stringPtr("stop"),
 			},
 		},
-		Usage: &struct {
-			PromptTokens        int     `json:"prompt_tokens"`
-			CompletionTokens    int     `json:"completion_tokens"`
-			TotalTokens         int     `json:"total_tokens"`
-			EstimatedCost       float64 `json:"estimated_cost"`
-			Cost                float64 `json:"cost,omitempty"`
-			PromptTokensDetails struct {
-				CachedTokens     int  `json:"cached_tokens"`
-				CacheWriteTokens *int `json:"cache_write_tokens"`
-			} `json:"prompt_tokens_details,omitempty"`
-		}{
+		Usage: &StreamingUsage{
 			PromptTokens:     10,
 			CompletionTokens: 15,
 			TotalTokens:      25,

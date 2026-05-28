@@ -194,10 +194,35 @@ func (sp *sproutProvider) doChatWithRetry(ctx context.Context, req *core.ChatReq
 // doChatOnce performs a single chat request, attaching pasted images to the
 // first user message if the client supports vision.
 func (sp *sproutProvider) doChatOnce(ctx context.Context, req *core.ChatRequest) (*core.ChatResponse, error) {
+	var resp *core.ChatResponse
+	var err error
 	if sp.agent != nil && sp.agent.output.IsStreamingEnabled() {
-		return sp.doChatStream(ctx, req)
+		resp, err = sp.doChatStream(ctx, req)
+	} else {
+		resp, err = sp.doChatNonStream(ctx, req)
 	}
-	return sp.doChatNonStream(ctx, req)
+	if err == nil {
+		sp.accumulateResponseCost(resp)
+	}
+	return resp, err
+}
+
+// accumulateResponseCost adds the provider-reported cost of a single
+// response to the agent's lifetime cost counter. seed's chat loop tracks
+// tokens (State.AddTokens) but never cost, so without this every footer
+// reads $0. We add cost here — once per successful LLM call — directly on
+// sprout's state, independent of seed's always-zero cost counter, so the
+// seedState.TotalCost() reconciliation in syncSeedStateToSprout can't double
+// count. The cost itself is captured at decode time (api.UsageCost), with a
+// provider-agnostic field-name fallback (api.CostFromJSON) so providers that
+// report cost under differing property names are all covered.
+func (sp *sproutProvider) accumulateResponseCost(resp *core.ChatResponse) {
+	if sp.agent == nil || sp.agent.state == nil || resp == nil {
+		return
+	}
+	if cost := api.UsageCost(resp.Usage); cost > 0 {
+		sp.agent.state.AddCost(cost)
+	}
 }
 
 // doChatNonStream performs a non-streaming chat request.

@@ -490,23 +490,26 @@ func (w *deepInfraListModelsWrapper) ListModels(ctx context.Context) ([]ModelInf
 		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	// Use the same response structure as the DeepInfra provider
+	// Decode core fields with the typed struct, and the same entries as raw
+	// maps so pricing can be probed across differing property names/units
+	// (ModelPricingPerMillion). DeepInfra's OpenAI-compatible endpoint and its
+	// native listing disagree on where/how pricing is reported.
 	var response struct {
 		Data []struct {
 			ID            string `json:"id"`
 			Name          string `json:"name"`
 			Description   string `json:"description"`
 			ContextLength int    `json:"context_length"`
-			Pricing       *struct {
-				Prompt     string `json:"prompt"`
-				Completion string `json:"completion"`
-			} `json:"pricing"`
 		} `json:"data"`
 	}
-
 	if err := json.Unmarshal(body, &response); err != nil {
 		return nil, fmt.Errorf("failed to decode DeepInfra models: %w", err)
 	}
+
+	var rawList struct {
+		Data []map[string]any `json:"data"`
+	}
+	_ = json.Unmarshal(body, &rawList)
 
 	// Convert to ModelInfo format with full details
 	models := make([]ModelInfo, len(response.Data))
@@ -524,18 +527,13 @@ func (w *deepInfraListModelsWrapper) ListModels(ctx context.Context) ([]ModelInf
 			modelInfo.ContextLength = model.ContextLength
 		}
 
-		// Parse pricing if available
-		if model.Pricing != nil {
-			if promptCost, err := strconv.ParseFloat(model.Pricing.Prompt, 64); err == nil {
-				// DeepInfra pricing is per token, convert to per million tokens
-				modelInfo.InputCost = promptCost * 1000000
-			}
-			if completionCost, err := strconv.ParseFloat(model.Pricing.Completion, 64); err == nil {
-				// DeepInfra pricing is per token, convert to per million tokens
-				modelInfo.OutputCost = completionCost * 1000000
-			}
-			if modelInfo.InputCost > 0 || modelInfo.OutputCost > 0 {
-				modelInfo.Cost = (modelInfo.InputCost + modelInfo.OutputCost) / 2.0
+		// Flexible pricing: probe candidate field names/units on the raw entry.
+		if i < len(rawList.Data) {
+			inputCost, outputCost := ModelPricingPerMillion(rawList.Data[i])
+			modelInfo.InputCost = inputCost
+			modelInfo.OutputCost = outputCost
+			if inputCost > 0 || outputCost > 0 {
+				modelInfo.Cost = (inputCost + outputCost) / 2.0
 			}
 		}
 

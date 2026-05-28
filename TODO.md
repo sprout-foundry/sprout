@@ -150,6 +150,7 @@
 - [x] SP-008-B3-migrateRemaining: Migrate all remaining `fmt.Printf` calls in `pkg/agent/` to structured logger
 - [x] SP-008-B4-retryLogic: Create `pkg/agent/retry.go` — `handleToolError()` with typed error classification
 - [x] SP-008-B4-apiTypedErrors: Replace string matching in `ErrorHandler.HandleAPIFailure()` with typed errors
+- [ ] SP-008-C1-testEmbedDownloadTimeout: Embedding-dependent agent tests (`TestRetrieveProactiveContext_*`, `TestEmbedAndStoreTurn_*`) hang the entire `pkg/agent` suite when the ONNX model isn't cached or the network is degraded — `embedding.ModelDownloader.downloadFile` (`pkg/embedding/model_downloader.go:165`) blocks on an `net/http` body read with no timeout. Add a context/HTTP timeout to the downloader and `-short`/offline skips on these tests so the suite can never hang indefinitely.
 
 ## Not Started — SP-011: Terminal Parity
 

@@ -204,3 +204,133 @@ describe('SPROUT_AUTH_TOKEN integration', () => {
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// Unix socket proxy (SP-060-B2)
+// ---------------------------------------------------------------------------
+
+describe('Unix socket proxy (SP-060-B2)', () => {
+  const source = fs.readFileSync(path.join(__dirname, 'backend.js'), 'utf8');
+
+  test('macOS/Linux native spawn args include --bind-socket', () => {
+    assert.ok(
+      source.includes('--bind-socket'),
+      'expected --bind-socket in the macOS/Linux native spawn args',
+    );
+  });
+
+  test('macOS/Linux native spawn args include --secret', () => {
+    assert.ok(
+      source.includes('--secret'),
+      'expected --secret in the macOS/Linux native spawn args',
+    );
+  });
+
+  test('generateSocketPath uses os.tmpdir()', () => {
+    assert.ok(
+      source.includes('os.tmpdir()'),
+      'expected os.tmpdir() in generateSocketPath',
+    );
+  });
+
+  test('generateSocketPath is exported', () => {
+    const { backend, cleanup } = loadFreshBackend();
+    try {
+      assert.strictEqual(
+        typeof backend.generateSocketPath,
+        'function',
+        'generateSocketPath should be exported as a function',
+      );
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('createSocketProxy is exported', () => {
+    const { backend, cleanup } = loadFreshBackend();
+    try {
+      assert.strictEqual(
+        typeof backend.createSocketProxy,
+        'function',
+        'createSocketProxy should be exported as a function',
+      );
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('waitForHealthOnSocket is exported', () => {
+    const { backend, cleanup } = loadFreshBackend();
+    try {
+      assert.strictEqual(
+        typeof backend.waitForHealthOnSocket,
+        'function',
+        'waitForHealthOnSocket should be exported as a function',
+      );
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('closeSocketProxy is exported', () => {
+    const { backend, cleanup } = loadFreshBackend();
+    try {
+      assert.strictEqual(
+        typeof backend.closeSocketProxy,
+        'function',
+        'closeSocketProxy should be exported as a function',
+      );
+    } finally {
+      cleanup();
+    }
+  });
+
+  test('os module is imported', () => {
+    assert.ok(
+      /require\(['"]node:os['"]\)/.test(source),
+      'expected require("node:os") for os.tmpdir()',
+    );
+  });
+
+  test('macOS/Linux native spawn env does NOT include SPROUT_AUTH_TOKEN', () => {
+    // The macOS/Linux native block (between its section header comment and
+    // the Windows native section header) should NOT contain SPROUT_AUTH_TOKEN.
+    // We pass the secret via --secret flag instead of an env variable.
+    // Find the macOS/Linux marker *inside* startBackendForWorkspace, not the
+    // section header above the helper functions.
+    const funcStart = source.indexOf('startBackendForWorkspace');
+    const startIdx = source.indexOf('macOS / Linux native', funcStart);
+    const endIdx = source.indexOf('Windows native', startIdx);
+    assert.ok(startIdx >= 0, 'expected macOS/Linux native section marker inside startBackendForWorkspace');
+    assert.ok(endIdx > startIdx, 'expected Windows native section after macOS/Linux');
+
+    const nativeBlock = source.slice(startIdx, endIdx);
+    assert.ok(
+      !nativeBlock.includes('SPROUT_AUTH_TOKEN'),
+      'expected macOS/Linux native spawn env to NOT include SPROUT_AUTH_TOKEN ' +
+        '(secret is passed via --secret flag, not an env var)',
+    );
+  });
+
+  test('createSocketProxy handles WebSocket upgrade', () => {
+    assert.ok(
+      source.includes("'upgrade'") || source.includes('"upgrade"'),
+      'expected createSocketProxy to have an upgrade event handler for WebSocket forwarding',
+    );
+  });
+
+  test('createSocketProxy injects Authorization header', () => {
+    assert.ok(
+      source.includes("Authorization: `Bearer ${token}`"),
+      'expected Authorization: Bearer header injection in the socket proxy',
+    );
+  });
+
+  test('Windows native spawn still uses --web-port', () => {
+    // The Windows native branch should still use --web-port (TCP mode).
+    assert.ok(
+      source.includes('--web-port'),
+      'expected --web-port in the Windows native spawn args',
+    );
+  });
+});

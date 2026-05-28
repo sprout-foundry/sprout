@@ -8,7 +8,7 @@ import { createRoot } from 'react-dom/client';
 // ---------------------------------------------------------------------------
 
 vi.mock('./TodoPanel', () => ({ default: (props) => props.children }));
-vi.mock('./RevisionListPanel', () => ({ default: (props) => props.children }));
+vi.mock('./AgentChangesPanel', () => ({ default: () => null }));
 vi.mock('../services/api', () => ({
   // No longer used by ContextPanel — kept for any transitive imports
 }));
@@ -55,10 +55,8 @@ const MINIMAL_CHAT_PROPS = {
   isProcessing: false,
   lastError: null,
   queryProgress: null,
-  onLoadRevisionHistory: vi.fn().mockResolvedValue({ revisions: [] }),
   onLoadSessions: vi.fn().mockResolvedValue({ sessions: [], current_session_id: '' }),
   onRestoreSession: vi.fn().mockResolvedValue({ messages: [] }),
-  onLoadRevisionDetails: vi.fn().mockResolvedValue({ revision: { files: [] } }),
 };
 
 function makeChatProps(overrides: Record<string, unknown> = {}) {

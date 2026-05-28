@@ -145,11 +145,8 @@ export interface ChatContextPanelProps extends ContextPanelBaseProps {
     query_count?: number;
   };
   onHandleToolPillClick?: (toolId: string) => void;
-  onOpenRevisionDiff?: (options: { path: string; diff: string; title: string }) => void;
-  onLoadRevisionHistory: () => Promise<{ revisions: Revision[] }>;
   onLoadSessions: () => Promise<{ sessions: SessionEntry[]; current_session_id: string }>;
   onRestoreSession: (sessionId: string) => Promise<{ messages: unknown[] }>;
-  onLoadRevisionDetails: (revisionId: string) => Promise<{ revision?: { files: RevisionDetailFile[] } }>;
 }
 
 export type ContextPanelProps = ChatContextPanelProps;
@@ -178,5 +175,7 @@ export interface PanelTab {
   id: ChatTabId;
   label: string;
   icon: ReactNode;
-  count: string;
+  /** Optional badge text (e.g. "3 active"). Omitted for self-counting
+   *  tabs like Agent Changes that manage their own header. */
+  count?: string;
 }

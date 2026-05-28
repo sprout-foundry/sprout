@@ -24,7 +24,7 @@ func TestFileOps_AllowlistCoversCreateDeleteRename(t *testing.T) {
 	workspaceRoot := t.TempDir()
 	externalDir := t.TempDir()
 
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +101,7 @@ func TestListDirectory_AllowlistCovers(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

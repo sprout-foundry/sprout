@@ -13,7 +13,7 @@ import (
 )
 
 func TestHandleAPIHotkeys_GET(t *testing.T) {
-	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +42,7 @@ func TestHandleAPIHotkeys_GET(t *testing.T) {
 
 func TestHandleAPIHotkeys_PUT_Valid(t *testing.T) {
 	t.Setenv("SPROUT_CONFIG", t.TempDir())
-	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func TestHandleAPIHotkeys_PUT_Valid(t *testing.T) {
 }
 
 func TestHandleAPIHotkeys_PUT_InvalidConfig(t *testing.T) {
-	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +98,7 @@ func TestHandleAPIHotkeys_PUT_InvalidConfig(t *testing.T) {
 }
 
 func TestHandleAPIHotkeys_PUT_InvalidJSON(t *testing.T) {
-	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +114,7 @@ func TestHandleAPIHotkeys_PUT_InvalidJSON(t *testing.T) {
 }
 
 func TestHandleAPIHotkeys_MethodNotAllowed(t *testing.T) {
-	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +130,7 @@ func TestHandleAPIHotkeys_MethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIHotkeysValidate(t *testing.T) {
-	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +206,7 @@ func TestHandleAPIHotkeysValidate(t *testing.T) {
 
 func TestHandleAPIHotkeysPreset(t *testing.T) {
 	t.Setenv("SPROUT_CONFIG", t.TempDir())
-	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

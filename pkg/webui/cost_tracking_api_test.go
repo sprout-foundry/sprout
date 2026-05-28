@@ -50,7 +50,7 @@ func TestHandleCostsSummary(t *testing.T) {
 		{Timestamp: time.Now(), Provider: "anthropic", Model: "claude", Cost: 0.10},
 	})
 	setCostStoreForTest(t, cs)
-	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func TestHandleCostsHistory(t *testing.T) {
 		{Timestamp: now.AddDate(0, 0, -31), Provider: "openai", Model: "gpt-4", Cost: 0.99},
 	})
 	setCostStoreForTest(t, cs)
-	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -176,7 +176,7 @@ func TestHandleCostsDetail(t *testing.T) {
 		{Timestamp: now.AddDate(0, 0, -1), Provider: "anthropic", Model: "claude", Cost: 0.10},
 	})
 	setCostStoreForTest(t, cs)
-	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

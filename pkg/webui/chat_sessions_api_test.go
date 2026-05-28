@@ -34,7 +34,7 @@ func TestHandleAPIChatSessionsCreateMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsCreateInvalidJSON(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +48,7 @@ func TestHandleAPIChatSessionsCreateInvalidJSON(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsCreateSuccess(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +62,7 @@ func TestHandleAPIChatSessionsCreateSuccess(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsCreateEmptyName(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +87,7 @@ func TestHandleAPIChatSessionsDeleteMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsDeleteMissingID(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +101,7 @@ func TestHandleAPIChatSessionsDeleteMissingID(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsDeleteDefaultSession(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +119,7 @@ func TestHandleAPIChatSessionsDeleteDefaultSession(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsDeleteNotFound(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +133,7 @@ func TestHandleAPIChatSessionsDeleteNotFound(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsDeleteInvalidJSON(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +158,7 @@ func TestHandleAPIChatSessionsRenameMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsRenameMissingID(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,7 +172,7 @@ func TestHandleAPIChatSessionsRenameMissingID(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsRenameMissingName(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,7 +186,7 @@ func TestHandleAPIChatSessionsRenameMissingName(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsRenameNotFound(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,7 +200,7 @@ func TestHandleAPIChatSessionsRenameNotFound(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsRenameInvalidJSON(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -225,7 +225,7 @@ func TestHandleAPIChatSessionsPinMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsPinMissingID(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -239,7 +239,7 @@ func TestHandleAPIChatSessionsPinMissingID(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsPinNotFound(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -254,7 +254,7 @@ func TestHandleAPIChatSessionsPinNotFound(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsPinInvalidJSON(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -268,7 +268,7 @@ func TestHandleAPIChatSessionsPinInvalidJSON(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsPinSuccess(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -295,7 +295,7 @@ func TestHandleAPIChatSessionsUnpinMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsUnpinMissingID(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -309,7 +309,7 @@ func TestHandleAPIChatSessionsUnpinMissingID(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsUnpinInvalidJSON(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -323,7 +323,7 @@ func TestHandleAPIChatSessionsUnpinInvalidJSON(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsUnpinSuccess(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -350,7 +350,7 @@ func TestHandleAPIChatSessionsSwitchMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsSwitchMissingID(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -364,7 +364,7 @@ func TestHandleAPIChatSessionsSwitchMissingID(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsSwitchNotFound(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -379,7 +379,7 @@ func TestHandleAPIChatSessionsSwitchNotFound(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsSwitchInvalidJSON(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -404,7 +404,7 @@ func TestHandleAPIChatSessionsCompactMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsCompactInvalidJSON(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -429,7 +429,7 @@ func TestHandleAPIChatSessionClearHistoryMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionClearHistoryInvalidJSON(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -454,7 +454,7 @@ func TestHandleAPIChatSessionsDeleteAllMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionsDeleteAllSuccess(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -469,7 +469,7 @@ func TestHandleAPIChatSessionsDeleteAllSuccess(t *testing.T) {
 }
 
 func TestResolveChatID(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -16,7 +16,7 @@ import (
 // security_approval_request events without a client_id are forwarded
 // to all connections (global event type).
 func TestShouldForwardSecurityApprovalEvent_Global(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +41,7 @@ func TestShouldForwardSecurityApprovalEvent_Global(t *testing.T) {
 // security_approval_request events with a matching client_id are forwarded
 // only to the matching connection.
 func TestShouldForwardSecurityApprovalEvent_Targeted(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,7 +71,7 @@ func TestShouldForwardSecurityApprovalEvent_Targeted(t *testing.T) {
 // TestShouldForwardSecurityPromptEvent_Global verifies that
 // security_prompt_request events are forwarded as global events.
 func TestShouldForwardSecurityPromptEvent_Global(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +101,7 @@ func TestShouldForwardSecurityPromptEvent_Global(t *testing.T) {
 // the websocket layer.
 func TestSecurityApprovalEvent_DeliveredViaEventBus(t *testing.T) {
 	eb := events.NewEventBus()
-	ws, err := NewReactWebServer(nil, eb, 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, eb, 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 		}
@@ -142,7 +142,7 @@ func TestSecurityApprovalEvent_DeliveredViaEventBus(t *testing.T) {
 // security_prompt_request events flow through the event bus.
 func TestSecurityPromptEvent_DeliveredViaEventBus(t *testing.T) {
 	eb := events.NewEventBus()
-	ws, err := NewReactWebServer(nil, eb, 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, eb, 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 		}
@@ -184,7 +184,7 @@ func TestSecurityPromptEvent_DeliveredViaEventBus(t *testing.T) {
 //  3. Event data fields are preserved for the WebUI dialog
 func TestSecurityApprovalRoundTrip(t *testing.T) {
 	eb := events.NewEventBus()
-	ws, err := NewReactWebServer(nil, eb, 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, eb, 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 		}
@@ -317,7 +317,7 @@ func TestSecurityApprovalEventWithTarget(t *testing.T) {
 // for approval, the event will be silently dropped, and the request will
 // time out (denying the operation) without the user ever seeing why.
 func TestSecurityEventsInGlobalAllowlist(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -351,7 +351,7 @@ func TestSecurityEventsInGlobalAllowlist(t *testing.T) {
 // TestSecurityEventsNotForwardedToWrongClient verifies targeted security
 // events are NOT leaked to unrelated clients.
 func TestSecurityEventsNotForwardedToWrongClient(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

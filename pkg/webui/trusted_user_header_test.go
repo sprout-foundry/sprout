@@ -59,7 +59,7 @@ func TestTrustedUserHeaderParsing(t *testing.T) {
 			eventBus := events.NewEventBus()
 
 			// Create the server which should parse the trusted user header
-			server, err := NewReactWebServer(nil, eventBus, 0, "127.0.0.1")
+			server, err := NewReactWebServer(nil, eventBus, 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 		}
@@ -175,7 +175,7 @@ func TestExtractUserID(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			eventBus := events.NewEventBus()
-			server, err := NewReactWebServer(nil, eventBus, 0, "127.0.0.1")
+			server, err := NewReactWebServer(nil, eventBus, 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 		}
@@ -204,7 +204,7 @@ func TestExtractUserID(t *testing.T) {
 // TestUserIDContextFunctions verifies the context functions work correctly.
 func TestUserIDContextFunctions(t *testing.T) {
 	eventBus := events.NewEventBus()
-	server, err := NewReactWebServer(nil, eventBus, 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, eventBus, 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 		}
@@ -246,7 +246,7 @@ func TestUserIDContextFunctions(t *testing.T) {
 // correctly extracts the user ID from the request context and stores it on the client context.
 func TestGetClientContextForRequestPopulatesUserID(t *testing.T) {
 	eventBus := events.NewEventBus()
-	server, err := NewReactWebServer(nil, eventBus, 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, eventBus, 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 		}

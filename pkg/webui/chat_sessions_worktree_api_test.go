@@ -48,7 +48,7 @@ func TestHandleAPIChatSessionWorktreeGetMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionWorktreeGetInvalidRoute(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +62,7 @@ func TestHandleAPIChatSessionWorktreeGetInvalidRoute(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionWorktreeGetSuccess(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func TestHandleAPIChatSessionWorktreeSetMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionWorktreeSetInvalidJSON(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func TestHandleAPIChatSessionWorktreeSetInvalidJSON(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionWorktreeSetInvalidRoute(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +116,7 @@ func TestHandleAPIChatSessionWorktreeSetInvalidRoute(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionWorktreeSetSuccess(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +142,7 @@ func TestHandleAPIChatSessionWorktreeSwitchMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionWorktreeSwitchMissingPath(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +156,7 @@ func TestHandleAPIChatSessionWorktreeSwitchMissingPath(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionWorktreeSwitchInvalidJSON(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +170,7 @@ func TestHandleAPIChatSessionWorktreeSwitchInvalidJSON(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionWorktreeSwitchInvalidRoute(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,7 +195,7 @@ func TestHandleAPIChatSessionWorktreeDispatcherMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionWorktreeDispatcherInvalidRoute(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,7 +220,7 @@ func TestHandleAPIChatSessionWorktreeListMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionWorktreeListSuccess(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -246,7 +246,7 @@ func TestHandleAPIChatSessionCreateInWorktreeMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionCreateInWorktreeMissingBranch(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -260,7 +260,7 @@ func TestHandleAPIChatSessionCreateInWorktreeMissingBranch(t *testing.T) {
 }
 
 func TestHandleAPIChatSessionCreateInWorktreeInvalidJSON(t *testing.T) {
-	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

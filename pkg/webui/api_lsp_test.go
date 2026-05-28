@@ -16,7 +16,7 @@ import (
 )
 
 func TestHandleLSPStatus(t *testing.T) {
-	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1")
+	server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	require.NoError(t, err)
 	server.lspManager = lspproxy.NewManager(context.Background())
 

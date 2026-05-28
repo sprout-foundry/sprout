@@ -557,8 +557,8 @@ func TestAllToolsRegistration(t *testing.T) {
 	if tools == nil {
 		t.Fatal("AllTools() returned nil")
 	}
-	if len(tools) != 37 {
-		t.Fatalf("AllTools() returned %d tools, want 37", len(tools))
+	if len(tools) != 35 {
+		t.Fatalf("AllTools() returned %d tools, want 35", len(tools))
 	}
 
 	expectedNames := map[string]string{
@@ -579,8 +579,6 @@ func TestAllToolsRegistration(t *testing.T) {
 		"shell_command":           "shell_command",
 		"save_memory":             "save_memory",
 		"search_memories":         "search_memories",
-		"run_subagent":            "run_subagent",
-		"run_parallel_subagents":  "run_parallel_subagents",
 		"task_queue_add":          "task_queue_add",
 		"task_queue_publish":      "task_queue_publish",
 		"task_queue_read":         "task_queue_read",
@@ -700,14 +698,6 @@ func TestAllToolsRegistration(t *testing.T) {
 		case "search_memories":
 			if len(def.Required) != 1 || def.Required[0] != "query" {
 				t.Errorf("search_memories Required = %v, want [\"query\"]", def.Required)
-			}
-		case "run_subagent":
-			if len(def.Required) != 2 || def.Required[0] != "prompt" || def.Required[1] != "persona" {
-				t.Errorf("run_subagent Required = %v, want [\"prompt\" \"persona\"]", def.Required)
-			}
-		case "run_parallel_subagents":
-			if len(def.Required) != 1 || def.Required[0] != "subagents" {
-				t.Errorf("run_parallel_subagents Required = %v, want [\"subagents\"]", def.Required)
 			}
 		case "task_queue_add":
 			if len(def.Required) != 1 || def.Required[0] != "title" {

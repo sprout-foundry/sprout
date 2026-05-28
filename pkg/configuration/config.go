@@ -1055,6 +1055,54 @@ type ChangeTrackingConfig struct {
 	// AutoSkipFileCountThreshold is the per-directory immediate child
 	// file count that triggers adaptive auto-skip. Default: 1500.
 	AutoSkipFileCountThreshold int `json:"auto_skip_file_count_threshold,omitempty"`
+
+	// RevisionRetention controls how the persistent revision store
+	// (.sprout/revisions/ + .sprout/changes/) is compacted. Quantity-
+	// based tiering: most recent N revisions are kept verbatim, next M
+	// drop the conversation transcript, next K collapse to a one-line
+	// summary, the rest are dropped. Position is by directory mtime,
+	// so accessing an old revision via view_history / recover_file
+	// promotes it back toward "hot" automatically.
+	RevisionRetention *RevisionRetentionConfig `json:"revision_retention,omitempty"`
+}
+
+// RevisionRetentionConfig controls the quantity-based compaction of
+// the persistent revision history. Two retained tiers plus a drop
+// threshold:
+//
+//   - hot:   the most recent N revisions kept verbatim
+//   - warm:  the next M revisions with conversation.json dropped
+//   - drop:  anything older is removed entirely
+//
+// The ChangeTracker is a short-horizon stop-gap (recover from a bad
+// sed -i, undo a hasty rm), not a long-term audit log — that's what
+// git is for. Once a revision falls out of warm, the user has either
+// committed the work or wasn't going to recover it anyway, and the
+// disk space is better spent on hot data.
+//
+// See AGENTS.md "Change Tracking" for context.
+type RevisionRetentionConfig struct {
+	// HotCount: most recent N revisions kept verbatim (full
+	// conversation.json + instructions + llm_response + all change
+	// payloads). Fast view_history + full recovery. Default: 200.
+	HotCount int `json:"hot_count,omitempty"`
+
+	// WarmCount: next M revisions after the hot tier. conversation.json
+	// dropped; instructions + response + change payloads kept. Recovery
+	// still works; conversation context lost. Default: 500.
+	WarmCount int `json:"warm_count,omitempty"`
+
+	// MaxDirBytes is the long-stop cap on total revisions+changes
+	// disk usage per workspace. If the count-based tiering still
+	// leaves the directory over this size, trim oldest warm entries
+	// until under cap. Default: 1 GiB (1073741824).
+	MaxDirBytes int64 `json:"max_dir_bytes,omitempty"`
+
+	// ArchiveFrozen: if true, dropped revisions are moved to
+	// .sprout/revisions/_frozen/ instead of being deleted outright.
+	// Opt-in safety net for users who want a recoverable record of
+	// long-tail history at the cost of unbounded growth. Default: false.
+	ArchiveFrozen bool `json:"archive_frozen,omitempty"`
 }
 
 // Resolve fills in defaults for any zero-value fields and returns a
@@ -1087,6 +1135,35 @@ func (c *ChangeTrackingConfig) Resolve() ChangeTrackingConfig {
 	if c.AutoSkipFileCountThreshold > 0 {
 		result.AutoSkipFileCountThreshold = c.AutoSkipFileCountThreshold
 	}
+	if c.RevisionRetention != nil {
+		resolved := c.RevisionRetention.Resolve()
+		result.RevisionRetention = &resolved
+	}
+	return result
+}
+
+// Resolve fills in defaults for any zero-value fields and returns a
+// fully-populated retention config. Safe to call on nil — yields
+// all-defaults.
+func (c *RevisionRetentionConfig) Resolve() RevisionRetentionConfig {
+	result := RevisionRetentionConfig{
+		HotCount:    200,
+		WarmCount:   500,
+		MaxDirBytes: 1024 * 1024 * 1024, // 1 GiB
+	}
+	if c == nil {
+		return result
+	}
+	if c.HotCount > 0 {
+		result.HotCount = c.HotCount
+	}
+	if c.WarmCount > 0 {
+		result.WarmCount = c.WarmCount
+	}
+	if c.MaxDirBytes > 0 {
+		result.MaxDirBytes = c.MaxDirBytes
+	}
+	result.ArchiveFrozen = c.ArchiveFrozen
 	return result
 }
 

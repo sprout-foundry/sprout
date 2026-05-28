@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/history"
 )
 
 // EnableChangeTracking enables change tracking for this agent session.
@@ -42,6 +43,47 @@ func (a *Agent) EnableChangeTracking(instructions string) {
 
 	if root := a.effectiveCwd(); root != "" {
 		a.changeTracker.PrimeShellTracking(root)
+	}
+
+	// One-shot revision-history compaction. Runs in the background so
+	// the agent's startup isn't blocked by I/O over a large
+	// .sprout/revisions/ tree. Idempotent — only the FIRST agent in
+	// the process actually does the work (compactionMu serializes;
+	// subsequent calls find revisions already in their target tier and
+	// no-op cheaply). Errors are logged and swallowed; a failed pass
+	// just means disk usage stays where it was.
+	go a.compactRevisionHistoryAsync()
+}
+
+// compactRevisionHistoryAsync runs one pass of pkg/history.CompactRevisions
+// using the policy resolved from configuration. Designed to be called
+// in a goroutine — never blocks the caller.
+func (a *Agent) compactRevisionHistoryAsync() {
+	var raw *configuration.RevisionRetentionConfig
+	if a.configManager != nil {
+		cfg := a.configManager.GetConfig()
+		if cfg != nil && cfg.ChangeTracking != nil {
+			raw = cfg.ChangeTracking.RevisionRetention
+		}
+	}
+	resolved := raw.Resolve()
+
+	policy := history.RetentionPolicy{
+		HotCount:      resolved.HotCount,
+		WarmCount:     resolved.WarmCount,
+		MaxDirBytes:   resolved.MaxDirBytes,
+		ArchiveFrozen: resolved.ArchiveFrozen,
+	}
+	stats, err := history.CompactRevisions(policy)
+	if err != nil {
+		a.Logger().Debug("revision compaction failed: %v\n", err)
+		return
+	}
+	if stats.WarmDemoted+stats.Dropped+stats.HardCapTrimmed > 0 {
+		a.Logger().Info("revision compaction: %d total / %d hot / %d→warm / %d dropped / %d trimmed / %.2f MiB reclaimed",
+			stats.TotalRevisions, stats.HotKept, stats.WarmDemoted,
+			stats.Dropped, stats.HardCapTrimmed,
+			float64(stats.BytesReclaimed)/(1024*1024))
 	}
 }
 

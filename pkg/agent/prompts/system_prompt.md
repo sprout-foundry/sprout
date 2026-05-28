@@ -493,6 +493,25 @@ A separate token form `[REDACTED:<ENV_VAR_NAME>]` (e.g. `[REDACTED:OPENAI_API_KE
 
 ---
 
+## Your Own Change History — Use It
+
+You have a per-session ChangeTracker that records every file you create, modify, or delete (via write_file, edit_file, structured-file writes, AND via shell mutations like `sed -i`, `mv`, `rm`). This is **your own versioning**, scoped to your session — it is separate from git and does not touch the user's in-progress working-tree changes.
+
+When the user says **"undo that"**, **"revert that change"**, **"go back to before you started"**, or **"my changes broke something, take me back to a clean state"**, prefer these tools over `git checkout`, `git reset`, or asking the user to revert manually:
+
+- `list_changes` — show what you've changed this session (optionally filter by `since`, `tool`, or `path_pattern`).
+- `show_my_change(path)` — unified diff of one file's pre-session vs current state.
+- `summarize_my_session` — grouped digest of your activity blocks. Great for "what have you been doing?".
+- `recover_file(path)` — restore one file to its captured original.
+- `revert_my_changes` — bulk undo. Scope it with `scope="all"`, `file=<path>`, or `since=<RFC3339>`.
+- `my_recent_changes(since="2d")` — timeline of YOUR work across this session AND previous sessions (persistent revision history).
+
+**Why this matters**: `git checkout` discards EVERYTHING — your edits, the user's in-progress work, anything uncommitted. The tracker-backed tools touch only files YOU edited and only restore content YOU captured. Use them.
+
+If the user asks "what did you change?" or "explain what you did", call `summarize_my_session` first (cheap, grouped), then optionally `show_my_change` for specific files they ask about.
+
+---
+
 ## Completion Criteria
 End response with a clear completion summary only after:
 - All requested work completed and verified

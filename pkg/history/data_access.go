@@ -68,6 +68,10 @@ type ChangeLog struct {
 	LLMMessage       string // Added: Full message sent to LLM
 	AgentModel       string // Added: Editing model used
 	HasConversation  bool   // Added: Whether conversation.json exists for this revision
+	// Tier reflects the revision's compaction state: "hot" (full data
+	// including conversation.json) or "warm" (conversation.json
+	// dropped). Empty string is treated as hot for backward compat.
+	Tier string
 }
 
 // InitializeHistoryPaths configures the history storage paths based on configuration
@@ -318,45 +322,34 @@ func fetchAllChanges() ([]ChangeLog, error) {
 		safeFilename := strings.ReplaceAll(metadata.Filename, "/", "_")
 		safeFilename = strings.ReplaceAll(safeFilename, "\\", "_")
 
-		originalBytes, err := filesystem.ReadFileBytes(filepath.Join(changeDir, safeFilename+originalSuffix))
-		if err != nil {
-			log.Printf("[history] skipping change %s: failed to read original code for %s: %v", entry.Name(), metadata.Filename, err)
+		// Tier detection: a revision dir is "warm" when conversation.json
+		// has been dropped (the compaction policy's only transition
+		// before outright drop). Surface the tier so view_history can
+		// label entries; payloads are always present for any revision
+		// that hasn't been dropped entirely.
+		revisionPath := filepath.Join(GetRevisionsDir(), metadata.RequestHash)
+		tier, instructions, response := loadRevisionTextForTier(revisionPath)
+
+		originalBytes, origErr := filesystem.ReadFileBytes(filepath.Join(changeDir, safeFilename+originalSuffix))
+		if origErr != nil {
+			log.Printf("[history] skipping change %s: failed to read original code for %s: %v", entry.Name(), metadata.Filename, origErr)
 			continue
 		}
-		// Decode base64 content
-		originalDecoded, err := base64.StdEncoding.DecodeString(string(originalBytes))
-		if err != nil {
-			// Fallback for existing non-encoded files
+		updatedBytes, updErr := filesystem.ReadFileBytes(filepath.Join(changeDir, safeFilename+updatedSuffix))
+		if updErr != nil {
+			log.Printf("[history] skipping change %s: failed to read updated code for %s: %v", entry.Name(), metadata.Filename, updErr)
+			continue
+		}
+		originalDecoded, decErr := base64.StdEncoding.DecodeString(string(originalBytes))
+		if decErr != nil {
 			originalDecoded = originalBytes
 		}
 		originalCode := string(originalDecoded)
-
-		updatedBytes, err := filesystem.ReadFileBytes(filepath.Join(changeDir, safeFilename+updatedSuffix))
-		if err != nil {
-			log.Printf("[history] skipping change %s: failed to read updated code for %s: %v", entry.Name(), metadata.Filename, err)
-			continue
-		}
-		// Decode base64 content
-		updatedDecoded, err := base64.StdEncoding.DecodeString(string(updatedBytes))
-		if err != nil {
-			// Fallback for existing non-encoded files
+		updatedDecoded, decErr := base64.StdEncoding.DecodeString(string(updatedBytes))
+		if decErr != nil {
 			updatedDecoded = updatedBytes
 		}
 		newCode := string(updatedDecoded)
-
-		// Fetch instructions and response from revisions directory
-		revisionPath := filepath.Join(GetRevisionsDir(), metadata.RequestHash)
-		instructionsBytes, err := filesystem.ReadFileBytes(filepath.Join(revisionPath, "instructions.txt"))
-		var instructions string
-		if err == nil {
-			instructions = string(instructionsBytes)
-		}
-
-		responseBytes, err := filesystem.ReadFileBytes(filepath.Join(revisionPath, "llm_response.txt"))
-		var response string
-		if err == nil {
-			response = string(responseBytes)
-		}
 
 		changes = append(changes, ChangeLog{
 			RequestHash:      metadata.RequestHash,
@@ -373,7 +366,8 @@ func fetchAllChanges() ([]ChangeLog, error) {
 			OriginalPrompt:   metadata.OriginalPrompt,
 			LLMMessage:       metadata.LLMMessage,
 			AgentModel:       metadata.AgentModel,
-			HasConversation:  fileExists(filepath.Join(revisionPath, "conversation.json")), // Track if conversation exists
+			HasConversation:  fileExists(filepath.Join(revisionPath, "conversation.json")),
+			Tier:             tier,
 		})
 	}
 
@@ -424,6 +418,27 @@ func GetChangedFilesSince(since time.Time) ([]string, error) {
 }
 
 // fileExists checks if a file exists without following symlinks
+// loadRevisionTextForTier inspects a revision directory and returns
+// (tier, instructions, response) based on what compaction has done.
+//
+//   - hot: all files present (conversation.json + instructions + response)
+//   - warm: conversation.json missing, the other two present
+//   - "": revision dir exists but has neither — treat as missing
+func loadRevisionTextForTier(revisionPath string) (tier, instructions, response string) {
+	instructionsBytes, err := filesystem.ReadFileBytes(filepath.Join(revisionPath, "instructions.txt"))
+	if err != nil {
+		return "", "", ""
+	}
+	instructions = string(instructionsBytes)
+	if responseBytes, err := filesystem.ReadFileBytes(filepath.Join(revisionPath, "llm_response.txt")); err == nil {
+		response = string(responseBytes)
+	}
+	if fileExists(filepath.Join(revisionPath, "conversation.json")) {
+		return "hot", instructions, response
+	}
+	return "warm", instructions, response
+}
+
 func fileExists(path string) bool {
 	info, err := os.Stat(path)
 	if err != nil {

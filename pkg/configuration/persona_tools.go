@@ -36,11 +36,15 @@ func getKnownPersonaToolNames() map[string]struct{} {
 		known["task_queue_add"] = struct{}{}
 		// ChangeTracker-facing tools (registered in tool_registrations.go).
 		// Without these here, any persona with an explicit allowlist
-		// would have list_changes / recover_file silently stripped as
-		// "unknown" — the change-tracking improvements would be
-		// invisible to allowlisted personas.
+		// would have these silently stripped as "unknown" and the
+		// change-tracking surface would be invisible to allowlisted
+		// personas.
 		known["list_changes"] = struct{}{}
 		known["recover_file"] = struct{}{}
+		known["show_my_change"] = struct{}{}
+		known["revert_my_changes"] = struct{}{}
+		known["summarize_my_session"] = struct{}{}
+		known["my_recent_changes"] = struct{}{}
 
 		personaToolNames = known
 	})

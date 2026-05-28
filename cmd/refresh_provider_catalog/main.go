@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/modelcontract"
 	"github.com/sprout-foundry/sprout/pkg/providercatalog"
 )
 
@@ -45,13 +47,20 @@ func main() {
 			continue
 		}
 
-		models, err := api.GetModelsForProvider(clientType)
+		canon, err := api.GetCanonicalModelsForProvider(context.Background(), clientType)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "keep existing catalog models for %s: %v\n", providerID, err)
 			continue
 		}
-		if len(models) == 0 {
+		if len(canon) == 0 {
 			continue
+		}
+
+		// Project to ModelInfo for the baked providers.json catalog; the full
+		// canonical models are published to the per-provider registry file.
+		models := make([]api.ModelInfo, len(canon))
+		for i := range canon {
+			models[i] = api.CanonicalToModelInfo(canon[i])
 		}
 
 		provider := providerIndex[providerID]
@@ -66,9 +75,9 @@ func main() {
 		providerIndex[providerID] = provider
 		fmt.Fprintf(os.Stdout, "updated %s with %d models\n", providerID, len(provider.Models))
 
-		// Write per-provider JSON for the registry server.
+		// Write per-provider canonical JSON for the registry server.
 		if *registryDir != "" {
-			writeProviderJSON(*registryDir, providerID, now, models)
+			writeProviderJSON(*registryDir, providerID, now, canon)
 		}
 	}
 
@@ -98,27 +107,20 @@ func main() {
 	}
 }
 
-// providerRegistryFile is the JSON schema for a per-provider model file served
-// by the registry. Uses api.ModelInfo rather than modelregistry.ModelInfo to
-// avoid a dependency on the modelregistry package (which would create an import
-// cycle through agent_api). Both types have identical JSON representations.
-type providerRegistryFile struct {
-	SchemaVersion int            `json:"schema_version"`
-	UpdatedAt     string         `json:"updated_at"`
-	Models        []api.ModelInfo `json:"models"`
-}
-
-// writeProviderJSON writes a per-provider model JSON file for the model registry server.
-func writeProviderJSON(registryDir, providerID, updatedAt string, models []api.ModelInfo) {
+// writeProviderJSON writes a per-provider canonical model file (schema 2) for
+// the model registry server. Older deployed clients that don't understand
+// schema 2 reject it and gracefully fall back to the live provider API.
+func writeProviderJSON(registryDir, providerID, updatedAt string, models []modelcontract.CanonicalModel) {
 	modelsDir := filepath.Join(registryDir, "models")
 	if err := os.MkdirAll(modelsDir, 0o755); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to create registry dir: %v\n", err)
 		return
 	}
 
-	payload := providerRegistryFile{
-		SchemaVersion: 1,
-		UpdatedAt:     updatedAt,
+	payload := modelcontract.ProviderFile{
+		SchemaVersion: modelcontract.SchemaVersion,
+		Provider:      providerID,
+		GeneratedAt:   updatedAt,
 		Models:        models,
 	}
 

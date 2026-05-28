@@ -376,17 +376,18 @@ func (w *ollamaLocalListModelsWrapper) ListModels(ctx context.Context) ([]ModelI
 type openRouterListModelsWrapper struct{}
 
 func (w *openRouterListModelsWrapper) ListModels(ctx context.Context) ([]ModelInfo, error) {
-	apiKey, err := credentials.ResolveProviderAPIKey("openrouter", "OpenRouter")
-	if err != nil {
-		return nil, err
-	}
+	// OpenRouter's model list is public — resolve the key best-effort and
+	// only attach it when present. Listing must not require a key.
+	apiKey, _ := credentials.ResolveProviderAPIKey("openrouter", "OpenRouter")
 
 	req, err := http.NewRequestWithContext(ctx, "GET", "https://openrouter.ai/api/v1/models", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	req.Header.Set("Authorization", "Bearer "+apiKey)
+	if apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+	}
 	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{Timeout: 30 * time.Second}
@@ -459,10 +460,9 @@ func (w *openRouterListModelsWrapper) ListModels(ctx context.Context) ([]ModelIn
 type deepInfraListModelsWrapper struct{}
 
 func (w *deepInfraListModelsWrapper) ListModels(ctx context.Context) ([]ModelInfo, error) {
-	apiKey, err := credentials.ResolveProviderAPIKey("deepinfra", "DeepInfra")
-	if err != nil {
-		return nil, err
-	}
+	// DeepInfra's OpenAI-compatible model list is public — resolve the key
+	// best-effort and only attach it when present. Listing must not require a key.
+	apiKey, _ := credentials.ResolveProviderAPIKey("deepinfra", "DeepInfra")
 
 	// Use the OpenAI-compatible endpoint like the DeepInfra provider does
 	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.deepinfra.com/v1/openai/models", nil)
@@ -470,7 +470,9 @@ func (w *deepInfraListModelsWrapper) ListModels(ctx context.Context) ([]ModelInf
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	req.Header.Set("Authorization", "Bearer "+apiKey)
+	if apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+	}
 	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{Timeout: 30 * time.Second}

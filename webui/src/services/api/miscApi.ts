@@ -6,10 +6,6 @@ import type {
   StatsResponse,
   ProviderOption,
   ProviderModelsResponse,
-  ChangelogResponse,
-  ChangesResponse,
-  RevisionDetailResponse,
-  RollbackResponse,
   DeepReviewResponse,
   DeepReviewFixResponse,
   DeepReviewFixStartResponse,
@@ -52,42 +48,6 @@ export async function getProviderModels(fetchFn: typeof fetch, provider: string)
     const text = await response.text();
     throw new Error(text || `Failed to fetch models: HTTP ${response.status}`);
   }
-  return response.json();
-}
-
-// ── Changelog / Revisions ──────────────────────────────────────────
-
-export async function getChangelog(fetchFn: typeof fetch): Promise<ChangelogResponse> {
-  const cacheBuster = Date.now();
-  const response = await fetchFn(`/api/history/changelog?_=${cacheBuster}`, { cache: 'no-store' });
-  if (!response.ok) throw new Error('Failed to fetch changelog');
-  return response.json();
-}
-
-export async function getChanges(fetchFn: typeof fetch): Promise<ChangesResponse> {
-  const cacheBuster = Date.now();
-  const response = await fetchFn(`/api/history/changes?_=${cacheBuster}`, { cache: 'no-store' });
-  if (!response.ok) throw new Error('Failed to fetch changes');
-  return response.json();
-}
-
-export async function getRevisionDetails(fetchFn: typeof fetch, revisionId: string): Promise<RevisionDetailResponse> {
-  const cacheBuster = Date.now();
-  const response = await fetchFn(
-    `/api/history/revision?revision_id=${encodeURIComponent(revisionId)}&_=${cacheBuster}`,
-    { cache: 'no-store' },
-  );
-  if (!response.ok) throw new Error('Failed to fetch revision details');
-  return response.json();
-}
-
-export async function rollbackToRevision(fetchFn: typeof fetch, revisionId: string): Promise<RollbackResponse> {
-  const response = await fetchFn('/api/history/rollback', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ revision_id: revisionId }),
-  });
-  if (!response.ok) throw new Error('Failed to rollback revision');
   return response.json();
 }
 

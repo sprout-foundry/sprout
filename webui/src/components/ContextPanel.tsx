@@ -16,11 +16,10 @@ import type {
 } from './contextPanel/types';
 import { PANEL_COLLAPSED_WIDTH } from './contextPanel/types';
 import { useContextPanelState } from './contextPanel/useContextPanelState';
-import { useRevisionManager } from './contextPanel/useRevisionManager';
 import { useSessionManager } from './contextPanel/useSessionManager';
 import { useStatusMetrics } from './contextPanel/useStatusMetrics';
 import { useSubagentRuns } from './contextPanel/useSubagentRuns';
-import RevisionListPanel from './RevisionListPanel';
+import AgentChangesPanel from './AgentChangesPanel';
 import TodoPanel from './TodoPanel';
 
 const TAB_IDS = ['subagents', 'tools', 'changes', 'tasks', 'status', 'sessions'] as const;
@@ -55,8 +54,9 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
   // Panel state (no external deps — avoids circular hook ordering)
   const state = useContextPanelState(props);
 
-  // Revision / session managers (depend on chatTab from state)
-  const revisionManager = useRevisionManager(chatProps, state.chatTab);
+  // Session manager (depends on chatTab from state). The "changes" tab
+  // is now self-contained in AgentChangesPanel — it loads its own data
+  // from /api/changes/* so there's no revision manager to thread here.
   const sessionManager = useSessionManager(chatProps, state.chatTab, chatProps?.isProcessing ?? false);
 
   const statusMetrics = useStatusMetrics(chatProps, toolExecutions, maxQueryId);
@@ -106,9 +106,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     state.setPanelCollapsed(false);
     const id = tabId as ChatTabId;
     state.setChatTab(id);
-    if (id === 'changes' && revisionManager.revisions.length === 0) {
-      revisionManager.loadRevisionHistory();
-    }
+    // 'changes' tab is self-loading (AgentChangesPanel fetches on mount).
     if (id === 'sessions' && sessionManager.sessionsCount === 0) {
       sessionManager.loadSessions();
     }
@@ -151,7 +149,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     ref,
     () => imperativeHandle,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [isChat, chatProps, revisionManager.revisions.length, sessionManager.sessionsCount],
+    [isChat, chatProps, sessionManager.sessionsCount],
   );
 
   // ── Computed counts for tabs ──────────────────────────────────────
@@ -161,8 +159,6 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
   const activeSubagentCount = subagentRuns.filter(
     ({ tool }) => tool.status === 'started' || tool.status === 'running',
   ).length;
-
-  const historyCounts = revisionManager.revisions.length;
 
   // ── Tab definitions ───────────────────────────────────────────────
 
@@ -182,9 +178,8 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
       },
       {
         id: 'changes',
-        label: 'Session Changes',
+        label: 'Agent Changes',
         icon: <History size={14} />,
-        count: `${historyCounts} revisions`,
       },
       {
         id: 'tasks',
@@ -205,7 +200,6 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
       subagentRuns.length,
       activeToolCount,
       toolExecutions.length,
-      historyCounts,
       currentTodos,
       sessionManager.sessionsCount,
       statusMetrics.totalMsgs,
@@ -249,17 +243,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
           />
         );
       case 'changes':
-        return (
-          <RevisionListPanel
-            mode="session"
-            onOpenDiff={
-              chatProps?.onOpenRevisionDiff ||
-              (() => {
-                /* noop */
-              })
-            }
-          />
-        );
+        return <AgentChangesPanel />;
       case 'tasks':
         return (
           <div className="side-panel-tasks">
@@ -279,12 +263,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
         );
       case 'status':
         return (
-          <StatusTab
-            chatProps={chatProps}
-            statusMetrics={statusMetrics}
-            liveDurationMs={liveDurationMs}
-            revisions={revisionManager.revisions}
-          />
+          <StatusTab chatProps={chatProps} statusMetrics={statusMetrics} liveDurationMs={liveDurationMs} />
         );
       default:
         return (

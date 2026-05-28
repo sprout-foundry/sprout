@@ -17,7 +17,7 @@ const {
   getRecentWorktrees,
 } = require('./state-manager');
 const { renderLoadingPage, renderErrorPage } = require('./error-pages');
-const { startBackendForWorkspace, registerExitHandler, generateSecret } = require('./backend');
+const { startBackendForWorkspace, registerExitHandler, generateSecret, closeSocketProxy } = require('./backend');
 const { startSSHBackendForHost } = require('./ssh');
 const { resolveWorkspaceDirectory, promptForWorkspace } = require('./workspace');
 
@@ -339,6 +339,11 @@ async function createWorkspaceWindow(options = {}) {
 
   const performReload = async () => {
     try {
+      // Close the old proxy server (macOS/Linux native) before restarting
+      const oldRecord = ctx.instanceRegistry.get(browserWindow.id);
+      if (oldRecord?.proxyServer) {
+        closeSocketProxy(oldRecord.proxyServer);
+      }
       const newBackend = await startBackendForWorkspace(workspaceEntry);
       crashCount = 0;
       ctx.instanceRegistry.set(browserWindow.id, { ...newBackend, ...workspaceEntry });
@@ -382,6 +387,10 @@ async function createWorkspaceWindow(options = {}) {
     }
     const record = ctx.instanceRegistry.get(browserWindow.id);
     if (record) {
+      // Close the proxy server (macOS/Linux native) before killing the child
+      if (record.proxyServer) {
+        closeSocketProxy(record.proxyServer);
+      }
       const child = record.child;
       child.kill();
       const killTimer = setTimeout(() => {

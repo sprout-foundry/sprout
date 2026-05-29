@@ -32,8 +32,8 @@ func (a *Agent) Shutdown() {
 	}
 
 	// Cancel interrupt context
-	if a.interruptCancel != nil {
-		a.interruptCancel()
+	if _, cancel := a.snapshotInterrupt(); cancel != nil {
+		cancel()
 	}
 
 	// Wait for background goroutines (memory migration, etc.) to finish
@@ -55,9 +55,12 @@ func (a *Agent) Shutdown() {
 	}
 
 	// Close embedding manager resources
-	if a.embeddingMgr != nil {
-		_ = a.embeddingMgr.Close()
-		a.embeddingMgr = nil
+	a.embeddingMu.Lock()
+	mgr := a.embeddingMgr
+	a.embeddingMgr = nil
+	a.embeddingMu.Unlock()
+	if mgr != nil {
+		_ = mgr.Close()
 	}
 }
 
@@ -71,5 +74,6 @@ func (a *Agent) SetInterruptHandler(ch chan struct{}) {
 // InterruptCtx returns the agent's interrupt context so child operations
 // (e.g., tool execution) can derive from it and respect user cancellations.
 func (a *Agent) InterruptCtx() context.Context {
-	return a.interruptCtx
+	ctx, _ := a.snapshotInterrupt()
+	return ctx
 }

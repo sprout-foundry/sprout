@@ -33,14 +33,20 @@ func (a *Agent) EnableEmbeddingIndex() error {
 		return fmt.Errorf("no workspace root available")
 	}
 
-	a.embeddingMgr = embedding.NewEmbeddingManager(ei, workspaceRoot)
-	go a.embeddingMgr.AutoBuildWhenReady()
+	mgr := embedding.NewEmbeddingManager(ei, workspaceRoot)
+	a.embeddingMu.Lock()
+	a.embeddingMgr = mgr
+	a.embeddingMu.Unlock()
+	go mgr.AutoBuildWhenReady()
 
-	// Run one-time memory migration: embed all existing memories into conversation store
+	// Snapshot the interrupt ctx before launching the goroutine so the field
+	// isn't read from another goroutine without synchronization. The local
+	// `mgr` already shadows the racy field for the goroutine's use.
+	migrateCtx, _ := a.snapshotInterrupt()
 	a.backgroundWg.Add(1)
 	go func() {
 		defer a.backgroundWg.Done()
-		MigrateMemories(a.interruptCtx, a.embeddingMgr)
+		MigrateMemories(migrateCtx, mgr)
 	}()
 
 	// Persist the preference to workspace config
@@ -52,9 +58,12 @@ func (a *Agent) EnableEmbeddingIndex() error {
 // DisableEmbeddingIndex stops and cleans up the embedding manager.
 // It persists the preference to the workspace config so it stays disabled on restart.
 func (a *Agent) DisableEmbeddingIndex() {
-	if a.embeddingMgr != nil {
-		_ = a.embeddingMgr.Close()
-		a.embeddingMgr = nil
+	a.embeddingMu.Lock()
+	mgr := a.embeddingMgr
+	a.embeddingMgr = nil
+	a.embeddingMu.Unlock()
+	if mgr != nil {
+		_ = mgr.Close()
 	}
 
 	// Persist the preference to workspace config
@@ -66,6 +75,8 @@ func (a *Agent) DisableEmbeddingIndex() {
 
 // IsEmbeddingIndexEnabled returns whether the embedding index is currently active.
 func (a *Agent) IsEmbeddingIndexEnabled() bool {
+	a.embeddingMu.RLock()
+	defer a.embeddingMu.RUnlock()
 	return a.embeddingMgr != nil
 }
 

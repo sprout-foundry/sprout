@@ -744,7 +744,7 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	// the webui Stop button at pkg/webui/api_query.go::handleAPIQueryStop —
 	// actually aborts the in-flight HTTP request, not just the agent loop
 	// after the next iteration boundary. See SP-034-1e.
-	ctx := a.interruptCtx
+	ctx, _ := a.snapshotInterrupt()
 	if ctx == nil {
 		ctx = context.Background()
 	}

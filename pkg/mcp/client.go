@@ -296,6 +296,15 @@ func (c *MCPClient) GetConfig() MCPServerConfig {
 	return c.config
 }
 
+// GetRestartCount returns how many times the underlying server has been
+// started (including manual Start calls and reconnects). Safe for concurrent
+// reads — startInternal increments under c.mutex.
+func (c *MCPClient) GetRestartCount() int {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	return c.restartCount
+}
+
 // Initialize sends initialize request to server
 func (c *MCPClient) Initialize(ctx context.Context) error {
 	c.mutex.RLock()
@@ -674,7 +683,14 @@ func (c *MCPClient) sendRequest(ctx context.Context, method string, params inter
 
 // handleMessages handles incoming messages from the server
 func (c *MCPClient) handleMessages() {
-	scanner := bufio.NewScanner(c.stdout)
+	// Capture stdout under lock — Stop() / tests may swap it to nil concurrently.
+	c.mutex.RLock()
+	stdout := c.stdout
+	c.mutex.RUnlock()
+	if stdout == nil {
+		return
+	}
+	scanner := bufio.NewScanner(stdout)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if line == "" {
@@ -760,7 +776,14 @@ func (c *MCPClient) triggerReconnect(reason string, err error) {
 
 // handleErrors handles stderr output from the server
 func (c *MCPClient) handleErrors() {
-	scanner := bufio.NewScanner(c.stderr)
+	// Capture stderr under lock — Stop() / tests may swap it to nil concurrently.
+	c.mutex.RLock()
+	stderr := c.stderr
+	c.mutex.RUnlock()
+	if stderr == nil {
+		return
+	}
+	scanner := bufio.NewScanner(stderr)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if line != "" && c.logger != nil {

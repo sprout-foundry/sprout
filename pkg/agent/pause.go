@@ -7,17 +7,32 @@ import (
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
+// snapshotInterrupt returns the current interruptCtx and interruptCancel under
+// lock. Callers should operate on the returned snapshot rather than touching
+// the fields directly, so concurrent ClearInterrupt /
+// resetInterruptForNewQuery don't race with reads.
+func (a *Agent) snapshotInterrupt() (context.Context, context.CancelFunc) {
+	a.interruptMu.Lock()
+	defer a.interruptMu.Unlock()
+	return a.interruptCtx, a.interruptCancel
+}
+
 // TriggerInterrupt manually triggers an interrupt for testing purposes
 func (a *Agent) TriggerInterrupt() {
-	if a.interruptCancel != nil {
-		a.interruptCancel()
+	_, cancel := a.snapshotInterrupt()
+	if cancel != nil {
+		cancel()
 	}
 }
 
 // CheckForInterrupt checks if an interrupt was requested
 func (a *Agent) CheckForInterrupt() bool {
+	ctx, _ := a.snapshotInterrupt()
+	if ctx == nil {
+		return false
+	}
 	select {
-	case <-a.interruptCtx.Done():
+	case <-ctx.Done():
 		// Context cancelled, interrupt requested
 		return true
 	default:
@@ -66,13 +81,17 @@ func (a *Agent) HandleInterrupt() string {
 
 // ClearInterrupt resets the interrupt state
 func (a *Agent) ClearInterrupt() {
-	// Create new interrupt context
-	if a.interruptCancel != nil {
-		a.interruptCancel()
+	newCtx, newCancel := context.WithCancel(context.Background())
+	a.interruptMu.Lock()
+	oldCancel := a.interruptCancel
+	a.interruptCtx = newCtx
+	a.interruptCancel = newCancel
+	a.interruptMu.Unlock()
+	// Cancel the previous ctx outside the lock so any callbacks invoked from
+	// the cancellation can re-enter the agent without deadlocking on interruptMu.
+	if oldCancel != nil {
+		oldCancel()
 	}
-	interruptCtx, interruptCancel := context.WithCancel(context.Background())
-	a.interruptCtx = interruptCtx
-	a.interruptCancel = interruptCancel
 }
 
 // resetInterruptForNewQuery ensures the interruptCtx is fresh at the start
@@ -81,16 +100,19 @@ func (a *Agent) ClearInterrupt() {
 // HTTP request (now that SP-034-1e wires interruptCtx into the request body).
 // Idempotent — if the ctx is already non-cancelled, this is essentially a no-op.
 func (a *Agent) resetInterruptForNewQuery() {
+	a.interruptMu.Lock()
 	if a.interruptCtx != nil {
 		select {
 		case <-a.interruptCtx.Done():
 			// Previous query was cancelled — make a fresh ctx.
 		default:
 			// Still live; leave it alone.
+			a.interruptMu.Unlock()
 			return
 		}
 	}
-	interruptCtx, interruptCancel := context.WithCancel(context.Background())
-	a.interruptCtx = interruptCtx
-	a.interruptCancel = interruptCancel
+	newCtx, newCancel := context.WithCancel(context.Background())
+	a.interruptCtx = newCtx
+	a.interruptCancel = newCancel
+	a.interruptMu.Unlock()
 }

@@ -488,7 +488,7 @@ func TestNewMCPClient_ReconnectionFields(t *testing.T) {
 	assert.True(t, client.connectedAt.IsZero(), "connectedAt should be zero time")
 	assert.Nil(t, client.healthCheckCancel, "healthCheckCancel should be nil")
 	assert.Nil(t, client.healthCheckCtx, "healthCheckCtx should be nil")
-	assert.Equal(t, 0, client.restartCount, "restartCount should be 0")
+	assert.Equal(t, 0, client.GetRestartCount(), "restartCount should be 0")
 	assert.Nil(t, client.cancel, "cancel should be nil before Start")
 	assert.Nil(t, client.ctx, "ctx should be nil before Start")
 }

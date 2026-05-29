@@ -496,7 +496,7 @@ func TestMCPClient_RestartCount(t *testing.T) {
 	ctx := context.Background()
 
 	// Initial restart count should be 0
-	assert.Equal(t, 0, client.restartCount)
+	assert.Equal(t, 0, client.GetRestartCount())
 
 	err := client.Start(ctx)
 	if err != nil {
@@ -505,7 +505,7 @@ func TestMCPClient_RestartCount(t *testing.T) {
 	require.NoError(t, err)
 
 	// After start, restart count should be 1
-	assert.Equal(t, 1, client.restartCount)
+	assert.Equal(t, 1, client.GetRestartCount())
 
 	err = client.Stop(ctx)
 	require.NoError(t, err)
@@ -518,7 +518,7 @@ func TestMCPClient_RestartCount(t *testing.T) {
 	defer client.Stop(ctx)
 
 	// After second start, restart count should be 2
-	assert.Equal(t, 2, client.restartCount)
+	assert.Equal(t, 2, client.GetRestartCount())
 }
 
 // ---------------------------------------------------------------------------

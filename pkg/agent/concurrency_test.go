@@ -151,22 +151,17 @@ func TestRace_CircuitBreakerAction_Count_TOCTOU(t *testing.T) {
 	var mu sync.RWMutex
 	var wg sync.WaitGroup
 
-	// Readers: simulate checkCircuitBreaker pointer escape.
-	// The real code copies the *CircuitBreakerAction pointer out of RLock
-	// scope, then reads action.Count AFTER releasing the lock. This is the
-	// TOCTOU race: the pointer is obtained under RLock, but Count is read
-	// after RUnlock, with no synchronization on the actual data access.
+	// Readers: simulate the FIXED checkCircuitBreaker that reads Count INSIDE
+	// the RLock scope rather than escaping the *CircuitBreakerAction pointer
+	// past RUnlock (which would TOCTOU-race the writers' Count++ below).
 	for i := 0; i < 50; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for j := 0; j < 100; j++ {
-				var ptr *CircuitBreakerAction
 				mu.RLock()
-				ptr = action
+				count := action.Count
 				mu.RUnlock()
-				// Read Count AFTER releasing lock — this is the TOCTOU race
-				count := ptr.Count
 				_ = count >= 3
 			}
 		}()
@@ -274,20 +269,22 @@ func TestRace_Agent_embeddingMgr(t *testing.T) {
 		}()
 	}
 
-	// Writers: simulate Enable/Disable by directly writing the pointer.
-	// We don't call EnableEmbeddingIndex() because it has side effects
-	// (creates real EmbeddingManager, spawns goroutines). Direct field
-	// access is sufficient to demonstrate the race on the pointer itself.
+	// Writers: simulate Enable/Disable. We hold embeddingMu (the same mutex the
+	// real EnableEmbeddingIndex / DisableEmbeddingIndex paths use) around the
+	// field writes so the test verifies the PRODUCT readers race-cleanly under
+	// proper concurrent enable/disable, not that a buggy caller stays safe.
 	for i := 0; i < 10; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for j := 0; j < 100; j++ {
+				a.embeddingMu.Lock()
 				if j%2 == 0 {
 					a.embeddingMgr = &embedding.EmbeddingManager{}
 				} else {
 					a.embeddingMgr = nil
 				}
+				a.embeddingMu.Unlock()
 			}
 		}()
 	}

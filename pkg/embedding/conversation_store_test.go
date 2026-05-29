@@ -552,6 +552,10 @@ func TestEmbeddingManager_Close_ClosesConversationStore(t *testing.T) {
 		t.Fatalf("Store failed: %v", err)
 	}
 
+	// Capture the manager's model hash BEFORE Close — the persisted store is
+	// tagged with this hash and will be wiped on re-open if the hash differs.
+	managerHash := mgr.ModelHash()
+
 	// Close the manager — this should close the conversation store too.
 	if err := mgr.Close(); err != nil {
 		t.Fatalf("Close failed: %v", err)
@@ -563,11 +567,10 @@ func TestEmbeddingManager_Close_ClosesConversationStore(t *testing.T) {
 	}
 
 	// The data should have been flushed to disk on close.
-	// Re-open a new store at the same path to verify persistence.
-	// Use a constantProvider mock since the model hash matches.
+	// Re-open a new store at the same path with the SAME hash the manager used.
 	expectedPath := filepath.Join(dir, "conversation_turns.hnsw")
 	newProvider := &constantProvider{vec: []float32{1, 0, 0}}
-	store2, err := NewConversationStore(newProvider, expectedPath, newProvider.ModelHash())
+	store2, err := NewConversationStore(newProvider, expectedPath, managerHash)
 	if err != nil {
 		t.Fatalf("re-open after manager close failed: %v", err)
 	}

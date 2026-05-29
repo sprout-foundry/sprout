@@ -23,12 +23,13 @@ type MCPSubManager interface {
 
 // AgentMCPManager implements MCPSubManager.
 type AgentMCPManager struct {
-	manager     mcp.MCPManager
-	toolsCache  []api.Tool
-	stateMu     sync.RWMutex // protects initialized + initErr
-	initialized bool
-	initErr     error
-	initMu      sync.Mutex
+	manager      mcp.MCPManager
+	toolsCacheMu sync.RWMutex // protects toolsCache
+	toolsCache   []api.Tool
+	stateMu      sync.RWMutex // protects initialized + initErr
+	initialized  bool
+	initErr      error
+	initMu       sync.Mutex
 }
 
 // NewAgentMCPManager creates a new AgentMCPManager with default values.
@@ -48,10 +49,14 @@ func (m *AgentMCPManager) SetManager(mgr mcp.MCPManager) {
 }
 
 func (m *AgentMCPManager) GetToolsCache() []api.Tool {
+	m.toolsCacheMu.RLock()
+	defer m.toolsCacheMu.RUnlock()
 	return m.toolsCache
 }
 
 func (m *AgentMCPManager) SetToolsCache(tools []api.Tool) {
+	m.toolsCacheMu.Lock()
+	defer m.toolsCacheMu.Unlock()
 	m.toolsCache = tools
 }
 

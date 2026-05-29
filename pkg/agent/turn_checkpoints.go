@@ -182,7 +182,7 @@ func (a *Agent) recordTurnCheckpointFromMessages(startIndex, endIndex int, turnM
 
 		// Capture embedding decision while still holding the lock so all
 		// related values come from the same consistent state snapshot.
-		if a.embeddingMgr != nil && userPrompt != "" && len(checkpoints) > 0 {
+		if a.GetEmbeddingManager() != nil && userPrompt != "" && len(checkpoints) > 0 {
 			shouldEmbed = true
 			sessionID = a.state.GetSessionID()
 			workspaceRoot = a.currentWorkspaceRoot()
@@ -207,7 +207,7 @@ func (a *Agent) recordTurnCheckpointFromMessages(startIndex, endIndex int, turnM
 		if err == nil {
 			turn.ActionableSummary = safeActionableSummary
 			// FilesTouched, Duration, TokenUsage are left as zero values to be enriched later
-			_ = EmbedAndStoreTurn(context.Background(), a.embeddingMgr, turn)
+			_ = EmbedAndStoreTurn(context.Background(), a.GetEmbeddingManager(), turn)
 
 			// Set session intent embedding from the first turn's prompt embedding.
 			// Uses atomic check-and-set to avoid TOCTOU races with concurrent turns.

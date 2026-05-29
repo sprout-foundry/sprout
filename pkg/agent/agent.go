@@ -81,6 +81,7 @@ type Agent struct {
 	// Input handling
 	inputInjectionChan  chan string
 	inputInjectionMutex sync.Mutex
+	interruptMu         sync.Mutex // protects interruptCtx + interruptCancel
 	interruptCtx        context.Context
 	interruptCancel     context.CancelFunc
 
@@ -122,6 +123,7 @@ type Agent struct {
 	terminalManager tools.TerminalAccess
 
 	// Embedding index manager for duplicate detection on file writes.
+	embeddingMu  sync.RWMutex // protects embeddingMgr
 	embeddingMgr *embedding.EmbeddingManager
 
 	// backgroundWg tracks background goroutines that use embeddingMgr or other

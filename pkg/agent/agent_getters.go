@@ -445,6 +445,8 @@ func (a *Agent) GetTerminalManager() tools.TerminalAccess {
 // GetEmbeddingManager returns the embedding index manager (may be nil if
 // embedding is not configured or enabled in the agent's config).
 func (a *Agent) GetEmbeddingManager() *embedding.EmbeddingManager {
+	a.embeddingMu.RLock()
+	defer a.embeddingMu.RUnlock()
 	return a.embeddingMgr
 }
 
@@ -464,7 +466,7 @@ func (a *Agent) GetSubagentRunner() *SubagentRunner {
 		a.subagentRunner = NewSubagentRunner(a, &SharedState{
 			EventBus:      a.eventBus,
 			TodoManager:   a.todoMgr,
-			EmbeddingMgr:  a.embeddingMgr,
+			EmbeddingMgr:  a.GetEmbeddingManager(),
 			ConfigManager: a.configManager,
 			WorkspaceRoot: a.workspaceRoot,
 		})

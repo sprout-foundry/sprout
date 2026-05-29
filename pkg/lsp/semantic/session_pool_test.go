@@ -8,6 +8,7 @@ import (
 )
 
 type fakeSessionAdapter struct {
+	mu       sync.Mutex
 	runCount int
 	healthy  bool
 	closed   bool
@@ -25,16 +26,25 @@ type blockingSessionAdapter struct {
 
 func (a *fakeSessionAdapter) Run(input ToolInput) (ToolResult, error) {
 	_ = input
+	a.mu.Lock()
 	a.runCount++
-	if a.err != nil {
-		return ToolResult{}, a.err
+	err := a.err
+	a.mu.Unlock()
+	if err != nil {
+		return ToolResult{}, err
 	}
 	return ToolResult{Capabilities: Capabilities{Diagnostics: true}}, nil
 }
 
-func (a *fakeSessionAdapter) Healthy() bool { return a.healthy && !a.closed }
+func (a *fakeSessionAdapter) Healthy() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.healthy && !a.closed
+}
 
 func (a *fakeSessionAdapter) Close() error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	a.closed = true
 	return nil
 }

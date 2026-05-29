@@ -88,7 +88,7 @@ func CreateDelegateAgent(parent *Agent, cfg DelegateConfig) (*Agent, error) {
 		// Shared resources
 		todoMgr:       parent.todoMgr,
 		eventBus:      parent.eventBus,
-		embeddingMgr:  parent.embeddingMgr,
+		embeddingMgr:  parent.GetEmbeddingManager(),
 	}
 
 	// Inherit the parent's TerminalManager

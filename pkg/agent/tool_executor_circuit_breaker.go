@@ -15,15 +15,21 @@ func (te *ToolExecutor) checkCircuitBreaker(toolName string, args map[string]int
 
 	key := te.generateActionKey(toolName, args)
 
-	// Copy action value outside the lock to reduce critical section hold time
-	action := func() *CircuitBreakerAction {
+	// Read the Count under the lock — escaping the *CircuitBreakerAction
+	// pointer out of RLock scope and reading Count afterward would be a TOCTOU
+	// race against updateCircuitBreaker's writes to the same field.
+	actionCount, exists := func() (int, bool) {
 		cb := te.agent.state.GetCircuitBreaker()
 		cb.mu.RLock()
 		defer cb.mu.RUnlock()
-		return cb.Actions[key]
+		a, ok := cb.Actions[key]
+		if !ok {
+			return 0, false
+		}
+		return a.Count, true
 	}()
 
-	if action == nil {
+	if !exists {
 		return false
 	}
 
@@ -48,7 +54,7 @@ func (te *ToolExecutor) checkCircuitBreaker(toolName string, args map[string]int
 	}
 
 	// Block if attempted too many times
-	return action.Count >= threshold
+	return actionCount >= threshold
 }
 
 // updateCircuitBreaker updates the circuit breaker state

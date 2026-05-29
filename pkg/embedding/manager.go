@@ -454,6 +454,18 @@ func (m *EmbeddingManager) GetConversationStore(ctx context.Context) (*Conversat
 	return convoStore, nil
 }
 
+// ModelHash returns the active embedding provider's model hash, or "" if no
+// provider is currently initialized. Used by tests to re-open persisted stores
+// with the same hash so the model-change invalidation logic doesn't wipe them.
+func (m *EmbeddingManager) ModelHash() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.provider == nil {
+		return ""
+	}
+	return m.provider.ModelHash()
+}
+
 // Close releases all resources.
 func (m *EmbeddingManager) Close() error {
 	m.mu.Lock()

@@ -12,10 +12,11 @@ func TestClassifyEligibleRoles(t *testing.T) {
 	}{
 		{300000, []string{"primary", "subagent"}},
 		{128000, []string{"primary", "subagent"}},
-		{127999, []string{"subagent"}},
-		{32000, []string{"subagent"}},
-		{31999, nil},
-		{0, nil}, // unknown context
+		{127999, []string{"subagent"}}, // usable, but warning band
+		{64000, []string{"subagent"}},  // exactly the hard floor
+		{63999, nil},                   // below floor → hard block
+		{32000, nil},                   // below floor → hard block
+		{0, nil},                       // unknown context
 	}
 	for _, c := range cases {
 		got := ClassifyEligibleRoles(ModelInfo{ContextLength: c.ctx})
@@ -27,9 +28,9 @@ func TestClassifyEligibleRoles(t *testing.T) {
 
 func TestFillEligibleRoles_PreservesExisting(t *testing.T) {
 	models := []ModelInfo{
-		{ID: "big", ContextLength: 200000},                                  // → filled primary+subagent
-		{ID: "small", ContextLength: 8000},                                  // → stays empty (below bar)
-		{ID: "probed", ContextLength: 8000, EligibleRoles: []string{"x"}},  // → preserved (already set)
+		{ID: "big", ContextLength: 200000},                                // → filled primary+subagent
+		{ID: "small", ContextLength: 8000},                                // → stays empty (below bar)
+		{ID: "probed", ContextLength: 8000, EligibleRoles: []string{"x"}}, // → preserved (already set)
 	}
 	out := fillEligibleRoles(models)
 

@@ -38,6 +38,21 @@ jobs:
           CHUTES_API_KEY: ${{ secrets.CHUTES_API_KEY }}
         run: go run ./cmd/refresh_provider_catalog --registry-dir=models
 
+      - name: Enrich new models with capability probes
+        # Probes only NEW + eligible + within-budget models (vs the live
+        # registry), capped at --max-probes, so the daily inference spend stays
+        # small. Prior probe results are carried forward for known models.
+        env:
+          LEDIT_MODEL_REGISTRY_URL: "disabled"
+          SPROUT_MODEL_REGISTRY_URL: "disabled"
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          DEEPINFRA_API_KEY: ${{ secrets.DEEPINFRA_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ZAI_API_KEY: ${{ secrets.ZAI_API_KEY }}
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+          CHUTES_API_KEY: ${{ secrets.CHUTES_API_KEY }}
+        run: go run ./cmd/enrich_registry --registry-dir=models --max-probe-cost=0.10 --max-probes=50
+
       - name: Generate model index
         run: bash scripts/generate-model-index.sh models/models
 

@@ -48,17 +48,17 @@ func (a DeepInfraAdapter) ListModels(ctx context.Context) ([]CanonicalModel, err
 }
 
 type deepInfraModel struct {
-	ModelName    string   `json:"model_name"`
-	Type         string   `json:"type"`
-	ReportedType string   `json:"reported_type"`
-	Description  string   `json:"description"`
+	ModelName    string `json:"model_name"`
+	Type         string `json:"type"`
+	ReportedType string `json:"reported_type"`
+	Description  string `json:"description"`
 	// DeepInfra reports deprecated as 0/1 or a timestamp number (not a bool),
 	// so decode loosely and interpret truthiness.
-	Deprecated any `json:"deprecated"`
-	MaxTokens  int `json:"max_tokens"`
-	Tags         []string `json:"tags"`
-	ReplacedBy   string   `json:"replaced_by"`
-	Pricing      struct {
+	Deprecated any      `json:"deprecated"`
+	MaxTokens  int      `json:"max_tokens"`
+	Tags       []string `json:"tags"`
+	ReplacedBy string   `json:"replaced_by"`
+	Pricing    struct {
 		Type                string  `json:"type"`
 		CentsPerInputToken  float64 `json:"cents_per_input_token"`
 		CentsPerOutputToken float64 `json:"cents_per_output_token"`

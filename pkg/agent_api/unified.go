@@ -129,6 +129,18 @@ func (w *UnifiedProviderWrapper) SendChatRequest(ctx context.Context, messages [
 				}
 			}
 		}
+
+		// Fallback: some Mistral-family models emit tool calls as a
+		// `[TOOL_CALLS]…` marker in the text content instead of the structured
+		// tool_calls field. When tools were offered and nothing was parsed
+		// structurally, recover them so the agent can act on the call instead
+		// of treating it as a plain-text answer.
+		if len(apiResponse.Choices[i].Message.ToolCalls) == 0 && len(tools) > 0 {
+			if recovered, rest, recoveredOK := RecoverMistralToolCalls(apiResponse.Choices[i].Message.Content); recoveredOK {
+				apiResponse.Choices[i].Message.ToolCalls = recovered
+				apiResponse.Choices[i].Message.Content = rest
+			}
+		}
 	}
 
 	return apiResponse, nil
@@ -270,6 +282,18 @@ func (w *UnifiedProviderWrapper) SendVisionRequest(ctx context.Context, messages
 				}
 			}
 		}
+
+		// Fallback: some Mistral-family models emit tool calls as a
+		// `[TOOL_CALLS]…` marker in the text content instead of the structured
+		// tool_calls field. When tools were offered and nothing was parsed
+		// structurally, recover them so the agent can act on the call instead
+		// of treating it as a plain-text answer.
+		if len(apiResponse.Choices[i].Message.ToolCalls) == 0 && len(tools) > 0 {
+			if recovered, rest, recoveredOK := RecoverMistralToolCalls(apiResponse.Choices[i].Message.Content); recoveredOK {
+				apiResponse.Choices[i].Message.ToolCalls = recovered
+				apiResponse.Choices[i].Message.Content = rest
+			}
+		}
 	}
 
 	return apiResponse, nil
@@ -376,6 +400,15 @@ func (w *UnifiedProviderWrapper) SendChatRequestStream(ctx context.Context, mess
 				ToolCalls:        toolCalls,
 			},
 			FinishReason: choice.FinishReason,
+		}
+
+		// Recover Mistral-family `[TOOL_CALLS]…` text-format tool calls that the
+		// provider didn't translate into structured tool_calls (streamed path).
+		if len(apiResponse.Choices[i].Message.ToolCalls) == 0 && len(tools) > 0 {
+			if recovered, rest, recoveredOK := RecoverMistralToolCalls(apiResponse.Choices[i].Message.Content); recoveredOK {
+				apiResponse.Choices[i].Message.ToolCalls = recovered
+				apiResponse.Choices[i].Message.Content = rest
+			}
 		}
 	}
 

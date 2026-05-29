@@ -47,33 +47,15 @@ export default defineConfig(({ mode: _mode }) => {
     
     // Resolve aliases
     resolve: {
-      // Hard-pin every React specifier to THIS workspace's React 18.3.1.
-      //
-      // The monorepo root has React 19.2.6 installed; shared packages
-      // resolved from the root (lucide-react, @sprout/ui) would
-      // otherwise pull React 19 while the webui app uses React 18.
-      // React 19 changed the element marker from
-      // Symbol.for('react.element') to Symbol.for('react.transitional.element'),
-      // so React-19-created elements are rejected by the React-18
-      // reconciler with "Objects are not valid as a React child" — which
-      // is exactly what broke the vitest component suite. `dedupe` alone
-      // doesn't cover vitest's resolution of root-hoisted packages;
-      // exact-match aliases do. Order matters: subpath patterns must
-      // precede the bare-module patterns.
-      alias: [
-        { find: '@', replacement: path.resolve(__dirname, './src') },
-        { find: /^react\/jsx-dev-runtime$/, replacement: path.resolve(__dirname, 'node_modules/react/jsx-dev-runtime.js') },
-        { find: /^react\/jsx-runtime$/, replacement: path.resolve(__dirname, 'node_modules/react/jsx-runtime.js') },
-        { find: /^react-dom\/client$/, replacement: path.resolve(__dirname, 'node_modules/react-dom/client.js') },
-        { find: /^react-dom$/, replacement: path.resolve(__dirname, 'node_modules/react-dom/index.js') },
-        { find: /^react$/, replacement: path.resolve(__dirname, 'node_modules/react/index.js') },
-      ],
-      // Belt-and-suspenders alongside the aliases above.
+      alias: [{ find: '@', replacement: path.resolve(__dirname, './src') }],
+      // React resolves to a single version across the whole workspace: the
+      // root package.json `overrides` pins react/react-dom to 18.3.1, so the
+      // previous hard-pin React aliases (which fought a duplicate React 19
+      // hoisted at the monorepo root) are no longer needed. `dedupe` keeps a
+      // single copy of React and CodeMirror if anything ever tries to nest one.
       dedupe: [
         'react',
         'react-dom',
-        'react/jsx-runtime',
-        'react/jsx-dev-runtime',
         '@codemirror/view',
         '@codemirror/state',
         '@codemirror/language',
@@ -134,18 +116,6 @@ export default defineConfig(({ mode: _mode }) => {
       environment: 'jsdom',
       setupFiles: ['./src/vitest.setup.ts'],
       include: ['src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
-      // Inline the React-using node_modules so vite TRANSFORMS them
-      // (applying the React-18 alias above) instead of externalizing
-      // them to Node resolution, which would pull the monorepo root's
-      // React 19. Without this, lucide-react / @sprout/ui icons are
-      // created by React 19 and rejected by the app's React 18
-      // reconciler ("Objects are not valid as a React child"). See the
-      // resolve.alias note for the underlying version mismatch.
-      server: {
-        deps: {
-          inline: true,
-        },
-      },
       coverage: {
         provider: 'v8',
         reporter: ['text', 'json', 'html'],

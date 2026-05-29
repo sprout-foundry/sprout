@@ -1,7 +1,21 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { ApiService } from '../services/api';
+import type { ProviderModel } from '../services/api/types';
 import { debugLog } from '../utils/log';
 import './ThemedDialog.css';
+
+// normalizeModels tolerates both the rich object shape and a legacy plain-string
+// list, so the modal renders correctly regardless of server/adapter variation.
+function normalizeModels(raw: unknown): ProviderModel[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((m): ProviderModel | null => {
+      if (typeof m === 'string') return { id: m };
+      if (m && typeof m === 'object' && typeof (m as ProviderModel).id === 'string') return m as ProviderModel;
+      return null;
+    })
+    .filter((m): m is ProviderModel => m !== null);
+}
 
 export interface ModelSelectionModalProps {
   provider: string;
@@ -22,7 +36,7 @@ function ModelSelectionModal({
   onClose,
   onSelectModel,
 }: ModelSelectionModalProps): JSX.Element {
-  const [models, setModels] = useState<string[]>([]);
+  const [models, setModels] = useState<ProviderModel[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedModel, setSelectedModel] = useState<string>('');
@@ -35,7 +49,7 @@ function ModelSelectionModal({
   const visibleModels = useMemo(() => {
     const q = filter.trim().toLowerCase();
     if (!q) return models;
-    return models.filter((m) => m.toLowerCase().includes(q));
+    return models.filter((m) => m.id.toLowerCase().includes(q) || (m.name ?? '').toLowerCase().includes(q));
   }, [models, filter]);
 
   // Copy + intent vary by why the modal opened.
@@ -60,8 +74,9 @@ function ModelSelectionModal({
     try {
       const apiService = ApiService.getInstance();
       const response = await apiService.getProviderModels(provider);
-      setModels(response.models || []);
-      debugLog('[ModelSelectionModal] Fetched models:', response.models?.length || 0);
+      const normalized = normalizeModels(response.models);
+      setModels(normalized);
+      debugLog('[ModelSelectionModal] Fetched models:', normalized.length);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch available models';
       setError(errorMessage);
@@ -93,8 +108,8 @@ function ModelSelectionModal({
 
   // Auto-preselect the first visible model when the list/filter changes.
   useEffect(() => {
-    if (!loading && !error && visibleModels.length > 0 && !visibleModels.includes(selectedModel)) {
-      setSelectedModel(visibleModels[0]);
+    if (!loading && !error && visibleModels.length > 0 && !visibleModels.some((m) => m.id === selectedModel)) {
+      setSelectedModel(visibleModels[0].id);
     }
   }, [loading, error, visibleModels, selectedModel]);
 
@@ -171,28 +186,59 @@ function ModelSelectionModal({
               {visibleModels.length > 0 && (
                 <div className="model-selection-list-wrapper">
                   <ul ref={listRef} className="model-selection-list" role="listbox" aria-label="Available models">
-                    {visibleModels.map((model) => (
-                  <li key={model}>
+                    {visibleModels.map((model) => {
+                      const recommended = model.recommended_roles ?? [];
+                      const eligible = model.eligible_roles ?? [];
+                      const warnings = model.warnings ?? [];
+                      const recommendedRole = recommended.includes('primary') ? 'primary' : recommended[0];
+                      return (
+                  <li key={model.id}>
                     <button
                       type="button"
                       className={`model-selection-item ${
-                        selectedModel === model ? 'model-selection-item--selected' : ''
+                        selectedModel === model.id ? 'model-selection-item--selected' : ''
                       }`}
-                      onClick={() => setSelectedModel(model)}
+                      onClick={() => setSelectedModel(model.id)}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           e.preventDefault();
                           handleSelect();
                         }
                       }}
-                      aria-selected={selectedModel === model}
+                      aria-selected={selectedModel === model.id}
                       role="option"
                     >
-                      <span className="model-selection-item-text">{model}</span>
-                      {selectedModel === model && <span className="model-selection-item-check">✓</span>}
+                      <span className="model-selection-item-text">{model.id}</span>
+                      {recommendedRole && (
+                        <span
+                          className="model-selection-badge model-selection-badge--recommended"
+                          title={`Recommended for ${recommended.join(', ')} — passed the capability probe`}
+                        >
+                          ★ {recommendedRole}
+                        </span>
+                      )}
+                      {!recommendedRole && eligible.length > 0 && (
+                        <span
+                          className="model-selection-badge model-selection-badge--eligible"
+                          title={`Eligible for ${eligible.join(', ')} (not yet probe-verified)`}
+                        >
+                          eligible
+                        </span>
+                      )}
+                      {warnings.length > 0 && (
+                        <span
+                          className="model-selection-badge model-selection-badge--warning"
+                          title={warnings.join('; ')}
+                          aria-label={`Warning: ${warnings.join('; ')}`}
+                        >
+                          ⚠
+                        </span>
+                      )}
+                      {selectedModel === model.id && <span className="model-selection-item-check">✓</span>}
                     </button>
                   </li>
-                ))}
+                      );
+                    })}
                   </ul>
                 </div>
               )}

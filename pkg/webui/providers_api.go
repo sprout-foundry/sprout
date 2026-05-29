@@ -300,8 +300,12 @@ func (ws *ReactWebServer) handleGetModels(w http.ResponseWriter, r *http.Request
 	result := make([]map[string]interface{}, 0, len(models))
 	for _, m := range models {
 		result = append(result, map[string]interface{}{
-			"id":   m.ID,
-			"name": m.Name,
+			"id":                m.ID,
+			"name":              m.Name,
+			"context_length":    m.ContextLength,
+			"eligible_roles":    m.EligibleRoles,
+			"recommended_roles": m.RecommendedRoles,
+			"warnings":          m.Warnings,
 		})
 	}
 

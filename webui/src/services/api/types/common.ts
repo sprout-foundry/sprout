@@ -61,9 +61,21 @@ export interface ProviderOption {
   models: string[];
 }
 
+export interface ProviderModel {
+  id: string;
+  name?: string;
+  context_length?: number;
+  /** Roles the model meets the deterministic minimum bar for ("primary", "subagent"). */
+  eligible_roles?: string[];
+  /** Roles backed by the capability probe (⊆ eligible_roles). */
+  recommended_roles?: string[];
+  /** Non-blocking caveats to surface (e.g. a small context window). */
+  warnings?: string[];
+}
+
 export interface ProviderModelsResponse {
   provider: string;
-  models: string[];
+  models: ProviderModel[];
 }
 
 export interface ProvidersResponse {

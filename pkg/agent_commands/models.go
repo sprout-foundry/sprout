@@ -101,6 +101,13 @@ func (m *ModelsCommand) listModels(chatAgent *agent.Agent) error {
 		if len(model.EligibleRoles) > 0 {
 			fmt.Printf("   Eligible for: %s\n", strings.Join(model.EligibleRoles, ", "))
 		}
+		if len(model.RecommendedRoles) > 0 {
+			fmt.Printf("   %sRecommended for: %s (passed capability probe)\n",
+				console.GlyphSuccess.Prefix(), strings.Join(model.RecommendedRoles, ", "))
+		}
+		for _, w := range model.Warnings {
+			fmt.Printf("   %s%s\n", console.GlyphWarning.Prefix(), w)
+		}
 		if len(model.Tags) > 0 {
 			// Highlight tool support
 			hasTools := false
@@ -237,9 +244,16 @@ func modelDetailString(model api.ModelInfo) string {
 		parts = append(parts, fmt.Sprintf("%dK", model.ContextLength/1000))
 	}
 
-	// Agentic eligibility (deterministic pre-filter)
-	if len(model.EligibleRoles) > 0 {
+	// Agentic role: probe-backed recommendation (★) wins over the
+	// deterministic eligibility pre-filter; a warning (e.g. small context)
+	// shows a ⚠ marker (full text appears in the `/model` list).
+	if len(model.RecommendedRoles) > 0 {
+		parts = append(parts, "★"+strings.Join(model.RecommendedRoles, "+"))
+	} else if len(model.EligibleRoles) > 0 {
 		parts = append(parts, strings.Join(model.EligibleRoles, "+"))
+	}
+	if len(model.Warnings) > 0 {
+		parts = append(parts, "⚠")
 	}
 
 	if len(parts) == 0 {

@@ -1266,6 +1266,34 @@
   flex-shrink: 0;
 }
 
+/* Eligibility / recommendation / warning chips on each model row. */
+.model-selection-badge {
+  flex-shrink: 0;
+  margin-left: var(--space-2);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  line-height: 1.7;
+  white-space: nowrap;
+}
+
+.model-selection-badge--recommended {
+  background: var(--accent-success);
+  color: var(--accent-fg);
+}
+
+.model-selection-badge--eligible {
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
+}
+
+.model-selection-badge--warning {
+  background: var(--accent-warning);
+  color: var(--accent-warning-fg);
+}
+
 /* Footer */
 .model-selection-footer {
   display: flex;

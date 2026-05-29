@@ -16,10 +16,10 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/credentials"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"github.com/sprout-foundry/sprout/pkg/modelcontract"
 	"github.com/sprout-foundry/sprout/pkg/modelregistry"
 	"github.com/sprout-foundry/sprout/pkg/providercatalog"
-	"github.com/sprout-foundry/sprout/pkg/envutil"
 )
 
 const maxHTTPErrorBodyPreview = 240
@@ -160,6 +160,13 @@ type ModelInfo struct {
 	// authoritative agentic-capable signal. Empty means below the bar or
 	// unknown. Additive/omitempty so older clients ignore it.
 	EligibleRoles []string `json:"eligible_roles,omitempty"`
+	// RecommendedRoles ⊆ EligibleRoles, gated on passing the capability probe
+	// (subagent ← gates passed, primary ← complex stage passed). Empty when
+	// un-probed or not recommended. Populated from the published registry.
+	RecommendedRoles []string `json:"recommended_roles,omitempty"`
+	// Warnings are non-blocking caveats to surface in the picker (e.g. a small
+	// context window in the 64K–128K band). Populated from the published registry.
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 // Agentic-coding eligibility thresholds. These set the *minimum* context
@@ -167,7 +174,7 @@ type ModelInfo struct {
 // probe (which will provide the authoritative agentic-capable signal).
 // Eligibility ≠ recommendation.
 const (
-	subagentMinContext = 32_000
+	subagentMinContext = 64_000
 	primaryMinContext  = 128_000
 )
 
@@ -386,17 +393,19 @@ func convertRegistryModels(raw []modelregistry.RawModel) []ModelInfo {
 	out := make([]ModelInfo, len(raw))
 	for i, m := range raw {
 		out[i] = ModelInfo{
-			ID:            m.ID,
-			Name:          m.Name,
-			Description:   m.Description,
-			Provider:      m.Provider,
-			Size:          m.Size,
-			Cost:          m.Cost,
-			InputCost:     m.InputCost,
-			OutputCost:    m.OutputCost,
-			ContextLength: m.ContextLength,
-			Tags:          append([]string(nil), m.Tags...),
-			EligibleRoles: append([]string(nil), m.EligibleRoles...),
+			ID:               m.ID,
+			Name:             m.Name,
+			Description:      m.Description,
+			Provider:         m.Provider,
+			Size:             m.Size,
+			Cost:             m.Cost,
+			InputCost:        m.InputCost,
+			OutputCost:       m.OutputCost,
+			ContextLength:    m.ContextLength,
+			Tags:             append([]string(nil), m.Tags...),
+			EligibleRoles:    append([]string(nil), m.EligibleRoles...),
+			RecommendedRoles: append([]string(nil), m.RecommendedRoles...),
+			Warnings:         append([]string(nil), m.Warnings...),
 		}
 	}
 	return out

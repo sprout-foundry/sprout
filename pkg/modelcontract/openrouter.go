@@ -85,14 +85,14 @@ func parseOpenRouter(body []byte) ([]CanonicalModel, error) {
 			ctx = e.TopProvider.ContextLength
 		}
 		m := CanonicalModel{
-			ID:            e.ID,
-			Provider:      "openrouter",
-			DisplayName:   e.Name,
-			Description:   e.Description,
-			ContextWindow: ctx,
+			ID:              e.ID,
+			Provider:        "openrouter",
+			DisplayName:     e.Name,
+			Description:     e.Description,
+			ContextWindow:   ctx,
 			MaxOutputTokens: e.TopProvider.MaxCompletionTokens,
-			Status:        StatusActive,
-			Source:        "openrouter:/api/v1/models",
+			Status:          StatusActive,
+			Source:          "openrouter:/api/v1/models",
 			Capabilities: Capabilities{
 				// supported_parameters is OpenRouter's authoritative capability
 				// list, so absence is a known-false.

@@ -13,9 +13,9 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/sync/singleflight"
 	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"github.com/sprout-foundry/sprout/pkg/modelcontract"
+	"golang.org/x/sync/singleflight"
 )
 
 // maxSchemaVersion is the highest published schema version this client can
@@ -24,44 +24,48 @@ import (
 const maxSchemaVersion = modelcontract.SchemaVersion
 
 const (
-	defaultTTL         = 5 * time.Minute
-	defaultNegativeTTL = 30 * time.Second
-	defaultHTTPTimeout = 500 * time.Millisecond
+	defaultTTL               = 5 * time.Minute
+	defaultNegativeTTL       = 30 * time.Second
+	defaultHTTPTimeout       = 500 * time.Millisecond
 	maxResponseBytes   int64 = 1 << 20 // 1 MiB — matches pkg/providercatalog limit
-	defaultRegistryURL = "https://sprout-foundry.github.io/sprout"
+	defaultRegistryURL       = "https://sprout-foundry.github.io/sprout"
 )
 
 // ModelInfo mirrors api.ModelInfo for registry JSON responses.
 // NOTE: Intentionally duplicated to avoid import cycles between
 // modelregistry and agent_api. Keep in sync with pkg/agent_api/models.go ModelInfo.
 type ModelInfo struct {
-	ID            string   `json:"id"`
-	Name          string   `json:"name,omitempty"`
-	Description   string   `json:"description,omitempty"`
-	Provider      string   `json:"provider,omitempty"`
-	Size          string   `json:"size,omitempty"`
-	Cost          float64  `json:"cost,omitempty"`
-	InputCost     float64  `json:"input_cost,omitempty"`
-	OutputCost    float64  `json:"output_cost,omitempty"`
-	ContextLength int      `json:"context_length,omitempty"`
-	Tags          []string `json:"tags,omitempty"`
-	EligibleRoles []string `json:"eligible_roles,omitempty"`
+	ID               string   `json:"id"`
+	Name             string   `json:"name,omitempty"`
+	Description      string   `json:"description,omitempty"`
+	Provider         string   `json:"provider,omitempty"`
+	Size             string   `json:"size,omitempty"`
+	Cost             float64  `json:"cost,omitempty"`
+	InputCost        float64  `json:"input_cost,omitempty"`
+	OutputCost       float64  `json:"output_cost,omitempty"`
+	ContextLength    int      `json:"context_length,omitempty"`
+	Tags             []string `json:"tags,omitempty"`
+	EligibleRoles    []string `json:"eligible_roles,omitempty"`
+	RecommendedRoles []string `json:"recommended_roles,omitempty"`
+	Warnings         []string `json:"warnings,omitempty"`
 }
 
 // RawModel is a provider-agnostic model representation used for cache storage
 // and inter-package transfer without creating import cycles.
 type RawModel struct {
-	ID            string   `json:"id"`
-	Name          string   `json:"name,omitempty"`
-	Description   string   `json:"description,omitempty"`
-	Provider      string   `json:"provider,omitempty"`
-	Size          string   `json:"size,omitempty"`
-	Cost          float64  `json:"cost,omitempty"`
-	InputCost     float64  `json:"input_cost,omitempty"`
-	OutputCost    float64  `json:"output_cost,omitempty"`
-	ContextLength int      `json:"context_length,omitempty"`
-	Tags          []string `json:"tags,omitempty"`
-	EligibleRoles []string `json:"eligible_roles,omitempty"`
+	ID               string   `json:"id"`
+	Name             string   `json:"name,omitempty"`
+	Description      string   `json:"description,omitempty"`
+	Provider         string   `json:"provider,omitempty"`
+	Size             string   `json:"size,omitempty"`
+	Cost             float64  `json:"cost,omitempty"`
+	InputCost        float64  `json:"input_cost,omitempty"`
+	OutputCost       float64  `json:"output_cost,omitempty"`
+	ContextLength    int      `json:"context_length,omitempty"`
+	Tags             []string `json:"tags,omitempty"`
+	EligibleRoles    []string `json:"eligible_roles,omitempty"`
+	RecommendedRoles []string `json:"recommended_roles,omitempty"`
+	Warnings         []string `json:"warnings,omitempty"`
 }
 
 // providerResponse is the JSON schema for a per-provider model file.
@@ -341,13 +345,15 @@ func ClearCache() {
 // surfacing known-true capabilities as Tags. Used when parsing schema-2+ files.
 func canonicalToLegacy(cm modelcontract.CanonicalModel) ModelInfo {
 	mi := ModelInfo{
-		ID:            cm.ID,
-		Name:          cm.DisplayName,
-		Description:   cm.Description,
-		Provider:      cm.Provider,
-		ContextLength: cm.ContextWindow,
-		Tags:          modelcontract.CapabilityTags(cm.Capabilities),
-		EligibleRoles: append([]string(nil), cm.EligibleRoles...),
+		ID:               cm.ID,
+		Name:             cm.DisplayName,
+		Description:      cm.Description,
+		Provider:         cm.Provider,
+		ContextLength:    cm.ContextWindow,
+		Tags:             modelcontract.CapabilityTags(cm.Capabilities),
+		EligibleRoles:    append([]string(nil), cm.EligibleRoles...),
+		RecommendedRoles: append([]string(nil), cm.RecommendedRoles...),
+		Warnings:         append([]string(nil), cm.Warnings...),
 	}
 	if cm.Pricing != nil {
 		mi.InputCost = cm.Pricing.InputPerMTok
@@ -363,17 +369,19 @@ func convertToRaw(models []ModelInfo) []RawModel {
 	out := make([]RawModel, len(models))
 	for i, m := range models {
 		out[i] = RawModel{
-			ID:            m.ID,
-			Name:          m.Name,
-			Description:   m.Description,
-			Provider:      m.Provider,
-			Size:          m.Size,
-			Cost:          m.Cost,
-			InputCost:     m.InputCost,
-			OutputCost:    m.OutputCost,
-			ContextLength: m.ContextLength,
-			Tags:          append([]string(nil), m.Tags...),
-			EligibleRoles: append([]string(nil), m.EligibleRoles...),
+			ID:               m.ID,
+			Name:             m.Name,
+			Description:      m.Description,
+			Provider:         m.Provider,
+			Size:             m.Size,
+			Cost:             m.Cost,
+			InputCost:        m.InputCost,
+			OutputCost:       m.OutputCost,
+			ContextLength:    m.ContextLength,
+			Tags:             append([]string(nil), m.Tags...),
+			EligibleRoles:    append([]string(nil), m.EligibleRoles...),
+			RecommendedRoles: append([]string(nil), m.RecommendedRoles...),
+			Warnings:         append([]string(nil), m.Warnings...),
 		}
 	}
 	return out

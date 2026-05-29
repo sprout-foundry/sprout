@@ -52,6 +52,7 @@ type CanonicalModel struct {
 	EligibleRoles    []string     `json:"eligible_roles,omitempty"`    // deterministic pre-filter
 	Probe            *ProbeResult `json:"probe,omitempty"`             // capability probe (later phase)
 	RecommendedRoles []string     `json:"recommended_roles,omitempty"` // post-probe (later phase)
+	Warnings         []string     `json:"warnings,omitempty"`          // non-blocking caveats to surface (e.g. small context)
 
 	// Provenance
 	Source    string `json:"source,omitempty"`     // e.g. "deepinfra:/models/list"
@@ -88,9 +89,13 @@ type Capabilities struct {
 	Streaming        *bool `json:"streaming,omitempty"`
 }
 
-// ProbeResult records the outcome of a capability probe (later phase).
+// ProbeResult records the outcome of a capability probe. Passed is the minimum
+// gate (model is usable for agentic edits at all); Complex additionally reports
+// that the model cleared the discovery+scoping tier, the signal for driving
+// primary-grade complex flows.
 type ProbeResult struct {
 	Passed       bool    `json:"passed"`
+	Complex      bool    `json:"complex,omitempty"`
 	Score        float64 `json:"score,omitempty"`
 	LastProbedAt string  `json:"last_probed_at,omitempty"`
 	ProbeVersion string  `json:"probe_version,omitempty"`

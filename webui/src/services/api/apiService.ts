@@ -42,6 +42,7 @@ import type {
   SkillConfig,
   SkillsResponse,
   SubagentTypeInfo,
+  ProviderModelsResponse,
 } from './types';
 import * as workspaceApi from './workspaceApi';
 
@@ -97,7 +98,7 @@ class ApiService {
     return miscApi.getProviders(clientFetch);
   }
 
-  async getProviderModels(provider: string): Promise<{ provider: string; models: string[] }> {
+  async getProviderModels(provider: string): Promise<ProviderModelsResponse> {
     return miscApi.getProviderModels(clientFetch, provider);
   }
 

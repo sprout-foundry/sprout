@@ -11,15 +11,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
 
     - name: Set up Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
         go-version: 1.25
 
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.11'
 
@@ -37,7 +37,7 @@ jobs:
       run: go mod download
 
     - name: Set up Node.js
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v5
       with:
         node-version: '22'
 
@@ -74,42 +74,10 @@ jobs:
     - name: Run smoke tests
       run: make test-smoke
 
-  desktop-release:
-    name: Build Desktop Release
-    needs: test
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-      fail-fast: false
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-
-    - name: Set up Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '22'
-        cache: 'npm'
-
-    - name: Install dependencies
-      run: npm ci
-
-    - name: Build and publish desktop app
-      env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        npm run desktop:release
-
-    - name: Upload desktop artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: desktop-${{ matrix.os }}
-        path: desktop/dist/*
-        retention-days: 30
+  # Desktop installers are built by the dedicated `desktop-release.yml`
+  # workflow (six-platform matrix with signing + prebuilt backends), which
+  # also fires on `v*` tags. A second desktop pipeline here would only
+  # duplicate that work.
 
   build:
     name: Build and Release
@@ -120,7 +88,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         fetch-depth: 0 # Fetch full history for changelog generation
 
@@ -133,7 +101,7 @@ jobs:
       run: go mod download
 
     - name: Set up Node.js
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v5
       with:
         node-version: '22'
 
@@ -251,23 +219,23 @@ jobs:
         echo "Using ldflags: $LDFLAGS"
         
         # Build for Linux (AMD64)
-        GOOS=linux GOARCH=amd64 go build -tags ollama_test -ldflags "$LDFLAGS" -o sprout-linux-amd64 .
+        GOOS=linux GOARCH=amd64 go build -ldflags "$LDFLAGS" -o sprout-linux-amd64 .
         tar -czvf sprout-linux-amd64.tar.gz sprout-linux-amd64
 
         # Build for Linux (ARM64)
-        GOOS=linux GOARCH=arm64 go build -tags ollama_test -ldflags "$LDFLAGS" -o sprout-linux-arm64 .
+        GOOS=linux GOARCH=arm64 go build -ldflags "$LDFLAGS" -o sprout-linux-arm64 .
         tar -czvf sprout-linux-arm64.tar.gz sprout-linux-arm64
 
         # Build for Windows (AMD64)
-        GOOS=windows GOARCH=amd64 go build -tags ollama_test -ldflags "$LDFLAGS" -o sprout-windows-amd64.exe .
+        GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS" -o sprout-windows-amd64.exe .
         zip sprout-windows-amd64.zip sprout-windows-amd64.exe
 
         # Build for macOS (AMD64)
-        GOOS=darwin GOARCH=amd64 go build -tags ollama_test -ldflags "$LDFLAGS" -o sprout-darwin-amd64 .
+        GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o sprout-darwin-amd64 .
         tar -czvf sprout-darwin-amd64.tar.gz sprout-darwin-amd64
 
         # Build for macOS (ARM64)
-        GOOS=darwin GOARCH=arm64 go build -tags ollama_test -ldflags "$LDFLAGS" -o sprout-darwin-arm64 .
+        GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o sprout-darwin-arm64 .
         tar -czvf sprout-darwin-arm64.tar.gz sprout-darwin-arm64
 
     - name: Create Release

@@ -36,7 +36,10 @@ func TestCIOutputHandler_EnvironmentDetection(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set environment variables
+			// Hermetic env: clear inherited CI vars first (the runner sets
+			// CI=true in CI), then apply the case's vars on top.
+			t.Setenv("CI", "")
+			t.Setenv("GITHUB_ACTIONS", "")
 			for k, v := range tt.envVars {
 				t.Setenv(k, v)
 			}
@@ -230,6 +233,10 @@ func TestCIOutputHandler_Summary(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Hermetic env: the runner sets CI=true in CI, so explicitly clear
+			// it before each subtest and only re-set it for the CI case.
+			t.Setenv("CI", "")
+			t.Setenv("GITHUB_ACTIONS", "")
 			if tt.isCI {
 				t.Setenv("CI", "1")
 			}

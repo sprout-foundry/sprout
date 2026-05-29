@@ -104,7 +104,8 @@ func TestEligibility(t *testing.T) {
 		want []string
 	}{
 		{"big+tools", CanonicalModel{ContextWindow: 200000, Capabilities: Capabilities{Tools: Bool(true)}}, []string{RolePrimary, RoleSubagent}},
-		{"mid+tools", CanonicalModel{ContextWindow: 32000, Capabilities: Capabilities{Tools: Bool(true)}}, []string{RoleSubagent}},
+		{"warn-band+tools", CanonicalModel{ContextWindow: 64000, Capabilities: Capabilities{Tools: Bool(true)}}, []string{RoleSubagent}},
+		{"below-floor+tools", CanonicalModel{ContextWindow: 32000, Capabilities: Capabilities{Tools: Bool(true)}}, nil},
 		{"big+no-tools", CanonicalModel{ContextWindow: 200000, Capabilities: Capabilities{Tools: Bool(false)}}, nil},
 		{"big+unknown-tools", CanonicalModel{ContextWindow: 200000}, []string{RolePrimary, RoleSubagent}},
 		{"small", CanonicalModel{ContextWindow: 8000, Capabilities: Capabilities{Tools: Bool(true)}}, nil},
@@ -121,6 +122,39 @@ func TestEligibility(t *testing.T) {
 				break
 			}
 		}
+	}
+}
+
+func TestContextWarning(t *testing.T) {
+	if w := ContextWarning(200000); w != "" {
+		t.Errorf("adequate context should have no warning, got %q", w)
+	}
+	if w := ContextWarning(128000); w != "" {
+		t.Errorf("exactly recommended context should have no warning, got %q", w)
+	}
+	if ContextWarning(96000) == "" {
+		t.Error("64K–128K band should carry a strong warning")
+	}
+	if w := ContextWarning(32000); w != "" {
+		t.Errorf("hard-blocked context should have no warning (it has no roles), got %q", w)
+	}
+}
+
+func TestFillEligibleRoles_AttachesContextWarning(t *testing.T) {
+	models := []CanonicalModel{
+		{ID: "big", ContextWindow: 200000, Capabilities: Capabilities{Tools: Bool(true)}},
+		{ID: "warn", ContextWindow: 80000, Capabilities: Capabilities{Tools: Bool(true)}},
+		{ID: "blocked", ContextWindow: 16000, Capabilities: Capabilities{Tools: Bool(true)}},
+	}
+	FillEligibleRoles(models)
+	if len(models[0].Warnings) != 0 {
+		t.Errorf("big: expected no warnings, got %v", models[0].Warnings)
+	}
+	if len(models[1].Warnings) == 0 || len(models[1].EligibleRoles) == 0 {
+		t.Errorf("warn: expected subagent role + a warning, got roles=%v warnings=%v", models[1].EligibleRoles, models[1].Warnings)
+	}
+	if len(models[2].EligibleRoles) != 0 || len(models[2].Warnings) != 0 {
+		t.Errorf("blocked: expected no roles and no warning, got roles=%v warnings=%v", models[2].EligibleRoles, models[2].Warnings)
 	}
 }
 

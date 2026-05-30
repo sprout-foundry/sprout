@@ -68,7 +68,7 @@ func handleReadFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 			return result, fmt.Errorf("read file %q: %w", path, err)
 		}
 		// Inject semantic context if embedding is enabled
-		result = injectSemanticContext(a, path, result)
+		result = injectSemanticContext(ctx, a, path, result)
 		return result, nil
 	}
 
@@ -94,14 +94,14 @@ func handleReadFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 		return "", fmt.Errorf("failed to read file %s: %w", path, err)
 	}
 	// Inject semantic context if embedding is enabled
-	result = injectSemanticContext(a, path, result)
+	result = injectSemanticContext(ctx, a, path, result)
 	return result, nil
 }
 
 // injectSemanticContext appends semantically related function references to
 // the read_file result, giving the agent awareness of related code in other files.
 // This is the input-side of the embedding system — proactive context, not warnings.
-func injectSemanticContext(a *Agent, filePath string, content string) string {
+func injectSemanticContext(ctx context.Context, a *Agent, filePath string, content string) string {
 	if !shouldInjectContext(a) {
 		return content
 	}
@@ -123,7 +123,7 @@ func injectSemanticContext(a *Agent, filePath string, content string) string {
 		query = query[:500]
 	}
 
-	results, err := em.QuerySimilar(context.Background(), query, 5, 0.85)
+	results, err := em.QuerySimilar(ctx, query, 5, 0.85)
 	if err != nil || len(results) == 0 {
 		return content
 	}

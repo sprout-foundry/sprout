@@ -19,6 +19,11 @@ const RedactedContentMarker = "[REDACTED - external file]"
 
 // ChangeTracker manages change tracking for the agent workflow
 type ChangeTracker struct {
+	// mu protects revisionID, instructions, changes, baseRevisionRecorded,
+	// committedChangeCount, and checkpointedChangeCount. RecordTurnCheckpointAsync
+	// reads ct.changes from a goroutine while the main flow may Clear()/Reset()
+	// and tool execution appends — without this mutex those collide.
+	mu                   sync.Mutex
 	revisionID           string
 	sessionID            string
 	instructions         string
@@ -155,7 +160,9 @@ func (ct *ChangeTracker) TrackFileWrite(filePath string, newContent string) erro
 		ToolCall:     "WriteFile",
 	}
 
+	ct.mu.Lock()
 	ct.changes = append(ct.changes, change)
+	ct.mu.Unlock()
 	return nil
 }
 
@@ -180,13 +187,20 @@ func (ct *ChangeTracker) TrackFileEdit(filePath string, originalContent string, 
 		ToolCall:     "EditFile",
 	}
 
+	ct.mu.Lock()
 	ct.changes = append(ct.changes, change)
+	ct.mu.Unlock()
 	return nil
 }
 
 // Commit commits all tracked changes to the change tracker
 func (ct *ChangeTracker) Commit(llmResponse string, conversation []api.Message) error {
-	if !ct.enabled || len(ct.changes) == 0 {
+	if !ct.enabled {
+		return nil
+	}
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
+	if len(ct.changes) == 0 {
 		return nil
 	}
 	if ct.committedChangeCount >= len(ct.changes) {
@@ -272,6 +286,8 @@ func convertToHistoryMessages(messages []api.Message) []history.APIMessage {
 
 // GetTrackedFiles returns a list of files that have been modified
 func (ct *ChangeTracker) GetTrackedFiles() []string {
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
 	files := make([]string, len(ct.changes))
 	for i, change := range ct.changes {
 		files[i] = change.FilePath
@@ -281,11 +297,15 @@ func (ct *ChangeTracker) GetTrackedFiles() []string {
 
 // GetChangeCount returns the number of tracked changes
 func (ct *ChangeTracker) GetChangeCount() int {
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
 	return len(ct.changes)
 }
 
 // GetChanges returns a copy of the tracked changes
 func (ct *ChangeTracker) GetChanges() []TrackedFileChange {
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
 	changesCopy := make([]TrackedFileChange, len(ct.changes))
 	copy(changesCopy, ct.changes)
 	return changesCopy
@@ -301,6 +321,14 @@ func (ct *ChangeTracker) GetChanges() []TrackedFileChange {
 // the user's changes); a Reset that wants to re-learn from scratch
 // can null it manually.
 func (ct *ChangeTracker) Clear() {
+	ct.mu.Lock()
+	ct.clearLocked()
+	ct.mu.Unlock()
+}
+
+// clearLocked is the body of Clear, callable from sites that already hold
+// ct.mu (e.g., Reset). Preconditions: ct.mu is held by the caller.
+func (ct *ChangeTracker) clearLocked() {
 	ct.changes = ct.changes[:0]
 	ct.baseRevisionRecorded = false
 	ct.committedChangeCount = 0
@@ -329,16 +357,24 @@ func (ct *ChangeTracker) CollectFileChangesForCheckpoint() ([]CheckpointFileChan
 	if ct == nil || !ct.enabled {
 		return nil, ""
 	}
+	ct.mu.Lock()
 	if ct.checkpointedChangeCount >= len(ct.changes) {
 		// No new changes since last capture.
-		return nil, ct.revisionID
+		revID := ct.revisionID
+		ct.mu.Unlock()
+		return nil, revID
 	}
 
-	window := ct.changes[ct.checkpointedChangeCount:]
+	// Snapshot the window under the lock so concurrent Clear/Reset can't
+	// truncate the underlying slice while we iterate below.
+	window := make([]TrackedFileChange, len(ct.changes)-ct.checkpointedChangeCount)
+	copy(window, ct.changes[ct.checkpointedChangeCount:])
 	ct.checkpointedChangeCount = len(ct.changes)
+	revID := ct.revisionID
+	ct.mu.Unlock()
 
 	if len(window) == 0 {
-		return nil, ct.revisionID
+		return nil, revID
 	}
 
 	// Collapse multiple writes to the same path → one entry per path.
@@ -364,7 +400,7 @@ func (ct *ChangeTracker) CollectFileChangesForCheckpoint() ([]CheckpointFileChan
 	for _, path := range order {
 		manifest = append(manifest, CheckpointFileChange{Path: path, Op: seen[path]})
 	}
-	return manifest, ct.revisionID
+	return manifest, revID
 }
 
 // mapTrackedOperationToGit maps a TrackedFileChange.Operation value to the
@@ -386,9 +422,12 @@ func mapTrackedOperationToGit(op string) string {
 
 // Reset resets the change tracker with a new revision ID and instructions
 func (ct *ChangeTracker) Reset(instructions string) {
+	revID := generateRevisionID(ct.sessionID, instructions)
+	ct.mu.Lock()
 	ct.instructions = instructions
-	ct.revisionID = generateRevisionID(ct.sessionID, instructions)
-	ct.Clear()
+	ct.revisionID = revID
+	ct.clearLocked()
+	ct.mu.Unlock()
 }
 
 // Helper functions
@@ -496,9 +535,17 @@ func limitString(s string, maxLen int) string {
 
 // GenerateAISummary creates an AI-generated summary of the changes
 func (ct *ChangeTracker) GenerateAISummary() (string, error) {
+	// Snapshot the state we need under the lock so concurrent Clear/Reset
+	// can't truncate ct.changes while we iterate below.
+	ct.mu.Lock()
 	if len(ct.changes) == 0 {
+		ct.mu.Unlock()
 		return "No changes to summarize", nil
 	}
+	changesSnapshot := make([]TrackedFileChange, len(ct.changes))
+	copy(changesSnapshot, ct.changes)
+	instructions := ct.instructions
+	ct.mu.Unlock()
 
 	if ct.agent == nil {
 		return ct.GetSummary(), nil // Fallback to manual summary
@@ -507,9 +554,9 @@ func (ct *ChangeTracker) GenerateAISummary() (string, error) {
 	// Build context for the AI summary
 	var contextBuilder strings.Builder
 	contextBuilder.WriteString("Changes made in this session:\n\n")
-	contextBuilder.WriteString(fmt.Sprintf("Original instruction: %s\n\n", ct.instructions))
+	contextBuilder.WriteString(fmt.Sprintf("Original instruction: %s\n\n", instructions))
 
-	for i, change := range ct.changes {
+	for i, change := range changesSnapshot {
 		contextBuilder.WriteString(fmt.Sprintf("Change %d: %s %s\n", i+1, change.Operation, change.FilePath))
 		contextBuilder.WriteString(fmt.Sprintf("Tool used: %s\n", change.ToolCall))
 
@@ -545,14 +592,19 @@ Focus on WHAT was changed and WHY (based on the instruction). Be specific about 
 
 // GetSummary returns a summary of tracked changes
 func (ct *ChangeTracker) GetSummary() string {
+	ct.mu.Lock()
 	if len(ct.changes) == 0 {
+		ct.mu.Unlock()
 		return "No file changes tracked"
 	}
+	changesSnapshot := make([]TrackedFileChange, len(ct.changes))
+	copy(changesSnapshot, ct.changes)
+	ct.mu.Unlock()
 
 	var summary strings.Builder
-	summary.WriteString(fmt.Sprintf("Tracked %d file changes:\n", len(ct.changes)))
+	summary.WriteString(fmt.Sprintf("Tracked %d file changes:\n", len(changesSnapshot)))
 
-	for _, change := range ct.changes {
+	for _, change := range changesSnapshot {
 		summary.WriteString(fmt.Sprintf("• %s (%s via %s)\n",
 			change.FilePath, change.Operation, change.ToolCall))
 	}

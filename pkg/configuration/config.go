@@ -1032,7 +1032,7 @@ func (c *PersistentContextConfig) Resolve() PersistentContextConfig {
 		MaxContextualResults:      5,
 		MinRelevanceScore:         0.50,
 		MaxContextChars:           4000,
-		WorkspaceScopedRetrieval:  false,
+		WorkspaceScopedRetrieval:  true,
 		DriftDetectionEnabled:     true,
 		DriftThreshold:            0.60,
 		DriftCheckInterval:        5,

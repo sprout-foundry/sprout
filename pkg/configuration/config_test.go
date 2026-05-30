@@ -311,7 +311,7 @@ func TestPersistentContextConfigResolve_NilReturnsDefaults(t *testing.T) {
 	assert.Equal(t, 5, result.MaxContextualResults)
 	assert.Equal(t, 0.50, result.MinRelevanceScore)
 	assert.Equal(t, 4000, result.MaxContextChars)
-	assert.False(t, result.WorkspaceScopedRetrieval)
+	assert.True(t, result.WorkspaceScopedRetrieval, "default is now true (workspace scoping on by default)")
 	assert.True(t, result.DriftDetectionEnabled)
 	assert.Equal(t, 0.60, result.DriftThreshold)
 	assert.Equal(t, 5, result.DriftCheckInterval)

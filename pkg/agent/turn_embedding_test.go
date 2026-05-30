@@ -7,10 +7,21 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/embedding"
 )
+
+// initEmbeddingMgrWithTimeout bounds mgr.Init so a stuck ONNX runtime / model
+// download fails the call within a finite window instead of hanging the whole
+// pkg/agent suite. Each caller still gets the "ONNX runtime not available"
+// skip branch via the returned error. See TODO SP-008-C1-testEmbedDownloadTimeout.
+func initEmbeddingMgrWithTimeout(parent context.Context, mgr *embedding.EmbeddingManager) error {
+	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
+	defer cancel()
+	return mgr.Init(ctx)
+}
 
 // TestEmbedAndStoreTurn_RealProvider tests the full flow with the ONNX provider.
 // It creates an EmbeddingManager with a temp config dir, calls EmbedAndStoreTurn,
@@ -33,7 +44,7 @@ func TestEmbedAndStoreTurn_RealProvider(t *testing.T) {
 	mgr := embedding.NewEmbeddingManager(cfg, tempDir)
 
 	// Initialize the manager (requires ONNX runtime)
-	if err := mgr.Init(ctx); err != nil {
+	if err := initEmbeddingMgrWithTimeout(ctx, mgr); err != nil {
 		if strings.Contains(err.Error(), "ONNX") {
 			t.Skipf("Skipping: ONNX runtime not available: %v", err)
 		}
@@ -111,7 +122,7 @@ func TestEmbedAndStoreTurn_EmptySummary(t *testing.T) {
 	mgr := embedding.NewEmbeddingManager(cfg, tempDir)
 
 	// Initialize the manager (requires ONNX runtime)
-	if err := mgr.Init(ctx); err != nil {
+	if err := initEmbeddingMgrWithTimeout(ctx, mgr); err != nil {
 		if strings.Contains(err.Error(), "ONNX") {
 			t.Skipf("Skipping: ONNX runtime not available: %v", err)
 		}
@@ -200,7 +211,7 @@ func TestEmbedAndStoreTurn_GracefulFailure_NilTurn(t *testing.T) {
 	mgr := embedding.NewEmbeddingManager(cfg, tempDir)
 
 	// Initialize the manager (requires ONNX runtime)
-	if err := mgr.Init(ctx); err != nil {
+	if err := initEmbeddingMgrWithTimeout(ctx, mgr); err != nil {
 		if strings.Contains(err.Error(), "ONNX") {
 			t.Skipf("Skipping: ONNX runtime not available: %v", err)
 		}
@@ -293,7 +304,7 @@ func TestEmbedAndStoreTurn_GracefulFailure_EmptyPrompt(t *testing.T) {
 
 	cfg := &configuration.EmbeddingIndexConfig{IndexDir: tempDir}
 	mgr := embedding.NewEmbeddingManager(cfg, tempDir)
-	if err := mgr.Init(ctx); err != nil {
+	if err := initEmbeddingMgrWithTimeout(ctx, mgr); err != nil {
 		if strings.Contains(err.Error(), "ONNX") {
 			t.Skipf("Skipping: ONNX runtime not available: %v", err)
 		}
@@ -460,7 +471,7 @@ func TestEmbedAndStoreTurn_RoundTripWithQuery(t *testing.T) {
 	mgr := embedding.NewEmbeddingManager(cfg, tempDir)
 
 	// Initialize the manager (requires ONNX runtime)
-	if err := mgr.Init(ctx); err != nil {
+	if err := initEmbeddingMgrWithTimeout(ctx, mgr); err != nil {
 		if strings.Contains(err.Error(), "ONNX") {
 			t.Skipf("Skipping: ONNX runtime not available: %v", err)
 		}

@@ -131,17 +131,15 @@ When the active persona spawns subagents (e.g. EA delegating to `coder`), the su
 
 | Document | Description |
 |-----------|-------------|
-| [Component Library](docs/CONSUMPTION_GUIDE.md) | @sprout/ui npm package usage and consumption guide |
+| [Component Library](docs/CONSUMPTION_GUIDE.md) | @sprout/ui npm package usage and architecture |
 | [CLI Reference](docs/CLI_REFERENCE.md) | All commands, flags, slash commands, personas, tools |
 | [Configuration](docs/CONFIGURATION.md) | Config files, environment variables, Zsh detection, CI/CD |
-| [Web UI](docs/WEB_UI.md) | Web UI features, SSH tunneling, remote access |
 | [Architecture](docs/ARCHITECTURE.md) | Package layout, data flow, workspace files |
 | [MCP Integration](docs/MCP_INTEGRATION.md) | MCP server setup, configuration, troubleshooting |
 | [Agent Workflow](docs/AGENT_WORKFLOW.md) | Config-driven workflow sequences |
 | [Provider Catalog](docs/PROVIDER_CATALOG.md) | Provider catalog system and model metadata |
 | [Personas](docs/PERSONAS.md) | Persona system, risk model, and custom persona guide |
 | [Testing](docs/TESTING.md) | Test strategy, categories, and commands |
-| [Electron Packaging](docs/ELECTRON.md) | Desktop shell packaging and distribution |
 
 ## Contributing
 

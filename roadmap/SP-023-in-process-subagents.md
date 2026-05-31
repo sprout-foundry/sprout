@@ -1,6 +1,6 @@
 # SP-023: In-Process Subagent Execution
 
-## Status: Active
+**Status:** ✅ Active
 
 ## Problem
 

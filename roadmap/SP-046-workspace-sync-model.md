@@ -1,8 +1,7 @@
 # SP-046: Browser-Primary Workspace Sync Model
 
-## Status
-
-**Proposed** — Priority: High (blocks paid-tier UX work in `../platform`)
+**Status:** 📋 Proposed
+**Priority:** High (blocks paid-tier UX work)
 
 ## 1. Decision Summary
 

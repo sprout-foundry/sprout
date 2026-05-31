@@ -1,4 +1,4 @@
-# Leduit Web UI Development Setup
+# Sprout Web UI Development Setup
 
 ## Prerequisites
 

@@ -1,7 +1,353 @@
-body: "# SP-011: Terminal Parity & Bug Fixes\n\n**Status:** \U0001F4CB Proposed  \n**Depends on:** SP-003 (WebUI & Frontend Architecture)  \n**Priority:** High  \n**Effort Estimate:** ~2-3 weeks (3 phases — critical bug fixes first)\n\n## Problem\n\nThe embedded terminal has **3 critical issues** that make it feel broken:\n\n### Critical Issue 1: `exit` Doesn't Close the Pane\n\nWhen the user types `exit` in a terminal, the backend sends a `pty_exit` event. The frontend writes `[Process exited]` to the xterm buffer but does NOT close the session, disconnect the WebSocket, or remove the tab. The dead terminal sits there forever with no way to recover.\n\n**Current behavior (broken):**\n```typescript\n// TerminalPane.tsx — pty_exit handler\n} else if (event.type === 'pty_exit') {\n  xtermRef.current?.writeln('\\r\\n\\x1b[90m[Process exited]\\x1b[0m');\n  // Nothing else happens — session stays open, tab stays, pane is dead\n}\n```\n\n**Expected behavior:**\n1. Show a brief \"[Process exited]\" message\n2. Disconnect the pane's WebSocket cleanly\n3. Notify parent Terminal component via new `onProcessExit` callback\n4. Parent handles cleanup:\n   - If secondary split pane → auto-close the split\n   - If only session → auto-create a fresh session after 1.5s\n   - If one of multiple tabbed sessions → close the tab, switch to next\n\n### Critical Issue 2: Tabs + Split Panes Conflict\n\nThe terminal uses `activeSessionId` for BOTH \"which tab is selected\" AND \"which session renders in the primary pane\". When split mode is active and the user switches tabs, it changes the primary pane's session — but the secondary pane is locked to one session. With >2 sessions, only the two split panes actually work; extra tabs exist but can only swap into the primary pane position, which is confusing.\n\n**Current architecture:**\n```\nTab bar shows: [Session 1] [Session 2] [Session 3]\n                     ↑ active (renders in primary pane)\n\nPrimary pane:   renders activeSessionId (switches with tab clicks)\nSecondary pane: always renders secondarySessionId (locked)\n```\n\n**Problem:**\n- Tab switching changes what's in the primary pane while the split is active\n- Extra tabs beyond the 2 split panes have no pane to render in\n- No way to assign tabs to specific panes\n- User expectation: each pane should have its own tab group\n\n**Solution: Per-Pane Session Model**\n- Each split pane maintains its own session group with its own tab bar\n- When unsplit, all sessions collapse back into a single group\n- New state model:\n\n```typescript\ninterface PaneState {\n  id: string;                     // stable pane identifier\n  sessions: TerminalSession[];    // tabs in this pane\n  activeSessionId: string;        // which tab is visible\n}\n```\n\n- Unsplit: 1 PaneState (all sessions in one tab bar)\n- Split: 2 PaneStates (each with its own session list and tab bar)\n- Splitting moves the current active session to the new pane\n- Tabs can only be switched within their pane\n\n### Critical Issue 3: Non-Working Buttons Should Be Removed\n\nThere are buttons in the terminal header that either don't work correctly or are confusing. Specifically:\n\n**Zoom buttons (+) (-) work** — these control font size and are functional. Keep them.\n\n**However**, the user reports seeing non-functional (+)(-) buttons. This is likely because:\n- The split (+) button in the tab bar (\"New terminal session\") may appear broken when split is active\n- The split buttons (⠀ ⠁) create new sessions but the interaction with tabs is confusing\n\n**Solution:** Remove the (+) new session button from the tab bar when split mode is active, and only allow creating new sessions through the tab bar within each pane's own tab group.\n\n## Current State\n\n### Terminal Architecture\n\n```\nwebui/src/components/Terminal.tsx (main terminal component, ~480 lines)\n├── TerminalTabBar (from @sprout/ui — tab CRUD, rename, pin)\n├── TerminalPane.tsx (xterm.js mount, WebSocket, events, ~500 lines)\n│   ├── xterm.js Terminal instance\n│   ├── FitAddon (auto-resize)\n│   ├── Custom key handler (Ctrl+Shift+C/V)\n│   └── WebSocket → PTY data via terminalWebSocket.ts\n├── Shell picker (+ button with dropdown)\n├── Zoom controls (ZoomIn/ZoomOut/Type buttons — work)\n├── Clear button\n└── Split management (horizontal/vertical, drag divider)\n\npackages/ui/src/components/Terminal.tsx (simplified version, ~278 lines)\n└── Same structure but simplified session management\n```\n\n### What Already Works\n\n| Feature | Status | Notes |\n|---------|--------|-------|\n| Tabbed sessions | ✅ Works | Rename, pin, close tabs |\n| Shell picker | ✅ Works | Dynamic shell detection, dropdown |\n| Split panes | ⚠️ Partially | Creates split, but conflicts with tabs |\n| Font zoom | ✅ Works | ZoomIn/ZoomOut/Reset buttons |\n| Clear | ✅ Works | Per-pane clear button |\n| WebSocket reconnect | ✅ Works | Exponential backoff, freeze/resume |\n| WASM fallback | ✅ Works | Cloud mode browser shell |\n| Selection copy | ✅ Works | Ctrl+Shift+C/V + right-click context menu |\n| `exit` handling | ❌ Broken | Shows message but doesn't clean up |\n| Tab/split coexistence | ❌ Broken | Conflicting session-to-pane mapping |\n\n## Proposed Solution\n\n### Phase 1: Critical Bug Fixes (Days 1-4)\n\n#### P1.1: Handle `pty_exit` — Auto-Close or Restart\n\n**New prop on TerminalPane:**\n```typescript\ninterface TerminalPaneProps {\n  // ... existing props ...\n  /** Called when the PTY process exits (user typed exit, shell crashed, etc.) */\n  onProcessExit?: () => void;\n}\n```\n\n**TerminalPane.tsx changes:**\n```typescript\n// In the WebSocket event handler:\n} else if (event.type === 'pty_exit') {\n  xtermRef.current?.writeln('\\r\\n\\x1b[90m[Process exited]\\x1b[0m');\n  setPaneConnected(false);\n  onConnectionChangeRef.current?.(false);\n  \n  // Close the WebSocket connection cleanly\n  const service = terminalWSRef.current;\n  if (service) {\n    service.closeSession();\n    service.disconnect();\n    terminalWSRef.current = null;\n  }\n  \n  // Notify parent after a brief delay so the user sees the exit message\n  setTimeout(() => {\n    onProcessExitRef.current?.();\n  }, 1000);\n}\n```\n\n**Terminal.tsx changes:**\n```typescript\nconst handlePaneExit = useCallback((paneId: string) => {\n  // If secondary split pane exited, auto-close the split\n  if (secondaryPaneId === paneId) {\n    closeSecondaryPane();\n    return;\n  }\n  \n  // If primary pane's session exited:\n  const pane = panesRef.current.find(p => p.id === paneId);\n  if (!pane) return;\n  \n  if (pane.sessions.length <= 1 && panesRef.current.length <= 1) {\n    // Last session in last pane — auto-restart after 1.5s\n    const newId = `pane-${++paneIdCounter.current}`;\n    const newSession: TerminalSession = { id: newId, name: 'Session 1', is_pinned: false };\n    \n    // Brief delay so user sees the exit message\n    setTimeout(() => {\n      setSessions([newSession]);\n      setActiveSessionId(newId);\n    }, 1500);\n  } else if (pane.sessions.length <= 1) {\n    // Last session in this pane, but other pane exists — close this pane\n    closePane(paneId);\n  } else {\n    // Multiple sessions in this pane — close the exited one, switch to next\n    const currentSessions = pane.sessions;\n    const activeIdx = currentSessions.findIndex(s => s.id === pane.activeSessionId);\n    const remaining = currentSessions.filter(s => s.id !== pane.activeSessionId);\n    const nextActive = remaining[Math.min(activeIdx, remaining.length - 1)];\n    updatePane(paneId, { sessions: remaining, activeSessionId: nextActive.id });\n  }\n}, []);\n```\n\n#### P1.2: Fix Tabs + Split — Per-Pane Session Model\n\nReplace the current flat session model with a per-pane model:\n\n**New state:**\n```typescript\ninterface PaneState {\n  id: string;                      // \"primary\" | \"secondary\"\n  sessions: TerminalSession[];     // tabs belonging to this pane\n  activeSessionId: string;         // currently visible tab\n}\n\n// State:\nconst [panes, setPanes] = useState<PaneState[]>([\n  { id: 'primary', sessions: [{ id: 's-1', name: 'Session 1', is_pinned: false }], activeSessionId: 's-1' }\n]);\nconst [splitDirection, setSplitDirection] = useState<SplitDirection>('none');\n```\n\n**Rendering:**\n```tsx\n{panes.map((pane, paneIndex) => (\n  <div key={pane.id} className=\"terminal-pane-wrapper\" style={splitStyleForPane(paneIndex)}>\n    {/* Per-pane tab bar */}\n    <TerminalTabBar\n      sessions={pane.sessions}\n      activeSessionId={pane.activeSessionId}\n      onSwitch={(id) => switchSessionInPane(pane.id, id)}\n      onCreate={() => addSessionToPane(pane.id)}\n      onClose={(id) => closeSessionInPane(pane.id, id)}\n      onRename={(id, name) => renameSessionInPane(pane.id, id, name)}\n      onTogglePin={(id) => togglePinInPane(pane.id, id)}\n    />\n    {/* Active session terminal */}\n    <TerminalPane\n      key={pane.activeSessionId}\n      isActive={isExpanded}\n      isConnected={isConnected}\n      showCloseButton={panes.length > 1}\n      onClose={() => closePane(pane.id)}\n      onProcessExit={() => handlePaneExit(pane.id, pane.activeSessionId)}\n      preferredShell={getSessionShell(pane.activeSessionId)}\n      fontSize={fontSize}\n    />\n  </div>\n))}\n```\n\n**Split behavior:**\n- `toggleSplit(direction)`:\n  - If currently unsplit → create secondary pane, move current active session to it, keep remaining sessions in primary\n  - If currently split → merge all sessions back to primary pane, close secondary\n  - If switching directions → just change direction, keep both panes\n\n- `addSessionToPane(paneId)` → create new session in specific pane\n- `closeSessionInPane(paneId, sessionId)` → close within that pane's scope\n- `switchSessionInPane(paneId, sessionId)` → switch tab within pane\n\n#### P1.3: Remove Non-Functional Buttons During Split\n\n**Changes to the tab bar area in Terminal.tsx:**\n- When split is active, each pane's tab bar gets its own (+) create button\n- Remove the global (+) shell picker from the tab bar row when split is active\n- Each pane's (+) button creates sessions in that pane only\n- The (+) new session button in the tab bar only appears for the pane that owns it\n\n### Phase 2: Polish & UX Improvements (Week 2)\n\n#### P2.1: Exited Session Visual Feedback\n\nAdd CSS for exited/waiting state:\n```css\n.terminal-tab.exited {\n  opacity: 0.5;\n  font-style: italic;\n}\n```\n\nShow a \"Session ended. Starting new session...\" message before auto-restart.\n\n#### P2.2: Verify Zoom Buttons Are Correctly Visible\n\nConfirm that ZoomIn (+) / ZoomOut (-) buttons:\n- Are visible in the terminal header\n- Correctly change xterm font size\n- Persist to localStorage across reloads\n- The font size indicator shows current size on hover\n\nIf any are broken, fix the data flow from Terminal → TerminalPane → xterm.\n\n#### P2.3: Clean Up `packages/ui` Terminal Duplication\n\nThe `packages/ui/src/components/Terminal.tsx` is a simplified duplicate with its own session management. Evaluate:\n- If it's used anywhere (storybook, examples) → update it to match the new per-pane model\n- If it's not used → remove it to avoid confusion\n\n### Phase 3: Missing Features (Week 3, optional)\n\n#### P3.1: Terminal Search (Ctrl+Shift+F)\n- Install `@xterm/addon-search`\n- Add search bar above terminal pane\n- Match counter, case-sensitive/regex toggles\n\n#### P3.2: Clickable File Paths\n- Detect patterns like `./foo.go:12:34` in terminal output\n- Use `Terminal.registerLinkProvider()` for click handling\n- Dispatch event to open file in editor at line/col\n\n#### P3.3: Copy-on-Select\n- Auto-copy selected text to clipboard\n\n#### P3.4: Scrollback Persistence\n- Save terminal buffer to IndexedDB on unmount\n- Restore on reconnect\n\n## Implementation Plan\n\n### Phase 1: Critical Bug Fixes — MUST DO FIRST\n\n**Modified files:**\n- `webui/src/components/TerminalPane.tsx` — handle `pty_exit`, add `onProcessExit` prop, clean up WebSocket on exit\n- `webui/src/components/Terminal.tsx` — replace flat session model with per-pane model, handle pane exits, clean up split/tab interaction\n- `webui/src/components/Terminal.css` — exited session styles, per-pane tab bar layout\n\n### Phase 2: Polish\n\n**Modified files:**\n- `webui/src/components/Terminal.tsx` — zoom verification, button cleanup\n- `webui/src/components/Terminal.css` — zoom button styling fixes if needed\n\n### Phase 3: Missing Features (optional)\n\n**New files:**\n- `webui/src/components/TerminalSearchBar.tsx` + CSS — search UI\n- `webui/src/extensions/terminalFilePaths.ts` — clickable file path detection\n\n**Modified files:**\n- `webui/src/components/TerminalPane.tsx` — wire search addon, link provider, copy-on-select\n\n## Success Criteria\n\n| Metric | Target |\n|--------|--------|\n| `exit` handling | Dead sessions auto-close or auto-restart after 1.5s delay |\n| Split pane exit | Secondary pane auto-closes when its process exits |\n| Tabs + split | Per-pane tab bars that work independently |\n| Non-working buttons | Removed or fixed |\n| Zoom buttons | Font size reliably changes when clicking +/- |\n| Build | `make build-all` passes |\n| Terminal search | (Phase 3) Ctrl+Shift+F finds text in scrollback |\n| Clickable paths | (Phase 3) `./foo.go:12` opens in editor |\n\n## Files Reference\n\n| File | Action |\n|------|--------|\n| `webui/src/components/Terminal.tsx` | Major: per-pane session model, exit handling |\n| `webui/src/components/TerminalPane.tsx` | Major: pty_exit handling, onProcessExit callback |\n| `webui/src/components/Terminal.css` | Modify: per-pane layout, exited session styles |\n| `packages/ui/src/components/Terminal.tsx` | Evaluate: update or remove duplicate |"
-frontmatter:
-    depends_on: SP-003
-    effort_estimate: ~2-3 weeks
-    priority: High
-    status: "\U0001F4CB Proposed"
-    title: 'SP-011: Terminal Parity & Bug Fixes'
+# SP-011: Terminal Parity & Bug Fixes
+
+**Status:** 📋 Proposed
+**Depends on:** SP-003 (WebUI & Frontend Architecture)
+**Priority:** High
+**Effort Estimate:** ~2-3 weeks (3 phases — critical bug fixes first)
+
+## Problem
+
+The embedded terminal has **3 critical issues** that make it feel broken:
+
+### Critical Issue 1: `exit` Doesn't Close the Pane
+
+When the user types `exit` in a terminal, the backend sends a `pty_exit` event. The frontend writes `[Process exited]` to the xterm buffer but does NOT close the session, disconnect the WebSocket, or remove the tab. The dead terminal sits there forever with no way to recover.
+
+**Current behavior (broken):**
+```typescript
+// TerminalPane.tsx — pty_exit handler
+} else if (event.type === 'pty_exit') {
+  xtermRef.current?.writeln('\r\n\x1b[90m[Process exited]\x1b[0m');
+  // Nothing else happens — session stays open, tab stays, pane is dead
+}
+```
+
+**Expected behavior:**
+1. Show a brief "[Process exited]" message
+2. Disconnect the pane's WebSocket cleanly
+3. Notify parent Terminal component via new `onProcessExit` callback
+4. Parent handles cleanup:
+   - If secondary split pane → auto-close the split
+   - If only session → auto-create a fresh session after 1.5s
+   - If one of multiple tabbed sessions → close the tab, switch to next
+
+### Critical Issue 2: Tabs + Split Panes Conflict
+
+The terminal uses `activeSessionId` for BOTH "which tab is selected" AND "which session renders in the primary pane". When split mode is active and the user switches tabs, it changes the primary pane's session — but the secondary pane is locked to one session. With >2 sessions, only the two split panes actually work; extra tabs exist but can only swap into the primary pane position, which is confusing.
+
+**Current architecture:**
+```
+Tab bar shows: [Session 1] [Session 2] [Session 3]
+                     ↑ active (renders in primary pane)
+
+Primary pane:   renders activeSessionId (switches with tab clicks)
+Secondary pane: always renders secondarySessionId (locked)
+```
+
+**Problem:**
+- Tab switching changes what's in the primary pane while the split is active
+- Extra tabs beyond the 2 split panes have no pane to render in
+- No way to assign tabs to specific panes
+- User expectation: each pane should have its own tab group
+
+**Solution: Per-Pane Session Model**
+- Each split pane maintains its own session group with its own tab bar
+- When unsplit, all sessions collapse back into a single group
+- New state model:
+
+```typescript
+interface PaneState {
+  id: string;                     // stable pane identifier
+  sessions: TerminalSession[];    // tabs in this pane
+  activeSessionId: string;        // which tab is visible
+}
+```
+
+- Unsplit: 1 PaneState (all sessions in one tab bar)
+- Split: 2 PaneStates (each with its own session list and tab bar)
+- Splitting moves the current active session to the new pane
+- Tabs can only be switched within their pane
+
+### Critical Issue 3: Non-Working Buttons Should Be Removed
+
+There are buttons in the terminal header that either don't work correctly or are confusing. Specifically:
+
+**Zoom buttons (+) (-) work** — these control font size and are functional. Keep them.
+
+**However**, the user reports seeing non-functional (+)(-) buttons. This is likely because:
+- The split (+) button in the tab bar ("New terminal session") may appear broken when split is active
+- The split buttons (⠀ ⠁) create new sessions but the interaction with tabs is confusing
+
+**Solution:** Remove the (+) new session button from the tab bar when split mode is active, and only allow creating new sessions through the tab bar within each pane's own tab group.
+
+## Current State
+
+### Terminal Architecture
+
+```
+webui/src/components/Terminal.tsx (main terminal component, ~480 lines)
+├── TerminalTabBar (from @sprout/ui — tab CRUD, rename, pin)
+├── TerminalPane.tsx (xterm.js mount, WebSocket, events, ~500 lines)
+│   ├── xterm.js Terminal instance
+│   ├── FitAddon (auto-resize)
+│   ├── Custom key handler (Ctrl+Shift+C/V)
+│   └── WebSocket → PTY data via terminalWebSocket.ts
+├── Shell picker (+ button with dropdown)
+├── Zoom controls (ZoomIn/ZoomOut/Type buttons — work)
+├── Clear button
+└── Split management (horizontal/vertical, drag divider)
+
+packages/ui/src/components/Terminal.tsx (simplified version, ~278 lines)
+└── Same structure but simplified session management
+```
+
+### What Already Works
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Tabbed sessions | ✅ Works | Rename, pin, close tabs |
+| Shell picker | ✅ Works | Dynamic shell detection, dropdown |
+| Split panes | ⚠️ Partially | Creates split, but conflicts with tabs |
+| Font zoom | ✅ Works | ZoomIn/ZoomOut/Reset buttons |
+| Clear | ✅ Works | Per-pane clear button |
+| WebSocket reconnect | ✅ Works | Exponential backoff, freeze/resume |
+| WASM fallback | ✅ Works | Cloud mode browser shell |
+| Selection copy | ✅ Works | Ctrl+Shift+C/V + right-click context menu |
+| `exit` handling | ❌ Broken | Shows message but doesn't clean up |
+| Tab/split coexistence | ❌ Broken | Conflicting session-to-pane mapping |
+
+## Proposed Solution
+
+### Phase 1: Critical Bug Fixes (Days 1-4)
+
+#### P1.1: Handle `pty_exit` — Auto-Close or Restart
+
+**New prop on TerminalPane:**
+```typescript
+interface TerminalPaneProps {
+  // ... existing props ...
+  /** Called when the PTY process exits (user typed exit, shell crashed, etc.) */
+  onProcessExit?: () => void;
+}
+```
+
+**TerminalPane.tsx changes:**
+```typescript
+// In the WebSocket event handler:
+} else if (event.type === 'pty_exit') {
+  xtermRef.current?.writeln('\r\n\x1b[90m[Process exited]\x1b[0m');
+  setPaneConnected(false);
+  onConnectionChangeRef.current?.(false);
+  
+  // Close the WebSocket connection cleanly
+  const service = terminalWSRef.current;
+  if (service) {
+    service.closeSession();
+    service.disconnect();
+    terminalWSRef.current = null;
+  }
+  
+  // Notify parent after a brief delay so the user sees the exit message
+  setTimeout(() => {
+    onProcessExitRef.current?.();
+  }, 1000);
+}
+```
+
+**Terminal.tsx changes:**
+```typescript
+const handlePaneExit = useCallback((paneId: string) => {
+  // If secondary split pane exited, auto-close the split
+  if (secondaryPaneId === paneId) {
+    closeSecondaryPane();
+    return;
+  }
+  
+  // If primary pane's session exited:
+  const pane = panesRef.current.find(p => p.id === paneId);
+  if (!pane) return;
+  
+  if (pane.sessions.length <= 1 && panesRef.current.length <= 1) {
+    // Last session in last pane — auto-restart after 1.5s
+    const newId = `pane-${++paneIdCounter.current}`;
+    const newSession: TerminalSession = { id: newId, name: 'Session 1', is_pinned: false };
+    
+    // Brief delay so user sees the exit message
+    setTimeout(() => {
+      setSessions([newSession]);
+      setActiveSessionId(newId);
+    }, 1500);
+  } else if (pane.sessions.length <= 1) {
+    // Last session in this pane, but other pane exists — close this pane
+    closePane(paneId);
+  } else {
+    // Multiple sessions in this pane — close the exited one, switch to next
+    const currentSessions = pane.sessions;
+    const activeIdx = currentSessions.findIndex(s => s.id === pane.activeSessionId);
+    const remaining = currentSessions.filter(s => s.id !== pane.activeSessionId);
+    const nextActive = remaining[Math.min(activeIdx, remaining.length - 1)];
+    updatePane(paneId, { sessions: remaining, activeSessionId: nextActive.id });
+  }
+}, []);
+```
+
+#### P1.2: Fix Tabs + Split — Per-Pane Session Model
+
+Replace the current flat session model with a per-pane model:
+
+**New state:**
+```typescript
+interface PaneState {
+  id: string;                      // "primary" | "secondary"
+  sessions: TerminalSession[];     // tabs belonging to this pane
+  activeSessionId: string;         // currently visible tab
+}
+
+// State:
+const [panes, setPanes] = useState<PaneState[]>([
+  { id: 'primary', sessions: [{ id: 's-1', name: 'Session 1', is_pinned: false }], activeSessionId: 's-1' }
+]);
+const [splitDirection, setSplitDirection] = useState<SplitDirection>('none');
+```
+
+**Rendering:**
+```tsx
+{panes.map((pane, paneIndex) => (
+  <div key={pane.id} className="terminal-pane-wrapper" style={splitStyleForPane(paneIndex)}>
+    {/* Per-pane tab bar */}
+    <TerminalTabBar
+      sessions={pane.sessions}
+      activeSessionId={pane.activeSessionId}
+      onSwitch={(id) => switchSessionInPane(pane.id, id)}
+      onCreate={() => addSessionToPane(pane.id)}
+      onClose={(id) => closeSessionInPane(pane.id, id)}
+      onRename={(id, name) => renameSessionInPane(pane.id, id, name)}
+      onTogglePin={(id) => togglePinInPane(pane.id, id)}
+    />
+    {/* Active session terminal */}
+    <TerminalPane
+      key={pane.activeSessionId}
+      isActive={isExpanded}
+      isConnected={isConnected}
+      showCloseButton={panes.length > 1}
+      onClose={() => closePane(pane.id)}
+      onProcessExit={() => handlePaneExit(pane.id, pane.activeSessionId)}
+      preferredShell={getSessionShell(pane.activeSessionId)}
+      fontSize={fontSize}
+    />
+  </div>
+))}
+```
+
+**Split behavior:**
+- `toggleSplit(direction)`:
+  - If currently unsplit → create secondary pane, move current active session to it, keep remaining sessions in primary
+  - If currently split → merge all sessions back to primary pane, close secondary
+  - If switching directions → just change direction, keep both panes
+
+- `addSessionToPane(paneId)` → create new session in specific pane
+- `closeSessionInPane(paneId, sessionId)` → close within that pane's scope
+- `switchSessionInPane(paneId, sessionId)` → switch tab within pane
+
+#### P1.3: Remove Non-Functional Buttons During Split
+
+**Changes to the tab bar area in Terminal.tsx:**
+- When split is active, each pane's tab bar gets its own (+) create button
+- Remove the global (+) shell picker from the tab bar row when split is active
+- Each pane's (+) button creates sessions in that pane only
+- The (+) new session button in the tab bar only appears for the pane that owns it
+
+### Phase 2: Polish & UX Improvements (Week 2)
+
+#### P2.1: Exited Session Visual Feedback
+
+Add CSS for exited/waiting state:
+```css
+.terminal-tab.exited {
+  opacity: 0.5;
+  font-style: italic;
+}
+```
+
+Show a "Session ended. Starting new session..." message before auto-restart.
+
+#### P2.2: Verify Zoom Buttons Are Correctly Visible
+
+Confirm that ZoomIn (+) / ZoomOut (-) buttons:
+- Are visible in the terminal header
+- Correctly change xterm font size
+- Persist to localStorage across reloads
+- The font size indicator shows current size on hover
+
+If any are broken, fix the data flow from Terminal → TerminalPane → xterm.
+
+#### P2.3: Clean Up `packages/ui` Terminal Duplication
+
+The `packages/ui/src/components/Terminal.tsx` is a simplified duplicate with its own session management. Evaluate:
+- If it's used anywhere (storybook, examples) → update it to match the new per-pane model
+- If it's not used → remove it to avoid confusion
+
+### Phase 3: Missing Features (Week 3, optional)
+
+#### P3.1: Terminal Search (Ctrl+Shift+F)
+- Install `@xterm/addon-search`
+- Add search bar above terminal pane
+- Match counter, case-sensitive/regex toggles
+
+#### P3.2: Clickable File Paths
+- Detect patterns like `./foo.go:12:34` in terminal output
+- Use `Terminal.registerLinkProvider()` for click handling
+- Dispatch event to open file in editor at line/col
+
+#### P3.3: Copy-on-Select
+- Auto-copy selected text to clipboard
+
+#### P3.4: Scrollback Persistence
+- Save terminal buffer to IndexedDB on unmount
+- Restore on reconnect
+
+## Implementation Plan
+
+### Phase 1: Critical Bug Fixes — MUST DO FIRST
+
+**Modified files:**
+- `webui/src/components/TerminalPane.tsx` — handle `pty_exit`, add `onProcessExit` prop, clean up WebSocket on exit
+- `webui/src/components/Terminal.tsx` — replace flat session model with per-pane model, handle pane exits, clean up split/tab interaction
+- `webui/src/components/Terminal.css` — exited session styles, per-pane tab bar layout
+
+### Phase 2: Polish
+
+**Modified files:**
+- `webui/src/components/Terminal.tsx` — zoom verification, button cleanup
+- `webui/src/components/Terminal.css` — zoom button styling fixes if needed
+
+### Phase 3: Missing Features (optional)
+
+**New files:**
+- `webui/src/components/TerminalSearchBar.tsx` + CSS — search UI
+- `webui/src/extensions/terminalFilePaths.ts` — clickable file path detection
+
+**Modified files:**
+- `webui/src/components/TerminalPane.tsx` — wire search addon, link provider, copy-on-select
+
+## Success Criteria
+
+| Metric | Target |
+|--------|--------|
+| `exit` handling | Dead sessions auto-close or auto-restart after 1.5s delay |
+| Split pane exit | Secondary pane auto-closes when its process exits |
+| Tabs + split | Per-pane tab bars that work independently |
+| Non-working buttons | Removed or fixed |
+| Zoom buttons | Font size reliably changes when clicking +/- |
+| Build | `make build-all` passes |
+| Terminal search | (Phase 3) Ctrl+Shift+F finds text in scrollback |
+| Clickable paths | (Phase 3) `./foo.go:12` opens in editor |
+
+## Files Reference
+
+| File | Action |
+|------|--------|
+| `webui/src/components/Terminal.tsx` | Major: per-pane session model, exit handling |
+| `webui/src/components/TerminalPane.tsx` | Major: pty_exit handling, onProcessExit callback |
+| `webui/src/components/Terminal.css` | Modify: per-pane layout, exited session styles |
+| `packages/ui/src/components/Terminal.tsx` | Evaluate: update or remove duplicate |

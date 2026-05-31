@@ -1,6 +1,6 @@
-# Smoke Tests for Registry Removal
+# Smoke Tests
 
-This directory contains smoke tests to verify that the registry removal changes are working correctly.
+This directory contains smoke tests to verify core functionality works correctly after significant changes.
 
 ## Tests
 

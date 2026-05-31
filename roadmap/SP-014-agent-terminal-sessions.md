@@ -1,4 +1,4 @@
-# SP-008: Agent Terminal Sessions — Hidden PTY Routing + Background Mode
+# SP-014: Agent Terminal Sessions — Hidden PTY Routing + Background Mode
 
 **Status:** 📋 Proposed  
 **Depends on:** SP-001 (Agent Core Architecture), SP-003 (WebUI & Frontend Architecture)  

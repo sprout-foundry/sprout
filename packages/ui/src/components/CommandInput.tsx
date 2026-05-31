@@ -7,6 +7,9 @@ import type {
 } from 'react';
 import { ScrollText, X, Send, SquarePen, ListPlus, Plus, Square, Info } from 'lucide-react';
 import { useLog, debugLog } from '../utils/log';
+import { getMatchingSlashCommands } from '../utils/slashCommands';
+import type { SlashCommand } from '../utils/slashCommands';
+import SlashCommandAutocomplete from './SlashCommandAutocomplete';
 import './CommandInput.css';
 import type { CommandHistoryApi } from './command_input_history';
 import { createEmptyState } from './command_input_history';
@@ -91,8 +94,13 @@ function CommandInput({
   const [previewImageId, setPreviewImageId] = useState<string | null>(null);
   const [showQueuePanel, setShowQueuePanel] = useState(false);
   const [showHints, setShowHints] = useState(false);
+  const [slashAutocompleteOpen, setSlashAutocompleteOpen] = useState(false);
+  const [slashAutocompletePrefix, setSlashAutocompletePrefix] = useState('');
+  const [slashAutocompleteIndex, setSlashAutocompleteIndex] = useState(0);
+  const [slashAutocompletePosition, setSlashAutocompletePosition] = useState({ top: 0, left: 0 });
   const queuePanelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const slashAutocompleteRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const historyApi = useRef<CommandHistoryApi | null>(historyApiProp ?? null);
   const selectionRef = useRef<{ start: number; end: number } | null>(null);
@@ -114,6 +122,49 @@ function CommandInput({
       setDraftValue(value);
     }
   }, [value, draftValue]);
+
+  // Detect the slash command prefix and cursor position from current input state.
+  // Uses draftValue (React state) rather than reading the live DOM, which can
+  // diverge when React hasn't flushed yet.
+  const detectSlashCommandAtCursor = useCallback((): { slashIndex: number; prefix: string } | null => {
+    const sel = selectionRef.current;
+    const cursorPos = sel?.start ?? 0;
+    const beforeCursor = draftValue.slice(0, cursorPos);
+    const slashIndex = beforeCursor.lastIndexOf('/');
+    if (slashIndex < 0) return null;
+    const beforeSlash = beforeCursor.slice(0, slashIndex);
+    const isCommandStart = slashIndex === 0 || /[\s\n]$/.test(beforeSlash);
+    if (!isCommandStart) return null;
+    const afterSlash = beforeCursor.slice(slashIndex + 1);
+    const prefix = afterSlash.split(/\s/)[0].trim();
+    return { slashIndex, prefix };
+  }, [draftValue]);
+
+  // Auto-close slash autocomplete when input no longer matches
+  useEffect(() => {
+    if (!slashAutocompleteOpen) return;
+    const textarea = inputRef.current;
+    if (!textarea || document.activeElement !== textarea) {
+      setSlashAutocompleteOpen(false);
+      return;
+    }
+    const info = detectSlashCommandAtCursor();
+    if (!info) {
+      setSlashAutocompleteOpen(false);
+      return;
+    }
+    if (info.prefix !== slashAutocompletePrefix) {
+      // Prefix changed — update it and re-check matches
+      setSlashAutocompletePrefix(info.prefix);
+      setSlashAutocompleteIndex(0);
+      const matches = getMatchingSlashCommands(info.prefix);
+      if (matches.length === 0) {
+        setSlashAutocompleteOpen(false);
+      }
+      // Recalculate position in case textarea resized
+      setSlashAutocompletePosition(getSlashAutocompletePosition());
+    }
+  }, [draftValue, slashAutocompleteOpen, slashAutocompletePrefix, detectSlashCommandAtCursor, getSlashAutocompletePosition]);
 
   useLayoutEffect(() => {
     if (!inputRef.current || !selectionRef.current) return;
@@ -167,6 +218,19 @@ function CommandInput({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showHints]);
+
+  // Click-outside handler for slash autocomplete
+  useEffect(() => {
+    if (!slashAutocompleteOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (slashAutocompleteRef.current && slashAutocompleteRef.current.contains(target)) return;
+      if (inputRef.current && inputRef.current.contains(target)) return;
+      setSlashAutocompleteOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [slashAutocompleteOpen]);
 
   useEffect(() => {
     if (!previewImageId) {
@@ -225,6 +289,48 @@ function CommandInput({
       onChange?.(nextValue);
     },
     [onChange],
+  );
+
+  // Calculate the position for the slash autocomplete dropdown
+  const getSlashAutocompletePosition = useCallback(() => {
+    const textarea = inputRef.current;
+    if (!textarea) return { top: 0, left: 0 };
+    const rect = textarea.getBoundingClientRect();
+    let top = rect.bottom + window.scrollY + 4;
+    let left = rect.left + window.scrollX;
+    // Clamp left to prevent going off right edge (max-width is 420px)
+    const maxLeft = window.innerWidth - 424;
+    left = Math.min(Math.max(0, left), maxLeft);
+    // Clamp top to prevent going off bottom edge (max-height is 280px)
+    const maxTop = window.innerHeight - 284;
+    top = Math.min(Math.max(0, top), maxTop);
+    return { top, left };
+  }, []);
+
+  // Accept the current slash command completion
+  const acceptSlashCompletion = useCallback(
+    (prefix: string, index: number) => {
+      const matches = getMatchingSlashCommands(prefix);
+      if (matches.length === 0) return null;
+      const cmd = matches[index % matches.length];
+
+      const sel = selectionRef.current;
+      const cursorPos = sel?.start ?? 0;
+      const beforeCursor = draftValue.slice(0, cursorPos);
+      const afterCursor = draftValue.slice(cursorPos);
+      const slashIndex = beforeCursor.lastIndexOf('/');
+      if (slashIndex < 0) return null;
+
+      const beforeSlash = beforeCursor.slice(0, slashIndex);
+      const afterFirstWord = beforeCursor.slice(slashIndex + 1).split(/\s/)[1] ?? '';
+
+      const newValue = beforeSlash + '/' + cmd.name + ' ' + afterFirstWord + afterCursor;
+      const newCursor = slashIndex + 1 + cmd.name.length + 1; // +1 for space
+      updateValue(newValue, { start: newCursor, end: newCursor });
+      setSlashAutocompleteOpen(false);
+      return cmd;
+    },
+    [draftValue, updateValue],
   );
 
   const currentHistoryValue =
@@ -478,6 +584,16 @@ function CommandInput({
 
     switch (e.key) {
       case 'ArrowUp': {
+        // When slash autocomplete is open, navigate the list instead of history
+        if (slashAutocompleteOpen) {
+          e.preventDefault();
+          const matches = getMatchingSlashCommands(slashAutocompletePrefix);
+          if (matches.length > 0) {
+            const prevIndex = (slashAutocompleteIndex - 1 + matches.length) % matches.length;
+            setSlashAutocompleteIndex(prevIndex);
+          }
+          return;
+        }
         const shouldNavigateHistory =
           !e.altKey &&
           !e.ctrlKey &&
@@ -494,6 +610,16 @@ function CommandInput({
         break;
       }
       case 'ArrowDown': {
+        // When slash autocomplete is open, navigate the list instead of history
+        if (slashAutocompleteOpen) {
+          e.preventDefault();
+          const matches = getMatchingSlashCommands(slashAutocompletePrefix);
+          if (matches.length > 0) {
+            const nextIndex = (slashAutocompleteIndex + 1) % matches.length;
+            setSlashAutocompleteIndex(nextIndex);
+          }
+          return;
+        }
         const shouldNavigateHistory =
           !e.altKey &&
           !e.ctrlKey &&
@@ -512,10 +638,53 @@ function CommandInput({
       }
       case 'Tab':
         e.preventDefault();
-        // Simple auto-completion could be added here
+        {
+          const info = detectSlashCommandAtCursor();
+          if (info) {
+            const firstWord = info.prefix;
+            // Only trigger if there's no space after the slash (we're still typing the command name)
+            // or if cursor is right after the slash
+            const sel = selectionRef.current;
+            const cursorPos = sel?.start ?? 0;
+            if (firstWord || info.slashIndex === cursorPos - 1) {
+              if (!slashAutocompleteOpen) {
+                const pos = getSlashAutocompletePosition();
+                setSlashAutocompletePosition(pos);
+                setSlashAutocompleteOpen(true);
+                setSlashAutocompletePrefix(firstWord);
+                setSlashAutocompleteIndex(0);
+              } else {
+                // Cycle to next completion
+                const matches = getMatchingSlashCommands(firstWord);
+                if (matches.length > 0) {
+                  const nextIndex = (slashAutocompleteIndex + 1) % matches.length;
+                  setSlashAutocompleteIndex(nextIndex);
+                  const cmd = matches[nextIndex];
+                  // Replace the typed prefix with the completion
+                  const newPrefix = cmd.name;
+                  const beforeSlashPart = draftValue.slice(0, info.slashIndex + 1);
+                  const afterFirstWord = draftValue.slice(info.slashIndex + 1 + firstWord.length);
+                  const newValue = beforeSlashPart + newPrefix + afterFirstWord;
+                  const newCursor = info.slashIndex + 1 + newPrefix.length;
+                  updateValue(newValue, { start: newCursor, end: newCursor });
+                  setSlashAutocompletePrefix(newPrefix);
+                  // Recalculate position in case textarea resized
+                  setSlashAutocompletePosition(getSlashAutocompletePosition());
+                }
+              }
+              return;
+            }
+          }
+        }
+        // Not a slash command, insert tab
         handleTabCompletion();
         break;
       case 'Enter':
+        if (slashAutocompleteOpen) {
+          e.preventDefault();
+          acceptSlashCompletion(slashAutocompletePrefix, slashAutocompleteIndex);
+          return;
+        }
         if (multiline) {
           if (e.shiftKey) {
             e.preventDefault();
@@ -548,6 +717,10 @@ function CommandInput({
         break;
       case 'Escape':
         e.preventDefault();
+        if (slashAutocompleteOpen) {
+          setSlashAutocompleteOpen(false);
+          return;
+        }
         if (isHistoryMode) {
           // Restore temp input and exit history mode
           resetHistoryNavigation();
@@ -713,6 +886,12 @@ function CommandInput({
               </div>
               <div className="hints-popover-row">
                 <span>
+                  <kbd>Tab</kbd>
+                </span>
+                <span>Slash completion</span>
+              </div>
+              <div className="hints-popover-row">
+                <span>
                   <kbd>Esc</kbd>
                 </span>
                 <span>Clear input</span>
@@ -753,10 +932,30 @@ function CommandInput({
         placeholder={placeholder}
         disabled={disabled}
         className={`input-field autoscaling ${isHistoryMode ? 'history-mode' : ''}`}
+        aria-haspopup="listbox"
+        aria-controls={slashAutocompleteOpen ? 'slash-autocomplete-listbox' : undefined}
+        aria-activedescendant={slashAutocompleteOpen ? `slash-option-${slashAutocompleteIndex}` : undefined}
         rows={2}
         spellCheck={false}
         data-testid="command-input"
       />
+
+      {slashAutocompleteOpen && (
+        <div ref={slashAutocompleteRef}>
+          <SlashCommandAutocomplete
+            matches={getMatchingSlashCommands(slashAutocompletePrefix)}
+            selectedIndex={slashAutocompleteIndex}
+            onSelect={(cmd: SlashCommand) => {
+              const matches = getMatchingSlashCommands(slashAutocompletePrefix);
+              const idx = matches.findIndex(m => m.name === cmd.name);
+              acceptSlashCompletion(slashAutocompletePrefix, idx >= 0 ? idx : slashAutocompleteIndex);
+            }}
+            onDismiss={() => setSlashAutocompleteOpen(false)}
+            anchorTop={slashAutocompletePosition.top}
+            anchorLeft={slashAutocompletePosition.left}
+          />
+        </div>
+      )}
 
       {attachedImages.length > 0 && (
         <div className="image-preview-strip">

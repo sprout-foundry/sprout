@@ -1,8 +1,6 @@
 # SP-027: Persistent Context & Conversational Memory
 
-## Status
-
-**Proposed**
+**Status:** 📋 Proposed
 
 ## 1. Executive Summary
 

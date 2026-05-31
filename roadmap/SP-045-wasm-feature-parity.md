@@ -1,8 +1,7 @@
 # SP-045: WASM Build Feature Parity
 
-## Status
-
-**Proposed** — Priority: Medium
+**Status:** 📋 Proposed
+**Priority:** Medium
 
 ## 1. Executive Summary
 

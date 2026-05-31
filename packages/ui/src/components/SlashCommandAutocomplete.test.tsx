@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -91,7 +92,7 @@ describe('SlashCommandAutocomplete', () => {
 
   it('calls onSelect with the clicked command', async () => {
     const user = userEvent.setup();
-    const onSelect = jest.fn();
+    const onSelect = vi.fn();
     render(
       <SlashCommandAutocomplete
         matches={mockCommands}

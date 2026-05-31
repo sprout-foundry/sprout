@@ -1,0 +1,71 @@
+.slash-autocomplete {
+  position: fixed;
+  min-width: 280px;
+  max-width: 420px;
+  max-height: 280px;
+  overflow-y: auto;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  box-shadow: var(--shadow-elevated);
+  padding: 4px;
+}
+
+.slash-autocomplete-item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+  font-size: 13px;
+  line-height: 1.4;
+  transition: background 0.1s ease;
+}
+
+.slash-autocomplete-item:hover {
+  background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
+}
+
+.slash-autocomplete-item:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: -2px;
+}
+
+.slash-autocomplete-highlight {
+  background: color-mix(in srgb, var(--accent-primary) 16%, transparent);
+}
+
+.slash-autocomplete-name {
+  font-weight: 600;
+  font-family: var(--font-mono, monospace);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.slash-autocomplete-description {
+  color: var(--text-secondary);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slash-autocomplete-alias .slash-autocomplete-name {
+  opacity: 0.7;
+}
+
+/* Scrollbar */
+.slash-autocomplete::-webkit-scrollbar {
+  width: 6px;
+}
+
+.slash-autocomplete::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 999px;
+}

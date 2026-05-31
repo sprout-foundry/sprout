@@ -1,12 +1,10 @@
-# SP-056: Remove Static Embedding Provider, Consolidate on ONNX
+# SP-061: Remove Static Embedding Provider, Consolidate on ONNX
 
-| Field       | Value                                      |
-| ----------- | ------------------------------------------ |
-| Status      | Proposed                                   |
-| Depends on  | None (self-contained refactor)             |
-| Priority    | Medium — tech-debt reduction, binary shrink |
-| Author      | Sprout Core Team                           |
-| Created     | 2025-05-22                                 |
+**Status:** 📋 Proposed  
+**Depends on:** None (self-contained refactor)  
+**Priority:** Medium — tech-debt reduction, binary shrink  
+**Author:** Sprout Core Team  
+**Created:** 2025-05-22
 
 ---
 

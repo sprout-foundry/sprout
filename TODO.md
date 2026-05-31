@@ -301,7 +301,7 @@
 - [x] SP-054-3.4: Shared `lsp_query.go` helper in `pkg/lsp/semantic/` for routing adapter queries through the LSP proxy
 
 ## Completed — SP-056: Remove Static Embedding Provider
-_Spec: roadmap/SP-056-remove-static-embeddings.md_
+_Spec: roadmap/SP-061-remove-static-embeddings.md_
 - [x] SP-056-P1-deleteStatic: Delete 9 static provider files (~1,532 lines + 55 MB model blob): `static_provider.go`, `static_tokenizer.go`, `static_loader.go`, `static_model_embed.go`, `static_model_nostub.go`, `static_model_js_testmain_test.go`, `static_test.go`, `compare_embed.go`, `static_model.bin`
 - [x] SP-056-P2a-managerFields: Simplify `EmbeddingManager` struct — replace `provider *StaticProvider` + `onnxProvider` with single `provider EmbeddingProvider`; remove `onnxStore`/`onnxConvoStore`/`onnxBuilding`/`onnxBuildCancel`/`onnxBuildWG`/`onnxReady`/`onnxError`/`onnxInitWG` fields
 - [x] SP-056-P2b-initLocked: Rewrite `initLocked()` to create ONNX provider synchronously as the sole provider; remove background ONNX init goroutine; fail fast with clear error if ONNX unavailable

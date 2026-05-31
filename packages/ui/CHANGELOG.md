@@ -5,6 +5,31 @@ All notable changes to `@sprout/ui` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-05-30
+
+### Added
+
+- Slash command autocomplete component.
+- Per-turn cost and token display for assistant messages.
+- Depth badge on tool execution cards.
+- Per-depth resource usage in subagent activity feed.
+- Visual depth indicator for nested subagent runs.
+- Read status and mark-all-read for notifications.
+- ARIA live regions for command palette results.
+- Storybook MDX documentation for FileTree, ChatPanel, GitPanel.
+- Chromatic visual regression testing workflow.
+- NPM publish GitHub Actions workflow.
+
+### Changed
+
+- Migrated hardcoded `rgba()` colors to CSS custom properties for theme support.
+- Migrated hardcoded hex colors to `color-mix()` with CSS variables.
+- Updated semantic CSS color tokens for improved theming.
+
+### Deprecated
+
+- `Terminal` component in `@sprout/ui` — use the webui-local Terminal instead.
+
 ## [0.1.0] - 2025-07-09
 
 ### Added

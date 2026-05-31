@@ -357,17 +357,22 @@ func (m *launchdManager) Diagnose() error {
 
 	// Check plist file
 	fmt.Println("📋 Checking plist file:")
-	if _, err := os.Stat(pPath); err != nil {
-		if os.IsNotExist(err) {
+	plistContent, plistReadErr := os.ReadFile(pPath)
+	if plistReadErr != nil {
+		if os.IsNotExist(plistReadErr) {
 			fmt.Printf("  ❌ plist file not found: %s\n", pPath)
 		} else {
-			fmt.Printf("  ❌ Error accessing plist: %v\n", err)
+			fmt.Printf("  ❌ Error accessing plist: %v\n", plistReadErr)
 		}
 	} else {
 		fmt.Printf("  ✅ plist file exists: %s\n", pPath)
-		// Show file size
-		if info, err := os.Stat(pPath); err == nil {
-			fmt.Printf("     Size: %d bytes\n", info.Size())
+		fmt.Printf("     Size: %d bytes\n", len(plistContent))
+		// Flag a stale plist that predates the SPROUT_DAEMON_ROOT fix —
+		// without it, the daemon falls back to $HOME (which launchd may have
+		// set wrong) and the workspace browser starts in the wrong directory.
+		if !strings.Contains(string(plistContent), "SPROUT_DAEMON_ROOT") {
+			fmt.Println("  ⚠️  STALE plist: missing SPROUT_DAEMON_ROOT — workspace browser may start in the wrong directory.")
+			fmt.Println("      Reinstall to regenerate: sprout service uninstall && sprout service install")
 		}
 	}
 	fmt.Println()

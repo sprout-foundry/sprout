@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/user"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -108,26 +109,48 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 	//
 	// Resolution, most authoritative first:
 	//   1. SPROUT_DAEMON_ROOT — baked into the launchd/systemd unit at install
-	//      time when $HOME is reliable. Source of truth for managed services,
-	//      where the runtime $HOME may be unset.
+	//      time when $HOME is reliable. Source of truth for managed services.
 	//   2. os.UserHomeDir() ($HOME) — the normal interactive case.
-	//   3. workspaceRoot (the CWD) — last resort only.
+	//   3. user.Current().HomeDir (`/etc/passwd`) — bypasses $HOME, used in
+	//      service mode when the plist/unit is stale and $HOME may be wrong
+	//      (e.g., a launchd cache from a pre-SPROUT_DAEMON_ROOT install).
+	//   4. workspaceRoot (the CWD) — last resort only.
 	//
 	// Falling back to the CWD is dangerous under a service manager: launchd /
 	// systemd can start the daemon in "/" or another system dir, and because
 	// the workspace browser is scoped to daemonRoot the user would be unable
-	// to reach their projects. Warn loudly if that happens.
+	// to reach their projects. Warn loudly when we have to fall back.
 	serviceMode := configuration.GetEnvSimple("SERVICE") == "1"
 	daemonRoot := configuration.GetEnvSimple("DAEMON_ROOT")
+	rootSource := "SPROUT_DAEMON_ROOT"
 	if daemonRoot == "" {
 		if home, homeErr := os.UserHomeDir(); homeErr == nil && home != "" {
 			daemonRoot = home
+			rootSource = "$HOME"
+		}
+	}
+	if daemonRoot == "" || (serviceMode && !looksLikeUserHome(daemonRoot)) {
+		// Service mode without an authoritative $HOME / SPROUT_DAEMON_ROOT
+		// (or with a $HOME that's clearly wrong — e.g. "/", "/var/root", or a
+		// system dir launchd inherited). Read /etc/passwd directly so we
+		// pick the OS user's home regardless of the inherited environment.
+		if u, uErr := user.Current(); uErr == nil && u.HomeDir != "" {
+			if daemonRoot == "" || u.HomeDir != daemonRoot {
+				if serviceMode {
+					log.Printf("[web] WARNING: %s resolved to %q which doesn't look like a user home dir; "+
+						"overriding with user.Current().HomeDir = %q. Your service unit is likely stale — "+
+						"reinstall to bake in SPROUT_DAEMON_ROOT: sprout service uninstall && sprout service install",
+						rootSource, daemonRoot, u.HomeDir)
+				}
+				daemonRoot = u.HomeDir
+				rootSource = "user.Current().HomeDir"
+			}
 		}
 	}
 	if daemonRoot == "" {
 		daemonRoot = workspaceRoot
 		if serviceMode {
-			log.Printf("[web] WARNING: could not resolve user home (SPROUT_DAEMON_ROOT and $HOME both unset); "+
+			log.Printf("[web] WARNING: could not resolve user home (SPROUT_DAEMON_ROOT, $HOME, and /etc/passwd all unavailable); "+
 				"workspace browser is scoped to the daemon working dir %q and may not reach your projects — "+
 				"reinstall the service (sprout service uninstall && sprout service install) to regenerate the unit", workspaceRoot)
 		}
@@ -275,6 +298,38 @@ func (ws *ReactWebServer) GetWorkspaceRoot() string {
 	ws.mutex.RLock()
 	defer ws.mutex.RUnlock()
 	return ws.workspaceRoot
+}
+
+// looksLikeUserHome heuristically reports whether dir resembles a real
+// per-user home directory rather than a system path that launchd or systemd
+// might leak in via $HOME (e.g., "/", "/var/root", "/var/empty", "/nonexistent",
+// or a "/usr/..." system dir). Conservative: a true positive triggers a
+// /etc/passwd lookup; a false positive only loses the chance to recover.
+func looksLikeUserHome(dir string) bool {
+	if dir == "" {
+		return false
+	}
+	clean := strings.TrimRight(dir, "/")
+	// Empty after trim means dir was "/" — definitely not a user home.
+	if clean == "" {
+		return false
+	}
+	// Obviously-not-user system paths.
+	systemRoots := []string{"/var/root", "/var/empty", "/nonexistent", "/usr", "/etc", "/tmp", "/var", "/private"}
+	for _, sys := range systemRoots {
+		if clean == sys {
+			return false
+		}
+	}
+	// Typical user-home prefixes across platforms.
+	for _, prefix := range []string{"/Users/", "/home/", "/root"} {
+		if strings.HasPrefix(clean+"/", prefix) || clean == strings.TrimRight(prefix, "/") {
+			return true
+		}
+	}
+	// Anything else (custom mount, container, NFS share) — give it the benefit
+	// of the doubt rather than triggering a fallback that could be wrong.
+	return true
 }
 
 // GetDaemonRoot returns the daemon-scoped filesystem root.

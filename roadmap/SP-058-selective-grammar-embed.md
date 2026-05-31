@@ -1,12 +1,10 @@
 # SP-058: Selective Grammar Embedding for WASM and Daemon
 
-| Field       | Value                                                     |
-| ----------- | --------------------------------------------------------- |
-| Status      | Proposed                                                  |
-| Depends on  | None (self-contained build infrastructure change)         |
-| Priority    | Medium — binary size / cold-load latency for WASM users   |
-| Author      | Sprout Core Team                                          |
-| Created     | 2026-05-26                                                |
+**Status:** 📋 Proposed  
+**Depends on:** None (self-contained build infrastructure change)  
+**Priority:** Medium — binary size / cold-load latency for WASM users  
+**Author:** Sprout Core Team  
+**Created:** 2026-05-26
 
 ---
 

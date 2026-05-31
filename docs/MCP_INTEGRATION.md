@@ -1,17 +1,17 @@
 # MCP (Model Context Protocol) Integration Guide
 
-This guide explains how MCP servers are integrated with the Ledit agent and how to verify they're working.
+This guide explains how MCP servers are integrated with the Sprout agent and how to verify they're working.
 
 ## Overview
 
-MCP servers extend Ledit's capabilities by providing external tools and services to the agent. The GitHub MCP server is the prototype implementation.
+MCP servers extend Sprout's capabilities by providing external tools and services to the agent. The GitHub MCP server is the prototype implementation.
 
 ## How MCP Integration Works
 
 ### 1. Architecture
 
 ```
-Ledit Agent
+Sprout Agent
     ├── Base Tools (file operations, shell, etc.)
     └── MCP Manager
         └── MCP Servers (GitHub, etc.)

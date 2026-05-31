@@ -1,4 +1,4 @@
-# Ledit Architecture
+# Sprout Architecture
 
 Project architecture documentation for the sprout AI-powered code editing and assistance tool.
 

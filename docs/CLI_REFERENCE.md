@@ -510,7 +510,6 @@ The index is automatically updated on commands for fresh context.
 ## Related Documentation
 
 - [Configuration](CONFIGURATION.md) — Config files, environment variables, and CI/CD
-- [Web UI](WEB_UI.md) — Web UI features and SSH tunneling
 - [Architecture](ARCHITECTURE.md) — Project structure and design
 - [MCP Integration](MCP_INTEGRATION.md) — MCP server setup
 - [Agent Workflow](AGENT_WORKFLOW.md) — Workflow configuration

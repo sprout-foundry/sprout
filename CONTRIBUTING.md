@@ -115,7 +115,6 @@ Before you submit:
 - [ ] Run `make build-all` locally and confirm it succeeds
 - [ ] Run `make test-coverage` to ensure coverage is above the threshold
 - [ ] Update or add tests for new functionality
-- [ ] Document any user-facing changes in `CHANGELOG.md`
 
 ### What Reviewers Look For
 

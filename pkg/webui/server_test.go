@@ -332,3 +332,46 @@ func TestFormatListenAddr(t *testing.T) {
 		})
 	}
 }
+
+// TestLooksLikeUserHome locks the heuristic that decides whether a daemonRoot
+// candidate is plausibly a per-user home directory. The runtime uses this to
+// trigger a /etc/passwd fallback when a stale launchd/systemd plist leaks a
+// system path as $HOME (the failure mode that scoped the workspace browser
+// to the wrong directory in service mode).
+func TestLooksLikeUserHome(t *testing.T) {
+	cases := []struct {
+		path string
+		want bool
+	}{
+		// System paths a service manager may inherit — NOT a user home.
+		{"", false},
+		{"/", false},
+		{"/var/root", false},
+		{"/var/empty", false},
+		{"/nonexistent", false},
+		{"/usr", false},
+		{"/etc", false},
+		{"/tmp", false},
+		{"/var", false},
+		{"/private", false},
+
+		// Real user homes — must be accepted on every platform.
+		{"/Users/alice", true},
+		{"/Users/alice/", true},
+		{"/home/bob", true},
+		{"/root", true},
+
+		// Custom/container/NFS mounts — give the benefit of the doubt rather
+		// than nuking a env-supplied path with a /etc/passwd lookup that may
+		// itself be wrong on a non-standard mount.
+		{"/workspace", true},
+		{"/data/users/charlie", true},
+	}
+	for _, c := range cases {
+		t.Run(c.path, func(t *testing.T) {
+			if got := looksLikeUserHome(c.path); got != c.want {
+				t.Errorf("looksLikeUserHome(%q) = %v, want %v", c.path, got, c.want)
+			}
+		})
+	}
+}

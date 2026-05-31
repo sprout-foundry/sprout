@@ -8,6 +8,60 @@ This guide explains how to integrate `@sprout/ui` into your own React applicatio
 
 If you're building an IDE-like application, a developer tool, or any interface that needs rich code editing and terminal capabilities, `@sprout/ui` gives you a solid foundation.
 
+## Architecture Overview
+
+Sprout uses a two-library architecture for UI components:
+
+| Package | Role | Published as |
+|---------|------|-------------|
+| `packages/ui` | Canonical component library (primitives) | `@sprout/ui` |
+| `webui/src/components` | Application-specific components (composites) | Internal only |
+
+**Decision**: Option B from SP-039 — keep `packages/ui` as the canonical shared library. See [`roadmap/SP-039-DECISION.md`](../roadmap/SP-039-DECISION.md) for full rationale.
+
+### Import Direction
+
+```
+webui/src/components/  ──────>  @sprout/ui  (packages/ui)
+     ✓  webui imports from @sprout/ui
+     ✗  @sprout/ui must NEVER import from webui
+```
+
+This is a one-way dependency:
+- `webui` may import anything from `@sprout/ui`
+- `@sprout/ui` must never import from `webui` or reference application-specific state
+
+### Primitive vs Composite Rubric
+
+A component is a **primitive** (belongs in `packages/ui`) if ALL of the following are true:
+
+- Accepts data via props only (no context hooks for app state)
+- Emits events via callback props (`onClick`, `onChange`, etc.)
+- Can render in isolation with mock data (no API calls, no auth context)
+- Has no imports from application-specific modules (`../services/*`, `../contexts/*`, etc.)
+- Is potentially reusable in a different React application
+
+A component is a **composite** (belongs in `webui`) if ANY of the following are true:
+
+- Imports from application-specific services (`apiAdapter`, `billingService`, etc.)
+- Uses application-specific context hooks (`useAuth`, `useSession`, `useSproutFetch`)
+- Makes direct API calls or manages server state
+- Wires primitives to application-specific business logic
+
+### How to Add a New Component
+
+```
+Is it reusable outside Sprout?
+├── YES → packages/ui/src/components/
+│         1. Create Component.tsx + Component.css
+│         2. Add .stories.tsx (Storybook) and .test.tsx
+│         3. Export from packages/ui/src/index.ts
+│
+└── NO  → webui/src/components/
+          1. Create Component.tsx + Component.css
+          2. Import primitives from '@sprout/ui' as needed
+```
+
 ## Installation
 
 ```bash
@@ -514,6 +568,5 @@ For monorepos or workspace setups, ensure the package is properly linked or inst
 
 ## Further Reading
 
-- [Component Library Architecture](COMPONENT_LIBRARY.md) — How Sprout's component system is organized
 - [packages/ui README](https://github.com/sprout-foundry/sprout/tree/main/packages/ui) — Full API reference, Storybook, and development setup
 - [Sprout Main Repository](https://github.com/sprout-foundry/sprout) — Source code, examples, and issues

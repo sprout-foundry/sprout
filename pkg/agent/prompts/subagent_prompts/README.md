@@ -59,4 +59,4 @@ For complex workflows, use multiple personas in sequence or parallel as appropri
 
 ## See Also
 
-- [Subagent Personas Documentation](../../../docs/SUBAGENT_PERSONAS.md) - Detailed persona descriptions
+- [Persona System](../../../docs/PERSONAS.md) - Full persona architecture, risk model, and custom persona guide

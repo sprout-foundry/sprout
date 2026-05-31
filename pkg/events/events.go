@@ -131,43 +131,44 @@ func (eb *EventBus) Publish(eventType string, data any) {
 
 	// Publish to all subscribers without holding the lock
 	for _, ch := range subscribers {
-		if isCritical {
-			// For critical events, serialize the drain-then-send to
-			// prevent concurrent critical events from racing on the
-			// same subscriber channel (which could lose events).
-			eb.drainMu.Lock()
-			// Drain one stale event to make room so the security dialog
-			// is always delivered to the client.
+		// Recover from send on closed channel — Unsubscribe may close ch
+		// concurrently after we copied the subscriber list. This is a known
+		// Go pattern: you cannot test "is this channel closed?" without
+		// sending/receiving, so recover is the safe approach.
+		func() {
+			defer recover()
+			eb.publishToChannel(ch, event, eventType, isCritical)
+		}()
+	}
+}
+
+// publishToChannel sends an event to a single subscriber channel.
+// MUST NOT be called with a closed channel (caller should recover).
+func (eb *EventBus) publishToChannel(ch chan UIEvent, event UIEvent, eventType string, isCritical bool) {
+	if isCritical {
+		eb.drainMu.Lock()
+		select {
+		case ch <- event:
+			eb.drainMu.Unlock()
+		default:
 			select {
-			case ch <- event:
+			case <-ch:
+				select {
+				case ch <- event:
+				case <-time.After(1 * time.Second):
+					log.Printf("[EventBus] Dropped critical %s event: subscriber unresponsive for 1s after drain", eventType)
+				}
 				eb.drainMu.Unlock()
 			default:
-				select {
-				case <-ch:
-					// Bounded send: a concurrent non-critical publisher
-					// can refill the slot between drain and send. Without
-					// the timeout, this would block indefinitely on a slow
-					// subscriber while holding drainMu — visible as a long
-					// pause when a security prompt is pending.
-					select {
-					case ch <- event:
-					case <-time.After(1 * time.Second):
-						log.Printf("[EventBus] Dropped critical %s event: subscriber unresponsive for 1s after drain", eventType)
-					}
-					eb.drainMu.Unlock()
-				default:
-					// Channel is empty but concurrently closed; give up.
-					eb.drainMu.Unlock()
-				}
+				// Channel is empty but concurrently closed; give up.
+				eb.drainMu.Unlock()
 			}
-		} else {
-			select {
-			case ch <- event:
-			default:
-				// Channel is full — subscriber is slow or disconnected.
-				// Log the drop so operators can diagnose missing events.
-				log.Printf("[EventBus] Dropped %s event for slow subscriber (channel full, cap=100)", eventType)
-			}
+		}
+	} else {
+		select {
+		case ch <- event:
+		default:
+			log.Printf("[EventBus] Dropped %s event for slow subscriber (channel full, cap=100)", eventType)
 		}
 	}
 }

@@ -135,11 +135,6 @@ func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface
 	// Staging operations (git add) are always allowed per policy.
 	// Read-only operations (status, log, diff, etc.) are always allowed through shell_command.
 	if isGitWriteCommand(command) {
-		if isBroadGitAdd(command) {
-			// Always block broad git add patterns regardless of persona.
-			// Use the git tool with specific file paths for staging.
-			return "", agenterrors.NewSecurityError(fmt.Sprintf("broad git add patterns (., -A, --all) are not allowed via shell_command. Use the git tool with operation='add' and specific file paths, or use 'git add <filepath>' via shell_command (command: '%s')", command), nil)
-		}
 		if !a.isOrchestratorGitWriteAllowed() {
 			persona := a.GetActivePersona()
 			if persona == "orchestrator" {

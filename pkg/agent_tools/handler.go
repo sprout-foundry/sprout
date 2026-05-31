@@ -27,7 +27,7 @@
 // 2. Define a struct and implement the four ToolHandler methods.
 // 3. Register it in `AllTools()` in `all.go`.
 //
-// See docs/TOOLS.md for a complete guide with examples.
+// See AGENTS.md for tool documentation and conventions.
 //
 //
 // Migration from legacy func-style handlers

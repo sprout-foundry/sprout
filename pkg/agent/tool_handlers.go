@@ -213,63 +213,6 @@ func isGitWriteCommand(command string) bool {
 	}
 }
 
-// isBroadGitAdd checks if a git add command uses broad patterns (all files)
-// instead of targeting specific files. Repo_orchestrator must use specific
-// file paths to stage changes — this prevents accidental mass-staging.
-// This function checks ALL git add commands in a compound shell command.
-func isBroadGitAdd(command string) bool {
-	// Strip quoted content to avoid false positives from JSON payloads etc.
-	command = stripQuotedContent(command)
-	// Find all occurrences of "git add" in the command
-	remaining := command
-	for {
-		idx := strings.Index(remaining, "git ")
-		if idx == -1 {
-			return false
-		}
-		
-		gitCmd := remaining[idx:]
-		parts := strings.Fields(gitCmd)
-		if len(parts) < 2 {
-			remaining = remaining[idx+1:]
-			continue
-		}
-		
-		// Find the "add" subcommand (skip leading flags)
-		addIdx := -1
-		for i := 1; i < len(parts); i++ {
-			if strings.HasPrefix(parts[i], "-") {
-				if parts[i] == "-c" || parts[i] == "-C" || parts[i] == "--exec-path" || parts[i] == "--git-dir" || parts[i] == "--work-tree" {
-					i++ // skip the flag value
-				}
-				continue
-			}
-			if parts[i] == "add" {
-				addIdx = i
-				break
-			}
-			// If the subcommand is not "add", this is not a git add command
-			return false
-		}
-		
-		if addIdx == -1 {
-			remaining = remaining[idx+1:]
-			continue
-		}
-		
-		// Check remaining args for broad patterns
-		for _, arg := range parts[addIdx+1:] {
-			switch arg {
-			case ".", "-A", "--all", "-a":
-				return true
-			}
-		}
-		
-		// Move past this git invocation to check for more
-		remaining = remaining[idx+1:]
-	}
-}
-
 // isGitDiscardCommand checks if a git command could discard changes
 // (restore, reset --hard, checkout -- <file>). These are always blocked
 // from shell_command regardless of orchestrator permissions.

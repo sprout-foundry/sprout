@@ -124,4 +124,4 @@ For signed macOS builds, configure these CI secrets:
 
 ## Productization
 
-The current productization backlog and suggested execution order live in [docs/PRODUCT_BACKLOG.md](PRODUCT_BACKLOG.md).
+The desktop productization roadmap is tracked in [roadmap/SP-060-desktop-serve.md](../roadmap/SP-060-desktop-serve.md).

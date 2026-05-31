@@ -139,10 +139,9 @@ When the active persona spawns subagents (e.g. EA delegating to `coder`), the su
 | [MCP Integration](docs/MCP_INTEGRATION.md) | MCP server setup, configuration, troubleshooting |
 | [Agent Workflow](docs/AGENT_WORKFLOW.md) | Config-driven workflow sequences |
 | [Provider Catalog](docs/PROVIDER_CATALOG.md) | Provider catalog system and model metadata |
-| [Subagent Personas](docs/SUBAGENT_PERSONAS.md) | Specialized persona descriptions and configuration |
+| [Personas](docs/PERSONAS.md) | Persona system, risk model, and custom persona guide |
 | [Testing](docs/TESTING.md) | Test strategy, categories, and commands |
 | [Electron Packaging](docs/ELECTRON.md) | Desktop shell packaging and distribution |
-| [Product Backlog](docs/PRODUCT_BACKLOG.md) | Desktop-first productization roadmap |
 
 ## Contributing
 

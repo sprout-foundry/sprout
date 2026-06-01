@@ -84,7 +84,7 @@ func withFakeBridge(t *testing.T, embedFn func(text string) []float32) {
 func TestONNXBridge_DetectsAbsentProvider(t *testing.T) {
 	// Ensure no leftover from another test; defensive.
 	js.Global().Delete("__sproutONNX")
-	_, err := NewONNXEmbeddingProvider(context.Background(), nil, "", "", 768)
+	_, err := NewONNXEmbeddingProvider(context.Background(), nil, "", "", 768, 768)
 	if err == nil {
 		t.Fatal("expected errWASMNotSupported when __sproutONNX is unset, got nil")
 	}
@@ -97,7 +97,7 @@ func TestONNXBridge_EmbedRoundTrip(t *testing.T) {
 		return []float32{float32(len(text)), 0.5, -0.5}
 	})
 
-	provider, err := NewONNXEmbeddingProvider(context.Background(), nil, "", "", 3)
+	provider, err := NewONNXEmbeddingProvider(context.Background(), nil, "", "", 3, 768)
 	if err != nil {
 		t.Fatalf("NewONNXEmbeddingProvider: %v", err)
 	}
@@ -129,7 +129,7 @@ func TestONNXBridge_EmbedBatchPreservesOrder(t *testing.T) {
 		return []float32{float32(len(text)), 0, 0}
 	})
 
-	provider, err := NewONNXEmbeddingProvider(context.Background(), nil, "", "", 3)
+	provider, err := NewONNXEmbeddingProvider(context.Background(), nil, "", "", 3, 768)
 	if err != nil {
 		t.Fatalf("NewONNXEmbeddingProvider: %v", err)
 	}
@@ -165,7 +165,7 @@ func TestONNXBridge_PromiseRejectionSurfaces(t *testing.T) {
 		rejectFunc.Release()
 	})
 
-	p, err := NewONNXEmbeddingProvider(context.Background(), nil, "", "", 768)
+	p, err := NewONNXEmbeddingProvider(context.Background(), nil, "", "", 768, 768)
 	if err != nil {
 		t.Fatalf("NewONNXEmbeddingProvider: %v", err)
 	}
@@ -195,7 +195,7 @@ func TestONNXBridge_ContextCancellation(t *testing.T) {
 		hangingFunc.Release()
 	})
 
-	p, err := NewONNXEmbeddingProvider(context.Background(), nil, "", "", 768)
+	p, err := NewONNXEmbeddingProvider(context.Background(), nil, "", "", 768, 768)
 	if err != nil {
 		t.Fatalf("NewONNXEmbeddingProvider: %v", err)
 	}

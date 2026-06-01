@@ -39,7 +39,7 @@ func TestE2E_ONNXEmbeddingProvider(t *testing.T) {
 
 	// Step 2: Create embedding provider
 	dims := 256
-	provider, err := NewONNXEmbeddingProvider(ctx, runtime, modelPath, tokenizerPath, dims)
+	provider, err := NewONNXEmbeddingProvider(ctx, runtime, modelPath, tokenizerPath, dims, 768)
 	if err != nil {
 		t.Fatalf("Failed to create ONNX embedding provider: %v", err)
 	}
@@ -148,7 +148,7 @@ func TestE2E_ONNXMemoryWorkflow(t *testing.T) {
 	}
 	defer runtime.Close()
 
-	provider, err := NewONNXEmbeddingProvider(ctx, runtime, modelPath, tokenizerPath, 256)
+	provider, err := NewONNXEmbeddingProvider(ctx, runtime, modelPath, tokenizerPath, 256, 768)
 	if err != nil {
 		t.Fatalf("ONNX provider: %v", err)
 	}

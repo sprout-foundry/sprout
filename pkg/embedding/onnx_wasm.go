@@ -100,6 +100,7 @@ type ONNXEmbeddingProvider struct {
 	bridged    bool
 	jsProvider js.Value
 	dims       int
+	fullDims   int
 	modelName  string
 	modelHash  string
 }
@@ -111,14 +112,17 @@ func NewONNXEmbeddingProvider(
 	_ context.Context,
 	_ *ONNXRuntime,
 	_, _ string,
-	dims int,
+	dims, fullDims int,
 ) (*ONNXEmbeddingProvider, error) {
 	jsProvider := js.Global().Get("__sproutONNX")
 	if jsProvider.IsUndefined() || jsProvider.IsNull() {
 		return nil, errWASMNotSupported
 	}
 	if dims <= 0 {
-		dims = 768
+		dims = fullDims
+	}
+	if fullDims <= 0 {
+		fullDims = 768
 	}
 	hash := "browser-bridge"
 	if hv := jsProvider.Get("modelHash"); hv.Type() == js.TypeString {
@@ -135,6 +139,7 @@ func NewONNXEmbeddingProvider(
 		bridged:    true,
 		jsProvider: jsProvider,
 		dims:       dims,
+		fullDims:   fullDims,
 		modelName:  name,
 		modelHash:  hash,
 	}, nil

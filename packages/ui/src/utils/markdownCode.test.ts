@@ -1,3 +1,4 @@
+import type React from 'react';
 import { flattenMarkdownText, isMarkdownCodeBlock, isLocalFilePath } from './markdownCode';
 
 describe('flattenMarkdownText', () => {
@@ -108,12 +109,15 @@ describe('flattenMarkdownText', () => {
 
   describe('object handling', () => {
     it('stringifies plain objects', () => {
-      const result = flattenMarkdownText({ key: 'value' });
+      // Cast: the function accepts ReactNode but we deliberately probe
+      // its runtime fallback for non-ReactNode inputs (e.g. accidental
+      // raw model output). Type assertion bypasses the compile-time check.
+      const result = flattenMarkdownText({ key: 'value' } as unknown as React.ReactNode);
       expect(typeof result).toBe('string');
     });
 
     it('handles arrays inside objects', () => {
-      const result = flattenMarkdownText({ arr: [1, 2, 3] });
+      const result = flattenMarkdownText({ arr: [1, 2, 3] } as unknown as React.ReactNode);
       expect(typeof result).toBe('string');
     });
   });

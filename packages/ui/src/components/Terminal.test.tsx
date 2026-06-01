@@ -578,7 +578,7 @@ describe('Terminal', () => {
     expect(splitVBtn?.classList.contains('active')).toBe(false);
 
     act(() => {
-      splitHBtn?.click();
+      (splitHBtn as HTMLButtonElement | null)?.click();
     });
     // Re-query after state change
     const updatedButtons = container.querySelectorAll('.terminal-header-btn');

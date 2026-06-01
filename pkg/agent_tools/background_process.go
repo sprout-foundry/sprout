@@ -182,7 +182,15 @@ func (m *BackgroundProcessManager) Start(ctx context.Context, command string, di
 // AdoptProcess takes an already-started exec.Cmd (from timeout promotion) and
 // registers it into the background process manager. The output file is already
 // created by the caller.
-func (m *BackgroundProcessManager) AdoptProcess(cmd *exec.Cmd, outputPath string, command string, dir string) (string, error) {
+//
+// If waitCh is non-nil, AdoptProcess assumes the caller has already started a
+// goroutine calling cmd.Wait() and reads its result from waitCh instead of
+// calling cmd.Wait() itself. Calling cmd.Wait() concurrently from two
+// goroutines on the same exec.Cmd is undefined behavior and trips the race
+// detector. The shell-promotion path uses this to hand off its existing Wait
+// goroutine. Callers that haven't yet started a Wait (e.g. tests) pass nil
+// and AdoptProcess starts one internally.
+func (m *BackgroundProcessManager) AdoptProcess(cmd *exec.Cmd, outputPath string, command string, dir string, waitCh <-chan error) (string, error) {
 	// Generate session ID
 	prefix := extractCommandPrefixCLI(command)
 	sanitizedPrefix := sanitizeSessionIDPartCLI(prefix)
@@ -204,9 +212,18 @@ func (m *BackgroundProcessManager) AdoptProcess(cmd *exec.Cmd, outputPath string
 		done:       make(chan struct{}),
 	}
 
+	// Resolve the wait channel: reuse the caller's if provided, else start
+	// our own Wait goroutine.
+	resolvedWait := waitCh
+	if resolvedWait == nil {
+		ch := make(chan error, 1)
+		go func() { ch <- cmd.Wait() }()
+		resolvedWait = ch
+	}
+
 	// Monitor process exit in a goroutine to reap the zombie
 	go func() {
-		waitErr := cmd.Wait()
+		waitErr := <-resolvedWait
 		exitCode := extractExitCode(waitErr)
 		proc.mu.Lock()
 		proc.exitCode = exitCode

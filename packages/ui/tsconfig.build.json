@@ -24,7 +24,12 @@
   },
   "exclude": [
     "node_modules",
-    "dist"
+    "dist",
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+    "src/**/*.stories.ts",
+    "src/**/*.stories.tsx",
+    "src/vitest-env.d.ts"
   ],
   "include": [
     "src"

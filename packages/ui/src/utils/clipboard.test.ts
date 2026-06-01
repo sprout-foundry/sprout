@@ -14,8 +14,10 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  // navigator.clipboard is a readonly property in TS lib.dom; cast through
+  // any to restore/delete the test fixture without compile errors.
   if (originalClipboard) {
-    global.navigator.clipboard = originalClipboard;
+    (global.navigator as any).clipboard = originalClipboard;
   } else {
     delete (global.navigator as any).clipboard;
   }

@@ -76,7 +76,6 @@ describe('TerminalTabBar', () => {
 
   it('renders tab bar with role=tablist', () => {
     act(() => {
-      // @ts-expect-error — createElement accepts children as rest args
       root.render(
         createElement(TerminalTabBar, { ...defaultProps })
       );
@@ -126,7 +125,7 @@ describe('TerminalTabBar', () => {
         })
       );
     });
-    const tabs = container.querySelectorAll('.terminal-tab');
+    const tabs = container.querySelectorAll<HTMLElement>('.terminal-tab');
     act(() => {
       tabs[1]?.click();
     });
@@ -151,14 +150,13 @@ describe('TerminalTabBar', () => {
       );
     });
     act(() => {
-      container.querySelector('.terminal-tab-new')?.click();
+      (container.querySelector('.terminal-tab-new') as HTMLElement | null)?.click();
     });
     expect(onCreate).toHaveBeenCalled();
   });
 
   it('does not render new session button without onCreate', () => {
     act(() => {
-      // @ts-expect-error — onCreate is not in the props
       root.render(
         createElement(TerminalTabBar, {
           sessions: defaultSessions,
@@ -212,7 +210,7 @@ describe('TerminalTabBar', () => {
         })
       );
     });
-    const closeBtns = container.querySelectorAll('.terminal-tab-close');
+    const closeBtns = container.querySelectorAll<HTMLElement>('.terminal-tab-close');
     act(() => {
       closeBtns[1]?.click();
     });
@@ -312,7 +310,7 @@ describe('TerminalTabBar', () => {
     });
     // Click "Rename" in context menu
     const menu = document.querySelector('.mock-context-menu')!;
-    const renameBtn = menu.querySelector('.context-menu-item');
+    const renameBtn = menu.querySelector<HTMLElement>('.context-menu-item');
     act(() => {
       renameBtn?.click();
     });
@@ -423,7 +421,7 @@ describe('TerminalTabBar', () => {
       );
     });
     act(() => {
-      container.querySelector('.agent-sessions-btn')?.click();
+      (container.querySelector('.agent-sessions-btn') as HTMLElement | null)?.click();
     });
     expect(container.querySelector('.agent-sessions-menu')).not.toBeNull();
     expect(container.querySelector('.agent-sessions-header')?.textContent).toBe('Agent Sessions');
@@ -446,9 +444,9 @@ describe('TerminalTabBar', () => {
     });
     // Open dropdown
     act(() => {
-      container.querySelector('.agent-sessions-btn')?.click();
+      (container.querySelector('.agent-sessions-btn') as HTMLElement | null)?.click();
     });
-    const items = container.querySelectorAll('.agent-sessions-item');
+    const items = container.querySelectorAll<HTMLButtonElement>('.agent-sessions-item');
     expect(items[0]?.disabled).toBe(false);
     expect(items[1]?.disabled).toBe(true);
   });
@@ -469,10 +467,10 @@ describe('TerminalTabBar', () => {
     });
     // Open dropdown
     act(() => {
-      container.querySelector('.agent-sessions-btn')?.click();
+      (container.querySelector('.agent-sessions-btn') as HTMLElement | null)?.click();
     });
     // Click the attach item
-    const items = container.querySelectorAll('.agent-sessions-item');
+    const items = container.querySelectorAll<HTMLElement>('.agent-sessions-item');
     act(() => {
       items[0]?.click();
     });

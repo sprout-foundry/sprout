@@ -1056,6 +1056,7 @@ func buildSubagentReturn(m map[string]string, result *SubagentResult, status Sub
 			TokensUsed: result.TokensUsed,
 			Cost:       result.Cost,
 			ToolCalls:  result.ToolCalls,
+			Iterations: result.Iterations,
 		}
 		// SP-059 Phase 2c: structured file manifest, no more regex
 		// scraping. Map ChangeTracker's operation labels (write/edit/

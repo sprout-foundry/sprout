@@ -48,7 +48,7 @@ these specifications first to ensure alignment with the project direction.
 - **SP-003** Webui & Frontend Architecture
 - **SP-004** Security, Validation & MCP
 - **SP-005** Supporting Systems & Infrastructure
-- **SP-006** Delegate Tool (proposed)
+- **SP-006** Delegate Tool (superseded by SP-059)
 - **SP-007** Extend Configuration (proposed)
 - **SP-008** Reliability Engineering (proposed)
 - **SP-009** Component Library Maturation (proposed)
@@ -69,7 +69,7 @@ these specifications first to ensure alignment with the project direction.
 - **SP-054** LSP Language Coverage Expansion (proposed)
 - **SP-055** CLI Pinned Input — Always-On Steering Panel (proposed)
 - **SP-061** Remove Static Embedding Provider (proposed)
-- **SP-059** Subagent ↔ Primary Interaction Overhaul (proposed)
+- **SP-059** Subagent ↔ Primary Interaction Overhaul + Delegate Retirement (in progress)
 - **SP-060** Desktop App — Per-Workspace Server Mode (proposed)
 
 ## Testing

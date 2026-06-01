@@ -63,6 +63,11 @@ type SubagentResult struct {
 	TokensUsed      int
 	Cost            float64
 	ToolCalls       int
+	// Iterations is the assistant-turn count consumed by this subagent
+	// run. Surfaced to the primary via SubagentRunMetrics.Iterations so
+	// the model has visibility into how many LLM rounds a delegated task
+	// burned. SP-059 Phase 5.
+	Iterations      int
 	Elapsed         time.Duration
 	Cancelled       bool
 	BudgetExceeded  bool  // true if task was skipped because fleet budget was already exceeded before starting
@@ -478,6 +483,15 @@ func (r *SubagentRunner) runTask(
 		}
 	}
 
+	// SP-059 Phase 4: share the parent's clarification manager and assign
+	// this subagent a clarification ID (its taskID). Lets the subagent
+	// call request_clarification mid-run and route the user's response
+	// back to itself via the shared manager.
+	if r.parentAgent != nil && r.parentAgent.clarificationManager != nil {
+		subAgent.clarificationManager = r.parentAgent.clarificationManager
+		subAgent.delegateID = taskID
+	}
+
 	// SP-051-2d: bump the process-wide active-subagent counter so the CLI
 	// status footer can show " · N sub" while subagents are running.
 	// Decremented on Run completion via the defer below.
@@ -714,6 +728,7 @@ func (r *SubagentRunner) runTask(
 	tokensUsed := subAgent.state.GetTotalTokens()
 	cost := subAgent.state.GetTotalCost()
 	toolCalls := subAgent.state.GetTotalToolCalls()
+	iterations := subAgent.state.GetCurrentIteration()
 
 	// Determine cancellation status
 	cancelled := runCtx.Err() != nil && !budgetExceeded.Load()
@@ -724,6 +739,7 @@ func (r *SubagentRunner) runTask(
 		result.TokensUsed = tokensUsed
 		result.Cost = cost
 		result.ToolCalls = toolCalls
+		result.Iterations = iterations
 		result.Cancelled = cancelled
 		result.BudgetExceeded = budgetExceeded.Load()
 		result.Truncated = subAgent.FleetBudgetExceeded()

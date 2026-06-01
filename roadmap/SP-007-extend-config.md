@@ -55,7 +55,7 @@ Users must manually edit `config.json` for any customization — fragile, not ro
   "system_prompt_override": "You are an API specialist...",
   "system_prompt_append": "\n\n## API Rules\n- Always validate against OpenAPI specs",
   "tools": {
-    "allowlist": ["shell_command", "read_file", "write_file", "edit_file", "delegate"],
+    "allowlist": ["shell_command", "read_file", "write_file", "edit_file", "run_subagent"],
     "denylist": ["commit", " browse_url"]
   },
   "mcp": {
@@ -112,8 +112,7 @@ Agent generates role JSON, presents for review
 User approves → saved to ~/.sprout/roles/api-specialist.json
       ↓
 Role available for:
-  - run_subagent(role="api-specialist", ...)
-  - delegate(role="api-specialist", ...)
+  - run_subagent(persona="api-specialist", ...)
   - ApplyPersona("api-specialist")
 ```
 

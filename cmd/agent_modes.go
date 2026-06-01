@@ -949,6 +949,18 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	// lifecycle below.
 	steerCoord := NewSteerCoordinator(chatAgent, footer)
 
+	// Capture a ground-truth termios snapshot of stdin in its default
+	// cooked state (the terminal is fully cooked at this point — no
+	// raw or steer mode active). Both InputReader and SteerInputReader
+	// use this for emergency recovery: if a prior mode transition leaves
+	// the terminal in raw mode, the pre-flight check restores to this
+	// known-good state instead of a potentially-corrupted per-enter
+	// snapshot. Must be captured AFTER footer.Start() so the scroll
+	// region is established, but BEFORE any ReadLine / StartTurn call.
+	groundTruth := console.CaptureGroundTruth()
+	inputReader.SetGroundTruth(groundTruth)
+	steerCoord.SetGroundTruth(groundTruth)
+
 	// SP-048-1c + 3: Subscribe to tool start/end events so the activity
 	// indicator can render a per-tool timeline AND the footer can refresh
 	// cost/context after each tool. Runs until ctx is cancelled.
@@ -1088,34 +1100,44 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			// also Stop() defensively after ProcessQuery returns.
 			indicator.Start(fmt.Sprintf("Thinking · %s", chatAgent.GetModel()))
 
-			// SP-055: turn the steer panel on for the duration of the
-			// ProcessQuery call. The coordinator (constructed once at
-			// session start) owns the SteerInputReader and the callback
-			// wiring to InjectInputContext / TriggerInterrupt.
-			steerCoord.StartTurn()
+			// Execute the turn inside a func so we can defer EndTurn.
+			// This ensures the steer reader is always stopped even if
+			// ProcessQuery panics, preventing the terminal from being
+			// left in raw/cbreak mode.
+			func() {
+				// SP-055: turn the steer panel on for the duration of the
+				// ProcessQuery call. The coordinator (constructed once at
+				// session start) owns the SteerInputReader and the callback
+				// wiring to InjectInputContext / TriggerInterrupt.
+				steerCoord.StartTurn()
+				defer steerCoord.EndTurn()
 
-			// Try zsh command detection first (fast path)
-			if executed, err := TryZshCommandExecution(ctx, chatAgent, query); err != nil {
-				indicator.Stop()
-				fmt.Fprint(os.Stderr, console.FormatErrorBlock(console.GlyphError.Prefix()+"Error", err))
-			} else if !executed {
-				// Zsh detection didn't trigger, try LLM-based detection
-				if executed, err := TryDirectExecution(ctx, chatAgent, query); err != nil {
+				// Try zsh command detection first (fast path)
+				if executed, err := TryZshCommandExecution(ctx, chatAgent, query); err != nil {
 					indicator.Stop()
 					fmt.Fprint(os.Stderr, console.FormatErrorBlock(console.GlyphError.Prefix()+"Error", err))
 				} else if !executed {
-					// Neither fast path triggered, process normally
-					if err := ProcessQuery(ctx, chatAgent, eventBus, query); err != nil {
+					// Zsh detection didn't trigger, try LLM-based detection
+					if executed, err := TryDirectExecution(ctx, chatAgent, query); err != nil {
 						indicator.Stop()
 						fmt.Fprint(os.Stderr, console.FormatErrorBlock(console.GlyphError.Prefix()+"Error", err))
+					} else if !executed {
+						// Neither fast path triggered, process normally
+						if err := ProcessQuery(ctx, chatAgent, eventBus, query); err != nil {
+							indicator.Stop()
+							fmt.Fprint(os.Stderr, console.FormatErrorBlock(console.GlyphError.Prefix()+"Error", err))
+						}
 					}
 				}
+			}()
+
+			// Drain any unsent steer text into the InputReader so it
+			// appears pre-filled at the next prompt. This prevents the
+			// silent loss of text the user typed into the steer panel
+			// but did not submit before the turn ended.
+			if unsent := steerCoord.DrainUnsentBuffer(); unsent != "" {
+				inputReader.SetInitialContent(unsent)
 			}
-			// SP-055: tear down the steer panel before the indicator so
-			// the terminal exits raw mode while the spinner / streaming
-			// callbacks are still safe to write. EndTurn resets the
-			// scroll region back to 2 reserved rows.
-			steerCoord.EndTurn()
 			// Defensive: ensure the spinner is cleared at the end of every turn
 			// even if the streamFn never fired (e.g. zsh fast-path executed).
 			indicator.Stop()

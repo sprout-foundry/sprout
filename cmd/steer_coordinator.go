@@ -74,6 +74,10 @@ func (c *SteerCoordinator) StartTurn() {
 	if c == nil || c.reader == nil {
 		return
 	}
+	// Clear the buffer at the start of each fresh turn. This was moved
+	// here from Start() so that PauseSteer/ResumeSteer cycles (used by
+	// interactive prompts mid-turn) preserve the in-progress text.
+	c.reader.ResetBuffer()
 	c.reader.Start()
 	clihooks.SetSteerHooks(c.reader.Stop, c.reader.Start)
 }
@@ -86,6 +90,29 @@ func (c *SteerCoordinator) EndTurn() {
 	}
 	clihooks.SetSteerHooks(nil, nil)
 	c.reader.Stop()
+}
+
+// DrainUnsentBuffer returns any text the user typed into the steer
+// panel during the last turn but did not submit. The REPL loop calls
+// this after EndTurn and carries the text into the next ReadLine via
+// InputReader.SetInitialContent. The steer buffer is reset after drain.
+func (c *SteerCoordinator) DrainUnsentBuffer() string {
+	if c == nil || c.reader == nil {
+		return ""
+	}
+	text := c.reader.DrainUnsentBuffer()
+	c.reader.ResetBuffer()
+	return text
+}
+
+// SetGroundTruth installs the REPL's pristine termios snapshot into
+// the steer reader so Stop() restores to a known-good state instead
+// of a potentially-corrupted per-enter snapshot.
+func (c *SteerCoordinator) SetGroundTruth(gt *console.GroundTruthTermios) {
+	if c == nil || c.reader == nil {
+		return
+	}
+	c.reader.SetGroundTruth(gt)
 }
 
 // handleSteerSubmit forwards the user's typed message to the agent's

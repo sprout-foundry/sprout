@@ -103,6 +103,7 @@ pkg/agent/tmp
 
 # Work-in-progress documentation and planning
 *_plan.md
+*_FIXES.md
 mem.md
 minimum_requirements.md
 feature_review_plan.md

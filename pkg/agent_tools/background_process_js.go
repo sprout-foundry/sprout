@@ -26,7 +26,7 @@ func (m *BackgroundProcessManager) Start(_ context.Context, _ string, _ string) 
 }
 
 // AdoptProcess always returns an error in WASM builds.
-func (m *BackgroundProcessManager) AdoptProcess(_ any, _ string, _ string, _ string) (string, error) {
+func (m *BackgroundProcessManager) AdoptProcess(_ any, _ string, _ string, _ string, _ <-chan error) (string, error) {
 	return "", errors.New("background process management is not available in WASM")
 }
 

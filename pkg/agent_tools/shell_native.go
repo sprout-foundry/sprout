@@ -15,6 +15,28 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
+// syncBuffer is a bytes.Buffer guarded by a Mutex. Used as the early-
+// output buffer in runShellCommandAdoptable: the cmd's stdout/stderr
+// pipe goroutines keep Write()ing concurrently with the main goroutine's
+// String() snapshot read on the background-promotion path (where
+// cmd.Wait() has not yet returned), so a plain bytes.Buffer races.
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
 // extractExitCode extracts the exit code from an error, if it's an exit error.
 // Returns 0 if the error is nil or not an exit error.
 func extractExitCode(err error) int {
@@ -167,8 +189,10 @@ func runShellCommandAdoptable(ctx context.Context, command string, bpm *Backgrou
 	}
 	outputPath := outputFile.Name()
 
-	// Write to both the temp file and a buffer (for early output on promotion)
-	var outputBuf bytes.Buffer
+	// Write to both the temp file and a mutex-guarded buffer (for the
+	// early-output snapshot if we promote to background mid-run, where
+	// the cmd's pipe goroutines are still writing concurrently).
+	var outputBuf syncBuffer
 	writer := io.MultiWriter(outputFile, &outputBuf)
 	cmd.Stdout = writer
 	cmd.Stderr = writer
@@ -208,7 +232,7 @@ func runShellCommandAdoptable(ctx context.Context, command string, bpm *Backgrou
 			// Tool deadline hit — promote to background instead of killing
 			outputFile.Close() // Close our handle; BPM will reopen for reading
 
-			sessionID, adoptErr := bpm.AdoptProcess(cmd, outputPath, command, cmd.Dir)
+			sessionID, adoptErr := bpm.AdoptProcess(cmd, outputPath, command, cmd.Dir, waitCh)
 			if adoptErr == nil {
 				return formatBackgroundPromotionMessage(sessionID, command, outputBuf.String()), nil
 			}

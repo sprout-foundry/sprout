@@ -214,9 +214,10 @@ func TestBPM_AdoptProcess(t *testing.T) {
 	err = cmd.Start()
 	require.NoError(t, err)
 
-	// Adopt it into BPM
+	// Adopt it into BPM. Pass nil waitCh — AdoptProcess will start its
+	// own Wait goroutine since the test hasn't started one.
 	outputFile.Close() // BPM will reopen for reading
-	sessionID, err := bpm.AdoptProcess(cmd, outputPath, "sleep 60", cmd.Dir)
+	sessionID, err := bpm.AdoptProcess(cmd, outputPath, "sleep 60", cmd.Dir, nil)
 	require.NoError(t, err)
 	require.NotEmpty(t, sessionID)
 

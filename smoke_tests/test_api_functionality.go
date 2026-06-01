@@ -175,9 +175,15 @@ func main() {
 				{Role: "user", Content: "Say hello"},
 			}, nil, "", false)
 
-			// Check if it's an auth error - if so, skip the entire test section early
+			// Check if it's an auth error or quota/rate-limit — both are
+			// out-of-band conditions (key invalid or account exhausted),
+			// not code defects, so skip rather than fail. 429 covers both
+			// "rate limit exceeded" and "insufficient_quota".
 			if err != nil && (strings.Contains(err.Error(), "401") || strings.Contains(err.Error(), "invalid_api_key") || strings.Contains(err.Error(), "Incorrect API key")) {
 				fmt.Printf("SKIPPED - Invalid API key\n")
+				// Don't count as failed, just skip
+			} else if err != nil && (strings.Contains(err.Error(), "429") || strings.Contains(err.Error(), "insufficient_quota") || strings.Contains(err.Error(), "exceeded your current quota")) {
+				fmt.Printf("SKIPPED - API key has no quota / rate-limited\n")
 				// Don't count as failed, just skip
 			} else if err != nil {
 				fmt.Printf("FAILED - Non-streaming error: %v\n", err)

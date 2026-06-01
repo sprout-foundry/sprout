@@ -78,7 +78,8 @@ const localStorageMock = (() => {
 })();
 
 beforeAll(() => {
-  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  // IS_REACT_ACT_ENVIRONMENT is React's runtime act() flag; not typed on globalThis.
+  (globalThis as unknown as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
   Object.defineProperty(global, 'localStorage', { value: localStorageMock });
 });
 
@@ -125,7 +126,7 @@ describe('NotificationProvider', () => {
         act(() => {
           root.render(createElement(TestConsumer));
         });
-      }).toThrowError(/useNotifications must be used within NotificationProvider/);
+      }).toThrow(/useNotifications must be used within NotificationProvider/);
     } catch {
       // If the outer expect doesn't catch it, check via console.error
       expect(capturedError).not.toBeNull();

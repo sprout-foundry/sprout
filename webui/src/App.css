@@ -124,9 +124,9 @@
 
   /* Editor-specific theme tokens */
   --editor-pane-bg: #1e293b;
-  --editor-pane-bg-secondary: rgba(255, 255, 255, 0.04);
-  --editor-pane-bg-secondary-hover: rgba(255, 255, 255, 0.08);
-  --editor-pane-footer-bg: rgba(255, 255, 255, 0.03);
+  --editor-pane-bg-secondary: var(--inset-highlight-4);
+  --editor-pane-bg-secondary-hover: var(--inset-highlight-8);
+  --editor-pane-footer-bg: var(--inset-highlight-3);
   --editor-pane-footer-fg: rgba(226, 232, 240, 0.65);
   --editor-empty-fg: rgba(226, 232, 240, 0.5);
   --editor-loading-bg: rgba(14, 165, 233, 0.18);
@@ -164,6 +164,18 @@
   --sidebar-nav-btn-active-bg: #3a404b;
   --sidebar-select-bg: #242932;
   --sidebar-rail-bg: rgba(0, 0, 0, 0.15);
+
+  /* Inset highlight tokens. Used in `box-shadow: inset 0 1px 0 ...` to
+   * add a subtle top-edge sheen to raised surfaces (buttons, tabs,
+   * cards). Dark-theme defaults are low-alpha white; light theme
+   * overrides to `transparent` so the highlight gracefully disappears
+   * instead of rendering as ugly white-on-white. */
+  --inset-highlight-3: rgba(255, 255, 255, 0.03);
+  --inset-highlight-4: rgba(255, 255, 255, 0.04);
+  --inset-highlight-5: rgba(255, 255, 255, 0.05);
+  --inset-highlight-6: rgba(255, 255, 255, 0.06);
+  --inset-highlight-8: rgba(255, 255, 255, 0.08);
+  --inset-highlight-10: rgba(255, 255, 255, 0.10);
 
   /* Subagent nesting-depth colors. Surfaced via DEPTH_COLORS in
    * SubagentTree.tsx so the tree's left-border, persona text, and
@@ -254,6 +266,16 @@
   --sidebar-nav-btn-active-bg: #1d4ed8;
   --sidebar-select-bg: rgba(255, 255, 255, 0.96);
   --sidebar-rail-bg: rgba(0, 0, 0, 0.06);
+
+  /* Inset highlights vanish on light theme — white-on-light reads as
+   * smudges. Tokens still exist; they just resolve to transparent so
+   * the box-shadow syntax in component CSS stays unchanged. */
+  --inset-highlight-3: transparent;
+  --inset-highlight-4: transparent;
+  --inset-highlight-5: transparent;
+  --inset-highlight-6: transparent;
+  --inset-highlight-8: transparent;
+  --inset-highlight-10: transparent;
 
   /* Subagent depth colors — darker progression for legibility on light bg. */
   --subagent-depth-0: #4f46e5;

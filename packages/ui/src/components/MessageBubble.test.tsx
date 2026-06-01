@@ -54,7 +54,7 @@ describe('MessageBubble', () => {
     const bubble = container.querySelector('.message');
     expect(bubble).not.toBeNull();
     expect(bubble?.classList.contains('assistant')).toBe(true);
-    expect(bubble?.getAttribute('role')).toBe('assistant-message');
+    expect(bubble?.getAttribute('data-message-type')).toBe('assistant');
   });
 
   it('renders with user type', () => {
@@ -69,7 +69,7 @@ describe('MessageBubble', () => {
     const bubble = container.querySelector('.message');
     expect(bubble).not.toBeNull();
     expect(bubble?.classList.contains('user')).toBe(true);
-    expect(bubble?.getAttribute('role')).toBe('user-message');
+    expect(bubble?.getAttribute('data-message-type')).toBe('user');
   });
 
   it('applies aria-label', () => {
@@ -241,7 +241,7 @@ describe('MessageBubble', () => {
 
     const bubble = container.querySelector('.message');
     expect(bubble?.classList.contains('user')).toBe(true);
-    expect(bubble?.getAttribute('role')).toBe('user-message');
+    expect(bubble?.getAttribute('data-message-type')).toBe('user');
     expect(container.querySelector('.copy-button')).not.toBeNull();
     expect(container.querySelector('.message-timestamp')?.textContent).toBe('Now');
     expect(container.querySelector('.message-content')?.textContent).toBe('Full example');

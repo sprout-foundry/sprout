@@ -31,7 +31,7 @@
 }
 
 .subagent-tree-node-header:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--inset-highlight-4);
 }
 
 .subagent-tree-node-left {

@@ -37,7 +37,7 @@ const hoisted = vi.hoisted(() => {
       this.loadedAddons.push(addon);
     }
 
-    open(parent: HTMLElement) {
+    open(parent: HTMLDivElement) {
       this.element = parent;
     }
 
@@ -138,7 +138,14 @@ function resetMockState() {
   // No-op — the mock classes maintain state via hoisted getters
 }
 
-function createMockConnection(): ReturnType<CreateTerminalConnection> {
+// MockConnection intersects the production connection type with two
+// test-only fields the assertions reach into to drive the mock.
+type MockConnection = ReturnType<CreateTerminalConnection> & {
+  _onDataCbs: ((data: string) => void)[];
+  _onExitCbs: ((code: number) => void)[];
+};
+
+function createMockConnection(): MockConnection {
   const onDataCbs: ((data: string) => void)[] = [];
   const onExitCbs: ((code: number) => void)[] = [];
   return {
@@ -190,7 +197,6 @@ describe('TerminalPane', () => {
   it('renders container div with terminal-pane class', () => {
     act(() => {
       root.render(
-        // @ts-expect-error — createElement accepts children as rest args
         createElement(TerminalPane, {
           isActive: true,
           sessionId: 'test-session',

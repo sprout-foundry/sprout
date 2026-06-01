@@ -59,12 +59,12 @@ describe('publish-ui workflow', () => {
   });
 
   describe('pipeline steps', () => {
-    it('uses actions/checkout@v4', () => {
-      expect(workflow).toContain('actions/checkout@v4');
+    it('uses actions/checkout@v5', () => {
+      expect(workflow).toContain('actions/checkout@v5');
     });
 
-    it('uses actions/setup-node@v4', () => {
-      expect(workflow).toContain('actions/setup-node@v4');
+    it('uses actions/setup-node@v5', () => {
+      expect(workflow).toContain('actions/setup-node@v5');
     });
 
     it('sets up Node.js 22', () => {

@@ -44,18 +44,12 @@ var codeEmbeddingFiles = []string{
 	"index.hnsw",
 	"index.hnsw.meta",
 	"index.hnsw.records.json",
-	"embedding_index_onnx.hnsw",
-	"embedding_index_onnx.hnsw.meta",
-	"embedding_index_onnx.hnsw.records.json",
 }
 
 var conversationEmbeddingFiles = []string{
 	"conversation_turns.hnsw",
 	"conversation_turns.hnsw.meta",
 	"conversation_turns.hnsw.records.json",
-	"conversation_turns_onnx.hnsw",
-	"conversation_turns_onnx.hnsw.meta",
-	"conversation_turns_onnx.hnsw.records.json",
 }
 
 // =============================================================================
@@ -82,7 +76,7 @@ func TestEmbeddingsClear_DefaultAll(t *testing.T) {
 		}
 	})
 
-	// Should have cleared all 6 files
+	// Should have cleared all 6 files (3 code + 3 conversation)
 	if !strings.Contains(out, "Cleared 6 embedding file(s)") {
 		t.Errorf("expected output to contain 'Cleared 6 embedding file(s)', got: %q", out)
 	}
@@ -321,8 +315,8 @@ func TestEmbeddingsClear_FullCodeFiles(t *testing.T) {
 		}
 	})
 
-	if !strings.Contains(out, "Cleared 6 embedding file(s)") {
-		t.Errorf("expected output to contain 'Cleared 6 embedding file(s)', got: %q", out)
+	if !strings.Contains(out, "Cleared 3 embedding file(s)") {
+		t.Errorf("expected output to contain 'Cleared 3 embedding file(s)', got: %q", out)
 	}
 
 	// Verify all are gone
@@ -350,8 +344,8 @@ func TestEmbeddingsClear_FullConversationFiles(t *testing.T) {
 		}
 	})
 
-	if !strings.Contains(out, "Cleared 6 embedding file(s)") {
-		t.Errorf("expected output to contain 'Cleared 6 embedding file(s)', got: %q", out)
+	if !strings.Contains(out, "Cleared 3 embedding file(s)") {
+		t.Errorf("expected output to contain 'Cleared 3 embedding file(s)', got: %q", out)
 	}
 
 	// Verify all are gone
@@ -367,10 +361,10 @@ func TestEmbeddingsClear_All_Mixed(t *testing.T) {
 
 	indexDir := setupEmbeddingTestEnv(t)
 
-	// Create only some code files (3 of 6)
-	createTestFiles(t, indexDir, codeEmbeddingFiles[:3]...)
+	// Create only some code files (2 of 3)
+	createTestFiles(t, indexDir, codeEmbeddingFiles[:2]...)
 
-	// Create all 6 conversation files
+	// Create all 3 conversation files
 	createTestFiles(t, indexDir, conversationEmbeddingFiles...)
 
 	embeddingsClearType = "all"
@@ -382,9 +376,9 @@ func TestEmbeddingsClear_All_Mixed(t *testing.T) {
 		}
 	})
 
-	// Should clear 3 code + 6 conversation = 9 total
-	if !strings.Contains(out, "Cleared 9 embedding file(s)") {
-		t.Errorf("expected output to contain 'Cleared 9 embedding file(s)', got: %q", out)
+	// Should clear 2 code + 3 conversation = 5 total
+	if !strings.Contains(out, "Cleared 5 embedding file(s)") {
+		t.Errorf("expected output to contain 'Cleared 5 embedding file(s)', got: %q", out)
 	}
 }
 
@@ -445,7 +439,7 @@ func TestEmbeddingsClear_DryRun_All(t *testing.T) {
 		}
 	})
 
-	// Should say "Would clear" not "Cleared"
+	// Should say "Would clear" not "Cleared" — 3 code + 3 conversation = 6
 	if !strings.Contains(out, "Would clear 6 embedding file(s)") {
 		t.Errorf("expected output to contain 'Would clear 6 embedding file(s)', got: %q", out)
 	}

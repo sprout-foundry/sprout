@@ -289,12 +289,13 @@ const AppContent: React.FC<AppContentProps> = ({
       if (!content) return [];
       const ext = currentBuffer?.file?.ext || '';
       const langId = ext.startsWith('.') ? ext.slice(1) : ext;
+      // extractSymbols is internally cached by content hash, so repeated
+      // calls for the same buffer are cheap.
       const symbols = extractSymbols(content, langId);
-      if (!query.trim()) {
-        return symbols.slice(0, 100).map((s) => ({ name: s.name, kind: s.kind, line: s.line }));
-      }
-      const matches = fuzzyFilter(query, symbols, (s) => s.name, 100);
-      return matches.map((m) => ({ name: m.item.name, kind: m.item.kind, line: m.item.line }));
+      const top = query.trim()
+        ? fuzzyFilter(query, symbols, (s) => s.name, 100).map((m) => m.item)
+        : symbols.slice(0, 100);
+      return top.map((s) => ({ name: s.name, kind: s.kind, line: s.line }));
     },
     [currentBuffer],
   );
@@ -677,10 +678,7 @@ const AppContent: React.FC<AppContentProps> = ({
         onNavigateToLine={(line) => {
           document.dispatchEvent(new CustomEvent('editor-goto-line', { detail: { line } }));
         }}
-        activeBufferContent={currentBuffer?.content}
-        activeBufferFileExtension={currentBuffer?.file?.ext}
         commands={VISIBLE_COMMANDS}
-        workspaceRoot={workspaceRoot}
         onSearchFiles={handlePaletteSearchFiles}
         onSearchSymbols={handlePaletteSearchSymbols}
         onExecuteCommand={handlePaletteExecuteCommand}

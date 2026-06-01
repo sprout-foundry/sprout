@@ -79,12 +79,6 @@ export interface CommandPaletteProps {
   onSearchFiles?: (query: string) => Promise<FileResult[]>;
   /** Callback to search symbols */
   onSearchSymbols?: (query: string) => SymbolResult[];
-  /** Active buffer content for local symbol search */
-  activeBufferContent?: string;
-  /** Active buffer file extension */
-  activeBufferFileExtension?: string;
-  /** Workspace root path */
-  workspaceRoot?: string;
 }
 
 function CommandPalette({
@@ -97,9 +91,6 @@ function CommandPalette({
   commands = [],
   onSearchFiles,
   onSearchSymbols,
-  activeBufferContent,
-  activeBufferFileExtension,
-  workspaceRoot,
 }: CommandPaletteProps): JSX.Element | null {
   const [query, setQuery] = useState('');
   const [mode, setMode] = useState<PaletteMode>(initialMode);
@@ -122,23 +113,38 @@ function CommandPalette({
   }, [isOpen, initialMode]);
 
   // Resolve raw query to (search-mode, cleaned-query). The first character
-  // can override mode: `>` → commands, `@` → symbols. Otherwise inherit the
-  // active mode (with `all` treated as "search everything").
+  // can override mode: `>` → commands, `@` or `#` → symbols. Otherwise
+  // inherit the active mode (with `all` treated as "search everything").
   const { q: searchQuery, searchMode } = useMemo<{ q: string; searchMode: PaletteMode }>(() => {
     if (query.startsWith('>')) return { q: query.slice(1).trim(), searchMode: 'commands' };
-    if (query.startsWith('@')) return { q: query.slice(1).trim(), searchMode: 'symbols' };
+    if (query.startsWith('@') || query.startsWith('#')) {
+      return { q: query.slice(1).trim(), searchMode: 'symbols' };
+    }
     return { q: query, searchMode: mode === 'all' ? 'all' : mode };
   }, [query, mode]);
 
-  // Search files when query changes — skip entirely when the user is in
-  // command/symbol mode (no point fetching files we'll never show).
+  // Track the currently-selected result by its stable key so we can restore
+  // selection when the result list filters as the user types.
+  const selectedKeyRef = useRef<string | null>(null);
+
+  // Race-safe debounced file search. Each call gets a token; only the most
+  // recent token may write to state. Without this guard, async backends
+  // produce flicker / wrong-result-for-current-query during fast typing.
+  const fileSearchTokenRef = useRef(0);
   useEffect(() => {
     if (!searchQuery || !onSearchFiles || (searchMode !== 'all' && searchMode !== 'files')) {
       setFileResults([]);
       return;
     }
+    const token = ++fileSearchTokenRef.current;
     const timer = setTimeout(() => {
-      onSearchFiles(searchQuery).then(setFileResults).catch(() => setFileResults([]));
+      onSearchFiles(searchQuery)
+        .then((results) => {
+          if (token === fileSearchTokenRef.current) setFileResults(results);
+        })
+        .catch(() => {
+          if (token === fileSearchTokenRef.current) setFileResults([]);
+        });
     }, 150);
     return () => clearTimeout(timer);
   }, [searchQuery, searchMode, onSearchFiles]);
@@ -204,6 +210,29 @@ function CommandPalette({
 
     return items.sort((a, b) => b.score - a.score).slice(0, 50);
   }, [query, searchQuery, searchMode, commands, fileResults, onSearchSymbols]);
+
+  // Remember which item the user has selected (by its stable key).
+  useEffect(() => {
+    selectedKeyRef.current = results[selectedIndex]?.key ?? null;
+  }, [selectedIndex, results]);
+
+  // When the result list changes, try to keep the previously-selected item
+  // highlighted. If it's no longer in the list, clamp to 0. This makes
+  // refining a query feel non-jarring: typing one more char doesn't yank
+  // the user back to the top of the list.
+  useEffect(() => {
+    if (results.length === 0) return;
+    const key = selectedKeyRef.current;
+    if (key) {
+      const idx = results.findIndex((r) => r.key === key);
+      if (idx >= 0) {
+        if (idx !== selectedIndex) setSelectedIndex(idx);
+        return;
+      }
+    }
+    if (selectedIndex >= results.length) setSelectedIndex(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [results]);
 
   // Announce selection changes when navigating with arrow keys.
   // Only depend on selectedIndex, not results, to avoid firing on every result recomputation.
@@ -327,7 +356,6 @@ function CommandPalette({
             value={query}
             onChange={(e: ChangeEvent<HTMLInputElement>) => {
               setQuery(e.target.value);
-              setSelectedIndex(0);
             }}
             onKeyDown={handleKeyDown}
             placeholder={
@@ -415,6 +443,11 @@ function CommandPalette({
               </span>
               {result.kind === 'file' && result.fileDirectory && (
                 <span className="command-palette-item-path">{result.fileDirectory}</span>
+              )}
+              {result.kind === 'symbol' && result.scopePath && (
+                <span className="command-palette-item-path command-palette-item-path--symbol">
+                  {result.scopePath}
+                </span>
               )}
               {result.kind === 'command' && (
                 <span className="command-palette-item-category">

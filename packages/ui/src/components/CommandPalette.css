@@ -228,6 +228,14 @@
   font-weight: 600;
 }
 
+/* Symbol breadcrumb (scopePath) — rendered as a dimmed monospace suffix.
+ * Mirrors the file-path treatment but with a leading separator to visually
+ * distinguish from file dirs. */
+.command-palette-item-path--symbol::before {
+  content: '› ';
+  opacity: 0.6;
+}
+
 .command-palette-item.selected .command-palette-item-path,
 .command-palette-item.selected .command-palette-item-category {
   color: color-mix(in srgb, var(--accent-fg, #ffffff) 78%, transparent);

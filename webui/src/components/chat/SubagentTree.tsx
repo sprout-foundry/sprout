@@ -16,10 +16,10 @@ const formatDuration = (start: Date, end?: Date): string => {
 // ── Depth Colors ─────────────────────────────────────────────────────
 
 const DEPTH_COLORS = [
-  'var(--subagent-depth-0, #6366f1)',
-  'var(--subagent-depth-1, #8b5cf6)',
-  'var(--subagent-depth-2, #a855f7)',
-  'var(--subagent-depth-3, #c084fc)',
+  'var(--subagent-depth-0)',
+  'var(--subagent-depth-1)',
+  'var(--subagent-depth-2)',
+  'var(--subagent-depth-3)',
 ];
 
 const MAX_COMPLETION_MSG_LENGTH = 80;

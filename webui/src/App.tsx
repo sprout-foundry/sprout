@@ -235,7 +235,11 @@ function AppInner() {
   const stats = useMemo(
     () => ({
       queryCount: state.queryCount,
-      filesModified: 0, // TODO: track modified files from buffers
+      // Not currently tracked — no consumer reads this field today. The
+      // type is preserved across the Sidebar/AppContent prop boundary
+      // because @sprout/ui's ChatProps expects it; a future buffer-dirty
+      // signal can populate it without touching that interface.
+      filesModified: 0,
     }),
     [state.queryCount],
   );

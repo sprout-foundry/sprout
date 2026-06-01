@@ -4,6 +4,12 @@ import type { ProviderLogEntry } from '../providers/types';
 
 const MAX_LOG_ROWS = 1000;
 
+// ANSI escape stripper for inline log previews. Hoisted to module scope so
+// re-renders don't recompile the pattern on every formatLogLine call.
+// Matches ESC (0x1B) followed by `[`, optional numeric/semicolon params,
+// and a final letter in the m/G/K/H/J/A/B/C/D set.
+const ANSI_ESCAPE_RE = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*[mGKHJABCD]`, 'g');
+
 interface SidebarLogsPaneProps {
   logs: ProviderLogEntry[];
 }
@@ -55,7 +61,7 @@ export default function SidebarLogsPane({ logs }: SidebarLogsPaneProps): JSX.Ele
       case 'agent_message': {
         const msg = String(d?.message || '');
         if (!msg.trim()) return '';
-        return `[agent] ${msg.replace(new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*[mGKHJABCD]`, 'g'), '').substring(0, 120)}`;
+        return `[agent] ${msg.replace(ANSI_ESCAPE_RE, '').substring(0, 120)}`;
       }
       case 'metrics_update':
         return `Model: ${String(d?.model || '?')} | Provider: ${String(d?.provider || '?')}`;

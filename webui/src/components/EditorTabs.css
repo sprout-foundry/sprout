@@ -54,7 +54,7 @@
   border-bottom: 2px solid transparent;
   border-radius: 6px 6px 0 0;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background, color, border-color, box-shadow, transform 0.15s ease;
   position: relative;
 }
 
@@ -146,7 +146,7 @@
   align-items: center;
   justify-content: center;
   border-radius: 4px;
-  transition: all 0.1s ease;
+  transition: background, color, border-color, box-shadow, transform 0.1s ease;
   flex-shrink: 0;
   opacity: 0.4;
 }
@@ -175,7 +175,7 @@
   align-items: center;
   justify-content: center;
   border-radius: 4px;
-  transition: all 0.15s ease;
+  transition: background, color, border-color, box-shadow, transform 0.15s ease;
   flex-shrink: 0;
   opacity: 0;
 }
@@ -395,7 +395,7 @@
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background, color, border-color, box-shadow, transform 0.15s ease;
 }
 
 .close-confirm-dialog .dialog-btn.primary {
@@ -430,7 +430,7 @@
   height: 6px;
   min-width: 6px;
   border-radius: 50%;
-  background: var(--accent-primary, #f59e0b);
+  background: var(--accent-primary);
   flex-shrink: 0;
   animation: chat-tab-pulse 1.2s ease-in-out infinite;
   z-index: 3;

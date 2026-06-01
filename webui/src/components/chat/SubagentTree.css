@@ -26,7 +26,7 @@
   color: var(--text-primary, #e2e8f0);
   text-align: left;
   border-radius: 4px;
-  border-left: 3px solid var(--st-color, #6366f1);
+  border-left: 3px solid var(--st-color, var(--accent-primary));
   transition: background 0.15s ease;
 }
 
@@ -66,7 +66,7 @@
 /* ── Status Icons ──────────────────────────────────────────────────── */
 
 .subagent-tree-spinner {
-  color: var(--st-color, #6366f1);
+  color: var(--st-color, var(--accent-primary));
   animation: subagent-tree-spin 1s linear infinite;
   flex-shrink: 0;
 }
@@ -89,13 +89,13 @@
 /* ── Persona ───────────────────────────────────────────────────────── */
 
 .subagent-tree-persona-icon {
-  color: var(--st-persona-color, #6366f1);
+  color: var(--st-persona-color, var(--accent-primary));
   flex-shrink: 0;
 }
 
 .subagent-tree-persona {
   font-weight: 600;
-  color: var(--st-persona-color, #6366f1);
+  color: var(--st-persona-color, var(--accent-primary));
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -119,8 +119,8 @@
   font-weight: 600;
   padding: 1px 5px;
   border-radius: 3px;
-  background: rgba(99, 102, 241, 0.15);
-  color: #6366f1;
+  background: color-mix(in srgb, var(--accent-primary) 15%, transparent);
+  color: var(--accent-primary);
   white-space: nowrap;
 }
 
@@ -166,19 +166,19 @@
 /* ── Depth-based color overrides via data-depth ────────────────────── */
 
 .subagent-tree-node[data-depth="0"] > .subagent-tree-node-header {
-  border-left-color: var(--subagent-depth-0, #6366f1);
+  border-left-color: var(--subagent-depth-0);
 }
 
 .subagent-tree-node[data-depth="1"] > .subagent-tree-node-header {
-  border-left-color: var(--subagent-depth-1, #8b5cf6);
+  border-left-color: var(--subagent-depth-1);
 }
 
 .subagent-tree-node[data-depth="2"] > .subagent-tree-node-header {
-  border-left-color: var(--subagent-depth-2, #a855f7);
+  border-left-color: var(--subagent-depth-2);
 }
 
 .subagent-tree-node[data-depth="3"] > .subagent-tree-node-header {
-  border-left-color: var(--subagent-depth-3, #c084fc);
+  border-left-color: var(--subagent-depth-3);
 }
 
 /* ── Active (running) node highlight ───────────────────────────────── */

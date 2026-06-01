@@ -54,7 +54,7 @@
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
-  transition: all 0.2s;
+  transition: background, color, border-color, box-shadow, transform 0.2s;
   display: flex;
   align-items: center;
   justify-content: space-between;

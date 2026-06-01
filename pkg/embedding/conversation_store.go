@@ -111,15 +111,18 @@ func (s *ConversationStore) DeleteMemoryByName(name string) error {
 		return fmt.Errorf("failed to load records: %w", err)
 	}
 
-	var remaining []VectorRecord
+	var ids []string
 	for _, r := range all {
 		if r.Type == "memory" && r.Name == name {
-			continue
+			ids = append(ids, r.ID)
 		}
-		remaining = append(remaining, r)
 	}
 
-	return s.store.ReplaceAll(remaining)
+	if len(ids) == 0 {
+		return nil
+	}
+
+	return s.store.DeleteByIDs(ids)
 }
 
 // QueryMemories searches memory records by embedding the query and returning

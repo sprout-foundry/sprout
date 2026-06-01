@@ -7,14 +7,16 @@ import {
   GitBranch,
   MinusSquare,
   RefreshCw,
+  Search,
   ShieldCheck,
   Sparkles,
   Square,
   Trash2,
   PlusSquare,
   Plus,
+  X,
 } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MAX_FILES_PER_SECTION, MAX_FILES_INITIAL, LOAD_MORE_INCREMENT } from '../constants/git-constants';
 import type { FileSection, GitBranchesState, GitFile, GitStatusData } from '../types/git-types';
 import { FILE_SECTIONS, selectionKey, parseSelectionKey } from '../types/git-types';
@@ -110,6 +112,17 @@ function GitSidebarPanel({
   // Tracks the last-clicked index per section for shift+click range selection
   const anchorRef = useRef<Map<string, number>>(new Map());
 
+  // Free-text filter over file paths across all sections
+  const [fileFilter, setFileFilter] = useState('');
+  const normalizedFilter = fileFilter.trim().toLowerCase();
+  const filterFiles = useCallback(
+    (files: GitFile[]): GitFile[] => {
+      if (!normalizedFilter) return files;
+      return files.filter((file) => file.path.toLowerCase().includes(normalizedFilter));
+    },
+    [normalizedFilter],
+  );
+
   // Track visible file count per section for pagination
   const [visibleCounts, setVisibleCounts] = useState<Record<FileSection, number>>({
     staged: MAX_FILES_INITIAL,
@@ -162,8 +175,28 @@ function GitSidebarPanel({
 
   const hasStagedFiles = (gitStatus?.staged.length ?? 0) > 0;
   const branchName = gitBranches.current || gitStatus?.branch || 'detached';
-  const visibleSections = FILE_SECTIONS.filter((section) => (gitStatus?.[section.id].length ?? 0) > 0);
+  const totalFiles =
+    (gitStatus?.staged.length ?? 0) +
+    (gitStatus?.modified.length ?? 0) +
+    (gitStatus?.untracked.length ?? 0) +
+    (gitStatus?.deleted.length ?? 0);
+  // Filtered file lists per section; recomputed only when status or filter changes.
+  const filteredBySection = useMemo(() => {
+    const out: Record<FileSection, GitFile[]> = {
+      staged: filterFiles(gitStatus?.staged ?? []),
+      modified: filterFiles(gitStatus?.modified ?? []),
+      untracked: filterFiles(gitStatus?.untracked ?? []),
+      deleted: filterFiles(gitStatus?.deleted ?? []),
+    };
+    return out;
+  }, [filterFiles, gitStatus]);
+  const visibleSections = FILE_SECTIONS.filter((section) => filteredBySection[section.id].length > 0);
   const hiddenSectionCount = FILE_SECTIONS.length - visibleSections.length;
+  const matchedFileCount =
+    filteredBySection.staged.length +
+    filteredBySection.modified.length +
+    filteredBySection.untracked.length +
+    filteredBySection.deleted.length;
   const selectedEntries = Array.from(selectedFiles)
     .map(parseSelectionKey)
     .filter((entry): entry is { section: FileSection; path: string } => entry !== null);
@@ -241,25 +274,41 @@ function GitSidebarPanel({
                 Changes
               </span>
             )}
-            {gitStatus?.ahead && gitStatus.ahead > 0 ? (
-              <span className="ahead">
-                <ArrowUp size={12} />
-                {gitStatus.ahead}
-              </span>
-            ) : null}
-            {gitStatus?.behind && gitStatus.behind > 0 ? (
-              <span className="behind">
-                <ArrowDown size={12} />
-                {gitStatus.behind}
-              </span>
-            ) : null}
           </div>
           <div className="git-sidebar-toolbar-actions">
-            <button type="button" className="git-header-action-btn" onClick={onPull} disabled={isActing || isLoading}>
-              Pull
+            <button
+              type="button"
+              className="git-header-action-btn"
+              onClick={onPull}
+              disabled={isActing || isLoading}
+              title={
+                gitStatus?.behind && gitStatus.behind > 0
+                  ? `Pull ${gitStatus.behind} commit${gitStatus.behind === 1 ? '' : 's'} from upstream`
+                  : 'Pull from upstream'
+              }
+            >
+              <ArrowDown size={12} />
+              <span>Pull</span>
+              {gitStatus?.behind && gitStatus.behind > 0 ? (
+                <span className="git-header-action-badge">{gitStatus.behind}</span>
+              ) : null}
             </button>
-            <button type="button" className="git-header-action-btn" onClick={onPush} disabled={isActing || isLoading}>
-              Push
+            <button
+              type="button"
+              className="git-header-action-btn"
+              onClick={onPush}
+              disabled={isActing || isLoading}
+              title={
+                gitStatus?.ahead && gitStatus.ahead > 0
+                  ? `Push ${gitStatus.ahead} commit${gitStatus.ahead === 1 ? '' : 's'} to upstream`
+                  : 'Push to upstream'
+              }
+            >
+              <ArrowUp size={12} />
+              <span>Push</span>
+              {gitStatus?.ahead && gitStatus.ahead > 0 ? (
+                <span className="git-header-action-badge">{gitStatus.ahead}</span>
+              ) : null}
             </button>
             <button
               type="button"
@@ -383,13 +432,61 @@ function GitSidebarPanel({
           <h4>Working Tree Files</h4>
           <span className="git-sidebar-section-subtitle">Files to stage for commit</span>
         </div>
-        {hiddenSectionCount > 0 ? (
+        {totalFiles > 0 ? (
+          <div className="git-sidebar-filter">
+            <Search size={12} className="git-sidebar-filter-icon" aria-hidden="true" />
+            <input
+              type="text"
+              className="git-sidebar-filter-input"
+              value={fileFilter}
+              onChange={(e) => setFileFilter(e.target.value)}
+              placeholder={`Filter ${totalFiles} file${totalFiles === 1 ? '' : 's'}…`}
+              aria-label="Filter changed files"
+            />
+            {fileFilter && (
+              <button
+                type="button"
+                className="git-sidebar-filter-clear"
+                onClick={() => setFileFilter('')}
+                title="Clear filter"
+                aria-label="Clear filter"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
+        ) : null}
+        {totalFiles === 0 ? (
+          <div className="git-sidebar-clean-state">
+            <CheckCircle2 size={18} />
+            <div>
+              <div className="git-sidebar-clean-state-title">Working tree clean</div>
+              <div className="git-sidebar-clean-state-hint">Nothing to commit. Edit a file to get started.</div>
+            </div>
+          </div>
+        ) : normalizedFilter && matchedFileCount === 0 ? (
+          <div className="git-sidebar-clean-state">
+            <Search size={18} />
+            <div>
+              <div className="git-sidebar-clean-state-title">No files match “{fileFilter}”</div>
+              <button
+                type="button"
+                className="git-sidebar-clean-state-action"
+                onClick={() => setFileFilter('')}
+              >
+                Clear filter
+              </button>
+            </div>
+          </div>
+        ) : hiddenSectionCount > 0 && !normalizedFilter ? (
           <div className="git-sidebar-hidden-sections-note">
             Hiding {hiddenSectionCount} empty {hiddenSectionCount === 1 ? 'section' : 'sections'}
           </div>
         ) : null}
         {visibleSections.map((section) => {
-          const files = gitStatus?.[section.id] ?? [];
+          const files = filteredBySection[section.id];
+          const allFilesInSection = gitStatus?.[section.id] ?? [];
+          const isFiltered = normalizedFilter.length > 0;
           const allSelected =
             files.length > 0 && files.every((file) => selectedFiles.has(selectionKey(section.id, file.path)));
           return (
@@ -402,16 +499,31 @@ function GitSidebarPanel({
                 <div className="git-sidebar-file-section-actions">
                   <button
                     className="git-section-icon-btn"
-                    onClick={() => onToggleSectionSelection(section.id)}
+                    onClick={() => {
+                      if (isFiltered && onSelectFiles) {
+                        // When filtered, toggle selection over the visible subset only.
+                        const visibleKeys = files.map((f) => selectionKey(section.id, f.path));
+                        if (allSelected) {
+                          // Remove visible keys from current selection.
+                          const next = Array.from(selectedFiles).filter((k) => !visibleKeys.includes(k));
+                          onSelectFiles(next);
+                        } else {
+                          const next = Array.from(new Set([...Array.from(selectedFiles), ...visibleKeys]));
+                          onSelectFiles(next);
+                        }
+                        return;
+                      }
+                      onToggleSectionSelection(section.id);
+                    }}
                     title={
                       allSelected
-                        ? `Deselect all ${section.title.toLowerCase()}`
-                        : `Select all ${section.title.toLowerCase()}`
+                        ? `Deselect all ${isFiltered ? 'visible ' : ''}${section.title.toLowerCase()}`
+                        : `Select all ${isFiltered ? 'visible ' : ''}${section.title.toLowerCase()}`
                     }
                   >
                     {allSelected ? <CheckSquare size={14} /> : <Square size={14} />}
                   </button>
-                  {files.length > 0 && (
+                  {allFilesInSection.length > 0 && !isFiltered && (
                     <button
                       className="git-section-icon-btn"
                       onClick={() => onSectionAction(section.id)}

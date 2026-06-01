@@ -1,4 +1,13 @@
-import { ArrowLeft, FileText, GitCompareArrows, Loader2, Clock, FolderOpen } from 'lucide-react';
+import {
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
+  FileText,
+  GitCompareArrows,
+  Loader2,
+  Clock,
+  FolderOpen,
+} from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import type { MutableRefObject } from 'react';
 import type { GitCommitSummary, GitCommitDetail } from '../types/git-types';
@@ -15,6 +24,10 @@ interface CommitDetailPanelProps {
   ) => Promise<{ message: string; hash: string; path: string; diff: string }>;
   commit: GitCommitSummary;
   onBack: () => void;
+  /** Optional siblings for prev/next navigation. */
+  prevCommit?: GitCommitSummary | null;
+  nextCommit?: GitCommitSummary | null;
+  onSelectCommit?: (commit: GitCommitSummary) => void;
   openWorkspaceBuffer: (options: {
     kind: 'chat' | 'diff' | 'review' | 'compare';
     path: string;
@@ -32,6 +45,9 @@ function CommitDetailPanel({
   onLoadCommitFileDiff,
   commit,
   onBack,
+  prevCommit,
+  nextCommit,
+  onSelectCommit,
   openWorkspaceBuffer,
 }: CommitDetailPanelProps): JSX.Element | null {
   const log = useLog();
@@ -170,10 +186,36 @@ function CommitDetailPanel({
     <div className="commit-detail-panel">
       {/* Header */}
       <div className="commit-detail-header">
-        <button type="button" className="commit-detail-back-btn" onClick={onBack}>
-          <ArrowLeft size={14} />
-          <span>Back to history</span>
-        </button>
+        <div className="commit-detail-nav-row">
+          <button type="button" className="commit-detail-back-btn" onClick={onBack}>
+            <ArrowLeft size={14} />
+            <span>Back to history</span>
+          </button>
+          {(prevCommit || nextCommit) && onSelectCommit && (
+            <div className="commit-detail-prev-next">
+              <button
+                type="button"
+                className="commit-detail-nav-btn"
+                onClick={() => prevCommit && onSelectCommit(prevCommit)}
+                disabled={!prevCommit}
+                title={prevCommit ? `Newer: ${prevCommit.short_hash} ${firstLine(prevCommit.message)}` : 'Newest commit'}
+                aria-label="Previous (newer) commit"
+              >
+                <ChevronLeft size={14} />
+              </button>
+              <button
+                type="button"
+                className="commit-detail-nav-btn"
+                onClick={() => nextCommit && onSelectCommit(nextCommit)}
+                disabled={!nextCommit}
+                title={nextCommit ? `Older: ${nextCommit.short_hash} ${firstLine(nextCommit.message)}` : 'Oldest commit'}
+                aria-label="Next (older) commit"
+              >
+                <ChevronRight size={14} />
+              </button>
+            </div>
+          )}
+        </div>
 
         <div className="commit-detail-commit-info">
           <span className="commit-detail-hash">{detail.short_hash}</span>

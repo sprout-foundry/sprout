@@ -44,6 +44,7 @@ type ONNXEmbeddingProvider struct {
 	session   *onnxruntime.DynamicAdvancedSession
 	tokenizer *GemmaTokenizer
 	dims      int           // output dimensions (after MRL truncation)
+	fullDims  int           // model's native output dimensions (e.g., 768)
 	modelHash string
 	closed    bool
 
@@ -56,7 +57,8 @@ type ONNXEmbeddingProvider struct {
 // The runtime must already be initialized. modelPath points to the .onnx model
 // file, tokenizerPath points to tokenizer.json. dims specifies the output
 // dimensionality (e.g., 256 for MRL truncation from 768, or 768 for full).
-func NewONNXEmbeddingProvider(ctx context.Context, runtime *ONNXRuntime, modelPath, tokenizerPath string, dims int) (*ONNXEmbeddingProvider, error) {
+// fullDims is the model's native output dimension (used for tensor allocation).
+func NewONNXEmbeddingProvider(ctx context.Context, runtime *ONNXRuntime, modelPath, tokenizerPath string, dims, fullDims int) (*ONNXEmbeddingProvider, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -88,9 +90,13 @@ func NewONNXEmbeddingProvider(ctx context.Context, runtime *ONNXRuntime, modelPa
 		return nil, fmt.Errorf("onnx embedding: hash model: %w", err)
 	}
 
-	if dims <= 0 || dims > 768 {
+	if fullDims <= 0 {
 		session.Destroy()
-		return nil, fmt.Errorf("onnx embedding: dims must be between 1 and 768, got %d", dims)
+		return nil, fmt.Errorf("onnx embedding: fullDims must be positive, got %d", fullDims)
+	}
+	if dims <= 0 || dims > fullDims {
+		session.Destroy()
+		return nil, fmt.Errorf("onnx embedding: dims must be between 1 and %d, got %d", fullDims, dims)
 	}
 
 	return &ONNXEmbeddingProvider{
@@ -98,6 +104,7 @@ func NewONNXEmbeddingProvider(ctx context.Context, runtime *ONNXRuntime, modelPa
 		session:   session,
 		tokenizer: tokenizer,
 		dims:      dims,
+		fullDims:  fullDims,
 		modelHash: hash,
 		maxSeqLen: 2048,
 	}, nil
@@ -318,7 +325,7 @@ func (p *ONNXEmbeddingProvider) EmbedBatchWithPrefix(ctx context.Context, texts 
 func (p *ONNXEmbeddingProvider) runInference(inputIDs []int64, attentionMask []int64) ([]float32, error) {
 	batchSize := int64(1)
 	seqLen := int64(len(inputIDs))
-	const fullDim = int64(768) // EmbeddingGemma sentence_embedding dimension
+	fullDim := int64(p.fullDims)
 
 	inputIDsTensor, err := onnxruntime.NewTensor(onnxruntime.NewShape(batchSize, seqLen), inputIDs)
 	if err != nil {

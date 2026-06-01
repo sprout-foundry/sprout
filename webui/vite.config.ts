@@ -79,17 +79,21 @@ export default defineConfig(({ mode }) => {
         // via Vite's esbuild minify pass.
         treeshake: isProd ? { moduleSideEffects: 'no-external' } : undefined,
         output: {
-          manualChunks: {
-            // Split CodeMirror into separate chunk
-            codemirror: [
-              '@codemirror/language',
-              '@codemirror/view',
-              '@codemirror/state',
-              '@codemirror/commands',
-              '@codemirror/autocomplete',
-            ],
-            // React separate chunk
-            react: ['react', 'react-dom'],
+          // Function-form manualChunks so we can split @codemirror/lang-*
+          // and @codemirror/legacy-modes/* (51 separate modules) into a
+          // sibling chunk without hand-listing every one. The previous
+          // object-form left them baked into the main index bundle.
+          manualChunks(id) {
+            // Per-vendor chunks for big dependencies. order matters: the
+            // most-specific match (e.g. lang/legacy-modes) must come
+            // before the more-general @codemirror catch-all.
+            if (id.includes('node_modules/@codemirror/lang-')) return 'codemirror-langs';
+            if (id.includes('node_modules/@codemirror/legacy-modes')) return 'codemirror-langs';
+            if (id.includes('node_modules/@lezer/')) return 'codemirror-langs';
+            if (id.includes('node_modules/@codemirror/')) return 'codemirror';
+            if (id.includes('node_modules/react') || id.includes('node_modules/scheduler')) return 'react';
+            if (id.includes('node_modules/onnxruntime')) return 'onnxruntime';
+            return undefined;
           },
         },
       },

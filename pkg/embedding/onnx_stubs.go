@@ -131,7 +131,7 @@ type ONNXEmbeddingProvider struct {
 }
 
 // NewONNXEmbeddingProvider creates a new ONNX embedding provider when CGO is disabled.
-func NewONNXEmbeddingProvider(ctx context.Context, runtime *ONNXRuntime, modelPath, tokenizerPath string, dims int) (*ONNXEmbeddingProvider, error) {
+func NewONNXEmbeddingProvider(ctx context.Context, runtime *ONNXRuntime, modelPath, tokenizerPath string, dims, fullDims int) (*ONNXEmbeddingProvider, error) {
 	return nil, fmt.Errorf("CGO is disabled; ONNX embedding provider cannot be used")
 }
 

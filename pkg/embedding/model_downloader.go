@@ -23,6 +23,14 @@ type ModelConfig struct {
 	// models that use external data; leave empty for self-contained .onnx files.
 	ModelDataURL  string
 	ModelDataHash string
+
+	// FullDims is the model's native output dimensionality (e.g., 768 for EmbeddingGemma).
+	// Used to allocate the output tensor in runInference.
+	FullDims int
+
+	// Dims is the desired output dimensionality after optional MRL truncation.
+	// Must be <= FullDims. When equal to FullDims, no truncation is applied.
+	Dims int
 }
 
 // ModelDownloader downloads ONNX models and tokenizers from HuggingFace.
@@ -269,6 +277,8 @@ func EmbeddingGemma300MConfig() ModelConfig {
 		ModelDataHash: "599962c3143b040de2dd05e5975be3e9091dd067cacc6a8f7186e3203bab9e02",
 		TokenizerURL:  base + "/tokenizer.json",
 		TokenizerHash: "4dda02faaf32bc91031dc8c88457ac272b00c1016cc679757d1c441b248b9c47",
+		FullDims:      768, // EmbeddingGemma-300M native output dimension
+		Dims:          768, // Full dimension (no MRL truncation)
 	}
 }
 

@@ -169,8 +169,10 @@
   font-size: 12px;
   padding: 0;
   margin-left: 4px;
-  width: 20px;
-  height: 20px;
+  /* WCAG 2.5.5 minimum touch-target size is 24x24px. Was 20x20 which
+   * Lighthouse flagged. */
+  width: 24px;
+  height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;

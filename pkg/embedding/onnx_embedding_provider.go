@@ -132,6 +132,11 @@ func (p *ONNXEmbeddingProvider) Embed(ctx context.Context, text string) ([]float
 	}
 
 	if len(tokenIDs) == 0 {
+		// Empty text produces a zero vector with undefined similarity.
+		// Cosine similarity with a zero vector is 0, so it never matches
+		// above any meaningful threshold, but callers should ideally
+		// validate input before embedding.
+		debugLogf("onnx embedding: empty text produced zero-token embedding")
 		return make([]float32, p.dims), nil
 	}
 

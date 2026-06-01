@@ -7,6 +7,8 @@
  *   console.log(result.stdout);
  */
 
+import { installSproutONNXBridge } from './sproutONNXBridge';
+
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export interface WasmShellResult {
@@ -245,6 +247,16 @@ export async function initWasmShell(config?: {
   await warmIdbCache();
 
   window.__sproutStore = store;
+
+  // Install the ONNX bridge so the Go-WASM build's embedding manager can
+  // delegate inference to onnxruntime-web running in this page. The bridge
+  // is lazy under the hood — BrowserONNXProvider.initialize() (which
+  // downloads the ~80 MB EmbeddingGemma model) only fires on the first
+  // .embed() call from the Go side. Installing here is just registering a
+  // global, so there's no startup cost for users who never trigger
+  // semantic search. See pkg/embedding/onnx_wasm.go and docs/WASM_API.md
+  // for the contract.
+  installSproutONNXBridge();
 
   // 2. Load wasm_exec.js.
   const script = document.createElement('script');

@@ -123,23 +123,27 @@ func TestStopBackgroundSession_SessionNotFound(t *testing.T) {
 }
 
 // TestStopBackgroundSession_NoTerminalManager verifies that calling
-// stop_background when the agent has no TerminalManager set (CLI mode) returns
-// an error indicating WebUI terminal manager is required.
+// stop_background when the agent has no TerminalManager set (CLI mode) falls
+// back to BackgroundProcessManager. Since BPM lazy-initializes and the
+// session doesn't exist there either, it returns a "session not found" error.
 func TestStopBackgroundSession_NoTerminalManager(t *testing.T) {
 
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
 	// Do NOT set a TerminalManager — simulates CLI mode.
+	// In CLI mode, the agent lazy-creates a BackgroundProcessManager and
+	// delegates stop_background to it. Since the session was never started
+	// in the BPM, it returns "session not found".
 	_, err := handleShellCommand(context.Background(), agent, map[string]interface{}{
 		"stop_background": "bg-echo-abcdef12",
 	})
 
 	if err == nil {
-		t.Fatal("expected error when no terminal manager is set")
+		t.Fatal("expected error when no terminal manager is set (BPM session not found)")
 	}
-	if !strings.Contains(err.Error(), "WebUI terminal manager") {
-		t.Errorf("expected error mentioning WebUI terminal manager, got %q", err.Error())
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("expected error mentioning session not found (BPM fallback), got %q", err.Error())
 	}
 }
 

@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
 // ExecuteShellCommand executes a shell command with safety checks
@@ -135,76 +137,117 @@ func buildShellOutputWithStatus(output, command string, exitCode int, err error)
 }
 
 // ExecuteShellCommandBackground runs a command in a background hidden PTY session
-// and returns a JSON result with the session ID. Only works in WebUI mode (requires TerminalManager).
-// This is for commands that should run asynchronously without waiting for completion.
+// and returns a JSON result with the session ID. Works in WebUI mode (TerminalManager)
+// and CLI mode (BackgroundProcessManager). This is for commands that should run
+// asynchronously without waiting for completion.
 func ExecuteShellCommandBackground(ctx context.Context, command string, sessionID string) (string, error) {
 	if strings.TrimSpace(command) == "" {
 		return "", fmt.Errorf("empty command provided")
 	}
 
-	// Background mode requires TerminalManager (WebUI mode only)
-	tm := TerminalManagerFromContext(ctx)
-	if tm == nil {
-		return "", fmt.Errorf("background mode requires WebUI terminal manager")
+	// Try TerminalManager first (WebUI mode)
+	if tm := TerminalManagerFromContext(ctx); tm != nil {
+		// Use sessionID as the chat identifier; generate one if not set
+		chatID := sessionID
+		if chatID == "" {
+			chatID = "default"
+		}
+
+		// Execute in background
+		bgSessionID, err := tm.ExecuteCommandInBackground(ctx, chatID, command)
+		if err != nil {
+			return "", fmt.Errorf("execute background command: %w", err)
+		}
+
+		// Return JSON result with session ID
+		resultBytes, err := json.Marshal(map[string]string{
+			"session_id": bgSessionID,
+			"status":     "running",
+		})
+		if err != nil {
+			return "", fmt.Errorf("marshal background result: %w", err)
+		}
+		return string(resultBytes), nil
 	}
 
-	// Use sessionID as the chat identifier; generate one if not set
-	chatID := sessionID
-	if chatID == "" {
-		chatID = "default"
+	// Fallback to BackgroundProcessManager (CLI mode)
+	if bpm := BackgroundProcessManagerFromContext(ctx); bpm != nil {
+		// Resolve working directory from context
+		dir := ""
+		if wd := filesystem.WorkspaceRootFromContext(ctx); wd != "" {
+			dir = wd
+		} else if wd, err := os.Getwd(); err == nil {
+			dir = wd
+		}
+
+		bspSessionID, err := bpm.Start(ctx, command, dir)
+		if err != nil {
+			return "", fmt.Errorf("execute background command: %w", err)
+		}
+		resultBytes, err := json.Marshal(map[string]string{
+			"session_id": bspSessionID,
+			"status":     "running",
+		})
+		if err != nil {
+			return "", fmt.Errorf("marshal background result: %w", err)
+		}
+		return string(resultBytes), nil
 	}
 
-	// Execute in background
-	bgSessionID, err := tm.ExecuteCommandInBackground(ctx, chatID, command)
-	if err != nil {
-		return "", fmt.Errorf("execute background command: %w", err)
-	}
-
-	// Return JSON result with session ID
-	resultBytes, err := json.Marshal(map[string]string{
-		"session_id": bgSessionID,
-		"status":     "running",
-	})
-	if err != nil {
-		return "", fmt.Errorf("marshal background result: %w", err)
-	}
-	return string(resultBytes), nil
+	return "", fmt.Errorf("background mode requires WebUI terminal manager or BackgroundProcessManager")
 }
 
 // CheckBackgroundOutput retrieves accumulated output for a background session.
 // Returns JSON with session_id, status, and output fields.
+// Works in WebUI mode (TerminalManager) and CLI mode (BackgroundProcessManager).
 func CheckBackgroundOutput(ctx context.Context, sessionID string) (string, error) {
 	if strings.TrimSpace(sessionID) == "" {
 		return "", fmt.Errorf("empty session_id provided")
 	}
 
-	// Requires TerminalManager (WebUI mode only)
-	tm := TerminalManagerFromContext(ctx)
-	if tm == nil {
-		return "", fmt.Errorf("background output retrieval requires WebUI terminal manager")
+	// Try TerminalManager first (WebUI mode)
+	if tm := TerminalManagerFromContext(ctx); tm != nil {
+		// Get the output
+		output, err := tm.GetBackgroundOutput(sessionID)
+		if err != nil {
+			return "", err
+		}
+
+		// Check if the session is still active via the interface
+		status := "running"
+		if !tm.IsSessionActive(sessionID) {
+			status = "exited"
+		}
+
+		resultBytes, err := json.Marshal(map[string]string{
+			"session_id": sessionID,
+			"status":     status,
+			"output":     output,
+		})
+		if err != nil {
+			return "", fmt.Errorf("marshal check result: %w", err)
+		}
+		return string(resultBytes), nil
 	}
 
-	// Get the output
-	output, err := tm.GetBackgroundOutput(sessionID)
-	if err != nil {
-		return "", err
+	// Fallback to BackgroundProcessManager (CLI mode)
+	if bpm := BackgroundProcessManagerFromContext(ctx); bpm != nil {
+		output, status, err := bpm.CheckOutput(sessionID)
+		if err != nil {
+			return "", err
+		}
+		resultBytes, err := json.Marshal(map[string]string{
+			"session_id": sessionID,
+			"status":     status,
+			"output":     output,
+		})
+		if err != nil {
+			return "", fmt.Errorf("marshal check result: %w", err)
+		}
+		return string(resultBytes), nil
 	}
 
-	// Check if the session is still active via the interface
-	status := "running"
-	if !tm.IsSessionActive(sessionID) {
-		status = "exited"
-	}
-
-	resultBytes, err := json.Marshal(map[string]string{
-		"session_id": sessionID,
-		"status":     status,
-		"output":     output,
-	})
-	if err != nil {
-		return "", fmt.Errorf("marshal check result: %w", err)
-	}
-	return string(resultBytes), nil
+	return "", fmt.Errorf("background output retrieval requires WebUI terminal manager or BackgroundProcessManager")
 }
 
 // formatBackgroundPromotionMessage creates a formatted message for commands that

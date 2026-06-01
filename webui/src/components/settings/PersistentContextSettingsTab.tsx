@@ -46,7 +46,7 @@ export default function PersistentContextSettingsTab({ settings, updateSetting }
   return (
     <div className="section">
       <h4>Memory & Context</h4>
-      <div className="config-help" style={{ marginBottom: 'var(--space-3)' }}>
+      <div className="config-help settings-help-spaced">
         Controls how sprout primes new chats with relevant prior turns and detects topic drift. Stored under
         <code> persistent_context </code>in config.json.
       </div>
@@ -132,7 +132,7 @@ export default function PersistentContextSettingsTab({ settings, updateSetting }
         <div className="config-help">Discard memory older than N days at startup. 0 disables cleanup (default).</div>
       </div>
 
-      <div style={{ marginTop: 'var(--space-5)' }}>
+      <div className="settings-section-spaced">
         <h4>Drift Detection</h4>
 
         <div className="config-item">
@@ -238,14 +238,14 @@ function PreviewRetrievalPanel() {
   };
 
   return (
-    <div style={{ marginTop: 'var(--space-6)' }}>
+    <div className="pc-preview-panel">
       <h4>Preview retrieval</h4>
-      <div className="config-help" style={{ marginBottom: 'var(--space-3)' }}>
+      <div className="config-help settings-help-spaced">
         See exactly which past turns the saved settings above would inject for a query, so you can tune the
         relevance score / result count before committing.
       </div>
 
-      <div style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}>
+      <div className="settings-inline-row settings-help-spaced">
         <input
           type="text"
           className="styled-input"
@@ -258,7 +258,6 @@ function PreviewRetrievalPanel() {
               void run();
             }
           }}
-          style={{ flex: 1 }}
           disabled={loading}
         />
         <button
@@ -272,108 +271,40 @@ function PreviewRetrievalPanel() {
         </button>
       </div>
 
-      {error && (
-        <div
-          style={{
-            padding: 'var(--space-2) var(--space-3)',
-            background: 'color-mix(in srgb, var(--accent-error) 12%, transparent)',
-            border: '1px solid var(--accent-error)',
-            borderRadius: 'var(--radius-sm)',
-            color: 'var(--accent-error)',
-            fontSize: 'var(--text-xs)',
-            marginBottom: 'var(--space-3)',
-          }}
-        >
-          {error}
-        </div>
-      )}
+      {error && <div className="pc-preview-error">{error}</div>}
 
       {preview && (
         <div>
-          {preview.note && (
-            <div
-              style={{
-                padding: 'var(--space-2) var(--space-3)',
-                background: 'color-mix(in srgb, var(--accent-warning) 12%, transparent)',
-                border: '1px solid var(--accent-warning)',
-                borderRadius: 'var(--radius-sm)',
-                color: 'var(--accent-warning-fg)',
-                fontSize: 'var(--text-xs)',
-                marginBottom: 'var(--space-3)',
-              }}
-            >
-              {preview.note}
-            </div>
-          )}
+          {preview.note && <div className="pc-preview-note">{preview.note}</div>}
 
-          <div
-            style={{
-              fontSize: 'var(--text-xs)',
-              color: 'var(--text-tertiary)',
-              marginBottom: 'var(--space-2)',
-            }}
-          >
-            score ≥ {preview.config.min_relevance_score.toFixed(2)} · top{' '}
-            {preview.config.max_contextual_results} · workspace-scoped:{' '}
-            {preview.config.workspace_scoped_retrieval ? 'yes' : 'no'}
+          <div className="pc-preview-meta">
+            score ≥ {preview.config.min_relevance_score.toFixed(2)} · top {preview.config.max_contextual_results} ·
+            workspace-scoped: {preview.config.workspace_scoped_retrieval ? 'yes' : 'no'}
           </div>
 
           {preview.results.length === 0 ? (
-            <div className="settings-empty">No retrievals matched. Lower the relevance score or try a different query.</div>
+            <div className="settings-empty">
+              No retrievals matched. Lower the relevance score or try a different query.
+            </div>
           ) : (
-            <ol style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+            <ol className="pc-preview-results">
               {preview.results.map((r, idx) => (
-                <li
-                  key={idx}
-                  style={{
-                    padding: 'var(--space-3)',
-                    background: 'var(--bg-elevated)',
-                    border: '1px solid var(--border-subtle)',
-                    borderRadius: 'var(--radius-sm)',
-                    marginBottom: 'var(--space-2)',
-                  }}
-                >
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      gap: 'var(--space-3)',
-                      marginBottom: 'var(--space-1)',
-                    }}
-                  >
-                    <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>
+                <li key={idx} className="pc-preview-result">
+                  <div className="pc-preview-result-head">
+                    <span className="pc-preview-result-rank">
                       #{idx + 1} · score {r.score.toFixed(3)}
                     </span>
-                    <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>
-                      {r.relative_time}
-                    </span>
+                    <span className="pc-preview-result-time">{r.relative_time}</span>
                   </div>
-                  <div
-                    style={{
-                      fontSize: 'var(--text-xs)',
-                      color: 'var(--text-secondary)',
-                      marginBottom: 'var(--space-1)',
-                    }}
-                  >
+                  <div className="pc-preview-result-line">
                     <strong>User:</strong> {r.user_message}
                   </div>
                   {r.summary && (
-                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>
+                    <div className="pc-preview-result-line pc-preview-result-line--muted">
                       <strong>Summary:</strong> {r.summary}
                     </div>
                   )}
-                  {r.workspace && (
-                    <div
-                      style={{
-                        fontSize: 'var(--text-xs)',
-                        fontFamily: 'var(--font-mono)',
-                        color: 'var(--text-muted)',
-                        marginTop: 'var(--space-1)',
-                      }}
-                    >
-                      {r.workspace}
-                    </div>
-                  )}
+                  {r.workspace && <div className="pc-preview-result-workspace">{r.workspace}</div>}
                 </li>
               ))}
             </ol>

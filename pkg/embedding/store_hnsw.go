@@ -254,28 +254,25 @@ func (s *HNSWStore) Store(records []VectorRecord) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// First, update s.records with all incoming records (both with and without embeddings).
 	for i := range records {
 		rec := &records[i]
-		s.records[rec.ID] = *rec
-	}
 
-	// Build a completely fresh graph from ALL records in s.records that have embeddings.
-	// This avoids the hnsw library's Delete bugs (corrupts graph state, causes panics on Add).
-	newGraph := newConfiguredGraph()
-	for _, rec := range s.records {
+		// Delete old node from graph if it exists.
+		// (hnsw.Add does delete+insert internally, but explicit delete is
+		// safer to ensure clean graph state.)
+		s.graph.Graph.Delete(rec.ID)
+
+		// Update the records map.
+		s.records[rec.ID] = *rec
+
+		// Add new node to graph.
 		if len(rec.Embedding) > 0 {
-			newGraph.Add(hnsw.MakeNode(rec.ID, rec.Embedding))
+			s.graph.Graph.Add(hnsw.MakeNode(rec.ID, rec.Embedding))
 		}
 	}
-
-	// Replace s.graph.Graph with the new graph.
-	s.graph.Graph = newGraph
 	s.dirty = true
 
-	// Persist records first so a crash mid-save leaves records ahead of the
-	// graph (recoverable on next build) rather than graph ahead of records
-	// (which triggers the "node not added" panic).
+	// Persist records first, then graph.
 	if err := s.saveRecords(); err != nil {
 		return fmt.Errorf("hnsw: save records after store: %w", err)
 	}
@@ -342,11 +339,11 @@ func (s *HNSWStore) DeleteByFile(filePath string) error {
 
 	normalized := filepath.Clean(filePath)
 
-	// Remove matching records from s.records.
 	var deleted int
 	for id, rec := range s.records {
 		if filepath.Clean(rec.File) == normalized {
 			delete(s.records, id)
+			s.graph.Graph.Delete(id)
 			deleted++
 		}
 	}
@@ -354,15 +351,6 @@ func (s *HNSWStore) DeleteByFile(filePath string) error {
 	if deleted == 0 {
 		return nil
 	}
-
-	// Rebuild the graph from scratch to avoid hnsw Delete bugs.
-	newGraph := newConfiguredGraph()
-	for _, rec := range s.records {
-		if len(rec.Embedding) > 0 {
-			newGraph.Add(hnsw.MakeNode(rec.ID, rec.Embedding))
-		}
-	}
-	s.graph.Graph = newGraph
 	s.dirty = true
 
 	if err := s.saveRecords(); err != nil {
@@ -381,28 +369,19 @@ func (s *HNSWStore) DeleteByIDs(ids []string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Remove records from s.records.
 	var deleted int
 	for _, id := range ids {
 		if _, ok := s.records[id]; !ok {
 			continue
 		}
 		delete(s.records, id)
+		s.graph.Graph.Delete(id)
 		deleted++
 	}
 
 	if deleted == 0 {
 		return nil
 	}
-
-	// Rebuild the graph from scratch to avoid hnsw Delete bugs.
-	newGraph := newConfiguredGraph()
-	for _, rec := range s.records {
-		if len(rec.Embedding) > 0 {
-			newGraph.Add(hnsw.MakeNode(rec.ID, rec.Embedding))
-		}
-	}
-	s.graph.Graph = newGraph
 	s.dirty = true
 
 	if err := s.saveRecords(); err != nil {

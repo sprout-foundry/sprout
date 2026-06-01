@@ -32,25 +32,48 @@ const LOCALHOST_DEFAULTS: RuntimeConfig = {
 let lastConfig: RuntimeConfig = LOCALHOST_DEFAULTS;
 
 /**
+ * Derive same-origin API/WS URLs from the current page location. Used when
+ * cloud mode is active but no Foundry URL is baked in — e.g. the webui is
+ * served from Cloudflare Pages and the Pages Functions proxy forwards
+ * /api/*, /.ory/*, and /ws to the Foundry tunnel on the same origin.
+ */
+function sameOriginDefaults(): { apiBaseURL: string; wsURL: string } {
+  if (typeof window === 'undefined') {
+    return { apiBaseURL: LOCALHOST_DEFAULTS.apiBaseURL, wsURL: LOCALHOST_DEFAULTS.wsURL };
+  }
+  const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return {
+    apiBaseURL: window.location.origin,
+    wsURL: `${wsProtocol}//${window.location.host}/ws`,
+  };
+}
+
+/**
  * Build a RuntimeConfig from Vite env vars, using per-field defaults.
  * Returns null when ALL env vars are unset (caller should fall to localhost defaults).
+ *
+ * Env var names match the build pipeline (sprout/scripts/build-webui-dist.mjs
+ * and sprout/webui/.env.cloud): VITE_SPROUT_MODE, VITE_FOUNDRY_API_URL,
+ * VITE_FOUNDRY_WS_URL.
  */
 function fromEnvVars(): RuntimeConfig | null {
-  const apiBaseURL = import.meta.env.VITE_API_BASE_URL;
-  const wsURL = import.meta.env.VITE_WS_URL;
-  const authMode = (import.meta.env.VITE_AUTH_MODE as 'none' | 'bearer' | undefined) ?? undefined;
-  const appMode = (import.meta.env.VITE_APP_MODE as 'local' | 'cloud' | undefined) ?? undefined;
+  const apiBaseURL = import.meta.env.VITE_FOUNDRY_API_URL;
+  const wsURL = import.meta.env.VITE_FOUNDRY_WS_URL;
+  const appMode = (import.meta.env.VITE_SPROUT_MODE as 'local' | 'cloud' | undefined) ?? undefined;
   const buildVersion = import.meta.env.VITE_BUILD_VERSION;
 
-  if (!apiBaseURL && !wsURL && !authMode && !appMode && !buildVersion) {
+  if (!apiBaseURL && !wsURL && !appMode && !buildVersion) {
     return null;
   }
 
+  const resolvedMode = appMode ?? 'local';
+  const fallback = resolvedMode === 'cloud' ? sameOriginDefaults() : LOCALHOST_DEFAULTS;
+
   return {
-    apiBaseURL: apiBaseURL || LOCALHOST_DEFAULTS.apiBaseURL,
-    wsURL: wsURL || LOCALHOST_DEFAULTS.wsURL,
-    authMode: authMode ?? 'none',
-    appMode: appMode ?? 'local',
+    apiBaseURL: apiBaseURL || fallback.apiBaseURL,
+    wsURL: wsURL || fallback.wsURL,
+    authMode: 'none',
+    appMode: resolvedMode,
     buildVersion: buildVersion ?? 'dev',
   };
 }

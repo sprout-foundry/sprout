@@ -544,10 +544,6 @@ func clearCodeEmbeddingFiles(indexDir string) (int, error) {
 		filepath.Join(indexDir, "index.hnsw"),
 		filepath.Join(indexDir, "index.hnsw.meta"),
 		filepath.Join(indexDir, "index.hnsw.records.json"),
-		// ONNX-variant filenames (created when the ONNX provider is active).
-		filepath.Join(indexDir, "embedding_index_onnx.hnsw"),
-		filepath.Join(indexDir, "embedding_index_onnx.hnsw.meta"),
-		filepath.Join(indexDir, "embedding_index_onnx.hnsw.records.json"),
 	}
 	return removeFilesSilently(files)
 }
@@ -557,10 +553,6 @@ func clearConversationEmbeddingFiles(indexDir string) (int, error) {
 		filepath.Join(indexDir, "conversation_turns.hnsw"),
 		filepath.Join(indexDir, "conversation_turns.hnsw.meta"),
 		filepath.Join(indexDir, "conversation_turns.hnsw.records.json"),
-		// ONNX-variant filenames (created when the ONNX provider is active).
-		filepath.Join(indexDir, "conversation_turns_onnx.hnsw"),
-		filepath.Join(indexDir, "conversation_turns_onnx.hnsw.meta"),
-		filepath.Join(indexDir, "conversation_turns_onnx.hnsw.records.json"),
 	}
 	return removeFilesSilently(files)
 }

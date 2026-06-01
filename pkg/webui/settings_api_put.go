@@ -854,7 +854,8 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 		for i, p := range ei.ExcludePaths {
 			ei.ExcludePaths[i] = truncateString(p, maxSettingPathLength)
 		}
-		ei.Provider = truncateString(ei.Provider, maxSettingNameLength)
+		// Provider field removed — embedding provider is always the
+		// bundled ONNX EmbeddingGemma-300M today.
 		ei.IndexDir = truncateString(ei.IndexDir, maxSettingPathLength)
 		cfg.EmbeddingIndex = &ei
 	}

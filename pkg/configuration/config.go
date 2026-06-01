@@ -953,10 +953,6 @@ type EmbeddingIndexConfig struct {
 	// Enabled controls whether the embedding index is active.
 	Enabled bool `json:"enabled,omitempty"`
 
-	// Provider is the embedding provider to use. Currently only "bundled" is supported.
-	// Default: "bundled"
-	Provider string `json:"provider,omitempty"`
-
 	// IndexDir is the directory where the embedding index JSONL files are stored.
 	// If empty, uses ~/.config/sprout/embeddings/
 	IndexDir string `json:"index_dir,omitempty"`
@@ -1473,9 +1469,6 @@ func MergeConfig(base, override *Config) *Config {
 		}
 		if override.EmbeddingIndex.Enabled {
 			result.EmbeddingIndex.Enabled = override.EmbeddingIndex.Enabled
-		}
-		if override.EmbeddingIndex.Provider != "" {
-			result.EmbeddingIndex.Provider = override.EmbeddingIndex.Provider
 		}
 		if override.EmbeddingIndex.IndexDir != "" {
 			result.EmbeddingIndex.IndexDir = override.EmbeddingIndex.IndexDir

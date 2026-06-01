@@ -144,15 +144,15 @@ func (h *embeddingIndexHandler) handleStatus(cfg *configuration.EmbeddingIndexCo
 	}
 
 	enabled := cfg.Enabled
-	provider := cfg.Provider
-	if provider == "" {
-		provider = "bundled"
-	}
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Embedding Index Status:\n\n"))
+	sb.WriteString("Embedding Index Status:\n\n")
 	sb.WriteString(fmt.Sprintf("  Enabled: %v\n", enabled))
-	sb.WriteString(fmt.Sprintf("  Provider: %s\n", provider))
+	// Provider is always the bundled ONNX EmbeddingGemma-300M today —
+	// the previously-configurable `provider` field was removed because no
+	// code branched on it. If remote providers are ever added, restore the
+	// config field and the per-provider routing in pkg/embedding/manager.go.
+	sb.WriteString("  Provider: bundled\n")
 	sb.WriteString(fmt.Sprintf("  Index Directory: %s\n", indexDir))
 
 	info, err := os.Stat(indexDir)

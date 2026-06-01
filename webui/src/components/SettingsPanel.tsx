@@ -1,5 +1,5 @@
-import { ChevronRight } from 'lucide-react';
-import { useRef, useEffect, useState } from 'react';
+import { ChevronRight, Search, X } from 'lucide-react';
+import { useRef, useEffect, useMemo, useState } from 'react';
 import './SettingsPanel.css';
 import type { SproutSettings } from '../services/api';
 import type { AgentConfigProps } from './settings/types';
@@ -33,6 +33,7 @@ import {
   getSectionForSubsection,
   scopeToLayer,
   subsectionToLegacyTab,
+  type SectionDef,
   type SettingsSubsection,
   type SettingsSection,
   type SettingsPanelProps,
@@ -59,11 +60,48 @@ function SettingsPanel({
     settingsRef.current = settings;
   }, [settings]);
 
-  /* ─── Collapsible section state ──────────────────────── */
+  /* ─── Collapsible section state (persisted across reopens) ── */
 
-  const [activeSubsection, setActiveSubsection] = useState<SettingsSubsection | null>(null);
-  const [expandedSections, setExpandedSections] = useState<Set<SettingsSection>>(new Set(['agent']));
+  const STORAGE_KEY = 'sprout.settingsPanel.state.v1';
+  const restored = useMemo(() => {
+    try {
+      const raw = typeof window !== 'undefined' ? window.localStorage.getItem(STORAGE_KEY) : null;
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as {
+        expanded?: SettingsSection[];
+        activeSubsection?: SettingsSubsection | null;
+      };
+      return parsed;
+    } catch {
+      return null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const [activeSubsection, setActiveSubsection] = useState<SettingsSubsection | null>(
+    restored?.activeSubsection ?? null,
+  );
+  const [expandedSections, setExpandedSections] = useState<Set<SettingsSection>>(
+    new Set(restored?.expanded ?? ['agent']),
+  );
   const [showCredentials, setShowCredentials] = useState(false);
+  const [filterQuery, setFilterQuery] = useState('');
+
+  // Persist expanded sections + active subsection on change so reopening the
+  // panel or reloading the page restores the user's last position.
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          expanded: Array.from(expandedSections),
+          activeSubsection,
+        }),
+      );
+    } catch {
+      // ignore quota / privacy-mode errors
+    }
+  }, [expandedSections, activeSubsection]);
 
   const toggleSection = (sectionId: SettingsSection) => {
     setExpandedSections((prev) => {
@@ -76,6 +114,44 @@ function SettingsPanel({
       return next;
     });
   };
+
+  // Filter sections/subsections by user query. A section is visible if its
+  // label/description matches, or if any of its subsection labels match.
+  // When filtering, matched sections auto-expand so results are visible.
+  const normalizedQuery = filterQuery.trim().toLowerCase();
+  const filteredSections = useMemo(() => {
+    if (!normalizedQuery) return SECTION_GROUPS;
+    return SECTION_GROUPS.map((section) => {
+      const sectionMatches =
+        section.label.toLowerCase().includes(normalizedQuery) ||
+        section.description.toLowerCase().includes(normalizedQuery) ||
+        section.scope.toLowerCase().includes(normalizedQuery);
+      const matchingSubs = section.subsections.filter((sub) =>
+        sub.label.toLowerCase().includes(normalizedQuery),
+      );
+      if (sectionMatches || matchingSubs.length > 0) {
+        return {
+          ...section,
+          subsections: matchingSubs.length > 0 ? matchingSubs : section.subsections,
+        };
+      }
+      return null;
+    }).filter((s): s is (typeof SECTION_GROUPS)[number] => s !== null);
+  }, [normalizedQuery]);
+
+  // Auto-expand any section that has matches while filtering.
+  useEffect(() => {
+    if (!normalizedQuery) return;
+    setExpandedSections((prev) => {
+      const next = new Set(prev);
+      for (const section of filteredSections) {
+        next.add(section.id);
+      }
+      return next;
+    });
+  }, [normalizedQuery, filteredSections]);
+
+  const credentialsMatches = !normalizedQuery || 'credentials'.includes(normalizedQuery);
 
   /* ─── Custom hooks (must be called before any useEffects) ── */
 
@@ -404,9 +480,52 @@ function SettingsPanel({
 
   /* ─── Main render ─────────────────────────────────────── */
 
+  const scopeTitle: Record<SectionDef['scope'], string> = {
+    session: 'Session-scoped — applies to this chat session only.',
+    workspace: 'Workspace-scoped — saved in this project directory.',
+    global: 'Global — saved in ~/.config/sprout, applies everywhere.',
+    runtime: 'Runtime — this browser session only, not persisted to disk.',
+  };
+
   return (
     <div className="settings-panel">
-      {SECTION_GROUPS.map((section) => (
+      {/* Filter bar */}
+      <div className="settings-filter">
+        <Search size={12} className="settings-filter-icon" aria-hidden="true" />
+        <input
+          type="text"
+          className="settings-filter-input"
+          value={filterQuery}
+          onChange={(e) => setFilterQuery(e.target.value)}
+          placeholder="Filter settings…"
+          aria-label="Filter settings"
+        />
+        {filterQuery && (
+          <button
+            type="button"
+            className="settings-filter-clear"
+            onClick={() => setFilterQuery('')}
+            title="Clear filter"
+            aria-label="Clear filter"
+          >
+            <X size={12} />
+          </button>
+        )}
+      </div>
+
+      {normalizedQuery && filteredSections.length === 0 && !credentialsMatches ? (
+        <div className="settings-no-match">
+          <Search size={16} />
+          <div>
+            <div>No settings match “{filterQuery}”</div>
+            <button type="button" className="settings-no-match-action" onClick={() => setFilterQuery('')}>
+              Clear filter
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {filteredSections.map((section) => (
         <div key={section.id} className={`settings-section ${expandedSections.has(section.id) ? 'expanded' : ''}`}>
           {/* Section header (clickable to toggle) */}
           <button
@@ -416,7 +535,12 @@ function SettingsPanel({
             aria-expanded={expandedSections.has(section.id)}
           >
             <span className="settings-section-label">{section.label}</span>
-            <span className={`settings-scope-badge scope-${section.scope}`}>{section.scope}</span>
+            <span
+              className={`settings-scope-badge scope-${section.scope}`}
+              title={scopeTitle[section.scope]}
+            >
+              {section.scope}
+            </span>
             <ChevronRight className="settings-section-chevron" size={14} />
           </button>
 
@@ -519,23 +643,27 @@ function SettingsPanel({
         </div>
       ))}
       {/* Credentials — separate panel per spec, not inside any section */}
-      <div className="settings-credentials-link">
-        <button
-          type="button"
-          className={`settings-section-header ${showCredentials ? 'expanded' : ''}`}
-          onClick={() => setShowCredentials(!showCredentials)}
-          aria-expanded={showCredentials}
-        >
-          <span className="settings-section-label">Credentials</span>
-          <span className="settings-scope-badge scope-global">global</span>
-          <ChevronRight className="settings-section-chevron" size={14} />
-        </button>
-        {showCredentials && (
-          <div className="settings-section-body">
-            <CredentialsSettingsTab />
-          </div>
-        )}
-      </div>
+      {credentialsMatches && (
+        <div className="settings-credentials-link">
+          <button
+            type="button"
+            className={`settings-section-header ${showCredentials ? 'expanded' : ''}`}
+            onClick={() => setShowCredentials(!showCredentials)}
+            aria-expanded={showCredentials}
+          >
+            <span className="settings-section-label">Credentials</span>
+            <span className="settings-scope-badge scope-global" title={scopeTitle.global}>
+              global
+            </span>
+            <ChevronRight className="settings-section-chevron" size={14} />
+          </button>
+          {showCredentials && (
+            <div className="settings-section-body">
+              <CredentialsSettingsTab />
+            </div>
+          )}
+        </div>
+      )}
 
       {fieldRenderers.renderSaving()}
     </div>

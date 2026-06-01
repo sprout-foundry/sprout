@@ -1,4 +1,4 @@
-import { Plus, Trash2 } from 'lucide-react';
+import { Lock, Plus, Trash2 } from 'lucide-react';
 
 interface MCPServerFormProps {
   editingServer: { mode: 'add' | 'edit'; originalName?: string } | null;
@@ -73,15 +73,15 @@ export default function MCPServerForm({
             placeholder="--flag value"
           />
         </div>
-        <div className="form-row" style={{ flexDirection: 'column' }}>
+        <div className="form-row mcp-env-form-row">
           <label>Environment Variables</label>
           {serverEnvVars.length > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '8px' }}>
+            <div className="mcp-env-list">
               {serverEnvVars.map((ev, idx) => (
-                <div key={idx} style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                <div key={idx} className="mcp-env-row">
                   <input
                     type="text"
-                    className="styled-input"
+                    className="styled-input mcp-env-key"
                     value={ev.key}
                     onChange={(e) => {
                       const updated = [...serverEnvVars];
@@ -89,27 +89,17 @@ export default function MCPServerForm({
                       setServerEnvVars(updated);
                     }}
                     placeholder="VAR_NAME"
-                    style={{ flex: 1 }}
                   />
-                  <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>=</span>
+                  <span className="mcp-env-equals">=</span>
                   {ev.value === '{{stored}}' ? (
-                    <span
-                      style={{
-                        flex: 1.5,
-                        padding: '4px 8px',
-                        borderRadius: '4px',
-                        background: 'var(--bg-secondary)',
-                        color: 'var(--text-muted)',
-                        fontSize: '12px',
-                        border: '1px solid var(--border)',
-                      }}
-                    >
-                      🔒 Stored in credential manager
+                    <span className="mcp-env-stored-badge">
+                      <Lock size={11} aria-hidden="true" />
+                      <span>Stored in credential manager</span>
                     </span>
                   ) : (
                     <input
                       type="password"
-                      className="styled-input"
+                      className="styled-input mcp-env-value"
                       value={ev.value}
                       onChange={(e) => {
                         const updated = [...serverEnvVars];
@@ -117,7 +107,6 @@ export default function MCPServerForm({
                         setServerEnvVars(updated);
                       }}
                       placeholder="value"
-                      style={{ flex: 1.5 }}
                     />
                   )}
                   <button
@@ -132,23 +121,21 @@ export default function MCPServerForm({
               ))}
             </div>
           )}
-          <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+          <div className="mcp-env-row">
             <input
               type="text"
-              className="styled-input"
+              className="styled-input mcp-env-key"
               value={newEnvKey}
               onChange={(e) => setNewEnvKey(e.target.value)}
               placeholder="NEW_VAR"
-              style={{ flex: 1 }}
             />
-            <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>=</span>
+            <span className="mcp-env-equals">=</span>
             <input
               type="password"
-              className="styled-input"
+              className="styled-input mcp-env-value"
               value={newEnvValue}
               onChange={(e) => setNewEnvValue(e.target.value)}
               placeholder="secret value"
-              style={{ flex: 1.5 }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && newEnvKey.trim() && newEnvValue.trim()) {
                   setServerEnvVars([...serverEnvVars, { key: newEnvKey.trim(), value: newEnvValue.trim() }]);

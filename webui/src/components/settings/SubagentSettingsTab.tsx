@@ -84,22 +84,20 @@ export default function SubagentSettingsTab({
         </select>
       </div>
 
-      <div style={{ marginTop: 'var(--space-5)', paddingTop: 'var(--space-4)', borderTop: '1px solid var(--border)' }}>
+      <div className="settings-section-spaced-bordered">
         <h4>Parallel Subagents</h4>
-        <>
-          {renderToggle('subagent_parallel_enabled', 'Enable parallel subagent execution')}
+        {renderToggle('subagent_parallel_enabled', 'Enable parallel subagent execution')}
 
-          {getNestedValue(settings, 'subagent_parallel_enabled') && (
-            <div style={{ marginTop: 'var(--space-3)' }}>
-              {renderNumberInput('subagent_max_parallel', 'Maximum parallel subagents', 1, 10)}
-              <div className="config-help" style={{ marginTop: 'var(--space-2)' }}>
-                Controls how many subagents can run simultaneously. Set to 0 or disable above to run all subagents
-                serially.
-              </div>
+        {Boolean(getNestedValue(settings, 'subagent_parallel_enabled')) && (
+          <div className="settings-help-spaced-top">
+            {renderNumberInput('subagent_max_parallel', 'Maximum parallel subagents', 1, 10)}
+            <div className="config-help">
+              Controls how many subagents can run simultaneously. Set to 0 or disable above to run all subagents
+              serially.
             </div>
-          )}
-        </>
-        <div style={{ marginTop: 'var(--space-4)' }}>
+          </div>
+        )}
+        <div className="settings-help-spaced-top">
           {renderNumberInput(
             'subagent_max_depth',
             'Maximum subagent nesting depth',
@@ -124,9 +122,9 @@ export default function SubagentSettingsTab({
         'computer_user',
       ])}
 
-      <div style={{ marginTop: 'var(--space-5)' }}>
+      <div className="settings-section-spaced">
         <h4>Per-Persona Overrides</h4>
-        <div className="config-help" style={{ marginBottom: 'var(--space-4)' }}>
+        <div className="config-help settings-help-spaced">
           Set a specific provider and/or model for individual personas. Empty values inherit from the default subagent
           settings above.
         </div>

@@ -1,5 +1,6 @@
 import { Pencil, Trash2, Lock } from 'lucide-react';
 import type { SproutSettings } from '../../services/api';
+import { showThemedConfirm } from '../ThemedDialog';
 import MCPCredentialPanel from './MCPCredentialPanel';
 import MCPServerForm from './MCPServerForm';
 import type { FieldRenderers } from './useSettingsFieldRenderers';
@@ -102,7 +103,7 @@ export default function MCPSettingsTab({
       {renderToggle('mcp.auto_discover', 'Auto-discover servers')}
       {renderTextInput('mcp.timeout', 'Timeout (e.g. 30s)', '30s')}
 
-      <div style={{ marginTop: 'var(--space-5)' }}>
+      <div className="settings-section-spaced">
         <h4>Servers ({serverEntries.length})</h4>
 
         {serverEntries.length === 0 && !editingServer && (
@@ -144,7 +145,14 @@ export default function MCPSettingsTab({
                   type="button"
                   className="crud-btn danger"
                   title="Delete server"
-                  onClick={() => handleDeleteServer(name)}
+                  onClick={async () => {
+                    const confirmed = await showThemedConfirm(
+                      `Delete MCP server "${name}"? This removes its config and disconnects it.`,
+                      { title: 'Delete MCP server', type: 'danger', confirmLabel: 'Delete' },
+                    );
+                    if (!confirmed) return;
+                    void handleDeleteServer(name);
+                  }}
                 >
                   <Trash2 size={12} />
                 </button>

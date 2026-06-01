@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Trash2 } from 'lucide-react';
 import type { SproutSettings } from '../../services/api';
+import { showThemedConfirm } from '../ThemedDialog';
 import { getNestedValue } from './settingsHelpers';
 import type { FieldRenderers } from './useSettingsFieldRenderers';
 
@@ -37,6 +38,11 @@ export default function SecuritySettingsTab({
   };
 
   const removeApproved = async (cmd: string) => {
+    const confirmed = await showThemedConfirm(
+      `Remove "${cmd}" from approved commands? Future runs will prompt for approval.`,
+      { title: 'Remove approved command', type: 'warning', confirmLabel: 'Remove' },
+    );
+    if (!confirmed) return;
     await updateSetting('approved_shell_commands', approved.filter((c) => c !== cmd));
   };
 
@@ -45,11 +51,11 @@ export default function SecuritySettingsTab({
       <h4>Security</h4>
       {renderNumberInput('security_validation.threshold', 'Validation threshold (0-2)', 0, 2)}
       {renderSelect('self_review_gate_mode', 'Self-review gate', ['off', 'code', 'always'])}
-      <div style={{ marginTop: 'var(--space-5)' }}>
+      <div className="settings-section-spaced">
         <h4>Git Permissions</h4>
         {renderToggle('allow_orchestrator_git_write', 'Allow orchestrator git write')}
       </div>
-      <div style={{ marginTop: 'var(--space-5)' }}>
+      <div className="settings-section-spaced">
         <h4>Shell Command Detection</h4>
         {renderToggle(
           'enable_zsh_command_detection',
@@ -62,15 +68,15 @@ export default function SecuritySettingsTab({
           'When detection is on, run matched commands without an extra confirmation prompt.',
         )}
       </div>
-      <div style={{ marginTop: 'var(--space-5)' }}>
+      <div className="settings-section-spaced">
         <h4>Approved Shell Commands</h4>
-        <div className="config-help" style={{ marginBottom: 'var(--space-3)' }}>
+        <div className="config-help settings-help-spaced">
           Persistent allowlist of shell commands that bypass the per-command approval prompt. Each entry is a literal
           command string — patterns must match exactly. Approvals persist across sessions; remove with the trash icon.
         </div>
 
         <div className="config-item">
-          <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+          <div className="settings-inline-row">
             <input
               type="text"
               className="styled-input"
@@ -83,7 +89,6 @@ export default function SecuritySettingsTab({
                   void addApproved();
                 }
               }}
-              style={{ flex: 1 }}
             />
             <button
               type="button"
@@ -99,46 +104,16 @@ export default function SecuritySettingsTab({
         {approved.length === 0 ? (
           <div className="settings-empty">No approved commands yet.</div>
         ) : (
-          <ul style={{ listStyle: 'none', padding: 0, margin: 'var(--space-3) 0 0 0' }}>
+          <ul className="settings-list settings-help-spaced-top">
             {approved.map((cmd) => (
-              <li
-                key={cmd}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 'var(--space-2)',
-                  padding: 'var(--space-2) var(--space-3)',
-                  background: 'var(--bg-elevated)',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-sm)',
-                  marginBottom: 'var(--space-2)',
-                }}
-              >
-                <code
-                  style={{
-                    flex: 1,
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 'var(--text-xs)',
-                    color: 'var(--text-primary)',
-                    whiteSpace: 'pre-wrap',
-                    wordBreak: 'break-all',
-                  }}
-                >
-                  {cmd}
-                </code>
+              <li key={cmd} className="settings-list-row">
+                <code className="settings-list-row-code">{cmd}</code>
                 <button
                   type="button"
-                  className="settings-icon-btn"
+                  className="settings-icon-btn danger"
                   aria-label={`Remove approval for ${cmd}`}
                   title="Remove"
                   onClick={() => void removeApproved(cmd)}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: 'var(--text-tertiary)',
-                    cursor: 'pointer',
-                    padding: 'var(--space-1)',
-                  }}
                 >
                   <Trash2 size={14} />
                 </button>
@@ -188,7 +163,7 @@ function StringListEditor({
   return (
     <div className="config-item">
       <label>{label}</label>
-      <div style={{ display: 'flex', gap: 'var(--space-2)', marginBottom: 'var(--space-2)' }}>
+      <div className="settings-inline-row settings-help-spaced">
         <input
           type="text"
           className="styled-input"
@@ -205,7 +180,6 @@ function StringListEditor({
               setDraft('');
             }
           }}
-          style={{ flex: 1 }}
         />
         <button
           type="button"
@@ -221,42 +195,16 @@ function StringListEditor({
         </button>
       </div>
       {values.length > 0 && (
-        <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+        <ul className="settings-list">
           {values.map((v) => (
-            <li
-              key={v}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 'var(--space-2)',
-                padding: 'var(--space-1) var(--space-2)',
-                background: 'var(--bg-elevated)',
-                border: '1px solid var(--border-subtle)',
-                borderRadius: 'var(--radius-sm)',
-                marginBottom: 'var(--space-1)',
-              }}
-            >
-              <code
-                style={{
-                  flex: 1,
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 'var(--text-xs)',
-                  color: 'var(--text-primary)',
-                }}
-              >
-                {v}
-              </code>
+            <li key={v} className="settings-list-row">
+              <code className="settings-list-row-code">{v}</code>
               <button
                 type="button"
+                className="settings-icon-btn danger"
                 aria-label={`Remove ${v}`}
+                title="Remove"
                 onClick={() => onChange(values.filter((x) => x !== v))}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: 'var(--text-tertiary)',
-                  cursor: 'pointer',
-                  padding: 'var(--space-1)',
-                }}
               >
                 <Trash2 size={12} />
               </button>
@@ -290,30 +238,23 @@ function SecurityPolicyEditor({ settings, updateSetting }: SecurityPolicyEditorP
   };
 
   return (
-    <div style={{ marginTop: 'var(--space-5)' }}>
+    <div className="settings-section-spaced">
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        style={{
-          background: 'transparent',
-          border: 'none',
-          padding: 0,
-          color: 'var(--text-primary)',
-          cursor: 'pointer',
-          fontSize: 'var(--text-base)',
-          fontWeight: 600,
-        }}
+        className="settings-collapsible-header"
         aria-expanded={expanded}
       >
-        {expanded ? '▼' : '▶'} Workspace Security Policy
+        {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        <span>Workspace Security Policy</span>
       </button>
       {!expanded ? (
-        <div className="config-help" style={{ marginTop: 'var(--space-2)' }}>
+        <div className="config-help settings-help-spaced-top">
           Advanced workspace command/path policy. Click to expand.
         </div>
       ) : (
-        <div style={{ marginTop: 'var(--space-3)' }}>
-          <div className="config-help" style={{ marginBottom: 'var(--space-3)' }}>
+        <div className="settings-help-spaced-top">
+          <div className="config-help settings-help-spaced">
             Workspace-level security rules. Persisted to config; the workspace file
             <code> .sprout/security-policy.json </code>still takes precedence when present.
           </div>
@@ -367,56 +308,25 @@ function SecurityPolicyEditor({ settings, updateSetting }: SecurityPolicyEditorP
             onChange={(next) => update({ denied_commands: next })}
           />
 
-          <div className="config-item" style={{ marginTop: 'var(--space-4)' }}>
+          <div className="config-item settings-section-spaced">
             <label>Pattern rules</label>
-            <div className="config-help" style={{ marginBottom: 'var(--space-2)' }}>
+            <div className="config-help">
               Each rule pairs a glob/regex pattern with an action. First match wins.
             </div>
 
             {rules.length > 0 && (
-              <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 var(--space-2) 0' }}>
+              <ul className="settings-list settings-help-spaced-top">
                 {rules.map((r, idx) => (
-                  <li
-                    key={`${r.pattern}-${idx}`}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 'var(--space-2)',
-                      padding: 'var(--space-2) var(--space-3)',
-                      background: 'var(--bg-elevated)',
-                      border: '1px solid var(--border-subtle)',
-                      borderRadius: 'var(--radius-sm)',
-                      marginBottom: 'var(--space-1)',
-                    }}
-                  >
-                    <code style={{ flex: 1, fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)' }}>
-                      {r.pattern}
-                    </code>
-                    <span
-                      style={{
-                        fontSize: 'var(--text-xs)',
-                        padding: '1px 6px',
-                        borderRadius: 'var(--radius-sm)',
-                        background: 'var(--bg-surface)',
-                        color: 'var(--text-secondary)',
-                      }}
-                    >
-                      {r.action}
-                    </span>
-                    {r.reason && (
-                      <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-tertiary)' }}>{r.reason}</span>
-                    )}
+                  <li key={`${r.pattern}-${idx}`} className="settings-list-row">
+                    <code className="settings-list-row-code">{r.pattern}</code>
+                    <span className="settings-rule-action">{r.action}</span>
+                    {r.reason && <span className="settings-rule-reason">{r.reason}</span>}
                     <button
                       type="button"
+                      className="settings-icon-btn danger"
                       aria-label={`Remove rule ${r.pattern}`}
+                      title="Remove rule"
                       onClick={() => removeRule(idx)}
-                      style={{
-                        background: 'transparent',
-                        border: 'none',
-                        color: 'var(--text-tertiary)',
-                        cursor: 'pointer',
-                        padding: 'var(--space-1)',
-                      }}
                     >
                       <Trash2 size={12} />
                     </button>
@@ -425,30 +335,18 @@ function SecurityPolicyEditor({ settings, updateSetting }: SecurityPolicyEditorP
               </ul>
             )}
 
-            <div
-              style={{
-                display: 'flex',
-                gap: 'var(--space-2)',
-                alignItems: 'center',
-                padding: 'var(--space-2)',
-                background: 'var(--bg-surface)',
-                border: '1px solid var(--border-subtle)',
-                borderRadius: 'var(--radius-sm)',
-              }}
-            >
+            <div className="settings-rule-builder">
               <input
                 type="text"
-                className="styled-input"
+                className="styled-input settings-rule-pattern"
                 placeholder="pattern"
                 value={ruleDraft.pattern}
                 onChange={(e) => setRuleDraft({ ...ruleDraft, pattern: e.target.value })}
-                style={{ flex: 2 }}
               />
               <select
-                className="styled-select"
+                className="styled-select settings-rule-action-select"
                 value={ruleDraft.action}
                 onChange={(e) => setRuleDraft({ ...ruleDraft, action: e.target.value })}
-                style={{ flex: 1 }}
               >
                 <option value="allow">allow</option>
                 <option value="deny">deny</option>
@@ -456,11 +354,10 @@ function SecurityPolicyEditor({ settings, updateSetting }: SecurityPolicyEditorP
               </select>
               <input
                 type="text"
-                className="styled-input"
+                className="styled-input settings-rule-pattern"
                 placeholder="reason (optional)"
                 value={ruleDraft.reason ?? ''}
                 onChange={(e) => setRuleDraft({ ...ruleDraft, reason: e.target.value })}
-                style={{ flex: 2 }}
               />
               <button
                 type="button"

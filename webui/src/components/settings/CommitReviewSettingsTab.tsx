@@ -26,7 +26,7 @@ export default function CommitReviewSettingsTab({
   return (
     <div className="section">
       <h4>Commit Message Generation</h4>
-      <div className="config-help" style={{ marginBottom: 'var(--space-4)' }}>
+      <div className="config-help settings-help-spaced">
         Configure which provider and model to use for generating commit messages. Leave empty to use the default
         (LastUsedProvider).
       </div>
@@ -65,9 +65,9 @@ export default function CommitReviewSettingsTab({
         </select>
       </div>
 
-      <div style={{ marginTop: 'var(--space-5)', paddingTop: 'var(--space-4)', borderTop: '1px solid var(--border)' }}>
+      <div className="settings-section-spaced-bordered">
         <h4>Code Review</h4>
-        <div className="config-help" style={{ marginBottom: 'var(--space-4)' }}>
+        <div className="config-help settings-help-spaced">
           Configure which provider and model to use for code review commands (/review, /review-deep). Leave empty to use
           the default (LastUsedProvider).
         </div>

@@ -27,6 +27,15 @@ type EmbeddingProvider interface {
 	// model changes and invalidate stale store records.
 	ModelHash() string
 
+	// EmbedWithPrefix returns an embedding with a task-specific prefix prepended
+	// to the text before tokenization. Implementations that don't support prefixes
+	// should prepend the prefix to the text and delegate to Embed.
+	EmbedWithPrefix(ctx context.Context, text string, prefix string) ([]float32, error)
+
+	// EmbedBatchWithPrefix returns embeddings with a task-specific prefix
+	// prepended to each text before tokenization.
+	EmbedBatchWithPrefix(ctx context.Context, texts []string, prefix string) ([][]float32, error)
+
 	// Close releases any resources held by the provider.
 	Close() error
 }

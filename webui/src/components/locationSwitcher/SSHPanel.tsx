@@ -75,7 +75,9 @@ export const SSHPanel: React.FC<SSHPanelProps> = ({
     <div
       ref={sshPanelRef}
       className="location-switcher-popover location-ssh-panel"
-      role="listbox"
+      // Mixed-content popover (errors + lists) — not a listbox. See
+      // WorkspacePopover for the same rationale.
+      role="dialog"
       aria-label="SSH connection panel"
       tabIndex={0}
     >

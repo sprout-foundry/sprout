@@ -84,7 +84,13 @@ export const WorkspacePopover: React.FC<WorkspacePopoverProps> = ({
     <div
       ref={popoverRef}
       className="location-switcher-popover"
-      role="listbox"
+      // role="listbox" was wrong — this popover contains mixed content
+      // (error alerts, status text, and several lists), not bare options.
+      // Lighthouse flagged the missing required option children. The
+      // inner WorkspaceRecentList / WorkspaceInstances components carry
+      // their own list semantics. Using role="dialog" with aria-label so
+      // assistive tech announces it as a popover.
+      role="dialog"
       aria-label="Location switcher"
       tabIndex={0}
     >

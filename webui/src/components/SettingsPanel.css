@@ -316,6 +316,202 @@
   min-width: 0;
 }
 
+/* Per-list filter (MCP servers, custom providers, skills) — smaller and
+ * inline with the section header so it doesn't compete with the top-level
+ * settings filter. */
+.sidebar .settings-list-filter {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 6px;
+  height: 24px;
+  margin-bottom: var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  transition: border-color 0.12s var(--ease-out), box-shadow 0.12s var(--ease-out);
+}
+
+.sidebar .settings-list-filter:focus-within {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 2px var(--accent-primary-alpha);
+}
+
+.sidebar .settings-list-filter-icon {
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.sidebar .settings-list-filter-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 11px;
+}
+
+.sidebar .settings-list-filter-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.sidebar .settings-list-filter-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.sidebar .settings-list-filter-clear:hover {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
+
+.sidebar .settings-list-filter-clear:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
+/* Persistent context tab — preview retrieval panel */
+.sidebar .pc-preview-panel {
+  margin-top: var(--space-6);
+}
+
+.sidebar .pc-preview-error {
+  padding: var(--space-2) var(--space-3);
+  background: color-mix(in srgb, var(--accent-error) 12%, transparent);
+  border: 1px solid var(--accent-error);
+  border-radius: var(--radius-sm);
+  color: var(--accent-error);
+  font-size: var(--text-xs);
+  margin-bottom: var(--space-3);
+}
+
+.sidebar .pc-preview-note {
+  padding: var(--space-2) var(--space-3);
+  background: color-mix(in srgb, var(--accent-warning) 12%, transparent);
+  border: 1px solid var(--accent-warning);
+  border-radius: var(--radius-sm);
+  color: var(--accent-warning-fg);
+  font-size: var(--text-xs);
+  margin-bottom: var(--space-3);
+}
+
+.sidebar .pc-preview-meta {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  margin-bottom: var(--space-2);
+}
+
+.sidebar .pc-preview-results {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.sidebar .pc-preview-result {
+  padding: var(--space-3);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.sidebar .pc-preview-result-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-1);
+}
+
+.sidebar .pc-preview-result-rank {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.sidebar .pc-preview-result-time {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.sidebar .pc-preview-result-line {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  margin-bottom: var(--space-1);
+}
+
+.sidebar .pc-preview-result-line--muted {
+  color: var(--text-tertiary);
+}
+
+.sidebar .pc-preview-result-workspace {
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  color: var(--text-tertiary);
+  margin-top: var(--space-1);
+}
+
+/* Language servers tab — list row body + form card */
+.sidebar .ls-row {
+  padding: var(--space-3);
+}
+
+.sidebar .ls-row-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.sidebar .ls-row-title {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.sidebar .ls-row-cmd {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar .ls-row-langs {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.sidebar .ls-form-card {
+  padding: var(--space-4);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+}
+
+.sidebar .ls-form-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.sidebar .settings-action-btn--ghost {
+  background: transparent;
+}
+
+.sidebar .settings-action-btn--ghost:hover:not(:disabled) {
+  background: var(--bg-elevated);
+}
+
 /* Theme picker (Appearance section) */
 .sidebar .theme-picker-row {
   display: flex;

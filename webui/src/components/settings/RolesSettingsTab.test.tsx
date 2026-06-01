@@ -44,6 +44,11 @@ vi.mock('../../services/api/rolesApi', () => ({
   getRole: vi.fn(),
 }));
 
+// Mock the themed confirm dialog used by the delete handler.
+vi.mock('../ThemedDialog', () => ({
+  showThemedConfirm: vi.fn(() => Promise.resolve(true)),
+}));
+
 // ---------------------------------------------------------------------------
 // Mock SproutAdapterContext — fully self-contained factory
 // ---------------------------------------------------------------------------
@@ -71,6 +76,7 @@ vi.mock('./RoleEditor.css', () => ({}));
 // ---------------------------------------------------------------------------
 
 import * as rolesApi from '../../services/api/rolesApi';
+import { showThemedConfirm } from '../ThemedDialog';
 import { RolesSettingsTab } from './RolesSettingsTab';
 
 // ---------------------------------------------------------------------------
@@ -85,15 +91,13 @@ let root: Root | null = null;
 beforeAll(() => {
   // @ts-expect-error — React expects this global
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-  // Mock window.confirm for delete confirmation dialogs
-  global.confirm = vi.fn(() => true);
 });
 
 beforeEach(() => {
   vi.clearAllMocks();
   mockAddNotification.mockClear();
-  // @ts-expect-error — reset confirm mock
-  global.confirm.mockClear();
+  // Reset the themed-confirm default to "user confirmed" for each test.
+  (showThemedConfirm as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(true);
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -621,13 +625,14 @@ describe('RolesSettingsTab - Delete Role', () => {
 
     await waitForAsync();
 
-    // @ts-expect-error — confirm is mocked
-    expect(global.confirm).toHaveBeenCalledWith('Delete role "agent"? This cannot be undone.');
+    expect(showThemedConfirm).toHaveBeenCalledWith(
+      'Delete role "agent"? This cannot be undone.',
+      expect.objectContaining({ title: 'Delete role', type: 'danger' }),
+    );
   });
 
   test('canceling confirm prevents deletion', async () => {
-    // @ts-expect-error — confirm is mocked
-    global.confirm.mockReturnValue(false);
+    (showThemedConfirm as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce(false);
     rolesApi.listRoles.mockResolvedValue([{ name: 'agent', description: 'Default agent' }]);
     rolesApi.deleteRole.mockResolvedValue(undefined);
 

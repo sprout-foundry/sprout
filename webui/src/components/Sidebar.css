@@ -1989,17 +1989,84 @@
 }
 
 .git-sidebar-file-path {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  font-size: 13px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.git-sidebar-file-dir {
+  color: var(--text-tertiary);
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
+  flex-shrink: 1;
+}
+
+.git-sidebar-file-name {
+  color: var(--text-primary);
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.git-sidebar-file-row.previewing .git-sidebar-file-dir,
+.git-sidebar-file-row.selected .git-sidebar-file-dir {
+  color: var(--text-secondary);
 }
 
 .git-sidebar-file-status {
-  color: var(--text-tertiary);
-  font-size: 11px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  border-radius: 999px;
+  padding: 1px 7px;
+  line-height: 1.5;
   flex-shrink: 0;
+  background: color-mix(in srgb, var(--text-tertiary) 14%, transparent);
+  color: var(--text-tertiary);
+}
+
+.git-sidebar-file-status.status-a {
+  color: var(--accent-success);
+  background: color-mix(in srgb, var(--accent-success) 15%, transparent);
+}
+
+.git-sidebar-file-status.status-m {
+  color: var(--accent-warning);
+  background: color-mix(in srgb, var(--accent-warning) 15%, transparent);
+}
+
+.git-sidebar-file-status.status-d {
+  color: var(--accent-error);
+  background: color-mix(in srgb, var(--accent-error) 15%, transparent);
+}
+
+.git-sidebar-file-status.status-r {
+  color: var(--accent-primary);
+  background: color-mix(in srgb, var(--accent-primary) 15%, transparent);
+}
+
+.git-sidebar-file-status.status-c {
+  color: var(--text-tertiary);
+  background: color-mix(in srgb, var(--text-tertiary) 12%, transparent);
+}
+
+.git-sidebar-file-section-title .git-sidebar-section-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  padding: 0 6px;
+  height: 18px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-tertiary) 18%, transparent);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
 }
 
 .git-section-icon-btn,

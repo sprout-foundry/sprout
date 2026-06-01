@@ -44,3 +44,21 @@ export function classifyDiffLine(line: string): string {
   if (line.startsWith('-')) return 'del';
   return 'context';
 }
+
+/** Render a date string as locale-formatted absolute time, falling back gracefully. */
+export function formatAbsoluteDate(dateStr: string): string {
+  try {
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return dateStr;
+    return date.toLocaleString();
+  } catch {
+    return dateStr;
+  }
+}
+
+/** Split a path into its directory prefix (with trailing slash) and basename. */
+export function splitPath(path: string): { dir: string; name: string } {
+  const idx = path.lastIndexOf('/');
+  if (idx < 0) return { dir: '', name: path };
+  return { dir: path.slice(0, idx + 1), name: path.slice(idx + 1) };
+}

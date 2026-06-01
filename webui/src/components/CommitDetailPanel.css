@@ -116,6 +116,22 @@
   white-space: nowrap;
 }
 
+.commit-detail-body {
+  margin: 0;
+  padding: 8px 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
 .commit-detail-stats {
   font-size: 11px;
   color: var(--text-tertiary);

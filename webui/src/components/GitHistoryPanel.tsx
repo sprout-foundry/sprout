@@ -1,7 +1,7 @@
 import { Loader2, ChevronRight, Clock, GitCommitHorizontal } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { GitCommitSummary, GitCommitDetail } from '../types/git-types';
-import { formatRelativeDate, firstLine } from '../utils/format';
+import { formatRelativeDate, formatAbsoluteDate, firstLine } from '../utils/format';
 import { debugLog } from '../utils/log';
 import CommitDetailPanel from './CommitDetailPanel';
 import GitHistoryContextMenu from './GitHistoryContextMenu';
@@ -202,7 +202,7 @@ function GitHistoryPanel({
             <div className="git-history-commit-top">
               <span className="git-history-commit-hash">{commit.short_hash}</span>
               <span className="git-history-commit-author">{commit.author}</span>
-              <span className="git-history-commit-date">
+              <span className="git-history-commit-date" title={formatAbsoluteDate(commit.date)}>
                 <Clock size={11} />
                 {formatRelativeDate(commit.date)}
               </span>

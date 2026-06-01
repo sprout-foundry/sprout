@@ -80,7 +80,7 @@
 .subagent-feed-card {
   position: relative;
   border-radius: 6px;
-  border-left: 3px solid var(--card-border-color, #6366f1);
+  border-left: 3px solid var(--card-border-color, var(--accent-primary));
   background: var(--bg-card, rgba(30, 41, 59, 0.4));
   overflow: hidden;
   transition: background 0.15s ease;
@@ -93,7 +93,7 @@
 /* ── Active Card ─────────────────────────────────────────────────────── */
 
 .subagent-feed-card--active {
-  border-left-color: var(--card-border-color, #6366f1);
+  border-left-color: var(--card-border-color, var(--accent-primary));
 }
 
 .subagent-feed-card-header {
@@ -256,25 +256,25 @@
 /* ── Depth-based left border colors ───────────────────────────────────── */
 
 .subagent-feed-card[data-depth="0"] {
-  --card-border-color: #6366f1;
-  border-left-color: #6366f1;
+  --card-border-color: var(--subagent-depth-0);
+  border-left-color: var(--subagent-depth-0);
 }
 
 .subagent-feed-card[data-depth="1"] {
-  --card-border-color: #8b5cf6;
-  border-left-color: #8b5cf6;
+  --card-border-color: var(--subagent-depth-1);
+  border-left-color: var(--subagent-depth-1);
   padding-left: 16px;
 }
 
 .subagent-feed-card[data-depth="2"] {
-  --card-border-color: #a855f7;
-  border-left-color: #a855f7;
+  --card-border-color: var(--subagent-depth-2);
+  border-left-color: var(--subagent-depth-2);
   padding-left: 32px;
 }
 
 .subagent-feed-card[data-depth="3"] {
-  --card-border-color: #d946ef;
-  border-left-color: #d946ef;
+  --card-border-color: var(--subagent-depth-3);
+  border-left-color: var(--subagent-depth-3);
   padding-left: 48px;
 }
 
@@ -288,7 +288,7 @@
   top: 0;
   bottom: 0;
   width: 2px;
-  background: var(--card-border-color, #6366f1);
+  background: var(--card-border-color, var(--accent-primary));
   opacity: 0.3;
 }
 
@@ -354,7 +354,7 @@
   padding: 2px 7px;
   border-radius: 4px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background, color, border-color, box-shadow, transform 0.15s ease;
   margin-left: 6px;
 }
 
@@ -364,7 +364,7 @@
 }
 
 .subagent-feed-view-toggle--active {
-  background: rgba(99, 102, 241, 0.15);
-  color: #6366f1;
-  border-color: rgba(99, 102, 241, 0.3);
+  background: color-mix(in srgb, var(--accent-primary) 15%, transparent);
+  color: var(--accent-primary);
+  border-color: color-mix(in srgb, var(--accent-primary) 30%, transparent);
 }

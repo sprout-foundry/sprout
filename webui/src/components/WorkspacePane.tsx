@@ -1,14 +1,20 @@
+import { SkeletonText } from '@sprout/ui';
 import { File } from 'lucide-react';
 import type { ComponentProps } from 'react';
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import type { PerChatState } from '../types/app';
 import Chat from './ChatView';
 import CompareTab from './CompareTab';
 import DiffWorkspaceTab from './DiffWorkspaceTab';
 import EditorPane from './EditorPane';
-import ReviewWorkspaceTab from './ReviewWorkspaceTab';
 import './WorkspacePane.css';
+
+// ReviewWorkspaceTab pulls in the deep-review pipeline (595+ LOC component
+// plus its dependencies). Code-split so the chat-mode initial load doesn't
+// include it; the chunk is fetched only when the user opens the review
+// surface.
+const ReviewWorkspaceTab = lazy(() => import('./ReviewWorkspaceTab'));
 
 // Re-export PerChatState for downstream consumers
 export type { PerChatState };
@@ -136,7 +142,11 @@ const WorkspacePane: React.FC<WorkspacePaneProps> = React.memo(
         );
       }
       case 'review':
-        return <ReviewWorkspaceTab {...reviewProps} />;
+        return (
+          <Suspense fallback={<div style={{ padding: 'var(--space-6)' }}><SkeletonText lines={6} /></div>}>
+            <ReviewWorkspaceTab {...reviewProps} />
+          </Suspense>
+        );
       case 'compare': {
         const {
           originalContent = '',

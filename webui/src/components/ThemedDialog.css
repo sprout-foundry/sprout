@@ -195,7 +195,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.15s var(--ease-out);
+  transition: background, color, border-color, box-shadow, transform 0.15s var(--ease-out);
 }
 
 .themed-dialog-btn:hover {
@@ -586,7 +586,7 @@
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  transition: all 0.15s var(--ease-out);
+  transition: background, color, border-color, box-shadow, transform 0.15s var(--ease-out);
 }
 
 .security-approval-btn:focus-visible {
@@ -811,7 +811,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.15s var(--ease-out);
+  transition: background, color, border-color, box-shadow, transform 0.15s var(--ease-out);
 }
 
 .security-prompt-btn:focus-visible {
@@ -1011,7 +1011,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.15s var(--ease-out);
+  transition: background, color, border-color, box-shadow, transform 0.15s var(--ease-out);
 }
 
 .ask-user-btn:focus-visible {
@@ -1225,7 +1225,7 @@
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   color: var(--text-primary);
-  transition: all 0.15s var(--ease-out);
+  transition: background, color, border-color, box-shadow, transform 0.15s var(--ease-out);
   min-height: 42px;
 }
 
@@ -1314,7 +1314,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.15s var(--ease-out);
+  transition: background, color, border-color, box-shadow, transform 0.15s var(--ease-out);
 }
 
 .model-selection-btn:focus-visible {

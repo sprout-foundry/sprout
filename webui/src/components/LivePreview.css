@@ -70,7 +70,7 @@
   font-size: 12px;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background, color, border-color, box-shadow, transform 0.15s ease;
 }
 
 .live-preview-toggle:hover {

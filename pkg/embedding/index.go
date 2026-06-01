@@ -11,6 +11,20 @@ import (
 	"time"
 )
 
+// EmbeddingGemma task prefixes for task-specific embedding.
+// These match the prefixes defined in the ONNX provider to ensure queries
+// and documents are embedded into the correct semantic space.
+const (
+	// documentPrefix is prepended to code/text before embedding for indexing.
+	documentPrefix = "title: none | text: "
+
+	// queryPrefix is prepended to search queries before embedding.
+	queryPrefix = "task: search result | query: "
+
+	// codeQueryPrefix is prepended to code-specific search queries.
+	codeQueryPrefix = "task: code retrieval | query: "
+)
+
 // IndexStats reports the results of an indexing operation.
 type IndexStats struct {
 	FilesProcessed int
@@ -370,7 +384,7 @@ func (m *IndexManager) UpdateFile(ctx context.Context, filePath string) error {
 
 // QuerySimilar embeds query text and returns the top-K most similar records above threshold.
 func (m *IndexManager) QuerySimilar(ctx context.Context, query string, topK int, threshold float32) ([]QueryResult, error) {
-	vec, err := m.provider.Embed(ctx, query)
+	vec, err := m.provider.EmbedWithPrefix(ctx, query, queryPrefix)
 	if err != nil {
 		return nil, fmt.Errorf("index: embed query: %w", err)
 	}
@@ -417,7 +431,7 @@ func (m *IndexManager) embedUnits(ctx context.Context, units []CodeUnit) ([]Vect
 			texts[j] = embeddingText(u, m.opts.MaxBodyLen)
 		}
 
-		vecs, err := m.provider.EmbedBatch(ctx, texts)
+		vecs, err := m.provider.EmbedBatchWithPrefix(ctx, texts, documentPrefix)
 		if err != nil {
 			return records, fmt.Errorf("index: embed batch [%d:%d]: %w", i, end, err)
 		}

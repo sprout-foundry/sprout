@@ -93,7 +93,7 @@
   border-color: var(--border-focus);
   box-shadow:
     0 0 0 3px var(--accent-primary-alpha),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    inset 0 1px 0 var(--inset-highlight-5);
 }
 
 .location-switcher-trigger:disabled {
@@ -159,7 +159,7 @@
   border-radius: 10px;
   box-shadow:
     0 8px 24px rgba(0, 0, 0, 0.25),
-    0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+    0 0 0 1px var(--inset-highlight-4) inset;
   z-index: 100;
   overflow: hidden;
   animation: location-switcher-popover-fade-in 0.12s ease-out;
@@ -905,7 +905,7 @@
   border-radius: 12px;
   box-shadow:
     0 16px 48px rgba(0, 0, 0, 0.4),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+    inset 0 0 0 1px var(--inset-highlight-6);
   width: 420px;
   max-width: calc(100vw - 32px);
   max-height: calc(100vh - 80px);
@@ -977,7 +977,7 @@
 }
 
 .ssh-workspace-picker-item:hover {
-  background: var(--bg-hover, rgba(255, 255, 255, 0.05));
+  background: var(--bg-hover, var(--inset-highlight-5));
 }
 
 .ssh-workspace-picker-item-name {
@@ -1047,5 +1047,5 @@
 
 .ssh-workspace-picker-dismiss:hover {
   color: var(--text-primary);
-  background: var(--bg-hover, rgba(255, 255, 255, 0.05));
+  background: var(--bg-hover, var(--inset-highlight-5));
 }

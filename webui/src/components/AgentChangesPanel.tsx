@@ -142,6 +142,17 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
   }, [loadSession]);
 
   // Live updates: when a file_changed event arrives, refresh + flash
+  // Escape closes the diff viewer overlay while it's open. Window-level
+  // listener because the overlay div doesn't carry focus.
+  useEffect(() => {
+    if (!diffOpen) return;
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setDiffOpen(false);
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [diffOpen]);
+
   // the changed file row. The websocket service surfaces events via
   // window-level CustomEvents (see useEventHandler) — we listen on
   // that channel rather than threading a prop through every parent.
@@ -470,8 +481,14 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
       )}
 
       {diffOpen && (
-        <div className="changes-diff-overlay" onClick={() => setDiffOpen(false)}>
-          <div className="changes-diff-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="changes-diff-overlay" onClick={() => setDiffOpen(false)} role="presentation">
+          <div
+            className="changes-diff-modal"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Diff for ${diffPath}`}
+          >
             <div className="changes-diff-header">
               <FileText size={14} /> <span title={diffPath}>{diffPath}</span>
               <div style={{ flex: 1 }} />

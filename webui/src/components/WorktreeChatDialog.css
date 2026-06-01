@@ -291,7 +291,7 @@
 }
 
 .wt-chat-dialog-worktree-item:hover:not(:disabled) {
-  background: var(--bg-tertiary, rgba(255, 255, 255, 0.05));
+  background: var(--bg-tertiary, var(--inset-highlight-5));
 }
 
 .wt-chat-dialog-worktree-item.current {

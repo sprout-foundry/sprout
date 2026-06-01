@@ -135,7 +135,7 @@
   --cm-panel-button-bg: transparent;
   --cm-panel-button-border: var(--cm-gutter-fg);
   --cm-panel-button-fg: var(--cm-fg);
-  --cm-panel-button-hover-bg: rgba(255, 255, 255, 0.08);
+  --cm-panel-button-hover-bg: var(--inset-highlight-8);
   --cm-panel-button-hover-border: #aaa;
   --cm-panel-button-active-bg: rgba(255, 255, 255, 0.12);
   --cm-panel-input-placeholder: #888;

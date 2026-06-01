@@ -211,7 +211,7 @@
 }
 
 .update-button.secondary:hover:not(:disabled) {
-  background: var(--bg-hover, rgba(255, 255, 255, 0.05));
+  background: var(--bg-hover, var(--inset-highlight-5));
   border-color: var(--border-hover, #444);
 }
 
@@ -222,7 +222,7 @@
 
 .update-button:not(.primary):not(.secondary):hover:not(:disabled) {
   color: var(--text-primary, #e5e5e5);
-  background: var(--bg-hover, rgba(255, 255, 255, 0.05));
+  background: var(--bg-hover, var(--inset-highlight-5));
 }
 
 /* Spin animation for loading states */

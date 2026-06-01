@@ -126,10 +126,10 @@ test-ci: test-unit test-integration
 # Coverage Check - Run tests with coverage and enforce minimum threshold
 # Note: timeout is the per-test-binary cap, not the wall clock. -race slows
 # pkg/agent + pkg/embedding enough that 10m wasn't enough; 20m gives headroom.
-test-coverage:
+test-coverage: prepare-grammars
 	@echo "Running unit tests with coverage check..."
 	@bash -lc 'set -o pipefail; \
-	go test -race -tags "browser" ./pkg/... ./cmd/... -timeout=1200s -coverprofile=/tmp/sprout-coverage.out 2>&1 | tee /tmp/sprout-test-coverage.log; \
+	go test -race -tags "browser grammar_blobs_external" ./pkg/... ./cmd/... -timeout=1200s -coverprofile=/tmp/sprout-coverage.out 2>&1 | tee /tmp/sprout-test-coverage.log; \
 	status=$${PIPESTATUS[0]}; \
 	if [ $$status -ne 0 ]; then \
 		echo ""; \

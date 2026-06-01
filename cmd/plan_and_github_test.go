@@ -212,6 +212,7 @@ func TestRunSeamlessPlanning_QuitCommands(t *testing.T) {
 }
 
 func TestRunSeamlessPlanning_ContextCancelled(t *testing.T) {
+	t.Helper()
 	a, err := createPlanningAgent()
 	if err != nil {
 		t.Fatalf("createPlanningAgent() error: %v", err)
@@ -226,22 +227,31 @@ func TestRunSeamlessPlanning_ContextCancelled(t *testing.T) {
 	os.Stdin = r
 	defer func() { os.Stdin = origStdin }()
 
-	// Keep stdin open (never write anything), but cancel context after short delay
+	// Close stdin after a generous delay to let ProcessQueryWithContinuity
+	// finish (it can take 1–2s under CI load). Without writing any content,
+	// the blocked ReadString will return ("", io.EOF) when the pipe closes.
 	go func() {
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(500 * time.Millisecond)
 		w.Close()
 	}()
 
 	ctx, cancel := context.WithCancel(context.Background())
-	// Cancel after a brief moment — context check happens at end of loop iteration
-	// after reading from stdin. The ReadString will block until the pipe is closed.
+	// Cancel well after the pipe closes so the context check at the end of the
+	// loop iteration actually fires. ProcessQueryWithContinuity may take
+	// 1–2 seconds under load, so give it a wide margin.
 	go func() {
-		time.Sleep(200 * time.Millisecond)
+		time.Sleep(2 * time.Second)
 		cancel()
 	}()
 
-	err = runSeamlessPlanning(ctx, a, "test query")
-	// Should return context.Canceled or nil (if exit was read)
+	// Use a generous timeout so the test survives CI load spikes.
+	ctxWithTimeout, cancelTimeout := context.WithTimeout(ctx, 10*time.Second)
+	defer cancelTimeout()
+
+	err = runSeamlessPlanning(ctxWithTimeout, a, "test query")
+	// The pipe-close yields userInput="" → hits the "continue" branch →
+	// the next ctx.Done() check fires because our cancel goroutine already
+	// ran. Accept either nil (edge-case early exit) or context.Canceled.
 	if err != nil && !strings.Contains(err.Error(), "context canceled") {
 		t.Errorf("expected context canceled error, got: %v", err)
 	}

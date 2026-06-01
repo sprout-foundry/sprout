@@ -1,5 +1,5 @@
 import { Plus, X, ChevronRight, ChevronDown, GitBranch, AlertCircle, RefreshCw } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useWorktrees } from '../hooks/useWorktrees';
 import { showThemedConfirm } from './ThemedDialog';
 import './WorktreePanel.css';
@@ -40,11 +40,29 @@ function CreateWorktreeDialog({ isOpen, onClose, onCreate }: CreateWorktreeDialo
     }
   };
 
+  // Keyboard-driven dismiss while the modal is open: Escape mirrors the
+  // click-outside affordance. Window-level listener (rather than div
+  // onKeyDown) because divs need focus to receive keydown.
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   return (
-    <div className="worktree-modal-overlay" onClick={onClose}>
-      <div className="worktree-modal" onClick={(e) => e.stopPropagation()}>
+    <div className="worktree-modal-overlay" onClick={onClose} role="presentation">
+      <div
+        className="worktree-modal"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Create Git Worktree"
+      >
         <div className="worktree-modal-header">
           <h2>Create Git Worktree</h2>
           <button className="worktree-modal-close" onClick={onClose} aria-label="Close">

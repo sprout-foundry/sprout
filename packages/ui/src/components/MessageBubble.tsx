@@ -68,7 +68,10 @@ function MessageBubble({
   return (
     <div
       className={`message ${type}`}
-      role={type === 'user' ? 'user-message' : 'assistant-message'}
+      // role="user-message" / "assistant-message" aren't valid ARIA roles —
+      // Lighthouse flagged them. The parent chat container carries
+      // role="log" already; individual messages don't need a role.
+      data-message-type={type}
       aria-label={ariaLabel}
       style={hasStyle ? containerStyle : undefined}
       data-subagent-depth={depth > 0 ? depth : undefined}

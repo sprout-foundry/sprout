@@ -744,6 +744,14 @@ func (c *constantProvider) EmbedBatch(_ context.Context, texts []string) ([][]fl
 	return results, nil
 }
 
+func (c *constantProvider) EmbedWithPrefix(_ context.Context, _ string, prefix string) ([]float32, error) {
+	return c.Embed(nil, prefix)
+}
+
+func (c *constantProvider) EmbedBatchWithPrefix(_ context.Context, texts []string, prefix string) ([][]float32, error) {
+	return c.EmbedBatch(nil, texts)
+}
+
 func (c *constantProvider) Dimensions() int    { return len(c.vec) }
 func (c *constantProvider) Name() string       { return "constant" }
 func (c *constantProvider) ModelHash() string  { return "constant-model-hash" }

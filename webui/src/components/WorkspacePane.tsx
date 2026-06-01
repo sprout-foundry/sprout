@@ -103,7 +103,6 @@ const WorkspacePane: React.FC<WorkspacePaneProps> = React.memo(
           messages: cached?.messages ?? [],
           toolExecutions: cached?.toolExecutions ?? [],
           subagentActivities: cached?.subagentActivities ?? [],
-          delegateActivities: cached?.delegateActivities ?? [],
           currentTodos: cached?.currentTodos ?? [],
           queryProgress: cached?.queryProgress ?? null,
           lastError: cached?.lastError ?? null,

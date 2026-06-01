@@ -155,7 +155,6 @@ export function useEventHandler({
           ],
           fileEdits: [], // Clear previous file edits for current-run status metrics
           subagentActivities: [],
-  delegateActivities: [],
           queryProgress: null, // Clear previous progress
           currentTodos: [], // Clear previous todos
           logs: appendCappedLog(prev.logs, logEntry),

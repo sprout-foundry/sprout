@@ -9,7 +9,6 @@ import type {
   Message,
   ToolExecution,
   SubagentActivity,
-  DelegateActivity,
   LogEntry,
   TodoStatus,
   TodoItem,
@@ -22,7 +21,7 @@ import type { ChatSession } from '../services/chatSessions';
 // Import canonical types from @sprout/ui
 
 // Re-export for downstream consumers
-export type { Message, ToolExecution, SubagentActivity, DelegateActivity, LogEntry, TodoStatus, TodoItem, FileEdit, ToolRef };
+export type { Message, ToolExecution, SubagentActivity, LogEntry, TodoStatus, TodoItem, FileEdit, ToolRef };
 
 // ── WebUI-specific Types ─────────────────────────────────────────────
 
@@ -54,7 +53,6 @@ export interface PerChatState {
   toolExecutions: ToolExecution[];
   fileEdits: FileEdit[];
   subagentActivities: SubagentActivity[];
-  delegateActivities: DelegateActivity[];
   currentTodos: TodoItem[];
   queryProgress: QueryProgress | null;
   lastError: string | null;
@@ -82,7 +80,6 @@ export interface AppState {
   currentTodos: TodoItem[];
   fileEdits: FileEdit[];
   subagentActivities: SubagentActivity[];
-  delegateActivities: DelegateActivity[];
   activeChatId: string | null;
   chatSessions: ChatSession[];
   // Snapshot of per-chat state, saved on switch-away and restored on switch-back

@@ -348,7 +348,6 @@ const AppContent: React.FC<AppContentProps> = ({
       backendReachable,
       onRetryConnection,
       subagentActivities: state.subagentActivities,
-      delegateActivities: state.delegateActivities,
     }),
     [
       state.messages,
@@ -369,7 +368,6 @@ const AppContent: React.FC<AppContentProps> = ({
       backendReachable,
       onRetryConnection,
       state.subagentActivities,
-      state.delegateActivities,
     ],
   );
   const reviewProps = useMemo(

@@ -15,7 +15,19 @@
  * Model source: https://huggingface.co/onnx-community/embeddinggemma-300m-ONNX
  */
 
-import { InferenceSession, Tensor } from 'onnxruntime-web';
+// Type-only import keeps the onnxruntime-web type surface available at
+// compile time without pulling the ~800 KB runtime into the initial
+// bundle. The actual InferenceSession/Tensor constructors load on first
+// use via loadOnnxRuntime() below.
+import type { InferenceSession, Tensor } from 'onnxruntime-web';
+
+let onnxModulePromise: Promise<typeof import('onnxruntime-web')> | null = null;
+async function loadOnnxRuntime(): Promise<typeof import('onnxruntime-web')> {
+  if (!onnxModulePromise) {
+    onnxModulePromise = import('onnxruntime-web');
+  }
+  return onnxModulePromise;
+}
 
 // ─── Public API ───────────────────────────────────────────────────
 
@@ -556,7 +568,8 @@ export class BrowserONNXProvider {
       opts.externalData = [{ path: basename, data: dataBytes }];
     }
 
-    this.session = await InferenceSession.create(modelBytes, opts as InferenceSession.SessionOptions);
+    const ort = await loadOnnxRuntime();
+    this.session = await ort.InferenceSession.create(modelBytes, opts as InferenceSession.SessionOptions);
   }
 
   /** Truncate a token sequence (with BOS/EOS markers) to maxSequenceLength,
@@ -597,8 +610,11 @@ export class BrowserONNXProvider {
       }
     }
 
-    const inputIdsTensor = new Tensor('int64', inputIdsData, [batchSize, maxLen]);
-    const attentionTensor = new Tensor('int64', attentionData, [batchSize, maxLen]);
+    // loadOnnxRuntime() returns the cached promise after the first call,
+    // so this awaits the already-resolved module (no extra network).
+    const ort = await loadOnnxRuntime();
+    const inputIdsTensor = new ort.Tensor('int64', inputIdsData, [batchSize, maxLen]);
+    const attentionTensor = new ort.Tensor('int64', attentionData, [batchSize, maxLen]);
 
     try {
       const feeds: Record<string, Tensor> = {};

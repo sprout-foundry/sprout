@@ -179,8 +179,8 @@ func (m *EmbeddingManager) createONNXProvider(ctx context.Context, indexDir stri
 		}
 	}
 
-	// Create ONNX embedding provider (EmbeddingGemma-300M outputs 768-dim vectors).
-	provider, err := NewONNXEmbeddingProvider(ctx, runtime, modelPath, tokenizerPath, 768)
+	// Create ONNX embedding provider using dimensions from model config.
+	provider, err := NewONNXEmbeddingProvider(ctx, runtime, modelPath, tokenizerPath, modelConfig.Dims, modelConfig.FullDims)
 	if err != nil {
 		runtime.Close()
 		return nil, nil, fmt.Errorf("onnx: create provider: %w", err)

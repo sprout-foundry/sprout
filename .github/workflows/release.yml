@@ -122,6 +122,17 @@ jobs:
       id: get_version
       run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
+    - name: Sync workspace package versions to release tag
+      # Keeps packages/ui and packages/events package.json versions
+      # aligned with the git tag so publish-{ui,events}.yml's
+      # version-match check passes without manual ceremony each release.
+      # Tag is "vX.Y.Z"; npm version drops the leading "v".
+      run: |
+        VERSION="${{ steps.get_version.outputs.VERSION }}"
+        NPM_VERSION="${VERSION#v}"
+        (cd packages/ui && npm version "$NPM_VERSION" --no-git-tag-version --allow-same-version)
+        (cd packages/events && npm version "$NPM_VERSION" --no-git-tag-version --allow-same-version)
+
     - name: Build and deploy React UI
       shell: bash
       run: make deploy-ui
@@ -130,13 +141,13 @@ jobs:
       shell: bash
       run: make verify-ui-embedded
 
-    - name: Commit embedded UI assets to release tag
+    - name: Commit embedded UI assets and package version bumps to release tag
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
-        git add pkg/webui/static/
+        git add pkg/webui/static/ packages/ui/package.json packages/events/package.json
         git diff --cached --quiet || (
-          git commit -m "chore: embed UI assets for ${{ steps.get_version.outputs.VERSION }}"
+          git commit -m "chore: embed UI assets and sync package versions for ${{ steps.get_version.outputs.VERSION }}"
           git tag -f ${{ steps.get_version.outputs.VERSION }} HEAD
           git push origin ${{ steps.get_version.outputs.VERSION }} --force
         )

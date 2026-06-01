@@ -10,6 +10,7 @@ A good skill contains knowledge that models **cannot infer from training data** 
 |-------|-------------|
 | `project-planning` | Starting a new project or onboarding to an existing repo |
 | `browse-debugging` | Multi-step interactive browser debugging with `browse_url` |
+| `self-help` | User asks "how do I...", wants to configure settings, or needs help understanding Sprout |
 
 ## Creating Custom Skills
 

@@ -61,17 +61,6 @@ func handleSearchMemories(ctx context.Context, a *Agent, args map[string]interfa
 	}
 
 	if len(results) == 0 {
-		// Trigger migration in case memories haven't been embedded yet
-		MigrateMemories(ctx, em)
-
-		// Retry after migration
-		results, err = store.QueryMemories(ctx, query, topK, threshold)
-		if err != nil {
-			return "", fmt.Errorf("memory search retry failed: %w", err)
-		}
-	}
-
-	if len(results) == 0 {
 		return fmt.Sprintf("No memories found matching: %q\n\nTry broadening your search or lowering the threshold (currently %.2f).", query, threshold), nil
 	}
 

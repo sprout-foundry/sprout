@@ -140,6 +140,25 @@ function CommandInput({
     return { slashIndex, prefix };
   }, [draftValue]);
 
+  // Calculate the position for the slash autocomplete dropdown. Declared
+  // before the auto-close effect below because that effect references it
+  // (and useCallback's identifier is in the TDZ until its declaration
+  // executes — using it earlier triggers a runtime ReferenceError).
+  const getSlashAutocompletePosition = useCallback(() => {
+    const textarea = inputRef.current;
+    if (!textarea) return { top: 0, left: 0 };
+    const rect = textarea.getBoundingClientRect();
+    let top = rect.bottom + window.scrollY + 4;
+    let left = rect.left + window.scrollX;
+    // Clamp left to prevent going off right edge (max-width is 420px)
+    const maxLeft = window.innerWidth - 424;
+    left = Math.min(Math.max(0, left), maxLeft);
+    // Clamp top to prevent going off bottom edge (max-height is 280px)
+    const maxTop = window.innerHeight - 284;
+    top = Math.min(Math.max(0, top), maxTop);
+    return { top, left };
+  }, []);
+
   // Auto-close slash autocomplete when input no longer matches
   useEffect(() => {
     if (!slashAutocompleteOpen) return;
@@ -290,22 +309,6 @@ function CommandInput({
     },
     [onChange],
   );
-
-  // Calculate the position for the slash autocomplete dropdown
-  const getSlashAutocompletePosition = useCallback(() => {
-    const textarea = inputRef.current;
-    if (!textarea) return { top: 0, left: 0 };
-    const rect = textarea.getBoundingClientRect();
-    let top = rect.bottom + window.scrollY + 4;
-    let left = rect.left + window.scrollX;
-    // Clamp left to prevent going off right edge (max-width is 420px)
-    const maxLeft = window.innerWidth - 424;
-    left = Math.min(Math.max(0, left), maxLeft);
-    // Clamp top to prevent going off bottom edge (max-height is 280px)
-    const maxTop = window.innerHeight - 284;
-    top = Math.min(Math.max(0, top), maxTop);
-    return { top, left };
-  }, []);
 
   // Accept the current slash command completion
   const acceptSlashCompletion = useCallback(

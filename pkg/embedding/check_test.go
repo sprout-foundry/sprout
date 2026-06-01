@@ -794,14 +794,16 @@ func TestEmbeddingText_Truncation(t *testing.T) {
 
 func TestEmbeddingText_TruncationAtUTF8Boundary(t *testing.T) {
 	// Multi-byte UTF-8 characters should not be split.
+	// "日本語テスト" is 15 bytes (3 bytes per character × 5 characters).
 	body := "日本語テスト"
 	u := CodeUnit{
 		Signature: "func Utf8()",
 		Body:      body,
 	}
 
-	// Truncate to 2 runes — should give us "日本"
-	result := embeddingText(u, 2)
+	// Truncate to 7 bytes — would split the 3rd character (語 = bytes 7-9).
+	// Should snap back to byte 6, giving us "日本".
+	result := embeddingText(u, 7)
 	expected := "func Utf8()\n日本"
 	if result != expected {
 		t.Errorf("expected %q, got %q", expected, result)

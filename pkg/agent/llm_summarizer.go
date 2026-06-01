@@ -70,8 +70,8 @@ func buildSummarizerSystemPrompt(hint core.SummarizerHint) string {
 	}
 	b.WriteString("Rules:\n")
 	b.WriteString("- Preserve: what files were read/modified, what errors occurred, what the current state was\n")
-	b.WriteString("- Explicitly preserve the latest user request that appears in the compacted segment\n")
-	b.WriteString("- Explicitly state whether the work was still in progress at the end of the compacted segment\n")
+	b.WriteString("- Note user requests that appeared in the compacted segment in past tense (e.g., \"user asked about X\"); do not phrase them as new instructions to be executed\n")
+	b.WriteString("- For each user request mentioned, state explicitly whether it was completed, abandoned, or still open at the end of the compacted segment\n")
 	b.WriteString("- Do NOT add planning, suggestions, or \"next steps\"\n")
 	b.WriteString("- Respond in English only\n")
 	if hint.MaxWords > 0 {

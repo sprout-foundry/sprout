@@ -1,6 +1,7 @@
 import { Trash2, Plus, Save, X } from 'lucide-react';
 import { useState } from 'react';
 import type { SproutSettings } from '../../services/api';
+import { showThemedConfirm } from '../ThemedDialog';
 
 interface LanguageServerOverride {
   id: string;
@@ -92,7 +93,13 @@ export default function LanguageServersSettingsTab({ settings, updateSetting }: 
     cancel();
   };
 
-  const remove = (idx: number) => {
+  const remove = async (idx: number) => {
+    const target = servers[idx];
+    const confirmed = await showThemedConfirm(
+      `Remove language server override "${target?.id ?? ''}"? sprout will fall back to the built-in registry for this server.`,
+      { title: 'Remove override', type: 'warning', confirmLabel: 'Remove' },
+    );
+    if (!confirmed) return;
     persist(servers.filter((_, i) => i !== idx));
     if (editingIdx === idx) cancel();
   };
@@ -102,7 +109,7 @@ export default function LanguageServersSettingsTab({ settings, updateSetting }: 
   return (
     <div className="section">
       <h4>Language Servers</h4>
-      <div className="config-help" style={{ marginBottom: 'var(--space-3)' }}>
+      <div className="config-help settings-help-spaced">
         Override the binary, arguments, or language IDs that sprout uses for a given LSP server. Overrides apply on top
         of the built-in registry. Leave blank to use the default.
       </div>
@@ -110,39 +117,16 @@ export default function LanguageServersSettingsTab({ settings, updateSetting }: 
       {servers.length === 0 && !formActive && <div className="settings-empty">No language server overrides</div>}
 
       {servers.length > 0 && (
-        <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 var(--space-3) 0' }}>
+        <ul className="settings-list settings-help-spaced">
           {servers.map((s, idx) => (
-            <li
-              key={`${s.id}-${idx}`}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 'var(--space-2)',
-                padding: 'var(--space-3)',
-                background: 'var(--bg-elevated)',
-                border: '1px solid var(--border-subtle)',
-                borderRadius: 'var(--radius-sm)',
-                marginBottom: 'var(--space-2)',
-              }}
-            >
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{s.id}</div>
-                <div
-                  style={{
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 'var(--text-xs)',
-                    color: 'var(--text-tertiary)',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
+            <li key={`${s.id}-${idx}`} className="settings-list-row ls-row">
+              <div className="ls-row-body">
+                <div className="ls-row-title">{s.id}</div>
+                <div className="ls-row-cmd">
                   {s.binary} {(s.args ?? []).join(' ')}
                 </div>
                 {s.language_ids && s.language_ids.length > 0 && (
-                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
-                    Languages: {s.language_ids.join(', ')}
-                  </div>
+                  <div className="ls-row-langs">Languages: {s.language_ids.join(', ')}</div>
                 )}
               </div>
               <button type="button" className="settings-action-btn" onClick={() => startEdit(idx)}>
@@ -150,15 +134,10 @@ export default function LanguageServersSettingsTab({ settings, updateSetting }: 
               </button>
               <button
                 type="button"
+                className="settings-icon-btn danger"
                 aria-label={`Remove override ${s.id}`}
-                onClick={() => remove(idx)}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: 'var(--text-tertiary)',
-                  cursor: 'pointer',
-                  padding: 'var(--space-1)',
-                }}
+                title="Remove override"
+                onClick={() => void remove(idx)}
               >
                 <Trash2 size={14} />
               </button>
@@ -168,14 +147,7 @@ export default function LanguageServersSettingsTab({ settings, updateSetting }: 
       )}
 
       {formActive ? (
-        <div
-          style={{
-            padding: 'var(--space-4)',
-            background: 'var(--bg-surface)',
-            border: '1px solid var(--border-default)',
-            borderRadius: 'var(--radius-md)',
-          }}
-        >
+        <div className="ls-form-card">
           <div className="config-item">
             <label htmlFor="ls-id">Server ID</label>
             <input
@@ -231,7 +203,7 @@ export default function LanguageServersSettingsTab({ settings, updateSetting }: 
               onChange={(e) => setDraft({ ...draft, install_hint: e.target.value })}
             />
           </div>
-          <div style={{ display: 'flex', gap: 'var(--space-2)', marginTop: 'var(--space-3)' }}>
+          <div className="ls-form-actions">
             <button
               type="button"
               className="settings-action-btn"
@@ -240,12 +212,7 @@ export default function LanguageServersSettingsTab({ settings, updateSetting }: 
             >
               <Save size={14} /> Save
             </button>
-            <button
-              type="button"
-              className="settings-action-btn"
-              onClick={cancel}
-              style={{ background: 'transparent' }}
-            >
+            <button type="button" className="settings-action-btn settings-action-btn--ghost" onClick={cancel}>
               <X size={14} /> Cancel
             </button>
           </div>

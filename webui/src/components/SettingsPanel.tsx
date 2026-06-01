@@ -86,6 +86,28 @@ function SettingsPanel({
   );
   const [showCredentials, setShowCredentials] = useState(false);
   const [filterQuery, setFilterQuery] = useState('');
+  const filterInputRef = useRef<HTMLInputElement>(null);
+
+  // Cmd/Ctrl+K focuses the settings filter when the panel is mounted.
+  // Escape clears the filter when it's focused. Both are scoped to the panel
+  // to avoid stealing global shortcuts.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        // Only intercept if a settings filter input exists in the DOM.
+        if (filterInputRef.current && document.body.contains(filterInputRef.current)) {
+          e.preventDefault();
+          filterInputRef.current.focus();
+          filterInputRef.current.select();
+        }
+      } else if (e.key === 'Escape' && document.activeElement === filterInputRef.current) {
+        setFilterQuery('');
+        filterInputRef.current?.blur();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   // Persist expanded sections + active subsection on change so reopening the
   // panel or reloading the page restores the user's last position.
@@ -493,11 +515,12 @@ function SettingsPanel({
       <div className="settings-filter">
         <Search size={12} className="settings-filter-icon" aria-hidden="true" />
         <input
+          ref={filterInputRef}
           type="text"
           className="settings-filter-input"
           value={filterQuery}
           onChange={(e) => setFilterQuery(e.target.value)}
-          placeholder="Filter settings…"
+          placeholder="Filter settings… (⌘/Ctrl+K)"
           aria-label="Filter settings"
         />
         {filterQuery && (
@@ -505,7 +528,7 @@ function SettingsPanel({
             type="button"
             className="settings-filter-clear"
             onClick={() => setFilterQuery('')}
-            title="Clear filter"
+            title="Clear filter (Esc)"
             aria-label="Clear filter"
           >
             <X size={12} />

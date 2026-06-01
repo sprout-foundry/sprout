@@ -100,8 +100,21 @@ export default function SidebarSettingsSection({
   };
 
   const handleHotkeyPresetChange = async (e: ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value;
+    if (!value) return;
+    const labels: Record<string, string> = {
+      vscode: 'VS Code',
+      webstorm: 'WebStorm',
+      sprout: 'Sprout (Legacy)',
+    };
     try {
-      await applyPreset(e.target.value);
+      await applyPreset(value);
+      log.success(`Hotkey preset applied: ${labels[value] ?? value}`, {
+        title: 'Hotkeys updated',
+        duration: 3000,
+      });
+      // Reset the select back to the placeholder so the user can re-apply.
+      e.target.value = '';
     } catch (err) {
       log.error(`Failed to apply hotkey preset: ${err instanceof Error ? err.message : String(err)}`, {
         title: 'Hotkey Error',

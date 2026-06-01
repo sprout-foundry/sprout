@@ -1,9 +1,13 @@
 import { Pencil, Trash2, Lock } from 'lucide-react';
+import { useState } from 'react';
 import type { SproutSettings } from '../../services/api';
 import { showThemedConfirm } from '../ThemedDialog';
+import ListFilter from './ListFilter';
 import MCPCredentialPanel from './MCPCredentialPanel';
 import MCPServerForm from './MCPServerForm';
 import type { FieldRenderers } from './useSettingsFieldRenderers';
+
+const FILTER_THRESHOLD = 4;
 
 interface MCPSettingsTabProps {
   settings: SproutSettings;
@@ -83,6 +87,15 @@ export default function MCPSettingsTab({
   const mcpSettings = settings.mcp || {};
   const servers = mcpSettings.servers || {};
   const serverEntries = Object.entries(servers);
+  const [serverFilter, setServerFilter] = useState('');
+  const normalizedServerFilter = serverFilter.trim().toLowerCase();
+  const filteredServerEntries = normalizedServerFilter
+    ? serverEntries.filter(
+        ([name, cfg]) =>
+          name.toLowerCase().includes(normalizedServerFilter) ||
+          (cfg.command || '').toLowerCase().includes(normalizedServerFilter),
+      )
+    : serverEntries;
 
   const handleShowAddForm = () => {
     setEditingServer({ mode: 'add' });
@@ -106,12 +119,25 @@ export default function MCPSettingsTab({
       <div className="settings-section-spaced">
         <h4>Servers ({serverEntries.length})</h4>
 
+        {serverEntries.length >= FILTER_THRESHOLD && (
+          <ListFilter
+            value={serverFilter}
+            onChange={setServerFilter}
+            placeholder={`Filter ${serverEntries.length} servers…`}
+            ariaLabel="Filter MCP servers"
+          />
+        )}
+
         {serverEntries.length === 0 && !editingServer && (
           <div className="settings-empty">No MCP servers configured</div>
         )}
 
+        {normalizedServerFilter && filteredServerEntries.length === 0 && (
+          <div className="settings-empty">No servers match “{serverFilter}”</div>
+        )}
+
         <div className="crud-list">
-          {serverEntries.map(([name, cfg]) => {
+          {filteredServerEntries.map(([name, cfg]) => {
             return (
               <div key={name} className="crud-item">
                 <span className="crud-item-name">{name}</span>

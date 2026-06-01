@@ -3,6 +3,7 @@ import * as rolesApi from '../../services/api/rolesApi';
 import { useSproutFetch } from '../../contexts/SproutAdapterContext';
 import type { RoleConfig } from '../../services/api/rolesApi';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { showThemedConfirm } from '../ThemedDialog';
 import './RoleEditor.css';
 
 export interface RolesSettingsTabProps {
@@ -123,9 +124,11 @@ export function RolesSettingsTab({ addNotification }: RolesSettingsTabProps) {
   };
 
   const handleDelete = async (name: string) => {
-    if (!confirm(`Delete role "${name}"? This cannot be undone.`)) {
-      return;
-    }
+    const confirmed = await showThemedConfirm(
+      `Delete role "${name}"? This cannot be undone.`,
+      { title: 'Delete role', type: 'danger', confirmLabel: 'Delete' },
+    );
+    if (!confirmed) return;
     try {
       setDeletingName(name);
       await rolesApi.deleteRole(fetchFn, name);

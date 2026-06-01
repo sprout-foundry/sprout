@@ -21,7 +21,6 @@ const MINIMAL_CHAT_PROPS = {
   fileEdits: [],
   logs: [],
   subagentActivities: [],
-  delegateActivities: [],
   currentTodos: [],
   messages: [],
   isProcessing: false,

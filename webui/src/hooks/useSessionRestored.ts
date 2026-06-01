@@ -39,7 +39,6 @@ export function useSessionRestored({ setState }: UseSessionRestoredOptions): voi
           toolExecutions: [],
           fileEdits: [],
           subagentActivities: [],
-          delegateActivities: [],
           currentTodos: [],
           queryProgress: null,
           lastError: null,

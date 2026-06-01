@@ -54,7 +54,6 @@ function App() {
       currentTodos: [],
       fileEdits: [],
       subagentActivities: [],
-      delegateActivities: [],
       isConnected: false,
       isProcessing: false,
       lastError: null,

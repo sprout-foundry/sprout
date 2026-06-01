@@ -86,7 +86,6 @@ function createDefaultState(overrides?: Partial<AppState>): AppState {
     currentTodos: [],
     fileEdits: [],
     subagentActivities: [],
-    delegateActivities: [],
     activeChatId: null,
     chatSessions: [],
     perChatCache: {},

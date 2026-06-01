@@ -6,6 +6,7 @@
  */
 import { useState, useEffect, useRef, useCallback, useMemo, useId } from 'react';
 import type { ChangeEvent, KeyboardEvent } from 'react';
+import { Command as CommandIcon, FileText, Hash, Search } from 'lucide-react';
 import { fuzzyScore, highlightMatches } from '../utils/fuzzyMatch';
 import { debugLog } from '../utils/log';
 import './CommandPalette.css';
@@ -53,7 +54,13 @@ export interface CommandPaletteProps {
   isOpen: boolean;
   onClose: () => void;
   onOpenFile: (filePath: string) => void;
-  onExecuteCommand?: (commandId: string) => void;
+  /**
+   * Invoked when the user activates a command result. Return `false` to keep
+   * the palette open (useful for commands that change the palette's own
+   * state, e.g. switching to "files" mode). Any other return value (or void)
+   * triggers the default auto-close behavior.
+   */
+  onExecuteCommand?: (commandId: string) => void | boolean;
   /** Mode to open with */
   initialMode?: PaletteMode;
   /** Navigate to a line in the active editor */
@@ -114,24 +121,33 @@ function CommandPalette({
     }
   }, [isOpen, initialMode]);
 
-  // Search files when query changes
+  // Resolve raw query to (search-mode, cleaned-query). The first character
+  // can override mode: `>` → commands, `@` → symbols. Otherwise inherit the
+  // active mode (with `all` treated as "search everything").
+  const { q: searchQuery, searchMode } = useMemo<{ q: string; searchMode: PaletteMode }>(() => {
+    if (query.startsWith('>')) return { q: query.slice(1).trim(), searchMode: 'commands' };
+    if (query.startsWith('@')) return { q: query.slice(1).trim(), searchMode: 'symbols' };
+    return { q: query, searchMode: mode === 'all' ? 'all' : mode };
+  }, [query, mode]);
+
+  // Search files when query changes — skip entirely when the user is in
+  // command/symbol mode (no point fetching files we'll never show).
   useEffect(() => {
-    if (!query || !onSearchFiles) {
+    if (!searchQuery || !onSearchFiles || (searchMode !== 'all' && searchMode !== 'files')) {
       setFileResults([]);
       return;
     }
     const timer = setTimeout(() => {
-      onSearchFiles(query).then(setFileResults).catch(() => setFileResults([]));
+      onSearchFiles(searchQuery).then(setFileResults).catch(() => setFileResults([]));
     }, 150);
     return () => clearTimeout(timer);
-  }, [query, onSearchFiles]);
+  }, [searchQuery, searchMode, onSearchFiles]);
 
   // Build results
   const results = useMemo(() => {
     if (!query) return [];
 
-    const q = query.startsWith('>') ? query.slice(1).trim() : query;
-    const searchMode = query.startsWith('>') ? 'commands' : mode === 'all' ? 'all' : mode;
+    const q = searchQuery;
 
     const items: PaletteResult[] = [];
 
@@ -156,13 +172,14 @@ function CommandPalette({
     if ((searchMode === 'all' || searchMode === 'files') && fileResults.length > 0) {
       for (const file of fileResults) {
         const dir = file.path.substring(0, file.path.lastIndexOf('/'));
+        const fileScore = fuzzyScore(q, file.path);
         items.push({
           kind: 'file',
           filePath: file.path,
           fileName: file.name,
           fileDirectory: dir,
-          highlightedLabel: highlightMatches(file.name, fuzzyScore(query, file.path).matches),
-          score: fuzzyScore(query, file.path).score,
+          highlightedLabel: highlightMatches(file.name, fileScore.matches),
+          score: fileScore.score,
           key: `file-${file.path}`,
         });
       }
@@ -170,12 +187,13 @@ function CommandPalette({
 
     // Symbols
     if ((searchMode === 'all' || searchMode === 'symbols') && onSearchSymbols) {
-      const symbols = onSearchSymbols(query);
+      const symbols = onSearchSymbols(q);
       for (const sym of symbols) {
+        const symScore = fuzzyScore(q, sym.name);
         items.push({
           kind: 'symbol',
-          highlightedLabel: highlightMatches(sym.name, fuzzyScore(query, sym.name).matches),
-          score: fuzzyScore(query, sym.name).score,
+          highlightedLabel: highlightMatches(sym.name, symScore.matches),
+          score: symScore.score,
           symbolLine: sym.line,
           symbolKind: sym.kind,
           scopePath: sym.scopePath,
@@ -185,7 +203,7 @@ function CommandPalette({
     }
 
     return items.sort((a, b) => b.score - a.score).slice(0, 50);
-  }, [query, mode, commands, fileResults, onSearchSymbols]);
+  }, [query, searchQuery, searchMode, commands, fileResults, onSearchSymbols]);
 
   // Announce selection changes when navigating with arrow keys.
   // Only depend on selectedIndex, not results, to avoid firing on every result recomputation.
@@ -220,6 +238,20 @@ function CommandPalette({
     return () => clearTimeout(timer);
   }, [results.length, query]);
 
+  // Keep the selected item visible as the user navigates with arrows or
+  // PageUp/PageDown. Without this, the selection rectangle scrolls off
+  // screen and the user loses track of where they are. Guarded for jsdom
+  // (which doesn't implement scrollIntoView).
+  useEffect(() => {
+    if (!listRef.current || results.length === 0) return;
+    const selectedEl = listRef.current.querySelector<HTMLElement>(
+      `#command-palette-result-${selectedIndex}`,
+    );
+    if (selectedEl && typeof selectedEl.scrollIntoView === 'function') {
+      selectedEl.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
+  }, [selectedIndex, results.length]);
+
   // Keyboard navigation
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLInputElement>) => {
@@ -247,13 +279,24 @@ function CommandPalette({
         setSelectedIndex(results.length - 1);
         return;
       }
+      if (e.key === 'PageDown') {
+        e.preventDefault();
+        setSelectedIndex((prev) => Math.min(prev + 10, results.length - 1));
+        return;
+      }
+      if (e.key === 'PageUp') {
+        e.preventDefault();
+        setSelectedIndex((prev) => Math.max(prev - 10, 0));
+        return;
+      }
       if (e.key === 'Enter' && results.length > 0) {
         e.preventDefault();
         const result = results[selectedIndex];
         if (!result) return;
 
         if (result.kind === 'command' && result.commandId) {
-          onExecuteCommand?.(result.commandId);
+          const keepOpen = onExecuteCommand?.(result.commandId) === false;
+          if (keepOpen) return;
         } else if (result.kind === 'file' && result.filePath) {
           onOpenFile(result.filePath);
         } else if (result.kind === 'symbol' && result.symbolLine != null) {
@@ -277,6 +320,7 @@ function CommandPalette({
     >
       <div className="command-palette" onClick={(e) => e.stopPropagation()}>
         <div className="command-palette-input-row">
+          <Search size={14} className="command-palette-input-icon" aria-hidden="true" />
           <input
             ref={inputRef}
             className="command-palette-input"
@@ -288,10 +332,10 @@ function CommandPalette({
             onKeyDown={handleKeyDown}
             placeholder={
               mode === 'files'
-                ? 'Search files by name...'
+                ? 'Search files…'
                 : mode === 'symbols'
-                  ? 'Search symbols...'
-                  : 'Type a command or search...'
+                  ? 'Search symbols…'
+                  : '> for commands, @ for symbols, type to find files'
             }
             role="combobox"
             aria-haspopup="listbox"
@@ -316,7 +360,24 @@ function CommandPalette({
         >
           {results.length === 0 && query && (
             <div className="command-palette-empty">
-              No results found
+              <div className="command-palette-empty-title">
+                No results for “{searchQuery || query}”
+              </div>
+              <div className="command-palette-empty-hint">
+                {searchMode === 'commands'
+                  ? 'Try a different command name'
+                  : searchMode === 'symbols'
+                    ? 'No matching symbols in the active file'
+                    : 'Type > for commands, @ for symbols, or check spelling'}
+              </div>
+            </div>
+          )}
+          {results.length === 0 && !query && (
+            <div className="command-palette-empty command-palette-empty--idle">
+              <div className="command-palette-empty-title">Search files, symbols, and commands</div>
+              <div className="command-palette-empty-hint">
+                Type to find files · <kbd>&gt;</kbd> commands · <kbd>@</kbd> symbols
+              </div>
             </div>
           )}
           {results.map((result, index) => (
@@ -330,7 +391,8 @@ function CommandPalette({
               aria-posinset={index + 1}
               onClick={() => {
                 if (result.kind === 'command' && result.commandId) {
-                  onExecuteCommand?.(result.commandId);
+                  const keepOpen = onExecuteCommand?.(result.commandId) === false;
+                  if (keepOpen) return;
                 } else if (result.kind === 'file' && result.filePath) {
                   onOpenFile(result.filePath);
                 } else if (result.kind === 'symbol' && result.symbolLine != null) {
@@ -341,7 +403,13 @@ function CommandPalette({
             >
               <span className="command-palette-item-label">
                 <span className={`result-kind-badge ${result.kind}`} aria-hidden="true">
-                  {result.kind === 'command' ? '⌘' : result.kind === 'file' ? '📄' : 'ƒ'}
+                  {result.kind === 'command' ? (
+                    <CommandIcon size={12} />
+                  ) : result.kind === 'file' ? (
+                    <FileText size={12} />
+                  ) : (
+                    <Hash size={12} />
+                  )}
                 </span>
                 <span dangerouslySetInnerHTML={{ __html: result.highlightedLabel }} />
               </span>
@@ -355,6 +423,26 @@ function CommandPalette({
               )}
             </div>
           ))}
+        </div>
+        <div className="command-palette-footer" aria-hidden="true">
+          <span className="command-palette-hint">
+            <kbd>↑</kbd>
+            <kbd>↓</kbd>
+            <span>navigate</span>
+          </span>
+          <span className="command-palette-hint">
+            <kbd>↵</kbd>
+            <span>open</span>
+          </span>
+          <span className="command-palette-hint">
+            <kbd>Esc</kbd>
+            <span>close</span>
+          </span>
+          {results.length > 0 && (
+            <span className="command-palette-hint command-palette-hint--count">
+              {selectedIndex + 1} / {results.length}
+            </span>
+          )}
         </div>
         <div
           className="command-palette-sr-only"

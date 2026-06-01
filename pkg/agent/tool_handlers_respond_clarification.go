@@ -6,7 +6,7 @@ import (
 )
 
 // handleRespondClarification is the tool handler for the respond_clarification tool.
-// It is called by parent agents to respond to a delegate's clarification request.
+// It is called by parent agents to respond to a subagent's clarification request.
 func handleRespondClarification(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	requestID, _ := args["request_id"].(string)
 	if requestID == "" {

@@ -46,9 +46,6 @@ func (a *Agent) initSubManagers() {
 	if a.mcpSub == nil {
 		a.mcpSub = NewAgentMCPManager()
 	}
-	if a.asyncDelegateTracker == nil {
-		a.asyncDelegateTracker = NewAsyncDelegateTracker()
-	}
 	if a.clarificationManager == nil && a.eventBus != nil {
 		a.clarificationManager = NewClarificationManager(a.eventBus)
 	}
@@ -122,6 +119,11 @@ type Agent struct {
 	// When nil (CLI mode), shell commands use os/exec unchanged.
 	terminalManager tools.TerminalAccess
 
+	// BackgroundProcessManager provides background shell execution for CLI mode.
+	// When nil AND terminalManager is nil, background shell features are unavailable.
+	// Lazy-initialized on first use when terminalManager is nil.
+	backgroundProcessManager *tools.BackgroundProcessManager
+
 	// Embedding index manager for duplicate detection on file writes.
 	embeddingMu  sync.RWMutex // protects embeddingMgr
 	embeddingMgr *embedding.EmbeddingManager
@@ -143,19 +145,22 @@ type Agent struct {
 	// based on the root persona (e.g., EA gets 3 levels, orchestrator gets 2).
 	rootPersonaID string
 
-	// delegateDepth tracks how deep this agent is in the delegate nesting chain.
-	// 0 = top-level agent, 1 = first-level delegate, etc.
-	delegateDepth int
-
 	// allowedTools restricts which tools this agent may use.
 	// When non-nil, only tools whose names (lowercased) are keys in this map
-	// can be invoked. Used by the delegate tool to limit tool access for child agents.
+	// can be invoked. Used to limit tool access for subagents.
 	allowedTools map[string]bool
 
-	// clarificationManager handles clarification requests between delegate and parent agents.
+	// clarificationManager handles clarification requests from a subagent
+	// back to the parent / user. Shared by reference from the parent
+	// agent when this agent is spawned as a subagent; nil on root agents
+	// that haven't been wired by their event bus initializer.
 	clarificationManager *ClarificationManager
 
-	// delegateID is the ID of this agent when acting as a delegate (empty for root agents).
+	// delegateID is this agent's identifier when acting as a subagent;
+	// empty for root agents. Used as the requester ID when calling
+	// request_clarification so the response routes back to the right
+	// subagent. Name retained from the legacy delegate machinery to
+	// minimize churn; the field is opaque-string anyway.
 	delegateID string
 
 	// riskProfileOverride is a transient (per-session) override for
@@ -197,9 +202,6 @@ type Agent struct {
 	fleetBudgetLimit   int64
 	fleetBudgetTrunc   atomic.Bool
 
-	// asyncDelegateTracker manages the lifecycle of asynchronous delegates.
-	// Lazy-initialized in initSubManagers.
-	asyncDelegateTracker *AsyncDelegateTracker
 }
 
 // InjectWebUIManagers replaces the agent's internal approval and ask-user

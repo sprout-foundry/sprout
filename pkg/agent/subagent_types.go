@@ -33,11 +33,14 @@ type FileChange struct {
 
 // SubagentRunMetrics is the structured token/cost accounting for a subagent
 // run. Sourced directly from SubagentResult (subagent_runner.go), not by
-// regex-scraping stdout (SP-059 Phase 2b).
+// regex-scraping stdout. Iterations is the assistant-turn count, exposed
+// so the primary's LLM can reason about how much budget a delegated task
+// burned.
 type SubagentRunMetrics struct {
 	TokensUsed int     `json:"tokens_used"`
 	Cost       float64 `json:"cost"`
 	ToolCalls  int     `json:"tool_calls"`
+	Iterations int     `json:"iterations"`
 }
 
 // SubagentReturn is the typed envelope a subagent tool call returns to

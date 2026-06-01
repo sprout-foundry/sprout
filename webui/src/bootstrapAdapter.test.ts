@@ -27,15 +27,14 @@ function restoreWindowLocation() {
 }
 
 describe('bootstrapAdapter', () => {
-  describe('cloud mode (VITE_APP_MODE=cloud)', () => {
+  describe('cloud mode (VITE_SPROUT_MODE=cloud)', () => {
     beforeEach(() => {
       vi.resetModules();
       // Mock fetch to reject (tier 1 fails) so tier 2 env vars are used
       vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network error')));
-      // Set cloud mode via import.meta.env (new env var names)
-      vi.stubEnv('VITE_APP_MODE', 'cloud');
-      vi.stubEnv('VITE_API_BASE_URL', 'https://foundry.test.sprout.dev/api');
-      vi.stubEnv('VITE_WS_URL', 'wss://foundry.test.sprout.dev/ws');
+      vi.stubEnv('VITE_SPROUT_MODE', 'cloud');
+      vi.stubEnv('VITE_FOUNDRY_API_URL', 'https://foundry.test.sprout.dev/api');
+      vi.stubEnv('VITE_FOUNDRY_WS_URL', 'wss://foundry.test.sprout.dev/ws');
       mockWindowLocation('https://app.test.sprout.dev', 'https:', 'app.test.sprout.dev');
     });
 
@@ -143,14 +142,14 @@ describe('bootstrapAdapter', () => {
   describe('local mode (VITE_SPROUT_MODE=local)', () => {
     beforeEach(() => {
       vi.resetModules();
-      process.env.VITE_SPROUT_MODE = 'local';
-      delete process.env.VITE_FOUNDRY_API_URL;
-      delete process.env.VITE_FOUNDRY_WS_URL;
+      vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network error')));
+      vi.stubEnv('VITE_SPROUT_MODE', 'local');
       mockWindowLocation('http://localhost:3000', 'http:', 'localhost:3000');
     });
 
     afterEach(() => {
-      delete process.env.VITE_SPROUT_MODE;
+      vi.unstubAllEnvs();
+      vi.unstubAllGlobals();
       restoreWindowLocation();
       vi.resetModules();
     });
@@ -163,13 +162,14 @@ describe('bootstrapAdapter', () => {
     });
   });
 
-  describe('fallback when env vars are not set in cloud mode', () => {
+  describe('fallback when env vars are not set in cloud mode (Pages Functions proxy case)', () => {
     beforeEach(() => {
       vi.resetModules();
       // Mock fetch to reject (tier 1 fails), and only set appMode to cloud
       vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network error')));
-      vi.stubEnv('VITE_APP_MODE', 'cloud');
-      // Do NOT set VITE_API_BASE_URL or VITE_WS_URL — should fall back to defaults
+      vi.stubEnv('VITE_SPROUT_MODE', 'cloud');
+      // Do NOT set VITE_FOUNDRY_API_URL or VITE_FOUNDRY_WS_URL — should derive
+      // same-origin URLs from window.location (Cloudflare Pages Functions proxy).
       mockWindowLocation('https://app.test.sprout.dev', 'https:', 'app.test.sprout.dev');
     });
 
@@ -180,7 +180,7 @@ describe('bootstrapAdapter', () => {
       vi.resetModules();
     });
 
-    it('installs CloudAdapter with fallback to localhost defaults', async () => {
+    it('installs CloudAdapter with same-origin defaults', async () => {
       await import('./bootstrapAdapter');
 
       const { getAdapter } = await import('./services/apiAdapter');
@@ -189,13 +189,12 @@ describe('bootstrapAdapter', () => {
       expect(adapter!.name).toBe('foundry-cloud');
     });
 
-    it('uses default WebSocket URL when VITE_WS_URL is not set', async () => {
+    it('derives WebSocket URL from window.location when VITE_FOUNDRY_WS_URL is not set', async () => {
       await import('./bootstrapAdapter');
 
       const { getAdapter } = await import('./services/apiAdapter');
       const adapter = getAdapter();
-      // Falls back to localhost defaults since VITE_WS_URL is not set
-      expect(adapter!.getWebSocketURL()).toBe('ws://localhost:56000/ws');
+      expect(adapter!.getWebSocketURL()).toBe('wss://app.test.sprout.dev/ws');
     });
   });
 
@@ -266,10 +265,9 @@ describe('bootstrapAdapter', () => {
     describe('Tier 2: VITE env vars fallback', () => {
       it('falls back to env vars when fetch rejects', async () => {
         fetchSpy.mockRejectedValue(new Error('network error'));
-        vi.stubEnv('VITE_API_BASE_URL', 'http://env:9090');
-        vi.stubEnv('VITE_WS_URL', 'ws://env:9090/ws');
-        vi.stubEnv('VITE_AUTH_MODE', 'bearer');
-        vi.stubEnv('VITE_APP_MODE', 'cloud');
+        vi.stubEnv('VITE_FOUNDRY_API_URL', 'http://env:9090');
+        vi.stubEnv('VITE_FOUNDRY_WS_URL', 'ws://env:9090/ws');
+        vi.stubEnv('VITE_SPROUT_MODE', 'cloud');
         vi.stubEnv('VITE_BUILD_VERSION', '2.0.0');
 
         const { fetchRuntimeConfig } = await import('./bootstrapAdapter');
@@ -277,7 +275,6 @@ describe('bootstrapAdapter', () => {
 
         expect(config.apiBaseURL).toBe('http://env:9090');
         expect(config.wsURL).toBe('ws://env:9090/ws');
-        expect(config.authMode).toBe('bearer');
         expect(config.appMode).toBe('cloud');
         expect(config.buildVersion).toBe('2.0.0');
         expect(consoleWarnSpy).toHaveBeenCalledWith(
@@ -292,8 +289,8 @@ describe('bootstrapAdapter', () => {
           status: 500,
           json: () => Promise.reject(new Error('Internal Server Error')),
         } as any);
-        vi.stubEnv('VITE_API_BASE_URL', 'http://env:9090');
-        vi.stubEnv('VITE_WS_URL', 'ws://env:9090/ws');
+        vi.stubEnv('VITE_FOUNDRY_API_URL', 'http://env:9090');
+        vi.stubEnv('VITE_FOUNDRY_WS_URL', 'ws://env:9090/ws');
 
         const { fetchRuntimeConfig } = await import('./bootstrapAdapter');
         const config = await fetchRuntimeConfig();
@@ -306,17 +303,15 @@ describe('bootstrapAdapter', () => {
         );
       });
 
-      it('uses partial env vars with defaults for missing fields', async () => {
+      it('uses partial env vars with defaults for missing fields in local mode', async () => {
         fetchSpy.mockRejectedValue(new Error('no network'));
-        vi.stubEnv('VITE_API_BASE_URL', 'http://partial:7777');
-        vi.stubEnv('VITE_AUTH_MODE', 'bearer');
+        vi.stubEnv('VITE_FOUNDRY_API_URL', 'http://partial:7777');
 
         const { fetchRuntimeConfig } = await import('./bootstrapAdapter');
         const config = await fetchRuntimeConfig();
 
         expect(config.apiBaseURL).toBe('http://partial:7777');
-        expect(config.wsURL).toBe('ws://localhost:56000/ws'); // falls back to default
-        expect(config.authMode).toBe('bearer');
+        expect(config.wsURL).toBe('ws://localhost:56000/ws'); // local-mode fallback
         expect(config.appMode).toBe('local'); // falls back to default
         expect(config.buildVersion).toBe('dev'); // falls back to default
       });
@@ -325,10 +320,9 @@ describe('bootstrapAdapter', () => {
     describe('Tier 3: localhost defaults', () => {
       it('falls back to localhost defaults when fetch fails and no env vars', async () => {
         fetchSpy.mockRejectedValue(new Error('network error'));
-        vi.stubEnv('VITE_API_BASE_URL', undefined);
-        vi.stubEnv('VITE_WS_URL', undefined);
-        vi.stubEnv('VITE_AUTH_MODE', undefined);
-        vi.stubEnv('VITE_APP_MODE', undefined);
+        vi.stubEnv('VITE_FOUNDRY_API_URL', undefined);
+        vi.stubEnv('VITE_FOUNDRY_WS_URL', undefined);
+        vi.stubEnv('VITE_SPROUT_MODE', undefined);
         vi.stubEnv('VITE_BUILD_VERSION', undefined);
 
         const { fetchRuntimeConfig } = await import('./bootstrapAdapter');
@@ -348,10 +342,9 @@ describe('bootstrapAdapter', () => {
         fetchSpy.mockResolvedValue({
           json: () => Promise.reject(new Error('Unexpected token')),
         } as any);
-        vi.stubEnv('VITE_API_BASE_URL', undefined);
-        vi.stubEnv('VITE_WS_URL', undefined);
-        vi.stubEnv('VITE_AUTH_MODE', undefined);
-        vi.stubEnv('VITE_APP_MODE', undefined);
+        vi.stubEnv('VITE_FOUNDRY_API_URL', undefined);
+        vi.stubEnv('VITE_FOUNDRY_WS_URL', undefined);
+        vi.stubEnv('VITE_SPROUT_MODE', undefined);
         vi.stubEnv('VITE_BUILD_VERSION', undefined);
 
         const { fetchRuntimeConfig } = await import('./bootstrapAdapter');
@@ -370,7 +363,7 @@ describe('bootstrapAdapter', () => {
         fetchSpy.mockResolvedValue({
           json: () => Promise.reject(new Error('invalid json')),
         } as any);
-        vi.stubEnv('VITE_API_BASE_URL', 'http://fallback:3000');
+        vi.stubEnv('VITE_FOUNDRY_API_URL', 'http://fallback:3000');
 
         const { fetchRuntimeConfig } = await import('./bootstrapAdapter');
         const config = await fetchRuntimeConfig();
@@ -386,7 +379,7 @@ describe('bootstrapAdapter', () => {
         fetchSpy.mockResolvedValue({
           json: () => Promise.resolve({ foo: 'bar' }),
         } as any);
-        vi.stubEnv('VITE_API_BASE_URL', 'http://fallback:3000');
+        vi.stubEnv('VITE_FOUNDRY_API_URL', 'http://fallback:3000');
 
         const { fetchRuntimeConfig } = await import('./bootstrapAdapter');
         const config = await fetchRuntimeConfig();
@@ -411,6 +404,23 @@ describe('bootstrapAdapter', () => {
         expect(config.authMode).toBe('none'); // defaults
         expect(config.appMode).toBe('local'); // defaults
         expect(config.buildVersion).toBe('dev'); // defaults
+      });
+
+      it('cloud mode without explicit URLs derives same-origin defaults', async () => {
+        fetchSpy.mockRejectedValue(new Error('no bootstrap endpoint'));
+        vi.stubEnv('VITE_SPROUT_MODE', 'cloud');
+        mockWindowLocation('https://app.example.com', 'https:', 'app.example.com');
+
+        try {
+          const { fetchRuntimeConfig } = await import('./bootstrapAdapter');
+          const config = await fetchRuntimeConfig();
+
+          expect(config.appMode).toBe('cloud');
+          expect(config.apiBaseURL).toBe('https://app.example.com');
+          expect(config.wsURL).toBe('wss://app.example.com/ws');
+        } finally {
+          restoreWindowLocation();
+        }
       });
     });
   });

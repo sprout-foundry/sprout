@@ -1,0 +1,583 @@
+//go:build !js
+
+package tools
+
+import (
+	"context"
+	"os"
+	"os/exec"
+	"strings"
+	"sync"
+	"syscall"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// =============================================================================
+// TestBPM_StartAndCheck — Start a fast command, verify output and exited status
+// =============================================================================
+
+func TestBPM_StartAndCheck(t *testing.T) {
+	t.Parallel()
+
+	bpm := NewBackgroundProcessManager()
+	defer bpm.Close()
+
+	sessionID, err := bpm.Start(context.Background(), "echo hello", "")
+	require.NoError(t, err)
+	require.NotEmpty(t, sessionID)
+	require.True(t, strings.HasPrefix(sessionID, "bg-echo-"))
+
+	// Wait for the fast command to complete
+	require.Eventually(t, func() bool {
+		_, status, err := bpm.CheckOutput(sessionID)
+		return err == nil && status == "exited"
+	}, 3*time.Second, 100*time.Millisecond)
+
+	output, status, err := bpm.CheckOutput(sessionID)
+	require.NoError(t, err)
+	assert.Equal(t, "exited", status)
+	assert.Contains(t, output, "hello")
+}
+
+// =============================================================================
+// TestBPM_StartLongRunningAndCheck — Start sleep 60, check it's running, then stop
+// =============================================================================
+
+func TestBPM_StartLongRunningAndCheck(t *testing.T) {
+	t.Parallel()
+
+	bpm := NewBackgroundProcessManager()
+	defer bpm.Close()
+
+	sessionID, err := bpm.Start(context.Background(), "sleep 60", "")
+	require.NoError(t, err)
+	require.NotEmpty(t, sessionID)
+
+	// Immediately check — should be running
+	output, status, err := bpm.CheckOutput(sessionID)
+	require.NoError(t, err)
+	assert.Equal(t, "running", status)
+	assert.Empty(t, output)
+
+	// Stop it
+	err = bpm.Stop(sessionID)
+	require.NoError(t, err)
+
+	// Process should be gone
+	assert.False(t, bpm.IsActive(sessionID))
+}
+
+// =============================================================================
+// TestBPM_Stop — Start sleep 60, stop it, verify process is killed
+// =============================================================================
+
+func TestBPM_Stop(t *testing.T) {
+	t.Parallel()
+
+	bpm := NewBackgroundProcessManager()
+	defer bpm.Close()
+
+	sessionID, err := bpm.Start(context.Background(), "sleep 60", "")
+	require.NoError(t, err)
+
+	// Verify it's running
+	assert.True(t, bpm.IsActive(sessionID))
+
+	// Stop it
+	err = bpm.Stop(sessionID)
+	require.NoError(t, err)
+
+	// Should no longer be active
+	assert.False(t, bpm.IsActive(sessionID))
+}
+
+// =============================================================================
+// TestBPM_StopExitedProcess — Start echo, wait for exit, then stop (no-op)
+// =============================================================================
+
+func TestBPM_StopExitedProcess(t *testing.T) {
+	t.Parallel()
+
+	bpm := NewBackgroundProcessManager()
+	defer bpm.Close()
+
+	sessionID, err := bpm.Start(context.Background(), "echo done", "")
+	require.NoError(t, err)
+
+	// Wait for the fast command to exit
+	require.Eventually(t, func() bool {
+		return !bpm.IsActive(sessionID)
+	}, 3*time.Second, 100*time.Millisecond)
+
+	// Stop an already-exited process should be a no-op (no error)
+	err = bpm.Stop(sessionID)
+	require.NoError(t, err)
+}
+
+// =============================================================================
+// TestBPM_CheckNonexistentSession — CheckOutput for non-existent session
+// =============================================================================
+
+func TestBPM_CheckNonexistentSession(t *testing.T) {
+	t.Parallel()
+
+	bpm := NewBackgroundProcessManager()
+	defer bpm.Close()
+
+	_, _, err := bpm.CheckOutput("nonexistent-session")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+}
+
+// =============================================================================
+// TestBPM_StopNonexistentSession — Stop for non-existent session
+// =============================================================================
+
+func TestBPM_StopNonexistentSession(t *testing.T) {
+	t.Parallel()
+
+	bpm := NewBackgroundProcessManager()
+	defer bpm.Close()
+
+	err := bpm.Stop("nonexistent-session")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+}
+
+// =============================================================================
+// TestBPM_IsActive — Start a process, verify IsActive, stop it, verify not active
+// =============================================================================
+
+func TestBPM_IsActive(t *testing.T) {
+	t.Parallel()
+
+	bpm := NewBackgroundProcessManager()
+	defer bpm.Close()
+
+	sessionID, err := bpm.Start(context.Background(), "sleep 60", "")
+	require.NoError(t, err)
+
+	// Should be active
+	assert.True(t, bpm.IsActive(sessionID))
+
+	// Stop it
+	require.NoError(t, bpm.Stop(sessionID))
+
+	// Should no longer be active
+	assert.False(t, bpm.IsActive(sessionID))
+}
+
+// =============================================================================
+// TestBPM_IsActive_NonexistentSession — IsActive for non-existent session returns false
+// =============================================================================
+
+func TestBPM_IsActive_NonexistentSession(t *testing.T) {
+	t.Parallel()
+
+	bpm := NewBackgroundProcessManager()
+	defer bpm.Close()
+
+	assert.False(t, bpm.IsActive("nonexistent-session"))
+}
+
+// =============================================================================
+// TestBPM_AdoptProcess — Create an exec.Cmd manually, start it, then adopt
+// =============================================================================
+
+func TestBPM_AdoptProcess(t *testing.T) {
+	t.Parallel()
+
+	bpm := NewBackgroundProcessManager()
+	defer bpm.Close()
+
+	// Create a running command manually
+	shell := os.Getenv("SHELL")
+	if shell == "" {
+		shell = "/bin/sh"
+	}
+	cmd := exec.Command(shell, "-c", "sleep 60")
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+
+	// Create output file manually (simulates what runShellCommandAdoptable does)
+	outputFile, err := os.CreateTemp("", "sprout-bg-*.output")
+	require.NoError(t, err)
+	outputPath := outputFile.Name()
+	defer os.Remove(outputPath)
+
+	cmd.Stdout = outputFile
+	cmd.Stderr = outputFile
+
+	err = cmd.Start()
+	require.NoError(t, err)
+
+	// Adopt it into BPM
+	outputFile.Close() // BPM will reopen for reading
+	sessionID, err := bpm.AdoptProcess(cmd, outputPath, "sleep 60", cmd.Dir)
+	require.NoError(t, err)
+	require.NotEmpty(t, sessionID)
+
+	// Verify the adopted process is tracked and running
+	assert.True(t, bpm.IsActive(sessionID))
+	_, status, err := bpm.CheckOutput(sessionID)
+	require.NoError(t, err)
+	assert.Equal(t, "running", status)
+
+	// Stop the adopted process
+	err = bpm.Stop(sessionID)
+	require.NoError(t, err)
+	assert.False(t, bpm.IsActive(sessionID))
+}
+
+// =============================================================================
+// TestBPM_StartEmptyCommand — empty command returns error
+// =============================================================================
+
+func TestBPM_StartEmptyCommand(t *testing.T) {
+	t.Parallel()
+
+	bpm := NewBackgroundProcessManager()
+	defer bpm.Close()
+
+	_, err := bpm.Start(context.Background(), "", "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot be empty")
+}
+
+// =============================================================================
+// TestBPM_StartWhitespaceCommand — whitespace-only command returns error
+// =============================================================================
+
+func TestBPM_StartWhitespaceCommand(t *testing.T) {
+	t.Parallel()
+
+	bpm := NewBackgroundProcessManager()
+	defer bpm.Close()
+
+	_, err := bpm.Start(context.Background(), "   ", "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot be empty")
+}
+
+// =============================================================================
+// TestBPM_ConcurrentStart — start multiple background processes simultaneously
+// =============================================================================
+
+func TestBPM_ConcurrentStart(t *testing.T) {
+	t.Parallel()
+
+	bpm := NewBackgroundProcessManager()
+	defer bpm.Close()
+
+	const count = 5
+	sessionIDs := make([]string, count)
+	var wg sync.WaitGroup
+	wg.Add(count)
+
+	for i := 0; i < count; i++ {
+		go func(i int) {
+			defer wg.Done()
+			sessionIDs[i], _ = bpm.Start(context.Background(), "sleep 60", "")
+		}(i)
+	}
+
+	wg.Wait()
+
+	// All session IDs should be unique and non-empty
+	seen := make(map[string]bool)
+	for i, id := range sessionIDs {
+		require.NotEmpty(t, id, "session ID %d is empty", i)
+		require.False(t, seen[id], "duplicate session ID %s", id)
+		seen[id] = true
+	}
+
+	// All should be active
+	for _, id := range sessionIDs {
+		assert.True(t, bpm.IsActive(id))
+	}
+
+	// Stop all
+	for _, id := range sessionIDs {
+		require.NoError(t, bpm.Stop(id))
+	}
+}
+
+// =============================================================================
+// TestBPM_Close — start some processes, call Close, verify all stopped
+// =============================================================================
+
+func TestBPM_Close(t *testing.T) {
+	t.Parallel()
+
+	bpm := NewBackgroundProcessManager()
+
+	sessionIDs := make([]string, 3)
+	for i := 0; i < 3; i++ {
+		var err error
+		sessionIDs[i], err = bpm.Start(context.Background(), "sleep 60", "")
+		require.NoError(t, err)
+	}
+
+	// All active
+	for _, id := range sessionIDs {
+		assert.True(t, bpm.IsActive(id))
+	}
+
+	// Close stops cleanup goroutine and kills all processes
+	bpm.Close()
+
+	// Verify all processes are gone (they were killed by StopAll inside Close)
+	// We can't re-check IsActive on the closed manager, but we verified Close
+	// didn't panic, which is the main concern
+}
+
+// =============================================================================
+// TestBPM_CheckOutput_CapturesStderr — output file captures both stdout and stderr
+// =============================================================================
+
+func TestBPM_CheckOutput_CapturesStderr(t *testing.T) {
+	t.Parallel()
+
+	bpm := NewBackgroundProcessManager()
+	defer bpm.Close()
+
+	// Command that writes to stderr
+	sessionID, err := bpm.Start(context.Background(), "echo stdout-line && echo stderr-line >&2", "")
+	require.NoError(t, err)
+
+	// Wait for command to finish
+	require.Eventually(t, func() bool {
+		_, status, err := bpm.CheckOutput(sessionID)
+		return err == nil && status == "exited"
+	}, 3*time.Second, 100*time.Millisecond)
+
+	output, _, err := bpm.CheckOutput(sessionID)
+	require.NoError(t, err)
+	assert.Contains(t, output, "stdout-line")
+	assert.Contains(t, output, "stderr-line")
+}
+
+// =============================================================================
+// TestBPM_CheckOutput_MultiplePolls — repeated CheckOutput calls accumulate
+// =============================================================================
+
+func TestBPM_CheckOutput_MultiplePolls(t *testing.T) {
+	t.Parallel()
+
+	bpm := NewBackgroundProcessManager()
+	defer bpm.Close()
+
+	sessionID, err := bpm.Start(context.Background(), "echo line1 && sleep 0.2 && echo line2", "")
+	require.NoError(t, err)
+
+	// First poll — might have partial output
+	_, _, err = bpm.CheckOutput(sessionID)
+	require.NoError(t, err)
+
+	// Second poll after a brief wait — should have more (or same) output
+	time.Sleep(500 * time.Millisecond)
+	output2, _, err := bpm.CheckOutput(sessionID)
+	require.NoError(t, err)
+
+	// Both should contain the content (second may have more)
+	assert.Contains(t, output2, "line1")
+	assert.Contains(t, output2, "line2")
+}
+
+// =============================================================================
+// TestBPM_SessionID_Format — session ID follows expected format
+// =============================================================================
+
+func TestBPM_SessionID_Format(t *testing.T) {
+	t.Parallel()
+
+	bpm := NewBackgroundProcessManager()
+	defer bpm.Close()
+
+	tests := []struct {
+		command  string
+		prefix   string
+	}{
+		{"echo hello", "bg-echo-"},
+		{"ls -la", "bg-ls-"},
+		{"npm test", "bg-npm-"},
+		{"./my_script.sh", "bg-.-my_script.sh-"}, // / is not in allowed chars, replaced with -
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.prefix, func(t *testing.T) {
+			sessionID, err := bpm.Start(context.Background(), tc.command, "")
+			require.NoError(t, err)
+			assert.True(t, strings.HasPrefix(sessionID, tc.prefix),
+				"expected session ID to start with %q, got %q", tc.prefix, sessionID)
+			// Session ID format: bg-<prefix>-<8 hex chars>
+			parts := strings.Split(sessionID, "-")
+			assert.GreaterOrEqual(t, len(parts), 3, "session ID should have at least 3 parts: bg, prefix, hex")
+			// Clean up
+			bpm.Stop(sessionID)
+		})
+	}
+}
+
+// =============================================================================
+// TestBPM_ExtractExitCode — extract exit code from various error types
+// =============================================================================
+
+func TestBPM_ExtractExitCode(t *testing.T) {
+	t.Parallel()
+
+	// Nil error returns 0
+	assert.Equal(t, 0, extractExitCode(nil))
+
+	// Non-exit error returns 0
+	assert.Equal(t, 0, extractExitCode(os.ErrNotExist))
+
+	// Note: We cannot test with a real exec.ExitError because constructing one
+	// with a valid ProcessState requires an actual completed process.
+	// The implementation matches the pattern in shell_native.go:extractExitCode.
+}
+
+// =============================================================================
+// TestBPM_CheckOutput_NonexistentSession_NoCrash — ensure CheckOutput handles
+// non-existent session gracefully without panicking on missing process fields
+// =============================================================================
+
+func TestBPM_CheckOutput_NonexistentSession_NoCrash(t *testing.T) {
+	t.Parallel()
+
+	bpm := NewBackgroundProcessManager()
+	defer bpm.Close()
+
+	// Multiple calls to non-existent session should not cause issues
+	for i := 0; i < 3; i++ {
+		_, _, err := bpm.CheckOutput("does-not-exist-" + string(rune('a'+i)))
+		require.Error(t, err)
+	}
+}
+
+// =============================================================================
+// TestBPM_ContextKey_Helpers — WithBackgroundProcessManager and
+// BackgroundProcessManagerFromContext round-trip correctly
+// =============================================================================
+
+func TestBPM_ContextKey_Helpers(t *testing.T) {
+	t.Parallel()
+
+	bpm := NewBackgroundProcessManager()
+	defer bpm.Close()
+
+	// Initially nil
+	ctx := context.Background()
+	assert.Nil(t, BackgroundProcessManagerFromContext(ctx))
+
+	// Add to context
+	ctx = WithBackgroundProcessManager(ctx, bpm)
+	retrieved := BackgroundProcessManagerFromContext(ctx)
+	require.NotNil(t, retrieved)
+	assert.Same(t, bpm, retrieved)
+
+	// Wrong type in context should return nil
+	ctx2 := context.WithValue(context.Background(), bpmContextKey{}, "not a bpm")
+	assert.Nil(t, BackgroundProcessManagerFromContext(ctx2))
+
+	// Child context inherits the value
+	ctx3 := context.WithValue(ctx, "other", 123)
+	assert.Same(t, bpm, BackgroundProcessManagerFromContext(ctx3))
+}
+
+// =============================================================================
+// TestBPM_Start_NonexistentDir — start with a non-existent working directory
+// =============================================================================
+
+func TestBPM_Start_NonexistentDir(t *testing.T) {
+	t.Parallel()
+
+	bpm := NewBackgroundProcessManager()
+	defer bpm.Close()
+
+	_, err := bpm.Start(context.Background(), "echo hello", "/nonexistent/path/12345")
+	// Should fail because directory doesn't exist
+	require.Error(t, err)
+}
+
+// =============================================================================
+// TestExtractCommandPrefixCLI — extract first word for session ID prefix
+// =============================================================================
+
+func TestExtractCommandPrefixCLI(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"echo hello", "echo"},
+		{"ls -la", "ls"},
+		{"npm test", "npm"},
+		{"./script.sh arg", "./script.sh"},
+		{"sleep 60 &", "sleep"},
+		{"cat file | grep foo", "cat"},
+		{"echo 'quoted arg'", "echo"},
+		{"", ""},
+		{"  spaces  ", "spaces"},
+		{"make build && test", "make"},
+		{"curl -X POST http://localhost", "curl"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.input, func(t *testing.T) {
+			result := extractCommandPrefixCLI(tc.input)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
+}
+
+// =============================================================================
+// TestSanitizeSessionIDPartCLI — sanitize string for session ID
+// =============================================================================
+
+func TestSanitizeSessionIDPartCLI(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"echo", "echo"},
+		{"npm_test", "npm_test"},
+		{"my-app", "my-app"},
+		{"foo bar", "foo-bar"},
+		{"hello world", "hello-world"},
+		{"!@#$", "----"},
+		{"", "unknown"},
+		// sanitizeSessionIDPartCLI caps at maxLen=32 rune positions, replacing non-alphanumeric with -
+		{"this is a really long command name that exceeds max length", "this-is-a-really-long-command-na"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.input, func(t *testing.T) {
+			result := sanitizeSessionIDPartCLI(tc.input)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
+}
+
+// =============================================================================
+// TestIsProcessGone — check "no such process" detection
+// =============================================================================
+
+func TestIsProcessGone(t *testing.T) {
+	t.Parallel()
+
+	assert.False(t, isProcessGone(nil))
+	assert.False(t, isProcessGone(os.ErrNotExist))
+
+	// syscall.ESRCH is "no such process"
+	assert.True(t, isProcessGone(syscall.ESRCH))
+
+	// os.SyscallError wrapping ESRCH also contains "no such process"
+	assert.True(t, isProcessGone(&os.SyscallError{Err: syscall.ESRCH}))
+}

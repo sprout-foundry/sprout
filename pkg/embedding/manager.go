@@ -40,6 +40,10 @@ type EmbeddingManager struct {
 
 	// ONNX runtime (held so Close() can release it)
 	onnxRuntime *ONNXRuntime
+
+	// closeChan is closed by Close() to signal long-running goroutines
+	// (e.g., AutoBuildWhenReady) to abort early.
+	closeChan chan struct{}
 }
 
 // NewEmbeddingManager creates a new manager with the given config.
@@ -358,7 +362,12 @@ type BuildResult struct {
 // A 2-minute timeout prevents the build from hanging indefinitely.
 func (m *EmbeddingManager) AutoBuildWhenReady() {
 	// Wait a few seconds so we don't compete with startup I/O.
-	time.Sleep(3 * time.Second)
+	// Use a select-based timer so Close() can wake us early.
+	select {
+	case <-time.After(3 * time.Second):
+	case <-m.closeCh():
+		return
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
@@ -369,6 +378,17 @@ func (m *EmbeddingManager) AutoBuildWhenReady() {
 	}
 	debugLogf("embedding: auto-build complete: %d files, %d units in %s",
 		stats.FilesProcessed, stats.UnitsExtracted, stats.Duration)
+}
+
+// closeCh returns a channel that is closed when the manager is closed.
+// Used by AutoBuildWhenReady to abort the startup sleep if Close() is called.
+func (m *EmbeddingManager) closeCh() <-chan struct{} {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.closeChan == nil {
+		m.closeChan = make(chan struct{})
+	}
+	return m.closeChan
 }
 
 // UpdateFile incrementally updates the index for a single file.
@@ -506,6 +526,16 @@ func (m *EmbeddingManager) Close() error {
 
 	m.initialized = false
 	m.initError = nil // cleared to allow re-initialization after Close()
+
+	// Signal long-running goroutines to abort.
+	if m.closeChan != nil {
+		select {
+		case <-m.closeChan:
+			// Already closed
+		default:
+			close(m.closeChan)
+		}
+	}
 
 	return firstErr
 }

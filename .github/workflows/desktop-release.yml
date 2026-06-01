@@ -158,6 +158,10 @@ jobs:
       run: npm run desktop:verify
 
     - name: Upload desktop artifacts
+      # Files-only upload. The release body is written once by release.yml;
+      # appending here would duplicate the blurb six times (once per matrix
+      # entry). The Assets section on the release page enumerates the
+      # uploaded files automatically.
       uses: softprops/action-gh-release@v2
       if: startsWith(github.ref, 'refs/tags/')
       with:
@@ -168,9 +172,6 @@ jobs:
           desktop/dist/releases/*.AppImage
           desktop/dist/releases/*.deb
           desktop/dist/releases/*.rpm
-        append_body: true
-        body: |
-          Desktop installers built from the Electron shell while preserving the existing Go backend and embedded web UI.
 
     - name: Upload workflow artifacts
       uses: actions/upload-artifact@v4

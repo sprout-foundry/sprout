@@ -249,6 +249,20 @@ jobs:
         GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o sprout-darwin-arm64 .
         tar -czvf sprout-darwin-arm64.tar.gz sprout-darwin-arm64
 
+    - name: Build WASM shell module
+      # Required by the cloud webui bundle (sprout.wasm is copied into the
+      # bundle's wasm/ directory by build-webui-dist.mjs).
+      run: make build-wasm
+
+    - name: Build cloud-mode webui bundle for platform vendoring
+      run: node scripts/build-webui-dist.mjs --mode cloud --output dist/sprout-webui-cloud
+
+    - name: Package cloud-mode webui bundle
+      # Stable filename (no version embedded) so platform's vendor workflow
+      # can fetch the latest with `gh release download --pattern`. The
+      # bundle's wasm/version.json carries the actual sprout version.
+      run: tar -czvf sprout-webui-cloud.tar.gz -C dist sprout-webui-cloud
+
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
@@ -258,24 +272,16 @@ jobs:
           sprout-windows-amd64.zip
           sprout-darwin-amd64.tar.gz
           sprout-darwin-arm64.tar.gz
+          sprout-webui-cloud.tar.gz
         name: Release ${{ steps.get_version.outputs.VERSION }}
         tag_name: ${{ steps.get_version.outputs.VERSION }}
         body: |
           ## Release ${{ steps.get_version.outputs.VERSION }}
 
-          This release includes multi-platform CLI binaries and desktop applications built with proper version information.
-
-          ### CLI Binaries
-          - `sprout-linux-amd64.tar.gz` - Linux AMD64
-          - `sprout-linux-arm64.tar.gz` - Linux ARM64
-          - `sprout-windows-amd64.zip` - Windows AMD64
-          - `sprout-darwin-amd64.tar.gz` - macOS Intel
-          - `sprout-darwin-arm64.tar.gz` - macOS Apple Silicon
-
-          ### Desktop Applications
-          - `Sprout-*.dmg` - macOS Desktop App
-          - `Sprout-*.exe` - Windows Desktop App
-          - `Sprout-*.AppImage` - Linux Desktop App
+          Multi-platform CLI binaries and Electron desktop installers, plus a
+          cloud-mode web bundle for sprout-foundry vendoring. See the Assets
+          section below for the full list of artifacts uploaded by this and
+          the desktop-release workflow.
 
           ### Version Information
           Each binary includes:

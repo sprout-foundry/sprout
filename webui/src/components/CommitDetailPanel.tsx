@@ -2,7 +2,7 @@ import { ArrowLeft, FileText, GitCompareArrows, Loader2, Clock, FolderOpen } fro
 import { useCallback, useEffect, useState } from 'react';
 import type { MutableRefObject } from 'react';
 import type { GitCommitSummary, GitCommitDetail } from '../types/git-types';
-import { formatRelativeDate, firstLine } from '../utils/format';
+import { formatRelativeDate, formatAbsoluteDate, firstLine } from '../utils/format';
 import { getStatusInfo } from '../utils/git';
 import { useLog } from '../utils/log';
 import './CommitDetailPanel.css';
@@ -161,6 +161,10 @@ function CommitDetailPanel({
 
   // ── File list view ──────────────────────────────────────────
   const fileList = detail.files || [];
+  const fullMessage = detail.subject || commit.message || '';
+  const subject = firstLine(fullMessage);
+  const bodyStart = fullMessage.indexOf('\n');
+  const body = bodyStart >= 0 ? fullMessage.slice(bodyStart + 1).replace(/^\n+/, '').trimEnd() : '';
 
   return (
     <div className="commit-detail-panel">
@@ -174,13 +178,15 @@ function CommitDetailPanel({
         <div className="commit-detail-commit-info">
           <span className="commit-detail-hash">{detail.short_hash}</span>
           <span className="commit-detail-author">{detail.author}</span>
-          <span className="commit-detail-date">
+          <span className="commit-detail-date" title={formatAbsoluteDate(detail.date)}>
             <Clock size={11} />
             {formatRelativeDate(detail.date)}
           </span>
         </div>
 
-        <div className="commit-detail-subject">{firstLine(detail.subject || commit.message)}</div>
+        <div className="commit-detail-subject">{subject}</div>
+
+        {body && <pre className="commit-detail-body">{body}</pre>}
 
         {detail.ref_names && <div className="commit-detail-refs">{detail.ref_names}</div>}
 

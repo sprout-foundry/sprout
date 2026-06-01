@@ -64,7 +64,7 @@ func (n *layerNode[K]) addNeighbor(newNode *layerNode[K], m int, dist DistanceFu
 	delete(n.neighbors, worst.Key)
 	// Delete backlink from the worst neighbor.
 	delete(worst.neighbors, n.Key)
-	worst.replenish(m)
+	worst.replenish(m, dist)
 }
 
 type searchCandidate[K cmp.Ordered] struct {
@@ -148,7 +148,7 @@ func (n *layerNode[K]) search(
 	return result.Slice()
 }
 
-func (n *layerNode[K]) replenish(m int) {
+func (n *layerNode[K]) replenish(m int, dist DistanceFunc) {
 	if len(n.neighbors) >= m {
 		return
 	}
@@ -165,7 +165,7 @@ func (n *layerNode[K]) replenish(m int) {
 			if candidate == n {
 				continue
 			}
-			n.addNeighbor(candidate, m, CosineDistance)
+			n.addNeighbor(candidate, m, dist)
 			if len(n.neighbors) >= m {
 				return
 			}
@@ -176,13 +176,13 @@ func (n *layerNode[K]) replenish(m int) {
 // isolate removes the node from the graph by removing all connections
 // to neighbors. Backported from upstream: the delete and replenish phases
 // must be separated to avoid mutating the neighbors map during iteration.
-func (n *layerNode[K]) isolate(m int) {
+func (n *layerNode[K]) isolate(m int, dist DistanceFunc) {
 	for _, neighbor := range n.neighbors {
 		delete(neighbor.neighbors, n.Key)
 	}
 
 	for _, neighbor := range n.neighbors {
-		neighbor.replenish(m)
+		neighbor.replenish(m, dist)
 	}
 }
 
@@ -484,7 +484,7 @@ func (h *Graph[K]) Delete(key K) bool {
 		if len(layer.nodes) == 0 {
 			deleteLayer[i] = struct{}{}
 		}
-		node.isolate(h.M)
+		node.isolate(h.M, h.Distance)
 		deleted = true
 	}
 

@@ -63,6 +63,9 @@ jobs:
     - name: Install goimports
       run: go install golang.org/x/tools/cmd/goimports@latest
 
+    - name: Prepare grammar blobs
+      run: make prepare-grammars
+
     - name: Run unit tests with race detection and coverage
       env:
         CI: "true"
@@ -121,6 +124,9 @@ jobs:
     - name: Get the version
       id: get_version
       run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+    - name: Prepare grammar blobs
+      run: make prepare-grammars
 
     - name: Sync workspace package versions to release tag
       # Keeps packages/ui and packages/events package.json versions

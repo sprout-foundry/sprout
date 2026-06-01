@@ -145,6 +145,16 @@ func (p *ONNXEmbeddingProvider) EmbedBatch(ctx context.Context, texts []string) 
 	return nil, fmt.Errorf("CGO is disabled; ONNX embedding not available")
 }
 
+// EmbedWithPrefix implements EmbeddingProvider.
+func (p *ONNXEmbeddingProvider) EmbedWithPrefix(ctx context.Context, text string, prefix string) ([]float32, error) {
+	return nil, fmt.Errorf("CGO is disabled; ONNX embedding not available")
+}
+
+// EmbedBatchWithPrefix implements EmbeddingProvider.
+func (p *ONNXEmbeddingProvider) EmbedBatchWithPrefix(ctx context.Context, texts []string, prefix string) ([][]float32, error) {
+	return nil, fmt.Errorf("CGO is disabled; ONNX embedding not available")
+}
+
 // ModelDims returns the model dimensions when CGO is disabled.
 func (p *ONNXEmbeddingProvider) ModelDims() int {
 	return 0

@@ -29,6 +29,14 @@ func (m *mockProvider) EmbedBatch(_ context.Context, texts []string) ([][]float3
 	return results, nil
 }
 
+func (m *mockProvider) EmbedWithPrefix(_ context.Context, text string, prefix string) ([]float32, error) {
+	return m.Embed(nil, prefix+text)
+}
+
+func (m *mockProvider) EmbedBatchWithPrefix(_ context.Context, texts []string, prefix string) ([][]float32, error) {
+	return m.EmbedBatch(nil, texts)
+}
+
 func (m *mockProvider) Dimensions() int    { return m.dims }
 func (m *mockProvider) Name() string       { return "mock" }
 func (m *mockProvider) ModelHash() string  { return "mock-model-hash" }

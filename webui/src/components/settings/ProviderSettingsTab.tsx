@@ -3,6 +3,9 @@ import { ArrowDown, ArrowUp, Pencil, Plus, Trash2, Cog } from 'lucide-react';
 import { useState } from 'react';
 import { ApiService, type SproutSettings, type ProviderOption } from '../../services/api';
 import { showThemedConfirm } from '../ThemedDialog';
+import ListFilter from './ListFilter';
+
+const PROVIDER_FILTER_THRESHOLD = 4;
 
 interface ProviderSettingsTabProps {
   settings: SproutSettings;
@@ -78,6 +81,15 @@ export default function ProviderSettingsTab({
 }: ProviderSettingsTabProps) {
   const customProviders = settings.custom_providers || {};
   const providerEntries = Object.entries(customProviders);
+  const [providerFilter, setProviderFilter] = useState('');
+  const normalizedProviderFilter = providerFilter.trim().toLowerCase();
+  const filteredProviderEntries = normalizedProviderFilter
+    ? providerEntries.filter(
+        ([name, cfg]) =>
+          name.toLowerCase().includes(normalizedProviderFilter) ||
+          (cfg.endpoint || '').toLowerCase().includes(normalizedProviderFilter),
+      )
+    : providerEntries;
 
   // The inline switcher only renders when we have both a provider catalog
   // and a persistence callback — otherwise we fall back to the read-only
@@ -214,12 +226,25 @@ export default function ProviderSettingsTab({
 
       <h4 className="settings-h4-spaced">Custom Providers ({providerEntries.length})</h4>
 
+      {providerEntries.length >= PROVIDER_FILTER_THRESHOLD && (
+        <ListFilter
+          value={providerFilter}
+          onChange={setProviderFilter}
+          placeholder={`Filter ${providerEntries.length} providers…`}
+          ariaLabel="Filter custom providers"
+        />
+      )}
+
       {providerEntries.length === 0 && !editingProvider && (
         <div className="settings-empty">No custom providers configured</div>
       )}
 
+      {normalizedProviderFilter && filteredProviderEntries.length === 0 && (
+        <div className="settings-empty">No providers match “{providerFilter}”</div>
+      )}
+
       <div className="crud-list">
-        {providerEntries.map(([name, cfg]) => {
+        {filteredProviderEntries.map(([name, cfg]) => {
           return (
             <div key={name} className="crud-item">
               <span className="crud-item-name">{name}</span>

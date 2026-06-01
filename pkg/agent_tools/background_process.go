@@ -15,7 +15,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 )
 
@@ -116,7 +115,7 @@ func (m *BackgroundProcessManager) Start(ctx context.Context, command string, di
 	}
 
 	// Set process group so we can kill the entire group on stop
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	setProcessGroup(cmd)
 
 	// Generate session ID
 	prefix := extractCommandPrefixCLI(command)
@@ -274,12 +273,9 @@ func (m *BackgroundProcessManager) Stop(sessionID string) error {
 		return nil
 	}
 
-	// Send SIGINT to the process group (same as Ctrl+C)
-	err := syscall.Kill(-process.Pid, syscall.SIGINT)
-	if err != nil && !isProcessGone(err) {
-		// Process group signal failed, try direct signal
-		_ = process.Signal(syscall.SIGINT)
-	}
+	// Send SIGINT to the process group (same as Ctrl+C). On Windows
+	// this degrades to a per-process kill — see the helper's comment.
+	_ = interruptProcessGroup(process)
 
 	// Wait briefly for graceful shutdown
 	time.Sleep(100 * time.Millisecond)
@@ -291,7 +287,7 @@ func (m *BackgroundProcessManager) Stop(sessionID string) error {
 
 	if stillActive {
 		// Force kill the process group
-		_ = syscall.Kill(-process.Pid, syscall.SIGKILL)
+		_ = killProcessGroup(process)
 		if cmd != nil {
 			_ = cmd.Wait() // reap
 		}
@@ -397,7 +393,7 @@ func (m *BackgroundProcessManager) cleanup() {
 			// Kill expired process
 			p := proc.Process
 			if p != nil {
-				_ = syscall.Kill(-p.Pid, syscall.SIGKILL)
+				_ = killProcessGroup(p)
 			}
 			_ = os.Remove(proc.OutputPath)
 			toDelete = append(toDelete, id)
@@ -415,13 +411,6 @@ func (m *BackgroundProcessManager) getProcess(sessionID string) (*BackgroundProc
 	defer m.mu.RUnlock()
 	proc, exists := m.processes[sessionID]
 	return proc, exists
-}
-
-func isProcessGone(err error) bool {
-	if err == nil {
-		return false
-	}
-	return strings.Contains(err.Error(), "no such process")
 }
 
 // extractCommandPrefixCLI extracts the first word from a command for session ID generation.

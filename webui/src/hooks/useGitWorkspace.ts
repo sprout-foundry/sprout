@@ -308,6 +308,26 @@ export const useGitWorkspace = ({
     loadDiff(selectedGitFilePath);
   }, [loadDiff, selectedGitFilePath]);
 
+  // When git status refreshes, if the currently previewed file moved to a
+  // different section (e.g. user staged it), re-key activeDiffSelectionKey so
+  // the row stays highlighted in its new section instead of going dark.
+  useEffect(() => {
+    if (!gitStatus || !activeDiffSelectionKey) return;
+    const parsed = parseSelectionKey(activeDiffSelectionKey);
+    if (!parsed) return;
+    const stillInOriginalSection = gitStatus[parsed.section]?.some((file) => file.path === parsed.path);
+    if (stillInOriginalSection) return;
+    const sections: FileSection[] = ['staged', 'modified', 'untracked', 'deleted'];
+    for (const section of sections) {
+      if (gitStatus[section]?.some((file) => file.path === parsed.path)) {
+        setActiveDiffSelectionKey(selectionKey(section, parsed.path));
+        return;
+      }
+    }
+    // File no longer present in any section — clear preview key.
+    setActiveDiffSelectionKey(null);
+  }, [gitStatus, activeDiffSelectionKey]);
+
   const selectedEntries = useMemo(
     () =>
       Array.from(selectedFiles)

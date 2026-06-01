@@ -35,7 +35,6 @@ const DEFAULT_APP_STATE: AppState = {
   currentTodos: [],
   fileEdits: [],
   subagentActivities: [],
-  delegateActivities: [],
   isConnected: false,
   isProcessing: false,
   lastError: null,

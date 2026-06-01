@@ -1,6 +1,5 @@
 /**
  * Resource usage formatting utilities.
- * Shared between SubagentActivityFeed and DelegateActivityTree.
  */
 
 export function formatCost(cost: number): string {

@@ -4,7 +4,7 @@ import type { CSSProperties, RefObject, Dispatch, SetStateAction, ReactNode, Com
 import { MIN_PANE_WIDTH_PERCENT, normalizePaneSize } from '../contexts/EditorManagerContext';
 import type { OpenWorkspaceBufferFn } from '../hooks/useChatSessionSync';
 import type { GitDiffResponse, DeepReviewResult } from '../hooks/useGitWorkspace';
-import type { PerChatState, TodoItem, Message, ToolExecution, SubagentActivity, DelegateActivity, QueryProgress } from '../types/app';
+import type { PerChatState, TodoItem, Message, ToolExecution, SubagentActivity, QueryProgress } from '../types/app';
 import type { EditorPane, EditorBuffer, PaneLayout } from '../types/editor';
 import EditorTabs from './EditorTabs';
 import ResizeHandle from './ResizeHandle';
@@ -57,7 +57,6 @@ export interface PaneLayoutManagerProps {
   queryProgress: QueryProgress | null;
   currentTodos: TodoItem[];
   subagentActivities: SubagentActivity[];
-  delegateActivities: DelegateActivity[];
   isConnected: boolean;
   stats: Record<string, unknown>;
 
@@ -244,7 +243,6 @@ function PaneLayoutManager({
   queryProgress,
   currentTodos,
   subagentActivities,
-  delegateActivities,
   isConnected,
   stats,
   deepReview,
@@ -516,7 +514,6 @@ function PaneLayoutManager({
                 queryProgress,
                 currentTodos,
                 subagentActivities,
-                delegateActivities,
                 onStopProcessing,
                 chatId: activeChatId || undefined,
                 worktreePath:

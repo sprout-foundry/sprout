@@ -3,9 +3,8 @@ import { Zap, AlertTriangle, Bot } from 'lucide-react';
 import type { QueryProgress } from '../../types/app';
 import { SubagentActivityFeed } from './SubagentActivityFeed';
 import { ToolTimelineBar } from './ToolTimelineBar';
-import { DelegateActivityTree } from './DelegateActivityTree';
 import './ToolTimelineBar.css';
-import type { ToolExecution, SubagentActivity, DelegateActivity } from './types';
+import type { ToolExecution, SubagentActivity } from './types';
 
 // SP-059 Phase 1c: derive whether a subagent is *currently running* (not
 // just present in the recent feed). The activity stream carries lifecycle
@@ -33,7 +32,6 @@ function hasLiveSubagent(activities: SubagentActivity[]): boolean {
 interface ChatFooterProps {
   hasSubagentActivity: boolean;
   subagentActivities: SubagentActivity[];
-  delegateActivities?: DelegateActivity[];
   queryProgress: QueryProgress | null;
   isProcessing: boolean;
   filteredToolExecutions: ToolExecution[];
@@ -45,7 +43,6 @@ interface ChatFooterProps {
 export function ChatFooter({
   hasSubagentActivity,
   subagentActivities,
-  delegateActivities = [],
   queryProgress,
   isProcessing,
   filteredToolExecutions,
@@ -78,16 +75,6 @@ export function ChatFooter({
       );
     }
     elements.push(<SubagentActivityFeed key="subagent" activities={subagentActivities} />);
-  }
-
-  if (delegateActivities.length > 0) {
-    elements.push(
-      <div key="delegate-activities" className="delegate-activities-container">
-        {delegateActivities.map((da) => (
-          <DelegateActivityTree key={da.delegateId} activity={da} />
-        ))}
-      </div>,
-    );
   }
 
   if (queryProgress) {

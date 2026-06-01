@@ -1,5 +1,5 @@
-import { Loader2, ChevronRight, Clock, GitCommitHorizontal } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Loader2, ChevronRight, Clock, GitCommitHorizontal, Search, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { GitCommitSummary, GitCommitDetail } from '../types/git-types';
 import { formatRelativeDate, formatAbsoluteDate, firstLine } from '../utils/format';
 import { debugLog } from '../utils/log';
@@ -50,7 +50,31 @@ function GitHistoryPanel({
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [selectedCommit, setSelectedCommit] = useState<GitCommitSummary | null>(null);
+  const [commitFilter, setCommitFilter] = useState('');
   const loadMoreAbortRef = useRef<AbortController | null>(null);
+
+  // Filter commits by SHA, subject, or author (case-insensitive substring).
+  const filteredCommits = useMemo(() => {
+    const q = commitFilter.trim().toLowerCase();
+    if (!q) return commits;
+    return commits.filter(
+      (c) =>
+        c.hash.toLowerCase().includes(q) ||
+        c.short_hash.toLowerCase().includes(q) ||
+        c.author.toLowerCase().includes(q) ||
+        c.message.toLowerCase().includes(q),
+    );
+  }, [commits, commitFilter]);
+
+  // Sibling lookup for prev/next nav from detail view. Operates on the full
+  // loaded list (not the filter), since filtering shouldn't change navigation.
+  const selectedIndex = useMemo(
+    () => (selectedCommit ? commits.findIndex((c) => c.hash === selectedCommit.hash) : -1),
+    [commits, selectedCommit],
+  );
+  const prevCommit = selectedIndex > 0 ? commits[selectedIndex - 1] : null;
+  const nextCommit =
+    selectedIndex >= 0 && selectedIndex < commits.length - 1 ? commits[selectedIndex + 1] : null;
 
   const fetchCommits = useCallback(
     async (offset: number, append: boolean, signal?: AbortSignal) => {
@@ -172,6 +196,9 @@ function GitHistoryPanel({
           onLoadCommitFileDiff={onLoadCommitFileDiff}
           commit={selectedCommit}
           onBack={() => setSelectedCommit(null)}
+          prevCommit={prevCommit}
+          nextCommit={nextCommit}
+          onSelectCommit={(c) => setSelectedCommit(c)}
           openWorkspaceBuffer={openWorkspaceBuffer}
         />
       </div>
@@ -186,8 +213,36 @@ function GitHistoryPanel({
           <span>{error}</span>
         </div>
       )}
+      <div className="git-history-filter">
+        <Search size={12} className="git-history-filter-icon" aria-hidden="true" />
+        <input
+          type="text"
+          className="git-history-filter-input"
+          value={commitFilter}
+          onChange={(e) => setCommitFilter(e.target.value)}
+          placeholder="Filter commits (subject, SHA, author)…"
+          aria-label="Filter commits"
+        />
+        {commitFilter && (
+          <button
+            type="button"
+            className="git-history-filter-clear"
+            onClick={() => setCommitFilter('')}
+            title="Clear filter"
+            aria-label="Clear filter"
+          >
+            <X size={12} />
+          </button>
+        )}
+      </div>
+      {commitFilter.trim() && filteredCommits.length === 0 ? (
+        <div className="git-history-empty">
+          <Search size={16} />
+          <span>No commits match “{commitFilter}”</span>
+        </div>
+      ) : null}
       <div className="git-history-commit-list thin-scrollbar">
-        {commits.map((commit) => (
+        {filteredCommits.map((commit) => (
           <button
             key={commit.hash}
             type="button"

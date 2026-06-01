@@ -34,6 +34,68 @@
   flex-wrap: wrap;
 }
 
+.git-history-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  height: 28px;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  transition: border-color 0.12s var(--ease-out), box-shadow 0.12s var(--ease-out);
+}
+
+.git-history-filter:focus-within {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-primary) 30%, transparent);
+}
+
+.git-history-filter-icon {
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.git-history-filter-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+}
+
+.git-history-filter-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.git-history-filter-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  border-radius: 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.12s ease, background 0.12s ease;
+}
+
+.git-history-filter-clear:hover {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
+
+.git-history-filter-clear:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
 .git-history-commit-list {
   display: flex;
   flex-direction: column;

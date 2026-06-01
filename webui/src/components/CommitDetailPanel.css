@@ -42,6 +42,49 @@
   padding: 6px 0;
 }
 
+.commit-detail-nav-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.commit-detail-prev-next {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.commit-detail-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 24px;
+  border: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.commit-detail-nav-btn:hover:not(:disabled) {
+  background: var(--bg-elevated);
+  border-color: var(--border-default);
+  color: var(--text-primary);
+}
+
+.commit-detail-nav-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
+.commit-detail-nav-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .commit-detail-back-btn {
   display: inline-flex;
   align-items: center;

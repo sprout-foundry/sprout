@@ -1933,6 +1933,144 @@
   font-size: 11px;
 }
 
+/* ── Filter input ─────────────────────────────────────────────── */
+
+.git-sidebar-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 12px 6px;
+  padding: 0 8px;
+  height: 28px;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  transition: border-color 0.12s var(--ease-out), box-shadow 0.12s var(--ease-out);
+}
+
+.git-sidebar-filter:focus-within {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-primary) 30%, transparent);
+}
+
+.git-sidebar-filter-icon {
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.git-sidebar-filter-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+}
+
+.git-sidebar-filter-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.git-sidebar-filter-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  border-radius: 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.12s ease, background 0.12s ease;
+}
+
+.git-sidebar-filter-clear:hover {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
+
+.git-sidebar-filter-clear:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
+/* ── Empty / clean / no-match states ──────────────────────────── */
+
+.git-sidebar-clean-state {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 12px;
+  padding: 14px 12px;
+  border: 1px dashed var(--border-subtle);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--bg-elevated) 60%, transparent);
+  color: var(--text-secondary);
+}
+
+.git-sidebar-clean-state > svg {
+  color: var(--accent-success);
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.git-sidebar-clean-state-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.git-sidebar-clean-state-hint {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
+
+.git-sidebar-clean-state-action {
+  margin-top: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.git-sidebar-clean-state-action:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--border-strong);
+}
+
+.git-sidebar-clean-state-action:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
+/* ── Pull/Push count badge ────────────────────────────────────── */
+
+.git-header-action-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 16px;
+  padding: 0 5px;
+  margin-left: 2px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent-primary) 22%, transparent);
+  color: var(--accent-primary);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
 .git-sidebar-load-more {
   width: 100%;
   padding: 10px 12px;

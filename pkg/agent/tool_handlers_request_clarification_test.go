@@ -59,7 +59,7 @@ func TestHandleRequestClarification_NotDelegateAgent(t *testing.T) {
 	})
 	assert.Empty(t, result)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "only available for delegate agents")
+	assert.Contains(t, err.Error(), "only available for subagents")
 }
 
 func TestHandleRequestClarification_Success(t *testing.T) {

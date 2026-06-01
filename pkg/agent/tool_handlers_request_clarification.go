@@ -6,7 +6,7 @@ import (
 )
 
 // handleRequestClarification is the tool handler for the request_clarification tool.
-// It is called by delegate agents when they need clarification from their parent.
+// It is called by subagents when they need clarification from their parent.
 func handleRequestClarification(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	question, _ := args["question"].(string)
 	if question == "" {
@@ -20,7 +20,7 @@ func handleRequestClarification(ctx context.Context, a *Agent, args map[string]i
 	}
 
 	if a.delegateID == "" {
-		return "", fmt.Errorf("request_clarification is only available for delegate agents")
+		return "", fmt.Errorf("request_clarification is only available for subagents")
 	}
 
 	response, err := a.clarificationManager.RequestClarification(ctx, a.delegateID, question)

@@ -8,7 +8,6 @@ import type {
   ToolStartData,
   ToolEndData,
   SubagentActivityData,
-  DelegateActivityData,
   AgentMessageData,
   TodoUpdateData,
   FileChangedData,
@@ -20,7 +19,7 @@ import type {
   AskUserRequestData,
   DriftDetectedData,
 } from '@sprout/events';
-import type { Message, ToolExecution, LogEntry, SubagentActivity, DelegateActivity, DelegateToolCallInfo } from '@sprout/ui';
+import type { Message, ToolExecution, LogEntry, SubagentActivity } from '@sprout/ui';
 import { useCallback } from 'react';
 import type { AppStoreSetState } from '../contexts/AppStore';
 import { getWebUIClientId } from '../services/clientSession';
@@ -192,7 +191,6 @@ const handleQueryStarted = (ctx: EventHandlerContext): void => {
       toolExecutions: [],
       fileEdits: [],
       subagentActivities: [],
-  delegateActivities: [],
       queryProgress: null,
       currentTodos: [],
       logs: appendCappedLog(prev.logs, logEntry),
@@ -499,82 +497,6 @@ const handleSubagentActivity = (ctx: EventHandlerContext): void => {
     }));
   }
 };
-
-// Handle delegate_activity event (SP-006-B)
-function handleDelegateActivity(ctx: EventHandlerContext): void {
-  const { event, setState } = ctx;
-  const data = (event.data ?? {}) as DelegateActivityData;
-
-  const toolsCalled: DelegateToolCallInfo[] = (data.tools_called ?? []).map((tc) => ({
-    tool_name: tc.tool_name,
-    input: tc.input,
-    output: tc.output,
-    timestamp: tc.timestamp,
-    duration_ms: tc.duration_ms,
-    success: tc.success,
-  }));
-
-  const status: DelegateActivity['status'] =
-    data.action === 'completed' ? 'completed'
-    : data.action === 'error' ? 'error'
-    : 'running';
-
-  setState((prev) => {
-    const existing = prev.delegateActivities ?? [];
-    const existingIdx = existing.findIndex(
-      (d) => d.delegateId === data.delegate_id,
-    );
-
-    let updated: DelegateActivity[];
-    if (existingIdx >= 0) {
-      const current = existing[existingIdx];
-      updated = [...existing];
-      updated[existingIdx] = {
-        ...current,
-        action: data.action,
-        summary: data.summary ?? current.summary,
-        depth: data.depth ?? current.depth,
-        // Backend sends cumulative totals only in "completed" events;
-        // intermediate events omit these fields. Use ?? to preserve previous value.
-        tokensUsed: data.tokens_used ?? current.tokensUsed,
-        cost: data.cost ?? current.cost,
-        toolsCalled: toolsCalled.length > 0
-          ? (() => {
-              const merged = [...current.toolsCalled];
-              for (const tc of toolsCalled) {
-                const dupIdx = merged.findIndex(
-                  (e) => e.tool_name === tc.tool_name && e.timestamp === tc.timestamp,
-                );
-                if (dupIdx >= 0) {
-                  merged[dupIdx] = { ...merged[dupIdx], ...tc };
-                } else {
-                  merged.push(tc);
-                }
-              }
-              return merged;
-            })()
-          : current.toolsCalled,
-        status: status === 'running' ? current.status : status,
-      };
-    } else {
-      updated = [
-        ...existing,
-        {
-          delegateId: data.delegate_id,
-          action: data.action,
-          summary: data.summary,
-          depth: data.depth ?? 0,
-          tokensUsed: data.tokens_used ?? 0,
-          cost: data.cost ?? 0,
-          toolsCalled,
-          status,
-        },
-      ];
-    }
-
-    return { delegateActivities: updated.slice(-500) };
-  });
-}
 
 // Handle agent_message event
 const handleAgentMessage = (ctx: EventHandlerContext): void => {
@@ -928,7 +850,6 @@ export function useWebSocketEventHandler({
         'tool_end',
         'todo_update',
         'subagent_activity',
-        'delegate_activity',
         'agent_message',
         'error',
       ]);
@@ -974,8 +895,6 @@ export function useWebSocketEventHandler({
           return handleToolEnd(ctx);
         case 'subagent_activity':
           return handleSubagentActivity(ctx);
-        case 'delegate_activity':
-          return handleDelegateActivity(ctx);
         case 'agent_message':
           return handleAgentMessage(ctx);
         case 'todo_update':

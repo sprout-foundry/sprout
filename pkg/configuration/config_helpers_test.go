@@ -490,14 +490,19 @@ func TestMergeMissingDefaultSkills(t *testing.T) {
 		assert.True(t, hasCustom, "custom skill should remain")
 	})
 
-	t.Run("does not overwrite existing entries", func(t *testing.T) {
+	t.Run("updates built-in entries but preserves enabled flag", func(t *testing.T) {
 		cfg := &Config{
 			Skills: map[string]Skill{
-				"project-planning": {ID: "project-planning", Name: "Custom Go", Enabled: true},
+				"project-planning": {ID: "project-planning", Name: "Custom Go", Enabled: false, Path: "pkg/agent/skills/project-planning"},
 			},
 		}
 		mergeMissingDefaultSkills(cfg)
-		assert.Equal(t, "Custom Go", cfg.Skills["project-planning"].Name)
+		// Name/description should be updated from current defaults
+		defaults := defaultSkills()
+		assert.Equal(t, defaults["project-planning"].Name, cfg.Skills["project-planning"].Name)
+		// But the user's Enabled preference should be preserved
+		assert.False(t, cfg.Skills["project-planning"].Enabled, "user-set Enabled=false should be preserved")
+		assert.Equal(t, "builtin", cfg.Skills["project-planning"].Metadata["source"])
 	})
 
 	t.Run("initializes Skills when nil", func(t *testing.T) {
@@ -509,6 +514,32 @@ func TestMergeMissingDefaultSkills(t *testing.T) {
 
 	t.Run("handles nil config gracefully", func(t *testing.T) {
 		mergeMissingDefaultSkills(nil)
+	})
+
+	t.Run("prunes stale built-in skills no longer in defaults", func(t *testing.T) {
+		cfg := &Config{
+			Skills: map[string]Skill{
+				"go-conventions":   {ID: "go-conventions", Name: "Go Conventions", Path: "pkg/agent/skills/go-conventions", Enabled: true},
+				"safe-refactor":    {ID: "safe-refactor", Name: "Safe Refactor", Path: "pkg/agent/skills/safe-refactor", Enabled: true},
+				"custom-skill":     {ID: "custom-skill", Name: "My Skill", Path: "~/.config/sprout/skills/custom-skill", Enabled: true},
+				"project-planning": {ID: "project-planning", Name: "Project Planning", Path: "pkg/agent/skills/project-planning", Enabled: true},
+			},
+		}
+		mergeMissingDefaultSkills(cfg)
+
+		// Stale built-in skills should be pruned
+		_, hasStale1 := cfg.Skills["go-conventions"]
+		assert.False(t, hasStale1, "stale built-in go-conventions should be pruned")
+		_, hasStale2 := cfg.Skills["safe-refactor"]
+		assert.False(t, hasStale2, "stale built-in safe-refactor should be pruned")
+
+		// Current built-in should remain
+		_, hasPP := cfg.Skills["project-planning"]
+		assert.True(t, hasPP, "current built-in project-planning should remain")
+
+		// User/project skills should never be pruned
+		_, hasCustom := cfg.Skills["custom-skill"]
+		assert.True(t, hasCustom, "user skill with non-builtin path should never be pruned")
 	})
 }
 

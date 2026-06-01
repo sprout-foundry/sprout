@@ -30,6 +30,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { name: 'self-review-gate', description: 'Toggle self-review gate on/off' },
   { name: 'sessions', description: 'List or manage sessions' },
   { name: 'shell', description: 'Execute a shell command' },
+  { name: 'setup', description: 'Show current configuration summary' },
   { name: 'status', description: 'Show working tree status' },
   { name: 'stats', description: 'Show token and cost statistics' },
   { name: 'subagent model', description: 'Configure subagent model' },

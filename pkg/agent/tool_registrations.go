@@ -469,11 +469,11 @@ func newDefaultToolRegistry() *ToolRegistry {
 	// Register manage_settings tool
 	registry.RegisterTool(ToolConfig{
 		Name:        "manage_settings",
-		Description: "Manage application settings and provider credentials. Supports getting/setting configuration values, listing available providers, and testing credential validity.",
+		Description: "Manage application settings and provider credentials. Supports getting/setting configuration values, listing available providers, testing credential validity, describing settings (with valid values), and previewing changes before applying.",
 		Parameters: []ParameterConfig{
-			{"operation", "string", true, []string{}, "Operation to perform: 'get' (retrieve a setting), 'set' (update a setting), 'list_providers' (list available providers), or 'test_credential' (test if a provider has valid credentials)"},
-			{"key", "string", false, []string{}, "Setting key (required for get/set operations). Examples: 'provider', 'model', 'reasoning_effort', 'disable_thinking', 'resource_directory', 'history_scope', 'ea_mode', 'subagent_provider', 'subagent_model'"},
-			{"value", "string", false, []string{}, "Setting value (required for set operation)"},
+			{"operation", "string", true, []string{}, "Operation to perform: 'get' (retrieve a setting), 'set' (update a setting), 'list_providers' (list available providers), 'test_credential' (test if a provider has valid credentials), 'describe' (describe a setting with valid values and current value), 'describe_all' (describe all settings), or 'preview' (preview a setting change without applying it)"},
+			{"key", "string", false, []string{}, "Setting key (required for get/set/describe/preview operations). Examples: 'provider', 'model', 'reasoning_effort', 'disable_thinking', 'resource_directory', 'history_scope', 'ea_mode', 'subagent_provider', 'subagent_model', 'commit_provider', 'commit_model', 'review_provider', 'review_model'"},
+			{"value", "string", false, []string{}, "Setting value (required for set/preview operations)"},
 			{"provider", "string", false, []string{}, "Provider name (required for test_credential operation, optional for list_providers filter)"},
 		},
 		Handler: handleManageSettings,

@@ -2420,6 +2420,14 @@ func defaultSkills() map[string]Skill {
 			Enabled:     true,
 			Metadata:    map[string]string{"version": "1.0"},
 		},
+		"self-help": {
+			ID:          "self-help",
+			Name:        "Self-Help",
+			Description: "Internal help and settings reference. Activate when the user asks \"how do I...\", wants to configure settings, or needs help understanding Sprout's capabilities.",
+			Path:        "pkg/agent/skills/self-help",
+			Enabled:     true,
+			Metadata:    map[string]string{"version": "1.0"},
+		},
 	}
 }
 
@@ -2432,12 +2440,38 @@ func mergeMissingDefaultSkills(config *Config) {
 	}
 
 	for id, skill := range defaultSkills() {
-		if _, exists := config.Skills[id]; !exists {
+		if existing, exists := config.Skills[id]; exists {
+			// Update built-in skills in-place so description/path/metadata
+			// stay current across versions.  Preserve user-set Enabled flag.
+			wasEnabled := existing.Enabled
+			skill.Metadata["source"] = "builtin"
+			skill.Enabled = wasEnabled
+			config.Skills[id] = skill
+		} else {
 			if skill.Metadata == nil {
 				skill.Metadata = make(map[string]string)
 			}
 			skill.Metadata["source"] = "builtin"
 			config.Skills[id] = skill
+		}
+	}
+
+	// Prune stale built-in skills that were registered by a prior version
+	// of defaultSkills() but are no longer present.  Only remove skills
+	// whose path starts with "pkg/agent/skills/" (the built-in directory)
+	// — user/project skills are never pruned here.
+	defaults := defaultSkills()
+	for id, skill := range config.Skills {
+		path := skill.Path
+		if path == "" {
+			continue
+		}
+		// Only prune skills that look like they came from the built-in set.
+		if !strings.HasPrefix(path, "pkg/agent/skills/") {
+			continue
+		}
+		if _, stillDefault := defaults[id]; !stillDefault {
+			delete(config.Skills, id)
 		}
 	}
 }

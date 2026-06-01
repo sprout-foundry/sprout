@@ -442,6 +442,17 @@ func (a *Agent) GetTerminalManager() tools.TerminalAccess {
 	return a.terminalManager
 }
 
+// SetBackgroundProcessManager sets the background process manager for CLI mode.
+// When set, shell commands can run in background without PTY (os/exec).
+func (a *Agent) SetBackgroundProcessManager(bpm *tools.BackgroundProcessManager) {
+	a.backgroundProcessManager = bpm
+}
+
+// GetBackgroundProcessManager returns the background process manager.
+func (a *Agent) GetBackgroundProcessManager() *tools.BackgroundProcessManager {
+	return a.backgroundProcessManager
+}
+
 // GetEmbeddingManager returns the embedding index manager (may be nil if
 // embedding is not configured or enabled in the agent's config).
 func (a *Agent) GetEmbeddingManager() *embedding.EmbeddingManager {

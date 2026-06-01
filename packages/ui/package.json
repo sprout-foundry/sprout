@@ -102,7 +102,7 @@
   "module": "dist/index.esm.js",
   "name": "@sprout/ui",
   "peerDependencies": {
-    "@sprout/events": "^0.1.0",
+    "@sprout/events": "file:../events",
     "react": ">=18.0.0",
     "react-dom": ">=18.0.0"
   },

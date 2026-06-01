@@ -114,6 +114,13 @@ type SteerInputReader struct {
 	// for example. SP-057 follow-up: rich paste in steer.
 	pasteActive bool
 	pasteBuf    []byte
+
+	// groundTruth is a snapshot of the terminal's cooked-mode termios
+	// captured at REPL startup. When Stop() restores the terminal, it
+	// uses this as the restoration target instead of the per-enter
+	// oldState, preventing termios-state descent across Pause/Resume
+	// cycles where intermediate code may have altered termios.
+	groundTruth *GroundTruthTermios
 }
 
 // SteerHistoryCap bounds the in-memory steer history to a sensible
@@ -181,7 +188,11 @@ func (r *SteerInputReader) Start() {
 	r.active = true
 	r.stopCh = make(chan struct{})
 	r.doneCh = make(chan struct{})
-	r.buffer = r.buffer[:0]
+	// NOTE: buffer is NOT cleared here. Start() is called for both
+	// fresh turns (StartTurn) and resume after pause (ResumeSteer).
+	// Buffer clearing is the coordinator's responsibility, done in
+	// StartTurn before calling Start(). This preserves in-progress
+	// text across PauseSteer/ResumeSteer cycles.
 	stopCh := r.stopCh
 	doneCh := r.doneCh
 	r.mu.Unlock()
@@ -244,7 +255,18 @@ func (r *SteerInputReader) Stop() {
 	// terminal returns to its prior paste mode (some apps run
 	// without bracketed paste enabled).
 	fmt.Fprint(os.Stderr, bracketedPasteDisable)
-	if oldState != nil {
+
+	// Restore terminal to ground-truth state if available (preferred
+	// over oldState). Ground truth is the REPL's original cooked-mode
+	// snapshot, immune to termios-state descent from PauseSteer /
+	// ResumeSteer cycles where intermediate code may have altered the
+	// termios between our enter and exit.
+	r.mu.Lock()
+	gt := r.groundTruth
+	r.mu.Unlock()
+	if gt != nil {
+		_ = gt.Restore()
+	} else if oldState != nil {
 		_ = exitSteerMode(r.fd, oldState)
 	}
 	// Clear the pinned line via the footer.
@@ -262,6 +284,38 @@ func (r *SteerInputReader) IsActive() bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.active
+}
+
+// SetGroundTruth installs the REPL's pristine cooked-mode termios
+// snapshot. Stop() uses this instead of per-enter oldState for
+// restoration, preventing termios descent across PauseSteer /
+// ResumeSteer cycles.
+func (r *SteerInputReader) SetGroundTruth(gt *GroundTruthTermios) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.groundTruth = gt
+}
+
+// DrainUnsentBuffer returns any text the user typed into the steer
+// panel but did not submit (no Enter pressed). The caller (typically
+// the REPL loop via SteerCoordinator) can carry this into the next
+// ReadLine call so the text is not silently discarded when a turn ends.
+// The buffer is left intact; call ResetBuffer afterwards to clear it.
+func (r *SteerInputReader) DrainUnsentBuffer() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return string(r.buffer)
+}
+
+// ResetBuffer clears the in-progress steer buffer. Called by the
+// coordinator after draining the unsent text into the InputReader,
+// so the next Start() begins with a clean slate.
+func (r *SteerInputReader) ResetBuffer() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.buffer = r.buffer[:0]
+	r.historyIndex = -1
+	r.pendingBuffer = nil
 }
 
 // readLoop is the input-handling goroutine. Steer mode sets VMIN=0

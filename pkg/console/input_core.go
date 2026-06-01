@@ -107,6 +107,17 @@ type InputReader struct {
 	searchResultIndex  int
 	preSearchLine      string
 	preSearchCursorPos int
+
+	// SP-055 follow-up: initial content pre-filled into the buffer
+	// by the REPL loop when the steer reader had unsent text at
+	// EndTurn. Cleared after first ReadLine consumption.
+	initialContent string
+
+	// groundTruth is a snapshot of the terminal's cooked-mode termios
+	// captured at REPL startup. Used for pre-flight sanity checks and
+	// emergency recovery if a prior mode transition left the terminal
+	// stuck in raw/cbreak mode. Set once by SetGroundTruth.
+	groundTruth *GroundTruthTermios
 }
 
 // CompletionProvider returns candidate completions for the current input
@@ -161,6 +172,15 @@ func (ir *InputReader) ReadLine() (string, error) {
 		return ir.fallbackReadLine()
 	}
 
+	// Pre-flight: if a prior mode transition (steer / editor escape /
+	// Ctrl+Z) left the terminal in raw mode, restore it to the ground-
+	// truth cooked state before we try to enter raw mode ourselves.
+	// Without this, term.MakeRaw saves an already-raw state and the
+	// defer Restore returns to broken mode on exit.
+	if ir.groundTruth != nil {
+		ir.groundTruth.EnsureSane()
+	}
+
 	// Save terminal state and set raw mode
 	oldState, err := term.MakeRaw(ir.termFd)
 	if err != nil {
@@ -205,6 +225,17 @@ func (ir *InputReader) ReadLine() (string, error) {
 	// after a redraw), the prompt would render *on top of* that content
 	// and produce the prompt-overlap-on-startup bug we caught in real use.
 	fmt.Printf("\r\033[K%s", ir.prompt)
+
+	// SP-055 follow-up: if the REPL carried over unsent steer text,
+	// pre-fill it into the line buffer and render it so the user can
+	// pick up where they left off. Consumed once then cleared.
+	if ir.initialContent != "" {
+		ir.line = ir.initialContent
+		ir.cursorPos = len(ir.initialContent)
+		ir.initialContent = ""
+		ir.hasEditedLine = true
+		ir.Refresh()
+	}
 
 	parser := NewEscapeParser()
 	buf := make([]byte, 32)
@@ -588,6 +619,21 @@ func (ir *InputReader) SetCompleter(c CompletionProvider) {
 // active model name after a `/model` switch. SP-048-5d follow-up.
 func (ir *InputReader) SetPrompt(p string) {
 	ir.prompt = p
+}
+
+// SetInitialContent pre-fills the input buffer with text that should
+// appear as if the user typed it. Used by the REPL loop to carry over
+// unsent steer-panel text into the main prompt after a turn ends.
+// The content is consumed on the next ReadLine call and then cleared.
+func (ir *InputReader) SetInitialContent(content string) {
+	ir.initialContent = content
+}
+
+// SetGroundTruth installs the terminal's pristine cooked-mode termios
+// snapshot for pre-flight sanity checks. Call once at REPL startup,
+// before the first ReadLine.
+func (ir *InputReader) SetGroundTruth(gt *GroundTruthTermios) {
+	ir.groundTruth = gt
 }
 
 // handleTabCompletion either starts a new completion cycle or advances the

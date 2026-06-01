@@ -51,7 +51,6 @@ require (
 	github.com/dsnet/compress v0.0.2-0.20230904184137-39efe44ab707 // indirect
 	github.com/fatih/semgroup v1.2.0 // indirect
 	github.com/gitleaks/go-gitdiff v0.9.1 // indirect
-	github.com/google/renameio v1.0.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/h2non/filetype v1.1.3 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
@@ -118,3 +117,11 @@ require (
 	golang.org/x/crypto v0.51.0 // indirect
 	golang.org/x/sys v0.44.0
 )
+
+// Vendored fork of coder/hnsw v0.6.1 with a Windows-compat patch for
+// encode.go (upstream calls github.com/google/renameio.TempFile, which
+// is gated by `// +build !windows` and thus undefined on Windows). The
+// only diff from upstream is the renameio.TempFile call site → a small
+// in-package atomic-write helper. Source lives in ./internal/hnsw/.
+// Drop this replace when upstream merges a Windows fix.
+replace github.com/coder/hnsw => ./internal/hnsw

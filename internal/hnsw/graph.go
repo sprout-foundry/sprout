@@ -173,11 +173,15 @@ func (n *layerNode[K]) replenish(m int) {
 	}
 }
 
-// isolates remove the node from the graph by removing all connections
-// to neighbors.
+// isolate removes the node from the graph by removing all connections
+// to neighbors. Backported from upstream: the delete and replenish phases
+// must be separated to avoid mutating the neighbors map during iteration.
 func (n *layerNode[K]) isolate(m int) {
 	for _, neighbor := range n.neighbors {
 		delete(neighbor.neighbors, n.Key)
+	}
+
+	for _, neighbor := range n.neighbors {
 		neighbor.replenish(m)
 	}
 }
@@ -401,8 +405,13 @@ func (g *Graph[K]) Add(nodes ...Node[K]) {
 		}
 
 		// Invariant check: the node should have been added to the graph.
+		// Backported from upstream: replaced panic with graceful empty-layer
+		// cleanup. The panic could fire after Delete+Add sequences when empty
+		// layers weren't properly removed.
 		if g.Len() != preLen+1 {
-			panic("node not added")
+			if len(g.layers) > 0 && g.layers[len(g.layers)-1].entry() == nil {
+				g.layers = g.layers[:len(g.layers)-1]
+			}
 		}
 	}
 }
@@ -457,20 +466,38 @@ func (h *Graph[K]) Len() int {
 // Delete removes a node from the graph by key.
 // It tries to preserve the clustering properties of the graph by
 // replenishing connectivity in the affected neighborhoods.
+// Backported from upstream: empty layers are now removed after deletion
+// to prevent degenerate graph state that causes panics on subsequent Add().
 func (h *Graph[K]) Delete(key K) bool {
 	if len(h.layers) == 0 {
 		return false
 	}
 
+	deleteLayer := map[int]struct{}{}
 	var deleted bool
-	for _, layer := range h.layers {
+	for i, layer := range h.layers {
 		node, ok := layer.nodes[key]
 		if !ok {
 			continue
 		}
 		delete(layer.nodes, key)
+		if len(layer.nodes) == 0 {
+			deleteLayer[i] = struct{}{}
+		}
 		node.isolate(h.M)
 		deleted = true
+	}
+
+	if len(deleteLayer) > 0 {
+		newLayers := make([]*layer[K], 0, len(h.layers)-len(deleteLayer))
+		for i, layer := range h.layers {
+			if _, ok := deleteLayer[i]; ok {
+				continue
+			}
+			newLayers = append(newLayers, layer)
+		}
+
+		h.layers = newLayers
 	}
 
 	return deleted

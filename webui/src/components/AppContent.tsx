@@ -18,7 +18,12 @@ import { ApiService } from '../services/api';
 import type { ChatSession } from '../services/chatSessions';
 import type { AppState, PerChatState } from '../types/app';
 import { useAppStoreSetState } from '../contexts/AppStore';
+import { fuzzyFilter } from '../utils/fuzzyMatch';
+import { useLog } from '../utils/log';
+import { extractSymbols } from '../utils/symbolUtils';
 import CommandPalette, { type PaletteMode } from './CommandPalette';
+import { VISIBLE_COMMANDS } from './CommandPalette/constants';
+import useFileIndex from './CommandPalette/useFileIndex';
 import type { ContextPanelHandle } from './contextPanel/types';
 import ContextSidebar from './ContextSidebar';
 import EditorWorkspace from './EditorWorkspace';
@@ -260,6 +265,90 @@ const AppContent: React.FC<AppContentProps> = ({
     hotkeysConfigPath,
     openFile,
   });
+
+  // ── Command palette plumbing ─────────────────────────────────────────
+  // Pre-index workspace files only while the palette is open. The fuzzy
+  // filter then runs against this in-memory list for instant results.
+  const paletteLog = useLog();
+  const { allFiles: paletteAllFiles } = useFileIndex({
+    apiService,
+    isOpen: isCommandPaletteOpen,
+    log: paletteLog,
+  });
+  const handlePaletteSearchFiles = useCallback(
+    async (query: string) => {
+      if (!query) return [];
+      const matches = fuzzyFilter(query, paletteAllFiles, (f) => f.path, 50);
+      return matches.map((m) => ({ name: m.item.name, path: m.item.path, type: m.item.type }));
+    },
+    [paletteAllFiles],
+  );
+  const handlePaletteSearchSymbols = useCallback(
+    (query: string) => {
+      const content = currentBuffer?.content;
+      if (!content) return [];
+      const ext = currentBuffer?.file?.ext || '';
+      const langId = ext.startsWith('.') ? ext.slice(1) : ext;
+      const symbols = extractSymbols(content, langId);
+      if (!query.trim()) {
+        return symbols.slice(0, 100).map((s) => ({ name: s.name, kind: s.kind, line: s.line }));
+      }
+      const matches = fuzzyFilter(query, symbols, (s) => s.name, 100);
+      return matches.map((m) => ({ name: m.item.name, kind: m.item.kind, line: m.item.line }));
+    },
+    [currentBuffer],
+  );
+  // Returning `false` from onExecuteCommand keeps the palette open — used by
+  // commands that change the palette's own mode (quick_open, goto_symbol).
+  const handlePaletteExecuteCommand = useCallback(
+    (commandId: string): void | boolean => {
+      if (commandId === 'quick_open') {
+        setCommandPaletteMode('files');
+        return false;
+      }
+      if (commandId === 'editor_goto_symbol') {
+        setCommandPaletteMode('symbols');
+        return false;
+      }
+      if (commandId === 'toggle_sidebar' || commandId === 'toggle_explorer') {
+        onSidebarToggle();
+        return;
+      }
+      if (commandId === 'toggle_terminal' && supportsLocalTerminal) {
+        onTerminalExpandedChange(!isTerminalExpanded);
+        return;
+      }
+      if (commandId === 'open_hotkeys_config') {
+        handleOpenHotkeysConfig();
+        return;
+      }
+      if (commandId === 'editor_cycle_whitespace_rendering') {
+        window.dispatchEvent(new CustomEvent('editor-cycle-whitespace-rendering'));
+        return;
+      }
+      if (commandId === 'format_document') {
+        document.dispatchEvent(new CustomEvent('editor-format-document'));
+        return;
+      }
+      if (commandId === 'editor_find_all_references') {
+        document.dispatchEvent(new CustomEvent('editor-find-all-references'));
+        return;
+      }
+      if (commandId === 'editor_workspace_symbol') {
+        document.dispatchEvent(new CustomEvent('editor-go-to-workspace-symbol'));
+        return;
+      }
+      // Everything else routes through the existing hotkey infrastructure
+      // (useAppContentHotkeys already listens for sprout:hotkey events).
+      window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId } }));
+    },
+    [
+      onSidebarToggle,
+      onTerminalExpandedChange,
+      isTerminalExpanded,
+      handleOpenHotkeysConfig,
+    ],
+  );
 
   const {
     gitStatus,
@@ -590,6 +679,11 @@ const AppContent: React.FC<AppContentProps> = ({
         }}
         activeBufferContent={currentBuffer?.content}
         activeBufferFileExtension={currentBuffer?.file?.ext}
+        commands={VISIBLE_COMMANDS}
+        workspaceRoot={workspaceRoot}
+        onSearchFiles={handlePaletteSearchFiles}
+        onSearchSymbols={handlePaletteSearchSymbols}
+        onExecuteCommand={handlePaletteExecuteCommand}
       />
     </div>
   );

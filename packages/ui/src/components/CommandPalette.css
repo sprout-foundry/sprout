@@ -1,4 +1,11 @@
-/* Command Palette Overlay */
+/* ── Command Palette ──────────────────────────────────────────────
+ * Tokens are resolved by the consumer's stylesheet (webui, foundry).
+ * Brand-correct fallbacks (#61afef for primary) are used where
+ * appropriate per the shared-package guidelines.
+ * ────────────────────────────────────────────────────────────── */
+
+/* Overlay (dim + center the palette) — pure black scrim is intentional
+ * and theme-neutral per the design system. */
 .command-palette-overlay {
   position: fixed;
   inset: 0;
@@ -10,326 +17,59 @@
   padding-top: 10vh;
 }
 
-/* Command Palette Container */
-.command-palette-container {
+/* Inner palette box */
+.command-palette {
   width: min(760px, calc(100vw - 32px));
   max-height: min(70vh, 560px);
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-default);
+  background: var(--bg-secondary, #1e2127);
+  border: 1px solid var(--border-default, #3e4451);
   border-radius: 12px;
-  box-shadow: var(--shadow-elevated);
+  box-shadow: var(--shadow-elevated, 0 12px 32px rgba(0, 0, 0, 0.4));
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
-/* Input wrapper (prefix + input) */
-.command-palette-input-wrapper {
+/* Input row (search icon + input) */
+.command-palette-input-row {
   display: flex;
   align-items: center;
-  border-bottom: 1px solid var(--border-default);
-  padding: 0 12px;
-  background: var(--bg-tertiary);
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-default, #3e4451);
+  background: var(--bg-tertiary, #21252b);
 }
 
-.command-palette-prefix {
-  color: var(--text-tertiary);
-  font-size: 16px;
-  font-weight: bold;
-  margin-right: 8px;
-  user-select: none;
-  min-width: 12px;
+.command-palette-input-icon {
+  color: var(--text-tertiary, #6a7280);
+  flex-shrink: 0;
 }
 
-/* Search Input */
 .command-palette-input {
   flex: 1;
-  padding: 12px 4px;
+  min-width: 0;
+  padding: 4px 0;
   border: none;
   background: transparent;
-  color: var(--text-primary);
+  color: var(--text-primary, #d4d4d4);
   font-size: 14px;
-  font-family: var(--font-sans);
+  font-family: var(--font-sans, system-ui, -apple-system, sans-serif);
   outline: none;
-  width: 100%;
   box-sizing: border-box;
 }
 
 .command-palette-input::placeholder {
-  color: var(--text-tertiary);
+  color: var(--text-tertiary, #6a7280);
 }
 
-/* Results Area */
+/* Results scroll area */
 .command-palette-results {
   flex: 1;
   overflow-y: auto;
+  padding: 4px 0;
 }
 
-/* Result Item */
-.command-palette-item {
-  padding: 8px 16px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 14px;
-  color: var(--text-primary);
-  transition: background-color 0.1s ease;
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.command-palette-item:last-child {
-  border-bottom: none;
-}
-
-.command-palette-item:hover {
-  background: var(--bg-elevated);
-}
-
-.command-palette-item.command-palette-selected {
-  background: var(--accent-primary);
-  color: var(--accent-fg);
-}
-
-/* Category Header */
-.command-palette-category {
-  padding: 6px 16px;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
-  background: var(--bg-tertiary);
-  border-top: 1px solid var(--border-default);
-  user-select: none;
-}
-
-.command-palette-category:first-child {
-  border-top: none;
-}
-
-/* Command Label */
-.command-palette-label {
-  flex: 1;
-  min-width: 0;
-}
-
-/* Shortcut Display */
-.command-palette-shortcut {
-  font-size: 12px;
-  color: var(--text-secondary);
-  margin-left: 16px;
-  font-family: var(--font-mono);
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-subtle);
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-
-.command-palette-selected .command-palette-shortcut {
-  background: color-mix(in srgb, var(--accent-fg) 20%, transparent);
-  border-color: color-mix(in srgb, var(--accent-fg) 35%, transparent);
-  color: var(--accent-fg);
-}
-
-/* File Path Display */
-.command-palette-file-icon {
-  flex-shrink: 0;
-  font-size: 14px;
-  margin-right: 8px;
-  width: 20px;
-  text-align: center;
-}
-
-.command-palette-file-path {
-  display: block;
-  flex: 1;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--text-tertiary);
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.command-palette-file-meta {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-width: 0;
-  overflow: hidden;
-}
-
-.command-palette-file-name {
-  display: block;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-weight: 600;
-}
-
-.command-palette-selected .command-palette-file-path {
-  color: color-mix(in srgb, var(--accent-fg) 78%, transparent);
-}
-
-/* Empty / Loading State */
-.command-palette-empty {
-  padding: 16px;
-  color: var(--text-tertiary);
-  font-style: italic;
-  text-align: center;
-}
-
-/* Hint Text */
-.command-palette-hint {
-  padding: 12px 16px;
-  font-size: 12px;
-  color: var(--text-tertiary);
-  text-align: center;
-}
-
-/* Loading indicator (shown while files are being pre-fetched) */
-.command-palette-loading {
-  padding: 8px 16px;
-  font-size: 12px;
-  color: var(--text-tertiary);
-  text-align: center;
-}
-
-/* Mode tab bar — shown at the top of the palette container */
-.command-palette-mode-bar {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 6px 8px 0;
-  background: var(--bg-secondary);
-}
-
-.command-palette-mode-tab {
-  padding: 4px 12px;
-  font-size: 12px;
-  font-family: var(--font-sans);
-  font-weight: 500;
-  color: var(--text-tertiary);
-  background: transparent;
-  border: none;
-  border-bottom: 2px solid transparent;
-  border-radius: 4px 4px 0 0;
-  cursor: pointer;
-  transition:
-    background-color 0.1s ease,
-    color 0.1s ease,
-    border-color 0.1s ease;
-  user-select: none;
-}
-
-.command-palette-mode-tab:hover {
-  color: var(--text-secondary);
-  background: var(--bg-tertiary);
-}
-
-.command-palette-mode-tab.active {
-  color: var(--text-primary);
-  background: var(--bg-tertiary);
-  border-bottom-color: var(--accent-primary);
-}
-
-/* Symbol result items */
-.command-palette-symbol-item {
-  gap: 8px;
-}
-
-.command-palette-symbol-icon {
-  flex-shrink: 0;
-  width: 20px;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  font-weight: 700;
-  font-family: var(--font-mono);
-  border-radius: 4px;
-  background: var(--bg-elevated);
-}
-
-.command-palette-symbol-icon.goto-symbol-kind-function,
-.command-palette-symbol-icon.goto-symbol-kind-method {
-  color: #c678dd;
-}
-
-.command-palette-symbol-icon.goto-symbol-kind-class {
-  color: #e5c07b;
-}
-
-.command-palette-symbol-icon.goto-symbol-kind-interface {
-  color: #61afef;
-}
-
-.command-palette-symbol-icon.goto-symbol-kind-variable,
-.command-palette-symbol-icon.goto-symbol-kind-constant {
-  color: #56b6c2;
-}
-
-.command-palette-symbol-icon.goto-symbol-kind-type {
-  color: #98c379;
-}
-
-.command-palette-selected .command-palette-symbol-icon {
-  background: color-mix(in srgb, var(--accent-fg) 20%, transparent);
-  color: var(--accent-fg) !important;
-}
-
-.command-palette-symbol-scope {
-  display: block;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--text-tertiary);
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.command-palette-selected .command-palette-symbol-scope {
-  color: color-mix(in srgb, var(--accent-fg) 70%, transparent);
-}
-
-.command-palette-symbol-line {
-  flex-shrink: 0;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--text-tertiary);
-  margin-left: auto;
-}
-
-.command-palette-selected .command-palette-symbol-line {
-  color: color-mix(in srgb, var(--accent-fg) 70%, transparent);
-}
-
-/* Highlight matched characters inside command/file/symbol labels */
-.command-palette-label mark,
-.command-palette-file-name mark,
-.command-palette-file-path mark,
-.command-palette-symbol-scope mark {
-  color: inherit;
-  font-weight: 600;
-  background: none;
-  text-decoration: underline;
-  text-decoration-color: var(--accent-primary);
-  text-underline-offset: 2px;
-}
-
-.command-palette-selected .command-palette-label mark,
-.command-palette-selected .command-palette-file-name mark,
-.command-palette-selected .command-palette-file-path mark,
-.command-palette-selected .command-palette-symbol-scope mark {
-  color: inherit;
-  text-decoration-color: color-mix(in srgb, var(--accent-fg) 50%, transparent);
-}
-
-/* Scrollbar Styling */
+/* Custom scrollbar */
 .command-palette-results::-webkit-scrollbar {
   width: 8px;
 }
@@ -339,10 +79,229 @@
 }
 
 .command-palette-results::-webkit-scrollbar-thumb {
-  background: var(--bg-surface);
+  background: var(--bg-surface, #2c313a);
   border-radius: 4px;
 }
 
 .command-palette-results::-webkit-scrollbar-thumb:hover {
-  background: var(--border-strong);
+  background: var(--border-strong, #4b515c);
+}
+
+/* Empty state */
+.command-palette-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 24px 16px;
+  color: var(--text-tertiary, #6a7280);
+  text-align: center;
+}
+
+.command-palette-empty-title {
+  color: var(--text-secondary, #abb2bf);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.command-palette-empty-hint {
+  font-size: 12px;
+  color: var(--text-tertiary, #6a7280);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.command-palette-empty-hint kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  margin: 0 2px;
+  border: 1px solid var(--border-default, #3e4451);
+  border-radius: 3px;
+  background: var(--bg-elevated, #2c313a);
+  color: var(--text-secondary, #abb2bf);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.command-palette-empty--idle {
+  padding: 32px 16px;
+}
+
+/* Result item */
+.command-palette-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-primary, #d4d4d4);
+  transition: background-color 0.1s ease;
+}
+
+.command-palette-item:hover {
+  background: var(--bg-elevated, #2c313a);
+}
+
+.command-palette-item.selected {
+  background: var(--accent-primary, #61afef);
+  color: var(--accent-fg, #ffffff);
+}
+
+/* Label (kind badge + highlighted text) */
+.command-palette-item-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.command-palette-item-label > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Result-kind badge — small icon chip in front of every result */
+.result-kind-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  background: var(--bg-elevated, #2c313a);
+  color: var(--text-tertiary, #6a7280);
+  flex-shrink: 0;
+}
+
+.result-kind-badge.command {
+  color: var(--accent-primary, #61afef);
+}
+
+.result-kind-badge.file {
+  color: var(--accent-success, #98c379);
+}
+
+.result-kind-badge.symbol {
+  color: var(--accent-warning, #e5c07b);
+}
+
+.command-palette-item.selected .result-kind-badge {
+  background: color-mix(in srgb, var(--accent-fg, #ffffff) 20%, transparent);
+  color: var(--accent-fg, #ffffff);
+}
+
+/* Secondary metadata (file directory, command category) */
+.command-palette-item-path,
+.command-palette-item-category {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11px;
+  color: var(--text-tertiary, #6a7280);
+  flex-shrink: 0;
+  margin-left: auto;
+  padding-left: 12px;
+  max-width: 50%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.command-palette-item-category {
+  font-family: var(--font-sans, system-ui);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+
+.command-palette-item.selected .command-palette-item-path,
+.command-palette-item.selected .command-palette-item-category {
+  color: color-mix(in srgb, var(--accent-fg, #ffffff) 78%, transparent);
+}
+
+/* Highlighted matched chars inside labels */
+.command-palette-item-label mark,
+.command-palette-item-path mark {
+  color: inherit;
+  font-weight: 600;
+  background: none;
+  text-decoration: underline;
+  text-decoration-color: var(--accent-primary, #61afef);
+  text-underline-offset: 2px;
+}
+
+.command-palette-item.selected .command-palette-item-label mark,
+.command-palette-item.selected .command-palette-item-path mark {
+  color: inherit;
+  text-decoration-color: color-mix(in srgb, var(--accent-fg, #ffffff) 60%, transparent);
+}
+
+/* Footer hint bar */
+.command-palette-footer {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 6px 14px;
+  border-top: 1px solid var(--border-subtle, #2c313a);
+  background: var(--bg-tertiary, #21252b);
+  font-size: 11px;
+  color: var(--text-tertiary, #6a7280);
+  user-select: none;
+}
+
+.command-palette-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.command-palette-hint--count {
+  margin-left: auto;
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+
+.command-palette-footer kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border: 1px solid var(--border-default, #3e4451);
+  border-radius: 3px;
+  background: var(--bg-elevated, #2c313a);
+  color: var(--text-secondary, #abb2bf);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+/* Visually-hidden helper for ARIA-live region. Without this rule the
+ * announcement text leaks visually below the palette. Pulled from
+ * the standard "sr-only" pattern. */
+.command-palette-sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
 }

@@ -109,7 +109,7 @@ describe('CommandPalette', () => {
       root.render(createElement(CommandPalette, { ...defaultProps }));
     });
     const input = container.querySelector('.command-palette-input') as HTMLInputElement;
-    expect(input?.placeholder).toBe('Type a command or search...');
+    expect(input?.placeholder).toBe('> for commands, @ for symbols, type to find files');
   });
 
   it('renders "files" placeholder when initialMode is files', () => {
@@ -122,7 +122,7 @@ describe('CommandPalette', () => {
       );
     });
     const input = container.querySelector('.command-palette-input') as HTMLInputElement;
-    expect(input?.placeholder).toBe('Search files by name...');
+    expect(input?.placeholder).toBe('Search files…');
   });
 
   it('renders "symbols" placeholder when initialMode is symbols', () => {
@@ -135,7 +135,7 @@ describe('CommandPalette', () => {
       );
     });
     const input = container.querySelector('.command-palette-input') as HTMLInputElement;
-    expect(input?.placeholder).toBe('Search symbols...');
+    expect(input?.placeholder).toBe('Search symbols…');
   });
 
   it('calls onClose when clicking overlay background', () => {

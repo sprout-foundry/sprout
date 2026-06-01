@@ -462,15 +462,28 @@ func (m *IndexManager) embedUnits(ctx context.Context, units []CodeUnit) ([]Vect
 func embeddingText(u CodeUnit, maxBodyLen int) string {
 	body := u.Body
 	if maxBodyLen > 0 && len(body) > maxBodyLen {
-		// Truncate at the last valid UTF-8 boundary before the limit.
-		// Converting to runes and back ensures we don't split multi-byte characters.
-		runes := []rune(body)
-		if len(runes) > maxBodyLen {
-			runes = runes[:maxBodyLen]
-		}
-		body = string(runes)
+		// Truncate to maxBodyLen bytes, snapping back to the last valid
+		// UTF-8 character boundary so we don't produce invalid runes.
+		// This avoids the cost of converting the entire body to []rune
+		// just to truncate it.
+		body = truncateUTF8Safe(body, maxBodyLen)
 	}
 	return u.Signature + "\n" + body
+}
+
+// truncateUTF8Safe truncates s to at most maxBytes bytes, snapping back to
+// the last valid UTF-8 character boundary if the cut falls mid-character.
+func truncateUTF8Safe(s string, maxBytes int) string {
+	if len(s) <= maxBytes {
+		return s
+	}
+	// A UTF-8 continuation byte has the top two bits as 10 (0x80 set, 0x40 clear).
+	// If the byte at maxBytes is a continuation byte, we're mid-character — walk
+	// backward to find the start of that character.
+	for maxBytes > 0 && s[maxBytes]&0xC0 == 0x80 {
+		maxBytes--
+	}
+	return s[:maxBytes]
 }
 
 // codeUnitToRecord converts a CodeUnit and its embedding into a VectorRecord.

@@ -84,7 +84,7 @@ const DiffWorkspaceTab = React.memo(function DiffWorkspaceTab({
                   className={`workspace-diff-mode-tab ${diffMode === mode ? 'active' : ''}`}
                   onClick={() => onDiffModeChange(mode)}
                 >
-                  {mode}
+                  {mode.charAt(0).toUpperCase() + mode.slice(1)}
                 </button>
               ))}
             </div>

@@ -19,6 +19,8 @@ import { MAX_FILES_PER_SECTION, MAX_FILES_INITIAL, LOAD_MORE_INCREMENT } from '.
 import type { FileSection, GitBranchesState, GitFile, GitStatusData } from '../types/git-types';
 import { FILE_SECTIONS, selectionKey, parseSelectionKey } from '../types/git-types';
 import { copyToClipboard } from '../utils/clipboard';
+import { getStatusInfo } from '../utils/git';
+import { splitPath } from '../utils/format';
 import { ContextMenu } from '@sprout/ui';
 import { showThemedPrompt } from './ThemedDialog';
 
@@ -289,8 +291,24 @@ function GitSidebarPanel({
         <textarea
           value={commitMessage}
           onChange={(e) => onCommitMessageChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (
+              (e.metaKey || e.ctrlKey) &&
+              e.key === 'Enter' &&
+              hasStagedFiles &&
+              commitMessage.trim() &&
+              !isActing
+            ) {
+              e.preventDefault();
+              onCommit();
+            }
+          }}
           disabled={!hasStagedFiles || isActing}
-          placeholder={hasStagedFiles ? 'Write commit message…' : 'Stage files to write a commit message'}
+          placeholder={
+            hasStagedFiles
+              ? 'Write commit message… (⌘/Ctrl+Enter to commit)'
+              : 'Stage files to write a commit message'
+          }
           className="git-sidebar-commit-input"
           rows={3}
         />
@@ -379,7 +397,7 @@ function GitSidebarPanel({
               <div className="git-sidebar-file-section-header">
                 <div className="git-sidebar-file-section-title">
                   <h4>{section.title}</h4>
-                  <span>{files.length}</span>
+                  <span className="git-sidebar-section-count">{files.length}</span>
                 </div>
                 <div className="git-sidebar-file-section-actions">
                   <button
@@ -409,12 +427,15 @@ function GitSidebarPanel({
                   const key = selectionKey(section.id, file.path);
                   const isSelected = selectedFiles.has(key);
                   const isPreviewing = activeDiffSelectionKey === key;
+                  const { dir, name } = splitPath(file.path);
+                  const statusInfo = getStatusInfo(file.status);
                   return (
                     <div
                       key={key}
                       className={`git-sidebar-file-row ${isPreviewing ? 'previewing' : ''} ${isSelected ? 'selected' : ''}`}
                       role="button"
                       tabIndex={0}
+                      title={file.path}
                       onClick={(event) => {
                         if (isActing) return;
                         if (event.shiftKey) {
@@ -457,8 +478,16 @@ function GitSidebarPanel({
                         });
                       }}
                     >
-                      <span className="git-sidebar-file-path">{file.path}</span>
-                      <span className="git-sidebar-file-status">{file.status}</span>
+                      <span className="git-sidebar-file-path">
+                        {dir && <span className="git-sidebar-file-dir">{dir}</span>}
+                        <span className="git-sidebar-file-name">{name}</span>
+                      </span>
+                      <span
+                        className={`git-sidebar-file-status ${statusInfo.className}`}
+                        aria-label={`status ${file.status}`}
+                      >
+                        {statusInfo.label}
+                      </span>
                       <div className="git-sidebar-row-actions">
                         {section.id === 'staged' ? (
                           <button

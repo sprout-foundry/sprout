@@ -14,6 +14,7 @@ import type {
 } from '../types/git-types';
 import { selectionKey, parseSelectionKey } from '../types/git-types';
 import { useLog, debugLog, warn } from '../utils/log';
+import { showThemedConfirm } from '../components/ThemedDialog';
 
 export interface GitDiffResponse {
   message: string;
@@ -421,7 +422,17 @@ export const useGitWorkspace = ({
 
   const handleDiscardSelected = useCallback(() => {
     if (discardablePaths.length === 0) return;
-    runGitAction(() => onGitDiscard(discardablePaths), 'Failed to discard selected files');
+    const count = discardablePaths.length;
+    const preview = discardablePaths.slice(0, 5).join('\n');
+    const more = count > 5 ? `\n…and ${count - 5} more` : '';
+    runGitAction(async () => {
+      const confirmed = await showThemedConfirm(
+        `Discard local changes to ${count} file${count === 1 ? '' : 's'}? This cannot be undone.\n\n${preview}${more}`,
+        { title: 'Discard changes', type: 'danger', confirmLabel: 'Discard' },
+      );
+      if (!confirmed) return;
+      await onGitDiscard(discardablePaths);
+    }, 'Failed to discard selected files');
   }, [discardablePaths, onGitDiscard, runGitAction]);
 
   const handleStageFile = useCallback(
@@ -440,7 +451,14 @@ export const useGitWorkspace = ({
 
   const handleDiscardFile = useCallback(
     (filePath: string) => {
-      runGitAction(() => onGitDiscard([filePath]), `Failed to discard ${filePath}`);
+      runGitAction(async () => {
+        const confirmed = await showThemedConfirm(
+          `Discard local changes to ${filePath}? This cannot be undone.`,
+          { title: 'Discard changes', type: 'danger', confirmLabel: 'Discard' },
+        );
+        if (!confirmed) return;
+        await onGitDiscard([filePath]);
+      }, `Failed to discard ${filePath}`);
     },
     [onGitDiscard, runGitAction],
   );

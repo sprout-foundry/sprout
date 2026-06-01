@@ -101,7 +101,13 @@ func runShellCommand(ctx context.Context, command string, streamOutput bool) (st
 	}
 
 	// SILENT MODE: Capture output without streaming (for LLM tool calls)
-	// Use exec.CommandContext to respect context cancellation
+	// Check if we can promote to background on timeout (CLI mode with BPM)
+	if bpm := BackgroundProcessManagerFromContext(ctx); bpm != nil {
+		// Use adoptable execution — can promote to background on timeout
+		return runShellCommandAdoptable(ctx, command, bpm)
+	}
+
+	// Fallback: no BPM available, use standard CommandContext (kills on cancel)
 	shell := os.Getenv("SHELL")
 	if shell == "" {
 		shell = "/bin/sh"
@@ -132,4 +138,91 @@ func runShellCommand(ctx context.Context, command string, streamOutput bool) (st
 	finalOutput := buildShellOutputWithStatus(string(output), command, exitCode, err)
 
 	return finalOutput, nil
+}
+
+// runShellCommandAdoptable executes a command that can be promoted to background
+// on timeout. Instead of using CommandContext (which kills on cancel), it uses
+// plain exec.Command and manually monitors context cancellation. If the context
+// deadline is exceeded, the running process is adopted into the BackgroundProcessManager.
+func runShellCommandAdoptable(ctx context.Context, command string, bpm *BackgroundProcessManager) (string, error) {
+	shell := os.Getenv("SHELL")
+	if shell == "" {
+		shell = "/bin/sh"
+	}
+	cmd := exec.Command(shell, "-c", command) // NOT CommandContext — we control lifecycle
+
+	if wd := filesystem.WorkspaceRootFromContext(ctx); wd != "" {
+		cmd.Dir = wd
+	} else if wd, err := os.Getwd(); err == nil {
+		cmd.Dir = wd
+	}
+
+	// Set process group so we can kill the entire group on stop
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+
+	// Create temp output file for potential background adoption
+	outputFile, err := os.CreateTemp("", "sprout-bg-*.output")
+	if err != nil {
+		return "", fmt.Errorf("create temp output file: %w", err)
+	}
+	outputPath := outputFile.Name()
+
+	// Write to both the temp file and a buffer (for early output on promotion)
+	var outputBuf bytes.Buffer
+	writer := io.MultiWriter(outputFile, &outputBuf)
+	cmd.Stdout = writer
+	cmd.Stderr = writer
+
+	// Start the process
+	if err := cmd.Start(); err != nil {
+		outputFile.Close()
+		os.Remove(outputPath)
+		return "", fmt.Errorf("start command: %w", err)
+	}
+
+	// Wait for command completion OR context cancellation
+	waitCh := make(chan error, 1)
+	go func() {
+		waitCh <- cmd.Wait()
+	}()
+
+	select {
+	case waitErr := <-waitCh:
+		// Command completed normally
+		outputFile.Close()
+		os.Remove(outputPath) // clean up temp file
+
+		exitCode := extractExitCode(waitErr)
+
+		// For LLM tool calls, truncate output to 2 lines
+		truncatedOutput := truncateOutput(outputBuf.String(), 2)
+		if truncatedOutput != "" && shouldPrintCapturedShellPreview() {
+			fmt.Printf("%s\n", truncatedOutput)
+		}
+
+		finalOutput := buildShellOutputWithStatus(outputBuf.String(), command, exitCode, waitErr)
+		return finalOutput, nil
+
+	case <-ctx.Done():
+		if ctx.Err() == context.DeadlineExceeded {
+			// Tool deadline hit — promote to background instead of killing
+			outputFile.Close() // Close our handle; BPM will reopen for reading
+
+			sessionID, adoptErr := bpm.AdoptProcess(cmd, outputPath, command, cmd.Dir)
+			if adoptErr == nil {
+				return formatBackgroundPromotionMessage(sessionID, command, outputBuf.String()), nil
+			}
+			// Adoption failed — kill the process and clean up
+			_ = cmd.Process.Kill()
+			<-waitCh // reap the zombie
+			os.Remove(outputPath)
+			return "", fmt.Errorf("command timed out and background promotion failed: %w", adoptErr)
+		}
+
+		// Non-deadline cancellation (user Ctrl+C) — kill the process
+		_ = cmd.Process.Kill()
+		<-waitCh // reap the zombie
+		os.Remove(outputPath)
+		return "", ctx.Err()
+	}
 }

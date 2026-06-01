@@ -36,6 +36,12 @@ func (a *Agent) Shutdown() {
 		cancel()
 	}
 
+	// Stop background process manager (CLI-mode background shells)
+	if a.backgroundProcessManager != nil {
+		a.backgroundProcessManager.Close()
+		a.backgroundProcessManager = nil
+	}
+
 	// Wait for background goroutines (memory migration, etc.) to finish
 	// before closing the resources they depend on.
 	a.backgroundWg.Wait()

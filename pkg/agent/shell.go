@@ -47,6 +47,14 @@ func (a *Agent) executeShellCommandWithTruncation(ctx context.Context, command s
 		ctx = tools.WithTerminalManager(ctx, tm)
 	}
 
+	// Wire BackgroundProcessManager into context for CLI mode (lazy-init)
+	if a.terminalManager == nil {
+		if a.backgroundProcessManager == nil {
+			a.backgroundProcessManager = tools.NewBackgroundProcessManager()
+		}
+		ctx = tools.WithBackgroundProcessManager(ctx, a.backgroundProcessManager)
+	}
+
 	headTokenLimit, tailTokenLimit := getShellOutputTokenLimits()
 
 	// Check if we've run this exact command before
@@ -244,6 +252,14 @@ func (a *Agent) checkBackgroundOutput(ctx context.Context, sessionID string) (st
 		ctx = tools.WithTerminalManager(ctx, tm)
 	}
 
+	// Wire BackgroundProcessManager into context for CLI mode (lazy-init)
+	if a.terminalManager == nil {
+		if a.backgroundProcessManager == nil {
+			a.backgroundProcessManager = tools.NewBackgroundProcessManager()
+		}
+		ctx = tools.WithBackgroundProcessManager(ctx, a.backgroundProcessManager)
+	}
+
 	result, err := tools.CheckBackgroundOutput(ctx, sessionID)
 	if err != nil {
 		return "", fmt.Errorf("failed to check background session %s: %w", sessionID, err)
@@ -253,25 +269,39 @@ func (a *Agent) checkBackgroundOutput(ctx context.Context, sessionID string) (st
 
 // stopBackgroundSession terminates a background shell session by session ID.
 func (a *Agent) stopBackgroundSession(sessionID string) (string, error) {
-	tm := a.terminalManager
-	if tm == nil {
-		return "", fmt.Errorf("background session management requires WebUI terminal manager")
+	// Try TerminalManager first (WebUI mode)
+	if tm := a.terminalManager; tm != nil {
+		if err := tm.StopBackgroundSession(sessionID); err != nil {
+			return "", fmt.Errorf("failed to stop background session %s: %w", sessionID, err)
+		}
+		return fmt.Sprintf("Background session %s stopped successfully", sessionID), nil
 	}
 
-	if err := tm.StopBackgroundSession(sessionID); err != nil {
+	// Fallback to BackgroundProcessManager (CLI mode) — lazy-init if needed
+	if a.backgroundProcessManager == nil {
+		a.backgroundProcessManager = tools.NewBackgroundProcessManager()
+	}
+	if err := a.backgroundProcessManager.Stop(sessionID); err != nil {
 		return "", fmt.Errorf("failed to stop background session %s: %w", sessionID, err)
 	}
-
 	return fmt.Sprintf("Background session %s stopped successfully", sessionID), nil
 }
 
-// executeShellCommandBackground executes a shell command in a background hidden PTY session
+// executeShellCommandBackground executes a shell command in a background session
 // and returns immediately with the session ID. This is for long-running commands
 // that should not block the agent.
 func (a *Agent) executeShellCommandBackground(ctx context.Context, command string) (string, error) {
 	// Wire TerminalManager into context for WebUI mode
 	if tm := a.terminalManager; tm != nil {
 		ctx = tools.WithTerminalManager(ctx, tm)
+	}
+
+	// Wire BackgroundProcessManager into context for CLI mode (lazy-init)
+	if a.terminalManager == nil {
+		if a.backgroundProcessManager == nil {
+			a.backgroundProcessManager = tools.NewBackgroundProcessManager()
+		}
+		ctx = tools.WithBackgroundProcessManager(ctx, a.backgroundProcessManager)
 	}
 
 	a.Logger().Debug("Executing shell command in background: %s\n", command)

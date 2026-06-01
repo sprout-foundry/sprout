@@ -133,53 +133,51 @@ export default function EmbeddingSettingsTab({
       <h4>Embedding Index</h4>
 
       {/* Status Card */}
-      <div className="settings-card" style={{ marginBottom: 'var(--space-8)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', marginBottom: 'var(--space-4)' }}>
+      <div className="settings-card embedding-status-card">
+        <div className="embedding-status-header">
           <Database size={16} />
-          <span style={{ fontWeight: 500 }}>Index Status</span>
+          <span className="embedding-status-title">Index Status</span>
         </div>
         {status === null ? (
-          <div style={{ color: 'var(--text-tertiary)', fontSize: '13px' }}>Unable to fetch status</div>
+          <div className="embedding-status-row">Unable to fetch status</div>
         ) : status.building || isRebuilding ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-primary)' }}>
+          <div className="embedding-status-row embedding-status-row--info">
             <Loader2 size={14} className="spinning" />
-            <span style={{ fontSize: '13px' }}>Building index...</span>
+            <span>Building index...</span>
           </div>
         ) : status.initialized ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-success)' }}>
+          <div className="embedding-status-row embedding-status-row--success">
             <CheckCircle2 size={14} />
-            <span style={{ fontSize: '13px' }}>{status.record_count.toLocaleString()} functions indexed</span>
+            <span>{status.record_count.toLocaleString()} functions indexed</span>
           </div>
         ) : status.available && status.init_error ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-error)' }}>
+          <div className="embedding-status-row embedding-status-row--error">
             <AlertTriangle size={14} />
-            <span style={{ fontSize: '13px' }}>Initialization failed: {status.init_error}</span>
+            <span>Initialization failed: {status.init_error}</span>
           </div>
         ) : status.available ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)' }}>
+          <div className="embedding-status-row embedding-status-row--muted">
             <AlertTriangle size={14} />
-            <span style={{ fontSize: '13px' }}>Not initialized — will build on next startup or search</span>
+            <span>Not initialized — will build on next startup or search</span>
           </div>
         ) : (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-error)' }}>
+          <div className="embedding-status-row embedding-status-row--error">
             <XCircle size={14} />
-            <span style={{ fontSize: '13px' }}>Failed to initialize embedding provider</span>
+            <span>Failed to initialize embedding provider</span>
           </div>
         )}
       </div>
 
       {/* Model Info */}
-      <div className="settings-card" style={{ marginBottom: '16px' }}>
-        <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-          <div style={{ marginBottom: '4px' }}>
-            <span style={{ color: 'var(--text-primary)' }}>Provider:</span> bge-base-en-v1.5-256d
-          </div>
-          <div style={{ marginBottom: '4px' }}>
-            <span style={{ color: 'var(--text-primary)' }}>Model:</span> bge-base-en-v1.5 (INT8 quantized)
-          </div>
-          <div>
-            <span style={{ color: 'var(--text-primary)' }}>Dimensions:</span> 256
-          </div>
+      <div className="settings-card embedding-model-card">
+        <div className="embedding-model-row">
+          <span className="embedding-model-label">Provider:</span> bge-base-en-v1.5-256d
+        </div>
+        <div className="embedding-model-row">
+          <span className="embedding-model-label">Model:</span> bge-base-en-v1.5 (INT8 quantized)
+        </div>
+        <div className="embedding-model-row">
+          <span className="embedding-model-label">Dimensions:</span> 256
         </div>
       </div>
 
@@ -221,10 +219,7 @@ export default function EmbeddingSettingsTab({
         </div>
       </div>
 
-      {/* Rebuild Action — uses the now-defined .settings-action-btn CSS
-       * for visual consistency with other tab-local action buttons. Inline
-       * style hooks dropped now that the class carries the look. */}
-      <div style={{ marginTop: 'var(--space-6)', display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
+      <div className="embedding-action-row">
         <button
           className="settings-action-btn"
           type="button"
@@ -234,7 +229,7 @@ export default function EmbeddingSettingsTab({
           {isRebuilding || status?.building ? <Loader2 size={14} className="spinning" /> : <RefreshCw size={14} />}
           {isRebuilding || status?.building ? 'Building...' : 'Rebuild Index'}
         </button>
-        {error && <span style={{ color: 'var(--accent-error)', fontSize: '12px' }}>{error}</span>}
+        {error && <span className="embedding-action-error">{error}</span>}
       </div>
     </div>
   );

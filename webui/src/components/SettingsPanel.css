@@ -10,6 +10,488 @@
   gap: var(--space-3);
 }
 
+/* ── Filter bar ──────────────────────────────────────────────── */
+.sidebar .settings-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  height: 30px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  transition:
+    border-color 0.12s var(--ease-out),
+    box-shadow 0.12s var(--ease-out);
+}
+
+.sidebar .settings-filter:focus-within {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-primary-alpha);
+}
+
+.sidebar .settings-filter-icon {
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.sidebar .settings-filter-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+}
+
+.sidebar .settings-filter-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.sidebar .settings-filter-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    color 0.12s ease,
+    background 0.12s ease;
+}
+
+.sidebar .settings-filter-clear:hover {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
+
+.sidebar .settings-filter-clear:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
+.sidebar .settings-no-match {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px dashed var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: 12px;
+  background: color-mix(in srgb, var(--bg-elevated) 60%, transparent);
+}
+
+.sidebar .settings-no-match > svg {
+  color: var(--text-tertiary);
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.sidebar .settings-no-match-action {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 6px;
+  padding: 3px 10px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.sidebar .settings-no-match-action:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--border-strong);
+}
+
+.sidebar .settings-no-match-action:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
+/* ── Reusable list row (provider priority, approved commands, etc.) ── */
+.sidebar .settings-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.sidebar .settings-list-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.sidebar .settings-list-row-index {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  min-width: 24px;
+}
+
+.sidebar .settings-list-row-label {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar .settings-list-row-code {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.sidebar .settings-list-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.sidebar .settings-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition:
+    color 0.12s ease,
+    background 0.12s ease;
+}
+
+.sidebar .settings-icon-btn:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
+
+.sidebar .settings-icon-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
+.sidebar .settings-icon-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.sidebar .settings-icon-btn.danger:hover:not(:disabled) {
+  color: var(--accent-error);
+}
+
+/* Inline add-input + button row (priority list, approved commands, etc.) */
+.sidebar .settings-inline-row {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.sidebar .settings-inline-row .styled-input,
+.sidebar .settings-inline-row .styled-select {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Spacing helpers — replace ad-hoc inline margin styles */
+.sidebar .settings-block-spaced {
+  margin-top: var(--space-12);
+}
+
+.sidebar .settings-h4-spaced {
+  margin-top: var(--space-12);
+}
+
+.sidebar .settings-help-spaced {
+  margin-bottom: var(--space-3);
+}
+
+.sidebar .settings-help-spaced-top {
+  margin-top: var(--space-3);
+}
+
+.sidebar .settings-section-spaced {
+  margin-top: var(--space-5);
+}
+
+.sidebar .settings-section-spaced-bordered {
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-default);
+}
+
+/* Collapsible sub-header used by SecurityPolicyEditor */
+.sidebar .settings-collapsible-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: var(--text-base);
+  font-weight: 600;
+  font-family: var(--font-sans);
+}
+
+.sidebar .settings-collapsible-header:hover {
+  color: var(--accent-primary);
+}
+
+.sidebar .settings-collapsible-header:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
+  border-radius: var(--radius-sm);
+}
+
+.sidebar .settings-collapsible-header > svg {
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+/* Security policy rule list — action tag + reason */
+.sidebar .settings-rule-action {
+  font-size: var(--text-xs);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.sidebar .settings-rule-reason {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+/* Security policy rule builder */
+.sidebar .settings-rule-builder {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  padding: var(--space-2);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.sidebar .settings-rule-builder .settings-rule-pattern {
+  flex: 2;
+  min-width: 0;
+}
+
+.sidebar .settings-rule-builder .settings-rule-action-select {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Theme picker (Appearance section) */
+.sidebar .theme-picker-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.sidebar .theme-picker-select {
+  flex: 1;
+  min-width: 0;
+}
+
+.sidebar .theme-picker-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 8px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.sidebar .theme-picker-btn:hover {
+  background: var(--bg-elevated);
+  border-color: var(--border-strong);
+}
+
+.sidebar .theme-picker-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
+.sidebar .theme-picker-btn--danger {
+  background: color-mix(in srgb, var(--accent-error) 12%, transparent);
+  border-color: var(--accent-error);
+  color: var(--accent-error);
+}
+
+.sidebar .theme-picker-btn--danger:hover {
+  background: color-mix(in srgb, var(--accent-error) 20%, transparent);
+  border-color: var(--accent-error);
+}
+
+.sidebar .theme-picker-file-input {
+  display: none;
+}
+
+.sidebar .theme-picker-error {
+  color: var(--accent-error);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+/* Embedding tab — status / model / action cards */
+.sidebar .embedding-status-card {
+  margin-bottom: var(--space-8);
+}
+
+.sidebar .embedding-status-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+  color: var(--text-primary);
+}
+
+.sidebar .embedding-status-title {
+  font-weight: 500;
+}
+
+.sidebar .embedding-status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+
+.sidebar .embedding-status-row--info {
+  color: var(--accent-primary);
+}
+
+.sidebar .embedding-status-row--success {
+  color: var(--accent-success);
+}
+
+.sidebar .embedding-status-row--error {
+  color: var(--accent-error);
+}
+
+.sidebar .embedding-status-row--muted {
+  color: var(--text-secondary);
+}
+
+.sidebar .embedding-model-card {
+  margin-bottom: 16px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sidebar .embedding-model-row {
+  line-height: 1.5;
+}
+
+.sidebar .embedding-model-label {
+  color: var(--text-primary);
+  margin-right: 4px;
+}
+
+.sidebar .embedding-action-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-top: var(--space-6);
+}
+
+.sidebar .embedding-action-error {
+  color: var(--accent-error);
+  font-size: 12px;
+}
+
+/* MCP environment-variable form rows */
+.sidebar .mcp-env-form-row {
+  flex-direction: column;
+}
+
+.sidebar .mcp-env-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.sidebar .mcp-env-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.sidebar .mcp-env-row .mcp-env-key {
+  flex: 1;
+  min-width: 0;
+}
+
+.sidebar .mcp-env-row .mcp-env-value {
+  flex: 1.5;
+  min-width: 0;
+}
+
+.sidebar .mcp-env-equals {
+  color: var(--text-tertiary);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+/* MCP form: badge for env vars stored in credential manager */
+.sidebar .mcp-env-stored-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 1.5;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-secondary);
+  color: var(--text-tertiary);
+  font-size: 11px;
+  border: 1px solid var(--border-subtle);
+}
+
 /* ── Credentials standalone panel ───────────────────────────── */
 .sidebar .settings-credentials-link {
   margin-top: var(--space-3);

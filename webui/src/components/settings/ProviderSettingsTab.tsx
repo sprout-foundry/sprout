@@ -2,6 +2,7 @@ import { SkeletonText } from '@sprout/ui';
 import { ArrowDown, ArrowUp, Pencil, Plus, Trash2, Cog } from 'lucide-react';
 import { useState } from 'react';
 import { ApiService, type SproutSettings, type ProviderOption } from '../../services/api';
+import { showThemedConfirm } from '../ThemedDialog';
 
 interface ProviderSettingsTabProps {
   settings: SproutSettings;
@@ -211,7 +212,7 @@ export default function ProviderSettingsTab({
         updateSetting={updateSetting}
       />
 
-      <h4 style={{ marginTop: 'var(--space-12)' }}>Custom Providers ({providerEntries.length})</h4>
+      <h4 className="settings-h4-spaced">Custom Providers ({providerEntries.length})</h4>
 
       {providerEntries.length === 0 && !editingProvider && (
         <div className="settings-empty">No custom providers configured</div>
@@ -253,7 +254,14 @@ export default function ProviderSettingsTab({
                 type="button"
                 className="crud-btn danger"
                 title="Delete provider"
-                onClick={() => handleDeleteProvider(name)}
+                onClick={async () => {
+                  const confirmed = await showThemedConfirm(
+                    `Delete custom provider "${name}"? This removes its config.`,
+                    { title: 'Delete custom provider', type: 'danger', confirmLabel: 'Delete' },
+                  );
+                  if (!confirmed) return;
+                  void handleDeleteProvider(name);
+                }}
               >
                 <Trash2 size={12} />
               </button>
@@ -314,16 +322,7 @@ export default function ProviderSettingsTab({
                 onChange={(e) => setProviderModelContextSizes(e.target.value)}
                 placeholder="model1:8192,model2:131072,model3:2097152"
               />
-              <small
-                style={{
-                  color: 'var(--text-tertiary)',
-                  fontSize: '12px',
-                  marginTop: '4px',
-                  display: 'block',
-                }}
-              >
-                Format: model_name:context_size, separated by commas
-              </small>
+              <small className="config-help">Format: model_name:context_size, separated by commas</small>
             </div>
             <div className="form-row">
               <label>API Key Env Var (optional)</label>
@@ -447,9 +446,9 @@ function ProviderPrioritySection({ settings, availableProviders, updateSetting }
   if (!updateSetting) return null;
 
   return (
-    <div style={{ marginTop: 'var(--space-12)' }}>
+    <div className="settings-block-spaced">
       <h4>Provider Priority</h4>
-      <div className="config-help" style={{ marginBottom: 'var(--space-3)' }}>
+      <div className="config-help settings-help-spaced">
         Fallback order when the active provider is unreachable. The first usable provider in this list wins. Empty list
         means no fallback.
       </div>
@@ -457,97 +456,63 @@ function ProviderPrioritySection({ settings, availableProviders, updateSetting }
       {priority.length === 0 ? (
         <div className="settings-empty">No providers in priority list</div>
       ) : (
-        <ol style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+        <ol className="settings-list">
           {priority.map((id, idx) => {
             const meta = availableProviders.find((p) => p.id === id);
             return (
-              <li
-                key={id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 'var(--space-2)',
-                  padding: 'var(--space-2) var(--space-3)',
-                  background: 'var(--bg-elevated)',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-sm)',
-                  marginBottom: 'var(--space-2)',
-                }}
-              >
-                <span
-                  style={{
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 'var(--text-xs)',
-                    color: 'var(--text-tertiary)',
-                    minWidth: 24,
-                  }}
-                >
-                  #{idx + 1}
-                </span>
-                <span style={{ flex: 1, color: 'var(--text-primary)' }}>{meta?.name ?? id}</span>
-                <button
-                  type="button"
-                  aria-label={`Move ${id} up`}
-                  title="Move up"
-                  className="settings-icon-btn"
-                  disabled={idx === 0}
-                  onClick={() => moveUp(idx)}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: idx === 0 ? 'var(--text-muted)' : 'var(--text-tertiary)',
-                    cursor: idx === 0 ? 'not-allowed' : 'pointer',
-                    padding: 'var(--space-1)',
-                  }}
-                >
-                  <ArrowUp size={14} />
-                </button>
-                <button
-                  type="button"
-                  aria-label={`Move ${id} down`}
-                  title="Move down"
-                  className="settings-icon-btn"
-                  disabled={idx === priority.length - 1}
-                  onClick={() => moveDown(idx)}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: idx === priority.length - 1 ? 'var(--text-muted)' : 'var(--text-tertiary)',
-                    cursor: idx === priority.length - 1 ? 'not-allowed' : 'pointer',
-                    padding: 'var(--space-1)',
-                  }}
-                >
-                  <ArrowDown size={14} />
-                </button>
-                <button
-                  type="button"
-                  aria-label={`Remove ${id}`}
-                  title="Remove"
-                  className="settings-icon-btn"
-                  onClick={() => remove(idx)}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: 'var(--text-tertiary)',
-                    cursor: 'pointer',
-                    padding: 'var(--space-1)',
-                  }}
-                >
-                  <Trash2 size={14} />
-                </button>
+              <li key={id} className="settings-list-row">
+                <span className="settings-list-row-index">#{idx + 1}</span>
+                <span className="settings-list-row-label">{meta?.name ?? id}</span>
+                <div className="settings-list-row-actions">
+                  <button
+                    type="button"
+                    aria-label={`Move ${id} up`}
+                    title="Move up"
+                    className="settings-icon-btn"
+                    disabled={idx === 0}
+                    onClick={() => moveUp(idx)}
+                  >
+                    <ArrowUp size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Move ${id} down`}
+                    title="Move down"
+                    className="settings-icon-btn"
+                    disabled={idx === priority.length - 1}
+                    onClick={() => moveDown(idx)}
+                  >
+                    <ArrowDown size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Remove ${id}`}
+                    title="Remove from priority list"
+                    className="settings-icon-btn danger"
+                    onClick={async () => {
+                      const confirmed = await showThemedConfirm(
+                        `Remove "${meta?.name ?? id}" from the priority fallback list?`,
+                        { title: 'Remove from priority list', type: 'warning', confirmLabel: 'Remove' },
+                      );
+                      if (!confirmed) return;
+                      remove(idx);
+                    }}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
               </li>
             );
           })}
         </ol>
       )}
 
-      <div className="config-item" style={{ marginTop: 'var(--space-3)' }}>
-        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+      <div className="config-item settings-help-spaced-top">
+        <div className="settings-inline-row">
           <select
             className="styled-select"
             value={pendingAdd}
             onChange={(e) => setPendingAdd(e.target.value)}
-            style={{ flex: 1 }}
           >
             <option value="">
               {candidateOptions.length === 0 ? 'All providers already in list' : 'Select provider to add…'}

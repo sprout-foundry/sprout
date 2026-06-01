@@ -243,16 +243,17 @@ func wrapTurnCheckpointSummary(messages []api.Message, body string, ctx turnComp
 	b.WriteString("Compacted earlier conversation state:\n")
 	fmt.Fprintf(&b, "- Summarized %d earlier messages to preserve context headroom.\n", len(messages))
 	if ctx.latestUserRequest != "" {
-		b.WriteString("- Latest compacted user request: ")
+		// Past-tense framing: this is historical, not a live instruction.
+		// Previously this asserted "work was still in progress" unconditionally,
+		// which caused the model to occasionally re-anchor on the compacted
+		// request as the active task even when newer messages had moved on.
+		// Completion state is left to the model's reading of recent messages.
+		b.WriteString("- Earlier compacted user request (historical): ")
 		b.WriteString(ctx.latestUserRequest)
 		b.WriteString("\n")
-		// Synthetic summaries default to "still in progress" so a compacted
-		// completed turn isn't mistaken for the live task. Newer full-fidelity
-		// messages remain the source of truth for exact completion state.
-		b.WriteString("- Status at compaction time: work was still in progress; newer messages continue from this task.\n")
 	}
 	if ctx.latestAssistantNote != "" {
-		b.WriteString("- Latest compacted assistant state: ")
+		b.WriteString("- Earlier compacted assistant state: ")
 		b.WriteString(ctx.latestAssistantNote)
 		b.WriteString("\n")
 	}

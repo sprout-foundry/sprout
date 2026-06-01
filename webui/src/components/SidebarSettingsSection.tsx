@@ -155,13 +155,12 @@ export default function SidebarSettingsSection({
         <h4>Appearance</h4>
         <div className="config-item">
           <label htmlFor="theme-select">Theme Pack:</label>
-          <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+          <div className="theme-picker-row">
             <select
               id="theme-select"
               value={themePack.id}
               onChange={(e) => setThemePack(e.target.value)}
-              className="styled-select"
-              style={{ flex: 1 }}
+              className="styled-select theme-picker-select"
             >
               {availableThemePacks.map((pack) => (
                 <option key={pack.id} value={pack.id}>
@@ -171,40 +170,20 @@ export default function SidebarSettingsSection({
             </select>
             <button
               type="button"
-              className="config-btn"
+              className="theme-picker-btn"
               onClick={() => fileInputRef.current?.click()}
               title="Import VSCode theme (.json)"
-              style={{
-                background: 'var(--bg-tertiary)',
-                border: '1px solid var(--border-default)',
-                borderRadius: 'var(--radius-sm)',
-                padding: '4px 8px',
-                cursor: 'pointer',
-                color: 'var(--text-primary)',
-                display: 'flex',
-                alignItems: 'center',
-                flexShrink: 0,
-              }}
+              aria-label="Import VSCode theme"
             >
               <Upload size={14} />
             </button>
             {themePack.id.startsWith('imported-') && (
               <button
                 type="button"
-                className="config-btn"
+                className="theme-picker-btn theme-picker-btn--danger"
                 onClick={() => removeTheme(themePack.id)}
                 title="Remove this imported theme"
-                style={{
-                  background: 'var(--color-error-bg)',
-                  border: '1px solid var(--accent-error)',
-                  borderRadius: 'var(--radius-sm)',
-                  padding: '4px 8px',
-                  cursor: 'pointer',
-                  color: 'var(--accent-error)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  flexShrink: 0,
-                }}
+                aria-label="Remove imported theme"
               >
                 <Trash2 size={14} />
               </button>
@@ -214,12 +193,10 @@ export default function SidebarSettingsSection({
             ref={fileInputRef}
             type="file"
             accept=".json"
-            style={{ display: 'none' }}
+            className="theme-picker-file-input"
             onChange={handleImportTheme}
           />
-          {importError && (
-            <div style={{ color: 'var(--accent-error)', fontSize: '12px', marginTop: '2px' }}>{importError}</div>
-          )}
+          {importError && <div className="theme-picker-error">{importError}</div>}
         </div>
         <div className="config-item">
           <label htmlFor="hotkey-preset-select">Apply Hotkey Preset:</label>
@@ -237,7 +214,7 @@ export default function SidebarSettingsSection({
             <option value="sprout">Sprout (Legacy)</option>
           </select>
         </div>
-        <div className="config-item" style={{ marginTop: 'var(--space-4, 8px)' }}>
+        <div className="config-item settings-help-spaced-top">
           <button
             type="button"
             className="settings-link-btn settings-link-btn--hotkeys"

@@ -22,7 +22,7 @@ export default function PerformanceSettingsTab({ renderNumberInput, renderTextIn
         'Timeout for AI-generated commit messages. Defaults to 300s if unset.',
       )}
 
-      <div style={{ marginTop: 'var(--space-5)' }}>
+      <div className="settings-section-spaced">
         <h4>Resource Storage</h4>
         {renderTextInput(
           'resource_directory',

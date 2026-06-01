@@ -10,7 +10,7 @@ import (
 )
 
 // handleManageSettings manages application settings and provider credentials.
-// Operations: get, set, list_providers, test_credential.
+// Operations: get, set, list_providers, test_credential, describe, describe_all, preview.
 func handleManageSettings(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	operation, err := getStringArg(args, "operation")
 	if err != nil {
@@ -26,8 +26,14 @@ func handleManageSettings(ctx context.Context, a *Agent, args map[string]interfa
 		return handleSettingsListProviders(a, args)
 	case "test_credential":
 		return handleSettingsTestCredential(a, args)
+	case "describe":
+		return handleSettingsDescribe(a, args)
+	case "describe_all":
+		return handleSettingsDescribeAll(a, args)
+	case "preview":
+		return handleSettingsPreview(a, args)
 	default:
-		return "", fmt.Errorf("unknown operation %q: must be one of get, set, list_providers, test_credential", operation)
+		return "", fmt.Errorf("unknown operation %q: must be one of get, set, list_providers, test_credential, describe, describe_all, preview", operation)
 	}
 }
 
@@ -142,6 +148,248 @@ func handleSettingsTestCredential(a *Agent, args map[string]interface{}) (string
 		return fmt.Sprintf("Provider %q has valid credentials configured", provider), nil
 	}
 	return fmt.Sprintf("Provider %q does not have credentials configured", provider), nil
+}
+
+// settingDetail holds metadata for a setting key used by describe and describe_all.
+type settingDetail struct {
+	key          string
+	description  string
+	validValues  string
+	getValue     func(cfg *configuration.Config) string
+}
+
+// allSettings returns the complete list of setting definitions including extended settings.
+func allSettings() []settingDetail {
+	return []settingDetail{
+		{
+			key:          "provider",
+			description:  "Current LLM provider",
+			validValues:  "openai, anthropic, deepseek, openrouter, ollama, ollama-local, lmstudio, deepinfra, cerebras, chutes, minimax, mistral, zai, or custom provider names",
+			getValue:     func(cfg *configuration.Config) string { return cfg.LastUsedProvider },
+		},
+		{
+			key:          "model",
+			description:  "Current model for the active provider",
+			validValues:  "provider-specific model name",
+			getValue:     func(cfg *configuration.Config) string { m := cfg.GetModelForProvider(cfg.LastUsedProvider); return m },
+		},
+		{
+			key:          "reasoning_effort",
+			description:  "Reasoning effort",
+			validValues:  "low, medium, high",
+			getValue:     func(cfg *configuration.Config) string { return cfg.ReasoningEffort },
+		},
+		{
+			key:          "disable_thinking",
+			description:  "Disable thinking mode",
+			validValues:  "true, false",
+			getValue:     func(cfg *configuration.Config) string { return fmt.Sprintf("%v", cfg.DisableThinking) },
+		},
+		{
+			key:          "resource_directory",
+			description:  "Directory for captured web/vision resources",
+			validValues:  "any valid file path",
+			getValue:     func(cfg *configuration.Config) string { return cfg.ResourceDirectory },
+		},
+		{
+			key:          "history_scope",
+			description:  "Change history scope",
+			validValues:  "project, global",
+			getValue:     func(cfg *configuration.Config) string { return cfg.HistoryScope },
+		},
+		{
+			key:          "ea_mode",
+			description:  "Executive Assistant mode",
+			validValues:  "interactive, queue",
+			getValue:     func(cfg *configuration.Config) string { return cfg.EAMode },
+		},
+		{
+			key:          "subagent_provider",
+			description:  "Provider used for subagents",
+			validValues:  "provider name or empty to inherit from provider",
+			getValue:     func(cfg *configuration.Config) string { return cfg.SubagentProvider },
+		},
+		{
+			key:          "subagent_model",
+			description:  "Model used for subagents",
+			validValues:  "provider-specific model name or empty to use provider default",
+			getValue:     func(cfg *configuration.Config) string { return cfg.SubagentModel },
+		},
+		{
+			key:          "self_review_gate_mode",
+			description:  "Self-review gate mode",
+			validValues:  "off, code, always",
+			getValue:     func(cfg *configuration.Config) string { return cfg.SelfReviewGateMode },
+		},
+		{
+			key:          "commit_provider",
+			description:  "Provider for commit message generation",
+			validValues:  "provider name or empty to inherit from provider",
+			getValue:     func(cfg *configuration.Config) string { return cfg.CommitProvider },
+		},
+		{
+			key:          "commit_model",
+			description:  "Model for commit message generation",
+			validValues:  "provider-specific model name or empty to use provider default",
+			getValue:     func(cfg *configuration.Config) string { return cfg.CommitModel },
+		},
+		{
+			key:          "review_provider",
+			description:  "Provider for code review commands",
+			validValues:  "provider name or empty to inherit from provider",
+			getValue:     func(cfg *configuration.Config) string { return cfg.ReviewProvider },
+		},
+		{
+			key:          "review_model",
+			description:  "Model for code review commands",
+			validValues:  "provider-specific model name or empty to use provider default",
+			getValue:     func(cfg *configuration.Config) string { return cfg.ReviewModel },
+		},
+	}
+}
+
+// handleSettingsDescribe returns the description, valid values, and current value for a single setting.
+func handleSettingsDescribe(a *Agent, args map[string]interface{}) (string, error) {
+	key, err := getStringArg(args, "key")
+	if err != nil {
+		return "", fmt.Errorf("key is required for describe operation: %w", err)
+	}
+
+	key = strings.ToLower(strings.TrimSpace(key))
+
+	mgr := a.GetConfigManager()
+	if mgr == nil {
+		return "", fmt.Errorf("configuration manager not available")
+	}
+
+	cfg := mgr.GetConfig()
+	if cfg == nil {
+		return "", fmt.Errorf("configuration not loaded")
+	}
+
+	for _, s := range allSettings() {
+		if s.key == key {
+			value := s.getValue(cfg)
+			if value == "" {
+				value = "(not set)"
+			}
+			return fmt.Sprintf("%s — %s\nValid values: %s\nCurrent value: %s", s.key, s.description, s.validValues, value), nil
+		}
+	}
+
+	return "", fmt.Errorf("unknown setting key %q", key)
+}
+
+// handleSettingsDescribeAll returns all settings with descriptions, valid values, and current values.
+func handleSettingsDescribeAll(a *Agent, args map[string]interface{}) (string, error) {
+	mgr := a.GetConfigManager()
+	if mgr == nil {
+		return "", fmt.Errorf("configuration manager not available")
+	}
+
+	cfg := mgr.GetConfig()
+	if cfg == nil {
+		return "", fmt.Errorf("configuration not loaded")
+	}
+
+	var lines []string
+	lines = append(lines, "Settings Overview")
+	lines = append(lines, strings.Repeat("-", 70))
+
+	for _, s := range allSettings() {
+		value := s.getValue(cfg)
+		if value == "" {
+			value = "(not set)"
+		}
+		lines = append(lines, fmt.Sprintf("%-22s %s", s.key+":", s.description))
+		lines = append(lines, fmt.Sprintf("  %-14s %s", "Valid values:", s.validValues))
+		lines = append(lines, fmt.Sprintf("  %-14s %s", "Current:", value))
+		lines = append(lines, "")
+	}
+
+	return strings.Join(lines, "\n"), nil
+}
+
+// handleSettingsPreview shows what would change before applying a setting, without actually changing it.
+func handleSettingsPreview(a *Agent, args map[string]interface{}) (string, error) {
+	key, err := getStringArg(args, "key")
+	if err != nil {
+		return "", fmt.Errorf("key is required for preview operation: %w", err)
+	}
+
+	value, err := getStringArg(args, "value")
+	if err != nil {
+		return "", fmt.Errorf("value is required for preview operation: %w", err)
+	}
+
+	key = strings.ToLower(strings.TrimSpace(key))
+
+	mgr := a.GetConfigManager()
+	if mgr == nil {
+		return "", fmt.Errorf("configuration manager not available")
+	}
+
+	cfg := mgr.GetConfig()
+	if cfg == nil {
+		return "", fmt.Errorf("configuration not loaded")
+	}
+
+	// Get current value
+	currentValue, err := getConfigValue(cfg, key)
+	if err != nil {
+		// Maybe it's an extended setting
+		for _, s := range allSettings() {
+			if s.key == key {
+				currentValue = s.getValue(cfg)
+				break
+			}
+		}
+		if err != nil && currentValue == "" {
+			return "", fmt.Errorf("unknown setting key %q", key)
+		}
+	}
+
+	if currentValue == "" {
+		currentValue = "(not set)"
+	}
+
+	// Validate the proposed value by dry-running setConfigValue on a minimal copy
+	// Only fields that setConfigValue reads are needed for validation
+	previewCfg := configuration.Config{
+		LastUsedProvider: cfg.LastUsedProvider,
+		ProviderModels:   cfg.ProviderModels,
+	}
+	setErr := setConfigValue(&previewCfg, key, value)
+
+	var notes []string
+
+	// Check credential status for provider-related keys
+	providerKeys := map[string]bool{"provider": true, "subagent_provider": true, "commit_provider": true, "review_provider": true}
+	if providerKeys[key] && value != "" {
+		provider := strings.TrimSpace(strings.ToLower(value))
+		if configuration.HasProviderAuth(provider) {
+			notes = append(notes, fmt.Sprintf("credential check — %s has valid credentials", provider))
+		} else {
+			notes = append(notes, fmt.Sprintf("WARNING — %s does not have credentials configured", provider))
+		}
+	}
+
+	var result strings.Builder
+	result.WriteString(fmt.Sprintf("Preview: Changing %s\n", key))
+	result.WriteString(fmt.Sprintf("  Current:  %s\n", currentValue))
+	result.WriteString(fmt.Sprintf("  Proposed: %s\n", value))
+
+	if setErr != nil {
+		result.WriteString(fmt.Sprintf("  ERROR: %s\n", setErr.Error()))
+	} else if len(notes) > 0 {
+		for _, n := range notes {
+			result.WriteString(fmt.Sprintf("  Notes:  %s\n", n))
+		}
+	} else {
+		result.WriteString("  Notes:  no issues detected\n")
+	}
+
+	return result.String(), nil
 }
 
 // supportedSettings contains the list of valid setting keys.

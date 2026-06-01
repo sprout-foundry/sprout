@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ApiService } from '../../services/api';
 import { clientFetch } from '../../services/clientSession';
 import { debugLog, type useLog } from '../../utils/log';
@@ -17,34 +17,47 @@ interface UseFileIndexOptions {
   log: ReturnType<typeof useLog>;
 }
 
+// Files only change when the workspace does, so we cache the BFS result and
+// invalidate it after this TTL so users picking up new files don't need to
+// reload the page. 60s is short enough to feel fresh, long enough to skip
+// redundant work during rapid palette opens.
+const INDEX_TTL_MS = 60_000;
+
 function useFileIndex(options: UseFileIndexOptions): UseFileIndexResult {
   const { apiService, isOpen, log } = options;
 
   const [allFiles, setAllFiles] = useState<FileResult[]>([]);
   const [workspaceRoot, setWorkspaceRoot] = useState('');
   const [isLoadingFiles, setIsLoadingFiles] = useState(false);
-
-  // Reset files when palette closes
-  useEffect(() => {
-    if (isOpen) return;
-    setAllFiles([]);
-  }, [isOpen]);
+  // Cache fingerprint: skip re-indexing if the workspace root matches and
+  // the index is still fresh. Reset on workspace change.
+  const lastIndexedAtRef = useRef<number>(0);
+  const lastIndexedRootRef = useRef<string>('');
 
   useEffect(() => {
     if (!isOpen) return;
     let cancelled = false;
 
-    apiService
-      .getWorkspace()
-      .then((workspace) => {
-        if (!cancelled) setWorkspaceRoot(String(workspace.workspace_root || '').trim());
-      })
-      .catch((err) => {
+    const run = async () => {
+      // Resolve workspace root first so we can decide whether the cache is
+      // still valid for it.
+      let resolvedRoot = '';
+      try {
+        const workspace = await apiService.getWorkspace();
+        if (cancelled) return;
+        resolvedRoot = String(workspace.workspace_root || '').trim();
+        setWorkspaceRoot(resolvedRoot);
+      } catch (err) {
         if (!cancelled) setWorkspaceRoot('');
         debugLog('[FileIndex] Failed to fetch workspace root:', err);
-      });
+      }
 
-    const doFetch = async () => {
+      const isFresh =
+        resolvedRoot &&
+        resolvedRoot === lastIndexedRootRef.current &&
+        Date.now() - lastIndexedAtRef.current < INDEX_TTL_MS;
+      if (isFresh) return;
+
       setIsLoadingFiles(true);
       try {
         const queue: Array<{ path: string; depth: number }> = [{ path: '.', depth: 0 }];
@@ -53,6 +66,7 @@ function useFileIndex(options: UseFileIndexOptions): UseFileIndexResult {
         let visitedDirs = 0;
 
         while (queue.length > 0 && indexedFiles.length < MAX_INDEXED_FILES && visitedDirs < MAX_INDEXED_DIRECTORIES) {
+          if (cancelled) return;
           const item = queue.shift();
           if (!item || visited.has(item.path)) continue;
           visited.add(item.path);
@@ -82,7 +96,11 @@ function useFileIndex(options: UseFileIndexOptions): UseFileIndexResult {
           }
         }
 
-        if (!cancelled) setAllFiles(indexedFiles);
+        if (!cancelled) {
+          setAllFiles(indexedFiles);
+          lastIndexedAtRef.current = Date.now();
+          lastIndexedRootRef.current = resolvedRoot;
+        }
       } catch (err) {
         log.error(`Failed to browse files: ${err instanceof Error ? err.message : String(err)}`, {
           title: 'File Browse Error',
@@ -91,7 +109,8 @@ function useFileIndex(options: UseFileIndexOptions): UseFileIndexResult {
         if (!cancelled) setIsLoadingFiles(false);
       }
     };
-    doFetch();
+
+    void run();
 
     return () => {
       cancelled = true;

@@ -132,36 +132,15 @@ export const WithNavigateToLine: Story = {
   },
 };
 
-export const WithActiveBuffer: Story = {
+export const SymbolMode: Story = {
   args: {
     isOpen: true,
     onClose: () => {},
     onOpenFile: (path) => console.log('Open file:', path),
     onExecuteCommand: (id) => console.log('Execute command:', id),
     initialMode: 'symbols',
-    activeBufferContent: `
-function App() {
-  const [count, setCount] = useState(0);
-  const [name, setName] = useState('');
-
-  useEffect(() => {
-    document.title = \`Count: \${count}\`;
-  }, [count]);
-
-  const handleClick = () => {
-    setCount(count + 1);
-  };
-
-  return (
-    <div>
-      <h1>Hello, {name}</h1>
-      <Button onClick={handleClick}>Click me</Button>
-    </div>
-  );
-}`,
-    activeBufferFileExtension: '.tsx',
     onSearchSymbols: (query) => {
-      if (!query) return [];
+      if (!query) return mockSymbols.slice(0, 10);
       return mockSymbols.filter((s) =>
         s.name.toLowerCase().includes(query.toLowerCase())
       );
@@ -169,14 +148,13 @@ function App() {
   },
 };
 
-export const WithWorkspaceRoot: Story = {
+export const FileMode: Story = {
   args: {
     isOpen: true,
     onClose: () => {},
     onOpenFile: (path) => console.log('Open file:', path),
     onExecuteCommand: (id) => console.log('Execute command:', id),
     initialMode: 'files',
-    workspaceRoot: '/home/user/myproject',
     onSearchFiles: async (query) => {
       if (!query) return [];
       return mockFiles.filter((f) =>

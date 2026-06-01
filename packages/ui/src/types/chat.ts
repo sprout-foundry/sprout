@@ -157,28 +157,6 @@ export interface SubagentRun {
   cost: number;
 }
 
-// ── Delegate Types ───────────────────────────────────────────────────
-
-export interface DelegateToolCallInfo {
-  tool_name: string;
-  input: string;
-  output: string;
-  timestamp: string;
-  duration_ms: number;
-  success: boolean;
-}
-
-export interface DelegateActivity {
-  delegateId: string;
-  action: string;
-  summary?: string;
-  depth: number;
-  tokensUsed: number;
-  cost: number;
-  toolsCalled: DelegateToolCallInfo[];
-  status: 'running' | 'completed' | 'error';
-}
-
 // ── Chat Component Props ───────────────────────────────────────────────
 /**
  * Shared props interface for chat components.
@@ -202,7 +180,6 @@ export interface ChatProps {
   queryProgress?: unknown;
   currentTodos?: TodoItem[];
   subagentActivities?: SubagentActivity[];
-  delegateActivities?: DelegateActivity[];
   onToolPillClick?: (toolId: string) => void;
   onStopProcessing?: () => void;
   // Worktree support

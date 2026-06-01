@@ -118,7 +118,6 @@ export function useChatSessions({
               toolExecutions: prev.toolExecutions,
               fileEdits: prev.fileEdits,
               subagentActivities: prev.subagentActivities,
-              delegateActivities: prev.delegateActivities,
               currentTodos: prev.currentTodos,
               queryProgress: prev.queryProgress,
               lastError: prev.lastError,

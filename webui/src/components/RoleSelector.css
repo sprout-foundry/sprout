@@ -31,7 +31,7 @@
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 150ms ease;
+  transition: background, color, border-color, box-shadow, transform 150ms ease;
   font-size: 16px;
   line-height: 1;
   margin-left: auto;

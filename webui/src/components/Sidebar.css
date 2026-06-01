@@ -297,7 +297,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.15s var(--ease-out);
+  transition: background, color, border-color, box-shadow, transform 0.15s var(--ease-out);
   position: relative;
   font-family: var(--font-sans);
 }
@@ -428,6 +428,34 @@
   color: var(--text-secondary);
   font-weight: 600;
   letter-spacing: 0.04em;
+}
+
+/* Inline settings utility button — e.g. "Edit Keyboard Shortcuts (JSON)".
+ * Replaces inline styles in SidebarSettingsSection so the appearance
+ * theme-switches and stays consistent with other sidebar controls. */
+.sidebar .settings-link-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: background var(--ease-out) 120ms, border-color var(--ease-out) 120ms;
+}
+
+.sidebar .settings-link-btn:hover {
+  background: var(--bg-elevated);
+  border-color: var(--border-strong);
+}
+
+.sidebar .settings-link-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
 }
 
 /* ── Styled selects ───────────────────────────────────────────── */
@@ -907,7 +935,7 @@
   font-size: 11px;
   font-weight: 600;
   font-family: var(--font-sans);
-  transition: all 0.15s var(--ease-out);
+  transition: background, color, border-color, box-shadow, transform 0.15s var(--ease-out);
 }
 
 .sidebar .search-option-btn:hover {
@@ -967,7 +995,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  transition: all 0.15s var(--ease-out);
+  transition: background, color, border-color, box-shadow, transform 0.15s var(--ease-out);
 }
 
 .sidebar .search-replace-btn:hover:not(:disabled) {
@@ -1196,7 +1224,7 @@
   font-size: var(--text-sm);
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s var(--ease-out);
+  transition: background, color, border-color, box-shadow, transform 0.15s var(--ease-out);
 }
 
 .sidebar .view-switch-btn:hover {
@@ -1914,7 +1942,7 @@
   color: var(--text-secondary);
   font-size: 13px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background, color, border-color, box-shadow, transform 0.15s ease;
 }
 
 .git-sidebar-load-more:hover {

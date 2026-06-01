@@ -1,13 +1,26 @@
+import { SkeletonText } from '@sprout/ui';
 import { Columns2, Rows2, X, MessageSquarePlus } from 'lucide-react';
-import React, { useCallback, useEffect, useRef, type CSSProperties } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useRef, type CSSProperties } from 'react';
 import { useEditorManager, MIN_PANE_WIDTH_PERCENT, normalizePaneSize } from '../contexts/EditorManagerContext';
 import type { PerChatState } from '../types/app';
 import EditorTabs from './EditorTabs';
 import EditorWithOutline from './EditorWithOutline';
 import ErrorBoundary from './ErrorBoundary';
-import { TasksPage, TeamPage, BillingPage } from './platform';
 import ResizeHandle from './ResizeHandle';
 import WorkspacePane from './WorkspacePane';
+
+// Route-level lazy-loaded panels — split out of the main bundle so the
+// initial chat-mode load doesn't pay for code paths the user may never
+// open. Each render site below wraps the component in <Suspense>.
+const TasksPage = lazy(() => import('./platform').then((m) => ({ default: m.TasksPage })));
+const TeamPage = lazy(() => import('./platform').then((m) => ({ default: m.TeamPage })));
+const BillingPage = lazy(() => import('./platform').then((m) => ({ default: m.BillingPage })));
+
+const RouteFallback: React.FC = () => (
+  <div style={{ padding: 'var(--space-6)' }}>
+    <SkeletonText lines={6} />
+  </div>
+);
 
 export interface EditorWorkspaceProps {
   currentView: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team';
@@ -496,15 +509,27 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   }, [handleFocusPaneIndex]);
 
   if (currentView === 'tasks') {
-    return <TasksPage />;
+    return (
+      <Suspense fallback={<RouteFallback />}>
+        <TasksPage />
+      </Suspense>
+    );
   }
 
   if (currentView === 'billing') {
-    return <BillingPage />;
+    return (
+      <Suspense fallback={<RouteFallback />}>
+        <BillingPage />
+      </Suspense>
+    );
   }
 
   if (currentView === 'team') {
-    return <TeamPage />;
+    return (
+      <Suspense fallback={<RouteFallback />}>
+        <TeamPage />
+      </Suspense>
+    );
   }
 
   return (

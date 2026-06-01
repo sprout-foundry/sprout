@@ -95,7 +95,7 @@
   border-radius: 8px;
   margin-bottom: 8px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background, color, border-color, box-shadow, transform 0.15s ease;
   text-align: left;
   appearance: none;
 }
@@ -195,7 +195,7 @@
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background, color, border-color, box-shadow, transform 0.15s ease;
   text-align: center;
   appearance: none;
 }

@@ -8,7 +8,7 @@
 
 .workspace-diff-view-toggle {
   display: flex;
-  background: var(--bg-tertiary, rgba(255, 255, 255, 0.06));
+  background: var(--bg-tertiary, var(--inset-highlight-6));
   border-radius: 6px;
   padding: 2px;
   border: 1px solid var(--border-subtle);

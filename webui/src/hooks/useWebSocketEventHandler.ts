@@ -19,7 +19,7 @@ import type {
   AskUserRequestData,
   DriftDetectedData,
 } from '@sprout/events';
-import type { Message, ToolExecution, LogEntry, SubagentActivity } from '@sprout/ui';
+import type { Message, ToolExecution, SubagentActivity } from '@sprout/ui';
 import { useCallback } from 'react';
 import type { AppStoreSetState } from '../contexts/AppStore';
 import { getWebUIClientId } from '../services/clientSession';
@@ -30,99 +30,14 @@ import { debugLog } from '../utils/log';
 import { appendCappedLog } from '../utils/logCap';
 import { generateMessageId } from '../utils/messageId';
 import { trimMessages } from '../utils/messageWindow';
-
-// ── Helper Functions ───────────────────────────────────────────────────
-
-const getToolCallId = (details: unknown): string | undefined => {
-  if (details && typeof details === 'object') {
-    const d = details as Record<string, unknown>;
-    return typeof (d.tool_call_id ?? d.id) === 'string' ? ((d.tool_call_id ?? d.id) as string) : undefined;
-  }
-  return undefined;
-};
-
-const AGENT_CHAT_LEAK_PATTERNS: RegExp[] = [
-  /^\[\d+\s*-\s*\d+%\]\s*executing tool/i,
-  /executing tool\s*\[[^\]]+\]/i,
-  /\bTodoWrite\b/i,
-  /\btodos=\d+/i,
-  /\[\s*\]=\d+\s*\[~\]=\d+\s*\[x\]=\d+\s*\[-\]=\d+/i,
-  /^Subagent:\s*\[\d+\s*-\s*\d+%\]/i,
-];
-
-const shouldSuppressAgentMessageInChat = (message: string): boolean => {
-  const line = message.trim();
-  if (!line) {
-    return true;
-  }
-  return AGENT_CHAT_LEAK_PATTERNS.some((pattern) => pattern.test(line));
-};
-
-const extractToolNameFromToolLogTarget = (target: string): string | null => {
-  if (!target) return null;
-  const trimmed = target.trim();
-  if (!trimmed.startsWith('[') || !trimmed.endsWith(']')) return null;
-  const inner = trimmed.slice(1, -1).trim();
-  if (!inner) return null;
-  const firstToken = inner.split(/\s+/, 1)[0] || '';
-  return firstToken || null;
-};
-
-const TODO_STATUSES = new Set(['pending', 'in_progress', 'completed', 'cancelled']);
-
-const normalizeTodoList = (
-  rawTodos: unknown,
-): Array<{ id: string; content: string; status: 'pending' | 'in_progress' | 'completed' | 'cancelled' }> => {
-  if (!Array.isArray(rawTodos)) return [];
-  const normalized: Array<{
-    id: string;
-    content: string;
-    status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
-  }> = [];
-  const seen = new Set<string>();
-
-  rawTodos.forEach((item, idx) => {
-    if (!item || typeof item !== 'object') return;
-    const t = item as Record<string, unknown>;
-    const rawContent = typeof t.content === 'string' ? t.content.trim() : '';
-    const rawStatus = typeof t.status === 'string' ? t.status.trim() : '';
-    const rawID = typeof t.id === 'string' ? t.id.trim() : '';
-    if (!rawContent || !TODO_STATUSES.has(rawStatus)) return;
-    const status = rawStatus as 'pending' | 'in_progress' | 'completed' | 'cancelled';
-    const id = rawID || `todo-${idx}-${rawStatus}-${rawContent.slice(0, 48)}`;
-    const dedupeKey = `${id}::${status}::${rawContent}`;
-    if (!seen.has(dedupeKey)) {
-      seen.add(dedupeKey);
-      normalized.push({ id, content: rawContent, status });
-    }
-  });
-
-  return normalized;
-};
-
-// ── Event Handler Helpers ───────────────────────────────────────────────
-
-interface EventHandlerContext {
-  event: WsEvent;
-  setState: AppStoreSetState;
-  activeRequestsRef: React.MutableRefObject<number>;
-  activeChatIdRef: React.MutableRefObject<string | null>;
-  apiService: { getStats: () => Promise<unknown> };
-  pendingProviderRef: React.MutableRefObject<string>;
-  pendingProviderChangeRef: React.MutableRefObject<boolean>;
-  pendingProviderChangeValueRef: React.MutableRefObject<string | null>;
-  connectionTimeoutRef: React.MutableRefObject<NodeJS.Timeout | null>;
-  lastConnectionStateRef: React.MutableRefObject<boolean>;
-}
-
-const createLogEntry = (event: WsEvent): LogEntry => ({
-  id: `${Date.now()}-${Math.random()}`,
-  type: event.type,
-  timestamp: new Date(),
-  data: event.data,
-  level: 'info',
-  category: 'system',
-});
+import {
+  createLogEntry,
+  type EventHandlerContext,
+  extractToolNameFromToolLogTarget,
+  getToolCallId,
+  normalizeTodoList,
+  shouldSuppressAgentMessageInChat,
+} from './webSocketEventHelpers';
 
 // Handle connection_status event
 const handleConnectionStatus = (ctx: EventHandlerContext): void => {
@@ -946,7 +861,7 @@ export function useWebSocketEventHandler({
         setState((prev) => {
           const nextToolExecutions = backendProcessing
             ? prev.toolExecutions
-            : prev.toolExecutions.map((tool) => {
+            : prev.toolExecutions.map((tool: ToolExecution) => {
                 if (tool.status === 'started' || tool.status === 'running') {
                   return {
                     ...tool,

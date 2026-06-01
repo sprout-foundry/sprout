@@ -34,7 +34,7 @@
 }
 
 .subagent-feed-toggle-bar:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--inset-highlight-5);
 }
 
 .subagent-feed-toggle-left {
@@ -112,7 +112,7 @@
 }
 
 .subagent-feed-card-header:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--inset-highlight-4);
 }
 
 .subagent-feed-card-left {

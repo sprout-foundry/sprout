@@ -651,7 +651,7 @@
 
 .terminal-search-input {
   width: 100%;
-  /* Was hardcoded `rgba(255, 255, 255, 0.05)` — broke on light theme.
+  /* Was hardcoded `var(--inset-highlight-5)` — broke on light theme.
    * Token-driven now so hover/focus tint reads on both backdrops. */
   background: var(--bg-elevated);
   border: 1px solid var(--border-subtle);

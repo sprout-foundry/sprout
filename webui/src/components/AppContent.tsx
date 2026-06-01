@@ -481,7 +481,7 @@ const AppContent: React.FC<AppContentProps> = ({
           }}
         />
       </ErrorBoundary>
-      <div
+      <main
         className={`main-content ${isMobile && isSidebarOpen ? 'sidebar-open' : ''} ${supportsLocalTerminal && isTerminalExpanded ? 'terminal-expanded' : ''}`}
       >
         <HeaderBar
@@ -566,7 +566,7 @@ const AppContent: React.FC<AppContentProps> = ({
           isConnected={state.isConnected}
           onModelClick={handleStatusBarModelClick}
         />
-      </div>
+      </main>
       {supportsLocalTerminal && (
         <ErrorBoundary panelName="Terminal">
           <Terminal isExpanded={isTerminalExpanded} onToggleExpand={onTerminalExpandedChange} />

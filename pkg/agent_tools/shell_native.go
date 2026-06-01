@@ -158,7 +158,7 @@ func runShellCommandAdoptable(ctx context.Context, command string, bpm *Backgrou
 	}
 
 	// Set process group so we can kill the entire group on stop
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	setProcessGroup(cmd)
 
 	// Create temp output file for potential background adoption
 	outputFile, err := os.CreateTemp("", "sprout-bg-*.output")

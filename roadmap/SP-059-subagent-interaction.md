@@ -1,11 +1,14 @@
-# SP-059: Subagent ↔ Primary Interaction Overhaul
+# SP-059: Subagent ↔ Primary Interaction Overhaul + Delegate Retirement
 
-**Status:** 📋 Proposed
-**Date:** 2026-05-26
-**Depends on:** SP-006 (Delegate Tool, shipped) — extends the subagent runner
+**Status:** 🚧 In progress
+**Date:** 2026-05-26 (original) · 2026-05-31 (amended)
+**Depends on:** SP-006 (Delegate Tool, shipped — being retired by this spec)
 **Priority:** High (closes silent-cancel and silent-steering UX bugs; pays
-down result-envelope tech debt)
-**Scope:** Three phases, each independently shippable.
+down result-envelope tech debt; collapses the dual delegate/subagent
+architecture into a single mechanism)
+**Scope:** Six phases. Phases 1–2 are largely shipped. Phases 3–6 are the
+remaining work: port the few delegate-only features worth keeping, then
+delete the delegate tool entirely.
 
 ## Problem
 
@@ -77,18 +80,21 @@ and in places non-existent. Three classes of issue:
 
 ### What's Actually Missing
 
-| Gap | Impact | Phase |
-|---|---|---|
-| Webui Stop button doesn't cancel running subagents | High (UX) | 1a |
-| No way to steer a running subagent mid-flight | High (UX) | 1b |
-| UI doesn't distinguish primary-busy from subagent-running | Medium (UX) | 1c |
-| Subagents tab is read-only (no per-row cancel) | Medium (UX) | 1c |
-| Token rollup via `SUBAGENT_METRICS:` stdout regex | Medium (correctness — silent regression if model drops line) | 2b |
-| Files-modified via `Created:`/`Modified:` stdout regex | Medium (correctness — same brittleness) | 2c |
-| Sentinel string error encoding | Low (refactor hygiene) | 2d |
-| Result envelope is `map[string]string` not typed | Low (refactor hygiene) | 2a |
-| Primary's LLM gets no partial visibility into subagent progress | High (capability) | 3a |
-| Stub handlers in new registry return errors | Low today (dead path) | 3b |
+| Gap | Impact | Phase | Status |
+|---|---|---|---|
+| Webui Stop button doesn't cancel running subagents | High (UX) | 1a | ✅ Shipped (`api_query.go:537` calls `runner.CancelAll`) |
+| No way to steer a running subagent mid-flight | High (UX) | 1b | ✅ Shipped (`InjectInputIntoActive` at `subagent_runner.go:409`) |
+| UI doesn't distinguish primary-busy from subagent-running | Medium (UX) | 1c | ❓ Verify; may be covered by SP-051 |
+| Subagents tab is read-only (no per-row cancel) | Medium (UX) | 1c | ❓ Verify; may be covered by SP-051 |
+| Token rollup via `SUBAGENT_METRICS:` stdout regex | Medium (correctness) | 2b | ✅ Shipped (`SubagentRunMetrics`) |
+| Files-modified via `Created:`/`Modified:` stdout regex | Medium (correctness) | 2c | ✅ Shipped (`FilesModified []FileChange`) |
+| Sentinel string error encoding | Low (refactor hygiene) | 2d | ✅ Shipped (`SubagentStatus` + `SubagentError`) |
+| Result envelope is `map[string]string` not typed | Low (refactor hygiene) | 2a | ✅ Shipped (`SubagentReturn`) |
+| Primary's LLM gets no partial visibility into subagent progress | High (capability) | 3a | ✅ Shipped — `ProgressLog` in `SubagentReturn` carries the full timeline; mid-flight injection N/A for sync subagents |
+| Stub handlers in new registry return errors | Low today (dead path) | 3b | ✅ Shipped (handler files deleted) |
+| Subagents can't request user clarification mid-run | Medium (capability) | 4 | ❌ Pending — wire `clarificationManager` into `createSubagent` |
+| `SubagentReturn` missing useful `DelegateResult` fields (e.g. `Iterations`) | Low (parity for delegate removal) | 5 | ❌ Pending |
+| `delegate` + `delegate_status` tools duplicate `run_subagent` with weaker operational tooling | High (architectural debt) | 6 | ❌ Pending — delete the dual system |
 
 ## Proposed Solution
 
@@ -312,10 +318,19 @@ streaming-bridge pattern.
 
 #### 3a. Stream subagent activity into the primary's LLM context
 
-The primary's seed conversation loop has an "observation" injection
-mechanism it uses for tool results. We extend it with a
-`SubagentObserver` that pushes a small, capped buffer of subagent
-events into the primary's pending observations during the run:
+**Resolution (amended 2026-05-31):** This was originally framed around
+mid-flight injection between primary LLM steps. With async subagents
+dropped in Phase 6, the primary is sync-blocked on the `run_subagent`
+tool call — there are no intervening LLM steps to inject into. The
+practical answer is the already-shipped `ProgressLog` field on
+`SubagentReturn` (`subagent_types.go:96-100`), populated by an
+event-bus subscription in `subagent_runner.go:507-547`. When the
+sync tool call returns, the primary's LLM sees the full chronological
+activity timeline (spawn / output / complete entries, capped at 50)
+attached to the result envelope. Goal met without the
+`SubagentObserver` machinery below.
+
+The original design follows for historical reference:
 
 ```
 Subagent <persona:id> [t+12s]: read_file pkg/auth.go
@@ -375,6 +390,119 @@ migration.
 - Delete `pkg/agent_tools/run_parallel_subagents_handler.go` + its test
 - `pkg/agent_tools/all.go` — remove their registrations
 
+### Phase 4: Subagents can request user clarification mid-run
+
+**Goal:** Subagents reach the same `clarificationManager` the primary
+already shares with delegates. Today, `createSubagent` does not copy
+`parent.clarificationManager`, so a subagent that hits an ambiguous
+input has no path back to the user. `delegate_factory.go:111-113`
+already demonstrates the one-line wiring.
+
+**Files touched:**
+- `pkg/agent/subagent_runner.go` — in `createSubagent`, copy
+  `parent.clarificationManager` onto the child agent struct (same as
+  delegate's pattern).
+- Test: extend an existing subagent runner test to assert the field is
+  populated.
+
+### Phase 5: Reconcile `SubagentReturn` with delegate's return fields
+
+**Goal:** Before deleting `delegate`, copy any genuinely useful fields
+from `DelegateResult` into `SubagentReturn` so callers don't lose
+information.
+
+**Audit candidates:**
+- `Iterations int` — `DelegateResult` has it; `SubagentReturn` doesn't.
+  Worth adding — it's a useful budget-pressure signal for the primary's
+  LLM.
+- `Summary string` — both have it (already present in `SubagentReturn`).
+- `FilesChanged []string` — `SubagentReturn.FilesModified` is richer
+  (carries op). No change.
+- `ToolsCalled []ToolCallRecord` — partially mirrored by
+  `ProgressLog`. The richer per-call record is delegate-only; skip
+  unless a real consumer materializes.
+- `ExitStatus string` (`"completed" | "max_iterations" | "error"`) —
+  `SubagentStatus` already covers this. Map `max_iterations` →
+  `SubagentStatusBudgetExceeded` semantically (it's the iteration
+  budget rather than the token budget, but the meaning is the same
+  class of terminal state — "couldn't finish within limits").
+
+**Files touched:**
+- `pkg/agent/subagent_types.go` — add `Iterations int` to
+  `SubagentReturn` and `SubagentRunMetrics`.
+- `pkg/agent/subagent_runner.go` / `tool_handlers_subagent.go` —
+  populate it from `subAgent.state.GetIterations()` or equivalent.
+
+### Phase 6: Delete the `delegate` tool entirely
+
+**Goal:** Collapse the dual delegate/subagent architecture. After
+Phases 3–5, the only delegate-only capabilities that haven't been
+ported are: async execution + `delegate_status`, freeform `role`
+strings, optional `tools` allowlist per-call, and `FollowUpMessages`
+pre-scheduled injection. We are intentionally dropping all four:
+
+- **Async + `delegate_status`** — research (Claude Code's `Task` tool,
+  Anthropic Agent SDK guidance, common pattern across coding agents)
+  shows async subagent execution is not a documented best practice;
+  the LLM control loop does not benefit from non-blocking child
+  execution. Parallelism is already covered by `run_parallel_subagents`.
+- **Freeform `role` string** — was a bug. Personas must be registered
+  configurations, not ad-hoc strings, so per-persona allowlists and
+  spawn-authority gating apply uniformly.
+- **Per-call `tools` allowlist** — superseded by the per-persona
+  allowlist (`conversation.go:97-100`). One source of truth.
+- **`FollowUpMessages` pre-scheduled injection** — interactive
+  steering via Phase 1b's `InjectInputIntoActive` covers the live
+  case; no production caller uses pre-scheduled follow-ups today.
+
+**Pre-flight:**
+
+```bash
+grep -rn '"delegate"\|"delegate_status"\|DelegateConfig\|DelegateResult\|delegateDepth' \
+  --include="*.go" --include="*.ts" --include="*.tsx" \
+  --include="*.json" --include="*.md" .
+```
+
+Anything beyond the known delete-set (the files listed below + their
+tests + spec mentions) is a live consumer that must migrate to
+`run_subagent` first.
+
+**Files deleted:**
+- `pkg/agent/delegate_factory.go` + `delegate_factory_test.go`
+- `pkg/agent/delegate_types.go` + `delegate_types_test.go`
+- `pkg/agent/delegate_stream.go` + `delegate_stream_test.go` (logic
+  preserved in `pkg/agent/streambridge.go` from Phase 3a, scoped to
+  subagents only)
+- `pkg/agent/delegate_nesting.go` + `delegate_nesting_test.go`
+- `pkg/agent/async_delegate_tracker.go` + `async_delegate_tracker_test.go`
+- `pkg/agent/tool_handlers_delegate.go` + `tool_handlers_delegate_test.go`
+  + `tool_handlers_delegate_async_test.go` + `delegate_followup_test.go`
+- `pkg/agent/tool_handlers_delegate_status.go` + `tool_handlers_delegate_status_test.go`
+
+**Files modified:**
+- `pkg/agent/tool_registrations.go` — remove `delegate` and
+  `delegate_status` registrations (lines 236, 256).
+- `pkg/agent/tool_registrations_test.go` — drop delegate entries from
+  the expected tool list and parameter-shape tests.
+- `pkg/agent_api/tools.go` — remove delegate registrations (lines
+  605, 673).
+- `pkg/agent/agent.go` (or wherever `Agent` is declared) — remove
+  `delegateDepth`, `delegateID` fields; remove `clarificationManager`
+  share path through the delegate factory (subagent path replaces it).
+- Anywhere `SPROUT_MAX_DELEGATE_DEPTH` is read — remove the env-var
+  handling.
+- `webui/` — grep for `delegate_spawn` / `delegate_activity` /
+  `delegate_complete` / `delegate_tool` event consumers; migrate to
+  the subagent equivalents (these events already exist for subagents).
+- `roadmap/SP-006-delegate-tool.md` — collapse to stub, mark
+  superseded by SP-059 (mirrors how SP-023 was archived).
+
+**Verification:**
+- `make build-all`
+- `go test ./...`
+- Manual: spin up the CLI, confirm tool listing no longer advertises
+  `delegate` / `delegate_status`, confirm `run_subagent` still works.
+
 ## Test plan
 
 Per phase. Each phase is independently shippable; tests guard the seam.
@@ -424,6 +552,14 @@ Per phase. Each phase is independently shippable; tests guard the seam.
 - **Per-subagent UI deep-dive (open in pane, view full conversation).**
   The current Subagents tab shows lifecycle + activity events; a richer
   drill-down is a separate UX project.
+- **Async/fire-and-forget subagent execution.** Explicitly dropped in
+  Phase 6 rather than ported from `delegate`. Sync subagents +
+  `run_parallel_subagents` cover the real use cases; async added
+  coordination overhead with no model-driven benefit.
+- **Pre-scheduled follow-up messages for subagents.** Delegate's
+  `FollowUpMessages` is not being ported. Phase 1b's interactive
+  steering covers live cases; pre-scheduling can be revisited if a
+  concrete need appears.
 
 ## References
 

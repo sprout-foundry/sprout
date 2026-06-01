@@ -146,6 +146,12 @@ func (h *searchFilesHandler) Execute(ctx context.Context, env ToolEnv, args map[
 		output = fmt.Sprintf("Error searching directory: %v", err)
 	}
 
+	// When grep finds nothing and embedding is available, hint at semantic search.
+	// Guard: only hint on clean zero-result runs, not when an error occurred.
+	if matchCount == 0 && err == nil && env.EmbeddingMgr != nil && env.EmbeddingMgr.IsInitialized() {
+		output = fmt.Sprintf("No results found for '%s' in %s.\n\nNo text matches, but the embedding index is available — try `semantic_search` to find code with similar meaning.", searchPattern, directory)
+	}
+
 	return ToolResult{
 		Output:  output,
 		IsError: false,

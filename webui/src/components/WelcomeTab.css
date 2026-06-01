@@ -33,7 +33,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition: background, color, border-color, box-shadow, transform 0.2s ease;
 }
 
 .welcome-dismiss-btn:hover {
@@ -109,7 +109,7 @@
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background, color, border-color, box-shadow, transform 0.2s ease;
   text-align: left;
 }
 
@@ -172,7 +172,7 @@
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
   cursor: default;
-  transition: all 0.2s ease;
+  transition: background, color, border-color, box-shadow, transform 0.2s ease;
 }
 
 .getting-started-card:hover {
@@ -223,7 +223,7 @@
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background, color, border-color, box-shadow, transform 0.2s ease;
   appearance: none;
   text-align: left;
   margin: 0;

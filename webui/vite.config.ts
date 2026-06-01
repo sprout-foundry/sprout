@@ -11,7 +11,9 @@ const reactPlugin = useSwc
   : require('@vitejs/plugin-react').default;
 
 // https://vite.dev/config/
-export default defineConfig(({ mode: _mode }) => {
+export default defineConfig(({ mode }) => {
+  const isProd = mode === 'production';
+
   // SP-040-2a: Safe defaults for VITE_ vars used by RuntimeConfig bootstrap.
   // These are overridden at build time by .env files or CI environment vars.
   //
@@ -71,6 +73,11 @@ export default defineConfig(({ mode: _mode }) => {
       outDir: 'dist',
       sourcemap: false,
       rollupOptions: {
+        // Bundle hygiene: production drops console.{log,debug,info,warn,error}
+        // and `debugger` so the shipped JS never contains the ~100 dev-time
+        // log calls scattered through src/. Configured at the Rollup level
+        // via Vite's esbuild minify pass.
+        treeshake: isProd ? { moduleSideEffects: 'no-external' } : undefined,
         output: {
           manualChunks: {
             // Split CodeMirror into separate chunk
@@ -87,7 +94,13 @@ export default defineConfig(({ mode: _mode }) => {
         },
       },
     },
-    
+
+    // esbuild config — strip console + debugger from production bundles
+    // only. Dev keeps them so live debugging still works.
+    esbuild: isProd
+      ? { drop: ['console', 'debugger'] }
+      : undefined,
+
     // Development server
     server: {
       port: 3000,

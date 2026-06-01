@@ -165,6 +165,15 @@
   --sidebar-select-bg: #242932;
   --sidebar-rail-bg: rgba(0, 0, 0, 0.15);
 
+  /* Subagent nesting-depth colors. Surfaced via DEPTH_COLORS in
+   * SubagentTree.tsx so the tree's left-border, persona text, and
+   * SubagentActivityFeed accents can vary per nesting level. Token-
+   * driven so light theme can flip to a more legible progression. */
+  --subagent-depth-0: #818cf8;
+  --subagent-depth-1: #a78bfa;
+  --subagent-depth-2: #c084fc;
+  --subagent-depth-3: #e879f9;
+
   /* Transitions */
   --ease-out: cubic-bezier(0, 0, 0.2, 1);
   --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
@@ -245,6 +254,12 @@
   --sidebar-nav-btn-active-bg: #1d4ed8;
   --sidebar-select-bg: rgba(255, 255, 255, 0.96);
   --sidebar-rail-bg: rgba(0, 0, 0, 0.06);
+
+  /* Subagent depth colors — darker progression for legibility on light bg. */
+  --subagent-depth-0: #4f46e5;
+  --subagent-depth-1: #7c3aed;
+  --subagent-depth-2: #9333ea;
+  --subagent-depth-3: #c026d3;
 }
 
 body {
@@ -837,7 +852,7 @@ body,
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
   cursor: pointer;
-  transition: all 0.15s var(--ease-out);
+  transition: background, color, border-color, box-shadow, transform 0.15s var(--ease-out);
   display: flex;
   align-items: center;
   gap: var(--space-2);

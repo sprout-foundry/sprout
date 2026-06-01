@@ -312,7 +312,7 @@ export function useEditorExtensions(): UseEditorExtensionsReturn {
         },
         '.cm-foldGutter': { width: '20px' },
         '.cm-foldGutter .cm-gutterElement': { padding: '0 4px', fontSize: '12px' },
-        '.cm-foldGutter .cm-gutterElement:hover': { color: 'var(--accent-primary, #6366f1)' },
+        '.cm-foldGutter .cm-gutterElement:hover': { color: 'var(--accent-primary)' },
       }),
 
       // ── Compartment-wrapped toggles ──

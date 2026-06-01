@@ -1,5 +1,6 @@
+import { SkeletonText } from '@sprout/ui';
 import { Keyboard, Upload, Trash2 } from 'lucide-react';
-import { useRef, useEffect, useState, useCallback } from 'react';
+import { Suspense, lazy, useRef, useEffect, useState, useCallback } from 'react';
 import type { ChangeEvent } from 'react';
 import type { WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
 import type { SproutSettings } from '../services/api';
@@ -11,7 +12,12 @@ interface ExtendedAgentConfig extends AgentConfigProps {
   onRoleChange?: (roleId: string | null) => void;
 }
 import { useLog } from '../utils/log';
-import SettingsPanel from './SettingsPanel';
+
+// SettingsPanel pulls in CredentialsSettingsTab, ProviderSettingsTab,
+// onnxEmbeddingProvider, and a few other heavy dependencies. It only
+// renders when the sidebar settings section is open, so split it into
+// its own chunk; the bundle no longer pays for it on initial load.
+const SettingsPanel = lazy(() => import('./SettingsPanel'));
 
 interface SidebarSettingsSectionProps {
   themePack: { id: string };
@@ -234,23 +240,10 @@ export default function SidebarSettingsSection({
         <div className="config-item" style={{ marginTop: 'var(--space-4, 8px)' }}>
           <button
             type="button"
-            className="settings-link-btn"
+            className="settings-link-btn settings-link-btn--hotkeys"
             onClick={() => {
               // Dispatch event to open hotkeys config
               window.dispatchEvent(new CustomEvent('sprout:open-hotkeys-config'));
-            }}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '6px 12px',
-              background: 'var(--bg-secondary, #2a2a2a)',
-              border: '1px solid var(--border-color, #3c3c3c)',
-              borderRadius: '4px',
-              color: 'var(--text-primary, #fff)',
-              cursor: 'pointer',
-              fontSize: '13px',
-              width: '100%',
             }}
           >
             <Keyboard size={14} />
@@ -260,18 +253,20 @@ export default function SidebarSettingsSection({
       </div>
 
       {/* Agent Config moved into SettingsPanel (Agent section body) */}
-      <SettingsPanel
-        settings={settings}
-        onSettingsChanged={onSettingsChanged}
-        onRequestProviderSetup={onRequestProviderSetup}
-        editorPreferences={{ autoSaveEnabled, whitespaceRenderingMode, formatOnSaveEnabled }}
-        onEditorPreferenceChanged={(key, value) => {
-          if (key === 'autoSaveEnabled') setAutoSaveEnabled(value as boolean);
-          if (key === 'whitespaceRenderingMode') setWhitespaceRenderingMode(value as WhitespaceRenderingMode);
-          if (key === 'formatOnSaveEnabled') setFormatOnSaveEnabled(value as boolean);
-        }}
-        agentConfig={agentConfigObj}
-      />
+      <Suspense fallback={<SkeletonText lines={6} />}>
+        <SettingsPanel
+          settings={settings}
+          onSettingsChanged={onSettingsChanged}
+          onRequestProviderSetup={onRequestProviderSetup}
+          editorPreferences={{ autoSaveEnabled, whitespaceRenderingMode, formatOnSaveEnabled }}
+          onEditorPreferenceChanged={(key, value) => {
+            if (key === 'autoSaveEnabled') setAutoSaveEnabled(value as boolean);
+            if (key === 'whitespaceRenderingMode') setWhitespaceRenderingMode(value as WhitespaceRenderingMode);
+            if (key === 'formatOnSaveEnabled') setFormatOnSaveEnabled(value as boolean);
+          }}
+          agentConfig={agentConfigObj}
+        />
+      </Suspense>
     </>
   );
 }

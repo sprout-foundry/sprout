@@ -1,20 +1,3 @@
-import { COMMAND_PREFIX, SYMBOL_PREFIXES } from './constants';
-import type { PaletteMode } from './types';
-
-// ── Prefix-based auto-detection ──────────────────────────────────────────
-
-export function parsePrefixAndQuery(raw: string): { prefix: PaletteMode | null; query: string } {
-  if (raw.startsWith(COMMAND_PREFIX)) {
-    return { prefix: 'commands', query: raw.slice(COMMAND_PREFIX.length) };
-  }
-  for (const p of SYMBOL_PREFIXES) {
-    if (raw.startsWith(p)) {
-      return { prefix: 'symbols', query: raw.slice(p.length) };
-    }
-  }
-  return { prefix: null, query: raw };
-}
-
 // ── Path helpers (exported for tests) ────────────────────────────────────
 
 export function normalizePathSeparators(value: string): string {

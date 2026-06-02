@@ -3,7 +3,7 @@ import type { ApiService } from '../../services/api';
 import { clientFetch } from '../../services/clientSession';
 import { debugLog, type useLog } from '../../utils/log';
 import { MAX_INDEXED_FILES, MAX_INDEXED_DIRECTORIES, SKIP_DIRECTORIES, MAX_DIRECTORY_DEPTH } from './constants';
-import type { FileResult } from './types';
+import type { FileResult } from './CommandPalette';
 
 interface UseFileIndexResult {
   allFiles: FileResult[];

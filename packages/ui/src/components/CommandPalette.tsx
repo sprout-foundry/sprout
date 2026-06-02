@@ -4,9 +4,9 @@
  * A searchable command palette supporting commands, files, and symbols.
  * Fully props-driven — data fetching is handled by the host application.
  */
-import { useState, useEffect, useRef, useCallback, useMemo, useId } from 'react';
+import { Fragment, useState, useEffect, useRef, useCallback, useMemo, useId } from 'react';
 import type { ChangeEvent, KeyboardEvent } from 'react';
-import { Command as CommandIcon, FileText, Hash, Search } from 'lucide-react';
+import { Command as CommandIcon, FileText, Hash, Loader2, Search, X } from 'lucide-react';
 import { fuzzyScore, highlightMatches } from '../utils/fuzzyMatch';
 import { debugLog } from '../utils/log';
 import './CommandPalette.css';
@@ -17,6 +17,9 @@ export interface CommandDef {
   id: string;
   label: string;
   category: string;
+  /** Pre-formatted keyboard shortcut to show next to the command (e.g.
+   *  "Cmd+Shift+P"). Optional — when omitted, no kbd is rendered. */
+  shortcut?: string;
 }
 
 export interface FileResult {
@@ -33,6 +36,37 @@ export interface SymbolResult {
 }
 
 type ResultKind = 'command' | 'file' | 'symbol' | 'header';
+
+const KIND_LABEL: Record<'command' | 'file' | 'symbol', string> = {
+  command: 'Commands',
+  file: 'Files',
+  symbol: 'Symbols',
+};
+
+const MODE_ORDER: PaletteMode[] = ['all', 'files', 'symbols', 'commands'];
+
+/** Split a `Cmd+Shift+P` style shortcut into individual chip strings.
+ *  Replaces common modifier names with single-char glyphs so the chips
+ *  read compactly in the row. */
+function splitShortcut(shortcut: string): string[] {
+  return shortcut
+    .split('+')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((part) => {
+      const lower = part.toLowerCase();
+      if (lower === 'cmd' || lower === 'meta' || lower === 'command') return '⌘';
+      if (lower === 'shift') return '⇧';
+      if (lower === 'alt' || lower === 'option') return '⌥';
+      if (lower === 'ctrl' || lower === 'control') return '⌃';
+      if (lower === 'enter' || lower === 'return') return '↵';
+      if (lower === 'esc' || lower === 'escape') return 'Esc';
+      if (lower === 'space') return '␣';
+      if (lower === 'tab') return '⇥';
+      if (lower === 'backspace') return '⌫';
+      return part.toUpperCase();
+    });
+}
 
 interface PaletteResult {
   kind: ResultKind;
@@ -79,6 +113,13 @@ export interface CommandPaletteProps {
   onSearchFiles?: (query: string) => Promise<FileResult[]>;
   /** Callback to search symbols */
   onSearchSymbols?: (query: string) => SymbolResult[];
+  /** Recently-opened files, shown as the landing list when the user opens
+   *  the palette in `all` or `files` mode with an empty query. Order is
+   *  preserved (most-recent first). */
+  recentFiles?: FileResult[];
+  /** True while the host is indexing files (or otherwise warming up data).
+   *  Surfaces a spinner so the user knows results may be temporarily empty. */
+  isLoading?: boolean;
 }
 
 function CommandPalette({
@@ -91,6 +132,8 @@ function CommandPalette({
   commands = [],
   onSearchFiles,
   onSearchSymbols,
+  recentFiles,
+  isLoading = false,
 }: CommandPaletteProps): JSX.Element | null {
   const [query, setQuery] = useState('');
   const [mode, setMode] = useState<PaletteMode>(initialMode);
@@ -149,19 +192,45 @@ function CommandPalette({
     return () => clearTimeout(timer);
   }, [searchQuery, searchMode, onSearchFiles]);
 
+  // O(1) command-id → CommandDef lookup, recomputed only when the command
+  // list changes. Previously the render loop did `commands.find(...)` per
+  // visible command, which is O(n × visible_results) on every render.
+  const commandIndex = useMemo(() => {
+    const m = new Map<string, CommandDef>();
+    for (const cmd of commands) m.set(cmd.id, cmd);
+    return m;
+  }, [commands]);
+
   // Build results
   const results = useMemo(() => {
-    if (!query) return [];
-
     const q = searchQuery;
-
+    const isEmpty = q.trim().length === 0;
     const items: PaletteResult[] = [];
 
-    // Commands
+    // Commands — when explicitly in commands mode (via `>` prefix or
+    // direct mode) AND the query is empty, list every available command so
+    // the user can browse. Otherwise fuzzy-filter.
     if (searchMode === 'all' || searchMode === 'commands') {
-      for (const cmd of commands) {
-        const result = fuzzyScore(q, cmd.label);
-        if (result.score > 0.3) {
+      if (isEmpty) {
+        if (searchMode === 'commands') {
+          for (const cmd of commands) {
+            items.push({
+              kind: 'command',
+              commandId: cmd.id,
+              commandLabel: cmd.label,
+              highlightedLabel: highlightMatches(cmd.label, []),
+              score: 0,
+              key: `cmd-${cmd.id}`,
+            });
+          }
+        }
+        // 'all' mode + empty query: skip commands so the landing screen is
+        // dominated by recent files (lower friction than scrolling a long
+        // command list).
+      } else {
+        for (const cmd of commands) {
+          const result = fuzzyScore(q, cmd.label);
+          if (result.score < 0.3) continue;
           items.push({
             kind: 'command',
             commandId: cmd.id,
@@ -174,42 +243,111 @@ function CommandPalette({
       }
     }
 
-    // Files
-    if ((searchMode === 'all' || searchMode === 'files') && fileResults.length > 0) {
-      for (const file of fileResults) {
-        const dir = file.path.substring(0, file.path.lastIndexOf('/'));
-        const fileScore = fuzzyScore(q, file.path);
-        items.push({
-          kind: 'file',
-          filePath: file.path,
-          fileName: file.name,
-          fileDirectory: dir,
-          highlightedLabel: highlightMatches(file.name, fileScore.matches),
-          score: fileScore.score,
-          key: `file-${file.path}`,
+    // Files — rank by full path (folder context helps when names collide),
+    // but highlight against the *basename* so the visible underlines line
+    // up with the user's keystrokes. Empty-query landing surfaces the
+    // recent-files list as the "where was I?" affordance.
+    if (searchMode === 'all' || searchMode === 'files') {
+      if (isEmpty) {
+        const recents = recentFiles ?? [];
+        // Decreasing score so most-recent stays on top after the group sort.
+        recents.forEach((file, i) => {
+          const dir = file.path.substring(0, file.path.lastIndexOf('/'));
+          items.push({
+            kind: 'file',
+            filePath: file.path,
+            fileName: file.name,
+            fileDirectory: dir,
+            highlightedLabel: highlightMatches(file.name, []),
+            score: recents.length - i,
+            key: `recent-${file.path}`,
+          });
         });
+      } else if (fileResults.length > 0) {
+        for (const file of fileResults) {
+          const dir = file.path.substring(0, file.path.lastIndexOf('/'));
+          const pathScore = fuzzyScore(q, file.path);
+          if (pathScore.score < 0.3) continue;
+          const nameScore = fuzzyScore(q, file.name);
+          items.push({
+            kind: 'file',
+            filePath: file.path,
+            fileName: file.name,
+            fileDirectory: dir,
+            highlightedLabel: highlightMatches(file.name, nameScore.matches),
+            score: pathScore.score,
+            key: `file-${file.path}`,
+          });
+        }
       }
     }
 
-    // Symbols
-    if ((searchMode === 'all' || searchMode === 'symbols') && onSearchSymbols) {
-      const symbols = onSearchSymbols(q);
-      for (const sym of symbols) {
-        const symScore = fuzzyScore(q, sym.name);
-        items.push({
-          kind: 'symbol',
-          highlightedLabel: highlightMatches(sym.name, symScore.matches),
-          score: symScore.score,
-          symbolLine: sym.line,
-          symbolKind: sym.kind,
-          scopePath: sym.scopePath,
-          key: `sym-${sym.name}-${sym.line}`,
-        });
+    // Symbols — when in explicit symbols mode, show all symbols in the
+    // active file even on an empty query so the palette doubles as a
+    // file-outline browser. Otherwise fuzzy-filter.
+    if (searchMode === 'all' || searchMode === 'symbols') {
+      if (onSearchSymbols) {
+        if (isEmpty) {
+          if (searchMode === 'symbols') {
+            const symbols = onSearchSymbols('');
+            for (const sym of symbols) {
+              items.push({
+                kind: 'symbol',
+                highlightedLabel: highlightMatches(sym.name, []),
+                score: 0,
+                symbolLine: sym.line,
+                symbolKind: sym.kind,
+                scopePath: sym.scopePath,
+                key: `sym-${sym.name}-${sym.line}`,
+              });
+            }
+          }
+        } else {
+          const symbols = onSearchSymbols(q);
+          for (const sym of symbols) {
+            const symScore = fuzzyScore(q, sym.name);
+            if (symScore.score < 0.3) continue;
+            items.push({
+              kind: 'symbol',
+              highlightedLabel: highlightMatches(sym.name, symScore.matches),
+              score: symScore.score,
+              symbolLine: sym.line,
+              symbolKind: sym.kind,
+              scopePath: sym.scopePath,
+              key: `sym-${sym.name}-${sym.line}`,
+            });
+          }
+        }
       }
     }
 
-    return items.sort((a, b) => b.score - a.score).slice(0, 50);
-  }, [query, searchQuery, searchMode, commands, fileResults, onSearchSymbols]);
+    // Group results by kind so the rendered list looks like
+    //   Commands · Files · Symbols
+    // instead of interleaved by raw score. Each group is internally sorted
+    // by score, and groups are ordered by their top-scoring item — so if
+    // the user's query matches a file very well it leads, with commands
+    // tucked below. This also makes the per-group section headers
+    // (rendered in JSX) sit in the correct place.
+    const groups = new Map<string, PaletteResult[]>();
+    for (const item of items) {
+      if (!groups.has(item.kind)) groups.set(item.kind, []);
+      groups.get(item.kind)!.push(item);
+    }
+    for (const arr of groups.values()) arr.sort((a, b) => b.score - a.score);
+    const orderedKinds = Array.from(groups.keys()).sort((a, b) => {
+      const aTop = groups.get(a)?.[0]?.score ?? 0;
+      const bTop = groups.get(b)?.[0]?.score ?? 0;
+      return bTop - aTop;
+    });
+    const out: PaletteResult[] = [];
+    for (const kind of orderedKinds) {
+      for (const item of groups.get(kind)!) {
+        out.push(item);
+        if (out.length >= 50) return out;
+      }
+    }
+    return out;
+  }, [searchQuery, searchMode, commands, fileResults, recentFiles, onSearchSymbols]);
 
   // Remember which item the user has selected (by its stable key).
   useEffect(() => {
@@ -281,11 +419,51 @@ function CommandPalette({
     }
   }, [selectedIndex, results.length]);
 
+  // Helper used by both Tab/Shift+Tab cycling and Cmd+digit shortcuts.
+  // Switching modes strips any prefix override so the change is decisive
+  // (otherwise typing `>` would silently outrank the mode switch).
+  const switchMode = useCallback(
+    (next: PaletteMode) => {
+      setMode(next);
+      setQuery((q) => {
+        if (q.startsWith('>') || q.startsWith('@') || q.startsWith('#')) {
+          return q.slice(1);
+        }
+        return q;
+      });
+    },
+    [],
+  );
+
   // Keyboard navigation
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLInputElement>) => {
       if (e.key === 'Escape') {
+        // Two-stage Esc: if the user has typed something, the first Esc
+        // clears the query without closing. A second Esc (with empty input)
+        // closes the palette.
+        if (query) {
+          e.preventDefault();
+          setQuery('');
+          return;
+        }
         onClose();
+        return;
+      }
+      // Cmd+1..4 (or Ctrl+1..4 on non-Mac) → jump directly to a mode tab.
+      // Power-user shortcut equivalent to clicking the tab.
+      if ((e.metaKey || e.ctrlKey) && /^[1-4]$/.test(e.key)) {
+        e.preventDefault();
+        switchMode(MODE_ORDER[Number(e.key) - 1]);
+        return;
+      }
+      // Tab / Shift+Tab → cycle through modes. Without this, Tab would
+      // escape the modal palette entirely, which is hostile in an overlay.
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const idx = MODE_ORDER.indexOf(searchMode);
+        const next = MODE_ORDER[(idx + (e.shiftKey ? -1 : 1) + MODE_ORDER.length) % MODE_ORDER.length];
+        switchMode(next);
         return;
       }
       if (e.key === 'ArrowDown') {
@@ -334,7 +512,7 @@ function CommandPalette({
         onClose();
       }
     },
-    [results, selectedIndex, onClose, onOpenFile, onExecuteCommand, onNavigateToLine],
+    [results, selectedIndex, query, searchMode, switchMode, onClose, onOpenFile, onExecuteCommand, onNavigateToLine],
   );
 
   if (!isOpen) return null;
@@ -348,6 +526,29 @@ function CommandPalette({
       aria-label="Command palette"
     >
       <div className="command-palette" onClick={(e) => e.stopPropagation()}>
+        <div className="command-palette-mode-tabs" role="tablist" aria-label="Search mode">
+          {(['all', 'files', 'symbols', 'commands'] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              role="tab"
+              aria-selected={searchMode === m}
+              className={`command-palette-mode-tab ${searchMode === m ? 'active' : ''}`}
+              tabIndex={-1}
+              onClick={() => {
+                // Strip any prefix override so an explicit click is decisive
+                // (otherwise the prefix would silently outrank the tab).
+                if (query.startsWith('>') || query.startsWith('@') || query.startsWith('#')) {
+                  setQuery(query.slice(1));
+                }
+                setMode(m);
+                inputRef.current?.focus();
+              }}
+            >
+              {m.charAt(0).toUpperCase() + m.slice(1)}
+            </button>
+          ))}
+        </div>
         <div className="command-palette-input-row">
           <Search size={14} className="command-palette-input-icon" aria-hidden="true" />
           <input
@@ -359,11 +560,13 @@ function CommandPalette({
             }}
             onKeyDown={handleKeyDown}
             placeholder={
-              mode === 'files'
+              searchMode === 'files'
                 ? 'Search files…'
-                : mode === 'symbols'
+                : searchMode === 'symbols'
                   ? 'Search symbols…'
-                  : '> for commands, @ for symbols, type to find files'
+                  : searchMode === 'commands'
+                    ? 'Search commands…'
+                    : '> for commands, @ for symbols, type to find files'
             }
             role="combobox"
             aria-haspopup="listbox"
@@ -377,6 +580,30 @@ function CommandPalette({
             aria-autocomplete="list"
             autoFocus
           />
+          {isLoading && (
+            <span
+              className="command-palette-loading-badge"
+              title="Indexing workspace files…"
+              aria-label="Loading"
+            >
+              <Loader2 size={12} className="command-palette-spin" />
+            </span>
+          )}
+          {query && (
+            <button
+              type="button"
+              className="command-palette-clear"
+              onClick={() => {
+                setQuery('');
+                inputRef.current?.focus();
+              }}
+              title="Clear (Esc)"
+              aria-label="Clear search"
+              tabIndex={-1}
+            >
+              <X size={12} />
+            </button>
+          )}
         </div>
         <div
           className="command-palette-results"
@@ -408,54 +635,84 @@ function CommandPalette({
               </div>
             </div>
           )}
-          {results.map((result, index) => (
-            <div
-              id={`command-palette-result-${index}`}
-              key={result.key}
-              className={`command-palette-item ${index === selectedIndex ? 'selected' : ''}`}
-              role="option"
-              aria-selected={index === selectedIndex}
-              aria-setsize={results.length}
-              aria-posinset={index + 1}
-              onClick={() => {
-                if (result.kind === 'command' && result.commandId) {
-                  const keepOpen = onExecuteCommand?.(result.commandId) === false;
-                  if (keepOpen) return;
-                } else if (result.kind === 'file' && result.filePath) {
-                  onOpenFile(result.filePath);
-                } else if (result.kind === 'symbol' && result.symbolLine != null) {
-                  onNavigateToLine?.(result.symbolLine);
-                }
-                onClose();
-              }}
-            >
-              <span className="command-palette-item-label">
-                <span className={`result-kind-badge ${result.kind}`} aria-hidden="true">
-                  {result.kind === 'command' ? (
-                    <CommandIcon size={12} />
-                  ) : result.kind === 'file' ? (
-                    <FileText size={12} />
-                  ) : (
-                    <Hash size={12} />
+          {(() => {
+            // Insert a section header before the first item of each kind.
+            // The results array is already grouped (commands → files →
+            // symbols, ordered by best score within each group).
+            const isIdleFileGroup = !searchQuery.trim();
+            let prevKind: string | null = null;
+            return results.map((result, index) => {
+              const showHeader = result.kind !== prevKind;
+              prevKind = result.kind;
+              // Files shown on empty query are recents — label accordingly
+              // so the user understands why those particular files appear.
+              const headerLabel =
+                result.kind === 'file' && isIdleFileGroup ? 'Recent files' : KIND_LABEL[result.kind as 'command' | 'file' | 'symbol'];
+              return (
+                <Fragment key={result.key}>
+                  {showHeader && (
+                    <div className="command-palette-group-header" role="presentation">
+                      {headerLabel}
+                    </div>
                   )}
-                </span>
-                <span dangerouslySetInnerHTML={{ __html: result.highlightedLabel }} />
-              </span>
-              {result.kind === 'file' && result.fileDirectory && (
-                <span className="command-palette-item-path">{result.fileDirectory}</span>
-              )}
-              {result.kind === 'symbol' && result.scopePath && (
-                <span className="command-palette-item-path command-palette-item-path--symbol">
-                  {result.scopePath}
-                </span>
-              )}
-              {result.kind === 'command' && (
-                <span className="command-palette-item-category">
-                  {commands.find((c) => c.id === result.commandId)?.category}
-                </span>
-              )}
-            </div>
-          ))}
+                  <div
+                    id={`command-palette-result-${index}`}
+                    className={`command-palette-item ${index === selectedIndex ? 'selected' : ''}`}
+                    role="option"
+                    aria-selected={index === selectedIndex}
+                    aria-setsize={results.length}
+                    aria-posinset={index + 1}
+                    onClick={() => {
+                      if (result.kind === 'command' && result.commandId) {
+                        const keepOpen = onExecuteCommand?.(result.commandId) === false;
+                        if (keepOpen) return;
+                      } else if (result.kind === 'file' && result.filePath) {
+                        onOpenFile(result.filePath);
+                      } else if (result.kind === 'symbol' && result.symbolLine != null) {
+                        onNavigateToLine?.(result.symbolLine);
+                      }
+                      onClose();
+                    }}
+                  >
+                    <span className="command-palette-item-label">
+                      <span className={`result-kind-badge ${result.kind}`} aria-hidden="true">
+                        {result.kind === 'command' ? (
+                          <CommandIcon size={12} />
+                        ) : result.kind === 'file' ? (
+                          <FileText size={12} />
+                        ) : (
+                          <Hash size={12} />
+                        )}
+                      </span>
+                      <span dangerouslySetInnerHTML={{ __html: result.highlightedLabel }} />
+                    </span>
+                    {result.kind === 'file' && result.fileDirectory && (
+                      <span className="command-palette-item-path">{result.fileDirectory}</span>
+                    )}
+                    {result.kind === 'symbol' && result.scopePath && (
+                      <span className="command-palette-item-path command-palette-item-path--symbol">
+                        {result.scopePath}
+                      </span>
+                    )}
+                    {result.kind === 'command' && (
+                      <>
+                        {result.commandId && commandIndex.get(result.commandId)?.shortcut && (
+                          <span className="command-palette-item-shortcut" aria-hidden="true">
+                            {splitShortcut(commandIndex.get(result.commandId)!.shortcut!).map((chip, i) => (
+                              <kbd key={i}>{chip}</kbd>
+                            ))}
+                          </span>
+                        )}
+                        <span className="command-palette-item-category">
+                          {result.commandId ? commandIndex.get(result.commandId)?.category : null}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </Fragment>
+              );
+            });
+          })()}
         </div>
         <div className="command-palette-footer" aria-hidden="true">
           <span className="command-palette-hint">

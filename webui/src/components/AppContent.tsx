@@ -18,6 +18,7 @@ import { ApiService } from '../services/api';
 import type { ChatSession } from '../services/chatSessions';
 import type { AppState, PerChatState } from '../types/app';
 import { useAppStoreSetState } from '../contexts/AppStore';
+import { useHotkeys } from '../contexts/HotkeyContext';
 import { fuzzyFilter } from '../utils/fuzzyMatch';
 import { useLog } from '../utils/log';
 import { extractSymbols } from '../utils/symbolUtils';
@@ -270,7 +271,15 @@ const AppContent: React.FC<AppContentProps> = ({
   // Pre-index workspace files only while the palette is open. The fuzzy
   // filter then runs against this in-memory list for instant results.
   const paletteLog = useLog();
-  const { allFiles: paletteAllFiles } = useFileIndex({
+  // Bake the user's current keybinding next to each command so the palette
+  // doubles as a shortcut cheatsheet. `hotkeyForCommand` already handles
+  // Mac vs non-Mac modifier substitution (Cmd ↔ Ctrl).
+  const { hotkeyForCommand } = useHotkeys();
+  const paletteCommands = useMemo(
+    () => VISIBLE_COMMANDS.map((cmd) => ({ ...cmd, shortcut: hotkeyForCommand(cmd.id) ?? undefined })),
+    [hotkeyForCommand],
+  );
+  const { allFiles: paletteAllFiles, isLoadingFiles: paletteIsLoading } = useFileIndex({
     apiService,
     isOpen: isCommandPaletteOpen,
     log: paletteLog,
@@ -283,6 +292,54 @@ const AppContent: React.FC<AppContentProps> = ({
     },
     [paletteAllFiles],
   );
+  // Most-recently-opened files. Persisted across sessions so the palette
+  // has something to show on idle, even right after page load. Limited to
+  // 15 entries — beyond that the list becomes noise.
+  const RECENT_FILES_STORAGE_KEY = 'sprout.commandPalette.recentFiles.v1';
+  const RECENT_FILES_LIMIT = 15;
+  type RecentFile = { name: string; path: string; type: string };
+  const [paletteRecentFiles, setPaletteRecentFiles] = useState<RecentFile[]>(() => {
+    try {
+      const raw = typeof window !== 'undefined' ? window.localStorage.getItem(RECENT_FILES_STORAGE_KEY) : null;
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return parsed.slice(0, RECENT_FILES_LIMIT);
+    } catch {
+      return [];
+    }
+  });
+  const recordRecentFile = useCallback((file: RecentFile) => {
+    setPaletteRecentFiles((prev) => {
+      const next = [file, ...prev.filter((f) => f.path !== file.path)].slice(0, RECENT_FILES_LIMIT);
+      try {
+        window.localStorage.setItem(RECENT_FILES_STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        // ignore quota / privacy-mode errors
+      }
+      return next;
+    });
+  }, []);
+  // Watch the editor manager's buffer set so *any* path that opens a file
+  // (palette, file tree, hotkey, drag-drop, layout restore…) contributes to
+  // the recents MRU. Skip non-file kinds (welcome/chat/diff/etc.) and the
+  // synthetic __workspace/ paths used by virtual buffers.
+  const seenFileBufferIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const seen = seenFileBufferIdsRef.current;
+    for (const [id, buffer] of buffers.entries()) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+      if (buffer.kind !== 'file') continue;
+      const path = buffer.file?.path;
+      if (!path || path.startsWith('__workspace/')) continue;
+      recordRecentFile({
+        name: buffer.file.name,
+        path,
+        type: 'file',
+      });
+    }
+  }, [buffers, recordRecentFile]);
   const handlePaletteSearchSymbols = useCallback(
     (query: string) => {
       const content = currentBuffer?.content;
@@ -670,6 +727,8 @@ const AppContent: React.FC<AppContentProps> = ({
           const extensionIndex = fileName.lastIndexOf('.');
           const fileExt = extensionIndex > 0 ? fileName.slice(extensionIndex) : '';
           openFile({ path: filePath, name: fileName, isDir: false, size: 0, modified: 0, ext: fileExt });
+          // Recents are populated by the buffer-watcher effect — no explicit
+          // recordRecentFile call needed here.
         }}
         onToggleSidebar={onSidebarToggle}
         onToggleTerminal={supportsLocalTerminal ? () => onTerminalExpandedChange(!isTerminalExpanded) : () => {}}
@@ -678,7 +737,9 @@ const AppContent: React.FC<AppContentProps> = ({
         onNavigateToLine={(line) => {
           document.dispatchEvent(new CustomEvent('editor-goto-line', { detail: { line } }));
         }}
-        commands={VISIBLE_COMMANDS}
+        commands={paletteCommands}
+        isLoading={paletteIsLoading}
+        recentFiles={paletteRecentFiles}
         onSearchFiles={handlePaletteSearchFiles}
         onSearchSymbols={handlePaletteSearchSymbols}
         onExecuteCommand={handlePaletteExecuteCommand}

@@ -30,6 +30,49 @@
   overflow: hidden;
 }
 
+/* Mode tabs — sit above the input. Click switches mode; the active tab
+ * reflects the *effective* mode (so typing `>` highlights "Commands"). */
+.command-palette-mode-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 8px 0;
+  background: var(--bg-secondary, #1e2127);
+  border-bottom: 1px solid var(--border-default, #3e4451);
+}
+
+.command-palette-mode-tab {
+  padding: 5px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary, #6a7280);
+  font-family: var(--font-sans, system-ui, -apple-system, sans-serif);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: 4px 4px 0 0;
+  border-bottom: 2px solid transparent;
+  transition:
+    background-color 0.12s ease,
+    color 0.12s ease,
+    border-color 0.12s ease;
+}
+
+.command-palette-mode-tab:hover {
+  color: var(--text-secondary, #abb2bf);
+  background: var(--bg-tertiary, #21252b);
+}
+
+.command-palette-mode-tab.active {
+  color: var(--text-primary, #d4d4d4);
+  border-bottom-color: var(--accent-primary, #61afef);
+}
+
+.command-palette-mode-tab:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary, #61afef);
+}
+
 /* Input row (search icon + input) */
 .command-palette-input-row {
   display: flex;
@@ -85,6 +128,68 @@
 
 .command-palette-results::-webkit-scrollbar-thumb:hover {
   background: var(--border-strong, #4b515c);
+}
+
+/* Clear button + loading badge inside the input row */
+.command-palette-clear,
+.command-palette-loading-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary, #6a7280);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: color 0.12s ease, background 0.12s ease;
+}
+
+.command-palette-loading-badge {
+  cursor: default;
+  color: var(--accent-primary, #61afef);
+}
+
+.command-palette-clear:hover {
+  color: var(--text-primary, #d4d4d4);
+  background: var(--bg-elevated, #2c313a);
+}
+
+.command-palette-clear:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary, #61afef);
+}
+
+.command-palette-spin {
+  animation: command-palette-spin 0.9s linear infinite;
+}
+
+@keyframes command-palette-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Group header — sits between kind sections in the result list. Not
+ * focusable / navigable; purely visual grouping like VS Code's palette. */
+.command-palette-group-header {
+  padding: 8px 14px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-tertiary, #6a7280);
+  user-select: none;
+}
+
+.command-palette-group-header + .command-palette-item {
+  /* Tighten the gap between header and first item of group */
+  padding-top: 4px;
 }
 
 /* Empty state */
@@ -226,6 +331,48 @@
   text-transform: uppercase;
   letter-spacing: 0.04em;
   font-weight: 600;
+}
+
+/* Keyboard shortcut chips shown on the right of a command row. Each modifier
+ * (⌘ ⇧ ⌥ ⌃) gets its own small kbd; the final character key gets the same
+ * treatment. Mirrors VS Code's command-palette layout. */
+.command-palette-item-shortcut {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  padding-left: 12px;
+  flex-shrink: 0;
+}
+
+.command-palette-item-shortcut kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border: 1px solid var(--border-subtle, #2c313a);
+  border-radius: 3px;
+  background: var(--bg-tertiary, #21252b);
+  color: var(--text-secondary, #abb2bf);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.command-palette-item.selected .command-palette-item-shortcut kbd {
+  background: color-mix(in srgb, var(--accent-fg, #ffffff) 18%, transparent);
+  border-color: color-mix(in srgb, var(--accent-fg, #ffffff) 30%, transparent);
+  color: var(--accent-fg, #ffffff);
+}
+
+/* When a shortcut is present, the category badge sits inside the row but
+ * has less right-margin so they line up cleanly. */
+.command-palette-item-shortcut + .command-palette-item-category {
+  margin-left: 8px;
+  padding-left: 0;
 }
 
 /* Symbol breadcrumb (scopePath) — rendered as a dimmed monospace suffix.

@@ -19,7 +19,7 @@ import (
 
 func TestFormatSpawnLine_NilAgent(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
-	got := formatSpawnLine(nil, 0, "coder")
+	got := formatSpawnLine(nil, 0, "coder", 0)
 	if !strings.Contains(got, "spawned") {
 		t.Errorf("expected 'spawned' in output, got: %q", got)
 	}
@@ -36,13 +36,37 @@ func TestFormatSpawnLine_WithAgent(t *testing.T) {
 	}
 
 	t.Setenv("NO_COLOR", "1")
-	got := formatSpawnLine(a, 1, "coder")
+	got := formatSpawnLine(a, 1, "coder", 0)
 	if !strings.Contains(got, "spawned") {
 		t.Errorf("expected 'spawned' in output, got: %q", got)
 	}
 	// Should have indent for depth 1
 	if !strings.HasPrefix(got, "    ") {
 		t.Errorf("expected indent for depth 1, got: %q", got)
+	}
+}
+
+// TestFormatSpawnLine_IncludesMaxContext pins the new context-budget
+// suffix on the spawn line: when monitorProgress has emitted at least
+// one snapshot the line gets "· 128.0k ctx" appended so the user can
+// see how much context the subagent has to work with before it does
+// anything. With maxCtx=0 the suffix is dropped — the line degrades to
+// the original "(provider · model)" form.
+func TestFormatSpawnLine_IncludesMaxContext(t *testing.T) {
+	a, err := agent.NewAgent()
+	if err != nil {
+		t.Fatalf("NewAgent() error: %v", err)
+	}
+	t.Setenv("NO_COLOR", "1")
+
+	withCtx := formatSpawnLine(a, 1, "coder", 128000)
+	if !strings.Contains(withCtx, "128.0k ctx") {
+		t.Errorf("expected '128.0k ctx' suffix when maxCtx is known, got: %q", withCtx)
+	}
+
+	withoutCtx := formatSpawnLine(a, 1, "coder", 0)
+	if strings.Contains(withoutCtx, "ctx)") {
+		t.Errorf("should not have ctx suffix when maxCtx is 0, got: %q", withoutCtx)
 	}
 }
 

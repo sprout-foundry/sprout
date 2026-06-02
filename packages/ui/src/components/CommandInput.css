@@ -96,6 +96,15 @@
   width: 100%;
 }
 
+/* Suppress the global textarea focus ring on the composer itself.
+ * The wrapping .command-input form already shows focus via
+ * :focus-within (border-color + accent box-shadow); rendering both
+ * produces a doubled focus indicator. The form-level ring is the
+ * intended visual. */
+.input-field:focus-visible {
+  outline: none;
+}
+
 .input-field.history-mode {
   background: var(--color-warning-bg);
   border-left: 3px solid var(--accent-warning);

@@ -412,6 +412,11 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
             <div className="changes-empty">
               <Inbox size={32} />
               <p>The agent hasn't changed anything this session yet.</p>
+              <p className="changes-empty-hint">
+                When the agent edits, creates, or deletes files, each entry will
+                have a <Eye size={12} aria-hidden="true" /> view-diff and{' '}
+                <Undo2 size={12} aria-hidden="true" /> revert button.
+              </p>
             </div>
           )}
           {!isEmpty && summary && (
@@ -469,10 +474,37 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
               {timelineItems.map((item, i) => (
                 <div key={`${item.revision_id || 'session'}-${item.path}-${i}`} className="changes-timeline-row">
                   {opIcon(item.op)}
-                  <span className="changes-timeline-path">{item.path}</span>
+                  <button
+                    type="button"
+                    className="changes-file-path"
+                    onClick={() => onFileClick?.(item.path)}
+                    title={item.path}
+                  >
+                    {item.path}
+                  </button>
                   <span className={`changes-timeline-source source-${item.source}`}>{item.source}</span>
                   {item.tier && <span className="changes-timeline-tier">{item.tier}</span>}
                   <span className="changes-timeline-time">{formatRelativeTime(item.timestamp)}</span>
+                  <div className="changes-file-actions">
+                    <button
+                      type="button"
+                      className="changes-action-btn"
+                      onClick={() => openDiff(item.path)}
+                      title="View diff"
+                      aria-label="View diff"
+                    >
+                      <Eye size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      className="changes-action-btn"
+                      onClick={() => revertOne(item.path)}
+                      title="Revert this file"
+                      aria-label="Revert this file"
+                    >
+                      <Undo2 size={14} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

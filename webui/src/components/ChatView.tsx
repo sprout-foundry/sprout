@@ -68,6 +68,25 @@ function Chat(props: ChatProps): JSX.Element {
     );
   }, [toolExecutions, currentQueryCount]);
 
+  // Map of toolId → status across ALL queries (not filtered).
+  // MessageSegments uses this to decide pill-vs-footnote rendering. Filtering
+  // here would make a completed tool from a previous query register as
+  // `undefined`, which falls back to the running-pill render — that's the
+  // root of the visible flicker where a tool badge appears, switches to its
+  // compact footnote, and then snaps back to the larger pill once the next
+  // query starts.
+  const toolStatusById = useMemo(() => {
+    const map = new Map<string, ToolExecution['status']>();
+    for (const t of toolExecutions) {
+      map.set(t.id, t.status);
+    }
+    return map;
+  }, [toolExecutions]);
+  const getToolStatusForMessage = useCallback(
+    (toolId: string) => toolStatusById.get(toolId),
+    [toolStatusById],
+  );
+
   useLayoutEffect(() => {
     const node = inputContainerRef.current;
     if (!node) return;
@@ -166,7 +185,7 @@ function Chat(props: ChatProps): JSX.Element {
                   message={message}
                   onToolPillClick={onToolPillClick}
                   findMatchingToolExecution={findMatchingToolExecution}
-                  filteredToolExecutions={filteredToolExecutions}
+                  getToolStatus={getToolStatusForMessage}
                   formatTime={formatTime}
                 />
               )}

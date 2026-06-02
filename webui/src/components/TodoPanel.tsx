@@ -54,14 +54,14 @@ function TodoPanel({ todos, isLoading = false }: TodoPanelProps): JSX.Element {
       <div className="todo-panel">
         <div className="todo-header">
           <span className="todo-title">📋 Tasks</span>
-          <span className="todo-count-summary">No tasks tracked</span>
+          <span className="todo-count-summary">Idle</span>
         </div>
         <div className="todo-progress-bar">
           <div className="todo-progress-fill" style={{ width: '0%' }} />
         </div>
         <div className="todo-list">
           <div className="todo-empty-state">
-            <span>No tasks tracked</span>
+            <span>Tasks created by the agent will appear here.</span>
           </div>
         </div>
       </div>

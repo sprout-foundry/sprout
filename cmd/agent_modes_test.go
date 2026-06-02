@@ -209,10 +209,15 @@ func TestFormatToolArgPreview(t *testing.T) {
 			want: " (https://example.com/page)",
 		},
 		{
-			name: "long path is truncated",
+			// Path-aware abbreviation: when the full path is too long we
+			// drop the directory prefix and keep the filename, which is
+			// almost always the more useful half. The previous
+			// behaviour (tail-truncate) chopped the filename off and
+			// left only directory crumbs.
+			name: "long path keeps the filename via abbreviation",
 			tool: "read_file",
-			args: `{"path": "a/very/long/path/that/exceeds/the/sixty/character/preview/limit/foo.go"}`,
-			want: " (a/very/long/path/that/exceeds/the/sixty/character/preview/l…)",
+			args: `{"path": "a/very/long/path/that/exceeds/the/seventy/character/preview/limit/foo.go"}`,
+			want: " (…/foo.go)",
 		},
 		{
 			name: "empty arguments returns empty",
@@ -303,6 +308,110 @@ func TestFormatRunSubagentPreview_NilAgent(t *testing.T) {
 	got := formatRunSubagentPreview(nil, `{"persona":"coder"}`)
 	if got != "" {
 		t.Errorf("nil agent should yield empty preview, got %q", got)
+	}
+}
+
+// TestAbbreviatePath pins the path-abbreviation behaviour the activity
+// indicator relies on. The filename must always survive when the
+// directory prefix is dropped — that's what makes the abbreviated
+// preview readable.
+func TestAbbreviatePath(t *testing.T) {
+	cases := []struct {
+		name   string
+		in     string
+		maxLen int
+		want   string
+	}{
+		{"fits unchanged", "foo.go", 70, "foo.go"},
+		{"long path keeps basename", "a/b/c/d/e/f/g/h/very_long_filename.go", 20, "…/very_long_filename.go"},
+		{"single segment tail-truncates", "this_is_a_single_very_long_segment_no_slashes_at_all.txt", 20, "this_is_a_single_ve…"},
+		// When path has a separator, we always prefer "…/basename" even
+		// if that overshoots maxLen — preserves the file extension that
+		// usually identifies the file type.
+		{"path with long basename keeps full basename via …/", "x/y/this_is_a_single_very_long_segment_no_slashes_at_all.txt", 20, "…/this_is_a_single_very_long_segment_no_slashes_at_all.txt"},
+		{"exactly at limit no truncation", "abc/def/ghi.go", 14, "abc/def/ghi.go"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := abbreviatePath(c.in, c.maxLen)
+			if got != c.want {
+				t.Errorf("abbreviatePath(%q, %d) = %q, want %q", c.in, c.maxLen, got, c.want)
+			}
+		})
+	}
+}
+
+// TestFormatThousands covers the comma-separated integer formatter
+// used in the subagent-done line so a 1.2M token run reads as
+// "1,234,567 tok" instead of "1234567 tok".
+func TestFormatThousands(t *testing.T) {
+	cases := []struct {
+		in   int
+		want string
+	}{
+		{0, "0"},
+		{42, "42"},
+		{999, "999"},
+		{1000, "1,000"},
+		{12345, "12,345"},
+		{1234567, "1,234,567"},
+		{-12345, "-12,345"},
+	}
+	for _, c := range cases {
+		got := formatThousands(c.in)
+		if got != c.want {
+			t.Errorf("formatThousands(%d) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+// TestFormatSubagentDoneLine covers the rendering of the per-subagent
+// completion summary. Notably: zero-valued numeric fields drop out so
+// a no-cost cancellation doesn't spam "0 tok · $0.0000".
+func TestFormatSubagentDoneLine(t *testing.T) {
+	cases := []struct {
+		name        string
+		persona     string
+		status      string
+		reason      string
+		tokens      int
+		cost        float64
+		elapsedSec  float64
+		wantSubstrs []string
+	}{
+		{
+			name: "completed with all fields",
+			persona: "coder", status: "completed", reason: "",
+			tokens: 12345, cost: 0.0234, elapsedSec: 4.2,
+			wantSubstrs: []string{"done", "12,345 tok", "$0.0234", "4.2s"},
+		},
+		{
+			name: "cancelled with reason",
+			persona: "coder", status: "cancelled", reason: "budget_exceeded",
+			tokens: 8901, cost: 0.0102, elapsedSec: 2.1,
+			wantSubstrs: []string{"cancelled (budget_exceeded)", "8,901 tok", "$0.0102", "2.1s"},
+		},
+		{
+			name: "completed with zero cost drops the dollar field",
+			persona: "coder", status: "completed", reason: "",
+			tokens: 100, cost: 0, elapsedSec: 1.5,
+			wantSubstrs: []string{"done", "100 tok", "1.5s"},
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := formatSubagentDoneLine(c.persona, c.status, c.reason, c.tokens, c.cost, c.elapsedSec)
+			for _, want := range c.wantSubstrs {
+				if !strings.Contains(got, want) {
+					t.Errorf("missing %q in %q", want, got)
+				}
+			}
+		})
+	}
+	// Cost == 0 case should not contain "$" at all.
+	got := formatSubagentDoneLine("coder", "completed", "", 100, 0, 1.0)
+	if strings.Contains(got, "$") {
+		t.Errorf("zero cost should drop the dollar field; got %q", got)
 	}
 }
 

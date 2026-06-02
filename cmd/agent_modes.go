@@ -13,6 +13,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -1561,6 +1562,34 @@ func startTerminalToolSubscriber(ctx context.Context, chatAgent *agent.Agent, ev
 					if _, isText := data["content_type"].(string); isText {
 						run = nil
 					}
+				case events.EventTypeSubagentActivity:
+					// SP-051-2d: render a one-line completion summary for
+					// each subagent run. The spawn line ("↳ persona spawned
+					// (provider · model)") already prints on the first
+					// tool event from the subagent; the matching "done"
+					// line below closes the bracket with the actual cost
+					// of the delegation — tokens consumed, dollar cost,
+					// and wall time — so the user can see at a glance how
+					// expensive each subagent run was.
+					status, _ := data["status"].(string)
+					if status != "completed" && status != "cancelled" {
+						break
+					}
+					persona, _ := data["persona"].(string)
+					tokens := readEventInt(data, "tokens_used")
+					elapsedMs := readEventInt64(data, "elapsed_ms")
+					cost, _ := data["cost"].(float64)
+					reason, _ := data["reason"].(string)
+					// Subagents nest under the parent that spawned them.
+					// Depth on the activity event isn't carried today, so
+					// indent at the same level as the run_subagent tool
+					// line — depth 1 — which is the common case. Deeper
+					// nests fall back to a single indent rather than
+					// guessing wrong.
+					indicator.Stop()
+					fmt.Fprintln(os.Stderr, formatSubagentDoneLine(persona, status, reason, tokens, cost, float64(elapsedMs)/1000.0))
+					run = nil
+					footer.Refresh()
 				case events.EventTypeSecurityApprovalRequest,
 					events.EventTypeSecurityPromptRequest,
 					events.EventTypeAskUserRequest:
@@ -1592,6 +1621,105 @@ func formatSpawnLine(chatAgent *agent.Agent, depth int, persona string) string {
 		}
 	}
 	return fmt.Sprintf("%s  ↳ %sspawned%s", indent, badge, suffix)
+}
+
+// formatSubagentDoneLine renders the per-subagent completion summary —
+// the closing bracket for the spawn line. Format:
+//
+//	  ↳ [persona] done · 12,345 tok · $0.0234 · 4.2s
+//	  ↳ [persona] cancelled (budget_exceeded) · 8,901 tok · $0.0102 · 2.1s
+//
+// Indents at depth 1 to nest visually under the parent's run_subagent
+// row. Numeric fields are omitted when zero so a no-cost / no-token
+// cancellation stays terse rather than printing "0 tok · $0.0000".
+func formatSubagentDoneLine(persona, status, reason string, tokens int, cost, elapsedSec float64) string {
+	indent := console.PersonaIndent(1)
+	badge := console.PersonaBadge(1, persona)
+	icon := console.GlyphSuccess.Prefix()
+	verb := "done"
+	if status == "cancelled" {
+		icon = console.GlyphPaused.Prefix()
+		verb = "cancelled"
+		if reason != "" {
+			verb = fmt.Sprintf("cancelled (%s)", reason)
+		}
+	}
+	parts := []string{}
+	if tokens > 0 {
+		parts = append(parts, fmt.Sprintf("%s tok", formatThousands(tokens)))
+	}
+	if cost > 0 {
+		parts = append(parts, fmt.Sprintf("$%.4f", cost))
+	}
+	if elapsedSec > 0 {
+		parts = append(parts, fmt.Sprintf("%.1fs", elapsedSec))
+	}
+	suffix := ""
+	if len(parts) > 0 {
+		suffix = " · " + strings.Join(parts, " · ")
+	}
+	return fmt.Sprintf("%s  ↳ %s %s%s%s", indent, icon, badge, verb, suffix)
+}
+
+// readEventInt extracts an int from an event payload, tolerating the
+// numeric types the event bus may marshal through (int / int64 /
+// float64 round-trip via JSON).
+func readEventInt(data map[string]interface{}, key string) int {
+	if data == nil {
+		return 0
+	}
+	switch v := data[key].(type) {
+	case int:
+		return v
+	case int64:
+		return int(v)
+	case float64:
+		return int(v)
+	}
+	return 0
+}
+
+func readEventInt64(data map[string]interface{}, key string) int64 {
+	if data == nil {
+		return 0
+	}
+	switch v := data[key].(type) {
+	case int:
+		return int64(v)
+	case int64:
+		return v
+	case float64:
+		return int64(v)
+	}
+	return 0
+}
+
+// formatThousands renders an integer with comma separators (e.g.
+// 1234567 → "1,234,567"). Negative numbers keep the sign.
+func formatThousands(n int) string {
+	if n < 0 {
+		return "-" + formatThousands(-n)
+	}
+	s := strconv.Itoa(n)
+	if len(s) <= 3 {
+		return s
+	}
+	// Insert commas from the right.
+	rem := len(s) % 3
+	var b strings.Builder
+	if rem > 0 {
+		b.WriteString(s[:rem])
+		if len(s) > rem {
+			b.WriteByte(',')
+		}
+	}
+	for i := rem; i < len(s); i += 3 {
+		b.WriteString(s[i : i+3])
+		if i+3 < len(s) {
+			b.WriteByte(',')
+		}
+	}
+	return b.String()
 }
 
 // readEventDepth reads the subagent_depth from an event payload. Returns 0
@@ -1775,6 +1903,15 @@ func formatRunParallelSubagentsPreview(arguments string) string {
 // JSON the model emitted; we extract whichever field is most informative
 // for the tool at hand. Returns an empty string (no parens) when nothing
 // useful is available. Best-effort — invalid JSON yields no preview.
+//
+// Per-tool max widths and truncation strategies:
+//   - File paths use abbreviatePath so the filename always survives even
+//     when the directory prefix has to be dropped — "…/last/two/seg.go"
+//     reads better than "webui/src/components/sett…" where the actual
+//     file is lost.
+//   - shell_command / exec preserve more context (80 chars) because the
+//     suffix of a command is often the meaningful part (pipes, args).
+//   - Everything else gets the conservative 70-char tail truncation.
 func formatToolArgPreview(toolName, arguments string) string {
 	if arguments == "" {
 		return ""
@@ -1793,24 +1930,23 @@ func formatToolArgPreview(toolName, arguments string) string {
 		return ""
 	}
 
-	const maxLen = 60
-	truncate := func(s string) string {
-		if len(s) > maxLen {
-			return s[:maxLen-1] + "…"
-		}
-		return s
-	}
-
 	var preview string
+	var maxLen int
+	isPath := false
 	switch toolName {
 	case "read_file", "write_file", "edit_file", "write_structured_file", "patch_structured_file":
 		preview = pick("path", "file_path", "filename")
+		maxLen = 70
+		isPath = true
 	case "shell_command", "exec":
 		preview = pick("command", "cmd")
+		maxLen = 80
 	case "search_files", "grep":
 		preview = pick("pattern", "query", "search")
+		maxLen = 70
 	case "fetch_url":
 		preview = pick("url")
+		maxLen = 70
 	default:
 		// Generic fallback: surface the first short string value.
 		for _, v := range args {
@@ -1819,13 +1955,42 @@ func formatToolArgPreview(toolName, arguments string) string {
 				break
 			}
 		}
+		maxLen = 70
 	}
 
 	preview = sanitizeArgForPreview(preview)
 	if preview == "" {
 		return ""
 	}
-	return " (" + truncate(preview) + ")"
+	if isPath {
+		preview = abbreviatePath(preview, maxLen)
+	} else if len(preview) > maxLen {
+		preview = preview[:maxLen-1] + "…"
+	}
+	return " (" + preview + ")"
+}
+
+// abbreviatePath shortens a path while preserving the filename. A path
+// like "webui/src/components/settings/ProviderSettingsTab.tsx" that
+// exceeds maxLen renders as "…/ProviderSettingsTab.tsx" — the user
+// almost always cares about the file at the tail more than the
+// directory chain.
+//
+// When the path has a separator we always prefer "…/basename" even if
+// the basename itself is still over maxLen: the alternative (tail-
+// truncating the basename) drops the suffix that usually identifies
+// the file type, which is worse than overshooting maxLen by a few
+// chars on a pathological filename. The only path with no separator
+// falls back to a plain tail-truncate.
+func abbreviatePath(p string, maxLen int) string {
+	if len(p) <= maxLen {
+		return p
+	}
+	slash := strings.LastIndex(p, "/")
+	if slash < 0 {
+		return p[:maxLen-1] + "…"
+	}
+	return "…/" + p[slash+1:]
 }
 
 // sanitizeArgForPreview collapses whitespace and strips control characters

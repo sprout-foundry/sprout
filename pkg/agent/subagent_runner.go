@@ -199,6 +199,15 @@ func (r *SubagentRunner) Metrics() SubagentMetrics {
 // describing the lifecycle transition. The event is only published when
 // the shared EventBus is available.
 func (r *SubagentRunner) publishLifecycleEvent(taskID, persona, status, reason string, tokensUsed int, elapsedMs int64) {
+	r.publishLifecycleEventWithCost(taskID, persona, status, reason, tokensUsed, elapsedMs, 0)
+}
+
+// publishLifecycleEventWithCost is the extended form used when the runner
+// has the per-subagent cost in hand (typically at "completed"/"cancelled").
+// Kept as a separate entry point so the existing call sites that only have
+// the lifecycle transition remain a one-liner; the original signature is
+// preserved.
+func (r *SubagentRunner) publishLifecycleEventWithCost(taskID, persona, status, reason string, tokensUsed int, elapsedMs int64, cost float64) {
 	if r.shared == nil || r.shared.EventBus == nil {
 		return
 	}
@@ -215,6 +224,9 @@ func (r *SubagentRunner) publishLifecycleEvent(taskID, persona, status, reason s
 	}
 	if elapsedMs > 0 {
 		data["elapsed_ms"] = elapsedMs
+	}
+	if cost > 0 {
+		data["cost"] = cost
 	}
 	r.shared.EventBus.Publish(events.EventTypeSubagentActivity, data)
 
@@ -352,7 +364,10 @@ func (r *SubagentRunner) RunParallel(ctx context.Context, tasks []SubagentTask, 
 					completedStatus = "cancelled"
 					completedReason = "budget_exceeded"
 				}
-				r.publishLifecycleEvent(t.ID, persona, completedStatus, completedReason, result.TokensUsed, result.Elapsed.Milliseconds())
+				r.publishLifecycleEventWithCost(
+					t.ID, persona, completedStatus, completedReason,
+					result.TokensUsed, result.Elapsed.Milliseconds(), result.Cost,
+				)
 			}
 		}(i, task)
 	}

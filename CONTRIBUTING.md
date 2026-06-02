@@ -123,6 +123,70 @@ Before you submit:
 - Is there test coverage for the new code?
 - Does the PR scope match what the title and description claim?
 
+## Adding a New Provider
+
+Need to add support for a new LLM provider? The process is straightforward.
+
+### 1. Create the JSON config
+
+Add a file at `pkg/agent_providers/configs/{provider}.json` following the existing
+schema. See any config in that directory for reference:
+
+```json
+{
+  "name": "cerebras",
+  "endpoint": "https://api.cerebras.ai/v1/chat/completions",
+  "auth": {
+    "type": "bearer",
+    "env_var": "CEREBRAS_API_KEY"
+  },
+  "defaults": {
+    "model": "zai-glm-4.7",
+    "temperature": 1.0,
+    "max_tokens": -1,
+    "top_p": 0.95
+  }
+}
+```
+
+### 2. Regenerate the provider code
+
+Run the code generator to produce the compiled Go types:
+
+```bash
+go run pkg/agent_providers/generate_providers.go
+```
+
+This updates `provider_gen.go` with the new provider's data.
+
+### 3. Open a PR
+
+Submit a pull request containing both the JSON config and the regenerated
+`provider_gen.go`. On merge, the CI workflow publishes the config to GitHub
+Pages, where existing binaries can pick it up at runtime — no new release
+required.
+
+### Provider types
+
+- **Standard OpenAI-compatible providers** — Only the JSON config is needed.
+  The built-in HTTP client handles authentication, streaming, and retries via
+  the shared adapter.
+- **Non-standard providers** — If the provider's API deviates from the
+  OpenAI-compatible format, you'll also need a model adapter in
+  `pkg/modelcontract/{provider}.go` to translate request/response shapes.
+
+### Local-only providers
+
+Providers configured in `~/.config/sprout/providers/` are always local-only
+and never published remotely. Use this directory for private or experimental
+providers you don't want to share.
+
+### Credentials
+
+Provider credentials (API keys, tokens, passwords) are **never** included in
+provider JSON configs or published to GitHub Pages. Configs reference
+credentials via environment variable names only.
+
 ## License
 
 Sprout is licensed under the [MIT License](LICENSE). By contributing, you agree

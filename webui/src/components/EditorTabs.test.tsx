@@ -388,7 +388,10 @@ describe('EditorTabs empty area context menu', () => {
   });
 
   describe('modified file handling', () => {
-    test('shows confirmation dialog when modified buffers exist', () => {
+    test('triggers themed confirm when modified buffers exist', async () => {
+      const { showThemedConfirm } = await import('./ThemedDialog');
+      (showThemedConfirm as any).mockClear();
+
       const buf1 = makeMockBuffer('buf-1', 'pane-1', { isModified: true });
       const buf2 = makeMockBuffer('buf-2', 'pane-1');
       mockUseEditorManager.mockReturnValue({
@@ -411,13 +414,16 @@ describe('EditorTabs empty area context menu', () => {
         (closeAllBtn as HTMLElement).click();
       });
 
-      // Should NOT have closed immediately — confirmation overlay should appear
-      expect(mockCloseBuffer).not.toHaveBeenCalled();
-      const overlay = document.querySelector('.close-confirm-overlay');
-      expect(overlay).not.toBeNull();
+      // Bespoke .close-confirm-overlay was replaced with showThemedConfirm
+      // (the project-wide dialog used everywhere else).
+      expect(showThemedConfirm).toHaveBeenCalledTimes(1);
     });
 
-    test('confirming the dialog closes all buffers including modified ones', () => {
+    test('confirming closes all buffers including modified ones', async () => {
+      const { showThemedConfirm } = await import('./ThemedDialog');
+      (showThemedConfirm as any).mockClear();
+      (showThemedConfirm as any).mockResolvedValue(true);
+
       const buf1 = makeMockBuffer('buf-1', 'pane-1', { isModified: true });
       const buf2 = makeMockBuffer('buf-2', 'pane-1');
       mockUseEditorManager.mockReturnValue({
@@ -436,26 +442,23 @@ describe('EditorTabs empty area context menu', () => {
       const rightMenu = menus.find((m) => getMenuTexts(m).some((t) => t.includes('Close All Tabs')));
       const closeAllBtn = getMenuItems(rightMenu).find((el) => el.textContent?.trim().includes('Close All Tabs'));
 
-      // First click opens the confirm dialog
-      act(() => {
+      await act(async () => {
         (closeAllBtn as HTMLElement).click();
-      });
-      expect(mockCloseBuffer).not.toHaveBeenCalled();
-
-      // Click "Yes, Close" button
-      const confirmBtn = document.querySelector('.dialog-btn.danger') as HTMLElement;
-      expect(confirmBtn).not.toBeNull();
-      act(() => {
-        confirmBtn.click();
+        // Flush the showThemedConfirm Promise so the close logic runs.
+        await Promise.resolve();
+        await Promise.resolve();
       });
 
-      // Now both buffers should be closed
       expect(mockCloseBuffer).toHaveBeenCalledTimes(2);
       expect(mockCloseBuffer).toHaveBeenCalledWith('buf-1');
       expect(mockCloseBuffer).toHaveBeenCalledWith('buf-2');
     });
 
-    test('cancelling the dialog does not close any buffers', () => {
+    test('cancelling does not close any buffers', async () => {
+      const { showThemedConfirm } = await import('./ThemedDialog');
+      (showThemedConfirm as any).mockClear();
+      (showThemedConfirm as any).mockResolvedValue(false);
+
       const buf1 = makeMockBuffer('buf-1', 'pane-1', { isModified: true });
       const buf2 = makeMockBuffer('buf-2', 'pane-1');
       mockUseEditorManager.mockReturnValue({
@@ -474,20 +477,16 @@ describe('EditorTabs empty area context menu', () => {
       const rightMenu = menus.find((m) => getMenuTexts(m).some((t) => t.includes('Close All Tabs')));
       const closeAllBtn = getMenuItems(rightMenu).find((el) => el.textContent?.trim().includes('Close All Tabs'));
 
-      // First click opens the confirm dialog
-      act(() => {
+      await act(async () => {
         (closeAllBtn as HTMLElement).click();
-      });
-      expect(mockCloseBuffer).not.toHaveBeenCalled();
-
-      // Click "Cancel" button
-      const cancelBtn = document.querySelector('.dialog-btn.primary') as HTMLElement;
-      expect(cancelBtn).not.toBeNull();
-      act(() => {
-        cancelBtn.click();
+        await Promise.resolve();
+        await Promise.resolve();
       });
 
       expect(mockCloseBuffer).not.toHaveBeenCalled();
+
+      // Restore for subsequent tests
+      (showThemedConfirm as any).mockResolvedValue(true);
     });
   });
 
@@ -646,7 +645,7 @@ describe('EditorTabs pin toggle button', () => {
 });
 
 describe('EditorTabs chat tab close behavior', () => {
-  test('pinned chat tab shows close button and confirmation dialog on close click', () => {
+  test('pinned chat tab shows close button and confirmation dialog on close click', async () => {
     const buf1 = makeMockBuffer('buf-chat', 'pane-1', {
       isPinned: true,
       kind: 'chat',
@@ -663,12 +662,18 @@ describe('EditorTabs chat tab close behavior', () => {
     const closeBtn = container!.querySelector('.tab-close') as HTMLElement;
     expect(closeBtn).not.toBeNull();
 
-    // Clicking close should show confirmation dialog (not be blocked by pin)
-    act(() => {
+    // Clicking close should trigger themed confirm (not bypass pin protection)
+    const { showThemedConfirm } = await import('./ThemedDialog');
+    (showThemedConfirm as any).mockClear();
+    (showThemedConfirm as any).mockResolvedValue(false);
+    await act(async () => {
       closeBtn.click();
+      await Promise.resolve();
+      await Promise.resolve();
     });
-    expect(container!.querySelector('.close-confirm-overlay')).not.toBeNull();
+    expect(showThemedConfirm).toHaveBeenCalledTimes(1);
     expect(mockCloseBuffer).not.toHaveBeenCalled();
+    (showThemedConfirm as any).mockResolvedValue(true);
   });
 
   test('pinned non-chat tab does NOT show close button and cannot be closed', () => {
@@ -709,7 +714,11 @@ describe('EditorTabs chat tab close behavior', () => {
     expect(container!.querySelector('.close-confirm-overlay')).toBeNull();
   });
 
-  test('pinned chat tab close confirmation dialog allows closing', () => {
+  test('pinned chat tab close confirmation dialog allows closing', async () => {
+    const { showThemedConfirm } = await import('./ThemedDialog');
+    (showThemedConfirm as any).mockClear();
+    (showThemedConfirm as any).mockResolvedValue(true);
+
     const buf1 = makeMockBuffer('buf-chat', 'pane-1', {
       isPinned: true,
       kind: 'chat',
@@ -723,20 +732,20 @@ describe('EditorTabs chat tab close behavior', () => {
     renderEditorTabs({ paneId: 'pane-1' });
 
     const closeBtn = container!.querySelector('.tab-close') as HTMLElement;
-    act(() => {
+    await act(async () => {
       closeBtn.click();
-    });
-
-    // Confirm the close
-    const confirmBtn = container!.querySelector('.dialog-btn.danger') as HTMLElement;
-    act(() => {
-      confirmBtn.click();
+      await Promise.resolve();
+      await Promise.resolve();
     });
 
     expect(mockCloseBuffer).toHaveBeenCalledWith('buf-chat');
   });
 
-  test('pinned chat tab close confirmation dialog cancel does not close', () => {
+  test('pinned chat tab close confirmation dialog cancel does not close', async () => {
+    const { showThemedConfirm } = await import('./ThemedDialog');
+    (showThemedConfirm as any).mockClear();
+    (showThemedConfirm as any).mockResolvedValue(false);
+
     const buf1 = makeMockBuffer('buf-chat', 'pane-1', {
       isPinned: true,
       kind: 'chat',
@@ -750,21 +759,21 @@ describe('EditorTabs chat tab close behavior', () => {
     renderEditorTabs({ paneId: 'pane-1' });
 
     const closeBtn = container!.querySelector('.tab-close') as HTMLElement;
-    act(() => {
+    await act(async () => {
       closeBtn.click();
-    });
-
-    // Cancel the close
-    const cancelBtn = container!.querySelector('.dialog-btn.primary') as HTMLElement;
-    act(() => {
-      cancelBtn.click();
+      await Promise.resolve();
+      await Promise.resolve();
     });
 
     expect(mockCloseBuffer).not.toHaveBeenCalled();
-    expect(container!.querySelector('.close-confirm-overlay')).toBeNull();
+    (showThemedConfirm as any).mockResolvedValue(true);
   });
 
-  test('middle-click on pinned chat tab triggers close confirmation', () => {
+  test('middle-click on pinned chat tab triggers themed confirm', async () => {
+    const { showThemedConfirm } = await import('./ThemedDialog');
+    (showThemedConfirm as any).mockClear();
+    (showThemedConfirm as any).mockResolvedValue(false);
+
     const buf1 = makeMockBuffer('buf-chat', 'pane-1', {
       isPinned: true,
       kind: 'chat',
@@ -778,11 +787,14 @@ describe('EditorTabs chat tab close behavior', () => {
     renderEditorTabs({ paneId: 'pane-1' });
 
     const tab = container!.querySelector('.tab') as HTMLElement;
-    act(() => {
+    await act(async () => {
       tab.dispatchEvent(new MouseEvent('auxclick', { button: 1, bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
     });
 
-    expect(container!.querySelector('.close-confirm-overlay')).not.toBeNull();
+    expect(showThemedConfirm).toHaveBeenCalledTimes(1);
+    (showThemedConfirm as any).mockResolvedValue(true);
   });
 
   test('context menu Close item is visible for pinned chat tab', async () => {

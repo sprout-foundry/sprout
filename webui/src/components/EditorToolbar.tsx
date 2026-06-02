@@ -1,13 +1,14 @@
-import { Save, Sun, Moon, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
-import { useTheme } from '../contexts/ThemeContext';
 import EditorBreadcrumb, { type BreadcrumbSymbol } from './EditorBreadcrumb';
 import './EditorToolbar.css';
 
 interface EditorToolbarProps {
-  onSave: () => void;
+  /** Saving spinner displayed in the breadcrumb area while a save is in
+   *  flight. Save is triggered by Ctrl/⌘+S or the omnibox; there's no
+   *  longer a dedicated Save button (the dirty `●` on the tab + hotkey
+   *  cover the affordance). */
   saving?: boolean;
-  showSave?: boolean;
   breadcrumbProps?: {
     filePath: string;
     onNavigate?: (path: string) => void;
@@ -33,15 +34,11 @@ interface EditorToolbarProps {
 }
 
 function EditorToolbar({
-  onSave,
   saving = false,
-  showSave = true,
   breadcrumbProps,
   actions = [],
   rightActions = [],
 }: EditorToolbarProps): JSX.Element {
-  const { theme, themePack, toggleTheme } = useTheme();
-
   return (
     <div className="editor-toolbar">
       <div className="toolbar-group">
@@ -55,6 +52,11 @@ function EditorToolbar({
                 onNavigateToSymbol={breadcrumbProps.onNavigateToSymbol}
               />
             </div>
+            {saving && (
+              <span className="toolbar-saving" title="Saving…" aria-label="Saving">
+                <Loader2 size={12} className="spinner" />
+              </span>
+            )}
             <div className="toolbar-separator" />
           </>
         )}
@@ -84,30 +86,6 @@ function EditorToolbar({
             <span className="toolbar-icon">{action.icon}</span>
           </button>
         ))}
-
-        {/* Save */}
-        {showSave ? (
-          <button className="toolbar-button" onClick={onSave} title="Save file (Ctrl+S)" disabled={saving}>
-            {saving ? (
-              <span className="toolbar-icon">
-                <Loader2 size={16} className="spinner" />
-              </span>
-            ) : (
-              <span className="toolbar-icon">
-                <Save size={16} />
-              </span>
-            )}
-          </button>
-        ) : null}
-
-        {/* Theme Toggle */}
-        <button
-          className="toolbar-button"
-          onClick={toggleTheme}
-          title={`Switch mode from ${themePack.name} to ${theme === 'dark' ? 'light' : 'dark'}`}
-        >
-          <span className="toolbar-icon">{theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}</span>
-        </button>
       </div>
     </div>
   );

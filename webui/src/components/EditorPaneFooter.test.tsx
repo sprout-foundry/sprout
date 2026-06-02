@@ -353,29 +353,35 @@ describe('EditorPaneFooter rendering', () => {
     expect(container.querySelector('.tab-size')?.textContent).toContain('Tabs');
   });
 
-  it('renders encoding indicator', () => {
+  it('renders encoding (line-ending) indicator', () => {
     renderFooter({ settings: makeSettings({ lineEnding: 'CRLF' }) });
-    expect(container.querySelector('.encoding-indicator')?.textContent).toContain('UTF-8');
+    // The "UTF-8 ·" prefix was removed — we don't actually detect encoding,
+    // so the indicator now shows just the line-ending convention.
     expect(container.querySelector('.encoding-indicator')?.textContent).toContain('CRLF');
   });
 
-  it('does not show whitespace mode indicator when mode is none', () => {
+  it('shows whitespace mode indicator as "off" when mode is none', () => {
     renderFooter({ whitespaceRenderingMode: 'none' });
-    expect(container.querySelector('.whitespace-mode')).toBeFalsy();
+    // The indicator is now always rendered so users can click to enable
+    // WS rendering from the footer without going through the omnibox or
+    // toolbar.
+    const ws = container.querySelector('.whitespace-mode');
+    expect(ws).toBeTruthy();
+    expect(ws?.textContent).toContain('off');
   });
 
   it('shows whitespace mode indicator when mode is boundary', () => {
     renderFooter({ whitespaceRenderingMode: 'boundary' });
     const ws = container.querySelector('.whitespace-mode');
     expect(ws).toBeTruthy();
-    expect(ws?.textContent).toContain('WS: boundary');
+    expect(ws?.textContent).toContain('boundary');
   });
 
   it('shows whitespace mode indicator when mode is all', () => {
     renderFooter({ whitespaceRenderingMode: 'all' });
     const ws = container.querySelector('.whitespace-mode');
     expect(ws).toBeTruthy();
-    expect(ws?.textContent).toContain('WS: all');
+    expect(ws?.textContent).toContain('all');
   });
 
   it('hides LSP badge when lspLanguage is null', () => {
@@ -387,21 +393,23 @@ describe('EditorPaneFooter rendering', () => {
     renderFooter({ lsp: makeLsp({ lspLanguage: 'go', lspState: 'connected' }) });
     const lsp = container.querySelector('.cm-footer-lsp');
     expect(lsp).toBeTruthy();
-    expect(lsp?.textContent).toContain('✓');
+    // Text glyphs (✓ / … / ✗) were replaced with lucide icons. The state is
+    // surfaced via a `cm-footer-lsp--<state>` modifier class on the wrapper.
+    expect(lsp?.classList.contains('cm-footer-lsp--connected')).toBe(true);
   });
 
   it('shows LSP disconnected badge', () => {
     renderFooter({ lsp: makeLsp({ lspLanguage: 'go', lspState: 'disconnected' }) });
     const lsp = container.querySelector('.cm-footer-lsp');
     expect(lsp).toBeTruthy();
-    expect(lsp?.textContent).toContain('✗');
+    expect(lsp?.classList.contains('cm-footer-lsp--disconnected')).toBe(true);
   });
 
   it('shows LSP connecting badge', () => {
     renderFooter({ lsp: makeLsp({ lspLanguage: 'go', lspState: 'connecting' }) });
     const lsp = container.querySelector('.cm-footer-lsp');
     expect(lsp).toBeTruthy();
-    expect(lsp?.textContent).toContain('…');
+    expect(lsp?.classList.contains('cm-footer-lsp--connecting')).toBe(true);
   });
 
   it('renders LanguageSwitcher with correct props', () => {

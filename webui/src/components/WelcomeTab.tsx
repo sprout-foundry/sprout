@@ -3,12 +3,20 @@ import { useWorkspace } from '../hooks/useWorkspace';
 import WorkspacePicker from './WorkspacePicker';
 import './WelcomeTab.css';
 
+/** Mac users see ⌘; everyone else sees Ctrl. Mirrors HotkeyContext logic. */
+const PRIMARY_KEY = (() => {
+  if (typeof navigator === 'undefined') return 'Ctrl';
+  return /mac/i.test(navigator.platform) ? '⌘' : 'Ctrl';
+})();
+
 interface WelcomeTabProps {
   onDismiss?: () => void;
   onOpenCommandPalette?: () => void;
   onOpenTerminal?: () => void;
   onViewGit?: () => void;
   onStartChat?: () => void;
+  onOpenSettings?: () => void;
+  onOpenHotkeysConfig?: () => void;
 }
 
 /* ── Workspace Picker View ────────────────────────────────────────── */
@@ -46,12 +54,14 @@ function WelcomeContent({
   onOpenTerminal,
   onViewGit,
   onStartChat,
+  onOpenSettings,
+  onOpenHotkeysConfig,
 }: WelcomeTabProps): JSX.Element {
   const quickActions = [
     {
       icon: <Command size={20} />,
       title: 'Open Command Palette',
-      description: 'Press Ctrl+P to search and open files',
+      description: `Press ${PRIMARY_KEY}+P to search and open files`,
       action: onOpenCommandPalette,
     },
     {
@@ -85,13 +95,17 @@ function WelcomeContent({
       icon: <Settings size={18} />,
       title: 'Settings',
       description: 'Customize your editor',
-      action: onOpenCommandPalette,
+      action:
+        onOpenSettings ??
+        (() => window.dispatchEvent(new CustomEvent('sprout:open-settings-focus'))),
     },
     {
       icon: <Zap size={18} />,
       title: 'Keyboard Shortcuts',
-      description: 'Master the shortcuts',
-      action: onOpenCommandPalette,
+      description: 'Edit your bindings',
+      action:
+        onOpenHotkeysConfig ??
+        (() => window.dispatchEvent(new CustomEvent('sprout:open-hotkeys-config'))),
     },
   ];
 
@@ -114,7 +128,13 @@ function WelcomeContent({
           <h2>Quick Actions</h2>
           <div className="quick-actions-grid">
             {quickActions.map((action, index) => (
-              <button key={index} className="quick-action-card" onClick={() => action.action?.()} type="button">
+              <button
+                key={index}
+                className="quick-action-card"
+                onClick={() => action.action?.()}
+                type="button"
+                disabled={!action.action}
+              >
                 <div className="quick-action-icon">{action.icon}</div>
                 <div className="quick-action-content">
                   <div className="quick-action-title">{action.title}</div>
@@ -134,7 +154,7 @@ function WelcomeContent({
               </div>
               <div className="gs-content">
                 <h3>Open a File</h3>
-                <p>Select a file from the file tree or use Ctrl+P to search</p>
+                <p>Select a file from the file tree or use {PRIMARY_KEY}+P to search</p>
               </div>
             </div>
 
@@ -184,7 +204,7 @@ function WelcomeContent({
               </div>
               <div className="gs-content">
                 <h3>Command Palette</h3>
-                <p>Access all commands with Ctrl+P</p>
+                <p>Access all commands with {PRIMARY_KEY}+P</p>
               </div>
             </div>
           </div>
@@ -194,7 +214,13 @@ function WelcomeContent({
           <h2>Resources</h2>
           <div className="resources-grid">
             {helpfulLinks.map((link, index) => (
-              <button key={index} className="resource-card" type="button" onClick={() => link.action?.()}>
+              <button
+                key={index}
+                className="resource-card"
+                type="button"
+                onClick={() => link.action?.()}
+                disabled={!link.action}
+              >
                 <div className="resource-icon">{link.icon}</div>
                 <div className="resource-content">
                   <div className="resource-title">{link.title}</div>
@@ -208,7 +234,7 @@ function WelcomeContent({
 
       <div className="welcome-footer">
         <p>
-          Pro tip: Press <kbd>Ctrl+P</kbd> to open the command palette and search for any command or file
+          Pro tip: Press <kbd>{PRIMARY_KEY}+P</kbd> to open the command palette and search for any command or file
         </p>
       </div>
     </>

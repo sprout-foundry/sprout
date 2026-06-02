@@ -44,6 +44,15 @@ export interface UseEditorEventsOptions {
   toggleLinkedScroll: () => void;
   handleFindAllReferences: () => void;
   onGoToWorkspaceSymbol?: () => void;
+  onToggleInlayHints?: () => void;
+  onToggleSignatureHelp?: () => void;
+  onCycleTabSize?: () => void;
+  onZoomIn?: () => void;
+  onZoomOut?: () => void;
+  onResetZoom?: () => void;
+  onToggleFormatOnSave?: () => void;
+  onOpenLivePreview?: () => void;
+  onToggleMarkdownPreview?: () => void;
 }
 
 /**
@@ -161,6 +170,24 @@ export function useEditorEvents(options: UseEditorEventsOptions): void {
         onGoToWorkspaceSymbol?.();
       } else if (e.type === 'editor-go-to-symbol') {
         window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId: 'editor_goto_symbol' } }));
+      } else if (e.type === 'editor-toggle-inlay-hints') {
+        optionsRef.current.onToggleInlayHints?.();
+      } else if (e.type === 'editor-toggle-signature-help') {
+        optionsRef.current.onToggleSignatureHelp?.();
+      } else if (e.type === 'editor-cycle-tab-size') {
+        optionsRef.current.onCycleTabSize?.();
+      } else if (e.type === 'editor-zoom-in') {
+        optionsRef.current.onZoomIn?.();
+      } else if (e.type === 'editor-zoom-out') {
+        optionsRef.current.onZoomOut?.();
+      } else if (e.type === 'editor-reset-zoom') {
+        optionsRef.current.onResetZoom?.();
+      } else if (e.type === 'editor-toggle-format-on-save') {
+        optionsRef.current.onToggleFormatOnSave?.();
+      } else if (e.type === 'editor-open-live-preview') {
+        optionsRef.current.onOpenLivePreview?.();
+      } else if (e.type === 'editor-toggle-markdown-preview') {
+        optionsRef.current.onToggleMarkdownPreview?.();
       }
     } catch (err) {
       debugLog('[useEditorEvents] Error handling editor event:', e.type, err);
@@ -173,38 +200,35 @@ export function useEditorEvents(options: UseEditorEventsOptions): void {
   // ---------------------------------------------------------------------------
 
   useEffect(() => {
-    document.addEventListener('editor-goto-line', handler);
-    document.addEventListener('editor-toggle-word-wrap', handler);
-    document.addEventListener('editor-toggle-linked-scroll', handler);
-    document.addEventListener('editor-toggle-minimap', handler);
-    document.addEventListener('editor-toggle-relative-line-numbers', handler);
-    document.addEventListener('editor-cycle-whitespace-rendering', handler);
-    document.addEventListener('editor-undo', handler);
-    document.addEventListener('editor-redo', handler);
-    document.addEventListener('editor-find', handler);
-    document.addEventListener('editor-find-replace', handler);
-    document.addEventListener('editor-select-all', handler);
-    document.addEventListener('editor-format-document', handler);
-    document.addEventListener('editor-find-all-references', handler);
-    document.addEventListener('editor-go-to-workspace-symbol', handler);
-    document.addEventListener('editor-go-to-symbol', handler);
-
+    const events = [
+      'editor-goto-line',
+      'editor-toggle-word-wrap',
+      'editor-toggle-linked-scroll',
+      'editor-toggle-minimap',
+      'editor-toggle-relative-line-numbers',
+      'editor-cycle-whitespace-rendering',
+      'editor-undo',
+      'editor-redo',
+      'editor-find',
+      'editor-find-replace',
+      'editor-select-all',
+      'editor-format-document',
+      'editor-find-all-references',
+      'editor-go-to-workspace-symbol',
+      'editor-go-to-symbol',
+      'editor-toggle-inlay-hints',
+      'editor-toggle-signature-help',
+      'editor-cycle-tab-size',
+      'editor-zoom-in',
+      'editor-zoom-out',
+      'editor-reset-zoom',
+      'editor-toggle-format-on-save',
+      'editor-open-live-preview',
+      'editor-toggle-markdown-preview',
+    ];
+    for (const ev of events) document.addEventListener(ev, handler);
     return () => {
-      document.removeEventListener('editor-goto-line', handler);
-      document.removeEventListener('editor-toggle-word-wrap', handler);
-      document.removeEventListener('editor-toggle-linked-scroll', handler);
-      document.removeEventListener('editor-toggle-minimap', handler);
-      document.removeEventListener('editor-toggle-relative-line-numbers', handler);
-      document.removeEventListener('editor-cycle-whitespace-rendering', handler);
-      document.removeEventListener('editor-undo', handler);
-      document.removeEventListener('editor-redo', handler);
-      document.removeEventListener('editor-find', handler);
-      document.removeEventListener('editor-find-replace', handler);
-      document.removeEventListener('editor-select-all', handler);
-      document.removeEventListener('editor-format-document', handler);
-      document.removeEventListener('editor-find-all-references', handler);
-      document.removeEventListener('editor-go-to-workspace-symbol', handler);
-      document.removeEventListener('editor-go-to-symbol', handler);
+      for (const ev of events) document.removeEventListener(ev, handler);
     };
   }, [handler]); // Handler has stable identity now, so this effect only runs once
 }

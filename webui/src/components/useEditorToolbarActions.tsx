@@ -9,13 +9,22 @@
  * Target: ~100 lines
  */
 
-import { Eye, Columns2, ListOrdered, Paintbrush, SaveAll } from 'lucide-react';
+import { Eye, Columns2, ListOrdered, Paintbrush } from 'lucide-react';
 import { useMemo, type ReactNode } from 'react';
-import type { ToolbarAction } from './EditorToolbarActions';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
+
+/** Shape of a single toolbar action button (left or right side). */
+export interface ToolbarAction {
+  id: string;
+  title: string;
+  icon: ReactNode;
+  onClick: () => void;
+  active?: boolean;
+  disabled?: boolean;
+}
 
 export interface UseEditorToolbarActionsOptions {
   isSvgFile: boolean;
@@ -28,8 +37,6 @@ export interface UseEditorToolbarActionsOptions {
   onOpenLivePreview?: () => void;
   onOpenLivePreviewInSplit?: () => void;
   onFormatDocument?: () => void;
-  formatOnSaveEnabled?: boolean;
-  onToggleFormatOnSave?: () => void;
 }
 
 export interface UseEditorToolbarActionsReturn {
@@ -54,8 +61,6 @@ export function useEditorToolbarActions(options: UseEditorToolbarActionsOptions)
     onOpenLivePreview,
     onOpenLivePreviewInSplit,
     onFormatDocument,
-    formatOnSaveEnabled,
-    onToggleFormatOnSave,
   } = options;
 
   const rightActions = useMemo<ToolbarAction[]>(() => {
@@ -71,16 +76,10 @@ export function useEditorToolbarActions(options: UseEditorToolbarActionsOptions)
       });
     }
 
-    // Format on save toggle
-    if (onToggleFormatOnSave && formatOnSaveEnabled !== undefined) {
-      actions.push({
-        id: 'format-on-save',
-        title: formatOnSaveEnabled ? 'Disable format on save' : 'Enable format on save',
-        icon: <SaveAll size={16} />,
-        onClick: onToggleFormatOnSave,
-        active: formatOnSaveEnabled,
-      });
-    }
+    // Note: Format-on-save is a *preference*, not an action — surfaced
+    // through Settings → Editor → Commit & Review (and the omnibox command
+    // `editor_toggle_format_on_save`). Putting it as a toolbar toggle next
+    // to one-shot actions made it look like a verb.
 
     // Live preview actions for SVG/HTML files
     if (isSvgFile || isHtmlFile) {
@@ -147,8 +146,6 @@ export function useEditorToolbarActions(options: UseEditorToolbarActionsOptions)
     onOpenLivePreview,
     onOpenLivePreviewInSplit,
     onFormatDocument,
-    formatOnSaveEnabled,
-    onToggleFormatOnSave,
   ]);
 
   return { rightActions };

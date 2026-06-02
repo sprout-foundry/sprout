@@ -43,14 +43,14 @@ The configuration uses a flat structure focused on provider and model management
     "deepinfra": "meta-llama/Llama-3.3-70B-Instruct",
     "openrouter": "openai/gpt-5",
     "ollama-local": "qwen3-coder:30b",
-    "ollama-turbo": "deepseek-v3.1:671b"
+    "ollama-cloud": "deepseek-v3.1:671b"
   },
   "provider_priority": [
     "openai",
     "zai",
     "openrouter",
     "deepinfra",
-    "ollama-turbo",
+    "ollama-cloud",
     "ollama-local"
   ],
   "mcp": {

@@ -149,8 +149,8 @@ func TestGetReviewModel_EmptyFallsBackToProviderModel(t *testing.T) {
 // TestSetReviewProvider_SetsValue tests that SetReviewProvider sets the value
 func TestSetReviewProvider_SetsValue(t *testing.T) {
 	cfg := &Config{}
-	cfg.SetReviewProvider("ollama-turbo")
-	assert.Equal(t, "ollama-turbo", cfg.ReviewProvider)
+	cfg.SetReviewProvider("ollama-cloud")
+	assert.Equal(t, "ollama-cloud", cfg.ReviewProvider)
 }
 
 // TestSetReviewModel_SetsValue tests that SetReviewModel sets the value
@@ -239,10 +239,10 @@ func TestReviewConfigFallbackChain(t *testing.T) {
 	}{
 		{
 			name:              "explicit review provider",
-			reviewProvider:    "ollama-turbo",
+			reviewProvider:    "ollama-cloud",
 			lastUsedProvider:  "openrouter",
 			providerPriority:  []string{"ollama-local"},
-			expectedProvider:  "ollama-turbo",
+			expectedProvider:  "ollama-cloud",
 		},
 		{
 			name:              "fallback to last used",
@@ -336,11 +336,11 @@ func TestCommitModelFallbackUsesCommitProvider(t *testing.T) {
 // TestReviewModelFallbackUsesReviewProvider tests that review model uses review provider, not last used
 func TestReviewModelFallbackUsesReviewProvider(t *testing.T) {
 	cfg := &Config{
-		ReviewProvider: "ollama-turbo",
+		ReviewProvider: "ollama-cloud",
 		ReviewModel:    "",
 		ProviderModels: map[string]string{
 			"openrouter":   "openai/gpt-5",
-			"ollama-turbo": "deepseek-v3.1:671b",
+			"ollama-cloud": "deepseek-v3.1:671b",
 		},
 		LastUsedProvider: "openrouter",
 	}

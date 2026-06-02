@@ -954,8 +954,8 @@ func mapClientTypeToString(ct api.ClientType) string {
 		return "ollama"
 	case api.OllamaLocalClientType:
 		return "ollama-local"
-	case api.OllamaTurboClientType:
-		return "ollama-turbo"
+	case api.OllamaCloudClientType:
+		return "ollama-cloud"
 	case api.LMStudioClientType:
 		return "lmstudio"
 	case api.MistralClientType:

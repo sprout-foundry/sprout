@@ -288,8 +288,8 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 			description = " - Open-source models, good performance"
 		case "ollama":
 			description = " - Run models locally, completely free (requires setup)"
-		case "ollama-turbo":
-			description = " - Hosted Ollama with API access"
+		case "ollama-cloud":
+			description = " - Hosted Ollama Cloud with API access"
 		case "lmstudio":
 			description = " - Local AI server, run models on your machine"
 		case "jinaai":
@@ -417,7 +417,7 @@ func GetAvailableProviders() []string {
 	// Add the special providers that aren't in the factory (built-in ones)
 	specialProviders := []string{
 		"ollama-local",
-		"ollama-turbo",
+		"ollama-cloud",
 		"test",
 		"editor",
 	}
@@ -515,7 +515,7 @@ func addNewProvider(apiKeys *APIKeys) (string, error) {
 	// Show providers that need API keys
 	needsKey := []string{}
 	for _, provider := range []string{
-		"openai", "openrouter", "deepinfra", "ollama-turbo", "lmstudio",
+		"openai", "openrouter", "deepinfra", "ollama-cloud", "lmstudio",
 	} {
 		if !HasProviderAuth(provider) {
 			needsKey = append(needsKey, provider)
@@ -636,7 +636,7 @@ func DebugPrintConfig(config *Config, apiKeys *APIKeys) {
 
 	fmt.Println("  API Keys:")
 	providers := []string{
-		"openai", "openrouter", "deepinfra", "ollama-local", "ollama-turbo",
+		"openai", "openrouter", "deepinfra", "ollama-local", "ollama-cloud",
 	}
 	for _, provider := range providers {
 		if apiKeys.HasAPIKey(provider) {

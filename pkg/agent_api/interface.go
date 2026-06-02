@@ -42,7 +42,7 @@ type ClientType string
 const (
 	OllamaClientType      ClientType = "ollama" // Alias for ollama-local
 	OllamaLocalClientType ClientType = "ollama-local"
-	OllamaTurboClientType ClientType = "ollama-turbo"
+	OllamaCloudClientType ClientType = "ollama-cloud"
 	TestClientType        ClientType = "test" // Mock provider for CI/testing
 	EditorClientType      ClientType = "editor" // Editor-only mode, no AI provider
 )
@@ -135,7 +135,7 @@ func DetermineProvider(explicitProvider string, lastUsedProvider ClientType) (Cl
 		ClientType("openai"),
 		ClientType("mistral"),
 		ClientType("lmstudio"),
-		ClientType("ollama-turbo"),
+		ClientType("ollama-cloud"),
 		OllamaLocalClientType,
 	}
 
@@ -193,7 +193,7 @@ func GetProviderName(clientType ClientType) string {
 		MinimaxClientType:        "MiniMax",
 		ChutesClientType:         "Chutes",
 		CerebrasClientType:       "Cerebras",
-		OllamaTurboClientType:    "Ollama (Turbo)",
+		OllamaCloudClientType:    "Ollama (Cloud)",
 		OllamaLocalClientType:    "Ollama (Local)",
 		TestClientType:           "Test Provider",
 		EditorClientType:         "Editor Mode",

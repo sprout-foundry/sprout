@@ -128,7 +128,7 @@ func (a *ProviderAdapter) GetEndpoint() string {
 	case OllamaClientType, OllamaLocalClientType:
 		// For local Ollama, use the default local endpoint
 		return "http://localhost:11434/v1/chat/completions"
-	case OllamaTurboClientType:
+	case OllamaCloudClientType:
 		return "https://turbo.ollama.ai/v1/chat/completions"
 	case LMStudioClientType:
 		// For LM Studio, use the default local endpoint

@@ -29,8 +29,8 @@ func MapProviderStringToClientType(cfg *Config, raw string) (api.ClientType, err
 		return api.OllamaClientType, nil
 	case "ollama-local":
 		return api.OllamaLocalClientType, nil
-	case "ollama-turbo":
-		return api.OllamaTurboClientType, nil
+	case "ollama-cloud":
+		return api.OllamaCloudClientType, nil
 	case "lmstudio":
 		return api.LMStudioClientType, nil
 	case "mistral":

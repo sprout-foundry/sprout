@@ -156,16 +156,16 @@ func TestHasProviderAuth(t *testing.T) {
 			expectHasAuth: false,
 		},
 		{
-			name:     "ollama-turbo with env var set returns true",
-			provider: "ollama-turbo",
+			name:     "ollama-cloud with env var set returns true",
+			provider: "ollama-cloud",
 			setupEnv: func() {
-				t.Setenv("OLLAMA_API_KEY", "test-ollama-turbo-key")
+				t.Setenv("OLLAMA_API_KEY", "test-ollama-cloud-key")
 			},
 			expectHasAuth: true,
 		},
 		{
-			name:     "ollama-turbo without env var returns true (local provider)",
-			provider: "ollama-turbo",
+			name:     "ollama-cloud without env var returns true (local provider)",
+			provider: "ollama-cloud",
 			setupEnv: func() {
 				// Use a unique config dir for isolation
 				configDir := t.TempDir()
@@ -330,7 +330,7 @@ func TestHasProviderAuthKnownProviders(t *testing.T) {
 	// Comprehensive test for all known providers
 	knownProviders := []string{
 		"openai", "openrouter", "deepinfra", "ollama", "ollama-local",
-		"ollama-turbo", "lmstudio", "jinaai", "zai", "test", "editor",
+		"ollama-cloud", "lmstudio", "jinaai", "zai", "test", "editor",
 	}
 
 	// Reset credential backend for clean state

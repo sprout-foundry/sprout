@@ -68,7 +68,7 @@ func TestGetProviderRateLimiterDefaults(t *testing.T) {
 		{"deepseek", 0.5, 3},
 		{"ollama", 10.0, 20},
 		{"ollama-local", 10.0, 20},
-		{"ollama-turbo", 10.0, 20},
+		{"ollama-cloud", 10.0, 20},
 		{"zai", 2.0, 10},
 		{"chutes", 2.0, 10},
 		{"lmstudio", 10.0, 20},

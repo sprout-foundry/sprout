@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
@@ -192,12 +194,29 @@ func (ws *ReactWebServer) handleAPIGitDiscard(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Discard changes / restore deleted file — use git restore which works for
-	// both modified and deleted working-tree files.
-	cmd := ws.gitCommandForWorkspace(workspaceRoot, "restore", "--", req.Path)
-	if err := cmd.Run(); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to discard changes: %v", err), http.StatusInternalServerError)
-		return
+	// "Discard file changes" should leave the file looking like HEAD again —
+	// regardless of whether it was modified-only, staged-only, both, deleted,
+	// or untracked. The previous `git restore --` covered only the working
+	// tree, which silently left staged changes in place and did nothing at
+	// all for untracked files (the button looked dead from the UI's
+	// perspective). Pick the right git operation per status:
+	switch {
+	case containsPath(status.Untracked, req.Path):
+		// Untracked: nothing to restore from HEAD, so just delete the file.
+		// This matches what `git clean -f -- <path>` would do.
+		abs := filepath.Join(workspaceRoot, req.Path)
+		if err := os.Remove(abs); err != nil && !os.IsNotExist(err) {
+			http.Error(w, fmt.Sprintf("Failed to delete untracked file: %v", err), http.StatusInternalServerError)
+			return
+		}
+	default:
+		// Modified / staged / deleted / renamed: restore both index and
+		// worktree back to HEAD so partial-stage cases also revert fully.
+		cmd := ws.gitCommandForWorkspace(workspaceRoot, "restore", "--staged", "--worktree", "--", req.Path)
+		if err := cmd.Run(); err != nil {
+			http.Error(w, fmt.Sprintf("Failed to discard changes: %v", err), http.StatusInternalServerError)
+			return
+		}
 	}
 
 	ws.publishClientEvent(ws.resolveClientID(r), events.EventTypeFileChanged, events.FileChangedEvent(req.Path, "git_discard", ""))

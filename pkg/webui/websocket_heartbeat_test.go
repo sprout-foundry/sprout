@@ -24,14 +24,22 @@ type testingConnPair struct {
 // newTestingConnPair creates a connected client/server pair via an httptest
 // server. The client side reads responses; the server side is used to write
 // messages (e.g. from handleHeartbeatMessage).
+//
+// Both the upgrader and the client dialer use 64 KB read/write buffers so
+// that tests streaming large payloads (e.g. ≥1 MB hydrate files) succeed
+// without the connection failing mid-stream.
 func newTestingConnPair(t *testing.T) *testingConnPair {
 	t.Helper()
+
+	const bufSize = 65536 // 64 KB — large enough for ≥1 MB payloads
 
 	var serverConn *websocket.Conn
 	connCh := make(chan *websocket.Conn, 1)
 
 	upgrader := websocket.Upgrader{
-		CheckOrigin: func(_ *http.Request) bool { return true },
+		CheckOrigin:     func(_ *http.Request) bool { return true },
+		ReadBufferSize:  bufSize,
+		WriteBufferSize: bufSize,
 	}
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -47,7 +55,10 @@ func newTestingConnPair(t *testing.T) *testingConnPair {
 	t.Cleanup(ts.Close)
 
 	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http")
-	clientConn, _, err := (&websocket.Dialer{}).Dial(wsURL, nil)
+	clientConn, _, err := (&websocket.Dialer{
+		ReadBufferSize:  bufSize,
+		WriteBufferSize: bufSize,
+	}).Dial(wsURL, nil)
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}

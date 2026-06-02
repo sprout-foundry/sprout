@@ -642,21 +642,33 @@ function SettingsPanel({
               )}
 
               {/* Subsection buttons */}
-              <div className="settings-subsection-list">
-                {section.subsections.map((sub) => (
-                  <button
-                    key={sub.id}
-                    type="button"
-                    className={`settings-subsection-btn ${activeSubsection === sub.id ? 'active' : ''}`}
-                    onClick={() => setActiveSubsection(sub.id)}
-                  >
-                    {sub.label}
-                  </button>
-                ))}
+              <div className="settings-subsection-list" role="tablist" aria-label={`${section.label} sub-sections`}>
+                {section.subsections.map((sub) => {
+                  const isActive = activeSubsection === sub.id;
+                  return (
+                    <button
+                      key={sub.id}
+                      type="button"
+                      role="tab"
+                      id={`settings-subtab-${sub.id}`}
+                      aria-selected={isActive}
+                      aria-controls={`settings-subpanel-${sub.id}`}
+                      className={`settings-subsection-btn ${isActive ? 'active' : ''}`}
+                      onClick={() => setActiveSubsection(sub.id)}
+                    >
+                      {sub.label}
+                    </button>
+                  );
+                })}
               </div>
 
               {/* Subsection content area */}
-              <div className="settings-subsection-content">
+              <div
+                className="settings-subsection-content"
+                role="tabpanel"
+                id={activeSubsection ? `settings-subpanel-${activeSubsection}` : undefined}
+                aria-labelledby={activeSubsection ? `settings-subtab-${activeSubsection}` : undefined}
+              >
                 {activeSubsection &&
                   section.subsections.some((s) => s.id === activeSubsection) &&
                   renderSubsectionContent(activeSubsection)}

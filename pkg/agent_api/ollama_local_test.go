@@ -151,7 +151,10 @@ func TestOllamaLocalClientIncludesStructuredTools(t *testing.T) {
 	require.Equal(t, "object", reqTool.Function.Parameters.Type)
 	require.ElementsMatch(t, []string{"command"}, reqTool.Function.Parameters.Required)
 
-	commandProp, ok := reqTool.Function.Parameters.Properties["command"]
+	// ollama v0.17+ replaced the plain map with an opaque
+	// `*ToolPropertiesMap` that preserves insertion order. Lookup goes
+	// through Get(key) instead of map index.
+	commandProp, ok := reqTool.Function.Parameters.Properties.Get("command")
 	require.True(t, ok)
 	require.Contains(t, commandProp.Type, "string")
 	require.Equal(t, "Shell command to execute", commandProp.Description)
@@ -219,7 +222,11 @@ func TestOllamaLocalClientCapturesToolCalls(t *testing.T) {
 		Models: []ollama.ListModelResponse{{Name: "model-a"}},
 	}
 
-	toolArgs := ollama.ToolCallFunctionArguments{"command": "ls", "args": []any{"-la"}}
+	// ollama v0.17+ replaced the plain map with an opaque struct that
+	// preserves insertion order. Construct via the helper + Set().
+	toolArgs := ollama.NewToolCallFunctionArguments()
+	toolArgs.Set("command", "ls")
+	toolArgs.Set("args", []any{"-la"})
 	stub := &stubOllamaClient{
 		listResp: available,
 		chatResponses: []ollama.ChatResponse{
@@ -259,7 +266,11 @@ func TestOllamaLocalClientStreamingToolCalls(t *testing.T) {
 		Models: []ollama.ListModelResponse{{Name: "model-a"}},
 	}
 
-	toolArgs := ollama.ToolCallFunctionArguments{"command": "ls", "args": []any{"-la"}}
+	// ollama v0.17+ replaced the plain map with an opaque struct that
+	// preserves insertion order. Construct via the helper + Set().
+	toolArgs := ollama.NewToolCallFunctionArguments()
+	toolArgs.Set("command", "ls")
+	toolArgs.Set("args", []any{"-la"})
 	stub := &stubOllamaClient{
 		listResp: available,
 		chatResponses: []ollama.ChatResponse{

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -1443,4 +1444,287 @@ func TestFetchAllProviders_ContextCancelled(t *testing.T) {
 	// but the function is designed to never return errors from the index.
 	// We just verify it doesn't panic and returns quickly.
 	_ = err
+}
+
+// ---------------------------------------------------------------------------
+// validateEndpoint — SSRF validation
+// ---------------------------------------------------------------------------
+
+func TestValidateEndpoint_HTTPS_Allowed(t *testing.T) {
+	tests := []struct {
+		name     string
+		endpoint string
+	}{
+		{"standard HTTPS", "https://api.openai.com/v1"},
+		{"HTTPS with path", "https://example.com/api/v1/chat/completions"},
+		{"HTTPS with port", "https://api.example.com:8443/v1"},
+		{"HTTPS with subdomain", "https://deepinfra.ai/v1/chat/completions"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateEndpoint(tt.endpoint)
+			if err != nil {
+				t.Errorf("expected %q to be allowed, got error: %v", tt.endpoint, err)
+			}
+		})
+	}
+}
+
+func TestValidateEndpoint_HTTP_Rejected(t *testing.T) {
+	err := validateEndpoint("http://api.example.com/v1")
+	if err == nil {
+		t.Fatal("expected error for HTTP endpoint, got nil")
+	}
+	if !strings.Contains(err.Error(), "https") {
+		t.Errorf("expected error mentioning https, got: %v", err)
+	}
+}
+
+func TestValidateEndpoint_FileScheme_Rejected(t *testing.T) {
+	err := validateEndpoint("file:///etc/passwd")
+	if err == nil {
+		t.Fatal("expected error for file:// endpoint, got nil")
+	}
+}
+
+func TestValidateEndpoint_InvalidURL(t *testing.T) {
+	tests := []struct {
+		name     string
+		endpoint string
+	}{
+		{"not a URL", "not a valid url at all"},
+		{"mixed garbage", "ht tp://example.com"},
+		{"empty scheme", "://example.com"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateEndpoint(tt.endpoint)
+			if err == nil {
+				t.Errorf("expected error for %q, got nil", tt.endpoint)
+			}
+		})
+	}
+}
+
+func TestValidateEndpoint_EmptyEndpoint(t *testing.T) {
+	err := validateEndpoint("")
+	if err == nil {
+		t.Fatal("expected error for empty endpoint, got nil")
+	}
+	if !strings.Contains(err.Error(), "empty") {
+		t.Errorf("expected error mentioning empty, got: %v", err)
+	}
+}
+
+func TestValidateEndpoint_Localhost_Rejected(t *testing.T) {
+	tests := []struct {
+		name     string
+		endpoint string
+	}{
+		{"localhost plain", "https://localhost:8080/api"},
+		{"localhost no port", "https://localhost/api"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateEndpoint(tt.endpoint)
+			if err == nil {
+				t.Errorf("expected error for %q, got nil", tt.endpoint)
+			}
+			if !strings.Contains(strings.ToLower(err.Error()), "localhost") {
+				t.Errorf("expected error mentioning localhost, got: %v", err)
+			}
+		})
+	}
+}
+
+func TestValidateEndpoint_LocalhostUpperCase(t *testing.T) {
+	err := validateEndpoint("https://LOCALHOST/api")
+	if err == nil {
+		t.Fatal("expected error for LOCALHOST (uppercase), got nil")
+	}
+}
+
+func TestValidateEndpoint_Private_IP_127(t *testing.T) {
+	err := validateEndpoint("https://127.0.0.1:8080/api")
+	if err == nil {
+		t.Fatal("expected error for 127.0.0.1, got nil")
+	}
+	if !strings.Contains(err.Error(), "private IP") {
+		t.Errorf("expected error mentioning private IP, got: %v", err)
+	}
+}
+
+func TestValidateEndpoint_Private_IP_10(t *testing.T) {
+	err := validateEndpoint("https://10.0.0.1/api")
+	if err == nil {
+		t.Fatal("expected error for 10.0.0.1, got nil")
+	}
+	if !strings.Contains(err.Error(), "private IP") {
+		t.Errorf("expected error mentioning private IP, got: %v", err)
+	}
+}
+
+func TestValidateEndpoint_Private_IP_172_16(t *testing.T) {
+	err := validateEndpoint("https://172.16.0.1/api")
+	if err == nil {
+		t.Fatal("expected error for 172.16.0.1, got nil")
+	}
+	if !strings.Contains(err.Error(), "private IP") {
+		t.Errorf("expected error mentioning private IP, got: %v", err)
+	}
+}
+
+func TestValidateEndpoint_Private_IP_172_31(t *testing.T) {
+	err := validateEndpoint("https://172.31.255.255/api")
+	if err == nil {
+		t.Fatal("expected error for 172.31.255.255, got nil")
+	}
+	if !strings.Contains(err.Error(), "private IP") {
+		t.Errorf("expected error mentioning private IP, got: %v", err)
+	}
+}
+
+func TestValidateEndpoint_Private_IP_172_32_Allowed(t *testing.T) {
+	err := validateEndpoint("https://172.32.0.1/api")
+	if err != nil {
+		t.Errorf("expected 172.32.0.1 to be allowed (outside private range), got error: %v", err)
+	}
+}
+
+func TestValidateEndpoint_Private_IP_192_168(t *testing.T) {
+	err := validateEndpoint("https://192.168.1.1/api")
+	if err == nil {
+		t.Fatal("expected error for 192.168.1.1, got nil")
+	}
+	if !strings.Contains(err.Error(), "private IP") {
+		t.Errorf("expected error mentioning private IP, got: %v", err)
+	}
+}
+
+func TestValidateEndpoint_Public_IP_Allowed(t *testing.T) {
+	tests := []struct {
+		name     string
+		endpoint string
+	}{
+		{"Google DNS", "https://8.8.8.8/api"},
+		{"Cloudflare DNS", "https://1.1.1.1/api"},
+		{"Public IP", "https://52.85.132.100/v1"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateEndpoint(tt.endpoint)
+			if err != nil {
+				t.Errorf("expected %q to be allowed, got error: %v", tt.endpoint, err)
+			}
+		})
+	}
+}
+
+func TestValidateEndpoint_IPv6_Loopback(t *testing.T) {
+	err := validateEndpoint("https://[::1]/api")
+	if err == nil {
+		t.Fatal("expected error for IPv6 loopback ::1, got nil")
+	}
+}
+
+func TestValidateEndpoint_IPv6_Ul_Prefix(t *testing.T) {
+	err := validateEndpoint("https://[fc00::1]/api")
+	if err == nil {
+		t.Fatal("expected error for IPv6 unique local fc00::1, got nil")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// isPrivateIP — edge cases
+// ---------------------------------------------------------------------------
+
+func TestIsPrivateIP_Loopback(t *testing.T) {
+	if !isPrivateIP(net.ParseIP("127.0.0.1")) {
+		t.Error("expected 127.0.0.1 to be private")
+	}
+	if !isPrivateIP(net.ParseIP("127.255.255.255")) {
+		t.Error("expected 127.255.255.255 to be private")
+	}
+}
+
+func TestIsPrivateIP_ClassA(t *testing.T) {
+	if !isPrivateIP(net.ParseIP("10.0.0.0")) {
+		t.Error("expected 10.0.0.0 to be private")
+	}
+	if !isPrivateIP(net.ParseIP("10.255.255.255")) {
+		t.Error("expected 10.255.255.255 to be private")
+	}
+	if isPrivateIP(net.ParseIP("11.0.0.0")) {
+		t.Error("expected 11.0.0.0 to be public")
+	}
+}
+
+func TestIsPrivateIP_ClassB(t *testing.T) {
+	if !isPrivateIP(net.ParseIP("172.16.0.0")) {
+		t.Error("expected 172.16.0.0 to be private")
+	}
+	if !isPrivateIP(net.ParseIP("172.31.255.255")) {
+		t.Error("expected 172.31.255.255 to be private")
+	}
+	if isPrivateIP(net.ParseIP("172.15.0.0")) {
+		t.Error("expected 172.15.0.0 to be public")
+	}
+	if isPrivateIP(net.ParseIP("172.32.0.0")) {
+		t.Error("expected 172.32.0.0 to be public")
+	}
+}
+
+func TestIsPrivateIP_ClassC(t *testing.T) {
+	if !isPrivateIP(net.ParseIP("192.168.0.0")) {
+		t.Error("expected 192.168.0.0 to be private")
+	}
+	if !isPrivateIP(net.ParseIP("192.168.255.255")) {
+		t.Error("expected 192.168.255.255 to be private")
+	}
+	if isPrivateIP(net.ParseIP("192.169.0.0")) {
+		t.Error("expected 192.169.0.0 to be public")
+	}
+}
+
+func TestIsPrivateIP_Nil(t *testing.T) {
+	if isPrivateIP(nil) {
+		t.Error("expected nil IP to not be private")
+	}
+}
+
+func TestIsPrivateIP_IPv6_Loopback(t *testing.T) {
+	if !isPrivateIP(net.ParseIP("::1")) {
+		t.Error("expected ::1 to be private")
+	}
+}
+
+func TestIsPrivateIP_IPv6_Unspecified(t *testing.T) {
+	if !isPrivateIP(net.ParseIP("::")) {
+		t.Error("expected :: (unspecified) to be private")
+	}
+}
+
+func TestIsPrivateIP_IPv6_LinkLocal(t *testing.T) {
+	if !isPrivateIP(net.ParseIP("fe80::1")) {
+		t.Error("expected fe80::1 to be private (link-local)")
+	}
+}
+
+func TestIsPrivateIP_IPv6_UniqueLocal(t *testing.T) {
+	if !isPrivateIP(net.ParseIP("fc00::1")) {
+		t.Error("expected fc00::1 to be private (unique local)")
+	}
+	if !isPrivateIP(net.ParseIP("fdff::ffff")) {
+		t.Error("expected fdff::ffff to be private (unique local)")
+	}
+}
+
+func TestIsPrivateIP_IPv6_Public(t *testing.T) {
+	if isPrivateIP(net.ParseIP("2001:db8::1")) {
+		t.Error("expected 2001:db8::1 to be public")
+	}
 }

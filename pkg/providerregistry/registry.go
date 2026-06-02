@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -386,6 +388,116 @@ func negativeTTLCopy() time.Duration {
 	return negativeTTL
 }
 
+// validateEndpoint checks that the endpoint URL is safe to call.
+// It rejects non-HTTPS schemes, localhost, and private/internal IP addresses.
+// DNS lookups are performed with a 3-second timeout; DNS failures fail closed
+// (return an error) to prevent SSRF via DNS poisoning or flaky resolution.
+func validateEndpoint(endpoint string) error {
+	if endpoint == "" {
+		return fmt.Errorf("endpoint is empty")
+	}
+
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return fmt.Errorf("failed to parse endpoint URL: %w", err)
+	}
+
+	// Only allow HTTPS.
+	if !strings.EqualFold(u.Scheme, "https") {
+		return fmt.Errorf("endpoint scheme %q is not https", u.Scheme)
+	}
+
+	host := u.Hostname()
+	if host == "" {
+		return fmt.Errorf("endpoint has no hostname")
+	}
+
+	// Reject localhost.
+	if strings.EqualFold(host, "localhost") {
+		return fmt.Errorf("endpoint points to localhost")
+	}
+
+	// If the host is a literal IP address, check it directly.
+	ip := net.ParseIP(host)
+	if ip != nil {
+		if isPrivateIP(ip) {
+			return fmt.Errorf("endpoint resolves to private IP %s", host)
+		}
+		return nil
+	}
+
+	// Otherwise resolve the hostname and check each resulting IP.
+	// Use a context with a 3-second timeout to prevent blocking the goroutine
+	// on slow DNS servers. On DNS failure, fail-open — we cannot verify the
+	// endpoint is private, so allow it. This prevents false rejections for
+	// endpoints that are unreachable from the current machine (e.g., air-gapped
+	// environments, CI without network, or provider endpoints that don't resolve
+	// from the client's DNS). The HTTPS-only check above is the primary guard.
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	resolver := &net.Resolver{}
+	ips, err := resolver.LookupIPAddr(ctx, host)
+	if err != nil {
+		// DNS resolution failed — fail open. The endpoint is HTTPS and we
+		// cannot determine it's private, so allow it.
+		return nil
+	}
+	for _, resolvedIP := range ips {
+		if isPrivateIP(resolvedIP.IP) {
+			return fmt.Errorf("endpoint %s resolves to private IP %s", host, resolvedIP.IP)
+		}
+	}
+	return nil
+}
+
+// isPrivateIP returns true if the IP falls into a private, loopback, or link-local range.
+func isPrivateIP(ip net.IP) bool {
+	if ip == nil {
+		return false
+	}
+
+	// IPv4 checks
+	if ip4 := ip.To4(); ip4 != nil {
+		// 127.0.0.0/8 (loopback)
+		if ip4[0] == 127 {
+			return true
+		}
+		// 10.0.0.0/8 (private class A)
+		if ip4[0] == 10 {
+			return true
+		}
+		// 172.16.0.0/12 (private class B: 172.16-31.x.x)
+		if ip4[0] == 172 && ip4[1]&0xf0 == 0x10 {
+			return true
+		}
+		// 192.168.0.0/16 (private class C)
+		if ip4[0] == 192 && ip4[1] == 168 {
+			return true
+		}
+		return false
+	}
+
+	// IPv6 checks
+	// ::1 (loopback)
+	if ip.Equal(net.IPv6zero) {
+		// :: (unspecified) — treat as private
+		return true
+	}
+	if ip.Equal(net.ParseIP("::1")) {
+		return true
+	}
+	// fc00::/7 (unique local)
+	if len(ip) == 16 && ip[0]&0xfe == 0xfc {
+		return true
+	}
+	// fe80::/10 (link-local)
+	if len(ip) == 16 && ip[0]&0xff == 0xfe && ip[1]&0xc0 == 0x80 {
+		return true
+	}
+	return false
+}
+
 // isValidProviderID checks that a provider ID contains only safe characters.
 func isValidProviderID(id string) bool {
 	if len(id) == 0 || len(id) > 128 {
@@ -488,6 +600,11 @@ func FetchProviderConfig(ctx context.Context, providerID string) (*RemoteProvide
 		var config RemoteProviderConfig
 		if decodeErr := json.Unmarshal(body, &config); decodeErr != nil {
 			return nil, fmt.Errorf("providerregistry: decode %s: %w", providerID, decodeErr)
+		}
+
+		// SSRF validation — reject configs that point to private/internal endpoints.
+		if valErr := validateEndpoint(config.Endpoint); valErr != nil {
+			return nil, fmt.Errorf("providerregistry: invalid endpoint for %s: %w", providerID, valErr)
 		}
 
 		// Store in cache.

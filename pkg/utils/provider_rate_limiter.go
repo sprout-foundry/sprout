@@ -25,7 +25,7 @@ var (
 // - openrouter: 2.0 tps (120 RPM), burst 10
 // - deepinfra: 1.0 tps (60 RPM), burst 5
 // - deepseek: 0.5 tps (30 RPM), burst 3
-// - ollama/ollama-local/ollama-turbo: 10.0 tps (600 RPM), burst 20
+// - ollama/ollama-local/ollama-cloud: 10.0 tps (600 RPM), burst 20
 // - zai: 2.0 tps (120 RPM), burst 10
 // - chutes: 2.0 tps (120 RPM), burst 10
 // - lmstudio: 10.0 tps (600 RPM), burst 20
@@ -89,7 +89,7 @@ func getDefaultRateForProvider(providerName string) (rate float64, burst int) {
 	case providerLower == "deepseek":
 		return 0.5, 3 // 30 RPM
 
-	case providerLower == "ollama" || providerLower == "ollama-local" || providerLower == "ollama-turbo":
+	case providerLower == "ollama" || providerLower == "ollama-local" || providerLower == "ollama-cloud":
 		return 10.0, 20 // 600 RPM
 
 	case providerLower == "zai":

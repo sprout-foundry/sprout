@@ -24,7 +24,7 @@ func TestProviderFactory(t *testing.T) {
 
 	// Test that providers were loaded
 	providers := factory.GetAvailableProviders()
-	expectedProviders := []string{"cerebras", "chutes", "openrouter", "deepinfra", "deepseek", "zai", "lmstudio", "minimax", "mistral", "ollama-turbo", "openai"}
+	expectedProviders := []string{"cerebras", "chutes", "openrouter", "deepinfra", "deepseek", "zai", "lmstudio", "minimax", "mistral", "ollama-cloud", "openai"}
 
 	// Debug: print actual providers
 	t.Logf("Actual providers loaded (%d): %v", len(providers), providers)

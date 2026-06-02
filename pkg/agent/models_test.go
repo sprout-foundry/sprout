@@ -66,7 +66,7 @@ func TestGetProviderType(t *testing.T) {
 		api.DeepSeekClientType,
 		api.OllamaClientType,
 		api.OllamaLocalClientType,
-		api.OllamaTurboClientType,
+		api.OllamaCloudClientType,
 		api.OpenAIClientType,
 		api.TestClientType,
 	}

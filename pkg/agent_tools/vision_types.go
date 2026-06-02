@@ -353,8 +353,8 @@ func GetVisionModelForProvider(providerType api.ClientType) string {
 		}
 		// Fallback to default local OCR/vision model.
 		return "glm-ocr:latest"
-	case api.OllamaTurboClientType:
-		// Ollama turbo currently does not support vision.
+	case api.OllamaCloudClientType:
+		// Ollama cloud currently does not support vision.
 		return ""
 	case api.TestClientType:
 		return ""

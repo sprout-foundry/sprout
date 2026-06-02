@@ -307,6 +307,21 @@ func canonicalAdapterModels(ctx context.Context, providerID string) ([]modelcont
 		apiKey, _ := credentials.ResolveProviderAPIKey("openai", "OpenAI")
 		m, err := modelcontract.OpenAIAdapter{APIKey: apiKey, Reference: openRouterReference(ctx)}.ListModels(ctx)
 		return m, true, err
+	case "cerebras":
+		m, err := modelcontract.NewOpenAICompatAdapter("cerebras", "https://api.cerebras.ai/v1/models", "CEREBRAS_API_KEY").ListModels(ctx)
+		return m, true, err
+	case "chutes":
+		m, err := modelcontract.NewOpenAICompatAdapter("chutes", "https://llm.chutes.ai/v1/models", "CHUTES_API_KEY").ListModels(ctx)
+		return m, true, err
+	case "ollama-cloud":
+		m, err := modelcontract.NewOpenAICompatAdapter("ollama-cloud", "https://ollama.com/v1/models", "OLLAMA_API_KEY").ListModels(ctx)
+		return m, true, err
+	case "deepseek":
+		m, err := modelcontract.NewOpenAICompatAdapter("deepseek", "https://api.deepseek.com/v1/models", "DEEPSEEK_API_KEY").ListModels(ctx)
+		return m, true, err
+	case "mistral":
+		m, err := modelcontract.NewOpenAICompatAdapter("mistral", "https://api.mistral.ai/v1/models", "MISTRAL_API_KEY").ListModels(ctx)
+		return m, true, err
 	default:
 		return nil, false, nil
 	}
@@ -422,8 +437,8 @@ func createProviderForType(clientType ClientType) (interface {
 			return nil, fmt.Errorf("failed to create Ollama local client: %w", err)
 		}
 		return &ollamaLocalListModelsWrapper{client: client}, nil
-	case OllamaTurboClientType:
-		return &genericConfigListModelsWrapper{providerName: "ollama-turbo"}, nil
+	case OllamaCloudClientType:
+		return &genericConfigListModelsWrapper{providerName: "ollama-cloud"}, nil
 	case OpenAIClientType:
 		return &genericConfigListModelsWrapper{providerName: "openai"}, nil
 	case OpenRouterClientType:

@@ -214,10 +214,10 @@ func TestReviewConfigWithMultipleProviders(t *testing.T) {
 			expected: "openai",
 		},
 		{
-			name:     "ollama-turbo",
-			provider: "ollama-turbo",
+			name:     "ollama-cloud",
+			provider: "ollama-cloud",
 			model:    "deepseek-v3.1:671b",
-			expected: "ollama-turbo",
+			expected: "ollama-cloud",
 		},
 		{
 			name:     "zai",

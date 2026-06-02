@@ -58,6 +58,7 @@ type InputReader struct {
 	oldState        *term.State
 	terminalWidth   int
 	lastLineLength  int
+	lastVisualRows  int
 	lastWrapPending bool
 
 	// Edit tracking for history vs text navigation
@@ -172,14 +173,18 @@ func (ir *InputReader) ReadLine() (string, error) {
 		return ir.fallbackReadLine()
 	}
 
-	// Pre-flight: if a prior mode transition (steer / editor escape /
-	// Ctrl+Z) left the terminal in raw mode, restore it to the ground-
-	// truth cooked state before we try to enter raw mode ourselves.
-	// Without this, term.MakeRaw saves an already-raw state and the
-	// defer Restore returns to broken mode on exit.
+	// Pre-flight: unconditionally force a known-good cooked termios
+	// before MakeRaw saves the to-be-restored state. ICANON-on alone
+	// (what EnsureSane checks) doesn't catch every way input can be
+	// broken across turns — VMIN=0 leftover from steer mode, IXOFF
+	// stop bit, missing OPOST — and any one of those silently latches
+	// for the rest of the session because MakeRaw → defer Restore
+	// faithfully restores whatever-broken-state was current at entry.
+	// Defensive: also clear any leaked O_NONBLOCK from a prior session.
 	if ir.groundTruth != nil {
-		ir.groundTruth.EnsureSane()
+		ir.groundTruth.EnsureCooked()
 	}
+	_ = setNonblock(ir.termFd, false)
 
 	// Save terminal state and set raw mode
 	oldState, err := term.MakeRaw(ir.termFd)
@@ -201,6 +206,7 @@ func (ir *InputReader) ReadLine() (string, error) {
 	ir.hasEditedLine = false
 	ir.updateTerminalWidth()
 	ir.lastLineLength = 0
+	ir.lastVisualRows = 1
 	ir.lastWrapPending = false
 	ir.currentPhysicalLine = 0
 	ir.pasteBuffer.Reset()
@@ -867,6 +873,16 @@ func (ep *EscapeParser) Parse(b byte) *InputEvent {
 		if b == 'O' {
 			ep.state = 4
 			return nil
+		}
+		// Alt+Enter (ESC + CR/LF): insert a literal newline into the
+		// buffer instead of submitting. Parity with the steer panel —
+		// plain Enter still submits, but Alt+Enter lets the user
+		// compose multi-line prompts. Most terminals translate the
+		// Alt modifier to a leading ESC byte; iTerm2 needs "Option
+		// acts as Meta" enabled for this to fire.
+		if b == 13 || b == 10 {
+			ep.Reset()
+			return &InputEvent{Type: EventChar, Data: "\n"}
 		}
 		// Not a CSI sequence, treat ESC as escape event
 		// This character could be printable, save it for next call

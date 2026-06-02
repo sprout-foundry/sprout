@@ -24,6 +24,12 @@ type GroundTruthTermios struct {
 // CaptureGroundTruth snapshots the current termios of stdin. Call once
 // at REPL startup when the terminal is in its default cooked state.
 // Returns nil on non-TTY or error (callers degrade gracefully).
+//
+// If the captured state is not actually cooked (some bootstrap path left
+// the terminal in raw mode before we got here), the snapshot is
+// normalized so the cooked flags we depend on are forced on. Without
+// this, every later Restore() would set ICANON-off and the recovery
+// mechanism would be self-defeating.
 func CaptureGroundTruth() *GroundTruthTermios {
 	fd := int(os.Stdin.Fd())
 	if !term.IsTerminal(fd) {
@@ -33,7 +39,27 @@ func CaptureGroundTruth() *GroundTruthTermios {
 	if err != nil {
 		return nil
 	}
+	normalizeCookedTermios(t)
 	return &GroundTruthTermios{fd: fd, termios: *t}
+}
+
+// normalizeCookedTermios forces the flag bits that define cooked mode.
+// Idempotent. Preserves baud rate, character size, control characters
+// and other user-tuned settings — only flips the bits that have to be
+// in a specific state for the REPL prompt's MakeRaw/Restore cycle to
+// behave correctly on the way back to cooked.
+func normalizeCookedTermios(t *unix.Termios) {
+	// Local mode: line-buffered input, echo, signal generation, extended
+	// processing all ON.
+	t.Lflag |= unix.ICANON | unix.ECHO | unix.ISIG | unix.IEXTEN
+	// Input mode: translate CR→NL on input (cooked default) and re-enable
+	// software flow control output (XON/XOFF will be honored by tty).
+	t.Iflag |= unix.ICRNL | unix.IXON
+	// Output mode: post-processing on so \n is rendered as CR-LF.
+	t.Oflag |= unix.OPOST
+	// Blocking read: at least one byte, no timeout.
+	t.Cc[unix.VMIN] = 1
+	t.Cc[unix.VTIME] = 0
 }
 
 // Restore resets the terminal to the ground-truth state. Returns an
@@ -73,6 +99,22 @@ func (g *GroundTruthTermios) EnsureSane() bool {
 	fmt.Fprintln(os.Stderr, "\r\x1b[K[terminal recovery: restoring cooked mode]")
 	_ = g.Restore()
 	return true
+}
+
+// EnsureCooked unconditionally writes a known-cooked termios derived
+// from the ground-truth snapshot. Unlike EnsureSane, it does not first
+// check whether the terminal "looks" sane — ICANON alone doesn't catch
+// every way input can be broken (VMIN=0 leftover from steer mode,
+// IXOFF stop, missing OPOST). Call at the top of every ReadLine to
+// guarantee a clean baseline before MakeRaw saves the to-be-restored
+// state.
+func (g *GroundTruthTermios) EnsureCooked() {
+	if g == nil {
+		return
+	}
+	saved := g.termios
+	normalizeCookedTermios(&saved)
+	_ = unix.IoctlSetTermios(g.fd, unix.TCGETS, &saved)
 }
 
 // Fd returns the file descriptor the ground truth was captured from.

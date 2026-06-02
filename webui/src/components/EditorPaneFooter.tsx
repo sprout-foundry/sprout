@@ -6,7 +6,8 @@
  * Target: ~100 lines
  */
 
-import React, { type FC, type KeyboardEvent } from 'react';
+import { AlertCircle, Check, Loader2 } from 'lucide-react';
+import React, { useMemo, type FC, type KeyboardEvent } from 'react';
 import type { WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
 import type { EditorBuffer } from '../types/editor';
 import LanguageSwitcher from './LanguageSwitcher';
@@ -126,11 +127,22 @@ const EditorPaneFooterImpl: FC<EditorPaneFooterProps> = ({
     settings.onResetZoom();
   };
 
+  // Memoize line/char counts so we don't re-split a 50k-line buffer on every
+  // cursor movement, focus event, or unrelated parent re-render.
+  const content = buffer?.content || '';
+  const { lineCount, charCount } = useMemo(() => {
+    let lines = 1;
+    for (let i = 0; i < content.length; i++) {
+      if (content.charCodeAt(i) === 10) lines++;
+    }
+    return { lineCount: content.length === 0 ? 0 : lines, charCount: content.length };
+  }, [content]);
+
   return (
     <div className="pane-footer">
       <div className="editor-stats">
-        <span className="line-count">Lines: {(buffer?.content || '').split('\n').length}</span>
-        <span className="char-count">Chars: {(buffer?.content || '').length}</span>
+        <span className="line-count">Lines: {lineCount}</span>
+        <span className="char-count">Chars: {charCount}</span>
         <span className="cursor-position">
           Ln {buffer?.cursorPosition?.line !== undefined ? buffer.cursorPosition.line : 0}, Col{' '}
           {buffer?.cursorPosition?.column !== undefined ? buffer.cursorPosition.column + 1 : 0}
@@ -155,7 +167,6 @@ const EditorPaneFooterImpl: FC<EditorPaneFooterProps> = ({
             }
           }}
           title="Zoom out (decrease font size)"
-          style={{ cursor: 'pointer', opacity: 0.7 }}
         >
           −
         </span>
@@ -171,7 +182,6 @@ const EditorPaneFooterImpl: FC<EditorPaneFooterProps> = ({
             }
           }}
           title="Reset zoom to default"
-          style={{ cursor: 'pointer' }}
         >
           {Math.round((settings.editorFontSize / FONT_SIZE_DEFAULT) * 100)}%
         </span>
@@ -187,7 +197,6 @@ const EditorPaneFooterImpl: FC<EditorPaneFooterProps> = ({
             }
           }}
           title="Zoom in (increase font size)"
-          style={{ cursor: 'pointer', opacity: 0.7 }}
         >
           +
         </span>
@@ -201,40 +210,29 @@ const EditorPaneFooterImpl: FC<EditorPaneFooterProps> = ({
         >
           {settings.editorUsesTabs ? 'Tabs' : `Spaces: ${settings.editorTabSize}`}
         </span>
-        <span className="encoding-indicator" title="File encoding and line endings">
-          UTF-8 · {settings.lineEnding}
+        <span className="encoding-indicator" title="Line ending convention used when saving">
+          {settings.lineEnding}
         </span>
-        {whitespaceRenderingMode !== 'none' && (
-          <span
-            className="whitespace-mode"
-            role="button"
-            tabIndex={0}
-            onClick={handleWhitespaceToggle}
-            onKeyDown={(e) => handleKeyDown(e, handleWhitespaceToggle)}
-            title="Click to change whitespace rendering (none → boundary → all)"
-          >
-            {whitespaceRenderingMode === 'boundary' ? 'WS: boundary' : 'WS: all'}
-          </span>
-        )}
+        <span
+          className="whitespace-mode"
+          role="button"
+          tabIndex={0}
+          onClick={handleWhitespaceToggle}
+          onKeyDown={(e) => handleKeyDown(e, handleWhitespaceToggle)}
+          title="Click to change whitespace rendering (none → boundary → all)"
+        >
+          WS: {whitespaceRenderingMode === 'none' ? 'off' : whitespaceRenderingMode}
+        </span>
         {lsp.lspLanguage && (
-          <span
-            className="cm-footer-lsp"
-            title={`LSP: ${lsp.lspState}`}
-            style={{
-              color:
-                lsp.lspState === 'connected'
-                  ? 'var(--cm-status-ok, #4caf50)'
-                  : lsp.lspState === 'disconnected'
-                    ? 'var(--cm-status-error, #666)'
-                    : 'var(--cm-status-warning, #c90)',
-            }}
-          >
-            LSP:
-            {lsp.lspState === 'connected'
-              ? '✓'
-              : lsp.lspState === 'connecting' || lsp.lspState === 'reconnecting'
-                ? '…'
-                : '✗'}
+          <span className={`cm-footer-lsp cm-footer-lsp--${lsp.lspState}`} title={`LSP: ${lsp.lspState}`}>
+            <span>LSP</span>
+            {lsp.lspState === 'connected' ? (
+              <Check size={11} aria-hidden="true" />
+            ) : lsp.lspState === 'connecting' || lsp.lspState === 'reconnecting' ? (
+              <Loader2 size={11} aria-hidden="true" className="cm-footer-lsp-spin" />
+            ) : (
+              <AlertCircle size={11} aria-hidden="true" />
+            )}
           </span>
         )}
       </div>

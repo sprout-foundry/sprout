@@ -63,7 +63,7 @@ func TestGetProviderName_Known(t *testing.T) {
 	assert.Equal(t, "OpenAI", GetProviderName(OpenAIClientType))
 	assert.Equal(t, "OpenRouter (Recommended)", GetProviderName(OpenRouterClientType))
 	assert.Equal(t, "Ollama (Local)", GetProviderName(OllamaLocalClientType))
-	assert.Equal(t, "Ollama (Turbo)", GetProviderName(OllamaTurboClientType))
+	assert.Equal(t, "Ollama (Cloud)", GetProviderName(OllamaCloudClientType))
 	assert.Equal(t, "Test Provider", GetProviderName(TestClientType))
 	assert.Equal(t, "Editor Mode", GetProviderName(EditorClientType))
 	assert.Equal(t, "DeepInfra", GetProviderName(DeepInfraClientType))
@@ -129,7 +129,7 @@ func TestClientType_Constants(t *testing.T) {
 	assert.Equal(t, ClientType("openai"), OpenAIClientType)
 	assert.Equal(t, ClientType("openrouter"), OpenRouterClientType)
 	assert.Equal(t, ClientType("ollama-local"), OllamaLocalClientType)
-	assert.Equal(t, ClientType("ollama-turbo"), OllamaTurboClientType)
+	assert.Equal(t, ClientType("ollama-cloud"), OllamaCloudClientType)
 	assert.Equal(t, ClientType("test"), TestClientType)
 	assert.Equal(t, ClientType("editor"), EditorClientType)
 }

@@ -19,7 +19,7 @@ const (
 	LmstudioClientType = "lmstudio"
 	MinimaxClientType = "minimax"
 	MistralClientType = "mistral"
-	OllamaTurboClientType = "ollama-turbo"
+	OllamaCloudClientType = "ollama-cloud"
 	OpenaiClientType = "openai"
 	OpenrouterClientType = "openrouter"
 	ZaiClientType = "zai"
@@ -36,7 +36,7 @@ func AllProviderNames() []string {
 		"lmstudio",
 		"minimax",
 		"mistral",
-		"ollama-turbo",
+		"ollama-cloud",
 		"openai",
 		"openrouter",
 		"zai",
@@ -81,8 +81,8 @@ func StringToClientType(name string) (string, error) {
 	case "mistral":
 		return "mistral", nil
 
-	case "ollama-turbo":
-		return "ollama-turbo", nil
+	case "ollama-cloud":
+		return "ollama-cloud", nil
 
 	case "openai":
 		return "openai", nil
@@ -138,8 +138,8 @@ func ClientTypeToString(ct string) string {
 	case "mistral":
 		return "mistral"
 
-	case "ollama-turbo":
-		return "ollama-turbo"
+	case "ollama-cloud":
+		return "ollama-cloud"
 
 	case "openai":
 		return "openai"
@@ -189,7 +189,7 @@ func ProviderRequiresAPIKey(name string) bool {
 	case "mistral":
 		return true
 
-	case "ollama-turbo":
+	case "ollama-cloud":
 		return true
 
 	case "openai":
@@ -233,7 +233,7 @@ func ProviderEnvVar(name string) string {
 	case "mistral":
 		return "MISTRAL_API_KEY"
 
-	case "ollama-turbo":
+	case "ollama-cloud":
 		return "OLLAMA_API_KEY"
 
 	case "openai":
@@ -265,7 +265,7 @@ func KnownProviders() []string {
 		"lmstudio",
 		"minimax",
 		"mistral",
-		"ollama-turbo",
+		"ollama-cloud",
 		"openai",
 		"openrouter",
 		"zai",
@@ -290,7 +290,7 @@ func ProviderDisplayNames() map[string]string {
 		"lmstudio": "LM Studio",
 		"minimax": "MiniMax",
 		"mistral": "Mistral",
-		"ollama-turbo": "Ollama (Turbo)",
+		"ollama-cloud": "Ollama (Cloud)",
 		"openai": "OpenAI",
 		"openrouter": "OpenRouter (Recommended)",
 		"zai": "Z.AI Coding Plan",

@@ -77,8 +77,8 @@ func (a *Agent) selectDefaultModel(models []api.ModelInfo, provider api.ClientTy
 			}
 		}
 
-	case api.OllamaTurboClientType:
-		// Prefer gpt-oss models for Ollama Turbo
+	case api.OllamaCloudClientType:
+		// Prefer gpt-oss models for Ollama Cloud
 		for _, model := range models {
 			if strings.Contains(strings.ToLower(model.ID), "gpt-oss:20b") {
 				return model.ID
@@ -107,7 +107,7 @@ func (a *Agent) getDefaultModelFromFactory(provider api.ClientType) string {
 
 	// Only check factory for dynamic providers (not built-in ones)
 	switch provider {
-	case api.OpenAIClientType, api.OllamaClientType, api.OllamaLocalClientType, api.OllamaTurboClientType, api.TestClientType:
+	case api.OpenAIClientType, api.OllamaClientType, api.OllamaLocalClientType, api.OllamaCloudClientType, api.TestClientType:
 		return "" // These are built-in providers, don't check factory
 	}
 

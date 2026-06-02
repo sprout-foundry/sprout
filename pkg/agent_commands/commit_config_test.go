@@ -127,7 +127,7 @@ func TestCommitConfigSaveLoadRoundTrip(t *testing.T) {
 
 	// Create a config with commit settings
 	cfg := configuration.NewConfig()
-	cfg.CommitProvider = "ollama-turbo"
+	cfg.CommitProvider = "ollama-cloud"
 	cfg.CommitModel = "deepseek-v3.1:671b"
 	cfg.ReviewProvider = "openai"
 	cfg.ReviewModel = "gpt-4-turbo"
@@ -144,8 +144,8 @@ func TestCommitConfigSaveLoadRoundTrip(t *testing.T) {
 	}
 
 	// Verify settings
-	if cfg2.CommitProvider != "ollama-turbo" {
-		t.Errorf("expected commit provider 'ollama-turbo', got %q", cfg2.CommitProvider)
+	if cfg2.CommitProvider != "ollama-cloud" {
+		t.Errorf("expected commit provider 'ollama-cloud', got %q", cfg2.CommitProvider)
 	}
 	if cfg2.CommitModel != "deepseek-v3.1:671b" {
 		t.Errorf("expected commit model 'deepseek-v3.1:671b', got %q", cfg2.CommitModel)
@@ -158,8 +158,8 @@ func TestCommitConfigSaveLoadRoundTrip(t *testing.T) {
 	}
 
 	// Verify getters work correctly
-	if provider := cfg2.GetCommitProvider(); provider != "ollama-turbo" {
-		t.Errorf("GetCommitProvider() returned %q, want 'ollama-turbo'", provider)
+	if provider := cfg2.GetCommitProvider(); provider != "ollama-cloud" {
+		t.Errorf("GetCommitProvider() returned %q, want 'ollama-cloud'", provider)
 	}
 	if model := cfg2.GetCommitModel(); model != "deepseek-v3.1:671b" {
 		t.Errorf("GetCommitModel() returned %q, want 'deepseek-v3.1:671b'", model)

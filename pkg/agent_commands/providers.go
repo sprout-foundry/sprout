@@ -341,8 +341,8 @@ func getProviderDisplayName(provider api.ClientType) string {
 		return "Ollama"
 	case api.OllamaLocalClientType:
 		return "Ollama Local"
-	case api.OllamaTurboClientType:
-		return "Ollama Turbo"
+	case api.OllamaCloudClientType:
+		return "Ollama Cloud"
 	case api.LMStudioClientType:
 		return "LM Studio"
 	case api.TestClientType:

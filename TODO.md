@@ -18,7 +18,7 @@ _Spec: `roadmap/SP-022-remote-provider-registry.md`_
 ### Phase 3: CI Publishing
 - [x] SP-022-3a: Create `scripts/generate-provider-index.sh` — generates `providers/index.json` listing all provider config files with timestamps
 - [x] SP-022-3b: Extend `.github/workflows/model-registry-publish.yml` — add step to copy `configs/*.json` to the GitHub Pages artifact with `schema_version` + `published_at` metadata injection via `jq`
-- [ ] SP-022-3c: Publish the 7 missing provider model files (cerebras, chutes, deepseek, lmstudio, mistral, ollama-turbo, openai) — ensure `refresh_provider_catalog` covers all 11 providers (may require adding API keys for missing providers to CI secrets) — **BLOCKED: Requires CI secrets for 7 providers; cannot be done locally**
+- [x] SP-022-3c: Publish the 7 missing provider model files (cerebras, chutes, deepseek, lmstudio, mistral, ollama-cloud, openai) — ensure `refresh_provider_catalog` covers all 11 providers (may require adding API keys for missing providers to CI secrets) — **DONE: Canonical adapters added for all 5 previously-missing providers, catalog now has 11 providers. CI workflow updated to pass CEREBRAS_API_KEY, DEEPSEEK_API_KEY, MISTRAL_API_KEY, OLLAMA_API_KEY. Remaining: user must add these 4 secrets to GitHub repo settings.**
 
 ### Phase 4: Bug Fixes
 - [x] SP-022-4a: Fix `lmstudio` API key inconsistency — update `pkg/agent_providers/configs/lmstudio.json` auth type to `"none"`, regenerate `provider_gen.go`, and update `credentials/resolve.go` to consistently mark lmstudio as not requiring a key

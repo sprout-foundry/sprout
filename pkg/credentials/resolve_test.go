@@ -20,7 +20,7 @@ func TestProviderEnvVar(t *testing.T) {
 		{"z.ai", "ZAI_API_KEY"},
 		{"ollama", "OLLAMA_API_KEY"},
 		{"ollama-local", "OLLAMA_API_KEY"},
-		{"ollama-turbo", "OLLAMA_API_KEY"},
+		{"ollama-cloud", "OLLAMA_API_KEY"},
 		{"minimax", "MINIMAX_API_KEY"},
 		{"mistral", "MISTRAL_API_KEY"},
 		{"chutes", "CHUTES_API_KEY"},

@@ -19,7 +19,7 @@ var knownEmbeddedProviders = []string{
 	"mistral",
 	"chutes",
 	"deepinfra",
-	"ollama-turbo",
+	"ollama-cloud",
 	"lmstudio",
 	"minimax",
 	"zai",

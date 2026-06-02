@@ -98,19 +98,28 @@ function CommitDetailPanel({
     async (filePath: string) => {
       try {
         const result = await onLoadCommitFileDiff(commit.hash, filePath);
-        if (!result?.diff) {
-          log.error(`No diff content returned for file: ${filePath}`, { title: 'Git Error' });
-          return;
-        }
+        // Open the workspace buffer even when the diff comes back empty.
+        // `git show -- <path>` returns no patch for binary files, no-op
+        // entries (renames with no content change), and a few edge cases
+        // around merge commits. Logging an error and bailing out made the
+        // file row look broken — the user clicked, nothing opened, and an
+        // "error" toast appeared with no explanation. Surfacing the empty
+        // state inside the buffer is clearer and still lets the user
+        // inspect the buffer header to confirm the file/commit pair.
+        const diff = result?.diff ?? '';
+        const content =
+          diff.trim().length > 0
+            ? diff
+            : `# No textual diff available for this file in this commit.\n# Common reasons:\n#   - The file is binary (image, archive, compiled blob)\n#   - The change is a pure rename with identical content\n#   - The commit is a merge that did not modify this path\n`;
         openWorkspaceBuffer({
           kind: 'diff',
           path: `__workspace/commit/${commit.short_hash}/${filePath}`,
           title: `${commit.short_hash}: ${filePath}`,
           ext: '.diff',
-          content: result.diff,
+          content,
           metadata: {
             sourcePath: `commit:${commit.hash}:${filePath}`,
-            diffContent: result.diff,
+            diffContent: content,
             modeOptions: ['combined'],
           },
         });

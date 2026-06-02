@@ -92,6 +92,15 @@
   width: 100%;
 }
 
+/* Mirror of the shared @sprout/ui rule — suppress the global textarea
+ * focus ring on the composer. The wrapping .command-input form shows
+ * focus via :focus-within. Without this override the global
+ * `textarea:focus-visible` rule from App.css renders a second outline
+ * inside the form ring. */
+.input-field:focus-visible {
+  outline: none;
+}
+
 .input-field.history-mode {
   background: var(--color-warning-bg);
   border-left: 3px solid var(--accent-warning);

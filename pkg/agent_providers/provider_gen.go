@@ -181,7 +181,7 @@ func ProviderRequiresAPIKey(name string) bool {
 		return true
 
 	case "lmstudio":
-		return true
+		return false
 
 	case "minimax":
 		return true
@@ -225,7 +225,7 @@ func ProviderEnvVar(name string) string {
 		return "DEEPSEEK_API_KEY"
 
 	case "lmstudio":
-		return "LMSTUDIO_API_KEY"
+		return ""
 
 	case "minimax":
 		return "MINIMAX_API_KEY"
@@ -248,7 +248,6 @@ func ProviderEnvVar(name string) string {
 	// Special providers (no config files)
 	case "jinaai":
 		return "JINA_API_KEY"
-
 	default:
 		return ""
 	}

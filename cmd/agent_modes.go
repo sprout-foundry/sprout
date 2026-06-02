@@ -1432,6 +1432,15 @@ func startTerminalToolSubscriber(ctx context.Context, chatAgent *agent.Agent, ev
 	// parens. Entries clear on the matching ToolEnd to bound growth.
 	pendingArgs := map[string]string{}
 
+	// subagentProgress caches the latest progress snapshot per persona
+	// so tool lines fired from depth>0 agents can append a "12.3k/128k
+	// ctx" suffix without each tool event needing to ferry the values
+	// itself. Updated by EventTypeSubagentActivity status=progress
+	// events; cleared on completed/cancelled. Per-persona (not per-task)
+	// because the CLI renders the depth+persona pair, not task IDs.
+	var progressMu sync.Mutex
+	subagentProgress := map[string]subagentProgressSnapshot{}
+
 	go func() {
 		defer eventBus.Unsubscribe(subName)
 		for {
@@ -1471,14 +1480,28 @@ func startTerminalToolSubscriber(ctx context.Context, chatAgent *agent.Agent, ev
 						spawnMu.Unlock()
 						if announce {
 							indicator.Stop()
-							fmt.Fprintln(os.Stderr, formatSpawnLine(chatAgent, depth, persona))
+							progressMu.Lock()
+							spawnSnap, hasSpawnSnap := subagentProgress[persona]
+							progressMu.Unlock()
+							ctxMax := 0
+							if hasSpawnSnap {
+								ctxMax = spawnSnap.ctxMax
+							}
+							fmt.Fprintln(os.Stderr, formatSpawnLine(chatAgent, depth, persona, ctxMax))
 						}
 					}
 					// Ensure the spinner lands on a fresh line so it never
 					// overwrites partial streamed text. Stdout for parity
 					// with how stream chunks were just printed.
 					fmt.Fprintln(os.Stdout)
-					indicator.Start(formatToolStartLine(depth, persona, name, formatToolPreview(chatAgent, name, args)))
+					progressMu.Lock()
+					snap, hasSnap := subagentProgress[persona]
+					progressMu.Unlock()
+					ctxSuffix := ""
+					if hasSnap && depth > 0 {
+						ctxSuffix = formatSubagentCtxSuffix(snap)
+					}
+					indicator.Start(formatToolStartLine(depth, persona, name, formatToolPreview(chatAgent, name, args)) + ctxSuffix)
 				case events.EventTypeToolEnd:
 					name, _ := data["tool_name"].(string)
 					if agent.IsInteractiveTool(name) {
@@ -1572,24 +1595,49 @@ func startTerminalToolSubscriber(ctx context.Context, chatAgent *agent.Agent, ev
 					// and wall time — so the user can see at a glance how
 					// expensive each subagent run was.
 					status, _ := data["status"].(string)
-					if status != "completed" && status != "cancelled" {
-						break
-					}
 					persona, _ := data["persona"].(string)
-					tokens := readEventInt(data, "tokens_used")
-					elapsedMs := readEventInt64(data, "elapsed_ms")
-					cost, _ := data["cost"].(float64)
-					reason, _ := data["reason"].(string)
-					// Subagents nest under the parent that spawned them.
-					// Depth on the activity event isn't carried today, so
-					// indent at the same level as the run_subagent tool
-					// line — depth 1 — which is the common case. Deeper
-					// nests fall back to a single indent rather than
-					// guessing wrong.
-					indicator.Stop()
-					fmt.Fprintln(os.Stderr, formatSubagentDoneLine(persona, status, reason, tokens, cost, float64(elapsedMs)/1000.0))
-					run = nil
-					footer.Refresh()
+					switch status {
+					case "progress":
+						// SP-051-2e: live context update. Cache the snapshot
+						// keyed by persona so the next tool line from this
+						// subagent can append "· 12.3k/128k ctx". Don't
+						// emit anything to the terminal directly — the
+						// signal is meant to enrich existing rows, not add
+						// new ones that would scroll past every 2s.
+						progressMu.Lock()
+						subagentProgress[persona] = subagentProgressSnapshot{
+							tokensUsed:  readEventInt(data, "tokens_used"),
+							ctxUsed:     readEventInt(data, "context_used"),
+							ctxMax:      readEventInt(data, "max_context_tokens"),
+							iteration:   readEventInt(data, "iteration"),
+							lastUpdated: time.Now(),
+						}
+						progressMu.Unlock()
+						// Refresh the footer so the cost field picks up the
+						// fleet-cost delta even when no tool event is
+						// firing (long shell_command inside the subagent).
+						footer.Refresh()
+					case "completed", "cancelled":
+						tokens := readEventInt(data, "tokens_used")
+						elapsedMs := readEventInt64(data, "elapsed_ms")
+						cost, _ := data["cost"].(float64)
+						reason, _ := data["reason"].(string)
+						// Subagents nest under the parent that spawned them.
+						// Depth on the activity event isn't carried today, so
+						// indent at the same level as the run_subagent tool
+						// line — depth 1 — which is the common case. Deeper
+						// nests fall back to a single indent rather than
+						// guessing wrong.
+						indicator.Stop()
+						fmt.Fprintln(os.Stderr, formatSubagentDoneLine(persona, status, reason, tokens, cost, float64(elapsedMs)/1000.0))
+						// Drop the cached progress for this persona once
+						// it's done — the next spawn starts fresh.
+						progressMu.Lock()
+						delete(subagentProgress, persona)
+						progressMu.Unlock()
+						run = nil
+						footer.Refresh()
+					}
 				case events.EventTypeSecurityApprovalRequest,
 					events.EventTypeSecurityPromptRequest,
 					events.EventTypeAskUserRequest:
@@ -1607,17 +1655,67 @@ func startTerminalToolSubscriber(ctx context.Context, chatAgent *agent.Agent, ev
 	return resetSpawn
 }
 
-// formatSpawnLine renders the one-shot "↳ persona spawned (provider · model)"
+// subagentProgressSnapshot is the most-recent live snapshot of a running
+// subagent's token / context usage, refreshed by the runner's monitorProgress
+// ticker (~every 2s). The CLI subscriber appends a compact "· 12.3k/128k ctx"
+// suffix to subsequent tool-start lines fired by the same persona so users
+// see the budget burn in real time, instead of only learning the final
+// numbers in the "completed" line after the subagent has already exited.
+type subagentProgressSnapshot struct {
+	tokensUsed  int
+	ctxUsed     int
+	ctxMax      int
+	iteration   int
+	lastUpdated time.Time
+}
+
+// formatSubagentCtxSuffix renders the trailing "· 12.3k/128k ctx" hint
+// appended to depth>0 tool-start lines. Returns "" when no useful
+// numbers are available so the line stays clean during the first tick
+// before any tokens have accumulated.
+func formatSubagentCtxSuffix(snap subagentProgressSnapshot) string {
+	if snap.ctxMax > 0 && snap.ctxUsed > 0 {
+		return fmt.Sprintf(" · %s/%s ctx", formatTokensShort(snap.ctxUsed), formatTokensShort(snap.ctxMax))
+	}
+	if snap.tokensUsed > 0 {
+		return fmt.Sprintf(" · %s tok", formatTokensShort(snap.tokensUsed))
+	}
+	return ""
+}
+
+// formatTokensShort formats a token count compactly: "1234" → "1.2k",
+// "1234567" → "1.2M". Used inside tool/spawn lines where horizontal
+// space is at a premium — the full comma-separated form lives in the
+// "↳ done" line at the end of the subagent run.
+func formatTokensShort(n int) string {
+	switch {
+	case n < 1000:
+		return strconv.Itoa(n)
+	case n < 1_000_000:
+		return fmt.Sprintf("%.1fk", float64(n)/1000.0)
+	default:
+		return fmt.Sprintf("%.1fM", float64(n)/1_000_000.0)
+	}
+}
+
+// formatSpawnLine renders the one-shot "↳ persona spawned (provider · model · 128k ctx)"
 // line emitted the first time the CLI sees a new (depth, persona) pair in a
 // turn. Indent matches the corresponding tool-line depth so it visually
-// nests under the parent that spawned it.
-func formatSpawnLine(chatAgent *agent.Agent, depth int, persona string) string {
+// nests under the parent that spawned it. The `maxCtx` argument carries
+// the subagent's model context budget (from monitorProgress's initial
+// emit); 0 means "unknown" and the ctx suffix is dropped — the line
+// degrades to the original "(provider · model)" form.
+func formatSpawnLine(chatAgent *agent.Agent, depth int, persona string, maxCtx int) string {
 	indent := console.PersonaIndent(depth)
 	badge := console.PersonaBadge(depth, persona)
 	suffix := ""
 	if chatAgent != nil {
 		if provider, model, err := chatAgent.GetPersonaProviderModel(persona); err == nil && (provider != "" || model != "") {
-			suffix = fmt.Sprintf(" (%s · %s)", provider, model)
+			if maxCtx > 0 {
+				suffix = fmt.Sprintf(" (%s · %s · %s ctx)", provider, model, formatTokensShort(maxCtx))
+			} else {
+				suffix = fmt.Sprintf(" (%s · %s)", provider, model)
+			}
 		}
 	}
 	return fmt.Sprintf("%s  ↳ %sspawned%s", indent, badge, suffix)

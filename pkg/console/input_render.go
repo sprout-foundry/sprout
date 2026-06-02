@@ -3,39 +3,37 @@ package console
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 )
 
 // Refresh redraws the current input line
 func (ir *InputReader) Refresh() {
-	// Calculate display width (accounting for multibyte characters)
 	promptRunes := []rune(stripANSIEscapeCodes(ir.prompt))
 	displayLine, displayCursorByte := ir.renderLineWithCollapsedPastes()
-	lineRunes := []rune(displayLine)
 	promptWidth := len(promptRunes)
-	lineWidth := len(lineRunes)
-	totalWidth := promptWidth + lineWidth
 
-	currentLineCount := visualLineCount(ir.terminalWidth, totalWidth)
-	previousLineCount := visualLineCount(ir.terminalWidth, ir.lastLineLength)
+	// Compute multi-line-aware geometry. The display line may contain
+	// literal `\n` (from pastes or Alt+Enter) — each acts as a hard
+	// break that resets the visual column to 0 on the next row.
+	currentLineCount, cursorLine, cursorCol, endLine, endCol := wrappedGeometry(
+		ir.terminalWidth, promptWidth, displayLine, displayCursorByte,
+	)
+	previousLineCount := ir.lastVisualRows
+	if previousLineCount < 1 {
+		previousLineCount = 1
+	}
 	previousCursorLine := ir.currentPhysicalLine
 	previousWrapPending := ir.lastWrapPending
 
-	// Calculate current cursor visual position.
-	displayCursorRunes := runeCountAtByteIndex(displayLine, displayCursorByte)
-	cursorPos := promptWidth + displayCursorRunes
-	cursorLine := cursorLineIndex(ir.terminalWidth, cursorPos)
-	cursorCol := cursorColumnOffset(ir.terminalWidth, cursorPos)
-
-	// Maximum number of wrapped lines we need to clear
-	// Always clear at least as many as we have now, plus what we had before
+	// Maximum number of wrapped lines we need to clear.
 	maxLines := currentLineCount
 	if previousLineCount > maxLines {
 		maxLines = previousLineCount
 	}
 
-	// Move to start of current physical line
+	// Move to start of current physical line.
 	if previousWrapPending {
-		// Terminals in autowrap-pending state can treat the next redraw
+		// Terminals in autowrap-pending state treat the next redraw
 		// relative to the wrapped line. Step left once to normalize.
 		fmt.Printf("%s", MoveCursorLeftSeq(1))
 	}
@@ -43,52 +41,131 @@ func (ir *InputReader) Refresh() {
 
 	// Move up from previous rendered cursor line to the top wrapped line.
 	if previousCursorLine > 0 {
-		// Move up to the top wrapped line
 		fmt.Printf("%s", MoveCursorUpSeq(previousCursorLine))
 	}
 
-	// Clear all wrapped lines from top to bottom
+	// Clear all wrapped lines from top to bottom.
 	for i := 0; i < maxLines; i++ {
 		fmt.Printf("%s", ClearLineSeq())
 		if i < maxLines-1 {
-			// Move down to next line
 			fmt.Printf("%s", MoveCursorDownSeq(1))
 		}
 	}
 
-	// Move back to the top line to redraw
+	// Move back to the top line to redraw.
 	if maxLines > 1 {
 		fmt.Printf("%s", MoveCursorUpSeq(maxLines-1))
 	}
 
-	// Redraw the prompt and line content
-	fmt.Printf("%s%s", ir.prompt, displayLine)
+	// Redraw the prompt then the line content, converting `\n` to
+	// `\033[K\r\n` so each new logical line starts at column 0 with a
+	// cleared row (raw mode swallows OPOST, so a bare LF would leave
+	// the cursor at the same column on the next row — the "staircase"
+	// bug). Clear-to-EOL before the CRLF prevents leftover content from
+	// the old top-row clear from re-appearing if the new content's
+	// first row is shorter.
+	fmt.Printf("%s", ir.prompt)
+	writeWithHardBreaks(displayLine)
 
-	// Clear any trailing content on the last line (in case new content is shorter than old)
+	// Clear any trailing content on the (last) line — handles the case
+	// where the new content's final row is shorter than what was there.
 	fmt.Printf("%s", ClearToEndOfLineSeq())
 
-	// Update tracked length AFTER drawing (use display width, not byte length)
-	ir.lastLineLength = totalWidth
+	ir.lastLineLength = promptWidth + utf8.RuneCountInString(displayLine)
+	ir.lastVisualRows = currentLineCount
 
-	// Position cursor correctly.
-	// After printing, cursor is at end of content (on line 'currentLineCount - 1').
-	endLine := currentLineCount - 1
+	// Position cursor: we're currently at (endLine, endCol). Move to
+	// (cursorLine, cursorCol). A col value equal to terminalWidth means
+	// the position is "one past the last visible column" — the terminal
+	// renders that as autowrap-pending at col terminalWidth-1. Clamp
+	// for the move sequence so we don't emit a CHA past EOL.
+	displayCursorCol := cursorCol
+	if ir.terminalWidth > 0 && displayCursorCol >= ir.terminalWidth {
+		displayCursorCol = ir.terminalWidth - 1
+	}
 	if endLine > cursorLine {
 		fmt.Printf("%s", MoveCursorUpSeq(endLine-cursorLine))
 	} else if endLine < cursorLine {
 		fmt.Printf("%s", MoveCursorDownSeq(cursorLine-endLine))
 	}
-
-	// Move to target column on that line.
-	if cursorCol > 0 {
-		fmt.Printf("\r\033[%dC", cursorCol)
+	if displayCursorCol > 0 {
+		fmt.Printf("\r\033[%dC", displayCursorCol)
 	} else {
 		fmt.Printf("\r")
 	}
 
-	// Track current rendered cursor line (0-based wrapped line index).
 	ir.currentPhysicalLine = cursorLine
-	ir.lastWrapPending = isWrapPending(ir.terminalWidth, totalWidth, cursorPos, promptWidth+lineWidth)
+	// Autowrap-pending only matters when the cursor sits at the
+	// "one-past-last-column" position of the LAST visual row — internal
+	// `\n` breaks always reset to column 0 so they can't leave the
+	// terminal autowrap-pending.
+	ir.lastWrapPending = cursorLine == endLine &&
+		cursorCol == endCol &&
+		ir.terminalWidth > 0 &&
+		cursorCol == ir.terminalWidth
+}
+
+// writeWithHardBreaks prints `content` to stdout, replacing each `\n`
+// with `\033[K\r\n` so the terminal moves to column 0 of a freshly
+// cleared next row. Without this, raw-mode LF would leave the cursor
+// at the previous column and overprint subsequent content there.
+func writeWithHardBreaks(content string) {
+	if !strings.ContainsRune(content, '\n') {
+		fmt.Print(content)
+		return
+	}
+	segments := strings.Split(content, "\n")
+	for i, seg := range segments {
+		fmt.Print(seg)
+		if i < len(segments)-1 {
+			fmt.Print(ClearToEndOfLineSeq())
+			fmt.Print("\r\n")
+		}
+	}
+}
+
+// wrappedGeometry walks `prompt + content` and returns:
+//   - totalRows: total visual rows the rendered string occupies
+//   - cursorRow, cursorCol: the (0-based row, 0-based col) of the
+//     byte position `cursorByte` within `content`
+//   - endRow, endCol: where the cursor lands after writing all content
+//
+// Each `\n` in `content` is a hard line break (next row, col 0).
+// Soft wraps happen when col reaches `cols` (next row, col 0).
+func wrappedGeometry(cols, promptWidth int, content string, cursorByte int) (totalRows, cursorRow, cursorCol, endRow, endCol int) {
+	if cols <= 0 {
+		// Pathological terminal width — render as one row.
+		runesBefore := runeCountAtByteIndex(content, cursorByte)
+		return 1, 0, promptWidth + runesBefore, 0, promptWidth + len([]rune(content))
+	}
+
+	row := 0
+	col := promptWidth
+	cursorRow = -1
+	byteIdx := 0
+	for byteIdx < len(content) {
+		if cursorRow == -1 && byteIdx == cursorByte {
+			cursorRow, cursorCol = row, col
+		}
+		r, size := utf8.DecodeRuneInString(content[byteIdx:])
+		if r == '\n' {
+			row++
+			col = 0
+		} else {
+			if col >= cols {
+				row++
+				col = 0
+			}
+			col++
+		}
+		byteIdx += size
+	}
+	if cursorRow == -1 {
+		cursorRow, cursorCol = row, col
+	}
+	endRow, endCol = row, col
+	totalRows = row + 1
+	return
 }
 
 // visualLineCount calculates how many terminal lines are occupied for a given

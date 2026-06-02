@@ -512,6 +512,20 @@ func (r *SteerInputReader) handleEscapeOrSequence() {
 		clearBuffer()
 		return
 	}
+	if got == '\r' || got == '\n' {
+		// Alt+Enter (and Esc-then-Enter): insert a literal newline into
+		// the buffer instead of submitting. Lets the user compose a
+		// multi-line steer message. Plain Enter still submits via the
+		// readLoop dispatch above; only the ESC-prefixed variant carves
+		// out a newline.
+		r.mu.Lock()
+		r.buffer = append(r.buffer, '\n')
+		r.historyIndex = -1
+		r.pendingBuffer = nil
+		r.mu.Unlock()
+		r.renderLine()
+		return
+	}
 	if got != '[' {
 		// Not a recognized CSI sequence. Clear + drop the second byte
 		// (a follow-up edge case not worth a putback queue in v1).

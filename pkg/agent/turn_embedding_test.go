@@ -27,6 +27,9 @@ func initEmbeddingMgrWithTimeout(parent context.Context, mgr *embedding.Embeddin
 // It creates an EmbeddingManager with a temp config dir, calls EmbedAndStoreTurn,
 // and verifies the record was stored by loading it back from the conversation store.
 func TestEmbedAndStoreTurn_RealProvider(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping embedding test in short mode")
+	}
 	ctx := context.Background()
 
 	// Create a temporary directory for test isolation
@@ -105,6 +108,9 @@ func TestEmbedAndStoreTurn_RealProvider(t *testing.T) {
 // TestEmbedAndStoreTurn_EmptySummary tests the case where only the prompt is embedded
 // because the actionable summary is empty.
 func TestEmbedAndStoreTurn_EmptySummary(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping embedding test in short mode")
+	}
 	ctx := context.Background()
 
 	// Create a temporary directory for test isolation
@@ -194,6 +200,9 @@ func TestEmbedAndStoreTurn_GracefulFailure_NilManager(t *testing.T) {
 // TestEmbedAndStoreTurn_GracefulFailure_NilTurn tests graceful failure when
 // the conversation turn is nil.
 func TestEmbedAndStoreTurn_GracefulFailure_NilTurn(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping embedding test in short mode")
+	}
 	ctx := context.Background()
 
 	// Create a temporary directory for test isolation
@@ -228,6 +237,9 @@ func TestEmbedAndStoreTurn_GracefulFailure_NilTurn(t *testing.T) {
 // TestEmbedAndStoreTurn_GracefulFailure_NilContext tests graceful failure when
 // the context is nil.
 func TestEmbedAndStoreTurn_GracefulFailure_NilContext(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping embedding test in short mode")
+	}
 	// Create a temporary directory for test isolation
 	tempDir := t.TempDir()
 
@@ -262,6 +274,9 @@ func TestEmbedAndStoreTurn_GracefulFailure_NilContext(t *testing.T) {
 // TestEmbedAndStoreTurn_GracefulFailure_CancelledContext tests graceful failure when
 // the context is cancelled before embedding completes.
 func TestEmbedAndStoreTurn_GracefulFailure_CancelledContext(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping embedding test in short mode")
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
 
@@ -297,6 +312,9 @@ func TestEmbedAndStoreTurn_GracefulFailure_CancelledContext(t *testing.T) {
 // TestEmbedAndStoreTurn_GracefulFailure_EmptyPrompt tests graceful failure when
 // the user prompt is empty.
 func TestEmbedAndStoreTurn_GracefulFailure_EmptyPrompt(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping embedding test in short mode")
+	}
 	ctx := context.Background()
 	tempDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", tempDir)
@@ -454,6 +472,9 @@ func TestMeanEmbedding_NegativeValues(t *testing.T) {
 // It creates and stores two conversation turns, then queries the store using one
 // turn's embedding and verifies the results match expectations.
 func TestEmbedAndStoreTurn_RoundTripWithQuery(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping embedding test in short mode")
+	}
 	ctx := context.Background()
 
 	// Create a temporary directory for test isolation

@@ -29,6 +29,10 @@ export default defineConfig({
           'react/jsx-runtime': 'jsxRuntime',
           '@sprout/events': 'SproutEvents',
         },
+        assetFileNames: (assetInfo) => {
+          if (assetInfo.name?.endsWith('.css')) return 'style.css';
+          return assetInfo.name ?? 'asset';
+        },
       },
     },
     cssCodeSplit: false,

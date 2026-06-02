@@ -638,11 +638,14 @@ func convertToolsToOllamaTools(tools []Tool) ollama.Tools {
 			},
 		}
 
-		params := ollama.ToolFunctionParameters{Type: "object", Properties: make(map[string]ollama.ToolProperty)}
+		// ollama v0.17+ changed `Properties` from a plain map to a typed
+		// opaque struct (`*ToolPropertiesMap`) that preserves insertion
+		// order. Construct via the package helper rather than literal map.
+		params := ollama.ToolFunctionParameters{Type: "object", Properties: ollama.NewToolPropertiesMap()}
 		if tool.Function.Parameters != nil {
 			if raw, err := json.Marshal(tool.Function.Parameters); err == nil {
 				if err := json.Unmarshal(raw, &params); err != nil {
-					params = ollama.ToolFunctionParameters{Type: "object", Properties: make(map[string]ollama.ToolProperty)}
+					params = ollama.ToolFunctionParameters{Type: "object", Properties: ollama.NewToolPropertiesMap()}
 				}
 			}
 		}
@@ -685,7 +688,9 @@ func convertOllamaResponseToStreamingChunk(res ollama.ChatResponse) *StreamingCh
 		delta.ToolCalls = make([]StreamingToolCall, 0, len(res.Message.ToolCalls))
 		for _, call := range res.Message.ToolCalls {
 			var arguments string
-			if call.Function.Arguments != nil {
+			// ollama v0.17+ changed Arguments from a nullable map to an
+			// opaque struct. Len() == 0 replaces the old nil-check.
+			if call.Function.Arguments.Len() > 0 {
 				if encoded, err := json.Marshal(call.Function.Arguments); err == nil {
 					arguments = string(encoded)
 				} else {
@@ -728,7 +733,7 @@ func convertOllamaToolCalls(calls []ollama.ToolCall) []ToolCall {
 	result := make([]ToolCall, 0, len(calls))
 	for _, call := range calls {
 		var arguments string
-		if call.Function.Arguments != nil {
+		if call.Function.Arguments.Len() > 0 {
 			if encoded, err := json.Marshal(call.Function.Arguments); err == nil {
 				arguments = string(encoded)
 			} else {

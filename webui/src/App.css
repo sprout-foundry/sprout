@@ -866,6 +866,13 @@ body,
   border-bottom: 1px solid var(--border-subtle);
 }
 
+/* Route fallback used by lazy-loaded panels (Tasks / Billing / Team) — sits
+ * inside EditorWorkspace and gets a comfortable inner padding for the
+ * Skeleton lines. Was previously an inline style. */
+.editor-workspace-route-fallback {
+  padding: var(--space-6);
+}
+
 .pane-control-btn {
   background: var(--bg-elevated);
   border: 1px solid var(--border-default);
@@ -928,6 +935,18 @@ body,
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+/* Inactive pane's split controls are dimmed so the active pane stays
+ * visually dominant. A click on a dimmed control activates that pane
+ * first, then performs the action — see EditorWorkspace.activateThenRun. */
+.split-controls.split-controls--inactive {
+  opacity: 0.45;
+  transition: opacity 0.12s var(--ease-out);
+}
+
+.split-controls.split-controls--inactive:hover {
+  opacity: 0.85;
 }
 
 .pane-controls-mobile {

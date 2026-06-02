@@ -17,7 +17,7 @@ const TeamPage = lazy(() => import('./platform').then((m) => ({ default: m.TeamP
 const BillingPage = lazy(() => import('./platform').then((m) => ({ default: m.BillingPage })));
 
 const RouteFallback: React.FC = () => (
-  <div style={{ padding: 'var(--space-6)' }}>
+  <div className="editor-workspace-route-fallback">
     <SkeletonText lines={6} />
   </div>
 );
@@ -283,11 +283,20 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
 
   const renderSplitControls = useCallback(
     (paneId: string) => {
+      // Controls render in *every* pane (with a dimmed style in non-active
+      // panes) so users can discover the split / close-split affordance
+      // without first clicking into a pane. A click on a non-active pane's
+      // control focuses that pane first, then performs the action.
+      const isActive = paneId === activePaneIdRef.current;
+      const activateThenRun = (action: () => void) => () => {
+        if (!isActive) switchPane(paneId);
+        action();
+      };
       return (
-        <div className="split-controls split-controls-embedded">
-          {paneId === activePaneIdRef.current && onCreateChat && (
+        <div className={`split-controls split-controls-embedded ${isActive ? '' : 'split-controls--inactive'}`}>
+          {onCreateChat && (
             <button
-              onClick={async () => {
+              onClick={activateThenRun(async () => {
                 const newId = await onCreateChat();
                 if (newId) {
                   openWorkspaceBuffer({
@@ -299,7 +308,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
                     metadata: { chatId: newId },
                   });
                 }
-              }}
+              })}
               className="pane-control-btn compact"
               title="New chat"
               aria-label="New chat"
@@ -307,9 +316,9 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
               <MessageSquarePlus size={13} />
             </button>
           )}
-          {paneId === activePaneIdRef.current && canCloseSplit && (
+          {canCloseSplit && (
             <button
-              onClick={handleCloseAllSplitsRef.current || undefined}
+              onClick={activateThenRun(() => handleCloseAllSplitsRef.current?.())}
               className="pane-control-btn compact"
               title="Close split panes"
               aria-label="Close split panes"
@@ -317,9 +326,9 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
               <X size={13} />
             </button>
           )}
-          {paneId === activePaneIdRef.current && canSplit && (
+          {canSplit && (
             <button
-              onClick={() => handleSplitRequestRef.current?.('vertical')}
+              onClick={activateThenRun(() => handleSplitRequestRef.current?.('vertical'))}
               className="pane-control-btn compact"
               title="Split vertically"
               aria-label="Split vertically"
@@ -327,9 +336,9 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
               <Columns2 size={14} />
             </button>
           )}
-          {paneId === activePaneIdRef.current && canSplit && (
+          {canSplit && (
             <button
-              onClick={() => handleSplitRequestRef.current?.('horizontal')}
+              onClick={activateThenRun(() => handleSplitRequestRef.current?.('horizontal'))}
               className="pane-control-btn compact"
               title="Split horizontally"
               aria-label="Split horizontally"
@@ -340,7 +349,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
         </div>
       );
     },
-    [onCreateChat, canCloseSplit, canSplit],
+    [onCreateChat, canCloseSplit, canSplit, switchPane, openWorkspaceBuffer],
   );
 
   const renderPaneById = useCallback(

@@ -1,4 +1,4 @@
-import { File, Folder, Terminal, GitBranch, MessageSquare, Zap, BookOpen, Settings, Command, X } from 'lucide-react';
+import { Terminal, GitBranch, MessageSquare, Zap, BookOpen, Settings, Command, X } from 'lucide-react';
 import { useWorkspace } from '../hooks/useWorkspace';
 import WorkspacePicker from './WorkspacePicker';
 import './WelcomeTab.css';
@@ -145,70 +145,10 @@ function WelcomeContent({
           </div>
         </section>
 
-        <section className="welcome-section">
-          <h2>Get Started</h2>
-          <div className="getting-started-grid">
-            <div className="getting-started-card">
-              <div className="gs-icon">
-                <File size={24} />
-              </div>
-              <div className="gs-content">
-                <h3>Open a File</h3>
-                <p>Select a file from the file tree or use {PRIMARY_KEY}+P to search</p>
-              </div>
-            </div>
-
-            <div className="getting-started-card">
-              <div className="gs-icon">
-                <Folder size={24} />
-              </div>
-              <div className="gs-content">
-                <h3>Navigate Projects</h3>
-                <p>Use the file tree to browse your workspace</p>
-              </div>
-            </div>
-
-            <div className="getting-started-card">
-              <div className="gs-icon">
-                <Terminal size={24} />
-              </div>
-              <div className="gs-content">
-                <h3>Run Commands</h3>
-                <p>Use the integrated terminal for shell commands</p>
-              </div>
-            </div>
-
-            <div className="getting-started-card">
-              <div className="gs-icon">
-                <GitBranch size={24} />
-              </div>
-              <div className="gs-content">
-                <h3>Version Control</h3>
-                <p>View and manage git history and changes</p>
-              </div>
-            </div>
-
-            <div className="getting-started-card">
-              <div className="gs-icon">
-                <MessageSquare size={24} />
-              </div>
-              <div className="gs-content">
-                <h3>AI Assistance</h3>
-                <p>Chat with AI to get code help and analysis</p>
-              </div>
-            </div>
-
-            <div className="getting-started-card">
-              <div className="gs-icon">
-                <Command size={24} />
-              </div>
-              <div className="gs-content">
-                <h3>Command Palette</h3>
-                <p>Access all commands with {PRIMARY_KEY}+P</p>
-              </div>
-            </div>
-          </div>
-        </section>
+        {/* The legacy "Get Started" section was decorative cards that
+          * duplicated Quick Actions (Command Palette, Run Commands, View Git,
+          * AI Chat) with no click handler. Removed in favor of Quick Actions
+          * + Resources, which actually do things. */}
 
         <section className="welcome-section welcome-links">
           <h2>Resources</h2>

@@ -158,12 +158,15 @@ function CommandPalette({
   // Resolve raw query to (search-mode, cleaned-query). The first character
   // can override mode: `>` → commands, `@` or `#` → symbols. Otherwise
   // inherit the active mode (with `all` treated as "search everything").
+  // Always trim — whitespace-only queries are semantically empty and the
+  // downstream code treats them that way (no point displaying "No results
+  // for '   '" or running fuzzy filter against bare spaces).
   const { q: searchQuery, searchMode } = useMemo<{ q: string; searchMode: PaletteMode }>(() => {
     if (query.startsWith('>')) return { q: query.slice(1).trim(), searchMode: 'commands' };
     if (query.startsWith('@') || query.startsWith('#')) {
       return { q: query.slice(1).trim(), searchMode: 'symbols' };
     }
-    return { q: query, searchMode: mode === 'all' ? 'all' : mode };
+    return { q: query.trim(), searchMode: mode === 'all' ? 'all' : mode };
   }, [query, mode]);
 
   // Track the currently-selected result by its stable key so we can restore
@@ -435,7 +438,15 @@ function CommandPalette({
     [],
   );
 
-  // Keyboard navigation
+  // Keyboard navigation. Any key we claim ownership of calls both
+  // preventDefault (to suppress browser default like Tab moving focus) and
+  // stopPropagation (so the global hotkey handler in HotkeyContext doesn't
+  // also fire — otherwise Ctrl+N here could trigger "New File" while we
+  // navigate to the next item).
+  const consume = (e: KeyboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLInputElement>) => {
       if (e.key === 'Escape') {
@@ -443,61 +454,62 @@ function CommandPalette({
         // clears the query without closing. A second Esc (with empty input)
         // closes the palette.
         if (query) {
-          e.preventDefault();
+          consume(e);
           setQuery('');
           return;
         }
+        consume(e);
         onClose();
         return;
       }
       // Cmd+1..4 (or Ctrl+1..4 on non-Mac) → jump directly to a mode tab.
       // Power-user shortcut equivalent to clicking the tab.
       if ((e.metaKey || e.ctrlKey) && /^[1-4]$/.test(e.key)) {
-        e.preventDefault();
+        consume(e);
         switchMode(MODE_ORDER[Number(e.key) - 1]);
         return;
       }
       // Tab / Shift+Tab → cycle through modes. Without this, Tab would
       // escape the modal palette entirely, which is hostile in an overlay.
       if (e.key === 'Tab') {
-        e.preventDefault();
+        consume(e);
         const idx = MODE_ORDER.indexOf(searchMode);
         const next = MODE_ORDER[(idx + (e.shiftKey ? -1 : 1) + MODE_ORDER.length) % MODE_ORDER.length];
         switchMode(next);
         return;
       }
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
+      if (e.key === 'ArrowDown' || (e.ctrlKey && e.key === 'n')) {
+        consume(e);
         setSelectedIndex((prev) => Math.min(prev + 1, results.length - 1));
         return;
       }
-      if (e.key === 'ArrowUp') {
-        e.preventDefault();
+      if (e.key === 'ArrowUp' || (e.ctrlKey && e.key === 'p')) {
+        consume(e);
         setSelectedIndex((prev) => Math.max(prev - 1, 0));
         return;
       }
       if (e.key === 'Home') {
-        e.preventDefault();
+        consume(e);
         setSelectedIndex(0);
         return;
       }
       if (e.key === 'End') {
-        e.preventDefault();
+        consume(e);
         setSelectedIndex(results.length - 1);
         return;
       }
       if (e.key === 'PageDown') {
-        e.preventDefault();
+        consume(e);
         setSelectedIndex((prev) => Math.min(prev + 10, results.length - 1));
         return;
       }
       if (e.key === 'PageUp') {
-        e.preventDefault();
+        consume(e);
         setSelectedIndex((prev) => Math.max(prev - 10, 0));
         return;
       }
       if (e.key === 'Enter' && results.length > 0) {
-        e.preventDefault();
+        consume(e);
         const result = results[selectedIndex];
         if (!result) return;
 
@@ -613,10 +625,10 @@ function CommandPalette({
           aria-label="Search results"
           aria-live="polite"
         >
-          {results.length === 0 && query && (
+          {results.length === 0 && searchQuery && (
             <div className="command-palette-empty">
               <div className="command-palette-empty-title">
-                No results for “{searchQuery || query}”
+                No results for “{searchQuery}”
               </div>
               <div className="command-palette-empty-hint">
                 {searchMode === 'commands'
@@ -627,11 +639,25 @@ function CommandPalette({
               </div>
             </div>
           )}
-          {results.length === 0 && !query && (
+          {results.length === 0 && !searchQuery && (
             <div className="command-palette-empty command-palette-empty--idle">
-              <div className="command-palette-empty-title">Search files, symbols, and commands</div>
+              <div className="command-palette-empty-title">
+                {searchMode === 'symbols'
+                  ? 'No symbols to show'
+                  : searchMode === 'files'
+                    ? 'No recent files yet'
+                    : 'Search files, symbols, and commands'}
+              </div>
               <div className="command-palette-empty-hint">
-                Type to find files · <kbd>&gt;</kbd> commands · <kbd>@</kbd> symbols
+                {searchMode === 'symbols'
+                  ? 'Open a file in the editor to browse its symbols'
+                  : searchMode === 'files'
+                    ? 'Type to search workspace files'
+                    : (
+                        <>
+                          Type to find files · <kbd>&gt;</kbd> commands · <kbd>@</kbd> symbols
+                        </>
+                      )}
               </div>
             </div>
           )}
@@ -719,6 +745,10 @@ function CommandPalette({
             <kbd>↑</kbd>
             <kbd>↓</kbd>
             <span>navigate</span>
+          </span>
+          <span className="command-palette-hint">
+            <kbd>⇥</kbd>
+            <span>switch mode</span>
           </span>
           <span className="command-palette-hint">
             <kbd>↵</kbd>

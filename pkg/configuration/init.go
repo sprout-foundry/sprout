@@ -410,15 +410,8 @@ func EnsureProviderAPIKey(provider string, apiKeys *APIKeys) error {
 
 // GetAvailableProviders returns all supported providers
 func GetAvailableProviders() []string {
-	// Use the provider factory to dynamically discover all available providers
-	providerFactory := providers.NewProviderFactory()
-	err := providerFactory.LoadEmbeddedConfigs()
-	if err != nil {
-		// Fallback to generated known providers list if factory fails to load
-		return providers.KnownProviders()
-	}
-
-	// Get all available providers from the factory
+	// Use the global factory (which has embedded + remote configs)
+	providerFactory := providers.GlobalFactory()
 	factoryProviders := providerFactory.GetAvailableProviders()
 
 	// Add the special providers that aren't in the factory (built-in ones)

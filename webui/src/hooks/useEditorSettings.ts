@@ -153,6 +153,16 @@ export function useEditorSettings(
     }
   };
 
+  const getStoredWordWrapEnabled = (): boolean => {
+    try {
+      const stored = localStorage.getItem('editor:word-wrap-enabled');
+      return stored !== null ? stored === 'true' : true;
+    } catch (err) {
+      debugLog('Failed to read word wrap setting from localStorage:', err);
+      return true;
+    }
+  };
+
   const getStoredMinimapEnabled = (): boolean => {
     try {
       const stored = localStorage.getItem('editor:minimap-enabled');
@@ -200,10 +210,7 @@ export function useEditorSettings(
   // Settings state
   // ---------------------------------------------------------------------------
 
-  const [wordWrapEnabled, setWordWrapEnabled] = useState<boolean>(() => {
-    // Default to true; persistence is handled via ref sync from context
-    return true;
-  });
+  const [wordWrapEnabled, setWordWrapEnabled] = useState<boolean>(getStoredWordWrapEnabled);
 
   const [relativeLineNumbersEnabled, setRelativeLineNumbersEnabled] = useState<boolean>(getStoredRelativeLineNumbers);
 
@@ -392,6 +399,11 @@ export function useEditorSettings(
     const next = !wordWrapRef.current;
     wordWrapRef.current = next;
     setWordWrapEnabled(next);
+    try {
+      localStorage.setItem('editor:word-wrap-enabled', String(next));
+    } catch (err) {
+      debugLog('[onToggleWordWrap] localStorage persist failed:', err);
+    }
   }, []);
 
   const onToggleMinimap = useCallback(() => {

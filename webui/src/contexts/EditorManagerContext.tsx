@@ -159,7 +159,11 @@ const PaneToBufferBridge: React.FC<{
 }> = ({ children, settings, closeBufferRef }) => {
   const pane = usePaneContext();
 
-  // Use refs for data values so PaneBridge is stable across pane state changes
+  // Use refs for data values so PaneBridge is stable across pane state changes.
+  // These refs are read synchronously by `openFile` / `switchToBuffer` inside
+  // the same React event tick that updated `pane.activePaneId`, so the writes
+  // must land at render time (not post-commit) — otherwise the bridge sees
+  // stale data on the call that immediately follows a pane switch.
   const activePaneIdRef = React.useRef(pane.activePaneId);
   const activeBufferIdRef = React.useRef(pane.activeBufferId);
   const panesRef = React.useRef(pane.panes);
@@ -209,7 +213,10 @@ const CombinedContextProvider: React.FC<{
   const pane = usePaneContext();
   const buffer = useBufferContext();
 
-  // Store closeBuffer for PaneManager to use
+  // Store closeBuffer for PaneManager to use. Synchronous render-time
+  // assignment is required because PaneManager reads through this ref in
+  // the same tick as it's mounted (closeBuffer would otherwise be null on
+  // first call).
   closeBufferRef.current = buffer.closeBuffer;
 
   const value = React.useMemo<EditorManagerContextValue>(

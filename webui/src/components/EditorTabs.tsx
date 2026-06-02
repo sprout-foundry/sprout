@@ -1,6 +1,5 @@
 import {
   X,
-  AlertTriangle,
   FolderOpen,
   ArrowRightLeft,
   PanelRightOpen,
@@ -72,13 +71,23 @@ function EditorTabs({
     moveBufferToPane,
     toggleBufferPin,
   } = useEditorManager();
-  const [showConfirm, setShowConfirm] = useState<{ bufferId: string; fileName: string } | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; bufferId: string } | null>(null);
   const [emptyAreaContextMenu, setEmptyAreaContextMenu] = useState<{ x: number; y: number } | null>(null);
   const tabRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const batchCloseTargetsRef = useRef<string[]>([]);
   const buffersRef = useRef(buffers);
-  buffersRef.current = buffers;
+  useEffect(() => {
+    buffersRef.current = buffers;
+  }, [buffers]);
+
+  // Drop tabRef entries for buffers that have been closed so the map
+  // doesn't grow unbounded across long sessions.
+  useEffect(() => {
+    const live = new Set<string>();
+    for (const id of buffers.keys()) live.add(id);
+    for (const id of Object.keys(tabRefs.current)) {
+      if (!live.has(id)) delete tabRefs.current[id];
+    }
+  }, [buffers]);
 
   // ── Drag-and-drop tab reorder ─────────────────────────────────
   const { handleDragStart, handleDrop, resolveDraggedBufferId, handlePaneDrop, handleDragEnd } = useTabDragReorder({
@@ -121,8 +130,10 @@ function EditorTabs({
       return;
     }
     const activeTab = tabRefs.current[activeBufferId];
+    // Use 'instant' so rapid Cmd+Option+→ tab cycling doesn't trigger a
+    // smooth-scroll queue that jumps behind the user.
     if (activeTab) {
-      activeTab.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+      activeTab.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' as ScrollBehavior });
     }
   }, [activeBufferId]);
 
@@ -141,18 +152,29 @@ function EditorTabs({
     }
   };
 
-  const handleTabClose = (e: MouseEvent, buffer: EditorBuffer) => {
+  const handleTabClose = async (e: MouseEvent, buffer: EditorBuffer) => {
     e.stopPropagation();
 
     if (buffer.isPinned && buffer.kind !== 'chat') return;
 
     if (buffer.isModified) {
-      setShowConfirm({ bufferId: buffer.id, fileName: buffer.file.name });
+      const ok = await showThemedConfirm(
+        `You have unsaved changes in "${buffer.file.name}". Close without saving?`,
+        { title: 'Unsaved changes', type: 'danger', confirmLabel: 'Close without saving' },
+      );
+      if (!ok) return;
+      closeBuffer(buffer.id);
       return;
     }
 
     if (buffer.isPinned && buffer.kind === 'chat') {
-      setShowConfirm({ bufferId: buffer.id, fileName: buffer.file.name });
+      const ok = await showThemedConfirm(`Close pinned chat "${buffer.file.name}"?`, {
+        title: 'Close pinned chat',
+        type: 'warning',
+        confirmLabel: 'Close',
+      });
+      if (!ok) return;
+      closeBuffer(buffer.id);
       return;
     }
 
@@ -242,51 +264,32 @@ function EditorTabs({
     [startRename],
   );
 
-  // ── Close confirmation ────────────────────────────────────────
-  const handleConfirmClose = () => {
-    if (showConfirm) {
-      if (showConfirm.bufferId === '__batch_close__') {
-        batchCloseTargetsRef.current.forEach((bufferId) => closeBuffer(bufferId));
-        batchCloseTargetsRef.current = [];
-      } else {
-        closeBuffer(showConfirm.bufferId);
-      }
-      setShowConfirm(null);
-    }
-  };
-
-  const handleCancelClose = () => {
-    batchCloseTargetsRef.current = [];
-    setShowConfirm(null);
-  };
-
-  // Escape key dismisses the confirmation dialog
-  useEffect(() => {
-    if (!showConfirm) return;
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') handleCancelClose();
-    };
-    document.addEventListener('keydown', handleEsc);
-    return () => document.removeEventListener('keydown', handleEsc);
-  }, [showConfirm]); // eslint-disable-line react-hooks/exhaustive-deps -- handleCancelClose is stable enough (close-ref + setState)
-
-  const closeRelatedBuffers = (predicate: (buffer: EditorBuffer) => boolean) => {
-    const closeTargets = Array.from(buffers.values()).filter(
+  // Bulk close uses showThemedConfirm so the confirmation surface matches the
+  // rest of the app. The list of dirty files is captured at the moment the
+  // dialog opens so any new modifications made while the dialog is open
+  // don't sneak into the batch.
+  const closeRelatedBuffers = async (predicate: (buffer: EditorBuffer) => boolean) => {
+    const closeTargets = Array.from(buffersRef.current.values()).filter(
       (buffer) => buffer.isClosable !== false && !buffer.isPinned && predicate(buffer),
     );
     const modifiedTargets = closeTargets.filter((buffer) => buffer.isModified);
 
     if (modifiedTargets.length > 0) {
       const names = modifiedTargets.map((b) => b.file.name).join(', ');
-      setShowConfirm({
-        bufferId: '__batch_close__',
-        fileName: names.length > 60 ? `${names.slice(0, 60)}… and ${modifiedTargets.length - 1} more` : names,
-      });
-      batchCloseTargetsRef.current = closeTargets.map((b) => b.id);
-      return;
+      const display = names.length > 60 ? `${names.slice(0, 60)}… and ${modifiedTargets.length - 1} more` : names;
+      const ok = await showThemedConfirm(
+        `You have unsaved changes in:\n${display}\n\nClose all without saving?`,
+        { title: 'Unsaved changes', type: 'danger', confirmLabel: 'Close without saving' },
+      );
+      if (!ok) return;
     }
 
-    closeTargets.forEach((buffer) => closeBuffer(buffer.id));
+    // Re-read at the moment of confirm so the snapshot reflects the latest
+    // buffer state (a file might have been saved while the dialog was open).
+    const finalTargets = Array.from(buffersRef.current.values()).filter(
+      (buffer) => buffer.isClosable !== false && !buffer.isPinned && predicate(buffer),
+    );
+    finalTargets.forEach((buffer) => closeBuffer(buffer.id));
   };
 
   // ── Safe callbacks for chat actions (fire-and-forget with error handling) ──
@@ -500,46 +503,11 @@ function EditorTabs({
         )}
       </div>
 
-      {/* Confirmation Dialog */}
-      {showConfirm && (
-        <div className="close-confirm-overlay">
-          <div className="close-confirm-dialog">
-            <div className="dialog-header">
-              <h3>
-                <AlertTriangle size={16} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 6 }} />
-                Unsaved Changes
-              </h3>
-            </div>
-            <div className="dialog-body">
-              {showConfirm.bufferId === '__batch_close__' ? (
-                <>
-                  <p>You have unsaved changes in the following files:</p>
-                  <p>
-                    <strong>{showConfirm.fileName}</strong>
-                  </p>
-                  <p>Are you sure you want to close them?</p>
-                </>
-              ) : (
-                <>
-                  <p>
-                    You have unsaved changes in <strong>&quot;{showConfirm.fileName}&quot;</strong>.
-                  </p>
-                  <p>Are you sure you want to close the file?</p>
-                </>
-              )}
-            </div>
-            <div className="dialog-actions">
-              <button onClick={handleConfirmClose} className="dialog-btn danger">
-                <X size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />
-                Yes, Close
-              </button>
-              <button onClick={handleCancelClose} className="dialog-btn primary">
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Unsaved-changes confirm uses the same themed dialog as the rest of
+        * the app (see SettingsPanel etc.) — surfaced via a useEffect just
+        * below when `showConfirm` flips truthy. The bespoke .close-confirm
+        * dialog used to live here and was the only place in the editor
+        * that didn't use showThemedConfirm. */}
 
       {/* ── Tab Context Menu ─────────────────────────────────────── */}
       <ContextMenu

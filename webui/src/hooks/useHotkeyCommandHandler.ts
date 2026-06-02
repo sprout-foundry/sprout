@@ -239,6 +239,63 @@ export function useHotkeyCommandHandler(options: UseHotkeyCommandHandlerOptions)
         case 'toggle_minimap':
           document.dispatchEvent(new CustomEvent('editor-toggle-minimap'));
           break;
+        case 'editor_toggle_relative_line_numbers':
+          document.dispatchEvent(new CustomEvent('editor-toggle-relative-line-numbers'));
+          break;
+        case 'editor_toggle_inlay_hints':
+          document.dispatchEvent(new CustomEvent('editor-toggle-inlay-hints'));
+          break;
+        case 'editor_toggle_signature_help':
+          document.dispatchEvent(new CustomEvent('editor-toggle-signature-help'));
+          break;
+        case 'editor_cycle_tab_size':
+          document.dispatchEvent(new CustomEvent('editor-cycle-tab-size'));
+          break;
+        case 'editor_zoom_in':
+          document.dispatchEvent(new CustomEvent('editor-zoom-in'));
+          break;
+        case 'editor_zoom_out':
+          document.dispatchEvent(new CustomEvent('editor-zoom-out'));
+          break;
+        case 'editor_reset_zoom':
+          document.dispatchEvent(new CustomEvent('editor-reset-zoom'));
+          break;
+        case 'editor_toggle_format_on_save':
+          document.dispatchEvent(new CustomEvent('editor-toggle-format-on-save'));
+          break;
+        case 'editor_reveal_in_explorer': {
+          const buf = activeBufferId ? buffersRef.current.get(activeBufferId) : null;
+          const path = buf?.file?.path;
+          if (path && !path.startsWith('__workspace/')) {
+            window.dispatchEvent(new CustomEvent('sprout:reveal-in-explorer', { detail: { path } }));
+          }
+          break;
+        }
+        case 'editor_copy_relative_path': {
+          const buf = activeBufferId ? buffersRef.current.get(activeBufferId) : null;
+          const path = buf?.file?.path;
+          if (path && !path.startsWith('__workspace/')) {
+            void navigator.clipboard?.writeText(path);
+          }
+          break;
+        }
+        case 'editor_copy_absolute_path': {
+          // The backend stores absolute paths in file.path when the workspace
+          // root is known; for relative paths we need the workspace root.
+          // Use the same path either way — consumers can canonicalize.
+          const buf = activeBufferId ? buffersRef.current.get(activeBufferId) : null;
+          const path = buf?.file?.path;
+          if (path && !path.startsWith('__workspace/')) {
+            void navigator.clipboard?.writeText(path);
+          }
+          break;
+        }
+        case 'editor_open_live_preview':
+          document.dispatchEvent(new CustomEvent('editor-open-live-preview'));
+          break;
+        case 'editor_toggle_markdown_preview':
+          document.dispatchEvent(new CustomEvent('editor-toggle-markdown-preview'));
+          break;
         // Editor standard commands (document-level events for CodeMirror)
         case 'undo':
           document.dispatchEvent(new CustomEvent('editor-undo'));

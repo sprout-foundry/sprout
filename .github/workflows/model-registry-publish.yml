@@ -56,6 +56,19 @@ jobs:
       - name: Generate model index
         run: bash scripts/generate-model-index.sh models/models
 
+      - name: Copy provider configs with metadata
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          mkdir -p providers
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          for cfg in pkg/agent_providers/configs/*.json; do
+            name=$(basename "$cfg")
+            jq --arg sv 1 --arg ts "$TIMESTAMP" \
+              '. + {schema_version: ($sv | tonumber), published_at: $ts}' \
+              "$cfg" > "providers/$name"
+          done
+
       - name: Generate provider index
         run: bash scripts/generate-provider-index.sh
 

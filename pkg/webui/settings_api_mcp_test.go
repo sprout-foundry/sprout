@@ -38,6 +38,16 @@ func setupMCPCredTestServer(t *testing.T) (*ReactWebServer, string) {
 	// Reset the credential backend so the env var takes effect.
 	credentials.ResetStorageBackend()
 
+	// Skip the network-based ListModels validation in ValidateAndSaveAPIKey.
+	// No webui credential test exercises the real validation path — tests
+	// that should fail return 400 BEFORE validation runs (empty value,
+	// unknown provider, malformed JSON), and tests that should succeed
+	// just need the key stored. Real validation is covered in
+	// pkg/configuration. Without this skip, CI fails any PUT-success
+	// test because there's no network or real API endpoint.
+	configuration.SetValidateAndSaveAPIKeyValidation(true)
+	t.Cleanup(func() { configuration.SetValidateAndSaveAPIKeyValidation(false) })
+
 	daemonRoot := t.TempDir()
 	workspaceDir := filepath.Join(daemonRoot, "workspace")
 	require.NoError(t, os.MkdirAll(workspaceDir, 0o755))

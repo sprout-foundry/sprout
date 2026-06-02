@@ -87,9 +87,17 @@ export default defineConfig(({ mode }) => {
             // Per-vendor chunks for big dependencies. order matters: the
             // most-specific match (e.g. lang/legacy-modes) must come
             // before the more-general @codemirror catch-all.
+            //
+            // @lezer/* belongs with core @codemirror (NOT with lang-*).
+            // @codemirror/language depends on @lezer/common and
+            // @lezer/highlight; if @lezer lives in codemirror-langs while
+            // @codemirror/language lives in codemirror, the chunks import
+            // each other and Rollup emits a TDZ-failing circular bundle
+            // (`Cannot access 'SO' before initialization`). Keep the
+            // dependency graph one-way: langs → codemirror → (nothing).
             if (id.includes('node_modules/@codemirror/lang-')) return 'codemirror-langs';
             if (id.includes('node_modules/@codemirror/legacy-modes')) return 'codemirror-langs';
-            if (id.includes('node_modules/@lezer/')) return 'codemirror-langs';
+            if (id.includes('node_modules/@lezer/')) return 'codemirror';
             if (id.includes('node_modules/@codemirror/')) return 'codemirror';
             if (id.includes('node_modules/react') || id.includes('node_modules/scheduler')) return 'react';
             if (id.includes('node_modules/onnxruntime')) return 'onnxruntime';

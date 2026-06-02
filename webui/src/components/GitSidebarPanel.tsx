@@ -157,6 +157,18 @@ function GitSidebarPanel({
     [gitStatus],
   );
 
+  // Filtered file lists per section; recomputed only when status or filter changes.
+  // Must run before any early returns — React requires a stable hook count across renders.
+  const filteredBySection = useMemo(() => {
+    const out: Record<FileSection, GitFile[]> = {
+      staged: filterFiles(gitStatus?.staged ?? []),
+      modified: filterFiles(gitStatus?.modified ?? []),
+      untracked: filterFiles(gitStatus?.untracked ?? []),
+      deleted: filterFiles(gitStatus?.deleted ?? []),
+    };
+    return out;
+  }, [filterFiles, gitStatus]);
+
   if (isLoading) {
     return (
       <div className="git-sidebar-panel">
@@ -180,16 +192,6 @@ function GitSidebarPanel({
     (gitStatus?.modified.length ?? 0) +
     (gitStatus?.untracked.length ?? 0) +
     (gitStatus?.deleted.length ?? 0);
-  // Filtered file lists per section; recomputed only when status or filter changes.
-  const filteredBySection = useMemo(() => {
-    const out: Record<FileSection, GitFile[]> = {
-      staged: filterFiles(gitStatus?.staged ?? []),
-      modified: filterFiles(gitStatus?.modified ?? []),
-      untracked: filterFiles(gitStatus?.untracked ?? []),
-      deleted: filterFiles(gitStatus?.deleted ?? []),
-    };
-    return out;
-  }, [filterFiles, gitStatus]);
   const visibleSections = FILE_SECTIONS.filter((section) => filteredBySection[section.id].length > 0);
   const hiddenSectionCount = FILE_SECTIONS.length - visibleSections.length;
   const matchedFileCount =
@@ -358,6 +360,7 @@ function GitSidebarPanel({
               ? 'Write commit message… (⌘/Ctrl+Enter to commit)'
               : 'Stage files to write a commit message'
           }
+          aria-label="Commit message"
           className="git-sidebar-commit-input"
           rows={3}
         />

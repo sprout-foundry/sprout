@@ -2248,21 +2248,33 @@
 }
 
 .git-sidebar-tab {
-  flex: 1;
+  /* `min-width: 0` lets flex distribute width evenly even when intrinsic
+   * label width exceeds the share. Combined with the ellipsis on the
+   * inner span, "Worktrees" gracefully truncates to "Worktree…" at the
+   * default 288px sidebar width instead of being chopped at the bar edge. */
+  flex: 1 1 0;
+  min-width: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 9px 12px;
+  gap: 5px;
+  padding: 9px 6px;
   border: none;
   background: transparent;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   cursor: pointer;
   transition:
     background 0.12s ease,
     color 0.12s ease;
+}
+
+.git-sidebar-tab > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .git-sidebar-tab:hover {

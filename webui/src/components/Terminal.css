@@ -123,6 +123,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Keep every toolbar button the same hit target. Without min-width the
+   * Unicode arrow on the expand button renders ~20px wide while icon
+   * buttons sit at 24px, producing a visible width jog at the end of the
+   * row. */
+  min-width: 24px;
   transition: color 0.15s ease;
 }
 

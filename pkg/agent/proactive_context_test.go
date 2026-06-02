@@ -625,6 +625,9 @@ func TestRetrieveProactiveContext_NilManager(t *testing.T) {
 }
 
 func TestRetrieveProactiveContext_NilContext(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping embedding test in short mode")
+	}
 	mgr, _ := setupProactiveManager(t)
 	defer mgr.Close()
 
@@ -641,6 +644,9 @@ func TestRetrieveProactiveContext_NilContext(t *testing.T) {
 }
 
 func TestRetrieveProactiveContext_EmptyQuery(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping embedding test in short mode")
+	}
 	ctx := context.Background()
 	mgr, _ := setupProactiveManager(t)
 	defer mgr.Close()
@@ -658,6 +664,9 @@ func TestRetrieveProactiveContext_EmptyQuery(t *testing.T) {
 }
 
 func TestRetrieveProactiveContext_EmptyStore(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping embedding test in short mode")
+	}
 	ctx := context.Background()
 	mgr, _ := setupProactiveManager(t)
 	defer mgr.Close()
@@ -676,6 +685,9 @@ func TestRetrieveProactiveContext_EmptyStore(t *testing.T) {
 }
 
 func TestRetrieveProactiveContext_HappyPath(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping embedding test in short mode")
+	}
 	ctx := context.Background()
 	now := time.Now().UTC()
 	mgr, _ := setupProactiveManager(t)
@@ -726,6 +738,9 @@ func TestRetrieveProactiveContext_HappyPath(t *testing.T) {
 }
 
 func TestRetrieveProactiveContext_WorkspaceScopedFiltering(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping embedding test in short mode")
+	}
 	ctx := context.Background()
 	now := time.Now().UTC()
 	mgr, _ := setupProactiveManager(t)
@@ -789,6 +804,9 @@ func TestRetrieveProactiveContext_WorkspaceScopedFiltering(t *testing.T) {
 // wrong directory.  WorkspaceScoped now defaults to true; this test locks that
 // in.
 func TestRetrieveProactiveContext_DefaultConfigSkipsCrossWorkspace(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping embedding test in short mode")
+	}
 	ctx := context.Background()
 	now := time.Now().UTC()
 	mgr, _ := setupProactiveManager(t)
@@ -828,6 +846,9 @@ func TestRetrieveProactiveContext_DefaultConfigSkipsCrossWorkspace(t *testing.T)
 // DefaultProactiveContextConfig() still returns turns from the SAME workspace.
 // Complements the cross-workspace regression test above.
 func TestRetrieveProactiveContext_DefaultConfigKeepsSameWorkspace(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping embedding test in short mode")
+	}
 	ctx := context.Background()
 	now := time.Now().UTC()
 	mgr, _ := setupProactiveManager(t)
@@ -858,6 +879,9 @@ func TestRetrieveProactiveContext_DefaultConfigKeepsSameWorkspace(t *testing.T) 
 }
 
 func TestRetrieveProactiveContext_TimeDecayOrdering(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping embedding test in short mode")
+	}
 	ctx := context.Background()
 	now := time.Now().UTC()
 	mgr, _ := setupProactiveManager(t)
@@ -922,6 +946,9 @@ func TestRetrieveProactiveContext_TimeDecayOrdering(t *testing.T) {
 }
 
 func TestRetrieveProactiveContext_MaxResultsCap(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping embedding test in short mode")
+	}
 	ctx := context.Background()
 	now := time.Now().UTC()
 	mgr, _ := setupProactiveManager(t)
@@ -956,6 +983,9 @@ func TestRetrieveProactiveContext_MaxResultsCap(t *testing.T) {
 }
 
 func TestRetrieveProactiveContext_MinRelevanceScoreFilter(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping embedding test in short mode")
+	}
 	ctx := context.Background()
 	now := time.Now().UTC()
 	mgr, _ := setupProactiveManager(t)
@@ -998,6 +1028,9 @@ func TestRetrieveProactiveContext_MinRelevanceScoreFilter(t *testing.T) {
 }
 
 func TestRetrieveProactiveContext_CustomConfigPreserved(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping embedding test in short mode")
+	}
 	ctx := context.Background()
 	now := time.Now().UTC()
 	mgr, _ := setupProactiveManager(t)
@@ -1035,6 +1068,9 @@ func TestRetrieveProactiveContext_CustomConfigPreserved(t *testing.T) {
 }
 
 func TestRetrieveProactiveContext_ZeroTimeUsesCurrent(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping embedding test in short mode")
+	}
 	ctx := context.Background()
 	now := time.Now().UTC()
 	mgr, _ := setupProactiveManager(t)
@@ -1072,6 +1108,9 @@ func TestRetrieveProactiveContext_ZeroTimeUsesCurrent(t *testing.T) {
 // Test that RetrieveProactiveContext only processes conversation_turn records,
 // and ignores records of other types.
 func TestRetrieveProactiveContext_IgnoresNonConversationTurns(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping embedding test in short mode")
+	}
 	ctx := context.Background()
 	now := time.Now().UTC()
 	mgr, store := setupProactiveManager(t)
@@ -1117,6 +1156,9 @@ func TestRetrieveProactiveContext_IgnoresNonConversationTurns(t *testing.T) {
 // ========================================================================
 
 func TestProactiveContext_FullRoundTrip(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping embedding test in short mode")
+	}
 	ctx := context.Background()
 	now := time.Now().UTC()
 	mgr, _ := setupProactiveManager(t)
@@ -1239,6 +1281,9 @@ func TestInjectProactiveContext_NoEmbeddingManager(t *testing.T) {
 }
 
 func TestInjectProactiveContext_EmptyStore(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping embedding test in short mode")
+	}
 	ctx := context.Background()
 	tempDir := t.TempDir()
 	t.Setenv("SPROUT_CONFIG", tempDir)
@@ -1273,6 +1318,9 @@ func TestInjectProactiveContext_EmptyStore(t *testing.T) {
 }
 
 func TestInjectProactiveContext_WithResults(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping embedding test in short mode")
+	}
 	ctx := context.Background()
 	now := time.Now().UTC()
 	tempDir := t.TempDir()

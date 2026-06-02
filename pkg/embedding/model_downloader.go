@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 // ModelConfig describes an ONNX model to download.
@@ -43,7 +44,7 @@ type ModelDownloader struct {
 func NewModelDownloader() *ModelDownloader {
 	return &ModelDownloader{
 		modelDir: DefaultModelDir(),
-		client:   &http.Client{},
+		client:   &http.Client{Timeout: 5 * time.Minute},
 	}
 }
 
@@ -51,7 +52,7 @@ func NewModelDownloader() *ModelDownloader {
 func NewModelDownloaderWithDir(modelDir string) *ModelDownloader {
 	return &ModelDownloader{
 		modelDir: modelDir,
-		client:   &http.Client{},
+		client:   &http.Client{Timeout: 5 * time.Minute},
 	}
 }
 

@@ -150,6 +150,15 @@ const (
 	bracketedPasteEnable   = "\033[?2004h"
 	bracketedPasteDisable  = "\033[?2004l"
 	bracketedPasteEndSeq   = "\x1b[201~"
+	// modifyOtherKeysEnable asks xterm-protocol-compatible terminals
+	// (Windows Terminal, kitty, alacritty, foot, iTerm2 w/ CSI u, etc.)
+	// to report modified keystrokes — most importantly Shift+Enter as
+	// `ESC [ 13 ; 2 u` instead of indistinguishably as plain `\r`.
+	// Level 1 covers Shift/Ctrl/Alt+Enter without disturbing arrows.
+	// Restore (level 0) on exit so we don't leak the mode to whatever
+	// runs after us.
+	modifyOtherKeysEnable  = "\033[>4;1m"
+	modifyOtherKeysDisable = "\033[>4;0m"
 )
 
 // NewInputReader creates a new input reader
@@ -198,6 +207,13 @@ func (ir *InputReader) ReadLine() (string, error) {
 	// Enable mouse tracking (SGR mode for extended coordinates)
 	fmt.Print(MouseTrackingSGR)
 	defer fmt.Print(MouseTrackingDisable)
+
+	// Ask the terminal to report modified keystrokes (Shift+Enter etc.)
+	// as CSI u sequences. Terminals that don't recognize this just
+	// ignore the SGR; the new parser branch is a no-op when the
+	// sequence never arrives.
+	fmt.Print(modifyOtherKeysEnable)
+	defer fmt.Print(modifyOtherKeysDisable)
 
 	// Initialize line state
 	ir.line = ""
@@ -853,6 +869,12 @@ func (ep *EscapeParser) Parse(b byte) *InputEvent {
 			return &InputEvent{Type: EventBackspace}
 		case 13:
 			return &InputEvent{Type: EventEnter}
+		case 10:
+			// Bare LF — terminals that distinguish Shift+Enter from plain
+			// Enter (notably VS Code's integrated terminal) send 0x0A
+			// here while plain Enter stays as CR (0x0D). Insert a literal
+			// newline so multi-line composition just works.
+			return &InputEvent{Type: EventChar, Data: "\n"}
 		case 9:
 			return &InputEvent{Type: EventTab}
 		default:
@@ -935,6 +957,30 @@ func (ep *EscapeParser) Parse(b byte) *InputEvent {
 			if (b >= '0' && b <= '9') || b == ';' {
 				return nil
 			}
+			if b == 'u' {
+				// CSI u (fixterms / kitty keyboard / xterm modifyOtherKeys
+				// reporting). Format: ESC [ <key>;<modifiers> u — used by
+				// Windows Terminal, kitty, alacritty, foot, and any iTerm2/
+				// xterm configured with modifyOtherKeys. Shift+Enter
+				// arrives here as `13;2u`. Modifier bitmask: 1=none,
+				// 2=Shift, 3=Alt, 4=Shift+Alt, 5=Ctrl, etc. Any modifier
+				// on Enter is treated as "insert newline" — covers
+				// Shift+Enter and Alt+Enter alike.
+				param := ""
+				if len(ep.buffer) >= 2 {
+					param = string(ep.buffer[1 : len(ep.buffer)-1])
+				}
+				keyParam, modParam := param, ""
+				if idx := strings.IndexByte(param, ';'); idx >= 0 {
+					keyParam = param[:idx]
+					modParam = param[idx+1:]
+				}
+				ep.Reset()
+				if keyParam == "13" && modParam != "" && modParam != "1" {
+					return &InputEvent{Type: EventChar, Data: "\n"}
+				}
+				return &InputEvent{Type: EventEscape}
+			}
 			if b == '~' {
 				param := ""
 				if len(ep.buffer) >= 3 {
@@ -956,6 +1002,15 @@ func (ep *EscapeParser) Parse(b byte) *InputEvent {
 					return &InputEvent{Type: EventPasteStart}
 				case "201":
 					return &InputEvent{Type: EventPasteEnd}
+				case "27":
+					// Older xterm "modifyOtherKeys" format:
+					// ESC [ 27 ; <mods> ; <key> ~ . If key is 13 (Enter)
+					// with any modifier, insert a newline.
+					parts := strings.Split(param, ";")
+					if len(parts) == 3 && parts[2] == "13" && parts[1] != "" && parts[1] != "1" {
+						return &InputEvent{Type: EventChar, Data: "\n"}
+					}
+					return &InputEvent{Type: EventEscape}
 				default:
 					return &InputEvent{Type: EventEscape}
 				}

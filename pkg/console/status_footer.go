@@ -476,11 +476,10 @@ func (f *StatusFooter) draw() {
 		// (bold bright-cyan) so they read as "active input" vs the
 		// muted status footer chrome below.
 		lines := splitSteerLines(steerLine, steerRows)
-		topRow := rows - 1 - steerRows
 		for i, lineText := range lines {
 			withCursor := i == len(lines)-1
 			rendered := steerRowText(lineText, cols, withCursor)
-			fmt.Fprintf(f.w, "\033[%d;1H\033[K%s%s%s", topRow+i+1, steerColor, rendered, footerResetAll)
+			fmt.Fprintf(f.w, "\033[%d;1H\033[K%s%s%s", steerRowFor(rows, steerRows, i), steerColor, rendered, footerResetAll)
 		}
 	}
 	fmt.Fprintf(f.w, "\033[%d;1H\033[K%s%s%s", rows-1, footerBaseColor, rule, footerResetAll)
@@ -493,6 +492,20 @@ func (f *StatusFooter) draw() {
 	f.lastRows = rows
 	f.lastSteerRows = steerRows
 	f.mu.Unlock()
+}
+
+// steerRowFor returns the absolute terminal row (1-based) where the
+// i-th rendered steer line should be drawn. The rule sits at `rows-1`
+// and the footer at `rows`; steer lines stack above the rule, so with
+// steerRows=1 a single line lands at `rows-2`, with steerRows=2 the
+// pair lands at `rows-3` and `rows-2`, etc.
+//
+// A previous version of this calculation wrote to `rows-1-steerRows+i+1`
+// (one row lower), placing the steer panel on the rule's row. The rule
+// repainted on the same draw call and the panel vanished entirely from
+// the terminal. SP-055.
+func steerRowFor(rows, steerRows, i int) int {
+	return rows - 1 - steerRows + i
 }
 
 // splitSteerLines breaks the steer buffer into at most `cap` lines.

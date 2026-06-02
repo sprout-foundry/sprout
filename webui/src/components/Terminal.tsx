@@ -807,7 +807,12 @@ function Terminal({
             >
               <Type size={14} />
             </button>
-            <button className="terminal-btn clear-btn" onClick={clearActivePane} title="Clear terminal">
+            <button
+              className="terminal-btn clear-btn"
+              onClick={clearActivePane}
+              title="Clear terminal"
+              aria-label="Clear terminal"
+            >
               <Trash2 size={16} />
             </button>
             <button
@@ -841,6 +846,8 @@ function Terminal({
               className="terminal-btn toggle-btn"
               onClick={toggleExpanded}
               title={isExpanded ? 'Collapse terminal' : 'Expand terminal'}
+              aria-label={isExpanded ? 'Collapse terminal' : 'Expand terminal'}
+              aria-expanded={isExpanded}
             >
               {isExpanded ? '▼' : '▲'}
             </button>

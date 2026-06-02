@@ -935,6 +935,7 @@ function CommandInput({
         placeholder={placeholder}
         disabled={disabled}
         className={`input-field autoscaling ${isHistoryMode ? 'history-mode' : ''}`}
+        aria-label={placeholder}
         aria-haspopup="listbox"
         aria-controls={slashAutocompleteOpen ? 'slash-autocomplete-listbox' : undefined}
         aria-activedescendant={slashAutocompleteOpen ? `slash-option-${slashAutocompleteIndex}` : undefined}

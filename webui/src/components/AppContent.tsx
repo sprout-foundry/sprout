@@ -15,6 +15,7 @@ import { useInstances } from '../hooks/useInstances';
 import { type SectionTab } from '../hooks/useSidebarState';
 import { useSwipeGesture } from '../hooks/useSwipeGesture';
 import { ApiService } from '../services/api';
+import { getWorkspaceSymbols } from '../services/api/editorApi';
 import type { ChatSession } from '../services/chatSessions';
 import type { AppState, PerChatState } from '../types/app';
 import { useAppStoreSetState } from '../contexts/AppStore';
@@ -137,11 +138,14 @@ const AppContent: React.FC<AppContentProps> = ({
   const {
     buffers,
     activeBufferId,
+    activePaneId,
     openFile,
     openWorkspaceBuffer,
     updateBufferTitle,
     updateBufferMetadata,
     closeBuffer,
+    splitPane,
+    switchPane,
   } = useEditorManager();
   const apiService = ApiService.getInstance();
   const sproutFetch = useSproutFetch();
@@ -355,6 +359,70 @@ const AppContent: React.FC<AppContentProps> = ({
       return top.map((s) => ({ name: s.name, kind: s.kind, line: s.line }));
     },
     [currentBuffer],
+  );
+  // Workspace-wide LSP symbol search. Surfaces symbols from any indexed
+  // file so the user can jump to a definition without first opening the
+  // file. The shared palette handles debouncing + race-safety.
+  const handlePaletteSearchWorkspaceSymbols = useCallback(
+    async (query: string) => {
+      const q = query.trim();
+      if (!q) return [];
+      try {
+        const response = await getWorkspaceSymbols(sproutFetch, q);
+        const out: Array<{ name: string; kind: string; line: number; filePath: string }> = [];
+        for (const file of response.files ?? []) {
+          for (const sym of file.symbols ?? []) {
+            if (sym.line == null) continue;
+            out.push({
+              name: sym.name,
+              kind: sym.kind || 'symbol',
+              line: sym.line,
+              filePath: file.file,
+            });
+            if (out.length >= 100) return out;
+          }
+        }
+        return out;
+      } catch {
+        return [];
+      }
+    },
+    [sproutFetch],
+  );
+  // Open a file at a specific line. Used by workspace symbol clicks: the
+  // user picks a symbol that lives elsewhere; we load that file then fire
+  // the goto-line event after the editor has mounted the buffer.
+  const handlePaletteOpenFileAtLine = useCallback(
+    (filePath: string, line: number) => {
+      const fileName = filePath.split('/').filter(Boolean).pop() || filePath;
+      const extensionIndex = fileName.lastIndexOf('.');
+      const fileExt = extensionIndex > 0 ? fileName.slice(extensionIndex) : '';
+      openFile({ path: filePath, name: fileName, isDir: false, size: 0, modified: 0, ext: fileExt });
+      // Defer the goto-line dispatch one tick so the editor has time to
+      // mount the new buffer's CodeMirror instance; otherwise the event
+      // fires against a buffer that doesn't exist yet and is dropped.
+      setTimeout(() => {
+        document.dispatchEvent(new CustomEvent('editor-goto-line', { detail: { line } }));
+      }, 100);
+    },
+    [openFile],
+  );
+  // Open a file in a new editor pane (split). Bound to ⌘/Ctrl+↵ in the
+  // palette. Splits the currently-active pane to the right, then opens the
+  // file in the newly-focused pane.
+  const handlePaletteOpenFileInNewPane = useCallback(
+    (filePath: string) => {
+      const fileName = filePath.split('/').filter(Boolean).pop() || filePath;
+      const extensionIndex = fileName.lastIndexOf('.');
+      const fileExt = extensionIndex > 0 ? fileName.slice(extensionIndex) : '';
+      const sourcePaneId = activePaneId;
+      const newPaneId = sourcePaneId ? splitPane(sourcePaneId, 'vertical') : null;
+      if (newPaneId) {
+        switchPane(newPaneId);
+      }
+      openFile({ path: filePath, name: fileName, isDir: false, size: 0, modified: 0, ext: fileExt });
+    },
+    [activePaneId, splitPane, switchPane, openFile],
   );
   // Returning `false` from onExecuteCommand keeps the palette open — used by
   // commands that change the palette's own mode (quick_open, goto_symbol).
@@ -742,6 +810,9 @@ const AppContent: React.FC<AppContentProps> = ({
         recentFiles={paletteRecentFiles}
         onSearchFiles={handlePaletteSearchFiles}
         onSearchSymbols={handlePaletteSearchSymbols}
+        onSearchWorkspaceSymbols={handlePaletteSearchWorkspaceSymbols}
+        onOpenFileAtLine={handlePaletteOpenFileAtLine}
+        onOpenFileInNewPane={handlePaletteOpenFileInNewPane}
         onExecuteCommand={handlePaletteExecuteCommand}
       />
     </div>

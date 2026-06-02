@@ -33,6 +33,12 @@ export interface SymbolResult {
   kind: string;
   line: number;
   scopePath?: string;
+  /** When set, the symbol lives in a different file from the active buffer
+   *  (typically a workspace-wide LSP result). Clicking will open that file
+   *  at this line via `onOpenFileAtLine`; without this, the palette falls
+   *  back to `onNavigateToLine` and assumes the symbol is in the active
+   *  buffer. */
+  filePath?: string;
 }
 
 type ResultKind = 'command' | 'file' | 'symbol' | 'header';
@@ -80,6 +86,8 @@ interface PaletteResult {
   symbolLine?: number;
   symbolKind?: string;
   scopePath?: string;
+  /** When set, the symbol lives in another file (workspace LSP result). */
+  symbolFilePath?: string;
   /** Stable unique key for React rendering */
   key: string;
 }
@@ -111,8 +119,20 @@ export interface CommandPaletteProps {
   commands?: CommandDef[];
   /** Callback to search files */
   onSearchFiles?: (query: string) => Promise<FileResult[]>;
-  /** Callback to search symbols */
+  /** Synchronous symbol search of the *active buffer* */
   onSearchSymbols?: (query: string) => SymbolResult[];
+  /** Async workspace-wide symbol search (e.g. via LSP `workspace/symbol`).
+   *  Called in addition to `onSearchSymbols` and debounced. Results with a
+   *  `filePath` are de-duplicated against `onSearchSymbols` and surface as
+   *  symbols in *other* files — clicking them invokes `onOpenFileAtLine`. */
+  onSearchWorkspaceSymbols?: (query: string) => Promise<SymbolResult[]>;
+  /** Open a file at a specific line. Used for symbol results that carry a
+   *  `filePath` (workspace-wide LSP results). When omitted, those results
+   *  fall back to `onOpenFile` (loses line-positioning). */
+  onOpenFileAtLine?: (path: string, line: number) => void;
+  /** Open a file in a new editor pane (split). Activated by `⌘+↵` / `Ctrl+↵`.
+   *  When omitted, that shortcut falls through to the standard open. */
+  onOpenFileInNewPane?: (path: string) => void;
   /** Recently-opened files, shown as the landing list when the user opens
    *  the palette in `all` or `files` mode with an empty query. Order is
    *  preserved (most-recent first). */
@@ -132,6 +152,9 @@ function CommandPalette({
   commands = [],
   onSearchFiles,
   onSearchSymbols,
+  onSearchWorkspaceSymbols,
+  onOpenFileAtLine,
+  onOpenFileInNewPane,
   recentFiles,
   isLoading = false,
 }: CommandPaletteProps): JSX.Element | null {
@@ -194,6 +217,33 @@ function CommandPalette({
     }, 150);
     return () => clearTimeout(timer);
   }, [searchQuery, searchMode, onSearchFiles]);
+
+  // Workspace LSP symbol search — debounced, race-safe (same pattern as
+  // files). Runs in 'all' and 'symbols' modes. Longer debounce than files
+  // because LSP `workspace/symbol` is more expensive.
+  const [workspaceSymbols, setWorkspaceSymbols] = useState<SymbolResult[]>([]);
+  const wsSymbolTokenRef = useRef(0);
+  useEffect(() => {
+    if (
+      !searchQuery ||
+      !onSearchWorkspaceSymbols ||
+      (searchMode !== 'all' && searchMode !== 'symbols')
+    ) {
+      setWorkspaceSymbols([]);
+      return;
+    }
+    const token = ++wsSymbolTokenRef.current;
+    const timer = setTimeout(() => {
+      onSearchWorkspaceSymbols(searchQuery)
+        .then((results) => {
+          if (token === wsSymbolTokenRef.current) setWorkspaceSymbols(results);
+        })
+        .catch(() => {
+          if (token === wsSymbolTokenRef.current) setWorkspaceSymbols([]);
+        });
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [searchQuery, searchMode, onSearchWorkspaceSymbols]);
 
   // O(1) command-id → CommandDef lookup, recomputed only when the command
   // list changes. Previously the render loop did `commands.find(...)` per
@@ -287,13 +337,19 @@ function CommandPalette({
 
     // Symbols — when in explicit symbols mode, show all symbols in the
     // active file even on an empty query so the palette doubles as a
-    // file-outline browser. Otherwise fuzzy-filter.
+    // file-outline browser. With a query, also merge in workspace-wide LSP
+    // matches (debounced + race-safe in the effect above) so the user can
+    // jump to a symbol in any indexed file.
     if (searchMode === 'all' || searchMode === 'symbols') {
+      // Track local (active-buffer) symbol identity so workspace results
+      // can dedupe — the same symbol shouldn't appear twice.
+      const localKeys = new Set<string>();
       if (onSearchSymbols) {
         if (isEmpty) {
           if (searchMode === 'symbols') {
             const symbols = onSearchSymbols('');
             for (const sym of symbols) {
+              localKeys.add(`${sym.name}:${sym.line}`);
               items.push({
                 kind: 'symbol',
                 highlightedLabel: highlightMatches(sym.name, []),
@@ -310,6 +366,7 @@ function CommandPalette({
           for (const sym of symbols) {
             const symScore = fuzzyScore(q, sym.name);
             if (symScore.score < 0.3) continue;
+            localKeys.add(`${sym.name}:${sym.line}`);
             items.push({
               kind: 'symbol',
               highlightedLabel: highlightMatches(sym.name, symScore.matches),
@@ -320,6 +377,27 @@ function CommandPalette({
               key: `sym-${sym.name}-${sym.line}`,
             });
           }
+        }
+      }
+      // Workspace-wide LSP results (from the debounced effect). Skip on
+      // empty queries — `workspace/symbol` typically requires a query.
+      if (!isEmpty && workspaceSymbols.length > 0) {
+        for (const sym of workspaceSymbols) {
+          if (localKeys.has(`${sym.name}:${sym.line}`)) continue;
+          const symScore = fuzzyScore(q, sym.name);
+          if (symScore.score < 0.3) continue;
+          items.push({
+            kind: 'symbol',
+            highlightedLabel: highlightMatches(sym.name, symScore.matches),
+            // Discount workspace results slightly so local-buffer symbols
+            // rank above them when the user is editing a file.
+            score: symScore.score * 0.95,
+            symbolLine: sym.line,
+            symbolKind: sym.kind,
+            scopePath: sym.scopePath ?? sym.filePath,
+            symbolFilePath: sym.filePath,
+            key: `wssym-${sym.filePath ?? ''}-${sym.name}-${sym.line}`,
+          });
         }
       }
     }
@@ -350,7 +428,7 @@ function CommandPalette({
       }
     }
     return out;
-  }, [searchQuery, searchMode, commands, fileResults, recentFiles, onSearchSymbols]);
+  }, [searchQuery, searchMode, commands, fileResults, recentFiles, onSearchSymbols, workspaceSymbols]);
 
   // Remember which item the user has selected (by its stable key).
   useEffect(() => {
@@ -512,19 +590,44 @@ function CommandPalette({
         consume(e);
         const result = results[selectedIndex];
         if (!result) return;
+        // Cmd/Ctrl+Enter on a file (or cross-file symbol) → split editor
+        // and open in the new pane. Falls back to normal open when the
+        // consumer doesn't provide the callback.
+        const wantsNewPane = (e.metaKey || e.ctrlKey) && onOpenFileInNewPane;
 
         if (result.kind === 'command' && result.commandId) {
           const keepOpen = onExecuteCommand?.(result.commandId) === false;
           if (keepOpen) return;
         } else if (result.kind === 'file' && result.filePath) {
-          onOpenFile(result.filePath);
+          if (wantsNewPane) onOpenFileInNewPane(result.filePath);
+          else onOpenFile(result.filePath);
         } else if (result.kind === 'symbol' && result.symbolLine != null) {
-          onNavigateToLine?.(result.symbolLine);
+          if (result.symbolFilePath) {
+            // Workspace symbol → open the file in (possibly a new) pane,
+            // then position the cursor at the symbol's line.
+            if (wantsNewPane) onOpenFileInNewPane(result.symbolFilePath);
+            else if (onOpenFileAtLine) onOpenFileAtLine(result.symbolFilePath, result.symbolLine);
+            else onOpenFile(result.symbolFilePath);
+          } else {
+            onNavigateToLine?.(result.symbolLine);
+          }
         }
         onClose();
       }
     },
-    [results, selectedIndex, query, searchMode, switchMode, onClose, onOpenFile, onExecuteCommand, onNavigateToLine],
+    [
+      results,
+      selectedIndex,
+      query,
+      searchMode,
+      switchMode,
+      onClose,
+      onOpenFile,
+      onOpenFileAtLine,
+      onOpenFileInNewPane,
+      onExecuteCommand,
+      onNavigateToLine,
+    ],
   );
 
   if (!isOpen) return null;
@@ -688,14 +791,23 @@ function CommandPalette({
                     aria-selected={index === selectedIndex}
                     aria-setsize={results.length}
                     aria-posinset={index + 1}
-                    onClick={() => {
+                    onClick={(ev) => {
+                      // ⌘/Ctrl-click mirrors ⌘/Ctrl+Enter: open in split.
+                      const wantsNewPane = (ev.metaKey || ev.ctrlKey) && onOpenFileInNewPane;
                       if (result.kind === 'command' && result.commandId) {
                         const keepOpen = onExecuteCommand?.(result.commandId) === false;
                         if (keepOpen) return;
                       } else if (result.kind === 'file' && result.filePath) {
-                        onOpenFile(result.filePath);
+                        if (wantsNewPane) onOpenFileInNewPane(result.filePath);
+                        else onOpenFile(result.filePath);
                       } else if (result.kind === 'symbol' && result.symbolLine != null) {
-                        onNavigateToLine?.(result.symbolLine);
+                        if (result.symbolFilePath) {
+                          if (wantsNewPane) onOpenFileInNewPane(result.symbolFilePath);
+                          else if (onOpenFileAtLine) onOpenFileAtLine(result.symbolFilePath, result.symbolLine);
+                          else onOpenFile(result.symbolFilePath);
+                        } else {
+                          onNavigateToLine?.(result.symbolLine);
+                        }
                       }
                       onClose();
                     }}
@@ -754,6 +866,13 @@ function CommandPalette({
             <kbd>↵</kbd>
             <span>open</span>
           </span>
+          {onOpenFileInNewPane && (
+            <span className="command-palette-hint">
+              <kbd>⌘</kbd>
+              <kbd>↵</kbd>
+              <span>split</span>
+            </span>
+          )}
           <span className="command-palette-hint">
             <kbd>Esc</kbd>
             <span>close</span>

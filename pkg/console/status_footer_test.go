@@ -46,6 +46,42 @@ func TestStatusFooter_NilSafe(t *testing.T) {
 	f.Stop() // no panic = pass
 }
 
+// TestSteerRowFor pins the row math the renderer uses for the pinned
+// steer panel. The rule sits at `rows-1` and the footer at `rows`; the
+// steer panel must occupy the rows immediately above the rule. A
+// regression here (off-by-one) drops the panel onto the rule's row and
+// the rule paints over it on the same draw call — the visible symptom
+// is the steer prompt disappearing entirely from the terminal.
+func TestSteerRowFor(t *testing.T) {
+	cases := []struct {
+		rows      int
+		steerRows int
+		i         int
+		want      int
+	}{
+		// Single-row steer panel: lives at rows-2 (just above the rule).
+		{rows: 24, steerRows: 1, i: 0, want: 22},
+		{rows: 30, steerRows: 1, i: 0, want: 28},
+		// Two-row steer panel: rows-3 and rows-2, never the rule's row.
+		{rows: 24, steerRows: 2, i: 0, want: 21},
+		{rows: 24, steerRows: 2, i: 1, want: 22},
+		// Max-row steer panel: each subsequent line steps one row down.
+		{rows: 30, steerRows: 6, i: 0, want: 23},
+		{rows: 30, steerRows: 6, i: 5, want: 28},
+	}
+	for _, c := range cases {
+		got := steerRowFor(c.rows, c.steerRows, c.i)
+		if got != c.want {
+			t.Errorf("steerRowFor(rows=%d, steerRows=%d, i=%d) = %d, want %d (rule sits at %d)",
+				c.rows, c.steerRows, c.i, got, c.want, c.rows-1)
+		}
+		if got >= c.rows-1 {
+			t.Errorf("steerRowFor(rows=%d, steerRows=%d, i=%d) = %d collides with rule at %d",
+				c.rows, c.steerRows, c.i, got, c.rows-1)
+		}
+	}
+}
+
 func TestFormatTokens(t *testing.T) {
 	cases := []struct {
 		in   int

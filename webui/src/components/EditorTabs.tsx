@@ -8,6 +8,7 @@ import {
   Plus,
   GitBranch,
   Pencil,
+  RefreshCw,
   Trash2,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, useCallback, memo } from 'react';
@@ -434,25 +435,30 @@ function EditorTabs({
                         {buffer.file.name}
                       </span>
                     )}
-                    {buffer.isModified && <span className="tab-modified">●</span>}
+                    {buffer.isModified && <span className="tab-modified" aria-label="Unsaved changes">●</span>}
                     {buffer.externallyModified && (
-                      <span className="tab-externally-modified" title="File changed on disk">
-                        ↑
+                      <span className="tab-externally-modified" title="File changed on disk" aria-label="Changed on disk">
+                        <RefreshCw size={11} aria-hidden="true" />
                       </span>
                     )}
-                    <button
-                      className="pin-indicator"
-                      aria-label={buffer.isPinned ? 'Unpin tab' : 'Pin tab'}
-                      aria-pressed={!!buffer.isPinned}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleBufferPin(buffer.id);
-                      }}
-                      title={buffer.isPinned ? 'Unpin tab' : 'Pin tab'}
-                      disabled={!buffer.isPinned && buffer.isClosable === false}
-                    >
-                      <Pin size={12} fill={buffer.isPinned ? 'currentColor' : 'none'} />
-                    </button>
+                    {/* Pin button hidden on chat tabs — pin/unpin a chat
+                      * isn't a typical workflow, and the pinned-default-chat
+                      * gets a forced pinned state via context anyway. */}
+                    {buffer.kind !== 'chat' && (
+                      <button
+                        className="pin-indicator"
+                        aria-label={buffer.isPinned ? 'Unpin tab' : 'Pin tab'}
+                        aria-pressed={!!buffer.isPinned}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleBufferPin(buffer.id);
+                        }}
+                        title={buffer.isPinned ? 'Unpin tab' : 'Pin tab'}
+                        disabled={!buffer.isPinned && buffer.isClosable === false}
+                      >
+                        <Pin size={12} fill={buffer.isPinned ? 'currentColor' : 'none'} />
+                      </button>
+                    )}
                     {buffer.isClosable !== false && (buffer.kind === 'chat' || !buffer.isPinned) && !isDefaultChat && (
                       <button
                         className="tab-close"
@@ -552,14 +558,19 @@ function EditorTabs({
                 <span>Move to split {paneOrder.get(pane.id) ?? index + 1}</span>
               </button>
             ))}
-            <button
-              className="context-menu-item"
-              onClick={() => handleContextAction(() => toggleBufferPin(activeContextBuffer.id))}
-              disabled={!activeContextBuffer.isPinned && activeContextBuffer.isClosable === false}
-            >
-              <Pin size={14} fill={activeContextBuffer.isPinned ? 'currentColor' : 'none'} />
-              <span>{activeContextBuffer.isPinned ? 'Unpin tab' : 'Pin tab'}</span>
-            </button>
+            {/* Pin is meaningless for chat tabs (defaults are forced
+              * pinned by the context). Only surface the action on real
+              * file tabs. */}
+            {activeContextBuffer.kind !== 'chat' && (
+              <button
+                className="context-menu-item"
+                onClick={() => handleContextAction(() => toggleBufferPin(activeContextBuffer.id))}
+                disabled={!activeContextBuffer.isPinned && activeContextBuffer.isClosable === false}
+              >
+                <Pin size={14} fill={activeContextBuffer.isPinned ? 'currentColor' : 'none'} />
+                <span>{activeContextBuffer.isPinned ? 'Unpin tab' : 'Pin tab'}</span>
+              </button>
+            )}
 
             {/* ── Chat-specific context menu items ───────────────── */}
             {activeContextBuffer.kind === 'chat' && !contextIsDefaultChat && onRenameChat && (

@@ -213,45 +213,19 @@ describe('WelcomeTab', () => {
   });
 
   // -------------------------------------------------------------------------
-  // Getting Started section
+  // Getting Started section — REMOVED.
+  //
+  // The original section was six non-clickable cards that duplicated the
+  // Quick Actions surface. It had no `action` handler, so clicks did
+  // nothing — pure decoration. Quick Actions (which actually wire up) is
+  // the single source of truth for "things to do from the welcome tab".
   // -------------------------------------------------------------------------
-  describe('Getting Started section', () => {
-    it('renders the Getting Started section heading', () => {
+  describe('Getting Started section (removed)', () => {
+    it('no longer renders a "Get Started" heading', () => {
       renderWithCallbacks();
-
       const headings = container!.querySelectorAll('h1, h2, h3');
       const found = Array.from(headings).some((h) => /Get Started/i.test(h.textContent ?? ''));
-      expect(found).toBe(true);
-    });
-
-    it('renders all six getting started cards', () => {
-      renderWithCallbacks();
-
-      const headings = [
-        'Open a File',
-        'Navigate Projects',
-        'Run Commands',
-        'Version Control',
-        'AI Assistance',
-        'Command Palette',
-      ];
-
-      const allText = container!.textContent ?? '';
-      headings.forEach((title) => {
-        expect(allText).toContain(title);
-      });
-    });
-
-    it('renders descriptive text for each getting started card', () => {
-      renderWithCallbacks();
-
-      const allText = container!.textContent ?? '';
-      expect(allText).toMatch(/Select a file from the file tree or use Ctrl\+P to search/);
-      expect(allText).toMatch(/Use the file tree to browse your workspace/);
-      expect(allText).toMatch(/Use the integrated terminal for shell commands/);
-      expect(allText).toMatch(/View and manage git history and changes/);
-      expect(allText).toMatch(/Chat with AI to get code help and analysis/);
-      expect(allText).toMatch(/Access all commands with Ctrl\+P/);
+      expect(found).toBe(false);
     });
   });
 
@@ -391,7 +365,9 @@ describe('WelcomeTab', () => {
       const allText = container!.textContent ?? '';
       expect(allText).toMatch(/welcome to sprout/i);
       expect(allText).toMatch(/Quick Actions/i);
-      expect(allText).toMatch(/Get Started/i);
+      // "Get Started" section was removed (it was decorative-only and
+      // duplicated Quick Actions); see the "Getting Started section
+      // (removed)" describe block.
       expect(allText).toMatch(/Resources/i);
       expect(allText).toMatch(/Pro tip/);
     });

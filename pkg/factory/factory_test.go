@@ -2,10 +2,14 @@ package factory
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/providerregistry"
 )
 
 // TestTestClient_SendChatRequest tests the TestClient's SendChatRequest method
@@ -557,4 +561,215 @@ func TestCreateProviderClient_GenericProviderTypes(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestEmbeddedOnlyMode verifies that when the registry is disabled (empty base URL),
+// FetchAllProviders returns nil gracefully and the factory still has embedded providers.
+func TestEmbeddedOnlyMode(t *testing.T) {
+	providerregistry.SetBaseURL("")
+	t.Cleanup(func() {
+		providerregistry.SetBaseURL("https://sprout-foundry.github.io/sprout")
+		providerregistry.ClearCache()
+	})
+
+	if providerregistry.IsEnabled() {
+		t.Fatal("registry should be disabled when base URL is empty")
+	}
+
+	results, _ := providerregistry.FetchAllProviders(context.Background())
+	if results != nil {
+		t.Fatal("FetchAllProviders should return nil when registry is disabled")
+	}
+
+	factory := GlobalFactory()
+	providers := factory.GetAvailableProviders()
+	if len(providers) == 0 {
+		t.Fatal("should have embedded providers even in embedded-only mode")
+	}
+
+	t.Logf("Embedded-only mode: %d providers available", len(providers))
+}
+
+// TestRemoteMergeOverEmbedded verifies that remote configs fetched via
+// FetchAllProviders can be upserted into the factory, merging with and
+// overriding embedded configs, while preserving providers that were not
+// touched by the remote fetch.
+func TestRemoteMergeOverEmbedded(t *testing.T) {
+	testProviderJSON := `{
+		"name": "test-provider",
+		"endpoint": "https://api.example.com/v1",
+		"auth": {"type": "bearer", "env_var": "TEST_PROVIDER_KEY"},
+		"defaults": {"model": "test-model-1"},
+		"models": {
+			"default_context_limit": 8192,
+			"default_model": "test-model-1",
+			"available_models": ["test-model-1"]
+		},
+		"retry": {
+			"max_attempts": 3,
+			"base_delay_ms": 1000,
+			"backoff_multiplier": 2,
+			"max_delay_ms": 10000,
+			"retryable_errors": ["502", "503", "504"]
+		},
+		"cost": {
+			"input_token_cost": 0.001,
+			"output_token_cost": 0.002,
+			"currency": "USD"
+		}
+	}`
+
+	openaiJSON := `{
+		"name": "openai",
+		"endpoint": "https://remote-openai-api.example.com/v1",
+		"auth": {"type": "bearer", "env_var": "OPENAI_API_KEY"},
+		"defaults": {"model": "gpt-4o-mini"},
+		"models": {
+			"default_context_limit": 128000,
+			"default_model": "gpt-4o-mini",
+			"available_models": ["gpt-4o-mini", "gpt-4o"],
+			"supports_vision": true
+		},
+		"retry": {
+			"max_attempts": 3,
+			"base_delay_ms": 1000,
+			"backoff_multiplier": 2,
+			"max_delay_ms": 10000,
+			"retryable_errors": ["502", "503", "504"]
+		},
+		"cost": {
+			"input_token_cost": 0.01,
+			"output_token_cost": 0.03,
+			"currency": "USD"
+		}
+	}`
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/providers/index.json":
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"providers":["test-provider","openai"]}`))
+		case "/providers/test-provider.json":
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(testProviderJSON))
+		case "/providers/openai.json":
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(openaiJSON))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	// Save original openai config and available providers before changes
+	factory := GlobalFactory()
+	originalOpenAiConfig, _ := factory.GetProviderConfig("openai")
+	originalProviders := factory.GetAvailableProviders()
+
+	// Prepare registry for test server
+	providerregistry.ClearCache()
+	providerregistry.SetBaseURL(server.URL)
+	providerregistry.SetHTTPTimeout(5 * time.Second)
+	t.Cleanup(func() {
+		providerregistry.SetBaseURL("https://sprout-foundry.github.io/sprout")
+		providerregistry.ClearCache()
+	})
+
+	// Fetch all providers from the test server
+	results, err := providerregistry.FetchAllProviders(context.Background())
+	if err != nil {
+		t.Fatalf("FetchAllProviders failed: %v", err)
+	}
+	if results == nil {
+		t.Fatal("FetchAllProviders returned nil; test server should have returned results")
+	}
+
+	// Upsert each fetched config into the factory
+	for name, cfg := range results {
+		providerCfg := cfg.ToProviderConfig()
+		if providerCfg == nil {
+			continue
+		}
+		if err := factory.UpsertConfig(name, providerCfg); err != nil {
+			t.Fatalf("UpsertConfig(%q) failed: %v", name, err)
+		}
+	}
+
+	// Verify test-provider appears in available providers
+	providers := factory.GetAvailableProviders()
+	found := false
+	for _, p := range providers {
+		if p == "test-provider" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("test-provider should appear in GetAvailableProviders() after upsert")
+	}
+
+	// Verify openai endpoint was overridden by remote config
+	openAiConfig, err := factory.GetProviderConfig("openai")
+	if err != nil {
+		t.Fatalf("GetProviderConfig(\"openai\") failed: %v", err)
+	}
+	if openAiConfig.Endpoint != "https://remote-openai-api.example.com/v1" {
+		t.Errorf("Expected openai endpoint 'https://remote-openai-api.example.com/v1', got %q", openAiConfig.Endpoint)
+	}
+
+	// Verify cerebras still exists unchanged (was not touched by remote fetch)
+	cerebrasConfig, err := factory.GetProviderConfig("cerebras")
+	if err != nil {
+		t.Fatalf("GetProviderConfig(\"cerebras\") failed: cerebras should still exist: %v", err)
+	}
+	if cerebrasConfig == nil {
+		t.Fatal("cerebras config should not be nil")
+	}
+
+	// Restore openai's original config
+	if originalOpenAiConfig != nil {
+		if err := factory.UpsertConfig("openai", originalOpenAiConfig); err != nil {
+			t.Logf("Failed to restore openai config: %v", err)
+		}
+	}
+
+	t.Logf("Remote merge test passed: %d original providers, test-provider added, openai overridden, cerebras preserved", len(originalProviders))
+}
+
+// TestOfflineGracefulDegradation verifies that when the registry URL is
+// unreachable, FetchAllProviders returns nil, nil (graceful degradation)
+// and the factory's embedded providers remain available.
+func TestOfflineGracefulDegradation(t *testing.T) {
+	// Save available providers before test
+	factory := GlobalFactory()
+	originalProviders := factory.GetAvailableProviders()
+
+	// Point registry at an unreachable host with a short timeout
+	providerregistry.SetBaseURL("http://localhost.invalid:9999")
+	providerregistry.SetHTTPTimeout(100 * time.Millisecond)
+	providerregistry.ClearCache()
+	t.Cleanup(func() {
+		providerregistry.SetBaseURL("https://sprout-foundry.github.io/sprout")
+		providerregistry.ClearCache()
+	})
+
+	// FetchAllProviders should return nil, nil (graceful degradation)
+	results, err := providerregistry.FetchAllProviders(context.Background())
+	if err != nil {
+		t.Fatalf("FetchAllProviders should not return an error for unreachable registry, got: %v", err)
+	}
+	if results != nil {
+		t.Fatalf("FetchAllProviders should return nil for unreachable registry, got %d results", len(results))
+	}
+
+	// Available providers should still have the embedded ones
+	currentProviders := factory.GetAvailableProviders()
+	if len(currentProviders) != len(originalProviders) {
+		t.Errorf("Expected %d providers, got %d after offline degradation", len(originalProviders), len(currentProviders))
+	}
+
+	t.Logf("Offline degradation test passed: %d providers still available", len(currentProviders))
 }

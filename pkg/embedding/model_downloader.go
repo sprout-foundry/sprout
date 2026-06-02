@@ -34,6 +34,9 @@ type ModelConfig struct {
 	Dims int
 }
 
+// defaultDownloadTimeout is the HTTP client timeout for model downloads.
+const defaultDownloadTimeout = 5 * time.Minute
+
 // ModelDownloader downloads ONNX models and tokenizers from HuggingFace.
 type ModelDownloader struct {
 	modelDir string // ~/.config/sprout/models/
@@ -44,7 +47,7 @@ type ModelDownloader struct {
 func NewModelDownloader() *ModelDownloader {
 	return &ModelDownloader{
 		modelDir: DefaultModelDir(),
-		client:   &http.Client{Timeout: 5 * time.Minute},
+		client:   &http.Client{Timeout: defaultDownloadTimeout},
 	}
 }
 
@@ -52,7 +55,7 @@ func NewModelDownloader() *ModelDownloader {
 func NewModelDownloaderWithDir(modelDir string) *ModelDownloader {
 	return &ModelDownloader{
 		modelDir: modelDir,
-		client:   &http.Client{Timeout: 5 * time.Minute},
+		client:   &http.Client{Timeout: defaultDownloadTimeout},
 	}
 }
 

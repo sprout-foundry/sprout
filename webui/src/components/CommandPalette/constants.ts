@@ -1,5 +1,5 @@
 import { supportsLocalTerminal } from '../../config/mode';
-import type { PaletteMode, CommandDef, ResultKind } from './types';
+import type { CommandDef } from './CommandPalette';
 
 // ── Command definitions ────────────────────────────────────────────────────
 
@@ -72,20 +72,7 @@ export const SKIP_DIRECTORIES = new Set([
 export const MAX_DIRECTORY_DEPTH = 8;
 export const MAX_SYMBOL_RESULTS = 100;
 
-// ── Mode tab definitions ─────────────────────────────────────────────────
-
-export const MODE_TABS: { mode: PaletteMode; label: string }[] = [
-  { mode: 'all', label: 'All' },
-  { mode: 'files', label: 'Files' },
-  { mode: 'symbols', label: 'Symbols' },
-  { mode: 'commands', label: 'Commands' },
-];
-
 // ── Prefix-based auto-detection ──────────────────────────────────────────
 
 export const COMMAND_PREFIX = '>';
 export const SYMBOL_PREFIXES = ['@', '#'];
-
-// ── Navigable result kinds (skip headers in arrow-key nav) ──────────────
-
-export const NAVIGABLE_KINDS = new Set<ResultKind>(['command', 'file', 'symbol']);

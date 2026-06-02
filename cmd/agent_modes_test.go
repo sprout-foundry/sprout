@@ -415,6 +415,55 @@ func TestFormatSubagentDoneLine(t *testing.T) {
 	}
 }
 
+// TestFormatTokensShort covers the compact token formatter used in
+// spawn / tool / progress lines where horizontal space is at a premium.
+func TestFormatTokensShort(t *testing.T) {
+	cases := []struct {
+		in   int
+		want string
+	}{
+		{0, "0"},
+		{42, "42"},
+		{999, "999"},
+		{1000, "1.0k"},
+		{12345, "12.3k"},
+		{128000, "128.0k"},
+		{1234567, "1.2M"},
+	}
+	for _, c := range cases {
+		got := formatTokensShort(c.in)
+		if got != c.want {
+			t.Errorf("formatTokensShort(%d) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+// TestFormatSubagentCtxSuffix pins the live-context hint appended to
+// depth>0 tool-start lines. When monitorProgress has reported a
+// ctxUsed/ctxMax pair the suffix shows both; otherwise it falls back
+// to total tokens; otherwise empty so a not-yet-warmed subagent's
+// tool lines stay clean.
+func TestFormatSubagentCtxSuffix(t *testing.T) {
+	cases := []struct {
+		name string
+		snap subagentProgressSnapshot
+		want string
+	}{
+		{"with ctx pair", subagentProgressSnapshot{ctxUsed: 12300, ctxMax: 128000, tokensUsed: 12300}, " · 12.3k/128.0k ctx"},
+		{"only total tokens", subagentProgressSnapshot{tokensUsed: 500}, " · 500 tok"},
+		{"empty snapshot", subagentProgressSnapshot{}, ""},
+		{"ctx max known but used not yet", subagentProgressSnapshot{ctxMax: 128000}, ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := formatSubagentCtxSuffix(c.snap)
+			if got != c.want {
+				t.Errorf("formatSubagentCtxSuffix(%+v) = %q, want %q", c.snap, got, c.want)
+			}
+		})
+	}
+}
+
 // =============================================================================
 // SP-051: depth-aware tool timeline rendering
 // =============================================================================

@@ -98,6 +98,69 @@ export interface EditorSettingsCompartments {
 }
 
 /**
+ * Internal: persisted boolean setting with debounced toggle. Each editor
+ * setting (word wrap, minimap, relative line numbers, inlay hints, signature
+ * help) used to inline ~25 lines of state + ref + sync effect + toggle +
+ * localStorage write. Five identical blocks collapsed to one.
+ *
+ * The ref mirror is necessary because the toggle is bound to global event
+ * listeners (`useEditorEvents`) whose callbacks must read the *current*
+ * value, not the value captured when the effect first registered.
+ */
+function useBooleanSetting(
+  storageKey: string,
+  defaultValue: boolean,
+): {
+  value: boolean;
+  ref: React.MutableRefObject<boolean>;
+  toggle: () => void;
+  set: (v: boolean) => void;
+} {
+  const [value, setValue] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem(storageKey);
+      return stored !== null ? stored === 'true' : defaultValue;
+    } catch (err) {
+      debugLog(`Failed to read ${storageKey} from localStorage:`, err);
+      return defaultValue;
+    }
+  });
+  const ref = useRef(value);
+  useEffect(() => {
+    ref.current = value;
+  }, [value]);
+  const lastToggleRef = useRef(0);
+  const toggle = useCallback(() => {
+    const now = Date.now();
+    // Coalesce double-fires within 100ms. Some hotkey schemes (omnibox →
+    // event → keybinding) can trigger the same toggle twice within a tick.
+    if (now - lastToggleRef.current < 100) return;
+    lastToggleRef.current = now;
+    const next = !ref.current;
+    ref.current = next;
+    setValue(next);
+    try {
+      localStorage.setItem(storageKey, String(next));
+    } catch (err) {
+      debugLog(`[toggle ${storageKey}] localStorage persist failed:`, err);
+    }
+  }, [storageKey]);
+  const set = useCallback(
+    (v: boolean) => {
+      ref.current = v;
+      setValue(v);
+      try {
+        localStorage.setItem(storageKey, String(v));
+      } catch (err) {
+        debugLog(`[set ${storageKey}] localStorage persist failed:`, err);
+      }
+    },
+    [storageKey],
+  );
+  return { value, ref, toggle, set };
+}
+
+/**
  * Hook that manages all editor settings state and compartment reconfiguration.
  *
  * @param compartments - CodeMirror compartments from useEditorExtensions
@@ -143,36 +206,6 @@ export function useEditorSettings(
     }
   };
 
-  const getStoredRelativeLineNumbers = (): boolean => {
-    try {
-      const stored = localStorage.getItem('editor:relative-line-numbers-enabled');
-      return stored !== null ? stored === 'true' : false;
-    } catch (err) {
-      debugLog('Failed to read relative line numbers setting from localStorage:', err);
-      return false;
-    }
-  };
-
-  const getStoredWordWrapEnabled = (): boolean => {
-    try {
-      const stored = localStorage.getItem('editor:word-wrap-enabled');
-      return stored !== null ? stored === 'true' : true;
-    } catch (err) {
-      debugLog('Failed to read word wrap setting from localStorage:', err);
-      return true;
-    }
-  };
-
-  const getStoredMinimapEnabled = (): boolean => {
-    try {
-      const stored = localStorage.getItem('editor:minimap-enabled');
-      return stored !== null ? stored === 'true' : true;
-    } catch (err) {
-      debugLog('Failed to read minimap setting from localStorage:', err);
-      return true;
-    }
-  };
-
   const getStoredWhitespaceRenderingMode = (): WhitespaceRenderingMode => {
     try {
       const stored = localStorage.getItem('editor:whitespace-rendering-mode');
@@ -186,35 +219,28 @@ export function useEditorSettings(
     }
   };
 
-  const getStoredInlayHintsEnabled = (): boolean => {
-    try {
-      const stored = localStorage.getItem('editor:inlay-hints-enabled');
-      return stored !== null ? stored === 'true' : true;
-    } catch (err) {
-      debugLog('Failed to read inlay hints setting from localStorage:', err);
-      return true;
-    }
-  };
-
-  const getStoredSignatureHelpEnabled = (): boolean => {
-    try {
-      const stored = localStorage.getItem('editor:signature-help-enabled');
-      return stored !== null ? stored === 'true' : true;
-    } catch (err) {
-      debugLog('Failed to read signature help setting from localStorage:', err);
-      return true;
-    }
-  };
-
   // ---------------------------------------------------------------------------
-  // Settings state
+  // Settings state — boolean toggles delegated to useBooleanSetting (one
+  // helper instead of 5 identical state + ref + sync effect + toggle blocks).
   // ---------------------------------------------------------------------------
 
-  const [wordWrapEnabled, setWordWrapEnabled] = useState<boolean>(getStoredWordWrapEnabled);
+  const wordWrap = useBooleanSetting('editor:word-wrap-enabled', true);
+  const minimap = useBooleanSetting('editor:minimap-enabled', true);
+  const relativeLineNumbers = useBooleanSetting('editor:relative-line-numbers-enabled', false);
+  const inlayHints = useBooleanSetting('editor:inlay-hints-enabled', true);
+  const signatureHelp = useBooleanSetting('editor:signature-help-enabled', true);
 
-  const [relativeLineNumbersEnabled, setRelativeLineNumbersEnabled] = useState<boolean>(getStoredRelativeLineNumbers);
-
-  const [minimapEnabled, setMinimapEnabled] = useState<boolean>(getStoredMinimapEnabled);
+  // Re-export under the historical names so callers don't need to change.
+  const wordWrapEnabled = wordWrap.value;
+  const wordWrapRef = wordWrap.ref;
+  const minimapEnabled = minimap.value;
+  const minimapEnabledRef = minimap.ref;
+  const relativeLineNumbersEnabled = relativeLineNumbers.value;
+  const relativeLineNumbersEnabledRef = relativeLineNumbers.ref;
+  const inlayHintsEnabled = inlayHints.value;
+  const inlayHintsEnabledRef = inlayHints.ref;
+  const signatureHelpEnabled = signatureHelp.value;
+  const signatureHelpEnabledRef = signatureHelp.ref;
 
   const [editorFontSize, setEditorFontSize] = useState<number>(getStoredFontSize);
 
@@ -233,55 +259,15 @@ export function useEditorSettings(
 
   const [lineEnding, setLineEnding] = useState<LineEnding>('LF');
 
-  const [inlayHintsEnabled, setInlayHintsEnabled] = useState<boolean>(getStoredInlayHintsEnabled);
-  const [signatureHelpEnabled, setSignatureHelpEnabled] = useState<boolean>(getStoredSignatureHelpEnabled);
-
-  // ---------------------------------------------------------------------------
-  // Ref mirrors for dedup and stale closure avoidance
-  // ---------------------------------------------------------------------------
-
-  const wordWrapRef = useRef(wordWrapEnabled);
-  const lastWrapToggleRef = useRef(0);
-  const minimapEnabledRef = useRef(minimapEnabled);
-  const lastMinimapToggleRef = useRef(0);
-  const relativeLineNumbersEnabledRef = useRef(relativeLineNumbersEnabled);
-  const lastRelativeLineNumbersToggleRef = useRef(0);
+  // Whitespace rendering is tri-state (none/boundary/all), so it can't use
+  // useBooleanSetting. The pattern is otherwise identical.
   const whitespaceRenderingModeRef = useRef<WhitespaceRenderingMode>(getStoredWhitespaceRenderingMode());
   const lastWhitespaceToggleRef = useRef(0);
   const indentManuallySetRef = useRef(false);
-  const inlayHintsEnabledRef = useRef(inlayHintsEnabled);
-  const lastInlayHintsToggleRef = useRef(0);
-  const signatureHelpEnabledRef = useRef(signatureHelpEnabled);
-  const lastSignatureHelpToggleRef = useRef(0);
 
-  // ---------------------------------------------------------------------------
-  // Ref sync effects
-  // ---------------------------------------------------------------------------
-
-  useEffect(() => {
-    wordWrapRef.current = wordWrapEnabled;
-  }, [wordWrapEnabled]);
-
-  useEffect(() => {
-    minimapEnabledRef.current = minimapEnabled;
-  }, [minimapEnabled]);
-
-  useEffect(() => {
-    relativeLineNumbersEnabledRef.current = relativeLineNumbersEnabled;
-  }, [relativeLineNumbersEnabled]);
-
-  // Keep the ref in sync whenever the state value changes from context
   useEffect(() => {
     indentManuallySetRef.current = indentManuallySet;
   }, [indentManuallySet]);
-
-  useEffect(() => {
-    inlayHintsEnabledRef.current = inlayHintsEnabled;
-  }, [inlayHintsEnabled]);
-
-  useEffect(() => {
-    signatureHelpEnabledRef.current = signatureHelpEnabled;
-  }, [signatureHelpEnabled]);
 
   // ---------------------------------------------------------------------------
   // Orphaned localStorage cleanup
@@ -389,50 +375,13 @@ export function useEditorSettings(
   }, []);
 
   // ---------------------------------------------------------------------------
-  // Toggle callbacks (these need the view ref, so they accept it as parameter)
+  // Toggle callbacks — boolean toggles delegate to useBooleanSetting; only
+  // the tri-state whitespace cycle needs custom logic.
   // ---------------------------------------------------------------------------
 
-  const onToggleWordWrap = useCallback(() => {
-    const now = Date.now();
-    if (now - lastWrapToggleRef.current < 100) return;
-    lastWrapToggleRef.current = now;
-    const next = !wordWrapRef.current;
-    wordWrapRef.current = next;
-    setWordWrapEnabled(next);
-    try {
-      localStorage.setItem('editor:word-wrap-enabled', String(next));
-    } catch (err) {
-      debugLog('[onToggleWordWrap] localStorage persist failed:', err);
-    }
-  }, []);
-
-  const onToggleMinimap = useCallback(() => {
-    const now = Date.now();
-    if (now - lastMinimapToggleRef.current < 100) return;
-    lastMinimapToggleRef.current = now;
-    const next = !minimapEnabledRef.current;
-    minimapEnabledRef.current = next;
-    setMinimapEnabled(next);
-    try {
-      localStorage.setItem('editor:minimap-enabled', String(next));
-    } catch (err) {
-      debugLog('[onToggleMinimap] localStorage persist failed:', err);
-    }
-  }, []);
-
-  const onToggleRelativeLineNumbers = useCallback(() => {
-    const now = Date.now();
-    if (now - lastRelativeLineNumbersToggleRef.current < 100) return;
-    lastRelativeLineNumbersToggleRef.current = now;
-    const next = !relativeLineNumbersEnabledRef.current;
-    relativeLineNumbersEnabledRef.current = next;
-    setRelativeLineNumbersEnabled(next);
-    try {
-      localStorage.setItem('editor:relative-line-numbers-enabled', String(next));
-    } catch (err) {
-      debugLog('[onToggleRelativeLineNumbers] localStorage persist failed:', err);
-    }
-  }, []);
+  const onToggleWordWrap = wordWrap.toggle;
+  const onToggleMinimap = minimap.toggle;
+  const onToggleRelativeLineNumbers = relativeLineNumbers.toggle;
 
   const onCycleWhitespaceRendering = useCallback((): WhitespaceRenderingMode => {
     const now = Date.now();
@@ -453,33 +402,8 @@ export function useEditorSettings(
     return next;
   }, []);
 
-  const onToggleInlayHints = useCallback(() => {
-    const now = Date.now();
-    if (now - lastInlayHintsToggleRef.current < 100) return;
-    lastInlayHintsToggleRef.current = now;
-    const next = !inlayHintsEnabledRef.current;
-    inlayHintsEnabledRef.current = next;
-    setInlayHintsEnabled(next);
-    try {
-      localStorage.setItem('editor:inlay-hints-enabled', String(next));
-    } catch (err) {
-      debugLog('[onToggleInlayHints] localStorage persist failed:', err);
-    }
-  }, []);
-
-  const onToggleSignatureHelp = useCallback(() => {
-    const now = Date.now();
-    if (now - lastSignatureHelpToggleRef.current < 100) return;
-    lastSignatureHelpToggleRef.current = now;
-    const next = !signatureHelpEnabledRef.current;
-    signatureHelpEnabledRef.current = next;
-    setSignatureHelpEnabled(next);
-    try {
-      localStorage.setItem('editor:signature-help-enabled', String(next));
-    } catch (err) {
-      debugLog('[onToggleSignatureHelp] localStorage persist failed:', err);
-    }
-  }, []);
+  const onToggleInlayHints = inlayHints.toggle;
+  const onToggleSignatureHelp = signatureHelp.toggle;
 
   return {
     // State

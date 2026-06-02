@@ -75,6 +75,17 @@ function CommandInput({
 }: CommandInputProps): JSX.Element {
   const log = useLog();
   const [draftValue, setDraftValue] = useState(value);
+  // Tracks the most recent value we pushed UP to the parent via onChange.
+  // The sync-from-parent effect below uses this to ignore "echoes": when
+  // we call setDraftValue(x) and onChange(x) in the same tick, React
+  // may run the effect with the OLD parent value still in props before
+  // the parent's setState lands. The previous `value.startsWith(draftValue)`
+  // reconciliation then read "parent's stale value starts with our new
+  // shorter draftValue" as "parent injected more text" and reinstated
+  // the just-deleted character — backspace appeared not to work at all.
+  // By remembering what we sent, we can tell "parent echoing our own
+  // update" apart from "parent independently changed the value".
+  const lastSentValueRef = useRef(value);
   const [history, setHistory] = useState<CommandHistoryState>({
     commands: [],
     index: -1,
@@ -107,18 +118,45 @@ function CommandInput({
   const uploadInProgressRef = useRef<Set<string>>(new Set());
   const isComposingRef = useRef(false);
 
+  // Sync from parent's `value` prop to local `draftValue`. The local
+  // draft is authoritative while the user has focus — we only adopt the
+  // parent's value when:
+  //   1. The input isn't focused (parent rehydrating after a send,
+  //      session restore, etc.), OR
+  //   2. The parent explicitly cleared to "" (post-send reset).
+  //
+  // Critically, we ignore the parent's *echo* of an update we just
+  // pushed via onChange. Without that guard the following races broke
+  // the input completely:
+  //   - Backspace: setDraftValue("h") + onChange("h") fire, the effect
+  //     runs before the parent re-renders, sees value still "hi" and
+  //     "starts with" draftValue, and reinstates the deleted char.
+  //   - Fast typing: each character chases the parent's stale value;
+  //     keystrokes get "eaten" when the effect overwrites draftValue
+  //     with the previous value.
+  //   - Slash commands: typing "/foo" while the parent is mid-update
+  //     could replace the in-flight draft with the parent's lagging
+  //     view, dropping the "/" or its tail and breaking autocomplete.
   useEffect(() => {
     if (value === draftValue) {
       return;
     }
-
+    // Parent is echoing the update we just sent — ignore. The local
+    // draft already has the right value; waiting for the parent to
+    // catch up is a no-op.
+    if (value === lastSentValueRef.current) {
+      return;
+    }
     const isFocused = document.activeElement === inputRef.current;
     if (!isFocused) {
       setDraftValue(value);
       return;
     }
-
-    if (value === '' || value.startsWith(draftValue)) {
+    // Focused: only accept an explicit clear-to-empty (post-send reset).
+    // Any other "parent overrides the live draft" path needs to go
+    // through a dedicated imperative API; silently overwriting what the
+    // user is typing produces the bugs above.
+    if (value === '') {
       setDraftValue(value);
     }
   }, [value, draftValue]);
@@ -305,6 +343,11 @@ function CommandInput({
         selectionRef.current = selection;
       }
       setDraftValue(nextValue);
+      // Record what we're about to send so the sync-from-parent effect
+      // can ignore the parent's echo. Must be set BEFORE onChange fires
+      // — onChange may be synchronous and the effect can run before
+      // this line if the ref write is deferred.
+      lastSentValueRef.current = nextValue;
       onChange?.(nextValue);
     },
     [onChange],

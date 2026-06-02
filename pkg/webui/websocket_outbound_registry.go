@@ -35,7 +35,21 @@ var allowedOutboundMessageTypes = map[string]struct{}{
 	"pong":                       {},
 	"heartbeat_ack":              {},
 	"stats_update":               {},
-	"session_restored":           {},      // terminal reattach
+	// Terminal WebSocket protocol (pkg/webui/terminal_websocket.go).
+	// All emitted by the terminal handler and consumed by the React
+	// TerminalPane. Forgetting any of these here strands the terminal
+	// in "Loading terminal..." or makes it look frozen — the frontend
+	// never receives the bytes it's waiting on. Keep this block in
+	// sync with the `case` branches in the client-side onmessage
+	// handler (services/terminalWebSocket.ts).
+	"session_created":            {},
+	"session_restored":           {},
+	"output":                     {},
+	"error_output":               {},
+	"pty_exit":                   {},
+	"resize_ack":                 {},
+	"focus_ack":                  {},
+	"blur_ack":                   {},
 	wsMessageTypeChatRunRestored: {},      // SP-034-2d
 	"connection_state":           {},
 	"session_conflict":           {},      // SP-046: sent to new device on conflict

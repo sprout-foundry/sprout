@@ -1094,42 +1094,48 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 				router.SetExternalWriteHook(turnRenderer.OnExternalWrite)
 			}
 
-			// SP-048-1b: spinner during the gap between submit and first
-			// stream chunk (or first tool event). The streaming callback
-			// registered in SetupAgentEvents stops it on first chunk; we
-			// also Stop() defensively after ProcessQuery returns.
-			indicator.Start(fmt.Sprintf("Thinking · %s", chatAgent.GetModel()))
-
-			// Execute the turn inside a func so we can defer EndTurn.
-			// This ensures the steer reader is always stopped even if
-			// ProcessQuery panics, preventing the terminal from being
-			// left in raw/cbreak mode.
-			func() {
-				// SP-055: turn the steer panel on for the duration of the
-				// ProcessQuery call. The coordinator (constructed once at
-				// session start) owns the SteerInputReader and the callback
-				// wiring to InjectInputContext / TriggerInterrupt.
-				steerCoord.StartTurn()
-				defer steerCoord.EndTurn()
-
-				// Try zsh command detection first (fast path)
-				if executed, err := TryZshCommandExecution(ctx, chatAgent, query); err != nil {
-					indicator.Stop()
+			// SP-048-1b: Try fast paths BEFORE starting the "Thinking"
+			// spinner so the user never sees the LLM spinner for commands
+			// that execute directly without LLM involvement.
+			var fastPathExecuted bool
+			// Try zsh command detection first (fast path)
+			if executed, err := TryZshCommandExecution(ctx, chatAgent, query); err != nil {
+				fmt.Fprint(os.Stderr, console.FormatErrorBlock(console.GlyphError.Prefix()+"Error", err))
+			} else if executed {
+				fastPathExecuted = true
+			} else {
+				// Zsh detection didn't trigger, try LLM-based detection
+				if executed, err := TryDirectExecution(ctx, chatAgent, query); err != nil {
 					fmt.Fprint(os.Stderr, console.FormatErrorBlock(console.GlyphError.Prefix()+"Error", err))
-				} else if !executed {
-					// Zsh detection didn't trigger, try LLM-based detection
-					if executed, err := TryDirectExecution(ctx, chatAgent, query); err != nil {
+				} else if executed {
+					fastPathExecuted = true
+				}
+			}
+
+			// Only start the spinner (and the full agent turn) when no fast
+			// path handled the query.
+			if !fastPathExecuted {
+				indicator.Start(fmt.Sprintf("Thinking · %s", chatAgent.GetModel()))
+
+				// Execute the turn inside a func so we can defer EndTurn.
+				// This ensures the steer reader is always stopped even if
+				// ProcessQuery panics, preventing the terminal from being
+				// left in raw/cbreak mode.
+				func() {
+					// SP-055: turn the steer panel on for the duration of the
+					// ProcessQuery call. The coordinator (constructed once at
+					// session start) owns the SteerInputReader and the callback
+					// wiring to InjectInputContext / TriggerInterrupt.
+					steerCoord.StartTurn()
+					defer steerCoord.EndTurn()
+
+					// No fast path triggered, process normally via LLM
+					if err := ProcessQuery(ctx, chatAgent, eventBus, query); err != nil {
 						indicator.Stop()
 						fmt.Fprint(os.Stderr, console.FormatErrorBlock(console.GlyphError.Prefix()+"Error", err))
-					} else if !executed {
-						// Neither fast path triggered, process normally
-						if err := ProcessQuery(ctx, chatAgent, eventBus, query); err != nil {
-							indicator.Stop()
-							fmt.Fprint(os.Stderr, console.FormatErrorBlock(console.GlyphError.Prefix()+"Error", err))
-						}
 					}
-				}
-			}()
+				}()
+			} // end if !fastPathExecuted
 
 			// Drain any unsent steer text into the InputReader so it
 			// appears pre-filled at the next prompt. This prevents the

@@ -49,9 +49,9 @@ func TestGetProviderDisplayName(t *testing.T) {
 			want:     "Ollama Local",
 		},
 		{
-			name:     "Ollama Turbo",
-			provider: api.OllamaTurboClientType,
-			want:     "Ollama Turbo",
+			name:     "Ollama Cloud",
+			provider: api.OllamaCloudClientType,
+			want:     "Ollama Cloud",
 		},
 		{
 			name:     "LM Studio",

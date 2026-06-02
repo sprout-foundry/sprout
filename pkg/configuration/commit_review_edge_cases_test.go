@@ -141,10 +141,10 @@ func TestReviewProviderEdgeCases(t *testing.T) {
 			config: &Config{
 				ReviewProvider:   "",
 				LastUsedProvider: "",
-				ProviderPriority:  []string{"ollama-turbo", "openrouter"},
-				ProviderModels:   map[string]string{"ollama-turbo": "deepseek-v3.1:671b", "openrouter": "openai/gpt-5"},
+				ProviderPriority:  []string{"ollama-cloud", "openrouter"},
+				ProviderModels:   map[string]string{"ollama-cloud": "deepseek-v3.1:671b", "openrouter": "openai/gpt-5"},
 			},
-			expectedProvider: "ollama-turbo",
+			expectedProvider: "ollama-cloud",
 			expectedModel:    "deepseek-v3.1:671b", // Model is fetched from ProviderModels
 		},
 	}
@@ -244,7 +244,7 @@ func TestCommitReviewConfigModelProviderMismatch(t *testing.T) {
 		CommitProvider:  "openai",
 		CommitModel:     "gpt-4", // Model matches provider
 		ReviewProvider:  "ollama-local",
-		ReviewModel:     "deepseek-v3", // This is an ollama-turbo model, not ollama-local
+		ReviewModel:     "deepseek-v3", // This is an ollama-cloud model, not ollama-local
 		ProviderModels: map[string]string{
 			"openai":       "gpt-4",
 			"ollama-local": "qwen3-coder:30b",

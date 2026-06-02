@@ -240,7 +240,7 @@ func TestProviderAdapterRateLimiter_ClientTypeMapping(t *testing.T) {
 		{DeepInfraClientType, 1.0, 5},
 		{DeepSeekClientType, 0.5, 3},
 		{OllamaLocalClientType, 10.0, 20},
-		{OllamaTurboClientType, 10.0, 20},
+		{OllamaCloudClientType, 10.0, 20},
 		{ZAIClientType, 2.0, 10},
 		{ChutesClientType, 2.0, 10},
 		{LMStudioClientType, 10.0, 20},

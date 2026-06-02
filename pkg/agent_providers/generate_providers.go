@@ -294,8 +294,8 @@ func displayName(name string) string {
 		return "Ollama (Local)"
 	case "ollama-local":
 		return "Ollama (Local)"
-	case "ollama-turbo":
-		return "Ollama (Turbo)"
+	case "ollama-cloud":
+		return "Ollama (Cloud)"
 	case "chutes":
 		return "Chutes"
 	case "openrouter":

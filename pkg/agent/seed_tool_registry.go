@@ -526,7 +526,7 @@ func isLocalProvider(agent *Agent) bool {
 	switch ct {
 	case api.OllamaLocalClientType,
 		api.OllamaClientType,      // "ollama" alias for ollama-local
-		api.OllamaTurboClientType,
+		api.OllamaCloudClientType,
 		api.LMStudioClientType,
 		api.TestClientType,
 		api.EditorClientType:

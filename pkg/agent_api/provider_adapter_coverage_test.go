@@ -175,11 +175,11 @@ func TestProviderAdapter_GetEndpoint_Ollama(t *testing.T) {
 	assert.Equal(t, "http://localhost:11434/v1/chat/completions", adapter.GetEndpoint())
 }
 
-func TestProviderAdapter_GetEndpoint_OllamaTurbo(t *testing.T) {
-	utils.RemoveProviderRateLimiter("ollama-turbo")
-	defer utils.RemoveProviderRateLimiter("ollama-turbo")
-	mock := &mockClient{provider: "ollama-turbo"}
-	adapter := NewProviderAdapter(OllamaTurboClientType, mock)
+func TestProviderAdapter_GetEndpoint_OllamaCloud(t *testing.T) {
+	utils.RemoveProviderRateLimiter("ollama-cloud")
+	defer utils.RemoveProviderRateLimiter("ollama-cloud")
+	mock := &mockClient{provider: "ollama-cloud"}
+	adapter := NewProviderAdapter(OllamaCloudClientType, mock)
 	assert.Equal(t, "https://turbo.ollama.ai/v1/chat/completions", adapter.GetEndpoint())
 }
 

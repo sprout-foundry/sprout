@@ -295,28 +295,38 @@ describe('WelcomeTab', () => {
       expect(window.open).toHaveBeenCalledWith('https://sprout.dev/docs', '_blank');
     });
 
-    it('"Settings" button calls onOpenCommandPalette when provided', () => {
-      const callbacks = renderWithCallbacks();
-
+    it('"Settings" button dispatches sprout:open-settings-focus when no onOpenSettings prop', () => {
+      renderWithCallbacks();
       const settingsButton = findResourceCardByText('Settings');
       expect(settingsButton).not.toBeNull();
 
+      const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
       act(() => {
         settingsButton!.click();
       });
-      expect(callbacks.onOpenCommandPalette).toHaveBeenCalledTimes(1);
+      // The Settings card used to call onOpenCommandPalette (a stub); now it
+      // actually opens settings via the global event the sidebar listens for.
+      const fired = dispatchSpy.mock.calls.some(
+        (args) => (args[0] as Event).type === 'sprout:open-settings-focus',
+      );
+      expect(fired).toBe(true);
+      dispatchSpy.mockRestore();
     });
 
-    it('"Keyboard Shortcuts" button calls onOpenCommandPalette when provided', () => {
-      const callbacks = renderWithCallbacks();
-
+    it('"Keyboard Shortcuts" button dispatches sprout:open-hotkeys-config when no prop', () => {
+      renderWithCallbacks();
       const shortcutsButton = findResourceCardByText('Keyboard Shortcuts');
       expect(shortcutsButton).not.toBeNull();
 
+      const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
       act(() => {
         shortcutsButton!.click();
       });
-      expect(callbacks.onOpenCommandPalette).toHaveBeenCalledTimes(1);
+      const fired = dispatchSpy.mock.calls.some(
+        (args) => (args[0] as Event).type === 'sprout:open-hotkeys-config',
+      );
+      expect(fired).toBe(true);
+      dispatchSpy.mockRestore();
     });
 
     it('resource buttons with onOpenCommandPalette do not throw when callback is undefined', () => {

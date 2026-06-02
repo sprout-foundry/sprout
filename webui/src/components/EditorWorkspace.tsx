@@ -33,12 +33,19 @@ export interface EditorWorkspaceProps {
   handleOutlineNavigateToSymbol: (line: number) => void;
 }
 
-// Cache pane flex styles by weight to avoid recreating CSSProperties objects
+// Cache pane flex styles by weight. Bounded so that drag-resizing (which
+// produces a unique float weight per pixel-delta) doesn't grow the map
+// without limit. When the cap is hit we drop the oldest entries.
+const PANE_FLEX_CACHE_CAP = 64;
 const paneFlexCache = new Map<number, CSSProperties>();
 
 const toPaneFlex = (weight: number): CSSProperties => {
   const cached = paneFlexCache.get(weight);
   if (cached) return cached;
+  if (paneFlexCache.size >= PANE_FLEX_CACHE_CAP) {
+    const oldestKey = paneFlexCache.keys().next().value;
+    if (oldestKey !== undefined) paneFlexCache.delete(oldestKey);
+  }
   const result: CSSProperties = {
     flexGrow: weight,
     flexShrink: 1,
@@ -136,22 +143,38 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   const dragStartSizeRef = useRef<Map<string, number>>(new Map());
   const isPaneDraggingRef = useRef<Set<string>>(new Set());
 
-  // Refs for values read inside memoized render helpers to keep dependency arrays stable
+  // Refs for values read inside memoized render helpers to keep dependency
+  // arrays stable. Writes happen in useEffect (not during render) so
+  // concurrent renders see consistent values.
   const activePaneIdRef = useRef(activePaneId);
-  activePaneIdRef.current = activePaneId;
-
   const panesRef = useRef(panes);
-  panesRef.current = panes;
   const perChatCacheRef = useRef(perChatCache);
-  perChatCacheRef.current = perChatCache;
   const activeChatIdRef = useRef(activeChatId);
-  activeChatIdRef.current = activeChatId;
   const chatPropsRef = useRef(chatProps);
-  chatPropsRef.current = chatProps;
   const reviewPropsRef = useRef(reviewProps);
-  reviewPropsRef.current = reviewProps;
   const diffStateRef = useRef(diffState);
-  diffStateRef.current = diffState;
+
+  React.useEffect(() => {
+    activePaneIdRef.current = activePaneId;
+  }, [activePaneId]);
+  React.useEffect(() => {
+    panesRef.current = panes;
+  }, [panes]);
+  React.useEffect(() => {
+    perChatCacheRef.current = perChatCache;
+  }, [perChatCache]);
+  React.useEffect(() => {
+    activeChatIdRef.current = activeChatId;
+  }, [activeChatId]);
+  React.useEffect(() => {
+    chatPropsRef.current = chatProps;
+  }, [chatProps]);
+  React.useEffect(() => {
+    reviewPropsRef.current = reviewProps;
+  }, [reviewProps]);
+  React.useEffect(() => {
+    diffStateRef.current = diffState;
+  }, [diffState]);
 
   // Refs for functions used by memoized render helpers — declared before render helpers to avoid TDZ
   const handleSplitRequestRef = useRef<((direction: 'vertical' | 'horizontal') => void) | null>(null);
@@ -198,8 +221,12 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   }, [closeSplit, closePane, nestedSplit]);
 
   // Keep function refs up to date for memoized render helpers
-  handleSplitRequestRef.current = handleSplitRequest;
-  handleCloseAllSplitsRef.current = handleCloseAllSplits;
+  React.useEffect(() => {
+    handleSplitRequestRef.current = handleSplitRequest;
+  }, [handleSplitRequest]);
+  React.useEffect(() => {
+    handleCloseAllSplitsRef.current = handleCloseAllSplits;
+  }, [handleCloseAllSplits]);
 
   React.useEffect(() => {
     if (panes.length !== 3 && nestedSplit) {

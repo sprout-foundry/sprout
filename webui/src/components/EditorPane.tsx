@@ -1,5 +1,5 @@
 import type { EditorView as CMEditorView } from '@codemirror/view';
-import { useRef, useState, useMemo, useCallback } from 'react';
+import { useRef, useState, useMemo, useCallback, useEffect } from 'react';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useHotkeys } from '../contexts/HotkeyContext';
 import { useTheme } from '../contexts/ThemeContext';
@@ -81,8 +81,11 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
 
   // Sync the context's whitespaceRenderingMode into the settings ref so that
   // onCycleWhitespaceRendering reads the correct starting value when changed
-  // externally (e.g., from the footer or sidebar).
-  settings.whitespaceRenderingModeRef.current = whitespaceRenderingMode;
+  // externally (e.g., from the footer or sidebar). useEffect (instead of
+  // direct render-time mutation) keeps concurrent renders consistent.
+  useEffect(() => {
+    settings.whitespaceRenderingModeRef.current = whitespaceRenderingMode;
+  }, [settings.whitespaceRenderingModeRef, whitespaceRenderingMode]);
 
   const { fetchDiagnosticsRef, isSemanticLanguage } = useEditorDiagnostics(viewRef, buffer);
 
@@ -144,14 +147,23 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   // of useEditorUpdate), which would destroy/recreate the EditorView and reset
   // scroll position, losing user focus. Using a ref stabilizes the dependency.
   const onUpdateRef = useRef(onUpdate);
-  onUpdateRef.current = onUpdate;
+  useEffect(() => {
+    onUpdateRef.current = onUpdate;
+  }, [onUpdate]);
 
   const { semanticHandlerRefs, buildKeymaps } = useEditorKeymaps(hotkeys, viewRef, bufferRef);
 
   const semantic = useEditorSemantic(viewRef, bufferRef, localContent, isSemanticLanguage, openWorkspaceBuffer);
 
-  semanticHandlerRefs.handleGoToDefinition.current = semantic.handleGoToDefinition;
-  semanticHandlerRefs.handleFindAllReferences.current = semantic.handleFindAllReferences;
+  useEffect(() => {
+    semanticHandlerRefs.handleGoToDefinition.current = semantic.handleGoToDefinition;
+    semanticHandlerRefs.handleFindAllReferences.current = semantic.handleFindAllReferences;
+  }, [
+    semanticHandlerRefs.handleGoToDefinition,
+    semanticHandlerRefs.handleFindAllReferences,
+    semantic.handleGoToDefinition,
+    semantic.handleFindAllReferences,
+  ]);
 
   const keymapActions = {
     onSave: handleSave,
@@ -172,8 +184,12 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   // Stable refs for keymaps, settings, and actions — passed to hooks so that
   // the dependency arrays don't change on every render, which would destroy
   // and recreate the EditorView (breaking editing and resetting scroll).
+  // Writes happen in useEffect (not during render) so concurrent renders see
+  // consistent values.
   const keymapsRef = useRef(keymaps);
-  keymapsRef.current = keymaps;
+  useEffect(() => {
+    keymapsRef.current = keymaps;
+  }, [keymaps]);
 
   const settingsRef = useRef({
     wordWrapEnabled: settings.wordWrapEnabled,
@@ -186,20 +202,33 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     inlayHintsEnabled: settings.inlayHintsEnabled,
     signatureHelpEnabled: settings.signatureHelpEnabled,
   });
-  settingsRef.current = {
-    wordWrapEnabled: settings.wordWrapEnabled,
-    relativeLineNumbersEnabled: settings.relativeLineNumbersEnabled,
-    minimapEnabled: settings.minimapEnabled,
-    editorFontSize: settings.editorFontSize,
-    editorTabSize: settings.editorTabSize,
-    editorUsesTabs: settings.editorUsesTabs,
-    whitespaceRenderingMode: settings.whitespaceRenderingMode,
-    inlayHintsEnabled: settings.inlayHintsEnabled,
-    signatureHelpEnabled: settings.signatureHelpEnabled,
-  };
+  useEffect(() => {
+    settingsRef.current = {
+      wordWrapEnabled: settings.wordWrapEnabled,
+      relativeLineNumbersEnabled: settings.relativeLineNumbersEnabled,
+      minimapEnabled: settings.minimapEnabled,
+      editorFontSize: settings.editorFontSize,
+      editorTabSize: settings.editorTabSize,
+      editorUsesTabs: settings.editorUsesTabs,
+      whitespaceRenderingMode: settings.whitespaceRenderingMode,
+      inlayHintsEnabled: settings.inlayHintsEnabled,
+      signatureHelpEnabled: settings.signatureHelpEnabled,
+    };
+  }, [
+    settings.wordWrapEnabled,
+    settings.relativeLineNumbersEnabled,
+    settings.minimapEnabled,
+    settings.editorFontSize,
+    settings.editorTabSize,
+    settings.editorUsesTabs,
+    settings.whitespaceRenderingMode,
+    settings.inlayHintsEnabled,
+    settings.signatureHelpEnabled,
+  ]);
 
   const actionsRef = useRef({ getSaveFn: () => saveRef.current });
-  actionsRef.current = { getSaveFn: () => saveRef.current };
+  // actionsRef holds only a stable closure over the ref-mirrored saveRef —
+  // no actual changing state. Initialized once; no need to update.
 
   useEditorEvents({
     viewRef,
@@ -215,6 +244,15 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     toggleLinkedScroll,
     handleFindAllReferences: semantic.handleFindAllReferences,
     onGoToWorkspaceSymbol: () => semantic.setShowGoToWorkspaceSymbol(true),
+    onToggleInlayHints: settings.onToggleInlayHints,
+    onToggleSignatureHelp: settings.onToggleSignatureHelp,
+    onCycleTabSize: settings.onCycleTabSize,
+    onZoomIn: settings.onZoomIn,
+    onZoomOut: settings.onZoomOut,
+    onResetZoom: settings.onResetZoom,
+    onToggleFormatOnSave: () => setFormatOnSaveEnabled(!isFormatOnSaveEnabled),
+    // Live preview / markdown preview wiring is set up further down once
+    // livePreview / markdownPreviewMode are in scope.
   });
 
   const contextMenuCallbacks = useMemo(
@@ -247,9 +285,28 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     document.dispatchEvent(new CustomEvent('editor-format-document'));
   }, []);
 
-  const handleToggleFormatOnSave = useCallback(() => {
-    setFormatOnSaveEnabled(!isFormatOnSaveEnabled);
-  }, [isFormatOnSaveEnabled, setFormatOnSaveEnabled]);
+  // Live-preview and markdown-preview omnibox commands are listened for here
+  // (rather than via useEditorEvents) because the consumers — `livePreview`
+  // and `markdownPreviewMode` — are declared after useEditorEvents is called.
+  useEffect(() => {
+    const onLivePreview = () => {
+      if (livePreview.openLivePreview && (fileType.isSvgFile || fileType.isHtmlFile)) {
+        livePreview.openLivePreview();
+      }
+    };
+    const onMdToggle = () => {
+      if (!fileType.isMarkdownFile) return;
+      setMarkdownPreviewMode((prev) =>
+        prev === 'off' ? 'split' : prev === 'split' ? 'preview' : 'off',
+      );
+    };
+    document.addEventListener('editor-open-live-preview', onLivePreview);
+    document.addEventListener('editor-toggle-markdown-preview', onMdToggle);
+    return () => {
+      document.removeEventListener('editor-open-live-preview', onLivePreview);
+      document.removeEventListener('editor-toggle-markdown-preview', onMdToggle);
+    };
+  }, [livePreview, fileType.isSvgFile, fileType.isHtmlFile, fileType.isMarkdownFile]);
 
   const { rightActions } = useEditorToolbarActions({
     isSvgFile: fileType.isSvgFile,
@@ -262,8 +319,6 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     onOpenLivePreview: livePreview.openLivePreview,
     onOpenLivePreviewInSplit: livePreview.openLivePreviewInSplit,
     onFormatDocument: handleFormatDocument,
-    formatOnSaveEnabled: isFormatOnSaveEnabled,
-    onToggleFormatOnSave: handleToggleFormatOnSave,
   });
 
   if (!buffer || !buffer.file || buffer.file.isDir) {
@@ -296,7 +351,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   if (fileType.isSvgPreviewBuffer || fileType.isHtmlPreviewBuffer) {
     return (
       <div className="editor-pane">
-        <EditorToolbar onSave={handleSave} saving={false} showSave={false} />
+        <EditorToolbar saving={false} />
         <LivePreview
           content={buffer?.content || ''}
           language={(buffer?.metadata?.previewKind as 'svg' | 'html') || 'html'}
@@ -309,6 +364,10 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     );
   }
 
+  // EditorCore documents that `initOptions` must stay reference-stable so the
+  // EditorView isn't torn down per keystroke. `localContent` is therefore
+  // *not* in the dep array — `useEditorViewInit` reads it once for the
+  // initial view content; subsequent updates flow through `onUpdateRef`.
   const editorCoreInitOptions = useMemo(() => ({
     paneId,
     buffer,
@@ -324,7 +383,8 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     onUpdateRef,
     settingsRef,
     actionsRef,
-  }), [paneId, buffer, localContent, compartments, buildExtensions, themePack, customHighlightStyle, openWorkspaceBuffer, cancelPendingFlush, onUpdateRef, settingsRef, actionsRef]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [paneId, buffer, compartments, buildExtensions, themePack, customHighlightStyle, openWorkspaceBuffer, cancelPendingFlush, onUpdateRef, settingsRef, actionsRef]);
 
   const editorCoreReconfigureOptions = useMemo(() => ({
     buffer,
@@ -345,8 +405,6 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   return (
     <div className="editor-pane">
       <EditorToolbar
-
-        onSave={handleSave}
         saving={saving}
         breadcrumbProps={{
           filePath: buffer.file.path,

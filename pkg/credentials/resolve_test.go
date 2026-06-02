@@ -262,6 +262,7 @@ func TestLMStudio_Credentials_EdgeCases(t *testing.T) {
 		assert.Empty(t, resolved.Value)
 	})
 }
+
 func TestProviderEnvVar_ConsistentWithHasProviderCredential(t *testing.T) {
 	providers := []struct {
 		provider string

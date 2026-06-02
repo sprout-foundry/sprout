@@ -21,5 +21,8 @@ func (g *GroundTruthTermios) IsTerminalSane() bool { return true }
 // EnsureSane is a no-op on non-Unix, always returns false.
 func (g *GroundTruthTermios) EnsureSane() bool { return false }
 
+// EnsureCooked is a no-op on non-Unix.
+func (g *GroundTruthTermios) EnsureCooked() {}
+
 // Fd returns -1 on non-Unix.
 func (g *GroundTruthTermios) Fd() int { return -1 }

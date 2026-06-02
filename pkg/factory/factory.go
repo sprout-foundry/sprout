@@ -4,12 +4,15 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/agent_providers"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/credentials"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
+	"github.com/sprout-foundry/sprout/pkg/providerregistry"
 )
 
 // TestClient implements a mock client for CI/testing environments
@@ -118,6 +121,9 @@ func (t *TestClient) ResetTPSStats() {
 // Global provider factory instance
 var globalProviderFactory *providers.ProviderFactory
 
+// remoteRefreshCancel can be used to cancel the remote refresh goroutine.
+var remoteRefreshCancel context.CancelFunc
+
 // init initializes the global provider factory
 func init() {
 	globalProviderFactory = providers.NewProviderFactory()
@@ -138,6 +144,60 @@ func init() {
 			}
 		}
 	}
+
+	// Skip network fetch in test binaries to avoid hitting GitHub Pages
+	if !inTestBinary() {
+		ctx, cancel := context.WithCancel(context.Background())
+		remoteRefreshCancel = cancel
+		go refreshFromRemote(ctx)
+	}
+}
+
+// inTestBinary returns true when running inside a Go test binary.
+func inTestBinary() bool {
+	if len(os.Args) == 0 {
+		return false
+	}
+	name := os.Args[0]
+	return strings.HasSuffix(name, ".test") ||
+		strings.Contains(name, "/_test/") ||
+		strings.Contains(name, `\_test\`) ||
+		strings.HasSuffix(name, ".test.exe")
+}
+
+// refreshFromRemote fetches all provider configs from the remote registry
+// and upserts them into the global provider factory.
+func refreshFromRemote(ctx context.Context) {
+	results, err := providerregistry.FetchAllProviders(ctx)
+	if err != nil {
+		log.Printf("[factory] failed to fetch remote providers: %v", err)
+		return
+	}
+	if len(results) == 0 {
+		return
+	}
+	for name, remoteCfg := range results {
+		cfg := remoteCfg.ToProviderConfig()
+		if cfg == nil {
+			continue
+		}
+		if err := globalProviderFactory.UpsertConfig(name, cfg); err != nil {
+			log.Printf("[factory] failed to upsert remote provider %q: %v", name, err)
+			continue
+		}
+	}
+	if envutil.GetEnvSimple("DEBUG_FACTORY") != "" {
+		count := 0
+		for range results {
+			count++
+		}
+		log.Printf("[factory] remote refresh completed: %d providers fetched", count)
+	}
+}
+
+// GlobalFactory returns the global provider factory instance.
+func GlobalFactory() *providers.ProviderFactory {
+	return globalProviderFactory
 }
 
 // CreateGenericProvider creates a generic provider by name

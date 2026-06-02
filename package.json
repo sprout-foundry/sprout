@@ -105,7 +105,10 @@
   "name": "sprout",
   "overrides": {
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "^9.0.9"
+    }
   },
   "private": true,
   "productName": "Sprout",

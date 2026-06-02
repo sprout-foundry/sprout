@@ -292,7 +292,13 @@ export-endpoint-manifest:
 
 # Full development build: UI + WASM + Go binary
 # Optimized: skips React rebuild if source files haven't changed
-build-all: deploy-ui build-wasm build
+#
+# Order matters: build-wasm refreshes webui/public/wasm/sprout.wasm
+# which Vite copies verbatim into webui/dist/ on the deploy-ui step.
+# Running deploy-ui BEFORE build-wasm would embed the previous WASM
+# blob into pkg/webui/static and ship it inside the Go binary, leaving
+# users on the prior turn's WASM until the next full build.
+build-all: build-wasm deploy-ui build
 	@echo "Full build completed: React UI + WASM shell + Go binary"
 
 # Generate the shared Go→TS type contract at webui/src/types/generated.ts.

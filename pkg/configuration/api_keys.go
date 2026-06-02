@@ -31,6 +31,17 @@ var knownProviderDisplayNames = providers.ProviderDisplayNames()
 // keyValidationMutex protects ValidateAndSaveAPIKey from concurrent access.
 var keyValidationMutex sync.Mutex
 
+// validateAndSaveSkipValidation, when true, skips the network-based
+// ListModels validation in ValidateAndSaveAPIKey and stores the key directly.
+// Intended for unit tests only.
+var validateAndSaveSkipValidation bool
+
+// SetValidateAndSaveAPIKeyValidation enables or disables the test-mode skip.
+// Call with true in tests that need to store keys without network validation.
+func SetValidateAndSaveAPIKeyValidation(skip bool) {
+	validateAndSaveSkipValidation = skip
+}
+
 // GetAPIKeysPath returns the full path to the API keys file
 func GetAPIKeysPath() (string, error) {
 	return credentials.GetAPIKeysPath()
@@ -393,6 +404,11 @@ func ValidateAndSaveAPIKey(provider, key string) (int, error) {
 			_ = credentials.SetToActiveBackend(provider, oldValue)
 		}
 		return 0, fmt.Errorf("failed to store temporary key: %w", err)
+	}
+
+	if validateAndSaveSkipValidation {
+		// Test mode: skip network validation, key is already stored above
+		return 0, nil
 	}
 
 	// Validate the new key by calling ListModels

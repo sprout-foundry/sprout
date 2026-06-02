@@ -47,6 +47,7 @@
   "description": "Reusable React UI components for Sprout",
   "devDependencies": {
     "@chromatic-com/storybook": "^3.2.7",
+    "@microsoft/api-extractor": "^7.58.7",
     "@storybook/addon-essentials": "^8.6.14",
     "@storybook/addon-links": "^8.6.14",
     "@storybook/blocks": "^8.6.14",
@@ -69,8 +70,8 @@
     "storybook": "^8.6.18",
     "ts-jest": "^29.4.9",
     "typescript": "^5.0.0",
-    "vite": "^5.0.0",
-    "vite-plugin-dts": "^3.0.0",
+    "vite": "^6.4.3",
+    "vite-plugin-dts": "^5.0.2",
     "vitest": "^4.1.5"
   },
   "exports": {

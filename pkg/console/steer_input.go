@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -216,6 +217,11 @@ func (r *SteerInputReader) Start() {
 	// the normal keystroke handlers. Stop() emits the matching
 	// disable sequence.
 	fmt.Fprint(os.Stderr, bracketedPasteEnable)
+	// Ask the terminal to report modified keystrokes (Shift+Enter
+	// etc.) as CSI u sequences so the steer panel can distinguish
+	// "submit" from "insert newline" instead of both arriving as
+	// indistinguishable CR.
+	fmt.Fprint(os.Stderr, modifyOtherKeysEnable)
 
 	r.renderLine()
 	go r.readLoop(stopCh, doneCh)
@@ -253,8 +259,10 @@ func (r *SteerInputReader) Stop() {
 	}
 	// Disable bracketed paste before restoring termios so the
 	// terminal returns to its prior paste mode (some apps run
-	// without bracketed paste enabled).
+	// without bracketed paste enabled). Same for the modifyOtherKeys
+	// reporting we enabled in Start.
 	fmt.Fprint(os.Stderr, bracketedPasteDisable)
+	fmt.Fprint(os.Stderr, modifyOtherKeysDisable)
 
 	// Restore terminal to ground-truth state if available (preferred
 	// over oldState). Ground truth is the REPL's original cooked-mode
@@ -381,8 +389,18 @@ func (r *SteerInputReader) readLoop(stopCh, doneCh chan struct{}) {
 		case b == 0x04: // Ctrl+D — ignore (no EOF on a steer channel)
 		case b == 0x09: // Tab — toggle submit mode (SP-055 Phase 3b)
 			r.toggleSubmitMode()
-		case b == 0x0D, b == 0x0A: // Enter (CR or LF)
+		case b == 0x0D: // CR — plain Enter, submits
 			r.handleSubmit()
+		case b == 0x0A: // Bare LF — Shift+Enter in terminals that
+			// distinguish (VS Code terminal, kitty in some configs).
+			// Insert a literal newline so multi-line steer composition
+			// works without needing CSI u or Alt+Enter.
+			r.mu.Lock()
+			r.buffer = append(r.buffer, '\n')
+			r.historyIndex = -1
+			r.pendingBuffer = nil
+			r.mu.Unlock()
+			r.renderLine()
 		case b == 0x1B: // Escape — could be plain ESC or sequence prefix
 			r.handleEscapeOrSequence()
 		case b == 0x7F, b == 0x08: // DEL or backspace
@@ -557,6 +575,27 @@ func (r *SteerInputReader) handleEscapeOrSequence() {
 					return
 				case "201":
 					r.endPaste()
+					return
+				}
+			}
+			if b[0] == 'u' {
+				// CSI u (fixterms / kitty keyboard / xterm modifyOtherKeys
+				// reporting). Format: <key>;<modifiers> u. Shift+Enter
+				// arrives as `13;2u`; any modifier on Enter is treated
+				// as "insert newline".
+				paramStr := string(params)
+				keyParam, modParam := paramStr, ""
+				if idx := strings.IndexByte(paramStr, ';'); idx >= 0 {
+					keyParam = paramStr[:idx]
+					modParam = paramStr[idx+1:]
+				}
+				if keyParam == "13" && modParam != "" && modParam != "1" {
+					r.mu.Lock()
+					r.buffer = append(r.buffer, '\n')
+					r.historyIndex = -1
+					r.pendingBuffer = nil
+					r.mu.Unlock()
+					r.renderLine()
 					return
 				}
 			}

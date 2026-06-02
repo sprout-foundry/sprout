@@ -44,6 +44,14 @@ type OutputRouter struct {
 	// May be nil. Caller is responsible for thread-safety inside the
 	// hook (renderer uses its own mutex).
 	externalWriteHook func()
+
+	// reasoningCallback receives reasoning chunks separately from the
+	// regular streaming callback so the CLI can collapse the thinking
+	// stream into a one-line "▽ Thinking · N kB" header instead of
+	// flooding the terminal with raw monologue. When unset, reasoning
+	// falls through to the regular streamingCallback (the historic
+	// behaviour, gated by reasoningTerminalEnabled).
+	reasoningCallback func(string)
 }
 
 // SetExternalWriteHook registers a callback that fires before every
@@ -54,6 +62,31 @@ func (r *OutputRouter) SetExternalWriteHook(fn func()) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.externalWriteHook = fn
+}
+
+// SetReasoningCallback registers a dedicated sink for reasoning chunks
+// so the CLI can render thinking-stream output as a collapsed header
+// instead of mixing it into the prose stream. When unset (the default),
+// reasoning chunks fall through to the regular streamingCallback if
+// SetReasoningTerminalEnabled is true; otherwise they're suppressed
+// from the terminal entirely (the historic behaviour).
+//
+// Pass nil to clear. The callback is invoked synchronously from
+// RouteStreamChunk; the caller is responsible for any locking it
+// needs internally.
+func (r *OutputRouter) SetReasoningCallback(fn func(string)) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.reasoningCallback = fn
+}
+
+// getReasoningCallback returns the current reasoning callback under a
+// read lock. Separated from SetReasoningCallback so RouteStreamChunk
+// stays lock-free on the hot path.
+func (r *OutputRouter) getReasoningCallback() func(string) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.reasoningCallback
 }
 
 // NewOutputRouter creates an output router.
@@ -161,6 +194,19 @@ func (r *OutputRouter) RouteStreamChunk(chunk string, contentType string) {
 	// Reasoning is visible to the event bus by default, but not the terminal.
 	if !r.shouldRenderReasoning(contentType) {
 		return
+	}
+
+	// Reasoning chunks: prefer the dedicated reasoning sink when one is
+	// registered. The CLI uses this to collapse the thinking stream into
+	// a single "▽ Thinking…" header instead of mixing it inline with the
+	// prose stream. Without a dedicated sink, reasoning falls through to
+	// the regular streamingCallback (and renders as raw monologue), which
+	// was the pre-collapse behaviour.
+	if contentType == "reasoning" {
+		if reasoningCb := r.getReasoningCallback(); reasoningCb != nil {
+			reasoningCb(chunk)
+			return
+		}
 	}
 
 	// Terminal: write via streamingCallback if set (real-time character output)

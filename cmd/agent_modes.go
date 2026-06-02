@@ -725,8 +725,7 @@ var currentTurnRenderer atomic.Pointer[console.AssistantTurnRenderer]
 // Exits cleanly when the queue is empty.
 func runQueueMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events.EventBus) error {
 	fmt.Println()
-	console.GlyphInfo.Print("Starting EA queue mode — processing pending tasks autonomously")
-	console.GlyphInfo.Printf("Provider: %s | Model: %s",
+	console.GlyphInfo.Printf("sprout · EA queue · %s · %s",
 		chatAgent.GetProvider(),
 		chatAgent.GetModel())
 
@@ -892,9 +891,14 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	footer.Start()
 	defer footer.Stop()
 
+	// Compact startup chrome: a single greeting line with the active
+	// provider/model so the first impression is "who am I talking to"
+	// rather than four rows of welcome / provider / model / blank.
+	// The previous form printed "Welcome to sprout! Enhanced CLI with
+	// Web UI" + a second "Provider: X | Model: Y" line with trailing
+	// blanks — five rows before the user could type anything.
 	fmt.Println()
-	console.GlyphInfo.Printf("Welcome to sprout! Enhanced CLI with Web UI")
-	console.GlyphInfo.Printf("Provider: %s | Model: %s\n",
+	console.GlyphInfo.Printf("sprout · %s · %s",
 		chatAgent.GetProvider(),
 		chatAgent.GetModel())
 
@@ -1093,6 +1097,13 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			currentTurnRenderer.Store(turnRenderer)
 			if router := chatAgent.OutputRouter(); router != nil {
 				router.SetExternalWriteHook(turnRenderer.OnExternalWrite)
+				// SP-061: route reasoning chunks to the renderer's
+				// dedicated sink so they collapse into a single
+				// "▽ Thinking · N kB" header rather than streaming
+				// raw monologue. Only takes effect when
+				// SetReasoningTerminalEnabled(true) — by default the
+				// CLI still suppresses reasoning entirely.
+				router.SetReasoningCallback(turnRenderer.WriteReasoningChunk)
 			}
 
 			// SP-048-1b: Try fast paths BEFORE starting the "Thinking"
@@ -1155,6 +1166,10 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			// re-render's own writes don't loop back through it.
 			if router := chatAgent.OutputRouter(); router != nil {
 				router.SetExternalWriteHook(nil)
+				// Drop the reasoning sink too so it doesn't fire into a
+				// stale renderer on the next turn (each turn builds a
+				// new renderer above).
+				router.SetReasoningCallback(nil)
 			}
 			turnRenderer.FinalizeAtTurnEnd()
 			currentTurnRenderer.Store(nil)

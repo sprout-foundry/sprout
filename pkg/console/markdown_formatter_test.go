@@ -43,12 +43,17 @@ func TestMarkdownFormatter_BasicFormatting(t *testing.T) {
 			},
 		},
 		{
+			// Code-block decoration was lightened: one optional
+			// "──── lang ────" header line and a dim "│ " gutter per
+			// code row, instead of the previous four rows of chrome
+			// (┌─/│ Language/│/└─). The language label and the
+			// per-line gutter are still present, just without the
+			// surrounding box.
 			name:  "Code block",
 			input: "```go\nfunc main() {\n  println(\"hello\")\n}\n```",
 			contains: []string{
-				ColorDim + ColorBold,
-				"┌─ Code Block",
-				"│ Language: go",
+				"──── go ────",
+				"│ ",
 				ColorBlue + "func",
 				ColorGreen + "hello",
 			},
@@ -64,6 +69,32 @@ func TestMarkdownFormatter_BasicFormatting(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestMarkdownFormatter_LongLineNotTruncated pins the Scanner buffer
+// bump: a single line over 64 KiB (the default Scanner cap) must round-
+// trip through Format without being silently dropped. Before the fix
+// large generated diffs or one-line minified code in assistant output
+// would simply vanish from the rendered turn.
+func TestMarkdownFormatter_LongLineNotTruncated(t *testing.T) {
+	formatter := NewMarkdownFormatter(true, true)
+	// 100 KiB single-line payload — well past the 64 KiB Scanner default.
+	long := strings.Repeat("abcdefghij", 100*1024/10)
+	if len(long) < 64*1024 {
+		t.Fatalf("test setup: expected >64KiB, got %d", len(long))
+	}
+	input := "before\n" + long + "\nafter"
+	result := formatter.Format(input)
+	if !strings.Contains(result, "before") {
+		t.Errorf("missing prefix line in output")
+	}
+	if !strings.Contains(result, "after") {
+		t.Errorf("missing suffix line — long line was silently dropped by the Scanner")
+	}
+	// The long line itself should also survive (sample a chunk of it).
+	if !strings.Contains(result, strings.Repeat("abcdefghij", 100)) {
+		t.Errorf("long line content missing from output")
 	}
 }
 

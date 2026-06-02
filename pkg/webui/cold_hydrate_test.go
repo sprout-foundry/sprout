@@ -123,7 +123,7 @@ func runHydrateAndWait(t *testing.T, ws *ReactWebServer, pair *testingConnPair, 
 	}()
 
 	clientConn := pair.client
-	clientConn.SetReadDeadline(time.Now().Add(10 * time.Second))
+	clientConn.SetReadDeadline(time.Now().Add(5 * time.Second))
 	for {
 		select {
 		case <-done:
@@ -145,8 +145,10 @@ func runHydrateAndWait(t *testing.T, ws *ReactWebServer, pair *testingConnPair, 
 				}
 			}
 		default:
-			// Try to read a message with a short timeout
-			clientConn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+			// Read a message with a generous deadline so large WebSocket
+			// frames (e.g. ≥5 MB base64 payloads) can be received without
+			// timing out mid-frame, which would corrupt the connection.
+			clientConn.SetReadDeadline(time.Now().Add(5 * time.Second))
 			_, raw, err := clientConn.ReadMessage()
 			if err != nil {
 				// A genuine read deadline is fine — handler may still be
@@ -864,14 +866,6 @@ func TestHandleColdHydrateRequest_EstimateSeconds(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// TODO: the in-process WebSocket test fixture cannot reliably stream
-			// >1MB hydrate payloads — the connection fails mid-stream and the
-			// helper races the panic recovery. The estimate logic itself is
-			// exercised by the smaller cases; revisit when the fixture is
-			// replaced with one that handles large buffered writes.
-			if tt.totalBytes >= 1024*1024 {
-				t.Skip("skipping large-payload subtest: test WS fixture cannot stream ≥1MB reliably")
-			}
 			ws := &ReactWebServer{eventBus: events.NewEventBus()}
 			pair := newTestingConnPair(t)
 			defer pair.server.Close()
@@ -963,10 +957,6 @@ func TestHandleColdHydrateRequest_FileSizeInMessage(t *testing.T) {
 // --- Binary file exactly at boundary ---
 
 func TestHandleColdHydrateRequest_BinaryAtBoundary(t *testing.T) {
-	// Same fixture limitation as the EstimateSeconds large-payload subtests —
-	// streaming ≥1MB through newTestingConnPair fails the WS mid-stream. See
-	// the webui-coldHydrate-largePayloadFixture TODO entry.
-	t.Skip("skipping: test WS fixture cannot stream ≥1MB reliably")
 	ws := &ReactWebServer{eventBus: events.NewEventBus()}
 	pair := newTestingConnPair(t)
 	defer pair.server.Close()
@@ -1018,9 +1008,6 @@ func TestHandleColdHydrateRequest_BinaryJustOverBoundary(t *testing.T) {
 // --- Non-binary file over 1MB but under 10MB ---
 
 func TestHandleColdHydrateRequest_LargeNonBinaryIncluded(t *testing.T) {
-	// Same fixture limitation as the other large-payload hydrate subtests.
-	// See the webui-coldHydrate-largePayloadFixture TODO entry.
-	t.Skip("skipping: test WS fixture cannot stream ≥1MB reliably")
 	ws := &ReactWebServer{eventBus: events.NewEventBus()}
 	pair := newTestingConnPair(t)
 	defer pair.server.Close()
@@ -1281,7 +1268,9 @@ func setupHydrateIntegrationServer(t *testing.T, workspaceRoot string) (*httptes
 	ws.workspaceRoot = workspaceRoot
 
 	upgrader := websocket.Upgrader{
-		CheckOrigin: func(_ *http.Request) bool { return true },
+		CheckOrigin:     func(_ *http.Request) bool { return true },
+		ReadBufferSize:  65536,
+		WriteBufferSize: 65536,
 	}
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, err := upgrader.Upgrade(w, r, nil)
@@ -1314,7 +1303,10 @@ func setupHydrateIntegrationServer(t *testing.T, workspaceRoot string) (*httptes
 	}))
 
 	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http")
-	clientConn, _, err := (&websocket.Dialer{}).Dial(wsURL, nil)
+	clientConn, _, err := (&websocket.Dialer{
+		ReadBufferSize:  65536,
+		WriteBufferSize: 65536,
+	}).Dial(wsURL, nil)
 	if err != nil {
 		t.Fatalf("dial failed: %v", err)
 	}

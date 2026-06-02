@@ -920,7 +920,9 @@ func TestUpsertConfig_NewProvider(t *testing.T) {
 		Models:   ModelConfig{DefaultContextLimit: 8192},
 	}
 
-	f.UpsertConfig("newprov", cfg)
+	if err := f.UpsertConfig("newprov", cfg); err != nil {
+		t.Fatalf("UpsertConfig(newprov): %v", err)
+	}
 
 	// Verify via GetProviderConfig (reads from f.configs)
 	got, err := f.GetProviderConfig("newprov")
@@ -976,7 +978,9 @@ func TestUpsertConfig_OverwriteExisting(t *testing.T) {
 		Defaults: RequestDefaults{Model: "updated-model"},
 		Models:   ModelConfig{DefaultContextLimit: 65536},
 	}
-	f.UpsertConfig("testprov", updatedCfg)
+	if err := f.UpsertConfig("testprov", updatedCfg); err != nil {
+		t.Fatalf("UpsertConfig(testprov): %v", err)
+	}
 
 	// Verify the config was replaced
 	got, err := f.GetProviderConfig("testprov")
@@ -1009,7 +1013,9 @@ func TestUpsertConfig_NilConfig(t *testing.T) {
 	f := newTestFactory(t)
 
 	// Upsert with nil config should not panic and should not change anything
-	f.UpsertConfig("testprov", nil)
+	if err := f.UpsertConfig("testprov", nil); err != nil {
+		t.Fatalf("UpsertConfig(nil): %v", err)
+	}
 
 	// Original config should still be there
 	cfg, err := f.GetProviderConfig("testprov")
@@ -1021,7 +1027,9 @@ func TestUpsertConfig_NilConfig(t *testing.T) {
 	}
 
 	// Upsert a new name with nil config should not create an entry
-	f.UpsertConfig("nonexistent", nil)
+	if err := f.UpsertConfig("nonexistent", nil); err != nil {
+		t.Fatalf("UpsertConfig(nonexistent, nil): %v", err)
+	}
 	_, err = f.GetProviderConfig("nonexistent")
 	if err == nil {
 		t.Fatal("expected error for nonexistent provider after nil upsert")
@@ -1041,29 +1049,25 @@ func TestUpsertConfig_EmptyName(t *testing.T) {
 		Models:   ModelConfig{DefaultContextLimit: 4096},
 	}
 
-	// Upsert with empty name — should insert under "" key
-	f.UpsertConfig("", cfg)
+	// Upsert with empty name should fail validation (Name is overwritten to "" then validated).
+	err := f.UpsertConfig("", cfg)
+	if err == nil {
+		t.Fatal("expected error for empty name upsert")
+	}
 
-	// Verify it's stored under empty string key
-	got, err := f.GetProviderConfig("")
+	// Verify the original "testprov" config was NOT affected
+	got, err := f.GetProviderConfig("testprov")
 	if err != nil {
-		t.Fatalf("GetProviderConfig for empty name: %v", err)
+		t.Fatalf("GetProviderConfig(testprov): %v", err)
 	}
-	if got.Name != "someprov" {
-		t.Errorf("expected name someprov, got %q", got.Name)
+	if got.Defaults.Model != "test-model-1" {
+		t.Errorf("expected original model test-model-1, got %q", got.Defaults.Model)
 	}
 
-	// Verify it appears in GetAvailableProviders
-	providers := f.GetAvailableProviders()
-	found := false
-	for _, p := range providers {
-		if p == "" {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Fatal("expected empty-string key in GetAvailableProviders")
+	// Verify no empty-string key was created
+	_, err = f.GetProviderConfig("")
+	if err == nil {
+		t.Fatal("expected error for empty-string key after failed upsert")
 	}
 }
 
@@ -1080,7 +1084,9 @@ func TestUpsertConfig_DoesNotMutateInput(t *testing.T) {
 		Models:   ModelConfig{DefaultContextLimit: 8192},
 	}
 
-	f.UpsertConfig("copyprov", cfg)
+	if err := f.UpsertConfig("copyprov", cfg); err != nil {
+		t.Fatalf("UpsertConfig(copyprov): %v", err)
+	}
 
 	// Mutate the input config AFTER upsert
 	cfg.Name = "mutated-name"
@@ -1138,7 +1144,10 @@ func TestUpsertConfig_ConcurrentAccess(t *testing.T) {
 					Defaults: RequestDefaults{Model: fmt.Sprintf("model-%d-%d", id, j)},
 					Models:   ModelConfig{DefaultContextLimit: 4096},
 				}
-				f.UpsertConfig(cfg.Name, cfg)
+				if err := f.UpsertConfig(cfg.Name, cfg); err != nil {
+					errCh <- fmt.Errorf("upsert %d iter %d UpsertConfig: %w", id, j, err)
+					return
+				}
 			}
 		}(i)
 	}

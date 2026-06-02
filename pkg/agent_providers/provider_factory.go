@@ -286,21 +286,52 @@ func (f *ProviderFactory) GetDefaultProvider() string {
 	return ""
 }
 
+// cloneProviderConfig returns a deep copy of cfg via JSON marshal/unmarshal.
+// If marshaling/unmarshaling fails (shouldn't happen for valid configs), it
+// falls back to a shallow copy.
+func cloneProviderConfig(cfg *ProviderConfig) *ProviderConfig {
+	if cfg == nil {
+		return nil
+	}
+	data, err := json.Marshal(cfg)
+	if err != nil {
+		c := *cfg
+		return &c
+	}
+	var out ProviderConfig
+	if err := json.Unmarshal(data, &out); err != nil {
+		c := *cfg
+		return &c
+	}
+	return &out
+}
+
 // UpsertConfig inserts or updates a provider configuration in the factory.
 // The provided config is deep-copied so external mutations have no effect.
-func (f *ProviderFactory) UpsertConfig(name string, cfg *ProviderConfig) {
+// If cfg.Name differs from name, cfg.Name is overwritten to match name
+// for consistency. The config is validated before insertion.
+func (f *ProviderFactory) UpsertConfig(name string, cfg *ProviderConfig) error {
 	if cfg == nil {
-		return
+		return nil
 	}
 
-	// Make a copy so external mutations don't affect our stored state.
-	configCopy := *cfg
+	// Deep-copy so external mutations don't affect our stored state.
+	configCopy := cloneProviderConfig(cfg)
+
+	// Ensure the stored Name matches the key we insert under.
+	configCopy.Name = name
+
+	if err := configCopy.Validate(); err != nil {
+		return fmt.Errorf("invalid provider config %q: %w", name, err)
+	}
 
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	f.configs[name] = &configCopy
-	f.registry.ProviderConfigs[name] = configCopy
+	f.configs[name] = configCopy
+	f.registry.ProviderConfigs[name] = *configCopy
+
+	return nil
 }
 
 // ReloadConfig reloads a provider configuration from file
@@ -323,4 +354,20 @@ func (f *ProviderFactory) ReloadConfig(filename string) error {
 	}
 
 	return f.loadConfigFromBytesUnlocked(data, name)
+}
+
+// globalFactory is the singleton ProviderFactory, initialized in init().
+var globalFactory *ProviderFactory
+
+func init() {
+	globalFactory = NewProviderFactory()
+	if err := globalFactory.LoadEmbeddedConfigs(); err != nil {
+		fmt.Printf("Warning: Failed to load embedded provider configs: %v\n", err)
+	}
+}
+
+// GlobalFactory returns the singleton ProviderFactory instance.
+// It is initialized with embedded configs during package init.
+func GlobalFactory() *ProviderFactory {
+	return globalFactory
 }

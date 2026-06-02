@@ -44,6 +44,17 @@ type AssistantTurnRenderer struct {
 	curLineRunes  int // visual length of the in-progress line (runes)
 	physicalLines int // physical rows the COMPLETED lines have used
 
+	// Reasoning-stream state. When a turn includes a thinking-model
+	// reasoning block, the per-chunk text would otherwise flood the
+	// terminal with lines the user almost never reads through. Instead
+	// we print a single "▽ Thinking..." header on the first reasoning
+	// chunk, count bytes silently after that, and finalize the header
+	// to "▽ Thinking · 1.2KB (~310 tokens)" when prose starts (or at
+	// turn end). The full reasoning is still published verbatim to the
+	// event bus for WebUI consumers — only the terminal gets collapsed.
+	reasoningActive bool
+	reasoningBytes  int
+
 	terminalWidth int
 	formatter     *MarkdownFormatter
 	indent        string
@@ -61,6 +72,69 @@ func NewAssistantTurnRenderer(width int, formatter *MarkdownFormatter) *Assistan
 	}
 }
 
+// WriteReasoningChunk consumes one chunk of reasoning/thinking output
+// from the streaming pipeline and renders the collapsed form. On the
+// FIRST chunk of a reasoning segment it prints a single dim "▽ Thinking…"
+// header; on subsequent chunks it only accumulates the byte count so the
+// terminal stays clean even when the model emits tens of KiB of internal
+// monologue. The header is finalized into "▽ Thinking · N kB (~N tokens)"
+// by the next prose chunk (via WriteChunk) or by FinalizeAtTurnEnd.
+//
+// No-op when the chunk is empty. Safe to call concurrently with other
+// renderer methods — internal mutex guards the state.
+func (r *AssistantTurnRenderer) WriteReasoningChunk(chunk string) {
+	if chunk == "" {
+		return
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if !r.reasoningActive {
+		// Print the header on a fresh row so it sits cleanly between
+		// the assistant header and the prose that follows. Dim color
+		// reads as "ambient detail" rather than active output.
+		fmt.Printf("%s%s%s▽ Thinking…%s\n", r.indent, ColorDim, ColorItalic, ColorReset)
+		r.reasoningActive = true
+		// The header consumed exactly one physical row regardless of
+		// terminal width (it's well under any reasonable width); track
+		// it so the prose segment's clear-and-rerender at turn end
+		// doesn't accidentally walk over the header.
+		r.physicalLines++
+	}
+	r.reasoningBytes += len(chunk)
+}
+
+// endReasoningLocked finalizes the collapsed header in place, rewriting
+// "▽ Thinking…" to "▽ Thinking · 1.2 kB (~310 tokens)". Called with the
+// mutex held. Idempotent — no-op when no reasoning was streamed this
+// turn. Token estimate uses the common rule of thumb (1 token ≈ 4
+// bytes); it's a hint, not an accounting source.
+func (r *AssistantTurnRenderer) endReasoningLocked() {
+	if !r.reasoningActive {
+		return
+	}
+	r.reasoningActive = false
+	bytes := r.reasoningBytes
+	r.reasoningBytes = 0
+
+	// Step one row up onto the header, clear it, reprint the summary.
+	fmt.Print("\033[1A\r\033[K")
+	fmt.Printf("%s%s%s▽ Thinking · %s · ~%d tokens%s\n",
+		r.indent, ColorDim, ColorItalic,
+		formatBytesShort(bytes), bytes/4, ColorReset)
+}
+
+// EndReasoning is the exported counterpart of endReasoningLocked for
+// callers that drive the lifecycle directly (e.g. an explicit "end of
+// thinking" event). The CLI today doesn't need it — WriteChunk and
+// FinalizeAtTurnEnd both call the locked form — but it's exposed for
+// completeness and tests.
+func (r *AssistantTurnRenderer) EndReasoning() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.endReasoningLocked()
+}
+
 // WriteChunk emits a chunk of assistant text to stdout, prefixing each line
 // with the configured indent. The chunk is also appended to the current
 // segment buffer for potential post-segment re-render.
@@ -70,6 +144,11 @@ func (r *AssistantTurnRenderer) WriteChunk(chunk string) {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
+	// Prose has arrived — finalize any pending reasoning header so the
+	// "▽ Thinking…" line collapses to the summary before the first
+	// prose row lands.
+	r.endReasoningLocked()
 
 	r.seg.WriteString(chunk)
 	indentRunes := len([]rune(r.indent))
@@ -110,6 +189,13 @@ func (r *AssistantTurnRenderer) FinalizeAtTurnEnd() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	// Catch a "reasoning-only" turn: the model emitted thinking but
+	// no prose response (rare, but happens when a tool call follows
+	// directly). Without this the "▽ Thinking…" header would stay
+	// on screen as a stale ellipsis instead of resolving to the
+	// final byte/token count.
+	r.endReasoningLocked()
+
 	text := r.seg.String()
 	if text == "" {
 		r.resetSegment()
@@ -131,6 +217,17 @@ func (r *AssistantTurnRenderer) FinalizeAtTurnEnd() {
 	if !r.atLineStart {
 		upRows += physicalRows(r.curLineRunes, r.terminalWidth) - 1
 	}
+
+	// Hide the cursor for the duration of the clear-and-reprint dance.
+	// Without this, the terminal cursor visibly jumps to the top of the
+	// segment and then back down as the formatted text renders, which
+	// reads as a "blink" — especially noticeable for tall code blocks.
+	// `\033[?25l` hides; `\033[?25h` restores. Restoration is wrapped in
+	// a defer-equivalent so an early return inside `emitFormatted`
+	// doesn't leave the user with an invisible cursor for the rest of
+	// the session.
+	fmt.Print("\033[?25l")
+	defer fmt.Print("\033[?25h")
 
 	// Cursor to column 0, then up to the first row of the streamed segment,
 	// then clear from cursor to end of screen.
@@ -159,6 +256,20 @@ func (r *AssistantTurnRenderer) emitFormatted(text string) {
 	}
 	if !strings.HasSuffix(text, "\n") {
 		fmt.Println()
+	}
+}
+
+// formatBytesShort returns a compact human-readable size. Used in the
+// reasoning collapsed header where horizontal space is at a premium:
+// "1234" → "1.2 kB", "1234567" → "1.2 MB". Plain "B" under 1 kB.
+func formatBytesShort(n int) string {
+	switch {
+	case n < 1024:
+		return fmt.Sprintf("%d B", n)
+	case n < 1024*1024:
+		return fmt.Sprintf("%.1f kB", float64(n)/1024.0)
+	default:
+		return fmt.Sprintf("%.1f MB", float64(n)/(1024.0*1024.0))
 	}
 }
 

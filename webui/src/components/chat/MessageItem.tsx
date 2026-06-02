@@ -7,7 +7,13 @@ interface MessageItemProps {
   message: Message;
   onToolPillClick?: (toolId: string) => void;
   findMatchingToolExecution: (toolName: string) => ToolExecution | undefined;
-  filteredToolExecutions: ToolExecution[];
+  /**
+   * Status lookup that spans ALL tool executions, not just the current
+   * query's. Decides whether a tool segment renders as the running pill
+   * or the completed footnote — if this falls back to undefined for a
+   * past-query tool, the badge regresses to the pill and visibly flickers.
+   */
+  getToolStatus: (toolId: string) => ToolExecution['status'] | undefined;
   formatTime: (date: Date) => string;
 }
 
@@ -15,7 +21,7 @@ export const MessageItem = memo(function MessageItem({
   message,
   onToolPillClick,
   findMatchingToolExecution,
-  filteredToolExecutions,
+  getToolStatus,
   formatTime,
 }: MessageItemProps) {
   return (
@@ -51,10 +57,7 @@ export const MessageItem = memo(function MessageItem({
                 onToolPillClick?.(matchingTool.id);
               }
             }}
-            getToolStatus={(toolId) => {
-              const te = filteredToolExecutions.find((t) => t.id === toolId);
-              return te?.status;
-            }}
+            getToolStatus={getToolStatus}
           />
         </>
       ) : (

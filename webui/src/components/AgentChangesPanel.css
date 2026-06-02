@@ -305,6 +305,19 @@
   font-size: var(--text-sm);
 }
 
+.changes-empty-hint {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  max-width: 260px;
+  line-height: 1.45;
+}
+
+.changes-empty-hint svg {
+  display: inline-block;
+  vertical-align: -2px;
+  margin: 0 1px;
+}
+
 .changes-error {
   display: flex;
   align-items: center;

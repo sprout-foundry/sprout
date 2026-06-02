@@ -78,9 +78,18 @@ func (f *MarkdownFormatter) Format(text string) string {
 		return f.stripMarkdown(text)
 	}
 
-	// Process line by line for better formatting
+	// Process line by line for better formatting.
+	//
+	// bufio.Scanner's default buffer is 64 KiB and Scan() silently
+	// returns false on tokens larger than that — for the assistant
+	// output that meant a single ~64KiB code block (generated docs,
+	// large diffs) would be truncated without warning. Bump the cap
+	// to 1 MiB which comfortably covers any single line a model would
+	// produce while still bounding worst-case memory.
 	var result strings.Builder
 	scanner := bufio.NewScanner(strings.NewReader(text))
+	const maxLineBytes = 1 << 20
+	scanner.Buffer(make([]byte, 0, 64*1024), maxLineBytes)
 
 	inCodeBlock := false
 	inCodeBlockLang := ""
@@ -88,28 +97,30 @@ func (f *MarkdownFormatter) Format(text string) string {
 	for scanner.Scan() {
 		line := scanner.Text()
 
-		// Handle code blocks
+		// Handle code blocks. The decoration here is intentionally
+		// lightweight: one optional header line for the language and a
+		// dim `│` gutter on each code row. The previous form added four
+		// rows of chrome per block (`┌─ Code Block`, `│ Language: X`,
+		// `│`, `└─ End Code Block`), which more than doubled the size
+		// of short snippets and crowded the scroll buffer on responses
+		// with several blocks.
 		if strings.HasPrefix(line, "```") {
 			if !inCodeBlock {
-				// Start code block
 				inCodeBlock = true
 				lang := strings.TrimSpace(line[3:])
 				inCodeBlockLang = lang
-				result.WriteString(fmt.Sprintf("%s%s%s\n", ColorDim, ColorBold, "┌─ Code Block"))
 				if lang != "" {
-					result.WriteString(fmt.Sprintf("%s│ Language: %s%s\n", ColorDim, lang, ColorReset))
+					result.WriteString(fmt.Sprintf("%s──── %s ────%s\n", ColorDim, lang, ColorReset))
 				}
-				result.WriteString(fmt.Sprintf("%s│%s\n", ColorDim, ColorReset))
 			} else {
-				// End code block
 				inCodeBlock = false
-				result.WriteString(fmt.Sprintf("%s└─ End Code Block%s\n", ColorDim, ColorReset))
+				// No closing line — the next non-code row reads as the
+				// natural boundary. Saves a row per block.
 			}
 			continue
 		}
 
 		if inCodeBlock {
-			// Inside code block - format with syntax highlighting hints
 			result.WriteString(fmt.Sprintf("%s│ %s%s\n", ColorDim, f.formatCodeLine(line, inCodeBlockLang), ColorReset))
 			continue
 		}

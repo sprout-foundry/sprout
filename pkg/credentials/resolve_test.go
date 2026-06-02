@@ -230,9 +230,38 @@ func TestResolveProvider_LocalProviderShortCircuit(t *testing.T) {
 	}
 }
 
-// TestProviderEnvVar_ConsistentWithHasProviderCredential verifies that
-// the env var name returned by ProviderEnvVar is actually the one checked
-// by HasProviderCredential when resolving from the environment.
+// TestLMStudio_Credentials_EdgeCases verifies lmstudio-specific edge cases
+// not covered by the existing table-driven tests.
+// Regression test for SP-022-4a: auth.type changed from "bearer" to "none".
+func TestLMStudio_Credentials_EdgeCases(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("LEDIT_CONFIG", dir)
+	t.Setenv("SPROUT_CONFIG", dir)
+	t.Setenv("LEDIT_CREDENTIAL_BACKEND", "file")
+	ResetStorageBackend()
+	ResetProviderInfoFunc()
+
+	t.Run("CaseInsensitive", func(t *testing.T) {
+		assert.True(t, HasProviderCredential("LMStudio"))
+		assert.True(t, HasProviderCredential("LMSTUDIO"))
+
+		resolved, err := ResolveProvider(" LMStudio ")
+		assert.NoError(t, err)
+		assert.Equal(t, "none", resolved.Source)
+	})
+
+	t.Run("IgnoresAccidentalEnvVar", func(t *testing.T) {
+		// Even if someone sets LMSTUDIO_API_KEY in the environment, lmstudio
+		// should still short-circuit to source="none" because it's a local provider.
+		t.Setenv("LMSTUDIO_API_KEY", "some-fake-key")
+
+		resolved, err := ResolveProvider("lmstudio")
+		assert.NoError(t, err)
+		assert.Equal(t, "none", resolved.Source,
+			"local provider should ignore env vars, not consume them")
+		assert.Empty(t, resolved.Value)
+	})
+}
 func TestProviderEnvVar_ConsistentWithHasProviderCredential(t *testing.T) {
 	providers := []struct {
 		provider string

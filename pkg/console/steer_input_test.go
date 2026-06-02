@@ -185,7 +185,7 @@ func TestSteerLineWithCursor_FitsInWidth(t *testing.T) {
 	// The pinned line renders text + caret padded to terminal width.
 	// Verify the cursor caret is present and the line is exactly cols
 	// wide (accounting for visible chars, not bytes).
-	out := steerLineWithCursor("hello", 20)
+	out := steerRowText("hello", 20, true)
 	if !strings.Contains(out, "▏") {
 		t.Fatalf("expected cursor caret in output, got %q", out)
 	}
@@ -199,7 +199,7 @@ func TestSteerLineWithCursor_TruncatesLongInput(t *testing.T) {
 	// caret stays visible (otherwise the user can't tell where their
 	// keystrokes land).
 	long := strings.Repeat("a", 100)
-	out := steerLineWithCursor(long, 20)
+	out := steerRowText(long, 20, true)
 	if !strings.Contains(out, "…") {
 		t.Fatalf("expected ellipsis for overflow, got %q", out)
 	}

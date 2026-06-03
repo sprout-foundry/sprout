@@ -142,4 +142,5 @@ func init() {
 	rootCmd.AddCommand(shellCmd)
 	rootCmd.AddCommand(planCmd)
 	rootCmd.AddCommand(historyCmd)
+	rootCmd.AddCommand(automateCmd)
 }

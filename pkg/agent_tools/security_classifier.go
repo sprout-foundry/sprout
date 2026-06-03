@@ -140,6 +140,13 @@ type SecurityResult struct {
 	IsHardBlock  bool
 	RiskType     string       // Deprecated: Use Category instead. Risk category for user-facing messages
 	Category     RiskCategory // Granular risk category for the classified operation
+
+	// IntentConfirmation marks a tool call as requiring explicit user
+	// confirmation before proceeding, but NOT because it's dangerous.
+	// Used for operations that are safe but consequential — like launching
+	// a long-running autonomous workflow. The approval prompt uses
+	// intent-focused framing instead of security-warning framing.
+	IntentConfirmation bool
 }
 
 // IsDestructive returns true if the operation's risk category is destructive.
@@ -200,6 +207,15 @@ func ClassifyToolCall(toolName string, args map[string]interface{}) SecurityResu
 		result = SecurityResult{Risk: SecuritySafe, Reasoning: "Network access tool", Category: RiskCategoryNetwork}
 	case "git":
 		result = classifyGitOperation(args)
+	case "run_automate":
+		// Autonomous workflows are safe (user created them) but consequential
+		// (run for hours unsupervised). Always require intent confirmation.
+		result = SecurityResult{
+			Risk:               SecuritySafe,
+			Reasoning:          "Autonomous workflow execution — requires confirmation before starting",
+			Category:           RiskCategoryProcessManagement,
+			IntentConfirmation: true,
+		}
 	default:
 		// Tools whose arguments don't need runtime inspection are SAFE.
 		// The tool registry already validates that only registered tools

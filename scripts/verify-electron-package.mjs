@@ -61,8 +61,14 @@ function ensureDirectory(dirPath, description) {
 }
 
 function mapOsArch(os, arch) {
+  // The backend artifact directories are keyed by GOOS / GOARCH —
+  // `darwin-arm64`, `linux-amd64`, etc. — but the desktop-release.yml
+  // matrix passes its own labels (`macos`, `linux`, `windows`) via
+  // DESKTOP_PLATFORM. Translate those to the GOOS equivalents so the
+  // verify step can find the backend dir on every matrix entry.
+  const goOs = ({ macos: 'darwin', mac: 'darwin', osx: 'darwin', win32: 'windows', win: 'windows' }[os] || os);
   const goArch = ({ x64: 'amd64', arm64: 'arm64' }[arch] || arch);
-  return `${os}-${goArch}`;
+  return `${goOs}-${goArch}`;
 }
 
 function parsePlatformFromArgs() {

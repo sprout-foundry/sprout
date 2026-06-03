@@ -7,9 +7,38 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/mcp"
+	"github.com/sprout-foundry/sprout/pkg/skills"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// TestDefaultSkillsCoversEmbeddedLibrary is the cross-package consistency
+// gate: every skill shipped under pkg/skills/library/ MUST appear in the
+// defaults map that seeds Config.Skills. The whole point of the
+// pkg/skills refactor is that there is only one place to register a
+// skill (its SKILL.md on disk); if a future change accidentally
+// reintroduces a hand-maintained list that drifts from the embedded
+// set, this test fails.
+func TestDefaultSkillsCoversEmbeddedLibrary(t *testing.T) {
+	defaults := defaultSkills()
+	embedded := skills.Builtins()
+	for id, b := range embedded {
+		got, ok := defaults[id]
+		if !ok {
+			t.Errorf("defaultSkills() missing embedded skill %q — every pkg/skills/library/<id> must register a default", id)
+			continue
+		}
+		if got.Description != b.Description {
+			t.Errorf("skill %q description drift: defaults=%q embedded=%q", id, got.Description, b.Description)
+		}
+		if got.Name != b.Name {
+			t.Errorf("skill %q name drift: defaults=%q embedded=%q", id, got.Name, b.Name)
+		}
+		if !got.Enabled {
+			t.Errorf("skill %q registered disabled — built-ins should default to enabled", id)
+		}
+	}
+}
 
 // =============================================================================
 // APIKeys helpers

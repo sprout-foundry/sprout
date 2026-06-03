@@ -1,5 +1,5 @@
 ---
-name: self-help
+name: Self-Help
 description: Internal help and settings reference. Activate when the user asks "how do I...", wants to configure settings, or needs help understanding Sprout's capabilities.
 ---
 

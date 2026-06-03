@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/console"
+	"github.com/sprout-foundry/sprout/pkg/skills"
 	"github.com/spf13/cobra"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
@@ -133,16 +134,12 @@ var skillListCmd = &cobra.Command{
 		
 		fmt.Println("## Built-in Skills")
 		fmt.Println()
-		builtins := []struct {
-			id, name, desc string
-		}{
-			{"project-planning", "Project Planning", "Project onboarding, planning, and initialization"},
-			{"browse-debugging", "Browse Debugging", "Multi-step interactive browser debugging"},
-			{"workflow-automation", "Workflow Automation", "Create and manage automated agent workflows"},
-			{"self-help", "Self Help", "Configuration, settings, and capability reference"},
-		}
-		for _, s := range builtins {
-			fmt.Printf("  %-25s %s\n", s.id, s.desc)
+		// Derive the list from pkg/skills so a new skill added under
+		// pkg/skills/library/<id>/SKILL.md shows up here automatically.
+		// IDs() returns alphabetical order so the output is stable.
+		builtins := skills.Builtins()
+		for _, id := range skills.IDs() {
+			fmt.Printf("  %-25s %s\n", id, builtins[id].Description)
 		}
 		
 		// Check for project skills

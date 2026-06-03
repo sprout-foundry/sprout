@@ -180,6 +180,11 @@ func (a *Agent) GetAvailablePersonaIDs() []string {
 		if !persona.Enabled {
 			continue
 		}
+		// Filter out user-disabled personas (DisabledPersonas takes precedence
+		// over the catalog's Enabled flag).
+		if config.IsPersonaDisabled(id) {
+			continue
+		}
 		// Filter out LocalOnly personas in cloud mode
 		if persona.LocalOnly && !isLocal {
 			continue
@@ -250,100 +255,86 @@ func (a *Agent) GetAvailableToolNames() []string {
 	return names
 }
 
-// isOrchestratorGitWriteAllowed returns true if the current agent is the
-// orchestrator persona and the AllowOrchestratorGitWrite config is enabled.
-// The legacy "repo_orchestrator" ID resolves to "orchestrator" via aliases.
+// isGitWriteAllowed returns true if the active persona is permitted to perform
+// git write operations (commit, stage, push) via shell_command or the commit
+// tool. The check is two-layer:
+//
+//  1. The persona must declare the CapabilityGitWrite capability in its catalog
+//     entry. Without it, no git write — regardless of any other config.
+//  2. For the orchestrator persona specifically, the user's AllowOrchestratorGitWrite
+//     flag must additionally be true. This gives users a single toggle to
+//     opt the default chat persona out of git writes without rewriting the
+//     catalog.
+//
+// All other personas with CapabilityGitWrite (e.g. coordinator) are allowed
+// unconditionally — they exist precisely because the user opted into their
+// elevated agency by activating them.
+func (a *Agent) isGitWriteAllowed() bool {
+	personaID := a.GetActivePersona()
+	if personaID == "" {
+		return false
+	}
+	cfg := a.GetConfig()
+	if cfg == nil {
+		return false
+	}
+	persona := cfg.GetSubagentType(personaID)
+	if persona == nil || !persona.HasCapability(personas.CapabilityGitWrite) {
+		return false
+	}
+	if personaID == personas.IDOrchestrator {
+		return cfg.AllowOrchestratorGitWrite
+	}
+	return true
+}
+
+// isOrchestratorGitWriteAllowed is the legacy name preserved for callers that
+// haven't been updated. Identical semantics to isGitWriteAllowed.
+//
+// Deprecated: use isGitWriteAllowed.
 func (a *Agent) isOrchestratorGitWriteAllowed() bool {
-	persona := a.GetActivePersona()
-	if persona != personas.IDOrchestrator {
-		// Personas with auto-approve rules (e.g., executive_assistant) are treated
-		// as having git write access when their rules include git write operations.
-		if persona != "" && a.hasEAGitWriteApproval() {
+	return a.isGitWriteAllowed()
+}
+
+// canSpawnNonDelegatable reports whether the active persona is permitted to
+// spawn the given target persona ID, even if the target carries
+// Delegatable=false. The check reads the active persona's
+// CanSpawnNonDelegatable list — declarative replacement for the previous
+// hasEASpawnAuthority special case. The coordinator declares ["orchestrator"]
+// so the canonical coordinator→orchestrator→specialist chain works without
+// special-case Go code.
+func (a *Agent) canSpawnNonDelegatable(target string) bool {
+	cfg := a.GetConfig()
+	if cfg == nil {
+		return false
+	}
+	spawner := cfg.GetSubagentType(a.GetActivePersona())
+	if spawner == nil {
+		return false
+	}
+	normalizedTarget := normalizeAgentPersonaID(target)
+	for _, allowed := range spawner.CanSpawnNonDelegatable {
+		if normalizeAgentPersonaID(allowed) == normalizedTarget {
 			return true
 		}
-		return false
-	}
-	if a.configManager == nil {
-		return false
-	}
-	config := a.configManager.GetConfig()
-	if config == nil {
-		return false
-	}
-	return config.AllowOrchestratorGitWrite
-}
-
-// hasEAGitWriteApproval checks if the active persona has auto-approve rules
-// that explicitly include git write operations (git_commit, git_push, etc.)
-// in its low or medium risk lists. This is used to grant git write access
-// to the Executive Assistant persona.
-func (a *Agent) hasEAGitWriteApproval() bool {
-	cfg := a.GetConfig()
-	if cfg == nil {
-		return false
-	}
-	personaID := a.GetActivePersona()
-	persona := cfg.GetSubagentType(personaID)
-	if persona == nil || persona.AutoApproveRules == nil {
-		return false
-	}
-	rules := persona.GetAutoApproveRules()
-	gitWriteOps := []string{"git_commit", "git_push", "git_add"}
-	for _, op := range gitWriteOps {
-		for _, low := range rules.LowRiskOps {
-			if low == op {
-				return true
-			}
-		}
-		for _, med := range rules.MediumRiskOps {
-			if med == op {
-				return true
-			}
-		}
 	}
 	return false
 }
 
-// hasEASpawnAuthority returns true if the active persona has coordinator-level
-// spawn authority, allowing it to delegate to any persona regardless of the
-// delegatable flag. This enables the three-level nesting chain:
-// coordinator (depth 0) → orchestrator (depth 1) → coder/tester (depth 2).
+// hasEASpawnAuthority is the legacy name preserved for one caller site.
+// It returns true if the active persona has ANY entry in
+// CanSpawnNonDelegatable — useful where the test was previously "is this an
+// EA-class persona?" without naming a specific target.
 //
-// Authority is granted when:
-// 1. The active persona is the coordinator (formerly "executive_assistant"), OR
-// 2. The persona has auto-approve rules that include run_subagent
-//    (indicating it operates with similar elevated authority)
+// Deprecated: prefer canSpawnNonDelegatable(target) which is precise.
 func (a *Agent) hasEASpawnAuthority() bool {
-	personaID := a.GetActivePersona()
-
-	// Direct EA persona always has spawn authority
-	if personaID == personas.IDCoordinator {
-		return true
-	}
-
-	// Personas with auto-approve rules that include subagent spawning
-	// are treated as having EA-level authority
 	cfg := a.GetConfig()
 	if cfg == nil {
 		return false
 	}
-	persona := cfg.GetSubagentType(personaID)
-	if persona == nil || persona.AutoApproveRules == nil {
+	spawner := cfg.GetSubagentType(a.GetActivePersona())
+	if spawner == nil {
 		return false
 	}
-	rules := persona.GetAutoApproveRules()
-	subagentOps := []string{"subagent_spawn"}
-	for _, op := range subagentOps {
-		for _, low := range rules.LowRiskOps {
-			if low == op {
-				return true
-			}
-		}
-		for _, med := range rules.MediumRiskOps {
-			if med == op {
-				return true
-			}
-		}
-	}
-	return false
+	return len(spawner.CanSpawnNonDelegatable) > 0
 }

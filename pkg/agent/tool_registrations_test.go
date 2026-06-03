@@ -8,7 +8,7 @@ import (
 // the expected number of tools after the refactor.
 func TestNewDefaultToolRegistry_Count(t *testing.T) {
 	registry := newDefaultToolRegistry()
-	expectedCount := 33
+	expectedCount := 35
 	if len(registry.tools) != expectedCount {
 		t.Errorf("expected %d registered tools, got %d", expectedCount, len(registry.tools))
 	}
@@ -50,6 +50,8 @@ func TestNewDefaultToolRegistry_AllToolsRegistered(t *testing.T) {
 		"manage_memory",
 		"manage_settings",
 		"task_queue",
+		"run_automate",
+		"list_automate_workflows",
 		"list_changes",
 		"recover_file",
 		"revert_my_changes",
@@ -114,6 +116,8 @@ func TestNewDefaultToolRegistry_ToolParameters(t *testing.T) {
 		"manage_memory":          {paramCount: 6, requiredCount: 1, requiredNames: []string{"operation"}},
 		"manage_settings":        {paramCount: 4, requiredCount: 1, requiredNames: []string{"operation"}},
 		"task_queue":             {paramCount: 11, requiredCount: 1, requiredNames: []string{"operation"}},
+		"run_automate":            {paramCount: 1, requiredCount: 1, requiredNames: []string{"workflow"}},
+		"list_automate_workflows": {paramCount: 0, requiredCount: 0, requiredNames: []string{}},
 	}
 
 	for toolName, expected := range expectations {

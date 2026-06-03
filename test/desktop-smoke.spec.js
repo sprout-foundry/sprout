@@ -16,7 +16,11 @@ const { spawn } = require('node:child_process');
 // Point at the repo root so that `require('electron')` resolves correctly
 // when Playwright spawns the app.
 const APP_ROOT = path.resolve(__dirname, '..');
-const ELECTRON_BIN = path.join(APP_ROOT, 'node_modules', 'electron', 'dist', 'electron');
+// `require('electron')` exports the absolute path to the platform-correct
+// binary — `Electron.app/Contents/MacOS/Electron` on macOS, `electron.exe`
+// on Windows, `electron` on Linux. Hardcoding the Linux path used to
+// break the smoke tests on every other platform.
+const ELECTRON_BIN = require('electron');
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));

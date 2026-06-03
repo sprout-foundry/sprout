@@ -74,6 +74,12 @@ function persistUpdateState(stateOverride = null) {
 function initAutoUpdater() {
   if (!app.isPackaged) {
     console.log('[updater] Running in development mode — auto-update disabled');
+    // Even in dev mode we still register the IPC handlers so the webui
+    // doesn't crash on launch when it polls `desktop:isUpdatePending`
+    // (preload.js wires it up unconditionally). The handlers return
+    // safe "no update available / no install pending" defaults so the
+    // UI's update-banner path stays inert.
+    registerIpcHandlers();
     return;
   }
 
@@ -163,6 +169,12 @@ function initAutoUpdater() {
 function registerIpcHandlers() {
   // Check for updates on demand
   ipcMain.handle('desktop:checkForUpdates', async () => {
+    if (!app.isPackaged) {
+      // Dev mode: autoUpdater is unconfigured. Calling checkForUpdates
+      // would throw a noisy "no update server" error; report "no update"
+      // instead so the webui's update-check UI stays quiet.
+      return { ok: true, result: { hasUpdate: false } };
+    }
     try {
       const result = await checkForUpdates();
       return { ok: true, result };
@@ -173,6 +185,11 @@ function registerIpcHandlers() {
 
   // Install update immediately
   ipcMain.handle('desktop:installUpdate', async () => {
+    if (!app.isPackaged) {
+      // Dev mode: quitAndInstall would crash the dev electron — refuse
+      // cleanly so the renderer can handle the no-op response.
+      return { ok: false, error: 'Auto-update is disabled in development mode' };
+    }
     try {
       // Clear the install-on-quit flag since we're installing now
       installOnQuit = false;

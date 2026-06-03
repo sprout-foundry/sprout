@@ -24,8 +24,18 @@
       }
     ],
     "files": [
-      "desktop/**/*",
-      "package.json"
+      "**/*",
+      "!packages/${/*}",
+      "!webui/${/*}",
+      "!test/${/*}",
+      "!cmd/${/*}",
+      "!pkg/${/*}",
+      "!scripts/${/*}",
+      "!roadmap/${/*}",
+      "!docs/${/*}",
+      "!desktop/dist/${/*}",
+      "!sprout",
+      "!Makefile"
     ],
     "linux": {
       "category": "Development",

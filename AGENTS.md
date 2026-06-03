@@ -71,6 +71,7 @@ these specifications first to ensure alignment with the project direction.
 - **SP-061** Remove Static Embedding Provider (proposed)
 - **SP-059** Subagent ↔ Primary Interaction Overhaul + Delegate Retirement (in progress)
 - **SP-060** Desktop App — Per-Workspace Server Mode (proposed)
+- **SP-063** Real `computer_user` Persona — Mouse/Keyboard/Screenshot Agent (proposed)
 
 ## Testing
 

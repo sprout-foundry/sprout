@@ -70,6 +70,12 @@ type Config struct {
 	// When false, ALL personas must use the git tool for write operations.
 	AllowOrchestratorGitWrite bool `json:"allow_orchestrator_git_write,omitempty"`
 
+	// DisableCoordinatorAutoActivate opts out of the automatic activation of the
+	// coordinator persona (formerly Executive Assistant) when sprout starts in
+	// the user's $HOME directory. When true, no persona is auto-activated and
+	// the user must select one explicitly. Default false (auto-activate).
+	DisableCoordinatorAutoActivate bool `json:"disable_coordinator_auto_activate,omitempty"`
+
 	// AllowGitHistoryRewrite controls whether commands that can lose commit
 	// history are accepted via shell_command without going through the git
 	// tool's approval flow. Specifically: `git reset --hard <commit-ish>`,

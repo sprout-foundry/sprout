@@ -121,15 +121,15 @@ func cloneDefinitions(src map[string]Definition) map[string]Definition {
 
 func fallbackDefinitions() map[string]Definition {
 	return map[string]Definition{
-		"orchestrator": {
-			ID:           "orchestrator",
+		IDOrchestrator: {
+			ID:           IDOrchestrator,
 			Name:         "Orchestrator",
 			Description:  "Primary orchestration persona",
 			AllowedTools: []string{"shell_command", "read_file", "write_file", "edit_file", "write_structured_file", "patch_structured_file", "search_files", "web_search", "fetch_url", "run_subagent", "run_parallel_subagents", "view_history", "rollback_changes", "self_review", "list_skills", "activate_skill", "TodoWrite", "TodoRead", "add_memory", "read_memory", "list_memories", "delete_memory"},
 			Enabled:      true,
 		},
-		"general": {
-			ID:           "general",
+		IDGeneral: {
+			ID:           IDGeneral,
 			Name:         "General",
 			Description:  "General-purpose persona",
 			SystemPrompt: "pkg/agent/prompts/subagent_prompts/general.md",

@@ -24,15 +24,15 @@ A **persona** is a named specialization that configures how the AI agent behaves
 | Tester | `tester` | Unit test writing and coverage | Yes |
 | Debugger | `debugger` | Bug investigation and root cause analysis | Yes |
 | Refactor | `refactor` | Behavior-preserving code refactoring | Yes |
-| Code Reviewer | `code_reviewer` | Code quality and security review | Yes |
+| Reviewer | `reviewer` | Code quality and security review | Yes |
 | Researcher | `researcher` | Combined local codebase analysis and external research | Yes |
 | Web Scraper | `web_scraper` | Web content extraction | Yes |
-| Computer User | `computer_user` | Hands-on system administration and engineering execution | Yes |
-| Executive Assistant | `executive_assistant` | Cross-project orchestration and task queue | No |
-| Project Planner | `project_planner` | Strategic Planning & Alignment Architect | No |
+| Coordinator | `coordinator` | Cross-project orchestration and task queue. Aliases: `executive_assistant`, `ea`, `assistant` | No |
 | Orchestrator | `orchestrator` | Planning and delegation; git-write (commit/stage/push) is gated by `AllowOrchestratorGitWrite`. Aliases: `repo_orchestrator`, `repo_operator`, `git_orchestrator`, `orchestration` | No (EA exception) |
 
-**Source**: `pkg/personas/configs/default_personas.json`, `pkg/personas/configs/executive_assistant.json`, `pkg/personas/configs/project_planner.json`
+**Source**: `pkg/personas/configs/default_personas.json`, `pkg/personas/configs/coordinator.json`
+
+> Strategic project planning lives in the `project-planning` **skill** (`pkg/agent/skills/project-planning/SKILL.md`), not a persona. Activate it via `activate_skill project-planning` when starting a new project or aligning an existing one.
 
 ---
 
@@ -85,7 +85,7 @@ The `Definition` struct (`pkg/personas/catalog.go`) has these fields:
 | `aliases` | `[]string` | Alternative names (e.g., `"web-scraper"`) |
 | `local_only` | `bool` | Available only in local mode |
 | `delegatable` | `bool` | Can be spawned as a subagent |
-| `auto_approve_rules` | `*AutoApproveRules` | Risk cascade rules (EA persona only) — **note**: this field exists on the `SubagentType` struct in `config.go`, not on the catalog `Definition` struct. It is declared inline in the JSON config (e.g., `executive_assistant.json`) and mapped to `SubagentType.AutoApproveRules` during the catalog→config conversion. |
+| `auto_approve_rules` | `*AutoApproveRules` | Risk cascade rules (EA persona only) — **note**: this field exists on the `SubagentType` struct in `config.go`, not on the catalog `Definition` struct. It is declared inline in the JSON config (e.g., `coordinator.json`) and mapped to `SubagentType.AutoApproveRules` during the catalog→config conversion. |
 
 **Loading**: The catalog is loaded at startup via `personas.DefaultDefinitions()` which uses `sync.Once` for thread-safe initialization. If loading fails, a minimal fallback with `orchestrator` and `general` is used.
 
@@ -337,9 +337,9 @@ The depth model controls how deeply personas can delegate work to subagents. Thi
 
 | Depth | Role | Examples | Tool Constraints |
 |-------|------|----------|-----------------|
-| **0** | Primary agent | Executive Assistant, Project Planner (when activated as root) | Full tool access, can spawn subagents |
+| **0** | Primary agent | Coordinator (when activated as root) | Full tool access, can spawn subagents |
 | **1** | Orchestrator subagent | Orchestrator | Can spawn subagents, inherits parent provider/model |
-| **2** | Specialist subagent | Coder, Tester, Debugger, Code Reviewer | **Cannot** spawn subagents, focused tool set |
+| **2** | Specialist subagent | Coder, Tester, Debugger, Reviewer | **Cannot** spawn subagents, focused tool set |
 
 **Note on non-delegatable personas**: The `orchestrator` is marked `delegatable: false` in its catalog definition, so it cannot be spawned as a subagent by regular personas. However, the `executive_assistant` bypasses this restriction via `hasEASpawnAuthority()` — when the EA spawns a subagent, it can delegate to any persona regardless of the `delegatable` flag. This is what enables the canonical three-level nesting chain (EA → orchestrator → specialist).
 
@@ -679,7 +679,7 @@ Personas can specify their own provider and model, which takes precedence over t
       "provider": "ollama",
       "model": "qwen3-coder-480b"
     },
-    "code_reviewer": {
+    "reviewer": {
       "provider": "anthropic",
       "model": "claude-sonnet-4-20250514"
     }
@@ -707,7 +707,7 @@ For parallel subagent execution, a **fleet token budget** can be set via `Subage
 - **EA (depth 0)**: Use your most capable model. The EA does high-level reasoning, task decomposition, and decision-making. Cost here pays off in better delegation quality.
 - **Orchestrator (depth 1)**: Use a capable but cost-effective model. The orchestrator coordinates code-level work and delegates to specialists.
 - **Specialists (depth 2)**: Use budget models. These agents have narrow, well-defined tasks (write tests, implement a function, debug an issue) where cheaper models perform adequately.
-- **Code Reviewer**: May benefit from a more capable model since security review requires strong reasoning.
+- **Reviewer**: May benefit from a more capable model since security review requires strong reasoning.
 
 **Source**: `pkg/agent/persona.go` (provider/model resolution), `pkg/agent/subagent_runner.go` (createSubagent, token budget), `pkg/configuration/config.go` (GetSubagentTypeProvider, GetSubagentTypeModel)
 

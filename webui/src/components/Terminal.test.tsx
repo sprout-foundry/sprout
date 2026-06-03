@@ -1284,3 +1284,208 @@ describe('Terminal height persistence', () => {
     expect(reservedHeight).toBe('42px');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Tests: flat N-pane splits + generalized close behavior
+// ---------------------------------------------------------------------------
+
+function getAddPaneBtn(container: HTMLElement) {
+  return container.querySelector('.add-pane-btn') as HTMLButtonElement | null;
+}
+
+function getDividers(container: HTMLElement) {
+  return container.querySelectorAll('.terminal-split-divider');
+}
+
+describe('Terminal flat N-pane splits', () => {
+  let container: HTMLDivElement;
+  let root: any;
+
+  beforeAll(() => {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  });
+
+  beforeEach(() => {
+    document.documentElement.style.removeProperty('--sprout-terminal-reserved-height');
+  });
+
+  afterEach(() => {
+    if (root) {
+      act(() => {
+        root.unmount();
+      });
+    }
+    if (container) {
+      container.remove();
+    }
+    document.documentElement.style.removeProperty('--sprout-terminal-reserved-height');
+  });
+
+  it('hides the +pane button when split is not active', () => {
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
+
+    expect(getAddPaneBtn(container)).toBeNull();
+  });
+
+  it('shows the +pane button when split is active', () => {
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
+
+    act(() => {
+      dispatchTerminalAction('split_vertical');
+    });
+
+    const addBtn = getAddPaneBtn(container);
+    expect(addBtn).toBeTruthy();
+    expect(addBtn?.disabled).toBe(false);
+  });
+
+  it('clicking +pane grows the split to 3 panes with 2 dividers', () => {
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
+
+    act(() => {
+      dispatchTerminalAction('split_vertical');
+    });
+    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
+    expect(getDividers(container).length).toBe(1);
+
+    const addBtn = getAddPaneBtn(container) as HTMLButtonElement;
+    act(() => {
+      addBtn.click();
+    });
+
+    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(3);
+    // N panes → N-1 dividers.
+    expect(getDividers(container).length).toBe(2);
+  });
+
+  it('+pane can grow up to the hard cap (8 panes)', () => {
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
+
+    act(() => {
+      dispatchTerminalAction('split_vertical');
+    });
+
+    // From 2 panes, click +pane until disabled or until we hit 8.
+    for (let i = 0; i < 10; i++) {
+      const addBtn = getAddPaneBtn(container) as HTMLButtonElement;
+      if (!addBtn || addBtn.disabled) break;
+      act(() => {
+        addBtn.click();
+      });
+    }
+
+    const paneCount = container.querySelectorAll('.terminal-pane-wrapper').length;
+    expect(paneCount).toBe(8);
+    expect(getDividers(container).length).toBe(7);
+
+    // At capacity, the +pane button is disabled.
+    const finalAddBtn = getAddPaneBtn(container) as HTMLButtonElement;
+    expect(finalAddBtn.disabled).toBe(true);
+  });
+
+  it('clicking matching split button at 3+ panes is a no-op (avoids destructive collapse)', () => {
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
+
+    // Grow to 3 panes.
+    act(() => {
+      dispatchTerminalAction('split_vertical');
+    });
+    const addBtn = getAddPaneBtn(container) as HTMLButtonElement;
+    act(() => {
+      addBtn.click();
+    });
+    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(3);
+
+    // Clicking the matching split button stays at 3 panes — without this
+    // guard the legacy 1↔2 toggle would silently destroy two terminals.
+    const splitBtns = getSplitButtons(container);
+    act(() => {
+      splitBtns[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(3);
+  });
+
+  it('switching direction at 3 panes keeps all 3 and flips the axis', () => {
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
+
+    act(() => {
+      dispatchTerminalAction('split_vertical');
+    });
+    const addBtn = getAddPaneBtn(container) as HTMLButtonElement;
+    act(() => {
+      addBtn.click();
+    });
+
+    // Now flip to horizontal.
+    const splitBtns = getSplitButtons(container);
+    act(() => {
+      splitBtns[1].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(3);
+    const panesContainer = getPanesContainer(container);
+    expect(panesContainer?.classList.contains('terminal-split-horizontal')).toBe(true);
+    expect(panesContainer?.classList.contains('terminal-split-vertical')).toBe(false);
+  });
+
+  it('closing the last session in pane 2 of 3 removes that pane', () => {
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
+
+    act(() => {
+      dispatchTerminalAction('split_vertical');
+    });
+    const addBtn = getAddPaneBtn(container) as HTMLButtonElement;
+    act(() => {
+      addBtn.click();
+    });
+    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(3);
+
+    // The mock TerminalPane exposes a close button via secondary-close-btn,
+    // but Terminal.tsx renders showCloseButton={false} on the real pane.
+    // Drive the close through the `kill` terminal action, which closes the
+    // active session in the focused pane (which is the newly-added pane 2).
+    act(() => {
+      dispatchTerminalAction('kill');
+    });
+
+    // Down to 2 panes, still split.
+    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
+    const panesContainer = getPanesContainer(container);
+    expect(panesContainer?.classList.contains('terminal-split-vertical')).toBe(true);
+  });
+
+  it('killing the last remaining split pane drops us back to 1 pane unsplit', () => {
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
+
+    act(() => {
+      dispatchTerminalAction('split_vertical');
+    });
+    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
+
+    // Focused pane is the secondary; killing it should collapse the split.
+    act(() => {
+      dispatchTerminalAction('kill');
+    });
+
+    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(1);
+    const panesContainer = getPanesContainer(container);
+    expect(panesContainer?.classList.contains('terminal-split-vertical')).toBe(false);
+    expect(panesContainer?.classList.contains('terminal-split-horizontal')).toBe(false);
+  });
+});

@@ -10,10 +10,16 @@
 
 export interface SessionChangeEntry {
   path: string;
-  op: 'create' | 'edit' | 'delete' | string;
+  // "bulk" is a rollup placeholder emitted by the change tracker when a
+  // single shell command churns more files than the per-command volume
+  // threshold. `path` then names the offending top-level directory
+  // (trailing "/"), `bulk_count` is set, and per-file recovery is not
+  // available — the UI renders it as a single build-output row.
+  op: 'create' | 'edit' | 'delete' | 'bulk' | string;
   tool: string;
   timestamp: string; // RFC3339
   recoverable: boolean;
+  bulk_count?: number;
 }
 
 export interface SessionChangesResponse {

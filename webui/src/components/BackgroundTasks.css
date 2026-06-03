@@ -1,82 +1,161 @@
-.background-tasks-container {
-  background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border-default);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  font-family: var(--font-mono);
-  font-size: 12px;
+/* ── Trigger button (in the tab bar row) ────────────────── */
+
+.background-tasks-dropdown {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
 }
 
-.background-tasks-header {
+.background-tasks-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 26px;
+  min-width: 28px;
+  padding: 0 6px;
+  margin: 1px 0;
+  border: none;
+  border-radius: 4px 4px 0 0;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+}
+
+.background-tasks-trigger:hover,
+.background-tasks-trigger.open {
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+}
+
+.background-tasks-trigger.has-tasks {
+  color: var(--accent-secondary);
+}
+
+.background-tasks-trigger:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: -2px;
+}
+
+.background-tasks-trigger-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 14px;
+  padding: 0 4px;
+  border-radius: 7px;
+  background: var(--accent-secondary);
+  color: var(--accent-fg);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+/* ── Popover panel ──────────────────────────────────────── */
+
+.background-tasks-popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 280px;
+  max-width: 360px;
+  max-height: 360px;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  z-index: 200;
+  box-shadow: var(--shadow-elevated);
+  animation: backgroundTasksFadeIn 0.1s ease-out;
+  overflow: hidden;
+}
+
+@keyframes backgroundTasksFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.background-tasks-popover-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 12px;
-  height: 36px;
-  cursor: pointer;
-  background: var(--bg-tertiary);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
   user-select: none;
-  transition: background 0.15s ease;
 }
 
-.background-tasks-header:hover {
-  background: var(--bg-elevated);
-}
-
-.background-tasks-title {
-  display: flex;
+.background-tasks-popover-title {
+  display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: var(--text-primary);
-  font-weight: 500;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .background-tasks-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 8px;
   background: var(--accent-secondary);
-  color: var(--text-primary);
-  border-radius: 12px;
-  padding: 2px 8px;
+  color: var(--accent-fg);
+  font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 600;
-  min-width: 18px;
-  text-align: center;
+  text-transform: none;
+  letter-spacing: 0;
+  line-height: 1;
 }
 
-.background-tasks-toggle {
-  display: flex;
-  align-items: center;
-  color: var(--text-muted);
-  transition: color 0.15s ease;
-}
-
-.background-tasks-header:hover .background-tasks-toggle {
-  color: var(--text-primary);
-}
-
-.background-tasks-body {
+.background-tasks-popover-body {
   display: flex;
   flex-direction: column;
   overflow-y: auto;
-  max-height: 300px;
-  min-height: 40px;
+  flex: 1;
+  min-height: 60px;
   scrollbar-width: thin;
   scrollbar-color: var(--border-default) transparent;
 }
 
-.background-tasks-body::-webkit-scrollbar {
-  width: 8px;
+.background-tasks-popover-body::-webkit-scrollbar {
+  width: 6px;
 }
 
-.background-tasks-body::-webkit-scrollbar-thumb {
+.background-tasks-popover-body::-webkit-scrollbar-thumb {
   background: var(--border-default);
   border-radius: 999px;
 }
 
+.background-tasks-popover-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 .background-tasks-empty {
-  padding: 12px;
+  padding: 16px 12px;
   text-align: center;
   color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
   font-style: italic;
 }
 
@@ -85,25 +164,28 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 12px;
-  color: var(--accent-error);
-  background: color-mix(in srgb, var(--accent-error) 10%, transparent);
-  border-radius: 4px;
   margin: 8px;
+  padding: 8px 10px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent-error) 10%, transparent);
+  color: var(--accent-error);
+  font-size: 12px;
 }
+
+/* ── Task list ──────────────────────────────────────────── */
 
 .background-tasks-list {
   display: flex;
   flex-direction: column;
-  gap: 0;
 }
 
 .background-task-item {
   display: flex;
   align-items: stretch;
-  padding: 8px 12px;
+  padding: 8px 10px;
   border-bottom: 1px solid var(--border-subtle);
   transition: background 0.15s ease;
+  font-family: var(--font-mono);
 }
 
 .background-task-item:hover {
@@ -145,7 +227,7 @@
 
 .background-task-status.active .background-task-status-dot {
   background: var(--accent-success);
-  box-shadow: 0 0 0 4px rgba(152, 195, 121, 0.15);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-success) 15%, transparent);
 }
 
 .background-task-status.inactive .background-task-status-dot {
@@ -158,8 +240,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: var(--font-mono);
   font-size: 12px;
+  min-width: 0;
 }
 
 .background-task-meta {
@@ -207,11 +289,13 @@
   line-height: 1.4;
 }
 
+/* ── Action buttons ─────────────────────────────────────── */
+
 .background-task-actions {
   display: flex;
   align-items: flex-start;
-  gap: 6px;
-  margin-left: 12px;
+  gap: 4px;
+  margin-left: 8px;
   flex-shrink: 0;
 }
 
@@ -225,12 +309,14 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background, color, border-color, box-shadow, transform 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
   flex-shrink: 0;
 }
 
 .background-task-btn:hover {
-  background: var(--bg-secondary);
+  background: var(--bg-elevated);
   color: var(--text-primary);
 }
 
@@ -239,7 +325,12 @@
   box-shadow: 0 0 0 2px var(--accent-primary);
 }
 
-.background-task-btn-attach:hover {
+.background-task-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.background-task-btn-attach:hover:not(:disabled) {
   background: color-mix(in srgb, var(--accent-success) 15%, transparent);
   color: var(--accent-success);
 }
@@ -249,19 +340,27 @@
   color: var(--accent-error);
 }
 
-/* Responsive adjustments */
+.background-task-btn-refresh:hover {
+  color: var(--accent-secondary);
+}
+
+.background-tasks-spin {
+  animation: backgroundTasksSpin 1s linear infinite;
+}
+
+@keyframes backgroundTasksSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (max-width: 768px) {
-  .background-tasks-header {
-    padding: 0 8px;
-    height: 32px;
-  }
-
-  .background-tasks-body {
-    max-height: 250px;
-  }
-
-  .background-task-item {
-    padding: 6px 8px;
+  .background-tasks-popover {
+    min-width: 240px;
+    max-width: calc(100vw - 24px);
   }
 
   .background-task-preview {

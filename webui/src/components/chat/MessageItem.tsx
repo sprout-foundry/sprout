@@ -24,6 +24,22 @@ export const MessageItem = memo(function MessageItem({
   getToolStatus,
   formatTime,
 }: MessageItemProps) {
+  // Suppress empty bubbles. Session restore replays the assistant turn
+  // boundaries verbatim, including tool-only turns whose persisted
+  // `content` is "" — those would otherwise render as a bubble with
+  // nothing but a timestamp and a copy button, looking broken. We only
+  // drop the row when there is truly nothing to render: no prose, no
+  // tool segments (toolRefs), and no reasoning to expand. Tool-only
+  // turns with at least one toolRef still render so the user can see
+  // the [tool] footnotes that closed the turn. Same guard for user
+  // turns — defensive, since the restore path also yields empty user
+  // content in rare cases.
+  const hasContent = !!message.content && message.content.trim().length > 0;
+  const hasReasoning = !!message.reasoning && message.reasoning.trim().length > 0;
+  const hasToolRefs = !!message.toolRefs && message.toolRefs.length > 0;
+  if (!hasContent && !hasReasoning && !hasToolRefs) {
+    return null;
+  }
   return (
     <MessageBubble
       type={message.type}

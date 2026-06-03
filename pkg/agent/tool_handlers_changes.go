@@ -47,6 +47,13 @@ func handleListChanges(ctx context.Context, a *Agent, args map[string]interface{
 		Tool        string    `json:"tool"`
 		Timestamp   time.Time `json:"timestamp"`
 		Recoverable bool      `json:"recoverable"`
+		// BulkCount surfaces build-output rollups (SP-061-1). When > 0,
+		// `path` names a directory that was churned past
+		// shellBulkThreshold by one shell command; the UI renders the
+		// entry as a single "<dir>/ — N files (build output)" row
+		// instead of stacking N per-file rows. Omitted on normal
+		// per-file entries so the JSON stays compact.
+		BulkCount int `json:"bulk_count,omitempty"`
 	}
 	files := make([]fileEntry, 0, len(changes))
 	for _, ch := range changes {
@@ -56,6 +63,7 @@ func handleListChanges(ctx context.Context, a *Agent, args map[string]interface{
 			Tool:        ch.ToolCall,
 			Timestamp:   ch.Timestamp,
 			Recoverable: isRecoverableOriginal(ch.OriginalCode),
+			BulkCount:   ch.BulkCount,
 		})
 	}
 

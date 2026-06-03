@@ -1,10 +1,11 @@
-import { Play, Square, Terminal, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
+import { Play, Square, Layers, RefreshCw } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { clientFetch } from '../services/clientSession';
 import { debugLog } from '../utils/log';
 import './BackgroundTasks.css';
 
-const POLL_INTERVAL_MS = 3000;
+const POLL_INTERVAL_OPEN_MS = 3000;
+const POLL_INTERVAL_IDLE_MS = 15000;
 
 interface BackgroundSession {
   id: string;
@@ -12,7 +13,7 @@ interface BackgroundSession {
   status: 'active' | 'inactive';
   chat_id: string;
   output_preview: string;
-  started_at: number; // Unix timestamp (seconds)
+  started_at: number;
 }
 
 interface SessionsResponse {
@@ -47,14 +48,15 @@ function friendlyStatus(status: number): string {
 }
 
 function BackgroundTasks({ onAttachSession }: BackgroundTasksProps): JSX.Element {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
   const [sessions, setSessions] = useState<BackgroundSession[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
   const isFetchingRef = useRef(false);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
-  // Fetch sessions from the API (guarded against concurrent calls)
   const fetchSessions = useCallback(async () => {
     if (isFetchingRef.current) return;
     isFetchingRef.current = true;
@@ -77,7 +79,6 @@ function BackgroundTasks({ onAttachSession }: BackgroundTasksProps): JSX.Element
     }
   }, []);
 
-  // Attach a session (make it visible in the terminal)
   const attachSession = useCallback(
     async (sessionId: string, sessionName?: string) => {
       try {
@@ -88,17 +89,14 @@ function BackgroundTasks({ onAttachSession }: BackgroundTasksProps): JSX.Element
           throw new Error(`Failed to attach session: ${friendlyStatus(response.status)}`);
         }
 
-        // Fire a custom event to notify Terminal.tsx
         window.dispatchEvent(
           new CustomEvent('sprout:terminal-attach-session', {
             detail: { sessionId, name: sessionName },
           }),
         );
 
-        // Call the optional prop callback
         onAttachSession?.(sessionId);
-
-        // Refresh the list (session should be removed from background tasks)
+        setIsOpen(false);
         await fetchSessions();
       } catch (err) {
         debugLog('[BackgroundTasks] Failed to attach session:', err);
@@ -108,7 +106,6 @@ function BackgroundTasks({ onAttachSession }: BackgroundTasksProps): JSX.Element
     [fetchSessions, onAttachSession],
   );
 
-  // Kill a session
   const killSession = useCallback(
     async (sessionId: string) => {
       try {
@@ -118,8 +115,6 @@ function BackgroundTasks({ onAttachSession }: BackgroundTasksProps): JSX.Element
         if (!response.ok) {
           throw new Error(`Failed to kill session: ${friendlyStatus(response.status)}`);
         }
-
-        // Refresh the list (session should be removed)
         await fetchSessions();
       } catch (err) {
         debugLog('[BackgroundTasks] Failed to kill session:', err);
@@ -129,41 +124,30 @@ function BackgroundTasks({ onAttachSession }: BackgroundTasksProps): JSX.Element
     [fetchSessions],
   );
 
-  // Poll for sessions when expanded
+  // Initial fetch + adaptive polling.
+  // When the popover is open we poll quickly so the list stays fresh;
+  // when closed we still poll (slowly) so the badge count is accurate.
   useEffect(() => {
-    if (!isExpanded) return;
-
-    // Clear stale errors on expand
-    setError(null);
-
-    // Initial fetch
     fetchSessions();
+    const intervalMs = isOpen ? POLL_INTERVAL_OPEN_MS : POLL_INTERVAL_IDLE_MS;
+    const intervalId = setInterval(fetchSessions, intervalMs);
+    return () => clearInterval(intervalId);
+  }, [isOpen, fetchSessions]);
 
-    // Set up polling
-    const intervalId = setInterval(() => {
-      fetchSessions();
-    }, POLL_INTERVAL_MS);
-
-    return () => {
-      clearInterval(intervalId);
-    };
-  }, [isExpanded, fetchSessions]);
-
-  // Tick every second when expanded and has active sessions
+  // Tick for live duration display, only while the popover is open and
+  // there's at least one active task.
   useEffect(() => {
-    if (!isExpanded) return;
+    if (!isOpen) return;
     const hasActive = sessions.some((s) => s.status === 'active');
     if (!hasActive) return;
     const id = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(id);
-  }, [isExpanded, sessions]); // depends on isExpanded and sessions (hasActive derived in effect body)
+  }, [isOpen, sessions]);
 
-  // Listen for WebSocket events to auto-refresh on terminal updates
+  // Refresh badge on terminal WS events.
   useEffect(() => {
-    if (!isExpanded) return;
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail;
-      // Refresh if it's a terminal-related event
       if (
         detail?.type === 'terminal_output' ||
         detail?.type === 'pty_exit' ||
@@ -174,107 +158,152 @@ function BackgroundTasks({ onAttachSession }: BackgroundTasksProps): JSX.Element
     };
     window.addEventListener('sprout:wsevent', handler as EventListener);
     return () => window.removeEventListener('sprout:wsevent', handler as EventListener);
-  }, [isExpanded, fetchSessions]);
+  }, [fetchSessions]);
 
-  // Also fetch when the component first mounts (to update the badge when collapsed)
+  // Close popover on outside click / Escape.
   useEffect(() => {
-    // Skip mount fetch if already expanded (the polling effect handles it)
-    if (isExpanded) return;
-    fetchSessions();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- intentional mount-only; isExpanded read at mount time
+    if (!isOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        popoverRef.current &&
+        !popoverRef.current.contains(target) &&
+        triggerRef.current &&
+        !triggerRef.current.contains(target)
+      ) {
+        setIsOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsOpen(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen]);
 
-  const count = sessions.length;
-
-  // Tick is used to trigger re-renders for duration updates
   void tick;
 
+  const count = sessions.length;
+  const triggerTitle =
+    count > 0 ? `${count} background ${count === 1 ? 'task' : 'tasks'}` : 'Background tasks';
+
   return (
-    <div className="background-tasks-container">
-      <div className="background-tasks-header" onClick={() => setIsExpanded((prev) => !prev)}>
-        <div className="background-tasks-title">
-          <Terminal size={16} />
-          <span>Background Tasks</span>
-          {count > 0 && <span className="background-tasks-badge">{count}</span>}
-        </div>
-        <div className="background-tasks-toggle">
-          {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-        </div>
-      </div>
+    <div className="background-tasks-dropdown">
+      <button
+        ref={triggerRef}
+        className={`background-tasks-trigger${isOpen ? ' open' : ''}${count > 0 ? ' has-tasks' : ''}`}
+        onClick={() => setIsOpen((prev) => !prev)}
+        title={triggerTitle}
+        aria-label={triggerTitle}
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
+        type="button"
+      >
+        <Layers size={14} />
+        {count > 0 && <span className="background-tasks-trigger-badge">{count}</span>}
+      </button>
 
-      {isExpanded && (
-        <div className="background-tasks-body">
-          {error && (
-            <div className="background-tasks-error" aria-live="polite">
-              <span>{error}</span>
-              <button
-                className="background-task-btn background-task-btn-retry"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  fetchSessions();
-                }}
-                title="Retry"
-                type="button"
-              >
-                <RefreshCw size={12} />
-              </button>
+      {isOpen && (
+        <div ref={popoverRef} className="background-tasks-popover" role="menu">
+          <div className="background-tasks-popover-header">
+            <div className="background-tasks-popover-title">
+              <span>Background Tasks</span>
+              {count > 0 && <span className="background-tasks-badge">{count}</span>}
             </div>
-          )}
+            <button
+              className="background-task-btn background-task-btn-refresh"
+              onClick={(e) => {
+                e.stopPropagation();
+                fetchSessions();
+              }}
+              title="Refresh"
+              aria-label="Refresh background tasks"
+              type="button"
+            >
+              <RefreshCw size={12} className={isLoading ? 'background-tasks-spin' : ''} />
+            </button>
+          </div>
 
-          {isLoading && count === 0 && !error && <div className="background-tasks-empty">Loading...</div>}
+          <div className="background-tasks-popover-body">
+            {error && (
+              <div className="background-tasks-error" aria-live="polite">
+                <span>{error}</span>
+                <button
+                  className="background-task-btn background-task-btn-retry"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    fetchSessions();
+                  }}
+                  title="Retry"
+                  type="button"
+                >
+                  <RefreshCw size={12} />
+                </button>
+              </div>
+            )}
 
-          {!error && count === 0 && !isLoading && (
-            <div className="background-tasks-empty">No background tasks running</div>
-          )}
+            {isLoading && count === 0 && !error && <div className="background-tasks-empty">Loading...</div>}
 
-          {!error && count > 0 && (
-            <div className="background-tasks-list">
-              {sessions.map((session) => (
-                <div key={session.id} className="background-task-item">
-                  <div className="background-task-info">
-                    <div className="background-task-header-row">
-                      <span
-                        className={`background-task-status ${session.status}`}
-                        aria-label={`Status: ${session.status}`}
-                      >
-                        <span className="background-task-status-dot" />
-                      </span>
-                      <span className="background-task-name">{session.name || session.id}</span>
-                    </div>
-                    <div className="background-task-meta">
-                      <span className={`background-task-status-text ${session.status}`}>
-                        {session.status === 'active' ? 'Running' : 'Exited'}
-                      </span>
-                      {session.started_at > 0 && (
-                        <span className="background-task-duration">{formatDuration(session.started_at)}</span>
+            {!error && count === 0 && !isLoading && (
+              <div className="background-tasks-empty">No background tasks running</div>
+            )}
+
+            {!error && count > 0 && (
+              <div className="background-tasks-list">
+                {sessions.map((session) => (
+                  <div key={session.id} className="background-task-item">
+                    <div className="background-task-info">
+                      <div className="background-task-header-row">
+                        <span
+                          className={`background-task-status ${session.status}`}
+                          aria-label={`Status: ${session.status}`}
+                        >
+                          <span className="background-task-status-dot" />
+                        </span>
+                        <span className="background-task-name">{session.name || session.id}</span>
+                      </div>
+                      <div className="background-task-meta">
+                        <span className={`background-task-status-text ${session.status}`}>
+                          {session.status === 'active' ? 'Running' : 'Exited'}
+                        </span>
+                        {session.started_at > 0 && (
+                          <span className="background-task-duration">{formatDuration(session.started_at)}</span>
+                        )}
+                      </div>
+                      {session.output_preview && (
+                        <pre className="background-task-preview">{session.output_preview}</pre>
                       )}
                     </div>
-                    {session.output_preview && <pre className="background-task-preview">{session.output_preview}</pre>}
+                    <div className="background-task-actions">
+                      <button
+                        className="background-task-btn background-task-btn-attach"
+                        onClick={() => attachSession(session.id, session.name)}
+                        title="Attach to terminal"
+                        type="button"
+                        disabled={session.status === 'inactive'}
+                        aria-label={`Attach ${session.name || session.id} to terminal`}
+                      >
+                        <Play size={14} />
+                      </button>
+                      <button
+                        className="background-task-btn background-task-btn-kill"
+                        onClick={() => killSession(session.id)}
+                        title="Kill task"
+                        type="button"
+                        aria-label={`Kill ${session.name || session.id}`}
+                      >
+                        <Square size={14} />
+                      </button>
+                    </div>
                   </div>
-                  <div className="background-task-actions">
-                    <button
-                      className="background-task-btn background-task-btn-attach"
-                      onClick={() => attachSession(session.id, session.name)}
-                      title="Attach to terminal"
-                      type="button"
-                      disabled={session.status === 'inactive'}
-                      aria-label={`Attach ${session.name || session.id} to terminal`}
-                    >
-                      <Play size={14} />
-                    </button>
-                    <button
-                      className="background-task-btn background-task-btn-kill"
-                      onClick={() => killSession(session.id)}
-                      title="Kill task"
-                      type="button"
-                      aria-label={`Kill ${session.name || session.id}`}
-                    >
-                      <Square size={14} />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

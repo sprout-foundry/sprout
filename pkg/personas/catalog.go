@@ -17,20 +17,34 @@ type Catalog struct {
 }
 
 type Definition struct {
-	ID               string   `json:"id"`
-	Name             string   `json:"name"`
-	Description      string   `json:"description"`
-	Provider         string   `json:"provider,omitempty"`
-	Model            string   `json:"model,omitempty"`
-	SystemPrompt     string   `json:"system_prompt,omitempty"`
-	SystemPromptText string   `json:"system_prompt_text,omitempty"`
-	SystemPromptAppend string `json:"system_prompt_append,omitempty"`
-	AllowedTools     []string         `json:"allowed_tools,omitempty"`
-	Enabled          bool             `json:"enabled"`
-	Aliases          []string         `json:"aliases,omitempty"`
-	LocalOnly        bool             `json:"local_only,omitempty"`
-	Delegatable      bool             `json:"delegatable,omitempty"`
-	AutoApproveRules *AutoApproveRules `json:"auto_approve_rules,omitempty"`
+	ID                 string            `json:"id"`
+	Name               string            `json:"name"`
+	Description        string            `json:"description"`
+	Provider           string            `json:"provider,omitempty"`
+	Model              string            `json:"model,omitempty"`
+	SystemPrompt       string            `json:"system_prompt,omitempty"`
+	SystemPromptText   string            `json:"system_prompt_text,omitempty"`
+	SystemPromptAppend string            `json:"system_prompt_append,omitempty"`
+	AllowedTools       []string          `json:"allowed_tools,omitempty"`
+	Enabled            bool              `json:"enabled"`
+	Aliases            []string          `json:"aliases,omitempty"`
+	LocalOnly          bool              `json:"local_only,omitempty"`
+	Delegatable        bool              `json:"delegatable,omitempty"`
+	AutoApproveRules   *AutoApproveRules `json:"auto_approve_rules,omitempty"`
+	// Capabilities is an explicit list of agency grants this persona holds —
+	// e.g. CapabilityGitWrite. Replaces the previous practice of inferring
+	// capabilities by sniffing AutoApproveRules. AutoApproveRules now means
+	// purely "what auto-approves at runtime"; capabilities mean "what this
+	// persona is fundamentally allowed to do".
+	Capabilities []string `json:"capabilities,omitempty"`
+	// CanSpawnNonDelegatable lists otherwise-undelegatable persona IDs that
+	// this persona is explicitly permitted to spawn as a subagent. Replaces
+	// the implicit "hasEASpawnAuthority" carve-out: instead of detecting
+	// EA-class personas by sniffing AutoApproveRules for "subagent_spawn",
+	// the catalog now declares the chain directly. The coordinator carries
+	// ["orchestrator"] so the canonical coordinator→orchestrator→specialist
+	// chain works without special-case code.
+	CanSpawnNonDelegatable []string `json:"can_spawn_non_delegatable,omitempty"`
 }
 
 // AutoApproveRules mirrors the configuration package's AutoApproveRules
@@ -69,6 +83,11 @@ func loadEmbeddedDefinitions() (map[string]Definition, error) {
 	}
 
 	merged := make(map[string]Definition)
+	// Track which file declared each ID/alias so conflict messages point
+	// the developer at the offending pair rather than silently overwriting.
+	idSources := make(map[string]string) // normalized id → filename that declared it
+	aliasSources := make(map[string]string) // normalized alias → "filename:owner-id"
+
 	for _, entry := range entries {
 		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
 			continue
@@ -90,8 +109,35 @@ func loadEmbeddedDefinitions() (map[string]Definition, error) {
 			if id == "" {
 				return nil, fmt.Errorf("persona in %s has empty id", filename)
 			}
+			if prior, exists := idSources[id]; exists {
+				return nil, fmt.Errorf("duplicate persona id %q: declared in both %s and %s", id, prior, filename)
+			}
+			// An alias from another persona must not shadow this ID.
+			if prior, exists := aliasSources[id]; exists {
+				return nil, fmt.Errorf("persona id %q in %s is shadowed by alias declared at %s", id, filename, prior)
+			}
 			persona.ID = id
 			merged[id] = persona
+			idSources[id] = filename
+
+			for _, alias := range persona.Aliases {
+				normalizedAlias := normalizeID(alias)
+				if normalizedAlias == "" {
+					continue
+				}
+				if normalizedAlias == id {
+					continue // self-alias is harmless
+				}
+				if prior, exists := idSources[normalizedAlias]; exists {
+					return nil, fmt.Errorf("alias %q on persona %q (%s) shadows persona id declared at %s",
+						normalizedAlias, id, filename, prior)
+				}
+				if prior, exists := aliasSources[normalizedAlias]; exists {
+					return nil, fmt.Errorf("alias %q is declared twice: %s and %s:%s",
+						normalizedAlias, prior, filename, id)
+				}
+				aliasSources[normalizedAlias] = filename + ":" + id
+			}
 		}
 	}
 

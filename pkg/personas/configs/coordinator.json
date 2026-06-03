@@ -39,6 +39,12 @@
         "task_queue_publish",
         "task_queue_add"
       ],
+      "capabilities": [
+        "git_write"
+      ],
+      "can_spawn_non_delegatable": [
+        "orchestrator"
+      ],
       "delegatable": false,
       "description": "Coordinates work across projects by delegating to orchestrator subagents. Manages a persistent task queue and operates on the user's behalf with elevated approval authority.",
       "enabled": true,

@@ -1662,6 +1662,29 @@ func startTerminalToolSubscriber(ctx context.Context, chatAgent *agent.Agent, ev
 					indicator.Stop()
 					// Same row-layout invalidation as above.
 					run = nil
+				case events.EventTypeTodoUpdate:
+					// Render the agent's current todo list as a styled block
+					// in the scroll region so the user can see what's queued,
+					// active, and done at a glance. The block lands AFTER the
+					// ToolEnd line for todo_write (events fire in order), so
+					// the layout reads:
+					//   ✓ TodoWrite (5 tasks · 1 active) 0.0s
+					//   ⓘ Todos · 5 total · 3 done · 1 active · 1 pending
+					//      ✓ Investigate CLI todo tool rendering
+					//      ✓ Audit stdin reading locations
+					//      → Improve CLI todo rendering
+					//      · Fix stdin reading with raw mode
+					todosRaw, _ := data["todos"].([]interface{})
+					indicator.Stop()
+					if len(todosRaw) == 0 {
+						fmt.Fprintln(os.Stdout, console.GlyphInfo.Prefix()+"Todo list cleared")
+					} else {
+						fmt.Fprintln(os.Stdout, formatTodoListBlock(todosRaw))
+					}
+					// Breaks any pending collapse run — the multi-line block
+					// invalidates the row math the next ToolEnd would use.
+					run = nil
+					footer.Refresh()
 				}
 			}
 		}
@@ -1962,9 +1985,138 @@ func formatToolPreview(chatAgent *agent.Agent, toolName, arguments string) strin
 		return formatRunSubagentPreview(chatAgent, arguments)
 	case "run_parallel_subagents":
 		return formatRunParallelSubagentsPreview(arguments)
+	case "TodoWrite", "todo_write":
+		return formatTodoWritePreview(arguments)
 	default:
 		return formatToolArgPreview(toolName, arguments)
 	}
+}
+
+// formatTodoListBlock renders the multi-line todo block printed in the
+// scroll region in response to EventTypeTodoUpdate. The header is a
+// one-line summary (counts by status); the body is one row per item
+// with a status-coded glyph (✓ done, → active, · pending, ⏹ cancelled).
+// Truncates long lists to keep the terminal scannable.
+func formatTodoListBlock(todosRaw []interface{}) string {
+	type todoEntry struct {
+		content string
+		status  string
+	}
+	items := make([]todoEntry, 0, len(todosRaw))
+	var pending, inProgress, completed, cancelled int
+	for _, t := range todosRaw {
+		m, ok := t.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		content, _ := m["content"].(string)
+		status, _ := m["status"].(string)
+		items = append(items, todoEntry{content: content, status: status})
+		switch status {
+		case "pending":
+			pending++
+		case "in_progress":
+			inProgress++
+		case "completed":
+			completed++
+		case "cancelled":
+			cancelled++
+		}
+	}
+
+	var b strings.Builder
+	parts := []string{fmt.Sprintf("%d total", len(items))}
+	if completed > 0 {
+		parts = append(parts, fmt.Sprintf("%d done", completed))
+	}
+	if inProgress > 0 {
+		parts = append(parts, fmt.Sprintf("%d active", inProgress))
+	}
+	if pending > 0 {
+		parts = append(parts, fmt.Sprintf("%d pending", pending))
+	}
+	if cancelled > 0 {
+		parts = append(parts, fmt.Sprintf("%d cancelled", cancelled))
+	}
+	b.WriteString(console.GlyphInfo.Prefix() + "Todos · " + strings.Join(parts, " · "))
+
+	const maxLines = 20
+	const maxContentLen = 100
+	shown := 0
+	for _, it := range items {
+		if shown >= maxLines {
+			fmt.Fprintf(&b, "\n   %s…and %d more", console.GlyphDim.Prefix(), len(items)-shown)
+			break
+		}
+		content := strings.TrimSpace(it.content)
+		if content == "" {
+			content = "<untitled>"
+		}
+		if len(content) > maxContentLen {
+			content = content[:maxContentLen-1] + "…"
+		}
+		fmt.Fprintf(&b, "\n   %s%s", todoStatusGlyph(it.status), content)
+		shown++
+	}
+	return b.String()
+}
+
+// todoStatusGlyph maps a todo status onto the shared CLI glyph palette.
+// Mirrors the mapping used by pkg/agent/tool_executor_todo_events.go so
+// the inline list and any other todo-status rendering stay visually
+// consistent.
+func todoStatusGlyph(status string) string {
+	switch status {
+	case "completed":
+		return console.GlyphSuccess.Prefix()
+	case "in_progress":
+		return console.GlyphAction.Prefix()
+	case "cancelled":
+		return console.GlyphStopped.Prefix()
+	default:
+		return console.GlyphDim.Prefix()
+	}
+}
+
+// formatTodoWritePreview produces the compact tail for the todo_write
+// tool's spinner / collapse line — "(5 tasks · 1 active · 3 done)" —
+// so the user sees the shape of the list at a glance without waiting
+// for the full TodoUpdate block to land. Returns "" when the args
+// are unparseable or empty, matching the contract of the other
+// per-tool preview helpers.
+func formatTodoWritePreview(arguments string) string {
+	if arguments == "" {
+		return ""
+	}
+	var args map[string]interface{}
+	if err := json.Unmarshal([]byte(arguments), &args); err != nil {
+		return ""
+	}
+	todos, ok := args["todos"].([]interface{})
+	if !ok || len(todos) == 0 {
+		return ""
+	}
+	var inProgress, completed int
+	for _, t := range todos {
+		m, ok := t.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		switch s, _ := m["status"].(string); s {
+		case "in_progress":
+			inProgress++
+		case "completed":
+			completed++
+		}
+	}
+	parts := []string{fmt.Sprintf("%d tasks", len(todos))}
+	if inProgress > 0 {
+		parts = append(parts, fmt.Sprintf("%d active", inProgress))
+	}
+	if completed > 0 {
+		parts = append(parts, fmt.Sprintf("%d done", completed))
+	}
+	return " (" + strings.Join(parts, " · ") + ")"
 }
 
 // formatRunSubagentPreview extracts the persona from args and looks up its

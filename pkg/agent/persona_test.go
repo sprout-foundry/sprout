@@ -676,14 +676,14 @@ func TestIsOrchestratorGitWriteAllowed_NonOrchestratorNonEAPersonaReturnsFalse(t
 
 // --- hasEASpawnAuthority tests ---
 
-func TestHasEASpawnAuthority_ExecutiveAssistantReturnsTrue(t *testing.T) {
+func TestHasEASpawnAuthority_CoordinatorReturnsTrue(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	agent.state.SetActivePersona("executive_assistant")
+	agent.state.SetActivePersona("coordinator")
 
 	if !agent.hasEASpawnAuthority() {
-		t.Error("expected hasEASpawnAuthority to return true for executive_assistant persona")
+		t.Error("expected hasEASpawnAuthority to return true for coordinator persona")
 	}
 }
 

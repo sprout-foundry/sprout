@@ -5,8 +5,9 @@ import (
 	"sort"
 	"strings"
 
-	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
+	"github.com/sprout-foundry/sprout/pkg/personas"
 )
 
 // GetActivePersona returns the currently active persona ID.
@@ -98,7 +99,7 @@ func (a *Agent) ApplyPersona(personaID string) error {
 	// (formerly repo_orchestrator). When the flag is on, append the embedded
 	// policy markdown so the model knows about the commit tool, staging rules,
 	// and which shell-side git ops are blocked.
-	if personaID == "orchestrator" && config.AllowOrchestratorGitWrite {
+	if personaID == personas.IDOrchestrator && config.AllowOrchestratorGitWrite {
 		if policy := strings.TrimSpace(orchestratorGitPolicyAppend); policy != "" {
 			current := a.GetSystemPrompt()
 			if strings.TrimSpace(current) != "" {
@@ -254,7 +255,7 @@ func (a *Agent) GetAvailableToolNames() []string {
 // The legacy "repo_orchestrator" ID resolves to "orchestrator" via aliases.
 func (a *Agent) isOrchestratorGitWriteAllowed() bool {
 	persona := a.GetActivePersona()
-	if persona != "orchestrator" {
+	if persona != personas.IDOrchestrator {
 		// Personas with auto-approve rules (e.g., executive_assistant) are treated
 		// as having git write access when their rules include git write operations.
 		if persona != "" && a.hasEAGitWriteApproval() {
@@ -303,20 +304,20 @@ func (a *Agent) hasEAGitWriteApproval() bool {
 	return false
 }
 
-// hasEASpawnAuthority returns true if the active persona has EA-level spawn
-// authority, allowing it to delegate to any persona regardless of the
+// hasEASpawnAuthority returns true if the active persona has coordinator-level
+// spawn authority, allowing it to delegate to any persona regardless of the
 // delegatable flag. This enables the three-level nesting chain:
-// EA (depth 0) → orchestrator (depth 1) → coder/tester (depth 2).
+// coordinator (depth 0) → orchestrator (depth 1) → coder/tester (depth 2).
 //
 // Authority is granted when:
-// 1. The active persona is "executive_assistant", OR
+// 1. The active persona is the coordinator (formerly "executive_assistant"), OR
 // 2. The persona has auto-approve rules that include run_subagent
 //    (indicating it operates with similar elevated authority)
 func (a *Agent) hasEASpawnAuthority() bool {
 	personaID := a.GetActivePersona()
 
 	// Direct EA persona always has spawn authority
-	if personaID == "executive_assistant" {
+	if personaID == personas.IDCoordinator {
 		return true
 	}
 

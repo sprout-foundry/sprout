@@ -34,14 +34,14 @@ func TestExecutiveAssistant_AutoApproveRules_LoadedFromJSON(t *testing.T) {
 		t.Fatalf("failed to load default definitions: %v", err)
 	}
 
-	ea, exists := definitions["executive_assistant"]
+	ea, exists := definitions["coordinator"]
 	if !exists {
-		t.Fatal("expected executive_assistant in default definitions")
+		t.Fatal("expected coordinator in default definitions")
 	}
 
 	// auto_approve_rules must be non-nil after loading from JSON
 	if ea.AutoApproveRules == nil {
-		t.Fatal("expected executive_assistant to have auto_approve_rules loaded from JSON")
+		t.Fatal("expected coordinator to have auto_approve_rules loaded from JSON")
 	}
 }
 
@@ -51,9 +51,9 @@ func TestExecutiveAssistant_AutoApproveRules_MatchesDefaultAutoApproveRules(t *t
 		t.Fatalf("failed to load default definitions: %v", err)
 	}
 
-	ea, exists := definitions["executive_assistant"]
+	ea, exists := definitions["coordinator"]
 	if !exists {
-		t.Fatal("expected executive_assistant in default definitions")
+		t.Fatal("expected coordinator in default definitions")
 	}
 
 	if ea.AutoApproveRules == nil {
@@ -79,9 +79,9 @@ func TestExecutiveAssistant_AutoApproveRules_RiskCategoryCounts(t *testing.T) {
 		t.Fatalf("failed to load default definitions: %v", err)
 	}
 
-	ea, exists := definitions["executive_assistant"]
+	ea, exists := definitions["coordinator"]
 	if !exists {
-		t.Fatal("expected executive_assistant in default definitions")
+		t.Fatal("expected coordinator in default definitions")
 	}
 
 	if ea.AutoApproveRules == nil {
@@ -107,16 +107,16 @@ func TestExecutiveAssistant_AutoApproveRules_RiskCategoryCounts(t *testing.T) {
 	}
 }
 
-func TestExecutiveAssistant_AutoApproveRules_DirectJSONLoad(t *testing.T) {
+func TestCoordinator_AutoApproveRules_DirectJSONLoad(t *testing.T) {
 	// Load the JSON directly to verify raw deserialization works
-	data, err := os.ReadFile("configs/executive_assistant.json")
+	data, err := os.ReadFile("configs/coordinator.json")
 	if err != nil {
-		t.Fatalf("failed to read executive_assistant.json: %v", err)
+		t.Fatalf("failed to read coordinator.json: %v", err)
 	}
 
 	var catalog Catalog
 	if err := json.Unmarshal(data, &catalog); err != nil {
-		t.Fatalf("failed to parse executive_assistant.json: %v", err)
+		t.Fatalf("failed to parse coordinator.json: %v", err)
 	}
 
 	if len(catalog.Personas) != 1 {

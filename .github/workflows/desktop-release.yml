@@ -90,25 +90,25 @@ jobs:
       with:
         node-version: '22'
         cache: 'npm'
-        cache-dependency-path: |
-          package-lock.json
-          webui/package-lock.json
+        cache-dependency-path: package-lock.json
 
-    - name: Install root dependencies
+    - name: Install dependencies (root workspaces)
+      # Single `npm ci` from root installs every workspace
+      # (packages/events, packages/ui, webui) plus root devDeps
+      # (electron-builder, electron). Per-workspace `npm install`
+      # in the past pruned root devDeps and broke `desktop:dist`.
       run: npm ci
 
-    - name: Build workspace packages
+    - name: Build shared workspace packages
+      # webui imports @sprout/events and @sprout/ui from their `dist/`
+      # outputs. `prepare` was removed from those packages in 61ba3f17,
+      # so build them explicitly before anything that resolves their exports.
       run: |
-        (cd packages/events && npm install && npm run build)
-        (cd packages/ui && npm install && npm run build)
-
-    - name: Install web UI dependencies
-      run: npm ci
-      working-directory: webui
+        npm run build -w @sprout/events
+        npm run build -w @sprout/ui
 
     - name: Type check
-      run: |
-        cd webui && npm run type-check
+      run: npm run type-check -w sprout-webui
 
     - name: Download prebuilt backends
       uses: actions/download-artifact@v4

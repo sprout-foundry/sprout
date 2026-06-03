@@ -88,6 +88,47 @@
   gap: 8px;
   color: var(--text-primary);
   font-weight: 600;
+  min-width: 0;
+}
+
+.terminal-title-session {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--text-tertiary);
+  font-weight: 400;
+}
+
+.terminal-title-separator {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.terminal-title-session-name {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  max-width: 220px;
+}
+
+.terminal-title-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--bg-elevated);
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  flex-shrink: 0;
 }
 
 .connection-status {
@@ -99,12 +140,12 @@
 
 .connection-status.connected {
   background: var(--accent-success);
-  box-shadow: 0 0 0 6px rgba(152, 195, 121, 0.15);
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent-success) 15%, transparent);
 }
 
 .connection-status.disconnected {
   background: var(--accent-error);
-  box-shadow: 0 0 0 6px rgba(224, 108, 117, 0.15);
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent-error) 15%, transparent);
 }
 
 .terminal-controls {
@@ -123,10 +164,6 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  /* Keep every toolbar button the same hit target. Without min-width the
-   * Unicode arrow on the expand button renders ~20px wide while icon
-   * buttons sit at 24px, producing a visible width jog at the end of the
-   * row. */
   min-width: 24px;
   transition: color 0.15s ease;
 }
@@ -156,6 +193,20 @@
 
 .terminal-btn.font-btn:hover {
   color: var(--accent-secondary);
+}
+
+.terminal-btn.add-pane-btn:hover:not(:disabled) {
+  color: var(--accent-secondary);
+}
+
+.terminal-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.terminal-btn:disabled:hover {
+  color: var(--text-muted);
+  background: transparent;
 }
 
 .clear-btn:hover {
@@ -195,6 +246,25 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+  position: relative;
+}
+
+/* Subtle accent bar marking the focused pane in split mode. Sits inside
+   the pane so it doesn't push the layout around. */
+.terminal-pane-wrapper--focused::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  background: var(--accent-primary);
+  z-index: 6;
+  pointer-events: none;
+}
+
+.terminal-pane-wrapper--focused .terminal-pane-tab-bar {
+  background: var(--bg-elevated);
 }
 
 .terminal-panes-container.split .terminal-pane-wrapper {
@@ -265,7 +335,7 @@
 
 .terminal-pane-exited .terminal-pane-dot.disconnected {
   background: var(--accent-error);
-  box-shadow: 0 0 0 6px rgba(224, 108, 117, 0.3);
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent-error) 30%, transparent);
 }
 
 /* Thin header shown per-pane only in split mode */
@@ -310,12 +380,12 @@
 
 .terminal-pane-dot.connected {
   background: var(--accent-success);
-  box-shadow: 0 0 0 4px rgba(152, 195, 121, 0.15);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-success) 15%, transparent);
 }
 
 .terminal-pane-dot.disconnected {
   background: var(--accent-error);
-  box-shadow: 0 0 0 4px rgba(224, 108, 117, 0.15);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-error) 15%, transparent);
 }
 
 .terminal-pane-close {
@@ -333,7 +403,7 @@
 
 .terminal-pane-close:hover {
   color: var(--accent-error);
-  background: rgba(224, 108, 117, 0.15);
+  background: color-mix(in srgb, var(--accent-error) 15%, transparent);
 }
 
 .terminal-pane-content {
@@ -384,6 +454,10 @@
   .terminal-title {
     gap: 6px;
     font-size: 12px;
+  }
+
+  .terminal-title-session {
+    display: none;
   }
 
   .terminal-controls {
@@ -471,7 +545,7 @@
 }
 
 .terminal-output::selection {
-  background: var(--accent-secondary-alpha, rgba(86, 182, 194, 0.38));
+  background: color-mix(in srgb, var(--accent-secondary) 38%, transparent);
   color: var(--text-primary);
 }
 
@@ -518,6 +592,18 @@
   background: var(--bg-elevated);
 }
 
+.shell-picker-current {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  margin-left: 3px;
+  color: var(--text-tertiary);
+}
+
+.shell-default-spacer {
+  width: 12px;
+  flex-shrink: 0;
+}
+
 .shell-picker-menu {
   position: absolute;
   top: calc(100% + 4px);
@@ -530,7 +616,7 @@
   border-radius: 8px;
   padding: 4px;
   z-index: 200;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-elevated);
   animation: shellPickerFadeIn 0.1s ease-out;
 }
 
@@ -630,7 +716,7 @@
   align-items: center;
   gap: 8px;
   padding: 6px 10px;
-  background: var(--bg-tertiary, #0f1729);
+  background: var(--bg-tertiary);
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
   min-height: 36px;
@@ -830,7 +916,7 @@
 }
 
 .terminal-search-counter.no-results {
-  color: var(--accent-warning, #f4d56f);
+  color: var(--accent-warning);
 }
 
 /* ── Reverse-i-Search Overlay ───────────────────────────── */
@@ -859,7 +945,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  background: rgba(15, 23, 42, 0.85);
+  background: color-mix(in srgb, var(--bg-elevated) 85%, transparent);
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
   padding: 6px 10px;
@@ -867,17 +953,17 @@
   font-size: 11px;
   color: var(--text-primary);
   backdrop-filter: blur(8px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-elevated);
   white-space: nowrap;
 }
 
 .terminal-reverse-search-icon {
-  color: var(--accent-success, #98c379);
+  color: var(--accent-success);
   flex-shrink: 0;
 }
 
 .terminal-reverse-search-label {
-  color: var(--accent-success, #98c379);
+  color: var(--accent-success);
   font-weight: 500;
 }
 
@@ -886,7 +972,7 @@
 }
 
 .terminal-reverse-search-quote {
-  color: var(--accent-secondary, #56b6c2);
+  color: var(--accent-secondary);
 }
 
 .terminal-reverse-search-query {

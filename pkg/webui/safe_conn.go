@@ -3,6 +3,7 @@
 package webui
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"sync"
@@ -33,13 +34,27 @@ func NewSafeConn(conn *websocket.Conn) *SafeConn {
 	}
 }
 
+// ErrOutboundDropped is returned by WriteJSON when the outbound
+// allowlist (websocket_outbound_registry.go) rejected the message. The
+// payload was NOT sent. Callers should check errors.Is(err, ErrOutboundDropped)
+// before logging "successfully sent" — otherwise a missing allowlist
+// entry produces silent drops that masquerade as successful writes (see
+// terminal_websocket.go: pre-fix, every `session_created` and `output`
+// frame was dropped while the handler logged successful sends, leaving
+// the React terminal stuck on "Loading terminal…").
+//
+// Transport-level failures (connection closed, network error) still
+// surface via the underlying error, distinct from this sentinel.
+var ErrOutboundDropped = errors.New("webui: outbound message type not in allowlist; dropped")
+
 // WriteJSON safely writes JSON to the WebSocket connection.
 //
 // SP-034-5d: outbound payloads carrying a `type` field are validated
 // against the registry in websocket_outbound_registry.go. Unknown types
-// panic in dev (`SPROUT_DEV=1`) so typos surface immediately, and are
-// dropped with a log line in prod so a misbehaving handler can't push
-// nonsense to a live client.
+// panic in dev (`SPROUT_DEV=1`) so typos surface immediately, and in
+// prod are dropped after logging — WriteJSON returns ErrOutboundDropped
+// so the caller can tell the difference between "actually delivered"
+// and "silently filtered by the registry".
 func (sc *SafeConn) WriteJSON(v interface{}) error {
 	if sc.closed.Load() {
 		return nil // Silently ignore writes to closed connections
@@ -47,10 +62,11 @@ func (sc *SafeConn) WriteJSON(v interface{}) error {
 
 	if msgType, ok := extractOutboundMessageType(v); ok {
 		if !validateOutboundMessageType(msgType) {
-			// Drop silently — validateOutboundMessageType already logged
-			// (or panicked in dev). Return nil so callers don't treat
-			// this as a transport error.
-			return nil
+			// Drop and signal — validateOutboundMessageType already
+			// logged (or panicked in dev). Returning a typed sentinel
+			// lets callers like the terminal session handler suppress
+			// their "successfully sent" log path on a drop.
+			return ErrOutboundDropped
 		}
 	}
 

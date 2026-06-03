@@ -1,4 +1,4 @@
-import { Trash2, Columns2, Rows2, Plus, Check, ZoomIn, ZoomOut, Type, Copy } from 'lucide-react';
+import { Trash2, Columns2, Rows2, Plus, Check, ZoomIn, ZoomOut, Type, Copy, ChevronUp, ChevronDown, SquarePlus } from 'lucide-react';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
 import './Terminal.css';
@@ -21,6 +21,28 @@ const TERMINAL_HEIGHT_STORAGE_KEY = 'sprout-terminal-height';
 const FONT_SIZE_MIN = 8;
 const FONT_SIZE_MAX = 32;
 const FONT_SIZE_STORAGE_KEY = 'sprout-terminal-font-size';
+
+// Minimum width per pane on a vertical split (panes sit side-by-side),
+// and minimum height per pane on a horizontal split (panes stack).
+// Used both to clamp divider drags and to compute how many panes the
+// current container can fit before the +pane button disables.
+const MIN_PANE_WIDTH_PX = 240;
+const MIN_PANE_HEIGHT_PX = 120;
+
+// Even with very large containers, cap the toolbar +pane button at a
+// number that feels usable. 8 vertical panes is already a lot; horizontal
+// is rarer.
+const MAX_PANES_HARD_CAP = 8;
+
+const evenSplit = (n: number): number[] => Array.from({ length: n }, () => 100 / n);
+
+const redistributeAfterRemove = (sizes: number[], removedIndex: number): number[] => {
+  if (sizes.length <= 1) return [100];
+  const next = sizes.filter((_, i) => i !== removedIndex);
+  const total = next.reduce((acc, v) => acc + v, 0);
+  if (total <= 0) return evenSplit(next.length);
+  return next.map((v) => (v / total) * 100);
+};
 
 const clampTerminalHeight = (value: number): number => {
   if (!Number.isFinite(value)) return TERMINAL_HEIGHT_DEFAULT;
@@ -110,7 +132,7 @@ function Terminal({
   // Split state
   const [splitDirection, setSplitDirection] = useState<SplitDirection>('none');
   const splitDirectionRef = useRef<SplitDirection>('none');
-  const [splitSizes, setSplitSizes] = useState<[number, number]>([50, 50]);
+  const [splitSizes, setSplitSizes] = useState<number[]>([100]);
 
   // Pane-based session state
   const paneIdCounter = useRef(0);
@@ -139,7 +161,8 @@ function Terminal({
 
   const isDraggingSplit = useRef(false);
   const splitDragStartPos = useRef(0);
-  const splitDragStartSizes = useRef<[number, number]>([50, 50]);
+  const splitDragStartSizes = useRef<number[]>([100]);
+  const splitDragIndex = useRef(0);
 
   const paneHandles = useRef<Map<string, TerminalPaneHandle | null>>(new Map());
 
@@ -408,10 +431,56 @@ function Terminal({
     [fetchAttachableSessions, getFocusedPane, updatePane],
   );
 
+  const removePane = useCallback(
+    (paneId: string) => {
+      const all = panesRef.current;
+      const idx = all.findIndex((p) => p.id === paneId);
+      if (idx === -1) return;
+      if (all.length <= 1) return; // Last pane never removes — handled by restart elsewhere.
+
+      const pane = all[idx];
+      pane.sessions.forEach((s) => {
+        const handle = paneHandles.current.get(s.id);
+        handle?.cleanup?.();
+        paneHandles.current.delete(s.id);
+        sessionShellsRef.current.delete(s.id);
+        sessionReattachIdsRef.current.delete(s.id);
+      });
+
+      const remainingPanes = all.filter((p) => p.id !== paneId);
+      setPanes(remainingPanes);
+      setSplitSizes((prev) => redistributeAfterRemove(prev, idx));
+
+      // Focus the neighbor closest to the removed pane.
+      if (focusedPaneId === paneId) {
+        const neighbor = remainingPanes[Math.max(0, idx - 1)];
+        if (neighbor) setFocusedPaneId(neighbor.id);
+      }
+
+      // Down to one pane → exit split mode entirely.
+      if (remainingPanes.length === 1) {
+        splitDirectionRef.current = 'none';
+        setSplitDirection('none');
+        setSplitSizes([100]);
+      }
+    },
+    [focusedPaneId],
+  );
+
   const closeSessionInPane = useCallback(
     (paneId: string, sessionId: string) => {
       const pane = panesRef.current.find((p) => p.id === paneId);
-      if (!pane || pane.sessions.length <= 1) return;
+      if (!pane) return;
+
+      // Closing the only session in this pane. With more than one pane
+      // open, this removes the whole pane; with only one pane, it would
+      // leave the terminal empty so we refuse — the user can run `exit`
+      // to trigger the restart path via pty_exit.
+      if (pane.sessions.length === 1) {
+        if (panesRef.current.length === 1) return;
+        removePane(paneId);
+        return;
+      }
 
       const handle = paneHandles.current.get(sessionId);
       handle?.cleanup?.();
@@ -427,15 +496,8 @@ function Terminal({
         sessions: remaining,
         activeSessionId: newActive,
       }));
-
-      // Auto-close secondary pane if it has no sessions
-      if (panesRef.current.length > 1 && remaining.length === 0) {
-        setPanes((prev) => prev.filter((p) => p.id !== paneId));
-        splitDirectionRef.current = 'none';
-        setSplitDirection('none');
-      }
     },
-    [updatePane],
+    [removePane, updatePane],
   );
 
   const renameSessionInPane = useCallback(
@@ -480,33 +542,26 @@ function Terminal({
         return;
       }
 
-      const isSecondaryPane = panesRef.current.length > 1 && panesRef.current[1]?.id === paneId;
-      const isOnlyTwoPanes = panesRef.current.length === 2;
-
-      // Case 1: Multi-session pane — close the specific tab
+      // Multi-session pane — close just the tab and keep the pane.
       if (pane.sessions.length > 1) {
         closeSessionInPane(paneId, sessionId);
         notificationBus.notify('info', 'Terminal', 'Terminal process exited — session closed.');
         return;
       }
 
-      // Clean up the exited session's resources
       paneHandles.current.delete(sessionId);
       sessionShellsRef.current.delete(sessionId);
       sessionReattachIdsRef.current.delete(sessionId);
 
-      // Case 2: Single-session secondary pane with only 2 panes — auto-close the split
-      if (isSecondaryPane && isOnlyTwoPanes) {
-        // Remove the secondary pane entirely
-        setPanes((prev) => prev.filter((p) => p.id !== paneId));
-        splitDirectionRef.current = 'none';
-        setSplitDirection('none');
-        setFocusedPaneId(panesRef.current[0].id);
+      // Last session in a pane that's part of a split — drop the pane.
+      if (panesRef.current.length > 1) {
+        removePane(paneId);
         notificationBus.notify('info', 'Terminal', 'Split pane closed after process exited.');
         return;
       }
 
-      // Case 3: Single-session pane — auto-restart with a fresh session
+      // Last session in the only pane — restart with a fresh shell so
+      // the terminal panel never becomes empty.
       const sessionNum2 = sessionCounterRef.current++;
       const newSessionId = `session-${sessionNum2}`;
       const newSession: TerminalSession = {
@@ -522,13 +577,9 @@ function Terminal({
         activeSessionId: newSessionId,
       }));
 
-      if (isSecondaryPane) {
-        notificationBus.notify('info', 'Terminal', 'Terminal process exited in split pane — restarted.');
-      } else {
-        notificationBus.notify('info', 'Terminal', 'Terminal process exited — restarted with fresh shell.');
-      }
+      notificationBus.notify('info', 'Terminal', 'Terminal process exited — restarted with fresh shell.');
     },
-    [closeSessionInPane, selectedShell, updatePane],
+    [closeSessionInPane, removePane, selectedShell, updatePane],
   );
 
   useEffect(() => {
@@ -562,15 +613,52 @@ function Terminal({
     return () => window.removeEventListener('sprout:terminal-attach-session', handler as EventListener);
   }, [getFocusedPane, switchSessionInPane, updatePane]);
 
+  // Build a fresh pane (with a single shell session) ready to be added
+  // to the panes array. Centralized so toggleSplit and addPaneInDirection
+  // produce structurally identical panes.
+  const createPane = useCallback((): TerminalPaneData => {
+    paneIdCounter.current += 1;
+    const paneId = `pane-${paneIdCounter.current}`;
+    const sessionNum = sessionCounterRef.current++;
+    const sessionId = `session-${sessionNum}`;
+    sessionShellsRef.current.set(sessionId, selectedShell ?? null);
+    return {
+      id: paneId,
+      sessions: [{ id: sessionId, name: `Session ${sessionNum}`, is_pinned: false }],
+      activeSessionId: sessionId,
+    };
+  }, [selectedShell]);
+
+  // Measure the panes container and convert it into "how many panes of
+  // the current direction can fit before they cross MIN_PANE_*_PX." In
+  // jsdom (or before first layout) the rect reads as 0×0; we fall back
+  // to the hard cap so tests can exercise the +pane path.
+  const computeMaxPanes = useCallback((direction: SplitDirection): number => {
+    if (direction === 'none') return 1;
+    const el = document.querySelector('.terminal-panes-container') as HTMLElement | null;
+    const rect = el?.getBoundingClientRect();
+    const w = rect?.width ?? 0;
+    const h = rect?.height ?? 0;
+    if (w === 0 && h === 0) return MAX_PANES_HARD_CAP;
+    const limit = direction === 'vertical'
+      ? Math.floor(w / MIN_PANE_WIDTH_PX)
+      : Math.floor(h / MIN_PANE_HEIGHT_PX);
+    return Math.min(MAX_PANES_HARD_CAP, Math.max(2, limit));
+  }, []);
+
   const toggleSplit = useCallback(
     (direction: 'horizontal' | 'vertical') => {
       const currentDir = splitDirectionRef.current;
+      const paneCount = panesRef.current.length;
 
       if (currentDir === direction) {
-        // Same direction → toggle off (unsplit)
-        if (panesRef.current.length > 1) {
-          const secondaryPane = panesRef.current[1];
-          secondaryPane.sessions.forEach((s) => {
+        // Matching direction click. Preserve the legacy 1↔2 toggle: at
+        // exactly 2 panes, collapse back to 1. At 3+ panes the toggle
+        // would silently destroy multiple terminals, so it's a no-op —
+        // users reduce via tab close on each pane.
+        if (paneCount === 2) {
+          const dropped = panesRef.current[1];
+          dropped.sessions.forEach((s) => {
             const handle = paneHandles.current.get(s.id);
             handle?.cleanup?.();
             paneHandles.current.delete(s.id);
@@ -579,35 +667,43 @@ function Terminal({
           });
           setPanes((prev) => prev.slice(0, 1));
           setFocusedPaneId(panesRef.current[0].id);
+          setSplitSizes([100]);
+          splitDirectionRef.current = 'none';
+          setSplitDirection('none');
         }
-        splitDirectionRef.current = 'none';
-        setSplitDirection('none');
-      } else if (currentDir !== 'none') {
-        // Different direction → switch direction, keep existing panes
-        setSplitSizes([50, 50]);
-        splitDirectionRef.current = direction;
-        setSplitDirection(direction);
-      } else {
-        // Not split → create new pane with session
-        paneIdCounter.current += 1;
-        const paneId = `pane-${paneIdCounter.current}`;
-        const splitSessionNum = sessionCounterRef.current++;
-        const sessionId = `session-${splitSessionNum}`;
-        const newPane: TerminalPaneData = {
-          id: paneId,
-          sessions: [{ id: sessionId, name: `Session ${splitSessionNum}`, is_pinned: false }],
-          activeSessionId: sessionId,
-        };
-        sessionShellsRef.current.set(sessionId, selectedShell ?? null);
-        setPanes((prev) => [...prev, newPane]);
-        setFocusedPaneId(paneId);
-        setSplitSizes([50, 50]);
-        splitDirectionRef.current = direction;
-        setSplitDirection(direction);
+        return;
       }
+
+      if (currentDir !== 'none') {
+        // Switch axis without changing pane count; redistribute evenly.
+        setSplitSizes(evenSplit(paneCount));
+        splitDirectionRef.current = direction;
+        setSplitDirection(direction);
+        return;
+      }
+
+      // Going from unsplit → 2 panes in the requested direction.
+      const newPane = createPane();
+      setPanes((prev) => [...prev, newPane]);
+      setFocusedPaneId(newPane.id);
+      setSplitSizes(evenSplit(2));
+      splitDirectionRef.current = direction;
+      setSplitDirection(direction);
     },
-    [selectedShell],
+    [createPane],
   );
+
+  const addPaneInDirection = useCallback(() => {
+    const dir = splitDirectionRef.current;
+    if (dir === 'none') return;
+    const max = computeMaxPanes(dir);
+    if (panesRef.current.length >= max) return;
+    const newPane = createPane();
+    const nextCount = panesRef.current.length + 1;
+    setPanes((prev) => [...prev, newPane]);
+    setFocusedPaneId(newPane.id);
+    setSplitSizes(evenSplit(nextCount));
+  }, [computeMaxPanes, createPane]);
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -631,9 +727,10 @@ function Terminal({
   }, [clearActivePane, closeSessionInPane, getFocusedPane, toggleSplit]);
 
   const handleSplitDividerDragStart = useCallback(
-    (e: ReactMouseEvent) => {
+    (e: ReactMouseEvent, dividerIndex: number) => {
       e.preventDefault();
       isDraggingSplit.current = true;
+      splitDragIndex.current = dividerIndex;
       setIsResizingVertical(true);
       splitDragStartPos.current = splitDirection === 'vertical' ? e.clientX : e.clientY;
       splitDragStartSizes.current = [...splitSizes];
@@ -649,11 +746,40 @@ function Terminal({
         const containerSize = splitDirection === 'vertical' ? containerWidth : containerHeight;
         if (containerSize <= 0) return;
 
+        const minPx = splitDirection === 'vertical' ? MIN_PANE_WIDTH_PX : MIN_PANE_HEIGHT_PX;
+        const minPct = (minPx / containerSize) * 100;
+
         const deltaPx = currentPos - splitDragStartPos.current;
-        const startSizes = splitDragStartSizes.current;
-        const newFirst = startSizes[0] + (deltaPx / containerSize) * 100;
-        const clamped = Math.max(20, Math.min(80, newFirst));
-        setSplitSizes([clamped, 100 - clamped]);
+        const start = splitDragStartSizes.current;
+        const i = splitDragIndex.current;
+        const a = start[i];
+        const b = start[i + 1];
+        if (a === undefined || b === undefined) return;
+
+        // Move only the size on either side of this divider; everything
+        // else stays put. Clamp both panes against the per-pane minimum
+        // so a drag can't squeeze a neighbour below MIN_PANE_*_PX.
+        const pair = a + b;
+        const minA = minPct;
+        const maxA = pair - minPct;
+        let nextA = a + (deltaPx / containerSize) * 100;
+        if (maxA < minA) {
+          // Container too small to honor both minimums — split the
+          // available room evenly instead of producing a NaN-clamped
+          // value.
+          nextA = pair / 2;
+        } else {
+          nextA = Math.max(minA, Math.min(maxA, nextA));
+        }
+        const nextB = pair - nextA;
+
+        setSplitSizes((prev) => {
+          if (i >= prev.length - 1) return prev;
+          const next = [...prev];
+          next[i] = nextA;
+          next[i + 1] = nextB;
+          return next;
+        });
       };
 
       const onUp = () => {
@@ -677,8 +803,8 @@ function Terminal({
     (paneIndex: number): CSSProperties => {
       if (splitDirection === 'none') return {};
       const property = splitDirection === 'vertical' ? 'width' : 'height';
-      const value = paneIndex === 0 ? `${splitSizes[0]}%` : `${splitSizes[1]}%`;
-      return { [property]: value, minWidth: 0, minHeight: 0 };
+      const value = splitSizes[paneIndex] ?? 100 / Math.max(1, splitSizes.length);
+      return { [property]: `${value}%`, minWidth: 0, minHeight: 0 };
     },
     [splitDirection, splitSizes],
   );
@@ -755,6 +881,15 @@ function Terminal({
 
   const isSplitActive = splitDirection !== 'none';
 
+  const focusedPane = panes.find((p) => p.id === focusedPaneId) ?? panes[0];
+  const focusedSession = focusedPane?.sessions.find((s) => s.id === focusedPane.activeSessionId);
+  const totalSessions = panes.reduce((acc, p) => acc + p.sessions.length, 0);
+
+  // Recomputed each render so the +pane button disables the instant the
+  // container becomes too small for another MIN_PANE_*_PX-sized pane.
+  const maxPanesForCurrentSplit = isSplitActive ? computeMaxPanes(splitDirection) : 1;
+  const canAddPane = isSplitActive && panes.length < maxPanesForCurrentSplit;
+
   return (
     <div
       className={[
@@ -781,6 +916,13 @@ function Terminal({
           <div className="terminal-title">
             <span className="terminal-icon">$</span>
             <span>Terminal</span>
+            {focusedSession && (
+              <span className="terminal-title-session" title={focusedSession.name}>
+                <span className="terminal-title-separator">—</span>
+                <span className="terminal-title-session-name">{focusedSession.name}</span>
+                {totalSessions > 1 && <span className="terminal-title-count">{totalSessions}</span>}
+              </span>
+            )}
           </div>
           <div className="terminal-controls" onClick={(e) => e.stopPropagation()}>
             <button
@@ -833,6 +975,21 @@ function Terminal({
             >
               <Rows2 size={16} />
             </button>
+            {isSplitActive && (
+              <button
+                className="terminal-btn add-pane-btn"
+                onClick={addPaneInDirection}
+                disabled={!canAddPane}
+                title={
+                  canAddPane
+                    ? `Add ${splitDirection === 'vertical' ? 'vertical' : 'horizontal'} pane`
+                    : 'No room for another pane — resize terminal or close one first'
+                }
+                aria-label="Add terminal pane"
+              >
+                <SquarePlus size={16} />
+              </button>
+            )}
             <button
               className={`terminal-btn copy-on-select-btn ${copyOnSelect ? 'copy-on-select-btn-active' : ''}`}
               onClick={toggleCopyOnSelect}
@@ -845,18 +1002,15 @@ function Terminal({
             <button
               className="terminal-btn toggle-btn"
               onClick={toggleExpanded}
-              title={isExpanded ? 'Collapse terminal' : 'Expand terminal'}
+              title={isExpanded ? 'Collapse terminal (Ctrl+`)' : 'Expand terminal (Ctrl+`)'}
               aria-label={isExpanded ? 'Collapse terminal' : 'Expand terminal'}
               aria-expanded={isExpanded}
             >
-              {isExpanded ? '▼' : '▲'}
+              {isExpanded ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
             </button>
           </div>
         </div>
       </div>
-
-      {/* Background Tasks */}
-      {isExpanded && <BackgroundTasks />}
 
       {/* Body */}
       <div className="terminal-body">
@@ -864,7 +1018,7 @@ function Terminal({
           {panes.map((pane, index) => (
             <React.Fragment key={pane.id}>
               <div
-                className="terminal-pane-wrapper"
+                className={`terminal-pane-wrapper${isSplitActive && pane.id === focusedPaneId ? ' terminal-pane-wrapper--focused' : ''}`}
                 style={splitStyleForPane(index)}
                 onMouseDown={() => setFocusedPaneId(pane.id)}
               >
@@ -882,6 +1036,7 @@ function Terminal({
                       onCreate={() => addSessionToPane(pane.id)}
                     />
                   </div>
+                  {index === 0 && <BackgroundTasks />}
                   <div className="shell-picker-dropdown" ref={focusedPaneId === pane.id ? shellPickerRef : null}>
                     <button
                       className="terminal-tab-new shell-picker-btn"
@@ -900,7 +1055,7 @@ function Terminal({
                     >
                       <Plus size={14} />
                       {shellsLoaded && selectedShell && (
-                        <span style={{ fontSize: 10, marginLeft: 3, opacity: 0.7 }}>{selectedShell}</span>
+                        <span className="shell-picker-current">{selectedShell}</span>
                       )}
                     </button>
                     {showShellMenu && shellsLoaded && availableShells.length > 1 && focusedPaneId === pane.id && (
@@ -920,7 +1075,7 @@ function Terminal({
                             title={shell.path}
                           >
                             {shell.default && <Check size={12} className="shell-default-indicator" />}
-                            {!shell.default && <span style={{ width: 12, flexShrink: 0 }} />}
+                            {!shell.default && <span className="shell-default-spacer" />}
                             <span className="shell-name">{shell.name}</span>
                             <span className="shell-path">{shell.path}</span>
                           </button>
@@ -964,10 +1119,10 @@ function Terminal({
                   );
                 })}
               </div>
-              {index === 0 && isSplitActive && (
+              {isSplitActive && index < panes.length - 1 && (
                 <div
                   className={`terminal-split-divider terminal-split-divider-${splitDirection}`}
-                  onMouseDown={handleSplitDividerDragStart}
+                  onMouseDown={(e) => handleSplitDividerDragStart(e, index)}
                 />
               )}
             </React.Fragment>

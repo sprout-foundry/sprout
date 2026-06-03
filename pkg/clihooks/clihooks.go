@@ -78,3 +78,26 @@ func ResumeSteer() {
 		fn()
 	}
 }
+
+// WithCookedStdin runs fn with the activity-indicator suspended and the
+// SteerInputReader paused so stdin is back in cooked mode for the
+// duration of the call. Wraps the SuspendIndicator + PauseSteer /
+// ResumeSteer dance that interactive prompts and child-process
+// editors must perform when invoked during a turn — the steer reader
+// otherwise holds stdin in raw mode and bufio.Reader / term.ReadPassword
+// calls hit EOF immediately.
+//
+// Safe to call even when no indicator or steer reader is registered
+// (e.g. non-interactive runs, slash commands that fire before the
+// first turn): both hooks no-op in that case.
+//
+// Callers that prefer the explicit pattern can still do so directly;
+// this helper exists so the most common "I'm about to read stdin or
+// spawn an interactive child process" idiom is a one-liner that's
+// hard to get wrong.
+func WithCookedStdin(fn func() error) error {
+	SuspendIndicator()
+	PauseSteer()
+	defer ResumeSteer()
+	return fn()
+}

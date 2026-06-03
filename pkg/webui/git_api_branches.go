@@ -177,6 +177,7 @@ func (ws *ReactWebServer) handleAPIGitCreateBranch(w http.ResponseWriter, r *htt
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
 		"message": "Branch created successfully",
 		"branch":  req.Name,
 	})

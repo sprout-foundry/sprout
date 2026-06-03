@@ -1,5 +1,5 @@
 ---
-name: browse-debugging
+name: Browse Debugging
 description: Multi-step interactive browser debugging with persistent sessions for web UI investigation.
 ---
 

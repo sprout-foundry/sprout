@@ -10,6 +10,8 @@ import (
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/console"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
+	"github.com/sprout-foundry/sprout/pkg/skills"
 	"github.com/spf13/cobra"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
@@ -123,52 +125,87 @@ description: Project-specific conventions for %s. Update this description.
 var skillListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List available skills",
-	Long: `List all available skills including built-in and project-specific skills.`,
+	Long:  `List all available skills including built-in, user-level, and project-specific skills.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		cwd, err := os.Getwd()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: failed to get current directory: %v\n", err)
 			os.Exit(1)
 		}
-		
+
 		fmt.Println("## Built-in Skills")
 		fmt.Println()
-		builtins := []struct {
-			id, name, desc string
-		}{
-			{"project-planning", "Project Planning", "Project onboarding, planning, and initialization"},
-			{"browse-debugging", "Browse Debugging", "Multi-step interactive browser debugging"},
-			{"workflow-automation", "Workflow Automation", "Create and manage automated agent workflows"},
-			{"self-help", "Self Help", "Configuration, settings, and capability reference"},
+		// Derive the list from pkg/skills so a new skill added under
+		// pkg/skills/library/<id>/SKILL.md shows up here automatically.
+		// IDs() returns alphabetical order so the output is stable.
+		builtins := skills.Builtins()
+		for _, id := range skills.IDs() {
+			fmt.Printf("  %-25s %s\n", id, builtins[id].Description)
 		}
-		for _, s := range builtins {
-			fmt.Printf("  %-25s %s\n", s.id, s.desc)
+
+		// User-level skills (~/.config/sprout/skills/). Listed BEFORE
+		// project skills because that mirrors the merge order in
+		// configuration.Load() — project skills override user skills
+		// when both define the same ID. envutil.GetConfigDir resolves
+		// SPROUT_CONFIG / XDG_CONFIG_HOME / $HOME, matching the same
+		// path discoverUserSkills uses at agent startup.
+		if userConfigDir, err := envutil.GetConfigDir(); err == nil {
+			printSkillsSection("User Skills", filepath.Join(userConfigDir, "skills"), "user skill")
 		}
-		
-		// Check for project skills
-		skillsDir := filepath.Join(cwd, ".sprout", "skills")
-		entries, err := os.ReadDir(skillsDir)
-		if err == nil && len(entries) > 0 {
-			fmt.Println()
-			fmt.Println("## Project Skills")
-			fmt.Println()
-			for _, entry := range entries {
-				if entry.IsDir() {
-					skillFile := filepath.Join(skillsDir, entry.Name(), "SKILL.md")
-					if content, err := os.ReadFile(skillFile); err == nil {
-						// Extract description from front matter
-						desc := extractDescription(string(content))
-						fmt.Printf("  %-25s %s\n", entry.Name(), desc)
-					} else {
-						fmt.Printf("  %-25s (project skill)\n", entry.Name())
-					}
-				}
-			}
-		}
-		
+
+		// Project skills (./.sprout/skills/) — the override layer.
+		printSkillsSection("Project Skills", filepath.Join(cwd, ".sprout", "skills"), "project skill")
+
 		fmt.Println()
 		fmt.Println("Use 'activate_skill <skill-id>' in an agent session to load a skill.")
 	},
+}
+
+// printSkillsSection lists skills found in dir under the given header.
+// Silent no-op when the directory is missing or empty — keeps the
+// output clean when a user has only project skills (or vice versa).
+// fallbackTag is shown in parentheses when a SKILL.md exists but the
+// frontmatter description can't be read.
+func printSkillsSection(header, dir, fallbackTag string) {
+	entries, err := os.ReadDir(dir)
+	if err != nil || len(entries) == 0 {
+		return
+	}
+
+	// Pre-scan for valid skill directories so we can skip the header
+	// when the directory has only stray files. Without this the user
+	// would see an empty section if (for example) the skills dir
+	// contains a README and no actual skill subdirs.
+	type skillRow struct {
+		id, desc string
+	}
+	var rows []skillRow
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		skillFile := filepath.Join(dir, entry.Name(), "SKILL.md")
+		content, err := os.ReadFile(skillFile)
+		if err != nil {
+			rows = append(rows, skillRow{id: entry.Name(), desc: "(" + fallbackTag + ")"})
+			continue
+		}
+		desc := extractDescription(string(content))
+		if desc == "" {
+			desc = "(" + fallbackTag + ")"
+		}
+		rows = append(rows, skillRow{id: entry.Name(), desc: desc})
+	}
+	if len(rows) == 0 {
+		return
+	}
+
+	fmt.Println()
+	fmt.Println("## " + header)
+	fmt.Println()
+	for _, row := range rows {
+		fmt.Printf("  %-25s %s\n", row.id, row.desc)
+	}
 }
 
 func extractDescription(content string) string {

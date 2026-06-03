@@ -108,7 +108,7 @@ function waitForHealthOnSocket(socketPath, timeoutMs) {
     let resolved = false;
 
     const probe = () => {
-      const socket = net.connect({ socketPath }, () => {
+      const socket = net.connect({ path: socketPath }, () => {
         socket.write('GET /health HTTP/1.1\r\nHost: localhost\r\n\r\n');
       });
 
@@ -167,11 +167,11 @@ async function createSocketProxy(socketPath, token) {
       headers: {
         ...req.headers,
         Authorization: `Bearer ${token}`,
-        // Strip hop-by-hop headers that must not be forwarded
-        connection: undefined,
-        transferEncoding: undefined,
       },
     };
+    // Strip hop-by-hop headers that must not be forwarded
+    delete options.headers.connection;
+    delete options.headers['transfer-encoding'];
 
     const proxyReq = http.request(options, (proxyRes) => {
       res.writeHead(proxyRes.statusCode, proxyRes.rawHeaders);
@@ -209,7 +209,7 @@ async function createSocketProxy(socketPath, token) {
       },
     };
 
-    const proxy = net.connect({ socketPath }, () => {
+    const proxy = net.connect({ path: socketPath }, () => {
       // Build the raw upgrade request to send over the Unix socket
       let reqStr = `GET ${req.url} HTTP/1.1\r\n`;
       for (const key of Object.keys(options.headers)) {

@@ -18,13 +18,10 @@ const { spawn, spawnSync } = require('node:child_process');
 const http = require('node:http');
 
 const APP_ROOT = path.resolve(__dirname, '..');
-const ELECTRON_BIN = path.join(
-  APP_ROOT,
-  'node_modules',
-  'electron',
-  'dist',
-  'electron'
-);
+// `require('electron')` exports the absolute path to the platform-correct
+// binary (`Electron.app/Contents/MacOS/Electron` on macOS, `electron.exe`
+// on Windows, `electron` on Linux).
+const ELECTRON_BIN = require('electron');
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -193,7 +190,9 @@ function checkWebuiLoads(port) {
       res.on('data', (chunk) => chunks.push(chunk));
       res.on('end', () => {
         const body = Buffer.concat(chunks).toString('utf8');
-        if (res.statusCode === 200 && body.includes('id="root"') && body.includes('<!doctype html>')) {
+        // Vite emits `<!DOCTYPE html>` (uppercase); case-insensitive match.
+        const looksLikeHtml = /^<!doctype\s+html>/i.test(body.trimStart());
+        if (res.statusCode === 200 && body.includes('id="root"') && looksLikeHtml) {
           resolve(body);
         } else {
           reject(new Error(`Webui did not load properly (HTTP ${res.statusCode}, body length ${body.length})`));
@@ -305,16 +304,22 @@ test.describe('Full User Flow E2E', () => {
       const health = await pollHealth(setup.port, 15000);
       expect(health.status).toBe('ok');
       expect(typeof health.port).toBe('number');
-      expect(health.port).toBe(setup.port);
+      // In native desktop mode the backend binds to a unix socket; the
+      // health endpoint reports its own bound port (0) and Electron
+      // proxies a TCP port in front. Accept either.
+      expect([0, setup.port]).toContain(health.port);
 
       // Verify webui (editor shell) loads
       const webuiHtml = await checkWebuiLoads(setup.port);
       expect(webuiHtml.length).toBeGreaterThan(0);
 
-      // Verify workspace info endpoint
+      // Verify workspace info endpoint. On macOS /var is a symlink to
+      // /private/var, so resolve both sides via realpath.
       const workspaceInfo = await httpGetJson(setup.port, '/api/workspace');
       expect(typeof workspaceInfo.workspace_root).toBe('string');
-      expect(workspaceInfo.workspace_root).toBe(path.resolve(setup.workspaceDir));
+      expect(fs.realpathSync(workspaceInfo.workspace_root)).toBe(
+        fs.realpathSync(setup.workspaceDir)
+      );
 
       // ---- Phase 2: REGISTER — Onboarding / provider configuration ----
       console.error('[E2E] Phase 2: Register — onboarding provider setup');

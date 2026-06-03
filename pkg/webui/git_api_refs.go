@@ -59,6 +59,7 @@ func (ws *ReactWebServer) handleAPIGitCommit(w http.ResponseWriter, r *http.Requ
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
 		"message": "Commit created successfully",
 		"commit":  strings.TrimSpace(string(output)),
 	})

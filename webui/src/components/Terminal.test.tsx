@@ -1489,3 +1489,78 @@ describe('Terminal flat N-pane splits', () => {
     expect(panesContainer?.classList.contains('terminal-split-horizontal')).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Tests: nextActiveAfterClose helper
+// ---------------------------------------------------------------------------
+
+import { nextActiveAfterClose } from './Terminal';
+
+describe('nextActiveAfterClose', () => {
+  // No pinning — display order matches insertion order.
+  it('picks the right-neighbour when closing a middle tab', () => {
+    const sessions = [
+      { id: 'a', name: 'A', is_pinned: false },
+      { id: 'b', name: 'B', is_pinned: false },
+      { id: 'c', name: 'C', is_pinned: false },
+    ];
+    expect(nextActiveAfterClose(sessions, 'b')).toBe('c');
+  });
+
+  it('picks the previous-neighbour when closing the last tab', () => {
+    const sessions = [
+      { id: 'a', name: 'A', is_pinned: false },
+      { id: 'b', name: 'B', is_pinned: false },
+      { id: 'c', name: 'C', is_pinned: false },
+    ];
+    expect(nextActiveAfterClose(sessions, 'c')).toBe('b');
+  });
+
+  it('picks the next display-tab when closing the first tab', () => {
+    const sessions = [
+      { id: 'a', name: 'A', is_pinned: false },
+      { id: 'b', name: 'B', is_pinned: false },
+      { id: 'c', name: 'C', is_pinned: false },
+    ];
+    expect(nextActiveAfterClose(sessions, 'a')).toBe('b');
+  });
+
+  // Pinning — display order differs from array order.
+  it('honors display order when a pinned tab sits before an unpinned one', () => {
+    // Array order: [A, B(pinned), C]; display order: [B, A, C].
+    // Closing A (display position 1) should focus C (display position 2),
+    // NOT B (the pinned tab to the left at display position 0).
+    const sessions = [
+      { id: 'a', name: 'A', is_pinned: false },
+      { id: 'b', name: 'B', is_pinned: true },
+      { id: 'c', name: 'C', is_pinned: false },
+    ];
+    expect(nextActiveAfterClose(sessions, 'a')).toBe('c');
+  });
+
+  it('falls back to the previous tab when closing the rightmost display tab', () => {
+    // Display order: [B(pinned), A, C]. Closing C → focus A.
+    const sessions = [
+      { id: 'a', name: 'A', is_pinned: false },
+      { id: 'b', name: 'B', is_pinned: true },
+      { id: 'c', name: 'C', is_pinned: false },
+    ];
+    expect(nextActiveAfterClose(sessions, 'c')).toBe('a');
+  });
+
+  it('keeps pinned-first when closing a pinned tab', () => {
+    // Display order: [B(pinned), D(pinned), A, C]. Closing B → focus D.
+    const sessions = [
+      { id: 'a', name: 'A', is_pinned: false },
+      { id: 'b', name: 'B', is_pinned: true },
+      { id: 'c', name: 'C', is_pinned: false },
+      { id: 'd', name: 'D', is_pinned: true },
+    ];
+    expect(nextActiveAfterClose(sessions, 'b')).toBe('d');
+  });
+
+  it('returns the closed id back when no session remains', () => {
+    const sessions = [{ id: 'a', name: 'A', is_pinned: false }];
+    expect(nextActiveAfterClose(sessions, 'a')).toBe('a');
+  });
+});

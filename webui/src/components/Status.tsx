@@ -106,9 +106,19 @@ function Status({ isConnected, stats }: StatusProps): JSX.Element {
             {provider} : {model}
           </button>
         )}
-        <span className="status-item" title="Connection state">
+        <span
+          className="status-item"
+          // Surface the transport session ID only in the tooltip so a
+          // support engineer can grab it on request, without leaking
+          // raw infra IDs into the user-facing chrome. The visible
+          // chrome stays "Link: connected".
+          title={
+            transportSessionId
+              ? `Connection state · session ${transportSessionId}`
+              : 'Connection state'
+          }
+        >
           Link: {connectionPhase}
-          {transportSessionId ? ` (${transportSessionId.slice(0, 12)})` : ''}
         </span>
       </div>
     </div>

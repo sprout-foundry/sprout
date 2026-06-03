@@ -15,7 +15,7 @@ vi.mock('../utils/log', () => ({
 }));
 
 vi.mock('lucide-react', () => {
-  const icons = ['Play', 'Square', 'Terminal', 'ChevronDown', 'ChevronRight', 'RefreshCw'];
+  const icons = ['Play', 'Square', 'Layers', 'RefreshCw'];
   const result: Record<string, (props: any) => JSX.Element> = {};
   for (const name of icons) {
     result[name] = (props: any) => <svg data-testid={name.toLowerCase()} {...props} />;
@@ -156,25 +156,33 @@ describe('BackgroundTasks', () => {
   // ─────────────────────────────────────────────────────────────────────
 
   describe('rendering', () => {
-    it('renders collapsed by default with header', () => {
+    it('renders closed by default with trigger button only', () => {
       const view = renderBackgroundTasks();
       container = view.container;
       root = view.root;
 
-      const header = container.querySelector('.background-tasks-header');
-      expect(header).toBeTruthy();
+      const trigger = container.querySelector('.background-tasks-trigger');
+      expect(trigger).toBeTruthy();
 
-      // The body should not be present when collapsed
-      const body = container.querySelector('.background-tasks-body');
-      expect(body).toBeNull();
+      // The popover should not be present when closed
+      const popover = container.querySelector('.background-tasks-popover');
+      expect(popover).toBeNull();
     });
 
-    it('shows "Background Tasks" title in header', () => {
+    it('shows "Background Tasks" title inside popover when open', async () => {
+      mockClientFetch.mockResolvedValue(makeOkResponse(emptyResponse));
+
       const view = renderBackgroundTasks();
       container = view.container;
       root = view.root;
 
-      const title = container.querySelector('.background-tasks-title span');
+      const trigger = container.querySelector('.background-tasks-trigger') as HTMLElement;
+      act(() => {
+        trigger.click();
+      });
+      await flushPromises();
+
+      const title = container.querySelector('.background-tasks-popover-title span');
       expect(title?.textContent).toBe('Background Tasks');
     });
 
@@ -185,14 +193,14 @@ describe('BackgroundTasks', () => {
       container = view.container;
       root = view.root;
 
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
 
       act(() => {
         header.click();
       });
       await flushPromises();
 
-      const body = container.querySelector('.background-tasks-body');
+      const body = container.querySelector('.background-tasks-popover-body');
       expect(body).toBeTruthy();
     });
 
@@ -203,7 +211,7 @@ describe('BackgroundTasks', () => {
       container = view.container;
       root = view.root;
 
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
 
       // Expand
       act(() => {
@@ -211,14 +219,14 @@ describe('BackgroundTasks', () => {
       });
       await flushPromises();
 
-      expect(container.querySelector('.background-tasks-body')).toBeTruthy();
+      expect(container.querySelector('.background-tasks-popover-body')).toBeTruthy();
 
       // Collapse
       act(() => {
         header.click();
       });
 
-      expect(container.querySelector('.background-tasks-body')).toBeNull();
+      expect(container.querySelector('.background-tasks-popover-body')).toBeNull();
     });
   });
 
@@ -237,7 +245,7 @@ describe('BackgroundTasks', () => {
       // Wait for mount fetch to complete
       await flushPromises();
 
-      const badge = container.querySelector('.background-tasks-badge');
+      const badge = container.querySelector('.background-tasks-trigger-badge');
       expect(badge).toBeNull();
     });
 
@@ -251,7 +259,7 @@ describe('BackgroundTasks', () => {
       // Wait for mount fetch to complete
       await flushPromises();
 
-      const badge = container.querySelector('.background-tasks-badge');
+      const badge = container.querySelector('.background-tasks-trigger-badge');
       expect(badge).toBeTruthy();
       expect(badge?.textContent).toBe('2');
     });
@@ -270,7 +278,7 @@ describe('BackgroundTasks', () => {
       root = view.root;
 
       // Expand
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
       act(() => {
         header.click();
       });
@@ -288,7 +296,7 @@ describe('BackgroundTasks', () => {
       root = view.root;
 
       // Expand
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
       act(() => {
         header.click();
       });
@@ -305,7 +313,7 @@ describe('BackgroundTasks', () => {
       container = view.container;
       root = view.root;
 
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
       act(() => {
         header.click();
       });
@@ -336,7 +344,7 @@ describe('BackgroundTasks', () => {
       container = view.container;
       root = view.root;
 
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
       act(() => {
         header.click();
       });
@@ -353,7 +361,7 @@ describe('BackgroundTasks', () => {
       container = view.container;
       root = view.root;
 
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
       act(() => {
         header.click();
       });
@@ -370,7 +378,7 @@ describe('BackgroundTasks', () => {
       container = view.container;
       root = view.root;
 
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
       act(() => {
         header.click();
       });
@@ -387,7 +395,7 @@ describe('BackgroundTasks', () => {
       container = view.container;
       root = view.root;
 
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
       act(() => {
         header.click();
       });
@@ -405,7 +413,7 @@ describe('BackgroundTasks', () => {
       container = view.container;
       root = view.root;
 
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
       act(() => {
         header.click();
       });
@@ -439,7 +447,7 @@ describe('BackgroundTasks', () => {
       container = view.container;
       root = view.root;
 
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
       act(() => {
         header.click();
       });
@@ -456,7 +464,7 @@ describe('BackgroundTasks', () => {
       container = view.container;
       root = view.root;
 
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
       act(() => {
         header.click();
       });
@@ -500,7 +508,7 @@ describe('BackgroundTasks', () => {
       mockClientFetch.mockClear();
       mockClientFetch.mockResolvedValue(makeOkResponse(mockResponse));
 
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
       act(() => {
         header.click();
       });
@@ -516,7 +524,7 @@ describe('BackgroundTasks', () => {
       container = view.container;
       root = view.root;
 
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
       act(() => {
         header.click();
       });
@@ -538,7 +546,7 @@ describe('BackgroundTasks', () => {
 
       // On mount when collapsed, errors are logged but not shown in UI
       // (the error element only shows when expanded)
-      const badge = container.querySelector('.background-tasks-badge');
+      const badge = container.querySelector('.background-tasks-trigger-badge');
       expect(badge).toBeNull();
     });
 
@@ -549,7 +557,7 @@ describe('BackgroundTasks', () => {
       container = view.container;
       root = view.root;
 
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
       act(() => {
         header.click();
       });
@@ -568,7 +576,7 @@ describe('BackgroundTasks', () => {
       root = view.root;
 
       // Expand to trigger error
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
       act(() => {
         header.click();
       });
@@ -605,7 +613,7 @@ describe('BackgroundTasks', () => {
       root = view.root;
 
       // Expand to trigger fetch
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
       act(() => {
         header.click();
       });
@@ -623,7 +631,7 @@ describe('BackgroundTasks', () => {
 
       // Only one fetch should have completed (the second one should have been skipped by the guard)
       // The key assertion: component didn't crash and rendered
-      expect(container.querySelector('.background-tasks-container')).toBeTruthy();
+      expect(container.querySelector('.background-tasks-dropdown')).toBeTruthy();
     });
   });
 
@@ -640,7 +648,7 @@ describe('BackgroundTasks', () => {
       root = view.root;
 
       // Expand
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
       act(() => {
         header.click();
       });
@@ -671,7 +679,7 @@ describe('BackgroundTasks', () => {
       root = view.root;
 
       // Expand
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
       act(() => {
         header.click();
       });
@@ -707,7 +715,7 @@ describe('BackgroundTasks', () => {
       root = view.root;
 
       // Expand
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
       act(() => {
         header.click();
       });
@@ -735,7 +743,7 @@ describe('BackgroundTasks', () => {
       root = view.root;
 
       // Expand
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
       act(() => {
         header.click();
       });
@@ -765,7 +773,7 @@ describe('BackgroundTasks', () => {
       root = view.root;
 
       // Expand
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
       act(() => {
         header.click();
       });
@@ -799,7 +807,7 @@ describe('BackgroundTasks', () => {
       root = view.root;
 
       // Expand
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
       act(() => {
         header.click();
       });
@@ -829,7 +837,7 @@ describe('BackgroundTasks', () => {
       root = view.root;
 
       // Expand
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
       act(() => {
         header.click();
       });
@@ -858,7 +866,7 @@ describe('BackgroundTasks', () => {
       root = view.root;
 
       // Expand
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
       act(() => {
         header.click();
       });
@@ -905,7 +913,7 @@ describe('BackgroundTasks', () => {
       container = view.container;
       root = view.root;
 
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
       act(() => {
         header.click();
       });
@@ -938,7 +946,7 @@ describe('BackgroundTasks', () => {
       container = view.container;
       root = view.root;
 
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
       act(() => {
         header.click();
       });
@@ -971,7 +979,7 @@ describe('BackgroundTasks', () => {
       container = view.container;
       root = view.root;
 
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
       act(() => {
         header.click();
       });
@@ -1003,7 +1011,7 @@ describe('BackgroundTasks', () => {
       container = view.container;
       root = view.root;
 
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
       act(() => {
         header.click();
       });
@@ -1027,7 +1035,7 @@ describe('BackgroundTasks', () => {
       root = view.root;
 
       // Expand
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
       act(() => {
         header.click();
       });
@@ -1045,41 +1053,49 @@ describe('BackgroundTasks', () => {
       expect(mockClientFetch.mock.calls.length).toBeGreaterThan(initialCallCount);
     });
 
-    it('clears polling interval when collapsed', async () => {
+    it('polls at a slower cadence when closed (keeps badge fresh)', async () => {
       mockClientFetch.mockResolvedValue(makeOkResponse(mockResponse));
 
       const view = renderBackgroundTasks();
       container = view.container;
       root = view.root;
 
-      // Expand
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      // Open
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
       act(() => {
         header.click();
       });
       await flushPromises();
 
-      // Advance past one poll
+      // Fast poll while open: 3s interval triggers a fetch
+      const callCountAfterOpen = mockClientFetch.mock.calls.length;
       act(() => {
         vi.advanceTimersByTime(3000);
       });
       await flushPromises();
+      expect(mockClientFetch.mock.calls.length).toBeGreaterThan(callCountAfterOpen);
 
-      const callCountAfterPoll = mockClientFetch.mock.calls.length;
-
-      // Collapse
+      // Close — switches to the idle (15s) poll cadence
       act(() => {
         header.click();
       });
+      await flushPromises();
 
-      // Advance past another poll interval
+      const callCountAfterClose = mockClientFetch.mock.calls.length;
+
+      // 3s elapsed is below the 15s idle interval — no extra fetch yet
       act(() => {
         vi.advanceTimersByTime(3000);
       });
       await flushPromises();
+      expect(mockClientFetch.mock.calls.length).toBe(callCountAfterClose);
 
-      // No additional calls after collapse
-      expect(mockClientFetch.mock.calls.length).toBe(callCountAfterPoll);
+      // Past 15s — the idle poll fires
+      act(() => {
+        vi.advanceTimersByTime(15000);
+      });
+      await flushPromises();
+      expect(mockClientFetch.mock.calls.length).toBeGreaterThan(callCountAfterClose);
     });
   });
 
@@ -1096,7 +1112,7 @@ describe('BackgroundTasks', () => {
       root = view.root;
 
       // Expand
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
       act(() => {
         header.click();
       });
@@ -1138,7 +1154,7 @@ describe('BackgroundTasks', () => {
       root = view.root;
 
       // Expand
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
       act(() => {
         header.click();
       });
@@ -1167,7 +1183,7 @@ describe('BackgroundTasks', () => {
       root = view.root;
 
       // Expand
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
       act(() => {
         header.click();
       });
@@ -1196,7 +1212,7 @@ describe('BackgroundTasks', () => {
       root = view.root;
 
       // Expand
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
       act(() => {
         header.click();
       });
@@ -1225,7 +1241,7 @@ describe('BackgroundTasks', () => {
       root = view.root;
 
       // Expand
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
       act(() => {
         header.click();
       });
@@ -1254,7 +1270,7 @@ describe('BackgroundTasks', () => {
       root = view.root;
 
       // Expand
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
       act(() => {
         header.click();
       });
@@ -1276,21 +1292,20 @@ describe('BackgroundTasks', () => {
       expect(mockClientFetch.mock.calls.length).toBe(callCountBefore);
     });
 
-    it('does not listen for events when collapsed', async () => {
+    it('still listens for events when closed (keeps badge in sync)', async () => {
       mockClientFetch.mockResolvedValue(makeOkResponse(emptyResponse));
 
       const view = renderBackgroundTasks();
       container = view.container;
       root = view.root;
 
-      // Do NOT expand — stay collapsed
+      // Do NOT expand — stay closed; the trigger badge needs WS updates
+      // so it can reflect new tasks without opening the popover.
 
-      // Advance past mount fetch
       await flushPromises();
 
       const callCountBefore = mockClientFetch.mock.calls.length;
 
-      // Dispatch event while collapsed
       act(() => {
         window.dispatchEvent(
           new CustomEvent('sprout:wsevent', {
@@ -1300,30 +1315,29 @@ describe('BackgroundTasks', () => {
       });
       await flushPromises();
 
-      // Should NOT have triggered a refetch
-      expect(mockClientFetch.mock.calls.length).toBe(callCountBefore);
+      expect(mockClientFetch.mock.calls.length).toBeGreaterThan(callCountBefore);
     });
 
-    it('stops listening for events after collapsing', async () => {
+    it('continues listening for events after closing the popover', async () => {
       mockClientFetch.mockResolvedValue(makeOkResponse(mockResponse));
 
       const view = renderBackgroundTasks();
       container = view.container;
       root = view.root;
 
-      // Expand
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      // Open then close
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
+      act(() => {
+        header.click();
+      });
+      await flushPromises();
       act(() => {
         header.click();
       });
       await flushPromises();
 
-      // Collapse
-      act(() => {
-        header.click();
-      });
+      const callCountBefore = mockClientFetch.mock.calls.length;
 
-      // Dispatch event after collapsing
       act(() => {
         window.dispatchEvent(
           new CustomEvent('sprout:wsevent', {
@@ -1333,8 +1347,9 @@ describe('BackgroundTasks', () => {
       });
       await flushPromises();
 
-      // Component should still be in a valid state (no crash)
-      expect(container.querySelector('.background-tasks-header')).toBeTruthy();
+      // WS event triggers a fetch regardless of popover state.
+      expect(mockClientFetch.mock.calls.length).toBeGreaterThan(callCountBefore);
+      expect(container.querySelector('.background-tasks-trigger')).toBeTruthy();
     });
   });
 
@@ -1351,7 +1366,7 @@ describe('BackgroundTasks', () => {
       root = view.root;
 
       // Expand
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
       act(() => {
         header.click();
       });
@@ -1373,7 +1388,7 @@ describe('BackgroundTasks', () => {
       root = view.root;
 
       // Expand
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
       act(() => {
         header.click();
       });
@@ -1405,7 +1420,7 @@ describe('BackgroundTasks', () => {
       root = view.root;
 
       // Expand
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
       act(() => {
         header.click();
       });
@@ -1428,7 +1443,7 @@ describe('BackgroundTasks', () => {
       root = view.root;
 
       // Expand
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
       act(() => {
         header.click();
       });
@@ -1441,7 +1456,7 @@ describe('BackgroundTasks', () => {
       await flushPromises();
 
       // Should not crash
-      expect(container.querySelector('.background-tasks-container')).toBeTruthy();
+      expect(container.querySelector('.background-tasks-dropdown')).toBeTruthy();
     });
 
     it('disables attach button for inactive sessions', async () => {
@@ -1452,7 +1467,7 @@ describe('BackgroundTasks', () => {
       root = view.root;
 
       // Expand
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
       act(() => {
         header.click();
       });
@@ -1496,7 +1511,7 @@ describe('BackgroundTasks', () => {
       root = view.root;
 
       // Expand
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
       act(() => {
         header.click();
       });
@@ -1531,7 +1546,7 @@ describe('BackgroundTasks', () => {
       root = view.root;
 
       // Expand
-      const header = container.querySelector('.background-tasks-header') as HTMLElement;
+      const header = container.querySelector('.background-tasks-trigger') as HTMLElement;
       act(() => {
         header.click();
       });

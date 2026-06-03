@@ -82,9 +82,19 @@ type TrackedFileChange struct {
 	FilePath     string    `json:"file_path"`
 	OriginalCode string    `json:"original_code"`
 	NewCode      string    `json:"new_code"`
-	Operation    string    `json:"operation"` // "write", "edit", "create"
+	Operation    string    `json:"operation"` // "write", "edit", "create", "delete", "bulk"
 	Timestamp    time.Time `json:"timestamp"`
 	ToolCall     string    `json:"tool_call"` // Which tool was used
+
+	// BulkCount is set on a rollup entry produced when a single shell
+	// command churns more than shellBulkThreshold paths in one
+	// directory — typical of `make build`, `npm ci`, `cargo build`, etc.
+	// FilePath then names the OFFENDING DIRECTORY (workspace-relative,
+	// trailing "/"), Operation is "bulk", and the per-file
+	// originalCode/newCode are empty (no recovery payload is captured
+	// for build outputs — they're cheap to regenerate). When zero, the
+	// entry represents a normal single-file change. SP-061-1.
+	BulkCount int `json:"bulk_count,omitempty"`
 }
 
 // NewChangeTracker creates a new change tracker for an agent session

@@ -29,6 +29,7 @@ import {
   FilePlus,
   FilePen,
   FileMinus,
+  FolderCog,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ApiService } from '../services/api';
@@ -63,6 +64,8 @@ const opIcon = (op: string) => {
       return <FilePlus size={14} className="op-icon op-create" />;
     case 'delete':
       return <FileMinus size={14} className="op-icon op-delete" />;
+    case 'bulk':
+      return <FolderCog size={14} className="op-icon op-bulk" />;
     default:
       return <FilePen size={14} className="op-icon op-edit" />;
   }
@@ -74,11 +77,21 @@ const opLabel = (op: string) => {
       return 'Created';
     case 'delete':
       return 'Deleted';
+    case 'bulk':
+      return 'Build output';
     case 'edit':
     default:
       return 'Modified';
   }
 };
+
+// formatBulkCount renders a thousands-separated file count for the
+// build-output rollup row ("1,247 files"). Empty / undefined leaves the
+// row label terse so the path remains the focal point.
+function formatBulkCount(n?: number): string {
+  if (!n || n <= 0) return '';
+  return new Intl.NumberFormat(undefined).format(n) + ' file' + (n === 1 ? '' : 's');
+}
 
 function formatRelativeTime(iso: string): string {
   const then = new Date(iso).getTime();
@@ -309,6 +322,27 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
             {blockFiles.map((f) => {
               const meta = changes.find((c) => c.path === f.path);
               const flashed = flashedPaths.has(f.path);
+              // Bulk rollups (SP-061-1): one row per build-output
+              // directory, no view/revert/ask actions. The path field
+              // already carries a trailing slash on the backend so the
+              // user can see at a glance that this is a directory entry.
+              if (f.op === 'bulk') {
+                const count = meta?.bulk_count;
+                return (
+                  <div
+                    key={f.path + f.op}
+                    className={`changes-file-row changes-file-row--bulk ${flashed ? 'changes-file-flash' : ''}`}
+                    title={`Build output rolled up — ${f.path} (${count ?? '?'} files). Not shown individually to keep the panel readable.`}
+                  >
+                    {opIcon(f.op)}
+                    <span className="changes-file-path changes-file-path--bulk">{f.path}</span>
+                    <span className="changes-file-op">
+                      {opLabel(f.op)}
+                      {count ? ` · ${formatBulkCount(count)}` : ''}
+                    </span>
+                  </div>
+                );
+              }
               return (
                 <div key={f.path + f.op} className={`changes-file-row ${flashed ? 'changes-file-flash' : ''}`}>
                   {opIcon(f.op)}

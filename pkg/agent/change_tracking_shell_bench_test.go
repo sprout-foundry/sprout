@@ -37,7 +37,7 @@ func BenchmarkTrackShellTurn_WarmNoChanges(b *testing.B) {
 	tracker.PrimeShellTracking(root) // pay the cold cost once
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		tracker.TrackShellTurn(root, "shell_command")
+		tracker.TrackShellTurn(root, "shell_command", false)
 	}
 }
 

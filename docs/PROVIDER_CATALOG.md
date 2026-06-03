@@ -29,7 +29,7 @@ The default remote refresh URL is:
 
 It can be overridden with:
 
-- `LEDIT_PROVIDER_CATALOG_URL`
+- `SPROUT_PROVIDER_CATALOG_URL`
 
 ### Runtime Behavior
 

@@ -19,15 +19,17 @@ sprout agent --provider zai --model GLM-4.6 "implement feature X"
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `LEDIT_NO_STREAM=1` | Disable streaming mode | `LEDIT_NO_STREAM=1 sprout agent "task"` |
-| `LEDIT_NO_SUBAGENTS=1` | Disable subagent tools | `LEDIT_NO_SUBAGENTS=1 sprout agent "task"` |
-| `LEDIT_NO_CONNECTION_CHECK=1` | Skip provider connection check | `LEDIT_NO_CONNECTION_CHECK=1 sprout agent "task"` |
-| `LEDIT_RESOURCE_DIRECTORY=<dir>` | Store web/vision resources | `LEDIT_RESOURCE_DIRECTORY=captures` |
-| `LEDIT_TRACE_DATASET_DIR=<dir>` | Enable dataset tracing | `LEDIT_TRACE_DATASET_DIR=traces` |
-| `LEDIT_CONFIG=<dir>` | Custom config directory | `LEDIT_CONFIG=/my/config` |
+| `SPROUT_NO_STREAM=1` | Disable streaming mode | `SPROUT_NO_STREAM=1 sprout agent "task"` |
+| `SPROUT_NO_SUBAGENTS=1` | Disable subagent tools | `SPROUT_NO_SUBAGENTS=1 sprout agent "task"` |
+| `SPROUT_NO_CONNECTION_CHECK=1` | Skip provider connection check | `SPROUT_NO_CONNECTION_CHECK=1 sprout agent "task"` |
+| `SPROUT_RESOURCE_DIRECTORY=<dir>` | Store web/vision resources | `SPROUT_RESOURCE_DIRECTORY=captures` |
+| `SPROUT_TRACE_DATASET_DIR=<dir>` | Enable dataset tracing | `SPROUT_TRACE_DATASET_DIR=traces` |
+| `SPROUT_CONFIG=<dir>` | Custom config directory | `SPROUT_CONFIG=/my/config` |
 | `CI=1` or `GITHUB_ACTIONS=1` | CI environment mode | `CI=1 sprout agent "task"` |
 | `GITHUB_PERSONAL_ACCESS_TOKEN` | GitHub token for MCP | Auto-discovers GitHub MCP server |
 | `OPENAI_API_KEY`, `DEEPINFRA_API_KEY`, etc. | API keys for providers | Set directly or in `api_keys.json` |
+
+> **Legacy**: The `LEDIT_*` equivalents (`LEDIT_NO_STREAM`, `LEDIT_CONFIG`, etc.) still work as fallbacks but are deprecated. Use `SPROUT_*` in new scripts.
 
 ## config.json Settings
 
@@ -232,10 +234,10 @@ sprout agent --provider deepinfra --model "meta-llama/Llama-3.3-70B-Instruct" "t
 sprout agent --skip-prompt "Implement feature"
 
 # Disable streaming for scripts
-LEDIT_NO_STREAM=1 sprout agent "task"
+SPROUT_NO_STREAM=1 sprout agent "task"
 
 # Skip provider connection check (faster in CI)
-LEDIT_NO_CONNECTION_CHECK=1 sprout agent "task"
+SPROUT_NO_CONNECTION_CHECK=1 sprout agent "task"
 ```
 
 ### Piped Input Support

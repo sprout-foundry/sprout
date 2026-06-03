@@ -69,6 +69,24 @@ type Config struct {
 	// When false, ALL personas must use the git tool for write operations.
 	AllowOrchestratorGitWrite bool `json:"allow_orchestrator_git_write,omitempty"`
 
+	// AllowGitHistoryRewrite controls whether commands that can lose commit
+	// history are accepted via shell_command without going through the git
+	// tool's approval flow. Specifically: `git reset --hard <commit-ish>`,
+	// `git rebase`, `git branch -D`, `git tag -d`.
+	//
+	// Working-tree-only destructive ops (`git checkout .`, `git restore`,
+	// `git clean -fd`, `git reset --hard HEAD`, etc.) are always allowed
+	// because the change tracker captures pre-mutation content and exposes
+	// recover_file / recover_bulk for restoration. History rewrites can't
+	// be recovered through the tracker — only via the reflog — so they
+	// stay gated by default.
+	//
+	// Default: false (gated). Set true in environments where the agent
+	// has tighter feedback loops (e.g. user-facing chat where every step
+	// is confirmed) and the friction of going through the git tool isn't
+	// worth it.
+	AllowGitHistoryRewrite bool `json:"allow_git_history_rewrite,omitempty"`
+
 	// ResourceDirectory stores captured web/vision resources relative to the current working directory.
 	// This can be overridden at runtime with --resource-directory.
 	ResourceDirectory string `json:"resource_directory,omitempty"`

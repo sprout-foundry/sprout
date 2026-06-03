@@ -115,20 +115,27 @@ func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface
 		}
 	}
 
-	// Block git checkout/switch commands from shell_command for ALL personas.
-	// These must go through the git tool which requires explicit user approval.
-	// This prevents the orchestrator and other autonomous personas from
-	// switching branches without user consent.
-	if isGitCheckoutSubcommand(command) {
-		return "", agenterrors.NewSecurityError(fmt.Sprintf("git checkout/switch/restore operations are not allowed via shell_command. Use the git tool to require explicit user approval (command: '%s')", command), nil)
-	}
-
-	// Block git commands that discard changes (restore, reset) from shell_command
-	// for ALL personas. These must go through the git tool which requires
-	// explicit user approval. This prevents accidental data loss even for the
-	// orchestrator persona.
-	if isGitDiscardCommand(command) {
-		return "", agenterrors.NewSecurityError(fmt.Sprintf("git %s operations are not allowed via shell_command. Use the git tool with operation='restore' or operation='reset' to require explicit user approval (command: '%s')", extractGitSubcommand(command), command), nil)
+	// Block git commands that lose commit history unless the workspace
+	// has opted into the more-permissive `AllowGitHistoryRewrite` mode.
+	//
+	// What this gate now covers:
+	//   - `git reset --hard <commit-ish>` (backward ref move)
+	//   - `git rebase` (any form — rewrites commits)
+	//   - `git branch -d/-D/--delete`
+	//   - `git tag -d/--delete`
+	//
+	// What it deliberately DOESN'T cover anymore (used to be blocked
+	// unconditionally): `checkout`, `switch`, `restore`, `reset` without
+	// `--hard <commit-ish>`, `clean`, `rm`, `mv`, `stash pop/apply/drop`,
+	// `cherry-pick`, `revert`, `am`, `apply`. These mutate only the
+	// working tree, which the change tracker captures (shellIsDestructive
+	// → walkWorkspace destructive mode → recoverable bulk entries), so
+	// recover_file / recover_bulk are the recovery story instead of an
+	// up-front block.
+	if isGitHistoryRewriteCommand(command) {
+		if cfg := a.GetConfig(); cfg == nil || !cfg.AllowGitHistoryRewrite {
+			return "", agenterrors.NewSecurityError(fmt.Sprintf("git %s can lose commit history and is blocked by default. Use the git tool for explicit user approval, or set allow_git_history_rewrite=true in config to opt in (command: '%s')", extractGitSubcommand(command), command), nil)
+		}
 	}
 
 	// Block git write operations unless the orchestrator persona has permission.

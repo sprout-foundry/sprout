@@ -138,6 +138,8 @@ var skillListCmd = &cobra.Command{
 		}{
 			{"project-planning", "Project Planning", "Project onboarding, planning, and initialization"},
 			{"browse-debugging", "Browse Debugging", "Multi-step interactive browser debugging"},
+			{"workflow-automation", "Workflow Automation", "Create and manage automated agent workflows"},
+			{"self-help", "Self Help", "Configuration, settings, and capability reference"},
 		}
 		for _, s := range builtins {
 			fmt.Printf("  %-25s %s\n", s.id, s.desc)

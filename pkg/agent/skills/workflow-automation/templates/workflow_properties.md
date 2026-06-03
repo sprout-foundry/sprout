@@ -10,6 +10,7 @@ These properties configure the overall workflow behavior.
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
+| `description` | string | *(none)* | Human-readable description shown by `sprout automate list` and `list_automate_workflows`. Strongly recommended — helps users identify workflows. |
 | `initial` | object | *(required)* | The first agent run. Defines persona, model, provider, and prompt. See [Initial Run](#initial-run). |
 | `steps` | array | `[]` | Additional runs that execute after the initial run, in sequence. See [Steps](#steps). |
 | `continue_on_error` | boolean | `false` | If `true`, keep processing steps even if a previous step fails. If `false`, stop on first error. **Recommendation**: `true` for autonomous workflows, `false` for quality-gated pipelines. |
@@ -220,6 +221,7 @@ For advanced use cases where an external process coordinates multiple workflow r
 
 ```json
 {
+  "description": "Processes TODO.md items one at a time with full build/test/review cycle, then commits each.",
   "continue_on_error": true,
   "initial": {
     "max_iterations": 500,

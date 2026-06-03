@@ -1,9 +1,9 @@
 ---
-name: autonomous-mode
-description: Interactive workflow builder that guides users through creating cost-effective, automated agent workflows. Helps discover providers/models, understand workflow properties, and generate ready-to-run workflow configurations in an automate/ directory.
+name: workflow-automation
+description: Interactive workflow builder that guides users through creating cost-effective, automated agent workflows. Helps discover providers/models, understand workflow properties, and generate ready-to-run workflow configurations in an automate/ directory. Activate with `sprout automate` after setup.
 ---
 
-# Autonomous Mode — Workflow Builder
+# Workflow Automation — Workflow Builder
 
 You are an **Autonomous Workflow Architect**. Your job is to guide any user — regardless of technical background — through creating a ready-to-run automated agent workflow. You must be patient, clear, and thorough. The user should finish this process with a working workflow they understand and can run.
 
@@ -173,6 +173,7 @@ A workflow has:
 
 | Property | Where | What it does | Default recommendation |
 |----------|-------|-------------|----------------------|
+| `description` | top-level | Human-readable description shown by `sprout automate list` and `list_automate_workflows` tool | Describe what the workflow does in one sentence |
 | `provider` | initial, steps | Which LLM provider to use | Their chosen primary provider |
 | `model` | initial, steps | Which model to use | Their chosen primary model |
 | `persona` | initial, steps | Agent persona (orchestrator, coder, etc.) | `executive_assistant` for full_autonomous, `orchestrator` for others |
@@ -260,6 +261,8 @@ Based on the user's choices, create the workflow configuration file. Use the tem
 
 Write to: `automate/workflow.json`
 
+**Important**: Every workflow JSON must include a `description` field — a one-sentence summary of what the workflow does. This is displayed by `sprout automate list` and the `list_automate_workflows` agent tool so users can identify their workflows.
+
 ### 4.3 Generate the workflow prompt file
 
 Create a `.md` file that the workflow references via `prompt_file`. This file contains:
@@ -322,6 +325,7 @@ Below are the reference templates for generating workflow files. Use these as st
 
 ```json
 {
+  "description": "USER_WORKFLOW_DESCRIPTION",
   "__comment": "Full Autonomous TODO Processor — processes TODO.md items with complete build/test/review cycle.",
   "__runCommand": "sprout agent --workflow-config automate/workflow.json",
   "continue_on_error": true,
@@ -423,6 +427,7 @@ For users who want a simpler one-shot workflow:
 
 ```json
 {
+  "description": "USER_WORKFLOW_DESCRIPTION",
   "continue_on_error": false,
   "initial": {
     "max_iterations": 300,
@@ -481,8 +486,22 @@ This directory contains ready-to-run agent workflow configurations.
 ## How to Run
 
 ```bash
+# Interactive picker
+sprout automate
+
+# Run directly by name
+sprout automate run workflow.json
+
+# Or use the traditional agent command
 sprout agent --workflow-config automate/workflow.json
 ```
+
+## Running from an Agent Session
+
+From within a sprout agent session, you can also:
+
+1. **List workflows**: Use the `list_automate_workflows` tool
+2. **Run a workflow**: Use the `run_automate` tool (requires your confirmation)
 
 ## Provider Configuration
 

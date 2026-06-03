@@ -48,10 +48,12 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 	}
 
 	// Security validation — classify and block/prompt dangerous operations
-	if secResult := tools.ClassifyToolCall(toolName, args); secResult.ShouldBlock || secResult.ShouldPrompt {
-		if agent != nil && agent.staticGateAutoApprove(secResult) {
+	if secResult := tools.ClassifyToolCall(toolName, args); secResult.ShouldBlock || secResult.ShouldPrompt || secResult.IntentConfirmation {
+		if agent != nil && agent.staticGateAutoApprove(secResult) && !secResult.IntentConfirmation {
 			// Unsafe mode or session elevation — skip the prompt for
 			// non-hard-block operations. See staticGateAutoApprove.
+			// IntentConfirmation is never auto-approved — it's about
+			// explicit user intent, not risk bypass.
 			if agent.debug {
 				agent.debugLog("[UNLOCK] Static gate auto-approve (unsafe/elevated): bypassing security validation for %s (risk: %s)\n", toolName, secResult.Risk)
 			}
@@ -73,6 +75,9 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 				}
 				// Build extras with context the webui dialog needs (command, target, risk type)
 				extras := map[string]string{}
+				if secResult.IntentConfirmation {
+					extras["intent_confirmation"] = "true"
+				}
 				if secResult.RiskType != "" {
 					extras["risk_type"] = formatRiskType(secResult.RiskType)
 				}
@@ -89,6 +94,10 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 					if op, ok := args["operation"].(string); ok && op != "" {
 						extras["target"] = fmt.Sprintf("git %s", op)
 					}
+				case "run_automate":
+					if wf, ok := args["workflow"].(string); ok && wf != "" {
+						extras["target"] = fmt.Sprintf("workflow: %s", wf)
+					}
 				}
 				if !mgr.RequestToolApproval(agent.GetEventBus(), agent.GetEventClientID(), agent.GetEventUserID(), toolName, secResult.Risk.String(), secResult.Reasoning, extras) {
 					return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", toolName, secResult.Reasoning), nil)
@@ -104,7 +113,12 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 				canPrompt := logger != nil && logger.IsInteractive() && !isSubagent
 
 				if canPrompt {
-					prompt := buildSecurityPrompt(toolName, args, secResult)
+					var prompt string
+					if secResult.IntentConfirmation {
+						prompt = buildIntentConfirmationPrompt(toolName, args, secResult)
+					} else {
+						prompt = buildSecurityPrompt(toolName, args, secResult)
+					}
 					if !logger.AskForConfirmation(prompt, false, false) {
 						return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", toolName, secResult.Reasoning), nil)
 					}
@@ -113,6 +127,9 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 				} else if secResult.ShouldBlock {
 					// NON-INTERACTIVE + DANGEROUS, no approval mechanism: always block
 					return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("security block: %s — %s", toolName, secResult.Reasoning), nil)
+				} else if secResult.IntentConfirmation {
+					// NON-INTERACTIVE + intent confirmation required: must ask user first
+					return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("confirmation required: %s — %s (this operation requires explicit user confirmation. Use ask_user to confirm with the user before proceeding.)", toolName, secResult.Reasoning), nil)
 				} else if secResult.ShouldPrompt && !isSubagent {
 					// NON-INTERACTIVE + CAUTION, needs prompt but no approval mechanism:
 					// Return a special error that tells the LLM to re-assert safety before proceeding
@@ -223,6 +240,7 @@ func (a *Agent) staticGateAutoApprove(secResult tools.SecurityResult) bool {
 }
 
 // buildSecurityPrompt constructs a detailed security approval prompt for the user
+// buildSecurityPrompt constructs a detailed security approval prompt for the user
 func buildSecurityPrompt(toolName string, args map[string]interface{}, secResult tools.SecurityResult) string {
 	var sb strings.Builder
 
@@ -267,6 +285,27 @@ func buildSecurityPrompt(toolName string, args map[string]interface{}, secResult
 // double-rendered both — the source of the "⚠ ⚠" and the duplicated
 // "Command:" block. The picker itself asks the question, so no trailing
 // "Do you want to proceed?" either.
+// buildIntentConfirmationPrompt constructs a confirmation prompt for consequential
+// but safe operations (like launching an autonomous workflow). Uses neutral framing
+// instead of security-warning framing — the operation isn't dangerous, just impactful.
+func buildIntentConfirmationPrompt(toolName string, args map[string]interface{}, secResult tools.SecurityResult) string {
+	var sb strings.Builder
+
+	sb.WriteString("▶  Confirmation Required\n\n")
+
+	switch toolName {
+	case "run_automate":
+		if wf, ok := args["workflow"].(string); ok && wf != "" {
+			sb.WriteString(fmt.Sprintf("Workflow: %s\n\n", wf))
+		}
+	}
+
+	sb.WriteString(fmt.Sprintf("%s\n\n", secResult.Reasoning))
+	sb.WriteString("Do you want to proceed?")
+
+	return sb.String()
+}
+
 func buildShellApprovalPrompt(secResult tools.SecurityResult) string {
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("Security Warning — %s", secResult.Risk))

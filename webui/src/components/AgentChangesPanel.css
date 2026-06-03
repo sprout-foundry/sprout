@@ -251,6 +251,21 @@
 .op-create { color: var(--accent-success); }
 .op-edit { color: var(--accent-info); }
 .op-delete { color: var(--accent-error); }
+.op-bulk { color: var(--text-muted); }
+
+/* Bulk rollups read as "ambient detail" rather than active per-file
+ * edits — dim color, italic path, no hover affordance since there's no
+ * view/revert action attached. The op label expands to show the count
+ * (e.g. "Build output · 1,247 files") so the user instantly sees this
+ * is the shell command's build output, not part of their changeset. */
+.changes-file-row--bulk {
+  color: var(--text-muted);
+  opacity: 0.8;
+}
+.changes-file-path--bulk {
+  font-style: italic;
+  color: var(--text-muted);
+}
 
 /* ── Action buttons ───────────────────────────────────────────── */
 

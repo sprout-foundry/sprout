@@ -4,7 +4,7 @@ package webui
 
 import (
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -116,13 +116,21 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 			"type": "session_created",
 			"data": map[string]string{"session_id": sessionID},
 		}
-		msgBytes, _ := json.Marshal(msg)
-		log.Printf("Terminal %s message bytes: %s", sessionID, string(msgBytes))
 
 		if err := safeConn.WriteJSON(msg); err != nil {
-			log.Printf("Terminal %s FAILED to send session_created: %v", sessionID, err)
-		} else {
-			log.Printf("Terminal %s successfully sent session_created", sessionID)
+			// Distinguish "dropped by the outbound allowlist" from a
+			// real transport failure. The first is a server-side
+			// configuration bug (missing allowlist entry) that strands
+			// the client on a loading state; the second is a network
+			// problem worth a higher-severity log. Without this split
+			// every drop logged as "FAILED" looked like flaky network
+			// and every successful send logged the same line as a
+			// silently-dropped one, both misleading.
+			if errors.Is(err, ErrOutboundDropped) {
+				log.Printf("Terminal %s session_created dropped — check allowedOutboundMessageTypes registry", sessionID)
+			} else {
+				log.Printf("Terminal %s failed to send session_created: %v", sessionID, err)
+			}
 		}
 	}
 

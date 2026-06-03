@@ -29,6 +29,252 @@ func newTrackerForShellTest(t *testing.T) *ChangeTracker {
 	}
 }
 
+// TestRecordShellMutations_BulkRollupCollapsesBuildOutput is the
+// canonical SP-061-1 case: `npm run build` (or equivalent) drops
+// thousands of files under one top-level directory. They collapse
+// into a single "bulk" entry; legitimate source edits adjacent to
+// the build invocation still emit individually.
+func TestRecordShellMutations_BulkRollupCollapsesBuildOutput(t *testing.T) {
+	tracker := newTrackerForShellTest(t)
+	tracker.agent = &Agent{workspaceRoot: "/work"}
+
+	before := map[string]*shellSnapshotEntry{}
+	after := map[string]*shellSnapshotEntry{}
+	for i := 0; i < 250; i++ {
+		path := "/work/dist/asset-" + strconv.Itoa(i) + ".js"
+		after[path] = &shellSnapshotEntry{Content: []byte("// generated"), Size: 12}
+	}
+	// A single legitimate source edit under "src" survives the rollup.
+	after["/work/src/lib.go"] = &shellSnapshotEntry{Content: []byte("package lib"), Size: 11}
+
+	tracker.RecordShellMutations(before, after, "shell_command")
+
+	if got := len(tracker.changes); got != 2 {
+		t.Fatalf("expected 2 changes (1 bulk rollup + 1 source edit), got %d", got)
+	}
+	var bulk, src *TrackedFileChange
+	for i := range tracker.changes {
+		switch tracker.changes[i].Operation {
+		case "bulk":
+			bulk = &tracker.changes[i]
+		case "create":
+			src = &tracker.changes[i]
+		}
+	}
+	if bulk == nil {
+		t.Fatalf("expected a bulk rollup entry, got %+v", tracker.changes)
+	}
+	if bulk.BulkCount != 250 {
+		t.Errorf("expected bulk count 250, got %d", bulk.BulkCount)
+	}
+	if !strings.HasPrefix(bulk.FilePath, "dist") {
+		t.Errorf("bulk path should name the offending dir, got %q", bulk.FilePath)
+	}
+	if src == nil || !strings.HasSuffix(src.FilePath, "src/lib.go") {
+		t.Errorf("source edit should survive the rollup, got %+v", src)
+	}
+	if tracker.autoSkipDirs == nil || !tracker.autoSkipDirs["/work/dist"] {
+		t.Errorf("expected /work/dist to be added to autoSkipDirs after rollup, got %+v", tracker.autoSkipDirs)
+	}
+}
+
+// TestRecordShellMutations_BulkRollupCatchesFanout pins the v2
+// redesign: a single shell command past the volume threshold rolls up
+// even when no single top-level directory is individually heavy. This
+// is what was broken in v1 — `git clone repo .` and `unzip
+// flat-archive.zip` spread their output across many shallow dirs and
+// slipped past the per-dir floor. With the per-command-only trigger,
+// each top-level dir collapses into its own rollup row regardless of
+// how thinly the churn fans out within it.
+func TestRecordShellMutations_BulkRollupCatchesFanout(t *testing.T) {
+	tracker := newTrackerForShellTest(t)
+	tracker.agent = &Agent{workspaceRoot: "/work"}
+
+	before := map[string]*shellSnapshotEntry{}
+	after := map[string]*shellSnapshotEntry{}
+	// `git clone repo .` shape: 250 files under one top-level "repo"
+	// dir, but only ~12 files per sub-directory — well below the old
+	// per-dir floor of 30. v1 would have emitted 250 rows; v2 collapses
+	// to one row.
+	for sub := 0; sub < 20; sub++ {
+		for i := 0; i < 13; i++ {
+			path := "/work/repo/pkg" + strconv.Itoa(sub) + "/file-" + strconv.Itoa(i) + ".go"
+			after[path] = &shellSnapshotEntry{Content: []byte("package x"), Size: 9}
+		}
+	}
+
+	tracker.RecordShellMutations(before, after, "shell_command")
+
+	if got := len(tracker.changes); got != 1 {
+		t.Fatalf("expected 1 bulk rollup, got %d: %+v", got, tracker.changes)
+	}
+	ch := tracker.changes[0]
+	if ch.Operation != "bulk" {
+		t.Errorf("expected op bulk, got %q", ch.Operation)
+	}
+	if ch.BulkCount != 260 {
+		t.Errorf("expected bulk count 260, got %d", ch.BulkCount)
+	}
+	// Label is the deepest workspace-relative directory shared by all
+	// items. Since each path is .../pkgN/fileN.go, the only shared
+	// prefix is "repo" (the top-level), so the rollup labels that.
+	if !strings.HasPrefix(ch.FilePath, "repo") {
+		t.Errorf("expected rollup label to start with 'repo/', got %q", ch.FilePath)
+	}
+	if !tracker.autoSkipDirs["/work/repo"] {
+		t.Errorf("expected /work/repo in autoSkipDirs, got %+v", tracker.autoSkipDirs)
+	}
+}
+
+// TestRecordShellMutations_BulkRollupLabelSharpens covers the case
+// where every rolled-up path sits deep inside one common subtree
+// (e.g. `pip install --target env/` filling
+// env/lib/python3.x/site-packages/...). The rollup label should
+// sharpen to the deepest workspace-relative prefix the bucket shares,
+// not the top-level dir — "env/lib/python3.11/site-packages" reads
+// far better than just "env" when that's actually what's underneath.
+func TestRecordShellMutations_BulkRollupLabelSharpens(t *testing.T) {
+	tracker := newTrackerForShellTest(t)
+	tracker.agent = &Agent{workspaceRoot: "/work"}
+
+	before := map[string]*shellSnapshotEntry{}
+	after := map[string]*shellSnapshotEntry{}
+	for i := 0; i < 250; i++ {
+		path := "/work/env/lib/python3.11/site-packages/pkg-" + strconv.Itoa(i) + "/__init__.py"
+		after[path] = &shellSnapshotEntry{Content: []byte("# stub"), Size: 6}
+	}
+
+	tracker.RecordShellMutations(before, after, "shell_command")
+
+	if got := len(tracker.changes); got != 1 {
+		t.Fatalf("expected 1 rollup, got %d", got)
+	}
+	ch := tracker.changes[0]
+	want := "env/lib/python3.11/site-packages"
+	if ch.FilePath != want+string(filepath.Separator) {
+		t.Errorf("expected sharpened label %q/, got %q", want, ch.FilePath)
+	}
+	// AutoSkip is the top-level dir ("env"), not the deepest ancestor,
+	// so future commands that touch a sibling like env/bin/ also get
+	// suppressed automatically — they're almost always part of the
+	// same venv that we already decided is build output.
+	if !tracker.autoSkipDirs["/work/env"] {
+		t.Errorf("expected /work/env in autoSkipDirs, got %+v", tracker.autoSkipDirs)
+	}
+}
+
+// TestRecordShellMutations_BelowThresholdStaysItemised confirms a
+// small-volume shell command (under shellBulkThreshold) records every
+// change individually even when the churn concentrates in one folder.
+// Without this guard, a 50-file targeted refactor would be hidden
+// behind a rollup just because the files happened to share a dir.
+func TestRecordShellMutations_BelowThresholdStaysItemised(t *testing.T) {
+	tracker := newTrackerForShellTest(t)
+	tracker.agent = &Agent{workspaceRoot: "/work"}
+
+	before := map[string]*shellSnapshotEntry{}
+	after := map[string]*shellSnapshotEntry{}
+	for i := 0; i < 50; i++ {
+		path := "/work/src/widget-" + strconv.Itoa(i) + ".ts"
+		after[path] = &shellSnapshotEntry{Content: []byte("export {};"), Size: 10}
+	}
+
+	tracker.RecordShellMutations(before, after, "shell_command")
+
+	if got := len(tracker.changes); got != 50 {
+		t.Fatalf("expected 50 itemised changes, got %d", got)
+	}
+	for _, ch := range tracker.changes {
+		if ch.Operation == "bulk" {
+			t.Errorf("did not expect a rollup below threshold, got %+v", ch)
+		}
+	}
+}
+
+// TestRecordShellMutations_BulkRollupSplitsTopLevelBuckets pins the
+// per-top-level-dir bucketing: a single command that spills changes
+// into TWO distinct top-level subtrees produces one rollup per
+// subtree, each labeled by its own deepest common ancestor. This is
+// the "build + install in one command" case (`make && pip install
+// --target env/`) — both the build dir and the env should collapse
+// independently.
+func TestRecordShellMutations_BulkRollupSplitsTopLevelBuckets(t *testing.T) {
+	tracker := newTrackerForShellTest(t)
+	tracker.agent = &Agent{workspaceRoot: "/work"}
+
+	before := map[string]*shellSnapshotEntry{}
+	after := map[string]*shellSnapshotEntry{}
+	for i := 0; i < 150; i++ {
+		after["/work/dist/asset-"+strconv.Itoa(i)+".js"] = &shellSnapshotEntry{Content: []byte("// b"), Size: 4}
+	}
+	for i := 0; i < 100; i++ {
+		after["/work/env/lib/python3.11/site-packages/pkg-"+strconv.Itoa(i)+"/__init__.py"] =
+			&shellSnapshotEntry{Content: []byte("# p"), Size: 3}
+	}
+
+	tracker.RecordShellMutations(before, after, "shell_command")
+
+	if got := len(tracker.changes); got != 2 {
+		t.Fatalf("expected 2 bulk rollups (one per top-level dir), got %d: %+v", got, tracker.changes)
+	}
+	bulksByLabel := map[string]int{}
+	for _, ch := range tracker.changes {
+		if ch.Operation != "bulk" {
+			t.Errorf("expected only bulk entries above threshold, got %+v", ch)
+			continue
+		}
+		bulksByLabel[ch.FilePath] = ch.BulkCount
+	}
+	distLabel := "dist" + string(filepath.Separator)
+	envLabel := "env/lib/python3.11/site-packages" + string(filepath.Separator)
+	if bulksByLabel[distLabel] != 150 {
+		t.Errorf("expected dist rollup with count 150, got %+v", bulksByLabel)
+	}
+	if bulksByLabel[envLabel] != 100 {
+		t.Errorf("expected env rollup with count 100, got %+v", bulksByLabel)
+	}
+}
+
+// TestRecordShellMutations_BulkRollupKeepsRootLevelFilesItemised
+// verifies the root-level exception: even above the volume threshold,
+// files directly at the workspace root (Makefile, package.json,
+// .gitignore, etc.) keep their per-file entries. There's no useful
+// "root" label, and those edits are almost always intentional.
+func TestRecordShellMutations_BulkRollupKeepsRootLevelFilesItemised(t *testing.T) {
+	tracker := newTrackerForShellTest(t)
+	tracker.agent = &Agent{workspaceRoot: "/work"}
+
+	before := map[string]*shellSnapshotEntry{
+		"/work/Makefile":     {Content: []byte("old"), Size: 3},
+		"/work/package.json": {Content: []byte(`{"v":1}`), Size: 7},
+	}
+	after := map[string]*shellSnapshotEntry{
+		"/work/Makefile":     {Content: []byte("new"), Size: 3},
+		"/work/package.json": {Content: []byte(`{"v":2}`), Size: 7},
+	}
+	for i := 0; i < 250; i++ {
+		after["/work/dist/asset-"+strconv.Itoa(i)+".js"] = &shellSnapshotEntry{Content: []byte("// b"), Size: 4}
+	}
+
+	tracker.RecordShellMutations(before, after, "shell_command")
+
+	if got := len(tracker.changes); got != 3 {
+		t.Fatalf("expected 3 changes (1 bulk + 2 root-level), got %d: %+v", got, tracker.changes)
+	}
+	var roots, bulks int
+	for _, ch := range tracker.changes {
+		switch ch.Operation {
+		case "bulk":
+			bulks++
+		case "edit":
+			roots++
+		}
+	}
+	if bulks != 1 || roots != 2 {
+		t.Errorf("expected 1 bulk + 2 root edits, got bulks=%d roots=%d", bulks, roots)
+	}
+}
+
 func TestRecordShellMutations_RecordsDeletion(t *testing.T) {
 	tracker := newTrackerForShellTest(t)
 	before := map[string]*shellSnapshotEntry{

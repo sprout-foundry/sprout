@@ -64,7 +64,18 @@ export function useTerminalSession(options: UseTerminalSessionOptions): UseTermi
   const paneConnectedRef = useRef(paneConnected);
   paneConnectedRef.current = paneConnected;
 
-  // Stabilize callbacks in refs
+  // Stabilize callbacks in refs.
+  //
+  // The four search/scrollback callbacks were previously read directly
+  // inside the WS-lifecycle effect AND listed in its dependency array.
+  // Every parent re-render produces fresh closure identities for them
+  // (unless the caller wraps each in useCallback — which TerminalPane
+  // does not), so the effect tore down and re-spun the WebSocket on
+  // every parent render. The visible symptom: opening the terminal
+  // logged three back-to-back "session_created"/"closed (1001 going
+  // away)" cycles before settling, and the user saw the panel flicker
+  // through several reconnects. Stashing the latest function in a ref
+  // lets the effect read the current closure without re-running.
   const onConnectionChangeRef = useRef(onConnectionChange);
   onConnectionChangeRef.current = onConnectionChange;
   const onProcessExitRef = useRef(onProcessExit);
@@ -73,6 +84,14 @@ export function useTerminalSession(options: UseTerminalSessionOptions): UseTermi
   preferredShellRef.current = preferredShell;
   const reattachSessionIdRef = useRef(reattachSessionId);
   reattachSessionIdRef.current = reattachSessionId;
+  const onResetSearchRef = useRef(onResetSearch);
+  onResetSearchRef.current = onResetSearch;
+  const onResetReverseSearchRef = useRef(onResetReverseSearch);
+  onResetReverseSearchRef.current = onResetReverseSearch;
+  const onSaveScrollbackRef = useRef(onSaveScrollback);
+  onSaveScrollbackRef.current = onSaveScrollback;
+  const onLoadScrollbackRef = useRef(onLoadScrollback);
+  onLoadScrollbackRef.current = onLoadScrollback;
 
   // Track whether the pane is currently mounted/active
   const isActiveRef = useRef(isActive);
@@ -133,7 +152,7 @@ export function useTerminalSession(options: UseTerminalSessionOptions): UseTermi
       const data = event.data as Record<string, unknown> | undefined;
       if (event.type === 'connection_status') {
         if (!data?.connected) {
-          onResetReverseSearch();
+          onResetReverseSearchRef.current();
           setPaneConnected(false);
           onConnectionChangeRef.current?.(false);
           xtermRef.current?.writeln('\r\nTerminal disconnected');
@@ -150,7 +169,7 @@ export function useTerminalSession(options: UseTerminalSessionOptions): UseTermi
           hasAutoFocusedReadyRef.current = true;
         }
         if (sessionId && Date.now() - lastRestoreTimeRef.current >= 5000) {
-          onLoadScrollback(sessionId);
+          onLoadScrollbackRef.current(sessionId);
         }
         requestAnimationFrame(() => {
           sendResize();
@@ -161,8 +180,8 @@ export function useTerminalSession(options: UseTerminalSessionOptions): UseTermi
       } else if (event.type === 'output' || event.type === 'error_output') {
         xtermRef.current?.write((data?.output as string) || '');
       } else if (event.type === 'session_restored') {
-        onResetSearch();
-        onResetReverseSearch();
+        onResetSearchRef.current();
+        onResetReverseSearchRef.current();
 
         const term = xtermRef.current;
         const sessionId = service.getSessionId();
@@ -173,7 +192,7 @@ export function useTerminalSession(options: UseTerminalSessionOptions): UseTermi
           if (scrollback) {
             term.write(scrollback);
           } else if (sessionId) {
-            onLoadScrollback(sessionId);
+            onLoadScrollbackRef.current(sessionId);
           }
         }
         lastRestoreTimeRef.current = Date.now();
@@ -187,7 +206,7 @@ export function useTerminalSession(options: UseTerminalSessionOptions): UseTermi
         xtermRef.current?.writeln('\r\n\x1b[90m[Process exited]\x1b[0m');
         setPaneConnected(false);
         onConnectionChangeRef.current?.(false);
-        onResetReverseSearch();
+        onResetReverseSearchRef.current();
 
         const svc = terminalWSRef.current;
         if (svc && eventHandlerRef.current) {
@@ -232,16 +251,14 @@ export function useTerminalSession(options: UseTerminalSessionOptions): UseTermi
       terminalWSRef.current = null;
       eventHandlerRef.current = null;
     };
-  }, [
-    isActive,
-    isConnected,
-    sendResize,
-    xtermRef,
-    onResetSearch,
-    onResetReverseSearch,
-    onSaveScrollback,
-    onLoadScrollback,
-  ]);
+    // Deps narrowed to the values whose change must actually re-spin
+    // the WS connection. The four scrollback/search callbacks moved to
+    // refs above; including them here let unmemoized callers (the
+    // common case in TerminalPane) re-create the WebSocket every time
+    // a sibling state changed in the parent. xtermRef is a stable ref
+    // object and is read via `.current` inside the effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- callbacks read via refs above
+  }, [isActive, isConnected, sendResize, xtermRef]);
 
   return {
     paneConnected,

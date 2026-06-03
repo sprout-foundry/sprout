@@ -12,13 +12,14 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/spf13/cobra"
 	"github.com/sprout-foundry/sprout/pkg/agent"
-	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/noninteractive"
+	"github.com/sprout-foundry/sprout/pkg/personas"
 	"github.com/sprout-foundry/sprout/pkg/security"
 	"github.com/sprout-foundry/sprout/pkg/trace"
-	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
 
@@ -153,7 +154,7 @@ func init() {
 	agentCmd.Flags().StringVarP(&agentProvider, "provider", "p", "", "Provider to use (openai, chutes, openrouter, deepinfra, deepseek, zai, mistral, ollama, ollama-local, ollama-cloud, lmstudio, or custom providers)")
 	agentCmd.Flags().StringVar(&agentSessionID, "session-id", "", "Resume a specific session ID in the current working directory scope")
 	agentCmd.Flags().BoolVar(&agentLastSession, "last-session", false, "Resume the most recent session from the current working directory scope")
-	agentCmd.Flags().StringVar(&agentPersona, "persona", "", "Persona to activate at startup (e.g., general, coder, refactor, debugger, tester, code_reviewer, researcher, web_scraper)")
+	agentCmd.Flags().StringVar(&agentPersona, "persona", "", "Persona to activate at startup (e.g., general, coder, refactor, debugger, tester, reviewer, researcher, web_scraper)")
 	agentCmd.Flags().StringVar(&agentRiskProfile, "risk-profile", "", "Shell-command risk cascade profile: readonly | cautious | default | permissive | unrestricted. Overrides config.risk_profile for this session. Persona-defined rules still win.")
 	agentCmd.Flags().StringVar(&agentEAMode, "ea-mode", "", "Executive Assistant startup mode: 'interactive' (default) or 'queue' (autonomous task processing)")
 	agentCmd.Flags().BoolVar(&agentDryRun, "dry-run", false, "Run tools in simulation mode (enhanced safety)")
@@ -212,7 +213,7 @@ func availablePersonaCompletions(cfg *configuration.Config, toComplete string) [
 			continue
 		}
 		// Exclude orchestrator from subagent options (it's the primary chat persona)
-		if id == "orchestrator" {
+		if id == personas.IDOrchestrator {
 			continue
 		}
 		if prefix != "" && !strings.HasPrefix(strings.ToLower(id), prefix) {

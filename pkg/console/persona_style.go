@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/envutil"
+	"github.com/sprout-foundry/sprout/pkg/personas"
 )
 
 // Persona ANSI foreground colors, picked to be distinct on a default
@@ -49,21 +50,21 @@ func PersonaColor(personaID string) string {
 		return ""
 	}
 	switch strings.ToLower(strings.TrimSpace(personaID)) {
-	case "coder":
+	case personas.IDCoder:
 		return personaColorCoder
-	case "tester":
+	case personas.IDTester:
 		return personaColorTester
-	case "debugger":
+	case personas.IDDebugger:
 		return personaColorDebugger
-	case "researcher":
+	case personas.IDResearcher:
 		return personaColorResearcher
-	case "code_reviewer":
+	case personas.IDReviewer, "code_reviewer":
 		return personaColorReviewer
-	case "refactor":
+	case personas.IDRefactor:
 		return personaColorRefactor
-	case "orchestrator":
+	case personas.IDOrchestrator:
 		return personaColorOrchestrator
-	case "executive_assistant":
+	case personas.IDCoordinator, "executive_assistant":
 		return personaColorEA
 	case "":
 		return ""

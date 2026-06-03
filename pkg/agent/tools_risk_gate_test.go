@@ -105,8 +105,8 @@ func TestRiskGates_BothGatesEvaluate(t *testing.T) {
 	// rm_recursive in its HighRiskNever list (the default EA configuration).
 	eaRules := configuration.DefaultAutoApproveRules()
 	eaPersona := configuration.SubagentType{
-		ID:               "executive_assistant",
-		Name:             "Executive Assistant",
+		ID:               "coordinator",
+		Name:             "Coordinator",
 		AutoApproveRules: &eaRules,
 	}
 
@@ -161,8 +161,8 @@ func TestRiskGates_BothGatesEvaluate_GitTool(t *testing.T) {
 
 	eaRules2 := configuration.DefaultAutoApproveRules()
 	eaPersona := configuration.SubagentType{
-		ID:               "executive_assistant",
-		Name:             "Executive Assistant",
+		ID:               "coordinator",
+		Name:             "Coordinator",
 		AutoApproveRules: &eaRules2,
 	}
 

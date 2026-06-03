@@ -6,13 +6,13 @@
   "initial": {
     "max_iterations": 500,
     "model": "REPLACE_WITH_PRIMARY_MODEL",
-    "persona": "executive_assistant",
+    "persona": "coordinator",
     "prompt_file": "automate/workflow_prompt.md",
     "provider": "REPLACE_WITH_PRIMARY_PROVIDER",
     "risk_profile": "permissive",
     "skip_prompt": true,
     "subagent_overrides": {
-      "code_reviewer": {
+      "reviewer": {
         "model": "REPLACE_WITH_SUBAGENT_MODEL",
         "provider": "REPLACE_WITH_SUBAGENT_PROVIDER"
       },

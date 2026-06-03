@@ -28,6 +28,26 @@ func (p *PersonaCommand) Description() string {
 	return "Manage and apply focused personas (provider/model/tools/system prompt)"
 }
 
+// SubagentPersonaCommand is a backwards-compatible alias for /persona.
+// It exists so users with muscle memory for /subagent-persona continue to work;
+// new users should prefer /persona.
+type SubagentPersonaCommand struct{}
+
+func (s *SubagentPersonaCommand) Name() string        { return "subagent-persona" }
+func (s *SubagentPersonaCommand) Description() string { return "Alias for /persona" }
+func (s *SubagentPersonaCommand) Execute(args []string, chatAgent *agent.Agent) error {
+	return (&PersonaCommand{}).Execute(args, chatAgent)
+}
+
+// SubagentPersonasCommand is a backwards-compatible alias for /persona list.
+type SubagentPersonasCommand struct{}
+
+func (s *SubagentPersonasCommand) Name() string        { return "subagent-personas" }
+func (s *SubagentPersonasCommand) Description() string { return "Alias for /persona list" }
+func (s *SubagentPersonasCommand) Execute(args []string, chatAgent *agent.Agent) error {
+	return (&PersonaCommand{}).Execute(nil, chatAgent)
+}
+
 // Execute runs the persona command.
 func (p *PersonaCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	configManager := chatAgent.GetConfigManager()
@@ -304,21 +324,6 @@ func resolvePersona(config *configuration.Config, raw string) (string, *configur
 		}
 		for _, alias := range persona.Aliases {
 			if normalizePersonaKey(alias) == needle {
-				p := persona
-				return id, &p, true
-			}
-		}
-	}
-
-	// Backward compatibility: map old persona names to new ones
-	legacyMappings := map[string]string{
-		"qa_engineer":    "tester",
-		"web_researcher": "web_scraper",
-	}
-	if mappedID, exists := legacyMappings[needle]; exists {
-		// Try to find the new persona ID (case-insensitive)
-		for id, persona := range config.SubagentTypes {
-			if normalizePersonaKey(id) == normalizePersonaKey(mappedID) || normalizePersonaKey(persona.Name) == normalizePersonaKey(mappedID) {
 				p := persona
 				return id, &p, true
 			}

@@ -176,7 +176,7 @@ A workflow has:
 | `description` | top-level | Human-readable description shown by `sprout automate list` and `list_automate_workflows` tool | Describe what the workflow does in one sentence |
 | `provider` | initial, steps | Which LLM provider to use | Their chosen primary provider |
 | `model` | initial, steps | Which model to use | Their chosen primary model |
-| `persona` | initial, steps | Agent persona (orchestrator, coder, etc.) | `executive_assistant` for full_autonomous, `orchestrator` for others |
+| `persona` | initial, steps | Agent persona (orchestrator, coder, etc.) | `coordinator` for full_autonomous, `orchestrator` for others |
 | `prompt` | initial, steps | The instructions for this run | Varies by workflow type |
 | `prompt_file` | initial, steps | Path to a `.md` file with instructions | Used for long prompts (recommended) |
 | `max_iterations` | initial, steps | Max tool-use iterations per run | 300-500 for primary, 100-200 for steps |
@@ -203,7 +203,7 @@ Explain this section carefully:
 "subagent_overrides": {
   "coder": { "provider": "cheaper-provider", "model": "cheaper-model" },
   "tester": { "provider": "cheaper-provider", "model": "cheaper-model" },
-  "code_reviewer": { "provider": "cheaper-provider", "model": "cheaper-model" },
+  "reviewer": { "provider": "cheaper-provider", "model": "cheaper-model" },
   "debugger": { "provider": "cheaper-provider", "model": "cheaper-model" }
 }
 ```
@@ -215,7 +215,7 @@ Explain this section carefully:
 - If subagent models are too expensive, you lose the cost benefit
 - The sweet spot: models that are good at focused, well-specified tasks but cheaper than the primary
 - The `repo_orchestrator` persona (if used) needs to be strong enough to delegate correctly — don't skimp here
-- Note: `repo_orchestrator` is an alias for `orchestrator`. It can be overridden as a subagent only when spawned by the `executive_assistant` persona. Other personas cannot delegate to `orchestrator`.
+- Note: `repo_orchestrator` is an alias for `orchestrator`. It can be overridden as a subagent only when spawned by the `coordinator` persona. Other personas cannot delegate to `orchestrator`.
 
 ### For the Full Autonomous TODO Processor specifically:
 
@@ -332,13 +332,13 @@ Below are the reference templates for generating workflow files. Use these as st
   "initial": {
     "max_iterations": 500,
     "model": "USER_PRIMARY_MODEL",
-    "persona": "executive_assistant",
+    "persona": "coordinator",
     "prompt_file": "automate/workflow_prompt.md",
     "provider": "USER_PRIMARY_PROVIDER",
     "risk_profile": "permissive",
     "skip_prompt": true,
     "subagent_overrides": {
-      "code_reviewer": {
+      "reviewer": {
         "model": "USER_SUBAGENT_MODEL",
         "provider": "USER_SUBAGENT_PROVIDER"
       },
@@ -372,7 +372,7 @@ Replace all `USER_*` placeholders with the user's chosen values. The subagent ov
 ```markdown
 # Full Autonomous TODO Processor — Agent Instructions
 
-You are an autonomous Executive Assistant agent processing a TODO.md list. Your job is to complete each TODO item with full build/test/review rigor, commit the result, and move on.
+You are an autonomous Coordinator agent processing a TODO.md list. Your job is to complete each TODO item with full build/test/review rigor, commit the result, and move on.
 
 ## Workflow for Each `[ ]` Item
 
@@ -387,7 +387,7 @@ You are an autonomous Executive Assistant agent processing a TODO.md list. Your 
    c) Verify build: Run the project build command. If it fails, delegate a fix to `coder`. Repeat.
    d) Write tests: Delegate to `tester` persona. Wait for completion.
    e) Run tests: Execute the test suite. If tests fail, delegate fixes. Iterate.
-   f) Code review: Delegate to `code_reviewer` persona. Wait for results.
+   f) Code review: Delegate to `reviewer` persona. Wait for results.
    g) Fix review findings: For MUST_FIX and SHOULD_FIX, delegate to `coder`. Re-run tests.
    h) Final verification: Run build and tests. Confirm everything passes.
    i) Report back: List all files changed, test results, and open concerns.
@@ -444,7 +444,7 @@ For users who want a simpler one-shot workflow:
   "steps": [
     {
       "name": "deep_review",
-      "persona": "code_reviewer",
+      "persona": "reviewer",
       "prompt": "Perform a deep evidence-based code review of all staged changes. If no issues, say REVIEW_STATUS: APPROVED. Do NOT make changes or commit.",
       "reasoning_effort": "high",
       "skip_prompt": true,

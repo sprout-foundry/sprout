@@ -29,8 +29,8 @@ func TestDefaultDefinitionsIncludesOrchestratorComputerUserAndRefactor(t *testin
 	if _, exists := definitions["orchestrator"]; !exists {
 		t.Fatalf("expected orchestrator in default persona definitions")
 	}
-	if _, exists := definitions["computer_user"]; !exists {
-		t.Fatalf("expected computer_user in default persona definitions")
+	if _, exists := definitions["coder"]; !exists {
+		t.Fatalf("expected coder in default persona definitions")
 	}
 	if _, exists := definitions["refactor"]; !exists {
 		t.Fatalf("expected refactor in default persona definitions")

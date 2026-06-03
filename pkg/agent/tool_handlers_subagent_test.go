@@ -132,14 +132,14 @@ func TestHandleRunSubagent_Delegatable_Validation(t *testing.T) {
 			delegatable: false,
 			cloudMode:   true,
 			wantErr:     true,
-			errContains: "not designed to be used as a subagent (delegatable=false)",
+			errContains: "is not spawnable from",
 		},
 		{
 			name:        "Non-delegatable persona rejected in local mode",
 			delegatable: false,
 			cloudMode:   false,
 			wantErr:     true,
-			errContains: "not designed to be used as a subagent (delegatable=false)",
+			errContains: "is not spawnable from",
 		},
 		{
 			name:        "Delegatable persona accepted in cloud mode",
@@ -247,7 +247,7 @@ func TestHandleRunSubagent_CombinedValidation(t *testing.T) {
 			delegatable: false,
 			cloudMode:   false,
 			wantErr:     true,
-			errContains: "not designed to be used as a subagent (delegatable=false)",
+			errContains: "is not spawnable from",
 		},
 		{
 			name:        "LocalOnly+Delegatable in cloud mode - LocalOnly error",
@@ -271,7 +271,7 @@ func TestHandleRunSubagent_CombinedValidation(t *testing.T) {
 			delegatable: false,
 			cloudMode:   true,
 			wantErr:     true,
-			errContains: "not designed to be used as a subagent (delegatable=false)",
+			errContains: "is not spawnable from",
 		},
 		{
 			name:        "NonLocalOnly+NonDelegatable in local mode - Delegatable error",
@@ -279,7 +279,7 @@ func TestHandleRunSubagent_CombinedValidation(t *testing.T) {
 			delegatable: false,
 			cloudMode:   false,
 			wantErr:     true,
-			errContains: "not designed to be used as a subagent (delegatable=false)",
+			errContains: "is not spawnable from",
 		},
 	}
 

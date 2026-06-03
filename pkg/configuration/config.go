@@ -174,6 +174,10 @@ type Config struct {
 	// `/persona <id> disable`. The catalog entries themselves are never
 	// mutated; resolution checks this list and treats disabled IDs as absent.
 	DisabledPersonas       []string                `json:"disabled_personas,omitempty"`
+	// DefaultSubagentPersona is the persona ID used when run_subagent is called
+	// without a persona argument. Defaults to "general" if unset. Setting this
+	// lets users redirect default spawns without editing the catalog.
+	DefaultSubagentPersona string                  `json:"default_subagent_persona,omitempty"`
 	SubagentMaxParallel    int                     `json:"subagent_max_parallel,omitempty"`     // Maximum number of parallel subagents (default: 2)
 	SubagentParallelEnabled *bool                   `json:"subagent_parallel_enabled,omitempty"` // Enable/disable parallel subagent execution (default: true)
 	SubagentMaxDepth       int                     `json:"subagent_max_depth,omitempty"`       // Maximum subagent nesting depth (default: 2)
@@ -570,20 +574,47 @@ func IsCriticalOperation(command string) bool {
 
 // SubagentType defines a specialized subagent persona with its own configuration
 type SubagentType struct {
-	ID               string   `json:"id"`                           // Unique identifier (e.g., "coder", "tester", "debugger")
-	Name             string   `json:"name"`                         // Human-readable name (e.g., "Coder", "Tester")
-	Description      string   `json:"description"`                  // What this subagent specializes in
-	Provider         string   `json:"provider"`                     // Provider for this subagent type (optional, falls back to SubagentProvider)
-	Model            string   `json:"model"`                        // Model for this subagent type (optional, falls back to SubagentModel)
-	SystemPrompt     string   `json:"system_prompt"`                // Relative path to system prompt file (e.g., "subagent_prompts/coder.md")
-	SystemPromptText string   `json:"system_prompt_text,omitempty"` // Optional inline system prompt text (replaces base prompt entirely)
-	SystemPromptAppend string `json:"system_prompt_append,omitempty"` // Optional inline text appended to the base or loaded system prompt (for composition)
-	AllowedTools     []string `json:"allowed_tools,omitempty"`      // Optional explicit tool allowlist for focused persona behavior
-	Aliases          []string `json:"aliases,omitempty"`            // Optional aliases (e.g., "web-scraper")
-	Enabled          bool     `json:"enabled"`                      // Whether this subagent type is available for use
-	LocalOnly        bool     `json:"local_only,omitempty"`         // Only available in local mode (not cloud)
-	Delegatable      bool     `json:"delegatable,omitempty"`        // Whether this persona can be used as a subagent (default: true for worker personas, false for orchestrator personas)
-	AutoApproveRules *AutoApproveRules `json:"auto_approve_rules,omitempty"` // Risk cascade rules for EA persona
+	ID                 string            `json:"id"`                             // Unique identifier (e.g., "coder", "tester", "debugger")
+	Name               string            `json:"name"`                           // Human-readable name (e.g., "Coder", "Tester")
+	Description        string            `json:"description"`                    // What this subagent specializes in
+	Provider           string            `json:"provider"`                       // Provider for this subagent type (optional, falls back to SubagentProvider)
+	Model              string            `json:"model"`                          // Model for this subagent type (optional, falls back to SubagentModel)
+	SystemPrompt       string            `json:"system_prompt"`                  // Relative path to system prompt file (e.g., "subagent_prompts/coder.md")
+	SystemPromptText   string            `json:"system_prompt_text,omitempty"`   // Optional inline system prompt text (replaces base prompt entirely)
+	SystemPromptAppend string            `json:"system_prompt_append,omitempty"` // Optional inline text appended to the base or loaded system prompt (for composition)
+	AllowedTools       []string          `json:"allowed_tools,omitempty"`        // Optional explicit tool allowlist for focused persona behavior
+	Aliases            []string          `json:"aliases,omitempty"`              // Optional aliases (e.g., "web-scraper")
+	Enabled            bool              `json:"enabled"`                        // Whether this subagent type is available for use
+	LocalOnly          bool              `json:"local_only,omitempty"`           // Only available in local mode (not cloud)
+	Delegatable        bool              `json:"delegatable,omitempty"`          // Whether this persona can be used as a subagent (default: true for worker personas, false for orchestrator personas)
+	AutoApproveRules   *AutoApproveRules `json:"auto_approve_rules,omitempty"`   // Risk cascade rules for the runtime auto-approve check
+	// Capabilities is an explicit list of agency grants this persona holds
+	// (e.g. "git_write"). Replaces sniffing AutoApproveRules to infer what a
+	// persona is allowed to do. Use HasCapability to query.
+	Capabilities []string `json:"capabilities,omitempty"`
+	// CanSpawnNonDelegatable lists otherwise-undelegatable persona IDs that
+	// this persona may spawn. Replaces the hardcoded EA-spawn-authority
+	// special-case. The coordinator carries ["orchestrator"] to enable the
+	// canonical coordinator→orchestrator→specialist chain.
+	CanSpawnNonDelegatable []string `json:"can_spawn_non_delegatable,omitempty"`
+}
+
+// HasCapability reports whether the persona declares the given capability
+// name. Comparison is case-insensitive and whitespace-tolerant.
+func (st *SubagentType) HasCapability(name string) bool {
+	if st == nil {
+		return false
+	}
+	target := strings.ToLower(strings.TrimSpace(name))
+	if target == "" {
+		return false
+	}
+	for _, c := range st.Capabilities {
+		if strings.ToLower(strings.TrimSpace(c)) == target {
+			return true
+		}
+	}
+	return false
 }
 
 // GetAutoApproveRules returns the auto-approve rules for this persona,
@@ -1652,6 +1683,8 @@ func cloneConfig(cfg *Config) *Config {
 			copied := st
 			copied.AllowedTools = append([]string{}, st.AllowedTools...)
 			copied.Aliases = append([]string{}, st.Aliases...)
+			copied.Capabilities = append([]string{}, st.Capabilities...)
+			copied.CanSpawnNonDelegatable = append([]string{}, st.CanSpawnNonDelegatable...)
 			if st.AutoApproveRules != nil {
 				rules := *st.AutoApproveRules
 				rules.LowRiskOps = append([]string{}, rules.LowRiskOps...)
@@ -2189,6 +2222,8 @@ func (c *Config) GetSubagentType(id string) *SubagentType {
 	result := *found
 	result.AllowedTools = append([]string{}, found.AllowedTools...)
 	result.Aliases = append([]string{}, found.Aliases...)
+	result.Capabilities = append([]string{}, found.Capabilities...)
+	result.CanSpawnNonDelegatable = append([]string{}, found.CanSpawnNonDelegatable...)
 	if found.AutoApproveRules != nil {
 		rules := *found.AutoApproveRules
 		rules.LowRiskOps = append([]string{}, rules.LowRiskOps...)
@@ -2211,20 +2246,22 @@ func defaultSubagentTypes() map[string]SubagentType {
 	for id, definition := range definitions {
 		autoApprove := convertAutoApproveRules(definition.AutoApproveRules)
 		types[normalizePersonaID(id)] = SubagentType{
-			ID:               normalizePersonaID(definition.ID),
-			Name:             definition.Name,
-			Description:      definition.Description,
-			Provider:         definition.Provider,
-			Model:            definition.Model,
-			SystemPrompt:     definition.SystemPrompt,
-			SystemPromptText: definition.SystemPromptText,
-			SystemPromptAppend: definition.SystemPromptAppend,
-			AllowedTools:     append([]string{}, definition.AllowedTools...),
-			Aliases:          append([]string{}, definition.Aliases...),
-			Enabled:          definition.Enabled,
-			LocalOnly:        definition.LocalOnly,
-			Delegatable:      definition.Delegatable,
-			AutoApproveRules: autoApprove,
+			ID:                     normalizePersonaID(definition.ID),
+			Name:                   definition.Name,
+			Description:            definition.Description,
+			Provider:               definition.Provider,
+			Model:                  definition.Model,
+			SystemPrompt:           definition.SystemPrompt,
+			SystemPromptText:       definition.SystemPromptText,
+			SystemPromptAppend:     definition.SystemPromptAppend,
+			AllowedTools:           append([]string{}, definition.AllowedTools...),
+			Aliases:                append([]string{}, definition.Aliases...),
+			Enabled:                definition.Enabled,
+			LocalOnly:              definition.LocalOnly,
+			Delegatable:            definition.Delegatable,
+			AutoApproveRules:       autoApprove,
+			Capabilities:           append([]string{}, definition.Capabilities...),
+			CanSpawnNonDelegatable: append([]string{}, definition.CanSpawnNonDelegatable...),
 		}
 	}
 

@@ -237,12 +237,13 @@ func handleGitOperation(ctx context.Context, a *Agent, args map[string]interface
 	// without interactive approval (the EA reasons about these itself).
 	// Other operations (reset, checkout, clean, rm, merge, etc.) always require
 	// user approval regardless of persona.
-	isOrchestratorWithGitWrite := a.GetActivePersona() == personas.IDOrchestrator && a.isOrchestratorGitWriteAllowed()
+	// Basic git ops (add/push/pull/fetch) skip the approval prompt for any
+	// persona with CapabilityGitWrite that has cleared isGitWriteAllowed
+	// (which gates the orchestrator behind the user's AllowOrchestratorGitWrite
+	// flag and lets capability-bearing personas like the coordinator through
+	// unconditionally).
 	basicGitOps := operation == tools.GitOpAdd || operation == tools.GitOpPush || operation == tools.GitOpPull || operation == tools.GitOpFetch
-	allowWithoutApproval := isOrchestratorWithGitWrite && basicGitOps
-	if !allowWithoutApproval && basicGitOps && a.hasEAGitWriteApproval() {
-		allowWithoutApproval = true
-	}
+	allowWithoutApproval := basicGitOps && a.isGitWriteAllowed()
 
 	var approvalPrompter tools.GitApprovalPrompter
 	if !allowWithoutApproval {
@@ -409,17 +410,14 @@ func handleCommitTool(_ context.Context, a *Agent, args map[string]interface{}) 
 		}
 	}
 
-	// Auto-approve commits for the orchestrator when AllowOrchestratorGitWrite
-	// is enabled — that flag is the user's explicit opt-in to autonomous commit
-	// workflows. Also auto-approve subagents (no interactive UI available)
-	// and personas with EA auto-approve rules (executive_assistant). All other
-	// personas still require interactive approval.
-	persona := a.GetActivePersona()
-	isOrchestratorWithGitWrite := persona == personas.IDOrchestrator && a.isOrchestratorGitWriteAllowed()
+	// Auto-approve commits when the persona has CapabilityGitWrite and the
+	// runtime gate is open (orchestrator needs AllowOrchestratorGitWrite; the
+	// coordinator clears unconditionally). Subagents also auto-approve because
+	// they have no interactive UI to prompt with.
 	isSubagent := a.IsSubagent()
-	hasEAAutoApprove := a.hasEAGitWriteApproval()
+	canGitWrite := a.isGitWriteAllowed()
 
-	if !isOrchestratorWithGitWrite && !isSubagent && !hasEAAutoApprove {
+	if !canGitWrite && !isSubagent {
 		// Prompt user for approval before committing (only in interactive mode)
 		choices := []ChoiceOption{
 			{Label: "Approve", Value: "approve"},

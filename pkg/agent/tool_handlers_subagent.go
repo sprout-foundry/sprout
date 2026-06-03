@@ -450,10 +450,16 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		}
 	}
 
-	// Default to "general" persona if not specified
+	// Default to the configured default persona if not specified, falling back
+	// to "general" if no default is set. This lets users redirect default
+	// spawns via config without editing the catalog.
 	if persona == "" {
-		persona = personas.IDGeneral
-		a.Logger().Debug("No persona specified, using default: %s\n", personas.IDGeneral)
+		if cfg := a.GetConfig(); cfg != nil && strings.TrimSpace(cfg.DefaultSubagentPersona) != "" {
+			persona = strings.TrimSpace(cfg.DefaultSubagentPersona)
+		} else {
+			persona = personas.IDGeneral
+		}
+		a.Logger().Debug("No persona specified, using default: %s\n", persona)
 	}
 	persona = strings.ReplaceAll(strings.ToLower(strings.TrimSpace(persona)), "-", "_")
 
@@ -646,19 +652,19 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 				if subagentType.LocalOnly && !a.IsLocalMode() {
 					return "", fmt.Errorf("persona '%s' is local-only and cannot be used as a subagent in cloud mode", persona)
 				}
-				// Check Delegatable flag - reject non-delegatable personas.
-				// Exception: EA personas (executive_assistant) can spawn any persona
-				// as a subagent, regardless of the delegatable flag. This enables
-				// the three-level delegation chain: EA (depth 0) → orchestrator
-				// (depth 1) → coder/tester (depth 2).
-				if !subagentType.Delegatable && !a.hasEASpawnAuthority() {
-					return "", fmt.Errorf("persona '%s' is not designed to be used as a subagent (delegatable=false)", persona)
+				// Spawnability check: a Delegatable=false target may only be
+				// spawned when the active persona explicitly lists it in
+				// CanSpawnNonDelegatable. This replaces the previous
+				// hardcoded "EA can spawn anything" carve-out — the coordinator
+				// declares ["orchestrator"] so the canonical
+				// coordinator→orchestrator→specialist chain still works, and
+				// no additional Go special-cases (EA-can't-spawn-EA,
+				// orchestrator-can't-spawn-coordinator) are needed: the
+				// missing entries express the policy directly.
+				if !subagentType.Delegatable && !a.canSpawnNonDelegatable(persona) {
+					return "", fmt.Errorf("persona '%s' is not spawnable from %q (delegatable=false and not listed in spawner's can_spawn_non_delegatable)", persona, a.GetActivePersona())
 				}
-				// EA cannot spawn another EA — prevents infinite nesting chains.
-				if a.rootPersonaID == personas.IDCoordinator && persona == personas.IDCoordinator {
-					return "", fmt.Errorf("%s cannot spawn another %s (prevents infinite nesting)", personas.IDCoordinator, personas.IDCoordinator)
-				}
-				// No persona can spawn itself — prevents self-recursion.
+				// No persona can spawn itself — orthogonal to spawn_policy.
 				currentPersona := a.GetActivePersona()
 				if currentPersona != "" && currentPersona == persona {
 					return "", fmt.Errorf("persona '%s' cannot spawn itself (prevents self-recursion)", persona)

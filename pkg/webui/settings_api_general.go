@@ -10,6 +10,7 @@ import (
 
 	agentpkg "github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/personas"
 )
 
 // ---------------------------------------------------------------------------
@@ -85,7 +86,7 @@ func (ws *ReactWebServer) applySystemPromptToLiveAgents(systemPrompt string) {
 	for _, agentInst := range agents {
 		agentInst.SetBaseSystemPrompt(systemPrompt)
 		activePersona := strings.TrimSpace(agentInst.GetActivePersona())
-		if activePersona == "" || activePersona == "orchestrator" {
+		if activePersona == "" || activePersona == personas.IDOrchestrator {
 			agentInst.SetSystemPrompt(systemPrompt)
 		}
 	}

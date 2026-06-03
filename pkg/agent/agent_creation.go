@@ -15,6 +15,7 @@ import (
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/factory"
 	"github.com/sprout-foundry/sprout/pkg/noninteractive"
+	"github.com/sprout-foundry/sprout/pkg/personas"
 )
 
 // sessionCleanupOnce ensures session cleanup runs only once per process,
@@ -184,7 +185,7 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 
 	// Auto-activate Executive Assistant persona when started from home directory
 	if params.isProduction {
-		agent.autoActivateEAPersona()
+		agent.autoActivateCoordinatorPersona()
 	}
 
 	return agent, nil
@@ -495,12 +496,19 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 	})
 }
 
-// autoActivateEAPersona checks if the Executive Assistant persona should be
-// auto-activated based on the workspace root being the user's home directory.
-// This is a no-op if a persona is already set or if the EA persona is unavailable.
-func (a *Agent) autoActivateEAPersona() {
+// autoActivateCoordinatorPersona checks if the Coordinator persona (formerly
+// Executive Assistant) should be auto-activated based on the workspace root
+// being the user's home directory. This is a no-op if a persona is already
+// set, if the Coordinator persona is unavailable, or if the user has opted
+// out via DisableCoordinatorAutoActivate in their config.
+func (a *Agent) autoActivateCoordinatorPersona() {
 	// Don't override an already-set persona
 	if a.state.GetActivePersona() != "" {
+		return
+	}
+
+	// Honor the user's opt-out flag
+	if cfg := a.GetConfig(); cfg != nil && cfg.DisableCoordinatorAutoActivate {
 		return
 	}
 
@@ -522,8 +530,8 @@ func (a *Agent) autoActivateEAPersona() {
 		return
 	}
 
-	// Check if EA persona is available
-	personaID := "executive_assistant"
+	// Check if the coordinator persona is available
+	personaID := personas.IDCoordinator
 	available := a.GetAvailablePersonaIDs()
 	found := false
 	for _, id := range available {
@@ -537,6 +545,9 @@ func (a *Agent) autoActivateEAPersona() {
 	}
 
 	if err := a.ApplyPersona(personaID); err != nil {
-		console.GlyphWarning.Fprintf(os.Stderr, "Failed to auto-activate EA persona: %v", err)
+		console.GlyphWarning.Fprintf(os.Stderr, "Failed to auto-activate coordinator persona: %v", err)
+		return
 	}
+	// Surface the activation so users can see why behavior changed.
+	console.GlyphInfo.Fprintf(os.Stderr, "Activated coordinator persona because workspace is $HOME (disable with 'disable_coordinator_auto_activate' in config)")
 }

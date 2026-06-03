@@ -44,7 +44,7 @@ The `initial` object defines the first agent interaction. This is the entry poin
 |----------|------|---------|-------------|
 | `prompt` | string | *(none)* | Inline instructions for the agent. Use for short prompts. Mutually exclusive with `prompt_file`. |
 | `prompt_file` | string | *(none)* | Path to a `.md` file with instructions. Preferred for complex workflows — easier to read and edit. Mutually exclusive with `prompt`. |
-| `persona` | string | `"orchestrator"` | The agent persona. Common values: `orchestrator`, `executive_assistant`, `coder`, `code_reviewer`, `tester`. |
+| `persona` | string | `"orchestrator"` | The agent persona. Common values: `orchestrator`, `coordinator`, `coder`, `reviewer`, `tester`. |
 | `provider` | string | config default | LLM provider (e.g., `openai`, `anthropic`, `openrouter`, `ollama`, `deepseek`, `zai`). |
 | `model` | string | config default | Model ID (e.g., `gpt-4o`, `claude-sonnet-4-20250514`, `deepseek-chat`). |
 | `skip_prompt` | boolean | `false` | If `true`, don't prompt the user for input — use the provided prompt directly. **Set to `true` for autonomous workflows.** |
@@ -70,7 +70,7 @@ Each step in the `steps` array is an additional agent run that executes after th
 "steps": [
   {
     "name": "deep_review",
-    "persona": "code_reviewer",
+    "persona": "reviewer",
     "prompt": "Review the staged changes...",
     "reasoning_effort": "high",
     "when": "on_success",
@@ -133,7 +133,7 @@ The `subagent_overrides` section is the **primary cost control mechanism**. It m
     "provider": "openrouter",
     "model": "deepseek/deepseek-chat"
   },
-  "code_reviewer": {
+  "reviewer": {
     "provider": "openrouter",
     "model": "anthropic/claude-sonnet-4-20250514"
   },
@@ -161,7 +161,7 @@ The `subagent_overrides` section is the **primary cost control mechanism**. It m
 |---------|-------------|-------------------|
 | `coder` | Writes production code, fixes bugs | Good coding ability, follows specifications |
 | `tester` | Writes and runs tests | Good at edge cases, test patterns |
-| `code_reviewer` | Reviews code for quality/security | Strong analysis, attention to detail |
+| `reviewer` | Reviews code for quality/security | Strong analysis, attention to detail |
 | `debugger` | Investigates and fixes bugs | Good root cause analysis |
 | `repo_orchestrator` | Coordinates multi-step work within a task | Strong delegation and planning |
 | `researcher` | Investigates codebase and researches solutions | Good comprehension, web search |
@@ -177,7 +177,7 @@ The key insight: **subagents do focused, well-scoped work** that doesn't require
 |------|-----------|-----|
 | Primary agent (initial) | Best available | Makes complex decisions, orchestrates, reviews output quality |
 | `repo_orchestrator` | Mid-tier or better | Needs to delegate correctly and verify subagent output |
-| `code_reviewer` | Mid-tier or better | Needs strong analysis for security and quality |
+| `reviewer` | Mid-tier or better | Needs strong analysis for security and quality |
 | `coder` | Budget to mid-tier | Follows specific instructions, writes focused code |
 | `tester` | Budget to mid-tier | Follows test patterns, writes focused tests |
 | `debugger` | Budget to mid-tier | Follows error messages, makes targeted fixes |
@@ -226,7 +226,7 @@ For advanced use cases where an external process coordinates multiple workflow r
   "initial": {
     "max_iterations": 500,
     "model": "claude-sonnet-4-20250514",
-    "persona": "executive_assistant",
+    "persona": "coordinator",
     "prompt_file": "automate/workflow_prompt.md",
     "provider": "anthropic",
     "risk_profile": "permissive",
@@ -234,7 +234,7 @@ For advanced use cases where an external process coordinates multiple workflow r
     "subagent_overrides": {
       "coder": { "provider": "openrouter", "model": "deepseek/deepseek-chat" },
       "tester": { "provider": "openrouter", "model": "deepseek/deepseek-chat" },
-      "code_reviewer": { "provider": "anthropic", "model": "claude-sonnet-4-20250514" },
+      "reviewer": { "provider": "anthropic", "model": "claude-sonnet-4-20250514" },
       "debugger": { "provider": "openrouter", "model": "deepseek/deepseek-chat" },
       "repo_orchestrator": { "provider": "anthropic", "model": "claude-sonnet-4-20250514" }
     }
@@ -262,7 +262,7 @@ For advanced use cases where an external process coordinates multiple workflow r
   "steps": [
     {
       "name": "deep_review",
-      "persona": "code_reviewer",
+      "persona": "reviewer",
       "prompt": "Perform a deep evidence-based code review of all staged changes. Read the staged diff, then read each changed file for full context. Analyze for correctness, edge cases, error handling, security, and code quality. If the code looks good with no issues, say REVIEW_STATUS: APPROVED. Do NOT make any code changes or stage anything. Do NOT commit.",
       "reasoning_effort": "high",
       "skip_prompt": true,

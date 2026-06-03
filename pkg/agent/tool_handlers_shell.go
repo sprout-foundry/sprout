@@ -21,10 +21,11 @@ import (
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
-	"github.com/sprout-foundry/sprout/pkg/filesystem"
-	"github.com/sprout-foundry/sprout/pkg/factory"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
+	"github.com/sprout-foundry/sprout/pkg/factory"
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
 	"github.com/sprout-foundry/sprout/pkg/git"
+	"github.com/sprout-foundry/sprout/pkg/personas"
 	"github.com/sprout-foundry/sprout/pkg/security"
 )
 
@@ -144,7 +145,7 @@ func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface
 	if isGitWriteCommand(command) {
 		if !a.isOrchestratorGitWriteAllowed() {
 			persona := a.GetActivePersona()
-			if persona == "orchestrator" {
+			if persona == personas.IDOrchestrator {
 				return "", agenterrors.NewSecurityError(fmt.Sprintf("git write operations are disabled for %s. Enable 'Allow orchestrator git write' in settings, or use the commit tool instead (operation: '%s')", persona, command), nil)
 			}
 			// For commit operations, redirect to the commit tool — this ensures
@@ -236,7 +237,7 @@ func handleGitOperation(ctx context.Context, a *Agent, args map[string]interface
 	// without interactive approval (the EA reasons about these itself).
 	// Other operations (reset, checkout, clean, rm, merge, etc.) always require
 	// user approval regardless of persona.
-	isOrchestratorWithGitWrite := a.GetActivePersona() == "orchestrator" && a.isOrchestratorGitWriteAllowed()
+	isOrchestratorWithGitWrite := a.GetActivePersona() == personas.IDOrchestrator && a.isOrchestratorGitWriteAllowed()
 	basicGitOps := operation == tools.GitOpAdd || operation == tools.GitOpPush || operation == tools.GitOpPull || operation == tools.GitOpFetch
 	allowWithoutApproval := isOrchestratorWithGitWrite && basicGitOps
 	if !allowWithoutApproval && basicGitOps && a.hasEAGitWriteApproval() {
@@ -414,7 +415,7 @@ func handleCommitTool(_ context.Context, a *Agent, args map[string]interface{}) 
 	// and personas with EA auto-approve rules (executive_assistant). All other
 	// personas still require interactive approval.
 	persona := a.GetActivePersona()
-	isOrchestratorWithGitWrite := persona == "orchestrator" && a.isOrchestratorGitWriteAllowed()
+	isOrchestratorWithGitWrite := persona == personas.IDOrchestrator && a.isOrchestratorGitWriteAllowed()
 	isSubagent := a.IsSubagent()
 	hasEAAutoApprove := a.hasEAGitWriteApproval()
 

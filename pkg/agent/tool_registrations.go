@@ -397,51 +397,19 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Handler: handleActivateSkill,
 	})
 
-	// Register memory tools
+	// manage_memory - Consolidated memory CRUD + search.
 	registry.RegisterTool(ToolConfig{
-		Name:        "add_memory",
-		Description: "Save a memory to persist across all future conversations. Use this to remember user preferences, learned patterns, project-specific conventions, or anything useful for future sessions. Memories are stored as markdown files in ~/.config/sprout/memories/ and loaded into your system prompt automatically.",
+		Name:        "manage_memory",
+		Description: "Manage persistent memories — markdown notes stored in ~/.config/sprout/memories/ that load into your system prompt for every future conversation. One tool, five operations:\n\n• `operation=\"add\"` — Create or overwrite a memory. Required: `name` (short slug like 'git-safety'), `content` (markdown body).\n• `operation=\"read\"` — Return the full content of one memory. Required: `name`.\n• `operation=\"list\"` — List every saved memory with its first-line title. No other args.\n• `operation=\"delete\"` — Permanently remove a memory file. Required: `name`.\n• `operation=\"search\"` — Semantic search across saved memories using embedding similarity. Required: `query` (natural-language description of what you're looking for). Optional: `threshold` (similarity floor, 0.0–1.0, default 0.75), `top_k` (max results, default 5).\n\n**When to use this**:\n• User shares a preference, convention, or fact that should outlive this conversation (`add`).\n• You want to recall what you previously noted about a topic (`search` or `read`).\n• You're deciding whether a memory already exists for some topic (`list` or `search`).\n• User tells you to forget something specific (`delete`).\n\nMemories are auto-loaded at conversation start — you don't usually need to read them explicitly during a session, just to remember they exist for the inventory.",
 		Parameters: []ParameterConfig{
-			{"name", "string", true, []string{"title"}, "Short descriptive name for the memory (e.g., 'git-safety', 'test-conventions')"},
-			{"content", "string", true, []string{}, "Markdown content to store in the memory file"},
+			{"operation", "string", true, []string{}, "One of: 'add', 'read', 'list', 'delete', 'search'."},
+			{"name", "string", false, []string{"title", "memory"}, "Memory name (required for add/read/delete). Short descriptive slug, no .md extension."},
+			{"content", "string", false, []string{}, "Markdown content (required for add)."},
+			{"query", "string", false, []string{}, "Natural-language search query (required for search)."},
+			{"threshold", "number", false, []string{}, "Search-only: minimum similarity 0.0–1.0 (default 0.75)."},
+			{"top_k", "integer", false, []string{}, "Search-only: maximum results to return (default 5)."},
 		},
-		Handler: handleAddMemory,
-	})
-
-	registry.RegisterTool(ToolConfig{
-		Name:        "read_memory",
-		Description: "Read a specific memory by name. Returns the full markdown content of the memory file.",
-		Parameters: []ParameterConfig{
-			{"name", "string", true, []string{}, "Name of the memory to read (without .md extension, e.g., 'git-safety')"},
-		},
-		Handler: handleReadMemory,
-	})
-
-	registry.RegisterTool(ToolConfig{
-		Name:        "list_memories",
-		Description: "List all saved memories. Returns memory names and their first lines (titles). Memories persist across all conversations.",
-		Parameters:  []ParameterConfig{},
-		Handler:     handleListMemories,
-	})
-
-	registry.RegisterTool(ToolConfig{
-		Name:        "delete_memory",
-		Description: "Delete a memory by name. Permanently removes the memory file from ~/.config/sprout/memories/.",
-		Parameters: []ParameterConfig{
-			{"name", "string", true, []string{}, "Name of the memory to delete (e.g., 'git-safety')"},
-		},
-		Handler: handleDeleteMemory,
-	})
-
-	registry.RegisterTool(ToolConfig{
-		Name:        "search_memories",
-		Description: "Search the codebase for semantically similar code using embedding vectors. Unlike text search, this finds code that does the same thing even with different names or implementations.",
-		Parameters: []ParameterConfig{
-			{"query", "string", true, []string{}, "Natural language description of what you're looking for"},
-			{"threshold", "number", false, []string{}, "Minimum similarity score 0.0-1.0 (default: 0.75)"},
-			{"top_k", "integer", false, []string{}, "Maximum results to return (default: 5)"},
-		},
-		Handler: handleSearchMemories,
+		Handler: handleManageMemory,
 	})
 
 	// embedding_index is registered against the new ToolHandler registry in
@@ -464,42 +432,27 @@ func newDefaultToolRegistry() *ToolRegistry {
 	// semantic_search is registered against the new ToolHandler registry in
 	// pkg/agent_tools/all.go. See the embedding_index comment above.
 
-	// Register task_queue_read tool
+	// task_queue - Consolidated persistent task-queue CRUD.
 	registry.RegisterTool(ToolConfig{
-		Name:        "task_queue_read",
-		Description: "Read pending tasks from the persistent task queue. Returns tasks sorted by priority (high > medium > low). The queue persists across sessions and is stored at ~/.config/sprout/task_queue.json.",
+		Name:        "task_queue",
+		Description: "Read, add, or publish updates to the persistent task queue at ~/.config/sprout/task_queue.json. Tasks persist across sessions and can be processed by the Executive Assistant persona.\n\n**Operations**:\n\n• `operation=\"read\"` — List pending tasks sorted by priority (high > medium > low). Optional: `status` (pending|in_progress|completed|failed|blocked|all, default \"pending\"), `limit` (default 10).\n\n• `operation=\"add\"` — Create a new task. Required: `title`. Optional: `description`, `priority` (high|medium|low, default \"medium\"), `working_dir`, `persona`.\n\n• `operation=\"publish\"` — Update an existing task — claim it, record progress, mark completion, or report failure. Required: `task_id`, `status` (in_progress|completed|failed|blocked). Optional: `result` (summary or error message), `subtasks` (array of {title, working_dir?, persona?, priority?} to break the task down).\n\n**When to use this**:\n• User asks \"what's on my queue?\" or \"any pending tasks?\" (read).\n• User wants you to remember a task for later, beyond this session (add).\n• You (in the EA persona) are claiming, completing, or failing a queued task (publish).",
 		Parameters: []ParameterConfig{
-			{"status", "string", false, []string{}, "Filter tasks by status: pending, in_progress, completed, failed, blocked, or all (default: pending)"},
-			{"limit", "integer", false, []string{}, "Maximum number of tasks to return (default: 10)"},
+			{"operation", "string", true, []string{}, "One of: 'read', 'add', 'publish'."},
+			// Read filters.
+			{"status", "string", false, []string{}, "Read: status filter (pending|in_progress|completed|failed|blocked|all). Publish: new status to set."},
+			{"limit", "integer", false, []string{}, "Read-only: maximum tasks to return (default 10)."},
+			// Add fields.
+			{"title", "string", false, []string{}, "Add-only: task title."},
+			{"description", "string", false, []string{}, "Add-only: detailed description."},
+			{"priority", "string", false, []string{}, "Add-only: high|medium|low (default medium)."},
+			{"working_dir", "string", false, []string{}, "Add-only: working directory for the task."},
+			{"persona", "string", false, []string{}, "Add-only: persona to use when executing."},
+			// Publish fields.
+			{"task_id", "string", false, []string{}, "Publish-only: task ID to update."},
+			{"result", "string", false, []string{}, "Publish-only: summary of work done or error message."},
+			{"subtasks", "array", false, []string{}, "Publish-only: break the task down. Each item: {title, working_dir?, persona?, priority?}."},
 		},
-		Handler: handleTaskQueueRead,
-	})
-
-	// Register task_queue_publish tool
-	registry.RegisterTool(ToolConfig{
-		Name:        "task_queue_publish",
-		Description: "Update a task in the persistent queue. Used to claim tasks (set status to in_progress), record progress, mark completion, or publish failure. Optionally break a task into subtasks.",
-		Parameters: []ParameterConfig{
-			{"task_id", "string", true, []string{}, "The task ID to update"},
-			{"status", "string", true, []string{}, "New status: in_progress, completed, failed, or blocked"},
-			{"result", "string", false, []string{}, "Summary of work done or error message"},
-			{"subtasks", "array", false, []string{}, "Break down into subtasks. Each item: {title, working_dir?, persona?, priority?}"},
-		},
-		Handler: handleTaskQueuePublish,
-	})
-
-	// Register task_queue_add tool
-	registry.RegisterTool(ToolConfig{
-		Name:        "task_queue_add",
-		Description: "Add a new task to the persistent queue. Tasks persist across sessions and can be processed by the Executive Assistant persona.",
-		Parameters: []ParameterConfig{
-			{"title", "string", true, []string{}, "Task title (required)"},
-			{"description", "string", false, []string{}, "Detailed task description"},
-			{"priority", "string", false, []string{}, "Priority: high, medium, or low (default: medium)"},
-			{"working_dir", "string", false, []string{}, "Working directory for the task (e.g., ~/projects/my-repo)"},
-			{"persona", "string", false, []string{}, "Persona to use when executing this task (e.g., orchestrator)"},
-		},
-		Handler: handleTaskQueueAdd,
+		Handler: handleTaskQueue,
 	})
 
 	return registry

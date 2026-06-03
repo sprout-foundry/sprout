@@ -32,14 +32,15 @@ const (
 
 // AgentWorkflowConfig defines non-interactive workflow orchestration.
 type AgentWorkflowConfig struct {
-	Initial                 *AgentWorkflowInitial             `json:"initial,omitempty"`
-	Steps                   []AgentWorkflowStep               `json:"steps"`
-	ContinueOnError         bool                              `json:"continue_on_error,omitempty"`
-	PersistRuntimeOverrides *bool                             `json:"persist_runtime_overrides,omitempty"`
-	Orchestration           *AgentWorkflowOrchestrationConfig `json:"orchestration,omitempty"`
-	NoWebUI                 *bool                             `json:"no_web_ui,omitempty"`
-	WebPort                 *int                              `json:"web_port,omitempty"`
-	Daemon                  *bool                             `json:"daemon,omitempty"`
+	Description              string                            `json:"description,omitempty"`
+	Initial                  *AgentWorkflowInitial             `json:"initial,omitempty"`
+	Steps                    []AgentWorkflowStep               `json:"steps"`
+	ContinueOnError          bool                              `json:"continue_on_error,omitempty"`
+	PersistRuntimeOverrides  *bool                             `json:"persist_runtime_overrides,omitempty"`
+	Orchestration            *AgentWorkflowOrchestrationConfig `json:"orchestration,omitempty"`
+	NoWebUI                  *bool                             `json:"no_web_ui,omitempty"`
+	WebPort                  *int                              `json:"web_port,omitempty"`
+	Daemon                   *bool                             `json:"daemon,omitempty"`
 }
 
 // AgentWorkflowOrchestrationConfig enables external orchestration integration.

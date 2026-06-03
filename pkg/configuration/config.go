@@ -15,6 +15,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"github.com/sprout-foundry/sprout/pkg/mcp"
 	"github.com/sprout-foundry/sprout/pkg/personas"
+	"github.com/sprout-foundry/sprout/pkg/skills"
 )
 
 var personaDefaultsWarningOnce sync.Once
@@ -2405,41 +2406,35 @@ func convertAutoApproveRules(src *personas.AutoApproveRules) *AutoApproveRules {
 	}
 }
 
+// defaultSkills derives the built-in skill registry from the embedded
+// pkg/skills library. Adding a new skill is a one-step process:
+// create pkg/skills/library/<id>/SKILL.md with valid frontmatter and
+// the registry, the `list_skills` tool output, and the `sprout skill
+// list` CLI all pick it up automatically.
+//
+// repo-onboarding is preserved as a legacy alias for project-planning
+// because user configs and prompts from older versions reference the
+// old ID; the two point at the same content.
 func defaultSkills() map[string]Skill {
-	return map[string]Skill{
-		"repo-onboarding": {
-			ID:          "repo-onboarding",
-			Name:        "Project Planning",
-			Description: "Strategic planning and alignment for new (greenfield) or existing (brownfield) projects. Use when starting a new project, onboarding to an unfamiliar repo, or aligning an existing codebase to a standardized workflow.",
-			Path:        "pkg/agent/skills/project-planning",
-			Enabled:     true,
-			Metadata:    map[string]string{"version": "2.0"},
-		},
-		"project-planning": {
-			ID:          "project-planning",
-			Name:        "Project Planning",
-			Description: "Structured planning and project initialization workflow. Use when starting a new project, setting up a new codebase, or creating a project plan.",
-			Path:        "pkg/agent/skills/project-planning",
+	builtins := skills.Builtins()
+	out := make(map[string]Skill, len(builtins)+1)
+	for id, b := range builtins {
+		out[id] = Skill{
+			ID:          b.ID,
+			Name:        b.Name,
+			Description: b.Description,
+			Path:        b.Path,
 			Enabled:     true,
 			Metadata:    map[string]string{"version": "1.0"},
-		},
-		"browse-debugging": {
-			ID:          "browse-debugging",
-			Name:        "Browse Debugging",
-			Description: "Multi-step interactive browser debugging with persistent sessions for web UI investigation.",
-			Path:        "pkg/agent/skills/browse-debugging",
-			Enabled:     true,
-			Metadata:    map[string]string{"version": "1.0"},
-		},
-		"self-help": {
-			ID:          "self-help",
-			Name:        "Self-Help",
-			Description: "Internal help and settings reference. Activate when the user asks \"how do I...\", wants to configure settings, or needs help understanding Sprout's capabilities.",
-			Path:        "pkg/agent/skills/self-help",
-			Enabled:     true,
-			Metadata:    map[string]string{"version": "1.0"},
-		},
+		}
 	}
+	if pp, ok := out["project-planning"]; ok {
+		alias := pp
+		alias.ID = "repo-onboarding"
+		alias.Metadata = map[string]string{"version": "2.0"}
+		out["repo-onboarding"] = alias
+	}
+	return out
 }
 
 func mergeMissingDefaultSkills(config *Config) {
@@ -2468,17 +2463,20 @@ func mergeMissingDefaultSkills(config *Config) {
 	}
 
 	// Prune stale built-in skills that were registered by a prior version
-	// of defaultSkills() but are no longer present.  Only remove skills
-	// whose path starts with "pkg/agent/skills/" (the built-in directory)
-	// — user/project skills are never pruned here.
+	// of defaultSkills() but are no longer present.  Accept both the
+	// current builtin prefix and the pre-refactor location so legacy
+	// configs migrate cleanly — entries with the old path get either
+	// updated in-place above (still in defaults) or pruned here (no
+	// longer in defaults).
 	defaults := defaultSkills()
 	for id, skill := range config.Skills {
 		path := skill.Path
 		if path == "" {
 			continue
 		}
-		// Only prune skills that look like they came from the built-in set.
-		if !strings.HasPrefix(path, "pkg/agent/skills/") {
+		isBuiltin := strings.HasPrefix(path, skills.LogicalPath+"/") ||
+			strings.HasPrefix(path, skills.LegacyLogicalPath+"/")
+		if !isBuiltin {
 			continue
 		}
 		if _, stillDefault := defaults[id]; !stillDefault {

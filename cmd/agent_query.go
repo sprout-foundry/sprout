@@ -165,51 +165,72 @@ func TryZshCommandExecution(ctx context.Context, chatAgent *agent.Agent, query s
 	return true, nil
 }
 
+// directCommands maps a user-typed shorthand to the actual shell command
+// the REPL runs without involving the LLM. Entries with an empty value
+// (e.g. "which", "whereis") accept a single-arg form matched as a
+// prefix at the call site. Pulled out of TryDirectExecution so the
+// steer/queue submit handlers can mirror the same membership test.
+var directCommands = map[string]string{
+	"pwd":        "pwd",
+	"ls":         "ls -la",
+	"ll":         "ls -la",
+	"la":         "ls -la",
+	"date":       "date",
+	"whoami":     "whoami",
+	"id":         "id",
+	"uname":      "uname -a",
+	"hostname":   "hostname",
+	"uptime":     "uptime",
+	"git status": "git status",
+	"git st":     "git status",
+	"git log":    "git log --oneline -20",
+	"git branch": "git branch",
+	"git diff":   "git diff",
+	"git remote": "git remote -v",
+	"git stash":  "git stash list",
+	"git tag":    "git tag",
+	"free":       "free -h",
+	"df":         "df -h",
+	"du":         "du -sh .",
+	"ps":         "ps aux",
+	"env":        "env",
+	"which":      "", // Requires additional argument matching below
+	"whereis":    "", // Requires additional argument matching below
+}
+
+// isDirectFastPathCommand reports whether query would be intercepted by
+// TryDirectExecution at the main prompt — either an exact match against
+// the directCommands table or one of the single-arg forms (which/whereis).
+// Used by the steer/queue submit handlers to reject command-class text
+// instead of silently injecting it into the active turn.
+func isDirectFastPathCommand(query string) bool {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return false
+	}
+	if cmd, ok := directCommands[query]; ok && cmd != "" {
+		return true
+	}
+	for prefix, cmd := range directCommands {
+		if cmd == "" && strings.HasPrefix(query, prefix+" ") {
+			return true
+		}
+	}
+	return false
+}
+
 // TryDirectExecution attempts to execute simple commands directly using static pattern matching.
 // Returns true if command was executed directly, false if normal agent flow should proceed.
 func TryDirectExecution(ctx context.Context, chatAgent *agent.Agent, query string) (bool, error) {
-	// Trim and check for empty
 	query = strings.TrimSpace(query)
 	if query == "" {
 		return false, nil
 	}
 
-	// Static list of commands that can be executed directly without LLM involvement.
-	// These are safe, informational commands that an LLM is not needed for.
-	directCommands := map[string]string{
-		"pwd":          "pwd",
-		"ls":           "ls -la",
-		"ll":           "ls -la",
-		"la":           "ls -la",
-		"date":         "date",
-		"whoami":       "whoami",
-		"id":           "id",
-		"uname":        "uname -a",
-		"hostname":     "hostname",
-		"uptime":       "uptime",
-		"git status":   "git status",
-		"git st":       "git status",
-		"git log":      "git log --oneline -20",
-		"git branch":   "git branch",
-		"git diff":     "git diff",
-		"git remote":   "git remote -v",
-		"git stash":    "git stash list",
-		"git tag":      "git tag",
-		"free":         "free -h",
-		"df":           "df -h",
-		"du":           "du -sh .",
-		"ps":           "ps aux",
-		"env":          "env",
-		"which":        "", // Requires additional argument matching below
-		"whereis":      "", // Requires additional argument matching below
-	}
-
-	// Check for exact match first
 	if cmd, ok := directCommands[query]; ok && cmd != "" {
 		return executeDirectCommand(cmd)
 	}
 
-	// Check for commands that take a single argument
 	for prefix, cmd := range directCommands {
 		if cmd == "" && strings.HasPrefix(query, prefix+" ") {
 			return executeDirectCommand(query)

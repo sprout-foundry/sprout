@@ -143,33 +143,18 @@ func TestGetSubagentTypeReturnsNilForUnknownPersona(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// 5. GetSubagentType fills in default AllowedTools when none specified
+// 5. GetSubagentType serves catalog-defined AllowedTools
 // ---------------------------------------------------------------------------
 
-func TestGetSubagentTypeFillsDefaultAllowedToolsWhenEmpty(t *testing.T) {
-	// Build a config where a known persona has an empty AllowedTools slice.
-	// We use "coder" since it has defaults in defaultSubagentTypes.
+func TestGetSubagentTypeReturnsCatalogAllowedTools(t *testing.T) {
 	defaults := defaultSubagentTypes()
 	coderDefault, ok := defaults["coder"]
-	require.True(t, ok, "coder should exist in defaults")
-	require.NotEmpty(t, coderDefault.AllowedTools, "coder default should have AllowedTools")
+	require.True(t, ok, "coder should exist in catalog")
+	require.NotEmpty(t, coderDefault.AllowedTools, "coder catalog entry should have AllowedTools")
 
-	// Create config with coder but no AllowedTools
-	cfg := &Config{
-		SubagentTypes: map[string]SubagentType{
-			"coder": {
-				ID:           coderDefault.ID,
-				Name:         coderDefault.Name,
-				Description:  coderDefault.Description,
-				Enabled:      true,
-				AllowedTools: nil, // explicitly empty
-			},
-		},
-	}
-
+	cfg := NewConfig()
 	persona := cfg.GetSubagentType("coder")
 	require.NotNil(t, persona)
-	assert.NotEmpty(t, persona.AllowedTools, "AllowedTools should be filled from defaults")
 	assert.Equal(t, coderDefault.AllowedTools, persona.AllowedTools)
 }
 

@@ -10,7 +10,6 @@ import type {
   CustomProviderConfig,
   SkillsResponse,
   SubagentTypesResponse,
-  UpdateSubagentTypeResponse,
   HotkeyConfig,
 } from './types';
 
@@ -157,23 +156,6 @@ export async function updateSkills(fetchFn: typeof fetch, skills: SkillsResponse
 export async function getSubagentTypes(fetchFn: typeof fetch): Promise<SubagentTypesResponse> {
   const response = await fetchFn('/api/settings/subagent-types');
   if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-  return response.json();
-}
-
-export async function updateSubagentType(
-  fetchFn: typeof fetch,
-  name: string,
-  updates: { provider?: string; model?: string },
-): Promise<UpdateSubagentTypeResponse> {
-  const response = await fetchFn(`/api/settings/subagent-types/${encodeURIComponent(name)}/`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(updates),
-  });
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(text || `HTTP error! status: ${response.status}`);
-  }
   return response.json();
 }
 

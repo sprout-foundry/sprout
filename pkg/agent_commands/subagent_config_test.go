@@ -218,74 +218,39 @@ func TestSelfReviewGateCommand_NoArgs_ShowsStatus(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// SubagentPersonaCommand (/subagent-persona <name> enable|disable)
+// /persona <name> enable|disable — now toggles Config.DisabledPersonas
 // ---------------------------------------------------------------------------
 
-func TestSetPersonaEnabled_EnablePersistsViaUpdateConfig(t *testing.T) {
-	chatAgent := createTestAgentWithTempConfig(t)
-	cm := chatAgent.GetConfigManager()
-
-	// Find an existing persona ID (e.g. "tester").
-	config := cm.GetConfig()
-	var personaID string
-	for id, p := range config.SubagentTypes {
-		if p.Enabled {
-			// Disable it first, so we can verify enable re-persists.
-			personaID = id
-			_ = cm.UpdateConfig(func(c *configuration.Config) error {
-				c.SubagentTypes[id] = configuration.SubagentType{
-					ID:      id,
-					Name:    p.Name,
-					Enabled: false,
-				}
-				return nil
-			})
-			break
-		}
-	}
-	if personaID == "" {
-		t.Skip("no enabled persona found to test with")
-	}
-
-	// Verify it is disabled before we re-enable.
-	if cm.GetConfig().SubagentTypes[personaID].Enabled {
-		t.Fatal("precondition failed: persona should be disabled before test")
-	}
-
-	err := (&PersonaCommand{}).Execute([]string{personaID, "enable"}, chatAgent)
-	if err != nil {
-		t.Fatalf("PersonaCommand enable returned error: %v", err)
-	}
-
-	// The vital regression check: GetConfig() must show Enabled == true.
-	if !cm.GetConfig().SubagentTypes[personaID].Enabled {
-		t.Fatalf("regression: persona enable not persisted for %q", personaID)
-	}
-}
-
-func TestSetPersonaEnabled_DisablePersistsViaUpdateConfig(t *testing.T) {
+func TestSetPersonaEnabled_DisableThenReEnableViaDisabledList(t *testing.T) {
 	chatAgent := createTestAgentWithTempConfig(t)
 	cm := chatAgent.GetConfigManager()
 
 	config := cm.GetConfig()
 	var personaID string
-	for id, p := range config.SubagentTypes {
-		if p.Enabled {
-			personaID = id
-			break
-		}
+	for id := range config.SubagentTypes {
+		personaID = id
+		break
 	}
 	if personaID == "" {
-		t.Skip("no enabled persona found to test with")
+		t.Skip("no persona found to test with")
 	}
 
-	err := (&PersonaCommand{}).Execute([]string{personaID, "disable"}, chatAgent)
-	if err != nil {
-		t.Fatalf("PersonaCommand disable returned error: %v", err)
+	if cm.GetConfig().IsPersonaDisabled(personaID) {
+		t.Fatal("precondition failed: persona should not be disabled before test")
 	}
 
-	if cm.GetConfig().SubagentTypes[personaID].Enabled {
-		t.Fatalf("regression: persona disable not persisted for %q", personaID)
+	if err := (&PersonaCommand{}).Execute([]string{personaID, "disable"}, chatAgent); err != nil {
+		t.Fatalf("disable returned error: %v", err)
+	}
+	if !cm.GetConfig().IsPersonaDisabled(personaID) {
+		t.Fatalf("regression: persona %q not flagged as disabled", personaID)
+	}
+
+	if err := (&PersonaCommand{}).Execute([]string{personaID, "enable"}, chatAgent); err != nil {
+		t.Fatalf("enable returned error: %v", err)
+	}
+	if cm.GetConfig().IsPersonaDisabled(personaID) {
+		t.Fatalf("regression: persona %q still disabled after enable command", personaID)
 	}
 }
 
@@ -300,167 +265,6 @@ func TestSetPersonaEnabled_NonexistentPersona_ReturnsError(t *testing.T) {
 	if !strings.Contains(err.Error(), "persona not found") {
 		t.Fatalf("expected 'persona not found' in error, got: %v", err)
 	}
-}
-
-// ---------------------------------------------------------------------------
-// SubagentPersonaCommand (/subagent-persona <name> provider <p>)
-// ---------------------------------------------------------------------------
-
-func TestSetPersonaProvider_PersistsViaUpdateConfig(t *testing.T) {
-	chatAgent := createTestAgentWithTempConfig(t)
-	cm := chatAgent.GetConfigManager()
-
-	config := cm.GetConfig()
-	var personaID string
-	for id := range config.SubagentTypes {
-		personaID = id
-		break
-	}
-	if personaID == "" {
-		t.Fatal("no personas found in default config")
-	}
-
-	// Clear provider so we can detect the write.
-	_ = cm.UpdateConfig(func(c *configuration.Config) error {
-		p := c.SubagentTypes[personaID]
-		p.Provider = ""
-		c.SubagentTypes[personaID] = p
-		return nil
-	})
-
-	err := (&PersonaCommand{}).Execute([]string{personaID, "provider", "openai"}, chatAgent)
-	if err != nil {
-		t.Fatalf("PersonaCommand provider returned error: %v", err)
-	}
-
-	if cm.GetConfig().SubagentTypes[personaID].Provider != "openai" {
-		t.Fatalf("regression: persona provider not persisted for %q – got %q",
-			personaID, cm.GetConfig().SubagentTypes[personaID].Provider)
-	}
-}
-
-func TestSetPersonaProvider_InvalidProvider_ReturnsError(t *testing.T) {
-	chatAgent := createTestAgentWithTempConfig(t)
-	cm := chatAgent.GetConfigManager()
-
-	config := cm.GetConfig()
-	var personaID string
-	for id := range config.SubagentTypes {
-		personaID = id
-		break
-	}
-
-	err := (&PersonaCommand{}).Execute([]string{personaID, "provider", "no_such_provider_xyz"}, chatAgent)
-	if err == nil {
-		t.Fatal("expected error for invalid provider, got nil")
-	}
-}
-
-// ---------------------------------------------------------------------------
-// SubagentPersonaCommand (/subagent-persona <name> model <m>)
-// ---------------------------------------------------------------------------
-
-func TestSetPersonaModel_PersistsViaUpdateConfig(t *testing.T) {
-	chatAgent := createTestAgentWithTempConfig(t)
-	cm := chatAgent.GetConfigManager()
-
-	config := cm.GetConfig()
-	var personaID string
-	for id := range config.SubagentTypes {
-		personaID = id
-		break
-	}
-	if personaID == "" {
-		t.Fatal("no personas found in default config")
-	}
-
-	// Clear model first.
-	_ = cm.UpdateConfig(func(c *configuration.Config) error {
-		p := c.SubagentTypes[personaID]
-		p.Model = ""
-		c.SubagentTypes[personaID] = p
-		return nil
-	})
-
-	err := (&PersonaCommand{}).Execute([]string{personaID, "model", "my-persona-test-model"}, chatAgent)
-	if err != nil {
-		t.Fatalf("PersonaCommand model returned error: %v", err)
-	}
-
-	if cm.GetConfig().SubagentTypes[personaID].Model != "my-persona-test-model" {
-		t.Fatalf("regression: persona model not persisted for %q – got %q",
-			personaID, cm.GetConfig().SubagentTypes[personaID].Model)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// End-to-end: SubagentPersonaCommand.Execute routes to the right helpers
-// ---------------------------------------------------------------------------
-
-func TestSubagentPersonaCommand_Execute_EnableThenDisable(t *testing.T) {
-	chatAgent := createTestAgentWithTempConfig(t)
-	cm := chatAgent.GetConfigManager()
-
-	config := cm.GetConfig()
-	var personaName string
-	for _, p := range config.SubagentTypes {
-		if p.Enabled {
-			personaName = p.Name
-			break
-		}
-	}
-	if personaName == "" {
-		t.Skip("no enabled persona found")
-	}
-
-	// Disable via Execute (the high-level command path).
-	cmd := &SubagentPersonaCommand{}
-	if err := cmd.Execute([]string{personaName, "disable"}, chatAgent); err != nil {
-		t.Fatalf("disable failed: %v", err)
-	}
-	for _, p := range cm.GetConfig().SubagentTypes {
-		if p.Name == personaName && p.Enabled {
-			t.Fatalf("regression: persona %q still enabled after disable command", personaName)
-		}
-	}
-
-	// Re-enable via Execute.
-	if err := cmd.Execute([]string{personaName, "enable"}, chatAgent); err != nil {
-		t.Fatalf("enable failed: %v", err)
-	}
-	for _, p := range cm.GetConfig().SubagentTypes {
-		if p.Name == personaName && !p.Enabled {
-			t.Fatalf("regression: persona %q still disabled after enable command", personaName)
-		}
-	}
-}
-
-func TestSubagentPersonaCommand_Execute_Model(t *testing.T) {
-	chatAgent := createTestAgentWithTempConfig(t)
-	cm := chatAgent.GetConfigManager()
-
-	config := cm.GetConfig()
-	var personaName string
-	for _, p := range config.SubagentTypes {
-		personaName = p.Name
-		break
-	}
-
-	cmd := &SubagentPersonaCommand{}
-	if err := cmd.Execute([]string{personaName, "model", "custom-persona-model-v2"}, chatAgent); err != nil {
-		t.Fatalf("set model failed: %v", err)
-	}
-
-	for _, p := range cm.GetConfig().SubagentTypes {
-		if p.Name == personaName {
-			if p.Model != "custom-persona-model-v2" {
-				t.Fatalf("regression: model not persisted – expected %q, got %q",
-					"custom-persona-model-v2", p.Model)
-			}
-			return
-		}
-	}
-	t.Fatal("persona not found in config after setting model")
 }
 
 func TestSubagentPersonaCommand_Execute_UnknownAction_ReturnsError(t *testing.T) {
@@ -559,7 +363,7 @@ func TestSelfReviewGate_SetThenReloadFromDisk(t *testing.T) {
 	}
 }
 
-func TestSubagentPersona_EnableThenReloadFromDisk(t *testing.T) {
+func TestSubagentPersona_DisablePersistedToDisk(t *testing.T) {
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
 	t.Setenv("XDG_CONFIG_HOME", "")
@@ -571,38 +375,25 @@ func TestSubagentPersona_EnableThenReloadFromDisk(t *testing.T) {
 	}
 	cm := chatAgent.GetConfigManager()
 
-	// Find any enabled persona, disable it, re-enable, then reload from disk.
-	config := cm.GetConfig()
-	var personaName string
-	for _, p := range config.SubagentTypes {
-		if p.Enabled {
-			personaName = p.Name
-			break
-		}
+	var personaID string
+	for id := range cm.GetConfig().SubagentTypes {
+		personaID = id
+		break
 	}
-	if personaName == "" {
-		t.Skip("no enabled persona found")
+	if personaID == "" {
+		t.Skip("no persona found")
 	}
 
 	cmd := &SubagentPersonaCommand{}
-	if err := cmd.Execute([]string{personaName, "disable"}, chatAgent); err != nil {
+	if err := cmd.Execute([]string{personaID, "disable"}, chatAgent); err != nil {
 		t.Fatalf("disable: %v", err)
-	}
-	if err := cmd.Execute([]string{personaName, "enable"}, chatAgent); err != nil {
-		t.Fatalf("enable: %v", err)
 	}
 
 	mgr2, err := configuration.NewManagerSilent()
 	if err != nil {
 		t.Fatalf("NewManagerSilent: %v", err)
 	}
-	for _, p := range mgr2.GetConfig().SubagentTypes {
-		if p.Name == personaName {
-			if !p.Enabled {
-				t.Fatalf("regression: persona %q not enabled after reload from disk", personaName)
-			}
-			return
-		}
+	if !mgr2.GetConfig().IsPersonaDisabled(personaID) {
+		t.Fatalf("regression: persona %q not disabled after reload from disk", personaID)
 	}
-	t.Fatalf("persona %q not found after reload from disk", personaName)
 }

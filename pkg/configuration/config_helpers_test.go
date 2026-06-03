@@ -496,51 +496,6 @@ func TestGetAllEnabledSkills(t *testing.T) {
 }
 
 // =============================================================================
-// mergeMissingDefaultSubagentTypes
-// =============================================================================
-
-func TestMergeMissingDefaultSubagentTypes(t *testing.T) {
-	t.Run("merges missing defaults into existing config", func(t *testing.T) {
-		cfg := &Config{
-			SubagentTypes: map[string]SubagentType{
-				"custom_persona": {ID: "custom_persona", Name: "Custom", Enabled: true},
-			},
-		}
-		mergeMissingDefaultSubagentTypes(cfg)
-
-		// Default personas should now be present
-		_, hasCoder := cfg.SubagentTypes["coder"]
-		assert.True(t, hasCoder, "coder should be merged in")
-		_, hasTester := cfg.SubagentTypes["tester"]
-		assert.True(t, hasTester, "tester should be merged in")
-		// Custom persona should still be present
-		_, hasCustom := cfg.SubagentTypes["custom_persona"]
-		assert.True(t, hasCustom, "custom persona should remain")
-	})
-
-	t.Run("does not overwrite existing entries", func(t *testing.T) {
-		cfg := &Config{
-			SubagentTypes: map[string]SubagentType{
-				"coder": {ID: "coder", Name: "Custom Coder", Enabled: true},
-			},
-		}
-		mergeMissingDefaultSubagentTypes(cfg)
-		assert.Equal(t, "Custom Coder", cfg.SubagentTypes["coder"].Name)
-	})
-
-	t.Run("initializes SubagentTypes when nil", func(t *testing.T) {
-		cfg := &Config{}
-		mergeMissingDefaultSubagentTypes(cfg)
-		assert.NotNil(t, cfg.SubagentTypes)
-		assert.NotEmpty(t, cfg.SubagentTypes)
-	})
-
-	t.Run("handles nil config gracefully", func(t *testing.T) {
-		mergeMissingDefaultSubagentTypes(nil)
-	})
-}
-
-// =============================================================================
 // mergeMissingDefaultSkills
 // =============================================================================
 

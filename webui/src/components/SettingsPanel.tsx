@@ -5,13 +5,6 @@ import type { SproutSettings } from '../services/api';
 import type { AgentConfigProps } from './settings/types';
 import { Skeleton } from '@sprout/ui';
 import CredentialsSettingsTab from './CredentialsSettingsTab';
-import RoleSelector from './RoleSelector';
-
-// Extended agent config that adds optional role selection
-type ExtendedAgentConfig = AgentConfigProps & {
-  selectedRole?: string | null;
-  onRoleChange?: (roleId: string | null) => void;
-};
 
 // Import from settings/ subdirectory
 import AgentBehaviorSettingsTab from './settings/AgentBehaviorSettingsTab';
@@ -26,7 +19,6 @@ import PersistentContextSettingsTab from './settings/PersistentContextSettingsTa
 import ProviderSettingsTab from './settings/ProviderSettingsTab';
 import SecuritySettingsTab from './settings/SecuritySettingsTab';
 import SkillsSettingsTab from './settings/SkillsSettingsTab';
-import { RolesSettingsTab } from './settings/RolesSettingsTab';
 import SubagentSettingsTab from './settings/SubagentSettingsTab';
 import {
   SECTION_GROUPS,
@@ -335,23 +327,16 @@ function SettingsPanel({
             settings={activeSettings ?? settings}
             subagentProviders={state.subagentProviders}
             subagentTypes={state.subagentTypes}
-            subagentSavingPersona={state.subagentSavingPersona}
-            setSubagentSavingPersona={state.setSubagentSavingPersona}
-            setSubagentTypes={state.setSubagentTypes}
             updateSetting={mutations.updateSetting}
             addNotification={state.addNotification}
             renderToggle={fieldRenderers.renderToggle}
             renderNumberInput={fieldRenderers.renderNumberInput}
             renderSelect={fieldRenderers.renderSelect}
-            api={state.api}
           />
         );
 
       case 'agent-skills':
         return <SkillsSettingsTab settings={activeSettings ?? settings} toggleSkill={mutations.toggleSkill} />;
-
-      case 'agent-roles':
-        return <RolesSettingsTab addNotification={state.addNotification} />;
 
       case 'agent-memory':
         return (
@@ -493,13 +478,6 @@ function SettingsPanel({
     }
   };
 
-  /* ─── Extract typed role config to avoid repeated assertions ─── */
-  const roleConfig = (
-    agentConfig && 'selectedRole' in agentConfig && 'onRoleChange' in agentConfig
-  )
-    ? agentConfig as unknown as ExtendedAgentConfig
-    : null;
-
   /* ─── Main render ─────────────────────────────────────── */
 
   const scopeTitle: Record<SectionDef['scope'], string> = {
@@ -632,12 +610,6 @@ function SettingsPanel({
                       )}
                     </select>
                   </div>
-                  {roleConfig && (
-                    <RoleSelector
-                      selectedRole={roleConfig.selectedRole ?? null}
-                      onRoleChange={roleConfig.onRoleChange ?? (() => {})}
-                    />
-                  )}
                 </div>
               )}
 

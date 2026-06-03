@@ -7,34 +7,21 @@ interface SubagentSettingsTabProps {
   settings: SproutSettings;
   subagentProviders: ProviderOption[];
   subagentTypes: Record<string, SubagentTypeInfo>;
-  subagentSavingPersona: string | null;
-  setSubagentSavingPersona: (v: string | null) => void;
   updateSetting: (keyOrPath: string, value: unknown) => Promise<void>;
   addNotification: (type: 'success' | 'error' | 'info', title: string, message: string, duration?: number) => string;
   renderToggle: FieldRenderers['renderToggle'];
   renderNumberInput: FieldRenderers['renderNumberInput'];
   renderSelect: FieldRenderers['renderSelect'];
-  api: { updateSubagentType: (id: string, data: Record<string, unknown>) => Promise<unknown> };
-  setSubagentTypes: (
-    v:
-      | Record<string, SubagentTypeInfo>
-      | ((prev: Record<string, SubagentTypeInfo>) => Record<string, SubagentTypeInfo>),
-  ) => void;
 }
 
 export default function SubagentSettingsTab({
   settings,
   subagentProviders,
   subagentTypes,
-  subagentSavingPersona,
-  setSubagentSavingPersona,
-  setSubagentTypes,
   updateSetting,
-  addNotification,
   renderToggle,
   renderNumberInput,
   renderSelect,
-  api,
 }: SubagentSettingsTabProps) {
   const currentSubProvider = String(getNestedValue(settings, 'subagent_provider') || '');
   const currentSubModel = String(getNestedValue(settings, 'subagent_model') || '');
@@ -122,88 +109,28 @@ export default function SubagentSettingsTab({
       ])}
 
       <div className="settings-section-spaced">
-        <h4>Per-Persona Overrides</h4>
+        <h4>Personas</h4>
         <div className="config-help settings-help-spaced">
-          Set a specific provider and/or model for individual personas. Empty values inherit from the default subagent
-          settings above.
+          Personas are catalog-fixed. To customize behavior, create a skill in <code>~/.config/sprout/skills/</code>.
         </div>
 
         {personaEntries.length === 0 && <div className="settings-empty">No personas available</div>}
 
         <div className="persona-mapping-list">
           {personaEntries.map(([personaId, persona]) => {
-            const isSaving = subagentSavingPersona === personaId;
             const personaProvider = persona.provider || '';
-            const personaModelsForProvider = subagentProviders.find((p) => p.id === personaProvider)?.models || [];
-
+            const personaModel = persona.model || '';
             return (
               <div key={personaId} className="persona-mapping-row">
                 <span className="persona-mapping-name" title={persona.description}>
                   {persona.name}
                 </span>
-                <select
-                  className="styled-select persona-mapping-select"
-                  value={personaProvider}
-                  onChange={async (e) => {
-                    setSubagentSavingPersona(personaId);
-                    try {
-                      await api.updateSubagentType(personaId, {
-                        provider: e.target.value,
-                        model: '',
-                      });
-                      setSubagentTypes((prev: Record<string, SubagentTypeInfo>) => ({
-                        ...prev,
-                        [personaId]: {
-                          ...prev[personaId],
-                          provider: e.target.value,
-                          model: '',
-                        },
-                      }));
-                      addNotification('success', 'Settings', `${persona.name}: provider updated`, 3000);
-                    } catch (err) {
-                      addNotification('error', 'Settings', `Failed to update ${persona.name}`, 5000);
-                    } finally {
-                      setSubagentSavingPersona(null);
-                    }
-                  }}
-                  disabled={isSaving}
-                >
-                  <option value="">Default</option>
-                  {subagentProviders.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  className="styled-select persona-mapping-select"
-                  value={persona.model || ''}
-                  onChange={async (e) => {
-                    setSubagentSavingPersona(personaId);
-                    try {
-                      await api.updateSubagentType(personaId, {
-                        model: e.target.value,
-                      });
-                      setSubagentTypes((prev: Record<string, SubagentTypeInfo>) => ({
-                        ...prev,
-                        [personaId]: { ...prev[personaId], model: e.target.value },
-                      }));
-                      addNotification('success', 'Settings', `${persona.name}: model updated`, 3000);
-                    } catch (err) {
-                      addNotification('error', 'Settings', `Failed to update ${persona.name}`, 5000);
-                    } finally {
-                      setSubagentSavingPersona(null);
-                    }
-                  }}
-                  disabled={isSaving || personaProvider === ''}
-                >
-                  <option value="">Default</option>
-                  {personaModelsForProvider.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
-                  ))}
-                </select>
+                <span className="persona-mapping-value">
+                  {personaProvider ? personaProvider : <em>default provider</em>}
+                </span>
+                <span className="persona-mapping-value">
+                  {personaModel ? personaModel : <em>default model</em>}
+                </span>
               </div>
             );
           })}

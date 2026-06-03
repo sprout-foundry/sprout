@@ -154,7 +154,9 @@ func TestHandleListChanges_FiltersByTool(t *testing.T) {
 	}
 }
 
-func TestHandleShowMyChange_RendersUnifiedDiff(t *testing.T) {
+func TestHandleListChanges_IncludeDiff_RendersUnifiedDiff(t *testing.T) {
+	// Replaces the historical handleShowMyChange test. The diff now
+	// rides on the list_changes per-file entry when include_diff=true.
 	dir := t.TempDir()
 	path := filepath.Join(dir, "foo.go")
 
@@ -166,28 +168,38 @@ func TestHandleShowMyChange_RendersUnifiedDiff(t *testing.T) {
 				NewCode:      "package main\n\nfunc main() {\n\tprintln(\"hello\")\n}\n"},
 		},
 	}}
-	out, err := handleShowMyChange(context.Background(), a, map[string]interface{}{"path": path})
+	out, err := handleListChanges(context.Background(), a, map[string]interface{}{
+		"path_pattern": path,
+		"include_diff": true,
+	})
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
 	var res struct {
-		Found bool   `json:"found"`
-		Diff  string `json:"diff"`
+		Files []struct {
+			Path string `json:"path"`
+			Diff string `json:"diff"`
+		} `json:"files"`
 	}
-	_ = json.Unmarshal([]byte(out), &res)
-	if !res.Found {
-		t.Fatalf("expected found=true, got: %s", out)
+	if err := json.Unmarshal([]byte(out), &res); err != nil {
+		t.Fatalf("output not JSON: %v\n%s", err, out)
 	}
-	if !strings.Contains(res.Diff, `-	println("hi")`) || !strings.Contains(res.Diff, `+	println("hello")`) {
-		t.Errorf("unified diff content missing expected -/+ lines:\n%s", res.Diff)
+	if len(res.Files) != 1 {
+		t.Fatalf("expected 1 file in output, got %d: %s", len(res.Files), out)
+	}
+	if !strings.Contains(res.Files[0].Diff, `-	println("hi")`) || !strings.Contains(res.Files[0].Diff, `+	println("hello")`) {
+		t.Errorf("unified diff content missing expected -/+ lines:\n%s", res.Files[0].Diff)
 	}
 }
 
-func TestHandleShowMyChange_NoMatchReturnsFalse(t *testing.T) {
+func TestHandleListChanges_IncludeDiff_NoMatchReturnsEmpty(t *testing.T) {
 	a := &Agent{changeTracker: &ChangeTracker{enabled: true}}
-	out, _ := handleShowMyChange(context.Background(), a, map[string]interface{}{"path": "/never/changed.go"})
-	if !strings.Contains(out, `"found": false`) {
-		t.Errorf("expected found=false for untracked path: %s", out)
+	out, _ := handleListChanges(context.Background(), a, map[string]interface{}{
+		"path_pattern": "/never/changed.go",
+		"include_diff": true,
+	})
+	if !strings.Contains(out, `"count": 0`) {
+		t.Errorf("expected count=0 for untracked path: %s", out)
 	}
 }
 
@@ -226,7 +238,10 @@ func TestHandleRevertMyChanges_RevertsAll(t *testing.T) {
 	}
 }
 
-func TestHandleRevertMyChanges_FileScopeOnlyTouchesOne(t *testing.T) {
+func TestHandleRecoverFile_SessionStartOnlyTouchesOne(t *testing.T) {
+	// The historical revert_my_changes(file=…) scope is now recover_file
+	// with scope="session_start". Verifies single-file recovery still
+	// leaves siblings untouched.
 	dir := t.TempDir()
 	pathA := filepath.Join(dir, "a.txt")
 	pathB := filepath.Join(dir, "b.txt")
@@ -240,17 +255,20 @@ func TestHandleRevertMyChanges_FileScopeOnlyTouchesOne(t *testing.T) {
 			{FilePath: pathB, Operation: "edit", ToolCall: "edit_file", OriginalCode: "BEFORE B"},
 		},
 	}}
-	_, err := handleRevertMyChanges(context.Background(), a, map[string]interface{}{"file": pathA})
+	_, err := handleRecoverFile(context.Background(), a, map[string]interface{}{
+		"path":  pathA,
+		"scope": "session_start",
+	})
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}
 	gotA, _ := os.ReadFile(pathA)
 	if string(gotA) != "BEFORE A" {
-		t.Errorf("pathA should have been reverted: %q", gotA)
+		t.Errorf("pathA should have been restored: %q", gotA)
 	}
 	gotB, _ := os.ReadFile(pathB)
 	if string(gotB) != "AFTER B" {
-		t.Errorf("pathB should be untouched when file scope is pathA: %q", gotB)
+		t.Errorf("pathB should be untouched: %q", gotB)
 	}
 }
 
@@ -279,7 +297,7 @@ func TestHandleRevertMyChanges_RevertsToEarliestOriginal(t *testing.T) {
 	}
 }
 
-func TestHandleSummarizeMySession_GroupsContiguousActivity(t *testing.T) {
+func TestHandleListChanges_GroupBy_Block_GroupsContiguousActivity(t *testing.T) {
 	t0 := time.Now()
 	a := &Agent{changeTracker: &ChangeTracker{
 		enabled: true,
@@ -292,7 +310,7 @@ func TestHandleSummarizeMySession_GroupsContiguousActivity(t *testing.T) {
 			{FilePath: "/d.go", Operation: "edit", ToolCall: "shell_command", OriginalCode: "z", Timestamp: t0.Add(5 * time.Minute)},
 		},
 	}}
-	out, err := handleSummarizeMySession(context.Background(), a, nil)
+	out, err := handleListChanges(context.Background(), a, map[string]interface{}{"group_by": "block"})
 	if err != nil {
 		t.Fatalf("err: %v", err)
 	}

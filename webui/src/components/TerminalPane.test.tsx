@@ -263,7 +263,7 @@ describe.skip('TerminalPane context menu', () => {
   it.skip('context menu appears on right-click in the terminal pane content', async () => {
     // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
-      root.render(<TerminalPane isActive={true} isConnected={false} showCloseButton={false} />);
+      root.render(<TerminalPane isActive={true} isConnected={false} />);
     });
     await flushPromises();
 
@@ -281,7 +281,7 @@ describe.skip('TerminalPane context menu', () => {
 
     // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
-      root.render(<TerminalPane isActive={true} isConnected={false} showCloseButton={false} />);
+      root.render(<TerminalPane isActive={true} isConnected={false} />);
     });
     await flushPromises();
 
@@ -306,7 +306,7 @@ describe.skip('TerminalPane context menu', () => {
 
     // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
-      root.render(<TerminalPane isActive={true} isConnected={false} showCloseButton={false} />);
+      root.render(<TerminalPane isActive={true} isConnected={false} />);
     });
     await flushPromises();
 
@@ -328,7 +328,7 @@ describe.skip('TerminalPane context menu', () => {
 
     // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
-      root.render(<TerminalPane isActive={true} isConnected={false} showCloseButton={false} />);
+      root.render(<TerminalPane isActive={true} isConnected={false} />);
     });
     await flushPromises();
 
@@ -368,7 +368,7 @@ describe.skip('TerminalPane context menu', () => {
 
     // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
-      root.render(<TerminalPane isActive={true} isConnected={false} showCloseButton={false} />);
+      root.render(<TerminalPane isActive={true} isConnected={false} />);
     });
     await flushPromises();
 
@@ -394,7 +394,7 @@ describe.skip('TerminalPane context menu', () => {
 
     // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
-      root.render(<TerminalPane isActive={true} isConnected={true} showCloseButton={false} />);
+      root.render(<TerminalPane isActive={true} isConnected={true} />);
     });
     await flushPromises();
 
@@ -421,7 +421,7 @@ describe.skip('TerminalPane context menu', () => {
   it('Select All action calls term.selectAll()', async () => {
     // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
-      root.render(<TerminalPane isActive={true} isConnected={false} showCloseButton={false} />);
+      root.render(<TerminalPane isActive={true} isConnected={false} />);
     });
     await flushPromises();
 
@@ -443,7 +443,7 @@ describe.skip('TerminalPane context menu', () => {
   it.skip('Clear Terminal action calls term.clear()', async () => {
     // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
-      root.render(<TerminalPane isActive={true} isConnected={false} showCloseButton={false} />);
+      root.render(<TerminalPane isActive={true} isConnected={false} />);
     });
     await flushPromises();
 
@@ -465,7 +465,7 @@ describe.skip('TerminalPane context menu', () => {
   it('context menu closes on Escape key', async () => {
     // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
-      root.render(<TerminalPane isActive={true} isConnected={false} showCloseButton={false} />);
+      root.render(<TerminalPane isActive={true} isConnected={false} />);
     });
     await flushPromises();
 
@@ -487,7 +487,7 @@ describe.skip('TerminalPane context menu', () => {
   it('context menu closes on click outside', async () => {
     // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
-      root.render(<TerminalPane isActive={true} isConnected={false} showCloseButton={false} />);
+      root.render(<TerminalPane isActive={true} isConnected={false} />);
     });
     await flushPromises();
 
@@ -513,7 +513,7 @@ describe.skip('TerminalPane context menu', () => {
 
     // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
-      root.render(<TerminalPane isActive={true} isConnected={false} showCloseButton={false} />);
+      root.render(<TerminalPane isActive={true} isConnected={false} />);
     });
     await flushPromises();
 
@@ -542,7 +542,7 @@ describe.skip('TerminalPane context menu', () => {
   it('context menu closes on scroll', async () => {
     // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
-      root.render(<TerminalPane isActive={true} isConnected={false} showCloseButton={false} />);
+      root.render(<TerminalPane isActive={true} isConnected={false} />);
     });
     await flushPromises();
 
@@ -564,7 +564,7 @@ describe.skip('TerminalPane context menu', () => {
   it('context menu closes when pane deactivates', async () => {
     // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
-      root.render(<TerminalPane isActive={true} isConnected={false} showCloseButton={false} />);
+      root.render(<TerminalPane isActive={true} isConnected={false} />);
     });
     await flushPromises();
 
@@ -577,7 +577,7 @@ describe.skip('TerminalPane context menu', () => {
     // Deactivate the pane
     // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
-      root.render(<TerminalPane isActive={false} isConnected={false} showCloseButton={false} />);
+      root.render(<TerminalPane isActive={false} isConnected={false} />);
     });
     await flushPromises();
 
@@ -625,7 +625,7 @@ describe('TerminalPane wordSeparator', () => {
   it('passes wordSeparator option to Terminal constructor', async () => {
     // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
-      root.render(<TerminalPane isActive={true} isConnected={false} showCloseButton={false} />);
+      root.render(<TerminalPane isActive={true} isConnected={false} />);
     });
     await flushPromises();
 
@@ -715,7 +715,6 @@ describe('TerminalPane pty_exit exited state', () => {
         <TerminalPane
           isActive={true}
           isConnected={true}
-          showCloseButton={false}
         />,
       );
     });
@@ -733,7 +732,6 @@ describe('TerminalPane pty_exit exited state', () => {
         <TerminalPane
           isActive={true}
           isConnected={true}
-          showCloseButton={false}
         />,
       );
     });
@@ -760,8 +758,7 @@ describe('TerminalPane pty_exit exited state', () => {
         <TerminalPane
           isActive={true}
           isConnected={true}
-          showCloseButton={false}
-          onProcessExit={onProcessExit}
+                   onProcessExit={onProcessExit}
         />,
       );
     });
@@ -784,7 +781,6 @@ describe('TerminalPane pty_exit exited state', () => {
         <TerminalPane
           isActive={true}
           isConnected={true}
-          showCloseButton={false}
         />,
       );
     });
@@ -816,7 +812,6 @@ describe('TerminalPane pty_exit exited state', () => {
         <TerminalPane
           isActive={true}
           isConnected={true}
-          showCloseButton={false}
         />,
       );
     });
@@ -853,8 +848,7 @@ describe('TerminalPane pty_exit exited state', () => {
         <TerminalPane
           isActive={true}
           isConnected={true}
-          showCloseButton={false}
-          onProcessExit={onProcessExit}
+                   onProcessExit={onProcessExit}
         />,
       );
     });

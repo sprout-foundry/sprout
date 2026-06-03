@@ -76,7 +76,7 @@ these specifications first to ensure alignment with the project direction.
 
 ```bash
 go test ./...                   # Run unit tests
-python3 test_runner.py          # Run E2E tests
+python3 e2e_test_runner.py          # Run E2E tests
 ```
 
 ### Test Isolation

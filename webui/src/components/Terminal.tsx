@@ -1,4 +1,4 @@
-import { Trash2, Columns2, Rows2, Plus, Check, ZoomIn, ZoomOut, Type, Copy, ChevronUp, ChevronDown, SquarePlus } from 'lucide-react';
+import { Trash2, Columns2, Rows2, Plus, Check, ZoomIn, ZoomOut, Type, Copy, ChevronUp, ChevronDown, SquarePlus, MoreHorizontal } from 'lucide-react';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
 import './Terminal.css';
@@ -35,6 +35,35 @@ const MIN_PANE_HEIGHT_PX = 120;
 const MAX_PANES_HARD_CAP = 8;
 
 const evenSplit = (n: number): number[] => Array.from({ length: n }, () => 100 / n);
+
+/**
+ * Pick the session that should become active after `closedId` is removed
+ * from `sessions`. Mirrors TerminalTabBar's display ordering — pinned
+ * sessions sort to the front, ties broken by insertion order — and then
+ * picks the next neighbour to the right (or the new last tab, if the
+ * closing tab was the rightmost).
+ *
+ * Returns the closed session's own id when there's no other session left;
+ * callers are expected to guard against that case before calling.
+ *
+ * Exported for unit tests so we can verify the display-order behaviour
+ * without spinning up the whole Terminal component.
+ */
+export function nextActiveAfterClose(sessions: TerminalSession[], closedId: string): string {
+  const displayOrder = sessions
+    .map((session, index) => ({ session, index }))
+    .sort((a, b) => {
+      if (a.session.is_pinned !== b.session.is_pinned) {
+        return a.session.is_pinned ? -1 : 1;
+      }
+      return a.index - b.index;
+    })
+    .map(({ session }) => session);
+  const closedDisplayIdx = displayOrder.findIndex((s) => s.id === closedId);
+  const remaining = displayOrder.filter((s) => s.id !== closedId);
+  if (remaining.length === 0) return closedId;
+  return remaining[Math.min(closedDisplayIdx, remaining.length - 1)].id;
+}
 
 const redistributeAfterRemove = (sizes: number[], removedIndex: number): number[] => {
   if (sizes.length <= 1) return [100];
@@ -96,7 +125,9 @@ function Terminal({
   const [shellsLoaded, setShellsLoaded] = useState(false);
   const [selectedShell, setSelectedShell] = useState<string | null>(null);
   const [showShellMenu, setShowShellMenu] = useState(false);
+  const [showOverflowMenu, setShowOverflowMenu] = useState(false);
   const shellPickerRef = useRef<HTMLDivElement>(null);
+  const overflowMenuRef = useRef<HTMLDivElement>(null);
   const sessionShellsRef = useRef<Map<string, string | null>>(new Map());
   const sessionReattachIdsRef = useRef<Map<string, string | null>>(new Map());
 
@@ -306,6 +337,26 @@ function Terminal({
     };
   }, [showShellMenu]);
 
+  useEffect(() => {
+    if (!showOverflowMenu) return;
+    const handleClick = (e: MouseEvent) => {
+      if (overflowMenuRef.current && !overflowMenuRef.current.contains(e.target as Node)) {
+        setShowOverflowMenu(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowOverflowMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showOverflowMenu]);
+
   const toggleExpanded = useCallback(() => {
     setIsExpanded((prev) => {
       const next = !prev;
@@ -510,13 +561,16 @@ function Terminal({
       sessionReattachIdsRef.current.delete(sessionId);
       forgetSession(sessionId);
 
-      const closedIdx = pane.sessions.findIndex((s) => s.id === sessionId);
       const remaining = pane.sessions.filter((s) => s.id !== sessionId);
       // Browser-tab convention: when the active tab is closed, focus moves
       // to the tab on its right; if it was the last, to the new last tab.
+      // The "right" neighbor must be picked in display order (pinned first,
+      // then insertion order) — TerminalTabBar reorders pinned tabs to the
+      // front, so the array-order successor is often not the one the user
+      // sees to the right of the closing tab.
       const newActive =
         pane.activeSessionId === sessionId
-          ? remaining[Math.min(closedIdx, remaining.length - 1)].id
+          ? nextActiveAfterClose(pane.sessions, sessionId)
           : pane.activeSessionId;
 
       updatePane(paneId, (p) => ({
@@ -545,11 +599,17 @@ function Terminal({
   const handleSessionTitleChange = useCallback(
     (paneId: string, sessionId: string, title: string) => {
       if (manuallyRenamedSessions.current.has(sessionId)) return;
-      updatePane(paneId, (pane) => ({
-        ...pane,
-        sessions: pane.sessions.map((s) =>
-          s.id === sessionId && s.name !== title ? { ...s, name: title } : s,
-        ),
+      const pane = panesRef.current.find((p) => p.id === paneId);
+      if (!pane) return;
+      const target = pane.sessions.find((s) => s.id === sessionId);
+      // Skip the render entirely when the title is already current.
+      // Shells emit OSC title sequences frequently (often once per prompt
+      // redraw) — without this guard we re-allocate sessions[] on every
+      // keystroke even when nothing visible would change.
+      if (!target || target.name === title) return;
+      updatePane(paneId, (p) => ({
+        ...p,
+        sessions: p.sessions.map((s) => (s.id === sessionId ? { ...s, name: title } : s)),
       }));
     },
     [updatePane],
@@ -623,14 +683,19 @@ function Terminal({
       paneHandles.current.delete(sessionId);
       sessionShellsRef.current.delete(sessionId);
       sessionReattachIdsRef.current.delete(sessionId);
-      forgetSession(sessionId);
 
       // Last session in a pane that's part of a split — drop the pane.
+      // removePane already iterates the pane's sessions and forgets each,
+      // so we deliberately skip an extra forgetSession here.
       if (panesRef.current.length > 1) {
         removePane(paneId);
         notificationBus.notify('info', 'Terminal', 'Split pane closed after process exited.');
         return;
       }
+
+      // Single-pane restart path: this session is being replaced by a
+      // fresh one, so drop the activity / manual-rename tracking now.
+      forgetSession(sessionId);
 
       // Last session in the only pane — restart with a fresh shell so
       // the terminal panel never becomes empty.
@@ -982,120 +1047,49 @@ function Terminal({
         />
       )}
 
-      {/* Header */}
-      <div className="terminal-header">
-        <div className="terminal-title-row" onClick={toggleExpanded}>
-          <div className="terminal-title">
-            <span className="terminal-icon">$</span>
-            <span>Terminal</span>
-            {focusedSession && (
-              <span className="terminal-title-session" title={focusedSession.name}>
-                <span className="terminal-title-separator">—</span>
-                <span className="terminal-title-session-name">{focusedSession.name}</span>
-                {totalSessions > 1 && <span className="terminal-title-count">{totalSessions}</span>}
-              </span>
-            )}
-          </div>
-          <div className="terminal-controls" onClick={(e) => e.stopPropagation()}>
-            <button
-              className="terminal-btn font-btn"
-              onClick={zoomOut}
-              title="Zoom out (decrease font size)"
-              aria-label="Zoom out"
-            >
-              <ZoomOut size={16} />
-            </button>
-            <button
-              className="terminal-btn font-btn"
-              onClick={zoomIn}
-              title="Zoom in (increase font size)"
-              aria-label="Zoom in"
-            >
-              <ZoomIn size={16} />
-            </button>
-            <button
-              className="terminal-btn font-btn"
-              onClick={resetFontSize}
-              title={`Reset font size (${fontSize}px)`}
-              aria-label="Reset font size"
-            >
-              <Type size={14} />
-            </button>
-            <button
-              className="terminal-btn clear-btn"
-              onClick={clearActivePane}
-              title="Clear terminal"
-              aria-label="Clear terminal"
-            >
-              <Trash2 size={16} />
-            </button>
-            <button
-              className={`terminal-btn split-btn ${splitDirection === 'vertical' ? 'split-btn-active' : ''}`}
-              onClick={() => toggleSplit('vertical')}
-              title={splitDirection === 'vertical' ? 'Unsplit terminal' : 'Split terminal vertically'}
-              aria-label={splitDirection === 'vertical' ? 'Unsplit terminal' : 'Split terminal vertically'}
-              aria-pressed={splitDirection === 'vertical'}
-            >
-              <Columns2 size={16} />
-            </button>
-            <button
-              className={`terminal-btn split-btn ${splitDirection === 'horizontal' ? 'split-btn-active' : ''}`}
-              onClick={() => toggleSplit('horizontal')}
-              title={splitDirection === 'horizontal' ? 'Unsplit terminal' : 'Split terminal horizontally'}
-              aria-label={splitDirection === 'horizontal' ? 'Unsplit terminal' : 'Split terminal horizontally'}
-              aria-pressed={splitDirection === 'horizontal'}
-            >
-              <Rows2 size={16} />
-            </button>
-            {isSplitActive && (
-              <button
-                className="terminal-btn add-pane-btn"
-                onClick={addPaneInDirection}
-                disabled={!canAddPane}
-                title={
-                  canAddPane
-                    ? `Add ${splitDirection === 'vertical' ? 'vertical' : 'horizontal'} pane`
-                    : 'No room for another pane — resize terminal or close one first'
-                }
-                aria-label="Add terminal pane"
-              >
-                <SquarePlus size={16} />
-              </button>
-            )}
-            <button
-              className={`terminal-btn copy-on-select-btn ${copyOnSelect ? 'copy-on-select-btn-active' : ''}`}
-              onClick={toggleCopyOnSelect}
-              title={`Copy on select: ${copyOnSelect ? 'enabled' : 'disabled'}`}
-              aria-label={`Toggle copy on select: currently ${copyOnSelect ? 'enabled' : 'disabled'}`}
-              aria-pressed={copyOnSelect}
-            >
-              <Copy size={16} />
-            </button>
-            <button
-              className="terminal-btn toggle-btn"
-              onClick={toggleExpanded}
-              title={isExpanded ? 'Collapse terminal (Ctrl+`)' : 'Expand terminal (Ctrl+`)'}
-              aria-label={isExpanded ? 'Collapse terminal' : 'Expand terminal'}
-              aria-expanded={isExpanded}
-            >
-              {isExpanded ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
-            </button>
-          </div>
-        </div>
-      </div>
+      {!isExpanded && (
+        <button
+          type="button"
+          className="terminal-collapsed-strip"
+          onClick={toggleExpanded}
+          title="Expand terminal (Ctrl+`)"
+          aria-label="Expand terminal"
+          aria-expanded={false}
+        >
+          <span className="terminal-collapsed-mark" aria-hidden="true">$</span>
+          {focusedSession && (
+            <span className="terminal-collapsed-session" title={focusedSession.name}>
+              <span className="terminal-collapsed-sep" aria-hidden="true">·</span>
+              <span className="terminal-collapsed-session-name">{focusedSession.name}</span>
+              {totalSessions > 1 && <span className="terminal-collapsed-count">{totalSessions}</span>}
+            </span>
+          )}
+          <span className="terminal-collapsed-spacer" />
+          <ChevronUp size={16} aria-hidden="true" />
+        </button>
+      )}
 
       {/* Body */}
       <div className="terminal-body">
         <div className={`terminal-panes-container ${isSplitActive ? `terminal-split-${splitDirection}` : ''}`}>
-          {panes.map((pane, index) => (
+          {(() => {
+            // Anchor the global-actions cluster on the pane whose tab bar
+            // sits at the top-right of the whole terminal area. In vertical
+            // split (panes side-by-side) that's the rightmost pane; in
+            // horizontal split (panes stacked) it's the top pane. Single
+            // pane: trivially pane[0].
+            const actionsPaneIdx = splitDirection === 'horizontal' ? 0 : panes.length - 1;
+            return panes.map((pane, index) => {
+            const isActionsPane = index === actionsPaneIdx;
+            return (
             <React.Fragment key={pane.id}>
               <div
                 className={`terminal-pane-wrapper${isSplitActive && pane.id === focusedPaneId ? ' terminal-pane-wrapper--focused' : ''}`}
                 style={splitStyleForPane(index)}
                 onMouseDown={() => setFocusedPaneId(pane.id)}
               >
-                <div className="terminal-pane-tab-bar">
-                  <div style={{ flex: 1, minWidth: 0 }}>
+                <div className={`terminal-pane-tab-bar${isActionsPane ? ' terminal-pane-tab-bar--with-actions' : ''}`}>
+                  <div className="terminal-pane-tabs">
                     <TerminalTabBar
                       sessions={pane.sessions}
                       activeSessionId={pane.activeSessionId}
@@ -1109,7 +1103,6 @@ function Terminal({
                       activitySessionIds={activitySessionIds}
                     />
                   </div>
-                  {index === 0 && <BackgroundTasks />}
                   <div className="shell-picker-dropdown" ref={focusedPaneId === pane.id ? shellPickerRef : null}>
                     <button
                       className="terminal-tab-new shell-picker-btn"
@@ -1156,6 +1149,121 @@ function Terminal({
                       </div>
                     )}
                   </div>
+                  {isActionsPane && (
+                    <>
+                      <div className="terminal-tab-bar-divider" aria-hidden="true" />
+                      <div className="terminal-tab-bar-actions">
+                        <BackgroundTasks />
+                        <button
+                          className={`terminal-btn split-btn ${splitDirection === 'vertical' ? 'split-btn-active' : ''}`}
+                          onClick={() => toggleSplit('vertical')}
+                          title={splitDirection === 'vertical' ? 'Unsplit terminal' : 'Split terminal vertically'}
+                          aria-label={splitDirection === 'vertical' ? 'Unsplit terminal' : 'Split terminal vertically'}
+                          aria-pressed={splitDirection === 'vertical'}
+                        >
+                          <Columns2 size={16} />
+                        </button>
+                        <button
+                          className={`terminal-btn split-btn ${splitDirection === 'horizontal' ? 'split-btn-active' : ''}`}
+                          onClick={() => toggleSplit('horizontal')}
+                          title={splitDirection === 'horizontal' ? 'Unsplit terminal' : 'Split terminal horizontally'}
+                          aria-label={splitDirection === 'horizontal' ? 'Unsplit terminal' : 'Split terminal horizontally'}
+                          aria-pressed={splitDirection === 'horizontal'}
+                        >
+                          <Rows2 size={16} />
+                        </button>
+                        {isSplitActive && (
+                          <button
+                            className="terminal-btn add-pane-btn"
+                            onClick={addPaneInDirection}
+                            disabled={!canAddPane}
+                            title={
+                              canAddPane
+                                ? `Add ${splitDirection === 'vertical' ? 'vertical' : 'horizontal'} pane`
+                                : 'No room for another pane — resize terminal or close one first'
+                            }
+                            aria-label="Add terminal pane"
+                          >
+                            <SquarePlus size={16} />
+                          </button>
+                        )}
+                        <button
+                          className="terminal-btn clear-btn"
+                          onClick={clearActivePane}
+                          title="Clear terminal"
+                          aria-label="Clear terminal"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                        <div className="terminal-overflow" ref={overflowMenuRef}>
+                          <button
+                            className="terminal-btn overflow-btn"
+                            onClick={() => setShowOverflowMenu((prev) => !prev)}
+                            title="More options"
+                            aria-label="More options"
+                            aria-haspopup="menu"
+                            aria-expanded={showOverflowMenu}
+                          >
+                            <MoreHorizontal size={16} />
+                          </button>
+                          {showOverflowMenu && (
+                            <div className="terminal-overflow-menu" role="menu">
+                              <div className="terminal-overflow-header">Font size</div>
+                              <button
+                                className="terminal-overflow-item"
+                                onClick={() => { zoomOut(); }}
+                                type="button"
+                                role="menuitem"
+                              >
+                                <ZoomOut size={14} aria-hidden="true" />
+                                <span className="terminal-overflow-label">Zoom out</span>
+                              </button>
+                              <button
+                                className="terminal-overflow-item"
+                                onClick={() => { zoomIn(); }}
+                                type="button"
+                                role="menuitem"
+                              >
+                                <ZoomIn size={14} aria-hidden="true" />
+                                <span className="terminal-overflow-label">Zoom in</span>
+                              </button>
+                              <button
+                                className="terminal-overflow-item"
+                                onClick={() => { resetFontSize(); setShowOverflowMenu(false); }}
+                                type="button"
+                                role="menuitem"
+                              >
+                                <Type size={14} aria-hidden="true" />
+                                <span className="terminal-overflow-label">Reset to default</span>
+                                <span className="terminal-overflow-meta">{fontSize}px</span>
+                              </button>
+                              <div className="terminal-overflow-divider" role="separator" />
+                              <button
+                                className={`terminal-overflow-item${copyOnSelect ? ' terminal-overflow-item--active' : ''}`}
+                                onClick={() => { toggleCopyOnSelect(); }}
+                                type="button"
+                                role="menuitemcheckbox"
+                                aria-checked={copyOnSelect}
+                              >
+                                <Copy size={14} aria-hidden="true" />
+                                <span className="terminal-overflow-label">Copy on select</span>
+                                <span className="terminal-overflow-meta">{copyOnSelect ? 'On' : 'Off'}</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          className="terminal-btn toggle-btn"
+                          onClick={toggleExpanded}
+                          title="Collapse terminal (Ctrl+`)"
+                          aria-label="Collapse terminal"
+                          aria-expanded={isExpanded}
+                        >
+                          <ChevronDown size={16} />
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
                 {pane.sessions.map((session) => {
                   const isActiveSession = session.id === pane.activeSessionId;
@@ -1181,7 +1289,6 @@ function Terminal({
                         isActive={hasActivated || isExpanded}
                         shouldFocus={pane.id === focusedPaneId && isActiveSession}
                         isConnected={isConnected}
-                        showCloseButton={false}
                         preferredShell={sessionShellsRef.current.get(session.id) ?? null}
                         reattachSessionId={sessionReattachIdsRef.current.get(session.id) ?? null}
                         fontSize={fontSize}
@@ -1201,7 +1308,9 @@ function Terminal({
                 />
               )}
             </React.Fragment>
-          ))}
+            );
+          });
+          })()}
         </div>
       </div>
     </div>

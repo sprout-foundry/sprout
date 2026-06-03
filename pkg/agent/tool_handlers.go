@@ -39,59 +39,21 @@ func stripQuotedContent(s string) string {
 	return b.String()
 }
 
-// isGitCheckoutSubcommand checks if a git command is a checkout or switch operation.
-// These are always blocked from shell_command to force use of the git tool
-// which requires explicit user approval.
-// This function checks ALL git commands in a compound shell command (e.g., "cd x && git checkout").
-func isGitCheckoutSubcommand(command string) bool {
-	// Strip quoted content to avoid false positives from JSON payloads etc.
-	command = stripQuotedContent(command)
-	// Find all occurrences of "git " in the command and check each subcommand
-	// This handles compound commands like "cd /path && git checkout branch"
-	remaining := command
-	for {
-		// Find the next "git " occurrence
-		idx := strings.Index(remaining, "git ")
-		if idx == -1 {
-			return false
-		}
-		
-		// Extract the substring starting from "git "
-		gitCmd := remaining[idx:]
-		
-		// Parse the git command to find the subcommand
-		parts := strings.Fields(gitCmd)
-		if len(parts) < 2 {
-			remaining = remaining[idx+1:]
-			continue
-		}
-		
-		// Skip leading flags (e.g., -c key=val, -C path, --no-pager)
-		for i := 1; i < len(parts); i++ {
-			part := parts[i]
-			if strings.HasPrefix(part, "-") {
-				// Skip flags that take an argument: -c, -C, --exec-path, etc.
-				if part == "-c" || part == "-C" || part == "--exec-path" || part == "--git-dir" || part == "--work-tree" {
-					i++ // skip the next argument (the value)
-				}
-				continue
-			}
-			// Clean up the subcommand by removing trailing punctuation (e.g., "checkout)" -> "checkout")
-			sub := strings.TrimRight(strings.TrimPrefix(strings.TrimPrefix(part, "--"), "-"), ");\"'")
-			if sub == "checkout" || sub == "switch" {
-				return true
-			}
-			// If we found a non-flag, non-checkout subcommand, stop checking this git invocation
-			break
-		}
-		
-		// Move past this git invocation to check for more
-		remaining = remaining[idx+1:]
-	}
-}
-
-// isGitWriteCommand checks if a command is a git write operation (which should use git tool for approval)
-// This function checks ALL git commands in a compound shell command (e.g., "cd x && git commit").
+// isGitWriteCommand reports whether `command` contains a git invocation
+// whose intent (not safety) requires the orchestrator git-write flow:
+// `commit`, `push`, branch/tag CREATE operations (not delete — those go
+// through the history-rewrite gate), and pushes via `clone`/`init` of
+// existing-repo destinations.
+//
+// Tier A working-tree-mutating ops (`checkout`, `switch`, `restore`,
+// `reset` without history-loss, `clean`, `rm`, `mv`, `am`, `apply`,
+// `cherry-pick`, `revert`, `fetch`, `pull`, `stash` mutations) used to
+// be gated here; they're now allowed because the change tracker captures
+// before-content and recover_file / recover_bulk are the recovery path.
+// Tier B history-loss ops (`rebase`, `reset --hard <commit-ish>`,
+// `branch -D`, `tag -d`) are routed through isGitHistoryRewriteCommand
+// instead — that gate has its own opt-in flag (AllowGitHistoryRewrite)
+// and produces a clearer error for the caller.
 func isGitWriteCommand(command string) bool {
 	// Strip quoted content to avoid false positives from JSON payloads etc.
 	command = stripQuotedContent(command)
@@ -102,14 +64,14 @@ func isGitWriteCommand(command string) bool {
 		if idx == -1 {
 			return false
 		}
-		
+
 		gitCmd := remaining[idx:]
 		parts := strings.Fields(gitCmd)
 		if len(parts) < 2 {
 			remaining = remaining[idx+1:]
 			continue
 		}
-		
+
 		// Find the actual subcommand (skip "git" and any leading flags like -c, -C, etc.)
 		subcommand := ""
 		subcommandIdx := 2
@@ -128,26 +90,41 @@ func isGitWriteCommand(command string) bool {
 		}
 
 		if subcommand != "" {
-			// Normalize subcommand (remove dashes, handle branch -d/-D as "branch")
 			subcommand = strings.TrimPrefix(subcommand, "--")
 			subcommand = strings.TrimPrefix(subcommand, "-")
 
-			// Handle special subcommands that can be read or write depending on flags/args.
+			// branch / tag — only CREATE/UPDATE operations land here.
+			// Deletes (`-d`/`-D`/`--delete`) are caught upstream by
+			// isGitHistoryRewriteCommand; if we see them here it's
+			// because the caller hasn't routed through that gate, but
+			// we still need to skip them so the positional `<name>`
+			// argument doesn't get misread as "create new branch X".
 			rest := parts[subcommandIdx+1:]
 			switch subcommand {
 			case "branch":
-				// Read-only examples: git branch, git branch -a, git branch --list
-				// Write examples: git branch new-feature, git branch -d old-feature
-				branchWriteFlags := map[string]struct{}{
-					"-d": {}, "-D": {}, "--delete": {}, "-m": {}, "-M": {}, "--move": {},
+				hasDelete := false
+				for _, arg := range rest {
+					if arg == "-d" || arg == "-D" || arg == "--delete" {
+						hasDelete = true
+						break
+					}
+				}
+				if hasDelete {
+					// Delete = history-rewrite, not the intent gate's job.
+					remaining = remaining[idx+1:]
+					continue
+				}
+				// `git branch` / `-a` / `--list` etc. are read-only.
+				// A positional (non-flag) argument means create.
+				createFlags := map[string]struct{}{
+					"-m": {}, "-M": {}, "--move": {},
 					"-c": {}, "-C": {}, "--copy": {}, "-f": {}, "--force": {},
 					"-u": {}, "--set-upstream-to": {}, "--unset-upstream": {}, "--edit-description": {},
 				}
 				for _, arg := range rest {
-					if _, ok := branchWriteFlags[arg]; ok {
+					if _, ok := createFlags[arg]; ok {
 						return true
 					}
-					// A positional argument (that isn't a list flag) generally means create/update branch.
 					if !strings.HasPrefix(arg, "-") {
 						return true
 					}
@@ -155,13 +132,22 @@ func isGitWriteCommand(command string) bool {
 				remaining = remaining[idx+1:]
 				continue
 			case "tag":
-				// Read-only examples: git tag, git tag -l
-				// Write examples: git tag v1.2.3, git tag -d v1.2.3
-				tagWriteFlags := map[string]struct{}{
-					"-d": {}, "--delete": {}, "-a": {}, "-s": {}, "-u": {}, "-f": {}, "--force": {},
+				hasDelete := false
+				for _, arg := range rest {
+					if arg == "-d" || arg == "--delete" {
+						hasDelete = true
+						break
+					}
+				}
+				if hasDelete {
+					remaining = remaining[idx+1:]
+					continue
+				}
+				createFlags := map[string]struct{}{
+					"-a": {}, "-s": {}, "-u": {}, "-f": {}, "--force": {},
 				}
 				for _, arg := range rest {
-					if _, ok := tagWriteFlags[arg]; ok {
+					if _, ok := createFlags[arg]; ok {
 						return true
 					}
 					if !strings.HasPrefix(arg, "-") {
@@ -170,100 +156,127 @@ func isGitWriteCommand(command string) bool {
 				}
 				remaining = remaining[idx+1:]
 				continue
-			case "stash":
-				// Read-only: git stash list/show
-				// Write: git stash [push|pop|apply|drop|clear|branch|store]
-				if len(rest) == 0 {
-					return true // plain `git stash` is equivalent to push
-				}
-				action := rest[0]
-				switch action {
-				case "list", "show":
-					remaining = remaining[idx+1:]
-					continue
-				default:
-					return true
-				}
 			}
 
-			// Staging operations (git add) are always allowed per policy — not considered a restricted write.
-			if subcommand == "add" {
-				remaining = remaining[idx+1:]
-				continue
-			}
-
-			// Check if it's a write operation
-			writerCommands := []string{
-				"commit", "push", "rm", "mv", "reset",
-				"rebase", "merge", "checkout", "clean",
-				"am", "apply", "cherry-pick", "revert",
-				"switch", "restore", "fetch", "pull", "clone",
-				"init", "worktree",
-			}
-
-			for _, writeCmd := range writerCommands {
+			// Intent gates: commit & push always require the orchestrator
+			// (or the commit-tool redirect for commit). clone/init create
+			// new repos — gated to keep the agent from making side
+			// repositories without the orchestrator opting in. merge
+			// stays gated because a merge commit is a commit.
+			intentGated := []string{"commit", "push", "merge", "clone", "init", "worktree"}
+			for _, writeCmd := range intentGated {
 				if subcommand == writeCmd {
 					return true
 				}
 			}
 		}
-		
+
 		// Move past this git invocation to check for more
 		remaining = remaining[idx+1:]
 	}
 }
 
-// isGitDiscardCommand checks if a git command could discard changes
-// (restore, reset --hard, checkout -- <file>). These are always blocked
-// from shell_command regardless of orchestrator permissions.
-// This function checks ALL git commands in a compound shell command (e.g., "cd x && git reset").
-func isGitDiscardCommand(command string) bool {
-	// Strip quoted content to avoid false positives from JSON payloads etc.
+
+// isGitHistoryRewriteCommand checks whether `command` contains a git
+// invocation that can lose commit history (a ref moves backward, a
+// branch/tag pointer disappears, a rebase rewrites commits). The change
+// tracker can recover working-tree changes but cannot recover lost
+// commits — only the reflog can — so these ops stay gated by default.
+//
+// Specifically matches:
+//
+//   - `git reset --hard <commit-ish>`  (backward ref-move)
+//   - `git rebase` (any form — rewrites or drops commits)
+//   - `git branch -d`/`-D`/`--delete` (deletes a branch ref)
+//   - `git tag -d`/`--delete` (deletes a tag ref)
+//
+// `git reset --hard` *without* an explicit commit-ish argument is
+// equivalent to `reset --hard HEAD` — it only reverts the working tree
+// and is fully recoverable. We err toward "gated" when the argument
+// shape is ambiguous (cheap false positive, expensive false negative).
+func isGitHistoryRewriteCommand(command string) bool {
 	command = stripQuotedContent(command)
-	// Find all occurrences of "git " in the command and check each subcommand
-	// This handles compound commands like "cd /path && git restore file"
 	remaining := command
 	for {
 		idx := strings.Index(remaining, "git ")
 		if idx == -1 {
 			return false
 		}
-		
 		gitCmd := remaining[idx:]
 		parts := strings.Fields(gitCmd)
 		if len(parts) < 2 {
 			remaining = remaining[idx+1:]
 			continue
 		}
-		
-		// Find the subcommand (skip leading flags like -c, -C)
+		// Find the subcommand, skipping leading git global flags.
 		subcommand := ""
+		subIdx := 0
 		for i := 1; i < len(parts); i++ {
 			part := parts[i]
 			if strings.HasPrefix(part, "-") {
-				// Skip flags that take arguments
 				if part == "-c" || part == "-C" || part == "--exec-path" || part == "--git-dir" || part == "--work-tree" {
 					i++
 				}
 				continue
 			}
-			// Clean up the subcommand by removing trailing punctuation (e.g., "reset)" -> "reset")
 			subcommand = strings.TrimRight(part, ");\"'")
+			subIdx = i
 			break
 		}
-		
-		if subcommand != "" {
-			// git restore always discards (working tree or staged changes)
-			if subcommand == "restore" {
+		if subcommand == "" {
+			remaining = remaining[idx+1:]
+			continue
+		}
+		rest := parts[subIdx+1:]
+
+		switch subcommand {
+		case "rebase":
+			return true
+		case "reset":
+			// `reset --hard` followed by an explicit commit-ish other than
+			// HEAD (or a positional path filter) is a backward ref move.
+			// Bare `reset --hard` or `reset --hard HEAD` only mutates the
+			// working tree and is handled by the change tracker.
+			hard := false
+			for _, a := range rest {
+				if a == "--hard" {
+					hard = true
+				}
+			}
+			if !hard {
+				remaining = remaining[idx+1:]
+				continue
+			}
+			// `--hard` with no further args, or with `HEAD` as the only
+			// other token, is working-tree-only. Anything else (`HEAD~1`,
+			// `abc123`, `origin/main`) abandons commits.
+			hasCommitIsh := false
+			for _, a := range rest {
+				if a == "--hard" || strings.HasPrefix(a, "-") {
+					continue
+				}
+				if a == "HEAD" {
+					continue
+				}
+				hasCommitIsh = true
+				break
+			}
+			if hasCommitIsh {
 				return true
 			}
-			// git reset can discard staged changes (even without --hard)
-			if subcommand == "reset" {
-				return true
+		case "branch":
+			for _, a := range rest {
+				if a == "-d" || a == "-D" || a == "--delete" {
+					return true
+				}
+			}
+		case "tag":
+			for _, a := range rest {
+				if a == "-d" || a == "--delete" {
+					return true
+				}
 			}
 		}
-		
-		// Move past this git invocation to check for more
 		remaining = remaining[idx+1:]
 	}
 }

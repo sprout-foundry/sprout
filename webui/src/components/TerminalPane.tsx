@@ -1,6 +1,6 @@
 import type { SearchAddon } from '@xterm/addon-search';
 import type { Terminal as XTerm } from '@xterm/xterm';
-import { X, TriangleAlert, Terminal } from 'lucide-react';
+import { TriangleAlert, Terminal } from 'lucide-react';
 import React, { useEffect, useRef, useCallback, useImperativeHandle, forwardRef, useState } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
 
@@ -33,10 +33,6 @@ interface TerminalPaneProps {
   shouldFocus?: boolean;
   /** Whether the app-level WebSocket connection is available. */
   isConnected?: boolean;
-  /** When true, renders a close button in the pane header. */
-  showCloseButton: boolean;
-  /** Called when the user clicks the pane close button. */
-  onClose?: () => void;
   /** Notifies the parent of connection state changes. */
   onConnectionChange?: (connected: boolean) => void;
   /** Preferred shell name (e.g. "bash", "zsh", "fish") for the initial PTY session. */
@@ -61,8 +57,6 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       isActive,
       shouldFocus = true,
       isConnected = true,
-      showCloseButton,
-      onClose,
       onConnectionChange,
       preferredShell,
       fontSize,
@@ -343,14 +337,6 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     // ═══════════════════════════════════════════════════════════════════
     return (
       <div className={`terminal-pane${isExited ? ' terminal-pane-exited' : ''}`} ref={paneWrapperRef} role="application" aria-label="Terminal">
-        {showCloseButton && (
-          <div className="terminal-pane-header">
-            <span className={`terminal-pane-dot ${paneConnected || wasmActive ? 'connected' : 'disconnected'}`} />
-            <button className="terminal-pane-close" onClick={onClose} title="Close pane">
-              <X size={12} />
-            </button>
-          </div>
-        )}
         <TerminalSearchBar
           ref={searchBarRef}
           visible={searchVisible}

@@ -1,17 +1,22 @@
 // Agent-facing tools backed by the ChangeTracker's session buffer.
-// Five tools share this file because they all operate on the same
-// in-memory []TrackedFileChange and emit JSON envelopes the LLM can
-// reason about directly:
 //
-//   - list_changes       Manifest of every change this session.
-//   - show_my_change     Inline diff for one file (uses go-difflib).
-//   - revert_my_changes  Bulk undo with scopes (all / file / since).
-//   - summarize_my_session  Grouped digest by contiguous activity block.
-//   - my_recent_changes  Unified timeline across in-memory + persistent.
+// After the SP-061-2 consolidation this file ships only two tools — the
+// rest were folded into options on these:
 //
-// All five are read/self-audit-or-revert tools — none of them call
-// out to the LLM, all are deterministic, and all return structured
-// JSON so the model has a stable shape to reason about.
+//   - list_changes
+//       Manifest of the session's changes, with three optional knobs:
+//         include_diff: bool        per-file unified diff (was show_my_change)
+//         group_by: "block"|""      activity-block summary (was summarize_my_session)
+//         include_persisted: bool   merge hot+warm history (was my_recent_changes)
+//       Plus the existing filters: since, tool, path_pattern.
+//
+//   - revert_my_changes
+//       Bulk undo by scope ("all" or "since"). The previous file= scope was
+//       removed because recover_file(scope="session_start") does the same
+//       thing with clearer semantics.
+//
+// Recovery of an individual file (or bulk entry, or session-start state)
+// lives in tool_handlers_recover.go.
 package agent
 
 import (
@@ -28,42 +33,170 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/history"
 )
 
+// activityGapThreshold is the time gap between consecutive changes
+// that splits one "activity block" from the next. 30 seconds is long
+// enough that work within a single agent turn clusters together but
+// short enough that distinct turns separate cleanly.
+const activityGapThreshold = 30 * time.Second
+
 // ---------------------------------------------------------------------------
-// list_changes (with filtering)
+// list_changes
 // ---------------------------------------------------------------------------
 
-func handleListChanges(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
+func handleListChanges(_ context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	tracker := a.GetChangeTracker()
+
+	// Read knobs. group_by switches the response shape entirely; the
+	// rest are additive on the per-file shape.
+	groupBy, _ := args["group_by"].(string)
+	includeDiff, _ := args["include_diff"].(bool)
+	includePersisted, _ := args["include_persisted"].(bool)
+
 	if tracker == nil || !tracker.IsEnabled() {
+		if groupBy == "block" {
+			return `{"enabled":false,"blocks":[],"totals":{"changes":0,"files":0}}`, nil
+		}
+		if includePersisted {
+			return handleListChangesPersistedOnly(args)
+		}
 		return `{"revision_id":"","enabled":false,"count":0,"files":[]}`, nil
 	}
 
-	changes := tracker.GetChanges()
-	changes = applyChangeFilters(changes, args)
+	changes := applyChangeFilters(tracker.GetChanges(), args)
 
+	if groupBy == "block" {
+		return buildBlockSummary(tracker.GetRevisionID(), changes)
+	}
+
+	return buildFileList(tracker, changes, includeDiff, includePersisted, args)
+}
+
+// handleListChangesPersistedOnly is the include_persisted path when no
+// in-memory tracker is enabled (or empty). It still returns the
+// list_changes envelope so the caller's parser doesn't have to branch.
+func handleListChangesPersistedOnly(args map[string]interface{}) (string, error) {
 	type fileEntry struct {
 		Path        string    `json:"path"`
 		Op          string    `json:"op"`
 		Tool        string    `json:"tool"`
 		Timestamp   time.Time `json:"timestamp"`
+		Source      string    `json:"source,omitempty"`
+		RevisionID  string    `json:"revision_id,omitempty"`
+		Tier        string    `json:"tier,omitempty"`
 		Recoverable bool      `json:"recoverable"`
-		// BulkCount surfaces build-output rollups (SP-061-1). When > 0,
-		// `path` names a directory that was churned past
-		// shellBulkThreshold by one shell command; the UI renders the
-		// entry as a single "<dir>/ — N files (build output)" row
-		// instead of stacking N per-file rows. Omitted on normal
-		// per-file entries so the JSON stays compact.
-		BulkCount int `json:"bulk_count,omitempty"`
 	}
+	cutoff, _ := parseRecentSince(asString(args["since"]))
+	files := make([]fileEntry, 0)
+	if persisted, err := history.GetAllChanges(); err == nil {
+		for _, ch := range persisted {
+			if !cutoff.IsZero() && ch.Timestamp.Before(cutoff) {
+				continue
+			}
+			files = append(files, fileEntry{
+				Path:        ch.Filename,
+				Op:          deriveOpFromChangeLog(ch),
+				Tool:        "(persisted)",
+				Timestamp:   ch.Timestamp,
+				Source:      "persisted",
+				RevisionID:  ch.RequestHash,
+				Tier:        ch.Tier,
+				Recoverable: ch.OriginalCode != "",
+			})
+		}
+	}
+	sort.Slice(files, func(i, j int) bool {
+		return files[i].Timestamp.After(files[j].Timestamp)
+	})
+	out := struct {
+		RevisionID string      `json:"revision_id"`
+		Enabled    bool        `json:"enabled"`
+		Count      int         `json:"count"`
+		Files      []fileEntry `json:"files"`
+	}{Count: len(files), Files: files}
+	b, err := json.MarshalIndent(out, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
+// buildFileList renders the per-file shape for list_changes. Used both
+// for session-only and session+persisted output.
+func buildFileList(tracker *ChangeTracker, changes []TrackedFileChange, includeDiff, includePersisted bool, args map[string]interface{}) (string, error) {
+	type bulkItemEntry struct {
+		Path string `json:"path"`
+		Op   string `json:"op"`
+	}
+	type fileEntry struct {
+		Path        string          `json:"path"`
+		Op          string          `json:"op"`
+		Tool        string          `json:"tool"`
+		Timestamp   time.Time       `json:"timestamp"`
+		Source      string          `json:"source,omitempty"`
+		RevisionID  string          `json:"revision_id,omitempty"`
+		Tier        string          `json:"tier,omitempty"`
+		Recoverable bool            `json:"recoverable"`
+		BulkCount   int             `json:"bulk_count,omitempty"`
+		BulkItems   []bulkItemEntry `json:"bulk_items,omitempty"`
+		Diff        string          `json:"diff,omitempty"`
+	}
+
 	files := make([]fileEntry, 0, len(changes))
 	for _, ch := range changes {
-		files = append(files, fileEntry{
+		entry := fileEntry{
 			Path:        ch.FilePath,
 			Op:          ch.Operation,
 			Tool:        ch.ToolCall,
 			Timestamp:   ch.Timestamp,
 			Recoverable: isRecoverableOriginal(ch.OriginalCode),
 			BulkCount:   ch.BulkCount,
+		}
+		if ch.Operation == "bulk" {
+			entry.Recoverable = len(ch.BulkItems) > 0
+			if len(ch.BulkItems) > 0 {
+				items := make([]bulkItemEntry, len(ch.BulkItems))
+				for i, it := range ch.BulkItems {
+					items[i] = bulkItemEntry{Path: it.FilePath, Op: it.Operation}
+				}
+				entry.BulkItems = items
+			}
+		}
+		if includeDiff && ch.Operation != "bulk" {
+			// Reuse collectFileChangeSpan so the diff reflects the
+			// CUMULATIVE state across multiple edits to the same file,
+			// not just the immediate change. Matches the prior
+			// show_my_change behaviour.
+			if abs, err := filepath.Abs(ch.FilePath); err == nil {
+				original, latestNew, _, _, found := collectFileChangeSpan(tracker.GetChanges(), abs)
+				if found {
+					entry.Diff = buildUnifiedDiff(abs, original, latestNew)
+				}
+			}
+		}
+		files = append(files, entry)
+	}
+
+	if includePersisted {
+		cutoff, _ := parseRecentSince(asString(args["since"]))
+		if persisted, err := history.GetAllChanges(); err == nil {
+			for _, ch := range persisted {
+				if !cutoff.IsZero() && ch.Timestamp.Before(cutoff) {
+					continue
+				}
+				files = append(files, fileEntry{
+					Path:        ch.Filename,
+					Op:          deriveOpFromChangeLog(ch),
+					Tool:        "(persisted)",
+					Timestamp:   ch.Timestamp,
+					Source:      "persisted",
+					RevisionID:  ch.RequestHash,
+					Tier:        ch.Tier,
+					Recoverable: ch.OriginalCode != "",
+				})
+			}
+		}
+		sort.Slice(files, func(i, j int) bool {
+			return files[i].Timestamp.After(files[j].Timestamp)
 		})
 	}
 
@@ -78,6 +211,79 @@ func handleListChanges(ctx context.Context, a *Agent, args map[string]interface{
 		Count:      len(files),
 		Files:      files,
 	}
+	b, err := json.MarshalIndent(out, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
+// buildBlockSummary renders the activity-block shape for
+// list_changes(group_by="block"). Activity-blocks are the contiguous
+// runs of work separated by activityGapThreshold of quiet — a useful
+// "what did this session look like at a glance" summary.
+func buildBlockSummary(revisionID string, changes []TrackedFileChange) (string, error) {
+	if len(changes) == 0 {
+		return `{"enabled":true,"revision_id":"` + revisionID + `","blocks":[],"totals":{"changes":0,"files":0}}`, nil
+	}
+
+	// Sort by timestamp so block boundaries are deterministic. The
+	// tracker is append-order, which already approximates this, but
+	// direct hooks vs shell diff can arrive out of order in rare cases.
+	sorted := make([]TrackedFileChange, len(changes))
+	copy(sorted, changes)
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i].Timestamp.Before(sorted[j].Timestamp)
+	})
+
+	type fileLite struct {
+		Path string `json:"path"`
+		Op   string `json:"op"`
+	}
+	type block struct {
+		StartedAt time.Time      `json:"started_at"`
+		EndedAt   time.Time      `json:"ended_at"`
+		Tools     map[string]int `json:"tools"`
+		Files     []fileLite     `json:"files"`
+	}
+	var blocks []block
+	current := block{StartedAt: sorted[0].Timestamp, Tools: map[string]int{}}
+	prev := sorted[0].Timestamp
+	seenInBlock := make(map[string]bool)
+	for _, ch := range sorted {
+		if ch.Timestamp.Sub(prev) > activityGapThreshold && len(current.Files) > 0 {
+			current.EndedAt = prev
+			blocks = append(blocks, current)
+			current = block{StartedAt: ch.Timestamp, Tools: map[string]int{}}
+			seenInBlock = make(map[string]bool)
+		}
+		key := ch.FilePath + "|" + ch.Operation
+		if !seenInBlock[key] {
+			current.Files = append(current.Files, fileLite{Path: ch.FilePath, Op: ch.Operation})
+			seenInBlock[key] = true
+		}
+		current.Tools[ch.ToolCall]++
+		prev = ch.Timestamp
+	}
+	current.EndedAt = prev
+	blocks = append(blocks, current)
+
+	allFiles := make(map[string]bool, len(changes))
+	for _, ch := range changes {
+		allFiles[ch.FilePath] = true
+	}
+
+	out := struct {
+		Enabled    bool    `json:"enabled"`
+		RevisionID string  `json:"revision_id"`
+		Blocks     []block `json:"blocks"`
+		Totals     struct {
+			Changes int `json:"changes"`
+			Files   int `json:"files"`
+		} `json:"totals"`
+	}{Enabled: true, RevisionID: revisionID, Blocks: blocks}
+	out.Totals.Changes = len(changes)
+	out.Totals.Files = len(allFiles)
 
 	b, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
@@ -87,25 +293,20 @@ func handleListChanges(ctx context.Context, a *Agent, args map[string]interface{
 }
 
 // applyChangeFilters narrows a TrackedFileChange slice by optional
-// since=<ISO8601>, tool=<name>, path_pattern=<glob> args. Returns a
-// copy of the matched subset so callers don't mutate the tracker's
-// internal slice.
+// since=<ISO8601 OR duration>, tool=<name>, path_pattern=<glob> args.
+// Returns a copy of the matched subset so callers don't mutate the
+// tracker's internal slice.
 func applyChangeFilters(changes []TrackedFileChange, args map[string]interface{}) []TrackedFileChange {
-	var sinceCutoff time.Time
-	if s, ok := args["since"].(string); ok && strings.TrimSpace(s) != "" {
-		if t, err := time.Parse(time.RFC3339, strings.TrimSpace(s)); err == nil {
-			sinceCutoff = t
-		}
-	}
+	cutoff, _ := parseRecentSince(asString(args["since"]))
 	toolFilter, _ := args["tool"].(string)
 	pattern, _ := args["path_pattern"].(string)
 
-	if sinceCutoff.IsZero() && toolFilter == "" && pattern == "" {
+	if cutoff.IsZero() && toolFilter == "" && pattern == "" {
 		return changes
 	}
 	out := make([]TrackedFileChange, 0, len(changes))
 	for _, ch := range changes {
-		if !sinceCutoff.IsZero() && ch.Timestamp.Before(sinceCutoff) {
+		if !cutoff.IsZero() && ch.Timestamp.Before(cutoff) {
 			continue
 		}
 		if toolFilter != "" && ch.ToolCall != toolFilter {
@@ -123,33 +324,8 @@ func applyChangeFilters(changes []TrackedFileChange, args map[string]interface{}
 }
 
 // ---------------------------------------------------------------------------
-// show_my_change
+// list_changes helpers reused by recover_file (scope="session_start")
 // ---------------------------------------------------------------------------
-
-func handleShowMyChange(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
-	rawPath, ok := args["path"].(string)
-	if !ok || strings.TrimSpace(rawPath) == "" {
-		return "", fmt.Errorf("show_my_change: 'path' parameter is required")
-	}
-	abs, err := filepath.Abs(rawPath)
-	if err != nil {
-		return "", fmt.Errorf("show_my_change: resolve %q: %w", rawPath, err)
-	}
-
-	tracker := a.GetChangeTracker()
-	if tracker == nil || !tracker.IsEnabled() {
-		return showChangeResult(false, abs, "", "change tracking is disabled", "", ""), nil
-	}
-
-	changes := tracker.GetChanges()
-	earliestOriginal, latestNew, op, tool, found := collectFileChangeSpan(changes, abs)
-	if !found {
-		return showChangeResult(false, abs, "", "no tracked changes recorded for this path in this session", "", ""), nil
-	}
-
-	diff := buildUnifiedDiff(abs, earliestOriginal, latestNew)
-	return showChangeResult(true, abs, op, tool, diff, summarizeDiffStats(earliestOriginal, latestNew)), nil
-}
 
 // collectFileChangeSpan walks the tracker's changes in append order
 // and returns (earliestOriginal, latestNew, op, tool, found) for the
@@ -214,49 +390,29 @@ func buildUnifiedDiff(path, before, after string) string {
 	return out
 }
 
-func summarizeDiffStats(before, after string) string {
-	beforeLines := len(strings.Split(before, "\n"))
-	afterLines := len(strings.Split(after, "\n"))
-	return fmt.Sprintf("%d lines before → %d lines after", beforeLines, afterLines)
-}
-
-func showChangeResult(ok bool, path, op, tool, diff, stats string) string {
-	payload := struct {
-		Found bool   `json:"found"`
-		Path  string `json:"path"`
-		Op    string `json:"op,omitempty"`
-		Tool  string `json:"tool,omitempty"`
-		Stats string `json:"stats,omitempty"`
-		Diff  string `json:"diff,omitempty"`
-	}{Found: ok, Path: path, Op: op, Tool: tool, Diff: diff, Stats: stats}
-	b, _ := json.MarshalIndent(payload, "", "  ")
-	return string(b)
-}
-
 // ---------------------------------------------------------------------------
-// revert_my_changes
+// revert_my_changes (slimmed to scope=all and since=)
 // ---------------------------------------------------------------------------
 
 // handleRevertMyChanges restores files to their session-start state
-// based on the requested scope. Scopes are mutually exclusive:
+// for a SCOPE — every change, or every change after a timestamp. The
+// previous file= scope was removed because recover_file(scope=
+// "session_start") does the same thing with clearer semantics.
+//
+// Scopes:
 //
 //   - scope="all"            Restore every file the tracker recorded.
-//   - file="<path>"          Restore one file (latest matching entry).
-//   - since="<RFC3339>"      Revert changes recorded at or after the
-//                            given timestamp.
+//   - since="<RFC3339|dur>"  Revert changes recorded at or after the
+//                            given timestamp (e.g. "2026-05-27T10:00:00Z"
+//                            or "30m"). When set, scope defaults to "all".
 //
 // Returns a JSON envelope listing per-file outcomes so the model can
 // report exactly what happened back to the user.
-func handleRevertMyChanges(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
-	scope := ""
-	if s, ok := args["scope"].(string); ok {
-		scope = strings.TrimSpace(s)
-	}
-	filePath, _ := args["file"].(string)
-	sinceStr, _ := args["since"].(string)
+func handleRevertMyChanges(_ context.Context, a *Agent, args map[string]interface{}) (string, error) {
+	scope := strings.TrimSpace(asString(args["scope"]))
+	sinceStr := strings.TrimSpace(asString(args["since"]))
 
-	// Default scope = "all" when no narrowing arg is provided.
-	if scope == "" && filePath == "" && sinceStr == "" {
+	if scope == "" && sinceStr == "" {
 		scope = "all"
 	}
 
@@ -265,7 +421,7 @@ func handleRevertMyChanges(ctx context.Context, a *Agent, args map[string]interf
 		return revertResult(0, 0, "change tracking is disabled — nothing to revert", nil), nil
 	}
 
-	candidates, err := selectRevertCandidates(tracker.GetChanges(), scope, filePath, sinceStr)
+	candidates, err := selectRevertCandidates(tracker.GetChanges(), scope, sinceStr)
 	if err != nil {
 		return "", err
 	}
@@ -287,7 +443,7 @@ func handleRevertMyChanges(ctx context.Context, a *Agent, args map[string]interf
 			failed++
 		}
 	}
-	summary := fmt.Sprintf("%d restored, %d failed (scope=%s)", restored, failed, describeScope(scope, filePath, sinceStr))
+	summary := fmt.Sprintf("%d restored, %d failed (scope=%s)", restored, failed, describeScope(scope, sinceStr))
 	return revertResult(restored, failed, summary, results), nil
 }
 
@@ -296,38 +452,20 @@ func handleRevertMyChanges(ctx context.Context, a *Agent, args map[string]interf
 // oldest pre-session state is the right behavior: even if the agent
 // edited a file three times this session, the user wants "back to
 // before the agent touched it", not "back to the previous edit".
-func selectRevertCandidates(changes []TrackedFileChange, scope, file, since string) ([]TrackedFileChange, error) {
+func selectRevertCandidates(changes []TrackedFileChange, scope, since string) ([]TrackedFileChange, error) {
 	var cutoff time.Time
 	if since != "" {
-		t, err := time.Parse(time.RFC3339, strings.TrimSpace(since))
+		t, err := parseRecentSince(since)
 		if err != nil {
-			return nil, fmt.Errorf("revert_my_changes: invalid 'since' (need RFC3339 like 2026-05-27T10:00:00Z): %w", err)
+			return nil, fmt.Errorf("revert_my_changes: invalid 'since' (need RFC3339 like 2026-05-27T10:00:00Z or duration like 30m): %w", err)
 		}
 		cutoff = t
 	}
 
-	var fileAbs string
-	if file != "" {
-		var err error
-		fileAbs, err = filepath.Abs(file)
-		if err != nil {
-			return nil, fmt.Errorf("revert_my_changes: resolve file path: %w", err)
-		}
-	}
-
-	// First pass: filter by scope/file/since. Then collapse to one
-	// per-path entry, keeping the earliest (so we revert to the
-	// truest pre-session state).
 	filtered := make([]TrackedFileChange, 0, len(changes))
 	for _, ch := range changes {
 		if !cutoff.IsZero() && ch.Timestamp.Before(cutoff) {
 			continue
-		}
-		if fileAbs != "" {
-			chAbs, _ := filepath.Abs(ch.FilePath)
-			if chAbs != fileAbs {
-				continue
-			}
 		}
 		filtered = append(filtered, ch)
 	}
@@ -382,15 +520,14 @@ func revertOne(ch TrackedFileChange, tracker *ChangeTracker) (string, bool, stri
 	return "restore", true, "wrote original content back to disk"
 }
 
-func describeScope(scope, file, since string) string {
-	switch {
-	case file != "":
-		return fmt.Sprintf("file=%s", file)
-	case since != "":
+func describeScope(scope, since string) string {
+	if since != "" {
 		return fmt.Sprintf("since=%s", since)
-	default:
-		return scope
 	}
+	if scope == "" {
+		return "all"
+	}
+	return scope
 }
 
 func revertResult(restored, failed int, summary string, entries interface{}) string {
@@ -405,168 +542,8 @@ func revertResult(restored, failed int, summary string, entries interface{}) str
 }
 
 // ---------------------------------------------------------------------------
-// summarize_my_session
+// shared helpers
 // ---------------------------------------------------------------------------
-
-// activityGapThreshold is the time gap between consecutive changes
-// that splits one "activity block" from the next. 30 seconds is long
-// enough that work within a single agent turn clusters together but
-// short enough that distinct turns separate cleanly.
-const activityGapThreshold = 30 * time.Second
-
-func handleSummarizeMySession(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
-	tracker := a.GetChangeTracker()
-	if tracker == nil || !tracker.IsEnabled() {
-		return `{"enabled":false,"blocks":[],"totals":{"changes":0,"files":0}}`, nil
-	}
-	changes := tracker.GetChanges()
-	if len(changes) == 0 {
-		return `{"enabled":true,"blocks":[],"totals":{"changes":0,"files":0}}`, nil
-	}
-
-	// Sort by timestamp so block detection is deterministic. The
-	// tracker is append-order, which already approximates this, but
-	// not guaranteed (e.g., direct hooks vs shell diff may arrive
-	// out of order in rare cases).
-	sorted := make([]TrackedFileChange, len(changes))
-	copy(sorted, changes)
-	sort.Slice(sorted, func(i, j int) bool {
-		return sorted[i].Timestamp.Before(sorted[j].Timestamp)
-	})
-
-	type fileLite struct {
-		Path string `json:"path"`
-		Op   string `json:"op"`
-	}
-	type block struct {
-		StartedAt time.Time           `json:"started_at"`
-		EndedAt   time.Time           `json:"ended_at"`
-		Tools     map[string]int      `json:"tools"`
-		Files     []fileLite          `json:"files"`
-	}
-	var blocks []block
-	current := block{StartedAt: sorted[0].Timestamp, Tools: map[string]int{}}
-	prev := sorted[0].Timestamp
-	seenInBlock := make(map[string]bool)
-	for _, ch := range sorted {
-		if ch.Timestamp.Sub(prev) > activityGapThreshold && len(current.Files) > 0 {
-			current.EndedAt = prev
-			blocks = append(blocks, current)
-			current = block{StartedAt: ch.Timestamp, Tools: map[string]int{}}
-			seenInBlock = make(map[string]bool)
-		}
-		key := ch.FilePath + "|" + ch.Operation
-		if !seenInBlock[key] {
-			current.Files = append(current.Files, fileLite{Path: ch.FilePath, Op: ch.Operation})
-			seenInBlock[key] = true
-		}
-		current.Tools[ch.ToolCall]++
-		prev = ch.Timestamp
-	}
-	current.EndedAt = prev
-	blocks = append(blocks, current)
-
-	allFiles := make(map[string]bool, len(changes))
-	for _, ch := range changes {
-		allFiles[ch.FilePath] = true
-	}
-
-	out := struct {
-		Enabled bool    `json:"enabled"`
-		Blocks  []block `json:"blocks"`
-		Totals  struct {
-			Changes int `json:"changes"`
-			Files   int `json:"files"`
-		} `json:"totals"`
-	}{Enabled: true, Blocks: blocks}
-	out.Totals.Changes = len(changes)
-	out.Totals.Files = len(allFiles)
-
-	b, err := json.MarshalIndent(out, "", "  ")
-	if err != nil {
-		return "", err
-	}
-	return string(b), nil
-}
-
-// ---------------------------------------------------------------------------
-// my_recent_changes (Phase 1.5: bridge in-memory + persistent)
-// ---------------------------------------------------------------------------
-
-func handleMyRecentChanges(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
-	sinceArg, _ := args["since"].(string)
-	cutoff, err := parseRecentSince(sinceArg)
-	if err != nil {
-		return "", err
-	}
-
-	tracker := a.GetChangeTracker()
-
-	type item struct {
-		Path       string    `json:"path"`
-		Op         string    `json:"op"`
-		Tool       string    `json:"tool"`
-		Source     string    `json:"source"` // "session" | "persisted"
-		RevisionID string    `json:"revision_id,omitempty"`
-		Timestamp  time.Time `json:"timestamp"`
-		Tier       string    `json:"tier,omitempty"`
-	}
-	var items []item
-
-	// In-memory session buffer.
-	if tracker != nil && tracker.IsEnabled() {
-		for _, ch := range tracker.GetChanges() {
-			if !cutoff.IsZero() && ch.Timestamp.Before(cutoff) {
-				continue
-			}
-			items = append(items, item{
-				Path:      ch.FilePath,
-				Op:        ch.Operation,
-				Tool:      ch.ToolCall,
-				Source:    "session",
-				Timestamp: ch.Timestamp,
-			})
-		}
-	}
-
-	// Persistent history (hot + warm tier; cold is dropped, so it
-	// can't appear here anyway). Best-effort — failures yield an
-	// empty list and we still return the session-buffer items.
-	if persisted, err := history.GetAllChanges(); err == nil {
-		for _, ch := range persisted {
-			if !cutoff.IsZero() && ch.Timestamp.Before(cutoff) {
-				continue
-			}
-			items = append(items, item{
-				Path:       ch.Filename,
-				Op:         deriveOpFromChangeLog(ch),
-				Tool:       "(persisted)",
-				Source:     "persisted",
-				RevisionID: ch.RequestHash,
-				Timestamp:  ch.Timestamp,
-				Tier:       ch.Tier,
-			})
-		}
-	}
-
-	sort.Slice(items, func(i, j int) bool {
-		return items[i].Timestamp.After(items[j].Timestamp)
-	})
-
-	out := struct {
-		Since string `json:"since,omitempty"`
-		Count int    `json:"count"`
-		Items []item `json:"items"`
-	}{Count: len(items), Items: items}
-	if !cutoff.IsZero() {
-		out.Since = cutoff.Format(time.RFC3339)
-	}
-	b, err := json.MarshalIndent(out, "", "  ")
-	if err != nil {
-		return "", err
-	}
-	return string(b), nil
-}
 
 // parseRecentSince accepts three "since" forms the model is likely to
 // produce:
@@ -595,15 +572,12 @@ func parseRecentSince(raw string) (time.Time, error) {
 	if d, err := time.ParseDuration(s); err == nil {
 		return time.Now().Add(-d), nil
 	}
-	return time.Time{}, fmt.Errorf("my_recent_changes: 'since' must be RFC3339 (e.g. 2026-05-27T10:00:00Z), duration (2d, 12h, 30m), or empty; got %q", raw)
+	return time.Time{}, fmt.Errorf("'since' must be RFC3339 (e.g. 2026-05-27T10:00:00Z), duration (2d, 12h, 30m), or empty; got %q", raw)
 }
 
 // deriveOpFromChangeLog infers the create/edit/delete code for a
 // persisted change. The ChangeLog itself doesn't carry an op field,
-// so we use the presence of OriginalCode + NewCode as the signal —
-// same logic the cold-tier classifier used (but we don't go through
-// that path anymore now that cold tier is gone; this is for the
-// hot/warm persisted entries my_recent_changes surfaces).
+// so we use the presence of OriginalCode + NewCode as the signal.
 func deriveOpFromChangeLog(ch history.ChangeLog) string {
 	hasOrig := ch.OriginalCode != ""
 	hasNew := ch.NewCode != ""
@@ -617,9 +591,13 @@ func deriveOpFromChangeLog(ch history.ChangeLog) string {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// shared helpers (already used by list_changes / recover_file)
-// ---------------------------------------------------------------------------
+// asString returns the string value at args[key], or empty string if
+// the key is absent or holds a non-string. A tiny shim that keeps the
+// option-parsing call sites readable.
+func asString(v interface{}) string {
+	s, _ := v.(string)
+	return s
+}
 
 // isRecoverableOriginal reports whether a TrackedFileChange.OriginalCode
 // value represents real recoverable content. The tracker uses three

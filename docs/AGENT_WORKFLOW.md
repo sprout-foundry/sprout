@@ -273,7 +273,7 @@ If `persist_runtime_overrides` is `false`, sprout restores runtime state after w
 - `unsafe`
 - `max_iterations`
 - `no_stream`
-- env-backed toggles (`LEDIT_DRY_RUN`, `LEDIT_NO_SUBAGENTS`, `LEDIT_RESOURCE_DIRECTORY`)
+- env-backed toggles (`SPROUT_DRY_RUN`, `SPROUT_NO_SUBAGENTS`, `SPROUT_RESOURCE_DIRECTORY`)
 
 Note: hard termination (for example `SIGKILL`) can prevent restoration.
 

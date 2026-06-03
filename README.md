@@ -7,7 +7,7 @@ AI-powered code editing and assistance tool. Leverages LLMs to understand your w
 ## Features
 
 - **Coding Agent** with smart workspace context, self-correction, and multi-step orchestration
-- **10 specialized personas** (coder, debugger, reviewer, researcher, etc.)
+- **12 specialized personas** (coder, debugger, reviewer, researcher, executive assistant, project planner, etc.)
 - **Web UI** with chat, code editor, terminal, file browser, Git UI, and more
 - **Multi-provider LLM support** — OpenAI, DeepInfra, OpenRouter, Z.AI, Ollama, DeepSeek, Mistral, Minimax, LMStudio, Cerebras, Chutes, and custom providers
 - **MCP Server Integration** for external tools (GitHub repos, issues, PRs)
@@ -72,7 +72,7 @@ Requires Go 1.25.0+ and Node.js 22+:
 git clone https://github.com/sprout-foundry/sprout.git
 cd sprout
 make deploy-ui   # Build and embed the React web UI (requires Node.js)
-make prepar-grammars
+make prepare-grammars
 go install .
 ```
 

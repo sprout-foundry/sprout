@@ -3,14 +3,17 @@
 package cmd
 
 import (
+	"bufio"
 	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 
+	"github.com/sprout-foundry/sprout/pkg/automate"
 	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/spf13/cobra"
 )
@@ -18,8 +21,10 @@ import (
 var automateDir string
 
 func init() {
+	automateCmd.AddCommand(automateListCmd)
+	automateCmd.AddCommand(automateRunCmd)
+
 	automateCmd.Flags().StringVar(&automateDir, "dir", "", "Workflow directory (default: ./automate)")
-	automateCmd.PersistentFlags().StringVar(&automateDir, "dir", "", "Workflow directory (default: ./automate)")
 }
 
 var automateCmd = &cobra.Command{
@@ -71,18 +76,6 @@ Examples:
 	},
 }
 
-// workflowEntry is a parsed workflow file with its metadata.
-type workflowEntry struct {
-	Filename    string
-	FilePath    string
-	Description string
-}
-
-func init() {
-	automateCmd.AddCommand(automateListCmd)
-	automateCmd.AddCommand(automateRunCmd)
-}
-
 // getAutomateDir returns the workflow directory path.
 func getAutomateDir() string {
 	if automateDir != "" {
@@ -92,85 +85,15 @@ func getAutomateDir() string {
 		cwd, _ := os.Getwd()
 		return filepath.Join(cwd, automateDir)
 	}
-	cwd, _ := os.Getwd()
-	return filepath.Join(cwd, "automate")
-}
-
-// discoverWorkflows scans the automate directory for JSON workflow files.
-func discoverWorkflows(dir string) ([]workflowEntry, error) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, err
-	}
-
-	var workflows []workflowEntry
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		name := entry.Name()
-		if strings.ToLower(filepath.Ext(name)) != ".json" {
-			continue
-		}
-
-		fullPath := filepath.Join(dir, name)
-		desc, err := extractWorkflowDescription(fullPath)
-		if err != nil {
-			// Not a valid workflow JSON — skip silently
-			continue
-		}
-
-		workflows = append(workflows, workflowEntry{
-			Filename:    name,
-			FilePath:    fullPath,
-			Description: desc,
-		})
-	}
-
-	return workflows, nil
-}
-
-// extractWorkflowDescription reads a JSON file and returns its description field.
-// Returns empty string if the file is valid JSON but has no description.
-func extractWorkflowDescription(path string) (string, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return "", err
-	}
-
-	var raw map[string]json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return "", err // Not valid JSON
-	}
-
-	// Check that it looks like a workflow config (has "initial" or "steps")
-	hasInitial := false
-	hasSteps := false
-	if _, ok := raw["initial"]; ok {
-		hasInitial = true
-	}
-	if _, ok := raw["steps"]; ok {
-		hasSteps = true
-	}
-	if !hasInitial && !hasSteps {
-		return "", fmt.Errorf("not a workflow config")
-	}
-
-	// Extract description
-	var desc string
-	if descRaw, ok := raw["description"]; ok {
-		_ = json.Unmarshal(descRaw, &desc)
-	}
-
-	return desc, nil
+	return automate.Dir()
 }
 
 // runAutomatePicker shows an interactive workflow picker and runs the selection.
 func runAutomatePicker() error {
 	dir := getAutomateDir()
-	workflows, err := discoverWorkflows(dir)
+	workflows, err := automate.Discover(dir)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, fs.ErrNotExist) {
 			return handleNoAutomateDir(dir)
 		}
 		return fmt.Errorf("failed to scan %s: %w", dir, err)
@@ -219,9 +142,9 @@ func runAutomatePicker() error {
 // runAutomateList prints all discovered workflows.
 func runAutomateList() error {
 	dir := getAutomateDir()
-	workflows, err := discoverWorkflows(dir)
+	workflows, err := automate.Discover(dir)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, fs.ErrNotExist) {
 			console.GlyphWarning.Printf("No automate/ directory found at %s/", dir)
 			return nil
 		}
@@ -248,50 +171,42 @@ func runAutomateList() error {
 // runAutomateRun runs a workflow by name or filename.
 func runAutomateRun(name string) error {
 	dir := getAutomateDir()
-	workflows, err := discoverWorkflows(dir)
+
+	// Resolve workflow path (includes path traversal protection from the shared package)
+	wfPath, err := automate.ResolvePath(dir, name)
 	if err != nil {
-		if os.IsNotExist(err) {
+		// Check if this is a "not found" vs "directory doesn't exist" error
+		if errors.Is(err, fs.ErrNotExist) {
 			return handleNoAutomateDir(dir)
 		}
-		return fmt.Errorf("failed to scan %s: %w", dir, err)
-	}
-
-	// Try exact filename match first
-	target := name
-	if !strings.HasSuffix(strings.ToLower(name), ".json") {
-		target = name + ".json"
-	}
-
-	for _, wf := range workflows {
-		if wf.Filename == target {
-			return runWorkflowByPath(wf.FilePath)
+		// For "no workflow matching" errors, show available workflows
+		if strings.Contains(err.Error(), "no workflow matching") {
+			console.GlyphWarning.Printf("%v", err)
+			fmt.Println()
+			return listAvailableWorkflows(dir)
 		}
-	}
-
-	// Try substring match
-	var matches []workflowEntry
-	for _, wf := range workflows {
-		if strings.Contains(strings.ToLower(wf.Filename), strings.ToLower(name)) {
-			matches = append(matches, wf)
+		if strings.Contains(err.Error(), "multiple workflows match") {
+			console.GlyphWarning.Printf("%v", err)
+			fmt.Println()
+			return listAvailableWorkflows(dir)
 		}
-	}
-
-	if len(matches) == 1 {
-		return runWorkflowByPath(matches[0].FilePath)
-	}
-
-	if len(matches) > 1 {
-		console.GlyphWarning.Printf("Multiple workflows match %q:", name)
-		for _, m := range matches {
-			fmt.Printf("  %s\n", m.Filename)
+		if strings.Contains(err.Error(), "workflow path escapes") {
+			console.GlyphWarning.Printf("Security: %v", err)
+			return nil
 		}
-		fmt.Println("Please specify the full filename.")
+		return fmt.Errorf("failed to resolve workflow: %w", err)
+	}
+
+	return runWorkflowByPath(wfPath)
+}
+
+// listAvailableWorkflows shows available workflow names for the user.
+func listAvailableWorkflows(dir string) error {
+	fmt.Println("Available workflows:")
+	workflows, err := automate.Discover(dir)
+	if err != nil {
 		return nil
 	}
-
-	console.GlyphWarning.Printf("No workflow matching %q found in %s/", name, dir)
-	fmt.Println()
-	fmt.Println("Available workflows:")
 	for _, wf := range workflows {
 		fmt.Printf("  %s\n", wf.Filename)
 	}
@@ -308,8 +223,12 @@ func handleNoAutomateDir(dir string) error {
 	fmt.Println()
 	fmt.Print("Start setup? [y/N] ")
 
-	var response string
-	fmt.Scanln(&response)
+	reader := bufio.NewReader(os.Stdin)
+	response, err := reader.ReadString('\n')
+	if err != nil {
+		fmt.Println("Cancelled. You can set up workflows later with: activate_skill workflow-automation")
+		return nil
+	}
 	response = strings.TrimSpace(strings.ToLower(response))
 
 	if response != "y" && response != "yes" {
@@ -340,7 +259,7 @@ func runWorkflowByPath(path string) error {
 	}
 
 	// Read the workflow to display info before running
-	desc, _ := extractWorkflowDescription(path)
+	desc, _ := automate.ExtractDescription(path)
 	name := filepath.Base(path)
 
 	fmt.Println()

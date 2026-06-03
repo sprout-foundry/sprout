@@ -1,5 +1,5 @@
 ---
-name: workflow-automation
+name: Workflow Automation
 description: Interactive workflow builder that guides users through creating cost-effective, automated agent workflows. Helps discover providers/models, understand workflow properties, and generate ready-to-run workflow configurations in an automate/ directory. Activate with `sprout automate` after setup.
 ---
 

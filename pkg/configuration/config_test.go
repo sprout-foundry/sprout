@@ -101,12 +101,6 @@ func TestNewConfigIncludesWebScraperPersona(t *testing.T) {
 	assert.True(t, ok, "expected orchestrator persona in defaults")
 	assert.True(t, orchestrator.Enabled)
 
-	computerUser, ok := cfg.SubagentTypes["computer_user"]
-	assert.True(t, ok, "expected computer_user persona in defaults")
-	assert.True(t, computerUser.Enabled)
-	assert.Contains(t, computerUser.AllowedTools, "write_structured_file")
-	assert.Contains(t, computerUser.AllowedTools, "patch_structured_file")
-
 	coderPersona, ok := cfg.SubagentTypes["coder"]
 	assert.True(t, ok, "expected coder persona in defaults")
 	assert.True(t, coderPersona.Enabled)

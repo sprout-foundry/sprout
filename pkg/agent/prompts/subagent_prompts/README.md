@@ -12,8 +12,7 @@ This directory contains the system prompts for each specialized subagent persona
 6. **[Researcher](researcher.md)** - Local codebase analysis combined with web research (hybrid)
 7. **[Web_Scraper](web_scraper.md)** - Web scraping and content extraction
 8. **[Coordinator](coordinator.md)** - Cross-project coordination, task queue management, delegation
-9. **[Computer_User](computer_user.md)** - Desktop GUI interaction and screenshot-driven automation
-10. **[General](general.md)** - General-purpose tasks that don't fit specialized categories
+9. **[General](general.md)** - General-purpose tasks that don't fit specialized categories
 
 ## Quick Reference
 
@@ -27,7 +26,6 @@ This directory contains the system prompts for each specialized subagent persona
 | Researcher | Local + web research | read_file, search_files, web_search, fetch_url |
 | Web_Scraper | Scraping web content | web_search, fetch_url, browse_url |
 | Coordinator | Cross-project coordination | run_subagent, task_queue_* |
-| Computer_User | Shell-driven sysadmin tasks | shell_command, read_file, write_file |
 | General | Anything not specialized | all defaults |
 
 ## Usage
@@ -46,7 +44,7 @@ When delegating tasks to subagents, choose the persona that best matches the tas
 - **Investigate codebase + find best practices** → `researcher`
 - **Scrape web content** → `web_scraper`
 - **Coordinate cross-project / manage task queue** → `coordinator`
-- **Hands-on shell / sysadmin** → `computer_user`
+- **Hands-on shell / sysadmin** → `coder` or `general` (use `shell_command` directly)
 - **General-purpose task** → `general`
 
 For complex workflows, use multiple personas in sequence or parallel as appropriate.

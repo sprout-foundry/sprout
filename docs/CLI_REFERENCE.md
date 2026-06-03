@@ -203,7 +203,6 @@ sprout export-training [flags]
 - `reviewer` — Code review and security review (alias: `code_reviewer`)
 - `researcher` — Combined local codebase analysis and external research
 - `web_scraper` — Web extraction and structured content collection
-- `computer_user` — System administration and engineering execution
 
 ### Performance & Safety
 
@@ -312,9 +311,9 @@ In interactive `sprout` or `sprout agent`, use `/` for commands (tab-complete).
 | `reviewer` | Code review and security review (alias: `code_reviewer`) |
 | `researcher` | Combined local codebase analysis and external research |
 | `web_scraper` | Web extraction and structured content collection |
-| `computer_user` | System administration and engineering execution |
 | `coordinator` | Cross-project orchestration and task queue (alias: `executive_assistant`, `ea`) |
-| `project_planner` | Strategic planning and alignment |
+
+For strategic project planning, use the `project-planning` skill instead: `activate_skill project-planning`.
 
 **Using Personas:**
 ```bash
@@ -324,7 +323,6 @@ sprout agent --persona reviewer "review my code"
 sprout agent --persona researcher "analyze codebase and external sources"
 sprout agent --persona web_scraper "extract structured content from web pages"
 sprout agent --persona refactor "refactor code while preserving behavior"
-sprout agent --persona computer_user "execute system administration tasks"
 ```
 
 ---

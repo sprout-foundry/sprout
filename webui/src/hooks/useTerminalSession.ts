@@ -29,6 +29,9 @@ export interface UseTerminalSessionOptions {
   onSaveScrollback: (sessionId: string) => void;
   /** Load scrollback for a given session. */
   onLoadScrollback: (sessionId: string) => void;
+  /** Called whenever the PTY emits output (used to flag background-tab
+      activity in the parent). Filtered to skip pure cursor noise. */
+  onActivity?: () => void;
 }
 
 export interface UseTerminalSessionReturn {
@@ -54,6 +57,7 @@ export function useTerminalSession(options: UseTerminalSessionOptions): UseTermi
     onResetReverseSearch,
     onSaveScrollback,
     onLoadScrollback,
+    onActivity,
   } = options;
 
   const terminalWSRef = useRef<TerminalWebSocketService | null>(null);
@@ -92,6 +96,8 @@ export function useTerminalSession(options: UseTerminalSessionOptions): UseTermi
   onSaveScrollbackRef.current = onSaveScrollback;
   const onLoadScrollbackRef = useRef(onLoadScrollback);
   onLoadScrollbackRef.current = onLoadScrollback;
+  const onActivityRef = useRef(onActivity);
+  onActivityRef.current = onActivity;
 
   // Track whether the pane is currently mounted/active
   const isActiveRef = useRef(isActive);
@@ -178,7 +184,14 @@ export function useTerminalSession(options: UseTerminalSessionOptions): UseTermi
           }
         });
       } else if (event.type === 'output' || event.type === 'error_output') {
-        xtermRef.current?.write((data?.output as string) || '');
+        const chunk = (data?.output as string) || '';
+        xtermRef.current?.write(chunk);
+        // Bubble activity to the parent only when there's actual content.
+        // Cursor-position pokes and other zero-length frames shouldn't
+        // light up the tab indicator.
+        if (chunk.length > 0) {
+          onActivityRef.current?.();
+        }
       } else if (event.type === 'session_restored') {
         onResetSearchRef.current();
         onResetReverseSearchRef.current();

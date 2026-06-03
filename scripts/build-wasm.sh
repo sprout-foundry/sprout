@@ -132,7 +132,7 @@ build_wasm() {
     # the gotreesitter registry entries for them. The library's filesystem
     # blob-source path is never invoked because lookup is short-circuited
     # by our overrides.
-    WASM_TAGS="grammar_blobs_external"
+    WASM_TAGS="grammar_blobs_external osusergo"
     LDFLAGS="-s -w"
     if [ "${WASM_KEEP_SYMBOLS:-}" = "1" ]; then
         LDFLAGS=""

@@ -157,7 +157,9 @@ func (ws *ReactWebServer) handleAPIChatSessionsCreate(w http.ResponseWriter, r *
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"message":  "Chat session created",
+		"success":      true,
+		"id":           chatID,
+		"message":      "Chat session created",
 		"chat_session": cs.chatSessionSummary(false),
 	})
 }
@@ -266,10 +268,11 @@ func (ws *ReactWebServer) handleAPIChatSessionsDelete(w http.ResponseWriter, r *
 
 	// Optionally clean up the associated worktree
 	resp := map[string]interface{}{
-		"message":           "Chat session deleted",
-		"id":                chatID,
-		"worktree_removed":  false,
-		"worktree_error":    "",
+		"success":          true,
+		"message":          "Chat session deleted",
+		"id":               chatID,
+		"worktree_removed": false,
+		"worktree_error":   "",
 	}
 
 	if req.RemoveWorktree && worktreePath != "" {
@@ -358,6 +361,7 @@ func (ws *ReactWebServer) handleAPIChatSessionsRename(w http.ResponseWriter, r *
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":      true,
 		"message":      "Chat session renamed",
 		"chat_session": summary,
 	})

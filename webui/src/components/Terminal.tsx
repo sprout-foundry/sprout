@@ -154,6 +154,14 @@ function Terminal({
 
   const [focusedPaneId, setFocusedPaneId] = useState<string>(panes[0].id);
 
+  // Tracks which sessions have shown new output since the user last
+  // looked at them (their tab wasn't the active one in its pane).
+  const [activitySessionIds, setActivitySessionIds] = useState<Set<string>>(() => new Set());
+  // Tracks sessions whose name the user has explicitly renamed. Once
+  // a session is in this set, OSC title changes won't overwrite the
+  // user's chosen name.
+  const manuallyRenamedSessions = useRef<Set<string>>(new Set());
+
   const hasMountedRef = useRef(false);
   const isDraggingVertical = useRef(false);
   const dragStartY = useRef(0);
@@ -431,6 +439,18 @@ function Terminal({
     [fetchAttachableSessions, getFocusedPane, updatePane],
   );
 
+  // Drop a session id from the per-Terminal tracking sets so closed/
+  // restarted sessions don't leak into them.
+  const forgetSession = useCallback((sessionId: string) => {
+    manuallyRenamedSessions.current.delete(sessionId);
+    setActivitySessionIds((prev) => {
+      if (!prev.has(sessionId)) return prev;
+      const next = new Set(prev);
+      next.delete(sessionId);
+      return next;
+    });
+  }, []);
+
   const removePane = useCallback(
     (paneId: string) => {
       const all = panesRef.current;
@@ -445,6 +465,7 @@ function Terminal({
         paneHandles.current.delete(s.id);
         sessionShellsRef.current.delete(s.id);
         sessionReattachIdsRef.current.delete(s.id);
+        forgetSession(s.id);
       });
 
       const remainingPanes = all.filter((p) => p.id !== paneId);
@@ -464,7 +485,7 @@ function Terminal({
         setSplitSizes([100]);
       }
     },
-    [focusedPaneId],
+    [focusedPaneId, forgetSession],
   );
 
   const closeSessionInPane = useCallback(
@@ -487,9 +508,16 @@ function Terminal({
       paneHandles.current.delete(sessionId);
       sessionShellsRef.current.delete(sessionId);
       sessionReattachIdsRef.current.delete(sessionId);
+      forgetSession(sessionId);
 
+      const closedIdx = pane.sessions.findIndex((s) => s.id === sessionId);
       const remaining = pane.sessions.filter((s) => s.id !== sessionId);
-      const newActive = pane.activeSessionId === sessionId ? remaining[0].id : pane.activeSessionId;
+      // Browser-tab convention: when the active tab is closed, focus moves
+      // to the tab on its right; if it was the last, to the new last tab.
+      const newActive =
+        pane.activeSessionId === sessionId
+          ? remaining[Math.min(closedIdx, remaining.length - 1)].id
+          : pane.activeSessionId;
 
       updatePane(paneId, (p) => ({
         ...p,
@@ -497,17 +525,52 @@ function Terminal({
         activeSessionId: newActive,
       }));
     },
-    [removePane, updatePane],
+    [forgetSession, removePane, updatePane],
   );
 
   const renameSessionInPane = useCallback(
     (paneId: string, sessionId: string, name: string) => {
+      manuallyRenamedSessions.current.add(sessionId);
       updatePane(paneId, (pane) => ({
         ...pane,
         sessions: pane.sessions.map((s) => (s.id === sessionId ? { ...s, name } : s)),
       }));
     },
     [updatePane],
+  );
+
+  // Apply an OSC 0/2 title sequence as the tab name — but only when
+  // the user hasn't manually renamed this session. A manual rename
+  // pins the name and we refuse to clobber it from shell title changes.
+  const handleSessionTitleChange = useCallback(
+    (paneId: string, sessionId: string, title: string) => {
+      if (manuallyRenamedSessions.current.has(sessionId)) return;
+      updatePane(paneId, (pane) => ({
+        ...pane,
+        sessions: pane.sessions.map((s) =>
+          s.id === sessionId && s.name !== title ? { ...s, name: title } : s,
+        ),
+      }));
+    },
+    [updatePane],
+  );
+
+  // Mark a session as having background activity. Skip when the session
+  // is currently the active tab in its pane — the user is already looking
+  // at it, no indicator needed.
+  const handleSessionActivity = useCallback(
+    (paneId: string, sessionId: string) => {
+      const pane = panesRef.current.find((p) => p.id === paneId);
+      if (!pane) return;
+      if (pane.activeSessionId === sessionId) return;
+      setActivitySessionIds((prev) => {
+        if (prev.has(sessionId)) return prev;
+        const next = new Set(prev);
+        next.add(sessionId);
+        return next;
+      });
+    },
+    [],
   );
 
   const togglePinInPane = useCallback(
@@ -523,6 +586,14 @@ function Terminal({
   const switchSessionInPane = useCallback(
     (paneId: string, sessionId: string) => {
       updatePane(paneId, (pane) => ({ ...pane, activeSessionId: sessionId }));
+      // Activating a tab clears its background-activity indicator —
+      // the user is now looking at it.
+      setActivitySessionIds((prev) => {
+        if (!prev.has(sessionId)) return prev;
+        const next = new Set(prev);
+        next.delete(sessionId);
+        return next;
+      });
       // After switching tabs, the newly visible xterm needs a resize since it
       // was display:none (0×0) and now needs to fit the pane dimensions.
       requestAnimationFrame(() => {
@@ -552,6 +623,7 @@ function Terminal({
       paneHandles.current.delete(sessionId);
       sessionShellsRef.current.delete(sessionId);
       sessionReattachIdsRef.current.delete(sessionId);
+      forgetSession(sessionId);
 
       // Last session in a pane that's part of a split — drop the pane.
       if (panesRef.current.length > 1) {
@@ -579,7 +651,7 @@ function Terminal({
 
       notificationBus.notify('info', 'Terminal', 'Terminal process exited — restarted with fresh shell.');
     },
-    [closeSessionInPane, removePane, selectedShell, updatePane],
+    [closeSessionInPane, forgetSession, removePane, selectedShell, updatePane],
   );
 
   useEffect(() => {
@@ -1033,7 +1105,8 @@ function Terminal({
                       onTogglePin={(id) => togglePinInPane(pane.id, id)}
                       attachableSessions={attachableSessions}
                       onAttachSession={handleAttachAgentSession}
-                      onCreate={() => addSessionToPane(pane.id)}
+                      allowCloseLastTab={panes.length > 1}
+                      activitySessionIds={activitySessionIds}
                     />
                   </div>
                   {index === 0 && <BackgroundTasks />}
@@ -1114,6 +1187,8 @@ function Terminal({
                         fontSize={fontSize}
                         copyOnSelect={copyOnSelect}
                         onProcessExit={() => handlePaneExit(pane.id, session.id)}
+                        onTitleChange={(title) => handleSessionTitleChange(pane.id, session.id, title)}
+                        onActivity={() => handleSessionActivity(pane.id, session.id)}
                       />
                     </div>
                   );

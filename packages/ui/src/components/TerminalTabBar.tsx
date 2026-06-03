@@ -28,6 +28,19 @@ interface TerminalTabBarProps {
   attachableSessions?: AttachableSession[];
   /** Called when user clicks "Attach" on a hidden session */
   onAttachSession?: (sessionId: string, name: string) => void;
+  /**
+   * When true, the close affordance (X button + context-menu Close)
+   * remains active even when only one session exists. The consumer's
+   * onClose handler is expected to know what "close the last tab" means
+   * in its context (e.g. removing the pane in a multi-pane terminal).
+   */
+  allowCloseLastTab?: boolean;
+  /**
+   * Session IDs that have received background output since the user last
+   * activated them. A small indicator renders on each matching tab; the
+   * indicator clears the moment the session becomes active in its pane.
+   */
+  activitySessionIds?: ReadonlySet<string>;
 }
 
 interface ContextMenuState {
@@ -48,6 +61,8 @@ function TerminalTabBar({
   onTogglePin,
   attachableSessions = [],
   onAttachSession,
+  allowCloseLastTab = false,
+  activitySessionIds,
 }: TerminalTabBarProps): JSX.Element {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
@@ -123,6 +138,37 @@ function TerminalTabBar({
     [commitRename, cancelRename],
   );
 
+  // ARIA tablist keyboard nav: Left/Right move focus and activation
+  // between tabs in render order, Home/End jump to ends. Wraps.
+  const handleTabKeyDown = useCallback(
+    (e: KeyboardEvent, currentIdx: number, renderedIds: string[]) => {
+      if (renamingId) return;
+      if (renderedIds.length === 0) return;
+      let nextIdx: number | null = null;
+      if (e.key === 'ArrowRight') {
+        nextIdx = (currentIdx + 1) % renderedIds.length;
+      } else if (e.key === 'ArrowLeft') {
+        nextIdx = (currentIdx - 1 + renderedIds.length) % renderedIds.length;
+      } else if (e.key === 'Home') {
+        nextIdx = 0;
+      } else if (e.key === 'End') {
+        nextIdx = renderedIds.length - 1;
+      }
+      if (nextIdx === null) return;
+      e.preventDefault();
+      const nextId = renderedIds[nextIdx];
+      onSwitch(nextId);
+      // Move DOM focus to the newly activated tab so the user can keep
+      // arrow-keying without losing the focus ring.
+      const bar = barRef.current;
+      if (bar) {
+        const tabs = bar.querySelectorAll<HTMLButtonElement>('.terminal-tab');
+        tabs[nextIdx]?.focus();
+      }
+    },
+    [onSwitch, renamingId],
+  );
+
   const closeContextMenu = useCallback(() => {
     setContextMenu((prev) => ({ ...prev, visible: false }));
   }, []);
@@ -136,10 +182,10 @@ function TerminalTabBar({
         x: e.clientX,
         y: e.clientY,
         sessionId: session.id,
-        canClose: sessions.length > 1,
+        canClose: !session.is_pinned && (sessions.length > 1 || allowCloseLastTab),
       });
     },
-    [sessions.length],
+    [sessions.length, allowCloseLastTab],
   );
 
   const handleMenuRename = useCallback(() => {
@@ -169,30 +215,69 @@ function TerminalTabBar({
     [onAttachSession],
   );
 
-  const showCloseButtons = sessions.length > 1;
+  const baseCloseAllowed = sessions.length > 1 || allowCloseLastTab;
+  // Pinned tabs render first (left). Stable: preserves the original
+  // index within each group, so renames/activations don't shuffle.
+  const orderedSessions = sessions
+    .map((session, index) => ({ session, index }))
+    .sort((a, b) => {
+      if (a.session.is_pinned !== b.session.is_pinned) {
+        return a.session.is_pinned ? -1 : 1;
+      }
+      return a.index - b.index;
+    });
+
+  const renderedIds = orderedSessions.map(({ session }) => session.id);
 
   return (
     <>
       <div className="terminal-tab-bar" ref={barRef} onContextMenu={(e) => e.preventDefault()} role="tablist">
-        {sessions.map((session) => {
+        {orderedSessions.map(({ session }, renderedIdx) => {
           const isActive = session.id === activeSessionId;
           const isRenaming = session.id === renamingId;
+          const canClose = baseCloseAllowed && !session.is_pinned;
+          const hasActivity = !isActive && (activitySessionIds?.has(session.id) ?? false);
 
           return (
             <button
               key={session.id}
-              className={`terminal-tab ${isActive ? 'active' : ''}`}
+              className={`terminal-tab ${isActive ? 'active' : ''}${session.is_pinned ? ' pinned' : ''}`}
               onClick={() => onSwitch(session.id)}
               onDoubleClick={(e) => {
                 e.stopPropagation();
                 handleDoubleClick(session);
               }}
               onContextMenu={(e) => handleContextMenu(e, session)}
-              title={session.name}
+              onAuxClick={(e) => {
+                // Middle-click closes the tab (browser convention).
+                if (e.button === 1 && canClose) {
+                  e.preventDefault();
+                  onClose(session.id);
+                }
+              }}
+              onMouseDown={(e) => {
+                // Suppress the middle-button autoscroll cursor.
+                if (e.button === 1) {
+                  e.preventDefault();
+                }
+              }}
+              onKeyDown={(e) => handleTabKeyDown(e, renderedIdx, renderedIds)}
+              title={session.is_pinned ? `${session.name} (pinned)` : session.name}
               type="button"
               role="tab"
               aria-selected={isActive}
+              tabIndex={isActive ? 0 : -1}
             >
+              {session.is_pinned && (
+                <Pin size={10} className="terminal-tab-pin-icon" aria-hidden="true" />
+              )}
+              {hasActivity && (
+                <span
+                  className="terminal-tab-activity-dot"
+                  aria-label="New output"
+                  title="New output"
+                />
+              )}
               {isRenaming ? (
                 <input
                   ref={renameInputRef}
@@ -206,7 +291,7 @@ function TerminalTabBar({
               ) : (
                 <span className="terminal-tab-name">{session.name}</span>
               )}
-              {showCloseButtons && !isRenaming && (
+              {canClose && !isRenaming && (
                 <span
                   className="terminal-tab-close"
                   role="button"

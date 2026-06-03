@@ -1,5 +1,5 @@
 ---
-name: project-planning
+name: Project Planning
 description: Strategic planning and alignment for new (greenfield) or existing (brownfield) projects. Use when starting a new project, onboarding to an unfamiliar repo, or aligning an existing codebase to a standardized workflow.
 ---
 

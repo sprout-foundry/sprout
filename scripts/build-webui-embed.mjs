@@ -69,28 +69,29 @@ console.log('🏗️  Building React Web UI with Vite...');
 const noBuild = process.argv.includes('--no-build');
 
 if (!noBuild) {
-  if (!existsSync(join(webuiDir, 'node_modules'))) {
-    console.log('📦 Installing dependencies...');
-    run('npm', ['install'], webuiDir);
+  // Install all workspaces from root if node_modules is missing.
+  // Per-workspace `npm install` was previously called here; it pruned
+  // root-hoisted devDeps (notably electron-builder) and broke later
+  // `desktop:dist`. Always install from root with workspaces.
+  if (!existsSync(join(repoRoot, 'node_modules'))) {
+    console.log('📦 Installing root workspaces...');
+    run('npm', ['ci'], repoRoot);
   }
 
   // Build workspace packages that the webui depends on via file: links.
-  // Their `prepare` scripts may not run reliably during npm install
-  // (npm ci skips prepare, and npm install behaviour varies by version),
-  // so we build them explicitly to ensure `dist/` exists before Vite
-  // resolves the `exports` fields in their package.json.
-  const pkgDirs = ['events', 'ui'].map(n => join(repoRoot, 'packages', n));
-  for (const pkgDir of pkgDirs) {
-    if (!existsSync(join(pkgDir, 'dist'))) {
-      console.log(`📦 Installing and building ${pkgDir}...`);
-      run('npm', ['install'], pkgDir);
-      run('npm', ['run', 'build'], pkgDir);
+  // Their `prepare` script was removed (61ba3f17) and `npm ci` does not
+  // run `prepare` anyway, so build them explicitly to ensure `dist/`
+  // exists before Vite resolves the `exports` fields in their package.json.
+  for (const pkg of ['@sprout/events', '@sprout/ui']) {
+    const distDir = join(repoRoot, 'packages', pkg.split('/')[1], 'dist');
+    if (!existsSync(distDir)) {
+      console.log(`📦 Building ${pkg}...`);
+      run('npm', ['run', 'build', '-w', pkg], repoRoot);
     }
   }
 
   console.log('🔨 Building React app with Vite...');
-  // Vite doesn't need DISABLE_ESLINT_PLUGIN
-  run('npm', ['run', 'build'], webuiDir, {
+  run('npm', ['run', 'build', '-w', 'sprout-webui'], repoRoot, {
     // Pass mode for cloud/local builds
     ...(process.env.SPROUT_MODE && { VITE_SPROUT_MODE: process.env.SPROUT_MODE }),
   });

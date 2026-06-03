@@ -27,12 +27,12 @@ A **persona** is a named specialization that configures how the AI agent behaves
 | Reviewer | `reviewer` | Code quality and security review | Yes |
 | Researcher | `researcher` | Combined local codebase analysis and external research | Yes |
 | Web Scraper | `web_scraper` | Web content extraction | Yes |
-| Computer User | `computer_user` | Hands-on system administration and engineering execution | Yes |
 | Coordinator | `coordinator` | Cross-project orchestration and task queue. Aliases: `executive_assistant`, `ea`, `assistant` | No |
-| Project Planner | `project_planner` | Strategic Planning & Alignment Architect | No |
 | Orchestrator | `orchestrator` | Planning and delegation; git-write (commit/stage/push) is gated by `AllowOrchestratorGitWrite`. Aliases: `repo_orchestrator`, `repo_operator`, `git_orchestrator`, `orchestration` | No (EA exception) |
 
-**Source**: `pkg/personas/configs/default_personas.json`, `pkg/personas/configs/coordinator.json`, `pkg/personas/configs/project_planner.json`
+**Source**: `pkg/personas/configs/default_personas.json`, `pkg/personas/configs/coordinator.json`
+
+> Strategic project planning lives in the `project-planning` **skill** (`pkg/agent/skills/project-planning/SKILL.md`), not a persona. Activate it via `activate_skill project-planning` when starting a new project or aligning an existing one.
 
 ---
 
@@ -337,7 +337,7 @@ The depth model controls how deeply personas can delegate work to subagents. Thi
 
 | Depth | Role | Examples | Tool Constraints |
 |-------|------|----------|-----------------|
-| **0** | Primary agent | Executive Assistant, Project Planner (when activated as root) | Full tool access, can spawn subagents |
+| **0** | Primary agent | Coordinator (when activated as root) | Full tool access, can spawn subagents |
 | **1** | Orchestrator subagent | Orchestrator | Can spawn subagents, inherits parent provider/model |
 | **2** | Specialist subagent | Coder, Tester, Debugger, Reviewer | **Cannot** spawn subagents, focused tool set |
 

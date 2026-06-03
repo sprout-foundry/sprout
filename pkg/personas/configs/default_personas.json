@@ -317,42 +317,6 @@
       "_rules_source": "inherit:DefaultAutoApproveRules",
       "name": "Web Scraper",
       "system_prompt": "pkg/agent/prompts/subagent_prompts/web_scraper.md"
-    },
-    {
-      "aliases": [
-        "sysadmin",
-        "ops"
-      ],
-      "allowed_tools": [
-        "shell_command",
-        "read_file",
-        "write_file",
-        "edit_file",
-        "write_structured_file",
-        "patch_structured_file",
-        "search_files",
-        "analyze_ui_screenshot",
-        "analyze_image_content",
-        "browse_url",
-        "web_search",
-        "fetch_url",
-        "mcp_tools",
-        "TodoWrite",
-        "TodoRead",
-        "list_changes",
-        "recover_file",
-        "show_my_change",
-        "revert_my_changes",
-        "summarize_my_session",
-        "my_recent_changes"
-      ],
-      "delegatable": true,
-      "description": "Hands-on system administration and engineering execution persona",
-      "enabled": true,
-      "id": "computer_user",
-      "_rules_source": "inherit:DefaultAutoApproveRules",
-      "name": "Computer User",
-      "system_prompt": "pkg/agent/prompts/subagent_prompts/computer_user.md"
     }
   ]
 }

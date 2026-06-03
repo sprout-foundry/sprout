@@ -186,7 +186,7 @@ var shellSnapshotSkipDirs = map[string]bool{
 // simple API; production hot-path callers should prefer
 // captureShellChangeDelta which reuses an existing baseline.
 func (ct *ChangeTracker) captureShellSnapshot(workDir string) map[string]*shellSnapshotEntry {
-	snap, _ := ct.walkWorkspace(workDir, nil)
+	snap, _, _ := ct.walkWorkspace(workDir, nil, false)
 	return snap
 }
 
@@ -206,15 +206,26 @@ func (ct *ChangeTracker) captureShellSnapshot(workDir string) map[string]*shellS
 // Walking a 5000-file tree with no changes takes ~5-20 ms (stat-only
 // fast path) instead of ~280 ms (full content read). Cold prime cost
 // is paid once per agent session.
-func (ct *ChangeTracker) walkWorkspace(workDir string, old map[string]*shellSnapshotEntry) (map[string]*shellSnapshotEntry, []pendingShellChange) {
+// walkWorkspace's `destructive` parameter switches the walker into the
+// safer (slower) mode used for `git checkout .` and friends — see
+// shell_destructive.go for the classifier. In destructive mode:
+//
+//   - The adaptive autoSkipDirs map is IGNORED for dir pruning, so dirs
+//     that previously crossed the count threshold are still walked. A
+//     destructive op might be reverting active edits inside one of them.
+//   - We do NOT add to autoSkipDirs or persist it: nothing learned from a
+//     destructive walk's fan-out should bias future non-destructive walks.
+//   - Static shellSnapshotSkipDirs is still honored (`.git`, `node_modules`,
+//     `dist`, etc. — universally inappropriate to track).
+func (ct *ChangeTracker) walkWorkspace(workDir string, old map[string]*shellSnapshotEntry, destructive bool) (map[string]*shellSnapshotEntry, []pendingShellChange, bool) {
 	if ct == nil || !ct.enabled || workDir == "" {
-		return nil, nil
+		return nil, nil, false
 	}
 
 	absRoot, err := filepath.Abs(workDir)
 	if err != nil {
 		ct.logf("shell snapshot: resolve %q: %v", workDir, err)
-		return nil, nil
+		return nil, nil, false
 	}
 
 	snap := make(map[string]*shellSnapshotEntry, len(old))
@@ -276,7 +287,12 @@ func (ct *ChangeTracker) walkWorkspace(workDir string, old map[string]*shellSnap
 				// Pays attention to the absolute path so we skip the
 				// exact dir we previously identified as fat — not all
 				// dirs that happen to share its name.
-				if ct.autoSkipDirs != nil && ct.autoSkipDirs[path] {
+				//
+				// In destructive mode (e.g. `git checkout .`) we walk
+				// these dirs anyway — the whole point of the override
+				// is to capture before-content even for dirs we'd
+				// normally skip, so reverts there stay recoverable.
+				if !destructive && ct.autoSkipDirs != nil && ct.autoSkipDirs[path] {
 					return fs.SkipDir
 				}
 			}
@@ -369,6 +385,11 @@ func (ct *ChangeTracker) walkWorkspace(workDir string, old map[string]*shellSnap
 	// sessions is left as a future improvement; today the set rebuilds
 	// each EnableChangeTracking.
 	//
+	// Skipped entirely in destructive mode — a `git checkout .` that
+	// fans out across a previously-untracked dir shouldn't teach the
+	// walker to skip that dir on future (non-destructive) walks. The
+	// fan-out is an artifact of the destructive op, not the workspace.
+	//
 	// Critical follow-up: drop snap entries under any newly-learned
 	// auto-skip dir AND suppress deletion records for those paths.
 	// Without this cleanup, the very next walk would see all the
@@ -376,7 +397,7 @@ func (ct *ChangeTracker) walkWorkspace(workDir string, old map[string]*shellSnap
 	// deletes — which would then ALSO claim "the agent deleted all
 	// these files" in the manifest. Worse than not tracking at all.
 	newlyLearned := false
-	if len(filesPerDir) > 0 {
+	if !destructive && len(filesPerDir) > 0 {
 		if ct.autoSkipDirs == nil {
 			ct.autoSkipDirs = make(map[string]bool)
 		}
@@ -427,7 +448,7 @@ func (ct *ChangeTracker) walkWorkspace(workDir string, old map[string]*shellSnap
 		}
 	}
 
-	return snap, changes
+	return snap, changes, truncated
 }
 
 // isUnderAnyAutoSkipDir reports whether the given absolute file path
@@ -500,7 +521,7 @@ func (ct *ChangeTracker) PrimeShellTracking(workDir string) {
 			}
 		}
 	}
-	snap, _ := ct.walkWorkspace(workDir, nil)
+	snap, _, _ := ct.walkWorkspace(workDir, nil, false)
 	if snap == nil {
 		snap = map[string]*shellSnapshotEntry{}
 	}
@@ -522,10 +543,16 @@ func (ct *ChangeTracker) PrimeShellTracking(workDir string) {
 // call is a no-op so users with weird workspaces can keep direct-tool
 // tracking without paying the walker's cost.
 //
+// `destructive` should be set when the shell command can clobber active
+// changes (`git checkout .`, `git reset --hard`, …). It flips the walk
+// into the safer mode that bypasses autoSkipDirs and emits per-file
+// rather than rolling up — see shell_destructive.go for the classifier
+// and walkWorkspace for the behaviour switch.
+//
 // Concurrency: serialized via the tracker's internal mutex. Subagents
 // each have their own ChangeTracker so cross-subagent calls don't
 // interfere.
-func (ct *ChangeTracker) TrackShellTurn(workDir, toolCall string) {
+func (ct *ChangeTracker) TrackShellTurn(workDir, toolCall string, destructive bool) {
 	if ct == nil || !ct.enabled {
 		return
 	}
@@ -536,8 +563,11 @@ func (ct *ChangeTracker) TrackShellTurn(workDir, toolCall string) {
 	defer ct.shellCacheMu.Unlock()
 
 	if ct.shellCache == nil {
-		// First call — populate the baseline silently.
-		snap, _ := ct.walkWorkspace(workDir, nil)
+		// First call — populate the baseline silently. Priming is
+		// inherently non-destructive (no diff is computed) so we
+		// always pass false here, even if the calling command is
+		// destructive — the safer walk happens on the next turn.
+		snap, _, _ := ct.walkWorkspace(workDir, nil, false)
 		if snap == nil {
 			snap = map[string]*shellSnapshotEntry{}
 		}
@@ -545,13 +575,38 @@ func (ct *ChangeTracker) TrackShellTurn(workDir, toolCall string) {
 		return
 	}
 
-	newSnap, pending := ct.walkWorkspace(workDir, ct.shellCache)
+	newSnap, pending, truncated := ct.walkWorkspace(workDir, ct.shellCache, destructive)
 	if newSnap == nil {
 		return
 	}
 
-	for _, p := range pending {
-		ct.appendShellMutation(p.Path, p.Before, p.After, p.Op, toolCall)
+	// Surface truncation as a manifest entry on destructive walks. Non-
+	// destructive truncation already gets logged; for destructive ops we
+	// want it impossible to miss because partial coverage might hide
+	// reverts the user expected to be recoverable. Recorded as Operation
+	// "warning" so the UI can highlight it distinctly.
+	if truncated && destructive {
+		ct.changes = append(ct.changes, TrackedFileChange{
+			FilePath:  toolCall,
+			Operation: "warning",
+			NewCode:   "walk truncated during destructive command — coverage is partial. Re-run sprout in a smaller subdirectory or increase the walker budget if recovery completeness matters.",
+			Timestamp: time.Now(),
+			ToolCall:  toolCall,
+		})
+	}
+
+	// Destructive commands above the bulk threshold collapse into a
+	// single recoverable entry. Below the threshold we keep the per-file
+	// shape so small reverts stay easy to scan flat. Non-destructive
+	// commands always emit per-file — the build-rollup machinery is
+	// dormant in production today (RecordShellMutations isn't wired in
+	// from this path), so we don't touch their behaviour here.
+	if destructive && len(pending) >= shellDestructiveBulkThreshold {
+		ct.appendDestructiveBulkRollup(pending, toolCall)
+	} else {
+		for _, p := range pending {
+			ct.appendShellMutation(p.Path, p.Before, p.After, p.Op, toolCall)
+		}
 	}
 
 	// Rebase the cache so the NEXT shell command's diff is against the
@@ -839,7 +894,14 @@ func (ct *ChangeTracker) emitWithBulkRollup(pending []pendingShellMutation, tool
 		if label == "" {
 			label = b.topDir
 		}
-		ct.appendBulkRollup(label, len(b.items), absWorkspace, toolCall)
+		// Convert pendingShellMutation (build-rollup's internal shape)
+		// into the canonical pendingShellChange so packBulkItems can
+		// process both bulk paths through one helper.
+		asChanges := make([]pendingShellChange, len(b.items))
+		for i, it := range b.items {
+			asChanges[i] = pendingShellChange{Path: it.path, Op: it.op, Before: it.before, After: it.after}
+		}
+		ct.appendBulkRollup(label, asChanges, absWorkspace, toolCall)
 		ct.addAutoSkipDir(absWorkspace, b.topDir)
 	}
 }
@@ -926,19 +988,34 @@ func deepestCommonAncestorRel(workspaceRoot string, items []pendingShellMutation
 }
 
 // appendBulkRollup records a single TrackedFileChange that stands in
-// for `count` files churned under `dir`. The path stored is workspace-
+// for the files churned under `dir`. The path stored is workspace-
 // relative with a trailing slash so the UI can recognise the entry as
 // a directory rollup at a glance.
-func (ct *ChangeTracker) appendBulkRollup(dir string, count int, workspaceRoot, toolCall string) {
+//
+// Items get packed into BulkItems via packBulkItems so the bulk row is
+// recoverable per-file. When the cumulative byte total exceeds the
+// payload cap, BulkItems is left empty and the entry behaves as the
+// historical count-only row — the UI/tools can detect this via
+// BulkCount > 0 && len(BulkItems) == 0.
+func (ct *ChangeTracker) appendBulkRollup(dir string, items []pendingShellChange, workspaceRoot, toolCall string) {
 	displayPath := dir + string(filepath.Separator)
-	log.Printf("[change-tracker] bulk rollup: %s (%d files) from %q — recording as build output and adding to auto-skip", displayPath, count, toolCall)
-	ct.changes = append(ct.changes, TrackedFileChange{
+	packed, overBudget := ct.packBulkItems(items)
+	if overBudget {
+		log.Printf("[change-tracker] bulk rollup over %d-byte cap (%d files) for %q from %q — recording count-only entry and adding to auto-skip", shellDestructiveBulkMaxPayloadBytes, len(items), displayPath, toolCall)
+	} else {
+		log.Printf("[change-tracker] bulk rollup: %s (%d files) from %q — recording with %d packed items and adding to auto-skip", displayPath, len(items), toolCall, len(packed))
+	}
+	entry := TrackedFileChange{
 		FilePath:  displayPath,
 		Operation: "bulk",
 		Timestamp: time.Now(),
 		ToolCall:  toolCall,
-		BulkCount: count,
-	})
+		BulkCount: len(items),
+	}
+	if !overBudget {
+		entry.BulkItems = packed
+	}
+	ct.changes = append(ct.changes, entry)
 	// Publish the rollup over the bus too so the UI can refresh.
 	if ct.agent != nil && ct.agent.eventBus != nil {
 		absDir := filepath.Join(workspaceRoot, dir)
@@ -947,6 +1024,111 @@ func (ct *ChangeTracker) appendBulkRollup(dir string, count int, workspaceRoot, 
 			events.FileChangedEvent(absDir, "shell_bulk", toolCall),
 		)
 	}
+}
+
+// shellDestructiveBulkThreshold is the per-command mutation count above
+// which a destructive shell command (e.g. `git checkout .`) collapses
+// into a single recoverable bulk entry instead of N per-file rows.
+// Set deliberately low (10) — once a destructive op touches enough
+// files to be hard to scan flat, the bulk row's expand-to-recover UX
+// wins. Below the threshold the per-file shape keeps small reverts
+// easy to read in the changes panel.
+var shellDestructiveBulkThreshold = 10
+
+// shellDestructiveBulkMaxPayloadBytes caps the total before+after
+// content packed into a single recoverable bulk entry. Same ceiling as
+// the walk's content budget (shellSnapshotMaxTotalBytes, 32 MiB) so we
+// never hold more bytes for recovery than the walker would have read
+// in the first place. Past the cap we degrade the bulk to count-only
+// and the entry is reported as !Recoverable.
+const shellDestructiveBulkMaxPayloadBytes = shellSnapshotMaxTotalBytes
+
+// appendDestructiveBulkRollup records a single TrackedFileChange that
+// stands in for an entire destructive shell command (e.g. `git
+// checkout .`) reverting many files. Unlike the build-rollup path,
+// every per-file mutation is packed into the entry's BulkItems so the
+// recovery tools can:
+//
+//   - restore one specific file inside the bulk (recover_file matches
+//     against BulkItems), or
+//   - restore everything in one shot (recover_bulk).
+//
+// When the cumulative before+after payload exceeds the cap, the entry
+// degrades to a count-only bulk (BulkItems == nil) and we log a warning
+// — the user can still see "300 files reverted" but per-file recovery
+// is out of reach. This is the same upper bound the walker applies, so
+// hitting it means we ran into a workspace that's outside the change
+// tracker's overall budget regardless of bulk shape.
+func (ct *ChangeTracker) appendDestructiveBulkRollup(pending []pendingShellChange, toolCall string) {
+	items, overBudget := ct.packBulkItems(pending)
+
+	entry := TrackedFileChange{
+		FilePath:  toolCall, // command label — the UI renders this as the bulk row's heading
+		Operation: "bulk",
+		Timestamp: time.Now(),
+		ToolCall:  toolCall,
+		BulkCount: len(pending),
+	}
+	if overBudget {
+		log.Printf("[change-tracker] destructive bulk over %d-byte cap (%d files); recording count-only entry from %q", shellDestructiveBulkMaxPayloadBytes, len(pending), toolCall)
+	} else {
+		entry.BulkItems = items
+	}
+	ct.changes = append(ct.changes, entry)
+
+	// Publish a file-changed event so the UI refreshes. The "path" here
+	// is the command label, not a real file path; the changes-panel
+	// renderer is the source of truth for resolving bulk entries.
+	if ct.agent != nil && ct.agent.eventBus != nil {
+		ct.agent.eventBus.Publish(
+			events.EventTypeFileChanged,
+			events.FileChangedEvent(toolCall, "shell_bulk", toolCall),
+		)
+	}
+}
+
+// packBulkItems extracts the per-file recovery payload from each
+// pending mutation, stopping when the cumulative byte total exceeds
+// shellDestructiveBulkMaxPayloadBytes. Returns the items collected so
+// far (may be empty) and an overBudget flag — callers should drop the
+// items when overBudget is true so a count-only bulk row is recorded
+// without misleading partial recovery.
+func (ct *ChangeTracker) packBulkItems(pending []pendingShellChange) ([]TrackedBulkItem, bool) {
+	items := make([]TrackedBulkItem, 0, len(pending))
+	var payloadBytes int64
+	for _, p := range pending {
+		original := ""
+		newer := ""
+		if p.Before != nil {
+			if p.Before.Content != nil {
+				original = string(p.Before.Content)
+			} else if p.Before.Skipped != "" {
+				original = "[CONTENT NOT CAPTURED: " + p.Before.Skipped + "]"
+			}
+		}
+		if p.After != nil {
+			if p.After.Content != nil {
+				newer = string(p.After.Content)
+			} else if p.After.Skipped != "" {
+				newer = "[CONTENT NOT CAPTURED: " + p.After.Skipped + "]"
+			}
+		}
+		if ct.isOutsideWorkspace(p.Path) {
+			original = RedactedContentMarker
+			newer = RedactedContentMarker
+		}
+		payloadBytes += int64(len(original)) + int64(len(newer))
+		if payloadBytes > shellDestructiveBulkMaxPayloadBytes {
+			return nil, true
+		}
+		items = append(items, TrackedBulkItem{
+			FilePath:     p.Path,
+			OriginalCode: original,
+			NewCode:      newer,
+			Operation:    p.Op,
+		})
+	}
+	return items, false
 }
 
 // addAutoSkipDir registers an absolute directory path with the shell-

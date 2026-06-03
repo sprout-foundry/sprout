@@ -186,11 +186,21 @@ func newDefaultToolRegistry() *ToolRegistry {
 	// recover_file - Restores a file from the change tracker's session buffer.
 	registry.RegisterTool(ToolConfig{
 		Name: "recover_file",
-		Description: "Restore a file you (the agent) changed earlier this session to its pre-change state, using the ChangeTracker's captured original content. Works for files edited or deleted via any tool — write_file, edit_file, or shell_command (rm, sed -i, mv, etc.).\n\n**Behavior by op**:\n• edit / modified → original bytes written back to disk\n• delete → original bytes written back to disk (file is un-deleted)\n• create → file is removed (restoring the workspace to pre-creation state)\n\n**When to use this**:\n• The user told you to undo a change you just made.\n• You realize a shell command (rm, sed -i, mv) destroyed something it shouldn't have.\n• A subagent's manifest shows it deleted a file you didn't want deleted.\n\n**Safety**:\n• Only files the tracker has a record of can be recovered — call list_changes first to see what's available.\n• Files reported as `recoverable: false` in list_changes (binary, >1 MiB, outside workspace, never tracked) cannot be restored via this tool.\n• Returns a JSON object: `{recovered: bool, path, action, message}`.",
+		Description: "Restore a file you (the agent) changed earlier this session to its pre-change state, using the ChangeTracker's captured original content. Works for files edited or deleted via any tool — write_file, edit_file, or shell_command (rm, sed -i, mv, etc.).\n\n**Behavior by op**:\n• edit / modified → original bytes written back to disk\n• delete → original bytes written back to disk (file is un-deleted)\n• create → file is removed (restoring the workspace to pre-creation state)\n\n**Bulk-aware**: when the requested path was packed into a bulk entry (e.g. one of hundreds of files reverted by a single `git checkout .`), recover_file finds it inside the bulk and restores just that one file. Use recover_bulk to restore the entire bulk in one call.\n\n**When to use this**:\n• The user told you to undo a change you just made.\n• You realize a shell command (rm, sed -i, mv) destroyed something it shouldn't have.\n• A subagent's manifest shows it deleted a file you didn't want deleted.\n\n**Safety**:\n• Only files the tracker has a record of can be recovered — call list_changes first to see what's available.\n• Files reported as `recoverable: false` in list_changes (binary, >1 MiB, outside workspace, never tracked) cannot be restored via this tool.\n• Returns a JSON object: `{recovered: bool, path, action, message}`.",
 		Parameters: []ParameterConfig{
 			{"path", "string", true, []string{"file_path"}, "Absolute or relative path to the file to recover."},
 		},
 		Handler: handleRecoverFile,
+	})
+
+	// recover_bulk - Restores every file packed inside one bulk change entry.
+	registry.RegisterTool(ToolConfig{
+		Name: "recover_bulk",
+		Description: "Restore every file packed inside a single bulk change entry — the rollup row produced when one shell command churned many files (e.g. `git checkout .` reverting 300 files, or a build writing hundreds of outputs).\n\n**When to use this**:\n• The user wants to undo a destructive command that affected too many files to recover individually.\n• list_changes shows a `bulk` entry with `bulk_count > 0` and `recoverable: true`, and the user asked you to roll back that whole operation.\n\n**Behavior**:\n• Walks every item packed in the bulk's BulkItems list and applies the same recovery action recover_file would for a single file.\n• Returns a JSON object: `{found, bulk_path, restored, failed, summary, entries[]}` with per-file outcomes.\n• When the bulk was recorded as count-only (memory cap blew through), `recoverable` would be false in list_changes and this tool returns `found: true, restored: 0` with an explanatory message.\n\n**Identifying the bulk**: use the entry's `path` field from list_changes as the `bulk_path` parameter. For destructive bulks the path is the command label (e.g. `\"shell_command\"`); for build bulks it's the workspace-relative directory with a trailing slash.",
+		Parameters: []ParameterConfig{
+			{"bulk_path", "string", true, []string{"path"}, "The bulk entry's `path` field as returned by list_changes."},
+		},
+		Handler: handleRecoverBulk,
 	})
 
 	// ask_user - Ask user a question and wait for response

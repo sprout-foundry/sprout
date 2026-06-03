@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/clihooks"
 	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
@@ -141,8 +142,9 @@ func (h *CommitMessageHandler) EditCommitMessage(commitMessage string) (string, 
 	console.GlyphAction.Printf("Opening %s to edit commit message...", editor)
 	console.GlyphInfo.Print("Make your changes, save, and exit the editor to continue")
 
-	err = cmd.Run()
-	if err != nil {
+	// Release stdin to cooked mode so the editor reads keystrokes
+	// normally. No-op when no turn / steer reader is active.
+	if err := clihooks.WithCookedStdin(cmd.Run); err != nil {
 		return "", fmt.Errorf("failed to edit commit message: %w", err)
 	}
 

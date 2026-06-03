@@ -12,6 +12,50 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// TestDiscoverProjectSkillsRoundtrip exercises the end-to-end custom-skill
+// path that the user owns: drop a SKILL.md under .sprout/skills/<id>/,
+// run the configuration boundary that the agent runs at startup, and
+// verify the skill survives both the discovery step (gets registered
+// into Config.Skills with the right Path + source metadata) and the
+// merge/prune step (NOT removed by the built-in cleanup pass).
+//
+// This is the regression test for the pkg/skills refactor — if the
+// prune logic ever generalises its prefix check too aggressively, or
+// the discovery layer is rewired through skills.Builtins(), custom
+// skills must keep working.
+func TestDiscoverProjectSkillsRoundtrip(t *testing.T) {
+	tmp := t.TempDir()
+	projectSkills := filepath.Join(tmp, ".sprout", "skills", "my-custom")
+	require.NoError(t, os.MkdirAll(projectSkills, 0o755))
+	skillBody := "---\nname: My Custom\ndescription: A user-supplied test skill.\n---\nbody"
+	require.NoError(t, os.WriteFile(filepath.Join(projectSkills, "SKILL.md"), []byte(skillBody), 0o644))
+
+	origWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(tmp))
+	defer os.Chdir(origWd)
+
+	cfg := &Config{}
+	discovered := discoverProjectSkills(cfg)
+	require.Contains(t, discovered, "My Custom", "discoverProjectSkills should pick up the on-disk skill")
+
+	got, ok := cfg.Skills["my-custom"]
+	require.True(t, ok, "Config.Skills should contain the discovered skill")
+	assert.Equal(t, "My Custom", got.Name)
+	assert.Equal(t, "A user-supplied test skill.", got.Description)
+	assert.Equal(t, filepath.Join(".sprout", "skills", "my-custom"), got.Path)
+	assert.Equal(t, "project", got.Metadata["source"])
+	assert.True(t, got.Enabled)
+
+	// Run the merge+prune step that the real Load() pipeline runs after
+	// discovery. The custom skill must survive — its path doesn't match
+	// the built-in prefix, and the prune is keyed on that prefix.
+	mergeMissingDefaultSkills(cfg)
+	stillThere, ok := cfg.Skills["my-custom"]
+	require.True(t, ok, "custom skill was pruned by mergeMissingDefaultSkills — built-in prune logic is over-broad")
+	assert.Equal(t, "project", stillThere.Metadata["source"], "custom skill metadata was clobbered by merge step")
+}
+
 // TestDefaultSkillsCoversEmbeddedLibrary is the cross-package consistency
 // gate: every skill shipped under pkg/skills/library/ MUST appear in the
 // defaults map that seeds Config.Skills. The whole point of the

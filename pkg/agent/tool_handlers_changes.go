@@ -41,30 +41,55 @@ func handleListChanges(ctx context.Context, a *Agent, args map[string]interface{
 	changes := tracker.GetChanges()
 	changes = applyChangeFilters(changes, args)
 
+	type bulkItemEntry struct {
+		Path string `json:"path"`
+		Op   string `json:"op"`
+	}
 	type fileEntry struct {
 		Path        string    `json:"path"`
 		Op          string    `json:"op"`
 		Tool        string    `json:"tool"`
 		Timestamp   time.Time `json:"timestamp"`
 		Recoverable bool      `json:"recoverable"`
-		// BulkCount surfaces build-output rollups (SP-061-1). When > 0,
-		// `path` names a directory that was churned past
-		// shellBulkThreshold by one shell command; the UI renders the
-		// entry as a single "<dir>/ — N files (build output)" row
-		// instead of stacking N per-file rows. Omitted on normal
-		// per-file entries so the JSON stays compact.
+		// BulkCount surfaces rollups produced by high-volume shell
+		// commands. When > 0, `path` names either a workspace-relative
+		// directory (build outputs, trailing "/") or a command label
+		// (destructive bulks like `git checkout .`); the UI renders the
+		// entry as one row instead of stacking N per-file rows.
+		// Omitted on normal per-file entries so the JSON stays compact.
 		BulkCount int `json:"bulk_count,omitempty"`
+		// BulkItems lists the paths packed inside a recoverable bulk.
+		// Path-only summaries — full before/after content is held in
+		// the tracker; recover_file or recover_bulk are the routes for
+		// retrieving it. Omitted when the bulk is count-only (cap blew).
+		BulkItems []bulkItemEntry `json:"bulk_items,omitempty"`
 	}
 	files := make([]fileEntry, 0, len(changes))
 	for _, ch := range changes {
-		files = append(files, fileEntry{
+		entry := fileEntry{
 			Path:        ch.FilePath,
 			Op:          ch.Operation,
 			Tool:        ch.ToolCall,
 			Timestamp:   ch.Timestamp,
 			Recoverable: isRecoverableOriginal(ch.OriginalCode),
 			BulkCount:   ch.BulkCount,
-		})
+		}
+		// Bulk entries are recoverable iff their per-file payload is
+		// present. The OriginalCode field on the bulk row itself is
+		// empty (the payload lives inside BulkItems), so the default
+		// path-only Recoverable check would always say false here —
+		// override it explicitly.
+		if ch.Operation == "bulk" {
+			entry.Recoverable = len(ch.BulkItems) > 0
+			if len(ch.BulkItems) > 0 {
+				items := make([]bulkItemEntry, len(ch.BulkItems))
+				for i, it := range ch.BulkItems {
+					items[i] = bulkItemEntry{Path: it.FilePath, Op: it.Operation}
+				}
+				entry.BulkItems = items
+			}
+		}
+		files = append(files, entry)
 	}
 
 	out := struct {

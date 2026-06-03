@@ -87,14 +87,32 @@ type TrackedFileChange struct {
 	ToolCall     string    `json:"tool_call"` // Which tool was used
 
 	// BulkCount is set on a rollup entry produced when a single shell
-	// command churns more than shellBulkThreshold paths in one
-	// directory — typical of `make build`, `npm ci`, `cargo build`, etc.
-	// FilePath then names the OFFENDING DIRECTORY (workspace-relative,
-	// trailing "/"), Operation is "bulk", and the per-file
-	// originalCode/newCode are empty (no recovery payload is captured
-	// for build outputs — they're cheap to regenerate). When zero, the
+	// command churns more than the bulk threshold — typical of
+	// `make build`, `npm ci`, `cargo build`, or `git checkout .`.
+	// FilePath then names the directory or command label (workspace-
+	// relative, trailing "/") and Operation is "bulk". When zero, the
 	// entry represents a normal single-file change. SP-061-1.
 	BulkCount int `json:"bulk_count,omitempty"`
+
+	// BulkItems carries the per-file recovery payload for bulk entries.
+	// Populated when the bulk fits inside the walk's content budget
+	// (~32 MiB). When present, recover_file can match a specific path
+	// inside the bulk and recover_bulk can restore the whole set.
+	// Empty when the bulk row is count-only (build-output rollup that
+	// the user said is cheap to regenerate, or destructive bulk that
+	// blew through the memory cap).
+	BulkItems []TrackedBulkItem `json:"bulk_items,omitempty"`
+}
+
+// TrackedBulkItem is the per-file payload packed inside a bulk
+// TrackedFileChange. Shape mirrors TrackedFileChange's recoverable
+// fields so the recovery helpers (`isRecoverableOriginal`,
+// `restoreFile`) can be reused without translation.
+type TrackedBulkItem struct {
+	FilePath     string `json:"file_path"`
+	OriginalCode string `json:"original_code"`
+	NewCode      string `json:"new_code"`
+	Operation    string `json:"operation"` // "create" | "edit" | "delete"
 }
 
 // NewChangeTracker creates a new change tracker for an agent session

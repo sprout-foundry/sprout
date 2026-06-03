@@ -47,18 +47,11 @@ func handleRecoverFile(ctx context.Context, a *Agent, args map[string]interface{
 	// Walk changes in REVERSE order so the most recent entry for the
 	// path wins (the tracker is append-only, so the last write to a
 	// given path is the canonical "current" state we want to undo).
+	// resolveRecoveryTarget also peers inside bulk entries so files
+	// packed into a `git checkout .`-style rollup are recoverable
+	// individually.
 	changes := tracker.GetChanges()
-	var match *TrackedFileChange
-	for i := len(changes) - 1; i >= 0; i-- {
-		candidatePath, candidateErr := filepath.Abs(changes[i].FilePath)
-		if candidateErr != nil {
-			continue
-		}
-		if candidatePath == abs {
-			match = &changes[i]
-			break
-		}
-	}
+	match := resolveRecoveryTarget(changes, abs)
 	if match == nil {
 		return jsonRecoverResult(false, abs, "", "no tracked change recorded for this path"), nil
 	}
@@ -99,6 +92,133 @@ func handleRecoverFile(ctx context.Context, a *Agent, args map[string]interface{
 	}
 	msg := fmt.Sprintf("%s file from session buffer (was: %s via %s)", verb, match.Operation, match.ToolCall)
 	return jsonRecoverResult(true, abs, verb, msg), nil
+}
+
+// handleRecoverBulk restores every per-file item packed inside a bulk
+// TrackedFileChange identified by `bulk_path` (the bulk entry's
+// FilePath — for destructive bulks this is the command label like
+// "shell_command"; for build bulks it's the workspace-relative dir with
+// trailing "/"). Walks BulkItems in append order and applies the same
+// per-file recovery logic recover_file uses.
+//
+// Returns a JSON envelope with per-file outcomes so the caller can
+// report exactly what happened.
+func handleRecoverBulk(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
+	rawPath, ok := args["bulk_path"].(string)
+	if !ok || rawPath == "" {
+		return "", fmt.Errorf("recover_bulk: 'bulk_path' parameter is required")
+	}
+
+	tracker := a.GetChangeTracker()
+	if tracker == nil || !tracker.IsEnabled() {
+		return jsonRecoverBulkResult(false, rawPath, 0, 0, "change tracking is disabled — nothing to recover from", nil), nil
+	}
+
+	// Match against bulk entries by FilePath. Walk in reverse so the
+	// most recent bulk with this label wins — the typical user intent
+	// is "undo the LAST `git checkout .`", not the first.
+	changes := tracker.GetChanges()
+	var bulk *TrackedFileChange
+	for i := len(changes) - 1; i >= 0; i-- {
+		ch := &changes[i]
+		if ch.Operation != "bulk" {
+			continue
+		}
+		if ch.FilePath == rawPath {
+			bulk = ch
+			break
+		}
+	}
+	if bulk == nil {
+		return jsonRecoverBulkResult(false, rawPath, 0, 0, "no bulk change recorded with that path", nil), nil
+	}
+	if len(bulk.BulkItems) == 0 {
+		return jsonRecoverBulkResult(false, rawPath, 0, 0, "bulk entry has no recoverable payload (was count-only due to memory cap)", nil), nil
+	}
+
+	type entry struct {
+		Path    string `json:"path"`
+		Action  string `json:"action"`
+		Message string `json:"message,omitempty"`
+		OK      bool   `json:"ok"`
+	}
+	results := make([]entry, 0, len(bulk.BulkItems))
+	var restored, failed int
+	for _, item := range bulk.BulkItems {
+		// Reuse the existing per-file recovery by synthesizing a
+		// TrackedFileChange and going through revertOne.
+		synthesized := TrackedFileChange{
+			FilePath:     item.FilePath,
+			OriginalCode: item.OriginalCode,
+			NewCode:      item.NewCode,
+			Operation:    item.Operation,
+			Timestamp:    bulk.Timestamp,
+			ToolCall:     bulk.ToolCall,
+		}
+		action, ok, msg := revertOne(synthesized, tracker)
+		results = append(results, entry{Path: item.FilePath, Action: action, OK: ok, Message: msg})
+		if ok {
+			restored++
+		} else {
+			failed++
+		}
+	}
+	summary := fmt.Sprintf("%d restored, %d failed (bulk=%s, %d items)", restored, failed, rawPath, len(bulk.BulkItems))
+	return jsonRecoverBulkResult(true, rawPath, restored, failed, summary, results), nil
+}
+
+// jsonRecoverBulkResult formats the structured result for recover_bulk.
+// Shape mirrors revert_my_changes so consumers (the LLM, the WebUI)
+// don't need a new envelope type.
+func jsonRecoverBulkResult(found bool, bulkPath string, restored, failed int, summary string, entries any) string {
+	payload := struct {
+		Found    bool   `json:"found"`
+		BulkPath string `json:"bulk_path"`
+		Restored int    `json:"restored"`
+		Failed   int    `json:"failed"`
+		Summary  string `json:"summary"`
+		Entries  any    `json:"entries,omitempty"`
+	}{Found: found, BulkPath: bulkPath, Restored: restored, Failed: failed, Summary: summary, Entries: entries}
+	b, _ := json.MarshalIndent(payload, "", "  ")
+	return string(b)
+}
+
+// resolveRecoveryTarget finds the most recent TrackedFileChange that
+// covers `abs` — either as a top-level entry or as a per-file item
+// packed inside a bulk entry (e.g. the rollup produced by `git checkout
+// .` in destructive mode). For bulk items the returned pointer is to a
+// synthesized TrackedFileChange that carries the bulk row's Timestamp
+// and ToolCall so the recovery reply still has useful provenance.
+//
+// Returns nil when no entry matches.
+func resolveRecoveryTarget(changes []TrackedFileChange, abs string) *TrackedFileChange {
+	for i := len(changes) - 1; i >= 0; i-- {
+		ch := &changes[i]
+		candidatePath, err := filepath.Abs(ch.FilePath)
+		if err == nil && candidatePath == abs && ch.Operation != "bulk" {
+			return ch
+		}
+		if ch.Operation != "bulk" || len(ch.BulkItems) == 0 {
+			continue
+		}
+		for j := len(ch.BulkItems) - 1; j >= 0; j-- {
+			item := ch.BulkItems[j]
+			itemPath, ierr := filepath.Abs(item.FilePath)
+			if ierr != nil || itemPath != abs {
+				continue
+			}
+			synthesized := TrackedFileChange{
+				FilePath:     item.FilePath,
+				OriginalCode: item.OriginalCode,
+				NewCode:      item.NewCode,
+				Operation:    item.Operation,
+				Timestamp:    ch.Timestamp,
+				ToolCall:     ch.ToolCall,
+			}
+			return &synthesized
+		}
+	}
+	return nil
 }
 
 // jsonRecoverResult formats the tool's structured result so the LLM

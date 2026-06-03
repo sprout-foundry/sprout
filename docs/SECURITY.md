@@ -167,7 +167,7 @@ and picks the approval flow accordingly.
 
 | Tier | Examples | Approval flow |
 |---|---|---|
-| **Workspace** | Anything under the agent's workspace root (or `~/.sprout` config dir). | No approval. |
+| **Workspace** | Anything under the agent's workspace root (or `~/.config/sprout` config dir). | No approval. |
 | **External** | An external folder that isn't a system dir, and isn't a home path while CWD is outside `$HOME`. E.g. `/tmp/scratch`, `/srv/shared`, a sibling project under your home when CWD is also in home. | Prompt with 3 options: **Allow once** / **Allow folder this session** / **Deny**. Picking the folder option adds the path's parent directory to the agent's in-memory session allowlist — future accesses under it auto-approve. |
 | **Sensitive** | System dirs (`/etc`, `/usr`, `/var`, `/Library`, `C:\Windows`, …). OR a home-directory path while CWD is outside `$HOME` (e.g. agent in `/tmp/sandbox` tries to read `~/.ssh/id_rsa`). | Prompt with 2 options: **Allow once** / **Deny**. The folder-allowlist choice is suppressed; every access prompts. |
 
@@ -204,11 +204,11 @@ The previous flow had two bugs:
 
 | Path | Contents | Sensitivity |
 |---|---|---|
-| `~/.sprout/config.json` | Provider settings, preferences | Low |
-| `~/.sprout/api_keys.json` | API keys (encrypted at rest via OS keyring when available) | **High** |
+| `~/.config/sprout/config.json` | Provider settings, preferences | Low |
+| `~/.config/sprout/api_keys.json` | API keys (encrypted at rest via OS keyring when available) | **High** |
 | `~/.sprout/service.env` | Environment variables for daemon | **High** |
 | `~/.sprout/logs/` | Daemon logs, rotated (10MB, 5 backups) | Medium |
-| `~/.sprout/memories/` | Agent memory .md files | Medium |
+| `~/.config/sprout/memories/` | Agent memory .md files | Medium |
 | `.sprout/workspace.log` | Per-workspace run log | Medium |
 | `.sprout/history/` | Change tracker revisions | Medium |
 | `.sprout/embeddings/` | Conversation turn embeddings | Medium |
@@ -249,7 +249,7 @@ rm -rf .sprout/memories/
 rm -rf .sprout/
 
 # Global config and keys
-rm -rf ~/.sprout/
+rm -rf ~/.config/sprout/
 ```
 
 ## Skill Allowlist

@@ -130,77 +130,49 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Handler:     handleTodoRead,
 	})
 
-	// list_changes - Returns the change tracker's current manifest of
-	// files modified, created, or deleted in this session.
+	// list_changes - Single read tool for the change tracker. Covers
+	// manifest listing, per-file diffs (include_diff), activity-block
+	// summaries (group_by="block"), and persisted history merging
+	// (include_persisted). Replaces the four pre-consolidation tools:
+	// list_changes, show_my_change, summarize_my_session, my_recent_changes.
 	registry.RegisterTool(ToolConfig{
 		Name: "list_changes",
-		Description: "List every file you (the agent) have created, modified, or deleted in this session. Returns a JSON object with revision_id and a files array. Each file entry has: path, op (\"create\" | \"edit\" | \"delete\"), tool, timestamp, and recoverable (true if the original bytes were captured and can be restored via recover_file or revert_my_changes).\n\n**Optional filters**:\n• `since` (RFC3339 timestamp, e.g. \"2026-05-27T10:00:00Z\") — only changes recorded after this time.\n• `tool` (string) — only changes recorded by this tool name.\n• `path_pattern` (glob) — only files matching the pattern (e.g. \"pkg/auth/*.go\").\n\n**When to use this**:\n• Before reporting a task as complete, to verify you actually changed what you intended.\n• When generating a commit message, to list the exact files touched.\n• When summarizing your work for the user or a parent agent.\n• When you're about to undo something and need to know what's tracked.\n\nThe manifest is authoritative: shell commands (sed, mv, rm, tee, etc.) that bypass write_file / edit_file are still tracked via a workspace-walk diff around every shell_command invocation. Files outside the workspace, binaries, and files >1 MiB are reported with `recoverable: false`.",
+		Description: "List every file you (the agent) have created, modified, or deleted in this session. Returns a JSON object with revision_id and a files array. Each file entry has: path, op (\"create\" | \"edit\" | \"delete\" | \"bulk\"), tool, timestamp, and recoverable. Bulk entries (high-volume rollups from `git checkout .` or build commands) also carry bulk_count and bulk_items (path+op summaries of every packed file).\n\n**Filter args** (all optional):\n• `since` — RFC3339 timestamp (\"2026-05-27T10:00:00Z\") or duration (\"2d\", \"12h\", \"30m\"). Only changes at/after this time.\n• `tool` — string. Only changes recorded by this tool name (e.g. write_file, shell_command).\n• `path_pattern` — glob. Only files matching the pattern (e.g. \"pkg/auth/*.go\").\n\n**Output-shape args** (all optional):\n• `include_diff` (bool) — append a `diff` field to each non-bulk entry containing the unified diff between the file's pre-session state and its current intended state. Use when answering \"what did you change in foo.go?\" without re-reading.\n• `group_by` (\"block\") — replace `files` with `blocks: [{started_at, ended_at, tools, files}]`, grouping changes by 30-second activity windows. Use for \"summarize what you've been doing\" questions.\n• `include_persisted` (bool) — merge in change records from the persistent history (hot+warm tiers) so the timeline spans previous sessions. Items get `source: \"session\"|\"persisted\"`, `revision_id`, `tier`.\n\n**When to use this**:\n• Before reporting a task complete, to verify you actually changed what you intended.\n• When generating a commit message, to list the exact files touched.\n• When the user asks what you changed in a specific file (`path_pattern` + `include_diff`).\n• When the user asks for a summary (`group_by=\"block\"`).\n• When you need to reason across sessions (`include_persisted`).\n\nShell commands (sed, mv, rm, tee, …) that bypass write_file / edit_file are still tracked via a workspace-walk diff around every shell_command invocation. Files outside the workspace, binaries, and files >1 MiB are reported with `recoverable: false`.",
 		Parameters: []ParameterConfig{
-			{"since", "string", false, []string{}, "Optional RFC3339 cutoff — only changes recorded at or after this time."},
+			{"since", "string", false, []string{}, "Optional cutoff: RFC3339 timestamp or duration (2d, 12h, 30m). Only changes at/after this time."},
 			{"tool", "string", false, []string{}, "Optional tool name filter (e.g. write_file, edit_file, shell_command)."},
 			{"path_pattern", "string", false, []string{}, "Optional path glob filter (e.g. pkg/auth/*.go)."},
+			{"include_diff", "boolean", false, []string{}, "When true, populate a per-file unified diff in each entry's `diff` field."},
+			{"group_by", "string", false, []string{}, "Set to \"block\" to return an activity-block summary instead of the files array."},
+			{"include_persisted", "boolean", false, []string{}, "When true, merge in change records from the persistent history (hot+warm tiers)."},
 		},
 		Handler: handleListChanges,
 	})
 
-	// show_my_change - Inline diff for a single file from session buffer.
-	registry.RegisterTool(ToolConfig{
-		Name: "show_my_change",
-		Description: "Show the unified diff between a file's pre-session state and its current intended state, using the change tracker's captured originals. Lets you see exactly what your edits to a specific file did this session without having to remember or re-read.\n\nReturns JSON: `{found, path, op, tool, stats, diff}`. `diff` is a standard unified diff string suitable for direct inclusion in a reply or commit message. `op` is the aggregate outcome (\"create\" / \"edit\" / \"delete\") across all your edits to this path this session.\n\n**When to use this**:\n• You want to remember what you actually changed in a specific file.\n• You're about to revert and want to confirm the diff first.\n• You're writing a commit message or explaining your work to the user.\n• A user asks \"what did you change in foo.go?\" — call this with path=foo.go.\n\nReturns `found: false` when the path has no tracked changes in this session.",
-		Parameters: []ParameterConfig{
-			{"path", "string", true, []string{"file_path"}, "Absolute or relative path of the file to diff."},
-		},
-		Handler: handleShowMyChange,
-	})
-
-	// revert_my_changes - Bulk undo with scopes (all / file / since).
+	// revert_my_changes - Bulk undo by scope (all or since). The
+	// previous file= scope was removed; use recover_file(scope=
+	// "session_start") for single-file pre-session restores.
 	registry.RegisterTool(ToolConfig{
 		Name: "revert_my_changes",
-		Description: "Restore files to their pre-session state in bulk. Uses the ChangeTracker's captured originals — does NOT touch git, does NOT affect work the user or another agent did, only undoes YOUR own edits this session.\n\n**Scope arguments** (mutually exclusive; pick one):\n• `scope=\"all\"` (default if no other arg given) — revert every file the tracker recorded this session.\n• `file=<path>` — revert ONE file to the state it was in before your first edit this session.\n• `since=<RFC3339>` — revert all changes you made at or after the given timestamp.\n\nFor each file: edits → write original bytes back; deletes → un-delete (re-write the file); creates → remove the file.\n\nReturns JSON: `{restored, failed, summary, entries: [{path, action, ok, message}]}`.\n\n**When to use this**:\n• User says \"undo what you just did\" / \"revert that change\" / \"go back to before you started\".\n• You realize a destructive shell command (rm, sed -i, mv) did the wrong thing.\n• A test broke and you want to bisect by reverting recent edits.\n\n**Prefer this over `git checkout`**: this tool is scoped to YOUR session, won't disturb the user's in-progress work in the working tree, and uses content you've captured directly rather than relying on git's index state.",
+		Description: "Restore many files to their pre-session state in one call. Uses the ChangeTracker's captured originals — does NOT touch git, does NOT affect work the user or another agent did, only undoes YOUR own edits this session.\n\n**Scope** (pick one):\n• `scope=\"all\"` (default) — revert every file the tracker recorded this session.\n• `since=<RFC3339 timestamp OR duration>` — revert all changes you made at/after the given time (e.g. \"2026-05-27T10:00:00Z\", \"30m\", \"2h\").\n\nFor each file: edits → write original bytes back; deletes → un-delete; creates → remove the file.\n\nReturns JSON: `{restored, failed, summary, entries: [{path, action, ok, message}]}`.\n\n**Single-file recovery is in a different tool**: use `recover_file(path=…, scope=\"session_start\")` to roll one path back to its pre-session state, or `recover_file(path=…, scope=\"latest\")` to undo just the most recent change.\n\n**When to use this**:\n• User says \"undo everything you just did\" / \"go back to before you started\".\n• You realize a destructive shell command did the wrong thing across many files.\n• A test broke after a multi-file refactor and you want to start over.\n\nPrefer this over `git checkout`: this tool is scoped to YOUR session, won't disturb the user's in-progress work in the working tree, and uses content you've captured directly rather than relying on git's index state.",
 		Parameters: []ParameterConfig{
 			{"scope", "string", false, []string{}, "\"all\" to revert every change this session. Default when no other filter is provided."},
-			{"file", "string", false, []string{"file_path", "path"}, "Revert one file to its pre-session state (latest matching entry's original content)."},
-			{"since", "string", false, []string{}, "RFC3339 timestamp — revert all changes recorded at or after this moment."},
+			{"since", "string", false, []string{}, "RFC3339 timestamp or duration (30m, 2h, 2d) — revert all changes recorded at/after this moment."},
 		},
 		Handler: handleRevertMyChanges,
 	})
 
-	// summarize_my_session - Grouped digest of work this session.
-	registry.RegisterTool(ToolConfig{
-		Name: "summarize_my_session",
-		Description: "Return a grouped digest of what you've done this session, broken into contiguous activity blocks (changes within 30 seconds of each other belong to the same block — roughly one block per agent turn).\n\nReturns JSON: `{enabled, blocks: [{started_at, ended_at, tools: {tool: count}, files: [{path, op}]}], totals: {changes, files}}`.\n\n**When to use this**:\n• User asks \"what have you been doing?\" / \"what did you change?\" / \"summarize your work\".\n• You want to ground yourself in what you actually did before continuing a long task.\n• You're writing a progress report or a commit message.\n• A subagent is about to return and wants a coherent summary for the primary.\n\nCheaper to call than `list_changes` for large sessions since the output is digested. No parameters.",
-		Parameters:  []ParameterConfig{},
-		Handler:     handleSummarizeMySession,
-	})
-
-	// my_recent_changes - Cross-session unified timeline (Phase 1.5).
-	registry.RegisterTool(ToolConfig{
-		Name: "my_recent_changes",
-		Description: "Unified chronological timeline of file changes spanning the current in-memory session buffer AND the persistent revision store (hot+warm tiers). Lets you reason about \"what have I been working on over the last X days\" across agent restarts.\n\nEach item has: path, op, tool, source (\"session\" or \"persisted\"), revision_id (when source=persisted), timestamp, tier (hot/warm).\n\n**`since` argument** accepts three forms:\n• RFC3339 timestamp: `2026-05-27T10:00:00Z`\n• Duration: `2d`, `12h`, `30m`, `300s`\n• Empty: returns everything available\n\n**When to use this**:\n• User asks \"what have you been doing on this project?\" — spans previous sessions.\n• You need to reason about your historical work on a feature.\n• Differentiate between work YOU did vs working-tree changes from the user / git operations.\n\n`view_history` is the lower-level alternative for digging into one revision's full conversation + diffs.",
-		Parameters: []ParameterConfig{
-			{"since", "string", false, []string{}, "Optional cutoff: RFC3339 timestamp, duration like \"2d\", or empty for all."},
-		},
-		Handler: handleMyRecentChanges,
-	})
-
-	// recover_file - Restores a file from the change tracker's session buffer.
+	// recover_file - Single-file recovery. Replaces both the historical
+	// recover_file tool and the standalone recover_bulk via the
+	// `scope` parameter.
 	registry.RegisterTool(ToolConfig{
 		Name: "recover_file",
-		Description: "Restore a file you (the agent) changed earlier this session to its pre-change state, using the ChangeTracker's captured original content. Works for files edited or deleted via any tool — write_file, edit_file, or shell_command (rm, sed -i, mv, etc.).\n\n**Behavior by op**:\n• edit / modified → original bytes written back to disk\n• delete → original bytes written back to disk (file is un-deleted)\n• create → file is removed (restoring the workspace to pre-creation state)\n\n**Bulk-aware**: when the requested path was packed into a bulk entry (e.g. one of hundreds of files reverted by a single `git checkout .`), recover_file finds it inside the bulk and restores just that one file. Use recover_bulk to restore the entire bulk in one call.\n\n**When to use this**:\n• The user told you to undo a change you just made.\n• You realize a shell command (rm, sed -i, mv) destroyed something it shouldn't have.\n• A subagent's manifest shows it deleted a file you didn't want deleted.\n\n**Safety**:\n• Only files the tracker has a record of can be recovered — call list_changes first to see what's available.\n• Files reported as `recoverable: false` in list_changes (binary, >1 MiB, outside workspace, never tracked) cannot be restored via this tool.\n• Returns a JSON object: `{recovered: bool, path, action, message}`.",
+		Description: "Restore one file (or one bulk entry's worth of files) from the ChangeTracker's session buffer. Works for any tool's edits — write_file, edit_file, or shell_command (rm, sed -i, mv, `git checkout .`, etc.).\n\n**`scope`** controls what \"restore\" means:\n• `\"latest\"` (default) — restore to the state immediately before the most recent tracked change for `path`. Use when undoing one specific edit.\n• `\"session_start\"` — restore to the state before the agent first touched this file this session. Use when the file went through multiple edits and you want the earliest known-good state.\n• `\"bulk\"` — treat `path` as the bulk entry's `path` field from list_changes (e.g. \"git checkout .\" or \"webui/src/\"). Walks every packed file in that bulk and restores them all. Use to undo a high-volume destructive command in one shot.\n\n**Behavior by op (single-file scopes)**:\n• edit / modified → original bytes written back to disk\n• delete → original bytes written back to disk (file is un-deleted)\n• create → file is removed (restoring the workspace to pre-creation state)\n\n**Bulk-aware single-file recovery**: when scope is \"latest\" or \"session_start\" and `path` was packed into a bulk entry (e.g. one of hundreds of files reverted by a single `git checkout .`), recover_file finds it inside the bulk and restores just that one file.\n\n**Returns**:\n• Single-file scopes: `{recovered: bool, path, action, message}`.\n• Bulk scope: `{found, bulk_path, restored, failed, summary, entries[]}` with per-file outcomes.\n\n**Safety**:\n• Only files the tracker has a record of can be recovered — call list_changes first to see what's available.\n• Files reported as `recoverable: false` in list_changes (binary, >1 MiB, outside workspace, never tracked) cannot be restored via this tool.\n• Bulk entries recorded as count-only (memory cap was exceeded) cannot be bulk-recovered.",
 		Parameters: []ParameterConfig{
-			{"path", "string", true, []string{"file_path"}, "Absolute or relative path to the file to recover."},
+			{"path", "string", true, []string{"file_path", "bulk_path"}, "Absolute or relative path to the file to recover. For scope=\"bulk\", use the bulk entry's `path` field from list_changes."},
+			{"scope", "string", false, []string{}, "\"latest\" (default), \"session_start\", or \"bulk\". See description for semantics."},
 		},
 		Handler: handleRecoverFile,
-	})
-
-	// recover_bulk - Restores every file packed inside one bulk change entry.
-	registry.RegisterTool(ToolConfig{
-		Name: "recover_bulk",
-		Description: "Restore every file packed inside a single bulk change entry — the rollup row produced when one shell command churned many files (e.g. `git checkout .` reverting 300 files, or a build writing hundreds of outputs).\n\n**When to use this**:\n• The user wants to undo a destructive command that affected too many files to recover individually.\n• list_changes shows a `bulk` entry with `bulk_count > 0` and `recoverable: true`, and the user asked you to roll back that whole operation.\n\n**Behavior**:\n• Walks every item packed in the bulk's BulkItems list and applies the same recovery action recover_file would for a single file.\n• Returns a JSON object: `{found, bulk_path, restored, failed, summary, entries[]}` with per-file outcomes.\n• When the bulk was recorded as count-only (memory cap blew through), `recoverable` would be false in list_changes and this tool returns `found: true, restored: 0` with an explanatory message.\n\n**Identifying the bulk**: use the entry's `path` field from list_changes as the `bulk_path` parameter. For destructive bulks the path is the command label (e.g. `\"shell_command\"`); for build bulks it's the workspace-relative directory with a trailing slash.",
-		Parameters: []ParameterConfig{
-			{"bulk_path", "string", true, []string{"path"}, "The bulk entry's `path` field as returned by list_changes."},
-		},
-		Handler: handleRecoverBulk,
 	})
 
 	// ask_user - Ask user a question and wait for response

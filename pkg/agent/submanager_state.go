@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/personas"
 )
 
 // StateManager defines the interface for managing conversation state
@@ -219,7 +220,7 @@ func NewAgentStateManager(debug bool) *AgentStateManager {
 		conversationPruner:      NewConversationPruner(debug),
 		commandHistory:          []string{},
 		historyIndex:            -1,
-		activePersona:           "orchestrator",
+		activePersona:           personas.IDOrchestrator,
 		circuitBreaker:          &CircuitBreakerState{Actions: make(map[string]*CircuitBreakerAction)},
 		falseStopDetectionEnabled: true,
 	}

@@ -11,6 +11,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/embedding"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
+	"github.com/sprout-foundry/sprout/pkg/personas"
 	"github.com/sprout-foundry/sprout/pkg/prompts"
 	"github.com/sprout-foundry/sprout/pkg/security"
 	"github.com/sprout-foundry/sprout/pkg/utils"
@@ -505,8 +506,8 @@ func (a *Agent) MaxSubagentDepth() int {
 		return cfg.SubagentMaxDepth
 	}
 
-	// EA root: 3 levels (EA → orchestrator → coder)
-	if a.rootPersonaID == "executive_assistant" {
+	// Coordinator root: 3 levels (coordinator → orchestrator → coder)
+	if a.rootPersonaID == personas.IDCoordinator {
 		return 2
 	}
 

@@ -115,11 +115,10 @@ export default function SubagentSettingsTab({
         'refactor',
         'debugger',
         'tester',
-        'code_reviewer',
+        'reviewer',
         'researcher',
         'web_scraper',
         'orchestrator',
-        'computer_user',
       ])}
 
       <div className="settings-section-spaced">

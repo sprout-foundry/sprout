@@ -83,7 +83,7 @@ If both are provided, the CLI prompt is used as the initial prompt.
 
       "provider": "openrouter",
       "model": "openai/gpt-5",
-      "persona": "code_reviewer",
+      "persona": "reviewer",
       "reasoning_effort": "high",
       "system_prompt": "...",
       "system_prompt_file": "prompts/system/reviewer.md",
@@ -176,7 +176,7 @@ The field is a map of persona IDs to provider/model overrides, available on both
     "model": "claude-sonnet-4",
     "subagent_overrides": {
       "tester": { "provider": "anthropic", "model": "claude-haiku-4-20250514" },
-      "code_reviewer": { "provider": "openrouter", "model": "google/gemini-2.5-pro" }
+      "reviewer": { "provider": "openrouter", "model": "google/gemini-2.5-pro" }
     },
     "prompt": "Implement feature X"
   }
@@ -219,7 +219,7 @@ The `SubagentRunner` enforces concurrency limits and token budgets to control re
 - `BudgetExceeded=true` means the task was skipped before it started (budget was already exhausted). `Truncated=true` means the task was running but cut short at an LLM-call boundary.
 - Budget check happens **after** acquiring the semaphore slot. A budget-skipped task may have consumed a semaphore slot while waiting in queue; it releases the slot immediately upon being skipped.
 - `MaxTokens` (`int` on `SubagentOptions`): per-subagent token budget. When `> 0`, a polling goroutine (500ms ticker via `monitorBudget`) watches token usage and calls `interruptCancel()` to stop the subagent when its individual token count exceeds the limit.
-- The Executive Assistant persona sets a default of 200000 tokens via `fleet_token_budget` in `pkg/personas/configs/executive_assistant.json`. When unset (zero), the fleet budget is unlimited.
+- The fleet budget is set per-call via `SubagentOptions.FleetTokenBudget`. When unset (zero), the fleet budget is unlimited.
 
 ### Telemetry
 
@@ -358,7 +358,7 @@ Note: hard termination (for example `SIGKILL`) can prevent restoration.
       "name": "review",
       "when": "on_success",
       "subagent_overrides": {
-        "code_reviewer": { "provider": "openrouter", "model": "google/gemini-2.5-pro" }
+        "reviewer": { "provider": "openrouter", "model": "google/gemini-2.5-pro" }
       },
       "prompt": "Review all changes."
     }
@@ -409,7 +409,7 @@ When the agent dispatches work via `RunParallel`, two shared limits govern how m
 - Tokens are debited to a shared `cumulativeTokens` counter **after each LLM API call** inside a subagent (not just after the subagent finishes). This is wired via `SetFleetBudget(cumulativeTokens, fleetBudgetLimit)` on each spawned subagent (SP-037-2c).
 - A budget check occurs **after acquiring the semaphore but before starting work**. If the budget is already exhausted, the task is cancelled immediately with `BudgetExceeded=true` — it never launches.
 - If a subagent is **mid-run** when the budget is exceeded during one of its LLM calls, the subagent truncates gracefully with `Truncated=true`.
-- The **Executive Assistant** persona sets a default `fleet_token_budget` of **200,000** tokens (`pkg/personas/configs/executive_assistant.json`).
+- The fleet budget is set per-call via `SubagentOptions.FleetTokenBudget`; unset/zero means unlimited.
 
 Result fields:
 - `SubagentResult.BudgetExceeded` — task was skipped because the budget was already exceeded before it started

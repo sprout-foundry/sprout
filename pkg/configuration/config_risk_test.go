@@ -750,14 +750,14 @@ func TestSubagentTypeEvaluateOperationRisk_WhitespaceOnly(t *testing.T) {
 func TestNewConfig_EA_AutoApproveRules_LoadedFromJSON(t *testing.T) {
 	cfg := NewConfig()
 
-	ea, ok := cfg.SubagentTypes["executive_assistant"]
+	ea, ok := cfg.SubagentTypes["coordinator"]
 	if !ok {
-		t.Fatalf("expected executive_assistant in default subagent types")
+		t.Fatalf("expected coordinator in default subagent types")
 	}
 
 	// Verify the EA has explicit auto_approve_rules (not nil)
 	if ea.AutoApproveRules == nil {
-		t.Fatal("expected executive_assistant to have AutoApproveRules loaded from JSON config, got nil")
+		t.Fatal("expected coordinator to have AutoApproveRules loaded from JSON config, got nil")
 	}
 
 	// Verify GetAutoApproveRules returns the configured values (not defaults)
@@ -828,9 +828,9 @@ func TestNewConfig_EA_AutoApproveRules_LoadedFromJSON(t *testing.T) {
 func TestNewConfig_EA_AutoApproveRules_MatchDefaults(t *testing.T) {
 	cfg := NewConfig()
 
-	ea, ok := cfg.SubagentTypes["executive_assistant"]
+	ea, ok := cfg.SubagentTypes["coordinator"]
 	if !ok {
-		t.Fatalf("expected executive_assistant in default subagent types")
+		t.Fatalf("expected coordinator in default subagent types")
 	}
 
 	// The JSON values were intentionally copied from DefaultAutoApproveRules()
@@ -896,9 +896,9 @@ func TestNewConfig_EA_AutoApproveRules_MatchDefaults(t *testing.T) {
 func TestNewConfig_EA_AutoApproveRules_EvaluateOperationRisk(t *testing.T) {
 	cfg := NewConfig()
 
-	ea, ok := cfg.SubagentTypes["executive_assistant"]
+	ea, ok := cfg.SubagentTypes["coordinator"]
 	if !ok {
-		t.Fatalf("expected executive_assistant in default subagent types")
+		t.Fatalf("expected coordinator in default subagent types")
 	}
 
 	tests := []struct {
@@ -1039,9 +1039,9 @@ func sliceDiff(have, want []string) (missing, extra []string) {
 func TestPersona_EA_RiskCascadeBaseline(t *testing.T) {
 	cfg := NewConfig()
 
-	ea, ok := cfg.SubagentTypes["executive_assistant"]
+	ea, ok := cfg.SubagentTypes["coordinator"]
 	if !ok {
-		t.Fatalf("expected executive_assistant in default subagent types")
+		t.Fatalf("expected coordinator in default subagent types")
 	}
 
 	rules := ea.GetAutoApproveRules()

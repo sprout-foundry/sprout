@@ -94,7 +94,7 @@ Example configuration:
 {
   "mcp": {
     "enabled": true,
-    "autoStart": true,
+    "auto_start": true,
     "servers": [
       {
         "name": "github",

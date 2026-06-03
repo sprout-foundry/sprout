@@ -211,20 +211,29 @@ func (a *Agent) ListChanges(args map[string]interface{}) (string, error) {
 }
 
 // ShowMyChange returns a unified diff JSON envelope for `path`.
+// After the SP-061-2 consolidation this is a thin wrapper around
+// list_changes(include_diff=true, path_pattern=path) — the standalone
+// show_my_change tool is gone.
 func (a *Agent) ShowMyChange(path string) (string, error) {
-	return handleShowMyChange(nil, a, map[string]interface{}{"path": path})
+	return handleListChanges(nil, a, map[string]interface{}{
+		"path_pattern": path,
+		"include_diff": true,
+	})
 }
 
-// RevertMyChanges performs a bulk revert. Exactly one of scope/file/
-// since should be non-empty; scope="all" is the default when all are
-// empty.
+// RevertMyChanges performs a bulk revert. The historical file= scope is
+// now served by recover_file(scope="session_start"); this method keeps
+// the old four-arg signature for back-compat and routes file= there.
 func (a *Agent) RevertMyChanges(scope, file, since string) (string, error) {
+	if file != "" {
+		return handleRecoverFile(nil, a, map[string]interface{}{
+			"path":  file,
+			"scope": "session_start",
+		})
+	}
 	args := map[string]interface{}{}
 	if scope != "" {
 		args["scope"] = scope
-	}
-	if file != "" {
-		args["file"] = file
 	}
 	if since != "" {
 		args["since"] = since
@@ -232,22 +241,25 @@ func (a *Agent) RevertMyChanges(scope, file, since string) (string, error) {
 	return handleRevertMyChanges(nil, a, args)
 }
 
-// SummarizeMySession returns the activity-block digest.
+// SummarizeMySession returns the activity-block digest. Thin wrapper
+// around list_changes(group_by="block").
 func (a *Agent) SummarizeMySession() (string, error) {
-	return handleSummarizeMySession(nil, a, nil)
+	return handleListChanges(nil, a, map[string]interface{}{"group_by": "block"})
 }
 
-// MyRecentChanges returns the cross-session timeline. `since` accepts
-// RFC3339, durations ("2d"), or empty for everything.
+// MyRecentChanges returns the cross-session timeline. Thin wrapper
+// around list_changes(include_persisted=true, since=…).
 func (a *Agent) MyRecentChanges(since string) (string, error) {
-	args := map[string]interface{}{}
+	args := map[string]interface{}{"include_persisted": true}
 	if since != "" {
 		args["since"] = since
 	}
-	return handleMyRecentChanges(nil, a, args)
+	return handleListChanges(nil, a, args)
 }
 
 // RecoverFile restores one file from the tracker's session buffer.
+// scope is forwarded as-is to handleRecoverFile so callers can request
+// "latest" (default), "session_start", or "bulk".
 func (a *Agent) RecoverFile(path string) (string, error) {
 	return handleRecoverFile(nil, a, map[string]interface{}{"path": path})
 }

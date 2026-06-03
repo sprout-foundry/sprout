@@ -8,7 +8,7 @@ import (
 // the expected number of tools after the refactor.
 func TestNewDefaultToolRegistry_Count(t *testing.T) {
 	registry := newDefaultToolRegistry()
-	expectedCount := 42
+	expectedCount := 33
 	if len(registry.tools) != expectedCount {
 		t.Errorf("expected %d registered tools, got %d", expectedCount, len(registry.tools))
 	}
@@ -47,21 +47,12 @@ func TestNewDefaultToolRegistry_AllToolsRegistered(t *testing.T) {
 		"self_review",
 		"list_skills",
 		"activate_skill",
-		"add_memory",
-		"read_memory",
-		"list_memories",
-		"delete_memory",
-		"search_memories",
+		"manage_memory",
 		"manage_settings",
-		"task_queue_read",
-		"task_queue_publish",
-		"task_queue_add",
+		"task_queue",
 		"list_changes",
-		"my_recent_changes",
 		"recover_file",
 		"revert_my_changes",
-		"show_my_change",
-		"summarize_my_session",
 	}
 
 	for _, toolName := range expectedTools {
@@ -120,15 +111,9 @@ func TestNewDefaultToolRegistry_ToolParameters(t *testing.T) {
 		"self_review":            {paramCount: 1, requiredCount: 0, requiredNames: []string{}},
 		"list_skills":            {paramCount: 0, requiredCount: 0, requiredNames: []string{}},
 		"activate_skill":         {paramCount: 1, requiredCount: 1, requiredNames: []string{"skill_id"}},
-		"add_memory":             {paramCount: 2, requiredCount: 2, requiredNames: []string{"name", "content"}},
-		"read_memory":            {paramCount: 1, requiredCount: 1, requiredNames: []string{"name"}},
-		"list_memories":          {paramCount: 0, requiredCount: 0, requiredNames: []string{}},
-		"delete_memory":          {paramCount: 1, requiredCount: 1, requiredNames: []string{"name"}},
-		"search_memories":        {paramCount: 3, requiredCount: 1, requiredNames: []string{"query"}},
+		"manage_memory":          {paramCount: 6, requiredCount: 1, requiredNames: []string{"operation"}},
 		"manage_settings":        {paramCount: 4, requiredCount: 1, requiredNames: []string{"operation"}},
-		"task_queue_read":        {paramCount: 2, requiredCount: 0, requiredNames: []string{}},
-		"task_queue_publish":     {paramCount: 4, requiredCount: 2, requiredNames: []string{"task_id", "status"}},
-		"task_queue_add":         {paramCount: 5, requiredCount: 1, requiredNames: []string{"title"}},
+		"task_queue":             {paramCount: 11, requiredCount: 1, requiredNames: []string{"operation"}},
 	}
 
 	for toolName, expected := range expectations {
@@ -201,7 +186,7 @@ func TestNewDefaultToolRegistry_ParameterAlternatives(t *testing.T) {
 		{"search_files", "directory", []string{"root"}},
 		{"ask_user", "question", []string{}},
 		{"activate_skill", "skill_id", []string{"skill", "id"}},
-		{"add_memory", "name", []string{"title"}},
+		{"manage_memory", "name", []string{"title", "memory"}},
 		{"rollback_changes", "file_path", []string{"filename"}},
 		{"view_history", "file_filter", []string{"filename"}},
 	}
@@ -328,28 +313,27 @@ func TestNewDefaultToolRegistry_ParameterTypes(t *testing.T) {
 		{"rollback_changes", "confirm", "boolean"},
 		{"self_review", "revision_id", "string"},
 		{"activate_skill", "skill_id", "string"},
-		{"add_memory", "name", "string"},
-		{"add_memory", "content", "string"},
-		{"read_memory", "name", "string"},
-		{"delete_memory", "name", "string"},
-		{"search_memories", "query", "string"},
-		{"search_memories", "threshold", "number"},
-		{"search_memories", "top_k", "integer"},
+		{"manage_memory", "operation", "string"},
+		{"manage_memory", "name", "string"},
+		{"manage_memory", "content", "string"},
+		{"manage_memory", "query", "string"},
+		{"manage_memory", "threshold", "number"},
+		{"manage_memory", "top_k", "integer"},
 		{"manage_settings", "operation", "string"},
 		{"manage_settings", "key", "string"},
 		{"manage_settings", "value", "string"},
 		{"manage_settings", "provider", "string"},
-		{"task_queue_read", "status", "string"},
-		{"task_queue_read", "limit", "integer"},
-		{"task_queue_publish", "task_id", "string"},
-		{"task_queue_publish", "status", "string"},
-		{"task_queue_publish", "result", "string"},
-		{"task_queue_publish", "subtasks", "array"},
-		{"task_queue_add", "title", "string"},
-		{"task_queue_add", "description", "string"},
-		{"task_queue_add", "priority", "string"},
-		{"task_queue_add", "working_dir", "string"},
-		{"task_queue_add", "persona", "string"},
+		{"task_queue", "operation", "string"},
+		{"task_queue", "status", "string"},
+		{"task_queue", "limit", "integer"},
+		{"task_queue", "title", "string"},
+		{"task_queue", "description", "string"},
+		{"task_queue", "priority", "string"},
+		{"task_queue", "working_dir", "string"},
+		{"task_queue", "persona", "string"},
+		{"task_queue", "task_id", "string"},
+		{"task_queue", "result", "string"},
+		{"task_queue", "subtasks", "array"},
 	}
 
 	for _, tc := range tests {

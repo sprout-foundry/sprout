@@ -558,7 +558,7 @@ func TestTrackShellTurn_DetectsMutationsAfterPrime(t *testing.T) {
 	created := filepath.Join(dir, "new.go")
 	mustWriteFile(t, created, []byte("package main"))
 
-	tracker.TrackShellTurn(dir, "shell_command")
+	tracker.TrackShellTurn(dir, "shell_command", false)
 
 	if len(tracker.changes) != 3 {
 		t.Fatalf("expected 3 changes (1 edit + 1 delete + 1 create), got %d: %+v",
@@ -611,7 +611,7 @@ func TestTrackShellTurn_RebasesAcrossCalls(t *testing.T) {
 	// First "shell": modify the file.
 	mustWriteFile(t, file, []byte("v2"))
 	bumpMtime(t, file)
-	tracker.TrackShellTurn(dir, "shell_command")
+	tracker.TrackShellTurn(dir, "shell_command", false)
 
 	if len(tracker.changes) != 1 || tracker.changes[0].NewCode != "v2" {
 		t.Fatalf("first shell: expected single edit landing at v2, got %+v", tracker.changes)
@@ -619,7 +619,7 @@ func TestTrackShellTurn_RebasesAcrossCalls(t *testing.T) {
 
 	// Second "shell": no further mutations. Must not re-report the
 	// first edit; cache should now consider v2 the baseline.
-	tracker.TrackShellTurn(dir, "shell_command")
+	tracker.TrackShellTurn(dir, "shell_command", false)
 
 	if len(tracker.changes) != 1 {
 		t.Errorf("second shell should not re-report prior mutation; expected 1 change, got %d: %+v",
@@ -629,7 +629,7 @@ func TestTrackShellTurn_RebasesAcrossCalls(t *testing.T) {
 	// Third "shell": modify again.
 	mustWriteFile(t, file, []byte("v3"))
 	bumpMtime(t, file)
-	tracker.TrackShellTurn(dir, "shell_command")
+	tracker.TrackShellTurn(dir, "shell_command", false)
 
 	if len(tracker.changes) != 2 {
 		t.Fatalf("third shell should land a new edit; expected 2 total changes, got %d", len(tracker.changes))
@@ -651,7 +651,7 @@ func TestTrackShellTurn_AutoPrimesWhenColdCalled(t *testing.T) {
 
 	tracker := newTrackerForShellTest(t)
 	// No PrimeShellTracking call — cold first invocation.
-	tracker.TrackShellTurn(dir, "shell_command")
+	tracker.TrackShellTurn(dir, "shell_command", false)
 
 	if len(tracker.changes) != 0 {
 		t.Errorf("cold first TrackShellTurn should auto-prime silently (no changes); got %d: %+v",
@@ -714,7 +714,7 @@ func TestTrackShellTurn_TruncatedWalkSkipsFalseDeletes(t *testing.T) {
 	prevCap := overrideShellSnapshotMaxFilesForTest(5)
 	defer overrideShellSnapshotMaxFilesForTest(prevCap)
 
-	tracker.TrackShellTurn(dir, "shell_command")
+	tracker.TrackShellTurn(dir, "shell_command", false)
 
 	// Critical assertion: NO deletes recorded even though most cached
 	// files are "missing" from the truncated new walk.
@@ -782,7 +782,7 @@ func TestWalkWorkspace_AdaptiveAutoSkipLearnsFatDirs(t *testing.T) {
 	// Second walk: must NOT produce false-positive deletes for the
 	// fat-dir files (they were never in the cache after cleanup). And
 	// the walker honors autoSkipDirs so we don't re-walk the fat dir.
-	tracker.TrackShellTurn(dir, "shell_command")
+	tracker.TrackShellTurn(dir, "shell_command", false)
 	for _, ch := range tracker.changes {
 		if strings.Contains(ch.FilePath, "releases/") {
 			t.Errorf("false-positive change recorded for auto-skipped path: %+v", ch)
@@ -854,5 +854,312 @@ func mapKeys(m map[string]*shellSnapshotEntry) []string {
 		keys = append(keys, k)
 	}
 	return keys
+}
+
+// TestTrackShellTurn_DestructiveBypassesAutoSkipDirs pins the
+// `git checkout .` safety case: the previous shell command (a build)
+// added a dir to autoSkipDirs, but a destructive command must walk it
+// anyway so reverts in there stay recoverable.
+func TestTrackShellTurn_DestructiveBypassesAutoSkipDirs(t *testing.T) {
+	dir := t.TempDir()
+	tracker := newTrackerForShellTest(t)
+
+	// Seed autoSkipDirs with a subdirectory that we'll mutate later.
+	fatDir := filepath.Join(dir, "generated")
+	if err := os.MkdirAll(fatDir, 0o755); err != nil {
+		t.Fatalf("mkdir generated: %v", err)
+	}
+	tracker.autoSkipDirs = map[string]bool{fatDir: true}
+
+	tracked := filepath.Join(fatDir, "build.go")
+	mustWriteFile(t, tracked, []byte("package main // active edit"))
+	tracker.PrimeShellTracking(dir)
+
+	// Sanity check: prime walk respected the auto-skip set, so
+	// generated/build.go isn't in the cache.
+	if _, ok := tracker.shellCache[tracked]; ok {
+		t.Fatalf("non-destructive prime walked an auto-skipped dir; cache shouldn't have %q", tracked)
+	}
+
+	// Simulate the destructive shell mutation: build.go gets clobbered.
+	mustWriteFile(t, tracked, []byte("package main // reverted"))
+	bumpMtime(t, tracked)
+
+	tracker.TrackShellTurn(dir, "git checkout .", true)
+
+	// Because destructive=true ignored autoSkipDirs, the walk visited
+	// generated/build.go. Without that visit there'd be no change
+	// recorded — exactly the silent-loss case the override prevents.
+	// Note: the very first destructive walk after a non-destructive
+	// prime is the boundary case — the file wasn't in the cache, so
+	// the walker sees it as a CREATE (not edit). That's still strictly
+	// better than silently dropping it.
+	if len(tracker.changes) == 0 {
+		t.Fatalf("destructive walk should have recorded mutation in auto-skipped dir; got 0 changes")
+	}
+	saw := false
+	for _, ch := range tracker.changes {
+		if ch.FilePath == tracked {
+			saw = true
+			break
+		}
+	}
+	if !saw {
+		t.Errorf("expected a change record for %q after destructive walk; got %+v", tracked, tracker.changes)
+	}
+
+	// And destructive mode must not POLLUTE the auto-skip set with
+	// whatever it learned during the override.
+	for d := range tracker.autoSkipDirs {
+		if d == fatDir {
+			continue
+		}
+		t.Errorf("destructive walk leaked %q into autoSkipDirs; only the seeded %q should be present", d, fatDir)
+	}
+}
+
+// TestTrackShellTurn_DestructiveBulkRollupBelowThresholdEmitsPerFile
+// confirms that small destructive ops still produce per-file rows so
+// the user can scan flat. Below shellDestructiveBulkThreshold (10),
+// each mutation is its own TrackedFileChange.
+func TestTrackShellTurn_DestructiveBulkRollupBelowThresholdEmitsPerFile(t *testing.T) {
+	dir := t.TempDir()
+	tracker := newTrackerForShellTest(t)
+
+	// 3 files (below threshold) — should emit per-file.
+	paths := make([]string, 3)
+	for i := range paths {
+		paths[i] = filepath.Join(dir, "f"+strconv.Itoa(i)+".txt")
+		mustWriteFile(t, paths[i], []byte("v1"))
+	}
+	tracker.PrimeShellTracking(dir)
+
+	for _, p := range paths {
+		mustWriteFile(t, p, []byte("v2"))
+		bumpMtime(t, p)
+	}
+
+	tracker.TrackShellTurn(dir, "git checkout .", true)
+
+	if len(tracker.changes) != 3 {
+		t.Fatalf("expected 3 per-file changes below the destructive threshold, got %d: %+v",
+			len(tracker.changes), tracker.changes)
+	}
+	for _, ch := range tracker.changes {
+		if ch.Operation == "bulk" {
+			t.Errorf("did not expect bulk emission below the threshold, got %+v", ch)
+		}
+	}
+}
+
+// TestTrackShellTurn_DestructiveBulkRollupCollapsesAtThreshold
+// confirms the recoverable-bulk shape kicks in at
+// shellDestructiveBulkThreshold and that every per-file payload is
+// preserved inside BulkItems.
+func TestTrackShellTurn_DestructiveBulkRollupCollapsesAtThreshold(t *testing.T) {
+	dir := t.TempDir()
+	tracker := newTrackerForShellTest(t)
+
+	const fileCount = 12 // > shellDestructiveBulkThreshold (10)
+	paths := make([]string, fileCount)
+	for i := range paths {
+		paths[i] = filepath.Join(dir, "f"+strconv.Itoa(i)+".txt")
+		mustWriteFile(t, paths[i], []byte("before-"+strconv.Itoa(i)))
+	}
+	tracker.PrimeShellTracking(dir)
+
+	for i, p := range paths {
+		mustWriteFile(t, p, []byte("after-"+strconv.Itoa(i)))
+		bumpMtime(t, p)
+	}
+
+	tracker.TrackShellTurn(dir, "git checkout .", true)
+
+	if len(tracker.changes) != 1 {
+		t.Fatalf("expected 1 bulk row, got %d: %+v", len(tracker.changes), tracker.changes)
+	}
+	bulk := tracker.changes[0]
+	if bulk.Operation != "bulk" {
+		t.Errorf("expected Operation=bulk, got %q", bulk.Operation)
+	}
+	if bulk.FilePath != "git checkout ." {
+		t.Errorf("expected FilePath to be the command label, got %q", bulk.FilePath)
+	}
+	if bulk.BulkCount != fileCount {
+		t.Errorf("BulkCount = %d, want %d", bulk.BulkCount, fileCount)
+	}
+	if len(bulk.BulkItems) != fileCount {
+		t.Fatalf("expected %d BulkItems for recoverable bulk, got %d", fileCount, len(bulk.BulkItems))
+	}
+	gotPaths := make(map[string]bool, len(bulk.BulkItems))
+	for i, item := range bulk.BulkItems {
+		gotPaths[item.FilePath] = true
+		if !strings.HasPrefix(item.OriginalCode, "before-") {
+			t.Errorf("BulkItems[%d].OriginalCode lost — expected 'before-…', got %q", i, item.OriginalCode)
+		}
+		if !strings.HasPrefix(item.NewCode, "after-") {
+			t.Errorf("BulkItems[%d].NewCode wrong — expected 'after-…', got %q", i, item.NewCode)
+		}
+		if item.Operation != "edit" {
+			t.Errorf("BulkItems[%d].Operation = %q, want 'edit'", i, item.Operation)
+		}
+	}
+	for _, p := range paths {
+		if !gotPaths[p] {
+			t.Errorf("BulkItems missing entry for %q", p)
+		}
+	}
+}
+
+// TestRecoverFile_FindsBulkPackedFile confirms recover_file resolves a
+// path that lives inside a bulk entry's BulkItems and restores it.
+func TestRecoverFile_FindsBulkPackedFile(t *testing.T) {
+	dir := t.TempDir()
+	abs := filepath.Join(dir, "config.go")
+	mustWriteFile(t, abs, []byte("after-edit"))
+
+	tracker := newTrackerForShellTest(t)
+	tracker.changes = []TrackedFileChange{{
+		FilePath:  "git checkout .",
+		Operation: "bulk",
+		BulkCount: 1,
+		BulkItems: []TrackedBulkItem{{
+			FilePath:     abs,
+			OriginalCode: "the recovered original",
+			NewCode:      "after-edit",
+			Operation:    "edit",
+		}},
+	}}
+
+	got := resolveRecoveryTarget(tracker.changes, abs)
+	if got == nil {
+		t.Fatalf("resolveRecoveryTarget did not match %q inside the bulk entry", abs)
+	}
+	if got.OriginalCode != "the recovered original" {
+		t.Errorf("synthesized TrackedFileChange.OriginalCode = %q, want 'the recovered original'", got.OriginalCode)
+	}
+	if got.Operation != "edit" {
+		t.Errorf("synthesized Operation = %q, want 'edit'", got.Operation)
+	}
+}
+
+// TestRecoverBulk_RestoresAllPackedFiles confirms handleRecoverBulk
+// walks BulkItems and restores each per-file payload.
+func TestRecoverBulk_RestoresAllPackedFiles(t *testing.T) {
+	dir := t.TempDir()
+	const fileCount = 3
+	abs := make([]string, fileCount)
+	for i := range abs {
+		abs[i] = filepath.Join(dir, "f"+strconv.Itoa(i)+".txt")
+		mustWriteFile(t, abs[i], []byte("after-"+strconv.Itoa(i)))
+	}
+
+	tracker := newTrackerForShellTest(t)
+	items := make([]TrackedBulkItem, fileCount)
+	for i := range items {
+		items[i] = TrackedBulkItem{
+			FilePath:     abs[i],
+			OriginalCode: "before-" + strconv.Itoa(i),
+			NewCode:      "after-" + strconv.Itoa(i),
+			Operation:    "edit",
+		}
+	}
+	tracker.changes = []TrackedFileChange{{
+		FilePath:  "git checkout .",
+		Operation: "bulk",
+		BulkCount: fileCount,
+		BulkItems: items,
+	}}
+
+	// The on-disk content should be restored after recover_bulk.
+	for i, p := range abs {
+		want := []byte("before-" + strconv.Itoa(i))
+		// Sanity: file is currently the "after" state.
+		got, _ := os.ReadFile(p)
+		if !bytes.Equal(got, []byte("after-"+strconv.Itoa(i))) {
+			t.Fatalf("pre-recovery state wrong for %s: got %q, want 'after-%d'", p, got, i)
+		}
+		_ = want // keep the assertion below explicit
+	}
+
+	// Build a stand-in agent that returns our tracker.
+	a := &Agent{changeTracker: tracker}
+	// Post-consolidation: recover_bulk folded into recover_file(scope="bulk").
+	out, err := handleRecoverFile(nil, a, map[string]any{"path": "git checkout .", "scope": "bulk"})
+	if err != nil {
+		t.Fatalf("handleRecoverFile(scope=bulk): %v", err)
+	}
+	if !strings.Contains(out, `"restored": 3`) {
+		t.Errorf("expected restored:3 in payload, got %s", out)
+	}
+	for i, p := range abs {
+		got, _ := os.ReadFile(p)
+		want := []byte("before-" + strconv.Itoa(i))
+		if !bytes.Equal(got, want) {
+			t.Errorf("post-recovery content wrong for %s: got %q, want %q", p, got, want)
+		}
+	}
+}
+
+// TestPackBulkItems_OverBudgetDegradesToCountOnly confirms a bulk that
+// exceeds shellDestructiveBulkMaxPayloadBytes returns overBudget=true
+// so the caller emits a count-only entry (recoverable=false in the UI).
+func TestPackBulkItems_OverBudgetDegradesToCountOnly(t *testing.T) {
+	// Two giant entries whose combined payload exceeds the cap.
+	huge := strings.Repeat("X", shellDestructiveBulkMaxPayloadBytes/2+1024) // each > half the cap
+	tracker := newTrackerForShellTest(t)
+
+	pending := []pendingShellChange{
+		{Path: "/abs/a.txt", Op: "edit", Before: &shellSnapshotEntry{Content: []byte(huge)}, After: &shellSnapshotEntry{Content: []byte("after")}},
+		{Path: "/abs/b.txt", Op: "edit", Before: &shellSnapshotEntry{Content: []byte(huge)}, After: &shellSnapshotEntry{Content: []byte("after")}},
+	}
+	items, overBudget := tracker.packBulkItems(pending)
+	if !overBudget {
+		t.Fatalf("expected overBudget=true once cumulative payload exceeds the cap")
+	}
+	if items != nil {
+		t.Errorf("expected items=nil on overBudget, got %d items", len(items))
+	}
+}
+
+// TestTrackShellTurn_TruncatedDestructiveWalkAppendsWarning confirms
+// the truncation surfacing — when a destructive walk hits the file-
+// count cap, a Operation:"warning" entry lands in the change manifest
+// so it's user-visible.
+func TestTrackShellTurn_TruncatedDestructiveWalkAppendsWarning(t *testing.T) {
+	dir := t.TempDir()
+	tracker := newTrackerForShellTest(t)
+
+	// Create a baseline file so PrimeShellTracking has something.
+	seed := filepath.Join(dir, "seed.txt")
+	mustWriteFile(t, seed, []byte("seed"))
+	tracker.PrimeShellTracking(dir)
+
+	// Force truncation by capping shellSnapshotMaxFiles to a low number
+	// and creating more files than the cap. Track the original so we can
+	// restore it; otherwise other tests in this package would inherit the
+	// reduced cap.
+	prev := overrideShellSnapshotMaxFilesForTest(2)
+	defer overrideShellSnapshotMaxFilesForTest(prev)
+
+	for i := 0; i < 10; i++ {
+		mustWriteFile(t, filepath.Join(dir, "extra"+strconv.Itoa(i)+".txt"), []byte("x"))
+	}
+
+	tracker.TrackShellTurn(dir, "git checkout .", true)
+
+	sawWarning := false
+	for _, ch := range tracker.changes {
+		if ch.Operation == "warning" {
+			sawWarning = true
+			if !strings.Contains(ch.NewCode, "truncated") {
+				t.Errorf("warning entry should mention truncation, got %q", ch.NewCode)
+			}
+			break
+		}
+	}
+	if !sawWarning {
+		t.Errorf("expected a Operation:warning entry after truncated destructive walk; got %+v", tracker.changes)
+	}
 }
 

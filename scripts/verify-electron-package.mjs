@@ -9,19 +9,35 @@ function fail(message) {
 }
 
 function findSingleUnpackedDir(releasesDir) {
-  const entries = readdirSync(releasesDir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && entry.name.endsWith('-unpacked'))
-    .map((entry) => entry.name);
+  // electron-builder --dir produces different layouts per platform:
+  //   linux / windows → `<name>-<os>-<arch>-unpacked/`
+  //   macOS           → `mac-<arch>/<name>.app/`
+  // Walk one level into mac-* dirs so we can return the .app, which is
+  // the closest analogue to an "unpacked" tree on macOS.
+  const candidates = [];
+  for (const entry of readdirSync(releasesDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    if (entry.name.endsWith('-unpacked')) {
+      candidates.push(entry.name);
+      continue;
+    }
+    if (entry.name.startsWith('mac')) {
+      const inner = readdirSync(join(releasesDir, entry.name), { withFileTypes: true })
+        .filter((e) => e.isDirectory() && e.name.endsWith('.app'))
+        .map((e) => join(entry.name, e.name));
+      candidates.push(...inner);
+    }
+  }
 
-  if (entries.length === 0) {
+  if (candidates.length === 0) {
     fail(`No unpacked app directory found under ${releasesDir}`);
   }
 
-  if (entries.length > 1) {
-    fail(`Multiple unpacked app directories found under ${releasesDir}: ${entries.join(', ')}`);
+  if (candidates.length > 1) {
+    fail(`Multiple unpacked app directories found under ${releasesDir}: ${candidates.join(', ')}`);
   }
 
-  return join(releasesDir, entries[0]);
+  return join(releasesDir, candidates[0]);
 }
 
 function ensureFile(filePath, description) {
@@ -122,7 +138,12 @@ ensureDirectory(releasesDir, 'release output directory');
 const unpackedDir = process.argv[3] ? join(releasesDir, process.argv[3]) : findSingleUnpackedDir(releasesDir);
 ensureDirectory(unpackedDir, 'unpacked app directory');
 
-const resourcesDir = join(unpackedDir, 'resources');
+// macOS .app bundles nest resources under Contents/Resources; linux/win
+// place them at the top level `resources/`.
+const isMacApp = unpackedDir.endsWith('.app');
+const resourcesDir = isMacApp
+  ? join(unpackedDir, 'Contents', 'Resources')
+  : join(unpackedDir, 'resources');
 const backendRoot = join(resourcesDir, 'backend');
 
 ensureFile(join(resourcesDir, 'app.asar'), 'app bundle');

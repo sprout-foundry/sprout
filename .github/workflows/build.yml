@@ -44,14 +44,18 @@ jobs:
       with:
         node-version: '22'
 
-    - name: Build workspace packages
-      run: |
-        (cd packages/events && npm install && npm run build)
-        (cd packages/ui && npm install && npm run build)
+    - name: Install Node.js dependencies (root workspaces)
+      # Single `npm ci` from root installs every workspace
+      # (packages/events, packages/ui, webui) plus root devDeps.
+      # Per-workspace `npm install` in the past pruned root devDeps.
+      run: npm ci
 
-    - name: Install Node.js dependencies
+    - name: Build shared workspace packages
+      # webui imports @sprout/events and @sprout/ui from their `dist/`
+      # outputs (no `prepare` script — removed in 61ba3f17).
       run: |
-        cd webui && npm ci
+        npm run build -w @sprout/events
+        npm run build -w @sprout/ui
 
     - name: Lint frontend (non-blocking)
       continue-on-error: true
@@ -170,14 +174,18 @@ jobs:
       with:
         node-version: '22'
 
-    - name: Build workspace packages
-      run: |
-        (cd packages/events && npm install && npm run build)
-        (cd packages/ui && npm install && npm run build)
+    - name: Install Node.js dependencies (root workspaces)
+      # Single `npm ci` from root installs every workspace
+      # (packages/events, packages/ui, webui) plus root devDeps.
+      # Per-workspace `npm install` in the past pruned root devDeps.
+      run: npm ci
 
-    - name: Install Node.js dependencies
+    - name: Build shared workspace packages
+      # webui imports @sprout/events and @sprout/ui from their `dist/`
+      # outputs (no `prepare` script — removed in 61ba3f17).
       run: |
-        cd webui && npm ci
+        npm run build -w @sprout/events
+        npm run build -w @sprout/ui
 
     - name: Build UI and WASM assets (make deploy-ui build-wasm)
       shell: bash

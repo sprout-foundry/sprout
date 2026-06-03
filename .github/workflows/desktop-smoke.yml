@@ -73,14 +73,13 @@ jobs:
             xauth \
             libgbm1
 
-      - name: Build workspace packages
+      - name: Build shared workspace packages
+        # Root `npm ci` above already installed every workspace.
+        # webui consumes @sprout/events and @sprout/ui from their `dist/`
+        # outputs (no `prepare` script — removed in 61ba3f17).
         run: |
-          (cd packages/events && npm install && npm run build)
-          (cd packages/ui && npm install && npm run build)
-
-      - name: Set up Node.js webui
-        run: |
-          cd webui && npm ci
+          npm run build -w @sprout/events
+          npm run build -w @sprout/ui
 
       - name: Build Go backend binary for E2E tests
         run: npm run build:desktop:backend

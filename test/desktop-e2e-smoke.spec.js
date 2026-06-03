@@ -19,13 +19,10 @@ const { spawn } = require('node:child_process');
 const http = require('node:http');
 
 const APP_ROOT = path.resolve(__dirname, '..');
-const ELECTRON_BIN = path.join(
-  APP_ROOT,
-  'node_modules',
-  'electron',
-  'dist',
-  'electron'
-);
+// `require('electron')` exports the absolute path to the platform-correct
+// binary (`Electron.app/Contents/MacOS/Electron` on macOS, `electron.exe`
+// on Windows, `electron` on Linux).
+const ELECTRON_BIN = require('electron');
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -136,7 +133,10 @@ function checkWebuiLoads(port) {
       res.on('data', (chunk) => chunks.push(chunk));
       res.on('end', () => {
         const body = Buffer.concat(chunks).toString('utf8');
-        if (res.statusCode === 200 && body.includes('id="root"') && body.includes('<!doctype html>')) {
+        // Vite emits `<!DOCTYPE html>` (uppercase); be case-insensitive
+        // so a future build-tool change doesn't break the smoke test.
+        const looksLikeHtml = /^<!doctype\s+html>/i.test(body.trimStart());
+        if (res.statusCode === 200 && body.includes('id="root"') && looksLikeHtml) {
           resolve(body);
         } else {
           reject(new Error(`Webui did not load properly (HTTP ${res.statusCode}, body length ${body.length})`));
@@ -292,9 +292,15 @@ test.describe('Desktop E2E smoke', () => {
       // Get health and verify fields
       const health = await pollHealth(setup.port, 15000);
       expect(health.status).toBe('ok');
-      expect(health.port).toBe(setup.port);
       expect(typeof health.port).toBe('number');
-      expect(health.port).toBeGreaterThan(0);
+      // In native desktop mode the backend binds to a unix socket and the
+      // Electron main process proxies a TCP port in front of it. The
+      // backend therefore reports port=0 in `/health` (its own bound port),
+      // while `setup.port` is the *proxy* port we connected to. Accept
+      // either: the proxy port (TCP-mode backend) or 0 (socket-mode
+      // backend). The reachability check above already proved a real
+      // listener is up.
+      expect([0, setup.port]).toContain(health.port);
       expect(typeof health.uptime).toBe('string');
       expect(health.uptime.length).toBeGreaterThan(0);
       expect(/\d/.test(health.uptime)).toBe(true);
@@ -323,7 +329,13 @@ test.describe('Desktop E2E smoke', () => {
       expect(workspaceInfo).toBeTruthy();
       expect(typeof workspaceInfo.workspace_root).toBe('string');
       expect(typeof workspaceInfo.daemon_root).toBe('string');
-      expect(workspaceInfo.workspace_root).toBe(path.resolve(setup.workspaceDir));
+      // On macOS, /var is a symlink to /private/var; the backend resolves
+      // the workspace path with realpath while os.tmpdir() in Node may
+      // return the symlinked form. Normalize both with realpath so the
+      // comparison sees the same canonical path.
+      expect(fs.realpathSync(workspaceInfo.workspace_root)).toBe(
+        fs.realpathSync(setup.workspaceDir)
+      );
     } finally {
       await cleanupTest(app, setup.statusDir, setup.statusFile);
     }

@@ -1084,9 +1084,10 @@ func TestRecoverBulk_RestoresAllPackedFiles(t *testing.T) {
 
 	// Build a stand-in agent that returns our tracker.
 	a := &Agent{changeTracker: tracker}
-	out, err := handleRecoverBulk(nil, a, map[string]any{"bulk_path": "git checkout ."})
+	// Post-consolidation: recover_bulk folded into recover_file(scope="bulk").
+	out, err := handleRecoverFile(nil, a, map[string]any{"path": "git checkout .", "scope": "bulk"})
 	if err != nil {
-		t.Fatalf("handleRecoverBulk: %v", err)
+		t.Fatalf("handleRecoverFile(scope=bulk): %v", err)
 	}
 	if !strings.Contains(out, `"restored": 3`) {
 		t.Errorf("expected restored:3 in payload, got %s", out)

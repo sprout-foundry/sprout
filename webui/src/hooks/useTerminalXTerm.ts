@@ -39,6 +39,9 @@ export interface UseTerminalXTermOptions {
   onSaveScrollback: (sessionId: string) => void;
   /** Get the terminal WebSocket service's session ID (for scrollback). */
   getSessionId: () => string | undefined;
+  /** Called when xterm receives an OSC 0/2 title change. Empty/whitespace
+      titles are filtered out before this fires. */
+  onTitleChange?: (title: string) => void;
 }
 
 export interface UseTerminalXTermReturn {
@@ -94,6 +97,7 @@ export function useTerminalXTerm(options: UseTerminalXTermOptions): UseTerminalX
     onSearchToggle,
     onSaveScrollback,
     getSessionId,
+    onTitleChange,
     shouldFocus = true,
   } = options;
 
@@ -137,6 +141,8 @@ export function useTerminalXTerm(options: UseTerminalXTermOptions): UseTerminalX
   onSaveScrollbackRef.current = onSaveScrollback;
   const getSessionIdRef = useRef(getSessionId);
   getSessionIdRef.current = getSessionId;
+  const onTitleChangeRef = useRef(onTitleChange);
+  onTitleChangeRef.current = onTitleChange;
 
   // ── Initialize xterm when pane becomes active ─────────────────────
   useEffect(() => {
@@ -213,6 +219,16 @@ export function useTerminalXTerm(options: UseTerminalXTermOptions): UseTerminalX
       },
     );
 
+    // OSC 0/2 title sequences (e.g. `\e]0;new title\a`). The parent decides
+    // whether to honor the title for the tab name (it's overridden by manual
+    // renames). Empty/whitespace titles are dropped — many shells emit a
+    // bare `\e]0;\a` on prompt redraw.
+    const titleDisposable = term.onTitleChange((title) => {
+      const trimmed = (title ?? '').trim();
+      if (!trimmed) return;
+      onTitleChangeRef.current?.(trimmed);
+    });
+
     // Data handler
     term.onData((data) => {
       onDataRef.current(data);
@@ -261,6 +277,7 @@ export function useTerminalXTerm(options: UseTerminalXTermOptions): UseTerminalX
       linkProviderRef.current?.dispose();
       linkProviderRef.current = null;
       resultsDisposable.dispose();
+      titleDisposable.dispose();
       selectionChangeDisposable.dispose();
       if (copyOnSelectTimerRef.current !== null) {
         clearTimeout(copyOnSelectTimerRef.current);

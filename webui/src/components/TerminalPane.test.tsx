@@ -26,6 +26,7 @@ const mockTerm = {
   open: vi.fn(),
   onData: vi.fn(() => ({ dispose: vi.fn() })),
   onSelectionChange: vi.fn(() => ({ dispose: vi.fn() })),
+  onTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
   focus: vi.fn(),
   writeln: vi.fn(),
   dispose: vi.fn(),

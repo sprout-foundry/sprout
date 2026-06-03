@@ -520,5 +520,26 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Handler: handleTaskQueueAdd,
 	})
 
+	// Register run_automate tool - starts a workflow as a background process
+	// ALWAYS requires user approval via the security classifier.
+	registry.RegisterTool(ToolConfig{
+		Name:        "run_automate",
+		Description: "Run an automated workflow from the project's automate/ directory as a background process. Use list_automate_workflows first to discover available workflows. ALWAYS requires user approval before starting. The workflow runs autonomously (no interaction needed after approval). Returns a background session ID that can be checked with shell_command(check_background=<session_id>).",
+		Parameters: []ParameterConfig{
+			{"workflow", "string", true, []string{"name", "workflow_name"}, "Workflow filename or name (with or without .json extension) from the automate/ directory"},
+			{"background", "boolean", false, []string{}, "Run as background process (default: true). Set to false for foreground (blocking) execution."},
+		},
+		Handler: handleRunAutomate,
+		Timeout: 0, // No timeout — autonomous workflows run until completion
+	})
+
+	// Register list_automate_workflows tool
+	registry.RegisterTool(ToolConfig{
+		Name:        "list_automate_workflows",
+		Description: "List available automated workflows from the project's automate/ directory. Returns workflow filenames and descriptions. Use this before run_automate to show the user what's available.",
+		Parameters:  []ParameterConfig{},
+		Handler:     handleListAutomateWorkflows,
+	})
+
 	return registry
 }

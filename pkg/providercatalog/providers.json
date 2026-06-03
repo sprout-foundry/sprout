@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-06-02T11:40:51Z",
+  "updated_at": "2026-06-03T14:05:40Z",
   "source": "refresh_provider_catalog",
   "providers": [
     {
@@ -1572,8 +1572,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.3,
-          "output_cost": 2.5
+          "input_cost": 0.075,
+          "output_cost": 0.625
         },
         {
           "id": "inflection/inflection-3-pi",
@@ -3294,6 +3294,14 @@
           ]
         },
         {
+          "id": "openrouter/fusion",
+          "name": "OpenRouter: Fusion",
+          "description": "Fusion turns your prompt into a small multi-model deliberation. A panel of expert models (see below) analyzes your prompt in parallel with web search and web fetch enabled, then a...",
+          "context_length": 128000,
+          "input_cost": -1000000,
+          "output_cost": -1000000
+        },
+        {
           "id": "openrouter/owl-alpha",
           "name": "Owl Alpha",
           "description": "Owl Alpha is a high-performance foundation model designed for agentic workloads. Natively supports tool use, and long-context tasks, with strong performance in code generation, automated workflows, and complex instruction execution....",
@@ -4025,6 +4033,20 @@
           "output_cost": 3.75
         },
         {
+          "id": "qwen/qwen3.7-plus",
+          "name": "Qwen: Qwen3.7 Plus",
+          "description": "Qwen3.7-Plus is a cost-effective model in Alibaba's Qwen3.7 series. It supports text and image input with text output, building on the series' text capabilities with a comprehensive upgrade to its...",
+          "context_length": 1000000,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 0.39999999999999997,
+          "output_cost": 1.5999999999999999
+        },
+        {
           "id": "rekaai/reka-edge",
           "name": "Reka Edge",
           "description": "Reka Edge is an extremely efficient 7B multimodal vision-language model that accepts image/video+text inputs and generates text outputs. This model is optimized specifically to deliver industry-leading performance in image understanding,...",
@@ -4474,7 +4496,7 @@
             "structured_output"
           ],
           "input_cost": 0.6,
-          "output_cost": 2.08
+          "output_cost": 1.92
         },
         {
           "id": "z-ai/glm-5-turbo",
@@ -5161,6 +5183,19 @@
           "output_cost": 1.1500000000000001
         },
         {
+          "id": "MiniMaxAI/MiniMax-M2.7",
+          "name": "MiniMaxAI/MiniMax-M2.7",
+          "description": "MiniMax-M2.7 is MiniMax's first model deeply participating in its own evolution. M2.7 is capable of building complex agent harnesses and completing highly elaborate productivity tasks, leveraging Agent Teams, complex Skills, and dynamic tool search.",
+          "context_length": 196608,
+          "tags": [
+            "tools",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 0.3,
+          "output_cost": 1.2
+        },
+        {
           "id": "mistralai/Mistral-Nemo-Instruct-2407",
           "name": "mistralai/Mistral-Nemo-Instruct-2407",
           "description": "12B model trained jointly by Mistral AI and NVIDIA, it significantly outperforms existing models smaller or similar in size.",
@@ -5808,10 +5843,6 @@
         {
           "id": "moonshotai/Kimi-K2.6-TEE",
           "name": "moonshotai/Kimi-K2.6-TEE"
-        },
-        {
-          "id": "Qwen/Qwen3-235B-A22B-Thinking-2507",
-          "name": "Qwen/Qwen3-235B-A22B-Thinking-2507"
         },
         {
           "id": "Qwen/Qwen3-235B-A22B-Thinking-2507-TEE",

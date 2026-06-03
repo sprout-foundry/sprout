@@ -192,6 +192,13 @@ func TestClassifyToolCallCategories(t *testing.T) {
 		{"git empty operation", "git", map[string]interface{}{"operation": ""}, RiskCategoryUnknown},
 		{"git unknown operation", "git", map[string]interface{}{"operation": "nonexistent_op"}, RiskCategoryUnknown},
 
+		// run_automate — requires intent confirmation
+		{"run_automate with workflow", "run_automate", map[string]interface{}{"workflow": "full_autonomous"}, RiskCategoryProcessManagement},
+		{"run_automate empty args", "run_automate", map[string]interface{}{}, RiskCategoryProcessManagement},
+
+		// list_automate_workflows — safe, no flags
+		{"list_automate_workflows", "list_automate_workflows", map[string]interface{}{}, RiskCategoryUnknown},
+
 		// Unknown/unregistered tool → Unknown
 		{"unknown tool", "unknown_tool", map[string]interface{}{}, RiskCategoryUnknown},
 
@@ -442,4 +449,52 @@ func TestGitOperationCategoryEdgeCases(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestRunAutomateSecurityClassification verifies that run_automate is classified
+// as SAFE with IntentConfirmation, and list_automate_workflows is SAFE without flags.
+func TestRunAutomateSecurityClassification(t *testing.T) {
+	t.Run("run_automate with workflow name is safe with intent confirmation", func(t *testing.T) {
+		result := ClassifyToolCall("run_automate", map[string]interface{}{
+			"workflow": "full_autonomous",
+		})
+		if result.Risk != SecuritySafe {
+			t.Errorf("run_automate.Risk = %s, want SAFE", result.Risk)
+		}
+		if !result.IntentConfirmation {
+			t.Error("run_automate.IntentConfirmation should be true")
+		}
+		if result.ShouldBlock {
+			t.Error("run_automate.ShouldBlock should be false")
+		}
+		if result.Category != RiskCategoryProcessManagement {
+			t.Errorf("run_automate.Category = %q, want %q", result.Category, RiskCategoryProcessManagement)
+		}
+	})
+
+	t.Run("run_automate with empty args is safe with intent confirmation", func(t *testing.T) {
+		result := ClassifyToolCall("run_automate", map[string]interface{}{})
+		if result.Risk != SecuritySafe {
+			t.Errorf("run_automate.Risk = %s, want SAFE", result.Risk)
+		}
+		if !result.IntentConfirmation {
+			t.Error("run_automate.IntentConfirmation should be true")
+		}
+	})
+
+	t.Run("list_automate_workflows is safe with no special flags", func(t *testing.T) {
+		result := ClassifyToolCall("list_automate_workflows", map[string]interface{}{})
+		if result.Risk != SecuritySafe {
+			t.Errorf("list_automate_workflows.Risk = %s, want SAFE", result.Risk)
+		}
+		if result.IntentConfirmation {
+			t.Error("list_automate_workflows.IntentConfirmation should be false")
+		}
+		if result.ShouldBlock {
+			t.Error("list_automate_workflows.ShouldBlock should be false")
+		}
+		if result.ShouldPrompt {
+			t.Error("list_automate_workflows.ShouldPrompt should be false")
+		}
+	})
 }

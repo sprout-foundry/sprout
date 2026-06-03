@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/clihooks"
 )
 
 // EditCommand opens $EDITOR to compose or edit a query.
@@ -43,7 +44,9 @@ func (c *EditCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
+	// Release stdin to cooked mode so the editor reads keystrokes
+	// normally. No-op when no turn / steer reader is active.
+	if err := clihooks.WithCookedStdin(cmd.Run); err != nil {
 		return fmt.Errorf("[edit] %s exited: %w", editor, err)
 	}
 

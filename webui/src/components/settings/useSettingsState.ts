@@ -4,7 +4,7 @@ import { ApiService, type SproutSettings, type ProviderOption } from '../../serv
 import type { SubagentTypeInfo } from '../../services/api/types';
 import { debugLog } from '../../utils/log';
 import { getNestedValue } from './settingsHelpers';
-import type { SubagentTypeEntry, SettingsSubTab } from './types';
+import type { SettingsSubTab } from './types';
 
 interface UseSettingsStateReturn {
   activeSubTab: SettingsSubTab;
@@ -37,8 +37,6 @@ interface UseSettingsStateReturn {
       | Record<string, SubagentTypeInfo>
       | ((prev: Record<string, SubagentTypeInfo>) => Record<string, SubagentTypeInfo>),
   ) => void;
-  subagentSavingPersona: string | null;
-  setSubagentSavingPersona: (v: string | null) => void;
   currentProviderInfo: { provider: string; model: string; hasCredential: boolean } | null;
   setCurrentProviderInfo: (v: { provider: string; model: string; hasCredential: boolean } | null) => void;
   loadingProviderInfo: boolean;
@@ -159,7 +157,6 @@ export function useSettingsState(
   // Subagent providers/models for dropdowns
   const [subagentProviders, setSubagentProviders] = useState<ProviderOption[]>([]);
   const [subagentTypes, setSubagentTypes] = useState<Record<string, SubagentTypeInfo>>({});
-  const [subagentSavingPersona, setSubagentSavingPersona] = useState<string | null>(null);
 
   // Current provider info for the Providers tab
   const [currentProviderInfo, setCurrentProviderInfo] = useState<{
@@ -349,8 +346,6 @@ export function useSettingsState(
     setSubagentProviders,
     subagentTypes,
     setSubagentTypes,
-    subagentSavingPersona,
-    setSubagentSavingPersona,
     currentProviderInfo,
     setCurrentProviderInfo,
     loadingProviderInfo,

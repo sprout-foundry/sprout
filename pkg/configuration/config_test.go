@@ -1,12 +1,8 @@
 package configuration
 
 import (
-	"bytes"
 	"encoding/json"
-	"log"
-	"os"
 	"path/filepath"
-	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -126,21 +122,20 @@ func TestNewConfigIncludesWebScraperPersona(t *testing.T) {
 	assert.Contains(t, refactorPersona.AllowedTools, "search_files")
 }
 
-func TestGetSubagentTypeFillsDefaultAllowedTools(t *testing.T) {
-	cfg := &Config{
-		SubagentTypes: map[string]SubagentType{
-			"general": {
-				ID:      "general",
-				Name:    "General",
-				Enabled: true,
-			},
-		},
-	}
-
+func TestGetSubagentType_AllowedToolsFromCatalog(t *testing.T) {
+	cfg := NewConfig()
 	persona := cfg.GetSubagentType("general")
 	assert.NotNil(t, persona)
 	assert.NotEmpty(t, persona.AllowedTools)
 	assert.Contains(t, persona.AllowedTools, "read_file")
+}
+
+func TestGetSubagentType_DisabledReturnsNil(t *testing.T) {
+	cfg := NewConfig()
+	cfg.SetPersonaDisabled("general", true)
+	assert.Nil(t, cfg.GetSubagentType("general"))
+	cfg.SetPersonaDisabled("general", false)
+	assert.NotNil(t, cfg.GetSubagentType("general"))
 }
 
 func TestSelfReviewGateModeDefaultsAndNormalization(t *testing.T) {
@@ -184,44 +179,6 @@ func TestGetDefaultConfigDirUsesHomeEnvWhenXDGUnset(t *testing.T) {
 	dir, err := getDefaultConfigDir()
 	assert.NoError(t, err)
 	assert.Equal(t, filepath.Join("/tmp/home-preferred", ".config", "sprout"), dir)
-}
-
-func TestMergeLegacyStructuredToolsIntoPersonaAllowlists(t *testing.T) {
-	cfg := &Config{
-		SubagentTypes: map[string]SubagentType{
-			"orchestrator": {
-				ID:           "orchestrator",
-				Name:         "Orchestrator",
-				Enabled:      true,
-				AllowedTools: []string{"read_file", "write_file", "edit_file"},
-			},
-			"researcher": {
-				ID:           "researcher",
-				Name:         "Researcher",
-				Enabled:      true,
-				AllowedTools: []string{"read_file", "search_files"},
-			},
-			"web_scraper": {
-				ID:           "web_scraper",
-				Name:         "Web Scraper",
-				Enabled:      true,
-				AllowedTools: []string{"read_file", "write_file", "edit_file", "search_files"},
-			},
-		},
-	}
-
-	mergeLegacyStructuredToolsIntoPersonaAllowlists(cfg)
-
-	orchestrator := cfg.SubagentTypes["orchestrator"]
-	assert.Contains(t, orchestrator.AllowedTools, "write_structured_file")
-	assert.Contains(t, orchestrator.AllowedTools, "patch_structured_file")
-
-	researcher := cfg.SubagentTypes["researcher"]
-	assert.NotContains(t, researcher.AllowedTools, "write_structured_file")
-	assert.NotContains(t, researcher.AllowedTools, "patch_structured_file")
-
-	webScraper := cfg.SubagentTypes["web_scraper"]
-	assert.Contains(t, webScraper.AllowedTools, "shell_command")
 }
 
 func TestGetSubagentMaxParallel(t *testing.T) {
@@ -436,172 +393,24 @@ func TestPersistentContextConfig_JSON_OmitsRetentionDaysWhenZero(t *testing.T) {
 		"zero RetentionDays should be omitted from JSON due to omitempty tag")
 }
 
-// TestAllowedToolsOverride_WarnsAndDrops verifies that when a user config overrides
-// AllowedTools for a built-in persona (SP-035-4a), the override is dropped and
-// a warning is logged.
-func TestAllowedToolsOverride_WarnsAndDrops(t *testing.T) {
-	var buf bytes.Buffer
-	log.SetOutput(&buf)
-	defer log.SetOutput(os.Stderr)
-
-	// Reset the warning once so it fires in this test
-	personaDefaultsWarningOnce = sync.Once{}
-
-	// Create a config that starts with defaults, then has a user override for "general"
+// TestPersonaCatalog_Immutable verifies that personas come from the embedded
+// catalog and are not mutated by writes to SubagentTypes after construction.
+// This is the post-override-removal contract: user code can read SubagentTypes
+// but the persistent layer ignores it.
+func TestPersonaCatalog_Immutable(t *testing.T) {
 	cfg := NewConfig()
 
-	// User overrides AllowedTools for the built-in "general" persona
-	cfg.SubagentTypes["general"] = SubagentType{
-		ID:           "general",
-		Name:         "General",
-		Description:  "User override",
-		Enabled:      true,
-		AllowedTools: []string{"read_file", "shell_command"}, // user wants only these
-	}
+	// Mutate a built-in entry in memory.
+	general, ok := cfg.SubagentTypes["general"]
+	require.True(t, ok, "general persona should exist in catalog")
+	general.AllowedTools = []string{"read_file"}
+	cfg.SubagentTypes["general"] = general
 
-	// Call GetSubagentType — it should return the DEFAULT tools, not the user override
-	result := cfg.GetSubagentType("general")
-	assert.NotNil(t, result, "GetSubagentType should return a non-nil result for built-in persona")
-
-	// The returned AllowedTools should be the DEFAULT, not the user's override
-	// The default for "general" contains more tools than just read_file and shell_command
-	hasUserOverride := func(tools []string) bool {
-		if len(tools) == 2 {
-			for _, t := range tools {
-				if t != "read_file" && t != "shell_command" {
-					return false
-				}
-			}
-			return true
-		}
-		return false
-	}
-	assert.False(t, hasUserOverride(result.AllowedTools),
-		"AllowedTools should NOT be the user override; it should be the default tools")
-
-	// Verify a warning was logged about the override being dropped
-	logOutput := buf.String()
-	assert.Contains(t, logOutput, "AllowedTools override ignored",
-		"Expected warning about AllowedTools override being dropped for built-in persona")
+	// A fresh config should still have the catalog defaults.
+	fresh := NewConfig()
+	freshGeneral, ok := fresh.SubagentTypes["general"]
+	require.True(t, ok)
+	assert.Greater(t, len(freshGeneral.AllowedTools), 1,
+		"catalog should hydrate full tool list, not be affected by prior mutation")
 }
 
-// TestAllowedToolsOverride_NoWarnWhenMatching verifies that when a user config
-// lists AllowedTools for a built-in persona that match the defaults exactly,
-// no warning is logged. This avoids noisy warnings for configs that restate defaults.
-func TestAllowedToolsOverride_NoWarnWhenMatching(t *testing.T) {
-	var buf bytes.Buffer
-	log.SetOutput(&buf)
-	defer log.SetOutput(os.Stderr)
-
-	personaDefaultsWarningOnce = sync.Once{}
-
-	cfg := NewConfig()
-
-	// Get the default AllowedTools for "general" and restate them exactly
-	defaultGeneral := cfg.GetSubagentType("general")
-	require.NotNil(t, defaultGeneral, "general persona should exist in defaults")
-
-	cfg.SubagentTypes["general"] = SubagentType{
-		ID:           "general",
-		Name:         defaultGeneral.Name,
-		Enabled:      true,
-		AllowedTools: append([]string{}, defaultGeneral.AllowedTools...),
-	}
-
-	result := cfg.GetSubagentType("general")
-	assert.NotNil(t, result)
-
-	logOutput := buf.String()
-	assert.NotContains(t, logOutput, "AllowedTools override ignored",
-		"Should NOT warn when user AllowedTools match defaults exactly")
-}
-
-// TestLegacyCustomPersona_WarnsOnce verifies that for a custom (non-default) persona
-// with write_file but missing write_structured_file/patch_structured_file,
-// those tools are auto-added and a one-time warning is logged (SP-035-4b).
-func TestLegacyCustomPersona_WarnsOnce(t *testing.T) {
-	var buf bytes.Buffer
-	log.SetOutput(&buf)
-	defer log.SetOutput(os.Stderr)
-
-	// Reset the warning once so it fires in this test
-	legacyCustomPersonaWarningOnce = sync.Once{}
-
-	cfg := &Config{
-		SubagentTypes: map[string]SubagentType{
-			"my-custom-persona": {
-				ID:           "my-custom-persona",
-				Name:         "My Custom Persona",
-				Description:  "A custom persona with write_file",
-				Enabled:      true,
-				AllowedTools: []string{"write_file"}, // has write_file but not structured tools
-			},
-		},
-	}
-
-	// Call the merge function — it should auto-add the structured file tools
-	mergeLegacyStructuredToolsIntoPersonaAllowlists(cfg)
-
-	persona := cfg.SubagentTypes["my-custom-persona"]
-
-	// Verify the structured tools were added
-	assert.Contains(t, persona.AllowedTools, "write_structured_file",
-		"write_structured_file should be auto-added for custom persona with write_file")
-	assert.Contains(t, persona.AllowedTools, "patch_structured_file",
-		"patch_structured_file should be auto-added for custom persona with write_file")
-	assert.Contains(t, persona.AllowedTools, "write_file",
-		"original write_file should still be present")
-
-	// Verify a warning was logged
-	logOutput := buf.String()
-	assert.Contains(t, logOutput, "my-custom-persona",
-		"Warning should mention the custom persona name")
-	assert.Contains(t, logOutput, "auto-adding structured file tools",
-		"Warning should mention auto-adding structured file tools")
-
-	// Verify sync.Once behavior: calling again should NOT produce another warning
-	buf.Reset()
-	// Add another custom persona to trigger the condition again
-	cfg.SubagentTypes["another-custom-persona"] = SubagentType{
-		ID:           "another-custom-persona",
-		Name:         "Another Custom Persona",
-		Description:  "Another custom persona",
-		Enabled:      true,
-		AllowedTools: []string{"write_file"},
-	}
-
-	mergeLegacyStructuredToolsIntoPersonaAllowlists(cfg)
-
-	// The second call should NOT produce another warning (sync.Once behavior)
-	logOutput = buf.String()
-	assert.Empty(t, logOutput,
-		"Warning should only be logged once (sync.Once behavior)")
-
-	// But the tools should still be added for the new persona
-	another := cfg.SubagentTypes["another-custom-persona"]
-	assert.Contains(t, another.AllowedTools, "write_structured_file",
-		"write_structured_file should still be auto-added for new custom persona")
-	assert.Contains(t, another.AllowedTools, "patch_structured_file",
-		"patch_structured_file should still be auto-added for new custom persona")
-}
-
-func TestToolSetsEqual(t *testing.T) {
-	tests := []struct {
-		name string
-		a, b []string
-		want bool
-	}{
-		{"identical", []string{"a", "b", "c"}, []string{"a", "b", "c"}, true},
-		{"reordered", []string{"c", "b", "a"}, []string{"a", "b", "c"}, true},
-		{"different length", []string{"a", "b"}, []string{"a", "b", "c"}, false},
-		{"different content", []string{"a", "b"}, []string{"a", "c"}, false},
-		{"both empty", nil, nil, true},
-		{"one empty", nil, []string{"a"}, false},
-		{"with whitespace", []string{" a", "b "}, []string{"a", "b"}, true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, toolSetsEqual(tt.a, tt.b))
-		})
-	}
-}

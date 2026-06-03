@@ -15,13 +15,12 @@ import (
 
 // Manager manages configuration state with safe concurrent access.
 type Manager struct {
-	mu           sync.RWMutex
-	config       *Config
-	apiKeys      *APIKeys
-	lastSaved    *Config // Track last saved state, not initial snapshot
-	loaded       bool    // Track if config has been loaded
-	configDir    string  // Explicit config directory for saves (empty = use env/default)
-	roleManager  *RoleManager
+	mu        sync.RWMutex
+	config    *Config
+	apiKeys   *APIKeys
+	lastSaved *Config // Track last saved state, not initial snapshot
+	loaded    bool    // Track if config has been loaded
+	configDir string  // Explicit config directory for saves (empty = use env/default)
 }
 
 // loadConfigSilently loads configuration without showing welcome messages
@@ -103,17 +102,11 @@ func NewManager() (*Manager, error) {
 		return nil, fmt.Errorf("load configuration: %w", err)
 	}
 
-	configDir, err := GetConfigDir()
-	if err != nil {
-		return nil, fmt.Errorf("get config dir: %w", err)
-	}
-
 	return &Manager{
-		config:      config,
-		apiKeys:     apiKeys,
-		lastSaved:   cloneConfig(config), // Track last saved state as the base
-		loaded:      true,
-		roleManager: NewRoleManager(filepath.Join(configDir, RoleDirName), ""),
+		config:    config,
+		apiKeys:   apiKeys,
+		lastSaved: cloneConfig(config), // Track last saved state as the base
+		loaded:    true,
 	}, nil
 }
 
@@ -125,44 +118,25 @@ func NewManagerSilent() (*Manager, error) {
 		return nil, fmt.Errorf("initialize API keys: %w", err)
 	}
 
-	configDir, err := GetConfigDir()
-	if err != nil {
-		return nil, fmt.Errorf("get config dir: %w", err)
-	}
-
 	return &Manager{
-		config:      config,
-		apiKeys:     apiKeys,
-		lastSaved:   cloneConfig(config),
-		loaded:      true,
-		roleManager: NewRoleManager(filepath.Join(configDir, RoleDirName), ""),
+		config:    config,
+		apiKeys:   apiKeys,
+		lastSaved: cloneConfig(config),
+		loaded:    true,
 	}, nil
 }
 
 // NewManagerWithConfig creates a new configuration manager from an explicit
-// Config and optional API key set.  The manager will persist saves to the same
+// Config and optional API key set. The manager will persist saves to the same
 // location that config.Save()/Load() would use for the current env (when
-// configDir is empty) or to configDir (when non-empty).  Pass nil for apiKeys
+// configDir is empty) or to configDir (when non-empty). Pass nil for apiKeys
 // to skip key loading.
 func NewManagerWithConfig(cfg *Config, apiKeys *APIKeys) *Manager {
-	configDir := ""
-	var err error
-	if configDir, err = GetConfigDir(); err != nil {
-		// Fallback: create with nil roleManager if config dir can't be resolved
-		return &Manager{
-			config:    cfg,
-			apiKeys:   apiKeys,
-			lastSaved: cloneConfig(cfg),
-			loaded:    true,
-		}
-	}
-
 	return &Manager{
-		config:      cfg,
-		apiKeys:     apiKeys,
-		lastSaved:   cloneConfig(cfg),
-		loaded:      true,
-		roleManager: NewRoleManager(filepath.Join(configDir, RoleDirName), ""),
+		config:    cfg,
+		apiKeys:   apiKeys,
+		lastSaved: cloneConfig(cfg),
+		loaded:    true,
 	}
 }
 
@@ -208,8 +182,6 @@ func NewManagerWithDir(configDir string) (*Manager, error) {
 
 	mgr := NewManagerWithConfig(config, apiKeys)
 	mgr.configDir = configDir // Store explicit dir for saves
-	// Override roleManager to use the explicit configDir
-	mgr.roleManager = NewRoleManager(filepath.Join(configDir, RoleDirName), "")
 	return mgr, nil
 }
 
@@ -262,28 +234,12 @@ func NewManagerWithLayers(globalDir, workspaceDir string) (*Manager, error) {
 		log.Printf("[debug] no API keys found in environment variables")
 	}
 
-	// Initialize role manager with both global and workspace role directories
-	globalRoleDir := ""
-	if globalDir != "" {
-		globalRoleDir = filepath.Join(globalDir, RoleDirName)
-	} else {
-		defaultDir, err := GetConfigDir()
-		if err == nil {
-			globalRoleDir = filepath.Join(defaultDir, RoleDirName)
-		}
-	}
-	workspaceRoleDir := ""
-	if workspaceDir != "" {
-		workspaceRoleDir = filepath.Join(workspaceDir, RoleDirName)
-	}
-
 	return &Manager{
-		config:      config,
-		apiKeys:     apiKeys,
-		lastSaved:   cloneConfig(config),
-		loaded:      true,
-		configDir:   saveDir, // Store explicit dir for saves
-		roleManager: NewRoleManager(globalRoleDir, workspaceRoleDir),
+		config:    config,
+		apiKeys:   apiKeys,
+		lastSaved: cloneConfig(config),
+		loaded:    true,
+		configDir: saveDir, // Store explicit dir for saves
 	}, nil
 }
 
@@ -363,6 +319,10 @@ func LoadConfigWithLayers(globalPath, workspacePath, sessionPath, globalDir stri
 	// Same self-heal as Load() — a stale "test" sentinel on disk
 	// shouldn't drive the real CLI.
 	sanitizeTestProvider(result)
+
+	// Personas are catalog-fixed and never read from disk; hydrate from the
+	// embedded catalog so every layered-load path matches the regular Load().
+	result.SubagentTypes = defaultSubagentTypes()
 
 	return result, nil
 }
@@ -756,11 +716,6 @@ func (m *Manager) ResolveProviderModel(explicitProvider, explicitModel string) (
 // GetMCPConfig returns the MCP configuration
 func (m *Manager) GetMCPConfig() mcp.MCPConfig {
 	return m.config.MCP
-}
-
-// GetRoleManager returns the RoleManager for this configuration manager.
-func (m *Manager) GetRoleManager() *RoleManager {
-	return m.roleManager
 }
 
 // EnrichCustomProviders loads custom provider files from the global providers

@@ -1,16 +1,10 @@
 import { SkeletonText } from '@sprout/ui';
 import { Keyboard, Upload, Trash2 } from 'lucide-react';
-import { Suspense, lazy, useRef, useEffect, useState, useCallback } from 'react';
+import { Suspense, lazy, useRef, useState, useCallback } from 'react';
 import type { ChangeEvent } from 'react';
 import type { WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
 import type { SproutSettings } from '../services/api';
 import type { AgentConfigProps } from './settings/types';
-
-// Extended agent config that adds optional role selection (matches SettingsPanel.tsx)
-interface ExtendedAgentConfig extends AgentConfigProps {
-  selectedRole?: string | null;
-  onRoleChange?: (roleId: string | null) => void;
-}
 import { useLog } from '../utils/log';
 
 // SettingsPanel pulls in CredentialsSettingsTab, ProviderSettingsTab,
@@ -47,8 +41,6 @@ interface SidebarSettingsSectionProps {
   onProviderChange: (provider: string) => void;
   onModelChange: (model: string) => void;
   onPersonaChange: (persona: string) => void;
-  selectedRole?: string | null;
-  onRoleChange?: (roleId: string | null) => void;
 }
 
 export default function SidebarSettingsSection({
@@ -79,25 +71,10 @@ export default function SidebarSettingsSection({
   onProviderChange,
   onModelChange,
   onPersonaChange,
-  selectedRole: initialSelectedRole,
-  onRoleChange: externalOnRoleChange,
 }: SidebarSettingsSectionProps): JSX.Element {
   const log = useLog();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importError, setImportError] = useState<string | null>(null);
-  const [selectedRole, setSelectedRole] = useState<string | null>(initialSelectedRole ?? null);
-
-  // Fix #4: Sync selectedRole when the external prop changes
-  useEffect(() => {
-    setSelectedRole(initialSelectedRole ?? null);
-  }, [initialSelectedRole]);
-
-  const handleRoleChange = (roleId: string | null) => {
-    setSelectedRole(roleId);
-    if (externalOnRoleChange) {
-      externalOnRoleChange(roleId);
-    }
-  };
 
   const handleHotkeyPresetChange = async (e: ChangeEvent<HTMLSelectElement>) => {
     const value = e.target.value;
@@ -145,11 +122,10 @@ export default function SidebarSettingsSection({
   );
 
   /* ─── Build agent config object with explicit typing (no assertion) ─── */
-  const agentConfigObj: ExtendedAgentConfig = {
+  const agentConfigObj: AgentConfigProps = {
     selectedProvider,
     selectedModel,
     selectedPersona,
-    selectedRole,
     providers,
     availableModels,
     personas,
@@ -159,7 +135,6 @@ export default function SidebarSettingsSection({
     onProviderChange,
     onModelChange,
     onPersonaChange,
-    onRoleChange: handleRoleChange,
   };
 
   return (

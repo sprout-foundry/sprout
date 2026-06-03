@@ -106,7 +106,6 @@ func NewCommandRegistry() *CommandRegistry {
 	registry.Register(&EditCommand{})
 
 	// Register extend command
-	registry.Register(&ExtendCommand{})
 
 	// SP-058: risk profile management
 	registry.Register(&RiskProfileCommand{})

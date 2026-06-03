@@ -71,9 +71,7 @@ KEY COMMANDS:
   /commit     - Interactive commit workflow
   /subagent-provider - Configure subagent provider
   /subagent-model - Configure subagent model
-  /subagent-personas - List available subagent personas
-  /subagent-persona - Configure a specific persona
-  /persona    - Apply/configure direct personas (provider/model/tools/prompt)
+  /persona    - Apply/configure personas (provider/model/tools/prompt). Aliases: /subagent-persona, /subagent-personas
   /self-review-gate - Configure automatic self-review gate mode
 
 Type 'exit' or 'quit' to end the session.

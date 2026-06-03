@@ -243,7 +243,7 @@ task_queue_add(
   title="Review auth implementation",
   description="Code review of auth middleware + tests for security best practices.",
   priority="medium",
-  persona="code_reviewer",
+  persona="reviewer",
   working_dir="/home/user/my-project"
 )
 ```
@@ -361,7 +361,7 @@ task_queue_publish(
 ```
 → Explain the EA workflow (see section 3 above)
 → Offer to read their TODO.md and convert items to queued tasks
-→ Set up personas: coder for implementation, tester for tests, code_reviewer for review
+→ Set up personas: coder for implementation, tester for tests, reviewer for review
 → Offer to run in queue mode or process interactively
 ```
 

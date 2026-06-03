@@ -49,6 +49,10 @@ interface TerminalPaneProps {
   onProcessExit?: () => void;
   /** When true, automatically copies selected text to clipboard. */
   copyOnSelect?: boolean;
+  /** Called when xterm reports an OSC title change for this pane's terminal. */
+  onTitleChange?: (title: string) => void;
+  /** Called when the PTY emits output (used for tab-activity indicators). */
+  onActivity?: () => void;
 }
 
 const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
@@ -65,6 +69,8 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       reattachSessionId,
       onProcessExit,
       copyOnSelect = false,
+      onTitleChange,
+      onActivity,
     },
     ref,
   ) => {
@@ -224,6 +230,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       onSearchToggle,
       onSaveScrollback: onSaveScrollbackForDispose,
       getSessionId: getSessionIdForXterm,
+      onTitleChange,
     });
 
     // Wire xtermRef to the other hooks' xterm refs
@@ -255,6 +262,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
       onResetReverseSearch: resetReverseSearch,
       onSaveScrollback: saveScrollback,
       onLoadScrollback: loadScrollbackToTerminal,
+      onActivity,
     });
 
     // Wire session's terminalWSRef for PTY input handler and xterm dispose

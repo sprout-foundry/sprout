@@ -79,6 +79,45 @@
   pointer-events: none;
 }
 
+/* ── Pinned tab ───────────────────────────────────────── */
+
+.terminal-tab-pin-icon {
+  flex-shrink: 0;
+  color: var(--accent-secondary, #61afef);
+  pointer-events: none;
+  margin-right: 2px;
+}
+
+.terminal-tab.pinned .terminal-tab-name {
+  font-style: italic;
+}
+
+/* ── Activity indicator ───────────────────────────────── */
+
+.terminal-tab-activity-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-success, #98c379);
+  flex-shrink: 0;
+  margin-right: 2px;
+  pointer-events: none;
+  /* Subtle pulse to draw the eye without being obnoxious. */
+  animation: terminalTabActivityPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes terminalTabActivityPulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(0.85);
+  }
+}
+
 /* ── Tab Close Button ─────────────────────────────────── */
 
 .terminal-tab-close {

@@ -9,7 +9,7 @@
 #   - webui/src/**/*.{ts,tsx,js,jsx,css}     (app source)
 #   - webui/public/**                        (verbatim public assets — manifest, icons, wasm)
 #   - webui/index.html, vite.config.ts, tsconfig.json (build entry + config)
-#   - webui/package.json, webui/package-lock.json     (deps + lockfile)
+#   - webui/package.json + root package-lock.json     (deps + workspace lockfile)
 #   - packages/{ui,events}/src/**            (shared workspace packages)
 #   - packages/{ui,events}/{package,tsconfig}.json    (workspace pkg configs)
 #
@@ -121,7 +121,7 @@ for f in \
     "$webui_dir/tsconfig.app.json" \
     "$webui_dir/tsconfig.node.json" \
     "$webui_dir/package.json" \
-    "$webui_dir/package-lock.json"
+    "$PROJECT_ROOT/package-lock.json"
 do
     [ -f "$f" ] || continue
     t=$(mtime "$f")

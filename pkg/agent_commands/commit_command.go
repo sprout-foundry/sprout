@@ -10,6 +10,7 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/clihooks"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/factory"
@@ -76,7 +77,10 @@ func editInEditor(initial string) (string, error) {
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
+	// Release stdin to cooked mode so the editor reads keystrokes
+	// normally. No-op when no turn / steer reader is active (the
+	// common slash-command path).
+	if err := clihooks.WithCookedStdin(cmd.Run); err != nil {
 		return "", fmt.Errorf("editor failed: %w", err)
 	}
 

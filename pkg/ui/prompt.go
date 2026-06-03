@@ -6,6 +6,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/sprout-foundry/sprout/pkg/clihooks"
 )
 
 const (
@@ -26,6 +28,13 @@ func PromptForSelection(options []string, prompt string) (int, bool) {
 	if prompt == "" {
 		prompt = DefaultPrompt
 	}
+
+	// Release stdin from raw mode in case the caller is invoked during a
+	// turn (steer reader holds stdin in cbreak; the scanner below would
+	// otherwise see EOF immediately).
+	clihooks.SuspendIndicator()
+	clihooks.PauseSteer()
+	defer clihooks.ResumeSteer()
 
 	fmt.Printf("\n%s ", prompt)
 	scanner := bufio.NewScanner(os.Stdin)
@@ -61,6 +70,12 @@ func PromptForConfirmation(prompt string) bool {
 	if prompt == "" {
 		prompt = "Continue? (y/n): "
 	}
+
+	// Same release-from-raw-mode dance as PromptForSelection: defensive
+	// for tool/turn-time callers that might otherwise hit EOF.
+	clihooks.SuspendIndicator()
+	clihooks.PauseSteer()
+	defer clihooks.ResumeSteer()
 
 	fmt.Printf("%s ", prompt)
 	scanner := bufio.NewScanner(os.Stdin)

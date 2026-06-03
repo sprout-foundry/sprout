@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/personas"
 )
 
 func TestGetAvailablePersonaIDsSorted(t *testing.T) {
@@ -395,26 +396,74 @@ func TestEvaluateOperationRisk_NilConfigReturnsLow(t *testing.T) {
 }
 
 // =============================================================================
-// hasEAGitWriteApproval tests
+// isGitWriteAllowed — capability-driven authorization
 // =============================================================================
+//
+// Post-B: git-write authorization no longer sniffs AutoApproveRules. A persona
+// must explicitly carry CapabilityGitWrite to clear the gate. Orchestrator
+// additionally needs the AllowOrchestratorGitWrite config flag set.
 
-func TestHasEAGitWriteApproval_WithGitCommitInMediumRisk(t *testing.T) {
+func TestIsGitWriteAllowed_CapabilityBearingNonOrchestratorReturnsTrue(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	// Register a persona with git_commit in MediumRiskOps
+	err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		cfg.SubagentTypes["test_with_git_cap"] = configuration.SubagentType{
+			ID:           "test_with_git_cap",
+			Name:         "With Git Capability",
+			Enabled:      true,
+			Capabilities: []string{personas.CapabilityGitWrite},
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("UpdateConfigNoSave failed: %v", err)
+	}
+
+	agent.state.SetActivePersona("test_with_git_cap")
+
+	if !agent.isGitWriteAllowed() {
+		t.Error("expected isGitWriteAllowed=true for non-orchestrator persona declaring CapabilityGitWrite")
+	}
+}
+
+func TestIsGitWriteAllowed_WithoutCapabilityReturnsFalse(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		cfg.SubagentTypes["test_no_cap"] = configuration.SubagentType{
+			ID:      "test_no_cap",
+			Name:    "Without Git Capability",
+			Enabled: true,
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("UpdateConfigNoSave failed: %v", err)
+	}
+
+	agent.state.SetActivePersona("test_no_cap")
+
+	if agent.isGitWriteAllowed() {
+		t.Error("expected isGitWriteAllowed=false for persona without CapabilityGitWrite")
+	}
+}
+
+func TestIsGitWriteAllowed_AutoApproveRulesAloneNoLongerGrants(t *testing.T) {
+	// Regression for the rule-sniffing removal: declaring git_commit in
+	// AutoApproveRules.MediumRiskOps used to imply git-write capability.
+	// Post-B, only an explicit Capabilities entry counts.
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
 	customRules := configuration.AutoApproveRules{
-		LowRiskOps:     []string{"git_status"},
-		MediumRiskOps:  []string{"git_commit", "git_push"},
-		HighRiskNever:  []string{"force_flag"},
+		MediumRiskOps: []string{"git_commit", "git_push"},
 	}
 	err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
-		if cfg.SubagentTypes == nil {
-			cfg.SubagentTypes = make(map[string]configuration.SubagentType)
-		}
-		cfg.SubagentTypes["test_ea_with_git_medium"] = configuration.SubagentType{
-			ID:               "test_ea_with_git_medium",
-			Name:             "EA with Git Medium",
+		cfg.SubagentTypes["test_rules_only"] = configuration.SubagentType{
+			ID:               "test_rules_only",
+			Name:             "Rules Only",
 			Enabled:          true,
 			AutoApproveRules: &customRules,
 		}
@@ -424,133 +473,33 @@ func TestHasEAGitWriteApproval_WithGitCommitInMediumRisk(t *testing.T) {
 		t.Fatalf("UpdateConfigNoSave failed: %v", err)
 	}
 
-	agent.state.SetActivePersona("test_ea_with_git_medium")
+	agent.state.SetActivePersona("test_rules_only")
 
-	if !agent.isOrchestratorGitWriteAllowed() {
-		t.Error("expected hasEAGitWriteApproval to return true with git_commit in MediumRiskOps")
+	if agent.isGitWriteAllowed() {
+		t.Error("expected isGitWriteAllowed=false: AutoApproveRules entries no longer imply capability")
 	}
 }
 
-func TestHasEAGitWriteApproval_WithGitAddInLowRisk(t *testing.T) {
+func TestIsGitWriteAllowed_EmptyPersonaReturnsFalse(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	// Register a persona with git_add in LowRiskOps
-	customRules := configuration.AutoApproveRules{
-		LowRiskOps:     []string{"git_add", "git_status"},
-		MediumRiskOps:  []string{},
-		HighRiskNever:  []string{"force_flag"},
-	}
-	err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
-		if cfg.SubagentTypes == nil {
-			cfg.SubagentTypes = make(map[string]configuration.SubagentType)
-		}
-		cfg.SubagentTypes["test_ea_with_git_low"] = configuration.SubagentType{
-			ID:               "test_ea_with_git_low",
-			Name:             "EA with Git Low",
-			Enabled:          true,
-			AutoApproveRules: &customRules,
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("UpdateConfigNoSave failed: %v", err)
-	}
+	agent.state.SetActivePersona("")
 
-	agent.state.SetActivePersona("test_ea_with_git_low")
-
-	if !agent.isOrchestratorGitWriteAllowed() {
-		t.Error("expected hasEAGitWriteApproval to return true with git_add in LowRiskOps")
+	if agent.isGitWriteAllowed() {
+		t.Error("expected isGitWriteAllowed=false with no active persona")
 	}
 }
 
-func TestHasEAGitWriteApproval_WithGitPushInLowRisk(t *testing.T) {
+func TestIsGitWriteAllowed_NilConfigReturnsFalse(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	// Register a persona with git_push in LowRiskOps
-	customRules := configuration.AutoApproveRules{
-		LowRiskOps:     []string{"git_push", "git_status"},
-		MediumRiskOps:  []string{},
-		HighRiskNever:  []string{},
-	}
-	err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
-		if cfg.SubagentTypes == nil {
-			cfg.SubagentTypes = make(map[string]configuration.SubagentType)
-		}
-		cfg.SubagentTypes["test_ea_with_git_push_low"] = configuration.SubagentType{
-			ID:               "test_ea_with_git_push_low",
-			Name:             "EA with Git Push Low",
-			Enabled:          true,
-			AutoApproveRules: &customRules,
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("UpdateConfigNoSave failed: %v", err)
-	}
-
-	agent.state.SetActivePersona("test_ea_with_git_push_low")
-
-	if !agent.isOrchestratorGitWriteAllowed() {
-		t.Error("expected hasEAGitWriteApproval to return true with git_push in LowRiskOps")
-	}
-}
-
-func TestHasEAGitWriteApproval_WithoutGitRulesReturnsFalse(t *testing.T) {
-	agent := newTestAgent(t)
-	defer agent.Shutdown()
-
-	// Register a persona with auto-approve rules but NO git write operations
-	customRules := configuration.AutoApproveRules{
-		LowRiskOps:     []string{"git_status", "git_log", "read_file"},
-		MediumRiskOps:  []string{"write_file", "shell_command"},
-		HighRiskNever:  []string{"force_flag"},
-	}
-	err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
-		if cfg.SubagentTypes == nil {
-			cfg.SubagentTypes = make(map[string]configuration.SubagentType)
-		}
-		cfg.SubagentTypes["test_ea_no_git_write"] = configuration.SubagentType{
-			ID:               "test_ea_no_git_write",
-			Name:             "EA without Git Write",
-			Enabled:          true,
-			AutoApproveRules: &customRules,
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("UpdateConfigNoSave failed: %v", err)
-	}
-
-	agent.state.SetActivePersona("test_ea_no_git_write")
-
-	if agent.isOrchestratorGitWriteAllowed() {
-		t.Error("expected hasEAGitWriteApproval to return false without git write operations in rules")
-	}
-}
-
-func TestHasEAGitWriteApproval_NoAutoApproveRulesReturnsFalse(t *testing.T) {
-	agent := newTestAgent(t)
-	defer agent.Shutdown()
-
-	// Activate a persona with no AutoApproveRules
-	agent.state.SetActivePersona("coder")
-
-	if agent.isOrchestratorGitWriteAllowed() {
-		t.Error("expected hasEAGitWriteApproval to return false for persona without AutoApproveRules")
-	}
-}
-
-func TestHasEAGitWriteApproval_NilConfigReturnsFalse(t *testing.T) {
-	agent := newTestAgent(t)
-	defer agent.Shutdown()
-
-	agent.state.SetActivePersona("some_persona")
+	agent.state.SetActivePersona("orchestrator")
 	agent.configManager = nil
 
-	if agent.isOrchestratorGitWriteAllowed() {
-		t.Error("expected hasEAGitWriteApproval to return false with nil configManager")
+	if agent.isGitWriteAllowed() {
+		t.Error("expected isGitWriteAllowed=false with nil configManager")
 	}
 }
 
@@ -674,52 +623,69 @@ func TestIsOrchestratorGitWriteAllowed_NonOrchestratorNonEAPersonaReturnsFalse(t
 	}
 }
 
-// --- hasEASpawnAuthority tests ---
+// --- canSpawnNonDelegatable tests ---
+//
+// Post-A: spawn authority is declarative. The coordinator's catalog entry
+// declares CanSpawnNonDelegatable=["orchestrator"], replacing the previous
+// hasEASpawnAuthority hardcoded check + the AutoApproveRules rule-sniffing.
 
-func TestHasEASpawnAuthority_CoordinatorReturnsTrue(t *testing.T) {
+func TestCanSpawnNonDelegatable_CoordinatorCanSpawnOrchestrator(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
 	agent.state.SetActivePersona("coordinator")
 
-	if !agent.hasEASpawnAuthority() {
-		t.Error("expected hasEASpawnAuthority to return true for coordinator persona")
+	if !agent.canSpawnNonDelegatable("orchestrator") {
+		t.Error("expected coordinator to be able to spawn orchestrator (catalog declares it)")
 	}
 }
 
-func TestHasEASpawnAuthority_CoderReturnsFalse(t *testing.T) {
+func TestCanSpawnNonDelegatable_CoordinatorCannotSpawnSelf(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	agent.state.SetActivePersona("coordinator")
+
+	if agent.canSpawnNonDelegatable("coordinator") {
+		t.Error("expected coordinator NOT to be able to spawn another coordinator (not in its allow list)")
+	}
+}
+
+func TestCanSpawnNonDelegatable_CoderCannotSpawnOrchestrator(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
 	agent.state.SetActivePersona("coder")
 
-	if agent.hasEASpawnAuthority() {
-		t.Error("expected hasEASpawnAuthority to return false for coder persona")
+	if agent.canSpawnNonDelegatable("orchestrator") {
+		t.Error("expected coder NOT to be able to spawn orchestrator")
 	}
 }
 
-func TestHasEASpawnAuthority_OrchestratorWithoutSubagentRulesReturnsFalse(t *testing.T) {
+func TestCanSpawnNonDelegatable_OrchestratorCannotSpawnNonDelegatable(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
 	agent.state.SetActivePersona("orchestrator")
 
-	// orchestrator does not have auto-approve rules with subagent_spawn
-	if agent.hasEASpawnAuthority() {
-		t.Error("expected hasEASpawnAuthority to return false for orchestrator without subagent rules")
+	// Orchestrator has no CanSpawnNonDelegatable entries — it can only spawn
+	// the regular delegatable specialists.
+	if agent.canSpawnNonDelegatable("coordinator") {
+		t.Error("expected orchestrator NOT to be able to spawn coordinator")
 	}
 }
 
-func TestHasEASpawnAuthority_PersonaWithSubagentSpawnRuleReturnsTrue(t *testing.T) {
+func TestCanSpawnNonDelegatable_AutoApproveRulesDoNotGrantAuthority(t *testing.T) {
+	// Regression for rule-sniffing removal: declaring "subagent_spawn" in
+	// AutoApproveRules used to imply spawn authority. Post-A only an explicit
+	// CanSpawnNonDelegatable list grants it.
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
-	// Register a custom persona with subagent_spawn in its auto-approve rules
 	err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
-		cfg.SubagentTypes["test_ea_like"] = configuration.SubagentType{
-			ID:          "test_ea_like",
-			Name:        "Test EA-Like",
-			Description: "Test persona with subagent_spawn in auto-approve",
+		cfg.SubagentTypes["test_rule_only"] = configuration.SubagentType{
+			ID:          "test_rule_only",
+			Name:        "Rule Only",
 			Enabled:     true,
 			Delegatable: false,
 			AutoApproveRules: &configuration.AutoApproveRules{
@@ -732,9 +698,9 @@ func TestHasEASpawnAuthority_PersonaWithSubagentSpawnRuleReturnsTrue(t *testing.
 		t.Fatalf("UpdateConfigNoSave failed: %v", err)
 	}
 
-	agent.state.SetActivePersona("test_ea_like")
+	agent.state.SetActivePersona("test_rule_only")
 
-	if !agent.hasEASpawnAuthority() {
-		t.Error("expected hasEASpawnAuthority to return true for persona with subagent_spawn in medium risk ops")
+	if agent.canSpawnNonDelegatable("orchestrator") {
+		t.Error("AutoApproveRules entries should no longer imply spawn authority")
 	}
 }

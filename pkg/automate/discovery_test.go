@@ -483,6 +483,25 @@ func TestResolvePath(t *testing.T) {
 		}
 	})
 
+	t.Run("exact match rejects planted file with shell metacharacters", func(t *testing.T) {
+		// Defense-in-depth: even when the path stays under dir (no traversal)
+		// and the file actually exists, ResolvePath must refuse to return
+		// filenames that contain characters which would inject shell commands
+		// once the path is embedded in a shell-interpreted command line
+		// (e.g. BackgroundProcessManager.Start runs sh -c <cmdStr>).
+		dir := t.TempDir()
+		planted := filepath.Join(dir, "legit;echo PWNED.json")
+		mustWriteFile(t, planted, `{"initial": {"message": "hi"}}`)
+
+		_, err := ResolvePath(dir, "legit;echo PWNED")
+		if err == nil {
+			t.Fatal("expected unsafe-filename rejection, got nil")
+		}
+		if !strings.Contains(err.Error(), "unsafe workflow filename") {
+			t.Errorf("expected 'unsafe workflow filename' error, got: %v", err)
+		}
+	})
+
 	t.Run("exact match takes precedence over substring", func(t *testing.T) {
 		dir := t.TempDir()
 		mustWriteFile(t, filepath.Join(dir, "test.json"), `{

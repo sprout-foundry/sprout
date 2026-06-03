@@ -165,3 +165,4 @@ pkg/ast/grammars/bin/*.bin
 # Archive files
 *.zip
 /providers/
+/tmp/

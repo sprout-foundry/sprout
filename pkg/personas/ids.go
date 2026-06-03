@@ -16,7 +16,5 @@ const (
 	IDReviewer           = "reviewer"
 	IDResearcher         = "researcher"
 	IDWebScraper         = "web_scraper"
-	IDComputerUser       = "computer_user"
 	IDCoordinator        = "coordinator"
-	IDProjectPlanner     = "project_planner"
 )

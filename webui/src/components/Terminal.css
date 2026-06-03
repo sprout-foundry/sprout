@@ -18,7 +18,7 @@
   pointer-events: none;
 }
 
-.terminal-container.collapsed .terminal-header {
+.terminal-container.collapsed .terminal-collapsed-strip {
   pointer-events: auto;
 }
 
@@ -62,60 +62,74 @@
   width: 72px;
 }
 
-.terminal-header {
+/* ── Collapsed strip — the single slim row shown when terminal is closed ── */
+.terminal-collapsed-strip {
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  background: var(--bg-tertiary);
-  border-bottom: 1px solid var(--border-subtle);
-  padding: 0 12px;
-  flex-shrink: 0;
-  user-select: none;
-  min-height: auto;
-}
-
-.terminal-title-row {
-  display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: var(--space-2);
+  width: 100%;
   height: 42px;
+  padding: 0 var(--space-3);
+  background: var(--bg-secondary);
+  border: none;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 13px;
   cursor: pointer;
+  user-select: none;
+  text-align: left;
+  flex-shrink: 0;
+  transition: background 120ms var(--ease-out), color 120ms var(--ease-out);
 }
 
-.terminal-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.terminal-collapsed-strip:hover {
+  background: var(--bg-hover);
   color: var(--text-primary);
-  font-weight: 600;
-  min-width: 0;
 }
 
-.terminal-title-session {
+.terminal-collapsed-strip:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--accent-primary);
+}
+
+.terminal-collapsed-mark {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  min-width: 0;
-  color: var(--text-tertiary);
-  font-weight: 400;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-sm);
+  color: var(--brand-teal);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 14px;
+  flex-shrink: 0;
 }
 
-.terminal-title-separator {
+.terminal-collapsed-session {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  color: var(--text-tertiary);
+}
+
+.terminal-collapsed-sep {
   color: var(--text-muted);
   flex-shrink: 0;
 }
 
-.terminal-title-session-name {
+.terminal-collapsed-session-name {
   font-family: var(--font-mono);
   font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
-  max-width: 220px;
+  max-width: 260px;
 }
 
-.terminal-title-count {
+.terminal-collapsed-count {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -131,26 +145,8 @@
   flex-shrink: 0;
 }
 
-.connection-status {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  margin-left: 8px;
-}
-
-.connection-status.connected {
-  background: var(--accent-success);
-  box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent-success) 15%, transparent);
-}
-
-.connection-status.disconnected {
-  background: var(--accent-error);
-  box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent-error) 15%, transparent);
-}
-
-.terminal-controls {
-  display: flex;
-  gap: 8px;
+.terminal-collapsed-spacer {
+  flex: 1;
 }
 
 .terminal-btn {
@@ -249,8 +245,10 @@
   position: relative;
 }
 
-/* Subtle accent bar marking the focused pane in split mode. Sits inside
-   the pane so it doesn't push the layout around. */
+/* Accent bar + brighter tab strip mark the focused pane in split mode.
+ * The ::before bar sits inside the pane wrapper so the layout doesn't
+ * shift when focus changes; the brighter tab strip gives a wider visual
+ * cue alongside the bar. */
 .terminal-pane-wrapper--focused::before {
   content: '';
   position: absolute;
@@ -265,6 +263,10 @@
 
 .terminal-pane-wrapper--focused .terminal-pane-tab-bar {
   background: var(--bg-elevated);
+}
+
+.terminal-pane-wrapper--focused .terminal-tab-bar-divider {
+  background: var(--border-default);
 }
 
 .terminal-panes-container.split .terminal-pane-wrapper {
@@ -333,77 +335,132 @@
   opacity: 0.5;
 }
 
-.terminal-pane-exited .terminal-pane-dot.disconnected {
-  background: var(--accent-error);
-  box-shadow: 0 0 0 6px color-mix(in srgb, var(--accent-error) 30%, transparent);
-}
-
-/* Thin header shown per-pane only in split mode */
-.terminal-pane-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 24px;
-  padding: 0 6px;
-  background: var(--bg-tertiary);
-  border-bottom: 1px solid var(--border-subtle);
-  flex-shrink: 0;
-}
-
-/* ── Per-pane tab bar ── */
+/* ── Per-pane tab bar — single chrome row ──
+ * Layout: [tabs flex:1] [shell-picker] [divider + actions (last pane only)]
+ * Focused pane brightens this bar (see .terminal-pane-wrapper--focused below). */
 .terminal-pane-tab-bar {
   display: flex;
-  align-items: stretch;
-  background: var(--bg-tertiary);
+  align-items: center;
+  background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
   min-height: auto;
+  gap: var(--space-1);
+  padding-right: var(--space-2);
 }
 
-.terminal-pane-tab-bar .terminal-tab-bar {
+.terminal-pane-tabs {
   flex: 1;
   min-width: 0;
+  display: flex;
+  align-items: stretch;
+}
+
+.terminal-pane-tabs .terminal-tab-bar {
+  flex: 1;
+  min-width: 0;
+}
+
+.terminal-tab-bar-divider {
+  width: 1px;
+  height: 22px;
+  background: var(--border-subtle);
+  flex-shrink: 0;
+  margin: 0 var(--space-1);
+}
+
+.terminal-tab-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+}
+
+/* ── Overflow menu (⋯) — settings that don't earn a top-level slot ── */
+.terminal-overflow {
+  position: relative;
+  display: inline-flex;
+}
+
+.terminal-overflow-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 200px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: var(--space-1);
+  z-index: 200;
+  box-shadow: var(--shadow-elevated);
+  animation: shellPickerFadeIn 0.1s ease-out;
+}
+
+.terminal-overflow-header {
+  padding: var(--space-2) var(--space-2) var(--space-1);
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  user-select: none;
+  font-weight: 600;
+}
+
+.terminal-overflow-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s var(--ease-out), color 0.12s var(--ease-out);
+}
+
+.terminal-overflow-item:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.terminal-overflow-item:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--accent-primary);
+}
+
+.terminal-overflow-item--active {
+  color: var(--accent-secondary);
+}
+
+.terminal-overflow-label {
+  flex: 1;
+}
+
+.terminal-overflow-meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.terminal-overflow-item--active .terminal-overflow-meta {
+  color: var(--accent-secondary);
+}
+
+.terminal-overflow-divider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: var(--space-1) var(--space-2);
 }
 
 /* Exited session tab — dims the tab to signal the process has ended */
 .terminal-tab.exited {
   opacity: 0.5;
   font-style: italic;
-}
-
-.terminal-pane-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.terminal-pane-dot.connected {
-  background: var(--accent-success);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-success) 15%, transparent);
-}
-
-.terminal-pane-dot.disconnected {
-  background: var(--accent-error);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-error) 15%, transparent);
-}
-
-.terminal-pane-close {
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: 2px;
-  border-radius: 3px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-}
-
-.terminal-pane-close:hover {
-  color: var(--accent-error);
-  background: color-mix(in srgb, var(--accent-error) 15%, transparent);
 }
 
 .terminal-pane-content {
@@ -439,34 +496,32 @@
     height: 34px;
   }
 
-  .terminal-title-row {
+  .terminal-collapsed-strip {
     height: 34px;
+    padding: 0 var(--space-2);
+    gap: var(--space-1);
+    font-size: 12px;
   }
 
-  .terminal-header {
-    padding: 0 8px;
+  .terminal-collapsed-session-name {
+    max-width: 140px;
   }
 
   .terminal-body {
     flex: 1;
   }
 
-  .terminal-title {
-    gap: 6px;
-    font-size: 12px;
-  }
-
-  .terminal-title-session {
-    display: none;
-  }
-
-  .terminal-controls {
-    gap: 6px;
-  }
-
   .terminal-btn {
     padding: 2px 6px;
     border-radius: 5px;
+  }
+
+  /* On narrow screens, the actions cluster gets cramped fast.
+   * Collapse the split toggles into the overflow by hiding them inline;
+   * users can still split via the keyboard shortcuts. */
+  .terminal-tab-bar-actions .split-btn,
+  .terminal-tab-bar-actions .add-pane-btn {
+    display: none;
   }
 }
 
@@ -537,7 +592,6 @@
     border-radius: 0;
   }
 
-  .terminal-header,
   .terminal-output {
     padding-left: 8px;
     padding-right: 8px;

@@ -1,0 +1,38 @@
+{
+  "__comment": "Full Autonomous TODO Processor — processes TODO.md items with complete build/test/review cycle. Customize provider/model/subagent_overrides before running.",
+  "__runCommand": "sprout agent --workflow-config automate/workflow.json",
+  "continue_on_error": true,
+  "initial": {
+    "max_iterations": 500,
+    "model": "REPLACE_WITH_PRIMARY_MODEL",
+    "persona": "executive_assistant",
+    "prompt_file": "automate/workflow_prompt.md",
+    "provider": "REPLACE_WITH_PRIMARY_PROVIDER",
+    "risk_profile": "permissive",
+    "skip_prompt": true,
+    "subagent_overrides": {
+      "code_reviewer": {
+        "model": "REPLACE_WITH_SUBAGENT_MODEL",
+        "provider": "REPLACE_WITH_SUBAGENT_PROVIDER"
+      },
+      "coder": {
+        "model": "REPLACE_WITH_SUBAGENT_MODEL",
+        "provider": "REPLACE_WITH_SUBAGENT_PROVIDER"
+      },
+      "debugger": {
+        "model": "REPLACE_WITH_SUBAGENT_MODEL",
+        "provider": "REPLACE_WITH_SUBAGENT_PROVIDER"
+      },
+      "repo_orchestrator": {
+        "model": "REPLACE_WITH_SUBAGENT_MODEL",
+        "provider": "REPLACE_WITH_SUBAGENT_PROVIDER"
+      },
+      "tester": {
+        "model": "REPLACE_WITH_SUBAGENT_MODEL",
+        "provider": "REPLACE_WITH_SUBAGENT_PROVIDER"
+      }
+    }
+  },
+  "no_web_ui": true,
+  "persist_runtime_overrides": false
+}

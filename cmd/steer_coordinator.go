@@ -5,6 +5,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/clihooks"
@@ -134,6 +135,10 @@ func (c *SteerCoordinator) handleSteerSubmit(text string) {
 	if c.agent == nil {
 		return
 	}
+	if intent := ClassifyPromptIntent(c.agent, text); intent != IntentNone {
+		rejectCommandIntent(intent, text, "steer", "wait for the prompt to finish (Ctrl+C / Esc to interrupt now)")
+		return
+	}
 	if err := c.agent.InjectInputContext(text); err != nil {
 		fmt.Fprintln(os.Stderr)
 		console.GlyphError.Fprintf(os.Stderr, "steer dropped: %v", err)
@@ -167,6 +172,15 @@ func (c *SteerCoordinator) handleQueueSubmit(text string) {
 	if c.agent == nil || text == "" {
 		return
 	}
+	if intent := ClassifyPromptIntent(c.agent, text); intent != IntentNone {
+		// Queue mode wraps drained messages into a "Queued from prior
+		// turn:" blockquote at the next prompt, which strips the leading
+		// '/' or '!' and the prompt's IsSlashCommand / fast-path checks
+		// stop matching. Rather than silently demoting the command to
+		// LLM text, reject and tell the user where to send it.
+		rejectCommandIntent(intent, text, "queue", "type it at the prompt after this turn ends")
+		return
+	}
 	c.agent.EnqueueDeferredMessage(text)
 	fmt.Fprintln(os.Stderr)
 	console.GlyphPaused.Fprintf(os.Stderr, "queued: %s", text)
@@ -176,4 +190,22 @@ func (c *SteerCoordinator) handleQueueSubmit(text string) {
 	if c.footer != nil {
 		c.footer.Refresh()
 	}
+}
+
+// rejectCommandIntent prints a single-line stderr warning explaining
+// why a steer / queue submission was dropped. mode is "steer" or
+// "queue"; remedy is the actionable hint the user can take next.
+// The dropped text is echoed verbatim (truncated) so the user can see
+// what they almost sent.
+func rejectCommandIntent(intent PromptIntent, text, mode, remedy string) {
+	preview := strings.TrimSpace(text)
+	const maxPreview = 60
+	if len(preview) > maxPreview {
+		preview = preview[:maxPreview-1] + "…"
+	}
+	fmt.Fprintln(os.Stderr)
+	console.GlyphWarning.Fprintf(os.Stderr,
+		"%s mode can't run a %s — %s. Dropped: %s",
+		mode, string(intent), remedy, preview,
+	)
 }

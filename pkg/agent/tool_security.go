@@ -57,6 +57,10 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 			if agent.debug {
 				agent.debugLog("[UNLOCK] Static gate auto-approve (unsafe/elevated): bypassing security validation for %s (risk: %s)\n", toolName, secResult.Risk)
 			}
+		} else if agent == nil && (secResult.ShouldBlock || secResult.IntentConfirmation) {
+			// Defense-in-depth: no agent context available for approval,
+			// so reject operations that require it.
+			return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("security: %s — %s (no agent context for approval)", toolName, secResult.Reasoning), nil)
 		} else if agent != nil {
 			// Check if we're running as a subagent — subagents cannot prompt
 			isSubagent := agent.IsSubagent()
@@ -239,7 +243,6 @@ func (a *Agent) staticGateAutoApprove(secResult tools.SecurityResult) bool {
 	return false
 }
 
-// buildSecurityPrompt constructs a detailed security approval prompt for the user
 // buildSecurityPrompt constructs a detailed security approval prompt for the user
 func buildSecurityPrompt(toolName string, args map[string]interface{}, secResult tools.SecurityResult) string {
 	var sb strings.Builder

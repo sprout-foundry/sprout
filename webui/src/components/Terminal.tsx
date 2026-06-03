@@ -36,6 +36,35 @@ const MAX_PANES_HARD_CAP = 8;
 
 const evenSplit = (n: number): number[] => Array.from({ length: n }, () => 100 / n);
 
+/**
+ * Pick the session that should become active after `closedId` is removed
+ * from `sessions`. Mirrors TerminalTabBar's display ordering — pinned
+ * sessions sort to the front, ties broken by insertion order — and then
+ * picks the next neighbour to the right (or the new last tab, if the
+ * closing tab was the rightmost).
+ *
+ * Returns the closed session's own id when there's no other session left;
+ * callers are expected to guard against that case before calling.
+ *
+ * Exported for unit tests so we can verify the display-order behaviour
+ * without spinning up the whole Terminal component.
+ */
+export function nextActiveAfterClose(sessions: TerminalSession[], closedId: string): string {
+  const displayOrder = sessions
+    .map((session, index) => ({ session, index }))
+    .sort((a, b) => {
+      if (a.session.is_pinned !== b.session.is_pinned) {
+        return a.session.is_pinned ? -1 : 1;
+      }
+      return a.index - b.index;
+    })
+    .map(({ session }) => session);
+  const closedDisplayIdx = displayOrder.findIndex((s) => s.id === closedId);
+  const remaining = displayOrder.filter((s) => s.id !== closedId);
+  if (remaining.length === 0) return closedId;
+  return remaining[Math.min(closedDisplayIdx, remaining.length - 1)].id;
+}
+
 const redistributeAfterRemove = (sizes: number[], removedIndex: number): number[] => {
   if (sizes.length <= 1) return [100];
   const next = sizes.filter((_, i) => i !== removedIndex);
@@ -510,13 +539,16 @@ function Terminal({
       sessionReattachIdsRef.current.delete(sessionId);
       forgetSession(sessionId);
 
-      const closedIdx = pane.sessions.findIndex((s) => s.id === sessionId);
       const remaining = pane.sessions.filter((s) => s.id !== sessionId);
       // Browser-tab convention: when the active tab is closed, focus moves
       // to the tab on its right; if it was the last, to the new last tab.
+      // The "right" neighbor must be picked in display order (pinned first,
+      // then insertion order) — TerminalTabBar reorders pinned tabs to the
+      // front, so the array-order successor is often not the one the user
+      // sees to the right of the closing tab.
       const newActive =
         pane.activeSessionId === sessionId
-          ? remaining[Math.min(closedIdx, remaining.length - 1)].id
+          ? nextActiveAfterClose(pane.sessions, sessionId)
           : pane.activeSessionId;
 
       updatePane(paneId, (p) => ({
@@ -545,11 +577,17 @@ function Terminal({
   const handleSessionTitleChange = useCallback(
     (paneId: string, sessionId: string, title: string) => {
       if (manuallyRenamedSessions.current.has(sessionId)) return;
-      updatePane(paneId, (pane) => ({
-        ...pane,
-        sessions: pane.sessions.map((s) =>
-          s.id === sessionId && s.name !== title ? { ...s, name: title } : s,
-        ),
+      const pane = panesRef.current.find((p) => p.id === paneId);
+      if (!pane) return;
+      const target = pane.sessions.find((s) => s.id === sessionId);
+      // Skip the render entirely when the title is already current.
+      // Shells emit OSC title sequences frequently (often once per prompt
+      // redraw) — without this guard we re-allocate sessions[] on every
+      // keystroke even when nothing visible would change.
+      if (!target || target.name === title) return;
+      updatePane(paneId, (p) => ({
+        ...p,
+        sessions: p.sessions.map((s) => (s.id === sessionId ? { ...s, name: title } : s)),
       }));
     },
     [updatePane],
@@ -623,14 +661,19 @@ function Terminal({
       paneHandles.current.delete(sessionId);
       sessionShellsRef.current.delete(sessionId);
       sessionReattachIdsRef.current.delete(sessionId);
-      forgetSession(sessionId);
 
       // Last session in a pane that's part of a split — drop the pane.
+      // removePane already iterates the pane's sessions and forgets each,
+      // so we deliberately skip an extra forgetSession here.
       if (panesRef.current.length > 1) {
         removePane(paneId);
         notificationBus.notify('info', 'Terminal', 'Split pane closed after process exited.');
         return;
       }
+
+      // Single-pane restart path: this session is being replaced by a
+      // fresh one, so drop the activity / manual-rename tracking now.
+      forgetSession(sessionId);
 
       // Last session in the only pane — restart with a fresh shell so
       // the terminal panel never becomes empty.

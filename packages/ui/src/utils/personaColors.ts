@@ -28,6 +28,7 @@ export const PERSONA_COLORS: Record<string, string> = {
   refactor: '#79c0ff',
   researcher: '#ff7b72',
   orchestrator: '#d29922',
+  coordinator: '#58a6ff',
   executive_assistant: '#58a6ff',
   general: '#6e7681',
 };

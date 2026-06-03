@@ -209,7 +209,7 @@ export function RolesSettingsTab({ addNotification }: RolesSettingsTabProps) {
                   type="text"
                   value={form.persona}
                   onChange={(e) => updateField('persona', e.target.value)}
-                  placeholder="e.g. code_reviewer"
+                  placeholder="e.g. reviewer"
                 />
               </div>
             </div>

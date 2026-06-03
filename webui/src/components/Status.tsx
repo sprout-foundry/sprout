@@ -52,7 +52,7 @@ function Status({ isConnected, stats }: StatusProps): JSX.Element {
     );
   };
 
-  /** Format the internal persona ID (e.g. "code_reviewer") into a display label (e.g. "Code Reviewer").
+  /** Format the internal persona ID (e.g. "web_scraper") into a display label (e.g. "Web Scraper").
       Persona IDs are expected to be ASCII-only (lowercase letters and underscores).
   */
   const formatPersonaLabel = (id: string): string => {

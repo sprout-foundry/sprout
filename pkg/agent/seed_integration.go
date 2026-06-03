@@ -25,10 +25,11 @@ import (
 
 	core "github.com/sprout-foundry/seed/core"
 
-	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/personas"
 	"github.com/sprout-foundry/sprout/pkg/spec"
 	"github.com/sprout-foundry/sprout/pkg/utils"
 )
@@ -1124,7 +1125,7 @@ func hasCodeLikeTrackedFiles(files []string) bool {
 
 func isSelfReviewGatePersonaEnabled(persona string) bool {
 	switch strings.ToLower(strings.TrimSpace(persona)) {
-	case "orchestrator", "coder":
+	case personas.IDOrchestrator, personas.IDCoder:
 		return true
 	default:
 		return false

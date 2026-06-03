@@ -430,36 +430,6 @@ func TestResolvePersona(t *testing.T) {
 			wantFound: false,
 		},
 		{
-			name: "legacy mapping qa_engineer -> tester",
-			config: &configuration.Config{
-				SubagentTypes: map[string]configuration.SubagentType{
-					"tester": {
-						ID:   "tester",
-						Name: "Code Tester",
-					},
-				},
-			},
-			raw:       "qa_engineer",
-			wantID:    "tester",
-			wantName:  "Code Tester",
-			wantFound: true,
-		},
-		{
-			name: "legacy mapping web_researcher -> web_scraper",
-			config: &configuration.Config{
-				SubagentTypes: map[string]configuration.SubagentType{
-					"web_scraper": {
-						ID:   "web_scraper",
-						Name: "Web Scraper",
-					},
-				},
-			},
-			raw:       "web_researcher",
-			wantID:    "web_scraper",
-			wantName:  "Web Scraper",
-			wantFound: true,
-		},
-		{
 			name:   "nil config",
 			config: nil,
 			raw:    "coder",

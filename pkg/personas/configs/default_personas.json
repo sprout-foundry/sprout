@@ -224,7 +224,7 @@
     },
     {
       "aliases": [
-        "reviewer"
+        "code_reviewer"
       ],
       "allowed_tools": [
         "shell_command",
@@ -252,10 +252,10 @@
       "delegatable": true,
       "description": "Code review, security review, and best-practices specialist",
       "enabled": true,
-      "id": "code_reviewer",
+      "id": "reviewer",
       "_rules_source": "inherit:DefaultAutoApproveRules",
-      "name": "Code Reviewer",
-      "system_prompt": "pkg/agent/prompts/subagent_prompts/code_reviewer.md"
+      "name": "Reviewer",
+      "system_prompt": "pkg/agent/prompts/subagent_prompts/reviewer.md"
     },
     {
       "allowed_tools": [

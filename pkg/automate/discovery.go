@@ -130,6 +130,16 @@ func ResolvePath(dir string, name string) (string, error) {
 		return "", fmt.Errorf("workflow path escapes automate directory")
 	}
 
+	// Filename validation also runs on the exact-match branch — Discover
+	// already filters its results, but the exact-match path returns
+	// whatever exists at `candidate`. Without this check, a planted file
+	// like `legit;echo PWNED.json` would round-trip through ResolvePath
+	// and end up embedded in the shell command line that BPM.Start hands
+	// to `sh -c`, where the semicolon would execute injected commands.
+	if !IsValidFilename(filepath.Base(candidate)) {
+		return "", fmt.Errorf("unsafe workflow filename: %q", filepath.Base(candidate))
+	}
+
 	if _, err := os.Stat(candidate); err == nil {
 		return candidate, nil
 	}

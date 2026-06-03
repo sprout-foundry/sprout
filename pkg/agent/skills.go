@@ -2,22 +2,19 @@ package agent
 
 import (
 	"context"
-	"embed"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/skills"
 )
 
-const (
-	SkillFileName = "SKILL.md"
-)
-
-//go:embed skills
-var skillFS embed.FS
+// SkillFileName is the conventional name of the markdown file inside
+// each skill directory. Re-exported from pkg/skills so callers in this
+// package don't need to learn two import paths for the same constant.
+const SkillFileName = skills.SkillFileName
 
 type SkillInfo struct {
 	ID          string
@@ -28,25 +25,25 @@ type SkillInfo struct {
 	Source      string // "builtin", "user", or "project"
 }
 
+// LoadSkill resolves a skill by ID: built-ins come from the embedded
+// pkg/skills library (the single source of truth that also seeds
+// Config.Skills), user/project skills come from disk via skill.Path.
+// The config registry is still the gate — a skill that isn't registered
+// or is explicitly disabled cannot be activated, even if its content
+// happens to be embedded.
 func LoadSkill(skillID string, config *configuration.Config) (*SkillInfo, error) {
 	skill := config.GetSkill(skillID)
 	if skill == nil {
 		return nil, fmt.Errorf("skill not found or disabled: %s", skillID)
 	}
 
-	var content []byte
-	var err error
-
-	// Try embedded skills first (builtin skills are embedded in the binary)
-	embeddedPath := "skills/" + skillID + "/" + SkillFileName
-	content, err = fs.ReadFile(skillFS, embeddedPath)
-	if err == nil {
+	if content, err := skills.ReadContent(skillID); err == nil {
 		return &SkillInfo{
 			ID:          skill.ID,
 			Name:        skill.Name,
 			Description: skill.Description,
 			Path:        skill.Path,
-			Content:     string(content),
+			Content:     content,
 			Source:      "builtin",
 		}, nil
 	}
@@ -55,7 +52,7 @@ func LoadSkill(skillID string, config *configuration.Config) (*SkillInfo, error)
 	skillPath := resolveSkillPath(skill.Path)
 	skillFile := filepath.Join(skillPath, SkillFileName)
 
-	content, err = os.ReadFile(skillFile)
+	content, err := os.ReadFile(skillFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read skill file %s: %w", skillFile, err)
 	}

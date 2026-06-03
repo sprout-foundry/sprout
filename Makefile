@@ -206,18 +206,20 @@ lint-fix:
 	@cd webui && npm run lint:fix && npm run format && echo "Lint fix completed"
 
 # Build React web UI only (doesn't deploy to Go static)
+# Root npm ci installs every workspace (packages/events, packages/ui, webui);
+# the @sprout/* packages are then built explicitly because their `prepare`
+# script was removed in 61ba3f17 and webui resolves their `exports` from
+# `dist/` at Vite-bundle time.
 build-ui:
 	@echo "Building React web UI with Vite..."
 	@if [ ! -d "webui" ]; then \
 		echo "Error: webui directory not found"; \
 		exit 1; \
 	fi
-	@# Build workspace packages first (needed by webui via file: references)
-	@cd packages/events && npm install --silent 2>/dev/null && npm run build
-	@cd packages/ui && npm install --silent 2>/dev/null && npm run build
-	@# Install npm dependencies if needed
-	@cd webui && npm ci 2>/dev/null || npm install >/dev/null 2>&1 || true
-	@cd webui && npm run build
+	@if [ ! -d node_modules ]; then npm ci; fi
+	@npm run build -w @sprout/events
+	@npm run build -w @sprout/ui
+	@npm run build -w sprout-webui
 	@echo "React web UI build completed in webui/dist/"
 
 # Build React web UI and deploy to Go static directory (for embedding)
@@ -226,12 +228,12 @@ deploy-ui:
 	@echo "Checking if React UI needs rebuild..."
 	@if bash scripts/check-needs-react-rebuild.sh; then \
 		echo "Building React web UI with Vite..."; \
-		(cd packages/events && npm install --silent 2>/dev/null && npm run build); \
-		(cd packages/ui && npm install --silent 2>/dev/null && npm run build); \
-		(cd webui && npm ci 2>/dev/null || npm install >/dev/null 2>&1 || true); \
-		(cd webui && npm run build); \
+		if [ ! -d node_modules ]; then npm ci; fi; \
+		npm run build -w @sprout/events; \
+		npm run build -w @sprout/ui; \
+		npm run build -w sprout-webui; \
 		echo "React web UI build completed in webui/dist/"; \
-		node scripts/build-webui-embed.mjs; \
+		node scripts/build-webui-embed.mjs --no-build; \
 	else \
 		echo "React UI is up-to-date, skipping rebuild"; \
 		echo "Deploying existing React build to Go static directory..."; \

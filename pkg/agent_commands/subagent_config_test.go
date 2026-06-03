@@ -252,9 +252,9 @@ func TestSetPersonaEnabled_EnablePersistsViaUpdateConfig(t *testing.T) {
 		t.Fatal("precondition failed: persona should be disabled before test")
 	}
 
-	err := setPersonaEnabled(personaID, true, cm)
+	err := (&PersonaCommand{}).Execute([]string{personaID, "enable"}, chatAgent)
 	if err != nil {
-		t.Fatalf("setPersonaEnabled returned error: %v", err)
+		t.Fatalf("PersonaCommand enable returned error: %v", err)
 	}
 
 	// The vital regression check: GetConfig() must show Enabled == true.
@@ -279,9 +279,9 @@ func TestSetPersonaEnabled_DisablePersistsViaUpdateConfig(t *testing.T) {
 		t.Skip("no enabled persona found to test with")
 	}
 
-	err := setPersonaEnabled(personaID, false, cm)
+	err := (&PersonaCommand{}).Execute([]string{personaID, "disable"}, chatAgent)
 	if err != nil {
-		t.Fatalf("setPersonaEnabled returned error: %v", err)
+		t.Fatalf("PersonaCommand disable returned error: %v", err)
 	}
 
 	if cm.GetConfig().SubagentTypes[personaID].Enabled {
@@ -291,9 +291,9 @@ func TestSetPersonaEnabled_DisablePersistsViaUpdateConfig(t *testing.T) {
 
 func TestSetPersonaEnabled_NonexistentPersona_ReturnsError(t *testing.T) {
 	chatAgent := createTestAgentWithTempConfig(t)
-	cm := chatAgent.GetConfigManager()
+	_ = chatAgent.GetConfigManager()
 
-	err := setPersonaEnabled("nonexistent_persona", true, cm)
+	err := (&PersonaCommand{}).Execute([]string{"nonexistent_persona", "enable"}, chatAgent)
 	if err == nil {
 		t.Fatal("expected error for nonexistent persona, got nil")
 	}
@@ -328,9 +328,9 @@ func TestSetPersonaProvider_PersistsViaUpdateConfig(t *testing.T) {
 		return nil
 	})
 
-	err := setPersonaProvider(personaID, "openai", cm)
+	err := (&PersonaCommand{}).Execute([]string{personaID, "provider", "openai"}, chatAgent)
 	if err != nil {
-		t.Fatalf("setPersonaProvider returned error: %v", err)
+		t.Fatalf("PersonaCommand provider returned error: %v", err)
 	}
 
 	if cm.GetConfig().SubagentTypes[personaID].Provider != "openai" {
@@ -350,7 +350,7 @@ func TestSetPersonaProvider_InvalidProvider_ReturnsError(t *testing.T) {
 		break
 	}
 
-	err := setPersonaProvider(personaID, "no_such_provider_xyz", cm)
+	err := (&PersonaCommand{}).Execute([]string{personaID, "provider", "no_such_provider_xyz"}, chatAgent)
 	if err == nil {
 		t.Fatal("expected error for invalid provider, got nil")
 	}
@@ -382,9 +382,9 @@ func TestSetPersonaModel_PersistsViaUpdateConfig(t *testing.T) {
 		return nil
 	})
 
-	err := setPersonaModel(personaID, "my-persona-test-model", cm)
+	err := (&PersonaCommand{}).Execute([]string{personaID, "model", "my-persona-test-model"}, chatAgent)
 	if err != nil {
-		t.Fatalf("setPersonaModel returned error: %v", err)
+		t.Fatalf("PersonaCommand model returned error: %v", err)
 	}
 
 	if cm.GetConfig().SubagentTypes[personaID].Model != "my-persona-test-model" {
@@ -480,7 +480,7 @@ func TestSubagentPersonaCommand_Execute_NoArgs_ListsPersonas(t *testing.T) {
 	chatAgent := createTestAgentWithTempConfig(t)
 
 	cmd := &SubagentPersonaCommand{}
-	// No args should list personas (showAllPersonas) without error.
+	// No args should list personas without error.
 	if err := cmd.Execute(nil, chatAgent); err != nil {
 		t.Fatalf("Execute with no args returned unexpected error: %v", err)
 	}

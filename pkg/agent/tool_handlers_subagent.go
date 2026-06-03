@@ -10,9 +10,10 @@ import (
 	"strings"
 	"sync"
 
-	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/personas"
 	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
@@ -451,8 +452,8 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 
 	// Default to "general" persona if not specified
 	if persona == "" {
-		persona = "general"
-		a.Logger().Debug("No persona specified, using default: general\n")
+		persona = personas.IDGeneral
+		a.Logger().Debug("No persona specified, using default: %s\n", personas.IDGeneral)
 	}
 	persona = strings.ReplaceAll(strings.ToLower(strings.TrimSpace(persona)), "-", "_")
 
@@ -680,8 +681,8 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 					return "", fmt.Errorf("persona '%s' is not designed to be used as a subagent (delegatable=false)", persona)
 				}
 				// EA cannot spawn another EA — prevents infinite nesting chains.
-				if a.rootPersonaID == "executive_assistant" && persona == "executive_assistant" {
-					return "", fmt.Errorf("executive_assistant cannot spawn another executive_assistant (prevents infinite nesting)")
+				if a.rootPersonaID == personas.IDCoordinator && persona == personas.IDCoordinator {
+					return "", fmt.Errorf("%s cannot spawn another %s (prevents infinite nesting)", personas.IDCoordinator, personas.IDCoordinator)
 				}
 				// No persona can spawn itself — prevents self-recursion.
 				currentPersona := a.GetActivePersona()

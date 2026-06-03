@@ -211,7 +211,7 @@ sprout export-training [flags]
 |------|-------------|---------|
 | `--no-connection-check` | Skip provider connection check | `sprout agent --no-connection-check "task"` |
 | `--max-iterations <n>` | Limit iterations (default: 1000) | `sprout agent --max-iterations 50 "task"` |
-| `--no-stream` | Disable streaming for scripts | `LEDIT_NO_STREAM=1 sprout agent "task"` |
+| `--no-stream` | Disable streaming for scripts | `SPROUT_NO_STREAM=1 sprout agent "task"` |
 | `--no-subagents` | Disable subagent tools | `sprout agent --no-subagents "task"` |
 | `--risk-profile <name>` | Shell-command gating profile: `readonly`, `cautious`, `default`, `permissive`, `unrestricted`. Overrides `config.risk_profile` for this session. See [SECURITY.md](SECURITY.md#risk-profiles). | `sprout agent --risk-profile readonly "audit the auth flow"` |
 | `--unsafe` | Bypass security checks (use with caution) | `sprout agent --unsafe "task"` |
@@ -299,7 +299,7 @@ In interactive `sprout` or `sprout agent`, use `/` for commands (tab-complete).
 
 ## Agent Personas
 
-`sprout` supports 10 specialized personas, each optimized for different types of tasks. See [`docs/subagent_personas.md`](subagent_personas.md) for detailed descriptions.
+`sprout` supports 12 specialized personas, each optimized for different types of tasks. See [`docs/PERSONAS.md`](PERSONAS.md) for detailed descriptions.
 
 | Persona | Description |
 |---------|-------------|
@@ -313,6 +313,8 @@ In interactive `sprout` or `sprout agent`, use `/` for commands (tab-complete).
 | `researcher` | Combined local codebase analysis and external research |
 | `web_scraper` | Web extraction and structured content collection |
 | `computer_user` | System administration and engineering execution |
+| `executive_assistant` | Cross-project orchestration and task queue |
+| `project_planner` | Strategic planning and alignment |
 
 **Using Personas:**
 ```bash

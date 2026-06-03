@@ -193,10 +193,17 @@ function TerminalTabBar({
     if (!id) return;
     const session = sessions.find((s) => s.id === id);
     if (!session) return;
+    // Activate the tab so the rename UI matches the visible terminal
+    // (and any activity dot clears) — without this, a right-click on a
+    // background tab would leave the user editing the name of a tab they
+    // can't see, with the activity dot still pulsing alongside the input.
+    if (id !== activeSessionId) {
+      onSwitch(id);
+    }
     setRenamingId(id);
     setRenameValue(session.name);
     closeContextMenu();
-  }, [contextMenu.sessionId, sessions, closeContextMenu]);
+  }, [contextMenu.sessionId, sessions, activeSessionId, onSwitch, closeContextMenu]);
 
   const handleMenuClose = useCallback(() => {
     const id = contextMenu.sessionId;

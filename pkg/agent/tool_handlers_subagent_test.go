@@ -571,7 +571,7 @@ func TestSubagentManifestEndToEnd(t *testing.T) {
 		t.Fatalf("mutate: %v", err)
 	}
 	bumpMtime(t, original)
-	tracker.TrackShellTurn(dir, "shell_command")
+	tracker.TrackShellTurn(dir, "shell_command", false)
 
 	if len(tracker.changes) != 1 {
 		t.Fatalf("tracker should have captured the shell mutation; got %d changes: %+v",

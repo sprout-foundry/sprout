@@ -11,7 +11,7 @@ import Terminal from './Terminal';
 vi.mock('./TerminalPane', async () => {
   const { forwardRef, useImperativeHandle } = await vi.importActual('react');
   return {
-    default: forwardRef(function MockTerminalPane({ isActive, isConnected, showCloseButton, onClose }: any, ref: any) {
+    default: forwardRef(function MockTerminalPane({ isActive, isConnected }: any, ref: any) {
       // NOTE: vi.fn() inside useImperativeHandle creates fresh mock instances on
       // every re-render. This is acceptable because no test asserts on imperative
       // handle call counts — all assertions check DOM state. If future tests need
@@ -28,13 +28,7 @@ vi.mock('./TerminalPane', async () => {
           data-testid="terminal-pane"
           data-active={isActive ? 'true' : 'false'}
           data-connected={isConnected ? 'true' : 'false'}
-        >
-          {showCloseButton && (
-            <button className="terminal-pane-close" data-testid="secondary-close-btn" onClick={onClose}>
-              ✕
-            </button>
-          )}
-        </div>
+        />
       );
     }),
   };
@@ -89,9 +83,20 @@ function collapseTerminal(container: HTMLElement) {
  * Get all split buttons (vertical is first, horizontal is second).
  * Ordered by their position in the DOM: vertical split button (Columns2 icon)
  * is rendered first, horizontal split button (Rows2 icon) is rendered second.
+ *
+ * Always re-query — toggling split moves the actions cluster between panes,
+ * so any captured element ref goes stale after a state change.
  */
 function getSplitButtons(container: HTMLElement) {
   return Array.from(container.querySelectorAll('.split-btn'));
+}
+
+function getVerticalBtn(container: HTMLElement): HTMLElement {
+  return getSplitButtons(container)[0] as HTMLElement;
+}
+
+function getHorizontalBtn(container: HTMLElement): HTMLElement {
+  return getSplitButtons(container)[1] as HTMLElement;
 }
 
 function getPanesContainer(container: HTMLElement) {
@@ -106,10 +111,6 @@ function getSecondaryPane(container: HTMLElement) {
   // Secondary pane wrapper is the second .terminal-pane-wrapper
   const wrappers = container.querySelectorAll('.terminal-pane-wrapper');
   return wrappers.length > 1 ? wrappers[1] : null;
-}
-
-function getSecondaryCloseBtn(container: HTMLElement) {
-  return container.querySelector('[data-testid="secondary-close-btn"]');
 }
 
 function dispatchTerminalAction(action: string) {
@@ -190,17 +191,16 @@ describe('Terminal split functionality', () => {
     root = view.root;
 
     // The vertical split button initially has aria-label="Split terminal vertically"
-    const verticalBtn = container.querySelector('[aria-label="Split terminal vertically"]') as HTMLElement;
-    expect(verticalBtn).toBeTruthy();
+    expect(getVerticalBtn(container)).toBeTruthy();
 
     act(() => {
-      verticalBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      getVerticalBtn(container).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     // After clicking, the button should now have split-btn-active class
-    expect(verticalBtn.classList.contains('split-btn-active')).toBe(true);
-    expect(verticalBtn.getAttribute('aria-label')).toBe('Unsplit terminal');
-    expect(verticalBtn.getAttribute('aria-pressed')).toBe('true');
+    expect(getVerticalBtn(container).classList.contains('split-btn-active')).toBe(true);
+    expect(getVerticalBtn(container).getAttribute('aria-label')).toBe('Unsplit terminal');
+    expect(getVerticalBtn(container).getAttribute('aria-pressed')).toBe('true');
   });
 
   it('shows vertical split layout in panes container after vertical split', () => {
@@ -209,9 +209,8 @@ describe('Terminal split functionality', () => {
     root = view.root;
 
     // Click vertical split
-    const verticalBtn = container.querySelector('[aria-label="Split terminal vertically"]') as HTMLElement;
     act(() => {
-      verticalBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      getVerticalBtn(container).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     const panesContainer = getPanesContainer(container);
@@ -226,20 +225,18 @@ describe('Terminal split functionality', () => {
     container = view.container;
     root = view.root;
 
-    const horizontalBtn = container.querySelector('[aria-label="Split terminal horizontally"]') as HTMLElement;
-    expect(horizontalBtn).toBeTruthy();
+    expect(getHorizontalBtn(container)).toBeTruthy();
 
     act(() => {
-      horizontalBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      getHorizontalBtn(container).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    expect(horizontalBtn.classList.contains('split-btn-active')).toBe(true);
-    expect(horizontalBtn.getAttribute('aria-label')).toBe('Unsplit terminal');
-    expect(horizontalBtn.getAttribute('aria-pressed')).toBe('true');
+    expect(getHorizontalBtn(container).classList.contains('split-btn-active')).toBe(true);
+    expect(getHorizontalBtn(container).getAttribute('aria-label')).toBe('Unsplit terminal');
+    expect(getHorizontalBtn(container).getAttribute('aria-pressed')).toBe('true');
 
     // Vertical button should NOT be active
-    const verticalBtn = container.querySelector('.split-btn') as HTMLElement;
-    expect(verticalBtn.classList.contains('split-btn-active')).toBe(false);
+    expect(getVerticalBtn(container).classList.contains('split-btn-active')).toBe(false);
   });
 
   it('shows horizontal split layout in panes container after horizontal split', () => {
@@ -247,9 +244,8 @@ describe('Terminal split functionality', () => {
     container = view.container;
     root = view.root;
 
-    const horizontalBtn = container.querySelector('[aria-label="Split terminal horizontally"]') as HTMLElement;
     act(() => {
-      horizontalBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      getHorizontalBtn(container).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     const panesContainer = getPanesContainer(container);
@@ -323,26 +319,27 @@ describe('Terminal split functionality', () => {
     container = view.container;
     root = view.root;
 
-    const verticalBtn = container.querySelector('[aria-label="Split terminal vertically"]') as HTMLElement;
 
     // First click: activate
     act(() => {
-      verticalBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      getVerticalBtn(container).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(verticalBtn.classList.contains('split-btn-active')).toBe(true);
+    expect(getVerticalBtn(container).classList.contains('split-btn-active')).toBe(true);
 
-    // Second click: aria-label is now "Unsplit terminal"
-    const unsplitBtn = container.querySelector('[aria-label="Unsplit terminal"]') as HTMLElement;
-
+    // Second click: aria-label is now "Unsplit terminal".
+    // The button moves between panes on toggle (actions cluster anchors to
+    // the rightmost/top-most pane), so re-query each time.
     act(() => {
-      unsplitBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      (container.querySelector('[aria-label="Unsplit terminal"]') as HTMLElement)
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    // Button should no longer be active
-    expect(unsplitBtn.classList.contains('split-btn-active')).toBe(false);
-    expect(unsplitBtn.getAttribute('aria-pressed')).toBe('false');
-    // Label should revert back
-    expect(unsplitBtn.getAttribute('aria-label')).toBe('Split terminal vertically');
+    // Button should no longer be active. After unsplit, the vertical-split
+    // button lives on pane[0]'s tab bar with its original label.
+    const vBtn = getVerticalBtn(container);
+    expect(vBtn.classList.contains('split-btn-active')).toBe(false);
+    expect(vBtn.getAttribute('aria-pressed')).toBe('false');
+    expect(vBtn.getAttribute('aria-label')).toBe('Split terminal vertically');
   });
 
   it('deactivates horizontal split when clicking the same button again', () => {
@@ -350,25 +347,24 @@ describe('Terminal split functionality', () => {
     container = view.container;
     root = view.root;
 
-    const horizontalBtn = container.querySelector('[aria-label="Split terminal horizontally"]') as HTMLElement;
 
     // Activate
     act(() => {
-      horizontalBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      getHorizontalBtn(container).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(horizontalBtn.classList.contains('split-btn-active')).toBe(true);
+    expect(getHorizontalBtn(container).classList.contains('split-btn-active')).toBe(true);
 
-    // Deactivate — now aria-label is "Unsplit terminal"
-    // There are two buttons with "Unsplit terminal" when horizontal is active
-    // We need to find the horizontal one (the second .split-btn)
-    const splitBtns = getSplitButtons(container);
-    const activeBtn = splitBtns.find((btn) => btn.classList.contains('split-btn-active')) as HTMLElement;
-
+    // Deactivate — the active button's aria-label is "Unsplit terminal".
+    // Find by class, re-query each step (the actions cluster moves between
+    // panes on toggle).
     act(() => {
+      const splitBtns = getSplitButtons(container);
+      const activeBtn = splitBtns.find((btn) => btn.classList.contains('split-btn-active')) as HTMLElement;
       activeBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    expect(activeBtn.classList.contains('split-btn-active')).toBe(false);
+    // After unsplit, no split button should carry the active class.
+    expect(getSplitButtons(container).some((btn) => btn.classList.contains('split-btn-active'))).toBe(false);
   });
 
   it('removes split layout when toggling off (expanded)', () => {
@@ -377,15 +373,15 @@ describe('Terminal split functionality', () => {
     root = view.root;
 
     // Activate vertical split
-    const verticalBtn = container.querySelector('[aria-label="Split terminal vertically"]') as HTMLElement;
     act(() => {
-      verticalBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      getVerticalBtn(container).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    // Deactivate
-    const unsplitBtn = container.querySelector('[aria-label="Unsplit terminal"]') as HTMLElement;
+    // Deactivate — re-query the unsplit button each step (it moves between
+    // panes when the actions cluster's host pane changes).
     act(() => {
-      unsplitBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      (container.querySelector('[aria-label="Unsplit terminal"]') as HTMLElement)
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     const panesContainer = getPanesContainer(container);
@@ -400,21 +396,19 @@ describe('Terminal split functionality', () => {
     container = view.container;
     root = view.root;
 
-    const splitBtns = getSplitButtons(container);
-
     // Activate horizontal
     act(() => {
-      splitBtns[1].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      getHorizontalBtn(container).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(splitBtns[1].classList.contains('split-btn-active')).toBe(true);
-    expect(splitBtns[0].classList.contains('split-btn-active')).toBe(false);
+    expect(getHorizontalBtn(container).classList.contains('split-btn-active')).toBe(true);
+    expect(getVerticalBtn(container).classList.contains('split-btn-active')).toBe(false);
 
     // Now activate vertical — should replace horizontal
     act(() => {
-      splitBtns[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      getVerticalBtn(container).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(splitBtns[0].classList.contains('split-btn-active')).toBe(true);
-    expect(splitBtns[1].classList.contains('split-btn-active')).toBe(false);
+    expect(getVerticalBtn(container).classList.contains('split-btn-active')).toBe(true);
+    expect(getHorizontalBtn(container).classList.contains('split-btn-active')).toBe(false);
   });
 
   it('switching from vertical to horizontal replaces (not stacks) the split', () => {
@@ -422,20 +416,18 @@ describe('Terminal split functionality', () => {
     container = view.container;
     root = view.root;
 
-    const splitBtns = getSplitButtons(container);
-
     // Activate vertical
     act(() => {
-      splitBtns[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      getVerticalBtn(container).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(splitBtns[0].classList.contains('split-btn-active')).toBe(true);
+    expect(getVerticalBtn(container).classList.contains('split-btn-active')).toBe(true);
 
     // Now activate horizontal
     act(() => {
-      splitBtns[1].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      getHorizontalBtn(container).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
-    expect(splitBtns[1].classList.contains('split-btn-active')).toBe(true);
-    expect(splitBtns[0].classList.contains('split-btn-active')).toBe(false);
+    expect(getHorizontalBtn(container).classList.contains('split-btn-active')).toBe(true);
+    expect(getVerticalBtn(container).classList.contains('split-btn-active')).toBe(false);
   });
 
   it('switching split direction updates CSS classes correctly (expanded)', () => {
@@ -443,11 +435,9 @@ describe('Terminal split functionality', () => {
     container = view.container;
     root = view.root;
 
-    const splitBtns = getSplitButtons(container);
-
     // Activate vertical
     act(() => {
-      splitBtns[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      getVerticalBtn(container).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     let panesContainer = getPanesContainer(container);
@@ -456,7 +446,7 @@ describe('Terminal split functionality', () => {
 
     // Switch to horizontal
     act(() => {
-      splitBtns[1].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      getHorizontalBtn(container).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     panesContainer = getPanesContainer(container);
@@ -476,9 +466,8 @@ describe('Terminal split functionality', () => {
     expect(wrappersBefore.length).toBe(1);
 
     // Activate vertical split
-    const verticalBtn = container.querySelector('[aria-label="Split terminal vertically"]') as HTMLElement;
     act(() => {
-      verticalBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      getVerticalBtn(container).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     // After split: two pane wrappers
@@ -495,9 +484,8 @@ describe('Terminal split functionality', () => {
     expect(wrappersBefore.length).toBe(1);
 
     // Activate horizontal split
-    const horizontalBtn = container.querySelector('[aria-label="Split terminal horizontally"]') as HTMLElement;
     act(() => {
-      horizontalBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      getHorizontalBtn(container).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     const wrappersAfter = container.querySelectorAll('.terminal-pane-wrapper');
@@ -532,9 +520,8 @@ describe('Terminal split functionality', () => {
     root = view.root;
 
     // Activate split
-    const verticalBtn = container.querySelector('[aria-label="Split terminal vertically"]') as HTMLElement;
     act(() => {
-      verticalBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      getVerticalBtn(container).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
 
@@ -555,9 +542,8 @@ describe('Terminal split functionality', () => {
     root = view.root;
 
     // Activate split
-    const verticalBtn = container.querySelector('[aria-label="Split terminal vertically"]') as HTMLElement;
     act(() => {
-      verticalBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      getVerticalBtn(container).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(getSplitDivider(container)).toBeTruthy();
 
@@ -776,16 +762,16 @@ describe('Terminal split functionality', () => {
       dispatchTerminalAction('split_vertical');
     });
 
-    const splitBtns = getSplitButtons(container);
-    expect(splitBtns[0].classList.contains('split-btn-active')).toBe(true);
+    expect(getVerticalBtn(container).classList.contains('split-btn-active')).toBe(true);
 
-    const unsplitBtn = container.querySelector('[aria-label="Unsplit terminal"]') as HTMLElement;
     act(() => {
-      unsplitBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      (container.querySelector('[aria-label="Unsplit terminal"]') as HTMLElement)
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    // Both buttons should be inactive
-    splitBtns.forEach((btn) => {
+    // Both buttons should be inactive — re-query, since the actions cluster
+    // moves between panes on toggle.
+    getSplitButtons(container).forEach((btn) => {
       expect(btn.classList.contains('split-btn-active')).toBe(false);
     });
   });
@@ -903,12 +889,11 @@ describe('Terminal split functionality', () => {
     container = view.container;
     root = view.root;
 
-    const verticalBtn = container.querySelector('[aria-label="Split terminal vertically"]') as HTMLElement;
     act(() => {
-      verticalBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      getVerticalBtn(container).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    expect(verticalBtn.getAttribute('aria-pressed')).toBe('true');
+    expect(getVerticalBtn(container).getAttribute('aria-pressed')).toBe('true');
   });
 
   it('horizontal split button aria-pressed becomes true when active', () => {
@@ -916,12 +901,11 @@ describe('Terminal split functionality', () => {
     container = view.container;
     root = view.root;
 
-    const horizontalBtn = container.querySelector('[aria-label="Split terminal horizontally"]') as HTMLElement;
     act(() => {
-      horizontalBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      getHorizontalBtn(container).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    expect(horizontalBtn.getAttribute('aria-pressed')).toBe('true');
+    expect(getHorizontalBtn(container).getAttribute('aria-pressed')).toBe('true');
   });
 
   it('split buttons have aria-label attributes', () => {
@@ -929,11 +913,8 @@ describe('Terminal split functionality', () => {
     container = view.container;
     root = view.root;
 
-    const verticalBtn = container.querySelector('[aria-label="Split terminal vertically"]');
-    const horizontalBtn = container.querySelector('[aria-label="Split terminal horizontally"]');
-
-    expect(verticalBtn).toBeTruthy();
-    expect(horizontalBtn).toBeTruthy();
+    expect(container.querySelector('[aria-label="Split terminal vertically"]')).toBeTruthy();
+    expect(container.querySelector('[aria-label="Split terminal horizontally"]')).toBeTruthy();
   });
 });
 
@@ -970,11 +951,10 @@ describe('Terminal split lifecycle and edge cases', () => {
     container = view.container;
     root = view.root;
 
-    const verticalBtn = container.querySelector('[aria-label="Split terminal vertically"]') as HTMLElement;
 
     // First split
     act(() => {
-      verticalBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      getVerticalBtn(container).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
 
@@ -987,7 +967,7 @@ describe('Terminal split lifecycle and edge cases', () => {
 
     // Re-split should create a new secondary session (not reuse old)
     act(() => {
-      verticalBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      getVerticalBtn(container).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
   });
@@ -997,11 +977,10 @@ describe('Terminal split lifecycle and edge cases', () => {
     container = view.container;
     root = view.root;
 
-    const verticalBtn = container.querySelector('[aria-label="Split terminal vertically"]') as HTMLElement;
 
     // First split
     act(() => {
-      verticalBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      getVerticalBtn(container).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
 
@@ -1014,7 +993,7 @@ describe('Terminal split lifecycle and edge cases', () => {
 
     // Re-split
     act(() => {
-      verticalBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      getVerticalBtn(container).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
   });
@@ -1024,29 +1003,31 @@ describe('Terminal split lifecycle and edge cases', () => {
     container = view.container;
     root = view.root;
 
-    const splitBtns = getSplitButtons(container);
+    // Re-query the vertical split button after every state change — the
+    // actions cluster moves between panes when split toggles, so the DOM
+    // node for the same logical button changes.
 
     // Split
     act(() => {
-      splitBtns[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      getVerticalBtn(container).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
 
     // Click again (same direction) should unsplit
     act(() => {
-      splitBtns[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      getVerticalBtn(container).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(1);
 
     // Click again should re-split
     act(() => {
-      splitBtns[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      getVerticalBtn(container).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
 
     // Never more than 2
     act(() => {
-      splitBtns[0].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      getVerticalBtn(container).dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
     expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(1);
   });
@@ -1487,5 +1468,80 @@ describe('Terminal flat N-pane splits', () => {
     const panesContainer = getPanesContainer(container);
     expect(panesContainer?.classList.contains('terminal-split-vertical')).toBe(false);
     expect(panesContainer?.classList.contains('terminal-split-horizontal')).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: nextActiveAfterClose helper
+// ---------------------------------------------------------------------------
+
+import { nextActiveAfterClose } from './Terminal';
+
+describe('nextActiveAfterClose', () => {
+  // No pinning — display order matches insertion order.
+  it('picks the right-neighbour when closing a middle tab', () => {
+    const sessions = [
+      { id: 'a', name: 'A', is_pinned: false },
+      { id: 'b', name: 'B', is_pinned: false },
+      { id: 'c', name: 'C', is_pinned: false },
+    ];
+    expect(nextActiveAfterClose(sessions, 'b')).toBe('c');
+  });
+
+  it('picks the previous-neighbour when closing the last tab', () => {
+    const sessions = [
+      { id: 'a', name: 'A', is_pinned: false },
+      { id: 'b', name: 'B', is_pinned: false },
+      { id: 'c', name: 'C', is_pinned: false },
+    ];
+    expect(nextActiveAfterClose(sessions, 'c')).toBe('b');
+  });
+
+  it('picks the next display-tab when closing the first tab', () => {
+    const sessions = [
+      { id: 'a', name: 'A', is_pinned: false },
+      { id: 'b', name: 'B', is_pinned: false },
+      { id: 'c', name: 'C', is_pinned: false },
+    ];
+    expect(nextActiveAfterClose(sessions, 'a')).toBe('b');
+  });
+
+  // Pinning — display order differs from array order.
+  it('honors display order when a pinned tab sits before an unpinned one', () => {
+    // Array order: [A, B(pinned), C]; display order: [B, A, C].
+    // Closing A (display position 1) should focus C (display position 2),
+    // NOT B (the pinned tab to the left at display position 0).
+    const sessions = [
+      { id: 'a', name: 'A', is_pinned: false },
+      { id: 'b', name: 'B', is_pinned: true },
+      { id: 'c', name: 'C', is_pinned: false },
+    ];
+    expect(nextActiveAfterClose(sessions, 'a')).toBe('c');
+  });
+
+  it('falls back to the previous tab when closing the rightmost display tab', () => {
+    // Display order: [B(pinned), A, C]. Closing C → focus A.
+    const sessions = [
+      { id: 'a', name: 'A', is_pinned: false },
+      { id: 'b', name: 'B', is_pinned: true },
+      { id: 'c', name: 'C', is_pinned: false },
+    ];
+    expect(nextActiveAfterClose(sessions, 'c')).toBe('a');
+  });
+
+  it('keeps pinned-first when closing a pinned tab', () => {
+    // Display order: [B(pinned), D(pinned), A, C]. Closing B → focus D.
+    const sessions = [
+      { id: 'a', name: 'A', is_pinned: false },
+      { id: 'b', name: 'B', is_pinned: true },
+      { id: 'c', name: 'C', is_pinned: false },
+      { id: 'd', name: 'D', is_pinned: true },
+    ];
+    expect(nextActiveAfterClose(sessions, 'b')).toBe('d');
+  });
+
+  it('returns the closed id back when no session remains', () => {
+    const sessions = [{ id: 'a', name: 'A', is_pinned: false }];
+    expect(nextActiveAfterClose(sessions, 'a')).toBe('a');
   });
 });

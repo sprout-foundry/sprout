@@ -52,8 +52,13 @@ export function useModelProviderHandlers({
     (model: string) => {
       debugLog('Model changed to:', model);
       const provider = pendingProviderRef.current || providerRef.current;
+      // Mirror the optimistic write into state.stats so ChatStatusBarItems
+      // (which renders stats.provider/stats.model) updates at the same instant
+      // as the settings-sidebar dropdown. Without this, the status bar stays
+      // on the previous model until the backend's next metrics_update arrives.
       setState((prev) => ({
         model,
+        stats: { ...prev.stats, model },
       }));
       events.sendEvent({
         type: 'model_change',
@@ -74,8 +79,10 @@ export function useModelProviderHandlers({
       if (pendingProviderChangeValueRef) {
         pendingProviderChangeValueRef.current = provider;
       }
+      // See handleModelChange — same reason for mirroring into state.stats.
       setState((prev) => ({
         provider,
+        stats: { ...prev.stats, provider },
       }));
       events.sendEvent({
         type: 'provider_change',

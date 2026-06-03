@@ -87,7 +87,11 @@ func (a *Agent) executeShellCommandWithTruncation(ctx context.Context, command s
 	// we want to remember.
 	if tracker := a.GetChangeTracker(); tracker != nil && tracker.IsEnabled() {
 		if !shellLooksReadOnly(command) {
-			tracker.TrackShellTurn(a.effectiveCwd(), "shell_command")
+			// `git checkout .`, `git reset --hard`, `git stash pop`, etc.
+			// switch the walker into destructive mode so adaptive
+			// auto-skip can't silently drop reverts the user wanted
+			// recoverable. shell_destructive.go has the classifier.
+			tracker.TrackShellTurn(a.effectiveCwd(), "shell_command", shellIsDestructive(command))
 		}
 	}
 

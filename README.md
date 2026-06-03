@@ -33,11 +33,13 @@ See the [Consumption Guide](docs/CONSUMPTION_GUIDE.md) for full documentation.
 ### Recommended Installation
 
 **Linux / macOS:**
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/sprout-foundry/sprout/main/scripts/install.sh | sh
 ```
 
 **Windows (PowerShell):**
+
 ```powershell
 irm https://raw.githubusercontent.com/sprout-foundry/sprout/main/scripts/install.ps1 | iex
 ```
@@ -70,6 +72,7 @@ Requires Go 1.25.0+ and Node.js 22+:
 git clone https://github.com/sprout-foundry/sprout.git
 cd sprout
 make deploy-ui   # Build and embed the React web UI (requires Node.js)
+make prepar-grammars
 go install .
 ```
 
@@ -100,13 +103,13 @@ sprout log
 
 Before sprout runs a shell command it consults a **risk cascade** that decides whether to run, prompt, or block. The cascade is driven by a named profile — five ship out of the box, you can override any of them in config:
 
-| Profile | Effect | Use when |
-|---|---|---|
-| `readonly` | Only reads (`git status/log/diff`, `read_file`). Everything else is **blocked outright** (no prompt). | Audits, code review, untrusted agents. |
-| `cautious` | Reads auto-approve. Everything else prompts you. | Sensitive workspaces. |
-| `default` | Reads + common edits auto-approve. Destructive ops (force flags, `rm -rf`, lossy git) prompt. | Daily driver. ← *the default* |
-| `permissive` | Almost everything auto-approves; only force-flagged or recursive-destructive patterns prompt. | High-trust agents in recoverable workspaces. |
-| `unrestricted` | Nothing prompts. Only catastrophic patterns (rm-rf-root, fork bombs) block. | Sandboxed runs. |
+| Profile        | Effect                                                                                                | Use when                                     |
+| -------------- | ----------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| `readonly`     | Only reads (`git status/log/diff`, `read_file`). Everything else is **blocked outright** (no prompt). | Audits, code review, untrusted agents.       |
+| `cautious`     | Reads auto-approve. Everything else prompts you.                                                      | Sensitive workspaces.                        |
+| `default`      | Reads + common edits auto-approve. Destructive ops (force flags, `rm -rf`, lossy git) prompt.         | Daily driver. ← _the default_                |
+| `permissive`   | Almost everything auto-approves; only force-flagged or recursive-destructive patterns prompt.         | High-trust agents in recoverable workspaces. |
+| `unrestricted` | Nothing prompts. Only catastrophic patterns (rm-rf-root, fork bombs) block.                           | Sandboxed runs.                              |
 
 ```bash
 # Pick a profile for one session
@@ -129,17 +132,17 @@ When the active persona spawns subagents (e.g. EA delegating to `coder`), the su
 
 ## Documentation
 
-| Document | Description |
-|-----------|-------------|
-| [Component Library](docs/CONSUMPTION_GUIDE.md) | @sprout/ui npm package usage and architecture |
-| [CLI Reference](docs/CLI_REFERENCE.md) | All commands, flags, slash commands, personas, tools |
-| [Configuration](docs/CONFIGURATION.md) | Config files, environment variables, Zsh detection, CI/CD |
-| [Architecture](docs/ARCHITECTURE.md) | Package layout, data flow, workspace files |
-| [MCP Integration](docs/MCP_INTEGRATION.md) | MCP server setup, configuration, troubleshooting |
-| [Agent Workflow](docs/AGENT_WORKFLOW.md) | Config-driven workflow sequences |
-| [Provider Catalog](docs/PROVIDER_CATALOG.md) | Provider catalog system and model metadata |
-| [Personas](docs/PERSONAS.md) | Persona system, risk model, and custom persona guide |
-| [Testing](docs/TESTING.md) | Test strategy, categories, and commands |
+| Document                                       | Description                                               |
+| ---------------------------------------------- | --------------------------------------------------------- |
+| [Component Library](docs/CONSUMPTION_GUIDE.md) | @sprout/ui npm package usage and architecture             |
+| [CLI Reference](docs/CLI_REFERENCE.md)         | All commands, flags, slash commands, personas, tools      |
+| [Configuration](docs/CONFIGURATION.md)         | Config files, environment variables, Zsh detection, CI/CD |
+| [Architecture](docs/ARCHITECTURE.md)           | Package layout, data flow, workspace files                |
+| [MCP Integration](docs/MCP_INTEGRATION.md)     | MCP server setup, configuration, troubleshooting          |
+| [Agent Workflow](docs/AGENT_WORKFLOW.md)       | Config-driven workflow sequences                          |
+| [Provider Catalog](docs/PROVIDER_CATALOG.md)   | Provider catalog system and model metadata                |
+| [Personas](docs/PERSONAS.md)                   | Persona system, risk model, and custom persona guide      |
+| [Testing](docs/TESTING.md)                     | Test strategy, categories, and commands                   |
 
 ## Contributing
 

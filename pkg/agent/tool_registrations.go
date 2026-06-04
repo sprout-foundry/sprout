@@ -456,10 +456,19 @@ func newDefaultToolRegistry() *ToolRegistry {
 	})
 
 	// Register run_automate tool — always runs as a background process.
-	// ALWAYS requires user approval via the security classifier.
+	// ALWAYS requires user approval via the security classifier on FIRST call;
+	// subsequent calls for the same workflow during the same session are
+	// pre-approved (so retries after failure don't re-prompt the user).
 	registry.RegisterTool(ToolConfig{
-		Name:        "run_automate",
-		Description: "Run an automated workflow from the project's automate/ directory as a background process. Use list_automate_workflows first to discover available workflows. ALWAYS requires user approval before starting. The workflow runs autonomously (no interaction needed after approval). Returns JSON with a top-level session_id field that can be used with shell_command(check_background=<session_id>) to monitor progress.",
+		Name: "run_automate",
+		Description: "Start an automated workflow from the project's automate/ directory as a long-running background process. " +
+			"Use list_automate_workflows first to discover what's available. " +
+			"BEFORE calling this tool: (1) read the workflow JSON and its prompt_file/command_file (if any) so you understand what the workflow will actually do; (2) write a brief plain-language overview to the user describing what will happen (steps, providers/models, expected duration, side effects like commits); (3) ask the user to confirm starting. The first call in a session triggers an explicit user approval prompt; subsequent calls for the SAME workflow during the same chat session are auto-approved so you (the primary agent) can restart it after failure without re-asking. " +
+			"After invocation, the tool returns immediately with a session_id. The workflow keeps running in the background. " +
+			"To monitor it efficiently, use shell_command(check_background=<session_id>, wait_seconds=600) — this blocks (up to 10 min) until the workflow exits or the wait elapses, returning the snapshot. " +
+			"Cadence guidance: first check ~60–90s after start (catches early failures), then use wait_seconds=600 in a loop while status stays 'running'. Surface meaningful updates to the user between waits — never poll silently for hours. If the user asks for status mid-run, do an immediate check with wait_seconds=0. " +
+			"When status is 'exited', read the captured output, decide if the run succeeded, and resume control to either report results, retry the workflow (no re-approval needed), or take corrective action. " +
+			"Returns JSON with workflow, description, command, session_id, and status fields.",
 		Parameters: []ParameterConfig{
 			{"workflow", "string", true, []string{"name", "workflow_name"}, "Workflow filename or name (with or without .json extension) from the automate/ directory"},
 		},

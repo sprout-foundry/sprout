@@ -49,12 +49,30 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 
 	// Security validation — classify and block/prompt dangerous operations
 	if secResult := tools.ClassifyToolCall(toolName, args); secResult.ShouldBlock || secResult.ShouldPrompt || secResult.IntentConfirmation {
+		// Workflow-declared auto-approval for run_automate. When the
+		// workflow JSON sets requires_approval: false, the model can
+		// invoke it without a user prompt — designed for validation
+		// workflows referenced from AGENTS.md that the model must run
+		// before declaring work done. Failure to read the file falls
+		// through to the normal approval path (fail-safe).
+		workflowAutoApproved := false
+		if agent != nil && toolName == "run_automate" && secResult.IntentConfirmation {
+			if wf, ok := args["workflow"].(string); ok && wf != "" {
+				if !workflowRequiresApproval(wf) {
+					if agent.debug {
+						agent.debugLog("[UNLOCK] run_automate %q has requires_approval=false — skipping intent prompt\n", wf)
+					}
+					ctx = WithUserApproved(ctx)
+					workflowAutoApproved = true
+				}
+			}
+		}
 		// In-session re-authorization for run_automate. Once the user has
 		// explicitly approved a workflow during this chat session, subsequent
 		// calls (e.g. retries kicked off by the primary agent after a failure)
 		// don't need to re-prompt — the user opted in once for this workflow.
 		alreadyApprovedInSession := false
-		if agent != nil && toolName == "run_automate" && secResult.IntentConfirmation {
+		if !workflowAutoApproved && agent != nil && toolName == "run_automate" && secResult.IntentConfirmation {
 			if wf, ok := args["workflow"].(string); ok && agent.IsWorkflowApprovedInSession(wf) {
 				if agent.debug {
 					agent.debugLog("[UNLOCK] run_automate %q already approved in this session — skipping intent prompt\n", wf)
@@ -63,7 +81,7 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 				alreadyApprovedInSession = true
 			}
 		}
-		if alreadyApprovedInSession {
+		if workflowAutoApproved || alreadyApprovedInSession {
 			// fall through to handler execution below
 		} else if agent != nil && agent.staticGateAutoApprove(secResult) && !secResult.IntentConfirmation {
 			// Unsafe mode or session elevation — skip the prompt for

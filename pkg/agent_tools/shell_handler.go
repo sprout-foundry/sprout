@@ -27,7 +27,7 @@ func (h *shellCommandHandler) Name() string {
 func (h *shellCommandHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "shell_command",
-		Description: "Execute a shell command. Supports background execution (background=true) and checking accumulated output of a background session (check_background=session_id) and stopping a background session (stop_background=session_id)",
+		Description: "Execute a shell command. Supports background execution (background=true), checking accumulated output of a background session (check_background=session_id, optionally with wait_seconds to block until exit), and stopping a background session (stop_background=session_id).",
 		Parameters: []ParameterDef{
 			{
 				Name:        "command",
@@ -46,6 +46,12 @@ func (h *shellCommandHandler) Definition() ToolDefinition {
 				Type:        "string",
 				Required:    false,
 				Description: "Session ID of a background session to check (returns accumulated output)",
+			},
+			{
+				Name:        "wait_seconds",
+				Type:        "integer",
+				Required:    false,
+				Description: "Only valid with check_background. Block (up to this many seconds, max 600) until the session exits, then return the snapshot. Use this for long-running workflows to avoid burning tokens on rapid polling. 0 (default) returns immediately as before.",
 			},
 			{
 				Name:        "stop_background",
@@ -111,6 +117,20 @@ func (h *shellCommandHandler) Validate(args map[string]any) error {
 	}
 	if stopBackground != "" && checkBackground != "" {
 		return fmt.Errorf("stop_background and check_background cannot be used together")
+	}
+
+	// wait_seconds is only meaningful with check_background.
+	if waitRaw, ok := args["wait_seconds"]; ok && waitRaw != nil {
+		wait, err := extractInt(args, "wait_seconds")
+		if err != nil {
+			return err
+		}
+		if wait < 0 {
+			return fmt.Errorf("parameter 'wait_seconds' must be >= 0")
+		}
+		if checkBackground == "" && wait > 0 {
+			return fmt.Errorf("wait_seconds is only valid with check_background")
+		}
 	}
 
 	// If neither check_background nor stop_background is set, command is required
@@ -186,7 +206,11 @@ func (h *shellCommandHandler) Execute(ctx context.Context, env ToolEnv, args map
 
 	// check_background: retrieve output for a background session
 	if checkBackground != "" {
-		return h.handleCheckBackground(ctx, env, checkBackground)
+		waitSeconds, err := extractInt(args, "wait_seconds")
+		if err != nil {
+			return ToolResult{Output: err.Error(), IsError: true}, err
+		}
+		return h.handleCheckBackground(ctx, env, checkBackground, waitSeconds)
 	}
 
 	// stop_background: terminate a background session
@@ -210,8 +234,10 @@ func (h *shellCommandHandler) Execute(ctx context.Context, env ToolEnv, args map
 }
 
 // handleCheckBackground retrieves accumulated output for a background session.
-func (h *shellCommandHandler) handleCheckBackground(ctx context.Context, env ToolEnv, sessionID string) (ToolResult, error) {
-	result, err := CheckBackgroundOutput(ctx, sessionID)
+// When waitSeconds > 0, it blocks (capped at maxBackgroundWaitSeconds) until
+// the session exits or the wait elapses, then returns the snapshot.
+func (h *shellCommandHandler) handleCheckBackground(ctx context.Context, env ToolEnv, sessionID string, waitSeconds int) (ToolResult, error) {
+	result, err := CheckBackgroundOutputWait(ctx, sessionID, waitSeconds)
 	if err != nil {
 		return ToolResult{
 			Output:  fmt.Sprintf("check background %q: %v", sessionID, err),

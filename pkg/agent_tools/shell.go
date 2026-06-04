@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
@@ -197,57 +198,120 @@ func ExecuteShellCommandBackground(ctx context.Context, command string, sessionI
 	return "", fmt.Errorf("background mode requires WebUI terminal manager or BackgroundProcessManager")
 }
 
+// maxBackgroundWaitSeconds caps the wait_seconds parameter on
+// CheckBackgroundOutputWait. Picked to match Claude Code's default Bash
+// timeout — long enough to collapse most polling on multi-hour workflows,
+// short enough that the user can interrupt or redirect the agent without
+// being parked indefinitely.
+const maxBackgroundWaitSeconds = 600
+
+// backgroundWaitTick is the internal polling interval used while waiting for
+// a background session to exit. It only touches in-process state (session
+// flag, file size) so it doesn't burn LLM tokens — the cost lives entirely
+// inside this process.
+const backgroundWaitTick = 500 * time.Millisecond
+
 // CheckBackgroundOutput retrieves accumulated output for a background session.
 // Returns JSON with session_id, status, and output fields.
 // Works in WebUI mode (TerminalManager) and CLI mode (BackgroundProcessManager).
+//
+// Equivalent to CheckBackgroundOutputWait(ctx, sessionID, 0).
 func CheckBackgroundOutput(ctx context.Context, sessionID string) (string, error) {
+	return CheckBackgroundOutputWait(ctx, sessionID, 0)
+}
+
+// CheckBackgroundOutputWait is like CheckBackgroundOutput but blocks (up to
+// waitSeconds, capped at maxBackgroundWaitSeconds) until the session exits or
+// the wait elapses, then returns the snapshot. waitSeconds <= 0 means return
+// immediately.
+//
+// A blocking wait is an LLM-side cost optimization: a 4-hour autonomous run
+// polled every minute = ~240 round trips, each re-sending the full context.
+// One blocking wait per 10 minutes collapses that to ~24, and an early exit
+// returns as soon as the workflow finishes.
+func CheckBackgroundOutputWait(ctx context.Context, sessionID string, waitSeconds int) (string, error) {
 	if strings.TrimSpace(sessionID) == "" {
 		return "", fmt.Errorf("empty session_id provided")
 	}
 
-	// Try TerminalManager first (WebUI mode)
-	if tm := TerminalManagerFromContext(ctx); tm != nil {
-		// Get the output
-		output, err := tm.GetBackgroundOutput(sessionID)
+	if waitSeconds > maxBackgroundWaitSeconds {
+		waitSeconds = maxBackgroundWaitSeconds
+	}
+
+	// snapshot returns the latest output+status as a JSON string.
+	snapshot := func() (string, bool, error) {
+		// Try TerminalManager first (WebUI mode)
+		if tm := TerminalManagerFromContext(ctx); tm != nil {
+			output, err := tm.GetBackgroundOutput(sessionID)
+			if err != nil {
+				return "", false, err
+			}
+			active := tm.IsSessionActive(sessionID)
+			status := "running"
+			if !active {
+				status = "exited"
+			}
+			resultBytes, err := json.Marshal(map[string]string{
+				"session_id": sessionID,
+				"status":     status,
+				"output":     output,
+			})
+			if err != nil {
+				return "", false, fmt.Errorf("marshal check result: %w", err)
+			}
+			return string(resultBytes), !active, nil
+		}
+
+		// Fallback to BackgroundProcessManager (CLI mode)
+		if bpm := BackgroundProcessManagerFromContext(ctx); bpm != nil {
+			output, status, err := bpm.CheckOutput(sessionID)
+			if err != nil {
+				return "", false, err
+			}
+			resultBytes, err := json.Marshal(map[string]string{
+				"session_id": sessionID,
+				"status":     status,
+				"output":     output,
+			})
+			if err != nil {
+				return "", false, fmt.Errorf("marshal check result: %w", err)
+			}
+			return string(resultBytes), status == "exited", nil
+		}
+
+		return "", false, fmt.Errorf("background output retrieval requires WebUI terminal manager or BackgroundProcessManager")
+	}
+
+	if waitSeconds <= 0 {
+		out, _, err := snapshot()
+		return out, err
+	}
+
+	deadline := time.Now().Add(time.Duration(waitSeconds) * time.Second)
+	ticker := time.NewTicker(backgroundWaitTick)
+	defer ticker.Stop()
+
+	for {
+		out, exited, err := snapshot()
 		if err != nil {
 			return "", err
 		}
-
-		// Check if the session is still active via the interface
-		status := "running"
-		if !tm.IsSessionActive(sessionID) {
-			status = "exited"
+		if exited {
+			return out, nil
 		}
-
-		resultBytes, err := json.Marshal(map[string]string{
-			"session_id": sessionID,
-			"status":     status,
-			"output":     output,
-		})
-		if err != nil {
-			return "", fmt.Errorf("marshal check result: %w", err)
+		if time.Now().After(deadline) {
+			return out, nil
 		}
-		return string(resultBytes), nil
+		select {
+		case <-ctx.Done():
+			// Return what we have rather than an error — the caller still
+			// wants the most recent snapshot, and ctx cancellation is the
+			// normal way to interrupt a wait.
+			return out, nil
+		case <-ticker.C:
+			// keep polling
+		}
 	}
-
-	// Fallback to BackgroundProcessManager (CLI mode)
-	if bpm := BackgroundProcessManagerFromContext(ctx); bpm != nil {
-		output, status, err := bpm.CheckOutput(sessionID)
-		if err != nil {
-			return "", err
-		}
-		resultBytes, err := json.Marshal(map[string]string{
-			"session_id": sessionID,
-			"status":     status,
-			"output":     output,
-		})
-		if err != nil {
-			return "", fmt.Errorf("marshal check result: %w", err)
-		}
-		return string(resultBytes), nil
-	}
-
-	return "", fmt.Errorf("background output retrieval requires WebUI terminal manager or BackgroundProcessManager")
 }
 
 // formatBackgroundPromotionMessage creates a formatted message for commands that

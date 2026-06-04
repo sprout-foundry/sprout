@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/sprout-foundry/sprout/pkg/automate"
@@ -120,4 +121,58 @@ func (a *Agent) getOrCreateBackgroundProcessManager() *tools.BackgroundProcessMa
 		}
 	})
 	return a.backgroundProcessManager
+}
+
+// normalizeWorkflowKey produces a stable cache key for the in-session approval
+// cache. ResolvePath accepts the workflow name with or without the .json
+// extension (case-insensitive) and both forms resolve to the same file, so the
+// cache key must collapse them — otherwise approving "foo" wouldn't satisfy a
+// follow-up "foo.json" call from the model and we'd re-prompt the user.
+func normalizeWorkflowKey(name string) string {
+	trimmed := strings.TrimSpace(name)
+	if trimmed == "" {
+		return ""
+	}
+	base := strings.ToLower(filepath.Base(trimmed))
+	return strings.TrimSuffix(base, ".json")
+}
+
+// IsWorkflowApprovedInSession reports whether the user has already approved
+// running this workflow during the current chat session. The cache is scoped
+// per-agent and is reset whenever the agent is reinitialized.
+func (a *Agent) IsWorkflowApprovedInSession(workflow string) bool {
+	if a == nil {
+		return false
+	}
+	key := normalizeWorkflowKey(workflow)
+	if key == "" {
+		return false
+	}
+	a.automateApprovedMu.Lock()
+	defer a.automateApprovedMu.Unlock()
+	if a.automateApprovedWorkflows == nil {
+		return false
+	}
+	_, ok := a.automateApprovedWorkflows[key]
+	return ok
+}
+
+// MarkWorkflowApprovedInSession records that the user has approved this
+// workflow for the remainder of the chat session. Called by the security
+// gate after a successful interactive approval, and by handleRunAutomate
+// after a CLI-side confirmation path.
+func (a *Agent) MarkWorkflowApprovedInSession(workflow string) {
+	if a == nil {
+		return
+	}
+	key := normalizeWorkflowKey(workflow)
+	if key == "" {
+		return
+	}
+	a.automateApprovedMu.Lock()
+	defer a.automateApprovedMu.Unlock()
+	if a.automateApprovedWorkflows == nil {
+		a.automateApprovedWorkflows = make(map[string]struct{})
+	}
+	a.automateApprovedWorkflows[key] = struct{}{}
 }

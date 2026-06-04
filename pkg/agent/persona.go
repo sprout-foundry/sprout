@@ -288,14 +288,6 @@ func (a *Agent) isGitWriteAllowed() bool {
 	return true
 }
 
-// isOrchestratorGitWriteAllowed is the legacy name preserved for callers that
-// haven't been updated. Identical semantics to isGitWriteAllowed.
-//
-// Deprecated: use isGitWriteAllowed.
-func (a *Agent) isOrchestratorGitWriteAllowed() bool {
-	return a.isGitWriteAllowed()
-}
-
 // canSpawnNonDelegatable reports whether the active persona is permitted to
 // spawn the given target persona ID, even if the target carries
 // Delegatable=false. The check reads the active persona's
@@ -321,20 +313,3 @@ func (a *Agent) canSpawnNonDelegatable(target string) bool {
 	return false
 }
 
-// hasEASpawnAuthority is the legacy name preserved for one caller site.
-// It returns true if the active persona has ANY entry in
-// CanSpawnNonDelegatable — useful where the test was previously "is this an
-// EA-class persona?" without naming a specific target.
-//
-// Deprecated: prefer canSpawnNonDelegatable(target) which is precise.
-func (a *Agent) hasEASpawnAuthority() bool {
-	cfg := a.GetConfig()
-	if cfg == nil {
-		return false
-	}
-	spawner := cfg.GetSubagentType(a.GetActivePersona())
-	if spawner == nil {
-		return false
-	}
-	return len(spawner.CanSpawnNonDelegatable) > 0
-}

@@ -145,8 +145,3 @@ export interface SubagentTypesResponse {
   current_provider: string;
   current_model: string;
 }
-
-export interface UpdateSubagentTypeResponse {
-  success: boolean;
-  type: SubagentTypeInfo;
-}

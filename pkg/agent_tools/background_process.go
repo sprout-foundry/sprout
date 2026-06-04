@@ -272,9 +272,9 @@ func (m *BackgroundProcessManager) CheckOutput(sessionID string) (string, string
 	return string(output), status, nil
 }
 
-// Stop terminates a background session by sending SIGINT, waiting briefly,
-// then SIGKILL if still running. Cleans up the process tracking.
-func (m *BackgroundProcessManager) Stop(sessionID string) error {
+// Stop terminates a background session using a graduated signal sequence:
+// SIGINT → wait for grace period → SIGTERM → wait 5s → SIGKILL if still alive.
+func (m *BackgroundProcessManager) Stop(sessionID string, grace time.Duration) error {
 	proc, exists := m.getProcess(sessionID)
 	if !exists {
 		return fmt.Errorf("session %s not found", sessionID)
@@ -294,8 +294,8 @@ func (m *BackgroundProcessManager) Stop(sessionID string) error {
 	// this degrades to a per-process kill — see the helper's comment.
 	_ = interruptProcessGroup(process)
 
-	// Wait briefly for graceful shutdown
-	time.Sleep(100 * time.Millisecond)
+	// Wait for grace period
+	time.Sleep(grace)
 
 	// Check if still alive
 	proc.mu.Lock()
@@ -303,20 +303,33 @@ func (m *BackgroundProcessManager) Stop(sessionID string) error {
 	proc.mu.Unlock()
 
 	if stillActive {
-		// Force kill the process group
-		_ = killProcessGroup(process)
-		if cmd != nil {
-			_ = cmd.Wait() // reap
-		}
-		// Update process state so IsActive() returns false immediately.
-		// Don't close proc.done — the monitor goroutine owns that.
+		// Send SIGTERM to the process group
+		_ = terminateProcessGroup(process)
+
+		// Wait for SIGTERM grace
+		time.Sleep(5 * time.Second)
+
+		// Check if still alive
 		proc.mu.Lock()
-		if proc.Process != nil {
-			proc.exitCode = 1 // killed
-			proc.Cmd = nil
-			proc.Process = nil
-		}
+		stillActive := proc.Process != nil
 		proc.mu.Unlock()
+
+		if stillActive {
+			// Force kill the process group
+			_ = killProcessGroup(process)
+			if cmd != nil {
+				_ = cmd.Wait() // reap
+			}
+			// Update process state so IsActive() returns false immediately.
+			// Don't close proc.done — the monitor goroutine owns that.
+			proc.mu.Lock()
+			if proc.Process != nil {
+				proc.exitCode = 1 // killed
+				proc.Cmd = nil
+				proc.Process = nil
+			}
+			proc.mu.Unlock()
+		}
 	}
 
 	return nil
@@ -354,7 +367,7 @@ func (m *BackgroundProcessManager) StopAll() {
 	m.mu.RUnlock()
 
 	for _, id := range sessionIDs {
-		_ = m.Stop(id)
+		_ = m.Stop(id, 10*time.Second)
 	}
 }
 

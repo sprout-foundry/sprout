@@ -42,6 +42,18 @@ func interruptProcessGroup(p *os.Process) error {
 	return p.Signal(syscall.SIGINT)
 }
 
+// terminateProcessGroup sends SIGTERM to the process group rooted at p,
+// falling back to a per-process SIGTERM if the group signal fails for a
+// reason other than the process already being gone.
+func terminateProcessGroup(p *os.Process) error {
+	if err := syscall.Kill(-p.Pid, syscall.SIGTERM); err == nil {
+		return nil
+	} else if isProcessGone(err) {
+		return nil
+	}
+	return p.Signal(syscall.SIGTERM)
+}
+
 // killProcessGroup sends SIGKILL to the process group rooted at p so any
 // children the process forked are killed alongside it.
 func killProcessGroup(p *os.Process) error {

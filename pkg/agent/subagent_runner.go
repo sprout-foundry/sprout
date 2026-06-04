@@ -520,6 +520,15 @@ func (r *SubagentRunner) runTask(
 		subAgent.SetFleetBudget(cumulativeTokens, fleetBudgetLimit)
 	}
 
+	// Propagate the parent's USD budget to this subagent so the cap is
+	// workflow-wide. Subagents share the same *FleetUsdBudget by
+	// reference, so debits accumulate in a single counter.
+	if r.parentAgent != nil {
+		if usd := r.parentAgent.GetFleetUsdBudget(); usd != nil {
+			subAgent.SetFleetUsdBudget(usd)
+		}
+	}
+
 	// Set up terminal output prefixing for subagent
 	prefix := buildSubagentPrefix(opts.Persona, taskID)
 	const dimGray = "\033[90m"

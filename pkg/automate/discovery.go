@@ -187,6 +187,14 @@ type Summary struct {
 	NoWebUI         bool
 	Initial         *InitialSummary
 	Steps           []StepSummary
+	Budget          *BudgetSummary
+}
+
+// BudgetSummary mirrors the cmd-level budget config in a package that has no
+// cmd dependency, so the overview renderer can display it.
+type BudgetSummary struct {
+	USD     float64
+	WarnAt  []float64
 }
 
 // InitialSummary describes the initial run.
@@ -257,12 +265,18 @@ func Summarize(path string) (*Summary, error) {
 		CommandFile string `json:"command_file,omitempty"`
 	}
 
+	type budgetRaw struct {
+		USD    float64   `json:"usd,omitempty"`
+		WarnAt []float64 `json:"warn_at,omitempty"`
+	}
+
 	var raw struct {
 		Description     string      `json:"description,omitempty"`
 		ContinueOnError bool        `json:"continue_on_error,omitempty"`
 		NoWebUI         bool        `json:"no_web_ui,omitempty"`
 		Initial         *initialRaw `json:"initial,omitempty"`
 		Steps           []stepRaw   `json:"steps,omitempty"`
+		Budget          *budgetRaw  `json:"budget,omitempty"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, err
@@ -272,6 +286,12 @@ func Summarize(path string) (*Summary, error) {
 		Description:     raw.Description,
 		ContinueOnError: raw.ContinueOnError,
 		NoWebUI:         raw.NoWebUI,
+	}
+	if raw.Budget != nil && raw.Budget.USD > 0 {
+		out.Budget = &BudgetSummary{
+			USD:    raw.Budget.USD,
+			WarnAt: append([]float64(nil), raw.Budget.WarnAt...),
+		}
 	}
 	if raw.Initial != nil {
 		init := &InitialSummary{

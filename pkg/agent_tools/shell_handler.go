@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
@@ -257,15 +258,38 @@ func (h *shellCommandHandler) handleCheckBackground(ctx context.Context, env Too
 
 // handleStopBackground terminates a background session.
 func (h *shellCommandHandler) handleStopBackground(ctx context.Context, env ToolEnv, sessionID string) (ToolResult, error) {
+	// Try TerminalManager first (WebUI mode)
 	tm := TerminalManagerFromContext(ctx)
-	if tm == nil {
+	if tm != nil {
+		err := tm.StopBackgroundSession(sessionID)
+		if err != nil {
+			return ToolResult{
+				Output:  fmt.Sprintf("stop background %q: %v", sessionID, err),
+				IsError: true,
+			}, fmt.Errorf("stop background %q: %w", sessionID, err)
+		}
+
+		result := fmt.Sprintf("Background session %s stopped.", sessionID)
+		if env.OutputWriter != nil {
+			io.WriteString(env.OutputWriter, result)
+		}
+
 		return ToolResult{
-			Output:  "stop_background requires WebUI terminal manager",
-			IsError: true,
-		}, fmt.Errorf("stop_background requires WebUI terminal manager")
+			Output:     result,
+			TokenUsage: int64(estimateTokenUsage(result)),
+		}, nil
 	}
 
-	err := tm.StopBackgroundSession(sessionID)
+	// Fallback to BackgroundProcessManager (CLI mode)
+	bpm := BackgroundProcessManagerFromContext(ctx)
+	if bpm == nil {
+		return ToolResult{
+			Output:  "stop_background requires WebUI terminal manager or CLI background process manager",
+			IsError: true,
+		}, fmt.Errorf("stop_background requires WebUI terminal manager or CLI background process manager")
+	}
+
+	err := bpm.Stop(sessionID, 10*time.Second)
 	if err != nil {
 		return ToolResult{
 			Output:  fmt.Sprintf("stop background %q: %v", sessionID, err),

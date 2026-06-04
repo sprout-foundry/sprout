@@ -112,11 +112,16 @@ export interface LogEntry {
 }
 
 export type TodoStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled';
+export type TodoPriority = 'high' | 'medium' | 'low';
 
 export interface TodoItem {
   id: string;
   content: string;
   status: TodoStatus;
+  /** Present-continuous phrasing surfaced while status === 'in_progress' (e.g. content "Implement X" → activeForm "Implementing X"). */
+  activeForm?: string;
+  /** Visual hint only; drives the priority indicator color. */
+  priority?: TodoPriority;
 }
 
 export interface FileEdit {

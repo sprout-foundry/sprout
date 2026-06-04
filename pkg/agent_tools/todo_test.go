@@ -202,7 +202,7 @@ func TestTodoWrite_AllCompleted(t *testing.T) {
 	})
 
 	assert.Contains(t, msg, "Todo list updated with 3 items")
-	assert.Contains(t, msg, "ALL COMPLETED ✅")
+	assert.Contains(t, msg, "ALL COMPLETED")
 	assert.Contains(t, msg, "Completed:")
 	assert.Contains(t, msg, "[completed] Task 1")
 	assert.Contains(t, msg, "[completed] Task 2")
@@ -257,7 +257,7 @@ func TestTodoWrite_SingleItemCompleted(t *testing.T) {
 	})
 
 	assert.Contains(t, msg, "Todo list updated with 1 items")
-	assert.Contains(t, msg, "ALL COMPLETED ✅")
+	assert.Contains(t, msg, "ALL COMPLETED")
 	assert.Contains(t, msg, "Completed:")
 	assert.Contains(t, msg, "[completed] Single task")
 }

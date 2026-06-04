@@ -6,15 +6,22 @@ import (
 	"sync"
 )
 
-// TodoItem represents a single todo item matching Claude Code's TodoWrite/TodoRead schema
+// TodoItem represents a single todo item matching Claude Code's TodoWrite/TodoRead schema.
+//
+// ActiveForm is the present-continuous phrasing surfaced in the activity
+// indicator while Status == "in_progress" (e.g. "Implementing X" vs
+// the imperative Content "Implement X"). Priority drives the colored
+// indicator on the UI; it's accepted from the LLM but is purely
+// presentational.
 type TodoItem struct {
-	ID       string `json:"id"`
-	Content  string `json:"content"`
-	Status   string `json:"status"`   // pending, in_progress, completed
-	Priority string `json:"priority"` // high, medium, low
+	ID         string `json:"id"`
+	Content    string `json:"content"`
+	Status     string `json:"status"`               // pending, in_progress, completed, cancelled
+	Priority   string `json:"priority,omitempty"`   // high, medium, low
+	ActiveForm string `json:"activeForm,omitempty"` // present-continuous phrasing
 }
 
-// TodoManager manages the todo list for the current session
+// TodoManager manages the todo list for a single conversation scope.
 type TodoManager struct {
 	items []TodoItem
 	mutex sync.RWMutex
@@ -52,7 +59,7 @@ func (tm *TodoManager) Write(todos []TodoItem) string {
 	var result strings.Builder
 	if completed > 0 && inProgress == 0 && pending == 0 {
 		// All completed
-		result.WriteString(fmt.Sprintf("Todo list updated with %d items — ALL COMPLETED ✅\n", len(todos)))
+		result.WriteString(fmt.Sprintf("Todo list updated with %d items — ALL COMPLETED\n", len(todos)))
 	} else {
 		// Mixed or not all completed
 		result.WriteString(fmt.Sprintf("Todo list updated with %d items", len(todos)))
@@ -95,6 +102,9 @@ func (tm *TodoManager) Write(todos []TodoItem) string {
 		result.WriteString(fmt.Sprintf("\n%s\n", listHeader))
 		for _, todo := range itemsToShow {
 			content := todo.Content
+			if todo.Status == "in_progress" && strings.TrimSpace(todo.ActiveForm) != "" {
+				content = todo.ActiveForm
+			}
 			// Truncate to ~80 chars if needed
 			if len(content) > 80 {
 				content = content[:80] + "..."
@@ -116,15 +126,55 @@ func (tm *TodoManager) Read() []TodoItem {
 	return result
 }
 
-// defaultManager is the default TodoManager instance for package-level convenience functions.
-var defaultManager = NewTodoManager()
+// ─────────────────────────────────────────────────────────────────────────────
+// Per-chat manager registry
+// ─────────────────────────────────────────────────────────────────────────────
 
-// TodoWrite is a convenience wrapper that writes todos to the default TodoManager.
-func TodoWrite(todos []TodoItem) string {
-	return defaultManager.Write(todos)
+// todoRegistry holds one TodoManager per chat scope. The empty string key
+// is the process-default scope used in CLI-only mode and by callers that
+// don't have a chat_id (CLI commands, tests). Multiple concurrent chats
+// each get their own list so they don't clobber each other.
+var (
+	todoRegistry     = make(map[string]*TodoManager)
+	todoRegistryLock sync.RWMutex
+)
+
+// ManagerForChat returns the TodoManager for the given chat scope,
+// lazily creating one if needed. A zero scope returns the process-default
+// manager (used by CLI/non-chat tool invocations).
+func ManagerForChat(chatID string) *TodoManager {
+	key := strings.TrimSpace(chatID)
+	todoRegistryLock.RLock()
+	mgr, ok := todoRegistry[key]
+	todoRegistryLock.RUnlock()
+	if ok {
+		return mgr
+	}
+	todoRegistryLock.Lock()
+	defer todoRegistryLock.Unlock()
+	if mgr, ok = todoRegistry[key]; ok {
+		return mgr
+	}
+	mgr = NewTodoManager()
+	todoRegistry[key] = mgr
+	return mgr
 }
 
-// TodoRead is a convenience wrapper that reads todos from the default TodoManager.
+// ResetTodoManagerForChat clears a chat's todo list (used by chat-end /
+// session-reset flows). Safe to call with an unknown chat_id.
+func ResetTodoManagerForChat(chatID string) {
+	key := strings.TrimSpace(chatID)
+	todoRegistryLock.Lock()
+	defer todoRegistryLock.Unlock()
+	delete(todoRegistry, key)
+}
+
+// TodoWrite is a convenience wrapper that writes todos to the default scope.
+func TodoWrite(todos []TodoItem) string {
+	return ManagerForChat("").Write(todos)
+}
+
+// TodoRead is a convenience wrapper that reads todos from the default scope.
 func TodoRead() []TodoItem {
-	return defaultManager.Read()
+	return ManagerForChat("").Read()
 }

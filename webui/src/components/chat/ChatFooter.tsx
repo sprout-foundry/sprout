@@ -1,5 +1,5 @@
-import { SkeletonText } from '@sprout/ui';
-import { Zap, AlertTriangle, Bot } from 'lucide-react';
+import { SkeletonText, type TodoItem } from '@sprout/ui';
+import { Zap, AlertTriangle, Bot, ListTodo } from 'lucide-react';
 import type { QueryProgress } from '../../types/app';
 import { SubagentActivityFeed } from './SubagentActivityFeed';
 import { ToolTimelineBar } from './ToolTimelineBar';
@@ -38,6 +38,7 @@ interface ChatFooterProps {
   lastError: string | null;
   showExpiredSessionRecovery: boolean;
   handleReloadWithoutSSHPath: () => void;
+  currentTodos?: TodoItem[];
 }
 
 export function ChatFooter({
@@ -49,7 +50,10 @@ export function ChatFooter({
   lastError,
   showExpiredSessionRecovery,
   handleReloadWithoutSSHPath,
+  currentTodos,
 }: ChatFooterProps): JSX.Element {
+  const activeTodo = isProcessing && currentTodos?.find((t) => t.status === 'in_progress');
+  const activeTodoLabel = activeTodo ? activeTodo.activeForm || activeTodo.content : null;
   const elements: JSX.Element[] = [];
 
   // SP-053-2b: live tool timeline above subagent feed / query progress.
@@ -101,8 +105,14 @@ export function ChatFooter({
     elements.push(
       <div key="processing" className="processing-indicator" role="status" aria-label="Processing request">
         <div className="processing-content">
+          {activeTodoLabel ? (
+            <div className="processing-active-task" aria-live="polite">
+              <ListTodo size={12} className="processing-active-task-icon" />
+              <span className="processing-active-task-text">{activeTodoLabel}</span>
+            </div>
+          ) : null}
           <SkeletonText lines={2} gap="6px" lineHeight="14px" lastLineWidth="40%" />
-          <span className="sr-only">Processing your request...</span>
+          <span className="sr-only">{activeTodoLabel ? `Processing: ${activeTodoLabel}` : 'Processing your request...'}</span>
         </div>
       </div>,
     );

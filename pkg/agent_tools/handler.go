@@ -108,6 +108,13 @@ type ToolEnv struct {
 	// (WebUI dialog when a browser is connected, terminal stdin otherwise).
 	// Nil means the tool must fall back to the CLI prompt directly.
 	AskUser AskUserService
+	// TodoManager is the conversation-scoped todo list. When nil, tools
+	// should fall back to the package-default scope via ManagerForChat("").
+	TodoManager *TodoManager
+	// IsInteractiveCLI reports whether the agent is running with a controlling
+	// TTY (no WebUI client). Tools use this to decide whether to render
+	// rich CLI output (boxes, colors) for the user.
+	IsInteractiveCLI bool
 }
 
 // AskUserService is the interface ask_user-style tools use to drive an

@@ -1,22 +1,109 @@
-import { useEffect, useCallback, useRef, useState } from 'react';
+import { useEffect, useCallback, useMemo, useRef, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkBreaks from 'remark-breaks';
+import remarkGfm from 'remark-gfm';
 import './ThemedDialog.css';
+
+export interface AskUserDialogOption {
+  label: string;
+  value?: string;
+  description?: string;
+}
 
 export interface AskUserDialogProps {
   requestId: string;
   question: string;
+  header?: string;
+  options?: AskUserDialogOption[];
+  multiSelect?: boolean;
+  defaultValue?: string;
   onRespond: (requestId: string, response: string) => void;
 }
 
-function AskUserDialog({ requestId, question, onRespond }: AskUserDialogProps): JSX.Element {
-  const [response, setResponse] = useState('');
+const optionValue = (opt: AskUserDialogOption): string =>
+  opt.value && opt.value.trim().length > 0 ? opt.value : opt.label;
+
+function AskUserDialog({
+  requestId,
+  question,
+  header,
+  options,
+  multiSelect,
+  defaultValue,
+  onRespond,
+}: AskUserDialogProps): JSX.Element {
+  const hasOptions = Array.isArray(options) && options.length > 0;
+  const isMulti = Boolean(multiSelect) && hasOptions;
+
+  const initialResponse = useMemo(() => {
+    if (hasOptions) return '';
+    return defaultValue ?? '';
+  }, [hasOptions, defaultValue]);
+
+  const initialSelection = useMemo(() => {
+    if (!hasOptions || !defaultValue) return new Set<string>();
+    const values = defaultValue.split(',').map((v) => v.trim()).filter(Boolean);
+    return new Set<string>(values);
+  }, [hasOptions, defaultValue]);
+
+  const [response, setResponse] = useState(initialResponse);
+  const [selected, setSelected] = useState<Set<string>>(initialSelection);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const firstOptionRef = useRef<HTMLButtonElement>(null);
+
+  const buildSelectionResponse = useCallback(
+    (set: Set<string>): string => Array.from(set).join(','),
+    [],
+  );
+
+  const submitSingleOption = useCallback(
+    (opt: AskUserDialogOption) => {
+      const value = optionValue(opt);
+      onRespond(requestId, value);
+    },
+    [requestId, onRespond],
+  );
 
   const handleSubmit = useCallback(() => {
-    const trimmedResponse = response.trim();
-    if (trimmedResponse.length > 0) {
-      onRespond(requestId, trimmedResponse);
+    if (hasOptions && isMulti) {
+      const trimmed = buildSelectionResponse(selected);
+      if (trimmed.length === 0) return;
+      onRespond(requestId, trimmed);
+      return;
     }
-  }, [requestId, response, onRespond]);
+    if (hasOptions && !isMulti) {
+      // Single-select expects an explicit click on an option, but if a
+      // default is present and the user just hits Enter, honor it.
+      if (defaultValue) {
+        onRespond(requestId, defaultValue);
+      }
+      return;
+    }
+    const trimmedResponse = response.trim();
+    if (trimmedResponse.length === 0) {
+      if (defaultValue) {
+        onRespond(requestId, defaultValue);
+      }
+      return;
+    }
+    onRespond(requestId, trimmedResponse);
+  }, [requestId, response, onRespond, hasOptions, isMulti, selected, defaultValue, buildSelectionResponse]);
+
+  const toggleOption = useCallback(
+    (opt: AskUserDialogOption) => {
+      const value = optionValue(opt);
+      setSelected((prev) => {
+        const next = new Set(prev);
+        if (next.has(value)) {
+          next.delete(value);
+        } else {
+          next.add(value);
+        }
+        return next;
+      });
+    },
+    [],
+  );
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -26,25 +113,30 @@ function AskUserDialog({ requestId, question, onRespond }: AskUserDialogProps): 
         return;
       }
       if (e.key === 'Enter') {
-        // Submit on Enter (without Ctrl/Cmd)
         if (e.metaKey || e.ctrlKey || e.shiftKey) {
-          // Allow Ctrl+Enter, Cmd+Enter, Shift+Enter for newlines
+          return;
+        }
+        // For freeform textarea, plain Enter inserts newline. Submit on
+        // Cmd/Ctrl+Enter only when the textarea is focused.
+        if (!hasOptions && document.activeElement === textareaRef.current) {
           return;
         }
         e.preventDefault();
         handleSubmit();
       }
     },
-    [handleSubmit],
+    [handleSubmit, hasOptions],
   );
 
   useEffect(() => {
     document.addEventListener('keydown', handleKeyDown);
-    // Lock scroll while dialog is open
     document.body.style.overflow = 'hidden';
-    // Auto-focus textarea
     const timer = setTimeout(() => {
-      textareaRef.current?.focus();
+      if (hasOptions) {
+        firstOptionRef.current?.focus();
+      } else {
+        textareaRef.current?.focus();
+      }
     }, 60);
 
     return () => {
@@ -52,52 +144,112 @@ function AskUserDialog({ requestId, question, onRespond }: AskUserDialogProps): 
       document.body.style.overflow = '';
       clearTimeout(timer);
     };
-  }, [handleKeyDown]);
+  }, [handleKeyDown, hasOptions]);
+
+  const submitDisabled = isMulti
+    ? selected.size === 0
+    : hasOptions
+      ? !defaultValue
+      : response.trim().length === 0 && !defaultValue;
 
   return (
     <div className="ask-user-overlay" role="dialog" aria-modal="true" aria-label="User input required">
       <div className="ask-user-card" onClick={(e) => e.stopPropagation()}>
-        {/* Accent bar - info color */}
         <div className="ask-user-accent-bar" />
 
-        {/* Header */}
         <div className="ask-user-header">
-          <span className="ask-user-icon">?</span>
-          <h2 className="ask-user-title">Question</h2>
+          <span className="ask-user-icon" aria-hidden="true">?</span>
+          <div className="ask-user-heading-stack">
+            {header && <span className="ask-user-chip">{header}</span>}
+            <h2 className="ask-user-title">Question</h2>
+          </div>
         </div>
 
-        {/* Body */}
         <div className="ask-user-body">
-          {/* Question text */}
-          <div>
-            <span className="ask-user-question-label">Question</span>
-            <div className="ask-user-question-text">{question}</div>
+          <div className="ask-user-question-block">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm, remarkBreaks]}
+              components={{
+                p: ({ children }) => <p className="ask-user-question-text">{children}</p>,
+                code: ({ className, children, ...props }) => (
+                  <code className={className ? className : 'ask-user-inline-code'} {...props}>
+                    {children}
+                  </code>
+                ),
+                a: ({ children, ...props }) => (
+                  <a {...props} target="_blank" rel="noopener noreferrer">
+                    {children}
+                  </a>
+                ),
+              }}
+            >
+              {question}
+            </ReactMarkdown>
           </div>
 
-          {/* Text input */}
-          <div>
-            <label htmlFor="ask-user-response">Your Response</label>
-            <textarea
-              id="ask-user-response"
-              ref={textareaRef}
-              value={response}
-              onChange={(e) => setResponse(e.target.value)}
-              placeholder="Type your response here..."
-              rows={4}
-            />
-          </div>
+          {hasOptions ? (
+            <div
+              className={`ask-user-options ${isMulti ? 'ask-user-options--multi' : 'ask-user-options--single'}`}
+              role={isMulti ? 'group' : 'radiogroup'}
+              aria-label="Available responses"
+            >
+              {options!.map((opt, idx) => {
+                const value = optionValue(opt);
+                const isSelected = isMulti ? selected.has(value) : defaultValue === value;
+                const ariaProps = isMulti
+                  ? { 'aria-pressed': isSelected }
+                  : { 'aria-checked': isSelected, role: 'radio' as const };
+                return (
+                  <button
+                    key={`${value}-${idx}`}
+                    type="button"
+                    ref={idx === 0 ? firstOptionRef : undefined}
+                    className={`ask-user-option ${isSelected ? 'ask-user-option--selected' : ''}`}
+                    onClick={() => (isMulti ? toggleOption(opt) : submitSingleOption(opt))}
+                    {...ariaProps}
+                  >
+                    <span className="ask-user-option-marker" aria-hidden="true">
+                      {isMulti ? (isSelected ? '☑' : '☐') : (isSelected ? '●' : '○')}
+                    </span>
+                    <span className="ask-user-option-body">
+                      <span className="ask-user-option-label">{opt.label}</span>
+                      {opt.description && (
+                        <span className="ask-user-option-description">{opt.description}</span>
+                      )}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div>
+              <label htmlFor="ask-user-response">Your Response</label>
+              <textarea
+                id="ask-user-response"
+                ref={textareaRef}
+                value={response}
+                onChange={(e) => setResponse(e.target.value)}
+                placeholder={defaultValue ? `Default: ${defaultValue}` : 'Type your response here...'}
+                rows={4}
+              />
+              <span className="ask-user-hint">Enter to submit · Shift+Enter for newline</span>
+            </div>
+          )}
         </div>
 
-        {/* Footer - Cannot be dismissed, must respond */}
         <div className="ask-user-footer">
-          <button
-            type="button"
-            className="ask-user-btn ask-user-btn--submit"
-            onClick={handleSubmit}
-            disabled={response.trim().length === 0}
-          >
-            Submit
-          </button>
+          {hasOptions && !isMulti ? (
+            <span className="ask-user-footer-hint">Click an option to submit</span>
+          ) : (
+            <button
+              type="button"
+              className="ask-user-btn ask-user-btn--submit"
+              onClick={handleSubmit}
+              disabled={submitDisabled}
+            >
+              {isMulti && selected.size > 0 ? `Submit (${selected.size})` : 'Submit'}
+            </button>
+          )}
         </div>
       </div>
     </div>

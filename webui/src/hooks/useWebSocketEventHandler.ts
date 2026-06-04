@@ -684,10 +684,16 @@ const handleAskUserRequest = (ctx: EventHandlerContext): void => {
     askUserRequest: {
       requestId: String(data.request_id || ''),
       question: String(data.question || ''),
+      header: data.header,
+      options: Array.isArray(data.options)
+        ? data.options.filter((o) => o && typeof o.label === 'string' && o.label.length > 0)
+        : undefined,
+      multiSelect: Boolean(data.multi_select),
+      default: data.default,
     },
     logs: appendCappedLog(prev.logs, logEntry),
   }));
-  debugLog('[ask_user] Question:', data.question);
+  debugLog('[ask_user] Question:', data.question, 'options:', data.options?.length ?? 0);
 };
 
 /**

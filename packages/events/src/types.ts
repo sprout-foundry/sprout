@@ -190,9 +190,26 @@ export interface SecurityPromptRequestData {
   default_response?: boolean;
 }
 
+export interface AskUserRequestOption {
+  /** Display label rendered in the option list. Required. */
+  label: string;
+  /** Machine-friendly value returned on selection. Falls back to `label` when omitted. */
+  value?: string;
+  /** Optional explanatory text shown next to the label. */
+  description?: string;
+}
+
 export interface AskUserRequestData {
   request_id: string;
   question: string;
+  /** Short categorizing label rendered above the question (e.g. "Auth method"). */
+  header?: string;
+  /** Selectable choices. When present, the dialog renders buttons / checkboxes instead of a freeform textarea. */
+  options?: AskUserRequestOption[];
+  /** When true, the user may pick multiple options. Response is a comma-joined list of values. */
+  multi_select?: boolean;
+  /** Default value (option `value` / `label`, or freeform string) pre-selected when the dialog opens. */
+  default?: string;
   client_id?: string;
   status?: string;
 }

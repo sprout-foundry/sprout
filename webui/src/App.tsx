@@ -336,6 +336,10 @@ function AppInner() {
                     <AskUserDialog
                       requestId={state.askUserRequest.requestId}
                       question={state.askUserRequest.question}
+                      header={state.askUserRequest.header}
+                      options={state.askUserRequest.options}
+                      multiSelect={state.askUserRequest.multiSelect}
+                      defaultValue={state.askUserRequest.default}
                       onRespond={handleAskUserResponse}
                     />
                   )}

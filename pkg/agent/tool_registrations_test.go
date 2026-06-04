@@ -98,7 +98,7 @@ func TestNewDefaultToolRegistry_ToolParameters(t *testing.T) {
 		"patch_structured_file":  {paramCount: 5, requiredCount: 1, requiredNames: []string{"path"}},
 		"TodoWrite":              {paramCount: 1, requiredCount: 1, requiredNames: []string{"todos"}},
 		"TodoRead":               {paramCount: 0, requiredCount: 0, requiredNames: []string{}},
-		"ask_user":               {paramCount: 1, requiredCount: 1, requiredNames: []string{"question"}},
+		"ask_user":               {paramCount: 5, requiredCount: 1, requiredNames: []string{"question"}},
 		"run_subagent":           {paramCount: 5, requiredCount: 2, requiredNames: []string{"prompt", "persona"}},
 		"run_parallel_subagents": {paramCount: 1, requiredCount: 1, requiredNames: []string{"subagents"}},
 		"search_files":           {paramCount: 6, requiredCount: 1, requiredNames: []string{"search_pattern"}},

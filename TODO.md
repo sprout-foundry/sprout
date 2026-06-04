@@ -1,41 +1,82 @@
 # TODO
 
-## SP-022: Remote Provider Registry
-_Spec: `roadmap/SP-022-remote-provider-registry.md`_
+Active work tracked here. Completed items are removed once their parent spec is moved to ✅ Implemented in `roadmap/README.md` — the spec file itself is the historical record.
 
-### Phase 1: Foundation (pkg/providerregistry + thread safety)
-- [x] SP-022-1a: Create `pkg/providerregistry/` package — define `RemoteProviderConfig` struct (duplicated fields from `ProviderConfig` to avoid import cycle), `ToProviderConfig()` converter, `FetchProviderConfig(ctx, providerID)`, `FetchAllProviders(ctx)` with cache/singleflight/TTL/negative-cache
-- [x] SP-022-1b: Add `sync.RWMutex` to `ProviderFactory` — protect `configs` and `registry.ProviderConfigs` maps; all read methods acquire RLock, all write methods acquire Lock
-- [x] SP-022-1c: Add `UpsertConfig(name string, cfg *ProviderConfig)` to `ProviderFactory` — acquires write lock, updates both `f.configs[name]` and `f.registry.ProviderConfigs[name]`
-- [x] SP-022-1d: Add SSRF validation to `pkg/providerregistry/` — reject non-HTTPS endpoints, private IPs, localhost
+## SP-064: Automate CLI — Status, Stop, Logs
+_Spec: `roadmap/SP-064-automate-cli-monitoring.md`_
 
-### Phase 2: Runtime Integration
-- [x] SP-022-2a: Add async `refreshFromRemote()` to `factory.init()` with `inTestBinary()` guard — fetches all remote provider configs and upserts into the global factory
-- [x] SP-022-2b: Export global factory accessor from `pkg/factory/` (e.g., `GlobalFactory() *providers.ProviderFactory` or `GlobalAvailableProviders() []string`)
-- [x] SP-022-2c: Fix `GetAvailableProviders()` in `pkg/configuration/init.go` to use the global factory instead of creating a throwaway instance
-- [x] SP-022-2d: Add `PROVIDER_REGISTRY_URL` env var support — default reuses same base as `MODEL_REGISTRY_URL`; support `"off"`/`"none"`/`"disabled"` to disable
+### Phase 1: BPM Stop primitive
+- [ ] SP-064-1a: Add `(*BackgroundProcessManager).Stop(sessionID string, grace time.Duration) error` in `pkg/agent_tools/background_process.go`. SIGINT → grace → SIGTERM → 5s → SIGKILL. Updates status to `exited`. No-op on already-exited sessions.
+- [ ] SP-064-1b: Wire `BPM.Stop` into the `shell_command(stop_background=…)` tool path in `pkg/agent_tools/shell_handler.go` so CLI mode reaches parity with the WebUI TerminalManager.
+- [ ] SP-064-1c: Revert the "stop_background not available for automate sessions in CLI mode" caveat in `pkg/skills/library/workflow-automation/SKILL.md`.
+- [ ] SP-064-1d: Unit tests — signal sequencing on a controlled sleep subprocess (mock or real with very short grace periods), no-op on exited, error on unknown session.
 
-### Phase 3: CI Publishing
-- [x] SP-022-3a: Create `scripts/generate-provider-index.sh` — generates `providers/index.json` listing all provider config files with timestamps
-- [x] SP-022-3b: Extend `.github/workflows/model-registry-publish.yml` — add step to copy `configs/*.json` to the GitHub Pages artifact with `schema_version` + `published_at` metadata injection via `jq`
-- [x] SP-022-3c: Publish the 7 missing provider model files (cerebras, chutes, deepseek, lmstudio, mistral, ollama-cloud, openai) — ensure `refresh_provider_catalog` covers all 11 providers (may require adding API keys for missing providers to CI secrets) — **DONE: Canonical adapters added for all 5 previously-missing providers, catalog now has 11 providers. CI workflow updated to pass CEREBRAS_API_KEY, DEEPSEEK_API_KEY, MISTRAL_API_KEY, OLLAMA_API_KEY. Remaining: user must add these 4 secrets to GitHub repo settings.**
+### Phase 2: Session-kind tagging
+- [ ] SP-064-2a: Add `Kind string` field to BPM `Process` struct, default `"shell"`.
+- [ ] SP-064-2b: Set `Kind = "automate"` in `pkg/agent/tool_handlers_automate.go` `handleRunAutomate` BPM `Start` call.
+- [ ] SP-064-2c: Set `Kind = "automate"` in `cmd/automate.go` `runWorkflowByPath` — but this path uses `exec.Command` not BPM; either move CLI launches through BPM or write the same `kind=automate` marker to the PID file (Phase 3) and treat that as the source of truth for CLI-launched runs.
 
-### Phase 4: Bug Fixes
-- [x] SP-022-4a: Fix `lmstudio` API key inconsistency — update `pkg/agent_providers/configs/lmstudio.json` auth type to `"none"`, regenerate `provider_gen.go`, and update `credentials/resolve.go` to consistently mark lmstudio as not requiring a key
+### Phase 3: Cross-process discovery (PID files)
+- [ ] SP-064-3a: On every workflow launch (CLI or agent tool), write `.sprout/automate/<session_id>.json` containing `{workflow, pid, started_at, output_file_path, budget_usd?, kind: "automate"}`.
+- [ ] SP-064-3b: Remove the PID file on clean shutdown (workflow process exit handler).
+- [ ] SP-064-3c: Stale-PID sweep at startup of any `sprout automate *` subcommand — `kill -0` each PID, remove files whose process is dead.
+- [ ] SP-064-3d: Document the PID-file schema in `roadmap/SP-064-automate-cli-monitoring.md` so SP-065's webui consumer doesn't drift.
 
-### Phase 5: Documentation & Testing
-- [x] SP-022-5a: Add `CONTRIBUTING.md` section documenting the provider addition pattern: create JSON config → run `generate_providers.go` → open PR → CI auto-publishes
-- [x] SP-022-5b: Unit tests for `pkg/providerregistry/` — cache hit/miss, negative cache, singleflight dedup, TTL expiry, offline fallback, SSRF rejection
-- [x] SP-022-5c: Unit tests for `UpsertConfig()` — concurrent read/write safety, both maps updated atomically
-- [x] SP-022-5d: Integration test: embedded-only mode (no remote) works correctly; remote configs merge over embedded
-- [x] SP-022-5e: Verify `make build-all` passes after all changes
+### Phase 4: status / stop / logs subcommands
+- [ ] SP-064-4a: `cmd/automate.go` — add `automateStatusCmd` (`sprout automate status [--all] [--json]`). Reads PID files + BPM in-memory state, prints table.
+- [ ] SP-064-4b: `cmd/automate.go` — add `automateStopCmd` (`sprout automate stop <session_id>` or `--all`). Calls `Stop` (or sends signals directly when only the PID file is known).
+- [ ] SP-064-4c: `cmd/automate.go` — add `automateLogsCmd` (`sprout automate logs <session_id> [-f] [-n N]`). Reads the captured output file; `-f` polls at 500ms ticks.
+- [ ] SP-064-4d: Add subcommands to `automateCmd.AddCommand` and update help text.
 
-## Open
+### Phase 5: Tests + docs
+- [ ] SP-064-5a: Integration test — launch a sleep-based workflow, status shows it, stop kills it, status reflects exit, output file persists.
+- [ ] SP-064-5b: Cross-process test — launch from terminal A (real subprocess), assert `sprout automate status` from a separate process sees it via the PID file.
+- [ ] SP-064-5c: Update `workflow_properties.md` with a "Monitoring a running workflow" section.
+- [ ] SP-064-5d: Run `make build-all` and the full automate test suite; verify green.
 
-- [x] SP-008-C1-testEmbedDownloadTimeout: Embedding-dependent agent tests (`TestRetrieveProactiveContext_*`, `TestEmbedAndStoreTurn_*`) hang the entire `pkg/agent` suite when the ONNX model isn't cached or the network is degraded — `embedding.ModelDownloader.downloadFile` (`pkg/embedding/model_downloader.go:165`) blocks on an `net/http` body read with no timeout. Add a context/HTTP timeout to the downloader and `-short`/offline skips on these tests so the suite can never hang indefinitely.
+## SP-065: WebUI Automations Panel
+_Spec: `roadmap/SP-065-automate-webui-panel.md`_
+_Blocked by: SP-064 (Phases 1–3 are prerequisites for cross-process session discovery)_
 
-- [x] webui-coldHydrate-largePayloadFixture: Several `TestHandleColdHydrateRequest_*` cases that stream ≥1MB through the in-process WebSocket pair (`newTestingConnPair` in `pkg/webui/cold_hydrate_test.go`) are now skipped — the WS pair fails mid-stream and the read helper used to panic with "repeated read on failed websocket connection". Affected: `EstimateSeconds/medium_~1MB`, `EstimateSeconds/~2MB`, `EstimateSeconds/~4MB`, `BinaryAtBoundary`, `LargeNonBinaryIncluded`. Replace the fixture with one that handles large buffered writes (e.g. a real `net.Pipe` paired with `gorilla/websocket` over an `httptest.Server`), then drop the `t.Skip` calls.
+### Phase 1: Backend REST
+- [ ] SP-065-1a: `pkg/webui/automations_handlers.go` — `GET /api/automate/workflows` reuses `automate.Discover` + `automate.Summarize`.
+- [ ] SP-065-1b: `GET /api/automate/sessions` and `GET /api/automate/sessions/:id` — read BPM + PID files (SP-064-3a).
+- [ ] SP-065-1c: `POST /api/automate/run` — body validation, optional overrides, dispatches through the `run_automate` tool path so `requires_approval` and the security gate are honored.
+- [ ] SP-065-1d: `POST /api/automate/sessions/:id/stop` — calls `BPM.Stop`.
+- [ ] SP-065-1e: `GET /api/automate/sessions/:id/output?since=offset` — paged output read for WS-drop fallback.
+- [ ] SP-065-1f: Wire endpoints into the existing webui router with auth/origin checks.
 
-- [x] webui-credPut-validationMock: `TestPutProviderCredential_UpdatesGetResponse` in `pkg/webui/settings_api_credentials_test.go` is skipped because the PUT handler now calls `validateAndSetCredential` → `configuration.ValidateAndSaveAPIKey`, which performs a real ListModels API call to the provider. Fake test keys always 400. Either mock `ValidateAndSaveAPIKey` (preferred) or thread a test-mode escape hatch through `credentials` that skips validation, then re-enable the test.
+### Phase 2: Backend WS events
+- [ ] SP-065-2a: Define event types in `pkg/events/`: `automate.session_started`, `automate.budget_update`, `automate.output_chunk`, `automate.session_ended`.
+- [ ] SP-065-2b: Publish `session_started` / `session_ended` from `handleRunAutomate` and CLI launch.
+- [ ] SP-065-2c: Publish `budget_update` from the existing budget warning + exceeded callbacks AND from the heartbeat tick in `cmd/agent_workflow.go`.
+- [ ] SP-065-2d: Tee captured-output writes through a `automate.output_chunk` publisher with coalescing (≥250ms or ≥4KB).
+- [ ] SP-065-2e: Subscription opt-in so chat sessions don't see automate events by default.
 
-- [x] agent-subagentFallback-stubProvider: `TestHandleRunSubagent_NoPersona_WithDelegatablePersona` in `pkg/agent/tool_handlers_subagent_test.go` is skipped because the subagent fallback path spawns a real provider (`openrouter`/`openai/gpt-5`) and never returns under `-race`, hanging the whole `pkg/agent` suite for the 10-min test timeout. Wire a stub provider into the subagent runner for tests and re-enable.
+### Phase 3: Frontend panel
+- [ ] SP-065-3a: `webui/src/components/AutomationsPanel.tsx` — three sections (Available / Running / Recent). Wire to REST endpoints + WS subscription.
+- [ ] SP-065-3b: Add Automations entry to sidebar nav.
+- [ ] SP-065-3c: Run modal — shows price card + budget, allows per-run budget/heartbeat override, calls `POST /api/automate/run`.
+- [ ] SP-065-3d: Budget bar component with 50%/80% color transitions.
+- [ ] SP-065-3e: Running-row Stop button → `POST stop` with confirmation dialog.
+
+### Phase 4: Session detail view
+- [ ] SP-065-4a: Detail panel route — header with status/budget/iteration/elapsed.
+- [ ] SP-065-4b: Captured-output stream component, auto-scroll-lock on user scroll-up.
+- [ ] SP-065-4c: Step timeline when `steps` exists — checkmarks for completed, highlight for current.
+- [ ] SP-065-4d: Budget event log — threshold crossings + cap-hit timestamps.
+
+### Phase 5: Chat ↔ automate linkage
+- [ ] SP-065-5a: When `run_automate` succeeds in a chat, emit an inline chat message containing a link to the Automations panel with the new session id.
+- [ ] SP-065-5b: Sidebar nav handler — clicking the link switches to Automations and focuses the session.
+
+### Phase 6: Tests
+- [ ] SP-065-6a: Handler unit tests — workflow discovery, run with requires_approval=true triggers intent prompt, run with requires_approval=false skips, stop terminates.
+- [ ] SP-065-6b: WS event ordering test — start → updates → end.
+- [ ] SP-065-6c: React component tests — AutomationsPanel renders empty / running / recent states; budget bar color transitions; intent confirmation modal flow.
+- [ ] SP-065-6d: Integration test against a real daemon with a shell-only workflow.
+
+### Phase 7: Docs
+- [ ] SP-065-7a: Add a "WebUI usage" section to `workflow_properties.md`.
+- [ ] SP-065-7b: Add a WebUI paragraph to `SKILL.md` explaining the panel exists and how it relates to the agent tool path.
+- [ ] SP-065-7c: One-paragraph README mention.

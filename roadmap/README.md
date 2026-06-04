@@ -18,6 +18,7 @@ architectural area, its current state, and open work.
 | SP-019 | [Multi-Chat Sessions](./SP-019-multi-chat-sessions.md) | ✅ Implemented |
 | SP-020 | [Trace/Dataset Mode](./SP-020-trace-dataset-mode.md) | ✅ Implemented |
 | SP-021 | [Self-Review Tool](./SP-021-self-review-tool.md) | ✅ Implemented |
+| SP-022 | [Remote Provider Registry](./SP-022-remote-provider-registry.md) | ✅ Implemented |
 | SP-024 | [Context Management — File Read Optimization](./SP-024-context-management.md) | ✅ Implemented |
 | SP-055 | [CLI Pinned Input — Always-On Steering Panel](./SP-055-cli-pinned-input.md) | ✅ Shipped |
 | SP-057 | [CLI Output Consistency — Glyph Migration & Unified Picker](./SP-057-cli-output-consistency.md) | ✅ Shipped |
@@ -60,6 +61,8 @@ architectural area, its current state, and open work.
 | SP-058 | [Selective Grammar Embedding for WASM and Daemon](./SP-058-selective-grammar-embed.md) | 📋 Proposed |
 | SP-059 | [Subagent ↔ Primary Interaction Overhaul](./SP-059-subagent-interaction.md) | 📋 Proposed |
 | SP-061 | [Remove Static Embedding Provider, Consolidate on ONNX](./SP-061-remove-static-embeddings.md) | 📋 Proposed |
+| SP-064 | [Automate CLI — Status, Stop, Logs](./SP-064-automate-cli-monitoring.md) | 📋 Proposed |
+| SP-065 | [WebUI Automations Panel](./SP-065-automate-webui-panel.md) | 📋 Proposed |
 
 ## Decisions
 

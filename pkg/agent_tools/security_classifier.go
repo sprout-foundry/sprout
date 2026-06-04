@@ -56,6 +56,37 @@ func SetAuditLogger(l *AuditLogger) {
 // The shell name must be followed by whitespace, shell metacharacters (;, |, &), or end of string.
 // Examples matched: |bash, | bash, |  bash, | /bin/bash, | /usr/bin/env bash, |zsh, |bash -c 'cmd'
 // NOT matched: |sort, |shasum, |shfmt (shell name must be followed by a valid boundary)
+// standaloneSleepPattern matches `sleep N` and `sleep N{s,m,h,d}` where N is a
+// positive integer or decimal. The anchors prevent matching chained or
+// embedded forms — `cmd && sleep 5 && cmd2` will not match because the
+// caller checks for compound separators first.
+var standaloneSleepPattern = regexp.MustCompile(`^sleep\s+\d+(\.\d+)?[smhd]?$`)
+
+// standaloneWaitPattern matches `wait` and `wait <pid>` (a single numeric arg).
+// `wait` with no jobs to wait on returns immediately, so this is purely an
+// antipattern when issued as a tool call.
+var standaloneWaitPattern = regexp.MustCompile(`^wait(\s+\d+)?$`)
+
+// compoundCommandSeparators are the operators that signal a chained or
+// piped command. Their presence disqualifies a command from the standalone
+// classification, even if part of the command line is a bare sleep/wait.
+var compoundCommandSeparators = []string{"&&", "||", ";", "|", "\n"}
+
+// isStandaloneSleepOrWaitCommand reports whether cmd is exactly a bare
+// `sleep N[suffix]` or `wait [pid]` invocation with nothing else around it.
+//
+// Chained or scripted forms (`make && sleep 5`, `bash -c "sleep 60"`,
+// `for i in 1 2 3; do sleep $i; done`) are NOT matched — legitimate
+// scripting uses are preserved.
+func isStandaloneSleepOrWaitCommand(cmd string) bool {
+	for _, sep := range compoundCommandSeparators {
+		if strings.Contains(cmd, sep) {
+			return false
+		}
+	}
+	return standaloneSleepPattern.MatchString(cmd) || standaloneWaitPattern.MatchString(cmd)
+}
+
 var pipeToShellPattern = regexp.MustCompile(`\|\s*(?:[^\s|&;]+/\s*)*(?:env\s+)?(?:bash|zsh|dash|fish|ksh|csh|tcsh|python[23]?|perl|ruby|node|sh)(?:\s|[;&|]|$)`)
 
 // pipeToModulePattern matches a pipe into an interpreter run in module
@@ -265,6 +296,31 @@ func classifyShellCommand(args map[string]interface{}) SecurityResult {
 	}
 
 	cmd := strings.TrimSpace(cmdRaw)
+
+	// Standalone `sleep N` / `wait` are an antipattern when invoked as a tool
+	// call. They appear to "succeed" because the 2-minute shell deadline
+	// adopts them into a background session and returns a promotion message,
+	// but the agent did NOT actually wait the requested duration. Models
+	// commonly reach for sleep as a poll-spacer between background-session
+	// checks; the correct API for that case is
+	// `shell_command(check_background=<id>, wait_seconds=<seconds>)`.
+	//
+	// We block *standalone* invocations only — chained forms like
+	// `make build && sleep 5 && curl ...` are legitimate scripting and stay
+	// allowed.
+	if isStandaloneSleepOrWaitCommand(cmd) {
+		return SecurityResult{
+			Risk: SecurityDangerous,
+			Reasoning: "Standalone sleep/wait is not appropriate as a shell_command tool call. " +
+				"For waiting on a background session, use shell_command(check_background=\"<session_id>\", wait_seconds=<seconds>) — that blocks (up to 10 min) without burning tokens on retries. " +
+				"For inserting a delay between commands inside a script, chain with && (e.g., \"cmd1 && sleep 5 && cmd2\"). " +
+				"Standalone sleep here will be cut off at the 2-minute shell deadline and adopted as a background session; the agent will NOT have actually waited the requested duration.",
+			ShouldBlock: true,
+			IsHardBlock: true,
+			RiskType:    "wait_misuse",
+			Category:    RiskCategoryProcessManagement,
+		}
+	}
 
 	if isCriticalSystemOperation("shell_command", args) {
 		rt := getShellCommandRiskType(cmd, SecurityDangerous, true)

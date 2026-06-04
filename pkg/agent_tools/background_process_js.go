@@ -5,6 +5,7 @@ package tools
 import (
 	"context"
 	"errors"
+	"time"
 )
 
 // BackgroundProcess is a stub type for WASM builds.
@@ -36,7 +37,7 @@ func (m *BackgroundProcessManager) CheckOutput(_ string) (string, string, error)
 }
 
 // Stop always returns an error in WASM builds.
-func (m *BackgroundProcessManager) Stop(_ string) error {
+func (m *BackgroundProcessManager) Stop(_ string, _ time.Duration) error {
 	return errors.New("background process management is not available in WASM")
 }
 

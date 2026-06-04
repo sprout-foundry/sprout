@@ -64,7 +64,7 @@ func TestBPM_StartLongRunningAndCheck(t *testing.T) {
 	assert.Empty(t, output)
 
 	// Stop it
-	err = bpm.Stop(sessionID)
+	err = bpm.Stop(sessionID, 100*time.Millisecond)
 	require.NoError(t, err)
 
 	// Process should be gone
@@ -88,7 +88,7 @@ func TestBPM_Stop(t *testing.T) {
 	assert.True(t, bpm.IsActive(sessionID))
 
 	// Stop it
-	err = bpm.Stop(sessionID)
+	err = bpm.Stop(sessionID, 100*time.Millisecond)
 	require.NoError(t, err)
 
 	// Should no longer be active
@@ -114,7 +114,7 @@ func TestBPM_StopExitedProcess(t *testing.T) {
 	}, 3*time.Second, 100*time.Millisecond)
 
 	// Stop an already-exited process should be a no-op (no error)
-	err = bpm.Stop(sessionID)
+	err = bpm.Stop(sessionID, 100*time.Millisecond)
 	require.NoError(t, err)
 }
 
@@ -143,7 +143,7 @@ func TestBPM_StopNonexistentSession(t *testing.T) {
 	bpm := NewBackgroundProcessManager()
 	defer bpm.Close()
 
-	err := bpm.Stop("nonexistent-session")
+	err := bpm.Stop("nonexistent-session", 100*time.Millisecond)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 }
@@ -165,7 +165,7 @@ func TestBPM_IsActive(t *testing.T) {
 	assert.True(t, bpm.IsActive(sessionID))
 
 	// Stop it
-	require.NoError(t, bpm.Stop(sessionID))
+	require.NoError(t, bpm.Stop(sessionID, 100*time.Millisecond))
 
 	// Should no longer be active
 	assert.False(t, bpm.IsActive(sessionID))
@@ -228,7 +228,7 @@ func TestBPM_AdoptProcess(t *testing.T) {
 	assert.Equal(t, "running", status)
 
 	// Stop the adopted process
-	err = bpm.Stop(sessionID)
+	err = bpm.Stop(sessionID, 100*time.Millisecond)
 	require.NoError(t, err)
 	assert.False(t, bpm.IsActive(sessionID))
 }
@@ -302,7 +302,7 @@ func TestBPM_ConcurrentStart(t *testing.T) {
 
 	// Stop all
 	for _, id := range sessionIDs {
-		require.NoError(t, bpm.Stop(id))
+		require.NoError(t, bpm.Stop(id, 100*time.Millisecond))
 	}
 }
 
@@ -418,7 +418,7 @@ func TestBPM_SessionID_Format(t *testing.T) {
 			parts := strings.Split(sessionID, "-")
 			assert.GreaterOrEqual(t, len(parts), 3, "session ID should have at least 3 parts: bg, prefix, hex")
 			// Clean up
-			bpm.Stop(sessionID)
+			bpm.Stop(sessionID, 100*time.Millisecond)
 		})
 	}
 }
@@ -581,4 +581,171 @@ func TestIsProcessGone(t *testing.T) {
 
 	// os.SyscallError wrapping ESRCH also contains "no such process"
 	assert.True(t, isProcessGone(&os.SyscallError{Err: syscall.ESRCH}))
+}
+
+// =============================================================================
+// TestBPM_Stop_SignalSequencing_SIGINT_Kills — Normal processes respond to SIGINT.
+// SIGINT sent to process group kills shell+sleep, so Stop returns within grace
+// (~50ms) without escalating to SIGTERM or SIGKILL.
+// =============================================================================
+
+func TestBPM_Stop_SignalSequencing_SIGINT_Kills(t *testing.T) {
+	t.Parallel()
+
+	bpm := NewBackgroundProcessManager()
+	defer bpm.Close()
+
+	sessionID, err := bpm.Start(context.Background(), "sleep 60", "")
+	require.NoError(t, err)
+
+	// Verify it's running
+	assert.True(t, bpm.IsActive(sessionID))
+
+	// SIGINT kills normal sleep within the grace period — should return fast.
+	start := time.Now()
+	err = bpm.Stop(sessionID, 50*time.Millisecond)
+	require.NoError(t, err)
+	elapsed := time.Since(start)
+
+	// If SIGINT alone killed it, elapsed ≈ grace period (50ms).
+	// It should definitely be well under the 5s SIGTERM wait.
+	assert.True(t, elapsed.Milliseconds() < 2000,
+		"SIGINT should have killed the process within grace period; took %v", elapsed)
+
+	assert.False(t, bpm.IsActive(sessionID))
+}
+
+// =============================================================================
+// TestBPM_Stop_SignalSequencing_SIGTERM_Required — Process ignores SIGINT but
+// responds to SIGTERM. After grace (50ms), SIGTERM is sent and kills the
+// process. Total elapsed: grace + 5s SIGTERM wait ≈ 5s.
+// This test takes ~5s because SIGTERM is the second step and has a hardcoded
+// 5s wait in the Stop implementation.
+// =============================================================================
+
+func TestBPM_Stop_SignalSequencing_SIGTERM_Required(t *testing.T) {
+	t.Parallel()
+
+	bpm := NewBackgroundProcessManager()
+	defer bpm.Close()
+
+	// trap 'true' INT works in both bash and zsh (unlike trap '' INT which
+	// removes the trap in zsh). The shell ignores INT and loops; sleep is
+	// restarted each time the group-sent SIGINT kills it. SIGTERM is NOT
+	// trapped so the shell exits on the default TERM handler.
+	cmd := "trap 'true' INT; while true; do sleep 60; done"
+	sessionID, err := bpm.Start(context.Background(), cmd, "")
+	require.NoError(t, err)
+
+	assert.True(t, bpm.IsActive(sessionID))
+
+	start := time.Now()
+	err = bpm.Stop(sessionID, 50*time.Millisecond)
+	require.NoError(t, err)
+	elapsed := time.Since(start)
+
+	// SIGINT is ignored → grace (50ms) → SIGTERM sent → 5s wait → process dead.
+	// Total ≈ 5.05s. Allow generous margin since timing varies by system load.
+	assert.True(t, elapsed.Milliseconds() > 4000,
+		"expected SIGTERM escalation (grace + 5s wait), but only took %v", elapsed)
+
+	assert.False(t, bpm.IsActive(sessionID))
+}
+
+// =============================================================================
+// TestBPM_Stop_SignalSequencing_SIGKILL_Required — Process ignores both SIGINT
+// and SIGTERM. Full escalation: SIGINT (ignored) → grace → SIGTERM (ignored)
+// → 5s wait → SIGKILL kills it. Total: grace + 5s ≈ 5.05s.
+// This test takes ~5s because of the 5s SIGTERM wait before SIGKILL.
+// =============================================================================
+
+func TestBPM_Stop_SignalSequencing_SIGKILL_Required(t *testing.T) {
+	t.Parallel()
+
+	bpm := NewBackgroundProcessManager()
+	defer bpm.Close()
+
+	// trap 'true' works in both bash and zsh. The shell ignores INT and TERM,
+	// looping to restart sleep. Only SIGKILL will stop it.
+	cmd := "trap 'true' INT TERM; while true; do sleep 60; done"
+	sessionID, err := bpm.Start(context.Background(), cmd, "")
+	require.NoError(t, err)
+
+	assert.True(t, bpm.IsActive(sessionID))
+
+	start := time.Now()
+	err = bpm.Stop(sessionID, 50*time.Millisecond)
+	require.NoError(t, err)
+	elapsed := time.Since(start)
+
+	// Full escalation: SIGINT ignored → grace → SIGTERM ignored → 5s → SIGKILL.
+	// Total ≈ 5.05s. Allow generous margin for system load.
+	assert.True(t, elapsed.Milliseconds() > 4000,
+		"expected full SIGKILL escalation (grace + 5s SIGTERM wait), but only took %v", elapsed)
+
+	// After SIGKILL + reap, process state is updated to inactive immediately.
+	assert.False(t, bpm.IsActive(sessionID))
+}
+
+// =============================================================================
+// TestBPM_Stop_GraceDuration — Verify the grace parameter is respected, not
+// hardcoded. With grace=500ms, Stop should wait at least 500ms (SIGINT kills
+// sleep within the grace period, so the method blocks for the full grace).
+// =============================================================================
+
+func TestBPM_Stop_GraceDuration(t *testing.T) {
+	t.Parallel()
+
+	bpm := NewBackgroundProcessManager()
+	defer bpm.Close()
+
+	sessionID, err := bpm.Start(context.Background(), "sleep 60", "")
+	require.NoError(t, err)
+
+	assert.True(t, bpm.IsActive(sessionID))
+
+	start := time.Now()
+	err = bpm.Stop(sessionID, 500*time.Millisecond)
+	require.NoError(t, err)
+	elapsed := time.Since(start)
+
+	// The SIGINT kills sleep, but Stop still waits the full grace period
+	// before checking if the process is still alive. So elapsed >= 500ms.
+	assert.True(t, elapsed.Milliseconds() >= 500,
+		"grace period should be respected; expected >= 500ms, got %v", elapsed)
+
+	assert.False(t, bpm.IsActive(sessionID))
+}
+
+// =============================================================================
+// TestBPM_Stop_CheckOutputAfterStop — After Stop, CheckOutput should report
+// "exited" (not "running"), confirming that process state is correctly updated.
+// =============================================================================
+
+func TestBPM_Stop_CheckOutputAfterStop(t *testing.T) {
+	t.Parallel()
+
+	bpm := NewBackgroundProcessManager()
+	defer bpm.Close()
+
+	sessionID, err := bpm.Start(context.Background(), "sleep 60", "")
+	require.NoError(t, err)
+
+	// Verify it's running
+	_, status, err := bpm.CheckOutput(sessionID)
+	require.NoError(t, err)
+	assert.Equal(t, "running", status)
+
+	// Stop it
+	err = bpm.Stop(sessionID, 50*time.Millisecond)
+	require.NoError(t, err)
+
+	// Give the monitor goroutine a moment to update state (it closes proc.done
+	// when cmd.Wait() returns, which happens after SIGINT kills the process).
+	// After Stop, proc.Process is either already nil (from the monitor goroutine
+	// reaping) or was set to nil by the SIGKILL path.
+	require.Eventually(t, func() bool {
+		_, s, err := bpm.CheckOutput(sessionID)
+		return err == nil && s == "exited"
+	}, 2*time.Second, 50*time.Millisecond)
 }

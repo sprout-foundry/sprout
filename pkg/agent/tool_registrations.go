@@ -20,6 +20,7 @@ func newDefaultToolRegistry() *ToolRegistry {
 			{"background", "boolean", false, []string{}, "Run command in background and return immediately with session_id (default: false)"},
 			{"check_background", "string", false, []string{}, "Session ID of a background session to check (returns accumulated output)"},
 			{"stop_background", "string", false, []string{}, "Session ID of a background session to stop/terminate"},
+			{"wait_seconds", "number", false, []string{}, "When used with check_background, block up to this many seconds for the session to exit before returning (capped at 600). 0 or unset = return immediately."},
 		},
 		Handler:     handleShellCommand,
 		Timeout:     2 * time.Minute,

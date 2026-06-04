@@ -21,6 +21,12 @@ func interruptProcessGroup(p *os.Process) error {
 	return p.Kill()
 }
 
+// terminateProcessGroup terminates the process. Windows has no SIGTERM,
+// so this falls back to a direct kill like the interrupt path.
+func terminateProcessGroup(p *os.Process) error {
+	return p.Kill()
+}
+
 // killProcessGroup terminates the process. See setProcessGroup re: the
 // scope limit (the Process tree may have orphaned descendants).
 func killProcessGroup(p *os.Process) error {

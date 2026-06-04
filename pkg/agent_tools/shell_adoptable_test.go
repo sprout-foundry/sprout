@@ -68,7 +68,7 @@ func TestAdoptable_TimeoutPromotion(t *testing.T) {
 	assert.True(t, bpm.IsActive(sessionID), "session %s should be active in BPM", sessionID)
 
 	// Clean up: stop the adopted session
-	err = bpm.Stop(sessionID)
+	err = bpm.Stop(sessionID, 100*time.Millisecond)
 	require.NoError(t, err)
 
 	// Wait briefly for the monitor goroutine to clean up proc.Process
@@ -206,7 +206,7 @@ func TestAdoptable_TimeoutPromotion_SessionIDInBPM(t *testing.T) {
 	assert.Contains(t, checkOutput, "adoption-test")
 
 	// Clean up
-	bpm.Stop(sessionID)
+	bpm.Stop(sessionID, 100*time.Millisecond)
 }
 
 // =============================================================================

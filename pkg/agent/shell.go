@@ -250,7 +250,7 @@ func (a *Agent) updatePreviousShellCommandMessage(prevResult *ShellCommandResult
 }
 
 // checkBackgroundOutput retrieves accumulated output for a background shell session.
-func (a *Agent) checkBackgroundOutput(ctx context.Context, sessionID string) (string, error) {
+func (a *Agent) checkBackgroundOutput(ctx context.Context, sessionID string, waitSeconds int) (string, error) {
 	// Wire TerminalManager into context for WebUI mode
 	if tm := a.terminalManager; tm != nil {
 		ctx = tools.WithTerminalManager(ctx, tm)
@@ -264,7 +264,7 @@ func (a *Agent) checkBackgroundOutput(ctx context.Context, sessionID string) (st
 		ctx = tools.WithBackgroundProcessManager(ctx, a.backgroundProcessManager)
 	}
 
-	result, err := tools.CheckBackgroundOutput(ctx, sessionID)
+	result, err := tools.CheckBackgroundOutputWait(ctx, sessionID, waitSeconds)
 	if err != nil {
 		return "", fmt.Errorf("failed to check background session %s: %w", sessionID, err)
 	}
@@ -285,7 +285,7 @@ func (a *Agent) stopBackgroundSession(sessionID string) (string, error) {
 	if a.backgroundProcessManager == nil {
 		a.backgroundProcessManager = tools.NewBackgroundProcessManager()
 	}
-	if err := a.backgroundProcessManager.Stop(sessionID); err != nil {
+	if err := a.backgroundProcessManager.Stop(sessionID, 10*time.Second); err != nil {
 		return "", fmt.Errorf("failed to stop background session %s: %w", sessionID, err)
 	}
 	return fmt.Sprintf("Background session %s stopped successfully", sessionID), nil

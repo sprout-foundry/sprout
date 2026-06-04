@@ -90,7 +90,7 @@ func handleSearchMemories(ctx context.Context, a *Agent, args map[string]interfa
 		sb.WriteString("\n")
 	}
 
-	sb.WriteString("Use `read_memory` to view the full content of any memory.")
+	sb.WriteString("Use `manage_memory` with operation=\"read\" to view the full content of any memory.")
 
 	return sb.String(), nil
 }

@@ -86,7 +86,7 @@ func TestGetOptimizedToolDefinitions(t *testing.T) {
 }
 
 func TestStaticToolDefinitionsIncludeBrowseURL(t *testing.T) {
-	allTools := api.GetToolDefinitions()
+	allTools := BuildToolDefinitions()
 	found := make(map[string]bool, len(allTools))
 	for _, tool := range allTools {
 		found[tool.Function.Name] = true
@@ -120,7 +120,7 @@ func TestOllamaAPIKeyDetection(t *testing.T) {
 }
 
 func TestFilterToolsByName(t *testing.T) {
-	allTools := api.GetToolDefinitions()
+	allTools := BuildToolDefinitions()
 	allowed := makeAllowedToolSet([]string{"read_file", "search_files", "missing_tool"})
 
 	filtered := filterToolsByName(allTools, allowed)

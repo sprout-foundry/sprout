@@ -860,105 +860,10 @@ func TestRepoMapConformance_DefaultDirectory(t *testing.T) {
 	require.False(t, res.IsError)
 }
 
-// ---------------------------------------------------------------------------
-// list_memories Conformance Tests
-// ---------------------------------------------------------------------------
-
-func TestListMemoriesConformance_Definition(t *testing.T) {
-	t.Parallel()
-	h := &listMemoriesHandler{}
-
-	require.Equal(t, "list_memories", h.Name())
-
-	def := h.Definition()
-	require.Equal(t, "list_memories", def.Name)
-	require.NotEmpty(t, def.Description)
-	require.Empty(t, def.Required, "list_memories should have no required parameters")
-}
-
-func TestListMemoriesConformance_Validate(t *testing.T) {
-	t.Parallel()
-	h := &listMemoriesHandler{}
-
-	// No required params
-	require.NoError(t, h.Validate(nil))
-	require.NoError(t, h.Validate(map[string]any{}))
-}
-
-func TestListMemoriesConformance_Execute(t *testing.T) {
-	t.Parallel()
-	dir := t.TempDir()
-	h := &listMemoriesHandler{}
-	ctx := newTestCtx(dir)
-
-	env := newTestEnv(t, dir)
-	res, err := h.Execute(ctx, env, map[string]any{})
-	require.NoError(t, err)
-	require.False(t, res.IsError)
-	// Should return some output (empty list or "no memories")
-	require.NotEmpty(t, res.Output)
-}
-
-// ---------------------------------------------------------------------------
-// read_memory Conformance Tests
-// ---------------------------------------------------------------------------
-
-func TestReadMemoryConformance_Definition(t *testing.T) {
-	t.Parallel()
-	h := &readMemoryHandler{}
-
-	require.Equal(t, "read_memory", h.Name())
-
-	def := h.Definition()
-	require.Equal(t, "read_memory", def.Name)
-	require.NotEmpty(t, def.Description)
-	require.Equal(t, []string{"name"}, def.Required)
-
-	// Check parameter schema
-	paramNames := make(map[string]bool)
-	for _, p := range def.Parameters {
-		paramNames[p.Name] = true
-	}
-	require.True(t, paramNames["name"], "should have 'name' parameter")
-}
-
-func TestReadMemoryConformance_Validate_MissingName(t *testing.T) {
-	t.Parallel()
-	h := &readMemoryHandler{}
-
-	err := h.Validate(map[string]any{})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "required")
-}
-
-func TestReadMemoryConformance_Validate_EmptyName(t *testing.T) {
-	t.Parallel()
-	h := &readMemoryHandler{}
-
-	// extractString allows empty strings - the handler only validates presence
-	err := h.Validate(map[string]any{"name": ""})
-	require.NoError(t, err)
-}
-
-func TestReadMemoryConformance_Validate_Valid(t *testing.T) {
-	t.Parallel()
-	h := &readMemoryHandler{}
-
-	require.NoError(t, h.Validate(map[string]any{"name": "git-safety"}))
-}
-
-func TestReadMemoryConformance_Execute_NonexistentMemory(t *testing.T) {
-	t.Parallel()
-	dir := t.TempDir()
-	h := &readMemoryHandler{}
-	ctx := newTestCtx(dir)
-
-	env := newTestEnv(t, dir)
-	res, err := h.Execute(ctx, env, map[string]any{"name": "nonexistent_memory"})
-	require.NoError(t, err)
-	require.True(t, res.IsError)
-	require.Contains(t, res.Output, "Error reading memory")
-}
+// list_memories and read_memory conformance tests were removed when the
+// legacy per-operation memory handlers were retired in favor of
+// manage_memory (see pkg/agent/memory_manage.go). The consolidated tool
+// is covered by manage_memory operation tests in pkg/agent.
 
 // ---------------------------------------------------------------------------
 // rollback_changes Conformance Tests
@@ -1347,10 +1252,10 @@ func TestAllToolsConformance_InterfaceContract(t *testing.T) {
 			// list_directory has no required params → nil args are valid
 			err := h.Validate(nil)
 			switch name {
-			case "read_file", "fetch_url", "search_files", "read_memory", "embedding_index",
+			case "read_file", "fetch_url", "search_files", "embedding_index",
 				"write_file", "write_structured_file", "edit_file", "shell_command", "save_memory", "search_memories":
 				require.Error(t, err, "Validate(nil) should return error for tools with required params")
-			case "list_directory", "repo_map", "list_memories", "list_skills", "rollback_changes", "view_history":
+			case "list_directory", "repo_map", "list_skills", "rollback_changes", "view_history":
 				require.NoError(t, err, "Validate(nil) should succeed for tools with no required params")
 			default:
 				require.Error(t, err, "Validate(nil) should return error for tool %q", name)
@@ -1359,10 +1264,10 @@ func TestAllToolsConformance_InterfaceContract(t *testing.T) {
 			// Validate must handle empty map
 			err = h.Validate(map[string]any{})
 			switch name {
-			case "read_file", "fetch_url", "search_files", "read_memory", "embedding_index",
+			case "read_file", "fetch_url", "search_files", "embedding_index",
 				"write_file", "write_structured_file", "edit_file", "shell_command", "save_memory", "search_memories":
 				require.Error(t, err, "Validate({}) should return error for tools with required params")
-			case "list_directory", "repo_map", "list_memories", "list_skills", "rollback_changes", "view_history":
+			case "list_directory", "repo_map", "list_skills", "rollback_changes", "view_history":
 				require.NoError(t, err, "Validate({}) should succeed for tools with no required params")
 			default:
 				require.Error(t, err, "Validate({}) should return error for tool %q", name)

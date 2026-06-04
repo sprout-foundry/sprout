@@ -32,16 +32,10 @@
         "activate_skill",
         "TodoWrite",
         "TodoRead",
-        "add_memory",
-        "read_memory",
-        "list_memories",
-        "delete_memory",
+        "manage_memory",
         "list_changes",
         "recover_file",
-        "show_my_change",
-        "revert_my_changes",
-        "summarize_my_session",
-        "my_recent_changes"
+        "revert_my_changes"
       ],
       "capabilities": [
         "git_write"

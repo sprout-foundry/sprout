@@ -43,10 +43,7 @@ func TestPersonaToolsCatalogIsAuthoritative(t *testing.T) {
 		"activate_skill",
 		"TodoWrite",
 		"TodoRead",
-		"add_memory",
-		"read_memory",
-		"list_memories",
-		"delete_memory",
+		"manage_memory",
 	}
 	for _, tool := range expectedTools {
 		assert.Contains(t, persona.AllowedTools, tool, "orchestrator catalog should include %s", tool)

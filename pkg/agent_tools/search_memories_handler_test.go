@@ -453,7 +453,7 @@ func TestFormatMemorySearchResults(t *testing.T) {
 	require.Contains(t, output, "Found 2 memory/memories")
 	require.Contains(t, output, "test-memory")
 	require.Contains(t, output, "0.95")
-	require.Contains(t, output, "read_memory")
+	require.Contains(t, output, "manage_memory")
 }
 
 func TestSearchMemoriesHandler_Definition(t *testing.T) {

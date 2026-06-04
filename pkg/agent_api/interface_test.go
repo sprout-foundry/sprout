@@ -134,29 +134,3 @@ func TestClientType_Constants(t *testing.T) {
 	assert.Equal(t, ClientType("editor"), EditorClientType)
 }
 
-func TestGetToolDefinitions(t *testing.T) {
-	tools := GetToolDefinitions()
-	assert.NotEmpty(t, tools, "should return tool definitions")
-
-	// Verify all tools have required fields
-	toolNames := make(map[string]bool)
-	for _, tool := range tools {
-		assert.Equal(t, "function", tool.Type, "tool type should be 'function'")
-		assert.NotEmpty(t, tool.Function.Name, "tool should have a name")
-		assert.NotEmpty(t, tool.Function.Description, "tool should have a description")
-
-		// Check for duplicate tool names
-		assert.False(t, toolNames[tool.Function.Name], "duplicate tool name: %s", tool.Function.Name)
-		toolNames[tool.Function.Name] = true
-	}
-
-	// Verify essential tools exist
-	essentialTools := []string{
-		"shell_command", "read_file", "write_file", "edit_file",
-		"search_files", "web_search", "fetch_url",
-		"run_subagent", "mcp_tools",
-	}
-	for _, name := range essentialTools {
-		assert.True(t, toolNames[name], "missing essential tool: %s", name)
-	}
-}

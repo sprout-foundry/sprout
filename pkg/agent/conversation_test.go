@@ -317,8 +317,7 @@ func TestExtractPastedImagePaths(t *testing.T) {
 
 func TestAlwaysIncludedTools(t *testing.T) {
 	expected := []string{
-		"list_skills", "activate_skill", "add_memory", "read_memory",
-		"list_memories", "delete_memory", "TodoWrite", "TodoRead",
+		"list_skills", "activate_skill", "manage_memory", "TodoWrite", "TodoRead",
 	}
 	for _, name := range expected {
 		found := false

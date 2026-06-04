@@ -20,7 +20,7 @@ func TestDefaultDefinitionsIncludesWebScraper(t *testing.T) {
 	}
 }
 
-func TestDefaultDefinitionsIncludesOrchestratorComputerUserAndRefactor(t *testing.T) {
+func TestDefaultDefinitionsIncludesOrchestratorCoderAndRefactor(t *testing.T) {
 	definitions, err := DefaultDefinitions()
 	if err != nil {
 		t.Fatalf("expected embedded persona configs to load, got error: %v", err)

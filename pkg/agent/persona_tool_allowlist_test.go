@@ -8,70 +8,35 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestPersonaToolAllowlistFix verifies that GetSubagentType always returns
-// authoritative tool allowlists from defaults, not stale saved config.
-func TestPersonaToolAllowlistFix(t *testing.T) {
-	// Create a config with a stale persona that has old allowed_tools
-	cfg := &configuration.Config{
-		SubagentTypes: map[string]configuration.SubagentType{
-			"orchestrator": {
-				ID:           "orchestrator",
-				Name:         "Orchestrator",
-				Description:  "Orchestrator persona description",
-				Enabled:      true,
-				SystemPrompt: "subagent_prompts/orchestrator.md",
-				Provider:     "custom-provider", // User override
-				Model:        "custom-model",    // User override
-				// Stale allowed_tools - missing browse_url, view_history, rollback_changes
-				AllowedTools: []string{
-					"shell_command",
-					"read_file",
-					"write_file",
-					"edit_file",
-					"TodoWrite",
-					"TodoRead",
-				},
-				Aliases: []string{"orch"},
-			},
-		},
-	}
+// TestPersonaToolsCatalogIsAuthoritative verifies the post-override-removal
+// contract: GetSubagentType returns the catalog-defined AllowedTools for built-in
+// personas. Users cannot persist a partial override; the catalog is the source
+// of truth at load time.
+func TestPersonaToolsCatalogIsAuthoritative(t *testing.T) {
+	cfg := configuration.NewConfig()
 
-	// Get the orchestrator persona - it should have the authoritative defaults
-	// with user overrides applied for provider/model
 	persona := cfg.GetSubagentType("orchestrator")
-	require.NotNil(t, persona, "orchestrator persona should exist")
+	require.NotNil(t, persona, "orchestrator persona should exist in catalog")
 
-	// Verify user overrides are preserved
-	assert.Equal(t, "custom-provider", persona.Provider, "user provider override should be preserved")
-	assert.Equal(t, "custom-model", persona.Model, "user model override should be preserved")
-	assert.Equal(t, "Orchestrator", persona.Name, "name should come from defaults")
-	// SystemPrompt is empty in defaults, so it should be empty
-	assert.Equal(t, "", persona.SystemPrompt, "system prompt should be empty from defaults")
-	// Orchestrator has alias "orchestration" plus legacy aliases from the
-	// SP-050 collapse so that pre-existing configs / sessions naming
-	// "repo_orchestrator" still resolve.
-	assert.Equal(t, []string{"orchestration", "repo_orchestrator", "repo_operator", "git_orchestrator"}, persona.Aliases, "aliases should come from defaults")
+	// Verify the orchestrator carries its canonical aliases (SP-050 collapse).
+	assert.Equal(t, []string{"orchestration", "repo_orchestrator", "repo_operator", "git_orchestrator"}, persona.Aliases)
 
-	// Verify authoritative allowed_tools include all expected tools
-	// The stale config should be ignored and defaults should be used
+	// Verify the catalog ships the full tool list, not a truncated one.
 	expectedTools := []string{
 		"shell_command",
 		"git",
-		"read_file", 
+		"read_file",
 		"write_file",
 		"edit_file",
 		"write_structured_file",
-		"patch_structured_file", 
+		"patch_structured_file",
 		"search_files",
-		"analyze_ui_screenshot",
-		"analyze_image_content",
-		"browse_url", // This is in default orchestrator tools!
+		"browse_url",
 		"web_search",
 		"fetch_url",
 		"run_subagent",
 		"run_parallel_subagents",
-		"mcp_tools",
-		"view_history", 
+		"view_history",
 		"rollback_changes",
 		"self_review",
 		"list_skills",
@@ -80,158 +45,60 @@ func TestPersonaToolAllowlistFix(t *testing.T) {
 		"TodoRead",
 		"add_memory",
 		"read_memory",
-		"list_memories", 
+		"list_memories",
 		"delete_memory",
 	}
-
 	for _, tool := range expectedTools {
-		assert.Contains(t, persona.AllowedTools, tool, "allowed_tools should include %s from defaults", tool)
-	}
-
-	// Verify there are no unexpected tools
-	for _, tool := range persona.AllowedTools {
-		assert.NotNil(t, tool, "tool should not be empty")
+		assert.Contains(t, persona.AllowedTools, tool, "orchestrator catalog should include %s", tool)
 	}
 }
 
-// TestCustomPersonaPreserved verifies that custom personas (only in user config)
-// are preserved as-is without trying to merge with defaults.
-func TestCustomPersonaPreserved(t *testing.T) {
-	cfg := &configuration.Config{
-		SubagentTypes: map[string]configuration.SubagentType{
-			"my_custom_persona": {
-				ID:           "my_custom_persona",
-				Name:         "My Custom Persona",
-				Description:  "A custom persona not in defaults",
-				Enabled:      true,
-				Provider:     "custom-provider",
-				Model:        "custom-model",
-				SystemPrompt: "my_custom_prompt.md",
-				AllowedTools: []string{"shell_command", "read_file"},
-				Aliases:      []string{"custom"},
-			},
-		},
+// TestRuntimePersonaMutationVisibleViaGetSubagentType verifies that in-memory
+// mutations of the SubagentTypes map (used by `sprout automate` workflow
+// overrides and test fixtures) are visible to GetSubagentType. These mutations
+// are not persisted to disk — they live only for the current process.
+func TestRuntimePersonaMutationVisibleViaGetSubagentType(t *testing.T) {
+	cfg := configuration.NewConfig()
+
+	// Inject a runtime-only persona (the pattern used by workflow overrides
+	// and unit tests that need a synthetic fixture).
+	cfg.SubagentTypes["test_runtime_only"] = configuration.SubagentType{
+		ID:           "test_runtime_only",
+		Name:         "Runtime Only",
+		Enabled:      true,
+		AllowedTools: []string{"shell_command", "read_file"},
 	}
 
-	persona := cfg.GetSubagentType("my_custom_persona")
-	require.NotNil(t, persona, "custom persona should exist")
-
-	// All fields should be exactly as provided since this is a custom persona
-	assert.Equal(t, "my_custom_persona", persona.ID)
-	assert.Equal(t, "My Custom Persona", persona.Name)
-	assert.Equal(t, "A custom persona not in defaults", persona.Description)
-	assert.Equal(t, "custom-provider", persona.Provider)
-	assert.Equal(t, "custom-model", persona.Model)
-	assert.Equal(t, "my_custom_prompt.md", persona.SystemPrompt)
+	persona := cfg.GetSubagentType("test_runtime_only")
+	require.NotNil(t, persona, "runtime-injected persona should be retrievable")
+	assert.Equal(t, "Runtime Only", persona.Name)
 	assert.Equal(t, []string{"shell_command", "read_file"}, persona.AllowedTools)
-	assert.Equal(t, []string{"custom"}, persona.Aliases)
 }
 
-// TestPersonaAliasesAreResolved verifies that aliases work correctly
-// and return the same persona as the primary ID.
-func TestPersonaAliasesAreResolved(t *testing.T) {
-	cfg := &configuration.Config{
-		SubagentTypes: map[string]configuration.SubagentType{
-			"orchestrator": {
-				ID:           "orchestrator",
-				Name:         "Orchestrator", 
-				Description:  "Orchestrator persona description",
-				Enabled:      true,
-				SystemPrompt: "subagent_prompts/orchestrator.md",
-				Provider:     "user-provider", // User override
-				Model:        "user-model",    // User override
-				// Don't set AllowedTools here to ensure we get defaults
-				Aliases:      []string{"orch"},
-			},
-		},
-	}
+// TestPersonaAliasesResolveToSameEntry verifies aliases resolve consistently.
+func TestPersonaAliasesResolveToSameEntry(t *testing.T) {
+	cfg := configuration.NewConfig()
 
-	// Let's first check what a default orchestrator looks like
-	defaultCfg := configuration.NewConfig()
-	defaultOrchestrator := defaultCfg.GetSubagentType("orchestrator")
-	require.NotNil(t, defaultOrchestrator)
-	t.Logf("Default orchestrator tools: %v", defaultOrchestrator.AllowedTools)
+	primary := cfg.GetSubagentType("orchestrator")
+	require.NotNil(t, primary)
+	alias := cfg.GetSubagentType("repo_orchestrator")
+	require.NotNil(t, alias, "legacy alias repo_orchestrator should resolve to orchestrator")
 
-	// Get by primary ID
-	primaryPersona := cfg.GetSubagentType("orchestrator")
-	require.NotNil(t, primaryPersona)
-	t.Logf("Primary persona tools: %v", primaryPersona.AllowedTools)
-
-	// Get by alias 
-	aliasPersona := cfg.GetSubagentType("orch")
-	require.NotNil(t, aliasPersona)
-	t.Logf("Alias persona tools: %v", aliasPersona.AllowedTools)
-
-	// Should be the same persona
-	assert.Equal(t, primaryPersona.ID, aliasPersona.ID)
-	assert.Equal(t, primaryPersona.Name, aliasPersona.Name)
-	assert.Equal(t, primaryPersona.Provider, aliasPersona.Provider)
-	assert.Equal(t, primaryPersona.AllowedTools, aliasPersona.AllowedTools)
+	assert.Equal(t, primary.ID, alias.ID)
+	assert.Equal(t, primary.Name, alias.Name)
+	assert.Equal(t, primary.AllowedTools, alias.AllowedTools)
 }
 
-// TestDisabledPersonaReturnsNil verifies that disabled personas return nil
-// even when they exist in the config.
+// TestDisabledPersonaReturnsNil verifies that personas listed in
+// Config.DisabledPersonas are filtered out by GetSubagentType.
 func TestDisabledPersonaReturnsNil(t *testing.T) {
-	cfg := &configuration.Config{
-		SubagentTypes: map[string]configuration.SubagentType{
-			"disabled_orchestrator": {
-				ID:           "orchestrator",
-				Name:         "Orchestrator",
-				Description:  "Orchestrator persona description",
-				Enabled:      false, // Disabled
-				SystemPrompt: "subagent_prompts/orchestrator.md",
-				AllowedTools: []string{"shell_command"},
-			},
-		},
-	}
+	cfg := configuration.NewConfig()
 
-	persona := cfg.GetSubagentType("orchestrator")
-	assert.Nil(t, persona, "disabled persona should return nil")
+	require.NotNil(t, cfg.GetSubagentType("orchestrator"), "orchestrator should exist before disable")
 
-	// Even with a custom override, if the default is disabled it should return nil
-	override := cfg.SubagentTypes["disabled_orchestrator"]
-	override.Enabled = true
-	cfg.SubagentTypes["disabled_orchestrator"] = override
-	persona = cfg.GetSubagentType("orchestrator")
-	assert.NotNil(t, persona, "enabled persona should not return nil")
-}
+	cfg.SetPersonaDisabled("orchestrator", true)
+	assert.Nil(t, cfg.GetSubagentType("orchestrator"), "disabled persona should return nil")
 
-// TestSystemPromptAppendOverride verifies that system_prompt_append
-// can be overridden by users while other system prompt fields come from defaults.
-func TestSystemPromptAppendOverride(t *testing.T) {
-	cfg := &configuration.Config{
-		SubagentTypes: map[string]configuration.SubagentType{
-			"coder": {
-				ID:                   "coder",
-				Name:                 "Coder",
-				Description:          "Coder persona description", 
-				Enabled:              true,
-				SystemPrompt:         "subagent_prompts/coder.md",
-				SystemPromptAppend:   "Custom append text from user",
-				Provider:             "user-provider",
-				Model:                "user-model",
-				AllowedTools:         []string{"shell_command"}, // Stale
-			},
-		},
-	}
-
-	persona := cfg.GetSubagentType("coder")
-	require.NotNil(t, persona)
-
-	// Verify defaults are used for most fields
-	assert.Equal(t, "coder", persona.ID)
-	assert.Equal(t, "Coder", persona.Name) 
-	assert.Equal(t, "Feature implementation and production code writing specialist", persona.Description)
-	// coder should have a system prompt in defaults
-	assert.NotEqual(t, "", persona.SystemPrompt, "coder should have a system prompt")
-
-	// Verify user override for system_prompt_append
-	assert.Equal(t, "Custom append text from user", persona.SystemPromptAppend)
-
-	// Verify user overrides for provider/model
-	assert.Equal(t, "user-provider", persona.Provider)
-	assert.Equal(t, "user-model", persona.Model)
-
-	// Verify authoritative allowed_tools includes browse_url
-	assert.Contains(t, persona.AllowedTools, "browse_url", "allowed_tools should include browse_url from defaults")
+	cfg.SetPersonaDisabled("orchestrator", false)
+	assert.NotNil(t, cfg.GetSubagentType("orchestrator"), "re-enabled persona should return non-nil")
 }

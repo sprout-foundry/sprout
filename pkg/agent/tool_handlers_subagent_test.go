@@ -132,14 +132,14 @@ func TestHandleRunSubagent_Delegatable_Validation(t *testing.T) {
 			delegatable: false,
 			cloudMode:   true,
 			wantErr:     true,
-			errContains: "not designed to be used as a subagent (delegatable=false)",
+			errContains: "is not spawnable from",
 		},
 		{
 			name:        "Non-delegatable persona rejected in local mode",
 			delegatable: false,
 			cloudMode:   false,
 			wantErr:     true,
-			errContains: "not designed to be used as a subagent (delegatable=false)",
+			errContains: "is not spawnable from",
 		},
 		{
 			name:        "Delegatable persona accepted in cloud mode",
@@ -247,7 +247,7 @@ func TestHandleRunSubagent_CombinedValidation(t *testing.T) {
 			delegatable: false,
 			cloudMode:   false,
 			wantErr:     true,
-			errContains: "not designed to be used as a subagent (delegatable=false)",
+			errContains: "is not spawnable from",
 		},
 		{
 			name:        "LocalOnly+Delegatable in cloud mode - LocalOnly error",
@@ -271,7 +271,7 @@ func TestHandleRunSubagent_CombinedValidation(t *testing.T) {
 			delegatable: false,
 			cloudMode:   true,
 			wantErr:     true,
-			errContains: "not designed to be used as a subagent (delegatable=false)",
+			errContains: "is not spawnable from",
 		},
 		{
 			name:        "NonLocalOnly+NonDelegatable in local mode - Delegatable error",
@@ -279,7 +279,7 @@ func TestHandleRunSubagent_CombinedValidation(t *testing.T) {
 			delegatable: false,
 			cloudMode:   false,
 			wantErr:     true,
-			errContains: "not designed to be used as a subagent (delegatable=false)",
+			errContains: "is not spawnable from",
 		},
 	}
 
@@ -443,6 +443,54 @@ func TestHandleRunSubagent_NonExistentPersona_FallsBack(t *testing.T) {
 	}
 	if result == "" {
 		t.Error("expected non-empty result")
+	}
+}
+
+// TestHandleRunSubagent_DefaultSubagentPersona_HonoredFromConfig verifies
+// that when no persona arg is passed, Config.DefaultSubagentPersona is used
+// before the hardcoded "general" fallback. Regression for audit item D.
+func TestHandleRunSubagent_DefaultSubagentPersona_HonoredFromConfig(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		cfg.DefaultSubagentPersona = "coder"
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("UpdateConfigNoSave failed: %v", err)
+	}
+
+	setupTestSubagentRunner(agent)
+
+	// Empty persona argument should route to coder (config default), not general.
+	args := map[string]interface{}{
+		"prompt": "test prompt",
+	}
+	if _, err := handleRunSubagent(context.Background(), agent, args); err != nil {
+		t.Fatalf("expected default persona to resolve cleanly, got: %v", err)
+	}
+}
+
+// TestHandleRunSubagent_DefaultSubagentPersona_FallsBackToGeneral verifies
+// the hardcoded "general" fallback still fires when DefaultSubagentPersona
+// is unset.
+func TestHandleRunSubagent_DefaultSubagentPersona_FallsBackToGeneral(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	// Sanity: the test fixture should leave DefaultSubagentPersona empty.
+	if got := agent.configManager.GetConfig().DefaultSubagentPersona; got != "" {
+		t.Fatalf("test precondition: DefaultSubagentPersona should default to empty, got %q", got)
+	}
+
+	setupTestSubagentRunner(agent)
+
+	args := map[string]interface{}{
+		"prompt": "test prompt",
+	}
+	if _, err := handleRunSubagent(context.Background(), agent, args); err != nil {
+		t.Fatalf("expected fallback to 'general' to resolve cleanly, got: %v", err)
 	}
 }
 

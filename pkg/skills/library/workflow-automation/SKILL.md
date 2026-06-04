@@ -13,6 +13,36 @@ You are an **Autonomous Workflow Architect**. Your job is to guide any user — 
 
 ---
 
+## Persona Glossary
+
+These four persona names appear throughout this skill. Don't confuse them:
+
+| Persona | Role in a workflow |
+|---|---|
+| `coordinator` | Owns the entire workflow run. Reads TODO.md, decides which item to process next, kicks off the orchestrator for each item, commits results, moves on. The `initial.persona` in the workflow JSON. |
+| `orchestrator` (alias: `repo_orchestrator`) | Owns ONE TODO item end-to-end. Delegates to coder/tester/reviewer/debugger. Reports back to the coordinator. Spawned via `run_subagent`. |
+| `coder` / `tester` / `reviewer` / `debugger` | Leaf workers. Do focused, well-scoped work and return. Spawned by the orchestrator via `run_subagent`. |
+
+Mental model: **coordinator → orchestrator (per TODO item) → leaf workers (per sub-task)**. Three layers, each delegating down the chain.
+
+---
+
+## Fast Path — The Canonical TODO Autonomous Flow
+
+**The most common case by far is "process my TODO.md autonomously."** If the user signals anything like "full TODO automation", "process my TODO.md", "autonomous workflow", "run through my TODO list", or names the `coordinator` persona explicitly, you go straight to this path. Skip Phase 2's workflow-type picker — don't enumerate alternatives that aren't relevant.
+
+The canonical flow needs **three** decisions, nothing more:
+
+1. **Primary model** for the coordinator + orchestrator (the brain of the workflow). Accept whatever the user named in their initial message.
+2. **Subagent model** for coder/tester/reviewer/debugger (the bulk of the work). Accept whatever the user named.
+3. **Budget cap** in USD. If the user didn't volunteer one, ask for it specifically — autonomous runs without a budget are a footgun.
+
+Then generate the workflow JSON using the **Full Autonomous Workflow template** below and skip directly to Phase 4. Everything else in this skill (Phase 1 provider interview, Phase 2 type picker, Phase 3 property walkthrough) is for cases where the user is exploring or building something non-canonical.
+
+**Heuristic:** if the user opened with concrete model names AND said anything resembling "TODO automation", you should be writing the workflow JSON within 3 turns, not 15.
+
+---
+
 ## Launching a Workflow (run_automate)
 
 When the user asks to *run* an existing workflow (as opposed to authoring one), follow this sequence every time:
@@ -57,7 +87,9 @@ Before starting, check if the project has the structure required for certain wor
 
 ## Phase 1: Discover Available Providers & Models
 
-The user needs to understand what providers and models they have access to before making cost/quality decisions.
+**Skip this entire phase when the user has already named a primary and subagent provider/model in their initial message.** Re-interviewing a user who told you "use zai:glm-5.1 and ai-worker:qw" is friction, not helpfulness. Accept their choice, do a single sanity check with `manage_settings(operation="test_credential", provider="<name>")` for each provider they named, and move on. The discovery interview below is for users who explicitly ask "what are my options?" — not as a default opening move.
+
+When you DO run the interview (because the user hasn't supplied models): the goal is to help them understand cost/quality tradeoffs before committing.
 
 ### Steps
 
@@ -122,68 +154,52 @@ If the user wants to use a single model for everything, that's fine — just set
 
 ---
 
-## Phase 2: Choose a Workflow Type
+## Phase 2: Workflow Type (usually skip)
 
-Present the available workflow types and help the user pick one:
+**The canonical case is the Full Autonomous TODO Processor.** If you came in via the Fast Path at the top of this skill, you already know to use that template. Don't run a "which workflow type would you like?" interview — it forces the user to choose between alternatives most of them never want.
 
-### Workflow Types
+Only consult this section when the user has explicitly asked for something other than TODO autonomous, OR when their request doesn't match any obvious canonical pattern. In those cases, the alternatives are:
 
-#### 1. Full Autonomous TODO Processor (`full_autonomous`)
+### Alternative Workflow Types (rarely used)
 
-**Best for**: Processing a TODO.md list of tasks automatically, one at a time, with full build/test/review cycle per task.
-
-**How it works**:
-1. Reads TODO.md, finds the first incomplete `[ ]` item
-2. Delegates implementation to a coder subagent
-3. Verifies the build passes
-4. Delegates testing to a tester subagent
-5. Delegates code review to a reviewer subagent
-6. Fixes any issues found in review
-7. Commits the changes
-8. Marks the TODO item `[x]` complete
-9. Moves to the next item
-10. Repeats until all items are done
-
-**Requirements**: TODO.md with `[ ]` items, ideally created via `project-planning` skill.
-
-**Cost profile**: High token usage per task (full cycle), but each task is production-ready when complete. Best value when TODO items are well-defined.
-
-**Prerequisites**: Strongly recommended to have run `project-planning` first so TODO.md exists with clear, actionable items.
-
-#### 2. Single-Task Workflow (`single_task`)
+#### Single-Task Workflow (`single_task`)
 
 **Best for**: Running one well-defined task with a build/test/review cycle.
 
-**How it works**:
-1. Takes a single task description (provided at runtime)
-2. Implements the task
-3. Runs a deep code review
-4. Fixes any issues from review
-5. Returns results
-
-**Requirements**: A task description.
+**How it works**: Takes a single task description, implements it, runs a deep code review, fixes issues, returns results.
 
 **Cost profile**: Medium. One cycle through build/test/review.
 
-#### 3. Multi-Step Review Pipeline (`review_pipeline`)
+#### Multi-Step Review Pipeline (`review_pipeline`)
 
 **Best for**: Code that's already written but needs thorough review and fixing.
 
-**How it works**:
-1. Deep review of staged changes
-2. Fix issues found
-3. Second review pass
-4. Final summary
+**How it works**: Deep review of staged changes → fix issues found → second review pass → final summary.
 
 **Requirements**: Staged git changes to review.
 
 **Cost profile**: Low-medium. Focuses on review, not implementation.
 
-#### 4. Custom Workflow (`custom`)
+#### Custom Workflow (`custom`)
 
 **Best for**: Users who understand the workflow schema and want to design their own multi-step pipeline.
 
-**How it works**: Whatever the user defines. You help them configure each step.
+**How it works**: Whatever the user defines. Use the property reference below to configure each step.
+
+### The Canonical Type: Full Autonomous TODO Processor
+
+For completeness, here's what the default does:
+
+1. Reads TODO.md, finds the first incomplete `[ ]` item
+2. Delegates the item to an orchestrator subagent (which further delegates to coder → tester → reviewer)
+3. Verifies the build passes after each item
+4. Commits the changes
+5. Marks the TODO item `[x]` complete
+6. Moves to the next item, repeats until done
+
+**Requirements**: TODO.md with `[ ]` items. The `project-planning` skill is the recommended way to produce a good TODO.md, but any markdown checklist works.
+
+**Cost profile**: High token usage per item (full build/test/review cycle), but each item is production-ready when complete. Set a USD budget (`budget.usd`) — autonomous runs without one are a footgun.
 
 ---
 
@@ -349,11 +365,13 @@ Explain this section carefully:
 ### For the Full Autonomous TODO Processor specifically:
 
 Explain the complete lifecycle:
-1. The EA agent reads TODO.md, picks the first `[ ]` item
-2. It creates a task_queue entry
-3. It delegates to a repo_orchestrator subagent (which further delegates to coder → tester → reviewer)
-4. After completion, it verifies the build, commits, marks the item `[x]`
+1. The coordinator reads TODO.md, picks the first `[ ]` item
+2. It updates an in-session `TodoWrite` list to "processing item N" so progress is visible in the UI
+3. It delegates to an `orchestrator` subagent (which further delegates to coder → tester → reviewer)
+4. After completion, it verifies the build, commits, marks the TODO.md item `[x]`
 5. Moves to the next item
+
+**TODO.md is the persistent record.** The `[ ]` → `[x]` transition in the markdown file is the only state that survives the run. `TodoWrite` is a transient UI helper, NOT a persistence layer — don't reach for `task_queue` here; this workflow doesn't use it.
 
 **Key decision points for the user**:
 - How many TODO items to process per session (`max_iterations` on the initial)
@@ -506,10 +524,10 @@ You are an autonomous Coordinator agent processing a TODO.md list. Your job is t
 ## Workflow for Each `[ ]` Item
 
 1. **Read TODO.md** and identify the first incomplete `[ ]` item
-2. **Create a task_queue entry** for it (status=in_progress)
-3. **Delegate implementation** to repo_orchestrator using run_subagent with these verbatim instructions:
+2. **Update the in-session TodoWrite list** so the UI shows "Processing: <TODO item text>". This is for live progress visibility only; TODO.md is the persistent record.
+3. **Delegate implementation** to the `orchestrator` persona using `run_subagent` with these verbatim instructions:
 
-   "You are the repo_orchestrator for this task. You MUST delegate all implementation, testing, and review work to specialized subagents. Do NOT write code, tests, or perform reviews yourself. Follow this exact sequence using run_subagent (serialized, NOT parallel):
+   "You are the orchestrator for this task. You MUST delegate all implementation, testing, and review work to specialized subagents. Do NOT write code, tests, or perform reviews yourself. Follow this exact sequence using run_subagent (serialized, NOT parallel):
 
    a) Activate relevant skills first.
    b) Write code: Delegate to `coder` persona. Wait for completion.
@@ -525,12 +543,12 @@ You are an autonomous Coordinator agent processing a TODO.md list. Your job is t
 
    Task: [insert the TODO item description here]"
 
-4. **Verify delegation**: Check that repo_orchestrator actually delegated (not did work directly). Retry if needed.
+4. **Verify delegation**: Check that the orchestrator actually delegated (not did work directly). Retry if needed.
 5. **Verify build passes**.
 6. **If build fails**, delegate a fix and re-verify.
 7. **Commit**: Stage only files you created/modified. Use commit tool with `notes` parameter containing the TODO description and summary.
 8. **Mark the TODO item `[x]`** in TODO.md.
-9. **Update task_queue** to completed.
+9. **Mark the in-session TodoWrite entry completed** so the UI reflects progress.
 10. **Move to next `[ ]` item**.
 
 ## Rules
@@ -547,7 +565,7 @@ You are an autonomous Coordinator agent processing a TODO.md list. Your job is t
 - Do NOT modify, revert, or delete other active changes
 - Do NOT run git checkout/restore/reset
 - On external conflicts: pause 2 min, retry up to 3 times, then mark blocked
-- Pass these rules verbatim to repo_orchestrator
+- Pass these rules verbatim to the orchestrator
 ```
 
 ### Template: Single-Task Workflow

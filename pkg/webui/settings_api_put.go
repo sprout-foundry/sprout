@@ -621,6 +621,53 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 			cfg.SubagentParallelEnabled = &b
 		}
 	}
+	if v, ok := patch["default_subagent_persona"]; ok {
+		knownKeys["default_subagent_persona"] = true
+		s, _ := v.(string)
+		s = strings.TrimSpace(truncateString(s, maxSettingNameLength))
+		// Empty string clears the override (falls back to "general").
+		// A non-empty value must reference a known persona; otherwise reject
+		// rather than silently fail at spawn time.
+		if s != "" && cfg.GetSubagentType(s) == nil {
+			return nil, fmt.Errorf("default_subagent_persona %q is not a known persona ID or alias", s)
+		}
+		cfg.DefaultSubagentPersona = s
+	}
+	if v, ok := patch["disabled_personas"]; ok {
+		knownKeys["disabled_personas"] = true
+		// Accept either []string or []interface{} (JSON unmarshals to the latter).
+		var ids []string
+		switch list := v.(type) {
+		case []string:
+			ids = list
+		case []interface{}:
+			for _, item := range list {
+				if s, ok := item.(string); ok {
+					ids = append(ids, s)
+				}
+			}
+		case nil:
+			ids = nil
+		default:
+			return nil, fmt.Errorf("disabled_personas must be a list of persona IDs")
+		}
+		// Validate each entry resolves to a known persona. Unknown IDs would
+		// silently no-op the disable, which is a quiet bug.
+		var cleaned []string
+		for _, id := range ids {
+			trimmed := strings.TrimSpace(truncateString(id, maxSettingNameLength))
+			if trimmed == "" {
+				continue
+			}
+			if cfg.GetSubagentType(trimmed) == nil && !cfg.IsPersonaDisabled(trimmed) {
+				// Allow re-listing an already-disabled persona (so the list is
+				// stable across PUTs even after a catalog change removes one).
+				return nil, fmt.Errorf("disabled_personas: %q is not a known persona ID or alias", trimmed)
+			}
+			cleaned = append(cleaned, trimmed)
+		}
+		cfg.DisabledPersonas = cleaned
+	}
 	if v, ok := patch["commit_provider"]; ok {
 		knownKeys["commit_provider"] = true
 		s, _ := v.(string)
@@ -925,34 +972,14 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 		}
 	}
 
-	// SubagentTypes — map[string]SubagentType
-	if v, ok := patch["subagent_types"]; ok {
+	// SubagentTypes — personas are catalog-fixed. Older clients (and
+	// round-trip GET→PUT flows like "copy global to workspace") may still
+	// include this field; we accept-and-ignore so existing payloads don't
+	// 400. Use 'disabled_personas' to hide a persona or 'default_subagent_persona'
+	// to redirect default spawns.
+	if _, ok := patch["subagent_types"]; ok {
 		knownKeys["subagent_types"] = true
-		raw, err := json.Marshal(v)
-		if err != nil {
-			return nil, fmt.Errorf("invalid subagent_types config: %w", err)
-		}
-		var types map[string]configuration.SubagentType
-		if err := json.Unmarshal(raw, &types); err != nil {
-			return nil, fmt.Errorf("invalid subagent_types config: %w", err)
-		}
-		for name, st := range types {
-			st.Provider = truncateString(st.Provider, maxSettingNameLength)
-			st.Model = truncateString(st.Model, maxSettingNameLength)
-			st.SystemPrompt = truncateString(st.SystemPrompt, maxSettingPathLength)
-			st.SystemPromptText = truncateString(st.SystemPromptText, maxSettingPromptLength)
-			st.SystemPromptAppend = truncateString(st.SystemPromptAppend, maxSettingPromptLength)
-			st.Name = truncateString(st.Name, maxSettingNameLength)
-			st.Description = truncateString(st.Description, maxSettingDescriptionLength)
-			for i, a := range st.AllowedTools {
-				st.AllowedTools[i] = truncateString(a, maxSettingNameLength)
-			}
-			for i, a := range st.Aliases {
-				st.Aliases[i] = truncateString(a, maxSettingNameLength)
-			}
-			types[name] = st
-		}
-		cfg.SubagentTypes = types
+		// Intentionally no-op: the catalog is the source of truth.
 	}
 
 	// Skills — map[string]Skill

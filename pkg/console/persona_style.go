@@ -34,6 +34,7 @@ const (
 	personaColorResearcher   = "\033[35m"      // magenta
 	personaColorReviewer     = "\033[34m"      // blue
 	personaColorRefactor     = "\033[37m"      // white
+	personaColorWebScraper   = "\033[1;35m"    // bold magenta — matches WebUI purple, distinct from researcher
 	personaColorOrchestrator = "\033[1;33m"    // bold yellow — matches WebUI amber, readable on light terminals
 	personaColorEA           = "\033[1;36m"    // bold cyan — top-level coordinator
 	personaColorGeneral      = "\033[90m"      // dim gray fallback
@@ -62,6 +63,8 @@ func PersonaColor(personaID string) string {
 		return personaColorReviewer
 	case personas.IDRefactor:
 		return personaColorRefactor
+	case personas.IDWebScraper:
+		return personaColorWebScraper
 	case personas.IDOrchestrator:
 		return personaColorOrchestrator
 	case personas.IDCoordinator, "executive_assistant":

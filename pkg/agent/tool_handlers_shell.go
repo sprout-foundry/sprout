@@ -139,11 +139,12 @@ func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface
 		}
 	}
 
-	// Block git write operations unless the orchestrator persona has permission.
+	// Block git write operations unless the active persona has CapabilityGitWrite
+	// (and, for the orchestrator persona, the AllowOrchestratorGitWrite config flag).
 	// Staging operations (git add) are always allowed per policy.
 	// Read-only operations (status, log, diff, etc.) are always allowed through shell_command.
 	if isGitWriteCommand(command) {
-		if !a.isOrchestratorGitWriteAllowed() {
+		if !a.isGitWriteAllowed() {
 			persona := a.GetActivePersona()
 			if persona == personas.IDOrchestrator {
 				return "", agenterrors.NewSecurityError(fmt.Sprintf("git write operations are disabled for %s. Enable 'Allow orchestrator git write' in settings, or use the commit tool instead (operation: '%s')", persona, command), nil)
@@ -230,18 +231,12 @@ func handleGitOperation(ctx context.Context, a *Agent, args map[string]interface
 		ctx = filesystem.WithWorkspaceRoot(ctx, wsRoot)
 	}
 
-	// The orchestrator can stage files and push without approval when the user
-	// has opted into git-write via AllowOrchestratorGitWrite.
-	// Personas with EA auto-approve rules (e.g., executive_assistant) that include
-	// git write operations in their medium-risk list can also stage/push/pull/fetch
-	// without interactive approval (the EA reasons about these itself).
-	// Other operations (reset, checkout, clean, rm, merge, etc.) always require
-	// user approval regardless of persona.
 	// Basic git ops (add/push/pull/fetch) skip the approval prompt for any
 	// persona with CapabilityGitWrite that has cleared isGitWriteAllowed
 	// (which gates the orchestrator behind the user's AllowOrchestratorGitWrite
 	// flag and lets capability-bearing personas like the coordinator through
-	// unconditionally).
+	// unconditionally). Other operations (reset, checkout, clean, rm, merge, etc.)
+	// always require user approval regardless of persona.
 	basicGitOps := operation == tools.GitOpAdd || operation == tools.GitOpPush || operation == tools.GitOpPull || operation == tools.GitOpFetch
 	allowWithoutApproval := basicGitOps && a.isGitWriteAllowed()
 

@@ -16,6 +16,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"strconv"
 	"strings"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
@@ -64,6 +65,21 @@ func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface
 		}
 	}
 
+	// Extract wait_seconds parameter (optional, defaults to 0)
+	var waitSeconds int
+	if wsParam, exists := args["wait_seconds"]; exists {
+		switch v := wsParam.(type) {
+		case float64:
+			waitSeconds = int(v)
+		case int:
+			waitSeconds = v
+		case string:
+			if n, err := strconv.Atoi(v); err == nil {
+				waitSeconds = n
+			}
+		}
+	}
+
 	// Reject conflicting parameters
 	if checkBackground != "" && background {
 		return "", agenterrors.NewInvalidInputError("check_background and background=true cannot be used together — check_background retrieves output, background runs a new command", nil)
@@ -80,9 +96,9 @@ func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface
 		return a.stopBackgroundSession(stopBackground)
 	}
 
-	// If check_background is set, return output for that session immediately
+	// If check_background is set, return output for that session
 	if checkBackground != "" {
-		return a.checkBackgroundOutput(ctx, checkBackground)
+		return a.checkBackgroundOutput(ctx, checkBackground, waitSeconds)
 	}
 
 	command, err := convertToString(args["command"], "command")

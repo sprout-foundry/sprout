@@ -4,18 +4,23 @@
  * Utilities for filtering/normalizing agent messages in the chat UI.
  */
 
-import type { TodoStatus, TodoItem } from '../types/app';
+import type { TodoStatus, TodoItem, TodoPriority } from '../types/app';
 
 export const AGENT_CHAT_LEAK_PATTERNS: RegExp[] = [
   /^\[\d+\s*-\s*\d+%\]\s*executing tool/i,
   /executing tool\s*\[[^\]]+\]/i,
-  /\bTodoWrite\b/i,
+  // Note: TodoWrite tool calls are surfaced as a dedicated "tasks updated"
+  // badge in the chat stream (see TodoUpdateBadge). They're filtered out of
+  // raw agent text via TodoWrite( call patterns only, but the structured
+  // todo_update event still drives the panel + badge.
+  /\bTodoWrite\(/i,
   /\btodos=\d+/i,
   /\[\s*\]=\d+\s*\[~\]=\d+\s*\[x\]=\d+\s*\[-\]=\d+/i,
   /^Subagent:\s*\[\d+\s*-\s*\d+%\]/i,
 ];
 
 export const TODO_STATUSES = new Set<string>(['pending', 'in_progress', 'completed', 'cancelled']);
+export const TODO_PRIORITIES = new Set<string>(['high', 'medium', 'low']);
 
 export const shouldSuppressAgentMessageInChat = (message: string): boolean => {
   const line = message.trim();
@@ -66,7 +71,17 @@ export const normalizeTodoList = (rawTodos: unknown): TodoItem[] => {
     }
     seen.add(dedupeKey);
 
-    normalized.push({ id, content: rawContent, status });
+    const rawActiveForm = typeof t.activeForm === 'string' ? t.activeForm.trim() : '';
+    const rawPriority = typeof t.priority === 'string' ? t.priority.trim().toLowerCase() : '';
+    const priority = TODO_PRIORITIES.has(rawPriority) ? (rawPriority as TodoPriority) : undefined;
+
+    normalized.push({
+      id,
+      content: rawContent,
+      status,
+      ...(rawActiveForm ? { activeForm: rawActiveForm } : {}),
+      ...(priority ? { priority } : {}),
+    });
   });
 
   return normalized;

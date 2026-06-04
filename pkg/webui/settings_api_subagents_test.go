@@ -32,25 +32,26 @@ func TestHandleAPISettingsSubagentTypesGetNoConfigManager(t *testing.T) {
 	}
 }
 
-func TestHandleAPISettingsSubagentTypesPutMissingName(t *testing.T) {
+func TestHandleAPISettingsSubagentTypesPutRejected(t *testing.T) {
 	ws := &ReactWebServer{agent: nil}
 	req := httptest.NewRequest(http.MethodPut, "/api/settings/subagent-types/", strings.NewReader(`{}`))
 	rec := httptest.NewRecorder()
 	ws.handleAPISettingsSubagentTypes(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for missing name, got %d", rec.Code)
+	// Personas are catalog-fixed; PUT is no longer supported.
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405 for PUT, got %d", rec.Code)
 	}
 }
 
-func TestHandleAPISettingsSubagentTypesDeleteMissingName(t *testing.T) {
+func TestHandleAPISettingsSubagentTypesDeleteRejected(t *testing.T) {
 	ws := &ReactWebServer{agent: nil}
 	req := httptest.NewRequest(http.MethodDelete, "/api/settings/subagent-types/", nil)
 	rec := httptest.NewRecorder()
 	ws.handleAPISettingsSubagentTypes(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for missing name, got %d", rec.Code)
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405 for DELETE, got %d", rec.Code)
 	}
 }
 

@@ -321,10 +321,10 @@ const settingsEndpoints: CloudEndpoint[] = [
   },
   {
     path: '/api/settings/subagent-types/',
-    methods: ['GET', 'PUT', 'DELETE'],
+    methods: ['GET'],
     category: 'foundry-backend',
     isPrefix: true,
-    description: 'Subagent type CRUD',
+    description: 'Subagent type read-only access (catalog is fixed; PUT/DELETE removed)',
   },
   {
     path: '/api/hotkeys',

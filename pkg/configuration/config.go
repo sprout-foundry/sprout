@@ -32,8 +32,6 @@ func isDebugEnabled() bool {
 		return true
 	}
 }
-var legacyCustomPersonaWarningOnce sync.Once
-
 const (
 	ConfigVersion   = "2.0"
 	ConfigDirName   = ".sprout"
@@ -167,7 +165,19 @@ type Config struct {
 	// Subagent Configuration
 	SubagentProvider       string                  `json:"subagent_provider,omitempty"` // Provider for subagents (defaults to LastUsedProvider)
 	SubagentModel          string                  `json:"subagent_model,omitempty"`    // Model for subagents (defaults to provider's default model)
-	SubagentTypes          map[string]SubagentType `json:"subagent_types,omitempty"`    // Named subagent personas (coder, tester, etc.)
+	// SubagentTypes is hydrated from the embedded catalog at config load time.
+	// It is NOT persisted (json:"-"): personas are catalog-fixed and user
+	// customization is intentionally not supported. Use DisabledPersonas to
+	// hide specific personas from /persona list and from subagent spawning.
+	SubagentTypes          map[string]SubagentType `json:"-"`
+	// DisabledPersonas holds canonical persona IDs the user has hidden via
+	// `/persona <id> disable`. The catalog entries themselves are never
+	// mutated; resolution checks this list and treats disabled IDs as absent.
+	DisabledPersonas       []string                `json:"disabled_personas,omitempty"`
+	// DefaultSubagentPersona is the persona ID used when run_subagent is called
+	// without a persona argument. Defaults to "general" if unset. Setting this
+	// lets users redirect default spawns without editing the catalog.
+	DefaultSubagentPersona string                  `json:"default_subagent_persona,omitempty"`
 	SubagentMaxParallel    int                     `json:"subagent_max_parallel,omitempty"`     // Maximum number of parallel subagents (default: 2)
 	SubagentParallelEnabled *bool                   `json:"subagent_parallel_enabled,omitempty"` // Enable/disable parallel subagent execution (default: true)
 	SubagentMaxDepth       int                     `json:"subagent_max_depth,omitempty"`       // Maximum subagent nesting depth (default: 2)
@@ -564,20 +574,47 @@ func IsCriticalOperation(command string) bool {
 
 // SubagentType defines a specialized subagent persona with its own configuration
 type SubagentType struct {
-	ID               string   `json:"id"`                           // Unique identifier (e.g., "coder", "tester", "debugger")
-	Name             string   `json:"name"`                         // Human-readable name (e.g., "Coder", "Tester")
-	Description      string   `json:"description"`                  // What this subagent specializes in
-	Provider         string   `json:"provider"`                     // Provider for this subagent type (optional, falls back to SubagentProvider)
-	Model            string   `json:"model"`                        // Model for this subagent type (optional, falls back to SubagentModel)
-	SystemPrompt     string   `json:"system_prompt"`                // Relative path to system prompt file (e.g., "subagent_prompts/coder.md")
-	SystemPromptText string   `json:"system_prompt_text,omitempty"` // Optional inline system prompt text (replaces base prompt entirely)
-	SystemPromptAppend string `json:"system_prompt_append,omitempty"` // Optional inline text appended to the base or loaded system prompt (for composition)
-	AllowedTools     []string `json:"allowed_tools,omitempty"`      // Optional explicit tool allowlist for focused persona behavior
-	Aliases          []string `json:"aliases,omitempty"`            // Optional aliases (e.g., "web-scraper")
-	Enabled          bool     `json:"enabled"`                      // Whether this subagent type is available for use
-	LocalOnly        bool     `json:"local_only,omitempty"`         // Only available in local mode (not cloud)
-	Delegatable      bool     `json:"delegatable,omitempty"`        // Whether this persona can be used as a subagent (default: true for worker personas, false for orchestrator personas)
-	AutoApproveRules *AutoApproveRules `json:"auto_approve_rules,omitempty"` // Risk cascade rules for EA persona
+	ID                 string            `json:"id"`                             // Unique identifier (e.g., "coder", "tester", "debugger")
+	Name               string            `json:"name"`                           // Human-readable name (e.g., "Coder", "Tester")
+	Description        string            `json:"description"`                    // What this subagent specializes in
+	Provider           string            `json:"provider"`                       // Provider for this subagent type (optional, falls back to SubagentProvider)
+	Model              string            `json:"model"`                          // Model for this subagent type (optional, falls back to SubagentModel)
+	SystemPrompt       string            `json:"system_prompt"`                  // Relative path to system prompt file (e.g., "subagent_prompts/coder.md")
+	SystemPromptText   string            `json:"system_prompt_text,omitempty"`   // Optional inline system prompt text (replaces base prompt entirely)
+	SystemPromptAppend string            `json:"system_prompt_append,omitempty"` // Optional inline text appended to the base or loaded system prompt (for composition)
+	AllowedTools       []string          `json:"allowed_tools,omitempty"`        // Optional explicit tool allowlist for focused persona behavior
+	Aliases            []string          `json:"aliases,omitempty"`              // Optional aliases (e.g., "web-scraper")
+	Enabled            bool              `json:"enabled"`                        // Catalog-only: every shipped persona sets this true. Runtime "is this persona usable?" is determined by Config.DisabledPersonas (user) + LocalOnly (env). Kept for catalog hygiene + defense-in-depth in case a future variant ships with a deliberately-disabled entry.
+	LocalOnly          bool              `json:"local_only,omitempty"`           // Only available in local mode (not cloud)
+	Delegatable        bool              `json:"delegatable,omitempty"`          // Whether this persona can be used as a subagent (default: true for worker personas, false for orchestrator personas)
+	AutoApproveRules   *AutoApproveRules `json:"auto_approve_rules,omitempty"`   // Risk cascade rules for the runtime auto-approve check
+	// Capabilities is an explicit list of agency grants this persona holds
+	// (e.g. "git_write"). Replaces sniffing AutoApproveRules to infer what a
+	// persona is allowed to do. Use HasCapability to query.
+	Capabilities []string `json:"capabilities,omitempty"`
+	// CanSpawnNonDelegatable lists otherwise-undelegatable persona IDs that
+	// this persona may spawn. Replaces the hardcoded EA-spawn-authority
+	// special-case. The coordinator carries ["orchestrator"] to enable the
+	// canonical coordinator→orchestrator→specialist chain.
+	CanSpawnNonDelegatable []string `json:"can_spawn_non_delegatable,omitempty"`
+}
+
+// HasCapability reports whether the persona declares the given capability
+// name. Comparison is case-insensitive and whitespace-tolerant.
+func (st *SubagentType) HasCapability(name string) bool {
+	if st == nil {
+		return false
+	}
+	target := strings.ToLower(strings.TrimSpace(name))
+	if target == "" {
+		return false
+	}
+	for _, c := range st.Capabilities {
+		if strings.ToLower(strings.TrimSpace(c)) == target {
+			return true
+		}
+	}
+	return false
 }
 
 // GetAutoApproveRules returns the auto-approve rules for this persona,
@@ -1634,6 +1671,32 @@ func cloneConfig(cfg *Config) *Config {
 	if err := json.Unmarshal(data, &out); err != nil {
 		return nil
 	}
+	// SubagentTypes is intentionally tagged json:"-" (personas are catalog-fixed
+	// and not persisted to disk). The JSON roundtrip strips it, so we copy it
+	// directly from the source — preserving any in-memory mutations (e.g. test
+	// fixtures that inject custom personas, workflow-automation overrides).
+	// If the source map is empty, fall back to the catalog defaults so callers
+	// never see a nil/empty SubagentTypes from a freshly loaded config.
+	if len(cfg.SubagentTypes) > 0 {
+		out.SubagentTypes = make(map[string]SubagentType, len(cfg.SubagentTypes))
+		for id, st := range cfg.SubagentTypes {
+			copied := st
+			copied.AllowedTools = append([]string{}, st.AllowedTools...)
+			copied.Aliases = append([]string{}, st.Aliases...)
+			copied.Capabilities = append([]string{}, st.Capabilities...)
+			copied.CanSpawnNonDelegatable = append([]string{}, st.CanSpawnNonDelegatable...)
+			if st.AutoApproveRules != nil {
+				rules := *st.AutoApproveRules
+				rules.LowRiskOps = append([]string{}, rules.LowRiskOps...)
+				rules.MediumRiskOps = append([]string{}, rules.MediumRiskOps...)
+				rules.HighRiskNever = append([]string{}, rules.HighRiskNever...)
+				copied.AutoApproveRules = &rules
+			}
+			out.SubagentTypes[id] = copied
+		}
+	} else {
+		out.SubagentTypes = defaultSubagentTypes()
+	}
 	return &out
 }
 
@@ -1711,17 +1774,16 @@ func Load() (*Config, error) {
 	if config.CustomProviders == nil {
 		config.CustomProviders = make(map[string]CustomProviderConfig)
 	}
-	if config.SubagentTypes == nil {
-		config.SubagentTypes = make(map[string]SubagentType)
-	}
+	// Personas are catalog-fixed and never loaded from user config — hydrate
+	// the in-memory map fresh from the embedded catalog every time so any
+	// stale `subagent_types` data from a pre-removal config gets discarded.
+	config.SubagentTypes = defaultSubagentTypes()
 	if config.Skills == nil {
 		config.Skills = make(map[string]Skill)
 	}
 
-	// Merge missing default subagent types and skills so that personas added
-	// to embedded defaults after the user's config was already at v2.0 are
-	// still available at runtime without requiring a migration.
-	mergeMissingDefaultSubagentTypes(&config)
+	// Merge missing default skills so that skills added to embedded defaults
+	// after the user's config was already at v2.0 are still available.
 	mergeMissingDefaultSkills(&config)
 
 	// Post-unmarshal operations that truly need struct-level access
@@ -1740,8 +1802,6 @@ func Load() (*Config, error) {
 	// (skill discovery adds in-memory entries that aren't persisted).
 	config.loadedModTime = loadedMod
 	config.loadedSize = loadedSize
-
-	warnUnknownPersonaTools(config.SubagentTypes)
 
 	// Discover user-level skills from ~/.config/sprout/skills/
 	if os.Getenv("SPROUT_NO_USER_SKILLS") != "1" {
@@ -2072,298 +2132,106 @@ func (c *Config) SetReviewModel(model string) {
 	c.ReviewModel = model
 }
 
-// GetSubagentType retrieves a subagent type configuration by ID
-// Returns nil if the subagent type doesn't exist or is disabled
+// IsPersonaDisabled reports whether the given persona ID has been disabled
+// by the user (via /persona <id> disable). The canonical ID after alias
+// resolution is matched; a disabled persona is returned as nil by
+// GetSubagentType and filtered from GetAvailablePersonaIDs.
+func (c *Config) IsPersonaDisabled(id string) bool {
+	if c == nil {
+		return false
+	}
+	needle := normalizePersonaID(id)
+	for _, disabled := range c.DisabledPersonas {
+		if normalizePersonaID(disabled) == needle {
+			return true
+		}
+	}
+	return false
+}
+
+// SetPersonaDisabled adds or removes a persona ID from DisabledPersonas.
+// Idempotent; aliases are normalized to the canonical form before storage.
+func (c *Config) SetPersonaDisabled(id string, disabled bool) {
+	if c == nil {
+		return
+	}
+	needle := normalizePersonaID(id)
+	filtered := c.DisabledPersonas[:0:0]
+	already := false
+	for _, existing := range c.DisabledPersonas {
+		if normalizePersonaID(existing) == needle {
+			already = true
+			if !disabled {
+				continue
+			}
+		}
+		filtered = append(filtered, existing)
+	}
+	if disabled && !already {
+		filtered = append(filtered, needle)
+	}
+	c.DisabledPersonas = filtered
+}
+
+// GetSubagentType retrieves a subagent type configuration by ID or alias.
+// Personas are catalog-fixed (loaded from pkg/personas/configs/*.json at
+// startup) — there is no user-override merge path. Returns nil if the
+// persona does not exist or has been disabled via Config.DisabledPersonas.
 func (c *Config) GetSubagentType(id string) *SubagentType {
-	if c.SubagentTypes == nil {
+	if c == nil || c.SubagentTypes == nil {
 		return nil
 	}
 
 	normalizedID := normalizePersonaID(id)
+	if normalizedID == "" {
+		return nil
+	}
 
-	// Find user override if any and determine the primary ID
-	var userOverride SubagentType
-	userOverrideFound := false
-	var primaryID string
+	// Resolve the request to a canonical map entry by ID, ID-field, or alias.
+	var found *SubagentType
+	var canonicalID string
 	for personaID, subagentType := range c.SubagentTypes {
-		normalizedPersonaID := normalizePersonaID(personaID)
-		normalizedSubagentTypeID := normalizePersonaID(subagentType.ID)
-		if normalizedPersonaID == normalizedID || normalizedSubagentTypeID == normalizedID {
-			userOverride = subagentType
-			userOverrideFound = true
-			primaryID = normalizedSubagentTypeID // Use the actual persona ID
-			break
-		}
-		for _, alias := range subagentType.Aliases {
-			if normalizePersonaID(alias) == normalizedID {
-				userOverride = subagentType
-				userOverrideFound = true
-				primaryID = normalizedSubagentTypeID // This is the primary ID
-				break
+		st := subagentType
+		switch {
+		case normalizePersonaID(personaID) == normalizedID,
+			normalizePersonaID(st.ID) == normalizedID:
+			found = &st
+			canonicalID = normalizePersonaID(st.ID)
+		default:
+			for _, alias := range st.Aliases {
+				if normalizePersonaID(alias) == normalizedID {
+					found = &st
+					canonicalID = normalizePersonaID(st.ID)
+					break
+				}
 			}
 		}
-		if userOverrideFound {
+		if found != nil {
 			break
 		}
 	}
-
-	// Warn if multiple config entries could match the same normalized ID.
-	// This can happen if two map keys map to the same persona ID, which would
-	// produce non-deterministic results since Go map iteration is unordered.
-	if primaryID != "" && primaryID != normalizedID {
-		// The match was via ID field, not map key — check if the map key also exists
-		for k := range c.SubagentTypes {
-			if normalizePersonaID(k) == normalizedID && normalizePersonaID(k) != primaryID {
-				log.Printf("[config] WARNING: multiple subagent config entries match %q — behavior is non-deterministic due to map iteration order", normalizedID)
-				break
-			}
-		}
-	}
-
-	// Get the default persona definition using the primary ID
-	defaultPersonas := defaultSubagentTypes()
-	var defaultPersona SubagentType
-	defaultExists := false
-	if primaryID != "" {
-		defaultPersona, defaultExists = defaultPersonas[primaryID]
-	} else {
-		defaultPersona, defaultExists = defaultPersonas[normalizedID]
-	}
-
-	// If no default exists and no user override, persona doesn't exist
-	if !defaultExists && !userOverrideFound {
+	if found == nil {
 		return nil
 	}
 
-	// Custom persona: only exists in user config, not in defaults
-	if !defaultExists && userOverrideFound {
-		if !userOverride.Enabled {
-			return nil
-		}
-		// Deep copy slices to avoid sharing backing arrays with the config map
-		result := userOverride
-		result.AllowedTools = append([]string{}, userOverride.AllowedTools...)
-		result.Aliases = append([]string{}, userOverride.Aliases...)
-		if userOverride.AutoApproveRules != nil {
-			rules := *userOverride.AutoApproveRules
-			rules.LowRiskOps = append([]string{}, rules.LowRiskOps...)
-			rules.MediumRiskOps = append([]string{}, rules.MediumRiskOps...)
-			rules.HighRiskNever = append([]string{}, rules.HighRiskNever...)
-			result.AutoApproveRules = &rules
-		}
-		return &result
-	}
-
-	// Default persona with user override: check if user disabled it
-	if defaultExists {
-		// If user has disabled the persona, return nil
-		if userOverrideFound && !userOverride.Enabled {
-			return nil
-		}
-
-		// Make a deep copy to avoid modifying the original default
-		result := SubagentType{
-			ID:                   defaultPersona.ID,
-			Name:                 defaultPersona.Name,
-			Description:          defaultPersona.Description,
-			Provider:             defaultPersona.Provider,
-			Model:                defaultPersona.Model,
-			SystemPrompt:         defaultPersona.SystemPrompt,
-			SystemPromptText:     defaultPersona.SystemPromptText,
-			SystemPromptAppend:   defaultPersona.SystemPromptAppend,
-			AllowedTools:         make([]string, len(defaultPersona.AllowedTools)),
-			Aliases:              make([]string, len(defaultPersona.Aliases)),
-			Enabled:              defaultPersona.Enabled,
-			LocalOnly:            defaultPersona.LocalOnly,
-			Delegatable:          defaultPersona.Delegatable,
-		}
-		// Copy slices
-		copy(result.AllowedTools, defaultPersona.AllowedTools)
-		copy(result.Aliases, defaultPersona.Aliases)
-
-		// Deep copy auto-approve rules
-		if defaultPersona.AutoApproveRules != nil {
-			rules := *defaultPersona.AutoApproveRules
-			rules.LowRiskOps = append([]string{}, rules.LowRiskOps...)
-			rules.MediumRiskOps = append([]string{}, rules.MediumRiskOps...)
-			rules.HighRiskNever = append([]string{}, rules.HighRiskNever...)
-			result.AutoApproveRules = &rules
-		}
-		
-		// If user has override, overlay only the user-overridable fields
-		if userOverrideFound {
-			// Provider, model, LocalOnly, AutoApproveRules, and SystemPromptAppend
-			// can be overridden. AllowedTools is intentionally NOT overridden here
-			// because default persona tool configurations are carefully curated for
-			// safety and correctness. Users who need different tools should create
-			// a custom persona with a new ID.
-			// Warn if user tried to override AllowedTools for a built-in persona,
-			// but only when the list actually differs from the defaults.
-			if len(userOverride.AllowedTools) > 0 && !toolSetsEqual(userOverride.AllowedTools, defaultPersona.AllowedTools) {
-				log.Printf("[WARN] AllowedTools override ignored for built-in persona '%s'; create a new persona ID to customize tools. Dropped tools: %v",
-					defaultPersona.ID, userOverride.AllowedTools)
-			}
-			if userOverride.Provider != "" {
-				result.Provider = userOverride.Provider
-			}
-			if userOverride.Model != "" {
-				result.Model = userOverride.Model
-			}
-			if userOverride.SystemPromptAppend != "" {
-				result.SystemPromptAppend = userOverride.SystemPromptAppend
-			}
-			// LocalOnly override
-			if userOverride.LocalOnly {
-				result.LocalOnly = true
-			}
-			// Auto-approve rules override
-			if userOverride.AutoApproveRules != nil {
-				rules := *userOverride.AutoApproveRules
-				rules.LowRiskOps = append([]string{}, rules.LowRiskOps...)
-				rules.MediumRiskOps = append([]string{}, rules.MediumRiskOps...)
-				rules.HighRiskNever = append([]string{}, rules.HighRiskNever...)
-				result.AutoApproveRules = &rules
-			}
-		}
-
-		if result.Enabled {
-			return &result
-		}
+	if c.IsPersonaDisabled(canonicalID) {
 		return nil
 	}
-	
-	return nil // This should never be reached, but needed for compilation
-}
 
-func mergeMissingDefaultSubagentTypes(config *Config) {
-	if config == nil {
-		return
+	// Deep copy slices so callers can't mutate the catalog-backed entry.
+	result := *found
+	result.AllowedTools = append([]string{}, found.AllowedTools...)
+	result.Aliases = append([]string{}, found.Aliases...)
+	result.Capabilities = append([]string{}, found.Capabilities...)
+	result.CanSpawnNonDelegatable = append([]string{}, found.CanSpawnNonDelegatable...)
+	if found.AutoApproveRules != nil {
+		rules := *found.AutoApproveRules
+		rules.LowRiskOps = append([]string{}, rules.LowRiskOps...)
+		rules.MediumRiskOps = append([]string{}, rules.MediumRiskOps...)
+		rules.HighRiskNever = append([]string{}, rules.HighRiskNever...)
+		result.AutoApproveRules = &rules
 	}
-	if config.SubagentTypes == nil {
-		config.SubagentTypes = make(map[string]SubagentType)
-	}
-
-	for id, persona := range defaultSubagentTypes() {
-		if _, exists := config.SubagentTypes[id]; !exists {
-			config.SubagentTypes[id] = persona
-		}
-	}
-}
-
-func mergeLegacyStructuredToolsIntoPersonaAllowlists(config *Config) {
-	if config == nil || config.SubagentTypes == nil {
-		return
-	}
-
-	defaults := defaultSubagentTypes()
-	for id, persona := range config.SubagentTypes {
-		normalizedID := normalizePersonaID(id)
-		if _, exists := defaults[normalizedID]; !exists {
-			continue
-		}
-		if len(persona.AllowedTools) == 0 {
-			continue
-		}
-		if !hasAnyTool(persona.AllowedTools, "write_file", "edit_file") {
-			continue
-		}
-
-		changed := false
-		if !hasTool(persona.AllowedTools, "write_structured_file") {
-			persona.AllowedTools = append(persona.AllowedTools, "write_structured_file")
-			changed = true
-		}
-		if !hasTool(persona.AllowedTools, "patch_structured_file") {
-			persona.AllowedTools = append(persona.AllowedTools, "patch_structured_file")
-			changed = true
-		}
-
-		if changed {
-			config.SubagentTypes[id] = persona
-		}
-	}
-
-	for id, persona := range config.SubagentTypes {
-		normalizedID := normalizePersonaID(id)
-		if normalizedID != "web_scraper" {
-			continue
-		}
-		if len(persona.AllowedTools) == 0 {
-			continue
-		}
-		if hasTool(persona.AllowedTools, "shell_command") {
-			continue
-		}
-		persona.AllowedTools = append(persona.AllowedTools, "shell_command")
-		config.SubagentTypes[id] = persona
-	}
-
-	// Handle custom (non-default) personas: auto-add structured file tools with a one-time warning
-	for id, persona := range config.SubagentTypes {
-		normalizedID := normalizePersonaID(id)
-		if _, exists := defaults[normalizedID]; exists {
-			continue // Skip built-in personas, already handled above
-		}
-		if len(persona.AllowedTools) == 0 {
-			continue
-		}
-		if !hasAnyTool(persona.AllowedTools, "write_file", "edit_file") {
-			continue
-		}
-
-		changed := false
-		if !hasTool(persona.AllowedTools, "write_structured_file") {
-			persona.AllowedTools = append(persona.AllowedTools, "write_structured_file")
-			changed = true
-		}
-		if !hasTool(persona.AllowedTools, "patch_structured_file") {
-			persona.AllowedTools = append(persona.AllowedTools, "patch_structured_file")
-			changed = true
-		}
-
-		if changed {
-			legacyCustomPersonaWarningOnce.Do(func() {
-				log.Printf("[WARN] Custom persona '%s' has write_file but not write_structured_file; auto-adding structured file tools. Consider explicitly listing them in your config.", persona.ID)
-			})
-			config.SubagentTypes[id] = persona
-		}
-	}
-}
-
-func hasAnyTool(tools []string, candidates ...string) bool {
-	for _, candidate := range candidates {
-		if hasTool(tools, candidate) {
-			return true
-		}
-	}
-	return false
-}
-
-func hasTool(tools []string, candidate string) bool {
-	for _, tool := range tools {
-		if strings.TrimSpace(tool) == candidate {
-			return true
-		}
-	}
-	return false
-}
-
-// toolSetsEqual returns true if two tool lists contain the same set of tools,
-// regardless of ordering. Whitespace is trimmed from each entry before comparison.
-func toolSetsEqual(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	set := make(map[string]struct{}, len(a))
-	for _, t := range a {
-		set[strings.TrimSpace(t)] = struct{}{}
-	}
-	for _, t := range b {
-		if _, ok := set[strings.TrimSpace(t)]; !ok {
-			return false
-		}
-	}
-	return true
+	return &result
 }
 
 func defaultSubagentTypes() map[string]SubagentType {
@@ -2378,20 +2246,22 @@ func defaultSubagentTypes() map[string]SubagentType {
 	for id, definition := range definitions {
 		autoApprove := convertAutoApproveRules(definition.AutoApproveRules)
 		types[normalizePersonaID(id)] = SubagentType{
-			ID:               normalizePersonaID(definition.ID),
-			Name:             definition.Name,
-			Description:      definition.Description,
-			Provider:         definition.Provider,
-			Model:            definition.Model,
-			SystemPrompt:     definition.SystemPrompt,
-			SystemPromptText: definition.SystemPromptText,
-			SystemPromptAppend: definition.SystemPromptAppend,
-			AllowedTools:     append([]string{}, definition.AllowedTools...),
-			Aliases:          append([]string{}, definition.Aliases...),
-			Enabled:          definition.Enabled,
-			LocalOnly:        definition.LocalOnly,
-			Delegatable:      definition.Delegatable,
-			AutoApproveRules: autoApprove,
+			ID:                     normalizePersonaID(definition.ID),
+			Name:                   definition.Name,
+			Description:            definition.Description,
+			Provider:               definition.Provider,
+			Model:                  definition.Model,
+			SystemPrompt:           definition.SystemPrompt,
+			SystemPromptText:       definition.SystemPromptText,
+			SystemPromptAppend:     definition.SystemPromptAppend,
+			AllowedTools:           append([]string{}, definition.AllowedTools...),
+			Aliases:                append([]string{}, definition.Aliases...),
+			Enabled:                definition.Enabled,
+			LocalOnly:              definition.LocalOnly,
+			Delegatable:            definition.Delegatable,
+			AutoApproveRules:       autoApprove,
+			Capabilities:           append([]string{}, definition.Capabilities...),
+			CanSpawnNonDelegatable: append([]string{}, definition.CanSpawnNonDelegatable...),
 		}
 	}
 

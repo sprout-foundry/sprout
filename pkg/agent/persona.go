@@ -5,7 +5,6 @@ import (
 	"sort"
 	"strings"
 
-	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/personas"
 )
@@ -235,7 +234,7 @@ func (a *Agent) GetPersonaProviderModel(personaID string) (string, string, error
 func (a *Agent) GetAvailableToolNames() []string {
 	tools := a.getOptimizedToolDefinitions(nil)
 	if len(tools) == 0 {
-		tools = api.GetToolDefinitions()
+		tools = BuildToolDefinitions()
 	}
 
 	names := make([]string, 0, len(tools))

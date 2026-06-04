@@ -149,8 +149,23 @@ func TestElevationBypassesFilesystemGate(t *testing.T) {
 		t.Fatal("ElevateSessionToPermissive should set IsSessionElevated = true")
 	}
 
-	// External path: should auto-approve under elevation.
-	extDir := t.TempDir()
+	// External path: must NOT land under any prefix ClassifyPathAccess
+	// treats as Sensitive (/var, /private/var, /etc, /usr, …).
+	// t.TempDir() returns /var/folders/... on macOS, which is Sensitive
+	// — so we build the path under $HOME instead. The test agent's
+	// effective CWD is also under $HOME, so the home-but-off-CWD
+	// "sensitive" branch doesn't trip either, leaving the path
+	// classified as External.
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("UserHomeDir: %v", err)
+	}
+	extDir, err := os.MkdirTemp(home, "sprout-elevation-test-")
+	if err != nil {
+		t.Fatalf("MkdirTemp in home: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(extDir) })
+
 	extPath := filepath.Join(extDir, "outside-workspace", "file.txt")
 	if err := os.MkdirAll(filepath.Dir(extPath), 0o755); err != nil {
 		t.Fatal(err)

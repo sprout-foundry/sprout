@@ -305,7 +305,7 @@ func argsFromPayload(payload map[string]interface{}) map[string]interface{} {
 //   - run_subagent with prompt → "run_subagent [task]"
 func buildDisplayName(toolName string, payload map[string]interface{}) string {
 	switch toolName {
-	case "read_file", "write_file", "edit_file", "write_structured_file", "patch_structured_file", "read_memory":
+	case "read_file", "write_file", "edit_file", "write_structured_file", "patch_structured_file":
 		if path, ok := payload["path"].(string); ok && path != "" {
 			return fmt.Sprintf("%s %s", toolName, path)
 		}
@@ -384,11 +384,9 @@ func buildDisplayName(toolName string, payload map[string]interface{}) string {
 		if skillID, ok := payload["skill_id"].(string); ok && skillID != "" {
 			return fmt.Sprintf("%s %s", toolName, skillID)
 		}
-	case "add_memory":
-		if name, ok := payload["name"].(string); ok && name != "" {
-			return fmt.Sprintf("%s %s", toolName, name)
-		}
-	case "delete_memory":
+	case "manage_memory":
+		// Surface the affected memory name for add/read/delete; for list/search
+		// fall through to the bare tool name.
 		if name, ok := payload["name"].(string); ok && name != "" {
 			return fmt.Sprintf("%s %s", toolName, name)
 		}

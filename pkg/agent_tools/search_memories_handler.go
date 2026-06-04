@@ -323,6 +323,6 @@ func formatMemorySearchResults(query string, results []memorySearchResult, thres
 		sb.WriteString("\n")
 	}
 
-	sb.WriteString("Use `read_memory` to view the full content of any memory.")
+	sb.WriteString("Use `manage_memory` with operation=\"read\" to view the full content of any memory.")
 	return sb.String()
 }

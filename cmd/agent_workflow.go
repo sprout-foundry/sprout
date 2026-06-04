@@ -45,6 +45,31 @@ type AgentWorkflowConfig struct {
 	Daemon                   *bool                             `json:"daemon,omitempty"`
 	Budget                   *AgentWorkflowBudgetConfig        `json:"budget,omitempty"`
 	Progress                 *AgentWorkflowProgressConfig      `json:"progress,omitempty"`
+
+	// RequiresApproval controls whether the run_automate agent tool must
+	// surface an intent-confirmation prompt to the user before launching
+	// this workflow. Pointer so we can distinguish "unset" (default: true)
+	// from explicit false. Set to false for workflows that exist
+	// specifically so an agent can invoke them mid-task — e.g. a
+	// validation workflow referenced from AGENTS.md that the model must
+	// run before considering work done. Anyone with workflow-file access
+	// can flip this, so the security implication should be obvious to a
+	// reader of the JSON.
+	//
+	// Only affects the agent tool path. The CLI (`sprout automate run`)
+	// always prompts unless --yes is passed, because a human at the
+	// keyboard might still fat-finger the wrong workflow.
+	RequiresApproval *bool `json:"requires_approval,omitempty"`
+}
+
+// IsApprovalRequired reports whether the run_automate tool path should
+// surface an intent-confirmation prompt before launching this workflow.
+// Defaults to true when unset.
+func (c *AgentWorkflowConfig) IsApprovalRequired() bool {
+	if c == nil || c.RequiresApproval == nil {
+		return true
+	}
+	return *c.RequiresApproval
 }
 
 // AgentWorkflowBudgetConfig caps the total USD spend of a workflow run

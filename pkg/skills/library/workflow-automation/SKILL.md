@@ -258,10 +258,37 @@ Example shell step (script file):
 | `file_exists` | steps | Only run if these files exist | Conditional execution |
 | `file_not_exists` | steps | Only run if these files DON'T exist | Conditional execution |
 | `dry_run` | initial, steps | Preview only, don't make changes | Useful for testing |
+| `requires_approval` | top-level | Whether the `run_automate` agent tool surfaces a user prompt before launching | `true` (default) for human-initiated workflows; `false` ONLY for agent-runnable validation workflows referenced from AGENTS.md |
 | `budget.usd` | top-level | Hard cap on total USD spend across primary + all subagents | Always set for autonomous runs — autonomous workflows without a budget can burn unlimited dollars |
 | `budget.warn_at` | top-level | Fractional thresholds (0–1] that emit a stdout warning when crossed | Defaults to `[0.5, 0.8]` if omitted |
 | `budget.on_exceed` | top-level | What happens when the cap is reached | `truncate` (default) — the run finishes the current LLM response then stops |
 | `progress.heartbeat_seconds` | top-level | Print `[budget] $X of $Y · iter N · elapsed Tm` every N seconds | Default 600s when a budget is set; set to a smaller value for tighter visibility on long runs |
+
+#### Auto-Approval for Agent-Runnable Workflows
+
+By default every `run_automate` call surfaces a confirmation prompt to the user. For workflows that exist *specifically* so an agent can invoke them mid-task — typically a validation/check workflow referenced from `AGENTS.md` with instructions like "run validate.json before considering work done" — set `requires_approval: false` so the agent can fire it without interrupting the user.
+
+```json
+{
+  "description": "Validates the build and runs the test suite.",
+  "requires_approval": false,
+  "continue_on_error": false,
+  "initial": { ... }
+}
+```
+
+**Behavior:**
+- Agent tool path (`run_automate`): no prompt; the workflow starts immediately.
+- CLI path (`sprout automate run`): still prompts (humans can still fat-finger). Use `--yes` to skip.
+- The CLI overview displays a prominent `⚠ requires_approval: false` line so the security implication is visible to anyone reading the JSON.
+
+**When to recommend it:**
+- Validation/lint/test workflows that an agent is *expected* to invoke as part of its workflow per project conventions.
+- Workflows whose failure mode is "wasted compute," not "wasted dollars or destroyed work."
+
+**When NOT to:**
+- Workflows that commit, push, deploy, or modify shared state.
+- Workflows that spawn long autonomous runs with high cost potential — combine with a tight `budget.usd` if you must.
 
 #### Budget (the safety net for autonomous runs)
 

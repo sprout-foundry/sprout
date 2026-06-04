@@ -550,6 +550,13 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		if restoreErr := restoreWorkflowConversationState(chatAgent, workflowConfig, workflowState); restoreErr != nil {
 			return fmt.Errorf("failed to restore workflow conversation state: %w", restoreErr)
 		}
+
+		// Attach the workflow's USD budget and progress heartbeat before
+		// any LLM call. stopBudget MUST be invoked before the agent
+		// shuts down so the heartbeat goroutine exits and callbacks are
+		// cleared. Safe no-op when no budget is configured.
+		stopBudget := attachWorkflowBudget(chatAgent, workflowConfig)
+		defer stopBudget()
 		if workflowConfig != nil && workflowConfig.orchestrationEnabled() {
 			if eventErr := emitWorkflowOrchestrationEvent(workflowConfig, "workflow_run_started", map[string]interface{}{
 				"initial_completed": workflowState.InitialCompleted,

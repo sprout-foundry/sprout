@@ -79,6 +79,26 @@ func (a *Agent) TrackMetricsFromResponse(promptTokens, completionTokens, totalTo
 		}
 	}
 
+	// Fleet USD budget tracking: debit cost to the shared USD budget,
+	// emit threshold-crossing warnings, and set the truncation flag if
+	// the cap is hit. Shares the same truncation flag as the token
+	// budget so the conversation loop has one place to check.
+	if a.fleetUsdBudget != nil && estimatedCost > 0 {
+		spent, crossed, justExceeded := a.fleetUsdBudget.Add(estimatedCost)
+		_, limit := a.fleetUsdBudget.Snapshot()
+		for _, t := range crossed {
+			if cb, ok := a.budgetWarningCallback.Load().(func(threshold, spent, limit float64)); ok && cb != nil {
+				cb(t, spent, limit)
+			}
+		}
+		if justExceeded {
+			a.fleetBudgetTrunc.Store(true)
+			if cb, ok := a.budgetExceededCallback.Load().(func(spent, limit float64)); ok && cb != nil {
+				cb(spent, limit)
+			}
+		}
+	}
+
 	// Calculate cost savings from cached tokens
 	// Assuming cached tokens save approximately 90% of the cost (since they're reused)
 	if cachedTokens > 0 {

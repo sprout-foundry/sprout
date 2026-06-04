@@ -47,6 +47,13 @@ var (
 	agentTraceDatasetDir       string
 	agentPromptStdin           bool
 	agentRiskProfile           string
+	// Workflow budget overrides — populated from CLI flags on `sprout
+	// automate` and applied on top of the workflow JSON's budget block.
+	// Only positive values apply; pass 0 (or omit) to inherit the workflow
+	// JSON. To explicitly disable budget/heartbeat, edit the JSON.
+	agentBudgetUSD        float64
+	agentBudgetWarn       string
+	agentHeartbeatSeconds int
 )
 
 // runStartupPermissionCheck performs a security check on config file permissions
@@ -169,6 +176,9 @@ func init() {
 	agentCmd.Flags().StringVar(&agentSubagentProvider, "subagent-provider", "", "Provider for subagent tools (persists to config; set per-session)")
 	agentCmd.Flags().StringVar(&agentResourceDirectory, "resource-directory", "", "Optional directory (relative to current working directory) to store captured web/vision resources")
 	agentCmd.Flags().StringVar(&agentWorkflowConfig, "workflow-config", "", "JSON file that defines agent workflow steps for non-interactive runs")
+	agentCmd.Flags().Float64Var(&agentBudgetUSD, "budget-usd", 0, "Hard cap on workflow USD spend (overrides workflow JSON budget.usd; 0 = no cap)")
+	agentCmd.Flags().StringVar(&agentBudgetWarn, "budget-warn", "", "Comma-separated warning thresholds as fractions of the budget, e.g. '0.5,0.8'")
+	agentCmd.Flags().IntVar(&agentHeartbeatSeconds, "heartbeat", 0, "Print [budget] progress every N seconds during the run (overrides progress.heartbeat_seconds)")
 	agentCmd.Flags().StringVar(&agentTraceDatasetDir, "trace-dataset-dir", "", "Enable dataset trace mode and write to directory (also settable via SPROUT_TRACE_DATASET_DIR env var)")
 	agentCmd.Flags().BoolVar(&agentPromptStdin, "prompt-stdin", false, "Read the prompt from stdin (avoids OS ARG_MAX limits for large prompts)")
 	_ = agentCmd.RegisterFlagCompletionFunc("persona", completePersonaFlag)

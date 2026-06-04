@@ -35,5 +35,13 @@
     }
   },
   "no_web_ui": true,
-  "persist_runtime_overrides": false
+  "persist_runtime_overrides": false,
+  "budget": {
+    "usd": 10.00,
+    "warn_at": [0.5, 0.8],
+    "on_exceed": "truncate"
+  },
+  "progress": {
+    "heartbeat_seconds": 600
+  }
 }

@@ -7,7 +7,7 @@ _Spec: `roadmap/SP-064-automate-cli-monitoring.md`_
 
 ### Phase 1: BPM Stop primitive
 - [x] SP-064-1a: Add `(*BackgroundProcessManager).Stop(sessionID string, grace time.Duration) error` in `pkg/agent_tools/background_process.go`. SIGINT → grace → SIGTERM → 5s → SIGKILL. Updates status to `exited`. No-op on already-exited sessions.
-- [ ] SP-064-1b: Wire `BPM.Stop` into the `shell_command(stop_background=…)` tool path in `pkg/agent_tools/shell_handler.go` so CLI mode reaches parity with the WebUI TerminalManager.
+- [x] SP-064-1b: Wire `BPM.Stop` into the `shell_command(stop_background=…)` tool path in `pkg/agent_tools/shell_handler.go` so CLI mode reaches parity with the WebUI TerminalManager.
 - [ ] SP-064-1c: Revert the "stop_background not available for automate sessions in CLI mode" caveat in `pkg/skills/library/workflow-automation/SKILL.md`.
 - [x] SP-064-1d: Unit tests — signal sequencing on a controlled sleep subprocess (mock or real with very short grace periods), no-op on exited, error on unknown session.
 

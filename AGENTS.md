@@ -25,53 +25,11 @@ make build-all
 
 ### First-time setup after `git clone`
 
-`pkg/ast/grammars_embed.go` references five tree-sitter grammar blobs via
-`//go:embed`. They are gitignored — the build copies them from the
-gotreesitter module cache. Before opening the project in an IDE (gopls will
-otherwise flag the embed line red), run:
-
-```bash
-make prepare-grammars
-```
-
-The Makefile targets (`build`, `build-wasm`, `test-unit`) depend on this
-automatically, so it only needs to be run manually for IDE/editor support
-on a fresh clone.
+Run `make prepare-grammars` once to populate gitignored tree-sitter blobs (only needed for IDE/gopls; `make build/test-unit` does it automatically).
 
 ## Roadmap
 
-Detailed roadmap specifications live in the `roadmap/` directory. Always read
-these specifications first to ensure alignment with the project direction.
-
-- **SP-001** Agent Core Architecture
-- **SP-002** Configuration, Credentials & Providers
-- **SP-003** Webui & Frontend Architecture
-- **SP-004** Security, Validation & MCP
-- **SP-005** Supporting Systems & Infrastructure
-- **SP-006** Delegate Tool (superseded by SP-059)
-- **SP-007** Extend Configuration (proposed)
-- **SP-008** Reliability Engineering (proposed)
-- **SP-009** Component Library Maturation (proposed)
-- **SP-010** Editor Modernization (proposed)
-- **SP-011** Terminal Parity (proposed)
-- **SP-012** UX Polish (proposed)
-- **SP-013** Agent Settings Management (proposed)
-- **SP-014** Agent Terminal Sessions (active)
-- **SP-015** Cloud Platform Integration (partially implemented)
-- **SP-016** Embedding Index — Duplicate Detection & Semantic Search (proposed)
-- **SP-017** Settings Panel Rework (proposed)
-- **SP-018** Memory System (implemented)
-- **SP-019** Multi-Chat Sessions (implemented)
-- **SP-020** Trace/Dataset Mode (implemented)
-- **SP-021** Self-Review Tool (implemented)
-- **SP-024** Context Management — File Read Optimization (proposed)
-- **SP-049** Shell Permission Overhaul — Tiered Allow-Lists & User Policy (proposed)
-- **SP-054** LSP Language Coverage Expansion (proposed)
-- **SP-055** CLI Pinned Input — Always-On Steering Panel (proposed)
-- **SP-061** Remove Static Embedding Provider (proposed)
-- **SP-059** Subagent ↔ Primary Interaction Overhaul + Delegate Retirement (in progress)
-- **SP-060** Desktop App — Per-Workspace Server Mode (proposed)
-- **SP-063** Real `computer_user` Persona — Mouse/Keyboard/Screenshot Agent (proposed)
+Detailed specifications live in `roadmap/` as `SP-###.md` files. Before making changes that touch a roadmap area, `ls roadmap/` to discover the relevant spec and read it for direction. Treat the spec as authoritative when its scope overlaps your task.
 
 ## Testing
 
@@ -96,12 +54,7 @@ python3 e2e_test_runner.py          # Run E2E tests
   // mutate via mgr.UpdateConfig(...) — never call configuration.Load() directly
   ```
 
-  **NEVER persist `api.TestClientType` ("test") to `LastUsedProvider` or `SubagentProvider`.** That string is an in-process sentinel for mock clients; if it reaches disk, the next CLI run picks it up and `/commit` (plus every chat) silently routes to a no-op mock. Five layers of defense exist to prevent this (see `pkg/configuration/testing_isolation.go`):
-  1. `Save()` / `SaveToDir()` strip `"test"` from `LastUsedProvider` and `SubagentProvider`
-  2. `Load()` / `LoadConfigWithLayers()` self-heal a poisoned file on read
-  3. `NewManagerWithDir` no longer pre-writes `"test"` to fresh test configs
-  4. `NewTestManager(t)` is the idiomatic helper for hermetic tests
-  5. The helper's cleanup verifies the real config file is unchanged at test end and fails loudly if not
+  **NEVER persist `api.TestClientType` ("test") to `LastUsedProvider` or `SubagentProvider`.** That string is an in-process sentinel for mock clients; if it reaches disk, the next CLI run picks it up and `/commit` (plus every chat) silently routes to a no-op mock. Multiple layers of defense exist (see `pkg/configuration/testing_isolation.go`); `NewTestManager(t)` is the idiomatic helper and its cleanup verifies the real config file is unchanged at test end.
 - **Uncommitted test artifacts** — Test files created during a session (e.g., `*_test.go` files exploring codebase structure) must not be left uncommitted in the working tree. Either commit them or remove them before finishing.
 
 ## Git Operations Policy
@@ -333,54 +286,9 @@ Three sources feed the tracker:
    `SubagentResult.FileChanges`, which become the primary-visible
    `files_modified` manifest.
 
-### Performance characteristics
+### Performance, safety filters, configuration
 
-- **Read-only short-circuit**: shell commands proven read-only by
-  `shellLooksReadOnly` skip the walk entirely (~1.7 µs per check).
-  `ls`, `grep`, `cat`, `git status`, etc. — the vast majority of agent
-  shell invocations cost nothing to track.
-- **Stat-based fast path**: when a file's `(size, mtime)` matches the
-  cache, content is reused without re-reading. Typical warm walk on a
-  5000-file workspace: ~10–15 ms. Cold prime: ~30 ms.
-- **Walk budgets**: hard caps at 50,000 files and 500 ms per walk.
-  Trips abort cleanly with a truncation log; deletion records under
-  newly-truncated dirs are suppressed (no false positives).
-- **Adaptive auto-skip**: directories with >1500 immediate child files
-  get added to a per-tracker skip set. Persists to
-  `~/.config/sprout/shell_skip_dirs.json` (workspace-keyed) so the
-  next session in the same workspace starts pre-tuned.
-- **Memory**: bounded at ~32 MiB content cap + ~10 MB map overhead per
-  tracker. Subagents each have their own (multiply by fleet size).
-
-### Safety filters
-
-- Symlinks are never dereferenced (no `/etc/passwd` leaks through
-  workspace links).
-- Binaries skipped via null-byte sniff in the first 8 KiB.
-- Files >1 MiB recorded as path-only entries (manifest reports
-  `recoverable: false`).
-- Pre-baked skip list catches `.git`, `node_modules`, `dist`,
-  `build`, `.sprout`, `.next`, `__pycache__`, `.venv`, etc.
-
-### Configuration
-
-`config.json` accepts a `change_tracking` object:
-
-```json
-{
-  "change_tracking": {
-    "shell_walk_enabled": true,
-    "max_files": 50000,
-    "max_total_bytes": 33554432,
-    "max_duration_ms": 500,
-    "auto_skip_file_count_threshold": 1500
-  }
-}
-```
-
-All fields optional. `shell_walk_enabled: false` disables the walker
-(direct file-tool hooks still work) — useful for users in pathological
-workspaces or who don't care about shell-driven mutation tracking.
+Read-only shell short-circuit, stat-based cache, walk budgets, symlink/binary/>1 MiB skips, skip-list (`.git`, `node_modules`, `dist`, …), and the `change_tracking` config block live in `pkg/agent/change_tracking*.go`. The defaults are tuned for typical workspaces; adjust via `config.json → change_tracking` if you hit a pathological repo.
 
 ### Subagent return contract
 
@@ -406,136 +314,23 @@ out-of-scope.
 
 ## Integration with Sprout Foundry
 
-This repo (`sprout`) integrates with the [`sprout-foundry`](../sprout-foundry) repository. Both repos must stay in sync.
+This repo's binary and packages (`@sprout/events`, `@sprout/ui`) are consumed by [`../sprout-foundry`](../sprout-foundry). Both repos must stay in sync.
 
-### 1. Binary Distribution
+### What's shared
 
-**How it works**:
-- The `sprout` binary is distributed via `scripts/install.sh`
-- sprout-foundry installs it in Docker images using `SPROUT_VERSION` build argument
-- Version is tracked in sprout-foundry's `VERSION` file
+- **`sprout` binary** — distributed via `scripts/install.sh`; sprout-foundry pins to a `SPROUT_VERSION` in its `VERSION` file and installs it in Docker images.
+- **NPM packages** (`packages/events`, `packages/ui`) — sprout-foundry references via `file:../packages/...` paths and consumes their `dist/` outputs. Run `npm run build -w @sprout/events` / `-w @sprout/ui` after changes.
+- **Daemon API** — port 56000 (configurable via `--port` / `--web-port`); env: `SPROUT_BIND_ADDR`, `SPROUT_ALLOWED_ORIGINS`, `SPROUT_TRUSTED_USER_HEADER`; `GET /health` returns `{"status":"ok","port":56000,"uptime":"…"}`; WebSocket for terminal/editor sessions.
+- **Task Runner JSON contract** (`sprout --output-json`) — `{status, query, error?, files_modified, git_diff, metrics: {elapsed_seconds, tokens_in/out, llm_calls, provider, model}}`. Treat field names as a stable contract.
 
-**When to update version**:
-- After releasing a new version (create GitHub release)
-- When sprout-foundry needs new features/fixes
-- Update `SPROUT_VERSION` in sprout-foundry's `VERSION` file
+### When you change any of the above
 
-**Release process**:
-```bash
-# Create new release
-git tag -a v1.3.0 -m "Release 1.3.0"
-git push origin v1.3.0
-# Create GitHub release with binary assets
-```
-
-### 2. NPM Packages
-
-**Packages maintained here** (consumed by sprout-foundry):
-- `packages/events` - Shared events transport (`@sprout/events`)
-- `packages/ui` - Shared React components (`@sprout/ui`)
-
-**Build requirements**:
-- Packages must be built before sprout-foundry can use them
-- Build command: `npm run build` (in package directory or root)
-- Output: `dist/` directory with compiled JS and TypeScript definitions
-
-**When updating packages**:
-1. Make changes in `packages/`
-2. Build: `npm run build`
-3. Test in sprout-foundry: `cd ../sprout-foundry/webui && npm install`
-4. Update version in `packages/*/package.json` if breaking changes
-5. Document changes in `COMPATIBILITY.md` in sprout-foundry
-
-**Version management**:
-- Package versions are in `packages/*/package.json`
-- sprout-foundry references via `file:../packages/...` paths
-- Breaking changes require version bump and compatibility update
-
-### 3. API Contracts
-
-**Daemon API** (sprout runs in workspace containers):
-- Port: 56000 (configurable via `--port` or `--web-port`)
-- Health: `GET /health` → `{"status":"ok","port":56000,"uptime":"..."}`
-- WebSocket: Terminal/editor sessions
-- Environment variables: `SPROUT_BIND_ADDR`, `SPROUT_ALLOWED_ORIGINS`, `SPROUT_TRUSTED_USER_HEADER`
-
-**Task Runner Output** (`sprout --output-json`):
-```json
-{
-  "status": "success|error",
-  "query": "original prompt",
-  "error": "error message (if error)",
-  "files_modified": ["file1", "file2"],
-  "git_diff": "unified diff",
-  "metrics": {
-    "elapsed_seconds": 45.2,
-    "tokens_in": 12500,
-    "tokens_out": 3200,
-    "llm_calls": 4,
-    "provider": "anthropic",
-    "model": "claude-sonnet-4-20250514"
-  }
-}
-```
-
-**When changing contracts**:
-1. Update `COMPATIBILITY.md` in sprout-foundry
-2. Bump version in `VERSION` file (sprout-foundry)
-3. Test integration thoroughly
-4. Document breaking changes
-
-### 4. Testing Integration
-
-**Test locally**:
-```bash
-# Build sprout binary
-go build -o ~/bin/sprout ./cmd/sprout
-
-# Test with sprout-foundry
-cd ../sprout-foundry
-make test-integration  # Requires sprout on PATH
-```
-
-**Verify package integration**:
-```bash
-# Build packages
-cd packages/events && npm run build
-cd ../ui && npm run build
-
-# Test in sprout-foundry
-cd ../sprout-foundry/webui
-npm install
-npm run build  # Should compile with @sprout/* packages
-```
-
-### 5. Common Integration Issues
-
-**"Package dist/ not found"**:
-- Build the package: `cd packages/<name> && npm run build`
-
-**"Cannot find module '@sprout/*'"**:
-- Check if packages are built
-- Reinstall in sprout-foundry: `cd ../sprout-foundry/webui && npm install`
-
-**Version mismatch**:
-- Check sprout-foundry's `VERSION` file
-- Ensure sprout version matches requirements in `COMPATIBILITY.md`
+1. Bump versions where appropriate (package.json for npm changes; `VERSION` for binary changes).
+2. Update `../sprout-foundry/COMPATIBILITY.md`.
+3. Run integration tests: `cd ../sprout-foundry && make test-integration` (requires sprout binary on PATH; Docker Compose at `docker-compose.local.yml` is the recommended setup).
 
 ### Resources
 
-- [Integration Contract Analysis](../sprout-foundry/docs/INTEGRATION_CONTRACT_ANALYSIS.md)
-- [Compatibility Matrix](../sprout-foundry/COMPATIBILITY.md)
-- [sprout-foundry AGENTS.md](../sprout-foundry/AGENTS.md)
-
-### Testing with sprout-foundry
-
-**Recommended**: Use Docker Compose in sprout-foundry repo
-```bash
-cd ../sprout-foundry
-docker compose -f docker-compose.local.yml up --build -d
-
-# Then run integration tests
-make test-integration
-```
-
-**Manual**: If Docker is not available, ensure PostgreSQL is running and sprout binary is on PATH.
+- [`../sprout-foundry/COMPATIBILITY.md`](../sprout-foundry/COMPATIBILITY.md) — version compatibility matrix
+- [`../sprout-foundry/AGENTS.md`](../sprout-foundry/AGENTS.md) — sister-repo agent instructions
+- [`../sprout-foundry/docs/INTEGRATION_CONTRACT_ANALYSIS.md`](../sprout-foundry/docs/INTEGRATION_CONTRACT_ANALYSIS.md) — full contract analysis

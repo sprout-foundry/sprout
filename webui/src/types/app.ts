@@ -120,6 +120,10 @@ export interface AppState {
   askUserRequest: {
     requestId: string;
     question: string;
+    header?: string;
+    options?: Array<{ label: string; value?: string; description?: string }>;
+    multiSelect?: boolean;
+    default?: string;
   } | null;
   modelSelectionRequest: {
     provider: string;

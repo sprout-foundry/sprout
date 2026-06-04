@@ -104,6 +104,29 @@ type ToolEnv struct {
 	// loaded ONNX model and an open HNSW handle, so per-call construction is
 	// both slow and unsafe under concurrent writes.
 	EmbeddingMgr *embedding.EmbeddingManager
+	// AskUser routes ask_user prompts through the active interactive channel
+	// (WebUI dialog when a browser is connected, terminal stdin otherwise).
+	// Nil means the tool must fall back to the CLI prompt directly.
+	AskUser AskUserService
+	// TodoManager is the conversation-scoped todo list. When nil, tools
+	// should fall back to the package-default scope via ManagerForChat("").
+	TodoManager *TodoManager
+	// IsInteractiveCLI reports whether the agent is running with a controlling
+	// TTY (no WebUI client). Tools use this to decide whether to render
+	// rich CLI output (boxes, colors) for the user.
+	IsInteractiveCLI bool
+}
+
+// AskUserService is the interface ask_user-style tools use to drive an
+// interactive prompt. Implementations decide between WebUI routing
+// (event bus + AskUserManager) and CLI stdin fallback based on whether
+// a browser client is connected. ToolEnv.AskUser is populated by the
+// agent at dispatch time so the tool handler doesn't need *Agent.
+type AskUserService interface {
+	// Ask presents req to the user and returns their response. Returns
+	// ErrAskUserNoChannel when no input channel is available so callers
+	// can surface a structured error to the LLM.
+	Ask(ctx context.Context, req AskUserRequest) (string, error)
 }
 
 // ApprovalResult contains the outcome of an approval request.

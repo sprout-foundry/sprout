@@ -15,9 +15,9 @@ func (h *todoWriteHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "todo_write",
 		Description: "Create and manage a structured task list for the current coding session.",
-		Required: []string{"todos"},
+		Required:    []string{"todos"},
 		Parameters: []ParameterDef{
-			{Name: "todos", Type: "array", Required: true, Description: "Array of todo items: [{content, status, activeForm, priority, id}]"},
+			{Name: "todos", Type: "array", Required: true, Description: "Array of todo items: [{content, status, activeForm?, priority?, id?}]. `content` is the imperative task description; `activeForm` is the present-continuous phrasing shown in the activity indicator while in_progress (e.g. content \"Implement X\" → activeForm \"Implementing X\"). `priority` is high/medium/low (visual hint only)."},
 		},
 	}
 }
@@ -75,7 +75,7 @@ func (h *todoWriteHandler) Execute(ctx context.Context, env ToolEnv, args map[st
 	}
 
 	todosRaw := args["todos"].([]interface{})
-	var todos []TodoItem
+	todos := make([]TodoItem, 0, len(todosRaw))
 	for _, todoRaw := range todosRaw {
 		todoMap := todoRaw.(map[string]interface{})
 		todo := TodoItem{}
@@ -91,10 +91,21 @@ func (h *todoWriteHandler) Execute(ctx context.Context, env ToolEnv, args map[st
 		if id, ok := todoMap["id"].(string); ok {
 			todo.ID = id
 		}
-		_ = todoMap["activeForm"] // acknowledged but not stored in TodoItem
+		if activeForm, ok := todoMap["activeForm"].(string); ok {
+			todo.ActiveForm = activeForm
+		}
 		todos = append(todos, todo)
 	}
 
-	result := TodoWrite(todos)
+	mgr := env.TodoManager
+	if mgr == nil {
+		mgr = ManagerForChat("")
+	}
+	result := mgr.Write(todos)
+
+	if env.IsInteractiveCLI && env.OutputWriter != nil {
+		RenderTodosForCLI(env.OutputWriter, todos)
+	}
+
 	return ToolResult{Output: result}, nil
 }

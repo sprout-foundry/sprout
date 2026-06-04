@@ -12,6 +12,7 @@ import type {
   LogEntry,
   TodoStatus,
   TodoItem,
+  TodoPriority,
   FileEdit,
   ToolRef,
 } from '@sprout/ui';
@@ -21,7 +22,7 @@ import type { ChatSession } from '../services/chatSessions';
 // Import canonical types from @sprout/ui
 
 // Re-export for downstream consumers
-export type { Message, ToolExecution, SubagentActivity, LogEntry, TodoStatus, TodoItem, FileEdit, ToolRef };
+export type { Message, ToolExecution, SubagentActivity, LogEntry, TodoStatus, TodoItem, TodoPriority, FileEdit, ToolRef };
 
 // ── WebUI-specific Types ─────────────────────────────────────────────
 
@@ -120,6 +121,10 @@ export interface AppState {
   askUserRequest: {
     requestId: string;
     question: string;
+    header?: string;
+    options?: Array<{ label: string; value?: string; description?: string }>;
+    multiSelect?: boolean;
+    default?: string;
   } | null;
   modelSelectionRequest: {
     provider: string;

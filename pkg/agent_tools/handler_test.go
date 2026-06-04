@@ -557,8 +557,8 @@ func TestAllToolsRegistration(t *testing.T) {
 	if tools == nil {
 		t.Fatal("AllTools() returned nil")
 	}
-	if len(tools) != 35 {
-		t.Fatalf("AllTools() returned %d tools, want 35", len(tools))
+	if len(tools) != 31 {
+		t.Fatalf("AllTools() returned %d tools, want 31", len(tools))
 	}
 
 	expectedNames := map[string]string{
@@ -567,8 +567,6 @@ func TestAllToolsRegistration(t *testing.T) {
 		"fetch_url":               "fetch_url",
 		"search_files":            "search_files",
 		"repo_map":                "repo_map",
-		"list_memories":           "list_memories",
-		"read_memory":             "read_memory",
 		"rollback_changes":        "rollback_changes",
 		"view_history":            "view_history",
 		"list_skills":             "list_skills",
@@ -590,8 +588,6 @@ func TestAllToolsRegistration(t *testing.T) {
 		"commit":                  "commit",
 		"git":                     "git",
 		"activate_skill":          "activate_skill",
-		"add_memory":              "add_memory",
-		"delete_memory":           "delete_memory",
 		"browse_url":              "browse_url",
 		"web_search":              "web_search",
 		"semantic_search":         "semantic_search",
@@ -650,14 +646,6 @@ func TestAllToolsRegistration(t *testing.T) {
 		case "repo_map":
 			if len(def.Required) != 0 {
 				t.Errorf("repo_map Required = %v, want nil/empty", def.Required)
-			}
-		case "list_memories":
-			if len(def.Required) != 0 {
-				t.Errorf("list_memories Required = %v, want nil/empty", def.Required)
-			}
-		case "read_memory":
-			if len(def.Required) != 1 || def.Required[0] != "name" {
-				t.Errorf("read_memory Required = %v, want [\"name\"]", def.Required)
 			}
 		case "rollback_changes":
 			if len(def.Required) != 0 {
@@ -742,14 +730,6 @@ func TestAllToolsRegistration(t *testing.T) {
 		case "activate_skill":
 			if len(def.Required) != 1 || def.Required[0] != "skill_id" {
 				t.Errorf("activate_skill Required = %v, want [\"skill_id\"]", def.Required)
-			}
-		case "add_memory":
-			if len(def.Required) != 2 || def.Required[0] != "name" || def.Required[1] != "content" {
-				t.Errorf("add_memory Required = %v, want [\"name\" \"content\"]", def.Required)
-			}
-		case "delete_memory":
-			if len(def.Required) != 1 || def.Required[0] != "name" {
-				t.Errorf("delete_memory Required = %v, want [\"name\"]", def.Required)
 			}
 		case "browse_url":
 			if len(def.Required) != 1 || def.Required[0] != "url" {

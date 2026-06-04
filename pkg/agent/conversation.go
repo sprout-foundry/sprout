@@ -57,8 +57,11 @@ func (a *Agent) ProcessQueryWithContinuity(userQuery string) (string, error) {
 
 // getOptimizedToolDefinitions returns tool definitions optimized based on conversation context
 func (a *Agent) getOptimizedToolDefinitions(messages []api.Message) []api.Tool {
-	// Start with standard tools
-	tools := api.GetToolDefinitions()
+	// Start with standard tools. Pulls from the canonical registry
+	// (pkg/agent/tool_registrations.go) via BuildToolDefinitions —
+	// the same registry seedRegistry uses, so the LLM and this
+	// optimisation path stay in sync.
+	tools := BuildToolDefinitions()
 
 	// Filter out run_subagent and run_parallel_subagents when
 	// the agent is not allowed to spawn subagents (depth limit or NO_SUBAGENTS env).
@@ -133,10 +136,7 @@ func (a *Agent) getCurrentCustomProvider() (*configuration.CustomProviderConfig,
 var alwaysIncludedTools = []string{
 	"list_skills",
 	"activate_skill",
-	"add_memory",
-	"read_memory",
-	"list_memories",
-	"delete_memory",
+	"manage_memory",
 	"TodoWrite",
 	"TodoRead",
 }

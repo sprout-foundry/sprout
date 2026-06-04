@@ -5,6 +5,7 @@ package webui
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -149,12 +150,26 @@ func TestFindNearestProjectRoot_NoProject(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	root, markers := FindNearestProjectRoot(filepath.Join(dir, "some_dir"))
-	if root != "" {
-		t.Errorf("root = %q, want \"\"", root)
+	// The function walks all the way to the filesystem root, so it can
+	// legitimately discover project markers in an ancestor of our temp dir
+	// (e.g. /tmp/package.json in some CI environments). The invariant we
+	// actually care about is that no directory *inside* our test fixture
+	// gets claimed as a project root, since we put no markers in any of them.
+	startDir := filepath.Join(dir, "some_dir")
+	root, _ := FindNearestProjectRoot(startDir)
+	if root == "" {
+		return // ideal case: ancestors are also clean
 	}
-	if markers != nil {
-		t.Errorf("markers = %v, want nil", markers)
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		t.Fatalf("filepath.Abs(%q): %v", root, err)
+	}
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		t.Fatalf("filepath.Abs(%q): %v", dir, err)
+	}
+	if strings.HasPrefix(abs, absDir+string(filepath.Separator)) || abs == absDir {
+		t.Errorf("root = %q is inside test fixture %q; expected the walk to find markers only outside the fixture or not at all", root, dir)
 	}
 }
 

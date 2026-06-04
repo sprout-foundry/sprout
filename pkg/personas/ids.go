@@ -7,14 +7,27 @@ package personas
 // normalization (lowercase, dashes → underscores). Aliases live in each
 // persona's JSON `aliases` array and are resolved at lookup time, not here.
 const (
-	IDOrchestrator       = "orchestrator"
-	IDGeneral            = "general"
-	IDCoder              = "coder"
-	IDRefactor           = "refactor"
-	IDDebugger           = "debugger"
-	IDTester             = "tester"
-	IDReviewer           = "reviewer"
-	IDResearcher         = "researcher"
-	IDWebScraper         = "web_scraper"
-	IDCoordinator        = "coordinator"
+	IDOrchestrator = "orchestrator"
+	IDGeneral      = "general"
+	IDCoder        = "coder"
+	IDRefactor     = "refactor"
+	IDDebugger     = "debugger"
+	IDTester       = "tester"
+	IDReviewer     = "reviewer"
+	IDResearcher   = "researcher"
+	IDWebScraper   = "web_scraper"
+	IDCoordinator  = "coordinator"
+)
+
+// Canonical persona capability names. A capability is an explicit grant of
+// agency that some personas have and others don't — e.g. the right to perform
+// git writes, or (after SP-NNN spawn_policy) the right to spawn subagents.
+// Use these constants rather than string literals so renames stay typesafe.
+const (
+	// CapabilityGitWrite — persona may perform git write operations (commit,
+	// stage, push) via the dedicated commit tool and shell_command. For the
+	// orchestrator persona this capability is additionally gated by the
+	// AllowOrchestratorGitWrite config flag; for other personas the capability
+	// alone is sufficient.
+	CapabilityGitWrite = "git_write"
 )

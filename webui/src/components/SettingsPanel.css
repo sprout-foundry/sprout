@@ -1106,19 +1106,6 @@
   text-overflow: ellipsis;
 }
 
-.sidebar .persona-mapping-select {
-  flex: 1;
-  min-width: 0;
-  min-height: 26px;
-  padding: 0 var(--space-3);
-  font-size: 11px;
-}
-
-.sidebar .persona-mapping-select:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
 /* ── Sub-tab row layout ────────────────────────────────────── */
 .sidebar .config-item {
   display: flex;

@@ -814,13 +814,6 @@ class ApiService {
     return settingsApi.getSubagentTypes(clientFetch);
   }
 
-  async updateSubagentType(
-    name: string,
-    updates: { provider?: string; model?: string },
-  ): Promise<{ success: boolean; type: SubagentTypeInfo }> {
-    return settingsApi.updateSubagentType(clientFetch, name, updates);
-  }
-
   async getHotkeys(): Promise<HotkeyConfig> {
     return settingsApi.getHotkeys(clientFetch);
   }

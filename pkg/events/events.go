@@ -456,11 +456,57 @@ func SecurityPromptResponseEvent(requestID, response bool) map[string]interface{
 	}
 }
 
-// AskUserRequestEvent creates an ask_user request event for the webui
-func AskUserRequestEvent(requestID, question, clientID string) map[string]interface{} {
+// AskUserRequest mirrors agent_tools.AskUserRequest in shape; declared
+// here to avoid an import cycle (events is a leaf package). The event
+// payload carries these fields verbatim so the WebUI can render
+// options, header, and the multi-select / default affordances.
+type AskUserRequest struct {
+	Question    string                  `json:"question"`
+	Header      string                  `json:"header,omitempty"`
+	Options     []AskUserRequestOption  `json:"options,omitempty"`
+	MultiSelect bool                    `json:"multi_select,omitempty"`
+	Default     string                  `json:"default,omitempty"`
+}
+
+// AskUserRequestOption is a single selectable choice in an ask_user prompt.
+type AskUserRequestOption struct {
+	Label       string `json:"label"`
+	Value       string `json:"value,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
+// AskUserRequestEvent creates an ask_user request event for the webui.
+// Accepts any struct whose JSON shape matches AskUserRequest (the
+// agent_tools package supplies one). Falls through fields onto the
+// flat event payload so existing frontend consumers that only read
+// "question" continue to work.
+func AskUserRequestEvent(requestID string, req AskUserRequest, clientID string) map[string]interface{} {
 	payload := map[string]interface{}{
 		"request_id": requestID,
-		"question":   question,
+		"question":   req.Question,
+	}
+	if req.Header != "" {
+		payload["header"] = req.Header
+	}
+	if len(req.Options) > 0 {
+		opts := make([]map[string]string, len(req.Options))
+		for i, opt := range req.Options {
+			entry := map[string]string{"label": opt.Label}
+			if opt.Value != "" {
+				entry["value"] = opt.Value
+			}
+			if opt.Description != "" {
+				entry["description"] = opt.Description
+			}
+			opts[i] = entry
+		}
+		payload["options"] = opts
+	}
+	if req.MultiSelect {
+		payload["multi_select"] = true
+	}
+	if req.Default != "" {
+		payload["default"] = req.Default
 	}
 	if clientID != "" {
 		payload["client_id"] = clientID

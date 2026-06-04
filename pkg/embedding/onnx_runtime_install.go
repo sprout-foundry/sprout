@@ -19,10 +19,19 @@ import (
 )
 
 // onnxRuntimeVersion is the ONNX Runtime release sprout downloads as the
-// production-grade fallback when no library is pre-staged. The version is
-// chosen to match the ABI yalue/onnxruntime_go v1.30.x compiles against
-// (Microsoft's 1.20.x line). When bumping yalue, re-verify and bump here.
-const onnxRuntimeVersion = "1.20.1"
+// production-grade fallback when no library is pre-staged. The version
+// MUST match the ORT_API_VERSION declared by the yalue/onnxruntime_go
+// header (`onnxruntime_c_api.h`). v1.30.x of that binding sets
+// `#define ORT_API_VERSION 25` (Microsoft's 1.25.x line), so the staged
+// dylib must come from a 1.25.x release. Loading a 1.20.x dylib against
+// this binding fails with "The requested API version [25] is not
+// available, only API versions [1, 20] are supported" — verified on
+// macOS arm64, 2026-06-04.
+//
+// When bumping yalue/onnxruntime_go, re-check the value of
+// ORT_API_VERSION in the binding's header and bump this constant to
+// match the corresponding ORT release.
+const onnxRuntimeVersion = "1.25.1"
 
 // onnxRuntimeReleaseConfig points at one platform-specific archive published
 // on the upstream microsoft/onnxruntime GitHub releases page, plus the

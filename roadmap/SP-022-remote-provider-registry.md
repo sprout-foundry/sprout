@@ -1,9 +1,11 @@
 # SP-022: Remote Provider Registry
 
-**Status**: Proposed
+**Status**: ✅ Implemented
 **Priority**: High
 **Depends on**: None
 **Blocks**: Future provider additions (Mistral, Grok/xAI, Google, etc.)
+
+> **Note (2026-06-04):** This spec is implemented; all phases tracked in TODO.md are checked off. The SP-022 number is also used by `SP-022-workspace-management.md` (still Proposed) — kept as-is to preserve git history references.
 
 ## Problem
 

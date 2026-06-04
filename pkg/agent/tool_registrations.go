@@ -178,9 +178,13 @@ func newDefaultToolRegistry() *ToolRegistry {
 	// ask_user - Ask user a question and wait for response
 	registry.RegisterTool(ToolConfig{
 		Name:        "ask_user",
-		Description: "Ask the user a question and wait for their response. Use this when you need clarification, user input, or a decision that cannot be determined from context alone.",
+		Description: "Ask the user a question and wait for their response. Use this when you need clarification, a decision, or any input that cannot be determined from context alone.\n\n**Prefer `options` when the answer is one of a small set of choices** (Yes/No, A/B/C, file paths to confirm). The WebUI renders them as buttons; the CLI renders a numbered list. The returned value is the option's `value` (falling back to `label`), so choose machine-friendly `value` strings.\n\nSet `multi_select: true` for checkbox-style selection (response is comma-joined values). Set `default` to the option `value` (or freeform string) that should be pre-selected.",
 		Parameters: []ParameterConfig{
-			{"question", "string", true, []string{}, "The question to ask the user (required)"},
+			{"question", "string", true, []string{}, "The question to ask the user. Markdown is supported in the WebUI; the CLI renders plain text."},
+			{"header", "string", false, []string{}, "Short label (≤ 40 chars) shown above the question — useful for categorizing the prompt (e.g., \"Auth method\", \"Approach\", \"Confirm delete\")."},
+			{"options", "array", false, []string{}, "Optional array of selectable choices. Each entry is {label, value?, description?}. When omitted the user types a freeform response."},
+			{"multi_select", "boolean", false, []string{}, "When true, the user may pick multiple options. Response is a comma-joined list of selected values. Default false."},
+			{"default", "string", false, []string{}, "Default response. Should match an option's `value` (or `label`) when `options` is set; otherwise it's the freeform default when the user submits empty input."},
 		},
 		Handler:     handleAskUser,
 		Timeout:     10 * time.Minute, // Match AskUserManager.DefaultAskUserTimeout

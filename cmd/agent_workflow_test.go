@@ -299,6 +299,51 @@ func TestLoadAgentWorkflowConfigValidation(t *testing.T) {
 		}
 	})
 
+	t.Run("requires_approval defaults to true when unset", func(t *testing.T) {
+		path := filepath.Join(dir, "ra-unset.json")
+		content := `{"steps":[{"prompt":"hi"}]}`
+		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+		cfg, err := loadAgentWorkflowConfig(path)
+		if err != nil {
+			t.Fatalf("load: %v", err)
+		}
+		if !cfg.IsApprovalRequired() {
+			t.Fatalf("IsApprovalRequired() should be true when JSON omits the field")
+		}
+	})
+
+	t.Run("requires_approval explicit true", func(t *testing.T) {
+		path := filepath.Join(dir, "ra-true.json")
+		content := `{"requires_approval":true,"steps":[{"prompt":"hi"}]}`
+		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+		cfg, err := loadAgentWorkflowConfig(path)
+		if err != nil {
+			t.Fatalf("load: %v", err)
+		}
+		if !cfg.IsApprovalRequired() {
+			t.Fatalf("IsApprovalRequired() should be true for explicit true")
+		}
+	})
+
+	t.Run("requires_approval explicit false", func(t *testing.T) {
+		path := filepath.Join(dir, "ra-false.json")
+		content := `{"requires_approval":false,"steps":[{"prompt":"hi"}]}`
+		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+		cfg, err := loadAgentWorkflowConfig(path)
+		if err != nil {
+			t.Fatalf("load: %v", err)
+		}
+		if cfg.IsApprovalRequired() {
+			t.Fatalf("IsApprovalRequired() should be false for explicit false")
+		}
+	})
+
 	t.Run("parseBudgetWarnList rejects out-of-range", func(t *testing.T) {
 		if _, err := parseBudgetWarnList("0.5,1.5"); err == nil {
 			t.Fatalf("expected error for 1.5")

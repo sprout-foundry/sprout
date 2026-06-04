@@ -188,6 +188,21 @@ type Summary struct {
 	Initial         *InitialSummary
 	Steps           []StepSummary
 	Budget          *BudgetSummary
+	// RequiresApproval reports whether the run_automate tool path should
+	// prompt the user before launching this workflow. nil means the field
+	// was unset in JSON (defaults to true). Explicit false marks the
+	// workflow as agent-runnable without user confirmation.
+	RequiresApproval *bool
+}
+
+// IsApprovalRequired returns true unless the workflow JSON explicitly
+// declared requires_approval: false. Used by the agent tool path to
+// decide whether to surface the intent-confirmation prompt.
+func (s *Summary) IsApprovalRequired() bool {
+	if s == nil || s.RequiresApproval == nil {
+		return true
+	}
+	return *s.RequiresApproval
 }
 
 // BudgetSummary mirrors the cmd-level budget config in a package that has no
@@ -271,21 +286,23 @@ func Summarize(path string) (*Summary, error) {
 	}
 
 	var raw struct {
-		Description     string      `json:"description,omitempty"`
-		ContinueOnError bool        `json:"continue_on_error,omitempty"`
-		NoWebUI         bool        `json:"no_web_ui,omitempty"`
-		Initial         *initialRaw `json:"initial,omitempty"`
-		Steps           []stepRaw   `json:"steps,omitempty"`
-		Budget          *budgetRaw  `json:"budget,omitempty"`
+		Description      string      `json:"description,omitempty"`
+		ContinueOnError  bool        `json:"continue_on_error,omitempty"`
+		NoWebUI          bool        `json:"no_web_ui,omitempty"`
+		Initial          *initialRaw `json:"initial,omitempty"`
+		Steps            []stepRaw   `json:"steps,omitempty"`
+		Budget           *budgetRaw  `json:"budget,omitempty"`
+		RequiresApproval *bool       `json:"requires_approval,omitempty"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, err
 	}
 
 	out := &Summary{
-		Description:     raw.Description,
-		ContinueOnError: raw.ContinueOnError,
-		NoWebUI:         raw.NoWebUI,
+		Description:      raw.Description,
+		ContinueOnError:  raw.ContinueOnError,
+		NoWebUI:          raw.NoWebUI,
+		RequiresApproval: raw.RequiresApproval,
 	}
 	if raw.Budget != nil && raw.Budget.USD > 0 {
 		out.Budget = &BudgetSummary{

@@ -7,6 +7,7 @@ export type {
   SubagentActivity,
   LogEntry,
   TodoStatus,
+  TodoPriority,
   TodoItem,
   FileEdit,
   LiveLogLine,

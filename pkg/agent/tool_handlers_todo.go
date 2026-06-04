@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
@@ -45,6 +46,9 @@ func handleTodoWrite(ctx context.Context, a *Agent, args map[string]interface{})
 		if id, ok := todoMap["id"].(string); ok {
 			todo.ID = id
 		}
+		if activeForm, ok := todoMap["activeForm"].(string); ok {
+			todo.ActiveForm = activeForm
+		}
 
 		if todo.Content == "" {
 			return "", agenterrors.NewInvalidInputError("each todo requires content", nil)
@@ -71,6 +75,14 @@ func handleTodoWrite(ctx context.Context, a *Agent, args map[string]interface{})
 	a.Logger().Debug("TodoWrite: processing %d todos\n", len(todos))
 	result := a.GetTodoManager().Write(todos)
 	a.Logger().Debug("TodoWrite result: %s\n", result)
+
+	// CLI rendering: when there's no active browser and stdin is a TTY,
+	// surface a bar-wrapped progress block on stdout. The webui path
+	// renders the same data via the todo_update event.
+	if !a.HasActiveWebUIClients() && !isNonInteractive() {
+		tools.RenderTodosForCLI(os.Stdout, todos)
+	}
+
 	return result, nil
 }
 

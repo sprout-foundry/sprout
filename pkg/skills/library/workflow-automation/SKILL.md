@@ -258,6 +258,44 @@ Example shell step (script file):
 | `file_exists` | steps | Only run if these files exist | Conditional execution |
 | `file_not_exists` | steps | Only run if these files DON'T exist | Conditional execution |
 | `dry_run` | initial, steps | Preview only, don't make changes | Useful for testing |
+| `budget.usd` | top-level | Hard cap on total USD spend across primary + all subagents | Always set for autonomous runs — autonomous workflows without a budget can burn unlimited dollars |
+| `budget.warn_at` | top-level | Fractional thresholds (0–1] that emit a stdout warning when crossed | Defaults to `[0.5, 0.8]` if omitted |
+| `budget.on_exceed` | top-level | What happens when the cap is reached | `truncate` (default) — the run finishes the current LLM response then stops |
+| `progress.heartbeat_seconds` | top-level | Print `[budget] $X of $Y · iter N · elapsed Tm` every N seconds | Default 600s when a budget is set; set to a smaller value for tighter visibility on long runs |
+
+#### Budget (the safety net for autonomous runs)
+
+Always recommend setting a USD budget for any autonomous workflow. Without it, an LLM that goes into a loop can burn through hundreds of dollars before anyone notices.
+
+```json
+"budget": {
+  "usd": 10.00,
+  "warn_at": [0.5, 0.8],
+  "on_exceed": "truncate"
+},
+"progress": {
+  "heartbeat_seconds": 600
+}
+```
+
+How it works at runtime:
+- Every LLM response (primary AND every subagent) debits its cost to a shared counter.
+- When the counter crosses each `warn_at` fraction, a one-time `[budget] WARNING` line prints to stdout.
+- When the counter reaches `usd`, the truncation flag fires; the current LLM response finishes, then the workflow stops cleanly (status: `fleet_budget_exceeded`).
+- The heartbeat prints a budget-progress line at the configured interval so the user can see drift in real time.
+
+CLI overrides (apply on top of the JSON):
+- `sprout automate run NAME --budget-usd 5` — tighter cap for one run
+- `sprout automate run NAME --budget-warn 0.5,0.9` — different warning ladder
+- `sprout automate run NAME --heartbeat 120` — more frequent progress lines
+
+Help the user pick a budget by walking them through:
+1. Their primary model's per-Mtok prices (the workflow overview shows these — see "Models that will run" section).
+2. Their subagent models' per-Mtok prices.
+3. The typical iteration count for similar runs they've done before (or a sensible cap like 200 iterations × ~$0.05/iter = $10 as a starting point).
+4. How much they're willing to lose if the workflow misbehaves.
+
+Default suggestion: $5 for first-time runs, $10–20 for known-good workflows. Always lower than the user is comfortable losing.
 
 #### Subagent Overrides (critical for cost control)
 

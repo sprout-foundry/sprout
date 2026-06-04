@@ -3,9 +3,12 @@ package tools
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -13,6 +16,29 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/clihooks"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
+
+// AskUserOption is a single selectable choice in a structured ask_user
+// request. When Value is empty the response carries Label verbatim.
+type AskUserOption struct {
+	Label       string `json:"label"`
+	Value       string `json:"value,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
+// AskUserRequest carries the full prompt payload from the tool layer to
+// the CLI / WebUI renderer. Only Question is required.
+type AskUserRequest struct {
+	Question    string          `json:"question"`
+	Header      string          `json:"header,omitempty"`
+	Options     []AskUserOption `json:"options,omitempty"`
+	MultiSelect bool            `json:"multi_select,omitempty"`
+	Default     string          `json:"default,omitempty"`
+}
+
+// ErrAskUserNoChannel is returned when no input channel is available
+// (no WebUI client, stdin not a TTY / closed). The LLM should treat
+// this as a hard signal to make a decision itself rather than retry.
+var ErrAskUserNoChannel = errors.New("ask_user: no interactive channel available (no WebUI client connected and stdin is not a TTY)")
 
 // AskUserManager coordinates ask_user requests between the agent
 // and the webui. It follows the same pattern as security.ApprovalManager
@@ -71,12 +97,12 @@ func generateAskUserRequestID() string {
 // RequestAskUser publishes an ask_user_request event and blocks until the
 // webui responds, a timeout elapses, the context is cancelled, or the event bus is nil.
 // Returns the user's text response.
-func (m *AskUserManager) RequestAskUser(ctx context.Context, eventBus *events.EventBus, question, clientID, userID, chatID string) (string, error) {
+func (m *AskUserManager) RequestAskUser(ctx context.Context, eventBus *events.EventBus, req AskUserRequest, clientID, userID, chatID string) (string, error) {
 	if eventBus == nil {
 		return "", fmt.Errorf("no event bus available")
 	}
 
-	if question == "" {
+	if strings.TrimSpace(req.Question) == "" {
 		return "", fmt.Errorf("empty question provided")
 	}
 
@@ -93,7 +119,7 @@ func (m *AskUserManager) RequestAskUser(ctx context.Context, eventBus *events.Ev
 		m.mu.Unlock()
 	}()
 
-	payload := events.AskUserRequestEvent(requestID, question, clientID)
+	payload := events.AskUserRequestEvent(requestID, toEventRequest(req), clientID)
 	if trimmed := strings.TrimSpace(userID); trimmed != "" {
 		payload["user_id"] = trimmed
 	}
@@ -155,11 +181,31 @@ func (m *AskUserManager) SetTimeout(d time.Duration) {
 	}
 }
 
+// stdinIsTTY reports whether os.Stdin appears to be a terminal we can
+// read from interactively. Returns false when stdin is closed, redirected,
+// or otherwise not a character device — in those cases AskUser would
+// hit EOF immediately and we'd rather surface ErrAskUserNoChannel.
+func stdinIsTTY() bool {
+	fi, err := os.Stdin.Stat()
+	if err != nil {
+		return false
+	}
+	return (fi.Mode() & os.ModeCharDevice) != 0
+}
+
 // AskUser prompts the user with a question and reads input from stdin.
-// This is the legacy CLI-only implementation kept for backward compatibility.
-func AskUser(question string) (string, error) {
-	if question == "" {
+// Renders options as a numbered list when present and accepts either an
+// index, the option label, or the option value as the response.
+//
+// Returns ErrAskUserNoChannel if stdin is not a TTY (background daemon,
+// closed stdin, piped) so callers can distinguish "no input channel"
+// from a transient I/O error.
+func AskUser(req AskUserRequest) (string, error) {
+	if strings.TrimSpace(req.Question) == "" {
 		return "", fmt.Errorf("empty question provided")
+	}
+	if !stdinIsTTY() {
+		return "", ErrAskUserNoChannel
 	}
 	// SP-048 follow-up: stop any active CLI spinner so it doesn't overwrite
 	// the question text on stderr while we render it on stdout.
@@ -171,30 +217,175 @@ func AskUser(question string) (string, error) {
 	// return an empty answer.
 	clihooks.PauseSteer()
 	defer clihooks.ResumeSteer()
-	// Display the prompt
-	fmt.Printf("%s: ", question)
-	// Read user input
+
+	renderCLIPrompt(os.Stdout, req)
+
 	reader := bufio.NewReader(os.Stdin)
 	answer, err := reader.ReadString('\n')
 	if err != nil {
+		if errors.Is(err, io.EOF) {
+			return "", ErrAskUserNoChannel
+		}
 		return "", fmt.Errorf("read user input: %w", err)
 	}
-	// Trim whitespace and newline characters
 	answer = strings.TrimSpace(answer)
-	return answer, nil
+
+	if len(req.Options) == 0 {
+		if answer == "" && req.Default != "" {
+			return req.Default, nil
+		}
+		return answer, nil
+	}
+	resolved, ok := resolveCLIOptionAnswer(answer, req)
+	if !ok {
+		return "", fmt.Errorf("invalid selection %q — expected a number 1-%d, an option label, or one of the option values", answer, len(req.Options))
+	}
+	return resolved, nil
+}
+
+// renderCLIPrompt writes the question and (optionally) the numbered
+// option list to w. Kept on a separate function so the tests can call
+// it against a buffer.
+func renderCLIPrompt(w io.Writer, req AskUserRequest) {
+	const bar = "────────────────────────────────────────────────"
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, bar)
+	if h := strings.TrimSpace(req.Header); h != "" {
+		fmt.Fprintf(w, "  %s\n", h)
+		fmt.Fprintln(w, bar)
+	}
+	fmt.Fprintf(w, "  %s\n", req.Question)
+	if len(req.Options) > 0 {
+		fmt.Fprintln(w)
+		for i, opt := range req.Options {
+			marker := " "
+			value := optionValue(opt)
+			if req.Default != "" && (req.Default == value || req.Default == opt.Label) {
+				marker = "*"
+			}
+			fmt.Fprintf(w, "  %s %d. %s", marker, i+1, opt.Label)
+			if opt.Description != "" {
+				fmt.Fprintf(w, "  — %s", opt.Description)
+			}
+			fmt.Fprintln(w)
+		}
+		fmt.Fprintln(w)
+		if req.MultiSelect {
+			fmt.Fprintln(w, "  Enter numbers separated by commas (e.g. 1,3) or labels.")
+		} else {
+			fmt.Fprintln(w, "  Enter a number, an option label, or your own text.")
+		}
+	}
+	fmt.Fprintln(w, bar)
+	if req.Default != "" {
+		fmt.Fprintf(w, "> [default: %s] ", req.Default)
+	} else {
+		fmt.Fprint(w, "> ")
+	}
+}
+
+func toEventRequest(req AskUserRequest) events.AskUserRequest {
+	out := events.AskUserRequest{
+		Question:    req.Question,
+		Header:      req.Header,
+		MultiSelect: req.MultiSelect,
+		Default:     req.Default,
+	}
+	if len(req.Options) > 0 {
+		out.Options = make([]events.AskUserRequestOption, len(req.Options))
+		for i, opt := range req.Options {
+			out.Options[i] = events.AskUserRequestOption{
+				Label:       opt.Label,
+				Value:       opt.Value,
+				Description: opt.Description,
+			}
+		}
+	}
+	return out
+}
+
+func optionValue(opt AskUserOption) string {
+	if strings.TrimSpace(opt.Value) != "" {
+		return opt.Value
+	}
+	return opt.Label
+}
+
+// resolveCLIOptionAnswer maps the raw user input to an option value (or
+// comma-joined values for multi-select). Returns ok=false if the input
+// doesn't match any option and there is no sensible freeform fallback.
+func resolveCLIOptionAnswer(answer string, req AskUserRequest) (string, bool) {
+	answer = strings.TrimSpace(answer)
+	if answer == "" {
+		if req.Default != "" {
+			return req.Default, true
+		}
+		return "", false
+	}
+
+	if req.MultiSelect {
+		parts := strings.Split(answer, ",")
+		var resolved []string
+		for _, part := range parts {
+			part = strings.TrimSpace(part)
+			if part == "" {
+				continue
+			}
+			v, ok := matchSingleOption(part, req.Options)
+			if !ok {
+				return "", false
+			}
+			resolved = append(resolved, v)
+		}
+		if len(resolved) == 0 {
+			return "", false
+		}
+		return strings.Join(resolved, ","), true
+	}
+
+	if v, ok := matchSingleOption(answer, req.Options); ok {
+		return v, true
+	}
+	// No option matched — treat as freeform text. The schema permits it.
+	return answer, true
+}
+
+func matchSingleOption(token string, options []AskUserOption) (string, bool) {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return "", false
+	}
+	if n, err := strconv.Atoi(token); err == nil {
+		if n >= 1 && n <= len(options) {
+			return optionValue(options[n-1]), true
+		}
+		return "", false
+	}
+	lower := strings.ToLower(token)
+	for _, opt := range options {
+		if strings.EqualFold(opt.Label, token) || strings.EqualFold(optionValue(opt), token) {
+			return optionValue(opt), true
+		}
+	}
+	for _, opt := range options {
+		if strings.HasPrefix(strings.ToLower(opt.Label), lower) {
+			return optionValue(opt), true
+		}
+	}
+	return "", false
 }
 
 // AskUserWithEventBus prompts the user with a question using the event bus
 // for WebUI mode, falling back to stdin for CLI mode.
-func AskUserWithEventBus(ctx context.Context, question string, eventBus *events.EventBus, clientID, userID, chatID string, mgr *AskUserManager) (string, error) {
-	if question == "" {
+func AskUserWithEventBus(ctx context.Context, req AskUserRequest, eventBus *events.EventBus, clientID, userID, chatID string, mgr *AskUserManager) (string, error) {
+	if strings.TrimSpace(req.Question) == "" {
 		return "", fmt.Errorf("empty question provided")
 	}
 
 	// WebUI mode: route through event bus
 	if mgr != nil && eventBus != nil {
-		log.Printf("[ask_user] Routing through event bus: clientID=%q chatID=%q", clientID, chatID)
-		return mgr.RequestAskUser(ctx, eventBus, question, clientID, userID, chatID)
+		log.Printf("[ask_user] Routing through event bus: clientID=%q chatID=%q options=%d", clientID, chatID, len(req.Options))
+		return mgr.RequestAskUser(ctx, eventBus, req, clientID, userID, chatID)
 	}
 
 	if mgr == nil {
@@ -205,5 +396,5 @@ func AskUserWithEventBus(ctx context.Context, question string, eventBus *events.
 	}
 
 	// CLI mode: read from stdin
-	return AskUser(question)
+	return AskUser(req)
 }

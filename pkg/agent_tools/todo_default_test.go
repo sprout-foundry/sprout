@@ -14,9 +14,18 @@ import (
 
 func initDefaultManagerForTest(t *testing.T) {
 	t.Helper()
-	saved := defaultManager
-	defaultManager = NewTodoManager()
-	t.Cleanup(func() { defaultManager = saved })
+	// Replace the default-scope manager in the registry with a fresh one
+	// so each test starts clean. Restored on cleanup to avoid cross-test
+	// contamination.
+	saved := ManagerForChat("")
+	todoRegistryLock.Lock()
+	todoRegistry[""] = NewTodoManager()
+	todoRegistryLock.Unlock()
+	t.Cleanup(func() {
+		todoRegistryLock.Lock()
+		todoRegistry[""] = saved
+		todoRegistryLock.Unlock()
+	})
 }
 
 func TestTodoDefaultRead_InitiallyEmpty(t *testing.T) {
@@ -74,7 +83,7 @@ func TestTodoDefaultWrite_AllCompleted(t *testing.T) {
 	})
 
 	assert.Contains(t, msg, "Todo list updated with 2 items")
-	assert.Contains(t, msg, "ALL COMPLETED ✅")
+	assert.Contains(t, msg, "ALL COMPLETED")
 	assert.Contains(t, msg, "Completed:")
 	assert.NotContains(t, msg, "Remaining:")
 

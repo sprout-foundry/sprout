@@ -10,6 +10,7 @@ import type { QueryProgress } from '../types/app';
 import { ChatFooter, ChatHeader, EmptyChatPanel, MessageItem } from './chat';
 import type { ChatProps, ToolExecution } from './chat/types';
 import CommandInput from './CommandInput';
+import InlineTodoSummary from './InlineTodoSummary';
 import './Chat.css';
 
 function Chat(props: ChatProps): JSX.Element {
@@ -29,7 +30,7 @@ function Chat(props: ChatProps): JSX.Element {
     lastError = null,
     toolExecutions = [],
     queryProgress = null,
-    currentTodos: _currentTodos = [],
+    currentTodos = [],
     subagentActivities = [],
     onToolPillClick,
     onStopProcessing,
@@ -163,6 +164,7 @@ function Chat(props: ChatProps): JSX.Element {
       style={{ '--chat-input-height': `${inputContainerHeight}px` } as CSSProperties}
     >
       <div className="chat-main">
+        <InlineTodoSummary todos={currentTodos} isLoading={isProcessing && currentTodos.length === 0} />
         {showOffline ? (
           <EmptyChatPanel ref={chatContainerRef} showOffline onRetryConnection={onRetryConnection} />
         ) : messages.length === 0 ? (
@@ -203,6 +205,7 @@ function Chat(props: ChatProps): JSX.Element {
                     lastError={lastError}
                     showExpiredSessionRecovery={showExpiredSessionRecovery}
                     handleReloadWithoutSSHPath={handleReloadWithoutSSHPath}
+                    currentTodos={currentTodos}
                   />
                 ),
               }}

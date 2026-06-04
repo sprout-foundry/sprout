@@ -549,6 +549,62 @@ func TestResolvePath(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// Summarize / IsApprovalRequired
+// ---------------------------------------------------------------------------
+
+func TestSummarize_RequiresApprovalDefault(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "default.json")
+	mustWriteFile(t, path, `{"initial":{"prompt":"hi"}}`)
+
+	s, err := Summarize(path)
+	if err != nil {
+		t.Fatalf("Summarize: %v", err)
+	}
+	if !s.IsApprovalRequired() {
+		t.Fatalf("IsApprovalRequired() should default to true when field is absent")
+	}
+	if s.RequiresApproval != nil {
+		t.Fatalf("RequiresApproval field should remain nil when absent in JSON")
+	}
+}
+
+func TestSummarize_RequiresApprovalExplicitFalse(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "explicit-false.json")
+	mustWriteFile(t, path, `{"requires_approval": false, "initial":{"prompt":"hi"}}`)
+
+	s, err := Summarize(path)
+	if err != nil {
+		t.Fatalf("Summarize: %v", err)
+	}
+	if s.IsApprovalRequired() {
+		t.Fatalf("IsApprovalRequired() should be false when explicitly disabled")
+	}
+}
+
+func TestSummarize_RequiresApprovalExplicitTrue(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "explicit-true.json")
+	mustWriteFile(t, path, `{"requires_approval": true, "initial":{"prompt":"hi"}}`)
+
+	s, err := Summarize(path)
+	if err != nil {
+		t.Fatalf("Summarize: %v", err)
+	}
+	if !s.IsApprovalRequired() {
+		t.Fatalf("IsApprovalRequired() should be true when explicitly enabled")
+	}
+}
+
+func TestSummary_IsApprovalRequired_NilSafe(t *testing.T) {
+	var s *Summary
+	if !s.IsApprovalRequired() {
+		t.Fatalf("nil Summary should default to require approval")
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 

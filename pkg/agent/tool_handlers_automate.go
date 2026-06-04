@@ -123,6 +123,25 @@ func (a *Agent) getOrCreateBackgroundProcessManager() *tools.BackgroundProcessMa
 	return a.backgroundProcessManager
 }
 
+// workflowRequiresApproval returns true unless the named workflow's JSON
+// declares requires_approval: false. Used by the security gate to decide
+// whether to bypass the intent-confirmation prompt for run_automate calls.
+//
+// FAIL-SAFE: any error resolving or parsing the workflow returns true so a
+// missing file or malformed JSON can't be used to slip past the prompt.
+func workflowRequiresApproval(workflowName string) bool {
+	dir := automate.Dir()
+	path, err := automate.ResolvePath(dir, workflowName)
+	if err != nil {
+		return true
+	}
+	summary, err := automate.Summarize(path)
+	if err != nil {
+		return true
+	}
+	return summary.IsApprovalRequired()
+}
+
 // normalizeWorkflowKey produces a stable cache key for the in-session approval
 // cache. ResolvePath accepts the workflow name with or without the .json
 // extension (case-insensitive) and both forms resolve to the same file, so the

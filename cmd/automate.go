@@ -390,6 +390,13 @@ func printWorkflowOverview(path, name string) error {
 	printPriceCard(summary)
 	printBudgetLine(summary)
 
+	// Surface auto-approval explicitly so a reader of the JSON sees the
+	// security implication of requires_approval: false.
+	if !summary.IsApprovalRequired() {
+		fmt.Println()
+		console.GlyphWarning.Printf("requires_approval: false — this workflow runs without a confirmation prompt when invoked by an agent.")
+	}
+
 	fmt.Println()
 	console.GlyphWarning.Printf("Heads up: workflows run autonomously in the background and consume tokens until they finish or are stopped.")
 	fmt.Println()

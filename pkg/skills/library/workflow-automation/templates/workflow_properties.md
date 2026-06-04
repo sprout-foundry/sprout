@@ -19,6 +19,7 @@ These properties configure the overall workflow behavior.
 | `web_port` | integer | `0` | Override the web UI port. `0` means use default. |
 | `daemon` | boolean | `false` | If `true`, run as a persistent daemon. |
 | `orchestration` | object | *(none)* | External orchestration config for multi-process coordination. See [Orchestration](#orchestration). |
+| `requires_approval` | boolean | `true` | When `false`, the `run_automate` agent tool launches this workflow without surfacing an intent-confirmation prompt. See [Auto-Approval](#auto-approval). Set only for agent-runnable validation workflows. CLI path (`sprout automate run`) still prompts. |
 | `budget` | object | *(none)* | USD spend cap for the workflow. See [Budget](#budget). **Strongly recommended for autonomous runs.** |
 | `progress` | object | *(none)* | Runtime visibility config. See [Progress](#progress). |
 
@@ -222,6 +223,24 @@ The key insight: **subagents do focused, well-scoped work** that doesn't require
 **Sweet spot**: Models that are good at *following specific instructions* but don't need the *reasoning power* of the primary agent.
 
 ---
+
+## Auto-Approval
+
+By default, every `run_automate` tool call surfaces an intent-confirmation prompt to the user. Workflows designed to be invoked by an agent as part of its expected workflow (e.g. a validation workflow referenced from `AGENTS.md`) can opt out:
+
+```json
+{
+  "requires_approval": false,
+  "description": "Validates the build before considering work done.",
+  ...
+}
+```
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `requires_approval` | boolean | `true` | When `false`, the agent tool path skips the confirmation prompt. CLI path still prompts unless `--yes` is passed. |
+
+**Trade-off:** Anyone with write access to the workflow file can flip this. The CLI overview displays a prominent `⚠ requires_approval: false` line so the security implication is visible to a reader of the JSON. Don't use this for workflows that commit, push, deploy, or have high cost potential — and combine with `budget.usd` if you must.
 
 ## Budget
 

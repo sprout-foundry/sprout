@@ -211,6 +211,22 @@ type Agent struct {
 	fleetBudgetLimit   int64
 	fleetBudgetTrunc   atomic.Bool
 
+	// Fleet USD budget — parallels fleetBudget but in dollars. Set by the
+	// workflow runner from cfg.Budget and propagated to subagents. When
+	// non-nil and limit > 0, each LLM response debits its cost to the
+	// shared budget. Crossing warn thresholds emits stdout/event notices;
+	// hitting the cap sets the same fleetBudgetTrunc flag the token path
+	// uses so the conversation loop stops gracefully in one place.
+	fleetUsdBudget *FleetUsdBudget
+
+	// budgetWarningCallback is invoked when the USD budget first crosses
+	// a configured warning threshold. The function value is stored
+	// atomically so the workflow runner can replace it without locking.
+	budgetWarningCallback atomic.Value // func(threshold, spent, limit float64)
+	// budgetExceededCallback is invoked when the USD budget is first
+	// reached or surpassed. Same atomic-value pattern.
+	budgetExceededCallback atomic.Value // func(spent, limit float64)
+
 }
 
 // InjectWebUIManagers replaces the agent's internal approval and ask-user
@@ -234,7 +250,45 @@ func (a *Agent) SetFleetBudget(tracker *atomic.Int64, limit int64) {
 }
 
 // FleetBudgetExceeded reports whether the fleet budget was exceeded during
-// this agent's execution (mid-run truncation).
+// this agent's execution (mid-run truncation). Returns true if EITHER the
+// token budget or the USD budget tripped — both use the same truncation
+// flag because the downstream behavior is identical.
 func (a *Agent) FleetBudgetExceeded() bool {
 	return a.fleetBudgetTrunc.Load()
+}
+
+// SetFleetUsdBudget attaches a shared USD budget to this agent. The budget
+// is shared by reference, so all agents (primary + subagents) that hold
+// the same pointer debit to the same counter.
+func (a *Agent) SetFleetUsdBudget(b *FleetUsdBudget) {
+	a.fleetUsdBudget = b
+	a.fleetBudgetTrunc.Store(false)
+}
+
+// GetFleetUsdBudget returns the agent's USD budget, or nil if none is set.
+// Used by the SubagentRunner to propagate the same budget to spawned
+// subagents (so the cap is workflow-wide, not per-agent).
+func (a *Agent) GetFleetUsdBudget() *FleetUsdBudget {
+	return a.fleetUsdBudget
+}
+
+// SetBudgetWarningCallback registers a function invoked when the USD budget
+// first crosses each configured warning threshold (fired at most once per
+// threshold). Pass nil to unregister.
+func (a *Agent) SetBudgetWarningCallback(fn func(threshold, spent, limit float64)) {
+	if fn == nil {
+		a.budgetWarningCallback.Store((func(threshold, spent, limit float64))(nil))
+		return
+	}
+	a.budgetWarningCallback.Store(fn)
+}
+
+// SetBudgetExceededCallback registers a function invoked when the USD budget
+// is first reached or surpassed. Pass nil to unregister.
+func (a *Agent) SetBudgetExceededCallback(fn func(spent, limit float64)) {
+	if fn == nil {
+		a.budgetExceededCallback.Store((func(spent, limit float64))(nil))
+		return
+	}
+	a.budgetExceededCallback.Store(fn)
 }

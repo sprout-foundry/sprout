@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -42,6 +43,39 @@ type AgentWorkflowConfig struct {
 	NoWebUI                  *bool                             `json:"no_web_ui,omitempty"`
 	WebPort                  *int                              `json:"web_port,omitempty"`
 	Daemon                   *bool                             `json:"daemon,omitempty"`
+	Budget                   *AgentWorkflowBudgetConfig        `json:"budget,omitempty"`
+	Progress                 *AgentWorkflowProgressConfig      `json:"progress,omitempty"`
+}
+
+// AgentWorkflowBudgetConfig caps the total USD spend of a workflow run
+// (primary agent + every subagent it spawns share the same budget).
+//
+// USD-denominated rather than tokens because mixed-provider workflows
+// route different personas to different price tiers — a token cap that
+// covers an Opus orchestrator would let a DeepSeek coder consume 50×
+// the work for the same budget, defeating the cap.
+type AgentWorkflowBudgetConfig struct {
+	// USD is the hard cap on cumulative cost across the workflow.
+	// <= 0 means no cap.
+	USD float64 `json:"usd,omitempty"`
+	// WarnAt is a list of fractional thresholds (0.0–1.0). When the
+	// cumulative spend first crosses each threshold, a single warning
+	// is emitted to stdout and (when wired) the event bus.
+	// Empty defaults to [0.50, 0.80].
+	WarnAt []float64 `json:"warn_at,omitempty"`
+	// OnExceed controls what happens when USD is reached.
+	// "truncate" (default) sets the truncation flag so the run finishes
+	// the current LLM response and stops gracefully. "stop" is reserved
+	// for future hard-kill behavior; today it's treated like truncate.
+	OnExceed string `json:"on_exceed,omitempty"`
+}
+
+// AgentWorkflowProgressConfig controls runtime visibility of the workflow.
+type AgentWorkflowProgressConfig struct {
+	// HeartbeatSeconds is the interval at which the workflow prints a
+	// progress line ([budget] $X of $Y · iter N · elapsed Tm).
+	// <= 0 disables the heartbeat. Default 600 (10 min) when Budget is set.
+	HeartbeatSeconds int `json:"heartbeat_seconds,omitempty"`
 }
 
 // AgentWorkflowOrchestrationConfig enables external orchestration integration.
@@ -193,6 +227,36 @@ func (c *AgentWorkflowConfig) validate() error {
 		return errors.New("web_port must be >= 0")
 	}
 
+	if c.Budget != nil {
+		if c.Budget.USD < 0 {
+			return errors.New("budget.usd must be >= 0")
+		}
+		for i, t := range c.Budget.WarnAt {
+			if t <= 0 || t > 1 {
+				return fmt.Errorf("budget.warn_at[%d] must be in (0, 1]; got %v", i, t)
+			}
+		}
+		switch strings.TrimSpace(strings.ToLower(c.Budget.OnExceed)) {
+		case "", "truncate", "stop":
+			c.Budget.OnExceed = strings.TrimSpace(strings.ToLower(c.Budget.OnExceed))
+			if c.Budget.OnExceed == "" {
+				c.Budget.OnExceed = "truncate"
+			}
+		default:
+			return fmt.Errorf("budget.on_exceed must be one of: truncate, stop; got %q", c.Budget.OnExceed)
+		}
+		if len(c.Budget.WarnAt) == 0 {
+			c.Budget.WarnAt = []float64{0.50, 0.80}
+		}
+		// Keep warn thresholds sorted ascending so the runtime can scan
+		// them in order without re-sorting on every response.
+		sort.Float64s(c.Budget.WarnAt)
+	}
+
+	if c.Progress != nil && c.Progress.HeartbeatSeconds < 0 {
+		return errors.New("progress.heartbeat_seconds must be >= 0")
+	}
+
 	if c.Initial != nil {
 		c.Initial.Prompt = strings.TrimSpace(c.Initial.Prompt)
 		c.Initial.PromptFile = strings.TrimSpace(c.Initial.PromptFile)
@@ -261,6 +325,55 @@ func applyWorkflowCommandOverrides(cfg *AgentWorkflowConfig) {
 	if cfg.Daemon != nil {
 		daemonMode = *cfg.Daemon
 	}
+
+	// CLI → workflow JSON overrides for budget + heartbeat.
+	// Only positive values override — 0 means "inherit JSON".
+	if agentBudgetUSD > 0 {
+		if cfg.Budget == nil {
+			cfg.Budget = &AgentWorkflowBudgetConfig{}
+		}
+		cfg.Budget.USD = agentBudgetUSD
+	}
+	if strings.TrimSpace(agentBudgetWarn) != "" {
+		thresholds, err := parseBudgetWarnList(agentBudgetWarn)
+		if err == nil && len(thresholds) > 0 {
+			if cfg.Budget == nil {
+				cfg.Budget = &AgentWorkflowBudgetConfig{}
+			}
+			cfg.Budget.WarnAt = thresholds
+		} else if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: ignoring invalid --budget-warn %q: %v\n", agentBudgetWarn, err)
+		}
+	}
+	if agentHeartbeatSeconds > 0 {
+		if cfg.Progress == nil {
+			cfg.Progress = &AgentWorkflowProgressConfig{}
+		}
+		cfg.Progress.HeartbeatSeconds = agentHeartbeatSeconds
+	}
+}
+
+// parseBudgetWarnList parses a comma-separated list of fractional thresholds
+// (e.g. "0.5,0.8") into a sorted []float64. Each value must be in (0, 1].
+func parseBudgetWarnList(s string) ([]float64, error) {
+	parts := strings.Split(s, ",")
+	out := make([]float64, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		var v float64
+		if _, err := fmt.Sscanf(p, "%f", &v); err != nil {
+			return nil, fmt.Errorf("invalid threshold %q: %w", p, err)
+		}
+		if v <= 0 || v > 1 {
+			return nil, fmt.Errorf("threshold %v must be in (0, 1]", v)
+		}
+		out = append(out, v)
+	}
+	sort.Float64s(out)
+	return out, nil
 }
 
 func (r *AgentWorkflowRuntime) validate(prefix string) error {
@@ -1235,6 +1348,91 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 	}
 
 	return false, firstErr
+}
+
+// attachWorkflowBudget wires the workflow's USD budget and progress
+// heartbeat onto the agent. Returns a stop function the caller MUST
+// invoke before the agent shuts down — it unregisters callbacks and
+// stops the heartbeat goroutine. If no budget is configured the
+// returned stop is a no-op and no goroutines are started.
+//
+// Heartbeat semantics:
+//   - Default cadence: 600s when a budget is configured, off otherwise.
+//   - cfg.Progress.HeartbeatSeconds > 0 overrides the cadence.
+//   - The heartbeat prints to stdout in a single line so it composes with
+//     existing console output without clobbering it.
+func attachWorkflowBudget(chatAgent *agent.Agent, cfg *AgentWorkflowConfig) (stop func()) {
+	if chatAgent == nil || cfg == nil || cfg.Budget == nil || cfg.Budget.USD <= 0 {
+		// Heartbeat without a budget is still meaningful, but only if
+		// explicitly requested. Most workflows want budget+heartbeat as
+		// a pair, so skip the goroutine when neither is set.
+		if chatAgent != nil && cfg != nil && cfg.Progress != nil && cfg.Progress.HeartbeatSeconds > 0 {
+			return startWorkflowHeartbeat(chatAgent, time.Duration(cfg.Progress.HeartbeatSeconds)*time.Second)
+		}
+		return func() {}
+	}
+
+	budget := agent.NewFleetUsdBudget(cfg.Budget.USD, cfg.Budget.WarnAt)
+	chatAgent.SetFleetUsdBudget(budget)
+
+	chatAgent.SetBudgetWarningCallback(func(threshold, spent, limit float64) {
+		fmt.Printf("\n[budget] WARNING — crossed %.0f%% threshold: $%.2f of $%.2f spent\n",
+			threshold*100, spent, limit)
+	})
+	chatAgent.SetBudgetExceededCallback(func(spent, limit float64) {
+		fmt.Printf("\n[budget] CAP HIT — $%.2f of $%.2f spent; workflow will truncate after the current LLM response.\n",
+			spent, limit)
+	})
+
+	heartbeatSeconds := 600
+	if cfg.Progress != nil && cfg.Progress.HeartbeatSeconds > 0 {
+		heartbeatSeconds = cfg.Progress.HeartbeatSeconds
+	}
+	stopHeartbeat := startWorkflowHeartbeat(chatAgent, time.Duration(heartbeatSeconds)*time.Second)
+
+	return func() {
+		stopHeartbeat()
+		chatAgent.SetBudgetWarningCallback(nil)
+		chatAgent.SetBudgetExceededCallback(nil)
+	}
+}
+
+// startWorkflowHeartbeat starts a goroutine that prints a one-line budget
+// progress message to stdout on the given interval, until the returned
+// stop function is called. Safe to call with a nil agent (returns a noop).
+func startWorkflowHeartbeat(chatAgent *agent.Agent, interval time.Duration) func() {
+	if chatAgent == nil || interval <= 0 {
+		return func() {}
+	}
+	stop := make(chan struct{})
+	started := time.Now()
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-ticker.C:
+				spent, limit := 0.0, 0.0
+				if b := chatAgent.GetFleetUsdBudget(); b != nil {
+					spent, limit = b.Snapshot()
+				} else {
+					spent = chatAgent.GetTotalCost()
+				}
+				iter := chatAgent.GetCurrentIteration()
+				elapsed := time.Since(started).Round(time.Second)
+				if limit > 0 {
+					fmt.Printf("\n[budget] $%.2f of $%.2f · iter %d · elapsed %s\n",
+						spent, limit, iter, elapsed)
+				} else {
+					fmt.Printf("\n[budget] $%.2f (no cap) · iter %d · elapsed %s\n",
+						spent, iter, elapsed)
+				}
+			}
+		}
+	}()
+	return func() { close(stop) }
 }
 
 // runWorkflowShellStep executes a shell command step. Stdout and stderr are

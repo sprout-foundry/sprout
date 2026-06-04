@@ -19,6 +19,8 @@ These properties configure the overall workflow behavior.
 | `web_port` | integer | `0` | Override the web UI port. `0` means use default. |
 | `daemon` | boolean | `false` | If `true`, run as a persistent daemon. |
 | `orchestration` | object | *(none)* | External orchestration config for multi-process coordination. See [Orchestration](#orchestration). |
+| `budget` | object | *(none)* | USD spend cap for the workflow. See [Budget](#budget). **Strongly recommended for autonomous runs.** |
+| `progress` | object | *(none)* | Runtime visibility config. See [Progress](#progress). |
 
 ---
 
@@ -220,6 +222,51 @@ The key insight: **subagents do focused, well-scoped work** that doesn't require
 **Sweet spot**: Models that are good at *following specific instructions* but don't need the *reasoning power* of the primary agent.
 
 ---
+
+## Budget
+
+USD spend cap that crosses the primary agent and every subagent it spawns. The most important safety net for autonomous workflows — without it, an agent in a loop can burn unlimited dollars.
+
+```json
+"budget": {
+  "usd": 10.00,
+  "warn_at": [0.5, 0.8],
+  "on_exceed": "truncate"
+}
+```
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `usd` | number | *(required)* | Hard cap on cumulative USD spend across the workflow. `0` or omitted means no cap. |
+| `warn_at` | number[] | `[0.5, 0.8]` | Fractional thresholds in `(0, 1]`. Each crossing emits a one-time `[budget] WARNING` line to stdout. Sorted ascending automatically. |
+| `on_exceed` | string | `"truncate"` | What happens when `usd` is reached. `truncate` finishes the current LLM response then stops gracefully. `stop` is reserved for future hard-kill behavior (currently behaves like truncate). |
+
+**Runtime behavior:**
+- Every LLM response (primary and subagent) debits its cost to a shared counter.
+- Threshold warnings fire at most once each.
+- When the cap is reached, the truncation flag is set; the agent finishes its current response, then the workflow terminates with status `fleet_budget_exceeded`.
+- The cost-tracking that drives this is the same cost data used to render `GetTotalCost()` in the agent state — pricing accuracy depends on the provider returning structured usage.
+
+**CLI overrides** (override the workflow JSON for a single run):
+
+```bash
+sprout automate run NAME --budget-usd 5
+sprout automate run NAME --budget-warn 0.5,0.9
+```
+
+## Progress
+
+```json
+"progress": {
+  "heartbeat_seconds": 600
+}
+```
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `heartbeat_seconds` | integer | `600` when a budget is set, off otherwise | Interval at which a single-line `[budget] $X of $Y · iter N · elapsed Tm` is printed to stdout. `0` disables. |
+
+CLI override: `sprout automate run NAME --heartbeat 120` for tighter visibility.
 
 ## Orchestration
 

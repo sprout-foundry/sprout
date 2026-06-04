@@ -195,6 +195,85 @@ func TestGetLLMCallCount(t *testing.T) {
 	})
 }
 
+func TestTrackMetricsFromResponse_UsdBudgetWiring(t *testing.T) {
+	t.Parallel()
+
+	t.Run("debits cost to attached USD budget and fires warning callback", func(t *testing.T) {
+		a := newMetricsTestAgent(t)
+		budget := NewFleetUsdBudget(10.0, []float64{0.5, 0.8})
+		a.SetFleetUsdBudget(budget)
+
+		var warnings []float64
+		a.SetBudgetWarningCallback(func(threshold, spent, limit float64) {
+			warnings = append(warnings, threshold)
+		})
+
+		// Two responses totaling $6 — crosses the 50% threshold once.
+		a.TrackMetricsFromResponse(100, 50, 150, 3.0, 0)
+		a.TrackMetricsFromResponse(100, 50, 150, 3.0, 0)
+
+		spent, _ := budget.Snapshot()
+		if spent < 5.99 || spent > 6.01 {
+			t.Fatalf("expected $6 spent, got %v", spent)
+		}
+		if len(warnings) != 1 || warnings[0] != 0.5 {
+			t.Fatalf("expected one 50%% warning, got %v", warnings)
+		}
+	})
+
+	t.Run("hitting cap sets the truncation flag and fires exceeded callback", func(t *testing.T) {
+		a := newMetricsTestAgent(t)
+		budget := NewFleetUsdBudget(5.0, nil)
+		a.SetFleetUsdBudget(budget)
+
+		var exceededCalls int
+		a.SetBudgetExceededCallback(func(spent, limit float64) {
+			exceededCalls++
+		})
+
+		a.TrackMetricsFromResponse(100, 50, 150, 6.0, 0)
+
+		if !a.FleetBudgetExceeded() {
+			t.Fatalf("FleetBudgetExceeded should be true after USD cap hit")
+		}
+		if exceededCalls != 1 {
+			t.Fatalf("exceeded callback should fire exactly once, got %d", exceededCalls)
+		}
+
+		// Subsequent debit should NOT re-fire the exceeded callback.
+		a.TrackMetricsFromResponse(100, 50, 150, 1.0, 0)
+		if exceededCalls != 1 {
+			t.Fatalf("exceeded callback should not re-fire, got %d", exceededCalls)
+		}
+	})
+
+	t.Run("zero cost responses do not trigger callbacks", func(t *testing.T) {
+		a := newMetricsTestAgent(t)
+		budget := NewFleetUsdBudget(10.0, []float64{0.5})
+		a.SetFleetUsdBudget(budget)
+
+		var warnings int
+		a.SetBudgetWarningCallback(func(threshold, spent, limit float64) { warnings++ })
+
+		a.TrackMetricsFromResponse(100, 50, 150, 0, 0)
+
+		if warnings != 0 {
+			t.Fatalf("zero-cost response should not fire warnings, got %d", warnings)
+		}
+		if a.FleetBudgetExceeded() {
+			t.Fatalf("zero-cost response should not exceed budget")
+		}
+	})
+
+	t.Run("no budget attached is a no-op", func(t *testing.T) {
+		a := newMetricsTestAgent(t)
+		a.TrackMetricsFromResponse(100, 50, 150, 100.0, 0)
+		if a.FleetBudgetExceeded() {
+			t.Fatalf("no budget should mean no truncation")
+		}
+	})
+}
+
 func TestTrackMetricsFromResponse(t *testing.T) {
 	t.Parallel()
 

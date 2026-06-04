@@ -227,6 +227,87 @@ func TestLoadAgentWorkflowConfigValidation(t *testing.T) {
 		}
 	})
 
+	t.Run("budget usd negative is rejected", func(t *testing.T) {
+		path := filepath.Join(dir, "budget-usd-neg.json")
+		content := `{"budget":{"usd":-1},"steps":[{"prompt":"hi"}]}`
+		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+			t.Fatalf("write config: %v", err)
+		}
+		if _, err := loadAgentWorkflowConfig(path); err == nil {
+			t.Fatalf("expected validation error for negative budget.usd")
+		}
+	})
+
+	t.Run("budget warn_at out of range is rejected", func(t *testing.T) {
+		path := filepath.Join(dir, "budget-warn-range.json")
+		content := `{"budget":{"usd":10,"warn_at":[0.5,1.5]},"steps":[{"prompt":"hi"}]}`
+		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+			t.Fatalf("write config: %v", err)
+		}
+		if _, err := loadAgentWorkflowConfig(path); err == nil {
+			t.Fatalf("expected validation error for warn_at > 1")
+		}
+	})
+
+	t.Run("budget on_exceed invalid is rejected", func(t *testing.T) {
+		path := filepath.Join(dir, "budget-on-exceed.json")
+		content := `{"budget":{"usd":10,"on_exceed":"explode"},"steps":[{"prompt":"hi"}]}`
+		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+			t.Fatalf("write config: %v", err)
+		}
+		if _, err := loadAgentWorkflowConfig(path); err == nil {
+			t.Fatalf("expected validation error for unknown on_exceed value")
+		}
+	})
+
+	t.Run("budget defaults warn_at and on_exceed", func(t *testing.T) {
+		path := filepath.Join(dir, "budget-defaults.json")
+		content := `{"budget":{"usd":10},"steps":[{"prompt":"hi"}]}`
+		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+			t.Fatalf("write config: %v", err)
+		}
+		cfg, err := loadAgentWorkflowConfig(path)
+		if err != nil {
+			t.Fatalf("load: %v", err)
+		}
+		if cfg.Budget.OnExceed != "truncate" {
+			t.Fatalf("on_exceed default = %q, want truncate", cfg.Budget.OnExceed)
+		}
+		if len(cfg.Budget.WarnAt) != 2 || cfg.Budget.WarnAt[0] != 0.5 || cfg.Budget.WarnAt[1] != 0.8 {
+			t.Fatalf("warn_at default = %v, want [0.5, 0.8]", cfg.Budget.WarnAt)
+		}
+	})
+
+	t.Run("progress heartbeat negative is rejected", func(t *testing.T) {
+		path := filepath.Join(dir, "progress-neg.json")
+		content := `{"progress":{"heartbeat_seconds":-1},"steps":[{"prompt":"hi"}]}`
+		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+			t.Fatalf("write config: %v", err)
+		}
+		if _, err := loadAgentWorkflowConfig(path); err == nil {
+			t.Fatalf("expected validation error for negative heartbeat_seconds")
+		}
+	})
+
+	t.Run("parseBudgetWarnList valid", func(t *testing.T) {
+		thresholds, err := parseBudgetWarnList("0.5, 0.8")
+		if err != nil {
+			t.Fatalf("parse: %v", err)
+		}
+		if len(thresholds) != 2 || thresholds[0] != 0.5 || thresholds[1] != 0.8 {
+			t.Fatalf("got %v, want [0.5, 0.8]", thresholds)
+		}
+	})
+
+	t.Run("parseBudgetWarnList rejects out-of-range", func(t *testing.T) {
+		if _, err := parseBudgetWarnList("0.5,1.5"); err == nil {
+			t.Fatalf("expected error for 1.5")
+		}
+		if _, err := parseBudgetWarnList("0,0.5"); err == nil {
+			t.Fatalf("expected error for 0")
+		}
+	})
+
 	t.Run("orchestration defaults", func(t *testing.T) {
 		path := filepath.Join(dir, "orchestration-defaults.json")
 		content := `{

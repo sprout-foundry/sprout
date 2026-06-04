@@ -19,8 +19,11 @@ import (
 )
 
 var (
-	automateDir       string
-	automateAssumeYes bool
+	automateDir              string
+	automateAssumeYes        bool
+	automateBudgetUSD        float64
+	automateBudgetWarn       string
+	automateHeartbeatSeconds int
 )
 
 func init() {
@@ -29,6 +32,9 @@ func init() {
 
 	automateCmd.PersistentFlags().StringVar(&automateDir, "dir", "", "Workflow directory (default: ./automate)")
 	automateCmd.PersistentFlags().BoolVarP(&automateAssumeYes, "yes", "y", false, "Skip the confirmation prompt before starting the workflow")
+	automateCmd.PersistentFlags().Float64Var(&automateBudgetUSD, "budget-usd", 0, "Hard cap on workflow USD spend (overrides workflow JSON budget.usd; 0 = no cap)")
+	automateCmd.PersistentFlags().StringVar(&automateBudgetWarn, "budget-warn", "", "Comma-separated warning thresholds as fractions of the budget, e.g. '0.5,0.8'")
+	automateCmd.PersistentFlags().IntVar(&automateHeartbeatSeconds, "heartbeat", 0, "Print [budget] progress every N seconds during the run (overrides workflow JSON progress.heartbeat_seconds)")
 }
 
 var automateCmd = &cobra.Command{
@@ -292,7 +298,18 @@ func runWorkflowByPath(path string) error {
 		return fmt.Errorf("failed to resolve sprout binary: %w", err)
 	}
 
-	cmd := exec.Command(execPath, "agent", "--workflow-config", path, "--skip-prompt", "--no-web-ui")
+	args := []string{"agent", "--workflow-config", path, "--skip-prompt", "--no-web-ui"}
+	if automateBudgetUSD > 0 {
+		args = append(args, "--budget-usd", fmt.Sprintf("%g", automateBudgetUSD))
+	}
+	if strings.TrimSpace(automateBudgetWarn) != "" {
+		args = append(args, "--budget-warn", automateBudgetWarn)
+	}
+	if automateHeartbeatSeconds > 0 {
+		args = append(args, "--heartbeat", fmt.Sprintf("%d", automateHeartbeatSeconds))
+	}
+
+	cmd := exec.Command(execPath, args...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -370,10 +387,132 @@ func printWorkflowOverview(path, name string) error {
 		fmt.Printf("  • Flags: %s\n", strings.Join(flags, ", "))
 	}
 
+	printPriceCard(summary)
+	printBudgetLine(summary)
+
 	fmt.Println()
 	console.GlyphWarning.Printf("Heads up: workflows run autonomously in the background and consume tokens until they finish or are stopped.")
 	fmt.Println()
 	return nil
+}
+
+// printPriceCard renders the provider/model rates for the initial agent and
+// each subagent persona that will run. It walks pricing for every model
+// named in the workflow so the user sees the actual rate card before
+// approving the run. Unknown rates are shown explicitly as "unknown" — we
+// never fabricate a price. Followed by a footer when any row is incomplete.
+func printPriceCard(summary *automate.Summary) {
+	if summary == nil || summary.Initial == nil {
+		return
+	}
+
+	type row struct {
+		Role        string
+		Persona     string
+		Provider    string
+		Model       string
+		InputUsd    float64
+		OutputUsd   float64
+		HasPricing  bool
+		IsInherited bool
+	}
+
+	rows := []row{}
+	primaryProvider := summary.Initial.Provider
+	primaryModel := summary.Initial.Model
+	if primaryProvider != "" && primaryModel != "" {
+		p := lookupModelPricing(primaryProvider, primaryModel)
+		rows = append(rows, row{
+			Role:       "Initial",
+			Persona:    displayOrDefault(summary.Initial.Persona, "default"),
+			Provider:   primaryProvider,
+			Model:      primaryModel,
+			InputUsd:   p.InputUsdPerM,
+			OutputUsd:  p.OutputUsdPerM,
+			HasPricing: p.HasPricing,
+		})
+	}
+
+	for _, ov := range summary.Initial.SubagentOverrides {
+		provider := ov.Provider
+		model := ov.Model
+		inherited := false
+		if provider == "" {
+			provider = primaryProvider
+			inherited = true
+		}
+		if model == "" {
+			model = primaryModel
+			inherited = true
+		}
+		if provider == "" || model == "" {
+			rows = append(rows, row{
+				Role:        "Subagent",
+				Persona:     ov.Persona,
+				Provider:    displayOrDefault(provider, "(inherit)"),
+				Model:       displayOrDefault(model, "(inherit)"),
+				IsInherited: inherited,
+			})
+			continue
+		}
+		p := lookupModelPricing(provider, model)
+		rows = append(rows, row{
+			Role:        "Subagent",
+			Persona:     ov.Persona,
+			Provider:    provider,
+			Model:       model,
+			InputUsd:    p.InputUsdPerM,
+			OutputUsd:   p.OutputUsdPerM,
+			HasPricing:  p.HasPricing,
+			IsInherited: inherited,
+		})
+	}
+
+	if len(rows) == 0 {
+		return
+	}
+
+	fmt.Println()
+	fmt.Println("Models that will run:")
+	missing := 0
+	for _, r := range rows {
+		priceCol := "      pricing: unknown"
+		if r.HasPricing {
+			priceCol = fmt.Sprintf("$%6.2f / $%6.2f per Mtok", r.InputUsd, r.OutputUsd)
+		} else {
+			missing++
+		}
+		inheritedTag := ""
+		if r.IsInherited {
+			inheritedTag = " (inherited)"
+		}
+		fmt.Printf("  %-9s %-20s %-13s %-30s %s%s\n",
+			r.Role, r.Persona, r.Provider, r.Model, priceCol, inheritedTag,
+		)
+	}
+	if missing > 0 {
+		console.GlyphWarning.Printf("Pricing data incomplete for %d of %d models — actual cost may exceed what's shown.",
+			missing, len(rows))
+	}
+}
+
+// printBudgetLine renders the configured USD budget if set, including warn
+// thresholds expressed in dollars (not just fractions) so the user sees the
+// concrete numbers they'll be billed against.
+func printBudgetLine(summary *automate.Summary) {
+	if summary == nil || summary.Budget == nil || summary.Budget.USD <= 0 {
+		return
+	}
+	parts := []string{fmt.Sprintf("$%.2f USD cap", summary.Budget.USD)}
+	if len(summary.Budget.WarnAt) > 0 {
+		dollars := make([]string, 0, len(summary.Budget.WarnAt))
+		for _, t := range summary.Budget.WarnAt {
+			dollars = append(dollars, fmt.Sprintf("$%.2f", t*summary.Budget.USD))
+		}
+		parts = append(parts, "warn at "+strings.Join(dollars, ", "))
+	}
+	fmt.Println()
+	fmt.Printf("Budget: %s\n", strings.Join(parts, ", "))
 }
 
 // confirmStartAutomation asks the user to explicitly approve starting the run.

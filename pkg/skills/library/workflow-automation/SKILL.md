@@ -62,7 +62,7 @@ When the user asks to *run* an existing workflow (as opposed to authoring one), 
    - First check at ~60–90s after starting (catches early failures fast, before committing to a long wait).
    - While `status: "running"`, loop with `wait_seconds=600`. Between waits, summarize what's visible in the captured output and surface meaningful updates to the user — never poll silently for hours.
    - If the user asks for status mid-run, do an immediate check with `wait_seconds=0`.
-   - If the workflow has been running unusually long with no new output, ask the user whether to keep waiting or escalate. (`stop_background` is not available for automate sessions in CLI mode; if the user wants to stop, they currently need to interrupt the run themselves.)
+   - If the workflow has been running unusually long with no new output, ask the user whether to keep waiting or escalate. You can stop a running workflow with `shell_command(stop_background="<session_id>")`, which works in both CLI and WebUI modes.
 
    Do not abandon the run — the user delegated management to you.
 6. **On completion, decide and report.** When the snapshot returns `status: "exited"`, read the captured output and:

@@ -1022,6 +1022,39 @@
   color: var(--accent-primary);
 }
 
+.processing-content:has(.processing-active-task) {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.processing-active-task {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 25%, transparent);
+  border-radius: var(--radius-sm, 6px);
+  color: var(--text-primary);
+  font-size: 11.5px;
+  font-weight: 500;
+  align-self: flex-start;
+  max-width: 100%;
+}
+
+.processing-active-task-icon {
+  color: var(--accent-primary);
+  flex-shrink: 0;
+}
+
+.processing-active-task-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
 .error-content {
   background: var(--color-error-bg);
   color: var(--accent-error);

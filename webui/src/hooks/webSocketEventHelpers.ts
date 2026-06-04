@@ -25,7 +25,9 @@ export const getToolCallId = (details: unknown): string | undefined => {
 export const AGENT_CHAT_LEAK_PATTERNS: RegExp[] = [
   /^\[\d+\s*-\s*\d+%\]\s*executing tool/i,
   /executing tool\s*\[[^\]]+\]/i,
-  /\bTodoWrite\b/i,
+  // The raw TodoWrite( call format dumps the JSON arg list; replaced in the
+  // chat stream by the dedicated TodoUpdate badge driven by todo_update events.
+  /\bTodoWrite\(/i,
   /\btodos=\d+/i,
   /\[\s*\]=\d+\s*\[~\]=\d+\s*\[x\]=\d+\s*\[-\]=\d+/i,
   /^Subagent:\s*\[\d+\s*-\s*\d+%\]/i,

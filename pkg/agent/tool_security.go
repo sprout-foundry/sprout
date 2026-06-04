@@ -156,6 +156,9 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 		env.MaxTokensFunc = func() int { return agent.GetMaxContextTokens() }
 		env.ConfigManager = agent.GetConfigManager()
 		env.AskUser = newAgentAskUserService(agent)
+		env.TodoManager = agent.GetTodoManager()
+		// Interactive CLI means: no browser client connected AND stdin is a TTY.
+		env.IsInteractiveCLI = !agent.HasActiveWebUIClients() && !isNonInteractive()
 		// TODO(SP-038): Wire ApprovalManager adapter when tools are migrated
 		// ApprovalManager: security.ApprovalManager does not implement
 		// tools.ApprovalManager (different method signatures), pass nil

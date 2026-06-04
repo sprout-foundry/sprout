@@ -216,6 +216,20 @@ func allSettings() []settingDetail {
 			getValue:     func(cfg *configuration.Config) string { return cfg.SubagentModel },
 		},
 		{
+			key:          "default_subagent_persona",
+			description:  "Persona used when run_subagent is invoked without a persona argument",
+			validValues:  "persona ID (e.g. general, coder, reviewer) or empty to fall back to 'general'",
+			getValue:     func(cfg *configuration.Config) string { return cfg.DefaultSubagentPersona },
+		},
+		{
+			key:          "disabled_personas",
+			description:  "Comma-separated persona IDs hidden from /persona list and subagent spawning",
+			validValues:  "comma-separated persona IDs (e.g. researcher,web_scraper) or empty to enable all",
+			getValue: func(cfg *configuration.Config) string {
+				return strings.Join(cfg.DisabledPersonas, ",")
+			},
+		},
+		{
 			key:          "self_review_gate_mode",
 			description:  "Self-review gate mode",
 			validValues:  "off, code, always",
@@ -394,16 +408,18 @@ func handleSettingsPreview(a *Agent, args map[string]interface{}) (string, error
 
 // supportedSettings contains the list of valid setting keys.
 var supportedSettings = map[string]string{
-	"provider":              "Current LLM provider",
-	"model":                 "Current model for the active provider",
-	"reasoning_effort":      "Reasoning effort (low/medium/high)",
-	"disable_thinking":      "Disable thinking mode (true/false)",
-	"resource_directory":    "Directory for captured web/vision resources",
-	"history_scope":         "Change history scope (project/global)",
-	"ea_mode":               "Executive Assistant mode (interactive/queue)",
-	"subagent_provider":     "Provider used for subagents",
-	"subagent_model":        "Model used for subagents",
-	"self_review_gate_mode": "Self-review gate mode (off/code/always)",
+	"provider":                 "Current LLM provider",
+	"model":                    "Current model for the active provider",
+	"reasoning_effort":         "Reasoning effort (low/medium/high)",
+	"disable_thinking":         "Disable thinking mode (true/false)",
+	"resource_directory":       "Directory for captured web/vision resources",
+	"history_scope":            "Change history scope (project/global)",
+	"ea_mode":                  "Coordinator persona startup mode (interactive/queue). Legacy name retained for compatibility.",
+	"subagent_provider":        "Provider used for subagents",
+	"subagent_model":           "Model used for subagents",
+	"default_subagent_persona": "Persona used when run_subagent omits the persona argument",
+	"disabled_personas":        "Comma-separated persona IDs hidden from /persona list and spawning",
+	"self_review_gate_mode":    "Self-review gate mode (off/code/always)",
 }
 
 // validateSettingKey checks that a key is a recognized setting.
@@ -446,6 +462,10 @@ func getConfigValue(cfg *configuration.Config, key string) (string, error) {
 		return cfg.SubagentProvider, nil
 	case "subagent_model":
 		return cfg.SubagentModel, nil
+	case "default_subagent_persona":
+		return cfg.DefaultSubagentPersona, nil
+	case "disabled_personas":
+		return strings.Join(cfg.DisabledPersonas, ","), nil
 	case "self_review_gate_mode":
 		return cfg.SelfReviewGateMode, nil
 	default:
@@ -502,6 +522,26 @@ func setConfigValue(cfg *configuration.Config, key, value string) error {
 		cfg.SubagentProvider = value
 	case "subagent_model":
 		cfg.SubagentModel = value
+	case "default_subagent_persona":
+		v := strings.TrimSpace(value)
+		if v != "" && cfg.GetSubagentType(v) == nil {
+			return fmt.Errorf("default_subagent_persona %q is not a known persona ID or alias", v)
+		}
+		cfg.DefaultSubagentPersona = v
+	case "disabled_personas":
+		// Comma-separated list. Empty value clears the list.
+		var ids []string
+		for _, raw := range strings.Split(value, ",") {
+			trimmed := strings.TrimSpace(raw)
+			if trimmed == "" {
+				continue
+			}
+			if cfg.GetSubagentType(trimmed) == nil && !cfg.IsPersonaDisabled(trimmed) {
+				return fmt.Errorf("disabled_personas: %q is not a known persona ID or alias", trimmed)
+			}
+			ids = append(ids, trimmed)
+		}
+		cfg.DisabledPersonas = ids
 	case "self_review_gate_mode":
 		switch strings.ToLower(value) {
 		case "off", "code", "always", "":

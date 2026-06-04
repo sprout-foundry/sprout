@@ -124,6 +124,15 @@ type Agent struct {
 	// Lazy-initialized on first use when terminalManager is nil.
 	backgroundProcessManager *tools.BackgroundProcessManager
 
+	// automateApprovedMu guards automateApprovedWorkflows.
+	automateApprovedMu sync.Mutex
+	// automateApprovedWorkflows tracks workflow filenames the user has
+	// explicitly approved during this chat session. Subsequent run_automate
+	// calls for the same workflow (e.g. retry-after-failure kicked off by
+	// the primary agent) skip the intent-confirmation prompt — the user has
+	// already opted in once.
+	automateApprovedWorkflows map[string]struct{}
+
 	// Embedding index manager for duplicate detection on file writes.
 	embeddingMu  sync.RWMutex // protects embeddingMgr
 	embeddingMgr *embedding.EmbeddingManager

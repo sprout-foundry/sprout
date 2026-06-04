@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -175,4 +176,167 @@ func ResolvePath(dir string, name string) (string, error) {
 // IsNotExists returns true if the error indicates a missing file or directory.
 func IsNotExists(err error) bool {
 	return errors.Is(err, fs.ErrNotExist)
+}
+
+// Summary describes the structure of a workflow file at a glance. It is
+// produced by Summarize and used by the CLI to render a human-readable
+// overview before kicking off the workflow.
+type Summary struct {
+	Description     string
+	ContinueOnError bool
+	NoWebUI         bool
+	Initial         *InitialSummary
+	Steps           []StepSummary
+}
+
+// InitialSummary describes the initial run.
+type InitialSummary struct {
+	Persona           string
+	Provider          string
+	Model             string
+	MaxIterations     int
+	RiskProfile       string
+	HasPrompt         bool
+	SubagentOverrides []SubagentOverrideSummary
+}
+
+// SubagentOverrideSummary describes one entry of subagent_overrides for display.
+type SubagentOverrideSummary struct {
+	Persona  string
+	Provider string
+	Model    string
+}
+
+// StepSummary describes a single workflow step.
+//
+// Kind is one of "agent" (LLM inference) or "shell" (raw command). For shell
+// steps, CommandPreview holds a single-line excerpt of the command for display.
+type StepSummary struct {
+	Name           string
+	Kind           string
+	Persona        string
+	Provider       string
+	Model          string
+	When           string
+	CommandPreview string
+}
+
+// Summarize parses a workflow file and returns its high-level structure.
+// Fields the JSON does not specify are left at their zero value.
+func Summarize(path string) (*Summary, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	type subagentOverrideRaw struct {
+		Provider string `json:"provider,omitempty"`
+		Model    string `json:"model,omitempty"`
+	}
+
+	type initialRaw struct {
+		Persona           string                         `json:"persona,omitempty"`
+		Provider          string                         `json:"provider,omitempty"`
+		Model             string                         `json:"model,omitempty"`
+		MaxIterations     *int                           `json:"max_iterations,omitempty"`
+		RiskProfile       string                         `json:"risk_profile,omitempty"`
+		Prompt            string                         `json:"prompt,omitempty"`
+		PromptFile        string                         `json:"prompt_file,omitempty"`
+		SubagentOverrides map[string]subagentOverrideRaw `json:"subagent_overrides,omitempty"`
+	}
+
+	type stepRaw struct {
+		Name        string `json:"name,omitempty"`
+		Persona     string `json:"persona,omitempty"`
+		Provider    string `json:"provider,omitempty"`
+		Model       string `json:"model,omitempty"`
+		When        string `json:"when,omitempty"`
+		Prompt      string `json:"prompt,omitempty"`
+		PromptFile  string `json:"prompt_file,omitempty"`
+		Command     string `json:"command,omitempty"`
+		CommandFile string `json:"command_file,omitempty"`
+	}
+
+	var raw struct {
+		Description     string      `json:"description,omitempty"`
+		ContinueOnError bool        `json:"continue_on_error,omitempty"`
+		NoWebUI         bool        `json:"no_web_ui,omitempty"`
+		Initial         *initialRaw `json:"initial,omitempty"`
+		Steps           []stepRaw   `json:"steps,omitempty"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, err
+	}
+
+	out := &Summary{
+		Description:     raw.Description,
+		ContinueOnError: raw.ContinueOnError,
+		NoWebUI:         raw.NoWebUI,
+	}
+	if raw.Initial != nil {
+		init := &InitialSummary{
+			Persona:     raw.Initial.Persona,
+			Provider:    raw.Initial.Provider,
+			Model:       raw.Initial.Model,
+			RiskProfile: raw.Initial.RiskProfile,
+			HasPrompt:   strings.TrimSpace(raw.Initial.Prompt) != "" || strings.TrimSpace(raw.Initial.PromptFile) != "",
+		}
+		if raw.Initial.MaxIterations != nil {
+			init.MaxIterations = *raw.Initial.MaxIterations
+		}
+		// Sort persona keys for stable display ordering.
+		personas := make([]string, 0, len(raw.Initial.SubagentOverrides))
+		for k := range raw.Initial.SubagentOverrides {
+			personas = append(personas, k)
+		}
+		sort.Strings(personas)
+		for _, p := range personas {
+			ov := raw.Initial.SubagentOverrides[p]
+			init.SubagentOverrides = append(init.SubagentOverrides, SubagentOverrideSummary{
+				Persona:  p,
+				Provider: ov.Provider,
+				Model:    ov.Model,
+			})
+		}
+		out.Initial = init
+	}
+	for _, s := range raw.Steps {
+		kind := "agent"
+		preview := ""
+		if strings.TrimSpace(s.Command) != "" || strings.TrimSpace(s.CommandFile) != "" {
+			kind = "shell"
+			preview = previewCommand(s.Command, s.CommandFile)
+		}
+		out.Steps = append(out.Steps, StepSummary{
+			Name:           s.Name,
+			Kind:           kind,
+			Persona:        s.Persona,
+			Provider:       s.Provider,
+			Model:          s.Model,
+			When:           s.When,
+			CommandPreview: preview,
+		})
+	}
+	return out, nil
+}
+
+// previewCommand returns a single-line excerpt suitable for terminal display.
+func previewCommand(command, commandFile string) string {
+	command = strings.TrimSpace(command)
+	commandFile = strings.TrimSpace(commandFile)
+	if command != "" {
+		// Collapse to a single line.
+		firstLine := command
+		if idx := strings.IndexAny(command, "\r\n"); idx >= 0 {
+			firstLine = strings.TrimSpace(command[:idx]) + " …"
+		}
+		if len(firstLine) > 72 {
+			firstLine = firstLine[:71] + "…"
+		}
+		return "$ " + firstLine
+	}
+	if commandFile != "" {
+		return "$ " + commandFile
+	}
+	return ""
 }

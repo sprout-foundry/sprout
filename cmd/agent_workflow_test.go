@@ -161,6 +161,72 @@ func TestLoadAgentWorkflowConfigValidation(t *testing.T) {
 		}
 	})
 
+	t.Run("shell step with command is valid", func(t *testing.T) {
+		path := filepath.Join(dir, "shell-step.json")
+		content := `{"steps":[{"name":"build","command":"make build-all","when":"on_success"}]}`
+		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+			t.Fatalf("write config: %v", err)
+		}
+		cfg, err := loadAgentWorkflowConfig(path)
+		if err != nil {
+			t.Fatalf("load config: %v", err)
+		}
+		if !cfg.Steps[0].IsShellStep() {
+			t.Fatalf("expected step to be a shell step")
+		}
+		if cfg.Steps[0].Command != "make build-all" {
+			t.Fatalf("unexpected command: %q", cfg.Steps[0].Command)
+		}
+	})
+
+	t.Run("shell step with command_file is valid", func(t *testing.T) {
+		path := filepath.Join(dir, "shell-step-file.json")
+		content := `{"steps":[{"name":"deploy","command_file":"scripts/deploy.sh"}]}`
+		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+			t.Fatalf("write config: %v", err)
+		}
+		cfg, err := loadAgentWorkflowConfig(path)
+		if err != nil {
+			t.Fatalf("load config: %v", err)
+		}
+		if !cfg.Steps[0].IsShellStep() {
+			t.Fatalf("expected step to be a shell step")
+		}
+	})
+
+	t.Run("step with both prompt and command is rejected", func(t *testing.T) {
+		path := filepath.Join(dir, "shell-and-prompt.json")
+		content := `{"steps":[{"prompt":"hi","command":"ls"}]}`
+		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+			t.Fatalf("write config: %v", err)
+		}
+		if _, err := loadAgentWorkflowConfig(path); err == nil {
+			t.Fatalf("expected validation error")
+		}
+	})
+
+	t.Run("step with both command and command_file is rejected", func(t *testing.T) {
+		path := filepath.Join(dir, "shell-and-shellfile.json")
+		content := `{"steps":[{"command":"ls","command_file":"scripts/a.sh"}]}`
+		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+			t.Fatalf("write config: %v", err)
+		}
+		if _, err := loadAgentWorkflowConfig(path); err == nil {
+			t.Fatalf("expected validation error")
+		}
+	})
+
+	t.Run("step with no work is rejected", func(t *testing.T) {
+		path := filepath.Join(dir, "empty-step.json")
+		content := `{"steps":[{"name":"empty","when":"always"}]}`
+		if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+			t.Fatalf("write config: %v", err)
+		}
+		if _, err := loadAgentWorkflowConfig(path); err == nil {
+			t.Fatalf("expected validation error")
+		}
+	})
+
 	t.Run("orchestration defaults", func(t *testing.T) {
 		path := filepath.Join(dir, "orchestration-defaults.json")
 		content := `{

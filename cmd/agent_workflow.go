@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -107,15 +108,33 @@ type AgentWorkflowInitial struct {
 	AgentWorkflowRuntime
 }
 
-// AgentWorkflowStep is a single prompt step executed after the initial query.
+// AgentWorkflowStep is a single step executed after the initial query.
+//
+// A step is either an agent step (Prompt or PromptFile) or a shell step
+// (Command or CommandFile). The two kinds are mutually exclusive — validation
+// fails if both are set or neither is set.
+//
+// Shell steps run the command via the user's $SHELL (or /bin/sh) with the
+// workflow's working directory and inherit stdout/stderr. They do NOT trigger
+// model inference; they are useful for cheap, deterministic steps like
+// `make build`, `git status`, or invoking a custom script that prepares
+// state for the next agent step.
 type AgentWorkflowStep struct {
 	Name          string   `json:"name,omitempty"`
 	Prompt        string   `json:"prompt,omitempty"`
 	PromptFile    string   `json:"prompt_file,omitempty"`
+	Command       string   `json:"command,omitempty"`
+	CommandFile   string   `json:"command_file,omitempty"`
 	When          string   `json:"when,omitempty"`
 	FileExists    []string `json:"file_exists,omitempty"`
 	FileNotExists []string `json:"file_not_exists,omitempty"`
 	AgentWorkflowRuntime
+}
+
+// IsShellStep reports whether the step is configured to run a shell command
+// instead of triggering model inference.
+func (s AgentWorkflowStep) IsShellStep() bool {
+	return strings.TrimSpace(s.Command) != "" || strings.TrimSpace(s.CommandFile) != ""
 }
 
 func loadAgentWorkflowConfig(path string) (*AgentWorkflowConfig, error) {
@@ -197,15 +216,25 @@ func (c *AgentWorkflowConfig) validate() error {
 		step.Name = strings.TrimSpace(step.Name)
 		step.Prompt = strings.TrimSpace(step.Prompt)
 		step.PromptFile = strings.TrimSpace(step.PromptFile)
+		step.Command = strings.TrimSpace(step.Command)
+		step.CommandFile = strings.TrimSpace(step.CommandFile)
 		step.When = normalizeWorkflowWhen(step.When)
 		step.FileExists = normalizeWorkflowPaths(step.FileExists)
 		step.FileNotExists = normalizeWorkflowPaths(step.FileNotExists)
 
-		if step.Prompt == "" && step.PromptFile == "" {
-			return fmt.Errorf("steps[%d] requires prompt or prompt_file", i)
+		hasPrompt := step.Prompt != "" || step.PromptFile != ""
+		hasCommand := step.Command != "" || step.CommandFile != ""
+		if hasPrompt && hasCommand {
+			return fmt.Errorf("steps[%d] cannot mix prompt/prompt_file with command/command_file", i)
+		}
+		if !hasPrompt && !hasCommand {
+			return fmt.Errorf("steps[%d] requires one of prompt, prompt_file, command, command_file", i)
 		}
 		if step.Prompt != "" && step.PromptFile != "" {
 			return fmt.Errorf("steps[%d].prompt and steps[%d].prompt_file are mutually exclusive", i, i)
+		}
+		if step.Command != "" && step.CommandFile != "" {
+			return fmt.Errorf("steps[%d].command and steps[%d].command_file are mutually exclusive", i, i)
 		}
 		if !isValidWorkflowWhen(step.When) {
 			return fmt.Errorf("steps[%d].when must be one of: %s, %s, %s", i, workflowWhenAlways, workflowWhenOnSuccess, workflowWhenOnError)
@@ -1039,6 +1068,53 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 			continue
 		}
 
+		if step.IsShellStep() {
+			shellErr := runWorkflowShellStep(ctx, step)
+			if shellErr != nil {
+				hasError = true
+				if firstErr == nil {
+					firstErr = fmt.Errorf("workflow step %q failed: %w", stepName, shellErr)
+				}
+				state.NextStepIndex = i + 1
+				state.HasError = hasError
+				if firstErr != nil {
+					state.FirstError = firstErr.Error()
+				}
+				state.LastProvider = strings.TrimSpace(chatAgent.GetProvider())
+				if err := emitWorkflowOrchestrationEvent(cfg, "workflow_step_failed", map[string]interface{}{
+					"step_index": i,
+					"step_name":  stepName,
+					"kind":       "shell",
+					"error":      shellErr.Error(),
+				}); err != nil {
+					return false, utils.WrapError(err, "emit workflow step failed event")
+				}
+				if err := persistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
+					return false, utils.WrapError(err, "persist workflow checkpoint")
+				}
+				if !cfg.ContinueOnError {
+					break
+				}
+				continue
+			}
+
+			hasError = false
+			state.NextStepIndex = i + 1
+			state.HasError = false
+			state.LastProvider = strings.TrimSpace(chatAgent.GetProvider())
+			if err := emitWorkflowOrchestrationEvent(cfg, "workflow_step_completed", map[string]interface{}{
+				"step_index": i,
+				"step_name":  stepName,
+				"kind":       "shell",
+			}); err != nil {
+				return false, utils.WrapError(err, "emit workflow step completed event")
+			}
+			if err := persistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
+				return false, utils.WrapError(err, "persist workflow checkpoint")
+			}
+			continue
+		}
+
 		if err := applyWorkflowRuntimeOverrides(chatAgent, step.AgentWorkflowRuntime); err != nil {
 			hasError = true
 			if firstErr == nil {
@@ -1159,4 +1235,54 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 	}
 
 	return false, firstErr
+}
+
+// runWorkflowShellStep executes a shell command step. Stdout and stderr are
+// inherited from the workflow's terminal so progress is visible in real time.
+// A non-zero exit code becomes a step failure.
+//
+// command_file is interpreted as a script path passed to the shell, not as a
+// raw command line — this avoids quoting headaches and lets users keep
+// multi-line scripts in version control.
+func runWorkflowShellStep(ctx context.Context, step AgentWorkflowStep) error {
+	shell := strings.TrimSpace(os.Getenv("SHELL"))
+	if shell == "" {
+		shell = "/bin/sh"
+	}
+
+	command := strings.TrimSpace(step.Command)
+	commandFile := strings.TrimSpace(step.CommandFile)
+
+	var cmd *exec.Cmd
+	switch {
+	case command != "":
+		fmt.Printf("$ %s\n", singleLinePreview(command))
+		cmd = exec.CommandContext(ctx, shell, "-c", command)
+	case commandFile != "":
+		if _, err := os.Stat(commandFile); err != nil {
+			return fmt.Errorf("command_file %q not accessible: %w", commandFile, err)
+		}
+		fmt.Printf("$ %s %s\n", shell, commandFile)
+		cmd = exec.CommandContext(ctx, shell, commandFile)
+	default:
+		return errors.New("shell step has neither command nor command_file")
+	}
+
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Env = os.Environ()
+
+	if err := cmd.Run(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// singleLinePreview collapses a multi-line command to a single display line.
+func singleLinePreview(s string) string {
+	if idx := strings.IndexAny(s, "\r\n"); idx >= 0 {
+		return strings.TrimSpace(s[:idx]) + " …"
+	}
+	return s
 }

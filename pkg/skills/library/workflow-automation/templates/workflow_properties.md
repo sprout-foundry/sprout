@@ -88,6 +88,36 @@ All properties from the Initial Run are available, plus these step-specific prop
 | `when` | string | `"always"` | When to run this step: `on_success` (only if previous succeeded), `on_error` (only if previous failed), `always` (regardless). |
 | `file_exists` | string[] | *(none)* | Only run this step if ALL listed files exist. Useful for conditional steps. |
 | `file_not_exists` | string[] | *(none)* | Only run this step if NONE of the listed files exist. Useful for "create if missing" patterns. |
+| `command` | string | *(none)* | Shell command to run as a non-inference step (mutually exclusive with `prompt` / `prompt_file`). Runs via `$SHELL -c`. A non-zero exit code marks the step as failed. |
+| `command_file` | string | *(none)* | Path to a shell script run as a non-inference step (mutually exclusive with `prompt` / `prompt_file` / `command`). |
+
+### Step Kinds: Agent vs. Shell
+
+Every step is one of two kinds:
+
+| Kind | How to declare | When to use |
+|------|---------------|-------------|
+| **Agent step** | `prompt` or `prompt_file` | Anything that requires reasoning, tool use, code-writing, or review. Token-consuming. |
+| **Shell step** | `command` or `command_file` | Deterministic work that does NOT need the LLM — build verification, formatters, custom scripts, status checks. No tokens consumed. |
+
+The two declarations are mutually exclusive on the same step. Provider/model/persona settings and `subagent_overrides` are ignored on shell steps. The shared step properties (`name`, `when`, `file_exists`, `file_not_exists`) work for both kinds.
+
+```json
+{
+  "name": "verify_build",
+  "command": "make build-all",
+  "when": "on_success"
+}
+```
+
+```json
+{
+  "name": "deploy",
+  "command_file": "automate/scripts/deploy.sh",
+  "when": "on_success",
+  "file_exists": ["dist/index.html"]
+}
+```
 
 ### When Conditions Explained
 

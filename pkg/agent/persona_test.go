@@ -504,7 +504,7 @@ func TestIsGitWriteAllowed_NilConfigReturnsFalse(t *testing.T) {
 }
 
 // =============================================================================
-// isOrchestratorGitWriteAllowed for orchestrator persona
+// isGitWriteAllowed for orchestrator persona
 // =============================================================================
 
 func TestIsOrchestratorGitWriteAllowed_OrchestratorPersonaWithConfigEnabled(t *testing.T) {
@@ -522,8 +522,8 @@ func TestIsOrchestratorGitWriteAllowed_OrchestratorPersonaWithConfigEnabled(t *t
 		t.Fatalf("UpdateConfigNoSave failed: %v", err)
 	}
 
-	if !agent.isOrchestratorGitWriteAllowed() {
-		t.Error("expected isOrchestratorGitWriteAllowed to return true for orchestrator with config enabled")
+	if !agent.isGitWriteAllowed() {
+		t.Error("expected isGitWriteAllowed to return true for orchestrator with config enabled")
 	}
 }
 
@@ -541,8 +541,8 @@ func TestIsOrchestratorGitWriteAllowed_OrchestratorPersonaWithConfigDisabled(t *
 		t.Fatalf("UpdateConfigNoSave failed: %v", err)
 	}
 
-	if agent.isOrchestratorGitWriteAllowed() {
-		t.Error("expected isOrchestratorGitWriteAllowed to return false for orchestrator with config disabled")
+	if agent.isGitWriteAllowed() {
+		t.Error("expected isGitWriteAllowed to return false for orchestrator with config disabled")
 	}
 }
 
@@ -558,6 +558,32 @@ func TestApplyPersona_RepoOrchestratorAliasResolvesToOrchestrator(t *testing.T) 
 
 	if got := agent.GetActivePersona(); got != "orchestrator" {
 		t.Errorf("activePersona after alias apply = %q, want %q", got, "orchestrator")
+	}
+}
+
+// Renamed-persona alias coverage: code_reviewer → reviewer and
+// executive_assistant → coordinator must canonicalize cleanly on apply.
+func TestApplyPersona_CodeReviewerAliasResolvesToReviewer(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	if err := agent.ApplyPersona("code_reviewer"); err != nil {
+		t.Fatalf("ApplyPersona(code_reviewer) failed: %v", err)
+	}
+	if got := agent.GetActivePersona(); got != "reviewer" {
+		t.Errorf("activePersona after alias apply = %q, want %q", got, "reviewer")
+	}
+}
+
+func TestApplyPersona_ExecutiveAssistantAliasResolvesToCoordinator(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	if err := agent.ApplyPersona("executive_assistant"); err != nil {
+		t.Fatalf("ApplyPersona(executive_assistant) failed: %v", err)
+	}
+	if got := agent.GetActivePersona(); got != "coordinator" {
+		t.Errorf("activePersona after alias apply = %q, want %q", got, "coordinator")
 	}
 }
 
@@ -618,8 +644,8 @@ func TestIsOrchestratorGitWriteAllowed_NonOrchestratorNonEAPersonaReturnsFalse(t
 
 	agent.state.SetActivePersona("coder")
 
-	if agent.isOrchestratorGitWriteAllowed() {
-		t.Error("expected isOrchestratorGitWriteAllowed to return false for non-orchestrator, non-EA persona")
+	if agent.isGitWriteAllowed() {
+		t.Error("expected isGitWriteAllowed to return false for non-orchestrator, non-EA persona")
 	}
 }
 

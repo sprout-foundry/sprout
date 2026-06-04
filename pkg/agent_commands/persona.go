@@ -106,13 +106,24 @@ func (p *PersonaCommand) listPersonas(config *configuration.Config, chatAgent *a
 	}
 	sort.Strings(ids)
 
+	isLocal := chatAgent.IsLocalMode()
 	for _, id := range ids {
 		persona := config.SubagentTypes[id]
 		status := "enabled"
 		if config.IsPersonaDisabled(id) {
 			status = "disabled"
 		}
-		fmt.Printf("- %s (%s): %s\n", id, persona.Name, status)
+		// Surface LocalOnly availability so the user understands why a persona
+		// they see here might not be spawnable in cloud mode.
+		modifier := ""
+		if persona.LocalOnly {
+			if isLocal {
+				modifier = " (local only)"
+			} else {
+				modifier = " (local only — unavailable in cloud)"
+			}
+		}
+		fmt.Printf("- %s (%s): %s%s\n", id, persona.Name, status, modifier)
 	}
 
 	fmt.Println("\nUsage:")

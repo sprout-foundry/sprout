@@ -133,7 +133,12 @@ func sanitizedConfig(cfg *configuration.Config) map[string]interface{} {
 		"self_review_gate_mode":          cfg.SelfReviewGateMode,
 		"subagent_provider":              cfg.SubagentProvider,
 		"subagent_model":                 cfg.SubagentModel,
-		"subagent_types":                 cfg.SubagentTypes,
+		// SubagentTypes is catalog-derived and never persisted — exposed via
+		// GET /api/settings/subagent-types for the persona list view. Keeping
+		// it out of the generic settings payload prevents round-trip PUTs
+		// from accidentally writing catalog state back through user config.
+		"default_subagent_persona":       cfg.DefaultSubagentPersona,
+		"disabled_personas":              cfg.DisabledPersonas,
 		"subagent_max_parallel":          cfg.GetSubagentMaxParallel(),
 		"subagent_parallel_enabled":      cfg.GetSubagentParallelEnabled(),
 		"commit_provider":                cfg.CommitProvider,

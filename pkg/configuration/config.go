@@ -584,7 +584,7 @@ type SubagentType struct {
 	SystemPromptAppend string            `json:"system_prompt_append,omitempty"` // Optional inline text appended to the base or loaded system prompt (for composition)
 	AllowedTools       []string          `json:"allowed_tools,omitempty"`        // Optional explicit tool allowlist for focused persona behavior
 	Aliases            []string          `json:"aliases,omitempty"`              // Optional aliases (e.g., "web-scraper")
-	Enabled            bool              `json:"enabled"`                        // Whether this subagent type is available for use
+	Enabled            bool              `json:"enabled"`                        // Catalog-only: every shipped persona sets this true. Runtime "is this persona usable?" is determined by Config.DisabledPersonas (user) + LocalOnly (env). Kept for catalog hygiene + defense-in-depth in case a future variant ships with a deliberately-disabled entry.
 	LocalOnly          bool              `json:"local_only,omitempty"`           // Only available in local mode (not cloud)
 	Delegatable        bool              `json:"delegatable,omitempty"`          // Whether this persona can be used as a subagent (default: true for worker personas, false for orchestrator personas)
 	AutoApproveRules   *AutoApproveRules `json:"auto_approve_rules,omitempty"`   // Risk cascade rules for the runtime auto-approve check

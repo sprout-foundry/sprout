@@ -96,17 +96,16 @@ export default function SubagentSettingsTab({
         </div>
       </div>
 
-      {renderSelect('default_subagent_persona', 'Default Persona', [
-        'general',
-        'coder',
-        'refactor',
-        'debugger',
-        'tester',
-        'reviewer',
-        'researcher',
-        'web_scraper',
-        'orchestrator',
-      ])}
+      {renderSelect(
+        'default_subagent_persona',
+        'Default Persona',
+        // Derive the list from the live catalog so it never drifts when a
+        // persona is added/removed. Sorted alphabetically for stable UI.
+        Object.entries(subagentTypes)
+          .filter(([, v]) => v.enabled)
+          .map(([id]) => id)
+          .sort(),
+      )}
 
       <div className="settings-section-spaced">
         <h4>Personas</h4>

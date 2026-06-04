@@ -11,7 +11,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestCheckBackgroundOutput_Success(t *testing.T) {
@@ -203,6 +205,132 @@ func TestCheckBackgroundOutput_StatusExited(t *testing.T) {
 	}
 	if parsed["output"] != "hello\n" {
 		t.Errorf("expected output 'hello\\n', got %q", parsed["output"])
+	}
+}
+
+func TestCheckBackgroundOutputWait_ZeroReturnsImmediately(t *testing.T) {
+	calls := int32(0)
+	tm := &mockTerminalManager{
+		getBackgroundOutputFunc: func(sessionID string) (string, error) {
+			atomic.AddInt32(&calls, 1)
+			return "still running", nil
+		},
+		isSessionActiveFunc: func(sessionID string) bool { return true },
+	}
+	ctx := WithTerminalManager(context.Background(), tm)
+
+	start := time.Now()
+	_, err := CheckBackgroundOutputWait(ctx, "bg-x", 0)
+	if err != nil {
+		t.Fatalf("CheckBackgroundOutputWait failed: %v", err)
+	}
+	if elapsed := time.Since(start); elapsed > 100*time.Millisecond {
+		t.Errorf("wait_seconds=0 should return immediately, took %v", elapsed)
+	}
+	if got := atomic.LoadInt32(&calls); got != 1 {
+		t.Errorf("expected 1 snapshot, got %d", got)
+	}
+}
+
+func TestCheckBackgroundOutputWait_ReturnsOnExit(t *testing.T) {
+	var active atomic.Bool
+	active.Store(true)
+	tm := &mockTerminalManager{
+		getBackgroundOutputFunc: func(sessionID string) (string, error) {
+			return "done", nil
+		},
+		isSessionActiveFunc: func(sessionID string) bool { return active.Load() },
+	}
+	ctx := WithTerminalManager(context.Background(), tm)
+
+	// Mark the session inactive after a short delay; the wait should
+	// return well before the 10s cap.
+	go func() {
+		time.Sleep(600 * time.Millisecond)
+		active.Store(false)
+	}()
+
+	start := time.Now()
+	result, err := CheckBackgroundOutputWait(ctx, "bg-y", 10)
+	if err != nil {
+		t.Fatalf("CheckBackgroundOutputWait failed: %v", err)
+	}
+	elapsed := time.Since(start)
+	if elapsed > 3*time.Second {
+		t.Errorf("expected wait to return shortly after exit, took %v", elapsed)
+	}
+
+	var parsed map[string]string
+	if err := json.Unmarshal([]byte(result), &parsed); err != nil {
+		t.Fatalf("result is not valid JSON: %v", err)
+	}
+	if parsed["status"] != "exited" {
+		t.Errorf("expected status 'exited', got %q", parsed["status"])
+	}
+}
+
+func TestCheckBackgroundOutputWait_ReturnsOnDeadline(t *testing.T) {
+	tm := &mockTerminalManager{
+		getBackgroundOutputFunc: func(sessionID string) (string, error) { return "still running", nil },
+		isSessionActiveFunc:     func(sessionID string) bool { return true },
+	}
+	ctx := WithTerminalManager(context.Background(), tm)
+
+	start := time.Now()
+	result, err := CheckBackgroundOutputWait(ctx, "bg-z", 1) // 1 second cap
+	if err != nil {
+		t.Fatalf("CheckBackgroundOutputWait failed: %v", err)
+	}
+	elapsed := time.Since(start)
+	if elapsed < 900*time.Millisecond {
+		t.Errorf("expected wait to honor deadline (~1s), returned in %v", elapsed)
+	}
+	if elapsed > 2500*time.Millisecond {
+		t.Errorf("expected wait to return shortly after deadline (~1s), took %v", elapsed)
+	}
+
+	var parsed map[string]string
+	if err := json.Unmarshal([]byte(result), &parsed); err != nil {
+		t.Fatalf("result is not valid JSON: %v", err)
+	}
+	if parsed["status"] != "running" {
+		t.Errorf("expected status 'running' when deadline hits, got %q", parsed["status"])
+	}
+}
+
+func TestCheckBackgroundOutputWait_HonorsContextCancel(t *testing.T) {
+	tm := &mockTerminalManager{
+		getBackgroundOutputFunc: func(sessionID string) (string, error) { return "still running", nil },
+		isSessionActiveFunc:     func(sessionID string) bool { return true },
+	}
+	ctx, cancel := context.WithCancel(WithTerminalManager(context.Background(), tm))
+
+	go func() {
+		time.Sleep(400 * time.Millisecond)
+		cancel()
+	}()
+
+	start := time.Now()
+	if _, err := CheckBackgroundOutputWait(ctx, "bg-cancel", 10); err != nil {
+		t.Fatalf("CheckBackgroundOutputWait failed: %v", err)
+	}
+	if elapsed := time.Since(start); elapsed > 2*time.Second {
+		t.Errorf("expected context cancel to return promptly, took %v", elapsed)
+	}
+}
+
+func TestCheckBackgroundOutputWait_CapsAtMax(t *testing.T) {
+	// Exceeding the cap should not error — it should silently clamp.
+	// We can only verify it doesn't reject the input. A second-precision
+	// timing assertion against the 600s cap would make the test too slow.
+	tm := &mockTerminalManager{
+		getBackgroundOutputFunc: func(sessionID string) (string, error) { return "done", nil },
+		isSessionActiveFunc:     func(sessionID string) bool { return false },
+	}
+	ctx := WithTerminalManager(context.Background(), tm)
+
+	if _, err := CheckBackgroundOutputWait(ctx, "bg-cap", 99999); err != nil {
+		t.Fatalf("CheckBackgroundOutputWait failed: %v", err)
 	}
 }
 

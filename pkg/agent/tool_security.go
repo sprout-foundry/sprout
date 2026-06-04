@@ -49,7 +49,23 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 
 	// Security validation — classify and block/prompt dangerous operations
 	if secResult := tools.ClassifyToolCall(toolName, args); secResult.ShouldBlock || secResult.ShouldPrompt || secResult.IntentConfirmation {
-		if agent != nil && agent.staticGateAutoApprove(secResult) && !secResult.IntentConfirmation {
+		// In-session re-authorization for run_automate. Once the user has
+		// explicitly approved a workflow during this chat session, subsequent
+		// calls (e.g. retries kicked off by the primary agent after a failure)
+		// don't need to re-prompt — the user opted in once for this workflow.
+		alreadyApprovedInSession := false
+		if agent != nil && toolName == "run_automate" && secResult.IntentConfirmation {
+			if wf, ok := args["workflow"].(string); ok && agent.IsWorkflowApprovedInSession(wf) {
+				if agent.debug {
+					agent.debugLog("[UNLOCK] run_automate %q already approved in this session — skipping intent prompt\n", wf)
+				}
+				ctx = WithUserApproved(ctx)
+				alreadyApprovedInSession = true
+			}
+		}
+		if alreadyApprovedInSession {
+			// fall through to handler execution below
+		} else if agent != nil && agent.staticGateAutoApprove(secResult) && !secResult.IntentConfirmation {
 			// Unsafe mode or session elevation — skip the prompt for
 			// non-hard-block operations. See staticGateAutoApprove.
 			// IntentConfirmation is never auto-approved — it's about
@@ -110,6 +126,11 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 				// already passed an interactive approval so it doesn't
 				// re-prompt for the same execution (SP-058 follow-up).
 				ctx = WithUserApproved(ctx)
+				if toolName == "run_automate" {
+					if wf, ok := args["workflow"].(string); ok {
+						agent.MarkWorkflowApprovedInSession(wf)
+					}
+				}
 			} else {
 				// CLI: prompt user interactively via terminal stdin
 				agentConfig := agent.GetConfig()
@@ -128,6 +149,11 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 					}
 					// Same approval-propagation as the webui branch above.
 					ctx = WithUserApproved(ctx)
+					if toolName == "run_automate" {
+						if wf, ok := args["workflow"].(string); ok {
+							agent.MarkWorkflowApprovedInSession(wf)
+						}
+					}
 				} else if secResult.ShouldBlock {
 					// NON-INTERACTIVE + DANGEROUS, no approval mechanism: always block
 					return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("security block: %s — %s", toolName, secResult.Reasoning), nil)

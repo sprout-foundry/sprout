@@ -59,7 +59,7 @@ func handleListMemories(ctx context.Context, a *Agent, args map[string]interface
 	}
 
 	if len(memories) == 0 {
-		return "No memories saved yet. Use `add_memory` to create a memory that persists across conversations.", nil
+		return "No memories saved yet. Use `manage_memory` with operation=\"add\" to create a memory that persists across conversations.", nil
 	}
 
 	var sb strings.Builder
@@ -77,7 +77,7 @@ func handleListMemories(ctx context.Context, a *Agent, args map[string]interface
 		sb.WriteString(fmt.Sprintf("- **%s** — %s\n", m.Name, title))
 	}
 
-	sb.WriteString("\nUse `read_memory` to view full content, or `add_memory`/`delete_memory` to manage memories.")
+	sb.WriteString("\nUse `manage_memory` (operation=\"read\" to view full content; operation=\"add\"/\"delete\" to manage memories).")
 	return sb.String(), nil
 }
 

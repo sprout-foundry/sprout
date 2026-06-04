@@ -393,36 +393,6 @@ func (sp *sproutProvider) EstimateTokens(req *core.ChatRequest) int {
 }
 
 // ---------------------------------------------------------------------------
-// sproutToolExecutor — implements seed/core.ToolExecutor
-// ---------------------------------------------------------------------------
-
-// sproutToolExecutor adapts an agent.ToolExecutor to seed's ToolExecutor interface.
-type sproutToolExecutor struct {
-	agent *Agent
-	exec  *ToolExecutor
-}
-
-// NewSproutToolExecutor creates a ToolExecutor that wraps a sprout agent ToolExecutor.
-func NewSproutToolExecutor(agent *Agent, exec *ToolExecutor) core.ToolExecutor {
-	return &sproutToolExecutor{agent: agent, exec: exec}
-}
-
-func (ste *sproutToolExecutor) GetTools() []core.Tool {
-	// Call agent's getOptimizedToolDefinitions to get dynamic tool set
-	// including MCP tools, persona filtering, and custom provider filtering
-	if ste.agent != nil {
-		tools := ste.agent.getOptimizedToolDefinitions(nil)
-		return tools
-	}
-	return api.GetToolDefinitions()
-}
-
-func (ste *sproutToolExecutor) Execute(ctx context.Context, calls []core.ToolCall) []core.Message {
-	sproutResults := ste.exec.ExecuteTools(calls)
-	return sproutResults
-}
-
-// ---------------------------------------------------------------------------
 // Conversion helpers — identity functions (types are now aliases)
 // ---------------------------------------------------------------------------
 

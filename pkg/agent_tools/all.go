@@ -3,14 +3,20 @@ package tools
 // AllTools returns all available tool handlers for registration.
 // This is the central registration point for the new interface-based tool system.
 // Currently includes: read_file, list_directory, fetch_url, search_files,
-// repo_map, list_memories, read_memory, rollback_changes, view_history,
+// repo_map, rollback_changes, view_history,
 // list_skills, embedding_index, write_file, write_structured_file,
 // edit_file, shell_command, save_memory, search_memories,
 // task_queue_add, task_queue_publish,
 // task_queue_read, todo_write, todo_read, ask_user, patch_structured_file,
-// self_review, commit, git, activate_skill, add_memory, delete_memory,
+// self_review, commit, git, activate_skill,
 // browse_url, web_search, semantic_search, analyze_image_content,
 // and analyze_ui_screenshot.
+//
+// Memory operations (add/read/list/delete/search) are exposed as the
+// consolidated manage_memory tool registered in
+// pkg/agent/tool_registrations.go. The legacy add_memory / read_memory /
+// list_memories / delete_memory handlers were removed once manage_memory
+// covered the full surface.
 //
 // Subagent tools (run_subagent / run_parallel_subagents) are NOT in this
 // list — they live exclusively in the seed registry under pkg/agent
@@ -31,8 +37,6 @@ func AllTools() []ToolHandler {
 		&fetchURLHandler{},
 		&searchFilesHandler{},
 		&repoMapHandler{},
-		&listMemoriesHandler{},
-		&readMemoryHandler{},
 		&rollbackChangesHandler{},
 		&viewHistoryHandler{},
 		&listSkillsHandler{},
@@ -63,9 +67,6 @@ func AllTools() []ToolHandler {
 		&gitHandler{},
 		// Skill tools (thin wrapper pending *Agent refactoring)
 		&activateSkillHandler{},
-		// Memory tools
-		&addMemoryHandler{},
-		&deleteMemoryHandler{},
 		// Browser/search tools (thin wrappers pending *Agent refactoring)
 		&browseURLHandler{},
 		&webSearchHandler{},

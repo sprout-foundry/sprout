@@ -227,6 +227,11 @@ type Agent struct {
 	// reached or surpassed. Same atomic-value pattern.
 	budgetExceededCallback atomic.Value // func(spent, limit float64)
 
+	// SP-066 Phase 2: background rollup worker. rollupW is lazily
+	// initialized via rollupOnce so existing tests that construct bare
+	// *Agent values continue to work without a constructor change.
+	rollupOnce sync.Once
+	rollupW    *rollupWorker
 }
 
 // InjectWebUIManagers replaces the agent's internal approval and ask-user

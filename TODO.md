@@ -67,8 +67,8 @@ _Blocked by: SP-064 (Phases 1–3 are prerequisites for cross-process session di
 - [x] SP-065-4d: Budget event log — threshold crossings + cap-hit timestamps.
 
 ### Phase 5: Chat ↔ automate linkage
-- [ ] SP-065-5a: When `run_automate` succeeds in a chat, emit an inline chat message containing a link to the Automations panel with the new session id.
-- [ ] SP-065-5b: Sidebar nav handler — clicking the link switches to Automations and focuses the session.
+- [x] SP-065-5a: When `run_automate` succeeds in a chat, emit an inline chat message containing a link to the Automations panel with the new session id.
+- [x] SP-065-5b: Sidebar nav handler — clicking the link switches to Automations and focuses the session.
 
 ### Phase 6: Tests
 - [ ] SP-065-6a: Handler unit tests — workflow discovery, run with requires_approval=true triggers intent prompt, run with requires_approval=false skips, stop terminates.

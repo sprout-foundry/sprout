@@ -29,10 +29,10 @@ _Spec: `roadmap/SP-064-automate-cli-monitoring.md`_
 - [x] SP-064-4d: Add subcommands to `automateCmd.AddCommand` and update help text.
 
 ### Phase 5: Tests + docs
-- [ ] SP-064-5a: Integration test — launch a sleep-based workflow, status shows it, stop kills it, status reflects exit, output file persists.
-- [ ] SP-064-5b: Cross-process test — launch from terminal A (real subprocess), assert `sprout automate status` from a separate process sees it via the PID file.
-- [ ] SP-064-5c: Update `workflow_properties.md` with a "Monitoring a running workflow" section.
-- [ ] SP-064-5d: Run `make build-all` and the full automate test suite; verify green.
+- [x] SP-064-5a: Integration test — launch a sleep-based workflow, status shows it, stop kills it, status reflects exit, output file persists.
+- [x] SP-064-5b: Cross-process test — launch from terminal A (real subprocess), assert `sprout automate status` from a separate process sees it via the PID file.
+- [x] SP-064-5c: Update `workflow_properties.md` with a "Monitoring a running workflow" section.
+- [x] SP-064-5d: Run `make build-all` and the full automate test suite; verify green.
 
 ## SP-065: WebUI Automations Panel
 _Spec: `roadmap/SP-065-automate-webui-panel.md`_

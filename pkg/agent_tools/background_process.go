@@ -54,6 +54,21 @@ func (p *BackgroundProcess) GetOutputPath() string {
 	return p.OutputPath
 }
 
+// GetExitCode returns the exit code of the background process.
+// Returns -1 if the process has not yet exited.
+func (p *BackgroundProcess) GetExitCode() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.exitCode
+}
+
+// Done returns a channel that closes when the background process exits.
+// Callers can select on this channel to wait for process completion.
+// If the process has already exited, the returned channel is already closed.
+func (p *BackgroundProcess) Done() <-chan struct{} {
+	return p.done
+}
+
 // BackgroundProcessManager manages background processes for CLI mode.
 // Provides the same lifecycle as the WebUI's TerminalManager background
 // sessions but without PTY support.

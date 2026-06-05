@@ -249,6 +249,77 @@ sed regex bug produced `252%` mid-refactor).
 - **Self-documenting code**: Descriptive names; comments only for "why"
 - **Incremental refactoring**: Build after each extraction step
 
+## Context Architecture (SP-066)
+
+Conversation context is managed by **three distinct operations**, plus an
+orthogonal embedding store. Conflating them is the recurring failure mode —
+the design depends on each operation staying in its lane.
+
+1. **Substitute** (free, automatic, every prompt build). seed's
+   `BuildCheckpointCompactedMessages` walks the message list before each
+   API call and replaces ranges covered by a `TurnCheckpoint` with that
+   checkpoint's `Summary` / `ActionableSummary`. No LLM call; the
+   summarization cost was paid once at checkpoint-record time. This is the
+   default lever and should fire on every prompt build.
+2. **Rollup** (one LLM call, amortized). Background worker at
+   `pkg/agent/rollup.go`. When the count of `TurnCheckpoint`s at any
+   `Level` exceeds `rollupTriggerCount` (with the `recentTurnsToPreserve`
+   window protected at level 0), the worker folds `rollupSourceCount`
+   oldest entries at that level into one `Level+1` checkpoint via the
+   dedicated rollup prompt (`prompts/rollup_prompt.md`). The rolled-up
+   checkpoint replaces its sources in `AgentState.TurnCheckpoints`. The
+   LLM call happens once; the result is reused by every future
+   substitution pass.
+3. **Compact** (LLM call on raw history, explicit). The `/compact` slash
+   command in `pkg/agent_commands/compact.go`. Whole-history LLM
+   summarization that **wipes** the active checkpoint list and replaces
+   the head of `messages[]` with one recap. Today's behavior preserved
+   intentionally — this is the user's deliberate "collapse this
+   conversation to one summary" hammer, paired with `/clear`. Under the
+   substitution-first model it should be a rare power-user action, not
+   a daily survival tool.
+
+The **conversation store** (vector embeddings via
+`pkg/agent/turn_embedding.go::EmbedAndStoreTurn` → `pkg/embedding/`) is
+the **persistent memory layer** and is orthogonal to the three operations
+above. Every summary (per-turn, rollup, `/compact` recap) is embedded at
+creation time and **persists in the store regardless of subsequent
+`TurnCheckpoint` list manipulation**. `/compact` wiping the active list
+does NOT delete the embedded summaries — recall (SP-066 Phase 3) can
+still surface them when the current turn asks about that material.
+
+### Trigger
+
+seed's chat loop triggers substitution + LLM-fall-through compaction
+when the prompt exceeds `CompactionTriggerFraction × max_context_tokens`.
+sprout computes the fraction in `pkg/agent/context_budget.go::
+computeCompactionTriggerFraction` by subtracting conservative reservations
+(15% response + 10% thinking + 5% tool I/O = 30%) so substitution fires
+at 70% of the window instead of seed's hardcoded 0.85 default. The
+reservation gates only the rare LLM-fall-through; substitution itself is
+free and happens every prompt build regardless of headroom.
+
+### Don't re-collapse these into one mechanism
+
+A few specific anti-patterns to avoid:
+
+- **Don't make `/compact` skip when checkpoints already exist.** The user
+  invoked it explicitly; honor the wipe.
+- **Don't gate substitution on headroom.** Substitute always. The
+  reservation math is for the LLM-fall-through path, not substitution.
+- **Don't treat the embedding store as ephemeral.** It survives `/compact`
+  and rollups by design. Don't add code paths that clear it on
+  checkpoint-list mutation.
+- **Don't let rollups consume the recency window.** The most-recent
+  `recentTurnsToPreserve` per-turn checkpoints stay at full fidelity so
+  the active prompt has high-resolution recent context.
+
+Files that touch this area: `pkg/agent/turn_checkpoints.go`,
+`pkg/agent/rollup.go`, `pkg/agent/context_budget.go`,
+`pkg/agent/seed_integration.go`, `pkg/agent_commands/compact.go`,
+`pkg/agent/turn_embedding.go`. Treat SP-066 in `roadmap/` as the
+authoritative design when modifying any of them.
+
 ## Change Tracking
 
 The `ChangeTracker` (in `pkg/agent/change_tracking*.go`) records every

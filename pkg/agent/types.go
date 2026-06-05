@@ -29,6 +29,14 @@ type ShellCommandResult struct {
 
 // TurnCheckpoint stores a compact summary for a completed user turn while
 // preserving the original full messages for cache-efficient reuse until needed.
+//
+// SP-066 Phase 2 generalizes this struct: a Level=0 entry is a per-turn
+// checkpoint (the historical default). A Level>0 entry is a "rollup" that
+// folds many lower-level checkpoints into one coarser summary. Both kinds
+// substitute identically through seed's BuildCheckpointCompactedMessages —
+// the rollup is just a checkpoint whose StartIndex/EndIndex span a wider
+// historical range. The extra fields are sprout-side metadata for the
+// rollup worker and the WebUI; seed doesn't read them.
 type TurnCheckpoint struct {
 	StartIndex        int    `json:"start_index"`
 	EndIndex          int    `json:"end_index"`
@@ -37,13 +45,35 @@ type TurnCheckpoint struct {
 	// FileChanges is the git-style manifest (M/A/D/R) of files touched
 	// during this turn. Populated from the agent's ChangeTracker at
 	// checkpoint-record time. Empty when tracking is disabled or the turn
-	// didn't write any files.
+	// didn't write any files. For rollups (Level>0), this is the union of
+	// the source checkpoints' file changes so the manifest doesn't get
+	// lost as rollups stack.
 	FileChanges []CheckpointFileChange `json:"file_changes,omitempty"`
 	// RevisionID is the ChangeTracker revision that was active when this
 	// turn ran. When set, the summary text references it so the model can
 	// call the view_history tool to recover the exact diff. Empty when
-	// tracking is disabled.
+	// tracking is disabled. For rollups, this is the most recent
+	// revision_id from the source set.
 	RevisionID string `json:"revision_id,omitempty"`
+
+	// SP-066 Phase 2 — rollup metadata. Absent on legacy/per-turn
+	// checkpoints; populated by the rollup worker.
+
+	// ID is a stable identifier for this checkpoint, independent of its
+	// position in the TurnCheckpoints slice. Used by rollups to reference
+	// their source checkpoints via SourceCheckpointIDs.
+	ID string `json:"id,omitempty"`
+	// Level is the rollup depth. 0 = per-turn (existing behavior).
+	// 1 = rollup of per-turn checkpoints. 2 = rollup of rollups. Etc.
+	Level int `json:"level,omitempty"`
+	// CoveredTurns is the count of original per-turn checkpoints this
+	// entry effectively replaces. For Level=0 this is 1 (or omitted).
+	// For rollups this is the sum of CoveredTurns from the source set.
+	CoveredTurns int `json:"covered_turns,omitempty"`
+	// SourceCheckpointIDs lists the checkpoint IDs this rollup consumed.
+	// Lets the UI drill down and lets a re-roll-up operate on the right
+	// source. Empty for Level=0.
+	SourceCheckpointIDs []string `json:"source_checkpoint_ids,omitempty"`
 }
 
 // CheckpointFileChange is a single file-change entry in a TurnCheckpoint's

@@ -61,10 +61,10 @@ _Blocked by: SP-064 (Phases 1–3 are prerequisites for cross-process session di
 - [x] SP-065-3e: Running-row Stop button → `POST stop` with confirmation dialog.
 
 ### Phase 4: Session detail view
-- [ ] SP-065-4a: Detail panel route — header with status/budget/iteration/elapsed.
-- [ ] SP-065-4b: Captured-output stream component, auto-scroll-lock on user scroll-up.
-- [ ] SP-065-4c: Step timeline when `steps` exists — checkmarks for completed, highlight for current.
-- [ ] SP-065-4d: Budget event log — threshold crossings + cap-hit timestamps.
+- [x] SP-065-4a: Detail panel route — header with status/budget/iteration/elapsed.
+- [x] SP-065-4b: Captured-output stream component, auto-scroll-lock on user scroll-up.
+- [x] SP-065-4c: Step timeline when `steps` exists — checkmarks for completed, highlight for current.
+- [x] SP-065-4d: Budget event log — threshold crossings + cap-hit timestamps.
 
 ### Phase 5: Chat ↔ automate linkage
 - [ ] SP-065-5a: When `run_automate` succeeds in a chat, emit an inline chat message containing a link to the Automations panel with the new session id.

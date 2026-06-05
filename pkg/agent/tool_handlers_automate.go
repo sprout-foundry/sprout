@@ -80,6 +80,20 @@ func handleRunAutomate(ctx context.Context, a *Agent, args map[string]interface{
 	return string(resultJSON), nil
 }
 
+// RunAutomateWorkflow executes a named workflow and returns the JSON result.
+// This is the public entry point for the WebUI automate API.
+func (a *Agent) RunAutomateWorkflow(ctx context.Context, workflow string) (string, error) {
+	args := map[string]interface{}{"workflow": workflow}
+	return handleRunAutomate(ctx, a, args)
+}
+
+// WorkflowRequiresApproval reports whether the named workflow needs user
+// confirmation before launching. This wraps the unexported workflowRequiresApproval
+// so the WebUI layer can enforce the same policy as the CLI tool path.
+func WorkflowRequiresApproval(workflowName string) bool {
+	return workflowRequiresApproval(workflowName)
+}
+
 // handleListAutomateWorkflows lists available workflows from the automate/ directory.
 func handleListAutomateWorkflows(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	dir := automate.Dir()

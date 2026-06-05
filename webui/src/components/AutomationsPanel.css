@@ -1,0 +1,686 @@
+/* ── Root Container ─────────────────────────────────────────── */
+
+.automations-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  font-family: var(--font-mono);
+}
+
+/* ── Tab Bar ───────────────────────────────────────────────── */
+
+.automations-tab-bar {
+  display: flex;
+  gap: 2px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.automations-tab {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+}
+
+.automations-tab:hover {
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+}
+
+.automations-tab.active {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.automations-tab:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: -2px;
+}
+
+.automations-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 14px;
+  padding: 0 4px;
+  border-radius: 7px;
+  background: var(--accent-secondary);
+  color: var(--accent-fg);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+/* ── Tab Content ───────────────────────────────────────────── */
+
+.automations-tab-content {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-default) transparent;
+}
+
+.automations-tab-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.automations-tab-content::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 999px;
+}
+
+.automations-tab-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ── Available Tab ─────────────────────────────────────────── */
+
+.automations-available {
+  display: flex;
+  flex-direction: column;
+  min-height: 80px;
+}
+
+.automations-workflow-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+}
+
+.automations-workflow-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--bg-primary);
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.automations-workflow-card:hover {
+  background: var(--bg-elevated);
+  border-color: var(--border-default);
+}
+
+.automations-workflow-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.automations-workflow-name {
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.automations-workflow-desc {
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Run Button ────────────────────────────────────────────── */
+
+.automations-run-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  height: 28px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent-success) 15%, transparent);
+  color: var(--accent-success);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.automations-run-btn:hover {
+  background: color-mix(in srgb, var(--accent-success) 25%, transparent);
+}
+
+.automations-run-btn:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: -2px;
+}
+
+/* ── Session Table ─────────────────────────────────────────── */
+
+.automations-session-table {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+
+.automations-session-header {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+  user-select: none;
+  color: var(--text-tertiary);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.automations-session-row {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 11px;
+  transition: background 0.12s ease;
+}
+
+.automations-session-row:last-child {
+  border-bottom: none;
+}
+
+.automations-session-row:not(.clickable):hover {
+  background: var(--bg-elevated);
+}
+
+.automations-session-row.clickable {
+  cursor: pointer;
+}
+
+.automations-session-row.clickable:hover {
+  background: var(--bg-elevated);
+}
+
+/* Column widths */
+.automations-col-id {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 132px;
+}
+
+.automations-col-workflow {
+  flex: 1 1 0;
+  min-width: 0;
+  padding-left: 12px;
+}
+
+.automations-col-status {
+  flex: 0 0 auto;
+  padding-left: 12px;
+  width: 70px;
+}
+
+.automations-col-elapsed {
+  flex: 0 0 auto;
+  padding-left: 12px;
+  width: 64px;
+  font-variant-numeric: tabular-nums;
+}
+
+.automations-col-budget {
+  flex: 0 0 auto;
+  padding-left: 12px;
+  width: 110px;
+}
+
+.automations-col-actions {
+  flex: 0 0 auto;
+  padding-left: 12px;
+  width: 72px;
+  text-align: right;
+}
+
+/* Cell content */
+.automations-session-id {
+  color: var(--text-primary);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.automations-session-workflow {
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.automations-session-elapsed {
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.automations-no-budget {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+/* ── Status Badge ──────────────────────────────────────────── */
+
+.automations-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.automations-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Running — green */
+.automations-status-badge.running {
+  background: color-mix(in srgb, var(--accent-success) 12%, transparent);
+  color: var(--accent-success);
+}
+
+.automations-status-badge.running .automations-status-dot {
+  background: var(--accent-success);
+}
+
+/* Exited — gray */
+.automations-status-badge.exited {
+  background: color-mix(in srgb, var(--text-muted) 15%, transparent);
+  color: var(--text-muted);
+}
+
+.automations-status-badge.exited .automations-status-dot {
+  background: var(--text-muted);
+}
+
+/* Stopped — red */
+.automations-status-badge.stopped {
+  background: color-mix(in srgb, var(--accent-error) 12%, transparent);
+  color: var(--accent-error);
+}
+
+.automations-status-badge.stopped .automations-status-dot {
+  background: var(--accent-error);
+}
+
+/* ── Stop Button ───────────────────────────────────────────── */
+
+.automations-stop-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent-error) 10%, transparent);
+  color: var(--accent-error);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+  flex-shrink: 0;
+}
+
+.automations-stop-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent-error) 20%, transparent);
+}
+
+.automations-stop-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.automations-stop-btn:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: -2px;
+}
+
+/* ── Budget Bar ────────────────────────────────────────────── */
+
+.automations-budget-bar {
+  position: relative;
+  height: 10px;
+  border-radius: 5px;
+  background: var(--bg-elevated);
+  overflow: hidden;
+  min-width: 60px;
+}
+
+.automations-budget-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  border-radius: 5px;
+  transition:
+    width 0.3s ease,
+    background 0.3s ease;
+}
+
+.automations-budget-text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-shadow: 0 0 3px var(--bg-primary);
+  white-space: nowrap;
+}
+
+/* ── Run Modal ─────────────────────────────────────────────── */
+
+.automations-run-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: automationsModalFadeIn 0.12s ease-out;
+}
+
+@keyframes automationsModalFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.automations-modal-overlay {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, black 40%, transparent);
+}
+
+.automations-modal-content {
+  position: relative;
+  width: 400px;
+  max-width: calc(100vw - 32px);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  box-shadow: var(--shadow-elevated);
+  overflow: hidden;
+}
+
+.automations-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.automations-modal-header h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.automations-modal-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+}
+
+.automations-modal-close:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.automations-modal-body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+}
+
+.automations-modal-workflow-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.automations-modal-workflow-name {
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.automations-modal-workflow-desc {
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.automations-modal-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.automations-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.automations-field-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.automations-field-hint {
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.automations-input {
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  transition:
+    border-color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+.automations-input::placeholder {
+  color: var(--text-muted);
+}
+
+.automations-input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-primary) 20%, transparent);
+}
+
+.automations-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.automations-modal-cancel-btn {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+}
+
+.automations-modal-cancel-btn:hover:not(:disabled) {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.automations-modal-cancel-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.automations-modal-run-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 4px;
+  background: var(--accent-primary);
+  color: var(--accent-fg);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    opacity 0.12s ease;
+}
+
+.automations-modal-run-btn:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.automations-modal-run-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── Error & Empty States ──────────────────────────────────── */
+
+.automations-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px;
+  padding: 8px 10px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent-error) 10%, transparent);
+  color: var(--accent-error);
+  font-size: 11px;
+}
+
+.automations-empty {
+  padding: 20px 12px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-style: italic;
+}
+
+/* ── Screen-reader only ───────────────────────────────────── */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── Responsive ────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  .automations-modal-content {
+    width: calc(100vw - 16px);
+  }
+
+  .automations-col-budget {
+    display: none;
+  }
+
+  .automations-col-actions {
+    width: 60px;
+  }
+}

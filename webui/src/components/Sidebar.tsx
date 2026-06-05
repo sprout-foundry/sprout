@@ -6,6 +6,7 @@ import { useHotkeys } from '../contexts/HotkeyContext';
 import { usePlatformNav } from '../contexts/PlatformNavContext';
 import { useTheme } from '../contexts/ThemeContext';
 import type { WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
+import { debugLog } from '../utils/log';
 import { useSidebarEventHandlers } from '../hooks/useSidebarEventHandlers';
 import { useSidebarModel } from '../hooks/useSidebarModel';
 import {
@@ -324,7 +325,10 @@ function Sidebar({
       case 'changes':
         return <AgentChangesPanel onFileClick={onFileClick} />;
       case 'automations':
-        return <AutomationsPanel />;
+        return <AutomationsPanel onNavigateToSession={(id) => {
+          // TODO: Navigate to session output view
+          debugLog('[Sidebar] Navigate to automation session:', id);
+        }} />;
       case 'settings':
         return supportsSettings ? (
           <SidebarSettingsSection

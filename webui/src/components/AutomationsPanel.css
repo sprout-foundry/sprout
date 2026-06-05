@@ -633,6 +633,16 @@
   cursor: not-allowed;
 }
 
+/* ── Detail Overlay ────────────────────────────────────────── */
+
+.automations-detail-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  background: var(--bg-secondary);
+  animation: automationsModalFadeIn 0.12s ease-out;
+}
+
 /* ── Error & Empty States ──────────────────────────────────── */
 
 .automations-error {

@@ -229,6 +229,64 @@ func TestEventBus_UnsubscribeNonExistent(t *testing.T) {
 	}
 }
 
+// TestEventBus_PublishAfterUnsubscribeDoesNotPanic guards the race where a
+// concurrent Unsubscribe closes a subscriber channel after Publish has
+// snapshotted the subscriber list. Sending on the closed channel panics; the
+// recover() guard in Publish must catch it. A prior implementation used
+// `defer recover()` which does NOT recover (recover only returns non-nil
+// when called inside a deferred function body), so a closed channel crashed
+// the agent — observed in `sprout automate` runs.
+func TestEventBus_PublishAfterUnsubscribeDoesNotPanic(t *testing.T) {
+	t.Run("non-critical event", func(t *testing.T) {
+		eb := NewEventBus()
+		eb.Subscribe("racer")
+
+		// Close the channel out from under Publish by reaching into the bus.
+		// This deterministically simulates the race the recover() guards.
+		eb.mutex.Lock()
+		ch := eb.subscribers["racer"]
+		delete(eb.subscribers, "racer")
+		close(ch)
+		// Re-register the now-closed channel so Publish sends to it.
+		eb.subscribers["racer"] = ch
+		eb.mutex.Unlock()
+
+		assert.NotPanics(t, func() {
+			eb.Publish(EventTypeAgentMessage, AgentMessageEvent("info", "hi", nil))
+		})
+	})
+
+	t.Run("critical event", func(t *testing.T) {
+		eb := NewEventBus()
+		eb.Subscribe("racer")
+
+		eb.mutex.Lock()
+		ch := eb.subscribers["racer"]
+		delete(eb.subscribers, "racer")
+		close(ch)
+		eb.subscribers["racer"] = ch
+		eb.mutex.Unlock()
+
+		assert.NotPanics(t, func() {
+			eb.Publish(EventTypeSecurityApprovalRequest, nil)
+		})
+
+		// drainMu must be released even when the send panicked — otherwise
+		// the next critical publish would deadlock.
+		done := make(chan struct{})
+		go func() {
+			eb.drainMu.Lock()
+			eb.drainMu.Unlock()
+			close(done)
+		}()
+		select {
+		case <-done:
+		case <-time.After(time.Second):
+			t.Fatal("drainMu leaked after panicked critical send")
+		}
+	})
+}
+
 func TestGenerateEventID(t *testing.T) {
 	id1 := generateEventID(1)
 	id2 := generateEventID(2)

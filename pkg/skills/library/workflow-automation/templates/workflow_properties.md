@@ -471,3 +471,33 @@ Stale PID files (from processes that have exited) can be cleaned up manually usi
 ### Integration with Agent Sessions
 
 Within an agent session, the `run_automate` tool launches workflows as background processes tracked by the BackgroundProcessManager. Use `shell_command(check_background=<session_id>)` to poll output and `shell_command(stop_background=<session_id>)` to stop them.
+
+## WebUI Usage
+
+The Automations panel in the WebUI provides a visual interface for discovering, running, and monitoring workflows.
+
+### Opening the Panel
+
+Click the **Automations** tab in the sidebar navigation (the Layers icon). The panel has three sections:
+
+- **Available**: Lists all workflow configurations found in your project's `automate/` directory
+- **Running**: Shows active sessions with real-time status, elapsed time, and stop controls
+- **Recent**: Displays completed sessions with output preview
+
+### Running a Workflow
+
+1. Click the **Run** button on any workflow card
+2. Optionally set a per-run budget or heartbeat interval
+3. Confirm to start — the workflow runs in the background
+4. Monitor progress in the Running tab
+
+### Session Details
+
+Click any session to view:
+- Session status and elapsed time
+- Captured output stream (for agent-launched sessions)
+- Budget utilization bar
+
+### Chat Integration
+
+When a workflow is started via the `run_automate` tool in a chat session, the response includes a direct link to the Automations panel for that session.

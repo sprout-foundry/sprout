@@ -12,6 +12,7 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/automate"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 // backgroundProcessManagerOnce ensures thread-safe lazy initialization of
@@ -71,6 +72,31 @@ func handleRunAutomate(ctx context.Context, a *Agent, args map[string]interface{
 	// The error is non-fatal — the session is still tracked by BPM.
 	if err := writeAutomatePIDFile(sessionID, bpm, wfPath); err != nil {
 		// Log warning but don't fail the workflow.
+	}
+
+	// SP-065-2b: Publish session_started event
+	a.publishEvent(events.EventTypeAutomateSessionStarted, events.AutomateSessionStartedEvent(
+		sessionID, filepath.Base(wfPath), "automate",
+	))
+
+	// SP-065-2d: Watch for process exit and publish session_ended
+	if proc, exists := bpm.GetProcess(sessionID); exists {
+		go func() {
+			select {
+			case <-proc.Done():
+				// Determine status from exit code
+				exitCode := proc.GetExitCode()
+				status := "success"
+				if exitCode != 0 {
+					status = "error"
+				}
+				a.publishEvent(events.EventTypeAutomateSessionEnded, events.AutomateSessionEndedEvent(
+					sessionID, filepath.Base(wfPath), status, 0,
+				))
+			case <-ctx.Done():
+				// Agent is shutting down; skip the event.
+			}
+		}()
 	}
 
 	result["status"] = "started"

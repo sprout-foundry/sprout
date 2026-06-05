@@ -41,7 +41,6 @@ function AutomationsSessionDetail({ sessionId, onClose }: AutomationsSessionDeta
   const [session, setSession] = useState<SessionDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [output, setOutput] = useState<string>('');
-  const [outputOffset, setOutputOffset] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
 
   const outputContainerRef = useRef<HTMLPreElement>(null);
@@ -74,6 +73,9 @@ function AutomationsSessionDetail({ sessionId, onClose }: AutomationsSessionDeta
         `/api/automate/sessions/${encodeURIComponent(sessionId)}`
       );
       if (!response.ok) {
+        if (response.status === 404) {
+          setSession(null);
+        }
         throw new Error(`Failed to fetch session: ${response.status}`);
       }
       const data: SessionDetail = await response.json();
@@ -96,7 +98,6 @@ function AutomationsSessionDetail({ sessionId, onClose }: AutomationsSessionDeta
       if (data.output) {
         setOutput((prev) => prev + data.output);
       }
-      setOutputOffset(data.offset);
       outputOffsetRef.current = data.offset;
     } catch (err) {
       debugLog('[AutomationsSessionDetail] Failed to fetch output:', err);
@@ -123,7 +124,6 @@ function AutomationsSessionDetail({ sessionId, onClose }: AutomationsSessionDeta
     setLoading(true);
     setError(null);
     setOutput('');
-    setOutputOffset(0);
     outputOffsetRef.current = 0;
     isAutoScrolling.current = true;
 
@@ -133,10 +133,6 @@ function AutomationsSessionDetail({ sessionId, onClose }: AutomationsSessionDeta
   }, [sessionId, fetchSession, fetchOutput]);
 
   /* ── Polling ─────────────────────────────────────────── */
-
-  useEffect(() => {
-    outputOffsetRef.current = outputOffset;
-  }, [outputOffset]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -182,7 +178,13 @@ function AutomationsSessionDetail({ sessionId, onClose }: AutomationsSessionDeta
   /* ── Render ──────────────────────────────────────────── */
 
   return (
-    <div className="automations-session-detail">
+    <div
+      className="automations-session-detail"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Session details"
+      tabIndex={-1}
+    >
       {/* Close Button */}
       <button
         type="button"

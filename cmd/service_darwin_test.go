@@ -190,9 +190,12 @@ func TestXmlEscapeStr(t *testing.T) {
 		{"ampersand", "a&b", "a&amp;b"},
 		{"less than", "a<b", "a&lt;b"},
 		{"greater than", "a>b", "a&gt;b"},
-		{"double quote", `a"b`, "a&quot;b"},
-		{"single quote", "a'b", "a&apos;b"},
-		{"all special", `&<>"'`, "&amp;&lt;&gt;&quot;&apos;"},
+		// xml.EscapeText emits numeric character references for quotes
+		// (&#34; / &#39;) rather than named entities (&quot; / &apos;).
+		// Both are valid XML and parse identically in launchd plists.
+		{"double quote", `a"b`, "a&#34;b"},
+		{"single quote", "a'b", "a&#39;b"},
+		{"all special", `&<>"'`, "&amp;&lt;&gt;&#34;&#39;"},
 		{"empty", "", ""},
 		{"path with spaces", "/path/to/my app", "/path/to/my app"},
 	}

@@ -9,7 +9,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { debugLog } from '../utils/log';
 
-export type SectionTab = 'git' | 'logs' | 'files' | 'settings' | 'search' | 'changes';
+export type SectionTab = 'git' | 'logs' | 'files' | 'settings' | 'search' | 'changes' | 'automations';
 
 export const SIDEBAR_MIN_WIDTH = 200;
 export const SIDEBAR_MAX_WIDTH = 600;
@@ -65,7 +65,7 @@ function loadPersistedString<T extends string>(key: string, fallback: T, validVa
   return fallback;
 }
 
-const VALID_SECTION_TABS: readonly SectionTab[] = ['git', 'logs', 'files', 'settings', 'search', 'changes'] as const;
+const VALID_SECTION_TABS: readonly SectionTab[] = ['git', 'logs', 'files', 'settings', 'search', 'changes', 'automations'] as const;
 
 export function useSidebarState(): UseSidebarStateReturn {
   const [isMobile, setIsMobile] = useState(false);

@@ -47,9 +47,9 @@ _Blocked by: SP-064 (Phases 1–3 are prerequisites for cross-process session di
 - [x] SP-065-1f: Wire endpoints into the existing webui router with auth/origin checks.
 
 ### Phase 2: Backend WS events
-- [ ] SP-065-2a: Define event types in `pkg/events/`: `automate.session_started`, `automate.budget_update`, `automate.output_chunk`, `automate.session_ended`.
-- [ ] SP-065-2b: Publish `session_started` / `session_ended` from `handleRunAutomate` and CLI launch.
-- [ ] SP-065-2c: Publish `budget_update` from the existing budget warning + exceeded callbacks AND from the heartbeat tick in `cmd/agent_workflow.go`.
+- [x] SP-065-2a: Define event types in `pkg/events/`: `automate.session_started`, `automate.budget_update`, `automate.output_chunk`, `automate.session_ended`.
+- [x] SP-065-2b: Publish `session_started` / `session_ended` from `handleRunAutomate` and CLI launch.
+- [x] SP-065-2c: Publish `budget_update` from the existing budget warning + exceeded callbacks AND from the heartbeat tick in `cmd/agent_workflow.go`.
 - [ ] SP-065-2d: Tee captured-output writes through a `automate.output_chunk` publisher with coalescing (≥250ms or ≥4KB).
 - [ ] SP-065-2e: Subscription opt-in so chat sessions don't see automate events by default.
 

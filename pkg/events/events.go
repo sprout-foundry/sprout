@@ -71,6 +71,11 @@ const (
 	// successful or not. Subscribers (e.g. the auto-transcript snapshot
 	// capture) use this to record the post-compact state.
 	EventTypeCompactCompleted = "compact_completed"
+	// EventTypeContextManagementDiagnostic (SP-066 Phase 1) reports the
+	// effective context budget at each iteration so we can verify
+	// substitution does the heavy lifting and the LLM fall-through
+	// stays near zero.
+	EventTypeContextManagementDiagnostic = "context_management_diagnostic"
 	// SP-065 Phase 2: Automate session lifecycle events
 	EventTypeAutomateSessionStarted = "automate.session_started"
 	EventTypeAutomateBudgetUpdate   = "automate.budget_update"
@@ -542,6 +547,41 @@ func CompactStartedEvent(source string, messageCount, checkpointCount int) map[s
 		"message_count":    messageCount,
 		"checkpoint_count": checkpointCount,
 		"timestamp":        time.Now().UTC().Format(time.RFC3339),
+	}
+}
+
+// ContextManagementDiagnosticEvent (SP-066 Phase 1) reports the model-aware
+// context-budget math at a single iteration. Subscribers (WebUI metrics
+// panel, telemetry pipelines) use it to verify substitution is doing the
+// heavy lifting and the LLM fall-through stays approximately never.
+//
+// Fields:
+//   - current_tokens: tokenizer-estimated size of the prompt going to the model.
+//   - max_tokens: model's hard context-window limit.
+//   - effective_max: max_tokens minus reservation budget; substitution
+//     triggers when current_tokens exceeds trigger_fraction × max_tokens.
+//   - trigger_fraction: share of max_tokens at which seed triggers compaction
+//     (1 − total_reserved_fraction).
+//   - reserved_response / reserved_thinking / reserved_tool_io: the three
+//     reservation slices as fractions of max_tokens.
+//   - iteration: current iteration number from seed's OnIteration callback.
+//   - message_count: messages in the prepared prompt list.
+func ContextManagementDiagnosticEvent(currentTokens, maxTokens int, triggerFraction, reservedResponse, reservedThinking, reservedToolIO float64, iteration, messageCount int) map[string]interface{} {
+	effectiveMax := 0
+	if maxTokens > 0 {
+		effectiveMax = int(float64(maxTokens) * triggerFraction)
+	}
+	return map[string]interface{}{
+		"current_tokens":    currentTokens,
+		"max_tokens":        maxTokens,
+		"effective_max":     effectiveMax,
+		"trigger_fraction":  triggerFraction,
+		"reserved_response": reservedResponse,
+		"reserved_thinking": reservedThinking,
+		"reserved_tool_io":  reservedToolIO,
+		"iteration":         iteration,
+		"message_count":     messageCount,
+		"timestamp":         time.Now().UTC().Format(time.RFC3339),
 	}
 }
 

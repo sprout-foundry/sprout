@@ -71,12 +71,12 @@ _Blocked by: SP-064 (Phases 1–3 are prerequisites for cross-process session di
 - [x] SP-065-5b: Sidebar nav handler — clicking the link switches to Automations and focuses the session.
 
 ### Phase 6: Tests
-- [ ] SP-065-6a: Handler unit tests — workflow discovery, run with requires_approval=true triggers intent prompt, run with requires_approval=false skips, stop terminates.
-- [ ] SP-065-6b: WS event ordering test — start → updates → end.
-- [ ] SP-065-6c: React component tests — AutomationsPanel renders empty / running / recent states; budget bar color transitions; intent confirmation modal flow.
-- [ ] SP-065-6d: Integration test against a real daemon with a shell-only workflow.
+- [x] SP-065-6a: Handler unit tests — workflow discovery, run with requires_approval=true triggers intent prompt, run with requires_approval=false skips, stop terminates.
+- [x] SP-065-6b: WS event ordering test — start → updates → end.
+- [x] SP-065-6c: React component tests — AutomationsPanel renders empty / running / recent states; budget bar color transitions; intent confirmation modal flow.
+- [x] SP-065-6d: Integration test against a real daemon with a shell-only workflow.
 
 ### Phase 7: Docs
-- [ ] SP-065-7a: Add a "WebUI usage" section to `workflow_properties.md`.
-- [ ] SP-065-7b: Add a WebUI paragraph to `SKILL.md` explaining the panel exists and how it relates to the agent tool path.
-- [ ] SP-065-7c: One-paragraph README mention.
+- [x] SP-065-7a: Add a "WebUI usage" section to `workflow_properties.md`.
+- [x] SP-065-7b: Add a WebUI paragraph to `SKILL.md` explaining the panel exists and how it relates to the agent tool path.
+- [x] SP-065-7c: One-paragraph README mention.

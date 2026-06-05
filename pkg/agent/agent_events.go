@@ -128,6 +128,23 @@ func (a *Agent) PublishContextManagementDiagnostic(currentTokens, maxTokens, ite
 	)
 }
 
+// PublishRecallDiagnostic (SP-066 Phase 3) emits a single semantic-recall
+// pass diagnostic. Called from InjectSemanticRecall after every recall
+// query (including no-op queries) so subscribers can see the full
+// distribution of recall behavior, not just hits.
+func (a *Agent) PublishRecallDiagnostic(diag recallRetrievalDiagnostic) {
+	a.publishEvent(
+		events.EventTypeRecallDiagnostic,
+		events.RecallDiagnosticEvent(
+			diag.EmbedDurationMS,
+			diag.CandidatesConsidered,
+			diag.Injected,
+			diag.InjectedChars,
+			diag.TopScores,
+		),
+	)
+}
+
 // PublishBudgetUpdate publishes a budget update event for automate sessions.
 // This goes through decorateEventPayload to include client_id/chat_id metadata.
 func (a *Agent) PublishBudgetUpdate(eventType string, data interface{}) {

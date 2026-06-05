@@ -580,6 +580,16 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 		injectCancel()
 	}
 
+	// SP-066 Phase 3: semantic recall over the conversation store. Runs
+	// on every user turn — including mid-session — so that summaries
+	// rolled past the substitution window (or wiped by a prior /compact)
+	// can still surface when the current message references them.
+	// Bounded by a tight timeout because this is on the user's critical
+	// path; recall is a nice-to-have and failure must degrade gracefully.
+	recallCtx, recallCancel := context.WithTimeout(context.Background(), 2*time.Second)
+	a.InjectSemanticRecall(recallCtx, processedQuery)
+	recallCancel()
+
 	// Build the user message with processed (cleaned) query and images
 	userMessage := api.Message{
 		Role:    "user",

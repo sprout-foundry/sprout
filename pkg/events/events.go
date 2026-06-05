@@ -76,6 +76,13 @@ const (
 	// substitution does the heavy lifting and the LLM fall-through
 	// stays near zero.
 	EventTypeContextManagementDiagnostic = "context_management_diagnostic"
+	// EventTypeRecallDiagnostic (SP-066 Phase 3) reports the per-turn
+	// semantic-recall pass: how long the embed took, how many candidates
+	// were considered, top scores, and how many items were injected.
+	// Subscribers (WebUI metrics panel, eval pipelines) use it to verify
+	// recall is surfacing useful matches and to tune the half-life and
+	// similarity threshold from real data.
+	EventTypeRecallDiagnostic = "recall_diagnostic"
 	// SP-065 Phase 2: Automate session lifecycle events
 	EventTypeAutomateSessionStarted = "automate.session_started"
 	EventTypeAutomateBudgetUpdate   = "automate.budget_update"
@@ -582,6 +589,28 @@ func ContextManagementDiagnosticEvent(currentTokens, maxTokens int, triggerFract
 		"iteration":         iteration,
 		"message_count":     messageCount,
 		"timestamp":         time.Now().UTC().Format(time.RFC3339),
+	}
+}
+
+// RecallDiagnosticEvent (SP-066 Phase 3) reports a single semantic-recall
+// pass. embedDurationMS measures the embed call (the recall query's
+// latency on the user's critical path). candidatesConsidered is what the
+// store returned before recency rerank + filter. injected/injectedChars
+// is what actually landed in the prompt supplement. topScores is the
+// raw cosine similarities for the candidates so subscribers can spot
+// near-miss patterns and tune the threshold.
+func RecallDiagnosticEvent(embedDurationMS float64, candidatesConsidered, injected, injectedChars int, topScores []float32) map[string]interface{} {
+	scores := make([]float64, len(topScores))
+	for i, s := range topScores {
+		scores[i] = float64(s)
+	}
+	return map[string]interface{}{
+		"embed_duration_ms":     embedDurationMS,
+		"candidates_considered": candidatesConsidered,
+		"injected":              injected,
+		"injected_chars":        injectedChars,
+		"top_scores":            scores,
+		"timestamp":             time.Now().UTC().Format(time.RFC3339),
 	}
 }
 

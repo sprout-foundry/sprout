@@ -23,10 +23,10 @@ _Spec: `roadmap/SP-064-automate-cli-monitoring.md`_
 - [x] SP-064-3d: Document the PID-file schema in `roadmap/SP-064-automate-cli-monitoring.md` so SP-065's webui consumer doesn't drift.
 
 ### Phase 4: status / stop / logs subcommands
-- [ ] SP-064-4a: `cmd/automate.go` — add `automateStatusCmd` (`sprout automate status [--all] [--json]`). Reads PID files + BPM in-memory state, prints table.
-- [ ] SP-064-4b: `cmd/automate.go` — add `automateStopCmd` (`sprout automate stop <session_id>` or `--all`). Calls `Stop` (or sends signals directly when only the PID file is known).
-- [ ] SP-064-4c: `cmd/automate.go` — add `automateLogsCmd` (`sprout automate logs <session_id> [-f] [-n N]`). Reads the captured output file; `-f` polls at 500ms ticks.
-- [ ] SP-064-4d: Add subcommands to `automateCmd.AddCommand` and update help text.
+- [x] SP-064-4a: `cmd/automate.go` — add `automateStatusCmd` (`sprout automate status [--all] [--json]`). Reads PID files + BPM in-memory state, prints table.
+- [x] SP-064-4b: `cmd/automate.go` — add `automateStopCmd` (`sprout automate stop <session_id>` or `--all`). Calls `Stop` (or sends signals directly when only the PID file is known).
+- [x] SP-064-4c: `cmd/automate.go` — add `automateLogsCmd` (`sprout automate logs <session_id> [-f] [-n N]`). Reads the captured output file; `-f` polls at 500ms ticks.
+- [x] SP-064-4d: Add subcommands to `automateCmd.AddCommand` and update help text.
 
 ### Phase 5: Tests + docs
 - [ ] SP-064-5a: Integration test — launch a sleep-based workflow, status shows it, stop kills it, status reflects exit, output file persists.

@@ -137,24 +137,26 @@ func (eb *EventBus) Publish(eventType string, data any) {
 	// Publish to all subscribers without holding the lock
 	for _, ch := range subscribers {
 		// Recover from send on closed channel — Unsubscribe may close ch
-		// concurrently after we copied the subscriber list. This is a known
-		// Go pattern: you cannot test "is this channel closed?" without
-		// sending/receiving, so recover is the safe approach.
+		// concurrently after we copied the subscriber list. `defer recover()`
+		// does NOT recover panics: recover() only returns non-nil when
+		// called inside a deferred function body, not when it IS the
+		// deferred call.
 		func() {
-			defer recover()
+			defer func() { _ = recover() }()
 			eb.publishToChannel(ch, event, eventType, isCritical)
 		}()
 	}
 }
 
 // publishToChannel sends an event to a single subscriber channel.
-// MUST NOT be called with a closed channel (caller should recover).
+// May panic if ch is closed; the caller wraps the call in a recover().
+// drainMu is released via defer so a panic on the send doesn't leak the lock.
 func (eb *EventBus) publishToChannel(ch chan UIEvent, event UIEvent, eventType string, isCritical bool) {
 	if isCritical {
 		eb.drainMu.Lock()
+		defer eb.drainMu.Unlock()
 		select {
 		case ch <- event:
-			eb.drainMu.Unlock()
 		default:
 			select {
 			case <-ch:
@@ -163,10 +165,8 @@ func (eb *EventBus) publishToChannel(ch chan UIEvent, event UIEvent, eventType s
 				case <-time.After(1 * time.Second):
 					log.Printf("[EventBus] Dropped critical %s event: subscriber unresponsive for 1s after drain", eventType)
 				}
-				eb.drainMu.Unlock()
 			default:
 				// Channel is empty but concurrently closed; give up.
-				eb.drainMu.Unlock()
 			}
 		}
 	} else {

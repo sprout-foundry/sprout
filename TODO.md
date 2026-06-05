@@ -8,19 +8,19 @@ _Spec: `roadmap/SP-064-automate-cli-monitoring.md`_
 ### Phase 1: BPM Stop primitive
 - [x] SP-064-1a: Add `(*BackgroundProcessManager).Stop(sessionID string, grace time.Duration) error` in `pkg/agent_tools/background_process.go`. SIGINT → grace → SIGTERM → 5s → SIGKILL. Updates status to `exited`. No-op on already-exited sessions.
 - [x] SP-064-1b: Wire `BPM.Stop` into the `shell_command(stop_background=…)` tool path in `pkg/agent_tools/shell_handler.go` so CLI mode reaches parity with the WebUI TerminalManager.
-- [ ] SP-064-1c: Revert the "stop_background not available for automate sessions in CLI mode" caveat in `pkg/skills/library/workflow-automation/SKILL.md`.
+- [x] SP-064-1c: Revert the "stop_background not available for automate sessions in CLI mode" caveat in `pkg/skills/library/workflow-automation/SKILL.md`.
 - [x] SP-064-1d: Unit tests — signal sequencing on a controlled sleep subprocess (mock or real with very short grace periods), no-op on exited, error on unknown session.
 
 ### Phase 2: Session-kind tagging
-- [ ] SP-064-2a: Add `Kind string` field to BPM `Process` struct, default `"shell"`.
-- [ ] SP-064-2b: Set `Kind = "automate"` in `pkg/agent/tool_handlers_automate.go` `handleRunAutomate` BPM `Start` call.
-- [ ] SP-064-2c: Set `Kind = "automate"` in `cmd/automate.go` `runWorkflowByPath` — but this path uses `exec.Command` not BPM; either move CLI launches through BPM or write the same `kind=automate` marker to the PID file (Phase 3) and treat that as the source of truth for CLI-launched runs.
+- [x] SP-064-2a: Add `Kind string` field to BPM `Process` struct, default `"shell"`.
+- [x] SP-064-2b: Set `Kind = "automate"` in `pkg/agent/tool_handlers_automate.go` `handleRunAutomate` BPM `Start` call.
+- [x] SP-064-2c: Set `Kind = "automate"` in `cmd/automate.go` `runWorkflowByPath` — but this path uses `exec.Command` not BPM; either move CLI launches through BPM or write the same `kind=automate` marker to the PID file (Phase 3) and treat that as the source of truth for CLI-launched runs.
 
 ### Phase 3: Cross-process discovery (PID files)
-- [ ] SP-064-3a: On every workflow launch (CLI or agent tool), write `.sprout/automate/<session_id>.json` containing `{workflow, pid, started_at, output_file_path, budget_usd?, kind: "automate"}`.
-- [ ] SP-064-3b: Remove the PID file on clean shutdown (workflow process exit handler).
-- [ ] SP-064-3c: Stale-PID sweep at startup of any `sprout automate *` subcommand — `kill -0` each PID, remove files whose process is dead.
-- [ ] SP-064-3d: Document the PID-file schema in `roadmap/SP-064-automate-cli-monitoring.md` so SP-065's webui consumer doesn't drift.
+- [x] SP-064-3a: On every workflow launch (CLI or agent tool), write `.sprout/automate/<session_id>.json` containing `{workflow, pid, started_at, output_file_path, budget_usd?, kind: "automate"}`.
+- [x] SP-064-3b: Remove the PID file on clean shutdown (workflow process exit handler).
+- [x] SP-064-3c: Stale-PID sweep at startup of any `sprout automate *` subcommand — `kill -0` each PID, remove files whose process is dead.
+- [x] SP-064-3d: Document the PID-file schema in `roadmap/SP-064-automate-cli-monitoring.md` so SP-065's webui consumer doesn't drift.
 
 ### Phase 4: status / stop / logs subcommands
 - [ ] SP-064-4a: `cmd/automate.go` — add `automateStatusCmd` (`sprout automate status [--all] [--json]`). Reads PID files + BPM in-memory state, prints table.

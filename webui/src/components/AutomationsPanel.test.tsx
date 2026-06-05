@@ -622,6 +622,25 @@ describe('AutomationsPanel', () => {
     }
   });
 
+  it('opens detail panel when clicking a running session row', async () => {
+    mockFetchSequence(
+      wfResp([]),
+      seResp([{
+        session_id: 'detail-sess', workflow: 'w', pid: 1, status: 'running',
+        started_at: EPOCH_S - 10, kind: 'workflow', output_file_path: '/t/o.txt', budget_usd: 0,
+      }]),
+    );
+    render(<AutomationsPanel />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Running' }));
+    await waitFor(() => {
+      expect(screen.getByText('w')).toBeInTheDocument();
+    });
+    // Click the session row
+    fireEvent.click(screen.getByText('detail-sess'));
+    // Verify detail overlay is rendered
+    expect(document.querySelector('.automations-detail-overlay')).toBeInTheDocument();
+  });
+
   // ── Elapsed Time Formatting (requires fake timers) ───────────
 
   it('formats elapsed seconds only (45s)', async () => {

@@ -84,6 +84,8 @@ var allowedOutboundMessageTypes = map[string]struct{}{
 	events.EventTypeSessionTerminated:       {},
 	events.EventTypeDriftDetected:           {},
 	events.EventTypeSessionChanged:          {}, // SP-034-3e
+	events.EventTypeCompactStarted:          {},
+	events.EventTypeCompactCompleted:        {},
 
 	// Cold hydration (SP-046) — server streams workspace files on first-load
 	AllowedMessageTypeHydrateManifest: {},

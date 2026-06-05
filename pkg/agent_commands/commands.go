@@ -99,6 +99,9 @@ func NewCommandRegistry() *CommandRegistry {
 	// Register compaction command
 	registry.Register(&CompactCommand{})
 
+	// Register transcript / diagnostics command
+	registry.Register(&TranscriptCommand{})
+
 	// Register indexing command
 	registry.Register(&IndexCommand{})
 

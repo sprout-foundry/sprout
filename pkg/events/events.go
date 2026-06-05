@@ -62,6 +62,15 @@ const (
 	// EventTypeDelegateClarificationResponded is published when a parent
 	// agent responds to a delegate's clarification request.
 	EventTypeDelegateClarificationResponded = "delegate_clarification_responded"
+	// EventTypeCompactStarted fires immediately before a compaction
+	// operation begins, whether triggered manually by /compact or
+	// automatically by seed's structural compaction / context-limit
+	// recovery. The payload's `source` field distinguishes the path.
+	EventTypeCompactStarted = "compact_started"
+	// EventTypeCompactCompleted fires after the compaction finishes,
+	// successful or not. Subscribers (e.g. the auto-transcript snapshot
+	// capture) use this to record the post-compact state.
+	EventTypeCompactCompleted = "compact_completed"
 )
 
 // EventBus manages event distribution between CLI and Web UI
@@ -512,6 +521,40 @@ func AskUserRequestEvent(requestID string, req AskUserRequest, clientID string) 
 		payload["client_id"] = clientID
 	}
 	return payload
+}
+
+// CompactStartedEvent creates the payload for a compact_started event.
+// source is one of "manual" (slash command) or "auto_llm_summary" (seed
+// structural compaction / context-limit recovery). messageCount and
+// checkpointCount capture the pre-compact state for diagnostics.
+func CompactStartedEvent(source string, messageCount, checkpointCount int) map[string]interface{} {
+	return map[string]interface{}{
+		"source":           source,
+		"message_count":    messageCount,
+		"checkpoint_count": checkpointCount,
+		"timestamp":        time.Now().UTC().Format(time.RFC3339),
+	}
+}
+
+// CompactCompletedEvent creates the payload for a compact_completed event.
+// On success, err should be nil and after/summary fields describe the new
+// state. On failure, err carries the reason and counts reflect the
+// unchanged pre-compact totals.
+func CompactCompletedEvent(source string, beforeCount, afterCount int, summaryChars int, err error) map[string]interface{} {
+	data := map[string]interface{}{
+		"source":             source,
+		"before_message_count": beforeCount,
+		"after_message_count":  afterCount,
+		"summary_chars":      summaryChars,
+		"timestamp":          time.Now().UTC().Format(time.RFC3339),
+	}
+	if err != nil {
+		data["error"] = err.Error()
+		data["success"] = false
+	} else {
+		data["success"] = true
+	}
+	return data
 }
 
 // DriftDetectedEvent creates a drift notification event for the WebUI

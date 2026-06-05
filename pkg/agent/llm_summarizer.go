@@ -165,3 +165,56 @@ func firstLine(s string) string {
 	}
 	return strings.TrimSpace(s)
 }
+
+// SummarizeViaLLM produces a real LLM-generated recap of the supplied
+// message window, using the agent's bound LLM client. Returns the
+// summary body — callers are responsible for wrapping it with the
+// "Compacted earlier conversation state:" header before splicing it
+// back into the message list. Used by `/compact` so the user-facing
+// command does an actual recap instead of substituting pre-baked
+// rule-based heuristic text.
+func (a *Agent) SummarizeViaLLM(ctx context.Context, messages []api.Message, hint core.SummarizerHint) (string, error) {
+	if a == nil {
+		return "", fmt.Errorf("agent unavailable")
+	}
+	summarizer := newLLMSummarizer(a.client, a.GetProvider())
+	if summarizer == nil {
+		return "", fmt.Errorf("no LLM client bound; cannot summarize via LLM")
+	}
+	return summarizer(ctx, messages, hint)
+}
+
+// wrapLLMSummarizerWithEvents decorates a core.LLMSummarizer so seed's
+// auto-compaction path emits the same compact_started / compact_completed
+// events as the manual /compact slash command. The wrapper also captures
+// pre- and post-compact transcript snapshots so symptom #1 (silent
+// mid-session context loss from auto-compaction) becomes inspectable.
+//
+// Returns nil when inner is nil — seed treats a nil summarizer as
+// "no LLM-summary path; fall back to rule-based compaction".
+func wrapLLMSummarizerWithEvents(inner core.LLMSummarizer, a *Agent) core.LLMSummarizer {
+	if inner == nil || a == nil {
+		return inner
+	}
+	return func(ctx context.Context, messages []core.Message, hint core.SummarizerHint) (string, error) {
+		beforeCount := len(a.GetMessages())
+		checkpointCount := 0
+		if cps := a.copyTurnCheckpoints(); cps != nil {
+			checkpointCount = len(cps)
+		}
+		a.PublishCompactStarted("auto_llm_summary", beforeCount, checkpointCount)
+		if path, err := a.CaptureTranscriptSnapshot("pre-compact-auto", false); err == nil {
+			a.Logger().Debug("[transcript] pre-compact-auto snapshot: %s", path)
+		}
+
+		summary, err := inner(ctx, messages, hint)
+
+		afterCount := len(a.GetMessages())
+		summaryChars := len(strings.TrimSpace(summary))
+		a.PublishCompactCompleted("auto_llm_summary", beforeCount, afterCount, summaryChars, err)
+		if path, capErr := a.CaptureTranscriptSnapshot("post-compact-auto", false); capErr == nil {
+			a.Logger().Debug("[transcript] post-compact-auto snapshot: %s", path)
+		}
+		return summary, err
+	}
+}

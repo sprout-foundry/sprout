@@ -95,6 +95,20 @@ func (a *Agent) PublishAgentMessage(category, message string, extra map[string]i
 	a.publishEvent(events.EventTypeAgentMessage, events.AgentMessageEvent(category, message, extra))
 }
 
+// PublishCompactStarted emits a compact_started event with diagnostic
+// fields describing the conversation state at the moment compaction
+// begins. source is the path: "manual" (slash command) or
+// "auto_llm_summary" (seed structural compaction).
+func (a *Agent) PublishCompactStarted(source string, messageCount, checkpointCount int) {
+	a.publishEvent(events.EventTypeCompactStarted, events.CompactStartedEvent(source, messageCount, checkpointCount))
+}
+
+// PublishCompactCompleted emits a compact_completed event with the
+// result of the compaction. Pass nil err on success.
+func (a *Agent) PublishCompactCompleted(source string, beforeCount, afterCount, summaryChars int, err error) {
+	a.publishEvent(events.EventTypeCompactCompleted, events.CompactCompletedEvent(source, beforeCount, afterCount, summaryChars, err))
+}
+
 // SetEventBus sets the event bus for real-time UI updates and initializes the validator
 func (a *Agent) SetEventBus(eventBus *events.EventBus) {
 	a.eventBus = eventBus

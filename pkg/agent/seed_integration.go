@@ -645,7 +645,7 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	if pruner := a.state.GetConversationPruner(); pruner != nil {
 		opts.Pruner = pruner
 	}
-	opts.LLMSummarizer = newLLMSummarizer(a.client, a.GetProvider())
+	opts.LLMSummarizer = wrapLLMSummarizerWithEvents(newLLMSummarizer(a.client, a.GetProvider()), a)
 
 	if a.systemPrompt != "" {
 		opts.SystemPrompt = a.systemPrompt

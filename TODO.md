@@ -39,12 +39,12 @@ _Spec: `roadmap/SP-065-automate-webui-panel.md`_
 _Blocked by: SP-064 (Phases 1–3 are prerequisites for cross-process session discovery)_
 
 ### Phase 1: Backend REST
-- [ ] SP-065-1a: `pkg/webui/automations_handlers.go` — `GET /api/automate/workflows` reuses `automate.Discover` + `automate.Summarize`.
-- [ ] SP-065-1b: `GET /api/automate/sessions` and `GET /api/automate/sessions/:id` — read BPM + PID files (SP-064-3a).
-- [ ] SP-065-1c: `POST /api/automate/run` — body validation, optional overrides, dispatches through the `run_automate` tool path so `requires_approval` and the security gate are honored.
-- [ ] SP-065-1d: `POST /api/automate/sessions/:id/stop` — calls `BPM.Stop`.
-- [ ] SP-065-1e: `GET /api/automate/sessions/:id/output?since=offset` — paged output read for WS-drop fallback.
-- [ ] SP-065-1f: Wire endpoints into the existing webui router with auth/origin checks.
+- [x] SP-065-1a: `pkg/webui/automations_handlers.go` — `GET /api/automate/workflows` reuses `automate.Discover` + `automate.Summarize`.
+- [x] SP-065-1b: `GET /api/automate/sessions` and `GET /api/automate/sessions/:id` — read BPM + PID files (SP-064-3a).
+- [x] SP-065-1c: `POST /api/automate/run` — body validation, optional overrides, dispatches through the `run_automate` tool path so `requires_approval` and the security gate are honored.
+- [x] SP-065-1d: `POST /api/automate/sessions/:id/stop` — calls `BPM.Stop`.
+- [x] SP-065-1e: `GET /api/automate/sessions/:id/output?since=offset` — paged output read for WS-drop fallback.
+- [x] SP-065-1f: Wire endpoints into the existing webui router with auth/origin checks.
 
 ### Phase 2: Backend WS events
 - [ ] SP-065-2a: Define event types in `pkg/events/`: `automate.session_started`, `automate.budget_update`, `automate.output_chunk`, `automate.session_ended`.

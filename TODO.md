@@ -80,3 +80,41 @@ _Blocked by: SP-064 (Phases 1–3 are prerequisites for cross-process session di
 - [x] SP-065-7a: Add a "WebUI usage" section to `workflow_properties.md`.
 - [x] SP-065-7b: Add a WebUI paragraph to `SKILL.md` explaining the panel exists and how it relates to the agent tool path.
 - [x] SP-065-7c: One-paragraph README mention.
+
+## SP-066: Preserve Key Order in Structured File Tools
+_Spec: `roadmap/SP-066-structured-file-key-order.md`_
+
+### Phase 1: Foundation — Ordered Map Dependency + Type Definition
+- [ ] SP-066-1a: Add `github.com/wk8/go-ordered-map/v2` dependency via `go get`.
+- [ ] SP-066-1b: Create `pkg/agent/ordered_map.go` — define `OrderedMap` type alias for `*orderedmap.OrderedMap[string, interface{}]` with helpers: `New()`, `Get/Set/Delete/Keys()`, `ToMap()` / `FromMap()` conversion utilities.
+- [ ] SP-066-1c: Add `ParseJSONOrdered(content string) (*OrderedMap, error)` — use `json.Decoder` with iterative token walk that inserts keys into ordered map in parse order (avoids `json.Unmarshal` which loses order).
+- [ ] SP-066-1d: Unit tests for `ParseJSONOrdered` — verify key order preserved for nested objects and arrays.
+
+### Phase 2: Ordered YAML Parsing
+- [ ] SP-066-2a: Add `ParseYAMLOrdered(content string) (*OrderedMap, error)` — use `yaml.Unmarshal` into `yaml.Node`, then walk the node tree into an ordered map (preserves key order from source).
+- [ ] SP-066-2b: Replace `normalizeYAMLValue` with `NormalizeYAMLOrdered(*OrderedMap) *OrderedMap` — recursively normalize `map[interface{}]interface{}` YAML quirks while preserving order.
+- [ ] SP-066-2c: Unit tests for `ParseYAMLOrdered` — verify key order preserved from source file, nested objects, arrays, and scalar normalization.
+
+### Phase 3: Ordered Serialization
+- [ ] SP-066-3a: Add `SerializeJSONOrdered(om *OrderedMap) (string, error)` — custom recursive JSON encoder that walks ordered map in insertion order, uses `encoding/json` for leaf values, preserves indentation.
+- [ ] SP-066-3b: Add `SerializeYAMLOrdered(om *OrderedMap) (string, error)` — construct `yaml.Node` tree with keys in insertion order, then `yaml.Marshal` the node tree.
+- [ ] SP-066-3c: Replace `serializeStructuredContent` in `tool_handlers_structured.go` to use the new ordered functions.
+- [ ] SP-066-3d: Unit tests for serialization — round-trip a known-ordered structure, verify output key order matches input order.
+
+### Phase 4: Tool Argument Parsing — Preserve Order at Entry Point
+- [ ] SP-066-4a: In `pkg/agent/tools.go` (line ~24 where `json.Unmarshal` parses tool args), add an ordered-parse path: after the existing `map[string]interface{}` parse, also produce an ordered version and store it in a context value for structured file tools to use.
+- [ ] SP-066-4b: Update `handleWriteStructuredFile` to check context for ordered args first; if available, use `data` as an ordered map directly. Fallback: parse from existing `map[string]interface{}` args.
+- [ ] SP-066-4c: Update `handlePatchStructuredFile` similarly — use ordered args for `patch_ops` and `data` when available.
+- [ ] SP-066-4d: Unit tests — verify that `write_structured_file` with ordered input produces output in the same key order.
+
+### Phase 5: Patch Mutation Functions — Ordered Map Operations
+- [ ] SP-066-5a: Rewrite `applyPatchOperation`, `applyMutation`, `mutateAtLeaf`, `readPointerValue` in `tool_handlers_structured.go` to operate on `*OrderedMap` instead of `map[string]interface{}`. Maintain insertion order on `add` ops.
+- [ ] SP-066-5b: Replace `deserializeStructuredContent` to return `*OrderedMap` using the new parse functions from Phase 2.
+- [ ] SP-066-5c: Rewrite `validateDataAgainstSchema` to accept `*OrderedMap` — update type assertions throughout.
+- [ ] SP-066-5d: Run existing tests in `tool_handlers_file_events_test.go` and `tool_handlers_file_json_test.go` — fix breakage from type changes.
+
+### Phase 6: Integration Tests & Verification
+- [ ] SP-066-6a: Write `pkg/agent/ordered_structured_test.go` — end-to-end: write a JSON file with specific key order, verify written file preserves order.
+- [ ] SP-066-6b: Patch order preservation test — start with ordered file, apply a patch, verify all original keys remain in order and new keys appear at the patched location.
+- [ ] SP-066-6c: YAML round-trip test — parse YAML with non-alphabetical keys, patch a value, verify output preserves original key order.
+- [ ] SP-066-6d: Run `make build-all` + `go test ./...` — verify no regressions across the full test suite.

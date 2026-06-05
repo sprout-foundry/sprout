@@ -71,6 +71,15 @@ const (
 	// successful or not. Subscribers (e.g. the auto-transcript snapshot
 	// capture) use this to record the post-compact state.
 	EventTypeCompactCompleted = "compact_completed"
+	// SP-065 Phase 2: Automate session lifecycle events
+	EventTypeAutomateSessionStarted = "automate.session_started"
+	EventTypeAutomateBudgetUpdate   = "automate.budget_update"
+	EventTypeAutomateOutputChunk    = "automate.output_chunk"
+	EventTypeAutomateSessionEnded   = "automate.session_ended"
+	// TODO(SP-065-2e): Add subscription opt-in filtering so automate events
+	// are only sent to WebSocket subscribers that have explicitly opted in
+	// via {type: "subscribe", channel: "automate"}. All automate events are
+	// currently broadcast to all subscribers.
 )
 
 // EventBus manages event distribution between CLI and Web UI
@@ -565,5 +574,54 @@ func DriftDetectedEvent(similarity float64, threshold float64, sessionID string)
 		"sessionId":   sessionID,
 		"timestamp":   time.Now().UTC().Format(time.RFC3339),
 		"options":     []string{"continue", "new_chat"},
+	}
+}
+
+// AutomateSessionStartedEvent creates a session_started event payload.
+func AutomateSessionStartedEvent(sessionID, workflow, kind string) map[string]interface{} {
+	return map[string]interface{}{
+		"session_id": sessionID,
+		"workflow":   workflow,
+		"kind":       kind,
+		"timestamp":  time.Now().UTC().Format(time.RFC3339),
+	}
+}
+
+// AutomateBudgetUpdateEvent creates a budget_update event payload.
+func AutomateBudgetUpdateEvent(sessionID string, spentUSD, budgetUSD float64, fraction float64, iteration int) map[string]interface{} {
+	return map[string]interface{}{
+		"session_id":  sessionID,
+		"spent_usd":   spentUSD,
+		"budget_usd":  budgetUSD,
+		"fraction":    fraction,
+		"iteration":   iteration,
+		"timestamp":   time.Now().UTC().Format(time.RFC3339),
+	}
+}
+
+// AutomateOutputChunkEvent creates an output_chunk event payload.
+// Note: we send chunk_len instead of the full chunk to avoid bloating WS frames.
+func AutomateOutputChunkEvent(sessionID string, offset int, chunk string) map[string]interface{} {
+	return map[string]interface{}{
+		"session_id": sessionID,
+		"offset":     offset,
+		"chunk_len":  len(chunk),
+		"timestamp":  time.Now().UTC().Format(time.RFC3339),
+	}
+}
+
+// TODO(SP-065-3): Implement output chunk coalescing — publish only when
+// ≥250ms has elapsed OR ≥4KB of new output has accumulated. Current
+// implementation sends chunk_len without the actual chunk to avoid WS
+// frame bloat. Full streaming deferred to Phase 3.
+
+// AutomateSessionEndedEvent creates a session_ended event payload.
+func AutomateSessionEndedEvent(sessionID, workflow, status string, totalCost float64) map[string]interface{} {
+	return map[string]interface{}{
+		"session_id": sessionID,
+		"workflow":   workflow,
+		"status":     status,
+		"total_cost": totalCost,
+		"timestamp":  time.Now().UTC().Format(time.RFC3339),
 	}
 }

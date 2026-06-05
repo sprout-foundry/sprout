@@ -1403,10 +1403,18 @@ func attachWorkflowBudget(chatAgent *agent.Agent, cfg *AgentWorkflowConfig) (sto
 	chatAgent.SetBudgetWarningCallback(func(threshold, spent, limit float64) {
 		fmt.Printf("\n[budget] WARNING — crossed %.0f%% threshold: $%.2f of $%.2f spent\n",
 			threshold*100, spent, limit)
+		// SP-065-2c: Publish budget_update event for automate sessions
+		chatAgent.PublishBudgetUpdate(events.EventTypeAutomateBudgetUpdate, events.AutomateBudgetUpdateEvent(
+			"", spent, limit, threshold, 0,
+		))
 	})
 	chatAgent.SetBudgetExceededCallback(func(spent, limit float64) {
 		fmt.Printf("\n[budget] CAP HIT — $%.2f of $%.2f spent; workflow will truncate after the current LLM response.\n",
 			spent, limit)
+		// SP-065-2c: Publish budget_update event for automate sessions
+		chatAgent.PublishBudgetUpdate(events.EventTypeAutomateBudgetUpdate, events.AutomateBudgetUpdateEvent(
+			"", spent, limit, 1.0, 0,
+		))
 	})
 
 	heartbeatSeconds := 600

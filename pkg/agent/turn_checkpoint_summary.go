@@ -37,9 +37,11 @@ type turnCompactionContext struct {
 }
 
 // buildTurnCheckpointGoSummary produces the Go-based, rule-derived bullet
-// list summarizing a window of messages. It is the deterministic equivalent
-// of an LLM-summary call and is suitable for per-turn checkpoint storage
-// (where calling an LLM on every turn would be wasteful).
+// list summarizing a window of messages. It is a fallback used only when
+// no LLM-generated summary is available for the turn — the LLM-driven
+// summarizer in llm_summarizer.go is the preferred path, since reusing
+// real model output preserves far more of what the model needs to
+// continue the conversation than a rule extractor can.
 func buildTurnCheckpointGoSummary(messages []api.Message) string {
 	if len(messages) == 0 {
 		return ""

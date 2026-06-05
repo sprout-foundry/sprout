@@ -323,6 +323,9 @@ func (m *launchdManager) Stop() error {
 // isESRCH returns true if the error is from a process that doesn't exist
 // (ESRCH = exit code 3, used by launchctl when a service isn't loaded).
 func isESRCH(err error) bool {
+	if err == nil {
+		return false
+	}
 	var exitErr *exec.ExitError
 	if errors.As(err, &exitErr) && exitErr.ExitCode() == 3 {
 		return true

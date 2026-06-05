@@ -72,6 +72,18 @@ func (p *BackgroundProcess) GetOutputPath() string {
 	return ""
 }
 
+// GetExitCode returns -1 in WASM builds (no real process).
+func (p *BackgroundProcess) GetExitCode() int {
+	return -1
+}
+
+// Done returns a closed channel in WASM builds (no real process to wait for).
+func (p *BackgroundProcess) Done() <-chan struct{} {
+	ch := make(chan struct{})
+	close(ch)
+	return ch
+}
+
 // bpmContextKey is the context key for BackgroundProcessManager.
 type bpmContextKey struct{}
 

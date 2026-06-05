@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/automate"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
@@ -61,9 +62,15 @@ func handleRunAutomate(ctx context.Context, a *Agent, args map[string]interface{
 		bpm = a.getOrCreateBackgroundProcessManager()
 	}
 
-	sessionID, err := bpm.Start(ctx, cmdStr, "")
+	sessionID, err := bpm.StartWithKind(ctx, cmdStr, "", "automate")
 	if err != nil {
 		return "", fmt.Errorf("failed to start workflow: %w", err)
+	}
+
+	// Write PID file for cross-process discoverability.
+	// The error is non-fatal — the session is still tracked by BPM.
+	if err := writeAutomatePIDFile(sessionID, bpm, wfPath); err != nil {
+		// Log warning but don't fail the workflow.
 	}
 
 	result["status"] = "started"
@@ -194,4 +201,33 @@ func (a *Agent) MarkWorkflowApprovedInSession(workflow string) {
 		a.automateApprovedWorkflows = make(map[string]struct{})
 	}
 	a.automateApprovedWorkflows[key] = struct{}{}
+}
+
+// writeAutomatePIDFile creates a PID file in .sprout/automate/ for cross-process
+// discoverability of agent-launched automate workflows.
+func writeAutomatePIDFile(sessionID string, bpm *tools.BackgroundProcessManager, wfPath string) error {
+	// Get the process info from BPM using public accessors
+	proc, exists := bpm.GetProcess(sessionID)
+	if !exists {
+		return fmt.Errorf("session %s not found in BPM", sessionID)
+	}
+	pid := proc.GetPID()
+	outputPath := proc.GetOutputPath()
+
+	// Resolve sprout directory
+	wd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("get working directory: %w", err)
+	}
+	sproutDir := filepath.Join(wd, ".sprout")
+
+	info := &automate.AutomateSessionInfo{
+		Workflow:       filepath.Base(wfPath),
+		PID:            pid,
+		StartedAt:      time.Now(),
+		OutputFilePath: outputPath,
+		Kind:           "automate",
+	}
+
+	return automate.WriteSessionFile(sproutDir, sessionID, info)
 }

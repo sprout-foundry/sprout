@@ -647,6 +647,14 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	}
 	opts.LLMSummarizer = wrapLLMSummarizerWithEvents(newLLMSummarizer(a.client, a.GetProvider()), a)
 
+	// SP-066 Phase 1: model-aware compaction trigger fraction. seed's default
+	// (0.85) leaves only 15% of the context window for response + thinking +
+	// tool I/O, which thinking-budget models exhaust before emitting any
+	// user-visible text. computeCompactionTriggerFraction subtracts the
+	// reservation fractions defined in context_budget.go so substitution
+	// fires earlier — by default at 0.70 instead of 0.85.
+	opts.CompactionTriggerFraction = a.computeCompactionTriggerFraction()
+
 	if a.systemPrompt != "" {
 		opts.SystemPrompt = a.systemPrompt
 	}
@@ -659,11 +667,14 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	}
 
 	// OnIteration callback: sync per-iteration context token estimates
-	// back to sprout's state so the UI can show real-time token usage.
+	// back to sprout's state so the UI can show real-time token usage,
+	// and emit the SP-066 context-management diagnostic so subscribers
+	// can verify the model-aware trigger fraction is sized correctly.
 	opts.OnIteration = func(iteration, messages, tokenEstimate, contextSize int) {
 		a.state.SetCurrentIteration(iteration)
 		a.state.SetCurrentContextTokens(tokenEstimate)
 		a.state.SetMaxContextTokens(contextSize)
+		a.PublishContextManagementDiagnostic(tokenEstimate, contextSize, iteration, messages)
 	}
 
 	// Seed the agent with the existing conversation history so that

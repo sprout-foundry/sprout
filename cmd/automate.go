@@ -271,7 +271,7 @@ func handleNoAutomateDir(dir string) error {
 	}
 
 	// Create the automate directory
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("failed to create %s: %w", dir, err)
 	}
 	console.GlyphSuccess.Printf("Created %s/", dir)
@@ -738,6 +738,9 @@ func readAllSessions(sproutDir string) ([]sessionEntry, error) {
 		if filepath.Ext(name) != ".json" {
 			continue
 		}
+		if len(name) <= 5 {
+			continue // skip filenames too short to have a meaningful session ID
+		}
 		sessionID := name[:len(name)-5] // strip ".json"
 		info, err := automate.ReadSessionFile(sproutDir, sessionID)
 		if err != nil {
@@ -961,7 +964,10 @@ func runAutomateLogs(sessionID string) error {
 	}
 
 	lines := strings.Split(string(data), "\n")
-
+	// Remove trailing empty element from trailing newline.
+	if len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
 	if automateLogsLines > 0 && automateLogsLines < len(lines) {
 		lines = lines[len(lines)-automateLogsLines:]
 	}
@@ -990,6 +996,12 @@ func followLogFile(path string, pid int) error {
 			break
 		}
 		time.Sleep(500 * time.Millisecond)
+
+		// Check if the file was truncated (e.g. log rotation).
+		fi, err := os.Stat(path)
+		if err == nil && fi.Size() < offset {
+			offset = 0 // file was truncated, restart from beginning
+		}
 
 		f, err := os.Open(path)
 		if err != nil {

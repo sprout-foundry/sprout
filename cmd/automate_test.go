@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -537,4 +538,177 @@ func TestReadAllSessions_SkipsCorrupt(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, sessions, 1)
 	assert.Equal(t, "good-session", sessions[0].SessionID)
+}
+
+// =============================================================================
+// Integration Tests
+// =============================================================================
+
+func TestAutomateIntegration_LaunchStatusStop(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode")
+	}
+	if _, err := exec.LookPath("sleep"); err != nil {
+		t.Skip("sleep command not available on this platform")
+	}
+
+	// Create a temp directory with .sprout/automate/ subdirectory
+	tmpDir := t.TempDir()
+	sproutDir := filepath.Join(tmpDir, ".sprout")
+	require.NoError(t, os.MkdirAll(filepath.Join(sproutDir, "automate"), 0o700))
+
+	// Create a small output file before starting the subprocess
+	outputFile, err := os.CreateTemp(tmpDir, "integ_output_*.log")
+	require.NoError(t, err)
+	_, err = outputFile.WriteString("initial output\n")
+	require.NoError(t, err)
+	require.NoError(t, outputFile.Close())
+
+	// Start a real subprocess
+	cmd := exec.Command("sleep", "30")
+	require.NoError(t, cmd.Start())
+
+	// Ensure the process is cleaned up if we return early for any reason
+	defer func() {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+	}()
+
+	pid := cmd.Process.Pid
+
+	// Write a PID file
+	require.NoError(t, automate.WriteSessionFile(sproutDir, "int-test-sleep", &automate.AutomateSessionInfo{
+		Workflow:       "sleep-test",
+		PID:            pid,
+		StartedAt:      time.Now(),
+		OutputFilePath: outputFile.Name(),
+		Kind:           "automate",
+	}))
+
+	// Verify the session file is accessible and contains expected output file path
+	info, err := automate.ReadSessionFile(sproutDir, "int-test-sleep")
+	require.NoError(t, err)
+	assert.Equal(t, outputFile.Name(), info.OutputFilePath)
+
+	// Verify the output file is accessible
+	data, err := os.ReadFile(info.OutputFilePath)
+	require.NoError(t, err)
+	assert.Contains(t, string(data), "initial output")
+
+	// List session files and verify it finds the session
+	sessions, err := automate.ListSessionFiles(sproutDir)
+	require.NoError(t, err)
+	require.Len(t, sessions, 1)
+	assert.Equal(t, "automate", sessions[0].Kind)
+	assert.Equal(t, pid, sessions[0].PID)
+
+	// Verify the process is alive
+	assert.True(t, automate.IsProcessAlive(pid), "process should be alive before stop")
+
+	// Stop the process
+	_, err = automate.StopProcess(pid)
+	require.NoError(t, err)
+
+	// Reap the zombie so IsProcessAlive (which uses kill(pid,0)) sees it as gone.
+	// StopProcess sends signals but without Wait() the child becomes a zombie that
+	// still exists in the process table and responds to kill(pid,0).
+	_ = cmd.Wait()
+
+	// Verify the process is dead
+	assert.False(t, automate.IsProcessAlive(pid), "process should be dead after stop and reap")
+
+	// List sessions again — the file may still exist since sweep isn't auto-run
+	sessions, err = automate.ListSessionFiles(sproutDir)
+	require.NoError(t, err)
+	assert.Len(t, sessions, 1, "session file should still exist before sweep")
+
+	// Sweep stale sessions and verify the file is removed
+	removed, err := automate.SweepStaleSessions(sproutDir)
+	require.NoError(t, err)
+	assert.Equal(t, 1, removed, "sweep should remove the stale session file")
+
+	// Confirm the session file is gone
+	sessions, err = automate.ListSessionFiles(sproutDir)
+	require.NoError(t, err)
+	assert.Len(t, sessions, 0, "no sessions should remain after sweep")
+}
+
+// =============================================================================
+// Cross-Process Discovery Tests
+// =============================================================================
+
+func TestAutomateCrossProcess_Discovery(t *testing.T) {
+	if testing.Short() {
+		t.Skip("short mode")
+	}
+	if _, err := exec.LookPath("sleep"); err != nil {
+		t.Skip("sleep command not available on this platform")
+	}
+
+	// Create a temp directory with .sprout/automate/ subdirectory
+	tmpDir := t.TempDir()
+	sproutDir := filepath.Join(tmpDir, ".sprout")
+	require.NoError(t, os.MkdirAll(filepath.Join(sproutDir, "automate"), 0o700))
+
+	// Start a real background process using exec.Command("sleep", "30")
+	cmd := exec.Command("sleep", "30")
+	require.NoError(t, cmd.Start())
+
+	// Ensure the process is cleaned up if we return early for any reason
+	defer func() {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+	}()
+
+	pid := cmd.Process.Pid
+
+	// Write a PID file for it
+	require.NoError(t, automate.WriteSessionFile(sproutDir, "crossproc-sleep", &automate.AutomateSessionInfo{
+		Workflow:  "cross-test",
+		PID:       pid,
+		StartedAt: time.Now(),
+		Kind:      "automate",
+	}))
+
+	// From a separate goroutine (simulating a different process/terminal),
+	// call automate.ListSessionFiles(sproutDir) to discover the session
+	var discovered []automate.AutomateSessionInfo
+	var discoverErr error
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		discovered, discoverErr = automate.ListSessionFiles(sproutDir)
+	}()
+	wg.Wait()
+
+	require.NoError(t, discoverErr)
+	require.Len(t, discovered, 1, "should discover exactly one session")
+
+	// Verify the discovered session has Kind == "automate" and the correct PID
+	assert.Equal(t, "automate", discovered[0].Kind)
+	assert.Equal(t, pid, discovered[0].PID)
+
+	// Verify automate.IsProcessAlive(pid) returns true
+	assert.True(t, automate.IsProcessAlive(pid), "process should be alive before stop")
+
+	// Kill the process using automate.StopProcess(pid)
+	_, err := automate.StopProcess(pid)
+	require.NoError(t, err)
+
+	// Reap the zombie so IsProcessAlive sees it as gone
+	_ = cmd.Wait()
+
+	// Verify automate.IsProcessAlive(pid) returns false after stop
+	assert.False(t, automate.IsProcessAlive(pid), "process should be dead after stop")
+
+	// Verify cleanup via sweep
+	removed, err := automate.SweepStaleSessions(sproutDir)
+	require.NoError(t, err)
+	assert.Equal(t, 1, removed, "sweep should remove the stale session file")
+
+	// Confirm the session file is gone
+	sessions, err := automate.ListSessionFiles(sproutDir)
+	require.NoError(t, err)
+	assert.Len(t, sessions, 0, "no sessions should remain after sweep")
 }

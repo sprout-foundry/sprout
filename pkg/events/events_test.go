@@ -229,6 +229,35 @@ func TestEventBus_UnsubscribeNonExistent(t *testing.T) {
 	}
 }
 
+// TestRecallDiagnosticEvent (SP-066 Phase 3) verifies the recall-pass
+// payload carries the embed duration, candidate counts, injection size,
+// and the raw top-scores list. Subscribers tune the similarity threshold
+// from this signal.
+func TestRecallDiagnosticEvent(t *testing.T) {
+	event := RecallDiagnosticEvent(12.5, 8, 2, 540, []float32{0.82, 0.71, 0.55})
+	assert.Equal(t, 12.5, event["embed_duration_ms"])
+	assert.Equal(t, 8, event["candidates_considered"])
+	assert.Equal(t, 2, event["injected"])
+	assert.Equal(t, 540, event["injected_chars"])
+	scores := event["top_scores"].([]float64)
+	if len(scores) != 3 {
+		t.Fatalf("expected 3 scores, got %d", len(scores))
+	}
+	assert.InDelta(t, 0.82, scores[0], 1e-6)
+	assert.NotEmpty(t, event["timestamp"])
+}
+
+// TestRecallDiagnosticEvent_EmptyScores reflects a recall pass that
+// returned no candidates — the payload must still carry a valid (empty)
+// top_scores list so consumers don't crash on a nil dereference.
+func TestRecallDiagnosticEvent_EmptyScores(t *testing.T) {
+	event := RecallDiagnosticEvent(3.0, 0, 0, 0, nil)
+	scores := event["top_scores"].([]float64)
+	if len(scores) != 0 {
+		t.Fatalf("expected empty scores, got %d", len(scores))
+	}
+}
+
 // TestContextManagementDiagnosticEvent (SP-066 Phase 1) verifies the
 // diagnostic payload carries the model-aware trigger math fields the
 // WebUI metrics panel and downstream telemetry expect, with the

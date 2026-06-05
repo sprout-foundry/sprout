@@ -34,8 +34,10 @@ import {
   Users,
   LayoutDashboard,
   ExternalLink,
+  Zap,
 } from 'lucide-react';
 import AgentChangesPanel from './AgentChangesPanel';
+import AutomationsPanel from './AutomationsPanel';
 import SearchView from './SearchView';
 import SidebarFilesSection, { type FileTreeHandle } from './SidebarFilesSection';
 import SidebarGitSection from './SidebarGitSection';
@@ -133,6 +135,7 @@ const MAIN_SECTION_TABS: { id: SectionTab; icon: LucideIcon; label: string }[] =
   { id: 'files', icon: FolderCog, label: 'Files' },
   { id: 'search', icon: Search, label: 'Search' },
   { id: 'changes', icon: History, label: 'Agent Changes' },
+  { id: 'automations', icon: Zap, label: 'Automations' },
 ];
 
 /** Valid platform view IDs for type-safe navigation */
@@ -320,6 +323,8 @@ function Sidebar({
         return renderSearchSection();
       case 'changes':
         return <AgentChangesPanel onFileClick={onFileClick} />;
+      case 'automations':
+        return <AutomationsPanel />;
       case 'settings':
         return supportsSettings ? (
           <SidebarSettingsSection

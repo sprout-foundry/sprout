@@ -26,6 +26,11 @@ func (m *BackgroundProcessManager) Start(_ context.Context, _ string, _ string) 
 	return "", errors.New("background process management is not available in WASM")
 }
 
+// StartWithKind always returns an error in WASM builds.
+func (m *BackgroundProcessManager) StartWithKind(_ context.Context, _ string, _ string, _ string) (string, error) {
+	return "", errors.New("background process management is not available in WASM")
+}
+
 // AdoptProcess always returns an error in WASM builds.
 func (m *BackgroundProcessManager) AdoptProcess(_ any, _ string, _ string, _ string, _ <-chan error) (string, error) {
 	return "", errors.New("background process management is not available in WASM")
@@ -51,6 +56,21 @@ func (m *BackgroundProcessManager) StopAll() {}
 
 // Close is a no-op in WASM builds.
 func (m *BackgroundProcessManager) Close() {}
+
+// GetProcess always returns nil in WASM builds.
+func (m *BackgroundProcessManager) GetProcess(_ string) (*BackgroundProcess, bool) {
+	return nil, false
+}
+
+// GetPID returns 0 in WASM builds (no real process).
+func (p *BackgroundProcess) GetPID() int {
+	return 0
+}
+
+// GetOutputPath returns empty string in WASM builds.
+func (p *BackgroundProcess) GetOutputPath() string {
+	return ""
+}
 
 // bpmContextKey is the context key for BackgroundProcessManager.
 type bpmContextKey struct{}

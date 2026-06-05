@@ -397,12 +397,6 @@ sprout agent --workflow-config automate/workflow.json --skip-prompt
 sprout agent --workflow-config automate/workflow.json --no-web-ui
 ```
 
-### Monitoring Progress
-
-- **Workflow state**: Check `.sprout/workflow_state.json` for current step and status
-- **Event log**: Check `.sprout/workflow_events.jsonl` for detailed execution log
-- **Task queue**: Check `~/.config/sprout/task_queue.json` for EA task progress
-
 ### Resuming After Interruption
 
 If orchestration is enabled with `resume: true`:
@@ -410,3 +404,70 @@ If orchestration is enabled with `resume: true`:
 # Simply re-run the same command — it picks up where it left off
 sprout agent --workflow-config automate/workflow.json
 ```
+
+## Monitoring a Running Workflow
+
+### CLI Commands
+
+Sprout provides three CLI commands for monitoring and controlling running workflows:
+
+#### Status
+
+```bash
+# Show all running automate sessions
+sprout automate status
+
+# Include exited sessions
+sprout automate status --all
+
+# JSON output for scripting
+sprout automate status --json
+```
+
+The status command reads `.sprout/automate/*.json` PID files and checks process liveness. Sessions are shown in a table with session ID, workflow name, status (running/exited), PID, start time, and elapsed duration.
+
+#### Stop
+
+```bash
+# Stop a specific session
+sprout automate stop <session_id>
+
+# Stop all running sessions
+sprout automate stop --all
+```
+
+Stop uses a graduated signal sequence: SIGINT → 10s grace → SIGTERM → 5s → SIGKILL. The PID file is removed after stopping.
+
+#### Logs
+
+```bash
+# View captured output
+sprout automate logs <session_id>
+
+# Follow output in real time (500ms polling)
+sprout automate logs <session_id> -f
+
+# Show only last N lines
+sprout automate logs <session_id> -n 50
+```
+
+Logs reads from the output file path stored in the PID file. Follow mode polls at 500ms and stops when the process exits. CLI-launched sessions pipe output directly to the terminal and may not have a captured output file.
+
+### Cross-Terminal Discovery
+
+Workflows write a PID file to `.sprout/automate/<session_id>.json` on launch. This enables cross-terminal monitoring — you can start a workflow from one terminal and check its status from another:
+
+```bash
+# Terminal A: start a workflow
+sprout automate run my_workflow
+
+# Terminal B: check status from a different terminal
+sprout automate status
+sprout automate logs <session_id> -f
+```
+
+Stale PID files (from processes that have exited) can be cleaned up manually using `sprout automate stop <session_id>` to remove specific sessions, or by stopping all sessions.
+
+### Integration with Agent Sessions
+
+Within an agent session, the `run_automate` tool launches workflows as background processes tracked by the BackgroundProcessManager. Use `shell_command(check_background=<session_id>)` to poll output and `shell_command(stop_background=<session_id>)` to stop them.

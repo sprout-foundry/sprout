@@ -91,6 +91,9 @@ func ListSessionFiles(sproutDir string) ([]AutomateSessionInfo, error) {
 		if filepath.Ext(name) != ".json" {
 			continue
 		}
+		if len(name) <= 5 {
+			continue // skip filenames too short to have a meaningful session ID
+		}
 		// Extract sessionID from filename (remove .json extension)
 		sessionID := name[:len(name)-5] // len(".json") == 5
 		info, err := ReadSessionFile(sproutDir, sessionID)
@@ -124,6 +127,9 @@ func SweepStaleSessions(sproutDir string) (int, error) {
 		name := entry.Name()
 		if filepath.Ext(name) != ".json" {
 			continue
+		}
+		if len(name) <= 5 {
+			continue // skip filenames too short to have a meaningful session ID
 		}
 		sessionID := name[:len(name)-5] // len(".json") == 5
 		info, err := ReadSessionFile(sproutDir, sessionID)

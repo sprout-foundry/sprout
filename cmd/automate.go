@@ -5,6 +5,8 @@ package cmd
 import (
 	"bufio"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -12,6 +14,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/automate"
 	"github.com/sprout-foundry/sprout/pkg/console"
@@ -52,6 +55,21 @@ Use 'sprout automate' to interactively pick a workflow, or specify one directly:
 To create workflows, activate the workflow-automation skill in an agent session
 or see: sprout skill list`,
 	Args: cobra.NoArgs,
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("get working directory: %w", err)
+		}
+		sproutDir := filepath.Join(cwd, ".sprout")
+		removed, err := automate.SweepStaleSessions(sproutDir)
+		if err != nil {
+			// Log warning but don't fail
+			fmt.Fprintf(os.Stderr, "warn: stale session sweep: %v\n", err)
+		} else if removed > 0 {
+			fmt.Fprintf(os.Stderr, "Cleaned up %d stale session(s)\n", removed)
+		}
+		return nil
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runAutomatePicker()
 	},
@@ -313,7 +331,54 @@ func runWorkflowByPath(path string) error {
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	return cmd.Run()
+
+	// Generate a session ID for PID file tracking
+	randomHex := make([]byte, 8)
+	if _, err := rand.Read(randomHex); err != nil {
+		return fmt.Errorf("failed to generate session ID: %w", err)
+	}
+	sessionID := fmt.Sprintf("cli-automate-%s", hex.EncodeToString(randomHex))
+
+	// Start the process
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("start workflow: %w", err)
+	}
+
+	// Resolve sprout directory relative to current working dir
+	sproutDir, err := filepath.Abs(".sprout")
+	if err != nil {
+		return fmt.Errorf("resolve sprout directory: %w", err)
+	}
+
+	// Write PID file
+	pidInfo := &automate.AutomateSessionInfo{
+		Workflow:    filepath.Base(path),
+		PID:         cmd.Process.Pid,
+		StartedAt:   time.Now(),
+		Kind:        "automate",
+	}
+	if automateBudgetUSD > 0 {
+		pidInfo.BudgetUSD = &automateBudgetUSD
+	}
+	if err := automate.WriteSessionFile(sproutDir, sessionID, pidInfo); err != nil {
+		// Log warning but don't fail the workflow
+		fmt.Fprintf(os.Stderr, "warn: failed to write PID file: %v\n", err)
+	}
+
+	// Remove PID file when process exits
+	defer automate.RemoveSessionFile(sproutDir, sessionID)
+
+	// Print session info
+	fmt.Fprintf(os.Stderr, "\nWorkflow session: %s\n", sessionID)
+	fmt.Fprintf(os.Stderr, "PID: %d\n", cmd.Process.Pid)
+	fmt.Fprintf(os.Stderr, "PID file: %s/automate/%s.json\n", sproutDir, sessionID)
+	fmt.Println()
+
+	// Wait for the process to complete
+	if err := cmd.Wait(); err != nil {
+		return fmt.Errorf("workflow failed: %w", err)
+	}
+	return nil
 }
 
 // printWorkflowOverview renders a human-readable summary of the workflow so

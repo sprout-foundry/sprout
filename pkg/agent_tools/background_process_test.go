@@ -749,3 +749,126 @@ func TestBPM_Stop_CheckOutputAfterStop(t *testing.T) {
 		return err == nil && s == "exited"
 	}, 2*time.Second, 50*time.Millisecond)
 }
+
+// =============================================================================
+// TestKindDefaultInStart — Start() sets Kind to "shell" by default
+// =============================================================================
+
+func TestKindDefaultInStart(t *testing.T) {
+	t.Parallel()
+
+	bpm := NewBackgroundProcessManager()
+	defer bpm.Close()
+
+	sessionID, err := bpm.Start(context.Background(), "sleep 0.1", "")
+	require.NoError(t, err)
+	require.NotEmpty(t, sessionID)
+
+	proc, found := bpm.GetProcess(sessionID)
+	require.True(t, found, "GetProcess should find the session")
+	require.NotNil(t, proc, "GetProcess should return a non-nil process")
+	assert.Equal(t, "shell", proc.Kind, "Kind should default to 'shell' when using Start()")
+}
+
+// =============================================================================
+// TestKindDefaultInAdoptProcess — AdoptProcess() sets Kind to "shell" by default
+// =============================================================================
+
+func TestKindDefaultInAdoptProcess(t *testing.T) {
+	t.Parallel()
+
+	bpm := NewBackgroundProcessManager()
+	defer bpm.Close()
+
+	shell := os.Getenv("SHELL")
+	if shell == "" {
+		shell = "/bin/sh"
+	}
+	cmd := exec.Command(shell, "-c", "sleep 0.1")
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+
+	outputFile, err := os.CreateTemp("", "sprout-bg-*.output")
+	require.NoError(t, err)
+	outputPath := outputFile.Name()
+	defer os.Remove(outputPath)
+
+	cmd.Stdout = outputFile
+	cmd.Stderr = outputFile
+
+	err = cmd.Start()
+	require.NoError(t, err)
+
+	outputFile.Close()
+	sessionID, err := bpm.AdoptProcess(cmd, outputPath, "sleep 0.1", cmd.Dir, nil)
+	require.NoError(t, err)
+	require.NotEmpty(t, sessionID)
+
+	proc, found := bpm.GetProcess(sessionID)
+	require.True(t, found, "GetProcess should find the adopted session")
+	require.NotNil(t, proc, "GetProcess should return a non-nil process")
+	assert.Equal(t, "shell", proc.Kind, "Kind should default to 'shell' when using AdoptProcess()")
+}
+
+// =============================================================================
+// TestStartWithKind — StartWithKind() sets Kind to the provided value
+// =============================================================================
+
+func TestStartWithKind(t *testing.T) {
+	t.Parallel()
+
+	bpm := NewBackgroundProcessManager()
+	defer bpm.Close()
+
+	const kind = "automate"
+	sessionID, err := bpm.StartWithKind(context.Background(), "sleep 0.1", "", kind)
+	require.NoError(t, err)
+	require.NotEmpty(t, sessionID)
+
+	proc, found := bpm.GetProcess(sessionID)
+	require.True(t, found, "GetProcess should find the session")
+	require.NotNil(t, proc, "GetProcess should return a non-nil process")
+	assert.Equal(t, kind, proc.Kind, "Kind should match the value passed to StartWithKind()")
+}
+
+// =============================================================================
+// TestGetProcessNotFound — GetProcess() returns nil, false for a non-existent session ID
+// =============================================================================
+
+func TestGetProcessNotFound(t *testing.T) {
+	t.Parallel()
+
+	bpm := NewBackgroundProcessManager()
+	defer bpm.Close()
+
+	proc, found := bpm.GetProcess("nonexistent-session-id")
+	assert.False(t, found, "GetProcess should return false for a non-existent session")
+	assert.Nil(t, proc, "GetProcess should return nil for a non-existent session")
+}
+
+// =============================================================================
+// TestGetProcessFound — GetProcess() returns correct process data for an existing session
+// =============================================================================
+
+func TestGetProcessFound(t *testing.T) {
+	t.Parallel()
+
+	bpm := NewBackgroundProcessManager()
+	defer bpm.Close()
+
+	const kind = "custom-kind"
+	sessionID, err := bpm.StartWithKind(context.Background(), "sleep 0.1", "", kind)
+	require.NoError(t, err)
+	require.NotEmpty(t, sessionID)
+
+	proc, found := bpm.GetProcess(sessionID)
+	require.True(t, found, "GetProcess should return true for an existing session")
+	require.NotNil(t, proc, "GetProcess should return a non-nil process")
+
+	// Verify the returned process has correct metadata
+	assert.Equal(t, sessionID, proc.ID, "Process ID should match the session ID")
+	assert.Equal(t, kind, proc.Kind, "Process Kind should match the value set during creation")
+	assert.Equal(t, "sleep 0.1", proc.Command, "Process Command should match the original command")
+	assert.NotZero(t, proc.StartedAt, "Process StartedAt should be set")
+	assert.NotZero(t, proc.LastPolled, "Process LastPolled should be set")
+	assert.NotEmpty(t, proc.OutputPath, "Process OutputPath should be set")
+}

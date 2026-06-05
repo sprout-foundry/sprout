@@ -28,11 +28,30 @@ type BackgroundProcess struct {
 	OutputPath string  // path to accumulated output temp file
 	Dir        string  // working directory
 	Command    string  // original command string
+	Kind       string  // "shell" (default), "automate", etc.
 	StartedAt  time.Time
 	LastPolled time.Time
 	done       chan struct{} // closed when process exits
 	exitCode   int
 	mu         sync.Mutex
+}
+
+// GetPID returns the process PID under the lock. Returns 0 if the process
+// is nil (not yet started or already exited).
+func (p *BackgroundProcess) GetPID() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.Process != nil {
+		return p.Process.Pid
+	}
+	return 0
+}
+
+// GetOutputPath returns the output file path under the lock.
+func (p *BackgroundProcess) GetOutputPath() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.OutputPath
 }
 
 // BackgroundProcessManager manages background processes for CLI mode.
@@ -89,6 +108,12 @@ func BackgroundProcessManagerFromContext(ctx context.Context) *BackgroundProcess
 // Start creates a new background process, pipes its output to a temp file,
 // and returns a session ID for later polling.
 func (m *BackgroundProcessManager) Start(ctx context.Context, command string, dir string) (string, error) {
+	return m.StartWithKind(ctx, command, dir, "shell")
+}
+
+// StartWithKind works like Start but allows specifying the process kind
+// (e.g., "automate" vs "shell").
+func (m *BackgroundProcessManager) StartWithKind(ctx context.Context, command string, dir string, kind string) (string, error) {
 	if strings.TrimSpace(command) == "" {
 		return "", fmt.Errorf("command cannot be empty")
 	}
@@ -153,6 +178,7 @@ func (m *BackgroundProcessManager) Start(ctx context.Context, command string, di
 		OutputPath: outputPath,
 		Dir:        cmd.Dir,
 		Command:    command,
+		Kind:       kind,
 		StartedAt:  time.Now(),
 		LastPolled: time.Now(),
 		done:       make(chan struct{}),
@@ -207,6 +233,7 @@ func (m *BackgroundProcessManager) AdoptProcess(cmd *exec.Cmd, outputPath string
 		OutputPath: outputPath,
 		Dir:        dir,
 		Command:    command,
+		Kind:       "shell",
 		StartedAt:  time.Now(),
 		LastPolled: time.Now(),
 		done:       make(chan struct{}),
@@ -243,7 +270,7 @@ func (m *BackgroundProcessManager) AdoptProcess(cmd *exec.Cmd, outputPath string
 // CheckOutput reads accumulated output from a background session.
 // Returns the raw output string, status ("running" or "exited"), and any error.
 func (m *BackgroundProcessManager) CheckOutput(sessionID string) (string, string, error) {
-	proc, exists := m.getProcess(sessionID)
+	proc, exists := m.GetProcess(sessionID)
 	if !exists {
 		return "", "", fmt.Errorf("session %s not found", sessionID)
 	}
@@ -275,7 +302,7 @@ func (m *BackgroundProcessManager) CheckOutput(sessionID string) (string, string
 // Stop terminates a background session using a graduated signal sequence:
 // SIGINT → wait for grace period → SIGTERM → wait 5s → SIGKILL if still alive.
 func (m *BackgroundProcessManager) Stop(sessionID string, grace time.Duration) error {
-	proc, exists := m.getProcess(sessionID)
+	proc, exists := m.GetProcess(sessionID)
 	if !exists {
 		return fmt.Errorf("session %s not found", sessionID)
 	}
@@ -337,7 +364,7 @@ func (m *BackgroundProcessManager) Stop(sessionID string, grace time.Duration) e
 
 // IsActive checks whether a session is still running.
 func (m *BackgroundProcessManager) IsActive(sessionID string) bool {
-	proc, exists := m.getProcess(sessionID)
+	proc, exists := m.GetProcess(sessionID)
 	if !exists {
 		return false
 	}
@@ -436,7 +463,14 @@ func (m *BackgroundProcessManager) cleanup() {
 	}
 }
 
-func (m *BackgroundProcessManager) getProcess(sessionID string) (*BackgroundProcess, bool) {
+// GetProcess returns a BackgroundProcess by its session ID.
+// Returns the process and true if found, or nil and false otherwise.
+//
+// The returned pointer must not be accessed without first acquiring
+// proc.mu.Lock() or proc.mu.RLock(). The BackgroundProcessManager does not
+// keep the process in the map permanently — cleanup may remove entries at
+// any time. Acquire proc.mu immediately after calling GetProcess.
+func (m *BackgroundProcessManager) GetProcess(sessionID string) (*BackgroundProcess, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	proc, exists := m.processes[sessionID]

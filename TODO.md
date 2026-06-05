@@ -54,11 +54,11 @@ _Blocked by: SP-064 (Phases 1–3 are prerequisites for cross-process session di
 - [ ] SP-065-2e: Subscription opt-in so chat sessions don't see automate events by default.
 
 ### Phase 3: Frontend panel
-- [ ] SP-065-3a: `webui/src/components/AutomationsPanel.tsx` — three sections (Available / Running / Recent). Wire to REST endpoints + WS subscription.
-- [ ] SP-065-3b: Add Automations entry to sidebar nav.
-- [ ] SP-065-3c: Run modal — shows price card + budget, allows per-run budget/heartbeat override, calls `POST /api/automate/run`.
-- [ ] SP-065-3d: Budget bar component with 50%/80% color transitions.
-- [ ] SP-065-3e: Running-row Stop button → `POST stop` with confirmation dialog.
+- [x] SP-065-3a: `webui/src/components/AutomationsPanel.tsx` — three sections (Available / Running / Recent). Wire to REST endpoints + WS subscription.
+- [x] SP-065-3b: Add Automations entry to sidebar nav.
+- [x] SP-065-3c: Run modal — shows price card + budget, allows per-run budget/heartbeat override, calls `POST /api/automate/run`.
+- [x] SP-065-3d: Budget bar component with 50%/80% color transitions.
+- [x] SP-065-3e: Running-row Stop button → `POST stop` with confirmation dialog.
 
 ### Phase 4: Session detail view
 - [ ] SP-065-4a: Detail panel route — header with status/budget/iteration/elapsed.

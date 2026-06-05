@@ -71,6 +71,10 @@ When the user asks to *run* an existing workflow (as opposed to authoring one), 
 
 **In-session re-authorization:** The user only confirms the *first* call for a given workflow in a chat session. Restarts of the same workflow during the same session are pre-approved by the tool layer — you should not pester the user with a second prompt unless they have asked you to.
 
+### WebUI Panel
+
+The Automations panel in the WebUI sidebar provides a visual alternative to the CLI commands for discovering, running, and monitoring workflows. Workflows started from the panel use the same backend as `run_automate` — including `requires_approval` gates and budget enforcement.
+
 ---
 
 ## Phase 0: Prerequisites Check

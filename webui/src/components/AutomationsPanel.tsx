@@ -2,6 +2,7 @@ import { Play, Square, Zap, X, AlertCircle } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { clientFetch } from '../services/clientSession';
 import { debugLog } from '../utils/log';
+import AutomationsSessionDetail from './AutomationsSessionDetail';
 import './AutomationsPanel.css';
 
 const POLL_INTERVAL_MS = 3000;
@@ -145,6 +146,9 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
   // Tick for live elapsed time display
   const [tick, setTick] = useState(0);
 
+  // Session detail panel
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+
   // Fetch guard refs
   const isFetchingWorkflowsRef = useRef(false);
   const isFetchingSessionsRef = useRef(false);
@@ -252,6 +256,10 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
       setIsRunningWorkflow(false);
     }
   }, [runModal, closeRunModal, fetchSessions]);
+
+  const closeDetail = useCallback(() => {
+    setSelectedSessionId(null);
+  }, []);
 
   const handleStopSession = useCallback(
     async (sessionId: string) => {
@@ -421,7 +429,11 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
                   <span className="automations-col-actions" />
                 </div>
                 {runningSessions.map((session) => (
-                  <div key={session.session_id} className="automations-session-row">
+                  <div
+                    key={session.session_id}
+                    className="automations-session-row clickable"
+                    onClick={() => setSelectedSessionId(session.session_id)}
+                  >
                     <span className="automations-session-id" title={session.session_id}>
                       {truncateId(session.session_id)}
                     </span>
@@ -443,7 +455,10 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
                     <span className="automations-col-actions">
                       <button
                         className="automations-stop-btn"
-                        onClick={() => handleStopSession(session.session_id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleStopSession(session.session_id);
+                        }}
                         disabled={stoppingIds.has(session.session_id)}
                         title="Stop session"
                         aria-label={`Stop session ${truncateId(session.session_id)}`}
@@ -497,8 +512,11 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
                   <div
                     key={session.session_id}
                     className={`automations-session-row ${onNavigateToSession ? 'clickable' : ''}`}
-                    onClick={() => onNavigateToSession?.(session.session_id)}
-                    title={onNavigateToSession ? `View session ${truncateId(session.session_id)}` : undefined}
+                    onClick={() => {
+                      setSelectedSessionId(session.session_id);
+                      onNavigateToSession?.(session.session_id);
+                    }}
+                    title={`View session ${truncateId(session.session_id)}`}
                   >
                     <span className="automations-session-id" title={session.session_id}>
                       {truncateId(session.session_id)}
@@ -518,6 +536,16 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
           </div>
         )}
       </div>
+
+      {/* ── Session Detail Panel ──────────────────────────── */}
+      {selectedSessionId && (
+        <div className="automations-detail-overlay">
+          <AutomationsSessionDetail
+            sessionId={selectedSessionId}
+            onClose={closeDetail}
+          />
+        </div>
+      )}
 
       {/* ── Run Modal ─────────────────────────────────── */}
       {runModal.open && runModal.workflow && (

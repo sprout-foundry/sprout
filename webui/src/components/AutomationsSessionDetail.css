@@ -1,0 +1,180 @@
+/* ── Outer Container ───────────────────────────────────────── */
+
+.automations-session-detail {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+  font-family: var(--font-mono);
+}
+
+/* ── Close Button ──────────────────────────────────────────── */
+
+.automations-detail-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+}
+
+.automations-detail-close:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+/* ── Header ────────────────────────────────────────────────── */
+
+.automations-detail-header {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.automations-detail-header-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.automations-detail-session-id {
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.automations-detail-workflow-name {
+  color: var(--text-secondary);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.automations-detail-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.automations-detail-elapsed {
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Sections ──────────────────────────────────────────────── */
+
+.automations-detail-section {
+  padding: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.automations-detail-section-output {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-bottom: none;
+}
+
+.automations-detail-section-title {
+  text-transform: uppercase;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  letter-spacing: 0.5px;
+}
+
+/* ── Output Area ───────────────────────────────────────────── */
+
+.automations-output-container {
+  flex: 1;
+  overflow: hidden;
+  background: #1e1e1e;
+  border-radius: 4px;
+  min-height: 0;
+}
+
+.automations-output-pre {
+  height: 100%;
+  overflow-y: auto;
+  padding: 12px;
+  margin: 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-default) transparent;
+}
+
+.automations-output-pre::-webkit-scrollbar {
+  width: 6px;
+}
+
+.automations-output-pre::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 999px;
+}
+
+.automations-output-pre::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.automations-output-code {
+  color: #d4d4d4;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: pre;
+  line-height: 1.5;
+}
+
+.automations-output-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 12px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-style: italic;
+}
+
+.automations-detail-section-output .automations-output-empty {
+  flex-shrink: 1;
+}
+
+/* ── Placeholder Text ──────────────────────────────────────── */
+
+.automations-detail-placeholder {
+  padding: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: 11px;
+}

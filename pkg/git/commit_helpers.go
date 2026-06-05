@@ -52,13 +52,14 @@ func NewCommitExecutorWithSecurityCheck(client api.ClientInterface, userMessage,
 	return executor
 }
 
-// gitCmd creates an exec.Cmd for a git command in the executor's working directory (if set).
+// gitCmd creates an exec.Cmd for a git command in the executor's working
+// directory (if set). Delegates to SafeGitCmd so the test-mode mutation
+// guard applies — see pkg/git/safety.go for the rationale and gating
+// rules. Production callers that legitimately need to operate on the
+// process CWD must use a read-only subcommand; mutating subcommands
+// require a non-empty e.Dir.
 func (e *CommitExecutor) gitCmd(args ...string) *exec.Cmd {
-	cmd := exec.Command("git", args...)
-	if e.Dir != "" {
-		cmd.Dir = e.Dir
-	}
-	return cmd
+	return SafeGitCmd(e.Dir, args...)
 }
 
 // ExecuteCommit performs the complete commit operation:

@@ -38,7 +38,7 @@ func TestAddAllAndCommit_TimeoutKillPath(t *testing.T) {
 
 	// Use a very short timeout — the hook will block and we should hit the kill path
 	start := time.Now()
-	err = AddAllAndCommit("should timeout", 2)
+	err = AddAllAndCommit(dir, "should timeout", 2)
 	elapsed := time.Since(start)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "timed out")
@@ -56,7 +56,7 @@ func TestAddAllAndCommit_TimeoutErrorInCommit(t *testing.T) {
 	require.NoError(t, os.Chdir(dir))
 
 	// Nothing staged — commit will fail quickly, but use timeout path
-	err = AddAllAndCommit("nothing staged", 5)
+	err = AddAllAndCommit(dir, "nothing staged", 5)
 	assert.Error(t, err)
 	// The error comes from git commit failing (nothing to commit)
 	assert.Contains(t, err.Error(), "error committing changes to git")
@@ -831,7 +831,7 @@ func TestAddAndCommitFile_NewFileSuccess(t *testing.T) {
 	fp := filepath.Join(dir, "success.go")
 	require.NoError(t, os.WriteFile(fp, []byte("package success\n"), 0644))
 
-	err = AddAndCommitFile("success.go", "add success.go")
+	err = AddAndCommitFile(dir, "success.go", "add success.go")
 	assert.NoError(t, err)
 
 	cmd := exec.Command("git", "-C", dir, "log", "-1", "--pretty=%s")
@@ -856,7 +856,7 @@ func TestPerformGitCommit_SpecialCharsInMessage(t *testing.T) {
 	gitRun(t, dir, "add", "special.go")
 
 	msg := "feat: add special chars $`\"'\\()[]{}&*|;<>!~"
-	err = PerformGitCommit(msg)
+	err = PerformGitCommit(dir, msg)
 	assert.NoError(t, err)
 
 	cmd := exec.Command("git", "-C", dir, "log", "-1", "--pretty=%B")
@@ -877,7 +877,7 @@ func TestPerformGitCommit_MultilineMessage(t *testing.T) {
 	gitRun(t, dir, "add", "ml.go")
 
 	msg := "feat: multiline commit\n\nThis is the body.\nIt has multiple lines."
-	err = PerformGitCommit(msg)
+	err = PerformGitCommit(dir, msg)
 	assert.NoError(t, err)
 
 	cmd := exec.Command("git", "-C", dir, "log", "-1", "--pretty=%B")
@@ -1066,7 +1066,7 @@ func TestFullCommitLifecycle_AddStageCommitVerify(t *testing.T) {
 	assert.False(t, secure.HasConcerns)
 
 	// 6. Commit
-	err = AddAllAndCommit("lifecycle test", 5)
+	err = AddAllAndCommit(dir, "lifecycle test", 5)
 	assert.NoError(t, err)
 
 	// 7. Verify clean state

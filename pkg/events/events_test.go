@@ -229,6 +229,42 @@ func TestEventBus_UnsubscribeNonExistent(t *testing.T) {
 	}
 }
 
+// TestContextManagementDiagnosticEvent (SP-066 Phase 1) verifies the
+// diagnostic payload carries the model-aware trigger math fields the
+// WebUI metrics panel and downstream telemetry expect, with the
+// effective_max precomputed from max_tokens × trigger_fraction so
+// consumers don't redo the arithmetic.
+func TestContextManagementDiagnosticEvent(t *testing.T) {
+	event := ContextManagementDiagnosticEvent(
+		70000,           // current_tokens
+		200000,          // max_tokens
+		0.70,            // trigger_fraction
+		0.15, 0.10, 0.05, // reserved response/thinking/tool_io
+		3,    // iteration
+		120,  // message_count
+	)
+
+	assert.Equal(t, 70000, event["current_tokens"])
+	assert.Equal(t, 200000, event["max_tokens"])
+	assert.Equal(t, 140000, event["effective_max"]) // 200000 * 0.70
+	assert.Equal(t, 0.70, event["trigger_fraction"])
+	assert.Equal(t, 0.15, event["reserved_response"])
+	assert.Equal(t, 0.10, event["reserved_thinking"])
+	assert.Equal(t, 0.05, event["reserved_tool_io"])
+	assert.Equal(t, 3, event["iteration"])
+	assert.Equal(t, 120, event["message_count"])
+	assert.NotEmpty(t, event["timestamp"])
+}
+
+// TestContextManagementDiagnosticEvent_ZeroMaxTokens guards the
+// degenerate case where max_tokens is zero (e.g. before the model is
+// loaded). effective_max must not panic on the multiplication and
+// should report 0 so downstream UIs don't render misleading values.
+func TestContextManagementDiagnosticEvent_ZeroMaxTokens(t *testing.T) {
+	event := ContextManagementDiagnosticEvent(0, 0, 0.70, 0.15, 0.10, 0.05, 0, 0)
+	assert.Equal(t, 0, event["effective_max"])
+}
+
 // TestEventBus_PublishAfterUnsubscribeDoesNotPanic guards the race where a
 // concurrent Unsubscribe closes a subscriber channel after Publish has
 // snapshotted the subscriber list. Sending on the closed channel panics; the

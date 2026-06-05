@@ -130,7 +130,7 @@ func SweepStaleSessions(sproutDir string) (int, error) {
 		if err != nil {
 			continue // skip unreadable files
 		}
-		if isProcessAlive(info.PID) {
+		if IsProcessAlive(info.PID) {
 			continue // process is alive, keep it
 		}
 		if err := RemoveSessionFile(sproutDir, sessionID); err != nil {

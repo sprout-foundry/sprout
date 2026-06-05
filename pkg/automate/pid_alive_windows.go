@@ -4,7 +4,7 @@ package automate
 
 import "os"
 
-func isProcessAlive(pid int) bool {
+func IsProcessAlive(pid int) bool {
 	if pid <= 0 {
 		return false
 	}

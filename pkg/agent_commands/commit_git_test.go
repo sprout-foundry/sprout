@@ -302,8 +302,13 @@ func TestGitCommandBasic(t *testing.T) {
 			args: []string{"log", "--oneline", "-10"},
 		},
 		{
+			// Was {"commit", "-m", "test message"} — but the in-test
+			// gitCommand defense (commit_git_safety_test.go) now
+			// substitutes a blocked sentinel for mutating subcommands
+			// when currentDir is empty. The test only verifies arg
+			// wrapping, so any multi-arg read-only subcommand works.
 			name: "multiple args",
-			args: []string{"commit", "-m", "test message"},
+			args: []string{"log", "-n", "3", "--oneline"},
 		},
 	}
 

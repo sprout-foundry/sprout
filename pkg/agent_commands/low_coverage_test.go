@@ -291,7 +291,7 @@ func TestCompactCommand_Name(t *testing.T) {
 
 func TestCompactCommand_Description(t *testing.T) {
 	c := &CompactCommand{}
-	assert.Equal(t, "Force immediate context compaction to reduce token usage", c.Description())
+	assert.Equal(t, "Summarize prior conversation via the LLM and replace it with the recap, preserving the most recent user turn", c.Description())
 }
 
 func TestCompactCommand_Execute_NilAgent(t *testing.T) {
@@ -301,7 +301,10 @@ func TestCompactCommand_Execute_NilAgent(t *testing.T) {
 	assert.Contains(t, err.Error(), "agent not available")
 }
 
-func TestCompactCommand_Execute_NoTurnCheckpoints(t *testing.T) {
+func TestCompactCommand_Execute_NotEnoughHistory(t *testing.T) {
+	// A fresh test agent has no conversation history. /compact should
+	// short-circuit with an informational message rather than calling
+	// the LLM summarizer with nothing to summarize.
 	a := agent.NewTestAgent()
 	c := &CompactCommand{}
 
@@ -320,7 +323,7 @@ func TestCompactCommand_Execute_NoTurnCheckpoints(t *testing.T) {
 	output := buf.String()
 
 	assert.NoError(t, err)
-	assert.Contains(t, output, "No turn checkpoints available for compaction")
+	assert.Contains(t, output, "Not enough conversation history to compact")
 }
 
 // =====================================================================

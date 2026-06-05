@@ -631,20 +631,20 @@ func TestSweepStaleSessions_MixedAliveAndDead(t *testing.T) {
 
 func TestIsProcessAlive(t *testing.T) {
 	// Zero and negative PIDs must return false
-	if isProcessAlive(0) {
-		t.Error("isProcessAlive(0) should return false")
+	if IsProcessAlive(0) {
+		t.Error("IsProcessAlive(0) should return false")
 	}
-	if isProcessAlive(-1) {
-		t.Error("isProcessAlive(-1) should return false")
+	if IsProcessAlive(-1) {
+		t.Error("IsProcessAlive(-1) should return false")
 	}
 
 	// Current process must be alive
-	if !isProcessAlive(os.Getpid()) {
-		t.Error("isProcessAlive(os.Getpid()) should return true")
+	if !IsProcessAlive(os.Getpid()) {
+		t.Error("IsProcessAlive(os.Getpid()) should return true")
 	}
 
 	// A very large PID should be dead
-	if isProcessAlive(99999999) {
-		t.Error("isProcessAlive(99999999) should return false")
+	if IsProcessAlive(99999999) {
+		t.Error("IsProcessAlive(99999999) should return false")
 	}
 }

@@ -7,8 +7,10 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -32,6 +34,9 @@ var (
 func init() {
 	automateCmd.AddCommand(automateListCmd)
 	automateCmd.AddCommand(automateRunCmd)
+	automateCmd.AddCommand(automateStatusCmd)
+	automateCmd.AddCommand(automateStopCmd)
+	automateCmd.AddCommand(automateLogsCmd)
 
 	automateCmd.PersistentFlags().StringVar(&automateDir, "dir", "", "Workflow directory (default: ./automate)")
 	automateCmd.PersistentFlags().BoolVarP(&automateAssumeYes, "yes", "y", false, "Skip the confirmation prompt before starting the workflow")
@@ -48,9 +53,10 @@ var automateCmd = &cobra.Command{
 Workflows are JSON configuration files that define automated agent behavior —
 building, testing, reviewing, and committing code without manual intervention.
 
-Use 'sprout automate' to interactively pick a workflow, or specify one directly:
-  sprout automate run full_autonomous
-  sprout automate run full_autonomous.json
+Use 'sprout automate run <name>' to run a workflow.
+Use 'sprout automate status' to see running sessions.
+Use 'sprout automate stop <session>' to stop a running session.
+Use 'sprout automate logs <session>' to view session output.
 
 To create workflows, activate the workflow-automation skill in an agent session
 or see: sprout skill list`,
@@ -635,4 +641,395 @@ func stepDetail(step automate.StepSummary) string {
 		}
 		return strings.Join(details, " ")
 	}
+}
+
+// -----------------------------------------------------------------------
+// Status subcommand
+// -----------------------------------------------------------------------
+
+var (
+	automateStatusAll  bool
+	automateStatusJSON bool
+)
+
+var automateStatusCmd = &cobra.Command{
+	Use:   "status [--all] [--json]",
+	Short: "Show running automate sessions",
+	Long: `Show currently running automate workflow sessions.
+
+By default only shows running (alive) sessions. Use --all to include
+exited sessions as well. Use --json for machine-readable output.`,
+	Args: cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runAutomateStatus()
+	},
+}
+
+func runAutomateStatus() error {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("get working directory: %w", err)
+	}
+	sproutDir := filepath.Join(cwd, ".sprout")
+
+	sessions, err := readAllSessions(sproutDir)
+	if err != nil {
+		return err
+	}
+
+	if len(sessions) == 0 {
+		if automateStatusJSON {
+			fmt.Println("[]")
+		} else {
+			console.GlyphInfo.Printf("No automate sessions found.")
+		}
+		return nil
+	}
+
+	// Filter to running only unless --all
+	if !automateStatusAll {
+		filtered := make([]sessionEntry, 0, len(sessions))
+		for _, s := range sessions {
+			if automate.IsProcessAlive(s.PID) {
+				filtered = append(filtered, s)
+			}
+		}
+		sessions = filtered
+	}
+
+	if len(sessions) == 0 {
+		if automateStatusJSON {
+			fmt.Println("[]")
+		} else {
+			console.GlyphInfo.Printf("No running automate sessions.")
+		}
+		return nil
+	}
+
+	if automateStatusJSON {
+		return printStatusJSON(sessions)
+	}
+
+	printStatusTable(sessions)
+	return nil
+}
+
+type sessionEntry struct {
+	SessionID string
+	automate.AutomateSessionInfo
+}
+
+func readAllSessions(sproutDir string) ([]sessionEntry, error) {
+	dir := filepath.Join(sproutDir, "automate")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("read automate session directory: %w", err)
+	}
+
+	var sessions []sessionEntry
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		if filepath.Ext(name) != ".json" {
+			continue
+		}
+		sessionID := name[:len(name)-5] // strip ".json"
+		info, err := automate.ReadSessionFile(sproutDir, sessionID)
+		if err != nil {
+			continue
+		}
+		sessions = append(sessions, sessionEntry{
+			SessionID:          sessionID,
+			AutomateSessionInfo: *info,
+		})
+	}
+	return sessions, nil
+}
+
+func printStatusTable(sessions []sessionEntry) {
+	fmt.Println()
+	fmt.Printf("  %-30s %-25s %-10s %-8s %-10s %s\n",
+		"SESSION", "WORKFLOW", "STATUS", "PID", "STARTED", "ELAPSED")
+	fmt.Println()
+	for _, s := range sessions {
+		status := "exited"
+		if automate.IsProcessAlive(s.PID) {
+			status = "running"
+		}
+		fmt.Printf("  %-30s %-25s %-10s %-8d %-10s %s\n",
+			s.SessionID,
+			s.Workflow,
+			status,
+			s.PID,
+			s.StartedAt.Format("15:04:05"),
+			time.Since(s.StartedAt).Round(time.Second),
+		)
+	}
+	fmt.Println()
+}
+
+func printStatusJSON(sessions []sessionEntry) error {
+	type statusEntry struct {
+		SessionID       string `json:"session_id"`
+		Workflow        string `json:"workflow"`
+		Status          string `json:"status"`
+		PID             int    `json:"pid"`
+		StartedAt       string `json:"started_at"`
+		ElapsedSeconds  int64  `json:"elapsed_seconds"`
+	}
+
+	entries := make([]statusEntry, 0, len(sessions))
+	for _, s := range sessions {
+		status := "exited"
+		if automate.IsProcessAlive(s.PID) {
+			status = "running"
+		}
+		entries = append(entries, statusEntry{
+			SessionID:      s.SessionID,
+			Workflow:       s.Workflow,
+			Status:         status,
+			PID:            s.PID,
+			StartedAt:      s.StartedAt.Format(time.RFC3339),
+			ElapsedSeconds: int64(time.Since(s.StartedAt).Seconds()),
+		})
+	}
+
+	data, err := json.MarshalIndent(entries, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal status JSON: %w", err)
+	}
+	fmt.Println(string(data))
+	return nil
+}
+
+// -----------------------------------------------------------------------
+// Stop subcommand
+// -----------------------------------------------------------------------
+
+var automateStopAll bool
+
+var automateStopCmd = &cobra.Command{
+	Use:   "stop <session_id> [--all]",
+	Short: "Stop a running automate session",
+	Long: `Stop a running automate workflow session by session ID.
+
+The process is stopped via signal escalation: SIGINT, then SIGTERM,
+then SIGKILL if the process persists. The PID file is removed after
+the process is confirmed dead.
+
+Use --all to stop all running sessions.`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if automateStopAll {
+			return runAutomateStopAll()
+		}
+		if len(args) == 0 {
+			return fmt.Errorf("session ID is required (or use --all to stop all sessions)")
+		}
+		return runAutomateStop(args[0])
+	},
+}
+
+func runAutomateStop(sessionID string) error {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("get working directory: %w", err)
+	}
+	sproutDir := filepath.Join(cwd, ".sprout")
+
+	info, err := automate.ReadSessionFile(sproutDir, sessionID)
+	if err != nil {
+		return err
+	}
+
+	if !automate.IsProcessAlive(info.PID) {
+		// Already dead — just clean up the PID file
+		if err := automate.RemoveSessionFile(sproutDir, sessionID); err != nil {
+			fmt.Fprintf(os.Stderr, "warn: %v\n", err)
+		}
+		console.GlyphInfo.Printf("Session %s (PID %d) was already stopped. PID file cleaned up.", sessionID, info.PID)
+		return nil
+	}
+
+	console.GlyphAction.Printf("Stopping session %s (PID %d, workflow: %s)...", sessionID, info.PID, info.Workflow)
+
+	ok, err := automate.StopProcess(info.PID)
+	if err != nil {
+		console.GlyphWarning.Printf("Error stopping process %d: %v", info.PID, err)
+	}
+
+	// Remove PID file regardless
+	if err := automate.RemoveSessionFile(sproutDir, sessionID); err != nil {
+		fmt.Fprintf(os.Stderr, "warn: %v\n", err)
+	}
+
+	if ok {
+		console.GlyphSuccess.Printf("Stopped session %s (PID %d).", sessionID, info.PID)
+	} else {
+		console.GlyphWarning.Printf("Session %s (PID %d) may still be running — verify manually.", sessionID, info.PID)
+	}
+	return nil
+}
+
+func runAutomateStopAll() error {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("get working directory: %w", err)
+	}
+	sproutDir := filepath.Join(cwd, ".sprout")
+
+	sessions, err := readAllSessions(sproutDir)
+	if err != nil {
+		return err
+	}
+
+	stopped := 0
+	for _, s := range sessions {
+		if !automate.IsProcessAlive(s.PID) {
+			// Already dead, just clean up
+			_ = automate.RemoveSessionFile(sproutDir, s.SessionID)
+			continue
+		}
+		console.GlyphAction.Printf("Stopping session %s (PID %d)...", s.SessionID, s.PID)
+		ok, err := automate.StopProcess(s.PID)
+		if err != nil {
+			console.GlyphWarning.Printf("Error stopping PID %d: %v", s.PID, err)
+		}
+		_ = automate.RemoveSessionFile(sproutDir, s.SessionID)
+		if ok {
+			stopped++
+		}
+	}
+
+	if stopped == 0 {
+		console.GlyphInfo.Printf("No running sessions to stop.")
+	} else {
+		console.GlyphSuccess.Printf("Stopped %d session(s).", stopped)
+	}
+	return nil
+}
+
+// -----------------------------------------------------------------------
+// Logs subcommand
+// -----------------------------------------------------------------------
+
+var (
+	automateLogsFollow bool
+	automateLogsLines  int
+)
+
+var automateLogsCmd = &cobra.Command{
+	Use:   "logs <session_id> [-f] [-n N]",
+	Short: "View output from an automate session",
+	Long: `View the captured output from an automate workflow session.
+
+Use -f to follow the output in real time (stops when the process exits).
+Use -n N to show only the last N lines.
+
+Note: CLI sessions that pipe to terminal do not have captured output files.`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runAutomateLogs(args[0])
+	},
+}
+
+func runAutomateLogs(sessionID string) error {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("get working directory: %w", err)
+	}
+	sproutDir := filepath.Join(cwd, ".sprout")
+
+	info, err := automate.ReadSessionFile(sproutDir, sessionID)
+	if err != nil {
+		return err
+	}
+
+	if info.OutputFilePath == "" {
+		fmt.Printf("No captured output for session %s (CLI sessions pipe to terminal)\n", sessionID)
+		return nil
+	}
+
+	data, err := os.ReadFile(info.OutputFilePath)
+	if err != nil {
+		return fmt.Errorf("read output file: %w", err)
+	}
+
+	lines := strings.Split(string(data), "\n")
+
+	if automateLogsLines > 0 && automateLogsLines < len(lines) {
+		lines = lines[len(lines)-automateLogsLines:]
+	}
+
+	for _, line := range lines {
+		fmt.Println(line)
+	}
+
+	if automateLogsFollow {
+		return followLogFile(info.OutputFilePath, info.PID)
+	}
+	return nil
+}
+
+func followLogFile(path string, pid int) error {
+	// Get the initial file size
+	fi, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("stat output file: %w", err)
+	}
+	offset := fi.Size()
+
+	for {
+		if !automate.IsProcessAlive(pid) {
+			// Process is gone — do one final read then exit
+			break
+		}
+		time.Sleep(500 * time.Millisecond)
+
+		f, err := os.Open(path)
+		if err != nil {
+			continue
+		}
+
+		_, err = f.Seek(offset, io.SeekStart)
+		if err != nil {
+			f.Close()
+			continue
+		}
+
+		newData, err := io.ReadAll(f)
+		f.Close()
+		if err != nil {
+			continue
+		}
+
+		if len(newData) > 0 {
+			fmt.Print(string(newData))
+			offset += int64(len(newData))
+		}
+	}
+
+	// Final read after process exits
+	f, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+
+	_, err = f.Seek(offset, io.SeekStart)
+	if err != nil {
+		return nil
+	}
+
+	newData, err := io.ReadAll(f)
+	if err != nil || len(newData) == 0 {
+		return nil
+	}
+	fmt.Print(string(newData))
+	return nil
 }

@@ -319,6 +319,22 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
     return () => clearInterval(id);
   }, [activeTab, sessions]);
 
+  /* ── Focus Session (from sprout://automations/session/ links) ── */
+
+  useEffect(() => {
+    const handler = (event: CustomEvent) => {
+      const sessionId = event.detail?.sessionId;
+      if (sessionId) {
+        debugLog('[AutomationsPanel] Focusing on session:', sessionId);
+        setActiveTab('running');
+        setSelectedSessionId(sessionId);
+        fetchSessions();
+      }
+    };
+    window.addEventListener('sprout-navigate-automation' as any, handler as any);
+    return () => window.removeEventListener('sprout-navigate-automation' as any, handler as any);
+  }, [fetchSessions]);
+
   /* ── Derived data ──────────────────────────────────────── */
 
   const runningSessions = sessions.filter((s) => s.status === 'running');
@@ -432,7 +448,10 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
                   <div
                     key={session.session_id}
                     className="automations-session-row clickable"
-                    onClick={() => setSelectedSessionId(session.session_id)}
+                    onClick={() => {
+                      setSelectedSessionId(session.session_id);
+                      onNavigateToSession?.(session.session_id);
+                    }}
                   >
                     <span className="automations-session-id" title={session.session_id}>
                       {truncateId(session.session_id)}

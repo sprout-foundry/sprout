@@ -6,6 +6,7 @@
   height: 100%;
   overflow: hidden;
   font-family: var(--font-mono);
+  position: relative;
 }
 
 /* ── Tab Bar ───────────────────────────────────────────────── */

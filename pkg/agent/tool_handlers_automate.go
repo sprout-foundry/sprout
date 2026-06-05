@@ -101,6 +101,8 @@ func handleRunAutomate(ctx context.Context, a *Agent, args map[string]interface{
 
 	result["status"] = "started"
 	result["session_id"] = sessionID
+	// SP-065-5a: Include a message with session ID and link to Automations panel
+	result["message"] = fmt.Sprintf("Workflow started: session `%s` — view in [Automations panel](sprout://automations/session/%s)", sessionID, sessionID)
 
 	resultJSON, _ := json.MarshalIndent(result, "", "  ")
 	return string(resultJSON), nil

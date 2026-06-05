@@ -9,11 +9,15 @@ import (
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
-// llmSummarizerMaxInputChars caps the conversation snippet sent to the
-// summary model. The cap is proportional to message count up to this hard
-// ceiling so a single oversized middle segment never sends the summary call
-// itself into context overflow.
-const llmSummarizerMaxInputChars = 32000
+// llmSummarizerMaxInputChars caps the transcript sent to the summary
+// model. 160K chars is ~40K tokens — comfortable headroom on a 128K
+// token model (GLM-4.5, GPT-4o) after system prompt and response
+// budget, and well within Claude's 200K window. When the transcript
+// exceeds this cap, truncateTranscriptMiddle keeps the opening
+// framing AND the most recent turns leading into the current user
+// message, dropping only the middle. Recency anchors what the model
+// needs to continue; the original setup anchors the task framing.
+const llmSummarizerMaxInputChars = 160000
 
 // newLLMSummarizer returns a core.LLMSummarizer bound to the supplied LLM
 // client. When the client is nil, returns nil — seed treats a nil
@@ -125,11 +129,50 @@ func buildSummarizerTranscript(messages []core.Message, maxChars int) string {
 			b.WriteString("\n")
 		}
 	}
-	out := b.String()
-	if len(out) > maxChars {
-		out = out[:maxChars] + "\n[...truncated...]"
+	return truncateTranscriptMiddle(b.String(), maxChars)
+}
+
+// truncateTranscriptMiddle keeps the first ~25% and last ~75% of the
+// transcript when it exceeds maxChars, replacing the middle with a
+// marker. The asymmetric split favors recency — the most recent turns
+// (last ~75%) carry the active working state that the recap needs to
+// preserve, while a smaller head slice anchors the original task
+// framing. Cuts are aligned to the nearest newline so we never split
+// a tagged transcript line ("[user] ...", "[assistant] ...") in the
+// middle.
+func truncateTranscriptMiddle(s string, maxChars int) string {
+	if maxChars <= 0 || len(s) <= maxChars {
+		return s
 	}
-	return out
+	const marker = "\n[...middle truncated to fit summarizer budget...]\n"
+	budget := maxChars - len(marker)
+	if budget <= 0 {
+		return s[:maxChars]
+	}
+	headBudget := budget / 4
+	tailBudget := budget - headBudget
+
+	// Head: take first headBudget bytes, then back up to the most
+	// recent newline so we don't split a transcript line.
+	headEnd := headBudget
+	if nl := strings.LastIndexByte(s[:headEnd], '\n'); nl > 0 {
+		headEnd = nl + 1
+	}
+
+	// Tail: start tailBudget from the end, then advance to the next
+	// newline so we don't start mid-line.
+	tailStart := len(s) - tailBudget
+	if tailStart < headEnd {
+		tailStart = headEnd
+	}
+	if nl := strings.IndexByte(s[tailStart:], '\n'); nl >= 0 {
+		candidate := tailStart + nl + 1
+		if candidate < len(s) {
+			tailStart = candidate
+		}
+	}
+
+	return s[:headEnd] + marker + s[tailStart:]
 }
 
 func joinAssistantToolNames(calls []core.ToolCall) string {

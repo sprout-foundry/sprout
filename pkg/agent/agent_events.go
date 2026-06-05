@@ -109,6 +109,25 @@ func (a *Agent) PublishCompactCompleted(source string, beforeCount, afterCount, 
 	a.publishEvent(events.EventTypeCompactCompleted, events.CompactCompletedEvent(source, beforeCount, afterCount, summaryChars, err))
 }
 
+// PublishContextManagementDiagnostic (SP-066 Phase 1) emits the per-iteration
+// context-budget snapshot so the WebUI metrics panel can render the effective
+// trigger threshold and verify substitution is doing the heavy lifting.
+func (a *Agent) PublishContextManagementDiagnostic(currentTokens, maxTokens, iteration, messageCount int) {
+	a.publishEvent(
+		events.EventTypeContextManagementDiagnostic,
+		events.ContextManagementDiagnosticEvent(
+			currentTokens,
+			maxTokens,
+			a.computeCompactionTriggerFraction(),
+			reservedForResponseFraction,
+			reservedForThinkingFraction,
+			reservedForToolIOFraction,
+			iteration,
+			messageCount,
+		),
+	)
+}
+
 // PublishBudgetUpdate publishes a budget update event for automate sessions.
 // This goes through decorateEventPayload to include client_id/chat_id metadata.
 func (a *Agent) PublishBudgetUpdate(eventType string, data interface{}) {

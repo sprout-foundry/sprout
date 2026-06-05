@@ -221,6 +221,26 @@ func AskUser(req AskUserRequest) (string, error) {
 	renderCLIPrompt(os.Stdout, req)
 
 	reader := bufio.NewReader(os.Stdin)
+
+	if len(req.Options) == 0 {
+		// Freeform mode: read until a blank line (double Enter) or EOF.
+		// This allows pasting multiline text — a single newline between
+		// pasted lines is preserved; the user submits by pressing Enter
+		// on an empty line.
+		answer, err := readFreeformInput(reader)
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return "", ErrAskUserNoChannel
+			}
+			return "", fmt.Errorf("read user input: %w", err)
+		}
+		if answer == "" && req.Default != "" {
+			return req.Default, nil
+		}
+		return answer, nil
+	}
+
+	// Option mode: single line is sufficient.
 	answer, err := reader.ReadString('\n')
 	if err != nil {
 		if errors.Is(err, io.EOF) {
@@ -230,17 +250,41 @@ func AskUser(req AskUserRequest) (string, error) {
 	}
 	answer = strings.TrimSpace(answer)
 
-	if len(req.Options) == 0 {
-		if answer == "" && req.Default != "" {
-			return req.Default, nil
-		}
-		return answer, nil
-	}
 	resolved, ok := resolveCLIOptionAnswer(answer, req)
 	if !ok {
 		return "", fmt.Errorf("invalid selection %q — expected a number 1-%d, an option label, or one of the option values", answer, len(req.Options))
 	}
 	return resolved, nil
+}
+
+// readFreeformInput reads lines from the reader until a blank line is
+// encountered (the user pressed Enter on an empty line) or EOF is reached.
+// Consecutive newlines within pasted content are preserved — only a blank
+// line at the *end* terminates input. The returned string is trimmed of
+// trailing whitespace but internal newlines are kept intact.
+func readFreeformInput(reader *bufio.Reader) (string, error) {
+	var lines []string
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				// EOF counts as the terminator — return whatever we have.
+				trimmed := strings.TrimRight(line, "\n\r")
+				if trimmed != "" {
+					lines = append(lines, trimmed)
+				}
+				return strings.Join(lines, "\n"), nil
+			}
+			return "", err
+		}
+		trimmed := strings.TrimRight(line, "\n\r")
+		if trimmed == "" && len(lines) > 0 {
+			// Blank line signals end of input (but only if we already
+			// have content — an immediate blank returns empty string).
+			return strings.Join(lines, "\n"), nil
+		}
+		lines = append(lines, trimmed)
+	}
 }
 
 // renderCLIPrompt writes the question and (optionally) the numbered
@@ -277,7 +321,13 @@ func renderCLIPrompt(w io.Writer, req AskUserRequest) {
 		}
 	}
 	fmt.Fprintln(w, bar)
-	if req.Default != "" {
+	if len(req.Options) == 0 {
+		if req.Default != "" {
+			fmt.Fprintf(w, "> [default: %s] (Enter blank line to submit)\n", req.Default)
+		} else {
+			fmt.Fprintln(w, "> (Enter blank line to submit)")
+		}
+	} else if req.Default != "" {
 		fmt.Fprintf(w, "> [default: %s] ", req.Default)
 	} else {
 		fmt.Fprint(w, "> ")

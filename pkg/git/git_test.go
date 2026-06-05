@@ -510,7 +510,7 @@ func TestAddAndCommitFile(t *testing.T) {
 	fp := filepath.Join(dir, "committed.go")
 	assert.NoError(t, os.WriteFile(fp, []byte("package committed\n"), 0644))
 
-	err := AddAndCommitFile("committed.go", "add committed.go")
+	err := AddAndCommitFile(dir, "committed.go", "add committed.go")
 	assert.NoError(t, err)
 
 	// Verify commit exists
@@ -538,7 +538,7 @@ func TestAddAllAndCommit(t *testing.T) {
 	assert.NoError(t, os.WriteFile(filepath.Join(dir, "all.go"), []byte("package all\n"), 0644))
 	gitRun(t, dir, "add", "all.go")
 
-	err := AddAllAndCommit("add all.go", 0)
+	err := AddAllAndCommit(dir, "add all.go", 0)
 	assert.NoError(t, err)
 
 	out, _ := exec.Command("git", "-C", dir, "log", "-1", "--pretty=%s").CombinedOutput()
@@ -547,7 +547,7 @@ func TestAddAllAndCommit(t *testing.T) {
 
 func TestAddAllAndCommit_Timeout(t *testing.T) {
 	// Just verify the function signature is correct
-	var _ func(string, int) error = AddAllAndCommit
+	var _ func(string, string, int) error = AddAllAndCommit
 }
 
 func TestNewCommitExecutor(t *testing.T) {
@@ -676,7 +676,7 @@ func TestPerformGitCommit(t *testing.T) {
 	assert.NoError(t, os.WriteFile(filepath.Join(dir, "perform.go"), []byte("package perform\n"), 0644))
 	gitRun(t, dir, "add", "perform.go")
 
-	err := PerformGitCommit("perform commit test")
+	err := PerformGitCommit(dir, "perform commit test")
 	assert.NoError(t, err)
 
 	out, _ := exec.Command("git", "-C", dir, "log", "-1", "--pretty=%s").CombinedOutput()

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/console"
+	"github.com/sprout-foundry/sprout/pkg/git"
 	"golang.org/x/term"
 )
 
@@ -19,13 +20,41 @@ func SetGitDir(dir string) {
 	currentDir = strings.TrimSpace(dir)
 }
 
-// gitCommand creates an exec.Cmd for a git command with the correct working directory.
+// gitCommand creates an exec.Cmd for a git command with the correct
+// working directory. Delegates to pkg/git.SafeGitCmd so the test-mode
+// mutation guard is shared with every other git invocation in the
+// codebase — there is exactly one allowlist of mutating subcommands.
 func gitCommand(args ...string) *exec.Cmd {
-	cmd := exec.Command("git", args...)
-	if currentDir != "" {
-		cmd.Dir = currentDir
-	}
-	return cmd
+	return git.SafeGitCmd(currentDir, args...)
+}
+
+// mutatingGitSubcommands is exposed for the safety test in this package.
+// Production code should call gitCommand (which routes through
+// pkg/git.SafeGitCmd) rather than reading this map directly.
+var mutatingGitSubcommands = map[string]bool{
+	"commit":       true,
+	"add":          true,
+	"push":         true,
+	"reset":        true,
+	"restore":      true,
+	"checkout":     true,
+	"switch":       true,
+	"rm":           true,
+	"mv":           true,
+	"merge":        true,
+	"rebase":       true,
+	"am":           true,
+	"cherry-pick":  true,
+	"revert":       true,
+	"pull":         true,
+	"stash":        true,
+	"tag":          true,
+	"branch":       true,
+	"update-ref":   true,
+	"update-index": true,
+	"gc":           true,
+	"prune":        true,
+	"repack":       true,
 }
 
 // normalizeNewlines converts newlines for terminal compatibility

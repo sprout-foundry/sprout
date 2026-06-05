@@ -1,4 +1,4 @@
-//go:build windows
+//go:build windows && !js
 
 package automate
 
@@ -16,6 +16,6 @@ func IsProcessAlive(pid int) bool {
 
 	// On Windows, FindProcess succeeds for arbitrary PIDs. Signal(0) is not
 	// portable here, so treat successful process resolution as "potentially
-	// alive" for host-selection purposes rather than failing the build.
+	// alive" for session lifecycle management rather than failing the build.
 	return process != nil
 }

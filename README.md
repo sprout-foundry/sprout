@@ -14,6 +14,7 @@ AI-powered code editing and assistance tool. Leverages LLMs to understand your w
 - **Persistent Memory** across conversations
 - **Built-in tool suite** — file operations, web search, vision analysis, shell execution, PDF analysis, headless browser
 - **Background subagents** for parallel task execution
+- **Workflow Automations**: Define and run autonomous agent workflows from `automate/` directory configs. Monitor with `sprout automate status/stop/logs` or the WebUI Automations panel.
 - **Addressing** — SSH remote workspace with local Web UI access via tunneling
 - **Dataset tracing** for training data generation
 - **Provider catalog** with model lists, costs, and recommendations

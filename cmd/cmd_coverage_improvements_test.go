@@ -614,8 +614,8 @@ func TestValidate_StepMissingPromptAndFile(t *testing.T) {
 		Steps: []AgentWorkflowStep{{Name: "empty"}},
 	}
 	err := cfg.validate()
-	if err == nil || !strings.Contains(err.Error(), "requires prompt or prompt_file") {
-		t.Fatalf("expected missing prompt error, got: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "requires one of prompt, prompt_file, command, command_file") {
+		t.Fatalf("expected missing prompt/command error, got: %v", err)
 	}
 }
 

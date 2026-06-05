@@ -89,6 +89,41 @@ Prefer **(1)** — simpler, easier to debug ("just look in `.sprout/automate/`")
 
 A nightly cleanup sweep removes stale entries whose PID no longer exists.
 
+#### PID-file schema
+
+Each session writes `.sprout/automate/<session_id>.json`. The schema is defined in `pkg/automate/pid_file.go` (`AutomateSessionInfo`):
+
+```json
+{
+  "workflow": "full_autonomous.json",
+  "pid": 12345,
+  "started_at": "2026-06-04T22:00:00Z",
+  "output_file_path": "/tmp/sprout-bg/bg-automate-abc123.output",
+  "budget_usd": 5.0,
+  "kind": "automate"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `workflow` | string | yes | Basename of the workflow JSON file |
+| `pid` | int | yes | OS process ID of the sprout agent subprocess |
+| `started_at` | RFC3339 | yes | Timestamp when the process was launched |
+| `output_file_path` | string | no | Path to captured stdout/stderr temp file (agent-launched sessions only; CLI sessions pipe directly to the terminal) |
+| `budget_usd` | float | no | Per-run USD budget cap (omitted when no budget is set) |
+| `kind` | string | yes | Always `"automate"` — used by consumers to filter automate sessions from other PID-file consumers |
+
+**Lifecycle:**
+1. Written immediately after `cmd.Start()` succeeds (CLI path) or after BPM `StartWithKind` returns (agent path).
+2. Removed on clean process exit via `defer RemoveSessionFile(...)`.
+3. Stale files (PID no longer alive) are swept at the start of every `sprout automate *` subcommand via `SweepStaleSessions()`.
+
+**Session ID format:**
+- CLI-launched: `cli-automate-<16-hex-chars>` (crypto/rand)
+- Agent-launched: `bg-<sanitized-prefix>-<8-hex-chars>` (BPM-generated)
+
+Consumers (SP-065 WebUI panel, `sprout automate status`) should read the directory with `ListSessionFiles()` and check `kind == "automate"` to filter.
+
 ### Phase 6: Tests + docs
 
 - Unit: BPM Stop primitive (mock process, signal sequencing, grace-period escalation).

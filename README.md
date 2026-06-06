@@ -74,9 +74,35 @@ sh install.sh
 
 ### Uninstall
 
+By default this removes the binary, the service files, and the config /
+session state under `~/.config/sprout/` and `~/.sprout/`. Pass
+`--keep-config` (or `-KeepConfig` on Windows) to preserve them.
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/sprout-foundry/sprout/main/scripts/install.sh | sh -s -- --uninstall
+# Keep your settings + session history:
+curl -fsSL https://raw.githubusercontent.com/sprout-foundry/sprout/main/scripts/install.sh | sh -s -- --uninstall --keep-config
 ```
+
+### Verifying the download
+
+Every release ships a `SHA256SUMS` manifest and an SLSA build-provenance
+attestation. The install scripts verify the checksum automatically; the
+provenance attestation can be checked manually with the GitHub CLI:
+
+```bash
+# Integrity (already automated by install.sh — this is for manual re-check):
+curl -fsSL https://github.com/sprout-foundry/sprout/releases/latest/download/SHA256SUMS \
+  | sha256sum -c --ignore-missing
+
+# Provenance — proves the binary came from the official release workflow:
+gh release download <tag> --pattern 'sprout-*' --repo sprout-foundry/sprout
+gh attestation verify sprout-linux-amd64.tar.gz --repo sprout-foundry/sprout
+```
+
+Set `SPROUT_SKIP_CHECKSUM=1` (or `$env:SPROUT_SKIP_CHECKSUM='1'` on
+Windows) only if you have a specific reason to bypass verification — e.g.
+a release that pre-dates the manifest.
 
 ### From Source
 

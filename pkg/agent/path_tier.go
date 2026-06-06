@@ -161,6 +161,11 @@ func normalizePath(p string) string {
 		return p
 	}
 	clean := filepath.Clean(p)
+	// Resolve symlinks so that macOS /var → /private/var doesn't cause
+	// mismatches between allowlist entries and canonical paths.
+	if evaled, err := filepath.EvalSymlinks(clean); err == nil {
+		clean = evaled
+	}
 	if runtime.GOOS == "windows" {
 		return strings.ToLower(clean)
 	}

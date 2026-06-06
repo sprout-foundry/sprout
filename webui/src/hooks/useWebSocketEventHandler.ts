@@ -121,7 +121,17 @@ const handleQueryStarted = (ctx: EventHandlerContext): void => {
         : alreadyPresent
           ? prev.messages
           : [...prev.messages, { id: generateMessageId(), type: 'user', content: startedQuery, timestamp: new Date() }],
-      toolExecutions: [],
+      // Preserve historical tool executions across turns. Wiping the array
+      // here (the original behavior) broke two visible features: (a)
+      // MessageSegments badges on past turns lost their status lookup and
+      // regressed to the running-pill render — the "tool badges flash on
+      // and off" symptom — and (b) clicking a past-turn tool badge fired
+      // contextPanelRef.highlightTool(toolId), which then couldn't find the
+      // tool in state and silently no-op'd. handleToolStart tags every new
+      // tool with the current queryCount so per-turn views (timeline bar,
+      // current-turn ToolsTab group) still filter cleanly; old entries
+      // stay reachable for lookup and the sidebar's "Earlier" group.
+      toolExecutions: prev.toolExecutions,
       fileEdits: [],
       subagentActivities: [],
       queryProgress: null,
@@ -336,6 +346,10 @@ const handleToolStart = (ctx: EventHandlerContext): void => {
       persona,
       subagentType,
       depth: depth > 0 ? depth : undefined,
+      // Tag with the current turn so ToolsTab can group historical
+      // tools by turn and ChatView's filteredToolExecutions can show
+      // only the current turn in the live timeline bar above the input.
+      queryId: prev.queryCount,
     };
     const messages = [...messagesWithNewline];
     addToolRefToMessage(messages, newTool.id);

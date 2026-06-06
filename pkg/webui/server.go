@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"os/user"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -235,6 +236,16 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 	// Unix sockets are inherently local-only.
 	if socketPath == "" && !isLocalhostAddr(bindAddr) && resolvedAuthToken == "" {
 		return nil, fmt.Errorf("Refusing to start: SPROUT_BIND_ADDR=%s requires SPROUT_AUTH_TOKEN to be set.", bindAddr)
+	}
+
+	// Resolve symlinks on both roots so that path comparisons are consistent
+	// (macOS /var → /private/var is the common case; without this, any path
+	// that goes through filepath.EvalSymlinks will fail prefix checks).
+	if evaled, err := filepath.EvalSymlinks(daemonRoot); err == nil {
+		daemonRoot = evaled
+	}
+	if evaled, err := filepath.EvalSymlinks(workspaceRoot); err == nil {
+		workspaceRoot = evaled
 	}
 
 	return &ReactWebServer{

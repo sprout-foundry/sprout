@@ -24,6 +24,11 @@ import (
 func newAutomateTestServer(t *testing.T) (*ReactWebServer, string) {
 	t.Helper()
 	daemonRoot := t.TempDir()
+	// Resolve symlinks so daemonRoot matches the server's expectations
+	// (macOS /var → /private/var).
+	if evaled, err := filepath.EvalSymlinks(daemonRoot); err == nil {
+		daemonRoot = evaled
+	}
 
 	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {

@@ -59,6 +59,14 @@ func GetFileGitPath(filename string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to get absolute path for %s: %w", filename, err)
 	}
+	// Resolve symlinks on both paths so filepath.Rel works correctly
+	// (macOS /var → /private/var via os.Getwd vs git output).
+	if evaled, err := filepath.EvalSymlinks(absPath); err == nil {
+		absPath = evaled
+	}
+	if evaled, err := filepath.EvalSymlinks(gitRoot); err == nil {
+		gitRoot = evaled
+	}
 	relPath, err := filepath.Rel(gitRoot, absPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to get relative path for %s: %w", filename, err)

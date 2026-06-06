@@ -38,6 +38,11 @@ func (m *fileConsentManager) issue(canonicalPath, operation string, ttl time.Dur
 	if ttl <= 0 {
 		ttl = defaultConsentTTL
 	}
+	// Resolve symlinks so the stored path matches what canonicalizePath
+	// produces (macOS /var → /private/var).
+	if evaled, err := filepath.EvalSymlinks(canonicalPath); err == nil {
+		canonicalPath = evaled
+	}
 	tokenBytes := make([]byte, 16)
 	if _, err := rand.Read(tokenBytes); err != nil {
 		return "", time.Time{}, fmt.Errorf("failed to generate consent token: %w", err)

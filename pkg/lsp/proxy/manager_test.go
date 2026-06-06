@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"context"
+	"os/exec"
 	"sync"
 	"testing"
 	"time"
@@ -167,7 +168,11 @@ func TestManagerGetOrCreateGracefulErrorWithInstallHint(t *testing.T) {
 		m := NewManager(ctx)
 		defer m.Close()
 
-		// clangd is unlikely to be installed in CI
+		// Skip if clangd is installed locally (test assumes it's absent)
+		if _, err := exec.LookPath("clangd"); err == nil {
+			t.Skip("clangd is installed locally; skipping install-hint test")
+		}
+
 		_, _, err := m.GetOrCreate("/tmp", "c")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "clangd")
@@ -222,10 +227,13 @@ func TestManagerGetOrCreateGracefulErrorWithInstallHint(t *testing.T) {
 		m := NewManager(ctx)
 		defer m.Close()
 
-		// sourcekit-lsp is unlikely to be installed in CI (macOS only)
+		// Skip if sourcekit-lsp is installed locally (test assumes it's absent)
+		if _, err := exec.LookPath("sourcekit-lsp"); err == nil {
+			t.Skip("sourcekit-lsp is installed locally; skipping install-hint test")
+		}
+
 		_, _, err := m.GetOrCreate("/tmp", "swift")
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "sourcekit-lsp")
 		assert.Contains(t, err.Error(), "sourcekit-lsp")
 	})
 

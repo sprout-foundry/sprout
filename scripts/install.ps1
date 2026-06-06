@@ -5,7 +5,8 @@ param(
     [switch]$Uninstall,
     [switch]$Service,
     [switch]$NoService,
-    [switch]$Version
+    [switch]$Version,
+    [switch]$KeepConfig
 )
 
 # Color output via Write-Host -ForegroundColor — scoped to a single line so
@@ -84,13 +85,24 @@ function Detect-Arch {
     return "amd64"
 }
 
-# Determine install directory
+# Determine install directory.
+#
+# Priority:
+#   1. $env:SPROUT_INSTALL_DIR if set (explicit user choice).
+#   2. Directory of an existing sprout / ledit binary on PATH (upgrade in place).
+#   3. %LOCALAPPDATA%\Programs\sprout (standard per-user location).
+#
+# The previous implementation probe-wrote a test file into every directory on
+# PATH and picked the first writable one — that frequently picked unexpected
+# locations (random tool bin folders, dev SDK paths) and made upgrades hard
+# to find. LOCALAPPDATA is the documented Windows per-user app prefix and
+# the installer adds it to PATH itself, so we don't need to scan.
 function Get-InstallDir {
     if ($env:SPROUT_INSTALL_DIR) {
         return $env:SPROUT_INSTALL_DIR
     }
 
-    # Check for existing sprout or legacy ledit binary on PATH to upgrade in place
+    # Upgrade in place if sprout (or the legacy ledit binary) is on PATH.
     $existingSprout = Get-Command sprout -ErrorAction SilentlyContinue
     if (-not $existingSprout) {
         $existingSprout = Get-Command ledit -ErrorAction SilentlyContinue
@@ -99,26 +111,54 @@ function Get-InstallDir {
         return Split-Path $existingSprout.Source
     }
 
-    # Default to LOCALAPPDATA\Programs\sprout
-    $defaultDir = Join-Path $env:LOCALAPPDATA "Programs\sprout"
-    
-    # Check if we should use a directory on PATH
-    $pathDirs = $env:PATH -split ";" | Where-Object { $_ -and (Test-Path $_) }
-    
-    # Prefer a writable directory on PATH
-    foreach ($dir in $pathDirs) {
+    return (Join-Path $env:LOCALAPPDATA "Programs\sprout")
+}
+
+# Retry wrapper for Invoke-WebRequest / Invoke-RestMethod with exponential
+# backoff. PowerShell 6+ exposes -MaximumRetryCount on these cmdlets, but
+# 5.1 (the default Windows shell) doesn't, so we roll our own to keep the
+# script single-source. Honors $env:SPROUT_INSTALL_RETRIES (default 3).
+function Invoke-WithRetries {
+    param(
+        [ScriptBlock]$Action,
+        [string]$Description = "request"
+    )
+
+    $maxRetries = if ($env:SPROUT_INSTALL_RETRIES) {
+        [int]$env:SPROUT_INSTALL_RETRIES
+    } else {
+        3
+    }
+
+    for ($attempt = 1; $attempt -le $maxRetries; $attempt++) {
         try {
-            $testFile = Join-Path $dir "test_write_$PID.$(Get-Random)"
-            $null = [System.IO.File]::WriteAllText($testFile, "test")
-            [System.IO.File]::Delete($testFile)
-            return $dir
+            return & $Action
         } catch {
-            continue
+            $lastError = $_
+            if ($attempt -lt $maxRetries) {
+                $delay = [math]::Pow(2, $attempt - 1)
+                Write-LogWarn "$Description failed (attempt $attempt/$maxRetries): $($_.Exception.Message). Retrying in ${delay}s..."
+                Start-Sleep -Seconds $delay
+            }
         }
     }
-    
-    # Fall back to LOCALAPPDATA
-    return $defaultDir
+
+    # All retries exhausted — surface targeted advice for common failure
+    # modes before re-throwing.
+    $msg = $lastError.Exception.Message
+    if ($msg -match "rate limit|403") {
+        Write-LogError "GitHub API rate limit hit (60 req/hr per IP)."
+        Write-LogError "Pin a version with `$env:SPROUT_VERSION='v0.14.0'` and re-run."
+    } elseif ($msg -match "404|Not Found") {
+        Write-LogError "Resource not found. Check the version tag exists."
+    } elseif ($msg -match "name or service not known|DNS|could not be resolved|No such host") {
+        Write-LogError "DNS lookup failed. Are you offline or behind a captive portal?"
+    } elseif ($msg -match "proxy|407") {
+        Write-LogError "Proxy required. Set `$env:HTTPS_PROXY` and re-run."
+    } else {
+        Write-LogError "$Description failed: $msg"
+    }
+    throw $lastError
 }
 
 # Get version from environment or fetch latest from GitHub
@@ -126,14 +166,14 @@ function Get-Version {
     if ($env:SPROUT_VERSION) {
         return $env:SPROUT_VERSION
     }
-    
+
     try {
-        $apiUrl = "https://api.github.com/repos/sprout-foundry/sprout/releases/latest"
-        $response = Invoke-RestMethod -Uri $apiUrl -UseBasicParsing -ErrorAction Stop
-        $version = $response.tag_name
-        return $version
+        $response = Invoke-WithRetries -Description "GitHub API version lookup" -Action {
+            Invoke-RestMethod -Uri "https://api.github.com/repos/sprout-foundry/sprout/releases/latest" `
+                -UseBasicParsing -ErrorAction Stop
+        }
+        return $response.tag_name
     } catch {
-        Write-LogError "Failed to get version from GitHub API"
         exit 1
     }
 }
@@ -145,20 +185,82 @@ function Download-Release {
         [string]$OS,
         [string]$Arch
     )
-    
+
     $filename = "sprout-${OS}-${Arch}.zip"
     $downloadUrl = "https://github.com/sprout-foundry/sprout/releases/download/${Version}/${filename}"
-    
+
     Write-LogInfo "Downloading $filename"
-    
+
     try {
-        Invoke-WebRequest -Uri $downloadUrl -OutFile "$script:TEMP_DIR\$filename" -UseBasicParsing -ErrorAction Stop
+        Invoke-WithRetries -Description "release download" -Action {
+            Invoke-WebRequest -Uri $downloadUrl `
+                -OutFile "$script:TEMP_DIR\$filename" `
+                -UseBasicParsing -ErrorAction Stop
+        } | Out-Null
     } catch {
-        Write-LogError "Failed to download release: $_"
         exit 1
     }
-    
+
     return $downloadUrl
+}
+
+# Verify the downloaded zip against the release's SHA256SUMS manifest.
+# Set $env:SPROUT_SKIP_CHECKSUM='1' to bypass (mirrors install.sh).
+function Test-Checksum {
+    param(
+        [string]$ArchivePath,
+        [string]$ArchiveName,
+        [string]$Version
+    )
+
+    if ($env:SPROUT_SKIP_CHECKSUM -eq '1') {
+        Write-LogWarn "SPROUT_SKIP_CHECKSUM=1 — skipping checksum verification"
+        return
+    }
+
+    $sumsUrl = "https://github.com/sprout-foundry/sprout/releases/download/${Version}/SHA256SUMS"
+    $sumsPath = Join-Path $script:TEMP_DIR "SHA256SUMS"
+
+    Write-LogInfo "Verifying SHA256 checksum..."
+
+    try {
+        Invoke-WithRetries -Description "SHA256SUMS download" -Action {
+            Invoke-WebRequest -Uri $sumsUrl -OutFile $sumsPath `
+                -UseBasicParsing -ErrorAction Stop
+        } | Out-Null
+    } catch {
+        Write-LogWarn "Could not download SHA256SUMS for $Version."
+        Write-LogWarn "Older releases may not ship a manifest. Re-run with"
+        Write-LogWarn "  `$env:SPROUT_SKIP_CHECKSUM='1'"
+        Write-LogWarn "if you trust the source."
+        throw "checksum manifest unavailable"
+    }
+
+    # SHA256SUMS uses `<hex>  <filename>` lines (two spaces). Match the
+    # one for our archive specifically.
+    $expected = $null
+    foreach ($line in Get-Content -Path $sumsPath) {
+        $fields = $line -split '\s+', 2
+        if ($fields.Length -eq 2 -and $fields[1].Trim() -eq $ArchiveName) {
+            $expected = $fields[0].Trim().ToLowerInvariant()
+            break
+        }
+    }
+    if (-not $expected) {
+        Write-LogError "$ArchiveName not listed in SHA256SUMS for $Version"
+        throw "checksum entry missing"
+    }
+
+    $actual = (Get-FileHash -Path $ArchivePath -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($expected -ne $actual) {
+        Write-LogError "Checksum mismatch for $ArchiveName"
+        Write-LogError "  expected: $expected"
+        Write-LogError "  actual:   $actual"
+        Write-LogError "Refusing to install. The download may be corrupted or tampered with."
+        throw "checksum mismatch"
+    }
+
+    Write-LogSuccess "Checksum verified ($expected)"
 }
 
 # Install the binary
@@ -205,28 +307,59 @@ function Install-Binary {
 # Add directory to PATH if not already present
 function Add-To-Path {
     param([string]$InstallDir)
-    
+
     $userPath = [Environment]::GetEnvironmentVariable("PATH", "User")
-    $machinePath = [Environment]::GetEnvironmentVariable("PATH", "Machine")
     $currentPath = $env:PATH
-    
+
     # Check if already in PATH
     if ($currentPath -split ";" | Where-Object { $_ -eq $InstallDir }) {
         Write-LogInfo "Install directory already in PATH"
         return
     }
-    
-    # Try to add to user PATH first (no admin required)
+
+    # Try to add to user PATH first (no admin required). Setting via
+    # [Environment]::SetEnvironmentVariable broadcasts WM_SETTINGCHANGE
+    # automatically since .NET 4.5, so new terminals pick it up.
     try {
         $newPath = "$InstallDir;$userPath"
         [Environment]::SetEnvironmentVariable("PATH", $newPath, "User")
         Write-LogInfo "Added $InstallDir to user PATH"
-        
-        # Update current session PATH
+
+        # Update current session PATH so the user can run `sprout` without
+        # opening a new terminal.
         $env:PATH = [Environment]::GetEnvironmentVariable("PATH", "User") + ";" + [Environment]::GetEnvironmentVariable("PATH", "Machine")
     } catch {
         Write-LogWarn "Could not add to PATH: $_"
         Write-LogInfo "You can manually add $InstallDir to your PATH"
+    }
+}
+
+# Symmetric counterpart to Add-To-Path: remove $InstallDir from the user
+# PATH if present. Only touches the User scope — never Machine — because
+# the installer never writes to Machine PATH.
+function Remove-FromPath {
+    param([string]$InstallDir)
+
+    $userPath = [Environment]::GetEnvironmentVariable("PATH", "User")
+    if (-not $userPath) {
+        return
+    }
+
+    $segments = $userPath -split ";" | Where-Object {
+        $_ -and ($_ -ne $InstallDir)
+    }
+    $newPath = $segments -join ";"
+
+    if ($newPath -eq $userPath) {
+        return
+    }
+
+    try {
+        [Environment]::SetEnvironmentVariable("PATH", $newPath, "User")
+        Write-LogInfo "Removed $InstallDir from user PATH"
+    } catch {
+        Write-LogWarn "Could not update PATH: $_"
+        Write-LogInfo "You can manually remove $InstallDir from your PATH"
     }
 }
 
@@ -276,13 +409,71 @@ function Remove-Old-Versions {
 # Print uninstall instructions
 function Print-UninstallInstructions {
     param([string]$InstallDir)
-    
+
     Write-Host ""
     Write-LogInfo "To uninstall sprout:"
     Write-Host ""
     Write-Host "  # Remove the binary"
     Write-Host "  Remove-Item -Path '$InstallDir\sprout.exe'"
     Write-Host ""
+}
+
+# Resolve the active sprout config directory using the same rules the
+# binary itself does. On Windows os.UserHomeDir() returns $env:USERPROFILE,
+# so the default config dir is $env:USERPROFILE\.config\sprout (mirrors
+# the Linux/macOS layout — sprout is XDG-style on every platform).
+function Resolve-ConfigDir {
+    if ($env:SPROUT_CONFIG)     { return $env:SPROUT_CONFIG }
+    if ($env:LEDIT_CONFIG)      { return $env:LEDIT_CONFIG }
+    if ($env:XDG_CONFIG_HOME)   { return (Join-Path $env:XDG_CONFIG_HOME "sprout") }
+    if ($env:USERPROFILE)       { return (Join-Path $env:USERPROFILE ".config\sprout") }
+    return $null
+}
+
+# Conversation state dir — $USERPROFILE\.sprout, mirrors the unix layout
+# in pkg/agent/persistence.go.
+function Resolve-StateDir {
+    if ($env:USERPROFILE)       { return (Join-Path $env:USERPROFILE ".sprout") }
+    return $null
+}
+
+# Remove sprout's config + state dirs unless -KeepConfig was passed.
+# Refuses to delete anything that doesn't look like a sprout-owned dir.
+function Remove-ConfigDirs {
+    param([bool]$KeepConfig)
+
+    if ($KeepConfig) {
+        Write-LogInfo "Keeping config and session state per -KeepConfig"
+        return
+    }
+
+    $suspicious = @(
+        '/', '\',
+        $env:USERPROFILE,
+        (Join-Path $env:USERPROFILE '.config')
+    ) | Where-Object { $_ }
+
+    $configDir = Resolve-ConfigDir
+    if ($configDir -and (Test-Path $configDir)) {
+        $normalized = ($configDir.TrimEnd('\','/'))
+        if ($suspicious -contains $normalized) {
+            Write-LogWarn "Refusing to remove suspicious config path: $configDir"
+        } else {
+            Write-LogInfo "Removing config dir: $configDir"
+            Remove-Item -Path $configDir -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    $stateDir = Resolve-StateDir
+    if ($stateDir -and (Test-Path $stateDir)) {
+        $normalized = ($stateDir.TrimEnd('\','/'))
+        if ($suspicious -contains $normalized) {
+            Write-LogWarn "Refusing to remove suspicious state path: $stateDir"
+        } else {
+            Write-LogInfo "Removing session state: $stateDir"
+            Remove-Item -Path $stateDir -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
 }
 
 # Print success message
@@ -368,7 +559,17 @@ function Main {
         } else {
             Write-LogWarn "sprout not found at $binaryPath"
         }
-        
+
+        # Strip the install dir from the user PATH if we own it (i.e. we
+        # only added a per-user entry — never touch Machine PATH). The
+        # installer adds it via Add-To-Path on install, so the symmetric
+        # cleanup belongs here. If the user added the dir to PATH some
+        # other way, this still cleans it because we match exactly.
+        Remove-FromPath -InstallDir $installDir
+
+        # Config + state cleanup (skip with -KeepConfig).
+        Remove-ConfigDirs -KeepConfig $KeepConfig.IsPresent
+
         Print-UninstallInstructions $installDir
         exit 0
     }
@@ -400,11 +601,21 @@ function Main {
     # Download the release
     $downloadUrl = Download-Release -Version $version -OS $os -Arch $arch
     Write-LogInfo "Downloaded from: $downloadUrl"
-    
+
+    # Verify the downloaded archive against the release's SHA256SUMS manifest
+    # BEFORE we extract / copy it. Failure aborts.
+    $archiveName = "sprout-${os}-${arch}.zip"
+    $zipPath = Join-Path $script:TEMP_DIR $archiveName
+    try {
+        Test-Checksum -ArchivePath $zipPath -ArchiveName $archiveName -Version $version
+    } catch {
+        Write-LogError "Refusing to install an unverified binary."
+        exit 1
+    }
+
     # Install the binary
-    $zipPath = Join-Path $script:TEMP_DIR "sprout-${os}-${arch}.zip"
     $binaryPath = Install-Binary -ZipPath $zipPath -InstallDir $installDir
-    
+
     # Verify installation
     Verify-Installation -InstallDir $installDir
 
@@ -415,19 +626,13 @@ function Main {
         Remove-Item $legacyBinary.Source -Force -ErrorAction SilentlyContinue
     }
 
-    # Offer to install as system service
-    if (-not $NoService.IsPresent) {
-        if ($Service.IsPresent) {
-            Write-LogInfo "Automatic service management is not yet available on Windows."
-            Write-LogInfo "You can manually run: sprout agent -d to start the daemon."
-        } else {
-            # Interactive prompt
-            $answer = Read-Host "[INFO] Install sprout as a background service? (auto-start on login) [Y/n]"
-            if (-not $answer -or $answer -match '^[Yy]') {
-                Write-LogInfo "Automatic service management is not yet available on Windows."
-                Write-LogInfo "You can manually run: sprout agent -d to start the daemon."
-            }
-        }
+    # Note about service management. The previous build had an interactive
+    # prompt that always replied "not yet available" regardless of the
+    # answer — removed as user-hostile noise. When real service management
+    # ships on Windows, restore it here gated by $Service / $NoService.
+    if ($Service.IsPresent) {
+        Write-LogInfo "Automatic service management is not yet available on Windows."
+        Write-LogInfo "Run 'sprout agent -d' to start the daemon manually."
     }
 
     # Add to PATH if needed

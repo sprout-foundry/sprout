@@ -6,7 +6,10 @@ param(
     [switch]$Service,
     [switch]$NoService,
     [switch]$Version,
-    [switch]$KeepConfig
+    [switch]$KeepConfig,
+    [switch]$DryRun,
+    [Alias('?')]
+    [switch]$Help
 )
 
 # Color output via Write-Host -ForegroundColor — scoped to a single line so
@@ -476,6 +479,138 @@ function Remove-ConfigDirs {
     }
 }
 
+# Dry-run preview helpers. Print what *would* happen without touching
+# the filesystem, the network, or PATH. Used by both the install and
+# uninstall flows for review-before-piping and CI smoke tests.
+function Show-InstallPreview {
+    param(
+        [string]$Version,
+        [string]$OS,
+        [string]$Arch,
+        [string]$InstallDir
+    )
+
+    $archive = "sprout-${OS}-${Arch}.zip"
+    $archiveUrl = "https://github.com/sprout-foundry/sprout/releases/download/$Version/$archive"
+    $sumsUrl = "https://github.com/sprout-foundry/sprout/releases/download/$Version/SHA256SUMS"
+
+    Write-Host ""
+    Write-LogInfo "DRY RUN - install preview (no files will be touched)"
+    Write-Host ""
+    "{0,-22} {1}" -f "Version:", $Version | Write-Host
+    "{0,-22} {1}" -f "Platform:", "$OS-$Arch" | Write-Host
+    "{0,-22} {1}" -f "Archive URL:", $archiveUrl | Write-Host
+    "{0,-22} {1}" -f "Checksum URL:", $sumsUrl | Write-Host
+    "{0,-22} {1}" -f "Install dir:", $InstallDir | Write-Host
+
+    $userPath = [Environment]::GetEnvironmentVariable("PATH", "User")
+    $alreadyOnPath = $false
+    if ($userPath) {
+        $alreadyOnPath = ($userPath -split ";") -contains $InstallDir
+    }
+    if ($alreadyOnPath) {
+        "{0,-22} {1}" -f "PATH change:", "already on user PATH" | Write-Host
+    } else {
+        "{0,-22} {1}" -f "PATH change:", "would prepend to user PATH" | Write-Host
+    }
+
+    if ($env:SPROUT_SKIP_CHECKSUM -eq '1') {
+        "{0,-22} {1}" -f "Checksum:", "SKIPPED (SPROUT_SKIP_CHECKSUM=1)" | Write-Host
+    } else {
+        "{0,-22} {1}" -f "Checksum:", "verified against SHA256SUMS" | Write-Host
+    }
+    Write-Host ""
+    Write-LogInfo "Re-run without -DryRun to install."
+}
+
+function Show-UninstallPreview {
+    param(
+        [string]$BinaryPath,
+        [bool]$KeepConfig
+    )
+
+    Write-Host ""
+    Write-LogInfo "DRY RUN - uninstall preview (no files will be touched)"
+    Write-Host ""
+    "{0,-22} {1}" -f "Binary:", $BinaryPath | Write-Host
+    if (Test-Path $BinaryPath) {
+        "{0,-22} {1}" -f "Binary status:", "present (would remove)" | Write-Host
+    } else {
+        "{0,-22} {1}" -f "Binary status:", "not found (nothing to remove)" | Write-Host
+    }
+
+    $installDir = Split-Path $BinaryPath
+    $userPath = [Environment]::GetEnvironmentVariable("PATH", "User")
+    if ($userPath -and (($userPath -split ";") -contains $installDir)) {
+        "{0,-22} {1}" -f "PATH cleanup:", "would remove $installDir from user PATH" | Write-Host
+    } else {
+        "{0,-22} {1}" -f "PATH cleanup:", "$installDir not in user PATH" | Write-Host
+    }
+
+    if ($KeepConfig) {
+        "{0,-22} {1}" -f "Config + state:", "KEPT (-KeepConfig)" | Write-Host
+    } else {
+        $configDir = Resolve-ConfigDir
+        $stateDir = Resolve-StateDir
+        if ($configDir) {
+            if (Test-Path $configDir) {
+                "{0,-22} {1}" -f "Config dir:", "$configDir (would remove)" | Write-Host
+            } else {
+                "{0,-22} {1}" -f "Config dir:", "$configDir (not present)" | Write-Host
+            }
+        }
+        if ($stateDir) {
+            if (Test-Path $stateDir) {
+                "{0,-22} {1}" -f "State dir:", "$stateDir (would remove)" | Write-Host
+            } else {
+                "{0,-22} {1}" -f "State dir:", "$stateDir (not present)" | Write-Host
+            }
+        }
+    }
+    Write-Host ""
+    Write-LogInfo "Re-run without -DryRun to uninstall."
+}
+
+# Help text — mirrors install.sh --help so the install + uninstall
+# surface is the same on both platforms. Print exactly once and exit.
+function Show-Help {
+    @"
+sprout one-line install script (Windows / PowerShell 5.1+)
+
+USAGE:
+  irm https://raw.githubusercontent.com/sprout-foundry/sprout/main/scripts/install.ps1 | iex
+  .\install.ps1 [-Uninstall] [-KeepConfig] [-Version] [-DryRun] [-Help]
+
+FLAGS:
+  -Help, -?       Show this help and exit.
+  -Version        Show the version that would be installed and exit.
+  -Uninstall      Remove sprout + service files + config/state.
+  -KeepConfig     With -Uninstall: keep `${env:USERPROFILE}\.config\sprout` and
+                  ${env:USERPROFILE}\.sprout (session state).
+  -DryRun         Print what would happen (download URL, install dir,
+                  PATH changes) without touching the filesystem.
+  -Service        Reserved for future service-management support.
+  -NoService      Reserved.
+
+ENV VARS:
+  SPROUT_VERSION         Pin a specific release tag (e.g. v0.14.0).
+                         Skips the GitHub API call.
+  SPROUT_INSTALL_DIR     Install destination. Defaults to
+                         %LOCALAPPDATA%\Programs\sprout (or the dir of an
+                         existing sprout/ledit binary on PATH).
+  SPROUT_INSTALL_RETRIES Network retry count (default 3).
+  SPROUT_SKIP_CHECKSUM   If "1", skip SHA256 verification. Use only when
+                         a release pre-dates the manifest.
+  SPROUT_CONFIG          Config dir override (also LEDIT_CONFIG for back-compat).
+
+EXAMPLES:
+  `$env:SPROUT_VERSION='v0.14.0'; irm .../install.ps1 | iex
+  .\install.ps1 -Uninstall -KeepConfig
+  .\install.ps1 -DryRun
+
+"@ | Write-Host
+}
+
 # Print success message
 function Print-Success {
     param([string]$InstallDir, [string]$Version)
@@ -513,6 +648,13 @@ function Show-Version {
 
 # Main function
 function Main {
+    # Show help if requested. Has to come before everything else so
+    # `-Help -Version` still prints help and doesn't fire the GitHub API.
+    if ($Help.IsPresent) {
+        Show-Help
+        exit 0
+    }
+
     # Show version if requested
     if ($Version.IsPresent) {
         Show-Version
@@ -527,10 +669,15 @@ function Main {
 
     # Handle uninstall
     if ($Uninstall.IsPresent) {
-        Write-LogInfo "Uninstalling sprout..."
-
         $installDir = Get-InstallDir
         $binaryPath = Join-Path $installDir "sprout.exe"
+
+        if ($DryRun.IsPresent) {
+            Show-UninstallPreview -BinaryPath $binaryPath -KeepConfig $KeepConfig.IsPresent
+            exit 0
+        }
+
+        Write-LogInfo "Uninstalling sprout..."
 
         if (Test-Path $binaryPath) {
             try {
@@ -594,7 +741,15 @@ function Main {
     # Determine install directory
     $installDir = Get-InstallDir
     Write-LogInfo "Installing to: $installDir"
-    
+
+    # Dry-run short-circuits before any download or filesystem changes.
+    # Enough is known here (version resolved, OS/arch detected, install
+    # dir picked, PATH status known) for a useful preview.
+    if ($DryRun.IsPresent) {
+        Show-InstallPreview -Version $version -OS $os -Arch $arch -InstallDir $installDir
+        exit 0
+    }
+
     # Remove old versions if they exist
     Remove-Old-Versions $installDir
     

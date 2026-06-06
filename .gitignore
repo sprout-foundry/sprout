@@ -167,5 +167,8 @@ pkg/ast/grammars/bin/*.bin
 /providers/
 /tmp/
 
-# Personal notes — not for public docs.
+# Personal playbook for embedding sprout as an admin-gated coding env
+# alongside another product's admin UI. Includes templates + threat
+# model + ops runbook in a single file for ease of passing around.
+# Not advertised in public docs.
 docs/embed.md

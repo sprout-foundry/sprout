@@ -150,6 +150,7 @@ func (m *WebSocketMessage) Validate() error {
 type SubscribeData struct {
 	Events  []string `json:"events"`
 	ChatIDs []string `json:"chat_ids,omitempty"`
+	Channel string   `json:"channel,omitempty"` // Event channel to opt into (e.g., "automate")
 }
 
 // Validate performs field-level validation on SubscribeData.
@@ -181,6 +182,14 @@ func (d *SubscribeData) Validate() error {
 			return fmt.Errorf("chat_id at index %d too long: %d characters (max %d)", i, len(chatID), maxEventNameLen)
 		}
 		d.ChatIDs[i] = chatID
+	}
+
+	// Validate optional channel subscription (e.g., "automate").
+	d.Channel = strings.TrimSpace(d.Channel)
+	if d.Channel != "" {
+		if len(d.Channel) > maxEventNameLen {
+			return fmt.Errorf("channel too long: %d characters (max %d)", len(d.Channel), maxEventNameLen)
+		}
 	}
 
 	return nil

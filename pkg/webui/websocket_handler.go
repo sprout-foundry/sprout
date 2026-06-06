@@ -156,13 +156,14 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 
 	// Store the underlying connection with metadata
 	ws.connections.Store(conn, &ConnectionInfo{
-		SessionID:   sessionID,
-		ClientID:    clientID,
-		ChatID:      chatID,
-		Type:        "webui",
-		UserID:      userID,
-		ConnectedAt: time.Now(),
-		Conn:        conn,
+		SessionID:          sessionID,
+		ClientID:           clientID,
+		ChatID:             chatID,
+		Type:               "webui",
+		UserID:             userID,
+		ConnectedAt:        time.Now(),
+		Conn:               conn,
+		subscribedChannels: make(map[string]bool),
 	})
 	defer ws.connections.Delete(conn)
 
@@ -357,6 +358,19 @@ func (ws *ReactWebServer) shouldForwardEventToConnection(event events.UIEvent, c
 		}
 	}
 
+	// SP-065-2e: Automate events require explicit channel subscription.
+	// Only forward automate.* events to connections that have opted in
+	// via {type: "subscribe", data: {channel: "automate"}}.
+	if strings.HasPrefix(event.Type, "automate.") {
+		if !connInfo.subscribedChannels["automate"] {
+			return false
+		}
+		// Connection has opted in — allow the event. Automate events
+		// don't carry client_id/chat_id targeting, so they'd otherwise
+		// be rejected by the global event type switch below.
+		return true
+	}
+
 	// Extract target client_id and chat_id from event
 	targetClientID, _ := data["client_id"].(string)
 	targetChatID, _ := data["chat_id"].(string)
@@ -455,7 +469,7 @@ func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, sessionID s
 			})
 			return
 		}
-		log.Printf("WebSocket client subscribed to events: %v chat_ids: %v", data.Events, data.ChatIDs)
+		log.Printf("WebSocket client subscribed to events: %v chat_ids: %v channel: %s", data.Events, data.ChatIDs, data.Channel)
 
 		// Register chat subscriptions so events for these chats fan out
 		// to this connection even when the originating clientID differs
@@ -463,6 +477,18 @@ func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, sessionID s
 		if ws.chatSubscribers != nil {
 			for _, chatID := range data.ChatIDs {
 				ws.chatSubscribers.Subscribe(chatID, safeConn.Conn())
+			}
+		}
+
+		// SP-065-2e: Register channel subscriptions (e.g., "automate")
+		// so automate events are only forwarded to connections that
+		// explicitly opted in.
+		if data.Channel != "" {
+			connInfoVal, ok := ws.connections.Load(safeConn.Conn())
+			if ok {
+				if ci, ok := connInfoVal.(*ConnectionInfo); ok {
+					ci.subscribedChannels[data.Channel] = true
+				}
 			}
 		}
 

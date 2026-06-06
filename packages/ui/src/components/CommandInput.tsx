@@ -156,6 +156,19 @@ function CommandInput({
     // Any other "parent overrides the live draft" path needs to go
     // through a dedicated imperative API; silently overwriting what the
     // user is typing produces the bugs above.
+    //
+    // Extra guard for the "first character eaten" race: when the user
+    // types into an empty input, updateValue() sets draftValue + lastSent
+    // synchronously and dispatches onChange. If the parent's setState
+    // doesn't land in the same commit (StrictMode double-invoke, an
+    // unrelated re-render firing first, an effect chain in between),
+    // this effect can run with the stale value="" while lastSent already
+    // holds the new char. Without this guard the value==='' branch then
+    // clobbers the just-typed character. handleSend resets lastSent
+    // alongside the draft, so legitimate post-send clears still pass.
+    if (value === '' && lastSentValueRef.current !== '') {
+      return;
+    }
     if (value === '') {
       setDraftValue(value);
     }

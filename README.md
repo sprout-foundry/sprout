@@ -78,10 +78,12 @@ Once sprout is installed, you can upgrade from the binary itself — no
 need to re-pipe curl into a shell:
 
 ```bash
-sprout upgrade           # confirm, then download + verify + replace
-sprout upgrade --check   # just print whether an upgrade is available
-sprout upgrade -y        # skip the prompt (useful in CI)
+sprout upgrade                     # confirm, then download + verify + replace
+sprout upgrade --check             # just print whether an upgrade is available
+sprout upgrade -y                  # skip the prompt (useful in CI)
 sprout upgrade --version v0.14.0   # pin a specific tag
+sprout upgrade --pre-release       # include pre-release tags as "latest"
+sprout upgrade --rollback          # restore the previous binary saved by the last upgrade
 ```
 
 The same SHA256 verification used by `install.sh` runs inside the

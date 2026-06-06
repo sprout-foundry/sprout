@@ -24,14 +24,18 @@ import (
 )
 
 const (
-	githubAPIURL   = "https://api.github.com/repos/sprout-foundry/sprout/releases/latest"
-	releaseBaseURL = "https://github.com/sprout-foundry/sprout/releases/download"
+	githubAPIURL        = "https://api.github.com/repos/sprout-foundry/sprout/releases/latest"
+	githubAPIListURL    = "https://api.github.com/repos/sprout-foundry/sprout/releases?per_page=20"
+	releaseBaseURL      = "https://github.com/sprout-foundry/sprout/releases/download"
+	upgradeBackupSuffix = ".previous"
 )
 
 var (
-	upgradeCheckOnly bool
-	upgradeYes       bool
-	upgradeVersion   string
+	upgradeCheckOnly  bool
+	upgradeYes        bool
+	upgradeVersion    string
+	upgradePreRelease bool
+	upgradeRollback   bool
 )
 
 // upgradeCmd is the in-binary equivalent of scripts/install.{sh,ps1} so
@@ -48,11 +52,15 @@ var upgradeCmd = &cobra.Command{
 Compares the current version against the latest GitHub release, downloads
 the matching archive for this OS / architecture, verifies its SHA256
 checksum against the release's SHA256SUMS manifest, and atomically
-replaces the binary in place.
+replaces the binary in place. A one-version backup is saved next to the
+binary as <name>.previous so '--rollback' can restore it.
 
-With --check the command only prints whether an upgrade is available
-and exits. With --version pins a specific release tag instead of
-"latest". With --yes skips the confirmation prompt (useful in CI).`,
+Flags:
+  --check        Only print whether an upgrade is available.
+  --version vX   Install a specific release tag instead of "latest".
+  --pre-release  Include pre-release tags when resolving "latest".
+  --rollback     Restore the previous binary saved by the last upgrade.
+  --yes          Skip the confirmation prompt (useful in CI).`,
 	RunE: runUpgrade,
 }
 
@@ -64,9 +72,20 @@ func init() {
 		"Skip the confirmation prompt.")
 	upgradeCmd.Flags().StringVar(&upgradeVersion, "version", "",
 		"Install a specific release tag instead of the latest (e.g. v0.14.0).")
+	upgradeCmd.Flags().BoolVar(&upgradePreRelease, "pre-release", false,
+		"Consider pre-release tags as candidates for 'latest'.")
+	upgradeCmd.Flags().BoolVar(&upgradeRollback, "rollback", false,
+		"Restore the previous binary saved by the last upgrade and exit.")
 }
 
 func runUpgrade(cmd *cobra.Command, _ []string) error {
+	// --rollback is an independent action: don't fetch versions or
+	// download anything; just restore the .previous file that the
+	// previous upgrade saved.
+	if upgradeRollback {
+		return rollbackBinary()
+	}
+
 	target, err := resolveTargetVersion()
 	if err != nil {
 		return err
@@ -101,18 +120,33 @@ func runUpgrade(cmd *cobra.Command, _ []string) error {
 }
 
 // resolveTargetVersion returns either the --version flag value or the
-// latest release tag from GitHub. Mirrors install.sh:get_version().
+// latest release tag from GitHub. Mirrors install.sh:get_version() but
+// branches on --pre-release: the /releases/latest endpoint explicitly
+// excludes pre-releases (GitHub picks the latest non-prerelease, non-draft),
+// so when --pre-release is set we have to list recent releases instead
+// and pick the newest tag including pre-releases.
 func resolveTargetVersion() (string, error) {
 	if upgradeVersion != "" {
 		return normalizeVersion(upgradeVersion), nil
 	}
-	tag, err := fetchLatestTag()
+
+	var (
+		tag string
+		err error
+	)
+	if upgradePreRelease {
+		tag, err = fetchLatestIncludingPreRelease()
+	} else {
+		tag, err = fetchLatestTag()
+	}
 	if err != nil {
 		return "", fmt.Errorf("look up latest version: %w\n\nPin a tag explicitly with --version vX.Y.Z if you're behind a proxy or hitting GitHub's 60 req/hr unauthenticated rate limit", err)
 	}
 	return normalizeVersion(tag), nil
 }
 
+// fetchLatestTag hits /releases/latest, which GitHub defines as "the most
+// recent non-draft, non-prerelease release."
 func fetchLatestTag() (string, error) {
 	req, err := http.NewRequest(http.MethodGet, githubAPIURL, nil)
 	if err != nil {
@@ -140,6 +174,44 @@ func fetchLatestTag() (string, error) {
 		return "", errors.New("GitHub API returned an empty tag_name")
 	}
 	return payload.TagName, nil
+}
+
+// fetchLatestIncludingPreRelease lists recent releases and returns the
+// first one (GitHub's default ordering is by created_at desc), skipping
+// drafts. This is the --pre-release path. We keep per_page small to
+// avoid amplifying load on the API.
+func fetchLatestIncludingPreRelease() (string, error) {
+	req, err := http.NewRequest(http.MethodGet, githubAPIListURL, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("User-Agent", "sprout-upgrade")
+	req.Header.Set("Accept", "application/vnd.github+json")
+
+	resp, err := httpClient().Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("GitHub API returned status %d", resp.StatusCode)
+	}
+
+	var releases []struct {
+		TagName    string `json:"tag_name"`
+		Draft      bool   `json:"draft"`
+		PreRelease bool   `json:"prerelease"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&releases); err != nil {
+		return "", fmt.Errorf("decode API response: %w", err)
+	}
+	for _, r := range releases {
+		if r.Draft || r.TagName == "" {
+			continue
+		}
+		return r.TagName, nil
+	}
+	return "", errors.New("no releases found (drafts are skipped)")
 }
 
 // performUpgrade does the download → verify → replace dance.
@@ -394,20 +466,24 @@ func extractBinaryFromZip(zipPath, binaryName, dst string) error {
 // Unix can rename(2) over a running ELF/Mach-O file — the kernel keeps
 // the old inode open for the running process and frees it on exit, so
 // the swap is atomic and the running sprout keeps working until exit.
+// A one-version backup is saved at <target>.previous so `sprout upgrade
+// --rollback` can put it back later.
 //
 // Windows can't replace a running .exe; the OS holds an exclusive lock
-// on it. The standard workaround: rename the running exe to ".old"
-// (which Windows DOES permit on a running image) and write the new one
-// in its place. The .old file is left for the user to delete after
-// restart — we don't schedule it via MOVEFILE_DELAY_UNTIL_REBOOT because
-// that needs admin and feels heavy-handed for a CLI tool.
+// on it. The standard workaround: rename the running exe to a backup
+// (Windows DOES permit rename on a running image, just not overwrite)
+// and write the new one in its place. We use the same .previous suffix
+// for the backup so --rollback works identically on both platforms.
 func replaceBinary(targetPath, newPath string) error {
 	dir := filepath.Dir(targetPath)
+	backup := targetPath + upgradeBackupSuffix
+
 	if runtime.GOOS == "windows" {
-		backup := targetPath + ".old"
-		// Best-effort: if a .old from a previous upgrade still exists,
-		// try to remove it. If that fails (the OS may still consider it
-		// busy), continue — we'll just write a fresh .old below.
+		// Best-effort: if a backup from a previous upgrade still exists,
+		// try to remove it. If that fails (file may still be considered
+		// busy by an antivirus scanner), continue — we'll just overwrite
+		// it below via Rename, which Windows allows when the source no
+		// longer exists.
 		_ = os.Remove(backup)
 		if err := os.Rename(targetPath, backup); err != nil {
 			return fmt.Errorf("rename running binary to %s: %w", backup, err)
@@ -417,22 +493,88 @@ func replaceBinary(targetPath, newPath string) error {
 			_ = os.Rename(backup, targetPath)
 			return fmt.Errorf("install new binary at %s: %w", targetPath, err)
 		}
-		fmt.Printf("Note: previous binary saved at %s — remove it once you've restarted.\n", backup)
+		fmt.Printf("Previous binary saved at %s (use `sprout upgrade --rollback` to restore).\n", backup)
 		return nil
 	}
 
-	// Unix path — atomic rename within the same filesystem.
+	// Unix path — atomic rename within the same filesystem. Stage in the
+	// install dir so the final rename is on the same fs as the target.
 	stagingPath := filepath.Join(dir, ".sprout.upgrade.tmp")
 	_ = os.Remove(stagingPath)
 	if err := moveFile(newPath, stagingPath); err != nil {
 		return fmt.Errorf("stage new binary in install dir: %w", err)
 	}
+
+	// Save the previous version first so we can offer --rollback.
+	// Best-effort: if the target doesn't exist (rare, but covers
+	// `go install ./...` cases where the original was already moved),
+	// skip the backup step rather than failing the whole upgrade.
+	if _, statErr := os.Stat(targetPath); statErr == nil {
+		_ = os.Remove(backup)
+		if err := os.Rename(targetPath, backup); err != nil {
+			// Couldn't back up; restore from staging and bail. Failing
+			// here is safer than installing without a rollback path.
+			_ = os.Remove(stagingPath)
+			return fmt.Errorf("back up current binary to %s: %w", backup, err)
+		}
+	}
+
 	if err := os.Rename(stagingPath, targetPath); err != nil {
-		// Could happen if install dir isn't writable (binary was installed
-		// to /usr/local/bin via sudo). Surface a clear hint.
+		// Roll back our own backup-rename so the user isn't left without
+		// a working binary. Could happen if install dir isn't writable
+		// (e.g. installed to /usr/local/bin via sudo).
+		_ = os.Rename(backup, targetPath)
 		_ = os.Remove(stagingPath)
 		return fmt.Errorf("replace %s: %w\n\nIf sprout was installed system-wide, re-run with sudo or use the install script", targetPath, err)
 	}
+	fmt.Printf("Previous binary saved at %s (use `sprout upgrade --rollback` to restore).\n", backup)
+	return nil
+}
+
+// rollbackBinary restores the previous binary saved by the last upgrade.
+// Mirrors replaceBinary's platform handling: rename the .previous file
+// over the current target. After rollback the .previous file is gone, so
+// only one rollback is available between upgrades — that matches what
+// most users want and avoids accumulating stale binaries on disk.
+func rollbackBinary() error {
+	execPath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("locate current binary: %w", err)
+	}
+	execPath, err = filepath.EvalSymlinks(execPath)
+	if err != nil {
+		return fmt.Errorf("resolve binary path: %w", err)
+	}
+	backup := execPath + upgradeBackupSuffix
+	if _, err := os.Stat(backup); err != nil {
+		return fmt.Errorf("no rollback available: %s does not exist", backup)
+	}
+
+	if runtime.GOOS == "windows" {
+		// Symmetric with replaceBinary's Windows path: rename current
+		// running .exe out of the way (Windows permits rename on a
+		// running image), then put the backup back at the original path.
+		dyingPath := execPath + ".dying"
+		_ = os.Remove(dyingPath)
+		if err := os.Rename(execPath, dyingPath); err != nil {
+			return fmt.Errorf("rename current binary aside: %w", err)
+		}
+		if err := os.Rename(backup, execPath); err != nil {
+			_ = os.Rename(dyingPath, execPath)
+			return fmt.Errorf("restore backup: %w", err)
+		}
+		fmt.Printf("Rolled back to previous binary. The replaced version is at %s — remove it once you've restarted.\n", dyingPath)
+		return nil
+	}
+
+	// Unix: atomic rename of the backup over the running binary. The
+	// kernel keeps the just-replaced inode pinned for the running
+	// process, so the rollback returns immediately and the *next* invoke
+	// of sprout will be the rolled-back version.
+	if err := os.Rename(backup, execPath); err != nil {
+		return fmt.Errorf("restore backup: %w", err)
+	}
+	fmt.Println("Rolled back to previous binary.")
 	return nil
 }
 

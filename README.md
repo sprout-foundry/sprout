@@ -72,6 +72,27 @@ curl -fsSL -o install.sh https://raw.githubusercontent.com/sprout-foundry/sprout
 sh install.sh
 ```
 
+### Upgrading
+
+Once sprout is installed, you can upgrade from the binary itself — no
+need to re-pipe curl into a shell:
+
+```bash
+sprout upgrade           # confirm, then download + verify + replace
+sprout upgrade --check   # just print whether an upgrade is available
+sprout upgrade -y        # skip the prompt (useful in CI)
+sprout upgrade --version v0.14.0   # pin a specific tag
+```
+
+The same SHA256 verification used by `install.sh` runs inside the
+command; bypass with `SPROUT_SKIP_CHECKSUM=1` only when you have a
+specific reason.
+
+On Windows the running `.exe` is renamed to `sprout.exe.old` in place
+(Windows can't replace a loaded executable) and the new binary is written
+to the original path — restart any running sprout process to pick up the
+new build.
+
 ### Uninstall
 
 By default this removes the binary, the service files, and the config /

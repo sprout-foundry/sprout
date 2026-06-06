@@ -1125,21 +1125,21 @@
 }
 
 .tool-message {
-  padding: 0 10px 8px;
+  padding: 6px 12px 10px;
   color: var(--text-secondary);
   font-size: 12px;
 }
 
 .tool-details {
   border-top: 1px solid var(--border-subtle);
-  padding: 8px 10px;
+  padding: 10px 12px 12px;
   background: var(--bg-secondary);
 }
 
 .tool-detail-section + .tool-detail-section {
   border-top: 1px solid var(--border-subtle);
-  margin-top: 8px;
-  padding-top: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
 }
 
 .tool-detail-label {
@@ -1148,13 +1148,17 @@
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-secondary);
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 
 .tool-details pre {
   margin: 0;
+  padding: 8px 10px;
   font-size: 11px;
   color: var(--text-primary);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm, 4px);
   overflow-x: auto;
   white-space: pre-wrap;
   word-break: break-word;

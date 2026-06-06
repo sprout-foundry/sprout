@@ -21,6 +21,11 @@ type ConnectionInfo struct {
 	UserID      string          // User ID extracted from trusted header (service mode)
 	ConnectedAt time.Time       // When the connection was established
 	Conn        *websocket.Conn // Underlying conn for registry lookups (SP-034-3c). Never written to directly; SafeConn owns the write path.
+
+	// subscribedChannels tracks which event channels this connection has
+	// explicitly opted into (e.g., "automate"). Automate events are only
+	// forwarded to connections that have subscribed to the "automate" channel.
+	subscribedChannels map[string]bool
 }
 
 type contextKey string

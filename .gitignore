@@ -166,3 +166,6 @@ pkg/ast/grammars/bin/*.bin
 *.zip
 /providers/
 /tmp/
+
+# Personal notes — not for public docs.
+docs/embed.md

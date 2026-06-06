@@ -6,6 +6,8 @@ import (
 	"context"
 	"errors"
 	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 // BackgroundProcess is a stub type for WASM builds.
@@ -28,6 +30,19 @@ func (m *BackgroundProcessManager) Start(_ context.Context, _ string, _ string) 
 
 // StartWithKind always returns an error in WASM builds.
 func (m *BackgroundProcessManager) StartWithKind(_ context.Context, _ string, _ string, _ string) (string, error) {
+	return "", errors.New("background process management is not available in WASM")
+}
+
+// StartOptions is a stub for WASM builds. Mirrors the non-WASM shape so
+// call sites that pass &tools.StartOptions{EventBus: bus} still compile;
+// the field goes unused because the StartWithOptions stub below always
+// errors before reading it.
+type StartOptions struct {
+	EventBus *events.EventBus
+}
+
+// StartWithOptions always returns an error in WASM builds.
+func (m *BackgroundProcessManager) StartWithOptions(_ context.Context, _ string, _ string, _ string, _ *StartOptions) (string, error) {
 	return "", errors.New("background process management is not available in WASM")
 }
 

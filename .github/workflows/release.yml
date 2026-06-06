@@ -89,7 +89,9 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Required to create a GitHub Release
+      contents: write   # Create the GitHub Release + upload assets
+      id-token: write   # OIDC token used by actions/attest-build-provenance
+      attestations: write # Publish the provenance attestation to the repo
 
     steps:
     - name: Checkout code
@@ -259,6 +261,43 @@ jobs:
         GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o sprout-darwin-arm64 .
         tar -czvf sprout-darwin-arm64.tar.gz sprout-darwin-arm64
 
+    - name: Generate SHA256SUMS
+      # Consumed by scripts/install.{sh,ps1} to verify the downloaded archive
+      # before chmod+x'ing it. Format matches `sha256sum -c` (and `shasum -a 256 -c`)
+      # so anyone can re-verify by hand:
+      #   curl -sL .../SHA256SUMS | sha256sum -c --ignore-missing
+      run: |
+        sha256sum \
+          sprout-linux-amd64.tar.gz \
+          sprout-linux-arm64.tar.gz \
+          sprout-windows-amd64.zip \
+          sprout-darwin-amd64.tar.gz \
+          sprout-darwin-arm64.tar.gz \
+          > SHA256SUMS
+        cat SHA256SUMS
+
+    - name: Attest build provenance
+      # SLSA v1.0 build provenance signed via GitHub OIDC (keyless cosign).
+      # The attestation ties the tarballs to *this workflow run / this
+      # commit*, so downstream verification can prove the binaries came
+      # from sprout-foundry/sprout's release pipeline rather than a
+      # tampered upload.
+      #
+      # Verification (power users):
+      #   gh attestation verify sprout-linux-amd64.tar.gz \
+      #     --repo sprout-foundry/sprout
+      #
+      # Not required by install.{sh,ps1} because gh isn't on most user
+      # machines — SHA256SUMS still gives integrity; this gives provenance.
+      uses: actions/attest-build-provenance@v2
+      with:
+        subject-path: |
+          sprout-linux-amd64.tar.gz
+          sprout-linux-arm64.tar.gz
+          sprout-windows-amd64.zip
+          sprout-darwin-amd64.tar.gz
+          sprout-darwin-arm64.tar.gz
+
     - name: Build WASM shell module
       # Required by the cloud webui bundle (sprout.wasm is copied into the
       # bundle's wasm/ directory by build-webui-dist.mjs).
@@ -282,6 +321,7 @@ jobs:
           sprout-windows-amd64.zip
           sprout-darwin-amd64.tar.gz
           sprout-darwin-arm64.tar.gz
+          SHA256SUMS
           sprout-webui-cloud.tar.gz
         name: Release ${{ steps.get_version.outputs.VERSION }}
         tag_name: ${{ steps.get_version.outputs.VERSION }}

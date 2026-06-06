@@ -136,6 +136,9 @@ func TestServer_StartUnixSocket(t *testing.T) {
 func TestServer_StartUnixSocket_ExistingSocket(t *testing.T) {
 	dir := t.TempDir()
 	socketPath := filepath.Join(dir, "sprout.sock")
+	if len(socketPath) > 100 {
+		t.Skipf("socket path too long for Unix domain socket (%d chars): %s", len(socketPath), socketPath)
+	}
 
 	// Create a stale socket file
 	err := os.WriteFile(socketPath, []byte("stale"), 0600)
@@ -176,6 +179,9 @@ func TestServer_StartUnixSocket_ExistingSocket(t *testing.T) {
 func TestServer_StartUnixSocket_InUse(t *testing.T) {
 	dir := t.TempDir()
 	socketPath := filepath.Join(dir, "sprout.sock")
+	if len(socketPath) > 100 {
+		t.Skipf("socket path too long for Unix domain socket (%d chars): %s", len(socketPath), socketPath)
+	}
 
 	// Start a real listener on the socket to simulate "address in use"
 	listener, err := net.Listen("unix", socketPath)

@@ -280,7 +280,14 @@ func (ws *ReactWebServer) clearClientSSHContextForSessionKey(sessionKey string) 
 }
 
 func (ws *ReactWebServer) getWorkspaceRootForRequest(r *http.Request) string {
-	return ws.getClientContextForRequest(r).WorkspaceRoot
+	root := ws.getClientContextForRequest(r).WorkspaceRoot
+	// Resolve symlinks so that canonicalizePath comparisons are consistent
+	// (macOS /var → /private/var). The daemonRoot/workspaceRoot are resolved
+	// at server construction, but per-client context roots may not be.
+	if evaled, err := filepath.EvalSymlinks(root); err == nil {
+		return evaled
+	}
+	return root
 }
 
 // getLayeredConfigManager creates a config manager using the layered approach

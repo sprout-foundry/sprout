@@ -16,9 +16,9 @@ import (
 
 // TestCheckPortAvailable verifies port availability checking
 func TestCheckPortAvailable(t *testing.T) {
-	// Create actual server to bind port
+	// Create actual server to bind port on the same interface CheckPortAvailable tests
 	server := &http.Server{
-		Addr: ":0", // Let OS pick available port
+		Addr: "127.0.0.1:0",
 	}
 	listener, err := net.Listen("tcp", server.Addr)
 	if err != nil {
@@ -79,7 +79,7 @@ func TestFindAvailablePort(t *testing.T) {
 
 // TestStartFailsWhenPortAlreadyInUse verifies startup state remains consistent on bind failures.
 func TestStartFailsWhenPortAlreadyInUse(t *testing.T) {
-	listener, err := net.Listen("tcp", ":0")
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("failed to reserve test port: %v", err)
 	}

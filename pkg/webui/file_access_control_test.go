@@ -5,6 +5,7 @@ package webui
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -78,6 +79,34 @@ func TestIsWithinWorkspace_RealPaths(t *testing.T) {
 	}
 }
 
+// evalSymlinks resolves symlinks on a path (best-effort; returns original on error).
+// Used in tests to match canonicalizePath behavior on macOS (/var → /private/var).
+func evalSymlinks(t *testing.T, path string) string {
+	t.Helper()
+	if evaled, err := filepath.EvalSymlinks(path); err == nil {
+		return evaled
+	}
+	return path
+}
+
+// evalParent resolves symlinks on the nearest existing ancestor of path.
+// Use for write-path tests where the file and parent dirs may not exist yet.
+func evalParent(t *testing.T, path string) string {
+	t.Helper()
+	dir := filepath.Dir(path)
+	for {
+		if evaled, err := filepath.EvalSymlinks(dir); err == nil {
+			rest := strings.TrimPrefix(path, dir+string(filepath.Separator))
+			return filepath.Join(evaled, rest)
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return path // reached root
+		}
+		dir = parent
+	}
+}
+
 func TestCanonicalizePath_RelativePath(t *testing.T) {
 	tmpDir := t.TempDir()
 
@@ -91,8 +120,8 @@ func TestCanonicalizePath_RelativePath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("canonicalizePath relative: %v", err)
 	}
-	if result != testFile {
-		t.Errorf("canonicalizePath(relative) = %q, want %q", result, testFile)
+	if result != evalSymlinks(t, testFile) {
+		t.Errorf("canonicalizePath(relative) = %q, want %q", result, evalSymlinks(t, testFile))
 	}
 }
 
@@ -106,8 +135,8 @@ func TestCanonicalizePath_AbsolutePath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("canonicalizePath absolute: %v", err)
 	}
-	if result != testFile {
-		t.Errorf("canonicalizePath(absolute) = %q, want %q", result, testFile)
+	if result != evalSymlinks(t, testFile) {
+		t.Errorf("canonicalizePath(absolute) = %q, want %q", result, evalSymlinks(t, testFile))
 	}
 }
 
@@ -134,8 +163,8 @@ func TestCanonicalizePath_WriteNonExistingFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("canonicalizePath for write (new file): %v", err)
 	}
-	if result != newFile {
-		t.Errorf("canonicalizePath(write, new) = %q, want %q", result, newFile)
+	if result != evalParent(t, newFile) {
+		t.Errorf("canonicalizePath(write, new) = %q, want %q", result, evalParent(t, newFile))
 	}
 }
 
@@ -148,8 +177,8 @@ func TestCanonicalizePath_WriteNestedNonExistingDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("canonicalizePath for write (nested new): %v", err)
 	}
-	if result != newFile {
-		t.Errorf("canonicalizePath(write, nested) = %q, want %q", result, newFile)
+	if result != evalParent(t, newFile) {
+		t.Errorf("canonicalizePath(write, nested) = %q, want %q", result, evalParent(t, newFile))
 	}
 }
 
@@ -174,7 +203,7 @@ func TestCanonicalizePath_Symlink(t *testing.T) {
 	if err != nil {
 		t.Fatalf("canonicalizePath with symlink: %v", err)
 	}
-	if result != testFile {
-		t.Errorf("canonicalizePath(symlink) = %q, want %q", result, testFile)
+	if result != evalSymlinks(t, testFile) {
+		t.Errorf("canonicalizePath(symlink) = %q, want %q", result, evalSymlinks(t, testFile))
 	}
 }

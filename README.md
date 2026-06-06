@@ -47,16 +47,37 @@ irm https://raw.githubusercontent.com/sprout-foundry/sprout/main/scripts/install
 
 **Termux (Android, arm64):**
 
-The same Linux installer detects Termux, installs into `$PREFIX/bin`, and
-skips the systemd/launchd service step:
+The same Linux installer detects Termux, installs into `$PREFIX/bin`,
+skips the systemd/launchd service step, and surfaces a clear error if
+the binary's libc requirements don't match Bionic:
 
 ```bash
 pkg install curl tar
 curl -fsSL https://raw.githubusercontent.com/sprout-foundry/sprout/main/scripts/install.sh | sh
 ```
 
-If the installed binary fails the post-install run check (rare, but possible
-if Bionic libc rejects it), the installer prints a build-from-source recipe.
+The release pipeline cross-compiles `sprout-linux-arm64` with CGO disabled,
+so the resulting static binary runs on Termux's Bionic libc unmodified.
+If the post-install verification fails the installer prints a
+build-from-source recipe specific to Termux (`pkg install golang nodejs
+make git` + `make deploy-ui && go install .`).
+
+**macOS via Homebrew (once the tap is published):**
+
+```bash
+brew tap sprout-foundry/sprout
+brew install sprout
+```
+
+Or install directly from the release URL without adding the tap:
+
+```bash
+brew install --formula https://github.com/sprout-foundry/sprout/releases/latest/download/sprout.rb
+```
+
+The formula source lives at [`Formula/sprout.rb`](Formula/sprout.rb);
+`scripts/update-homebrew-formula.sh` stamps it with each release's
+version and SHA256s and `release.yml` uploads the result as an asset.
 
 ### Install Options
 

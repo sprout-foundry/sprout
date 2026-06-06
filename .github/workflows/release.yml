@@ -276,6 +276,21 @@ jobs:
           > SHA256SUMS
         cat SHA256SUMS
 
+    - name: Stamp Homebrew formula
+      # Substitutes the version + per-platform SHA256s into the formula
+      # template at Formula/sprout.rb (using scripts/update-homebrew-formula.sh)
+      # and uploads the stamped copy as a release asset. Users can install
+      # from URL without a tap repo:
+      #   brew install --formula https://github.com/sprout-foundry/sprout/releases/latest/download/sprout.rb
+      # Or, once sprout-foundry/homebrew-tap exists:
+      #   brew tap sprout-foundry/sprout
+      #   brew install sprout
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/}
+        ./scripts/update-homebrew-formula.sh "$VERSION" SHA256SUMS sprout.rb
+        echo "--- stamped formula ---"
+        cat sprout.rb
+
     - name: Attest build provenance
       # SLSA v1.0 build provenance signed via GitHub OIDC (keyless cosign).
       # The attestation ties the tarballs to *this workflow run / this
@@ -322,6 +337,7 @@ jobs:
           sprout-darwin-amd64.tar.gz
           sprout-darwin-arm64.tar.gz
           SHA256SUMS
+          sprout.rb
           sprout-webui-cloud.tar.gz
         name: Release ${{ steps.get_version.outputs.VERSION }}
         tag_name: ${{ steps.get_version.outputs.VERSION }}

@@ -20,6 +20,16 @@ export const formatDuration = (start: Date, end?: Date): string => {
   return `${(ms / 60000).toFixed(1)}m`;
 };
 
+// "Dn" is a compact subagent-depth badge. Surface a human-readable label
+// via tooltip / aria-label so users hovering a "D1" know it means an
+// orchestrator-level delegation rather than a cryptic abbreviation.
+export const subagentDepthLabel = (depth: number): string => {
+  if (depth <= 0) return 'Primary agent';
+  if (depth === 1) return 'Subagent depth 1 (orchestrator)';
+  if (depth === 2) return 'Subagent depth 2 (specialist)';
+  return `Subagent depth ${depth} (nested specialist)`;
+};
+
 // ── Active Subagent Card ─────────────────────────────────────────────
 
 interface ActiveSubagentCardProps {
@@ -53,7 +63,11 @@ function ActiveSubagentCard({ run }: ActiveSubagentCardProps): JSX.Element {
           <Bot size={13} className="subagent-feed-card-icon" />
           <span className="subagent-feed-persona">{run.persona}</span>
           {depth > 0 && (
-            <span className="subagent-feed-depth-badge">D{depth}</span>
+            <span
+              className="subagent-feed-depth-badge"
+              title={subagentDepthLabel(depth)}
+              aria-label={subagentDepthLabel(depth)}
+            >D{depth}</span>
           )}
           {run.isParallel && <span className="subagent-feed-badge">parallel</span>}
         </span>
@@ -106,7 +120,11 @@ function CompletedSubagentCard({ run }: CompletedSubagentCardProps): JSX.Element
       <Bot size={13} className="subagent-feed-card-icon" style={{ color }} />
       <span className="subagent-feed-persona">{run.persona}</span>
       {depth > 0 && (
-        <span className="subagent-feed-depth-badge">D{depth}</span>
+        <span
+              className="subagent-feed-depth-badge"
+              title={subagentDepthLabel(depth)}
+              aria-label={subagentDepthLabel(depth)}
+            >D{depth}</span>
       )}
       {run.isParallel && <span className="subagent-feed-badge">parallel</span>}
       <span className="subagent-feed-sep">·</span>

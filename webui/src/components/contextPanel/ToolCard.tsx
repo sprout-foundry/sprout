@@ -1,5 +1,6 @@
 import { stripAnsiCodes } from '../../utils/ansi';
 import { formatToolDetail } from '../../utils/resultSummary';
+import { subagentDepthLabel } from '../chat/SubagentActivityFeed';
 import type { ToolExecution } from './types';
 
 /** Shape of tool execution details when result truncation info is present. */
@@ -78,7 +79,12 @@ export function ToolCard({ tool, expandedTools, activeToolId, toolRef, onToggleE
             {isSub && tool.subagentType === 'parallel' && ' (parallel)'}
           </span>
           {tool.depth && tool.depth > 0 && (
-            <span className="tool-depth-badge" style={{ backgroundColor: getDepthBadgeColor(tool.depth) }}>
+            <span
+              className="tool-depth-badge"
+              style={{ backgroundColor: getDepthBadgeColor(tool.depth) }}
+              title={subagentDepthLabel(tool.depth)}
+              aria-label={subagentDepthLabel(tool.depth)}
+            >
               D{tool.depth}
             </span>
           )}

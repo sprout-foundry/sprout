@@ -71,10 +71,7 @@ func (p *OutputChunkPublisher) Flush() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	// Always publish once to ensure even a single tiny write gets an event.
-	if p.totalWritten == 0 && p.buf.Len() > 0 {
-		p.publishLocked()
-	} else if p.buf.Len() > 0 {
+	if p.buf.Len() > 0 {
 		p.publishLocked()
 	}
 }
@@ -97,6 +94,9 @@ func (p *OutputChunkPublisher) shouldPublishLocked() bool {
 // publishLocked drains the buffer into an automate.output_chunk event.
 // Caller must hold mu.
 func (p *OutputChunkPublisher) publishLocked() {
+	if p.eventBus == nil {
+		return
+	}
 	chunk := p.buf.String()
 	p.buf.Reset()
 

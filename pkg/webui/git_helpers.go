@@ -41,6 +41,7 @@ type GitStatus struct {
 	Renamed     []GitFile `json:"renamed"`
 	// Truncated indicates whether any file lists were truncated due to limits
 	Truncated   bool     `json:"truncated"`
+	InGitRepo   bool     `json:"in_git_repo"`
 }
 
 // GitFile represents a file with its git status
@@ -66,11 +67,12 @@ func (ws *ReactWebServer) getGitStatusForWorkspace(workspaceRoot string) (*GitSt
 			Modified:  []GitFile{},
 			Untracked: []GitFile{},
 			Truncated: false,
+			InGitRepo: false,
 		}, nil
 	}
 
 	// Get branch and tracking info
-	status := &GitStatus{}
+	status := &GitStatus{InGitRepo: true}
 
 	// Get current branch
 	cmd = ws.gitCommandForWorkspace(workspaceRoot, "branch", "--show-current")

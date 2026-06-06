@@ -3,6 +3,7 @@ package validation
 import (
 	"context"
 	"fmt"
+	"os/exec"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -136,6 +137,10 @@ func main() { fmt.Println(os.Args) }
 // --- RunValidation with import issues (valid syntax + unsorted imports) ---
 
 func TestRunValidation_ImportWarning_PopulatesWarningsAndDiagnostics(t *testing.T) {
+	if _, err := exec.LookPath("goimports"); err != nil {
+		t.Skip("goimports not installed; skipping import warning test")
+	}
+
 	bus := events.NewEventBus()
 	defer bus.Unsubscribe("import-warn-test")
 	ch := bus.Subscribe("import-warn-test")
@@ -239,6 +244,10 @@ func main(){println("hi")}
 // --- ValidateImports: import formatting issues ---
 
 func TestValidateImports_UnsortedImportBlock(t *testing.T) {
+	if _, err := exec.LookPath("goimports"); err != nil {
+		t.Skip("goimports not installed; skipping import sorting test")
+	}
+
 	v := NewValidator(nil)
 	// Intentionally unsorted import block — goimports should flag this
 	code := `package main

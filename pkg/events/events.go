@@ -88,10 +88,6 @@ const (
 	EventTypeAutomateBudgetUpdate   = "automate.budget_update"
 	EventTypeAutomateOutputChunk    = "automate.output_chunk"
 	EventTypeAutomateSessionEnded   = "automate.session_ended"
-	// TODO(SP-065-2e): Add subscription opt-in filtering so automate events
-	// are only sent to WebSocket subscribers that have explicitly opted in
-	// via {type: "subscribe", channel: "automate"}. All automate events are
-	// currently broadcast to all subscribers.
 )
 
 // EventBus manages event distribution between CLI and Web UI

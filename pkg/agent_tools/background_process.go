@@ -16,6 +16,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 // BackgroundProcess represents a tracked background process for CLI mode.
@@ -34,6 +36,7 @@ type BackgroundProcess struct {
 	done       chan struct{} // closed when process exits
 	exitCode   int
 	mu         sync.Mutex
+	publisher  *OutputChunkPublisher // non-nil for automate sessions with an event bus
 }
 
 // GetPID returns the process PID under the lock. Returns 0 if the process
@@ -209,6 +212,124 @@ func (m *BackgroundProcessManager) StartWithKind(ctx context.Context, command st
 		proc.Process = nil
 		proc.mu.Unlock()
 		close(proc.done)
+		// Close the output file handle after process exits
+		outputFile.Close()
+	}()
+
+	m.mu.Lock()
+	m.processes[sessionID] = proc
+	m.mu.Unlock()
+
+	return sessionID, nil
+}
+
+// StartOptions configures optional behavior when starting a background process.
+type StartOptions struct {
+	EventBus *events.EventBus // non-nil to enable output-chunk streaming for automate sessions
+}
+
+// StartWithOptions works like StartWithKind but also accepts options that
+// control output streaming. When kind == "automate" and opts.EventBus is
+// non-nil, output is teed through an OutputChunkPublisher that emits
+// automate.output_chunk events on a coalesced basis (≥250ms or ≥4KB).
+func (m *BackgroundProcessManager) StartWithOptions(ctx context.Context, command string, dir string, kind string, opts *StartOptions) (string, error) {
+	if strings.TrimSpace(command) == "" {
+		return "", fmt.Errorf("command cannot be empty")
+	}
+
+	m.mu.RLock()
+	if len(m.processes) >= m.maxSessions {
+		m.mu.RUnlock()
+		return "", fmt.Errorf("background session limit reached (%d active)", m.maxSessions)
+	}
+	m.mu.RUnlock()
+
+	shell := os.Getenv("SHELL")
+	if shell == "" {
+		shell = "/bin/sh"
+	}
+	cmd := exec.Command(shell, "-c", command)
+
+	if dir != "" {
+		cmd.Dir = dir
+	} else {
+		if wd, err := os.Getwd(); err == nil {
+			cmd.Dir = wd
+		}
+	}
+
+	// Set process group so we can kill the entire group on stop
+	setProcessGroup(cmd)
+
+	// Generate session ID
+	prefix := extractCommandPrefixCLI(command)
+	sanitizedPrefix := sanitizeSessionIDPartCLI(prefix)
+	randomHex, err := generateRandomHexCLI(4)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate session ID: %w", err)
+	}
+	sessionID := fmt.Sprintf("bg-%s-%s", sanitizedPrefix, randomHex)
+
+	// Create output file in the base directory with owner-only permissions
+	outputPath := filepath.Join(m.baseDir, sessionID+".output")
+	outputFile, err := os.OpenFile(outputPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	if err != nil {
+		return "", fmt.Errorf("create output file: %w", err)
+	}
+
+	// Buffer for early output capture
+	var outputBuf bytes.Buffer
+
+	// Build the writer chain: always include the file and the in-memory buffer.
+	// For automate sessions with an event bus, tee through the chunk publisher.
+	var writers []io.Writer
+	writers = append(writers, outputFile, &outputBuf)
+
+	var publisher *OutputChunkPublisher
+	if kind == "automate" && opts != nil && opts.EventBus != nil {
+		publisher = NewOutputChunkPublisher(sessionID, opts.EventBus)
+		writers = append(writers, publisher)
+	}
+
+	writer := io.MultiWriter(writers...)
+	cmd.Stdout = writer
+	cmd.Stderr = writer
+
+	// Start the process
+	if err := cmd.Start(); err != nil {
+		outputFile.Close()
+		os.Remove(outputPath)
+		return "", fmt.Errorf("start command: %w", err)
+	}
+
+	proc := &BackgroundProcess{
+		ID:         sessionID,
+		Cmd:        cmd,
+		Process:    cmd.Process,
+		OutputPath: outputPath,
+		Dir:        cmd.Dir,
+		Command:    command,
+		Kind:       kind,
+		StartedAt:  time.Now(),
+		LastPolled: time.Now(),
+		done:       make(chan struct{}),
+		publisher:  publisher,
+	}
+
+	// Monitor process exit in a goroutine
+	go func() {
+		waitErr := cmd.Wait() // reap the zombie
+		exitCode := extractExitCode(waitErr)
+		proc.mu.Lock()
+		proc.exitCode = exitCode
+		proc.Cmd = nil
+		proc.Process = nil
+		proc.mu.Unlock()
+		close(proc.done)
+		// Flush any remaining output chunks before closing the file
+		if proc.publisher != nil {
+			proc.publisher.Flush()
+		}
 		// Close the output file handle after process exits
 		outputFile.Close()
 	}()

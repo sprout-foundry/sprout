@@ -38,20 +38,27 @@ jobs:
       # ShellCheck is preinstalled on ubuntu-latest runners. We pin the
       # severity to `warning` so we catch real bugs but not stylistic
       # nags (single-quote vs double-quote in echo etc.).
+      #
+      # --shell=dash matches our real portability target: every shell we
+      # care about (dash on Debian/Ubuntu, bash, busybox ash on Alpine,
+      # macOS bash-as-sh) supports `local`, but strict POSIX (--shell=sh)
+      # flags it as SC3043. dash is the strictest commonly-deployed sh
+      # implementation, so its rule set is the right floor.
       - name: Run shellcheck
         run: |
           shellcheck --version
-          shellcheck --severity=warning --shell=sh scripts/install.sh
+          shellcheck --severity=warning --shell=dash scripts/install.sh
+          shellcheck --severity=warning --shell=dash scripts/update-homebrew-formula.sh
 
       # POSIX-shell variant explicitly — install.sh's shebang is `#!/bin/sh`
-      # and we use `local` (a widely-supported extension). dash is the
-      # most-strict commonly-installed `sh`-class shell, so a second pass
-      # under dash catches anything shellcheck missed.
-      - name: dash -n syntax check
+      # so we want to verify it parses under dash AND bash without errors.
+      - name: dash -n / bash -n syntax check
         run: |
           sudo apt-get install -y dash
           dash -n scripts/install.sh
+          dash -n scripts/update-homebrew-formula.sh
           bash -n scripts/install.sh
+          bash -n scripts/update-homebrew-formula.sh
 
   psscriptanalyzer:
     name: PSScriptAnalyzer install.ps1

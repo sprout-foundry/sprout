@@ -269,7 +269,7 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
     setTimelineLoading(true);
     try {
       const res = await apiService.getAgentChangesTimeline(timelineSince || undefined);
-      setTimelineItems(res.items);
+      setTimelineItems(res.files ?? res.items ?? []);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       log.error(`Timeline load failed: ${msg}`, { title: 'Agent Changes' });

@@ -58,7 +58,13 @@ check_dependencies() {
     fi
 }
 
-# Detect operating system
+# Detect operating system.
+#
+# Termux (Android) reports `Linux` from uname but needs a different install
+# prefix and skips system-service registration — it's handled via
+# is_termux() at call sites, not as a separate "os" value, because the
+# release pipeline cross-compiles linux-arm64 with CGO disabled, producing
+# a static binary that runs unmodified on Bionic libc.
 detect_os() {
     local os
     os=$(uname -s)
@@ -69,9 +75,20 @@ detect_os() {
         Linux)
             echo "linux"
             ;;
+        CYGWIN*|MINGW*|MSYS*)
+            log_error "Detected $os (Cygwin / MSYS / Git Bash)."
+            log_error "On Windows use install.ps1 from PowerShell instead:"
+            log_error "  irm https://raw.githubusercontent.com/sprout-foundry/sprout/main/scripts/install.ps1 | iex"
+            exit 1
+            ;;
+        FreeBSD|OpenBSD|NetBSD|DragonFly)
+            log_error "BSD platforms are not supported by the release pipeline."
+            log_error "Build from source: https://github.com/sprout-foundry/sprout#from-source"
+            exit 1
+            ;;
         *)
             log_error "Unsupported operating system: $os"
-            log_error "Supported: Linux, macOS (Darwin)"
+            log_error "Supported: Linux, macOS (Darwin), Termux on Android"
             exit 1
             ;;
     esac
@@ -157,7 +174,10 @@ get_install_dir() {
     echo "/usr/local/bin"
 }
 
-# Get version from environment or fetch latest from GitHub
+# Get version from environment or fetch latest from GitHub.
+# GitHub's unauthenticated API limit is 60 req/hr per IP, which corporate
+# NATs blow past easily — surface SPROUT_VERSION as the workaround in the
+# error rather than letting users guess.
 get_version() {
     if [ -n "${SPROUT_VERSION:-}" ]; then
         echo "$SPROUT_VERSION"
@@ -166,7 +186,10 @@ get_version() {
         local version
         version=$(curl --fail --show-error --silent "$api_url" | awk -F'"' '/"tag_name":/ {print $4; exit}')
         if [ -z "$version" ]; then
-            log_error "Failed to get version from GitHub API"
+            log_error "Failed to get version from GitHub API."
+            log_error "If you're behind a proxy or hitting the 60 req/hr unauthenticated"
+            log_error "rate limit, pin a version explicitly:"
+            log_error "  SPROUT_VERSION=v0.14.0 curl -fsSL .../install.sh | sh"
             exit 1
         fi
         echo "$version"
@@ -229,17 +252,37 @@ install_binary() {
 verify_installation() {
     local install_dir="$1"
     local binary_path="${install_dir}/sprout"
-    
+
     if [ ! -f "$binary_path" ]; then
         log_error "sprout binary not found at $binary_path"
         exit 1
     fi
-    
+
     if [ ! -x "$binary_path" ]; then
         log_error "sprout binary is not executable"
         exit 1
     fi
-    
+
+    # Actually exec the binary. Catches the only mode where a wrong-libc
+    # binary can land cleanly on disk but blow up at runtime — most
+    # commonly: Termux pulling a glibc-linked binary, or someone uname
+    # spoofing. The release pipeline cross-compiles linux-arm64 with CGO
+    # disabled so this should normally pass on Termux too.
+    if ! "$binary_path" version >/dev/null 2>&1; then
+        log_error "sprout was installed to $binary_path but failed to run."
+        if is_termux; then
+            log_error "On Termux this usually means the binary is dynamically linked"
+            log_error "against glibc and won't load on Bionic libc."
+            log_error "Workaround: build from source."
+            log_error "  pkg install golang nodejs make git"
+            log_error "  git clone https://github.com/sprout-foundry/sprout.git"
+            log_error "  cd sprout && make deploy-ui && go install ."
+        else
+            log_error "Try running '$binary_path version' directly to see the error."
+        fi
+        exit 1
+    fi
+
     log_success "sprout binary verified"
 }
 
@@ -464,8 +507,9 @@ main() {
     esac
 
     # If the service was previously installed, reinstall it now so the service
-    # unit/plist points at the newly installed binary.
-    if [ "$service_was_installed" = "true" ]; then
+    # unit/plist points at the newly installed binary. Skip on Termux — it
+    # has neither systemd nor launchd, so 'sprout service install' would fail.
+    if [ "$service_was_installed" = "true" ] && ! is_termux; then
         log_info "Reinstalling sprout service to point at the updated binary..."
         if "${install_dir}/sprout" service install; then
             log_success "Service reinstalled successfully."

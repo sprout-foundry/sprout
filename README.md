@@ -39,11 +39,24 @@ See the [Consumption Guide](docs/CONSUMPTION_GUIDE.md) for full documentation.
 curl -fsSL https://raw.githubusercontent.com/sprout-foundry/sprout/main/scripts/install.sh | sh
 ```
 
-**Windows (PowerShell):**
+**Windows (PowerShell 5.1+ — the default on Windows 10/11, or PowerShell 7):**
 
 ```powershell
 irm https://raw.githubusercontent.com/sprout-foundry/sprout/main/scripts/install.ps1 | iex
 ```
+
+**Termux (Android, arm64):**
+
+The same Linux installer detects Termux, installs into `$PREFIX/bin`, and
+skips the systemd/launchd service step:
+
+```bash
+pkg install curl tar
+curl -fsSL https://raw.githubusercontent.com/sprout-foundry/sprout/main/scripts/install.sh | sh
+```
+
+If the installed binary fails the post-install run check (rare, but possible
+if Bionic libc rejects it), the installer prints a build-from-source recipe.
 
 ### Install Options
 

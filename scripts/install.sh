@@ -43,7 +43,13 @@ cleanup() {
 # Set up trap for cleanup
 trap cleanup EXIT INT TERM
 
-# Check for required dependencies
+# Check for required dependencies.
+#
+# We need ONE of {sha256sum, shasum} for checksum verification — Linux ships
+# sha256sum (coreutils), macOS ships shasum (Perl). Termux has sha256sum if
+# the user installed coreutils. We don't fail at check_dependencies if both
+# are missing because verify_checksum() handles that case with a clearer
+# message that mentions SPROUT_SKIP_CHECKSUM.
 check_dependencies() {
     local missing=0
     for cmd in curl tar awk grep; do
@@ -56,6 +62,111 @@ check_dependencies() {
         log_error "Please install missing dependencies and try again"
         exit 1
     fi
+}
+
+# curl wrapper with retries + actionable error messages on common failures.
+# Wraps the most distinctive curl exit codes (6 DNS, 7 connect, 22 HTTP 4xx/5xx)
+# so users get a hint instead of a stack trace.
+#
+# Usage: curl_with_retries [extra curl args] <url> [-o output_path]
+#
+# Honors $SPROUT_INSTALL_RETRIES (default 3) so flaky CI / corporate proxies
+# can dial it up via env without editing the script.
+curl_with_retries() {
+    local retries="${SPROUT_INSTALL_RETRIES:-3}"
+    local out
+    local exit_code=0
+
+    # --retry retries idempotent transient failures (5xx, connection drops).
+    # --retry-delay 2 + --retry-max-time 60 caps the wait so a fully-down
+    # endpoint doesn't hang for minutes. --connect-timeout 15 fails fast
+    # on DNS / unreachable hosts.
+    if out=$(curl --fail --show-error --silent --location \
+        --retry "$retries" \
+        --retry-delay 2 \
+        --retry-max-time 60 \
+        --connect-timeout 15 \
+        "$@" 2>&1); then
+        printf '%s' "$out"
+        return 0
+    fi
+
+    exit_code=$?
+    case "$exit_code" in
+        6)
+            log_error "DNS lookup failed. Are you offline or behind a captive portal?" ;;
+        7)
+            log_error "Could not connect to host. Check firewall / proxy settings." ;;
+        22)
+            log_error "HTTP error from server: $out" ;;
+        28)
+            log_error "Network timed out. Retry, or set SPROUT_INSTALL_RETRIES=5." ;;
+        *)
+            log_error "curl failed (exit $exit_code): $out" ;;
+    esac
+    return "$exit_code"
+}
+
+# Verify the downloaded archive against the release SHA256SUMS manifest.
+#
+# Set SPROUT_SKIP_CHECKSUM=1 to skip (escape hatch — e.g. if a release is
+# missing the manifest because of a pipeline incident). We still log it as
+# a warning so users know they're trusting unverified bytes.
+verify_checksum() {
+    local archive_path="$1"
+    local archive_name="$2"
+    local version="$3"
+
+    if [ "${SPROUT_SKIP_CHECKSUM:-0}" = "1" ]; then
+        log_warn "SPROUT_SKIP_CHECKSUM=1 — skipping checksum verification"
+        return 0
+    fi
+
+    # Pick the available hashing tool. macOS ships shasum (Perl); most Linux
+    # distros ship sha256sum (coreutils). Both emit the same `<hash>  <file>`
+    # format so callers below can grep identically.
+    local sha_cmd
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha_cmd="sha256sum"
+    elif command -v shasum >/dev/null 2>&1; then
+        sha_cmd="shasum -a 256"
+    else
+        log_warn "Neither sha256sum nor shasum is available — cannot verify checksum."
+        log_warn "Install coreutils, or re-run with SPROUT_SKIP_CHECKSUM=1 to bypass."
+        return 1
+    fi
+
+    local sums_url="https://github.com/sprout-foundry/sprout/releases/download/${version}/SHA256SUMS"
+    local sums_path="${TEMP_DIR}/SHA256SUMS"
+
+    log_info "Verifying SHA256 checksum..."
+    if ! curl_with_retries -o "$sums_path" "$sums_url" >/dev/null; then
+        log_warn "Could not download SHA256SUMS for $version."
+        log_warn "Older releases may not ship a manifest — re-run with"
+        log_warn "SPROUT_SKIP_CHECKSUM=1 if you trust the source."
+        return 1
+    fi
+
+    local expected
+    expected=$(awk -v f="$archive_name" '$2 == f {print $1; exit}' "$sums_path")
+    if [ -z "$expected" ]; then
+        log_error "$archive_name not listed in SHA256SUMS for $version"
+        return 1
+    fi
+
+    local actual
+    # shellcheck disable=SC2086  # $sha_cmd is intentionally word-split
+    actual=$($sha_cmd "$archive_path" | awk '{print $1}')
+    if [ "$expected" != "$actual" ]; then
+        log_error "Checksum mismatch for $archive_name"
+        log_error "  expected: $expected"
+        log_error "  actual:   $actual"
+        log_error "Refusing to install. The download may be corrupted or tampered with."
+        return 1
+    fi
+
+    log_success "Checksum verified ($expected)"
+    return 0
 }
 
 # Detect operating system.
@@ -177,26 +288,36 @@ get_install_dir() {
 # Get version from environment or fetch latest from GitHub.
 # GitHub's unauthenticated API limit is 60 req/hr per IP, which corporate
 # NATs blow past easily — surface SPROUT_VERSION as the workaround in the
-# error rather than letting users guess.
+# error rather than letting users guess. Uses curl_with_retries so a flaky
+# network can self-heal across attempts.
 get_version() {
     if [ -n "${SPROUT_VERSION:-}" ]; then
         echo "$SPROUT_VERSION"
     else
         local api_url="https://api.github.com/repos/sprout-foundry/sprout/releases/latest"
-        local version
-        version=$(curl --fail --show-error --silent "$api_url" | awk -F'"' '/"tag_name":/ {print $4; exit}')
-        if [ -z "$version" ]; then
+        local response
+        if ! response=$(curl_with_retries "$api_url" 2>&1); then
             log_error "Failed to get version from GitHub API."
             log_error "If you're behind a proxy or hitting the 60 req/hr unauthenticated"
             log_error "rate limit, pin a version explicitly:"
             log_error "  SPROUT_VERSION=v0.14.0 curl -fsSL .../install.sh | sh"
             exit 1
         fi
+        local version
+        version=$(echo "$response" | awk -F'"' '/"tag_name":/ {print $4; exit}')
+        if [ -z "$version" ]; then
+            log_error "GitHub API returned an unexpected payload (no tag_name)."
+            log_error "Pin a version with SPROUT_VERSION=vX.Y.Z and re-run."
+            exit 1
+        fi
         echo "$version"
     fi
 }
 
-# Download the release tarball
+# Download the release tarball with retries (via curl_with_retries).
+# Uses --progress-bar via a separate curl invocation rather than the wrapper
+# because the wrapper is for short headless fetches (manifest, version JSON);
+# the tarball download benefits from a visible progress indicator.
 download_release() {
     local version="$1"
     local os="$2"
@@ -204,12 +325,25 @@ download_release() {
 
     local filename="sprout-${os}-${arch}.tar.gz"
     local download_url="https://github.com/sprout-foundry/sprout/releases/download/${version}/${filename}"
+    local retries="${SPROUT_INSTALL_RETRIES:-3}"
 
     log_info "Downloading $filename" >&2
 
-    curl --fail --show-error --location --progress-bar \
+    if ! curl --fail --show-error --location --progress-bar \
+        --retry "$retries" \
+        --retry-delay 2 \
+        --retry-max-time 120 \
+        --connect-timeout 15 \
         -o "$TEMP_DIR/$filename" \
-        "$download_url"
+        "$download_url"; then
+        local code=$?
+        log_error "Failed to download $download_url (curl exit $code)" >&2
+        log_error "If GitHub Releases is unreachable from your network, you can" >&2
+        log_error "download the tarball manually and run:" >&2
+        log_error "  SPROUT_VERSION=$version sh install.sh" >&2
+        log_error "after placing it in your current directory." >&2
+        return "$code"
+    fi
 
     # Only print the URL to stdout (captured by caller)
     echo "$download_url"
@@ -332,12 +466,149 @@ print_success() {
     echo ""
 }
 
+# Print --help text. Mirrors what install.ps1 -? would show on Windows so
+# users have the same surface area on both installers.
+print_help() {
+    cat <<'EOF'
+sprout one-line install script
+
+USAGE:
+  curl -fsSL .../install.sh | sh                  install latest release
+  sh install.sh [FLAGS]                           run a downloaded copy
+  curl -fsSL .../install.sh | sh -s -- [FLAGS]    pass flags through curl
+
+FLAGS:
+  -h, --help          show this help and exit
+  -v, --version       show the version that would be installed and exit
+  -u, --uninstall     remove sprout + service files
+      --keep-config   used with --uninstall: keep config + session state.
+                      Default is to remove ~/.config/sprout/ and
+                      ~/.sprout/ alongside the binary.
+
+ENV VARS:
+  SPROUT_VERSION         pin a specific release tag (e.g. v0.14.0).
+                         Skips the GitHub API call.
+  SPROUT_INSTALL_DIR     install destination. Defaults to /usr/local/bin,
+                         existing sprout dir on PATH, or $PREFIX/bin on Termux.
+  SPROUT_INSTALL_RETRIES network retry count for curl (default 3).
+  SPROUT_SKIP_CHECKSUM   if "1", skip SHA256 verification of the download.
+                         Use only when a release is missing the manifest.
+  SPROUT_CONFIG          config dir override (see also LEDIT_CONFIG for
+                         pre-rebrand back-compat). Honored on uninstall.
+  XDG_CONFIG_HOME        XDG override; uninstall reads it before falling
+                         back to ~/.config/sprout/.
+
+EXAMPLES:
+  SPROUT_VERSION=v0.14.0 curl -fsSL .../install.sh | sh
+  SPROUT_INSTALL_DIR=~/.local/bin curl -fsSL .../install.sh | sh
+  curl -fsSL .../install.sh | sh -s -- --uninstall
+  curl -fsSL .../install.sh | sh -s -- --uninstall --keep-config
+EOF
+}
+
+# Resolve the active sprout config directory using the same rules the
+# binary itself does (see pkg/envutil/env.go:GetConfigDir):
+#   1. $SPROUT_CONFIG / $LEDIT_CONFIG
+#   2. $XDG_CONFIG_HOME/sprout
+#   3. $HOME/.config/sprout
+# Prints the path; never creates it.
+resolve_config_dir() {
+    if [ -n "${SPROUT_CONFIG:-}" ]; then
+        echo "$SPROUT_CONFIG"
+    elif [ -n "${LEDIT_CONFIG:-}" ]; then
+        echo "$LEDIT_CONFIG"
+    elif [ -n "${XDG_CONFIG_HOME:-}" ]; then
+        echo "${XDG_CONFIG_HOME}/sprout"
+    elif [ -n "${HOME:-}" ]; then
+        echo "${HOME}/.config/sprout"
+    fi
+}
+
+# Resolve the conversation state dir (~/.sprout/, holds sessions/).
+# Not configurable in the binary today — pkg/agent/persistence.go hardcodes
+# $HOME/.sprout/sessions. Keep this in sync if that ever changes.
+resolve_state_dir() {
+    if [ -n "${HOME:-}" ]; then
+        echo "${HOME}/.sprout"
+    fi
+}
+
+# Remove sprout's config + state dirs unless --keep-config was passed.
+# Refuses to delete anything that doesn't look like a sprout-owned dir
+# (e.g. if SPROUT_CONFIG points at /) — sanity-checks the path before rm.
+remove_config_dirs() {
+    local keep_config="$1"
+
+    if [ "$keep_config" = "true" ]; then
+        log_info "Keeping config and session state per --keep-config"
+        return 0
+    fi
+
+    local config_dir
+    config_dir=$(resolve_config_dir)
+    if [ -n "$config_dir" ] && [ -d "$config_dir" ]; then
+        # Refuse to nuke obviously-wrong targets. The check covers $HOME
+        # itself, /, and bare $HOME/.config (which holds OTHER apps' data).
+        case "$config_dir" in
+            "/"|"$HOME"|"${HOME}/"|"${HOME}/.config"|"${HOME}/.config/")
+                log_warn "Refusing to remove suspicious config path: $config_dir"
+                ;;
+            *)
+                log_info "Removing config dir: $config_dir"
+                rm -rf "$config_dir"
+                ;;
+        esac
+    fi
+
+    local state_dir
+    state_dir=$(resolve_state_dir)
+    if [ -n "$state_dir" ] && [ -d "$state_dir" ]; then
+        case "$state_dir" in
+            "/"|"$HOME"|"${HOME}/")
+                log_warn "Refusing to remove suspicious state path: $state_dir"
+                ;;
+            *)
+                log_info "Removing session state: $state_dir"
+                rm -rf "$state_dir"
+                ;;
+        esac
+    fi
+}
+
 # Main function
 main() {
-    # Check for uninstall flag
-    if [ "${1:-}" = "--uninstall" ] || [ "${1:-}" = "-u" ]; then
+    case "${1:-}" in
+        -h|--help)
+            print_help
+            exit 0
+            ;;
+        -v|--version)
+            local version
+            version=$(get_version)
+            echo "sprout $version"
+            exit 0
+            ;;
+    esac
+
+    # Check for uninstall flag. Accept --keep-config in either order
+    # relative to --uninstall so `sh -s -- --uninstall --keep-config` and
+    # `sh -s -- --keep-config --uninstall` both work.
+    local uninstall=false
+    local keep_config=false
+    for arg in "$@"; do
+        case "$arg" in
+            --uninstall|-u) uninstall=true ;;
+            --keep-config)  keep_config=true ;;
+            -h|--help|-v|--version) ;; # already handled above
+            *)
+                log_warn "Unknown argument: $arg"
+                ;;
+        esac
+    done
+
+    if [ "$uninstall" = "true" ]; then
         log_info "Uninstalling sprout..."
-        
+
         local install_dir
         if [ -n "${SPROUT_INSTALL_DIR:-}" ]; then
             install_dir="$SPROUT_INSTALL_DIR"
@@ -395,10 +666,13 @@ main() {
                 ;;
         esac
 
+        # Config + state cleanup (skip with --keep-config).
+        remove_config_dirs "$keep_config"
+
         print_uninstall_instructions "$install_dir"
         exit 0
     fi
-    
+
     # Check dependencies
     log_info "Checking dependencies..."
     check_dependencies
@@ -467,10 +741,18 @@ main() {
     local download_url
     download_url=$(download_release "$version" "$os" "$arch")
     log_info "Downloaded from: $download_url"
-    
+
+    # Verify the downloaded archive against the release's SHA256SUMS manifest.
+    # Failure here aborts before we chmod+x — that's the whole point.
+    local archive_name="sprout-${os}-${arch}.tar.gz"
+    if ! verify_checksum "$TEMP_DIR/$archive_name" "$archive_name" "$version"; then
+        log_error "Refusing to install an unverified binary."
+        exit 1
+    fi
+
     # Install the binary
     install_binary "$TEMP_DIR/sprout-${os}-${arch}.tar.gz" "$install_dir"
-    
+
     # Verify installation
     verify_installation "$install_dir"
 

@@ -679,11 +679,6 @@ func AutomateOutputChunkEvent(sessionID string, offset int, chunk string) map[st
 	}
 }
 
-// TODO(SP-065-3): Implement output chunk coalescing — publish only when
-// ≥250ms has elapsed OR ≥4KB of new output has accumulated. Current
-// implementation sends chunk_len without the actual chunk to avoid WS
-// frame bloat. Full streaming deferred to Phase 3.
-
 // AutomateSessionEndedEvent creates a session_ended event payload.
 func AutomateSessionEndedEvent(sessionID, workflow, status string, totalCost float64) map[string]interface{} {
 	return map[string]interface{}{

@@ -1,5 +1,5 @@
 # sprout one-line install script for Windows
-# Requires PowerShell 5.1+ or PowerShell 7+
+# Requires PowerShell 5.1 (default on Windows 10/11) or PowerShell 7+
 
 param(
     [switch]$Uninstall,
@@ -8,47 +8,32 @@ param(
     [switch]$Version
 )
 
-# Enable colored output with fallback for non-color terminals
-$ColorEnabled = $Host.UI.RawUI.SupportsColor
-
-$Colors = @{
-    Red = if ($ColorEnabled) { [ConsoleColor]::Red } else { $null }
-    Green = if ($ColorEnabled) { [ConsoleColor]::Green } else { $null }
-    Yellow = if ($ColorEnabled) { [ConsoleColor]::Yellow } else { $null }
-    Blue = if ($ColorEnabled) { [ConsoleColor]::Blue } else { $null }
-    Normal = if ($ColorEnabled) { $null } else { $null }
-}
+# Color output via Write-Host -ForegroundColor — scoped to a single line so
+# we don't mutate [Console]::ForegroundColor and bleed colors into the host
+# session for the rest of the user's terminal lifetime.
 
 function Write-LogInfo {
     param([string]$Message)
-    $color = $Colors.Blue
-    if ($ColorEnabled) { [Console]::ForegroundColor = $color }
-    Write-Host "[INFO] $Message"
-    if ($ColorEnabled) { [Console]::ForegroundColor = [Console]::White }
+    Write-Host "[INFO] " -ForegroundColor Blue -NoNewline
+    Write-Host $Message
 }
 
 function Write-LogSuccess {
     param([string]$Message)
-    $color = $Colors.Green
-    if ($ColorEnabled) { [Console]::ForegroundColor = $color }
-    Write-Host "[SUCCESS] $Message"
-    if ($ColorEnabled) { [Console]::ForegroundColor = [Console]::White }
+    Write-Host "[SUCCESS] " -ForegroundColor Green -NoNewline
+    Write-Host $Message
 }
 
 function Write-LogWarn {
     param([string]$Message)
-    $color = $Colors.Yellow
-    if ($ColorEnabled) { [Console]::ForegroundColor = $color }
-    Write-Host "[WARN] $Message"
-    if ($ColorEnabled) { [Console]::ForegroundColor = [Console]::White }
+    Write-Host "[WARN] " -ForegroundColor Yellow -NoNewline
+    Write-Host $Message
 }
 
 function Write-LogError {
     param([string]$Message)
-    $color = $Colors.Red
-    if ($ColorEnabled) { [Console]::ForegroundColor = $color }
-    Write-Host "[ERROR] $Message"
-    if ($ColorEnabled) { [Console]::ForegroundColor = [Console]::White }
+    Write-Host "[ERROR] " -ForegroundColor Red -NoNewline
+    Write-Host $Message -ForegroundColor Red
 }
 
 # Cleanup function
@@ -58,26 +43,32 @@ function Cleanup {
     }
 }
 
-# Check for curl dependency
+# Verify PowerShell version. The script itself uses Invoke-RestMethod /
+# Invoke-WebRequest (both >= PS 3.0) and System.IO.Compression, so we don't
+# need any external binaries — checking the host's PS version is enough.
 function Check-Dependencies {
-    $requiredCmds = @("curl")
-    foreach ($cmd in $requiredCmds) {
-        $cmdPath = Get-Command $cmd -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source -ErrorAction SilentlyContinue
-        if (-not $cmdPath) {
-            Write-LogError "$cmd is required but not installed"
-            exit 1
-        }
+    if ($PSVersionTable.PSVersion.Major -lt 5) {
+        Write-LogError "PowerShell 5.0+ is required (found $($PSVersionTable.PSVersion))"
+        Write-LogError "Install PowerShell 7: https://aka.ms/powershell"
+        exit 1
     }
 }
 
-# Detect operating system
+# Detect operating system.
+#
+# Note: $PSVersionTable.OS only exists on PowerShell 6+ (Core). The default
+# Windows shell is Windows PowerShell 5.1, where $PSVersionTable.OS is null
+# — the previous check ('$PSVersionTable.OS -match "Windows"') therefore
+# made the script unrunnable on the stock shell. $env:OS is set to
+# "Windows_NT" by the OS itself and works identically on 5.1 and 7+.
 function Detect-OS {
-    $os = $PSVersionTable.OS
-    if ($os -match "Windows") {
+    if ($env:OS -eq 'Windows_NT') {
         return "windows"
     }
-    Write-LogError "Unsupported operating system: $os"
-    Write-LogError "Only Windows is supported"
+    # PS 7 on Linux/macOS — not supported by this script.
+    Write-LogError "Unsupported operating system (this script is Windows-only)"
+    Write-LogError "On Linux/macOS use install.sh instead:"
+    Write-LogError "  curl -fsSL https://raw.githubusercontent.com/sprout-foundry/sprout/main/scripts/install.sh | sh"
     exit 1
 }
 

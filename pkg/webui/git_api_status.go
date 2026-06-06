@@ -23,8 +23,9 @@ func (ws *ReactWebServer) handleAPIGitStatus(w http.ResponseWriter, r *http.Requ
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"message": "success",
-		"status":  status,
-		"files":   getAllGitFiles(status), // Backward compatibility
+		"message":     "success",
+		"status":      status,
+		"files":       getAllGitFiles(status), // Backward compatibility
+		"in_git_repo": status.InGitRepo,
 	})
 }

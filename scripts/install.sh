@@ -399,12 +399,34 @@ verify_installation() {
 
     # Actually exec the binary. Catches the only mode where a wrong-libc
     # binary can land cleanly on disk but blow up at runtime — most
-    # commonly: Termux pulling a glibc-linked binary, or someone uname
-    # spoofing. The release pipeline cross-compiles linux-arm64 with CGO
-    # disabled so this should normally pass on Termux too.
-    if ! "$binary_path" version >/dev/null 2>&1; then
+    # commonly: Termux pulling a glibc-linked binary, an older glibc host
+    # running a binary built against newer glibc, or someone uname spoofing.
+    # The release pipeline cross-compiles linux-arm64 with CGO disabled so
+    # this should normally pass on Termux too.
+    local run_output run_status
+    run_output=$("$binary_path" version 2>&1)
+    run_status=$?
+    if [ "$run_status" -ne 0 ]; then
         log_error "sprout was installed to $binary_path but failed to run."
-        if is_termux; then
+
+        # Detect the most common Linux failure: host glibc is too old for
+        # the binary the release pipeline built. The runtime loader prints
+        # a very specific message we can pattern-match:
+        #   /lib/x86_64-linux-gnu/libc.so.6: version `GLIBC_2.34' not found
+        if printf '%s' "$run_output" | grep -qE "GLIBC_[0-9]+\.[0-9]+.+not found"; then
+            local needed
+            needed=$(printf '%s' "$run_output" | grep -oE "GLIBC_[0-9]+\.[0-9]+" | sort -u | tail -1)
+            log_error "Your host glibc is too old. The binary needs $needed but"
+            log_error "your system provides an older version. Run 'ldd --version'"
+            log_error "to see what you have."
+            log_error ""
+            log_error "Workarounds:"
+            log_error "  1. Upgrade your distro (RHEL 7 / Ubuntu 18.04 era are the"
+            log_error "     common culprits)."
+            log_error "  2. Pin to an older sprout release built against older glibc:"
+            log_error "     SPROUT_VERSION=v0.13.0 curl -fsSL .../install.sh | sh"
+            log_error "  3. Build from source (recent Go and Node required)."
+        elif is_termux; then
             log_error "On Termux this usually means the binary is dynamically linked"
             log_error "against glibc and won't load on Bionic libc."
             log_error "Workaround: build from source."
@@ -412,7 +434,8 @@ verify_installation() {
             log_error "  git clone https://github.com/sprout-foundry/sprout.git"
             log_error "  cd sprout && make deploy-ui && go install ."
         else
-            log_error "Try running '$binary_path version' directly to see the error."
+            log_error "Output from '$binary_path version':"
+            printf '%s\n' "$run_output" | sed 's/^/  /' >&2
         fi
         exit 1
     fi
@@ -484,6 +507,10 @@ FLAGS:
       --keep-config   used with --uninstall: keep config + session state.
                       Default is to remove ~/.config/sprout/ and
                       ~/.sprout/ alongside the binary.
+      --dry-run       print what would happen (URL, install dir, sudo
+                      prompts, PATH changes, paths removed) without
+                      touching the filesystem. Useful for reviewing the
+                      script before piping curl | sh, and for CI.
 
 ENV VARS:
   SPROUT_VERSION         pin a specific release tag (e.g. v0.14.0).
@@ -575,6 +602,94 @@ remove_config_dirs() {
     fi
 }
 
+# Dry-run preview helpers. Print what *would* happen without touching
+# the filesystem, the network, or the system PATH. Used by both the
+# install and uninstall flows so users can review before piping curl to
+# sh (and so CI smoke tests can validate the script's choices end to end
+# without actually installing anything).
+
+preview_install() {
+    local version="$1"
+    local os="$2"
+    local arch="$3"
+    local install_dir="$4"
+
+    local archive="sprout-${os}-${arch}.tar.gz"
+    local archive_url="https://github.com/sprout-foundry/sprout/releases/download/${version}/${archive}"
+    local sums_url="https://github.com/sprout-foundry/sprout/releases/download/${version}/SHA256SUMS"
+
+    echo
+    log_info "DRY RUN — install preview (no files will be touched)"
+    echo
+    printf '  %-22s %s\n' "Version:" "$version"
+    printf '  %-22s %s\n' "Platform:" "${os}-${arch}"
+    printf '  %-22s %s\n' "Archive URL:" "$archive_url"
+    printf '  %-22s %s\n' "Checksum URL:" "$sums_url"
+    printf '  %-22s %s\n' "Install dir:" "$install_dir"
+
+    if [ ! -w "$install_dir" ] && [ -d "$install_dir" ]; then
+        printf '  %-22s %s\n' "Privilege:" "sudo required (install dir is not writable)"
+    elif [ ! -d "$install_dir" ]; then
+        local parent
+        parent=$(dirname "$install_dir")
+        if [ ! -w "$parent" ]; then
+            printf '  %-22s %s\n' "Privilege:" "sudo required (would create $install_dir)"
+        else
+            printf '  %-22s %s\n' "Privilege:" "none (parent dir is writable)"
+        fi
+    else
+        printf '  %-22s %s\n' "Privilege:" "none (install dir is writable)"
+    fi
+
+    if is_termux; then
+        printf '  %-22s %s\n' "Termux mode:" "yes (service step skipped)"
+    fi
+
+    if [ "${SPROUT_SKIP_CHECKSUM:-0}" = "1" ]; then
+        printf '  %-22s %s\n' "Checksum:" "SKIPPED (SPROUT_SKIP_CHECKSUM=1)"
+    else
+        printf '  %-22s %s\n' "Checksum:" "verified against SHA256SUMS"
+    fi
+    echo
+    log_info "Re-run without --dry-run to install."
+}
+
+preview_uninstall() {
+    local binary_path="$1"
+    local keep_config="$2"
+
+    echo
+    printf '  %-22s %s\n' "Binary:" "$binary_path"
+    if [ -f "$binary_path" ]; then
+        printf '  %-22s %s\n' "Binary status:" "present (would remove)"
+        if [ ! -w "$binary_path" ]; then
+            printf '  %-22s %s\n' "Privilege:" "sudo required (binary not writable)"
+        fi
+    else
+        printf '  %-22s %s\n' "Binary status:" "not found (nothing to remove)"
+    fi
+
+    if [ "$keep_config" = "true" ]; then
+        printf '  %-22s %s\n' "Config + state:" "KEPT (--keep-config)"
+    else
+        local config_dir state_dir
+        config_dir=$(resolve_config_dir)
+        state_dir=$(resolve_state_dir)
+        if [ -n "$config_dir" ] && [ -d "$config_dir" ]; then
+            printf '  %-22s %s\n' "Config dir:" "$config_dir (would remove)"
+        elif [ -n "$config_dir" ]; then
+            printf '  %-22s %s\n' "Config dir:" "$config_dir (not present)"
+        fi
+        if [ -n "$state_dir" ] && [ -d "$state_dir" ]; then
+            printf '  %-22s %s\n' "State dir:" "$state_dir (would remove)"
+        elif [ -n "$state_dir" ]; then
+            printf '  %-22s %s\n' "State dir:" "$state_dir (not present)"
+        fi
+    fi
+    echo
+    log_info "Re-run without --dry-run to uninstall."
+}
+
 # Main function
 main() {
     case "${1:-}" in
@@ -590,15 +705,16 @@ main() {
             ;;
     esac
 
-    # Check for uninstall flag. Accept --keep-config in either order
-    # relative to --uninstall so `sh -s -- --uninstall --keep-config` and
-    # `sh -s -- --keep-config --uninstall` both work.
+    # Check for flags. Accept any combination/order — `sh -s -- --uninstall
+    # --keep-config --dry-run` should preview a full cleanup.
     local uninstall=false
     local keep_config=false
+    local dry_run=false
     for arg in "$@"; do
         case "$arg" in
             --uninstall|-u) uninstall=true ;;
             --keep-config)  keep_config=true ;;
+            --dry-run)      dry_run=true ;;
             -h|--help|-v|--version) ;; # already handled above
             *)
                 log_warn "Unknown argument: $arg"
@@ -607,7 +723,11 @@ main() {
     done
 
     if [ "$uninstall" = "true" ]; then
-        log_info "Uninstalling sprout..."
+        if [ "$dry_run" = "true" ]; then
+            log_info "DRY RUN — uninstall preview (no files will be touched)"
+        else
+            log_info "Uninstalling sprout..."
+        fi
 
         local install_dir
         if [ -n "${SPROUT_INSTALL_DIR:-}" ]; then
@@ -615,8 +735,13 @@ main() {
         else
             install_dir=$(get_install_dir)
         fi
-        
+
         local binary_path="${install_dir}/sprout"
+
+        if [ "$dry_run" = "true" ]; then
+            preview_uninstall "$binary_path" "$keep_config"
+            exit 0
+        fi
 
         # Stop and uninstall service before removing binary
         if command -v sprout >/dev/null 2>&1; then
@@ -696,6 +821,16 @@ main() {
     local install_dir
     install_dir=$(get_install_dir)
     log_info "Installing to: $install_dir"
+
+    # Dry-run short-circuits before any network or filesystem ops. We've
+    # done enough to give a useful preview (version resolved, OS/arch
+    # detected, install dir picked, Termux/sudo status known) — printing
+    # the plan + exiting is more informative than continuing in some
+    # "fake" mode would be.
+    if [ "$dry_run" = "true" ]; then
+        preview_install "$version" "$os" "$arch" "$install_dir"
+        exit 0
+    fi
 
     # Detect whether this is an upgrade (existing binary on PATH)
     # Also check now (before removing the old binary) whether the service daemon

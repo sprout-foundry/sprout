@@ -33,10 +33,42 @@ vi.mock('lucide-react', () => {
 });
 
 vi.mock('@sprout/ui', () => ({
+  // Minimal stand-in for the real ContextMenu. The production component
+  // handles dismissal on outside mousedown / window blur internally
+  // (that's the behavior the dismissal tests below exercise), so the
+  // mock has to replicate the same listeners or those tests have no
+  // observable effect. We add the listeners only while isOpen=true and
+  // tear them down on close, matching the real component's lifecycle.
   ContextMenu: ({ children, isOpen, onClose, className, zIndex }: any) => {
+    const menuRef = (window as any).React?.useRef
+      ? (window as any).React.useRef<HTMLDivElement>(null)
+      : null;
+    // Lazy-import React so this mock file doesn't have to declare it as
+    // a top-level dep — vitest hoists vi.mock above the imports, and
+    // top-level `import React from 'react'` here would be hoisted with it.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const React = require('react');
+    const ref = React.useRef<HTMLDivElement>(null);
+    React.useEffect(() => {
+      if (!isOpen) return;
+      const onMouseDown = (e: MouseEvent) => {
+        if (ref.current && !ref.current.contains(e.target as Node)) {
+          onClose?.();
+        } else if (!ref.current) {
+          onClose?.();
+        }
+      };
+      const onBlur = () => onClose?.();
+      document.addEventListener('mousedown', onMouseDown);
+      window.addEventListener('blur', onBlur);
+      return () => {
+        document.removeEventListener('mousedown', onMouseDown);
+        window.removeEventListener('blur', onBlur);
+      };
+    }, [isOpen, onClose]);
     if (!isOpen) return null;
     return (
-      <div className={className || 'context-menu'} style={{ position: 'fixed', zIndex }} onClick={onClose}>
+      <div ref={ref} className={className || 'context-menu'} style={{ position: 'fixed', zIndex }} onClick={onClose}>
         {children}
       </div>
     );

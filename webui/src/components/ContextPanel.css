@@ -88,13 +88,26 @@
 .tool-depth-badge {
   display: inline-block;
   margin-left: 6px;
-  padding: 1px 5px;
-  border-radius: 4px;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm, 4px);
   font-size: 10px;
   font-family: var(--font-mono, monospace);
   font-weight: 600;
   line-height: 16px;
-  color: #fff;
+  background: var(--accent-primary);
+  color: var(--accent-fg);
+}
+
+/* Orchestrator vs nested-specialist coloring (data-driven so theme
+   tokens still apply — see CLAUDE.md design-system rules). */
+.tool-depth-badge[data-depth-tier='orchestrator'] {
+  background: var(--accent-primary);
+  color: var(--accent-fg);
+}
+
+.tool-depth-badge[data-depth-tier='deep'] {
+  background: var(--accent-warning);
+  color: var(--accent-warning-fg);
 }
 
 .tool-query-tools {

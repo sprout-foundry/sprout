@@ -63,7 +63,7 @@ func handleRunAutomate(ctx context.Context, a *Agent, args map[string]interface{
 		bpm = a.getOrCreateBackgroundProcessManager()
 	}
 
-	sessionID, err := bpm.StartWithKind(ctx, cmdStr, "", "automate")
+	sessionID, err := bpm.StartWithOptions(ctx, cmdStr, "", "automate", &tools.StartOptions{EventBus: a.eventBus})
 	if err != nil {
 		return "", fmt.Errorf("failed to start workflow: %w", err)
 	}

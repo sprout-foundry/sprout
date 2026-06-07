@@ -81,20 +81,52 @@ func handleRunAutomate(ctx context.Context, a *Agent, args map[string]interface{
 
 	// SP-065-2d: Watch for process exit and publish session_ended
 	if proc, exists := bpm.GetProcess(sessionID); exists {
+		// Capture variables for goroutine closure
+		wfName := filepath.Base(wfPath)
+		wfDesc := desc
+
 		go func() {
 			select {
 			case <-proc.Done():
-				// Determine status from exit code
 				exitCode := proc.GetExitCode()
 				status := "success"
 				if exitCode != 0 {
 					status = "error"
 				}
 				a.publishEvent(events.EventTypeAutomateSessionEnded, events.AutomateSessionEndedEvent(
-					sessionID, filepath.Base(wfPath), status, 0,
+					sessionID, wfName, status, 0,
 				))
+
+				// SP-067: Inject self-contained completion message back to the model
+				// so it can act autonomously (e.g., retry on failure) without polling.
+				var tail string
+				if exitCode != 0 {
+					tail = readOutputTail(proc.GetOutputPath(), 2048)
+				}
+				var injectMsg string
+				if tail != "" {
+					injectMsg = fmt.Sprintf(
+						"[automate] Background workflow completed:\n"+
+							"  Workflow: %s\n"+
+							"  Description: %s\n"+
+							"  Session: %s\n"+
+							"  Status: %s (exit code %d)\n"+
+							"  Output (last 2KB):\n%s",
+						wfName, wfDesc, sessionID, status, exitCode, tail,
+					)
+				} else {
+					injectMsg = fmt.Sprintf(
+						"[automate] Background workflow completed:\n"+
+							"  Workflow: %s\n"+
+							"  Description: %s\n"+
+							"  Session: %s\n"+
+							"  Status: %s (exit code %d)",
+						wfName, wfDesc, sessionID, status, exitCode,
+					)
+				}
+				_ = a.InjectInputContext(injectMsg)
 			case <-ctx.Done():
-				// Agent is shutting down; skip the event.
+				// Agent shutting down; skip injection.
 			}
 		}()
 	}
@@ -272,4 +304,47 @@ func writeAutomatePIDFile(sessionID string, bpm *tools.BackgroundProcessManager,
 	}
 
 	return automate.WriteSessionFile(sproutDir, sessionID, info)
+}
+
+// readOutputTail reads the last maxBytes bytes of the file at path.
+// Returns empty string on any error (file missing, read error, etc).
+func readOutputTail(path string, maxBytes int) string {
+	info, err := os.Stat(path)
+	if err != nil {
+		return ""
+	}
+	if info.IsDir() {
+		return ""
+	}
+
+	fileSize := info.Size()
+	if fileSize <= 0 {
+		return ""
+	}
+
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+
+	var offset int64
+	if fileSize > int64(maxBytes) {
+		offset = fileSize - int64(maxBytes)
+	}
+
+	buf := make([]byte, fileSize-offset)
+	if _, err := f.ReadAt(buf, offset); err != nil {
+		return ""
+	}
+
+	// Strip control characters except common whitespace (newline, tab, carriage return).
+	var b strings.Builder
+	b.Grow(len(buf))
+	for _, r := range string(buf) {
+		if r == '\n' || r == '\t' || r == '\r' || (r >= 32 && r < 127) || r >= 128 {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }

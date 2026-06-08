@@ -1,9 +1,88 @@
 # SP-066: Never-Ending Context — Substitution-First Context Management, Hierarchical Rollups, and Embedded Memory Recall
 
-**Status:** 📋 Proposed
-**Date:** 2026-06-05
+**Status:** ✅ Substantially Shipped (Phase 3d deferred)
+**Date:** 2026-06-05 (proposed), 2026-06-08 (status update)
 **Depends on:** existing `TurnCheckpoint` / seed structural compaction (`pkg/agent/turn_checkpoints.go`, `pkg/agent/seed_integration.go`), existing embedding manager (`pkg/agent/turn_embedding.go`, `pkg/embedding/`)
 **Priority:** High
+
+## Status snapshot (2026-06-08)
+
+Every phase except 3d landed:
+
+| Phase | Status | Where it lives |
+|---|---|---|
+| 1a Substitute every prompt build | ✅ shipped | `pkg/agent/turn_checkpoints.go::BuildCheckpointCompactedMessages` |
+| 1b Model-aware response budget (15+10+5% = 30% reservation) | ✅ shipped | `pkg/agent/context_budget.go::computeCompactionTriggerFraction` |
+| 1c Pre-turn prediction + hysteresis | ✅ shipped | Same file, drives the trigger at 70% of effective max |
+| 1d Fall-through compaction (rare) | ✅ shipped | seed's LLM compaction fires only when substitution can't free enough |
+| 1e `context_management_diagnostic` telemetry | ✅ shipped | `pkg/events/events.go::ContextManagementDiagnosticEvent` |
+| 2a `TurnCheckpoint` ID/Level/CoveredTurns/SourceCheckpointIDs | ✅ shipped | `pkg/agent/types.go:64-76` |
+| 2b `/compact` keeps current behavior | ✅ shipped | `pkg/agent_commands/compact.go` unchanged |
+| 2c Background rollup worker | ✅ shipped | `pkg/agent/rollup.go` + `prompts/rollup_prompt.md` |
+| 2d Recency window (recent K turns full-fidelity) | ✅ shipped | `recentTurnsToPreserve` in rollup config |
+| 2e FileChanges manifest propagates up the hierarchy | ✅ shipped | rollup.go preserves union of source set |
+| 2f Persistence migration (additive `omitempty` fields) | ✅ shipped | Old state JSON deserializes cleanly |
+| 2g AGENTS.md "Context architecture" section | ✅ shipped | Present in CLAUDE.md |
+| 3a Embedding store as permanent memory | ✅ shipped (doc + behavior) | Store survives `/compact` and rollup by design |
+| 3b Embed at every level (rollups too) | ✅ shipped | `pkg/agent/rollup_embedding.go` |
+| 3c Recall on user-turn ingest | ✅ shipped | `pkg/agent/semantic_recall.go::InjectSemanticRecall`, called from `seed_integration.go:590` |
+| **3d Embeddings as rollup tie-breaker** | **⏸ Deferred** | See "Why 3d is deferred" below |
+| 3e `recall_diagnostic` telemetry | ✅ shipped | `pkg/events/events.go::RecallDiagnosticEvent`, emitted via `agent_events.go::PublishRecallDiagnostic` |
+
+## Why 3d is deferred
+
+Auditing the user's real session corpus on 2026-06-08 produced the data
+that argued against shipping 3d:
+
+- **379 persisted sessions, 5,651 total checkpoints, only 84 rollups
+  (1.5%).** Every single rollup came from sprout's own `cmd/` test suite
+  hitting the mock LLM provider — `"working_directory": ".../sprout/cmd"`,
+  checkpoint summaries literally reading `"Test response from mock provider"`.
+- **Zero rollups have ever fired on real user workloads.** The threshold
+  is `recentTurnsToPreserve (10) + rollupTriggerCount (20) = 30` Level-0
+  checkpoints. The longest observed real session reached 21 — nine short
+  of the trigger.
+- Phase 1 substitution is doing all the work: 5,567 Level-0 checkpoints
+  recorded across the corpus, fired on every prompt build by
+  `BuildCheckpointCompactedMessages`. Rollups are a dormant safety net.
+
+3d would optimize a code path that doesn't execute in real usage. The
+ROI is zero until either (a) the threshold is lowered enough to make
+rollups common, or (b) we see telemetry from another deployment where
+sessions routinely cross 30 checkpoints. Neither precondition exists.
+
+The roadmap item stays open conceptually but tagged ⏸ to make the
+"don't pick this up without first revisiting whether rollups even
+fire" reasoning durable.
+
+## Adjacent question raised by the audit (not part of this spec)
+
+The data suggests `rollupTriggerCount + recentTurnsToPreserve = 30` may
+be set higher than real workloads exercise. The right next experiment —
+separate from 3d — is to drop the threshold (e.g., to 15+5=20 or 10+5=15)
+and see whether rollups become useful in practice. That's a one-line
+constant change in `rollup.go`. Filed as adjacent rather than as part of
+SP-066 because it's a calibration question, not a feature gap.
+
+## Test isolation note (2026-06-08)
+
+The audit of real sessions surfaced that `~90` test-generated session
+JSONs had been leaking into the developer's real `~/.sprout/sessions/`
+because `cmd/` tests built real Agents without overriding
+`getStateDirFunc`. Fixed in the same patch series:
+
+- `pkg/agent/testing_state_isolation.go` (new): `SetTestStateDirHook`,
+  `NewTestStateDir(t)`, `SnapshotRealStateDir`, `AssertNoStateLeak`.
+- `cmd/main_test.go`, `pkg/agent_commands/main_test.go`,
+  `pkg/commands/main_test.go`, `pkg/webui/main_test.go` (new): package-
+  wide TestMain that installs the hook and runs the Layer-5 leak detector.
+- 215 polluted session JSONs deleted from `~/.sprout/sessions/`,
+  preserving 163 real ones.
+
+Documented here because the audit that produced these findings was
+inseparable from the SP-066 3d evaluation: without the test pollution
+the rollup data would have looked different (84 → 0 rollups in the
+corpus), and the deferral argument would have been even stronger.
 
 ## Background
 

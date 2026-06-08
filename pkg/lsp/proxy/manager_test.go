@@ -146,9 +146,14 @@ func TestManagerGetOrCreateGracefulErrorWithInstallHint(t *testing.T) {
 		m := NewManager(ctx)
 		defer m.Close()
 
-		// pylsp is unlikely to be installed in CI
+		// Skip if pylsp is installed locally (test assumes it's absent).
+		// Some CI images ship python-lsp-server pre-installed.
+		if _, err := exec.LookPath("pylsp"); err == nil {
+			t.Skip("pylsp is installed locally; skipping install-hint test")
+		}
+
 		_, _, err := m.GetOrCreate("/tmp", "python")
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "pylsp")
 		assert.Contains(t, err.Error(), "pip install python-lsp-server")
 	})
@@ -157,9 +162,15 @@ func TestManagerGetOrCreateGracefulErrorWithInstallHint(t *testing.T) {
 		m := NewManager(ctx)
 		defer m.Close()
 
-		// rust-analyzer is unlikely to be installed in CI
+		// Skip if rust-analyzer is installed locally (test assumes it's
+		// absent). The GitHub Actions ubuntu-latest image ships a system
+		// rust toolchain that includes rust-analyzer — caught in CI.
+		if _, err := exec.LookPath("rust-analyzer"); err == nil {
+			t.Skip("rust-analyzer is installed locally; skipping install-hint test")
+		}
+
 		_, _, err := m.GetOrCreate("/tmp", "rust")
-		assert.Error(t, err)
+		require.Error(t, err)
 		assert.Contains(t, err.Error(), "rust-analyzer")
 		assert.Contains(t, err.Error(), "rustup component add rust-analyzer")
 	})

@@ -23,11 +23,18 @@ type ChangeTracker struct {
 	// committedChangeCount, and checkpointedChangeCount. RecordTurnCheckpointAsync
 	// reads ct.changes from a goroutine while the main flow may Clear()/Reset()
 	// and tool execution appends — without this mutex those collide.
-	mu                   sync.Mutex
-	revisionID           string
-	sessionID            string
-	instructions         string
-	changes              []TrackedFileChange
+	mu           sync.Mutex
+	revisionID   string
+	sessionID    string
+	instructions string
+	changes      []TrackedFileChange
+	// enabled is the on/off flag for change tracking. The field is a
+	// regular bool to keep struct-literal init working in tests, but
+	// every concurrent read in production code MUST go through
+	// IsEnabled() — that locks ct.mu so the read doesn't race with
+	// Enable()/Disable() writes. The race detector caught a direct
+	// `!ct.enabled` read on the hot path during
+	// TestRunSeamlessPlanning_ContextCancelled.
 	enabled              bool
 	agent                *Agent
 	baseRevisionRecorded bool
@@ -138,18 +145,28 @@ func NewChangeTracker(agent *Agent, instructions string) *ChangeTracker {
 	}
 }
 
-// Enable enables change tracking
+// Enable enables change tracking. Holds ct.mu so the write doesn't
+// race with concurrent IsEnabled() reads from background goroutines
+// (e.g. RecordTurnCheckpointAsync).
 func (ct *ChangeTracker) Enable() {
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
 	ct.enabled = true
 }
 
-// Disable disables change tracking
+// Disable disables change tracking. Same lock discipline as Enable.
 func (ct *ChangeTracker) Disable() {
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
 	ct.enabled = false
 }
 
-// IsEnabled returns whether change tracking is enabled
+// IsEnabled returns whether change tracking is enabled. Production
+// code must call this instead of reading ct.enabled directly so
+// concurrent Enable()/Disable() calls don't race the read.
 func (ct *ChangeTracker) IsEnabled() bool {
+	ct.mu.Lock()
+	defer ct.mu.Unlock()
 	return ct.enabled
 }
 
@@ -160,7 +177,7 @@ func (ct *ChangeTracker) GetRevisionID() string {
 
 // TrackFileWrite tracks a write operation (WriteFile tool)
 func (ct *ChangeTracker) TrackFileWrite(filePath string, newContent string) error {
-	if !ct.enabled {
+	if !ct.IsEnabled() {
 		return nil
 	}
 
@@ -196,7 +213,7 @@ func (ct *ChangeTracker) TrackFileWrite(filePath string, newContent string) erro
 
 // TrackFileEdit tracks an edit operation (EditFile tool)
 func (ct *ChangeTracker) TrackFileEdit(filePath string, originalContent string, newContent string) error {
-	if !ct.enabled {
+	if !ct.IsEnabled() {
 		return nil
 	}
 
@@ -223,7 +240,7 @@ func (ct *ChangeTracker) TrackFileEdit(filePath string, originalContent string, 
 
 // Commit commits all tracked changes to the change tracker
 func (ct *ChangeTracker) Commit(llmResponse string, conversation []api.Message) error {
-	if !ct.enabled {
+	if !ct.IsEnabled() {
 		return nil
 	}
 	ct.mu.Lock()
@@ -382,7 +399,7 @@ func (ct *ChangeTracker) clearLocked() {
 // entry, preferring "A" over "M" (a turn that creates then modifies
 // the same file is recorded as A).
 func (ct *ChangeTracker) CollectFileChangesForCheckpoint() ([]CheckpointFileChange, string) {
-	if ct == nil || !ct.enabled {
+	if ct == nil || !ct.IsEnabled() {
 		return nil, ""
 	}
 	ct.mu.Lock()

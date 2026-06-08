@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -20,11 +21,13 @@ import (
 type Bridge struct {
 	wsConn *websocket.Conn
 
-	lspProcess *LSPProcess
-	lspCh      <-chan string
+	lspProcess  *LSPProcess
+	lspCh       <-chan string
 	unsubscribe func()
 
-	doneCh chan struct{}
+	doneCh    chan struct{}
+	doneOnce  sync.Once // guards close(doneCh) — both goroutines race to signal it
+	closeOnce sync.Once // guards Close() — both shutdown paths invoke it
 }
 
 // NewBridge creates a new bridge for the given WebSocket connection and LSP process.
@@ -75,7 +78,10 @@ func (b *Bridge) Run(ctx context.Context) error {
 // runWSToLSP reads from WebSocket and writes to LSP process.
 func (b *Bridge) runWSToLSP(ctx context.Context) {
 	defer func() {
-		close(b.doneCh)
+		// Signal Run() that we're done. Both runWSToLSP and runLSPToWS
+		// may race to be the first exiter — sync.Once makes close(doneCh)
+		// safe to call from either path.
+		b.doneOnce.Do(func() { close(b.doneCh) })
 		b.Close()
 	}()
 
@@ -123,6 +129,13 @@ func (b *Bridge) runWSToLSP(ctx context.Context) {
 
 // runLSPToWS reads from LSP process and writes to WebSocket.
 func (b *Bridge) runLSPToWS(ctx context.Context) {
+	// Mirror runWSToLSP: signal completion + invoke Close on exit so
+	// that whichever direction tears down first releases the conn.
+	defer func() {
+		b.doneOnce.Do(func() { close(b.doneCh) })
+		b.Close()
+	}()
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -130,8 +143,9 @@ func (b *Bridge) runLSPToWS(ctx context.Context) {
 
 		case msg, ok := <-b.lspCh:
 			if !ok {
-				// Channel closed - LSP process exited
-				b.wsConn.Close()
+				// Channel closed — LSP process exited. Close() (deferred)
+				// will close the WS conn; no direct field access here so
+				// runWSToLSP's concurrent Close() can't race us.
 				return
 			}
 
@@ -147,17 +161,19 @@ func (b *Bridge) runLSPToWS(ctx context.Context) {
 	}
 }
 
-// Close cleans up the bridge.
+// Close cleans up the bridge. Safe to call multiple times and from
+// multiple goroutines — both shutdown paths (runWSToLSP defer + the
+// BridgeHandler defer) invoke it. The previous version nilled wsConn,
+// which raced with the still-running runLSPToWS reading wsConn.
 func (b *Bridge) Close() {
-	if b.unsubscribe != nil {
-		b.unsubscribe()
-		b.unsubscribe = nil
-	}
-
-	if b.wsConn != nil {
-		b.wsConn.Close()
-		b.wsConn = nil
-	}
+	b.closeOnce.Do(func() {
+		if b.unsubscribe != nil {
+			b.unsubscribe()
+		}
+		if b.wsConn != nil {
+			b.wsConn.Close()
+		}
+	})
 }
 
 // BridgeHandler creates a http.HandlerFunc that handles LSP WebSocket connections.

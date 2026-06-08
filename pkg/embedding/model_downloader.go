@@ -14,16 +14,26 @@ import (
 // ModelConfig describes an ONNX model to download.
 type ModelConfig struct {
 	Name          string // e.g. "embeddinggemma-300m"
-	ModelURL      string // HuggingFace download URL for model.onnx
+	ModelURL      string // HuggingFace download URL for the .onnx graph file
 	TokenizerURL  string // HuggingFace download URL for tokenizer.json
 	ModelHash     string // SHA256 hex of model file (empty = skip verification)
 	TokenizerHash string // SHA256 hex of tokenizer file
 
-	// ModelDataURL is the URL for the external weights blob (e.g. model_q4.onnx_data)
-	// that ONNX Runtime loads as a sibling of the .onnx graph file. Required for
-	// models that use external data; leave empty for self-contained .onnx files.
+	// ModelDataURL is the URL for the external weights blob (e.g.
+	// model_fp16.onnx_data) that ONNX Runtime loads as a sibling of the
+	// .onnx graph file. Required for models that use external data;
+	// leave empty for self-contained .onnx files.
 	ModelDataURL  string
 	ModelDataHash string
+
+	// ModelFilename / ModelDataFilename are the on-disk basenames the
+	// downloader writes the graph + weights blob to (and the manager
+	// reads them back from). Defaults to "model_q4.onnx" and
+	// "model_q4.onnx_data" for back-compat with the original q4 layout;
+	// callers using a different quantization (e.g. fp16) set these to
+	// match the variant they ship.
+	ModelFilename     string
+	ModelDataFilename string
 
 	// FullDims is the model's native output dimensionality (e.g., 768 for EmbeddingGemma).
 	// Used to allocate the output tensor in runInference.
@@ -32,6 +42,27 @@ type ModelConfig struct {
 	// Dims is the desired output dimensionality after optional MRL truncation.
 	// Must be <= FullDims. When equal to FullDims, no truncation is applied.
 	Dims int
+}
+
+// ModelFilenameOrDefault returns the on-disk basename for the model
+// graph, falling back to the historical "model_q4.onnx" when the
+// config left it empty. Centralized so the back-compat default lives
+// in one place instead of being duplicated across downloader, manager,
+// and helpers.
+func (c ModelConfig) ModelFilenameOrDefault() string {
+	if c.ModelFilename != "" {
+		return c.ModelFilename
+	}
+	return "model_q4.onnx"
+}
+
+// ModelDataFilenameOrDefault returns the on-disk basename for the
+// external weights blob, mirroring ModelFilenameOrDefault.
+func (c ModelConfig) ModelDataFilenameOrDefault() string {
+	if c.ModelDataFilename != "" {
+		return c.ModelDataFilename
+	}
+	return "model_q4.onnx_data"
 }
 
 // defaultDownloadTimeout is the HTTP client timeout for model downloads.
@@ -70,8 +101,8 @@ func (d *ModelDownloader) Download(ctx context.Context, cfg ModelConfig, progres
 		return fmt.Errorf("model: create dir %s: %w", dir, err)
 	}
 
-	modelPath := filepath.Join(dir, "model_q4.onnx")
-	modelDataPath := filepath.Join(dir, "model_q4.onnx_data")
+	modelPath := filepath.Join(dir, cfg.ModelFilenameOrDefault())
+	modelDataPath := filepath.Join(dir, cfg.ModelDataFilenameOrDefault())
 	tokenizerPath := filepath.Join(dir, "tokenizer.json")
 
 	// Build the phase list dynamically so progress maps to whatever combination
@@ -238,6 +269,10 @@ func (d *ModelDownloader) fileHash(path string) (string, error) {
 }
 
 // GetModelPath returns the path to the model file for the given model name.
+//
+// Returns the q4 path for back-compat with callers that don't know the
+// active variant. Variant-aware code should join modelDir, name, and
+// ModelConfig.ModelFilenameOrDefault() directly.
 func (d *ModelDownloader) GetModelPath(name string) string {
 	return filepath.Join(d.modelDir, name, "model_q4.onnx")
 }
@@ -260,11 +295,24 @@ func (d *ModelDownloader) IsDownloaded(name string) bool {
 
 // EmbeddingGemma300MConfig returns the predefined config for Google's
 // EmbeddingGemma-300M (308M parameter) model — the actual published model name.
-// The .onnx graph is small (~520 KB) but references an external weights blob
-// (~197 MB) that must be downloaded into the same directory; both URLs are set.
+// The .onnx graph is small (~692 KB) but references an external weights blob
+// (~167 MB) that must be downloaded into the same directory; both URLs are set.
 //
 // Source: the community ONNX export at onnx-community/embeddinggemma-300m-ONNX,
 // since the official Google repo ships SafeTensors only.
+//
+// Ships the Q4f16 variant: 4-bit weights with FP16 activations/compute
+// (via ONNX Runtime's MatMulNBits operator). Background: the original
+// Q4 export (model_q4.onnx) dequantizes through BFloat16, and ORT
+// 1.25.1's SimplifiedLayerNormalization kernel on macOS arm64 doesn't
+// have type traits for BF16 — every embed crashed with "GetElementType
+// is not implemented" on M1+. The Q4f16 path stays in FP16 throughout
+// and dodges the whole class of platform-fragile ops, while keeping
+// the disk footprint near the original Q4 (168 MB vs 197 MB) AND
+// improving latency over FP16 (single-call 11.4 ms vs 16.1 ms p50 on
+// M1+; quality margin +0.31 vs +0.30 — statistically identical). See
+// `embeddings-bench/results/2026-06-07-broad-sweep.md` for the wider
+// model comparison that informed this choice.
 //
 // Hashes pin the upstream files we validated end-to-end. The downloader rejects
 // mismatched files, so a poisoned mirror or MITM swap on the HuggingFace path
@@ -274,11 +322,15 @@ func (d *ModelDownloader) IsDownloaded(name string) bool {
 func EmbeddingGemma300MConfig() ModelConfig {
 	const base = "https://huggingface.co/onnx-community/embeddinggemma-300m-ONNX/resolve/main"
 	return ModelConfig{
-		Name:          "embeddinggemma-300m",
-		ModelURL:      base + "/onnx/model_q4.onnx",
-		ModelHash:     "ad1dfee81a70f7944b9b9d1cc6e48075b832881cf33fab2f2b248be78f3f0043",
-		ModelDataURL:  base + "/onnx/model_q4.onnx_data",
-		ModelDataHash: "599962c3143b040de2dd05e5975be3e9091dd067cacc6a8f7186e3203bab9e02",
+		Name: "embeddinggemma-300m",
+
+		ModelURL:          base + "/onnx/model_q4f16.onnx",
+		ModelHash:         "4df4a2a44253865800b8882a497badf67c2707a487267460813f78da339c753f",
+		ModelFilename:     "model_q4f16.onnx",
+		ModelDataURL:      base + "/onnx/model_q4f16.onnx_data",
+		ModelDataHash:     "c9cc456a345e6aa9bc5fb75b54c10b3e0edbb4f80708f749dc4c45dbed5b6edf",
+		ModelDataFilename: "model_q4f16.onnx_data",
+
 		TokenizerURL:  base + "/tokenizer.json",
 		TokenizerHash: "4dda02faaf32bc91031dc8c88457ac272b00c1016cc679757d1c441b248b9c47",
 		FullDims:      768, // EmbeddingGemma-300M native output dimension

@@ -80,9 +80,17 @@ func (a *Agent) IsEmbeddingIndexEnabled() bool {
 	return a.embeddingMgr != nil
 }
 
-// RestoreEmbeddingIndex checks if indexing was previously enabled for this
-// workspace and restores it. Called once during agent startup after workspace
+// RestoreEmbeddingIndex checks if indexing should be enabled for this
+// workspace and enables it. Called once during agent startup after workspace
 // root is known.
+//
+// Resolution order:
+//  1. Workspace config has embedding_index.enabled: true  → enable (user opted in).
+//  2. Workspace config has embedding_index.enabled: false → skip (explicit opt-out).
+//  3. Workspace config has no embedding_index section     → auto-enable (default).
+//
+// Auto-enable downloads the ONNX model and runtime lazily on first use
+// (~240MB total), so a fresh machine gets embeddings without manual setup.
 func (a *Agent) RestoreEmbeddingIndex() {
 	workspaceRoot := a.GetWorkspaceRoot()
 	if workspaceRoot == "" {
@@ -92,17 +100,23 @@ func (a *Agent) RestoreEmbeddingIndex() {
 	wsCfgPath := configuration.GetWorkspaceConfigPath(workspaceRoot)
 	data, err := os.ReadFile(wsCfgPath)
 	if err != nil {
-		return // no workspace config = indexing not previously enabled
+		// No workspace config file — auto-enable (fresh workspace).
+		_ = a.EnableEmbeddingIndex()
+		return
 	}
 
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(data, &raw); err != nil {
+		// Unreadable config — auto-enable (fail-open).
+		_ = a.EnableEmbeddingIndex()
 		return
 	}
 
-	// Check if embedding_index.enabled is set to true in workspace config
+	// Check if embedding_index section exists.
 	eiRaw, ok := raw["embedding_index"]
 	if !ok {
+		// No embedding_index section — auto-enable (default).
+		_ = a.EnableEmbeddingIndex()
 		return
 	}
 
@@ -110,12 +124,15 @@ func (a *Agent) RestoreEmbeddingIndex() {
 		Enabled bool `json:"enabled"`
 	}
 	if err := json.Unmarshal(eiRaw, &eiConfig); err != nil {
+		// Malformed section — auto-enable (fail-open).
+		_ = a.EnableEmbeddingIndex()
 		return
 	}
 
 	if eiConfig.Enabled {
 		_ = a.EnableEmbeddingIndex()
 	}
+	// If explicitly false, skip — user opted out.
 }
 
 // persistEmbeddingIndexPreference saves the indexing enabled/disabled state

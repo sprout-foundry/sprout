@@ -218,7 +218,7 @@ func (ct *ChangeTracker) captureShellSnapshot(workDir string) map[string]*shellS
 //   - Static shellSnapshotSkipDirs is still honored (`.git`, `node_modules`,
 //     `dist`, etc. — universally inappropriate to track).
 func (ct *ChangeTracker) walkWorkspace(workDir string, old map[string]*shellSnapshotEntry, destructive bool) (map[string]*shellSnapshotEntry, []pendingShellChange, bool) {
-	if ct == nil || !ct.enabled || workDir == "" {
+	if ct == nil || !ct.IsEnabled() || workDir == "" {
 		return nil, nil, false
 	}
 
@@ -495,7 +495,7 @@ type pendingShellChange struct {
 // mutations need to be tracked, PrimeShellTracking should be called
 // from EnableChangeTracking so the baseline pre-exists.
 func (ct *ChangeTracker) PrimeShellTracking(workDir string) {
-	if ct == nil || !ct.enabled {
+	if ct == nil || !ct.IsEnabled() {
 		return
 	}
 	if !ct.shellWalkEnabled {
@@ -553,7 +553,7 @@ func (ct *ChangeTracker) PrimeShellTracking(workDir string) {
 // each have their own ChangeTracker so cross-subagent calls don't
 // interfere.
 func (ct *ChangeTracker) TrackShellTurn(workDir, toolCall string, destructive bool) {
-	if ct == nil || !ct.enabled {
+	if ct == nil || !ct.IsEnabled() {
 		return
 	}
 	if !ct.shellWalkEnabled {
@@ -625,7 +625,7 @@ func (ct *ChangeTracker) TrackShellTurn(workDir, toolCall string, destructive bo
 // Safe to call when the cache hasn't been primed yet (no-op) — there's
 // no baseline to keep in sync.
 func (ct *ChangeTracker) SyncShellCacheForPath(path string) {
-	if ct == nil || !ct.enabled {
+	if ct == nil || !ct.IsEnabled() {
 		return
 	}
 	ct.shellCacheMu.Lock()
@@ -747,7 +747,7 @@ type pendingShellMutation struct {
 // render "dist/ — 1,247 files (build output)" instead of stacking
 // thousands of individual rows.
 func (ct *ChangeTracker) RecordShellMutations(before, after map[string]*shellSnapshotEntry, toolCall string) {
-	if ct == nil || !ct.enabled {
+	if ct == nil || !ct.IsEnabled() {
 		return
 	}
 	if before == nil {

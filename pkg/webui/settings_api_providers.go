@@ -37,8 +37,19 @@ func (ws *ReactWebServer) handleAPISettingsProviders(w http.ResponseWriter, r *h
 // ---------------------------------------------------------------------------
 
 func (ws *ReactWebServer) handleAPISettingsProvidersGet(w http.ResponseWriter, r *http.Request) {
-	cm := ws.getConfigManager(r, w)
+	// GET is best-effort: when no config manager is available (no agent,
+	// no layered config), return an empty list with 200 rather than
+	// 503. The UI can still render its providers panel and let the user
+	// add a first custom provider via POST. POST itself uses the strict
+	// getConfigManager since it needs a persistable target.
+	cm := ws.resolveConfigManagerQuietly(r)
 	if cm == nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			// custom_providers is a map[string]CustomProviderConfig in
+			// real config — emit an empty map so the JSON shape matches
+			// (`{}`, not `[]`).
+			"custom_providers": map[string]configuration.CustomProviderConfig{},
+		})
 		return
 	}
 

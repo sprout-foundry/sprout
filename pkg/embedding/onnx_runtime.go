@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
+	"strings"
 	"sync"
 	"time"
 
@@ -101,22 +102,61 @@ func (r *ONNXRuntime) init() error {
 	// Initialize the global ONNX environment if not already done.
 	// onnxruntime_go uses a global singleton; this is idempotent.
 	if !onnxruntime.IsInitialized() {
-		// Resolve and set the shared library path BEFORE InitializeEnvironment.
-		// The yalue/onnxruntime_go library defaults to looking for plain
-		// "onnxruntime.so" in CWD/LD_LIBRARY_PATH, which is rarely correct on
-		// developer machines. We probe a few stable locations and bootstrap
-		// from the yalue module's bundled library when needed.
-		libPath := r.resolveSharedLibraryPath()
-		if libPath != "" {
-			onnxruntime.SetSharedLibraryPath(libPath)
-		}
-		if err := onnxruntime.InitializeEnvironment(onnxruntime.WithLogLevelWarning()); err != nil {
-			return r.installGuidanceError(err)
+		if err := r.resolveAndInitialize(false); err != nil {
+			if isVersionMismatchError(err) {
+				log.Printf("onnx: staged library has incompatible API version, removing and re-downloading: %v", err)
+				r.removeStagedLibrary()
+				if err2 := r.resolveAndInitialize(true); err2 != nil {
+					return r.installGuidanceError(err2)
+				}
+				// Success on retry — fresh library worked.
+			} else {
+				return r.installGuidanceError(err)
+			}
 		}
 	}
 
 	r.ready = true
 	return nil
+}
+
+// resolveAndInitialize resolves the shared library path, sets it on the
+// onnxruntime_go library, and calls InitializeEnvironment. When skipStaged
+// is true, any pre-staged library file is bypassed so a fresh download is
+// attempted (used after detecting a stale/incompatible library).
+func (r *ONNXRuntime) resolveAndInitialize(skipStaged bool) error {
+	libPath := r.resolveSharedLibraryPath(skipStaged)
+	if libPath != "" {
+		onnxruntime.SetSharedLibraryPath(libPath)
+	}
+	return onnxruntime.InitializeEnvironment(onnxruntime.WithLogLevelWarning())
+}
+
+// isVersionMismatchError reports whether err indicates an ONNX Runtime API
+// version mismatch. These errors occur when the staged shared library is
+// from an older ORT release than the Go binding expects, producing messages
+// like: "The requested API version [25] is not available, only API versions
+// [1, 20] are supported".
+func isVersionMismatchError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), "API version")
+}
+
+// removeStagedLibrary removes the pre-staged ONNX Runtime shared library
+// from the runtime directory so a subsequent resolveSharedLibraryPath call
+// will fall through to the download step. Errors other than "file not found"
+// are logged but not propagated — the file may already be gone.
+func (r *ONNXRuntime) removeStagedLibrary() {
+	libName := platformLibName()
+	if libName == "" {
+		return
+	}
+	staged := filepath.Join(r.runtimeDir, libName)
+	if err := os.Remove(staged); err != nil && !os.IsNotExist(err) {
+		log.Printf("onnx: failed to remove staged library %s: %v", staged, err)
+	}
 }
 
 // platformLibName returns the conventional ONNX Runtime shared library
@@ -159,7 +199,7 @@ func platformLibName() string {
 // default usually fails on dev machines but is preserved so custom
 // deployments that pre-stage the library on the system loader path still
 // work without sprout intervention.
-func (r *ONNXRuntime) resolveSharedLibraryPath() string {
+func (r *ONNXRuntime) resolveSharedLibraryPath(skipStaged bool) string {
 	libName := platformLibName()
 	if libName == "" {
 		return ""
@@ -170,8 +210,10 @@ func (r *ONNXRuntime) resolveSharedLibraryPath() string {
 	}
 
 	staged := filepath.Join(r.runtimeDir, libName)
-	if _, err := os.Stat(staged); err == nil {
-		return staged
+	if !skipStaged {
+		if _, err := os.Stat(staged); err == nil {
+			return staged
+		}
 	}
 
 	// Production-grade fallback: download from upstream. Use a bounded

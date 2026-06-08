@@ -488,6 +488,7 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 		agentInst.SetEventMetadata(meta)
 		agentInst.EnableStreaming(func(string) {})
 		agentInst.SetHasActiveWebUIClients(ws.HasActiveWebUIClients)
+		agentInst.InjectWebUIManagers(ws.GetSecurityPromptMgr(), ws.GetAskUserMgr())
 		// Wire the TerminalManager from the client context into the agent for WebUI mode.
 		if terminal != nil {
 			agentInst.SetTerminalManager(terminal)
@@ -514,6 +515,7 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 				agentInst.SetEventMetadata(meta)
 				agentInst.EnableStreaming(func(string) {})
 				agentInst.SetHasActiveWebUIClients(ws.HasActiveWebUIClients)
+				agentInst.InjectWebUIManagers(ws.GetSecurityPromptMgr(), ws.GetAskUserMgr())
 				// Wire the TerminalManager from the client context into the agent for WebUI mode.
 				if terminal != nil {
 					agentInst.SetTerminalManager(terminal)
@@ -541,6 +543,7 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 		agentInst.SetEventMetadata(meta)
 		agentInst.EnableStreaming(func(string) {})
 		agentInst.SetHasActiveWebUIClients(ws.HasActiveWebUIClients)
+		agentInst.InjectWebUIManagers(ws.GetSecurityPromptMgr(), ws.GetAskUserMgr())
 		// Wire the TerminalManager from the client context into the agent for WebUI mode.
 		if terminal != nil {
 			agentInst.SetTerminalManager(terminal)
@@ -613,6 +616,7 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 	created.SetEventMetadata(meta)
 	created.EnableStreaming(func(string) {})
 	created.SetHasActiveWebUIClients(ws.HasActiveWebUIClients)
+	created.InjectWebUIManagers(ws.GetSecurityPromptMgr(), ws.GetAskUserMgr())
 
 	// Wire the TerminalManager from the client context into the agent for WebUI mode.
 	// CLI mode does not set this (agent.terminalManager stays nil).
@@ -779,6 +783,15 @@ func (ws *ReactWebServer) getChatAgent(clientID, chatID string) (*agent.Agent, e
 		}
 		return nil, fmt.Errorf("get or create chat agent: %w", err)
 	}
+
+	// Wire WebUI-owned managers and client-presence callback so that
+	// ask_user, security approvals, and security prompts route through
+	// the shared manager instances that the WebSocket handlers resolve
+	// responses on. Without this injection, each chat-session agent uses
+	// its own default managers and ask_user/approval requests either fall
+	// through to stdin (ask_user) or time out (approvals).
+	agentInst.SetHasActiveWebUIClients(ws.HasActiveWebUIClients)
+	agentInst.InjectWebUIManagers(ws.GetSecurityPromptMgr(), ws.GetAskUserMgr())
 
 	// Wire the TerminalManager from the client context into the agent for WebUI mode.
 	// CLI mode does not set this (agent.terminalManager stays nil).

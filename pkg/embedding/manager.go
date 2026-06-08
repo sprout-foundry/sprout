@@ -165,7 +165,7 @@ func (m *EmbeddingManager) createONNXProvider(ctx context.Context, indexDir stri
 	// Load the pre-registered EmbeddingGemma-300M config
 	modelConfig := EmbeddingGemma300MConfig()
 	modelName := modelConfig.Name
-	modelPath := filepath.Join(modelDir, modelName, "model_q4.onnx")
+	modelPath := filepath.Join(modelDir, modelName, modelConfig.ModelFilenameOrDefault())
 	tokenizerPath := filepath.Join(modelDir, modelName, "tokenizer.json")
 
 	// Native builds load .onnx from disk; download it if missing.

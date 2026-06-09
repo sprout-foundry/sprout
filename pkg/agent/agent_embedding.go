@@ -92,6 +92,17 @@ func (a *Agent) IsEmbeddingIndexEnabled() bool {
 // Auto-enable downloads the ONNX model and runtime lazily on first use
 // (~240MB total), so a fresh machine gets embeddings without manual setup.
 func (a *Agent) RestoreEmbeddingIndex() {
+	// Opt-out for test / headless / CI runs. Auto-index lazily downloads a
+	// ~240MB ONNX model and spawns a background build goroutine; doing that
+	// implicitly for every agent created in a test suite pins the machine
+	// (the full ./pkg/agent/ suite previously ran ~21 cores / tens of GB and
+	// hung on the download). Explicit EnableEmbeddingIndex() is unaffected, so
+	// tests that genuinely exercise embeddings still work (they gate on
+	// -short / ONNX availability themselves).
+	if os.Getenv("SPROUT_DISABLE_EMBEDDING_AUTOINDEX") == "1" {
+		return
+	}
+
 	workspaceRoot := a.GetWorkspaceRoot()
 	if workspaceRoot == "" {
 		return

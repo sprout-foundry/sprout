@@ -68,6 +68,16 @@ func newIsolatedTestAgent(t *testing.T) *Agent {
 	}
 	// Replace the real-user-config manager with the isolated one.
 	agent.configManager = mgr
+	// Tests must never block on an interactive security prompt. SkipPrompt
+	// drives utils.GetLogger(cfg.SkipPrompt) → non-interactive at every gate
+	// (Gate 1 in tool_security.go, Gate 2 in risk_prompt.go), so approval
+	// paths resolve deterministically instead of hanging on stdin.
+	if err := mgr.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		cfg.SkipPrompt = true
+		return nil
+	}); err != nil {
+		t.Fatalf("set SkipPrompt on isolated test config: %v", err)
+	}
 	return agent
 }
 

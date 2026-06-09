@@ -75,17 +75,20 @@ func TestIsStandaloneSleepOrWaitCommand_AllowsChainedAndEmbedded(t *testing.T) {
 	}
 }
 
-func TestClassifyShellCommand_BlocksStandaloneSleep(t *testing.T) {
+func TestClassifyShellCommand_SleepIsSafeNotSecurityBlock(t *testing.T) {
 	t.Parallel()
 	res := ClassifyToolCall("shell_command", map[string]interface{}{"command": "sleep 600"})
-	if !res.ShouldBlock {
-		t.Fatalf("expected ShouldBlock=true for standalone sleep, got %+v", res)
+	// Standalone sleep is NOT a security issue — it's a usage guidance issue.
+	// The classifier returns Safe so no security elevation triggers. The shell
+	// handler catches it and returns a helpful tool error instead.
+	if res.ShouldBlock {
+		t.Fatalf("expected ShouldBlock=false for standalone sleep (no longer a security block), got %+v", res)
 	}
-	if !res.IsHardBlock {
-		t.Fatalf("expected IsHardBlock=true so the user cannot approve through a prompt")
+	if res.IsHardBlock {
+		t.Fatalf("expected IsHardBlock=false for standalone sleep, got %+v", res)
 	}
-	if res.Risk != SecurityDangerous {
-		t.Fatalf("expected SecurityDangerous, got %v", res.Risk)
+	if res.Risk != SecuritySafe {
+		t.Fatalf("expected SecuritySafe, got %v", res.Risk)
 	}
 	if !strings.Contains(res.Reasoning, "check_background") {
 		t.Fatalf("reasoning must name the correct alternative (check_background/wait_seconds), got: %s", res.Reasoning)
@@ -98,14 +101,14 @@ func TestClassifyShellCommand_BlocksStandaloneSleep(t *testing.T) {
 	}
 }
 
-func TestClassifyShellCommand_BlocksStandaloneWait(t *testing.T) {
+func TestClassifyShellCommand_WaitIsSafeNotSecurityBlock(t *testing.T) {
 	t.Parallel()
 	res := ClassifyToolCall("shell_command", map[string]interface{}{"command": "wait"})
-	if !res.ShouldBlock {
-		t.Fatalf("expected ShouldBlock=true for bare wait, got %+v", res)
+	if res.ShouldBlock {
+		t.Fatalf("expected ShouldBlock=false for bare wait (no longer a security block), got %+v", res)
 	}
-	if !res.IsHardBlock {
-		t.Fatalf("expected IsHardBlock=true")
+	if res.IsHardBlock {
+		t.Fatalf("expected IsHardBlock=false")
 	}
 }
 

@@ -173,6 +173,20 @@ func (h *shellCommandHandler) Execute(ctx context.Context, env ToolEnv, args map
 
 	background := getBoolArg(args, "background")
 
+	// --- Usage guidance (not a security gate) ---
+	// Standalone sleep/wait is an antipattern in tool calls. The classifier
+	// returns SecuritySafe for these so no security elevation triggers, but
+	// we still return a helpful error so the model knows the right API.
+	if isStandaloneSleepOrWaitCommand(command) {
+		return ToolResult{
+			Output: "Standalone sleep/wait is not appropriate as a shell_command tool call. " +
+				"For waiting on a background session, use shell_command(check_background=\"<session_id>\", wait_seconds=<seconds>) — that blocks (up to 10 min) without burning tokens on retries. " +
+				"For inserting a delay between commands inside a script, chain with && (e.g., \"cmd1 && sleep 5 && cmd2\"). " +
+				"Standalone sleep here will be cut off at the 2-minute shell deadline and adopted as a background session; the agent will NOT have actually waited the requested duration.",
+			IsError: true,
+		}, fmt.Errorf("standalone sleep/wait not supported as a tool call — use check_background with wait_seconds instead")
+	}
+
 	// --- Security classification ---
 	secResult := ClassifyToolCall("shell_command", args)
 

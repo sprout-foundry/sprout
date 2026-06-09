@@ -455,6 +455,14 @@ func (f *StatusFooter) draw() {
 	if rows < f.reservedRows()+1 {
 		return
 	}
+	// Serialize against InputReader render and other console chrome so
+	// the multi-step save-cursor / move / clear / restore sequence can't
+	// interleave with a keystroke render. Without this, typing between
+	// turns with background event subscribers firing Refresh looks like
+	// characters are dropped (they're in the line buffer, but the cursor
+	// has been displaced mid-render).
+	LockOutput()
+	defer UnlockOutput()
 	line := f.composeLine(cols)
 	rule := strings.Repeat("─", cols)
 

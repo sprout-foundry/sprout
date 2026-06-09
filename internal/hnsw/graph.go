@@ -177,7 +177,16 @@ func (n *layerNode[K]) replenish(m int, dist DistanceFunc) {
 // to neighbors. Backported from upstream: the delete and replenish phases
 // must be separated to avoid mutating the neighbors map during iteration.
 func (n *layerNode[K]) isolate(m int, dist DistanceFunc) {
-	for _, neighbor := range n.neighbors {
+	// Drop any nil entries first — a graph loaded from disk can contain
+	// dangling neighbor keys, and dereferencing them here was the source
+	// of a SIGSEGV in DeleteByIDs. The load path in encode.go also filters
+	// these, but guard here so a future regression upstream can't crash
+	// the agent.
+	for key, neighbor := range n.neighbors {
+		if neighbor == nil {
+			delete(n.neighbors, key)
+			continue
+		}
 		delete(neighbor.neighbors, n.Key)
 	}
 

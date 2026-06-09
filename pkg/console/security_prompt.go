@@ -2,6 +2,7 @@ package console
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -10,6 +11,27 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"github.com/sprout-foundry/sprout/pkg/utils"
 )
+
+// runApprovalPicker runs sl under a deadline so a security prompt the user
+// never answers can't wedge the agent or leave the terminal in raw mode.
+// On timeout the SelectList's runTTY loop observes ctx.Done() (its termios
+// is set VMIN=0, so the poll loop ticks every few ms) and its deferred
+// exitSteerMode restores cooked mode before returning context.DeadlineExceeded.
+// Returns ApprovalChoiceDeny on timeout, cancel (Esc/Ctrl-C), or error.
+func runApprovalPicker(w io.Writer, sl *SelectList) (string, bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), utils.ApprovalPromptTimeout)
+	defer cancel()
+
+	value, ok, err := sl.Run(ctx)
+	if errors.Is(err, context.DeadlineExceeded) {
+		fmt.Fprintf(w, "\n  Approval timed out after %s — denying for safety.\n", utils.ApprovalPromptTimeout)
+		return "", false
+	}
+	if err != nil || !ok {
+		return "", false
+	}
+	return value, true
+}
 
 // askForSecurityApproval drives a SelectList-based 4-option approval prompt
 // for high-risk shell commands.  Visual treatment puts an amber GlyphWarning
@@ -49,8 +71,8 @@ func askForSecurityApprovalWriter(w io.Writer, prompt, command string) utils.App
 		Footer: "↑/↓ navigate · Enter confirm · Esc denies",
 	})
 
-	value, ok, err := sl.Run(context.Background())
-	if err != nil || !ok {
+	value, ok := runApprovalPicker(w, sl)
+	if !ok {
 		return utils.ApprovalChoiceDeny
 	}
 
@@ -109,8 +131,8 @@ func askForFilesystemSecurityApprovalWriter(w io.Writer, prompt, path, folder st
 		Footer: "↑/↓ navigate · Enter confirm · Esc denies",
 	})
 
-	value, ok, err := sl.Run(context.Background())
-	if err != nil || !ok {
+	value, ok := runApprovalPicker(w, sl)
+	if !ok {
 		return utils.ApprovalChoiceDeny
 	}
 

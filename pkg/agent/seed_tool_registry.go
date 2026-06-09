@@ -637,6 +637,12 @@ func newPreExecuteHook(agent *Agent) func(name string, args map[string]interface
 
 		// 2. Security classification
 		secResult := tools.ClassifyToolCall(name, args)
+		if agent.debug {
+			// SP-068 unified risk view, logged alongside the live gate so the
+			// canonical assessment (classifier ⊕ persona cascade) is visible
+			// for "why was this gated?" without changing the decision below.
+			agent.debugLog("[risk] %s: %s\n", name, agent.ResolveToolRisk(name, args).Explain())
+		}
 		if !secResult.ShouldBlock && !secResult.ShouldPrompt {
 			return nil // safe, no action needed
 		}

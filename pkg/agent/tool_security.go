@@ -62,7 +62,6 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 					if agent.debug {
 						agent.debugLog("[UNLOCK] run_automate %q has requires_approval=false — skipping intent prompt\n", wf)
 					}
-					ctx = WithUserApproved(ctx)
 					workflowAutoApproved = true
 				}
 			}
@@ -77,7 +76,6 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 				if agent.debug {
 					agent.debugLog("[UNLOCK] run_automate %q already approved in this session — skipping intent prompt\n", wf)
 				}
-				ctx = WithUserApproved(ctx)
 				alreadyApprovedInSession = true
 			}
 		}
@@ -98,6 +96,13 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 		} else if agent != nil {
 			// Check if we're running as a subagent — subagents cannot prompt
 			isSubagent := agent.IsSubagent()
+
+			// When true, the browser dialog conclusively answered (approve or
+			// deny); skip the CLI fallback. Stays false when the webui path is
+			// unavailable or the dialog went unanswered (timeout / disconnect),
+			// in which case we fall through to the terminal prompt below so an
+			// unattended browser tab can't dead-end the agent.
+			approvedViaWebUI := false
 
 			// Prefer webui approval path when a browser tab is connected.
 			// When the process has an active webui client, the query likely
@@ -137,19 +142,29 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 						extras["target"] = fmt.Sprintf("workflow: %s", wf)
 					}
 				}
-				if !mgr.RequestToolApproval(agent.GetEventBus(), agent.GetEventClientID(), agent.GetEventUserID(), toolName, secResult.Risk.String(), secResult.Reasoning, extras) {
-					return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", toolName, secResult.Reasoning), nil)
-				}
-				// Signal Gate 2 (persona cascade) that this command
-				// already passed an interactive approval so it doesn't
-				// re-prompt for the same execution (SP-058 follow-up).
-				ctx = WithUserApproved(ctx)
-				if toolName == "run_automate" {
-					if wf, ok := args["workflow"].(string); ok {
-						agent.MarkWorkflowApprovedInSession(wf)
+				approved, outcome := mgr.RequestToolApprovalWithOutcome(agent.GetEventBus(), agent.GetEventClientID(), agent.GetEventUserID(), toolName, secResult.Risk.String(), secResult.Reasoning, extras)
+				if outcome == security.ApprovalOutcomeResponded {
+					if !approved {
+						return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", toolName, secResult.Reasoning), nil)
 					}
+					// Signal Gate 2 (persona cascade) that this command
+					// already passed an interactive approval so it doesn't
+					// re-prompt for the same execution (SP-058 follow-up).
+					agent.recordGateApproval(toolName, args)
+					if toolName == "run_automate" {
+						if wf, ok := args["workflow"].(string); ok {
+							agent.MarkWorkflowApprovedInSession(wf)
+						}
+					}
+					approvedViaWebUI = true
+				} else if agent.debug {
+					// Timed out or the browser disconnected — don't treat an
+					// unanswered dialog as a deny. Fall through to the CLI
+					// prompt below so a user at the terminal can respond.
+					agent.debugLog("[APPROVAL] webui approval unanswered (outcome=%d) for %s — falling back to CLI prompt\n", outcome, toolName)
 				}
-			} else {
+			}
+			if !approvedViaWebUI {
 				// CLI: prompt user interactively via terminal stdin
 				agentConfig := agent.GetConfig()
 				logger := utils.GetLogger(agentConfig != nil && agentConfig.SkipPrompt)
@@ -166,7 +181,7 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 						return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", toolName, secResult.Reasoning), nil)
 					}
 					// Same approval-propagation as the webui branch above.
-					ctx = WithUserApproved(ctx)
+					agent.recordGateApproval(toolName, args)
 					if toolName == "run_automate" {
 						if wf, ok := args["workflow"].(string); ok {
 							agent.MarkWorkflowApprovedInSession(wf)

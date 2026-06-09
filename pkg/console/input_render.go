@@ -8,6 +8,8 @@ import (
 
 // Refresh redraws the current input line
 func (ir *InputReader) Refresh() {
+	LockOutput()
+	defer UnlockOutput()
 	promptRunes := []rune(stripANSIEscapeCodes(ir.prompt))
 	displayLine, displayCursorByte := ir.renderLineWithCollapsedPastes()
 	promptWidth := len(promptRunes)

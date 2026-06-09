@@ -248,10 +248,19 @@ func (h *Graph[K]) Import(r io.Reader) error {
 				node.neighbors[neighbor] = nil
 			}
 		}
-		// Fill in neighbor pointers
+		// Fill in neighbor pointers. If a saved neighbor key does not
+		// resolve to a node in this layer, drop it instead of inserting a
+		// nil pointer — earlier buggy saves can leave dangling references
+		// (the library's addNeighbor writes one-sided edges via replenish,
+		// which the eviction path at graph.go assumes are symmetric), and
+		// a nil entry crashes the next Delete → isolate at graph.go:181.
 		for _, node := range nodes {
 			for key := range node.neighbors {
-				node.neighbors[key] = nodes[key]
+				if target, ok := nodes[key]; ok {
+					node.neighbors[key] = target
+				} else {
+					delete(node.neighbors, key)
+				}
 			}
 		}
 		h.layers[i] = &layer[K]{nodes: nodes}

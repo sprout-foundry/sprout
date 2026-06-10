@@ -206,6 +206,45 @@ func TestParseJSONOrdered_TrailingContent(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// ParseJSONOrderedAny — object and array support with ordering
+// ---------------------------------------------------------------------------
+
+func TestParseJSONOrderedAny_Object(t *testing.T) {
+	result, err := ParseJSONOrderedAny(`{"types":"./d.ts","import":"./d.js","default":"./d.js"}`)
+	require.NoError(t, err)
+	om, ok := result.(*OrderedMap)
+	require.True(t, ok, "expected *OrderedMap, got %T", result)
+	keys := om.Keys()
+	assert.Equal(t, []string{"types", "import", "default"}, keys)
+}
+
+func TestParseJSONOrderedAny_Array(t *testing.T) {
+	result, err := ParseJSONOrderedAny(`[{"b":2,"a":1},42]`)
+	require.NoError(t, err)
+	arr, ok := result.([]interface{})
+	require.True(t, ok, "expected []interface{}, got %T", result)
+	assert.Len(t, arr, 2)
+
+	// First element should be an *OrderedMap preserving key order.
+	om := arr[0].(*OrderedMap)
+	assert.Equal(t, []string{"b", "a"}, om.Keys())
+}
+
+func TestParseJSONOrderedAny_Scalar(t *testing.T) {
+	// ParseJSONOrderedAny parses any valid JSON document, including scalars.
+	// The caller (parseStructuredJSONContent) is responsible for rejecting
+	// non-object/array top-level values.
+	result, err := ParseJSONOrderedAny(`42`)
+	require.NoError(t, err)
+	assert.Equal(t, float64(42), result)
+}
+
+func TestParseJSONOrderedAny_InvalidJSON(t *testing.T) {
+	_, err := ParseJSONOrderedAny(`{bad}`)
+	assert.Error(t, err)
+}
+
+// ---------------------------------------------------------------------------
 // OrderedMap helpers
 // ---------------------------------------------------------------------------
 

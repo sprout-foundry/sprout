@@ -140,7 +140,12 @@ func init() {
 		if err := globalProviderFactory.LoadConfigsFromDirectory("configs"); err != nil {
 			// As a last resort, try to load from current directory
 			if err := globalProviderFactory.LoadConfigsFromDirectory("./configs"); err != nil {
-				log.Printf("[debug] failed to load configs from ./configs: %v", err)
+				// Expected outside the source tree — provider configs are
+				// embedded and already loaded above; these dirs are just an
+				// override hook. Only surface the miss under debug.
+				if configuration.GetEnvSimple("DEBUG") != "" {
+					log.Printf("[debug] failed to load configs from ./configs: %v", err)
+				}
 			}
 		}
 	}

@@ -1,7 +1,7 @@
 # Ledit Testing and Build Makefile
 # Provides clear commands for different types of tests and builds
 
-.PHONY: help test test-unit test-integration test-e2e test-smoke test-desktop-smoke test-all test-ci test-coverage \
+.PHONY: help test test-unit test-unit-lowmem test-integration test-e2e test-smoke test-desktop-smoke test-all test-ci test-coverage \
        clean build build-all install build-version build-ui deploy-ui build-wasm \
        verify-ui-embedded test-webui lint lint-fix dev build-webui-dist build-webui-dist-local \
        verify-dist verify-dist-local
@@ -11,6 +11,7 @@ help:
 	@echo "Ledit Testing and Build Commands:"
 	@echo ""
 	@echo "  make test-unit        - Run unit tests (fast, no dependencies)"
+	@echo "  make test-unit-lowmem - Run unit tests in ~4GB RAM (no -race, low parallelism)"
 	@echo "  make test-integration - Run integration tests (mocked AI)"  
 	@echo "  make test-e2e         - Run e2e tests (requires AI model)"
 	@echo "  make test-smoke       - Run smoke tests (basic functionality)"
@@ -59,11 +60,24 @@ help:
 prepare-grammars:
 	@bash scripts/prepare-grammars.sh
 
+# Test parallelism knobs. Peak test-suite memory is roughly
+#   (TEST_P concurrent test binaries) x (per-binary working set, inflated by
+#   the race detector's ~5-10x shadow memory). The Go defaults (-p / -parallel
+#   = GOMAXPROCS, e.g. 24) run two dozen race-instrumented binaries at once and
+#   peaked this suite at 30-40GB (and caused load-induced flakiness in timing
+#   tests like pkg/webui's file watcher). Bounding both keeps the whole suite
+#   inside a small footprint: -race at TEST_P=4 fits ~12GB; drop -race (see
+#   test-unit-lowmem) and it fits ~4GB. Override on the CLI, e.g.
+#   `make test-unit TEST_P=8 TEST_PARALLEL=8` or `make test-unit TEST_RACE=`.
+TEST_RACE     ?= -race
+TEST_P        ?= 4
+TEST_PARALLEL ?= 4
+
 # Unit Tests - Fast, no external dependencies
 test-unit: prepare-grammars
-	@echo "Running unit tests..."
+	@echo "Running unit tests (race=$(TEST_RACE) -p $(TEST_P) -parallel $(TEST_PARALLEL))..."
 	@bash -lc 'set -o pipefail; \
-	go test -race -tags "browser grammar_blobs_external" ./pkg/... ./cmd/... -v -timeout=300s -short -coverprofile=/tmp/sprout-unit-coverage.out 2>&1 | tee /tmp/sprout-test-unit.log; \
+	go test $(TEST_RACE) -tags "browser grammar_blobs_external" ./pkg/... ./cmd/... -v -timeout=300s -short -p $(TEST_P) -parallel $(TEST_PARALLEL) -coverprofile=/tmp/sprout-unit-coverage.out 2>&1 | tee /tmp/sprout-test-unit.log; \
 	status=$${PIPESTATUS[0]}; \
 	if [ $$status -ne 0 ]; then \
 		echo ""; \
@@ -74,6 +88,14 @@ test-unit: prepare-grammars
 		grep -nE "^(FAIL|--- FAIL:|panic:)" /tmp/sprout-test-unit.log || true; \
 		exit $$status; \
 	fi'
+
+# Unit Tests, minimal memory footprint - drops the race detector (its ~5-10x
+# shadow memory is the single biggest multiplier) and tightens parallelism so
+# the entire suite completes inside ~4GB RAM. Verified to pass under a hard
+# `systemd-run -p MemoryMax=4G -p MemorySwapMax=0` cap. Use on memory-constrained
+# machines or when -race isn't needed; CI/`test-coverage` still run with -race.
+test-unit-lowmem:
+	@$(MAKE) test-unit TEST_RACE= TEST_P=4 TEST_PARALLEL=2
 
 # Integration Tests - Mocked AI, file operations
 test-integration:
@@ -129,7 +151,7 @@ test-ci: test-unit test-integration
 test-coverage: prepare-grammars
 	@echo "Running unit tests with coverage check..."
 	@bash -lc 'set -o pipefail; \
-	go test -race -tags "browser grammar_blobs_external" ./pkg/... ./cmd/... -timeout=1200s -coverprofile=/tmp/sprout-coverage.out 2>&1 | tee /tmp/sprout-test-coverage.log; \
+	go test -race -tags "browser grammar_blobs_external" ./pkg/... ./cmd/... -timeout=1200s -p $(TEST_P) -parallel $(TEST_PARALLEL) -coverprofile=/tmp/sprout-coverage.out 2>&1 | tee /tmp/sprout-test-coverage.log; \
 	status=$${PIPESTATUS[0]}; \
 	if [ $$status -ne 0 ]; then \
 		echo ""; \

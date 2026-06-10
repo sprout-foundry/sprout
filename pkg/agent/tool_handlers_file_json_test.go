@@ -63,3 +63,47 @@ func TestHandleWriteFile_InvalidJSON_ReturnsForwardingDiagnostics(t *testing.T) 
 		t.Fatalf("expected line/col details, got: %s", msg)
 	}
 }
+
+func TestParseStructuredJSONContent_PreservesKeyOrder(t *testing.T) {
+	// The exports condition in package.json is order-sensitive: "default"
+	// must come after "types" and "import" for correct module resolution.
+	input := `{"exports":{".":{"types":"./dist/index.d.ts","import":"./dist/index.js","default":"./dist/index.js"}}}`
+
+	result, err := parseStructuredJSONContent(input, "edit_file")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	om, ok := result.(*OrderedMap)
+	if !ok {
+		t.Fatalf("expected *OrderedMap, got %T", result)
+	}
+
+	exports, _ := om.Get("exports")
+	exportsOm := exports.(*OrderedMap)
+	dot, _ := exportsOm.Get(".")
+	dotOm := dot.(*OrderedMap)
+
+	keys := dotOm.Keys()
+	if len(keys) != 3 {
+		t.Fatalf("expected 3 keys, got %d", len(keys))
+	}
+	if keys[0] != "types" || keys[1] != "import" || keys[2] != "default" {
+		t.Fatalf("expected keys in order [types, import, default], got %v", keys)
+	}
+}
+
+func TestParseStructuredJSONContent_TopLevelArray(t *testing.T) {
+	input := `[{"b":2,"a":1}]`
+	result, err := parseStructuredJSONContent(input, "edit_file")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	arr, ok := result.([]interface{})
+	if !ok {
+		t.Fatalf("expected []interface{}, got %T", result)
+	}
+	if len(arr) != 1 {
+		t.Fatalf("expected 1 element, got %d", len(arr))
+	}
+}

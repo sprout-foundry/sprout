@@ -20,7 +20,12 @@ var isolatedConfig bool
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "sprout",
-	Short: "Agent for code analysis and editing (interactive mode when run without arguments)",
+	// A runtime failure (e.g. a bad model, a network error) is not a usage
+	// mistake, so don't dump the full flag list after it; and don't let cobra
+	// print the raw wrapped error itself — Execute() renders one clean line.
+	SilenceUsage:  true,
+	SilenceErrors: true,
+	Short:         "Agent for code analysis and editing (interactive mode when run without arguments)",
 	Long: `Sprout is a command-line tool that leverages Large Language Models (LLMs)
 to automate and assist in software development tasks. It features a modern CLI
 with automatic web UI startup for rich interactive experiences.
@@ -69,7 +74,14 @@ See "Available Commands" below for the full list.`,
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() error {
-	return rootCmd.Execute()
+	if err := rootCmd.Execute(); err != nil {
+		// Render exactly one clean line (already-reported errors render
+		// nothing — the command showed them while running), then exit
+		// non-zero so shells and CI see the failure.
+		renderExecuteError(err)
+		os.Exit(1)
+	}
+	return nil
 }
 
 // initializeSystem initializes configuration and API keys with first-run setup

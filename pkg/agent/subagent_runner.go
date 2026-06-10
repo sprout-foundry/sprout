@@ -28,6 +28,7 @@ import (
 	agent_api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/embedding"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/factory"
 	"github.com/sprout-foundry/sprout/pkg/utils"
@@ -529,10 +530,16 @@ func (r *SubagentRunner) runTask(
 		}
 	}
 
-	// Set up terminal output prefixing for subagent
+	// Set up terminal output prefixing for subagent. Dim the prefix so the
+	// subagent's lines read as secondary to the primary's, but honor NO_COLOR /
+	// non-terminal output — otherwise raw escape codes leak into pipes/logs.
 	prefix := buildSubagentPrefix(opts.Persona, taskID)
-	const dimGray = "\033[90m"
-	const reset = "\033[0m"
+	dimGray := "\033[90m"
+	reset := "\033[0m"
+	if !envutil.ResolveColorPreference(true) {
+		dimGray = ""
+		reset = ""
+	}
 
 	// Create OutputRouter with the shared eventBus so subagent events
 	// (stream_chunk, agent_message, tool_log, etc.) are published to the

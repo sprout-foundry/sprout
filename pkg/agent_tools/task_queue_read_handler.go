@@ -55,7 +55,7 @@ func (h *taskQueueReadHandler) Execute(ctx context.Context, env ToolEnv, args ma
 	}
 
 	tq := NewTaskQueue(DefaultTaskQueuePath())
-	tasks, err := tq.ReadTasks(status, limit)
+	tasks, err := tq.ReadTasks(ctx, status, limit)
 	if err != nil {
 		return ToolResult{Output: fmt.Sprintf("Failed to read tasks: %v", err), IsError: true}, nil
 	}

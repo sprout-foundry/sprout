@@ -28,7 +28,7 @@ func handleTaskQueueRead(ctx context.Context, a *Agent, args map[string]interfac
 	queue := tools.NewTaskQueue(queuePath)
 
 	// Read tasks (ReadTasks loads fresh from disk under a shared lock)
-	tasks, err := queue.ReadTasks(status, limit)
+	tasks, err := queue.ReadTasks(ctx, status, limit)
 	if err != nil {
 		return "", fmt.Errorf("failed to read tasks: %w", err)
 	}
@@ -124,7 +124,7 @@ func handleTaskQueuePublish(ctx context.Context, a *Agent, args map[string]inter
 	queue := tools.NewTaskQueue(queuePath)
 
 	// Publish task update (PublishTask loads fresh from disk under an exclusive lock)
-	updatedTasks, err := queue.PublishTask(taskID, status, result, subtasks)
+	updatedTasks, err := queue.PublishTask(ctx, taskID, status, result, subtasks)
 	if err != nil {
 		return "", fmt.Errorf("failed to publish task update: %w", err)
 	}
@@ -190,7 +190,7 @@ func handleTaskQueueAdd(ctx context.Context, a *Agent, args map[string]interface
 	queue := tools.NewTaskQueue(queuePath)
 
 	// Add task (AddTask loads fresh from disk under an exclusive lock)
-	task, err := queue.AddTask(title, description, priority, workingDir, persona)
+	task, err := queue.AddTask(ctx, title, description, priority, workingDir, persona)
 	if err != nil {
 		return "", fmt.Errorf("failed to add task: %w", err)
 	}

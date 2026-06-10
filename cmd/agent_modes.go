@@ -756,7 +756,7 @@ func runQueueMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 		}
 
 		// Read pending tasks from the queue
-		tasks, err := tq.ReadTasks("pending", 10)
+		tasks, err := tq.ReadTasks(ctx, "pending", 10)
 		if err != nil {
 			return fmt.Errorf("failed to read task queue: %w", err)
 		}
@@ -786,7 +786,7 @@ func runQueueMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 				task.Title, task.ID, task.Priority)
 
 			// Mark task as in_progress
-			_, err = tq.PublishTask(task.ID, "in_progress", "", nil)
+			_, err = tq.PublishTask(ctx, task.ID, "in_progress", "", nil)
 			if err != nil {
 				console.GlyphWarning.Fprintf(os.Stderr, "Failed to mark task %s as in_progress: %v", task.ID, err)
 			}
@@ -800,14 +800,14 @@ func runQueueMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 			if err != nil {
 				fmt.Fprint(os.Stderr, "\n"+console.FormatErrorBlock(fmt.Sprintf("Error processing task %s", task.ID), err))
 				// Mark task as failed
-				_, _ = tq.PublishTask(task.ID, "failed", fmt.Sprintf("Error during processing: %v", err), nil)
+				_, _ = tq.PublishTask(ctx, task.ID, "failed", fmt.Sprintf("Error during processing: %v", err), nil)
 				continue
 			}
 
 			// Check if the agent marked this task as completed/failed via its tool handlers
 			// If not, check the current status. The agent should use task_queue_publish
 			// during processing, so we re-read the task to see its state.
-			updatedTasks, err := tq.ReadTasks("all", 100)
+			updatedTasks, err := tq.ReadTasks(ctx, "all", 100)
 			taskCompleted := false
 			if err == nil {
 				for _, t := range updatedTasks {
@@ -824,7 +824,7 @@ func runQueueMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 				// Agent didn't update task status; mark as completed by default
 				console.GlyphInfo.Printf("Task %s processed — marking as completed", task.Title)
 				result := "Task processed via queue mode. Agent did not explicitly set a result."
-				_, _ = tq.PublishTask(task.ID, "completed", result, nil)
+				_, _ = tq.PublishTask(ctx, task.ID, "completed", result, nil)
 			} else {
 				console.GlyphSuccess.Printf("Task %s completed", task.Title)
 			}

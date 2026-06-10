@@ -65,7 +65,7 @@ func (h *taskQueueAddHandler) Execute(ctx context.Context, env ToolEnv, args map
 	}
 
 	tq := NewTaskQueue(DefaultTaskQueuePath())
-	task, err := tq.AddTask(title, description, priority, workingDir, persona)
+	task, err := tq.AddTask(ctx, title, description, priority, workingDir, persona)
 	if err != nil {
 		return ToolResult{Output: fmt.Sprintf("Failed to add task: %v", err), IsError: true}, nil
 	}

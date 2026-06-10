@@ -115,3 +115,60 @@ func TestExtractValidationPaths(t *testing.T) {
 		t.Fatalf("unexpected paths: %v", paths)
 	}
 }
+
+func TestPatchReplacePreservesOrderedKeyOutput(t *testing.T) {
+	// Simulate a package.json with exports in wrong order (default before types).
+	doc, err := ParseJSONOrdered(`{
+	  "exports": {
+	    ".": {
+	      "default": "./dist/index.js",
+	      "import": "./dist/index.js",
+	      "types": "./dist/index.d.ts"
+	    }
+	  }
+	}`)
+	if err != nil {
+		t.Fatalf("ParseJSONOrdered: %v", err)
+	}
+
+	// Replace the "." entry with a reordered value.
+	// The value arrives as map[string]interface{} from json.Unmarshal (tool args),
+	// which loses the original key order. convertToOrderedValue sorts alphabetically,
+	// so the output is deterministic (alphabetical) rather than random.
+	patchValue := map[string]interface{}{
+		"types":   "./dist/index.d.ts",
+		"import":  "./dist/index.js",
+		"default": "./dist/index.js",
+	}
+	ops := []jsonPatchOperation{
+		{Op: "replace", Path: "/exports/.", Value: patchValue},
+	}
+
+	result := interface{}(doc)
+	for _, op := range ops {
+		result, err = applyPatchOperation(result, op)
+		if err != nil {
+			t.Fatalf("applyPatchOperation failed: %v", err)
+		}
+	}
+
+	// Serialize back to JSON and verify keys are in deterministic order.
+	serialized, err := SerializeJSONOrdered(result)
+	if err != nil {
+		t.Fatalf("SerializeJSONOrdered: %v", err)
+	}
+
+	// Keys should be alphabetically sorted: default < import < types.
+	expected := `{
+  "exports": {
+    ".": {
+      "default": "./dist/index.js",
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  }
+}`
+	if serialized != expected {
+		t.Fatalf("expected alphabetically ordered keys:\n%s\n\ngot:\n%s", expected, serialized)
+	}
+}

@@ -337,12 +337,15 @@ func handleWriteFile(ctx context.Context, a *Agent, args map[string]interface{})
 }
 
 func parseStructuredJSONContent(content string, callerTool string) (interface{}, error) {
-	var parsed interface{}
-	if err := json.Unmarshal([]byte(content), &parsed); err != nil {
+	// Use ParseJSONOrderedAny to preserve key insertion order from the source
+	// text. Standard json.Unmarshal loses ordering, which causes edit_file's
+	// JSON normalization step to rewrite files with scrambled key order.
+	parsed, err := ParseJSONOrderedAny(content)
+	if err != nil {
 		return nil, formatJSONParseError(content, err, callerTool)
 	}
 	switch parsed.(type) {
-	case map[string]interface{}, []interface{}:
+	case *OrderedMap, []interface{}:
 		return parsed, nil
 	default:
 		return nil, agenterrors.NewInvalidInputError("top-level JSON must be an object or array", nil)

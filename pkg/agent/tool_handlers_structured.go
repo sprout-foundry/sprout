@@ -493,7 +493,11 @@ func applyMutation(node interface{}, segments []string, value interface{}, op st
 	if len(segments) == 0 {
 		switch op {
 		case "add", "replace":
-			return value, nil
+			// Convert map[string]interface{} values to *OrderedMap for
+			// deterministic key ordering during serialization. Patch values
+			// arrive from json.Unmarshal (via tool args) which loses key
+			// order — converting ensures consistent output.
+			return convertToOrderedValue(value), nil
 		case "remove":
 			return nil, nil
 		default:
@@ -552,17 +556,22 @@ func applyMutation(node interface{}, segments []string, value interface{}, op st
 }
 
 func mutateAtLeaf(node interface{}, token string, value interface{}, op string) (interface{}, error) {
+	// Convert values to ordered form before storing. Patch values arrive from
+	// json.Unmarshal (via tool args) as map[string]interface{}, which loses
+	// key order. Converting ensures deterministic serialization output.
+	orderedValue := convertToOrderedValue(value)
+
 	switch typed := node.(type) {
 	case *OrderedMap:
 		switch op {
 		case "add":
-			typed.Set(token, value)
+			typed.Set(token, orderedValue)
 			return typed, nil
 		case "replace":
 			if _, exists := typed.Get(token); !exists {
 				return nil, fmt.Errorf("cannot replace missing key '%s'", token)
 			}
-			typed.Set(token, value)
+			typed.Set(token, orderedValue)
 			return typed, nil
 		case "remove":
 			if _, exists := typed.Get(token); !exists {
@@ -580,7 +589,7 @@ func mutateAtLeaf(node interface{}, token string, value interface{}, op string) 
 			if _, exists := typed[token]; !exists {
 				return nil, fmt.Errorf("cannot replace missing key '%s'", token)
 			}
-			typed[token] = value
+			typed[token] = orderedValue
 			return typed, nil
 		case "remove":
 			if _, exists := typed[token]; !exists {
@@ -591,7 +600,7 @@ func mutateAtLeaf(node interface{}, token string, value interface{}, op string) 
 		}
 	case []interface{}:
 		if op == "add" && token == "-" {
-			return append(typed, value), nil
+			return append(typed, orderedValue), nil
 		}
 		idx, err := strconv.Atoi(token)
 		if err != nil {
@@ -605,13 +614,13 @@ func mutateAtLeaf(node interface{}, token string, value interface{}, op string) 
 			}
 			typed = append(typed, nil)
 			copy(typed[idx+1:], typed[idx:])
-			typed[idx] = value
+			typed[idx] = orderedValue
 			return typed, nil
 		case "replace":
 			if idx < 0 || idx >= len(typed) {
 				return nil, fmt.Errorf("array replace index out of range: %d", idx)
 			}
-			typed[idx] = value
+			typed[idx] = orderedValue
 			return typed, nil
 		case "remove":
 			if idx < 0 || idx >= len(typed) {

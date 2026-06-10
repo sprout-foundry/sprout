@@ -25,19 +25,11 @@ var rootCmd = &cobra.Command{
 to automate and assist in software development tasks. It features a modern CLI
 with automatic web UI startup for rich interactive experiences.
 
-Available commands:
-  agent  - Agent mode with modern CLI + Web UI
-  plan   - Interactive planning mode for refining ideas and generating detailed plans
-  shell  - Generate shell scripts from natural language descriptions
-  commit - Generate commit messages
-  review - Perform AI-powered code review on staged changes
-  log    - View operation logs
-  mcp    - Manage MCP (Model Context Protocol) servers
-  custom - Manage custom OpenAI-compatible providers
-
 For autonomous operation, try: sprout agent "your intent here"
 
-Running just 'sprout' without arguments starts enhanced agent mode with automatic web UI.`,
+Running just 'sprout' without arguments starts enhanced agent mode with automatic web UI.
+
+See "Available Commands" below for the full list.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		if isolatedConfig {
 			cwd, err := os.Getwd()

@@ -2303,7 +2303,7 @@ func sanitizeArgForPreview(s string) string {
 // runDirectMode handles single query execution
 func runDirectMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events.EventBus, query string) error {
 	if configuration.GetEnvSimple("SUBAGENT") != "1" {
-		fmt.Printf("[>>] Processing: %s\n", query)
+		fmt.Printf("%sProcessing: %s\n", console.GlyphAction.Prefix(), query)
 	}
 
 	// Slash/bang commands should bypass command-detection fast paths.

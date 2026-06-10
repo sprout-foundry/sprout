@@ -766,6 +766,26 @@ const handleDriftDetected = (ctx: EventHandlerContext): void => {
   }));
 };
 
+// Handle the chat_run_restored control frame that leads a reattach replay.
+// When the server sets gap=true it had already evicted events this client
+// missed, so the partial replay that follows would splice onto a stale
+// transcript (missing text, wrong content). Rather than corrupt the view, ask
+// the chat manager to reload the active chat's authoritative history from the
+// backend — subsequent live events then append cleanly. With gap=false the
+// replay is complete, so this is a no-op and the following events apply as
+// usual.
+const handleChatRunRestored = (ctx: EventHandlerContext): void => {
+  const { event, activeChatIdRef } = ctx;
+  const data = (event.data ?? {}) as { gap?: boolean; chat_id?: string };
+  if (!data.gap) return;
+  const chatId = data.chat_id ? String(data.chat_id) : activeChatIdRef.current || '';
+  // Only force-reload the chat the user is actually viewing; others re-hydrate
+  // from the backend when next selected.
+  if (chatId && activeChatIdRef.current && chatId !== activeChatIdRef.current) return;
+  debugLog('[reattach] gap on reconnect — reloading chat', chatId);
+  window.dispatchEvent(new CustomEvent('sprout:chat-gap-reload', { detail: { chatId } }));
+};
+
 // ── Hook Interface ───────────────────────────────────────────────────────
 
 export interface UseWebSocketEventHandlerRefs {
@@ -887,6 +907,8 @@ export function useWebSocketEventHandler({
           return handleAskUserRequest(ctx);
         case 'drift_detected':
           return handleDriftDetected(ctx);
+        case 'chat_run_restored':
+          return handleChatRunRestored(ctx);
         default:
           const logEntry = createLogEntry(event);
           logEntry.level = 'warning';

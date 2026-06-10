@@ -2,7 +2,6 @@ package credentials
 
 import (
 	"fmt"
-	"log"
 	"strings"
 
 	"github.com/zalando/go-keyring"
@@ -228,7 +227,7 @@ func IsKeyringAvailable() (available bool) {
 	// Recover from panics in go-keyring on unsupported platforms (Android, headless, etc.)
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("[credentials] OS keyring not available (panic): %v", r)
+			debugLogf("[credentials] OS keyring not available (panic): %v", r)
 			available = false
 		}
 	}()
@@ -236,7 +235,7 @@ func IsKeyringAvailable() (available bool) {
 	backend := NewOSKeyringBackend()
 	_, err := backend.Get(keyringProbeProvider)
 	if err != nil {
-		log.Printf("[credentials] OS keyring not available: %v", err)
+		debugLogf("[credentials] OS keyring not available: %v", err)
 		return false
 	}
 	// No error means keyring responded successfully (entry absent or present).

@@ -14,6 +14,21 @@ import (
 // Nested objects are recursively wrapped in *OrderedMap. Arrays become
 // []interface{} slices where any contained objects are also *OrderedMap values.
 func ParseJSONOrdered(content string) (*OrderedMap, error) {
+	result, err := ParseJSONOrderedAny(content)
+	if err != nil {
+		return nil, err
+	}
+	om, ok := result.(*OrderedMap)
+	if !ok {
+		return nil, fmt.Errorf("JSON content must be a top-level object, got %T", result)
+	}
+	return om, nil
+}
+
+// ParseJSONOrderedAny parses a JSON string, preserving key order in objects.
+// Returns *OrderedMap for objects and []interface{} for arrays (with nested
+// objects also wrapped in *OrderedMap).
+func ParseJSONOrderedAny(content string) (interface{}, error) {
 	dec := json.NewDecoder(strings.NewReader(content))
 	// Consume leading whitespace and peek at the first token.
 	tok, err := dec.Token()
@@ -21,19 +36,14 @@ func ParseJSONOrdered(content string) (*OrderedMap, error) {
 		return nil, fmt.Errorf("failed to read JSON token: %w", err)
 	}
 
-	delim, ok := tok.(json.Delim)
-	if !ok || delim != '{' {
-		return nil, fmt.Errorf("JSON content must be a top-level object, got %s", tokenDescription(tok))
-	}
-
-	result, err := parseJSONObject(dec)
+	result, err := parseJSONValueFromToken(dec, tok)
 	if err != nil {
 		return nil, err
 	}
 
 	// Verify there is no trailing content (except whitespace).
 	if _, err := dec.Token(); err != io.EOF {
-		return nil, fmt.Errorf("unexpected trailing content after JSON object")
+		return nil, fmt.Errorf("unexpected trailing content after JSON document")
 	}
 
 	return result, nil

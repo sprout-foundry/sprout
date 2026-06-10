@@ -353,8 +353,17 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		for {
 			select {
 			case sig := <-sigCh:
-				// SIGHUP: reload on-disk config without shutting down.
-				if sig == syscall.SIGHUP {
+				// SIGHUP in daemon mode = reload on-disk config (Unix
+				// daemon convention). In interactive mode SIGHUP means
+				// the controlling terminal closed — the kernel sends it
+				// to the foreground process group when the tty hangs
+				// up. Treating that as "reload" leaves an orphaned
+				// sprout running with PPID=1 forever (it keeps
+				// heartbeating to instances.json and holding the
+				// task_queue.json flock against new sessions). Fall
+				// through to the shutdown path so terminal close cleans
+				// up the process.
+				if sig == syscall.SIGHUP && daemonMode {
 					fmt.Printf("\n[RELOAD] Received SIGHUP, reloading configuration...\n")
 					if chatAgent != nil {
 						if mgr := chatAgent.GetConfigManager(); mgr != nil {

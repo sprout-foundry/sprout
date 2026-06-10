@@ -101,6 +101,11 @@ type EventBus struct {
 	drainMu sync.Mutex
 }
 
+// subscriberBufferSize is the per-subscriber channel capacity. Non-critical
+// events (e.g. stream_chunk) are dropped when this fills, so it's sized to
+// absorb transient backpressure rather than the old 100.
+const subscriberBufferSize = 1024
+
 // NewEventBus creates a new event bus
 func NewEventBus() *EventBus {
 	return &EventBus{
@@ -113,7 +118,12 @@ func (eb *EventBus) Subscribe(name string) <-chan UIEvent {
 	eb.mutex.Lock()
 	defer eb.mutex.Unlock()
 
-	ch := make(chan UIEvent, 100) // Buffered channel
+	// Generous buffer so a transient consumer stall (a backgrounded/laggy
+	// browser tab, a burst of token-level stream chunks) doesn't immediately
+	// overflow and start silently dropping non-critical events. The websocket
+	// writer also coalesces queued stream chunks on drain, so this headroom is
+	// rarely approached in practice.
+	ch := make(chan UIEvent, subscriberBufferSize)
 	eb.subscribers[name] = ch
 	return ch
 }
@@ -190,7 +200,7 @@ func (eb *EventBus) publishToChannel(ch chan UIEvent, event UIEvent, eventType s
 		select {
 		case ch <- event:
 		default:
-			log.Printf("[EventBus] Dropped %s event for slow subscriber (channel full, cap=100)", eventType)
+			log.Printf("[EventBus] Dropped %s event for slow subscriber (channel full, cap=%d)", eventType, subscriberBufferSize)
 		}
 	}
 }

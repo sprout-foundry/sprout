@@ -314,24 +314,44 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 				log.Printf("WebSocket %s connection info type mismatch, skipping event", sessionID)
 				continue
 			}
-			if !ws.shouldForwardEventToConnection(event, connInfo) {
-				continue
-			}
-			if event.Type == events.EventTypeSecurityApprovalRequest {
-				if data, ok := event.Data.(map[string]interface{}); ok {
-					log.Printf("[SECURITY] Forwarding security_approval_request to client %s: request_id=%v tool=%s risk=%s",
-						connInfo.ClientID, data["request_id"], data["tool_name"], data["risk_level"])
+
+			// Opportunistically drain any already-queued events (non-blocking)
+			// and coalesce runs of adjacent stream chunks before writing. Under
+			// a backlog — the only time stream chunks get dropped — this turns
+			// hundreds of tiny writes into a few, letting the channel drain fast
+			// instead of overflowing. With no backlog the drain pulls nothing,
+			// so streaming latency is unchanged.
+			batch := []events.UIEvent{event}
+		drain:
+			for len(batch) < maxCoalesceDrain {
+				select {
+				case e2 := <-eventCh:
+					batch = append(batch, e2)
+				default:
+					break drain
 				}
 			}
-			if event.Type == events.EventTypeAskUserRequest {
-				if data, ok := event.Data.(map[string]interface{}); ok {
-					log.Printf("[ASK_USER] Forwarding ask_user_request to client %s: request_id=%v question=%q",
-						connInfo.ClientID, data["request_id"], data["question"])
+
+			for _, ev := range coalesceStreamChunks(batch) {
+				if !ws.shouldForwardEventToConnection(ev, connInfo) {
+					continue
 				}
-			}
-			if err := safeConn.WriteJSON(event); err != nil {
-				log.Printf("WebSocket %s write error: %v", sessionID, err)
-				return
+				if ev.Type == events.EventTypeSecurityApprovalRequest {
+					if data, ok := ev.Data.(map[string]interface{}); ok {
+						log.Printf("[SECURITY] Forwarding security_approval_request to client %s: request_id=%v tool=%s risk=%s",
+							connInfo.ClientID, data["request_id"], data["tool_name"], data["risk_level"])
+					}
+				}
+				if ev.Type == events.EventTypeAskUserRequest {
+					if data, ok := ev.Data.(map[string]interface{}); ok {
+						log.Printf("[ASK_USER] Forwarding ask_user_request to client %s: request_id=%v question=%q",
+							connInfo.ClientID, data["request_id"], data["question"])
+					}
+				}
+				if err := safeConn.WriteJSON(ev); err != nil {
+					log.Printf("WebSocket %s write error: %v", sessionID, err)
+					return
+				}
 			}
 
 		case <-readDone:

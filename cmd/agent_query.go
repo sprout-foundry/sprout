@@ -352,9 +352,13 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 		duration := time.Since(startTime)
 
 		if res.err != nil {
-			// Print the response (user-friendly error message) if available
+			// Print the response (user-friendly error message) if available.
+			// When we show it here, mark the returned error as already-reported
+			// so Execute() doesn't print the raw wrapped chain a second time.
+			reported := false
 			if res.response != "" {
-				_, _ = os.Stderr.Write([]byte(fmt.Sprintf("[FAIL] %s\n", res.response)))
+				console.GlyphError.Fprintln(os.Stderr, res.response)
+				reported = true
 			}
 			errorEvent := events.ErrorEvent(
 				fmt.Sprintf("Failed to process query: %s", query), res.err,
@@ -367,6 +371,9 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 				errorEvent["chat_id"] = chatID
 			}
 			eventBus.Publish(events.EventTypeError, errorEvent)
+			if reported {
+				return markReported(res.err)
+			}
 			return fmt.Errorf("agent processing failed: %w", res.err)
 		}
 

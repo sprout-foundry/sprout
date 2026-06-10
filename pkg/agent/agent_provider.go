@@ -120,7 +120,10 @@ func recoverProviderStartup(configManager *configuration.Manager, failedProvider
 	}
 
 	failedProviderName := api.GetProviderName(failedProvider)
-	_, _ = os.Stderr.Write([]byte(fmt.Sprintf("[WARN] Failed to initialize provider '%s': %v\n", failedProviderName, startupErr)))
+	// Diagnostic detail about which provider failed and why. The final error
+	// (rendered by the CLI) already states the cause and how to configure a
+	// provider, so keep this gated behind debug to avoid duplicating it.
+	debugLogf("[provider] failed to initialize %q: %v", failedProviderName, startupErr)
 
 	// Detect whether the failure is a model-not-found issue so we can offer
 	// the user the option to pick a different model on the same provider.

@@ -750,7 +750,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		"model":       displayModel,
 		"is_parallel": false,
 	})
-	_, _ = os.Stderr.Write([]byte(fmt.Sprintf("[~] Spawning subagent [%s]: provider=%s, model=%s\n", persona, displayProvider, displayModel)))
+	printSubagentStart(persona, displayProvider, displayModel)
 
 	runner := a.GetSubagentRunner()
 	result := runner.Run(ctx, enhancedPrompt.String(), SubagentOptions{
@@ -760,6 +760,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		SystemPrompt: systemPromptText,
 		WorkingDir:   workingDir,
 	})
+	printSubagentDone(persona, result)
 
 	// SP-059 Phase 2a: build the typed envelope. resultMap is preserved
 	// for the legacy code paths below that still mutate it via string
@@ -1281,7 +1282,7 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 		"is_parallel": true,
 		"task_count":  len(parallelTasks),
 	})
-	_, _ = os.Stderr.Write([]byte(fmt.Sprintf("[~] Spawning %d parallel subagents: provider=%s, model=%s\n", len(parallelTasks), displayProvider, displayModel)))
+	printParallelSubagentStart(len(parallelTasks), displayProvider, displayModel)
 
 	runner := a.GetSubagentRunner()
 	var tasks []SubagentTask

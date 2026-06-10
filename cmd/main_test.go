@@ -30,6 +30,23 @@ import (
 // is timestamp-based, so collisions don't happen and the shared dir
 // keeps the test setup cheap.
 func TestMain(m *testing.M) {
+	// Disable implicit embedding auto-index for the whole cmd suite. Every
+	// agent built by a cmd test (createPlanningAgent, runAgentQuery, the
+	// automate/workflow paths, …) calls RestoreEmbeddingIndex(), which
+	// otherwise auto-enables the index, lazily downloads a ~240MB ONNX model,
+	// and spawns a background build/inference goroutine. Multiplied across the
+	// package's ~660 tests those goroutines balloon a single cmd.test process
+	// to 25–30GB RSS (measured) and peg every core. This mirrors the same
+	// backstop in pkg/agent's TestMain; tests that genuinely exercise
+	// embeddings call EnableEmbeddingIndex() explicitly and gate on -short /
+	// ONNX availability. A stable shared models dir means the model is fetched
+	// at most once if an explicit-embedding test does run, instead of being
+	// re-downloaded into every test's throwaway temp dir.
+	os.Setenv("SPROUT_DISABLE_EMBEDDING_AUTOINDEX", "1")
+	if os.Getenv("SPROUT_MODELS_DIR") == "" {
+		os.Setenv("SPROUT_MODELS_DIR", filepath.Join(os.TempDir(), "sprout-test-models"))
+	}
+
 	tmpDir, err := os.MkdirTemp("", "sprout-cmd-test-state-*")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "TestMain: create temp state dir: %v\n", err)

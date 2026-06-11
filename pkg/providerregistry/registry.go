@@ -545,6 +545,15 @@ var validRemoteAuthTypes = map[string]struct{}{
 	"oauth":   {},
 }
 
+// ValidateForPublish runs the same structural schema check that
+// FetchProvider applies at runtime, but is exported so the publish-time
+// validator (cmd/validate_registry) can reject bad files BEFORE they
+// hit GitHub Pages. The two share one rule set so what passes CI also
+// passes at runtime.
+func ValidateForPublish(id string, cfg *RemoteProviderConfig) error {
+	return validateRemoteConfig(id, cfg)
+}
+
 // validateRemoteConfig is a structural check on a freshly-decoded
 // RemoteProviderConfig: required fields present and within sane
 // bounds, auth.type recognised, defaults.model present unless auth
@@ -564,8 +573,16 @@ func validateRemoteConfig(id string, cfg *RemoteProviderConfig) error {
 	if !strings.EqualFold(strings.TrimSpace(cfg.Name), strings.TrimSpace(id)) {
 		return fmt.Errorf("name %q does not match id %q", cfg.Name, id)
 	}
-	if strings.TrimSpace(cfg.Endpoint) == "" {
+	endpoint := strings.TrimSpace(cfg.Endpoint)
+	if endpoint == "" {
 		return fmt.Errorf("missing endpoint")
+	}
+	// Cheap scheme check so the publish-time validator rejects
+	// non-HTTPS at CI time without doing DNS. Runtime's
+	// validateEndpoint still runs the full SSRF check (private IPs,
+	// localhost, DNS resolution) on fetched configs.
+	if !strings.HasPrefix(strings.ToLower(endpoint), "https://") {
+		return fmt.Errorf("endpoint must be https://")
 	}
 	if _, ok := validRemoteAuthTypes[strings.ToLower(strings.TrimSpace(cfg.Auth.Type))]; !ok {
 		return fmt.Errorf("unknown auth.type %q", cfg.Auth.Type)

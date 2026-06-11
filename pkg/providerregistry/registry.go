@@ -326,10 +326,30 @@ var (
 	negativeTTL   = defaultNegativeTTL
 	httpTimeout   = defaultHTTPTimeout
 	sf            singleflight.Group
+
+	// sharedTransport enables connection pooling and TLS session resumption
+	// across all registry fetches, avoiding a fresh TCP+TLS handshake per
+	// provider in FetchAllProviders.
+	sharedTransport *http.Transport
+
+	// httpClient is the shared client for individual provider fetches.
+	// It uses sharedTransport for connection reuse; its Timeout is
+	// configured via SetHTTPTimeout (default: 500ms).
+	httpClient *http.Client
 )
 
 func init() {
 	loadConfig()
+
+	sharedTransport = &http.Transport{
+		MaxIdleConns:        10,
+		MaxIdleConnsPerHost: 10,
+		IdleConnTimeout:     30 * time.Second,
+	}
+	httpClient = &http.Client{
+		Timeout:   httpTimeout,
+		Transport: sharedTransport,
+	}
 }
 
 func loadConfig() {
@@ -379,6 +399,9 @@ func SetHTTPTimeout(d time.Duration) {
 	mu.Lock()
 	defer mu.Unlock()
 	httpTimeout = d
+	if httpClient != nil {
+		httpClient.Timeout = d
+	}
 }
 
 // SetNegativeTTL sets the negative cache TTL for 404 responses (useful for testing).
@@ -666,7 +689,7 @@ func FetchProviderConfig(ctx context.Context, providerID string) (*RemoteProvide
 		req.Header.Set("Accept", "application/json")
 		req.Header.Set("User-Agent", "sprout-provider-registry/1.0")
 
-		client := &http.Client{Timeout: httpTimeoutCopy()}
+		client := &http.Client{Timeout: httpTimeoutCopy(), Transport: sharedTransport}
 		resp, fetchErr := client.Do(req)
 		if fetchErr != nil {
 			return nil, fmt.Errorf("providerregistry: fetch %s: %w", providerID, fetchErr)
@@ -751,7 +774,7 @@ func FetchAllProviders(ctx context.Context) (map[string]*RemoteProviderConfig, e
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", "sprout-provider-registry/1.0")
 
-	client := &http.Client{Timeout: defaultIndexTimeout}
+	client := &http.Client{Timeout: defaultIndexTimeout, Transport: sharedTransport}
 	resp, fetchErr := client.Do(req)
 	if fetchErr != nil {
 		if envutil.GetEnvSimple("DEBUG_REGISTRY") != "" {

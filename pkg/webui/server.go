@@ -148,6 +148,25 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 			}
 		}
 	}
+	// Second pass: even if the path looks like a home directory, verify it
+	// actually exists on disk. A stale plist from a different machine (e.g.
+	// /home/user on macOS where the real home is /Users/user) will pass
+	// looksLikeUserHome but point to a nonexistent directory, making every
+	// workspace change fail the isWithinWorkspace guard.
+	if daemonRoot != "" {
+		if info, statErr := os.Stat(daemonRoot); statErr != nil || !info.IsDir() {
+			if u, uErr := user.Current(); uErr == nil && u.HomeDir != "" && u.HomeDir != daemonRoot {
+				if serviceMode {
+					log.Printf("[web] WARNING: SPROUT_DAEMON_ROOT %q does not exist on disk; "+
+						"overriding with user.Current().HomeDir = %q. Reinstall the service to fix: "+
+						"sprout service uninstall && sprout service install",
+						daemonRoot, u.HomeDir)
+				}
+				daemonRoot = u.HomeDir
+				rootSource = "user.Current().HomeDir (disk-miss fallback)"
+			}
+		}
+	}
 	if daemonRoot == "" {
 		daemonRoot = workspaceRoot
 		if serviceMode {

@@ -264,12 +264,21 @@ func ToolExecutionEvent(toolName, action string, details map[string]interface{})
 	return data
 }
 
-// FileChangedEvent creates a file changed event
+// FileChangedEvent creates a file changed event.
+//
+// The full file content is deliberately NOT transmitted. No consumer reads it —
+// the WebUI's handler only uses file_path/action, and the editor refetches a
+// file's bytes on demand (and gets disk-change notifications via the lean
+// FileContentChangedEvent). Shipping whole-file content here made each event
+// large, so a burst (bulk shell edits, many writes) filled the per-subscriber
+// channel and the replay ring buffer fast — dropping file_changed events and
+// spamming "[EventBus] Dropped file_changed event" logs. The `content` arg is
+// retained for call-site compatibility but only its length is surfaced.
 func FileChangedEvent(filePath, action string, content string) map[string]interface{} {
 	return map[string]interface{}{
 		"file_path": filePath,
-		"action":    action, // "created", "modified", "deleted"
-		"content":   content,
+		"action":    action, // "created", "modified", "deleted", "write", "edit", "git_*", …
+		"size":      len(content),
 	}
 }
 

@@ -90,13 +90,9 @@ func TestWriteFileEmitsFileChangedEvent(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, content, string(written))
 
-	// Verify the file_changed event was published
-	data := expectFileChangedEvent(t, ch, filePath, "write")
-
-	// The content field should be the written content
-	actualContent, ok := data["content"].(string)
-	require.True(t, ok, "content should be a string")
-	assert.Equal(t, content, actualContent, "event content should match written content")
+	// Verify the file_changed event was published (whole-file content is no
+	// longer transmitted — only path/action/size).
+	expectFileChangedEvent(t, ch, filePath, "write")
 }
 
 // TestEditFileEmitsFileChangedEvent verifies that handleEditFile publishes
@@ -129,12 +125,7 @@ func TestEditFileEmitsFileChangedEvent(t *testing.T) {
 	assert.NotContains(t, string(edited), "key = old_value")
 
 	// Verify the file_changed event was published
-	data := expectFileChangedEvent(t, ch, filePath, "edit")
-
-	// The content field should reflect the edited file content
-	actualContent, ok := data["content"].(string)
-	require.True(t, ok, "content should be a string")
-	assert.Contains(t, actualContent, "key = new_value", "event content should reflect the edit")
+	expectFileChangedEvent(t, ch, filePath, "edit")
 }
 
 // TestWriteStructuredFileEmitsFileChangedEvent verifies that
@@ -165,12 +156,7 @@ func TestWriteStructuredFileEmitsFileChangedEvent(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify the file_changed event was published
-	eventData := expectFileChangedEvent(t, ch, filePath, "write")
-
-	// The content should contain the JSON output
-	actualContent, ok := eventData["content"].(string)
-	require.True(t, ok, "content should be a string")
-	assert.Contains(t, actualContent, "sprout", "event content should contain the JSON data")
+	expectFileChangedEvent(t, ch, filePath, "write")
 }
 
 // TestWriteStructuredFileYAMLEmitsFileChangedEvent verifies that
@@ -200,12 +186,7 @@ func TestWriteStructuredFileYAMLEmitsFileChangedEvent(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify the file_changed event was published
-	eventData := expectFileChangedEvent(t, ch, filePath, "write")
-
-	// The content should contain the YAML output
-	actualContent, ok := eventData["content"].(string)
-	require.True(t, ok, "content should be a string")
-	assert.Contains(t, actualContent, "sprout", "event content should contain the YAML data")
+	expectFileChangedEvent(t, ch, filePath, "write")
 }
 
 // TestPatchStructuredFileEmitsFileChangedEvent verifies that
@@ -256,12 +237,7 @@ func TestPatchStructuredFileEmitsFileChangedEvent(t *testing.T) {
 	assert.Contains(t, string(patched), "a test agent")
 
 	// Verify the file_changed event was published
-	eventData := expectFileChangedEvent(t, ch, filePath, "write")
-
-	// The content should contain the patched JSON
-	actualContent, ok := eventData["content"].(string)
-	require.True(t, ok, "content should be a string")
-	assert.Contains(t, actualContent, "new-name", "event content should contain patched data")
+	expectFileChangedEvent(t, ch, filePath, "write")
 }
 
 // TestPatchStructuredFileAsWriteEmitsFileChangedEvent verifies that when
@@ -288,11 +264,7 @@ func TestPatchStructuredFileAsWriteEmitsFileChangedEvent(t *testing.T) {
 	assert.NotEmpty(t, result)
 
 	// Verify the file_changed event was published (this goes through write path)
-	eventData := expectFileChangedEvent(t, ch, filePath, "write")
-
-	actualContent, ok := eventData["content"].(string)
-	require.True(t, ok, "content should be a string")
-	assert.Contains(t, actualContent, "value", "event content should contain the data")
+	expectFileChangedEvent(t, ch, filePath, "write")
 }
 
 // TestWriteFileEmitsFileChangedEventWithMetadata verifies that event metadata
@@ -412,12 +384,10 @@ func TestWriteFileMultipleEvents(t *testing.T) {
 	require.NoError(t, err)
 
 	// Expect event for file A
-	dataA := expectFileChangedEvent(t, ch, fileA, "write")
-	assert.Equal(t, "content A", dataA["content"])
+	expectFileChangedEvent(t, ch, fileA, "write")
 
 	// Expect event for file B
-	dataB := expectFileChangedEvent(t, ch, fileB, "write")
-	assert.Equal(t, "content B", dataB["content"])
+	expectFileChangedEvent(t, ch, fileB, "write")
 }
 
 // TestWriteStructuredFileDisallowRawWriteInTextFile verifies that write_file

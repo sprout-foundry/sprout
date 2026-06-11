@@ -304,7 +304,7 @@ describe('exported constants', () => {
 });
 
 describe('compartment creation', () => {
-  it('returns all 13 compartment handles', () => {
+  it('returns all 14 compartment handles', () => {
     const { compartments } = renderHook();
     expect(compartments.hotkeys).toBeDefined();
     expect(compartments.lineWrapping).toBeDefined();
@@ -319,11 +319,16 @@ describe('compartment creation', () => {
     expect(compartments.lsp).toBeDefined();
     expect(compartments.inlayHints).toBeDefined();
     expect(compartments.signatureHelp).toBeDefined();
+    // `history` was extracted into its own compartment so undo state can
+    // be reconfigured per-buffer without rebuilding the whole extension
+    // tree. Keep this assertion paired with the count check below so any
+    // future split / collapse bumps both at once.
+    expect(compartments.history).toBeDefined();
   });
 
-  it('returns exactly 13 compartment properties', () => {
+  it('returns exactly 14 compartment properties', () => {
     const { compartments } = renderHook();
-    expect(Object.keys(compartments).length).toBe(13);
+    expect(Object.keys(compartments).length).toBe(14);
   });
 
   it('uses createEmmetCompartment and createAutoCloseTagCompartment helpers', () => {
@@ -347,7 +352,11 @@ describe('buildExtensions — array structure', () => {
     expect(mockLineNumbers).toHaveBeenCalled();
     expect(ext).toContain('cm-indentOnInput');
     expect(ext).toContain('cm-bracketMatching');
-    expect(ext).toContain('cm-history');
+    // `history` is now wrapped in its own compartment (see source line:
+    // `compartments.history.of(history())`), so the raw 'cm-history'
+    // string no longer appears at the top level of the extension array.
+    // Assert via the compartment-of wrapper produced by the mock instead.
+    expect(ext).toContain('compartment-of(cm-history)');
   });
 
   it('includes custom editor extensions', () => {

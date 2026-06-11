@@ -169,11 +169,15 @@ func CalculateOutputBudget(contextLimit int, inputTokens int) (int, bool) {
 	// Calculate remaining space
 	remaining := contextLimit - inputTokens
 
-	// Use a percentage-based buffer with minimum
-	// 5% of remaining or at least DefaultBufferTokens
-	buffer := (remaining * 5) / 100
-	if buffer < DefaultBufferTokens {
-		buffer = DefaultBufferTokens
+	// Reserve a safety buffer to absorb token estimation errors.
+	// Use 10% of the total context limit (not remaining) so the buffer
+	// scales with the window size. Large contexts (200K+) can have
+	// estimation errors of thousands of tokens, so the buffer must grow
+	// with them. A floor of 2000 ensures small contexts still get a
+	// meaningful cushion.
+	buffer := (contextLimit * 10) / 100
+	if buffer < 2000 {
+		buffer = 2000
 	}
 
 	// Ensure we don't subtract more than available

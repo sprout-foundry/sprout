@@ -1097,3 +1097,29 @@ describe('WebSocketService - reattach on reconnect', () => {
     );
   });
 });
+
+describe('WebSocketService - lifecycle signals (pause / session_close)', () => {
+  it('sends a pause control frame on freeze()', () => {
+    const ws = WebSocketService.getInstance();
+    ws.connect();
+    mockReadyState = MockWebSocket.OPEN;
+    triggerWebSocketOpen();
+    mockSend.mockClear();
+
+    ws.freeze();
+
+    expect(mockSend).toHaveBeenCalledWith(JSON.stringify({ type: 'pause' }));
+  });
+
+  it('sends a session_close control frame on pagehide', () => {
+    const ws = WebSocketService.getInstance();
+    ws.connect();
+    mockReadyState = MockWebSocket.OPEN;
+    triggerWebSocketOpen();
+    mockSend.mockClear();
+
+    window.dispatchEvent(new Event('pagehide'));
+
+    expect(mockSend).toHaveBeenCalledWith(JSON.stringify({ type: 'session_close' }));
+  });
+});

@@ -246,11 +246,13 @@ func SafeResolvePathWithBypass(ctx context.Context, filePath string) (string, er
 	return resolvedAbs, nil
 }
 
-// isInTmpPath checks if a path is within /tmp
+// isInTmpPath checks if a path is within /tmp (or the OS-equivalent temp dir).
 func isInTmpPath(path string) bool {
-	// Check for /tmp paths
+	// Check for /tmp paths — macOS resolves /tmp to /private/tmp via symlink,
+	// so check both the cleaned path and the original /tmp prefix.
 	cleanPath := filepath.Clean(path)
-	if strings.HasPrefix(cleanPath, "/tmp/") || cleanPath == "/tmp" {
+	if strings.HasPrefix(cleanPath, "/tmp/") || cleanPath == "/tmp" ||
+		strings.HasPrefix(cleanPath, "/private/tmp/") || cleanPath == "/private/tmp" {
 		return true
 	}
 	// Also check for Windows-style temp paths

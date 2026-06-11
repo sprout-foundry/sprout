@@ -123,6 +123,27 @@ type ApprovalRequest struct {
 	Extras map[string]string
 }
 
+// ApprovalOutcome reports HOW an approval request resolved, independent of
+// the decision itself. It lets callers distinguish a deliberate user "deny"
+// from a dialog that was never answered — so an unattended browser tab can
+// fall back to the terminal prompt instead of dead-ending on a 5-minute
+// timeout that silently denies.
+type ApprovalOutcome int
+
+const (
+	// ApprovalOutcomeResponded — the user (browser) actually answered.
+	// The accompanying decision is authoritative; honor it.
+	ApprovalOutcomeResponded ApprovalOutcome = iota
+	// ApprovalOutcomeTimedOut — no answer arrived within the timeout
+	// window. The decision is the safe default; callers may retry on
+	// another surface.
+	ApprovalOutcomeTimedOut
+	// ApprovalOutcomeNoChannel — the event bus was nil or the response
+	// channel closed without a reply (e.g. the browser disconnected).
+	// The decision is the safe default; callers may retry on another surface.
+	ApprovalOutcomeNoChannel
+)
+
 // ApprovalManager coordinates security approval requests between the agent
 // and the webui. It subsumes the former SecurityApprovalManager (tool
 // approvals) and SecurityPromptManager (file security prompts) into a single
@@ -227,8 +248,19 @@ func (am *ApprovalManager) RequestApproval(eventBus *events.EventBus, req Approv
 // shell_command Gate 1/2 callers; everyone else collapses through the
 // bool wrapper above.
 func (am *ApprovalManager) RequestApprovalDecision(eventBus *events.EventBus, req ApprovalRequest) ApprovalDecision {
+	decision, _ := am.RequestApprovalDecisionWithOutcome(eventBus, req)
+	return decision
+}
+
+// RequestApprovalDecisionWithOutcome is the same as RequestApprovalDecision
+// but also returns an ApprovalOutcome so the caller can tell whether the
+// user actually answered (Responded) or the request fell back to its safe
+// default via timeout / missing channel. Callers that have an alternate
+// approval surface (e.g. a terminal prompt) use this to avoid treating an
+// unanswered browser dialog as a deliberate deny.
+func (am *ApprovalManager) RequestApprovalDecisionWithOutcome(eventBus *events.EventBus, req ApprovalRequest) (ApprovalDecision, ApprovalOutcome) {
 	if eventBus == nil {
-		return am.defaultDecisionForKind(req)
+		return am.defaultDecisionForKind(req), ApprovalOutcomeNoChannel
 	}
 
 	requestID := am.generateRequestID(req.Kind)
@@ -280,12 +312,12 @@ func (am *ApprovalManager) RequestApprovalDecision(eventBus *events.EventBus, re
 	select {
 	case result, ok := <-responseCh:
 		if !ok {
-			return am.defaultDecisionForKind(req) // channel closed without response
+			return am.defaultDecisionForKind(req), ApprovalOutcomeNoChannel // channel closed without response
 		}
-		return result
+		return result, ApprovalOutcomeResponded
 	case <-timer.C:
 		log.Printf("Security approval request %s timed out after %v — applying default", requestID, timeout)
-		return am.defaultDecisionForKind(req)
+		return am.defaultDecisionForKind(req), ApprovalOutcomeTimedOut
 	}
 }
 
@@ -353,6 +385,30 @@ func (am *ApprovalManager) RequestToolApproval(eventBus *events.EventBus, client
 // schema (action field).
 func (am *ApprovalManager) RequestToolApprovalDecision(eventBus *events.EventBus, clientID, userID, toolName, riskLevel, reasoning string, extras map[string]string) ApprovalDecision {
 	return am.RequestApprovalDecision(eventBus, ApprovalRequest{
+		Kind:            ApprovalKindTool,
+		DefaultResponse: false, // reject for safety
+		ToolName:        toolName,
+		RiskLevel:       riskLevel,
+		Reasoning:       reasoning,
+		ClientID:        clientID,
+		UserID:          userID,
+		Extras:          extras,
+	})
+}
+
+// RequestToolApprovalWithOutcome is the outcome-aware variant of
+// RequestToolApproval: it returns whether the operation was approved AND how
+// the request resolved (Responded / TimedOut / NoChannel), so a caller with a
+// terminal fallback can avoid treating an unanswered browser dialog as a deny.
+func (am *ApprovalManager) RequestToolApprovalWithOutcome(eventBus *events.EventBus, clientID, userID, toolName, riskLevel, reasoning string, extras map[string]string) (bool, ApprovalOutcome) {
+	decision, outcome := am.RequestToolApprovalDecisionWithOutcome(eventBus, clientID, userID, toolName, riskLevel, reasoning, extras)
+	return decision.Approved(), outcome
+}
+
+// RequestToolApprovalDecisionWithOutcome is the outcome-aware variant of
+// RequestToolApprovalDecision (the 4-option Gate 2 path).
+func (am *ApprovalManager) RequestToolApprovalDecisionWithOutcome(eventBus *events.EventBus, clientID, userID, toolName, riskLevel, reasoning string, extras map[string]string) (ApprovalDecision, ApprovalOutcome) {
+	return am.RequestApprovalDecisionWithOutcome(eventBus, ApprovalRequest{
 		Kind:            ApprovalKindTool,
 		DefaultResponse: false, // reject for safety
 		ToolName:        toolName,

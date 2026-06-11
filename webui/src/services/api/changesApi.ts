@@ -64,7 +64,8 @@ export interface TimelineItem {
 export interface TimelineResponse {
   since?: string;
   count: number;
-  items: TimelineItem[];
+  files?: TimelineItem[];
+  items?: TimelineItem[];
 }
 
 export interface RevertEntry {

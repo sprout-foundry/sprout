@@ -86,6 +86,24 @@ const handleQueryStarted = (ctx: EventHandlerContext): void => {
   const startedQuery = String(data.query || '');
   const isClearCommand = startedQuery.trim().toLowerCase() === '/clear';
 
+  // Subagent ProcessQuery calls publish their own query_started through the
+  // same bus, decorated with subagent_depth > 0 by SP-051's
+  // decorateEventPayload. If we treat those as user prompts we (a) render the
+  // subagent's task as a user bubble in the primary chat, and (b) show the
+  // same text three places (this user bubble + the run_subagent tool args +
+  // the SubagentActivityFeed spawn card) — that is the "messages sent to
+  // subagents look like user prompts and get duplicated" bug. Skip the
+  // message append for subagent-originated query_started; the rest of the
+  // state reset (isProcessing, toolExecutions, etc.) is owned by the
+  // primary's query_started so subagents must not touch it either.
+  const startedRaw = event.data as Record<string, unknown> | undefined;
+  const startedDepth = Number(startedRaw?.subagent_depth ?? 0);
+  if (Number.isFinite(startedDepth) && startedDepth > 0) {
+    setState((prev) => ({ logs: appendCappedLog(prev.logs, logEntry) }));
+    debugLog('[>>] Subagent query started (suppressed from chat):', startedQuery);
+    return;
+  }
+
   setState((prev) => {
     // Avoid duplicating the user message: handleSendMessage may have already
     // added it optimistically (e.g. for concurrent queries). Only add if the
@@ -103,7 +121,17 @@ const handleQueryStarted = (ctx: EventHandlerContext): void => {
         : alreadyPresent
           ? prev.messages
           : [...prev.messages, { id: generateMessageId(), type: 'user', content: startedQuery, timestamp: new Date() }],
-      toolExecutions: [],
+      // Preserve historical tool executions across turns. Wiping the array
+      // here (the original behavior) broke two visible features: (a)
+      // MessageSegments badges on past turns lost their status lookup and
+      // regressed to the running-pill render — the "tool badges flash on
+      // and off" symptom — and (b) clicking a past-turn tool badge fired
+      // contextPanelRef.highlightTool(toolId), which then couldn't find the
+      // tool in state and silently no-op'd. handleToolStart tags every new
+      // tool with the current queryCount so per-turn views (timeline bar,
+      // current-turn ToolsTab group) still filter cleanly; old entries
+      // stay reachable for lookup and the sidebar's "Earlier" group.
+      toolExecutions: prev.toolExecutions,
       fileEdits: [],
       subagentActivities: [],
       queryProgress: null,
@@ -164,7 +192,6 @@ const handleQueryCompleted = (ctx: EventHandlerContext): void => {
   const logEntry = createLogEntry(event);
   logEntry.category = 'query';
   logEntry.level = 'success';
-  if (activeRequestsRef.current > 0) activeRequestsRef.current -= 1;
   const data = (event.data ?? {}) as QueryCompletedData;
   const completedQuery = String(data.query || '')
     .trim()
@@ -173,6 +200,26 @@ const handleQueryCompleted = (ctx: EventHandlerContext): void => {
   const wasClearCommand = completedQuery === '/clear';
   const tokensUsed = typeof data.tokens_used === 'number' ? data.tokens_used : undefined;
   const cost = typeof data.cost === 'number' ? data.cost : undefined;
+
+  // Mirror the handleQueryStarted guard: subagent ProcessQuery calls fire
+  // their own query_completed through the same bus, decorated with
+  // subagent_depth > 0. If we ran the full primary-completion path we would
+  // (a) decrement activeRequestsRef before the primary actually finishes,
+  // prematurely flipping isProcessing to false, and (b) inject the
+  // subagent's response into the main chat as a second assistant bubble
+  // next to the run_subagent tool result — the response side of the same
+  // duplication the user reported. The subagent's output is already
+  // surfaced through SubagentActivityFeed and the run_subagent tool
+  // execution card.
+  const completedRaw = event.data as Record<string, unknown> | undefined;
+  const completedSubDepth = Number(completedRaw?.subagent_depth ?? 0);
+  if (Number.isFinite(completedSubDepth) && completedSubDepth > 0) {
+    setState((prev) => ({ logs: appendCappedLog(prev.logs, logEntry) }));
+    debugLog('[OK] Subagent query completed (suppressed from chat):', completedQuery);
+    return;
+  }
+
+  if (activeRequestsRef.current > 0) activeRequestsRef.current -= 1;
 
   setState((prev) => {
     let nextMessages = wasClearCommand
@@ -299,6 +346,10 @@ const handleToolStart = (ctx: EventHandlerContext): void => {
       persona,
       subagentType,
       depth: depth > 0 ? depth : undefined,
+      // Tag with the current turn so ToolsTab can group historical
+      // tools by turn and ChatView's filteredToolExecutions can show
+      // only the current turn in the live timeline bar above the input.
+      queryId: prev.queryCount,
     };
     const messages = [...messagesWithNewline];
     addToolRefToMessage(messages, newTool.id);
@@ -715,6 +766,26 @@ const handleDriftDetected = (ctx: EventHandlerContext): void => {
   }));
 };
 
+// Handle the chat_run_restored control frame that leads a reattach replay.
+// When the server sets gap=true it had already evicted events this client
+// missed, so the partial replay that follows would splice onto a stale
+// transcript (missing text, wrong content). Rather than corrupt the view, ask
+// the chat manager to reload the active chat's authoritative history from the
+// backend — subsequent live events then append cleanly. With gap=false the
+// replay is complete, so this is a no-op and the following events apply as
+// usual.
+const handleChatRunRestored = (ctx: EventHandlerContext): void => {
+  const { event, activeChatIdRef } = ctx;
+  const data = (event.data ?? {}) as { gap?: boolean; chat_id?: string };
+  if (!data.gap) return;
+  const chatId = data.chat_id ? String(data.chat_id) : activeChatIdRef.current || '';
+  // Only force-reload the chat the user is actually viewing; others re-hydrate
+  // from the backend when next selected.
+  if (chatId && activeChatIdRef.current && chatId !== activeChatIdRef.current) return;
+  debugLog('[reattach] gap on reconnect — reloading chat', chatId);
+  window.dispatchEvent(new CustomEvent('sprout:chat-gap-reload', { detail: { chatId } }));
+};
+
 // ── Hook Interface ───────────────────────────────────────────────────────
 
 export interface UseWebSocketEventHandlerRefs {
@@ -836,6 +907,8 @@ export function useWebSocketEventHandler({
           return handleAskUserRequest(ctx);
         case 'drift_detected':
           return handleDriftDetected(ctx);
+        case 'chat_run_restored':
+          return handleChatRunRestored(ctx);
         default:
           const logEntry = createLogEntry(event);
           logEntry.level = 'warning';

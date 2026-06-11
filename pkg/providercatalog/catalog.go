@@ -1,3 +1,26 @@
+// Package providercatalog is the curated UX layer for provider
+// onboarding — friendly descriptions, signup URLs, API-key help text,
+// recommended-model justifications. ONE combined providers.json,
+// shipped embedded and refreshable from
+// raw.githubusercontent.com/.../pkg/providercatalog/providers.json.
+//
+// Lifecycle:
+//   - Embedded at compile time (//go:embed providers.json).
+//   - Refreshed weekly by .github/workflows/provider-catalog-refresh.yml,
+//     which runs cmd/refresh_provider_catalog to query provider APIs and
+//     update the checked-in JSON via a PR.
+//
+// IMPORTANT — distinguish from pkg/providerregistry, the sister
+// system with adjacent but DIFFERENT concerns:
+//
+//   - pkg/providercatalog (this package): UX/copy. Used by onboarding
+//     menus, the model picker description blurbs, signup/help text.
+//   - pkg/providerregistry: per-provider TECHNICAL CONFIG (endpoint,
+//     auth, streaming, retry, cost) that the API client uses.
+//
+// They share an id/name and a model list shape but otherwise serve
+// different consumers and have separate publish workflows. Don't
+// merge them without a roadmap entry.
 package providercatalog
 
 import (

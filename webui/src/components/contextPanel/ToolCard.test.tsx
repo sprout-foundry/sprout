@@ -141,11 +141,15 @@ describe('ToolCard depth badge', () => {
       expect(badge?.textContent?.trim()).toBe('D1');
     });
 
-    it('applies purple backgroundColor for depth 1 badge', () => {
+    it('tags the depth-1 badge with the orchestrator tier', () => {
+      // ToolCard switched from inline backgroundColor to a data-depth-tier
+      // attribute that CSS resolves via design tokens (--accent-primary
+      // for orchestrator, --accent-warning for deep). Asserting on the
+      // attribute decouples the test from token values that vary by theme.
       renderToolCard({ depth: 1 });
       const badge = container.querySelector('.tool-depth-badge');
       expect(badge).toBeTruthy();
-      expect(badge?.style.backgroundColor).toBe('rgb(167, 139, 250)');
+      expect(badge?.getAttribute('data-depth-tier')).toBe('orchestrator');
     });
 
     it('applies paddingLeft of 0px on the tool-summary', () => {
@@ -164,11 +168,11 @@ describe('ToolCard depth badge', () => {
       expect(badge?.textContent?.trim()).toBe('D2');
     });
 
-    it('applies amber backgroundColor to the depth-2 badge', () => {
+    it('tags the depth-2 badge with the deep tier', () => {
       renderToolCard({ depth: 2 });
       const badge = container.querySelector('.tool-depth-badge');
       expect(badge).toBeTruthy();
-      expect(badge?.style.backgroundColor).toBe('rgb(245, 158, 11)');
+      expect(badge?.getAttribute('data-depth-tier')).toBe('deep');
     });
 
     it('applies paddingLeft of 16px on the tool-summary', () => {
@@ -187,11 +191,11 @@ describe('ToolCard depth badge', () => {
       expect(badge?.textContent?.trim()).toBe('D3');
     });
 
-    it('applies amber backgroundColor to the depth-3 badge', () => {
+    it('tags the depth-3 badge with the deep tier', () => {
       renderToolCard({ depth: 3 });
       const badge = container.querySelector('.tool-depth-badge');
       expect(badge).toBeTruthy();
-      expect(badge?.style.backgroundColor).toBe('rgb(245, 158, 11)');
+      expect(badge?.getAttribute('data-depth-tier')).toBe('deep');
     });
 
     it('applies paddingLeft of 32px on the tool-summary', () => {
@@ -217,11 +221,11 @@ describe('ToolCard depth badge', () => {
       expect(badge?.textContent?.trim()).toBe('D10');
     });
 
-    it('applies amber backgroundColor to depth 4+ badges', () => {
+    it('tags depth 4+ badges with the deep tier', () => {
       renderToolCard({ depth: 5 });
       const badge = container.querySelector('.tool-depth-badge');
       expect(badge).toBeTruthy();
-      expect(badge?.style.backgroundColor).toBe('rgb(245, 158, 11)');
+      expect(badge?.getAttribute('data-depth-tier')).toBe('deep');
     });
 
     it('applies paddingLeft that scales linearly with depth', () => {
@@ -255,26 +259,21 @@ describe('ToolCard depth badge', () => {
     });
   });
 
-  describe('badge color progression', () => {
-    it('uses purple (#a78bfa) for depth 1', () => {
+  describe('depth tier progression', () => {
+    // Depth 1 = orchestrator-level subagent (driven by --accent-primary
+    // in CSS). Depth >= 2 = deep / specialist (--accent-warning).
+    it('uses the orchestrator tier for depth 1', () => {
       renderToolCard({ depth: 1 });
       const badge = container.querySelector('.tool-depth-badge');
       expect(badge).toBeTruthy();
-      expect(badge?.style.backgroundColor).toBe('rgb(167, 139, 250)');
+      expect(badge?.getAttribute('data-depth-tier')).toBe('orchestrator');
     });
 
-    it('uses amber (#f59e0b) for depth 2', () => {
-      renderToolCard({ depth: 2 });
-      const badge = container.querySelector('.tool-depth-badge');
-      expect(badge).toBeTruthy();
-      expect(badge?.style.backgroundColor).toBe('rgb(245, 158, 11)');
-    });
-
-    it.each([3, 4, 5])('uses amber (#f59e0b) for depth %d', (depth) => {
+    it.each([2, 3, 4, 5])('uses the deep tier for depth %d', (depth) => {
       renderToolCard({ depth, id: `tool-${depth}` });
       const badge = container.querySelector('.tool-depth-badge');
       expect(badge).toBeTruthy();
-      expect(badge?.style.backgroundColor).toBe('rgb(245, 158, 11)');
+      expect(badge?.getAttribute('data-depth-tier')).toBe('deep');
     });
   });
 });

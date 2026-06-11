@@ -56,6 +56,17 @@ type ChangeTracker struct {
 	shellCache   map[string]*shellSnapshotEntry
 	shellCacheMu sync.Mutex
 
+	// shellCacheRoot is the absolute workspace path the shellCache was
+	// built against. effectiveCwd() follows `cd` commands, so a shell
+	// turn can target a directory outside the original workspace —
+	// without tracking the baseline's root, the cache built for
+	// /Users/x/dev/proj would be empty for /Users/x and the diff would
+	// classify every file under home as a "create" (see the 14k-entry
+	// runaway session that motivated this field). When TrackShellTurn
+	// sees a workDir that differs from shellCacheRoot, it re-primes
+	// silently rather than emitting spurious creates.
+	shellCacheRoot string
+
 	// autoSkipDirs is the adaptive companion to shellSnapshotSkipDirs.
 	// Static skip list catches the well-known bloat (node_modules,
 	// .git, …); this set catches per-user surprises: a workspace that

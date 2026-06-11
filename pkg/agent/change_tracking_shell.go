@@ -608,6 +608,9 @@ func (ct *ChangeTracker) PrimeShellTracking(workDir string) {
 		snap = map[string]*shellSnapshotEntry{}
 	}
 	ct.shellCache = snap
+	if absRoot, err := filepath.Abs(workDir); err == nil {
+		ct.shellCacheRoot = absRoot
+	}
 }
 
 // TrackShellTurn diffs the workspace against the primed baseline,
@@ -644,16 +647,25 @@ func (ct *ChangeTracker) TrackShellTurn(workDir, toolCall string, destructive bo
 	ct.shellCacheMu.Lock()
 	defer ct.shellCacheMu.Unlock()
 
-	if ct.shellCache == nil {
-		// First call — populate the baseline silently. Priming is
-		// inherently non-destructive (no diff is computed) so we
-		// always pass false here, even if the calling command is
-		// destructive — the safer walk happens on the next turn.
+	absWorkDir, absErr := filepath.Abs(workDir)
+	if absErr != nil {
+		absWorkDir = workDir
+	}
+
+	if ct.shellCache == nil || ct.shellCacheRoot != absWorkDir {
+		// Either first call, or the shell `cd`'d into a different
+		// directory since the cache was built. Re-prime silently
+		// against the new workDir — diffing a cache built for one
+		// root against a walk of another would classify every file
+		// outside the old root as a "create" (the 14k-entry runaway
+		// session that motivated shellCacheRoot). Priming is always
+		// non-destructive even when the triggering command is.
 		snap, _, _ := ct.walkWorkspace(workDir, nil, false)
 		if snap == nil {
 			snap = map[string]*shellSnapshotEntry{}
 		}
 		ct.shellCache = snap
+		ct.shellCacheRoot = absWorkDir
 		return
 	}
 
@@ -694,6 +706,7 @@ func (ct *ChangeTracker) TrackShellTurn(workDir, toolCall string, destructive bo
 	// Rebase the cache so the NEXT shell command's diff is against the
 	// state we just observed (not the original session-start state).
 	ct.shellCache = newSnap
+	ct.shellCacheRoot = absWorkDir
 }
 
 // SyncShellCacheForPath refreshes the shell cache entry for one path

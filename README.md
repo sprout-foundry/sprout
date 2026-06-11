@@ -9,7 +9,7 @@ AI-powered code editing and assistance tool. Leverages LLMs to understand your w
 - **Coding Agent** with smart workspace context, self-correction, and multi-step orchestration
 - **12 specialized personas** (coder, debugger, reviewer, researcher, executive assistant, project planner, etc.)
 - **Web UI** with chat, code editor, terminal, file browser, Git UI, and more
-- **Multi-provider LLM support** — OpenAI, DeepInfra, OpenRouter, Z.AI, Ollama, DeepSeek, Mistral, Minimax, LMStudio, Cerebras, Chutes, and custom providers
+- **Multi-provider LLM support** — OpenAI, DeepInfra, OpenRouter, Z.AI, Ollama, DeepSeek, Mistral, Minimax, LMStudio, Cerebras, Chutes, plus community-contributed providers via the remote registry (see [Provider Registry](docs/PROVIDER_REGISTRY.md)) and local custom providers (`sprout custom add`)
 - **MCP Server Integration** for external tools (GitHub repos, issues, PRs)
 - **Persistent Memory** across conversations
 - **Built-in tool suite** — file operations, web search, vision analysis, shell execution, PDF analysis, headless browser
@@ -225,6 +225,7 @@ When the active persona spawns subagents (e.g. EA delegating to `coder`), the su
 | [MCP Integration](docs/MCP_INTEGRATION.md)     | MCP server setup, configuration, troubleshooting          |
 | [Agent Workflow](docs/AGENT_WORKFLOW.md)       | Config-driven workflow sequences                          |
 | [Provider Catalog](docs/PROVIDER_CATALOG.md)   | Provider catalog system and model metadata                |
+| [Provider Registry](docs/PROVIDER_REGISTRY.md) | Remote provider registry, community provider PRs, schema  |
 | [Personas](docs/PERSONAS.md)                   | Persona system, risk model, and custom persona guide      |
 | [Testing](docs/TESTING.md)                     | Test strategy, categories, and commands                   |
 

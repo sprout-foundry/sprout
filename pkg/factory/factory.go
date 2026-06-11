@@ -150,6 +150,27 @@ func init() {
 		}
 	}
 
+	// Let configuration.GetProviderAuthMetadata see remote-loaded
+	// providers. The callback reads globalProviderFactory at call time
+	// so providers added later by refreshFromRemote are visible without
+	// re-registration.
+	configuration.SetProviderConfigLookup(func(name string) (string, string, bool) {
+		cfg, err := globalProviderFactory.GetProviderConfig(name)
+		if err != nil || cfg == nil {
+			return "", "", false
+		}
+		return cfg.Auth.EnvVar, cfg.Auth.Type, true
+	})
+
+	// Same idea for the provider-names enumeration paths (onboarding
+	// menu, env-var credential sweep, default-provider auto-selection).
+	// The closure reads the factory live so providers added later by
+	// refreshFromRemote show up in the union returned by
+	// configuration.knownProviderNames().
+	configuration.SetProviderNamesLookup(func() []string {
+		return globalProviderFactory.GetAvailableProviders()
+	})
+
 	// Skip network fetch in test binaries to avoid hitting GitHub Pages
 	if !inTestBinary() {
 		ctx, cancel := context.WithCancel(context.Background())

@@ -82,6 +82,20 @@ const validProviderJSON = `{
   }
 }`
 
+// providerJSONFor returns validProviderJSON rewritten with the "name"
+// field set to id, so tests that fetch arbitrary provider names from
+// a single mock server don't trip the name-vs-id schema check in
+// validateRemoteConfig. The schema check is real (it catches publish
+// bugs where the file name and JSON name field diverge), so the fix
+// for tests is to honor the contract rather than relax validation.
+func providerJSONFor(id string) string {
+	return strings.ReplaceAll(
+		validProviderJSON,
+		`"name": "openrouter"`,
+		fmt.Sprintf(`"name": %q`, id),
+	)
+}
+
 // setupTest is a helper that configures the package for testing and returns
 // a cleanup function to restore state.
 func setupTest(t *testing.T, srv *httptest.Server) {
@@ -159,10 +173,10 @@ func TestConfig_SettingsTakeEffect(t *testing.T) {
 		switch r.URL.Path {
 		case "/providers/fast.json":
 			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(validProviderJSON))
+			w.Write([]byte(providerJSONFor("fast")))
 		case "/providers/slow.json":
 			time.Sleep(1 * time.Second)
-			w.Write([]byte(validProviderJSON))
+			w.Write([]byte(providerJSONFor("slow")))
 		case "/providers/missing.json":
 			http.Error(w, "not found", http.StatusNotFound)
 		default:
@@ -714,7 +728,7 @@ func TestFetchProviderConfig_ConcurrentRequests(t *testing.T) {
 		// Small delay to make concurrent requests more likely
 		time.Sleep(20 * time.Millisecond)
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(validProviderJSON))
+		w.Write([]byte(providerJSONFor("shared")))
 	}))
 	defer srv.Close()
 
@@ -738,7 +752,7 @@ func TestFetchProviderConfig_ConcurrentRequests(t *testing.T) {
 				errors[idx] = fmt.Errorf("nil config")
 				return
 			}
-			if cfg.Name != "openrouter" {
+			if cfg.Name != "shared" {
 				errors[idx] = fmt.Errorf("wrong name: %q", cfg.Name)
 			}
 		}(i)
@@ -949,7 +963,7 @@ func TestFetchAllProviders_PartialFailure(t *testing.T) {
 			w.Write([]byte(`{"providers": ["good", "bad-404", "bad-500"]}`))
 		case "/providers/good.json":
 			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(validProviderJSON))
+			w.Write([]byte(providerJSONFor("good")))
 		case "/providers/bad-404.json":
 			http.Error(w, "not found", http.StatusNotFound)
 		case "/providers/bad-500.json":
@@ -1727,4 +1741,79 @@ func TestIsPrivateIP_IPv6_Public(t *testing.T) {
 	if isPrivateIP(net.ParseIP("2001:db8::1")) {
 		t.Error("expected 2001:db8::1 to be public")
 	}
+}
+
+func TestValidateRemoteConfig(t *testing.T) {
+	t.Parallel()
+
+	base := RemoteProviderConfig{
+		Name:     "foo",
+		Endpoint: "https://api.foo.com/v1",
+		Auth:     RemoteAuthConfig{Type: "bearer", EnvVar: "FOO_API_KEY"},
+		Defaults: RemoteRequestDefaults{Model: "foo-1"},
+	}
+
+	t.Run("happy path", func(t *testing.T) {
+		cfg := base
+		if err := validateRemoteConfig("foo", &cfg); err != nil {
+			t.Fatalf("expected nil, got %v", err)
+		}
+	})
+
+	t.Run("nil config", func(t *testing.T) {
+		if err := validateRemoteConfig("foo", nil); err == nil {
+			t.Fatal("expected error for nil config")
+		}
+	})
+
+	t.Run("missing name", func(t *testing.T) {
+		cfg := base
+		cfg.Name = "   "
+		if err := validateRemoteConfig("foo", &cfg); err == nil {
+			t.Fatal("expected error for blank name")
+		}
+	})
+
+	t.Run("name id mismatch", func(t *testing.T) {
+		cfg := base
+		cfg.Name = "bar"
+		if err := validateRemoteConfig("foo", &cfg); err == nil {
+			t.Fatal("expected error for name/id mismatch")
+		}
+	})
+
+	t.Run("missing endpoint", func(t *testing.T) {
+		cfg := base
+		cfg.Endpoint = ""
+		if err := validateRemoteConfig("foo", &cfg); err == nil {
+			t.Fatal("expected error for missing endpoint")
+		}
+	})
+
+	t.Run("unknown auth type", func(t *testing.T) {
+		cfg := base
+		cfg.Auth.Type = "magic-handshake"
+		if err := validateRemoteConfig("foo", &cfg); err == nil {
+			t.Fatal("expected error for unknown auth.type")
+		}
+	})
+
+	t.Run("missing default model", func(t *testing.T) {
+		cfg := base
+		cfg.Defaults.Model = ""
+		if err := validateRemoteConfig("foo", &cfg); err == nil {
+			t.Fatal("expected error for missing defaults.model")
+		}
+	})
+
+	t.Run("empty auth type accepted", func(t *testing.T) {
+		// Blank type is treated as "none" downstream — local providers
+		// (lmstudio, ollama-cloud variants) sometimes publish that way.
+		cfg := base
+		cfg.Auth.Type = ""
+		cfg.Auth.EnvVar = ""
+		if err := validateRemoteConfig("foo", &cfg); err != nil {
+			t.Fatalf("expected blank auth.type to pass, got %v", err)
+		}
+	})
 }

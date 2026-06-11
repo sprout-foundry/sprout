@@ -125,7 +125,29 @@ Before you submit:
 
 ## Adding a New Provider
 
-Need to add support for a new LLM provider? The process is straightforward.
+Need to add support for a new LLM provider? Two paths, depending on
+whether the provider should ship inside the binary or just be
+available via the remote registry. Pick the first that fits:
+
+| You want… | Use… | See section |
+|---|---|---|
+| New OpenAI-compatible provider, no Go code needed, OK shipping it on the next release | **community-configs** (remote-only) | [Community provider](#community-provider-remote-only) below |
+| Provider needs a custom Go adapter, OR you want it embedded for offline use | **embedded config** (this section) | continues below |
+| Provider for just your own machine | `sprout custom add …` | N/A — see `sprout custom --help` |
+
+### Community provider (remote-only)
+
+The fast path. Add a single JSON file to
+`pkg/agent_providers/community-configs/`, open a PR. On merge, the
+publish workflow ships the file to GitHub Pages and every sprout user
+picks it up at next startup — no binary change, no release. See
+`pkg/agent_providers/community-configs/README.md` for the contributor
+checklist (required fields, local testing, what doesn't belong).
+
+### Embedded provider
+
+The longer path. Use this when the provider needs offline availability
+or a non-standard adapter.
 
 ### 1. Create the JSON config
 

@@ -65,12 +65,20 @@ jobs:
         run: bash scripts/generate-model-index.sh models/models
 
       - name: Copy provider configs with metadata
+        # Pulls from two sources:
+        #   pkg/agent_providers/configs/           (embedded built-ins)
+        #   pkg/agent_providers/community-configs/ (remote-only, NOT embedded)
+        # The community path lets a contributor add a provider to GitHub
+        # Pages without growing the binary. Cross-dir id collisions are
+        # caught by generate-provider-index.sh below.
         run: |
           set -euo pipefail
           shopt -s nullglob
           mkdir -p providers
           TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          for cfg in pkg/agent_providers/configs/*.json; do
+          for cfg in pkg/agent_providers/configs/*.json \
+                     pkg/agent_providers/community-configs/*.json; do
+            [[ -f "$cfg" ]] || continue
             name=$(basename "$cfg")
             jq --arg sv 1 --arg ts "$TIMESTAMP" \
               '. + {schema_version: ($sv | tonumber), published_at: $ts}' \
@@ -79,6 +87,12 @@ jobs:
 
       - name: Generate provider index
         run: bash scripts/generate-provider-index.sh
+
+      - name: Validate published provider configs
+        # Runs the same schema check that pkg/providerregistry applies
+        # at runtime — catches malformed configs in CI rather than 6h
+        # later when every client rejects the bad file.
+        run: go run ./cmd/validate_registry providers/
 
       - name: Assemble registry artifacts
         run: |

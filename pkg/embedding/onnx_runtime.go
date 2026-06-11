@@ -384,6 +384,20 @@ func (r *ONNXRuntime) newSessionOptions(opts []SessionOption) (*onnxruntime.Sess
 		return nil, fmt.Errorf("onnx: create session options: %w", err)
 	}
 
+	// Disable the CPU memory arena and memory pattern planner. Both trade RAM
+	// for speed; for sprout's embedding workload (single small batch per call,
+	// fixed shapes) the arena grows to hundreds of MB of unreturned slabs and
+	// the pattern cache rarely hits. Disabling them roughly halves the
+	// per-session resident footprint with negligible latency impact.
+	if err := so.SetCpuMemArena(false); err != nil {
+		so.Destroy()
+		return nil, fmt.Errorf("onnx: disable cpu mem arena: %w", err)
+	}
+	if err := so.SetMemPattern(false); err != nil {
+		so.Destroy()
+		return nil, fmt.Errorf("onnx: disable mem pattern: %w", err)
+	}
+
 	// Merge options (last wins).
 	option := SessionOption{}
 	for _, o := range opts {

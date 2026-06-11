@@ -380,9 +380,19 @@ func (g *Graph[K]) Add(nodes ...Node[K]) {
 			searchPoint := layer.entry()
 
 			// On subsequent layers, we use the elevator node to enter the graph
-			// at the best point.
+			// at the best point. The HNSW invariant says any node at a higher
+			// layer also exists at every lower layer, so this lookup should
+			// always succeed — but prior Delete / load-from-disk paths have
+			// been observed to leave the layer set in a state where the
+			// elevator key is missing from the current layer (see commit
+			// 2513a566 for the same class of dangling-reference bug in
+			// isolate()). Fall back to the layer's entry node instead of
+			// dereferencing nil, which manifests as a SIGSEGV at addr=0x10
+			// (the offset of layerNode.Value) inside search().
 			if elevator != nil {
-				searchPoint = layer.nodes[*elevator]
+				if sp := layer.nodes[*elevator]; sp != nil {
+					searchPoint = sp
+				}
 			}
 
 			if g.Distance == nil {
@@ -440,8 +450,15 @@ func (h *Graph[K]) Search(near Vector, k int) []Node[K] {
 
 	for layer := len(h.layers) - 1; layer >= 0; layer-- {
 		searchPoint := h.layers[layer].entry()
+		// See the same guard in Add(): a stale elevator key absent from
+		// this layer would otherwise nil-dereference inside search().
 		if elevator != nil {
-			searchPoint = h.layers[layer].nodes[*elevator]
+			if sp := h.layers[layer].nodes[*elevator]; sp != nil {
+				searchPoint = sp
+			}
+		}
+		if searchPoint == nil {
+			continue
 		}
 
 		// Descending hierarchies

@@ -405,11 +405,14 @@ func TestToolExecutionEvent(t *testing.T) {
 }
 
 func TestFileChangedEvent(t *testing.T) {
-	event := FileChangedEvent("/path/to/file.go", "modified", "content")
+	event := FileChangedEvent("/path/to/file.go", "modified", "some content")
 
 	assert.Equal(t, "/path/to/file.go", event["file_path"])
 	assert.Equal(t, "modified", event["action"])
-	assert.Equal(t, "content", event["content"])
+	// Whole-file content is intentionally NOT transmitted (only its size) so a
+	// burst of file_changed events doesn't flood/overflow the event bus.
+	assert.NotContains(t, event, "content", "file_changed must not carry file content")
+	assert.Equal(t, len("some content"), event["size"])
 }
 
 func TestStreamChunkEvent(t *testing.T) {

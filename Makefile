@@ -174,7 +174,7 @@ test-coverage: prepare-grammars
 	echo ""; \
 	echo "Total coverage: $${total_coverage}%"; \
 	min_coverage=40; \
-	if ! awk "BEGIN {exit !($${total_coverage} < $${min_coverage})}"; then \
+	if awk "BEGIN {exit !($${total_coverage} < $${min_coverage})}"; then \
 		echo ""; \
 		echo "ERROR: Coverage ($${total_coverage}%) is below minimum threshold ($${min_coverage}%)"; \
 		echo "Packages with lowest coverage:"; \

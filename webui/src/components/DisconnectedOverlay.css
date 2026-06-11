@@ -1,0 +1,73 @@
+/* Full-screen blocking overlay shown on sustained disconnect. Sits above every
+   other surface (dialogs, command palette, notifications) and captures all
+   input so the user can't act on stale state. */
+.disconnected-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Theme-neutral modal scrim (the design system exempts pure-black overlays). */
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(2px);
+  padding: var(--space-6);
+}
+
+.disconnected-overlay__card {
+  width: 100%;
+  max-width: 28rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-float);
+  padding: var(--space-8);
+  text-align: center;
+  color: var(--text-primary);
+}
+
+.disconnected-overlay__icon {
+  font-size: var(--text-3xl);
+  color: var(--accent-warning);
+  line-height: 1;
+  margin-bottom: var(--space-3);
+}
+
+.disconnected-overlay__title {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-xl);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.disconnected-overlay__body {
+  margin: 0 0 var(--space-6);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.disconnected-overlay__reload {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 8rem;
+  padding: var(--space-2) var(--space-5);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--accent-fg);
+  background: var(--accent-primary);
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background var(--ease-out, ease) 120ms;
+}
+
+.disconnected-overlay__reload:hover {
+  background: var(--accent-secondary);
+}
+
+.disconnected-overlay__reload:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}

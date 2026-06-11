@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/mattn/go-runewidth"
 )
 
 // Refresh redraws the current input line
@@ -154,11 +156,16 @@ func wrappedGeometry(cols, promptWidth int, content string, cursorByte int) (tot
 			row++
 			col = 0
 		} else {
-			if col >= cols {
+			// Advance by the rune's terminal display width (1 for ASCII, 2 for
+			// wide/CJK, 0 for combining). A wide rune that won't fit in the
+			// remaining columns wraps to the next row — matching how the
+			// terminal renders it — so the cursor column stays accurate.
+			w := runewidth.RuneWidth(r)
+			if col+w > cols {
 				row++
 				col = 0
 			}
-			col++
+			col += w
 		}
 		byteIdx += size
 	}
@@ -214,10 +221,10 @@ func isWrapPending(terminalWidth, cursorPos, renderedCursorPos, renderedWidth in
 	return cursorPos%terminalWidth == 0
 }
 
-// visibleRuneWidth returns the printable rune width of a string after removing
-// ANSI control sequences.
+// visibleRuneWidth returns the terminal display width of a string after
+// removing ANSI control sequences (wide/CJK runes count as 2, combining as 0).
 func visibleRuneWidth(s string) int {
-	return len([]rune(stripANSIEscapeCodes(s)))
+	return displayWidth(s)
 }
 
 // stripANSIEscapeCodes removes ANSI CSI escape sequences like \x1b[31m.

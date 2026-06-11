@@ -282,6 +282,10 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 	setQueryInProgress(true)
 	defer setQueryInProgress(false)
 
+	// New turn: allow the "output is in the Web UI" handoff line to print once
+	// if a browser is connected for this query.
+	resetWebUIHandoff()
+
 	// Check if this is a slash command
 	registry := agent_commands.NewCommandRegistry()
 	if registry.IsSlashCommand(query) {

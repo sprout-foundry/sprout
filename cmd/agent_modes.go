@@ -271,9 +271,11 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 					webServer,
 					port,
 					func(activePort int) {
+						setWebUIDisplayURL(fmt.Sprintf("http://%s:%d", webui.DisplayAddr(bindAddr), activePort))
 						fmt.Printf("\n[web] Web UI available at http://%s:%d\n", webui.DisplayAddr(bindAddr), activePort)
 					},
 					func(activePort int) {
+						setWebUIDisplayURL(fmt.Sprintf("http://%s:%d", webui.DisplayAddr(bindAddr), activePort))
 						fmt.Printf("\n[web] Reusing active Web UI at http://%s:%d\n", webui.DisplayAddr(bindAddr), activePort)
 					},
 				)
@@ -336,6 +338,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 					}
 				}
 
+				setWebUIDisplayURL(fmt.Sprintf("http://%s:%d", webui.DisplayAddr(bindAddr), webServer.GetPort()))
 				fmt.Printf("\n[web] Web UI available at http://%s:%d\n", webui.DisplayAddr(bindAddr), webServer.GetPort())
 			}
 		}
@@ -521,6 +524,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 			// No query provided - check if we should keep running (daemon mode)
 			if daemonMode && webServer != nil && webServer.IsRunning() {
 				// Daemon mode: keep web UI running
+				setWebUIDisplayURL(fmt.Sprintf("http://%s:%d", webui.DisplayAddr(bindAddr), webServer.GetPort()))
 				fmt.Printf("\n[web] Web UI running at http://%s:%d\n", webui.DisplayAddr(bindAddr), webServer.GetPort())
 				if !isServiceMode() {
 					fmt.Println("Press Ctrl+C to stop the server.")
@@ -710,13 +714,20 @@ func SetupAgentEvents(chatAgent *agent.Agent, eventBus *events.EventBus, indicat
 	// / RouteTerminalOnly), so there's no blob-output risk on this path.
 	if !agentNoStreaming {
 		chatAgent.EnableStreaming(func(chunk string) {
-			indicator.Stop()
 			if chunk != "" {
 				// CompareAndSwap: only the FIRST non-empty chunk records
 				// the ttft. Subsequent chunks are a no-op so reading the
 				// timestamp later yields "first token landed at X".
 				noteFirstStreamChunk()
 			}
+			// A browser is watching the Web UI — hand off there instead of
+			// duplicating the token stream in the terminal. Print one handoff
+			// line per turn and stay quiet.
+			if chatAgent.HasActiveWebUIClients() {
+				showWebUIHandoffOnce(indicator)
+				return
+			}
+			indicator.Stop()
 			if r := currentTurnRenderer.Load(); r != nil {
 				r.WriteChunk(chunk)
 				return

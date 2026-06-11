@@ -1201,6 +1201,20 @@ type RevisionRetentionConfig struct {
 	// Opt-in safety net for users who want a recoverable record of
 	// long-tail history at the cost of unbounded growth. Default: false.
 	ArchiveFrozen bool `json:"archive_frozen,omitempty"`
+
+	// MaxChangesPerRevision caps the number of change records kept per
+	// revision in .sprout/changes/. A single runaway session (e.g. an
+	// agent that `cd`'d into $HOME so a shell walk classified
+	// pre-existing files as creates) can produce tens of thousands of
+	// records; without this cap, count bloat persists even when total
+	// bytes are under MaxDirBytes. Default: 10000.
+	MaxChangesPerRevision int `json:"max_changes_per_revision,omitempty"`
+
+	// MaxChangesAgeDays drops change records older than this number of
+	// days regardless of their parent revision's tier. Belt-and-
+	// suspenders against changes/ accumulating inside the hot window.
+	// Default: 30. Set to a negative value to disable.
+	MaxChangesAgeDays int `json:"max_changes_age_days,omitempty"`
 }
 
 // Resolve fills in defaults for any zero-value fields and returns a
@@ -1245,9 +1259,11 @@ func (c *ChangeTrackingConfig) Resolve() ChangeTrackingConfig {
 // all-defaults.
 func (c *RevisionRetentionConfig) Resolve() RevisionRetentionConfig {
 	result := RevisionRetentionConfig{
-		HotCount:    200,
-		WarmCount:   500,
-		MaxDirBytes: 1024 * 1024 * 1024, // 1 GiB
+		HotCount:              200,
+		WarmCount:             500,
+		MaxDirBytes:           1024 * 1024 * 1024, // 1 GiB
+		MaxChangesPerRevision: 10000,
+		MaxChangesAgeDays:     30,
 	}
 	if c == nil {
 		return result
@@ -1260,6 +1276,13 @@ func (c *RevisionRetentionConfig) Resolve() RevisionRetentionConfig {
 	}
 	if c.MaxDirBytes > 0 {
 		result.MaxDirBytes = c.MaxDirBytes
+	}
+	if c.MaxChangesPerRevision > 0 {
+		result.MaxChangesPerRevision = c.MaxChangesPerRevision
+	}
+	if c.MaxChangesAgeDays != 0 {
+		// Negative disables; positive overrides; zero = use default.
+		result.MaxChangesAgeDays = c.MaxChangesAgeDays
 	}
 	result.ArchiveFrozen = c.ArchiveFrozen
 	return result

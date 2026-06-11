@@ -39,6 +39,9 @@ type CompactionStats struct {
 	ChangesPayloadsDeleted int
 	BytesReclaimed         int64
 	HardCapTrimmed         int
+	OrphanChangesDropped   int
+	OverCapChangesDropped  int
+	AgedChangesDropped     int
 }
 
 // RetentionPolicy is the subset of RevisionRetentionConfig the
@@ -48,6 +51,19 @@ type RetentionPolicy struct {
 	WarmCount     int
 	MaxDirBytes   int64
 	ArchiveFrozen bool
+
+	// MaxChangesPerRevision caps the per-revision change-record count
+	// in the changes/ directory. A single runaway session can produce
+	// tens of thousands of records (e.g. when the agent `cd`s into
+	// $HOME and a shell walk misclassifies pre-existing files as
+	// creates). Without this cap, count-based bloat persists even
+	// when total bytes are under MaxDirBytes. Zero disables.
+	MaxChangesPerRevision int
+
+	// MaxChangesAge drops change records older than this regardless of
+	// their parent revision's tier. Belt-and-suspenders against
+	// changes/ growing unbounded inside the hot window. Zero disables.
+	MaxChangesAge time.Duration
 }
 
 // fileConversationJSON is the only revision-dir file the compactor
@@ -129,7 +145,143 @@ func CompactRevisions(policy RetentionPolicy) (CompactionStats, error) {
 		}
 	}
 
+	// Defensive changes/ cleanup: orphan + age + per-revision-cap.
+	// Runs after the revision-tier passes so the valid-revisions set
+	// reflects post-compaction state.
+	if policy.MaxChangesPerRevision > 0 || policy.MaxChangesAge > 0 {
+		valid := make(map[string]bool, len(revs))
+		for _, r := range revs {
+			valid[r.ID] = true
+		}
+		// Re-list after drops so newly orphaned revs aren't kept as valid.
+		if remaining, err := listRevisions(revDir); err == nil {
+			valid = make(map[string]bool, len(remaining))
+			for _, r := range remaining {
+				valid[r.ID] = true
+			}
+		}
+		orphan, overcap, aged, bytes := pruneChangesDir(valid, policy.MaxChangesPerRevision, policy.MaxChangesAge)
+		stats.OrphanChangesDropped = orphan
+		stats.OverCapChangesDropped = overcap
+		stats.AgedChangesDropped = aged
+		stats.BytesReclaimed += bytes
+	}
+
 	return stats, nil
+}
+
+// pruneChangesDir does a single pass over the changes/ directory and
+// drops entries that fail any of:
+//
+//  1. Orphan: parent revision no longer exists in `validRevisions`.
+//  2. Aged: entry's timestamp is older than maxAge (if > 0).
+//  3. Over-cap: revision has more than maxPerRev entries (if > 0). The
+//     oldest entries are dropped first; newest are preserved.
+//
+// Returns (orphanCount, overCapCount, agedCount, bytesReclaimed).
+func pruneChangesDir(validRevisions map[string]bool, maxPerRev int, maxAge time.Duration) (int, int, int, int64) {
+	changesDir := GetChangesDir()
+	if changesDir == "" {
+		return 0, 0, 0, 0
+	}
+	entries, err := os.ReadDir(changesDir)
+	if err != nil {
+		return 0, 0, 0, 0
+	}
+
+	type changeEntry struct {
+		dir       string // absolute path of the change-record directory
+		revID     string
+		timestamp time.Time
+		bytes     int64
+	}
+
+	// Bucket by revision so the per-revision cap can drop oldest first.
+	buckets := make(map[string][]changeEntry, len(entries))
+	var orphan, overcap, aged int
+	var bytes int64
+	cutoff := time.Time{}
+	if maxAge > 0 {
+		cutoff = time.Now().Add(-maxAge)
+	}
+
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		dir := filepath.Join(changesDir, e.Name())
+		metaPath := filepath.Join(dir, metadataFile)
+		metaBytes, mErr := os.ReadFile(metaPath)
+		if mErr != nil {
+			continue
+		}
+		var meta ChangeMetadata
+		if jErr := json.Unmarshal(metaBytes, &meta); jErr != nil {
+			continue
+		}
+
+		size := dirSize(dir)
+
+		// Orphan check: revision no longer in the valid set.
+		if !validRevisions[meta.RequestHash] {
+			if err := os.RemoveAll(dir); err == nil {
+				orphan++
+				bytes += size
+			}
+			continue
+		}
+
+		// Age check: timestamp older than cutoff.
+		if !cutoff.IsZero() && meta.Timestamp.Before(cutoff) {
+			if err := os.RemoveAll(dir); err == nil {
+				aged++
+				bytes += size
+			}
+			continue
+		}
+
+		buckets[meta.RequestHash] = append(buckets[meta.RequestHash], changeEntry{
+			dir:       dir,
+			revID:     meta.RequestHash,
+			timestamp: meta.Timestamp,
+			bytes:     size,
+		})
+	}
+
+	if maxPerRev > 0 {
+		for _, group := range buckets {
+			if len(group) <= maxPerRev {
+				continue
+			}
+			sort.Slice(group, func(i, j int) bool {
+				return group[i].timestamp.After(group[j].timestamp)
+			})
+			for _, e := range group[maxPerRev:] {
+				if err := os.RemoveAll(e.dir); err == nil {
+					overcap++
+					bytes += e.bytes
+				}
+			}
+		}
+	}
+
+	return orphan, overcap, aged, bytes
+}
+
+// dirSize sums the bytes of all regular files under dir. Returns 0 on
+// any walk error — sizing is best-effort and only used for stats.
+func dirSize(dir string) int64 {
+	var total int64
+	_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		if info, infoErr := d.Info(); infoErr == nil {
+			total += info.Size()
+		}
+		return nil
+	})
+	return total
 }
 
 // revisionEntry is the in-memory record the compactor sorts and acts on.

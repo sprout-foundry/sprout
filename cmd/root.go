@@ -4,6 +4,8 @@ package cmd
 
 import (
 	"fmt"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"path/filepath"
 	"sync"
@@ -16,6 +18,7 @@ import (
 
 var startupChecksOnce sync.Once
 var isolatedConfig bool
+var debugPprofAddr string
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -36,6 +39,14 @@ Running just 'sprout' without arguments starts enhanced agent mode with automati
 
 See "Available Commands" below for the full list.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		if debugPprofAddr != "" {
+			go func() {
+				fmt.Fprintf(os.Stderr, "pprof: listening on http://%s/debug/pprof/\n", debugPprofAddr)
+				if err := http.ListenAndServe(debugPprofAddr, nil); err != nil {
+					fmt.Fprintf(os.Stderr, "pprof server: %v\n", err)
+				}
+			}()
+		}
 		if isolatedConfig {
 			cwd, err := os.Getwd()
 			if err != nil {
@@ -131,6 +142,7 @@ func init() {
 
 	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.config/sprout/config.json)")
 	rootCmd.PersistentFlags().BoolVar(&isolatedConfig, "isolated-config", false, "Use per-working-directory config at ./.sprout (clone from main config on first run)")
+	rootCmd.PersistentFlags().StringVar(&debugPprofAddr, "debug-pprof", "", "If set, start a pprof HTTP server on this address (e.g. localhost:6060) for live memory/CPU profiling")
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.

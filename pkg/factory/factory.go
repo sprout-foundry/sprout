@@ -171,6 +171,18 @@ func init() {
 		return globalProviderFactory.GetAvailableProviders()
 	})
 
+	// And the friendly display label, sourced from the JSON
+	// display_name field. Lets remote-only providers render in
+	// onboarding menus / model pickers with their published label
+	// instead of the raw lowercase id.
+	configuration.SetProviderDisplayNameLookup(func(name string) (string, bool) {
+		cfg, err := globalProviderFactory.GetProviderConfig(name)
+		if err != nil || cfg == nil || strings.TrimSpace(cfg.DisplayName) == "" {
+			return "", false
+		}
+		return cfg.DisplayName, true
+	})
+
 	// Skip network fetch in test binaries to avoid hitting GitHub Pages
 	if !inTestBinary() {
 		ctx, cancel := context.WithCancel(context.Background())

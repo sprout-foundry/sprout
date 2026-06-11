@@ -1,5 +1,38 @@
 // Package providerregistry provides a client for fetching provider connection
 // configs from a remote JSON registry server with in-memory caching.
+// Package providerregistry fetches per-provider TECHNICAL CONFIG —
+// the API-client wiring (endpoint, auth.type/env_var, streaming
+// format, headers, retry/cost, message conversion quirks) — from
+// the remote registry at https://sprout-foundry.github.io/sprout/
+// providers/{id}.json plus the index at providers/index.json.
+//
+// Lifecycle:
+//   - Published every 6h by .github/workflows/model-registry-publish.yml,
+//     which copies pkg/agent_providers/configs/*.json into providers/
+//     with schema_version + published_at added by jq.
+//   - Fetched at runtime by pkg/factory.refreshFromRemote, which
+//     UpsertConfigs each result into the global ProviderFactory so
+//     pkg/agent_providers.NewGenericProvider can build a working
+//     client from JSON alone (no per-provider Go code).
+//   - Cached in-process for 5 min (positive) / 30 s (negative);
+//     SSRF + schema-validated before caching.
+//
+// IMPORTANT — distinguish from pkg/providercatalog, which is a
+// separate system with adjacent but DIFFERENT concerns:
+//
+//   - pkg/providercatalog: ONE combined JSON describing the curated
+//     UX layer — friendly descriptions, signup URLs, API-key help
+//     text, recommended-model justification. Used by onboarding /
+//     the model picker for human-facing copy. Refreshed by a separate
+//     workflow (.github/workflows/provider-catalog-refresh.yml).
+//   - pkg/providerregistry (this package): per-provider TECHNICAL
+//     CONFIG that the API client actually uses to talk to a provider.
+//
+// They overlap minimally (both have an id/name and a model list, in
+// different shapes); they do not share infrastructure, schemas, or
+// publish workflows. A consolidation has been discussed but the two
+// systems serve different consumers (UI vs API client) so the seam
+// is load-bearing.
 package providerregistry
 
 import (
@@ -110,16 +143,17 @@ type RemoteCostConfig struct {
 
 // RemoteProviderConfig duplicates ProviderConfig for remote JSON consumption.
 type RemoteProviderConfig struct {
-	Name       string                 `json:"name"`
-	Endpoint   string                 `json:"endpoint"`
-	Auth       RemoteAuthConfig       `json:"auth"`
-	Headers    map[string]string      `json:"headers"`
-	Defaults   RemoteRequestDefaults  `json:"defaults"`
-	Conversion RemoteMessageConversion `json:"message_conversion"`
-	Streaming  RemoteStreamingConfig  `json:"streaming"`
-	Models     RemoteModelConfig      `json:"models"`
-	Retry      RemoteRetryConfig      `json:"retry"`
-	Cost       RemoteCostConfig       `json:"cost"`
+	Name        string                  `json:"name"`
+	DisplayName string                  `json:"display_name,omitempty"`
+	Endpoint    string                  `json:"endpoint"`
+	Auth        RemoteAuthConfig        `json:"auth"`
+	Headers     map[string]string       `json:"headers"`
+	Defaults    RemoteRequestDefaults   `json:"defaults"`
+	Conversion  RemoteMessageConversion `json:"message_conversion"`
+	Streaming   RemoteStreamingConfig   `json:"streaming"`
+	Models      RemoteModelConfig       `json:"models"`
+	Retry       RemoteRetryConfig       `json:"retry"`
+	Cost        RemoteCostConfig        `json:"cost"`
 }
 
 // ToProviderConfig converts this remote config to a providers.ProviderConfig.
@@ -129,8 +163,9 @@ func (r *RemoteProviderConfig) ToProviderConfig() *providers.ProviderConfig {
 		return nil
 	}
 	return &providers.ProviderConfig{
-		Name:     r.Name,
-		Endpoint: r.Endpoint,
+		Name:        r.Name,
+		DisplayName: r.DisplayName,
+		Endpoint:    r.Endpoint,
 		Auth: providers.AuthConfig{
 			Type:   r.Auth.Type,
 			EnvVar: r.Auth.EnvVar,
@@ -498,6 +533,49 @@ func isPrivateIP(ip net.IP) bool {
 	return false
 }
 
+// validRemoteAuthTypes mirrors the AuthConfig.Type values that
+// providers.NewGenericProvider knows how to wire — keep in sync if
+// the auth contract gains a new type.
+var validRemoteAuthTypes = map[string]struct{}{
+	"":        {}, // empty is treated as "none" by downstream code
+	"none":    {},
+	"bearer":  {},
+	"api_key": {},
+	"basic":   {},
+	"oauth":   {},
+}
+
+// validateRemoteConfig is a structural check on a freshly-decoded
+// RemoteProviderConfig: required fields present and within sane
+// bounds, auth.type recognised, defaults.model present unless auth
+// is "none" (local providers like LM Studio publish a default in the
+// JSON too in practice, but we don't require it). SSRF checks on the
+// endpoint live in validateEndpoint and run separately.
+func validateRemoteConfig(id string, cfg *RemoteProviderConfig) error {
+	if cfg == nil {
+		return fmt.Errorf("nil config")
+	}
+	if strings.TrimSpace(cfg.Name) == "" {
+		return fmt.Errorf("missing name")
+	}
+	// Defence in depth: name should match the file/index id (cheap
+	// guard against an index that lists "openai" but serves zai.json
+	// content somehow — e.g. a botched publish step).
+	if !strings.EqualFold(strings.TrimSpace(cfg.Name), strings.TrimSpace(id)) {
+		return fmt.Errorf("name %q does not match id %q", cfg.Name, id)
+	}
+	if strings.TrimSpace(cfg.Endpoint) == "" {
+		return fmt.Errorf("missing endpoint")
+	}
+	if _, ok := validRemoteAuthTypes[strings.ToLower(strings.TrimSpace(cfg.Auth.Type))]; !ok {
+		return fmt.Errorf("unknown auth.type %q", cfg.Auth.Type)
+	}
+	if strings.TrimSpace(cfg.Defaults.Model) == "" {
+		return fmt.Errorf("missing defaults.model")
+	}
+	return nil
+}
+
 // isValidProviderID checks that a provider ID contains only safe characters.
 func isValidProviderID(id string) bool {
 	if len(id) == 0 || len(id) > 128 {
@@ -605,6 +683,14 @@ func FetchProviderConfig(ctx context.Context, providerID string) (*RemoteProvide
 		// SSRF validation — reject configs that point to private/internal endpoints.
 		if valErr := validateEndpoint(config.Endpoint); valErr != nil {
 			return nil, fmt.Errorf("providerregistry: invalid endpoint for %s: %w", providerID, valErr)
+		}
+
+		// Schema validation — reject configs missing required fields.
+		// Without this a malformed publish (e.g. a forgotten field after
+		// a schema change) would silently UpsertConfig into the global
+		// factory and produce confusing failures at first API call.
+		if schemaErr := validateRemoteConfig(providerID, &config); schemaErr != nil {
+			return nil, fmt.Errorf("providerregistry: invalid schema for %s: %w", providerID, schemaErr)
 		}
 
 		// Store in cache.

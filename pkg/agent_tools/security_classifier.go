@@ -305,20 +305,18 @@ func classifyShellCommand(args map[string]interface{}) SecurityResult {
 	// checks; the correct API for that case is
 	// `shell_command(check_background=<id>, wait_seconds=<seconds>)`.
 	//
-	// We block *standalone* invocations only — chained forms like
-	// `make build && sleep 5 && curl ...` are legitimate scripting and stay
-	// allowed.
+	// This is NOT a security issue — it's a usage guidance issue. We return
+	// SecuritySafe so no security elevation/prompts trigger. The shell handler
+	// catches this before execution and returns the guidance as a plain tool
+	// error message to the model.
 	if isStandaloneSleepOrWaitCommand(cmd) {
 		return SecurityResult{
-			Risk: SecurityDangerous,
+			Risk: SecuritySafe,
 			Reasoning: "Standalone sleep/wait is not appropriate as a shell_command tool call. " +
 				"For waiting on a background session, use shell_command(check_background=\"<session_id>\", wait_seconds=<seconds>) — that blocks (up to 10 min) without burning tokens on retries. " +
 				"For inserting a delay between commands inside a script, chain with && (e.g., \"cmd1 && sleep 5 && cmd2\"). " +
 				"Standalone sleep here will be cut off at the 2-minute shell deadline and adopted as a background session; the agent will NOT have actually waited the requested duration.",
-			ShouldBlock: true,
-			IsHardBlock: true,
-			RiskType:    "wait_misuse",
-			Category:    RiskCategoryProcessManagement,
+			Category: RiskCategoryProcessManagement,
 		}
 	}
 

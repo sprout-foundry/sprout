@@ -185,6 +185,183 @@ func TestHasProviderAuth_WithCredential(t *testing.T) {
 	}
 }
 
+// TestGetProviderAuthMetadata_RemoteOnlyProvider verifies the SP-022
+// remote-registry path: a provider that isn't embedded in the binary
+// (e.g., one freshly published to GitHub Pages at
+// /providers/<name>.json) should still have its declared auth.env_var
+// and auth.type surfaced by GetProviderAuthMetadata. Pre-fix, the
+// function created a throwaway factory that loaded only embedded
+// configs, so remote-only providers fell through to the
+// "bearer / no env var" default and the user couldn't configure the
+// key via an environment variable.
+func TestGetProviderAuthMetadata_RemoteOnlyProvider(t *testing.T) {
+	configDir := t.TempDir()
+	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
+
+	// Restore whatever the package-init wired up (pkg/factory's
+	// callback) so we don't poison sibling tests.
+	providerConfigLookupMu.RLock()
+	prev := providerConfigLookup
+	providerConfigLookupMu.RUnlock()
+	t.Cleanup(func() { SetProviderConfigLookup(prev) })
+
+	const remoteOnlyName = "totally-new-provider"
+	SetProviderConfigLookup(func(name string) (string, string, bool) {
+		if name == remoteOnlyName {
+			return "TOTALLY_NEW_API_KEY", "bearer", true
+		}
+		return "", "", false
+	})
+
+	got, err := GetProviderAuthMetadata(remoteOnlyName)
+	if err != nil {
+		t.Fatalf("GetProviderAuthMetadata: %v", err)
+	}
+	if got.EnvVar != "TOTALLY_NEW_API_KEY" {
+		t.Errorf("EnvVar: got %q, want %q", got.EnvVar, "TOTALLY_NEW_API_KEY")
+	}
+	if got.AuthType != "bearer" {
+		t.Errorf("AuthType: got %q, want %q", got.AuthType, "bearer")
+	}
+	if !got.RequiresAPIKey {
+		t.Errorf("RequiresAPIKey: got false, want true")
+	}
+
+	// And: when the lookup returns ok=false (provider unknown to the
+	// runtime factory too), we still get the default fallback rather
+	// than an error.
+	got, err = GetProviderAuthMetadata("entirely-unknown-provider")
+	if err != nil {
+		t.Fatalf("GetProviderAuthMetadata for unknown: %v", err)
+	}
+	if got.AuthType != "bearer" {
+		t.Errorf("default fallback AuthType: got %q, want %q", got.AuthType, "bearer")
+	}
+}
+
+// TestKnownProviderNames_MergesRuntimeAdditions verifies that
+// providers registered only at runtime (e.g. fetched from the
+// GitHub Pages registry, NOT in the generated staticProviderNames
+// list) appear in the enumeration used by onboarding, the env-var
+// credential sweep, and default-provider auto-selection. Static
+// entries must keep their generated order at the front; runtime
+// additions are appended in sorted order; duplicates are dropped.
+func TestKnownProviderNames_MergesRuntimeAdditions(t *testing.T) {
+	providerNamesLookupMu.RLock()
+	prev := providerNamesLookup
+	providerNamesLookupMu.RUnlock()
+	t.Cleanup(func() { SetProviderNamesLookup(prev) })
+
+	SetProviderNamesLookup(func() []string {
+		// One name that overlaps with the static list (should be
+		// deduped) and two that don't (should be appended sorted).
+		return []string{"openai", "zeta-remote", "alpha-remote"}
+	})
+
+	got := knownProviderNames()
+
+	if len(got) < len(staticProviderNames)+2 {
+		t.Fatalf("expected at least %d entries (static + 2 extras), got %d: %v",
+			len(staticProviderNames)+2, len(got), got)
+	}
+
+	// Static prefix preserved in order.
+	for i, want := range staticProviderNames {
+		if got[i] != want {
+			t.Fatalf("static prefix mismatch at index %d: got %q, want %q (full: %v)",
+				i, got[i], want, got)
+		}
+	}
+
+	extras := got[len(staticProviderNames):]
+	wantExtras := []string{"alpha-remote", "zeta-remote"}
+	if len(extras) != len(wantExtras) {
+		t.Fatalf("extras: got %v, want %v", extras, wantExtras)
+	}
+	for i, want := range wantExtras {
+		if extras[i] != want {
+			t.Errorf("extras[%d]: got %q, want %q", i, extras[i], want)
+		}
+	}
+
+	// "openai" must appear exactly once (came from static, dedup'd
+	// from runtime additions).
+	openaiCount := 0
+	for _, n := range got {
+		if n == "openai" {
+			openaiCount++
+		}
+	}
+	if openaiCount != 1 {
+		t.Errorf("expected openai exactly once, got %d times", openaiCount)
+	}
+}
+
+// TestKnownProviderNames_NoLookupReturnsStatic covers the path where
+// pkg/factory's init hasn't wired the lookup — a narrow unit test
+// that imports only pkg/configuration must still get a usable list
+// (the compile-time built-ins).
+func TestKnownProviderNames_NoLookupReturnsStatic(t *testing.T) {
+	providerNamesLookupMu.RLock()
+	prev := providerNamesLookup
+	providerNamesLookupMu.RUnlock()
+	t.Cleanup(func() { SetProviderNamesLookup(prev) })
+
+	SetProviderNamesLookup(nil)
+
+	got := knownProviderNames()
+	if len(got) != len(staticProviderNames) {
+		t.Fatalf("with no lookup, expected %d entries, got %d", len(staticProviderNames), len(got))
+	}
+	for i, want := range staticProviderNames {
+		if got[i] != want {
+			t.Errorf("index %d: got %q, want %q", i, got[i], want)
+		}
+	}
+}
+
+// TestGetProviderDisplayName_RemoteOnlyProvider proves the runtime
+// display-name lookup wins over the raw-id fallback for providers
+// that aren't in the static knownProviderDisplayNames map (i.e.,
+// providers published to GitHub Pages but not embedded in the binary).
+// Static entries must still resolve via the fast static-map path.
+func TestGetProviderDisplayName_RemoteOnlyProvider(t *testing.T) {
+	configDir := t.TempDir()
+	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
+
+	providerDisplayLookupMu.RLock()
+	prev := providerDisplayLookup
+	providerDisplayLookupMu.RUnlock()
+	t.Cleanup(func() { SetProviderDisplayNameLookup(prev) })
+
+	SetProviderDisplayNameLookup(func(name string) (string, bool) {
+		if name == "totally-new-provider" {
+			return "Totally New Provider", true
+		}
+		return "", false
+	})
+
+	// Remote-only provider gets its published display name.
+	if got := getProviderDisplayName("totally-new-provider"); got != "Totally New Provider" {
+		t.Errorf("remote-only: got %q, want %q", got, "Totally New Provider")
+	}
+
+	// Built-in provider still resolves via the static map (the runtime
+	// callback should never be consulted for an entry that's already
+	// in knownProviderDisplayNames).
+	if got := getProviderDisplayName("openai"); got != "OpenAI" {
+		t.Errorf("built-in: got %q, want %q", got, "OpenAI")
+	}
+
+	// Provider unknown to both static map and runtime callback falls
+	// back to the raw id.
+	if got := getProviderDisplayName("never-heard-of-it"); got != "never-heard-of-it" {
+		t.Errorf("unknown: got %q, want raw id", got)
+	}
+}
+
 func TestHasProviderAuth_WithoutCredential(t *testing.T) {
 	configDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", configDir)

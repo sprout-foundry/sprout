@@ -128,7 +128,7 @@ func TestAddAndCommitFile_AlreadyCommittedUnchanged(t *testing.T) {
 	require.NoError(t, os.Chdir(dir))
 
 	// Add init.go which is already committed and unchanged
-	err = AddAndCommitFile("init.go", "should fail - nothing to commit")
+	err = AddAndCommitFile(dir, "init.go", "should fail - nothing to commit")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "error committing changes to git")
 }
@@ -145,7 +145,7 @@ func TestAddAndCommitFile_CommitSuccess(t *testing.T) {
 	fp := filepath.Join(dir, "new_commit.go")
 	require.NoError(t, os.WriteFile(fp, []byte("package new\n"), 0644))
 
-	err = AddAndCommitFile("new_commit.go", "add new_commit.go")
+	err = AddAndCommitFile(dir, "new_commit.go", "add new_commit.go")
 	assert.NoError(t, err)
 
 	out, _ := exec.Command("git", "-C", dir, "log", "-1", "--pretty=%s").CombinedOutput()
@@ -171,7 +171,7 @@ func TestAddAllAndCommit_ShortTimeoutSuccess(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "to.go"), []byte("package to\n"), 0644))
 	gitRun(t, dir, "add", "to.go")
 
-	err = AddAllAndCommit("timeout test", 1)
+	err = AddAllAndCommit(dir, "timeout test", 1)
 	assert.NoError(t, err)
 }
 
@@ -734,7 +734,7 @@ func TestPerformGitCommit_Success(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "perf.go"), []byte("package perf\n"), 0644))
 	gitRun(t, dir, "add", "perf.go")
 
-	err = PerformGitCommit("perform test success")
+	err = PerformGitCommit(dir, "perform test success")
 	assert.NoError(t, err)
 
 	out, _ := exec.Command("git", "-C", dir, "log", "-1", "--pretty=%s").CombinedOutput()
@@ -776,13 +776,13 @@ var (
 	_ func() (string, int, int, error)                        = GetGitStatus
 	_ func(int) ([]string, error)                             = GetRecentTouchedFiles
 	_ func(string, int) (string, error)                       = GetRecentFileLog
-	_ func(string, string) error                              = AddAndCommitFile
-	_ func(string, int) error                                 = AddAllAndCommit
+	_ func(string, string, string) error                      = AddAndCommitFile
+	_ func(string, string, int) error                         = AddAllAndCommit
 	_ func() (string, error)                                  = GetUncommittedChanges
 	_ func() (string, error)                                  = GetStagedChanges
 	_ func(string) error                                      = CheckStagedChanges
 	_ func(string) (string, error)                            = GetStagedDiff
-	_ func(string) error                                      = PerformGitCommit
+	_ func(string, string) error                              = PerformGitCommit
 	_ func([]CommitFileChange) string                         = generateFallbackCommitMessage
 	_ func(string) string                                     = actionFromStatus
 	_ func(string) bool                                       = isDefaultBranch

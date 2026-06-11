@@ -301,20 +301,32 @@ func TestWorkspacePatchEventIncludesMetadata(t *testing.T) {
 }
 
 // TestWriteFileNoWorkspacePatchOnFailure verifies that when a write
-// fails (e.g. writing to a directory that doesn't exist), no
-// workspace_patch event is published.
+// fails, no workspace_patch event is published.
+//
+// Note: tools.WriteFile does os.MkdirAll on the parent, so a missing
+// directory is NOT a failure case — the prior version of this test
+// happened to pass on macOS only because of leftover /tmp state.
+// To get a deterministic write failure we create a regular file and
+// then try to write to a path that treats that file as a parent
+// directory, which makes MkdirAll fail with ENOTDIR on every OS.
 func TestWriteFileNoWorkspacePatchOnFailure(t *testing.T) {
 	agent, bus := newTestAgentWithEventBus(t)
 	ch := bus.Subscribe("patch_failure_test")
 
-	// Attempt to write to a deeply nested non-existent directory
-	filePath := "/tmp/sprout-test-nonexistent-dir/" + filepath.Join("a", "b", "c", "d", "impossible.txt")
+	// Create a regular file, then build a path that uses it as a
+	// parent directory. tools.WriteFile's MkdirAll cannot create a
+	// directory beneath an existing file, so this fails reliably.
+	parentFile := filepath.Join(t.TempDir(), "not-a-directory")
+	if err := os.WriteFile(parentFile, []byte("blocker"), 0644); err != nil {
+		t.Fatalf("setup: write blocker file: %v", err)
+	}
+	filePath := filepath.Join(parentFile, "impossible.txt")
 
 	_, err := handleWriteFile(context.Background(), agent, map[string]interface{}{
 		"path":    filePath,
 		"content": "this should fail",
 	})
-	require.Error(t, err, "writing to non-existent directory should fail")
+	require.Error(t, err, "writing under a non-directory parent should fail")
 
 	// No workspace_patch should be published on failure
 	expectNoWorkspacePatchEvent(t, ch)

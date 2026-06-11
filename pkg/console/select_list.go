@@ -559,19 +559,23 @@ func renderSelectRow(label, detail string, active bool, termWidth int) string {
 	if detail == "" {
 		return prefix + labelOpen + label + labelClose
 	}
-	// Pad label so detail right-aligns. Account for prefix (2 cells)
-	// and a 2-cell gutter between label and detail.
+	// Pad label so detail right-aligns. Account for prefix (2 cells) and a
+	// 2-cell gutter between label and detail. Measure in display columns so
+	// wide/CJK labels and details align correctly and aren't split mid-rune.
 	const gutter = 2
-	available := termWidth - 2 - gutter - len(detail)
+	available := termWidth - 2 - gutter - displayWidth(detail)
 	if available < 8 {
 		// Not enough room for detail; just append it inline.
 		return prefix + labelOpen + label + labelClose + "  " + dimString(detail)
 	}
 	labelStr := label
-	if len(labelStr) > available {
-		labelStr = labelStr[:available-1] + "…"
+	if displayWidth(labelStr) > available {
+		labelStr = truncateToWidth(label, available, "…")
 	}
-	pad := available - len(labelStr)
+	pad := available - displayWidth(labelStr)
+	if pad < 0 {
+		pad = 0
+	}
 	return prefix + labelOpen + labelStr + labelClose + strings.Repeat(" ", pad+gutter) + dimString(detail)
 }
 

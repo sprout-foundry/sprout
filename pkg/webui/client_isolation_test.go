@@ -97,6 +97,10 @@ func TestMultiWindowClientIsolationForWorkspaceSessionAndModel(t *testing.T) {
 
 	assertWorkspace := func(clientID, expected string) {
 		t.Helper()
+		// Resolve symlinks on expected to match server behavior (macOS /var → /private/var)
+		if evaled, err := filepath.EvalSymlinks(expected); err == nil {
+			expected = evaled
+		}
 		req := httptest.NewRequest(http.MethodGet, "/api/workspace", nil)
 		req.Header.Set(webClientIDHeader, clientID)
 		rec := httptest.NewRecorder()
@@ -219,11 +223,20 @@ func TestActiveQueryIsolationAllowsOtherWindowWorkspaceSwitch(t *testing.T) {
 		t.Fatalf("expected clientB workspace switch to succeed, got %d: %s", recB.Code, recB.Body.String())
 	}
 
-	if got := ws.getWorkspaceRootForRequest(reqA); got != clientAStart {
-		t.Fatalf("clientA workspace should remain unchanged, got %q want %q", got, clientAStart)
+	// Resolve expected paths for comparison (server resolves symlinks via getWorkspaceRootForRequest)
+	evaledClientAStart := clientAStart
+	if evaled, err := filepath.EvalSymlinks(clientAStart); err == nil {
+		evaledClientAStart = evaled
 	}
-	if got := ws.getWorkspaceRootForRequest(reqB); got != clientBTarget {
-		t.Fatalf("clientB workspace should move to target, got %q want %q", got, clientBTarget)
+	evaledClientBTarget := clientBTarget
+	if evaled, err := filepath.EvalSymlinks(clientBTarget); err == nil {
+		evaledClientBTarget = evaled
+	}
+	if got := ws.getWorkspaceRootForRequest(reqA); got != evaledClientAStart {
+		t.Fatalf("clientA workspace should remain unchanged, got %q want %q", got, evaledClientAStart)
+	}
+	if got := ws.getWorkspaceRootForRequest(reqB); got != evaledClientBTarget {
+		t.Fatalf("clientB workspace should move to target, got %q want %q", got, evaledClientBTarget)
 	}
 }
 

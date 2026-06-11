@@ -790,6 +790,155 @@ func TestWalkWorkspace_AdaptiveAutoSkipLearnsFatDirs(t *testing.T) {
 	}
 }
 
+// TestWalkWorkspace_AdaptiveAutoSkipLearnsDistributedBloat covers the
+// distributed-bloat case: thousands of files spread across many
+// shallow subdirectories (e.g. Swift SPM's .build/index-build/...
+// with 9000 files across hundreds of 6D/, 6E/, … subdirs). No single
+// subdirectory exceeds the threshold, but the parent should still be
+// auto-skipped once the cumulative descendant count is computed.
+func TestWalkWorkspace_AdaptiveAutoSkipLearnsDistributedBloat(t *testing.T) {
+	dir := t.TempDir()
+
+	// Lower both thresholds so we don't need to create thousands of
+	// files. 20 for direct, 50 for cumulative: 20 subdirs × 5 files
+	// = 100 descendant files > 50 cumulative threshold.
+	prevDirect := autoSkipFileCountThreshold
+	autoSkipFileCountThreshold = 20
+	prevCumulative := autoSkipCumulativeThreshold
+	autoSkipCumulativeThreshold = 50
+	defer func() {
+		autoSkipFileCountThreshold = prevDirect
+		autoSkipCumulativeThreshold = prevCumulative
+	}()
+
+	// Lean source dir — should NOT be auto-skipped.
+	leanDir := filepath.Join(dir, "src")
+	if err := os.Mkdir(leanDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	mustWriteFile(t, filepath.Join(leanDir, "main.go"), []byte("package main"))
+	mustWriteFile(t, filepath.Join(leanDir, "util.go"), []byte("package main"))
+
+	// Distributed bloat under cache/, mimicking SPM's index layout:
+	// cache/index-build/records/ with 20 subdirs (6D–6W), each
+	// holding 5 files.  No single subdir has more than 5 direct
+	// children — far below the threshold — but the parent cache/
+	// accumulates 100 descendant files.
+	// Use "cache" (not ".build") so it's NOT in the static
+	// shellSnapshotSkipDirs — we want the adaptive logic to learn
+	// this one, not the static skip list.
+	buildDir := filepath.Join(dir, "cache")
+	recordsDir := filepath.Join(buildDir, "index-build", "records")
+	if err := os.MkdirAll(recordsDir, 0o755); err != nil {
+		t.Fatalf("mkdir records: %v", err)
+	}
+	for sub := 0; sub < 20; sub++ {
+		subDir := filepath.Join(recordsDir, "6"+string(rune('D'+sub)))
+		if err := os.Mkdir(subDir, 0o755); err != nil {
+			t.Fatalf("mkdir subdir: %v", err)
+		}
+		for f := 0; f < 5; f++ {
+			mustWriteFile(t, filepath.Join(subDir, strconv.Itoa(f)+".txt"), []byte("x"))
+		}
+	}
+
+	tracker := newTrackerForShellTest(t)
+
+	// First walk: the cumulative bubbling should identify cache/ as
+	// fat (100 descendant files > threshold of 20) and add it to
+	// autoSkipDirs. The lean src/ dir (2 files) should not be touched.
+	tracker.PrimeShellTracking(dir)
+
+	if !tracker.autoSkipDirs[buildDir] {
+		t.Fatalf("cache/ should have been auto-skipped after first walk (100 descendant files); got autoSkipDirs=%v", tracker.autoSkipDirs)
+	}
+	if tracker.autoSkipDirs[leanDir] {
+		t.Errorf("lean dir %q should NOT be in autoSkipDirs (only 2 files)", leanDir)
+	}
+	// No cache/ files should leak into the shell cache (they get
+	// purged as part of the auto-skip cleanup).
+	for path := range tracker.shellCache {
+		rel, _ := filepath.Rel(dir, path)
+		if strings.HasPrefix(rel, "cache/") {
+			t.Errorf("cache/ file %q leaked into cache after auto-skip cleanup", path)
+		}
+	}
+	// Lean files survive.
+	if _, ok := tracker.shellCache[filepath.Join(leanDir, "main.go")]; !ok {
+		t.Errorf("lean source dir's file should remain in cache; got keys %v", mapKeys(tracker.shellCache))
+	}
+
+	// Second walk: must not produce false-positive deletes for the
+	// cache/ files (they were purged from the cache on first walk).
+	tracker.TrackShellTurn(dir, "shell_command", false)
+	for _, ch := range tracker.changes {
+		if strings.Contains(ch.FilePath, "cache/") {
+			t.Errorf("false-positive change recorded for auto-skipped cache/ path: %+v", ch)
+		}
+	}
+}
+
+// TestWalkWorkspace_CumulativeThresholdDoesNotFalsePositiveOnSourceTrees
+// verifies that a legitimate source tree with files spread across
+// subdirectories does NOT get auto-skipped, even when the cumulative
+// descendant count is non-trivial. The cumulative threshold (10000 in
+// production) is set far above any honest source tree; this test
+// simulates a 5000-file source dir (well under 10000) and confirms
+// it stays tracked.
+func TestWalkWorkspace_CumulativeThresholdDoesNotFalsePositiveOnSourceTrees(t *testing.T) {
+	dir := t.TempDir()
+
+	// Use production thresholds scaled proportionally:
+	// - Direct threshold 50: each subdir has 30 files (under 50).
+	// - Cumulative threshold 200: src/ has 150 files total (under 200).
+	// This mirrors the production ratio where source subdirs have
+	// ~50-200 files and the cumulative cap is 10000.
+	prevDirect := autoSkipFileCountThreshold
+	autoSkipFileCountThreshold = 50
+	prevCumulative := autoSkipCumulativeThreshold
+	autoSkipCumulativeThreshold = 200
+	defer func() {
+		autoSkipFileCountThreshold = prevDirect
+		autoSkipCumulativeThreshold = prevCumulative
+	}()
+
+	// Simulate a source tree: src/models/ (30 files), src/services/ (30),
+	// src/handlers/ (30), src/utils/ (30), src/config/ (30) = 150 total.
+	// Each subdir has 30 files (< 50 direct threshold).
+	// Total descendants = 150 (< 200 cumulative threshold).
+	srcDir := filepath.Join(dir, "src")
+	for _, pkg := range []string{"models", "services", "handlers", "utils", "config"} {
+		pkgDir := filepath.Join(srcDir, pkg)
+		if err := os.MkdirAll(pkgDir, 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		for f := 0; f < 30; f++ {
+			mustWriteFile(t, filepath.Join(pkgDir, "file"+strconv.Itoa(f)+".go"), []byte("package "+pkg))
+		}
+	}
+
+	tracker := newTrackerForShellTest(t)
+	tracker.PrimeShellTracking(dir)
+
+	// src/ must NOT be auto-skipped — 150 files is under the 200
+	// cumulative threshold, even though it exceeds the 20 direct
+	// threshold when counted cumulatively.
+	if tracker.autoSkipDirs[srcDir] {
+		t.Errorf("src/ should NOT be auto-skipped (150 descendant files < 200 cumulative threshold); got autoSkipDirs=%v", tracker.autoSkipDirs)
+	}
+
+	// All source files should be in the cache — nothing was pruned.
+	found := 0
+	for path := range tracker.shellCache {
+		if strings.HasPrefix(path, srcDir+string(filepath.Separator)) {
+			found++
+		}
+	}
+	if found != 150 {
+		t.Errorf("expected all 150 source files in cache, got %d", found)
+	}
+}
+
 // TestCaptureShellSnapshot_SkipsSymlinks confirms the walker doesn't
 // dereference symlinks. Following a symlink to /etc/passwd or
 // somewhere in $HOME would leak content outside the workspace into

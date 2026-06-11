@@ -54,6 +54,15 @@ type webClientContext struct {
 	ActiveQuery      bool
 	LastSeenAt       time.Time
 
+	// Paused is set when the client signals it is backgrounding (the tab went
+	// hidden) rather than closing. While paused, the heartbeat monitor leaves
+	// an in-flight query running (up to maxPausedQueryDuration) instead of
+	// cancelling it, so a long agent run keeps going in the background and the
+	// client can reattach when it returns. Cleared on reconnect, on an explicit
+	// resume, or on a session_close (which cancels the run outright).
+	Paused   bool
+	PausedAt time.Time
+
 	// Multi-chat support: one client context (tab) can have multiple
 	// independent chat sessions, each with its own agent state.
 	ChatSessions   map[string]*chatSession
@@ -96,6 +105,29 @@ func (ws *ReactWebServer) touchClientLastSeen(clientID string) {
 
 	if ctx := ws.clientContexts[clientID]; ctx != nil {
 		ctx.LastSeenAt = time.Now()
+	}
+}
+
+// setClientPaused marks (or clears) a client as paused — the tab is backgrounded
+// but expected to return. While paused, the heartbeat monitor keeps any in-flight
+// query running instead of cancelling it on staleness. Cleared on reconnect /
+// resume / session_close.
+func (ws *ReactWebServer) setClientPaused(clientID string, paused bool) {
+	clientID = strings.TrimSpace(clientID)
+	if clientID == "" {
+		clientID = defaultWebClientID
+	}
+
+	ws.mutex.Lock()
+	defer ws.mutex.Unlock()
+
+	if ctx := ws.clientContexts[clientID]; ctx != nil {
+		ctx.Paused = paused
+		if paused {
+			ctx.PausedAt = time.Now()
+		} else {
+			ctx.PausedAt = time.Time{}
+		}
 	}
 }
 
@@ -280,7 +312,14 @@ func (ws *ReactWebServer) clearClientSSHContextForSessionKey(sessionKey string) 
 }
 
 func (ws *ReactWebServer) getWorkspaceRootForRequest(r *http.Request) string {
-	return ws.getClientContextForRequest(r).WorkspaceRoot
+	root := ws.getClientContextForRequest(r).WorkspaceRoot
+	// Resolve symlinks so that canonicalizePath comparisons are consistent
+	// (macOS /var → /private/var). The daemonRoot/workspaceRoot are resolved
+	// at server construction, but per-client context roots may not be.
+	if evaled, err := filepath.EvalSymlinks(root); err == nil {
+		return evaled
+	}
+	return root
 }
 
 // getLayeredConfigManager creates a config manager using the layered approach
@@ -481,6 +520,7 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 		agentInst.SetEventMetadata(meta)
 		agentInst.EnableStreaming(func(string) {})
 		agentInst.SetHasActiveWebUIClients(ws.HasActiveWebUIClients)
+		agentInst.InjectWebUIManagers(ws.GetSecurityPromptMgr(), ws.GetAskUserMgr())
 		// Wire the TerminalManager from the client context into the agent for WebUI mode.
 		if terminal != nil {
 			agentInst.SetTerminalManager(terminal)
@@ -507,6 +547,7 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 				agentInst.SetEventMetadata(meta)
 				agentInst.EnableStreaming(func(string) {})
 				agentInst.SetHasActiveWebUIClients(ws.HasActiveWebUIClients)
+				agentInst.InjectWebUIManagers(ws.GetSecurityPromptMgr(), ws.GetAskUserMgr())
 				// Wire the TerminalManager from the client context into the agent for WebUI mode.
 				if terminal != nil {
 					agentInst.SetTerminalManager(terminal)
@@ -534,6 +575,7 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 		agentInst.SetEventMetadata(meta)
 		agentInst.EnableStreaming(func(string) {})
 		agentInst.SetHasActiveWebUIClients(ws.HasActiveWebUIClients)
+		agentInst.InjectWebUIManagers(ws.GetSecurityPromptMgr(), ws.GetAskUserMgr())
 		// Wire the TerminalManager from the client context into the agent for WebUI mode.
 		if terminal != nil {
 			agentInst.SetTerminalManager(terminal)
@@ -606,6 +648,7 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 	created.SetEventMetadata(meta)
 	created.EnableStreaming(func(string) {})
 	created.SetHasActiveWebUIClients(ws.HasActiveWebUIClients)
+	created.InjectWebUIManagers(ws.GetSecurityPromptMgr(), ws.GetAskUserMgr())
 
 	// Wire the TerminalManager from the client context into the agent for WebUI mode.
 	// CLI mode does not set this (agent.terminalManager stays nil).
@@ -772,6 +815,15 @@ func (ws *ReactWebServer) getChatAgent(clientID, chatID string) (*agent.Agent, e
 		}
 		return nil, fmt.Errorf("get or create chat agent: %w", err)
 	}
+
+	// Wire WebUI-owned managers and client-presence callback so that
+	// ask_user, security approvals, and security prompts route through
+	// the shared manager instances that the WebSocket handlers resolve
+	// responses on. Without this injection, each chat-session agent uses
+	// its own default managers and ask_user/approval requests either fall
+	// through to stdin (ask_user) or time out (approvals).
+	agentInst.SetHasActiveWebUIClients(ws.HasActiveWebUIClients)
+	agentInst.InjectWebUIManagers(ws.GetSecurityPromptMgr(), ws.GetAskUserMgr())
 
 	// Wire the TerminalManager from the client context into the agent for WebUI mode.
 	// CLI mode does not set this (agent.terminalManager stays nil).

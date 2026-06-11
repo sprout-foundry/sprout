@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { ChevronRight, ChevronDown, Loader2, CheckCircle2, XCircle, Bot } from 'lucide-react';
 import type { SubagentRun } from './types';
 import { getPersonaColor, formatCost, formatTokens } from '@sprout/ui';
+import { subagentDepthLabel } from './SubagentActivityFeed';
 import './SubagentTree.css';
 
 // ── Duration Formatting ──────────────────────────────────────────────
@@ -114,7 +115,13 @@ function SubagentTreeNode({ node, defaultExpanded = true }: SubagentTreeNodeProp
           )}
           <Bot size={13} className="subagent-tree-persona-icon" />
           <span className="subagent-tree-persona">{run.persona}</span>
-          {depth > 0 && <span className="subagent-tree-depth-badge">D{depth}</span>}
+          {depth > 0 && (
+            <span
+              className="subagent-tree-depth-badge"
+              title={subagentDepthLabel(depth)}
+              aria-label={subagentDepthLabel(depth)}
+            >D{depth}</span>
+          )}
           {run.isParallel && <span className="subagent-tree-parallel-badge">parallel</span>}
         </span>
         <span className="subagent-tree-node-right">

@@ -271,11 +271,16 @@ func (ws *ReactWebServer) handleColdHydrateRequest(safeConn *SafeConn, workspace
 	filesSent := int64(0)
 	var bytesSent int64
 
-	// Resolve the workspace root once for path validation
+	// Resolve the workspace root once for path validation (eval symlinks so
+	// comparison with EvalSymlinks'd file paths is consistent — macOS /var
+	// → /private/var, etc.).
 	absRoot, rootErr := filepath.Abs(workspaceRoot)
 	if rootErr != nil {
 		log.Printf("[hydrate] cannot resolve workspace root: %v", rootErr)
 		absRoot = workspaceRoot
+	}
+	if evaled, err := filepath.EvalSymlinks(absRoot); err == nil {
+		absRoot = evaled
 	}
 
 	for i, fi := range files {

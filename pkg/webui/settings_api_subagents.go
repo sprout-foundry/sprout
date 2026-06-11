@@ -4,6 +4,8 @@ package webui
 
 import (
 	"net/http"
+
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 // handleAPISettingsSubagentTypes dispatches GET on /api/settings/subagent-types.
@@ -19,23 +21,32 @@ func (ws *ReactWebServer) handleAPISettingsSubagentTypes(w http.ResponseWriter, 
 }
 
 func (ws *ReactWebServer) handleAPISettingsSubagentTypesGet(w http.ResponseWriter, r *http.Request) {
-	cm := ws.getConfigManager(r, w)
+	// GET is best-effort: fall back to empty defaults rather than 503
+	// when no config manager is available. See the matching comment on
+	// handleAPISettingsProvidersGet for the rationale.
+	cm := ws.resolveConfigManagerQuietly(r)
+	providers := ws.listProviders(ws.resolveClientID(r))
+
 	if cm == nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			// subagent_types is a map[string]SubagentType in real config —
+			// emit an empty map so the JSON shape matches what the UI
+			// expects (`{}`, not `[]`).
+			"subagent_types":      map[string]configuration.SubagentType{},
+			"disabled_personas":   []string{},
+			"available_providers": providers,
+			"current_provider":    "",
+			"current_model":       "",
+		})
 		return
 	}
 
 	cfg := cm.GetConfig()
-
-	providers := ws.listProviders(ws.resolveClientID(r))
-
-	currentProvider := cfg.GetSubagentProvider()
-	currentModel := cfg.GetSubagentModel()
-
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"subagent_types":      cfg.SubagentTypes,
 		"disabled_personas":   cfg.DisabledPersonas,
 		"available_providers": providers,
-		"current_provider":    currentProvider,
-		"current_model":       currentModel,
+		"current_provider":    cfg.GetSubagentProvider(),
+		"current_model":       cfg.GetSubagentModel(),
 	})
 }

@@ -187,6 +187,69 @@ else
 fi
 cleanup_test_env "$TEST_DIR"
 
+echo "=== Test: community-configs/ providers are included in index ==="
+TEST_DIR=$(setup_test_env)
+mkdir -p "$TEST_DIR/pkg/agent_providers/community-configs"
+echo '{"name":"omega-community"}' > "$TEST_DIR/pkg/agent_providers/community-configs/omega-community.json"
+echo '{"name":"delta-community"}' > "$TEST_DIR/pkg/agent_providers/community-configs/delta-community.json"
+cd "$TEST_DIR"
+bash scripts/generate-provider-index.sh > /dev/null 2>&1
+cd - > /dev/null
+
+providers=$(jq -r '.providers[]' "$TEST_DIR/providers/index.json" | tr '\n' ' ')
+expected="alpha beta delta-community gamma omega-community zeta "
+if [[ "$providers" == "$expected" ]]; then
+    pass "community-configs providers merged + sorted into index"
+else
+    fail "providers: got '$providers', expected '$expected'"
+fi
+cleanup_test_env "$TEST_DIR"
+
+echo "=== Test: error on cross-dir provider collision ==="
+TEST_DIR=$(setup_test_env)
+mkdir -p "$TEST_DIR/pkg/agent_providers/community-configs"
+# Same id 'alpha' exists in both — should fail loud rather than pick a winner.
+echo '{"name":"alpha"}' > "$TEST_DIR/pkg/agent_providers/community-configs/alpha.json"
+cd "$TEST_DIR"
+if bash scripts/generate-provider-index.sh > /dev/null 2>&1; then
+    fail "Script should fail when the same id exists in configs/ and community-configs/"
+else
+    pass "Script correctly fails on cross-dir collision"
+fi
+cd - > /dev/null
+cleanup_test_env "$TEST_DIR"
+
+echo "=== Test: community-configs/ only (no embedded configs) ==="
+TEST_DIR=$(setup_test_env)
+# Remove the embedded configs entirely so only community-configs/ has entries.
+rm -f "$TEST_DIR/pkg/agent_providers/configs/"*.json
+mkdir -p "$TEST_DIR/pkg/agent_providers/community-configs"
+echo '{"name":"only-community"}' > "$TEST_DIR/pkg/agent_providers/community-configs/only-community.json"
+cd "$TEST_DIR"
+bash scripts/generate-provider-index.sh > /dev/null 2>&1
+cd - > /dev/null
+
+providers=$(jq -r '.providers[]' "$TEST_DIR/providers/index.json" | tr '\n' ' ')
+if [[ "$providers" == "only-community " ]]; then
+    pass "community-configs-only case produces the expected index"
+else
+    fail "providers: got '$providers', expected 'only-community '"
+fi
+cleanup_test_env "$TEST_DIR"
+
+echo "=== Test: error when BOTH dirs are empty ==="
+TEST_DIR=$(setup_test_env)
+rm -f "$TEST_DIR/pkg/agent_providers/configs/"*.json
+mkdir -p "$TEST_DIR/pkg/agent_providers/community-configs"
+cd "$TEST_DIR"
+if bash scripts/generate-provider-index.sh > /dev/null 2>&1; then
+    fail "Script should fail when both source dirs are empty"
+else
+    pass "Script correctly fails when both source dirs are empty"
+fi
+cd - > /dev/null
+cleanup_test_env "$TEST_DIR"
+
 echo ""
 echo "=== Results: $PASS/$TOTAL passed, $FAIL failed ==="
 if [[ $FAIL -gt 0 ]]; then

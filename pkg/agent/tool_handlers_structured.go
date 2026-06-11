@@ -1,9 +1,7 @@
 package agent
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,7 +12,6 @@ import (
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
-	"gopkg.in/yaml.v3"
 )
 
 type jsonPatchOperation struct {
@@ -40,6 +37,19 @@ func handleWriteStructuredFile(ctx context.Context, a *Agent, args map[string]in
 	data, exists := args["data"]
 	if !exists {
 		return "", agenterrors.NewInvalidInputError("parameter 'data' is required", nil)
+	}
+
+	// Convert data to *OrderedMap for ordered serialization.
+	// If the caller already provides an *OrderedMap (future-proofing), use it directly.
+	// Otherwise, convert map[string]interface{} → OrderedMapFromMap (alphabetical order).
+	switch d := data.(type) {
+	case *OrderedMap:
+		// Already ordered — use as-is.
+	case map[string]interface{}:
+		data = OrderedMapFromMap(d)
+	default:
+		// For non-object types (arrays, scalars), pass through — the
+		// ordered serializers handle these via their fallback paths.
 	}
 
 	if schemaRaw, ok := args["schema"]; ok && schemaRaw != nil {
@@ -176,67 +186,22 @@ func inferStructuredFormat(path, provided string) string {
 func serializeStructuredContent(format string, data interface{}) (string, error) {
 	switch format {
 	case "json":
-		var buf bytes.Buffer
-		enc := json.NewEncoder(&buf)
-		enc.SetEscapeHTML(false)
-		enc.SetIndent("", "  ")
-		if err := enc.Encode(data); err != nil {
-			return "", fmt.Errorf("failed to marshal JSON: %w", err)
-		}
-		return strings.TrimRight(buf.String(), "\n"), nil
+		return SerializeJSONOrdered(data)
 	case "yaml":
-		b, err := yaml.Marshal(data)
-		if err != nil {
-			return "", fmt.Errorf("failed to marshal YAML: %w", err)
-		}
-		if len(b) == 0 || b[len(b)-1] != '\n' {
-			b = append(b, '\n')
-		}
-		return string(b), nil
+		return SerializeYAMLOrdered(data)
 	default:
 		return "", fmt.Errorf("unsupported format: %s", format)
 	}
 }
 
 func deserializeStructuredContent(format, content string) (interface{}, error) {
-	var doc interface{}
 	switch format {
 	case "json":
-		if err := json.Unmarshal([]byte(content), &doc); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal JSON: %w", err)
-		}
+		return ParseJSONOrdered(content)
 	case "yaml":
-		if err := yaml.Unmarshal([]byte(content), &doc); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal YAML: %w", err)
-		}
+		return ParseYAMLOrdered(content)
 	default:
 		return nil, fmt.Errorf("unsupported format: %s", format)
-	}
-	return normalizeYAMLValue(doc), nil
-}
-
-func normalizeYAMLValue(v interface{}) interface{} {
-	switch typed := v.(type) {
-	case map[string]interface{}:
-		out := make(map[string]interface{}, len(typed))
-		for k, value := range typed {
-			out[k] = normalizeYAMLValue(value)
-		}
-		return out
-	case map[interface{}]interface{}:
-		out := make(map[string]interface{}, len(typed))
-		for k, value := range typed {
-			out[fmt.Sprint(k)] = normalizeYAMLValue(value)
-		}
-		return out
-	case []interface{}:
-		out := make([]interface{}, len(typed))
-		for i := range typed {
-			out[i] = normalizeYAMLValue(typed[i])
-		}
-		return out
-	default:
-		return typed
 	}
 }
 
@@ -258,35 +223,66 @@ func validateDataAgainstSchema(data interface{}, schema map[string]interface{}, 
 		typeName, _ := typeRaw.(string)
 		switch typeName {
 		case "object":
-			obj, ok := data.(map[string]interface{})
-			if !ok {
-				return []string{fmt.Sprintf("%s: expected object", path)}
-			}
-			if reqRaw, ok := schema["required"]; ok {
-				required, ok := reqRaw.([]interface{})
-				if ok {
-					for _, entry := range required {
-						key := fmt.Sprint(entry)
-						if _, exists := obj[key]; !exists {
-							errs = append(errs, fmt.Sprintf("%s.%s: required field missing", path, key))
+			// Support both *OrderedMap and map[string]interface{} for
+			// schema validation. The *OrderedMap case must come first
+			// because Go type switches match the first applicable case.
+			switch obj := data.(type) {
+			case *OrderedMap:
+				if reqRaw, ok := schema["required"]; ok {
+					required, ok := reqRaw.([]interface{})
+					if ok {
+						for _, entry := range required {
+							key := fmt.Sprint(entry)
+							if _, exists := obj.Get(key); !exists {
+								errs = append(errs, fmt.Sprintf("%s.%s: required field missing", path, key))
+							}
 						}
 					}
 				}
-			}
-			props, _ := schema["properties"].(map[string]interface{})
-			for key, value := range obj {
-				propRaw, exists := props[key]
-				if !exists {
-					if additional, ok := schema["additionalProperties"].(bool); ok && !additional {
-						errs = append(errs, fmt.Sprintf("%s.%s: additional property not allowed", path, key))
+				props, _ := schema["properties"].(map[string]interface{})
+				for _, pair := range obj.InOrder() {
+					propRaw, exists := props[pair.Key]
+					if !exists {
+						if additional, ok := schema["additionalProperties"].(bool); ok && !additional {
+							errs = append(errs, fmt.Sprintf("%s.%s: additional property not allowed", path, pair.Key))
+						}
+						continue
 					}
-					continue
+					propSchema, ok := propRaw.(map[string]interface{})
+					if !ok {
+						continue
+					}
+					errs = append(errs, validateDataAgainstSchema(pair.Value, propSchema, path+"."+pair.Key)...)
 				}
-				propSchema, ok := propRaw.(map[string]interface{})
-				if !ok {
-					continue
+			case map[string]interface{}:
+				if reqRaw, ok := schema["required"]; ok {
+					required, ok := reqRaw.([]interface{})
+					if ok {
+						for _, entry := range required {
+							key := fmt.Sprint(entry)
+							if _, exists := obj[key]; !exists {
+								errs = append(errs, fmt.Sprintf("%s.%s: required field missing", path, key))
+							}
+						}
+					}
 				}
-				errs = append(errs, validateDataAgainstSchema(value, propSchema, path+"."+key)...)
+				props, _ := schema["properties"].(map[string]interface{})
+				for key, value := range obj {
+					propRaw, exists := props[key]
+					if !exists {
+						if additional, ok := schema["additionalProperties"].(bool); ok && !additional {
+							errs = append(errs, fmt.Sprintf("%s.%s: additional property not allowed", path, key))
+						}
+						continue
+					}
+					propSchema, ok := propRaw.(map[string]interface{})
+					if !ok {
+						continue
+					}
+					errs = append(errs, validateDataAgainstSchema(value, propSchema, path+"."+key)...)
+				}
+			default:
+				return []string{fmt.Sprintf("%s: expected object", path)}
 			}
 		case "array":
 			arr, ok := data.([]interface{})
@@ -325,9 +321,13 @@ func validateDataAgainstSchema(data interface{}, schema map[string]interface{}, 
 	if enumRaw, ok := schema["enum"]; ok {
 		enumVals, ok := enumRaw.([]interface{})
 		if ok {
+			// Normalize *OrderedMap → map[string]interface{} so that
+			// reflect.DeepEqual works when data is *OrderedMap but enum
+			// values are map[string]interface{} (from JSON tool args).
+			comparableData := convertFromOrderedValue(data)
 			match := false
 			for _, candidate := range enumVals {
-				if reflect.DeepEqual(candidate, data) {
+				if reflect.DeepEqual(candidate, comparableData) {
 					match = true
 					break
 				}
@@ -476,7 +476,11 @@ func applyPatchOperation(doc interface{}, op jsonPatchOperation) (interface{}, e
 		if err != nil {
 			return nil, fmt.Errorf("failed to read pointer value: %w", err)
 		}
-		if !reflect.DeepEqual(actual, op.Value) {
+		// Normalize *OrderedMap → map[string]interface{} so that
+		// reflect.DeepEqual works when op.Value is a plain map (from JSON
+		// tool args) but actual is an *OrderedMap (from ordered deserialization).
+		comparableActual := convertFromOrderedValue(actual)
+		if !reflect.DeepEqual(comparableActual, op.Value) {
 			return nil, fmt.Errorf("patch test failed at %s", op.Path)
 		}
 		return doc, nil
@@ -489,7 +493,11 @@ func applyMutation(node interface{}, segments []string, value interface{}, op st
 	if len(segments) == 0 {
 		switch op {
 		case "add", "replace":
-			return value, nil
+			// Convert map[string]interface{} values to *OrderedMap for
+			// deterministic key ordering during serialization. Patch values
+			// arrive from json.Unmarshal (via tool args) which loses key
+			// order — converting ensures consistent output.
+			return convertToOrderedValue(value), nil
 		case "remove":
 			return nil, nil
 		default:
@@ -503,6 +511,20 @@ func applyMutation(node interface{}, segments []string, value interface{}, op st
 	}
 
 	switch typed := node.(type) {
+	case *OrderedMap:
+		child, exists := typed.Get(token)
+		if !exists {
+			if op != "add" {
+				return nil, fmt.Errorf("path segment '%s' does not exist", token)
+			}
+			child = NewOrderedMap()
+		}
+		updatedChild, err := applyMutation(child, segments[1:], value, op)
+		if err != nil {
+			return nil, fmt.Errorf("failed to apply mutation: %w", err)
+		}
+		typed.Set(token, updatedChild)
+		return typed, nil
 	case map[string]interface{}:
 		child, exists := typed[token]
 		if !exists {
@@ -534,7 +556,30 @@ func applyMutation(node interface{}, segments []string, value interface{}, op st
 }
 
 func mutateAtLeaf(node interface{}, token string, value interface{}, op string) (interface{}, error) {
+	// Convert values to ordered form before storing. Patch values arrive from
+	// json.Unmarshal (via tool args) as map[string]interface{}, which loses
+	// key order. Converting ensures deterministic serialization output.
+	orderedValue := convertToOrderedValue(value)
+
 	switch typed := node.(type) {
+	case *OrderedMap:
+		switch op {
+		case "add":
+			typed.Set(token, orderedValue)
+			return typed, nil
+		case "replace":
+			if _, exists := typed.Get(token); !exists {
+				return nil, fmt.Errorf("cannot replace missing key '%s'", token)
+			}
+			typed.Set(token, orderedValue)
+			return typed, nil
+		case "remove":
+			if _, exists := typed.Get(token); !exists {
+				return nil, fmt.Errorf("cannot remove missing key '%s'", token)
+			}
+			typed.Delete(token)
+			return typed, nil
+		}
 	case map[string]interface{}:
 		switch op {
 		case "add":
@@ -544,7 +589,7 @@ func mutateAtLeaf(node interface{}, token string, value interface{}, op string) 
 			if _, exists := typed[token]; !exists {
 				return nil, fmt.Errorf("cannot replace missing key '%s'", token)
 			}
-			typed[token] = value
+			typed[token] = orderedValue
 			return typed, nil
 		case "remove":
 			if _, exists := typed[token]; !exists {
@@ -555,7 +600,7 @@ func mutateAtLeaf(node interface{}, token string, value interface{}, op string) 
 		}
 	case []interface{}:
 		if op == "add" && token == "-" {
-			return append(typed, value), nil
+			return append(typed, orderedValue), nil
 		}
 		idx, err := strconv.Atoi(token)
 		if err != nil {
@@ -569,13 +614,13 @@ func mutateAtLeaf(node interface{}, token string, value interface{}, op string) 
 			}
 			typed = append(typed, nil)
 			copy(typed[idx+1:], typed[idx:])
-			typed[idx] = value
+			typed[idx] = orderedValue
 			return typed, nil
 		case "replace":
 			if idx < 0 || idx >= len(typed) {
 				return nil, fmt.Errorf("array replace index out of range: %d", idx)
 			}
-			typed[idx] = value
+			typed[idx] = orderedValue
 			return typed, nil
 		case "remove":
 			if idx < 0 || idx >= len(typed) {
@@ -613,6 +658,12 @@ func readPointerValue(doc interface{}, segments []string) (interface{}, error) {
 	current := doc
 	for _, segment := range segments {
 		switch typed := current.(type) {
+		case *OrderedMap:
+			val, exists := typed.Get(segment)
+			if !exists {
+				return nil, fmt.Errorf("path segment '%s' does not exist", segment)
+			}
+			current = val
 		case map[string]interface{}:
 			value, exists := typed[segment]
 			if !exists {

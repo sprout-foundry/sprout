@@ -249,8 +249,10 @@ func TestApplyTerminalWidthChangeResetsRedrawState(t *testing.T) {
 		}
 	})
 
-	if !strings.HasPrefix(output, "\r"+ClearLineSeq()+"\n") {
-		t.Fatalf("expected resize redraw to start on a fresh line, got %q", output)
+	// On resize we clear from the cursor to the end of the screen and redraw in
+	// place (no extra blank line), since the terminal has re-wrapped the rows.
+	if !strings.HasPrefix(output, "\r\033[J") {
+		t.Fatalf("expected resize redraw to clear-to-end-of-screen in place, got %q", output)
 	}
 	if ir.terminalWidth != 6 {
 		t.Fatalf("unexpected terminal width: %d", ir.terminalWidth)

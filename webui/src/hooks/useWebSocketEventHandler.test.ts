@@ -405,3 +405,56 @@ describe('subagent_activity', () => {
     expect(stateHolder.current.subagentActivities).toHaveLength(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Tests: chat_run_restored gap handling (reconnect replay)
+// ---------------------------------------------------------------------------
+
+describe('chat_run_restored', () => {
+  function setup(activeChatId: string | null) {
+    const stateHolder = { current: createDefaultState() };
+    const setStateMock = vi.fn((updater: unknown) => {
+      if (typeof updater === 'function') {
+        const prev = stateHolder.current;
+        stateHolder.current = { ...prev, ...(updater(prev) as object) };
+      } else {
+        stateHolder.current = updater as typeof stateHolder.current;
+      }
+    });
+    const activeChatIdRef: MutableRefObject<string | null> = { current: activeChatId };
+    act(() => {
+      root.render(createElement(HookWrapper, { stateHolder, setStateMock, activeChatIdRef }));
+    });
+    const reloads: Array<string | undefined> = [];
+    const onReload = (e: Event) => reloads.push((e as CustomEvent<{ chatId?: string }>).detail?.chatId);
+    window.addEventListener('sprout:chat-gap-reload', onReload);
+    return { reloads, cleanup: () => window.removeEventListener('sprout:chat-gap-reload', onReload) };
+  }
+
+  it('requests a reload when gap is true for the active chat', () => {
+    const { reloads, cleanup } = setup('chat-1');
+    act(() => {
+      hookHandleEvent!({ id: 'e', type: 'chat_run_restored', data: { gap: true, chat_id: 'chat-1' } });
+    });
+    expect(reloads).toEqual(['chat-1']);
+    cleanup();
+  });
+
+  it('does NOT reload when gap is false (replay is complete)', () => {
+    const { reloads, cleanup } = setup('chat-1');
+    act(() => {
+      hookHandleEvent!({ id: 'e', type: 'chat_run_restored', data: { gap: false, chat_id: 'chat-1' } });
+    });
+    expect(reloads).toHaveLength(0);
+    cleanup();
+  });
+
+  it('does NOT reload a chat the user is not viewing', () => {
+    const { reloads, cleanup } = setup('chat-1');
+    act(() => {
+      hookHandleEvent!({ id: 'e', type: 'chat_run_restored', data: { gap: true, chat_id: 'chat-2' } });
+    });
+    expect(reloads).toHaveLength(0);
+    cleanup();
+  });
+});

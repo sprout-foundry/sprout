@@ -5,9 +5,18 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/google/uuid"
+
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/redact"
 )
+
+// newCheckpointID returns a stable identifier for a new TurnCheckpoint.
+// Used by SP-066 Phase 2 rollups to reference source checkpoints via
+// SourceCheckpointIDs independently of slice position.
+func newCheckpointID() string {
+	return "cp-" + uuid.NewString()
+}
 
 // collectCheckpointFileMetadata returns the file-change manifest + revision
 // ID to embed in the turn checkpoint about to be recorded. Pulls from the
@@ -141,6 +150,7 @@ func (a *Agent) recordTurnCheckpointFromMessages(startIndex, endIndex int, turnM
 	actionableSummary = appendFileMetadataToSummary(actionableSummary, fileChanges, revisionID)
 
 	checkpoint := TurnCheckpoint{
+		ID:                newCheckpointID(),
 		StartIndex:        startIndex,
 		EndIndex:          endIndex,
 		Summary:           summary,
@@ -170,6 +180,11 @@ func (a *Agent) recordTurnCheckpointFromMessages(startIndex, endIndex int, turnM
 		defer mu.Unlock()
 		checkpoints := a.state.GetTurnCheckpoints()
 		if n := len(checkpoints); n > 0 && checkpoints[n-1].StartIndex == startIndex {
+			// Preserve the prior ID so any rollup that already referenced
+			// this checkpoint via SourceCheckpointIDs remains valid.
+			if existing := checkpoints[n-1].ID; existing != "" {
+				checkpoint.ID = existing
+			}
 			checkpoints[n-1] = checkpoint
 			a.state.SetTurnCheckpoints(checkpoints)
 		} else {
@@ -214,6 +229,12 @@ func (a *Agent) recordTurnCheckpointFromMessages(startIndex, endIndex int, turnM
 			a.state.SetSessionIntentEmbeddingIfNil(turn.PromptEmbedding)
 		}
 	}
+
+	// SP-066 Phase 2: after a new per-turn checkpoint lands, check whether
+	// any level is now over its rollup threshold. Idempotent and bounded —
+	// at most one rollup runs at a time per agent; subsequent turns retrigger
+	// for additional levels.
+	a.scheduleRollupIfNeeded()
 }
 
 func (a *Agent) buildTurnCheckpointSummary(messages []api.Message) string {

@@ -197,7 +197,7 @@ func TestCalculateOutputBudget(t *testing.T) {
 			inputTokens:  10000,
 			wantOK:       true,
 			minOutput:    MinOutputTokens,
-			maxOutput:    21000, // 32K - 10K = 22K, minus ~5% buffer (~1.1K) = ~20.9K
+			maxOutput:    19000, // 32K - 10K = 22K remaining, buffer = 10% of 32K = 3200, output = 18800
 		},
 		{
 			name:         "input exceeds context",
@@ -220,15 +220,15 @@ func TestCalculateOutputBudget(t *testing.T) {
 			contextLimit: 2000,
 			inputTokens:  500,
 			wantOK:       true,
-			minOutput:    MinOutputTokens, // Should clamp to minimum
-			maxOutput:    1500,
+			minOutput:    MinOutputTokens, // buffer = 10% of 2000 = 200, floored to 2000 >= remaining (1500), returns min
+			maxOutput:    MinOutputTokens,
 		},
 		{
 			name:         "budget never exceeds remaining context",
 			contextLimit: 1200,
 			inputTokens:  900,
 			wantOK:       true,
-			minOutput:    300,
+			minOutput:    300, // buffer = 10% of 1200 = 120, floored to 2000 >= remaining (300), returns remaining
 			maxOutput:    300,
 		},
 		{
@@ -237,7 +237,7 @@ func TestCalculateOutputBudget(t *testing.T) {
 			inputTokens:  1000,
 			wantOK:       true,
 			minOutput:    MinOutputTokens,
-			maxOutput:    30000,
+			maxOutput:    28000, // defaults to 32K context, buffer = 3200, remaining = 31K, output = 27800
 		},
 	}
 

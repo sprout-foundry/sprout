@@ -43,6 +43,22 @@ func (a *Agent) markShellCommandApproved(command string) {
 	a.recentlyApprovedShellCommands.Store(command, time.Now())
 }
 
+// recordGateApproval bridges a Gate-1 approval (static classifier, in
+// ExecuteTool or the seed pre-execute hook) to Gate 2 (the persona cascade
+// in handleShellCommand) so the user isn't re-prompted for the same command.
+// Only shell_command has a Gate 2, so every other tool is a no-op. This is
+// the single approval bridge: SP-068 collapsed the former context-value
+// bridge (WithUserApproved/HasUserApproval) into this agent-scoped map so one
+// mechanism serves both dispatch paths.
+func (a *Agent) recordGateApproval(toolName string, args map[string]interface{}) {
+	if a == nil || toolName != "shell_command" {
+		return
+	}
+	if cmd, ok := args["command"].(string); ok {
+		a.markShellCommandApproved(cmd)
+	}
+}
+
 // consumeShellCommandApproval returns true if this exact command was
 // recently approved by Gate 1, deleting the entry so a second
 // invocation gets its own prompt. Entries older than recentApprovalTTL
@@ -102,21 +118,15 @@ func (a *Agent) highRiskApprovedForCommand(ctx context.Context, command string) 
 		return true
 	}
 
-	// If the static security classifier (Gate 1, in tool_security.go)
-	// already prompted the user and they approved, don't re-prompt.
-	// Both gates can fire for the same command (Gate 1 = "this looks
-	// dangerous", Gate 2 = "your active profile/persona gates this");
-	// asking twice in a row is a UX regression that SP-058 introduced
-	// when Gate 2 moved from "always reject" to "prompt and continue".
-	if HasUserApproval(ctx) {
-		return true
-	}
-
-	// Seed pre-execute hook path: Gate 1 ran in newPreExecuteHook
-	// (seed_tool_registry.go) which has no ctx access, so it can't
-	// signal approval via WithUserApproved. Instead it records the
-	// approved command in a per-agent map that we drain here. Same
-	// effect, different transport.
+	// If Gate 1 (the static classifier, in tool_security.go's ExecuteTool
+	// or the seed pre-execute hook) already prompted the user and they
+	// approved, don't re-prompt. Both gates can fire for the same command
+	// (Gate 1 = "this looks dangerous", Gate 2 = "your active profile/persona
+	// gates this"); asking twice in a row is a UX regression that SP-058
+	// introduced when Gate 2 moved from "always reject" to "prompt and
+	// continue". SP-068 unified the former context-value and per-agent-map
+	// bridges into the single recordGateApproval → consumeShellCommandApproval
+	// path, so both dispatch architectures drain the same place here.
 	if a.consumeShellCommandApproval(command) {
 		return true
 	}
@@ -140,7 +150,7 @@ func (a *Agent) highRiskApprovedForCommand(ctx context.Context, command string) 
 			"command":       command,
 			"allow_options": "true", // signals the frontend to render the 4-button dialog
 		}
-		decision := mgr.RequestToolApprovalDecision(
+		decision, outcome := mgr.RequestToolApprovalDecisionWithOutcome(
 			a.GetEventBus(),
 			a.GetEventClientID(),
 			a.GetEventUserID(),
@@ -149,8 +159,14 @@ func (a *Agent) highRiskApprovedForCommand(ctx context.Context, command string) 
 			prompt,
 			extras,
 		)
-		a.applyApprovalDecision(decision, command)
-		return decision.Approved()
+		// Only honor the browser's answer when the user actually responded.
+		// On timeout / disconnect, fall through to the terminal prompt below
+		// instead of denying — an unattended tab shouldn't block a user who's
+		// at the CLI.
+		if outcome == security.ApprovalOutcomeResponded {
+			a.applyApprovalDecision(decision, command)
+			return decision.Approved()
+		}
 	}
 
 	// Terminal / stdin path.

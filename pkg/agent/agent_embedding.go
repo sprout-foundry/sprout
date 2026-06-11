@@ -80,29 +80,65 @@ func (a *Agent) IsEmbeddingIndexEnabled() bool {
 	return a.embeddingMgr != nil
 }
 
-// RestoreEmbeddingIndex checks if indexing was previously enabled for this
-// workspace and restores it. Called once during agent startup after workspace
-// root is known.
+// RestoreEmbeddingIndex enables the workspace embedding index only when the
+// user has opted in. Called once during agent startup after workspace root is
+// known.
+//
+// Embeddings are OPT-IN, not default-on. The index lazily loads a ~380MB ONNX
+// model + in-memory HNSW store (it is ~80% of an agent's resident memory:
+// ~486MB with it, ~103MB without — measured), and proactive-context runs it on
+// every prompt. A fresh agent therefore stays lightweight unless semantic
+// recall / duplicate detection is explicitly wanted. Enable it via any of:
+//   - workspace config `embedding_index.enabled: true` (set by /index or the UI toggle), or
+//   - env `SPROUT_ENABLE_EMBEDDING_AUTOINDEX=1` for default-on globally.
+// `SPROUT_DISABLE_EMBEDDING_AUTOINDEX=1` always wins and hard-disables (used by
+// the test suites — see cmd/main_test.go and pkg/agent's TestMain).
+//
+// Resolution order:
+//  1. SPROUT_DISABLE_EMBEDDING_AUTOINDEX=1                 → skip (hard off).
+//  2. Workspace config embedding_index.enabled: true      → enable (explicit opt-in).
+//  3. Workspace config embedding_index.enabled: false     → skip (explicit opt-out).
+//  4. No section / no file / unreadable config            → enable only if
+//     SPROUT_ENABLE_EMBEDDING_AUTOINDEX=1, else skip (lazy/opt-in default).
 func (a *Agent) RestoreEmbeddingIndex() {
+	if os.Getenv("SPROUT_DISABLE_EMBEDDING_AUTOINDEX") == "1" {
+		return
+	}
+
 	workspaceRoot := a.GetWorkspaceRoot()
 	if workspaceRoot == "" {
 		return
 	}
 
+	// Default (no explicit per-workspace preference): enable only if the user
+	// opted into default-on embeddings globally.
+	autoOptIn := os.Getenv("SPROUT_ENABLE_EMBEDDING_AUTOINDEX") == "1"
+	enableDefault := func() {
+		if autoOptIn {
+			_ = a.EnableEmbeddingIndex()
+		}
+	}
+
 	wsCfgPath := configuration.GetWorkspaceConfigPath(workspaceRoot)
 	data, err := os.ReadFile(wsCfgPath)
 	if err != nil {
-		return // no workspace config = indexing not previously enabled
+		// No workspace config file — fresh workspace, use the default.
+		enableDefault()
+		return
 	}
 
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(data, &raw); err != nil {
+		// Unreadable config — treat as no preference.
+		enableDefault()
 		return
 	}
 
-	// Check if embedding_index.enabled is set to true in workspace config
+	// Check if embedding_index section exists.
 	eiRaw, ok := raw["embedding_index"]
 	if !ok {
+		// No embedding_index section — no preference, use the default.
+		enableDefault()
 		return
 	}
 
@@ -110,12 +146,16 @@ func (a *Agent) RestoreEmbeddingIndex() {
 		Enabled bool `json:"enabled"`
 	}
 	if err := json.Unmarshal(eiRaw, &eiConfig); err != nil {
+		// Malformed section — treat as no preference.
+		enableDefault()
 		return
 	}
 
 	if eiConfig.Enabled {
+		// Explicit per-workspace opt-in.
 		_ = a.EnableEmbeddingIndex()
 	}
+	// If explicitly false, skip — user opted out.
 }
 
 // persistEmbeddingIndexPreference saves the indexing enabled/disabled state

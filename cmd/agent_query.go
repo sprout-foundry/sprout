@@ -127,7 +127,9 @@ func TryZshCommandExecution(ctx context.Context, chatAgent *agent.Agent, query s
 
 	_, err = ExecuteCommand(query)
 
-	// Print separator after output
+	// Print separator after output — re-read the width in case the terminal
+	// was resized while the command ran.
+	separator = strings.Repeat("─", GetTerminalWidth())
 	_, _ = os.Stdout.Write([]byte(fmt.Sprintf("%s%s%s\n",
 		console.ColorGray,
 		separator,
@@ -260,7 +262,9 @@ func executeDirectCommand(command string) (bool, error) {
 	// Execute the command directly (output streams in real-time)
 	_, err := ExecuteCommand(command)
 
-	// Print separator after output
+	// Print separator after output — re-read the width in case the terminal
+	// was resized while the command ran.
+	separator = strings.Repeat("─", GetTerminalWidth())
 	_, _ = os.Stdout.Write([]byte(fmt.Sprintf("%s%s%s\n",
 		console.ColorGray,
 		separator,
@@ -281,6 +285,10 @@ func executeDirectCommand(command string) (bool, error) {
 func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.EventBus, query string) error {
 	setQueryInProgress(true)
 	defer setQueryInProgress(false)
+
+	// New turn: allow the "output is in the Web UI" handoff line to print once
+	// if a browser is connected for this query.
+	resetWebUIHandoff()
 
 	// Check if this is a slash command
 	registry := agent_commands.NewCommandRegistry()
@@ -352,9 +360,13 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 		duration := time.Since(startTime)
 
 		if res.err != nil {
-			// Print the response (user-friendly error message) if available
+			// Print the response (user-friendly error message) if available.
+			// When we show it here, mark the returned error as already-reported
+			// so Execute() doesn't print the raw wrapped chain a second time.
+			reported := false
 			if res.response != "" {
-				_, _ = os.Stderr.Write([]byte(fmt.Sprintf("[FAIL] %s\n", res.response)))
+				console.GlyphError.Fprintln(os.Stderr, res.response)
+				reported = true
 			}
 			errorEvent := events.ErrorEvent(
 				fmt.Sprintf("Failed to process query: %s", query), res.err,
@@ -367,6 +379,9 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 				errorEvent["chat_id"] = chatID
 			}
 			eventBus.Publish(events.EventTypeError, errorEvent)
+			if reported {
+				return markReported(res.err)
+			}
 			return fmt.Errorf("agent processing failed: %w", res.err)
 		}
 

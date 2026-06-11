@@ -227,6 +227,57 @@ func Benchmark_HNSW_1536(b *testing.B) {
 	})
 }
 
+// TestGraph_StaleElevatorDoesNotPanic exercises the nil-guard added after
+// a SIGSEGV at graph.go:95 (distance(n.Value, target) on a nil receiver).
+// The crash surfaced when an elevator key found at a higher layer was
+// absent from a lower layer — `searchPoint = layer.nodes[*elevator]`
+// returned nil, and `searchPoint.search(...)` then dereferenced the nil
+// receiver at field offset 0x10 (layerNode.Value).
+//
+// We construct that state directly: layer 1 has keys {1,2}, layer 0 has
+// only {2}. Searching/inserting near key 1 (the only entry at layer 1)
+// previously crashed at layer 0 because key 1 isn't there.
+func TestGraph_StaleElevatorDoesNotPanic(t *testing.T) {
+	t.Parallel()
+
+	g := newTestGraph[int]()
+
+	n2L0 := &layerNode[int]{Node: Node[int]{Key: 2, Value: Vector{2}}}
+	n1L1 := &layerNode[int]{Node: Node[int]{Key: 1, Value: Vector{1}}}
+	n2L1 := &layerNode[int]{Node: Node[int]{Key: 2, Value: Vector{2}}}
+
+	// Wire layer 1 (the "higher" layer). Key 1 is the entry — its
+	// presence here but ABSENCE from layer 0 is the broken invariant
+	// we're simulating.
+	n1L1.neighbors = map[int]*layerNode[int]{2: n2L1}
+	n2L1.neighbors = map[int]*layerNode[int]{1: n1L1}
+
+	// Layer 0 has only key 2. Key 1 is intentionally missing — this
+	// is the "stale elevator" state.
+	n2L0.neighbors = map[int]*layerNode[int]{}
+
+	g.layers = []*layer[int]{
+		{nodes: map[int]*layerNode[int]{2: n2L0}},
+		{nodes: map[int]*layerNode[int]{1: n1L1, 2: n2L1}},
+	}
+
+	// Search near key 1's vector — layer 1 elevates to key 1, layer 0
+	// lookup returns nil. Pre-fix this crashed inside search() at the
+	// distance(n.Value, target) line. Post-fix it falls back to
+	// layer.entry() and returns key 2.
+	require.NotPanics(t, func() {
+		got := g.Search([]float32{1}, 1)
+		require.Len(t, got, 1)
+		require.Equal(t, 2, got[0].Key)
+	})
+
+	// Add should also survive the same state and successfully insert
+	// the new node at layer 0 (insertLevel=0 with this seeded RNG).
+	require.NotPanics(t, func() {
+		g.Add(Node[int]{Key: 99, Value: Vector{99}})
+	})
+}
+
 func TestGraph_DefaultCosine(t *testing.T) {
 	g := NewGraph[int]()
 	g.Add(

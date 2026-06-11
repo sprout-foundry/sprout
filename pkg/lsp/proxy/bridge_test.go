@@ -178,13 +178,23 @@ func TestBridgeClose(t *testing.T) {
 		// Close the bridge - should unsubscribe and close wsConn
 		bridge.Close()
 
-		// Verify cleanup
-		assert.Nil(t, bridge.unsubscribe)
-		assert.Nil(t, bridge.wsConn)
+		// Verify behavior, not implementation: the previous version of
+		// this test asserted bridge.unsubscribe and bridge.wsConn were
+		// nilled after Close. Nilling those fields raced with the still-
+		// running runLSPToWS goroutine reading wsConn. The new Close
+		// just closes the resources without nilling — verify the
+		// behavior we actually care about.
 
 		// Verify the channel was closed by unsubscribe
 		_, ok := <-ch
 		assert.False(t, ok, "channel should be closed after unsubscribe")
+
+		// Verify wsConn was closed — writing should now fail.
+		writeErr := bridge.wsConn.WriteMessage(websocket.TextMessage, []byte("ping"))
+		assert.Error(t, writeErr, "writing to a closed wsConn should fail")
+
+		// Calling Close again should be a no-op (sync.Once).
+		assert.NotPanics(t, func() { bridge.Close() })
 	})
 }
 

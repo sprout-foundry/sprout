@@ -10,6 +10,7 @@ export interface GitStatusEntry {
 
 export interface GitStatusResponse {
   message: string;
+  in_git_repo: boolean;
   status: {
     branch: string;
     ahead: number;
@@ -20,6 +21,7 @@ export interface GitStatusResponse {
     deleted: GitStatusEntry[];
     renamed: GitStatusEntry[];
     truncated?: boolean;
+    in_git_repo: boolean;
   };
   files: Array<{ path: string; status: string; staged?: boolean }>;
 }

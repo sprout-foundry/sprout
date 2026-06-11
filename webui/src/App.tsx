@@ -2,6 +2,7 @@ import { EventsContextProvider, useEvents } from '@sprout/events';
 import { useState, useCallback, useRef, useMemo } from 'react';
 import AppContent from './components/AppContent';
 import AskUserDialog from './components/AskUserDialog';
+import { DisconnectedOverlay } from './components/DisconnectedOverlay';
 import DriftNotification from './components/DriftNotification';
 import ErrorBoundary from './components/ErrorBoundary';
 import ModelSelectionModal from './components/ModelSelectionModal';
@@ -28,6 +29,7 @@ import { useChatSessionManager } from './hooks/useChatSessionManager';
 import { useGitHandlers } from './hooks/useGitHandlers';
 import { useModelProviderHandlers } from './hooks/useModelProviderHandlers';
 import useOnboarding from './hooks/useOnboarding';
+import { usePageVisibility } from './hooks/usePageVisibility';
 import { useSecurityHandlers } from './hooks/useSecurityHandlers';
 import { useSidebarState } from './hooks/useSidebarState';
 import type { UseWebSocketEventHandlerRefs } from './hooks/useWebSocketEventHandler';
@@ -86,6 +88,13 @@ function AppInner() {
   const state = useAppStoreState();
   const setState = useAppStoreSetState();
   const events = useEvents();
+
+  // Freeze the WebSocket when the tab is hidden (clean close so the backend
+  // detaches) and resume + reattach when it returns to the foreground. Without
+  // this, a backgrounded tab's socket is killed by the server's read deadline
+  // and only recovers slowly via the pong watchdog. (Accidentally dropped in a
+  // hooks-consolidation refactor; restored here.)
+  usePageVisibility();
 
   const [inputValue, setInputValue] = useState('');
   const [recentFiles, setRecentFiles] = useState<Array<{ path: string; modified: boolean }>>([]);
@@ -307,6 +316,7 @@ function AppInner() {
                   />
                   <Notification />
                   <UpdateNotification />
+                  <DisconnectedOverlay isConnected={state.isConnected} />
                   {state.securityApprovalRequest && (
                     <SecurityApprovalDialog
                       requestId={state.securityApprovalRequest.requestId}

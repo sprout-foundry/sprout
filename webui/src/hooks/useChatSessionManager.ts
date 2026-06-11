@@ -451,6 +451,48 @@ export function useChatSessionManager({
     });
   }, [isProcessing, handleSendMessage, queuedMessagesCount]);
 
+  // Reload the active chat's authoritative history from the backend. Triggered
+  // when a reconnect reports a gap (the server's run buffer had already evicted
+  // events this client missed), so we replace the possibly-corrupted local
+  // transcript with the server's instead of splicing a partial replay onto it.
+  // Re-switching to the already-active chat is a safe, idempotent fetch.
+  const reloadActiveChatFromBackend = useCallback(
+    async (id: string) => {
+      try {
+        const response = await switchChatSession(id);
+        if (activeChatIdRef.current !== id) return; // user moved on while loading
+        const backendMessages: Message[] = (response.chat_session.messages ?? [])
+          .filter((m) => m.role === 'user' || m.role === 'assistant')
+          .map((m, i) => ({
+            id: `chat-${id}-${i}`,
+            type: m.role as 'user' | 'assistant',
+            content: typeof m.content === 'string' ? m.content : '',
+            timestamp: new Date(),
+            ...(m.reasoning_content ? { reasoning: m.reasoning_content } : {}),
+          }));
+        const backendIsActive = response.chat_session.active_query;
+        activeRequestsRef.current = backendIsActive ? 1 : 0;
+        setState(() => ({
+          messages: trimMessages(backendMessages),
+          isProcessing: backendIsActive,
+        }));
+      } catch (error) {
+        debugLog('[chat] gap reload failed:', error);
+      }
+    },
+    [setState, activeChatIdRef, activeRequestsRef],
+  );
+
+  useEffect(() => {
+    const onGapReload = (e: Event) => {
+      const id = (e as CustomEvent<{ chatId?: string }>).detail?.chatId || activeChatIdRef.current;
+      if (!id || (activeChatIdRef.current && activeChatIdRef.current !== id)) return;
+      void reloadActiveChatFromBackend(id);
+    };
+    window.addEventListener('sprout:chat-gap-reload', onGapReload);
+    return () => window.removeEventListener('sprout:chat-gap-reload', onGapReload);
+  }, [reloadActiveChatFromBackend, activeChatIdRef]);
+
   return {
     loadChatSessions,
     handleActiveChatChange,

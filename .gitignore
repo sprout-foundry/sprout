@@ -7,6 +7,7 @@ ledit-*
 ledit-main
 model_registry_server
 refresh_provider_catalog
+validate_registry
 *.exe
 *.exe~
 *.dll
@@ -166,3 +167,9 @@ pkg/ast/grammars/bin/*.bin
 *.zip
 /providers/
 /tmp/
+
+# Personal playbook for embedding sprout as an admin-gated coding env
+# alongside another product's admin UI. Includes templates + threat
+# model + ops runbook in a single file for ease of passing around.
+# Not advertised in public docs.
+docs/embed.md

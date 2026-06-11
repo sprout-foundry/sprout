@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/mattn/go-runewidth"
 	"golang.org/x/term"
 )
 
@@ -455,6 +456,14 @@ func (f *StatusFooter) draw() {
 	if rows < f.reservedRows()+1 {
 		return
 	}
+	// Serialize against InputReader render and other console chrome so
+	// the multi-step save-cursor / move / clear / restore sequence can't
+	// interleave with a keystroke render. Without this, typing between
+	// turns with background event subscribers firing Refresh looks like
+	// characters are dropped (they're in the line buffer, but the cursor
+	// has been displaced mid-render).
+	LockOutput()
+	defer UnlockOutput()
 	line := f.composeLine(cols)
 	rule := strings.Repeat("─", cols)
 
@@ -777,42 +786,57 @@ func stripTail(p string) string {
 }
 
 func truncTo(s string, n int) string {
-	if len(s) <= n {
+	if displayWidth(s) <= n {
 		return s
 	}
 	if n <= 1 {
-		return s[:n]
+		return truncateToWidth(s, n, "")
 	}
-	return s[:n-1] + "…"
+	return truncateToWidth(s, n, "…")
 }
 
+// truncWithEllipsis clamps s to at most n display columns, preserving ANSI
+// styling escapes (they don't count toward the budget) and cutting only on rune
+// boundaries so wide/CJK content is never split. Appends "…" when it cuts.
 func truncWithEllipsis(s string, n int) string {
-	if n <= 1 {
-		return strings.Repeat(" ", n)
+	if n <= 0 {
+		return ""
 	}
-	if len(s) <= n {
+	if n == 1 {
+		return " "
+	}
+	if visibleLen(s) <= n {
 		return s
 	}
-	return s[:n-1] + "…"
-}
-
-// visibleLen counts non-ANSI runes. Cheap implementation that handles
-// only the styling sequences we emit (\033[31m, \033[33m, \033[0m).
-func visibleLen(s string) int {
-	count := 0
-	in := false
+	budget := n - 1 // reserve a column for the ellipsis
+	var b strings.Builder
+	w := 0
+	inEsc := false
 	for _, r := range s {
-		if in {
+		if inEsc {
+			b.WriteRune(r)
 			if r == 'm' {
-				in = false
+				inEsc = false
 			}
 			continue
 		}
 		if r == '\033' {
-			in = true
+			inEsc = true
+			b.WriteRune(r)
 			continue
 		}
-		count++
+		rw := runewidth.RuneWidth(r)
+		if w+rw > budget {
+			break
+		}
+		b.WriteRune(r)
+		w += rw
 	}
-	return count
+	return b.String() + "…"
+}
+
+// visibleLen returns the display-column width of s, ignoring ANSI escapes
+// (wide/CJK runes count as 2, combining as 0).
+func visibleLen(s string) int {
+	return displayWidth(s)
 }

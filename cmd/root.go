@@ -4,6 +4,8 @@ package cmd
 
 import (
 	"fmt"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"path/filepath"
 	"sync"
@@ -16,29 +18,35 @@ import (
 
 var startupChecksOnce sync.Once
 var isolatedConfig bool
+var debugPprofAddr string
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "sprout",
-	Short: "Agent for code analysis and editing (interactive mode when run without arguments)",
+	// A runtime failure (e.g. a bad model, a network error) is not a usage
+	// mistake, so don't dump the full flag list after it; and don't let cobra
+	// print the raw wrapped error itself — Execute() renders one clean line.
+	SilenceUsage:  true,
+	SilenceErrors: true,
+	Short:         "Agent for code analysis and editing (interactive mode when run without arguments)",
 	Long: `Sprout is a command-line tool that leverages Large Language Models (LLMs)
 to automate and assist in software development tasks. It features a modern CLI
 with automatic web UI startup for rich interactive experiences.
 
-Available commands:
-  agent  - Agent mode with modern CLI + Web UI
-  plan   - Interactive planning mode for refining ideas and generating detailed plans
-  shell  - Generate shell scripts from natural language descriptions
-  commit - Generate commit messages
-  review - Perform AI-powered code review on staged changes
-  log    - View operation logs
-  mcp    - Manage MCP (Model Context Protocol) servers
-  custom - Manage custom OpenAI-compatible providers
-
 For autonomous operation, try: sprout agent "your intent here"
 
-Running just 'sprout' without arguments starts enhanced agent mode with automatic web UI.`,
+Running just 'sprout' without arguments starts enhanced agent mode with automatic web UI.
+
+See "Available Commands" below for the full list.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		if debugPprofAddr != "" {
+			go func() {
+				fmt.Fprintf(os.Stderr, "pprof: listening on http://%s/debug/pprof/\n", debugPprofAddr)
+				if err := http.ListenAndServe(debugPprofAddr, nil); err != nil {
+					fmt.Fprintf(os.Stderr, "pprof server: %v\n", err)
+				}
+			}()
+		}
 		if isolatedConfig {
 			cwd, err := os.Getwd()
 			if err != nil {
@@ -77,7 +85,14 @@ Running just 'sprout' without arguments starts enhanced agent mode with automati
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() error {
-	return rootCmd.Execute()
+	if err := rootCmd.Execute(); err != nil {
+		// Render exactly one clean line (already-reported errors render
+		// nothing — the command showed them while running), then exit
+		// non-zero so shells and CI see the failure.
+		renderExecuteError(err)
+		os.Exit(1)
+	}
+	return nil
 }
 
 // initializeSystem initializes configuration and API keys with first-run setup
@@ -127,6 +142,7 @@ func init() {
 
 	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.config/sprout/config.json)")
 	rootCmd.PersistentFlags().BoolVar(&isolatedConfig, "isolated-config", false, "Use per-working-directory config at ./.sprout (clone from main config on first run)")
+	rootCmd.PersistentFlags().StringVar(&debugPprofAddr, "debug-pprof", "", "If set, start a pprof HTTP server on this address (e.g. localhost:6060) for live memory/CPU profiling")
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.

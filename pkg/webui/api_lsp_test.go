@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os/exec"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -102,7 +103,11 @@ func TestHandleLSPStatus(t *testing.T) {
 		}
 	})
 
-	t.Run("gopls shows available=true in CI", func(t *testing.T) {
+	t.Run("gopls shows available=true when installed", func(t *testing.T) {
+		if _, err := exec.LookPath("gopls"); err != nil {
+			t.Skip("gopls not installed; skipping availability check")
+		}
+
 		req := httptest.NewRequest(http.MethodGet, "/api/lsp/status", nil)
 		rec := httptest.NewRecorder()
 

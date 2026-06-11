@@ -719,9 +719,15 @@ func (ir *InputReader) InsertChar(char string) {
 	ir.cursorPos += len(char)
 	ir.shiftPasteSpans(insertAt, len(char))
 
-	// For typing at end of line, just output the character (more efficient)
+	// For typing at end of line, just output the character (more efficient).
+	// Wrap the write in the console output lock so a status-footer Refresh
+	// firing from a background event subscriber can't slide in mid-write
+	// and displace the cursor — that's the path that makes typed chars
+	// look "dropped" between turns.
 	if ir.cursorPos == len(ir.line) && len(ir.collapsedPastes) == 0 {
+		LockOutput()
 		fmt.Printf("%s", char)
+		UnlockOutput()
 		// Keep refresh bookkeeping in sync even on fast-path writes.
 		promptWidth := visibleRuneWidth(ir.prompt)
 		lineWidth := len([]rune(ir.line))

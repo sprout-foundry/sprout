@@ -557,50 +557,24 @@ func TestBoost_CommitFlow_ExecuteConsoleFlow_NoGitRepo(t *testing.T) {
 // Testing no staged changes path
 // =====================================================================
 
-func TestBoost_CommitStagedWithMessage_NoGitDir(t *testing.T) {
-	// Use a non-git temp dir — CommitStagedWithMessage should fail
-	// when it cannot find staged changes.
-	// Note: CommitStagedWithMessage calls SetGitDir("") when agent is nil,
-	// which resets to the process cwd. We create a fresh CommitFlow and
-	// verify the function handles the no-staged-changes case without panicking.
-	// Use a real git repo with no staged changes for a deterministic test.
-	tmpDir := t.TempDir()
-	SetGitDir(tmpDir)
-	defer SetGitDir("")
-
-	// Init git repo so git commands don't fail on "not a git repo"
-	cmd := exec.Command("git", "init")
-	cmd.Dir = tmpDir
-	require.NoError(t, cmd.Run())
-
-	cmd = exec.Command("git", "config", "user.email", "test@test.com")
-	cmd.Dir = tmpDir
-	require.NoError(t, cmd.Run())
-
-	cmd = exec.Command("git", "config", "user.name", "Test")
-	cmd.Dir = tmpDir
-	require.NoError(t, cmd.Run())
-
-	// Create initial commit so HEAD exists
-	require.NoError(t, os.WriteFile(tmpDir+"/initial.txt", []byte("init"), 0644))
-	cmd = exec.Command("git", "add", "initial.txt")
-	cmd.Dir = tmpDir
-	require.NoError(t, cmd.Run())
-	cmd = exec.Command("git", "commit", "-m", "initial")
-	cmd.Dir = tmpDir
-	require.NoError(t, cmd.Run())
-
-	// Verify staging area is clean (no staged changes)
-	stagedOutput, err := exec.Command("git", "diff", "--staged", "--name-only").CombinedOutput()
-	require.NoError(t, err)
-	require.Empty(t, strings.TrimSpace(string(stagedOutput)), "staging area should be clean")
-
+// TestBoost_CommitStagedWithMessage_NilAgentRefuses verifies the new
+// contract: CommitStagedWithMessage rejects a nil-agent CommitFlow rather
+// than falling back to SetGitDir(""). Background — the prior behavior
+// produced two real "test" commits on the host repo when a leaked
+// api.TestClientType="test" sentinel routed the commit message LLM to
+// the mock client, which returned "test". The defense-in-depth at the
+// gitCommand layer (commit_git_safety_test.go) and the sentinel scrub
+// at config load (pkg/configuration/testing_isolation.go) are the other
+// two layers; this is the call-site refusal that closes the loop.
+func TestBoost_CommitStagedWithMessage_NilAgentRefuses(t *testing.T) {
 	cf := &CommitFlow{}
-	err = cf.CommitStagedWithMessage()
-	// Should error with "no staged changes" since agent is nil and
-	// SetGitDir("") resets to process cwd — but with clean staging in tmpDir,
-	// the local git state ensures deterministic behavior
-	assert.Error(t, err)
+	err := cf.CommitStagedWithMessage()
+	if err == nil {
+		t.Fatal("expected error from nil-agent CommitStagedWithMessage")
+	}
+	if !strings.Contains(err.Error(), "requires an agent") {
+		t.Errorf("error message should explain the contract; got: %v", err)
+	}
 }
 
 // =====================================================================

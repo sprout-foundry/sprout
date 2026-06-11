@@ -3,7 +3,6 @@ package embedding
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -38,8 +37,12 @@ type EmbeddingManager struct {
 	// Resolved index directory path (stored during init)
 	indexDir string
 
-	// ONNX runtime (held so Close() can release it)
-	onnxRuntime *ONNXRuntime
+	// ONNX runtime (held so Close() can release it). When providerShared is
+	// true, provider+onnxRuntime came from the process-wide shared cache
+	// (acquireSharedONNXProvider) and MUST NOT be closed by this manager —
+	// other managers/agents in the same process reference the same instances.
+	onnxRuntime    *ONNXRuntime
+	providerShared bool
 
 	// closeChan is closed by Close() to signal long-running goroutines
 	// (e.g., AutoBuildWhenReady) to abort early.
@@ -109,8 +112,9 @@ func (m *EmbeddingManager) initLocked(ctx context.Context) error {
 		m.maxResults = 3
 	}
 
-	// Create ONNX embedding provider as the sole provider.
-	provider, runtime, err := m.createONNXProvider(ctx, indexDir)
+	// Create ONNX embedding provider as the sole provider. provider+runtime
+	// are owned by the shared cache; do not Close them on any failure path.
+	provider, runtime, err := m.createONNXProvider(ctx)
 	if err != nil {
 		m.initError = fmt.Errorf("embedding: init provider: %w", err)
 		return m.initError
@@ -119,8 +123,6 @@ func (m *EmbeddingManager) initLocked(ctx context.Context) error {
 	// Open vector store with the ONNX provider's model hash
 	store, err := NewHNSWStore(filepath.Join(indexDir, "index.hnsw"), provider.ModelHash())
 	if err != nil {
-		provider.Close()
-		runtime.Close()
 		m.initError = fmt.Errorf("embedding: open store: %w", err)
 		return m.initError
 	}
@@ -134,6 +136,7 @@ func (m *EmbeddingManager) initLocked(ctx context.Context) error {
 
 	m.provider = provider
 	m.onnxRuntime = runtime
+	m.providerShared = true
 	m.store = store
 	m.indexMgr = indexMgr
 	m.initialized = true
@@ -141,56 +144,16 @@ func (m *EmbeddingManager) initLocked(ctx context.Context) error {
 	return nil
 }
 
-// createONNXProvider creates an ONNX embedding provider, downloading the
-// model if needed. Returns the provider and its underlying runtime (so the
-// caller can Close the runtime on failure).
+// createONNXProvider returns the process-wide shared ONNX embedding provider
+// and its runtime, creating (and downloading the model, if needed) on first
+// use. The returned instances are owned by the shared cache — the manager must
+// NOT close them (see providerShared and acquireSharedONNXProvider). Sharing
+// avoids loading a fresh ~180MB model copy per agent, which matters most for
+// the WebUI daemon that builds one agent per chat session.
 //
-// On non-WASM builds the model is loaded from disk and downloaded if
-// missing. On WASM the JS bridge (__sproutONNX) handles model loading
-// internally — if the bridge is absent, the call fails with a clear error.
-func (m *EmbeddingManager) createONNXProvider(ctx context.Context, indexDir string) (EmbeddingProvider, *ONNXRuntime, error) {
-	// If no ONNX backend is available at all (stub build), fail fast.
-	if !onnxAvailable {
-		return nil, nil, fmt.Errorf("ONNX runtime not available in this build (requires CGO or WASM bridge)")
-	}
-
-	modelDir := DefaultModelDir()
-
-	// Create ONNX runtime
-	runtime, err := NewONNXRuntimeWithDir(modelDir)
-	if err != nil {
-		return nil, nil, fmt.Errorf("onnx: create runtime: %w", err)
-	}
-
-	// Load the pre-registered EmbeddingGemma-300M config
-	modelConfig := EmbeddingGemma300MConfig()
-	modelName := modelConfig.Name
-	modelPath := filepath.Join(modelDir, modelName, "model_q4.onnx")
-	tokenizerPath := filepath.Join(modelDir, modelName, "tokenizer.json")
-
-	// Native builds load .onnx from disk; download it if missing.
-	// The WASM build delegates to a JS-side provider that owns its own model
-	// loading, so we skip the on-disk file check there — see
-	// onnxRequiresModelFiles in onnx_runtime.go / onnx_wasm.go.
-	if onnxRequiresModelFiles() {
-		if _, err := os.Stat(modelPath); err != nil {
-			log.Printf("embedding: downloading ONNX model %s...", modelName)
-			if err := DownloadModel(ctx, modelDir, modelConfig); err != nil {
-				runtime.Close()
-				return nil, nil, fmt.Errorf("onnx: download model: %w", err)
-			}
-			log.Printf("embedding: ONNX model %s downloaded", modelName)
-		}
-	}
-
-	// Create ONNX embedding provider using dimensions from model config.
-	provider, err := NewONNXEmbeddingProvider(ctx, runtime, modelPath, tokenizerPath, modelConfig.Dims, modelConfig.FullDims)
-	if err != nil {
-		runtime.Close()
-		return nil, nil, fmt.Errorf("onnx: create provider: %w", err)
-	}
-
-	return provider, runtime, nil
+// On WASM the JS bridge (__sproutONNX) handles model loading internally.
+func (m *EmbeddingManager) createONNXProvider(ctx context.Context) (EmbeddingProvider, *ONNXRuntime, error) {
+	return acquireSharedONNXProvider(ctx, DefaultModelDir(), EmbeddingGemma300MConfig())
 }
 
 // snapshotIndexMgr returns a reference to the IndexManager under lock.
@@ -501,10 +464,16 @@ func (m *EmbeddingManager) Close() error {
 		m.convoStore = nil
 	}
 
-	// Close provider and store
+	// Release provider/runtime references. When providerShared is true they are
+	// owned by the process-wide shared cache (acquireSharedONNXProvider) and
+	// other managers still reference them, so we drop our reference WITHOUT
+	// closing — closing would tear down a session the rest of the process is
+	// using. The shared instances intentionally live for the process lifetime.
 	if m.provider != nil {
-		if err := m.provider.Close(); err != nil && firstErr == nil {
-			firstErr = err
+		if !m.providerShared {
+			if err := m.provider.Close(); err != nil && firstErr == nil {
+				firstErr = err
+			}
 		}
 		m.provider = nil
 	}
@@ -516,13 +485,15 @@ func (m *EmbeddingManager) Close() error {
 	}
 	m.indexMgr = nil
 
-	// Close ONNX runtime
 	if m.onnxRuntime != nil {
-		if err := m.onnxRuntime.Close(); err != nil && firstErr == nil {
-			firstErr = err
+		if !m.providerShared {
+			if err := m.onnxRuntime.Close(); err != nil && firstErr == nil {
+				firstErr = err
+			}
 		}
 		m.onnxRuntime = nil
 	}
+	m.providerShared = false
 
 	m.initialized = false
 	m.initError = nil // cleared to allow re-initialization after Close()

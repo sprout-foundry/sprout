@@ -129,7 +129,7 @@ func TestShellCommandHandler_Execute_Background_NoTerminalManager(t *testing.T) 
 	ctx := newTestCtx(dir)
 
 	res, err := h.Execute(ctx, newTestEnv(t, dir), map[string]any{
-		"command":    "sleep 100",
+		"command":    "echo background-test",
 		"background": true,
 	})
 	// Background mode requires TerminalManager which is not available in test context

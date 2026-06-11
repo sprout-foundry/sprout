@@ -71,6 +71,7 @@ func TestSemanticSearchHandler_Execute_MissingQuery(t *testing.T) {
 	env := ToolEnv{
 		EventBus:      events.NewEventBus(),
 		WorkspaceRoot: ".",
+		ConfigManager: newHermeticConfigManager(t),
 	}
 
 	res, err := h.Execute(context.Background(), env, map[string]any{})
@@ -85,6 +86,7 @@ func TestSemanticSearchHandler_Execute_InvalidQueryType(t *testing.T) {
 	env := ToolEnv{
 		EventBus:      events.NewEventBus(),
 		WorkspaceRoot: ".",
+		ConfigManager: newHermeticConfigManager(t),
 	}
 
 	res, err := h.Execute(context.Background(), env, map[string]any{"query": 42})
@@ -103,6 +105,7 @@ func TestSemanticSearchHandler_Execute_DefaultArgs(t *testing.T) {
 	env := ToolEnv{
 		EventBus:      events.NewEventBus(),
 		WorkspaceRoot: t.TempDir(),
+		ConfigManager: newHermeticConfigManager(t),
 	}
 
 	res, err := h.Execute(context.Background(), env, map[string]any{
@@ -309,6 +312,7 @@ func TestSemanticSearchHandler_EventBus_PublishesEvents(t *testing.T) {
 	env := ToolEnv{
 		EventBus:      bus,
 		WorkspaceRoot: t.TempDir(),
+		ConfigManager: newHermeticConfigManager(t),
 	}
 
 	// Execute with missing query — triggers error path
@@ -341,6 +345,7 @@ func TestSemanticSearchHandler_NoEventBus(t *testing.T) {
 	// No EventBus — should still work, just no events
 	env := ToolEnv{
 		WorkspaceRoot: t.TempDir(),
+		ConfigManager: newHermeticConfigManager(t),
 	}
 
 	// Should handle missing query gracefully without panicking
@@ -360,6 +365,7 @@ func TestEmbeddingIndexHandler_NoEventBus(t *testing.T) {
 	// No EventBus — the handler should still execute its logic
 	env := ToolEnv{
 		WorkspaceRoot: t.TempDir(),
+		ConfigManager: newHermeticConfigManager(t),
 	}
 
 	// Test status operation (no ONNX needed)
@@ -378,6 +384,7 @@ func TestEmbeddingIndexHandler_NoEventBus_UnknownOperation(t *testing.T) {
 
 	env := ToolEnv{
 		WorkspaceRoot: t.TempDir(),
+		ConfigManager: newHermeticConfigManager(t),
 	}
 
 	res, err := h.Execute(context.Background(), env, map[string]any{
@@ -394,6 +401,7 @@ func TestEmbeddingIndexHandler_NoEventBus_MissingOperation(t *testing.T) {
 
 	env := ToolEnv{
 		WorkspaceRoot: t.TempDir(),
+		ConfigManager: newHermeticConfigManager(t),
 	}
 
 	res, err := h.Execute(context.Background(), env, map[string]any{})
@@ -412,6 +420,7 @@ func TestEmbeddingIndexHandler_WithEventBus(t *testing.T) {
 	env := ToolEnv{
 		EventBus:      bus,
 		WorkspaceRoot: t.TempDir(),
+		ConfigManager: newHermeticConfigManager(t),
 	}
 
 	res, err := h.Execute(context.Background(), env, map[string]any{
@@ -451,6 +460,7 @@ func TestEmbeddingIndexHandler_WithEventBus_Error(t *testing.T) {
 	env := ToolEnv{
 		EventBus:      bus,
 		WorkspaceRoot: t.TempDir(),
+		ConfigManager: newHermeticConfigManager(t),
 	}
 
 	// Invalid operation — should publish tool_end with error=true
@@ -488,6 +498,7 @@ func TestEmbeddingIndexHandler_WithEventBus_MissingOperation(t *testing.T) {
 	env := ToolEnv{
 		EventBus:      bus,
 		WorkspaceRoot: t.TempDir(),
+		ConfigManager: newHermeticConfigManager(t),
 	}
 
 	// Missing operation — should publish tool_end with error=true

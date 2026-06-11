@@ -271,9 +271,11 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 					webServer,
 					port,
 					func(activePort int) {
+						setWebUIDisplayURL(fmt.Sprintf("http://%s:%d", webui.DisplayAddr(bindAddr), activePort))
 						fmt.Printf("\n[web] Web UI available at http://%s:%d\n", webui.DisplayAddr(bindAddr), activePort)
 					},
 					func(activePort int) {
+						setWebUIDisplayURL(fmt.Sprintf("http://%s:%d", webui.DisplayAddr(bindAddr), activePort))
 						fmt.Printf("\n[web] Reusing active Web UI at http://%s:%d\n", webui.DisplayAddr(bindAddr), activePort)
 					},
 				)
@@ -336,6 +338,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 					}
 				}
 
+				setWebUIDisplayURL(fmt.Sprintf("http://%s:%d", webui.DisplayAddr(bindAddr), webServer.GetPort()))
 				fmt.Printf("\n[web] Web UI available at http://%s:%d\n", webui.DisplayAddr(bindAddr), webServer.GetPort())
 			}
 		}
@@ -353,8 +356,17 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		for {
 			select {
 			case sig := <-sigCh:
-				// SIGHUP: reload on-disk config without shutting down.
-				if sig == syscall.SIGHUP {
+				// SIGHUP in daemon mode = reload on-disk config (Unix
+				// daemon convention). In interactive mode SIGHUP means
+				// the controlling terminal closed — the kernel sends it
+				// to the foreground process group when the tty hangs
+				// up. Treating that as "reload" leaves an orphaned
+				// sprout running with PPID=1 forever (it keeps
+				// heartbeating to instances.json and holding the
+				// task_queue.json flock against new sessions). Fall
+				// through to the shutdown path so terminal close cleans
+				// up the process.
+				if sig == syscall.SIGHUP && daemonMode {
 					fmt.Printf("\n[RELOAD] Received SIGHUP, reloading configuration...\n")
 					if chatAgent != nil {
 						if mgr := chatAgent.GetConfigManager(); mgr != nil {
@@ -512,6 +524,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 			// No query provided - check if we should keep running (daemon mode)
 			if daemonMode && webServer != nil && webServer.IsRunning() {
 				// Daemon mode: keep web UI running
+				setWebUIDisplayURL(fmt.Sprintf("http://%s:%d", webui.DisplayAddr(bindAddr), webServer.GetPort()))
 				fmt.Printf("\n[web] Web UI running at http://%s:%d\n", webui.DisplayAddr(bindAddr), webServer.GetPort())
 				if !isServiceMode() {
 					fmt.Println("Press Ctrl+C to stop the server.")
@@ -701,13 +714,20 @@ func SetupAgentEvents(chatAgent *agent.Agent, eventBus *events.EventBus, indicat
 	// / RouteTerminalOnly), so there's no blob-output risk on this path.
 	if !agentNoStreaming {
 		chatAgent.EnableStreaming(func(chunk string) {
-			indicator.Stop()
 			if chunk != "" {
 				// CompareAndSwap: only the FIRST non-empty chunk records
 				// the ttft. Subsequent chunks are a no-op so reading the
 				// timestamp later yields "first token landed at X".
 				noteFirstStreamChunk()
 			}
+			// A browser is watching the Web UI — hand off there instead of
+			// duplicating the token stream in the terminal. Print one handoff
+			// line per turn and stay quiet.
+			if chatAgent.HasActiveWebUIClients() {
+				showWebUIHandoffOnce(indicator)
+				return
+			}
+			indicator.Stop()
 			if r := currentTurnRenderer.Load(); r != nil {
 				r.WriteChunk(chunk)
 				return
@@ -756,7 +776,7 @@ func runQueueMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 		}
 
 		// Read pending tasks from the queue
-		tasks, err := tq.ReadTasks("pending", 10)
+		tasks, err := tq.ReadTasks(ctx, "pending", 10)
 		if err != nil {
 			return fmt.Errorf("failed to read task queue: %w", err)
 		}
@@ -786,7 +806,7 @@ func runQueueMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 				task.Title, task.ID, task.Priority)
 
 			// Mark task as in_progress
-			_, err = tq.PublishTask(task.ID, "in_progress", "", nil)
+			_, err = tq.PublishTask(ctx, task.ID, "in_progress", "", nil)
 			if err != nil {
 				console.GlyphWarning.Fprintf(os.Stderr, "Failed to mark task %s as in_progress: %v", task.ID, err)
 			}
@@ -800,14 +820,14 @@ func runQueueMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 			if err != nil {
 				fmt.Fprint(os.Stderr, "\n"+console.FormatErrorBlock(fmt.Sprintf("Error processing task %s", task.ID), err))
 				// Mark task as failed
-				_, _ = tq.PublishTask(task.ID, "failed", fmt.Sprintf("Error during processing: %v", err), nil)
+				_, _ = tq.PublishTask(ctx, task.ID, "failed", fmt.Sprintf("Error during processing: %v", err), nil)
 				continue
 			}
 
 			// Check if the agent marked this task as completed/failed via its tool handlers
 			// If not, check the current status. The agent should use task_queue_publish
 			// during processing, so we re-read the task to see its state.
-			updatedTasks, err := tq.ReadTasks("all", 100)
+			updatedTasks, err := tq.ReadTasks(ctx, "all", 100)
 			taskCompleted := false
 			if err == nil {
 				for _, t := range updatedTasks {
@@ -824,7 +844,7 @@ func runQueueMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 				// Agent didn't update task status; mark as completed by default
 				console.GlyphInfo.Printf("Task %s processed — marking as completed", task.Title)
 				result := "Task processed via queue mode. Agent did not explicitly set a result."
-				_, _ = tq.PublishTask(task.ID, "completed", result, nil)
+				_, _ = tq.PublishTask(ctx, task.ID, "completed", result, nil)
 			} else {
 				console.GlyphSuccess.Printf("Task %s completed", task.Title)
 			}
@@ -923,6 +943,10 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	// SP-048-5b: one-shot hint about Tab autocomplete + Ctrl-D, persisted
 	// per workspace in ~/.sprout/state.json so it never repeats.
 	maybeShowFirstRunHint()
+
+	// Embeddings are opt-in (they load a ~380MB model); recommend turning them
+	// on once per workspace so the feature stays discoverable without nagging.
+	maybeRecommendEmbeddingIndex(chatAgent)
 
 	// Create enhanced input reader with completion support.
 	// SP-048-5d: prompt includes the current model so users always know
@@ -2290,7 +2314,7 @@ func sanitizeArgForPreview(s string) string {
 // runDirectMode handles single query execution
 func runDirectMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events.EventBus, query string) error {
 	if configuration.GetEnvSimple("SUBAGENT") != "1" {
-		fmt.Printf("[>>] Processing: %s\n", query)
+		fmt.Printf("%sProcessing: %s\n", console.GlyphAction.Prefix(), query)
 	}
 
 	// Slash/bang commands should bypass command-detection fast paths.

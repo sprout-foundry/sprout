@@ -1,21 +1,7 @@
 import { stripAnsiCodes } from '../../utils/ansi';
 import { formatToolDetail } from '../../utils/resultSummary';
+import { subagentDepthLabel } from '../chat/SubagentActivityFeed';
 import type { ToolExecution } from './types';
-
-/** Shape of tool execution details when result truncation info is present. */
-interface TruncationDetails {
-  result_truncated?: boolean;
-  result_length?: number;
-}
-
-const hasTruncation = (d: unknown): d is TruncationDetails =>
-  d != null && typeof d === 'object' && 'result_truncated' in d;
-
-/** Depth badge color: amber for deep nesting, purple for orchestrator. */
-const getDepthBadgeColor = (depth: number): string => {
-  if (depth >= 2) return '#f59e0b';
-  return '#a78bfa';
-};
 import {
   isSubagentTool,
   getSubagentPrompt,
@@ -33,7 +19,23 @@ import {
   ClipboardList,
   BarChart3 as BarChart3Icon,
   FileText,
+  AlertTriangle,
 } from 'lucide-react';
+
+/** Shape of tool execution details when result truncation info is present. */
+interface TruncationDetails {
+  result_truncated?: boolean;
+  result_length?: number;
+}
+
+const hasTruncation = (d: unknown): d is TruncationDetails =>
+  d != null && typeof d === 'object' && 'result_truncated' in d;
+
+/** Depth badge tier — drives CSS-side coloring via [data-depth-tier].
+ *  Avoids inline hex (CLAUDE.md design-system rule) and keeps the
+ *  palette themable. */
+const getDepthBadgeTier = (depth: number): 'orchestrator' | 'deep' =>
+  depth >= 2 ? 'deep' : 'orchestrator';
 
 interface ToolCardProps {
   tool: ToolExecution;
@@ -78,7 +80,12 @@ export function ToolCard({ tool, expandedTools, activeToolId, toolRef, onToggleE
             {isSub && tool.subagentType === 'parallel' && ' (parallel)'}
           </span>
           {tool.depth && tool.depth > 0 && (
-            <span className="tool-depth-badge" style={{ backgroundColor: getDepthBadgeColor(tool.depth) }}>
+            <span
+              className="tool-depth-badge"
+              data-depth-tier={getDepthBadgeTier(tool.depth)}
+              title={subagentDepthLabel(tool.depth)}
+              aria-label={subagentDepthLabel(tool.depth)}
+            >
               D{tool.depth}
             </span>
           )}
@@ -130,9 +137,9 @@ export function ToolCard({ tool, expandedTools, activeToolId, toolRef, onToggleE
                 </div>
                 <FilePathPre text={formatToolDetail(tool.result)} />
                 {hasTruncation(tool.details) && tool.details.result_truncated && (
-                  <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.25rem' }}>
-                    {' '}
-                    {'⚠'} Truncated — full result was {Number(tool.details.result_length ?? 0)} characters
+                  <div className="tool-truncation-notice">
+                    <AlertTriangle size={11} className="inline-icon" />
+                    Truncated — full result was {Number(tool.details.result_length ?? 0)} characters
                   </div>
                 )}
               </div>

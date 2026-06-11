@@ -3,6 +3,7 @@ package utils
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -165,7 +166,16 @@ func (w *Logger) AskForConfirmation(prompt string, default_response bool, requir
 
 	for {
 		w.LogUserInteraction(fmt.Sprintf("%s %s: ", prompt, hint))
-		response, err := reader.ReadString('\n')
+		response, err := ReadLineWithTimeout(reader, ApprovalPromptTimeout)
+
+		// An idle (open but silent) stdin means the user walked away or the
+		// harness isn't forwarding keystrokes. Deny rather than block the
+		// agent forever; the consecutive-error guard below only catches a
+		// *closed* stdin, not a stalled one.
+		if errors.Is(err, ErrPromptTimeout) {
+			w.LogUserInteraction(fmt.Sprintf(" timed out after %s waiting for input - rejecting for safety.", ApprovalPromptTimeout))
+			return false
+		}
 
 		// Handle EOF or read errors - these indicate stdin is closed/unavailable
 		// Without this check, we'd loop infinitely printing the prompt

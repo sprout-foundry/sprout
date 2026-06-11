@@ -16,6 +16,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 // BackgroundProcess represents a tracked background process for CLI mode.
@@ -34,6 +36,7 @@ type BackgroundProcess struct {
 	done       chan struct{} // closed when process exits
 	exitCode   int
 	mu         sync.Mutex
+	publisher  *OutputChunkPublisher // non-nil for automate sessions with an event bus
 }
 
 // GetPID returns the process PID under the lock. Returns 0 if the process
@@ -129,6 +132,19 @@ func (m *BackgroundProcessManager) Start(ctx context.Context, command string, di
 // StartWithKind works like Start but allows specifying the process kind
 // (e.g., "automate" vs "shell").
 func (m *BackgroundProcessManager) StartWithKind(ctx context.Context, command string, dir string, kind string) (string, error) {
+	return m.StartWithOptions(ctx, command, dir, kind, nil)
+}
+
+// StartOptions configures optional behavior when starting a background process.
+type StartOptions struct {
+	EventBus *events.EventBus // non-nil to enable output-chunk streaming for automate sessions
+}
+
+// StartWithOptions works like StartWithKind but also accepts options that
+// control output streaming. When kind == "automate" and opts.EventBus is
+// non-nil, output is teed through an OutputChunkPublisher that emits
+// automate.output_chunk events on a coalesced basis (≥250ms or ≥4KB).
+func (m *BackgroundProcessManager) StartWithOptions(ctx context.Context, command string, dir string, kind string, opts *StartOptions) (string, error) {
 	if strings.TrimSpace(command) == "" {
 		return "", fmt.Errorf("command cannot be empty")
 	}
@@ -175,7 +191,19 @@ func (m *BackgroundProcessManager) StartWithKind(ctx context.Context, command st
 
 	// Buffer for early output capture
 	var outputBuf bytes.Buffer
-	writer := io.MultiWriter(outputFile, &outputBuf)
+
+	// Build the writer chain: always include the file and the in-memory buffer.
+	// For automate sessions with an event bus, tee through the chunk publisher.
+	var writers []io.Writer
+	writers = append(writers, outputFile, &outputBuf)
+
+	var publisher *OutputChunkPublisher
+	if kind == "automate" && opts != nil && opts.EventBus != nil {
+		publisher = NewOutputChunkPublisher(sessionID, opts.EventBus)
+		writers = append(writers, publisher)
+	}
+
+	writer := io.MultiWriter(writers...)
 	cmd.Stdout = writer
 	cmd.Stderr = writer
 
@@ -197,6 +225,7 @@ func (m *BackgroundProcessManager) StartWithKind(ctx context.Context, command st
 		StartedAt:  time.Now(),
 		LastPolled: time.Now(),
 		done:       make(chan struct{}),
+		publisher:  publisher,
 	}
 
 	// Monitor process exit in a goroutine
@@ -209,6 +238,10 @@ func (m *BackgroundProcessManager) StartWithKind(ctx context.Context, command st
 		proc.Process = nil
 		proc.mu.Unlock()
 		close(proc.done)
+		// Flush any remaining output chunks before closing the file
+		if proc.publisher != nil {
+			proc.publisher.Flush()
+		}
 		// Close the output file handle after process exits
 		outputFile.Close()
 	}()

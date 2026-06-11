@@ -103,10 +103,9 @@ func createChatAgent() (*agent.Agent, error) {
 			return nil, nil
 		}
 		if noninteractive.IsNonInteractiveHint(err) {
-			// The agent startup failed specifically because no provider is
-			// configured and stdin is not a terminal. Print the guidance
-			// prominently and exit with a non-zero status.
-			_, _ = os.Stderr.Write([]byte(fmt.Sprintf("\n%s\n\n", err)))
+			// No usable provider and stdin isn't a terminal. Don't print the raw
+			// wrapped error here — Execute()'s central renderer shows the cause
+			// plus a concise provider-setup block (renderProviderSetupHint).
 			return nil, err
 		}
 		return nil, fmt.Errorf("failed to initialize agent: %w", err)
@@ -302,6 +301,11 @@ Examples:
   sprout agent --no-web-ui "Analyze this code"`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// `sprout agent --help-all` (without -h) lists every flag, then exits.
+		if maybeRenderAgentHelpAll(cmd) {
+			return nil
+		}
+
 		// Propagate --no-project-skills to env so config loading skips discovery
 		if noProjectSkills {
 			os.Setenv("SPROUT_NO_PROJECT_SKILLS", "1")

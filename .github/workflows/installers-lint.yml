@@ -1,0 +1,101 @@
+name: Installers Lint
+
+# Lint the install scripts on every PR that touches them, plus a weekly
+# scheduled run so token expirations / action deprecations surface early.
+#
+# Catches:
+#   - shell portability bugs (POSIX `local` is technically non-POSIX, etc.)
+#   - PSScriptAnalyzer-flagged PS antipatterns
+#   - unused params, dead branches, missing exit codes
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/install.sh'
+      - 'scripts/install.ps1'
+      - '.github/workflows/installers-lint.yml'
+  pull_request:
+    paths:
+      - 'scripts/install.sh'
+      - 'scripts/install.ps1'
+      - '.github/workflows/installers-lint.yml'
+  schedule:
+    # Mondays 13:00 UTC — keeps the badge fresh on long-running branches.
+    - cron: '0 13 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  shellcheck:
+    name: shellcheck install.sh
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # ShellCheck is preinstalled on ubuntu-latest runners. We pin the
+      # severity to `warning` so we catch real bugs but not stylistic
+      # nags (single-quote vs double-quote in echo etc.).
+      #
+      # --shell=dash matches our real portability target: every shell we
+      # care about (dash on Debian/Ubuntu, bash, busybox ash on Alpine,
+      # macOS bash-as-sh) supports `local`, but strict POSIX (--shell=sh)
+      # flags it as SC3043. dash is the strictest commonly-deployed sh
+      # implementation, so its rule set is the right floor.
+      - name: Run shellcheck
+        run: |
+          shellcheck --version
+          shellcheck --severity=warning --shell=dash scripts/install.sh
+          shellcheck --severity=warning --shell=dash scripts/update-homebrew-formula.sh
+
+      # POSIX-shell variant explicitly — install.sh's shebang is `#!/bin/sh`
+      # so we want to verify it parses under dash AND bash without errors.
+      - name: dash -n / bash -n syntax check
+        run: |
+          sudo apt-get install -y dash
+          dash -n scripts/install.sh
+          dash -n scripts/update-homebrew-formula.sh
+          bash -n scripts/install.sh
+          bash -n scripts/update-homebrew-formula.sh
+
+  psscriptanalyzer:
+    name: PSScriptAnalyzer install.ps1
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          Install-Module -Name PSScriptAnalyzer -Force -Scope CurrentUser
+          Get-Module -ListAvailable PSScriptAnalyzer | Format-Table Name, Version
+
+      # Severity filter — error/warning surfaces real bugs; info-level
+      # rules are too noisy on an installer script that intentionally
+      # uses Write-Host etc.
+      - name: Run PSScriptAnalyzer
+        shell: pwsh
+        run: |
+          $results = Invoke-ScriptAnalyzer -Path scripts/install.ps1 -Severity Error,Warning
+          if ($results) {
+              $results | Format-Table -AutoSize
+              Write-Error "PSScriptAnalyzer flagged $($results.Count) issue(s)"
+              exit 1
+          }
+          Write-Host "PSScriptAnalyzer: clean"
+
+      - name: Parse-check install.ps1
+        shell: pwsh
+        run: |
+          $errors = $null
+          $tokens = $null
+          $null = [System.Management.Automation.Language.Parser]::ParseFile(
+              "$PWD/scripts/install.ps1", [ref]$tokens, [ref]$errors)
+          if ($errors) {
+              $errors | Format-Table -AutoSize
+              Write-Error "install.ps1 has $($errors.Count) parse error(s)"
+              exit 1
+          }
+          Write-Host "install.ps1 parses cleanly"

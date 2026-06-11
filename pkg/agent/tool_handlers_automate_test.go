@@ -3,6 +3,7 @@ package agent
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -133,5 +134,130 @@ func TestWorkflowApprovalCache_DifferentWorkflowsIndependent(t *testing.T) {
 	a.MarkWorkflowApprovedInSession("foo.json")
 	if a.IsWorkflowApprovedInSession("bar.json") {
 		t.Fatalf("approving foo should not approve bar")
+	}
+}
+
+func TestReadOutputTail_FileMissing(t *testing.T) {
+	got := readOutputTail("/tmp/sprout-nonexistent-output-file-12345.txt", 2048)
+	if got != "" {
+		t.Fatalf("expected empty string for missing file, got %q", got)
+	}
+}
+
+func TestReadOutputTail_EmptyFile(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "empty.txt")
+	if err := os.WriteFile(path, nil, 0600); err != nil {
+		t.Fatalf("write empty file: %v", err)
+	}
+	got := readOutputTail(path, 2048)
+	if got != "" {
+		t.Fatalf("expected empty string for empty file, got %q", got)
+	}
+}
+
+func TestReadOutputTail_SmallFile(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "small.txt")
+	content := "line1\nline2\nline3\n"
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+	got := readOutputTail(path, 2048)
+	if got != content {
+		t.Fatalf("expected full content %q, got %q", content, got)
+	}
+}
+
+func TestReadOutputTail_LargeFile(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "large.txt")
+
+	// Create content larger than 2KB: 3KB of repeating text
+	content := strings.Repeat("A", 1024) + strings.Repeat("B", 1024) + strings.Repeat("C", 1024)
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	got := readOutputTail(path, 2048)
+	if len(got) != 2048 {
+		t.Fatalf("expected 2048 bytes, got %d", len(got))
+	}
+
+	// Should be the last 2048 bytes: 1024 B's + 1024 C's
+	expected := strings.Repeat("B", 1024) + strings.Repeat("C", 1024)
+	if got != expected {
+		t.Fatalf("tail mismatch: got starts with %q", got[:40])
+	}
+}
+
+func TestReadOutputTail_PartialRead(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "partial.txt")
+
+	// Write exactly 500 bytes of content
+	content := strings.Repeat("X", 500)
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	// Request 2048 bytes but file is only 500
+	got := readOutputTail(path, 2048)
+	if got != content {
+		t.Fatalf("expected full 500 bytes, got %d bytes", len(got))
+	}
+
+	// Request only 100 bytes — should get last 100
+	gotSmall := readOutputTail(path, 100)
+	if len(gotSmall) != 100 {
+		t.Fatalf("expected 100 bytes, got %d", len(gotSmall))
+	}
+	if gotSmall != strings.Repeat("X", 100) {
+		t.Fatalf("expected last 100 X's, got %q", gotSmall)
+	}
+}
+
+func TestReadOutputTail_Directory(t *testing.T) {
+	tmp := t.TempDir()
+	got := readOutputTail(tmp, 2048)
+	if got != "" {
+		t.Fatalf("expected empty string for directory, got %q", got)
+	}
+}
+
+func TestReadOutputTail_StripsControlChars(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "control.txt")
+
+	// Mix of printable, newline, tab, and control characters
+	content := "line1\nline2\tval\x00null\x1besc\x07bell\nline3\n"
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	got := readOutputTail(path, 2048)
+
+	// Should contain printable chars, newline, tab — but NOT null/esc/bell
+	if strings.Contains(got, "\x00") {
+		t.Fatalf("should not contain null byte")
+	}
+	if strings.Contains(got, "\x1b") {
+		t.Fatalf("should not contain ESC byte")
+	}
+	if strings.Contains(got, "\x07") {
+		t.Fatalf("should not contain BEL byte")
+	}
+	if !strings.Contains(got, "line1") {
+		t.Fatalf("should contain printable text 'line1'")
+	}
+	if !strings.Contains(got, "\n") {
+		t.Fatalf("should contain newlines")
+	}
+	if !strings.Contains(got, "\t") {
+		t.Fatalf("should contain tabs")
+	}
+	// Verify the printable parts survived
+	if !strings.Contains(got, "line2") || !strings.Contains(got, "line3") {
+		t.Fatalf("should contain 'line2' and 'line3', got %q", got)
 	}
 }

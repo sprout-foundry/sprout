@@ -353,12 +353,17 @@ func (cf *CommitFlow) executeNonInteractive() error {
 // CommitStagedWithMessage commits staged files with an optional message or auto-generated message
 // This method is designed for non-interactive use by the commit tool
 func (cf *CommitFlow) CommitStagedWithMessage() error {
-	// Set git working directory from agent workspace root
-	if cf.agent != nil {
-		SetGitDir(cf.agent.GetWorkspaceRoot())
-	} else {
-		SetGitDir("")
+	// Refuse to run without an agent. Previously this path called
+	// SetGitDir("") to fall back to the process CWD — which on test
+	// runners was the host repo, and let a broken test (and the
+	// api.TestClientType="test" sentinel) commit "test" twice onto
+	// the user's main branch. See SP-066-era investigation. Production
+	// flows always supply an agent; refusing the nil case removes
+	// the dangerous fallback without changing any real call site.
+	if cf.agent == nil {
+		return errors.New("CommitStagedWithMessage requires an agent: nil agent would fall back to the process CWD")
 	}
+	SetGitDir(cf.agent.GetWorkspaceRoot())
 
 	// Check for staged changes first
 	stagedOutput, err := gitCommand("diff", "--staged", "--name-only").CombinedOutput()

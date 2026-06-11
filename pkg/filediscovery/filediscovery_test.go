@@ -475,6 +475,11 @@ func TestBuildWorkspaceStructure_RootDir(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get abs path: %v", err)
 	}
+	// filepath.Abs calls os.Getwd which resolves symlinks on macOS (/var → /private/var).
+	// t.TempDir() returns the unresolved path, so resolve for comparison.
+	if evaled, err := filepath.EvalSymlinks(absRoot); err == nil {
+		absRoot = evaled
+	}
 
 	if info.RootDir != absRoot {
 		t.Errorf("expected RootDir %q, got %q", absRoot, info.RootDir)
@@ -1530,7 +1535,16 @@ func TestDeduplicateAndFilter_ConvertsToAbsolutePath(t *testing.T) {
 	}
 
 	fd := newFD()
-	wsInfo := &WorkspaceInfo{RootDir: root}
+	// Resolve RootDir so it matches what filepath.Abs produces via os.Getwd
+	// (macOS resolves /var → /private/var).
+	resolvedRoot, err := filepath.Abs(root)
+	if err != nil {
+		t.Fatalf("failed to resolve root: %v", err)
+	}
+	if evaled, err := filepath.EvalSymlinks(resolvedRoot); err == nil {
+		resolvedRoot = evaled
+	}
+	wsInfo := &WorkspaceInfo{RootDir: resolvedRoot}
 
 	files := []string{
 		"main.go",     // Relative path
@@ -2070,6 +2084,10 @@ func TestWorkspaceInfo_BuildsCorrectly(t *testing.T) {
 	absRoot, err := filepath.Abs(root)
 	if err != nil {
 		t.Fatalf("failed to get abs root: %v", err)
+	}
+	// filepath.Abs calls os.Getwd which resolves symlinks on macOS.
+	if evaled, err := filepath.EvalSymlinks(absRoot); err == nil {
+		absRoot = evaled
 	}
 	if wsInfo.RootDir != absRoot {
 		t.Errorf("expected RootDir %q, got %q", absRoot, wsInfo.RootDir)

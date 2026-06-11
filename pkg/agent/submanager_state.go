@@ -207,7 +207,7 @@ type AgentStateManager struct {
 	sessionProvider             api.ClientType
 	sessionModel                string
 	configOverrides             map[string]interface{}
-	currentIteration             int
+	currentIteration            int
 	sessionIntentEmbedding      []float32
 	lastProviderError           *ProviderErrorInfo
 }
@@ -215,13 +215,13 @@ type AgentStateManager struct {
 // NewAgentStateManager creates a new AgentStateManager with sensible defaults.
 func NewAgentStateManager(debug bool) *AgentStateManager {
 	return &AgentStateManager{
-		messages:                []api.Message{},
-		optimizer:               NewConversationOptimizer(true, debug),
-		conversationPruner:      NewConversationPruner(debug),
-		commandHistory:          []string{},
-		historyIndex:            -1,
-		activePersona:           personas.IDOrchestrator,
-		circuitBreaker:          &CircuitBreakerState{Actions: make(map[string]*CircuitBreakerAction)},
+		messages:                  []api.Message{},
+		optimizer:                 NewConversationOptimizer(true, debug),
+		conversationPruner:        NewConversationPruner(debug),
+		commandHistory:            []string{},
+		historyIndex:              -1,
+		activePersona:             personas.IDOrchestrator,
+		circuitBreaker:            &CircuitBreakerState{Actions: make(map[string]*CircuitBreakerAction)},
 		falseStopDetectionEnabled: true,
 	}
 }
@@ -248,11 +248,20 @@ func (s *AgentStateManager) AddMessage(msg api.Message) {
 
 // --- Session ---
 
+// Session ID accessors hold s.mu — autoSaveState (state.go) writes
+// sessionID from the main flow while RecordTurnCheckpointAsync
+// (turn_checkpoints.go) reads it from a background goroutine. The
+// race detector caught this on TestRunSeamlessPlanning_ContextCancelled.
+
 func (s *AgentStateManager) GetSessionID() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return s.sessionID
 }
 
 func (s *AgentStateManager) SetSessionID(id string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.sessionID = id
 }
 

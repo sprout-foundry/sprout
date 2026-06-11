@@ -130,20 +130,20 @@ func RetrieveProactiveContext(
 
 	// Ensure the embedding manager is initialized
 	if err := mgr.Init(ctx); err != nil {
-		packageLogErrorf("[proactive-context] init failed: %v", err)
+		debugLogf("[proactive-context] init failed: %v", err)
 		return nil, nil
 	}
 
 	// Acquire the conversation store (lazy-created by the manager)
 	store, err := mgr.GetConversationStore(ctx)
 	if err != nil {
-		packageLogErrorf("[proactive-context] conversation store unavailable: %v", err)
+		debugLogf("[proactive-context] conversation store unavailable: %v", err)
 		return nil, nil
 	}
 
 	provider := store.Provider()
 	if provider == nil {
-		packageLogErrorf("[proactive-context] provider unexpectedly nil")
+		debugLogf("[proactive-context] provider unexpectedly nil")
 		return nil, nil
 	}
 
@@ -151,21 +151,21 @@ func RetrieveProactiveContext(
 	queryEmb, err := provider.Embed(ctx, query)
 	if err != nil {
 		if ctx.Err() != nil {
-			packageLogErrorf("[proactive-context] embedding cancelled: %v", ctx.Err())
+			debugLogf("[proactive-context] embedding cancelled: %v", ctx.Err())
 		} else {
-			packageLogErrorf("[proactive-context] query embedding failed: %v", err)
+			debugLogf("[proactive-context] query embedding failed: %v", err)
 		}
 		return nil, nil
 	}
 	if len(queryEmb) == 0 {
-		packageLogErrorf("[proactive-context] query embedding returned empty vector")
+		debugLogf("[proactive-context] query embedding returned empty vector")
 		return nil, nil
 	}
 
 	// Load all records and filter to conversation turns
 	allRecords, err := store.LoadAll()
 	if err != nil {
-		packageLogErrorf("[proactive-context] failed to load records: %v", err)
+		debugLogf("[proactive-context] failed to load records: %v", err)
 		return nil, nil
 	}
 

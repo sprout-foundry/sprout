@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"syscall"
@@ -18,15 +19,56 @@ import (
 	"golang.org/x/term"
 )
 
-// knownProviderNames is the canonical list of built-in provider names.
-// This is the single source of truth for provider ordering in CLI/UI.
-// Generated from provider configs - use providers.KnownProviders() for the full list.
-var knownProviderNames = providers.KnownProviders()
+// staticProviderNames is the compile-time canonical list of built-in
+// provider names. CLI/UI ordering anchors on this — built-ins keep
+// their generated order; runtime-only additions (e.g. providers
+// published to GitHub Pages but not yet shipped in the binary) are
+// appended in sorted order by knownProviderNames().
+var staticProviderNames = providers.KnownProviders()
 
 // knownProviderDisplayNames maps provider names to their display names.
 // This is the single source of truth for provider display names in CLI/UI.
 // Generated from provider configs - use providers.ProviderDisplayNames() for the full map.
 var knownProviderDisplayNames = providers.ProviderDisplayNames()
+
+// knownProviderNames returns the union of the compile-time provider
+// list and whatever the runtime factory has registered (which includes
+// embedded + filesystem + remote configs once pkg/factory.init has
+// wired SetProviderNamesLookup). Static entries keep their generated
+// order; runtime-only additions are appended in sorted order so the
+// result is deterministic across calls.
+func knownProviderNames() []string {
+	static := staticProviderNames
+	providerNamesLookupMu.RLock()
+	lookup := providerNamesLookup
+	providerNamesLookupMu.RUnlock()
+	if lookup == nil {
+		return append([]string(nil), static...)
+	}
+
+	seen := make(map[string]struct{}, len(static))
+	for _, n := range static {
+		seen[n] = struct{}{}
+	}
+
+	var extras []string
+	for _, n := range lookup() {
+		if _, ok := seen[n]; ok {
+			continue
+		}
+		seen[n] = struct{}{}
+		extras = append(extras, n)
+	}
+
+	if len(extras) == 0 {
+		return append([]string(nil), static...)
+	}
+	sort.Strings(extras)
+	out := make([]string, 0, len(static)+len(extras))
+	out = append(out, static...)
+	out = append(out, extras...)
+	return out
+}
 
 // keyValidationMutex protects ValidateAndSaveAPIKey from concurrent access.
 var keyValidationMutex sync.Mutex
@@ -318,7 +360,7 @@ func SaveAPIKeysToDir(keys *APIKeys, configDir string) error {
 // This is called on startup only to detect whether environment credentials are available.
 func (keys *APIKeys) PopulateFromEnvironment() bool {
 	populated := false
-	for _, name := range knownProviderNames {
+	for _, name := range knownProviderNames() {
 		metadata, err := GetProviderAuthMetadata(name)
 		if err != nil {
 			continue
@@ -503,15 +545,27 @@ func PromptForAPIKey(provider string) (string, error) {
 }
 
 // getProviderDisplayName returns a user-friendly name for the provider.
-// For known built-in providers, uses the static display name map.
-// For custom providers, falls back to the custom provider config.
+// Lookup chain:
+//  1. Static display-name map (generated from embedded configs — fastest
+//     and the common case for built-ins).
+//  2. Runtime factory (covers remote-only providers published to GitHub
+//     Pages whose display_name isn't baked into the static map).
+//  3. CustomProviders (user-defined local providers in config.json).
+//  4. Raw provider ID as a last resort.
 func getProviderDisplayName(provider string) string {
-	// Check static display names for built-in providers first
 	if displayName, ok := knownProviderDisplayNames[provider]; ok {
 		return displayName
 	}
 
-	// Fall back to custom providers
+	providerDisplayLookupMu.RLock()
+	lookup := providerDisplayLookup
+	providerDisplayLookupMu.RUnlock()
+	if lookup != nil {
+		if displayName, ok := lookup(provider); ok && displayName != "" {
+			return displayName
+		}
+	}
+
 	if cfg, err := Load(); err == nil {
 		if custom, exists := cfg.CustomProviders[provider]; exists {
 			if custom.Name != "" {

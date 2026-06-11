@@ -17,6 +17,20 @@ var systemPromptContent string
 //go:embed prompts/planning_prompt.md
 var planningPromptContent string
 
+// SP-066 Phase 2 — dedicated rollup prompt template used by the background
+// rollup worker. Separate from the per-turn summarizer because its inputs
+// are already-summarized data, not raw conversation messages.
+//
+//go:embed prompts/rollup_prompt.md
+var rollupPromptContent string
+
+// GetEmbeddedRollupPrompt returns the rollup summarizer prompt embedded
+// from prompts/rollup_prompt.md. The body is used verbatim as the system
+// prompt for the rollup worker's LLM call.
+func GetEmbeddedRollupPrompt() string {
+	return rollupPromptContent
+}
+
 //go:embed prompts/*.md prompts/subagent_prompts/*.md
 var embeddedPromptFiles embed.FS
 

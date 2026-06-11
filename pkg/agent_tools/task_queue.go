@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -13,6 +14,12 @@ import (
 
 	"github.com/gofrs/flock"
 )
+
+// lockRetryDelay bounds how often a TryLockContext call retries while
+// waiting for the file lock. 100ms is fast enough that ctx cancellation
+// is observed within the tool-timeout grace window, slow enough to avoid
+// burning CPU when another process holds the lock for several seconds.
+const lockRetryDelay = 100 * time.Millisecond
 
 // Task represents a single task in the queue
 type Task struct {
@@ -175,7 +182,7 @@ func (tq *TaskQueue) writeToDisk(tasks []Task) error {
 // Load reads tasks from disk into the in-memory cache. Useful for initial load
 // followed by multiple operations before Save(), but prefer the self-contained
 // ReadTasks / PublishTask / AddTask methods for safety.
-func (tq *TaskQueue) Load() error {
+func (tq *TaskQueue) Load(ctx context.Context) error {
 	tq.mutex.Lock()
 	defer tq.mutex.Unlock()
 
@@ -183,7 +190,7 @@ func (tq *TaskQueue) Load() error {
 		return err
 	}
 
-	if err := tq.flock.RLock(); err != nil {
+	if _, err := tq.flock.TryRLockContext(ctx, lockRetryDelay); err != nil {
 		return fmt.Errorf("failed to acquire read lock: %w", err)
 	}
 	defer tq.flock.Unlock()
@@ -198,7 +205,7 @@ func (tq *TaskQueue) Load() error {
 
 // Save writes the in-memory cache back to disk atomically. Prefer
 // PublishTask / AddTask for mutation since they handle the full atomic cycle.
-func (tq *TaskQueue) Save() error {
+func (tq *TaskQueue) Save(ctx context.Context) error {
 	tq.mutex.Lock()
 	defer tq.mutex.Unlock()
 
@@ -206,7 +213,7 @@ func (tq *TaskQueue) Save() error {
 		return err
 	}
 
-	if err := tq.flock.Lock(); err != nil {
+	if _, err := tq.flock.TryLockContext(ctx, lockRetryDelay); err != nil {
 		return fmt.Errorf("failed to acquire write lock: %w", err)
 	}
 	defer tq.flock.Unlock()
@@ -219,7 +226,11 @@ func (tq *TaskQueue) Save() error {
 // ReadTasks reads tasks from disk, filtered by status, sorted by priority then
 // created_at. Each call reads fresh from disk under a shared file lock, so it
 // reflects the latest state without a prior Load().
-func (tq *TaskQueue) ReadTasks(status string, limit int) ([]Task, error) {
+//
+// The shared lock is acquired via TryRLockContext so the caller's ctx
+// cancels the wait (tool timeout / user interrupt) instead of blocking
+// indefinitely when another process holds an exclusive write lock.
+func (tq *TaskQueue) ReadTasks(ctx context.Context, status string, limit int) ([]Task, error) {
 	tq.mutex.Lock()
 	defer tq.mutex.Unlock()
 
@@ -227,7 +238,7 @@ func (tq *TaskQueue) ReadTasks(status string, limit int) ([]Task, error) {
 		return nil, err
 	}
 
-	if err := tq.flock.RLock(); err != nil {
+	if _, err := tq.flock.TryRLockContext(ctx, lockRetryDelay); err != nil {
 		return nil, fmt.Errorf("failed to acquire read lock: %w", err)
 	}
 	defer tq.flock.Unlock()
@@ -269,7 +280,13 @@ func (tq *TaskQueue) ReadTasks(status string, limit int) ([]Task, error) {
 // PublishTask atomically updates a task's status and result and optionally
 // creates subtasks. Reads fresh from disk under an exclusive file lock, so it
 // never overwrites work done by another process between Load and Publish.
-func (tq *TaskQueue) PublishTask(taskID, status, result string, subtasks []SubtaskInput) ([]Task, error) {
+//
+// The exclusive lock is acquired via TryLockContext so the caller's ctx
+// cancels the wait (tool timeout / user interrupt) instead of blocking
+// indefinitely when another process holds the lock — historically the
+// non-cancellable Lock() call orphaned a goroutine that kept the lock
+// contended long after the tool's outer timeout fired.
+func (tq *TaskQueue) PublishTask(ctx context.Context, taskID, status, result string, subtasks []SubtaskInput) ([]Task, error) {
 	tq.mutex.Lock()
 	defer tq.mutex.Unlock()
 
@@ -282,7 +299,7 @@ func (tq *TaskQueue) PublishTask(taskID, status, result string, subtasks []Subta
 		return nil, err
 	}
 
-	if err := tq.flock.Lock(); err != nil {
+	if _, err := tq.flock.TryLockContext(ctx, lockRetryDelay); err != nil {
 		return nil, fmt.Errorf("failed to acquire write lock: %w", err)
 	}
 	defer tq.flock.Unlock()
@@ -355,7 +372,10 @@ func (tq *TaskQueue) PublishTask(taskID, status, result string, subtasks []Subta
 // AddTask atomically adds a new task. Reads fresh from disk under an exclusive
 // file lock, so concurrent adds from separate processes do not overwrite each
 // other.
-func (tq *TaskQueue) AddTask(title, description, priority, workingDir, persona string) (*Task, error) {
+//
+// The exclusive lock is acquired via TryLockContext so the caller's ctx
+// cancels the wait when another process holds the lock.
+func (tq *TaskQueue) AddTask(ctx context.Context, title, description, priority, workingDir, persona string) (*Task, error) {
 	tq.mutex.Lock()
 	defer tq.mutex.Unlock()
 
@@ -367,7 +387,7 @@ func (tq *TaskQueue) AddTask(title, description, priority, workingDir, persona s
 		return nil, err
 	}
 
-	if err := tq.flock.Lock(); err != nil {
+	if _, err := tq.flock.TryLockContext(ctx, lockRetryDelay); err != nil {
 		return nil, fmt.Errorf("failed to acquire write lock: %w", err)
 	}
 	defer tq.flock.Unlock()

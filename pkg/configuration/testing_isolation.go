@@ -112,6 +112,19 @@ func sanitizeTestProvider(c *Config) {
 		log.Printf("[config] sanitizing test-provider sentinel from SubagentProvider")
 		c.SubagentProvider = ""
 	}
+	// CommitProvider and ReviewProvider are resolved independently of
+	// LastUsedProvider. If either holds the test sentinel, the commit
+	// or review tool would route LLM calls to the mock client, which
+	// returns "test" for every prompt — producing the literal string
+	// as the generated commit message.
+	if c.CommitProvider == string(api.TestClientType) {
+		log.Printf("[config] sanitizing test-provider sentinel from CommitProvider")
+		c.CommitProvider = ""
+	}
+	if c.ReviewProvider == string(api.TestClientType) {
+		log.Printf("[config] sanitizing test-provider sentinel from ReviewProvider")
+		c.ReviewProvider = ""
+	}
 	// ProviderModels is keyed by provider name. A "test" entry is
 	// harmless on its own (nothing reads it once LastUsedProvider is
 	// cleared) but contributes to file bloat over time; drop it.

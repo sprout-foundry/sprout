@@ -128,7 +128,10 @@ func formatErrorDetails(err error) string {
 	return err.Error()
 }
 
-const maxErrorLogFiles = 100
+// Each error dump can be 30+ MB (full request payload + redacted history),
+// so 100 files = ~3GB of disk. 20 is enough to debug recent failures without
+// growing into a multi-gigabyte sink.
+const maxErrorLogFiles = 20
 
 // cleanupOldErrorLogs removes old error log files, keeping only the most recent maxErrorLogFiles.
 // Files are sorted by name (which contains timestamps), so lexicographic sort = chronological.

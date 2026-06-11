@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
@@ -24,7 +25,30 @@ func newTestEnv(t *testing.T, workspaceRoot string) ToolEnv {
 		WorkspaceRoot: workspaceRoot,
 		OutputWriter:  os.Stderr,
 		MaxTokensFunc: func() int { return 128000 },
+		// Hermetic config manager. Without this, handlers that fall
+		// through to configuration.NewManager() race the user's real
+		// ~/.config/sprout/config.json under -race + t.Parallel and
+		// fail with "config file changed on disk since load". We can't
+		// use configuration.NewTestManager(t) here because t.Setenv is
+		// incompatible with t.Parallel — NewManagerWithDir sidesteps
+		// the env var entirely.
+		ConfigManager: newHermeticConfigManager(t),
 	}
+}
+
+// newHermeticConfigManager returns a configuration.Manager backed by a
+// per-test temp directory. Safe under t.Parallel — does not call
+// t.Setenv. Used by every test that calls a handler whose Execute path
+// constructs a Manager when env.ConfigManager is nil (embedding_index,
+// semantic_search, list_skills, fetch_url, etc.).
+func newHermeticConfigManager(t *testing.T) *configuration.Manager {
+	t.Helper()
+	cfgDir := filepath.Join(t.TempDir(), ".sprout")
+	mgr, err := configuration.NewManagerWithDir(cfgDir)
+	if err != nil {
+		t.Fatalf("newHermeticConfigManager: NewManagerWithDir(%q): %v", cfgDir, err)
+	}
+	return mgr
 }
 
 func newTestCtx(root string) context.Context {

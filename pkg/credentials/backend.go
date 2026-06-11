@@ -3,7 +3,6 @@ package credentials
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -186,7 +185,7 @@ func SetStorageMode(mode string) error {
 		return fmt.Errorf("failed to write backend mode file: %w", err)
 	}
 
-	log.Printf("[credentials] Storage mode set to: %s", mode)
+	debugLogf("[credentials] Storage mode set to: %s", mode)
 	return nil
 }
 
@@ -213,11 +212,11 @@ func resolveBackend() (Backend, error) {
 	// Check environment variable first
 	envMode := strings.TrimSpace(envutil.GetEnvSimple("CREDENTIAL_BACKEND"))
 	if envMode == "keyring" {
-		log.Printf("[credentials] Using keyring backend (forced via SPROUT_CREDENTIAL_BACKEND)")
+		debugLogf("[credentials] Using keyring backend (forced via SPROUT_CREDENTIAL_BACKEND)")
 		return NewOSKeyringBackend(), nil
 	}
 	if envMode == "file" {
-		log.Printf("[credentials] Using file backend (forced via SPROUT_CREDENTIAL_BACKEND)")
+		debugLogf("[credentials] Using file backend (forced via SPROUT_CREDENTIAL_BACKEND)")
 		return NewFileBackend(), nil
 	}
 
@@ -231,7 +230,7 @@ func resolveBackend() (Backend, error) {
 	// paths set SPROUT_CREDENTIALS_TEST_ALLOW_AUTODETECT=1 and use
 	// keyring.MockInit() to keep the probe in-memory.
 	if inTestBinary() && strings.TrimSpace(os.Getenv("SPROUT_CREDENTIALS_TEST_ALLOW_AUTODETECT")) == "" {
-		log.Printf("[credentials] Test binary detected — using file backend (skipping keyring auto-detect)")
+		debugLogf("[credentials] Test binary detected — using file backend (skipping keyring auto-detect)")
 		return NewFileBackend(), nil
 	}
 
@@ -242,28 +241,28 @@ func resolveBackend() (Backend, error) {
 	}
 
 	if persistedMode == "keyring" {
-		log.Printf("[credentials] Using keyring backend (persisted mode)")
+		debugLogf("[credentials] Using keyring backend (persisted mode)")
 		return NewOSKeyringBackend(), nil
 	}
 	if persistedMode == "file" {
-		log.Printf("[credentials] Using file backend (persisted mode)")
+		debugLogf("[credentials] Using file backend (persisted mode)")
 		return NewFileBackend(), nil
 	}
 
 	// Auto-detect: try to use keyring, fall back to file.
 
-	log.Printf("[credentials] Auto-detecting storage backend...")
+	debugLogf("[credentials] Auto-detecting storage backend...")
 	if IsKeyringAvailable() {
-		log.Printf("[credentials] OS keyring available, using keyring backend")
+		debugLogf("[credentials] OS keyring available, using keyring backend")
 		if err := SetStorageMode("keyring"); err != nil {
-			log.Printf("[credentials] Warning: failed to persist keyring mode: %v", err)
+			debugLogf("[credentials] Warning: failed to persist keyring mode: %v", err)
 		}
 		return NewOSKeyringBackend(), nil
 	}
 
-	log.Printf("[credentials] OS keyring not available, using file backend")
+	debugLogf("[credentials] OS keyring not available, using file backend")
 	if err := SetStorageMode("file"); err != nil {
-		log.Printf("[credentials] Warning: failed to persist file mode: %v", err)
+		debugLogf("[credentials] Warning: failed to persist file mode: %v", err)
 	}
 	return NewFileBackend(), nil
 }
@@ -294,7 +293,7 @@ func ResetStorageBackend() {
 // If clearFile is true, removes all credentials from the file store after successful migration.
 // On failure, rolls back any partially migrated credentials to prevent orphaned entries.
 func MigrateFileToKeyring(clearFile bool) ([]string, error) {
-	log.Printf("[credentials] Migrating credentials from file store to keyring...")
+	debugLogf("[credentials] Migrating credentials from file store to keyring...")
 
 	// Load all credentials from file store
 	store, err := Load()
@@ -303,7 +302,7 @@ func MigrateFileToKeyring(clearFile bool) ([]string, error) {
 	}
 
 	if len(store) == 0 {
-		log.Printf("[credentials] No credentials to migrate from file store")
+		debugLogf("[credentials] No credentials to migrate from file store")
 		return []string{}, nil
 	}
 
@@ -380,7 +379,7 @@ func MigrateFileToKeyring(clearFile bool) ([]string, error) {
 
 	// Optionally clear the file store
 	if clearFile {
-		log.Printf("[credentials] Clearing file store after migration")
+		debugLogf("[credentials] Clearing file store after migration")
 		if err := Save(Store{}); err != nil {
 			// Rollback: delete migrated credentials from keyring if file clear fails
 			for _, p := range migrated {
@@ -394,7 +393,7 @@ func MigrateFileToKeyring(clearFile bool) ([]string, error) {
 		}
 	}
 
-	log.Printf("[credentials] Successfully migrated %d credentials to keyring", len(migrated))
+	debugLogf("[credentials] Successfully migrated %d credentials to keyring", len(migrated))
 	return migrated, nil
 }
 
@@ -403,7 +402,7 @@ func MigrateFileToKeyring(clearFile bool) ([]string, error) {
 // If clearKeyring is true, removes all credentials from the keyring after successful migration.
 // On failure, rolls back any partially migrated credentials to prevent orphaned entries.
 func MigrateKeyringToFile(clearKeyring bool) ([]string, error) {
-	log.Printf("[credentials] Migrating credentials from keyring to file store...")
+	debugLogf("[credentials] Migrating credentials from keyring to file store...")
 
 	// Get tracked providers from keyring
 	providers, err := getTrackedKeyringProviders()
@@ -412,7 +411,7 @@ func MigrateKeyringToFile(clearKeyring bool) ([]string, error) {
 	}
 
 	if len(providers) == 0 {
-		log.Printf("[credentials] No credentials to migrate from keyring")
+		debugLogf("[credentials] No credentials to migrate from keyring")
 		return []string{}, nil
 	}
 
@@ -433,7 +432,7 @@ func MigrateKeyringToFile(clearKeyring bool) ([]string, error) {
 		}
 
 		if value == "" {
-			log.Printf("[credentials] Warning: no credential found for %q in keyring, skipping", provider)
+			debugLogf("[credentials] Warning: no credential found for %q in keyring, skipping", provider)
 			continue
 		}
 
@@ -478,26 +477,26 @@ func MigrateKeyringToFile(clearKeyring bool) ([]string, error) {
 
 	// Optionally clear the keyring
 	if clearKeyring {
-		log.Printf("[credentials] Clearing keyring after migration")
+		debugLogf("[credentials] Clearing keyring after migration")
 		for _, provider := range providers {
 			if err := keyringBackend.Delete(provider); err != nil {
-				log.Printf("[credentials] Warning: failed to delete %q from keyring: %v", provider, err)
+				debugLogf("[credentials] Warning: failed to delete %q from keyring: %v", provider, err)
 			}
 			// Also clean up pool entries
 			for i := 1; i < MaxPoolEntries; i++ {
 				poolKey := fmt.Sprintf("%s__pool_%d", provider, i)
 				if err := keyringBackend.Delete(poolKey); err != nil {
-					log.Printf("[credentials] Warning: failed to delete %q from keyring: %v", poolKey, err)
+					debugLogf("[credentials] Warning: failed to delete %q from keyring: %v", poolKey, err)
 					continue // Keep trying; entries may not be contiguous after add/remove
 				}
 			}
 			if err := removeTrackedProvider(provider); err != nil {
-				log.Printf("[credentials] Warning: failed to remove %q from tracking: %v", provider, err)
+				debugLogf("[credentials] Warning: failed to remove %q from tracking: %v", provider, err)
 			}
 		}
 	}
 
-	log.Printf("[credentials] Successfully migrated %d credentials to file store", len(migrated))
+	debugLogf("[credentials] Successfully migrated %d credentials to file store", len(migrated))
 	return migrated, nil
 }
 
@@ -520,7 +519,7 @@ func DeleteFromActiveBackend(provider string) error {
 	// If using keyring backend, also remove from tracking
 	if _, ok := backend.(*OSKeyringBackend); ok {
 		if err := removeTrackedProvider(provider); err != nil {
-			log.Printf("[credentials] Warning: failed to remove %q from tracking: %v", provider, err)
+			debugLogf("[credentials] Warning: failed to remove %q from tracking: %v", provider, err)
 		}
 	}
 
@@ -541,7 +540,7 @@ func SetToActiveBackend(provider, value string) error {
 	// If using keyring backend, add to tracking
 	if _, ok := backend.(*OSKeyringBackend); ok {
 		if err := addTrackedProvider(provider); err != nil {
-			log.Printf("[credentials] Warning: failed to track %q: %v", provider, err)
+			debugLogf("[credentials] Warning: failed to track %q: %v", provider, err)
 		}
 	}
 

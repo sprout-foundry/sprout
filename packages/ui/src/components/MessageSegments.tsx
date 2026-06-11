@@ -95,8 +95,20 @@ const MessageSegments: React.FC<MessageSegmentsProps> = ({ content, toolRefs = [
           case 'tool_call': {
             const matchingRef = claimMatchingToolRef(segment.toolName);
             const baseName = segment.toolName.split('(')[0];
-            const toolStatus = matchingRef && getToolStatus ? getToolStatus(matchingRef.toolId) : undefined;
-            const isDone = toolStatus === 'completed' || toolStatus === 'error';
+            // When the chat provides getToolStatus AND we have a matching toolRef,
+            // a returned `undefined` means the tool ran in a previous turn whose
+            // execution state has been cleared (handleQueryStart resets
+            // state.toolExecutions to [] on every new query). Treat that as done
+            // so the badge stays in compact footnote form instead of regressing
+            // to the running pill on every subsequent query — that regression was
+            // the visible "tool call badges show then hide every few seconds"
+            // flicker. Consumers that don't pass getToolStatus (e.g. unit tests
+            // exercising a bare pill) keep the original render path.
+            const hasStatusLookup = !!matchingRef && !!getToolStatus;
+            const toolStatus = hasStatusLookup ? getToolStatus!(matchingRef!.toolId) : undefined;
+            const isDone =
+              hasStatusLookup &&
+              (toolStatus === undefined || toolStatus === 'completed' || toolStatus === 'error');
 
             if (isDone && matchingRef) {
               // Completed tool: render a compact footnote superscript link [shortname]

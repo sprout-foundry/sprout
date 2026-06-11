@@ -30,6 +30,7 @@ require github.com/odvcencio/gotreesitter v0.16.0
 require (
 	github.com/coder/hnsw v0.6.1
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
+	github.com/wk8/go-ordered-map/v2 v2.1.8
 	github.com/yalue/onnxruntime_go v1.30.1
 	github.com/zricethezav/gitleaks/v8 v8.30.1
 )
@@ -98,7 +99,6 @@ require (
 	github.com/viterin/vek v0.4.2 // indirect
 	github.com/wasilibs/go-re2 v1.9.0 // indirect
 	github.com/wasilibs/wazero-helpers v0.0.0-20240620070341-3dff1577cd52 // indirect
-	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go4.org v0.0.0-20230225012048-214862532bf5 // indirect

@@ -20,7 +20,12 @@ import (
 const (
 	MAX_SUBAGENT_OUTPUT_SIZE    = 10 * 1024 * 1024 // 10MB
 	MAX_SUBAGENT_CONTEXT_SIZE   = 1024 * 1024      // 1MB
-	BATCH_SIZE                  = 50               // Number of lines to batch before publishing
+	// Lines to batch before publishing a subagent "output" event. Kept small
+	// so output streams to the WebUI in near-real-time — subagent output is
+	// line-level (LLM-paced), not char-level, so this won't flood the event
+	// bus, while still coalescing bursty tool dumps. (Was 50, which made most
+	// subagent runs show nothing until they finished.)
+	BATCH_SIZE = 8
 	DefaultSubagentTokenBudget  = 2_000_000        // Default token budget for subagents
 )
 
@@ -149,12 +154,25 @@ func publishSubagentActivity(ctx context.Context, a *Agent, phase, message strin
 	buffer.lines = append(buffer.lines, message)
 	buffer.lineCount++
 
-	// Check if batch is full - clear buffer first, then flush
+	// Flush when the batch is full. Snapshot the lines into a separate buffer
+	// BEFORE resetting, then publish outside the lock. The previous code reset
+	// buffer.lines to length 0 and then passed the same (now-empty) buffer to
+	// flushSubagentBatch, which saw len==0 and published nothing — so every
+	// full 50-line batch of subagent output was silently dropped and never
+	// reached the WebUI. Only the final sub-50 remainder (flushed on the
+	// "complete" milestone) ever showed.
 	if buffer.lineCount >= BATCH_SIZE {
+		toFlush := &subagentBatchBuffer{
+			lines:      append([]string(nil), buffer.lines...),
+			lineCount:  buffer.lineCount,
+			taskID:     buffer.taskID,
+			persona:    buffer.persona,
+			isParallel: buffer.isParallel,
+		}
 		buffer.lines = buffer.lines[:0]
 		buffer.lineCount = 0
 		bufferMu.Unlock()
-		flushSubagentBatch(buffer, a, toolCallID, toolName)
+		flushSubagentBatch(toFlush, a, toolCallID, toolName)
 		bufferMu.Lock()
 	}
 
@@ -750,7 +768,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		"model":       displayModel,
 		"is_parallel": false,
 	})
-	_, _ = os.Stderr.Write([]byte(fmt.Sprintf("[~] Spawning subagent [%s]: provider=%s, model=%s\n", persona, displayProvider, displayModel)))
+	printSubagentStart(persona, displayProvider, displayModel)
 
 	runner := a.GetSubagentRunner()
 	result := runner.Run(ctx, enhancedPrompt.String(), SubagentOptions{
@@ -760,6 +778,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		SystemPrompt: systemPromptText,
 		WorkingDir:   workingDir,
 	})
+	printSubagentDone(persona, result)
 
 	// SP-059 Phase 2a: build the typed envelope. resultMap is preserved
 	// for the legacy code paths below that still mutate it via string
@@ -1281,7 +1300,7 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 		"is_parallel": true,
 		"task_count":  len(parallelTasks),
 	})
-	_, _ = os.Stderr.Write([]byte(fmt.Sprintf("[~] Spawning %d parallel subagents: provider=%s, model=%s\n", len(parallelTasks), displayProvider, displayModel)))
+	printParallelSubagentStart(len(parallelTasks), displayProvider, displayModel)
 
 	runner := a.GetSubagentRunner()
 	var tasks []SubagentTask

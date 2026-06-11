@@ -145,5 +145,6 @@
     "chunk_timeout_ms": 320000,
     "done_marker": "[DONE]",
     "format": "sse"
-  }
+  },
+  "display_name": "DeepSeek"
 }

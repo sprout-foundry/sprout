@@ -9,7 +9,7 @@ AI-powered code editing and assistance tool. Leverages LLMs to understand your w
 - **Coding Agent** with smart workspace context, self-correction, and multi-step orchestration
 - **12 specialized personas** (coder, debugger, reviewer, researcher, executive assistant, project planner, etc.)
 - **Web UI** with chat, code editor, terminal, file browser, Git UI, and more
-- **Multi-provider LLM support** — OpenAI, DeepInfra, OpenRouter, Z.AI, Ollama, DeepSeek, Mistral, Minimax, LMStudio, Cerebras, Chutes, and custom providers
+- **Multi-provider LLM support** — OpenAI, DeepInfra, OpenRouter, Z.AI, Ollama, DeepSeek, Mistral, Minimax, LMStudio, Cerebras, Chutes, plus community-contributed providers via the remote registry (see [Provider Registry](docs/PROVIDER_REGISTRY.md)) and local custom providers (`sprout custom add`)
 - **MCP Server Integration** for external tools (GitHub repos, issues, PRs)
 - **Persistent Memory** across conversations
 - **Built-in tool suite** — file operations, web search, vision analysis, shell execution, PDF analysis, headless browser
@@ -39,11 +39,45 @@ See the [Consumption Guide](docs/CONSUMPTION_GUIDE.md) for full documentation.
 curl -fsSL https://raw.githubusercontent.com/sprout-foundry/sprout/main/scripts/install.sh | sh
 ```
 
-**Windows (PowerShell):**
+**Windows (PowerShell 5.1+ — the default on Windows 10/11, or PowerShell 7):**
 
 ```powershell
 irm https://raw.githubusercontent.com/sprout-foundry/sprout/main/scripts/install.ps1 | iex
 ```
+
+**Termux (Android, arm64):**
+
+The same Linux installer detects Termux, installs into `$PREFIX/bin`,
+skips the systemd/launchd service step, and surfaces a clear error if
+the binary's libc requirements don't match Bionic:
+
+```bash
+pkg install curl tar
+curl -fsSL https://raw.githubusercontent.com/sprout-foundry/sprout/main/scripts/install.sh | sh
+```
+
+The release pipeline cross-compiles `sprout-linux-arm64` with CGO disabled,
+so the resulting static binary runs on Termux's Bionic libc unmodified.
+If the post-install verification fails the installer prints a
+build-from-source recipe specific to Termux (`pkg install golang nodejs
+make git` + `make deploy-ui && go install .`).
+
+**macOS via Homebrew (once the tap is published):**
+
+```bash
+brew tap sprout-foundry/sprout
+brew install sprout
+```
+
+Or install directly from the release URL without adding the tap:
+
+```bash
+brew install --formula https://github.com/sprout-foundry/sprout/releases/latest/download/sprout.rb
+```
+
+The formula source lives at [`Formula/sprout.rb`](Formula/sprout.rb);
+`scripts/update-homebrew-formula.sh` stamps it with each release's
+version and SHA256s and `release.yml` uploads the result as an asset.
 
 ### Install Options
 
@@ -59,11 +93,60 @@ curl -fsSL -o install.sh https://raw.githubusercontent.com/sprout-foundry/sprout
 sh install.sh
 ```
 
+### Upgrading
+
+Once sprout is installed, you can upgrade from the binary itself — no
+need to re-pipe curl into a shell:
+
+```bash
+sprout upgrade                     # confirm, then download + verify + replace
+sprout upgrade --check             # just print whether an upgrade is available
+sprout upgrade -y                  # skip the prompt (useful in CI)
+sprout upgrade --version v0.14.0   # pin a specific tag
+sprout upgrade --pre-release       # include pre-release tags as "latest"
+sprout upgrade --rollback          # restore the previous binary saved by the last upgrade
+```
+
+The same SHA256 verification used by `install.sh` runs inside the
+command; bypass with `SPROUT_SKIP_CHECKSUM=1` only when you have a
+specific reason.
+
+On Windows the running `.exe` is renamed to `sprout.exe.old` in place
+(Windows can't replace a loaded executable) and the new binary is written
+to the original path — restart any running sprout process to pick up the
+new build.
+
 ### Uninstall
+
+By default this removes the binary, the service files, and the config /
+session state under `~/.config/sprout/` and `~/.sprout/`. Pass
+`--keep-config` (or `-KeepConfig` on Windows) to preserve them.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/sprout-foundry/sprout/main/scripts/install.sh | sh -s -- --uninstall
+# Keep your settings + session history:
+curl -fsSL https://raw.githubusercontent.com/sprout-foundry/sprout/main/scripts/install.sh | sh -s -- --uninstall --keep-config
 ```
+
+### Verifying the download
+
+Every release ships a `SHA256SUMS` manifest and an SLSA build-provenance
+attestation. The install scripts verify the checksum automatically; the
+provenance attestation can be checked manually with the GitHub CLI:
+
+```bash
+# Integrity (already automated by install.sh — this is for manual re-check):
+curl -fsSL https://github.com/sprout-foundry/sprout/releases/latest/download/SHA256SUMS \
+  | sha256sum -c --ignore-missing
+
+# Provenance — proves the binary came from the official release workflow:
+gh release download <tag> --pattern 'sprout-*' --repo sprout-foundry/sprout
+gh attestation verify sprout-linux-amd64.tar.gz --repo sprout-foundry/sprout
+```
+
+Set `SPROUT_SKIP_CHECKSUM=1` (or `$env:SPROUT_SKIP_CHECKSUM='1'` on
+Windows) only if you have a specific reason to bypass verification — e.g.
+a release that pre-dates the manifest.
 
 ### From Source
 
@@ -142,6 +225,7 @@ When the active persona spawns subagents (e.g. EA delegating to `coder`), the su
 | [MCP Integration](docs/MCP_INTEGRATION.md)     | MCP server setup, configuration, troubleshooting          |
 | [Agent Workflow](docs/AGENT_WORKFLOW.md)       | Config-driven workflow sequences                          |
 | [Provider Catalog](docs/PROVIDER_CATALOG.md)   | Provider catalog system and model metadata                |
+| [Provider Registry](docs/PROVIDER_REGISTRY.md) | Remote provider registry, community provider PRs, schema  |
 | [Personas](docs/PERSONAS.md)                   | Persona system, risk model, and custom persona guide      |
 | [Testing](docs/TESTING.md)                     | Test strategy, categories, and commands                   |
 

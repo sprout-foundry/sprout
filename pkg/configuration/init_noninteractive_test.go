@@ -99,10 +99,17 @@ func TestEnsureProviderAPIKeyNonInteractive(t *testing.T) {
 				}
 				return cleanup, nil
 			},
-			wantErr: false, // If credential exists, function succeeds even in non-interactive
-			errMsg:  "non-interactive mode", // Should NOT contain this if credential exists
+			wantErr: true,
+			errMsg:  "non-interactive mode",
 		},
 	}
+
+	// Ensure no host-side credential satisfies HasProviderAuth("openai") —
+	// the previous version of this test was tolerant of "credential
+	// exists", which made it pass locally on dev machines and fail in
+	// CI where no env var is set. Clearing the env unconditionally makes
+	// the assertion meaningful in both environments.
+	t.Setenv("OPENAI_API_KEY", "")
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -112,20 +119,23 @@ func TestEnsureProviderAPIKeyNonInteractive(t *testing.T) {
 			}
 			defer cleanup()
 
+			// Skip when a non-env credential is present (e.g. ~/.config
+			// store on a dev workstation). The behavior is still
+			// correct — just untested here — and forcing it to fail
+			// would block local runs.
+			if HasProviderAuth("openai") {
+				t.Skip("openai credential is configured locally; non-interactive failure path not reachable")
+			}
+
 			// Create a minimal APIKeys object for the test
 			apiKeys := &APIKeys{}
 
-			// Test with a provider that requires an API key
-			// Note: If the provider already has a credential stored (env var or file),
-			// this test may pass even in non-interactive mode, which is expected behavior.
-			// The important thing is to verify that non-interactive detection is in place.
 			err = EnsureProviderAPIKey("openai", apiKeys)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("EnsureProviderAPIKey() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 
-			// Only check error message content if we expected an error
 			if err != nil && tt.errMsg != "" {
 				errStr := err.Error()
 				if !strings.Contains(errStr, tt.errMsg) {

@@ -18,6 +18,26 @@ vi.mock('@codemirror/lsp-client', () => ({
   languageServerExtensions: vi.fn(() => []),
 }));
 
+// utils/log.ts pulls in NotificationContext which re-exports from
+// @sprout/ui; the shared package's runtime touches `document` at module
+// load. Stub the log surface here so the test file's import chain stays
+// hermetic — we only consume warn() indirectly via createTransport's
+// error path, so a no-op suffices.
+vi.mock('../utils/log', () => ({
+  debugLog: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+  info: vi.fn(),
+  success: vi.fn(),
+  useLog: () => ({
+    debug: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    info: vi.fn(),
+    success: vi.fn(),
+  }),
+}));
+
 // ── Module under test ─────────────────────────────────────────────────
 
 import { getFileURI, uriToFilePath, LSP_SUPPORTED_LANGUAGES, createTransport } from './lspClientService';
@@ -102,8 +122,18 @@ describe('LSP_SUPPORTED_LANGUAGES', () => {
   });
 
   it('does not contain unsupported languages', () => {
-    expect(LSP_SUPPORTED_LANGUAGES.has('python')).toBe(false);
-    expect(LSP_SUPPORTED_LANGUAGES.has('ruby')).toBe(false);
+    // The LSP_SUPPORTED_LANGUAGES set has grown to cover most popular
+    // languages (python, ruby, rust, etc. are now in). Pick languageIds
+    // that genuinely aren't wired up on the backend — these are the
+    // canonical CodeMirror language IDs for ecosystems where we haven't
+    // added a language-server route. If you add support for one of these,
+    // pick another truly-unsupported one rather than removing the
+    // assertion: the test exists to catch the "Set got accidentally
+    // replaced with `new Set(['*'])`-style" bug, not to enumerate the
+    // current support matrix.
+    expect(LSP_SUPPORTED_LANGUAGES.has('cobol')).toBe(false);
+    expect(LSP_SUPPORTED_LANGUAGES.has('fortran')).toBe(false);
+    expect(LSP_SUPPORTED_LANGUAGES.has('not-a-real-language')).toBe(false);
   });
 });
 

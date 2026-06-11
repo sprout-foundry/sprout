@@ -38,11 +38,16 @@
     "base_delay_ms": 1000,
     "backoff_multiplier": 2.0,
     "max_delay_ms": 30000,
-    "retryable_errors": ["rate_limit_exceeded", "temporary_error", "timeout"]
+    "retryable_errors": [
+      "rate_limit_exceeded",
+      "temporary_error",
+      "timeout"
+    ]
   },
   "cost": {
     "input_token_cost": 0.0,
     "output_token_cost": 0.0,
     "currency": "USD"
-  }
+  },
+  "display_name": "Cerebras"
 }

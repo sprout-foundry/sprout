@@ -278,8 +278,11 @@ func KnownProviders() []string {
 	}
 }
 
-// ProviderDisplayNames returns a map of provider names to display names
-// This replaces the hardcoded knownProviderDisplayNames map in api_keys.go
+// ProviderDisplayNames returns a map of provider names to display names.
+// Values prefer the per-config display_name field (single source of truth
+// in pkg/agent_providers/configs/*.json); the hardcoded switch in
+// generate_providers.go::displayName is kept as a transitional fallback
+// for configs that haven't been backfilled yet.
 func ProviderDisplayNames() map[string]string {
 	return map[string]string{
 

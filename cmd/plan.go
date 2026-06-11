@@ -210,7 +210,7 @@ func runSeamlessPlanning(ctx context.Context, chatAgent *agent.Agent, initialQue
 		fmt.Println("\n" + strings.Repeat("─", 60))
 		fmt.Print("[>] Your response: ")
 
-		userInput, _ := reader.ReadString('\n')
+		userInput, readErr := reader.ReadString('\n')
 		userInput = strings.TrimSpace(userInput)
 
 		// Handle special commands
@@ -219,6 +219,15 @@ func runSeamlessPlanning(ctx context.Context, chatAgent *agent.Agent, initialQue
 			fmt.Println("\n-- Planning session ended.")
 			return nil
 		case "":
+			// An empty line only means "continue" for an interactive user who
+			// pressed Enter. A read error with no content means stdin is closed
+			// (EOF) — continuing would spin this loop forever, re-invoking the
+			// agent and accumulating conversation history without bound. End the
+			// session instead.
+			if readErr != nil {
+				fmt.Println("\n-- Planning session ended.")
+				return nil
+			}
 			// Continue without additional input - agent should decide next action
 			currentQuery = "Please continue. If we're in the planning phase, continue gathering information or present the plan if ready. If in execution phase, continue with the next task."
 		default:

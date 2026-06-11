@@ -2,6 +2,7 @@ package utils
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -112,7 +113,11 @@ func (w *Logger) AskForApprovalWithOptions(prompt, command string) ApprovalChoic
 
 	for {
 		w.LogUserInteraction("Choose [y/n/a/e]: ")
-		response, err := reader.ReadString('\n')
+		response, err := ReadLineWithTimeout(reader, ApprovalPromptTimeout)
+		if errors.Is(err, ErrPromptTimeout) {
+			w.LogUserInteraction(fmt.Sprintf(" timed out after %s waiting for input - denying for safety.", ApprovalPromptTimeout))
+			return ApprovalChoiceDeny
+		}
 		if err != nil {
 			consecutiveErrors++
 			w.Log(fmt.Sprintf("AskForApprovalWithOptions: read error (attempt %d/%d): %v", consecutiveErrors, maxConsecutiveErrors, err))
@@ -204,7 +209,11 @@ func (w *Logger) AskForFilesystemApproval(prompt, path, folder string, tier File
 
 	for {
 		w.LogUserInteraction(choiceHint)
-		response, err := reader.ReadString('\n')
+		response, err := ReadLineWithTimeout(reader, ApprovalPromptTimeout)
+		if errors.Is(err, ErrPromptTimeout) {
+			w.LogUserInteraction(fmt.Sprintf(" timed out after %s waiting for input - denying for safety.", ApprovalPromptTimeout))
+			return ApprovalChoiceDeny
+		}
 		if err != nil {
 			consecutiveErrors++
 			w.Log(fmt.Sprintf("AskForFilesystemApproval: read error (attempt %d/%d): %v", consecutiveErrors, maxConsecutiveErrors, err))

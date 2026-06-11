@@ -397,7 +397,7 @@ func TestAddAllAndCommit_NoStagedChanges(t *testing.T) {
 	require.NoError(t, os.Chdir(dir))
 
 	// No staged changes — git commit should fail
-	err = AddAllAndCommit("should fail", 0)
+	err = AddAllAndCommit(dir, "should fail", 0)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "error committing changes to git")
 }
@@ -416,7 +416,7 @@ func TestAddAllAndCommit_WithTimeout(t *testing.T) {
 	gitRun(t, dir, "add", "timed.go")
 
 	// Use a generous timeout — should succeed
-	err = AddAllAndCommit("timed commit", 10)
+	err = AddAllAndCommit(dir, "timed commit", 10)
 	assert.NoError(t, err)
 
 	out, _ := exec.Command("git", "-C", dir, "log", "-1", "--pretty=%s").CombinedOutput()
@@ -437,7 +437,7 @@ func TestAddAllAndCommit_ZeroTimeout(t *testing.T) {
 	gitRun(t, dir, "add", "zero.go")
 
 	// Zero timeout means no timeout (direct execution)
-	err = AddAllAndCommit("zero timeout commit", 0)
+	err = AddAllAndCommit(dir, "zero timeout commit", 0)
 	assert.NoError(t, err)
 }
 
@@ -455,7 +455,7 @@ func TestAddAllAndCommit_NegativeTimeout(t *testing.T) {
 	gitRun(t, dir, "add", "neg.go")
 
 	// Negative timeout also means no timeout path
-	err = AddAllAndCommit("negative timeout commit", -1)
+	err = AddAllAndCommit(dir, "negative timeout commit", -1)
 	assert.NoError(t, err)
 }
 
@@ -476,7 +476,7 @@ func TestAddAllAndCommit_TimeoutTriggers(t *testing.T) {
 	// but we use it to exercise the timeout code path)
 	// We can't reliably make git slow, so this test just validates
 	// the function handles the timeout parameter correctly
-	err = AddAllAndCommit("fast commit", 1)
+	err = AddAllAndCommit(dir, "fast commit", 1)
 	assert.NoError(t, err)
 }
 
@@ -638,23 +638,16 @@ func TestExecuteCommit_MultipleFiles(t *testing.T) {
 	assert.Contains(t, string(out), "Add 3 Files")
 }
 
-func TestExecuteCommit_NoDir_OperatesOnCWD(t *testing.T) {
-	testDirMtx.Lock()
-	defer testDirMtx.Unlock()
-	dir := newTestGitRepo(t)
-	origDir, err := os.Getwd()
-	require.NoError(t, err)
-	defer os.Chdir(origDir)
-	require.NoError(t, os.Chdir(dir))
-
-	require.NoError(t, os.WriteFile("cwd_test.go", []byte("package cwd\n"), 0644))
-	gitRun(t, dir, "add", "cwd_test.go")
-
-	executor := NewCommitExecutor(nil, "cwd commit", "")
-	hash, err := executor.ExecuteCommit()
-	require.NoError(t, err)
-	assert.NotEmpty(t, hash)
-}
+// TestExecuteCommit_NoDir_OperatesOnCWD was removed. It deliberately
+// exercised the CWD-fallback path of NewCommitExecutor(nil, …) by
+// chdir'ing into a tempdir — exactly the pattern that produced two
+// literal "test" commits on the user's main branch when a leaked
+// api.TestClientType="test" sentinel routed the commit-message LLM
+// call to the mock client. SafeGitCmd in pkg/git/safety.go now refuses
+// mutating subcommands when the executor's Dir is empty under
+// `go test`. Use TestExecuteCommit_MultipleFiles (which constructs
+// NewCommitExecutorInDir with an explicit dir) for ExecuteCommit
+// coverage.
 
 func TestExecuteCommit_FallbackEmptyMessage(t *testing.T) {
 	dir := newTestGitRepo(t)
@@ -911,7 +904,7 @@ func TestPerformGitCommit_NoStagedChanges(t *testing.T) {
 	require.NoError(t, os.Chdir(dir))
 
 	// Nothing staged — commit should fail
-	err = PerformGitCommit("should fail")
+	err = PerformGitCommit(dir, "should fail")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "git commit failed")
 }
@@ -1101,7 +1094,7 @@ func TestAddAndCommitFile_NonExistentFile(t *testing.T) {
 	defer os.Chdir(origDir)
 	require.NoError(t, os.Chdir(dir))
 
-	err = AddAndCommitFile("nonexistent.go", "should fail")
+	err = AddAndCommitFile(dir, "nonexistent.go", "should fail")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "error adding changes to git")
 }

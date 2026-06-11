@@ -138,7 +138,11 @@ export interface FileChangedData {
   path?: string;
   action?: string;
   operation?: string;
+  /** @deprecated No longer transmitted — the editor refetches file bytes on
+   *  demand. Use `size` for the byte count. */
   content?: string;
+  /** Byte length of the changed content (whole-file content is not sent). */
+  size?: number;
   lines_added?: number;
   lines_deleted?: number;
   chat_id?: string;

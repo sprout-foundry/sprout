@@ -19,6 +19,9 @@ const firstRunStateFile = ".sprout/state.json"
 // (e.g. session metadata) lives elsewhere.
 type sproutState struct {
 	SeenFirstRunHint []string `json:"seen_first_run_hint,omitempty"`
+	// SeenIndexRecommendation tracks workspaces where the one-time "enable the
+	// semantic index" suggestion has already been shown.
+	SeenIndexRecommendation []string `json:"seen_index_recommendation,omitempty"`
 }
 
 var firstRunStateMu sync.Mutex

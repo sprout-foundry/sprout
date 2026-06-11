@@ -76,15 +76,18 @@ const (
 	// substitution does the heavy lifting and the LLM fall-through
 	// stays near zero.
 	EventTypeContextManagementDiagnostic = "context_management_diagnostic"
+	// EventTypeRecallDiagnostic (SP-066 Phase 3) reports the per-turn
+	// semantic-recall pass: how long the embed took, how many candidates
+	// were considered, top scores, and how many items were injected.
+	// Subscribers (WebUI metrics panel, eval pipelines) use it to verify
+	// recall is surfacing useful matches and to tune the half-life and
+	// similarity threshold from real data.
+	EventTypeRecallDiagnostic = "recall_diagnostic"
 	// SP-065 Phase 2: Automate session lifecycle events
 	EventTypeAutomateSessionStarted = "automate.session_started"
 	EventTypeAutomateBudgetUpdate   = "automate.budget_update"
 	EventTypeAutomateOutputChunk    = "automate.output_chunk"
 	EventTypeAutomateSessionEnded   = "automate.session_ended"
-	// TODO(SP-065-2e): Add subscription opt-in filtering so automate events
-	// are only sent to WebSocket subscribers that have explicitly opted in
-	// via {type: "subscribe", channel: "automate"}. All automate events are
-	// currently broadcast to all subscribers.
 )
 
 // EventBus manages event distribution between CLI and Web UI
@@ -98,6 +101,11 @@ type EventBus struct {
 	drainMu sync.Mutex
 }
 
+// subscriberBufferSize is the per-subscriber channel capacity. Non-critical
+// events (e.g. stream_chunk) are dropped when this fills, so it's sized to
+// absorb transient backpressure rather than the old 100.
+const subscriberBufferSize = 1024
+
 // NewEventBus creates a new event bus
 func NewEventBus() *EventBus {
 	return &EventBus{
@@ -110,7 +118,12 @@ func (eb *EventBus) Subscribe(name string) <-chan UIEvent {
 	eb.mutex.Lock()
 	defer eb.mutex.Unlock()
 
-	ch := make(chan UIEvent, 100) // Buffered channel
+	// Generous buffer so a transient consumer stall (a backgrounded/laggy
+	// browser tab, a burst of token-level stream chunks) doesn't immediately
+	// overflow and start silently dropping non-critical events. The websocket
+	// writer also coalesces queued stream chunks on drain, so this headroom is
+	// rarely approached in practice.
+	ch := make(chan UIEvent, subscriberBufferSize)
 	eb.subscribers[name] = ch
 	return ch
 }
@@ -187,7 +200,7 @@ func (eb *EventBus) publishToChannel(ch chan UIEvent, event UIEvent, eventType s
 		select {
 		case ch <- event:
 		default:
-			log.Printf("[EventBus] Dropped %s event for slow subscriber (channel full, cap=100)", eventType)
+			log.Printf("[EventBus] Dropped %s event for slow subscriber (channel full, cap=%d)", eventType, subscriberBufferSize)
 		}
 	}
 }
@@ -251,12 +264,21 @@ func ToolExecutionEvent(toolName, action string, details map[string]interface{})
 	return data
 }
 
-// FileChangedEvent creates a file changed event
+// FileChangedEvent creates a file changed event.
+//
+// The full file content is deliberately NOT transmitted. No consumer reads it —
+// the WebUI's handler only uses file_path/action, and the editor refetches a
+// file's bytes on demand (and gets disk-change notifications via the lean
+// FileContentChangedEvent). Shipping whole-file content here made each event
+// large, so a burst (bulk shell edits, many writes) filled the per-subscriber
+// channel and the replay ring buffer fast — dropping file_changed events and
+// spamming "[EventBus] Dropped file_changed event" logs. The `content` arg is
+// retained for call-site compatibility but only its length is surfaced.
 func FileChangedEvent(filePath, action string, content string) map[string]interface{} {
 	return map[string]interface{}{
 		"file_path": filePath,
-		"action":    action, // "created", "modified", "deleted"
-		"content":   content,
+		"action":    action, // "created", "modified", "deleted", "write", "edit", "git_*", …
+		"size":      len(content),
 	}
 }
 
@@ -585,6 +607,28 @@ func ContextManagementDiagnosticEvent(currentTokens, maxTokens int, triggerFract
 	}
 }
 
+// RecallDiagnosticEvent (SP-066 Phase 3) reports a single semantic-recall
+// pass. embedDurationMS measures the embed call (the recall query's
+// latency on the user's critical path). candidatesConsidered is what the
+// store returned before recency rerank + filter. injected/injectedChars
+// is what actually landed in the prompt supplement. topScores is the
+// raw cosine similarities for the candidates so subscribers can spot
+// near-miss patterns and tune the threshold.
+func RecallDiagnosticEvent(embedDurationMS float64, candidatesConsidered, injected, injectedChars int, topScores []float32) map[string]interface{} {
+	scores := make([]float64, len(topScores))
+	for i, s := range topScores {
+		scores[i] = float64(s)
+	}
+	return map[string]interface{}{
+		"embed_duration_ms":     embedDurationMS,
+		"candidates_considered": candidatesConsidered,
+		"injected":              injected,
+		"injected_chars":        injectedChars,
+		"top_scores":            scores,
+		"timestamp":             time.Now().UTC().Format(time.RFC3339),
+	}
+}
+
 // CompactCompletedEvent creates the payload for a compact_completed event.
 // On success, err should be nil and after/summary fields describe the new
 // state. On failure, err carries the reason and counts reflect the
@@ -649,11 +693,6 @@ func AutomateOutputChunkEvent(sessionID string, offset int, chunk string) map[st
 		"timestamp":  time.Now().UTC().Format(time.RFC3339),
 	}
 }
-
-// TODO(SP-065-3): Implement output chunk coalescing — publish only when
-// ≥250ms has elapsed OR ≥4KB of new output has accumulated. Current
-// implementation sends chunk_len without the actual chunk to avoid WS
-// frame bloat. Full streaming deferred to Phase 3.
 
 // AutomateSessionEndedEvent creates a session_ended event payload.
 func AutomateSessionEndedEvent(sessionID, workflow, status string, totalCost float64) map[string]interface{} {

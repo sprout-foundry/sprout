@@ -51,6 +51,18 @@ const (
 	// AllowedMessageTypeSyncRecover is the "sync_recover" message type (SP-046)
 	AllowedMessageTypeSyncRecover = "sync_recover"
 
+	// AllowedMessageTypePause signals the tab is backgrounding but will return —
+	// keep any in-flight query running in the background instead of cancelling
+	// it on heartbeat staleness.
+	AllowedMessageTypePause = "pause"
+	// AllowedMessageTypeResume signals the tab is foregrounded again — clear the
+	// paused state (a reconnect also clears it implicitly).
+	AllowedMessageTypeResume = "resume"
+	// AllowedMessageTypeSessionClose signals the tab is closing/navigating away —
+	// cancel any in-flight query for this client now rather than waiting out the
+	// heartbeat timeout.
+	AllowedMessageTypeSessionClose = "session_close"
+
 	// Outbound-only hydration message types (SP-046) — server→client
 	AllowedMessageTypeHydrateManifest = "hydrate_manifest"
 	AllowedMessageTypeHydrateFile     = "hydrate_file"
@@ -72,6 +84,9 @@ var allowedMessageTypes = map[string]bool{
 	AllowedMessageTypeSessionTakeover:          true,
 	AllowedMessageTypeHydrateRequest:           true,
 	AllowedMessageTypeSyncRecover:              true,
+	AllowedMessageTypePause:                    true,
+	AllowedMessageTypeResume:                   true,
+	AllowedMessageTypeSessionClose:             true,
 }
 
 // HydrateManifestData is the data payload for "hydrate_manifest" messages.
@@ -150,6 +165,7 @@ func (m *WebSocketMessage) Validate() error {
 type SubscribeData struct {
 	Events  []string `json:"events"`
 	ChatIDs []string `json:"chat_ids,omitempty"`
+	Channel string   `json:"channel,omitempty"` // Event channel to opt into (e.g., "automate")
 }
 
 // Validate performs field-level validation on SubscribeData.
@@ -181,6 +197,14 @@ func (d *SubscribeData) Validate() error {
 			return fmt.Errorf("chat_id at index %d too long: %d characters (max %d)", i, len(chatID), maxEventNameLen)
 		}
 		d.ChatIDs[i] = chatID
+	}
+
+	// Validate optional channel subscription (e.g., "automate").
+	d.Channel = strings.TrimSpace(d.Channel)
+	if d.Channel != "" {
+		if len(d.Channel) > maxEventNameLen {
+			return fmt.Errorf("channel too long: %d characters (max %d)", len(d.Channel), maxEventNameLen)
+		}
 	}
 
 	return nil

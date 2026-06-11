@@ -195,7 +195,7 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 
 	// First, check for providers that have environment variables set
 	envProviders := []string{}
-	for _, name := range knownProviderNames {
+	for _, name := range knownProviderNames() {
 		metadata, err := GetProviderAuthMetadata(name)
 		if err != nil {
 			continue
@@ -235,8 +235,14 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 		return selected, nil
 	}
 
+	// Snapshot the merged provider list so the displayed menu, the
+	// readIntInput bounds, and the index used for selection are all
+	// guaranteed consistent — even if the runtime factory happens to
+	// upsert a new remote provider mid-onboarding.
+	providerNames := knownProviderNames()
+
 	// Check which providers have API keys already (from file)
-	for _, name := range knownProviderNames {
+	for _, name := range providerNames {
 		metadata, err := GetProviderAuthMetadata(name)
 		if err != nil {
 			continue
@@ -261,7 +267,7 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 
 	// Show all provider options with clear descriptions
 	fmt.Println("[bot] All available AI providers:")
-	for i, name := range knownProviderNames {
+	for i, name := range providerNames {
 		metadata, err := GetProviderAuthMetadata(name)
 		if err != nil {
 			continue
@@ -301,7 +307,7 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 	fmt.Println()
 
 	// Get user choice
-	choice, err := readIntInput(fmt.Sprintf("Select a provider (0-%d, 0 to skip): ", len(knownProviderNames)), 0, len(knownProviderNames))
+	choice, err := readIntInput(fmt.Sprintf("Select a provider (0-%d, 0 to skip): ", len(providerNames)), 0, len(providerNames))
 	if err != nil {
 		return "", fmt.Errorf("invalid choice: %w", err)
 	}
@@ -311,7 +317,7 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 		return "editor", nil
 	}
 
-	selectedProvider := knownProviderNames[choice-1]
+	selectedProvider := providerNames[choice-1]
 
 	// Check if API key is needed
 	metadata, _ := GetProviderAuthMetadata(selectedProvider)

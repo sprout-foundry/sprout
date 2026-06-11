@@ -167,6 +167,11 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 	})
 	defer ws.connections.Delete(conn)
 
+	// A fresh connection means the client is back (e.g. a backgrounded tab
+	// returned to the foreground). Clear any paused state so normal
+	// heartbeat-based cancellation resumes.
+	ws.setClientPaused(clientID, false)
+
 	// Auto-subscribe to the connected chat (SP-034-3b). When the client
 	// switches chats over its lifetime, it'll send a subscribe message
 	// with the new chatID; we unsubscribe from the prior one on
@@ -474,6 +479,22 @@ func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, sessionID s
 
 	case AllowedMessageTypeHeartbeat:
 		ws.handleHeartbeatMessage(safeConn, clientID)
+
+	case AllowedMessageTypePause:
+		// Tab backgrounded — keep any in-flight query running in the background
+		// instead of letting the heartbeat monitor cancel it on staleness.
+		log.Printf("[lifecycle] client %s paused (backgrounded) — keeping any active query alive", clientID)
+		ws.setClientPaused(clientID, true)
+
+	case AllowedMessageTypeResume:
+		// Tab foregrounded — resume normal heartbeat-based cancellation.
+		ws.setClientPaused(clientID, false)
+
+	case AllowedMessageTypeSessionClose:
+		// Tab closing/navigating away — cancel the in-flight query now rather
+		// than waiting out the heartbeat timeout.
+		ws.setClientPaused(clientID, false)
+		ws.cancelQueryForClient(clientID, "session_closed", "Query cancelled: the Web UI was closed")
 
 	case AllowedMessageTypeSubscribe:
 		// Handle subscription requests for specific event types AND

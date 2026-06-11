@@ -11,6 +11,11 @@ import (
 const (
 	heartbeatMonitorInterval = 15 * time.Second
 	heartbeatStaleThreshold  = 60 * time.Second
+	// maxPausedQueryDuration caps how long a backgrounded (paused) client's
+	// in-flight query is kept alive. A tab that's hidden but periodically
+	// returns keeps its run going; one that's backgrounded and abandoned for
+	// this long is treated like a closed tab so work doesn't run forever.
+	maxPausedQueryDuration = 30 * time.Minute
 )
 
 // startHeartbeatMonitor runs a background goroutine that periodically
@@ -38,31 +43,46 @@ func (ws *ReactWebServer) checkStaleConnections() {
 	ws.mutex.Lock()
 	var staleClients []string
 	for clientID, clientCtx := range ws.clientContexts {
-		if now.Sub(clientCtx.LastSeenAt) > heartbeatStaleThreshold && clientCtx.ActiveQuery {
-			staleClients = append(staleClients, clientID)
+		if !clientCtx.ActiveQuery || now.Sub(clientCtx.LastSeenAt) <= heartbeatStaleThreshold {
+			continue
 		}
+		// A paused (backgrounded) client keeps its query running until the
+		// max-paused cap — it's expected to return and reattach.
+		if clientCtx.Paused && now.Sub(clientCtx.PausedAt) < maxPausedQueryDuration {
+			continue
+		}
+		staleClients = append(staleClients, clientID)
 	}
 	// Release lock before doing expensive work (agent interrupt, event publish)
 	ws.mutex.Unlock()
 
 	for _, clientID := range staleClients {
 		log.Printf("[heartbeat] Stale connection detected for client %s (no heartbeat for >%s), cancelling active query", clientID, heartbeatStaleThreshold)
-		ws.cancelQueryForStaleClient(clientID)
+		ws.cancelQueryForClient(clientID, "heartbeat_timeout", "Query cancelled: no heartbeat received for 60 seconds")
 	}
 }
 
-// cancelQueryForStaleClient performs the cleanup for a single stale client:
-// re-verifies staleness under lock, triggers agent interrupt, decrements the
-// active query counter, and publishes a query_cancelled event to notify the frontend.
-func (ws *ReactWebServer) cancelQueryForStaleClient(clientID string) {
+// cancelQueryForClient cancels a single client's in-flight query: triggers the
+// agent interrupt, decrements the active-query counter, and publishes a
+// query_cancelled event. Used by the heartbeat monitor (stale connection) and
+// the explicit session_close path. The reason/message are surfaced to the
+// frontend. Re-verifies under lock that there's still an active query, and (for
+// the heartbeat path) that the client hasn't quietly become un-stale or paused.
+func (ws *ReactWebServer) cancelQueryForClient(clientID, reason, message string) {
 	ws.mutex.Lock()
 	clientCtx := ws.clientContexts[clientID]
-	// Re-check staleness under lock — client may have sent a heartbeat between
-	// the scan in checkStaleConnections and this call.
-	if clientCtx == nil || !clientCtx.ActiveQuery ||
-		time.Since(clientCtx.LastSeenAt) <= heartbeatStaleThreshold {
+	if clientCtx == nil || !clientCtx.ActiveQuery {
 		ws.mutex.Unlock()
 		return
+	}
+	// For the heartbeat path, re-check staleness and pause under the lock —
+	// the client may have sent a heartbeat or paused since the scan.
+	if reason == "heartbeat_timeout" {
+		if time.Since(clientCtx.LastSeenAt) <= heartbeatStaleThreshold ||
+			(clientCtx.Paused && time.Since(clientCtx.PausedAt) < maxPausedQueryDuration) {
+			ws.mutex.Unlock()
+			return
+		}
 	}
 	agent := clientCtx.Agent
 	ws.mutex.Unlock()
@@ -77,7 +97,7 @@ func (ws *ReactWebServer) cancelQueryForStaleClient(clientID string) {
 
 	// Publish event to notify frontend
 	ws.publishClientEvent(clientID, "query_cancelled", map[string]interface{}{
-		"reason":  "heartbeat_timeout",
-		"message": "Query cancelled: no heartbeat received for 60 seconds",
+		"reason":  reason,
+		"message": message,
 	})
 }

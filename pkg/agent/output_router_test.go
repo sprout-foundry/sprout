@@ -671,3 +671,54 @@ func TestPrintTerminalOnly_NilRouter_Fallback(t *testing.T) {
 	// Should not panic
 	a.PrintTerminalOnly("test\n")
 }
+
+// TestRouteAgentMessage_HandsOffToolLogToWebUI verifies that tool-call/thought
+// logs are suppressed in the terminal when a browser is connected (handed off
+// to the Web UI) but still published to the event bus — and that they DO print
+// to the terminal when no Web UI client is connected.
+func TestRouteAgentMessage_HandsOffToolLogToWebUI(t *testing.T) {
+	bus := events.NewEventBus()
+	ch := bus.Subscribe("handoff_test")
+
+	var termWrites []string
+	var mu sync.Mutex
+	agent := &Agent{output: NewAgentOutputManager(), security: NewAgentSecurityManager()}
+	agent.output.SetOutputMutex(&sync.Mutex{})
+	agent.output.SetTerminalWriter(func(m string) {
+		mu.Lock()
+		defer mu.Unlock()
+		termWrites = append(termWrites, m)
+	})
+	router := NewOutputRouter(agent, bus)
+
+	// Browser connected → tool_log suppressed in terminal, still published.
+	agent.SetHasActiveWebUIClients(func() bool { return true })
+	router.RouteAgentMessage("tool_log", "wrote auth.go", nil)
+
+	select {
+	case ev := <-ch:
+		assert.Equal(t, events.EventTypeAgentMessage, ev.Type, "event should still reach the WebUI")
+	case <-time.After(time.Second):
+		t.Fatal("expected agent_message event to be published")
+	}
+	mu.Lock()
+	assert.Empty(t, termWrites, "tool_log must be suppressed in terminal when a browser is connected")
+	mu.Unlock()
+
+	// No browser → tool_log prints to terminal.
+	agent.SetHasActiveWebUIClients(func() bool { return false })
+	router.RouteAgentMessage("tool_log", "wrote main.go", nil)
+	mu.Lock()
+	assert.NotEmpty(t, termWrites, "tool_log must print to terminal when no browser is connected")
+	mu.Unlock()
+
+	// Errors are never suppressed, even with a browser connected.
+	mu.Lock()
+	termWrites = nil
+	mu.Unlock()
+	agent.SetHasActiveWebUIClients(func() bool { return true })
+	router.RouteAgentMessage("error", "boom", nil)
+	mu.Lock()
+	assert.NotEmpty(t, termWrites, "error messages must never be suppressed")
+	mu.Unlock()
+}

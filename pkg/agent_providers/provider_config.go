@@ -11,16 +11,23 @@ import (
 
 // ProviderConfig defines the configuration for a generic provider
 type ProviderConfig struct {
-	Name       string            `json:"name"`
-	Endpoint   string            `json:"endpoint"`
-	Auth       AuthConfig        `json:"auth"`
-	Headers    map[string]string `json:"headers"`
-	Defaults   RequestDefaults   `json:"defaults"`
-	Conversion MessageConversion `json:"message_conversion"`
-	Streaming  StreamingConfig   `json:"streaming"`
-	Models     ModelConfig       `json:"models"`
-	Retry      RetryConfig       `json:"retry"`
-	Cost       CostConfig        `json:"cost"`
+	Name string `json:"name"`
+	// DisplayName is the user-facing label (e.g. "Z.AI Coding Plan").
+	// Carried in the JSON config so onboarding menus, the env-var
+	// credential sweep, and the model picker can label remote-only
+	// providers (published to GitHub Pages but not embedded) without
+	// a binary rebuild. Optional — callers should fall back to the
+	// static knownProviderDisplayNames map and then the raw Name.
+	DisplayName string            `json:"display_name,omitempty"`
+	Endpoint    string            `json:"endpoint"`
+	Auth        AuthConfig        `json:"auth"`
+	Headers     map[string]string `json:"headers"`
+	Defaults    RequestDefaults   `json:"defaults"`
+	Conversion  MessageConversion `json:"message_conversion"`
+	Streaming   StreamingConfig   `json:"streaming"`
+	Models      ModelConfig       `json:"models"`
+	Retry       RetryConfig       `json:"retry"`
+	Cost        CostConfig        `json:"cost"`
 }
 
 // AuthConfig defines authentication configuration

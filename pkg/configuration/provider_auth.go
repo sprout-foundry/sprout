@@ -58,6 +58,29 @@ func SetProviderNamesLookup(fn ProviderNamesLookupFunc) {
 	providerNamesLookup = fn
 }
 
+// ProviderDisplayNameLookupFunc returns the user-facing label for a
+// provider — sourced from the runtime config's display_name field.
+// Returns ok=false when the provider is unknown to the runtime view
+// or when its display_name is blank (so callers fall through to the
+// static map / raw-id fallback).
+type ProviderDisplayNameLookupFunc func(name string) (displayName string, ok bool)
+
+var (
+	providerDisplayLookupMu sync.RWMutex
+	providerDisplayLookup   ProviderDisplayNameLookupFunc
+)
+
+// SetProviderDisplayNameLookup registers a runtime display-name lookup.
+// pkg/factory wires this to GlobalFactory().GetProviderConfig in its
+// init(); the callback returns cfg.DisplayName so providers published
+// only to the remote registry surface their friendly label in the
+// onboarding menu, model picker, and other UI surfaces.
+func SetProviderDisplayNameLookup(fn ProviderDisplayNameLookupFunc) {
+	providerDisplayLookupMu.Lock()
+	defer providerDisplayLookupMu.Unlock()
+	providerDisplayLookup = fn
+}
+
 func GetProviderAuthMetadata(provider string) (ProviderAuthMetadata, error) {
 	name := strings.ToLower(strings.TrimSpace(provider))
 	if name == "" {

@@ -50,6 +50,32 @@ const (
 type MarkdownFormatter struct {
 	enableColors bool
 	enableInline bool
+	// width is the content width used for width-dependent elements like the
+	// horizontal rule. 0 means "unknown" — a sensible default is used.
+	width int
+}
+
+// SetWidth sets the content width used for width-aware rendering (e.g. the
+// horizontal rule spans this many columns). Returns the receiver for chaining.
+func (f *MarkdownFormatter) SetWidth(w int) *MarkdownFormatter {
+	f.width = w
+	return f
+}
+
+// hrWidth returns the column count for a horizontal rule: the configured width
+// clamped to a readable range, or 40 when width is unknown.
+func (f *MarkdownFormatter) hrWidth() int {
+	if f.width <= 0 {
+		return 40
+	}
+	w := f.width
+	if w < 10 {
+		w = 10
+	}
+	if w > 120 {
+		w = 120
+	}
+	return w
 }
 
 // NewMarkdownFormatter creates a new markdown formatter.
@@ -162,7 +188,7 @@ func (f *MarkdownFormatter) formatMarkdownLine(line string) string {
 
 	// Horizontal rule
 	if strings.TrimSpace(line) == "---" || strings.TrimSpace(line) == "***" {
-		return fmt.Sprintf("%s%s%s", ColorDim, strings.Repeat("─", 40), ColorReset)
+		return fmt.Sprintf("%s%s%s", ColorDim, strings.Repeat("─", f.hrWidth()), ColorReset)
 	}
 
 	// Blockquotes

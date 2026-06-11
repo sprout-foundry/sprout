@@ -44,11 +44,19 @@ func (ir *InputReader) applyTerminalWidthChange(oldWidth, newWidth int) bool {
 	ir.terminalWidth = newWidth
 	ir.lastLineLength = 0
 	ir.currentPhysicalLine = 0
+	ir.lastVisualRows = 0
 	ir.lastWrapPending = false
 
-	// After a terminal resize, the previous wrapped geometry is invalid.
-	// Redraw on a fresh line rather than trying to clear using stale counts.
-	fmt.Printf("\r%s\n", ClearLineSeq())
+	// After a resize the terminal re-soft-wraps the on-screen rows to the new
+	// width, so our captured geometry is stale and the block's top row can't be
+	// located reliably without a cursor-position query. Clear from the cursor to
+	// the end of the screen (dropping any stale wrapped rows below) and redraw
+	// the prompt+line fresh in place. This avoids the extra blank line the prior
+	// "\r CLEAR \n" inserted on every resize; rows above the cursor are left to
+	// the terminal's own reflow.
+	LockOutput()
+	fmt.Print("\r\033[J")
+	UnlockOutput()
 	ir.Refresh()
 	return true
 }

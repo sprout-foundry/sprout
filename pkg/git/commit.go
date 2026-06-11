@@ -123,9 +123,11 @@ func CheckStagedFilesForSecurityCredentials(logger *utils.Logger, dir string) Co
 }
 
 // PerformGitCommit executes the git commit command safely using stdin
-func PerformGitCommit(message string) error {
-	// Use git commit -F - to read commit message from stdin (safe from injection)
-	cmd := exec.Command("git", "commit", "-F", "-")
+// inside dir. dir MUST be non-empty — see SafeGitCmd for why an empty
+// dir is refused under `go test`.
+func PerformGitCommit(dir, message string) error {
+	// Use git commit -F - to read commit message from stdin (safe from injection).
+	cmd := SafeGitCmd(dir, "commit", "-F", "-")
 	cmd.Stdin = strings.NewReader(message)
 	cmd.Stdout = nil // Don't capture stdout
 	cmd.Stderr = nil // Don't capture stderr

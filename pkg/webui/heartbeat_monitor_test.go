@@ -129,7 +129,7 @@ func TestCancelQueryForStaleClientNilContext(t *testing.T) {
 	server := newTestMonitorServer(t)
 
 	// Should not panic when client context doesn't exist
-	server.cancelQueryForStaleClient("nonexistent-client")
+	server.cancelQueryForClient("nonexistent-client", "heartbeat_timeout", "test")
 }
 
 // TestCancelQueryForStaleClientNilAgent verifies that a stale client with
@@ -149,7 +149,7 @@ func TestCancelQueryForStaleClientNilAgent(t *testing.T) {
 	eventCh := server.eventBus.Subscribe("test-cleanup")
 	defer server.eventBus.Unsubscribe("test-cleanup")
 
-	server.cancelQueryForStaleClient("no-agent-client")
+	server.cancelQueryForClient("no-agent-client", "heartbeat_timeout", "Query cancelled: no heartbeat received for 60 seconds")
 
 	// ActiveQuery should be false after decrementActiveQueries
 	if ctx.ActiveQuery {
@@ -227,10 +227,66 @@ func TestCancelQueryForStaleClientNoLongerStale(t *testing.T) {
 	// Simulate client sending heartbeat between scan and cancel
 	ctx.LastSeenAt = time.Now()
 
-	server.cancelQueryForStaleClient("race-client")
+	server.cancelQueryForClient("race-client", "heartbeat_timeout", "test")
 
 	// ActiveQuery should remain true since client is no longer stale
 	if !ctx.ActiveQuery {
 		t.Error("expected ActiveQuery to remain true — client was no longer stale")
+	}
+}
+
+// TestCheckStaleConnections_PausedClientNotCancelled verifies that a stale
+// client whose tab is paused (backgrounded) keeps its active query running —
+// the heartbeat monitor leaves it alone within the max-paused window.
+func TestCheckStaleConnections_PausedClientNotCancelled(t *testing.T) {
+	server := newTestMonitorServer(t)
+
+	ctx := &webClientContext{
+		LastSeenAt:  time.Now().Add(-61 * time.Second), // stale heartbeat
+		ActiveQuery: true,
+		Paused:      true,
+		PausedAt:    time.Now(), // recently paused — within the cap
+	}
+	server.clientContexts["paused-client"] = ctx
+
+	server.checkStaleConnections()
+
+	if !ctx.ActiveQuery {
+		t.Error("expected ActiveQuery to remain true for a recently-paused client")
+	}
+}
+
+// TestCheckStaleConnections_PausedTooLongIsCancelled verifies that a client
+// paused beyond the max-paused cap is treated like a closed tab and cancelled.
+func TestCheckStaleConnections_PausedTooLongIsCancelled(t *testing.T) {
+	server := newTestMonitorServer(t)
+
+	ctx := &webClientContext{
+		LastSeenAt:  time.Now().Add(-61 * time.Second),
+		ActiveQuery: true,
+		Paused:      true,
+		PausedAt:    time.Now().Add(-(maxPausedQueryDuration + time.Minute)),
+	}
+	server.clientContexts["abandoned-client"] = ctx
+
+	server.checkStaleConnections()
+
+	if ctx.ActiveQuery {
+		t.Error("expected ActiveQuery to be false for a client paused beyond the cap")
+	}
+}
+
+// TestSetClientPaused verifies the paused flag round-trips and stamps PausedAt.
+func TestSetClientPaused(t *testing.T) {
+	server := newTestMonitorServer(t)
+	server.clientContexts["c"] = &webClientContext{}
+
+	server.setClientPaused("c", true)
+	if !server.clientContexts["c"].Paused || server.clientContexts["c"].PausedAt.IsZero() {
+		t.Error("expected client to be paused with a PausedAt timestamp")
+	}
+	server.setClientPaused("c", false)
+	if server.clientContexts["c"].Paused {
+		t.Error("expected client to be un-paused")
 	}
 }

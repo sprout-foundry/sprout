@@ -59,6 +59,14 @@ func GetFileGitPath(filename string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to get absolute path for %s: %w", filename, err)
 	}
+	// Resolve symlinks on both paths so filepath.Rel works correctly
+	// (macOS /var → /private/var via os.Getwd vs git output).
+	if evaled, err := filepath.EvalSymlinks(absPath); err == nil {
+		absPath = evaled
+	}
+	if evaled, err := filepath.EvalSymlinks(gitRoot); err == nil {
+		gitRoot = evaled
+	}
 	relPath, err := filepath.Rel(gitRoot, absPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to get relative path for %s: %w", filename, err)
@@ -66,12 +74,15 @@ func GetFileGitPath(filename string) (string, error) {
 	return relPath, nil
 }
 
-// AddAndCommitFile stages the specified file and commits it with the given message.
-func AddAndCommitFile(newFilename, message string) error {
-	if err := exec.Command("git", "add", newFilename).Run(); err != nil {
+// AddAndCommitFile stages the specified file and commits it with the
+// given message inside dir. dir MUST be non-empty — passing "" would
+// let the operation hit the test process's CWD (the host repo on
+// developer machines) and is refused by SafeGitCmd under `go test`.
+func AddAndCommitFile(dir, newFilename, message string) error {
+	if err := SafeGitCmd(dir, "add", newFilename).Run(); err != nil {
 		return fmt.Errorf("error adding changes to git: %w", err)
 	}
-	if err := exec.Command("git", "commit", "-m", message).Run(); err != nil {
+	if err := SafeGitCmd(dir, "commit", "-m", message).Run(); err != nil {
 		return fmt.Errorf("error committing changes to git: %w", err)
 	}
 	logger := utils.GetLogger(true) // Use true for skipPrompt since this is internal
@@ -79,9 +90,10 @@ func AddAndCommitFile(newFilename, message string) error {
 	return nil
 }
 
-// AddAllAndCommit commits all staged changes with the provided message (non-interactive).
-func AddAllAndCommit(message string, timeoutSeconds int) error {
-	cmd := exec.Command("git", "commit", "-m", message)
+// AddAllAndCommit commits all staged changes inside dir with the
+// provided message (non-interactive). dir MUST be non-empty.
+func AddAllAndCommit(dir, message string, timeoutSeconds int) error {
+	cmd := SafeGitCmd(dir, "commit", "-m", message)
 	if timeoutSeconds > 0 {
 		if err := cmd.Start(); err != nil {
 			return fmt.Errorf("error starting git commit: %w", err)

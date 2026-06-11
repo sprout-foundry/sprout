@@ -72,11 +72,19 @@ describe('shouldSuppressAgentMessageInChat', () => {
   });
 
   it('suppresses TodoWrite pattern', () => {
+    // Source pattern is `\bTodoWrite\(/i` — the parenthesis is required
+    // so we only suppress actual tool-call leak text, not stray mentions
+    // of the word "TodoWrite" inside normal agent prose. Source comment
+    // is explicit: "via TodoWrite( call patterns only".
     const msg1 = 'TodoWrite(' + '[{content: "task"}]' + ')';
     const msg2 = '  TodoWrite(' + '[{id: "1"}]' + ')';
     expect(shouldSuppressAgentMessageInChat(msg1)).toBe(true);
     expect(shouldSuppressAgentMessageInChat(msg2)).toBe(true);
-    expect(shouldSuppressAgentMessageInChat('todoWrite')).toBe(true); // case insensitive
+    // Case insensitivity still applies, but the open-paren is required.
+    expect(shouldSuppressAgentMessageInChat('todowrite(args)')).toBe(true);
+    // Bare word with no call shape is NOT suppressed — left to flow as
+    // normal text so we don't eat references like "the TodoWrite tool".
+    expect(shouldSuppressAgentMessageInChat('todoWrite')).toBe(false);
   });
 
   it('suppresses todos=N pattern', () => {

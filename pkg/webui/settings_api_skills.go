@@ -31,8 +31,16 @@ func (ws *ReactWebServer) handleAPISettingsSkills(w http.ResponseWriter, r *http
 // ---------------------------------------------------------------------------
 
 func (ws *ReactWebServer) handleAPISettingsSkillsGet(w http.ResponseWriter, r *http.Request) {
-	cm := ws.getConfigManager(r, w)
+	// GET is best-effort: fall back to an empty skills list rather than
+	// 503 when no config manager is available. See the matching comment
+	// on handleAPISettingsProvidersGet for the rationale.
+	cm := ws.resolveConfigManagerQuietly(r)
 	if cm == nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			// skills is a map[string]Skill in real config — emit an
+			// empty map so the JSON shape matches (`{}`, not `[]`).
+			"skills": map[string]configuration.Skill{},
+		})
 		return
 	}
 

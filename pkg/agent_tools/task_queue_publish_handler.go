@@ -90,7 +90,7 @@ func (h *taskQueuePublishHandler) Execute(ctx context.Context, env ToolEnv, args
 	}
 
 	tq := NewTaskQueue(DefaultTaskQueuePath())
-	updated, err := tq.PublishTask(taskID, status, result, subtasks)
+	updated, err := tq.PublishTask(ctx, taskID, status, result, subtasks)
 	if err != nil {
 		return ToolResult{Output: fmt.Sprintf("Failed to publish task: %v", err), IsError: true}, nil
 	}

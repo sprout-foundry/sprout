@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/mattn/go-runewidth"
 	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"golang.org/x/term"
 )
@@ -56,6 +57,11 @@ type AssistantTurnRenderer struct {
 	reasoningBytes  int
 
 	terminalWidth int
+	// startRawWidth is the terminal's raw column count captured at construction
+	// (turn start). Compared against the live raw width at finalize to detect a
+	// resize that happened mid-turn (independent of terminalWidth, which is the
+	// adjusted/clamped value used for soft-wrap accounting).
+	startRawWidth int
 	formatter     *MarkdownFormatter
 	indent        string
 }
@@ -67,6 +73,7 @@ func NewAssistantTurnRenderer(width int, formatter *MarkdownFormatter) *Assistan
 	return &AssistantTurnRenderer{
 		atLineStart:   true,
 		terminalWidth: width,
+		startRawWidth: currentStdoutWidth(),
 		formatter:     formatter,
 		indent:        "  ",
 	}
@@ -88,6 +95,8 @@ func (r *AssistantTurnRenderer) WriteReasoningChunk(chunk string) {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	LockOutput()
+	defer UnlockOutput()
 
 	if !r.reasoningActive {
 		// Print the header on a fresh row so it sits cleanly between
@@ -132,6 +141,8 @@ func (r *AssistantTurnRenderer) endReasoningLocked() {
 func (r *AssistantTurnRenderer) EndReasoning() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	LockOutput()
+	defer UnlockOutput()
 	r.endReasoningLocked()
 }
 
@@ -145,19 +156,26 @@ func (r *AssistantTurnRenderer) WriteChunk(chunk string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	// Serialize against the status footer / input renderer so a concurrent
+	// footer redraw (cursor save/move/clear/restore) can't interleave with this
+	// stream and displace the cursor / tear the line. (r.mu then outputMu — the
+	// footer only ever takes outputMu, so there's no lock-ordering cycle.)
+	LockOutput()
+	defer UnlockOutput()
+
 	// Prose has arrived — finalize any pending reasoning header so the
 	// "▽ Thinking…" line collapses to the summary before the first
 	// prose row lands.
 	r.endReasoningLocked()
 
 	r.seg.WriteString(chunk)
-	indentRunes := len([]rune(r.indent))
+	indentCols := displayWidth(r.indent)
 
 	for _, ch := range chunk {
 		if r.atLineStart {
 			fmt.Print(r.indent)
 			r.atLineStart = false
-			r.curLineRunes = indentRunes
+			r.curLineRunes = indentCols
 		}
 		fmt.Print(string(ch))
 		if ch == '\n' {
@@ -165,7 +183,9 @@ func (r *AssistantTurnRenderer) WriteChunk(chunk string) {
 			r.atLineStart = true
 			r.curLineRunes = 0
 		} else {
-			r.curLineRunes++
+			// Count terminal columns, not runes, so wide/CJK glyphs advance the
+			// soft-wrap accounting correctly.
+			r.curLineRunes += runewidth.RuneWidth(ch)
 		}
 	}
 }
@@ -188,6 +208,8 @@ func (r *AssistantTurnRenderer) OnExternalWrite() {
 func (r *AssistantTurnRenderer) FinalizeAtTurnEnd() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	LockOutput()
+	defer UnlockOutput()
 
 	// Catch a "reasoning-only" turn: the model emitted thinking but
 	// no prose response (rare, but happens when a tool call follows
@@ -202,6 +224,16 @@ func (r *AssistantTurnRenderer) FinalizeAtTurnEnd() {
 		return
 	}
 	if !shouldReformat(text, r.terminalWidth) {
+		r.resetSegment()
+		return
+	}
+	// If the terminal was resized while this turn streamed, the rows already on
+	// screen were re-soft-wrapped by the terminal to the new width, so our
+	// captured-width row accounting no longer matches what's displayed. Running
+	// the clear-and-reprint dance would walk back over the wrong number of rows
+	// and corrupt the scrollback. Skip the markdown reformat in that case — the
+	// raw streamed text is already on screen and correctly wrapped.
+	if w := currentStdoutWidth(); w > 0 && r.startRawWidth > 0 && w != r.startRawWidth {
 		r.resetSegment()
 		return
 	}
@@ -237,6 +269,9 @@ func (r *AssistantTurnRenderer) FinalizeAtTurnEnd() {
 	}
 	fmt.Print("\033[J")
 
+	// Width-aware elements (the horizontal rule) should span the content area —
+	// the terminal width minus the prose indent.
+	r.formatter.SetWidth(r.terminalWidth - displayWidth(r.indent))
 	formatted := r.formatter.Format(text)
 	// Emit formatted text with the same indent as the live stream.
 	r.emitFormatted(formatted)
@@ -335,4 +370,15 @@ func shouldReformat(text string, width int) bool {
 
 func isStdoutTTY() bool {
 	return term.IsTerminal(int(os.Stdout.Fd()))
+}
+
+// currentStdoutWidth reads the terminal's current column count live, or 0 if it
+// can't be determined (not a TTY / error). Used at turn finalize to detect a
+// resize that happened while the turn was streaming.
+func currentStdoutWidth() int {
+	cols, _, err := term.GetSize(int(os.Stdout.Fd()))
+	if err != nil || cols <= 0 {
+		return 0
+	}
+	return cols
 }

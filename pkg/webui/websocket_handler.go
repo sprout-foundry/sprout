@@ -156,15 +156,21 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 
 	// Store the underlying connection with metadata
 	ws.connections.Store(conn, &ConnectionInfo{
-		SessionID:   sessionID,
-		ClientID:    clientID,
-		ChatID:      chatID,
-		Type:        "webui",
-		UserID:      userID,
-		ConnectedAt: time.Now(),
-		Conn:        conn,
+		SessionID:          sessionID,
+		ClientID:           clientID,
+		ChatID:             chatID,
+		Type:               "webui",
+		UserID:             userID,
+		ConnectedAt:        time.Now(),
+		Conn:               conn,
+		subscribedChannels: make(map[string]bool),
 	})
 	defer ws.connections.Delete(conn)
+
+	// A fresh connection means the client is back (e.g. a backgrounded tab
+	// returned to the foreground). Clear any paused state so normal
+	// heartbeat-based cancellation resumes.
+	ws.setClientPaused(clientID, false)
 
 	// Auto-subscribe to the connected chat (SP-034-3b). When the client
 	// switches chats over its lifetime, it'll send a subscribe message
@@ -313,24 +319,44 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 				log.Printf("WebSocket %s connection info type mismatch, skipping event", sessionID)
 				continue
 			}
-			if !ws.shouldForwardEventToConnection(event, connInfo) {
-				continue
-			}
-			if event.Type == events.EventTypeSecurityApprovalRequest {
-				if data, ok := event.Data.(map[string]interface{}); ok {
-					log.Printf("[SECURITY] Forwarding security_approval_request to client %s: request_id=%v tool=%s risk=%s",
-						connInfo.ClientID, data["request_id"], data["tool_name"], data["risk_level"])
+
+			// Opportunistically drain any already-queued events (non-blocking)
+			// and coalesce runs of adjacent stream chunks before writing. Under
+			// a backlog — the only time stream chunks get dropped — this turns
+			// hundreds of tiny writes into a few, letting the channel drain fast
+			// instead of overflowing. With no backlog the drain pulls nothing,
+			// so streaming latency is unchanged.
+			batch := []events.UIEvent{event}
+		drain:
+			for len(batch) < maxCoalesceDrain {
+				select {
+				case e2 := <-eventCh:
+					batch = append(batch, e2)
+				default:
+					break drain
 				}
 			}
-			if event.Type == events.EventTypeAskUserRequest {
-				if data, ok := event.Data.(map[string]interface{}); ok {
-					log.Printf("[ASK_USER] Forwarding ask_user_request to client %s: request_id=%v question=%q",
-						connInfo.ClientID, data["request_id"], data["question"])
+
+			for _, ev := range coalesceStreamChunks(batch) {
+				if !ws.shouldForwardEventToConnection(ev, connInfo) {
+					continue
 				}
-			}
-			if err := safeConn.WriteJSON(event); err != nil {
-				log.Printf("WebSocket %s write error: %v", sessionID, err)
-				return
+				if ev.Type == events.EventTypeSecurityApprovalRequest {
+					if data, ok := ev.Data.(map[string]interface{}); ok {
+						log.Printf("[SECURITY] Forwarding security_approval_request to client %s: request_id=%v tool=%s risk=%s",
+							connInfo.ClientID, data["request_id"], data["tool_name"], data["risk_level"])
+					}
+				}
+				if ev.Type == events.EventTypeAskUserRequest {
+					if data, ok := ev.Data.(map[string]interface{}); ok {
+						log.Printf("[ASK_USER] Forwarding ask_user_request to client %s: request_id=%v question=%q",
+							connInfo.ClientID, data["request_id"], data["question"])
+					}
+				}
+				if err := safeConn.WriteJSON(ev); err != nil {
+					log.Printf("WebSocket %s write error: %v", sessionID, err)
+					return
+				}
 			}
 
 		case <-readDone:
@@ -355,6 +381,19 @@ func (ws *ReactWebServer) shouldForwardEventToConnection(event events.UIEvent, c
 				return false
 			}
 		}
+	}
+
+	// SP-065-2e: Automate events require explicit channel subscription.
+	// Only forward automate.* events to connections that have opted in
+	// via {type: "subscribe", data: {channel: "automate"}}.
+	if strings.HasPrefix(event.Type, "automate.") {
+		if !connInfo.subscribedChannels["automate"] {
+			return false
+		}
+		// Connection has opted in — allow the event. Automate events
+		// don't carry client_id/chat_id targeting, so they'd otherwise
+		// be rejected by the global event type switch below.
+		return true
 	}
 
 	// Extract target client_id and chat_id from event
@@ -441,6 +480,22 @@ func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, sessionID s
 	case AllowedMessageTypeHeartbeat:
 		ws.handleHeartbeatMessage(safeConn, clientID)
 
+	case AllowedMessageTypePause:
+		// Tab backgrounded — keep any in-flight query running in the background
+		// instead of letting the heartbeat monitor cancel it on staleness.
+		log.Printf("[lifecycle] client %s paused (backgrounded) — keeping any active query alive", clientID)
+		ws.setClientPaused(clientID, true)
+
+	case AllowedMessageTypeResume:
+		// Tab foregrounded — resume normal heartbeat-based cancellation.
+		ws.setClientPaused(clientID, false)
+
+	case AllowedMessageTypeSessionClose:
+		// Tab closing/navigating away — cancel the in-flight query now rather
+		// than waiting out the heartbeat timeout.
+		ws.setClientPaused(clientID, false)
+		ws.cancelQueryForClient(clientID, "session_closed", "Query cancelled: the Web UI was closed")
+
 	case AllowedMessageTypeSubscribe:
 		// Handle subscription requests for specific event types AND
 		// (SP-034-3b) chat-id subscriptions for multi-tab consistency.
@@ -455,7 +510,7 @@ func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, sessionID s
 			})
 			return
 		}
-		log.Printf("WebSocket client subscribed to events: %v chat_ids: %v", data.Events, data.ChatIDs)
+		log.Printf("WebSocket client subscribed to events: %v chat_ids: %v channel: %s", data.Events, data.ChatIDs, data.Channel)
 
 		// Register chat subscriptions so events for these chats fan out
 		// to this connection even when the originating clientID differs
@@ -463,6 +518,18 @@ func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, sessionID s
 		if ws.chatSubscribers != nil {
 			for _, chatID := range data.ChatIDs {
 				ws.chatSubscribers.Subscribe(chatID, safeConn.Conn())
+			}
+		}
+
+		// SP-065-2e: Register channel subscriptions (e.g., "automate")
+		// so automate events are only forwarded to connections that
+		// explicitly opted in.
+		if data.Channel != "" {
+			connInfoVal, ok := ws.connections.Load(safeConn.Conn())
+			if ok {
+				if ci, ok := connInfoVal.(*ConnectionInfo); ok {
+					ci.subscribedChannels[data.Channel] = true
+				}
 			}
 		}
 

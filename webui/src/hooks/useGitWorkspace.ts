@@ -134,6 +134,14 @@ export const useGitWorkspace = ({
         renamed: [],
       };
 
+      // Not in a git repository — show the "No git repository found" message.
+      if (!data.in_git_repo) {
+        setGitStatus(null);
+        setGitActionWarning(null);
+        setGitBranches({ current: '', branches: [] });
+        return;
+      }
+
       // Show warning if file list was truncated due to limits
       if (data.status?.truncated) {
         setGitActionWarning(

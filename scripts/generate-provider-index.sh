@@ -2,8 +2,15 @@
 # generate-provider-index.sh — Generate providers/index.json from provider config files.
 # Usage: bash scripts/generate-provider-index.sh
 #
-# Reads all JSON files from pkg/agent_providers/configs/, extracts provider names,
-# sorts them alphabetically, and writes providers/index.json.
+# Reads JSON files from two source directories:
+#   - pkg/agent_providers/configs/           (embedded built-ins)
+#   - pkg/agent_providers/community-configs/ (remote-only, not embedded)
+# extracts provider names, sorts them alphabetically, and writes
+# providers/index.json. The community-configs/ directory is the path
+# for adding a provider to GitHub Pages without growing the binary.
+#
+# Fails loudly if the same provider id appears in both source dirs —
+# that's an unresolved conflict, not a precedence question.
 #
 # Does NOT copy, modify, or touch any individual provider files.
 
@@ -13,6 +20,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 CONFIGS_DIR="$REPO_ROOT/pkg/agent_providers/configs"
+COMMUNITY_CONFIGS_DIR="$REPO_ROOT/pkg/agent_providers/community-configs"
 PROVIDERS_DIR="$REPO_ROOT/providers"
 INDEX_FILE="${PROVIDERS_DIR}/index.json"
 
@@ -25,18 +33,39 @@ fi
 
 shopt -s nullglob
 JSON_FILES=("$CONFIGS_DIR"/*.json)
+COMMUNITY_JSON_FILES=()
+if [[ -d "$COMMUNITY_CONFIGS_DIR" ]]; then
+    COMMUNITY_JSON_FILES=("$COMMUNITY_CONFIGS_DIR"/*.json)
+fi
 shopt -u nullglob
 
-if [[ ${#JSON_FILES[@]} -eq 0 ]]; then
-    echo "Error: no JSON files found in '$CONFIGS_DIR'" >&2
+if [[ ${#JSON_FILES[@]} -eq 0 && ${#COMMUNITY_JSON_FILES[@]} -eq 0 ]]; then
+    echo "Error: no JSON files found in '$CONFIGS_DIR' or '$COMMUNITY_CONFIGS_DIR'" >&2
     exit 1
 fi
 
-# --- Extract and sort provider names ---
+# --- Extract provider names + detect cross-dir collisions ---
+# Avoid `declare -A` to keep this runnable on macOS bash 3.2.
 
 PROVIDERS=()
-for file in "${JSON_FILES[@]}"; do
+EMBEDDED_NAMES=""
+
+# Safe expansion on empty arrays under `set -u`. See comment above
+# for the bash-3.2 idiom.
+for file in ${JSON_FILES[@]+"${JSON_FILES[@]}"}; do
     provider="$(basename "$file" .json)"
+    EMBEDDED_NAMES+="$provider"$'\n'
+    PROVIDERS+=("$provider")
+done
+
+# ${ARR[@]+"${ARR[@]}"} is the bash-3.2-safe expansion of a possibly-empty
+# array under `set -u`; bare "${ARR[@]}" trips "unbound variable" there.
+for file in ${COMMUNITY_JSON_FILES[@]+"${COMMUNITY_JSON_FILES[@]}"}; do
+    provider="$(basename "$file" .json)"
+    if printf '%s' "$EMBEDDED_NAMES" | grep -qx "$provider"; then
+        echo "Error: provider '$provider' exists in both configs/ and community-configs/ — remove one" >&2
+        exit 1
+    fi
     PROVIDERS+=("$provider")
 done
 

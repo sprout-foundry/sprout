@@ -1790,6 +1790,14 @@ func TestValidateRemoteConfig(t *testing.T) {
 		}
 	})
 
+	t.Run("non-https endpoint", func(t *testing.T) {
+		cfg := base
+		cfg.Endpoint = "http://api.foo.com/v1"
+		if err := validateRemoteConfig("foo", &cfg); err == nil {
+			t.Fatal("expected error for http:// endpoint")
+		}
+	})
+
 	t.Run("unknown auth type", func(t *testing.T) {
 		cfg := base
 		cfg.Auth.Type = "magic-handshake"

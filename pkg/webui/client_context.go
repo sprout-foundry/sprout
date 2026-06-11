@@ -405,21 +405,8 @@ func (ws *ReactWebServer) setClientWorkspaceRoot(clientID, path string) (string,
 		resolvedDaemonRoot = evaled
 	}
 
-	// Validate that the workspace is within the daemon root. Also accept
-	// the real home directory as a valid boundary — a stale plist may bake
-	// in a wrong SPROUT_DAEMON_ROOT (e.g. /home/user on macOS where the
-	// real home is /Users/user), which would block every workspace change.
 	if !isWithinWorkspace(workspaceRoot, resolvedDaemonRoot) && workspaceRoot != resolvedDaemonRoot {
-		if realHome, homeErr := os.UserHomeDir(); homeErr == nil && realHome != "" {
-			if evaledHome, evalErr := filepath.EvalSymlinks(realHome); evalErr == nil {
-				realHome = evaledHome
-			}
-			if !isWithinWorkspace(workspaceRoot, realHome) && workspaceRoot != realHome {
-				return "", fmt.Errorf("workspace root must stay within daemon root %s", ws.daemonRoot)
-			}
-		} else {
-			return "", fmt.Errorf("workspace root must stay within daemon root %s", ws.daemonRoot)
-		}
+		return "", fmt.Errorf("workspace root must stay within daemon root %s", ws.daemonRoot)
 	}
 
 	if ws.clientContexts == nil {

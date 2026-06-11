@@ -68,21 +68,29 @@ func (a *Agent) compactRevisionHistoryAsync() {
 	}
 	resolved := raw.Resolve()
 
+	var maxChangesAge time.Duration
+	if resolved.MaxChangesAgeDays > 0 {
+		maxChangesAge = time.Duration(resolved.MaxChangesAgeDays) * 24 * time.Hour
+	}
 	policy := history.RetentionPolicy{
-		HotCount:      resolved.HotCount,
-		WarmCount:     resolved.WarmCount,
-		MaxDirBytes:   resolved.MaxDirBytes,
-		ArchiveFrozen: resolved.ArchiveFrozen,
+		HotCount:              resolved.HotCount,
+		WarmCount:             resolved.WarmCount,
+		MaxDirBytes:           resolved.MaxDirBytes,
+		ArchiveFrozen:         resolved.ArchiveFrozen,
+		MaxChangesPerRevision: resolved.MaxChangesPerRevision,
+		MaxChangesAge:         maxChangesAge,
 	}
 	stats, err := history.CompactRevisions(policy)
 	if err != nil {
 		a.Logger().Debug("revision compaction failed: %v\n", err)
 		return
 	}
-	if stats.WarmDemoted+stats.Dropped+stats.HardCapTrimmed > 0 {
-		a.Logger().Info("revision compaction: %d total / %d hot / %d→warm / %d dropped / %d trimmed / %.2f MiB reclaimed",
+	changesDropped := stats.OrphanChangesDropped + stats.OverCapChangesDropped + stats.AgedChangesDropped
+	if stats.WarmDemoted+stats.Dropped+stats.HardCapTrimmed+changesDropped > 0 {
+		a.Logger().Info("revision compaction: %d total / %d hot / %d→warm / %d dropped / %d trimmed / %d orphan-changes / %d over-cap-changes / %d aged-changes / %.2f MiB reclaimed",
 			stats.TotalRevisions, stats.HotKept, stats.WarmDemoted,
 			stats.Dropped, stats.HardCapTrimmed,
+			stats.OrphanChangesDropped, stats.OverCapChangesDropped, stats.AgedChangesDropped,
 			float64(stats.BytesReclaimed)/(1024*1024))
 	}
 }

@@ -101,6 +101,29 @@ func overrideShellSnapshotMaxFilesForTest(newCap int) int {
 // for monorepo `internal/` style dirs.
 var autoSkipFileCountThreshold = 1500
 
+// autoSkipCumulativeThreshold is the cumulative-descendant-file count
+// that triggers adaptive auto-skip for distributed bloat — directories
+// whose total recursive file count exceeds this value even though no
+// single subdirectory individually exceeds autoSkipFileCountThreshold.
+//
+// This is set MUCH higher than autoSkipFileCountThreshold because
+// cumulative counts naturally include all nested source files. A
+// legitimate monorepo src/ dir with 3000 source files must never be
+// auto-skipped — the agent edits those files. Build artifacts, by
+// contrast, start at 3000–5000 and routinely exceed 10000 (Swift
+// SPM's .build/ alone can hit 30000).
+//
+// The two-threshold design gives us:
+//   - autoSkipFileCountThreshold (1500): catches "flat" bloat dirs
+//     with thousands of direct children (e.g., a releases/ dir of
+//     tarballs). High confidence — no legitimate dir has 1500 direct
+//     file children.
+//   - autoSkipCumulativeThreshold (10000): catches "distributed" bloat
+//     dirs with files spread across many shallow subdirs (e.g.,
+//     .build/index-build/records/6D/, 6E/, …). Lower confidence but
+//     still far above honest source trees.
+var autoSkipCumulativeThreshold = 10000
+
 // shellSnapshotEntry is what the snapshot map stores per file. Content
 // is the byte payload (nil if the file was filtered out by size /
 // binary checks but we want to remember it existed). Size + ModTime
@@ -169,6 +192,9 @@ var shellSnapshotSkipDirs = map[string]bool{
 	".idea":         true,
 	".vscode":       true,
 	".direnv":       true,
+	// Swift Package Manager build output (can be tens of thousands of
+	// indexed files — see ~9000+ records in .build/index-build/).
+	".build": true,
 	// Sprout's own session-output / scratch directories. The tracker
 	// writing into .sprout/ and then having to walk .sprout/ on the
 	// next shell snapshot would be silly recursion; skipping is safe
@@ -401,14 +427,70 @@ func (ct *ChangeTracker) walkWorkspace(workDir string, old map[string]*shellSnap
 		if ct.autoSkipDirs == nil {
 			ct.autoSkipDirs = make(map[string]bool)
 		}
+
+		// Build cumulative descendant file counts by bubbling leaf
+		// counts upward to all ancestors. Directories whose total
+		// descendant count exceeds the threshold are bloat — even if
+		// no single subdirectory individually tripped it (e.g. Swift
+		// SPM's .build/index-build/.../records/ with 9000 files
+		// spread across hundreds of shallow subdirs).
+		cumulative := make(map[string]int, len(filesPerDir))
+		for dir, count := range filesPerDir {
+			// Add this dir's direct files to itself and all ancestors.
+			for d := dir; d != "" && d != absRoot; {
+				cumulative[d] += count
+				parent := filepath.Dir(d)
+				if parent == d {
+					break // reached filesystem root
+				}
+				d = parent
+			}
+		}
+
+		// Collect dirs that exceed either the direct-children threshold
+		// OR the cumulative-descendant threshold, then keep only the
+		// shallowest per subtree so we skip .build/ instead of each of
+		// its leaf subdirs individually.
+		//
+		// Two thresholds:
+		//   - autoSkipThreshold (1500): high-confidence direct-children
+		//     check. No legitimate source dir has 1500 direct file children.
+		//   - autoSkipCumulativeThreshold (10000): catches distributed
+		//     bloat (files spread across many shallow subdirs). Set far
+		//     above any honest source tree (monorepo src/ might hit 3000,
+		//     build artifacts start at 3000-5000 and hit 30000+).
+		fatDirs := make(map[string]int) // dir → file count (direct or cumulative)
 		for dir, count := range filesPerDir {
 			if count > autoSkipThreshold {
-				if !ct.autoSkipDirs[dir] {
-					ct.logf("shell snapshot: auto-skipping fat dir %q (%d direct files) on future walks", dir, count)
-					newlyLearned = true
-				}
-				ct.autoSkipDirs[dir] = true
+				fatDirs[dir] = count
 			}
+		}
+		for dir, count := range cumulative {
+			if count > autoSkipCumulativeThreshold {
+				// Keep the larger label (direct vs cumulative) for logging
+				if _, exists := fatDirs[dir]; !exists {
+					fatDirs[dir] = count
+				}
+			}
+		}
+		for dir, count := range fatDirs {
+			// If any ancestor is also fat, skip this one — the ancestor
+			// subsumes it and produces a broader skip.
+			subsumed := false
+			for other := range fatDirs {
+				if other != dir && strings.HasPrefix(dir, other+string(filepath.Separator)) {
+					subsumed = true
+					break
+				}
+			}
+			if subsumed {
+				continue
+			}
+			if !ct.autoSkipDirs[dir] {
+				ct.logf("shell snapshot: auto-skipping fat dir %q (%d descendant files) on future walks", dir, count)
+				newlyLearned = true
+			}
+			ct.autoSkipDirs[dir] = true
 		}
 	}
 	if newlyLearned {

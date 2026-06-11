@@ -62,15 +62,16 @@ prepare-grammars:
 
 # Test parallelism knobs. Peak test-suite memory is roughly
 #   (TEST_P concurrent test binaries) x (per-binary working set, inflated by
-#   the race detector's ~5-10x shadow memory). The Go defaults (-p / -parallel
-#   = GOMAXPROCS, e.g. 24) run two dozen race-instrumented binaries at once and
-#   peaked this suite at 30-40GB (and caused load-induced flakiness in timing
-#   tests like pkg/webui's file watcher). Bounding both keeps the whole suite
-#   inside a small footprint: -race at TEST_P=4 fits ~12GB; drop -race (see
-#   test-unit-lowmem) and it fits ~4GB. Override on the CLI, e.g.
+#   the race detector's ~5-10x shadow memory). Measured per-package peaks with
+#   -race: pkg/embedding 1.15GB, pkg/agent_tools 940MB, pkg/agent 910MB, cmd
+#   and pkg/webui ~645MB. With internal -parallel multiplying inside each
+#   binary, the Go defaults (-p / -parallel = GOMAXPROCS) peak this suite at
+#   30-40GB. TEST_P=2 keeps -race runs inside ~10GB (fits a 16GB laptop);
+#   TEST_P=4 needs 24GB+ headroom. Drop -race (see test-unit-lowmem) and the
+#   whole suite fits ~4GB. Override on the CLI, e.g.
 #   `make test-unit TEST_P=8 TEST_PARALLEL=8` or `make test-unit TEST_RACE=`.
 TEST_RACE     ?= -race
-TEST_P        ?= 4
+TEST_P        ?= 2
 TEST_PARALLEL ?= 4
 
 # Unit Tests - Fast, no external dependencies

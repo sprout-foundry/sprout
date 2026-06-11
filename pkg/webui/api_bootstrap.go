@@ -36,10 +36,16 @@ func (ws *ReactWebServer) handleAPIBootstrap(w http.ResponseWriter, r *http.Requ
 	if ws.authToken != "" {
 		authMode = "bearer"
 	}
+	// appMode is always "local" from this binary. The launchd/systemd
+	// "service mode" is still a self-hosted local install — the daemon
+	// has a real workspace ($HOME) and the user reaches it via
+	// localhost. Conflating it with "cloud" caused the frontend's
+	// CloudAdapter to short-circuit /api/workspace with the synthetic
+	// /home/user response (cloudEndpointRegistry/endpoints/synthetic.ts)
+	// instead of calling the real local daemon. Managed cloud
+	// deployments override via VITE_SPROUT_MODE at build time
+	// (bootstrapAdapter.ts).
 	appMode := "local"
-	if ws.serviceMode {
-		appMode = "cloud"
-	}
 	scheme := "http"
 	wsScheme := "ws"
 	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {

@@ -545,15 +545,27 @@ func PromptForAPIKey(provider string) (string, error) {
 }
 
 // getProviderDisplayName returns a user-friendly name for the provider.
-// For known built-in providers, uses the static display name map.
-// For custom providers, falls back to the custom provider config.
+// Lookup chain:
+//  1. Static display-name map (generated from embedded configs — fastest
+//     and the common case for built-ins).
+//  2. Runtime factory (covers remote-only providers published to GitHub
+//     Pages whose display_name isn't baked into the static map).
+//  3. CustomProviders (user-defined local providers in config.json).
+//  4. Raw provider ID as a last resort.
 func getProviderDisplayName(provider string) string {
-	// Check static display names for built-in providers first
 	if displayName, ok := knownProviderDisplayNames[provider]; ok {
 		return displayName
 	}
 
-	// Fall back to custom providers
+	providerDisplayLookupMu.RLock()
+	lookup := providerDisplayLookup
+	providerDisplayLookupMu.RUnlock()
+	if lookup != nil {
+		if displayName, ok := lookup(provider); ok && displayName != "" {
+			return displayName
+		}
+	}
+
 	if cfg, err := Load(); err == nil {
 		if custom, exists := cfg.CustomProviders[provider]; exists {
 			if custom.Name != "" {

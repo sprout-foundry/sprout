@@ -74,5 +74,6 @@
     "chunk_timeout_ms": 300000,
     "done_marker": "[DONE]",
     "format": "sse"
-  }
+  },
+  "display_name": "LM Studio"
 }

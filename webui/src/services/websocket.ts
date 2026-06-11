@@ -30,7 +30,30 @@ class WebSocketService {
   private chatSeq = new Map<string, number>();
   private connecting = false;
 
-  private constructor() {}
+  private constructor() {
+    // A real tab close / navigation fires `pagehide` (a background does not).
+    // Tell the server to cancel any in-flight query now rather than letting it
+    // run out the heartbeat timeout. Best-effort: the send may not flush during
+    // unload, in which case the server's heartbeat still cancels it (the client
+    // isn't marked paused on a close).
+    if (typeof window !== 'undefined') {
+      window.addEventListener('pagehide', () => {
+        this.sendControl('session_close');
+      });
+    }
+  }
+
+  /** Send a small control frame if the socket is open. Used for lifecycle
+   *  signals (pause / session_close) that the server acts on immediately. */
+  private sendControl(type: string): void {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      try {
+        this.ws.send(JSON.stringify({ type }));
+      } catch {
+        // best-effort during teardown
+      }
+    }
+  }
 
   static getInstance(): WebSocketService {
     if (!WebSocketService.instance) {
@@ -319,6 +342,10 @@ class WebSocketService {
    *  The outbound message queue is intentionally preserved so queued messages
    *  can be replayed after resume(). */
   freeze() {
+    // Tell the server we're backgrounding (not closing) so it keeps any
+    // in-flight query running and reattaches when we return, rather than
+    // cancelling it on heartbeat staleness. Sent before the close below.
+    this.sendControl('pause');
     this.intentionalClose = true;
     // Intentionally do NOT reset wasConnectedBefore — see comment above.
     if (this.reconnectTimeout) {

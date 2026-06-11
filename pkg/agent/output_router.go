@@ -237,7 +237,17 @@ func (r *OutputRouter) RouteAgentMessage(category, message string, extra map[str
 	// Always publish to event bus for WebUI (when active)
 	r.publish(events.EventTypeAgentMessage, events.AgentMessageEvent(category, message, extra))
 
-	// Terminal output: always write to terminal
+	// Hand off to the Web UI: when a browser is connected, the primary agent's
+	// tool-call and thought logs render there, so keep the terminal quiet
+	// instead of duplicating them. Errors/warnings/info still print so failures
+	// are never hidden, and subagent output (its own display path) is untouched.
+	if category == "tool_log" || category == "thought" {
+		if r.agent != nil && !r.agent.IsSubagent() && r.agent.HasActiveWebUIClients() {
+			return
+		}
+	}
+
+	// Terminal output: write to terminal
 	r.writeTerminalMessage(message)
 }
 

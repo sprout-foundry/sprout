@@ -54,6 +54,15 @@ type webClientContext struct {
 	ActiveQuery      bool
 	LastSeenAt       time.Time
 
+	// Paused is set when the client signals it is backgrounding (the tab went
+	// hidden) rather than closing. While paused, the heartbeat monitor leaves
+	// an in-flight query running (up to maxPausedQueryDuration) instead of
+	// cancelling it, so a long agent run keeps going in the background and the
+	// client can reattach when it returns. Cleared on reconnect, on an explicit
+	// resume, or on a session_close (which cancels the run outright).
+	Paused   bool
+	PausedAt time.Time
+
 	// Multi-chat support: one client context (tab) can have multiple
 	// independent chat sessions, each with its own agent state.
 	ChatSessions   map[string]*chatSession
@@ -96,6 +105,29 @@ func (ws *ReactWebServer) touchClientLastSeen(clientID string) {
 
 	if ctx := ws.clientContexts[clientID]; ctx != nil {
 		ctx.LastSeenAt = time.Now()
+	}
+}
+
+// setClientPaused marks (or clears) a client as paused — the tab is backgrounded
+// but expected to return. While paused, the heartbeat monitor keeps any in-flight
+// query running instead of cancelling it on staleness. Cleared on reconnect /
+// resume / session_close.
+func (ws *ReactWebServer) setClientPaused(clientID string, paused bool) {
+	clientID = strings.TrimSpace(clientID)
+	if clientID == "" {
+		clientID = defaultWebClientID
+	}
+
+	ws.mutex.Lock()
+	defer ws.mutex.Unlock()
+
+	if ctx := ws.clientContexts[clientID]; ctx != nil {
+		ctx.Paused = paused
+		if paused {
+			ctx.PausedAt = time.Now()
+		} else {
+			ctx.PausedAt = time.Time{}
+		}
 	}
 }
 

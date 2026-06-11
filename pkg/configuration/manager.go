@@ -50,8 +50,9 @@ func loadConfigSilently() (*Config, *APIKeys, error) {
 
 	// Check if we need to set a default provider
 	if config.LastUsedProvider == "" {
+		names := knownProviderNames()
 		// Check for environment variables
-		for _, name := range knownProviderNames {
+		for _, name := range names {
 			metadata, err := GetProviderAuthMetadata(name)
 			if err != nil {
 				continue
@@ -66,7 +67,7 @@ func loadConfigSilently() (*Config, *APIKeys, error) {
 
 		// If no env provider, check for saved API keys (cloud providers only)
 		if config.LastUsedProvider == "" {
-			for _, name := range knownProviderNames {
+			for _, name := range names {
 				if RequiresAPIKey(name) && HasProviderAuth(name) {
 					config.LastUsedProvider = name
 					break

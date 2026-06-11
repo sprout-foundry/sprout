@@ -75,5 +75,6 @@
     "input_token_cost": 0.0,
     "output_token_cost": 0.0,
     "currency": "USD"
-  }
+  },
+  "display_name": "OpenAI"
 }

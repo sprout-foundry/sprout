@@ -12,8 +12,33 @@ import (
 	providers "github.com/sprout-foundry/sprout/pkg/agent_providers"
 	"github.com/sprout-foundry/sprout/pkg/credentials"
 	"github.com/sprout-foundry/sprout/pkg/noninteractive"
+	"github.com/sprout-foundry/sprout/pkg/providercatalog"
 	"golang.org/x/term"
 )
+
+// specialProviderDescriptions covers the few non-config providers
+// (ollama, ollama-local, jinaai) that aren't in pkg/providercatalog
+// because they ship no provider JSON. Built-ins and remote providers
+// pull from the catalog instead; this map is the small fallback for
+// the rest. Format matches the catalog: no leading separator.
+var specialProviderDescriptions = map[string]string{
+	"ollama":       "Run models locally, completely free (requires setup)",
+	"ollama-local": "Run models locally, completely free (requires setup)",
+	"jinaai":       "Specialized in embeddings and search",
+}
+
+// providerDescription returns the user-facing description for a
+// provider. Lookup chain: pkg/providercatalog (the curated catalog,
+// refreshed by .github/workflows/provider-catalog-refresh.yml) →
+// specialProviderDescriptions (for non-config providers like ollama)
+// → empty string. Replaces an earlier hardcoded switch in init.go
+// that only covered 7 of the 16 known providers.
+func providerDescription(name string) string {
+	if p, ok := providercatalog.FindProvider(name); ok && strings.TrimSpace(p.Description) != "" {
+		return p.Description
+	}
+	return specialProviderDescriptions[name]
+}
 
 // readInput reads a line of input from stdin without conflicting with other input systems
 func readInput() (string, error) {
@@ -284,22 +309,8 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 			status = " (local, no key needed)"
 		}
 
-		// Add helpful descriptions
-		switch name {
-		case "openrouter":
-			description = " - 100+ models, free options, pay-as-you-go"
-		case "openai":
-			description = " - GPT models, reliable but pricier"
-		case "deepinfra":
-			description = " - Open-source models, good performance"
-		case "ollama":
-			description = " - Run models locally, completely free (requires setup)"
-		case "ollama-cloud":
-			description = " - Hosted Ollama Cloud with API access"
-		case "lmstudio":
-			description = " - Local AI server, run models on your machine"
-		case "jinaai":
-			description = " - Specialized in embeddings and search"
+		if desc := providerDescription(name); desc != "" {
+			description = " - " + desc
 		}
 
 		fmt.Printf("  %d. %s%s%s\n", i+1, getProviderDisplayName(name), status, description)

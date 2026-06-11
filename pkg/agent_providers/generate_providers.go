@@ -21,8 +21,9 @@ import (
 
 // ProviderConfig represents a minimal subset of the provider config needed for code generation
 type ProviderConfig struct {
-	Name string `json:"name"`
-	Auth struct {
+	Name        string `json:"name"`
+	DisplayName string `json:"display_name"`
+	Auth        struct {
 		Type   string `json:"type"`
 		EnvVar string `json:"env_var"`
 	} `json:"auth"`
@@ -254,12 +255,15 @@ func KnownProviders() []string {
 	}
 }
 
-// ProviderDisplayNames returns a map of provider names to display names
-// This replaces the hardcoded knownProviderDisplayNames map in api_keys.go
+// ProviderDisplayNames returns a map of provider names to display names.
+// Values prefer the per-config display_name field (single source of truth
+// in pkg/agent_providers/configs/*.json); the hardcoded switch in
+// generate_providers.go::displayName is kept as a transitional fallback
+// for configs that haven't been backfilled yet.
 func ProviderDisplayNames() map[string]string {
 	return map[string]string{
 {{range .Providers}}
-		"{{.Name}}": "{{displayName .Name}}",{{end}}
+		"{{.Name}}": "{{if .DisplayName}}{{.DisplayName}}{{else}}{{displayName .Name}}{{end}}",{{end}}
 		// Special providers (no config files)
 		"ollama": "Ollama (Local)",
 		"ollama-local": "Ollama (Local)",

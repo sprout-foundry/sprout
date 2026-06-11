@@ -321,6 +321,47 @@ func TestKnownProviderNames_NoLookupReturnsStatic(t *testing.T) {
 	}
 }
 
+// TestGetProviderDisplayName_RemoteOnlyProvider proves the runtime
+// display-name lookup wins over the raw-id fallback for providers
+// that aren't in the static knownProviderDisplayNames map (i.e.,
+// providers published to GitHub Pages but not embedded in the binary).
+// Static entries must still resolve via the fast static-map path.
+func TestGetProviderDisplayName_RemoteOnlyProvider(t *testing.T) {
+	configDir := t.TempDir()
+	t.Setenv("LEDIT_CONFIG", configDir)
+	t.Setenv("SPROUT_CONFIG", configDir)
+
+	providerDisplayLookupMu.RLock()
+	prev := providerDisplayLookup
+	providerDisplayLookupMu.RUnlock()
+	t.Cleanup(func() { SetProviderDisplayNameLookup(prev) })
+
+	SetProviderDisplayNameLookup(func(name string) (string, bool) {
+		if name == "totally-new-provider" {
+			return "Totally New Provider", true
+		}
+		return "", false
+	})
+
+	// Remote-only provider gets its published display name.
+	if got := getProviderDisplayName("totally-new-provider"); got != "Totally New Provider" {
+		t.Errorf("remote-only: got %q, want %q", got, "Totally New Provider")
+	}
+
+	// Built-in provider still resolves via the static map (the runtime
+	// callback should never be consulted for an entry that's already
+	// in knownProviderDisplayNames).
+	if got := getProviderDisplayName("openai"); got != "OpenAI" {
+		t.Errorf("built-in: got %q, want %q", got, "OpenAI")
+	}
+
+	// Provider unknown to both static map and runtime callback falls
+	// back to the raw id.
+	if got := getProviderDisplayName("never-heard-of-it"); got != "never-heard-of-it" {
+		t.Errorf("unknown: got %q, want raw id", got)
+	}
+}
+
 func TestHasProviderAuth_WithoutCredential(t *testing.T) {
 	configDir := t.TempDir()
 	t.Setenv("LEDIT_CONFIG", configDir)

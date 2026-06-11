@@ -127,7 +127,9 @@ func TryZshCommandExecution(ctx context.Context, chatAgent *agent.Agent, query s
 
 	_, err = ExecuteCommand(query)
 
-	// Print separator after output
+	// Print separator after output — re-read the width in case the terminal
+	// was resized while the command ran.
+	separator = strings.Repeat("─", GetTerminalWidth())
 	_, _ = os.Stdout.Write([]byte(fmt.Sprintf("%s%s%s\n",
 		console.ColorGray,
 		separator,
@@ -260,7 +262,9 @@ func executeDirectCommand(command string) (bool, error) {
 	// Execute the command directly (output streams in real-time)
 	_, err := ExecuteCommand(command)
 
-	// Print separator after output
+	// Print separator after output — re-read the width in case the terminal
+	// was resized while the command ran.
+	separator = strings.Repeat("─", GetTerminalWidth())
 	_, _ = os.Stdout.Write([]byte(fmt.Sprintf("%s%s%s\n",
 		console.ColorGray,
 		separator,

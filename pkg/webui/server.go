@@ -130,41 +130,21 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 			rootSource = "$HOME"
 		}
 	}
-	if daemonRoot == "" || (serviceMode && !looksLikeUserHome(daemonRoot)) {
-		// Service mode without an authoritative $HOME / SPROUT_DAEMON_ROOT
-		// (or with a $HOME that's clearly wrong — e.g. "/", "/var/root", or a
-		// system dir launchd inherited). Read /etc/passwd directly so we
-		// pick the OS user's home regardless of the inherited environment.
-		if u, uErr := user.Current(); uErr == nil && u.HomeDir != "" {
-			if daemonRoot == "" || u.HomeDir != daemonRoot {
-				if serviceMode {
-					log.Printf("[web] WARNING: %s resolved to %q which doesn't look like a user home dir; "+
-						"overriding with user.Current().HomeDir = %q. Your service unit is likely stale — "+
-						"reinstall to bake in SPROUT_DAEMON_ROOT: sprout service uninstall && sprout service install",
-						rootSource, daemonRoot, u.HomeDir)
-				}
-				daemonRoot = u.HomeDir
-				rootSource = "user.Current().HomeDir"
-			}
-		}
-	}
-	// Second pass: even if the path looks like a home directory, verify it
-	// actually exists on disk. A stale plist from a different machine (e.g.
-	// /home/user on macOS where the real home is /Users/user) will pass
-	// looksLikeUserHome but point to a nonexistent directory, making every
-	// workspace change fail the isWithinWorkspace guard.
-	if daemonRoot != "" {
-		if info, statErr := os.Stat(daemonRoot); statErr != nil || !info.IsDir() {
-			if u, uErr := user.Current(); uErr == nil && u.HomeDir != "" && u.HomeDir != daemonRoot {
-				if serviceMode {
-					log.Printf("[web] WARNING: SPROUT_DAEMON_ROOT %q does not exist on disk; "+
-						"overriding with user.Current().HomeDir = %q. Reinstall the service to fix: "+
-						"sprout service uninstall && sprout service install",
-						daemonRoot, u.HomeDir)
-				}
-				daemonRoot = u.HomeDir
-				rootSource = "user.Current().HomeDir (disk-miss fallback)"
-			}
+	// In service mode, always reconcile against the OS user database.
+	// SPROUT_DAEMON_ROOT is baked into the plist/unit at install time and can
+	// go stale — e.g. a unit generated on Linux (/home/user) copied to macOS
+	// where the real home is /Users/user, or a renamed user account. The
+	// previous looksLikeUserHome heuristic failed because /home/user passes
+	// both the heuristic AND the disk-existence check on macOS (synthetic
+	// firmlinks). user.Current().HomeDir reads /etc/passwd (or its platform
+	// equivalent), which is always authoritative for the current user.
+	if serviceMode {
+		if u, uErr := user.Current(); uErr == nil && u.HomeDir != "" && u.HomeDir != daemonRoot {
+			log.Printf("[web] SPROUT_DAEMON_ROOT=%q disagrees with user.Current().HomeDir=%q; "+
+				"using %q (reinstall the service to update the plist: sprout service uninstall && sprout service install)",
+				daemonRoot, u.HomeDir, u.HomeDir)
+			daemonRoot = u.HomeDir
+			rootSource = "user.Current().HomeDir"
 		}
 	}
 	if daemonRoot == "" {
@@ -176,7 +156,7 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 		}
 	}
 
-	log.Printf("[web] startup: cwd=%s home=%s service=%v", workspaceRoot, daemonRoot, serviceMode)
+	log.Printf("[web] startup: cwd=%s home=%s service=%v source=%s", workspaceRoot, daemonRoot, serviceMode, rootSource)
 	if serviceMode {
 		workspaceRoot = daemonRoot
 	}

@@ -98,11 +98,18 @@ describe('ToolTimelineBar', () => {
     });
     // Initially visible
     expect(container.querySelector('.tool-timeline-card--completed')).not.toBeNull();
-    // Advance past the 3s fade window
+    // Advance past the 3s fade window — the card is gone, but the bar
+    // container stays mounted during the hide-grace window so rapid
+    // back-to-back tools don't churn the DOM (the visible flicker bug).
     act(() => {
       vi.advanceTimersByTime(3500);
     });
     expect(container.querySelector('.tool-timeline-card--completed')).toBeNull();
+    expect(container.querySelector('.tool-timeline-bar')).not.toBeNull();
+    // After the hide-grace window the bar unmounts.
+    act(() => {
+      vi.advanceTimersByTime(4500);
+    });
     expect(container.querySelector('.tool-timeline-bar')).toBeNull();
   });
 

@@ -57,13 +57,12 @@ export function ChatFooter({
   const elements: JSX.Element[] = [];
 
   // SP-053-2b: live tool timeline above subagent feed / query progress.
-  // Shown whenever there are tool executions to surface (running, or
-  // recently-completed within the fade window); ToolTimelineBar itself
-  // returns null when there's nothing visible, so no extra guard needed.
-  const hasToolsToShow = filteredToolExecutions.length > 0;
-  if (hasToolsToShow) {
-    elements.push(<ToolTimelineBar key="tool-timeline" toolExecutions={filteredToolExecutions} />);
-  }
+  // Always mount; ToolTimelineBar owns its own visibility (including a
+  // hide-grace window) so rapid back-to-back tools don't churn the DOM.
+  // An outer length-gate here would unmount the bar between consecutive
+  // tools whose lifetimes don't quite overlap, which the user perceives
+  // as the live bar flickering on and off.
+  elements.push(<ToolTimelineBar key="tool-timeline" toolExecutions={filteredToolExecutions} />);
 
   if (hasSubagentActivity) {
     // SP-059 Phase 1c: when a subagent is currently running, show a pill

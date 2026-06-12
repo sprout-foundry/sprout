@@ -14,6 +14,15 @@
   color: var(--text-secondary, #8b949e);
 }
 
+/* During the hide-grace window the bar is mounted but has no children.
+   Collapse it to zero footprint so the user doesn't see an empty strip
+   between consecutive tool batches — the goal of the grace window is
+   to keep React state stable, not to leave a visible placeholder. */
+.tool-timeline-bar:empty {
+  padding: 0;
+  min-height: 0;
+}
+
 .tool-timeline-card {
   display: inline-flex;
   align-items: center;

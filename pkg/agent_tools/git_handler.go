@@ -123,14 +123,19 @@ func (h *gitHandler) Execute(ctx context.Context, env ToolEnv, args map[string]a
 		gitCmd += " " + argsStr
 	}
 
-	// Check if this is a dangerous operation requiring approval
-	if dangerousOps[operation] {
+	// Classify this git operation using the security classifier
+	secResult := classifyGitOperation(args)
+
+	// Three-tier approval based on classifier result
+	switch secResult.Risk {
+	case SecurityDangerous:
+		// Destructive operation (e.g., reset --hard, rebase -i)
 		if env.ApprovalManager != nil {
 			result := env.ApprovalManager.RequestApproval(
 				operation,
 				"git",
-				"high",
-				fmt.Sprintf("Execute dangerous git operation: %s\nCommand: %s", operation, gitCmd),
+				"critical",
+				fmt.Sprintf("⚠️ DESTRUCTIVE git operation: %s\nReason: %s\nCommand: %s", operation, secResult.Reasoning, gitCmd),
 				nil,
 			)
 			if !result.Approved {
@@ -141,9 +146,37 @@ func (h *gitHandler) Execute(ctx context.Context, env ToolEnv, args map[string]a
 				return ToolResult{Output: fmt.Sprintf("Git operation %q was %s by approval manager", operation, reason)}, nil
 			}
 		} else {
-			// No approval manager - warn but proceed
-			fmt.Fprintf(os.Stderr, "WARNING: Dangerous git operation %q without approval manager\n", operation)
+			// No approval manager - hard-block destructive operations
+			return ToolResult{
+				Output:  fmt.Sprintf("Blocked: destructive git operation %q (%s). This operation requires interactive approval and cannot proceed without an approval manager.", operation, secResult.Reasoning),
+				IsError: true,
+			}, nil
 		}
+	case SecurityCaution:
+		// Caution-level operation (e.g., reset --soft, plain reset/rebase)
+		// Fall through to legacy dangerousOps map for backward compat
+		if dangerousOps[operation] {
+			if env.ApprovalManager != nil {
+				result := env.ApprovalManager.RequestApproval(
+					operation,
+					"git",
+					"high",
+					fmt.Sprintf("Execute dangerous git operation: %s\nCommand: %s", operation, gitCmd),
+					nil,
+				)
+				if !result.Approved {
+					reason := "denied"
+					if result.Reason != "" {
+						reason = result.Reason
+					}
+					return ToolResult{Output: fmt.Sprintf("Git operation %q was %s by approval manager", operation, reason)}, nil
+				}
+			} else {
+				// No approval manager - warn but proceed
+				fmt.Fprintf(os.Stderr, "WARNING: Dangerous git operation %q without approval manager\n", operation)
+			}
+		}
+	// SecuritySafe: no approval needed, skip entirely
 	}
 
 	result, err := execShellCmd(ctx, gitCmd, env.WorkspaceRoot)

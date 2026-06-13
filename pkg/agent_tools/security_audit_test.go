@@ -544,3 +544,371 @@ func TestSetAuditLogger_Integration(t *testing.T) {
 		}
 	}
 }
+
+// ---------------------------------------------------------------------------
+// SP-049-3b: Secret scrubbing in audit log
+// ---------------------------------------------------------------------------
+
+func TestLog_RedactsSecretsInCommand(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	logPath := filepath.Join(tmpDir, "audit.jsonl")
+
+	logger, err := NewAuditLogger(logPath)
+	if err != nil {
+		t.Fatalf("NewAuditLogger: %v", err)
+	}
+	defer logger.Close()
+
+	// Log an entry with a secret in the command field.
+	entry := AuditEntry{
+		Timestamp: time.Now(),
+		Tool:      "shell_command",
+		Command:   `curl -H "Authorization: Bearer sk-1234567890abcdef" https://api.example.com`,
+		RiskLevel: "DANGEROUS",
+		Outcome:   "blocked",
+		Source:    "built-in-dangerous",
+	}
+	if err := logger.Log(entry); err != nil {
+		t.Fatalf("Log: %v", err)
+	}
+	logger.Close()
+
+	// Read back and verify the secret is redacted.
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+
+	var parsed AuditEntry
+	if err := json.Unmarshal(data[:len(data)-1], &parsed); err != nil {
+		// The last byte is a newline; try without it.
+		lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+		if len(lines) != 1 {
+			t.Fatalf("expected 1 line, got %d", len(lines))
+		}
+		if err := json.Unmarshal([]byte(lines[0]), &parsed); err != nil {
+			t.Fatalf("Unmarshal: %v", err)
+		}
+	}
+
+	// The command should NOT contain the raw secret.
+	if strings.Contains(parsed.Command, "sk-1234567890abcdef") {
+		t.Errorf("secret not redacted in command field: %s", parsed.Command)
+	}
+
+	// The command should contain a redaction marker.
+	if !strings.Contains(parsed.Command, "REDACTED") {
+		t.Errorf("expected REDACTED marker in command, got: %s", parsed.Command)
+	}
+}
+
+func TestLog_RedactsSecretsInArgs(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	logPath := filepath.Join(tmpDir, "audit.jsonl")
+
+	logger, err := NewAuditLogger(logPath)
+	if err != nil {
+		t.Fatalf("NewAuditLogger: %v", err)
+	}
+	defer logger.Close()
+
+	entry := AuditEntry{
+		Timestamp: time.Now(),
+		Tool:      "shell_command",
+		Args:      `export API_KEY=sk-secret-12345678901234567890`,
+		RiskLevel: "CAUTION",
+		Outcome:   "approved",
+	}
+	if err := logger.Log(entry); err != nil {
+		t.Fatalf("Log: %v", err)
+	}
+	logger.Close()
+
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	var parsed AuditEntry
+	if err := json.Unmarshal([]byte(lines[0]), &parsed); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+
+	// Args should not contain the raw secret.
+	if strings.Contains(parsed.Args, "sk-secret-12345678901234567890") {
+		t.Errorf("secret not redacted in args field: %s", parsed.Args)
+	}
+}
+
+func TestLog_DoesNotCorruptNonSecretCommands(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	logPath := filepath.Join(tmpDir, "audit.jsonl")
+
+	logger, err := NewAuditLogger(logPath)
+	if err != nil {
+		t.Fatalf("NewAuditLogger: %v", err)
+	}
+	defer logger.Close()
+
+	plainCmd := "git push --force origin main"
+	entry := AuditEntry{
+		Timestamp: time.Now(),
+		Tool:      "shell_command",
+		Command:   plainCmd,
+		RiskLevel: "DANGEROUS",
+		Outcome:   "blocked",
+	}
+	if err := logger.Log(entry); err != nil {
+		t.Fatalf("Log: %v", err)
+	}
+	logger.Close()
+
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	var parsed AuditEntry
+	if err := json.Unmarshal([]byte(lines[0]), &parsed); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+
+	if parsed.Command != plainCmd {
+		t.Errorf("command was modified unnecessarily: got %q, want %q", parsed.Command, plainCmd)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// SP-049-3b: Log rotation at 10MB
+// ---------------------------------------------------------------------------
+
+func TestLog_RotationAt10MB(t *testing.T) {
+	// Not parallel — manipulates global maxLogSize concept (actually tests real rotation).
+	tmpDir := t.TempDir()
+	logPath := filepath.Join(tmpDir, "audit.jsonl")
+
+	logger, err := NewAuditLogger(logPath)
+	if err != nil {
+		t.Fatalf("NewAuditLogger: %v", err)
+	}
+
+	// Write entries until we exceed maxLogSize. Each entry should be at least
+	// a few hundred bytes. We need ~10MB total. Use a large command string.
+	largeCmd := strings.Repeat("A", 5000) // 5KB per entry
+	entry := AuditEntry{
+		Timestamp: time.Now(),
+		Tool:      "shell_command",
+		Command:   largeCmd,
+		RiskLevel: "CAUTION",
+		Outcome:   "approved",
+	}
+
+	// Write ~2500 entries (2500 * ~5KB = ~12.5MB, which exceeds 10MB).
+	for i := 0; i < 2500; i++ {
+		if err := logger.Log(entry); err != nil {
+			t.Fatalf("Log iteration %d: %v", i, err)
+		}
+	}
+	logger.Close()
+
+	// Verify the original file was rotated.
+	_, err = os.Stat(logPath)
+	if err != nil {
+		t.Fatalf("current log file should exist after rotation: %v", err)
+	}
+
+	rotatedPath := logPath + ".1"
+	rotatedInfo, err := os.Stat(rotatedPath)
+	if err != nil {
+		t.Fatalf("rotated log file (.1) should exist after rotation: %v", err)
+	}
+
+	// The rotated file should be close to maxLogSize.
+	if rotatedInfo.Size() < maxLogSize {
+		t.Errorf("rotated file size %d should be >= maxLogSize %d", rotatedInfo.Size(), maxLogSize)
+	}
+
+	// The current file should be smaller (it's the fresh one after rotation).
+	currentInfo, err := os.Stat(logPath)
+	if err != nil {
+		t.Fatalf("stat current log: %v", err)
+	}
+	// After rotation, the new file gets the remaining entries. It could be
+	// anything from 0 to close to maxLogSize depending on when rotation hit.
+	if currentInfo.Size() > maxLogSize*2 {
+		t.Errorf("current file size %d seems too large after rotation", currentInfo.Size())
+	}
+
+	// Verify the rotated file contains valid JSONL.
+	rotatedData, err := os.ReadFile(rotatedPath)
+	if err != nil {
+		t.Fatalf("ReadFile rotated: %v", err)
+	}
+	rotatedLines := strings.Split(strings.TrimSpace(string(rotatedData)), "\n")
+	if len(rotatedLines) == 0 {
+		t.Error("rotated file should contain at least one JSONL line")
+	}
+	var firstEntry AuditEntry
+	if err := json.Unmarshal([]byte(rotatedLines[0]), &firstEntry); err != nil {
+		t.Errorf("first line of rotated file is not valid JSON: %v", err)
+	}
+}
+
+func TestLog_RotationOverwritesOldRotatedFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	logPath := filepath.Join(tmpDir, "audit.jsonl")
+
+	// Pre-create a stale .1 file.
+	staleContent := []byte("stale rotated content\n")
+	if err := os.WriteFile(logPath+".1", staleContent, 0o600); err != nil {
+		t.Fatalf("write stale .1: %v", err)
+	}
+
+	logger, err := NewAuditLogger(logPath)
+	if err != nil {
+		t.Fatalf("NewAuditLogger: %v", err)
+	}
+
+	// Write enough to trigger rotation.
+	largeCmd := strings.Repeat("B", 5000)
+	entry := AuditEntry{
+		Timestamp: time.Now(),
+		Tool:      "test",
+		Command:   largeCmd,
+		RiskLevel: "CAUTION",
+	}
+	for i := 0; i < 2500; i++ {
+		if err := logger.Log(entry); err != nil {
+			t.Fatalf("Log %d: %v", i, err)
+		}
+	}
+	logger.Close()
+
+	// The stale .1 file should have been overwritten by real rotated data.
+	rotatedData, err := os.ReadFile(logPath + ".1")
+	if err != nil {
+		t.Fatalf("ReadFile .1: %v", err)
+	}
+	if strings.Contains(string(rotatedData), "stale rotated content") {
+		t.Error("stale .1 file was not overwritten during rotation")
+	}
+
+	// Should contain valid JSONL lines.
+	lines := strings.Split(strings.TrimSpace(string(rotatedData)), "\n")
+	var entry2 AuditEntry
+	if err := json.Unmarshal([]byte(lines[0]), &entry2); err != nil {
+		t.Errorf("rotated .1 file first line not valid JSON: %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// SP-049-3b: AuditEntry spec field compatibility
+// ---------------------------------------------------------------------------
+
+func TestAuditEntry_SpecFieldsPresent(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	logPath := filepath.Join(tmpDir, "audit.jsonl")
+
+	logger, err := NewAuditLogger(logPath)
+	if err != nil {
+		t.Fatalf("NewAuditLogger: %v", err)
+	}
+
+	entry := AuditEntry{
+		Timestamp: time.Date(2026, 5, 22, 14, 32, 11, 0, time.UTC),
+		Tool:      "shell_command",
+		Command:   "git reset --hard HEAD~5",
+		RiskLevel: "DANGEROUS",
+		Outcome:   "blocked",
+		Source:    "built-in-dangerous",
+		Headless:  true,
+		SessionID: "abc123",
+	}
+	if err := logger.Log(entry); err != nil {
+		t.Fatalf("Log: %v", err)
+	}
+	logger.Close()
+
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+
+	// Parse as a generic map to check spec field names.
+	var raw map[string]interface{}
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if err := json.Unmarshal([]byte(lines[0]), &raw); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+
+	// Verify spec-required fields exist.
+	specFields := []string{"ts", "tool", "risk", "command", "outcome", "source", "headless", "session_id"}
+	for _, field := range specFields {
+		if _, ok := raw[field]; !ok {
+			t.Errorf("spec field %q missing from JSON output", field)
+		}
+	}
+
+	// Verify specific values.
+	if raw["tool"] != "shell_command" {
+		t.Errorf("tool = %v, want shell_command", raw["tool"])
+	}
+	if raw["risk"] != "DANGEROUS" {
+		t.Errorf("risk = %v, want DANGEROUS", raw["risk"])
+	}
+	if raw["outcome"] != "blocked" {
+		t.Errorf("outcome = %v, want blocked", raw["outcome"])
+	}
+	if raw["source"] != "built-in-dangerous" {
+		t.Errorf("source = %v, want built-in-dangerous", raw["source"])
+	}
+	if raw["headless"] != true {
+		t.Errorf("headless = %v, want true", raw["headless"])
+	}
+	if raw["session_id"] != "abc123" {
+		t.Errorf("session_id = %v, want abc123", raw["session_id"])
+	}
+}
+
+func TestAuditEntry_LegacyFieldCompatibility(t *testing.T) {
+	t.Parallel()
+
+	entry := AuditEntry{
+		Timestamp: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		Tool:      "test",
+		RiskLevel: "SAFE",
+	}
+	data, err := json.Marshal(entry)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+
+	// Both new and legacy field names should be present for backward compat.
+	if _, ok := raw["ts"]; !ok {
+		t.Error("missing 'ts' field")
+	}
+	if _, ok := raw["timestamp"]; !ok {
+		t.Error("missing legacy 'timestamp' field")
+	}
+	if _, ok := raw["risk"]; !ok {
+		t.Error("missing 'risk' field")
+	}
+	if _, ok := raw["risk_level"]; !ok {
+		t.Error("missing legacy 'risk_level' field")
+	}
+}

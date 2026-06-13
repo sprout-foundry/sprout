@@ -1,3 +1,5 @@
+//go:build !js
+
 package tools
 
 import (
@@ -7,26 +9,113 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/security"
 )
+
+// maxLogSize is the maximum audit log file size before rotation.
+const maxLogSize = 10 * 1024 * 1024 // 10 MB
 
 // AuditEntry represents a single security audit log entry.
 type AuditEntry struct {
-	Timestamp time.Time `json:"timestamp"`
+	Timestamp time.Time `json:"ts"`
 	Tool      string    `json:"tool"`
-	Args      string    `json:"args,omitempty"`
-	RiskLevel string    `json:"risk_level"`
-	Category  string    `json:"category"`
-	Action    string    `json:"action"` // "allowed", "denied", "prompted"
+	Command   string    `json:"command,omitempty"`
+	RiskLevel string    `json:"risk"`
+	Outcome   string    `json:"outcome,omitempty"`
+	Category  string    `json:"category,omitempty"`
+	Action    string    `json:"action,omitempty"`
 	Reasoning string    `json:"reasoning,omitempty"`
-	Source    string    `json:"source,omitempty"` // "classifier", "policy", "user_override"
+	Source    string    `json:"source,omitempty"`
+	Headless  bool      `json:"headless"`
 	SessionID string    `json:"session_id,omitempty"`
 	Workspace string    `json:"workspace,omitempty"`
+	Args      string    `json:"args,omitempty"`
+}
+
+// MarshalJSON serializes AuditEntry with both new (ts, risk) and legacy
+// (timestamp, risk_level) keys so that callers parsing the raw JSON under
+// either naming convention continue to work without change.
+//
+// Value receiver so that json.Marshal(v) (without a pointer) still invokes us.
+func (e AuditEntry) MarshalJSON() ([]byte, error) {
+	type Alias AuditEntry
+
+	m := map[string]interface{}{
+		"ts":         e.Timestamp.Format(time.RFC3339),
+		"timestamp":  e.Timestamp.Format(time.RFC3339),
+		"tool":       e.Tool,
+		"risk":       e.RiskLevel,
+		"risk_level": e.RiskLevel,
+	}
+
+	if e.Command != "" {
+		m["command"] = e.Command
+	}
+	if e.Outcome != "" {
+		m["outcome"] = e.Outcome
+	}
+	if e.Category != "" {
+		m["category"] = e.Category
+	}
+	if e.Action != "" {
+		m["action"] = e.Action
+	}
+	if e.Reasoning != "" {
+		m["reasoning"] = e.Reasoning
+	}
+	if e.Source != "" {
+		m["source"] = e.Source
+	}
+	if e.Headless {
+		m["headless"] = true
+	}
+	if e.SessionID != "" {
+		m["session_id"] = e.SessionID
+	}
+	if e.Workspace != "" {
+		m["workspace"] = e.Workspace
+	}
+	if e.Args != "" {
+		m["args"] = e.Args
+	}
+
+	return json.Marshal(m)
+}
+
+// UnmarshalJSON deserializes AuditEntry from JSON, accepting both the new
+// keys (ts, risk) and the legacy keys (timestamp, risk_level) for backward
+// compatibility.
+func (e *AuditEntry) UnmarshalJSON(data []byte) error {
+	type Alias AuditEntry
+	aux := &struct {
+		TimestampOld string `json:"timestamp"`
+		RiskLevelOld string `json:"risk_level"`
+		*Alias
+	}{
+		Alias: (*Alias)(e),
+	}
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+	// Fallback to old keys if the new ones didn't parse.
+	if e.Timestamp.IsZero() && aux.TimestampOld != "" {
+		t, err := time.Parse(time.RFC3339, aux.TimestampOld)
+		if err == nil {
+			e.Timestamp = t
+		}
+	}
+	if e.RiskLevel == "" && aux.RiskLevelOld != "" {
+		e.RiskLevel = aux.RiskLevelOld
+	}
+	return nil
 }
 
 // AuditLogger provides thread-safe JSONL audit logging for security decisions.
 type AuditLogger struct {
-	mu   sync.Mutex
-	file *os.File
+	mu      sync.Mutex
+	file    *os.File
+	logPath string
 }
 
 // NewAuditLogger creates or opens a log file at the given path,
@@ -42,17 +131,29 @@ func NewAuditLogger(logPath string) (*AuditLogger, error) {
 		return nil, fmt.Errorf("open audit log file: %w", err)
 	}
 
-	return &AuditLogger{file: f}, nil
+	return &AuditLogger{file: f, logPath: logPath}, nil
 }
 
 // Log marshals the entry to JSON and appends it as a single line
-// (JSONL/NDJSON format) followed by a newline.
+// (JSONL/NDJSON format) followed by a newline. Secrets in Command and Args
+// are scrubbed before writing. After each write, the log file is checked for
+// rotation.
 func (l *AuditLogger) Log(entry AuditEntry) error {
 	if l == nil {
 		return nil
 	}
 
-	data, err := json.Marshal(entry)
+	// Create a mutable copy to scrub secrets.
+	e := entry
+	redactor := security.NewOutputRedactor()
+	if e.Command != "" {
+		e.Command = redactor.RedactString(e.Command)
+	}
+	if e.Args != "" {
+		e.Args = redactor.RedactString(e.Args)
+	}
+
+	data, err := json.Marshal(e)
 	if err != nil {
 		return fmt.Errorf("marshal audit entry: %w", err)
 	}
@@ -60,8 +161,17 @@ func (l *AuditLogger) Log(entry AuditEntry) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
+	if l.file == nil {
+		return fmt.Errorf("audit logger: file is closed")
+	}
+
 	if _, err := l.file.Write(append(data, '\n')); err != nil {
 		return fmt.Errorf("write audit entry: %w", err)
+	}
+
+	// Check size and rotate if needed.
+	if err := l.maybeRotate(); err != nil {
+		return fmt.Errorf("rotate audit log: %w", err)
 	}
 
 	return nil
@@ -71,6 +181,43 @@ func (l *AuditLogger) Log(entry AuditEntry) error {
 // Nil-receiver safe via Log's internal nil guard.
 func (l *AuditLogger) LogEntry(entry AuditEntry) error {
 	return l.Log(entry)
+}
+
+// maybeRotate closes the current log file, renames it to .1 (overwriting
+// any existing rotated file), and opens a fresh log file when the current
+// file exceeds maxLogSize. Caller must hold l.mu.
+func (l *AuditLogger) maybeRotate() error {
+	stat, err := l.file.Stat()
+	if err != nil {
+		return fmt.Errorf("stat audit log: %w", err)
+	}
+	if stat.Size() <= maxLogSize {
+		return nil
+	}
+
+	// Close current file.
+	if err := l.file.Close(); err != nil {
+		return fmt.Errorf("close audit log for rotation: %w", err)
+	}
+	l.file = nil
+
+	rotatedPath := l.logPath + ".1"
+
+	// Remove any existing rotated file.
+	_ = os.Remove(rotatedPath)
+
+	// Rename current to .1.
+	if err := os.Rename(l.logPath, rotatedPath); err != nil {
+		return fmt.Errorf("rename audit log for rotation: %w", err)
+	}
+
+	// Open fresh file.
+	f, err := os.OpenFile(l.logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		return fmt.Errorf("open new audit log after rotation: %w", err)
+	}
+	l.file = f
+	return nil
 }
 
 // Close closes the underlying log file.

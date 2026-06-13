@@ -261,3 +261,133 @@ func TestReadOutputTail_StripsControlChars(t *testing.T) {
 		t.Fatalf("should contain 'line2' and 'line3', got %q", got)
 	}
 }
+
+func TestBuildAutomateCompletionMessage_Success(t *testing.T) {
+	got := buildAutomateCompletionMessage("my-workflow", "My workflow description", "abc-123", "success", 0, "/nonexistent/output.txt")
+
+	if !strings.Contains(got, "[automate] Background workflow completed:") {
+		t.Fatalf("expected completion header, got %q", got)
+	}
+	if !strings.Contains(got, "Workflow: my-workflow") {
+		t.Fatalf("expected workflow name, got %q", got)
+	}
+	if !strings.Contains(got, "Description: My workflow description") {
+		t.Fatalf("expected description, got %q", got)
+	}
+	if !strings.Contains(got, "Session: abc-123") {
+		t.Fatalf("expected session id, got %q", got)
+	}
+	if !strings.Contains(got, "Status: success (exit code 0)") {
+		t.Fatalf("expected success status, got %q", got)
+	}
+	if strings.Contains(got, "Output (last 2KB)") {
+		t.Fatalf("success message should NOT contain output tail, got %q", got)
+	}
+}
+
+func TestBuildAutomateCompletionMessage_FailureWithTail(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "out.txt")
+	if err := os.WriteFile(path, []byte("Error: something failed\n"), 0600); err != nil {
+		t.Fatalf("write temp file: %v", err)
+	}
+
+	got := buildAutomateCompletionMessage("wf", "desc", "s1", "error", 1, path)
+
+	if !strings.Contains(got, "Status: error (exit code 1)") {
+		t.Fatalf("expected error status, got %q", got)
+	}
+	if !strings.Contains(got, "Output (last 2KB):") {
+		t.Fatalf("expected output tail header, got %q", got)
+	}
+	if !strings.Contains(got, "Error: something failed") {
+		t.Fatalf("expected tail content, got %q", got)
+	}
+}
+
+func TestBuildAutomateCompletionMessage_FailureNoOutputFile(t *testing.T) {
+	got := buildAutomateCompletionMessage("wf", "desc", "s2", "error", 1, "/tmp/sprout-nonexistent-12345.txt")
+
+	if !strings.Contains(got, "Status: error (exit code 1)") {
+		t.Fatalf("expected error status, got %q", got)
+	}
+	if strings.Contains(got, "Output (last 2KB)") {
+		t.Fatalf("missing output file should NOT include tail section, got %q", got)
+	}
+}
+
+func TestBuildAutomateCompletionMessage_SelfContained(t *testing.T) {
+	desc := "Deploy production v2.1.3"
+	got := buildAutomateCompletionMessage("deploy-prod", desc, "xyz-789", "success", 0, "")
+
+	// Both name and description must appear in the same message (self-contained).
+	if !strings.Contains(got, "Workflow: deploy-prod") {
+		t.Fatalf("expected workflow name in self-contained message, got %q", got)
+	}
+	if !strings.Contains(got, "Description: Deploy production v2.1.3") {
+		t.Fatalf("expected description in self-contained message, got %q", got)
+	}
+}
+
+func TestBuildAutomateCompletionMessage_FailureExitCode2(t *testing.T) {
+	got := buildAutomateCompletionMessage("wf", "desc", "s3", "error", 2, "/nonexistent/path.txt")
+
+	if !strings.Contains(got, "Status: error (exit code 2)") {
+		t.Fatalf("expected exit code 2, got %q", got)
+	}
+	if strings.Contains(got, "Output (last 2KB)") {
+		t.Fatalf("missing output file should NOT include tail, got %q", got)
+	}
+}
+
+func TestBuildAutomateCompletionMessage_FailureWithEmptyOutput(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "empty.txt")
+	if err := os.WriteFile(path, nil, 0600); err != nil {
+		t.Fatalf("write empty file: %v", err)
+	}
+
+	got := buildAutomateCompletionMessage("wf", "desc", "s4", "error", 1, path)
+
+	if !strings.Contains(got, "Status: error (exit code 1)") {
+		t.Fatalf("expected error status, got %q", got)
+	}
+	if strings.Contains(got, "Output (last 2KB)") {
+		t.Fatalf("empty output file should NOT include tail section, got %q", got)
+	}
+}
+
+func TestBuildAutomateCompletionMessage_DescriptionWithSpecialChars(t *testing.T) {
+	desc := "deploy\nstage: prod\n%verb% and 'quotes'"
+	got := buildAutomateCompletionMessage("wf", desc, "s1", "success", 0, "")
+	if !strings.Contains(got, "deploy") {
+		t.Fatalf("expected description content in message, got %q", got)
+	}
+	if !strings.Contains(got, "%verb%") {
+		t.Fatalf("percent signs in description should survive, got %q", got)
+	}
+	if !strings.Contains(got, "quotes") {
+		t.Fatalf("quoted text in description should survive, got %q", got)
+	}
+}
+
+func TestBuildAutomateCompletionMessage_FailureWithLargeOutput(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "large.txt")
+
+	// 5KB of content — readOutputTail will return last 2048 bytes.
+	content := strings.Repeat("A", 3000) + "FATAL: critical error\n" + strings.Repeat("Z", 2500)
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+
+	got := buildAutomateCompletionMessage("wf", "desc", "s5", "error", 1, path)
+
+	if !strings.Contains(got, "Output (last 2KB):") {
+		t.Fatalf("expected output tail header, got %q", got)
+	}
+	// The tail should be the last 2048 bytes, which is all Z's (since FATAL line + Z's > 2048).
+	if strings.Contains(got, "FATAL: critical error") {
+		t.Fatalf("tail should have been truncated and should NOT contain the earlier FATAL line, got %q", got)
+	}
+}

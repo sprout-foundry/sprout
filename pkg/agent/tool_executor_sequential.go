@@ -263,8 +263,10 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 		// interactive confirmation, and operating system controls.
 		action := ClassifyError(err)
 		if action == ActionEscalate || strings.Contains(err.Error(), "security caution:") {
-			// This is a caution-level operation that requires LLM verification
-			// Send it back to the LLM as a special message that indicates "verify before proceeding"
+			// Security error — send back to the LLM as a tool result so it
+			// can read the error message and adjust. The message itself now
+			// contains "Do not retry this exact command" for CAUTION-tier
+			// blocks (SP-049-1c), which LLMs reliably honor.
 			te.agent.PrintLine("")
 			te.agent.PrintLine(fmt.Sprintf("[⚠️  SECURITY CAUTION - LLM VERIFICATION REQUIRED] %s", safeErr))
 			te.agent.PrintLine("")

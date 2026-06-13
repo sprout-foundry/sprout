@@ -15,6 +15,8 @@ type SecurityManager interface {
 	GetAskUserMgr() *agenttools.AskUserManager
 	SetUnsafeMode(unsafe bool)
 	GetUnsafeMode() bool
+	SetUnsafeShellMode(unsafe bool)
+	GetUnsafeShellMode() bool
 
 	// IsSecurityBypassApproved reports whether the user has approved
 	// any external filesystem access this session. After the SP-058
@@ -59,6 +61,7 @@ type AgentSecurityManager struct {
 	securityApprovalMgr     *security.ApprovalManager
 	askUserMgr              *agenttools.AskUserManager
 	unsafeMode              bool
+	unsafeShellMode         bool
 	securityBypassMu        sync.RWMutex
 	// sessionAllowedFolders holds absolute path prefixes the user
 	// approved via "Allow this folder for the rest of the session"
@@ -118,6 +121,18 @@ func (m *AgentSecurityManager) GetUnsafeMode() bool {
 	m.securityBypassMu.RLock()
 	defer m.securityBypassMu.RUnlock()
 	return m.unsafeMode
+}
+
+func (m *AgentSecurityManager) SetUnsafeShellMode(unsafe bool) {
+	m.securityBypassMu.Lock()
+	defer m.securityBypassMu.Unlock()
+	m.unsafeShellMode = unsafe
+}
+
+func (m *AgentSecurityManager) GetUnsafeShellMode() bool {
+	m.securityBypassMu.RLock()
+	defer m.securityBypassMu.RUnlock()
+	return m.unsafeShellMode
 }
 
 func (m *AgentSecurityManager) IsSecurityBypassApproved() bool {

@@ -13,7 +13,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/security"
 )
 
-// maxLogSize is the maximum audit log file size before rotation.
+// maxLogSize is the maximum size in bytes before log rotation triggers.
 const maxLogSize = 10 * 1024 * 1024 // 10 MB
 
 // AuditEntry represents a single security audit log entry.
@@ -33,22 +33,17 @@ type AuditEntry struct {
 	Args      string    `json:"args,omitempty"`
 }
 
-// MarshalJSON serializes AuditEntry with both new (ts, risk) and legacy
-// (timestamp, risk_level) keys so that callers parsing the raw JSON under
-// either naming convention continue to work without change.
-//
-// Value receiver so that json.Marshal(v) (without a pointer) still invokes us.
+// MarshalJSON implements custom marshaling that emits both new and legacy
+// JSON keys for backward compatibility. Omits empty/zero optional fields.
 func (e AuditEntry) MarshalJSON() ([]byte, error) {
-	type Alias AuditEntry
-
 	m := map[string]interface{}{
+		// New short-form keys
 		"ts":         e.Timestamp.Format(time.RFC3339),
-		"timestamp":  e.Timestamp.Format(time.RFC3339),
+		"timestamp":  e.Timestamp.Format(time.RFC3339), // legacy alias
 		"tool":       e.Tool,
 		"risk":       e.RiskLevel,
-		"risk_level": e.RiskLevel,
+		"risk_level": e.RiskLevel, // legacy alias
 	}
-
 	if e.Command != "" {
 		m["command"] = e.Command
 	}
@@ -79,13 +74,11 @@ func (e AuditEntry) MarshalJSON() ([]byte, error) {
 	if e.Args != "" {
 		m["args"] = e.Args
 	}
-
 	return json.Marshal(m)
 }
 
-// UnmarshalJSON deserializes AuditEntry from JSON, accepting both the new
-// keys (ts, risk) and the legacy keys (timestamp, risk_level) for backward
-// compatibility.
+// UnmarshalJSON accepts both new (ts, risk) and legacy (timestamp, risk_level)
+// JSON keys for backward compatibility with older log entries.
 func (e *AuditEntry) UnmarshalJSON(data []byte) error {
 	type Alias AuditEntry
 	aux := &struct {
@@ -98,7 +91,7 @@ func (e *AuditEntry) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, aux); err != nil {
 		return err
 	}
-	// Fallback to old keys if the new ones didn't parse.
+	// Fallback to old key names if new ones were empty
 	if e.Timestamp.IsZero() && aux.TimestampOld != "" {
 		t, err := time.Parse(time.RFC3339, aux.TimestampOld)
 		if err == nil {
@@ -134,17 +127,17 @@ func NewAuditLogger(logPath string) (*AuditLogger, error) {
 	return &AuditLogger{file: f, logPath: logPath}, nil
 }
 
-// Log marshals the entry to JSON and appends it as a single line
-// (JSONL/NDJSON format) followed by a newline. Secrets in Command and Args
-// are scrubbed before writing. After each write, the log file is checked for
-// rotation.
+// Log marshals the entry to JSON, scrubs secrets from Command and Args,
+// appends it as a single line (JSONL format), then checks for rotation.
 func (l *AuditLogger) Log(entry AuditEntry) error {
 	if l == nil {
 		return nil
 	}
 
-	// Create a mutable copy to scrub secrets.
+	// Create a mutable copy
 	e := entry
+
+	// Scrub secrets from Command and Args fields before logging
 	redactor := security.NewOutputRedactor()
 	if e.Command != "" {
 		e.Command = redactor.RedactString(e.Command)
@@ -169,7 +162,7 @@ func (l *AuditLogger) Log(entry AuditEntry) error {
 		return fmt.Errorf("write audit entry: %w", err)
 	}
 
-	// Check size and rotate if needed.
+	// Check size and rotate if needed
 	if err := l.maybeRotate(); err != nil {
 		return fmt.Errorf("rotate audit log: %w", err)
 	}
@@ -183,9 +176,9 @@ func (l *AuditLogger) LogEntry(entry AuditEntry) error {
 	return l.Log(entry)
 }
 
-// maybeRotate closes the current log file, renames it to .1 (overwriting
-// any existing rotated file), and opens a fresh log file when the current
-// file exceeds maxLogSize. Caller must hold l.mu.
+// maybeRotate closes the current log, renames it to logPath+".1" (removing
+// any existing backup), and opens a fresh file when the size exceeds
+// maxLogSize. Must be called with l.mu held.
 func (l *AuditLogger) maybeRotate() error {
 	stat, err := l.file.Stat()
 	if err != nil {
@@ -195,7 +188,7 @@ func (l *AuditLogger) maybeRotate() error {
 		return nil
 	}
 
-	// Close current file.
+	// Close current file
 	if err := l.file.Close(); err != nil {
 		return fmt.Errorf("close audit log for rotation: %w", err)
 	}
@@ -203,15 +196,15 @@ func (l *AuditLogger) maybeRotate() error {
 
 	rotatedPath := l.logPath + ".1"
 
-	// Remove any existing rotated file.
+	// Remove any existing rotated file
 	_ = os.Remove(rotatedPath)
 
-	// Rename current to .1.
+	// Rename current to .1
 	if err := os.Rename(l.logPath, rotatedPath); err != nil {
 		return fmt.Errorf("rename audit log for rotation: %w", err)
 	}
 
-	// Open fresh file.
+	// Open fresh file
 	f, err := os.OpenFile(l.logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return fmt.Errorf("open new audit log after rotation: %w", err)

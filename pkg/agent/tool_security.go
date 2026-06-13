@@ -195,8 +195,11 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 					return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("confirmation required: %s — %s (this operation requires explicit user confirmation. Use ask_user to confirm with the user before proceeding.)", toolName, secResult.Reasoning), nil)
 				} else if secResult.ShouldPrompt && !isSubagent {
 					// NON-INTERACTIVE + CAUTION, needs prompt but no approval mechanism:
-					// Return a special error that tells the LLM to re-assert safety before proceeding
-					return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("security caution: %s — %s (requires LLM verification: confirm this action is safe, expected, and aligned with user goals before proceeding)", toolName, secResult.Reasoning), nil)
+					// Return a terminal SecurityError — the operation cannot proceed
+					// without interactive approval. LLMs reliably honor "do not retry."
+					return nil, "", agenterrors.NewSecurityError(fmt.Sprintf(
+						"security block: %s — %s. This operation requires interactive user approval. To proceed, the user must re-run interactively or grant a scoped bypass via --unsafe-shell. Do not retry this exact command.",
+						toolName, secResult.Reasoning), nil)
 				}
 				// NON-INTERACTIVE + CAUTION, no approval mechanism, not a subagent: auto-allow (safe operations)
 			}

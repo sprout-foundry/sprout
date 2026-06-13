@@ -752,7 +752,7 @@ func newPreExecuteHook(agent *Agent) func(name string, args map[string]interface
 
 		if secResult.ShouldPrompt && !isSubagent {
 			return agenterrors.NewSecurityError(
-				fmt.Sprintf("security caution: %s — %s (requires LLM verification: confirm this action is safe, expected, and aligned with user goals before proceeding)",
+				fmt.Sprintf("security block: %s — %s. This operation requires interactive user approval. To proceed, the user must re-run interactively or grant a scoped bypass via --unsafe-shell. Do not retry this exact command.",
 					name, secResult.Reasoning), nil)
 		}
 

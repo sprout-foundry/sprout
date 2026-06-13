@@ -1,6 +1,6 @@
 # SP-067: Automate Workflow Completion Injection
 
-**Status:** 📋 Proposed
+**Status:** ✅ Implemented
 **Date:** 2026-06-06
 **Depends on:** SP-065 (event bus, BPM, event types already defined)
 **Priority:** Medium

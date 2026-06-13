@@ -349,7 +349,7 @@ func classifyShellCommand(args map[string]interface{}) SecurityResult {
 	} else {
 		category = RiskCategoryUnknown
 	}
-	return SecurityResult{
+	result := SecurityResult{
 		Risk:         maxRisk,
 		Reasoning:    getShellCommandReasoning(cmd, maxRisk),
 		ShouldBlock:  maxRisk == SecurityDangerous,
@@ -357,6 +357,19 @@ func classifyShellCommand(args map[string]interface{}) SecurityResult {
 		RiskType:     getShellCommandRiskType(cmd, maxRisk, isCritical),
 		Category:     category,
 	}
+
+	// Apply user-configurable shell policy (user safe/dangerous patterns).
+	// Checked after built-in classification; user patterns can tighten or
+	// loosen but must never override a built-in hard-block.
+	if p := globalShellPolicy.Load(); p != nil {
+		var matched bool
+		result, matched = p.applyTo(result, cmd)
+		if matched {
+			// result was modified by user policy
+		}
+	}
+
+	return result
 }
 
 // classifyChainedCommand splits and classifies chained commands

@@ -19,6 +19,40 @@ import (
 // the BackgroundProcessManager to prevent data races.
 var backgroundProcessManagerOnce sync.Once
 
+// completionMessageTailLimit is the maximum number of output bytes included
+// in an automate completion injection message when the workflow fails.
+const completionMessageTailLimit = 2048
+
+// buildAutomateCompletionMessage builds the self-contained completion injection
+// message for an automate workflow that has finished. It is extracted from the
+// proc.Done() goroutine in handleRunAutomate so it can be unit-tested without
+// spinning up real background processes.
+func buildAutomateCompletionMessage(wfName, wfDesc, sessionID, status string, exitCode int, outputPath string) string {
+	// On failure, include the output tail for diagnostics.
+	if exitCode != 0 {
+		tail := readOutputTail(outputPath, completionMessageTailLimit)
+		if tail != "" {
+			return fmt.Sprintf(
+				"[automate] Background workflow completed:\n"+
+					"  Workflow: %s\n"+
+					"  Description: %s\n"+
+					"  Session: %s\n"+
+					"  Status: %s (exit code %d)\n"+
+					"  Output (last 2KB):\n%s",
+				wfName, wfDesc, sessionID, status, exitCode, tail,
+			)
+		}
+	}
+	return fmt.Sprintf(
+		"[automate] Background workflow completed:\n"+
+			"  Workflow: %s\n"+
+			"  Description: %s\n"+
+			"  Session: %s\n"+
+			"  Status: %s (exit code %d)",
+		wfName, wfDesc, sessionID, status, exitCode,
+	)
+}
+
 // handleRunAutomate runs a workflow from the automate/ directory as a background process.
 // Always requires user approval (enforced by the security classifier).
 // Background execution is enforced — foreground mode is disabled for safety.
@@ -99,31 +133,7 @@ func handleRunAutomate(ctx context.Context, a *Agent, args map[string]interface{
 
 				// SP-067: Inject self-contained completion message back to the model
 				// so it can act autonomously (e.g., retry on failure) without polling.
-				var tail string
-				if exitCode != 0 {
-					tail = readOutputTail(proc.GetOutputPath(), 2048)
-				}
-				var injectMsg string
-				if tail != "" {
-					injectMsg = fmt.Sprintf(
-						"[automate] Background workflow completed:\n"+
-							"  Workflow: %s\n"+
-							"  Description: %s\n"+
-							"  Session: %s\n"+
-							"  Status: %s (exit code %d)\n"+
-							"  Output (last 2KB):\n%s",
-						wfName, wfDesc, sessionID, status, exitCode, tail,
-					)
-				} else {
-					injectMsg = fmt.Sprintf(
-						"[automate] Background workflow completed:\n"+
-							"  Workflow: %s\n"+
-							"  Description: %s\n"+
-							"  Session: %s\n"+
-							"  Status: %s (exit code %d)",
-						wfName, wfDesc, sessionID, status, exitCode,
-					)
-				}
+				injectMsg := buildAutomateCompletionMessage(wfName, wfDesc, sessionID, status, exitCode, proc.GetOutputPath())
 				_ = a.InjectInputContext(injectMsg)
 			case <-ctx.Done():
 				// Agent shutting down; skip injection.

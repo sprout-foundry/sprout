@@ -89,6 +89,14 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 			if agent.debug {
 				agent.debugLog("[UNLOCK] Static gate auto-approve (unsafe/elevated): bypassing security validation for %s (risk: %s)\n", toolName, secResult.Risk)
 			}
+		} else if agent != nil && agent.GetUnsafeShellMode() && toolName == "shell_command" && !secResult.IsHardBlock && secResult.Risk.String() != "DANGEROUS" && !secResult.IntentConfirmation {
+			// --unsafe-shell bypasses CAUTION-tier shell prompts across all
+			// modes (CLI and WebUI) so the flag behaves consistently regardless
+			// of UI. DANGEROUS and hard-block operations still require approval.
+			// IntentConfirmation is never auto-approved here either.
+			if agent.debug {
+				agent.debugLog("[UNLOCK] Unsafe shell mode: bypassing shell security prompt for %s (risk: %s)\n", toolName, secResult.Risk)
+			}
 		} else if agent == nil && (secResult.ShouldBlock || secResult.IntentConfirmation) {
 			// Defense-in-depth: no agent context available for approval,
 			// so reject operations that require it.

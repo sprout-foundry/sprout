@@ -16,7 +16,7 @@
     "persona": "coordinator",
     "prompt_file": "automate/workflow_prompt.md",
     "provider": "zai",
-    "risk_profile": "permissive",
+    "risk_profile": "standard",
     "skip_prompt": true,
     "subagent_overrides": {
       "coder": {
@@ -27,15 +27,15 @@
         "model": "qwen3.6-27b",
         "provider": "ai-worker"
       },
-      "repo_orchestrator": {
-        "model": "qwen3.6-27b",
-        "provider": "ai-worker"
-      },
       "reviewer": {
         "model": "qwen3.6-27b",
         "provider": "ai-worker"
       },
       "tester": {
+        "model": "qwen3.6-27b",
+        "provider": "ai-worker"
+      },
+      "orchestrator": {
         "model": "qwen3.6-27b",
         "provider": "ai-worker"
       }

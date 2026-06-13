@@ -35,6 +35,12 @@ func (a *Agent) GetUnsafeMode() bool { return a.security.GetUnsafeMode() }
 // SetUnsafeMode sets the unsafe mode flag
 func (a *Agent) SetUnsafeMode(unsafe bool) { a.security.SetUnsafeMode(unsafe) }
 
+// GetUnsafeShellMode returns whether unsafe shell mode is enabled
+func (a *Agent) GetUnsafeShellMode() bool { return a.security.GetUnsafeShellMode() }
+
+// SetUnsafeShellMode sets the unsafe shell mode flag
+func (a *Agent) SetUnsafeShellMode(unsafe bool) { a.security.SetUnsafeShellMode(unsafe) }
+
 // IsSecurityBypassApproved returns whether the user has approved any
 // external filesystem access this session. Coarse signal: prefer the
 // per-path IsFolderSessionAllowed for new code.

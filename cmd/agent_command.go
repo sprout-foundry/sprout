@@ -38,6 +38,7 @@ var (
 	agentSystemPromptFile      string
 	agentSystemPrompt          string
 	agentUnsafe                bool
+	agentUnsafeShell           bool
 	agentNoSubagents           bool
 	agentSubagentModel         string
 	agentSubagentProvider      string
@@ -170,6 +171,7 @@ func init() {
 	agentCmd.Flags().StringVar(&agentSystemPromptFile, "system-prompt", "", "File path containing custom system prompt")
 	agentCmd.Flags().StringVar(&agentSystemPrompt, "system-prompt-str", "", "Direct system prompt string")
 	agentCmd.Flags().BoolVar(&agentUnsafe, "unsafe", false, "UNSAFE MODE: Bypass most security checks (still blocks critical system operations)")
+	agentCmd.Flags().BoolVar(&agentUnsafeShell, "unsafe-shell", false, "UNSAFE SHELL MODE: Bypass CAUTION-tier shell prompts only (DANGEROUS operations still block; file security still applies)")
 	agentCmd.Flags().BoolVar(&agentNoSubagents, "no-subagents", false, "Disable subagent tools (run_subagent, run_parallel_subagents)")
 	agentCmd.Flags().StringVar(&agentSubagentModel, "subagent-model", "", "Model for subagent tools (persists to config; set per-session)")
 	agentCmd.Flags().StringVar(&agentSubagentProvider, "subagent-provider", "", "Provider for subagent tools (persists to config; set per-session)")
@@ -348,6 +350,9 @@ Examples:
 
 		// Set unsafe mode if flag is provided
 		chatAgent.SetUnsafeMode(agentUnsafe)
+
+		// --unsafe implies --unsafe-shell, but --unsafe-shell can be set independently
+		chatAgent.SetUnsafeShellMode(agentUnsafeShell || agentUnsafe)
 
 		// Apply --risk-profile flag (SP-058). Accepts either a
 		// built-in profile name OR a user-defined name from

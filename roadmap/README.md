@@ -24,6 +24,7 @@ architectural area, its current state, and open work.
 | SP-057 | [CLI Output Consistency — Glyph Migration & Unified Picker](./SP-057-cli-output-consistency.md) | ✅ Shipped |
 | SP-050 | [Orchestrator Persona Collapse — One Persona, Configurable Git-Write](./SP-050-orchestrator-persona-collapse.md) | ✅ Implemented |
 | SP-051 | [Depth-Aware Subagent UI — Visible Nesting in the CLI](./SP-051-depth-aware-subagent-ui.md) | ✅ Implemented |
+| SP-053 | [WebUI CLI Parity — Persona/Depth, Live Tools, Cost Footer](./SP-053-webui-cli-parity.md) | ✅ Implemented |
 
 ## In Progress
 
@@ -55,7 +56,6 @@ architectural area, its current state, and open work.
 | SP-046 | [Browser-Primary Workspace Sync Model](./SP-046-workspace-sync-model.md) | 📋 Proposed |
 | SP-048 | [CLI Delight — Terminal UX Polish](./SP-048-cli-delight.md) | 📋 Proposed |
 | SP-049 | [Shell Permission Overhaul — Tiered Allow-Lists & User Policy](./SP-049-shell-permission-overhaul.md) | 📋 Proposed |
-| SP-053 | [WebUI CLI Parity — Persona/Depth, Live Tools, Cost Footer](./SP-053-webui-cli-parity.md) | 📋 Proposed |
 | SP-054 | [LSP Language Coverage Expansion](./SP-054-lsp-language-coverage.md) | 📋 Proposed |
 | SP-056 | [CLI Reasoning Fold — Collapsed Thinking Indicator](./SP-056-cli-reasoning-fold.md) | 📋 Proposed |
 | SP-058 | [Selective Grammar Embedding for WASM and Daemon](./SP-058-selective-grammar-embed.md) | 📋 Proposed |

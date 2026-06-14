@@ -1,6 +1,6 @@
 # SP-059: Subagent ↔ Primary Interaction Overhaul + Delegate Retirement
 
-**Status:** 🚧 In progress
+**Status:** ✅ Implemented (Phases 1–6 complete; delegate tool retired)
 **Date:** 2026-05-26 (original) · 2026-05-31 (amended)
 **Depends on:** SP-006 (Delegate Tool, shipped — being retired by this spec)
 **Priority:** High (closes silent-cancel and silent-steering UX bugs; pays

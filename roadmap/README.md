@@ -60,7 +60,7 @@ architectural area, its current state, and open work.
 | SP-054 | [LSP Language Coverage Expansion](./SP-054-lsp-language-coverage.md) | 📋 Proposed |
 | SP-056 | [CLI Reasoning Fold — Collapsed Thinking Indicator](./SP-056-cli-reasoning-fold.md) | 📋 Proposed |
 | SP-058 | [Selective Grammar Embedding for WASM and Daemon](./SP-058-selective-grammar-embed.md) | 📋 Proposed |
-| SP-059 | [Subagent ↔ Primary Interaction Overhaul](./SP-059-subagent-interaction.md) | 📋 Proposed |
+| SP-059 | [Subagent ↔ Primary Interaction Overhaul](./SP-059-subagent-interaction.md) | ✅ Implemented |
 | SP-061 | [Remove Static Embedding Provider, Consolidate on ONNX](./SP-061-remove-static-embeddings.md) | 📋 Proposed |
 | SP-064 | [Automate CLI — Status, Stop, Logs](./SP-064-automate-cli-monitoring.md) | 📋 Proposed |
 | SP-065 | [WebUI Automations Panel](./SP-065-automate-webui-panel.md) | 📋 Proposed |

@@ -51,7 +51,7 @@ func TestHandleRequestClarification_NotDelegateAgent(t *testing.T) {
 	eb := events.NewEventBus()
 	a := &Agent{
 		eventBus: eb,
-		// delegateID is empty — not a delegate
+		// subagentID is empty — not a subagent
 	}
 
 	result, err := handleRequestClarification(context.Background(), a, map[string]interface{}{
@@ -66,7 +66,7 @@ func TestHandleRequestClarification_Success(t *testing.T) {
 	eb := events.NewEventBus()
 	a := &Agent{
 		eventBus:   eb,
-		delegateID: "delegate-test-1",
+		subagentID: "delegate-test-1",
 	}
 
 	// initSubManagers will create clarificationManager
@@ -110,7 +110,7 @@ func TestHandleRequestClarification_ContextCancelled(t *testing.T) {
 	eb := events.NewEventBus()
 	a := &Agent{
 		eventBus:   eb,
-		delegateID: "delegate-test-2",
+		subagentID: "delegate-test-2",
 	}
 	a.initSubManagers()
 	require.NotNil(t, a.clarificationManager)
@@ -148,7 +148,7 @@ func TestHandleRequestClarification_Timeout(t *testing.T) {
 	eb := events.NewEventBus()
 	a := &Agent{
 		eventBus:   eb,
-		delegateID: "delegate-test-3",
+		subagentID: "delegate-test-3",
 	}
 	a.initSubManagers()
 	a.clarificationManager = NewClarificationManagerWithTimeout(eb, 100*time.Millisecond)

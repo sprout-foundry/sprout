@@ -165,12 +165,11 @@ type Agent struct {
 	// that haven't been wired by their event bus initializer.
 	clarificationManager *ClarificationManager
 
-	// delegateID is this agent's identifier when acting as a subagent;
+	// subagentID is this agent's identifier when acting as a subagent;
 	// empty for root agents. Used as the requester ID when calling
 	// request_clarification so the response routes back to the right
-	// subagent. Name retained from the legacy delegate machinery to
-	// minimize churn; the field is opaque-string anyway.
-	delegateID string
+	// subagent.
+	subagentID string
 
 	// riskProfileOverride is a transient (per-session) override for
 	// the risk cascade profile. Set by the --risk-profile CLI flag

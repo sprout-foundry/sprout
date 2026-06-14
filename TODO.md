@@ -22,7 +22,7 @@ _Spec: `roadmap/SP-060-desktop-serve.md`_
 
 Phase A (auth token + TCP random port) and Phase B (Unix domain socket) are largely implemented. Verify and close out.
 
-- [ ] SP-060-A: Verify Phase A and Phase B completeness. Run the existing `desktop/backend_test.js` tests. Verify: (1) `generateSecret()` produces a 256-bit hex token, (2) `SPROUT_AUTH_TOKEN` env var is passed to the child process, (3) the HTTP proxy injects `Authorization: Bearer <token>` headers, (4) `--bind-socket` flag works in Go and the Electron proxy forwards to the socket, (5) Windows falls back to TCP+auth. If all pass, update the spec status to ✅ and move SP-060 in `roadmap/README.md` from "In Progress" to "Implemented". Acceptance: `node desktop/backend_test.js` passes; spec and README updated.
+- [x] SP-060-A: Verify Phase A and Phase B completeness. Run the existing `desktop/backend_test.js` tests. Verify: (1) `generateSecret()` produces a 256-bit hex token, (2) `SPROUT_AUTH_TOKEN` env var is passed to the child process, (3) the HTTP proxy injects `Authorization: Bearer <token>` headers, (4) `--bind-socket` flag works in Go and the Electron proxy forwards to the socket, (5) Windows falls back to TCP+auth. If all pass, update the spec status to ✅ and move SP-060 in `roadmap/README.md` from "In Progress" to "Implemented". Acceptance: `node desktop/backend_test.js` passes; spec and README updated.
 
 ## SP-068: Security Check Consolidation
 _Spec: `roadmap/SP-068-security-check-consolidation.md`_

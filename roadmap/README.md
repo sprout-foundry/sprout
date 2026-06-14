@@ -55,7 +55,7 @@ architectural area, its current state, and open work.
 | SP-045 | [WASM Build Feature Parity](./SP-045-wasm-feature-parity.md) | 📋 Proposed |
 | SP-046 | [Browser-Primary Workspace Sync Model](./SP-046-workspace-sync-model.md) | 📋 Proposed |
 | SP-048 | [CLI Delight — Terminal UX Polish](./SP-048-cli-delight.md) | 📋 Proposed |
-| SP-049 | [Shell Permission Overhaul — Tiered Allow-Lists & User Policy](./SP-049-shell-permission-overhaul.md) | 📋 Proposed |
+| SP-049 | [Shell Permission Overhaul — Tiered Allow-Lists & User Policy](./SP-049-shell-permission-overhaul.md) | ✅ Implemented |
 | SP-054 | [LSP Language Coverage Expansion](./SP-054-lsp-language-coverage.md) | 📋 Proposed |
 | SP-056 | [CLI Reasoning Fold — Collapsed Thinking Indicator](./SP-056-cli-reasoning-fold.md) | 📋 Proposed |
 | SP-058 | [Selective Grammar Embedding for WASM and Daemon](./SP-058-selective-grammar-embed.md) | 📋 Proposed |

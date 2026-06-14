@@ -26,12 +26,13 @@ architectural area, its current state, and open work.
 | SP-051 | [Depth-Aware Subagent UI — Visible Nesting in the CLI](./SP-051-depth-aware-subagent-ui.md) | ✅ Implemented |
 | SP-053 | [WebUI CLI Parity — Persona/Depth, Live Tools, Cost Footer](./SP-053-webui-cli-parity.md) | ✅ Implemented |
 
+| SP-060 | [Desktop App — Per-Workspace Server Mode](./SP-060-desktop-serve.md) | ✅ Implemented |
+
 ## In Progress
 
 | Spec | Title | Status |
 |------|-------|--------|
 | SP-015 | [Cloud Platform Integration](./SP-015-cloud-platform.md) | 🚧 Partially implemented |
-| SP-060 | [Desktop App — Per-Workspace Server Mode](./SP-060-desktop-serve.md) | 🚧 In Progress |
 
 ## Proposed
 

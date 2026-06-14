@@ -505,7 +505,7 @@ func (r *SubagentRunner) runTask(
 	// back to itself via the shared manager.
 	if r.parentAgent != nil && r.parentAgent.clarificationManager != nil {
 		subAgent.clarificationManager = r.parentAgent.clarificationManager
-		subAgent.delegateID = taskID
+		subAgent.subagentID = taskID
 	}
 
 	// SP-051-2d: bump the process-wide active-subagent counter so the CLI

@@ -890,9 +890,15 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions) (*Agent, error) {
 		security:            securityMgr,
 		mcpSub:              mcpMgr,
 		// Shared resources
-		todoMgr:       r.shared.TodoManager,
-		eventBus:      r.shared.EventBus,
-		embeddingMgr:  r.shared.EmbeddingMgr,
+		todoMgr:        r.shared.TodoManager,
+		eventBus:       r.shared.EventBus,
+		embeddingMgr:   r.shared.EmbeddingMgr,
+	}
+
+	// Share the parent's clarificationManager so subagents can call
+	// request_clarification through the same manager instance.
+	if r.parentAgent != nil && r.parentAgent.clarificationManager != nil {
+		agent.clarificationManager = r.parentAgent.clarificationManager
 	}
 
 	// SP-059 Phase 2c: enable a lightweight change tracker on the subagent

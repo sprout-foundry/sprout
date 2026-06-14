@@ -140,10 +140,10 @@ func (l *AuditLogger) Log(entry AuditEntry) error {
 	// Scrub secrets from Command and Args fields before logging
 	redactor := security.NewOutputRedactor()
 	if e.Command != "" {
-		e.Command = redactor.RedactString(e.Command)
+		e.Command = redactor.RedactToolOutput(e.Command, "", nil).Content
 	}
 	if e.Args != "" {
-		e.Args = redactor.RedactString(e.Args)
+		e.Args = redactor.RedactToolOutput(e.Args, "", nil).Content
 	}
 
 	data, err := json.Marshal(e)

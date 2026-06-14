@@ -226,7 +226,7 @@ func TestGetPendingClarifications(t *testing.T) {
 	require.Len(t, pending, 3)
 
 	for _, p := range pending {
-		assert.Equal(t, "delegate-1", p.DelegateID)
+		assert.Equal(t, "delegate-1", p.SubagentID)
 		assert.NotEmpty(t, p.RequestID)
 		assert.NotEmpty(t, p.Question)
 		assert.NotZero(t, p.CreatedAt)
@@ -257,16 +257,16 @@ func TestGetPendingClarifications_DifferentDelegates(t *testing.T) {
 	// Filter by delegate-a
 	pendingA := cm.GetPendingClarifications("delegate-a")
 	require.Len(t, pendingA, 1)
-	assert.Equal(t, "delegate-a", pendingA[0].DelegateID)
+	assert.Equal(t, "delegate-a", pendingA[0].SubagentID)
 
 	// Filter by delegate-b
 	pendingB := cm.GetPendingClarifications("delegate-b")
 	require.Len(t, pendingB, 2)
 	for _, p := range pendingB {
-		assert.Equal(t, "delegate-b", p.DelegateID)
+		assert.Equal(t, "delegate-b", p.SubagentID)
 	}
 
-	// Get all (empty delegateID means all)
+	// Get all (empty subagentID means all)
 	pendingAll := cm.GetPendingClarifications("")
 	require.Len(t, pendingAll, 3)
 
@@ -398,7 +398,7 @@ func TestConcurrentAccess(t *testing.T) {
 	// Respond to all pending
 	pending := cm.GetPendingClarifications("")
 	for _, p := range pending {
-		err := cm.RespondClarification(p.RequestID, "Answer for "+p.DelegateID)
+		err := cm.RespondClarification(p.RequestID, "Answer for "+p.SubagentID)
 		if err != nil {
 			t.Logf("respond error (expected if request already completed): %v", err)
 		}
@@ -442,7 +442,7 @@ func TestRequestClarification_PublishesEvent(t *testing.T) {
 	assert.Equal(t, events.EventTypeDelegateClarificationRequested, capturedEvent.Type)
 	data, ok := capturedEvent.Data.(map[string]interface{})
 	require.True(t, ok)
-	assert.Equal(t, "delegate-1", data["delegate_id"])
+	assert.Equal(t, "delegate-1", data["subagent_id"])
 	assert.Equal(t, "What do?", data["question"])
 	assert.NotEmpty(t, data["request_id"])
 	assert.NotEmpty(t, data["timestamp"])
@@ -499,7 +499,7 @@ func TestRespondClarification_PublishesEvent(t *testing.T) {
 	assert.Equal(t, events.EventTypeDelegateClarificationResponded, capturedEvent.Type)
 	data, ok := capturedEvent.Data.(map[string]interface{})
 	require.True(t, ok)
-	assert.Equal(t, "delegate-1", data["delegate_id"])
+	assert.Equal(t, "delegate-1", data["subagent_id"])
 	assert.Equal(t, requestID, data["request_id"])
 	assert.Equal(t, "The answer", data["response"])
 	assert.NotEmpty(t, data["timestamp"])

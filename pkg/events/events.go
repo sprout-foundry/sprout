@@ -451,20 +451,20 @@ func SubagentActivityEvent(toolCallID, toolName, phase, message string, details 
 	return data
 }
 
-// DelegateClarificationRequestedEvent creates a delegate_clarification_requested event payload.
-func DelegateClarificationRequestedEvent(delegateID, requestID, question string) map[string]interface{} {
+// SubagentClarificationRequestedEvent creates a delegate_clarification_requested event payload.
+func SubagentClarificationRequestedEvent(subagentID, requestID, question string) map[string]interface{} {
 	return map[string]interface{}{
-		"delegate_id": delegateID,
+		"subagent_id": subagentID,
 		"request_id":  requestID,
 		"question":    question,
 		"timestamp":   time.Now().UTC().Format(time.RFC3339),
 	}
 }
 
-// DelegateClarificationRespondedEvent creates a delegate_clarification_responded event payload.
-func DelegateClarificationRespondedEvent(delegateID, requestID, response string) map[string]interface{} {
+// SubagentClarificationRespondedEvent creates a delegate_clarification_responded event payload.
+func SubagentClarificationRespondedEvent(subagentID, requestID, response string) map[string]interface{} {
 	return map[string]interface{}{
-		"delegate_id": delegateID,
+		"subagent_id": subagentID,
 		"request_id":  requestID,
 		"response":    response,
 		"timestamp":   time.Now().UTC().Format(time.RFC3339),

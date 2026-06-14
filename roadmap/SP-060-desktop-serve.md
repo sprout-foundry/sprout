@@ -1,6 +1,6 @@
 # SP-060: Desktop App — Per-Workspace Server Mode
 
-**Status:** 🚧 In Progress (Phase A partial, Phase B planned)  
+**Status:** ✅ Implemented (Phase A + Phase B shipped and verified)  
 **Depends on:** SP-001 (Agent Core Architecture), SP-003 (WebUI & Frontend Architecture)  
 **Priority:** High  
 **Effort Estimate:** ~1 week (Phase B focused)

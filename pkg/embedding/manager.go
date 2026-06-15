@@ -85,21 +85,7 @@ func (m *EmbeddingManager) initLocked(ctx context.Context) error {
 	}
 
 	// Resolve index directory
-	indexDir := m.config.IndexDir
-	if indexDir == "" {
-		configDir := os.Getenv("SPROUT_CONFIG")
-		if configDir == "" {
-			configDir = os.Getenv("LEDIT_CONFIG")
-		}
-		if configDir == "" {
-			home, _ := os.UserHomeDir()
-			configDir = filepath.Join(home, ".config", "sprout")
-		}
-		indexDir = filepath.Join(configDir, "embeddings")
-	}
-
-	// Store the resolved index directory for reuse
-	m.indexDir = indexDir
+	m.indexDir = resolveIndexDirFromConfig(m.config)
 
 	// Store resolved threshold and maxResults as fields (SHOULD_FIX #7).
 	m.threshold = m.config.SimilarityThreshold
@@ -121,7 +107,7 @@ func (m *EmbeddingManager) initLocked(ctx context.Context) error {
 	}
 
 	// Open vector store with the ONNX provider's model hash
-	store, err := NewHNSWStore(filepath.Join(indexDir, "index.hnsw"), provider.ModelHash())
+	store, err := NewHNSWStore(filepath.Join(m.indexDir, "index.hnsw"), provider.ModelHash())
 	if err != nil {
 		m.initError = fmt.Errorf("embedding: open store: %w", err)
 		return m.initError
@@ -131,7 +117,7 @@ func (m *EmbeddingManager) initLocked(ctx context.Context) error {
 		BatchSize:      32,
 		MaxBodyLen:     2000,
 		IndexFileLevel: true, // Enable file-level indexing by default
-		ManifestPath:   filepath.Join(indexDir, ".index.hnsw.manifest.json"),
+		ManifestPath:   filepath.Join(m.indexDir, ".index.hnsw.manifest.json"),
 	})
 
 	m.provider = provider
@@ -174,9 +160,42 @@ func (m *EmbeddingManager) snapshotQueryParams() (threshold float32, topK int) {
 	return m.threshold, m.maxResults
 }
 
+// resolveIndexDirFromConfig resolves the embedding index directory using the
+// same precedence as initLocked: explicit config value first, then the
+// SPROUT_CONFIG / LEDIT_CONFIG env vars, then the user's default config dir.
+func resolveIndexDirFromConfig(cfg *configuration.EmbeddingIndexConfig) string {
+	indexDir := ""
+	if cfg != nil {
+		indexDir = cfg.IndexDir
+	}
+	if indexDir == "" {
+		indexDir = resolveIndexDir()
+	}
+	return indexDir
+}
+
+// resolveIndexDir resolves the embedding index directory from the SPROUT_CONFIG
+// or LEDIT_CONFIG environment variables, falling back to the user's default
+// config directory. Used by both initLocked and SetForTesting.
+func resolveIndexDir() string {
+	configDir := os.Getenv("SPROUT_CONFIG")
+	if configDir == "" {
+		configDir = os.Getenv("LEDIT_CONFIG")
+	}
+	if configDir == "" {
+		home, _ := os.UserHomeDir()
+		configDir = filepath.Join(home, ".config", "sprout")
+	}
+	return filepath.Join(configDir, "embeddings")
+}
+
 // SetForTesting injects mock provider, store, and indexManager for testing.
 // This bypasses Init() so tests can run without an ONNX runtime.
 // NOT for production use.
+//
+// It also resolves indexDir (mirroring the logic in initLocked) so that
+// GetConversationStore creates the conversation store in the expected
+// location rather than leaking a file into the process working directory.
 func (m *EmbeddingManager) SetForTesting(provider EmbeddingProvider, store VectorStore, indexMgr *IndexManager) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -184,6 +203,10 @@ func (m *EmbeddingManager) SetForTesting(provider EmbeddingProvider, store Vecto
 	m.store = store
 	m.indexMgr = indexMgr
 	m.initialized = true
+
+	// Resolve indexDir using the same logic as initLocked so that
+	// GetConversationStore can create the conversation store in the right place.
+	m.indexDir = resolveIndexDirFromConfig(m.config)
 }
 
 // IsInitialized returns whether the manager has been initialized.

@@ -215,6 +215,11 @@ type Config struct {
 	// Persistent Context Configuration
 	PersistentContext *PersistentContextConfig `json:"persistent_context,omitempty"`
 
+	// Computer Use Configuration (SP-063) — gates the computer_user persona's
+	// mouse/keyboard/screenshot tools. Off by default; the tools are never
+	// available unless this is explicitly enabled.
+	ComputerUse *ComputerUseConfig `json:"computer_use,omitempty"`
+
 	// Change Tracking Configuration — controls the shell-mutation
 	// snapshot pass. Direct file-tool hooks (write_file, edit_file,
 	// patch_structured_file) are always tracked; this struct only
@@ -1131,6 +1136,46 @@ type EmbeddingIndexConfig struct {
 
 	// ExcludePaths is a list of additional paths to exclude from indexing.
 	ExcludePaths []string `json:"exclude_paths,omitempty"`
+}
+
+// ComputerUseConfig gates the computer_user persona's desktop-control tools
+// (SP-063). The feature is categorically more dangerous than file edits — a
+// click can send an email or empty the trash — so it is off by default and
+// every field is a safety lever.
+type ComputerUseConfig struct {
+	// Enabled is the master switch. When false (default) the computer_user
+	// persona's mouse/keyboard/screenshot tools are never registered or
+	// executed. Turning it on is a deliberate, one-time user choice.
+	Enabled bool `json:"enabled,omitempty"`
+
+	// MaxActionsPerMinute caps the action rate as a runaway-loop backstop.
+	// Default: 60. Set to 0 to disable the cap (not recommended).
+	MaxActionsPerMinute int `json:"max_actions_per_minute,omitempty"`
+
+	// AuditLogDir is where per-session JSONL action logs are written.
+	// Default: ~/.config/sprout/computer_use_log when empty.
+	AuditLogDir string `json:"audit_log_dir,omitempty"`
+
+	// WorkspaceAllowlist lists workspace roots where computer use is
+	// auto-approved for the session without the per-session opt-in prompt.
+	WorkspaceAllowlist []string `json:"workspace_allowlist,omitempty"`
+}
+
+// Resolve returns a copy with defaults filled in for zero-value fields.
+func (c *ComputerUseConfig) Resolve() ComputerUseConfig {
+	result := ComputerUseConfig{
+		Enabled:             false,
+		MaxActionsPerMinute: 60,
+	}
+	if c != nil {
+		result.Enabled = c.Enabled
+		if c.MaxActionsPerMinute != 0 {
+			result.MaxActionsPerMinute = c.MaxActionsPerMinute
+		}
+		result.AuditLogDir = c.AuditLogDir
+		result.WorkspaceAllowlist = append([]string{}, c.WorkspaceAllowlist...)
+	}
+	return result
 }
 
 // PersistentContextConfig configures persistent conversational context and memory retrieval.

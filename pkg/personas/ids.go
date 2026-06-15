@@ -17,6 +17,7 @@ const (
 	IDResearcher   = "researcher"
 	IDWebScraper   = "web_scraper"
 	IDCoordinator  = "coordinator"
+	IDComputerUser = "computer_user"
 )
 
 // Canonical persona capability names. A capability is an explicit grant of
@@ -30,4 +31,9 @@ const (
 	// AllowOrchestratorGitWrite config flag; for other personas the capability
 	// alone is sufficient.
 	CapabilityGitWrite = "git_write"
+
+	// CapabilityComputerUse — persona may drive the desktop (mouse, keyboard,
+	// screenshots) via the computer_use tools. Held only by the computer_user
+	// persona and gated further by the ComputerUse.Enabled config flag.
+	CapabilityComputerUse = "computer_use"
 )

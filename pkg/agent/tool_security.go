@@ -11,6 +11,7 @@ import (
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 	"github.com/sprout-foundry/sprout/pkg/security"
 	"github.com/sprout-foundry/sprout/pkg/utils"
@@ -315,6 +316,190 @@ func (a *Agent) staticGateAutoApprove(secResult tools.SecurityResult) bool {
 		return true
 	}
 	return false
+}
+
+// unifiedSecurityGate is the Phase-2 security gate. When
+// UnifiedRiskResolver is ON it replaces the split Gate 1 / Gate 2
+// call-site path with a single ResolveToolRisk assessment.
+//
+// The decision mapping mirrors the existing call-site logic:
+//
+//	Critical/IsHardBlock → hard-block error
+//	High                → highRiskApprovedForCommand (same as today)
+//	Medium              → go through the interactive approval flow
+//	(reuse existing
+//	 prompt wiring)
+//	Low                 → allow
+//
+// The function returns nil when the call is allowed to proceed, or an
+// error when it should be blocked.
+func (a *Agent) unifiedSecurityGate(name string, args map[string]interface{}) error {
+	assessment := a.ResolveToolRisk(name, args)
+
+	if a.debug {
+		a.debugLog("[unified-gate] %s: %s\n", name, assessment.Explain())
+	}
+
+	// Hard blocks are unconditional — no approval path can override
+	if assessment.IsHardBlock || assessment.Level == configuration.RiskLevelCritical {
+		return agenterrors.NewSecurityError(
+			fmt.Sprintf("critical operation blocked (cannot be approved): %s", assessment.Reason), nil,
+		)
+	}
+
+	// High risk: reuse the existing approval cascade (EA persona reasons,
+	// interactive users get prompted, non-interactive subagents are blocked)
+	if assessment.Level == configuration.RiskLevelHigh {
+		if cmd, ok := args["command"].(string); ok && cmd != "" {
+			if !a.highRiskApprovedForCommand(nil, cmd) {
+				return agenterrors.NewSecurityError(
+					fmt.Sprintf("high-risk operation rejected by unified resolver: %s", assessment.Reason), nil,
+				)
+			}
+		} else {
+			// Non-shell tool at High risk — go through the interactive prompt
+			return a.unifiedSecurityPrompt(name, args, assessment)
+		}
+	}
+
+	// Workflow-declared auto-approval for run_automate. When the
+	// workflow JSON sets requires_approval: false, the model can
+	// invoke it without a user prompt — designed for validation
+	// workflows referenced from AGENTS.md that the model must run
+	// before declaring work done. Failure to read the file falls
+	// through to the normal intent-confirmation path (fail-safe).
+	// In-session re-authorization for run_automate. Once the user has
+	// explicitly approved a workflow during this chat session, subsequent
+	// calls (e.g. retries kicked off by the primary agent after a failure)
+	// don't need to re-prompt — the user opted in once for this workflow.
+	if name == "run_automate" && assessment.RequiresIntentConfirmation {
+		if wf, ok := args["workflow"].(string); ok && wf != "" {
+			if !workflowRequiresApproval(wf) {
+				if a.debug {
+					a.debugLog("[UNLOCK] run_automate %q has requires_approval=false — skipping intent prompt\n", wf)
+				}
+				return nil
+			}
+			if a.IsWorkflowApprovedInSession(wf) {
+				if a.debug {
+					a.debugLog("[UNLOCK] run_automate %q already approved in this session — skipping intent prompt\n", wf)
+				}
+				return nil
+			}
+		}
+	}
+
+	// Intent confirmation is orthogonal to risk level — safe-but-consequential
+	// ops still need explicit user intent
+	if assessment.RequiresIntentConfirmation {
+		if a.IsSubagent() {
+			return agenterrors.NewSecurityError(
+				fmt.Sprintf("confirmation required: %s — %s (this operation requires explicit user confirmation. Use ask_user to confirm with the user before proceeding.)", name, assessment.Reason), nil,
+			)
+		}
+		// For intent confirmation, go through the approval prompt
+		return a.unifiedSecurityPrompt(name, args, assessment)
+	}
+
+	// Medium risk: needs interactive approval
+	if assessment.Level == configuration.RiskLevelMedium {
+		return a.unifiedSecurityPrompt(name, args, assessment)
+	}
+
+	// Low risk: allow
+	return nil
+}
+
+// unifiedSecurityPrompt handles the interactive approval flow for Medium
+// risk or intent-confirmation operations in the unified gate. Reuses the
+// existing WebUI / CLI prompt wiring so the UX doesn't change.
+func (a *Agent) unifiedSecurityPrompt(name string, args map[string]interface{}, assessment RiskAssessment) error {
+	isSubagent := a.IsSubagent()
+
+	// Unsafe mode or session elevation skips prompts for non-hard-block
+	// operations in the unified path too.
+	if a.GetUnsafeMode() || a.IsSessionElevated() {
+		if a.debug {
+			a.debugLog("[UNLOCK] Unified gate auto-approve (unsafe/elevated): %s\n", name)
+		}
+		return nil
+	}
+
+	// --unsafe-shell bypasses Medium-tier shell prompts in the unified path
+	// so the flag behaves consistently regardless of which gate path is active.
+	if a.GetUnsafeShellMode() && name == "shell_command" &&
+		assessment.Level == configuration.RiskLevelMedium &&
+		!assessment.RequiresIntentConfirmation {
+		if a.debug {
+			a.debugLog("[UNLOCK] Unsafe shell mode: bypassing shell security prompt for %s (level: %s)\n", name, assessment.Level)
+		}
+		return nil
+	}
+
+	// Persistent allowlist for shell commands
+	if name == "shell_command" {
+		if cmd, ok := args["command"].(string); ok && cmd != "" && a.IsShellCommandAllowlisted(cmd) {
+			a.markShellCommandApproved(cmd)
+			return nil
+		}
+	}
+
+	// WebUI approval path
+	if mgr := a.GetSecurityApprovalMgr(); mgr != nil && a.GetEventBus() != nil && !isSubagent && a.HasActiveWebUIClients() {
+		extras := map[string]string{}
+		extras["risk_level"] = string(assessment.Level)
+		switch name {
+		case "shell_command":
+			if cmd, ok := args["command"].(string); ok && cmd != "" {
+				extras["command"] = cmd
+				extras["allow_options"] = "true"
+			}
+		case "write_file", "edit_file", "write_structured_file", "patch_structured_file":
+			if path, ok := args["path"].(string); ok && path != "" {
+				extras["target"] = path
+			}
+		}
+		riskLabel := string(assessment.Level)
+		if name == "shell_command" && assessment.RequiresIntentConfirmation {
+			riskLabel = "INTENT"
+		}
+		if assessment.RequiresIntentConfirmation {
+			extras["intent_confirmation"] = "true"
+		}
+		if cmd, ok := args["command"].(string); ok && cmd != "" {
+			decision := mgr.RequestToolApprovalDecision(a.GetEventBus(), a.GetEventClientID(), a.GetEventUserID(), name, riskLabel, assessment.Reason, extras)
+			if !decision.Approved() {
+				return agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", name, assessment.Reason), nil)
+			}
+			a.applyApprovalDecision(decision, cmd)
+			a.markShellCommandApproved(cmd)
+			return nil
+		}
+		if !mgr.RequestToolApproval(a.GetEventBus(), a.GetEventClientID(), a.GetEventUserID(), name, riskLabel, assessment.Reason, extras) {
+			return agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", name, assessment.Reason), nil)
+		}
+		return nil
+	}
+
+	// CLI approval path
+	cfg := a.GetConfig()
+	logger := utils.GetLogger(cfg != nil && cfg.SkipPrompt)
+	canPrompt := logger != nil && logger.IsInteractive() && !isSubagent
+
+	if canPrompt {
+		prompt := fmt.Sprintf("⚠  Security Warning — %s\n\nReasoning: %s\n\nDo you want to proceed?",
+			strings.ToUpper(string(assessment.Level)), assessment.Reason)
+		if !logger.AskForConfirmation(prompt, false, false) {
+			return agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", name, assessment.Reason), nil)
+		}
+		return nil
+	}
+
+	// Non-interactive: block
+	return agenterrors.NewSecurityError(
+		fmt.Sprintf("security block: %s — %s. This operation requires interactive user approval. To proceed, the user must re-run interactively or grant a scoped bypass via --unsafe-shell. Do not retry this exact command.",
+			name, assessment.Reason), nil,
+	)
 }
 
 // buildSecurityPrompt constructs a detailed security approval prompt for the user

@@ -17,42 +17,117 @@ import (
 // download fails the call within a finite window instead of hanging the whole
 // pkg/agent suite. Each caller still gets the "ONNX runtime not available"
 // skip branch via the returned error. See TODO SP-008-C1-testEmbedDownloadTimeout.
+//
+// NOTE: This helper is retained for the remaining ONNX integration tests in
+// memory_embedding_test.go and proactive_context_test.go. The turn_embedding
+// tests now use newTestEmbeddingMgr (mock provider) instead.
 func initEmbeddingMgrWithTimeout(parent context.Context, mgr *embedding.EmbeddingManager) error {
 	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
 	defer cancel()
 	return mgr.Init(ctx)
 }
 
-// TestEmbedAndStoreTurn_RealProvider tests the full flow with the ONNX provider.
-// It creates an EmbeddingManager with a temp config dir, calls EmbedAndStoreTurn,
-// and verifies the record was stored by loading it back from the conversation store.
-func TestEmbedAndStoreTurn_RealProvider(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping embedding test in short mode")
+// --- Mock embedding provider ---
+
+// mockEmbeddingProvider produces deterministic, content-dependent embeddings
+// for testing without requiring the ONNX runtime. Each byte of the input text
+// is distributed across the vector dimensions, so different texts yield
+// different vectors and identical texts yield identical vectors.
+type mockEmbeddingProvider struct {
+	dims int
+}
+
+func newMockEmbeddingProvider(dims int) *mockEmbeddingProvider {
+	return &mockEmbeddingProvider{dims: dims}
+}
+
+// embedText is the shared deterministic embedding routine.
+func (m *mockEmbeddingProvider) embedText(text string) []float32 {
+	vec := make([]float32, m.dims)
+	if len(text) == 0 {
+		return vec
 	}
-	ctx := context.Background()
+	for i := 0; i < len(text); i++ {
+		dim := i % m.dims
+		vec[dim] += float32(text[i]) / 255.0
+	}
+	return vec
+}
 
-	// Create a temporary directory for test isolation
+func (m *mockEmbeddingProvider) Embed(_ context.Context, text string) ([]float32, error) {
+	return m.embedText(text), nil
+}
+
+func (m *mockEmbeddingProvider) EmbedBatch(_ context.Context, texts []string) ([][]float32, error) {
+	results := make([][]float32, len(texts))
+	for i, t := range texts {
+		results[i] = m.embedText(t)
+	}
+	return results, nil
+}
+
+func (m *mockEmbeddingProvider) EmbedWithPrefix(_ context.Context, text string, prefix string) ([]float32, error) {
+	return m.embedText(prefix + text), nil
+}
+
+func (m *mockEmbeddingProvider) EmbedBatchWithPrefix(_ context.Context, texts []string, prefix string) ([][]float32, error) {
+	results := make([][]float32, len(texts))
+	for i, t := range texts {
+		results[i] = m.embedText(prefix + t)
+	}
+	return results, nil
+}
+
+func (m *mockEmbeddingProvider) Dimensions() int   { return m.dims }
+func (m *mockEmbeddingProvider) Name() string      { return "mock" }
+func (m *mockEmbeddingProvider) ModelHash() string { return "mock-model-hash" }
+func (m *mockEmbeddingProvider) Close() error      { return nil }
+
+// --- Test helper ---
+
+// newTestEmbeddingMgr builds an EmbeddingManager wired with a mock embedding
+// provider via SetForTesting. This bypasses ONNX initialization entirely so
+// tests run in any environment without the ~300MB model files.
+//
+// Config isolation is handled by setting SPROUT_CONFIG and LEDIT_CONFIG to a
+// temp directory so no real config is touched.
+func newTestEmbeddingMgr(t *testing.T) *embedding.EmbeddingManager {
+	t.Helper()
+
 	tempDir := t.TempDir()
-
-	// Set config env vars to use temp dir
 	t.Setenv("SPROUT_CONFIG", tempDir)
 	t.Setenv("LEDIT_CONFIG", tempDir)
 
-	// Create EmbeddingManager with minimal config
 	cfg := &configuration.EmbeddingIndexConfig{
 		IndexDir: tempDir,
 	}
-
 	mgr := embedding.NewEmbeddingManager(cfg, tempDir)
 
-	// Initialize the manager (requires ONNX runtime)
-	if err := initEmbeddingMgrWithTimeout(ctx, mgr); err != nil {
-		if strings.Contains(err.Error(), "ONNX") {
-			t.Skipf("Skipping: ONNX runtime not available: %v", err)
-		}
-		t.Fatalf("failed to initialize embedding manager: %v", err)
+	// Wire mock provider + real stores via SetForTesting.
+	provider := newMockEmbeddingProvider(128)
+	store, err := embedding.NewHNSWStore(filepath.Join(tempDir, "index.hnsw"), provider.ModelHash())
+	if err != nil {
+		t.Fatalf("failed to create HNSW store: %v", err)
 	}
+	t.Cleanup(func() { store.Close() })
+
+	indexMgr := embedding.NewIndexManager(provider, store, embedding.IndexOptions{
+		BatchSize:  32,
+		MaxBodyLen: 2000,
+	})
+	mgr.SetForTesting(provider, store, indexMgr)
+
+	return mgr
+}
+
+// --- Tests for EmbedAndStoreTurn ---
+
+// TestEmbedAndStoreTurn_RealProvider tests the full flow with a mock provider.
+// It creates an EmbeddingManager with a mock provider, calls EmbedAndStoreTurn,
+// and verifies the record was stored by loading it back from the conversation store.
+func TestEmbedAndStoreTurn_RealProvider(t *testing.T) {
+	ctx := context.Background()
+	mgr := newTestEmbeddingMgr(t)
 	defer mgr.Close()
 
 	// Create a test conversation turn
@@ -108,32 +183,8 @@ func TestEmbedAndStoreTurn_RealProvider(t *testing.T) {
 // TestEmbedAndStoreTurn_EmptySummary tests the case where only the prompt is embedded
 // because the actionable summary is empty.
 func TestEmbedAndStoreTurn_EmptySummary(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping embedding test in short mode")
-	}
 	ctx := context.Background()
-
-	// Create a temporary directory for test isolation
-	tempDir := t.TempDir()
-
-	// Set config env vars to use temp dir
-	t.Setenv("SPROUT_CONFIG", tempDir)
-	t.Setenv("LEDIT_CONFIG", tempDir)
-
-	// Create EmbeddingManager with minimal config
-	cfg := &configuration.EmbeddingIndexConfig{
-		IndexDir: tempDir,
-	}
-
-	mgr := embedding.NewEmbeddingManager(cfg, tempDir)
-
-	// Initialize the manager (requires ONNX runtime)
-	if err := initEmbeddingMgrWithTimeout(ctx, mgr); err != nil {
-		if strings.Contains(err.Error(), "ONNX") {
-			t.Skipf("Skipping: ONNX runtime not available: %v", err)
-		}
-		t.Fatalf("failed to initialize embedding manager: %v", err)
-	}
+	mgr := newTestEmbeddingMgr(t)
 	defer mgr.Close()
 
 	// Create a test conversation turn without an actionable summary
@@ -200,32 +251,8 @@ func TestEmbedAndStoreTurn_GracefulFailure_NilManager(t *testing.T) {
 // TestEmbedAndStoreTurn_GracefulFailure_NilTurn tests graceful failure when
 // the conversation turn is nil.
 func TestEmbedAndStoreTurn_GracefulFailure_NilTurn(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping embedding test in short mode")
-	}
 	ctx := context.Background()
-
-	// Create a temporary directory for test isolation
-	tempDir := t.TempDir()
-
-	// Set config env vars to use temp dir
-	t.Setenv("SPROUT_CONFIG", tempDir)
-	t.Setenv("LEDIT_CONFIG", tempDir)
-
-	// Create EmbeddingManager with minimal config
-	cfg := &configuration.EmbeddingIndexConfig{
-		IndexDir: tempDir,
-	}
-
-	mgr := embedding.NewEmbeddingManager(cfg, tempDir)
-
-	// Initialize the manager (requires ONNX runtime)
-	if err := initEmbeddingMgrWithTimeout(ctx, mgr); err != nil {
-		if strings.Contains(err.Error(), "ONNX") {
-			t.Skipf("Skipping: ONNX runtime not available: %v", err)
-		}
-		t.Fatalf("failed to initialize embedding manager: %v", err)
-	}
+	mgr := newTestEmbeddingMgr(t)
 	defer mgr.Close()
 
 	// Call EmbedAndStoreTurn with nil turn - should not panic or return error
@@ -237,22 +264,8 @@ func TestEmbedAndStoreTurn_GracefulFailure_NilTurn(t *testing.T) {
 // TestEmbedAndStoreTurn_GracefulFailure_NilContext tests graceful failure when
 // the context is nil.
 func TestEmbedAndStoreTurn_GracefulFailure_NilContext(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping embedding test in short mode")
-	}
-	// Create a temporary directory for test isolation
-	tempDir := t.TempDir()
-
-	// Set config env vars to use temp dir
-	t.Setenv("SPROUT_CONFIG", tempDir)
-	t.Setenv("LEDIT_CONFIG", tempDir)
-
-	// Create EmbeddingManager with minimal config
-	cfg := &configuration.EmbeddingIndexConfig{
-		IndexDir: tempDir,
-	}
-
-	mgr := embedding.NewEmbeddingManager(cfg, tempDir)
+	mgr := newTestEmbeddingMgr(t)
+	defer mgr.Close()
 
 	// Create a test conversation turn
 	turn, err := NewConversationTurn("test-session", 1, "test prompt", "/tmp/workspace")
@@ -274,25 +287,11 @@ func TestEmbedAndStoreTurn_GracefulFailure_NilContext(t *testing.T) {
 // TestEmbedAndStoreTurn_GracefulFailure_CancelledContext tests graceful failure when
 // the context is cancelled before embedding completes.
 func TestEmbedAndStoreTurn_GracefulFailure_CancelledContext(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping embedding test in short mode")
-	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel immediately
 
-	// Create a temporary directory for test isolation
-	tempDir := t.TempDir()
-
-	// Set config env vars to use temp dir
-	t.Setenv("SPROUT_CONFIG", tempDir)
-	t.Setenv("LEDIT_CONFIG", tempDir)
-
-	// Create EmbeddingManager with minimal config
-	cfg := &configuration.EmbeddingIndexConfig{
-		IndexDir: tempDir,
-	}
-
-	mgr := embedding.NewEmbeddingManager(cfg, tempDir)
+	mgr := newTestEmbeddingMgr(t)
+	defer mgr.Close()
 
 	// Create a test conversation turn
 	turn, err := NewConversationTurn("test-session", 1, "test prompt", "/tmp/workspace")
@@ -300,7 +299,10 @@ func TestEmbedAndStoreTurn_GracefulFailure_CancelledContext(t *testing.T) {
 		t.Fatalf("failed to create conversation turn: %v", err)
 	}
 
-	// Call EmbedAndStoreTurn with cancelled context - should handle gracefully
+	// Call EmbedAndStoreTurn with cancelled context - should handle gracefully.
+	// The mock provider does not check context cancellation (it returns
+	// instantly), so the function may succeed and store the record. The
+	// contract being tested is that no error is returned either way.
 	if err := EmbedAndStoreTurn(ctx, mgr, turn); err != nil {
 		t.Errorf("EmbedAndStoreTurn should return nil on graceful failure, got %v", err)
 	}
@@ -312,22 +314,8 @@ func TestEmbedAndStoreTurn_GracefulFailure_CancelledContext(t *testing.T) {
 // TestEmbedAndStoreTurn_GracefulFailure_EmptyPrompt tests graceful failure when
 // the user prompt is empty.
 func TestEmbedAndStoreTurn_GracefulFailure_EmptyPrompt(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping embedding test in short mode")
-	}
 	ctx := context.Background()
-	tempDir := t.TempDir()
-	t.Setenv("SPROUT_CONFIG", tempDir)
-	t.Setenv("LEDIT_CONFIG", tempDir)
-
-	cfg := &configuration.EmbeddingIndexConfig{IndexDir: tempDir}
-	mgr := embedding.NewEmbeddingManager(cfg, tempDir)
-	if err := initEmbeddingMgrWithTimeout(ctx, mgr); err != nil {
-		if strings.Contains(err.Error(), "ONNX") {
-			t.Skipf("Skipping: ONNX runtime not available: %v", err)
-		}
-		t.Fatalf("failed to initialize embedding manager: %v", err)
-	}
+	mgr := newTestEmbeddingMgr(t)
 	defer mgr.Close()
 
 	// Create a turn with empty prompt
@@ -472,32 +460,8 @@ func TestMeanEmbedding_NegativeValues(t *testing.T) {
 // It creates and stores two conversation turns, then queries the store using one
 // turn's embedding and verifies the results match expectations.
 func TestEmbedAndStoreTurn_RoundTripWithQuery(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping embedding test in short mode")
-	}
 	ctx := context.Background()
-
-	// Create a temporary directory for test isolation
-	tempDir := t.TempDir()
-
-	// Set config env vars to use temp dir
-	t.Setenv("SPROUT_CONFIG", tempDir)
-	t.Setenv("LEDIT_CONFIG", tempDir)
-
-	// Create EmbeddingManager with minimal config
-	cfg := &configuration.EmbeddingIndexConfig{
-		IndexDir: tempDir,
-	}
-
-	mgr := embedding.NewEmbeddingManager(cfg, tempDir)
-
-	// Initialize the manager (requires ONNX runtime)
-	if err := initEmbeddingMgrWithTimeout(ctx, mgr); err != nil {
-		if strings.Contains(err.Error(), "ONNX") {
-			t.Skipf("Skipping: ONNX runtime not available: %v", err)
-		}
-		t.Fatalf("failed to initialize embedding manager: %v", err)
-	}
+	mgr := newTestEmbeddingMgr(t)
 	defer mgr.Close()
 
 	// Create and embed/store the first conversation turn

@@ -33,13 +33,13 @@ architectural area, its current state, and open work.
 | Spec | Title | Status |
 |------|-------|--------|
 | SP-015 | [Cloud Platform Integration](./SP-015-cloud-platform.md) | 🚧 Partially implemented |
+| SP-063 | [Real `computer_user` Persona — Mouse/Keyboard/Screenshot Agent](./SP-063-computer-use-persona.md) | 🚧 Core implemented (backend + tools + persona + safety); WebUI settings + interactive opt-in remain |
 
 ## Proposed
 
 | Spec | Title | Status |
 |------|-------|--------|
 | SP-006 | [Delegate Tool — In-Process Agent Delegation](./SP-006-delegate-tool.md) | 📋 Proposed |
-| SP-007 | [Extend Configuration — Role-Based Configs](./SP-007-extend-config.md) | 📋 Proposed |
 | SP-008 | [Reliability Engineering — Concurrency & Observability](./SP-008-reliability-engineering.md) | 📋 Proposed |
 | SP-009 | [Component Library Maturation — Publish & Storybook](./SP-009-component-library-maturation.md) | 📋 Proposed |
 | SP-010 | [Editor Modernization](./SP-010-editor-modernization.md) | 📋 Proposed |
@@ -65,6 +65,18 @@ architectural area, its current state, and open work.
 | SP-064 | [Automate CLI — Status, Stop, Logs](./SP-064-automate-cli-monitoring.md) | 📋 Proposed |
 | SP-065 | [WebUI Automations Panel](./SP-065-automate-webui-panel.md) | 📋 Proposed |
 | SP-068 | [Security Check Consolidation — One Risk Scale, One Resolver, One Broker](./SP-068-security-check-consolidation.md) | 📋 Proposed |
+| SP-069 | [Pull Request Creation](./SP-069-pull-request-creation.md) | 📋 Proposed (gap analysis) |
+| SP-070 | [Agent Completion Notifications](./SP-070-completion-notifications.md) | 📋 Proposed (gap analysis) |
+| SP-071 | [Conversation Rewind & Edit-and-Resend](./SP-071-conversation-rewind.md) | 📋 Proposed (gap analysis) |
+| SP-072 | [Per-Hunk Diff Approval — Approve-Before-Apply](./SP-072-diff-approval.md) | 📋 Proposed (gap analysis) |
+
+## Future / On Hold
+
+Parked pending real demand — not scheduled. See [`future/`](./future/).
+
+| Spec | Title | Reason |
+|------|-------|--------|
+| SP-007 | [Extend Configuration — Role-Based Configs](./future/SP-007-extend-config.md) | Speculative; `subagent_types` + the shipped EA personas (SP-026) already cover most of the need. Revisit if users ask for per-project custom roles. |
 
 ## Decisions
 

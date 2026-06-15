@@ -36,7 +36,7 @@ Refactor to unify the two risk vocabularies (static classifier SAFE/CAUTION/DANG
 - [x] SP-068-2a: Implement `ResolveToolRisk` function. Create `ResolveToolRisk(toolName, args, agent) RiskAssessment` that runs all security inputs (static classifier, persona cascade, git-gate, fs-tier, workspace policy) and returns the most restrictive result. Ship behind a `unified_risk_resolver` config flag (default off). Add shadow-mode logging comparing old-vs-new decisions. Acceptance: with flag off, behavior is unchanged. With flag on, the resolver returns a single decision; shadow-mode log shows zero decision changes except eliminated duplicate prompts on a test corpus.
 
 ### Phase 3: One broker + "explain" diagnostic
-- [ ] SP-068-3a: Add `sprout explain` CLI subcommand. Add an `explain` subcommand that takes a command string and prints the full `RiskAssessment`: canonical level, every contributing source, and the exact rule that set the level. Complements SP-049's `sprout audit tail`. Acceptance: `sprout explain 'git reset --hard HEAD~5'` prints level `High/Critical` with annotated contributing sources.
+- [x] SP-068-3a: Add `sprout explain` CLI subcommand. Add an `explain` subcommand that takes a command string and prints the full `RiskAssessment`: canonical level, every contributing source, and the exact rule that set the level. Complements SP-049's `sprout audit tail`. Acceptance: `sprout explain 'git reset --hard HEAD~5'` prints level `High/Critical` with annotated contributing sources.
 
 ## SP-066: Structured File Key Order Preservation
 _Spec: `roadmap/SP-066-structured-file-key-order.md`_

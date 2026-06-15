@@ -345,8 +345,19 @@ func (cf *CommitFlow) generateCommitMessageAndCommit() error {
 
 // executeNonInteractive handles non-interactive mode (fallback)
 func (cf *CommitFlow) executeNonInteractive() error {
-	// Fallback to original commit logic for non-terminal environments
-	commitCmd := &CommitCommand{}
+	// Fallback to original commit logic for non-terminal environments.
+	// Propagate the flow's flags — previously this constructed a bare
+	// CommitCommand{}, silently dropping --skip-prompt/--dry-run/--allow-secrets
+	// in exactly the non-TTY environments (CI, scripts, piped invocations,
+	// agent tool calls) where --skip-prompt matters most. The dropped flag
+	// left the confirmation picker to read EOF from a non-interactive stdin
+	// and cancel the commit.
+	commitCmd := &CommitCommand{
+		skipPrompt:       cf.skipPrompt,
+		dryRun:           cf.dryRun,
+		allowSecrets:     cf.allowSecrets,
+		userInstructions: cf.userInstructions,
+	}
 	return commitCmd.executeMultiFileCommit(cf.agent)
 }
 

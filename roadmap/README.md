@@ -33,7 +33,7 @@ architectural area, its current state, and open work.
 | Spec | Title | Status |
 |------|-------|--------|
 | SP-015 | [Cloud Platform Integration](./SP-015-cloud-platform.md) | 🚧 Partially implemented |
-| SP-063 | [Real `computer_user` Persona — Mouse/Keyboard/Screenshot Agent](./SP-063-computer-use-persona.md) | 🚧 Core implemented (backend + tools + persona + safety); WebUI settings + interactive opt-in remain |
+| SP-063 | [Real `computer_user` Persona — Mouse/Keyboard/Screenshot Agent](./SP-063-computer-use-persona.md) | 🚧 Partially implemented (core: backend + tools + persona + safety gates; remaining: WebUI settings + interactive opt-in) |
 
 ## Proposed
 

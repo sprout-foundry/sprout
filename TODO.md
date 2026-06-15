@@ -55,6 +55,6 @@ _Spec: `roadmap/SP-061-remove-static-embeddings.md`_
 
 Tech-debt reduction: remove the static embedding provider and consolidate on ONNX.
 
-- [ ] SP-061-1: Delete static provider files. Remove `pkg/embedding/static_*.go` files (static provider implementation). Update imports and references throughout `pkg/embedding/manager.go`. Acceptance: `go build ./...` succeeds with no references to deleted files.
-- [ ] SP-061-2: Update WASM embedding and memory code. Update `cmd/wasm/embedding_funcs.go`, `pkg/agent/memory_embedding.go`, and `pkg/agent/memory_search_handler.go` to remove static provider code paths. Acceptance: `go build -tags wasm ./cmd/wasm/` succeeds; WASM build works without static model.
-- [ ] SP-061-3: Update tests and build system. Remove or update static-provider tests in `pkg/embedding/`. Ensure `go test ./pkg/embedding/...` and `go test ./pkg/agent/...` pass. Update any build scripts that reference static model paths. Acceptance: all tests pass; semantic search via ONNX provider returns correct results.
+- [x] SP-061-1: Delete static provider files. Remove `pkg/embedding/static_*.go` files (static provider implementation). Update imports and references throughout `pkg/embedding/manager.go`. Acceptance: `go build ./...` succeeds with no references to deleted files.
+- [x] SP-061-2: Update WASM embedding and memory code. Update `cmd/wasm/embedding_funcs.go`, `pkg/agent/memory_embedding.go`, and `pkg/agent/memory_search_handler.go` to remove static provider code paths. Acceptance: `go build -tags wasm ./cmd/wasm/` succeeds; WASM build works without static model.
+- [x] SP-061-3: Update tests and build system. Remove or update static-provider tests in `pkg/embedding/`. Ensure `go test ./pkg/embedding/...` and `go test ./pkg/agent/...` pass. Update any build scripts that reference static model paths. Acceptance: all tests pass; semantic search via ONNX provider returns correct results.

@@ -1,6 +1,6 @@
 # SP-063: Real `computer_user` Persona — Mouse/Keyboard/Screenshot Agent
 
-**Status:** 🚧 Core implemented (2026-06-15) — backend + tools + persona + safety shipped; WebUI settings + interactive opt-in remain
+**Status:** 🚧 Partially implemented (2026-06-15) — core shipped (backend + tools + persona + safety gates); WebUI settings + interactive opt-in remain
 **Date:** 2026-06-03
 **Depends on:** SP-050 (orchestrator persona collapse — same persona-system mechanics)
 **Priority:** Medium-Low (capability addition, not bug-fix)

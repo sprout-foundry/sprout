@@ -173,3 +173,6 @@ pkg/ast/grammars/bin/*.bin
 # model + ops runbook in a single file for ease of passing around.
 # Not advertised in public docs.
 docs/embed.md
+
+# Compiled WASM binary build artifact (produced by make build-wasm/build-all)
+/wasm

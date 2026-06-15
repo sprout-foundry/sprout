@@ -69,6 +69,9 @@ architectural area, its current state, and open work.
 | SP-070 | [Agent Completion Notifications](./SP-070-completion-notifications.md) | 📋 Proposed (gap analysis) |
 | SP-071 | [Conversation Rewind & Edit-and-Resend](./SP-071-conversation-rewind.md) | 📋 Proposed (gap analysis) |
 | SP-072 | [Per-Hunk Diff Approval — Approve-Before-Apply](./SP-072-diff-approval.md) | 📋 Proposed (gap analysis) |
+| SP-073 | [Cooperative Cancellation — Stop Actually Aborts](./SP-073-cooperative-cancellation.md) | 📋 Proposed (tech-debt audit) |
+| SP-074 | [Finish the Tool-Registry Migration](./SP-074-tool-registry-migration.md) | 📋 Proposed (tech-debt audit) |
+| SP-075 | [Large-File Decomposition](./SP-075-large-file-decomposition.md) | 📋 Proposed (tech-debt audit) |
 
 ## Future / On Hold
 

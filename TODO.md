@@ -47,8 +47,8 @@ _Spec: `roadmap/SP-066-structured-file-key-order.md`_
 _Spec: `roadmap/SP-015-cloud-platform.md`_
 
 - [x] SP-015-R1: Add WASM interception in CloudAdapter. The `CloudAdapter` class in `webui/src/services/cloudAdapter.ts` classifies 17 endpoints as `wasm-local` but does NOT intercept them — they fall through to `fetch()` → 404. Add WASM interception: check `isWasmLocal()` and route to WASM shell methods instead of `fetch()`. The Service Worker path already does this correctly. Acceptance: file operations work through the CloudAdapter path in cloud mode; `cloudAdapter.test.ts` and `cloudAdapter.integration.test.ts` pass.
-- [ ] SP-015-R3: Audit component-level feature flag adoption. Audit webui components that reference SSH, instances, local terminal, or settings. Ensure they use `supports*` flags from `webui/src/config/mode.ts` so local-only features are hidden in cloud mode. Acceptance: no local-only UI elements appear when running in cloud mode.
-- [ ] SP-015-R5: Verify WebSocket routing across all three patterns. Three WebSocket patterns exist: (1) transparent reverse proxy, (2) JSON-over-websocket tunnel, (3) no WebSocket (browser IDE uses SSE + MessageChannel). Verify the webui's WebSocket client handles all three. Acceptance: terminal sessions work in all three deployment environments.
+- [x] SP-015-R3: Audit component-level feature flag adoption. Audit webui components that reference SSH, instances, local terminal, or settings. Ensure they use `supports*` flags from `webui/src/config/mode.ts` so local-only features are hidden in cloud mode. Acceptance: no local-only UI elements appear when running in cloud mode.
+- [x] SP-015-R5: Verify WebSocket routing across all three patterns. Three WebSocket patterns exist: (1) transparent reverse proxy, (2) JSON-over-websocket tunnel, (3) no WebSocket (browser IDE uses SSE + MessageChannel). Verify the webui's WebSocket client handles all three. Acceptance: terminal sessions work in all three deployment environments.
 
 ## SP-061: Remove Static Embedding Provider
 _Spec: `roadmap/SP-061-remove-static-embeddings.md`_

@@ -15,7 +15,7 @@ Phases 1–3 are shipped. Phase 6 (delete the `delegate` tool) is the remaining 
 - [x] SP-059-6e: Phase 6 tests and verification. Run `make build-all` and `go test ./...` — both must pass. Verify `run_subagent` still works via manual or automated test. Update `roadmap/SP-006-delegate-tool.md` to mark as superseded by SP-059. Acceptance: all tests pass; SP-006 spec marked superseded.
 
 ### Phase 4: Subagents can request user clarification mid-run
-- [ ] SP-059-4: Wire clarificationManager into createSubagent. Currently subagents cannot call `request_clarification`. Wire the primary's `clarificationManager` into the subagent creation path (`pkg/agent/subagent_runner.go::createSubagent`) so subagents can request clarification from the user mid-run. Acceptance: a subagent calling `request_clarification` surfaces the question to the user via the existing primary agent event bus path.
+- [x] SP-059-4: Wire clarificationManager into createSubagent. Currently subagents cannot call `request_clarification`. Wire the primary's `clarificationManager` into the subagent creation path (`pkg/agent/subagent_runner.go::createSubagent`) so subagents can request clarification from the user mid-run. Acceptance: a subagent calling `request_clarification` surfaces the question to the user via the existing primary agent event bus path.
 
 ## SP-060: Desktop App — Per-Workspace Server Mode
 _Spec: `roadmap/SP-060-desktop-serve.md`_
@@ -33,7 +33,7 @@ Refactor to unify the two risk vocabularies (static classifier SAFE/CAUTION/DANG
 - [x] SP-068-1a: Create `RiskAssessment` type. In `pkg/agent_tools/` (or `pkg/agent/`), create a `RiskAssessment` struct with fields: `Level` (Low/Medium/High/Critical), `Sources` ([]RiskSource — classifier, persona, git-gate, fs-tier, workspace-policy), `Reason` (human-readable string), `IsHardBlock` (bool). This is a pure type addition with no behavior change. Acceptance: type compiles; `go vet` clean; `go build ./...` passes.
 
 ### Phase 2: One resolver (collapse the two gates)
-- [ ] SP-068-2a: Implement `ResolveToolRisk` function. Create `ResolveToolRisk(toolName, args, agent) RiskAssessment` that runs all security inputs (static classifier, persona cascade, git-gate, fs-tier, workspace policy) and returns the most restrictive result. Ship behind a `unified_risk_resolver` config flag (default off). Add shadow-mode logging comparing old-vs-new decisions. Acceptance: with flag off, behavior is unchanged. With flag on, the resolver returns a single decision; shadow-mode log shows zero decision changes except eliminated duplicate prompts on a test corpus.
+- [x] SP-068-2a: Implement `ResolveToolRisk` function. Create `ResolveToolRisk(toolName, args, agent) RiskAssessment` that runs all security inputs (static classifier, persona cascade, git-gate, fs-tier, workspace policy) and returns the most restrictive result. Ship behind a `unified_risk_resolver` config flag (default off). Add shadow-mode logging comparing old-vs-new decisions. Acceptance: with flag off, behavior is unchanged. With flag on, the resolver returns a single decision; shadow-mode log shows zero decision changes except eliminated duplicate prompts on a test corpus.
 
 ### Phase 3: One broker + "explain" diagnostic
 - [ ] SP-068-3a: Add `sprout explain` CLI subcommand. Add an `explain` subcommand that takes a command string and prints the full `RiskAssessment`: canonical level, every contributing source, and the exact rule that set the level. Complements SP-049's `sprout audit tail`. Acceptance: `sprout explain 'git reset --hard HEAD~5'` prints level `High/Critical` with annotated contributing sources.
@@ -41,7 +41,7 @@ Refactor to unify the two risk vocabularies (static classifier SAFE/CAUTION/DANG
 ## SP-066: Structured File Key Order Preservation
 _Spec: `roadmap/SP-066-structured-file-key-order.md`_
 
-- [ ] SP-066-keyorder: Preserve insertion key order in structured file tools. Update `write_structured_file` and `patch_structured_file` to preserve the key order the LLM sends, rather than alphabetically sorting keys. Use an ordered map implementation (e.g. `OrderedMap` with slice + map) instead of `map[string]interface{}` for JSON/YAML serialization. Acceptance: `write_structured_file` with keys `{name, version, description}` produces a file with keys in that order, not alphabetical. `patch_structured_file` preserves original key order on re-serialization. Existing tests pass.
+- [x] SP-066-keyorder: Preserve insertion key order in structured file tools. Update `write_structured_file` and `patch_structured_file` to preserve the key order the LLM sends, rather than alphabetically sorting keys. Use an ordered map implementation (e.g. `OrderedMap` with slice + map) instead of `map[string]interface{}` for JSON/YAML serialization. Acceptance: `write_structured_file` with keys `{name, version, directory}` produces a file with keys in that order, not alphabetical. `patch_structured_file` preserves original key order on re-serialization. Existing tests pass.
 
 ## SP-015: Cloud Platform Integration
 _Spec: `roadmap/SP-015-cloud-platform.md`_

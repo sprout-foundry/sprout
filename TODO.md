@@ -47,3 +47,46 @@ Gap (Medium): the agent applies edits immediately; there is no opt-in approve-be
 - [ ] SP-072-2: Add `EditApprovalConfig` (`mode: off|all|paths`, `paths` globs) to `pkg/configuration/config.go`; route `write_file`/`edit_file`/`patch_structured_file` in `pkg/agent/tool_handlers_file.go` through approval when active; treat non-interactive runs (`--skip-prompt`/automate/daemon) as approve-all (no hangs). Acceptance: `mode: off` (default) preserves current behavior; `mode: all` gates every write; `mode: paths` gates only matching globs.
 - [ ] SP-072-3: CLI review UI in `pkg/console` — colored unified diff with a per-hunk `[a]ccept / [r]eject / [s]elect / [e]dit ($EDITOR)` prompt (built on the SP-057 prompt/select primitives). Acceptance: a gated write renders the diff and applies only accepted hunks; rejected hunks never touch the working tree.
 - [ ] SP-072-4: WebUI — `webui/src/components/EditApprovalPanel.tsx` (per-hunk Accept/Reject, Apply selected / Reject all), `POST /api/edits/{id}/decision`, wired into the tool-event stream and triggering an `input_required` notification (SP-070). Acceptance: `make build-all` passes; a pending edit blocks visibly and applies only accepted hunks.
+
+## SP-073: Cooperative Cancellation — Stop Actually Aborts
+_Spec: `roadmap/SP-073-cooperative-cancellation.md`_
+
+Tech debt / UX (Medium-High): ~8 pipelines pass `context.Background()` to the provider, so Ctrl+C / Stop can't abort them (10 `TODO(SP-034-1c)` markers). `a.interruptCtx` is the ready cancellation source.
+
+- [ ] SP-073-1: Phase 1 — add a leading `ctx context.Context` param to the leaf functions in `pkg/spec/extractor.go` + `validator.go`, `pkg/codereview/prompts.go`, `pkg/agent_tools/vision_pdf.go` + `vision_analyze.go`, `pkg/agent_commands/commit_review.go` + `shell.go`, and forward it to `SendChatRequest`/`SendVisionRequest` instead of `context.Background()`. Acceptance: `make build-all` passes; those calls use the passed ctx.
+- [ ] SP-073-2: Phase 2 — callers pass a real cancellation context (tool `Execute(ctx,…)` for handler-driven paths; `a.interruptCtx` for agent methods, incl. the `GenerateResponse` signature note at `agent_getters.go:633`). Acceptance: `grep -rn "context.Background()" ` in the affected pipelines' provider calls returns nothing; `make build-all` passes.
+- [ ] SP-073-3: Phase 3 — verify Ctrl+C / Stop aborts a multi-page PDF OCR and a commit review within ~1s (clean "aborted" result, no crash); delete all 10 `TODO(SP-034-1c)` markers. Acceptance: `grep -rn "TODO(SP-034-1c)" pkg/` is empty; manual abort confirmed.
+
+## SP-074: Finish the Tool-Registry Migration (retire SP-038 shim)
+_Spec: `roadmap/SP-074-tool-registry-migration.md`_
+
+Tech debt (Medium): the dual registry has 3 `TODO(SP-038)` leftovers — `ForPersona` is a stub returning all tools, `ToolEnv.OutputWriter` is hardcoded to `os.Stdout`, and `ToolEnv.ApprovalManager` is `nil`.
+
+- [ ] SP-074-1: Implement real per-persona filtering — `(*ToolRegistry).ForPersona(allowlist []string) map[string]ToolHandler` in `pkg/agent_tools/registry.go` (empty allowlist → all tools), with tests for allowlist / empty / unknown-tool. Acceptance: `ForPersona` returns exactly the allowlisted tools; `go test ./pkg/agent_tools/...` passes.
+- [ ] SP-074-2: Route tool output through the agent — add an `io.Writer` accessor backed by `PrintLine`/`PrintLineAsync` (`OutputRouter`) and set `env.OutputWriter` to it in `pkg/agent/tool_security.go` (keep `os.Stdout` only as the nil-agent fallback). Acceptance: a streaming new-interface tool's output appears in the WebUI, not just stdout.
+- [ ] SP-074-3: Add a `tools.ApprovalManager` adapter over the agent's `security.ApprovalManager` (signature translation) and set `env.ApprovalManager`. Acceptance: a migrated tool can request approval via the env and it surfaces through the normal CLI/WebUI prompt.
+- [ ] SP-074-4: Collapse the dual-dispatch fallback for migrated tools (keep only for documented legacy func-style handlers); remove the `TODO(SP-038)` markers. Acceptance: `grep -rn "TODO(SP-038)" pkg/` is empty; existing persona tool-gating is regression-tested unchanged; `make build-all` + `go test ./...` green.
+
+## SP-075: Large-File Decomposition
+_Spec: `roadmap/SP-075-large-file-decomposition.md`_
+
+Maintainability (Low-Medium): 20+ files exceed 800 lines (config.go 2833, agent_modes.go 2344, …) vs the 500-line target. Pure, incremental file-level extraction — build + tests green after each step.
+
+- [ ] SP-075-1: Phase 1 (config + cmd) — split `pkg/configuration/config.go` (per-domain `config_*.go` for the nested structs + `Resolve()`s), `cmd/agent_modes.go` (per-mode files), `cmd/agent_workflow.go`. Acceptance: each targeted file < ~600 lines or documented exception; `make build-all` + `go test ./...` green; no API diff beyond moves.
+- [ ] SP-075-2: Phase 2 (agent core) — `pkg/agent/tool_handlers_subagent.go`, `seed_integration.go`, `subagent_runner.go`, `change_tracking_shell.go`. Acceptance: as above, per file.
+- [ ] SP-075-3: Phase 3 (providers + web) — `pkg/agent_providers/generic_provider.go`, `pkg/webcontent/browser_rod.go`, `pkg/wasmshell/commands.go`, `pkg/console/input_core.go`, `webui/src/components/Terminal.tsx` (extract a `useTerminalPanes` hook — also helps SP-011). Acceptance: as above, per file.
+
+## SP-045: WASM Build Feature Parity — distribution tail
+_Spec: `roadmap/SP-045-wasm-feature-parity.md` §4–§5 (Tiers 1/2a/2b already shipped)_
+
+- [ ] SP-045-1: Strip the WASM binary — add `-ldflags="-s -w"` in `scripts/build-wasm.sh`; confirm the size drop. Acceptance: WASM binary is measurably smaller; still loads.
+- [ ] SP-045-2: Spike `tinygo` for `cmd/wasm` — assess stdlib/`pkg/agent` compatibility; document go/no-go. Acceptance: written go/no-go with the blocking incompatibilities (if any).
+- [ ] SP-045-3: Split into a small shell-only WASM module + a lazy-loaded `embedding.wasm` (loads on first semantic search). Acceptance: casual page load no longer pulls the embedding module.
+- [ ] SP-045-4: Build-matrix hygiene — tag `pkg/webui/terminal_*.go` (creack/pty importers) `!js` and sweep `//go:build !windows` that wrongly include `js`. Acceptance: `GOOS=js GOARCH=wasm go build ./...` is clean.
+
+## SP-015: Cloud Platform Integration — remaining follow-ups
+_Spec: `roadmap/SP-015-cloud-platform.md` (R1/R3/R5 already complete)_
+
+- [ ] SP-015-R4: Add a CI check that fails if Foundry's Service-Worker route table diverges from `dist/endpoint-manifest.json`; evaluate a shared `@sprout/endpoint-registry` package. Acceptance: a manifest/route-table divergence fails CI.
+- [ ] SP-015-R6: Define the canonical dist-bundle layout the browser IDE expects (`index.html`, `static/js/`, `wasm/`) and make `scripts/build-webui-dist.mjs` produce exactly that. Acceptance: the build output matches the documented layout.
+- [ ] SP-015-R7: Chat-translation robustness — edge-case tests (empty query, missing `chat_id`, steer, stop), document the Foundry chat contract, and consider extracting the `{query}`→`{messages,stream}` translation into a module shared with Foundry's `chat-bridge.ts`. Acceptance: edge-case tests pass; the contract is documented.

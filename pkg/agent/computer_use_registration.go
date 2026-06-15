@@ -101,6 +101,26 @@ func toolConfigFromHandler(h tools.ToolHandler) ToolConfig {
 	}
 }
 
+// checkComputerUseActivation enforces the SP-063 gates required to switch into
+// the computer_user persona. Returns a descriptive error (surfaced to the user)
+// when any precondition fails. Called from ApplyPersona.
+func (a *Agent) checkComputerUseActivation() error {
+	cfg := a.GetConfig()
+	if cfg == nil || cfg.ComputerUse == nil || !cfg.ComputerUse.Enabled {
+		return fmt.Errorf("the computer_user persona is off by default — enable it first (set computer_use.enabled = true in settings)")
+	}
+	if a.IsSubagent() {
+		return fmt.Errorf("computer_user must be a top-level persona; it cannot be activated inside a subagent (no silent autonomous computer control)")
+	}
+	if support := computer_use.CheckPlatformSupport(); !support.Supported {
+		return fmt.Errorf("computer use is unavailable on this machine: %s", support.Reason)
+	}
+	if a.client != nil && !a.client.SupportsVision() {
+		return fmt.Errorf("computer_user requires a vision-capable provider; %q has no vision support — switch to a model that accepts images", a.GetProvider())
+	}
+	return nil
+}
+
 // isComputerUseToolBlocked reports whether the named tool is a computer-use
 // tool being invoked by a persona other than computer_user. This is the
 // dispatch-layer enforcement of SP-063 Phase 6 (tools allowlisted only for the

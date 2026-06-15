@@ -15,8 +15,8 @@ exercised via an overridable `commandRunner`).
 |---|---|---|
 | 1 Tool surface (7 tools + Anthropic `computer_20241022` translation) | ✅ done | `handlers.go`, `anthropic.go`, `registry.go` |
 | 2 Platform backends (macOS `cliclick`/`screencapture`, Linux-X11 `xdotool`/`scrot`/`import`; Wayland + other OS rejected with a clear reason; region crop in-process) | ✅ done | `backend_subprocess.go`, `backend_select.go` |
-| 3 Vision wiring (screenshot returns an image content block via `ToolResult.Images`) | ✅ done | `handlers.go`; **remaining:** hard-refuse activation on text-only providers (`requires_capabilities: ["vision"]`) |
-| 4 Safety gates | 🟡 partial | off-by-default `ComputerUseConfig.Enabled`, audit log (`audit.go`), action-rate cap (`safety.go`) **done**; per-session interactive opt-in dialog, global Ctrl+C+Esc panic key, destructive-app denylist heuristic **remain** |
+| 3 Vision wiring (screenshot returns an image content block; activation refused on text-only providers) | ✅ done | `handlers.go` + `checkComputerUseActivation` (`computer_use_registration.go`, called from `ApplyPersona`) |
+| 4 Safety gates | 🟡 mostly done | off-by-default `ComputerUseConfig.Enabled`, audit log (`audit.go`), action-rate cap (`safety.go`), and **activation gates** (enabled flag, platform-supported, top-level-only/no-subagent, vision-capable) **done**; per-session interactive opt-in dialog, global Ctrl+C+Esc panic key, destructive-app denylist heuristic, and precise `--skip-prompt`/daemon block **remain** |
 | 5 Persona prompt | ✅ done | `pkg/agent/prompts/subagent_prompts/computer_user.md` |
 | 6 Tool allowlist (computer_user only) | ✅ done | persona `allowed_tools` (`pkg/personas/configs/computer_user.json`) + dispatch-layer guard (`computer_use_registration.go`, `tool_security.go`) |
 | 7 WebUI settings panel | ❌ remaining | "Computer Use (Experimental)" section + Test-connection button |

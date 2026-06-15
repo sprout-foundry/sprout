@@ -92,6 +92,14 @@ type Config struct {
 	// worth it.
 	AllowGitHistoryRewrite bool `json:"allow_git_history_rewrite,omitempty"`
 
+	// UnifiedRiskResolver enables the unified risk resolver (SP-068 Phase 2).
+	// When true, gating decisions at call sites use a single ResolveToolRisk
+	// assessment instead of the split Gate 1 (static classifier) → Gate 2
+	// (persona risk cascade) path. When false (default), the existing dual-gate
+	// code paths run unchanged, but a debug shadow-log compares old vs new
+	// decisions for pre-release validation.
+	UnifiedRiskResolver bool `json:"unified_risk_resolver,omitempty"`
+
 	// ResourceDirectory stores captured web/vision resources relative to the current working directory.
 	// This can be overridden at runtime with --resource-directory.
 	ResourceDirectory string `json:"resource_directory,omitempty"`

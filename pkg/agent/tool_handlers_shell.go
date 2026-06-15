@@ -111,6 +111,39 @@ func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface
 		return "", agenterrors.NewInvalidInputError("command parameter is required when check_background is not provided", nil)
 	}
 
+	// SP-068 Phase 2: when UnifiedRiskResolver is enabled, use the single
+	// ResolveToolRisk assessment instead of the individual gates below.
+	if cfg := a.GetConfig(); cfg != nil && cfg.UnifiedRiskResolver {
+		return a.handleShellCommandUnified(ctx, command, background)
+	}
+
+	// Shadow-mode logging: compare old dual-gate decision vs new unified
+	// assessment when the flag is off so we can validate parity before
+	// flipping the flag (SP-068 Phase 2).
+	if a.debug {
+		secResult := tools.ClassifyToolCall("shell_command", map[string]interface{}{"command": command})
+		unified := a.ResolveToolRisk("shell_command", map[string]interface{}{"command": command})
+
+		// Derive old decision from the static classifier (Gate 1) which is
+		// the actual first line of defense in the pre-execute hook
+		oldDecision := resolveOldDecision(secResult)
+
+		newDecision := "allow"
+		if unified.IsHardBlock || unified.Level == configuration.RiskLevelCritical {
+			newDecision = "block"
+		} else if unified.Level == configuration.RiskLevelHigh || unified.Level == configuration.RiskLevelMedium {
+			newDecision = "prompt"
+		}
+
+		match := "true"
+		if oldDecision != newDecision {
+			match = "false"
+		}
+
+		a.debugLog("[shadow-risk] shell_command: old=%s, new=%s, match=%s — %s\n", oldDecision, newDecision, match, unified.Explain())
+	}
+
+	// — Legacy dual-gate path (flag OFF) —
 	// Risk cascade for personas / risk profiles (SP-058).
 	// Resolution:
 	//   Critical → ALWAYS reject (rm -rf root, fork bomb). No persona,
@@ -134,21 +167,6 @@ func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface
 
 	// Block git commands that lose commit history unless the workspace
 	// has opted into the more-permissive `AllowGitHistoryRewrite` mode.
-	//
-	// What this gate now covers:
-	//   - `git reset --hard <commit-ish>` (backward ref move)
-	//   - `git rebase` (any form — rewrites commits)
-	//   - `git branch -d/-D/--delete`
-	//   - `git tag -d/--delete`
-	//
-	// What it deliberately DOESN'T cover anymore (used to be blocked
-	// unconditionally): `checkout`, `switch`, `restore`, `reset` without
-	// `--hard <commit-ish>`, `clean`, `rm`, `mv`, `stash pop/apply/drop`,
-	// `cherry-pick`, `revert`, `am`, `apply`. These mutate only the
-	// working tree, which the change tracker captures (shellIsDestructive
-	// → walkWorkspace destructive mode → recoverable bulk entries), so
-	// recover_file / recover_bulk are the recovery story instead of an
-	// up-front block.
 	if isGitHistoryRewriteCommand(command) {
 		if cfg := a.GetConfig(); cfg == nil || !cfg.AllowGitHistoryRewrite {
 			return "", agenterrors.NewSecurityError(fmt.Sprintf("git %s can lose commit history and is blocked by default. Use the git tool for explicit user approval, or set allow_git_history_rewrite=true in config to opt in (command: '%s')", extractGitSubcommand(command), command), nil)
@@ -503,4 +521,40 @@ func executeCommit(userMessage, notes string, configManager configManagerInterfa
 	executor.Dir = workDir
 
 	return executor.ExecuteCommit()
+}
+
+// handleShellCommandUnified is the single-risk-assessment path for shell
+// commands when the UnifiedRiskResolver flag is ON (SP-068 Phase 2).
+// It folds all security gates into one RiskAssessment via ResolveToolRisk
+// and acts on the result.
+func (a *Agent) handleShellCommandUnified(ctx context.Context, command string, background bool) (string, error) {
+	// Get the unified risk assessment
+	assessment := a.ResolveToolRisk("shell_command", map[string]interface{}{"command": command})
+
+	// Log the assessment for diagnostics
+	if a.debug {
+		a.debugLog("[risk] shell_command unified: %s\n", assessment.Explain())
+	}
+
+	// Hard-block / Critical: unconditional deny
+	if assessment.IsHardBlock || assessment.Level == configuration.RiskLevelCritical {
+		return "", agenterrors.NewSecurityError(
+			fmt.Sprintf("critical operation blocked (cannot be approved by any profile or persona): '%s'", command), nil,
+		)
+	}
+
+	// High risk: require approval via highRiskApprovedForCommand
+	if assessment.Level == configuration.RiskLevelHigh {
+		if !a.highRiskApprovedForCommand(ctx, command) {
+			return "", agenterrors.NewSecurityError(
+				fmt.Sprintf("high-risk operation rejected by unified risk assessment: %s (command: '%s')", assessment.Level, command), nil,
+			)
+		}
+	}
+
+	// Medium / Low: proceed to execution
+	if background {
+		return a.executeShellCommandBackground(ctx, command)
+	}
+	return a.executeShellCommandWithTruncation(ctx, command)
 }

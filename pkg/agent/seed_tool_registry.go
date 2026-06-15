@@ -637,12 +637,32 @@ func newPreExecuteHook(agent *Agent) func(name string, args map[string]interface
 
 		// 2. Security classification
 		secResult := tools.ClassifyToolCall(name, args)
+		unifiedAssessment := agent.ResolveToolRisk(name, args)
 		if agent.debug {
 			// SP-068 unified risk view, logged alongside the live gate so the
 			// canonical assessment (classifier ⊕ persona cascade) is visible
 			// for "why was this gated?" without changing the decision below.
-			agent.debugLog("[risk] %s: %s\n", name, agent.ResolveToolRisk(name, args).Explain())
+			agent.debugLog("[risk] %s: %s\n", name, unifiedAssessment.Explain())
 		}
+
+		// SP-068 Phase 2: when UnifiedRiskResolver is enabled, use the
+		// single ResolveToolRisk assessment for gating. When disabled
+		// (default), the existing dual-gate path runs unchanged with
+		// optional shadow-mode logging.
+		if cfg := agent.GetConfig(); cfg != nil && cfg.UnifiedRiskResolver {
+			return agent.unifiedSecurityGate(name, args)
+		}
+
+		// — Shadow-mode logging (flag OFF, debug ON) —
+		// Compare the old dual-gate decision with the new unified resolver
+		// to validate behavioral parity before the flag flips default.
+		if agent.debug {
+			oldDecision := resolveOldDecision(secResult)
+			newDecision := resolveUnifiedDecision(unifiedAssessment)
+			agent.debugLog("[shadow-risk] %s: old=%s, new=%s, match=%v\n",
+				name, oldDecision, newDecision, oldDecision == newDecision)
+		}
+
 		if !secResult.ShouldBlock && !secResult.ShouldPrompt {
 			return nil // safe, no action needed
 		}

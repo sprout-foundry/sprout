@@ -71,7 +71,7 @@ func (g *GroundTruthTermios) Restore() error {
 		return nil
 	}
 	saved := g.termios
-	return unix.IoctlSetTermios(g.fd, unix.TCGETS, &saved)
+	return unix.IoctlSetTermios(g.fd, unix.TCSETS, &saved)
 }
 
 // IsTerminalSane checks whether the terminal is currently in an
@@ -114,7 +114,7 @@ func (g *GroundTruthTermios) EnsureCooked() {
 	}
 	saved := g.termios
 	normalizeCookedTermios(&saved)
-	_ = unix.IoctlSetTermios(g.fd, unix.TCGETS, &saved)
+	_ = unix.IoctlSetTermios(g.fd, unix.TCSETS, &saved)
 }
 
 // Fd returns the file descriptor the ground truth was captured from.

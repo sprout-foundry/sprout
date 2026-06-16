@@ -20,6 +20,7 @@ import ProviderSettingsTab from './settings/ProviderSettingsTab';
 import SecuritySettingsTab from './settings/SecuritySettingsTab';
 import SkillsSettingsTab from './settings/SkillsSettingsTab';
 import SubagentSettingsTab from './settings/SubagentSettingsTab';
+import NotificationsSettingsTab from './settings/NotificationsSettingsTab';
 import {
   SECTION_GROUPS,
   getSectionForSubsection,
@@ -470,6 +471,13 @@ function SettingsPanel({
           <GeneralSettingsTab
             editorPreferences={editorPreferences}
             onEditorPreferenceChanged={onEditorPreferenceChanged}
+          />
+        );
+
+      case 'editor-notifications':
+        return (
+          <NotificationsSettingsTab
+            renderLocalToggle={fieldRenderers.renderLocalToggle}
           />
         );
 

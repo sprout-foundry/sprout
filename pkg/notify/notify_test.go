@@ -133,14 +133,40 @@ func TestDarwinNotifier_EscapesQuotesAndBackslashes(t *testing.T) {
 	require.Len(t, captured.Args, 3)
 
 	// Compute the expected script the same way the implementation does:
-	// 1) replace \ with \\  2) replace ' with \'
+	// 1) replace \ with \\  2) replace ' with \'  3) replace " with ""
 	escTitle := strings.ReplaceAll(titleIn, "\\", "\\\\")
 	escTitle = strings.ReplaceAll(escTitle, "'", "\\'")
+	escTitle = strings.ReplaceAll(escTitle, "\"", "\"\"")
 	escMsg := strings.ReplaceAll(msgIn, "\\", "\\\\")
 	escMsg = strings.ReplaceAll(escMsg, "'", "\\'")
+	escMsg = strings.ReplaceAll(escMsg, "\"", "\"\"")
 
 	expected := fmt.Sprintf("display notification \"%s\" with title \"%s\"", escMsg, escTitle)
 	assert.Equal(t, expected, captured.Args[2])
+}
+
+func TestDarwinNotifier_EscapesDoubleQuotes(t *testing.T) {
+	var captured *exec.Cmd
+	orig := runCommand
+	runCommand = func(cmd *exec.Cmd) ([]byte, error) {
+		captured = cmd
+		return nil, nil
+	}
+	defer func() { runCommand = orig }()
+
+	// A message with double quotes should be escaped as "" to prevent
+	// breaking out of the AppleScript string literal.
+	// Input: title = He said "hi",  message = It's "great" \here
+	err := (&darwinNotifier{}).Notify("He said \"hi\"", "It's \"great\" \\here")
+	assert.NoError(t, err)
+	require.NotNil(t, captured)
+	require.Len(t, captured.Args, 3)
+
+	// Escaping order: \ -> \\, ' -> \', " -> ""
+	// Title:  He said ""hi""
+	// Message: It\'s ""great"" \\here
+	expectedScript := "display notification \"It\\'s \"\"great\"\" \\\\here\" with title \"He said \"\"hi\"\"\""
+	assert.Equal(t, expectedScript, captured.Args[2])
 }
 
 func TestDarwinNotifier_AllowsCustomCommand(t *testing.T) {
@@ -248,8 +274,9 @@ func TestWindowsNotifier_ConstructsCorrectCommand(t *testing.T) {
 	assert.Equal(t, "powershell", captured.Args[0])
 	assert.Equal(t, "-Command", captured.Args[1])
 	script := captured.Args[2]
-	assert.Contains(t, script, "Hello World")
-	assert.Contains(t, script, "My Title")
+	// Values are wrapped in double-quoted strings with PowerShell escaping
+	assert.Contains(t, script, `"Hello World"`)
+	assert.Contains(t, script, `"My Title"`)
 	assert.Contains(t, script, "NotifyIcon")
 	assert.Contains(t, script, "ShowBalloonTip(5000)")
 }
@@ -263,13 +290,39 @@ func TestWindowsNotifier_EscapesMessageProperly(t *testing.T) {
 	}
 	defer func() { runCommand = orig }()
 
-	err := (&windowsNotifier{}).Notify("Line\tTab", "Has \"quotes\" inside")
+	// Test PowerShell-native escaping: ` -> ``  " -> `"
+	err := (&windowsNotifier{}).Notify("Line\tTab", "Has `backtick` and \"quotes\" inside")
 	assert.NoError(t, err)
 	require.NotNil(t, captured)
 	script := captured.Args[2]
-	// %q in Sprintf produces a Go-escaped, double-quoted string.
-	assert.Contains(t, script, `"Has \"quotes\" inside"`)
-	assert.Contains(t, script, `"Line\tTab"`)
+
+	// Backticks are escaped as ``
+	assert.Contains(t, script, "``backtick``")
+	// Quotes are escaped as `" (backtick-quote) — the escaped segment wraps "quotes"
+	assert.Contains(t, script, "`\"quotes`\"")
+	// Tabs pass through as-is in double-quoted PowerShell strings
+	assert.Contains(t, script, "Line\tTab")
+}
+
+func TestWindowsNotifier_EscapesBackticksAndQuotes(t *testing.T) {
+	var captured *exec.Cmd
+	orig := runCommand
+	runCommand = func(cmd *exec.Cmd) ([]byte, error) {
+		captured = cmd
+		return nil, nil
+	}
+	defer func() { runCommand = orig }()
+
+	err := (&windowsNotifier{}).Notify("A`B\"C", "D`E\"F")
+	assert.NoError(t, err)
+	require.NotNil(t, captured)
+	script := captured.Args[2]
+	// Backticks escaped as ``, quotes escaped as `"
+	assert.Contains(t, script, "D``E")
+	assert.Contains(t, script, "A``B")
+	// Verify the backtick-quote escape is present for "
+	assert.Contains(t, script, "`\"F\"")
+	assert.Contains(t, script, "`\"C\"")
 }
 
 func TestWindowsNotifier_AllowsCustomCommand(t *testing.T) {

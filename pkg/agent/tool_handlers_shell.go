@@ -558,3 +558,105 @@ func (a *Agent) handleShellCommandUnified(ctx context.Context, command string, b
 	}
 	return a.executeShellCommandWithTruncation(ctx, command)
 }
+
+// handleCreatePullRequest handles the create_pull_request tool, creating a
+// pull request on GitHub via the git.CreatePullRequest backend. Gated as a
+// git-write operation — the persona must have CapabilityGitWrite (or the
+// user must approve interactively).
+func handleCreatePullRequest(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
+	// Extract required title parameter
+	title, err := convertToString(args["title"], "title")
+	if err != nil {
+		return "", agenterrors.NewInvalidInputError("failed to convert title parameter", err)
+	}
+	if title == "" {
+		return "", agenterrors.NewInvalidInputError("title parameter is required and must not be empty", nil)
+	}
+
+	// Extract optional body parameter
+	var body string
+	if b, exists := args["body"]; exists {
+		body, err = convertToString(b, "body")
+		if err != nil {
+			return "", agenterrors.NewInvalidInputError("failed to convert body parameter", err)
+		}
+	}
+
+	// Extract optional base parameter
+	var base string
+	if ba, exists := args["base"]; exists {
+		base, err = convertToString(ba, "base")
+		if err != nil {
+			return "", agenterrors.NewInvalidInputError("failed to convert base parameter", err)
+		}
+	}
+
+	// Extract optional head parameter
+	var head string
+	if h, exists := args["head"]; exists {
+		head, err = convertToString(h, "head")
+		if err != nil {
+			return "", agenterrors.NewInvalidInputError("failed to convert head parameter", err)
+		}
+	}
+
+	// Extract optional draft parameter
+	var draft bool
+	if d, exists := args["draft"]; exists {
+		if dBool, ok := d.(bool); ok {
+			draft = dBool
+		}
+	}
+
+	// Extract optional repo_dir parameter
+	var repoDir string
+	if rd, exists := args["repo_dir"]; exists {
+		repoDir, err = convertToString(rd, "repo_dir")
+		if err != nil {
+			return "", agenterrors.NewInvalidInputError("failed to convert repo_dir parameter", err)
+		}
+	}
+
+	// Default repoDir to the agent's workspace root
+	if repoDir == "" {
+		repoDir = a.effectiveCwd()
+	}
+
+	// Git-write gate: mirror the handleCommitTool approval pattern.
+	isSubagent := a.IsSubagent()
+	canGitWrite := a.isGitWriteAllowed()
+
+	if !canGitWrite && !isSubagent {
+		// Prompt user for approval before creating PR
+		choices := []ChoiceOption{
+			{Label: "Approve", Value: "approve"},
+			{Label: "Deny", Value: "deny"},
+		}
+
+		choice, err := a.PromptChoice("Allow agent to create a pull request?", choices)
+		if err != nil {
+			if errors.Is(err, ErrUINotAvailable) {
+				// Fall back to allowing when UI is not available,
+				// since this tool is designed for autonomous agents and was explicitly called
+			} else {
+				return "", agenterrors.NewTransientError("approval prompt failed", err)
+			}
+		} else if choice != "approve" {
+			return "Pull request creation cancelled by user.", nil
+		}
+	}
+
+	// Call the backend
+	result, err := git.CreatePullRequest(ctx, repoDir, git.PullRequestRequest{
+		Title: title,
+		Body:  body,
+		Base:  base,
+		Head:  head,
+		Draft: draft,
+	})
+	if err != nil {
+		return "", agenterrors.NewTransientError("failed to create pull request", err)
+	}
+
+	return fmt.Sprintf("Pull request created successfully!\n\nURL: %s\nNumber: #%d\nState: %s", result.URL, result.Number, result.State), nil
+}

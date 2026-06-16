@@ -16,7 +16,7 @@
     "persona": "coordinator",
     "prompt_file": "automate/workflow_prompt.md",
     "provider": "zai",
-    "risk_profile": "standard",
+    "risk_profile": "permissive",
     "skip_prompt": true,
     "subagent_overrides": {
       "coder": {

@@ -61,11 +61,13 @@ var osascriptCmd = "osascript"
 type darwinNotifier struct{}
 
 func (d *darwinNotifier) Notify(title, message string) error {
-	// Escape single quotes and backslashes for AppleScript string literal
+	// Escape for AppleScript string literal: \ first, then ', then "
 	t := strings.ReplaceAll(title, "\\", "\\\\")
 	t = strings.ReplaceAll(t, "'", "\\'")
+	t = strings.ReplaceAll(t, "\"", "\"\"")
 	m := strings.ReplaceAll(message, "\\", "\\\\")
 	m = strings.ReplaceAll(m, "'", "\\'")
+	m = strings.ReplaceAll(m, "\"", "\"\"")
 	script := fmt.Sprintf("display notification \"%s\" with title \"%s\"", m, t)
 	_, err := runCommand(exec.Command(osascriptCmd, "-e", script))
 	return err
@@ -91,21 +93,29 @@ var powershellCmd = "powershell"
 type windowsNotifier struct{}
 
 func (w *windowsNotifier) Notify(title, message string) error {
-	// Use PowerShell's built-in toast notification via BurntToast module if available,
-	// otherwise fall back to a simple message box
+	// Escape for PowerShell double-quoted string: ` first, then "
+	t := escapePowerShell(title)
+	m := escapePowerShell(message)
 	script := fmt.Sprintf(
 		"[System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms'); "+
 			"$balloon = New-Object System.Windows.Forms.NotifyIcon; "+
 			"$balloon.Icon = [System.Drawing.SystemIcons]::ApplicationInfo; "+
-			"$balloon.BalloonTipText = %q; "+
-			"$balloon.BalloonTipTitle = %q; "+
+			"$balloon.BalloonTipText = \"%s\"; "+
+			"$balloon.BalloonTipTitle = \"%s\"; "+
 			"$balloon.Visible = $true; "+
 			"$balloon.ShowBalloonTip(5000); "+
 			"$balloon.Dispose()",
-		message, title,
+		m, t,
 	)
 	_, err := runCommand(exec.Command(powershellCmd, "-Command", script))
 	return err
+}
+
+// escapePowerShell escapes a string for use inside a PowerShell double-quoted string.
+func escapePowerShell(s string) string {
+	s = strings.ReplaceAll(s, "`", "``")
+	s = strings.ReplaceAll(s, "\"", "`\"")
+	return s
 }
 
 // runCommand executes a command and returns its combined output.

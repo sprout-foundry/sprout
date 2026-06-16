@@ -26,6 +26,7 @@ import { getWebUIClientId } from '../services/clientSession';
 import { getServerErrorCode } from '../services/errorCodes';
 import { toQueryProgress } from '../types/app';
 import { ensureCompletedAssistantMessage } from '../utils/chatCompletion';
+import { notifyIfHidden } from '../services/desktopNotify';
 import { debugLog } from '../utils/log';
 import { appendCappedLog } from '../utils/logCap';
 import { generateMessageId } from '../utils/messageId';
@@ -275,6 +276,8 @@ const handleQueryCompleted = (ctx: EventHandlerContext): void => {
     };
   });
   debugLog('[OK] Query completed');
+  // SP-070-4: desktop notification when tab is backgrounded
+  notifyIfHidden('Sprout', 'Task complete');
 };
 
 // Handle tool_start event
@@ -766,6 +769,22 @@ const handleDriftDetected = (ctx: EventHandlerContext): void => {
   }));
 };
 
+// Handle input_required event (SP-070-4: desktop notification)
+const handleInputRequired = (ctx: EventHandlerContext): void => {
+  const { event, setState } = ctx;
+  const logEntry = createLogEntry(event);
+  logEntry.category = 'system';
+  logEntry.level = 'info';
+
+  // SP-070-4: desktop notification when tab is backgrounded
+  notifyIfHidden('Sprout', 'Input required');
+
+  setState((prev) => ({
+    logs: appendCappedLog(prev.logs, logEntry),
+  }));
+  debugLog('[input_required] Input required event received');
+};
+
 // Handle the chat_run_restored control frame that leads a reattach replay.
 // When the server sets gap=true it had already evicted events this client
 // missed, so the partial replay that follows would splice onto a stale
@@ -905,6 +924,8 @@ export function useWebSocketEventHandler({
           return handleSecurityPromptRequest(ctx);
         case 'ask_user_request':
           return handleAskUserRequest(ctx);
+        case 'input_required':
+          return handleInputRequired(ctx);
         case 'drift_detected':
           return handleDriftDetected(ctx);
         case 'chat_run_restored':

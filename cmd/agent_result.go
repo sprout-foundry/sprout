@@ -17,12 +17,13 @@ import (
 // It captures everything a SaaS wrapper (e.g. Sprout Foundry) needs from a
 // non-interactive sprout run.
 type AgentResult struct {
-	Status        string             `json:"status"`                   // "success" or "error"
-	Error         string             `json:"error,omitempty"`          // error message if status=="error"
-	Query         string             `json:"query"`                    // the original prompt
-	FilesModified []string           `json:"files_modified,omitempty"` // files changed during execution
-	GitDiff       string             `json:"git_diff,omitempty"`       // unified diff of all changes
-	Metrics       AgentResultMetrics `json:"metrics"`
+	Status         string             `json:"status"`                     // "success" or "error"
+	Error          string             `json:"error,omitempty"`            // error message if status=="error"
+	Query          string             `json:"query"`                      // the original prompt
+	FilesModified  []string           `json:"files_modified,omitempty"`   // files changed during execution
+	GitDiff        string             `json:"git_diff,omitempty"`         // unified diff of all changes
+	PullRequestURL string             `json:"pull_request_url,omitempty"` // URL of PR created during execution
+	Metrics        AgentResultMetrics `json:"metrics"`
 }
 
 // AgentResultMetrics holds execution metrics for structured output.

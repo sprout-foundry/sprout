@@ -27,6 +27,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/notify"
 	"github.com/sprout-foundry/sprout/pkg/webcontent"
 	"github.com/sprout-foundry/sprout/pkg/webui"
 	"golang.org/x/term"
@@ -1204,6 +1205,8 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			}
 			turnRenderer.FinalizeAtTurnEnd()
 			currentTurnRenderer.Store(nil)
+			// SP-070-2: notify the user when a long turn completes
+			notifyTurnCompletion(chatAgent, turnStart, agentSkipPrompt)
 			// SP-048-3: refresh the footer at turn-end so cost / context /
 			// model changes (e.g. /model switch) land immediately.
 			footer.Refresh()
@@ -1212,6 +1215,41 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			// commands, zsh fast paths, empty responses).
 			printPerTurnSummary(chatAgent, turnStart, turnPromptStart, turnCompletionStart, turnCostStart)
 		}
+	}
+}
+
+// notifyTurnCompletion emits a terminal bell and/or OS notification when a turn
+// completes after exceeding the configured minimum duration. Suppressed in
+// non-interactive sessions, when --skip-prompt is set, or for fast turns.
+// SP-070-2.
+func notifyTurnCompletion(chatAgent *agent.Agent, turnStart time.Time, skipPrompt bool) {
+	// Skip if non-interactive
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		return
+	}
+	// Skip if --skip-prompt
+	if skipPrompt {
+		return
+	}
+	// Get config
+	mgr := chatAgent.GetConfigManager()
+	if mgr == nil {
+		return
+	}
+	cfg := mgr.GetConfig()
+	if cfg == nil || cfg.Notifications == nil {
+		return
+	}
+	notif := cfg.Notifications.Resolve()
+	// Check minimum duration
+	if time.Since(turnStart).Seconds() < notif.MinSeconds {
+		return
+	}
+	// Emit bell to stderr
+	fmt.Fprint(os.Stderr, "\a")
+	// OS notification if configured
+	if notif.OSNotify {
+		_ = notify.New().Notify("Sprout", "Task complete")
 	}
 }
 

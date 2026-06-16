@@ -18,6 +18,7 @@ import type {
   GitCommitDetailResponse,
   GitCommitFileDiffResponse,
   GitDiffResponse,
+  PullRequestResponse,
 } from './types';
 
 export async function getGitStatus(fetchFn: typeof fetch): Promise<GitStatusResponse> {
@@ -225,5 +226,27 @@ export async function revertGitCommit(fetchFn: typeof fetch, commitHash: string)
 export async function getGitDiff(fetchFn: typeof fetch, path: string): Promise<GitDiffResponse> {
   const response = await fetchFn(`/api/git/diff?path=${encodeURIComponent(path)}`);
   if (!response.ok) throw new Error('Failed to fetch git diff');
+  return response.json();
+}
+
+export async function createPullRequest(
+  fetchFn: typeof fetch,
+  params: { title: string; body?: string; base?: string; head?: string; draft?: boolean },
+): Promise<PullRequestResponse> {
+  const response = await fetchFn('/api/git/pull-request', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      title: params.title,
+      body: params.body || '',
+      base: params.base || '',
+      head: params.head || '',
+      draft: params.draft || false,
+    }),
+  });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ error: 'Pull request creation failed' }));
+    throw new Error(data.error || data.message || 'Pull request creation failed');
+  }
   return response.json();
 }

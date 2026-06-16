@@ -46,13 +46,13 @@ type PullRequestResult struct {
 // Package-level hooks for testability
 // ---------------------------------------------------------------------------
 
-// runGhCommand is the function used to invoke the gh CLI.  The default
+// RunGhCommand is the function used to invoke the gh CLI.  The default
 // implementation simply calls exec.CommandContext("gh", args...).  Tests may
 // override this variable to avoid a real binary.
 //
 // NOTE: this variable is intentionally not safe for concurrent writes —
 // override it in init() or TestMain, not mid-flight.
-var runGhCommand = func(ctx context.Context, dir string, args ...string) ([]byte, error) {
+var RunGhCommand = func(ctx context.Context, dir string, args ...string) ([]byte, error) {
 	cmd := exec.CommandContext(ctx, "gh", args...)
 	cmd.Dir = dir
 	out, err := cmd.CombinedOutput()
@@ -63,17 +63,17 @@ var runGhCommand = func(ctx context.Context, dir string, args ...string) ([]byte
 // may override it to use httptest.Server.
 var prHTTPClient = http.DefaultClient
 
-// githubAPIBaseURL is the base URL for the GitHub REST API.  Tests may
+// GitHubAPIBaseURL is the base URL for the GitHub REST API.  Tests may
 // override it to point at an httptest server.
-var githubAPIBaseURL = "https://api.github.com"
+var GitHubAPIBaseURL = "https://api.github.com"
 
-// getDefaultBranch returns the default branch name for the repo rooted at
+// GetDefaultBranch returns the default branch name for the repo rooted at
 // repoDir.  By default it reads
 //
 //	git symbolic-ref refs/remotes/origin/HEAD
 //
 // and falls back to "main".  Tests may override this variable.
-var getDefaultBranch = func(ctx context.Context, repoDir string) (string, error) {
+var GetDefaultBranch = func(ctx context.Context, repoDir string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", "symbolic-ref", "--short", "refs/remotes/origin/HEAD")
 	cmd.Dir = repoDir
 	out, err := cmd.Output()
@@ -237,7 +237,7 @@ func resolveBase(ctx context.Context, repoDir string, base string) (string, erro
 	if base != "" {
 		return base, nil
 	}
-	return getDefaultBranch(ctx, repoDir)
+	return GetDefaultBranch(ctx, repoDir)
 }
 
 // getOwnerRepo parses the origin remote URL and returns owner/repo for GitHub
@@ -291,6 +291,22 @@ func synthesizePRBody(ctx context.Context, repoDir, base, head string) (string, 
 // Auto-push
 // ---------------------------------------------------------------------------
 
+// PushBranch executes "git push -u origin <head>".  Tests may override this
+// variable to avoid network access.
+//
+// NOTE: intentionally exported only for testability — follow the same
+// pattern as RunGhCommand / GetDefaultBranch.  Not safe for concurrent
+// writes; override in init() or TestMain, not mid-flight.
+var PushBranch = func(ctx context.Context, repoDir, head string) error {
+	cmd := exec.CommandContext(ctx, "git", "push", "-u", "origin", head)
+	cmd.Dir = repoDir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("push branch %q to origin: %w (output: %s)", head, err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
 // ensureBranchPushed pushes the head branch with upstream tracking if it
 // doesn't already have an upstream.
 func ensureBranchPushed(ctx context.Context, repoDir, head string) error {
@@ -304,13 +320,7 @@ func ensureBranchPushed(ctx context.Context, repoDir, head string) error {
 	}
 
 	// Push with upstream tracking
-	cmd = exec.CommandContext(ctx, "git", "push", "-u", "origin", head)
-	cmd.Dir = repoDir
-	out, err = cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("push branch %q to origin: %w (output: %s)", head, err, strings.TrimSpace(string(out)))
-	}
-	return nil
+	return PushBranch(ctx, repoDir, head)
 }
 
 // ---------------------------------------------------------------------------
@@ -346,7 +356,7 @@ func createPRViaAPI(ctx context.Context, owner, repo, head, base, title, body st
 		return nil, fmt.Errorf("marshal PR request: %w", err)
 	}
 
-	urlStr := fmt.Sprintf("%s/repos/%s/%s/pulls", githubAPIBaseURL, owner, repo)
+	urlStr := fmt.Sprintf("%s/repos/%s/%s/pulls", GitHubAPIBaseURL, owner, repo)
 	req, err := http.NewRequestWithContext(ctx, "POST", urlStr, bytes.NewReader(jsonData))
 	if err != nil {
 		return nil, fmt.Errorf("create HTTP request: %w", err)
@@ -423,7 +433,7 @@ func createPRViaGH(ctx context.Context, repoDir, head, base, title, body string,
 		args = append(args, "--draft")
 	}
 
-	out, err := runGhCommand(ctx, repoDir, args...)
+	out, err := RunGhCommand(ctx, repoDir, args...)
 	if err != nil {
 		return nil, fmt.Errorf("gh pr create: %w", err)
 	}

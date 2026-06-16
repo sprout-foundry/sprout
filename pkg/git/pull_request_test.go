@@ -69,23 +69,23 @@ type savedHooks struct {
 	runGhCommand     func(ctx context.Context, dir string, args ...string) ([]byte, error)
 	prHTTPClient     *http.Client
 	getDefaultBranch func(ctx context.Context, repoDir string) (string, error)
-	githubAPIBaseURL string
+	GitHubAPIBaseURL string
 }
 
 func saveHooks() savedHooks {
 	return savedHooks{
-		runGhCommand:     runGhCommand,
+		runGhCommand:     RunGhCommand,
 		prHTTPClient:     prHTTPClient,
-		getDefaultBranch: getDefaultBranch,
-		githubAPIBaseURL: githubAPIBaseURL,
+		getDefaultBranch: GetDefaultBranch,
+		GitHubAPIBaseURL: GitHubAPIBaseURL,
 	}
 }
 
 func restoreHooks(s savedHooks) {
-	runGhCommand = s.runGhCommand
+	RunGhCommand = s.runGhCommand
 	prHTTPClient = s.prHTTPClient
-	getDefaultBranch = s.getDefaultBranch
-	githubAPIBaseURL = s.githubAPIBaseURL
+	GetDefaultBranch = s.getDefaultBranch
+	GitHubAPIBaseURL = s.GitHubAPIBaseURL
 }// =============================================================================
 // TestParseGitHubRemoteURL
 // =============================================================================
@@ -188,7 +188,7 @@ func TestCreatePullRequest_ViaAPI_Success(t *testing.T) {
 	dir := newTestGitRepoWithOrigin(t, "https://github.com/testorg/testrepo.git")
 	gitRun(t, dir, "checkout", "-b", "feature-test")
 
-	getDefaultBranch = func(_ context.Context, _ string) (string, error) {
+	GetDefaultBranch = func(_ context.Context, _ string) (string, error) {
 		return "main", nil
 	}
 
@@ -235,7 +235,7 @@ func TestCreatePullRequest_ViaAPI_Success(t *testing.T) {
 	defer server.Close()
 
 	prHTTPClient = server.Client()
-	githubAPIBaseURL = server.URL
+	GitHubAPIBaseURL = server.URL
 	t.Setenv("GH_TOKEN", "testtoken123")
 
 	ctx := context.Background()
@@ -265,7 +265,7 @@ func TestCreatePullRequest_ViaAPI_AlreadyExists(t *testing.T) {
 	dir := newTestGitRepoWithOrigin(t, "https://github.com/testorg/testrepo.git")
 	gitRun(t, dir, "checkout", "-b", "feature-already")
 
-	getDefaultBranch = func(_ context.Context, _ string) (string, error) {
+	GetDefaultBranch = func(_ context.Context, _ string) (string, error) {
 		return "main", nil
 	}
 
@@ -279,7 +279,7 @@ func TestCreatePullRequest_ViaAPI_AlreadyExists(t *testing.T) {
 	defer server.Close()
 
 	prHTTPClient = server.Client()
-	githubAPIBaseURL = server.URL
+	GitHubAPIBaseURL = server.URL
 	t.Setenv("GH_TOKEN", "testtoken123")
 
 	ctx := context.Background()
@@ -307,7 +307,7 @@ func TestCreatePullRequest_ViaAPI_401FallsThroughToGH(t *testing.T) {
 	dir := newTestGitRepoWithOrigin(t, "https://github.com/testorg/testrepo.git")
 	gitRun(t, dir, "checkout", "-b", "feature-fallback")
 
-	getDefaultBranch = func(_ context.Context, _ string) (string, error) {
+	GetDefaultBranch = func(_ context.Context, _ string) (string, error) {
 		return "main", nil
 	}
 
@@ -323,10 +323,10 @@ func TestCreatePullRequest_ViaAPI_401FallsThroughToGH(t *testing.T) {
 	defer server.Close()
 
 	prHTTPClient = server.Client()
-	githubAPIBaseURL = server.URL
+	GitHubAPIBaseURL = server.URL
 	t.Setenv("GH_TOKEN", "badtoken")
 
-	runGhCommand = func(_ context.Context, _ string, args ...string) ([]byte, error) {
+	RunGhCommand = func(_ context.Context, _ string, args ...string) ([]byte, error) {
 		return []byte("https://github.com/testorg/testrepo/pull/99\n"), nil
 	}
 
@@ -357,7 +357,7 @@ func TestCreatePullRequest_NoTokenSkipsAPI(t *testing.T) {
 	dir := newTestGitRepoWithOrigin(t, "https://github.com/testorg/testrepo.git")
 	gitRun(t, dir, "checkout", "-b", "feature-notoken")
 
-	getDefaultBranch = func(_ context.Context, _ string) (string, error) {
+	GetDefaultBranch = func(_ context.Context, _ string) (string, error) {
 		return "main", nil
 	}
 
@@ -369,9 +369,9 @@ func TestCreatePullRequest_NoTokenSkipsAPI(t *testing.T) {
 	}))
 	defer server.Close()
 	prHTTPClient = server.Client()
-	githubAPIBaseURL = server.URL
+	GitHubAPIBaseURL = server.URL
 
-	runGhCommand = func(_ context.Context, _ string, args ...string) ([]byte, error) {
+	RunGhCommand = func(_ context.Context, _ string, args ...string) ([]byte, error) {
 		return []byte("https://github.com/testorg/testrepo/pull/10\n"), nil
 	}
 
@@ -403,13 +403,13 @@ func TestCreatePullRequest_ViaGH_Success(t *testing.T) {
 	dir := newTestGitRepo(t)
 	gitRun(t, dir, "checkout", "-b", "feature-gh")
 
-	getDefaultBranch = func(_ context.Context, _ string) (string, error) {
+	GetDefaultBranch = func(_ context.Context, _ string) (string, error) {
 		return "main", nil
 	}
 
 	t.Setenv("GH_TOKEN", "")
 
-	runGhCommand = func(_ context.Context, dir string, args ...string) ([]byte, error) {
+	RunGhCommand = func(_ context.Context, dir string, args ...string) ([]byte, error) {
 		got := strings.Join(args, " ")
 		if !strings.Contains(got, "--title") || !strings.Contains(got, "Test PR") {
 			t.Errorf("expected --title 'Test PR' in args, got: %s", got)
@@ -447,13 +447,13 @@ func TestCreatePullRequest_ViaGH_Draft(t *testing.T) {
 	dir := newTestGitRepo(t)
 	gitRun(t, dir, "checkout", "-b", "feature-draft")
 
-	getDefaultBranch = func(_ context.Context, _ string) (string, error) {
+	GetDefaultBranch = func(_ context.Context, _ string) (string, error) {
 		return "main", nil
 	}
 
 	t.Setenv("GH_TOKEN", "")
 
-	runGhCommand = func(_ context.Context, _ string, args ...string) ([]byte, error) {
+	RunGhCommand = func(_ context.Context, _ string, args ...string) ([]byte, error) {
 		argStr := strings.Join(args, " ")
 		if !strings.Contains(argStr, "--draft") {
 			t.Errorf("expected --draft in args, got: %s", argStr)
@@ -483,13 +483,13 @@ func TestCreatePullRequest_ViaGH_NotAvailable(t *testing.T) {
 	dir := newTestGitRepo(t)
 	gitRun(t, dir, "checkout", "-b", "feature-no-gh")
 
-	getDefaultBranch = func(_ context.Context, _ string) (string, error) {
+	GetDefaultBranch = func(_ context.Context, _ string) (string, error) {
 		return "main", nil
 	}
 
 	t.Setenv("GH_TOKEN", "")
 
-	runGhCommand = func(_ context.Context, _ string, args ...string) ([]byte, error) {
+	RunGhCommand = func(_ context.Context, _ string, args ...string) ([]byte, error) {
 		return nil, errors.New("executable file not found in $PATH")
 	}
 
@@ -524,7 +524,7 @@ func TestCreatePullRequest_NoAuth(t *testing.T) {
 	dir := newTestGitRepoWithOrigin(t, "https://github.com/testorg/testrepo.git")
 	gitRun(t, dir, "checkout", "-b", "feature-noauth")
 
-	getDefaultBranch = func(_ context.Context, _ string) (string, error) {
+	GetDefaultBranch = func(_ context.Context, _ string) (string, error) {
 		return "main", nil
 	}
 
@@ -536,10 +536,10 @@ func TestCreatePullRequest_NoAuth(t *testing.T) {
 	defer server.Close()
 
 	prHTTPClient = server.Client()
-	githubAPIBaseURL = server.URL
+	GitHubAPIBaseURL = server.URL
 	t.Setenv("GH_TOKEN", "badtoken")
 
-	runGhCommand = func(_ context.Context, _ string, args ...string) ([]byte, error) {
+	RunGhCommand = func(_ context.Context, _ string, args ...string) ([]byte, error) {
 		return nil, errors.New("gh: command not found")
 	}
 
@@ -912,7 +912,7 @@ func TestCreatePullRequest_BodySynthesis(t *testing.T) {
 	gitRun(t, dir, "add", "new.txt")
 	gitRun(t, dir, "commit", "-m", "Add new feature file")
 
-	getDefaultBranch = func(_ context.Context, _ string) (string, error) {
+	GetDefaultBranch = func(_ context.Context, _ string) (string, error) {
 		return "main", nil
 	}
 
@@ -936,7 +936,7 @@ func TestCreatePullRequest_BodySynthesis(t *testing.T) {
 	defer server.Close()
 
 	prHTTPClient = server.Client()
-	githubAPIBaseURL = server.URL
+	GitHubAPIBaseURL = server.URL
 	t.Setenv("GH_TOKEN", "testtoken")
 
 	ctx := context.Background()
@@ -977,7 +977,7 @@ func TestCreatePullRequest_ExplicitBodyNotOverridden(t *testing.T) {
 	gitRun(t, dir, "add", "f.txt")
 	gitRun(t, dir, "commit", "-m", "Some commit")
 
-	getDefaultBranch = func(_ context.Context, _ string) (string, error) {
+	GetDefaultBranch = func(_ context.Context, _ string) (string, error) {
 		return "main", nil
 	}
 
@@ -998,7 +998,7 @@ func TestCreatePullRequest_ExplicitBodyNotOverridden(t *testing.T) {
 	defer server.Close()
 
 	prHTTPClient = server.Client()
-	githubAPIBaseURL = server.URL
+	GitHubAPIBaseURL = server.URL
 	t.Setenv("GH_TOKEN", "testtoken")
 
 	ctx := context.Background()
@@ -1030,7 +1030,7 @@ func TestCreatePullRequest_ResolveHeadFromCurrentBranch(t *testing.T) {
 	dir := newTestGitRepoWithOrigin(t, "https://github.com/testorg/testrepo.git")
 	gitRun(t, dir, "checkout", "-b", "auto-head-branch")
 
-	getDefaultBranch = func(_ context.Context, _ string) (string, error) {
+	GetDefaultBranch = func(_ context.Context, _ string) (string, error) {
 		return "main", nil
 	}
 
@@ -1051,7 +1051,7 @@ func TestCreatePullRequest_ResolveHeadFromCurrentBranch(t *testing.T) {
 	defer server.Close()
 
 	prHTTPClient = server.Client()
-	githubAPIBaseURL = server.URL
+	GitHubAPIBaseURL = server.URL
 	t.Setenv("GH_TOKEN", "testtoken")
 
 	ctx := context.Background()
@@ -1081,7 +1081,7 @@ func TestCreatePullRequest_DraftViaAPI(t *testing.T) {
 	dir := newTestGitRepoWithOrigin(t, "https://github.com/testorg/testrepo.git")
 	gitRun(t, dir, "checkout", "-b", "feature-draft-api")
 
-	getDefaultBranch = func(_ context.Context, _ string) (string, error) {
+	GetDefaultBranch = func(_ context.Context, _ string) (string, error) {
 		return "main", nil
 	}
 
@@ -1106,7 +1106,7 @@ func TestCreatePullRequest_DraftViaAPI(t *testing.T) {
 	defer server.Close()
 
 	prHTTPClient = server.Client()
-	githubAPIBaseURL = server.URL
+	GitHubAPIBaseURL = server.URL
 	t.Setenv("GH_TOKEN", "testtoken")
 
 	ctx := context.Background()
@@ -1138,7 +1138,7 @@ func TestCreatePullRequest_ResolveBaseFromDefaultBranch(t *testing.T) {
 	dir := newTestGitRepoWithOrigin(t, "https://github.com/testorg/testrepo.git")
 	gitRun(t, dir, "checkout", "-b", "feature-base-resolve")
 
-	getDefaultBranch = func(_ context.Context, _ string) (string, error) {
+	GetDefaultBranch = func(_ context.Context, _ string) (string, error) {
 		return "develop", nil
 	}
 
@@ -1159,7 +1159,7 @@ func TestCreatePullRequest_ResolveBaseFromDefaultBranch(t *testing.T) {
 	defer server.Close()
 
 	prHTTPClient = server.Client()
-	githubAPIBaseURL = server.URL
+	GitHubAPIBaseURL = server.URL
 	t.Setenv("GH_TOKEN", "testtoken")
 
 	ctx := context.Background()
@@ -1189,7 +1189,7 @@ func TestCreatePullRequest_APIUnknownError(t *testing.T) {
 	dir := newTestGitRepoWithOrigin(t, "https://github.com/testorg/testrepo.git")
 	gitRun(t, dir, "checkout", "-b", "feature-api-error")
 
-	getDefaultBranch = func(_ context.Context, _ string) (string, error) {
+	GetDefaultBranch = func(_ context.Context, _ string) (string, error) {
 		return "main", nil
 	}
 
@@ -1203,7 +1203,7 @@ func TestCreatePullRequest_APIUnknownError(t *testing.T) {
 	defer server.Close()
 
 	prHTTPClient = server.Client()
-	githubAPIBaseURL = server.URL
+	GitHubAPIBaseURL = server.URL
 	t.Setenv("GH_TOKEN", "testtoken")
 
 	ctx := context.Background()
@@ -1311,7 +1311,7 @@ func TestCreatePullRequest_ResolveHeadDetachedHead(t *testing.T) {
 	hash = strings.TrimSpace(hash)
 	gitRun(t, dir, "checkout", hash)
 
-	getDefaultBranch = func(_ context.Context, _ string) (string, error) {
+	GetDefaultBranch = func(_ context.Context, _ string) (string, error) {
 		return "main", nil
 	}
 
@@ -1338,7 +1338,7 @@ func TestCreatePullRequest_PushFailureDoesntBlockAPI(t *testing.T) {
 	dir := newTestGitRepoWithOrigin(t, "https://github.com/testorg/testrepo.git")
 	gitRun(t, dir, "checkout", "-b", "feature-noupstream")
 
-	getDefaultBranch = func(_ context.Context, _ string) (string, error) {
+	GetDefaultBranch = func(_ context.Context, _ string) (string, error) {
 		return "main", nil
 	}
 
@@ -1354,7 +1354,7 @@ func TestCreatePullRequest_PushFailureDoesntBlockAPI(t *testing.T) {
 	defer server.Close()
 
 	prHTTPClient = server.Client()
-	githubAPIBaseURL = server.URL
+	GitHubAPIBaseURL = server.URL
 	t.Setenv("GH_TOKEN", "testtoken")
 
 	ctx := context.Background()
@@ -1386,14 +1386,14 @@ func TestCreatePullRequest_ReviewersIgnoredByGH(t *testing.T) {
 	dir := newTestGitRepo(t)
 	gitRun(t, dir, "checkout", "-b", "feature-reviewers")
 
-	getDefaultBranch = func(_ context.Context, _ string) (string, error) {
+	GetDefaultBranch = func(_ context.Context, _ string) (string, error) {
 		return "main", nil
 	}
 
 	t.Setenv("GH_TOKEN", "")
 
 	var capturedArgs []string
-	runGhCommand = func(_ context.Context, _ string, args ...string) ([]byte, error) {
+	RunGhCommand = func(_ context.Context, _ string, args ...string) ([]byte, error) {
 		capturedArgs = args
 		return []byte("https://github.com/owner/repo/pull/1\n"), nil
 	}
@@ -1429,7 +1429,7 @@ func TestCreatePullRequest_APIDeserializesCorrectPayload(t *testing.T) {
 	dir := newTestGitRepoWithOrigin(t, "https://github.com/myorg/myrepo.git")
 	gitRun(t, dir, "checkout", "-b", "feature-payload")
 
-	getDefaultBranch = func(_ context.Context, _ string) (string, error) {
+	GetDefaultBranch = func(_ context.Context, _ string) (string, error) {
 		return "main", nil
 	}
 
@@ -1451,7 +1451,7 @@ func TestCreatePullRequest_APIDeserializesCorrectPayload(t *testing.T) {
 	defer server.Close()
 
 	prHTTPClient = server.Client()
-	githubAPIBaseURL = server.URL
+	GitHubAPIBaseURL = server.URL
 	t.Setenv("GH_TOKEN", "token123")
 
 	ctx := context.Background()
@@ -1497,13 +1497,13 @@ func TestCreatePullRequest_GetOwnerRepoFailure(t *testing.T) {
 	dir := newTestGitRepo(t)
 	gitRun(t, dir, "checkout", "-b", "feature-noremote")
 
-	getDefaultBranch = func(_ context.Context, _ string) (string, error) {
+	GetDefaultBranch = func(_ context.Context, _ string) (string, error) {
 		return "main", nil
 	}
 
 	t.Setenv("GH_TOKEN", "testtoken")
 
-	runGhCommand = func(_ context.Context, _ string, args ...string) ([]byte, error) {
+	RunGhCommand = func(_ context.Context, _ string, args ...string) ([]byte, error) {
 		return []byte("https://github.com/owner/repo/pull/11\n"), nil
 	}
 
@@ -1535,13 +1535,13 @@ func TestCreatePullRequest_GetOwnerRepoNonGithub(t *testing.T) {
 	dir := newTestGitRepoWithOrigin(t, "https://gitlab.com/owner/repo.git")
 	gitRun(t, dir, "checkout", "-b", "feature-gitlab")
 
-	getDefaultBranch = func(_ context.Context, _ string) (string, error) {
+	GetDefaultBranch = func(_ context.Context, _ string) (string, error) {
 		return "main", nil
 	}
 
 	t.Setenv("GH_TOKEN", "testtoken")
 
-	runGhCommand = func(_ context.Context, _ string, args ...string) ([]byte, error) {
+	RunGhCommand = func(_ context.Context, _ string, args ...string) ([]byte, error) {
 		return []byte("https://github.com/owner/repo/pull/12\n"), nil
 	}
 

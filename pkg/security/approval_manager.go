@@ -289,6 +289,7 @@ func (am *ApprovalManager) RequestApprovalDecisionWithOutcome(eventBus *events.E
 			payload["user_id"] = trimmed
 		}
 		eventBus.Publish(events.EventTypeSecurityApprovalRequest, payload)
+		eventBus.Publish(events.EventTypeInputRequired, events.InputRequiredEvent("security_approval", requestID))
 
 	case ApprovalKindPrompt:
 		payload := events.SecurityPromptRequestEvent(requestID, req.Prompt, req.DefaultResponse, req.Extras)
@@ -296,6 +297,7 @@ func (am *ApprovalManager) RequestApprovalDecisionWithOutcome(eventBus *events.E
 			payload["user_id"] = trimmed
 		}
 		eventBus.Publish(events.EventTypeSecurityPromptRequest, payload)
+		eventBus.Publish(events.EventTypeInputRequired, events.InputRequiredEvent("security_prompt", requestID))
 	}
 
 	timeout := am.timeout

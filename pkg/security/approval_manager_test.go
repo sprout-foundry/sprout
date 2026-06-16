@@ -209,3 +209,101 @@ func TestApprovalManager_RequestPrompt_DefaultFalse(t *testing.T) {
 	result := am.RequestPrompt(eventBus, "user-1", "Allow this?", false, nil)
 	assert.False(t, result, "timeout should use DefaultResponse=false")
 }
+
+// TestApprovalManager_InputRequiredPublishedWithToolApproval verifies that
+// when a tool approval request is published, BOTH security_approval_request
+// AND input_required events appear on the bus.
+func TestApprovalManager_InputRequiredPublishedWithToolApproval(t *testing.T) {
+	am := NewApprovalManager()
+	am.SetTimeout(2 * time.Second)
+	eventBus := events.NewEventBus()
+
+	// Subscribe to intercept events before the manager's timeout fires.
+	sub := eventBus.Subscribe("input-required-tool")
+
+	// Collect events in background.
+	var receivedTypes []string
+	done := make(chan struct{})
+	go func() {
+		timeout := time.After(2 * time.Second)
+		for {
+			select {
+			case evt := <-sub:
+				receivedTypes = append(receivedTypes, evt.Type)
+				// Respond to the security_approval_request to unblock the manager.
+				data, ok := evt.Data.(map[string]interface{})
+				if !ok {
+					continue
+				}
+				requestID, _ := data["request_id"].(string)
+				if requestID != "" && evt.Type == events.EventTypeSecurityApprovalRequest {
+					am.RespondToApproval(requestID, true)
+				}
+			case <-timeout:
+				close(done)
+				return
+			}
+		}
+	}()
+
+	// Fire the tool approval request.
+	result := am.RequestToolApproval(eventBus, "client-1", "user-1", "shell_command", "low", "test", nil)
+	assert.True(t, result, "tool request should be approved")
+
+	// Wait for the goroutine to finish.
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for event collection goroutine")
+	}
+
+	// Verify both event types were received.
+	assert.Contains(t, receivedTypes, events.EventTypeSecurityApprovalRequest,
+		"should receive security_approval_request")
+	assert.Contains(t, receivedTypes, events.EventTypeInputRequired,
+		"should also receive input_required")
+	assert.Len(t, receivedTypes, 2, "should receive exactly 2 events: security_approval_request and input_required")
+}
+
+// TestApprovalManager_InputRequiredPublishedWithPrompt verifies that
+// when a prompt approval request is published, BOTH security_prompt_request
+// AND input_required events appear on the bus.
+func TestApprovalManager_InputRequiredPublishedWithPrompt(t *testing.T) {
+	am := NewApprovalManager()
+	am.SetTimeout(200 * time.Millisecond)
+	eventBus := events.NewEventBus()
+
+	sub := eventBus.Subscribe("input-required-prompt")
+
+	var receivedTypes []string
+	done := make(chan struct{})
+	go func() {
+		timeout := time.After(1 * time.Second)
+		for {
+			select {
+			case evt := <-sub:
+				receivedTypes = append(receivedTypes, evt.Type)
+			case <-timeout:
+				close(done)
+				return
+			}
+		}
+	}()
+
+	// Fire the prompt request (will timeout since we don't respond).
+	result := am.RequestPrompt(eventBus, "user-1", "API key detected?", true, nil)
+	assert.True(t, result, "should use DefaultResponse=true on timeout")
+
+	// Wait for goroutine.
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for event collection goroutine")
+	}
+
+	// Verify both event types were received.
+	assert.Contains(t, receivedTypes, events.EventTypeSecurityPromptRequest,
+		"should receive security_prompt_request")
+	assert.Contains(t, receivedTypes, events.EventTypeInputRequired,
+		"should also receive input_required")
+}

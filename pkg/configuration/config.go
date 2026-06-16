@@ -32,6 +32,7 @@ func isDebugEnabled() bool {
 		return true
 	}
 }
+
 const (
 	ConfigVersion   = "2.0"
 	ConfigDirName   = ".sprout"
@@ -171,24 +172,24 @@ type Config struct {
 	SelfReviewGateMode string `json:"self_review_gate_mode,omitempty"` // "off", "code", or "always"
 
 	// Subagent Configuration
-	SubagentProvider       string                  `json:"subagent_provider,omitempty"` // Provider for subagents (defaults to LastUsedProvider)
-	SubagentModel          string                  `json:"subagent_model,omitempty"`    // Model for subagents (defaults to provider's default model)
+	SubagentProvider string `json:"subagent_provider,omitempty"` // Provider for subagents (defaults to LastUsedProvider)
+	SubagentModel    string `json:"subagent_model,omitempty"`    // Model for subagents (defaults to provider's default model)
 	// SubagentTypes is hydrated from the embedded catalog at config load time.
 	// It is NOT persisted (json:"-"): personas are catalog-fixed and user
 	// customization is intentionally not supported. Use DisabledPersonas to
 	// hide specific personas from /persona list and from subagent spawning.
-	SubagentTypes          map[string]SubagentType `json:"-"`
+	SubagentTypes map[string]SubagentType `json:"-"`
 	// DisabledPersonas holds canonical persona IDs the user has hidden via
 	// `/persona <id> disable`. The catalog entries themselves are never
 	// mutated; resolution checks this list and treats disabled IDs as absent.
-	DisabledPersonas       []string                `json:"disabled_personas,omitempty"`
+	DisabledPersonas []string `json:"disabled_personas,omitempty"`
 	// DefaultSubagentPersona is the persona ID used when run_subagent is called
 	// without a persona argument. Defaults to "general" if unset. Setting this
 	// lets users redirect default spawns without editing the catalog.
-	DefaultSubagentPersona string                  `json:"default_subagent_persona,omitempty"`
-	SubagentMaxParallel    int                     `json:"subagent_max_parallel,omitempty"`     // Maximum number of parallel subagents (default: 2)
-	SubagentParallelEnabled *bool                   `json:"subagent_parallel_enabled,omitempty"` // Enable/disable parallel subagent execution (default: true)
-	SubagentMaxDepth       int                     `json:"subagent_max_depth,omitempty"`       // Maximum subagent nesting depth (default: 2)
+	DefaultSubagentPersona  string `json:"default_subagent_persona,omitempty"`
+	SubagentMaxParallel     int    `json:"subagent_max_parallel,omitempty"`     // Maximum number of parallel subagents (default: 2)
+	SubagentParallelEnabled *bool  `json:"subagent_parallel_enabled,omitempty"` // Enable/disable parallel subagent execution (default: true)
+	SubagentMaxDepth        int    `json:"subagent_max_depth,omitempty"`        // Maximum subagent nesting depth (default: 2)
 
 	// EAMode controls how the Executive Assistant persona operates.
 	// "interactive" = standard chat interface (default)
@@ -241,6 +242,10 @@ type Config struct {
 	// and a workspace-overlay mode.
 	Shell ShellConfig `json:"shell,omitempty"`
 
+	// Notifications Configuration (SP-070) — controls how the agent
+	// notifies the user when long-running turns complete.
+	Notifications *NotificationsConfig `json:"notifications,omitempty"`
+
 	// Other flags
 	FromAgent bool `json:"-"` // Internal flag, not persisted
 
@@ -255,18 +260,18 @@ type Config struct {
 
 // APITimeoutConfig represents timeout settings for API calls
 type APITimeoutConfig struct {
-	ConnectionTimeoutSec int `json:"connection_timeout_sec,omitempty"`  // Time to establish connection (default: 300)
-	FirstChunkTimeoutSec int `json:"first_chunk_timeout_sec,omitempty"` // Time to receive first response (default: 600)
-	ChunkTimeoutSec      int `json:"chunk_timeout_sec,omitempty"`       // Max time between streaming chunks (default: 600)
-	OverallTimeoutSec    int `json:"overall_timeout_sec,omitempty"`     // Total request timeout (default: 1800)
+	ConnectionTimeoutSec    int `json:"connection_timeout_sec,omitempty"`     // Time to establish connection (default: 300)
+	FirstChunkTimeoutSec    int `json:"first_chunk_timeout_sec,omitempty"`    // Time to receive first response (default: 600)
+	ChunkTimeoutSec         int `json:"chunk_timeout_sec,omitempty"`          // Max time between streaming chunks (default: 600)
+	OverallTimeoutSec       int `json:"overall_timeout_sec,omitempty"`        // Total request timeout (default: 1800)
 	CommitMessageTimeoutSec int `json:"commit_message_timeout_sec,omitempty"` // Timeout for commit message generation (default: 300)
 }
 
 // ShellPattern is a single user-defined shell classification pattern.
 type ShellPattern struct {
-	Match  string `json:"match"`              // prefix string or regex pattern
-	Kind   string `json:"kind"`               // "prefix" or "regex"
-	Reason string `json:"reason,omitempty"`   // optional human-readable note
+	Match  string `json:"match"`            // prefix string or regex pattern
+	Kind   string `json:"kind"`             // "prefix" or "regex"
+	Reason string `json:"reason,omitempty"` // optional human-readable note
 }
 
 // WorkspaceOverlayConfig controls how workspace-rooted policy files are loaded.
@@ -279,8 +284,8 @@ type WorkspaceOverlayConfig struct {
 
 // ShellConfig holds user-configurable shell permission policy.
 type ShellConfig struct {
-	UserSafePatterns      []ShellPattern        `json:"user_safe_patterns,omitempty"`
-	UserDangerousPatterns []ShellPattern        `json:"user_dangerous_patterns,omitempty"`
+	UserSafePatterns      []ShellPattern         `json:"user_safe_patterns,omitempty"`
+	UserDangerousPatterns []ShellPattern         `json:"user_dangerous_patterns,omitempty"`
 	WorkspaceOverlay      WorkspaceOverlayConfig `json:"workspace_overlay,omitempty"`
 }
 
@@ -360,9 +365,9 @@ type APIKeys map[string]string
 // in the default set, this override replaces it entirely. New IDs are
 // appended to the merged list.
 type LanguageServerOverride struct {
-	ID          string   `json:"id" yaml:"id"`                              // Unique server ID (e.g. "go", "typescript")
-	Binary      string   `json:"binary" yaml:"binary"`                      // Path to the binary (e.g. "gopls", "typescript-language-server")
-	Args        []string `json:"args,omitempty" yaml:"args,omitempty"`      // Command-line arguments (e.g. ["--stdio"])
+	ID          string   `json:"id" yaml:"id"`                                         // Unique server ID (e.g. "go", "typescript")
+	Binary      string   `json:"binary" yaml:"binary"`                                 // Path to the binary (e.g. "gopls", "typescript-language-server")
+	Args        []string `json:"args,omitempty" yaml:"args,omitempty"`                 // Command-line arguments (e.g. ["--stdio"])
 	LanguageIDs []string `json:"language_ids,omitempty" yaml:"language_ids,omitempty"` // Language IDs this server handles (e.g. ["go"])
 	InstallHint string   `json:"install_hint,omitempty" yaml:"install_hint,omitempty"` // Installation instructions
 }
@@ -393,17 +398,17 @@ type CustomProviderConfig struct {
 type RiskLevel string
 
 const (
-	RiskLevelLow    RiskLevel = "low"      // Auto-approve (git status, read operations)
-	RiskLevelMedium RiskLevel = "medium"   // Reason and decide (git commit, git push)
-	RiskLevelHigh   RiskLevel = "high"     // Prompt the user when interactive; reject when not
+	RiskLevelLow      RiskLevel = "low"      // Auto-approve (git status, read operations)
+	RiskLevelMedium   RiskLevel = "medium"   // Reason and decide (git commit, git push)
+	RiskLevelHigh     RiskLevel = "high"     // Prompt the user when interactive; reject when not
 	RiskLevelCritical RiskLevel = "critical" // Never approvable: rm -rf root, fork bombs
 )
 
 // AutoApproveRules controls the EA's sliding risk cascade for operation approvals.
 type AutoApproveRules struct {
-	LowRiskOps     []string `json:"low_risk,omitempty"`        // Operations auto-approved by EA
-	MediumRiskOps  []string `json:"medium_risk,omitempty"`     // Operations the EA reasons about
-	HighRiskNever  []string `json:"high_risk_never,omitempty"` // Pattern names always gated (rm_recursive, force_flag, ...)
+	LowRiskOps    []string `json:"low_risk,omitempty"`        // Operations auto-approved by EA
+	MediumRiskOps []string `json:"medium_risk,omitempty"`     // Operations the EA reasons about
+	HighRiskNever []string `json:"high_risk_never,omitempty"` // Pattern names always gated (rm_recursive, force_flag, ...)
 	// DefaultRisk is the level returned for operations that don't
 	// match any of the above. Default (empty) is "medium" — the
 	// classic EA behavior. Cautious profiles set this to "high"
@@ -1178,6 +1183,37 @@ func (c *ComputerUseConfig) Resolve() ComputerUseConfig {
 	return result
 }
 
+// NotificationsConfig controls how the agent notifies the user when
+// long-running turns complete (SP-070).
+type NotificationsConfig struct {
+	// CLIBell emits a terminal bell (\a) on completion.
+	CLIBell bool `json:"cli_bell,omitempty"`
+	// OSNotify fires an OS-level desktop notification on completion.
+	OSNotify bool `json:"os_notify,omitempty"`
+	// Browser fires a browser notification (used by WebUI, SP-070-4).
+	Browser bool `json:"browser,omitempty"`
+	// MinSeconds is the minimum turn duration (in seconds) before a
+	// notification is sent.  Default: 10.0.  Turns completing in less
+	// than this are considered too brief to warrant a notification.
+	MinSeconds float64 `json:"min_seconds,omitempty"`
+}
+
+// Resolve returns a copy with defaults filled in for zero-value fields.
+func (c *NotificationsConfig) Resolve() NotificationsConfig {
+	result := NotificationsConfig{
+		MinSeconds: 10,
+	}
+	if c != nil {
+		result.CLIBell = c.CLIBell
+		result.OSNotify = c.OSNotify
+		result.Browser = c.Browser
+		if c.MinSeconds != 0 {
+			result.MinSeconds = c.MinSeconds
+		}
+	}
+	return result
+}
+
 // PersistentContextConfig configures persistent conversational context and memory retrieval.
 type PersistentContextConfig struct {
 	// ProactiveContextEnabled controls whether the system primes new sessions with
@@ -1229,14 +1265,14 @@ type PersistentContextConfig struct {
 // If the receiver is nil, returns a fully-defaulted config.
 func (c *PersistentContextConfig) Resolve() PersistentContextConfig {
 	result := PersistentContextConfig{
-		ProactiveContextEnabled:   true,
-		MaxContextualResults:      5,
-		MinRelevanceScore:         0.50,
-		MaxContextChars:           4000,
-		WorkspaceScopedRetrieval:  true,
-		DriftDetectionEnabled:     true,
-		DriftThreshold:            0.60,
-		DriftCheckInterval:        5,
+		ProactiveContextEnabled:  true,
+		MaxContextualResults:     5,
+		MinRelevanceScore:        0.50,
+		MaxContextChars:          4000,
+		WorkspaceScopedRetrieval: true,
+		DriftDetectionEnabled:    true,
+		DriftThreshold:           0.60,
+		DriftCheckInterval:       5,
 	}
 	if c != nil {
 		result.ProactiveContextEnabled = c.ProactiveContextEnabled
@@ -1470,10 +1506,10 @@ func NewConfig() *Config {
 		MCP:                  mcp.DefaultMCPConfig(),
 		Preferences:          make(map[string]interface{}),
 		APITimeouts: &APITimeoutConfig{
-			ConnectionTimeoutSec: 300,
-			FirstChunkTimeoutSec: 600,
-			ChunkTimeoutSec:      600,
-			OverallTimeoutSec:    1800,
+			ConnectionTimeoutSec:    300,
+			FirstChunkTimeoutSec:    600,
+			ChunkTimeoutSec:         600,
+			OverallTimeoutSec:       1800,
 			CommitMessageTimeoutSec: 300, // 5 minutes for commit message generation
 		},
 		HistoryScope:                "project", // Default to project-scoped history
@@ -1486,7 +1522,7 @@ func NewConfig() *Config {
 		PDFOCREnabled:               true,
 		PDFOCRProvider:              "ollama",
 		PDFOCRModel:                 "glm-ocr",
-		SubagentMaxParallel:         2,    // Default max parallel subagents
+		SubagentMaxParallel:         2,                                       // Default max parallel subagents
 		SubagentParallelEnabled:     func() *bool { t := true; return &t }(), // Default to enabling parallel subagents
 		EmbeddingIndex: &EmbeddingIndexConfig{
 			Enabled:             false,

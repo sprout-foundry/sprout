@@ -163,6 +163,7 @@ func (ws *ReactWebServer) registerGitRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/git/worktree/checkout", ws.handleAPIGitWorktreeCheckout)
 	mux.HandleFunc("/api/git/checkout", ws.handleAPIGitCheckout)
 	mux.HandleFunc("/api/git/revert", ws.handleAPIGitRevert)
+	mux.HandleFunc("/api/git/pull-request", ws.handleAPIGitPullRequest)
 	mux.HandleFunc("/api/git/branch/create", ws.handleAPIGitCreateBranch)
 	mux.HandleFunc("/api/git/pull", ws.handleAPIGitPull)
 	mux.HandleFunc("/api/git/push", ws.handleAPIGitPush)

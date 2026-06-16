@@ -679,6 +679,27 @@ export const useGitWorkspace = ({
     }, 'Failed to push changes');
   }, [fetchFn, runGitAction]);
 
+  const handleCreatePullRequest = useCallback(
+    async (
+      params: { title: string; body?: string; base?: string; head?: string; draft?: boolean },
+    ): Promise<{ url: string; number: number; state: string }> => {
+      setGitActionError(null);
+      setGitActionWarning(null);
+      setIsGitActing(true);
+      try {
+        const result = await gitApi.createPullRequest(fetchFn, params);
+        return result;
+      } catch (error) {
+        warn(`[handleCreatePullRequest] failed: ${error instanceof Error ? error.message : String(error)}`);
+        setGitActionError(error instanceof Error ? error.message : 'Failed to create pull request');
+        throw error;
+      } finally {
+        setIsGitActing(false);
+      }
+    },
+    [fetchFn],
+  );
+
   // Git history callbacks
   const handleLoadCommits = useCallback(
     async (limit: number, offset: number, opts?: { signal?: AbortSignal }) => {
@@ -786,6 +807,7 @@ export const useGitWorkspace = ({
     handleCreateBranch,
     handlePull,
     handlePush,
+    handleCreatePullRequest,
     handleLoadCommits,
     handleLoadCommitDetail,
     handleLoadCommitFileDiff,

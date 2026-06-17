@@ -27,6 +27,23 @@ import (
 type ShellCommand struct {
 	Provider string
 	Model    string
+	// goCtx is the cancellation context for LLM calls (SP-073). Set before
+	// Execute is called via the command registry. When nil, falls back to
+	// context.Background().
+	goCtx context.Context
+}
+
+// SetContext sets the cancellation context for LLM calls (SP-073).
+func (c *ShellCommand) SetContext(ctx context.Context) {
+	c.goCtx = ctx
+}
+
+// getContext returns the stored context or context.Background() as fallback.
+func (c *ShellCommand) getContext() context.Context {
+	if c.goCtx != nil {
+		return c.goCtx
+	}
+	return context.Background()
 }
 
 func (c *ShellCommand) Name() string {
@@ -91,8 +108,8 @@ Generate the command/script now:`, description, envContext)
 		{Role: "user", Content: userPrompt},
 	}
 
-	// TODO(SP-034-1c): thread caller ctx through shell-script generation.
-	response, err := clientWrapper.SendChatRequest(context.Background(), messages, nil, "", false) // nil tools = no tool usage
+	// SP-073: use caller ctx so Stop aborts shell-script generation.
+	response, err := clientWrapper.SendChatRequest(c.getContext(), messages, nil, "", false) // nil tools = no tool usage
 	if err != nil {
 		return fmt.Errorf("failed to generate shell script: %v", err)
 	}
@@ -124,7 +141,7 @@ Generate the command/script now:`, description, envContext)
 Example format: find . -name "*.go" | wc -l`, description)},
 		}
 
-		response, err = clientWrapper.SendChatRequest(context.Background(), retryMessages, nil, "", false)
+		response, err = clientWrapper.SendChatRequest(c.getContext(), retryMessages, nil, "", false)
 		if err != nil {
 			return fmt.Errorf("failed to regenerate shell script: %v", err)
 		}
@@ -183,7 +200,7 @@ Example format: find . -name "*.go" | wc -l`, description)},
 
 	if isSingleCommand {
 		// Execute single command directly (output streams in real-time)
-		_, execErr = tools.ExecuteShellCommandWithSafety(context.Background(), generatedScript, true, "", true)
+		_, execErr = tools.ExecuteShellCommandWithSafety(c.getContext(), generatedScript, true, "", true)
 	} else {
 		// For scripts, save to temporary file and execute
 		tmpFile, err := os.CreateTemp("", "sprout-script-*.sh")
@@ -206,7 +223,7 @@ Example format: find . -name "*.go" | wc -l`, description)},
 		}
 
 		// Execute the script (output streams in real-time)
-		_, execErr = tools.ExecuteShellCommandWithSafety(context.Background(), tmpFile.Name(), true, "", true)
+		_, execErr = tools.ExecuteShellCommandWithSafety(c.getContext(), tmpFile.Name(), true, "", true)
 	}
 
 	// Display results (output has been streamed in real-time)

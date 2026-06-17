@@ -12,7 +12,7 @@ import (
 
 // generateCommitReview generates a review of staged files to flag critical concerns
 // The review focuses on high-level, critical issues or staged files that should not be committed
-func generateCommitReview(chatAgent *agent.Agent) (string, error) {
+func generateCommitReview(ctx context.Context, chatAgent *agent.Agent) (string, error) {
 	// Get staged diff
 	diffOutput, err := gitCommand("diff", "--staged").CombinedOutput()
 	if err != nil {
@@ -86,8 +86,8 @@ IMPORTANT RULES:
 		},
 	}
 
-	// TODO(SP-034-1c): thread caller ctx through commit review pipeline.
-	resp, err := client.SendChatRequest(context.Background(), messages, nil, "", false)
+	// SP-073: use caller ctx so Stop aborts commit review.
+	resp, err := client.SendChatRequest(ctx, messages, nil, "", false)
 	if err != nil {
 		// Fall back to heuristic review ifLLM fails
 		return doHeuristicReview(diff, stagedFiles), nil

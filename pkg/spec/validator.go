@@ -34,7 +34,7 @@ func NewScopeValidator(cfg *configuration.Config, logger *utils.Logger) (*ScopeV
 }
 
 // ValidateScope checks if changes are within spec boundaries
-func (v *ScopeValidator) ValidateScope(diff string, spec *CanonicalSpec) (*ScopeReviewResult, error) {
+func (v *ScopeValidator) ValidateScope(ctx context.Context, diff string, spec *CanonicalSpec) (*ScopeReviewResult, error) {
 	// Validate inputs
 	if diff == "" {
 		return nil, fmt.Errorf("diff cannot be empty")
@@ -65,8 +65,8 @@ func (v *ScopeValidator) ValidateScope(diff string, spec *CanonicalSpec) (*Scope
 	promptSize := len(fullPrompt)
 	v.logger.LogProcessStep(fmt.Sprintf("Scope validation prompt size: %d bytes", promptSize))
 
-	// TODO(SP-034-1c): thread caller ctx through ScopeValidator so Stop aborts.
-	chatResponse, err := v.agentClient.SendChatRequest(context.Background(), messages, nil, "", false)
+	// SP-073: thread caller ctx through ScopeValidator so Stop aborts.
+	chatResponse, err := v.agentClient.SendChatRequest(ctx, messages, nil, "", false)
 	if err != nil {
 		// Check for rate limiting or timeout errors
 		errStr := err.Error()

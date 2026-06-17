@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -45,7 +46,7 @@ func (c *SelfReviewCommand) Execute(args []string, chatAgent *agent.Agent) error
 	}
 
 	logger := utils.GetLogger(true)
-	result, err := spec.ReviewTrackedChanges(revisionID, cfg, logger)
+	result, err := spec.ReviewTrackedChanges(context.Background(), revisionID, cfg, logger)
 	if err != nil {
 		return fmt.Errorf("self-review failed: %w", err)
 	}

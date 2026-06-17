@@ -13,7 +13,9 @@ import (
 )
 
 // SelfReviewCommand implements the /self-review slash command.
-type SelfReviewCommand struct{}
+type SelfReviewCommand struct {
+	ctx context.Context // SP-073: cancellation context
+}
 
 func (c *SelfReviewCommand) Name() string {
 	return "self-review"
@@ -21,6 +23,19 @@ func (c *SelfReviewCommand) Name() string {
 
 func (c *SelfReviewCommand) Description() string {
 	return "Run canonical-spec scope validation against the current or specified revision"
+}
+
+// SetContext sets the cancellation context for review operations (SP-073).
+func (c *SelfReviewCommand) SetContext(ctx context.Context) {
+	c.ctx = ctx
+}
+
+// getContext returns the stored context or context.Background() as fallback.
+func (c *SelfReviewCommand) getContext() context.Context {
+	if c.ctx != nil {
+		return c.ctx
+	}
+	return context.Background()
 }
 
 func (c *SelfReviewCommand) Execute(args []string, chatAgent *agent.Agent) error {
@@ -46,7 +61,7 @@ func (c *SelfReviewCommand) Execute(args []string, chatAgent *agent.Agent) error
 	}
 
 	logger := utils.GetLogger(true)
-	result, err := spec.ReviewTrackedChanges(context.Background(), revisionID, cfg, logger)
+	result, err := spec.ReviewTrackedChanges(c.getContext(), revisionID, cfg, logger)
 	if err != nil {
 		return fmt.Errorf("self-review failed: %w", err)
 	}

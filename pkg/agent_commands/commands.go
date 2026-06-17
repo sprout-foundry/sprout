@@ -86,6 +86,7 @@ func NewCommandRegistry() *CommandRegistry {
 	registry.Register(&StatusCommand{})
 	registry.Register(&LogCommand{})
 	registry.Register(&RollbackCommand{})
+	registry.Register(&RewindCommand{})
 
 	// Register MCP commands
 	registry.Register(&MCPCommand{})

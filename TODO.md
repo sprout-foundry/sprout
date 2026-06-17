@@ -64,7 +64,7 @@ Tech debt (Medium): the dual registry has 3 `TODO(SP-038)` leftovers — `ForPer
 
 - [x] SP-074-1: Implement real per-persona filtering — `(*ToolRegistry).ForPersona(allowlist []string) map[string]ToolHandler` in `pkg/agent_tools/registry.go` (empty allowlist → all tools), with tests for allowlist / empty / unknown-tool. Acceptance: `ForPersona` returns exactly the allowlisted tools; `go test ./pkg/agent_tools/...` passes.
 - [x] SP-074-2: Route tool output through the agent — add an `io.Writer` accessor backed by `PrintLine`/`PrintLineAsync` (`OutputRouter`) and set `env.OutputWriter` to it in `pkg/agent/tool_security.go` (keep `os.Stdout` only as the nil-agent fallback). Acceptance: a streaming new-interface tool's output appears in the WebUI, not just stdout.
-- [ ] SP-074-3: Add a `tools.ApprovalManager` adapter over the agent's `security.ApprovalManager` (signature translation) and set `env.ApprovalManager`. Acceptance: a migrated tool can request approval via the env and it surfaces through the normal CLI/WebUI prompt.
+- [x] SP-074-3: Add a `tools.ApprovalManager` adapter over the agent's `security.ApprovalManager` (signature translation) and set `env.ApprovalManager`. Acceptance: a migrated tool can request approval via the env and it surfaces through the normal CLI/WebUI prompt.
 - [ ] SP-074-4: Collapse the dual-dispatch fallback for migrated tools (keep only for documented legacy func-style handlers); remove the `TODO(SP-038)` markers. Acceptance: `grep -rn "TODO(SP-038)" pkg/` is empty; existing persona tool-gating is regression-tested unchanged; `make build-all` + `go test ./...` green.
 
 ## SP-075: Large-File Decomposition

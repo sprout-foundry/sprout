@@ -1054,7 +1054,7 @@ func (a *Agent) runSelfReviewGate() error {
 	}
 
 	logger := utils.GetLogger(true)
-	result, err := spec.ReviewTrackedChanges(revisionID, cfg, logger)
+	result, err := spec.ReviewTrackedChanges(a.interruptCtx, revisionID, cfg, logger)
 	if err != nil {
 		return fmt.Errorf("self-review gate blocked completion: %w", err)
 	}

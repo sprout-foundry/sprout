@@ -67,6 +67,8 @@ func (ws *ReactWebServer) registerQueryRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/query/status", ws.handleAPIQueryStatus)
 	// SP-071-3: rewind the conversation to a prior turn.
 	mux.HandleFunc("/api/query/rewind", ws.handleAPIQueryRewind)
+	// SP-072-4: per-hunk edit approval endpoints.
+	mux.HandleFunc("/api/edits/", ws.handleAPIEdits)
 	// SP-059: per-subagent cancel; path is /api/subagent/{id}/cancel.
 	mux.HandleFunc("/api/subagent/", ws.handleAPISubagentCancel)
 	// Foundry proxy endpoints — accept the translated chat format from CloudAdapter

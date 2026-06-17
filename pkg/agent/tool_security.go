@@ -14,6 +14,7 @@ import (
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 	"github.com/sprout-foundry/sprout/pkg/security"
 	"github.com/sprout-foundry/sprout/pkg/utils"
@@ -237,9 +238,9 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 		env.TodoManager = agent.GetTodoManager()
 		// Interactive CLI means: no browser client connected AND stdin is a TTY.
 		env.IsInteractiveCLI = !agent.HasActiveWebUIClients() && !isNonInteractive()
-		// TODO(SP-038): Wire ApprovalManager adapter when tools are migrated
-		// ApprovalManager: security.ApprovalManager does not implement
-		// tools.ApprovalManager (different method signatures), pass nil
+		// SP-074-3: Wire ApprovalManager adapter so migrated tools can
+		// request security approvals through the normal CLI/WebUI flow.
+		env.ApprovalManager = newToolsApprovalAdapter(agent)
 	} else {
 		env.OutputWriter = os.Stdout
 		env.MaxTokensFunc = func() int { return 0 }
@@ -804,4 +805,68 @@ func (w *outputRouter) Write(p []byte) (int, error) {
 		w.agent.PrintLineAsync(strings.TrimRight(string(line), "\n"))
 	}
 	return len(p), nil
+}
+
+// toolsApprovalAdapter wraps the agent's security.ApprovalManager and event
+// bus, translating calls from the tools.ApprovalManager interface to the
+// security package's signature.
+type toolsApprovalAdapter struct {
+	approvalMgr *security.ApprovalManager
+	eventBus    *events.EventBus
+	clientID    string
+	userID      string
+}
+
+// newToolsApprovalAdapter creates a tools.ApprovalManager backed by the
+// agent's security approval manager and event bus.
+func newToolsApprovalAdapter(agent *Agent) tools.ApprovalManager {
+	if agent == nil {
+		return nil
+	}
+	mgr := agent.GetSecurityApprovalMgr()
+	if mgr == nil {
+		return nil
+	}
+	return &toolsApprovalAdapter{
+		approvalMgr: mgr,
+		eventBus:    agent.GetEventBus(),
+		clientID:    agent.GetEventClientID(),
+		userID:      agent.GetEventUserID(),
+	}
+}
+
+// RequestApproval implements tools.ApprovalManager by translating the call
+// to security.ApprovalManager.RequestApprovalDecisionWithOutcome and
+// converting the decision+outcome to a tools.ApprovalResult.
+//
+// requestID is intentionally ignored — the security layer generates its own ID.
+func (a *toolsApprovalAdapter) RequestApproval(requestID, toolName, riskLevel, prompt string, extras map[string]string) tools.ApprovalResult {
+	// requestID is intentionally ignored — the security layer generates its own ID
+	req := security.ApprovalRequest{
+		Kind:            security.ApprovalKindTool,
+		DefaultResponse: false,
+		ToolName:        toolName,
+		RiskLevel:       riskLevel,
+		Reasoning:       prompt,
+		ClientID:        a.clientID,
+		UserID:          a.userID,
+		Extras:          extras,
+	}
+	decision, outcome := a.approvalMgr.RequestApprovalDecisionWithOutcome(a.eventBus, req)
+
+	reason := ""
+	if !decision.Approved() {
+		switch outcome {
+		case security.ApprovalOutcomeTimedOut:
+			reason = "timed_out"
+		case security.ApprovalOutcomeNoChannel:
+			reason = "no_channel"
+		default:
+			reason = "rejected"
+		}
+	}
+	return tools.ApprovalResult{
+		Approved: decision.Approved(),
+		Reason:   reason,
+	}
 }

@@ -53,9 +53,9 @@ _Spec: `roadmap/SP-073-cooperative-cancellation.md`_
 
 Tech debt / UX (Medium-High): ~8 pipelines pass `context.Background()` to the provider, so Ctrl+C / Stop can't abort them (10 `TODO(SP-034-1c)` markers). `a.interruptCtx` is the ready cancellation source.
 
-- [ ] SP-073-1: Phase 1 — add a leading `ctx context.Context` param to the leaf functions in `pkg/spec/extractor.go` + `validator.go`, `pkg/codereview/prompts.go`, `pkg/agent_tools/vision_pdf.go` + `vision_analyze.go`, `pkg/agent_commands/commit_review.go` + `shell.go`, and forward it to `SendChatRequest`/`SendVisionRequest` instead of `context.Background()`. Acceptance: `make build-all` passes; those calls use the passed ctx.
-- [ ] SP-073-2: Phase 2 — callers pass a real cancellation context (tool `Execute(ctx,…)` for handler-driven paths; `a.interruptCtx` for agent methods, incl. the `GenerateResponse` signature note at `agent_getters.go:633`). Acceptance: `grep -rn "context.Background()" ` in the affected pipelines' provider calls returns nothing; `make build-all` passes.
-- [ ] SP-073-3: Phase 3 — verify Ctrl+C / Stop aborts a multi-page PDF OCR and a commit review within ~1s (clean "aborted" result, no crash); delete all 10 `TODO(SP-034-1c)` markers. Acceptance: `grep -rn "TODO(SP-034-1c)" pkg/` is empty; manual abort confirmed.
+- [x] SP-073-1: Phase 1 — add a leading `ctx context.Context` param to the leaf functions in `pkg/spec/extractor.go` + `validator.go`, `pkg/codereview/prompts.go`, `pkg/agent_tools/vision_pdf.go` + `vision_analyze.go`, `pkg/agent_commands/commit_review.go` + `shell.go`, and forward it to `SendChatRequest`/`SendVisionRequest` instead of `context.Background()`. Acceptance: `make build-all` passes; those calls use the passed ctx.
+- [x] SP-073-2: Phase 2 — callers pass a real cancellation context (tool `Execute(ctx,…)` for handler-driven paths; `a.interruptCtx` for agent methods, incl. the `GenerateResponse` signature note at `agent_getters.go:633`). Acceptance: `grep -rn "context.Background()" ` in the affected pipelines' provider calls returns nothing; `make build-all` passes.
+- [x] SP-073-3: Phase 3 — verify Ctrl+C / Stop aborts a multi-page PDF OCR and a commit review within ~1s (clean "aborted" result, no crash); delete all 10 `TODO(SP-034-1c)` markers. Acceptance: `grep -rn "TODO(SP-034-1c)" pkg/` is empty; manual abort confirmed.
 
 ## SP-074: Finish the Tool-Registry Migration (retire SP-038 shim)
 _Spec: `roadmap/SP-074-tool-registry-migration.md`_

@@ -157,16 +157,54 @@ func TestToolRegistryForPersona(t *testing.T) {
 	reg.Register(h1)
 	reg.Register(h2)
 
-	tools := reg.ForPersona("coder")
-	if len(tools) != 2 {
-		t.Fatalf("ForPersona returned %d tools, want 2", len(tools))
-	}
-	// ForPersona currently returns all tools regardless of persona
-	for _, name := range []string{"tool_a", "tool_b"} {
-		if _, ok := tools[name]; !ok {
-			t.Errorf("ForPersona missing tool %q", name)
+	t.Run("allowlist returns subset", func(t *testing.T) {
+		tools := reg.ForPersona([]string{"tool_a"})
+		if len(tools) != 1 {
+			t.Fatalf("ForPersona([tool_a]) returned %d tools, want 1", len(tools))
 		}
-	}
+		if _, ok := tools["tool_a"]; !ok {
+			t.Error("ForPersona([tool_a]) missing tool_a")
+		}
+		if _, ok := tools["tool_b"]; ok {
+			t.Error("ForPersona([tool_a]) should not include tool_b")
+		}
+	})
+
+	t.Run("nil allowlist returns all", func(t *testing.T) {
+		tools := reg.ForPersona(nil)
+		if len(tools) != 2 {
+			t.Fatalf("ForPersona(nil) returned %d tools, want 2", len(tools))
+		}
+		for _, name := range []string{"tool_a", "tool_b"} {
+			if _, ok := tools[name]; !ok {
+				t.Errorf("ForPersona(nil) missing tool %q", name)
+			}
+		}
+	})
+
+	t.Run("empty slice returns all", func(t *testing.T) {
+		tools := reg.ForPersona([]string{})
+		if len(tools) != 2 {
+			t.Fatalf("ForPersona([]) returned %d tools, want 2", len(tools))
+		}
+	})
+
+	t.Run("unknown tool in allowlist is ignored", func(t *testing.T) {
+		tools := reg.ForPersona([]string{"tool_a", "nonexistent"})
+		if len(tools) != 1 {
+			t.Fatalf("ForPersona([tool_a, nonexistent]) returned %d tools, want 1", len(tools))
+		}
+		if _, ok := tools["tool_a"]; !ok {
+			t.Error("ForPersona([tool_a, nonexistent]) missing tool_a")
+		}
+	})
+
+	t.Run("multiple tools in allowlist", func(t *testing.T) {
+		tools := reg.ForPersona([]string{"tool_a", "tool_b"})
+		if len(tools) != 2 {
+			t.Fatalf("ForPersona([tool_a, tool_b]) returned %d tools, want 2", len(tools))
+		}
+	})
 }
 
 func TestToolRegistryNames(t *testing.T) {

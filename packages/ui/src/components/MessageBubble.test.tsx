@@ -339,4 +339,22 @@ describe('MessageBubble', () => {
     // Fallback color #6e7681 — neutral mid-gray, readable on both themes.
     expect(wrapper?.style.getPropertyValue('--persona-color')).toBe('#6e7681');
   });
+
+  // ─────────────────────────────────────────────────────────────────────
+  // SP-071-3: data-message-index
+  // ─────────────────────────────────────────────────────────────────────
+
+  it('sets data-message-index attribute when dataMessageIndex prop is provided', () => {
+    act(() => {
+      root.render(createElement(MessageBubble, {
+        ariaLabel: 'Indexed message',
+        dataMessageIndex: 5,
+        children: 'Content',
+      }));
+    });
+
+    const bubble = container.querySelector('.message') as HTMLElement | null;
+    expect(bubble).not.toBeNull();
+    expect(bubble?.getAttribute('data-message-index')).toBe('5');
+  });
 });

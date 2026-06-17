@@ -1,6 +1,7 @@
 package spec
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
@@ -36,10 +37,10 @@ func NewSpecReviewService(cfg *configuration.Config, logger *utils.Logger) (*Spe
 }
 
 // ExtractAndValidate extracts spec and validates changes in one call
-func (s *SpecReviewService) ExtractAndValidate(conversation []Message, diff string, userIntent string) (*ScopeReviewResult, *CanonicalSpec, error) {
+func (s *SpecReviewService) ExtractAndValidate(ctx context.Context, conversation []Message, diff string, userIntent string) (*ScopeReviewResult, *CanonicalSpec, error) {
 	// Extract spec from conversation
 	s.logger.LogProcessStep("Extracting canonical specification from conversation...")
-	extractionResult, err := s.extractor.ExtractSpec(conversation, userIntent)
+	extractionResult, err := s.extractor.ExtractSpec(ctx, conversation, userIntent)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to extract spec: %w", err)
 	}
@@ -48,7 +49,7 @@ func (s *SpecReviewService) ExtractAndValidate(conversation []Message, diff stri
 
 	// Validate changes against spec
 	s.logger.LogProcessStep("Validating changes against specification...")
-	scopeResult, err := s.validator.ValidateScope(diff, spec)
+	scopeResult, err := s.validator.ValidateScope(ctx, diff, spec)
 	if err != nil {
 		return nil, spec, fmt.Errorf("failed to validate scope: %w", err)
 	}

@@ -2,6 +2,7 @@ package tools
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha1"
 	"encoding/base64"
 	"encoding/hex"
@@ -769,7 +770,7 @@ func detectImageMimeType(path string) string {
 
 // AnalyzeImage is the tool function called by the agent for image analysis
 // Returns a structured JSON response with metadata for robust error handling
-func AnalyzeImage(imagePath string, analysisPrompt string, analysisMode string) (string, error) {
+func AnalyzeImage(ctx context.Context, imagePath string, analysisPrompt string, analysisMode string) (string, error) {
 	response := ImageAnalysisResponse{
 		Success:     false,
 		ToolInvoked: true,
@@ -809,7 +810,7 @@ func AnalyzeImage(imagePath string, analysisPrompt string, analysisMode string) 
 	ext := strings.ToLower(GetFileExtension(imagePath))
 	if ext == ".pdf" {
 		// Try simplified PDF processing
-		pdfText, err := ProcessPDFWithVision(imagePath)
+		pdfText, err := ProcessPDFWithVision(ctx, imagePath)
 		if err != nil {
 			response.Success = false
 			response.InputResolved = true
@@ -881,7 +882,7 @@ func AnalyzeImage(imagePath string, analysisPrompt string, analysisMode string) 
 	response.InputResolved = true
 	response.OCRAttempted = true
 
-	analysis, err := processor.AnalyzeImage(imagePath, prompt)
+	analysis, err := processor.AnalyzeImage(ctx, imagePath, prompt)
 	if err != nil {
 		errMsg := err.Error()
 

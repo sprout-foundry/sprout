@@ -630,9 +630,9 @@ func (a *Agent) IsSessionElevated() bool {
 
 // GenerateResponse generates a simple response using the current model without tool calls.
 //
-// TODO(SP-034-1c): accept a ctx parameter and forward it so callers can abort
-// in-flight calls. The interruptCtx on the agent is the natural source, but
-// changing this signature ripples into many callsites — handle in 1c.
+// SP-073: uses a.interruptCtx so Stop/cancel aborts the in-flight call. If
+// callers need to pass their own context, they can set it via SetInterruptCtx
+// before calling.
 func (a *Agent) GenerateResponse(messages []api.Message) (string, error) {
 	resp, err := a.client.SendChatRequest(a.interruptCtx, messages, nil, "", false) // No tools, no reasoning, no disableThinking
 	if err != nil {

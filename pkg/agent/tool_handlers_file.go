@@ -204,7 +204,7 @@ func handleReadFileWithImages(ctx context.Context, a *Agent, args map[string]int
 		}
 
 		// Non-multimodal: extract text via OCR
-		result, ocrErr := tools.ProcessPDFForTextOnly(cleanPath)
+		result, ocrErr := tools.ProcessPDFForTextOnly(ctx, cleanPath)
 		if ocrErr != nil {
 			return nil, "", fmt.Errorf("failed to read PDF %s: %w", path, ocrErr)
 		}

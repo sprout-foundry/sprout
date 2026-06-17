@@ -21,6 +21,12 @@ interface MessageBubbleProps {
    * delegation chain reads as a visible hierarchy. Default 0.
    */
   depth?: number;
+  /**
+   * SP-071-3: zero-based index of this message in the chat history.
+   * Rendered as data-message-index for the context menu to identify
+   * which message was right-clicked.
+   */
+  dataMessageIndex?: number;
   tokensUsed?: number;
   cost?: number;
   model?: string;
@@ -37,6 +43,7 @@ function MessageBubble({
   timestamp,
   persona,
   depth = 0,
+  dataMessageIndex,
   tokensUsed,
   cost,
   model,
@@ -72,6 +79,7 @@ function MessageBubble({
       // Lighthouse flagged them. The parent chat container carries
       // role="log" already; individual messages don't need a role.
       data-message-type={type}
+      data-message-index={dataMessageIndex}
       aria-label={ariaLabel}
       style={hasStyle ? containerStyle : undefined}
       data-subagent-depth={depth > 0 ? depth : undefined}

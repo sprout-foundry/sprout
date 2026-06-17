@@ -650,4 +650,300 @@ describe('ChatMessageContextMenu', () => {
     const menu = document.querySelector('.context-menu');
     expect(menu).toBeNull();
   });
+
+  // ─────────────────────────────────────────────────────────────────────
+  // SP-071-3: Edit & resend from here
+  // ─────────────────────────────────────────────────────────────────────
+
+  // Helper to build the full DOM structure the context menu expects:
+  //   .message (data-message-type, data-message-index) → .message-bubble (data-message-content)
+  function buildUserBubble(
+    content: string,
+    index: number,
+    parent: HTMLElement,
+  ) {
+    const messageEl = document.createElement('div');
+    messageEl.className = 'message user';
+    messageEl.setAttribute('data-message-type', 'user');
+    messageEl.setAttribute('data-message-index', String(index));
+
+    const bubble = document.createElement('div');
+    bubble.className = 'message-bubble';
+    bubble.setAttribute('data-message-content', content);
+
+    messageEl.appendChild(bubble);
+    parent.appendChild(messageEl);
+    return { messageEl, bubble };
+  }
+
+  function buildAssistantBubble(
+    content: string,
+    index: number,
+    parent: HTMLElement,
+  ) {
+    const messageEl = document.createElement('div');
+    messageEl.className = 'message assistant';
+    messageEl.setAttribute('data-message-type', 'assistant');
+    messageEl.setAttribute('data-message-index', String(index));
+
+    const bubble = document.createElement('div');
+    bubble.className = 'message-bubble';
+    bubble.setAttribute('data-message-content', content);
+
+    messageEl.appendChild(bubble);
+    parent.appendChild(messageEl);
+    return { messageEl, bubble };
+  }
+
+  it('shows Edit & resend from here for user messages when onRewindAndResend is provided', () => {
+    const onInsertAtCursor = vi.fn();
+    const onRewindAndResend = vi.fn();
+
+    const { bubble } = buildUserBubble('Edit me', 5, containerRef.current!);
+
+    act(() => {
+      root.render(
+        createElement(ChatMessageContextMenu, {
+          containerRef,
+          onInsertAtCursor,
+          onRewindAndResend,
+        })
+      );
+    });
+
+    act(() => {
+      const event = new MouseEvent('contextmenu', {
+        bubbles: true,
+        clientX: 100,
+        clientY: 200,
+      });
+      bubble.dispatchEvent(event);
+    });
+
+    const menu = document.querySelector('.context-menu');
+    expect(menu).not.toBeNull();
+    const labels = menu?.querySelectorAll('.menu-item-label');
+    const labelTexts = Array.from(labels!).map((l) => l.textContent);
+    // &amp; in JSX renders as & in the DOM's textContent
+    expect(labelTexts).toContain('Edit & resend from here');
+  });
+
+  it('does not show Edit & resend from here for assistant messages', () => {
+    const onInsertAtCursor = vi.fn();
+    const onRewindAndResend = vi.fn();
+
+    const { bubble } = buildAssistantBubble('Assistant text', 3, containerRef.current!);
+
+    act(() => {
+      root.render(
+        createElement(ChatMessageContextMenu, {
+          containerRef,
+          onInsertAtCursor,
+          onRewindAndResend,
+        })
+      );
+    });
+
+    act(() => {
+      const event = new MouseEvent('contextmenu', {
+        bubbles: true,
+        clientX: 100,
+        clientY: 200,
+      });
+      bubble.dispatchEvent(event);
+    });
+
+    const menu = document.querySelector('.context-menu');
+    expect(menu).not.toBeNull();
+    const labels = menu?.querySelectorAll('.menu-item-label');
+    const labelTexts = Array.from(labels!).map((l) => l.textContent);
+    expect(labelTexts).not.toContain('Edit &amp; resend from here');
+  });
+
+  it('does not show Edit & resend from here when onRewindAndResend is not provided', () => {
+    const onInsertAtCursor = vi.fn();
+
+    const { bubble } = buildUserBubble('User message', 2, containerRef.current!);
+
+    act(() => {
+      root.render(
+        createElement(ChatMessageContextMenu, {
+          containerRef,
+          onInsertAtCursor,
+        })
+      );
+    });
+
+    act(() => {
+      const event = new MouseEvent('contextmenu', {
+        bubbles: true,
+        clientX: 100,
+        clientY: 200,
+      });
+      bubble.dispatchEvent(event);
+    });
+
+    const menu = document.querySelector('.context-menu');
+    expect(menu).not.toBeNull();
+    const labels = menu?.querySelectorAll('.menu-item-label');
+    const labelTexts = Array.from(labels!).map((l) => l.textContent);
+    expect(labelTexts).not.toContain('Edit &amp; resend from here');
+  });
+
+  it('calls onRewindAndResend with correct content and index when clicked', () => {
+    const onInsertAtCursor = vi.fn();
+    const onRewindAndResend = vi.fn();
+
+    const { bubble } = buildUserBubble('test message', 5, containerRef.current!);
+
+    act(() => {
+      root.render(
+        createElement(ChatMessageContextMenu, {
+          containerRef,
+          onInsertAtCursor,
+          onRewindAndResend,
+        })
+      );
+    });
+
+    act(() => {
+      const event = new MouseEvent('contextmenu', {
+        bubbles: true,
+        clientX: 100,
+        clientY: 200,
+      });
+      bubble.dispatchEvent(event);
+    });
+
+    // Find and click the "Edit & resend from here" button
+    const menu = document.querySelector('.context-menu');
+    const labels = menu?.querySelectorAll('.menu-item-label');
+    let rewindBtn: HTMLButtonElement | null = null;
+    for (const label of labels!) {
+      // &amp; in JSX renders as & in the DOM's textContent
+      if (label.textContent === 'Edit & resend from here') {
+        rewindBtn = label.closest('button') as HTMLButtonElement;
+        break;
+      }
+    }
+
+    expect(rewindBtn).not.toBeNull();
+
+    act(() => {
+      rewindBtn?.click();
+    });
+
+    expect(onRewindAndResend).toHaveBeenCalledWith('test message', 5);
+  });
+
+  it('resolves messageIndex -1 when data-message-index is missing', () => {
+    const onInsertAtCursor = vi.fn();
+    const onRewindAndResend = vi.fn();
+
+    // Build a user bubble WITHOUT data-message-index
+    const messageEl = document.createElement('div');
+    messageEl.className = 'message user';
+    messageEl.setAttribute('data-message-type', 'user');
+    // Intentionally omit data-message-index
+
+    const bubble = document.createElement('div');
+    bubble.className = 'message-bubble';
+    bubble.setAttribute('data-message-content', 'no index message');
+
+    messageEl.appendChild(bubble);
+    containerRef.current!.appendChild(messageEl);
+
+    act(() => {
+      root.render(
+        createElement(ChatMessageContextMenu, {
+          containerRef,
+          onInsertAtCursor,
+          onRewindAndResend,
+        })
+      );
+    });
+
+    act(() => {
+      const event = new MouseEvent('contextmenu', {
+        bubbles: true,
+        clientX: 100,
+        clientY: 200,
+      });
+      bubble.dispatchEvent(event);
+    });
+
+    const menu = document.querySelector('.context-menu');
+    expect(menu).not.toBeNull();
+
+    const labels = menu?.querySelectorAll('.menu-item-label');
+    let rewindBtn: HTMLButtonElement | null = null;
+    for (const label of labels!) {
+      // &amp; in JSX renders as & in the DOM's textContent
+      if (label.textContent === 'Edit & resend from here') {
+        rewindBtn = label.closest('button') as HTMLButtonElement;
+        break;
+      }
+    }
+
+    act(() => {
+      rewindBtn?.click();
+    });
+
+    expect(onRewindAndResend).toHaveBeenCalledWith('no index message', -1);
+  });
+
+  it('shows Edit & resend from here between divider and Insert at cursor', () => {
+    const onInsertAtCursor = vi.fn();
+    const onRewindAndResend = vi.fn();
+
+    const { bubble } = buildUserBubble('Position test', 10, containerRef.current!);
+
+    act(() => {
+      root.render(
+        createElement(ChatMessageContextMenu, {
+          containerRef,
+          onInsertAtCursor,
+          onRewindAndResend,
+        })
+      );
+    });
+
+    act(() => {
+      const event = new MouseEvent('contextmenu', {
+        bubbles: true,
+        clientX: 100,
+        clientY: 200,
+      });
+      bubble.dispatchEvent(event);
+    });
+
+    const menu = document.querySelector('.context-menu');
+    expect(menu).not.toBeNull();
+
+    // Collect the text content of all child elements in order
+    // Children alternate between .context-menu-item (button) and .context-menu-divider
+    const children = Array.from(menu?.children || []);
+    const childTypes = children.map((child) => {
+      if (child.classList.contains('context-menu-item')) {
+        const label = child.querySelector('.menu-item-label');
+        return { type: 'item', label: label?.textContent ?? '' };
+      }
+      if (child.classList.contains('context-menu-divider')) {
+        return { type: 'divider' };
+      }
+      return { type: 'other' };
+    });
+
+    // Expected order:
+    // 1. Copy message (item)
+    // 2. divider
+    // 3. Edit & resend from here (item)
+    // 4. divider
+    // 5. Insert at cursor (item)
+    expect(childTypes[0]).toEqual({ type: 'item', label: 'Copy message' });
+    expect(childTypes[1]).toEqual({ type: 'divider' });
+    expect(childTypes[2]).toEqual({ type: 'item', label: 'Edit & resend from here' });
+    expect(childTypes[3]).toEqual({ type: 'divider' });
+    expect(childTypes[4]).toEqual({ type: 'item', label: 'Insert at cursor' });
+  });
 });

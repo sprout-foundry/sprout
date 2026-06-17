@@ -357,8 +357,13 @@ func (a *Agent) PrintTerminalOnly(text string) {
 	router.RouteTerminalOnly(text)
 }
 
-// GetSecurityApprovalMgr returns the security approval manager
+// GetSecurityApprovalMgr returns the security approval manager. Returns nil
+// when the security subsystem is not initialized (e.g., bare &Agent{} in
+// tests), so callers can safely nil-check the result.
 func (a *Agent) GetSecurityApprovalMgr() *security.ApprovalManager {
+	if a.security == nil {
+		return nil
+	}
 	return a.security.GetSecurityApprovalMgr()
 }
 

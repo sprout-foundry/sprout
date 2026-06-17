@@ -1,9 +1,11 @@
 package agent
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -226,10 +228,9 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 	if agent != nil {
 		env.EventBus = agent.GetEventBus()
 		env.WorkspaceRoot = agent.GetWorkspaceRoot()
-		// TODO(SP-038): Agent has no Stdout/Writer accessor; it routes output
-		// via PrintLine/PrintLineAsync → OutputRouter. For now, use os.Stdout
-		// so tools that stream output still produce visible results.
-		env.OutputWriter = os.Stdout
+		// SP-074-2: Route tool output through the agent's output system
+		// (PrintLineAsync → OutputRouter) instead of os.Stdout.
+		env.OutputWriter = newOutputRouter(agent)
 		env.MaxTokensFunc = func() int { return agent.GetMaxContextTokens() }
 		env.ConfigManager = agent.GetConfigManager()
 		env.AskUser = newAgentAskUserService(agent)
@@ -767,4 +768,40 @@ func filesystemDecisionFromCLIChoice(c utils.ApprovalChoice) security.ApprovalDe
 	default:
 		return security.ApprovalDeny
 	}
+}
+
+// outputRouter implements io.Writer by routing writes through the agent's
+// PrintLineAsync method. It buffers partial lines and flushes them on newline
+// boundaries, so streaming output from tools appears in the console the same
+// way it would on a real terminal.
+type outputRouter struct {
+	agent *Agent
+	buf   bytes.Buffer
+}
+
+// newOutputRouter creates an io.Writer that routes tool output through the
+// agent's output system instead of writing directly to os.Stdout.
+func newOutputRouter(agent *Agent) io.Writer {
+	return &outputRouter{agent: agent}
+}
+
+// Write implements io.Writer. It accumulates data in an internal buffer and
+// flushes complete lines (terminated by \n) via PrintLineAsync. Any remaining
+// buffered data is held until the next Write call brings a newline.
+func (w *outputRouter) Write(p []byte) (int, error) {
+	if w.agent == nil {
+		// Fallback: write to os.Stdout if no agent is available
+		return os.Stdout.Write(p)
+	}
+	w.buf.Write(p)
+	for {
+		idx := bytes.IndexByte(w.buf.Bytes(), '\n')
+		if idx < 0 {
+			break
+		}
+		line := w.buf.Next(idx + 1)
+		// Trim the trailing newline for PrintLineAsync
+		w.agent.PrintLineAsync(strings.TrimRight(string(line), "\n"))
+	}
+	return len(p), nil
 }

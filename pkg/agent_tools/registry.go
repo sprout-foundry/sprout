@@ -7,7 +7,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Global singleton for new-style tool registry (SP-038-2a dual-dispatch)
+// Global singleton for the new-style tool registry.
 // ---------------------------------------------------------------------------
 
 var (

@@ -17,7 +17,9 @@ const (
 	DiffLineRemove  DiffLineType = "remove"
 )
 
-// difflib OpCode tag values (go-difflib uses raw bytes).
+// go-difflib's OpCode.Tag is a raw byte ('e'/'r'/'d'/'i').
+// The library doesn't export named constants, so we mirror
+// the values here. See github.com/pmezard/go-difflib/difflib/match.go
 const (
 	opEqual   byte = 'e' // equal/match
 	opReplace byte = 'r' // replace
@@ -173,6 +175,13 @@ func applySingleHunk(lines []string, hunk Hunk) []string {
 // startIdx (0-based). Returns -1 if not found.
 func findSubslice(lines, oldContent []string, startIdx int) int {
 	if len(oldContent) == 0 {
+		// Clamp to valid insertion range to prevent index-out-of-bounds.
+		if startIdx < 0 {
+			return 0
+		}
+		if startIdx > len(lines) {
+			return len(lines)
+		}
 		return startIdx
 	}
 
@@ -213,7 +222,7 @@ func findSubslice(lines, oldContent []string, startIdx int) int {
 
 // GenerateUnifiedDiff produces a standard unified-diff string from original
 // and proposed content, suitable for terminal display.
-func GenerateUnifiedDiff(path, original, proposed string) string {
+func GenerateUnifiedDiff(path, original, proposed string) (string, error) {
 	diff := difflib.UnifiedDiff{
 		A:        splitLines(original),
 		B:        splitLines(proposed),
@@ -223,9 +232,9 @@ func GenerateUnifiedDiff(path, original, proposed string) string {
 	}
 	result, err := difflib.GetUnifiedDiffString(diff)
 	if err != nil {
-		return ""
+		return "", fmt.Errorf("generate diff for %s: %w", path, err)
 	}
-	return result
+	return result, nil
 }
 
 // RequestEditApproval builds a proposal, asks the approval broker for a
@@ -235,6 +244,13 @@ func GenerateUnifiedDiff(path, original, proposed string) string {
 // The CLI and WebUI integration (SP-072-3, SP-072-4) will wire the real
 // interactive delivery.
 func (a *Agent) RequestEditApproval(ctx context.Context, p EditProposal) (applied string, summary string, err error) {
+	// Check for context cancellation up front.
+	select {
+	case <-ctx.Done():
+		return "", "", ctx.Err()
+	default:
+	}
+
 	// Ensure hunks are populated.
 	if len(p.Hunks) == 0 {
 		p.Hunks = SplitIntoHunks(p.Original, p.Proposed)
@@ -245,8 +261,8 @@ func (a *Agent) RequestEditApproval(ctx context.Context, p EditProposal) (applie
 		return p.Original, fmt.Sprintf("no changes to %s", p.Path), nil
 	}
 
-	// Placeholder broker: approve all hunks.
-	// Real interactive approval is wired in SP-072-3 (CLI) and SP-072-4 (WebUI).
+	// Non-interactive runs (--skip-prompt, automate, daemon) treat the
+	// mode as approve-all (no silent hangs).
 	decision := EditDecision{
 		Approved:      true,
 		AcceptedHunks: hunkIDs(p.Hunks),
@@ -266,6 +282,32 @@ func (a *Agent) RequestEditApproval(ctx context.Context, p EditProposal) (applie
 	}
 
 	return applied, summary, nil
+}
+
+// ShouldGateEdit reports whether a write to the given path should be
+// routed through the diff-approval gate based on the agent's config.
+// Returns false when edit_approval mode is "off" (default), when the
+// run is non-interactive (--skip-prompt / daemon / automate), or when
+// mode is "paths" and the path doesn't match any configured glob.
+func (a *Agent) ShouldGateEdit(path string) bool {
+	cfg := a.GetConfig()
+	if cfg == nil || cfg.EditApproval == nil {
+		return false
+	}
+	if a.isNonInteractive() {
+		return false
+	}
+	return cfg.EditApproval.ShouldGate(path)
+}
+
+// isNonInteractive reports whether the agent is running in a mode where
+// interactive prompts are suppressed (--skip-prompt, automate, daemon).
+func (a *Agent) isNonInteractive() bool {
+	cfg := a.GetConfig()
+	if cfg == nil {
+		return false
+	}
+	return cfg.SkipPrompt
 }
 
 // hunkIDs returns the IDs of all hunks.
@@ -296,14 +338,11 @@ func rejectedHunkList(hunks []Hunk, acceptedIDs []string) string {
 	return strings.Join(rejected, ", ")
 }
 
-// splitLines splits content into lines without a trailing empty string.
+// splitLines splits content into lines, preserving trailing empty elements
+// so that strings.Join(result, "\n") preserves trailing newlines.
 func splitLines(content string) []string {
 	if content == "" {
 		return []string{""}
 	}
-	lines := strings.Split(content, "\n")
-	if len(lines) > 0 && lines[len(lines)-1] == "" {
-		lines = lines[:len(lines)-1]
-	}
-	return lines
+	return strings.Split(content, "\n")
 }

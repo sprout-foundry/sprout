@@ -437,6 +437,24 @@ func writeFileContent(ctx context.Context, a *Agent, path, content, toolName str
 		return "", err
 	}
 
+	// SP-072: route through diff-approval gate when enabled.
+	if a.ShouldGateEdit(path) {
+		original, readErr := tools.ReadFile(ctx, path)
+		if readErr != nil && !os.IsNotExist(readErr) {
+			a.Logger().Debug("edit-approval: could not read original for %s: %v\n", path, readErr)
+		} else {
+			proposal := EditProposal{
+				Path: path, Original: original, Proposed: content,
+			}
+			approved, summary, appErr := a.RequestEditApproval(ctx, proposal)
+			if appErr != nil {
+				return "", fmt.Errorf("edit-approval failed for %s: %w", path, appErr)
+			}
+			content = approved
+			a.Logger().Debug("edit-approval: %s\n", summary)
+		}
+	}
+
 	if warning := validateJSONContent(content, path); warning != "" {
 		a.Logger().Debug("%s\n", warning)
 	}
@@ -529,6 +547,32 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 	a.Logger().Debug("Editing file: %s\n", path)
 	a.Logger().Debug("Old string: %s\n", oldStr)
 	a.Logger().Debug("New string: %s\n", newStr)
+
+	// SP-072: route through diff-approval gate when enabled.
+	if a.ShouldGateEdit(path) {
+		proposedContent := strings.Replace(originalContent, oldStr, newStr, 1)
+		proposal := EditProposal{Path: path, Original: originalContent, Proposed: proposedContent}
+		approved, summary, appErr := a.RequestEditApproval(ctx, proposal)
+		if appErr != nil {
+			return "", fmt.Errorf("edit-approval failed for %s: %w", path, appErr)
+		}
+		if approved != proposedContent {
+			a.Logger().Debug("edit-approval modified content for %s: %s\n", path, summary)
+			if trackErr := a.TrackFileWrite(path, approved); trackErr != nil {
+				a.Logger().Debug("Warning: Failed to track approved write: %v\n", trackErr)
+			}
+			writeResult, writeErr := tools.WriteFile(ctx, path, approved)
+			if writeErr != nil {
+				return "", fmt.Errorf("failed to write approved content to %s: %w", path, writeErr)
+			}
+			a.publishEvent(events.EventTypeFileChanged, events.FileChangedEvent(path, "edit", approved))
+			if a.state.GetOptimizer() != nil {
+				a.state.GetOptimizer().InvalidateFile(path)
+			}
+			return writeResult, nil
+		}
+		a.Logger().Debug("edit-approval: %s\n", summary)
+	}
 
 	if trackErr := a.TrackFileEdit(path, oldStr, newStr); trackErr != nil {
 		a.Logger().Debug("Warning: Failed to track file edit: %v\n", trackErr)

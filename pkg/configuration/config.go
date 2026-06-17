@@ -246,6 +246,10 @@ type Config struct {
 	// notifies the user when long-running turns complete.
 	Notifications *NotificationsConfig `json:"notifications,omitempty"`
 
+	// Edit Approval Configuration (SP-072) — controls the per-hunk
+	// diff approval gate for agent file writes.
+	EditApproval *EditApprovalConfig `json:"edit_approval,omitempty"`
+
 	// Other flags
 	FromAgent bool `json:"-"` // Internal flag, not persisted
 
@@ -1212,6 +1216,46 @@ func (c *NotificationsConfig) Resolve() NotificationsConfig {
 		}
 	}
 	return result
+}
+
+// EditApprovalConfig controls the per-hunk diff approval gate (SP-072).
+type EditApprovalConfig struct {
+	Mode  string   `json:"mode,omitempty"`
+	Paths []string `json:"paths,omitempty"`
+}
+
+func (c *EditApprovalConfig) Resolve() EditApprovalConfig {
+	result := EditApprovalConfig{Mode: "off"}
+	if c != nil {
+		result.Mode = c.Mode
+		result.Paths = c.Paths
+	}
+	if result.Mode == "" {
+		result.Mode = "off"
+	}
+	return result
+}
+
+func (c *EditApprovalConfig) ShouldGate(path string) bool {
+	r := c.Resolve()
+	switch r.Mode {
+	case "off", "":
+		return false
+	case "all":
+		return true
+	case "paths":
+		for _, p := range r.Paths {
+			if m, err := filepath.Match(p, path); err == nil && m {
+				return true
+			}
+			if m, err := filepath.Match(p, filepath.Base(path)); err == nil && m {
+				return true
+			}
+		}
+		return false
+	default:
+		return false
+	}
 }
 
 // PersistentContextConfig configures persistent conversational context and memory retrieval.

@@ -145,6 +145,16 @@ build_wasm() {
     WASM_SIZE=$(ls -lh "$target_dir/sprout.wasm" | awk '{print $5}')
     echo "  WASM binary size: $WASM_SIZE"
 
+    # Build the embedding WASM (lazy-loaded by the browser when semantic
+    # search or memory features are first used). This is a separate module
+    # so the main sprout.wasm stays small for casual page loads (SP-045-3).
+    echo "  Compiling embedding.wasm (GOOS=js GOARCH=wasm)..."
+    (cd "$PROJECT_ROOT" && GOOS=js GOARCH=wasm go build -tags "$WASM_TAGS" -ldflags="$LDFLAGS" -o "$target_dir/embedding.wasm" ./cmd/embedding-wasm/)
+    echo "    ✓ embedding.wasm"
+
+    EMB_SIZE=$(ls -lh "$target_dir/embedding.wasm" | awk '{print $5}')
+    echo "  Embedding WASM binary size: $EMB_SIZE"
+
     # Size threshold check: post-SP-058 the stripped binary lands ~40MB.
     # 50MB allows headroom for future Go runtime / dependency growth without
     # silently regressing the grammar embed back to the full set.
@@ -233,6 +243,9 @@ copy_dist_files() {
     echo "  Copying wasm files → $dist_dir/wasm/"
     cp "$PROJECT_ROOT/webui/public/wasm/wasm_exec.js" "$dist_dir/wasm/"
     cp "$PROJECT_ROOT/webui/public/wasm/sprout.wasm" "$dist_dir/wasm/"
+    if [ -f "$PROJECT_ROOT/webui/public/wasm/embedding.wasm" ]; then
+        cp "$PROJECT_ROOT/webui/public/wasm/embedding.wasm" "$dist_dir/wasm/"
+    fi
 
     # Copy version.json
     local version_json="$PROJECT_ROOT/webui/public/wasm/version.json"

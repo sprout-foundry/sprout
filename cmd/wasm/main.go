@@ -42,9 +42,6 @@ func main() {
 		"getHistory":     js.FuncOf(getHistoryFunc),
 		"getEnv":         js.FuncOf(getEnvFunc),
 	}
-	for name, fn := range embeddingJSFuncs() {
-		apiSurface[name] = fn
-	}
 	for name, fn := range configJSFuncs() {
 		apiSurface[name] = fn
 	}

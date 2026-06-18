@@ -72,17 +72,17 @@ _Spec: `roadmap/SP-075-large-file-decomposition.md`_
 
 Maintainability (Low-Medium): 20+ files exceed 800 lines (config.go 2833, agent_modes.go 2344, …) vs the 500-line target. Pure, incremental file-level extraction — build + tests green after each step.
 
-- [ ] SP-075-1: Phase 1 (config + cmd) — split `pkg/configuration/config.go` (per-domain `config_*.go` for the nested structs + `Resolve()`s), `cmd/agent_modes.go` (per-mode files), `cmd/agent_workflow.go`. Acceptance: each targeted file < ~600 lines or documented exception; `make build-all` + `go test ./...` green; no API diff beyond moves.
-- [ ] SP-075-2: Phase 2 (agent core) — `pkg/agent/tool_handlers_subagent.go`, `seed_integration.go`, `subagent_runner.go`, `change_tracking_shell.go`. Acceptance: as above, per file.
-- [ ] SP-075-3: Phase 3 (providers + web) — `pkg/agent_providers/generic_provider.go`, `pkg/webcontent/browser_rod.go`, `pkg/wasmshell/commands.go`, `pkg/console/input_core.go`, `webui/src/components/Terminal.tsx` (extract a `useTerminalPanes` hook — also helps SP-011). Acceptance: as above, per file.
+- [x] SP-075-1: Phase 1 (config + cmd) — split `pkg/configuration/config.go` (per-domain `config_*.go` for the nested structs + `Resolve()`s), `cmd/agent_modes.go` (per-mode files), `cmd/agent_workflow.go`. Acceptance: each targeted file < ~600 lines or documented exception; `make build-all` + `go test ./...` green; no API diff beyond moves.
+- [x] SP-075-2: Phase 2 (agent core) — `pkg/agent/tool_handlers_subagent.go`, `seed_integration.go`, `subagent_runner.go`, `change_tracking_shell.go`. Acceptance: as above, per file.
+- [x] SP-075-3: Phase 3 (providers + web) — `pkg/agent_providers/generic_provider.go` ✅ (split into 5 files), `pkg/webcontent/browser_rod.go` (split into 4 files, 1398→max 587), `pkg/wasmshell/commands.go` (split into 4 files, 1633→368), `pkg/console/input_core.go` (1264→706, extracted editing/escape-parser/search), `webui/src/components/Terminal.tsx` (1320→700, extracted `useTerminalPanes` hook). Acceptance: all packages build+test green; no file >750 lines.
 
 ## SP-045: WASM Build Feature Parity — distribution tail
 _Spec: `roadmap/SP-045-wasm-feature-parity.md` §4–§5 (Tiers 1/2a/2b already shipped)_
 
-- [ ] SP-045-1: Strip the WASM binary — add `-ldflags="-s -w"` in `scripts/build-wasm.sh`; confirm the size drop. Acceptance: WASM binary is measurably smaller; still loads.
-- [ ] SP-045-2: Spike `tinygo` for `cmd/wasm` — assess stdlib/`pkg/agent` compatibility; document go/no-go. Acceptance: written go/no-go with the blocking incompatibilities (if any).
+- [x] SP-045-1: Strip the WASM binary — add `-ldflags="-s -w"` in `scripts/build-wasm.sh`; confirm the size drop. Acceptance: WASM binary is measurably smaller; still loads.
+- [x] SP-045-2: Spike `tinygo` for `cmd/wasm` — assess stdlib/`pkg/agent` compatibility; document go/no-go. Acceptance: written go/no-go with the blocking incompatibilities (if any).
 - [ ] SP-045-3: Split into a small shell-only WASM module + a lazy-loaded `embedding.wasm` (loads on first semantic search). Acceptance: casual page load no longer pulls the embedding module.
-- [ ] SP-045-4: Build-matrix hygiene — tag `pkg/webui/terminal_*.go` (creack/pty importers) `!js` and sweep `//go:build !windows` that wrongly include `js`. Acceptance: `GOOS=js GOARCH=wasm go build ./...` is clean.
+- [x] SP-045-4: Build-matrix hygiene — tag `pkg/webui/terminal_*.go` (creack/pty importers) `!js` and sweep `//go:build !windows` that wrongly include `js`. Acceptance: `GOOS=js GOARCH=wasm go build ./...` is clean.
 
 ## SP-015: Cloud Platform Integration — remaining follow-ups
 _Spec: `roadmap/SP-015-cloud-platform.md` (R1/R3/R5 already complete)_

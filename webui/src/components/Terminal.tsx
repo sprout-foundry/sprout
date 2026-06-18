@@ -1,17 +1,15 @@
 import { Trash2, Columns2, Rows2, Plus, Check, ZoomIn, ZoomOut, Type, Copy, ChevronUp, ChevronDown, SquarePlus, MoreHorizontal } from 'lucide-react';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
 import './Terminal.css';
-import { TerminalTabBar, type TerminalSession, type AttachableSession } from '@sprout/ui';
+import { TerminalTabBar, type AttachableSession } from '@sprout/ui';
+import { useTerminalPanes } from '../hooks/useTerminalPanes';
 import { ApiService, type ShellInfo } from '../services/api';
 import { clientFetch } from '../services/clientSession';
 import { notificationBus } from '../services/notificationBus';
 import { debugLog } from '../utils/log';
 import BackgroundTasks from './BackgroundTasks';
 import { FONT_SIZE_DEFAULT, COPY_ON_SELECT_DEFAULT, COPY_ON_SELECT_STORAGE_KEY } from './terminalConstants';
-import TerminalPane, { type TerminalPaneHandle } from './TerminalPane';
-
-type SplitDirection = 'none' | 'horizontal' | 'vertical';
+import TerminalPane from './TerminalPane';
 
 const TERMINAL_HEIGHT_MIN = 120;
 const TERMINAL_HEIGHT_DEFAULT = 400;
@@ -21,57 +19,6 @@ const TERMINAL_HEIGHT_STORAGE_KEY = 'sprout-terminal-height';
 const FONT_SIZE_MIN = 8;
 const FONT_SIZE_MAX = 32;
 const FONT_SIZE_STORAGE_KEY = 'sprout-terminal-font-size';
-
-// Minimum width per pane on a vertical split (panes sit side-by-side),
-// and minimum height per pane on a horizontal split (panes stack).
-// Used both to clamp divider drags and to compute how many panes the
-// current container can fit before the +pane button disables.
-const MIN_PANE_WIDTH_PX = 240;
-const MIN_PANE_HEIGHT_PX = 120;
-
-// Even with very large containers, cap the toolbar +pane button at a
-// number that feels usable. 8 vertical panes is already a lot; horizontal
-// is rarer.
-const MAX_PANES_HARD_CAP = 8;
-
-const evenSplit = (n: number): number[] => Array.from({ length: n }, () => 100 / n);
-
-/**
- * Pick the session that should become active after `closedId` is removed
- * from `sessions`. Mirrors TerminalTabBar's display ordering — pinned
- * sessions sort to the front, ties broken by insertion order — and then
- * picks the next neighbour to the right (or the new last tab, if the
- * closing tab was the rightmost).
- *
- * Returns the closed session's own id when there's no other session left;
- * callers are expected to guard against that case before calling.
- *
- * Exported for unit tests so we can verify the display-order behaviour
- * without spinning up the whole Terminal component.
- */
-export function nextActiveAfterClose(sessions: TerminalSession[], closedId: string): string {
-  const displayOrder = sessions
-    .map((session, index) => ({ session, index }))
-    .sort((a, b) => {
-      if (a.session.is_pinned !== b.session.is_pinned) {
-        return a.session.is_pinned ? -1 : 1;
-      }
-      return a.index - b.index;
-    })
-    .map(({ session }) => session);
-  const closedDisplayIdx = displayOrder.findIndex((s) => s.id === closedId);
-  const remaining = displayOrder.filter((s) => s.id !== closedId);
-  if (remaining.length === 0) return closedId;
-  return remaining[Math.min(closedDisplayIdx, remaining.length - 1)].id;
-}
-
-const redistributeAfterRemove = (sizes: number[], removedIndex: number): number[] => {
-  if (sizes.length <= 1) return [100];
-  const next = sizes.filter((_, i) => i !== removedIndex);
-  const total = next.reduce((acc, v) => acc + v, 0);
-  if (total <= 0) return evenSplit(next.length);
-  return next.map((v) => (v / total) * 100);
-};
 
 const clampTerminalHeight = (value: number): number => {
   if (!Number.isFinite(value)) return TERMINAL_HEIGHT_DEFAULT;
@@ -83,11 +30,8 @@ const clampFontSize = (value: number): number => {
   return Math.max(FONT_SIZE_MIN, Math.min(FONT_SIZE_MAX, value));
 };
 
-interface TerminalPaneData {
-  id: string;
-  sessions: TerminalSession[];
-  activeSessionId: string;
-}
+/** @deprecated Re-exported for backward compatibility with existing tests. */
+export { nextActiveAfterClose } from '../hooks/useTerminalPanes';
 
 interface TerminalProps {
   isConnected?: boolean;
@@ -128,8 +72,6 @@ function Terminal({
   const [showOverflowMenu, setShowOverflowMenu] = useState(false);
   const shellPickerRef = useRef<HTMLDivElement>(null);
   const overflowMenuRef = useRef<HTMLDivElement>(null);
-  const sessionShellsRef = useRef<Map<string, string | null>>(new Map());
-  const sessionReattachIdsRef = useRef<Map<string, string | null>>(new Map());
 
   // Attachable sessions
   const [attachableSessions, setAttachableSessions] = useState<AttachableSession[]>([]);
@@ -160,107 +102,7 @@ function Terminal({
     }
   });
 
-  // Split state
-  const [splitDirection, setSplitDirection] = useState<SplitDirection>('none');
-  const splitDirectionRef = useRef<SplitDirection>('none');
-  const [splitSizes, setSplitSizes] = useState<number[]>([100]);
-
-  // Pane-based session state
-  const paneIdCounter = useRef(0);
-  const sessionCounterRef = useRef(1);
-  const panesRef = useRef<TerminalPaneData[]>([]);
-
-  const [panes, setPanes] = useState<TerminalPaneData[]>(() => {
-    paneIdCounter.current += 1;
-    const paneId = `pane-${paneIdCounter.current}`;
-    const sessionId = `session-${sessionCounterRef.current++}`;
-    const initialPane: TerminalPaneData = {
-      id: paneId,
-      sessions: [{ id: sessionId, name: 'Session 1', is_pinned: false }],
-      activeSessionId: sessionId,
-    };
-    panesRef.current = [initialPane];
-    return [initialPane];
-  });
-
-  const [focusedPaneId, setFocusedPaneId] = useState<string>(panes[0].id);
-
-  // Tracks which sessions have shown new output since the user last
-  // looked at them (their tab wasn't the active one in its pane).
-  const [activitySessionIds, setActivitySessionIds] = useState<Set<string>>(() => new Set());
-  // Tracks sessions whose name the user has explicitly renamed. Once
-  // a session is in this set, OSC title changes won't overwrite the
-  // user's chosen name.
-  const manuallyRenamedSessions = useRef<Set<string>>(new Set());
-
-  const hasMountedRef = useRef(false);
-  const isDraggingVertical = useRef(false);
-  const dragStartY = useRef(0);
-  const dragStartHeight = useRef(0);
-
-  const isDraggingSplit = useRef(false);
-  const splitDragStartPos = useRef(0);
-  const splitDragStartSizes = useRef<number[]>([100]);
-  const splitDragIndex = useRef(0);
-
-  const paneHandles = useRef<Map<string, TerminalPaneHandle | null>>(new Map());
-
-  // Keep panesRef in sync
-  useEffect(() => {
-    panesRef.current = panes;
-  }, [panes]);
-
-  useEffect(() => {
-    setIsExpanded(externalIsExpanded);
-    if (externalIsExpanded) {
-      setHasActivated(true);
-      window.dispatchEvent(new CustomEvent('sprout-terminal-expand'));
-    }
-  }, [externalIsExpanded]);
-
-  useEffect(() => {
-    const reservedHeight = isExpanded ? terminalHeight : collapsedHeight;
-    document.documentElement.style.setProperty('--sprout-terminal-reserved-height', `${reservedHeight}px`);
-    return () => {
-      document.documentElement.style.setProperty('--sprout-terminal-reserved-height', `${collapsedHeight}px`);
-    };
-  }, [collapsedHeight, isExpanded, terminalHeight]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return undefined;
-
-    const updateCollapsedHeight = () => {
-      setCollapsedHeight(getCollapsedHeight());
-    };
-
-    updateCollapsedHeight();
-    window.addEventListener('resize', updateCollapsedHeight);
-    return () => window.removeEventListener('resize', updateCollapsedHeight);
-  }, [getCollapsedHeight]);
-
-  useEffect(() => {
-    let cancelled = false;
-    ApiService.getInstance()
-      .getAvailableShells()
-      .then((res) => {
-        if (cancelled) return;
-        setAvailableShells(res.shells || []);
-        const defaultShell = res.shells.find((s) => s.default) || res.shells[0];
-        if (defaultShell) {
-          setSelectedShell(defaultShell.name);
-        }
-        setShellsLoaded(true);
-      })
-      .catch((err) => {
-        debugLog('[Terminal] Failed to load available shells:', err);
-        notificationBus.notify('warning', 'Terminal', 'Failed to load available shells: ' + String(err));
-        setShellsLoaded(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
+  /* ---- Attachable session fetching (owns state the hook depends on) ---- */
   const fetchAttachableSessions = useCallback(async () => {
     if (isFetchingSessionsRef.current) return;
     isFetchingSessionsRef.current = true;
@@ -290,6 +132,99 @@ function Terminal({
     }
   }, []);
 
+  /* ---- Terminal panes hook ---- */
+  const paneState = useTerminalPanes({
+    selectedShell,
+    fetchAttachableSessions,
+    setAttachableSessions,
+    isExpanded,
+    terminalHeight,
+    setIsResizingVertical,
+  });
+
+  const {
+    panes,
+    focusedPaneId,
+    setFocusedPaneId,
+    getFocusedPane,
+    splitDirection,
+    isSplitActive,
+    splitStyleForPane,
+    handleSplitDividerDragStart,
+    addSessionToPane,
+    closeSessionInPane,
+    renameSessionInPane,
+    togglePinInPane,
+    switchSessionInPane,
+    handleSessionTitleChange,
+    handleSessionActivity,
+    handlePaneExit,
+    handleAttachAgentSession,
+    toggleSplit,
+    addPaneInDirection,
+    canAddPane,
+    activitySessionIds,
+    paneHandlesRef,
+    sessionShellsRef,
+    sessionReattachIdsRef,
+  } = paneState;
+
+  /* ---- Effects ---- */
+
+  // Expand/collapse sync with external prop
+  useEffect(() => {
+    setIsExpanded(externalIsExpanded);
+    if (externalIsExpanded) {
+      setHasActivated(true);
+      window.dispatchEvent(new CustomEvent('sprout-terminal-expand'));
+    }
+  }, [externalIsExpanded]);
+
+  // CSS custom property for reserved height
+  useEffect(() => {
+    const reservedHeight = isExpanded ? terminalHeight : collapsedHeight;
+    document.documentElement.style.setProperty('--sprout-terminal-reserved-height', `${reservedHeight}px`);
+    return () => {
+      document.documentElement.style.setProperty('--sprout-terminal-reserved-height', `${collapsedHeight}px`);
+    };
+  }, [collapsedHeight, isExpanded, terminalHeight]);
+
+  // Responsive collapsed height
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const updateCollapsedHeight = () => {
+      setCollapsedHeight(getCollapsedHeight());
+    };
+    updateCollapsedHeight();
+    window.addEventListener('resize', updateCollapsedHeight);
+    return () => window.removeEventListener('resize', updateCollapsedHeight);
+  }, [getCollapsedHeight]);
+
+  // Load available shells
+  useEffect(() => {
+    let cancelled = false;
+    ApiService.getInstance()
+      .getAvailableShells()
+      .then((res) => {
+        if (cancelled) return;
+        setAvailableShells(res.shells || []);
+        const defaultShell = res.shells.find((s) => s.default) || res.shells[0];
+        if (defaultShell) {
+          setSelectedShell(defaultShell.name);
+        }
+        setShellsLoaded(true);
+      })
+      .catch((err) => {
+        debugLog('[Terminal] Failed to load available shells:', err);
+        notificationBus.notify('warning', 'Terminal', 'Failed to load available shells: ' + String(err));
+        setShellsLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Poll attachable sessions
   useEffect(() => {
     fetchAttachableSessions();
     const intervalId = setInterval(() => {
@@ -302,6 +237,7 @@ function Terminal({
     };
   }, [isExpanded, fetchAttachableSessions]);
 
+  // WS events trigger re-fetch
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail;
@@ -317,6 +253,7 @@ function Terminal({
     return () => window.removeEventListener('sprout:wsevent', handler as EventListener);
   }, [fetchAttachableSessions]);
 
+  // Close menus on outside click / Escape
   useEffect(() => {
     if (!showShellMenu) return;
     const handleClick = (e: MouseEvent) => {
@@ -357,6 +294,7 @@ function Terminal({
     };
   }, [showOverflowMenu]);
 
+  /* ---- Actions ---- */
   const toggleExpanded = useCallback(() => {
     setIsExpanded((prev) => {
       const next = !prev;
@@ -413,557 +351,20 @@ function Terminal({
     });
   }, []);
 
-  const getFocusedPane = useCallback((): TerminalPaneData | null => {
-    return panesRef.current.find((p) => p.id === focusedPaneId) ?? null;
-  }, [focusedPaneId]);
-
-  const clearActivePane = useCallback(() => {
-    const pane = getFocusedPane();
-    if (pane) {
-      const handle = paneHandles.current.get(pane.activeSessionId);
-      handle?.clear();
-    }
-  }, [getFocusedPane]);
-
-  // Helper: Update a pane immutably
-  const updatePane = useCallback((paneId: string, updater: (pane: TerminalPaneData) => TerminalPaneData) => {
-    setPanes((prev) => prev.map((p) => (p.id === paneId ? updater(p) : p)));
-  }, []);
-
-  // Session management scoped to panes
-  const addSessionToPane = useCallback(
-    (paneId: string, shell?: string | null) => {
-      const sessionNum = sessionCounterRef.current++;
-      const sessionId = `session-${sessionNum}`;
-      const newSession: TerminalSession = {
-        id: sessionId,
-        name: `Session ${sessionNum}`,
-        is_pinned: false,
-      };
-      sessionShellsRef.current.set(sessionId, shell ?? selectedShell ?? null);
-      updatePane(paneId, (pane) => ({
-        ...pane,
-        sessions: [...pane.sessions, newSession],
-        activeSessionId: sessionId,
-      }));
-    },
-    [selectedShell, updatePane],
-  );
-
-  const handleAttachAgentSession = useCallback(
-    async (sessionId: string, name: string) => {
-      setAttachableSessions((prev) => prev.filter((s) => s.id !== sessionId));
-      try {
-        const response = await clientFetch(`/api/terminal/agent-sessions/${sessionId}/attach`, {
-          method: 'POST',
-        });
-        if (!response.ok) {
-          if (response.status === 400 || response.status === 404 || response.status === 410) {
-            notificationBus.notify('info', 'Terminal', `Session '${name}' is no longer available`);
-            return;
-          }
-          throw new Error(`Failed to attach session: ${response.status}`);
-        }
-
-        const pane = getFocusedPane();
-        if (pane) {
-          const sessionName = name || `Agent: ${sessionId.substring(0, 20)}`;
-          const newSession: TerminalSession = {
-            id: sessionId,
-            name: sessionName,
-            is_pinned: false,
-          };
-          sessionReattachIdsRef.current.set(sessionId, sessionId);
-          updatePane(pane.id, (p) => ({
-            ...p,
-            sessions: [...p.sessions, newSession],
-            activeSessionId: sessionId,
-          }));
-        }
-        await fetchAttachableSessions();
-      } catch (err) {
-        debugLog('[Terminal] Failed to attach agent session:', err);
-        notificationBus.notify('warning', 'Terminal', 'Failed to attach session: ' + String(err));
-        fetchAttachableSessions();
-      }
-    },
-    [fetchAttachableSessions, getFocusedPane, updatePane],
-  );
-
-  // Drop a session id from the per-Terminal tracking sets so closed/
-  // restarted sessions don't leak into them.
-  const forgetSession = useCallback((sessionId: string) => {
-    manuallyRenamedSessions.current.delete(sessionId);
-    setActivitySessionIds((prev) => {
-      if (!prev.has(sessionId)) return prev;
-      const next = new Set(prev);
-      next.delete(sessionId);
-      return next;
-    });
-  }, []);
-
-  const removePane = useCallback(
-    (paneId: string) => {
-      const all = panesRef.current;
-      const idx = all.findIndex((p) => p.id === paneId);
-      if (idx === -1) return;
-      if (all.length <= 1) return; // Last pane never removes — handled by restart elsewhere.
-
-      const pane = all[idx];
-      pane.sessions.forEach((s) => {
-        const handle = paneHandles.current.get(s.id);
-        handle?.cleanup?.();
-        paneHandles.current.delete(s.id);
-        sessionShellsRef.current.delete(s.id);
-        sessionReattachIdsRef.current.delete(s.id);
-        forgetSession(s.id);
-      });
-
-      const remainingPanes = all.filter((p) => p.id !== paneId);
-      setPanes(remainingPanes);
-      setSplitSizes((prev) => redistributeAfterRemove(prev, idx));
-
-      // Focus the neighbor closest to the removed pane.
-      if (focusedPaneId === paneId) {
-        const neighbor = remainingPanes[Math.max(0, idx - 1)];
-        if (neighbor) setFocusedPaneId(neighbor.id);
-      }
-
-      // Down to one pane → exit split mode entirely.
-      if (remainingPanes.length === 1) {
-        splitDirectionRef.current = 'none';
-        setSplitDirection('none');
-        setSplitSizes([100]);
-      }
-    },
-    [focusedPaneId, forgetSession],
-  );
-
-  const closeSessionInPane = useCallback(
-    (paneId: string, sessionId: string) => {
-      const pane = panesRef.current.find((p) => p.id === paneId);
-      if (!pane) return;
-
-      // Closing the only session in this pane. With more than one pane
-      // open, this removes the whole pane; with only one pane, it would
-      // leave the terminal empty so we refuse — the user can run `exit`
-      // to trigger the restart path via pty_exit.
-      if (pane.sessions.length === 1) {
-        if (panesRef.current.length === 1) return;
-        removePane(paneId);
-        return;
-      }
-
-      const handle = paneHandles.current.get(sessionId);
-      handle?.cleanup?.();
-      paneHandles.current.delete(sessionId);
-      sessionShellsRef.current.delete(sessionId);
-      sessionReattachIdsRef.current.delete(sessionId);
-      forgetSession(sessionId);
-
-      const remaining = pane.sessions.filter((s) => s.id !== sessionId);
-      // Browser-tab convention: when the active tab is closed, focus moves
-      // to the tab on its right; if it was the last, to the new last tab.
-      // The "right" neighbor must be picked in display order (pinned first,
-      // then insertion order) — TerminalTabBar reorders pinned tabs to the
-      // front, so the array-order successor is often not the one the user
-      // sees to the right of the closing tab.
-      const newActive =
-        pane.activeSessionId === sessionId
-          ? nextActiveAfterClose(pane.sessions, sessionId)
-          : pane.activeSessionId;
-
-      updatePane(paneId, (p) => ({
-        ...p,
-        sessions: remaining,
-        activeSessionId: newActive,
-      }));
-    },
-    [forgetSession, removePane, updatePane],
-  );
-
-  const renameSessionInPane = useCallback(
-    (paneId: string, sessionId: string, name: string) => {
-      manuallyRenamedSessions.current.add(sessionId);
-      updatePane(paneId, (pane) => ({
-        ...pane,
-        sessions: pane.sessions.map((s) => (s.id === sessionId ? { ...s, name } : s)),
-      }));
-    },
-    [updatePane],
-  );
-
-  // Apply an OSC 0/2 title sequence as the tab name — but only when
-  // the user hasn't manually renamed this session. A manual rename
-  // pins the name and we refuse to clobber it from shell title changes.
-  const handleSessionTitleChange = useCallback(
-    (paneId: string, sessionId: string, title: string) => {
-      if (manuallyRenamedSessions.current.has(sessionId)) return;
-      const pane = panesRef.current.find((p) => p.id === paneId);
-      if (!pane) return;
-      const target = pane.sessions.find((s) => s.id === sessionId);
-      // Skip the render entirely when the title is already current.
-      // Shells emit OSC title sequences frequently (often once per prompt
-      // redraw) — without this guard we re-allocate sessions[] on every
-      // keystroke even when nothing visible would change.
-      if (!target || target.name === title) return;
-      updatePane(paneId, (p) => ({
-        ...p,
-        sessions: p.sessions.map((s) => (s.id === sessionId ? { ...s, name: title } : s)),
-      }));
-    },
-    [updatePane],
-  );
-
-  // Mark a session as having background activity. Skip when the session
-  // is currently the active tab in its pane — the user is already looking
-  // at it, no indicator needed.
-  const handleSessionActivity = useCallback(
-    (paneId: string, sessionId: string) => {
-      const pane = panesRef.current.find((p) => p.id === paneId);
-      if (!pane) return;
-      if (pane.activeSessionId === sessionId) return;
-      setActivitySessionIds((prev) => {
-        if (prev.has(sessionId)) return prev;
-        const next = new Set(prev);
-        next.add(sessionId);
-        return next;
-      });
-    },
-    [],
-  );
-
-  const togglePinInPane = useCallback(
-    (paneId: string, sessionId: string) => {
-      updatePane(paneId, (pane) => ({
-        ...pane,
-        sessions: pane.sessions.map((s) => (s.id === sessionId ? { ...s, is_pinned: !s.is_pinned } : s)),
-      }));
-    },
-    [updatePane],
-  );
-
-  const switchSessionInPane = useCallback(
-    (paneId: string, sessionId: string) => {
-      updatePane(paneId, (pane) => ({ ...pane, activeSessionId: sessionId }));
-      // Activating a tab clears its background-activity indicator —
-      // the user is now looking at it.
-      setActivitySessionIds((prev) => {
-        if (!prev.has(sessionId)) return prev;
-        const next = new Set(prev);
-        next.delete(sessionId);
-        return next;
-      });
-      // After switching tabs, the newly visible xterm needs a resize since it
-      // was display:none (0×0) and now needs to fit the pane dimensions.
-      requestAnimationFrame(() => {
-        window.dispatchEvent(new Event('resize'));
-      });
-    },
-    [updatePane],
-  );
-
-  const handlePaneExit = useCallback(
-    (paneId: string, sessionId: string) => {
-      const pane = panesRef.current.find((p) => p.id === paneId);
-      if (!pane) return;
-
-      if (!pane.sessions.some((s) => s.id === sessionId) && !paneHandles.current.has(sessionId)) {
-        debugLog('[Terminal] pty_exit for already-closed session:', sessionId);
-        return;
-      }
-
-      // Multi-session pane — close just the tab and keep the pane.
-      if (pane.sessions.length > 1) {
-        closeSessionInPane(paneId, sessionId);
-        notificationBus.notify('info', 'Terminal', 'Terminal process exited — session closed.');
-        return;
-      }
-
-      paneHandles.current.delete(sessionId);
-      sessionShellsRef.current.delete(sessionId);
-      sessionReattachIdsRef.current.delete(sessionId);
-
-      // Last session in a pane that's part of a split — drop the pane.
-      // removePane already iterates the pane's sessions and forgets each,
-      // so we deliberately skip an extra forgetSession here.
-      if (panesRef.current.length > 1) {
-        removePane(paneId);
-        notificationBus.notify('info', 'Terminal', 'Split pane closed after process exited.');
-        return;
-      }
-
-      // Single-pane restart path: this session is being replaced by a
-      // fresh one, so drop the activity / manual-rename tracking now.
-      forgetSession(sessionId);
-
-      // Last session in the only pane — restart with a fresh shell so
-      // the terminal panel never becomes empty.
-      const sessionNum2 = sessionCounterRef.current++;
-      const newSessionId = `session-${sessionNum2}`;
-      const newSession: TerminalSession = {
-        id: newSessionId,
-        name: `Session ${sessionNum2}`,
-        is_pinned: false,
-      };
-      sessionShellsRef.current.set(newSessionId, selectedShell ?? null);
-
-      updatePane(paneId, (p) => ({
-        ...p,
-        sessions: [newSession],
-        activeSessionId: newSessionId,
-      }));
-
-      notificationBus.notify('info', 'Terminal', 'Terminal process exited — restarted with fresh shell.');
-    },
-    [closeSessionInPane, forgetSession, removePane, selectedShell, updatePane],
-  );
-
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent<{ sessionId: string; name?: string }>).detail;
-      if (!detail?.sessionId) return;
-      const sessionId = detail.sessionId;
-      const sessionName = detail.name || `Agent: ${sessionId.substring(0, 20)}`;
-
-      const pane = getFocusedPane();
-      if (!pane) return;
-
-      if (pane.sessions.some((s) => s.id === sessionId)) {
-        switchSessionInPane(pane.id, sessionId);
-        return;
-      }
-
-      const newSession: TerminalSession = {
-        id: sessionId,
-        name: sessionName,
-        is_pinned: false,
-      };
-      sessionReattachIdsRef.current.set(sessionId, sessionId);
-      updatePane(pane.id, (p) => ({
-        ...p,
-        sessions: [...p.sessions, newSession],
-        activeSessionId: sessionId,
-      }));
-    };
-    window.addEventListener('sprout:terminal-attach-session', handler as EventListener);
-    return () => window.removeEventListener('sprout:terminal-attach-session', handler as EventListener);
-  }, [getFocusedPane, switchSessionInPane, updatePane]);
-
-  // Build a fresh pane (with a single shell session) ready to be added
-  // to the panes array. Centralized so toggleSplit and addPaneInDirection
-  // produce structurally identical panes.
-  const createPane = useCallback((): TerminalPaneData => {
-    paneIdCounter.current += 1;
-    const paneId = `pane-${paneIdCounter.current}`;
-    const sessionNum = sessionCounterRef.current++;
-    const sessionId = `session-${sessionNum}`;
-    sessionShellsRef.current.set(sessionId, selectedShell ?? null);
-    return {
-      id: paneId,
-      sessions: [{ id: sessionId, name: `Session ${sessionNum}`, is_pinned: false }],
-      activeSessionId: sessionId,
-    };
-  }, [selectedShell]);
-
-  // Measure the panes container and convert it into "how many panes of
-  // the current direction can fit before they cross MIN_PANE_*_PX." In
-  // jsdom (or before first layout) the rect reads as 0×0; we fall back
-  // to the hard cap so tests can exercise the +pane path.
-  const computeMaxPanes = useCallback((direction: SplitDirection): number => {
-    if (direction === 'none') return 1;
-    const el = document.querySelector('.terminal-panes-container') as HTMLElement | null;
-    const rect = el?.getBoundingClientRect();
-    const w = rect?.width ?? 0;
-    const h = rect?.height ?? 0;
-    if (w === 0 && h === 0) return MAX_PANES_HARD_CAP;
-    const limit = direction === 'vertical'
-      ? Math.floor(w / MIN_PANE_WIDTH_PX)
-      : Math.floor(h / MIN_PANE_HEIGHT_PX);
-    return Math.min(MAX_PANES_HARD_CAP, Math.max(2, limit));
-  }, []);
-
-  const toggleSplit = useCallback(
-    (direction: 'horizontal' | 'vertical') => {
-      const currentDir = splitDirectionRef.current;
-      const paneCount = panesRef.current.length;
-
-      if (currentDir === direction) {
-        // Matching direction click. Preserve the legacy 1↔2 toggle: at
-        // exactly 2 panes, collapse back to 1. At 3+ panes the toggle
-        // would silently destroy multiple terminals, so it's a no-op —
-        // users reduce via tab close on each pane.
-        if (paneCount === 2) {
-          const dropped = panesRef.current[1];
-          dropped.sessions.forEach((s) => {
-            const handle = paneHandles.current.get(s.id);
-            handle?.cleanup?.();
-            paneHandles.current.delete(s.id);
-            sessionShellsRef.current.delete(s.id);
-            sessionReattachIdsRef.current.delete(s.id);
-          });
-          setPanes((prev) => prev.slice(0, 1));
-          setFocusedPaneId(panesRef.current[0].id);
-          setSplitSizes([100]);
-          splitDirectionRef.current = 'none';
-          setSplitDirection('none');
-        }
-        return;
-      }
-
-      if (currentDir !== 'none') {
-        // Switch axis without changing pane count; redistribute evenly.
-        setSplitSizes(evenSplit(paneCount));
-        splitDirectionRef.current = direction;
-        setSplitDirection(direction);
-        return;
-      }
-
-      // Going from unsplit → 2 panes in the requested direction.
-      const newPane = createPane();
-      setPanes((prev) => [...prev, newPane]);
-      setFocusedPaneId(newPane.id);
-      setSplitSizes(evenSplit(2));
-      splitDirectionRef.current = direction;
-      setSplitDirection(direction);
-    },
-    [createPane],
-  );
-
-  const addPaneInDirection = useCallback(() => {
-    const dir = splitDirectionRef.current;
-    if (dir === 'none') return;
-    const max = computeMaxPanes(dir);
-    if (panesRef.current.length >= max) return;
-    const newPane = createPane();
-    const nextCount = panesRef.current.length + 1;
-    setPanes((prev) => [...prev, newPane]);
-    setFocusedPaneId(newPane.id);
-    setSplitSizes(evenSplit(nextCount));
-  }, [computeMaxPanes, createPane]);
-
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent<{ action: string }>).detail;
-      if (!detail?.action) return;
-      if (detail.action === 'split_horizontal') {
-        toggleSplit('horizontal');
-      } else if (detail.action === 'split_vertical') {
-        toggleSplit('vertical');
-      } else if (detail.action === 'clear') {
-        clearActivePane();
-      } else if (detail.action === 'kill') {
-        const pane = getFocusedPane();
-        if (pane) {
-          closeSessionInPane(pane.id, pane.activeSessionId);
-        }
-      }
-    };
-    window.addEventListener('sprout:terminal-action', handler as EventListener);
-    return () => window.removeEventListener('sprout:terminal-action', handler as EventListener);
-  }, [clearActivePane, closeSessionInPane, getFocusedPane, toggleSplit]);
-
-  const handleSplitDividerDragStart = useCallback(
-    (e: ReactMouseEvent, dividerIndex: number) => {
-      e.preventDefault();
-      isDraggingSplit.current = true;
-      splitDragIndex.current = dividerIndex;
-      setIsResizingVertical(true);
-      splitDragStartPos.current = splitDirection === 'vertical' ? e.clientX : e.clientY;
-      splitDragStartSizes.current = [...splitSizes];
-
-      const bodyEl = document.querySelector('.terminal-panes-container');
-      const bodyRect = bodyEl?.getBoundingClientRect();
-      const containerWidth = bodyRect?.width ?? window.innerWidth;
-      const containerHeight = bodyRect?.height ?? terminalHeight;
-
-      const onMove = (ev: MouseEvent) => {
-        if (!isDraggingSplit.current) return;
-        const currentPos = splitDirection === 'vertical' ? ev.clientX : ev.clientY;
-        const containerSize = splitDirection === 'vertical' ? containerWidth : containerHeight;
-        if (containerSize <= 0) return;
-
-        const minPx = splitDirection === 'vertical' ? MIN_PANE_WIDTH_PX : MIN_PANE_HEIGHT_PX;
-        const minPct = (minPx / containerSize) * 100;
-
-        const deltaPx = currentPos - splitDragStartPos.current;
-        const start = splitDragStartSizes.current;
-        const i = splitDragIndex.current;
-        const a = start[i];
-        const b = start[i + 1];
-        if (a === undefined || b === undefined) return;
-
-        // Move only the size on either side of this divider; everything
-        // else stays put. Clamp both panes against the per-pane minimum
-        // so a drag can't squeeze a neighbour below MIN_PANE_*_PX.
-        const pair = a + b;
-        const minA = minPct;
-        const maxA = pair - minPct;
-        let nextA = a + (deltaPx / containerSize) * 100;
-        if (maxA < minA) {
-          // Container too small to honor both minimums — split the
-          // available room evenly instead of producing a NaN-clamped
-          // value.
-          nextA = pair / 2;
-        } else {
-          nextA = Math.max(minA, Math.min(maxA, nextA));
-        }
-        const nextB = pair - nextA;
-
-        setSplitSizes((prev) => {
-          if (i >= prev.length - 1) return prev;
-          const next = [...prev];
-          next[i] = nextA;
-          next[i + 1] = nextB;
-          return next;
-        });
-      };
-
-      const onUp = () => {
-        isDraggingSplit.current = false;
-        setIsResizingVertical(false);
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup', onUp);
-        document.body.style.userSelect = '';
-        document.body.style.cursor = '';
-      };
-
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onUp);
-      document.body.style.userSelect = 'none';
-      document.body.style.cursor = splitDirection === 'vertical' ? 'col-resize' : 'row-resize';
-    },
-    [splitDirection, splitSizes, terminalHeight],
-  );
-
-  const splitStyleForPane = useCallback(
-    (paneIndex: number): CSSProperties => {
-      if (splitDirection === 'none') return {};
-      const property = splitDirection === 'vertical' ? 'width' : 'height';
-      const value = splitSizes[paneIndex] ?? 100 / Math.max(1, splitSizes.length);
-      return { [property]: `${value}%`, minWidth: 0, minHeight: 0 };
-    },
-    [splitDirection, splitSizes],
-  );
-
+  /* ---- Terminal height resize ---- */
   const handleVerticalResizeStart = useCallback(
-    (e: ReactMouseEvent) => {
+    (e: React.MouseEvent) => {
       e.preventDefault();
-      isDraggingVertical.current = true;
-      setIsResizingVertical(true);
-      dragStartY.current = e.clientY;
-      dragStartHeight.current = terminalHeight;
+      const startY = e.clientY;
+      const startHeight = terminalHeight;
 
       const onMove = (ev: MouseEvent) => {
-        if (!isDraggingVertical.current) return;
-        const delta = dragStartY.current - ev.clientY;
-        const next = clampTerminalHeight(dragStartHeight.current + delta);
+        const delta = startY - ev.clientY;
+        const next = clampTerminalHeight(startHeight + delta);
         setTerminalHeight(next);
       };
 
       const onUp = () => {
-        isDraggingVertical.current = false;
-        setIsResizingVertical(false);
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
         document.body.style.userSelect = '';
@@ -986,6 +387,8 @@ function Terminal({
     [terminalHeight],
   );
 
+  /* ---- Initial mount animation guard ---- */
+  const hasMountedRef = useRef(false);
   useEffect(() => {
     if (!hasMountedRef.current) {
       hasMountedRef.current = true;
@@ -996,37 +399,12 @@ function Terminal({
     }
   }, []);
 
-  useEffect(() => {
-    return () => {
-      if (isDraggingSplit.current || isDraggingVertical.current) {
-        document.body.style.userSelect = '';
-        document.body.style.cursor = '';
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      paneHandles.current.forEach((handle) => {
-        handle?.cleanup?.();
-      });
-      paneHandles.current.clear();
-      sessionShellsRef.current.clear();
-      sessionReattachIdsRef.current.clear();
-    };
-  }, []);
-
-  const isSplitActive = splitDirection !== 'none';
-
+  /* ---- Computed for rendering ---- */
   const focusedPane = panes.find((p) => p.id === focusedPaneId) ?? panes[0];
   const focusedSession = focusedPane?.sessions.find((s) => s.id === focusedPane.activeSessionId);
   const totalSessions = panes.reduce((acc, p) => acc + p.sessions.length, 0);
 
-  // Recomputed each render so the +pane button disables the instant the
-  // container becomes too small for another MIN_PANE_*_PX-sized pane.
-  const maxPanesForCurrentSplit = isSplitActive ? computeMaxPanes(splitDirection) : 1;
-  const canAddPane = isSplitActive && panes.length < maxPanesForCurrentSplit;
-
+  /* ---- Render ---- */
   return (
     <div
       className={[
@@ -1073,243 +451,244 @@ function Terminal({
       <div className="terminal-body">
         <div className={`terminal-panes-container ${isSplitActive ? `terminal-split-${splitDirection}` : ''}`}>
           {(() => {
-            // Anchor the global-actions cluster on the pane whose tab bar
-            // sits at the top-right of the whole terminal area. In vertical
-            // split (panes side-by-side) that's the rightmost pane; in
-            // horizontal split (panes stacked) it's the top pane. Single
-            // pane: trivially pane[0].
             const actionsPaneIdx = splitDirection === 'horizontal' ? 0 : panes.length - 1;
             return panes.map((pane, index) => {
-            const isActionsPane = index === actionsPaneIdx;
-            return (
-            <React.Fragment key={pane.id}>
-              <div
-                className={`terminal-pane-wrapper${isSplitActive && pane.id === focusedPaneId ? ' terminal-pane-wrapper--focused' : ''}`}
-                style={splitStyleForPane(index)}
-                onMouseDown={() => setFocusedPaneId(pane.id)}
-              >
-                <div className={`terminal-pane-tab-bar${isActionsPane ? ' terminal-pane-tab-bar--with-actions' : ''}`}>
-                  <div className="terminal-pane-tabs">
-                    <TerminalTabBar
-                      sessions={pane.sessions}
-                      activeSessionId={pane.activeSessionId}
-                      onSwitch={(id) => switchSessionInPane(pane.id, id)}
-                      onClose={(id) => closeSessionInPane(pane.id, id)}
-                      onRename={(id, name) => renameSessionInPane(pane.id, id, name)}
-                      onTogglePin={(id) => togglePinInPane(pane.id, id)}
-                      attachableSessions={attachableSessions}
-                      onAttachSession={handleAttachAgentSession}
-                      allowCloseLastTab={panes.length > 1}
-                      activitySessionIds={activitySessionIds}
-                    />
-                  </div>
-                  <div className="shell-picker-dropdown" ref={focusedPaneId === pane.id ? shellPickerRef : null}>
-                    <button
-                      className="terminal-tab-new shell-picker-btn"
-                      onClick={() => {
-                        if (availableShells.length <= 1) {
-                          addSessionToPane(pane.id);
-                        } else {
-                          setShowShellMenu((prev) => !prev);
-                        }
-                      }}
-                      title="New terminal session"
-                      type="button"
-                      aria-label="New terminal session"
-                      aria-haspopup={availableShells.length > 1}
-                      aria-expanded={showShellMenu && focusedPaneId === pane.id}
-                    >
-                      <Plus size={14} />
-                      {shellsLoaded && selectedShell && (
-                        <span className="shell-picker-current">{selectedShell}</span>
-                      )}
-                    </button>
-                    {showShellMenu && shellsLoaded && availableShells.length > 1 && focusedPaneId === pane.id && (
-                      <div className="shell-picker-menu" role="menu">
-                        <div className="shell-picker-header">New Terminal</div>
-                        {availableShells.map((shell) => (
-                          <button
-                            key={shell.name}
-                            className="shell-picker-item"
-                            onClick={() => {
-                              setSelectedShell(shell.name);
-                              setShowShellMenu(false);
-                              addSessionToPane(pane.id, shell.name);
-                            }}
-                            type="button"
-                            role="menuitem"
-                            title={shell.path}
-                          >
-                            {shell.default && <Check size={12} className="shell-default-indicator" />}
-                            {!shell.default && <span className="shell-default-spacer" />}
-                            <span className="shell-name">{shell.name}</span>
-                            <span className="shell-path">{shell.path}</span>
-                          </button>
-                        ))}
+              const isActionsPane = index === actionsPaneIdx;
+              return (
+                <React.Fragment key={pane.id}>
+                  <div
+                    className={`terminal-pane-wrapper${isSplitActive && pane.id === focusedPaneId ? ' terminal-pane-wrapper--focused' : ''}`}
+                    style={splitStyleForPane(index)}
+                    onMouseDown={() => setFocusedPaneId(pane.id)}
+                  >
+                    <div className={`terminal-pane-tab-bar${isActionsPane ? ' terminal-pane-tab-bar--with-actions' : ''}`}>
+                      <div className="terminal-pane-tabs">
+                        <TerminalTabBar
+                          sessions={pane.sessions}
+                          activeSessionId={pane.activeSessionId}
+                          onSwitch={(id) => switchSessionInPane(pane.id, id)}
+                          onClose={(id) => closeSessionInPane(pane.id, id)}
+                          onRename={(id, name) => renameSessionInPane(pane.id, id, name)}
+                          onTogglePin={(id) => togglePinInPane(pane.id, id)}
+                          attachableSessions={attachableSessions}
+                          onAttachSession={handleAttachAgentSession}
+                          allowCloseLastTab={panes.length > 1}
+                          activitySessionIds={activitySessionIds}
+                        />
                       </div>
-                    )}
-                  </div>
-                  {isActionsPane && (
-                    <>
-                      <div className="terminal-tab-bar-divider" aria-hidden="true" />
-                      <div className="terminal-tab-bar-actions">
-                        <BackgroundTasks />
+                      <div className="shell-picker-dropdown" ref={focusedPaneId === pane.id ? shellPickerRef : null}>
                         <button
-                          className={`terminal-btn split-btn ${splitDirection === 'vertical' ? 'split-btn-active' : ''}`}
-                          onClick={() => toggleSplit('vertical')}
-                          title={splitDirection === 'vertical' ? 'Unsplit terminal' : 'Split terminal vertically'}
-                          aria-label={splitDirection === 'vertical' ? 'Unsplit terminal' : 'Split terminal vertically'}
-                          aria-pressed={splitDirection === 'vertical'}
-                        >
-                          <Columns2 size={16} />
-                        </button>
-                        <button
-                          className={`terminal-btn split-btn ${splitDirection === 'horizontal' ? 'split-btn-active' : ''}`}
-                          onClick={() => toggleSplit('horizontal')}
-                          title={splitDirection === 'horizontal' ? 'Unsplit terminal' : 'Split terminal horizontally'}
-                          aria-label={splitDirection === 'horizontal' ? 'Unsplit terminal' : 'Split terminal horizontally'}
-                          aria-pressed={splitDirection === 'horizontal'}
-                        >
-                          <Rows2 size={16} />
-                        </button>
-                        {isSplitActive && (
-                          <button
-                            className="terminal-btn add-pane-btn"
-                            onClick={addPaneInDirection}
-                            disabled={!canAddPane}
-                            title={
-                              canAddPane
-                                ? `Add ${splitDirection === 'vertical' ? 'vertical' : 'horizontal'} pane`
-                                : 'No room for another pane — resize terminal or close one first'
+                          className="terminal-tab-new shell-picker-btn"
+                          onClick={() => {
+                            if (availableShells.length <= 1) {
+                              addSessionToPane(pane.id);
+                            } else {
+                              setShowShellMenu((prev) => !prev);
                             }
-                            aria-label="Add terminal pane"
-                          >
-                            <SquarePlus size={16} />
-                          </button>
-                        )}
-                        <button
-                          className="terminal-btn clear-btn"
-                          onClick={clearActivePane}
-                          title="Clear terminal"
-                          aria-label="Clear terminal"
+                          }}
+                          title="New terminal session"
+                          type="button"
+                          aria-label="New terminal session"
+                          aria-haspopup={availableShells.length > 1}
+                          aria-expanded={showShellMenu && focusedPaneId === pane.id}
                         >
-                          <Trash2 size={16} />
-                        </button>
-                        <div className="terminal-overflow" ref={overflowMenuRef}>
-                          <button
-                            className="terminal-btn overflow-btn"
-                            onClick={() => setShowOverflowMenu((prev) => !prev)}
-                            title="More options"
-                            aria-label="More options"
-                            aria-haspopup="menu"
-                            aria-expanded={showOverflowMenu}
-                          >
-                            <MoreHorizontal size={16} />
-                          </button>
-                          {showOverflowMenu && (
-                            <div className="terminal-overflow-menu" role="menu">
-                              <div className="terminal-overflow-header">Font size</div>
-                              <button
-                                className="terminal-overflow-item"
-                                onClick={() => { zoomOut(); }}
-                                type="button"
-                                role="menuitem"
-                              >
-                                <ZoomOut size={14} aria-hidden="true" />
-                                <span className="terminal-overflow-label">Zoom out</span>
-                              </button>
-                              <button
-                                className="terminal-overflow-item"
-                                onClick={() => { zoomIn(); }}
-                                type="button"
-                                role="menuitem"
-                              >
-                                <ZoomIn size={14} aria-hidden="true" />
-                                <span className="terminal-overflow-label">Zoom in</span>
-                              </button>
-                              <button
-                                className="terminal-overflow-item"
-                                onClick={() => { resetFontSize(); setShowOverflowMenu(false); }}
-                                type="button"
-                                role="menuitem"
-                              >
-                                <Type size={14} aria-hidden="true" />
-                                <span className="terminal-overflow-label">Reset to default</span>
-                                <span className="terminal-overflow-meta">{fontSize}px</span>
-                              </button>
-                              <div className="terminal-overflow-divider" role="separator" />
-                              <button
-                                className={`terminal-overflow-item${copyOnSelect ? ' terminal-overflow-item--active' : ''}`}
-                                onClick={() => { toggleCopyOnSelect(); }}
-                                type="button"
-                                role="menuitemcheckbox"
-                                aria-checked={copyOnSelect}
-                              >
-                                <Copy size={14} aria-hidden="true" />
-                                <span className="terminal-overflow-label">Copy on select</span>
-                                <span className="terminal-overflow-meta">{copyOnSelect ? 'On' : 'Off'}</span>
-                              </button>
-                            </div>
+                          <Plus size={14} />
+                          {shellsLoaded && selectedShell && (
+                            <span className="shell-picker-current">{selectedShell}</span>
                           )}
-                        </div>
-                        <button
-                          className="terminal-btn toggle-btn"
-                          onClick={toggleExpanded}
-                          title="Collapse terminal (Ctrl+`)"
-                          aria-label="Collapse terminal"
-                          aria-expanded={isExpanded}
-                        >
-                          <ChevronDown size={16} />
                         </button>
+                        {showShellMenu && shellsLoaded && availableShells.length > 1 && focusedPaneId === pane.id && (
+                          <div className="shell-picker-menu" role="menu">
+                            <div className="shell-picker-header">New Terminal</div>
+                            {availableShells.map((shell) => (
+                              <button
+                                key={shell.name}
+                                className="shell-picker-item"
+                                onClick={() => {
+                                  setSelectedShell(shell.name);
+                                  setShowShellMenu(false);
+                                  addSessionToPane(pane.id, shell.name);
+                                }}
+                                type="button"
+                                role="menuitem"
+                                title={shell.path}
+                              >
+                                {shell.default && <Check size={12} className="shell-default-indicator" />}
+                                {!shell.default && <span className="shell-default-spacer" />}
+                                <span className="shell-name">{shell.name}</span>
+                                <span className="shell-path">{shell.path}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    </>
-                  )}
-                </div>
-                {pane.sessions.map((session) => {
-                  const isActiveSession = session.id === pane.activeSessionId;
-                  return (
-                    <div
-                      key={session.id}
-                      style={{
-                        display: isActiveSession ? 'flex' : 'none',
-                        flex: '1 1 0%',
-                        minWidth: 0,
-                        minHeight: 0,
-                        flexDirection: 'column',
-                      }}
-                    >
-                      <TerminalPane
-                        ref={(handle) => {
-                          if (handle) {
-                            paneHandles.current.set(session.id, handle);
-                          } else {
-                            paneHandles.current.delete(session.id);
-                          }
-                        }}
-                        isActive={hasActivated || isExpanded}
-                        shouldFocus={pane.id === focusedPaneId && isActiveSession}
-                        isConnected={isConnected}
-                        preferredShell={sessionShellsRef.current.get(session.id) ?? null}
-                        reattachSessionId={sessionReattachIdsRef.current.get(session.id) ?? null}
-                        fontSize={fontSize}
-                        copyOnSelect={copyOnSelect}
-                        onProcessExit={() => handlePaneExit(pane.id, session.id)}
-                        onTitleChange={(title) => handleSessionTitleChange(pane.id, session.id, title)}
-                        onActivity={() => handleSessionActivity(pane.id, session.id)}
-                      />
+                      {isActionsPane && (
+                        <>
+                          <div className="terminal-tab-bar-divider" aria-hidden="true" />
+                          <div className="terminal-tab-bar-actions">
+                            <BackgroundTasks />
+                            <button
+                              className={`terminal-btn split-btn ${splitDirection === 'vertical' ? 'split-btn-active' : ''}`}
+                              onClick={() => toggleSplit('vertical')}
+                              title={splitDirection === 'vertical' ? 'Unsplit terminal' : 'Split terminal vertically'}
+                              aria-label={splitDirection === 'vertical' ? 'Unsplit terminal' : 'Split terminal vertically'}
+                              aria-pressed={splitDirection === 'vertical'}
+                            >
+                              <Columns2 size={16} />
+                            </button>
+                            <button
+                              className={`terminal-btn split-btn ${splitDirection === 'horizontal' ? 'split-btn-active' : ''}`}
+                              onClick={() => toggleSplit('horizontal')}
+                              title={splitDirection === 'horizontal' ? 'Unsplit terminal' : 'Split terminal horizontally'}
+                              aria-label={splitDirection === 'horizontal' ? 'Unsplit terminal' : 'Split terminal horizontally'}
+                              aria-pressed={splitDirection === 'horizontal'}
+                            >
+                              <Rows2 size={16} />
+                            </button>
+                            {isSplitActive && (
+                              <button
+                                className="terminal-btn add-pane-btn"
+                                onClick={addPaneInDirection}
+                                disabled={!canAddPane}
+                                title={
+                                  canAddPane
+                                    ? `Add ${splitDirection === 'vertical' ? 'vertical' : 'horizontal'} pane`
+                                    : 'No room for another pane — resize terminal or close one first'
+                                }
+                                aria-label="Add terminal pane"
+                              >
+                                <SquarePlus size={16} />
+                              </button>
+                            )}
+                            <button
+                              className="terminal-btn clear-btn"
+                              onClick={() => {
+                                const pane = getFocusedPane();
+                                if (pane) {
+                                  const handle = paneHandlesRef.current.get(pane.activeSessionId);
+                                  handle?.clear();
+                                }
+                              }}
+                              title="Clear terminal"
+                              aria-label="Clear terminal"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                            <div className="terminal-overflow" ref={overflowMenuRef}>
+                              <button
+                                className="terminal-btn overflow-btn"
+                                onClick={() => setShowOverflowMenu((prev) => !prev)}
+                                title="More options"
+                                aria-label="More options"
+                                aria-haspopup="menu"
+                                aria-expanded={showOverflowMenu}
+                              >
+                                <MoreHorizontal size={16} />
+                              </button>
+                              {showOverflowMenu && (
+                                <div className="terminal-overflow-menu" role="menu">
+                                  <div className="terminal-overflow-header">Font size</div>
+                                  <button
+                                    className="terminal-overflow-item"
+                                    onClick={() => { zoomOut(); }}
+                                    type="button"
+                                    role="menuitem"
+                                  >
+                                    <ZoomOut size={14} aria-hidden="true" />
+                                    <span className="terminal-overflow-label">Zoom out</span>
+                                  </button>
+                                  <button
+                                    className="terminal-overflow-item"
+                                    onClick={() => { zoomIn(); }}
+                                    type="button"
+                                    role="menuitem"
+                                  >
+                                    <ZoomIn size={14} aria-hidden="true" />
+                                    <span className="terminal-overflow-label">Zoom in</span>
+                                  </button>
+                                  <button
+                                    className="terminal-overflow-item"
+                                    onClick={() => { resetFontSize(); setShowOverflowMenu(false); }}
+                                    type="button"
+                                    role="menuitem"
+                                  >
+                                    <Type size={14} aria-hidden="true" />
+                                    <span className="terminal-overflow-label">Reset to default</span>
+                                    <span className="terminal-overflow-meta">{fontSize}px</span>
+                                  </button>
+                                  <div className="terminal-overflow-divider" role="separator" />
+                                  <button
+                                    className={`terminal-overflow-item${copyOnSelect ? ' terminal-overflow-item--active' : ''}`}
+                                    onClick={() => { toggleCopyOnSelect(); }}
+                                    type="button"
+                                    role="menuitemcheckbox"
+                                    aria-checked={copyOnSelect}
+                                  >
+                                    <Copy size={14} aria-hidden="true" />
+                                    <span className="terminal-overflow-label">Copy on select</span>
+                                    <span className="terminal-overflow-meta">{copyOnSelect ? 'On' : 'Off'}</span>
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                            <button
+                              className="terminal-btn toggle-btn"
+                              onClick={toggleExpanded}
+                              title="Collapse terminal (Ctrl+`)"
+                              aria-label="Collapse terminal"
+                              aria-expanded={isExpanded}
+                            >
+                              <ChevronDown size={16} />
+                            </button>
+                          </div>
+                        </>
+                      )}
                     </div>
-                  );
-                })}
-              </div>
-              {isSplitActive && index < panes.length - 1 && (
-                <div
-                  className={`terminal-split-divider terminal-split-divider-${splitDirection}`}
-                  onMouseDown={(e) => handleSplitDividerDragStart(e, index)}
-                />
-              )}
-            </React.Fragment>
-            );
-          });
+                    {pane.sessions.map((session) => {
+                      const isActiveSession = session.id === pane.activeSessionId;
+                      return (
+                        <div
+                          key={session.id}
+                          style={{
+                            display: isActiveSession ? 'flex' : 'none',
+                            flex: '1 1 0%',
+                            minWidth: 0,
+                            minHeight: 0,
+                            flexDirection: 'column',
+                          }}
+                        >
+                          <TerminalPane
+                            ref={(handle) => {
+                              if (handle) {
+                                paneHandlesRef.current.set(session.id, handle);
+                              } else {
+                                paneHandlesRef.current.delete(session.id);
+                              }
+                            }}
+                            isActive={hasActivated || isExpanded}
+                            shouldFocus={pane.id === focusedPaneId && isActiveSession}
+                            isConnected={isConnected}
+                            preferredShell={sessionShellsRef.current.get(session.id) ?? null}
+                            reattachSessionId={sessionReattachIdsRef.current.get(session.id) ?? null}
+                            fontSize={fontSize}
+                            copyOnSelect={copyOnSelect}
+                            onProcessExit={() => handlePaneExit(pane.id, session.id)}
+                            onTitleChange={(title) => handleSessionTitleChange(pane.id, session.id, title)}
+                            onActivity={() => handleSessionActivity(pane.id, session.id)}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {isSplitActive && index < panes.length - 1 && (
+                    <div
+                      className={`terminal-split-divider terminal-split-divider-${splitDirection}`}
+                      onMouseDown={(e) => handleSplitDividerDragStart(e, index)}
+                    />
+                  )}
+                </React.Fragment>
+              );
+            });
           })()}
         </div>
       </div>

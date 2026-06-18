@@ -194,6 +194,14 @@ function copyWasmFiles(targetDir) {
     console.log('  ⚠ wasm_exec.js not found, skipping');
   }
 
+  const embeddingWasmFile = join(wasmDir, 'embedding.wasm');
+  if (existsSync(embeddingWasmFile)) {
+    cpSync(embeddingWasmFile, join(targetWasmDir, 'embedding.wasm'));
+    console.log('  ✓ embedding.wasm');
+  } else {
+    console.log('  ⚠ embedding.wasm not found, skipping (lazy-load module)');
+  }
+
   // Remove stale version.json that CRA may have copied from public/wasm/.
   // The authoritative version.json is generated at the dist root by generateVersionJson().
   const staleVersionJson = join(targetWasmDir, 'version.json');

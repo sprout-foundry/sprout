@@ -88,5 +88,5 @@ _Spec: `roadmap/SP-045-wasm-feature-parity.md` §4–§5 (Tiers 1/2a/2b already 
 _Spec: `roadmap/SP-015-cloud-platform.md` (R1/R3/R5 already complete)_
 
 - [x] SP-015-R4: Add a CI check that fails if Foundry's Service-Worker route table diverges from `dist/endpoint-manifest.json`; evaluate a shared `@sprout/endpoint-registry` package. Acceptance: a manifest/route-table divergence fails CI.
-- [ ] SP-015-R6: Define the canonical dist-bundle layout the browser IDE expects (`index.html`, `static/js/`, `wasm/`) and make `scripts/build-webui-dist.mjs` produce exactly that. Acceptance: the build output matches the documented layout.
+- [x] SP-015-R6: Define the canonical dist-bundle layout the browser IDE expects (`index.html`, `assets/`, `wasm/`) and make `scripts/build-webui-dist.mjs` produce exactly that. Acceptance: the build output matches the documented layout.
 - [ ] SP-015-R7: Chat-translation robustness — edge-case tests (empty query, missing `chat_id`, steer, stop), document the Foundry chat contract, and consider extracting the `{query}`→`{messages,stream}` translation into a module shared with Foundry's `chat-bridge.ts`. Acceptance: edge-case tests pass; the contract is documented.

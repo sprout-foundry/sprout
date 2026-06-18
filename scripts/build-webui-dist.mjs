@@ -358,6 +358,72 @@ function postProcessIndexHtml(targetDir, buildMode) {
   writeFileSync(indexHtmlPath, html, 'utf-8');
 }
 
+// ── Dist Layout Verification (SP-015-R6) ───────────────────────────
+// Verifies the output directory matches the canonical dist-bundle layout
+// documented in docs/DIST_BUNDLE_LAYOUT.md.
+
+function verifyDistLayout(outputDir) {
+  console.log('🔍 Verifying canonical dist-bundle layout...');
+
+  const required = [
+    { path: 'index.html', desc: 'SPA entry point' },
+    { path: 'assets', desc: 'Vite build output (JS/CSS)', isDir: true },
+    { path: 'wasm', desc: 'Go WASM modules', isDir: true },
+    { path: 'wasm/wasm_exec.js', desc: 'Go WASM runtime' },
+    { path: 'version.json', desc: 'Build metadata' },
+  ];
+
+  // Optional files — warn if missing but don't fail
+  const optional = [
+    { path: 'wasm/sprout.wasm', desc: 'Shell WASM binary' },
+    { path: 'wasm/embedding.wasm', desc: 'Embedding WASM binary (SP-045-3)' },
+    { path: 'manifest.json', desc: 'PWA manifest' },
+    { path: 'sw.js', desc: 'Service worker' },
+  ];
+
+  let allRequired = true;
+
+  for (const item of required) {
+    const fullPath = join(outputDir, item.path);
+    if (existsSync(fullPath)) {
+      console.log(`  ✓ ${item.path} — ${item.desc}`);
+    } else {
+      console.error(`  ✗ ${item.path} MISSING — ${item.desc}`);
+      allRequired = false;
+    }
+  }
+
+  for (const item of optional) {
+    const fullPath = join(outputDir, item.path);
+    if (existsSync(fullPath)) {
+      console.log(`  ✓ ${item.path} — ${item.desc}`);
+    } else {
+      console.warn(`  ⚠ ${item.path} not found — ${item.desc} (optional)`);
+    }
+  }
+
+  // Verify assets/ has at least one .js file
+  const assetsDir = join(outputDir, 'assets');
+  if (existsSync(assetsDir)) {
+    const jsFiles = readdirSync(assetsDir).filter((f) => f.endsWith('.js'));
+    if (jsFiles.length === 0) {
+      console.error('  ✗ assets/ has no .js files — build may have failed');
+      allRequired = false;
+    } else {
+      console.log(`  ✓ assets/ contains ${jsFiles.length} JS file(s)`);
+    }
+  }
+
+  if (!allRequired) {
+    console.error('');
+    console.error('Error: Dist-bundle layout verification failed.');
+    console.error('See docs/DIST_BUNDLE_LAYOUT.md for the canonical structure.');
+    process.exit(1);
+  }
+
+  console.log('  ✓ Canonical layout verified.');
+}
+
 function main() {
   console.log(`🏗️  Building ${mode}-mode WebUI distribution...`);
   console.log('');
@@ -418,6 +484,10 @@ function main() {
   generateVersionJson(outputDir, mode);
   console.log('');
 
+  // Verify canonical dist layout (SP-015-R6)
+  verifyDistLayout(outputDir);
+  console.log('');
+
   // Print summary
   const size = getDirectorySize(outputDir);
   console.log('');
@@ -429,9 +499,13 @@ function main() {
   console.log('');
   console.log('Contents:');
   console.log('  index.html      - Application entry point');
-  console.log('  assets/         - Built assets (css/, js/)');
-  console.log('  wasm/           - WASM binary and runtime (if available)');
+  console.log('  assets/         - Vite build output (JS, CSS, fonts)');
+  console.log('  wasm/           - Go WASM modules (sprout.wasm, embedding.wasm, wasm_exec.js)');
   console.log('  version.json    - Version and build metadata');
+  console.log('  manifest.json   - PWA manifest');
+  console.log('  sw.js           - Service worker');
+  console.log('');
+  console.log('See docs/DIST_BUNDLE_LAYOUT.md for the canonical layout spec.');
   console.log('');
 }
 

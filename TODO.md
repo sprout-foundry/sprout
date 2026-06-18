@@ -81,7 +81,7 @@ _Spec: `roadmap/SP-045-wasm-feature-parity.md` §4–§5 (Tiers 1/2a/2b already 
 
 - [x] SP-045-1: Strip the WASM binary — add `-ldflags="-s -w"` in `scripts/build-wasm.sh`; confirm the size drop. Acceptance: WASM binary is measurably smaller; still loads.
 - [x] SP-045-2: Spike `tinygo` for `cmd/wasm` — assess stdlib/`pkg/agent` compatibility; document go/no-go. Acceptance: written go/no-go with the blocking incompatibilities (if any).
-- [ ] SP-045-3: Split into a small shell-only WASM module + a lazy-loaded `embedding.wasm` (loads on first semantic search). Acceptance: casual page load no longer pulls the embedding module.
+- [x] SP-045-3: Split into a small shell-only WASM module + a lazy-loaded `embedding.wasm` (loads on first semantic search). Acceptance: casual page load no longer pulls the embedding module.
 - [x] SP-045-4: Build-matrix hygiene — tag `pkg/webui/terminal_*.go` (creack/pty importers) `!js` and sweep `//go:build !windows` that wrongly include `js`. Acceptance: `GOOS=js GOARCH=wasm go build ./...` is clean.
 
 ## SP-015: Cloud Platform Integration — remaining follow-ups

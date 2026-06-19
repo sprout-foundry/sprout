@@ -21,7 +21,7 @@ func (te *ToolExecutor) executeSequential(toolCalls []api.ToolCall) []api.Messag
 	for i, tc := range toolCalls {
 		// Check for interrupt between tool executions
 		select {
-		case <-te.agent.interruptCtx.Done():
+		case <-te.agent.InterruptCtx().Done():
 			// Context cancelled, interrupt requested
 			toolCallID := tc.ID
 			if toolCallID == "" {
@@ -242,7 +242,7 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 		err = res.err
 	case <-ctx.Done():
 		err = agenterrors.NewTransientError(fmt.Sprintf("tool execution timed out after %s", toolTimeout), nil)
-	case <-te.agent.interruptCtx.Done():
+	case <-te.agent.InterruptCtx().Done():
 		err = agenterrors.NewTransientError("tool execution interrupted by user", nil)
 	}
 

@@ -146,18 +146,8 @@ sprout
 .sprout
 storybook-static
 
-# Static embedding model source files (built into static_model.bin)
-pkg/embedding/staticmodel/
-
-# Old model files (replaced by static_model.bin)
-pkg/embedding/models/
-pkg/embedding/staticmodel/mkembed
-
 code_review_output.json
 .claude/
-
-# Static embedding model (54MB) — not tracked, built/downloaded locally
-pkg/embedding/static_model.bin
 
 # Tree-sitter grammar blobs copied from the gotreesitter module cache by
 # scripts/prepare-grammars.sh (SP-058). Not tracked — regenerated on every build.

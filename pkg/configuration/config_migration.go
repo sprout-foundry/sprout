@@ -162,6 +162,18 @@ func applyZshCommandDetectionDefaults(raw map[string]interface{}) {
 	}
 }
 
+// applyUnifiedRiskResolverDefault enables the unified risk resolver (SP-068)
+// by default. The unified resolver collapses the former dual-gate security
+// path (static classifier → persona cascade) into a single ResolveToolRisk
+// assessment, removing ~50% of the security-system complexity. Users who
+// need the legacy dual-gate behavior for compatibility can set
+// "unified_risk_resolver": false in their config to opt out.
+func applyUnifiedRiskResolverDefault(raw map[string]interface{}) {
+	if _, exists := raw["unified_risk_resolver"]; !exists {
+		raw["unified_risk_resolver"] = true
+	}
+}
+
 // applyMapInitializations ensures required map fields are initialized to empty maps.
 // It only sets fields that are nil/missing — existing values are preserved.
 func applyMapInitializations(raw map[string]interface{}) {
@@ -470,6 +482,7 @@ func applyV2Defaults(raw map[string]interface{}) error {
 	applyAPITimeoutDefaults(raw)
 	applyPDFOCRDefaults(raw)
 	applyZshCommandDetectionDefaults(raw)
+	applyUnifiedRiskResolverDefault(raw)
 	applyDefaultSubagentTypes(raw)
 	applyDefaultSkills(raw)
 	applyLegacyToolAllowlistMigration(raw)

@@ -87,11 +87,11 @@ type Config struct {
 	AllowGitHistoryRewrite bool `json:"allow_git_history_rewrite,omitempty"`
 
 	// UnifiedRiskResolver enables the unified risk resolver (SP-068 Phase 2).
-	// When true, gating decisions at call sites use a single ResolveToolRisk
-	// assessment instead of the split Gate 1 (static classifier) → Gate 2
-	// (persona risk cascade) path. When false (default), the existing dual-gate
-	// code paths run unchanged, but a debug shadow-log compares old vs new
-	// decisions for pre-release validation.
+	// When true (the default), gating decisions at call sites use a single
+	// ResolveToolRisk assessment instead of the split Gate 1 (static
+	// classifier) → Gate 2 (persona risk cascade) path. When false, the
+	// legacy dual-gate code paths run (retained for compatibility). Set to
+	// false explicitly to opt out of the unified resolver.
 	UnifiedRiskResolver bool `json:"unified_risk_resolver,omitempty"`
 
 	// ResourceDirectory stores captured web/vision resources relative to the current working directory.

@@ -2,6 +2,7 @@ package agent
 
 import (
 	"testing"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/security"
@@ -17,10 +18,32 @@ func TestSecurityApprovalWebuiFlow(t *testing.T) {
 	eventCh := eventBus.Subscribe("security_test")
 	defer eventBus.Unsubscribe("security_test")
 
-	// Track the approval request
-	requestID := ""
+	// The event bus publishes two events per approval request
+	// (SecurityApprovalRequest + InputRequired). Filter to only the
+	// approval-request events and retry the response briefly because the
+	// request goroutine may not have registered its pending entry yet.
+	respondToNextApproval := func(approve bool) {
+		for {
+			event := <-eventCh
+			if event.Type != events.EventTypeSecurityApprovalRequest {
+				continue // skip InputRequired and other companion events
+			}
+			data, ok := event.Data.(map[string]interface{})
+			if !ok {
+				t.Error("Expected event data to be a map")
+				return
+			}
+			requestID, _ := data["request_id"].(string)
+			// Retry until the pending entry exists (bounded polling).
+			for !approvalMgr.RespondToApproval(requestID, approve) {
+				time.Sleep(time.Millisecond)
+			}
+			return
+		}
+	}
 
-	// Start a goroutine to listen for security approval requests
+	// Start a goroutine to listen for the first security approval request
+	// and validate its payload before approving.
 	go func() {
 		event := <-eventCh
 		if event.Type != events.EventTypeSecurityApprovalRequest {
@@ -34,7 +57,6 @@ func TestSecurityApprovalWebuiFlow(t *testing.T) {
 			return
 		}
 
-		requestID = data["request_id"].(string)
 		toolName := data["tool_name"].(string)
 		riskLevel := data["risk_level"].(string)
 		reasoning := data["reasoning"].(string)
@@ -50,8 +72,11 @@ func TestSecurityApprovalWebuiFlow(t *testing.T) {
 			t.Errorf("Expected reasoning to be 'Test reasoning', got: %s", reasoning)
 		}
 
-		// Respond with approval
-		approvalMgr.RespondToApproval(requestID, true)
+		// Respond with approval (retry until pending entry is registered)
+		requestID, _ := data["request_id"].(string)
+		for !approvalMgr.RespondToApproval(requestID, true) {
+			time.Sleep(time.Millisecond)
+		}
 	}()
 
 	// Test the webui approval flow: eventBus is available, so approval should go through webui
@@ -64,13 +89,9 @@ func TestSecurityApprovalWebuiFlow(t *testing.T) {
 		t.Error("Expected approval to be true when eventBus is available (webui mode)")
 	}
 
-	// Test rejection flow
-	go func() {
-		event := <-eventCh
-		data, _ := event.Data.(map[string]interface{})
-		requestID, _ := data["request_id"].(string)
-		approvalMgr.RespondToApproval(requestID, false)
-	}()
+	// Test rejection flow — drain the companion InputRequired event from the
+	// first request, then respond to the second approval request with reject.
+	go respondToNextApproval(false)
 
 	rejected := approvalMgr.RequestToolApproval(eventBus, "test-client", "", "shell_command", "DANGEROUS", "Test rejection", map[string]string{
 		"command": "rm -rf /",

@@ -30,14 +30,25 @@
 package tools
 
 import (
+	"log"
 	"regexp"
 	"strings"
+	"sync/atomic"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
-// Audit logging for security decisions is provided by build-tagged hooks:
-// security_audit_hooks.go (!js) and security_audit_hooks_wasm.go (js).
+// auditLogger is the package-level audit logger for security decisions.
+// Set via SetAuditLogger; accessed atomically for concurrent safety.
+var auditLogger atomic.Pointer[AuditLogger]
+
+// SetAuditLogger sets the package-level audit logger for recording security
+// decisions. Must be called during initialization before concurrent goroutines
+// begin calling ClassifyToolCall.
+func SetAuditLogger(l *AuditLogger) {
+	auditLogger.Store(l)
+}
 
 // pipeToShellPattern matches pipe-to-shell patterns that can execute arbitrary code.
 // Matches: | followed by optional whitespace, optional path prefix (e.g., /bin/, /usr/bin/),
@@ -244,8 +255,20 @@ func ClassifyToolCall(toolName string, args map[string]interface{}) SecurityResu
 		result = SecurityResult{Risk: SecuritySafe, Reasoning: "Registered tool with no argument-level risk", Category: RiskCategoryUnknown}
 	}
 
-	// Log the security decision (build-tagged: no-op under WASM)
-	logSecurityDecision(toolName, result)
+	// Log the security decision (nil-safe, atomic load)
+	if l := auditLogger.Load(); l != nil {
+		if err := l.LogEntry(AuditEntry{
+			Timestamp: time.Now(),
+			Tool:      toolName,
+			RiskLevel: result.Risk.String(),
+			Category:  string(result.Category),
+			Action:    classifyAction(result),
+			Reasoning: result.Reasoning,
+			Source:    "classifier",
+		}); err != nil {
+			log.Printf("audit log write failed: %v", err)
+		}
+	}
 
 	return result
 }
@@ -326,7 +349,7 @@ func classifyShellCommand(args map[string]interface{}) SecurityResult {
 	} else {
 		category = RiskCategoryUnknown
 	}
-	result := SecurityResult{
+	return SecurityResult{
 		Risk:         maxRisk,
 		Reasoning:    getShellCommandReasoning(cmd, maxRisk),
 		ShouldBlock:  maxRisk == SecurityDangerous,
@@ -334,19 +357,6 @@ func classifyShellCommand(args map[string]interface{}) SecurityResult {
 		RiskType:     getShellCommandRiskType(cmd, maxRisk, isCritical),
 		Category:     category,
 	}
-
-	// Apply user-configurable shell policy (user safe/dangerous patterns).
-	// Checked after built-in classification; user patterns can tighten or
-	// loosen but must never override a built-in hard-block.
-	if p := globalShellPolicy.Load(); p != nil {
-		var matched bool
-		result, matched = p.applyTo(result, cmd)
-		if matched {
-			// result was modified by user policy
-		}
-	}
-
-	return result
 }
 
 // classifyChainedCommand splits and classifies chained commands

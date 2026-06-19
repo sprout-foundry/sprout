@@ -27,12 +27,6 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 		return nil, "", fmt.Errorf("unknown tool '%s'", toolName)
 	}
 
-	// SP-063: computer-use tools are restricted to the computer_user persona.
-	// Inert unless computer use is enabled (the restricted-name set is empty).
-	if isComputerUseToolBlocked(toolName, agent) {
-		return nil, "", fmt.Errorf("tool %q is only available to the computer_user persona", toolName)
-	}
-
 	if agent != nil && agent.debug {
 		agent.debugLog("[tool] tool dispatched via new registry: %s\n", toolName)
 	}

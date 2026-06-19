@@ -79,7 +79,7 @@ func handleAnalyzeUIScreenshot(ctx context.Context, a *Agent, args map[string]in
 		effectiveImagePath = screenshotPath
 	}
 
-	result, err := tools.AnalyzeImage(ctx, effectiveImagePath, analysisPrompt, "frontend")
+	result, err := tools.AnalyzeImage(effectiveImagePath, analysisPrompt, "frontend")
 	a.Logger().Debug("Analyze UI screenshot error: %v\n", err)
 	if err != nil {
 		return result, fmt.Errorf("failed to analyze UI screenshot %s: %w", imagePath, err)
@@ -248,7 +248,7 @@ func handleAnalyzeImageContent(ctx context.Context, a *Agent, args map[string]in
 		effectiveImagePath = screenshotPath
 	}
 
-	result, err := tools.AnalyzeImage(ctx, effectiveImagePath, analysisPrompt, analysisMode)
+	result, err := tools.AnalyzeImage(effectiveImagePath, analysisPrompt, analysisMode)
 	a.Logger().Debug("Analyze image content error: %v\n", err)
 
 	// Check if model download is needed
@@ -272,7 +272,7 @@ func handleAnalyzeImageContent(ctx context.Context, a *Agent, args map[string]in
 		if choice == "yes" {
 			// The simplified PDF processing doesn't require model downloads
 			a.PrintLine(console.GlyphDim.Prefix() + "Processing PDF with simplified approach...")
-			result, err = tools.AnalyzeImage(ctx, imagePath, analysisPrompt, analysisMode)
+			result, err = tools.AnalyzeImage(imagePath, analysisPrompt, analysisMode)
 		}
 	}
 

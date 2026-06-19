@@ -7,7 +7,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Global singleton for the new-style tool registry.
+// Global singleton for new-style tool registry (SP-038-2a dual-dispatch)
 // ---------------------------------------------------------------------------
 
 var (
@@ -73,30 +73,10 @@ func (r *ToolRegistry) All() map[string]ToolHandler {
 	return out
 }
 
-// ForPersona returns tools available for a given persona allowlist. If the
-// allowlist is empty (nil or zero-length), all registered tools are returned
-// (unrestricted persona). Otherwise only tools whose name appears in the
-// allowlist are returned. Unknown names in the allowlist are silently
-// ignored — they don't cause an error, they simply don't match any
-// registered tool.
-func (r *ToolRegistry) ForPersona(allowlist []string) map[string]ToolHandler {
-	if len(allowlist) == 0 {
-		return r.All()
-	}
-	// Build a set for O(1) lookup
-	allowed := make(map[string]bool, len(allowlist))
-	for _, name := range allowlist {
-		allowed[name] = true
-	}
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	out := make(map[string]ToolHandler, len(allowlist))
-	for name, handler := range r.tools {
-		if allowed[name] {
-			out[name] = handler
-		}
-	}
-	return out
+// ForPersona returns tools available for a given persona. Initially returns all tools.
+// TODO(SP-038): Implement per-persona tool filtering
+func (r *ToolRegistry) ForPersona(persona string) map[string]ToolHandler {
+	return r.All()
 }
 
 // Unregister removes a tool handler by name. Returns true if the tool was found and removed.

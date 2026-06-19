@@ -39,9 +39,9 @@ func makeAuditEntry(tool, risk, outcome, source, command string, ts time.Time) t
 		Timestamp: ts,
 		Tool:      tool,
 		RiskLevel: risk,
-		Outcome:   outcome,
+		Action:    outcome,
 		Source:    source,
-		Command:   command,
+		Args:      command,
 	}
 }
 
@@ -77,8 +77,8 @@ func TestReadAuditLogFile_BasicRead(t *testing.T) {
 	if result[0].Tool != "shell_command" {
 		t.Errorf("first entry tool = %s, want shell_command", result[0].Tool)
 	}
-	if result[2].Command != "mkfs /dev/sda" {
-		t.Errorf("third entry command = %s, want 'mkfs /dev/sda'", result[2].Command)
+	if result[2].Args != "mkfs /dev/sda" {
+		t.Errorf("third entry command = %s, want 'mkfs /dev/sda'", result[2].Args)
 	}
 }
 
@@ -102,11 +102,11 @@ func TestReadAuditLogFile_TailN(t *testing.T) {
 		t.Fatalf("expected 3 entries (tail), got %d", len(result))
 	}
 	// Should be the last 3 entries.
-	if result[0].Command != "cmd-H" {
-		t.Errorf("first of tail = %s, want cmd-H", result[0].Command)
+	if result[0].Args != "cmd-H" {
+		t.Errorf("first of tail = %s, want cmd-H", result[0].Args)
 	}
-	if result[2].Command != "cmd-J" {
-		t.Errorf("last of tail = %s, want cmd-J", result[2].Command)
+	if result[2].Args != "cmd-J" {
+		t.Errorf("last of tail = %s, want cmd-J", result[2].Args)
 	}
 }
 
@@ -161,11 +161,11 @@ func TestReadAuditLogTail_IncludesRotatedFile(t *testing.T) {
 		t.Fatalf("expected 3 entries (rotated + current), got %d", len(result))
 	}
 	// Order should be: old entries first, then new.
-	if result[0].Command != "old-cmd-1" {
-		t.Errorf("first entry should be from rotated file, got %s", result[0].Command)
+	if result[0].Args != "old-cmd-1" {
+		t.Errorf("first entry should be from rotated file, got %s", result[0].Args)
 	}
-	if result[2].Command != "new-cmd" {
-		t.Errorf("last entry should be from current file, got %s", result[2].Command)
+	if result[2].Args != "new-cmd" {
+		t.Errorf("last entry should be from current file, got %s", result[2].Args)
 	}
 }
 
@@ -174,9 +174,9 @@ func TestFormatAuditEntry_AllFields(t *testing.T) {
 		Timestamp: time.Date(2026, 6, 13, 14, 32, 11, 0, time.UTC),
 		Tool:      "shell_command",
 		RiskLevel: "DANGEROUS",
-		Outcome:   "blocked",
+		Action:    "blocked",
 		Source:    "built-in-dangerous",
-		Command:   "git push --force origin main",
+		Args:      "git push --force origin main",
 	}
 
 	formatted := formatAuditEntry(entry)
@@ -214,8 +214,8 @@ func TestFormatAuditEntry_TruncatesLongCommand(t *testing.T) {
 		Timestamp: time.Now(),
 		Tool:      "shell_command",
 		RiskLevel: "CAUTION",
-		Outcome:   "approved",
-		Command:   longCmd,
+		Action:    "approved",
+		Args:      longCmd,
 	}
 
 	formatted := formatAuditEntry(entry)

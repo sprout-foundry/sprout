@@ -49,15 +49,6 @@ func (a *Agent) ApplyPersona(personaID string) error {
 		personaID = canonical
 	}
 
-	// SP-063: the computer_user persona controls the real desktop. Enforce the
-	// activation gates (enabled flag, top-level only, platform support, vision
-	// capability) before applying any provider/prompt overrides.
-	if personaID == personas.IDComputerUser {
-		if err := a.checkComputerUseActivation(); err != nil {
-			return err
-		}
-	}
-
 	// Composition rules:
 	// 1) Start from current provider/model.
 	// 2) If persona provider is set, switch provider first (model falls back for that provider).

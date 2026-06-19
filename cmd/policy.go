@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -67,11 +66,6 @@ var policyListCmd = &cobra.Command{
 		}
 		fmt.Println()
 
-		// Built-in counts (computed from actual pattern tables)
-		fmt.Printf("Built-in Safe Patterns: %d entries\n", tools.BuiltinSafeCount)
-		fmt.Printf("Built-in Dangerous Patterns: %d entries\n", tools.BuiltinDangerousCount)
-		fmt.Println()
-
 		// Workspace overlay mode
 		mode := config.Shell.WorkspaceOverlay.Mode
 		if mode == "" {
@@ -89,8 +83,6 @@ var policyListCmd = &cobra.Command{
 type policyDumpOutput struct {
 	UserSafePatterns      []policyPatternSource `json:"user_safe_patterns" yaml:"user_safe_patterns"`
 	UserDangerousPatterns []policyPatternSource `json:"user_dangerous_patterns" yaml:"user_dangerous_patterns"`
-	BuiltinSafeCount      int                   `json:"builtin_safe_count" yaml:"builtin_safe_count"`
-	BuiltinDangerousCount int                   `json:"builtin_dangerous_count" yaml:"builtin_dangerous_count"`
 	WorkspaceOverlay      policyOverlaySource   `json:"workspace_overlay" yaml:"workspace_overlay"`
 }
 
@@ -121,10 +113,7 @@ Each pattern is tagged with its source (user-config). Default format is JSON.`,
 			return fmt.Errorf("failed to load config: %w", err)
 		}
 
-		out := policyDumpOutput{
-			BuiltinSafeCount:      tools.BuiltinSafeCount,
-			BuiltinDangerousCount: tools.BuiltinDangerousCount,
-		}
+		out := policyDumpOutput{}
 
 		for _, p := range config.Shell.UserSafePatterns {
 			out.UserSafePatterns = append(out.UserSafePatterns, policyPatternSource{
@@ -406,73 +395,6 @@ Example:
 }
 
 // ---------------------------------------------------------------------------
-// `policy trust` — Trust current workspace
-// ---------------------------------------------------------------------------
-
-var policyTrustCmd = &cobra.Command{
-	Use:   "trust",
-	Short: "Trust the current workspace's shell policy",
-	Long: `Trust the current workspace's .sprout/shell-policy.json file. This records
-the SHA-256 hash of the policy file in ~/.sprout/trusted-workspaces.json so
-that the workspace overlay is honored in "trusted" mode.`,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		cwd, err := os.Getwd()
-		if err != nil {
-			return fmt.Errorf("failed to get current directory: %w", err)
-		}
-
-		if err := tools.TrustWorkspace(cwd); err != nil {
-			return fmt.Errorf("failed to trust workspace: %w", err)
-		}
-
-		absPath, err := filepath.Abs(cwd)
-		if err != nil {
-			return fmt.Errorf("failed to resolve workspace path: %w", err)
-		}
-		fmt.Printf("Trusted workspace: %s\n", absPath)
-		return nil
-	},
-}
-
-// ---------------------------------------------------------------------------
-// `policy untrust [--all]` — Untrust workspace(s)
-// ---------------------------------------------------------------------------
-
-var policyUntrustCmd = &cobra.Command{
-	Use:   "untrust",
-	Short: "Untrust the current workspace (or all workspaces with --all)",
-	Long: `Remove the current workspace from the trust store. Use --all to clear
-all trusted workspaces.`,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		all, _ := cmd.Flags().GetBool("all")
-
-		if all {
-			if err := tools.UntrustAllWorkspaces(); err != nil {
-				return fmt.Errorf("failed to clear trust store: %w", err)
-			}
-			fmt.Println("Cleared all trusted workspaces")
-			return nil
-		}
-
-		cwd, err := os.Getwd()
-		if err != nil {
-			return fmt.Errorf("failed to get current directory: %w", err)
-		}
-
-		if err := tools.UntrustWorkspace(cwd); err != nil {
-			return fmt.Errorf("failed to untrust workspace: %w", err)
-		}
-
-		absPath, err := filepath.Abs(cwd)
-		if err != nil {
-			return fmt.Errorf("failed to resolve workspace path: %w", err)
-		}
-		fmt.Printf("Untrusted workspace: %s\n", absPath)
-		return nil
-	},
-}
-
-// ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
 
@@ -510,11 +432,8 @@ func init() {
 	policyCmd.AddCommand(policyRemoveCmd)
 	policyCmd.AddCommand(policyExportCmd)
 	policyCmd.AddCommand(policyImportCmd)
-	policyCmd.AddCommand(policyTrustCmd)
-	policyCmd.AddCommand(policyUntrustCmd)
 
 	// Flags
 	policyDumpCmd.Flags().String("format", "json", "Output format: json or yaml")
 	policyExportCmd.Flags().String("format", "yaml", "Output format: json or yaml")
-	policyUntrustCmd.Flags().Bool("all", false, "Clear all trusted workspaces")
 }

@@ -350,6 +350,11 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 
 	resultCh := make(chan result, 1)
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				resultCh <- result{response: "", err: fmt.Errorf("agent panic recovered: %v", r)}
+			}
+		}()
 		response, err := chatAgent.ProcessQueryWithContinuity(query)
 		resultCh <- result{response, err}
 	}()

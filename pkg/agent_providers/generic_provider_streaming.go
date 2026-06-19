@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/logging"
@@ -58,7 +59,7 @@ func (p *GenericProvider) SendChatRequestStream(ctx context.Context, messages []
 				return nil, formattedErr
 			}
 
-			response, err := p.handleStreamingResponse(retryResp, callback)
+			response, err := p.handleStreamingResponse(ctx, retryResp, callback)
 			if err != nil {
 				logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, true, "streaming_response", err)
 				return nil, fmt.Errorf("chat request failed: %w", err)
@@ -74,7 +75,7 @@ func (p *GenericProvider) SendChatRequestStream(ctx context.Context, messages []
 	}
 	defer resp.Body.Close()
 
-	response, err := p.handleStreamingResponse(resp, callback)
+	response, err := p.handleStreamingResponse(ctx, resp, callback)
 	if err != nil {
 		// Log request on streaming error
 		logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, true, "streaming_response", err)
@@ -86,13 +87,46 @@ func (p *GenericProvider) SendChatRequestStream(ctx context.Context, messages []
 }
 
 // handleStreamingResponse processes the streaming response
-func (p *GenericProvider) handleStreamingResponse(resp *http.Response, callback api.StreamCallback) (*api.ChatResponse, error) {
+func (p *GenericProvider) handleStreamingResponse(ctx context.Context, resp *http.Response, callback api.StreamCallback) (*api.ChatResponse, error) {
 	// Process streaming response using shared builder to support tool_calls
 	reader := bufio.NewReader(resp.Body)
 	builder := api.NewStreamingResponseBuilder(callback)
 
+	// readLine reads one line with context + idle-deadline awareness.
+	// The underlying bufio.Reader.ReadString blocks until a newline arrives,
+	// which on a network stall (proxy idle hole, NAT timeout) can hang until
+	// the 900s HTTP timeout. We bound each chunk read with an idle deadline
+	// and honor ctx cancellation by closing the response body, which unblocks
+	// the reader goroutine.
+	type readResult struct {
+		line string
+		err  error
+	}
+
 	for {
-		line, err := reader.ReadString('\n')
+		lineCh := make(chan readResult, 1)
+		go func() {
+			line, err := reader.ReadString('\n')
+			lineCh <- readResult{line, err}
+		}()
+
+		var res readResult
+		select {
+		case <-ctx.Done():
+			// Cancellation: close the body to unblock the reader goroutine,
+			// then return a cancellation error.
+			resp.Body.Close()
+			return nil, fmt.Errorf("streaming response cancelled: %w", ctx.Err())
+		case <-time.After(120 * time.Second):
+			// Idle deadline: no chunk arrived in 120s. Close the body and
+			// surface a transient error so seed's retry logic can retry.
+			resp.Body.Close()
+			return nil, fmt.Errorf("streaming response idle timeout (no chunk for 120s)")
+		case res = <-lineCh:
+			// Got a line (or EOF/error) — fall through to process it below.
+		}
+
+		line, err := res.line, res.err
 		if err != nil {
 			if err == io.EOF {
 				break

@@ -173,7 +173,7 @@ func TestFormatSelfReviewResult_BothNilResults(t *testing.T) {
 // =============================================================================
 
 func TestVisionProcessor_ProcessImagesInText_CancelledContext(t *testing.T) {
-	_, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // Cancel before calling
 
 	// Create a vision processor (may fail if no provider is configured)
@@ -185,7 +185,7 @@ func TestVisionProcessor_ProcessImagesInText_CancelledContext(t *testing.T) {
 
 	// Should not panic with cancelled context — either returns an error
 	// or returns the input unchanged.
-	result, analyses, resultErr := proc.ProcessImagesInText("plain text with no images")
+	result, analyses, resultErr := proc.ProcessImagesInText(ctx, "plain text with no images")
 	if resultErr == nil {
 		// No error — should return input unchanged when there are no images
 		assert.Equal(t, "plain text with no images", result)

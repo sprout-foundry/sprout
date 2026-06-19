@@ -1,19 +1,11 @@
 //go:build !js
 
-// Package cmd provides the `sprout explain` subcommand for human-readable
-// risk assessment of shell commands.
-//
-// The explain command runs a command string through the same security
-// classification pipeline used at runtime (static classifier, critical-op
-// gate, git-history-rewrite gate) and prints a structured breakdown of
-// contributing checks and their individual verdicts.
-//
-// Checks that require Agent runtime context (persona-cascade, git-write,
-// workspace-policy, fs-tier) are shown as context-dependent in the output,
-// since this CLI command operates without a live Agent instance.
+// Package cmd provides the `sprout explain` subcommand (SP-068 Phase 3) for
+// human-readable risk assessment of commands and tool calls.
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -24,36 +16,12 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Risk assessment helpers (replicated from pkg/agent to avoid circular deps)
-// ---------------------------------------------------------------------------
-
-// classifyLevel maps a static-classifier SecurityResult onto the canonical
-// Low/Medium/High/Critical risk scale, mirroring assessmentFromClassifier()
-// in pkg/agent/risk_assessment.go.
-func classifyLevel(res tools.SecurityResult) configuration.RiskLevel {
-	if res.IsHardBlock {
-		return configuration.RiskLevelCritical
-	}
-	switch res.Risk {
-	case tools.SecuritySafe:
-		return configuration.RiskLevelLow
-	case tools.SecurityCaution:
-		return configuration.RiskLevelMedium
-	case tools.SecurityDangerous:
-		return configuration.RiskLevelHigh
-	default:
-		return configuration.RiskLevelLow
-	}
-}
-
-// ---------------------------------------------------------------------------
 // Git history-rewrite detection (replicated from pkg/agent/tool_handlers.go)
 // ---------------------------------------------------------------------------
 
 // stripQuotedContent replaces all single-quoted and double-quoted string
 // content with spaces, preserving quote boundaries so token positions stay
-// stable. This prevents false-positive git command detection when words
-// like "git reset" appear inside quoted arguments.
+// stable.
 func stripQuotedContent(s string) string {
 	var b strings.Builder
 	inSingle := false
@@ -80,17 +48,8 @@ func stripQuotedContent(s string) string {
 }
 
 // isGitHistoryRewriteCommand checks whether `command` contains a git
-// invocation that can lose commit history (a ref moves backward, a
-// branch/tag pointer disappears, a rebase rewrites commits).
-//
-// Replicated from pkg/agent/tool_handlers.go to avoid importing pkg/agent
-// (circular dependency).
-//
-// Specifically matches:
-//   - `git reset --hard <commit-ish>` (backward ref-move, where commit-ish is not HEAD)
-//   - `git rebase` (any form — rewrites or drops commits)
-//   - `git branch -d`/`-D`/`--delete` (deletes a branch ref)
-//   - `git tag -d`/`--delete` (deletes a tag ref)
+// invocation that can lose commit history. Replicated from pkg/agent to
+// avoid a circular import.
 func isGitHistoryRewriteCommand(command string) bool {
 	command = stripQuotedContent(command)
 	remaining := command
@@ -105,7 +64,6 @@ func isGitHistoryRewriteCommand(command string) bool {
 			remaining = remaining[idx+1:]
 			continue
 		}
-		// Find the subcommand, skipping leading git global flags.
 		subcommand := ""
 		subIdx := 0
 		for i := 1; i < len(parts); i++ {
@@ -125,14 +83,10 @@ func isGitHistoryRewriteCommand(command string) bool {
 			continue
 		}
 		rest := parts[subIdx+1:]
-
 		switch subcommand {
 		case "rebase":
 			return true
 		case "reset":
-			// `reset --hard` followed by an explicit commit-ish other than
-			// HEAD is a backward ref move. Bare `reset --hard` or
-			// `reset --hard HEAD` only mutates the working tree.
 			hard := false
 			for _, a := range rest {
 				if a == "--hard" {
@@ -143,14 +97,9 @@ func isGitHistoryRewriteCommand(command string) bool {
 				remaining = remaining[idx+1:]
 				continue
 			}
-			// `--hard` with no further args or with `HEAD` as the only
-			// other token is working-tree-only. Anything else abandons commits.
 			hasCommitIsh := false
 			for _, a := range rest {
-				if a == "--hard" || strings.HasPrefix(a, "-") {
-					continue
-				}
-				if a == "HEAD" {
+				if a == "--hard" || strings.HasPrefix(a, "-") || a == "HEAD" {
 					continue
 				}
 				hasCommitIsh = true
@@ -177,17 +126,8 @@ func isGitHistoryRewriteCommand(command string) bool {
 }
 
 // isGitWriteCommand reports whether `command` contains a git invocation
-// whose intent requires the orchestrator git-write flow: `commit`, `push`,
-// `merge`, `clone`, `init`, `worktree`, and branch/tag CREATE operations.
-//
-// Replicated from pkg/agent/tool_handlers.go to avoid importing pkg/agent
-// (circular dependency).
-//
-// Tier A working-tree-mutating ops (`checkout`, `switch`, `restore`, etc.)
-// are NOT gated here — the change tracker captures before-content and
-// recover_file provides recovery. Tier B history-loss ops (`rebase`,
-// `reset --hard <commit-ish>`, `branch -D`, `tag -d`) are routed through
-// isGitHistoryRewriteCommand instead.
+// whose intent requires the orchestrator git-write flow. Replicated from
+// pkg/agent to avoid a circular import.
 func isGitWriteCommand(command string) bool {
 	command = stripQuotedContent(command)
 	remaining := command
@@ -202,7 +142,6 @@ func isGitWriteCommand(command string) bool {
 			remaining = remaining[idx+1:]
 			continue
 		}
-		// Find the actual subcommand (skip "git" and any leading flags).
 		subcommand := ""
 		subcommandIdx := 2
 		for i := 1; i < len(parts); i++ {
@@ -220,10 +159,6 @@ func isGitWriteCommand(command string) bool {
 		if subcommand != "" {
 			subcommand = strings.TrimPrefix(subcommand, "--")
 			subcommand = strings.TrimPrefix(subcommand, "-")
-
-			// branch / tag — only CREATE/UPDATE operations land here.
-			// Deletes (`-d`/`-D`/`--delete`) are caught upstream by
-			// isGitHistoryRewriteCommand.
 			rest := parts[subcommandIdx+1:]
 			switch subcommand {
 			case "branch":
@@ -279,8 +214,6 @@ func isGitWriteCommand(command string) bool {
 				remaining = remaining[idx+1:]
 				continue
 			}
-
-			// Intent gates: commit, push, merge, clone, init, worktree.
 			intentGated := []string{"commit", "push", "merge", "clone", "init", "worktree"}
 			for _, writeCmd := range intentGated {
 				if subcommand == writeCmd {
@@ -288,60 +221,32 @@ func isGitWriteCommand(command string) bool {
 				}
 			}
 		}
-
 		remaining = remaining[idx+1:]
 	}
 }
 
 // ---------------------------------------------------------------------------
-// checkResult holds the outcome of a single contributing check.
+// Contributing-check model
 // ---------------------------------------------------------------------------
 
-type checkResult struct {
-	evaluated    bool
-	level        configuration.RiskLevel
-	reason       string
-	riskType     string
-	na           bool   // not applicable for this command
-	needsContext bool   // requires agent runtime context
-	naReason     string // custom n/a reason
+// explainSource labels a single contributing check in the risk assessment.
+type explainSource struct {
+	id      string
+	explain string
+	level   configuration.RiskLevel
 }
 
-func symbolFor(cr checkResult) string {
-	if !cr.evaluated || cr.needsContext {
-		return "○"
-	}
-	if cr.na {
-		return "✓"
-	}
-	return "✓"
-}
-
-func displayFor(cr checkResult) string {
-	if !cr.evaluated && cr.needsContext {
-		return "(requires agent runtime context)"
-	}
-	if cr.needsContext {
-		if cr.naReason != "" {
-			return fmt.Sprintf("(%s)", cr.naReason)
-		}
-		return "(requires agent runtime context)"
-	}
-	if cr.na {
-		if cr.naReason != "" {
-			return fmt.Sprintf("(%s)", cr.naReason)
-		}
-		return "(n/a for this command)"
-	}
-	// Contributed with a level.
-	levelStr := strings.ToUpper(string(cr.level))
-	if cr.riskType != "" {
-		levelStr = fmt.Sprintf("%s (%s)", levelStr, cr.riskType)
-	}
-	if cr.reason != "" {
-		return fmt.Sprintf("%s: %s", levelStr, cr.reason)
-	}
-	return levelStr
+// explainSupportedTools is the allowlist of tool names that --tool accepts.
+var explainSupportedTools = map[string]bool{
+	"shell_command":         true,
+	"write_file":            true,
+	"edit_file":             true,
+	"write_structured_file": true,
+	"patch_structured_file": true,
+	"git":                   true,
+	"mkdir":                 true,
+	"fetch_url":             true,
+	"web_search":            true,
 }
 
 // ---------------------------------------------------------------------------
@@ -349,149 +254,349 @@ func displayFor(cr checkResult) string {
 // ---------------------------------------------------------------------------
 
 var explainCmd = &cobra.Command{
-	Use:   "explain <command>",
-	Short: "Explain the risk assessment for a shell command",
-	Long: `Run a shell command through the security classification pipeline and print
-a human-readable breakdown of every contributing check.
+	Use:   "explain [flags] '<command>'",
+	Short: "Show the security risk assessment for a command",
+	Long: `Explain the security risk assessment for a command or tool call.
 
-This is the same pipeline used at runtime to decide whether to block,
-prompt, or auto-approve a tool call. The explain command shows each
-check's individual verdict and the combined final assessment.
+This diagnostic shows how Sprout classifies an operation on the canonical
+Low/Medium/High/Critical risk scale, along with the reasoning and the
+checks that contributed to the verdict.
+
+By default the positional argument is treated as a shell command. Use
+--tool to classify another tool (e.g. write_file with --path, git with
+--operation).
+
+It uses the static classifier only — no LLM, provider, or workspace context
+is required. Runtime-gated checks (persona risk profile, workspace security
+policy) are noted as context-dependent.
 
 Examples:
   sprout explain 'rm -rf /'
-  sprout explain 'git reset --hard HEAD~5'
+  sprout explain 'git push'
   sprout explain 'ls -la'
-`,
-	Args: cobra.ExactArgs(1),
+  sprout explain --tool write_file --path ~/.ssh/config
+  sprout explain --tool git --operation push
+  sprout explain 'ls' --json`,
+	Args: cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runExplain(cmd, args[0])
+		toolName, _ := cmd.Flags().GetString("tool")
+		pathFlag, _ := cmd.Flags().GetString("path")
+		opFlag, _ := cmd.Flags().GetString("operation")
+		asJSON, _ := cmd.Flags().GetBool("json")
+
+		if !explainSupportedTools[toolName] {
+			return fmt.Errorf("unknown or unsupported tool %q (valid: %s)", toolName, explainToolList())
+		}
+
+		cliArgs := buildExplainArgs(args, toolName, pathFlag, opFlag)
+
+		if msg := validateExplainInput(toolName, cliArgs); msg != "" {
+			fmt.Fprintln(cmd.ErrOrStderr(), msg)
+			return fmt.Errorf("no input provided for tool %q", toolName)
+		}
+
+		secResult := tools.ClassifyToolCall(toolName, cliArgs)
+		level, hardBlock := combinedAssessment(toolName, secResult, cliArgs)
+		if hardBlock {
+			secResult.IsHardBlock = true
+		}
+		sources := explainSourcesFor(toolName, secResult, cliArgs)
+
+		if asJSON {
+			return printExplainJSON(cmd, secResult, level, sources, toolName, cliArgs)
+		}
+
+		printExplainHuman(cmd, secResult, level, sources, toolName, cliArgs)
+		return nil
 	},
 }
 
-// runExplain executes the risk assessment pipeline and prints the result.
+// runExplain runs the risk assessment pipeline for a shell command and
+// prints the human-readable breakdown. It is the testable core of the
+// explain command.
 func runExplain(cmd *cobra.Command, command string) error {
-	out := cmd.OutOrStdout()
-
-	// ── 1. Static classifier ─────────────────────────────────────────────
-	classifierResult := tools.ClassifyToolCall("shell_command", map[string]interface{}{
-		"command": command,
-	})
-	classifierLevel := classifyLevel(classifierResult)
-
-	// ── 2. Critical operation gate ───────────────────────────────────────
-	isCritical := configuration.IsCriticalOperation(command)
-
-	// ── 3. Git history-rewrite gate ──────────────────────────────────────
-	isGitHistoryRewrite := isGitHistoryRewriteCommand(command)
-
-	// ── Combine assessments ──────────────────────────────────────────────
-	// Start with classifier, then tighten with critical-op and git gates.
-	level := classifierLevel
-	isHardBlock := classifierResult.IsHardBlock
-	sources := make([]string, 0, 4)
-	reason := classifierResult.Reasoning
-
-	// Track individual check results for the detailed breakdown.
-	checks := make(map[string]checkResult)
-
-	// Classifier
-	checks["classifier"] = checkResult{
-		evaluated: true,
-		level:     classifierLevel,
-		reason:    classifierResult.Reasoning,
-		riskType:  classifierResult.Risk.String(),
+	args := map[string]interface{}{"command": command}
+	secResult := tools.ClassifyToolCall("shell_command", args)
+	level, hardBlock := combinedAssessment("shell_command", secResult, args)
+	if hardBlock {
+		secResult.IsHardBlock = true
 	}
-	sources = append(sources, "classifier")
-
-	// Critical operation
-	if isCritical {
-		if level.Rank() < configuration.RiskLevelCritical.Rank() {
-			level = configuration.RiskLevelCritical
-			reason = "Critical system operation — hard-blocked"
-		}
-		isHardBlock = true
-		sources = append(sources, "critical-op")
-		checks["critical-op"] = checkResult{
-			evaluated: true,
-			level:     configuration.RiskLevelCritical,
-			reason:    "Critical system operation — hard-blocked",
-		}
-	} else {
-		checks["critical-op"] = checkResult{evaluated: true, na: true}
-	}
-
-	// Git history-rewrite
-	if isGitHistoryRewrite {
-		if level.Rank() < configuration.RiskLevelCritical.Rank() {
-			level = configuration.RiskLevelCritical
-			reason = "git history-rewrite operation blocked by default"
-		}
-		isHardBlock = true
-		sources = append(sources, "git-history-rewrite")
-		checks["git-history-rewrite"] = checkResult{
-			evaluated: true,
-			level:     configuration.RiskLevelCritical,
-			reason:    "blocked unless allow_git_history_rewrite=true",
-		}
-	} else {
-		checks["git-history-rewrite"] = checkResult{evaluated: true, na: true}
-	}
-
-	// Runtime-context checks (shown as placeholders)
-	checks["persona-cascade"] = checkResult{evaluated: false, needsContext: true}
-
-	// Git write check
-	isGitWrite := isGitWriteCommand(command)
-	if isGitWrite {
-		checks["git-write"] = checkResult{
-			evaluated:    true,
-			needsContext: true,
-			naReason:     "agent persona determines if allowed",
-		}
-	} else {
-		checks["git-write"] = checkResult{evaluated: true, na: true}
-	}
-
-	checks["fs-tier"] = checkResult{evaluated: true, na: true, naReason: "n/a for shell_command"}
-	checks["workspace-policy"] = checkResult{evaluated: false, needsContext: true}
-
-	// Sort sources for stable output
-	sort.Strings(sources)
-
-	// ── Render ───────────────────────────────────────────────────────────
-	fprint := func(format string, args ...interface{}) {
-		fmt.Fprintf(out, format+"\n", args...)
-	}
-
-	fprint("Risk Assessment")
-	fprint("===============")
-	fprint("Level:        %s (hard-block: %v)", strings.ToUpper(string(level)), isHardBlock)
-	fprint("Sources:      %s", strings.Join(sources, ", "))
-	fprint("Reason:       %s", reason)
-
-	fprint("")
-	fprint("Contributing checks:")
-
-	// Render each check in a fixed order.
-	checkOrder := []string{
-		"classifier",
-		"critical-op",
-		"git-history-rewrite",
-		"persona-cascade",
-		"git-write",
-		"fs-tier",
-		"workspace-policy",
-	}
-
-	for _, name := range checkOrder {
-		cr := checks[name]
-		fprint("  %s %-22s → %s", symbolFor(cr), name, displayFor(cr))
-	}
-
+	sources := explainSourcesFor("shell_command", secResult, args)
+	printExplainHuman(cmd, secResult, level, sources, "shell_command", args)
 	return nil
 }
 
+// buildExplainArgs constructs the args map that ClassifyToolCall expects.
+func buildExplainArgs(args []string, toolName, pathFlag, opFlag string) map[string]interface{} {
+	out := map[string]interface{}{}
+	if len(args) > 0 {
+		out["command"] = strings.Join(args, " ")
+	}
+	switch toolName {
+	case "write_file", "edit_file", "write_structured_file", "patch_structured_file":
+		if pathFlag != "" {
+			out["path"] = pathFlag
+		}
+	case "git":
+		if opFlag != "" {
+			out["operation"] = opFlag
+		}
+	}
+	return out
+}
+
+// validateExplainInput returns a non-empty user-facing message when the
+// tool call is missing the input required to classify it.
+func validateExplainInput(toolName string, args map[string]interface{}) string {
+	switch toolName {
+	case "shell_command":
+		if c, _ := args["command"].(string); strings.TrimSpace(c) == "" {
+			return `Usage: sprout explain '<command>'
+Provide a command string to classify (e.g. sprout explain 'rm -rf /tmp/foo').`
+		}
+	case "write_file", "edit_file", "write_structured_file", "patch_structured_file":
+		if p, _ := args["path"].(string); strings.TrimSpace(p) == "" {
+			return fmt.Sprintf(`Usage: sprout explain --tool %s --path <path>
+Provide a --path to classify (e.g. sprout explain --tool write_file --path ./foo.txt).`, toolName)
+		}
+	case "git":
+		if op, _ := args["operation"].(string); strings.TrimSpace(op) == "" {
+			return `Usage: sprout explain --tool git --operation <op>
+Provide a --operation to classify (e.g. sprout explain --tool git --operation push).`
+		}
+	}
+	return ""
+}
+
+// explainSourcesFor derives the contributing-check list from a SecurityResult.
+func explainSourcesFor(toolName string, res tools.SecurityResult, args map[string]interface{}) []explainSource {
+	var sources []explainSource
+
+	if res.IsHardBlock {
+		sources = append(sources, explainSource{
+			id:      "critical-op",
+			explain: "built-in critical-operation hard-block",
+			level:   configuration.RiskLevelCritical,
+		})
+	}
+
+	if toolName == "shell_command" {
+		if cmd, ok := args["command"].(string); ok && cmd != "" {
+			if isGitHistoryRewriteCommand(cmd) {
+				sources = append(sources, explainSource{
+					id:      "git-history-rewrite",
+					explain: "git history-rewrite blocked unless allow_git_history_rewrite=true",
+					level:   configuration.RiskLevelCritical,
+				})
+			}
+		}
+	}
+
+	sources = append(sources, explainSource{
+		id:      "classifier",
+		explain: "static string-based classifier",
+		level:   riskLevelFromSecurityResult(res),
+	})
+
+	if toolName == "shell_command" {
+		if cmd, ok := args["command"].(string); ok && cmd != "" {
+			if isGitWriteCommand(cmd) {
+				sources = append(sources, explainSource{
+					id:      "git-write",
+					explain: "git write op — gated by persona (requires agent runtime context)",
+					level:   configuration.RiskLevelHigh,
+				})
+			}
+			sources = append(sources, explainSource{
+				id:      "persona-cascade",
+				explain: "persona/profile risk cascade (requires agent runtime context)",
+				level:   configuration.RiskLevelLow,
+			})
+		}
+	}
+
+	return sources
+}
+
+// riskLevelFromSecurityResult converts a tools.SecurityResult risk tier into
+// a configuration.RiskLevel. Replaces the deleted tools.RiskLevelFromSecurityResult.
+// Mapping: hard-block → critical, safe → low, caution → medium, dangerous → high.
+// Unknown risk values default to low (matching the prior behavior).
+func riskLevelFromSecurityResult(res tools.SecurityResult) configuration.RiskLevel {
+	if res.IsHardBlock {
+		return configuration.RiskLevelCritical
+	}
+	switch res.Risk {
+	case tools.SecuritySafe:
+		return configuration.RiskLevelLow
+	case tools.SecurityCaution:
+		return configuration.RiskLevelMedium
+	case tools.SecurityDangerous:
+		return configuration.RiskLevelHigh
+	default:
+		return configuration.RiskLevelLow
+	}
+}
+
+// combinedAssessment folds the git-history-rewrite gate into the classifier
+// verdict to produce the final level and hard-block status.
+func combinedAssessment(toolName string, secResult tools.SecurityResult, args map[string]interface{}) (configuration.RiskLevel, bool) {
+	level := riskLevelFromSecurityResult(secResult)
+	hardBlock := secResult.IsHardBlock
+
+	if toolName == "shell_command" {
+		if cmd, ok := args["command"].(string); ok && cmd != "" {
+			if isGitHistoryRewriteCommand(cmd) {
+				level = configuration.RiskLevelCritical
+				hardBlock = true
+			}
+		}
+	}
+	return level, hardBlock
+}
+
+// levelHeadline renders the top-line summary of the assessment.
+func levelHeadline(level configuration.RiskLevel, res tools.SecurityResult) string {
+	intent := res.IntentConfirmation
+	switch level {
+	case configuration.RiskLevelCritical:
+		return "CRITICAL — hard-block (cannot be approved)"
+	case configuration.RiskLevelHigh:
+		if intent {
+			return "HIGH — requires explicit confirmation before proceeding"
+		}
+		return "HIGH — prompts when interactive; blocked when non-interactive"
+	case configuration.RiskLevelMedium:
+		if intent {
+			return "MEDIUM — requires explicit confirmation before proceeding"
+		}
+		return "MEDIUM — prompts when interactive; auto-approved risk-profile dependent"
+	default:
+		if intent {
+			return "LOW — requires explicit confirmation before proceeding"
+		}
+		return "LOW — auto-approved (no prompt)"
+	}
+}
+
+// suppressionHints returns guidance on how to bypass a non-critical prompt.
+// Only shown for Medium and High — Low commands are auto-approved and
+// Critical cannot be overridden.
+func suppressionHints(level configuration.RiskLevel, toolName string) []string {
+	if level == configuration.RiskLevelCritical || level == configuration.RiskLevelLow {
+		return nil
+	}
+	var hints []string
+	if toolName == "shell_command" {
+		hints = append(hints, "--unsafe-shell          (shell commands only)")
+	}
+	hints = append(hints, "--risk-profile=permissive  (all non-critical operations)")
+	hints = append(hints, "Re-run interactively to approve via the webui/CLI dialog")
+	return hints
+}
+
+// printExplainHuman writes the human-readable assessment to stdout.
+func printExplainHuman(cmd *cobra.Command, res tools.SecurityResult, level configuration.RiskLevel, sources []explainSource, toolName string, args map[string]interface{}) {
+	out := cmd.OutOrStdout()
+
+	fmt.Fprintln(out)
+	fmt.Fprintf(out, "  %s\n", levelHeadline(level, res))
+	fmt.Fprintln(out)
+
+	if c, _ := args["command"].(string); c != "" {
+		fmt.Fprintf(out, "  Command:  %s\n", c)
+	}
+	if p, _ := args["path"].(string); p != "" {
+		fmt.Fprintf(out, "  Path:     %s\n", p)
+	}
+	if op, _ := args["operation"].(string); op != "" {
+		fmt.Fprintf(out, "  Operation: %s\n", op)
+	}
+	fmt.Fprintf(out, "  Tool:     %s\n", toolName)
+	fmt.Fprintln(out)
+
+	reason := strings.TrimSpace(res.Reasoning)
+	if reason == "" {
+		reason = "(no reasoning provided)"
+	}
+	fmt.Fprintf(out, "  Reason: %s\n", reason)
+
+	fmt.Fprintln(out)
+	fmt.Fprintln(out, "  Contributing checks:")
+	for _, s := range sources {
+		fmt.Fprintf(out, "    \u2022 %-19s \u2014 %s\n", s.id, s.explain)
+	}
+
+	if level == configuration.RiskLevelCritical {
+		fmt.Fprintln(out)
+		fmt.Fprintln(out, "  This operation will be unconditionally blocked. No risk profile,")
+		fmt.Fprintln(out, "  flag, or approval can override it.")
+	}
+
+	if hints := suppressionHints(level, toolName); len(hints) > 0 {
+		fmt.Fprintln(out)
+		fmt.Fprintln(out, "  To suppress this prompt:")
+		for _, h := range hints {
+			fmt.Fprintf(out, "    \u2022 %s\n", h)
+		}
+	}
+	fmt.Fprintln(out)
+}
+
+// explainJSONOutput is the structure emitted with --json.
+type explainJSONOutput struct {
+	Tool      string                 `json:"tool"`
+	Args      map[string]interface{} `json:"args"`
+	RiskLevel string                 `json:"risk_level"`
+	HardBlock bool                   `json:"hard_block"`
+	Sources   []explainJSONSource    `json:"sources"`
+	Result    tools.SecurityResult   `json:"result"`
+}
+
+// explainJSONSource is a single contributing check in JSON output.
+type explainJSONSource struct {
+	ID      string `json:"id"`
+	Explain string `json:"explain"`
+	Level   string `json:"level"`
+}
+
+// printExplainJSON writes a machine-readable assessment to stdout.
+func printExplainJSON(cmd *cobra.Command, res tools.SecurityResult, level configuration.RiskLevel, sources []explainSource, toolName string, args map[string]interface{}) error {
+	jsonSources := make([]explainJSONSource, 0, len(sources))
+	for _, s := range sources {
+		jsonSources = append(jsonSources, explainJSONSource{
+			ID:      s.id,
+			Explain: s.explain,
+			Level:   string(s.level),
+		})
+	}
+	payload := explainJSONOutput{
+		Tool:      toolName,
+		Args:      args,
+		RiskLevel: string(level),
+		HardBlock: res.IsHardBlock,
+		Sources:   jsonSources,
+		Result:    res,
+	}
+	enc := json.NewEncoder(cmd.OutOrStdout())
+	enc.SetIndent("", "  ")
+	return enc.Encode(payload)
+}
+
+// explainToolList returns a sorted, comma-separated list of supported tools.
+func explainToolList() string {
+	names := make([]string, 0, len(explainSupportedTools))
+	for name := range explainSupportedTools {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return strings.Join(names, ", ")
+}
+
 func init() {
+	explainCmd.Flags().String("tool", "shell_command", "tool name to classify (shell_command, write_file, edit_file, write_structured_file, patch_structured_file, git, mkdir, fetch_url, web_search)")
+	explainCmd.Flags().String("path", "", "file path (for write/edit tools)")
+	explainCmd.Flags().String("operation", "", "git operation (for git tool)")
+	explainCmd.Flags().Bool("json", false, "machine-readable JSON output")
 	rootCmd.AddCommand(explainCmd)
 }

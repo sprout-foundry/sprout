@@ -30,22 +30,22 @@
 // See AGENTS.md for tool documentation and conventions.
 //
 //
-// Tool dispatch: new registry is canonical
+// Migration from legacy func-style handlers
 //
-// The interface-based tool system decouples tools from the agent via ToolEnv,
-// which provides explicit dependencies (EventBus, WorkspaceRoot, OutputWriter,
-// ApprovalManager, etc.). ExecuteTool() checks the new registry first via
-// tools.GetNewToolRegistry().Lookup(name). If a handler is found, it builds a
-// ToolEnv from the agent context and dispatches through the new interface. If
-// no handler exists in the new registry, it falls back to the legacy
-// func-style handlers registered in pkg/agent/tool_definitions.go.
+// The legacy tool system used function types directly coupled to *Agent. The new
+// interface-based system decouples tools from the agent via ToolEnv, which provides
+// explicit dependencies (EventBus, WorkspaceRoot, OutputWriter, etc.).
 //
-// The new registry is the canonical dispatch path for all interface-based
-// tools. The legacy fallback is retained only for a small set of documented
-// func-style handlers (e.g., browseURLHandler, webSearchHandler,
-// activateSkillHandler, runSubagentHandler) that are thin wrappers around
-// legacy agent methods pending full refactoring. These are marked with
-// comments in all.go.
+// During the migration period, a dual-dispatch shim in pkg/agent/tool_definitions.go
+// bridges both systems: when ExecuteTool() is called, it first checks the new registry
+// via tools.GetNewToolRegistry().Lookup(name). If a handler is found there, it builds
+// a ToolEnv from the agent context and dispatches through the new interface. If no
+// handler exists in the new registry, it falls back to the legacy func-style handlers.
+// This allows incremental migration without breaking existing functionality.
+//
+// Some current tools (e.g., browseURLHandler, runSubagentHandler) are thin wrappers
+// around legacy agent methods, pending full refactoring. These are marked with comments
+// in all.go.
 package tools
 
 import (

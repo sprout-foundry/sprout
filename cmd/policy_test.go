@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -46,27 +45,6 @@ func setupPolicyTestWithPatterns(t *testing.T, safe, dangerous []configuration.S
 	require.NoError(t, cfg.Save())
 }
 
-// newTempWorkspace creates a temp directory with an optional shell-policy.json.
-func newTempWorkspace(t *testing.T, policyContent string) string {
-	t.Helper()
-	dir := t.TempDir()
-	if policyContent != "" {
-		sproutDir := filepath.Join(dir, ".sprout")
-		require.NoError(t, os.MkdirAll(sproutDir, 0o755))
-		require.NoError(t, os.WriteFile(filepath.Join(sproutDir, "shell-policy.json"), []byte(policyContent), 0o644))
-	}
-	return dir
-}
-
-// saveAndRestoreCwd changes CWD to dir and returns a restore func.
-func saveAndRestoreCwd(t *testing.T, dir string) func() {
-	t.Helper()
-	origWd, err := os.Getwd()
-	require.NoError(t, err)
-	require.NoError(t, os.Chdir(dir))
-	return func() { os.Chdir(origWd) }
-}
-
 // ---------------------------------------------------------------------------
 // policy list
 // ---------------------------------------------------------------------------
@@ -82,8 +60,6 @@ func TestPolicyList_Empty(t *testing.T) {
 	assert.Contains(t, out, "=== Shell Permission Policy ===")
 	assert.Contains(t, out, "User Safe Patterns (0):")
 	assert.Contains(t, out, "User Dangerous Patterns (0):")
-	assert.Contains(t, out, "Built-in Safe Patterns:")
-	assert.Contains(t, out, "Built-in Dangerous Patterns:")
 	assert.Contains(t, out, "Workspace Overlay Mode: tighten_only")
 }
 
@@ -121,8 +97,6 @@ func TestPolicyDump_DefaultFormat(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(out), &result))
 	assert.Contains(t, result, "user_safe_patterns")
 	assert.Contains(t, result, "user_dangerous_patterns")
-	assert.Contains(t, result, "builtin_safe_count")
-	assert.Contains(t, result, "builtin_dangerous_count")
 	assert.Contains(t, result, "workspace_overlay")
 }
 
@@ -138,8 +112,6 @@ func TestPolicyDump_JSON(t *testing.T) {
 
 	var result map[string]interface{}
 	require.NoError(t, json.Unmarshal([]byte(out), &result))
-	assert.Equal(t, float64(tools.BuiltinSafeCount), result["builtin_safe_count"])
-	assert.Equal(t, float64(tools.BuiltinDangerousCount), result["builtin_dangerous_count"])
 
 	safePatterns := result["user_safe_patterns"].([]interface{})
 	assert.Len(t, safePatterns, 1)
@@ -157,7 +129,6 @@ func TestPolicyDump_YAML(t *testing.T) {
 	var result map[string]interface{}
 	require.NoError(t, yaml.Unmarshal([]byte(out), &result))
 	assert.Contains(t, result, "user_safe_patterns")
-	assert.Contains(t, result, "builtin_safe_count")
 	assert.Contains(t, result, "workspace_overlay")
 }
 
@@ -513,109 +484,6 @@ func TestPolicyImport_YMLExtension(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, cfg.Shell.UserSafePatterns, 1)
 	assert.Equal(t, "yml-tool", cfg.Shell.UserSafePatterns[0].Match)
-}
-
-// ---------------------------------------------------------------------------
-// policy trust
-// ---------------------------------------------------------------------------
-
-func TestPolicyTrust_Success(t *testing.T) {
-	setupPolicyTest(t)
-
-	workspaceDir := newTempWorkspace(t, `{
-		"user_safe_patterns": [{"match": "ws-tool", "kind": "prefix"}]
-	}`)
-	restoreWd := saveAndRestoreCwd(t, workspaceDir)
-	defer restoreWd()
-
-	// Clean up trust store after test
-	defer func() {
-		tools.UntrustWorkspace(workspaceDir)
-		_ = tools.SaveTrustedWorkspaces()
-	}()
-
-	out := captureStdout(t, func() {
-		err := policyTrustCmd.RunE(policyTrustCmd, nil)
-		require.NoError(t, err)
-	})
-
-	assert.Contains(t, out, "Trusted workspace:")
-
-	// Verify trust was recorded
-	trusted, err := tools.IsWorkspaceTrusted(workspaceDir)
-	require.NoError(t, err)
-	assert.True(t, trusted)
-}
-
-func TestPolicyTrust_NoPolicyFile(t *testing.T) {
-	setupPolicyTest(t)
-
-	// Workspace without .sprout/shell-policy.json
-	workspaceDir := t.TempDir()
-	restoreWd := saveAndRestoreCwd(t, workspaceDir)
-	defer restoreWd()
-
-	err := policyTrustCmd.RunE(policyTrustCmd, nil)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not found")
-}
-
-// ---------------------------------------------------------------------------
-// policy untrust
-// ---------------------------------------------------------------------------
-
-func TestPolicyUntrust_Current(t *testing.T) {
-	setupPolicyTest(t)
-
-	workspaceDir := newTempWorkspace(t, `{"user_safe_patterns": [{"match": "ws-tool", "kind": "prefix"}]}`)
-	restoreWd := saveAndRestoreCwd(t, workspaceDir)
-	defer restoreWd()
-
-	// First trust it
-	require.NoError(t, tools.TrustWorkspace(workspaceDir))
-	require.NoError(t, tools.SaveTrustedWorkspaces())
-
-	out := captureStdout(t, func() {
-		err := policyUntrustCmd.RunE(policyUntrustCmd, nil)
-		require.NoError(t, err)
-	})
-
-	assert.Contains(t, out, "Untrusted workspace:")
-
-	trusted, err := tools.IsWorkspaceTrusted(workspaceDir)
-	require.NoError(t, err)
-	assert.False(t, trusted)
-}
-
-func TestPolicyUntrust_All(t *testing.T) {
-	setupPolicyTest(t)
-
-	// Trust two workspaces
-	ws1 := newTempWorkspace(t, `{"user_safe_patterns": []}`)
-	ws2 := newTempWorkspace(t, `{"user_safe_patterns": []}`)
-
-	require.NoError(t, tools.TrustWorkspace(ws1))
-	require.NoError(t, tools.TrustWorkspace(ws2))
-	require.NoError(t, tools.SaveTrustedWorkspaces())
-
-	// Clean up after test
-	defer func() {
-		tools.UntrustWorkspace(ws1)
-		tools.UntrustWorkspace(ws2)
-		_ = tools.SaveTrustedWorkspaces()
-	}()
-
-	restoreWd := saveAndRestoreCwd(t, ws1)
-	defer restoreWd()
-
-	require.NoError(t, policyUntrustCmd.Flags().Set("all", "true"))
-
-	out := captureStdout(t, func() {
-		err := policyUntrustCmd.RunE(policyUntrustCmd, nil)
-		require.NoError(t, err)
-	})
-
-	assert.Contains(t, out, "Cleared all trusted workspaces")
 }
 
 // ---------------------------------------------------------------------------

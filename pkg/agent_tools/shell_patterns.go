@@ -577,11 +577,3 @@ func hasSystemPathTarget(args string) bool {
 
 	return false
 }
-
-// BuiltinSafeCount is the approximate number of built-in safe command patterns.
-// Updated: 2026-06-13. Recount when safeListCommands/safeGitPrefixes/etc. change.
-const BuiltinSafeCount = 380
-
-// BuiltinDangerousCount is the approximate number of built-in dangerous patterns.
-// Updated: 2026-06-13. Recount when dangerousGit/dangerousSys/cautionPatterns change.
-const BuiltinDangerousCount = 19

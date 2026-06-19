@@ -388,7 +388,7 @@ func (a *Agent) processImagesViaOCR(query string) (string, error) {
 	}
 
 	// Process any images found in the text
-	enhancedQuery, analyses, err := processor.ProcessImagesInText(a.interruptCtx, query)
+	enhancedQuery, analyses, err := processor.ProcessImagesInText(query)
 	if err != nil {
 		return query, fmt.Errorf("failed to process images: %w", err)
 	}

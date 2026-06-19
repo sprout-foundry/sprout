@@ -194,7 +194,7 @@ func formatAuditEntry(e tools.AuditEntry) string {
 		risk = "?"
 	}
 
-	outcome := e.Outcome
+	outcome := e.Action
 	if outcome == "" {
 		outcome = "-"
 	}
@@ -204,10 +204,7 @@ func formatAuditEntry(e tools.AuditEntry) string {
 		source = "-"
 	}
 
-	cmd := e.Command
-	if cmd == "" {
-		cmd = e.Args
-	}
+	cmd := e.Args
 	if len(cmd) > 80 {
 		cmd = cmd[:77] + "..."
 	}

@@ -10,10 +10,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 	"github.com/sprout-foundry/sprout/pkg/security"
@@ -57,172 +57,189 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 		}
 	}
 
-	// Security validation — classify and block/prompt dangerous operations
-	if secResult := tools.ClassifyToolCall(toolName, args); secResult.ShouldBlock || secResult.ShouldPrompt || secResult.IntentConfirmation {
-		// Workflow-declared auto-approval for run_automate. When the
-		// workflow JSON sets requires_approval: false, the model can
-		// invoke it without a user prompt — designed for validation
-		// workflows referenced from AGENTS.md that the model must run
-		// before declaring work done. Failure to read the file falls
-		// through to the normal approval path (fail-safe).
-		workflowAutoApproved := false
-		if agent != nil && toolName == "run_automate" && secResult.IntentConfirmation {
-			if wf, ok := args["workflow"].(string); ok && wf != "" {
-				if !workflowRequiresApproval(wf) {
-					if agent.debug {
-						agent.debugLog("[UNLOCK] run_automate %q has requires_approval=false — skipping intent prompt\n", wf)
-					}
-					workflowAutoApproved = true
-				}
+	// Security validation — classify and block/prompt dangerous operations.
+	//
+	// SP-068 Phase 2: when UnifiedRiskResolver is enabled, use the single
+	// ResolveToolRisk assessment for gating — same path as the seed
+	// pre-execute hook. This keeps the public ExecuteTool API consistent
+	// with the live dispatch path. When disabled (flag OFF), the legacy
+	// dual-gate block below runs unchanged.
+	usedUnifiedGate := false
+	if agent != nil {
+		if cfg := agent.GetConfig(); cfg != nil && cfg.UnifiedRiskResolver {
+			if err := agent.unifiedSecurityGate(toolName, args); err != nil {
+				return nil, "", err
 			}
-		}
-		// In-session re-authorization for run_automate. Once the user has
-		// explicitly approved a workflow during this chat session, subsequent
-		// calls (e.g. retries kicked off by the primary agent after a failure)
-		// don't need to re-prompt — the user opted in once for this workflow.
-		alreadyApprovedInSession := false
-		if !workflowAutoApproved && agent != nil && toolName == "run_automate" && secResult.IntentConfirmation {
-			if wf, ok := args["workflow"].(string); ok && agent.IsWorkflowApprovedInSession(wf) {
-				if agent.debug {
-					agent.debugLog("[UNLOCK] run_automate %q already approved in this session — skipping intent prompt\n", wf)
-				}
-				alreadyApprovedInSession = true
-			}
-		}
-		if workflowAutoApproved || alreadyApprovedInSession {
-			// fall through to handler execution below
-		} else if agent != nil && agent.staticGateAutoApprove(secResult) && !secResult.IntentConfirmation {
-			// Unsafe mode or session elevation — skip the prompt for
-			// non-hard-block operations. See staticGateAutoApprove.
-			// IntentConfirmation is never auto-approved — it's about
-			// explicit user intent, not risk bypass.
-			if agent.debug {
-				agent.debugLog("[UNLOCK] Static gate auto-approve (unsafe/elevated): bypassing security validation for %s (risk: %s)\n", toolName, secResult.Risk)
-			}
-		} else if agent != nil && agent.GetUnsafeShellMode() && toolName == "shell_command" && !secResult.IsHardBlock && secResult.Risk.String() != "DANGEROUS" && !secResult.IntentConfirmation {
-			// --unsafe-shell bypasses CAUTION-tier shell prompts across all
-			// modes (CLI and WebUI) so the flag behaves consistently regardless
-			// of UI. DANGEROUS and hard-block operations still require approval.
-			// IntentConfirmation is never auto-approved here either.
-			if agent.debug {
-				agent.debugLog("[UNLOCK] Unsafe shell mode: bypassing shell security prompt for %s (risk: %s)\n", toolName, secResult.Risk)
-			}
-		} else if agent == nil && (secResult.ShouldBlock || secResult.IntentConfirmation) {
-			// Defense-in-depth: no agent context available for approval,
-			// so reject operations that require it.
-			return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("security: %s — %s (no agent context for approval)", toolName, secResult.Reasoning), nil)
-		} else if agent != nil {
-			// Check if we're running as a subagent — subagents cannot prompt
-			isSubagent := agent.IsSubagent()
-
-			// When true, the browser dialog conclusively answered (approve or
-			// deny); skip the CLI fallback. Stays false when the webui path is
-			// unavailable or the dialog went unanswered (timeout / disconnect),
-			// in which case we fall through to the terminal prompt below so an
-			// unattended browser tab can't dead-end the agent.
-			approvedViaWebUI := false
-
-			// Prefer webui approval path when a browser tab is connected.
-			// When the process has an active webui client, the query likely
-			// originated from the browser. Sending the approval request through
-			// the event bus ensures the dialog appears in the webui. The CLI
-			// interactive prompt is unreliable in this case because stdin may
-			// belong to the terminal that launched the server — the user is
-			// interacting via the browser, not the terminal.
-			if mgr := agent.GetSecurityApprovalMgr(); mgr != nil && agent.GetEventBus() != nil && !isSubagent && agent.HasActiveWebUIClients() {
-				// WEBUI: request approval via event bus for the browser dialog
-				if agent.debug {
-					agent.debugLog("[APPROVAL] Requesting security approval via webui for %s (risk: %s)\n", toolName, secResult.Risk)
-				}
-				// Build extras with context the webui dialog needs (command, target, risk type)
-				extras := map[string]string{}
-				if secResult.IntentConfirmation {
-					extras["intent_confirmation"] = "true"
-				}
-				if secResult.RiskType != "" {
-					extras["risk_type"] = formatRiskType(secResult.RiskType)
-				}
-				switch toolName {
-				case "shell_command":
-					if cmd, ok := args["command"].(string); ok && cmd != "" {
-						extras["command"] = cmd
-					}
-				case "write_file", "edit_file", "write_structured_file", "patch_structured_file":
-					if path, ok := args["path"].(string); ok && path != "" {
-						extras["target"] = path
-					}
-				case "git":
-					if op, ok := args["operation"].(string); ok && op != "" {
-						extras["target"] = fmt.Sprintf("git %s", op)
-					}
-				case "run_automate":
-					if wf, ok := args["workflow"].(string); ok && wf != "" {
-						extras["target"] = fmt.Sprintf("workflow: %s", wf)
-					}
-				}
-				approved, outcome := mgr.RequestToolApprovalWithOutcome(agent.GetEventBus(), agent.GetEventClientID(), agent.GetEventUserID(), toolName, secResult.Risk.String(), secResult.Reasoning, extras)
-				if outcome == security.ApprovalOutcomeResponded {
-					if !approved {
-						return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", toolName, secResult.Reasoning), nil)
-					}
-					// Signal Gate 2 (persona cascade) that this command
-					// already passed an interactive approval so it doesn't
-					// re-prompt for the same execution (SP-058 follow-up).
-					agent.recordGateApproval(toolName, args)
-					if toolName == "run_automate" {
-						if wf, ok := args["workflow"].(string); ok {
-							agent.MarkWorkflowApprovedInSession(wf)
-						}
-					}
-					approvedViaWebUI = true
-				} else if agent.debug {
-					// Timed out or the browser disconnected — don't treat an
-					// unanswered dialog as a deny. Fall through to the CLI
-					// prompt below so a user at the terminal can respond.
-					agent.debugLog("[APPROVAL] webui approval unanswered (outcome=%d) for %s — falling back to CLI prompt\n", outcome, toolName)
-				}
-			}
-			if !approvedViaWebUI {
-				// CLI: prompt user interactively via terminal stdin
-				agentConfig := agent.GetConfig()
-				logger := utils.GetLogger(agentConfig != nil && agentConfig.SkipPrompt)
-				canPrompt := logger != nil && logger.IsInteractive() && !isSubagent
-
-				if canPrompt {
-					var prompt string
-					if secResult.IntentConfirmation {
-						prompt = buildIntentConfirmationPrompt(toolName, args, secResult)
-					} else {
-						prompt = buildSecurityPrompt(toolName, args, secResult)
-					}
-					if !logger.AskForConfirmation(prompt, false, false) {
-						return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", toolName, secResult.Reasoning), nil)
-					}
-					// Same approval-propagation as the webui branch above.
-					agent.recordGateApproval(toolName, args)
-					if toolName == "run_automate" {
-						if wf, ok := args["workflow"].(string); ok {
-							agent.MarkWorkflowApprovedInSession(wf)
-						}
-					}
-				} else if secResult.ShouldBlock {
-					// NON-INTERACTIVE + DANGEROUS, no approval mechanism: always block
-					return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("security block: %s — %s", toolName, secResult.Reasoning), nil)
-				} else if secResult.IntentConfirmation {
-					// NON-INTERACTIVE + intent confirmation required: must ask user first
-					return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("confirmation required: %s — %s (this operation requires explicit user confirmation. Use ask_user to confirm with the user before proceeding.)", toolName, secResult.Reasoning), nil)
-				} else if secResult.ShouldPrompt && !isSubagent {
-					// NON-INTERACTIVE + CAUTION, needs prompt but no approval mechanism:
-					// Return a terminal SecurityError — the operation cannot proceed
-					// without interactive approval. LLMs reliably honor "do not retry."
-					return nil, "", agenterrors.NewSecurityError(fmt.Sprintf(
-						"security block: %s — %s. This operation requires interactive user approval. To proceed, the user must re-run interactively or grant a scoped bypass via --unsafe-shell. Do not retry this exact command.",
-						toolName, secResult.Reasoning), nil)
-				}
-				// NON-INTERACTIVE + CAUTION, no approval mechanism, not a subagent: auto-allow (safe operations)
-			}
+			usedUnifiedGate = true
 		}
 	}
+	if !usedUnifiedGate {
+		secResult := tools.ClassifyToolCall(toolName, args)
+		if secResult.ShouldBlock || secResult.ShouldPrompt || secResult.IntentConfirmation {
+			// Workflow-declared auto-approval for run_automate. When the
+			// workflow JSON sets requires_approval: false, the model can
+			// invoke it without a user prompt — designed for validation
+			// workflows referenced from AGENTS.md that the model must run
+			// before declaring work done. Failure to read the file falls
+			// through to the normal approval path (fail-safe).
+			workflowAutoApproved := false
+			if agent != nil && toolName == "run_automate" && secResult.IntentConfirmation {
+				if wf, ok := args["workflow"].(string); ok && wf != "" {
+					if !workflowRequiresApproval(wf) {
+						if agent.debug {
+							agent.debugLog("[UNLOCK] run_automate %q has requires_approval=false — skipping intent prompt\n", wf)
+						}
+						workflowAutoApproved = true
+					}
+				}
+			}
+			// In-session re-authorization for run_automate. Once the user has
+			// explicitly approved a workflow during this chat session, subsequent
+			// calls (e.g. retries kicked off by the primary agent after a failure)
+			// don't need to re-prompt — the user opted in once for this workflow.
+			alreadyApprovedInSession := false
+			if !workflowAutoApproved && agent != nil && toolName == "run_automate" && secResult.IntentConfirmation {
+				if wf, ok := args["workflow"].(string); ok && agent.IsWorkflowApprovedInSession(wf) {
+					if agent.debug {
+						agent.debugLog("[UNLOCK] run_automate %q already approved in this session — skipping intent prompt\n", wf)
+					}
+					alreadyApprovedInSession = true
+				}
+			}
+			if workflowAutoApproved || alreadyApprovedInSession {
+				// fall through to handler execution below
+			} else if agent != nil && agent.staticGateAutoApprove(secResult) && !secResult.IntentConfirmation {
+				// Unsafe mode or session elevation — skip the prompt for
+				// non-hard-block operations. See staticGateAutoApprove.
+				// IntentConfirmation is never auto-approved — it's about
+				// explicit user intent, not risk bypass.
+				if agent.debug {
+					agent.debugLog("[UNLOCK] Static gate auto-approve (unsafe/elevated): bypassing security validation for %s (risk: %s)\n", toolName, secResult.Risk)
+				}
+			} else if agent != nil && agent.GetUnsafeShellMode() && toolName == "shell_command" && !secResult.IsHardBlock && secResult.Risk.String() != "DANGEROUS" && !secResult.IntentConfirmation {
+				// --unsafe-shell bypasses CAUTION-tier shell prompts across all
+				// modes (CLI and WebUI) so the flag behaves consistently regardless
+				// of UI. DANGEROUS and hard-block operations still require approval.
+				// IntentConfirmation is never auto-approved here either.
+				if agent.debug {
+					agent.debugLog("[UNLOCK] Unsafe shell mode: bypassing shell security prompt for %s (risk: %s)\n", toolName, secResult.Risk)
+				}
+			} else if agent == nil && (secResult.ShouldBlock || secResult.IntentConfirmation) {
+				// Defense-in-depth: no agent context available for approval,
+				// so reject operations that require it.
+				return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("security: %s — %s (no agent context for approval)", toolName, secResult.Reasoning), nil)
+			} else if agent != nil {
+				// Check if we're running as a subagent — subagents cannot prompt
+				isSubagent := agent.IsSubagent()
+
+				// When true, the browser dialog conclusively answered (approve or
+				// deny); skip the CLI fallback. Stays false when the webui path is
+				// unavailable or the dialog went unanswered (timeout / disconnect),
+				// in which case we fall through to the terminal prompt below so an
+				// unattended browser tab can't dead-end the agent.
+				approvedViaWebUI := false
+
+				// Prefer webui approval path when a browser tab is connected.
+				// When the process has an active webui client, the query likely
+				// originated from the browser. Sending the approval request through
+				// the event bus ensures the dialog appears in the webui. The CLI
+				// interactive prompt is unreliable in this case because stdin may
+				// belong to the terminal that launched the server — the user is
+				// interacting via the browser, not the terminal.
+				if mgr := agent.GetSecurityApprovalMgr(); mgr != nil && agent.GetEventBus() != nil && !isSubagent && agent.HasActiveWebUIClients() {
+					// WEBUI: request approval via event bus for the browser dialog
+					if agent.debug {
+						agent.debugLog("[APPROVAL] Requesting security approval via webui for %s (risk: %s)\n", toolName, secResult.Risk)
+					}
+					// Build extras with context the webui dialog needs (command, target, risk type)
+					extras := map[string]string{}
+					if secResult.IntentConfirmation {
+						extras["intent_confirmation"] = "true"
+					}
+					if secResult.RiskType != "" {
+						extras["risk_type"] = formatRiskType(secResult.RiskType)
+					}
+					switch toolName {
+					case "shell_command":
+						if cmd, ok := args["command"].(string); ok && cmd != "" {
+							extras["command"] = cmd
+						}
+					case "write_file", "edit_file", "write_structured_file", "patch_structured_file":
+						if path, ok := args["path"].(string); ok && path != "" {
+							extras["target"] = path
+						}
+					case "git":
+						if op, ok := args["operation"].(string); ok && op != "" {
+							extras["target"] = fmt.Sprintf("git %s", op)
+						}
+					case "run_automate":
+						if wf, ok := args["workflow"].(string); ok && wf != "" {
+							extras["target"] = fmt.Sprintf("workflow: %s", wf)
+						}
+					}
+					approved, outcome := mgr.RequestToolApprovalWithOutcome(agent.GetEventBus(), agent.GetEventClientID(), agent.GetEventUserID(), toolName, secResult.Risk.String(), secResult.Reasoning, extras)
+					if outcome == security.ApprovalOutcomeResponded {
+						if !approved {
+							return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", toolName, secResult.Reasoning), nil)
+						}
+						// Signal Gate 2 (persona cascade) that this command
+						// already passed an interactive approval so it doesn't
+						// re-prompt for the same execution (SP-058 follow-up).
+						agent.recordGateApproval(toolName, args)
+						if toolName == "run_automate" {
+							if wf, ok := args["workflow"].(string); ok {
+								agent.MarkWorkflowApprovedInSession(wf)
+							}
+						}
+						approvedViaWebUI = true
+					} else if agent.debug {
+						// Timed out or the browser disconnected — don't treat an
+						// unanswered dialog as a deny. Fall through to the CLI
+						// prompt below so a user at the terminal can respond.
+						agent.debugLog("[APPROVAL] webui approval unanswered (outcome=%d) for %s — falling back to CLI prompt\n", outcome, toolName)
+					}
+				}
+				if !approvedViaWebUI {
+					// CLI: prompt user interactively via terminal stdin
+					agentConfig := agent.GetConfig()
+					logger := utils.GetLogger(agentConfig != nil && agentConfig.SkipPrompt)
+					canPrompt := logger != nil && logger.IsInteractive() && !isSubagent
+
+					if canPrompt {
+						var prompt string
+						if secResult.IntentConfirmation {
+							prompt = buildIntentConfirmationPrompt(toolName, args, secResult)
+						} else {
+							prompt = buildSecurityPrompt(toolName, args, secResult)
+						}
+						if !logger.AskForConfirmation(prompt, false, false) {
+							return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", toolName, secResult.Reasoning), nil)
+						}
+						// Same approval-propagation as the webui branch above.
+						agent.recordGateApproval(toolName, args)
+						if toolName == "run_automate" {
+							if wf, ok := args["workflow"].(string); ok {
+								agent.MarkWorkflowApprovedInSession(wf)
+							}
+						}
+					} else if secResult.ShouldBlock {
+						// NON-INTERACTIVE + DANGEROUS, no approval mechanism: always block
+						return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("security block: %s — %s", toolName, secResult.Reasoning), nil)
+					} else if secResult.IntentConfirmation {
+						// NON-INTERACTIVE + intent confirmation required: must ask user first
+						return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("confirmation required: %s — %s (this operation requires explicit user confirmation, unavailable in non-interactive mode. Use ask_user to confirm with the user, or re-run with --risk-profile=permissive.)", toolName, secResult.Reasoning), nil)
+					} else if secResult.ShouldPrompt && !isSubagent {
+						// NON-INTERACTIVE + CAUTION, needs prompt but no approval mechanism:
+						// Return a terminal SecurityError — the operation cannot proceed
+						// without interactive approval. LLMs reliably honor "do not retry."
+						return nil, "", agenterrors.NewSecurityError(fmt.Sprintf(
+							"security block: %s — %s. This operation requires interactive user approval, which is unavailable in non-interactive mode. To proceed: re-run interactively, or use --risk-profile=permissive (or set risk_profile in the workflow JSON), or use --unsafe-shell for shell commands only. Do not retry this exact command without changing the risk profile.",
+							toolName, secResult.Reasoning), nil)
+					} // NON-INTERACTIVE + CAUTION, no approval mechanism, not a subagent: auto-allow (safe operations)
+				}
+			}
+		}
+	} // end if !usedUnifiedGate
 
 	// Build ToolEnv from agent context
 	var env tools.ToolEnv
@@ -260,8 +277,8 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 		images = make([]api.ImageData, len(res.Images))
 		for i, img := range res.Images {
 			images[i] = api.ImageData{
-				URL:    img.URI,
-				Type:   img.MIMEType,
+				URL:  img.URI,
+				Type: img.MIMEType,
 			}
 		}
 	}
@@ -402,7 +419,7 @@ func (a *Agent) unifiedSecurityGate(name string, args map[string]interface{}) er
 	if assessment.RequiresIntentConfirmation {
 		if a.IsSubagent() {
 			return agenterrors.NewSecurityError(
-				fmt.Sprintf("confirmation required: %s — %s (this operation requires explicit user confirmation. Use ask_user to confirm with the user before proceeding.)", name, assessment.Reason), nil,
+				fmt.Sprintf("confirmation required: %s — %s (this operation requires explicit user confirmation. Subagents cannot obtain interactive confirmation — use ask_user to confirm with the user, or re-run with --risk-profile=permissive.)", name, assessment.Reason), nil,
 			)
 		}
 		// For intent confirmation, go through the approval prompt
@@ -452,8 +469,10 @@ func (a *Agent) unifiedSecurityPrompt(name string, args map[string]interface{}, 
 		}
 	}
 
-	// WebUI approval path
-	if mgr := a.GetSecurityApprovalMgr(); mgr != nil && a.GetEventBus() != nil && !isSubagent && a.HasActiveWebUIClients() {
+	// WebUI approval path — interactive only.
+	// Non-interactive runs skip the browser dialog (see isNonInteractive).
+	hasInteractiveSurface := !a.isNonInteractive() && !isSubagent && a.HasActiveWebUIClients()
+	if mgr := a.GetSecurityApprovalMgr(); mgr != nil && a.GetEventBus() != nil && hasInteractiveSurface {
 		extras := map[string]string{}
 		extras["risk_level"] = string(assessment.Level)
 		switch name {
@@ -503,9 +522,24 @@ func (a *Agent) unifiedSecurityPrompt(name string, args map[string]interface{}, 
 		return nil
 	}
 
-	// Non-interactive: block
+	// Non-interactive: permissive-by-default, matching the legacy
+	// pre-execute hook (seed_tool_registry.go ~line 780).
+	// Automation runs inside a container/sandbox, so routine approval
+	// prompts are auto-approved to avoid dead-ending a run that has
+	// no human to ask. Hard blocks (Critical) are caught earlier in
+	// unifiedSecurityGate and never reach here.
+	if a.isNonInteractive() {
+		if a.debug {
+			a.debugLog("[non-interactive] auto-approving %s (level: %s) — no interactive surface available\n",
+				name, assessment.Level)
+		}
+		return nil
+	}
+
+	// No interactive surface and not flagged non-interactive (e.g. a
+	// misconfigured daemon). Fail safe.
 	return agenterrors.NewSecurityError(
-		fmt.Sprintf("security block: %s — %s. This operation requires interactive user approval. To proceed, the user must re-run interactively or grant a scoped bypass via --unsafe-shell. Do not retry this exact command.",
+		fmt.Sprintf("security block: %s — %s. No interactive surface available to approve this operation.",
 			name, assessment.Reason), nil,
 	)
 }

@@ -3,9 +3,11 @@ package agent
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/pmezard/go-difflib/difflib"
+	"golang.org/x/term"
 )
 
 // DiffLineType identifies whether a diff line is context, added, or removed.
@@ -301,13 +303,26 @@ func (a *Agent) ShouldGateEdit(path string) bool {
 }
 
 // isNonInteractive reports whether the agent is running in a mode where
-// interactive prompts are suppressed (--skip-prompt, automate, daemon).
+// interactive prompts are suppressed or impossible. This is the single
+// authoritative check used by the security system to decide between the
+// interactive gating path (full profiles, prompts, long approval timeout)
+// and the non-interactive path (permissive-by-default, Critical-only
+// blocks, fast-fail).
+//
+// True when ANY of:
+//   - stdin is not a TTY (daemon, CI, piped input)
+//   - cfg.SkipPrompt is set (--skip-prompt, automate, daemon flag)
+//
+// Both conditions must lead to the same behavior because either one means
+// there is no live user at a terminal to answer an approval prompt.
 func (a *Agent) isNonInteractive() bool {
-	cfg := a.GetConfig()
-	if cfg == nil {
-		return false
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		return true
 	}
-	return cfg.SkipPrompt
+	if cfg := a.GetConfig(); cfg != nil && cfg.SkipPrompt {
+		return true
+	}
+	return false
 }
 
 // hunkIDs returns the IDs of all hunks.

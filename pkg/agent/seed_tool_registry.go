@@ -693,8 +693,12 @@ func newPreExecuteHook(agent *Agent) func(name string, args map[string]interface
 			}
 		}
 
-		// WebUI approval path
-		if mgr := agent.GetSecurityApprovalMgr(); mgr != nil && agent.GetEventBus() != nil && !isSubagent && agent.HasActiveWebUIClients() {
+		// WebUI approval path — interactive only.
+		// Non-interactive runs never wait on a browser dialog: even if a
+		// stale WebUI tab is connected, there's no guarantee a human is
+		// watching. Fast-fail to the permissive non-interactive path below.
+		hasInteractiveSurface := !agent.isNonInteractive() && !isSubagent && agent.HasActiveWebUIClients()
+		if mgr := agent.GetSecurityApprovalMgr(); mgr != nil && agent.GetEventBus() != nil && hasInteractiveSurface {
 			if agent.debug {
 				agent.debugLog("[APPROVAL] Requesting security approval via webui for %s (risk: %s)\n", name, secResult.Risk)
 			}
@@ -765,15 +769,30 @@ func newPreExecuteHook(agent *Agent) func(name string, args map[string]interface
 			return nil
 		}
 
-		// Non-interactive paths
-		if secResult.ShouldBlock {
-			return agenterrors.NewSecurityError(fmt.Sprintf("security block: %s — %s", name, secResult.Reasoning), nil)
+		// Non-interactive path.
+		//
+		// Per the security model (see SECURITY_NONINTERACTIVE.md):
+		// non-interactive runs are permissive-by-default. The assumption is
+		// that automation runs inside a container/sandbox, so routine
+		// approval prompts (Medium/High) are auto-approved to avoid
+		// dead-ending a run that has no human to ask.
+		//
+		// Only unconditional hard blocks (Critical: rm -rf /, fork bombs,
+		// mass source destruction) terminate the run — and they do so with
+		// a fatal error so the loop exits cleanly rather than spinning.
+		if secResult.IsHardBlock {
+			return agenterrors.NewSecurityError(
+				fmt.Sprintf("fatal security block (non-interactive): %s — %s. "+
+					"This operation is unconditionally blocked and cannot be approved by any profile or flag. "+
+					"The run will exit.",
+					name, secResult.Reasoning), nil)
 		}
 
-		if secResult.ShouldPrompt && !isSubagent {
-			return agenterrors.NewSecurityError(
-				fmt.Sprintf("security block: %s — %s. This operation requires interactive user approval. To proceed, the user must re-run interactively or grant a scoped bypass via --unsafe-shell. Do not retry this exact command.",
-					name, secResult.Reasoning), nil)
+		// Non-hard-block in non-interactive mode: allow (permissive-by-default).
+		// Log so the auto-approval is auditable without blocking.
+		if agent.debug && (secResult.ShouldBlock || secResult.ShouldPrompt) {
+			agent.debugLog("[non-interactive] auto-approving %s (risk: %s) — no interactive surface available\n",
+				name, secResult.Risk)
 		}
 
 		return nil

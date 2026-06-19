@@ -64,6 +64,13 @@ func (a *Agent) recordGateApproval(toolName string, args map[string]interface{})
 // invocation gets its own prompt. Entries older than recentApprovalTTL
 // are treated as expired (defensive — both gates should fire within
 // the same tool dispatch).
+//
+// SP-068 note: on the unified risk path (UnifiedRiskResolver enabled,
+// the default), this function is effectively a no-op — the map is
+// never populated because the unified gate doesn't call
+// markShellCommandApproved. It's retained for the legacy dual-gate
+// opt-out path (flag OFF), where Gate 1 calls markShellCommandApproved
+// and Gate 2 (highRiskApprovedForCommand) consumes it here.
 func (a *Agent) consumeShellCommandApproval(command string) bool {
 	if a == nil || command == "" {
 		return false
@@ -143,7 +150,10 @@ func (a *Agent) highRiskApprovedForCommand(ctx context.Context, command string) 
 	// event bus so the dialog renders in the browser. The 4-option
 	// dialog returns an ApprovalDecision; we act on ApproveAlways and
 	// Elevate locally before reporting back to the caller.
-	if mgr := a.GetSecurityApprovalMgr(); mgr != nil && a.GetEventBus() != nil && a.HasActiveWebUIClients() {
+	//
+	// Interactive only — non-interactive runs never wait on a browser
+	// dialog (permissive-by-default; see isNonInteractive).
+	if mgr := a.GetSecurityApprovalMgr(); mgr != nil && a.GetEventBus() != nil && a.HasActiveWebUIClients() && !a.isNonInteractive() {
 		prompt := fmt.Sprintf("High-risk shell command:\n  %s", command)
 		extras := map[string]string{
 			"risk_type":     "Shell command — persona risk cascade",
@@ -173,10 +183,19 @@ func (a *Agent) highRiskApprovedForCommand(ctx context.Context, command string) 
 	cfg := a.GetConfig()
 	logger := utils.GetLogger(cfg != nil && cfg.SkipPrompt)
 	if logger == nil || !logger.IsInteractive() {
-		// No interactive surface — refuse silently and let the
-		// caller surface a security error. Workflows / CI runs that
-		// need these operations should select a more permissive
-		// profile (or `unrestricted` for sandboxed targets).
+		// Non-interactive: no one to ask. Permissive-by-default — allow
+		// the operation. Critical-tier commands are caught earlier (in
+		// tool_handlers_shell.go via EvaluateOperationRisk) and never
+		// reach this point, so this only governs High-risk commands,
+		// which are safe to auto-approve in a sandboxed non-interactive run.
+		if a.isNonInteractive() {
+			if a.debug {
+				a.debugLog("[non-interactive] auto-approving high-risk shell command (no interactive surface): %s\n", command)
+			}
+			return true
+		}
+		// Interactive but no usable terminal surface — refuse and let the
+		// caller surface a security error.
 		return false
 	}
 

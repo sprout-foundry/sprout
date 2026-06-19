@@ -71,6 +71,9 @@ func TestSecurityApprovalManager_NilEventBus(t *testing.T) {
 func TestSecurityApprovalManager_ConcurrentRequests(t *testing.T) {
 	eb := events.NewEventBus()
 	mgr := security.NewApprovalManager()
+	// Short timeout so a missed response fails fast instead of hanging for
+	// 30 minutes (the default interactive timeout).
+	mgr.SetApprovalTimeout(2 * time.Second)
 
 	eventCh := eb.Subscribe("test_sub")
 	defer eb.Unsubscribe("test_sub")
@@ -87,12 +90,23 @@ func TestSecurityApprovalManager_ConcurrentRequests(t *testing.T) {
 		}(i)
 	}
 
-	// Respond to each request
-	for i := 0; i < n; i++ {
+	// Respond to each request. The event bus publishes two events per
+	// approval request (SecurityApprovalRequest + InputRequired); filter to
+	// only the approval requests and retry the response briefly because the
+	// request goroutine may not have registered its pending entry yet.
+	responded := 0
+	for responded < n {
 		event := <-eventCh
+		if event.Type != events.EventTypeSecurityApprovalRequest {
+			continue
+		}
 		data, _ := event.Data.(map[string]interface{})
 		requestID, _ := data["request_id"].(string)
-		mgr.RespondToApproval(requestID, true)
+		// Retry until the pending entry exists (bounded polling).
+		for !mgr.RespondToApproval(requestID, true) {
+			time.Sleep(time.Millisecond)
+		}
+		responded++
 	}
 
 	wg.Wait()

@@ -16,7 +16,7 @@ import (
 // ============================================================================
 
 // ProcessImagesInText detects images in text and processes them with vision models
-func (vp *VisionProcessor) ProcessImagesInText(text string) (string, []VisionAnalysis, error) {
+func (vp *VisionProcessor) ProcessImagesInText(ctx context.Context, text string) (string, []VisionAnalysis, error) {
 	if vp.debug {
 		fmt.Println("[search] Scanning text for image references...")
 	}
@@ -40,7 +40,7 @@ func (vp *VisionProcessor) ProcessImagesInText(text string) (string, []VisionAna
 			fmt.Printf("[search] Analyzing image %d: %s\n", i+1, imgPath)
 		}
 
-		analysis, err := vp.AnalyzeImage(imgPath)
+		analysis, err := vp.AnalyzeImage(ctx, imgPath)
 		if err != nil {
 			if vp.debug {
 				fmt.Printf("\n[WARN] Failed to analyze %s: %v\n", imgPath, err)
@@ -107,7 +107,7 @@ func (vp *VisionProcessor) extractImageReferences(text string) []string {
 // AnalyzeImage processes a single image with the vision model.
 // If optionalPrompt is provided and non-empty, it is used as the prompt;
 // otherwise the default vision prompt for imagePath is created.
-func (vp *VisionProcessor) AnalyzeImage(imagePath string, optionalPrompt ...string) (VisionAnalysis, error) {
+func (vp *VisionProcessor) AnalyzeImage(ctx context.Context, imagePath string, optionalPrompt ...string) (VisionAnalysis, error) {
 	// Download or read the image
 	imageData, imageType, err := vp.GetImageData(imagePath)
 	if err != nil {
@@ -131,10 +131,10 @@ func (vp *VisionProcessor) AnalyzeImage(imagePath string, optionalPrompt ...stri
 		},
 	}
 
-	// Get vision analysis using the vision-enabled method.
-	// TODO(SP-034-1c): thread the parent context.Context through
-	// VisionProcessor.AnalyzeImage so the Stop button can abort vision calls.
-	response, err := vp.visionClient.SendVisionRequest(context.Background(), messages, nil, "", false)
+	// Get vision analysis using the vision-enabled method. The parent
+	// context is threaded through so the Stop button can abort in-flight
+	// vision calls (SP-034-1c).
+	response, err := vp.visionClient.SendVisionRequest(ctx, messages, nil, "", false)
 	if err != nil {
 		return VisionAnalysis{}, fmt.Errorf("vision request: %w", err)
 	}
@@ -293,8 +293,8 @@ func (vp *VisionProcessor) EnhanceTextWithAnalysis(text, imagePath string, analy
 }
 
 // ProcessPDFForVision processes PDF using Ollama with glm-ocr model
-func (vp *VisionProcessor) ProcessPDFForVision(pdfPath string) (VisionAnalysis, error) {
-	text, err := ProcessPDFWithVision(pdfPath)
+func (vp *VisionProcessor) ProcessPDFForVision(ctx context.Context, pdfPath string) (VisionAnalysis, error) {
+	text, err := ProcessPDFWithVision(ctx, pdfPath)
 	if err != nil {
 		return VisionAnalysis{}, fmt.Errorf("PDF OCR: %w", err)
 	}

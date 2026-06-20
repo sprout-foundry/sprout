@@ -466,6 +466,97 @@ func TestResolveToolRisk_FileWriteExternalPath(t *testing.T) {
 	}
 }
 
+func TestResolveToolRisk_FileWriteExternalPathSessionAllowed(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	workspace := t.TempDir()
+	agent.SetWorkspaceRoot(workspace)
+	agent.SetShellCwd(workspace)
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skipf("cannot determine home dir: %v", err)
+	}
+
+	// External path outside both workspace and home → External tier.
+	externalPath := filepath.Join("/tmp", "sprout-test-external", "file.txt")
+	externalFolder := filepath.Dir(externalPath)
+
+	// Precondition: path is External tier (not Sensitive, not Workspace).
+	tier := ClassifyPathAccess(externalPath, workspace, home, workspace)
+	if tier != PathTierExternal {
+		t.Skipf("path %q classified as %s, need External for this test", externalPath, tier)
+	}
+
+	// Before allowlisting: External → at least Medium.
+	args := map[string]interface{}{"path": externalPath}
+	before := agent.ResolveToolRisk("write_file", args)
+	if before.Level.Rank() < configuration.RiskLevelMedium.Rank() {
+		t.Fatalf("before allowlist: Level = %q, want at least Medium for external path", before.Level)
+	}
+	beforeHasFSTier := false
+	for _, src := range before.Sources {
+		if src == RiskSourceFSTier {
+			beforeHasFSTier = true
+		}
+	}
+	if !beforeHasFSTier {
+		t.Error("before allowlist: Sources should contain fs-tier for un-approved external path")
+	}
+
+	// Simulate user clicking "Allow folder this session".
+	agent.AddSessionAllowedFolder(externalFolder)
+
+	// After allowlisting: fs-tier contribution must be skipped.
+	after := agent.ResolveToolRisk("write_file", args)
+	for _, src := range after.Sources {
+		if src == RiskSourceFSTier {
+			t.Errorf("after allowlist: Sources should NOT contain fs-tier for session-allowed external path; got %v", after.Sources)
+		}
+	}
+	// Level should be strictly lower than Medium IF fs-tier was the only
+	// contributor. (A workspace policy or classifier hit could independently
+	// raise it, but a plain external write_file has no other contributors.)
+	// Assert at minimum that fs-tier is absent (the precise behavior we fixed).
+}
+
+func TestResolveToolRisk_FileWriteSensitivePathNotSessionAllowed(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	workspace := t.TempDir()
+	agent.SetWorkspaceRoot(workspace)
+	agent.SetShellCwd(workspace)
+
+	// /etc/passwd is a Sensitive-tier path (system directory).
+	sensitivePath := "/etc/passwd"
+	sensitiveFolder := "/etc"
+
+	// Simulate a (should-be-impossible) attempt to session-allowlist a
+	// sensitive folder. The allowlist check is tier-blind, so the folder
+	// CAN be added — but ResolveToolRisk only skips Medium for the
+	// External case. Sensitive (→ High) must still apply.
+	agent.AddSessionAllowedFolder(sensitiveFolder)
+
+	args := map[string]interface{}{"path": sensitivePath}
+	assessment := agent.ResolveToolRisk("write_file", args)
+
+	// Sensitive path must remain at least High regardless of allowlist.
+	if assessment.Level.Rank() < configuration.RiskLevelHigh.Rank() {
+		t.Errorf("Level = %q, want at least High for sensitive path /etc/passwd even with allowlist", assessment.Level)
+	}
+	foundFSTier := false
+	for _, src := range assessment.Sources {
+		if src == RiskSourceFSTier {
+			foundFSTier = true
+		}
+	}
+	if !foundFSTier {
+		t.Error("Sources should contain fs-tier for sensitive path (High contribution must still apply)")
+	}
+}
+
 func TestResolveToolRisk_FileWriteWorkspacePath(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()

@@ -492,7 +492,15 @@ func handleToolError(agent *Agent, err error, toolName string) (string, error) {
 			agent.PrintLine(fmt.Sprintf("[⚠️  SECURITY CAUTION - LLM VERIFICATION REQUIRED] %s", safeMsg))
 			agent.PrintLine("")
 		}
-		return fmt.Sprintf("SECURITY_CAUTION_REQUIRED: %s", safeMsg), err
+		// Wrap the error itself (not just the result string) with the
+		// SECURITY_CAUTION_REQUIRED prefix. Seed's runWithTimeout discards
+		// the string return value when err != nil, overwriting result with
+		// handlerErr.Error(). By wrapping the error, the prefix and guidance
+		// survive into the tool result the LLM sees.
+		return "", agenterrors.NewSecurityError(
+			fmt.Sprintf("SECURITY_CAUTION_REQUIRED: %s. Do not retry this exact operation without changing the risk profile or getting explicit user approval. You may use ask_user to confirm, or the user can re-run with --risk-profile=permissive.", safeMsg),
+			err,
+		)
 
 	case ActionFail:
 		// Permanent/invalid input/context overflow — no retry.
@@ -614,6 +622,35 @@ func postProcessResult(ctx context.Context, agent *Agent, toolName string, args 
 // Pre-execute hook: security classification + subagent nesting prevention
 // ---------------------------------------------------------------------------
 
+// wrapSecurityCaution surfaces security errors with the same
+// SECURITY_CAUTION_REQUIRED signal that handleToolError produces for
+// handler-level security errors. Seed wraps pre-execute hook errors as
+// "Pre-execute hook rejected: <msg>", so prefixing the message here
+// ensures the model sees "SECURITY_CAUTION_REQUIRED:" in the tool result.
+// Non-security errors are returned unchanged.
+func wrapSecurityCaution(agent *Agent, err error) error {
+	if err == nil {
+		return nil
+	}
+	if !agenterrors.IsSecurity(err) {
+		return err
+	}
+	safeMsg := sanitizeToolFailureMessage(err.Error())
+	if agent != nil {
+		agent.PrintLine("")
+		agent.PrintLine(fmt.Sprintf("[⚠️  SECURITY CAUTION - LLM VERIFICATION REQUIRED] %s", safeMsg))
+		agent.PrintLine("")
+	}
+	// Preserve the SecurityError type so ClassifyError still returns
+	// ActionEscalate downstream. Seed's pre-execute hook path wraps the
+	// error string as "Pre-execute hook rejected: <msg>", so the
+	// SECURITY_CAUTION_REQUIRED prefix survives into the tool result.
+	return agenterrors.NewSecurityError(
+		fmt.Sprintf("SECURITY_CAUTION_REQUIRED: %s", safeMsg),
+		err,
+	)
+}
+
 func newPreExecuteHook(agent *Agent) func(name string, args map[string]interface{}) error {
 	if agent == nil {
 		return nil
@@ -626,12 +663,12 @@ func newPreExecuteHook(agent *Agent) func(name string, args map[string]interface
 		// primary agent and questions are routed through the same WebUI/CLI prompt mechanism.
 		if !agent.CanSpawnSubagents() {
 			if name == "run_subagent" || name == "run_parallel_subagents" {
-				return agenterrors.NewSecurityError(
+				return wrapSecurityCaution(agent, agenterrors.NewSecurityError(
 					fmt.Sprintf("SUBAGENT_RESTRICTION: Agent at depth %d cannot spawn subagents (max depth: %d). "+
 						"This restriction prevents runaway agent chains and ensures proper task delegation. "+
 						"If you need additional work done, please complete your current task and return "+
 						"your results to the parent agent for further delegation.",
-						agent.SubagentDepth(), agent.MaxSubagentDepth()), nil)
+						agent.SubagentDepth(), agent.MaxSubagentDepth()), nil))
 			}
 		}
 
@@ -650,7 +687,7 @@ func newPreExecuteHook(agent *Agent) func(name string, args map[string]interface
 		// (default), the existing dual-gate path runs unchanged with
 		// optional shadow-mode logging.
 		if cfg := agent.GetConfig(); cfg != nil && cfg.UnifiedRiskResolver {
-			return agent.unifiedSecurityGate(name, args)
+			return wrapSecurityCaution(agent, agent.unifiedSecurityGate(name, args))
 		}
 
 		// — Shadow-mode logging (flag OFF, debug ON) —
@@ -726,13 +763,13 @@ func newPreExecuteHook(agent *Agent) func(name string, args map[string]interface
 			if name == "shell_command" && shellCommand != "" {
 				decision := mgr.RequestToolApprovalDecision(agent.GetEventBus(), agent.GetEventClientID(), agent.GetEventUserID(), name, secResult.Risk.String(), secResult.Reasoning, extras)
 				if !decision.Approved() {
-					return agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", name, secResult.Reasoning), nil)
+					return wrapSecurityCaution(agent, agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", name, secResult.Reasoning), nil))
 				}
 				agent.applyApprovalDecision(decision, shellCommand)
 				return nil
 			}
 			if !mgr.RequestToolApproval(agent.GetEventBus(), agent.GetEventClientID(), agent.GetEventUserID(), name, secResult.Risk.String(), secResult.Reasoning, extras) {
-				return agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", name, secResult.Reasoning), nil)
+				return wrapSecurityCaution(agent, agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", name, secResult.Reasoning), nil))
 			}
 			return nil
 		}
@@ -752,7 +789,7 @@ func newPreExecuteHook(agent *Agent) func(name string, args map[string]interface
 					choice := logger.AskForApprovalWithOptions(prompt, cmd)
 					decision := approvalDecisionFromCLIChoice(choice)
 					if !decision.Approved() {
-						return agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", name, secResult.Reasoning), nil)
+						return wrapSecurityCaution(agent, agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", name, secResult.Reasoning), nil))
 					}
 					agent.applyApprovalDecision(decision, cmd)
 					return nil
@@ -760,7 +797,7 @@ func newPreExecuteHook(agent *Agent) func(name string, args map[string]interface
 			}
 			prompt := buildSecurityPrompt(name, args, secResult)
 			if !logger.AskForConfirmation(prompt, false, false) {
-				return agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", name, secResult.Reasoning), nil)
+				return wrapSecurityCaution(agent, agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", name, secResult.Reasoning), nil))
 			}
 			return nil
 		}
@@ -777,11 +814,11 @@ func newPreExecuteHook(agent *Agent) func(name string, args map[string]interface
 		// mass source destruction) terminate the run — and they do so with
 		// a fatal error so the loop exits cleanly rather than spinning.
 		if secResult.IsHardBlock {
-			return agenterrors.NewSecurityError(
+			return wrapSecurityCaution(agent, agenterrors.NewSecurityError(
 				fmt.Sprintf("fatal security block (non-interactive): %s — %s. "+
 					"This operation is unconditionally blocked and cannot be approved by any profile or flag. "+
 					"The run will exit.",
-					name, secResult.Reasoning), nil)
+					name, secResult.Reasoning), nil))
 		}
 
 		// Non-hard-block in non-interactive mode: allow (permissive-by-default).

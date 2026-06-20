@@ -502,10 +502,23 @@ func categorizeCommand(cmdLower string) string {
 	if strings.HasPrefix(cmdLower, "docker ") {
 		return "docker"
 	}
-	// Read-only file operations
-	if strings.HasPrefix(cmdLower, "cat ") || strings.HasPrefix(cmdLower, "head ") ||
-		strings.HasPrefix(cmdLower, "ls ") || strings.HasPrefix(cmdLower, "find ") ||
-		strings.HasPrefix(cmdLower, "which ") || strings.HasPrefix(cmdLower, "file ") {
+	// Read-only file operations. These commands cannot mutate state:
+	// they only read files / metadata / environment / hardware info.
+	// Commands commonly invoked WITHOUT arguments (pwd, date, whoami,
+	// ...) are matched via isReadOnlyCmd which accepts both the bare
+	// command and "<cmd> <args>" forms. The remaining ones are matched
+	// by prefix only (they always take an argument in practice).
+	if isReadOnlyCmd(cmdLower,
+		// Bare-or-arged: frequently invoked with no arguments.
+		"pwd", "date", "whoami", "id", "groups", "tty", "arch",
+		"nproc", "uptime", "free", "true", "false", "env", "printenv",
+		// Always-arged in practice, but matched uniformly for simplicity.
+		"cat", "head", "ls", "find", "which", "file",
+		"grep", "rg", "wc", "tree", "du", "df", "stat", "uname",
+		"basename", "dirname", "realpath", "test",
+		"type", "command", "hash", "locate", "lscpu", "lsblk", "lsmod",
+		"lspci", "lsusb", "getconf",
+	) {
 		return "read_file"
 	}
 	// Write operations
@@ -513,6 +526,20 @@ func categorizeCommand(cmdLower string) string {
 		return "write_file"
 	}
 	return "shell_command"
+}
+
+// isReadOnlyCmd reports whether cmdLower is an invocation of one of the
+// given read-only command names — either the bare command (e.g. "pwd")
+// or the command followed by arguments ("pwd\n", "pwd ", "pwd\n…"). The
+// trailing-space prefix form matches any argument-bearing invocation
+// while the exact-equality form covers the common no-argument case.
+func isReadOnlyCmd(cmdLower string, names ...string) bool {
+	for _, n := range names {
+		if cmdLower == n || strings.HasPrefix(cmdLower, n+" ") {
+			return true
+		}
+	}
+	return false
 }
 
 // categorizeGitCommand maps git subcommands to risk-category identifiers.
@@ -556,6 +583,10 @@ func categorizeGitCommand(cmdLower string) string {
 		return "git_add" // Tags are relatively safe
 	case "merge", "rebase":
 		return "git_commit" // Medium risk like commit
+	case "cherry-pick", "cherry_pick", "am", "apply":
+		return "git_commit" // Medium — applies patches, version-controlled
+	case "rm", "mv":
+		return "git_commit" // Medium — removes/moves tracked files, version-controlled
 	default:
 		return "shell_command" // Default to medium
 	}

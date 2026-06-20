@@ -13,7 +13,7 @@ import (
 var expectedDefaultAutoApproveRules = AutoApproveRules{
 	LowRiskOps: []string{
 		"git_add", "git_status", "git_log", "git_diff",
-		"read_file",
+		"read_file", "build_test",
 	},
 	MediumRiskOps: []string{
 		"git_commit", "git_push", "git_pull", "git_fetch",
@@ -93,7 +93,7 @@ func TestExecutiveAssistant_AutoApproveRules_RiskCategoryCounts(t *testing.T) {
 		actual   int
 		expected int
 	}{
-		{"low_risk", len(ea.AutoApproveRules.LowRiskOps), 5},
+		{"low_risk", len(ea.AutoApproveRules.LowRiskOps), 6},
 		{"medium_risk", len(ea.AutoApproveRules.MediumRiskOps), 11},
 		{"high_risk_never", len(ea.AutoApproveRules.HighRiskNever), 10},
 	}

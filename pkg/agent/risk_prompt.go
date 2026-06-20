@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/security"
 	"github.com/sprout-foundry/sprout/pkg/utils"
@@ -23,68 +22,6 @@ func getApprovalLogWriter() io.Writer { return approvalLogWriter }
 // the "CAUTION" label that the filesystem and git approval flows use
 // so the browser dialog renders consistently across all three.
 const webuiHighRiskRiskClass = "CAUTION"
-
-// recentApprovalTTL bounds how long a Gate 1 approval stays valid for
-// Gate 2 consumption. Both gates fire as part of the same tool dispatch,
-// so 30s is generously above any normal latency while still small enough
-// that a stale entry doesn't silently approve a future invocation if the
-// downstream consumer is somehow skipped.
-const recentApprovalTTL = 30 * time.Second
-
-// markShellCommandApproved records that the user just approved this
-// shell command at Gate 1 (the static classifier in tool_security.go
-// or the seed pre-execute hook). Gate 2 (highRiskApprovedForCommand)
-// consumes the entry so the user isn't re-prompted for the same
-// execution. See agent.go:recentlyApprovedShellCommands for context.
-func (a *Agent) markShellCommandApproved(command string) {
-	if a == nil || command == "" {
-		return
-	}
-	a.recentlyApprovedShellCommands.Store(command, time.Now())
-}
-
-// recordGateApproval bridges a Gate-1 approval (static classifier, in
-// ExecuteTool or the seed pre-execute hook) to Gate 2 (the persona cascade
-// in handleShellCommand) so the user isn't re-prompted for the same command.
-// Only shell_command has a Gate 2, so every other tool is a no-op. This is
-// the single approval bridge: SP-068 collapsed the former context-value
-// bridge (WithUserApproved/HasUserApproval) into this agent-scoped map so one
-// mechanism serves both dispatch paths.
-func (a *Agent) recordGateApproval(toolName string, args map[string]interface{}) {
-	if a == nil || toolName != "shell_command" {
-		return
-	}
-	if cmd, ok := args["command"].(string); ok {
-		a.markShellCommandApproved(cmd)
-	}
-}
-
-// consumeShellCommandApproval returns true if this exact command was
-// recently approved by Gate 1, deleting the entry so a second
-// invocation gets its own prompt. Entries older than recentApprovalTTL
-// are treated as expired (defensive — both gates should fire within
-// the same tool dispatch).
-//
-// SP-068 note: on the unified risk path (UnifiedRiskResolver enabled,
-// the default), this function is effectively a no-op — the map is
-// never populated because the unified gate doesn't call
-// markShellCommandApproved. It's retained for the legacy dual-gate
-// opt-out path (flag OFF), where Gate 1 calls markShellCommandApproved
-// and Gate 2 (highRiskApprovedForCommand) consumes it here.
-func (a *Agent) consumeShellCommandApproval(command string) bool {
-	if a == nil || command == "" {
-		return false
-	}
-	v, ok := a.recentlyApprovedShellCommands.LoadAndDelete(command)
-	if !ok {
-		return false
-	}
-	ts, ok := v.(time.Time)
-	if !ok {
-		return false
-	}
-	return time.Since(ts) <= recentApprovalTTL
-}
 
 // highRiskApprovedForCommand decides whether a high-risk shell command
 // is permitted to execute. Resolution (SP-058 v2):
@@ -119,22 +56,7 @@ func (a *Agent) consumeShellCommandApproval(command string) bool {
 func (a *Agent) highRiskApprovedForCommand(ctx context.Context, command string) bool {
 	// Persistent allowlist: if the user previously chose "Always approve
 	// this command" for this exact string, skip the prompt entirely.
-	// Checked before any other short-circuit so the allowlist works even
-	// if Gate 1 already approved in-context (no duplicate work).
 	if a.IsShellCommandAllowlisted(command) {
-		return true
-	}
-
-	// If Gate 1 (the static classifier, in tool_security.go's ExecuteTool
-	// or the seed pre-execute hook) already prompted the user and they
-	// approved, don't re-prompt. Both gates can fire for the same command
-	// (Gate 1 = "this looks dangerous", Gate 2 = "your active profile/persona
-	// gates this"); asking twice in a row is a UX regression that SP-058
-	// introduced when Gate 2 moved from "always reject" to "prompt and
-	// continue". SP-068 unified the former context-value and per-agent-map
-	// bridges into the single recordGateApproval → consumeShellCommandApproval
-	// path, so both dispatch architectures drain the same place here.
-	if a.consumeShellCommandApproval(command) {
 		return true
 	}
 

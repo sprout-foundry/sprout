@@ -171,13 +171,29 @@ func (a *Agent) ResolveToolRisk(toolName string, args map[string]interface{}) Ri
 						},
 					)
 				case PathTierExternal:
-					assessment = assessment.combine(
-						RiskAssessment{
-							Level:   configuration.RiskLevelMedium,
-							Sources: []RiskSource{RiskSourceFSTier},
-							Reason:  fmt.Sprintf("path %s is outside the workspace (external tier)", pathRaw),
-						},
-					)
+					// Session-scoped folder allowlist: if the user already
+					// clicked "Allow folder this session" for this path's
+					// directory (see handleFileSecurityError /
+					// applyFilesystemDecision), skip the Medium contribution.
+					// Without this, the unified gate re-prompts on every
+					// write to an external folder the user already approved —
+					// because ResolveToolRisk runs BEFORE the filesystem
+					// layer that owns the allowlist. Sensitive-tier paths
+					// never reach this branch (they're caught above) and can
+					// never be session-allowlisted.
+					if a.IsFolderSessionAllowed(pathRaw) {
+						if a.debug {
+							a.debugLog("[risk] %s path %s is under a session-allowed folder — skipping external-tier Medium contribution\n", toolName, pathRaw)
+						}
+					} else {
+						assessment = assessment.combine(
+							RiskAssessment{
+								Level:   configuration.RiskLevelMedium,
+								Sources: []RiskSource{RiskSourceFSTier},
+								Reason:  fmt.Sprintf("path %s is outside the workspace (external tier)", pathRaw),
+							},
+						)
+					}
 				}
 			}
 		}

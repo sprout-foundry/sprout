@@ -1,14 +1,15 @@
-// Package agent provides the shell command handler with a two-gate security model.
+// Package agent provides the shell command handler with a unified security model.
 //
-// Gate 1 (Global Static Classifier): pkg/agent_tools/security_classifier.go:ClassifyToolCall()
-// Inspects tool name + arguments using string-based heuristics. Always runs regardless of persona.
-// Can block (ShouldBlock) or prompt (ShouldPrompt) for dangerous operations.
+// When UnifiedRiskResolver is ON (the default, set by config_migration.go),
+// a single ResolveToolRisk assessment gates every shell command. The unified
+// gate (unifiedSecurityGate in tool_security.go) runs once per tool call —
+// no Gate 1/Gate 2 bridge or suppression plumbing is needed.
 //
-// Gate 2 (Persona Risk Cascade): pkg/agent/agent_getters.go:EvaluateOperationRisk()
-// Evaluates commands against the active persona's auto_approve_rules. Returns Low/Medium/High.
-//
-// INVARIANT: Neither gate may suppress or bypass the other. Both evaluate independently.
-// The more restrictive result always wins.
+// When the flag is OFF (legacy fallback), the older dual-gate model applies:
+// Gate 1 (ClassifyToolCall static classifier) + Gate 2 (EvaluateOperationRisk
+// persona cascade). Note that the legacy path may double-prompt because the
+// suppression bridge was removed in SP-068 Phase 3; the unified resolver is
+// the recommended and default path.
 package agent
 
 import (
@@ -536,23 +537,21 @@ func (a *Agent) handleShellCommandUnified(ctx context.Context, command string, b
 		a.debugLog("[risk] shell_command unified: %s\n", assessment.Explain())
 	}
 
-	// Hard-block / Critical: unconditional deny
+	// Hard-block / Critical: unconditional deny. This is defense-in-depth —
+	// Gate 1 (unifiedSecurityGate) already blocks Critical operations before
+	// this handler runs. The check is retained because the handler can be
+	// called directly in edge cases, and hard-blocks must always be enforced.
 	if assessment.IsHardBlock || assessment.Level == configuration.RiskLevelCritical {
 		return "", agenterrors.NewSecurityError(
 			fmt.Sprintf("critical operation blocked (cannot be approved by any profile or persona): '%s'", command), nil,
 		)
 	}
 
-	// High risk: require approval via highRiskApprovedForCommand
-	if assessment.Level == configuration.RiskLevelHigh {
-		if !a.highRiskApprovedForCommand(ctx, command) {
-			return "", agenterrors.NewSecurityError(
-				fmt.Sprintf("high-risk operation rejected by unified risk assessment: %s (command: '%s')", assessment.Level, command), nil,
-			)
-		}
-	}
-
-	// Medium / Low: proceed to execution
+	// High risk: Gate 1 (unifiedSecurityGate) already ran the
+	// highRiskApprovedForCommand check before this handler was invoked.
+	// Re-checking here is redundant — Gate 1's approval is authoritative for
+	// the unified path. Proceed directly to execution for all non-Critical
+	// levels (High/Medium/Low). SP-068 Phase 3 removed the redundant Gate 2.
 	if background {
 		return a.executeShellCommandBackground(ctx, command)
 	}

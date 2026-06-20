@@ -176,10 +176,6 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 						if !approved {
 							return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", toolName, secResult.Reasoning), nil)
 						}
-						// Signal Gate 2 (persona cascade) that this command
-						// already passed an interactive approval so it doesn't
-						// re-prompt for the same execution (SP-058 follow-up).
-						agent.recordGateApproval(toolName, args)
 						if toolName == "run_automate" {
 							if wf, ok := args["workflow"].(string); ok {
 								agent.MarkWorkflowApprovedInSession(wf)
@@ -209,8 +205,6 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 						if !logger.AskForConfirmation(prompt, false, false) {
 							return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", toolName, secResult.Reasoning), nil)
 						}
-						// Same approval-propagation as the webui branch above.
-						agent.recordGateApproval(toolName, args)
 						if toolName == "run_automate" {
 							if wf, ok := args["workflow"].(string); ok {
 								agent.MarkWorkflowApprovedInSession(wf)
@@ -458,7 +452,6 @@ func (a *Agent) unifiedSecurityPrompt(name string, args map[string]interface{}, 
 	// Persistent allowlist for shell commands
 	if name == "shell_command" {
 		if cmd, ok := args["command"].(string); ok && cmd != "" && a.IsShellCommandAllowlisted(cmd) {
-			a.markShellCommandApproved(cmd)
 			return nil
 		}
 	}
@@ -493,7 +486,6 @@ func (a *Agent) unifiedSecurityPrompt(name string, args map[string]interface{}, 
 				return agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", name, assessment.Reason), nil)
 			}
 			a.applyApprovalDecision(decision, cmd)
-			a.markShellCommandApproved(cmd)
 			return nil
 		}
 		if !mgr.RequestToolApproval(a.GetEventBus(), a.GetEventClientID(), a.GetEventUserID(), name, riskLabel, assessment.Reason, extras) {

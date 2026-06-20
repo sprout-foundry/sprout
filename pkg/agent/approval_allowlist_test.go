@@ -218,8 +218,8 @@ func TestElevateSessionToPermissive(t *testing.T) {
 	}
 }
 
-// TestHighRiskApprovedForCommand_AllowlistShortCircuit verifies Gate 2
-// auto-approves an allowlisted command without prompting (no event bus
+// TestHighRiskApprovedForCommand_AllowlistShortCircuit verifies the unified
+// gate auto-approves an allowlisted command without prompting (no event bus
 // configured here, so a prompt would otherwise reject).
 func TestHighRiskApprovedForCommand_AllowlistShortCircuit(t *testing.T) {
 	a := newIsolatedTestAgent(t)
@@ -231,7 +231,7 @@ func TestHighRiskApprovedForCommand_AllowlistShortCircuit(t *testing.T) {
 	}
 	ctx := context.Background()
 	if !a.highRiskApprovedForCommand(ctx, cmd) {
-		t.Error("allowlisted command should be auto-approved by Gate 2")
+		t.Error("allowlisted command should be auto-approved by the unified gate")
 	}
 	// Under go test, stdin is a pipe → isNonInteractive() returns true.
 	// Non-interactive mode is permissive-by-default: High-risk commands

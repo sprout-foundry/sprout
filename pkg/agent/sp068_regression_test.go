@@ -17,7 +17,10 @@ import (
 //                The old dual-gate architecture (Gate 1 = static classifier,
 //                Gate 2 = persona risk cascade) could fire two prompts for
 //                the same command. The unified resolver eliminates the
-//                second gate entirely.
+//                second gate entirely. SP-068 Phase 3 further removed the
+//                approval-bridge plumbing (markShellCommandApproved,
+//                consumeShellCommandApproval, recentlyApprovedShellCommands)
+//                that was only needed to suppress the second prompt.
 //
 //   Criterion 5: Critical operations (rm -rf /, fork bombs, mkfs) still
 //                hard-block even if the user adds a safe-pattern allowlist
@@ -29,25 +32,12 @@ import (
 // Criterion 2 — Single approval per gated call (no double-prompt)
 // ---------------------------------------------------------------------------
 
-// TestSP068_UnifiedGateDoesNotPopulateSuppressionMap is the core regression
-// test for criterion 2. The old dual-gate architecture relied on the
-// recentlyApprovedShellCommands map (markShellCommandApproved →
-// consumeShellCommandApproval) to prevent Gate 2 from re-prompting after
-// Gate 1 already approved. If the unified gate were to populate this map,
-// it would mean the gate plumbing is doing redundant work — the telltale
-// sign of a double-prompt regression.
-//
-// The invariant: under UnifiedRiskResolver=true, the approval-suppression
-// map is NEVER populated by the unified gate for a non-allowlisted command.
-// The map is only touched when a command IS allowlisted (the one
-// markShellCommandApproved call in unifiedSecurityPrompt), which is correct
-// — the allowlist path marks approval so a hypothetical Gate 2 would skip,
-// but since Gate 2 doesn't fire in unified mode, the entry is harmless.
-//
-// For a command that goes through the interactive/non-interactive prompt
-// path (not allowlisted), the map must remain empty — proving the
-// suppression plumbing is dead in unified mode.
-func TestSP068_UnifiedGateDoesNotPopulateSuppressionMap(t *testing.T) {
+// TestSP068_UnifiedGateApprovesMediumCommand verifies that the unified gate
+// approves a Medium-risk command in non-interactive mode (permissive-by-default)
+// without any error. This is the core behavior that replaces the former
+// suppression-map test: since there is no Gate 2, the gate call itself is
+// the single and only approval decision point.
+func TestSP068_UnifiedGateApprovesMediumCommand(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
@@ -65,46 +55,24 @@ func TestSP068_UnifiedGateDoesNotPopulateSuppressionMap(t *testing.T) {
 
 	// A Medium-risk command that is NOT on the allowlist. In non-interactive
 	// mode (SkipPrompt=true), this goes through unifiedSecurityPrompt →
-	// non-interactive auto-approve path and returns nil WITHOUT touching
-	// the suppression map.
+	// non-interactive auto-approve path and returns nil.
 	args := map[string]interface{}{"command": "rm somefile.txt"}
 
 	err = agent.unifiedSecurityGate("shell_command", args)
 
 	// Non-interactive mode auto-approves Medium-risk (permissive-by-default).
-	// The gate must either return nil (approved) or an error (rejected),
-	// but it must NOT populate the suppression map.
 	if err != nil {
-		// An error is acceptable if the command was classified differently
-		// than expected — but let's check that it's a security error, not a
-		// crash. The key assertion below is about the map, not the result.
-		t.Logf("unifiedSecurityGate returned error for Medium command (acceptable): %v", err)
-	}
-
-	// THE KEY ASSERTION: the legacy approval-suppression map must be empty
-	// after a unified gate call for a non-allowlisted command. This proves
-	// the suppression plumbing (markShellCommandApproved →
-	// consumeShellCommandApproval) is not being used — there is no Gate 2
-	// to suppress, so the double-prompt bug cannot occur.
-	mapPopulated := false
-	agent.recentlyApprovedShellCommands.Range(func(key, value any) bool {
-		mapPopulated = true
-		return false
-	})
-	if mapPopulated {
-		t.Error("recentlyApprovedShellCommands map should be empty after unified gate " +
-			"call for a non-allowlisted command — the suppression plumbing is dead in unified mode")
+		t.Errorf("unifiedSecurityGate should approve Medium-risk command in "+
+			"non-interactive mode, got error: %v", err)
 	}
 }
 
-// TestSP068_UnifiedGateIdempotentNoDoubleApproval verifies that calling
-// unifiedSecurityGate multiple times for the same command does not
-// accumulate entries in the suppression map. In the old dual-gate path,
-// each Gate 1 approval would mark the command, and Gate 2 would consume
-// it — a fresh Gate 1 call would mark again. In the unified path, the
-// gate is stateless across calls (for non-allowlisted commands), so
-// repeated calls must not accumulate state.
-func TestSP068_UnifiedGateIdempotentNoDoubleApproval(t *testing.T) {
+// TestSP068_UnifiedGateIdempotent verifies that calling unifiedSecurityGate
+// multiple times for the same command returns the same result each time
+// (no accumulated state, no side effects between calls). In the old
+// dual-gate path, each Gate 1 approval would mark the command for Gate 2
+// consumption. The unified path is stateless across calls.
+func TestSP068_UnifiedGateIdempotent(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
@@ -121,39 +89,21 @@ func TestSP068_UnifiedGateIdempotentNoDoubleApproval(t *testing.T) {
 
 	args := map[string]interface{}{"command": "rm temp_build_artifact.txt"}
 
-	// Call the unified gate three times — simulating what would have been
-	// Gate1 + Gate2 + a retry in the old architecture. Each call resolves
-	// independently; no state should leak between them.
+	// Call the unified gate three times. Each call resolves independently
+	// with no state leakage between them.
 	for i := 0; i < 3; i++ {
-		_ = agent.unifiedSecurityGate("shell_command", args)
-	}
-
-	// After multiple calls, the suppression map must still be empty for
-	// a non-allowlisted command. The old dual-gate path would have left
-	// stale entries (one per Gate 1 invocation) that Gate 2 consumed —
-	// the unified path doesn't produce any.
-	count := 0
-	agent.recentlyApprovedShellCommands.Range(func(key, value any) bool {
-		count++
-		return true
-	})
-	if count != 0 {
-		t.Errorf("suppression map should have 0 entries after 3 unified gate calls "+
-			"for a non-allowlisted command, got %d", count)
+		if err := agent.unifiedSecurityGate("shell_command", args); err != nil {
+			t.Errorf("call %d failed: %v", i, err)
+		}
 	}
 }
 
-// TestSP068_AllowlistedCommandMarksSuppressionButNoDoublePrompt confirms
-// the ONE scenario where the suppression map IS legitimately populated in
-// unified mode: when a command is on the persistent allowlist. In that
-// case, unifiedSecurityPrompt calls markShellCommandApproved before
-// returning nil. This is correct and safe — it doesn't cause a
-// double-prompt because there's no Gate 2 to consume the entry.
-//
-// The test proves: (a) the allowlist short-circuit works, (b) the map
-// gets exactly ONE entry (not two), and (c) the entry doesn't cause
-// any observable double-prompt behavior.
-func TestSP068_AllowlistedCommandMarksSuppressionButNoDoublePrompt(t *testing.T) {
+// TestSP068_AllowlistedCommandApproved verifies the allowlist short-circuit
+// works correctly in the unified gate: an allowlisted command should be
+// approved immediately without prompting. This replaces the former test that
+// checked the suppression map had exactly one entry — the map is now deleted,
+// so we verify behavior (approval) instead of implementation (map state).
+func TestSP068_AllowlistedCommandApproved(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
@@ -178,48 +128,14 @@ func TestSP068_AllowlistedCommandMarksSuppressionButNoDoublePrompt(t *testing.T)
 		t.Fatalf("IsShellCommandAllowlisted should return true for allowlisted command")
 	}
 
-	// First call: allowlist short-circuit → markShellCommandApproved → nil.
-	err = agent.unifiedSecurityGate("shell_command", args)
-	if err != nil {
-		t.Fatalf("unifiedSecurityGate should approve allowlisted command, got error: %v", err)
+	// First call: allowlist short-circuit → nil (approved).
+	if err := agent.unifiedSecurityGate("shell_command", args); err != nil {
+		t.Fatalf("first call should approve allowlisted command, got error: %v", err)
 	}
 
-	// The map should have exactly ONE entry (the allowlisted command).
-	count := 0
-	var foundKey string
-	agent.recentlyApprovedShellCommands.Range(func(key, value any) bool {
-		count++
-		if k, ok := key.(string); ok {
-			foundKey = k
-		}
-		return true
-	})
-	if count != 1 {
-		t.Errorf("suppression map should have exactly 1 entry after allowlisted command, got %d", count)
-	}
-	if foundKey != allowlistedCmd {
-		t.Errorf("suppression map key = %q, want %q", foundKey, allowlistedCmd)
-	}
-
-	// Second call: should still succeed (allowlist is checked before the
-	// map; the stale entry doesn't interfere). This proves no double-prompt:
-	// the second call doesn't re-prompt because the allowlist short-circuits.
-	err = agent.unifiedSecurityGate("shell_command", args)
-	if err != nil {
-		t.Errorf("second unifiedSecurityGate call should also approve via allowlist, got error: %v", err)
-	}
-
-	// The map should STILL have exactly one entry — the second call's
-	// markShellCommandApproved overwrote the same key (Store is idempotent
-	// for the same key), not added a new one.
-	count = 0
-	agent.recentlyApprovedShellCommands.Range(func(key, value any) bool {
-		count++
-		return true
-	})
-	if count != 1 {
-		t.Errorf("suppression map should still have 1 entry (overwritten, not duplicated) "+
-			"after second allowlisted call, got %d", count)
+	// Second call: should also succeed (allowlist is persistent).
+	if err := agent.unifiedSecurityGate("shell_command", args); err != nil {
+		t.Errorf("second call should also approve via allowlist, got error: %v", err)
 	}
 }
 

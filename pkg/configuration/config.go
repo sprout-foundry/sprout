@@ -145,6 +145,19 @@ type Config struct {
 	// entry, or remove all entries to reset.
 	ApprovedShellCommands []string `json:"approved_shell_commands,omitempty"`
 
+	// ApprovedShellCommandPatterns is the user's persistent allowlist of
+	// glob patterns for shell commands that should auto-approve through
+	// the high-risk cascade without prompting. Patterns use Go's path.Match
+	// syntax: `*` matches any sequence of characters (but NOT `/`),
+	// `?` matches any single character, `[abc]` matches a character class.
+	// For example, `rm -rf /tmp/*` matches `rm -rf /tmp/build` but NOT
+	// `rm -rf /home/x`. The Critical tier still blocks regardless of
+	// pattern matches — patterns cannot override critical-tier gating,
+	// which is enforced at the call site before this allowlist is consulted.
+	// Users can edit this list directly in config.json to revoke an entry,
+	// or remove all entries to reset.
+	ApprovedShellCommandPatterns []string `json:"approved_shell_command_patterns,omitempty"`
+
 	// DismissedPrompts tracks which one-time prompts the user has dismissed.
 	DismissedPrompts map[string]bool `json:"dismissed_prompts,omitempty"`
 

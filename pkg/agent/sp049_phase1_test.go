@@ -25,13 +25,13 @@ import (
 func TestSP049_HeadlessCautionReturnsTerminalSecurityError(t *testing.T) {
 	// Simulate the error message that tool_security.go would produce for
 	// a headless CAUTION operation (e.g., `git reset --soft HEAD~1`).
-	// This is the actual format string from tool_security.go after SP-049-1c.
+	// This is the actual format string from tool_security.go after the
+	// message unification (Task 3).
 	toolName := "shell_command"
 	reasoning := "Git operation may affect history: reset"
-	errMsg := "security block: " + toolName + " — " + reasoning +
-		". This operation requires interactive user approval. " +
-		"To proceed, the user must re-run interactively or grant a " +
-		"scoped bypass via --unsafe-shell. Do not retry this exact command."
+	errMsg := "security confirmation required: " + toolName + " — " + reasoning +
+		". Re-run interactively, use --risk-profile=permissive, or use ask_user to confirm." +
+		" Do not retry this exact command without changing the risk profile."
 
 	// Must NOT contain the old soft-nudge language.
 	if strings.Contains(errMsg, "requires LLM verification") {
@@ -43,10 +43,9 @@ func TestSP049_HeadlessCautionReturnsTerminalSecurityError(t *testing.T) {
 
 	// Must contain the new terminal-error indicators.
 	requiredPhrases := []string{
-		"security block:",
+		"security confirmation required:",
 		"Do not retry",
-		"--unsafe-shell",
-		"interactive user approval",
+		"--risk-profile=permissive",
 	}
 	for _, phrase := range requiredPhrases {
 		if !strings.Contains(errMsg, phrase) {
@@ -70,18 +69,16 @@ func TestSP049_SecondInvocationAlsoReturnsSecurityError(t *testing.T) {
 	reasoning := "Git operation may affect history: reset"
 	// First invocation
 	err1 := agenterrors.NewSecurityError(
-		"security block: git — "+reasoning+
-			". This operation requires interactive user approval. "+
-			"To proceed, the user must re-run interactively or grant a "+
-			"scoped bypass via --unsafe-shell. Do not retry this exact command.",
+		"security confirmation required: git — "+reasoning+
+			". Re-run interactively, use --risk-profile=permissive, or use ask_user to confirm."+
+			" Do not retry this exact command without changing the risk profile.",
 		nil)
 
 	// Second invocation — identical message (system has no memory of prior nudge)
 	err2 := agenterrors.NewSecurityError(
-		"security block: git — "+reasoning+
-			". This operation requires interactive user approval. "+
-			"To proceed, the user must re-run interactively or grant a "+
-			"scoped bypass via --unsafe-shell. Do not retry this exact command.",
+		"security confirmation required: git — "+reasoning+
+			". Re-run interactively, use --risk-profile=permissive, or use ask_user to confirm."+
+			" Do not retry this exact command without changing the risk profile.",
 		nil)
 
 	// Both must be SecurityErrors (not transient/retryable)

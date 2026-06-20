@@ -251,35 +251,7 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 
 	if err != nil {
 		safeErr := sanitizeToolFailureMessage(err.Error())
-		
-		// Use typed error classification to detect security errors, with a
-		// fallback to string matching for untyped errors (backward compat).
-		//
-		// SECURITY BOUNDARY NOTE: The underlying classification in
-		// pkg/agent_tools/security_classifier.go is purely string-based heuristics with known
-		// limitations (no filesystem access, no symlink resolution, no env variable
-		// expansion). This caution flow is a defense-in-depth layer, not a security
-		// boundary. Actual enforcement relies on the user's filesystem permissions,
-		// interactive confirmation, and operating system controls.
-		action := ClassifyError(err)
-		if action == ActionEscalate || strings.Contains(err.Error(), "security caution:") {
-			// Security error — send back to the LLM as a tool result so it
-			// can read the error message and adjust. The message itself now
-			// contains "Do not retry this exact command" for CAUTION-tier
-			// blocks (SP-049-1c), which LLMs reliably honor.
-			te.agent.PrintLine("")
-			te.agent.PrintLine(fmt.Sprintf("[⚠️  SECURITY CAUTION - LLM VERIFICATION REQUIRED] %s", safeErr))
-			te.agent.PrintLine("")
-			
-			// Return a special tool result that signals the LLM to re-verify
-			// The LLM will see this and can decide to re-assert safety and retry, or abort
-			return api.Message{
-				Role:       "tool",
-				Content:    fmt.Sprintf("SECURITY_CAUTION_REQUIRED: %s", safeErr),
-				ToolCallID: toolCallID,
-			}
-		}
-		
+
 		// Ensure the error is visible to the user immediately
 		te.agent.PrintLine("")
 		te.agent.PrintLine(fmt.Sprintf("[FAIL] Tool '%s' failed: %s", normalizedToolName, safeErr))

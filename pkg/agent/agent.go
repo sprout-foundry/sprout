@@ -215,6 +215,19 @@ type Agent struct {
 	// reached or surpassed. Same atomic-value pattern.
 	budgetExceededCallback atomic.Value // func(spent, limit float64)
 
+	// auditLogger records security decisions (blocks, approvals, loops) to a
+	// JSONL file for auditing. Set via SetAuditLogger; nil-safe everywhere.
+	// Stored as a value-backed pointer so tests can swap it freely.
+	auditLogger *tools.AuditLogger
+
+	// Security telemetry counters (Task 3) — track post-caution LLM behavior.
+	// Incremented atomically because seed may execute SafeForParallel tools
+	// concurrently, each running the pre-execute hook. Exposed via getters
+	// and the JSON result metrics.
+	secCautionsIssued      atomic.Int64
+	secRetriesAfterCaution atomic.Int64
+	secLoopsDetected       atomic.Int64
+
 	// SP-066 Phase 2: background rollup worker. rollupW is lazily
 	// initialized via rollupOnce so existing tests that construct bare
 	// *Agent values continue to work without a constructor change.

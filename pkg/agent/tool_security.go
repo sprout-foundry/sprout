@@ -355,6 +355,7 @@ func (a *Agent) unifiedSecurityGate(name string, args map[string]interface{}) er
 
 	// Hard blocks are unconditional — no approval path can override
 	if assessment.IsHardBlock || assessment.Level == configuration.RiskLevelCritical {
+		a.logSecurityDecision(name, args, assessment, "blocked")
 		return agenterrors.NewSecurityError(
 			fmt.Sprintf("security hard block: %s — %s. This operation cannot be approved by any profile or flag.", name, assessment.Reason), nil,
 		)
@@ -365,6 +366,7 @@ func (a *Agent) unifiedSecurityGate(name string, args map[string]interface{}) er
 	if assessment.Level == configuration.RiskLevelHigh {
 		if cmd, ok := args["command"].(string); ok && cmd != "" {
 			if !a.highRiskApprovedForCommand(nil, cmd) {
+				a.logSecurityDecision(name, args, assessment, "blocked")
 				return agenterrors.NewSecurityError(
 					fmt.Sprintf("security hard block: %s — %s. This operation cannot be approved by any profile or flag.", name, assessment.Reason), nil,
 				)
@@ -406,6 +408,7 @@ func (a *Agent) unifiedSecurityGate(name string, args map[string]interface{}) er
 	// ops still need explicit user intent
 	if assessment.RequiresIntentConfirmation {
 		if a.IsSubagent() {
+			a.logSecurityDecision(name, args, assessment, "blocked")
 			return agenterrors.NewSecurityError(
 				fmt.Sprintf("security confirmation required: %s — %s. Re-run interactively, use --risk-profile=permissive, or use ask_user to confirm.", name, assessment.Reason), nil,
 			)
@@ -419,7 +422,8 @@ func (a *Agent) unifiedSecurityGate(name string, args map[string]interface{}) er
 		return a.unifiedSecurityPrompt(name, args, assessment)
 	}
 
-	// Low risk: allow
+	// Low risk: allow. Skip audit logging here — Low-risk allows are noisy
+	// (the vast majority of tool calls) and provide little audit value.
 	return nil
 }
 
@@ -483,14 +487,18 @@ func (a *Agent) unifiedSecurityPrompt(name string, args map[string]interface{}, 
 		if cmd, ok := args["command"].(string); ok && cmd != "" {
 			decision := mgr.RequestToolApprovalDecision(a.GetEventBus(), a.GetEventClientID(), a.GetEventUserID(), name, riskLabel, assessment.Reason, extras)
 			if !decision.Approved() {
+				a.logSecurityDecision(name, args, assessment, "blocked")
 				return agenterrors.NewSecurityError(fmt.Sprintf("security rejected: %s — %s. The user declined approval.", name, assessment.Reason), nil)
 			}
 			a.applyApprovalDecision(decision, cmd)
+			a.logSecurityDecision(name, args, assessment, "approved")
 			return nil
 		}
 		if !mgr.RequestToolApproval(a.GetEventBus(), a.GetEventClientID(), a.GetEventUserID(), name, riskLabel, assessment.Reason, extras) {
+			a.logSecurityDecision(name, args, assessment, "blocked")
 			return agenterrors.NewSecurityError(fmt.Sprintf("security rejected: %s — %s. The user declined approval.", name, assessment.Reason), nil)
 		}
+		a.logSecurityDecision(name, args, assessment, "approved")
 		return nil
 	}
 
@@ -503,8 +511,10 @@ func (a *Agent) unifiedSecurityPrompt(name string, args map[string]interface{}, 
 		prompt := fmt.Sprintf("⚠  Security Warning — %s\n\nReasoning: %s\n\nDo you want to proceed?",
 			strings.ToUpper(string(assessment.Level)), assessment.Reason)
 		if !logger.AskForConfirmation(prompt, false, false) {
+			a.logSecurityDecision(name, args, assessment, "blocked")
 			return agenterrors.NewSecurityError(fmt.Sprintf("security rejected: %s — %s. The user declined approval.", name, assessment.Reason), nil)
 		}
+		a.logSecurityDecision(name, args, assessment, "approved")
 		return nil
 	}
 
@@ -524,6 +534,7 @@ func (a *Agent) unifiedSecurityPrompt(name string, args map[string]interface{}, 
 
 	// No interactive surface and not flagged non-interactive (e.g. a
 	// misconfigured daemon). Fail safe.
+	a.logSecurityDecision(name, args, assessment, "blocked")
 	return agenterrors.NewSecurityError(
 		fmt.Sprintf("security confirmation required: %s — %s. Re-run interactively, use --risk-profile=permissive, or use ask_user to confirm.",
 			name, assessment.Reason), nil,

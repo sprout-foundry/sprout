@@ -126,6 +126,65 @@ func (a *Agent) GetLLMCallCount() int {
 	return a.state.GetLLMCallCount()
 }
 
+// ---------------------------------------------------------------------------
+// Security telemetry (Task 3)
+//
+// Lightweight counters that track what the LLM does after receiving a
+// SECURITY_CAUTION_REQUIRED signal. Exposed via the --output-json metrics
+// object so external tools can measure caution-signal effectiveness.
+// ---------------------------------------------------------------------------
+
+// GetSecurityCautionsIssued returns the number of SECURITY_CAUTION_REQUIRED
+// errors produced this session.
+func (a *Agent) GetSecurityCautionsIssued() int64 {
+	if a == nil {
+		return 0
+	}
+	return a.secCautionsIssued.Load()
+}
+
+// GetSecurityRetriesAfterCaution returns the number of times the LLM retried
+// the same tool+args after seeing a security caution (the count went 1→2).
+func (a *Agent) GetSecurityRetriesAfterCaution() int64 {
+	if a == nil {
+		return 0
+	}
+	return a.secRetriesAfterCaution.Load()
+}
+
+// GetSecurityLoopsDetected returns the number of times loop detection fired
+// (the same tool+args was blocked >= securityBlockThreshold times).
+func (a *Agent) GetSecurityLoopsDetected() int64 {
+	if a == nil {
+		return 0
+	}
+	return a.secLoopsDetected.Load()
+}
+
+// incrementSecurityCautionsIssued bumps the cautions-issued counter.
+func (a *Agent) incrementSecurityCautionsIssued() {
+	if a == nil {
+		return
+	}
+	a.secCautionsIssued.Add(1)
+}
+
+// incrementSecurityRetryAfterCaution bumps the retry-after-caution counter.
+func (a *Agent) incrementSecurityRetryAfterCaution() {
+	if a == nil {
+		return
+	}
+	a.secRetriesAfterCaution.Add(1)
+}
+
+// incrementSecurityLoopsDetected bumps the loops-detected counter.
+func (a *Agent) incrementSecurityLoopsDetected() {
+	if a == nil {
+		return
+	}
+	a.secLoopsDetected.Add(1)
+}
+
 // GetEstimatedTokenResponses returns how many responses used estimated token usage.
 func (a *Agent) GetEstimatedTokenResponses() int {
 	return a.state.GetEstimatedTokenResponses()

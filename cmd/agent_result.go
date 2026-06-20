@@ -34,6 +34,12 @@ type AgentResultMetrics struct {
 	LLMCalls       int     `json:"llm_calls"`  // Number of LLM API calls made
 	Provider       string  `json:"provider"`   // LLM provider name (e.g., "openai", "anthropic")
 	Model          string  `json:"model"`      // Model identifier (e.g., "gpt-4o")
+
+	// Security telemetry — track post-caution LLM behavior so external tools
+	// can measure SECURITY_CAUTION_REQUIRED signal effectiveness.
+	SecurityCautionsIssued      int64 `json:"security_cautions_issued"`      // Times a SECURITY_CAUTION_REQUIRED was produced
+	SecurityRetriesAfterCaution int64 `json:"security_retries_after_caution"` // Times the LLM retried the same blocked op after a caution
+	SecurityLoopsDetected       int64 `json:"security_loops_detected"`       // Times loop-detection fired (3+ identical blocks)
 }
 
 // outputFormatJSON is the flag value for JSON output mode.
@@ -69,6 +75,10 @@ func emitJSONResult(query string, startTime time.Time, runErr error, a *agent.Ag
 		result.Metrics.LLMCalls = a.GetLLMCallCount()
 		result.Metrics.Provider = a.GetProvider()
 		result.Metrics.Model = a.GetModel()
+		// Security telemetry
+		result.Metrics.SecurityCautionsIssued = a.GetSecurityCautionsIssued()
+		result.Metrics.SecurityRetriesAfterCaution = a.GetSecurityRetriesAfterCaution()
+		result.Metrics.SecurityLoopsDetected = a.GetSecurityLoopsDetected()
 	}
 
 	if runErr != nil {

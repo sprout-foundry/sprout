@@ -247,7 +247,7 @@ func TestCategorizeCommand_NonGitCommands(t *testing.T) {
 		{"write_file tool", "write_file path/to/file", "write_file"},
 		{"edit_file tool", "edit_file path/to/file", "write_file"},
 		{"unknown command", "docker compose up", "docker"},
-		{"random command", "python3 script.py", "shell_command"},
+		{"python script is build/test", "python3 script.py", "build_test"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -486,7 +486,7 @@ func TestSubagentTypeEvaluateOperationRisk_MediumRiskCommands(t *testing.T) {
 		{"git fetch", "git fetch"},
 		{"write_file", "write_file path/file.go"},
 		{"edit_file", "edit_file path/file.go"},
-		{"shell_command", "python3 script.py"},
+		{"shell_command", "curl http://example.com/api"},
 		{"subagent_spawn", "subagent_spawn"},
 	}
 	for _, tt := range tests {
@@ -617,8 +617,9 @@ func TestSubagentTypeEvaluateOperationRisk_CustomRules(t *testing.T) {
 		t.Errorf("custom rules: EvaluateOperationRisk(%q) = %q, want %q", "git commit -m msg", got, RiskLevelLow)
 	}
 
-	// shell_command should be low risk with custom rules
-	gotShell := st.EvaluateOperationRisk("python3 script.py")
+	// shell_command should be low risk with custom rules (use a command that is not
+	// build/test so that it falls through to the low_risk rule, not the build_test category)
+	gotShell := st.EvaluateOperationRisk("curl http://example.com/api")
 	if gotShell != RiskLevelLow {
 		t.Errorf("custom rules: EvaluateOperationRisk(%q) = %q, want %q", "python3 script.py", gotShell, RiskLevelLow)
 	}
@@ -782,7 +783,7 @@ func TestNewConfig_EA_AutoApproveRules_LoadedFromJSON(t *testing.T) {
 	}
 
 	// Verify low_risk ops
-	expectedLowRisk := []string{"git_add", "git_status", "git_log", "git_diff", "read_file"}
+	expectedLowRisk := []string{"git_add", "git_status", "git_log", "git_diff", "read_file", "build_test"}
 	if len(rules.LowRiskOps) != len(expectedLowRisk) {
 		t.Errorf("low_risk: expected %d items, got %d: %v", len(expectedLowRisk), len(rules.LowRiskOps), rules.LowRiskOps)
 	}
@@ -931,7 +932,7 @@ func TestNewConfig_EA_AutoApproveRules_EvaluateOperationRisk(t *testing.T) {
 		{"git pull is medium risk", "git pull", RiskLevelMedium},
 		{"write_file is medium risk", "write_file test.txt", RiskLevelMedium},
 		{"edit_file is medium risk", "edit_file test.txt", RiskLevelMedium},
-		{"shell_command is medium risk", "make build", RiskLevelMedium},
+		{"shell_command is medium risk", "curl http://example.com/api", RiskLevelMedium},
 		{"rm is medium risk", "rm file.txt", RiskLevelMedium},
 		{"git reset --hard is high risk", "git reset --hard HEAD", RiskLevelHigh},
 		{"git clean is high risk", "git clean -fd", RiskLevelHigh},
@@ -1061,7 +1062,7 @@ func TestPersona_EA_RiskCascadeBaseline(t *testing.T) {
 
 	rules := ea.GetAutoApproveRules()
 
-	wantedLow := []string{"git_add", "git_status", "git_log", "git_diff", "read_file"}
+	wantedLow := []string{"git_add", "git_status", "git_log", "git_diff", "read_file", "build_test"}
 	wantedMedium := []string{"git_commit", "git_push", "git_pull", "git_fetch",
 		"write_file", "edit_file", "shell_command", "rm_command", "docker",
 		"subagent_spawn", "cross_directory"}

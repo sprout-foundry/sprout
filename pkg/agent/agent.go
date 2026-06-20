@@ -83,10 +83,10 @@ type Agent struct {
 	interruptCancel     context.CancelFunc
 
 	// Sub-managers — Agent coordinates through these interfaces
-	state    StateManager    // Conversation history, checkpoints, tokens, cost, persona, etc.
-	output   OutputManager   // Streaming, async output, event metadata, output routing
-	security SecurityManager // Approvals, redaction, elevation, bypass
-	mcpSub   MCPSubManager   // MCP server lifecycle and tool caching
+	state    StateManager       // Conversation history, checkpoints, tokens, cost, persona, etc.
+	output   OutputManager      // Streaming, async output, event metadata, output routing
+	security SecurityManager    // Approvals, redaction, elevation, bypass
+	mcpSub   MCPSubManager      // MCP server lifecycle and tool caching
 	todoMgr  *tools.TodoManager // Per-agent todo manager for session isolation
 
 	// Event system (bridges output and core)
@@ -219,6 +219,15 @@ type Agent struct {
 	// JSONL file for auditing. Set via SetAuditLogger; nil-safe everywhere.
 	// Stored as a value-backed pointer so tests can swap it freely.
 	auditLogger *tools.AuditLogger
+
+	// securityLLMClassifier is the lazily-initialized LLM-based command risk
+	// classifier (SP-076). Nil until GetSecurityLLMClassifier() is first
+	// called; a failed init caches nil so we don't retry on every prompt.
+	// Protected by securityLLMClassifierMu. securityLLMClassifierInitDone
+	// distinguishes "haven't tried yet" (false) from "tried, got nil" (true).
+	securityLLMClassifier         *SecurityLLMClassifier
+	securityLLMClassifierMu       sync.Mutex
+	securityLLMClassifierInitDone bool
 
 	// Security telemetry counters (Task 3) — track post-caution LLM behavior.
 	// Incremented atomically because seed may execute SafeForParallel tools

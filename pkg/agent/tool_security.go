@@ -200,7 +200,7 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 						if secResult.IntentConfirmation {
 							prompt = buildIntentConfirmationPrompt(toolName, args, secResult)
 						} else {
-							prompt = buildSecurityPrompt(toolName, args, secResult)
+							prompt = buildSecurityPrompt(toolName, args, secResult, agent.securityLLMAnalysisForPrompt(toolName, args, secResult))
 						}
 						if !logger.AskForConfirmation(prompt, false, false) {
 							return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("security rejected: %s — %s. The user declined approval.", toolName, secResult.Reasoning), nil)
@@ -541,8 +541,81 @@ func (a *Agent) unifiedSecurityPrompt(name string, args map[string]interface{}, 
 	)
 }
 
+// securityLLMAnalysisForPrompt computes the optional LLM risk-analysis block
+// for the approval prompt (SP-076). Returns "" when no analysis is available
+// (classifier disabled, not a shell command, command allowlisted, an LLM
+// error/timeout, etc.) so callers can pass the result straight through to
+// buildSecurityPrompt as a variadic and a "" leaves the prompt unchanged.
+//
+// Safety: this method must NEVER break the approval flow. The LLM call is
+// wrapped in a recover() so an unexpected panic degrades to "no analysis"
+// instead of wedging the gate. It is advisory-only — see SP-076.
+//
+// Gating: the analysis runs ONLY when:
+//   - the heuristic flagged the command as CAUTION/DANGEROUS (ShouldPrompt/
+//     ShouldBlock but NOT IsHardBlock — hard-blocks never reach the prompt
+//     path and must never be sent to the LLM),
+//   - it's a shell_command (the LLM classifier analyzes shell commands),
+//   - the command is not allowlisted, and
+//   - the session is not in unsafe-shell or session-elevated mode (those
+//     auto-run the command without a prompt, so there's no decision to inform).
+func (a *Agent) securityLLMAnalysisForPrompt(toolName string, args map[string]interface{}, secResult tools.SecurityResult) string {
+	if a == nil {
+		return ""
+	}
+	// Only for shell commands.
+	if toolName != "shell_command" {
+		return ""
+	}
+	// Only when the heuristic flagged it as prompt/block-worthy.
+	if !secResult.ShouldPrompt && !secResult.ShouldBlock {
+		return ""
+	}
+	// Hard-block (Critical tier) is never sent to the LLM.
+	if secResult.IsHardBlock {
+		return ""
+	}
+	cmd, ok := args["command"].(string)
+	if !ok || cmd == "" {
+		return ""
+	}
+	// Allowlist / bypass checks — these commands auto-run, no decision to inform.
+	if a.IsShellCommandAllowlisted(cmd) {
+		return ""
+	}
+	if a.GetUnsafeShellMode() {
+		return ""
+	}
+	if a.IsSessionElevated() {
+		return ""
+	}
+
+	classifier := a.GetSecurityLLMClassifier()
+	if classifier == nil {
+		return ""
+	}
+
+	// Recover from any panic in the LLM call so the approval flow is never
+	// broken — degrade to "no analysis".
+	var analysis SecurityLLMAnalysis
+	var okResult bool
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				if a.debug {
+					a.debugLog("[security-llm] panic during analysis (degraded to no analysis): %v\n", r)
+				}
+				okResult = false
+			}
+		}()
+		analysis, okResult = classifier.Analyze(context.Background(), toolName, cmd, secResult.Risk.String())
+	}()
+
+	return FormatAnalysisForPrompt(analysis, okResult)
+}
+
 // buildSecurityPrompt constructs a detailed security approval prompt for the user
-func buildSecurityPrompt(toolName string, args map[string]interface{}, secResult tools.SecurityResult) string {
+func buildSecurityPrompt(toolName string, args map[string]interface{}, secResult tools.SecurityResult, llmAnalysis ...string) string {
 	var sb strings.Builder
 
 	sb.WriteString(fmt.Sprintf("⚠  Security Warning — %s\n\n", secResult.Risk))
@@ -568,6 +641,15 @@ func buildSecurityPrompt(toolName string, args map[string]interface{}, secResult
 	}
 
 	sb.WriteString(fmt.Sprintf("Reasoning: %s\n\n", secResult.Reasoning))
+
+	// SP-076: append the optional LLM risk analysis block (advisory —
+	// informs the user's decision but does not change the gate). The
+	// variadic keeps existing call sites working with zero args.
+	if len(llmAnalysis) > 0 && strings.TrimSpace(llmAnalysis[0]) != "" {
+		sb.WriteString(llmAnalysis[0])
+		sb.WriteString("\n\n")
+	}
+
 	// Trailing question only — AskForConfirmation appends the
 	// "[y/N]" hint itself. Including "(yes/no):" here used to
 	// produce "...(yes/no):  [y/N]:" (duplicate suffix).
@@ -576,16 +658,6 @@ func buildSecurityPrompt(toolName string, args map[string]interface{}, secResult
 	return sb.String()
 }
 
-// buildShellApprovalPrompt builds the header text for the 4-option shell
-// approval picker (AskForApprovalWithOptions → the SelectList renderer).
-//
-// Unlike buildSecurityPrompt (used by the raw yes/no AskForConfirmation
-// path), it deliberately omits the leading warning glyph AND the command
-// block: the picker's renderer (pkg/console.writeSecurityHeader) prepends
-// the ⚠ glyph and prints the command on its own block. Including them here
-// double-rendered both — the source of the "⚠ ⚠" and the duplicated
-// "Command:" block. The picker itself asks the question, so no trailing
-// "Do you want to proceed?" either.
 // buildIntentConfirmationPrompt constructs a confirmation prompt for consequential
 // but safe operations (like launching an autonomous workflow). Uses neutral framing
 // instead of security-warning framing — the operation isn't dangerous, just impactful.
@@ -607,7 +679,25 @@ func buildIntentConfirmationPrompt(toolName string, args map[string]interface{},
 	return sb.String()
 }
 
-func buildShellApprovalPrompt(secResult tools.SecurityResult) string {
+// buildShellApprovalPrompt builds the header text for the 4-option shell
+// approval picker (AskForApprovalWithOptions → the SelectList renderer).
+//
+// Unlike buildSecurityPrompt (used by the raw yes/no AskForConfirmation
+// path), it deliberately omits the leading warning glyph AND the command
+// block: the picker's renderer (pkg/console.writeSecurityHeader) prepends
+// the ⚠ glyph and prints the command on its own block. Including them here
+// double-rendered both — the source of the "⚠ ⚠" and the duplicated
+// "Command:" block. The picker itself asks the question, so no trailing
+// "Do you want to proceed?" either.
+//
+// SP-076: like buildSecurityPrompt, this accepts an optional LLM risk-analysis
+// block (variadic) that is appended at the end when non-empty. The variadic
+// keeps existing call sites working with zero args. Callers should obtain the
+// analysis via (*Agent).securityLLMAnalysisForPrompt, which gates correctly
+// (shell-only, CAUTION/DANGEROUS-only, not-hard-block, not-allowlisted,
+// not-unsafe-shell, not-session-elevated) and returns "" when no analysis
+// applies — a "" leaves the prompt unchanged.
+func buildShellApprovalPrompt(secResult tools.SecurityResult, llmAnalysis ...string) string {
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("Security Warning — %s", secResult.Risk))
 	if secResult.RiskType != "" {
@@ -615,6 +705,15 @@ func buildShellApprovalPrompt(secResult tools.SecurityResult) string {
 	}
 	if secResult.Reasoning != "" {
 		sb.WriteString(fmt.Sprintf("\n\nReasoning: %s", secResult.Reasoning))
+	}
+	// SP-076: append the optional LLM risk analysis block (advisory —
+	// informs the user's decision but does not change the gate). Mirrors
+	// buildSecurityPrompt: when a non-empty analysis string is passed, it
+	// is appended as a separate block so the two prompts are visually
+	// consistent. An empty string leaves the prompt unchanged.
+	if len(llmAnalysis) > 0 && strings.TrimSpace(llmAnalysis[0]) != "" {
+		sb.WriteString("\n\n")
+		sb.WriteString(llmAnalysis[0])
 	}
 	return sb.String()
 }

@@ -478,6 +478,43 @@ func (a *Agent) GetEmbeddingManager() *embedding.EmbeddingManager {
 	return a.embeddingMgr
 }
 
+// GetSecurityLLMClassifier returns the agent's LLM security classifier
+// (SP-076), or nil if none is configured. The classifier is lazily
+// initialized on first call and cached on the agent (securityLLMClassifier).
+// If creation fails — no provider configured, client error, or the feature
+// is disabled — the nil result is cached so we don't retry on every prompt.
+//
+// Returns nil for a nil agent or when config is unavailable.
+func (a *Agent) GetSecurityLLMClassifier() *SecurityLLMClassifier {
+	if a == nil {
+		return nil
+	}
+	// Fast path: already initialized (success or cached nil).
+	a.securityLLMClassifierMu.Lock()
+	defer a.securityLLMClassifierMu.Unlock()
+	if a.securityLLMClassifier != nil {
+		return a.securityLLMClassifier
+	}
+	// Detect the "already tried, cached nil" case. We use a sentinel: when
+	// init has been attempted, we set securityLLMClassifierInitDone = true.
+	// A nil pointer with done=true means "intentionally off/unavailable".
+	if a.securityLLMClassifierInitDone {
+		return nil
+	}
+	cfg := a.GetConfig()
+	logger := utils.GetLogger(cfg != nil && cfg.SkipPrompt)
+	classifier, _ := NewSecurityLLMClassifier(cfg, logger)
+	a.securityLLMClassifier = classifier
+	a.securityLLMClassifierInitDone = true
+	if classifier != nil && classifier.enabled && a.debug {
+		a.debugLog("[security-llm] classifier initialized\n")
+	}
+	if classifier != nil && classifier.enabled {
+		return classifier
+	}
+	return nil
+}
+
 // GetTodoManager returns the per-agent todo manager.
 // This ensures session isolation in daemon mode where multiple agents
 // run concurrently.

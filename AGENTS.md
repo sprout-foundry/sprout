@@ -120,6 +120,18 @@ When a merge produces conflicts:
 | `git push --force` (any variant) | **FORBIDDEN** | Never allowed |
 | `git rebase` (onto remote) | **FORBIDDEN** | Use merge instead |
 
+## Security Risk Classification
+
+Shell-command risk classification uses a **two-tier pipeline**:
+
+1. **Heuristic classifier** (`pkg/agent_tools/security_classifier.go` + `shell_patterns.go`) — fast, string/regex-based, always runs. Classifies every `shell_command` call as Safe / Caution / Dangerous / Critical. This is the gate that decides whether to auto-approve, prompt the user, or block. It uses prefix matching and a catch-all CAUTION default for unrecognized commands.
+
+2. **LLM-based classifier** (`pkg/agent/llm_security_classifier.go`) — runs **only** for commands the heuristic flags as risky (Caution or Dangerous) AND that aren't already on the session approval allowlist. Calls the configured LLM with a structured-output prompt to produce a `{risk, recommendation, summary}` analysis.
+
+   The analysis is **advisory only**: it never changes whether a prompt is shown or whether a command auto-runs, Critical-tier commands never reach the LLM, and any LLM error/timeout degrades gracefully to "no analysis". Authoritative design + safety contract: [`roadmap/SP-076-llm-security-classifier.md`](roadmap/SP-076-llm-security-classifier.md). Read it before touching this area.
+
+**Do NOT attempt an embedding-based classifier for command risk.** This was tried and removed (commit history). Embeddings measure semantic similarity, but security risk is structural: `rm -rf node_modules` and `rm -rf /etc` are nearly identical embeddings with opposite risk profiles. The distinguishing signal (flags, target paths) is too small a fraction of the vector. A tokenizing command parser or an LLM call are the correct tools; embeddings are not. If revisiting classification accuracy, fix the heuristic's catch-all CAUTION default or tune the LLM prompt — do not reach for embeddings.
+
 ## Design System
 
 The webui is built on a token-driven design system rooted in `webui/src/App.css`

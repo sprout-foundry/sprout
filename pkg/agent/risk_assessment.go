@@ -46,6 +46,10 @@ const (
 	RiskSourceFSTier RiskSource = "fs-tier"
 	// RiskSourceWorkspacePolicy — workspace security policy evaluation
 	RiskSourceWorkspacePolicy RiskSource = "workspace-policy"
+	// RiskSourceHandler — a security error raised by a tool handler at
+	// execution time (not by the pre-execute gate). Used when the only
+	// signal available is the typed SecurityError returned by the handler.
+	RiskSourceHandler RiskSource = "handler"
 )
 
 // RiskAssessment is the canonical, single-vocabulary verdict for a tool

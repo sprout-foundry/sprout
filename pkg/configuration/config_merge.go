@@ -123,6 +123,28 @@ func MergeConfig(base, override *Config) *Config {
 		}
 		result.ApprovedShellCommands = merged
 	}
+	// ApprovedShellCommandPatterns: same union-merge as ApprovedShellCommands
+	// so patterns defined at the workspace layer stack on top of the global
+	// layer rather than silently overwriting it.
+	if len(override.ApprovedShellCommandPatterns) > 0 {
+		seen := make(map[string]struct{}, len(result.ApprovedShellCommandPatterns)+len(override.ApprovedShellCommandPatterns))
+		merged := make([]string, 0, len(result.ApprovedShellCommandPatterns)+len(override.ApprovedShellCommandPatterns))
+		for _, p := range result.ApprovedShellCommandPatterns {
+			if _, ok := seen[p]; ok {
+				continue
+			}
+			seen[p] = struct{}{}
+			merged = append(merged, p)
+		}
+		for _, p := range override.ApprovedShellCommandPatterns {
+			if _, ok := seen[p]; ok {
+				continue
+			}
+			seen[p] = struct{}{}
+			merged = append(merged, p)
+		}
+		result.ApprovedShellCommandPatterns = merged
+	}
 
 	// Merge DismissedPrompts
 	if len(override.DismissedPrompts) > 0 {

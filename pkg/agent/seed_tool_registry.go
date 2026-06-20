@@ -12,6 +12,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/agent_api"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/security"
 	"github.com/sprout-foundry/sprout/pkg/utils"
 )
@@ -95,6 +96,11 @@ func convertToSeedToolConfig(cfg ToolConfig, agent *Agent) core.ToolConfig {
 			if err != nil {
 				return handleToolError(agent, err, name)
 			}
+			// Success — clear the security block counter for this tool+args
+			// so the circuit breaker only tracks *consecutive* failures.
+			if agent != nil {
+				agent.clearSecurityBlock(name, args)
+			}
 			return postProcessResult(ctx, agent, name, args, result), nil
 		}
 	}
@@ -106,6 +112,11 @@ func convertToSeedToolConfig(cfg ToolConfig, agent *Agent) core.ToolConfig {
 			if err != nil {
 				msg, _ := handleToolError(agent, err, name)
 				return imgs, msg, err
+			}
+			// Success — clear the security block counter for this tool+args
+			// so the circuit breaker only tracks *consecutive* failures.
+			if agent != nil {
+				agent.clearSecurityBlock(name, args)
 			}
 			return imgs, postProcessResult(ctx, agent, name, args, result), nil
 		}
@@ -487,10 +498,22 @@ func handleToolError(agent *Agent, err error, toolName string) (string, error) {
 	switch action {
 	case ActionEscalate:
 		// Security error (typed) — escalate to user/LLM.
+		// Task 3: telemetry — a caution was issued from the handler path.
+		if agent != nil {
+			agent.incrementSecurityCautionsIssued()
+		}
+		// Task 4: tier-aware guidance suffix parsed from the error message.
+		suffix := tierFromMessage(safeMsg)
 		if agent != nil {
 			agent.PrintLine("")
 			agent.PrintLine(fmt.Sprintf("[⚠️  SECURITY CAUTION - LLM VERIFICATION REQUIRED] %s", safeMsg))
 			agent.PrintLine("")
+			// Task 2: audit-log the handler-level security block.
+			assessment := RiskAssessment{
+				Sources: []RiskSource{RiskSourceHandler},
+				Reason:  safeMsg,
+			}
+			agent.logSecurityDecision(toolName, nil, assessment, "blocked")
 		}
 		// Wrap the error itself (not just the result string) with the
 		// SECURITY_CAUTION_REQUIRED prefix. Seed's runWithTimeout discards
@@ -498,7 +521,7 @@ func handleToolError(agent *Agent, err error, toolName string) (string, error) {
 		// handlerErr.Error(). By wrapping the error, the prefix and guidance
 		// survive into the tool result the LLM sees.
 		return "", agenterrors.NewSecurityError(
-			fmt.Sprintf("SECURITY_CAUTION_REQUIRED: %s. Do not retry this exact operation without changing the risk profile or getting explicit user approval. You may use ask_user to confirm, or the user can re-run with --risk-profile=permissive.", safeMsg),
+			fmt.Sprintf("SECURITY_CAUTION_REQUIRED: %s. %s", safeMsg, suffix),
 			err,
 		)
 
@@ -628,6 +651,14 @@ func postProcessResult(ctx context.Context, agent *Agent, toolName string, args 
 // "Pre-execute hook rejected: <msg>", so prefixing the message here
 // ensures the model sees "SECURITY_CAUTION_REQUIRED:" in the tool result.
 // Non-security errors are returned unchanged.
+//
+// Integrated features:
+//   - Task 1: security circuit breaker. The SAME tool+args combo blocked
+//     >= securityBlockThreshold times escalates from a standard caution to a
+//     hard "SECURITY_CAUTION_LOOP_DETECTED" signal.
+//   - Task 2: audit logging of the block / loop_detected decision.
+//   - Task 3: telemetry counters (cautions issued, retries, loops).
+//   - Task 4: tier-aware guidance suffix parsed from the error message.
 func wrapSecurityCaution(agent *Agent, err error) error {
 	if err == nil {
 		return nil
@@ -636,6 +667,24 @@ func wrapSecurityCaution(agent *Agent, err error) error {
 		return err
 	}
 	safeMsg := sanitizeToolFailureMessage(err.Error())
+
+	// Task 1: record the block and detect loops.
+	// We can't recover the original toolName/args here (the hook owns those),
+	// so loop detection happens at the hook level via recordSecurityBlock.
+	// This function is called with the error already built; the hook calls
+	// recordSecurityBlock BEFORE invoking wrapSecurityCaution when it has the
+	// tool name + args. For callers that don't go through the hook (e.g.
+	// direct error wrapping), loop detection is skipped — that's acceptable
+	// because the only live caller is the pre-execute hook.
+
+	// Task 4: tier-aware guidance suffix.
+	suffix := tierFromMessage(safeMsg)
+
+	// Task 3: telemetry — a caution was issued.
+	if agent != nil {
+		agent.incrementSecurityCautionsIssued()
+	}
+
 	if agent != nil {
 		agent.PrintLine("")
 		agent.PrintLine(fmt.Sprintf("[⚠️  SECURITY CAUTION - LLM VERIFICATION REQUIRED] %s", safeMsg))
@@ -646,7 +695,89 @@ func wrapSecurityCaution(agent *Agent, err error) error {
 	// error string as "Pre-execute hook rejected: <msg>", so the
 	// SECURITY_CAUTION_REQUIRED prefix survives into the tool result.
 	return agenterrors.NewSecurityError(
-		fmt.Sprintf("SECURITY_CAUTION_REQUIRED: %s", safeMsg),
+		fmt.Sprintf("SECURITY_CAUTION_REQUIRED: %s. %s", safeMsg, suffix),
+		err,
+	)
+}
+
+// wrapSecurityCautionWithLoop is the loop-detection-aware variant of
+// wrapSecurityCaution. It is called by the pre-execute hook which has access
+// to the tool name + args needed for circuit-breaker tracking. It:
+//   - increments the security block counter (Task 1)
+//   - escalates to SECURITY_CAUTION_LOOP_DETECTED when count >= threshold
+//   - logs the audit entry (Task 2)
+//   - bumps telemetry counters (Task 3)
+//   - applies tier-aware suffixes (Task 4)
+//
+// Returns the wrapped error (loop variant when threshold is hit).
+func wrapSecurityCautionWithLoop(agent *Agent, err error, toolName string, args map[string]interface{}) error {
+	if err == nil {
+		return nil
+	}
+	if !agenterrors.IsSecurity(err) {
+		return err
+	}
+
+	// Task 1: record this block and check for a loop.
+	newCount := 0
+	if agent != nil {
+		newCount = agent.recordSecurityBlock(toolName, args)
+	}
+
+	safeMsg := sanitizeToolFailureMessage(err.Error())
+
+	// Task 3: telemetry.
+	if agent != nil {
+		agent.incrementSecurityCautionsIssued()
+		// A retry-after-caution is when the count goes from 1→2 (the model
+		// saw the caution at count 1 and retried the identical operation).
+		if newCount == 2 {
+			agent.incrementSecurityRetryAfterCaution()
+		}
+	}
+
+	// Task 1: loop escalation. The threshold (2) means "one retry is
+	// forgivable" — count 1 is the first block, count 2 is the first retry,
+	// and count 3+ (> threshold) is a loop.
+	if newCount > securityBlockThreshold {
+		if agent != nil {
+			agent.incrementSecurityLoopsDetected()
+		}
+		loopMsg := fmt.Sprintf(
+			"SECURITY_CAUTION_LOOP_DETECTED: This exact operation has been blocked %d times. "+
+				"The security decision will not change on retry. "+
+				"Stop attempting this operation and choose a different approach. Last reason: %s",
+			newCount, safeMsg)
+		if agent != nil {
+			agent.PrintLine("")
+			agent.PrintLine(fmt.Sprintf("[🛑 SECURITY LOOP DETECTED] %s", safeMsg))
+			agent.PrintLine("")
+			// Task 2: audit-log the loop detection.
+			assessment := RiskAssessment{
+				Level:   configuration.RiskLevelCritical,
+				Sources: []RiskSource{RiskSourceClassifier},
+				Reason:  fmt.Sprintf("security loop detected after %d identical blocks: %s", newCount, safeMsg),
+			}
+			agent.logSecurityDecision(toolName, args, assessment, "loop_detected")
+		}
+		return agenterrors.NewSecurityError(loopMsg, err)
+	}
+
+	// Standard caution path (count < threshold).
+	suffix := tierFromMessage(safeMsg)
+	if agent != nil {
+		agent.PrintLine("")
+		agent.PrintLine(fmt.Sprintf("[⚠️  SECURITY CAUTION - LLM VERIFICATION REQUIRED] %s", safeMsg))
+		agent.PrintLine("")
+		// Task 2: audit-log the block.
+		assessment := RiskAssessment{
+			Sources: []RiskSource{RiskSourceClassifier},
+			Reason:  safeMsg,
+		}
+		agent.logSecurityDecision(toolName, args, assessment, "blocked")
+	}
+	return agenterrors.NewSecurityError(
+		fmt.Sprintf("SECURITY_CAUTION_REQUIRED: %s. %s", safeMsg, suffix),
 		err,
 	)
 }
@@ -663,12 +794,12 @@ func newPreExecuteHook(agent *Agent) func(name string, args map[string]interface
 		// primary agent and questions are routed through the same WebUI/CLI prompt mechanism.
 		if !agent.CanSpawnSubagents() {
 			if name == "run_subagent" || name == "run_parallel_subagents" {
-				return wrapSecurityCaution(agent, agenterrors.NewSecurityError(
+				return wrapSecurityCautionWithLoop(agent, agenterrors.NewSecurityError(
 					fmt.Sprintf("SUBAGENT_RESTRICTION: Agent at depth %d cannot spawn subagents (max depth: %d). "+
 						"This restriction prevents runaway agent chains and ensures proper task delegation. "+
 						"If you need additional work done, please complete your current task and return "+
 						"your results to the parent agent for further delegation.",
-						agent.SubagentDepth(), agent.MaxSubagentDepth()), nil))
+						agent.SubagentDepth(), agent.MaxSubagentDepth()), nil), name, args)
 			}
 		}
 
@@ -687,7 +818,11 @@ func newPreExecuteHook(agent *Agent) func(name string, args map[string]interface
 		// (default), the existing dual-gate path runs unchanged with
 		// optional shadow-mode logging.
 		if cfg := agent.GetConfig(); cfg != nil && cfg.UnifiedRiskResolver {
-			return wrapSecurityCaution(agent, agent.unifiedSecurityGate(name, args))
+			gateErr := agent.unifiedSecurityGate(name, args)
+			if gateErr != nil {
+				return wrapSecurityCautionWithLoop(agent, gateErr, name, args)
+			}
+			return nil
 		}
 
 		// — Shadow-mode logging (flag OFF, debug ON) —
@@ -763,13 +898,13 @@ func newPreExecuteHook(agent *Agent) func(name string, args map[string]interface
 			if name == "shell_command" && shellCommand != "" {
 				decision := mgr.RequestToolApprovalDecision(agent.GetEventBus(), agent.GetEventClientID(), agent.GetEventUserID(), name, secResult.Risk.String(), secResult.Reasoning, extras)
 				if !decision.Approved() {
-					return wrapSecurityCaution(agent, agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", name, secResult.Reasoning), nil))
+					return wrapSecurityCautionWithLoop(agent, agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", name, secResult.Reasoning), nil), name, args)
 				}
 				agent.applyApprovalDecision(decision, shellCommand)
 				return nil
 			}
 			if !mgr.RequestToolApproval(agent.GetEventBus(), agent.GetEventClientID(), agent.GetEventUserID(), name, secResult.Risk.String(), secResult.Reasoning, extras) {
-				return wrapSecurityCaution(agent, agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", name, secResult.Reasoning), nil))
+				return wrapSecurityCautionWithLoop(agent, agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", name, secResult.Reasoning), nil), name, args)
 			}
 			return nil
 		}
@@ -789,7 +924,7 @@ func newPreExecuteHook(agent *Agent) func(name string, args map[string]interface
 					choice := logger.AskForApprovalWithOptions(prompt, cmd)
 					decision := approvalDecisionFromCLIChoice(choice)
 					if !decision.Approved() {
-						return wrapSecurityCaution(agent, agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", name, secResult.Reasoning), nil))
+						return wrapSecurityCautionWithLoop(agent, agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", name, secResult.Reasoning), nil), name, args)
 					}
 					agent.applyApprovalDecision(decision, cmd)
 					return nil
@@ -797,7 +932,7 @@ func newPreExecuteHook(agent *Agent) func(name string, args map[string]interface
 			}
 			prompt := buildSecurityPrompt(name, args, secResult)
 			if !logger.AskForConfirmation(prompt, false, false) {
-				return wrapSecurityCaution(agent, agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", name, secResult.Reasoning), nil))
+				return wrapSecurityCautionWithLoop(agent, agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", name, secResult.Reasoning), nil), name, args)
 			}
 			return nil
 		}
@@ -814,11 +949,11 @@ func newPreExecuteHook(agent *Agent) func(name string, args map[string]interface
 		// mass source destruction) terminate the run — and they do so with
 		// a fatal error so the loop exits cleanly rather than spinning.
 		if secResult.IsHardBlock {
-			return wrapSecurityCaution(agent, agenterrors.NewSecurityError(
+			return wrapSecurityCautionWithLoop(agent, agenterrors.NewSecurityError(
 				fmt.Sprintf("fatal security block (non-interactive): %s — %s. "+
 					"This operation is unconditionally blocked and cannot be approved by any profile or flag. "+
 					"The run will exit.",
-					name, secResult.Reasoning), nil))
+					name, secResult.Reasoning), nil), name, args)
 		}
 
 		// Non-hard-block in non-interactive mode: allow (permissive-by-default).

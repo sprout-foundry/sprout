@@ -687,8 +687,6 @@ func newPreExecuteHook(agent *Agent) func(name string, args map[string]interface
 		// and cannot be allowlisted, so this is safe.
 		if name == "shell_command" {
 			if cmd, ok := args["command"].(string); ok && cmd != "" && agent.IsShellCommandAllowlisted(cmd) {
-				// Mark so Gate 2 also sees it as approved.
-				agent.markShellCommandApproved(cmd)
 				return nil
 			}
 		}
@@ -731,7 +729,6 @@ func newPreExecuteHook(agent *Agent) func(name string, args map[string]interface
 					return agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", name, secResult.Reasoning), nil)
 				}
 				agent.applyApprovalDecision(decision, shellCommand)
-				agent.markShellCommandApproved(shellCommand)
 				return nil
 			}
 			if !mgr.RequestToolApproval(agent.GetEventBus(), agent.GetEventClientID(), agent.GetEventUserID(), name, secResult.Risk.String(), secResult.Reasoning, extras) {
@@ -758,7 +755,6 @@ func newPreExecuteHook(agent *Agent) func(name string, args map[string]interface
 						return agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", name, secResult.Reasoning), nil)
 					}
 					agent.applyApprovalDecision(decision, cmd)
-					agent.markShellCommandApproved(cmd)
 					return nil
 				}
 			}

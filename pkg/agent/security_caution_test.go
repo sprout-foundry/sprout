@@ -235,11 +235,11 @@ func TestSecurityCautionWorkflowIntegration(t *testing.T) {
 	// Step 3: Verify the new error format is detectable by tool_executor_sequential.go.
 	// The executor classifies SecurityError as ActionEscalate (via ClassifyError).
 	// We simulate the error format:
-	simulatedError := "security block: shell_command — " + classification.Reasoning +
-		". This operation requires interactive user approval. To proceed, the user must re-run interactively or grant a scoped bypass via --unsafe-shell. Do not retry this exact command."
+	simulatedError := "security confirmation required: shell_command — " + classification.Reasoning +
+		". Re-run interactively, use --risk-profile=permissive, or use ask_user to confirm. Do not retry this exact command without changing the risk profile."
 
-	if !strings.HasPrefix(simulatedError, "security block:") {
-		t.Fatal("simulated error does not contain the 'security block:' prefix")
+	if !strings.HasPrefix(simulatedError, "security confirmation required:") {
+		t.Fatal("simulated error does not contain the 'security confirmation required:' prefix")
 	}
 	if !strings.Contains(simulatedError, "Do not retry") {
 		t.Fatal("simulated error must contain 'Do not retry' to prevent LLM re-issuing")

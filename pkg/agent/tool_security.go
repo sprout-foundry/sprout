@@ -174,7 +174,7 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 					approved, outcome := mgr.RequestToolApprovalWithOutcome(agent.GetEventBus(), agent.GetEventClientID(), agent.GetEventUserID(), toolName, secResult.Risk.String(), secResult.Reasoning, extras)
 					if outcome == security.ApprovalOutcomeResponded {
 						if !approved {
-							return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", toolName, secResult.Reasoning), nil)
+							return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("security rejected: %s — %s. The user declined approval.", toolName, secResult.Reasoning), nil)
 						}
 						if toolName == "run_automate" {
 							if wf, ok := args["workflow"].(string); ok {
@@ -203,7 +203,7 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 							prompt = buildSecurityPrompt(toolName, args, secResult)
 						}
 						if !logger.AskForConfirmation(prompt, false, false) {
-							return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", toolName, secResult.Reasoning), nil)
+							return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("security rejected: %s — %s. The user declined approval.", toolName, secResult.Reasoning), nil)
 						}
 						if toolName == "run_automate" {
 							if wf, ok := args["workflow"].(string); ok {
@@ -212,16 +212,16 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 						}
 					} else if secResult.ShouldBlock {
 						// NON-INTERACTIVE + DANGEROUS, no approval mechanism: always block
-						return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("security block: %s — %s", toolName, secResult.Reasoning), nil)
+						return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("security hard block: %s — %s. This operation cannot be approved by any profile or flag.", toolName, secResult.Reasoning), nil)
 					} else if secResult.IntentConfirmation {
 						// NON-INTERACTIVE + intent confirmation required: must ask user first
-						return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("confirmation required: %s — %s (this operation requires explicit user confirmation, unavailable in non-interactive mode. Use ask_user to confirm with the user, or re-run with --risk-profile=permissive.)", toolName, secResult.Reasoning), nil)
+						return nil, "", agenterrors.NewSecurityError(fmt.Sprintf("security confirmation required: %s — %s. Re-run interactively, use --risk-profile=permissive, or use ask_user to confirm.", toolName, secResult.Reasoning), nil)
 					} else if secResult.ShouldPrompt && !isSubagent {
 						// NON-INTERACTIVE + CAUTION, needs prompt but no approval mechanism:
 						// Return a terminal SecurityError — the operation cannot proceed
 						// without interactive approval. LLMs reliably honor "do not retry."
 						return nil, "", agenterrors.NewSecurityError(fmt.Sprintf(
-							"security block: %s — %s. This operation requires interactive user approval, which is unavailable in non-interactive mode. To proceed: re-run interactively, or use --risk-profile=permissive (or set risk_profile in the workflow JSON), or use --unsafe-shell for shell commands only. Do not retry this exact command without changing the risk profile.",
+							"security confirmation required: %s — %s. Re-run interactively, use --risk-profile=permissive, or use ask_user to confirm. Do not retry this exact command without changing the risk profile.",
 							toolName, secResult.Reasoning), nil)
 					} // NON-INTERACTIVE + CAUTION, no approval mechanism, not a subagent: auto-allow (safe operations)
 				}
@@ -356,7 +356,7 @@ func (a *Agent) unifiedSecurityGate(name string, args map[string]interface{}) er
 	// Hard blocks are unconditional — no approval path can override
 	if assessment.IsHardBlock || assessment.Level == configuration.RiskLevelCritical {
 		return agenterrors.NewSecurityError(
-			fmt.Sprintf("critical operation blocked (cannot be approved): %s", assessment.Reason), nil,
+			fmt.Sprintf("security hard block: %s — %s. This operation cannot be approved by any profile or flag.", name, assessment.Reason), nil,
 		)
 	}
 
@@ -366,7 +366,7 @@ func (a *Agent) unifiedSecurityGate(name string, args map[string]interface{}) er
 		if cmd, ok := args["command"].(string); ok && cmd != "" {
 			if !a.highRiskApprovedForCommand(nil, cmd) {
 				return agenterrors.NewSecurityError(
-					fmt.Sprintf("high-risk operation rejected by unified resolver: %s", assessment.Reason), nil,
+					fmt.Sprintf("security hard block: %s — %s. This operation cannot be approved by any profile or flag.", name, assessment.Reason), nil,
 				)
 			}
 		} else {
@@ -407,7 +407,7 @@ func (a *Agent) unifiedSecurityGate(name string, args map[string]interface{}) er
 	if assessment.RequiresIntentConfirmation {
 		if a.IsSubagent() {
 			return agenterrors.NewSecurityError(
-				fmt.Sprintf("confirmation required: %s — %s (this operation requires explicit user confirmation. Subagents cannot obtain interactive confirmation — use ask_user to confirm with the user, or re-run with --risk-profile=permissive.)", name, assessment.Reason), nil,
+				fmt.Sprintf("security confirmation required: %s — %s. Re-run interactively, use --risk-profile=permissive, or use ask_user to confirm.", name, assessment.Reason), nil,
 			)
 		}
 		// For intent confirmation, go through the approval prompt
@@ -483,13 +483,13 @@ func (a *Agent) unifiedSecurityPrompt(name string, args map[string]interface{}, 
 		if cmd, ok := args["command"].(string); ok && cmd != "" {
 			decision := mgr.RequestToolApprovalDecision(a.GetEventBus(), a.GetEventClientID(), a.GetEventUserID(), name, riskLabel, assessment.Reason, extras)
 			if !decision.Approved() {
-				return agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", name, assessment.Reason), nil)
+				return agenterrors.NewSecurityError(fmt.Sprintf("security rejected: %s — %s. The user declined approval.", name, assessment.Reason), nil)
 			}
 			a.applyApprovalDecision(decision, cmd)
 			return nil
 		}
 		if !mgr.RequestToolApproval(a.GetEventBus(), a.GetEventClientID(), a.GetEventUserID(), name, riskLabel, assessment.Reason, extras) {
-			return agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", name, assessment.Reason), nil)
+			return agenterrors.NewSecurityError(fmt.Sprintf("security rejected: %s — %s. The user declined approval.", name, assessment.Reason), nil)
 		}
 		return nil
 	}
@@ -503,7 +503,7 @@ func (a *Agent) unifiedSecurityPrompt(name string, args map[string]interface{}, 
 		prompt := fmt.Sprintf("⚠  Security Warning — %s\n\nReasoning: %s\n\nDo you want to proceed?",
 			strings.ToUpper(string(assessment.Level)), assessment.Reason)
 		if !logger.AskForConfirmation(prompt, false, false) {
-			return agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", name, assessment.Reason), nil)
+			return agenterrors.NewSecurityError(fmt.Sprintf("security rejected: %s — %s. The user declined approval.", name, assessment.Reason), nil)
 		}
 		return nil
 	}
@@ -525,7 +525,7 @@ func (a *Agent) unifiedSecurityPrompt(name string, args map[string]interface{}, 
 	// No interactive surface and not flagged non-interactive (e.g. a
 	// misconfigured daemon). Fail safe.
 	return agenterrors.NewSecurityError(
-		fmt.Sprintf("security block: %s — %s. No interactive surface available to approve this operation.",
+		fmt.Sprintf("security confirmation required: %s — %s. Re-run interactively, use --risk-profile=permissive, or use ask_user to confirm.",
 			name, assessment.Reason), nil,
 	)
 }

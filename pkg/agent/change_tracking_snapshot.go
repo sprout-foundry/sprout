@@ -293,11 +293,13 @@ func (ct *ChangeTracker) walkWorkspace(workDir string, old map[string]*shellSnap
 		// the common no-change case.
 		if cached, ok := old[path]; ok && cached.Size == info.Size() && cached.ModTime.Equal(info.ModTime()) {
 			snap[path] = cached
-			// Count cached content toward the budget so the budget
-			// stays consistent across walks. (No I/O happened.)
-			if cached.Content != nil {
-				totalBytes += int64(len(cached.Content))
-			}
+			// NOTE: cached content is intentionally NOT counted toward
+			// totalBytes. The budget guards *new* allocations on this
+			// walk; cached content was already read (and counted) during
+			// a prior walk and remains in memory regardless. Counting it
+			// again would double-count and could exhaust the budget
+			// purely from unchanged files, starving fresh reads of files
+			// that actually changed (causing the change to be missed).
 			return nil
 		}
 

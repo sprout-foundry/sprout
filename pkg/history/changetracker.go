@@ -15,9 +15,13 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
-// redactedContentMarker matches agent.RedactedContentMarker - files outside workspace
-// have their content replaced with this marker to avoid leaking sensitive data.
-const redactedContentMarker = "[REDACTED - external file]"
+// RedactedContentMarker is the canonical marker used when file content is
+// redacted because the file is outside the workspace root (to avoid leaking
+// sensitive data). It is defined here, in the lower-level history package, so
+// both pkg/history and pkg/agent reference a single source of truth instead of
+// maintaining duplicate copies that can silently drift. pkg/agent references
+// this via history.RedactedContentMarker.
+const RedactedContentMarker = "[REDACTED - external file]"
 
 // RevisionGroup represents a group of changes that belong to the same revision
 type RevisionGroup struct {
@@ -545,7 +549,7 @@ func handleRevisionRollback(group RevisionGroup) error {
 	activeChanges := getActiveChanges(group.Changes)
 	for _, change := range activeChanges {
 		// Skip files with redacted content (external files)
-		if change.OriginalCode == redactedContentMarker {
+		if change.OriginalCode == RedactedContentMarker {
 			fmt.Printf("  Skipping %s: content was redacted (external file)\n", change.Filename)
 			continue
 		}
@@ -581,7 +585,7 @@ func handleRevisionRestore(group RevisionGroup) error {
 
 	for _, change := range group.Changes {
 		// Skip files with redacted content (external files)
-		if change.NewCode == redactedContentMarker {
+		if change.NewCode == RedactedContentMarker {
 			fmt.Printf("  Skipping %s: content was redacted (external file)\n", change.Filename)
 			continue
 		}

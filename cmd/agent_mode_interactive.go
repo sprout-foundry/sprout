@@ -131,6 +131,11 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	defer cancelSub()
 	resetSpawnTracking := startTerminalToolSubscriber(subCtx, chatAgent, eventBus, indicator, footer)
 
+	// Tracks the time of the last Ctrl+C at the idle prompt so a
+	// second press within 2s exits the REPL (standard convention:
+	// psql, redis-cli, node). Reset to zero on any successful read.
+	var lastInterruptAt time.Time
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -146,11 +151,28 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 
 			if err != nil {
 				if err.Error() == "interrupted" {
-					fmt.Println("Use 'exit' or 'quit' to exit.")
+					// Standard REPL convention (psql, redis-cli, node):
+					// first Ctrl+C at an empty prompt clears the line and
+					// shows a brief hint; a second Ctrl+C within a short
+					// window exits. The input reader has already cleared
+					// and re-rendered the prompt line; we just track the
+					// timing to detect the double-press.
+					now := time.Now()
+					if now.Sub(lastInterruptAt) < 2*time.Second {
+						fmt.Println()
+						console.GlyphInfo.Printf("Goodbye!")
+						printContinuationHint(chatAgent)
+						return nil
+					}
+					lastInterruptAt = now
+					fmt.Println("(press Ctrl+C again to exit)")
 					continue
 				}
 				return fmt.Errorf("failed to read input: %w", err)
 			}
+			// A successful read resets the double-Ctrl+C window so the
+			// next interrupt cycle starts fresh.
+			lastInterruptAt = time.Time{}
 
 			query = strings.TrimSpace(query)
 			// SP-055 Phase 3b: drain any messages the user queued via

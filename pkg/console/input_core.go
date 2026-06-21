@@ -1,6 +1,7 @@
 package console
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"os/signal"
@@ -539,11 +540,19 @@ func (ir *InputReader) ReadLine() (string, error) {
 }
 
 // fallbackReadLine provides simple input for non-terminal environments
+// (piped stdin). Uses bufio.Reader so multi-word input isn't truncated at
+// whitespace (the old fmt.Scanln did that) and returns the error directly
+// so EOF on a closed pipe is reported faithfully rather than always wrapped
+// as "failed to read fallback input: EOF" (the old fmt.Errorf("%w", err)
+// produced a non-nil error even on success).
 func (ir *InputReader) fallbackReadLine() (string, error) {
 	fmt.Print(ir.prompt)
-	var input string
-	_, err := fmt.Scanln(&input)
-	return input, fmt.Errorf("failed to read fallback input: %w", err)
+	reader := bufio.NewReader(os.Stdin)
+	line, err := reader.ReadString('\n')
+	if err != nil && line == "" {
+		return "", err
+	}
+	return strings.TrimRight(line, "\r\n"), nil
 }
 
 // HandleEvent processes an input event

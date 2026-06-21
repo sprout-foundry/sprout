@@ -303,3 +303,25 @@ func (a *Agent) TrackFileEdit(filePath string, originalContent string, newConten
 
 	return nil
 }
+
+// MergeSubagentChanges merges a completed subagent's tracked changes
+// into this (primary) agent's ChangeTracker, tagging each entry with
+// "subagent:<persona>". This is the missing SP-059 Phase 2c step:
+// without it, list_changes / recover_file / revert_my_changes are
+// blind to subagent edits.
+//
+// No-op when the primary's tracking is disabled. The changes slice is
+// sourced from SubagentResult.FileChanges.
+func (a *Agent) MergeSubagentChanges(changes []TrackedFileChange, persona string) {
+	if a.changeTracker == nil || !a.changeTracker.IsEnabled() {
+		return
+	}
+	if len(changes) == 0 {
+		return
+	}
+	source := "subagent"
+	if persona != "" {
+		source = "subagent:" + persona
+	}
+	a.changeTracker.MergeChild(changes, source)
+}

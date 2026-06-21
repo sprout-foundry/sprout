@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/console"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/personas"
 	"github.com/sprout-foundry/sprout/pkg/spec"
@@ -32,15 +33,15 @@ func UseSeedLoop() bool {
 // runSelfReviewGate runs self-review validation after conversation completion.
 func (a *Agent) runSelfReviewGate() error {
 	if configuration.GetEnvSimple("SKIP_SELF_REVIEW_GATE") == "1" {
-		a.PrintLineAsync("[WARN] Self-review gate skipped (SPROUT_SKIP_SELF_REVIEW_GATE=1)")
+		a.PrintLineAsync(fmt.Sprintf("%sSelf-review gate skipped (SPROUT_SKIP_SELF_REVIEW_GATE=1)", console.GlyphWarning.Prefix()))
 		return nil
 	}
 	activePersona := a.GetActivePersona()
 	if !isSelfReviewGatePersonaEnabled(activePersona) {
 		if strings.TrimSpace(activePersona) == "" {
-			a.PrintLineAsync("[info] Self-review gate skipped (persona=<none>)")
+			a.PrintLineAsync(fmt.Sprintf("%sSelf-review gate skipped (persona=<none>)", console.GlyphInfo.Prefix()))
 		} else {
-			a.PrintLineAsync(fmt.Sprintf("[info] Self-review gate skipped (persona=%s)", activePersona))
+			a.PrintLineAsync(fmt.Sprintf("%sSelf-review gate skipped (persona=%s)", console.GlyphInfo.Prefix(), activePersona))
 		}
 		return nil
 	}
@@ -60,11 +61,11 @@ func (a *Agent) runSelfReviewGate() error {
 	}
 	mode := cfg.GetSelfReviewGateMode()
 	if mode == configuration.SelfReviewGateModeOff {
-		a.PrintLineAsync("[info] Self-review gate skipped (mode=off)")
+		a.PrintLineAsync(fmt.Sprintf("%sSelf-review gate skipped (mode=off)", console.GlyphInfo.Prefix()))
 		return nil
 	}
 	if mode == configuration.SelfReviewGateModeCode && !hasCodeLikeTrackedFiles(a.GetTrackedFiles()) {
-		a.PrintLineAsync("[info] Self-review gate skipped (mode=code, no code files changed)")
+		a.PrintLineAsync(fmt.Sprintf("%sSelf-review gate skipped (mode=code, no code files changed)", console.GlyphInfo.Prefix()))
 		return nil
 	}
 
@@ -81,7 +82,7 @@ func (a *Agent) runSelfReviewGate() error {
 		return fmt.Errorf("self-review gate blocked completion: %s", summary)
 	}
 
-	a.PrintLineAsync(fmt.Sprintf("[OK] Self-review gate passed: revision %s is within scope", revisionID))
+	a.PrintLineAsync(fmt.Sprintf("%sSelf-review gate passed: revision %s is within scope", console.GlyphSuccess.Prefix(), revisionID))
 	return nil
 }
 

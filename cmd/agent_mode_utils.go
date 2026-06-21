@@ -62,11 +62,11 @@ func printKeyboardHelp() {
 	writeKeyboardHelp(os.Stderr)
 }
 
-// writeKeyboardHelp emits a compact, two-column reference of the
-// non-obvious keys the CLI exposes — primarily the steer-panel keys
-// added by SP-055 since the rest of the bindings (slash commands,
-// exit) are documented in the welcome banner and `/help`. Accepts a
-// writer so tests can capture output.
+// writeKeyboardHelp emits a compact, two-column reference of the keys
+// the CLI exposes. Covers every binding the InputReader / SteerInputReader
+// actually interpret — these features exist but were previously
+// undocumented outside of code comments, making them effectively
+// undiscoverable. Accepts a writer so tests can capture output.
 func writeKeyboardHelp(w io.Writer) {
 	colorOn := envutil.ResolveColorPreference(true)
 	dim, reset := "", ""
@@ -74,18 +74,27 @@ func writeKeyboardHelp(w io.Writer) {
 		dim, reset = "\033[2m", "\033[0m"
 	}
 	rows := [][2]string{
+		{"Idle prompt", ""},
+		{"  Enter", "send message to the agent"},
+		{"  Shift+Enter", "insert newline (compose multi-line input)"},
+		{"  Tab", "autocomplete /commands"},
+		{"  Ctrl+R", "reverse-search command history"},
+		{"  Ctrl+X Ctrl+E", "edit input in $EDITOR"},
+		{"  Ctrl+C", "clear line (press twice to exit)"},
+		{"  Ctrl+D", "exit session"},
+		{"  ↑ / ↓", "recall prior prompts"},
+		{"  Right-click", "context menu (cut/copy/paste)"},
+		{"  Paste", "auto-detected (bracketed + heuristic)"},
+		{"  /<cmd>", "slash command (/help, /commit, /persona, …)"},
+		{"  ?", "this help"},
+		{"  exit / quit", "end session + print summary"},
+		{"", ""},
 		{"Steer panel (while a turn is running)", ""},
 		{"  Enter", "send mid-turn steer (default)"},
 		{"  Tab", "toggle steer ↔ queue mode"},
 		{"  ↑ / ↓", "recall prior steer messages"},
 		{"  Esc", "clear the input"},
 		{"  Ctrl+C", "interrupt the current turn"},
-		{"", ""},
-		{"Idle prompt", ""},
-		{"  /<cmd>", "slash command (/help, /commit, /persona, …)"},
-		{"  ?", "this help"},
-		{"  exit / quit", "end session + print summary"},
-		{"  Ctrl+C × 2", "force quit"},
 	}
 	fmt.Fprintln(w)
 	console.GlyphInfo.Fprintf(w, "Keyboard help")

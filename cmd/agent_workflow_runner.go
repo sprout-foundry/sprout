@@ -60,7 +60,8 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 			if err := persistWorkflowCheckpoint(cfg, state, chatAgent); err != nil {
 				return false, utils.WrapError(err, "persist workflow checkpoint")
 			}
-			fmt.Printf("\n[||] Workflow yielded for orchestration before step %s\n", stepName)
+			fmt.Println()
+			console.GlyphPaused.Printf("Workflow yielded for orchestration before step %s", stepName)
 			return true, nil
 		}
 

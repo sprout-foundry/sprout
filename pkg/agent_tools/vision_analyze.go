@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
 // ============================================================================
@@ -43,7 +45,7 @@ func (vp *VisionProcessor) ProcessImagesInText(ctx context.Context, text string)
 		analysis, err := vp.AnalyzeImage(ctx, imgPath)
 		if err != nil {
 			if vp.debug {
-				fmt.Printf("\n[WARN] Failed to analyze %s: %v\n", imgPath, err)
+				console.GlyphWarning.Fprintf(os.Stdout, "Failed to analyze %s: %v", imgPath, err)
 			}
 			continue
 		}
@@ -55,7 +57,7 @@ func (vp *VisionProcessor) ProcessImagesInText(ctx context.Context, text string)
 	}
 
 	if vp.debug && len(analyses) > 0 {
-		fmt.Printf("[OK] Successfully analyzed %d images\n", len(analyses))
+		console.GlyphSuccess.Fprintf(os.Stdout, "Successfully analyzed %d images", len(analyses))
 	}
 
 	return enhancedText, analyses, nil

@@ -11,6 +11,7 @@ import (
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/security"
 )
 
@@ -254,7 +255,7 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 
 		// Ensure the error is visible to the user immediately
 		te.agent.PrintLine("")
-		te.agent.PrintLine(fmt.Sprintf("[FAIL] Tool '%s' failed: %s", normalizedToolName, safeErr))
+		te.agent.PrintLine(fmt.Sprintf("%sTool '%s' failed: %s", console.GlyphError.Prefix(), normalizedToolName, safeErr))
 		te.agent.PrintLine("")
 		fullResult = fmt.Sprintf("Error: %s", safeErr)
 	}

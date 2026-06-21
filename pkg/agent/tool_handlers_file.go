@@ -574,7 +574,13 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 		a.Logger().Debug("edit-approval: %s\n", summary)
 	}
 
-	if trackErr := a.TrackFileEdit(path, oldStr, newStr); trackErr != nil {
+	// SP-072: TrackFileEdit stores FULL file content (not fragments) so
+	// recovery/rollback restores the complete file rather than a single
+	// edit fragment. originalContent is the full file read above; the
+	// proposed content is the single-occurrence replacement matching
+	// tools.EditFile's first-match behaviour.
+	proposedContent := strings.Replace(originalContent, oldStr, newStr, 1)
+	if trackErr := a.TrackFileEdit(path, originalContent, proposedContent); trackErr != nil {
 		a.Logger().Debug("Warning: Failed to track file edit: %v\n", trackErr)
 	}
 

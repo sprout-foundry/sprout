@@ -182,7 +182,7 @@ func (ct *ChangeTracker) TrackShellTurn(workDir, toolCall string, destructive bo
 	// reverts the user expected to be recoverable. Recorded as Operation
 	// "warning" so the UI can highlight it distinctly.
 	if truncated && destructive {
-		ct.changes = append(ct.changes, TrackedFileChange{
+		ct.appendChange(TrackedFileChange{
 			FilePath:  toolCall,
 			Operation: "warning",
 			NewCode:   "walk truncated during destructive command — coverage is partial. Re-run sprout in a smaller subdirectory or increase the walker budget if recovery completeness matters.",

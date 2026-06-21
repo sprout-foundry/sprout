@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -1312,3 +1313,61 @@ func TestTrackShellTurn_TruncatedDestructiveWalkAppendsWarning(t *testing.T) {
 	}
 }
 
+// TestRecordShellMutations_NoRaceWithConcurrentReads exercises the C3
+// fix: the shell-mutation pipeline (RecordShellMutations →
+// appendShellMutation) appends to ct.changes, while the turn-checkpoint
+// goroutine concurrently reads ct.changes via GetChanges /
+// CollectFileChangesForCheckpoint. Without ct.mu around both the append
+// and the read, this is a data race on the slice header. Run with
+// `go test -race` to detect it.
+func TestRecordShellMutations_NoRaceWithConcurrentReads(t *testing.T) {
+	tracker := newTrackerForShellTest(t)
+	tracker.agent = &Agent{workspaceRoot: "/work"}
+
+	// Writer goroutine: repeatedly call RecordShellMutations, which
+	// appends via appendShellMutation / appendChange under ct.mu.
+	done := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		defer close(done)
+		for i := 0; i < 50; i++ {
+			before := map[string]*shellSnapshotEntry{
+				"/work/f.go": {Content: []byte("old"), Size: 3},
+			}
+			after := map[string]*shellSnapshotEntry{
+				"/work/f.go": {Content: []byte("new"), Size: 3},
+			}
+			tracker.RecordShellMutations(before, after, "shell_command")
+		}
+	}()
+
+	// Reader goroutine: simulate the turn-checkpoint goroutine reading
+	// ct.changes concurrently.
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-done:
+				return
+			default:
+				// GetChanges reads ct.changes under ct.mu.
+				_ = tracker.GetChanges()
+				// CollectFileChangesForCheckpoint reads + advances the
+				// watermark under ct.mu.
+				_, _ = tracker.CollectFileChangesForCheckpoint()
+			}
+		}
+	}()
+
+	wg.Wait()
+
+	// We should have recorded ~50 changes. The exact count isn't
+	// asserted (the reader's checkpoint watermark may consume some);
+	// the point is that the race detector stays silent.
+	if got := tracker.GetChangeCount(); got == 0 {
+		t.Errorf("expected some changes to be recorded, got 0")
+	}
+}

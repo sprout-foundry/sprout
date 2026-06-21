@@ -1,6 +1,9 @@
 package agent
 
 import (
+	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -579,4 +582,62 @@ func TestSameToolJSONFixHint(t *testing.T) {
 			t.Errorf("hint should default to 'write_file', got: %s", hint)
 		}
 	})
+}
+
+// TestHandleEditFile_TracksFullFileContent verifies that handleEditFile
+// records the FULL file content (original + proposed) in the change
+// tracker, NOT the edit fragments (oldStr/newStr). Recovery/rollback
+// writes the tracked content back to disk, so a fragment would destroy
+// the file. Regression test for the C2 bug where the non-approval
+// branch passed oldStr/newStr to TrackFileEdit instead of the full
+// before/after content.
+func TestHandleEditFile_TracksFullFileContent(t *testing.T) {
+	agent := NewTestAgent()
+	ws := t.TempDir()
+	agent.workspaceRoot = ws
+	agent.changeTracker = NewChangeTracker(agent, "test")
+	agent.changeTracker.Enable()
+
+	filePath := filepath.Join(ws, "main.go")
+	originalContent := "package main\n\nfunc a() int {\n\treturn 1\n}\n"
+	if err := os.WriteFile(filePath, []byte(originalContent), 0o644); err != nil {
+		t.Fatalf("setup write: %v", err)
+	}
+
+	oldStr := "return 1"
+	newStr := "return 2"
+	if _, err := handleEditFile(context.Background(), agent, map[string]interface{}{
+		"path":    filePath,
+		"old_str": oldStr,
+		"new_str": newStr,
+	}); err != nil {
+		t.Fatalf("handleEditFile: %v", err)
+	}
+
+	changes := agent.changeTracker.GetChanges()
+	if len(changes) != 1 {
+		t.Fatalf("expected 1 tracked change, got %d", len(changes))
+	}
+	change := changes[0]
+
+	// The tracker MUST record the full original file, not the "return 1" fragment.
+	if change.OriginalCode != originalContent {
+		t.Errorf("OriginalCode should be the FULL original file content, got %q (want %q)",
+			change.OriginalCode, originalContent)
+	}
+
+	// The tracker MUST record the full proposed file (with the replacement applied).
+	expectedNew := strings.Replace(originalContent, oldStr, newStr, 1)
+	if change.NewCode != expectedNew {
+		t.Errorf("NewCode should be the FULL proposed file content, got %q (want %q)",
+			change.NewCode, expectedNew)
+	}
+
+	// Sanity: the fragments themselves must NOT appear as the full content.
+	if change.OriginalCode == oldStr {
+		t.Errorf("OriginalCode is the edit fragment %q — this is the C2 bug", oldStr)
+	}
+	if change.NewCode == newStr {
+		t.Errorf("NewCode is the edit fragment %q — this is the C2 bug", newStr)
+	}
 }

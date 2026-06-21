@@ -3,6 +3,7 @@ package console
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 )
 
 // ─── SP-048-4e: Ctrl-R reverse search methods ───────────────────────────────
@@ -14,6 +15,7 @@ func (ir *InputReader) enterSearchMode() {
 	ir.searchQuery = ""
 	ir.searchResult = ""
 	ir.searchResultIndex = -1
+	ir.searchBuf = ir.searchBuf[:0]
 	ir.preSearchLine = ir.line
 	ir.preSearchCursorPos = ir.cursorPos
 	// Show most recent history entry for empty query.
@@ -40,57 +42,64 @@ func (ir *InputReader) exitSearchMode(accept bool) {
 	ir.searchQuery = ""
 	ir.searchResult = ""
 	ir.searchResultIndex = -1
+	ir.searchBuf = ir.searchBuf[:0]
 	ir.preSearchLine = ""
 	ir.preSearchCursorPos = 0
 }
 
 // handleSearchByte processes a single byte while in search mode.
 func (ir *InputReader) handleSearchByte(b byte) {
-	// TODO(SP-048-4e): This function processes typed input one byte at a time.
-	// For ASCII this works fine, but multi-byte UTF-8 sequences (e.g. accented
-	// characters, CJK) will be split across multiple handleSearchByte calls.
-	// Each byte ≥ 128 is converted via string(rune(b)) which produces an
-	// incorrect code point — e.g. 0xC3 becomes 'Ã' (U+00C3) instead of being
-	// part of a multi-byte sequence like 'é'. Properly fixing this requires
-	// buffering bytes until a complete UTF-8 rune is available via utf8.DecodeRune.
 	switch {
 	case b == 127 || b == 8: // Backspace
+		ir.searchBuf = ir.searchBuf[:0]
 		if len(ir.searchQuery) > 0 {
-			ir.searchQuery = ir.searchQuery[:len(ir.searchQuery)-1]
+			// Trim one rune (not one byte) so multi-byte chars
+			// aren't half-deleted.
+			_, size := utf8.DecodeLastRuneInString(ir.searchQuery)
+			ir.searchQuery = ir.searchQuery[:len(ir.searchQuery)-size]
 		}
-		// Re-search from the end of history (find newest match).
-		if ir.searchQuery == "" {
-			// Empty query: show most recent entry again.
-			if len(ir.history) > 0 {
-				ir.searchResult = ir.history[len(ir.history)-1]
-				ir.searchResultIndex = len(ir.history) - 1
-			} else {
-				ir.searchResult = ""
-				ir.searchResultIndex = -1
-			}
-		} else {
-			result, idx, ok := ir.searchHistory(ir.searchQuery, len(ir.history)-1)
-			if ok {
-				ir.searchResult = result
-				ir.searchResultIndex = idx
-			} else {
-				ir.searchResult = ""
-				ir.searchResultIndex = -1
-			}
+		ir.refreshSearchForQuery()
+	case b >= 128 || len(ir.searchBuf) > 0:
+		// Multi-byte UTF-8 sequence: buffer until we have a full rune.
+		ir.searchBuf = append(ir.searchBuf, b)
+		r, size := utf8.DecodeRune(ir.searchBuf)
+		if r == utf8.RuneError && size == 1 && len(ir.searchBuf) < utf8.UTFMax {
+			// Incomplete sequence — wait for more bytes.
+			return
 		}
-	case b >= 32: // Printable character
+		// Either a valid rune or an invalid sequence we must flush.
+		ir.searchQuery += string(ir.searchBuf)
+		ir.searchBuf = ir.searchBuf[:0]
+		ir.refreshSearchForQuery()
+	case b >= 32: // Printable ASCII
 		ir.searchQuery += string(rune(b))
-		// Search from the end of history (newest first).
-		result, idx, ok := ir.searchHistory(ir.searchQuery, len(ir.history)-1)
-		if ok {
-			ir.searchResult = result
-			ir.searchResultIndex = idx
+		ir.refreshSearchForQuery()
+	}
+}
+
+// refreshSearchForQuery re-runs the history search for the current query
+// and updates searchResult / searchResultIndex. For an empty query it
+// shows the most recent history entry.
+func (ir *InputReader) refreshSearchForQuery() {
+	if ir.searchQuery == "" {
+		if len(ir.history) > 0 {
+			ir.searchResult = ir.history[len(ir.history)-1]
+			ir.searchResultIndex = len(ir.history) - 1
 		} else {
 			ir.searchResult = ""
 			ir.searchResultIndex = -1
 		}
-		// Everything else: ignore
-}}
+		return
+	}
+	result, idx, ok := ir.searchHistory(ir.searchQuery, len(ir.history)-1)
+	if ok {
+		ir.searchResult = result
+		ir.searchResultIndex = idx
+	} else {
+		ir.searchResult = ""
+		ir.searchResultIndex = -1
+	}
+}
 
 // cycleSearchResult searches for the next older match with the current query.
 //

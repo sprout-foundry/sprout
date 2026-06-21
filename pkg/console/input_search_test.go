@@ -1322,3 +1322,98 @@ func TestCycleSearchResult_PartialMatchWrap(t *testing.T) {
 		t.Fatalf("expected 'foo bar' (wrap-around), got %q", ir.searchResult)
 	}
 }
+
+// ─── handleSearchByte: UTF-8 multi-byte correctness ──────────────────────────
+
+func TestHandleSearchByte_UTF8MultiByte(t *testing.T) {
+	ir := newSearchIR([]string{"café test", "résumé entry", "naïve value"})
+	ir.enterSearchMode()
+
+	// Feed the two bytes of 'é' (U+00E9 → UTF-8 0xC3 0xA9) one at a time.
+	// The first byte (0xC3) is incomplete and must be buffered.
+	ir.handleSearchByte(0xC3)
+	if ir.searchQuery != "" {
+		t.Fatalf("after 0xC3: searchQuery = %q, want empty (incomplete sequence)", ir.searchQuery)
+	}
+
+	// Second byte completes the rune.
+	ir.handleSearchByte(0xA9)
+	if ir.searchQuery != "é" {
+		t.Fatalf("after 0xC3 0xA9: searchQuery = %q, want %q", ir.searchQuery, "é")
+	}
+	// 'é' appears in "café test" and "résumé entry". The newest match is
+	// "résumé entry" (index 1).
+	if ir.searchResult == "" {
+		t.Fatal("expected a search result containing 'é', got empty")
+	}
+	if !strings.Contains(ir.searchResult, "é") {
+		t.Fatalf("searchResult %q does not contain 'é'", ir.searchResult)
+	}
+}
+
+func TestHandleSearchByte_UTF8BackspaceByRune(t *testing.T) {
+	// Part 1: ASCII — backspace removes one byte (one rune).
+	t.Run("ASCII", func(t *testing.T) {
+		ir := newSearchIR([]string{"hello world"})
+		ir.enterSearchMode()
+		for _, c := range "hello" {
+			ir.handleSearchByte(byte(c))
+		}
+		if ir.searchQuery != "hello" {
+			t.Fatalf("query = %q, want 'hello'", ir.searchQuery)
+		}
+		ir.handleSearchByte(127) // backspace
+		if ir.searchQuery != "hell" {
+			t.Fatalf("after backspace: query = %q, want 'hell'", ir.searchQuery)
+		}
+	})
+
+	// Part 2: Multi-byte — backspace removes the whole rune, not one byte.
+	t.Run("MultiByte", func(t *testing.T) {
+		ir := newSearchIR([]string{"café"})
+		ir.enterSearchMode()
+		// Type "café": c, a, f are ASCII; é = 0xC3 0xA9.
+		ir.handleSearchByte('c')
+		ir.handleSearchByte('a')
+		ir.handleSearchByte('f')
+		ir.handleSearchByte(0xC3)
+		ir.handleSearchByte(0xA9)
+		if ir.searchQuery != "café" {
+			t.Fatalf("query = %q, want 'café'", ir.searchQuery)
+		}
+		// Backspace must remove the entire 2-byte 'é' rune → "caf".
+		ir.handleSearchByte(127)
+		if ir.searchQuery != "caf" {
+			t.Fatalf("after backspace: query = %q, want 'caf'", ir.searchQuery)
+		}
+		if len(ir.searchQuery) != 3 {
+			t.Fatalf("query length = %d, want 3 bytes", len(ir.searchQuery))
+		}
+	})
+}
+
+func TestHandleSearchByte_IncompleteUTF8SequenceBuffers(t *testing.T) {
+	ir := newSearchIR([]string{"café"})
+	ir.enterSearchMode()
+
+	// Feed only the lead byte 0xC3. This is an incomplete UTF-8 sequence
+	// and must NOT be appended to searchQuery yet.
+	ir.handleSearchByte(0xC3)
+	if ir.searchQuery != "" {
+		t.Fatalf("after 0xC3: searchQuery = %q, want empty (buffering)", ir.searchQuery)
+	}
+	// The partial byte should be sitting in the buffer, waiting.
+	if len(ir.searchBuf) != 1 {
+		t.Fatalf("after 0xC3: searchBuf len = %d, want 1", len(ir.searchBuf))
+	}
+
+	// Now feed the continuation byte 0xA9 → completes 'é'.
+	ir.handleSearchByte(0xA9)
+	if ir.searchQuery != "é" {
+		t.Fatalf("after 0xC3 0xA9: searchQuery = %q, want 'é'", ir.searchQuery)
+	}
+	// Buffer should be flushed.
+	if len(ir.searchBuf) != 0 {
+		t.Fatalf("after completion: searchBuf len = %d, want 0", len(ir.searchBuf))
+	}
+}

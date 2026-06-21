@@ -170,6 +170,21 @@ func (a *Agent) GetChangeTracker() *ChangeTracker {
 	return a.changeTracker
 }
 
+// IsPathOutsideWorkspace reports whether the resolved absolute path of
+// `path` falls outside the agent's workspace root. Returns false (i.e.
+// treats the path as in-workspace) when the change tracker is nil or
+// disabled, mirroring the existing nil-agent / empty-root behaviour of
+// ChangeTracker.isOutsideWorkspace. This is the boundary guard shared
+// by recover_file / revert_my_changes so a crafted tracker entry can't
+// trick the recovery tools into writing (or deleting) files outside
+// the workspace.
+func (a *Agent) IsPathOutsideWorkspace(path string) bool {
+	if a.changeTracker == nil || !a.changeTracker.IsEnabled() {
+		return false
+	}
+	return a.changeTracker.isOutsideWorkspace(path)
+}
+
 // GetRevisionID returns the current revision ID (if change tracking is enabled)
 func (a *Agent) GetRevisionID() string {
 	if a.changeTracker != nil {

@@ -256,6 +256,22 @@ func (ct *ChangeTracker) TrackFileEdit(filePath string, originalContent string, 
 	return nil
 }
 
+// appendChange appends a single tracked change under ct.mu. The caller
+// may NOT already hold ct.mu — this method acquires it. This is the
+// single safe entry point for appending to ct.changes from the
+// shell-mutation pipeline (RecordShellMutations / appendShellMutation
+// / appendBulkRollup / appendDestructiveBulkRollup), which runs
+// concurrently with the turn-checkpoint goroutine that reads
+// ct.changes via CollectFileChangesForCheckpoint. Holding ct.mu only
+// around the slice mutation (NOT around event publishing or other
+// potentially-blocking calls) keeps the critical section tight and
+// avoids lock-ordering hazards.
+func (ct *ChangeTracker) appendChange(change TrackedFileChange) {
+	ct.mu.Lock()
+	ct.changes = append(ct.changes, change)
+	ct.mu.Unlock()
+}
+
 // Commit commits all tracked changes to the change tracker
 func (ct *ChangeTracker) Commit(llmResponse string, conversation []api.Message) error {
 	if !ct.IsEnabled() {

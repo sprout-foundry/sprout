@@ -289,7 +289,7 @@ func handleReadImageFileMultimodal(ctx context.Context, a *Agent, filePath strin
 func handleReadPDFFileMultimodal(ctx context.Context, a *Agent, filePath string) ([]api.ImageData, string, error) {
 	a.Logger().Debug("[doc] PDF detected, processing via multimodal pipeline: %s\n", filePath)
 
-	result, err := tools.ProcessPDFForMultimodal(filePath)
+	result, err := tools.ProcessPDFForMultimodal(ctx, filePath)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to process PDF %s: %w", filePath, err)
 	}

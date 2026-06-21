@@ -94,10 +94,20 @@ func (ct *ChangeTracker) RecordShellMutations(before, after map[string]*shellSna
 	// double-count direct write/edit hooks fired during the same shell
 	// command (rare in practice — shell_command rarely re-invokes
 	// agent tools — but cheap to defend against).
-	already := make(map[string]bool, len(ct.changes))
-	for _, ch := range ct.changes {
-		already[ch.FilePath] = true
-	}
+	//
+	// C3: snapshot ct.changes under ct.mu. RecordShellMutations runs on
+	// the tool-execution goroutine while the turn-checkpoint goroutine
+	// concurrently reads ct.changes via CollectFileChangesForCheckpoint;
+	// without the lock this is a data race on the slice header.
+	already := func() map[string]bool {
+		ct.mu.Lock()
+		defer ct.mu.Unlock()
+		m := make(map[string]bool, len(ct.changes))
+		for _, ch := range ct.changes {
+			m[ch.FilePath] = true
+		}
+		return m
+	}()
 
 	// Phase 1: collect candidate mutations into a deferred slice so we
 	// can decide between per-file emission and bulk rollup AFTER we
@@ -348,7 +358,7 @@ func (ct *ChangeTracker) appendBulkRollup(dir string, items []pendingShellChange
 	if !overBudget {
 		entry.BulkItems = packed
 	}
-	ct.changes = append(ct.changes, entry)
+	ct.appendChange(entry)
 	// Publish the rollup over the bus too so the UI can refresh.
 	if ct.agent != nil && ct.agent.eventBus != nil {
 		absDir := filepath.Join(workspaceRoot, dir)
@@ -407,7 +417,7 @@ func (ct *ChangeTracker) appendDestructiveBulkRollup(pending []pendingShellChang
 	} else {
 		entry.BulkItems = items
 	}
-	ct.changes = append(ct.changes, entry)
+	ct.appendChange(entry)
 
 	// Publish a file-changed event so the UI refreshes. The "path" here
 	// is the command label, not a real file path; the changes-panel
@@ -494,7 +504,7 @@ func (ct *ChangeTracker) appendShellMutation(path string, before, after *shellSn
 		newCode = RedactedContentMarker
 	}
 
-	ct.changes = append(ct.changes, TrackedFileChange{
+	ct.appendChange(TrackedFileChange{
 		FilePath:     path,
 		OriginalCode: originalCode,
 		NewCode:      newCode,

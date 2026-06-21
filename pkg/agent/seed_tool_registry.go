@@ -13,6 +13,7 @@ import (
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/security"
 	"github.com/sprout-foundry/sprout/pkg/utils"
 )
@@ -529,7 +530,7 @@ func handleToolError(agent *Agent, err error, toolName string) (string, error) {
 		// Permanent/invalid input/context overflow — no retry.
 		if agent != nil {
 			agent.PrintLine("")
-			agent.PrintLine(fmt.Sprintf("[FAIL] Tool '%s' failed: %s", toolName, safeMsg))
+			agent.PrintLine(fmt.Sprintf("%sTool '%s' failed: %s", console.GlyphError.Prefix(), toolName, safeMsg))
 			agent.PrintLine("")
 		}
 		return fmt.Sprintf("Error: %s", safeMsg), err
@@ -542,11 +543,11 @@ func handleToolError(agent *Agent, err error, toolName string) (string, error) {
 			agent.PrintLine("")
 			switch {
 			case agenterrors.IsRateLimited(err):
-				agent.PrintLine(fmt.Sprintf("[FAIL] Tool '%s' failed (rate limited): %s", toolName, safeMsg))
+				agent.PrintLine(fmt.Sprintf("%sTool '%s' failed (rate limited): %s", console.GlyphError.Prefix(), toolName, safeMsg))
 			case agenterrors.IsProviderError(err):
-				agent.PrintLine(fmt.Sprintf("[FAIL] Tool '%s' failed (provider): %s", toolName, safeMsg))
+				agent.PrintLine(fmt.Sprintf("%sTool '%s' failed (provider): %s", console.GlyphError.Prefix(), toolName, safeMsg))
 			default:
-				agent.PrintLine(fmt.Sprintf("[FAIL] Tool '%s' failed (transient): %s", toolName, safeMsg))
+				agent.PrintLine(fmt.Sprintf("%sTool '%s' failed (transient): %s", console.GlyphError.Prefix(), toolName, safeMsg))
 			}
 			agent.PrintLine("")
 		}

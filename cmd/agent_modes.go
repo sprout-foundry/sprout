@@ -265,21 +265,22 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 				// task_queue.json flock against new sessions). Fall
 				// through to the shutdown path so terminal close cleans
 				// up the process.
-				if sig == syscall.SIGHUP && daemonMode {
-					fmt.Printf("\n[RELOAD] Received SIGHUP, reloading configuration...\n")
-					if chatAgent != nil {
-						if mgr := chatAgent.GetConfigManager(); mgr != nil {
-							if err := mgr.Reload(); err != nil {
-								fmt.Printf("[RELOAD] Failed: %v\n", err)
-							} else {
-								fmt.Printf("[RELOAD] Configuration reloaded successfully.\n")
-							}
+							if sig == syscall.SIGHUP && daemonMode {
+				fmt.Println()
+				console.GlyphAction.Printf("Received SIGHUP, reloading configuration...")
+				if chatAgent != nil {
+					if mgr := chatAgent.GetConfigManager(); mgr != nil {
+						if err := mgr.Reload(); err != nil {
+							console.GlyphError.Fprintf(os.Stdout, "Reload failed: %v", err)
+						} else {
+							console.GlyphSuccess.Print("Configuration reloaded successfully.")
 						}
 					}
-					continue
 				}
+				continue
+			}
 
-				if isInteractive && isQueryInProgress() {
+			if isInteractive && isQueryInProgress() {
 					nowUnix := time.Now().UnixNano()
 					prev := atomic.LoadInt64(&lastInterruptAt)
 					if prev > 0 && time.Duration(nowUnix-prev) < 2*time.Second {

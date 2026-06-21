@@ -152,6 +152,60 @@ func TestHandleRecoverFile_InWorkspaceStillWorks(t *testing.T) {
 	}
 }
 
+// TestHandleRecoverFile_RefusesRedactedMarkerWrite is a defense-in-depth
+// test for the M1 fix: even if a future code path sets the redacted
+// marker as OriginalCode and bypasses isRecoverableOriginal, the final
+// guard immediately before os.WriteFile must refuse to persist the
+// literal marker string to disk. (isRecoverableOriginal already rejects
+// the marker; this documents and locks the write-site invariant.)
+func TestHandleRecoverFile_RefusesRedactedMarkerWrite(t *testing.T) {
+	ws := t.TempDir()
+	inFile := filepath.Join(ws, "redacted.txt")
+
+	tracker := &ChangeTracker{
+		enabled: true,
+		changes: []TrackedFileChange{
+			{
+				// Malformed entry: the marker should never be stored as
+				// recoverable content, but if it ever is, recovery must
+				// refuse rather than writing "[REDACTED - external file]"
+				// into the user's file.
+				FilePath:     inFile,
+				OriginalCode: RedactedContentMarker,
+				Operation:    "delete",
+				ToolCall:     "shell_command",
+			},
+		},
+	}
+	a := &Agent{changeTracker: tracker, workspaceRoot: ws}
+	tracker.agent = a
+
+	out, err := handleRecoverFile(context.Background(), a, map[string]interface{}{"path": inFile})
+	if err != nil {
+		t.Fatalf("handleRecoverFile returned error: %v", err)
+	}
+
+	var res struct {
+		Recovered bool   `json:"recovered"`
+		Message   string `json:"message"`
+	}
+	if jsonErr := json.Unmarshal([]byte(out), &res); jsonErr != nil {
+		t.Fatalf("output not JSON: %v\n%s", jsonErr, out)
+	}
+	if res.Recovered {
+		t.Errorf("expected recovered=false for redacted marker content; got %s", out)
+	}
+
+	// The file must NOT contain the marker string. (It may not exist at
+	// all, which is also acceptable — the point is the marker is never
+	// written.)
+	if content, statErr := os.ReadFile(inFile); statErr == nil {
+		if string(content) == RedactedContentMarker {
+			t.Errorf("redacted marker was written to disk! file contains the marker string")
+		}
+	}
+}
+
 // TestHandleRevertMyChanges_SkipsOutOfWorkspace verifies the C1 fix for
 // revert_my_changes: out-of-workspace entries are reported as skipped
 // (not failures), and their content is NOT written. In-workspace

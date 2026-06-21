@@ -10,6 +10,16 @@ import (
 
 // EnableChangeTracking enables change tracking for this agent session.
 //
+// Session scoping: the FIRST call (tracker == nil) creates the tracker,
+// assigns the session's stable revisionID, and captures `instructions`
+// as the session's identity. Subsequent calls within the same session
+// (same Agent instance — e.g. every ProcessQuery in a daemon chat) do
+// NOT reset the buffer: they only ensure tracking is enabled and
+// re-prime the shell cache. The change buffer is therefore session-long,
+// matching what list_changes / recover_file / revert_my_changes promise
+// ("files you've created, modified, or deleted this session"). A genuine
+// reset happens only when a new Agent is constructed for a new chat.
+//
 // Side effect: primes the shell-mutation snapshot cache against the
 // agent's workspace root. This is the one-time cost (~280 ms on a
 // 5000-file workspace) that lets every subsequent shell_command be
@@ -24,15 +34,24 @@ func (a *Agent) EnableChangeTracking(instructions string) {
 	}
 
 	if a.changeTracker == nil {
+		// First enable of this session — create the tracker with a
+		// stable revisionID + instructions that will persist for the
+		// life of this Agent.
 		a.changeTracker = NewChangeTracker(a, instructions)
 		if a.debug {
-			a.Logger().Debug("DEBUG: Created new change tracker and enabled it\n")
+			a.Logger().Debug("DEBUG: Created new change tracker (session start)\n")
 		}
 	} else {
-		a.changeTracker.Reset(instructions)
+		// Subsequent enable within the same session. Ensure enabled,
+		// but DO NOT Reset: the buffer must accumulate across queries
+		// so list_changes reflects the whole session, not just the
+		// current turn. (Reset would wipe prior turns' edits and make
+		// recover_file / revert_my_changes blind to earlier work.)
+		// instructions/revisionID stay pinned to the first call's
+		// values for revision-identity stability in history.
 		a.changeTracker.Enable()
 		if a.debug {
-			a.Logger().Debug("DEBUG: Reset existing change tracker and enabled it\n")
+			a.Logger().Debug("DEBUG: Re-enabled existing change tracker (buffer preserved, %d entries)\n", a.GetChangeCount())
 		}
 	}
 

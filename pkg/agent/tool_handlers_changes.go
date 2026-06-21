@@ -50,7 +50,16 @@ func handleListChanges(_ context.Context, a *Agent, args map[string]interface{})
 	// rest are additive on the per-file shape.
 	groupBy, _ := args["group_by"].(string)
 	includeDiff, _ := args["include_diff"].(bool)
-	includePersisted, _ := args["include_persisted"].(bool)
+	// include_persisted defaults to true so the manifest reflects the
+	// full session (in-memory + already-committed-to-history entries)
+	// rather than just the current turn's uncommitted buffer. A caller
+	// who wants the live buffer only can pass include_persisted=false.
+	// The persisted merge is SESSION-SCOPED (matches the tracker's
+	// revisionID), so it never surfaces other sessions' noise.
+	includePersisted := true
+	if v, ok := args["include_persisted"].(bool); ok {
+		includePersisted = v
+	}
 
 	if tracker == nil || !tracker.IsEnabled() {
 		if groupBy == "block" {
@@ -179,8 +188,34 @@ func buildFileList(tracker *ChangeTracker, changes []TrackedFileChange, includeD
 
 	if includePersisted {
 		cutoff, _ := parseRecentSince(asString(args["since"]))
+		// Session-scope the persisted merge: only entries recorded
+		// under THIS session's revisionID. This keeps other sessions'
+		// work out of the manifest (the historical reason
+		// include_persisted was opt-in) while still surfacing this
+		// session's already-committed entries — which is what makes
+		// the default manifest correct across turn boundaries, where
+		// a file edited last turn was committed to history and may
+		// not yet be re-touched this turn.
+		sessionRevID := tracker.GetRevisionID()
+		// Build a dedup set from the in-memory entries so a file that
+		// is BOTH committed (persisted) and re-edited this turn isn't
+		// listed twice. The in-memory entry wins because it carries
+		// the latest, possibly uncommitted, state.
+		seenInMemory := make(map[string]bool, len(files))
+		for _, f := range files {
+			seenInMemory[f.Path] = true
+		}
 		if persisted, err := history.GetAllChanges(); err == nil {
 			for _, ch := range persisted {
+				// Session filter: skip other sessions' revisions.
+				if sessionRevID != "" && ch.RequestHash != sessionRevID {
+					continue
+				}
+				// Dedup: skip if the in-memory buffer already shows
+				// this path (it has newer or equal info).
+				if seenInMemory[ch.Filename] {
+					continue
+				}
 				if !cutoff.IsZero() && ch.Timestamp.Before(cutoff) {
 					continue
 				}

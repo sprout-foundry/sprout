@@ -364,15 +364,23 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 
 	// ---- Post-loop hooks (moved from old ConversationHandler.finalizeConversation) ----
 
-	// Commit tracked changes
-	if a.IsChangeTrackingEnabled() && a.GetChangeCount() > 0 {
+	// Commit tracked changes. Subagents are EXEMPT: their writes are
+	// merged into the parent's tracker via MergeChild, and the PARENT's
+	// Commit persists them (tagged "subagent:<persona>"). If a subagent
+	// committed its own history entry it would (a) double-persist every
+	// subagent-touched file, and (b) litter history with useless revision
+	// dirs whose instructions field is just "subagent run". The subagent's
+	// in-memory tracker still captures its FilesModified manifest for the
+	// SubagentResult handoff — it just never flushes to disk itself.
+	if !a.IsSubagent() && a.IsChangeTrackingEnabled() && a.GetChangeCount() > 0 {
 		if commitErr := a.CommitChanges("Task completed"); commitErr != nil {
 			a.Logger().Debug("Warning: Failed to commit changes: %v\n", commitErr)
 		}
 	}
 
-	// Run self-review gate if changes were tracked
-	if a.IsChangeTrackingEnabled() && a.GetChangeCount() > 0 {
+	// Run self-review gate if changes were tracked (primary only; a
+	// subagent's work is reviewed by its parent orchestrator).
+	if !a.IsSubagent() && a.IsChangeTrackingEnabled() && a.GetChangeCount() > 0 {
 		if err := a.runSelfReviewGate(); err != nil {
 			a.publishEvent(events.EventTypeError, events.ErrorEvent("Self-review gate failed", err))
 			return "", fmt.Errorf("failed self-review gate: %w", err)

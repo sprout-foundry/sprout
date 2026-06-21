@@ -11,6 +11,10 @@
 // workspace root, so subsequent sessions in the same workspace
 // inherit the learning. The file is best-effort: read failures fall
 // back to an empty set (re-learn), write failures log a warning.
+//
+// To prevent unbounded growth across many workspaces, the file caps
+// at maxPersistedWorkspaces entries — least-recently-used workspaces
+// are evicted first when the cap is exceeded.
 package agent
 
 import (
@@ -20,6 +24,7 @@ import (
 	"path/filepath"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
@@ -30,11 +35,21 @@ import (
 // previously-learned dir.
 const shellSkipDirsFilename = "shell_skip_dirs.json"
 
+// maxPersistedWorkspaces caps the number of workspaces tracked in
+// shell_skip_dirs.json. 50 covers most users (a few dozen projects +
+// some scratch dirs); the cap prevents the file from growing without
+// bound when a user works across many projects over time. LRU
+// eviction ensures frequently-used workspaces survive.
+const maxPersistedWorkspaces = 50
+
 // shellSkipDirsFileSchema is the on-disk shape. Versioned in case we
-// want to evolve the file format (e.g., add per-entry metadata).
+// want to evolve the file format. LastUsed is keyed by workspace root
+// (same key as Workspaces) and stores a unix timestamp; missing
+// entries are treated as epoch (oldest) so they evict first.
 type shellSkipDirsFileSchema struct {
 	Version    int                 `json:"version"`
 	Workspaces map[string][]string `json:"workspaces"`
+	LastUsed   map[string]int64    `json:"last_used,omitempty"`
 }
 
 // shellSkipDirsPersistMu serializes file I/O so concurrent subagents
@@ -73,6 +88,7 @@ func loadAutoSkipDirsFor(workspaceRoot string) map[string]bool {
 	for _, dir := range schema.Workspaces[workspaceRoot] {
 		result[dir] = true
 	}
+
 	return result
 }
 
@@ -80,6 +96,10 @@ func loadAutoSkipDirsFor(workspaceRoot string) map[string]bool {
 // under the workspace key. Read-modify-write under a process-level
 // mutex; atomic via temp + rename so a crash never produces a partial
 // JSON file.
+//
+// Enforces maxPersistedWorkspaces via LRU eviction: if the workspace
+// count exceeds the cap, the least-recently-used entries (oldest
+// LastUsed) are removed until count <= cap.
 func saveAutoSkipDirsFor(workspaceRoot string, dirs map[string]bool) error {
 	if workspaceRoot == "" || len(dirs) == 0 {
 		return nil
@@ -100,6 +120,9 @@ func saveAutoSkipDirsFor(workspaceRoot string, dirs map[string]bool) error {
 	if schema.Workspaces == nil {
 		schema.Workspaces = make(map[string][]string)
 	}
+	if schema.LastUsed == nil {
+		schema.LastUsed = make(map[string]int64)
+	}
 	schema.Version = 1
 
 	// Merge: union of previously-saved + currently-known.
@@ -116,6 +139,22 @@ func saveAutoSkipDirsFor(workspaceRoot string, dirs map[string]bool) error {
 	}
 	sort.Strings(merged) // deterministic output for sane diffs
 	schema.Workspaces[workspaceRoot] = merged
+
+	// Bump LastUsed for the current workspace. If it was loaded this
+	// process (or already has a future timestamp), use now; otherwise
+	// preserve whatever was there (could be a newer timestamp from
+	// another process).
+	now := time.Now().Unix()
+	if schema.LastUsed[workspaceRoot] < now {
+		schema.LastUsed[workspaceRoot] = now
+	}
+
+	// LRU eviction: if we're over the cap, remove the oldest
+	// workspaces until we're at the cap. Workspaces with no LastUsed
+	// (missing/zero) evict first.
+	if len(schema.Workspaces) > maxPersistedWorkspaces {
+		evictOldestWorkspaces(&schema, len(schema.Workspaces)-maxPersistedWorkspaces)
+	}
 
 	out, marshalErr := json.MarshalIndent(&schema, "", "  ")
 	if marshalErr != nil {
@@ -147,6 +186,36 @@ func saveAutoSkipDirsFor(workspaceRoot string, dirs map[string]bool) error {
 		return err
 	}
 	return nil
+}
+
+// evictOldestWorkspaces removes the n least-recently-used workspaces
+// from schema.Workspaces and schema.LastUsed. Workspaces without a
+// LastUsed (zero timestamp) evict first; ties broken by sorted
+// workspace root for determinism.
+func evictOldestWorkspaces(schema *shellSkipDirsFileSchema, n int) {
+	if n <= 0 || len(schema.Workspaces) <= n {
+		return
+	}
+	type entry struct {
+		root     string
+		lastUsed int64
+	}
+	entries := make([]entry, 0, len(schema.Workspaces))
+	for root := range schema.Workspaces {
+		entries = append(entries, entry{root: root, lastUsed: schema.LastUsed[root]})
+	}
+	// Sort ascending by lastUsed; ties broken by root name for
+	// determinism (so eviction is reproducible across runs).
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].lastUsed != entries[j].lastUsed {
+			return entries[i].lastUsed < entries[j].lastUsed
+		}
+		return entries[i].root < entries[j].root
+	})
+	for i := 0; i < n; i++ {
+		delete(schema.Workspaces, entries[i].root)
+		delete(schema.LastUsed, entries[i].root)
+	}
 }
 
 // shellSkipDirsFilePath returns the absolute path of the

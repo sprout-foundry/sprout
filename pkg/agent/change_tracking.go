@@ -104,6 +104,13 @@ type TrackedFileChange struct {
 	Timestamp    time.Time `json:"timestamp"`
 	ToolCall     string    `json:"tool_call"` // Which tool was used
 
+	// Source attributes a change to its origin. Empty for direct
+	// primary-agent edits; "subagent:<persona>" for changes merged
+	// in from a subagent run. Surfaced by list_changes so the user/LLM
+	// can tell which subagent touched a file. TrackedBulkItem does NOT
+	// carry this (bulk entries are always shell-mutation rollups).
+	Source string `json:"source,omitempty"`
+
 	// BulkCount is set on a rollup entry produced when a single shell
 	// command churns more than the bulk threshold — typical of
 	// `make build`, `npm ci`, `cargo build`, or `git checkout .`.
@@ -365,6 +372,41 @@ func (ct *ChangeTracker) GetChanges() []TrackedFileChange {
 	changesCopy := make([]TrackedFileChange, len(ct.changes))
 	copy(changesCopy, ct.changes)
 	return changesCopy
+}
+
+// MergeChild appends a subagent's tracked changes into this (parent)
+// tracker so list_changes / recover_file / revert_my_changes see
+// subagent edits too. Each merged entry is tagged with Source so
+// list_changes can attribute it; the shell-snapshot cache is
+// re-baselined per path so the next shell-command walk doesn't
+// record a duplicate entry for the same file.
+//
+// This closes the SP-059 Phase 2c gap where subagent edits were
+// captured in a child tracker but never surfaced to the parent's
+// user-facing change tools.
+//
+// Safe to call when tracking is disabled (no-op). The input slice is
+// copied; nil/empty input is a no-op.
+func (ct *ChangeTracker) MergeChild(changes []TrackedFileChange, source string) {
+	if ct == nil || !ct.IsEnabled() || len(changes) == 0 {
+		return
+	}
+	// Defensive copy + tag each entry under the lock so a concurrent
+	// Clear()/Reset() can't race the append.
+	merged := make([]TrackedFileChange, len(changes))
+	for i, ch := range changes {
+		merged[i] = ch
+		merged[i].Source = source
+	}
+	ct.mu.Lock()
+	ct.changes = append(ct.changes, merged...)
+	ct.mu.Unlock()
+	// Re-baseline the shell cache for each touched path so the next
+	// TrackShellTurn walk doesn't re-discover these writes as
+	// "stat mismatch" edits (duplicates of what we just recorded).
+	for _, ch := range merged {
+		ct.SyncShellCacheForPath(ch.FilePath)
+	}
 }
 
 // Clear clears all tracked changes (but keeps the tracker enabled).

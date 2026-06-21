@@ -3,6 +3,7 @@ package console
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"strings"
@@ -46,6 +47,9 @@ const (
 	EventPasteEnd
 	// Mouse events
 	EventMouse
+	EventWordLeft
+	EventWordRight
+	EventDeleteWordBackward
 )
 
 // InputReader handles interactive input with proper escape sequence handling
@@ -71,7 +75,6 @@ type InputReader struct {
 	pasteActive      bool
 	lastCharTime     time.Time
 	inPasteMode      bool
-	pasteStartPrompt string
 	bracketedPaste   bool
 	bracketedMatch   int
 	bracketedSawCR   bool
@@ -110,6 +113,13 @@ type InputReader struct {
 	preSearchLine      string
 	preSearchCursorPos int
 
+	// searchBuf accumulates bytes for a multi-byte UTF-8 rune while
+	// typing in Ctrl-R reverse-search mode. handleSearchByte processes
+	// one byte at a time from raw input, so without buffering, bytes
+	// >= 128 (continuation bytes) would each be mis-converted via
+	// string(rune(b)).
+	searchBuf []byte
+
 	// SP-055 follow-up: initial content pre-filled into the buffer
 	// by the REPL loop when the steer reader had unsent text at
 	// EndTurn. Cleared after first ReadLine consumption.
@@ -143,6 +153,18 @@ const (
 	// runs after us.
 	modifyOtherKeysEnable  = "\033[>4;1m"
 	modifyOtherKeysDisable = "\033[>4;0m"
+
+	// Paste-detection timing thresholds. All times are tuned empirically:
+	// heuristic paste bursts arrive much faster than human typing.
+	pasteFinalizeTimeout = 100 * time.Millisecond // idle gap that ends a heuristic paste
+	pasteBurstMinGap     = 30 * time.Millisecond  // max inter-byte gap for a short burst to count as paste
+	pasteBurstMinBytes   = 20                     // short bursts (<this many bytes) must arrive rapidly
+	pastePollInterval    = 10 * time.Millisecond  // idle spin sleep in non-blocking read loop
+	suspendDrainDelay    = 50 * time.Millisecond  // wait for in-flight bytes after SIGCONT
+
+	// maxHistoryEntries caps the in-memory prompt history. Older entries
+	// are dropped FIFO once the cap is exceeded.
+	maxHistoryEntries = 100
 )
 
 // NewInputReader creates a new input reader
@@ -274,42 +296,19 @@ func (ir *InputReader) ReadLine() (string, error) {
 
 		// Handle non-blocking read errors
 		if err != nil {
-			errStr := err.Error()
-			// Check if it's just "no data available" (EAGAIN/EWOULDBLOCK)
-			// Common error messages: "no data", "resource temporarily unavailable", "EAGAIN"
-			isNoData := strings.Contains(errStr, "no data") ||
-				strings.Contains(errStr, "temporarily unavailable") ||
-				errStr == "EAGAIN" ||
-				errStr == "EWOULDBLOCK"
-			isInterrupted := strings.Contains(errStr, "interrupted system call") ||
-				errStr == "EINTR"
-
-			if nonBlocking && isNoData {
-				if ir.processPendingResize(resizeCh, parser) {
-					continue
-				}
-				// Check if paste timer should fire
-				if ir.pasteActive && time.Since(ir.lastCharTime) > 100*time.Millisecond {
-					// Paste detected - process it
-					if ir.finalizePaste() {
-						// Paste was finalized, continue reading
-						continue
-					}
-				}
-				time.Sleep(10 * time.Millisecond)
+			continueLoop, err := ir.handleReadError(err, nonBlocking, resizeCh, parser)
+			if err != nil {
+				return "", err
+			}
+			if continueLoop {
 				continue
 			}
-			if isInterrupted && ir.processPendingResize(resizeCh, parser) {
-				continue
-			}
-			// Real error - return it wrapped with context
-			return "", fmt.Errorf("stdin read error: %w", err)
 		}
 
 		if n == 0 {
 			// In non-blocking mode, this means no data
 			if nonBlocking {
-				time.Sleep(10 * time.Millisecond)
+				time.Sleep(pastePollInterval)
 			}
 			continue
 		}
@@ -358,44 +357,53 @@ func (ir *InputReader) ReadLine() (string, error) {
 				continue
 			}
 
-			if b == 26 { // Ctrl+Z
-				// Re-enter cooked mode before suspension so the shell
-				// state is clean while the user is away.
-				term.Restore(ir.termFd, oldState)
-				suspendTerminal()
-
-				// Execution resumes here after SIGCONT (e.g. "fg").
-				ignoreTerminalSignals()
-
-				// Drain any bytes that arrived while suspended (e.g.
-				// keystrokes, newline from "fg" command).  Only possible
-				// when the fd is in non-blocking mode; otherwise there is
-				// no safe way to poll without blocking indefinitely.
-				if nonBlocking {
-					time.Sleep(50 * time.Millisecond)
-					discardBuf := make([]byte, 256)
-					for {
-						n, _ := os.Stdin.Read(discardBuf)
-						if n <= 0 {
-							break
-						}
+			// Emacs/readline-style control characters. These match the
+			// bindings users expect from bash/zsh/python REPLs. Skipped
+			// while in Ctrl-R reverse-search mode — there, only
+			// Enter/Esc/Ctrl-C/Ctrl-R/Backspace/printable bytes affect
+			// the search query (handled further below). Without this
+			// guard, Ctrl-D on an empty prompt during search would
+			// terminate the session, and Ctrl-A/E/U/K/W would corrupt
+			// the underlying line buffer instead of the query.
+			if !ir.searchMode {
+				switch b {
+				case 1: // Ctrl-A — move to start of line
+					ir.SetCursor(0)
+					continue
+				case 4: // Ctrl-D — EOF on empty line, else forward-delete
+					if len(ir.line) == 0 {
+						fmt.Println()
+						return "", io.EOF
 					}
+					ir.Delete()
+					continue
+				case 5: // Ctrl-E — move to end of line (standalone; the
+					// two-keystroke Ctrl-X Ctrl-E editor escape is handled
+					// above via pendingCtrlX)
+					ir.SetCursor(len(ir.line))
+					continue
+				case 2: // Ctrl-B — move back one char
+					ir.MoveCursor(-1)
+					continue
+				case 6: // Ctrl-F — move forward one char
+					ir.MoveCursor(1)
+					continue
+				case 11: // Ctrl-K — kill to end of line
+					ir.KillToEndOfLine()
+					continue
+				case 21: // Ctrl-U — kill to start of line
+					ir.KillToStartOfLine()
+					continue
+				case 23: // Ctrl-W — delete previous word
+					ir.DeleteWordBackward()
+					continue
 				}
+			}
 
-				// Re-enter raw mode.
-				if newState, err := term.MakeRaw(ir.termFd); err == nil {
+			if b == 26 { // Ctrl+Z
+				if newState := ir.handleSuspend(oldState, nonBlocking); newState != nil {
 					oldState = newState
 				}
-
-				// Re-enable bracketed paste mode (lost when we exited raw mode).
-				fmt.Print(bracketedPasteEnable)
-
-				resetTerminalSignals()
-
-				// Clear the current line and redisplay the prompt.
-				fmt.Printf("\r%s%s", ClearLineSeq(), ir.prompt)
-				ir.line = ""
-				ir.cursorPos = 0
 				continue
 			}
 
@@ -412,29 +420,12 @@ func (ir *InputReader) ReadLine() (string, error) {
 
 			// SP-048-4e: Search mode byte handler
 			if ir.searchMode {
-				if b == 13 || b == 10 { // Enter — accept match
-					ir.exitSearchMode(true)
-					ir.Refresh()
-					fmt.Println()
-					input := ir.line
-					if input != "" {
-						ir.AddToHistory(input)
-					}
+				result, input := ir.handleSearchModeByte(b)
+				switch result {
+				case searchContinue:
+					continue
+				case searchReturn:
 					return input, nil
-				} else if b == 27 { // Escape — cancel
-					ir.exitSearchMode(false)
-					ir.Refresh()
-					continue
-				} else if b == 3 { // Ctrl-C — cancel, return error
-					ir.exitSearchMode(false)
-					ir.Refresh()
-					fmt.Printf("%s", ClearToEndOfLineSeq())
-					fmt.Println("^C")
-					return "", fmt.Errorf("interrupted")
-				} else {
-					ir.handleSearchByte(b)
-					ir.renderSearchPrompt()
-					continue
 				}
 			}
 
@@ -448,7 +439,6 @@ func (ir *InputReader) ReadLine() (string, error) {
 			if !ir.inPasteMode && !isEscapeSeq && i == 0 && shouldStartHeuristicPaste(buf[:n], timeSinceLastChar) {
 				ir.inPasteMode = true
 				ir.pasteActive = true
-				ir.pasteStartPrompt = ir.prompt
 				ir.pasteBuffer.Reset()
 				ir.pasteBuffer.WriteByte(b)
 				ir.lastCharTime = now
@@ -466,7 +456,7 @@ func (ir *InputReader) ReadLine() (string, error) {
 					if b != 27 {
 						continue
 					}
-				} else if timeSinceLastChar > 100*time.Millisecond || (b == 13 && ir.pasteBuffer.Len() > 0) {
+				} else if timeSinceLastChar > pasteFinalizeTimeout || (b == 13 && ir.pasteBuffer.Len() > 0) {
 					// Check if paste is ending (slow input or Enter at end)
 					// Finalize paste on Enter or timeout
 					if b != 13 {
@@ -572,6 +562,12 @@ func (ir *InputReader) HandleEvent(event *InputEvent) {
 		ir.SetCursor(0)
 	case EventEnd:
 		ir.SetCursor(len(ir.line))
+	case EventWordLeft:
+		ir.MoveWord(-1)
+	case EventWordRight:
+		ir.MoveWord(1)
+	case EventDeleteWordBackward:
+		ir.DeleteWordBackward()
 	case EventUp:
 		// If context menu is visible, navigate it
 		if ir.contextMenu != nil && ir.contextMenu.Visible {
@@ -641,5 +637,124 @@ func (ir *InputReader) SetInitialContent(content string) {
 // before the first ReadLine.
 func (ir *InputReader) SetGroundTruth(gt *GroundTruthTermios) {
 	ir.groundTruth = gt
+}
+
+// handleReadError classifies a stdin read error and decides whether the
+// read loop should continue (EAGAIN/EINTR) or abort. Returns (continueLoop bool, err error).
+// When continueLoop is true, err is nil and the caller should `continue` the read loop.
+// When err is non-nil, the caller should return it.
+func (ir *InputReader) handleReadError(err error, nonBlocking bool, resizeCh chan os.Signal, parser *EscapeParser) (bool, error) {
+	errStr := err.Error()
+	// Check if it's just "no data available" (EAGAIN/EWOULDBLOCK)
+	// Common error messages: "no data", "resource temporarily unavailable", "EAGAIN"
+	isNoData := strings.Contains(errStr, "no data") ||
+		strings.Contains(errStr, "temporarily unavailable") ||
+		errStr == "EAGAIN" ||
+		errStr == "EWOULDBLOCK"
+	isInterrupted := strings.Contains(errStr, "interrupted system call") ||
+		errStr == "EINTR"
+
+	if nonBlocking && isNoData {
+		if ir.processPendingResize(resizeCh, parser) {
+			return true, nil
+		}
+		// Check if paste timer should fire
+		if ir.pasteActive && time.Since(ir.lastCharTime) > pasteFinalizeTimeout {
+			// Paste detected - process it
+			if ir.finalizePaste() {
+				// Paste was finalized, continue reading
+				return true, nil
+			}
+		}
+		time.Sleep(pastePollInterval)
+		return true, nil
+	}
+	if isInterrupted && ir.processPendingResize(resizeCh, parser) {
+		return true, nil
+	}
+	// Real error - return it wrapped with context
+	return false, fmt.Errorf("stdin read error: %w", err)
+}
+
+// handleSuspend processes Ctrl-Z: suspends the process (SIGTSTP), waits for
+// resume (SIGCONT), drains stale input, re-enters raw mode, and restores the
+// prompt. Returns the new raw-mode *term.State (or nil if re-entering failed).
+func (ir *InputReader) handleSuspend(oldState *term.State, nonBlocking bool) *term.State {
+	// Re-enter cooked mode before suspension so the shell
+	// state is clean while the user is away.
+	term.Restore(ir.termFd, oldState)
+	suspendTerminal()
+
+	// Execution resumes here after SIGCONT (e.g. "fg").
+	ignoreTerminalSignals()
+
+	// Drain any bytes that arrived while suspended (e.g.
+	// keystrokes, newline from "fg" command).  Only possible
+	// when the fd is in non-blocking mode; otherwise there is
+	// no safe way to poll without blocking indefinitely.
+	if nonBlocking {
+		time.Sleep(suspendDrainDelay)
+		discardBuf := make([]byte, 256)
+		for {
+			n, _ := os.Stdin.Read(discardBuf)
+			if n <= 0 {
+				break
+			}
+		}
+	}
+
+	// Re-enter raw mode.
+	newState, err := term.MakeRaw(ir.termFd)
+	if err != nil {
+		return nil
+	}
+
+	// Re-enable bracketed paste mode (lost when we exited raw mode).
+	fmt.Print(bracketedPasteEnable)
+
+	resetTerminalSignals()
+
+	// Redisplay the prompt and the preserved line content.
+	// Unlike a fresh prompt, we keep whatever the user had
+	// typed before suspending (mirrors runExternalEditor).
+	fmt.Printf("\r%s%s", ClearLineSeq(), ir.prompt)
+	ir.Refresh()
+	return newState
+}
+
+// searchByteResult communicates what the ReadLine loop should do after
+// handleSearchModeByte processes a byte.
+type searchByteResult int
+
+const (
+	searchContinue searchByteResult = iota // continue the read loop
+	searchReturn                           // return (input, nil) — accepted match
+)
+
+// handleSearchModeByte dispatches a byte while in Ctrl-R reverse-search mode.
+// The `input` out-param is set only when result is searchReturn.
+//
+// Note: Ctrl-C (byte 3) never reaches here — it is intercepted earlier in
+// the ReadLine loop and aborts the whole read. We therefore do not handle
+// it here; doing so would be dead code.
+func (ir *InputReader) handleSearchModeByte(b byte) (result searchByteResult, input string) {
+	if b == 13 || b == 10 { // Enter — accept match
+		ir.exitSearchMode(true)
+		ir.Refresh()
+		fmt.Println()
+		input := ir.line
+		if input != "" {
+			ir.AddToHistory(input)
+		}
+		return searchReturn, input
+	} else if b == 27 { // Escape — cancel
+		ir.exitSearchMode(false)
+		ir.Refresh()
+		return searchContinue, ""
+	} else {
+		ir.handleSearchByte(b)
+		ir.renderSearchPrompt()
+		return searchContinue, ""
+	}
 }
 

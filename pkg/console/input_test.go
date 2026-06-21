@@ -539,6 +539,104 @@ func TestNavigateHistoryClearsCollapsedPastes(t *testing.T) {
 		t.Fatalf("unexpected history line: %q", ir.line)
 	}
 	if len(ir.collapsedPastes) != 0 {
-		t.Fatalf("expected collapsed spans to clear on history nav, got %d", len(ir.collapsedPastes))
+		t.Fatalf("expected collapsed spans to clear on history nav, got %d spans", len(ir.collapsedPastes))
 	}
+}
+
+// ─── Alt-key word navigation (ESC + key) ─────────────────────────────────────
+
+func TestEscapeParser_AltB_AltF(t *testing.T) {
+	ep := NewEscapeParser()
+
+	// ESC then 'b' → Alt+B → EventWordLeft.
+	var event *InputEvent
+	event = ep.Parse(27)
+	if event != nil {
+		t.Fatalf("expected nil after ESC, got %v", event)
+	}
+	event = ep.Parse('b')
+	if event == nil || event.Type != EventWordLeft {
+		t.Fatalf("Alt+B: expected EventWordLeft, got %v", event)
+	}
+
+	// ESC then 'f' → Alt+F → EventWordRight.
+	event = ep.Parse(27)
+	if event != nil {
+		t.Fatalf("expected nil after ESC, got %v", event)
+	}
+	event = ep.Parse('f')
+	if event == nil || event.Type != EventWordRight {
+		t.Fatalf("Alt+F: expected EventWordRight, got %v", event)
+	}
+}
+
+func TestEscapeParser_AltBackspace(t *testing.T) {
+	ep := NewEscapeParser()
+
+	// ESC then 0x7F (DEL) → Alt+Backspace → EventDeleteWordBackward.
+	event := ep.Parse(27)
+	if event != nil {
+		t.Fatalf("expected nil after ESC, got %v", event)
+	}
+	event = ep.Parse(127)
+	if event == nil || event.Type != EventDeleteWordBackward {
+		t.Fatalf("Alt+Backspace: expected EventDeleteWordBackward, got %v", event)
+	}
+}
+
+func TestEscapeParser_CtrlLeft_CtrlRight(t *testing.T) {
+	// Ctrl+Left = ESC [ 1 ; 5 D
+	t.Run("CtrlLeft", func(t *testing.T) {
+		ep := NewEscapeParser()
+		seq := []byte{27, '[', '1', ';', '5', 'D'}
+		var event *InputEvent
+		for _, b := range seq {
+			event = ep.Parse(b)
+		}
+		if event == nil || event.Type != EventWordLeft {
+			t.Fatalf("Ctrl+Left: expected EventWordLeft, got %v", event)
+		}
+	})
+
+	// Ctrl+Right = ESC [ 1 ; 5 C
+	t.Run("CtrlRight", func(t *testing.T) {
+		ep := NewEscapeParser()
+		seq := []byte{27, '[', '1', ';', '5', 'C'}
+		var event *InputEvent
+		for _, b := range seq {
+			event = ep.Parse(b)
+		}
+		if event == nil || event.Type != EventWordRight {
+			t.Fatalf("Ctrl+Right: expected EventWordRight, got %v", event)
+		}
+	})
+}
+
+func TestEscapeParser_PlainArrowsStillWork(t *testing.T) {
+	// Plain right arrow (ESC [ C) should still produce EventRight, not
+	// EventWordRight, because the buffer never contains ";5".
+	t.Run("PlainRight", func(t *testing.T) {
+		ep := NewEscapeParser()
+		seq := []byte{27, '[', 'C'}
+		var event *InputEvent
+		for _, b := range seq {
+			event = ep.Parse(b)
+		}
+		if event == nil || event.Type != EventRight {
+			t.Fatalf("plain right arrow: expected EventRight, got %v", event)
+		}
+	})
+
+	// Plain left arrow (ESC [ D) → EventLeft.
+	t.Run("PlainLeft", func(t *testing.T) {
+		ep := NewEscapeParser()
+		seq := []byte{27, '[', 'D'}
+		var event *InputEvent
+		for _, b := range seq {
+			event = ep.Parse(b)
+		}
+		if event == nil || event.Type != EventLeft {
+			t.Fatalf("plain left arrow: expected EventLeft, got %v", event)
+		}
+	})
 }

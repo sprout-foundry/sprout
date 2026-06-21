@@ -152,6 +152,7 @@ func TestHandleRecoverFile_InWorkspaceStillWorks(t *testing.T) {
 	}
 }
 
+<<<<<<< HEAD
 // TestHandleRecoverFile_RefusesRedactedMarkerWrite is a defense-in-depth
 // test for the M1 fix: even if a future code path sets the redacted
 // marker as OriginalCode and bypasses isRecoverableOriginal, the final
@@ -206,6 +207,8 @@ func TestHandleRecoverFile_RefusesRedactedMarkerWrite(t *testing.T) {
 	}
 }
 
+=======
+>>>>>>> 4148d682 (fix(change-tracking): close three CRITICAL safety bugs (C1/C2/C3))
 // TestHandleRevertMyChanges_SkipsOutOfWorkspace verifies the C1 fix for
 // revert_my_changes: out-of-workspace entries are reported as skipped
 // (not failures), and their content is NOT written. In-workspace

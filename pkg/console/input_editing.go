@@ -2,7 +2,8 @@ package console
 
 import (
 	"fmt"
-	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 // InsertChar inserts a character string at the current cursor position.
@@ -106,35 +107,124 @@ func (ir *InputReader) SetCursor(pos int) {
 	}
 }
 
-// detectCodePattern checks if the pasted content looks like code
-func (ir *InputReader) detectCodePattern(content string) bool {
-	// Check for common code patterns
-	codeIndicators := []string{
-		"function ", "def ", "class ", "func ", "var ", "let ", "const ",
-		"if ", "for ", "while ", "return ", "import ", "from ", "export ",
-		"//", "/*", "*/", "#", "<!--",
-		"package ", "struct ", "type ", "interface ",
+// deleteRange deletes characters in [start, end) from ir.line, adjusts
+// the cursor and collapsed-paste spans, and refreshes the display.
+// start/end are clamped to valid byte bounds; a no-op when start >= end.
+func (ir *InputReader) deleteRange(start, end int) {
+	if start < 0 {
+		start = 0
 	}
+	if end > len(ir.line) {
+		end = len(ir.line)
+	}
+	if start >= end {
+		return
+	}
+	ir.expandPasteAtCursor()
+	ir.hasEditedLine = true
+	ir.historyIndex = -1
+	removed := end - start
+	ir.line = ir.line[:start] + ir.line[end:]
+	if ir.cursorPos > start {
+		if ir.cursorPos <= end {
+			ir.cursorPos = start
+		} else {
+			ir.cursorPos -= removed
+		}
+	}
+	filtered := ir.collapsedPastes[:0]
+	for _, span := range ir.collapsedPastes {
+		switch {
+		case span.end <= start:
+			filtered = append(filtered, span)
+		case span.start >= end:
+			span.start -= removed
+			span.end -= removed
+			filtered = append(filtered, span)
+		}
+		// spans overlapping [start,end) are dropped
+	}
+	ir.collapsedPastes = filtered
+	ir.Refresh()
+}
 
-	hasSpace := strings.Contains(content, " ")
-	braceCount := strings.Count(content, "{") + strings.Count(content, "}")
-	parenCount := strings.Count(content, "(") + strings.Count(content, ")")
-	bracketCount := strings.Count(content, "[") + strings.Count(content, "]")
+// MoveWord moves the cursor by one word in the given direction
+// (-1 backward / Alt-B / Ctrl-Left, +1 forward / Alt-F / Ctrl-Right).
+// A word is a maximal run of non-whitespace (unicode.IsSpace).
+func (ir *InputReader) MoveWord(direction int) {
+	line := ir.line
+	pos := ir.cursorPos
+	if direction < 0 {
+		for pos > 0 {
+			r, size := utf8.DecodeLastRuneInString(line[:pos])
+			if unicode.IsSpace(r) {
+				pos -= size
+			} else {
+				break
+			}
+		}
+		for pos > 0 {
+			r, size := utf8.DecodeLastRuneInString(line[:pos])
+			if !unicode.IsSpace(r) {
+				pos -= size
+			} else {
+				break
+			}
+		}
+	} else {
+		for pos < len(line) {
+			r, size := utf8.DecodeRuneInString(line[pos:])
+			if unicode.IsSpace(r) {
+				pos += size
+			} else {
+				break
+			}
+		}
+		for pos < len(line) {
+			r, size := utf8.DecodeRuneInString(line[pos:])
+			if !unicode.IsSpace(r) {
+				pos += size
+			} else {
+				break
+			}
+		}
+	}
+	ir.SetCursor(pos)
+}
 
-	// Check for code indicators
-	isCode := false
-	for _, indicator := range codeIndicators {
-		if strings.Contains(content, indicator) {
-			isCode = true
+// DeleteWordBackward deletes the word before the cursor (Ctrl-W /
+// Meta-Backspace).
+func (ir *InputReader) DeleteWordBackward() {
+	if ir.cursorPos == 0 {
+		return
+	}
+	line := ir.line
+	pos := ir.cursorPos
+	for pos > 0 {
+		r, size := utf8.DecodeLastRuneInString(line[:pos])
+		if unicode.IsSpace(r) {
+			pos -= size
+		} else {
 			break
 		}
 	}
-
-	// Also check for multiple pairs of brackets (common in code)
-	totalBrackets := braceCount + parenCount + bracketCount
-	if totalBrackets >= 4 && hasSpace {
-		return true
+	for pos > 0 {
+		r, size := utf8.DecodeLastRuneInString(line[:pos])
+		if !unicode.IsSpace(r) {
+			pos -= size
+		} else {
+			break
+		}
 	}
+	ir.deleteRange(pos, ir.cursorPos)
+}
 
-	return isCode
+// KillToEndOfLine deletes from the cursor to the end of the line (Ctrl-K).
+func (ir *InputReader) KillToEndOfLine() {
+	ir.deleteRange(ir.cursorPos, len(ir.line))
+}
+
+// KillToStartOfLine deletes from the start of the line to the cursor (Ctrl-U).
+func (ir *InputReader) KillToStartOfLine() {
+	ir.deleteRange(0, ir.cursorPos)
 }

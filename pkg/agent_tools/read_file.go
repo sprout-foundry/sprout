@@ -185,7 +185,7 @@ func (h *readFileHandler) handlePDF(ctx context.Context, env ToolEnv, path strin
 
 	// Try to extract text via the existing PDF pipeline as supplementary content
 	var textContent string
-	result, pipelineErr := ProcessPDFForMultimodal(cleanPath)
+	result, pipelineErr := ProcessPDFForMultimodal(ctx, cleanPath)
 	if pipelineErr == nil && result != nil && result.Text != "" {
 		textContent = fmt.Sprintf("[PDF content extracted from %s]\n\n%s", cleanPath, result.Text)
 	} else if pipelineErr == nil && result != nil && len(result.Images) > 0 {

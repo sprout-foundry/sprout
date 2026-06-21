@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -26,7 +27,9 @@ type BinaryFetchResult struct {
 
 // FetchBinaryURL downloads binary content from a URL and processes it
 // for multimodal consumption based on the detected content type.
-func FetchBinaryURL(url string, kind ResponseKind) (*BinaryFetchResult, error) {
+// The ctx is threaded through the HTTP request and downstream PDF
+// processing so the Stop button can abort in-flight fetches (SP-034-1c).
+func FetchBinaryURL(ctx context.Context, url string, kind ResponseKind) (*BinaryFetchResult, error) {
 	client := &http.Client{
 		Timeout: 60 * time.Second,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
@@ -36,7 +39,11 @@ func FetchBinaryURL(url string, kind ResponseKind) (*BinaryFetchResult, error) {
 			return nil
 		},
 	}
-	resp, err := client.Get(url)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("download URL: %w", err)
 	}
@@ -66,7 +73,7 @@ func FetchBinaryURL(url string, kind ResponseKind) (*BinaryFetchResult, error) {
 	case ResponseKindImage:
 		return processImageBinary(effectiveURL, data)
 	case ResponseKindPDF:
-		return processPDFBinary(effectiveURL, data)
+		return processPDFBinary(ctx, effectiveURL, data)
 	default:
 		return nil, fmt.Errorf("unsupported content type for binary fetch: %s", kind)
 	}
@@ -106,7 +113,7 @@ func processImageBinary(sourceURL string, data []byte) (*BinaryFetchResult, erro
 }
 
 // processPDFBinary saves a PDF to a temp file and processes it for multimodal.
-func processPDFBinary(effectiveURL string, data []byte) (*BinaryFetchResult, error) {
+func processPDFBinary(ctx context.Context, effectiveURL string, data []byte) (*BinaryFetchResult, error) {
 	// Validate it looks like a PDF
 	if !looksLikePDF(data) {
 		return nil, fmt.Errorf("downloaded content is not a valid PDF (failed PDF header check)")
@@ -143,7 +150,7 @@ func processPDFBinary(effectiveURL string, data []byte) (*BinaryFetchResult, err
 	// The deferred cleanup will call Close() again (harmless) and remove the file.
 	tmpFile.Close()
 
-	result, err := ProcessPDFForMultimodal(tmpPath)
+	result, err := ProcessPDFForMultimodal(ctx, tmpPath)
 
 	if err != nil {
 		return nil, fmt.Errorf("PDF multimodal processing: %w", err)

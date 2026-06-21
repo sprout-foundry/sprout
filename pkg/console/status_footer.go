@@ -47,6 +47,10 @@ type StatusFooter struct {
 	// SteerInputReader; the footer splits it into rows at draw time.
 	steerActive bool
 	steerLine   string
+	// steerCursor is the byte offset within steerLine where the input
+	// caret (▏) should be rendered. -1 (default) means "at end" for
+	// backward compat with SetSteerLine. Set by SetSteerLineWithCursor.
+	steerCursor int
 	// lastSteerRows is the row count we drew last time. Used to detect
 	// when the row count changed (user added/removed a newline) so we
 	// can reapply the scroll region and blank any orphaned rows.
@@ -102,12 +106,13 @@ func NewStatusFooter(w io.Writer, source ContentSource) *StatusFooter {
 		isTTY = term.IsTerminal(fd)
 	}
 	return &StatusFooter{
-		w:         w,
-		isTTY:     isTTY,
-		fd:        fd,
-		source:    source,
-		WarnCost:  1.0,
-		AlertCost: 5.0,
+		w:           w,
+		isTTY:       isTTY,
+		fd:          fd,
+		source:      source,
+		WarnCost:    1.0,
+		AlertCost:   5.0,
+		steerCursor: -1,
 	}
 }
 
@@ -362,6 +367,7 @@ func (f *StatusFooter) SetSteerLine(text string) {
 	prevRows := f.lastSteerRows
 	f.steerActive = true
 	f.steerLine = text
+	f.steerCursor = -1
 	active := f.active
 	newRows := f.steerRowCount()
 	f.mu.Unlock()
@@ -373,6 +379,36 @@ func (f *StatusFooter) SetSteerLine(text string) {
 		// the previous size before reapplying the region. Without this,
 		// shrinking from 3 rows to 1 would leave the top two rows
 		// stranded above the new scroll region.
+		if wasActive && newRows < prevRows {
+			f.clearOrphanedSteerRows(prevRows, newRows)
+		}
+		f.applyScrollRegion()
+	}
+	f.draw()
+}
+
+// SetSteerLineWithCursor is like SetSteerLine but also specifies the
+// byte offset within text where the input caret (▏) should appear.
+// Used by SteerInputReader to render a mid-buffer cursor for readline
+// cursor movement (Ctrl-A/E/B/F, Alt-B/F, etc.). An offset of -1
+// falls back to caret-at-end (legacy) behavior.
+func (f *StatusFooter) SetSteerLineWithCursor(text string, cursorByteOffset int) {
+	if f == nil || !f.isTTY {
+		return
+	}
+	f.mu.Lock()
+	wasActive := f.steerActive
+	prevRows := f.lastSteerRows
+	f.steerActive = true
+	f.steerLine = text
+	f.steerCursor = cursorByteOffset
+	active := f.active
+	newRows := f.steerRowCount()
+	f.mu.Unlock()
+	if !active {
+		return
+	}
+	if !wasActive || newRows != prevRows {
 		if wasActive && newRows < prevRows {
 			f.clearOrphanedSteerRows(prevRows, newRows)
 		}
@@ -420,6 +456,7 @@ func (f *StatusFooter) ClearSteerLine() {
 	prevRows := f.lastSteerRows
 	f.steerActive = false
 	f.steerLine = ""
+	f.steerCursor = -1
 	f.lastSteerRows = 0
 	active := f.active
 	f.mu.Unlock()
@@ -470,6 +507,7 @@ func (f *StatusFooter) draw() {
 	f.mu.Lock()
 	steerActive := f.steerActive
 	steerLine := f.steerLine
+	steerCursor := f.steerCursor
 	steerRows := f.steerRowCount()
 	f.mu.Unlock()
 
@@ -479,15 +517,53 @@ func (f *StatusFooter) draw() {
 	fmt.Fprint(f.w, "\0337")
 	if steerActive && steerRows > 0 {
 		// Render the steer panel above the rule, one terminal row per
-		// `\n`-separated line of the buffer. The caret marker goes on
-		// the LAST rendered row so the user always sees where new
-		// keystrokes will land. The steer rows use a brighter color
-		// (bold bright-cyan) so they read as "active input" vs the
-		// muted status footer chrome below.
+		// `\n`-separated line of the buffer. The steer rows use a
+		// brighter color (bold bright-cyan) so they read as "active
+		// input" vs the muted status footer chrome below.
 		lines := splitSteerLines(steerLine, steerRows)
+
+		// Map steerCursor (byte offset into the full steerLine) to a
+		// (lineIndex, byteColWithinLine) pair so we can render the
+		// caret on the correct row at the correct column. When
+		// steerCursor < 0 we fall back to legacy behavior: caret at
+		// the end of the last line.
+		cursorLineIdx := len(lines) - 1 // default: last line
+		cursorByteCol := -1             // -1 = caret at end (legacy)
+		if steerCursor >= 0 {
+			cursorByteCol = 0
+			offset := 0
+			for i, lineText := range lines {
+				lineEnd := offset + len(lineText)
+				if steerCursor <= lineEnd || i == len(lines)-1 {
+					cursorLineIdx = i
+					cursorByteCol = steerCursor - offset
+					if cursorByteCol < 0 {
+						cursorByteCol = 0
+					}
+					if cursorByteCol > len(lineText) {
+						cursorByteCol = len(lineText)
+					}
+					break
+				}
+				offset = lineEnd + 1 // +1 for the \n separator
+			}
+		}
+
 		for i, lineText := range lines {
-			withCursor := i == len(lines)-1
-			rendered := steerRowText(lineText, cols, withCursor)
+			withCursor := false
+			col := -1
+			if steerCursor >= 0 {
+				// Cursor-aware path: caret only on the line the cursor
+				// actually falls on, at the computed column.
+				if i == cursorLineIdx {
+					withCursor = true
+					col = cursorByteCol
+				}
+			} else {
+				// Legacy path: caret at the end of the last line.
+				withCursor = i == len(lines)-1
+			}
+			rendered := steerRowTextWithCursor(lineText, cols, withCursor, col)
 			fmt.Fprintf(f.w, "\033[%d;1H\033[K%s%s%s", steerRowFor(rows, steerRows, i), steerColor, rendered, footerResetAll)
 		}
 	}
@@ -546,16 +622,42 @@ const steerColor = "\033[1;96m" // bold bright-cyan
 // the user always sees where the next keystroke will land, regardless
 // of where the terminal's blinking cursor was parked by the most
 // recent save/restore. Earlier rows omit the caret to stay visually
-// quiet.
+// quiet. This is the legacy caret-at-end path; callers that track a
+// cursor position should use steerRowTextWithCursor instead.
 func steerRowText(text string, cols int, withCursor bool) string {
+	return steerRowTextWithCursor(text, cols, withCursor, -1)
+}
+
+// steerRowTextWithCursor pads a steer-panel row to the terminal width.
+// When withCursor is true, a visible caret (▏) is inserted. When
+// cursorCol is a valid byte offset within text (0 <= cursorCol <
+// len(text)), the caret is inserted at that column so the user sees
+// where mid-buffer edits will land. When cursorCol < 0 the caret is
+// appended at the end (legacy behavior for SetSteerLine without a
+// cursor). Rows without the caret are truncated/padded silently.
+func steerRowTextWithCursor(text string, cols int, withCursor bool, cursorCol int) string {
 	const caret = "▏"
 	body := text
 	if withCursor {
 		caretLen := visibleLen(caret)
-		if visibleLen(body)+caretLen >= cols {
-			body = truncWithEllipsis(body, cols-caretLen-1)
+		if cursorCol >= 0 && cursorCol < len(body) {
+			// Insert caret at the cursor position.
+			if visibleLen(body)+caretLen >= cols {
+				body = truncWithEllipsis(body, cols-caretLen-1)
+			}
+			// Re-check cursorCol after potential truncation so we
+			// never index past the now-shorter body.
+			if cursorCol > len(body) {
+				cursorCol = len(body)
+			}
+			body = body[:cursorCol] + caret + body[cursorCol:]
+		} else {
+			// Caret at end (legacy / SetSteerLine path).
+			if visibleLen(body)+caretLen >= cols {
+				body = truncWithEllipsis(body, cols-caretLen-1)
+			}
+			body = body + caret
 		}
-		body = body + caret
 	} else if visibleLen(body) >= cols {
 		body = truncWithEllipsis(body, cols-1)
 	}

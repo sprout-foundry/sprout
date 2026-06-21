@@ -405,3 +405,164 @@ func TestStatusFooter_StyleCost_RestoresBaseColorAfterAlert(t *testing.T) {
 		t.Errorf("alert cost should end by popping fg back to base color, got %q", got)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Cursor-aware steer rendering (SetSteerLineWithCursor + steerRowTextWithCursor)
+// ---------------------------------------------------------------------------
+
+func TestSteerRowTextWithCursor_CaretAtEnd(t *testing.T) {
+	// cursorCol < 0 → legacy behavior: caret appended at the end.
+	out := steerRowTextWithCursor("hello", 20, true, -1)
+	if !strings.Contains(out, "▏") {
+		t.Fatalf("expected caret, got %q", out)
+	}
+	if visibleLen(out) != 20 {
+		t.Fatalf("expected visible length 20, got %d (%q)", visibleLen(out), out)
+	}
+}
+
+func TestSteerRowTextWithCursor_CaretAtMidBuffer(t *testing.T) {
+	// cursorCol = 1 → caret inserted between 'a' and 'b'.
+	out := steerRowTextWithCursor("abc", 20, true, 1)
+	if !strings.Contains(out, "a▏bc") {
+		t.Fatalf("expected 'a▏bc' substring, got %q", out)
+	}
+	if visibleLen(out) != 20 {
+		t.Fatalf("expected visible length 20, got %d (%q)", visibleLen(out), out)
+	}
+}
+
+func TestSteerRowTextWithCursor_CaretAtStart(t *testing.T) {
+	out := steerRowTextWithCursor("abc", 20, true, 0)
+	if !strings.HasPrefix(visiblePart(out), "▏abc") {
+		t.Fatalf("expected caret at start, got %q", out)
+	}
+}
+
+func TestSteerRowTextWithCursor_CursorPastEndFallsBackToEnd(t *testing.T) {
+	// cursorCol >= len(text) → caret at end (legacy behavior).
+	out := steerRowTextWithCursor("abc", 20, true, 5)
+	if !strings.Contains(out, "abc▏") {
+		t.Fatalf("expected caret at end when cursorCol past end, got %q", out)
+	}
+}
+
+func TestSteerRowTextWithCursor_NoCursorTruncatesWide(t *testing.T) {
+	long := strings.Repeat("a", 100)
+	out := steerRowTextWithCursor(long, 20, false, -1)
+	if !strings.Contains(out, "…") {
+		t.Fatalf("expected ellipsis for overflow without cursor, got %q", out)
+	}
+	if visibleLen(out) != 20 {
+		t.Fatalf("expected visible length 20, got %d (%q)", visibleLen(out), out)
+	}
+}
+
+func TestSteerRowTextWithCursor_CaretMidBufferTruncates(t *testing.T) {
+	// Long input with a mid-buffer cursor: caret still visible, line
+	// width respected.
+	long := strings.Repeat("a", 100)
+	out := steerRowTextWithCursor(long, 20, true, 3)
+	if !strings.Contains(out, "▏") {
+		t.Fatalf("caret should appear at mid buffer, got %q", out)
+	}
+	if visibleLen(out) != 20 {
+		t.Fatalf("expected visible length 20, got %d (%q)", visibleLen(out), out)
+	}
+}
+
+// steerRowText is the legacy wrapper — it must delegate to
+// steerRowTextWithCursor with cursorCol=-1 (caret at end).
+func TestSteerRowText_LegacyWrapperMatchesWithCursorMinusOne(t *testing.T) {
+	legacy := steerRowText("hello", 20, true)
+	withCursor := steerRowTextWithCursor("hello", 20, true, -1)
+	if legacy != withCursor {
+		t.Fatalf("steerRowText should match steerRowTextWithCursor(-1): %q != %q", legacy, withCursor)
+	}
+}
+
+func TestStatusFooter_SetSteerLineWithCursor_RecordsCursor(t *testing.T) {
+	// On a non-TTY the method returns early before draw(), but the
+	// steerCursor field is still set under the lock — verify it.
+	var buf bytes.Buffer
+	f := &StatusFooter{w: &buf, isTTY: true, steerCursor: -1}
+	f.SetSteerLineWithCursor("abc", 1)
+	f.mu.Lock()
+	got := f.steerCursor
+	gotLine := f.steerLine
+	f.mu.Unlock()
+	if got != 1 {
+		t.Fatalf("expected steerCursor=1, got %d", got)
+	}
+	if gotLine != "abc" {
+		t.Fatalf("expected steerLine='abc', got %q", gotLine)
+	}
+}
+
+func TestStatusFooter_SetSteerLine_ResetsCursorToMinusOne(t *testing.T) {
+	// After SetSteerLineWithCursor sets a cursor offset, a subsequent
+	// SetSteerLine (legacy) must reset steerCursor to -1 so the caret
+	// goes back to the end.
+	var buf bytes.Buffer
+	f := &StatusFooter{w: &buf, isTTY: true, steerCursor: -1}
+	f.SetSteerLineWithCursor("abc", 1)
+	f.mu.Lock()
+	if f.steerCursor != 1 {
+		t.Fatalf("setup: expected cursor 1, got %d", f.steerCursor)
+	}
+	f.mu.Unlock()
+
+	f.SetSteerLine("abc")
+	f.mu.Lock()
+	got := f.steerCursor
+	f.mu.Unlock()
+	if got != -1 {
+		t.Fatalf("SetSteerLine should reset steerCursor to -1, got %d", got)
+	}
+}
+
+func TestStatusFooter_NewStatusFooter_DefaultCursorMinusOne(t *testing.T) {
+	f := NewStatusFooter(&nonTTYWriter{}, &stubSource{model: "m", workdir: "/x"})
+	if f.steerCursor != -1 {
+		t.Fatalf("NewStatusFooter should default steerCursor to -1, got %d", f.steerCursor)
+	}
+}
+
+func TestStatusFooter_ClearSteerLine_ResetsCursor(t *testing.T) {
+	// ClearSteerLine should reset steerCursor to -1 so a future
+	// activation starts clean.
+	var buf bytes.Buffer
+	f := &StatusFooter{w: &buf, isTTY: true, steerCursor: -1}
+	f.SetSteerLineWithCursor("abc", 2)
+	f.mu.Lock()
+	f.active = true // allow ClearSteerLine to proceed past the guard
+	f.mu.Unlock()
+	f.ClearSteerLine()
+	f.mu.Lock()
+	got := f.steerCursor
+	f.mu.Unlock()
+	if got != -1 {
+		t.Fatalf("ClearSteerLine should reset steerCursor to -1, got %d", got)
+	}
+}
+
+// visiblePart strips ANSI escape sequences from s so assertions can
+// check the user-visible character layout regardless of color codes.
+func visiblePart(s string) string {
+	var b strings.Builder
+	inEsc := false
+	for _, r := range s {
+		if inEsc {
+			if r == 'm' {
+				inEsc = false
+			}
+			continue
+		}
+		if r == '\033' {
+			inEsc = true
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}

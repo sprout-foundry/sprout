@@ -1,9 +1,12 @@
 package history
 
 import (
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -452,5 +455,187 @@ func TestClearAll_SkipsNonDirectoryEntries(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(revisionsDir, "not-a-dir.txt")); os.IsNotExist(err) {
 		t.Error("non-directory file in revisions dir should not be removed")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// H2: Metadata-only scan (GetAllChangesMetadata)
+// ---------------------------------------------------------------------------
+
+// createChangeDirWithContent creates a change entry including the
+// .original/.updated content files (base64-encoded). The default
+// createChangeDir helper only writes metadata.json.
+func createChangeDirWithContent(t *testing.T, changesDir, hash, revisionID, filename, originalCode, newCode string, ts time.Time) {
+	t.Helper()
+	dir := filepath.Join(changesDir, hash)
+	os.MkdirAll(dir, 0755)
+
+	metadata := ChangeMetadata{
+		Version:          metadataVersion,
+		Filename:         filename,
+		FileRevisionHash: hash,
+		RequestHash:      revisionID,
+		Timestamp:        ts,
+		Status:           activeStatus,
+		Description:      "test change with content",
+	}
+	data, err := json.MarshalIndent(metadata, "", "  ")
+	if err != nil {
+		t.Fatalf("failed to marshal metadata: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, metadataFile), data, 0644); err != nil {
+		t.Fatalf("failed to write metadata: %v", err)
+	}
+
+	// Write content files (base64-encoded, as RecordChangeWithDetails does).
+	safeFilename := strings.ReplaceAll(filename, "/", "_")
+	safeFilename = strings.ReplaceAll(safeFilename, "\\", "_")
+	origEncoded := base64.StdEncoding.EncodeToString([]byte(originalCode))
+	newEncoded := base64.StdEncoding.EncodeToString([]byte(newCode))
+	os.WriteFile(filepath.Join(dir, safeFilename+originalSuffix), []byte(origEncoded), 0644)
+	os.WriteFile(filepath.Join(dir, safeFilename+updatedSuffix), []byte(newEncoded), 0644)
+}
+
+// TestGetAllChangesMetadata_ReturnsMetadataWithoutContent (H2) verifies
+// that the metadata-only scan returns the correct count and metadata
+// fields, and that it does NOT fail when content files are missing.
+func TestGetAllChangesMetadata_ReturnsMetadataWithoutContent(t *testing.T) {
+	changesDir, revisionsDir := setupHistoryDirs(t)
+
+	now := time.Now()
+	revID := "meta-rev-1"
+	createRevisionDir(t, revisionsDir, revID)
+
+	// Create 3 change entries with content.
+	for i := 0; i < 3; i++ {
+		filename := fmt.Sprintf("file_%d.go", i)
+		hash := fmt.Sprintf("hash-%d", i)
+		createChangeDirWithContent(t, changesDir, hash, revID, filename, "old code", "new code", now.Add(-time.Duration(i)*time.Minute))
+	}
+
+	// Fetch via metadata-only scan.
+	results, err := GetAllChangesMetadata()
+	if err != nil {
+		t.Fatalf("GetAllChangesMetadata: %v", err)
+	}
+	if len(results) != 3 {
+		t.Fatalf("expected 3 entries, got %d", len(results))
+	}
+
+	// Verify metadata fields are correct.
+	for _, ch := range results {
+		if ch.RequestHash != revID {
+			t.Errorf("RequestHash = %q, want %q", ch.RequestHash, revID)
+		}
+		if ch.Status != activeStatus {
+			t.Errorf("Status = %q, want %q", ch.Status, activeStatus)
+		}
+		if !strings.HasPrefix(ch.Filename, "file_") || !strings.HasSuffix(ch.Filename, ".go") {
+			t.Errorf("unexpected Filename: %q", ch.Filename)
+		}
+		// The sentinels should be non-empty (content files exist).
+		if ch.OriginalCode == "" {
+			t.Errorf("OriginalCode sentinel should be non-empty when .original exists, for %q", ch.Filename)
+		}
+		if ch.NewCode == "" {
+			t.Errorf("NewCode sentinel should be non-empty when .updated exists, for %q", ch.Filename)
+		}
+		// The sentinels must NOT be the actual decoded content.
+		if ch.OriginalCode == "old code" {
+			t.Errorf("OriginalCode should be a sentinel, not decoded content, for %q", ch.Filename)
+		}
+	}
+
+	// Results should be sorted by timestamp descending (most recent first).
+	for i := 1; i < len(results); i++ {
+		if results[i].Timestamp.After(results[i-1].Timestamp) {
+			t.Errorf("results not sorted by timestamp descending at index %d", i)
+		}
+	}
+}
+
+// TestGetAllChangesMetadata_WorksWhenContentFilesMissing (H2) verifies
+// that the metadata-only scan returns entries even when .original/
+// .updated files are absent. The full fetchAllChanges would SKIP such
+// entries (it treats missing content as a hard error); the metadata
+// scan treats it as "content not available" and reports the presence
+// via empty OriginalCode/NewCode sentinels.
+func TestGetAllChangesMetadata_WorksWhenContentFilesMissing(t *testing.T) {
+	changesDir, revisionsDir := setupHistoryDirs(t)
+
+	now := time.Now()
+	revID := "meta-rev-2"
+	createRevisionDir(t, revisionsDir, revID)
+
+	// Create a change entry WITHOUT content files (only metadata).
+	createChangeDir(t, changesDir, "no-content-hash", revID, now)
+
+	results, err := GetAllChangesMetadata()
+	if err != nil {
+		t.Fatalf("GetAllChangesMetadata: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(results))
+	}
+
+	ch := results[0]
+	if ch.OriginalCode != "" {
+		t.Errorf("OriginalCode should be empty when .original is missing, got %q", ch.OriginalCode)
+	}
+	if ch.NewCode != "" {
+		t.Errorf("NewCode should be empty when .updated is missing, got %q", ch.NewCode)
+	}
+	// Metadata fields should still be present.
+	if ch.Filename != "test.go" {
+		t.Errorf("Filename = %q, want %q", ch.Filename, "test.go")
+	}
+	if ch.RequestHash != revID {
+		t.Errorf("RequestHash = %q, want %q", ch.RequestHash, revID)
+	}
+}
+
+// TestGetAllChangesMetadata_MixedContentPresence (H2) verifies correct
+// sentinel behavior when some entries have content and some don't.
+func TestGetAllChangesMetadata_MixedContentPresence(t *testing.T) {
+	changesDir, revisionsDir := setupHistoryDirs(t)
+
+	now := time.Now()
+	revID := "meta-rev-3"
+	createRevisionDir(t, revisionsDir, revID)
+
+	// Entry WITH content.
+	createChangeDirWithContent(t, changesDir, "with-content", revID, "with.go", "orig", "upd", now)
+	// Entry WITHOUT content (metadata-only on disk).
+	createChangeDir(t, changesDir, "without-content", revID, now.Add(-time.Minute))
+
+	results, err := GetAllChangesMetadata()
+	if err != nil {
+		t.Fatalf("GetAllChangesMetadata: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(results))
+	}
+
+	// Find both entries.
+	var withContent, withoutContent *ChangeLog
+	for i := range results {
+		switch results[i].FileRevisionHash {
+		case "with-content":
+			withContent = &results[i]
+		case "without-content":
+			withoutContent = &results[i]
+		}
+	}
+	if withContent == nil || withoutContent == nil {
+		t.Fatalf("expected to find both entries, got: %+v", results)
+	}
+
+	// Entry with content should have non-empty sentinels.
+	if withContent.OriginalCode == "" {
+		t.Error("entry with content should have non-empty OriginalCode sentinel")
+	}
+	// Entry without content should have empty sentinels.
+	if withoutContent.OriginalCode != "" {
+		t.Error("entry without content should have empty OriginalCode")
 	}
 }

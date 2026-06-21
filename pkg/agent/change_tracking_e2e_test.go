@@ -2,6 +2,7 @@ package agent
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/sprout-foundry/sprout/pkg/history"
@@ -77,9 +78,18 @@ func TestChangeTrackingE2E(t *testing.T) {
 		t.Fatalf("Expected 1 tracked change, got %d", agent.GetChangeCount())
 	}
 
+	// H3: paths are normalized to absolute at track time so a later
+	// CWD change can't break recovery. Compare against the absolute
+	// form of the relative test name.
+	expectedTracked := testFileName
+	if filepath.IsAbs(testFileName) {
+		expectedTracked = filepath.Clean(testFileName)
+	} else {
+		expectedTracked, _ = filepath.Abs(testFileName)
+	}
 	trackedFiles := agent.GetTrackedFiles()
-	if len(trackedFiles) != 1 || trackedFiles[0] != testFileName {
-		t.Fatalf("Expected tracked file %s, got %v", testFileName, trackedFiles)
+	if len(trackedFiles) != 1 || trackedFiles[0] != expectedTracked {
+		t.Fatalf("Expected tracked file %s, got %v", expectedTracked, trackedFiles)
 	}
 
 	// Modify the actual file to simulate the tool making the change
@@ -120,8 +130,9 @@ func TestChangeTrackingE2E(t *testing.T) {
 	}
 
 	change := allChanges[0]
-	if change.Filename != testFileName {
-		t.Fatalf("Expected filename %s, got %s", testFileName, change.Filename)
+	// H3: stored Filename is now absolute (normalized at track time).
+	if change.Filename != expectedTracked {
+		t.Fatalf("Expected filename %s, got %s", expectedTracked, change.Filename)
 	}
 	if change.OriginalCode != originalContent {
 		t.Fatalf("Expected original code %s, got %s", originalContent, change.OriginalCode)
@@ -228,18 +239,102 @@ func TestChangeTrackingSupportsIncrementalCommits(t *testing.T) {
 
 	foundA := false
 	foundB := false
+	// H3: paths are normalized to absolute at track time.
+	absA, _ := filepath.Abs(fileA)
+	absB, _ := filepath.Abs(fileB)
 	for _, change := range allChanges {
 		if change.RequestHash != revisionID {
 			t.Fatalf("expected change revision %s, got %s", revisionID, change.RequestHash)
 		}
 		switch change.Filename {
-		case fileA:
+		case absA:
 			foundA = true
-		case fileB:
+		case absB:
 			foundB = true
 		}
 	}
 	if !foundA || !foundB {
 		t.Fatalf("expected both tracked files to be persisted, foundA=%v foundB=%v", foundA, foundB)
+	}
+}
+
+// TestCommitIsIdempotent_DoubleCommitNoDuplicates (H1 regression) verifies
+// that calling Commit twice does not re-record changes that were already
+// persisted. The old code only advanced committedChangeCount AFTER the
+// loop, so a second Commit re-sliced from the same offset and duplicated
+// every entry. The fix advances the counter inside the loop so a retry
+// resumes from the correct position.
+func TestCommitIsIdempotent_DoubleCommitNoDuplicates(t *testing.T) {
+	testDir := t.TempDir()
+	oldDir, _ := os.Getwd()
+	defer func() {
+		_ = os.Chdir(oldDir)
+	}()
+	if err := os.Chdir(testDir); err != nil {
+		t.Fatalf("change dir: %v", err)
+	}
+
+	agent := &Agent{}
+	agent.changeTracker = NewChangeTracker(agent, "H1 idempotency test")
+	agent.changeTracker.Enable()
+
+	fileA := "dup_a.go"
+	fileB := "dup_b.go"
+	if err := os.WriteFile(fileA, []byte("old\n"), 0644); err != nil {
+		t.Fatalf("write fileA: %v", err)
+	}
+	if err := os.WriteFile(fileB, []byte("old\n"), 0644); err != nil {
+		t.Fatalf("write fileB: %v", err)
+	}
+
+	// Track two changes and commit.
+	if err := agent.TrackFileWrite(fileA, "new a\n"); err != nil {
+		t.Fatalf("track fileA: %v", err)
+	}
+	if err := agent.TrackFileWrite(fileB, "new b\n"); err != nil {
+		t.Fatalf("track fileB: %v", err)
+	}
+	if err := agent.CommitChanges("first commit"); err != nil {
+		t.Fatalf("commit 1: %v", err)
+	}
+
+	// Snapshot the persisted count after the first commit.
+	allAfterFirst, err := history.GetAllChanges()
+	if err != nil {
+		t.Fatalf("fetch after first commit: %v", err)
+	}
+	countAfterFirst := len(allAfterFirst)
+
+	// Commit again with NO new changes tracked. The committedChangeCount
+	// guard must prevent re-recording the two already-persisted entries.
+	if err := agent.CommitChanges("second commit (no-op)"); err != nil {
+		t.Fatalf("commit 2: %v", err)
+	}
+	allAfterSecond, err := history.GetAllChanges()
+	if err != nil {
+		t.Fatalf("fetch after second commit: %v", err)
+	}
+	if len(allAfterSecond) != countAfterFirst {
+		t.Errorf("double-Commit produced duplicates: got %d after 2nd commit, want %d",
+			len(allAfterSecond), countAfterFirst)
+	}
+
+	// Also verify the internal counter is at the right position — it
+	// should equal the number of tracked changes after a successful
+	// commit, so a third commit after adding ONE more change persists
+	// exactly that one.
+	if err := agent.TrackFileWrite("dup_c.go", "new c\n"); err != nil {
+		t.Fatalf("track fileC: %v", err)
+	}
+	if err := agent.CommitChanges("third commit"); err != nil {
+		t.Fatalf("commit 3: %v", err)
+	}
+	allAfterThird, err := history.GetAllChanges()
+	if err != nil {
+		t.Fatalf("fetch after third commit: %v", err)
+	}
+	if len(allAfterThird) != countAfterFirst+1 {
+		t.Errorf("incremental commit after double-commit: got %d, want %d (only the new change should be added)",
+			len(allAfterThird), countAfterFirst+1)
 	}
 }

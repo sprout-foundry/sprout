@@ -92,7 +92,7 @@ func writeKeyboardHelp(w io.Writer) {
 		{"  ↑ / ↓", "recall prior prompts"},
 		{"  Right-click", "context menu (cut/copy/paste)"},
 		{"  Paste", "auto-detected (bracketed + heuristic)"},
-		{"  /<cmd>", "slash command (/help, /commit, /persona, …)"},
+		{"  /<cmd>", "slash command — type /help to list all"},
 		{"  ?", "this help"},
 		{"  exit / quit", "end session + print summary"},
 		{"", ""},
@@ -121,7 +121,7 @@ func writeKeyboardHelp(w io.Writer) {
 		}
 		// Two-column row. Align the description column at fixed width
 		// so the descriptions stack visually.
-		fmt.Fprintf(w, "  %-18s %s%s%s\n", r[0], dim, r[1], reset)
+		fmt.Fprintf(w, "  %-26s %s%s%s\n", r[0], dim, r[1], reset)
 	}
 	fmt.Fprintln(w)
 }

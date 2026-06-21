@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"path/filepath"
 	"testing"
 )
 
@@ -72,21 +73,51 @@ func TestAgent_EnableChangeTracking_CreatesTracker(t *testing.T) {
 	}
 }
 
-func TestAgent_EnableChangeTracking_ResetsExistingTracker(t *testing.T) {
+// TestAgent_EnableChangeTracking_PreservesExistingTracker verifies the
+// SESSION-SCOPING contract: calling EnableChangeTracking on an existing
+// tracker does NOT reset the buffer or change the revision ID. The
+// first call (new session) establishes identity; subsequent calls
+// (every ProcessQuery in a daemon chat) must preserve accumulated
+// changes so list_changes / recover_file / revert_my_changes reflect
+// the whole session, not just the current turn.
+//
+// Previously EnableChangeTracking called Reset() on re-enable, which
+// wiped prior turns' edits — a cross-turn footgun. See
+// memory: off-rails-revert-detection for the incident that surfaced it.
+func TestAgent_EnableChangeTracking_PreservesExistingTracker(t *testing.T) {
+	ws := t.TempDir()
 	a := &Agent{
-		state: NewAgentStateManager(false),
+		state:        NewAgentStateManager(false),
+		workspaceRoot: ws,
 	}
 	a.EnableChangeTracking("first instructions")
 	firstID := a.GetRevisionID()
 
+	// Record a change after first enable.
+	a.TrackFileWrite(filepath.Join(ws, "a.go"), "content")
+	if got := a.GetChangeCount(); got != 1 {
+		t.Fatalf("expected 1 change after first enable, got %d", got)
+	}
+
+	// Re-enable (simulating a new ProcessQuery in the same session).
 	a.EnableChangeTracking("second instructions")
 	secondID := a.GetRevisionID()
 
-	if firstID == secondID {
-		t.Error("revision ID should change when re-enabling with different instructions")
+	// The revision ID MUST be stable — it's the session identity used
+	// to scope persisted history entries. Changing it per-turn would
+	// orphan prior commits and break list_changes' session filter.
+	if firstID != secondID {
+		t.Errorf("revision ID changed on re-enable: %q -> %q (must stay stable within a session)", firstID, secondID)
 	}
 	if !a.IsChangeTrackingEnabled() {
 		t.Error("should still be enabled after re-enable")
+	}
+
+	// The buffer MUST be preserved — the whole point of Fix B. If this
+	// regresses to wiping, list_changes returns count:0 at the start of
+	// every new turn, exactly the bug that motivated this change.
+	if got := a.GetChangeCount(); got != 1 {
+		t.Errorf("re-enable wiped the buffer: change count = %d, want 1 (session buffer must be preserved)", got)
 	}
 }
 

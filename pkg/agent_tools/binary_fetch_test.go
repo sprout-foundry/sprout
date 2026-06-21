@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -205,14 +206,14 @@ func TestProcessImageBinary_EmptyData(t *testing.T) {
 }
 
 func TestProcessPDFBinary_InvalidData(t *testing.T) {
-	_, err := processPDFBinary("https://example.com/not-a-pdf.bin", []byte("not a pdf"))
+	_, err := processPDFBinary(context.Background(), "https://example.com/not-a-pdf.bin", []byte("not a pdf"))
 	if err == nil {
 		t.Error("expected error for non-PDF data")
 	}
 }
 
 func TestProcessPDFBinary_EmptyData(t *testing.T) {
-	_, err := processPDFBinary("https://example.com/empty.pdf", []byte{})
+	_, err := processPDFBinary(context.Background(), "https://example.com/empty.pdf", []byte{})
 	if err == nil {
 		t.Error("expected error for empty data")
 	}
@@ -224,7 +225,7 @@ func TestFetchBinaryURL_NonOKStatus(t *testing.T) {
 	}))
 	defer server.Close()
 
-	_, err := FetchBinaryURL(server.URL+"/image.png", ResponseKindImage)
+	_, err := FetchBinaryURL(context.Background(), server.URL+"/image.png", ResponseKindImage)
 	if err == nil {
 		t.Error("expected error for 404 response")
 	}
@@ -237,7 +238,7 @@ func TestFetchBinaryURL_UnsupportedKind(t *testing.T) {
 	}))
 	defer server.Close()
 
-	_, err := FetchBinaryURL(server.URL, ResponseKindUnknown)
+	_, err := FetchBinaryURL(context.Background(), server.URL, ResponseKindUnknown)
 	if err == nil {
 		t.Error("expected error for unsupported kind")
 	}

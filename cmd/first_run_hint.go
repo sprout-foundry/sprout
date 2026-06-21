@@ -63,7 +63,7 @@ func maybeShowFirstRunHint() {
 		state = &sproutState{}
 	}
 
-	fmt.Fprintln(os.Stderr, "Press Tab to autocomplete /commands, Ctrl-D to exit, or just start typing.")
+	fmt.Fprintln(os.Stderr, "Type /help for commands, or ? for keyboard shortcuts. Ctrl-D exits.")
 
 	state.SeenFirstRunHint = append(state.SeenFirstRunHint, cwd)
 	_ = saveFirstRunState(statePath, state) // best-effort — we don't care if persist fails

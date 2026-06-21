@@ -175,6 +175,8 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			lastInterruptAt = time.Time{}
 
 			query = strings.TrimSpace(query)
+			rawQuery := query // user's typed text, before deferred-message prepend
+
 			// SP-055 Phase 3b: drain any messages the user queued via
 			// Tab+Enter in the steer panel during the previous turn.
 			// They prepend to the typed prompt, joined as separate
@@ -198,12 +200,8 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			if query == "" {
 				continue
 			}
-			// Add to agent history
-			chatAgent.AddToHistory(query)
-			// Update input reader history to stay in sync
-			inputReader.SetHistory(chatAgent.GetHistory())
 
-			// Handle exit commands
+			// Handle exit commands (before history — don't persist these)
 			if strings.ToLower(query) == "exit" || strings.ToLower(query) == "quit" {
 				fmt.Println("\n-- Goodbye! Here's your session summary:")
 				fmt.Println("=====================================")
@@ -239,6 +237,18 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 				inputReader.SetPrompt(buildPromptPrefix(chatAgent.GetModel()))
 				footer.Refresh()
 				continue
+			}
+
+			// Add to agent history — only genuine LLM-bound prompts
+			// are persisted. `?`, exit/quit, and slash commands are
+			// intentionally excluded so they don't pollute ↑/Ctrl-R.
+			// We persist rawQuery (the user's typed text) rather than
+			// the composite `query`, so recalling a deferred-message
+			// turn via ↑ doesn't replay the "Queued from prior turn:"
+			// template — only the user's actual input.
+			if rawQuery != "" {
+				chatAgent.AddToHistory(rawQuery)
+				inputReader.SetHistory(chatAgent.GetHistory())
 			}
 
 			// SP-048-5c: snapshot per-turn metrics before submit so we can

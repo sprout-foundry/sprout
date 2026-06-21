@@ -558,7 +558,9 @@ func SimplePDFInfo(pdfPath string) (map[string]interface{}, error) {
 
 	f, r, err := pdf.Open(pdfPath)
 	defer func() {
-		_ = f.Close()
+		if f != nil {
+			_ = f.Close()
+		}
 	}()
 	if err != nil {
 		return nil, fmt.Errorf("open PDF: %w", err)

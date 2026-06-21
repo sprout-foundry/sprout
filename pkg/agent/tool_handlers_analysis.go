@@ -80,8 +80,8 @@ func handleAnalyzeUIScreenshot(ctx context.Context, a *Agent, args map[string]in
 	}
 
 	result, err := tools.AnalyzeImage(ctx, effectiveImagePath, analysisPrompt, "frontend")
-	a.Logger().Debug("Analyze UI screenshot error: %v\n", err)
 	if err != nil {
+		a.Logger().Debug("Analyze UI screenshot error: %v\n", err)
 		return result, fmt.Errorf("failed to analyze UI screenshot %s: %w", imagePath, err)
 	}
 	// Capture using the original path the user provided, not the temp screenshot

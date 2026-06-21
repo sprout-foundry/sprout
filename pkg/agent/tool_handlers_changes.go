@@ -572,6 +572,13 @@ func (a *Agent) revertOne(ch TrackedFileChange) (string, bool, string) {
 	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
 		return "", false, fmt.Sprintf("create parent dir: %v", err)
 	}
+	// Belt-and-suspenders: isRecoverableOriginal already rejects the redacted
+	// marker above, but this final guard sits directly at the write so a
+	// future code path that bypasses that check can never persist the literal
+	// marker string to a user's file.
+	if ch.OriginalCode == RedactedContentMarker {
+		return "", false, "refusing to write redacted marker to disk"
+	}
 	if err := os.WriteFile(abs, []byte(ch.OriginalCode), 0o644); err != nil {
 		return "", false, fmt.Sprintf("write: %v", err)
 	}

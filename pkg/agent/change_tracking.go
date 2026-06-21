@@ -13,9 +13,11 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/history"
 )
 
-// RedactedContentMarker is the marker used when file content is redacted because
-// the file is outside the workspace root (to avoid leaking sensitive data).
-const RedactedContentMarker = "[REDACTED - external file]"
+// RedactedContentMarker aliases history.RedactedContentMarker so existing call
+// sites within this package keep working. The canonical constant lives in
+// pkg/history (the lower-level package, which pkg/agent already imports) so the
+// two packages can never drift apart.
+const RedactedContentMarker = history.RedactedContentMarker
 
 // ChangeTracker manages change tracking for the agent workflow
 type ChangeTracker struct {

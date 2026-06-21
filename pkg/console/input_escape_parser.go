@@ -76,6 +76,22 @@ func (ep *EscapeParser) Parse(b byte) *InputEvent {
 			ep.Reset()
 			return &InputEvent{Type: EventChar, Data: "\n"}
 		}
+		// Alt+B (backward word) and Alt+F (forward word). Most terminals
+		// send Alt-modified keys as ESC + <key>, which lands here.
+		if b == 'b' {
+			ep.Reset()
+			return &InputEvent{Type: EventWordLeft}
+		}
+		if b == 'f' {
+			ep.Reset()
+			return &InputEvent{Type: EventWordRight}
+		}
+		// Alt+Backspace (Meta-DEL): ESC followed by 0x7F. Delete the
+		// previous word, same as Ctrl-W.
+		if b == 127 {
+			ep.Reset()
+			return &InputEvent{Type: EventDeleteWordBackward}
+		}
 		// Not a CSI sequence, treat ESC as escape event
 		// This character could be printable, save it for next call
 		ep.Reset()
@@ -98,14 +114,20 @@ func (ep *EscapeParser) Parse(b byte) *InputEvent {
 			event := &InputEvent{Type: EventDown}
 			ep.Reset()
 			return event
-		case 'C': // Right arrow
-			event := &InputEvent{Type: EventRight}
+		case 'C': // Right arrow (or Ctrl+Right = forward word)
+			ctrlMod := strings.Contains(string(ep.buffer), ";5")
 			ep.Reset()
-			return event
-		case 'D': // Left arrow
-			event := &InputEvent{Type: EventLeft}
+			if ctrlMod {
+				return &InputEvent{Type: EventWordRight}
+			}
+			return &InputEvent{Type: EventRight}
+		case 'D': // Left arrow (or Ctrl+Left = backward word)
+			ctrlMod := strings.Contains(string(ep.buffer), ";5")
 			ep.Reset()
-			return event
+			if ctrlMod {
+				return &InputEvent{Type: EventWordLeft}
+			}
+			return &InputEvent{Type: EventLeft}
 		case 'H': // Home
 			event := &InputEvent{Type: EventHome}
 			ep.Reset()

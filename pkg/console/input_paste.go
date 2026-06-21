@@ -365,7 +365,7 @@ func shouldStartHeuristicPaste(chunk []byte, timeSinceLastChar time.Duration) bo
 	}
 
 	// For moderate bursts, still require rapid arrival.
-	if len(chunk) < 20 && timeSinceLastChar >= 30*time.Millisecond {
+	if len(chunk) < pasteBurstMinBytes && timeSinceLastChar >= pasteBurstMinGap {
 		return false
 	}
 

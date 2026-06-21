@@ -2,6 +2,7 @@ package tools
 
 import (
 	"bytes"
+	"context"
 	"image"
 	"image/jpeg"
 	"image/png"
@@ -235,7 +236,7 @@ func TestOptimizeImageData_FallbackMimeFromPath(t *testing.T) {
 
 func TestNewPypdfTextExtractionCommand(t *testing.T) {
 	t.Parallel()
-	cmd := newPypdfTextExtractionCommand("python3", "/path/to/doc.pdf", 5000)
+	cmd := newPypdfTextExtractionCommand(context.Background(), "python3", "/path/to/doc.pdf", 5000)
 	// NOTE: This test depends on the 'python3' command being resolvable via
 	// exec.Command (PATH lookup). On systems where python3 is not installed,
 	// cmd.Path may be non-empty (just the command name) but the command
@@ -268,7 +269,7 @@ func TestNewPypdfTextExtractionCommand(t *testing.T) {
 
 func TestNewPypdfTextExtractionCommand_DifferentLimit(t *testing.T) {
 	t.Parallel()
-	cmd := newPypdfTextExtractionCommand("python3", "/path/to/doc.pdf", 20000)
+	cmd := newPypdfTextExtractionCommand(context.Background(), "python3", "/path/to/doc.pdf", 20000)
 
 	args := cmd.Args
 	if len(args) < 3 {

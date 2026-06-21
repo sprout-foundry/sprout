@@ -525,14 +525,14 @@ func HasVisionCapability() bool {
 // ============================================================================
 
 // GetImageData reads image data from file or URL
-func (vp *VisionProcessor) GetImageData(imagePath string) (string, string, error) {
+func (vp *VisionProcessor) GetImageData(ctx context.Context, imagePath string) (string, string, error) {
 	var data []byte
 	var err error
 
 	lowerPath := strings.ToLower(imagePath)
 	if strings.HasPrefix(lowerPath, "http://") || strings.HasPrefix(lowerPath, "https://") {
 		// Download from URL
-		data, err = vp.DownloadImage(imagePath)
+		data, err = vp.DownloadImage(ctx, imagePath)
 	} else {
 		// Read local file
 		data, err = os.ReadFile(imagePath)
@@ -586,9 +586,13 @@ func (vp *VisionProcessor) GetImageData(imagePath string) (string, string, error
 }
 
 // DownloadImage downloads an image from URL
-func (vp *VisionProcessor) DownloadImage(url string) ([]byte, error) {
+func (vp *VisionProcessor) DownloadImage(ctx context.Context, url string) ([]byte, error) {
 	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Get(url)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create image download request: %w", err)
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("download image: %w", err)
 	}

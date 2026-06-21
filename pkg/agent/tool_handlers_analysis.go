@@ -614,7 +614,7 @@ func handleAnalyzePDFWithImages(ctx context.Context, a *Agent, path string, args
 	var cleanup func()
 
 	if strings.HasPrefix(strings.ToLower(path), "http://") || strings.HasPrefix(strings.ToLower(path), "https://") {
-		resolvedPath, resolvedCleanup, resolveErr := tools.ResolvePDFInputPath(path)
+		resolvedPath, resolvedCleanup, resolveErr := tools.ResolvePDFInputPath(ctx, path)
 		if resolveErr != nil || resolvedPath == "" {
 			a.Logger().Debug("[WARN] Failed to resolve remote PDF: %v\n", resolveErr)
 			// Fall back to text-only pipeline
@@ -632,7 +632,7 @@ func handleAnalyzePDFWithImages(ctx context.Context, a *Agent, path string, args
 		}
 	}
 
-	result, err := tools.ProcessPDFForMultimodal(effectivePath)
+	result, err := tools.ProcessPDFForMultimodal(ctx, effectivePath)
 
 	if cleanup != nil {
 		cleanup()

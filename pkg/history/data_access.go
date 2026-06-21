@@ -384,6 +384,104 @@ func GetAllChanges() ([]ChangeLog, error) {
 	return fetchAllChanges()
 }
 
+// GetAllChangesMetadata returns change metadata WITHOUT reading or
+// base64-decoding the .original/.updated content files. This is the
+// lightweight alternative to GetAllChanges for callers that only need
+// the manifest fields (filename, revision, timestamp, status, tier) —
+// primarily list_changes when include_diff/show_content aren't set.
+//
+// The OriginalCode and NewCode fields of the returned ChangeLog entries
+// are left EMPTY. Callers that infer op/recoverability from content
+// presence should instead use HasOriginal/HasNew, which report whether
+// the content files exist on disk (a cheap os.Stat, not a read+decode).
+// This avoids the O(total-history) base64 decode that fetchAllChanges
+// performs on every list_changes invocation.
+func GetAllChangesMetadata() ([]ChangeLog, error) {
+	if err := ensureChangesDirs(); err != nil {
+		return nil, fmt.Errorf("get changes directory: %w", err)
+	}
+
+	var changes []ChangeLog
+
+	entries, err := os.ReadDir(GetChangesDir())
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []ChangeLog{}, nil
+		}
+		return nil, fmt.Errorf("failed to read changes directory: %w", err)
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		changeDir := filepath.Join(GetChangesDir(), entry.Name())
+		metadataPath := filepath.Join(changeDir, metadataFile)
+
+		metadataBytes, err := filesystem.ReadFileBytes(metadataPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			log.Printf("[history] skipping change %s: failed to read metadata: %v", entry.Name(), err)
+			continue
+		}
+
+		var metadata ChangeMetadata
+		if err := json.Unmarshal(metadataBytes, &metadata); err != nil {
+			log.Printf("[history] skipping change %s: failed to parse metadata: %v", entry.Name(), err)
+			continue
+		}
+
+		// Determine content presence via os.Stat (cheap) rather than
+		// reading + base64-decoding. Store in OriginalCode/NewCode as
+		// non-empty sentinels so existing callers that check
+		// `OriginalCode != ""` for recoverability still work.
+		safeFilename := strings.ReplaceAll(metadata.Filename, "/", "_")
+		safeFilename = strings.ReplaceAll(safeFilename, "\\", "_")
+
+		hasOriginal := fileExists(filepath.Join(changeDir, safeFilename+originalSuffix))
+		hasNew := fileExists(filepath.Join(changeDir, safeFilename+updatedSuffix))
+
+		var origSentinel, newSentinel string
+		if hasOriginal {
+			origSentinel = "(metadata-only: original exists)"
+		}
+		if hasNew {
+			newSentinel = "(metadata-only: new exists)"
+		}
+
+		revisionPath := filepath.Join(GetRevisionsDir(), metadata.RequestHash)
+		tier, instructions, response := loadRevisionTextForTier(revisionPath)
+
+		changes = append(changes, ChangeLog{
+			RequestHash:      metadata.RequestHash,
+			Instructions:     instructions,
+			Response:         response,
+			FileRevisionHash: metadata.FileRevisionHash,
+			Filename:         metadata.Filename,
+			OriginalCode:     origSentinel,
+			NewCode:          newSentinel,
+			Description:      metadata.Description,
+			Note:             sql.NullString{String: metadata.Note, Valid: metadata.Note != ""},
+			Status:           metadata.Status,
+			Timestamp:        metadata.Timestamp,
+			OriginalPrompt:   metadata.OriginalPrompt,
+			LLMMessage:       metadata.LLMMessage,
+			AgentModel:       metadata.AgentModel,
+			HasConversation:  fileExists(filepath.Join(revisionPath, "conversation.json")),
+			Tier:             tier,
+		})
+	}
+
+	sort.Slice(changes, func(i, j int) bool {
+		return changes[i].Timestamp.After(changes[j].Timestamp)
+	})
+
+	return changes, nil
+}
+
 // GetChangesSince returns changes whose timestamp is strictly after the provided time.
 func GetChangesSince(since time.Time) ([]ChangeLog, error) {
 	changes, err := fetchAllChanges()

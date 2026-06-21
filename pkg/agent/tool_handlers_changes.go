@@ -96,7 +96,10 @@ func handleListChangesPersistedOnly(args map[string]interface{}) (string, error)
 	}
 	cutoff, _ := parseRecentSince(asString(args["since"]))
 	files := make([]fileEntry, 0)
-	if persisted, err := history.GetAllChanges(); err == nil {
+	// H2: Metadata-only scan avoids the O(history) base64 decode.
+	// This fallback path (no in-memory tracker) only needs the
+	// manifest fields, never the full content.
+	if persisted, err := history.GetAllChangesMetadata(); err == nil {
 		for _, ch := range persisted {
 			if !cutoff.IsZero() && ch.Timestamp.Before(cutoff) {
 				continue
@@ -205,7 +208,13 @@ func buildFileList(tracker *ChangeTracker, changes []TrackedFileChange, includeD
 		for _, f := range files {
 			seenInMemory[f.Path] = true
 		}
-		if persisted, err := history.GetAllChanges(); err == nil {
+		// H2: Use the metadata-only scan. The persisted entries here
+		// never need full content (diffs are computed only from
+		// in-memory entries via collectFileChangeSpan). The metadata
+		// scan avoids reading + base64-decoding every .original/
+		// .updated file on disk — the dominant cost of list_changes
+		// on a large history.
+		if persisted, err := history.GetAllChangesMetadata(); err == nil {
 			for _, ch := range persisted {
 				// Session filter: skip other sessions' revisions.
 				if sessionRevID != "" && ch.RequestHash != sessionRevID {

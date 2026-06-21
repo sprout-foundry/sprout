@@ -199,6 +199,14 @@ func (ct *ChangeTracker) TrackFileWrite(filePath string, newContent string) erro
 		return nil
 	}
 
+	// H3: Normalize to absolute at track time so the stored FilePath
+	// is independent of the process's CWD. If the agent later does a
+	// `cd` via a shell command, recovery (which resolves via
+	// filepath.Abs against the CURRENT CWD) still points to the
+	// correct location, and dedup in resolveRecoveryTarget compares
+	// consistently. See resolveAbsPath for the resolution strategy.
+	filePath = ct.resolveAbsPath(filePath)
+
 	// Get original content (if file exists)
 	originalContent := ""
 	if _, err := os.Stat(filePath); err == nil {
@@ -234,6 +242,9 @@ func (ct *ChangeTracker) TrackFileEdit(filePath string, originalContent string, 
 	if !ct.IsEnabled() {
 		return nil
 	}
+
+	// H3: Normalize to absolute at track time. See TrackFileWrite.
+	filePath = ct.resolveAbsPath(filePath)
 
 	// Redact content if file is outside the workspace root
 	if ct.isOutsideWorkspace(filePath) {
@@ -301,8 +312,14 @@ func (ct *ChangeTracker) Commit(llmResponse string, conversation []api.Message) 
 		ct.baseRevisionRecorded = true
 	}
 
-	// Record each file change
-	for _, change := range ct.changes[ct.committedChangeCount:] {
+	// Record each file change. Advance committedChangeCount after each
+	// SUCCESSFUL RecordChangeWithDetails so a mid-loop failure (disk
+	// full, permission error, …) doesn't leave the counter stale — the
+	// next Commit call must resume from the change that actually
+	// failed, not re-record the ones that already succeeded. The lock
+	// is held for the whole function, so the increment is safe.
+	for ct.committedChangeCount < len(ct.changes) {
+		change := ct.changes[ct.committedChangeCount]
 		description := fmt.Sprintf("%s via %s", change.Operation, change.ToolCall)
 		note := fmt.Sprintf("Agent session: %s", ct.sessionID)
 
@@ -320,9 +337,9 @@ func (ct *ChangeTracker) Commit(llmResponse string, conversation []api.Message) 
 		if err != nil {
 			return fmt.Errorf("failed to record change for %s: %w", change.FilePath, err)
 		}
+		ct.committedChangeCount++
 	}
 
-	ct.committedChangeCount = len(ct.changes)
 	return nil
 }
 
@@ -545,6 +562,38 @@ func (ct *ChangeTracker) Reset(instructions string) {
 }
 
 // Helper functions
+
+// resolveAbsPath resolves filePath to a cleaned absolute path, using
+// the agent's workspace root as the base for relative paths when
+// available, else the process CWD. This normalization is applied at
+// track time (H3) so stored FilePaths are independent of the process's
+// CWD — a later `cd` in a shell command can't make recovery or dedup
+// resolve a relative path to the wrong location.
+//
+// Absolute paths are returned cleaned but otherwise unchanged. If the
+// resolution fails (e.g., os.Getwd error), the raw input is returned
+// as a fallback so tracking doesn't silently drop the change.
+func (ct *ChangeTracker) resolveAbsPath(filePath string) string {
+	if filepath.IsAbs(filePath) {
+		return filepath.Clean(filePath)
+	}
+	root := ""
+	if ct.agent != nil {
+		root = ct.agent.workspaceRoot
+	}
+	if root == "" {
+		var err error
+		root, err = os.Getwd()
+		if err != nil {
+			return filePath
+		}
+	}
+	abs, err := filepath.Abs(filepath.Join(root, filePath))
+	if err != nil {
+		return filePath
+	}
+	return abs
+}
 
 // isOutsideWorkspace returns true if filePath is outside the agent's workspace root.
 // If the workspace root is empty or the agent is nil, it returns false (treats all files as in-workspace).

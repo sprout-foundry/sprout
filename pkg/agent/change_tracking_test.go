@@ -3,6 +3,7 @@ package agent
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -522,5 +523,198 @@ func TestEnableDisable(t *testing.T) {
 	ct.Enable()
 	if !ct.IsEnabled() {
 		t.Errorf("tracker should be enabled again")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// H3: Path normalization at track time
+// ---------------------------------------------------------------------------
+
+// TestTrackFileWrite_RelativePathNormalizedToAbsolute (H3) verifies that
+// a relative path passed to TrackFileWrite is stored as an absolute path.
+// Without this, a later CWD change would make recovery resolve the
+// relative path to the wrong location.
+func TestTrackFileWrite_RelativePathNormalizedToAbsolute(t *testing.T) {
+	ws := t.TempDir()
+	agent := NewTestAgent()
+	agent.workspaceRoot = ws
+
+	ct := NewChangeTracker(agent, "test instruction")
+
+	// Track a relative path (as the LLM typically provides).
+	relPath := "pkg/agent/foo.go"
+	if err := ct.TrackFileWrite(relPath, "package main\n"); err != nil {
+		t.Fatalf("TrackFileWrite: %v", err)
+	}
+
+	changes := ct.GetChanges()
+	if len(changes) != 1 {
+		t.Fatalf("expected 1 change, got %d", len(changes))
+	}
+
+	stored := changes[0].FilePath
+	if !filepath.IsAbs(stored) {
+		t.Errorf("stored FilePath should be absolute, got %q", stored)
+	}
+
+	// The absolute path should resolve under the workspace root.
+	expected, err := filepath.Abs(filepath.Join(ws, "pkg/agent/foo.go"))
+	if err != nil {
+		t.Fatalf("filepath.Abs: %v", err)
+	}
+	if stored != expected {
+		t.Errorf("stored FilePath = %q, want %q", stored, expected)
+	}
+}
+
+// TestTrackFileEdit_RelativePathNormalizedToAbsolute (H3) verifies the
+// same normalization applies to TrackFileEdit.
+func TestTrackFileEdit_RelativePathNormalizedToAbsolute(t *testing.T) {
+	ws := t.TempDir()
+	agent := NewTestAgent()
+	agent.workspaceRoot = ws
+
+	ct := NewChangeTracker(agent, "test instruction")
+
+	relPath := "src/main.go"
+	if err := ct.TrackFileEdit(relPath, "old", "new"); err != nil {
+		t.Fatalf("TrackFileEdit: %v", err)
+	}
+
+	changes := ct.GetChanges()
+	if len(changes) != 1 {
+		t.Fatalf("expected 1 change, got %d", len(changes))
+	}
+
+	stored := changes[0].FilePath
+	if !filepath.IsAbs(stored) {
+		t.Errorf("stored FilePath should be absolute, got %q", stored)
+	}
+}
+
+// TestResolveAbsPath_AlreadyAbsolute returns cleaned absolute paths
+// unchanged.
+func TestResolveAbsPath_AlreadyAbsolute(t *testing.T) {
+	ws := t.TempDir()
+	agent := NewTestAgent()
+	agent.workspaceRoot = ws
+
+	ct := NewChangeTracker(agent, "test instruction")
+
+	abs := filepath.Join(ws, "a", "b", "c.go")
+	resolved := ct.resolveAbsPath(abs)
+	if resolved != filepath.Clean(abs) {
+		t.Errorf("absolute path should be cleaned but unchanged, got %q want %q", resolved, filepath.Clean(abs))
+	}
+}
+
+// TestResolveAbsPath_UsesWorkspaceRoot resolves relative paths against
+// the workspace root, not the process CWD.
+func TestResolveAbsPath_UsesWorkspaceRoot(t *testing.T) {
+	ws := t.TempDir()
+	agent := NewTestAgent()
+	agent.workspaceRoot = ws
+
+	ct := NewChangeTracker(agent, "test instruction")
+
+	// CWD is NOT the workspace — normalization must still use ws.
+	origWd, _ := os.Getwd()
+	defer os.Chdir(origWd)
+	otherDir := t.TempDir()
+	os.Chdir(otherDir)
+
+	resolved := ct.resolveAbsPath("nested/file.go")
+	expected := filepath.Join(ws, "nested", "file.go")
+	if resolved != expected {
+		t.Errorf("expected resolution against workspace root %q, got %q", expected, resolved)
+	}
+}
+
+// TestResolveAbsPath_FallsBackToCwd uses CWD when workspace root is empty.
+func TestResolveAbsPath_FallsBackToCwd(t *testing.T) {
+	agent := NewTestAgent()
+	agent.workspaceRoot = ""
+
+	ct := NewChangeTracker(agent, "test instruction")
+
+	origWd, _ := os.Getwd()
+	defer os.Chdir(origWd)
+	tmp := t.TempDir()
+	os.Chdir(tmp)
+
+	resolved := ct.resolveAbsPath("file.go")
+	expected := filepath.Join(tmp, "file.go")
+	if resolved != expected {
+		t.Errorf("expected CWD-based resolution %q, got %q", expected, resolved)
+	}
+}
+
+// TestRecovery_ResolvesCorrectlyAfterChdir (H3 integration) verifies
+// the end-to-end fix: track a relative path, change CWD, then verify
+// recovery resolves to the ORIGINAL location (not the new CWD).
+func TestRecovery_ResolvesCorrectlyAfterChdir(t *testing.T) {
+	ws := t.TempDir()
+	agent := NewTestAgent()
+	agent.workspaceRoot = ws
+
+	ct := NewChangeTracker(agent, "test instruction")
+	agent.changeTracker = ct
+
+	// Track a relative path while CWD == workspace.
+	origWd, _ := os.Getwd()
+	defer os.Chdir(origWd)
+	os.Chdir(ws)
+
+	// Create the file so it exists for tracking.
+	relPath := "target.go"
+	filePath := filepath.Join(ws, relPath)
+	if err := os.WriteFile(filePath, []byte("original content\n"), 0644); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+	if err := ct.TrackFileWrite(relPath, "modified content\n"); err != nil {
+		t.Fatalf("TrackFileWrite: %v", err)
+	}
+
+	// Simulate a `cd` to a different directory.
+	otherDir := t.TempDir()
+	os.Chdir(otherDir)
+
+	// The stored path must be absolute so recovery resolves to the
+	// ORIGINAL location regardless of CWD.
+	changes := ct.GetChanges()
+	if len(changes) != 1 {
+		t.Fatalf("expected 1 change, got %d", len(changes))
+	}
+	stored := changes[0].FilePath
+	if !filepath.IsAbs(stored) {
+		t.Fatalf("stored path must be absolute for CWD-independent recovery, got %q", stored)
+	}
+
+	// Recovery via handleRecoverFile must resolve to the original
+	// workspace path, not the new CWD.
+	result, err := handleRecoverFile(nil, agent, map[string]interface{}{
+		"path":  stored,
+		"scope": "latest",
+	})
+	if err != nil {
+		t.Fatalf("handleRecoverFile: %v", err)
+	}
+
+	// The result should report a successful restore.
+	if !strings.Contains(result, `"recovered": true`) {
+		t.Errorf("expected recovery to succeed, got: %s", result)
+	}
+	// The path in the result should be the ORIGINAL workspace location.
+	if !strings.Contains(result, `"path": "`+filePath) {
+		t.Errorf("expected recovery path to be %q, got: %s", filePath, result)
+	}
+
+	// Verify the file on disk was restored at the original location.
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		t.Fatalf("read file at original location: %v", err)
+	}
+	if string(content) != "original content\n" {
+		t.Errorf("file at original location should be restored, got %q", string(content))
 	}
 }

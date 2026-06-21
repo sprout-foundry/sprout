@@ -109,7 +109,7 @@ func (vp *VisionProcessor) extractImageReferences(text string) []string {
 // otherwise the default vision prompt for imagePath is created.
 func (vp *VisionProcessor) AnalyzeImage(ctx context.Context, imagePath string, optionalPrompt ...string) (VisionAnalysis, error) {
 	// Download or read the image
-	imageData, imageType, err := vp.GetImageData(imagePath)
+	imageData, imageType, err := vp.GetImageData(ctx, imagePath)
 	if err != nil {
 		return VisionAnalysis{}, fmt.Errorf("get image data: %w", err)
 	}

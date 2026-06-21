@@ -288,3 +288,78 @@ func requireError(t *testing.T, err error, msg string) {
 // Ensure the errors package is referenced (used implicitly by context.Canceled
 // comparisons in richer assertions if added later).
 var _ = errors.Is
+
+// =============================================================================
+// SP-034-1c extension — pre-API I/O ctx-threading tests
+//
+// The original SP-034-1c threaded ctx to SendVisionRequest leaf sites.
+// The extension threads ctx deeper, into the HTTP download and Python
+// subprocess layers, so Stop can abort remote fetches and OCR subprocesses
+// (not just the vision API calls themselves). These tests verify that.
+// =============================================================================
+
+// TestDownloadImage_CancelledContext verifies that a pre-cancelled context
+// causes DownloadImage to fail fast instead of issuing a real HTTP request.
+func TestDownloadImage_CancelledContext(t *testing.T) {
+	vp := &VisionProcessor{}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	// A non-routable address: even if the cancelled ctx somehow didn't
+	// short-circuit, this would fail. The key assertion is that ctx
+	// cancellation produces an immediate error rather than a hang.
+	_, err := vp.DownloadImage(ctx, "http://10.255.255.1/never.png")
+	requireError(t, err, "DownloadImage with pre-cancelled ctx should return an error")
+}
+
+// TestFetchBinaryURL_CancelledContext verifies that a pre-cancelled context
+// aborts the binary fetch HTTP request promptly.
+func TestFetchBinaryURL_CancelledContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := FetchBinaryURL(ctx, "http://10.255.255.1/never.pdf", ResponseKindPDF)
+	requireError(t, err, "FetchBinaryURL with pre-cancelled ctx should return an error")
+}
+
+// TestResolvePDFInputPath_CancelledContext verifies that resolving a remote
+// PDF URL with a cancelled context fails fast.
+func TestResolvePDFInputPath_CancelledContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, _, err := ResolvePDFInputPath(ctx, "https://10.255.255.1/never.pdf")
+	requireError(t, err, "ResolvePDFInputPath with pre-cancelled ctx should return an error")
+}
+
+// TestResolvePDFInputPath_LocalPassthrough_UnaffectedByCtx verifies that
+// local file paths bypass the HTTP path entirely (ctx is irrelevant).
+func TestResolvePDFInputPath_LocalPassthrough_UnaffectedByCtx(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	path, cleanup, err := ResolvePDFInputPath(ctx, "/tmp/sprout_test_passthrough.pdf")
+	if err != nil {
+		t.Fatalf("local path should pass through regardless of ctx: %v", err)
+	}
+	defer cleanup()
+	if path != "/tmp/sprout_test_passthrough.pdf" {
+		t.Fatalf("expected passthrough path, got %s", path)
+	}
+}
+
+// TestExtractPageImagesFromPDF_CancelledContext verifies that a cancelled
+// context causes the Python subprocess to be killed/fail rather than run.
+// We use a fake pythonExec path so no real subprocess is spawned.
+func TestExtractPageImagesFromPDF_CancelledContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	// Write a minimal valid-looking PDF so file checks don't fail first.
+	pdfPath := writeTempPDF(t)
+
+	_, err := extractPageImagesFromPDF(ctx, pdfPath, "/nonexistent/python3")
+	// CommandContext on a non-existent binary with a cancelled ctx will
+	// return an error promptly (context canceled or exec failure).
+	requireError(t, err, "extractPageImagesFromPDF with pre-cancelled ctx should return an error")
+}

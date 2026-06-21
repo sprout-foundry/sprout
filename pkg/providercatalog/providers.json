@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-06-20T11:25:09Z",
+  "updated_at": "2026-06-21T11:54:13Z",
   "source": "refresh_provider_catalog",
   "providers": [
     {
@@ -784,8 +784,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.22,
-          "output_cost": 0.85
+          "input_cost": 0.25,
+          "output_cost": 0.7999999999999999
         },
         {
           "id": "arcee-ai/trinity-mini",

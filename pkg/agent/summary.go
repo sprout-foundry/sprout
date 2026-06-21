@@ -2,9 +2,11 @@ package agent
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
 type conversationSummaryMetrics struct {
@@ -45,18 +47,19 @@ func (a *Agent) PrintConversationSummary(forceFull bool) {
 		return
 	}
 
-	fmt.Println("\n[chart] Conversation Summary")
+	fmt.Println()
+	fmt.Println("Conversation Summary")
 	fmt.Println("══════════════════════════════")
 
 	metrics := computeConversationSummaryMetrics(a.state.GetMessages())
 
 	// Conversation metrics
-	fmt.Printf("[~] Iterations:      %d\n", a.state.GetCurrentIteration())
-	fmt.Printf("[you] User msgs:        %d\n", metrics.userMessages)
-	fmt.Printf("[bot] Assistant msgs:   %d\n", metrics.assistantMessages)
-	fmt.Printf("[cfg] Tool calls:      %d\n", metrics.toolCalls)
-	fmt.Printf("[tools] Tool results:    %d\n", metrics.toolMessages)
-	fmt.Printf("[msg] Total messages:   %d\n", len(a.state.GetMessages()))
+	console.GlyphInfo.Fprintf(os.Stdout, "Iterations:      %d", a.state.GetCurrentIteration())
+	console.GlyphInfo.Fprintf(os.Stdout, "User msgs:        %d", metrics.userMessages)
+	console.GlyphInfo.Fprintf(os.Stdout, "Assistant msgs:   %d", metrics.assistantMessages)
+	console.GlyphInfo.Fprintf(os.Stdout, "Tool calls:      %d", metrics.toolCalls)
+	console.GlyphInfo.Fprintf(os.Stdout, "Tool results:    %d", metrics.toolMessages)
+	console.GlyphInfo.Fprintf(os.Stdout, "Total messages:   %d", len(a.state.GetMessages()))
 	fmt.Println()
 
 	// Calculate processed tokens (excluding cached ones)
@@ -74,31 +77,31 @@ func (a *Agent) PrintConversationSummary(forceFull bool) {
 	}
 
 	// Token usage section
-	fmt.Println("[num] Token Usage")
+	fmt.Println("Token Usage")
 	fmt.Println("──────────────────────────────")
 	estimateLabel := ""
 	if a.state.GetEstimatedTokenResponses() > 0 {
 		estimateLabel = " (estimated)"
 	}
-	fmt.Printf("[pkg] Total%s:            %s\n", estimateLabel, a.formatTokenCount(a.state.GetTotalTokens()))
-	fmt.Printf("[edit] Processed%s:        %s (%d prompt + %d completion)\n", estimateLabel,
+	console.GlyphInfo.Fprintf(os.Stdout, "Total%s:            %s", estimateLabel, a.formatTokenCount(a.state.GetTotalTokens()))
+	console.GlyphInfo.Fprintf(os.Stdout, "Processed%s:        %s (%d prompt + %d completion)", estimateLabel,
 		a.formatTokenCount(processedTokens), processedPromptTokens, a.state.GetCompletionTokens())
 
 	// Context window information
 	if a.state.GetMaxContextTokens() > 0 {
 		contextUsage := float64(a.state.GetCurrentContextTokens()) / float64(a.state.GetMaxContextTokens()) * 100
-		fmt.Printf("[win] Context window:     %s/%s (%.1f%% used)\n",
+		console.GlyphInfo.Fprintf(os.Stdout, "Context window:     %s/%s (%.1f%% used)",
 			a.formatTokenCount(a.state.GetCurrentContextTokens()),
 			a.formatTokenCount(a.state.GetMaxContextTokens()),
 			contextUsage)
 	} else {
-		fmt.Printf("[win] Context window:     %s (limit unavailable)\n", a.formatTokenCount(a.state.GetCurrentContextTokens()))
+		console.GlyphInfo.Fprintf(os.Stdout, "Context window:     %s (limit unavailable)", a.formatTokenCount(a.state.GetCurrentContextTokens()))
 	}
 
 	if a.state.GetEstimatedTokenResponses() > 0 {
-		fmt.Printf("[info] Token usage includes estimates for %d response(s) where provider usage was unavailable.\n", a.state.GetEstimatedTokenResponses())
+		console.GlyphInfo.Fprintf(os.Stdout, "Token usage includes estimates for %d response(s) where provider usage was unavailable.", a.state.GetEstimatedTokenResponses())
 	} else if a.state.GetTotalTokens() == 0 && a.state.GetCurrentContextTokens() > 0 {
-		fmt.Println("[info] Token usage from provider was unavailable for this run.")
+		console.GlyphInfo.Fprintln(os.Stdout, "Token usage from provider was unavailable for this run.")
 	}
 
 	if a.state.GetCachedTokens() > 0 {
@@ -106,32 +109,37 @@ func (a *Agent) PrintConversationSummary(forceFull bool) {
 		if a.state.GetTotalTokens() > 0 {
 			efficiency = float64(a.state.GetCachedTokens()) / float64(a.state.GetTotalTokens()) * 100
 		}
-		fmt.Printf("[recycle] Cached reused:     %s\n", a.formatTokenCount(a.state.GetCachedTokens()))
-		fmt.Printf("$ Cost savings:       $%.6f\n", a.state.GetCachedCostSavings())
-		fmt.Printf("[up] Efficiency:        %.1f%% tokens cached\n", efficiency)
+		console.GlyphInfo.Fprintf(os.Stdout, "Cached reused:     %s", a.formatTokenCount(a.state.GetCachedTokens()))
+		console.GlyphInfo.Fprintf(os.Stdout, "Cost savings:       $%.6f", a.state.GetCachedCostSavings())
+		console.GlyphInfo.Fprintf(os.Stdout, "Efficiency:        %.1f%% tokens cached", efficiency)
 
 		// Add efficiency rating
-		var efficiencyRating string
+		var ratingGlyph console.Glyph
+		var ratingText string
 		switch {
 		case efficiency >= 50:
-			efficiencyRating = "[cup] Excellent"
+			ratingGlyph = console.GlyphSuccess
+			ratingText = "Excellent"
 		case efficiency >= 30:
-			efficiencyRating = "[OK] Good"
+			ratingGlyph = console.GlyphSuccess
+			ratingText = "Good"
 		case efficiency >= 15:
-			efficiencyRating = "[chart] Average"
+			ratingGlyph = console.GlyphWarning
+			ratingText = "Average"
 		default:
-			efficiencyRating = "[down] Low"
+			ratingGlyph = console.GlyphWarning
+			ratingText = "Low"
 		}
-		fmt.Printf("[medal] Efficiency rating: %s\n", efficiencyRating)
+		ratingGlyph.Fprintf(os.Stdout, "Efficiency rating: %s", ratingText)
 	}
 
 	fmt.Println()
-	fmt.Printf("$ Total cost:        $%.6f\n", a.state.GetTotalCost())
+	console.GlyphInfo.Fprintf(os.Stdout, "Total cost:        $%.6f", a.state.GetTotalCost())
 
 	// Add cost per iteration
 	if a.state.GetCurrentIteration() > 0 {
 		costPerIteration := a.state.GetTotalCost() / float64(a.state.GetCurrentIteration())
-		fmt.Printf("[list] Cost per iteration: $%.6f\n", costPerIteration)
+		console.GlyphInfo.Fprintf(os.Stdout, "Cost per iteration: $%.6f", costPerIteration)
 	}
 
 	fmt.Println("══════════════════════════════")
@@ -275,12 +283,12 @@ func (a *Agent) GenerateConversationSummary() string {
 	taskActions := a.GetTaskActions()
 
 	// Add conversation metrics
-	summary.WriteString("[chart] CONVERSATION SUMMARY\n")
+	summary.WriteString(console.GlyphInfo.Prefix() + "CONVERSATION SUMMARY\n")
 	summary.WriteString("══════════════════════════════\n\n")
 
 	// Add task actions summary
 	if len(taskActions) > 0 {
-		summary.WriteString("[*] COMPLETED ACTIONS:\n")
+		summary.WriteString(console.GlyphAction.Prefix() + "COMPLETED ACTIONS:\n")
 		summary.WriteString("──────────────────────────────\n")
 
 		// Group actions by type
@@ -304,7 +312,7 @@ func (a *Agent) GenerateConversationSummary() string {
 				completed++
 			}
 		}
-		summary.WriteString("[list] TASK PROGRESS:\n")
+		summary.WriteString(console.GlyphInfo.Prefix() + "TASK PROGRESS:\n")
 		summary.WriteString("──────────────────────────────\n")
 		summary.WriteString(fmt.Sprintf("• Completed: %d/%d tasks\n", completed, len(todos)))
 		summary.WriteString("\n")
@@ -314,7 +322,7 @@ func (a *Agent) GenerateConversationSummary() string {
 	if a.state.GetOptimizer() != nil {
 		stats := a.state.GetOptimizer().GetOptimizationStats()
 		if trackedFiles, ok := stats["file_paths"].([]string); ok && len(trackedFiles) > 0 {
-			summary.WriteString("[dir/] KEY FILES EXPLORED:\n")
+			summary.WriteString(console.GlyphInfo.Prefix() + "KEY FILES EXPLORED:\n")
 			summary.WriteString("──────────────────────────────\n")
 			for _, file := range trackedFiles {
 				summary.WriteString(fmt.Sprintf("• %s\n", file))
@@ -324,7 +332,7 @@ func (a *Agent) GenerateConversationSummary() string {
 	}
 
 	// Add conversation metrics
-	summary.WriteString("[up] CONVERSATION METRICS:\n")
+	summary.WriteString(console.GlyphInfo.Prefix() + "CONVERSATION METRICS:\n")
 	summary.WriteString("──────────────────────────────\n")
 	summary.WriteString(fmt.Sprintf("• Iterations: %d\n", a.state.GetCurrentIteration()))
 	summary.WriteString(fmt.Sprintf("• Total cost: $%.6f\n", a.state.GetTotalCost()))

@@ -540,7 +540,7 @@ func (m *MCPCommand) testServer(serverName string, chatAgent *agent.Agent) error
 	}
 
 	defer func() {
-		fmt.Println("[STOP] Stopping server...")
+		console.GlyphStopped.Print("Stopping server...")
 		server.Stop(context.Background())
 	}()
 

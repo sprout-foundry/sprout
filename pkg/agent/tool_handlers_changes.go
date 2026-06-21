@@ -471,7 +471,7 @@ func handleRevertMyChanges(_ context.Context, a *Agent, args map[string]interfac
 	results := make([]entry, 0, len(candidates))
 	var restored, failed int
 	for _, ch := range candidates {
-		action, ok, msg := revertOne(ch, tracker)
+		action, ok, msg := a.revertOne(ch)
 		results = append(results, entry{Path: ch.FilePath, Action: action, OK: ok, Message: msg})
 		if ok {
 			restored++
@@ -528,18 +528,32 @@ func selectRevertCandidates(changes []TrackedFileChange, scope, since string) ([
 
 // revertOne writes the change's OriginalCode back to disk (or removes
 // the file if the change is a create-with-no-original). Returns
-// (action, ok, message).
-func revertOne(ch TrackedFileChange, tracker *ChangeTracker) (string, bool, string) {
+// (action, ok, message). A method on *Agent so it can enforce the
+// workspace boundary check (C1) via a.IsPathOutsideWorkspace and reach
+// the change tracker via a.GetChangeTracker.
+func (a *Agent) revertOne(ch TrackedFileChange) (string, bool, string) {
 	abs, err := filepath.Abs(ch.FilePath)
 	if err != nil {
 		return "", false, fmt.Sprintf("resolve path: %v", err)
 	}
 
+	// C1: Refuse to write to or delete anything outside the workspace
+	// root. Out-of-workspace entries are reported as skipped (not
+	// failures) so a bulk revert still succeeds for the in-workspace
+	// majority without aborting on a single stray path.
+	if a.IsPathOutsideWorkspace(abs) {
+		return "", false, "path is outside the workspace — skipped"
+	}
+
+	tracker := a.GetChangeTracker()
+
 	if ch.Operation == "create" {
 		if err := os.Remove(abs); err != nil && !os.IsNotExist(err) {
 			return "delete", false, fmt.Sprintf("remove created file: %v", err)
 		}
-		tracker.SyncShellCacheForPath(abs)
+		if tracker != nil {
+			tracker.SyncShellCacheForPath(abs)
+		}
 		return "delete", true, "removed file created during session"
 	}
 
@@ -552,7 +566,9 @@ func revertOne(ch TrackedFileChange, tracker *ChangeTracker) (string, bool, stri
 	if err := os.WriteFile(abs, []byte(ch.OriginalCode), 0o644); err != nil {
 		return "", false, fmt.Sprintf("write: %v", err)
 	}
-	tracker.SyncShellCacheForPath(abs)
+	if tracker != nil {
+		tracker.SyncShellCacheForPath(abs)
+	}
 	return "restore", true, "wrote original content back to disk"
 }
 

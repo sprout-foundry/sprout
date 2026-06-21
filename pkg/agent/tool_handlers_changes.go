@@ -148,6 +148,7 @@ func buildFileList(tracker *ChangeTracker, changes []TrackedFileChange, includeD
 			Op:          ch.Operation,
 			Tool:        ch.ToolCall,
 			Timestamp:   ch.Timestamp,
+			Source:      ch.Source,
 			Recoverable: isRecoverableOriginal(ch.OriginalCode),
 			BulkCount:   ch.BulkCount,
 		}

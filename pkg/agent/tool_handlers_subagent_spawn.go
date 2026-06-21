@@ -623,6 +623,11 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 	})
 	printSubagentDone(persona, result)
 
+	// SP-059 Phase 2c (missing step): merge the subagent's tracked
+	// changes into the primary's ChangeTracker so list_changes,
+	// recover_file, and revert_my_changes see subagent edits.
+	a.MergeSubagentChanges(result.FileChanges, persona)
+
 	// SP-059 Phase 2a: build the typed envelope. resultMap is preserved
 	// for the legacy code paths below that still mutate it via string
 	// keys (file change extraction, security re-prompt, etc.) — both
@@ -987,6 +992,19 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 		opts.MaxConcurrentSubagents = maxParallel
 	}
 	results := runner.RunParallel(ctx, tasks, opts)
+
+	// SP-059 Phase 2c (missing step): merge each subagent's tracked
+	// changes into the primary's ChangeTracker so list_changes,
+	// recover_file, and revert_my_changes see subagent edits. Build a
+	// taskID -> persona lookup so merged changes are attributed to the
+	// correct subagent persona.
+	personaByID := make(map[string]string, len(tasks))
+	for _, t := range tasks {
+		personaByID[t.ID] = t.Persona
+	}
+	for _, r := range results {
+		a.MergeSubagentChanges(r.FileChanges, personaByID[r.ID])
+	}
 
 	// Convert to resultMap format for backward compatibility
 	resultMap := make(map[string]map[string]string)

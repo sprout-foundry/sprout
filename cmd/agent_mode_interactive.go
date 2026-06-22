@@ -64,8 +64,11 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	// just triggered interactively.
 	//
 	// Runs BEFORE the InputReader is constructed so a resumed session's
-	// model is reflected in the prompt prefix.
-	maybeOfferSessionResume(chatAgent)
+	// model is reflected in the prompt prefix. The returned dismissKey
+	// is the first character the user typed to dismiss the picker (if
+	// any) — it's forwarded into the input buffer below so that
+	// keystroke isn't swallowed.
+	dismissKey := maybeOfferSessionResume(chatAgent)
 
 	// SP-048-5b: one-shot hint about Tab autocomplete + Ctrl-D, persisted
 	// per workspace in ~/.sprout/state.json so it never repeats.
@@ -83,6 +86,14 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 
 	// Initialize with existing history from agent
 	inputReader.SetHistory(chatAgent.GetHistory())
+
+	// Forward the picker's dismiss key into the REPL input buffer so the
+	// first character the user typed to start fresh isn't swallowed by
+	// the session picker. SetInitialContent pre-fills the buffer; the
+	// next ReadLine renders it with the cursor at the end.
+	if dismissKey != "" {
+		inputReader.SetInitialContent(dismissKey)
+	}
 
 	// SP-048-2a: slash command tab completion. Re-builds a fresh registry
 	// per call so newly-installed MCP commands (which can be added mid-

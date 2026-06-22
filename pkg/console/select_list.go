@@ -67,6 +67,13 @@ type SelectList struct {
 
 	fd     int
 	isTTY  bool
+
+	// dismissKey holds the printable text of the key that dismissed
+	// the picker under DismissOnAnyKey. Empty when the picker exited
+	// via Enter/Esc/Ctrl+C or when DismissOnAnyKey is off. Callers
+	// that want to forward the dismissed keystroke (e.g. pre-filling
+	// the REPL input buffer) should read it via DismissKey().
+	dismissKey string
 }
 
 // NewSelectList constructs a picker with the given options. Items
@@ -153,6 +160,7 @@ func (s *SelectList) processKey(b byte, n int, buf []byte) (done bool, val strin
 			s.filterBackspace()
 			s.render()
 		} else if s.opts.DismissOnAnyKey {
+			s.recordDismissKey(string(b))
 			return true, "", false
 		}
 		return false, "", false
@@ -161,6 +169,7 @@ func (s *SelectList) processKey(b byte, n int, buf []byte) (done bool, val strin
 			s.filterAppend(string(b))
 			s.render()
 		} else if s.opts.DismissOnAnyKey {
+			s.recordDismissKey(string(b))
 			return true, "", false
 		}
 		return false, "", false
@@ -169,11 +178,50 @@ func (s *SelectList) processKey(b byte, n int, buf []byte) (done bool, val strin
 			s.consumeUTF8(b, n, buf[:])
 			s.render()
 		} else if s.opts.DismissOnAnyKey {
+			s.recordDismissKey(utf8RuneFromBuf(b, n, buf[:]))
 			return true, "", false
 		}
 		return false, "", false
 	}
 	return false, "", false
+}
+
+// recordDismissKey stores the printable text of the key that dismissed
+// the picker so callers can forward it (e.g. into the REPL input buffer).
+// Backspace/DEL (0x7F/0x08) is intentionally NOT recorded — it's not a
+// character the user would want pre-filled into a prompt.
+func (s *SelectList) recordDismissKey(text string) {
+	if b := text[0]; b == 0x7F || b == 0x08 {
+		return
+	}
+	s.dismissKey = text
+}
+
+// utf8RuneFromBuf decodes the bytes in buf (starting at buf[0]=lead)
+// into a string. n is the number of bytes read so far; continuation
+// bytes already present in buf are used directly. If the buffer holds
+// an incomplete sequence, the decoded bytes are still returned (a
+// RuneError surfaces as "\ufffd", which callers may forward as-is).
+func utf8RuneFromBuf(lead byte, n int, buf []byte) string {
+	if n >= utf8Width(lead) {
+		// We already have the full sequence in buf.
+		if r, size := utf8.DecodeRune(buf[:n]); size > 0 {
+			return string(r)
+		}
+	}
+	// Incomplete — best effort: decode what we have.
+	if r, _ := utf8.DecodeRune(buf[:n]); r != utf8.RuneError {
+		return string(r)
+	}
+	return ""
+}
+
+// DismissKey returns the printable key that dismissed the picker under
+// DismissOnAnyKey (empty for Enter/Esc/Ctrl+C exits or when the
+// feature is off). Callers can forward it into their own input reader
+// so the user's keystroke isn't lost.
+func (s *SelectList) DismissKey() string {
+	return s.dismissKey
 }
 
 // runTTY drives the interactive picker. Returns when the user presses

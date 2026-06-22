@@ -308,6 +308,9 @@ func CreateProviderClient(clientType api.ClientType, model string) (api.ClientIn
 	case api.ZAIClientType:
 		// Use the new generic provider system
 		return CreateGenericProvider("zai", model)
+	case api.ZAICodingClientType:
+		// GLM Coding Plan uses a dedicated endpoint
+		return CreateGenericProvider("zai-coding", model)
 	case api.DeepInfraClientType:
 		// Use the new generic provider system
 		return CreateGenericProvider("deepinfra", model)

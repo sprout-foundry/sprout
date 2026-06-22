@@ -155,6 +155,8 @@ func ProviderEnvVar(provider string) string {
 		return "DEEPSEEK_API_KEY"
 	case "zai", "z.ai":
 		return "ZAI_API_KEY"
+	case "zai-coding":
+		return "ZAI_CODING_API_KEY"
 	case "ollama", "ollama-local", "ollama-cloud":
 		return "OLLAMA_API_KEY"
 	case "minimax":

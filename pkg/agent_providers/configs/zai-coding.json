@@ -1,0 +1,172 @@
+{
+  "auth": {
+    "env_var": "ZAI_CODING_API_KEY",
+    "type": "bearer"
+  },
+  "cost": {
+    "currency": "USD",
+    "input_token_cost": 0,
+    "output_token_cost": 0
+  },
+  "defaults": {
+    "model": "glm-5",
+    "temperature": 0.1
+  },
+  "endpoint": "https://api.z.ai/api/coding/paas/v4/chat/completions",
+  "headers": {},
+  "message_conversion": {
+    "convert_tool_role_to_user": false,
+    "include_tool_call_id": true,
+    "reasoning_content_field": "reasoning_content"
+  },
+  "models": {
+    "available_models": [
+      "glm-5",
+      "glm-5.1",
+      "glm-5-turbo",
+      "glm-4.7",
+      "GLM-4.6",
+      "glm-4.6v",
+      "GLM-4.5",
+      "GLM-4.5-air"
+    ],
+    "default_context_limit": 200000,
+    "default_model": "glm-5",
+    "model_info": [
+      {
+        "context_length": 200000,
+        "description": "Z.AI GLM-5 - Flagship model with 200K context, 128K max output, agentic coding",
+        "id": "glm-5",
+        "name": "GLM-5",
+        "tags": [
+          "tools",
+          "coding"
+        ]
+      },
+      {
+        "context_length": 200000,
+        "description": "Z.AI GLM-5.1 - Enhanced GLM-5 with improved reasoning and tool use capabilities",
+        "id": "glm-5.1",
+        "name": "GLM-5.1",
+        "tags": [
+          "tools",
+          "coding",
+          "reasoning"
+        ]
+      },
+      {
+        "context_length": 200000,
+        "description": "Z.AI GLM-5-Turbo - Optimized for agent/tool tasks with 200K context, 128K max output",
+        "id": "glm-5-turbo",
+        "name": "GLM-5 Turbo",
+        "tags": [
+          "tools",
+          "coding"
+        ]
+      },
+      {
+        "context_length": 200000,
+        "description": "Z.AI GLM-4.7 - Latest GLM-4.x model with 200K context window, designed for development environments",
+        "id": "glm-4.7",
+        "name": "GLM-4.7",
+        "tags": [
+          "tools",
+          "coding"
+        ]
+      },
+      {
+        "context_length": 200000,
+        "description": "Z.AI GLM-4.6 - Coding optimized model with 200K context window",
+        "id": "GLM-4.6",
+        "name": "GLM-4.6",
+        "tags": [
+          "tools",
+          "coding"
+        ]
+      },
+      {
+        "context_length": 200000,
+        "description": "Z.AI GLM-4.6 with vision capabilities",
+        "id": "glm-4.6v",
+        "name": "GLM-4.6 Vision",
+        "tags": [
+          "tools",
+          "coding",
+          "vision"
+        ]
+      },
+      {
+        "context_length": 128000,
+        "description": "Z.AI GLM-4.5 - Previous generation with 128K context window",
+        "id": "GLM-4.5",
+        "name": "GLM-4.5",
+        "tags": [
+          "tools"
+        ]
+      },
+      {
+        "context_length": 128000,
+        "description": "Z.AI GLM-4.5 Air - Lightweight version with 128K context window",
+        "id": "GLM-4.5-air",
+        "name": "GLM-4.5 Air",
+        "tags": [
+          "tools"
+        ]
+      }
+    ],
+    "model_overrides": {
+      "glm-3-turbo": 128000,
+      "glm-4": 128000,
+      "glm-4.5": 128000,
+      "glm-4.5-air": 128000,
+      "glm-4.6": 200000,
+      "glm-4.6V": 200000,
+      "glm-4.7": 200000,
+      "glm-5": 200000,
+      "glm-5-turbo": 200000,
+      "glm-5.1": 200000
+    },
+    "pattern_overrides": [
+      {
+        "context_limit": 200000,
+        "pattern": "glm-5.*"
+      },
+      {
+        "context_limit": 200000,
+        "pattern": "glm-4\\.6.*"
+      },
+      {
+        "context_limit": 200000,
+        "pattern": "glm-4\\.[7-9].*"
+      },
+      {
+        "context_limit": 128000,
+        "pattern": "glm-4.*"
+      },
+      {
+        "context_limit": 128000,
+        "pattern": "glm-3.*"
+      }
+    ],
+    "supports_vision": true,
+    "vision_model": "glm-4.6v"
+  },
+  "name": "zai-coding",
+  "retry": {
+    "backoff_multiplier": 2,
+    "base_delay_ms": 1000,
+    "max_attempts": 3,
+    "max_delay_ms": 30000,
+    "retryable_errors": [
+      "rate_limit_exceeded",
+      "temporary_error",
+      "timeout"
+    ]
+  },
+  "streaming": {
+    "chunk_timeout_ms": 320000,
+    "done_marker": "[DONE]",
+    "format": "sse"
+  },
+  "display_name": "Z.AI Coding Plan"
+}

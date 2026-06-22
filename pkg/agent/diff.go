@@ -2,7 +2,6 @@ package agent
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -36,7 +35,7 @@ func (a *Agent) showPythonDiff(oldContent, newContent string, maxLines int) bool
 	}
 
 	// Create temporary files for the diff
-	tmpDir, err := ioutil.TempDir("", "coder_diff_")
+	tmpDir, err := os.MkdirTemp("", "coder_diff_")
 	if err != nil {
 		if a.debug {
 			a.Logger().Debug("Failed to create temporary directory for diff: %v", err)
@@ -49,13 +48,13 @@ func (a *Agent) showPythonDiff(oldContent, newContent string, maxLines int) bool
 	newFile := filepath.Join(tmpDir, "new.txt")
 
 	// Write content to temporary files
-	if err := ioutil.WriteFile(oldFile, []byte(oldContent), 0644); err != nil {
+	if err := os.WriteFile(oldFile, []byte(oldContent), 0644); err != nil {
 		if a.debug {
 			a.Logger().Debug("Failed to write old content to temporary file: %v", err)
 		}
 		return false
 	}
-	if err := ioutil.WriteFile(newFile, []byte(newContent), 0644); err != nil {
+	if err := os.WriteFile(newFile, []byte(newContent), 0644); err != nil {
 		if a.debug {
 			a.Logger().Debug("Failed to write new content to temporary file: %v", err)
 		}
@@ -134,7 +133,7 @@ if __name__ == "__main__":
 `, oldFile, newFile, maxLines, maxLines)
 
 	scriptFile := filepath.Join(tmpDir, "diff_script.py")
-	if err := ioutil.WriteFile(scriptFile, []byte(pythonScript), 0644); err != nil {
+	if err := os.WriteFile(scriptFile, []byte(pythonScript), 0644); err != nil {
 		if a.debug {
 			a.Logger().Debug("Failed to write Python diff script: %v", err)
 		}

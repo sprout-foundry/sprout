@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"sync"
 )
 
 // MigrationFunc transforms a raw JSON config from one version to the next.
@@ -21,22 +22,63 @@ type migrationStep struct {
 // migrationRegistry holds all registered migration steps.
 var migrationRegistry []migrationStep
 
-// RegisterMigration adds a migration step to the global registry.
-// It panics if a migration from the same source version is already registered
-// (at-most-one-step-per-source prevents ambiguous chains).
-func RegisterMigration(from, to string, fn MigrationFunc) {
+// registerMigration adds a migration step to the global registry.
+// It returns an error if a migration from the same source version is already
+// registered (at-most-one-step-per-source prevents ambiguous chains).
+func registerMigration(from, to string, fn MigrationFunc) error {
 	for _, m := range migrationRegistry {
 		if m.from == from {
-			panic(fmt.Sprintf("config migration: duplicate source version %q", from))
+			return fmt.Errorf("config migration: duplicate source version %q", from)
 		}
 	}
 	migrationRegistry = append(migrationRegistry, migrationStep{from: from, to: to, fn: fn})
+	return nil
+}
+
+// RegisterMigration adds a migration step to the global registry.
+// It panics if a migration from the same source version is already registered
+// (at-most-one-step-per-source prevents ambiguous chains).
+//
+// Deprecated: Use registerMigration (returns an error) for new code. This
+// wrapper is retained for backward compatibility with external callers and
+// tests that expect the panic behavior.
+func RegisterMigration(from, to string, fn MigrationFunc) {
+	if err := registerMigration(from, to, fn); err != nil {
+		panic(err.Error())
+	}
+}
+
+// registrationOnce guards one-time population of migrationRegistry from the
+// built-in migration table. init() cannot return errors, so we defer the
+// registration into a sync.Once and surface any failure via MigrateConfig.
+var (
+	registrationOnce sync.Once
+	registrationErr  error
+)
+
+func ensureRegistered() {
+	registrationOnce.Do(func() {
+		registrationErr = registerMigration("0.0", "2.0", migrateV0ToV2)
+		if registrationErr != nil {
+			return
+		}
+		registrationErr = registerMigration("1.0", "2.0", migrateV1ToV2)
+		if registrationErr != nil {
+			return
+		}
+		registrationErr = registerMigration("2.0", "3.0", migrateV2ToV3)
+	})
 }
 
 // MigrateConfig applies all necessary migration steps to bring raw config up to the target version.
 // It takes a raw JSON map, determines the current version, and runs each step in order.
 // Returns the migrated raw config or an error if a step fails or the chain cannot reach the target.
 func MigrateConfig(raw map[string]interface{}, targetVersion string) (map[string]interface{}, error) {
+	ensureRegistered()
+	if registrationErr != nil {
+		return raw, fmt.Errorf("config migration registry initialization failed: %w", registrationErr)
+	}
+
 	currentVersion, _ := raw["version"].(string)
 	if currentVersion == "" {
 		currentVersion = "0.0" // Treat unversioned configs as "0.0"
@@ -511,10 +553,7 @@ func migrateV1ToV2(raw map[string]interface{}) error {
 }
 
 func init() {
-	// Register the migration from pre-versioned configs (0.0) to version 2.0
-	RegisterMigration("0.0", "2.0", migrateV0ToV2)
-	// Register the migration from version 1.0 to version 2.0
-	RegisterMigration("1.0", "2.0", migrateV1ToV2)
-	// Register the migration from version 2.0 to version 3.0
-	RegisterMigration("2.0", "3.0", migrateV2ToV3)
+	// Migration registration happens lazily via ensureRegistered() (sync.Once)
+	// so that a duplicate source version surfaces as an error from MigrateConfig
+	// rather than panicking at process start.
 }

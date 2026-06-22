@@ -160,7 +160,13 @@ type ApprovalManager struct {
 // DefaultTimeout is the maximum time a request will block waiting for a
 // webui response before applying the fallback (reject for tool kind,
 // defaultResponse for prompt kind).
-const DefaultTimeout = 5 * time.Minute
+//
+// Set generously (30 min) so a user who steps away from an interactive
+// session can still return and approve — a false-deny after 5 minutes was
+// a recurring UX complaint. Non-interactive runs should not hit this path
+// at all (they fast-fail before calling the manager), so the long timeout
+// has no downside for automation.
+const DefaultTimeout = 30 * time.Minute
 
 // --- Global singleton ---
 
@@ -289,6 +295,7 @@ func (am *ApprovalManager) RequestApprovalDecisionWithOutcome(eventBus *events.E
 			payload["user_id"] = trimmed
 		}
 		eventBus.Publish(events.EventTypeSecurityApprovalRequest, payload)
+		eventBus.Publish(events.EventTypeInputRequired, events.InputRequiredEvent("security_approval", requestID))
 
 	case ApprovalKindPrompt:
 		payload := events.SecurityPromptRequestEvent(requestID, req.Prompt, req.DefaultResponse, req.Extras)
@@ -296,6 +303,7 @@ func (am *ApprovalManager) RequestApprovalDecisionWithOutcome(eventBus *events.E
 			payload["user_id"] = trimmed
 		}
 		eventBus.Publish(events.EventTypeSecurityPromptRequest, payload)
+		eventBus.Publish(events.EventTypeInputRequired, events.InputRequiredEvent("security_prompt", requestID))
 	}
 
 	timeout := am.timeout

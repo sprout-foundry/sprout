@@ -50,7 +50,10 @@ func promptLargePasteAction(content string, in io.Reader) pasteAction {
 			fmt.Fprintf(os.Stderr, "\n")
 			return actionCancel
 		default:
-			fmt.Fprintf(os.Stderr, "  Choose: ")
+			// Erase the invalid character (backspace + overwrite with a
+			// space + backspace again) before re-prompting, so the
+			// line doesn't accumulate garbage characters.
+			fmt.Fprintf(os.Stderr, "\b \b  Choose: ")
 		}
 	}
 }
@@ -365,7 +368,7 @@ func shouldStartHeuristicPaste(chunk []byte, timeSinceLastChar time.Duration) bo
 	}
 
 	// For moderate bursts, still require rapid arrival.
-	if len(chunk) < 20 && timeSinceLastChar >= 30*time.Millisecond {
+	if len(chunk) < pasteBurstMinBytes && timeSinceLastChar >= pasteBurstMinGap {
 		return false
 	}
 

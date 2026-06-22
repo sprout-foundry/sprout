@@ -41,7 +41,7 @@
         "git_write"
       ],
       "delegatable": false,
-      "description": "Planning and delegation persona: classify -> activate skills -> delegate -> verify. Git-write operations (commit, stage, push) are gated by the 'AllowOrchestratorGitWrite' config flag; when enabled, the 'commit' tool and git policy guidance become active.",
+      "description": "Planning and delegation persona: classify -> activate skills -> delegate -> verify. Carries the 'git_write' capability, granting git-write operations (commit, stage, push) via shell_command and the commit tool.",
       "enabled": true,
       "id": "orchestrator",
       "_rules_source": "inherit:DefaultAutoApproveRules",

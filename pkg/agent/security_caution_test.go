@@ -225,22 +225,24 @@ func TestSecurityCautionWorkflowIntegration(t *testing.T) {
 		t.Fatal("expected ShouldPrompt=true for privileged install")
 	}
 
-	// Step 2: Verify the error format matches what tool_definitions.go generates.
-	// In non-interactive mode, CAUTION+ShouldPrompt produces:
-	//   fmt.Errorf("security caution: %s — %s (requires LLM verification: ...)", ...)
-	// We verify the reasoning would be included.
+	// Step 2: Verify the error format matches what tool_security.go generates.
+	// In non-interactive mode, CAUTION+ShouldPrompt now produces a terminal
+	// SecurityError with "Do not retry this exact command" (SP-049-1c).
 	if classification.Reasoning == "" {
-		t.Fatal("classification reasoning is empty; the LLM would have no context for verification")
+		t.Fatal("classification reasoning is empty; the LLM would have no context for the block")
 	}
 
-	// Step 3: Verify the error prefix is detectable by tool_executor_sequential.go.
-	// The executor checks: strings.Contains(err.Error(), "security caution:")
+	// Step 3: Verify the new error format is detectable by tool_executor_sequential.go.
+	// The executor classifies SecurityError as ActionEscalate (via ClassifyError).
 	// We simulate the error format:
-	simulatedError := "security caution: shell_command — " + classification.Reasoning +
-		" (requires LLM verification: confirm this action is safe, expected, and aligned with user goals before proceeding)"
+	simulatedError := "security confirmation required: shell_command — " + classification.Reasoning +
+		". Re-run interactively, use --risk-profile=permissive, or use ask_user to confirm. Do not retry this exact command without changing the risk profile."
 
-	if !strings.Contains(simulatedError, "security caution:") {
-		t.Fatal("simulated error does not contain the 'security caution:' prefix")
+	if !strings.HasPrefix(simulatedError, "security confirmation required:") {
+		t.Fatal("simulated error does not contain the 'security confirmation required:' prefix")
+	}
+	if !strings.Contains(simulatedError, "Do not retry") {
+		t.Fatal("simulated error must contain 'Do not retry' to prevent LLM re-issuing")
 	}
 
 	// Step 4: Verify the SECURITY_CAUTION_REQUIRED result format.

@@ -205,18 +205,6 @@ func TestApplyPartialSettings_ResourceDirectory(t *testing.T) {
 	}
 }
 
-func TestApplyPartialSettings_AllowOrchestratorGitWrite(t *testing.T) {
-	cfg := configuration.NewConfig()
-	patch := map[string]interface{}{"allow_orchestrator_git_write": true}
-	_, err := applyPartialSettings(cfg, patch)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !cfg.AllowOrchestratorGitWrite {
-		t.Error("AllowOrchestratorGitWrite should be true")
-	}
-}
-
 func TestApplyPartialSettings_DisableThinking(t *testing.T) {
 	cfg := configuration.NewConfig()
 	patch := map[string]interface{}{"disable_thinking": true}

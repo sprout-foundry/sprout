@@ -13,10 +13,11 @@ const (
 	toolExecutionContextKeyToolName   toolExecutionContextKey = "tool_name"
 )
 
-// SP-068 collapsed the former WithUserApproved/HasUserApproval context-value
-// bridge (which signalled a Gate-1 approval to the Gate-2 persona cascade)
-// into the single agent-scoped recordGateApproval → consumeShellCommandApproval
-// path in risk_prompt.go, so both dispatch architectures share one mechanism.
+// SP-068 Phase 3 removed the former Gate-1 → Gate-2 approval bridge
+// (WithUserApproved/HasUserApproval context values, then
+// recordGateApproval → consumeShellCommandApproval agent-scoped map).
+// The unified risk resolver (UnifiedRiskResolver flag, default ON) runs
+// a single gate, so no bridge plumbing is needed.
 
 func withToolExecutionMetadata(ctx context.Context, toolCallID, toolName, workspaceRoot string) context.Context {
 	ctx = context.WithValue(ctx, toolExecutionContextKeyToolCallID, toolCallID)

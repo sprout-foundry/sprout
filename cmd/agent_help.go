@@ -28,6 +28,7 @@ var advancedAgentFlags = []string{
 	"system-prompt",
 	"system-prompt-str",
 	"unsafe",
+	"unsafe-shell",
 	"no-subagents",
 	"subagent-model",
 	"subagent-provider",

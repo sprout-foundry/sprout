@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -61,7 +62,7 @@ func TestLooksLikePDF(t *testing.T) {
 }
 
 func TestResolvePDFInputPath_LocalPathPassthrough(t *testing.T) {
-	path, cleanup, err := ResolvePDFInputPath("/tmp/sample.pdf")
+	path, cleanup, err := ResolvePDFInputPath(context.Background(), "/tmp/sample.pdf")
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -78,7 +79,7 @@ func TestResolvePDFInputPath_RemoteURLDownloadsToTemp(t *testing.T) {
 	}))
 	defer server.Close()
 
-	path, cleanup, err := ResolvePDFInputPath(server.URL + "/menu.pdf")
+	path, cleanup, err := ResolvePDFInputPath(context.Background(), server.URL + "/menu.pdf")
 	if err != nil {
 		t.Fatalf("expected remote PDF to resolve, got: %v", err)
 	}
@@ -101,7 +102,7 @@ func TestResolvePDFInputPath_RemoteURLRejectsNonPDF(t *testing.T) {
 	}))
 	defer server.Close()
 
-	_, cleanup, err := ResolvePDFInputPath(server.URL + "/menu.pdf")
+	_, cleanup, err := ResolvePDFInputPath(context.Background(), server.URL + "/menu.pdf")
 	defer cleanup()
 	if err == nil {
 		t.Fatal("expected non-PDF remote content to be rejected")

@@ -44,39 +44,21 @@ func TryZshCommandExecution(ctx context.Context, chatAgent *agent.Agent, query s
 		return false, nil
 	}
 
-	// Build the display message with colors
-	var displayMsg strings.Builder
-	displayMsg.WriteString(fmt.Sprintf("\n%s[Detected %s command: %s%s]%s",
-		console.ColorCyan,
-		cmdInfo.Type,
-		cmdInfo.Name,
-		console.ColorReset,
-		console.ColorReset,
-	))
-	switch cmdInfo.Type {
-	case zsh.CommandTypeExternal:
-		displayMsg.WriteString(fmt.Sprintf(" %s[%s%s]%s",
-			console.ColorGray,
-			cmdInfo.Path,
-			console.ColorReset,
-			console.ColorReset,
-		))
-	case zsh.CommandTypeAlias:
-		displayMsg.WriteString(fmt.Sprintf(" %s[%s%s]%s",
-			console.ColorGray,
-			cmdInfo.Value,
-			console.ColorReset,
-			console.ColorReset,
-		))
-	}
-	displayMsg.WriteString("\n")
-
 	// Check if we should auto-execute (either '!' prefix or config setting)
 	shouldAutoExecute := autoExecute || config.AutoExecuteDetectedCommands
 
+	// Build a one-line detect message with the path/value appended inline.
+	switch cmdInfo.Type {
+	case zsh.CommandTypeExternal:
+		console.GlyphInfo.Fprintf(os.Stdout, "Detected %s: %s (%s)", cmdInfo.Type, cmdInfo.Name, cmdInfo.Path)
+	case zsh.CommandTypeAlias:
+		console.GlyphInfo.Fprintf(os.Stdout, "Detected %s: %s (%s)", cmdInfo.Type, cmdInfo.Name, cmdInfo.Value)
+	default:
+		console.GlyphInfo.Fprintf(os.Stdout, "Detected %s: %s", cmdInfo.Type, cmdInfo.Name)
+	}
+
 	// Ask for confirmation (unless auto-execute)
 	if !shouldAutoExecute {
-		_, _ = os.Stdout.Write([]byte(displayMsg.String()))
 		_, _ = os.Stdout.Write([]byte("Execute directly? " + console.FormatYesNoPromptStdout(true) + " "))
 
 		// Read response
@@ -92,56 +74,15 @@ func TryZshCommandExecution(ctx context.Context, chatAgent *agent.Agent, query s
 			// User declined, proceed with normal agent flow
 			return false, nil
 		}
-	} else {
-		// Auto-execute with color
-		if autoExecute {
-			_, _ = os.Stdout.Write([]byte(fmt.Sprintf("%s%s[Auto-executing with !]%s\n",
-				displayMsg.String(),
-				console.ColorizeBold("Auto-executing with !", console.ColorYellow),
-				console.ColorReset,
-			)))
-		} else {
-			_, _ = os.Stdout.Write([]byte(fmt.Sprintf("%s%s[Auto-executing]%s\n",
-				displayMsg.String(),
-				console.ColorizeBold("Auto-executing", console.ColorGreen),
-				console.ColorReset,
-			)))
-		}
 	}
 
-	// Execute the command with color indicator
-	_, _ = os.Stdout.Write([]byte(fmt.Sprintf("%s▶ Executing:%s %s\n",
-		console.ColorizeBold("▶ Executing:", console.ColorBlue),
-		console.ColorReset,
-		query,
-	)))
-
-	// Print separator before streaming output
-	separatorWidth := GetTerminalWidth()
-	separator := strings.Repeat("─", separatorWidth)
-	_, _ = os.Stdout.Write([]byte(fmt.Sprintf("%s%s%s\n",
-		console.ColorGray,
-		separator,
-		console.ColorReset,
-	)))
+	// Execute the command with a glyph-led action line.
+	console.GlyphAction.Fprintf(os.Stdout, "Executing: %s", query)
 
 	_, err = ExecuteCommand(query)
 
-	// Print separator after output — re-read the width in case the terminal
-	// was resized while the command ran.
-	separator = strings.Repeat("─", GetTerminalWidth())
-	_, _ = os.Stdout.Write([]byte(fmt.Sprintf("%s%s%s\n",
-		console.ColorGray,
-		separator,
-		console.ColorReset,
-	)))
-
 	if err != nil {
-		_, _ = os.Stdout.Write([]byte(fmt.Sprintf("%s[FAIL] Error:%s %v\n",
-			console.ColorRed,
-			console.ColorReset,
-			err,
-		)))
+		console.GlyphError.Fprintf(os.Stdout, "Error: %v", err)
 		// Command execution failed - ask user if they want to send to LLM instead
 		_, _ = os.Stdout.Write([]byte("The command failed. Send this query to the Assistant instead? " + console.FormatYesNoPromptStdout(true) + " "))
 
@@ -244,39 +185,13 @@ func TryDirectExecution(ctx context.Context, chatAgent *agent.Agent, query strin
 
 // executeDirectCommand executes a command directly and prints output
 func executeDirectCommand(command string) (bool, error) {
-	_, _ = os.Stdout.Write([]byte(fmt.Sprintf("%s[!] Fast path:%s %s\n",
-		console.ColorizeBold("[!] Fast path:", console.ColorYellow),
-		console.ColorReset,
-		command,
-	)))
-
-	// Print separator before streaming output
-	separatorWidth := GetTerminalWidth()
-	separator := strings.Repeat("─", separatorWidth)
-	_, _ = os.Stdout.Write([]byte(fmt.Sprintf("%s%s%s\n",
-		console.ColorGray,
-		separator,
-		console.ColorReset,
-	)))
+	console.GlyphAction.Fprintf(os.Stdout, "Fast path: %s", command)
 
 	// Execute the command directly (output streams in real-time)
 	_, err := ExecuteCommand(command)
 
-	// Print separator after output — re-read the width in case the terminal
-	// was resized while the command ran.
-	separator = strings.Repeat("─", GetTerminalWidth())
-	_, _ = os.Stdout.Write([]byte(fmt.Sprintf("%s%s%s\n",
-		console.ColorGray,
-		separator,
-		console.ColorReset,
-	)))
-
 	if err != nil {
-		_, _ = os.Stdout.Write([]byte(fmt.Sprintf("%s[FAIL] Error:%s %v\n",
-			console.ColorRed,
-			console.ColorReset,
-			err,
-		)))
+		console.GlyphError.Fprintf(os.Stdout, "Error: %v", err)
 	}
 	return true, nil
 }
@@ -295,8 +210,8 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 	if registry.IsSlashCommand(query) {
 		if err := registry.Execute(query, chatAgent); err != nil {
 			// For slash commands, show error and exit immediately
-			_, _ = os.Stderr.Write([]byte(fmt.Sprintf("[FAIL] Slash command error: %v\n", err)))
-			_, _ = os.Stderr.Write([]byte("[i] Use '/help' to see available commands\n"))
+			console.GlyphError.Fprintf(os.Stderr, "Slash command error: %v", err)
+			console.GlyphInfo.Fprintf(os.Stderr, "Use '/help' to see available commands")
 			return fmt.Errorf("slash command failed: %w", err)
 		}
 		return nil
@@ -350,6 +265,11 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 
 	resultCh := make(chan result, 1)
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				resultCh <- result{response: "", err: fmt.Errorf("agent panic recovered: %v", r)}
+			}
+		}()
 		response, err := chatAgent.ProcessQueryWithContinuity(query)
 		resultCh <- result{response, err}
 	}()
@@ -424,7 +344,7 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 		// Context was cancelled - agent processing was interrupted
 		chatAgent.TriggerInterrupt()
 		duration := time.Since(startTime)
-		_, _ = os.Stdout.Write([]byte(fmt.Sprintf("\n[STOP] Query interrupted after %s\n", FormatDuration(duration))))
+		console.GlyphStopped.Fprintf(os.Stdout, "Query interrupted after %s", FormatDuration(duration))
 
 		// Allow the agent goroutine to stop cleanly after receiving interrupt.
 		select {

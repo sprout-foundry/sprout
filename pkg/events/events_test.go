@@ -448,3 +448,72 @@ func TestAgentMessageEventNilExtra(t *testing.T) {
 	assert.Equal(t, "caution", event["message"])
 	assert.Len(t, event, 2) // Only category and message
 }
+
+// TestInputRequiredEventConstant verifies the constant string value.
+func TestInputRequiredEventConstant(t *testing.T) {
+	assert.Equal(t, "input_required", EventTypeInputRequired)
+}
+
+// TestInputRequiredEventFactory_WithRequestID verifies the payload carries
+// both reason and request_id when the ID is non-empty.
+func TestInputRequiredEventFactory_WithRequestID(t *testing.T) {
+	event := InputRequiredEvent("some_reason", "req-123")
+
+	assert.Equal(t, "some_reason", event["reason"])
+	assert.Equal(t, "req-123", event["request_id"])
+}
+
+// TestInputRequiredEventFactory_EmptyRequestID verifies that when requestID
+// is empty, the returned map contains reason but NOT request_id.
+func TestInputRequiredEventFactory_EmptyRequestID(t *testing.T) {
+	event := InputRequiredEvent("some_reason", "")
+
+	assert.Equal(t, "some_reason", event["reason"])
+	assert.NotContains(t, event, "request_id", "request_id key must not be present when empty")
+	assert.NotEmpty(t, event["timestamp"], "timestamp must be present and non-empty")
+}
+
+// TestInputRequiredEventCritical verifies that input_required is treated as
+// a critical event: when the subscriber channel is full, the critical event
+// drains the stale event and delivers itself instead of being silently dropped.
+func TestInputRequiredEventCritical(t *testing.T) {
+	eb := NewEventBus()
+
+	// Use a tiny buffer-1 channel so we can deterministically fill it.
+	ch := make(chan UIEvent, 1)
+	eb.mutex.Lock()
+	eb.subscribers["crit-test"] = ch
+	eb.mutex.Unlock()
+	defer func() {
+		eb.mutex.Lock()
+		delete(eb.subscribers, "crit-test")
+		eb.mutex.Unlock()
+		close(ch)
+	}()
+
+	// Fill the channel with a non-critical event.
+	eb.Publish(EventTypeAgentMessage, AgentMessageEvent("info", "old", nil))
+
+	// Publish a critical input_required event — it should drain the channel
+	// and deliver itself, not be silently dropped.
+	eb.Publish(EventTypeInputRequired, InputRequiredEvent("test_reason", "req-1"))
+
+	// Read the single event in the buffer — it should be the critical one.
+	select {
+	case evt := <-ch:
+		assert.Equal(t, EventTypeInputRequired, evt.Type, "critical event should replace the drained event")
+		data := evt.Data.(map[string]interface{})
+		assert.Equal(t, "test_reason", data["reason"])
+		assert.Equal(t, "req-1", data["request_id"])
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for critical input_required event")
+	}
+
+	// Channel should now be empty — only one slot, we already read it.
+	select {
+	case evt := <-ch:
+		t.Fatalf("unexpected extra event in channel: %s", evt.Type)
+	default:
+		// Good — channel is empty.
+	}
+}

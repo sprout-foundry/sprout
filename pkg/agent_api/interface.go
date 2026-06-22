@@ -186,7 +186,7 @@ func GetProviderName(clientType ClientType) string {
 	providerDisplayNames := map[ClientType]string{
 		OpenAIClientType:         "OpenAI",
 		OpenRouterClientType:     "OpenRouter (Recommended)",
-		ZAIClientType:            "Z.AI Coding Plan",
+		ZAIClientType:            "Z.AI",
 		DeepInfraClientType:      "DeepInfra",
 		DeepSeekClientType:       "DeepSeek",
 		LMStudioClientType:       "LM Studio",

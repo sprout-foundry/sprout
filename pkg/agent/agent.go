@@ -83,10 +83,10 @@ type Agent struct {
 	interruptCancel     context.CancelFunc
 
 	// Sub-managers — Agent coordinates through these interfaces
-	state    StateManager    // Conversation history, checkpoints, tokens, cost, persona, etc.
-	output   OutputManager   // Streaming, async output, event metadata, output routing
-	security SecurityManager // Approvals, redaction, elevation, bypass
-	mcpSub   MCPSubManager   // MCP server lifecycle and tool caching
+	state    StateManager       // Conversation history, checkpoints, tokens, cost, persona, etc.
+	output   OutputManager      // Streaming, async output, event metadata, output routing
+	security SecurityManager    // Approvals, redaction, elevation, bypass
+	mcpSub   MCPSubManager      // MCP server lifecycle and tool caching
 	todoMgr  *tools.TodoManager // Per-agent todo manager for session isolation
 
 	// Event system (bridges output and core)
@@ -165,12 +165,11 @@ type Agent struct {
 	// that haven't been wired by their event bus initializer.
 	clarificationManager *ClarificationManager
 
-	// delegateID is this agent's identifier when acting as a subagent;
+	// subagentID is this agent's identifier when acting as a subagent;
 	// empty for root agents. Used as the requester ID when calling
 	// request_clarification so the response routes back to the right
-	// subagent. Name retained from the legacy delegate machinery to
-	// minimize churn; the field is opaque-string anyway.
-	delegateID string
+	// subagent.
+	subagentID string
 
 	// riskProfileOverride is a transient (per-session) override for
 	// the risk cascade profile. Set by the --risk-profile CLI flag
@@ -178,17 +177,6 @@ type Agent struct {
 	// fall through to Config.RiskProfile, then to "default".
 	// See agent_getters.go:EvaluateOperationRisk for resolution.
 	riskProfileOverride configuration.RiskProfile
-
-	// recentlyApprovedShellCommands tracks shell commands that just
-	// passed Gate 1's interactive approval (in the seed pre-execute
-	// hook), so Gate 2 (persona risk cascade in tool_handlers_shell.go)
-	// doesn't re-prompt the user for the same execution. The seed
-	// hook's signature has no ctx, so we can't propagate approval via
-	// context here — this map is the bridge. Entries are consumed
-	// (read-and-delete) by the first Gate 2 check that matches.
-	// Values are timestamps; consumers ignore entries older than 30s
-	// to bound memory if a Gate 2 check is somehow skipped.
-	recentlyApprovedShellCommands sync.Map // map[string]time.Time
 
 	// filesReadThisTurn tracks paths the agent called read_file on during
 	// the current turn. Used by the SP-046 staleness rule in
@@ -226,6 +214,28 @@ type Agent struct {
 	// budgetExceededCallback is invoked when the USD budget is first
 	// reached or surpassed. Same atomic-value pattern.
 	budgetExceededCallback atomic.Value // func(spent, limit float64)
+
+	// auditLogger records security decisions (blocks, approvals, loops) to a
+	// JSONL file for auditing. Set via SetAuditLogger; nil-safe everywhere.
+	// Stored as a value-backed pointer so tests can swap it freely.
+	auditLogger *tools.AuditLogger
+
+	// securityLLMClassifier is the lazily-initialized LLM-based command risk
+	// classifier (SP-076). Nil until GetSecurityLLMClassifier() is first
+	// called; a failed init caches nil so we don't retry on every prompt.
+	// Protected by securityLLMClassifierMu. securityLLMClassifierInitDone
+	// distinguishes "haven't tried yet" (false) from "tried, got nil" (true).
+	securityLLMClassifier         *SecurityLLMClassifier
+	securityLLMClassifierMu       sync.Mutex
+	securityLLMClassifierInitDone bool
+
+	// Security telemetry counters (Task 3) — track post-caution LLM behavior.
+	// Incremented atomically because seed may execute SafeForParallel tools
+	// concurrently, each running the pre-execute hook. Exposed via getters
+	// and the JSON result metrics.
+	secCautionsIssued      atomic.Int64
+	secRetriesAfterCaution atomic.Int64
+	secLoopsDetected       atomic.Int64
 
 	// SP-066 Phase 2: background rollup worker. rollupW is lazily
 	// initialized via rollupOnce so existing tests that construct bare

@@ -18,7 +18,7 @@ func handleRespondClarification(ctx context.Context, a *Agent, args map[string]i
 		return "", fmt.Errorf("response parameter is required")
 	}
 
-	if a.delegateID != "" {
+	if a.subagentID != "" {
 		return "", fmt.Errorf("respond_clarification is only available for parent agents")
 	}
 

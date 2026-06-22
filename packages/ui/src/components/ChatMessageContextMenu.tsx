@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, type RefObject } from 'react';
 
-import { Copy, ArrowDownToLine } from 'lucide-react';
+import { Copy, ArrowDownToLine, RotateCcw } from 'lucide-react';
 import { copyToClipboard } from '../utils/clipboard';
 import ContextMenu from './ContextMenu';
 
@@ -10,11 +10,14 @@ interface ChatMessageMenuState {
   y: number;
   messageContent: string;
   codeBlockText: string | null;
+  messageType: 'user' | 'assistant';
+  messageIndex: number;
 }
 
 interface ChatMessageContextMenuProps {
   containerRef: RefObject<HTMLDivElement>;
   onInsertAtCursor: (text: string) => void;
+  onRewindAndResend?: (messageContent: string, messageIndex: number) => void;
 }
 
 /**
@@ -22,7 +25,11 @@ interface ChatMessageContextMenuProps {
  * Listens for `contextmenu` events on the given container ref and shows
  * a menu with Copy / Copy Code Block / Insert at Cursor actions.
  */
-function ChatMessageContextMenu({ containerRef, onInsertAtCursor }: ChatMessageContextMenuProps): JSX.Element {
+function ChatMessageContextMenu({
+  containerRef,
+  onInsertAtCursor,
+  onRewindAndResend,
+}: ChatMessageContextMenuProps): JSX.Element {
   const timersRef = useRef<number[]>([]);
 
   // Clean up all pending timers
@@ -37,6 +44,8 @@ function ChatMessageContextMenu({ containerRef, onInsertAtCursor }: ChatMessageC
     y: 0,
     messageContent: '',
     codeBlockText: null,
+    messageType: 'assistant',
+    messageIndex: 0,
   });
 
   const [copiedAction, setCopiedAction] = useState<'message' | 'code' | null>(null);
@@ -71,7 +80,13 @@ function ChatMessageContextMenu({ containerRef, onInsertAtCursor }: ChatMessageC
       codeBlockText = (code || pre).textContent?.trim() || null;
     }
 
-    return { visible: true, x: 0, y: 0, messageContent, codeBlockText };
+    // Find the .message parent (the outer div with data-message-type and data-message-index)
+    const messageEl = bubble.closest('.message') as HTMLElement | null;
+    const messageType = (messageEl?.getAttribute('data-message-type') as 'user' | 'assistant') || 'assistant';
+    const rawIndex = messageEl ? messageEl.getAttribute('data-message-index') : null;
+    const messageIndex = rawIndex !== null ? parseInt(rawIndex, 10) : -1;
+
+    return { visible: true, x: 0, y: 0, messageContent, codeBlockText, messageType, messageIndex };
   }, []);
 
   // ── Context menu handler ──────────────────────────────────
@@ -96,6 +111,8 @@ function ChatMessageContextMenu({ containerRef, onInsertAtCursor }: ChatMessageC
         y: e.clientY,
         messageContent: data.messageContent,
         codeBlockText: data.codeBlockText,
+        messageType: data.messageType,
+        messageIndex: data.messageIndex,
       });
     },
     [containerRef, resolveMenuData],
@@ -132,6 +149,13 @@ function ChatMessageContextMenu({ containerRef, onInsertAtCursor }: ChatMessageC
     timersRef.current.push(window.setTimeout(() => close(), 800));
   }, [menu.codeBlockText, close, showCopied]);
 
+  const handleRewindAndResend = useCallback(() => {
+    if (onRewindAndResend) {
+      onRewindAndResend(menu.messageContent, menu.messageIndex);
+    }
+    close();
+  }, [onRewindAndResend, menu.messageContent, menu.messageIndex, close]);
+
   const handleInsertAtCursor = useCallback(() => {
     if (!menu.messageContent) return;
     onInsertAtCursor(menu.messageContent);
@@ -163,6 +187,16 @@ function ChatMessageContextMenu({ containerRef, onInsertAtCursor }: ChatMessageC
       )}
 
       <div className="context-menu-divider" />
+
+      {menu.messageType === 'user' && onRewindAndResend !== undefined && (
+        <>
+          <button className="context-menu-item" onClick={handleRewindAndResend} type="button">
+            <RotateCcw size={13} />
+            <span className="menu-item-label">Edit &amp; resend from here</span>
+          </button>
+          <div className="context-menu-divider" />
+        </>
+      )}
 
       <button className="context-menu-item" onClick={handleInsertAtCursor} type="button">
         <ArrowDownToLine size={13} />

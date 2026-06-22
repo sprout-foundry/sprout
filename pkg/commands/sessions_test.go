@@ -383,10 +383,10 @@ func TestDisplayConversationPreview(t *testing.T) {
 
 	// Verify preview output
 	assert.Contains(t, output, "Recent conversation preview")
-	assert.Contains(t, output, "[you] You: First message")
-	assert.Contains(t, output, "[bot] Assistant: First response")
-	assert.Contains(t, output, "[you] You: Second message")
-	assert.Contains(t, output, "[bot] Assistant: Second response")
+	assert.Contains(t, output, "You: First message")
+	assert.Contains(t, output, "Assistant: First response")
+	assert.Contains(t, output, "You: Second message")
+	assert.Contains(t, output, "Assistant: Second response")
 }
 
 // TestDisplayConversationPreview_Empty tests preview with no messages
@@ -765,7 +765,7 @@ func TestSessionsCommand_selectSessionWithDropdown_Interactive_Success(t *testin
 
 	// Verify success
 	assert.NoError(t, err)
-	assert.Contains(t, output, "[OK] Conversation session loaded")
+	assert.Contains(t, output, "Conversation session loaded")
 	assert.Contains(t, output, sessionID)
 
 	// Verify messages were loaded
@@ -1062,7 +1062,7 @@ func TestSessionsCommand_selectSessionWithDropdown_Interactive_EmptyNameFallback
 
 	// Verify success
 	assert.NoError(t, err)
-	assert.Contains(t, output, "[OK] Conversation session loaded")
+	assert.Contains(t, output, "Conversation session loaded")
 	assert.Contains(t, output, sessionID)
 
 	// Verify the preview was shown (first 50 chars of first user message)
@@ -1162,7 +1162,7 @@ func TestSessionsCommand_selectSessionWithDropdown_Interactive_MultipleSessions_
 
 	// Verify the second session was loaded
 	assert.NoError(t, err)
-	assert.Contains(t, output, "[OK] Conversation session loaded")
+	assert.Contains(t, output, "Conversation session loaded")
 	assert.Contains(t, output, "session-two")
 
 	// Verify the messages match session-two
@@ -1307,12 +1307,12 @@ func TestSessionsCommand_selectSessionWithDropdown_Interactive_PreviewDisplay(t 
 
 	// Verify success
 	assert.NoError(t, err)
-	assert.Contains(t, output, "[OK] Conversation session loaded")
+	assert.Contains(t, output, "Conversation session loaded")
 
 	// Verify preview section is shown
 	assert.Contains(t, output, "Recent conversation preview")
-	assert.Contains(t, output, "[you] You:")
-	assert.Contains(t, output, "[bot] Assistant:")
+	assert.Contains(t, output, "You:")
+	assert.Contains(t, output, "Assistant:")
 }
 
 // TestSessionsCommand_selectSessionWithDropdown_Interactive_PreviewDisplay_NoMessages tests
@@ -1381,7 +1381,7 @@ func TestSessionsCommand_selectSessionWithDropdown_Interactive_PreviewDisplay_No
 
 	// Verify success
 	assert.NoError(t, err)
-	assert.Contains(t, output, "[OK] Conversation session loaded")
+	assert.Contains(t, output, "Conversation session loaded")
 
 	// Verify no preview section (no messages to show)
 	assert.NotContains(t, output, "Recent conversation preview")

@@ -50,7 +50,16 @@ func handleListChanges(_ context.Context, a *Agent, args map[string]interface{})
 	// rest are additive on the per-file shape.
 	groupBy, _ := args["group_by"].(string)
 	includeDiff, _ := args["include_diff"].(bool)
-	includePersisted, _ := args["include_persisted"].(bool)
+	// include_persisted defaults to true so the manifest reflects the
+	// full session (in-memory + already-committed-to-history entries)
+	// rather than just the current turn's uncommitted buffer. A caller
+	// who wants the live buffer only can pass include_persisted=false.
+	// The persisted merge is SESSION-SCOPED (matches the tracker's
+	// revisionID), so it never surfaces other sessions' noise.
+	includePersisted := true
+	if v, ok := args["include_persisted"].(bool); ok {
+		includePersisted = v
+	}
 
 	if tracker == nil || !tracker.IsEnabled() {
 		if groupBy == "block" {
@@ -87,7 +96,10 @@ func handleListChangesPersistedOnly(args map[string]interface{}) (string, error)
 	}
 	cutoff, _ := parseRecentSince(asString(args["since"]))
 	files := make([]fileEntry, 0)
-	if persisted, err := history.GetAllChanges(); err == nil {
+	// H2: Metadata-only scan avoids the O(history) base64 decode.
+	// This fallback path (no in-memory tracker) only needs the
+	// manifest fields, never the full content.
+	if persisted, err := history.GetAllChangesMetadata(); err == nil {
 		for _, ch := range persisted {
 			if !cutoff.IsZero() && ch.Timestamp.Before(cutoff) {
 				continue
@@ -148,6 +160,7 @@ func buildFileList(tracker *ChangeTracker, changes []TrackedFileChange, includeD
 			Op:          ch.Operation,
 			Tool:        ch.ToolCall,
 			Timestamp:   ch.Timestamp,
+			Source:      ch.Source,
 			Recoverable: isRecoverableOriginal(ch.OriginalCode),
 			BulkCount:   ch.BulkCount,
 		}
@@ -178,8 +191,40 @@ func buildFileList(tracker *ChangeTracker, changes []TrackedFileChange, includeD
 
 	if includePersisted {
 		cutoff, _ := parseRecentSince(asString(args["since"]))
-		if persisted, err := history.GetAllChanges(); err == nil {
+		// Session-scope the persisted merge: only entries recorded
+		// under THIS session's revisionID. This keeps other sessions'
+		// work out of the manifest (the historical reason
+		// include_persisted was opt-in) while still surfacing this
+		// session's already-committed entries — which is what makes
+		// the default manifest correct across turn boundaries, where
+		// a file edited last turn was committed to history and may
+		// not yet be re-touched this turn.
+		sessionRevID := tracker.GetRevisionID()
+		// Build a dedup set from the in-memory entries so a file that
+		// is BOTH committed (persisted) and re-edited this turn isn't
+		// listed twice. The in-memory entry wins because it carries
+		// the latest, possibly uncommitted, state.
+		seenInMemory := make(map[string]bool, len(files))
+		for _, f := range files {
+			seenInMemory[f.Path] = true
+		}
+		// H2: Use the metadata-only scan. The persisted entries here
+		// never need full content (diffs are computed only from
+		// in-memory entries via collectFileChangeSpan). The metadata
+		// scan avoids reading + base64-decoding every .original/
+		// .updated file on disk — the dominant cost of list_changes
+		// on a large history.
+		if persisted, err := history.GetAllChangesMetadata(); err == nil {
 			for _, ch := range persisted {
+				// Session filter: skip other sessions' revisions.
+				if sessionRevID != "" && ch.RequestHash != sessionRevID {
+					continue
+				}
+				// Dedup: skip if the in-memory buffer already shows
+				// this path (it has newer or equal info).
+				if seenInMemory[ch.Filename] {
+					continue
+				}
 				if !cutoff.IsZero() && ch.Timestamp.Before(cutoff) {
 					continue
 				}
@@ -435,7 +480,7 @@ func handleRevertMyChanges(_ context.Context, a *Agent, args map[string]interfac
 	results := make([]entry, 0, len(candidates))
 	var restored, failed int
 	for _, ch := range candidates {
-		action, ok, msg := revertOne(ch, tracker)
+		action, ok, msg := a.revertOne(ch)
 		results = append(results, entry{Path: ch.FilePath, Action: action, OK: ok, Message: msg})
 		if ok {
 			restored++
@@ -492,18 +537,32 @@ func selectRevertCandidates(changes []TrackedFileChange, scope, since string) ([
 
 // revertOne writes the change's OriginalCode back to disk (or removes
 // the file if the change is a create-with-no-original). Returns
-// (action, ok, message).
-func revertOne(ch TrackedFileChange, tracker *ChangeTracker) (string, bool, string) {
+// (action, ok, message). A method on *Agent so it can enforce the
+// workspace boundary check (C1) via a.IsPathOutsideWorkspace and reach
+// the change tracker via a.GetChangeTracker.
+func (a *Agent) revertOne(ch TrackedFileChange) (string, bool, string) {
 	abs, err := filepath.Abs(ch.FilePath)
 	if err != nil {
 		return "", false, fmt.Sprintf("resolve path: %v", err)
 	}
 
+	// C1: Refuse to write to or delete anything outside the workspace
+	// root. Out-of-workspace entries are reported as skipped (not
+	// failures) so a bulk revert still succeeds for the in-workspace
+	// majority without aborting on a single stray path.
+	if a.IsPathOutsideWorkspace(abs) {
+		return "", false, "path is outside the workspace — skipped"
+	}
+
+	tracker := a.GetChangeTracker()
+
 	if ch.Operation == "create" {
 		if err := os.Remove(abs); err != nil && !os.IsNotExist(err) {
 			return "delete", false, fmt.Sprintf("remove created file: %v", err)
 		}
-		tracker.SyncShellCacheForPath(abs)
+		if tracker != nil {
+			tracker.SyncShellCacheForPath(abs)
+		}
 		return "delete", true, "removed file created during session"
 	}
 
@@ -513,10 +572,19 @@ func revertOne(ch TrackedFileChange, tracker *ChangeTracker) (string, bool, stri
 	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
 		return "", false, fmt.Sprintf("create parent dir: %v", err)
 	}
+	// Belt-and-suspenders: isRecoverableOriginal already rejects the redacted
+	// marker above, but this final guard sits directly at the write so a
+	// future code path that bypasses that check can never persist the literal
+	// marker string to a user's file.
+	if ch.OriginalCode == RedactedContentMarker {
+		return "", false, "refusing to write redacted marker to disk"
+	}
 	if err := os.WriteFile(abs, []byte(ch.OriginalCode), 0o644); err != nil {
 		return "", false, fmt.Sprintf("write: %v", err)
 	}
-	tracker.SyncShellCacheForPath(abs)
+	if tracker != nil {
+		tracker.SyncShellCacheForPath(abs)
+	}
 	return "restore", true, "wrote original content back to disk"
 }
 

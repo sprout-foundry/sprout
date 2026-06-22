@@ -132,20 +132,36 @@ func TestHandleRespondClarification_Success(t *testing.T) {
 	}
 }
 
+func TestHandleRespondClarification_SubagentRejected(t *testing.T) {
+	eb := events.NewEventBus()
+	a := &Agent{
+		eventBus:   eb,
+		subagentID: "subagent-123",
+	}
+
+	result, err := handleRespondClarification(context.Background(), a, map[string]interface{}{
+		"request_id": "some-id",
+		"response":   "some answer",
+	})
+	assert.Empty(t, result)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "only available for parent agents")
+}
+
 func TestHandleRespondClarification_DeliversToWaitingRequest(t *testing.T) {
 	eb := events.NewEventBus()
 
 	// Shared clarification manager for both delegate and parent
 	cm := NewClarificationManager(eb)
 
-	// Delegate agent (has delegateID) - requests clarification
+	// Subagent (has subagentID) - requests clarification
 	delegateAgent := &Agent{
 		eventBus:           eb,
-		delegateID:         "delegate-multi",
+		subagentID:         "delegate-multi",
 		clarificationManager: cm,
 	}
 
-	// Parent agent (no delegateID) - responds to clarification
+	// Parent agent (no subagentID) - responds to clarification
 	parentAgent := &Agent{
 		eventBus:           eb,
 		clarificationManager: cm,

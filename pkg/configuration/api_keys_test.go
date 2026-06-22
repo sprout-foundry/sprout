@@ -9,7 +9,7 @@ import (
 func TestPopulateFromEnvironment(t *testing.T) {
 	// Get all known provider environment variables
 	var allEnvVars []string
-	for _, name := range knownProviderNames() {
+	for _, name := range KnownProviderNames() {
 		metadata, err := GetProviderAuthMetadata(name)
 		if err != nil || !metadata.RequiresAPIKey || metadata.EnvVar == "" {
 			continue

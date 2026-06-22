@@ -100,7 +100,8 @@ export type SettingsSubsection =
   | 'env-commit-review'
   | 'env-ocr'
   // Editor
-  | 'editor-preferences';
+  | 'editor-preferences'
+  | 'editor-notifications';
 
 export interface SectionDef {
   id: SettingsSection;
@@ -152,7 +153,10 @@ export const SECTION_GROUPS: SectionDef[] = [
     label: 'Editor',
     scope: 'runtime',
     description: 'Editor display preferences (this session only)',
-    subsections: [{ id: 'editor-preferences', label: 'Display' }],
+    subsections: [
+      { id: 'editor-preferences', label: 'Display' },
+      { id: 'editor-notifications', label: 'Notifications' },
+    ],
   },
 ];
 
@@ -187,6 +191,7 @@ export function subsectionToLegacyTab(subsectionId: SettingsSubsection): Setting
     'env-commit-review': 'commit-review',
     'env-ocr': 'pdf-ocr',
     'editor-preferences': 'general',
+    'editor-notifications': 'general',
   };
   return map[subsectionId];
 }

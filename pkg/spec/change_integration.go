@@ -1,6 +1,7 @@
 package spec
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -22,6 +23,7 @@ type ChangeReviewResult struct {
 // ReviewTrackedChanges reviews changes tracked in the current revision against a canonical spec
 // This is used by the agent for self-review during a session
 func ReviewTrackedChanges(
+	ctx context.Context,
 	revisionID string,
 	cfg *configuration.Config,
 	logger *utils.Logger,
@@ -73,7 +75,7 @@ func ReviewTrackedChanges(
 
 	// Extract spec from conversation
 	logger.LogProcessStep("Extracting canonical specification from session conversation...")
-	specResult, err := specService.GetExtractor().ExtractSpec(conversation, userIntent)
+	specResult, err := specService.GetExtractor().ExtractSpec(ctx, conversation, userIntent)
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract spec: %w", err)
 	}
@@ -82,7 +84,7 @@ func ReviewTrackedChanges(
 
 	// Validate changes against spec
 	logger.LogProcessStep("Validating tracked changes against specification...")
-	scopeResult, err := specService.GetValidator().ValidateScope(diff, spec)
+	scopeResult, err := specService.GetValidator().ValidateScope(ctx, diff, spec)
 	if err != nil {
 		return nil, fmt.Errorf("failed to validate scope: %w", err)
 	}

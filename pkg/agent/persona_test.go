@@ -399,9 +399,8 @@ func TestEvaluateOperationRisk_NilConfigReturnsLow(t *testing.T) {
 // isGitWriteAllowed — capability-driven authorization
 // =============================================================================
 //
-// Post-B: git-write authorization no longer sniffs AutoApproveRules. A persona
-// must explicitly carry CapabilityGitWrite to clear the gate. Orchestrator
-// additionally needs the AllowOrchestratorGitWrite config flag set.
+// git-write authorization is driven solely by CapabilityGitWrite. A persona
+// must explicitly carry CapabilityGitWrite to clear the gate.
 
 func TestIsGitWriteAllowed_CapabilityBearingNonOrchestratorReturnsTrue(t *testing.T) {
 	agent := newTestAgent(t)
@@ -507,42 +506,15 @@ func TestIsGitWriteAllowed_NilConfigReturnsFalse(t *testing.T) {
 // isGitWriteAllowed for orchestrator persona
 // =============================================================================
 
-func TestIsOrchestratorGitWriteAllowed_OrchestratorPersonaWithConfigEnabled(t *testing.T) {
+func TestIsOrchestratorGitWriteAllowed_OrchestratorPersonaReturnsTrue(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
 
 	agent.state.SetActivePersona("orchestrator")
 
-	// Enable AllowOrchestratorGitWrite in config
-	err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
-		cfg.AllowOrchestratorGitWrite = true
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("UpdateConfigNoSave failed: %v", err)
-	}
-
+	// Orchestrator has CapabilityGitWrite in the catalog; no config flag needed.
 	if !agent.isGitWriteAllowed() {
-		t.Error("expected isGitWriteAllowed to return true for orchestrator with config enabled")
-	}
-}
-
-func TestIsOrchestratorGitWriteAllowed_OrchestratorPersonaWithConfigDisabled(t *testing.T) {
-	agent := newTestAgent(t)
-	defer agent.Shutdown()
-
-	agent.state.SetActivePersona("orchestrator")
-
-	// Explicitly disable git-write (SP-050 flipped the default seed to true).
-	if err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
-		cfg.AllowOrchestratorGitWrite = false
-		return nil
-	}); err != nil {
-		t.Fatalf("UpdateConfigNoSave failed: %v", err)
-	}
-
-	if agent.isGitWriteAllowed() {
-		t.Error("expected isGitWriteAllowed to return false for orchestrator with config disabled")
+		t.Error("expected isGitWriteAllowed to return true for orchestrator (has CapabilityGitWrite)")
 	}
 }
 
@@ -587,19 +559,13 @@ func TestApplyPersona_ExecutiveAssistantAliasResolvesToCoordinator(t *testing.T)
 	}
 }
 
-// SP-050: when AllowOrchestratorGitWrite=true, ApplyPersona("orchestrator")
-// appends the git-policy markdown so the model knows about the commit tool,
-// staging rules, and blocked shell-side git ops.
-func TestApplyPersona_OrchestratorGitPolicyAppended_WhenFlagEnabled(t *testing.T) {
+// SP-050: ApplyPersona("orchestrator") always appends the git-policy markdown
+// so the model knows about the commit tool, staging rules, and blocked
+// shell-side git ops. The append is unconditional — the policy text is useful
+// guidance regardless of runtime permissions.
+func TestApplyPersona_OrchestratorGitPolicyAppended(t *testing.T) {
 	agent := newTestAgent(t)
 	defer agent.Shutdown()
-
-	if err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
-		cfg.AllowOrchestratorGitWrite = true
-		return nil
-	}); err != nil {
-		t.Fatalf("UpdateConfigNoSave failed: %v", err)
-	}
 
 	if err := agent.ApplyPersona("orchestrator"); err != nil {
 		t.Fatalf("ApplyPersona(orchestrator) failed: %v", err)
@@ -610,31 +576,7 @@ func TestApplyPersona_OrchestratorGitPolicyAppended_WhenFlagEnabled(t *testing.T
 	// distinguish it from any "git" content that already lives in the base
 	// system prompt.
 	if !strings.Contains(prompt, "ALWAYS use the 'commit' tool for all commits") {
-		t.Error("expected orchestrator git policy append in system prompt when AllowOrchestratorGitWrite=true")
-	}
-}
-
-// SP-050: when AllowOrchestratorGitWrite=false, the git-policy markdown
-// must NOT be appended — the shell-side gate blocks the commands anyway,
-// and the prompt should reflect what the persona is actually allowed to do.
-func TestApplyPersona_OrchestratorGitPolicyAbsent_WhenFlagDisabled(t *testing.T) {
-	agent := newTestAgent(t)
-	defer agent.Shutdown()
-
-	if err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
-		cfg.AllowOrchestratorGitWrite = false
-		return nil
-	}); err != nil {
-		t.Fatalf("UpdateConfigNoSave failed: %v", err)
-	}
-
-	if err := agent.ApplyPersona("orchestrator"); err != nil {
-		t.Fatalf("ApplyPersona(orchestrator) failed: %v", err)
-	}
-
-	prompt := agent.GetSystemPrompt()
-	if strings.Contains(prompt, "ALWAYS use the 'commit' tool for all commits") {
-		t.Error("expected git policy NOT to be appended when AllowOrchestratorGitWrite=false")
+		t.Error("expected orchestrator git policy append in system prompt")
 	}
 }
 

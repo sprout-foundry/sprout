@@ -1,6 +1,6 @@
 # SP-007: Extend Configuration — Role-Based Configs
 
-**Status:** 📋 Proposed  
+**Status:** 🧊 On hold (parked 2026-06-14) — speculative; revisit only with evidence of user demand. See roadmap/README.md "Future / On Hold".
 **Depends on:** None (foundation for SP-006)  
 **Priority:** High  
 **Effort Estimate:** ~2-3 weeks (2 phases)

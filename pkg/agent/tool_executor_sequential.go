@@ -11,6 +11,7 @@ import (
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/security"
 )
 
@@ -21,7 +22,7 @@ func (te *ToolExecutor) executeSequential(toolCalls []api.ToolCall) []api.Messag
 	for i, tc := range toolCalls {
 		// Check for interrupt between tool executions
 		select {
-		case <-te.agent.interruptCtx.Done():
+		case <-te.agent.InterruptCtx().Done():
 			// Context cancelled, interrupt requested
 			toolCallID := tc.ID
 			if toolCallID == "" {
@@ -242,7 +243,7 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 		err = res.err
 	case <-ctx.Done():
 		err = agenterrors.NewTransientError(fmt.Sprintf("tool execution timed out after %s", toolTimeout), nil)
-	case <-te.agent.interruptCtx.Done():
+	case <-te.agent.InterruptCtx().Done():
 		err = agenterrors.NewTransientError("tool execution interrupted by user", nil)
 	}
 
@@ -251,36 +252,10 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 
 	if err != nil {
 		safeErr := sanitizeToolFailureMessage(err.Error())
-		
-		// Use typed error classification to detect security errors, with a
-		// fallback to string matching for untyped errors (backward compat).
-		//
-		// SECURITY BOUNDARY NOTE: The underlying classification in
-		// pkg/agent_tools/security_classifier.go is purely string-based heuristics with known
-		// limitations (no filesystem access, no symlink resolution, no env variable
-		// expansion). This caution flow is a defense-in-depth layer, not a security
-		// boundary. Actual enforcement relies on the user's filesystem permissions,
-		// interactive confirmation, and operating system controls.
-		action := ClassifyError(err)
-		if action == ActionEscalate || strings.Contains(err.Error(), "security caution:") {
-			// This is a caution-level operation that requires LLM verification
-			// Send it back to the LLM as a special message that indicates "verify before proceeding"
-			te.agent.PrintLine("")
-			te.agent.PrintLine(fmt.Sprintf("[⚠️  SECURITY CAUTION - LLM VERIFICATION REQUIRED] %s", safeErr))
-			te.agent.PrintLine("")
-			
-			// Return a special tool result that signals the LLM to re-verify
-			// The LLM will see this and can decide to re-assert safety and retry, or abort
-			return api.Message{
-				Role:       "tool",
-				Content:    fmt.Sprintf("SECURITY_CAUTION_REQUIRED: %s", safeErr),
-				ToolCallID: toolCallID,
-			}
-		}
-		
+
 		// Ensure the error is visible to the user immediately
 		te.agent.PrintLine("")
-		te.agent.PrintLine(fmt.Sprintf("[FAIL] Tool '%s' failed: %s", normalizedToolName, safeErr))
+		te.agent.PrintLine(fmt.Sprintf("%sTool '%s' failed: %s", console.GlyphError.Prefix(), normalizedToolName, safeErr))
 		te.agent.PrintLine("")
 		fullResult = fmt.Sprintf("Error: %s", safeErr)
 	}

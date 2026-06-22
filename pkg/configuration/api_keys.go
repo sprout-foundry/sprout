@@ -23,7 +23,7 @@ import (
 // provider names. CLI/UI ordering anchors on this — built-ins keep
 // their generated order; runtime-only additions (e.g. providers
 // published to GitHub Pages but not yet shipped in the binary) are
-// appended in sorted order by knownProviderNames().
+// appended in sorted order by KnownProviderNames().
 var staticProviderNames = providers.KnownProviders()
 
 // knownProviderDisplayNames maps provider names to their display names.
@@ -31,13 +31,13 @@ var staticProviderNames = providers.KnownProviders()
 // Generated from provider configs - use providers.ProviderDisplayNames() for the full map.
 var knownProviderDisplayNames = providers.ProviderDisplayNames()
 
-// knownProviderNames returns the union of the compile-time provider
+// KnownProviderNames returns the union of the compile-time provider
 // list and whatever the runtime factory has registered (which includes
 // embedded + filesystem + remote configs once pkg/factory.init has
 // wired SetProviderNamesLookup). Static entries keep their generated
 // order; runtime-only additions are appended in sorted order so the
 // result is deterministic across calls.
-func knownProviderNames() []string {
+func KnownProviderNames() []string {
 	static := staticProviderNames
 	providerNamesLookupMu.RLock()
 	lookup := providerNamesLookup
@@ -360,7 +360,7 @@ func SaveAPIKeysToDir(keys *APIKeys, configDir string) error {
 // This is called on startup only to detect whether environment credentials are available.
 func (keys *APIKeys) PopulateFromEnvironment() bool {
 	populated := false
-	for _, name := range knownProviderNames() {
+	for _, name := range KnownProviderNames() {
 		metadata, err := GetProviderAuthMetadata(name)
 		if err != nil {
 			continue
@@ -494,7 +494,7 @@ func (keys *APIKeys) HasAPIKey(provider string) bool {
 
 // PromptForAPIKey prompts the user for an API key with helpful guidance
 func PromptForAPIKey(provider string) (string, error) {
-	providerName := getProviderDisplayName(provider)
+	providerName := GetProviderDisplayName(provider)
 
 	// Provide specific guidance for getting API keys
 	fmt.Printf("[key] Enter your %s API key\n", providerName)
@@ -544,7 +544,7 @@ func PromptForAPIKey(provider string) (string, error) {
 	return apiKey, nil
 }
 
-// getProviderDisplayName returns a user-friendly name for the provider.
+// GetProviderDisplayName returns a user-friendly name for the provider.
 // Lookup chain:
 //  1. Static display-name map (generated from embedded configs — fastest
 //     and the common case for built-ins).
@@ -552,7 +552,7 @@ func PromptForAPIKey(provider string) (string, error) {
 //     Pages whose display_name isn't baked into the static map).
 //  3. CustomProviders (user-defined local providers in config.json).
 //  4. Raw provider ID as a last resort.
-func getProviderDisplayName(provider string) string {
+func GetProviderDisplayName(provider string) string {
 	if displayName, ok := knownProviderDisplayNames[provider]; ok {
 		return displayName
 	}

@@ -91,7 +91,7 @@ func GetProviderAuthMetadata(provider string) (ProviderAuthMetadata, error) {
 	case "ollama", "ollama-local", "lmstudio", "test", "editor":
 		return ProviderAuthMetadata{
 			Provider:       name,
-			DisplayName:    getProviderDisplayName(name),
+			DisplayName:    GetProviderDisplayName(name),
 			RequiresAPIKey: false,
 			AuthType:       "none",
 		}, nil
@@ -100,7 +100,7 @@ func GetProviderAuthMetadata(provider string) (ProviderAuthMetadata, error) {
 		// It has no provider config JSON file, so it's handled explicitly here.
 		return ProviderAuthMetadata{
 			Provider:       name,
-			DisplayName:    getProviderDisplayName(name),
+			DisplayName:    GetProviderDisplayName(name),
 			RequiresAPIKey: true,
 			EnvVar:         "JINA_API_KEY",
 			AuthType:       "bearer",
@@ -131,7 +131,7 @@ func GetProviderAuthMetadata(provider string) (ProviderAuthMetadata, error) {
 			requires := authType != "" && authType != "none"
 			return ProviderAuthMetadata{
 				Provider:       name,
-				DisplayName:    getProviderDisplayName(name),
+				DisplayName:    GetProviderDisplayName(name),
 				RequiresAPIKey: requires,
 				EnvVar:         strings.TrimSpace(envVar),
 				AuthType:       authType,
@@ -147,7 +147,7 @@ func GetProviderAuthMetadata(provider string) (ProviderAuthMetadata, error) {
 			requires := providerConfig.Auth.Type != "" && providerConfig.Auth.Type != "none"
 			return ProviderAuthMetadata{
 				Provider:       name,
-				DisplayName:    getProviderDisplayName(name),
+				DisplayName:    GetProviderDisplayName(name),
 				RequiresAPIKey: requires,
 				EnvVar:         strings.TrimSpace(providerConfig.Auth.EnvVar),
 				AuthType:       providerConfig.Auth.Type,

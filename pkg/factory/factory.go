@@ -166,7 +166,7 @@ func init() {
 	// menu, env-var credential sweep, default-provider auto-selection).
 	// The closure reads the factory live so providers added later by
 	// refreshFromRemote show up in the union returned by
-	// configuration.knownProviderNames().
+	// configuration.KnownProviderNames().
 	configuration.SetProviderNamesLookup(func() []string {
 		return globalProviderFactory.GetAvailableProviders()
 	})

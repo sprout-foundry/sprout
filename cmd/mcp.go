@@ -24,8 +24,8 @@ var mcpCmd = &cobra.Command{
 	Short: "Manage MCP (Model Context Protocol) servers",
 	Long: `Manage MCP servers that extend sprout with external tools and services.
 Use subcommands to add, remove, or list configured MCP servers.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		cmd.Help()
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return cmd.Help()
 	},
 }
 
@@ -34,11 +34,8 @@ var mcpAddCmd = &cobra.Command{
 	Short: "Add a new MCP server interactively",
 	Long: `Interactively add a new MCP server configuration.
 This will guide you through setting up popular MCP servers or custom configurations.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		if err := runMCPAdd(); err != nil {
-			fmt.Fprintf(os.Stderr, "Error adding MCP server: %v\n", err)
-			os.Exit(1)
-		}
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runMCPAdd()
 	},
 }
 
@@ -47,15 +44,12 @@ var mcpRemoveCmd = &cobra.Command{
 	Short: "Remove an MCP server",
 	Long:  `Remove an MCP server from the configuration.`,
 	Args:  cobra.MaximumNArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		var serverName string
 		if len(args) > 0 {
 			serverName = args[0]
 		}
-		if err := runMCPRemove(serverName); err != nil {
-			fmt.Fprintf(os.Stderr, "Error removing MCP server: %v\n", err)
-			os.Exit(1)
-		}
+		return runMCPRemove(serverName)
 	},
 }
 
@@ -63,11 +57,8 @@ var mcpListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List configured MCP servers",
 	Long:  `Display all configured MCP servers and their status.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		if err := runMCPList(); err != nil {
-			fmt.Fprintf(os.Stderr, "Error listing MCP servers: %v\n", err)
-			os.Exit(1)
-		}
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runMCPList()
 	},
 }
 
@@ -76,15 +67,12 @@ var mcpTestCmd = &cobra.Command{
 	Short: "Test MCP server connection",
 	Long:  `Test connection to an MCP server and list its available tools.`,
 	Args:  cobra.MaximumNArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		var serverName string
 		if len(args) > 0 {
 			serverName = args[0]
 		}
-		if err := runMCPTest(serverName); err != nil {
-			fmt.Fprintf(os.Stderr, "Error testing MCP server: %v\n", err)
-			os.Exit(1)
-		}
+		return runMCPTest(serverName)
 	},
 }
 

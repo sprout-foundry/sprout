@@ -19,8 +19,8 @@ var embeddingsCmd = &cobra.Command{
 
 Subcommands:
   clear  Clear embedding index files`,
-	Run: func(cmd *cobra.Command, args []string) {
-		_ = cmd.Help()
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return cmd.Help()
 	},
 }
 
@@ -36,18 +36,15 @@ var embeddingsClearCmd = &cobra.Command{
 By default, clears all embedding types (code and conversation_turn/memory).
 Use --type to specify which type to clear.
 Use --yes to skip the confirmation prompt.
-Use --dry-run to see what would be cleared without deleting anything.
+	Use --dry-run to see what would be cleared without deleting anything.
 
 Types:
   code              Code file embeddings (index.jsonl and related)
   conversation_turn Conversation turn embeddings (conversation_turns.jsonl and related)
   memory            Memory embeddings (same files as conversation_turn)
   all               All embedding types (default)`,
-	Run: func(cmd *cobra.Command, args []string) {
-		if err := runEmbeddingsClear(); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runEmbeddingsClear()
 	},
 }
 

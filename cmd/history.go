@@ -23,8 +23,8 @@ var historyCmd = &cobra.Command{
 
 Subcommands:
   clear  Remove old revisions, changes, and runlogs`,
-	Run: func(cmd *cobra.Command, args []string) {
-		_ = cmd.Help()
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return cmd.Help()
 	},
 }
 
@@ -50,11 +50,8 @@ Examples:
   sprout history clear --older-than 30d             # Clear history older than 30 days
   sprout history clear --older-than 7d --workspace /path/to/project  # Target specific project
   sprout history clear --dry-run                    # Show what would be cleared`,
-	Run: func(cmd *cobra.Command, args []string) {
-		if err := runHistoryClear(); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runHistoryClear()
 	},
 }
 

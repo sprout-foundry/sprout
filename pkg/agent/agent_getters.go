@@ -219,17 +219,12 @@ func (a *Agent) currentWorkspaceRoot() string {
 
 // GetShellCwd returns the current logical shell working directory.
 func (a *Agent) GetShellCwd() string {
-	a.shellCwdMu.RLock()
-	defer a.shellCwdMu.RUnlock()
-	return a.shellCwd
+	return a.ensureShellCwd().Get()
 }
 
 // SetShellCwd sets the logical shell working directory and records the previous.
 func (a *Agent) SetShellCwd(dir string) {
-	a.shellCwdMu.Lock()
-	defer a.shellCwdMu.Unlock()
-	a.prevShellCwd = a.shellCwd
-	a.shellCwd = dir
+	a.ensureShellCwd().Set(dir)
 }
 
 // effectiveCwd returns the directory that tools should use for file/git operations.
@@ -280,24 +275,22 @@ func (a *Agent) updateShellCwd(cmd string) {
 		arg = strings.TrimSpace(trimmed)
 	}
 
-	a.shellCwdMu.Lock()
-	defer a.shellCwdMu.Unlock()
-
-	current := a.shellCwd
+	// Read current cwd atomically; fall back to workspace root if unset.
+	current, _ := a.ensureShellCwd().GetBoth()
 	if current == "" {
 		current = a.currentWorkspaceRoot()
 	}
 
 	resolved := resolveShellCdArg(arg, current)
 
+	tracker := a.ensureShellCwd()
 	if arg == "-" {
 		// cd - swaps current and previous.
-		a.prevShellCwd, a.shellCwd = a.shellCwd, a.prevShellCwd
+		tracker.SwapPrevious()
 		return
 	}
 
-	a.prevShellCwd = a.shellCwd
-	a.shellCwd = resolved
+	tracker.SetWithPrev(resolved, current)
 }
 
 // resolveShellCdArg resolves a cd argument to an absolute path.

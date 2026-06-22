@@ -54,6 +54,10 @@ export function ChatFooter({
 }: ChatFooterProps): JSX.Element {
   const activeTodo = isProcessing && currentTodos?.find((t) => t.status === 'in_progress');
   const activeTodoLabel = activeTodo ? activeTodo.activeForm || activeTodo.content : null;
+  // ToolTimelineBar is always mounted (it owns its own visibility), but the
+  // processing-indicator guard below still needs to know whether any tool
+  // execution is present so it doesn't render a skeleton alongside the bar.
+  const hasToolsToShow = filteredToolExecutions.length > 0;
   const elements: JSX.Element[] = [];
 
   // SP-053-2b: live tool timeline above subagent feed / query progress.

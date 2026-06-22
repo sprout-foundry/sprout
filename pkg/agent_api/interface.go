@@ -64,6 +64,7 @@ const (
 	MinimaxClientType  ClientType = "minimax"
 	ChutesClientType   ClientType = "chutes"
 	CerebrasClientType ClientType = "cerebras"
+	ZAICodingClientType ClientType = "zai-coding"
 )
 
 // NewUnifiedClient creates a client with default model for the provider

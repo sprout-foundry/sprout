@@ -121,7 +121,8 @@ func (p *GenericProvider) shouldSkipReasoningContentHistory() bool {
 
 	// ZAI (GLM models) may reject stale reasoning_content in message history when
 	// the current request doesn't explicitly enable thinking, causing 400 errors.
-	if strings.EqualFold(p.config.Name, "zai") &&
+	// Applies to both the general API ("zai") and the GLM Coding Plan ("zai-coding").
+	if (strings.EqualFold(p.config.Name, "zai") || strings.EqualFold(p.config.Name, "zai-coding")) &&
 		p.config.Conversion.ReasoningContentField != "" {
 		return true
 	}

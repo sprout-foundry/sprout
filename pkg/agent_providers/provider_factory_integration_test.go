@@ -23,6 +23,7 @@ var knownEmbeddedProviders = []string{
 	"lmstudio",
 	"minimax",
 	"zai",
+	"zai-coding",
 }
 
 // ---------------------------------------------------------------------------

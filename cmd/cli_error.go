@@ -74,7 +74,8 @@ func renderExecuteError(err error) {
 func renderProviderSetupHint() {
 	fmt.Fprintln(os.Stderr, "  Configure a provider with any of:")
 	fmt.Fprintln(os.Stderr, "    sprout custom add               # add an OpenAI-compatible provider")
-	fmt.Fprintln(os.Stderr, "    sprout keys                     # store an API key for a built-in provider")
+	fmt.Fprintln(os.Stderr, "    sprout keys set <provider>      # store & validate an API key for a built-in provider")
+	fmt.Fprintln(os.Stderr, "    export <PROVIDER>_API_KEY=...   # set via environment variable")
 	fmt.Fprintln(os.Stderr, "    export SPROUT_PROVIDER=<name>   # select an already-configured provider")
 	fmt.Fprintln(os.Stderr, "  Or run 'sprout agent' interactively (without piping input) for guided setup.")
 }

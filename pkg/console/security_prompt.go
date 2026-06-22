@@ -51,6 +51,9 @@ func askForSecurityApprovalWriter(w io.Writer, prompt, command string) utils.App
 	clihooks.PauseSteer()
 	defer clihooks.ResumeSteer()
 
+	// SP-070-2: Ring bell to alert the user that a blocking approval is needed
+	fmt.Fprint(w, "\a")
+
 	writeSecurityHeader(w, prompt, "Command", command)
 	// Elevate's caveat is rendered above the picker because SelectList items
 	// only support single-line label+detail; this preserves the warning from
@@ -102,6 +105,9 @@ func askForFilesystemSecurityApprovalWriter(w io.Writer, prompt, path, folder st
 	clihooks.SuspendIndicator()
 	clihooks.PauseSteer()
 	defer clihooks.ResumeSteer()
+
+	// SP-070-2: Ring bell to alert the user that a blocking approval is needed
+	fmt.Fprint(w, "\a")
 
 	writeSecurityHeader(w, prompt, "Path", path)
 

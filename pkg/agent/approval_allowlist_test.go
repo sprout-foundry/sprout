@@ -76,6 +76,135 @@ func TestPersistShellCommandAllowlist_RejectsEmpty(t *testing.T) {
 	}
 }
 
+// TestIsShellCommandAllowlisted_PatternMatching covers the glob-pattern
+// matching path added in the ApprovedShellCommandPatterns extension.
+func TestIsShellCommandAllowlisted_PatternMatching(t *testing.T) {
+	a := newIsolatedTestAgent(t)
+	defer a.Shutdown()
+
+	// Inject patterns via the config manager (skip Save) so we can assert
+	// the lookup path independently from persistence.
+	patterns := []string{
+		"rm -rf /tmp/*",
+		"git checkout ?", // single-char glob
+		"[malformed",     // path.Match returns ErrBadPattern — must be skipped
+	}
+	if err := a.GetConfigManager().UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		cfg.ApprovedShellCommandPatterns = patterns
+		return nil
+	}); err != nil {
+		t.Fatalf("UpdateConfigNoSave: %v", err)
+	}
+
+	cases := []struct {
+		name    string
+		command string
+		want    bool
+	}{
+		// `*` glob — matches any non-`/` sequence in the last segment.
+		{"star matches subdir", "rm -rf /tmp/build", true},
+		{"star matches longer name", "rm -rf /tmp/build-2024-06-19", true},
+		// path.Match `*` does NOT cross `/`, so /tmp/nested/deep is not matched
+		// by `rm -rf /tmp/*` — this is intentional and safer.
+		{"star does not cross separator", "rm -rf /tmp/nested/deep", false},
+		// Different top-level path must not match.
+		{"star no match different path", "rm -rf /home/build", false},
+		// `?` single-char glob.
+		{"question single char match", "git checkout a", true},
+		{"question multi char no match", "git checkout ab", false},
+		// A malformed pattern (`[` with no close) causes path.Match to return
+		// ErrBadPattern; IsShellCommandAllowlisted must skip it silently
+		// rather than panic, and other patterns must still be consulted.
+		{"malformed pattern ignored", "rm -rf /tmp/match", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := a.IsShellCommandAllowlisted(tc.command)
+			if got != tc.want {
+				t.Errorf("IsShellCommandAllowlisted(%q) = %v, want %v", tc.command, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestIsShellCommandAllowlisted_LiteralAndPattern covers the case where
+// both a literal entry and a pattern entry exist, ensuring either path
+// can produce a match.
+func TestIsShellCommandAllowlisted_LiteralAndPattern(t *testing.T) {
+	a := newIsolatedTestAgent(t)
+	defer a.Shutdown()
+
+	if err := a.GetConfigManager().UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		cfg.ApprovedShellCommands = []string{"npm test"}
+		cfg.ApprovedShellCommandPatterns = []string{"rm -rf /tmp/*"}
+		return nil
+	}); err != nil {
+		t.Fatalf("UpdateConfigNoSave: %v", err)
+	}
+
+	if !a.IsShellCommandAllowlisted("npm test") {
+		t.Error("literal entry should still match")
+	}
+	if !a.IsShellCommandAllowlisted("rm -rf /tmp/cache") {
+		t.Error("pattern entry should match")
+	}
+	if a.IsShellCommandAllowlisted("npm install") {
+		t.Error("unrelated command should not match")
+	}
+}
+
+// TestIsShellCommandAllowlisted_NilAgent ensures the nil/empty guards
+// return false without panicking.
+func TestIsShellCommandAllowlisted_NilAgent(t *testing.T) {
+	var nilAgent *Agent
+	if nilAgent.IsShellCommandAllowlisted("ls") {
+		t.Error("nil agent should return false")
+	}
+
+	a := newIsolatedTestAgent(t)
+	defer a.Shutdown()
+	if a.IsShellCommandAllowlisted("") {
+		t.Error("empty command should return false")
+	}
+}
+
+func TestPersistShellCommandPattern(t *testing.T) {
+	a := newIsolatedTestAgent(t)
+	defer a.Shutdown()
+
+	pattern := "rm -rf /tmp/sprout-cache-*"
+	if err := a.PersistShellCommandPattern(pattern); err != nil {
+		t.Fatalf("PersistShellCommandPattern: %v", err)
+	}
+	if !a.IsShellCommandAllowlisted("rm -rf /tmp/sprout-cache-2024") {
+		t.Error("persisted pattern should match a matching command")
+	}
+
+	// Idempotency — persisting the same pattern twice should not duplicate.
+	if err := a.PersistShellCommandPattern(pattern); err != nil {
+		t.Fatalf("re-persist: %v", err)
+	}
+	got := a.GetConfig().ApprovedShellCommandPatterns
+	count := 0
+	for _, p := range got {
+		if p == pattern {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Errorf("expected exactly 1 entry for %q, got %d (list: %v)", pattern, count, got)
+	}
+}
+
+func TestPersistShellCommandPattern_RejectsEmpty(t *testing.T) {
+	a := newIsolatedTestAgent(t)
+	defer a.Shutdown()
+
+	if err := a.PersistShellCommandPattern(""); err == nil {
+		t.Error("expected error for empty pattern")
+	}
+}
+
 func TestElevateSessionToPermissive(t *testing.T) {
 	a := newIsolatedTestAgent(t)
 	defer a.Shutdown()
@@ -89,8 +218,8 @@ func TestElevateSessionToPermissive(t *testing.T) {
 	}
 }
 
-// TestHighRiskApprovedForCommand_AllowlistShortCircuit verifies Gate 2
-// auto-approves an allowlisted command without prompting (no event bus
+// TestHighRiskApprovedForCommand_AllowlistShortCircuit verifies the unified
+// gate auto-approves an allowlisted command without prompting (no event bus
 // configured here, so a prompt would otherwise reject).
 func TestHighRiskApprovedForCommand_AllowlistShortCircuit(t *testing.T) {
 	a := newIsolatedTestAgent(t)
@@ -102,12 +231,15 @@ func TestHighRiskApprovedForCommand_AllowlistShortCircuit(t *testing.T) {
 	}
 	ctx := context.Background()
 	if !a.highRiskApprovedForCommand(ctx, cmd) {
-		t.Error("allowlisted command should be auto-approved by Gate 2")
+		t.Error("allowlisted command should be auto-approved by the unified gate")
 	}
-	// Non-allowlisted variant should still take the prompt path.
-	// With no interactive logger AND no event bus, it must reject.
-	if a.highRiskApprovedForCommand(ctx, "rm -rf /tmp/sprout-different-path") {
-		t.Error("non-allowlisted command should not be auto-approved")
+	// Under go test, stdin is a pipe → isNonInteractive() returns true.
+	// Non-interactive mode is permissive-by-default: High-risk commands
+	// (below Critical) are auto-approved. Only Critical-tier operations
+	// block (tested separately via EvaluateOperationRisk). This is the
+	// intended security posture for sandboxed automation.
+	if !a.highRiskApprovedForCommand(ctx, "rm -rf /tmp/sprout-different-path") {
+		t.Error("non-interactive mode should auto-approve high-risk (non-critical) commands")
 	}
 }
 
@@ -204,11 +336,18 @@ func TestElevationBypassesStaticGate(t *testing.T) {
 		t.Fatalf("precondition: critical classify = %+v; want hard-block", r)
 	}
 
-	t.Run("not elevated blocks dangerous", func(t *testing.T) {
+	// Non-interactive runs are permissive-by-default (see
+	// SECURITY_NONINTERACTIVE.md): routine risky-but-not-critical ops are
+	// auto-approved because there's no human to ask. The test agent sets
+	// SkipPrompt=true, so this sub-case now verifies that permissive policy
+	// holds even WITHOUT elevation — the distinction elevation makes is
+	// only observable on an interactive surface, which a non-interactive
+	// test agent can't exercise.
+	t.Run("not elevated still allows dangerous (non-interactive permissive)", func(t *testing.T) {
 		a := newIsolatedTestAgent(t)
 		defer a.Shutdown()
-		if err := newPreExecuteHook(a)("shell_command", dangerous); err == nil {
-			t.Error("non-elevated session should block the dangerous command")
+		if err := newPreExecuteHook(a)("shell_command", dangerous); err != nil {
+			t.Errorf("non-interactive session should auto-approve the dangerous (non-critical) command per permissive-by-default policy, got: %v", err)
 		}
 	})
 

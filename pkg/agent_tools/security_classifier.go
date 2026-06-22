@@ -595,6 +595,18 @@ func classifyWriteOperation(args map[string]interface{}) SecurityResult {
 	return SecurityResult{Risk: SecuritySafe, Reasoning: "Workspace file operation", Category: RiskCategoryFileWrite}
 }
 
+// hasToken splits s on whitespace and reports whether any resulting token
+// exactly equals token. This prevents substring false-positives (e.g.
+// "--hardlink" must NOT match "--hard").
+func hasToken(s string, token string) bool {
+	for _, t := range strings.Fields(s) {
+		if t == token {
+			return true
+		}
+	}
+	return false
+}
+
 // classifyGitOperation classifies git operations
 func classifyGitOperation(args map[string]interface{}) SecurityResult {
 	opRaw, ok := args["operation"].(string)
@@ -608,6 +620,27 @@ func classifyGitOperation(args map[string]interface{}) SecurityResult {
 	for _, safe := range safeOps {
 		if op == safe {
 			return SecurityResult{Risk: SecuritySafe, Reasoning: "Safe git operation: " + op, Category: RiskCategoryReadOnly}
+		}
+	}
+
+	// Flag-aware dangerous-reset detection: --hard, --keep, --merge are
+	// destructive because they discard working-tree / index state.
+	argsStr, _ := args["args"].(string)
+	if op == "reset" && (hasToken(argsStr, "--hard") || hasToken(argsStr, "--keep") || hasToken(argsStr, "--merge")) {
+		return SecurityResult{
+			Risk: SecurityDangerous, Reasoning: "Destructive git reset with flag: " + op,
+			ShouldBlock: true, ShouldPrompt: true, IsHardBlock: true,
+			RiskType: "destructive_git_operation", Category: RiskCategoryDestructive,
+		}
+	}
+
+	// Flag-aware dangerous-rebase detection: --onto and -i can rewrite
+	// history across multiple branches.
+	if op == "rebase" && (hasToken(argsStr, "--onto") || hasToken(argsStr, "-i")) {
+		return SecurityResult{
+			Risk: SecurityDangerous, Reasoning: "Destructive git rebase with flag: " + op,
+			ShouldBlock: true, ShouldPrompt: true, IsHardBlock: true,
+			RiskType: "destructive_git_operation", Category: RiskCategoryDestructive,
 		}
 	}
 

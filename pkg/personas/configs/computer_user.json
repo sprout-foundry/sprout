@@ -1,0 +1,28 @@
+{
+  "personas": [
+    {
+      "id": "computer_user",
+      "name": "Computer User",
+      "description": "Drives the user's actual desktop — mouse, keyboard, and screen — via a screenshot/act/verify loop. Requires a vision-capable provider and the computer_use config flag. Local-only and off by default.",
+      "system_prompt": "pkg/agent/prompts/subagent_prompts/computer_user.md",
+      "allowed_tools": [
+        "take_screenshot",
+        "mouse_click",
+        "mouse_drag",
+        "keyboard_type",
+        "keyboard_press",
+        "scroll",
+        "wait",
+        "ask_user",
+        "TodoWrite",
+        "TodoRead"
+      ],
+      "capabilities": [
+        "computer_use"
+      ],
+      "enabled": true,
+      "local_only": true,
+      "delegatable": false
+    }
+  ]
+}

@@ -38,6 +38,18 @@ const (
 	// RiskSourceCriticalOp — the built-in critical-operation hard-block
 	// (configuration.IsCriticalOperation).
 	RiskSourceCriticalOp RiskSource = "critical-op"
+	// RiskSourceGitHistoryRewrite — git commands that can lose commit history
+	RiskSourceGitHistoryRewrite RiskSource = "git-history-rewrite"
+	// RiskSourceGitWrite — git write operations not allowed by persona
+	RiskSourceGitWrite RiskSource = "git-write"
+	// RiskSourceFSTier — filesystem path-tier classification (Sensitive/External)
+	RiskSourceFSTier RiskSource = "fs-tier"
+	// RiskSourceWorkspacePolicy — workspace security policy evaluation
+	RiskSourceWorkspacePolicy RiskSource = "workspace-policy"
+	// RiskSourceHandler — a security error raised by a tool handler at
+	// execution time (not by the pre-execute gate). Used when the only
+	// signal available is the typed SecurityError returned by the handler.
+	RiskSourceHandler RiskSource = "handler"
 )
 
 // RiskAssessment is the canonical, single-vocabulary verdict for a tool
@@ -65,24 +77,132 @@ type RiskAssessment struct {
 }
 
 // ResolveToolRisk produces the unified, single-vocabulary assessment for a
-// tool call by folding the static classifier with (for shell_command) the
-// persona / risk-profile cascade onto one Low/Medium/High/Critical scale.
+// tool call by folding all available security inputs onto one
+// Low/Medium/High/Critical scale. It incorporates:
 //
-// SP-068: this is the canonical risk view. Today it powers diagnostics (the
-// gate's debug "[risk]" line and the future `sprout explain`) and runs
-// alongside the existing gates without changing any decision; the eventual
-// step is to make it the single gating authority so the two prompt paths and
-// their approval bridges collapse into one.
+//  1. Static classifier (pkg/agent_tools.ClassifyToolCall)
+//  2. Persona / risk-profile cascade (Agent.EvaluateOperationRisk)
+//  3. Git history-rewrite gate (isGitHistoryRewriteCommand + AllowGitHistoryRewrite)
+//  4. Git write gate (isGitWriteCommand + isGitWriteAllowed)
+//  5. Filesystem path-tier (ClassifyPathAccess for file tools)
+//  6. Workspace security policy (SecurityPolicy.Evaluate for shell_command)
+//
+// SP-068 Phase 2: this is the canonical risk view for gating when
+// UnifiedRiskResolver is enabled. When the flag is off it still powers
+// diagnostics (the gate's debug "[risk]" line and the future `sprout
+// explain`) and shadow-mode logging.
 func (a *Agent) ResolveToolRisk(toolName string, args map[string]interface{}) RiskAssessment {
+	// 1. Static classifier (always)
 	assessment := assessmentFromClassifier(tools.ClassifyToolCall(toolName, args))
+
+	// 2. Persona cascade (shell_command only)
 	if toolName == "shell_command" && a != nil {
 		if cmd, ok := args["command"].(string); ok && cmd != "" {
 			level := a.EvaluateOperationRisk(cmd)
 			assessment = assessment.combine(
 				assessmentFromPersonaCascade(level, fmt.Sprintf("persona/profile risk cascade: %s", level)),
 			)
+
+			// 3. Git history-rewrite gate
+			if isGitHistoryRewriteCommand(cmd) {
+				cfg := a.GetConfig()
+				if cfg == nil || !cfg.AllowGitHistoryRewrite {
+					assessment = assessment.combine(
+						RiskAssessment{
+							Level:       configuration.RiskLevelCritical,
+							IsHardBlock: true,
+							Sources:     []RiskSource{RiskSourceGitHistoryRewrite},
+							Reason:      "git history-rewrite operation blocked by default",
+						},
+					)
+				}
+			}
+
+			// 4. Git write gate
+			if isGitWriteCommand(cmd) && !a.isGitWriteAllowed() {
+				assessment = assessment.combine(
+					RiskAssessment{
+						Level:   configuration.RiskLevelHigh,
+						Sources: []RiskSource{RiskSourceGitWrite},
+						Reason:  "git write operation not allowed for current persona",
+					},
+				)
+			}
+
+			// 6. Workspace security policy
+			if cfg := a.GetConfig(); cfg != nil && cfg.SecurityPolicy != nil {
+				policyAction := cfg.SecurityPolicy.Evaluate(cmd)
+				switch policyAction {
+				case configuration.PolicyDeny:
+					assessment = assessment.combine(
+						RiskAssessment{
+							Level:       configuration.RiskLevelCritical,
+							IsHardBlock: true,
+							Sources:     []RiskSource{RiskSourceWorkspacePolicy},
+							Reason:      "workspace security policy denies this command",
+						},
+					)
+				case configuration.PolicyPrompt:
+					// Only contribute if classifier didn't already flag it
+					if assessment.Level.Rank() <= configuration.RiskLevelLow.Rank() {
+						assessment = assessment.combine(
+							RiskAssessment{
+								Level:   configuration.RiskLevelMedium,
+								Sources: []RiskSource{RiskSourceWorkspacePolicy},
+								Reason:  "workspace security policy requires prompt for this command",
+							},
+						)
+					}
+				}
+			}
 		}
 	}
+
+	// 5. Filesystem path-tier (file write tools)
+	if toolName == "write_file" || toolName == "edit_file" ||
+		toolName == "write_structured_file" || toolName == "patch_structured_file" {
+		if a != nil {
+			if pathRaw, ok := args["path"].(string); ok && pathRaw != "" {
+				home := detectHomeDir()
+				tier := ClassifyPathAccess(pathRaw, a.GetWorkspaceRoot(), home, a.effectiveCwd())
+				switch tier {
+				case PathTierSensitive:
+					assessment = assessment.combine(
+						RiskAssessment{
+							Level:   configuration.RiskLevelHigh,
+							Sources: []RiskSource{RiskSourceFSTier},
+							Reason:  fmt.Sprintf("path %s is in a sensitive filesystem tier", pathRaw),
+						},
+					)
+				case PathTierExternal:
+					// Session-scoped folder allowlist: if the user already
+					// clicked "Allow folder this session" for this path's
+					// directory (see handleFileSecurityError /
+					// applyFilesystemDecision), skip the Medium contribution.
+					// Without this, the unified gate re-prompts on every
+					// write to an external folder the user already approved —
+					// because ResolveToolRisk runs BEFORE the filesystem
+					// layer that owns the allowlist. Sensitive-tier paths
+					// never reach this branch (they're caught above) and can
+					// never be session-allowlisted.
+					if a.IsFolderSessionAllowed(pathRaw) {
+						if a.debug {
+							a.debugLog("[risk] %s path %s is under a session-allowed folder — skipping external-tier Medium contribution\n", toolName, pathRaw)
+						}
+					} else {
+						assessment = assessment.combine(
+							RiskAssessment{
+								Level:   configuration.RiskLevelMedium,
+								Sources: []RiskSource{RiskSourceFSTier},
+								Reason:  fmt.Sprintf("path %s is outside the workspace (external tier)", pathRaw),
+							},
+						)
+					}
+				}
+			}
+		}
+	}
+
 	return assessment
 }
 
@@ -205,4 +325,28 @@ func (ra RiskAssessment) Explain() string {
 		fmt.Fprintf(&b, " — %s", ra.Reason)
 	}
 	return b.String()
+}
+
+// resolveOldDecision derives a one-word gating decision from the old
+// dual-gate path's SecurityResult for shadow-mode comparison.
+func resolveOldDecision(res tools.SecurityResult) string {
+	if res.ShouldBlock {
+		return "block"
+	}
+	if res.ShouldPrompt {
+		return "prompt"
+	}
+	return "allow"
+}
+
+// resolveUnifiedDecision derives a one-word gating decision from a
+// RiskAssessment for shadow-mode comparison with the old path.
+func resolveUnifiedDecision(ra RiskAssessment) string {
+	if ra.IsHardBlock || ra.Level == configuration.RiskLevelCritical {
+		return "block"
+	}
+	if ra.Level == configuration.RiskLevelHigh || ra.Level == configuration.RiskLevelMedium {
+		return "prompt"
+	}
+	return "allow"
 }

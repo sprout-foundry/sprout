@@ -127,7 +127,7 @@ func (ir *InputReader) AddToHistory(command string) {
 	ir.history = append(ir.history, command)
 
 	// Limit history size
-	if len(ir.history) > 100 {
+	if len(ir.history) > maxHistoryEntries {
 		ir.history = ir.history[1:]
 	}
 }

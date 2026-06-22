@@ -229,3 +229,55 @@ func TestAgentSecurityManager_ConcurrentAccess(t *testing.T) {
 	// Should not have panicked
 	_ = sm.GetUnsafeMode()
 }
+
+// =============================================================================
+// SP-049-3a: Unsafe shell mode tests
+// =============================================================================
+
+func TestAgentSecurityManager_UnsafeShellMode_Basic(t *testing.T) {
+	sm := NewAgentSecurityManager()
+
+	// Default should be false.
+	if sm.GetUnsafeShellMode() {
+		t.Error("unsafe shell mode should be false by default")
+	}
+
+	// Enable.
+	sm.SetUnsafeShellMode(true)
+	if !sm.GetUnsafeShellMode() {
+		t.Error("unsafe shell mode should be true after setting")
+	}
+
+	// Disable again.
+	sm.SetUnsafeShellMode(false)
+	if sm.GetUnsafeShellMode() {
+		t.Error("unsafe shell mode should be false after resetting")
+	}
+}
+
+func TestAgentSecurityManager_UnsafeShellMode_IndependentOfUnsafeMode(t *testing.T) {
+	sm := NewAgentSecurityManager()
+
+	// Setting unsafe mode should NOT affect unsafe shell mode.
+	sm.SetUnsafeMode(true)
+	if sm.GetUnsafeShellMode() {
+		t.Error("SetUnsafeMode should not change GetUnsafeShellMode")
+	}
+	if !sm.GetUnsafeMode() {
+		t.Error("unsafe mode should be true")
+	}
+
+	// Setting unsafe shell mode should NOT affect unsafe mode.
+	sm.SetUnsafeShellMode(true)
+	if sm.GetUnsafeMode() != true {
+		t.Error("SetUnsafeShellMode should not change GetUnsafeMode (still true)")
+	}
+	sm.SetUnsafeMode(false)
+	sm.SetUnsafeShellMode(true)
+	if sm.GetUnsafeMode() {
+		t.Error("unsafe mode should remain false after SetUnsafeShellMode")
+	}
+	if !sm.GetUnsafeShellMode() {
+		t.Error("unsafe shell mode should be true")
+	}
+}

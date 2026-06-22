@@ -1,8 +1,18 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	agent_api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/embedding"
+	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 // SubagentStatus enumerates terminal states of a subagent run. Replaces
@@ -139,4 +149,122 @@ func (e *SubagentError) Error() string {
 		return fmt.Sprintf("subagent %s", e.Status)
 	}
 	return fmt.Sprintf("subagent %s: %s", e.Status, e.Reason)
+}
+
+// ── Runner types (moved from subagent_runner.go) ──
+
+// SubagentOptions configures an in-process subagent
+type SubagentOptions struct {
+	Persona      string          // "coder", "tester", "debugger", etc.
+	Model        string          // optional model override
+	Provider     string          // optional provider override
+	SystemPrompt string          // optional system prompt override
+	MaxTokens    int             // token budget (0 = unlimited)
+	Timeout      time.Duration   // execution timeout (0 = unlimited)
+	WorkingDir             string          // optional: override workspace root (must be within $HOME)
+	MaxConcurrentSubagents int             // max parallel subagents (0 = unlimited, default unlimited)
+	FleetTokenBudget       int             // shared token budget across all parallel subagents (0 = unlimited)
+}
+
+// SharedState holds resources shared between parent and subagents
+type SharedState struct {
+	EventBus      *events.EventBus
+	TodoManager   *tools.TodoManager
+	EmbeddingMgr  *embedding.EmbeddingManager
+	ConfigManager *configuration.Manager
+	WorkspaceRoot string
+}
+
+// SubagentResult is the structured output from a subagent
+type SubagentResult struct {
+	ID              string
+	Output          string
+	Error           error
+	TokensUsed      int
+	Cost            float64
+	ToolCalls       int
+	// Iterations is the assistant-turn count consumed by this subagent
+	// run. Surfaced to the primary via SubagentRunMetrics.Iterations so
+	// the model has visibility into how many LLM rounds a delegated task
+	// burned. SP-059 Phase 5.
+	Iterations      int
+	Elapsed         time.Duration
+	Cancelled       bool
+	BudgetExceeded  bool  // true if task was skipped because fleet budget was already exceeded before starting
+	Truncated       bool  // true if subagent was cut short due to fleet budget exceeded mid-run
+	// FileChanges is the manifest of writes/edits this subagent performed,
+	// captured via its own ChangeTracker. nil when tracking wasn't
+	// initialized for this run. SP-059 Phase 2c.
+	FileChanges     []TrackedFileChange
+	// ProgressLog is a per-run timeline of notable subagent events
+	// (spawn, output, complete). Surfaced to the primary's LLM via the
+	// SubagentReturn envelope so the model can reason about *what* the
+	// subagent did, not just the final assistant message. Capped to
+	// subagentProgressLogCap entries. SP-059 Phase 3a.
+	ProgressLog     []SubagentProgressEntry
+}
+
+// SubagentProgressEntry is one timeline entry from a subagent run. Kept
+// minimal to avoid bloating the envelope the primary's LLM sees.
+type SubagentProgressEntry struct {
+	OffsetMS int64  `json:"offset_ms"` // ms since subagent started
+	Phase    string `json:"phase"`     // "spawn" | "output" | "complete"
+	Message  string `json:"message"`
+}
+
+// subagentProgressLogCap bounds the per-run progress log. Beyond this,
+// the buffer becomes head-trimmed (oldest entries dropped) so the LLM
+// always sees the most recent activity.
+const subagentProgressLogCap = 50
+
+// SubagentTask represents a single parallel subagent task
+type SubagentTask struct {
+	ID         string
+	Prompt     string
+	Model      string
+	Provider   string
+	Persona    string
+	WorkingDir string // optional: override workspace root
+}
+
+// SubagentMetrics tracks operational metrics for the subagent runner.
+type SubagentMetrics struct {
+	Active            int64 // Currently executing subagents
+	Queued            int64 // Waiting for semaphore slot
+	Completed         int64 // Successfully completed
+	Failed            int64 // Completed with error
+	Cancelled         int64 // Cancelled (parent ctx or budget)
+	TotalQueuedWaitMS int64 // Cumulative milliseconds spent waiting in queue
+}
+
+// SubagentRunner manages in-process subagent execution
+type SubagentRunner struct {
+	parentAgent *Agent
+	shared      *SharedState
+	active      sync.Map // taskID -> *runningSubagent
+
+	// Operational metrics (atomic for concurrent access)
+	metricActive       atomic.Int64
+	metricQueued       atomic.Int64
+	metricCompleted    atomic.Int64
+	metricFailed       atomic.Int64
+	metricCancelled    atomic.Int64
+	metricQueuedWaitMS atomic.Int64
+
+	// testClientFactory overrides client creation for testing only.
+	// When non-nil, it is called instead of factory.CreateProviderClient.
+	// This field is never set in production code.
+	testClientFactory func(clientType agent_api.ClientType, model string) (agent_api.ClientInterface, error)
+}
+
+// runningSubagent tracks an active subagent execution
+type runningSubagent struct {
+	ID        string
+	Persona   string
+	Prompt    string
+	StartedAt time.Time
+	Agent     *Agent
+	Ctx       context.Context
+	Cancel    context.CancelFunc
+	Completed atomic.Bool
 }

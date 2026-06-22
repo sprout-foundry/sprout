@@ -2,6 +2,7 @@ package tools
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha1"
 	"encoding/base64"
 	"encoding/hex"
@@ -524,14 +525,14 @@ func HasVisionCapability() bool {
 // ============================================================================
 
 // GetImageData reads image data from file or URL
-func (vp *VisionProcessor) GetImageData(imagePath string) (string, string, error) {
+func (vp *VisionProcessor) GetImageData(ctx context.Context, imagePath string) (string, string, error) {
 	var data []byte
 	var err error
 
 	lowerPath := strings.ToLower(imagePath)
 	if strings.HasPrefix(lowerPath, "http://") || strings.HasPrefix(lowerPath, "https://") {
 		// Download from URL
-		data, err = vp.DownloadImage(imagePath)
+		data, err = vp.DownloadImage(ctx, imagePath)
 	} else {
 		// Read local file
 		data, err = os.ReadFile(imagePath)
@@ -585,9 +586,13 @@ func (vp *VisionProcessor) GetImageData(imagePath string) (string, string, error
 }
 
 // DownloadImage downloads an image from URL
-func (vp *VisionProcessor) DownloadImage(url string) ([]byte, error) {
+func (vp *VisionProcessor) DownloadImage(ctx context.Context, url string) ([]byte, error) {
 	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Get(url)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create image download request: %w", err)
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("download image: %w", err)
 	}
@@ -769,7 +774,7 @@ func detectImageMimeType(path string) string {
 
 // AnalyzeImage is the tool function called by the agent for image analysis
 // Returns a structured JSON response with metadata for robust error handling
-func AnalyzeImage(imagePath string, analysisPrompt string, analysisMode string) (string, error) {
+func AnalyzeImage(ctx context.Context, imagePath string, analysisPrompt string, analysisMode string) (string, error) {
 	response := ImageAnalysisResponse{
 		Success:     false,
 		ToolInvoked: true,
@@ -809,7 +814,7 @@ func AnalyzeImage(imagePath string, analysisPrompt string, analysisMode string) 
 	ext := strings.ToLower(GetFileExtension(imagePath))
 	if ext == ".pdf" {
 		// Try simplified PDF processing
-		pdfText, err := ProcessPDFWithVision(imagePath)
+		pdfText, err := ProcessPDFWithVision(ctx, imagePath)
 		if err != nil {
 			response.Success = false
 			response.InputResolved = true
@@ -881,7 +886,7 @@ func AnalyzeImage(imagePath string, analysisPrompt string, analysisMode string) 
 	response.InputResolved = true
 	response.OCRAttempted = true
 
-	analysis, err := processor.AnalyzeImage(imagePath, prompt)
+	analysis, err := processor.AnalyzeImage(ctx, imagePath, prompt)
 	if err != nil {
 		errMsg := err.Error()
 

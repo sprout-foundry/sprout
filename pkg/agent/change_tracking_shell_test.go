@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -939,6 +940,86 @@ func TestWalkWorkspace_CumulativeThresholdDoesNotFalsePositiveOnSourceTrees(t *t
 	}
 }
 
+// TestWalkWorkspace_CachedContentDoesNotExhaustBudget is the M2 regression
+// test. The byte budget (shellMaxTotalBytes) guards *new* allocations on a
+// given walk. Previously the stat fast path re-counted cached (unchanged)
+// content toward the budget — double-counting memory that was already
+// resident from a prior walk. That could exhaust the budget purely from
+// cached entries, causing the walker to mark a genuinely CHANGED file as
+// "snapshot budget exceeded" and skip it — silently dropping the change.
+//
+// This test sets a tiny per-tracker budget, primes the cache with a file
+// that alone fits the budget, then mutates a second file. With the bug,
+// the cached file re-counts toward the budget and the changed file is
+// skipped; with the fix, cached content isn't counted and the changed file
+// is read fresh and captured.
+func TestWalkWorkspace_CachedContentDoesNotExhaustBudget(t *testing.T) {
+	dir := t.TempDir()
+
+	// cached.txt: a file that fits the budget by itself and stays
+	// unchanged between walks (so it hits the stat fast path).
+	cachedFile := filepath.Join(dir, "cached.txt")
+	cachedContent := bytes.Repeat([]byte("c"), 100)
+	mustWriteFile(t, cachedFile, cachedContent)
+
+	// changed.txt: starts small, then grows. It must be re-read on the
+	// second walk (stat mismatch → fresh-read branch). We size it so
+	// that cached + changed would EXCEED the budget if both were counted.
+	changedFile := filepath.Join(dir, "changed.txt")
+	mustWriteFile(t, changedFile, []byte("original"))
+
+	tracker := newTrackerForShellTest(t)
+	// Tiny budget: 120 bytes. The cold walk reads both (100 + ~8 ≤ 120).
+	// On the second walk the cached file's 100 bytes would alone leave
+	// only 20 bytes — not enough for the now-grown changed file (~14).
+	tracker.shellMaxTotalBytes = 120
+
+	// Cold prime: populates the cache with both files.
+	tracker.PrimeShellTracking(dir)
+	if tracker.shellCache[cachedFile] == nil || tracker.shellCache[changedFile] == nil {
+		t.Fatalf("prime should cache both files; got keys %v", mapKeys(tracker.shellCache))
+	}
+
+	// Mutate changed.txt (grow it) and bump mtime so the fast path
+	// detects the change and takes the fresh-read branch. Size it so
+	// that cached(100) + grown(>20) would EXCEED the 120-byte budget
+	// if cached content were (incorrectly) counted — this is the
+	// exact condition under which the bug skips a changed file.
+	grown := bytes.Repeat([]byte("n"), 30) // 30 bytes → 100+30=130 > 120 (buggy), 0+30=30 ≤ 120 (fixed)
+	mustWriteFile(t, changedFile, grown)
+	bumpMtime(t, changedFile)
+
+	snap, changes, _ := tracker.walkWorkspace(dir, tracker.shellCache, false)
+
+	// The changed file must be captured with fresh content (NOT skipped
+	// with "snapshot budget exceeded"). If the bug were present, cached
+	// content would have consumed the budget and this entry would be
+	// marked Skipped.
+	entry, ok := snap[changedFile]
+	if !ok {
+		t.Fatalf("changed file missing from snapshot; got keys %v", mapKeys(snap))
+	}
+	if entry.Skipped != "" {
+		t.Errorf("changed file was skipped with %q — cached content should not count toward the budget", entry.Skipped)
+	}
+	if string(entry.Content) != string(grown) {
+		t.Errorf("changed file content = %q, want %q (must be freshly read)", entry.Content, grown)
+	}
+
+	// And the mutation must surface as a recorded change — a skipped
+	// file would not produce a change entry, which is exactly the
+	// "change is MISSED" failure mode M2 guards against.
+	var sawEdit bool
+	for _, ch := range changes {
+		if ch.Path == changedFile && ch.Op == "edit" {
+			sawEdit = true
+		}
+	}
+	if !sawEdit {
+		t.Errorf("expected an edit change for %s; got %d changes", changedFile, len(changes))
+	}
+}
+
 // TestCaptureShellSnapshot_SkipsSymlinks confirms the walker doesn't
 // dereference symlinks. Following a symlink to /etc/passwd or
 // somewhere in $HOME would leak content outside the workspace into
@@ -1312,3 +1393,61 @@ func TestTrackShellTurn_TruncatedDestructiveWalkAppendsWarning(t *testing.T) {
 	}
 }
 
+// TestRecordShellMutations_NoRaceWithConcurrentReads exercises the C3
+// fix: the shell-mutation pipeline (RecordShellMutations →
+// appendShellMutation) appends to ct.changes, while the turn-checkpoint
+// goroutine concurrently reads ct.changes via GetChanges /
+// CollectFileChangesForCheckpoint. Without ct.mu around both the append
+// and the read, this is a data race on the slice header. Run with
+// `go test -race` to detect it.
+func TestRecordShellMutations_NoRaceWithConcurrentReads(t *testing.T) {
+	tracker := newTrackerForShellTest(t)
+	tracker.agent = &Agent{workspaceRoot: "/work"}
+
+	// Writer goroutine: repeatedly call RecordShellMutations, which
+	// appends via appendShellMutation / appendChange under ct.mu.
+	done := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		defer close(done)
+		for i := 0; i < 50; i++ {
+			before := map[string]*shellSnapshotEntry{
+				"/work/f.go": {Content: []byte("old"), Size: 3},
+			}
+			after := map[string]*shellSnapshotEntry{
+				"/work/f.go": {Content: []byte("new"), Size: 3},
+			}
+			tracker.RecordShellMutations(before, after, "shell_command")
+		}
+	}()
+
+	// Reader goroutine: simulate the turn-checkpoint goroutine reading
+	// ct.changes concurrently.
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case <-done:
+				return
+			default:
+				// GetChanges reads ct.changes under ct.mu.
+				_ = tracker.GetChanges()
+				// CollectFileChangesForCheckpoint reads + advances the
+				// watermark under ct.mu.
+				_, _ = tracker.CollectFileChangesForCheckpoint()
+			}
+		}
+	}()
+
+	wg.Wait()
+
+	// We should have recorded ~50 changes. The exact count isn't
+	// asserted (the reader's checkpoint watermark may consume some);
+	// the point is that the race detector stays silent.
+	if got := tracker.GetChangeCount(); got == 0 {
+		t.Errorf("expected some changes to be recorded, got 0")
+	}
+}

@@ -50,6 +50,23 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Handler: handleCommitTool,
 	})
 
+	// Register create_pull_request tool — opens a PR on GitHub after a
+	// feature branch has been pushed. Gated as a git-write operation;
+	// requires the persona to have CapabilityGitWrite.
+	registry.RegisterTool(ToolConfig{
+		Name:        "create_pull_request",
+		Description: "Create a pull request on GitHub. Call this tool after pushing a feature branch to open a PR for review. Provide a descriptive title and body summarizing the changes — do not use placeholders like \"TODO\" or \"fix\". The tool is gated as a git-write operation and requires the persona to have git_write capability.",
+		Parameters: []ParameterConfig{
+			{"title", "string", true, []string{"pr_title"}, "Title of the pull request (required)"},
+			{"body", "string", false, []string{"pr_body", "description"}, "Body/description of the pull request. If omitted, the body is synthesized from commit messages."},
+			{"base", "string", false, []string{"target_branch"}, "Target branch (e.g. main, develop). If omitted, the repository's default branch is used."},
+			{"head", "string", false, []string{"source_branch"}, "Source branch containing the changes. If omitted, the current HEAD branch is used."},
+			{"draft", "boolean", false, []string{}, "Create as a draft PR (default: false)"},
+			{"repo_dir", "string", false, []string{"repo_dir", "directory"}, "Path to the repository root. If omitted, the agent's workspace root is used."},
+		},
+		Handler: handleCreatePullRequest,
+	})
+
 	// Register read_file tool
 	registry.RegisterTool(ToolConfig{
 		Name:        "read_file",

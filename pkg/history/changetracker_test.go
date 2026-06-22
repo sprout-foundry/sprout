@@ -105,7 +105,7 @@ func TestRollbackRedactedFile_SkipsWrite(t *testing.T) {
 	}
 
 	// Record a change with redacted content
-	if err := RecordChangeWithDetails(revID, "/tmp/external.txt", redactedContentMarker, "new content", "edit", "", "", "", ""); err != nil {
+	if err := RecordChangeWithDetails(revID, "/tmp/external.txt", RedactedContentMarker, "new content", "edit", "", "", "", ""); err != nil {
 		t.Fatalf("RecordChangeWithDetails: %v", err)
 	}
 
@@ -132,7 +132,7 @@ func TestRollbackRedactedFile_SkipsWrite(t *testing.T) {
 	if _, err := os.Stat("/tmp/external.txt"); err == nil {
 		// File exists — might be pre-existing, check content
 		content, _ := os.ReadFile("/tmp/external.txt")
-		if string(content) == redactedContentMarker {
+		if string(content) == RedactedContentMarker {
 			t.Errorf("rollback should not write redacted content to disk")
 		}
 	}
@@ -151,7 +151,7 @@ func TestRestoreRedactedFile_SkipsWrite(t *testing.T) {
 	}
 
 	// Record a change with redacted new content
-	if err := RecordChangeWithDetails(revID, "/tmp/external2.txt", "old content", redactedContentMarker, "edit", "", "", "", ""); err != nil {
+	if err := RecordChangeWithDetails(revID, "/tmp/external2.txt", "old content", RedactedContentMarker, "edit", "", "", "", ""); err != nil {
 		t.Fatalf("RecordChangeWithDetails: %v", err)
 	}
 
@@ -177,7 +177,7 @@ func TestRestoreRedactedFile_SkipsWrite(t *testing.T) {
 	// Verify the file was NOT written with redacted content
 	if _, err := os.Stat("/tmp/external2.txt"); err == nil {
 		content, _ := os.ReadFile("/tmp/external2.txt")
-		if string(content) == redactedContentMarker {
+		if string(content) == RedactedContentMarker {
 			t.Errorf("restore should not write redacted content to disk")
 		}
 	}
@@ -303,7 +303,7 @@ func TestRollbackMixedRedactedAndNormal(t *testing.T) {
 	}
 
 	// Redacted change
-	if err := RecordChangeWithDetails(revID, "/tmp/secret.txt", redactedContentMarker, redactedContentMarker, "edit", "", "", "", ""); err != nil {
+	if err := RecordChangeWithDetails(revID, "/tmp/secret.txt", RedactedContentMarker, RedactedContentMarker, "edit", "", "", "", ""); err != nil {
 		t.Fatalf("RecordChangeWithDetails (redacted): %v", err)
 	}
 
@@ -353,7 +353,7 @@ func TestRestoreMixedRedactedAndNormal(t *testing.T) {
 	}
 
 	// Redacted change
-	if err := RecordChangeWithDetails(revID, "/tmp/secret2.txt", redactedContentMarker, redactedContentMarker, "edit", "", "", "", ""); err != nil {
+	if err := RecordChangeWithDetails(revID, "/tmp/secret2.txt", RedactedContentMarker, RedactedContentMarker, "edit", "", "", "", ""); err != nil {
 		t.Fatalf("RecordChangeWithDetails (redacted): %v", err)
 	}
 
@@ -378,5 +378,16 @@ func TestRestoreMixedRedactedAndNormal(t *testing.T) {
 	}
 	if string(content) != "updated" {
 		t.Errorf("normal file after restore = %q, want %q", string(content), "updated")
+	}
+}
+
+// TestRedactedContentMarkerValue guards against accidental edits to the marker
+// string. Rollback/restore guards and write-site guards all key off this exact
+// value; changing it would silently break the redaction defense. If you
+// intentionally change the marker, update every comparison and this test.
+func TestRedactedContentMarkerValue(t *testing.T) {
+	const want = "[REDACTED - external file]"
+	if RedactedContentMarker != want {
+		t.Errorf("RedactedContentMarker = %q, want %q (changing this breaks redaction guards)", RedactedContentMarker, want)
 	}
 }

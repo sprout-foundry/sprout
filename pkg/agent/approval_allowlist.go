@@ -2,15 +2,25 @@ package agent
 
 import (
 	"fmt"
+	"path"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 // IsShellCommandAllowlisted reports whether the user has previously chosen
-// "Always approve this command" for this exact command string. The match
-// is literal — allowlisting `rm -rf /tmp/build` does NOT cover any other
-// path. The Critical tier still blocks regardless; this short-circuit only
-// applies to the High-risk persona-cascade gate.
+// "Always approve this command" for this exact command string (literal
+// match) or whether any user-defined glob pattern in
+// ApprovedShellCommandPatterns matches the command. Pattern matching uses
+// Go's path.Match glob syntax: `*` (any non-`/` sequence), `?` (single
+// char), `[abc]` (char class).
+//
+// Caveat: while `*` does not match `/`, character classes can — e.g.
+// `[^a-z]` or `[/.]` will match `/`. This is NOT a security hole because
+// the Critical tier still blocks regardless of both literal and pattern
+// matches; this short-circuit only applies to the High-risk
+// persona-cascade gate. Critical-tier enforcement happens at the call
+// site before this function is consulted (see risk_prompt.go and
+// tool_security.go), so no pattern can bypass a hard-blocked command.
 func (a *Agent) IsShellCommandAllowlisted(command string) bool {
 	if a == nil || command == "" {
 		return false
@@ -19,8 +29,16 @@ func (a *Agent) IsShellCommandAllowlisted(command string) bool {
 	if cfg == nil {
 		return false
 	}
+	// 1. Literal match against ApprovedShellCommands (unchanged behavior).
 	for _, c := range cfg.ApprovedShellCommands {
 		if c == command {
+			return true
+		}
+	}
+	// 2. Glob pattern match against ApprovedShellCommandPatterns.
+	// path.Match uses glob syntax (not regexp) — safer and simpler.
+	for _, pattern := range cfg.ApprovedShellCommandPatterns {
+		if matched, err := path.Match(pattern, command); err == nil && matched {
 			return true
 		}
 	}
@@ -50,6 +68,33 @@ func (a *Agent) PersistShellCommandAllowlist(command string) error {
 			}
 		}
 		cfg.ApprovedShellCommands = append(cfg.ApprovedShellCommands, command)
+		return nil
+	})
+}
+
+// PersistShellCommandPattern appends pattern to the user's persistent
+// approved-command-pattern list (Config.ApprovedShellCommandPatterns) and
+// saves to disk. Patterns use Go path.Match glob syntax (`*`, `?`, `[]`).
+// Idempotent: re-adding an existing entry is a no-op but still triggers
+// a save so the file's mtime updates (cheap).
+func (a *Agent) PersistShellCommandPattern(pattern string) error {
+	if a == nil {
+		return fmt.Errorf("nil agent")
+	}
+	if pattern == "" {
+		return fmt.Errorf("cannot allowlist empty pattern")
+	}
+	mgr := a.GetConfigManager()
+	if mgr == nil {
+		return fmt.Errorf("no config manager — cannot persist allowlist pattern")
+	}
+	return mgr.UpdateConfig(func(cfg *configuration.Config) error {
+		for _, p := range cfg.ApprovedShellCommandPatterns {
+			if p == pattern {
+				return nil
+			}
+		}
+		cfg.ApprovedShellCommandPatterns = append(cfg.ApprovedShellCommandPatterns, pattern)
 		return nil
 	})
 }

@@ -334,7 +334,7 @@ func canonicalAdapterModels(ctx context.Context, providerID string) ([]modelcont
 		m, err := modelcontract.NewOpenAICompatAdapter("zai", "https://api.z.ai/api/paas/v4/models", "ZAI_API_KEY").ListModels(ctx)
 		return m, true, err
 	case "zai-coding":
-		// Z.AI GLM Coding Plan — dedicated coding-plan endpoint with a separate
+		// GLM Coding Plan — dedicated coding-plan endpoint with a separate
 		// key (ZAI_CODING_API_KEY). Returns the coding-eligible model subset.
 		m, err := modelcontract.NewOpenAICompatAdapter("zai-coding", "https://api.z.ai/api/coding/paas/v4/models", "ZAI_CODING_API_KEY").ListModels(ctx)
 		return m, true, err

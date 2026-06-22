@@ -126,7 +126,7 @@ func Initialize() (*Config, *APIKeys, error) {
 		if currentProvider != "editor" && RequiresAPIKey(currentProvider) && !HasProviderAuth(currentProvider) {
 			needsSetup = true
 			if !isCI {
-				fmt.Printf("\n[WARN] Current provider '%s' requires an API key but none is configured.\n", getProviderDisplayName(currentProvider))
+				fmt.Printf("\n[WARN] Current provider '%s' requires an API key but none is configured.\n", GetProviderDisplayName(currentProvider))
 			}
 		}
 	}
@@ -185,7 +185,7 @@ func Initialize() (*Config, *APIKeys, error) {
 			fmt.Println("   • Or set up a provider via the webui: sprout agent -d")
 			fmt.Println()
 		} else {
-			fmt.Printf("[done] Setup complete! You can now use sprout with %s.\n\n", getProviderDisplayName(provider))
+			fmt.Printf("[done] Setup complete! You can now use sprout with %s.\n\n", GetProviderDisplayName(provider))
 		}
 
 		// Show helpful next steps
@@ -220,7 +220,7 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 
 	// First, check for providers that have environment variables set
 	envProviders := []string{}
-	for _, name := range knownProviderNames() {
+	for _, name := range KnownProviderNames() {
 		metadata, err := GetProviderAuthMetadata(name)
 		if err != nil {
 			continue
@@ -239,7 +239,7 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 		for i, providerName := range envProviders {
 			metadata, _ := GetProviderAuthMetadata(providerName)
 			envVarName := metadata.EnvVar
-			fmt.Printf("  %d. %s (from %s)\n", i+1, getProviderDisplayName(providerName), envVarName)
+			fmt.Printf("  %d. %s (from %s)\n", i+1, GetProviderDisplayName(providerName), envVarName)
 		}
 		fmt.Println()
 
@@ -256,7 +256,7 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 		if choice > 0 && choice <= len(envProviders) {
 			selected = envProviders[choice-1]
 		}
-		fmt.Printf("[OK] Using %s (environment variable detected)\n", getProviderDisplayName(selected))
+		fmt.Printf("[OK] Using %s (environment variable detected)\n", GetProviderDisplayName(selected))
 		return selected, nil
 	}
 
@@ -264,7 +264,7 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 	// readIntInput bounds, and the index used for selection are all
 	// guaranteed consistent — even if the runtime factory happens to
 	// upsert a new remote provider mid-onboarding.
-	providerNames := knownProviderNames()
+	providerNames := KnownProviderNames()
 
 	// Check which providers have API keys already (from file)
 	for _, name := range providerNames {
@@ -281,7 +281,7 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 	if len(providersWithKeys) > 0 {
 		fmt.Println("[OK] Ready to use (configured or no API key needed):")
 		for i, providerName := range providersWithKeys {
-			fmt.Printf("  %d. %s", i+1, getProviderDisplayName(providerName))
+			fmt.Printf("  %d. %s", i+1, GetProviderDisplayName(providerName))
 			if !RequiresAPIKey(providerName) {
 				fmt.Print(" (no API key needed)")
 			}
@@ -313,7 +313,7 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 			description = " - " + desc
 		}
 
-		fmt.Printf("  %d. %s%s%s\n", i+1, getProviderDisplayName(name), status, description)
+		fmt.Printf("  %d. %s%s%s\n", i+1, GetProviderDisplayName(name), status, description)
 	}
 	fmt.Println()
 
@@ -334,7 +334,7 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 	metadata, _ := GetProviderAuthMetadata(selectedProvider)
 	if metadata.RequiresAPIKey && !HasProviderAuth(selectedProvider) {
 		fmt.Println()
-		fmt.Printf("[list] Setting up %s:\n", getProviderDisplayName(selectedProvider))
+		fmt.Printf("[list] Setting up %s:\n", GetProviderDisplayName(selectedProvider))
 
 		// Provide helpful information about getting API keys
 		switch selectedProvider {
@@ -367,11 +367,11 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 			return "", fmt.Errorf("failed to validate and save API key: %w", err)
 		}
 
-		fmt.Printf("[OK] API key saved for %s (%d models available)\n", getProviderDisplayName(selectedProvider), modelCount)
+		fmt.Printf("[OK] API key saved for %s (%d models available)\n", GetProviderDisplayName(selectedProvider), modelCount)
 	} else if metadata.RequiresAPIKey {
-		fmt.Printf("[OK] Using existing API key for %s\n", getProviderDisplayName(selectedProvider))
+		fmt.Printf("[OK] Using existing API key for %s\n", GetProviderDisplayName(selectedProvider))
 	} else {
-		fmt.Printf("[OK] Selected %s (no API key required)\n", getProviderDisplayName(selectedProvider))
+		fmt.Printf("[OK] Selected %s (no API key required)\n", GetProviderDisplayName(selectedProvider))
 	}
 
 	return selectedProvider, nil
@@ -389,11 +389,11 @@ func EnsureProviderAPIKey(provider string, apiKeys *APIKeys) error {
 
 	// Non-interactive environments cannot prompt for API keys.
 	if !term.IsTerminal(int(os.Stdin.Fd())) {
-		return fmt.Errorf("no API key for %s. Running in non-interactive mode. "+noninteractive.HelpHint, getProviderDisplayName(provider))
+		return fmt.Errorf("no API key for %s. Running in non-interactive mode. "+noninteractive.HelpHint, GetProviderDisplayName(provider))
 	}
 
 	fmt.Println()
-	fmt.Printf("[WARN] No API key found for %s\n", getProviderDisplayName(provider))
+	fmt.Printf("[WARN] No API key found for %s\n", GetProviderDisplayName(provider))
 	fmt.Println()
 	fmt.Println("Options:")
 	fmt.Println("  1. Enter API key now")
@@ -417,7 +417,7 @@ func EnsureProviderAPIKey(provider string, apiKeys *APIKeys) error {
 			return fmt.Errorf("failed to validate and save API key: %w", err)
 		}
 
-		fmt.Printf("[OK] API key saved for %s (%d models available)\n", getProviderDisplayName(provider), modelCount)
+		fmt.Printf("[OK] API key saved for %s (%d models available)\n", GetProviderDisplayName(provider), modelCount)
 		return nil
 	}
 
@@ -489,7 +489,7 @@ func SelectProvider(currentProvider string, apiKeys *APIKeys) (string, error) {
 		if provider == currentProvider {
 			indicator = "→ "
 		}
-		fmt.Printf("%s%d. %s\n", indicator, i+1, getProviderDisplayName(provider))
+		fmt.Printf("%s%d. %s\n", indicator, i+1, GetProviderDisplayName(provider))
 	}
 
 	// Also show option to add new provider
@@ -544,7 +544,7 @@ func addNewProvider(apiKeys *APIKeys) (string, error) {
 	}
 
 	for i, provider := range needsKey {
-		fmt.Printf("  %d. %s\n", i+1, getProviderDisplayName(provider))
+		fmt.Printf("  %d. %s\n", i+1, GetProviderDisplayName(provider))
 	}
 	fmt.Println()
 
@@ -567,7 +567,7 @@ func addNewProvider(apiKeys *APIKeys) (string, error) {
 		return "", fmt.Errorf("failed to validate and save API key: %w", err)
 	}
 
-	fmt.Printf("[OK] Added %s (%d models available)\n", getProviderDisplayName(provider), modelCount)
+	fmt.Printf("[OK] Added %s (%d models available)\n", GetProviderDisplayName(provider), modelCount)
 	return provider, nil
 }
 

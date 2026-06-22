@@ -50,7 +50,7 @@ func loadConfigSilently() (*Config, *APIKeys, error) {
 
 	// Check if we need to set a default provider
 	if config.LastUsedProvider == "" {
-		names := knownProviderNames()
+		names := KnownProviderNames()
 		// Check for environment variables
 		for _, name := range names {
 			metadata, err := GetProviderAuthMetadata(name)

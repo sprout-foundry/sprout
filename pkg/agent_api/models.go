@@ -322,6 +322,22 @@ func canonicalAdapterModels(ctx context.Context, providerID string) ([]modelcont
 	case "mistral":
 		m, err := modelcontract.NewOpenAICompatAdapter("mistral", "https://api.mistral.ai/v1/models", "MISTRAL_API_KEY").ListModels(ctx)
 		return m, true, err
+	case "minimax":
+		// MiniMax exposes a single OpenAI-compatible /v1/models endpoint that
+		// works identically for both pay-as-you-go API keys and Token Plan
+		// (subscription) keys. The same key hits the same endpoint regardless
+		// of plan, so one adapter covers both.
+		m, err := modelcontract.NewOpenAICompatAdapter("minimax", "https://api.minimax.io/v1/models", "MINIMAX_API_KEY").ListModels(ctx)
+		return m, true, err
+	case "zai":
+		// Z.AI general API — full GLM catalog.
+		m, err := modelcontract.NewOpenAICompatAdapter("zai", "https://api.z.ai/api/paas/v4/models", "ZAI_API_KEY").ListModels(ctx)
+		return m, true, err
+	case "zai-coding":
+		// Z.AI GLM Coding Plan — dedicated coding-plan endpoint with a separate
+		// key (ZAI_CODING_API_KEY). Returns the coding-eligible model subset.
+		m, err := modelcontract.NewOpenAICompatAdapter("zai-coding", "https://api.z.ai/api/coding/paas/v4/models", "ZAI_CODING_API_KEY").ListModels(ctx)
+		return m, true, err
 	default:
 		return nil, false, nil
 	}
@@ -447,6 +463,9 @@ func createProviderForType(clientType ClientType) (interface {
 	case ZAIClientType:
 		// Use generic provider wrapper to get models from config
 		return &genericConfigListModelsWrapper{providerName: "zai"}, nil
+	case ZAICodingClientType:
+		// Coding plan uses the same model list but a different endpoint
+		return &genericConfigListModelsWrapper{providerName: "zai-coding"}, nil
 	case DeepInfraClientType:
 		// Create DeepInfra wrapper that uses the provider's ListModels directly
 		return &deepInfraListModelsWrapper{}, nil

@@ -9,10 +9,12 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/credentials"
 	"github.com/sprout-foundry/sprout/pkg/logging"
+	"github.com/sprout-foundry/sprout/pkg/modelregistry"
 )
 
 // GenericProvider implements ClientInterface using JSON configuration
@@ -393,6 +395,8 @@ func (p *GenericProvider) GetStreamingClient() *http.Client {
 
 // GetModelContextLimit returns the context limit for the current model
 func (p *GenericProvider) GetModelContextLimit() (int, error) {
+	// 1. If ListModels() has been called and cached a context length for this
+	//    model, use it — it came from the provider's own API.
 	if p.modelsCached {
 		for _, model := range p.models {
 			if model.ID == p.model && model.ContextLength > 0 {
@@ -401,8 +405,31 @@ func (p *GenericProvider) GetModelContextLimit() (int, error) {
 		}
 	}
 
+	// 2. Consult the published model registry (canonical per-provider files at
+	//    sprout-foundry.github.io). These carry the exact context window that
+	//    the refresh workflow fetched from the provider's API, which is more
+	//    accurate than the static config defaults below. Best-effort: a fetch
+	//    failure or cache miss silently falls through to the config.
+	if p.model != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), modelregistryFetchTimeout)
+		defer cancel()
+		if rawModels, err := modelregistry.FetchModels(ctx, p.config.Name); err == nil {
+			for _, rm := range rawModels {
+				if rm.ID == p.model && rm.ContextLength > 0 {
+					return rm.ContextLength, nil
+				}
+			}
+		}
+	}
+
+	// 3. Fall back to the static config (model_overrides → pattern_overrides
+	//    → default_context_limit → conservative 32k).
 	return p.config.GetContextLimit(p.model), nil
 }
+
+// modelregistryFetchTimeout bounds the registry lookup in
+// GetModelContextLimit so a slow network can't stall the agent loop.
+const modelregistryFetchTimeout = 2 * time.Second
 
 // ListModels returns available models
 // Priority:

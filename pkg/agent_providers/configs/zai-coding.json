@@ -1,6 +1,6 @@
 {
   "auth": {
-    "env_var": "ZAI_API_KEY",
+    "env_var": "ZAI_CODING_API_KEY",
     "type": "bearer"
   },
   "cost": {
@@ -12,7 +12,7 @@
     "model": "glm-5",
     "temperature": 0.1
   },
-  "endpoint": "https://api.z.ai/api/paas/v4/chat/completions",
+  "endpoint": "https://api.z.ai/api/coding/paas/v4/chat/completions",
   "headers": {},
   "message_conversion": {
     "convert_tool_role_to_user": false,
@@ -151,7 +151,7 @@
     "supports_vision": true,
     "vision_model": "glm-4.6v"
   },
-  "name": "zai",
+  "name": "zai-coding",
   "retry": {
     "backoff_multiplier": 2,
     "base_delay_ms": 1000,
@@ -168,5 +168,5 @@
     "done_marker": "[DONE]",
     "format": "sse"
   },
-  "display_name": "Z.AI"
+  "display_name": "Z.AI Coding Plan"
 }

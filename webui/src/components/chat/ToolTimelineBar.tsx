@@ -25,6 +25,12 @@ interface ToolTimelineBarProps {
 
 const FADE_MS = 3000;
 const DEFAULT_MAX_VISIBLE = 4;
+// Time the bar stays mounted after `visible` empties. Without this the
+// bar unmounts the instant the last visible tool ages out, then
+// remounts on the next tool_start — which the user sees as the bar
+// flickering on and off. 4s comfortably bridges the gap between
+// consecutive tools while still letting the bar disappear on true idle.
+const HIDE_GRACE_MS = 4000;
 
 export function ToolTimelineBar({ toolExecutions, maxVisible = DEFAULT_MAX_VISIBLE }: ToolTimelineBarProps): JSX.Element | null {
   // Live tick so in-flight elapsed times update without parent re-renders.
@@ -89,7 +95,21 @@ export function ToolTimelineBar({ toolExecutions, maxVisible = DEFAULT_MAX_VISIB
     return filtered.slice(-maxVisible);
   }, [toolExecutions, now, maxVisible]);
 
-  if (visible.length === 0) return null;
+  // Hide-grace gate. Stays true for HIDE_GRACE_MS after `visible`
+  // last had entries, so a brief gap between consecutive tools doesn't
+  // unmount the bar (DOM mount/unmount is what the user reads as
+  // flicker). On true idle the timer fires and the bar disappears.
+  const [shouldRender, setShouldRender] = useState(false);
+  useEffect(() => {
+    if (visible.length > 0) {
+      setShouldRender(true);
+      return undefined;
+    }
+    const id = window.setTimeout(() => setShouldRender(false), HIDE_GRACE_MS);
+    return () => window.clearTimeout(id);
+  }, [visible.length]);
+
+  if (!shouldRender) return null;
 
   return (
     <div className="tool-timeline-bar" role="status" aria-label="Active tools">

@@ -330,7 +330,9 @@ func getProviderDisplayName(provider api.ClientType) string {
 	case api.OpenAIClientType:
 		return "OpenAI"
 	case api.ZAIClientType:
-		return "Z.AI Coding Plan"
+		return "Z.AI"
+	case api.ZAICodingClientType:
+		return "GLM Coding Plan"
 	case api.DeepInfraClientType:
 		return "DeepInfra"
 	case api.DeepSeekClientType:

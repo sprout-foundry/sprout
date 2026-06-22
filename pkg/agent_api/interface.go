@@ -187,6 +187,7 @@ func GetProviderName(clientType ClientType) string {
 		OpenAIClientType:         "OpenAI",
 		OpenRouterClientType:     "OpenRouter (Recommended)",
 		ZAIClientType:            "Z.AI",
+		ZAICodingClientType:      "GLM Coding Plan",
 		DeepInfraClientType:      "DeepInfra",
 		DeepSeekClientType:       "DeepSeek",
 		LMStudioClientType:       "LM Studio",

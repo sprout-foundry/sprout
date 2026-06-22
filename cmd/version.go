@@ -22,8 +22,9 @@ var versionCmd = &cobra.Command{
 • Git commit hash (if available)
 
 This command supports both --version and -v flags as well as the standalone version command.`,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		printVersionInfo()
+		return nil
 	},
 }
 
@@ -46,8 +47,8 @@ func init() {
 	rootCmd.Flags().BoolP("version", "v", false, "Print version information and exit")
 
 	// Hook into the root command's pre-run to handle version flags
-	originalPreRun := rootCmd.PersistentPreRun
-	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) {
+	originalPreRunE := rootCmd.PersistentPreRunE
+	rootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
 		// Check if version flag is set
 		if versionFlag, _ := cmd.Flags().GetBool("version"); versionFlag {
 			printVersionInfo()
@@ -55,9 +56,10 @@ func init() {
 		}
 
 		// Call original pre-run if it exists
-		if originalPreRun != nil {
-			originalPreRun(cmd, args)
+		if originalPreRunE != nil {
+			return originalPreRunE(cmd, args)
 		}
+		return nil
 	}
 }
 

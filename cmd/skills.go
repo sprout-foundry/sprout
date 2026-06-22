@@ -26,8 +26,8 @@ Subcommands:
   allow   Add one or more skill IDs to the allowlist
   revoke  Remove one or more skill IDs from the allowlist
   list    Show currently allowlisted skills`,
-	Run: func(cmd *cobra.Command, args []string) {
-		_ = cmd.Help()
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return cmd.Help()
 	},
 }
 
@@ -43,11 +43,8 @@ Examples:
   sprout skills allow project-planning
   sprout skills allow project-planning browse-debugging`,
 	Args: cobra.MinimumNArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
-		if err := runSkillsAllow(args); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runSkillsAllow(args)
 	},
 }
 
@@ -62,11 +59,8 @@ Examples:
   sprout skills revoke project-planning
   sprout skills revoke browse-debugging`,
 	Args: cobra.MinimumNArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
-		if err := runSkillsRevoke(args); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runSkillsRevoke(args)
 	},
 }
 
@@ -76,11 +70,8 @@ var skillsListCmd = &cobra.Command{
 	Long: `Display the skills currently in the project's allowlist.
 
 If no allowlist is configured, all skills are allowed by default.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		if err := runSkillsList(); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runSkillsList()
 	},
 }
 

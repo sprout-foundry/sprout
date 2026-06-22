@@ -256,8 +256,8 @@ func TestMCPSubcommandProperties(t *testing.T) {
 			if tt.cmd.Short == "" {
 				t.Errorf("expected Short to be set for %q", tt.name)
 			}
-			if tt.cmd.Run == nil {
-				t.Errorf("expected Run to be set for %q", tt.name)
+			if tt.cmd.Run == nil && tt.cmd.RunE == nil {
+				t.Errorf("expected Run or RunE to be set for %q", tt.name)
 			}
 		})
 	}

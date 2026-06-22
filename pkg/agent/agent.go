@@ -49,6 +49,9 @@ func (a *Agent) initSubManagers() {
 	if a.clarificationManager == nil && a.eventBus != nil {
 		a.clarificationManager = NewClarificationManager(a.eventBus)
 	}
+	if a.shellCwd == nil {
+		a.shellCwd = &shellCwdTracker{}
+	}
 }
 
 type Agent struct {
@@ -71,9 +74,7 @@ type Agent struct {
 	// Tools like commit use this instead of workspaceRoot when available,
 	// so that git operations run in the correct directory after the agent
 	// has changed directories via shell commands.
-	shellCwd     string
-	prevShellCwd string
-	shellCwdMu   sync.RWMutex
+	shellCwd *shellCwdTracker
 
 	// Input handling
 	inputInjectionChan  chan string

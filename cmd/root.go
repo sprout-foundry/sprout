@@ -38,7 +38,7 @@ For autonomous operation, try: sprout agent "your intent here"
 Running just 'sprout' without arguments starts enhanced agent mode with automatic web UI.
 
 See "Available Commands" below for the full list.`,
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		if debugPprofAddr != "" {
 			go func() {
 				fmt.Fprintf(os.Stderr, "pprof: listening on http://%s/debug/pprof/\n", debugPprofAddr)
@@ -50,21 +50,19 @@ See "Available Commands" below for the full list.`,
 		if isolatedConfig {
 			cwd, err := os.Getwd()
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to resolve working directory for --isolated-config: %v\n", err)
-				os.Exit(1)
+				return fmt.Errorf("failed to resolve working directory for --isolated-config: %w", err)
 			}
 			isolatedDir := filepath.Join(cwd, ".sprout")
 			if err := configuration.SetEnv("CONFIG", isolatedDir); err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to set SPROUT_CONFIG for --isolated-config: %v\n", err)
-				os.Exit(1)
+				return fmt.Errorf("failed to set SPROUT_CONFIG for --isolated-config: %w", err)
 			}
 			if err := configuration.BootstrapIsolatedConfig(isolatedDir); err != nil {
-				fmt.Fprintf(os.Stderr, "Failed to bootstrap isolated config: %v\n", err)
-				os.Exit(1)
+				return fmt.Errorf("failed to bootstrap isolated config: %w", err)
 			}
 		}
 		// Initialize API keys and configuration
 		initializeSystem()
+		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Default to interactive mode when no arguments provided

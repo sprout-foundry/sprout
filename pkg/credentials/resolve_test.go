@@ -18,6 +18,7 @@ func TestProviderEnvVar(t *testing.T) {
 		{"deepseek", "DEEPSEEK_API_KEY"},
 		{"zai", "ZAI_API_KEY"},
 		{"z.ai", "ZAI_API_KEY"},
+		{"zai-coding", "ZAI_CODING_API_KEY"},
 		{"ollama", "OLLAMA_API_KEY"},
 		{"ollama-local", "OLLAMA_API_KEY"},
 		{"ollama-cloud", "OLLAMA_API_KEY"},
@@ -274,6 +275,8 @@ func TestProviderEnvVar_ConsistentWithHasProviderCredential(t *testing.T) {
 		{"deepseek", "DEEPSEEK_API_KEY"},
 		{"minimax", "MINIMAX_API_KEY"},
 		{"mistral", "MISTRAL_API_KEY"},
+		{"zai", "ZAI_API_KEY"},
+		{"zai-coding", "ZAI_CODING_API_KEY"},
 	}
 
 	for _, tc := range providers {

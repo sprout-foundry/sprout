@@ -27,7 +27,6 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/factory"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 	"github.com/sprout-foundry/sprout/pkg/git"
-	"github.com/sprout-foundry/sprout/pkg/personas"
 	"github.com/sprout-foundry/sprout/pkg/security"
 )
 
@@ -174,16 +173,11 @@ func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface
 		}
 	}
 
-	// Block git write operations unless the active persona has CapabilityGitWrite
-	// (and, for the orchestrator persona, the AllowOrchestratorGitWrite config flag).
+	// Block git write operations unless the active persona has CapabilityGitWrite.
 	// Staging operations (git add) are always allowed per policy.
 	// Read-only operations (status, log, diff, etc.) are always allowed through shell_command.
 	if isGitWriteCommand(command) {
 		if !a.isGitWriteAllowed() {
-			persona := a.GetActivePersona()
-			if persona == personas.IDOrchestrator {
-				return "", agenterrors.NewSecurityError(fmt.Sprintf("git write operations are disabled for %s. Enable 'Allow orchestrator git write' in settings, or use the commit tool instead (operation: '%s')", persona, command), nil)
-			}
 			// For commit operations, redirect to the commit tool — this ensures
 			// commits go through the proper message generation code path regardless
 			// of whether the agent used shell_command or the commit tool.
@@ -268,9 +262,8 @@ func handleGitOperation(ctx context.Context, a *Agent, args map[string]interface
 
 	// Basic git ops (add/push/pull/fetch) skip the approval prompt for any
 	// persona with CapabilityGitWrite that has cleared isGitWriteAllowed
-	// (which gates the orchestrator behind the user's AllowOrchestratorGitWrite
-	// flag and lets capability-bearing personas like the coordinator through
-	// unconditionally). Other operations (reset, checkout, clean, rm, merge, etc.)
+	// (orchestrator, coordinator, or any custom persona declaring the
+	// capability). Other operations (reset, checkout, clean, rm, merge, etc.)
 	// always require user approval regardless of persona.
 	basicGitOps := operation == tools.GitOpAdd || operation == tools.GitOpPush || operation == tools.GitOpPull || operation == tools.GitOpFetch
 	allowWithoutApproval := basicGitOps && a.isGitWriteAllowed()
@@ -440,10 +433,8 @@ func handleCommitTool(_ context.Context, a *Agent, args map[string]interface{}) 
 		}
 	}
 
-	// Auto-approve commits when the persona has CapabilityGitWrite and the
-	// runtime gate is open (orchestrator needs AllowOrchestratorGitWrite; the
-	// coordinator clears unconditionally). Subagents also auto-approve because
-	// they have no interactive UI to prompt with.
+	// Auto-approve commits when the persona has CapabilityGitWrite.
+	// Subagents also auto-approve because they have no interactive UI to prompt with.
 	isSubagent := a.IsSubagent()
 	canGitWrite := a.isGitWriteAllowed()
 

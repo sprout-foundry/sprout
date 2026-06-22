@@ -26,10 +26,8 @@ const (
 // Use these constants rather than string literals so renames stay typesafe.
 const (
 	// CapabilityGitWrite — persona may perform git write operations (commit,
-	// stage, push) via the dedicated commit tool and shell_command. For the
-	// orchestrator persona this capability is additionally gated by the
-	// AllowOrchestratorGitWrite config flag; for other personas the capability
-	// alone is sufficient.
+	// stage, push) via the dedicated commit tool and shell_command. Any persona
+	// declaring this capability is allowed git-write operations.
 	CapabilityGitWrite = "git_write"
 
 	// CapabilityComputerUse — persona may drive the desktop (mouse, keyboard,

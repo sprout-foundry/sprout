@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
-	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/git"
 )
 
@@ -74,12 +73,6 @@ func setupPRHandlerTest(t *testing.T) (*Agent, string, func()) {
 
 	// Set orchestrator persona with git-write enabled for basic tests.
 	agent.state.SetActivePersona("orchestrator")
-	if err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
-		cfg.AllowOrchestratorGitWrite = true
-		return nil
-	}); err != nil {
-		t.Fatalf("failed to enable orchestrator git-write: %v", err)
-	}
 
 	cleanup := func() {
 		git.PushBranch = origPushBranch
@@ -312,7 +305,7 @@ func TestHandleCreatePullRequest_GitWriteGateAllows(t *testing.T) {
 	a, _, cleanup := setupPRHandlerTest(t)
 	defer cleanup()
 
-	// Orchestrator with AllowOrchestratorGitWrite=true should bypass prompt.
+	// Orchestrator has CapabilityGitWrite, so it should bypass the prompt.
 	a.state.SetActivePersona("orchestrator")
 
 	restore := overrideGHOutput("https://github.com/testorg/testrepo/pull/8")
@@ -500,41 +493,6 @@ func TestHandleCreatePullRequest_ResultFormatting(t *testing.T) {
 	}
 	if !strings.Contains(result, "State: open") {
 		t.Errorf("result should contain state, got: %s", result)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Orchestrator with git-write disabled
-// ---------------------------------------------------------------------------
-
-func TestHandleCreatePullRequest_OrchestratorGitWriteDisabled(t *testing.T) {
-	a, _, cleanup := setupPRHandlerTest(t)
-	defer cleanup()
-
-	// Disable git-write for orchestrator
-	if err := a.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
-		cfg.AllowOrchestratorGitWrite = false
-		return nil
-	}); err != nil {
-		t.Fatalf("failed to disable orchestrator git-write: %v", err)
-	}
-
-	// No UI → PromptChoice returns ErrUINotAvailable → fallback to allow
-	a.state.SetActivePersona("orchestrator")
-	a.ui = &mockUI{interactive: false}
-
-	restore := overrideGHOutput("https://github.com/testorg/testrepo/pull/50")
-	defer restore()
-	t.Setenv("GH_TOKEN", "")
-
-	result, err := handleCreatePullRequest(context.Background(), a, map[string]interface{}{
-		"title": "Orchestrator no-cap PR",
-	})
-	if err != nil {
-		t.Fatalf("unexpected error after UI-not-available fallback: %v", err)
-	}
-	if !strings.Contains(result, "pull/50") {
-		t.Errorf("result should contain PR URL after fallback, got: %s", result)
 	}
 }
 

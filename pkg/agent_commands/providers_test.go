@@ -19,9 +19,14 @@ func TestGetProviderDisplayName(t *testing.T) {
 			want:     "OpenAI",
 		},
 		{
-			name:     "Z.AI Coding Plan",
+			name:     "Z.AI",
 			provider: api.ZAIClientType,
-			want:     "Z.AI Coding Plan",
+			want:     "Z.AI",
+		},
+		{
+			name:     "GLM Coding Plan",
+			provider: api.ZAICodingClientType,
+			want:     "GLM Coding Plan",
 		},
 		{
 			name:     "DeepInfra",

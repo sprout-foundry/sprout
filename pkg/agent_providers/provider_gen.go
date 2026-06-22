@@ -312,7 +312,7 @@ func ProviderDisplayNames() map[string]string {
 		"openai": "OpenAI",
 		"openrouter": "OpenRouter (Recommended)",
 		"zai": "Z.AI",
-		"zai-coding": "Z.AI Coding Plan",
+		"zai-coding": "GLM Coding Plan",
 		// Special providers (no config files)
 		"ollama": "Ollama (Local)",
 		"ollama-local": "Ollama (Local)",

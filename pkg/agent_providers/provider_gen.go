@@ -23,6 +23,7 @@ const (
 	OpenaiClientType = "openai"
 	OpenrouterClientType = "openrouter"
 	ZaiClientType = "zai"
+	ZaiCodingClientType = "zai-coding"
 )
 
 // AllProviderNames returns all provider names as strings
@@ -40,6 +41,7 @@ func AllProviderNames() []string {
 		"openai",
 		"openrouter",
 		"zai",
+		"zai-coding",
 	}
 }
 
@@ -92,6 +94,9 @@ func StringToClientType(name string) (string, error) {
 
 	case "zai":
 		return "zai", nil
+
+	case "zai-coding":
+		return "zai-coding", nil
 
 	default:
 		if normalized != "" {
@@ -150,6 +155,9 @@ func ClientTypeToString(ct string) string {
 	case "zai":
 		return "zai"
 
+	case "zai-coding":
+		return "zai-coding"
+
 	default:
 		// For custom providers or future additions
 		return ct
@@ -201,6 +209,9 @@ func ProviderRequiresAPIKey(name string) bool {
 	case "zai":
 		return true
 
+	case "zai-coding":
+		return true
+
 	default:
 		// Default to requiring key for unknown providers
 		return true
@@ -245,6 +256,9 @@ func ProviderEnvVar(name string) string {
 	case "zai":
 		return "ZAI_API_KEY"
 
+	case "zai-coding":
+		return "ZAI_CODING_API_KEY"
+
 	// Special providers (no config files)
 	case "jinaai":
 		return "JINA_API_KEY"
@@ -269,6 +283,7 @@ func KnownProviders() []string {
 		"openai",
 		"openrouter",
 		"zai",
+		"zai-coding",
 		// Special providers (no config files)
 		"ollama",
 		"ollama-local",
@@ -296,7 +311,8 @@ func ProviderDisplayNames() map[string]string {
 		"ollama-cloud": "Ollama (Cloud)",
 		"openai": "OpenAI",
 		"openrouter": "OpenRouter (Recommended)",
-		"zai": "Z.AI Coding Plan",
+		"zai": "Z.AI",
+		"zai-coding": "Z.AI Coding Plan",
 		// Special providers (no config files)
 		"ollama": "Ollama (Local)",
 		"ollama-local": "Ollama (Local)",

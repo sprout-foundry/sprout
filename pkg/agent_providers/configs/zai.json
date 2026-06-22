@@ -23,6 +23,7 @@
     "available_models": [
       "glm-5",
       "glm-5.1",
+      "glm-5.2",
       "glm-5-turbo",
       "glm-4.7",
       "GLM-4.6",
@@ -48,6 +49,17 @@
         "description": "Z.AI GLM-5.1 - Enhanced GLM-5 with improved reasoning and tool use capabilities",
         "id": "glm-5.1",
         "name": "GLM-5.1",
+        "tags": [
+          "tools",
+          "coding",
+          "reasoning"
+        ]
+      },
+      {
+        "context_length": 1048576,
+        "description": "Z.AI GLM-5.2 - Latest flagship with 1M-token context for long-horizon tasks",
+        "id": "glm-5.2",
+        "name": "GLM-5.2",
         "tags": [
           "tools",
           "coding",
@@ -124,7 +136,8 @@
       "glm-4.7": 200000,
       "glm-5": 200000,
       "glm-5-turbo": 200000,
-      "glm-5.1": 200000
+      "glm-5.1": 200000,
+      "glm-5.2": 1048576
     },
     "pattern_overrides": [
       {

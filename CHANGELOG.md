@@ -2,6 +2,19 @@
 
 All notable changes to Sprout will be documented in this file.
 
+## [v0.16.16] - 2026-06-22
+
+- chore: embed UI assets and sync package versions for v0.16.16 (5463b190)
+- Fix glm-5.2 context limit to 1M tokens in Z.AI provider configs (3dcbd7d9)
+- Fix leftover Z.AI Coding Plan comment and add zai-coding credential tests (c8bbc722)
+- Rename Z.AI Coding Plan display name to GLM Coding Plan (c7778a75)
+- fix: correct z.ai provider name and markdown italic boundaries (f0281dff)
+- Merge remote-tracking branch 'origin/main' (8f7e4d26)
+- feat(providers): add live model catalog refresh support for zai and minimax (208ca9c9)
+- Merge branch 'main' of github.com:sprout-foundry/sprout (fd3e0b0c)
+- refactor: codebase quality improvements across CLI, agent, config, history (fe7cdf45)
+- fix(interactive): capture dismiss key from session picker to prevent swallowed first keystroke (e567c187)
+
 ## [v0.16.13] - 2026-06-22
 
 - chore: embed UI assets and sync package versions for v0.16.13 (09d152e5)

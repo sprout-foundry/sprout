@@ -101,6 +101,13 @@ export interface GitCommitFileDiffResponse {
   diff: string;
 }
 
+export interface PullRequestResponse {
+  success: boolean;
+  url: string;
+  number: number;
+  state: string;
+}
+
 export interface GitDiffResponse {
   message: string;
   path: string;

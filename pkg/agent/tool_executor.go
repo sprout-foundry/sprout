@@ -83,7 +83,7 @@ func (te *ToolExecutor) ExecuteTools(toolCalls []api.ToolCall) []api.Message {
 
 	// Check for interrupt before executing
 	select {
-	case <-te.agent.interruptCtx.Done():
+	case <-te.agent.InterruptCtx().Done():
 		// Context cancelled, interrupt requested
 		var results []api.Message
 		for _, tc := range toolCalls {

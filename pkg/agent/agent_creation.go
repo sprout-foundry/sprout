@@ -162,6 +162,7 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 		if agent.debug {
 			agent.Logger().Info("Tool registry initialized")
 		}
+
 	}
 
 	// Load command history from configuration
@@ -357,6 +358,16 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 		if keyErr := configManager.EnsureAPIKey(resolvedType); keyErr != nil {
 			return nil, agenterrors.NewProviderError("no provider configured. Running in non-interactive mode. "+noninteractive.HelpHint, keyErr, "", "")
 		}
+
+		// Warn that non-interactive runs use a permissive security posture.
+		// Only routine (Medium/High) operations are auto-approved; Critical
+		// ops (rm -rf /, fork bombs) still hard-block and exit. The
+		// assumption is that non-interactive automation runs in a
+		// container/sandbox, so we print this reminder so the operator can
+		// confirm the execution environment is appropriately isolated.
+		console.GlyphWarning.Fprintf(os.Stderr,
+			"Non-interactive mode: security is permissive (Medium/High operations auto-approved; only Critical ops block). "+
+				"Run inside a container or sandbox for isolation.\n")
 	}
 
 	// NOTE: The early check above ensures that in non-interactive mode the

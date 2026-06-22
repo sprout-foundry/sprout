@@ -19,11 +19,11 @@ func handleRequestClarification(ctx context.Context, a *Agent, args map[string]i
 		return "", fmt.Errorf("clarification manager not available")
 	}
 
-	if a.delegateID == "" {
+	if a.subagentID == "" {
 		return "", fmt.Errorf("request_clarification is only available for subagents")
 	}
 
-	response, err := a.clarificationManager.RequestClarification(ctx, a.delegateID, question)
+	response, err := a.clarificationManager.RequestClarification(ctx, a.subagentID, question)
 	if err != nil {
 		return fmt.Sprintf("Clarification request failed: %v", err), nil
 	}

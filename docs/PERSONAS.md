@@ -10,7 +10,7 @@ Personas are **catalog-fixed**. The set of personas, their tool allowlists, syst
 
 | ID | Description | Delegatable | Notes |
 |----|-------------|-------------|-------|
-| `orchestrator` | Planning and delegation; classify → activate skill → delegate → verify | No | Carries `git_write` capability, gated by `AllowOrchestratorGitWrite`. Aliases: `orchestration`, `repo_orchestrator`, `repo_operator`, `git_orchestrator` |
+| `orchestrator` | Planning and delegation; classify → activate skill → delegate → verify | No | Carries `git_write` capability. Aliases: `orchestration`, `repo_orchestrator`, `repo_operator`, `git_orchestrator` |
 | `coordinator` | Cross-project orchestration; manages a persistent task queue, delegates to orchestrator subagents | No | Carries `git_write` unconditionally. Lists `orchestrator` in `can_spawn_non_delegatable`. Aliases: `executive_assistant`, `ea`, `assistant` |
 | `general` | General-purpose persona for tasks that don't need deep specialization | Yes | Alias: `default` |
 | `coder` | Feature implementation and production code writing | Yes | |
@@ -57,19 +57,9 @@ When `run_subagent` is called without a `persona` argument, Sprout uses this per
 
 Implementation: `pkg/agent/tool_handlers_subagent.go:456-463`.
 
-### `allow_orchestrator_git_write` — gate orchestrator git-write
+Git-write authorization is governed solely by the persona's `CapabilityGitWrite` capability — personas that declare it (orchestrator, coordinator) are allowed; all others are not. No config toggle is needed.
 
-The orchestrator carries `CapabilityGitWrite` in the catalog, but only the orchestrator's grant is additionally gated by this flag. Default: `true`.
-
-```json
-{
-  "allow_orchestrator_git_write": false
-}
-```
-
-When `false`, the orchestrator can't commit, push, or otherwise mutate git via `shell_command`; the `commit` tool path returns an error. Other capability-bearing personas (currently just `coordinator`) are unaffected.
-
-Implementation: `pkg/agent/persona.go:272-289` (`isGitWriteAllowed`), `pkg/agent/tool_handlers_shell.go:146-171`.
+Implementation: `pkg/agent/persona.go` (`isGitWriteAllowed`), `pkg/agent/tool_handlers_shell.go`.
 
 ### `disable_coordinator_auto_activate` — opt out of coordinator activation in $HOME
 
@@ -139,22 +129,19 @@ The only capability constant today is `personas.CapabilityGitWrite = "git_write"
 
 | Persona | Has `git_write`? | Effective? |
 |---------|------------------|------------|
-| `orchestrator` | Yes | Only when `AllowOrchestratorGitWrite=true` |
-| `coordinator` | Yes | Always (the user opted in by activating it) |
+| `orchestrator` | Yes | Always (has capability) |
+| `coordinator` | Yes | Always (has capability) |
 | All others | No | Never; `commit` tool is rejected, write subcommands are blocked |
 
-`Agent.isGitWriteAllowed()` (`pkg/agent/persona.go:272`):
+`Agent.isGitWriteAllowed()` (`pkg/agent/persona.go`):
 
 ```go
 func (a *Agent) isGitWriteAllowed() bool {
     persona := cfg.GetSubagentType(a.GetActivePersona())
-    if persona == nil || !persona.HasCapability(personas.CapabilityGitWrite) {
+    if persona == nil {
         return false
     }
-    if personaID == personas.IDOrchestrator {
-        return cfg.AllowOrchestratorGitWrite
-    }
-    return true
+    return persona.HasCapability(personas.CapabilityGitWrite)
 }
 ```
 
@@ -240,7 +227,7 @@ if risk := a.EvaluateOperationRisk(pseudoCmd); risk == configuration.RiskLevelHi
    - `system_prompt_text` set → replace current prompt entirely.
    - Else `system_prompt` (file path) set → load file, replace.
    - `system_prompt_append` set → append after the base/file/text prompt, separated by `---`.
-5. **Orchestrator-only**: if active persona is `orchestrator` and `AllowOrchestratorGitWrite=true`, append the embedded git-policy markdown (`orchestratorGitPolicyAppend`). The same persona ID covers both the read-only and git-write variants; no second catalog entry needed.
+5. **Orchestrator-only**: if active persona is `orchestrator`, append the embedded git-policy markdown (`orchestratorGitPolicyAppend`). The policy text documents the commit tool preference, staging rules, and which shell-side git ops are blocked.
 6. Record the persona on `Agent.state`; at depth 0 also stamp `rootPersonaID`.
 7. Merge depth + active persona into event metadata so every published event is tagged.
 
@@ -296,7 +283,7 @@ If a workflow needs a different combination of tools or a tailored system prompt
 | Catalog definitions (Go) | `pkg/personas/catalog.go` |
 | Catalog data (JSON) | `pkg/personas/configs/*.json` |
 | Persona ID + capability constants | `pkg/personas/ids.go` |
-| Config integration | `pkg/configuration/config.go` (`SubagentType`, `GetSubagentType`, `IsPersonaDisabled`, `DefaultSubagentPersona`, `AllowOrchestratorGitWrite`) |
+| Config integration | `pkg/configuration/config.go` (`SubagentType`, `GetSubagentType`, `IsPersonaDisabled`, `DefaultSubagentPersona`) |
 | Persona activation | `pkg/agent/persona.go` (`ApplyPersona`, `isGitWriteAllowed`, `canSpawnNonDelegatable`, `GetAvailablePersonaIDs`) |
 | Coordinator auto-activate | `pkg/agent/agent_creation.go::autoActivateCoordinatorPersona` |
 | Subagent spawn gate | `pkg/agent/tool_handlers_subagent.go::handleRunSubagent` |

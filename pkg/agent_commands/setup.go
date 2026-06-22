@@ -67,7 +67,6 @@ func (s *SetupCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	// Security
 	s.printSection("Security", []keyValue{
 		{"Risk Profile", s.nonEmpty(cfg.RiskProfile, "default")},
-		{"Orchestrator Git Write", fmt.Sprintf("%v", cfg.AllowOrchestratorGitWrite)},
 	})
 
 	// Skills

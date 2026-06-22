@@ -35,7 +35,7 @@ func NewSpecExtractor(cfg *configuration.Config, logger *utils.Logger) (*SpecExt
 }
 
 // ExtractSpec analyzes conversation and extracts canonical spec
-func (e *SpecExtractor) ExtractSpec(conversation []Message, userIntent string) (*SpecExtractionResult, error) {
+func (e *SpecExtractor) ExtractSpec(ctx context.Context, conversation []Message, userIntent string) (*SpecExtractionResult, error) {
 	// Validate inputs
 	if userIntent == "" {
 		return nil, fmt.Errorf("userIntent cannot be empty")
@@ -62,8 +62,8 @@ func (e *SpecExtractor) ExtractSpec(conversation []Message, userIntent string) (
 		{Role: "user", Content: fullPrompt},
 	}
 
-	// TODO(SP-034-1c): thread caller ctx through SpecExtractor so Stop aborts.
-	chatResponse, err := e.agentClient.SendChatRequest(context.Background(), messages, nil, "", false)
+	// SP-073: thread caller ctx through SpecExtractor so Stop aborts.
+	chatResponse, err := e.agentClient.SendChatRequest(ctx, messages, nil, "", false)
 	if err != nil {
 		// Check for rate limiting or timeout errors
 		errStr := err.Error()
@@ -129,12 +129,12 @@ func (e *SpecExtractor) ExtractSpec(conversation []Message, userIntent string) (
 }
 
 // UpdateSpec updates existing spec with new conversation
-func (e *SpecExtractor) UpdateSpec(existing *CanonicalSpec, newMessages []Message) (*CanonicalSpec, error) {
+func (e *SpecExtractor) UpdateSpec(ctx context.Context, existing *CanonicalSpec, newMessages []Message) (*CanonicalSpec, error) {
 	// Append new messages to conversation
 	updatedConversation := append(existing.Conversation, newMessages...)
 
 	// Extract new spec from full conversation
-	result, err := e.ExtractSpec(updatedConversation, existing.UserPrompt)
+	result, err := e.ExtractSpec(ctx, updatedConversation, existing.UserPrompt)
 	if err != nil {
 		return nil, fmt.Errorf("parse spec extraction result: %w", err)
 	}

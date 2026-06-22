@@ -13,9 +13,11 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/history"
 )
 
-// RedactedContentMarker is the marker used when file content is redacted because
-// the file is outside the workspace root (to avoid leaking sensitive data).
-const RedactedContentMarker = "[REDACTED - external file]"
+// RedactedContentMarker aliases history.RedactedContentMarker so existing call
+// sites within this package keep working. The canonical constant lives in
+// pkg/history (the lower-level package, which pkg/agent already imports) so the
+// two packages can never drift apart.
+const RedactedContentMarker = history.RedactedContentMarker
 
 // ChangeTracker manages change tracking for the agent workflow
 type ChangeTracker struct {
@@ -103,6 +105,13 @@ type TrackedFileChange struct {
 	Operation    string    `json:"operation"` // "write", "edit", "create", "delete", "bulk"
 	Timestamp    time.Time `json:"timestamp"`
 	ToolCall     string    `json:"tool_call"` // Which tool was used
+
+	// Source attributes a change to its origin. Empty for direct
+	// primary-agent edits; "subagent:<persona>" for changes merged
+	// in from a subagent run. Surfaced by list_changes so the user/LLM
+	// can tell which subagent touched a file. TrackedBulkItem does NOT
+	// carry this (bulk entries are always shell-mutation rollups).
+	Source string `json:"source,omitempty"`
 
 	// BulkCount is set on a rollup entry produced when a single shell
 	// command churns more than the bulk threshold — typical of
@@ -192,6 +201,14 @@ func (ct *ChangeTracker) TrackFileWrite(filePath string, newContent string) erro
 		return nil
 	}
 
+	// H3: Normalize to absolute at track time so the stored FilePath
+	// is independent of the process's CWD. If the agent later does a
+	// `cd` via a shell command, recovery (which resolves via
+	// filepath.Abs against the CURRENT CWD) still points to the
+	// correct location, and dedup in resolveRecoveryTarget compares
+	// consistently. See resolveAbsPath for the resolution strategy.
+	filePath = ct.resolveAbsPath(filePath)
+
 	// Get original content (if file exists)
 	originalContent := ""
 	if _, err := os.Stat(filePath); err == nil {
@@ -228,6 +245,9 @@ func (ct *ChangeTracker) TrackFileEdit(filePath string, originalContent string, 
 		return nil
 	}
 
+	// H3: Normalize to absolute at track time. See TrackFileWrite.
+	filePath = ct.resolveAbsPath(filePath)
+
 	// Redact content if file is outside the workspace root
 	if ct.isOutsideWorkspace(filePath) {
 		originalContent = RedactedContentMarker
@@ -247,6 +267,22 @@ func (ct *ChangeTracker) TrackFileEdit(filePath string, originalContent string, 
 	ct.changes = append(ct.changes, change)
 	ct.mu.Unlock()
 	return nil
+}
+
+// appendChange appends a single tracked change under ct.mu. The caller
+// may NOT already hold ct.mu — this method acquires it. This is the
+// single safe entry point for appending to ct.changes from the
+// shell-mutation pipeline (RecordShellMutations / appendShellMutation
+// / appendBulkRollup / appendDestructiveBulkRollup), which runs
+// concurrently with the turn-checkpoint goroutine that reads
+// ct.changes via CollectFileChangesForCheckpoint. Holding ct.mu only
+// around the slice mutation (NOT around event publishing or other
+// potentially-blocking calls) keeps the critical section tight and
+// avoids lock-ordering hazards.
+func (ct *ChangeTracker) appendChange(change TrackedFileChange) {
+	ct.mu.Lock()
+	ct.changes = append(ct.changes, change)
+	ct.mu.Unlock()
 }
 
 // Commit commits all tracked changes to the change tracker
@@ -278,8 +314,14 @@ func (ct *ChangeTracker) Commit(llmResponse string, conversation []api.Message) 
 		ct.baseRevisionRecorded = true
 	}
 
-	// Record each file change
-	for _, change := range ct.changes[ct.committedChangeCount:] {
+	// Record each file change. Advance committedChangeCount after each
+	// SUCCESSFUL RecordChangeWithDetails so a mid-loop failure (disk
+	// full, permission error, …) doesn't leave the counter stale — the
+	// next Commit call must resume from the change that actually
+	// failed, not re-record the ones that already succeeded. The lock
+	// is held for the whole function, so the increment is safe.
+	for ct.committedChangeCount < len(ct.changes) {
+		change := ct.changes[ct.committedChangeCount]
 		description := fmt.Sprintf("%s via %s", change.Operation, change.ToolCall)
 		note := fmt.Sprintf("Agent session: %s", ct.sessionID)
 
@@ -297,9 +339,9 @@ func (ct *ChangeTracker) Commit(llmResponse string, conversation []api.Message) 
 		if err != nil {
 			return fmt.Errorf("failed to record change for %s: %w", change.FilePath, err)
 		}
+		ct.committedChangeCount++
 	}
 
-	ct.committedChangeCount = len(ct.changes)
 	return nil
 }
 
@@ -365,6 +407,41 @@ func (ct *ChangeTracker) GetChanges() []TrackedFileChange {
 	changesCopy := make([]TrackedFileChange, len(ct.changes))
 	copy(changesCopy, ct.changes)
 	return changesCopy
+}
+
+// MergeChild appends a subagent's tracked changes into this (parent)
+// tracker so list_changes / recover_file / revert_my_changes see
+// subagent edits too. Each merged entry is tagged with Source so
+// list_changes can attribute it; the shell-snapshot cache is
+// re-baselined per path so the next shell-command walk doesn't
+// record a duplicate entry for the same file.
+//
+// This closes the SP-059 Phase 2c gap where subagent edits were
+// captured in a child tracker but never surfaced to the parent's
+// user-facing change tools.
+//
+// Safe to call when tracking is disabled (no-op). The input slice is
+// copied; nil/empty input is a no-op.
+func (ct *ChangeTracker) MergeChild(changes []TrackedFileChange, source string) {
+	if ct == nil || !ct.IsEnabled() || len(changes) == 0 {
+		return
+	}
+	// Defensive copy + tag each entry under the lock so a concurrent
+	// Clear()/Reset() can't race the append.
+	merged := make([]TrackedFileChange, len(changes))
+	for i, ch := range changes {
+		merged[i] = ch
+		merged[i].Source = source
+	}
+	ct.mu.Lock()
+	ct.changes = append(ct.changes, merged...)
+	ct.mu.Unlock()
+	// Re-baseline the shell cache for each touched path so the next
+	// TrackShellTurn walk doesn't re-discover these writes as
+	// "stat mismatch" edits (duplicates of what we just recorded).
+	for _, ch := range merged {
+		ct.SyncShellCacheForPath(ch.FilePath)
+	}
 }
 
 // Clear clears all tracked changes (but keeps the tracker enabled).
@@ -487,6 +564,38 @@ func (ct *ChangeTracker) Reset(instructions string) {
 }
 
 // Helper functions
+
+// resolveAbsPath resolves filePath to a cleaned absolute path, using
+// the agent's workspace root as the base for relative paths when
+// available, else the process CWD. This normalization is applied at
+// track time (H3) so stored FilePaths are independent of the process's
+// CWD — a later `cd` in a shell command can't make recovery or dedup
+// resolve a relative path to the wrong location.
+//
+// Absolute paths are returned cleaned but otherwise unchanged. If the
+// resolution fails (e.g., os.Getwd error), the raw input is returned
+// as a fallback so tracking doesn't silently drop the change.
+func (ct *ChangeTracker) resolveAbsPath(filePath string) string {
+	if filepath.IsAbs(filePath) {
+		return filepath.Clean(filePath)
+	}
+	root := ""
+	if ct.agent != nil {
+		root = ct.agent.workspaceRoot
+	}
+	if root == "" {
+		var err error
+		root, err = os.Getwd()
+		if err != nil {
+			return filePath
+		}
+	}
+	abs, err := filepath.Abs(filepath.Join(root, filePath))
+	if err != nil {
+		return filePath
+	}
+	return abs
+}
 
 // isOutsideWorkspace returns true if filePath is outside the agent's workspace root.
 // If the workspace root is empty or the agent is nil, it returns false (treats all files as in-workspace).

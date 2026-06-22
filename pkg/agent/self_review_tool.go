@@ -53,7 +53,7 @@ func handleSelfReview(ctx context.Context, a *Agent, args map[string]interface{}
 	logger := utils.GetLogger(false)
 
 	// Perform the review
-	result, err := spec.ReviewTrackedChanges(revisionID, cfg, logger)
+	result, err := spec.ReviewTrackedChanges(ctx, revisionID, cfg, logger)
 	if err != nil {
 		return "", fmt.Errorf("self-review failed: %w", err)
 	}

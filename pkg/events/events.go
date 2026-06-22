@@ -42,7 +42,14 @@ const (
 	EventTypeSecurityApprovalRequest = "security_approval_request"
 	EventTypeSecurityPromptRequest  = "security_prompt_request"
 	EventTypeAskUserRequest        = "ask_user_request"
-	EventTypeAgentMessage            = "agent_message"
+	// EventTypeInputRequired is published when the agent is blocked waiting
+	// for human input — a security approval, an ask_user prompt, or any
+	// other blocking interaction. This is a higher-level signal than the
+	// specific security_approval_request / security_prompt_request / ask_user_request
+	// events: it lets notification subscribers (CLI bell, browser notification)
+	// listen to a single "the agent needs you" signal.
+	EventTypeInputRequired               = "input_required"
+	EventTypeAgentMessage                = "agent_message"
 	// EventTypeProviderNoCredential is published when a provider change
 	// would activate a provider that requires an API key but doesn't
 	// have one configured. The frontend surfaces it as a sticky toast
@@ -159,7 +166,8 @@ func (eb *EventBus) Publish(eventType string, data any) {
 
 	isCritical := eventType == EventTypeSecurityApprovalRequest ||
 		eventType == EventTypeSecurityPromptRequest ||
-		eventType == EventTypeAskUserRequest
+		eventType == EventTypeAskUserRequest ||
+		eventType == EventTypeInputRequired
 
 	// Publish to all subscribers without holding the lock
 	for _, ch := range subscribers {
@@ -451,20 +459,20 @@ func SubagentActivityEvent(toolCallID, toolName, phase, message string, details 
 	return data
 }
 
-// DelegateClarificationRequestedEvent creates a delegate_clarification_requested event payload.
-func DelegateClarificationRequestedEvent(delegateID, requestID, question string) map[string]interface{} {
+// SubagentClarificationRequestedEvent creates a delegate_clarification_requested event payload.
+func SubagentClarificationRequestedEvent(subagentID, requestID, question string) map[string]interface{} {
 	return map[string]interface{}{
-		"delegate_id": delegateID,
+		"subagent_id": subagentID,
 		"request_id":  requestID,
 		"question":    question,
 		"timestamp":   time.Now().UTC().Format(time.RFC3339),
 	}
 }
 
-// DelegateClarificationRespondedEvent creates a delegate_clarification_responded event payload.
-func DelegateClarificationRespondedEvent(delegateID, requestID, response string) map[string]interface{} {
+// SubagentClarificationRespondedEvent creates a delegate_clarification_responded event payload.
+func SubagentClarificationRespondedEvent(subagentID, requestID, response string) map[string]interface{} {
 	return map[string]interface{}{
-		"delegate_id": delegateID,
+		"subagent_id": subagentID,
 		"request_id":  requestID,
 		"response":    response,
 		"timestamp":   time.Now().UTC().Format(time.RFC3339),
@@ -555,6 +563,21 @@ func AskUserRequestEvent(requestID string, req AskUserRequest, clientID string) 
 	}
 	if clientID != "" {
 		payload["client_id"] = clientID
+	}
+	return payload
+}
+
+// InputRequiredEvent creates an input_required event payload.
+// reason is a human-readable description of why input is needed
+// (e.g., "security_approval", "ask_user", "blocking_prompt").
+// requestID optionally links to the specific request event.
+func InputRequiredEvent(reason, requestID string) map[string]interface{} {
+	payload := map[string]interface{}{
+		"reason":    reason,
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+	}
+	if requestID != "" {
+		payload["request_id"] = requestID
 	}
 	return payload
 }

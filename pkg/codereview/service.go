@@ -1,6 +1,7 @@
 package codereview
 
 import (
+	"context"
 	"fmt"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
@@ -30,14 +31,15 @@ type ReviewContext struct {
 	FullFileContext       string              // Full file content for patch resolution context
 	RelatedFiles          []string            // Files that might be affected by changes
 	AgentClient           api.ClientInterface // Agent API client for LLM calls
+	// GoCtx is the cancellation context for LLM calls (SP-073). When set,
+	// it replaces context.Background() so Stop/Ctrl+C can abort reviews.
+	GoCtx context.Context
 	// Metadata for enhanced context
 	ProjectType      string // Project type (Go, Node.js, etc.)
 	CommitMessage    string // Commit message/intent
 	KeyComments      string // Key code comments explaining WHY
 	ChangeCategories string // Categorization of changes
-}
-
-// ReviewType defines the type of code review being performed
+}// ReviewType defines the type of code review being performed
 type ReviewType int
 
 const (

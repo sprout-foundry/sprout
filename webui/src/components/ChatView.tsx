@@ -5,7 +5,9 @@ import type { CSSProperties } from 'react';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import { supportsSSH } from '../config/mode';
 import { requiresBackendHealthCheck } from '../services/apiAdapter';
+import { rewindQuery } from '../services/api/chatApi';
 import { clientFetch } from '../services/clientSession';
+import { showThemedAlert, showThemedConfirm } from './ThemedDialog';
 import type { QueryProgress } from '../types/app';
 import { ChatFooter, ChatHeader, EmptyChatPanel, MessageItem } from './chat';
 import type { ChatProps, ToolExecution } from './chat/types';
@@ -34,7 +36,7 @@ function Chat(props: ChatProps): JSX.Element {
     subagentActivities = [],
     onToolPillClick,
     onStopProcessing,
-    chatId: _chatId,
+    chatId,
     worktreePath,
     workspaceRoot: _workspaceRoot,
     onWorktreeChange: _onWorktreeChange,
@@ -52,6 +54,7 @@ function Chat(props: ChatProps): JSX.Element {
   const inputContainerRef = useRef<HTMLDivElement>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [inputContainerHeight, setInputContainerHeight] = useState(0);
+  const [isRewinding, setIsRewinding] = useState(false);
 
   const inputValueRef = useRef(inputValue);
   inputValueRef.current = inputValue;
@@ -139,6 +142,40 @@ function Chat(props: ChatProps): JSX.Element {
     [onInputChange],
   );
 
+  const handleRewindAndResend = useCallback(async (messageContent: string, messageIndex: number) => {
+    if (isRewinding) return;
+    // The toTurn is a checkpoint index: user messages are at even indices (0, 2, 4, ...)
+    // and correspond to checkpoints 0, 1, 2, ....  To rewind BEFORE this checkpoint
+    // pass k - 1 (where k = Math.floor(messageIndex / 2)).  For the very first message
+    // the result is 0 which is a harmless no-op.
+    const toTurn = Math.max(0, Math.floor(messageIndex / 2) - 1);
+
+    const confirmed = await showThemedConfirm(
+      `Discard all turns after this message and revert file changes?`,
+      {
+        title: 'Edit & Resend',
+        confirmLabel: 'Resend',
+        cancelLabel: 'Cancel',
+        type: 'danger',
+      },
+    );
+    if (!confirmed) return;
+
+    setIsRewinding(true);
+    try {
+      await rewindQuery(clientFetch, toTurn, true, chatId);
+      onInputChange(messageContent);
+    } catch (e) {
+      console.error('Rewind failed:', e);
+      await showThemedAlert(
+        `Rewind failed: ${e instanceof Error ? e.message : 'Unknown error'}`,
+        { title: 'Rewind Failed', type: 'error' },
+      );
+    } finally {
+      setIsRewinding(false);
+    }
+  }, [isRewinding, onInputChange, chatId]);
+
   const handleToggleIndex = useCallback(async (enabled: boolean) => {
     try {
       const response = await clientFetch('/api/embedding-index', {
@@ -189,6 +226,7 @@ function Chat(props: ChatProps): JSX.Element {
                   findMatchingToolExecution={findMatchingToolExecution}
                   getToolStatus={getToolStatusForMessage}
                   formatTime={formatTime}
+                  messageIndex={_index}
                 />
               )}
               components={{
@@ -275,7 +313,11 @@ function Chat(props: ChatProps): JSX.Element {
         />
       </div>
 
-      <ChatMessageContextMenu containerRef={chatContainerRef} onInsertAtCursor={handleInsertAtCursor} />
+      <ChatMessageContextMenu
+        containerRef={chatContainerRef}
+        onInsertAtCursor={handleInsertAtCursor}
+        onRewindAndResend={isRewinding ? undefined : handleRewindAndResend}
+      />
     </div>
   );
 }

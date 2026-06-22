@@ -10,10 +10,10 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/spf13/cobra"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/pythonruntime"
-	"github.com/spf13/cobra"
 )
 
 var startupChecksOnce sync.Once
@@ -22,7 +22,7 @@ var debugPprofAddr string
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "sprout",
+	Use: "sprout",
 	// A runtime failure (e.g. a bad model, a network error) is not a usage
 	// mistake, so don't dump the full flag list after it; and don't let cobra
 	// print the raw wrapped error itself — Execute() renders one clean line.
@@ -159,4 +159,5 @@ func init() {
 	rootCmd.AddCommand(planCmd)
 	rootCmd.AddCommand(historyCmd)
 	rootCmd.AddCommand(automateCmd)
+	rootCmd.AddCommand(prCmd)
 }

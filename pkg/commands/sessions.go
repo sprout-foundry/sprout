@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/ui"
 	"golang.org/x/term"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
@@ -133,7 +134,7 @@ func (c *SessionsCommand) selectSessionWithDropdown(sessions []agent.SessionInfo
 	}
 
 	chatAgent.ApplyState(state)
-	fmt.Printf("\r\n[OK] Conversation session loaded: %s\r\n", sessionID)
+	console.GlyphSuccess.Fprintf(os.Stdout, "Conversation session loaded: %s", sessionID)
 
 	// Show conversation preview
 	displayConversationPreview(chatAgent)
@@ -146,13 +147,14 @@ func displayConversationPreview(chatAgent *agent.Agent) {
 	lastMessages := chatAgent.GetLastMessages(5)
 
 	if len(lastMessages) > 0 {
-		fmt.Println("\n[list] Recent conversation preview:")
+		fmt.Println()
+		fmt.Println("Recent conversation preview:")
 		fmt.Println("================================")
 		for _, msg := range lastMessages {
 			if msg.Role == "user" {
-				fmt.Printf("[you] You: %s\n", msg.Content)
+				console.GlyphInfo.Fprintf(os.Stdout, "You: %s", msg.Content)
 			} else if msg.Role == "assistant" {
-				fmt.Printf("[bot] Assistant: %s\n", msg.Content)
+				console.GlyphInfo.Fprintf(os.Stdout, "Assistant: %s", msg.Content)
 			}
 		}
 		fmt.Println("================================")

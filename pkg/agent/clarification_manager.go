@@ -17,12 +17,12 @@ const DefaultClarificationTimeout = 60 * time.Second
 // ClarificationRequest is the exported representation of a pending clarification request.
 type ClarificationRequest struct {
 	RequestID  string    `json:"request_id"`
-	DelegateID string    `json:"delegate_id"`
+	SubagentID string    `json:"subagent_id"`
 	Question   string    `json:"question"`
 	CreatedAt  time.Time `json:"created_at"`
 }
 
-// ClarificationManager manages pending clarification requests between delegate and parent agents.
+// ClarificationManager manages pending clarification requests between subagent and parent agents.
 // It provides thread-safe tracking of clarification requests and responses via channels.
 type ClarificationManager struct {
 	mu       sync.RWMutex
@@ -34,7 +34,7 @@ type ClarificationManager struct {
 
 type clarificationEntry struct {
 	requestID  string
-	delegateID string
+	subagentID string
 	question   string
 	responseCh chan string
 	createdAt  time.Time
@@ -58,7 +58,7 @@ func NewClarificationManagerWithTimeout(eventBus *events.EventBus, timeout time.
 }
 
 // RequestClarification creates a clarification request, publishes an event, and blocks until a response arrives or timeout.
-func (m *ClarificationManager) RequestClarification(ctx context.Context, delegateID, question string) (string, error) {
+func (m *ClarificationManager) RequestClarification(ctx context.Context, subagentID, question string) (string, error) {
 	// Generate unique request ID
 	requestID, err := generateRequestID()
 	if err != nil {
@@ -67,7 +67,7 @@ func (m *ClarificationManager) RequestClarification(ctx context.Context, delegat
 
 	entry := &clarificationEntry{
 		requestID:  requestID,
-		delegateID: delegateID,
+		subagentID: subagentID,
 		question:   question,
 		responseCh: make(chan string, 1),
 		createdAt:  time.Now(),
@@ -78,7 +78,7 @@ func (m *ClarificationManager) RequestClarification(ctx context.Context, delegat
 	m.mu.Unlock()
 
 	// Publish event
-	m.publishEvent(events.EventTypeDelegateClarificationRequested, delegateID, requestID, question, "")
+	m.publishEvent(events.EventTypeDelegateClarificationRequested, subagentID, requestID, question, "")
 
 	// Wait for response with timeout
 	select {
@@ -116,22 +116,22 @@ func (m *ClarificationManager) RespondClarification(requestID, response string) 
 	}
 
 	// Publish event
-	m.publishEvent(events.EventTypeDelegateClarificationResponded, entry.delegateID, requestID, "", response)
+	m.publishEvent(events.EventTypeDelegateClarificationResponded, entry.subagentID, requestID, "", response)
 
 	return nil
 }
 
-// GetPendingClarifications returns all pending clarification requests for a delegate.
-func (m *ClarificationManager) GetPendingClarifications(delegateID string) []ClarificationRequest {
+// GetPendingClarifications returns all pending clarification requests for a subagent.
+func (m *ClarificationManager) GetPendingClarifications(subagentID string) []ClarificationRequest {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	var pending []ClarificationRequest
 	for _, e := range m.requests {
-		if delegateID == "" || e.delegateID == delegateID {
+		if subagentID == "" || e.subagentID == subagentID {
 			pending = append(pending, ClarificationRequest{
 				RequestID:  e.requestID,
-				DelegateID: e.delegateID,
+				SubagentID: e.subagentID,
 				Question:   e.question,
 				CreatedAt:  e.createdAt,
 			})
@@ -174,13 +174,13 @@ func (m *ClarificationManager) Close() {
 	}
 }
 
-func (m *ClarificationManager) publishEvent(eventType, delegateID, requestID, question, response string) {
+func (m *ClarificationManager) publishEvent(eventType, subagentID, requestID, question, response string) {
 	if m.eventBus == nil {
 		return
 	}
 
 	data := map[string]interface{}{
-		"delegate_id": delegateID,
+		"subagent_id": subagentID,
 		"request_id":  requestID,
 	}
 	if question != "" {

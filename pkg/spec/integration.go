@@ -1,6 +1,7 @@
 package spec
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/sprout-foundry/sprout/pkg/codereview"
@@ -11,6 +12,7 @@ import (
 
 // ReviewWithSpec performs standard code review AND scope validation
 func ReviewWithSpec(
+	ctx context.Context,
 	diff string,
 	conversation []Message,
 	userIntent string,
@@ -26,7 +28,7 @@ func ReviewWithSpec(
 
 	// Step 1: Extract canonical spec from conversation
 	logger.LogProcessStep("Extracting canonical specification from conversation...")
-	extractionResult, err := specService.GetExtractor().ExtractSpec(conversation, userIntent)
+	extractionResult, err := specService.GetExtractor().ExtractSpec(ctx, conversation, userIntent)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to extract spec: %w", err)
 	}
@@ -59,7 +61,7 @@ func ReviewWithSpec(
 
 	// Step 3: Validate scope compliance
 	logger.LogProcessStep("Validating scope compliance...")
-	scopeResult, err := specService.GetValidator().ValidateScope(diff, spec)
+	scopeResult, err := specService.GetValidator().ValidateScope(ctx, diff, spec)
 	if err != nil {
 		return codeReviewResult, nil, spec, fmt.Errorf("failed to validate scope: %w", err)
 	}

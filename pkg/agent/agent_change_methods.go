@@ -10,6 +10,16 @@ import (
 
 // EnableChangeTracking enables change tracking for this agent session.
 //
+// Session scoping: the FIRST call (tracker == nil) creates the tracker,
+// assigns the session's stable revisionID, and captures `instructions`
+// as the session's identity. Subsequent calls within the same session
+// (same Agent instance — e.g. every ProcessQuery in a daemon chat) do
+// NOT reset the buffer: they only ensure tracking is enabled and
+// re-prime the shell cache. The change buffer is therefore session-long,
+// matching what list_changes / recover_file / revert_my_changes promise
+// ("files you've created, modified, or deleted this session"). A genuine
+// reset happens only when a new Agent is constructed for a new chat.
+//
 // Side effect: primes the shell-mutation snapshot cache against the
 // agent's workspace root. This is the one-time cost (~280 ms on a
 // 5000-file workspace) that lets every subsequent shell_command be
@@ -24,15 +34,24 @@ func (a *Agent) EnableChangeTracking(instructions string) {
 	}
 
 	if a.changeTracker == nil {
+		// First enable of this session — create the tracker with a
+		// stable revisionID + instructions that will persist for the
+		// life of this Agent.
 		a.changeTracker = NewChangeTracker(a, instructions)
 		if a.debug {
-			a.Logger().Debug("DEBUG: Created new change tracker and enabled it\n")
+			a.Logger().Debug("DEBUG: Created new change tracker (session start)\n")
 		}
 	} else {
-		a.changeTracker.Reset(instructions)
+		// Subsequent enable within the same session. Ensure enabled,
+		// but DO NOT Reset: the buffer must accumulate across queries
+		// so list_changes reflects the whole session, not just the
+		// current turn. (Reset would wipe prior turns' edits and make
+		// recover_file / revert_my_changes blind to earlier work.)
+		// instructions/revisionID stay pinned to the first call's
+		// values for revision-identity stability in history.
 		a.changeTracker.Enable()
 		if a.debug {
-			a.Logger().Debug("DEBUG: Reset existing change tracker and enabled it\n")
+			a.Logger().Debug("DEBUG: Re-enabled existing change tracker (buffer preserved, %d entries)\n", a.GetChangeCount())
 		}
 	}
 
@@ -149,6 +168,21 @@ func (a *Agent) IsChangeTrackingEnabled() bool {
 // GetChangeTracker returns the change tracker (can be nil)
 func (a *Agent) GetChangeTracker() *ChangeTracker {
 	return a.changeTracker
+}
+
+// IsPathOutsideWorkspace reports whether the resolved absolute path of
+// `path` falls outside the agent's workspace root. Returns false (i.e.
+// treats the path as in-workspace) when the change tracker is nil or
+// disabled, mirroring the existing nil-agent / empty-root behaviour of
+// ChangeTracker.isOutsideWorkspace. This is the boundary guard shared
+// by recover_file / revert_my_changes so a crafted tracker entry can't
+// trick the recovery tools into writing (or deleting) files outside
+// the workspace.
+func (a *Agent) IsPathOutsideWorkspace(path string) bool {
+	if a.changeTracker == nil || !a.changeTracker.IsEnabled() {
+		return false
+	}
+	return a.changeTracker.isOutsideWorkspace(path)
 }
 
 // GetRevisionID returns the current revision ID (if change tracking is enabled)
@@ -302,4 +336,26 @@ func (a *Agent) TrackFileEdit(filePath string, originalContent string, newConten
 	a.AddTaskAction("file_modified", fmt.Sprintf("Modified file: %s", filePath), filePath)
 
 	return nil
+}
+
+// MergeSubagentChanges merges a completed subagent's tracked changes
+// into this (primary) agent's ChangeTracker, tagging each entry with
+// "subagent:<persona>". This is the missing SP-059 Phase 2c step:
+// without it, list_changes / recover_file / revert_my_changes are
+// blind to subagent edits.
+//
+// No-op when the primary's tracking is disabled. The changes slice is
+// sourced from SubagentResult.FileChanges.
+func (a *Agent) MergeSubagentChanges(changes []TrackedFileChange, persona string) {
+	if a.changeTracker == nil || !a.changeTracker.IsEnabled() {
+		return
+	}
+	if len(changes) == 0 {
+		return
+	}
+	source := "subagent"
+	if persona != "" {
+		source = "subagent:" + persona
+	}
+	a.changeTracker.MergeChild(changes, source)
 }

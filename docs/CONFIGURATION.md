@@ -6,7 +6,7 @@
 
 API keys for services like DeepInfra, OpenAI, Ollama, etc., are stored securely in `~/.config/sprout/api_keys.json`. If a key is not found, `sprout` will prompt you to enter it. Set environment variables like `DEEPINFRA_API_KEY`, `OPENAI_API_KEY`, `OLLAMA_API_KEY` for convenience.
 
-For Z.AI Coding Plan support, set `ZAI_API_KEY` and select the provider/model:
+For GLM Coding Plan support, set `ZAI_API_KEY` and select the provider/model:
 
 ```bash
 export ZAI_API_KEY=your_api_key

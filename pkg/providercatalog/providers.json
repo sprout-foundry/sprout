@@ -10,7 +10,7 @@
       "docs_url": "https://docs.z.ai/devpack/overview",
       "signup_url": "https://platform.z.ai/",
       "api_key_label": "Z.AI API Key",
-      "api_key_help": "Z.AI Coding Plan users may need to use dedicated coding API base instead of general API.",
+      "api_key_help": "GLM Coding Plan users may need to use dedicated coding API base instead of general API.",
       "recommended": true,
       "default_model": "glm-5",
       "recommended_model": "glm-5",
@@ -93,8 +93,8 @@
       ]
     },
     {
-      "api_key_help": "Use your Z.AI Coding Plan API key (separate from the general API key). Set ZAI_CODING_API_KEY env var.",
-      "api_key_label": "Z.AI Coding Plan API Key",
+      "api_key_help": "Use your GLM Coding Plan API key (separate from the general API key). Set ZAI_CODING_API_KEY env var.",
+      "api_key_label": "GLM Coding Plan API Key",
       "default_model": "glm-5",
       "description": "Z.AI coding-plan endpoint with dedicated /api/coding/paas/v4 base URL for devpack users.",
       "docs_url": "https://docs.z.ai/devpack/overview",
@@ -178,11 +178,11 @@
           ]
         }
       ],
-      "name": "Z.AI Coding Plan",
+      "name": "GLM Coding Plan",
       "recommended": false,
       "recommended_model": "glm-5",
       "recommended_model_why": "Current flagship GLM coding model with strong tool and agent support.",
-      "setup_hint": "Use this entry if your key is on a Z.AI Coding Plan subscription.",
+      "setup_hint": "Use this entry if your key is on a GLM Coding Plan subscription.",
       "signup_url": "https://platform.z.ai/"
     },
     {

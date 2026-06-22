@@ -12,7 +12,7 @@ import (
 // ProviderConfig defines the configuration for a generic provider
 type ProviderConfig struct {
 	Name string `json:"name"`
-	// DisplayName is the user-facing label (e.g. "Z.AI Coding Plan").
+	// DisplayName is the user-facing label (e.g. "GLM Coding Plan").
 	// Carried in the JSON config so onboarding menus, the env-var
 	// credential sweep, and the model picker can label remote-only
 	// providers (published to GitHub Pages but not embedded) without

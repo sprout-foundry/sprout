@@ -122,7 +122,6 @@ func sanitizedConfig(cfg *configuration.Config) map[string]interface{} {
 		"provider_models":                cfg.ProviderModels,
 		"provider_priority":              cfg.ProviderPriority,
 		"mcp":                            mcp.RedactMCPConfig(cfg.MCP),
-		"allow_orchestrator_git_write":   cfg.AllowOrchestratorGitWrite,
 		"resource_directory":             cfg.ResourceDirectory,
 		"reasoning_effort":               cfg.ReasoningEffort,
 		"system_prompt_text":             cfg.SystemPromptText,

@@ -11,7 +11,6 @@ export interface SproutSettings {
   enable_pre_write_validation: boolean;
   enable_zsh_command_detection: boolean;
   auto_execute_detected_commands: boolean;
-  allow_orchestrator_git_write?: boolean;
   history_scope: string;
   self_review_gate_mode: string;
   subagent_provider: string;

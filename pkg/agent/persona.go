@@ -93,12 +93,10 @@ func (a *Agent) ApplyPersona(personaID string) error {
 		}
 	}
 
-	// SP-050: the orchestrator persona's git-policy append rides on the
-	// AllowOrchestratorGitWrite flag rather than living as a separate persona
-	// (formerly repo_orchestrator). When the flag is on, append the embedded
-	// policy markdown so the model knows about the commit tool, staging rules,
+	// SP-050: the orchestrator persona always gets the git-policy append.
+	// The policy text documents the commit tool preference, staging rules,
 	// and which shell-side git ops are blocked.
-	if personaID == personas.IDOrchestrator && config.AllowOrchestratorGitWrite {
+	if personaID == personas.IDOrchestrator {
 		if policy := strings.TrimSpace(orchestratorGitPolicyAppend); policy != "" {
 			current := a.GetSystemPrompt()
 			if strings.TrimSpace(current) != "" {
@@ -256,18 +254,11 @@ func (a *Agent) GetAvailableToolNames() []string {
 
 // isGitWriteAllowed returns true if the active persona is permitted to perform
 // git write operations (commit, stage, push) via shell_command or the commit
-// tool. The check is two-layer:
+// tool. The gate is the persona's CapabilityGitWrite capability — personas that
+// declare it (orchestrator, coordinator) are allowed; all others are not.
 //
-//  1. The persona must declare the CapabilityGitWrite capability in its catalog
-//     entry. Without it, no git write — regardless of any other config.
-//  2. For the orchestrator persona specifically, the user's AllowOrchestratorGitWrite
-//     flag must additionally be true. This gives users a single toggle to
-//     opt the default chat persona out of git writes without rewriting the
-//     catalog.
-//
-// All other personas with CapabilityGitWrite (e.g. coordinator) are allowed
-// unconditionally — they exist precisely because the user opted into their
-// elevated agency by activating them.
+// The ChangeTracker provides the recovery safety net for git operations, so no
+// additional config toggle is needed.
 func (a *Agent) isGitWriteAllowed() bool {
 	personaID := a.GetActivePersona()
 	if personaID == "" {
@@ -278,13 +269,10 @@ func (a *Agent) isGitWriteAllowed() bool {
 		return false
 	}
 	persona := cfg.GetSubagentType(personaID)
-	if persona == nil || !persona.HasCapability(personas.CapabilityGitWrite) {
+	if persona == nil {
 		return false
 	}
-	if personaID == personas.IDOrchestrator {
-		return cfg.AllowOrchestratorGitWrite
-	}
-	return true
+	return persona.HasCapability(personas.CapabilityGitWrite)
 }
 
 // canSpawnNonDelegatable reports whether the active persona is permitted to

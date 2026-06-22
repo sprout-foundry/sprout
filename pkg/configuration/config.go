@@ -55,13 +55,6 @@ type Config struct {
 	// Preferences
 	Preferences map[string]interface{} `json:"preferences,omitempty"`
 
-	// AllowOrchestratorGitWrite controls whether the orchestrator persona is allowed to execute
-	// writable git operations (commit, push, add, etc.) via shell_command.
-	// When true (default), the orchestrator can use git write commands through shell_command
-	// as an alternative to the dedicated git tool. Other personas are never allowed.
-	// When false, ALL personas must use the git tool for write operations.
-	AllowOrchestratorGitWrite bool `json:"allow_orchestrator_git_write,omitempty"`
-
 	// DisableCoordinatorAutoActivate opts out of the automatic activation of the
 	// coordinator persona (formerly Executive Assistant) when sprout starts in
 	// the user's $HOME directory. When true, no persona is auto-activated and
@@ -319,7 +312,6 @@ func NewConfig() *Config {
 		SelfReviewGateMode:          SelfReviewGateModeOff,
 		EnableZshCommandDetection:   true, // Enable zsh command detection by default
 		AutoExecuteDetectedCommands: true, // Auto-execute detected commands without prompting
-		AllowOrchestratorGitWrite:   true, // SP-050: orchestrator gets git-write by default; flip to false to require the git tool for write ops
 		SubagentTypes:               defaultSubagentTypes(),
 		Skills:                      defaultSkills(),
 		PDFOCREnabled:               true,

@@ -68,6 +68,11 @@ func (c ModelConfig) ModelDataFilenameOrDefault() string {
 // defaultDownloadTimeout is the HTTP client timeout for model downloads.
 const defaultDownloadTimeout = 5 * time.Minute
 
+// progressReportInterval throttles streaming progress callbacks so we
+// don't flood the caller with one update per io.Copy buffer flush
+// (typically 32KB). Caps the report rate at ~10Hz.
+const progressReportInterval = 100 * time.Millisecond
+
 // ModelDownloader downloads ONNX models and tokenizers from HuggingFace.
 type ModelDownloader struct {
 	modelDir string // ~/.config/sprout/models/
@@ -200,20 +205,16 @@ func (d *ModelDownloader) downloadFile(ctx context.Context, destPath, url, expec
 	hasher := sha256.New()
 	total := resp.ContentLength // may be 0 if server doesn't send Content-Length
 
-	var written int64
 	tee := io.TeeReader(resp.Body, hasher)
 
-	// Wrap tmp with a counter so we can report progress.
-	counter := &countWriter{w: tmp}
+	// Wrap tmp with a counter so we can report progress during streaming
+	// (throttled inside countWriter). The final 1.0 is reported by the
+	// caller's progress(1.0) after a successful copy + rename.
+	counter := &countWriter{w: tmp, total: total, progress: progress}
 	if _, err = io.Copy(counter, tee); err != nil {
 		tmp.Close()
 		os.Remove(tmpPath)
 		return fmt.Errorf("copy: %w", err)
-	}
-	written = counter.n
-
-	if progress != nil && total > 0 {
-		progress(float64(written) / float64(total))
 	}
 
 	if err := tmp.Close(); err != nil {
@@ -241,15 +242,33 @@ func (d *ModelDownloader) downloadFile(ctx context.Context, destPath, url, expec
 	return nil
 }
 
-// countWriter wraps an io.Writer to track the number of bytes written.
+// countWriter wraps an io.Writer to track the number of bytes written and
+// reports download progress. When total > 0 and a progress callback is set,
+// it emits a 0.0–1.0 progress value during streaming, throttled to at most
+// one report per progressReportInterval so we don't flood the caller with a
+// callback on every io.Copy buffer flush (typically 32KB).
 type countWriter struct {
-	w   io.Writer
-	n   int64
+	w          io.Writer
+	n          int64
+	total      int64         // Content-Length; 0 if unknown (disables streaming reports)
+	progress   func(float64) // optional progress callback
+	lastReport time.Time     // last time progress was emitted; zero value throttles first report too
 }
 
 func (c *countWriter) Write(p []byte) (int, error) {
 	n, err := c.w.Write(p)
 	c.n += int64(n)
+
+	// Report streaming progress when the total is known and a callback is set.
+	// Throttle to avoid thousands of updates per second during a large download.
+	if c.progress != nil && c.total > 0 {
+		now := time.Now()
+		if now.Sub(c.lastReport) >= progressReportInterval {
+			c.progress(float64(c.n) / float64(c.total))
+			c.lastReport = now
+		}
+	}
+
 	return n, err
 }
 

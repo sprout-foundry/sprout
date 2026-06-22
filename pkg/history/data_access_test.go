@@ -639,3 +639,186 @@ func TestGetAllChangesMetadata_MixedContentPresence(t *testing.T) {
 		t.Error("entry without content should have empty OriginalCode")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// RecordChange (delegates to RecordChangeWithDetails with empty optional fields)
+// ---------------------------------------------------------------------------
+
+// TestRecordChange_WritesContentAndMetadata verifies that RecordChange
+// persists a change entry whose original/updated content and metadata
+// are readable by fetchAllChanges — a real round-trip through the
+// filesystem, not a mock.
+func TestRecordChange_WritesContentAndMetadata(t *testing.T) {
+	changesDir, revisionsDir := setupHistoryDirs(t)
+
+	revID := "record-change-rev-1"
+	createRevisionDir(t, revisionsDir, revID)
+
+	if err := RecordChange(revID, "main.go", "func old() {}", "func new() {}", "refactored", "test note"); err != nil {
+		t.Fatalf("RecordChange: %v", err)
+	}
+
+	// Exactly one change directory should have been created.
+	if countDirs(t, changesDir) != 1 {
+		t.Fatalf("expected 1 change dir, got %d", countDirs(t, changesDir))
+	}
+
+	// Fetch the recorded change and verify the round-trip.
+	list, err := GetAllChanges()
+	if err != nil {
+		t.Fatalf("GetAllChanges: %v", err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("expected 1 change, got %d", len(list))
+	}
+	ch := list[0]
+	if ch.Filename != "main.go" {
+		t.Errorf("Filename = %q, want %q", ch.Filename, "main.go")
+	}
+	if ch.OriginalCode != "func old() {}" {
+		t.Errorf("OriginalCode = %q, want %q", ch.OriginalCode, "func old() {}")
+	}
+	if ch.NewCode != "func new() {}" {
+		t.Errorf("NewCode = %q, want %q", ch.NewCode, "func new() {}")
+	}
+	if ch.Description != "refactored" {
+		t.Errorf("Description = %q, want %q", ch.Description, "refactored")
+	}
+	if ch.Status != activeStatus {
+		t.Errorf("Status = %q, want %q", ch.Status, activeStatus)
+	}
+	// RecordChange passes empty optional fields — the defaults should be empty.
+	if ch.OriginalPrompt != "" {
+		t.Errorf("OriginalPrompt = %q, want empty", ch.OriginalPrompt)
+	}
+	if ch.LLMMessage != "" {
+		t.Errorf("LLMMessage = %q, want empty", ch.LLMMessage)
+	}
+	if ch.AgentModel != "" {
+		t.Errorf("AgentModel = %q, want empty", ch.AgentModel)
+	}
+}
+
+// TestRecordChange_PreservesBinaryContent verifies that RecordChange
+// round-trips content containing newlines and special characters without
+// corruption — the base64 encoding layer must not mangle it.
+func TestRecordChange_PreservesBinaryContent(t *testing.T) {
+	setupHistoryDirs(t)
+
+	revID := "binary-rev-1"
+	createRevisionDir(t, GetRevisionsDir(), revID)
+
+	original := "line1\nline2\twith tab\nunicode: café ☕"
+	updated := "line1\nline2\twith tab\nunicode: café ☕ +more"
+
+	if err := RecordChange(revID, "binary.txt", original, updated, "unicode edit", ""); err != nil {
+		t.Fatalf("RecordChange: %v", err)
+	}
+
+	list, err := GetAllChanges()
+	if err != nil {
+		t.Fatalf("GetAllChanges: %v", err)
+	}
+	if len(list) != 1 {
+		t.Fatalf("expected 1 change, got %d", len(list))
+	}
+	if list[0].OriginalCode != original {
+		t.Errorf("OriginalCode round-trip failed:\n got %q\nwant %q", list[0].OriginalCode, original)
+	}
+	if list[0].NewCode != updated {
+		t.Errorf("NewCode round-trip failed:\n got %q\nwant %q", list[0].NewCode, updated)
+	}
+}
+
+// TestRecordChange_HashBasedOnOnNewCode verifies that two changes with
+// different new content get different FileRevisionHashes (the hash is
+// derived from filename + newCode). This guards against a regression
+// where all changes collapse to the same hash.
+func TestRecordChange_HashBasedOnOnNewCode(t *testing.T) {
+	setupHistoryDirs(t)
+
+	revID := "hash-rev-1"
+	createRevisionDir(t, GetRevisionsDir(), revID)
+
+	if err := RecordChange(revID, "a.go", "old", "content-a", "d1", ""); err != nil {
+		t.Fatalf("RecordChange #1: %v", err)
+	}
+	if err := RecordChange(revID, "a.go", "old", "content-b", "d2", ""); err != nil {
+		t.Fatalf("RecordChange #2: %v", err)
+	}
+
+	list, err := GetAllChanges()
+	if err != nil {
+		t.Fatalf("GetAllChanges: %v", err)
+	}
+	if len(list) != 2 {
+		t.Fatalf("expected 2 changes, got %d", len(list))
+	}
+	if list[0].FileRevisionHash == list[1].FileRevisionHash {
+		t.Errorf("changes with different content should have different hashes, both = %q", list[0].FileRevisionHash)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// IsChangeOlderThan
+// ---------------------------------------------------------------------------
+
+// TestIsChangeOlderThan_OlderThanThreshold verifies that a change whose
+// timestamp is strictly before the threshold returns true.
+func TestIsChangeOlderThan_OlderThanThreshold(t *testing.T) {
+	changesDir, _ := setupHistoryDirs(t)
+
+	changeTime := time.Now().Add(-48 * time.Hour)
+	hash := "older-change"
+	createChangeDir(t, changesDir, hash, "rev-1", changeTime)
+
+	metaPath := filepath.Join(changesDir, hash, metadataFile)
+
+	// Threshold is 24h ago; the change is 48h old → older.
+	if !IsChangeOlderThan(metaPath, time.Now().Add(-24*time.Hour)) {
+		t.Errorf("change from %v should be older than 24h threshold", changeTime)
+	}
+}
+
+// TestIsChangeOlderThan_NewerThanThreshold verifies that a recent change
+// returns false.
+func TestIsChangeOlderThan_NewerThanThreshold(t *testing.T) {
+	changesDir, _ := setupHistoryDirs(t)
+
+	changeTime := time.Now().Add(-1 * time.Hour) // 1h ago
+	hash := "newer-change"
+	createChangeDir(t, changesDir, hash, "rev-1", changeTime)
+
+	metaPath := filepath.Join(changesDir, hash, metadataFile)
+
+	// Threshold is 24h ago; the change is 1h old → NOT older.
+	if IsChangeOlderThan(metaPath, time.Now().Add(-24*time.Hour)) {
+		t.Errorf("change from %v should NOT be older than 24h threshold", changeTime)
+	}
+}
+
+// TestIsChangeOlderThan_NonExistentFile verifies graceful handling when
+// the metadata file does not exist — should return false, not panic.
+func TestIsChangeOlderThan_NonExistentFile(t *testing.T) {
+	_, _ = setupHistoryDirs(t)
+
+	nonexistent := filepath.Join(GetChangesDir(), "does-not-exist", metadataFile)
+	if IsChangeOlderThan(nonexistent, time.Now()) {
+		t.Errorf("non-existent metadata should return false, not true")
+	}
+}
+
+// TestIsChangeOlderThan_InvalidJSON verifies graceful handling of a
+// corrupted metadata file — should return false, not panic.
+func TestIsChangeOlderThan_InvalidJSON(t *testing.T) {
+	changesDir, _ := setupHistoryDirs(t)
+
+	hash := "corrupt-change"
+	dir := filepath.Join(changesDir, hash)
+	os.MkdirAll(dir, 0755)
+	os.WriteFile(filepath.Join(dir, metadataFile), []byte("{not valid json"), 0644)
+
+	if IsChangeOlderThan(filepath.Join(dir, metadataFile), time.Now()) {
+		t.Errorf("corrupted metadata should return false, not true")
+	}
+}

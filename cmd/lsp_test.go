@@ -413,7 +413,9 @@ func TestLspCmd_NoArgs_ShowsHelp(t *testing.T) {
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 
 	output := captureStdout(t, func() {
-		lspCmd.Run(lspCmd, []string{})
+		if err := lspCmd.RunE(lspCmd, []string{}); err != nil {
+			t.Fatalf("lspCmd.RunE failed: %v", err)
+		}
 	})
 
 	// Running lsp with no args should show help text

@@ -86,7 +86,7 @@ Before **every** `git push`, you MUST:
 
 ### Committing and Pushing
 
-**`orchestrator` git-write privileges**: When `AllowOrchestratorGitWrite=true` (the default for fresh installs), the `orchestrator` persona can stage files, commit (via the commit tool), and push without interactive approval. When the flag is `false`, all git-write operations require the git tool with explicit user approval.
+**`orchestrator` git-write privileges**: The `orchestrator` persona carries the `git_write` capability and can stage files, commit (via the commit tool), and push without interactive approval. Git-write is governed solely by the persona's `CapabilityGitWrite` — no additional config toggle is needed.
 
 ### Local History Operations (checkout, restore, reset, rebase)
 

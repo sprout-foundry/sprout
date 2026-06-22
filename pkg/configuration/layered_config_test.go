@@ -131,14 +131,12 @@ func TestMergeConfig_BoolOverrides(t *testing.T) {
 	// Note: The current implementation only overrides booleans when they are true
 	// This test reflects the actual behavior, not necessarily desired behavior
 	base := &Config{
-		AllowOrchestratorGitWrite:   false,
 		DisableThinking:             false,
 		SkipPrompt:                  false,
 		PDFOCREnabled:               false,
 	}
 
 	override := &Config{
-		AllowOrchestratorGitWrite:   true,
 		DisableThinking:             true,
 		SkipPrompt:                  true,
 		PDFOCREnabled:               true,
@@ -147,7 +145,6 @@ func TestMergeConfig_BoolOverrides(t *testing.T) {
 	result := MergeConfig(base, override)
 
 	require.NotNil(t, result)
-	assert.Equal(t, true, result.AllowOrchestratorGitWrite)
 	assert.Equal(t, true, result.DisableThinking)
 	assert.Equal(t, true, result.SkipPrompt)
 	assert.Equal(t, true, result.PDFOCREnabled)

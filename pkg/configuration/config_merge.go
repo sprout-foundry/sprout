@@ -66,9 +66,6 @@ func MergeConfig(base, override *Config) *Config {
 	}
 
 	// Override simple bool/int/string fields
-	if override.AllowOrchestratorGitWrite {
-		result.AllowOrchestratorGitWrite = override.AllowOrchestratorGitWrite
-	}
 	if override.ResourceDirectory != "" {
 		result.ResourceDirectory = override.ResourceDirectory
 	}

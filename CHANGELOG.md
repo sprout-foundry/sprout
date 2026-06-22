@@ -2,6 +2,13 @@
 
 All notable changes to Sprout will be documented in this file.
 
+## [v0.16.13] - 2026-06-22
+
+- chore: embed UI assets and sync package versions for v0.16.13 (09d152e5)
+- Merge branch 'main' of github.com:sprout-foundry/sprout (7d113622)
+- refactor: remove AllowOrchestratorGitWrite flag (d39d2fb6)
+- docs: Update changelog for v0.16.12 (0582416b)
+
 ## [v0.16.12] - 2026-06-22
 
 - chore: embed UI assets and sync package versions for v0.16.12 (27df7878)

@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -10,10 +11,13 @@ import (
 
 // TestCommitCommandUsesConfiguredProvider tests that commit command uses configured provider
 func TestCommitCommandUsesConfiguredProvider(t *testing.T) {
-	// Create a test agent with temp config directory
+	// Create a test agent with temp config directory.
+	// Set SPROUT_CONFIG/LEDIT_CONFIG explicitly so the test is isolated
+	// even if the user has those env vars set in their shell.
 	homeDir := t.TempDir()
-	t.Setenv("HOME", homeDir)
-	t.Setenv("XDG_CONFIG_HOME", "")
+	configDir := filepath.Join(homeDir, ".config", "sprout")
+	t.Setenv("SPROUT_CONFIG", configDir)
+	t.Setenv("LEDIT_CONFIG", configDir)
 	t.Setenv("OPENROUTER_API_KEY", "test-key-for-unit-tests")
 
 	chatAgent, err := agent.NewAgent()
@@ -53,8 +57,9 @@ func TestCommitCommandUsesConfiguredProvider(t *testing.T) {
 // TestCommitCommandFallsBackToLastUsedProvider tests fallback behavior
 func TestCommitCommandFallsBackToLastUsedProvider(t *testing.T) {
 	homeDir := t.TempDir()
-	t.Setenv("HOME", homeDir)
-	t.Setenv("XDG_CONFIG_HOME", "")
+	configDir := filepath.Join(homeDir, ".config", "sprout")
+	t.Setenv("SPROUT_CONFIG", configDir)
+	t.Setenv("LEDIT_CONFIG", configDir)
 	t.Setenv("OPENROUTER_API_KEY", "test-key-for-unit-tests")
 
 	chatAgent, err := agent.NewAgent()
@@ -84,8 +89,9 @@ func TestCommitCommandFallsBackToLastUsedProvider(t *testing.T) {
 // TestCommitCommandPersistsToDisk tests that config changes are persisted
 func TestCommitCommandPersistsToDisk(t *testing.T) {
 	homeDir := t.TempDir()
-	t.Setenv("HOME", homeDir)
-	t.Setenv("XDG_CONFIG_HOME", "")
+	configDir := filepath.Join(homeDir, ".config", "sprout")
+	t.Setenv("SPROUT_CONFIG", configDir)
+	t.Setenv("LEDIT_CONFIG", configDir)
 	t.Setenv("OPENROUTER_API_KEY", "test-key-for-unit-tests")
 
 	// Create first agent and set config
@@ -122,8 +128,9 @@ func TestCommitCommandPersistsToDisk(t *testing.T) {
 // TestCommitConfigSaveLoadRoundTrip tests that config can be saved and loaded
 func TestCommitConfigSaveLoadRoundTrip(t *testing.T) {
 	homeDir := t.TempDir()
-	t.Setenv("HOME", homeDir)
-	t.Setenv("XDG_CONFIG_HOME", "")
+	configDir := filepath.Join(homeDir, ".config", "sprout")
+	t.Setenv("SPROUT_CONFIG", configDir)
+	t.Setenv("LEDIT_CONFIG", configDir)
 
 	// Create a config with commit settings
 	cfg := configuration.NewConfig()

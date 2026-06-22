@@ -1,10 +1,15 @@
 package history
 
 import (
+	"database/sql"
 	"os"
 	"path/filepath"
+	"sort"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGroupChangesByRevisionAndActive(t *testing.T) {
@@ -390,4 +395,159 @@ func TestRedactedContentMarkerValue(t *testing.T) {
 	if RedactedContentMarker != want {
 		t.Errorf("RedactedContentMarker = %q, want %q (changing this breaks redaction guards)", RedactedContentMarker, want)
 	}
+}
+
+// ---------------------------------------------------------------------------
+// formatRevision
+// ---------------------------------------------------------------------------
+
+// TestFormatRevision_BasicFields verifies that formatRevision includes
+// the revision ID, timestamp, model, filename, and status in its output.
+func TestFormatRevision_BasicFields(t *testing.T) {
+	ts := time.Date(2024, 6, 15, 10, 30, 0, 0, time.UTC)
+	group := RevisionGroup{
+		RevisionID: "rev-format-1",
+		Timestamp:  ts,
+		AgentModel: "test-model-v2",
+		Changes: []ChangeLog{
+			{
+				Filename:         "main.go",
+				FileRevisionHash: "hash-abc",
+				Status:           "active",
+				Description:      "fixed a critical bug",
+			},
+		},
+	}
+
+	out := formatRevision(group)
+	require.NotEmpty(t, out)
+	assert.Contains(t, out, "rev-format-1")
+	assert.Contains(t, out, "test-model-v2")
+	assert.Contains(t, out, "main.go")
+	assert.Contains(t, out, "hash-abc")
+	assert.Contains(t, out, "active")
+	assert.Contains(t, out, "fixed a critical bug")
+}
+
+// TestFormatRevision_MultipleChanges verifies that all file changes
+// are included when a revision has multiple changes.
+func TestFormatRevision_MultipleChanges(t *testing.T) {
+	group := RevisionGroup{
+		RevisionID: "rev-multi",
+		Timestamp:  time.Now(),
+		Changes: []ChangeLog{
+			{Filename: "a.go", FileRevisionHash: "ha", Status: "active", Description: "change a"},
+			{Filename: "b.go", FileRevisionHash: "hb", Status: "reverted", Description: "change b"},
+			{Filename: "c.go", FileRevisionHash: "hc", Status: "restored", Description: "change c"},
+		},
+	}
+
+	out := formatRevision(group)
+	assert.Contains(t, out, "File Changes (3):")
+	for _, c := range group.Changes {
+		assert.Contains(t, out, c.Filename, "filename %q missing from output", c.Filename)
+		assert.Contains(t, out, c.Description, "description %q missing", c.Description)
+	}
+}
+
+// TestFormatRevision_EmptyModel shows "Not specified".
+func TestFormatRevision_EmptyModel(t *testing.T) {
+	group := RevisionGroup{
+		RevisionID: "rev-no-model",
+		Timestamp:  time.Now(),
+		Changes:    []ChangeLog{},
+	}
+	out := formatRevision(group)
+	assert.Contains(t, out, "Model: Not specified")
+}
+
+// TestFormatRevision_IncludesNote verifies that a change's note is
+// rendered when present.
+func TestFormatRevision_IncludesNote(t *testing.T) {
+	group := RevisionGroup{
+		RevisionID: "rev-note",
+		Timestamp:  time.Now(),
+		Changes: []ChangeLog{
+			{
+				Filename:         "noted.go",
+				FileRevisionHash: "hn",
+				Status:           "active",
+				Description:      "with note",
+				Note:             sql.NullString{String: "important note text", Valid: true},
+			},
+		},
+	}
+	out := formatRevision(group)
+	assert.Contains(t, out, "important note text")
+}
+
+// ---------------------------------------------------------------------------
+// GetFilesForRevision
+// ---------------------------------------------------------------------------
+
+// TestGetFilesForRevision_ReturnsActiveFiles verifies that the function
+// returns the filenames of active changes for a given revision.
+func TestGetFilesForRevision_ReturnsActiveFiles(t *testing.T) {
+	changesDir, revisionsDir := setupHistoryDirs(t)
+
+	revID := "getfiles-rev-1"
+	createRevisionDir(t, revisionsDir, revID)
+
+	now := time.Now()
+	// Two active files, one reverted (should be excluded).
+	createChangeDirWithContent(t, changesDir, "hash-a", revID, "active_a.go", "old", "new", now)
+	createChangeDirWithContent(t, changesDir, "hash-b", revID, "active_b.go", "old", "new", now.Add(-time.Minute))
+	createChangeDirWithContent(t, changesDir, "hash-c", revID, "reverted_c.go", "old", "new", now.Add(-2*time.Minute))
+	// Mark the third as reverted.
+	updateChangeStatus("hash-c", "reverted")
+
+	files, err := GetFilesForRevision(revID)
+	require.NoError(t, err)
+
+	// Should include the two active files, not the reverted one.
+	require.Len(t, files, 2)
+	sort.Strings(files) // make order deterministic for assertion
+	assert.Equal(t, []string{"active_a.go", "active_b.go"}, files)
+}
+
+// TestGetFilesForRevision_NoActiveChanges returns empty slice.
+func TestGetFilesForRevision_NoActiveChanges(t *testing.T) {
+	changesDir, revisionsDir := setupHistoryDirs(t)
+
+	revID := "getfiles-rev-2"
+	createRevisionDir(t, revisionsDir, revID)
+
+	createChangeDirWithContent(t, changesDir, "hash-r", revID, "file.go", "old", "new", time.Now())
+	updateChangeStatus("hash-r", "reverted")
+
+	files, err := GetFilesForRevision(revID)
+	require.NoError(t, err)
+	assert.Empty(t, files)
+}
+
+// TestGetFilesForRevision_UnknownRevision returns empty slice, no error.
+func TestGetFilesForRevision_UnknownRevision(t *testing.T) {
+	setupHistoryDirs(t)
+
+	files, err := GetFilesForRevision("nonexistent-rev-xyz")
+	require.NoError(t, err)
+	assert.Empty(t, files)
+}
+
+// TestGetFilesForRevision_DoesNotReturnFilesFromOtherRevisions verifies
+// that files belonging to a different revision are not included.
+func TestGetFilesForRevision_DoesNotReturnFilesFromOtherRevisions(t *testing.T) {
+	changesDir, revisionsDir := setupHistoryDirs(t)
+
+	createRevisionDir(t, revisionsDir, "target-rev")
+	createRevisionDir(t, revisionsDir, "other-rev")
+
+	now := time.Now()
+	createChangeDirWithContent(t, changesDir, "t1", "target-rev", "target.go", "o", "n", now)
+	createChangeDirWithContent(t, changesDir, "o1", "other-rev", "other.go", "o", "n", now)
+
+	files, err := GetFilesForRevision("target-rev")
+	require.NoError(t, err)
+	require.Len(t, files, 1)
+	assert.Equal(t, "target.go", files[0])
 }

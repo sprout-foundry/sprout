@@ -1,9 +1,33 @@
 # SP-063: Real `computer_user` Persona — Mouse/Keyboard/Screenshot Agent
 
-**Status:** 📋 Proposed
+**Status:** 🚧 Partially implemented (2026-06-15) — core shipped (backend + tools + persona + safety gates); WebUI settings + interactive opt-in remain
 **Date:** 2026-06-03
 **Depends on:** SP-050 (orchestrator persona collapse — same persona-system mechanics)
 **Priority:** Medium-Low (capability addition, not bug-fix)
+
+## Implementation status (2026-06-15)
+
+The Go core landed and is build-verified (`make build-all`) + unit-tested
+(`pkg/agent_tools/computer_use/*_test.go`, 0 GUI dependency — backends are
+exercised via an overridable `commandRunner`).
+
+| Phase | Status | Where |
+|---|---|---|
+| 1 Tool surface (7 tools + Anthropic `computer_20241022` translation) | ✅ done | `handlers.go`, `anthropic.go`, `registry.go` |
+| 2 Platform backends (macOS `cliclick`/`screencapture`, Linux-X11 `xdotool`/`scrot`/`import`; Wayland + other OS rejected with a clear reason; region crop in-process) | ✅ done | `backend_subprocess.go`, `backend_select.go` |
+| 3 Vision wiring (screenshot returns an image content block; activation refused on text-only providers) | ✅ done | `handlers.go` + `checkComputerUseActivation` (`computer_use_registration.go`, called from `ApplyPersona`) |
+| 4 Safety gates | 🟡 mostly done | off-by-default `ComputerUseConfig.Enabled`, audit log (`audit.go`), action-rate cap (`safety.go`), and **activation gates** (enabled flag, platform-supported, top-level-only/no-subagent, vision-capable) **done**; per-session interactive opt-in dialog, global Ctrl+C+Esc panic key, destructive-app denylist heuristic, and precise `--skip-prompt`/daemon block **remain** |
+| 5 Persona prompt | ✅ done | `pkg/agent/prompts/subagent_prompts/computer_user.md` |
+| 6 Tool allowlist (computer_user only) | ✅ done | persona `allowed_tools` (`pkg/personas/configs/computer_user.json`) + dispatch-layer guard (`computer_use_registration.go`, `tool_security.go`) |
+| 7 WebUI settings panel | ❌ remaining | "Computer Use (Experimental)" section + Test-connection button |
+| 8 Tests | 🟡 unit done | mock-backend unit tests shipped; Xvfb+tkinter integration smoke **remains** |
+
+Registration is gated four ways (config flag off by default → real backend must
+exist → exposed only to `computer_user` persona → dispatch-layer rejection for
+any other persona) and wired at agent creation
+(`agent_creation.go` → `RegisterComputerUseTools`). The platform backends are
+written but cannot be functionally verified in CI/headless — they need a real
+macOS/X11 display.
 
 ## Background
 

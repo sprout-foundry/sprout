@@ -85,7 +85,8 @@ export type ServerEventType =
   | 'session_terminated'
   | 'drift_detected'
   | 'session_changed'
-  | 'delegate_activity';
+  | 'delegate_clarification_requested'
+  | 'delegate_clarification_responded';
 
 /**
  * The envelope every event flows through. `data` shape varies per

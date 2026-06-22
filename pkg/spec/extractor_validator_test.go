@@ -82,7 +82,7 @@ func TestExtractSpec_InputValidation(t *testing.T) {
 	extractor := newTestExtractor(nil)
 
 	t.Run("empty userIntent returns error", func(t *testing.T) {
-		_, err := extractor.ExtractSpec([]Message{{Role: "user", Content: "hi"}}, "")
+		_, err := extractor.ExtractSpec(context.Background(), []Message{{Role: "user", Content: "hi"}}, "")
 		if err == nil {
 			t.Fatal("expected error for empty userIntent")
 		}
@@ -92,7 +92,7 @@ func TestExtractSpec_InputValidation(t *testing.T) {
 	})
 
 	t.Run("empty conversation returns error", func(t *testing.T) {
-		_, err := extractor.ExtractSpec([]Message{}, "build a thing")
+		_, err := extractor.ExtractSpec(context.Background(), []Message{}, "build a thing")
 		if err == nil {
 			t.Fatal("expected error for empty conversation")
 		}
@@ -102,7 +102,7 @@ func TestExtractSpec_InputValidation(t *testing.T) {
 	})
 
 	t.Run("nil conversation returns error", func(t *testing.T) {
-		_, err := extractor.ExtractSpec(nil, "build a thing")
+		_, err := extractor.ExtractSpec(context.Background(), nil, "build a thing")
 		if err == nil {
 			t.Fatal("expected error for nil conversation")
 		}
@@ -137,7 +137,7 @@ func TestExtractSpec_ValidJSON(t *testing.T) {
 		}, nil
 	})
 
-	result, err := extractor.ExtractSpec(
+	result, err := extractor.ExtractSpec(context.Background(), 
 		[]Message{
 			{Role: "user", Content: "I need a REST API"},
 			{Role: "assistant", Content: "I'll build that for you"},
@@ -202,7 +202,7 @@ func TestExtractSpec_MarkdownWrappedJSON(t *testing.T) {
 		}, nil
 	})
 
-	result, err := extractor.ExtractSpec(
+	result, err := extractor.ExtractSpec(context.Background(), 
 		[]Message{{Role: "user", Content: "test"}},
 		"test intent",
 	)
@@ -230,7 +230,7 @@ func TestExtractSpec_InvalidJSON(t *testing.T) {
 		}, nil
 	})
 
-	_, err := extractor.ExtractSpec(
+	_, err := extractor.ExtractSpec(context.Background(), 
 		[]Message{{Role: "user", Content: "test"}},
 		"test intent",
 	)
@@ -251,7 +251,7 @@ func TestExtractSpec_RateLimitError(t *testing.T) {
 		return nil, errors.New("HTTP 429: rate limit exceeded")
 	})
 
-	_, err := extractor.ExtractSpec(
+	_, err := extractor.ExtractSpec(context.Background(), 
 		[]Message{{Role: "user", Content: "test"}},
 		"test intent",
 	)
@@ -272,7 +272,7 @@ func TestExtractSpec_GenericAPIError(t *testing.T) {
 		return nil, errors.New("connection timeout")
 	})
 
-	_, err := extractor.ExtractSpec(
+	_, err := extractor.ExtractSpec(context.Background(), 
 		[]Message{{Role: "user", Content: "test"}},
 		"test intent",
 	)
@@ -299,7 +299,7 @@ func TestExtractSpec_PromptContent(t *testing.T) {
 		}, nil
 	})
 
-	_, err := extractor.ExtractSpec(
+	_, err := extractor.ExtractSpec(context.Background(), 
 		[]Message{
 			{Role: "user", Content: "I want to build a CLI tool"},
 			{Role: "assistant", Content: "Sure, I'll help with that"},
@@ -366,7 +366,7 @@ func TestUpdateSpec(t *testing.T) {
 		{Role: "assistant", Content: "I'll add logging"},
 	}
 
-	updated, err := extractor.UpdateSpec(existing, newMessages)
+	updated, err := extractor.UpdateSpec(context.Background(), existing, newMessages)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -398,7 +398,7 @@ func TestUpdateSpec_ExtractionError(t *testing.T) {
 		Conversation: []Message{{Role: "user", Content: "original"}},
 	}
 
-	_, err := extractor.UpdateSpec(existing, []Message{{Role: "user", Content: "update"}})
+	_, err := extractor.UpdateSpec(context.Background(), existing, []Message{{Role: "user", Content: "update"}})
 	if err == nil {
 		t.Fatal("expected error from extraction failure")
 	}
@@ -415,7 +415,7 @@ func TestValidateScope_InputValidation(t *testing.T) {
 	validator := newTestValidator(nil)
 
 	t.Run("empty diff returns error", func(t *testing.T) {
-		_, err := validator.ValidateScope("", &CanonicalSpec{Objective: "test"})
+		_, err := validator.ValidateScope(context.Background(), "", &CanonicalSpec{Objective: "test"})
 		if err == nil {
 			t.Fatal("expected error for empty diff")
 		}
@@ -425,7 +425,7 @@ func TestValidateScope_InputValidation(t *testing.T) {
 	})
 
 	t.Run("nil spec returns error", func(t *testing.T) {
-		_, err := validator.ValidateScope("some diff", nil)
+		_, err := validator.ValidateScope(context.Background(), "some diff", nil)
 		if err == nil {
 			t.Fatal("expected error for nil spec")
 		}
@@ -453,7 +453,7 @@ func TestValidateScope_InScope(t *testing.T) {
 		}, nil
 	})
 
-	result, err := validator.ValidateScope("diff --git a/main.go b/main.go\n+func test() {}", &CanonicalSpec{
+	result, err := validator.ValidateScope(context.Background(), "diff --git a/main.go b/main.go\n+func test() {}", &CanonicalSpec{
 		Objective: "Build a test",
 		InScope:   []string{"Test functions"},
 	})
@@ -498,7 +498,7 @@ func TestValidateScope_OutOfScope(t *testing.T) {
 		}, nil
 	})
 
-	result, err := validator.ValidateScope("diff --git a/auth.go b/auth.go\n+func auth() {}", &CanonicalSpec{
+	result, err := validator.ValidateScope(context.Background(), "diff --git a/auth.go b/auth.go\n+func auth() {}", &CanonicalSpec{
 		Objective:  "Build REST API",
 		InScope:    []string{"CRUD"},
 		OutOfScope: []string{"Authentication"},
@@ -530,7 +530,7 @@ func TestValidateScope_RateLimit(t *testing.T) {
 		return nil, errors.New("HTTP 429: rate limit exceeded")
 	})
 
-	result, err := validator.ValidateScope("some diff", &CanonicalSpec{Objective: "test"})
+	result, err := validator.ValidateScope(context.Background(), "some diff", &CanonicalSpec{Objective: "test"})
 	if err != nil {
 		t.Fatalf("unexpected error (rate limit should be handled gracefully): %v", err)
 	}
@@ -561,7 +561,7 @@ func TestValidateScope_GenericError(t *testing.T) {
 		return nil, errors.New("connection refused")
 	})
 
-	_, err := validator.ValidateScope("some diff", &CanonicalSpec{Objective: "test"})
+	_, err := validator.ValidateScope(context.Background(), "some diff", &CanonicalSpec{Objective: "test"})
 	if err == nil {
 		t.Fatal("expected error for generic API failure")
 	}
@@ -583,7 +583,7 @@ func TestValidateScope_InvalidJSON(t *testing.T) {
 		}, nil
 	})
 
-	_, err := validator.ValidateScope("some diff", &CanonicalSpec{Objective: "test"})
+	_, err := validator.ValidateScope(context.Background(), "some diff", &CanonicalSpec{Objective: "test"})
 	if err == nil {
 		t.Fatal("expected error for unparseable JSON")
 	}
@@ -605,7 +605,7 @@ func TestValidateScope_MarkdownWrappedJSON(t *testing.T) {
 		}, nil
 	})
 
-	result, err := validator.ValidateScope("some diff", &CanonicalSpec{Objective: "test"})
+	result, err := validator.ValidateScope(context.Background(), "some diff", &CanonicalSpec{Objective: "test"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -634,7 +634,7 @@ func TestValidateScope_PromptContent(t *testing.T) {
 		InScope:   []string{"CRUD operations"},
 	}
 
-	_, err := validator.ValidateScope("diff --git a/main.go\n+func main() {}", spec)
+	_, err := validator.ValidateScope(context.Background(), "diff --git a/main.go\n+func main() {}", spec)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -693,7 +693,7 @@ func TestValidateScope_LineNumberPostProcessing(t *testing.T) {
 		}, nil
 	})
 
-	result, err := validator.ValidateScope(diff, &CanonicalSpec{Objective: "test"})
+	result, err := validator.ValidateScope(context.Background(), diff, &CanonicalSpec{Objective: "test"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -765,7 +765,7 @@ func TestExtractAndValidate(t *testing.T) {
 		cfg:    &configuration.Config{},
 	}
 
-	scopeResult, spec, err := service.ExtractAndValidate(
+	scopeResult, spec, err := service.ExtractAndValidate(context.Background(), 
 		[]Message{{Role: "user", Content: "Build feature X"}},
 		"diff --git a/main.go\n+func featureX() {}",
 		"Build feature X",
@@ -809,7 +809,7 @@ func TestExtractAndValidate_ExtractionError(t *testing.T) {
 		cfg:    &configuration.Config{},
 	}
 
-	_, _, err := service.ExtractAndValidate(
+	_, _, err := service.ExtractAndValidate(context.Background(), 
 		[]Message{{Role: "user", Content: "test"}},
 		"diff",
 		"intent",
@@ -855,7 +855,7 @@ func TestExtractAndValidate_ValidationError(t *testing.T) {
 		cfg:    &configuration.Config{},
 	}
 
-	_, spec, err := service.ExtractAndValidate(
+	_, spec, err := service.ExtractAndValidate(context.Background(), 
 		[]Message{{Role: "user", Content: "test"}},
 		"diff",
 		"intent",
@@ -951,7 +951,7 @@ func TestExtractSpec_InvalidJSONInsideBraces(t *testing.T) {
 		}, nil
 	})
 
-	_, err := extractor.ExtractSpec(
+	_, err := extractor.ExtractSpec(context.Background(), 
 		[]Message{{Role: "user", Content: "test"}},
 		"test intent",
 	)
@@ -976,7 +976,7 @@ func TestValidateScope_InvalidJSONInsideBraces(t *testing.T) {
 		}, nil
 	})
 
-	_, err := validator.ValidateScope("some diff", &CanonicalSpec{Objective: "test"})
+	_, err := validator.ValidateScope(context.Background(), "some diff", &CanonicalSpec{Objective: "test"})
 	if err == nil {
 		t.Fatal("expected error for invalid JSON within braces")
 	}
@@ -1013,7 +1013,7 @@ func TestExtractSpec_LongConversation(t *testing.T) {
 		}
 	}
 
-	_, err := extractor.ExtractSpec(conversation, "Long conversation test")
+	_, err := extractor.ExtractSpec(context.Background(), conversation, "Long conversation test")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1050,7 +1050,7 @@ func TestValidateScope_MultipleViolations_WithLineNumbers(t *testing.T) {
 		}, nil
 	})
 
-	result, err := validator.ValidateScope("some diff content here", &CanonicalSpec{Objective: "test"})
+	result, err := validator.ValidateScope(context.Background(), "some diff content here", &CanonicalSpec{Objective: "test"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -1103,7 +1103,7 @@ func TestExtractSpec_ConfidenceBoundaryValues(t *testing.T) {
 				}, nil
 			})
 
-			result, err := extractor.ExtractSpec(
+			result, err := extractor.ExtractSpec(context.Background(), 
 				[]Message{{Role: "user", Content: "test"}},
 				"test intent",
 			)
@@ -1140,7 +1140,7 @@ func TestValidateScope_SpecMarshaledInPrompt(t *testing.T) {
 		Acceptance: []string{"Returns 200 on valid requests"},
 	}
 
-	_, err := validator.ValidateScope("diff content", spec)
+	_, err := validator.ValidateScope(context.Background(), "diff content", spec)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

@@ -1,120 +1,92 @@
 # TODO
 
-Active work tracked here. Completed items are removed once their parent spec is moved to ✅ Implemented in `roadmap/README.md` — the spec file itself is the historical record.
+Active work tracked here. Completed items are removed once their parent spec is
+done — the spec file (`roadmap/SP-###.md`) plus git history are the historical
+record.
 
-## SP-064: Automate CLI — Status, Stop, Logs
-_Spec: `roadmap/SP-064-automate-cli-monitoring.md`_
+The items below are the active, proposed product-gap work surfaced by the
+2026-06-14 gap analysis. **SP-063** (`computer_user` persona) is **partially
+implemented** — its core shipped; remaining work is tracked in
+`roadmap/SP-063-computer-use-persona.md`, not here.
 
-### Phase 1: BPM Stop primitive
-- [x] SP-064-1a: Add `(*BackgroundProcessManager).Stop(sessionID string, grace time.Duration) error` in `pkg/agent_tools/background_process.go`. SIGINT → grace → SIGTERM → 5s → SIGKILL. Updates status to `exited`. No-op on already-exited sessions.
-- [x] SP-064-1b: Wire `BPM.Stop` into the `shell_command(stop_background=…)` tool path in `pkg/agent_tools/shell_handler.go` so CLI mode reaches parity with the WebUI TerminalManager.
-- [x] SP-064-1c: Revert the "stop_background not available for automate sessions in CLI mode" caveat in `pkg/skills/library/workflow-automation/SKILL.md`.
-- [x] SP-064-1d: Unit tests — signal sequencing on a controlled sleep subprocess (mock or real with very short grace periods), no-op on exited, error on unknown session.
+## SP-069: Pull Request Creation
+_Spec: `roadmap/SP-069-pull-request-creation.md`_
 
-### Phase 2: Session-kind tagging
-- [x] SP-064-2a: Add `Kind string` field to BPM `Process` struct, default `"shell"`.
-- [x] SP-064-2b: Set `Kind = "automate"` in `pkg/agent/tool_handlers_automate.go` `handleRunAutomate` BPM `Start` call.
-- [x] SP-064-2c: Set `Kind = "automate"` in `cmd/automate.go` `runWorkflowByPath` — but this path uses `exec.Command` not BPM; either move CLI launches through BPM or write the same `kind=automate` marker to the PID file (Phase 3) and treat that as the source of truth for CLI-launched runs.
+Gap (High priority): the agent can commit and push a branch but has no way to open a PR — the most natural next step. `pkg/webcontent/github.go` only parses GitHub URLs.
 
-### Phase 3: Cross-process discovery (PID files)
-- [x] SP-064-3a: On every workflow launch (CLI or agent tool), write `.sprout/automate/<session_id>.json` containing `{workflow, pid, started_at, output_file_path, budget_usd?, kind: "automate"}`.
-- [x] SP-064-3b: Remove the PID file on clean shutdown (workflow process exit handler).
-- [x] SP-064-3c: Stale-PID sweep at startup of any `sprout automate *` subcommand — `kill -0` each PID, remove files whose process is dead.
-- [x] SP-064-3d: Document the PID-file schema in `roadmap/SP-064-automate-cli-monitoring.md` so SP-065's webui consumer doesn't drift.
+- [x] SP-069-1: Create `pkg/git/pull_request.go` with `CreatePullRequest(ctx, repoDir, req)`. Resolution order: GitHub REST API (token from credential store / `GH_TOKEN`) → `gh pr create` → structured error with the exact `gh` command. Derive owner/repo from `git remote` (reuse `pkg/webcontent/github.go` parsing); auto-push the head branch if it has no upstream (git-write gated); synthesize body from commits + `ChangeTracker` manifest when empty. Add `pull_request_test.go` (mock transport + mock `gh`). Acceptance: `go test ./pkg/git/...` passes; PR opens against a test remote and returns the URL.
+- [x] SP-069-2: Register the `create_pull_request` agent tool in `pkg/agent/tool_registrations.go` with a handler in `pkg/agent/tool_handlers_shell.go`, gated as a **git-write** op (SP-049 — persona must hold `git_write`, blocked headless without authorization). Tool description instructs the model to call it after pushing a feature branch with a real title/body. Acceptance: `make build-all` passes; the tool listing includes `create_pull_request`; the gate blocks when the persona lacks `git_write`.
+- [x] SP-069-3: Add `cmd/pr.go` — `sprout pr [--title --body --base --draft --web]`; generate title/body from commits and confirm via `$EDITOR` unless `--skip-prompt`. Add `pull_request_url` to the `--output-json` payload in `cmd/agent_result.go`. Acceptance: `sprout pr` on a pushed branch prints the PR URL; `--output-json` includes `pull_request_url`.
+- [x] SP-069-4: WebUI — `POST /api/git/pull-request` handler in `pkg/webui/`, a "Create Pull Request" button + dialog in `webui/src/components/GitPanel.tsx` (enabled when the branch is ahead of base), API call in `webui/src/services/api/gitApi.ts`, and a clickable PR-link toast on success. Acceptance: `make build-all` passes; creating a PR from the git panel returns a clickable link.
 
-### Phase 4: status / stop / logs subcommands
-- [x] SP-064-4a: `cmd/automate.go` — add `automateStatusCmd` (`sprout automate status [--all] [--json]`). Reads PID files + BPM in-memory state, prints table.
-- [x] SP-064-4b: `cmd/automate.go` — add `automateStopCmd` (`sprout automate stop <session_id>` or `--all`). Calls `Stop` (or sends signals directly when only the PID file is known).
-- [x] SP-064-4c: `cmd/automate.go` — add `automateLogsCmd` (`sprout automate logs <session_id> [-f] [-n N]`). Reads the captured output file; `-f` polls at 500ms ticks.
-- [x] SP-064-4d: Add subcommands to `automateCmd.AddCommand` and update help text.
+## SP-070: Agent Completion Notifications
+_Spec: `roadmap/SP-070-completion-notifications.md`_
 
-### Phase 5: Tests + docs
-- [x] SP-064-5a: Integration test — launch a sleep-based workflow, status shows it, stop kills it, status reflects exit, output file persists.
-- [x] SP-064-5b: Cross-process test — launch from terminal A (real subprocess), assert `sprout automate status` from a separate process sees it via the PID file.
-- [x] SP-064-5c: Update `workflow_properties.md` with a "Monitoring a running workflow" section.
-- [x] SP-064-5d: Run `make build-all` and the full automate test suite; verify green.
+Gap (High priority, low effort): notifications are in-app only — no CLI bell, no browser notification when the user has looked away. Completion signals already exist (`FinalizeAtTurnEnd()`, `query_completed`).
 
-## SP-065: WebUI Automations Panel
-_Spec: `roadmap/SP-065-automate-webui-panel.md`_
-_Blocked by: SP-064 (Phases 1–3 are prerequisites for cross-process session discovery)_
+- [x] SP-070-1: Add `NotificationsConfig` (`cli_bell`, `os_notify`, `browser`, `min_seconds`) to `pkg/configuration/config.go`. Create `pkg/notify/notify.go` — cross-platform OS notification via subprocess (`osascript` / `notify-send` / PowerShell toast), no-op when the tool is absent. Add `notify_test.go`. Acceptance: backend selection picks the right tool per OS and no-ops cleanly when absent; `go test ./pkg/notify/...` passes.
+- [x] SP-070-2: CLI wiring in `cmd/agent_modes.go` — emit terminal bell (`\a`) + optional OS notify on turn completion (around `FinalizeAtTurnEnd()`) and on a blocking approval (`pkg/console/security_prompt.go`), only when the turn exceeded `min_seconds` and the session is interactive (suppressed under `--skip-prompt`/non-TTY). Acceptance: a >10s interactive turn rings the bell on completion and on a blocking prompt; non-interactive runs are silent.
+- [x] SP-070-3: Add an `input_required` event in `pkg/events/events.go` so "agent is blocked on the human" is an explicit, notifiable signal on both surfaces. Acceptance: the event fires when the agent blocks on a prompt/approval; CLI and webui can subscribe.
+- [x] SP-070-4: WebUI — `webui/src/services/desktopNotify.ts` (`Notification` API + permission flow); fire on `query_completed` and `input_required` in `useWebSocketEventHandler.ts` **only when `document.hidden`**; clicking focuses the tab + chat. Add a settings toggle + "Test" button; record in `notificationBus` history. Acceptance: a backgrounded tab raises a browser notification on completion and input-required; clicking focuses the tab.
 
-### Phase 1: Backend REST
-- [x] SP-065-1a: `pkg/webui/automations_handlers.go` — `GET /api/automate/workflows` reuses `automate.Discover` + `automate.Summarize`.
-- [x] SP-065-1b: `GET /api/automate/sessions` and `GET /api/automate/sessions/:id` — read BPM + PID files (SP-064-3a).
-- [x] SP-065-1c: `POST /api/automate/run` — body validation, optional overrides, dispatches through the `run_automate` tool path so `requires_approval` and the security gate are honored.
-- [x] SP-065-1d: `POST /api/automate/sessions/:id/stop` — calls `BPM.Stop`.
-- [x] SP-065-1e: `GET /api/automate/sessions/:id/output?since=offset` — paged output read for WS-drop fallback.
-- [x] SP-065-1f: Wire endpoints into the existing webui router with auth/origin checks.
+## SP-071: Conversation Rewind & Edit-and-Resend
+_Spec: `roadmap/SP-071-conversation-rewind.md`_
 
-### Phase 2: Backend WS events
-- [x] SP-065-2a: Define event types in `pkg/events/`: `automate.session_started`, `automate.budget_update`, `automate.output_chunk`, `automate.session_ended`.
-- [x] SP-065-2b: Publish `session_started` / `session_ended` from `handleRunAutomate` and CLI launch.
-- [x] SP-065-2c: Publish `budget_update` from the existing budget warning + exceeded callbacks AND from the heartbeat tick in `cmd/agent_workflow.go`.
-- [x] SP-065-2d: Tee captured-output writes through a `automate.output_chunk` publisher with coalescing (≥250ms or ≥4KB).
-- [x] SP-065-2e: Subscription opt-in so chat sessions don't see automate events by default.
+Gap (Medium-High): files can be reverted but the conversation can't be rewound — no "jump back to turn N, fix the prompt, re-run."
 
-### Phase 3: Frontend panel
-- [x] SP-065-3a: `webui/src/components/AutomationsPanel.tsx` — three sections (Available / Running / Recent). Wire to REST endpoints + WS subscription.
-- [x] SP-065-3b: Add Automations entry to sidebar nav.
-- [x] SP-065-3c: Run modal — shows price card + budget, allows per-run budget/heartbeat override, calls `POST /api/automate/run`.
-- [x] SP-065-3d: Budget bar component with 50%/80% color transitions.
-- [x] SP-065-3e: Running-row Stop button → `POST stop` with confirmation dialog.
+- [x] SP-071-1: Create `pkg/agent/rewind.go` — `(*Agent).Rewind(opts)` truncating `messages[]` at a `TurnCheckpoint` boundary, dropping orphaned checkpoints, and (default) reverting the discarded turns' file changes via `ChangeTracker` in reverse order; skip files modified outside the agent; snapshot first so rewind is itself undoable; leave embeddings untouched (SP-066 invariant). Add `rewind_test.go`. Acceptance: `/rewind` to a turn truncates history and reverts later file edits; files changed outside the agent are reported, not clobbered; `go test ./pkg/agent/...` passes.
+- [x] SP-071-2: Add `/rewind` — `pkg/agent_commands/rewind_command.go` registered in `commands.go`: no-arg interactive turn picker (built on `select_list`, SP-057) and `/rewind N`; print the `RewindResult` and drop the user at a fresh prompt after turn N. Acceptance: `/rewind 3` rewinds to turn 3 and reports turns discarded + files reverted; `/rewind` with no arg shows a picker.
+- [x] SP-071-3: WebUI — `POST /api/query/rewind { to_turn, revert_files }`; add "Edit & resend from here" to `webui/src/components/ChatMessageContextMenu.tsx` with a discard-confirmation, prompt pre-fill, resubmit, and collapse (not delete) of the discarded branch. Acceptance: `make build-all` passes; editing & resending a prior message rewinds and resubmits; the discarded branch is collapsed, not lost.
 
-### Phase 4: Session detail view
-- [x] SP-065-4a: Detail panel route — header with status/budget/iteration/elapsed.
-- [x] SP-065-4b: Captured-output stream component, auto-scroll-lock on user scroll-up.
-- [x] SP-065-4c: Step timeline when `steps` exists — checkmarks for completed, highlight for current.
-- [x] SP-065-4d: Budget event log — threshold crossings + cap-hit timestamps.
+## SP-072: Per-Hunk Diff Approval — Approve-Before-Apply
+_Spec: `roadmap/SP-072-diff-approval.md`_
 
-### Phase 5: Chat ↔ automate linkage
-- [x] SP-065-5a: When `run_automate` succeeds in a chat, emit an inline chat message containing a link to the Automations panel with the new session id.
-- [x] SP-065-5b: Sidebar nav handler — clicking the link switches to Automations and focuses the session.
+Gap (Medium): the agent applies edits immediately; there is no opt-in approve-before-apply / per-hunk accept-reject.
 
-### Phase 6: Tests
-- [x] SP-065-6a: Handler unit tests — workflow discovery, run with requires_approval=true triggers intent prompt, run with requires_approval=false skips, stop terminates.
-- [x] SP-065-6b: WS event ordering test — start → updates → end.
-- [x] SP-065-6c: React component tests — AutomationsPanel renders empty / running / recent states; budget bar color transitions; intent confirmation modal flow.
-- [x] SP-065-6d: Integration test against a real daemon with a shell-only workflow.
+- [x] SP-072-1: Create `pkg/agent/edit_approval.go` — `EditProposal`/`EditDecision`, a unified-diff hunk splitter, partial apply (original + accepted hunks only), and a broker call reusing the SP-049/SP-068 approval delivery (timeout + webui↔CLI fallback). The tool result states exactly which hunks applied/rejected. Add `edit_approval_test.go`. Acceptance: hunk split + partial apply + reject-all are covered by tests; `go test ./pkg/agent/...` passes.
+- [x] SP-072-2: Add `EditApprovalConfig` (`mode: off|all|paths`, `paths` globs) to `pkg/configuration/config.go`; route `write_file`/`edit_file`/`patch_structured_file` in `pkg/agent/tool_handlers_file.go` through approval when active; treat non-interactive runs (`--skip-prompt`/automate/daemon) as approve-all (no hangs). Acceptance: `mode: off` (default) preserves current behavior; `mode: all` gates every write; `mode: paths` gates only matching globs.
+- [x] SP-072-3: CLI review UI in `pkg/console` — colored unified diff with a per-hunk `[a]ccept / [r]eject / [s]elect / [e]dit ($EDITOR)` prompt (built on the SP-057 prompt/select primitives). Acceptance: a gated write renders the diff and applies only accepted hunks; rejected hunks never touch the working tree.
+- [x] SP-072-4: WebUI — `webui/src/components/EditApprovalPanel.tsx` (per-hunk Accept/Reject, Apply selected / Reject all), `POST /api/edits/{id}/decision`, wired into the tool-event stream and triggering an `input_required` notification (SP-070). Acceptance: `make build-all` passes; a pending edit blocks visibly and applies only accepted hunks.
 
-### Phase 7: Docs
-- [x] SP-065-7a: Add a "WebUI usage" section to `workflow_properties.md`.
-- [x] SP-065-7b: Add a WebUI paragraph to `SKILL.md` explaining the panel exists and how it relates to the agent tool path.
-- [x] SP-065-7c: One-paragraph README mention.
+## SP-073: Cooperative Cancellation — Stop Actually Aborts
+_Spec: `roadmap/SP-073-cooperative-cancellation.md`_
 
-## SP-066: Preserve Key Order in Structured File Tools
-_Spec: `roadmap/SP-066-structured-file-key-order.md`_
+Tech debt / UX (Medium-High): ~8 pipelines pass `context.Background()` to the provider, so Ctrl+C / Stop can't abort them (10 `TODO(SP-034-1c)` markers). `a.interruptCtx` is the ready cancellation source.
 
-### Phase 1: Foundation — Ordered Map Dependency + Type Definition
-- [x] SP-066-1a: Add `github.com/wk8/go-ordered-map/v2` dependency via `go get`.
-- [x] SP-066-1b: Create `pkg/agent/ordered_map.go` — define `OrderedMap` type alias for `*orderedmap.OrderedMap[string, interface{}]` with helpers: `New()`, `Get/Set/Delete/Keys()`, `ToMap()` / `FromMap()` conversion utilities.
-- [x] SP-066-1c: Add `ParseJSONOrdered(content string) (*OrderedMap, error)` — use `json.Decoder` with iterative token walk that inserts keys into ordered map in parse order (avoids `json.Unmarshal` which loses order).
-- [x] SP-066-1d: Unit tests for `ParseJSONOrdered` — verify key order preserved for nested objects and arrays.
+- [x] SP-073-1: Phase 1 — add a leading `ctx context.Context` param to the leaf functions in `pkg/spec/extractor.go` + `validator.go`, `pkg/codereview/prompts.go`, `pkg/agent_tools/vision_pdf.go` + `vision_analyze.go`, `pkg/agent_commands/commit_review.go` + `shell.go`, and forward it to `SendChatRequest`/`SendVisionRequest` instead of `context.Background()`. Acceptance: `make build-all` passes; those calls use the passed ctx.
+- [x] SP-073-2: Phase 2 — callers pass a real cancellation context (tool `Execute(ctx,…)` for handler-driven paths; `a.interruptCtx` for agent methods, incl. the `GenerateResponse` signature note at `agent_getters.go:633`). Acceptance: `grep -rn "context.Background()" ` in the affected pipelines' provider calls returns nothing; `make build-all` passes.
+- [x] SP-073-3: Phase 3 — verify Ctrl+C / Stop aborts a multi-page PDF OCR and a commit review within ~1s (clean "aborted" result, no crash); delete all 10 `TODO(SP-034-1c)` markers. Acceptance: `grep -rn "TODO(SP-034-1c)" pkg/` is empty; manual abort confirmed.
 
-### Phase 2: Ordered YAML Parsing
-- [x] SP-066-2a: Add `ParseYAMLOrdered(content string) (*OrderedMap, error)` — use `yaml.Unmarshal` into `yaml.Node`, then walk the node tree into an ordered map (preserves key order from source).
-- [x] SP-066-2b: Replace `normalizeYAMLValue` with `NormalizeYAMLOrdered(*OrderedMap) *OrderedMap` — recursively normalize `map[interface{}]interface{}` YAML quirks while preserving order.
-- [x] SP-066-2c: Unit tests for `ParseYAMLOrdered` — verify key order preserved from source file, nested objects, arrays, and scalar normalization.
+## SP-074: Finish the Tool-Registry Migration (retire SP-038 shim)
+_Spec: `roadmap/SP-074-tool-registry-migration.md`_
 
-### Phase 3: Ordered Serialization
-- [x] SP-066-3a: Add `SerializeJSONOrdered(om *OrderedMap) (string, error)` — custom recursive JSON encoder that walks ordered map in insertion order, uses `encoding/json` for leaf values, preserves indentation.
-- [x] SP-066-3b: Add `SerializeYAMLOrdered(om *OrderedMap) (string, error)` — construct `yaml.Node` tree with keys in insertion order, then `yaml.Marshal` the node tree.
-- [x] SP-066-3c: Replace `serializeStructuredContent` in `tool_handlers_structured.go` to use the new ordered functions.
-- [x] SP-066-3d: Unit tests for serialization — round-trip a known-ordered structure, verify output key order matches input order.
+Tech debt (Medium): the dual registry has 3 `TODO(SP-038)` leftovers — `ForPersona` is a stub returning all tools, `ToolEnv.OutputWriter` is hardcoded to `os.Stdout`, and `ToolEnv.ApprovalManager` is `nil`.
 
-### Phase 4: Tool Argument Parsing — Preserve Order at Entry Point
-- [x] SP-066-4a: In `pkg/agent/tools.go` (line ~24 where `json.Unmarshal` parses tool args), add an ordered-parse path: after the existing `map[string]interface{}` parse, also produce an ordered version and store it in a context value for structured file tools to use.
-- [x] SP-066-4b: Update `handleWriteStructuredFile` to check context for ordered args first; if available, use `data` as an ordered map directly. Fallback: parse from existing `map[string]interface{}` args.
-- [x] SP-066-4c: Update `handlePatchStructuredFile` similarly — use ordered args for `patch_ops` and `data` when available.
-- [x] SP-066-4d: Unit tests — verify that `write_structured_file` with ordered input produces output in the same key order.
+- [x] SP-074-1: Implement real per-persona filtering — `(*ToolRegistry).ForPersona(allowlist []string) map[string]ToolHandler` in `pkg/agent_tools/registry.go` (empty allowlist → all tools), with tests for allowlist / empty / unknown-tool. Acceptance: `ForPersona` returns exactly the allowlisted tools; `go test ./pkg/agent_tools/...` passes.
+- [x] SP-074-2: Route tool output through the agent — add an `io.Writer` accessor backed by `PrintLine`/`PrintLineAsync` (`OutputRouter`) and set `env.OutputWriter` to it in `pkg/agent/tool_security.go` (keep `os.Stdout` only as the nil-agent fallback). Acceptance: a streaming new-interface tool's output appears in the WebUI, not just stdout.
+- [x] SP-074-3: Add a `tools.ApprovalManager` adapter over the agent's `security.ApprovalManager` (signature translation) and set `env.ApprovalManager`. Acceptance: a migrated tool can request approval via the env and it surfaces through the normal CLI/WebUI prompt.
+- [x] SP-074-4: Collapse the dual-dispatch fallback for migrated tools (keep only for documented legacy func-style handlers); remove the `TODO(SP-038)` markers. Acceptance: `grep -rn "TODO(SP-038)" pkg/` is empty; existing persona tool-gating is regression-tested unchanged; `make build-all` + `go test ./...` green.
 
-### Phase 5: Patch Mutation Functions — Ordered Map Operations
-- [x] SP-066-5a: Rewrite `applyPatchOperation`, `applyMutation`, `mutateAtLeaf`, `readPointerValue` in `tool_handlers_structured.go` to operate on `*OrderedMap` instead of `map[string]interface{}`. Maintain insertion order on `add` ops.
-- [x] SP-066-5b: Replace `deserializeStructuredContent` to return `*OrderedMap` using the new parse functions from Phase 2.
-- [x] SP-066-5c: Rewrite `validateDataAgainstSchema` to accept `*OrderedMap` — update type assertions throughout.
-- [x] SP-066-5d: Run existing tests in `tool_handlers_file_events_test.go` and `tool_handlers_file_json_test.go` — fix breakage from type changes.
+## SP-075: Large-File Decomposition
+_Spec: `roadmap/SP-075-large-file-decomposition.md`_
 
-### Phase 6: Integration Tests & Verification
-- [x] SP-066-6a: Write `pkg/agent/ordered_structured_test.go` — end-to-end: write a JSON file with specific key order, verify written file preserves order.
-- [x] SP-066-6b: Patch order preservation test — start with ordered file, apply a patch, verify all original keys remain in order and new keys appear at the patched location.
-- [x] SP-066-6c: YAML round-trip test — parse YAML with non-alphabetical keys, patch a value, verify output preserves original key order.
-- [x] SP-066-6d: Run `make build-all` + `go test ./...` — verify no regressions across the full test suite.
+Maintainability (Low-Medium): 20+ files exceed 800 lines (config.go 2833, agent_modes.go 2344, …) vs the 500-line target. Pure, incremental file-level extraction — build + tests green after each step.
+
+- [x] SP-075-1: Phase 1 (config + cmd) — split `pkg/configuration/config.go` (per-domain `config_*.go` for the nested structs + `Resolve()`s), `cmd/agent_modes.go` (per-mode files), `cmd/agent_workflow.go`. Acceptance: each targeted file < ~600 lines or documented exception; `make build-all` + `go test ./...` green; no API diff beyond moves.
+- [x] SP-075-2: Phase 2 (agent core) — `pkg/agent/tool_handlers_subagent.go`, `seed_integration.go`, `subagent_runner.go`, `change_tracking_shell.go`. Acceptance: as above, per file.
+- [x] SP-075-3: Phase 3 (providers + web) — `pkg/agent_providers/generic_provider.go` ✅ (split into 5 files), `pkg/webcontent/browser_rod.go` (split into 4 files, 1398→max 587), `pkg/wasmshell/commands.go` (split into 4 files, 1633→368), `pkg/console/input_core.go` (1264→706, extracted editing/escape-parser/search), `webui/src/components/Terminal.tsx` (1320→700, extracted `useTerminalPanes` hook). Acceptance: all packages build+test green; no file >750 lines.
+
+## SP-045: WASM Build Feature Parity — distribution tail
+_Spec: `roadmap/SP-045-wasm-feature-parity.md` §4–§5 (Tiers 1/2a/2b already shipped)_
+
+- [x] SP-045-1: Strip the WASM binary — add `-ldflags="-s -w"` in `scripts/build-wasm.sh`; confirm the size drop. Acceptance: WASM binary is measurably smaller; still loads.
+- [x] SP-045-2: Spike `tinygo` for `cmd/wasm` — assess stdlib/`pkg/agent` compatibility; document go/no-go. Acceptance: written go/no-go with the blocking incompatibilities (if any).
+- [x] SP-045-3: Split into a small shell-only WASM module + a lazy-loaded `embedding.wasm` (loads on first semantic search). Acceptance: casual page load no longer pulls the embedding module.
+- [x] SP-045-4: Build-matrix hygiene — tag `pkg/webui/terminal_*.go` (creack/pty importers) `!js` and sweep `//go:build !windows` that wrongly include `js`. Acceptance: `GOOS=js GOARCH=wasm go build ./...` is clean.
+
+## SP-015: Cloud Platform Integration — remaining follow-ups
+_Spec: `roadmap/SP-015-cloud-platform.md` (R1/R3/R5 already complete)_
+
+- [x] SP-015-R4: Add a CI check that fails if Foundry's Service-Worker route table diverges from `dist/endpoint-manifest.json`; evaluate a shared `@sprout/endpoint-registry` package. Acceptance: a manifest/route-table divergence fails CI.
+- [x] SP-015-R6: Define the canonical dist-bundle layout the browser IDE expects (`index.html`, `assets/`, `wasm/`) and make `scripts/build-webui-dist.mjs` produce exactly that. Acceptance: the build output matches the documented layout.
+- [x] SP-015-R7: Chat-translation robustness — edge-case tests (empty query, missing `chat_id`, steer, stop), document the Foundry chat contract, and consider extracting the `{query}`→`{messages,stream}` translation into a module shared with Foundry's `chat-bridge.ts`. Acceptance: edge-case tests pass; the contract is documented.

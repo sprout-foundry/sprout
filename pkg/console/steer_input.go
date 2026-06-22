@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"golang.org/x/term"
 )
@@ -49,10 +52,17 @@ func isEAGAIN(err error) bool {
 // re-implemented by reading the byte directly):
 //
 //	Enter (CR/LF)   → submitFn(buffer); buffer cleared
-//	Backspace (DEL) → remove last byte
+//	Backspace (DEL) → remove rune before cursor
 //	Escape (alone)  → clear buffer (does not exit steer mode)
 //	Ctrl+C  (0x03)  → interruptFn() — caller routes to TriggerInterrupt
-//	Ctrl+D  (0x04)  → ignored (no EOF on a transient channel)
+//	Ctrl+A/E         → move cursor to start / end
+//	Ctrl+B/F         → move cursor back / forward one rune
+//	Ctrl+D           → forward-delete rune at cursor
+//	Ctrl+K/U         → kill from cursor to end / start of buffer
+//	Ctrl+W           → delete word before cursor
+//	Alt+B/F          → move cursor back / forward one word
+//	Ctrl+Left/Right  → move cursor back / forward one word
+//	Left/Right       → move cursor back / forward one rune
 //	ESC [ ... ~/A-Z → swallow common escape-sequence (arrows, fn keys)
 //
 // Submission UX: when Enter is pressed, submitFn receives the buffer.
@@ -84,6 +94,11 @@ type SteerInputReader struct {
 
 	// buffer accumulates the in-progress steer message.
 	buffer []byte
+
+	// cursorPos is the byte offset into buffer where the next edit
+	// lands. The footer renders a caret marker at this position so
+	// the user sees where typed characters will be inserted.
+	cursorPos int
 
 	// oldState is the pre-steer-mode termios snapshot, restored on Stop.
 	// Use steerTermiosState (NOT term.State) because we run a "cbreak"-
@@ -322,6 +337,7 @@ func (r *SteerInputReader) ResetBuffer() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.buffer = r.buffer[:0]
+	r.cursorPos = 0
 	r.historyIndex = -1
 	r.pendingBuffer = nil
 }
@@ -384,23 +400,33 @@ func (r *SteerInputReader) readLoop(stopCh, doneCh chan struct{}) {
 		}
 
 		switch {
+		case b == 0x01: // Ctrl+A — move to start
+			r.moveCursorStart()
+		case b == 0x02: // Ctrl+B — move back one rune
+			r.moveCursorBackward()
 		case b == 0x03: // Ctrl+C
 			r.handleInterrupt()
-		case b == 0x04: // Ctrl+D — ignore (no EOF on a steer channel)
+		case b == 0x04: // Ctrl+D — forward-delete rune at cursor
+			r.deleteForward()
+		case b == 0x05: // Ctrl+E — move to end
+			r.moveCursorEnd()
+		case b == 0x06: // Ctrl+F — move forward one rune
+			r.moveCursorForward()
 		case b == 0x09: // Tab — toggle submit mode (SP-055 Phase 3b)
 			r.toggleSubmitMode()
-		case b == 0x0D: // CR — plain Enter, submits
-			r.handleSubmit()
 		case b == 0x0A: // Bare LF — Shift+Enter in terminals that
 			// distinguish (VS Code terminal, kitty in some configs).
 			// Insert a literal newline so multi-line steer composition
 			// works without needing CSI u or Alt+Enter.
-			r.mu.Lock()
-			r.buffer = append(r.buffer, '\n')
-			r.historyIndex = -1
-			r.pendingBuffer = nil
-			r.mu.Unlock()
-			r.renderLine()
+			r.insertAtCursor([]byte{'\n'})
+		case b == 0x0B: // Ctrl+K — kill to end
+			r.killToEnd()
+		case b == 0x0D: // CR — plain Enter, submits
+			r.handleSubmit()
+		case b == 0x15: // Ctrl+U — kill to start
+			r.killToStart()
+		case b == 0x17: // Ctrl+W — delete previous word
+			r.deleteWordBackward()
 		case b == 0x1B: // Escape — could be plain ESC or sequence prefix
 			r.handleEscapeOrSequence()
 		case b == 0x7F, b == 0x08: // DEL or backspace
@@ -423,6 +449,7 @@ func (r *SteerInputReader) readLoop(stopCh, doneCh chan struct{}) {
 func (r *SteerInputReader) handleInterrupt() {
 	r.mu.Lock()
 	r.buffer = r.buffer[:0]
+	r.cursorPos = 0
 	r.historyIndex = -1
 	r.pendingBuffer = nil
 	cb := r.interruptFn
@@ -442,6 +469,7 @@ func (r *SteerInputReader) handleSubmit() {
 	r.mu.Lock()
 	text := string(r.buffer)
 	r.buffer = r.buffer[:0]
+	r.cursorPos = 0
 	mode := r.submitMode
 	submit := r.submitFn
 	queue := r.queueFn
@@ -504,6 +532,7 @@ func (r *SteerInputReader) handleEscapeOrSequence() {
 	clearBuffer := func() {
 		r.mu.Lock()
 		r.buffer = r.buffer[:0]
+		r.cursorPos = 0
 		r.historyIndex = -1
 		r.pendingBuffer = nil
 		r.mu.Unlock()
@@ -536,12 +565,17 @@ func (r *SteerInputReader) handleEscapeOrSequence() {
 		// multi-line steer message. Plain Enter still submits via the
 		// readLoop dispatch above; only the ESC-prefixed variant carves
 		// out a newline.
-		r.mu.Lock()
-		r.buffer = append(r.buffer, '\n')
-		r.historyIndex = -1
-		r.pendingBuffer = nil
-		r.mu.Unlock()
-		r.renderLine()
+		r.insertAtCursor([]byte{'\n'})
+		return
+	}
+	if got == 'b' {
+		// Alt+B — move back one word.
+		r.moveWord(-1)
+		return
+	}
+	if got == 'f' {
+		// Alt+F — move forward one word.
+		r.moveWord(1)
 		return
 	}
 	if got != '[' {
@@ -590,16 +624,11 @@ func (r *SteerInputReader) handleEscapeOrSequence() {
 					modParam = paramStr[idx+1:]
 				}
 				if keyParam == "13" && modParam != "" && modParam != "1" {
-					r.mu.Lock()
-					r.buffer = append(r.buffer, '\n')
-					r.historyIndex = -1
-					r.pendingBuffer = nil
-					r.mu.Unlock()
-					r.renderLine()
+					r.insertAtCursor([]byte{'\n'})
 					return
 				}
 			}
-			r.dispatchCSIFinal(b[0])
+			r.dispatchCSIFinal(b[0], string(params))
 			return
 		}
 		// Parameter/intermediate bytes (0x30..0x3F, 0x20..0x2F) keep
@@ -629,6 +658,7 @@ func (r *SteerInputReader) endPaste() {
 	r.pasteBuf = r.pasteBuf[:0]
 	r.pasteActive = false
 	r.buffer = append(r.buffer, paste...)
+	r.cursorPos = len(r.buffer)
 	r.hasEditedHistory()
 	r.mu.Unlock()
 	r.renderLine()
@@ -651,16 +681,29 @@ func (r *SteerInputReader) hasEditedHistory() {
 }
 
 // dispatchCSIFinal acts on the terminator byte of a CSI sequence we
-// just drained. Only arrow keys are wired today; other final bytes are
-// swallowed silently.
-func (r *SteerInputReader) dispatchCSIFinal(final byte) {
-	switch final {
-	case 'A': // Up arrow — recall previous history entry.
+// just drained. Arrow keys navigate: Up/Down recall history, Left/Right
+// move the cursor by one rune, and Ctrl+Left/Right (params "1;5") move
+// by one word. Other final bytes are swallowed silently.
+func (r *SteerInputReader) dispatchCSIFinal(final byte, params string) {
+	switch {
+	case final == 'A': // Up arrow — recall previous history entry.
 		r.recallHistory(-1)
-	case 'B': // Down arrow — advance toward in-progress buffer.
+	case final == 'B': // Down arrow — advance toward in-progress buffer.
 		r.recallHistory(+1)
+	case final == 'C': // Right arrow / Ctrl+Right
+		if params == "1;5" {
+			r.moveWord(1) // Ctrl+Right — forward one word
+		} else {
+			r.moveCursorForward() // Plain Right — forward one rune
+		}
+	case final == 'D': // Left arrow / Ctrl+Left
+		if params == "1;5" {
+			r.moveWord(-1) // Ctrl+Left — back one word
+		} else {
+			r.moveCursorBackward() // Plain Left — back one rune
+		}
 	default:
-		// Left/right/Home/End/Pg... not yet wired.
+		// Home/End/Pg... not yet wired.
 	}
 }
 
@@ -710,6 +753,7 @@ func (r *SteerInputReader) recallHistory(delta int) {
 		entry := r.history[len(r.history)-1-newIdx]
 		r.buffer = append(r.buffer[:0], entry...)
 	}
+	r.cursorPos = len(r.buffer)
 	r.historyIndex = newIdx
 	r.mu.Unlock()
 	r.renderLine()
@@ -734,24 +778,26 @@ func (r *SteerInputReader) appendHistory(text string) {
 	r.pendingBuffer = nil
 }
 
-// handleBackspace removes the last RUNE (not byte) from the buffer
-// so a single backspace on a multi-byte character — Greek "α", Han
-// "字", emoji "🚀" — deletes the whole glyph rather than corrupting
-// it. Walks backward from the end skipping UTF-8 continuation bytes
-// (10xxxxxx) until it finds a lead byte (or ASCII) to drop.
+// handleBackspace removes the RUNE (not byte) immediately before the
+// cursor so a single backspace on a multi-byte character — Greek "α",
+// Han "字", emoji "🚀" — deletes the whole glyph rather than corrupting
+// it. Walks backward from the cursor skipping UTF-8 continuation bytes
+// (10xxxxxx) until it finds a lead byte (or ASCII) to drop. A no-op
+// when the cursor is at position 0.
 //
 // Also exits history navigation: editing a recalled entry treats it
 // as a fresh in-progress message.
 func (r *SteerInputReader) handleBackspace() {
 	r.mu.Lock()
-	if n := len(r.buffer); n > 0 {
-		// Find the start of the last rune by walking back over
-		// continuation bytes (0x80..0xBF).
-		i := n - 1
+	if r.cursorPos > 0 {
+		// Find the start of the rune just before the cursor by walking
+		// back over continuation bytes (0x80..0xBF).
+		i := r.cursorPos - 1
 		for i > 0 && r.buffer[i]&0xC0 == 0x80 {
 			i--
 		}
-		r.buffer = r.buffer[:i]
+		r.buffer = slices.Delete(r.buffer, i, r.cursorPos)
+		r.cursorPos = i
 	}
 	r.historyIndex = -1
 	r.pendingBuffer = nil
@@ -759,12 +805,13 @@ func (r *SteerInputReader) handleBackspace() {
 	r.renderLine()
 }
 
-// handlePrintable appends a printable ASCII byte to the buffer and
+// handlePrintable inserts a printable ASCII byte at the cursor and
 // redraws. Typing exits "history navigation" mode: the buffer becomes
 // editable from the recalled state and the next Up arrow starts fresh.
 func (r *SteerInputReader) handlePrintable(b byte) {
 	r.mu.Lock()
-	r.buffer = append(r.buffer, b)
+	r.buffer = slices.Insert(r.buffer, r.cursorPos, b)
+	r.cursorPos++
 	r.historyIndex = -1
 	r.pendingBuffer = nil
 	r.mu.Unlock()
@@ -817,8 +864,191 @@ func (r *SteerInputReader) handleUTF8Lead(lead byte) {
 		return // timed out
 	}
 
+	r.insertAtCursor(seq)
+}
+
+// insertAtCursor inserts a byte sequence at the cursor position and
+// advances the cursor. Edits exit history navigation. Caller must NOT
+// hold r.mu.
+func (r *SteerInputReader) insertAtCursor(data []byte) {
 	r.mu.Lock()
-	r.buffer = append(r.buffer, seq...)
+	r.buffer = slices.Insert(r.buffer, r.cursorPos, data...)
+	r.cursorPos += len(data)
+	r.historyIndex = -1
+	r.pendingBuffer = nil
+	r.mu.Unlock()
+	r.renderLine()
+}
+
+// moveCursorStart moves the cursor to byte 0 (Ctrl+A / Home).
+func (r *SteerInputReader) moveCursorStart() {
+	r.mu.Lock()
+	r.cursorPos = 0
+	r.mu.Unlock()
+	r.renderLine()
+}
+
+// moveCursorEnd moves the cursor to the end of the buffer (Ctrl+E / End).
+func (r *SteerInputReader) moveCursorEnd() {
+	r.mu.Lock()
+	r.cursorPos = len(r.buffer)
+	r.mu.Unlock()
+	r.renderLine()
+}
+
+// moveCursorBackward moves the cursor back one rune (Ctrl+B / Left).
+// A no-op when the cursor is already at the start.
+func (r *SteerInputReader) moveCursorBackward() {
+	r.mu.Lock()
+	if r.cursorPos > 0 {
+		_, sz := utf8.DecodeLastRune(r.buffer[:r.cursorPos])
+		r.cursorPos -= sz
+	}
+	r.mu.Unlock()
+	r.renderLine()
+}
+
+// moveCursorForward moves the cursor forward one rune (Ctrl+F / Right).
+// A no-op when the cursor is already at the end.
+func (r *SteerInputReader) moveCursorForward() {
+	r.mu.Lock()
+	if r.cursorPos < len(r.buffer) {
+		_, sz := utf8.DecodeRune(r.buffer[r.cursorPos:])
+		r.cursorPos += sz
+	}
+	r.mu.Unlock()
+	r.renderLine()
+}
+
+// moveWord moves the cursor by one word (delta -1 = backward, +1 =
+// forward). A word is a maximal run of non-whitespace (unicode.IsSpace),
+// matching the main InputReader's MoveWord semantics.
+func (r *SteerInputReader) moveWord(delta int) {
+	r.mu.Lock()
+	pos := r.cursorPos
+	buf := r.buffer
+	if delta < 0 {
+		// Skip whitespace backward.
+		for pos > 0 {
+			rr, sz := utf8.DecodeLastRune(buf[:pos])
+			if unicode.IsSpace(rr) {
+				pos -= sz
+			} else {
+				break
+			}
+		}
+		// Skip non-whitespace backward.
+		for pos > 0 {
+			rr, sz := utf8.DecodeLastRune(buf[:pos])
+			if !unicode.IsSpace(rr) {
+				pos -= sz
+			} else {
+				break
+			}
+		}
+	} else {
+		// Skip whitespace forward.
+		for pos < len(buf) {
+			rr, sz := utf8.DecodeRune(buf[pos:])
+			if unicode.IsSpace(rr) {
+				pos += sz
+			} else {
+				break
+			}
+		}
+		// Skip non-whitespace forward.
+		for pos < len(buf) {
+			rr, sz := utf8.DecodeRune(buf[pos:])
+			if !unicode.IsSpace(rr) {
+				pos += sz
+			} else {
+				break
+			}
+		}
+	}
+	r.cursorPos = pos
+	r.mu.Unlock()
+	r.renderLine()
+}
+
+// deleteWordBackward deletes the word before the cursor (Ctrl-W /
+// Alt-Backspace). A no-op when the cursor is at the start or only
+// whitespace precedes it.
+func (r *SteerInputReader) deleteWordBackward() {
+	r.mu.Lock()
+	if r.cursorPos == 0 {
+		r.mu.Unlock()
+		return
+	}
+	pos := r.cursorPos
+	buf := r.buffer
+	// Skip whitespace backward.
+	for pos > 0 {
+		rr, sz := utf8.DecodeLastRune(buf[:pos])
+		if unicode.IsSpace(rr) {
+			pos -= sz
+		} else {
+			break
+		}
+	}
+	// Skip non-whitespace backward.
+	for pos > 0 {
+		rr, sz := utf8.DecodeLastRune(buf[:pos])
+		if !unicode.IsSpace(rr) {
+			pos -= sz
+		} else {
+			break
+		}
+	}
+	r.buffer = slices.Delete(r.buffer, pos, r.cursorPos)
+	r.cursorPos = pos
+	r.historyIndex = -1
+	r.pendingBuffer = nil
+	r.mu.Unlock()
+	r.renderLine()
+}
+
+// killToEnd deletes from the cursor to the end of the buffer (Ctrl-K).
+// A no-op when the cursor is already at the end.
+func (r *SteerInputReader) killToEnd() {
+	r.mu.Lock()
+	if r.cursorPos >= len(r.buffer) {
+		r.mu.Unlock()
+		return
+	}
+	r.buffer = r.buffer[:r.cursorPos]
+	r.historyIndex = -1
+	r.pendingBuffer = nil
+	r.mu.Unlock()
+	r.renderLine()
+}
+
+// killToStart deletes from the start of the buffer to the cursor
+// (Ctrl-U). A no-op when the cursor is already at the start.
+func (r *SteerInputReader) killToStart() {
+	r.mu.Lock()
+	if r.cursorPos == 0 {
+		r.mu.Unlock()
+		return
+	}
+	r.buffer = slices.Delete(r.buffer, 0, r.cursorPos)
+	r.cursorPos = 0
+	r.historyIndex = -1
+	r.pendingBuffer = nil
+	r.mu.Unlock()
+	r.renderLine()
+}
+
+// deleteForward deletes the rune at the cursor (Ctrl-D on non-empty).
+// A no-op when the cursor is at the end.
+func (r *SteerInputReader) deleteForward() {
+	r.mu.Lock()
+	if r.cursorPos >= len(r.buffer) {
+		r.mu.Unlock()
+		return
+	}
+	_, sz := utf8.DecodeRune(r.buffer[r.cursorPos:])
+	r.buffer = slices.Delete(r.buffer, r.cursorPos, r.cursorPos+sz)
 	r.historyIndex = -1
 	r.pendingBuffer = nil
 	r.mu.Unlock()
@@ -828,17 +1058,22 @@ func (r *SteerInputReader) handleUTF8Lead(lead byte) {
 // renderLine asks the footer to repaint the pinned input row with the
 // current buffer and a mode-specific prefix. The prefix is included
 // here (not in the footer) so the footer stays content-agnostic and
-// any future modes don't require footer changes.
+// any future modes don't require footer changes. The cursor byte
+// offset is forwarded so the footer can render a caret at the correct
+// position for mid-buffer editing.
 func (r *SteerInputReader) renderLine() {
 	if r.footer == nil {
 		return
 	}
 	r.mu.Lock()
 	text := string(r.buffer)
+	cursor := r.cursorPos
 	prefix := SteerPromptPrefix
 	if r.submitMode == SteerSubmitModeQueue {
 		prefix = QueuePromptPrefix
 	}
 	r.mu.Unlock()
-	r.footer.SetSteerLine(fmt.Sprintf("%s%s", prefix, text))
+	// cursor is a byte offset into the buffer; add the prefix byte
+	// length to get the offset within the full rendered string.
+	r.footer.SetSteerLineWithCursor(fmt.Sprintf("%s%s", prefix, text), len(prefix)+cursor)
 }

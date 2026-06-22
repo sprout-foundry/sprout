@@ -12,6 +12,7 @@ import (
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/clihooks"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/factory"
 	"github.com/sprout-foundry/sprout/pkg/noninteractive"
 	"golang.org/x/term"
@@ -153,7 +154,7 @@ func recoverProviderStartup(configManager *configuration.Manager, failedProvider
 	if choice == 1 && isModelError {
 		models, listErr := api.GetModelsForProvider(failedProvider)
 		if listErr != nil || len(models) == 0 {
-			_, _ = os.Stderr.Write([]byte(fmt.Sprintf("[WARN] Failed to list models for %s: %v\n", failedProviderName, listErr)))
+			console.GlyphWarning.Fprintf(os.Stderr, "Failed to list models for %s: %v", failedProviderName, listErr)
 			_, _ = os.Stderr.Write([]byte("Falling back to selecting a different provider.\n"))
 			return recoverProviderBySwitching(configManager, failedProvider, failedProviderName, modelArg)
 		}

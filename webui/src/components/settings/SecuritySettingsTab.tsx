@@ -52,10 +52,6 @@ export default function SecuritySettingsTab({
       {renderNumberInput('security_validation.threshold', 'Validation threshold (0-2)', 0, 2)}
       {renderSelect('self_review_gate_mode', 'Self-review gate', ['off', 'code', 'always'])}
       <div className="settings-section-spaced">
-        <h4>Git Permissions</h4>
-        {renderToggle('allow_orchestrator_git_write', 'Allow orchestrator git write')}
-      </div>
-      <div className="settings-section-spaced">
         <h4>Shell Command Detection</h4>
         {renderToggle(
           'enable_zsh_command_detection',

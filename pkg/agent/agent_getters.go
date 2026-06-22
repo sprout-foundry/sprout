@@ -35,6 +35,12 @@ func (a *Agent) GetUnsafeMode() bool { return a.security.GetUnsafeMode() }
 // SetUnsafeMode sets the unsafe mode flag
 func (a *Agent) SetUnsafeMode(unsafe bool) { a.security.SetUnsafeMode(unsafe) }
 
+// GetUnsafeShellMode returns whether unsafe shell mode is enabled
+func (a *Agent) GetUnsafeShellMode() bool { return a.security.GetUnsafeShellMode() }
+
+// SetUnsafeShellMode sets the unsafe shell mode flag
+func (a *Agent) SetUnsafeShellMode(unsafe bool) { a.security.SetUnsafeShellMode(unsafe) }
+
 // IsSecurityBypassApproved returns whether the user has approved any
 // external filesystem access this session. Coarse signal: prefer the
 // per-path IsFolderSessionAllowed for new code.
@@ -351,8 +357,13 @@ func (a *Agent) PrintTerminalOnly(text string) {
 	router.RouteTerminalOnly(text)
 }
 
-// GetSecurityApprovalMgr returns the security approval manager
+// GetSecurityApprovalMgr returns the security approval manager. Returns nil
+// when the security subsystem is not initialized (e.g., bare &Agent{} in
+// tests), so callers can safely nil-check the result.
 func (a *Agent) GetSecurityApprovalMgr() *security.ApprovalManager {
+	if a.security == nil {
+		return nil
+	}
 	return a.security.GetSecurityApprovalMgr()
 }
 
@@ -465,6 +476,43 @@ func (a *Agent) GetEmbeddingManager() *embedding.EmbeddingManager {
 	a.embeddingMu.RLock()
 	defer a.embeddingMu.RUnlock()
 	return a.embeddingMgr
+}
+
+// GetSecurityLLMClassifier returns the agent's LLM security classifier
+// (SP-076), or nil if none is configured. The classifier is lazily
+// initialized on first call and cached on the agent (securityLLMClassifier).
+// If creation fails — no provider configured, client error, or the feature
+// is disabled — the nil result is cached so we don't retry on every prompt.
+//
+// Returns nil for a nil agent or when config is unavailable.
+func (a *Agent) GetSecurityLLMClassifier() *SecurityLLMClassifier {
+	if a == nil {
+		return nil
+	}
+	// Fast path: already initialized (success or cached nil).
+	a.securityLLMClassifierMu.Lock()
+	defer a.securityLLMClassifierMu.Unlock()
+	if a.securityLLMClassifier != nil {
+		return a.securityLLMClassifier
+	}
+	// Detect the "already tried, cached nil" case. We use a sentinel: when
+	// init has been attempted, we set securityLLMClassifierInitDone = true.
+	// A nil pointer with done=true means "intentionally off/unavailable".
+	if a.securityLLMClassifierInitDone {
+		return nil
+	}
+	cfg := a.GetConfig()
+	logger := utils.GetLogger(cfg != nil && cfg.SkipPrompt)
+	classifier, _ := NewSecurityLLMClassifier(cfg, logger)
+	a.securityLLMClassifier = classifier
+	a.securityLLMClassifierInitDone = true
+	if classifier != nil && classifier.enabled && a.debug {
+		a.debugLog("[security-llm] classifier initialized\n")
+	}
+	if classifier != nil && classifier.enabled {
+		return classifier
+	}
+	return nil
 }
 
 // GetTodoManager returns the per-agent todo manager.
@@ -624,9 +672,9 @@ func (a *Agent) IsSessionElevated() bool {
 
 // GenerateResponse generates a simple response using the current model without tool calls.
 //
-// TODO(SP-034-1c): accept a ctx parameter and forward it so callers can abort
-// in-flight calls. The interruptCtx on the agent is the natural source, but
-// changing this signature ripples into many callsites — handle in 1c.
+// SP-073: uses a.interruptCtx so Stop/cancel aborts the in-flight call. If
+// callers need to pass their own context, they can set it via SetInterruptCtx
+// before calling.
 func (a *Agent) GenerateResponse(messages []api.Message) (string, error) {
 	resp, err := a.client.SendChatRequest(a.interruptCtx, messages, nil, "", false) // No tools, no reasoning, no disableThinking
 	if err != nil {

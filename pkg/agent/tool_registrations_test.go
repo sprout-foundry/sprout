@@ -8,7 +8,7 @@ import (
 // the expected number of tools after the refactor.
 func TestNewDefaultToolRegistry_Count(t *testing.T) {
 	registry := newDefaultToolRegistry()
-	expectedCount := 35
+	expectedCount := 36
 	if len(registry.tools) != expectedCount {
 		t.Errorf("expected %d registered tools, got %d", expectedCount, len(registry.tools))
 	}
@@ -23,6 +23,7 @@ func TestNewDefaultToolRegistry_AllToolsRegistered(t *testing.T) {
 		"shell_command",
 		"git",
 		"commit",
+		"create_pull_request",
 		"read_file",
 		"write_file",
 		"edit_file",
@@ -91,6 +92,7 @@ func TestNewDefaultToolRegistry_ToolParameters(t *testing.T) {
 		"shell_command":           {paramCount: 5, requiredCount: 0, requiredNames: []string{}},
 		"git":                    {paramCount: 2, requiredCount: 1, requiredNames: []string{"operation"}},
 		"commit":                 {paramCount: 2, requiredCount: 0, requiredNames: []string{}},
+		"create_pull_request":    {paramCount: 6, requiredCount: 1, requiredNames: []string{"title"}},
 		"read_file":              {paramCount: 2, requiredCount: 1, requiredNames: []string{"path"}},
 		"write_file":             {paramCount: 2, requiredCount: 2, requiredNames: []string{"path", "content"}},
 		"edit_file":              {paramCount: 3, requiredCount: 3, requiredNames: []string{"path", "old_str", "new_str"}},
@@ -248,6 +250,12 @@ func TestNewDefaultToolRegistry_ParameterTypes(t *testing.T) {
 		{"git", "args", "string"},
 		{"commit", "message", "string"},
 		{"commit", "notes", "string"},
+		{"create_pull_request", "title", "string"},
+		{"create_pull_request", "body", "string"},
+		{"create_pull_request", "base", "string"},
+		{"create_pull_request", "head", "string"},
+		{"create_pull_request", "draft", "boolean"},
+		{"create_pull_request", "repo_dir", "string"},
 		{"read_file", "path", "string"},
 		{"read_file", "view_range", "array"},
 		{"write_file", "path", "string"},

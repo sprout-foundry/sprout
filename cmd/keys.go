@@ -24,17 +24,20 @@ import (
 var keysCmd = &cobra.Command{
 	Use:   "keys",
 	Short: "Manage API key encryption and credentials",
-	Long: `Manage encryption and storage of API keys.
+	Long: `Manage encryption, storage, and credentials for API keys.
 
-The sprout tool now encrypts API keys at rest using the age encryption library.
+The sprout tool encrypts API keys at rest using the age encryption library.
 By default, a machine-specific key is used for transparent encryption.
 
 Commands:
+  set      - Add or replace an API key for a built-in provider
   status   - Show current encryption status
   encrypt  - Enable or change encryption mode
   decrypt  - Decrypt to plaintext (for migration/export)
   migrate  - Encrypt existing plaintext API keys
-  rotate   - Generate a new machine key and re-encrypt all keys`,
+  rotate   - Generate a new machine key and re-encrypt all keys
+
+Run 'sprout keys set <provider>' to add credentials for first-run setup.`,
 }
 
 // statusCmd shows encryption status

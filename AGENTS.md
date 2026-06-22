@@ -86,17 +86,19 @@ Before **every** `git push`, you MUST:
 
 ### Committing and Pushing
 
-**`orchestrator` git-write privileges**: When `AllowOrchestratorGitWrite=true` (the default for fresh installs), the `orchestrator` persona can stage files, commit (via the commit tool), and push without interactive approval. When the flag is `false`, all git-write operations require the git tool with explicit user approval. Operations that discard or alter history (checkout, restore, reset) always require the git tool pathway with explicit user approval, regardless of persona or flag.
+**`orchestrator` git-write privileges**: The `orchestrator` persona carries the `git_write` capability and can stage files, commit (via the commit tool), and push without interactive approval. Git-write is governed solely by the persona's `CapabilityGitWrite` — no additional config toggle is needed.
+
+### Local History Operations (checkout, restore, reset, rebase)
+
+Local git history operations (`git checkout`, `git switch`, `git restore`, `git reset`, `git stash`) are **restorable via the ChangeTracker** (`list_changes`, `recover_file`, `revert_my_changes`). They do not require interactive approval — the ChangeTracker captures the pre-change state of every file an agent touches and can reverse it on request. These commands may be run via `shell_command`.
+
+The rollback/restore footgun is closed: history rollback and restore now enforce a workspace boundary check (`pkg/history/changetracker.go::isWithinWorkspace`), so a rollback can no longer silently overwrite committed files from stale snapshots.
+
+**Still requires care**: prefer scoped operations (`git checkout <file>`, `git restore <file>`) over whole-tree resets when you only need to undo specific files. Use `recover_file` / `revert_my_changes` for reversing agent edits — these touch only the files the agent changed, unlike `git checkout` which discards everything including the user's uncommitted work.
 
 ### Active Change Set Isolation
 
-When working on a specific task (e.g., a TODO item), you MUST respect other active changes in the working tree:
-
-1. **Focus ONLY on your assigned task.** Do NOT modify, revert, or delete any other active changes that exist in the working tree or change sets.
-2. **Do NOT run destructive git commands** (`git checkout`, `git restore`, `git reset`, `git stash drop`, etc.) that would alter existing staged or unstaged changes that are not yours.
-3. **If a build or test fails** due to conflicts with OTHER unrelated changes (not caused by your current work): pause for 2 minutes, then retry. Repeat up to 3 times (total delay of up to 6 minutes).
-4. **After 3 failed retries** due to external conflicts, stop and escalate to the user. Report the conflicting changes. Do NOT attempt to resolve other people's changes yourself.
-5. **Pass these isolation rules verbatim** when delegating to subagents.
+Focus ONLY on your assigned task. Do not modify or revert other active changes that exist in the working tree unless explicitly directed. If a build or test fails due to conflicts with OTHER unrelated changes (not caused by your current work), pause briefly and retry; if it keeps failing, escalate to the user rather than resolving other people's changes yourself.
 
 ### Conflict Resolution
 
@@ -116,9 +118,20 @@ When a merge produces conflicts:
 | `git add <specific-file>` | `shell_command` | Always allowed |
 | `git commit -m "..."` | `shell_command` (orchestrator + git-write flag) or commit tool | Per orchestrator git-write rules |
 | `git push` | `shell_command` (after pre-push safety check) | Per orchestrator git-write rules |
-| `git checkout`, `git switch`, `git restore`, `git reset` | Git tool only | Requires explicit user approval |
+| `git checkout`, `git switch`, `git restore`, `git reset`, `git stash`, `git rebase` | `shell_command` | Restorable via ChangeTracker; prefer scoped ops over whole-tree |
 | `git push --force` (any variant) | **FORBIDDEN** | Never allowed |
-| `git rebase` (onto remote) | **FORBIDDEN** | Use merge instead |
+
+## Security Risk Classification
+
+Shell-command risk classification uses a **two-tier pipeline**:
+
+1. **Heuristic classifier** (`pkg/agent_tools/security_classifier.go` + `shell_patterns.go`) — fast, string/regex-based, always runs. Classifies every `shell_command` call as Safe / Caution / Dangerous / Critical. This is the gate that decides whether to auto-approve, prompt the user, or block. It uses prefix matching and a catch-all CAUTION default for unrecognized commands.
+
+2. **LLM-based classifier** (`pkg/agent/llm_security_classifier.go`) — runs **only** for commands the heuristic flags as risky (Caution or Dangerous) AND that aren't already on the session approval allowlist. Calls the configured LLM with a structured-output prompt to produce a `{risk, recommendation, summary}` analysis.
+
+   The analysis is **advisory only**: it never changes whether a prompt is shown or whether a command auto-runs, Critical-tier commands never reach the LLM, and any LLM error/timeout degrades gracefully to "no analysis". Authoritative design + safety contract: [`roadmap/SP-076-llm-security-classifier.md`](roadmap/SP-076-llm-security-classifier.md). Read it before touching this area.
+
+**Do NOT attempt an embedding-based classifier for command risk.** This was tried and removed (commit history). Embeddings measure semantic similarity, but security risk is structural: `rm -rf node_modules` and `rm -rf /etc` are nearly identical embeddings with opposite risk profiles. The distinguishing signal (flags, target paths) is too small a fraction of the vector. A tokenizing command parser or an LLM call are the correct tools; embeddings are not. If revisiting classification accuracy, fix the heuristic's catch-all CAUTION default or tune the LLM prompt — do not reach for embeddings.
 
 ## Design System
 

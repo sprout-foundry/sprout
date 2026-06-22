@@ -2,6 +2,7 @@ package tools
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -30,7 +31,8 @@ type PDFPipelineResult struct {
 // ProcessPDFForMultimodal processes a PDF file for multimodal consumption.
 // Step 1: Try pypdf text extraction (works for text-based PDFs).
 // Step 2: If no text found, render pages to optimized images for the model to see directly.
-func ProcessPDFForMultimodal(pdfPath string) (*PDFPipelineResult, error) {
+// The ctx is threaded through subprocess calls so Stop can abort them (SP-034-1c).
+func ProcessPDFForMultimodal(ctx context.Context, pdfPath string) (*PDFPipelineResult, error) {
 	pythonExec, err := GetPDFPythonExecutable()
 	if err != nil {
 		return nil, fmt.Errorf("PDF processing requires Python 3.10+: %w", err)
@@ -60,13 +62,13 @@ func ProcessPDFForMultimodal(pdfPath string) (*PDFPipelineResult, error) {
 	}
 
 	// Step 1: Try pypdf text extraction with higher limit for multimodal models
-	text, hasText, pypdfErr := extractTextWithPypdfMultimodal(pdfPath, pythonExec)
+	text, hasText, pypdfErr := extractTextWithPypdfMultimodal(ctx, pdfPath, pythonExec)
 	if pypdfErr == nil && hasText && len(strings.TrimSpace(text)) > 0 {
 		return &PDFPipelineResult{Text: text, Source: "pypdf"}, nil
 	}
 
 	// Step 2: Render pages to images for multimodal model to see directly
-	pageImages, pageErr := extractPageImagesFromPDF(pdfPath, pythonExec)
+	pageImages, pageErr := extractPageImagesFromPDF(ctx, pdfPath, pythonExec)
 	if pageErr == nil && len(pageImages) > 0 {
 		if len(pageImages) > maxPDFOCRPages {
 			pageImages = pageImages[:maxPDFOCRPages]
@@ -105,18 +107,18 @@ func ProcessPDFForMultimodal(pdfPath string) (*PDFPipelineResult, error) {
 // extractTextWithPypdfMultimodal extracts text from a PDF using pypdf with a higher
 // character limit than extractTextWithPypdf. Multimodal models can handle much more
 // context than OCR output, so we allow up to pdfMultimodalTextLimit characters.
-func extractTextWithPypdfMultimodal(pdfPath, pythonExec string) (string, bool, error) {
+func extractTextWithPypdfMultimodal(ctx context.Context, pdfPath, pythonExec string) (string, bool, error) {
 	// This uses the same approach as extractTextWithPypdf but with a higher
 	// output limit (20000 chars instead of 5000) since the multimodal model
 	// can handle more context directly.
-	cmd := newPypdfTextExtractionCommand(pythonExec, pdfPath, pdfMultimodalTextLimit)
+	cmd := newPypdfTextExtractionCommand(ctx, pythonExec, pdfPath, pdfMultimodalTextLimit)
 	return executePypdfTextExtraction(cmd)
 }
 
 // newPypdfTextExtractionCommand creates a Python command to extract text from a PDF
 // with a specified character limit on the output.
-func newPypdfTextExtractionCommand(pythonExec, pdfPath string, charLimit int) *exec.Cmd {
-	return exec.Command(pythonExec, "-c", fmt.Sprintf(`
+func newPypdfTextExtractionCommand(ctx context.Context, pythonExec, pdfPath string, charLimit int) *exec.Cmd {
+	return exec.CommandContext(ctx, pythonExec, "-c", fmt.Sprintf(`
 import sys
 try:
     from pypdf import PdfReader

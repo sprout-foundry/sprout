@@ -92,6 +92,15 @@ func handleRecoverFile(_ context.Context, a *Agent, args map[string]interface{})
 		return jsonRecoverResult(false, abs, "", "no tracked change recorded for this path"), nil
 	}
 
+	// C1: Refuse to touch anything outside the workspace root. A crafted
+	// or mis-recorded tracker entry (e.g. a shell-mutation diff that
+	// escaped the workspace) must not be able to write or delete files
+	// in arbitrary directories via the recovery path. The doc comment
+	// has always claimed this guarantee; this enforces it.
+	if a.IsPathOutsideWorkspace(abs) {
+		return jsonRecoverResult(false, abs, "", "path is outside the workspace — refusing cross-workspace restore"), nil
+	}
+
 	// "create" with no original → recovery is delete.
 	if match.Operation == "create" {
 		if removeErr := os.Remove(abs); removeErr != nil && !os.IsNotExist(removeErr) {
@@ -115,6 +124,14 @@ func handleRecoverFile(_ context.Context, a *Agent, args map[string]interface{})
 	// along with its parent in a `rm -rf` scenario).
 	if mkErr := os.MkdirAll(filepath.Dir(abs), 0o755); mkErr != nil {
 		return jsonRecoverResult(false, abs, "", fmt.Sprintf("unable to create parent dir: %v", mkErr)), nil
+	}
+
+	// Belt-and-suspenders: isRecoverableOriginal already rejects the redacted
+	// marker earlier, but this final guard sits directly at the write so a
+	// future code path that bypasses that check can never persist the literal
+	// marker string to a user's file.
+	if match.OriginalCode == RedactedContentMarker {
+		return jsonRecoverResult(false, abs, "", "refusing to write redacted marker to disk"), nil
 	}
 
 	if writeErr := os.WriteFile(abs, []byte(match.OriginalCode), 0o644); writeErr != nil {
@@ -175,7 +192,7 @@ func recoverBulk(a *Agent, bulkPath string) (string, error) {
 			Timestamp:    bulk.Timestamp,
 			ToolCall:     bulk.ToolCall,
 		}
-		action, ok, msg := revertOne(synthesized, tracker)
+		action, ok, msg := a.revertOne(synthesized)
 		results = append(results, entry{Path: item.FilePath, Action: action, OK: ok, Message: msg})
 		if ok {
 			restored++

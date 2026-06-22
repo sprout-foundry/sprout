@@ -55,7 +55,8 @@
           "git_status",
           "git_log",
           "git_diff",
-          "read_file"
+          "read_file",
+          "build_test"
         ],
         "medium_risk": [
           "git_commit",

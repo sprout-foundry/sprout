@@ -11,6 +11,8 @@ import (
 	"strings"
 	"unicode/utf16"
 	"unicode/utf8"
+
+	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
 // ErrOutsideWorkingDirectory is returned when a path is outside the working directory
@@ -109,10 +111,10 @@ func SaveFile(filename, content string) error {
 	}
 	err := os.WriteFile(filename, normalized, 0644)
 	if err != nil {
-		fmt.Printf("   [FAIL] Failed to write file: %v\n", err)
+		console.GlyphError.Fprintf(os.Stdout, "Failed to write file: %v", err)
 		return fmt.Errorf("write file %s: %w", filename, err)
 	}
-	fmt.Print("   [OK] File written successfully\n")
+	console.GlyphSuccess.Fprintln(os.Stdout, "File written successfully")
 	return nil
 }
 
@@ -123,22 +125,22 @@ func ReadFile(filename string) (string, error) {
 	// Use buffered reader for potential large files; still load whole file for simplicity
 	f, err := os.Open(filename)
 	if err != nil {
-		fmt.Printf("   [FAIL] Failed to read file: %v\n", err)
+		console.GlyphError.Fprintf(os.Stdout, "Failed to read file: %v", err)
 		return "", fmt.Errorf("could not read file %s: %w", filename, err)
 	}
 	defer f.Close()
 	buf := new(bytes.Buffer)
 	if _, err := bufio.NewReader(f).WriteTo(buf); err != nil {
-		fmt.Printf("   [FAIL] Failed to read file: %v\n", err)
+		console.GlyphError.Fprintf(os.Stdout, "Failed to read file: %v", err)
 		return "", fmt.Errorf("could not read file %s: %w", filename, err)
 	}
 	content := buf.Bytes()
 	if err != nil {
-		fmt.Printf("   [FAIL] Failed to read file: %v\n", err)
+		console.GlyphError.Fprintf(os.Stdout, "Failed to read file: %v", err)
 		return "", fmt.Errorf("could not read file %s: %w", filename, err)
 	}
 
-	fmt.Printf("   [OK] File read successfully (%d bytes)\n", len(content))
+	console.GlyphSuccess.Fprintf(os.Stdout, "File read successfully (%d bytes)", len(content))
 	return string(content), nil
 }
 

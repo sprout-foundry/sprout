@@ -535,10 +535,6 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 		knownKeys["skip_prompt"] = true
 		cfg.SkipPrompt, _ = v.(bool)
 	}
-	if v, ok := patch["allow_orchestrator_git_write"]; ok {
-		knownKeys["allow_orchestrator_git_write"] = true
-		cfg.AllowOrchestratorGitWrite, _ = v.(bool)
-	}
 	if v, ok := patch["resource_directory"]; ok {
 		knownKeys["resource_directory"] = true
 		s, _ := v.(string)

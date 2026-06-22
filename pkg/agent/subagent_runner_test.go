@@ -1363,3 +1363,35 @@ func TestCreateSubagent_PreservesParentMetadata(t *testing.T) {
 	}
 }
 
+// TestCreateSubagent_SharesClarificationManager verifies that a subagent
+// receives the parent's clarificationManager by pointer — so clarification
+// requests from any depth in the subagent tree are routed to the same
+// parent-channel consumer.
+func TestCreateSubagent_SharesClarificationManager(t *testing.T) {
+	parent := newIsolatedTestAgent(t)
+	defer parent.Shutdown()
+	parent.eventBus = events.NewEventBus()
+	parent.initSubManagers()
+
+	shared := &SharedState{
+		EventBus:      parent.eventBus,
+		TodoManager:   tools.NewTodoManager(),
+		ConfigManager: parent.configManager,
+		WorkspaceRoot: parent.workspaceRoot,
+	}
+
+	runner := NewSubagentRunner(parent, shared)
+
+	child, err := runner.createSubagent(SubagentOptions{Persona: "coder"})
+	if err != nil {
+		t.Fatalf("createSubagent failed: %v", err)
+	}
+
+	if child.clarificationManager == nil {
+		t.Fatal("child.clarificationManager is nil, expected shared manager from parent")
+	}
+	if child.clarificationManager != parent.clarificationManager {
+		t.Fatal("child.clarificationManager != parent.clarificationManager — subagents must share the parent's manager by pointer")
+	}
+}
+

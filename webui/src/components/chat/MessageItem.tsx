@@ -15,6 +15,11 @@ interface MessageItemProps {
    */
   getToolStatus: (toolId: string) => ToolExecution['status'] | undefined;
   formatTime: (date: Date) => string;
+  /**
+   * SP-071-3: zero-based index of this message in the chat history.
+   * Passed through to MessageBubble for data-message-index attribute.
+   */
+  messageIndex?: number;
 }
 
 export const MessageItem = memo(function MessageItem({
@@ -23,6 +28,7 @@ export const MessageItem = memo(function MessageItem({
   findMatchingToolExecution,
   getToolStatus,
   formatTime,
+  messageIndex,
 }: MessageItemProps) {
   // Suppress empty bubbles. Session restore replays the assistant turn
   // boundaries verbatim, including tool-only turns whose persisted
@@ -48,6 +54,7 @@ export const MessageItem = memo(function MessageItem({
       timestamp={formatTime(message.timestamp)}
       persona={message.persona}
       depth={message.subagentDepth}
+      dataMessageIndex={messageIndex}
     >
       {message.type === 'assistant' ? (
         <>

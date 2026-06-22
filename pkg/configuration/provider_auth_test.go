@@ -259,7 +259,7 @@ func TestKnownProviderNames_MergesRuntimeAdditions(t *testing.T) {
 		return []string{"openai", "zeta-remote", "alpha-remote"}
 	})
 
-	got := knownProviderNames()
+	got := KnownProviderNames()
 
 	if len(got) < len(staticProviderNames)+2 {
 		t.Fatalf("expected at least %d entries (static + 2 extras), got %d: %v",
@@ -310,7 +310,7 @@ func TestKnownProviderNames_NoLookupReturnsStatic(t *testing.T) {
 
 	SetProviderNamesLookup(nil)
 
-	got := knownProviderNames()
+	got := KnownProviderNames()
 	if len(got) != len(staticProviderNames) {
 		t.Fatalf("with no lookup, expected %d entries, got %d", len(staticProviderNames), len(got))
 	}
@@ -344,20 +344,20 @@ func TestGetProviderDisplayName_RemoteOnlyProvider(t *testing.T) {
 	})
 
 	// Remote-only provider gets its published display name.
-	if got := getProviderDisplayName("totally-new-provider"); got != "Totally New Provider" {
+	if got := GetProviderDisplayName("totally-new-provider"); got != "Totally New Provider" {
 		t.Errorf("remote-only: got %q, want %q", got, "Totally New Provider")
 	}
 
 	// Built-in provider still resolves via the static map (the runtime
 	// callback should never be consulted for an entry that's already
 	// in knownProviderDisplayNames).
-	if got := getProviderDisplayName("openai"); got != "OpenAI" {
+	if got := GetProviderDisplayName("openai"); got != "OpenAI" {
 		t.Errorf("built-in: got %q, want %q", got, "OpenAI")
 	}
 
 	// Provider unknown to both static map and runtime callback falls
 	// back to the raw id.
-	if got := getProviderDisplayName("never-heard-of-it"); got != "never-heard-of-it" {
+	if got := GetProviderDisplayName("never-heard-of-it"); got != "never-heard-of-it" {
 		t.Errorf("unknown: got %q, want raw id", got)
 	}
 }

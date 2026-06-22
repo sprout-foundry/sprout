@@ -79,9 +79,9 @@ func handleAnalyzeUIScreenshot(ctx context.Context, a *Agent, args map[string]in
 		effectiveImagePath = screenshotPath
 	}
 
-	result, err := tools.AnalyzeImage(effectiveImagePath, analysisPrompt, "frontend")
-	a.Logger().Debug("Analyze UI screenshot error: %v\n", err)
+	result, err := tools.AnalyzeImage(ctx, effectiveImagePath, analysisPrompt, "frontend")
 	if err != nil {
+		a.Logger().Debug("Analyze UI screenshot error: %v\n", err)
 		return result, fmt.Errorf("failed to analyze UI screenshot %s: %w", imagePath, err)
 	}
 	// Capture using the original path the user provided, not the temp screenshot
@@ -248,7 +248,7 @@ func handleAnalyzeImageContent(ctx context.Context, a *Agent, args map[string]in
 		effectiveImagePath = screenshotPath
 	}
 
-	result, err := tools.AnalyzeImage(effectiveImagePath, analysisPrompt, analysisMode)
+	result, err := tools.AnalyzeImage(ctx, effectiveImagePath, analysisPrompt, analysisMode)
 	a.Logger().Debug("Analyze image content error: %v\n", err)
 
 	// Check if model download is needed
@@ -272,7 +272,7 @@ func handleAnalyzeImageContent(ctx context.Context, a *Agent, args map[string]in
 		if choice == "yes" {
 			// The simplified PDF processing doesn't require model downloads
 			a.PrintLine(console.GlyphDim.Prefix() + "Processing PDF with simplified approach...")
-			result, err = tools.AnalyzeImage(imagePath, analysisPrompt, analysisMode)
+			result, err = tools.AnalyzeImage(ctx, imagePath, analysisPrompt, analysisMode)
 		}
 	}
 
@@ -614,7 +614,7 @@ func handleAnalyzePDFWithImages(ctx context.Context, a *Agent, path string, args
 	var cleanup func()
 
 	if strings.HasPrefix(strings.ToLower(path), "http://") || strings.HasPrefix(strings.ToLower(path), "https://") {
-		resolvedPath, resolvedCleanup, resolveErr := tools.ResolvePDFInputPath(path)
+		resolvedPath, resolvedCleanup, resolveErr := tools.ResolvePDFInputPath(ctx, path)
 		if resolveErr != nil || resolvedPath == "" {
 			a.Logger().Debug("[WARN] Failed to resolve remote PDF: %v\n", resolveErr)
 			// Fall back to text-only pipeline
@@ -632,7 +632,7 @@ func handleAnalyzePDFWithImages(ctx context.Context, a *Agent, path string, args
 		}
 	}
 
-	result, err := tools.ProcessPDFForMultimodal(effectivePath)
+	result, err := tools.ProcessPDFForMultimodal(ctx, effectivePath)
 
 	if cleanup != nil {
 		cleanup()

@@ -15,9 +15,13 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
-// redactedContentMarker matches agent.RedactedContentMarker - files outside workspace
-// have their content replaced with this marker to avoid leaking sensitive data.
-const redactedContentMarker = "[REDACTED - external file]"
+// RedactedContentMarker is the canonical marker used when file content is
+// redacted because the file is outside the workspace root (to avoid leaking
+// sensitive data). It is defined here, in the lower-level history package, so
+// both pkg/history and pkg/agent reference a single source of truth instead of
+// maintaining duplicate copies that can silently drift. pkg/agent references
+// this via history.RedactedContentMarker.
+const RedactedContentMarker = "[REDACTED - external file]"
 
 // RevisionGroup represents a group of changes that belong to the same revision
 type RevisionGroup struct {
@@ -453,14 +457,109 @@ func getActiveChanges(changes []ChangeLog) []ChangeLog {
 	return active
 }
 
+// isTmpPath reports whether the resolved path lives under the system temp
+// directory. macOS resolves /tmp to /private/tmp via a symlink, so both forms
+// are checked. This mirrors filesystem.isInTmpPath, which is not exported.
+func isTmpPath(path string) bool {
+	cleanPath := filepath.Clean(path)
+	if strings.HasPrefix(cleanPath, "/tmp/") || cleanPath == "/tmp" ||
+		strings.HasPrefix(cleanPath, "/private/tmp/") || cleanPath == "/private/tmp" {
+		return true
+	}
+	// Windows-style temp paths
+	lowerPath := strings.ToLower(cleanPath)
+	if strings.Contains(lowerPath, "\\temp\\") || strings.Contains(lowerPath, "\\tmp\\") {
+		return true
+	}
+	return false
+}
+
+// isWithinWorkspace reports whether the given filename resolves to a path
+// inside the current workspace root (determined from os.Getwd()). It is a
+// safety guard used by rollback/restore to prevent the history store from
+// silently overwriting files outside the project — e.g. committed files whose
+// old snapshots are still in the DB.
+//
+// The history package does not receive an explicit workspace root, so CWD is
+// the best available proxy, consistent with how SafeResolvePath in the
+// filesystem package falls back to CWD when no root is configured. /tmp paths
+// are always allowed (same exception as SafeResolvePath).
+//
+// Any error during path resolution causes this to return false (skip the
+// file) — failing closed is safer than writing to an unexpected location.
+func isWithinWorkspace(filename string) bool {
+	if filename == "" {
+		return false
+	}
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		return false
+	}
+	cwdAbs, err := filepath.Abs(cwd)
+	if err != nil {
+		return false
+	}
+
+	cleanPath := filepath.Clean(filename)
+	absPath := cleanPath
+	if !filepath.IsAbs(absPath) {
+		absPath = filepath.Join(cwdAbs, cleanPath)
+	}
+	absPath, err = filepath.Abs(absPath)
+	if err != nil {
+		return false
+	}
+
+	// /tmp is always allowed (same exception as SafeResolvePath).
+	if isTmpPath(absPath) {
+		return true
+	}
+
+	// Resolve symlinks on the file path. The file may not exist yet (rollback
+	// can restore a deleted file), so fall back to the parent directory if the
+	// file itself cannot be evaluated.
+	resolvedAbs, err := filepath.EvalSymlinks(absPath)
+	if err != nil {
+		// Try resolving the parent directory instead (file may not exist).
+		resolvedParent, parentErr := filepath.EvalSymlinks(filepath.Dir(absPath))
+		if parentErr != nil {
+			return false
+		}
+		resolvedAbs = filepath.Join(resolvedParent, filepath.Base(absPath))
+	}
+
+	resolvedCwd, err := filepath.EvalSymlinks(cwdAbs)
+	if err != nil {
+		return false
+	}
+
+	relPath, err := filepath.Rel(resolvedCwd, resolvedAbs)
+	if err != nil {
+		return false
+	}
+
+	// A relative path starting with ".." escapes the workspace root.
+	return !strings.HasPrefix(relPath, "..")
+}
+
 func handleRevisionRollback(group RevisionGroup) error {
 	fmt.Printf("Rolling back all changes in revision %s...\n", group.RevisionID)
 
 	activeChanges := getActiveChanges(group.Changes)
 	for _, change := range activeChanges {
 		// Skip files with redacted content (external files)
-		if change.OriginalCode == redactedContentMarker {
+		if change.OriginalCode == RedactedContentMarker {
 			fmt.Printf("  Skipping %s: content was redacted (external file)\n", change.Filename)
+			continue
+		}
+
+		// Safety check: never write to files outside the current workspace.
+		// The history DB may contain snapshots of files that were later moved
+		// or committed elsewhere; blindly restoring them would clobber
+		// intentional changes outside this project.
+		if !isWithinWorkspace(change.Filename) {
+			fmt.Printf("  Skipping %s: outside current workspace (safety check)\n", change.Filename)
 			continue
 		}
 
@@ -486,8 +585,15 @@ func handleRevisionRestore(group RevisionGroup) error {
 
 	for _, change := range group.Changes {
 		// Skip files with redacted content (external files)
-		if change.NewCode == redactedContentMarker {
+		if change.NewCode == RedactedContentMarker {
 			fmt.Printf("  Skipping %s: content was redacted (external file)\n", change.Filename)
+			continue
+		}
+
+		// Safety check: never write to files outside the current workspace.
+		// See handleRevisionRollback for rationale.
+		if !isWithinWorkspace(change.Filename) {
+			fmt.Printf("  Skipping %s: outside current workspace (safety check)\n", change.Filename)
 			continue
 		}
 

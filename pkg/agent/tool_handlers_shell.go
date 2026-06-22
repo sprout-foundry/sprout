@@ -1,14 +1,15 @@
-// Package agent provides the shell command handler with a two-gate security model.
+// Package agent provides the shell command handler with a unified security model.
 //
-// Gate 1 (Global Static Classifier): pkg/agent_tools/security_classifier.go:ClassifyToolCall()
-// Inspects tool name + arguments using string-based heuristics. Always runs regardless of persona.
-// Can block (ShouldBlock) or prompt (ShouldPrompt) for dangerous operations.
+// When UnifiedRiskResolver is ON (the default, set by config_migration.go),
+// a single ResolveToolRisk assessment gates every shell command. The unified
+// gate (unifiedSecurityGate in tool_security.go) runs once per tool call —
+// no Gate 1/Gate 2 bridge or suppression plumbing is needed.
 //
-// Gate 2 (Persona Risk Cascade): pkg/agent/agent_getters.go:EvaluateOperationRisk()
-// Evaluates commands against the active persona's auto_approve_rules. Returns Low/Medium/High.
-//
-// INVARIANT: Neither gate may suppress or bypass the other. Both evaluate independently.
-// The more restrictive result always wins.
+// When the flag is OFF (legacy fallback), the older dual-gate model applies:
+// Gate 1 (ClassifyToolCall static classifier) + Gate 2 (EvaluateOperationRisk
+// persona cascade). Note that the legacy path may double-prompt because the
+// suppression bridge was removed in SP-068 Phase 3; the unified resolver is
+// the recommended and default path.
 package agent
 
 import (
@@ -26,7 +27,6 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/factory"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 	"github.com/sprout-foundry/sprout/pkg/git"
-	"github.com/sprout-foundry/sprout/pkg/personas"
 	"github.com/sprout-foundry/sprout/pkg/security"
 )
 
@@ -111,6 +111,39 @@ func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface
 		return "", agenterrors.NewInvalidInputError("command parameter is required when check_background is not provided", nil)
 	}
 
+	// SP-068 Phase 2: when UnifiedRiskResolver is enabled, use the single
+	// ResolveToolRisk assessment instead of the individual gates below.
+	if cfg := a.GetConfig(); cfg != nil && cfg.UnifiedRiskResolver {
+		return a.handleShellCommandUnified(ctx, command, background)
+	}
+
+	// Shadow-mode logging: compare old dual-gate decision vs new unified
+	// assessment when the flag is off so we can validate parity before
+	// flipping the flag (SP-068 Phase 2).
+	if a.debug {
+		secResult := tools.ClassifyToolCall("shell_command", map[string]interface{}{"command": command})
+		unified := a.ResolveToolRisk("shell_command", map[string]interface{}{"command": command})
+
+		// Derive old decision from the static classifier (Gate 1) which is
+		// the actual first line of defense in the pre-execute hook
+		oldDecision := resolveOldDecision(secResult)
+
+		newDecision := "allow"
+		if unified.IsHardBlock || unified.Level == configuration.RiskLevelCritical {
+			newDecision = "block"
+		} else if unified.Level == configuration.RiskLevelHigh || unified.Level == configuration.RiskLevelMedium {
+			newDecision = "prompt"
+		}
+
+		match := "true"
+		if oldDecision != newDecision {
+			match = "false"
+		}
+
+		a.debugLog("[shadow-risk] shell_command: old=%s, new=%s, match=%s — %s\n", oldDecision, newDecision, match, unified.Explain())
+	}
+
+	// — Legacy dual-gate path (flag OFF) —
 	// Risk cascade for personas / risk profiles (SP-058).
 	// Resolution:
 	//   Critical → ALWAYS reject (rm -rf root, fork bomb). No persona,
@@ -134,37 +167,17 @@ func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface
 
 	// Block git commands that lose commit history unless the workspace
 	// has opted into the more-permissive `AllowGitHistoryRewrite` mode.
-	//
-	// What this gate now covers:
-	//   - `git reset --hard <commit-ish>` (backward ref move)
-	//   - `git rebase` (any form — rewrites commits)
-	//   - `git branch -d/-D/--delete`
-	//   - `git tag -d/--delete`
-	//
-	// What it deliberately DOESN'T cover anymore (used to be blocked
-	// unconditionally): `checkout`, `switch`, `restore`, `reset` without
-	// `--hard <commit-ish>`, `clean`, `rm`, `mv`, `stash pop/apply/drop`,
-	// `cherry-pick`, `revert`, `am`, `apply`. These mutate only the
-	// working tree, which the change tracker captures (shellIsDestructive
-	// → walkWorkspace destructive mode → recoverable bulk entries), so
-	// recover_file / recover_bulk are the recovery story instead of an
-	// up-front block.
 	if isGitHistoryRewriteCommand(command) {
 		if cfg := a.GetConfig(); cfg == nil || !cfg.AllowGitHistoryRewrite {
 			return "", agenterrors.NewSecurityError(fmt.Sprintf("git %s can lose commit history and is blocked by default. Use the git tool for explicit user approval, or set allow_git_history_rewrite=true in config to opt in (command: '%s')", extractGitSubcommand(command), command), nil)
 		}
 	}
 
-	// Block git write operations unless the active persona has CapabilityGitWrite
-	// (and, for the orchestrator persona, the AllowOrchestratorGitWrite config flag).
+	// Block git write operations unless the active persona has CapabilityGitWrite.
 	// Staging operations (git add) are always allowed per policy.
 	// Read-only operations (status, log, diff, etc.) are always allowed through shell_command.
 	if isGitWriteCommand(command) {
 		if !a.isGitWriteAllowed() {
-			persona := a.GetActivePersona()
-			if persona == personas.IDOrchestrator {
-				return "", agenterrors.NewSecurityError(fmt.Sprintf("git write operations are disabled for %s. Enable 'Allow orchestrator git write' in settings, or use the commit tool instead (operation: '%s')", persona, command), nil)
-			}
 			// For commit operations, redirect to the commit tool — this ensures
 			// commits go through the proper message generation code path regardless
 			// of whether the agent used shell_command or the commit tool.
@@ -249,9 +262,8 @@ func handleGitOperation(ctx context.Context, a *Agent, args map[string]interface
 
 	// Basic git ops (add/push/pull/fetch) skip the approval prompt for any
 	// persona with CapabilityGitWrite that has cleared isGitWriteAllowed
-	// (which gates the orchestrator behind the user's AllowOrchestratorGitWrite
-	// flag and lets capability-bearing personas like the coordinator through
-	// unconditionally). Other operations (reset, checkout, clean, rm, merge, etc.)
+	// (orchestrator, coordinator, or any custom persona declaring the
+	// capability). Other operations (reset, checkout, clean, rm, merge, etc.)
 	// always require user approval regardless of persona.
 	basicGitOps := operation == tools.GitOpAdd || operation == tools.GitOpPush || operation == tools.GitOpPull || operation == tools.GitOpFetch
 	allowWithoutApproval := basicGitOps && a.isGitWriteAllowed()
@@ -421,10 +433,8 @@ func handleCommitTool(_ context.Context, a *Agent, args map[string]interface{}) 
 		}
 	}
 
-	// Auto-approve commits when the persona has CapabilityGitWrite and the
-	// runtime gate is open (orchestrator needs AllowOrchestratorGitWrite; the
-	// coordinator clears unconditionally). Subagents also auto-approve because
-	// they have no interactive UI to prompt with.
+	// Auto-approve commits when the persona has CapabilityGitWrite.
+	// Subagents also auto-approve because they have no interactive UI to prompt with.
 	isSubagent := a.IsSubagent()
 	canGitWrite := a.isGitWriteAllowed()
 
@@ -503,4 +513,140 @@ func executeCommit(userMessage, notes string, configManager configManagerInterfa
 	executor.Dir = workDir
 
 	return executor.ExecuteCommit()
+}
+
+// handleShellCommandUnified is the single-risk-assessment path for shell
+// commands when the UnifiedRiskResolver flag is ON (SP-068 Phase 2).
+// It folds all security gates into one RiskAssessment via ResolveToolRisk
+// and acts on the result.
+func (a *Agent) handleShellCommandUnified(ctx context.Context, command string, background bool) (string, error) {
+	// Get the unified risk assessment
+	assessment := a.ResolveToolRisk("shell_command", map[string]interface{}{"command": command})
+
+	// Log the assessment for diagnostics
+	if a.debug {
+		a.debugLog("[risk] shell_command unified: %s\n", assessment.Explain())
+	}
+
+	// Hard-block / Critical: unconditional deny. This is defense-in-depth —
+	// Gate 1 (unifiedSecurityGate) already blocks Critical operations before
+	// this handler runs. The check is retained because the handler can be
+	// called directly in edge cases, and hard-blocks must always be enforced.
+	if assessment.IsHardBlock || assessment.Level == configuration.RiskLevelCritical {
+		return "", agenterrors.NewSecurityError(
+			fmt.Sprintf("critical operation blocked (cannot be approved by any profile or persona): '%s'", command), nil,
+		)
+	}
+
+	// High risk: Gate 1 (unifiedSecurityGate) already ran the
+	// highRiskApprovedForCommand check before this handler was invoked.
+	// Re-checking here is redundant — Gate 1's approval is authoritative for
+	// the unified path. Proceed directly to execution for all non-Critical
+	// levels (High/Medium/Low). SP-068 Phase 3 removed the redundant Gate 2.
+	if background {
+		return a.executeShellCommandBackground(ctx, command)
+	}
+	return a.executeShellCommandWithTruncation(ctx, command)
+}
+
+// handleCreatePullRequest handles the create_pull_request tool, creating a
+// pull request on GitHub via the git.CreatePullRequest backend. Gated as a
+// git-write operation — the persona must have CapabilityGitWrite (or the
+// user must approve interactively).
+func handleCreatePullRequest(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
+	// Extract required title parameter
+	title, err := convertToString(args["title"], "title")
+	if err != nil {
+		return "", agenterrors.NewInvalidInputError("failed to convert title parameter", err)
+	}
+	if title == "" {
+		return "", agenterrors.NewInvalidInputError("title parameter is required and must not be empty", nil)
+	}
+
+	// Extract optional body parameter
+	var body string
+	if b, exists := args["body"]; exists {
+		body, err = convertToString(b, "body")
+		if err != nil {
+			return "", agenterrors.NewInvalidInputError("failed to convert body parameter", err)
+		}
+	}
+
+	// Extract optional base parameter
+	var base string
+	if ba, exists := args["base"]; exists {
+		base, err = convertToString(ba, "base")
+		if err != nil {
+			return "", agenterrors.NewInvalidInputError("failed to convert base parameter", err)
+		}
+	}
+
+	// Extract optional head parameter
+	var head string
+	if h, exists := args["head"]; exists {
+		head, err = convertToString(h, "head")
+		if err != nil {
+			return "", agenterrors.NewInvalidInputError("failed to convert head parameter", err)
+		}
+	}
+
+	// Extract optional draft parameter
+	var draft bool
+	if d, exists := args["draft"]; exists {
+		if dBool, ok := d.(bool); ok {
+			draft = dBool
+		}
+	}
+
+	// Extract optional repo_dir parameter
+	var repoDir string
+	if rd, exists := args["repo_dir"]; exists {
+		repoDir, err = convertToString(rd, "repo_dir")
+		if err != nil {
+			return "", agenterrors.NewInvalidInputError("failed to convert repo_dir parameter", err)
+		}
+	}
+
+	// Default repoDir to the agent's workspace root
+	if repoDir == "" {
+		repoDir = a.effectiveCwd()
+	}
+
+	// Git-write gate: mirror the handleCommitTool approval pattern.
+	isSubagent := a.IsSubagent()
+	canGitWrite := a.isGitWriteAllowed()
+
+	if !canGitWrite && !isSubagent {
+		// Prompt user for approval before creating PR
+		choices := []ChoiceOption{
+			{Label: "Approve", Value: "approve"},
+			{Label: "Deny", Value: "deny"},
+		}
+
+		choice, err := a.PromptChoice("Allow agent to create a pull request?", choices)
+		if err != nil {
+			if errors.Is(err, ErrUINotAvailable) {
+				// Fall back to allowing when UI is not available,
+				// since this tool is designed for autonomous agents and was explicitly called
+			} else {
+				return "", agenterrors.NewTransientError("approval prompt failed", err)
+			}
+		} else if choice != "approve" {
+			return "Pull request creation cancelled by user.", nil
+		}
+	}
+
+	// Call the backend
+	result, err := git.CreatePullRequest(ctx, repoDir, git.PullRequestRequest{
+		Title: title,
+		Body:  body,
+		Base:  base,
+		Head:  head,
+		Draft: draft,
+	})
+	if err != nil {
+		return "", agenterrors.NewTransientError("failed to create pull request", err)
+	}
+
+	return fmt.Sprintf("Pull request created successfully!\n\nURL: %s\nNumber: #%d\nState: %s", result.URL, result.Number, result.State), nil
 }

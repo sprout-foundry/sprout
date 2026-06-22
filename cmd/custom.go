@@ -22,19 +22,16 @@ var customModelCmd = &cobra.Command{
 	Long: `Manage custom OpenAI-compatible providers backed by ~/.config/sprout/providers/*.json.
 Each custom provider stores an endpoint URL and optional API-key environment variable,
 and sprout discovers available models from the provider's /v1/models endpoint.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		_ = cmd.Help()
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return cmd.Help()
 	},
 }
 
 var customModelAddCmd = &cobra.Command{
 	Use:   "add",
 	Short: "Add a custom provider",
-	Run: func(cmd *cobra.Command, args []string) {
-		if err := runCustomModelAdd(); err != nil {
-			fmt.Fprintf(os.Stderr, "Error adding custom provider: %v\n", err)
-			os.Exit(1)
-		}
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runCustomModelAdd()
 	},
 }
 
@@ -42,26 +39,20 @@ var customModelRemoveCmd = &cobra.Command{
 	Use:   "remove [provider-name]",
 	Short: "Remove a custom provider",
 	Args:  cobra.MaximumNArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		name := ""
 		if len(args) > 0 {
 			name = args[0]
 		}
-		if err := runCustomModelRemove(name); err != nil {
-			fmt.Fprintf(os.Stderr, "Error removing custom provider: %v\n", err)
-			os.Exit(1)
-		}
+		return runCustomModelRemove(name)
 	},
 }
 
 var customModelListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List custom providers",
-	Run: func(cmd *cobra.Command, args []string) {
-		if err := runCustomModelList(); err != nil {
-			fmt.Fprintf(os.Stderr, "Error listing custom providers: %v\n", err)
-			os.Exit(1)
-		}
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runCustomModelList()
 	},
 }
 

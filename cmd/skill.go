@@ -37,53 +37,47 @@ This will create a SKILL.md file with the correct structure that you can edit.
 Example:
   sprout skill add myproject-conventions`,
 	Args: cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		skillID := args[0]
-		
+
 		// Validate skill ID
 		if strings.Contains(skillID, " ") {
-			fmt.Fprintf(os.Stderr, "Error: skill ID cannot contain spaces\n")
-			os.Exit(1)
+			return fmt.Errorf("skill ID cannot contain spaces")
 		}
 		if strings.Contains(skillID, "/") || strings.Contains(skillID, "\\") {
-			fmt.Fprintf(os.Stderr, "Error: skill ID cannot contain path separators\n")
-			os.Exit(1)
+			return fmt.Errorf("skill ID cannot contain path separators")
 		}
-		
+
 		// Get current working directory
 		cwd, err := os.Getwd()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: failed to get current directory: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("failed to get current directory: %w", err)
 		}
-		
+
 		// Create .sprout/skills directory
 		skillsDir := filepath.Join(cwd, ".sprout", "skills")
 		if err := os.MkdirAll(skillsDir, 0755); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: failed to create skills directory: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("failed to create skills directory: %w", err)
 		}
-		
+
 		// Create skill directory
 		skillDir := filepath.Join(skillsDir, skillID)
 		skillFile := filepath.Join(skillDir, "SKILL.md")
-		
+
 		// Check if skill already exists
 		if _, err := os.Stat(skillFile); err == nil {
-			fmt.Fprintf(os.Stderr, "Error: skill '%s' already exists at %s\n", skillID, skillFile)
-			os.Exit(1)
+			return fmt.Errorf("skill '%s' already exists at %s", skillID, skillFile)
 		}
-		
+
 		// Create skill directory
 		if err := os.MkdirAll(skillDir, 0755); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: failed to create skill directory: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("failed to create skill directory: %w", err)
 		}
-		
+
 		// Generate skill content
 		skillName := strings.ReplaceAll(skillID, "-", " ")
 		skillName = cases.Title(language.English).String(skillName)
-		
+
 		content := fmt.Sprintf(`---
 name: %s
 description: Project-specific conventions for %s. Update this description.
@@ -109,16 +103,16 @@ description: Project-specific conventions for %s. Update this description.
 
 <!-- Brief code examples showing the patterns -->
 `, skillID, skillName, skillName)
-		
+
 		// Write skill file
 		if err := os.WriteFile(skillFile, []byte(content), 0644); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: failed to create skill file: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("failed to create skill file: %w", err)
 		}
-		
+
 		console.GlyphSuccess.Printf("Created skill '%s' at %s", skillID, skillFile)
 		fmt.Printf("\nEdit the file to add your project-specific conventions.\n")
 		fmt.Printf("The skill will be automatically discovered when running sprout in this project.\n")
+		return nil
 	},
 }
 
@@ -126,11 +120,10 @@ var skillListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List available skills",
 	Long:  `List all available skills including built-in, user-level, and project-specific skills.`,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		cwd, err := os.Getwd()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: failed to get current directory: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("failed to get current directory: %w", err)
 		}
 
 		fmt.Println("## Built-in Skills")
@@ -158,6 +151,7 @@ var skillListCmd = &cobra.Command{
 
 		fmt.Println()
 		fmt.Println("Use 'activate_skill <skill-id>' in an agent session to load a skill.")
+		return nil
 	},
 }
 

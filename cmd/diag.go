@@ -21,8 +21,9 @@ var diagCmd = &cobra.Command{
 	Use:   "diag",
 	Short: "Show diagnostic information about configuration",
 	Long:  `Display which config files exist and where custom providers are stored.`,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		runDiag()
+		return nil
 	},
 }
 

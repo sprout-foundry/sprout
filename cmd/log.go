@@ -21,14 +21,12 @@ var logCmd = &cobra.Command{
 	Short: "Print revision history or verbose log",
 	Long: `Displays a log of all changes made by sprout, allowing you to review, revert, or restore them.
 	Use the --raw-log flag to view the verbose internal log file.`,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		if rawLog {
 			displayVerboseLog()
-		} else {
-			if err := history.PrintRevisionHistory(); err != nil {
-				log.Fatalf("Failed to print revision history: %v", err)
-			}
+			return nil
 		}
+		return history.PrintRevisionHistory()
 	},
 }
 

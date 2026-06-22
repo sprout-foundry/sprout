@@ -25,7 +25,7 @@ var commitCmd = &cobra.Command{
 	Short: "Generate a commit message and complete a git commit for staged changes",
 	Long: `This command generates a conventional git commit message based on your staged changes
 and then allows you to confirm, edit, or retry the commit before finalizing it.`,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		logger := utils.GetLogger(commitSkipPrompt)
 
 		_, err := configuration.LoadOrInitConfig(commitSkipPrompt)
@@ -64,7 +64,9 @@ and then allows you to confirm, edit, or retry the commit before finalizing it.`
 		err = commitCmd.Execute(cmdArgs, chatAgent)
 		if err != nil {
 			logger.LogError(fmt.Errorf("commit failed: %w", err))
+			return err
 		}
+		return nil
 	},
 }
 

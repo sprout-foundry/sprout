@@ -18,8 +18,8 @@ var lspCmd = &cobra.Command{
 	Long: `Manage language server configurations that provide IDE-like features
 such as code completion, diagnostics, and go-to-definition.
 Use subcommands to list, install, or check the status of language servers.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		cmd.Help()
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return cmd.Help()
 	},
 }
 
@@ -27,11 +27,8 @@ var lspListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List configured language servers and their install status",
 	Long:  `Display all supported language servers and whether their binary is installed on your system.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		if err := runLSPList(); err != nil {
-			fmt.Fprintf(os.Stderr, "Error listing language servers: %v\n", err)
-			os.Exit(1)
-		}
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runLSPList()
 	},
 }
 
@@ -40,11 +37,8 @@ var lspInstallCmd = &cobra.Command{
 	Short: "Show installation instructions for a language server",
 	Long:  `Look up and display the installation instructions for the language server that handles the given language.`,
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
-		if err := runLSPInstall(args[0]); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runLSPInstall(args[0])
 	},
 }
 
@@ -53,11 +47,8 @@ var lspStatusCmd = &cobra.Command{
 	Short: "Show detailed status of language servers",
 	Long: `Show detailed status information for each language server including
 binary path, arguments, and install status.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		if err := runLSPStatus(); err != nil {
-			fmt.Fprintf(os.Stderr, "Error checking language server status: %v\n", err)
-			os.Exit(1)
-		}
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runLSPStatus()
 	},
 }
 

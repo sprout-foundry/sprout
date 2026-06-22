@@ -89,6 +89,7 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 		todoMgr:             tools.NewTodoManager(),
 		subagentDepth:       params.subagentDepth,
 		rootPersonaID:       params.rootPersonaID,
+		shellCwd:            &shellCwdTracker{},
 	}
 
 	// Set up output router

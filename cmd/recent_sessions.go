@@ -29,6 +29,12 @@ const maxRecentSessionsShown = 3
 // corresponding session is loaded into chatAgent (state + session ID)
 // and the user proceeds in that session. SP-048-5a.
 //
+// Returns the text of the key the user pressed to dismiss the picker
+// (when DismissOnAnyKey fires). The caller forwards it into the REPL
+// input buffer so the first typed character isn't swallowed. Empty
+// when no session was offered, a session was picked, or the picker
+// was dismissed via Enter/Esc/Ctrl+C.
+//
 // Behavior:
 //   - Empty result: silent, no prompt, no state change.
 //   - Non-TTY stdin (piped input): list is still printed for visibility,
@@ -42,27 +48,27 @@ const maxRecentSessionsShown = 3
 //
 // Up/down arrows are NOT used for selection — those stay reserved for
 // command history. Selection is by number, intentionally simple.
-func maybeOfferSessionResume(chatAgent *agent.Agent) {
+func maybeOfferSessionResume(chatAgent *agent.Agent) string {
 	// If the user explicitly chose a session via flag, the picker is
 	// redundant — and worse, picking a different number would stomp
 	// the state we just loaded. Same applies when the agent already
 	// has a conversation loaded (covers the workflow restore path
 	// where state arrives via Orchestration.ConversationSessionID).
 	if strings.TrimSpace(agentSessionID) != "" || agentLastSession {
-		return
+		return ""
 	}
 	if chatAgent != nil && len(chatAgent.GetMessages()) > 0 {
-		return
+		return ""
 	}
 
 	cwd, err := os.Getwd()
 	if err != nil {
-		return
+		return ""
 	}
 
 	sessions, err := agent.ListSessionsWithTimestampsScoped(cwd)
 	if err != nil || len(sessions) == 0 {
-		return
+		return ""
 	}
 
 	cutoff := time.Now().Add(-recentSessionsWindow)
@@ -83,7 +89,7 @@ func maybeOfferSessionResume(chatAgent *agent.Agent) {
 		recent = append(recent, s)
 	}
 	if len(recent) == 0 {
-		return
+		return ""
 	}
 
 	// Already sorted by LastUpdated descending from
@@ -110,7 +116,7 @@ func maybeOfferSessionResume(chatAgent *agent.Agent) {
 			)
 		}
 		fmt.Fprintln(os.Stderr)
-		return
+		return ""
 	}
 
 	items := make([]console.SelectItem, 0, len(recent))
@@ -134,7 +140,11 @@ func maybeOfferSessionResume(chatAgent *agent.Agent) {
 	})
 	chosenID, ok, _ := picker.Run(context.Background())
 	if !ok || chosenID == "" {
-		return
+		// Picker dismissed without a selection (Esc, Ctrl+C, or a
+		// printable "start fresh" key). Forward any captured dismiss
+		// key so the REPL can pre-fill it into the input buffer and
+		// the keystroke isn't lost.
+		return picker.DismissKey()
 	}
 
 	var chosen agent.SessionInfo
@@ -145,12 +155,12 @@ func maybeOfferSessionResume(chatAgent *agent.Agent) {
 		}
 	}
 	if chosen.SessionID == "" {
-		return
+		return ""
 	}
 	state, err := chatAgent.LoadStateScoped(chosen.SessionID, cwd)
 	if err != nil {
 		console.GlyphError.Fprintf(os.Stderr, "  could not load session %s: %v", chosen.SessionID, err)
-		return
+		return ""
 	}
 	chatAgent.ApplyState(state)
 	chatAgent.SetSessionID(state.SessionID)
@@ -160,6 +170,7 @@ func maybeOfferSessionResume(chatAgent *agent.Agent) {
 		label = chosen.SessionID
 	}
 	console.GlyphSuccess.Fprintf(os.Stderr, "Resumed: %s", truncateLabel(label, 64))
+	return ""
 }
 
 // humanizeAge renders a duration as a short, friendly relative time

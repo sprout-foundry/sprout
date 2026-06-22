@@ -164,6 +164,10 @@ func TestSelectList_DismissOnAnyKey_PrintableChar(t *testing.T) {
 	if ok {
 		t.Fatalf("expected ok=false on dismiss")
 	}
+	// The dismissed key should be captured so callers can forward it.
+	if got := s.DismissKey(); got != "h" {
+		t.Fatalf("DismissKey()=%q want \"h\"", got)
+	}
 }
 
 func TestSelectList_DismissOnAnyKey_UTF8LeadByte(t *testing.T) {
@@ -174,9 +178,11 @@ func TestSelectList_DismissOnAnyKey_UTF8LeadByte(t *testing.T) {
 		DismissOnAnyKey: true,
 		Searchable:      false,
 	})
+	// 'á' is U+00E1, encoded as 0xC3 0xA1 in UTF-8.
 	var buf [8]byte
-	buf[0] = 0xC3 // UTF-8 lead byte (e.g. á)
-	done, val, ok := s.processKey(0xC3, 1, buf[:])
+	buf[0] = 0xC3
+	buf[1] = 0xA1
+	done, val, ok := s.processKey(0xC3, 2, buf[:])
 	if !done {
 		t.Fatalf("expected done=true on UTF-8 lead byte with DismissOnAnyKey")
 	}
@@ -185,6 +191,9 @@ func TestSelectList_DismissOnAnyKey_UTF8LeadByte(t *testing.T) {
 	}
 	if ok {
 		t.Fatalf("expected ok=false on dismiss")
+	}
+	if got := s.DismissKey(); got != "á" {
+		t.Fatalf("DismissKey()=%q want \"á\"", got)
 	}
 }
 
@@ -275,5 +284,57 @@ func TestSelectList_DismissOff_PrintableNoOp(t *testing.T) {
 	done, _, _ := s.processKey('q', 1, buf[:])
 	if done {
 		t.Fatal("expected done=false (printable char should be ignored without DismissOnAnyKey)")
+	}
+}
+
+// DismissKey must stay empty when the picker exits via Enter (confirm)
+// or Esc (cancel) — those aren't "start fresh by typing" gestures.
+func TestSelectList_DismissKey_EmptyOnEnterAndCancel(t *testing.T) {
+	s := NewSelectList(SelectListOptions{
+		Items: []SelectItem{
+			{Label: "alpha", Value: "A"},
+			{Label: "bravo", Value: "B"},
+		},
+		DismissOnAnyKey: true,
+	})
+	// Enter → confirm, no dismiss key.
+	var buf [8]byte
+	buf[0] = 0x0D
+	done, val, ok := s.processKey(0x0D, 1, buf[:])
+	if !done || !ok || val != "A" {
+		t.Fatalf("Enter should confirm A, got val=%q ok=%v done=%v", val, ok, done)
+	}
+	if got := s.DismissKey(); got != "" {
+		t.Fatalf("DismissKey()=%q want \"\" after Enter", got)
+	}
+
+	// Ctrl+C → cancel, no dismiss key.
+	buf[0] = 0x03
+	done, _, ok = s.processKey(0x03, 1, buf[:])
+	if !done || ok {
+		t.Fatalf("Ctrl+C should cancel, got done=%v ok=%v", done, ok)
+	}
+	if got := s.DismissKey(); got != "" {
+		t.Fatalf("DismissKey()=%q want \"\" after Ctrl+C", got)
+	}
+}
+
+// Backspace/DEL must dismiss but NOT be recorded — forwarding a
+// backspace into the REPL input buffer would delete a phantom char.
+func TestSelectList_DismissKey_BackspaceNotRecorded(t *testing.T) {
+	s := NewSelectList(SelectListOptions{
+		Items: []SelectItem{
+			{Label: "alpha", Value: "A"},
+		},
+		DismissOnAnyKey: true,
+	})
+	var buf [8]byte
+	buf[0] = 0x7F // DEL
+	done, _, _ := s.processKey(0x7F, 1, buf[:])
+	if !done {
+		t.Fatal("expected done=true on DEL with DismissOnAnyKey")
+	}
+	if got := s.DismissKey(); got != "" {
+		t.Fatalf("DismissKey()=%q want \"\" (backspace should not be forwarded)", got)
 	}
 }

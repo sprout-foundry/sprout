@@ -74,7 +74,6 @@ type InputReader struct {
 	pasteTimer       *time.Timer
 	pasteActive      bool
 	lastCharTime     time.Time
-	inPasteMode      bool
 	bracketedPaste   bool
 	bracketedMatch   int
 	bracketedSawCR   bool
@@ -138,9 +137,6 @@ type pasteSpan struct {
 }
 
 const (
-	// Heuristic paste detection should be conservative to avoid misclassifying
-	// normal typing over high-latency links as paste bursts.
-	minHeuristicPasteBytes = 12
 	bracketedPasteEnable   = "\033[?2004h"
 	bracketedPasteDisable  = "\033[?2004l"
 	bracketedPasteEndSeq   = "\x1b[201~"
@@ -154,13 +150,10 @@ const (
 	modifyOtherKeysEnable  = "\033[>4;1m"
 	modifyOtherKeysDisable = "\033[>4;0m"
 
-	// Paste-detection timing thresholds. All times are tuned empirically:
-	// heuristic paste bursts arrive much faster than human typing.
-	pasteFinalizeTimeout = 100 * time.Millisecond // idle gap that ends a heuristic paste
-	pasteBurstMinGap     = 30 * time.Millisecond  // max inter-byte gap for a short burst to count as paste
-	pasteBurstMinBytes   = 20                     // short bursts (<this many bytes) must arrive rapidly
-	pastePollInterval    = 10 * time.Millisecond  // idle spin sleep in non-blocking read loop
-	suspendDrainDelay    = 50 * time.Millisecond  // wait for in-flight bytes after SIGCONT
+	// pastePollInterval is the idle spin sleep in the non-blocking
+	// read loop; tuned empirically to keep typing responsive.
+	pastePollInterval = 10 * time.Millisecond
+	suspendDrainDelay = 50 * time.Millisecond // wait for in-flight bytes after SIGCONT
 
 	// maxHistoryEntries caps the in-memory prompt history. Older entries
 	// are dropped FIFO once the cap is exceeded.
@@ -233,7 +226,6 @@ func (ir *InputReader) ReadLine() (string, error) {
 	ir.currentPhysicalLine = 0
 	ir.pasteBuffer.Reset()
 	ir.pasteActive = false
-	ir.inPasteMode = false
 	ir.bracketedPaste = false
 	ir.bracketedMatch = 0
 	ir.bracketedSawCR = false
@@ -325,9 +317,6 @@ func (ir *InputReader) ReadLine() (string, error) {
 				ir.lastCharTime = now
 				continue
 			}
-
-			// Detect paste: rapid character input
-			timeSinceLastChar := now.Sub(ir.lastCharTime)
 
 			// Handle Ctrl+C and Ctrl+Z directly before parsing
 			if b == 3 { // Ctrl+C
@@ -429,57 +418,6 @@ func (ir *InputReader) ReadLine() (string, error) {
 				}
 			}
 
-			// Check for escape sequences BEFORE paste detection
-			// Arrow keys send escape sequences which look like rapid input
-			isEscapeSeq := (b == 27) || (parser.state > 0)
-
-			// Start paste mode only when input looks strongly like a paste burst.
-			// This avoids false positives on remote/high-latency links where
-			// regular keypresses may be delivered in small batches.
-			if !ir.inPasteMode && !isEscapeSeq && i == 0 && shouldStartHeuristicPaste(buf[:n], timeSinceLastChar) {
-				ir.inPasteMode = true
-				ir.pasteActive = true
-				ir.pasteBuffer.Reset()
-				ir.pasteBuffer.WriteByte(b)
-				ir.lastCharTime = now
-				continue
-			}
-
-			// Collect paste content
-			if ir.inPasteMode {
-				// Exit paste mode for control characters that indicate user intent
-				if b == 27 || b == 8 || b == 127 { // ESC, Backspace, Delete
-					ir.inPasteMode = false
-					ir.pasteActive = false
-					// For ESC, let escape parser handle it
-					// For Backspace/Delete, handle them normally
-					if b != 27 {
-						continue
-					}
-				} else if timeSinceLastChar > pasteFinalizeTimeout || (b == 13 && ir.pasteBuffer.Len() > 0) {
-					// Check if paste is ending (slow input or Enter at end)
-					// Finalize paste on Enter or timeout
-					if b != 13 {
-						ir.pasteBuffer.WriteByte(b)
-					}
-					if ir.finalizePaste() {
-						// Continue after paste
-						continue
-					}
-				} else {
-					// Convert \r to \n for proper multiline handling
-					if b == 13 {
-						ir.pasteBuffer.WriteRune('\n')
-					} else if b >= 32 {
-						ir.pasteBuffer.WriteByte(b)
-					} else if b == 9 { // Tab
-						ir.pasteBuffer.WriteByte('\t')
-					}
-					ir.lastCharTime = now
-					continue
-				}
-			}
-
 			ir.lastCharTime = now
 
 			// Parse the byte through the escape parser
@@ -489,7 +427,6 @@ func (ir *InputReader) ReadLine() (string, error) {
 					ir.bracketedPaste = true
 					ir.bracketedMatch = 0
 					ir.bracketedSawCR = false
-					ir.inPasteMode = true
 					ir.pasteActive = true
 					ir.pasteBuffer.Reset()
 					ir.rawPasteBuffer = nil
@@ -657,14 +594,6 @@ func (ir *InputReader) handleReadError(err error, nonBlocking bool, resizeCh cha
 	if nonBlocking && isNoData {
 		if ir.processPendingResize(resizeCh, parser) {
 			return true, nil
-		}
-		// Check if paste timer should fire
-		if ir.pasteActive && time.Since(ir.lastCharTime) > pasteFinalizeTimeout {
-			// Paste detected - process it
-			if ir.finalizePaste() {
-				// Paste was finalized, continue reading
-				return true, nil
-			}
 		}
 		time.Sleep(pastePollInterval)
 		return true, nil

@@ -228,15 +228,6 @@ type Agent struct {
 	// Stored as a value-backed pointer so tests can swap it freely.
 	auditLogger *tools.AuditLogger
 
-	// securityLLMClassifier is the lazily-initialized LLM-based command risk
-	// classifier (SP-076). Nil until GetSecurityLLMClassifier() is first
-	// called; a failed init caches nil so we don't retry on every prompt.
-	// Protected by securityLLMClassifierMu. securityLLMClassifierInitDone
-	// distinguishes "haven't tried yet" (false) from "tried, got nil" (true).
-	securityLLMClassifier         *SecurityLLMClassifier
-	securityLLMClassifierMu       sync.Mutex
-	securityLLMClassifierInitDone bool
-
 	// Security telemetry counters (Task 3) — track post-caution LLM behavior.
 	// Incremented atomically because seed may execute SafeForParallel tools
 	// concurrently, each running the pre-execute hook. Exposed via getters

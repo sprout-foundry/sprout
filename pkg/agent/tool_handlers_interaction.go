@@ -48,9 +48,16 @@ func handleAskUser(ctx context.Context, a *Agent, args map[string]interface{}) (
 	var response string
 	if hasActiveWebUI {
 		response, err = tools.AskUserWithEventBus(ctx, req, eventBus, clientID, userID, chatID, askUserMgr)
+	} else if a.isNonInteractive() {
+		// No active browser tab AND no interactive terminal (daemon mode,
+		// --skip-prompt, piped stdin). Short-circuit before calling AskUser
+		// so we return the structured ErrAskUserNoChannel immediately rather
+		// than relying on a separate TTY check deep in the tool layer.
+		err = tools.ErrAskUserNoChannel
 	} else {
-		// No active browser tab → CLI fallback. Returns ErrAskUserNoChannel
-		// when stdin is not a TTY (daemon mode, closed stdin, piped).
+		// CLI fallback: terminal is interactive. AskUser does its own
+		// stdinIsTTY check (now consistent with isNonInteractive) and
+		// returns ErrAskUserNoChannel if stdin is somehow unavailable.
 		response, err = tools.AskUser(req)
 	}
 	if err != nil {

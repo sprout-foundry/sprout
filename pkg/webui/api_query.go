@@ -250,22 +250,44 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 		workspaceRoot = ws.getWorkspaceRootForRequest(r)
 	}
 
-	ws.mutex.RLock()
+	ws.mutex.Lock()
 	ctx := ws.clientContexts[clientID]
 	if ctx == nil {
-		ws.mutex.RUnlock()
+		ws.mutex.Unlock()
 		http.Error(w, "Client context not found", http.StatusBadRequest)
 		return
 	}
 	if ctx.hasActiveQueryForChat(chatID) {
-		ws.mutex.RUnlock()
+		ws.mutex.Unlock()
 		http.Error(w, "A query is already running for this chat", http.StatusConflict)
 		return
 	}
-	ws.mutex.RUnlock()
+	// Atomically mark the query as active while still holding the lock so
+	// a concurrent request for the same chat cannot also pass the check.
+	// The previous implementation released the lock between the check and
+	// the set, creating a TOCTOU race where two requests could both enter
+	// the query goroutine and corrupt the same agent's state.
+	ws.queryCount++
+	ws.activeQueries++
+	ctx.setChatQueryActive(chatID, true, query.Query)
+	ws.mutex.Unlock()
 
+	// Resolve the agent AFTER the active-query lock is released. Creating
+	// an agent may block (config load, provider init), and holding ws.mutex
+	// during that would serialize all incoming queries across all chats.
 	clientAgent, err := ws.getChatAgent(clientID, chatID)
 	if err != nil {
+		// Roll back the active-query state we set above — the query never runs.
+		ws.mutex.Lock()
+		if ws.activeQueries > 0 {
+			ws.activeQueries--
+		}
+		ctx := ws.clientContexts[clientID]
+		if ctx != nil {
+			ctx.setChatQueryActive(chatID, false, "")
+		}
+		ws.mutex.Unlock()
+
 		if isProviderConfigError(err) {
 			writeJSONErr(w, http.StatusServiceUnavailable, "no_provider", "AI features require a provider. Please configure one in settings.")
 		} else {
@@ -274,25 +296,59 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Apply per-query overrides: provider, model
+	// Apply per-query overrides: provider, model.
+	// On failure, return an error to the client instead of silently
+	// proceeding with the wrong provider/model — the user's query would
+	// run against an unexpected model with no indication.
 	if query.Provider != "" {
 		cm := ws.getConfigManager(r, w)
 		if cm != nil {
 			// Enrich custom providers from disk before mapping — the config
 			// manager may not have them loaded if it was created via fallback.
 			cm.EnrichCustomProviders()
-			if providerType, err := cm.MapStringToClientType(query.Provider); err == nil {
-				if serr := clientAgent.SetProvider(providerType); serr != nil {
-					log.Printf("handleAPIQuery: failed to set provider %q: %v", query.Provider, serr)
+			providerType, mapErr := cm.MapStringToClientType(query.Provider)
+			if mapErr != nil {
+				// Roll back active-query state and return error.
+				ws.mutex.Lock()
+				if ws.activeQueries > 0 {
+					ws.activeQueries--
 				}
-			} else {
-				log.Printf("handleAPIQuery: invalid provider %q: %v", query.Provider, err)
+				if ctx := ws.clientContexts[clientID]; ctx != nil {
+					ctx.setChatQueryActive(chatID, false, "")
+				}
+				ws.mutex.Unlock()
+				writeJSONErr(w, http.StatusBadRequest, "invalid_provider",
+					fmt.Sprintf("Invalid provider %q: %v", query.Provider, mapErr))
+				return
+			}
+			if serr := clientAgent.SetProvider(providerType); serr != nil {
+				ws.mutex.Lock()
+				if ws.activeQueries > 0 {
+					ws.activeQueries--
+				}
+				if ctx := ws.clientContexts[clientID]; ctx != nil {
+					ctx.setChatQueryActive(chatID, false, "")
+				}
+				ws.mutex.Unlock()
+				writeJSONErr(w, http.StatusBadRequest, "provider_switch_failed",
+					fmt.Sprintf("Failed to switch to provider %q: %v", query.Provider, serr))
+				return
 			}
 		}
 	}
 	if query.Model != "" {
 		if err := clientAgent.SetModel(query.Model); err != nil {
-			log.Printf("handleAPIQuery: failed to set model %q: %v", query.Model, err)
+			ws.mutex.Lock()
+			if ws.activeQueries > 0 {
+				ws.activeQueries--
+			}
+			if ctx := ws.clientContexts[clientID]; ctx != nil {
+				ctx.setChatQueryActive(chatID, false, "")
+			}
+			ws.mutex.Unlock()
+			writeJSONErr(w, http.StatusBadRequest, "model_switch_failed",
+				fmt.Sprintf("Failed to switch to model %q: %v", query.Model, err))
+			return
 		}
 	}
 
@@ -305,16 +361,6 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 	if query.SystemPrompt != "" {
 		clientAgent.SetSystemPrompt(query.SystemPrompt)
 	}
-
-	// Store CurrentQuery atomically with ActiveQuery so that stats responses
-	// include it on reconnect without a TOCTOU window.
-	ws.mutex.Lock()
-	ws.queryCount++
-	ws.activeQueries++
-	if ctx := ws.clientContexts[clientID]; ctx != nil {
-		ctx.setChatQueryActive(chatID, true, query.Query)
-	}
-	ws.mutex.Unlock()
 
 	// Run the query asynchronously. The web UI consumes progress and completion via WebSocket.
 	go func() {

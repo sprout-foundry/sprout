@@ -27,7 +27,7 @@ const (
 	maxPDFOCRPages  = 8
 )
 
-// ProcessPDFWithVision processes a PDF file using Ollama with glm-ocr model
+// ProcessPDFWithVision processes a PDF file using the configured vision/OCR model
 func ProcessPDFWithVision(ctx context.Context, pdfPath string) (string, error) {
 	resolvedPath, cleanup, err := ResolvePDFInputPath(ctx, pdfPath)
 	if err != nil {
@@ -419,7 +419,7 @@ except Exception as e:
 	return decodeBase64ImagePayload(output), nil
 }
 
-// processPDFWithVisionModel sends PDF directly to glm-ocr model for OCR
+// processPDFWithVisionModel sends PDF directly to the vision/OCR model
 // This is cross-platform and doesn't require poppler or tesseract
 func processPDFWithVisionModel(ctx context.Context, pdfPath string, client api.ClientInterface) (string, error) {
 	// Read PDF file
@@ -437,7 +437,7 @@ func processPDFWithVisionModel(ctx context.Context, pdfPath string, client api.C
 	// Create prompt for OCR
 	prompt := GetPDFOCRPrompt()
 
-	// Create message with PDF - glm-ocr supports PDF natively
+	// Create message with PDF — the vision/OCR model supports PDF natively
 	messages := []api.Message{
 		{
 			Role:    "user",

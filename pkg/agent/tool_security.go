@@ -12,6 +12,7 @@ import (
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/clihooks"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
@@ -141,7 +142,20 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 				// belong to the terminal that launched the server — the user is
 				// interacting via the browser, not the terminal.
 				if mgr := agent.GetSecurityApprovalMgr(); mgr != nil && agent.GetEventBus() != nil && !isSubagent && agent.HasActiveWebUIClients() {
-					// WEBUI: request approval via event bus for the browser dialog
+					// WEBUI: request approval via event bus for the browser dialog.
+					//
+					// Suspend the CLI spinner and pause the steer reader BEFORE
+					// blocking on the webui response. The approval request can
+					// block for up to 30 minutes (DefaultTimeout). Without
+					// suspending, the steer reader stays in raw mode while the
+					// agent is blocked, and any stdout writes from background
+					// goroutines (tool output, streaming) corrupt the terminal
+					// display. After the block returns (approved, denied, or
+					// timed out), ResumeSteer restores the terminal state.
+					clihooks.SuspendIndicator()
+					clihooks.PauseSteer()
+					defer clihooks.ResumeSteer()
+
 					if agent.debug {
 						agent.debugLog("[APPROVAL] Requesting security approval via webui for %s (risk: %s)\n", toolName, secResult.Risk)
 					}
@@ -464,6 +478,12 @@ func (a *Agent) unifiedSecurityPrompt(name string, args map[string]interface{}, 
 	// Non-interactive runs skip the browser dialog (see isNonInteractive).
 	hasInteractiveSurface := !a.isNonInteractive() && !isSubagent && a.HasActiveWebUIClients()
 	if mgr := a.GetSecurityApprovalMgr(); mgr != nil && a.GetEventBus() != nil && hasInteractiveSurface {
+		// Suspend CLI spinner and steer reader before blocking on the
+		// webui response — prevents terminal corruption during the wait.
+		clihooks.SuspendIndicator()
+		clihooks.PauseSteer()
+		defer clihooks.ResumeSteer()
+
 		extras := map[string]string{}
 		extras["risk_level"] = string(assessment.Level)
 		switch name {
@@ -797,6 +817,12 @@ func handleFileSecurityError(ctx context.Context, agent *Agent, toolName, filePa
 
 	// Prefer webui approval path when a browser tab is connected.
 	if mgr := agent.GetSecurityApprovalMgr(); mgr != nil && agent.GetEventBus() != nil && agent.HasActiveWebUIClients() {
+		// Suspend CLI spinner and steer reader before blocking on the
+		// webui response — same rationale as the tool approval path above.
+		clihooks.SuspendIndicator()
+		clihooks.PauseSteer()
+		defer clihooks.ResumeSteer()
+
 		kind := "fs_external"
 		if tier == PathTierSensitive {
 			kind = "fs_sensitive"

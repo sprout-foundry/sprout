@@ -39,14 +39,14 @@ func (ws *ReactWebServer) handleAPIConfirm(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Try security approval response first
-	ws.mutex.RLock()
-	agent := ws.agent
-	ws.mutex.RUnlock()
-
-	if agent != nil && agent.GetSecurityApprovalMgr() != nil {
+	// In daemon mode, ws.agent is nil but all agents share the webui-owned
+	// securityPromptMgr (injected via InjectWebUIManagers). Use it directly
+	// for both tool approval responses and file content prompt responses —
+	// the old code checked ws.agent first (nil in daemon mode), causing
+	// tool approval responses to be silently dropped.
+	if ws.securityPromptMgr != nil {
 		decision := resolveApprovalDecision(payload.Action, payload.Response)
-		if agent.GetSecurityApprovalMgr().RespondToApprovalDecision(payload.RequestID, decision) {
+		if ws.securityPromptMgr.RespondToApprovalDecision(payload.RequestID, decision) {
 			ws.publishClientEvent(defaultWebClientID, events.EventTypeSecurityApprovalRequest, map[string]interface{}{
 				"status":     "responded",
 				"request_id": payload.RequestID,
@@ -58,14 +58,16 @@ func (ws *ReactWebServer) handleAPIConfirm(w http.ResponseWriter, r *http.Reques
 				"success": true,
 				"message": "Security approval response recorded",
 			})
-			return
-		}
+					return
+	}
 	}
 
-	// Try security prompt response
+	// Try security prompt response (legacy boolean path for file content
+	// security prompts). Tool approvals use RespondToApprovalDecision above;
+	// this path handles the old yes/no prompt responses.
 	if ws.securityPromptMgr != nil && ws.securityPromptMgr.RespondToApproval(payload.RequestID, payload.Response) {
 		ws.publishClientEvent(defaultWebClientID, events.EventTypeSecurityPromptRequest, map[string]interface{}{
-			"status":    "responded",
+			"status":     "responded",
 			"request_id": payload.RequestID,
 			"response":   payload.Response,
 		})

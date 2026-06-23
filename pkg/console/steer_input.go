@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
+	"os/signal"
 	"slices"
 	"strings"
 	"sync"
@@ -49,9 +51,15 @@ func isEAGAIN(err error) bool {
 //	r.Stop()    // restores cooked mode, clears the pinned line
 //
 // Key handling (raw mode — ICANON / ISIG disabled, so signals must be
-// re-implemented by reading the byte directly):
+// re-implemented by reading the byte directly). Control keys below are
+// dispatched directly in readLoop; arrow keys, function keys, escape
+// sequences, Alt+key combos, bracketed-paste markers, and multi-byte
+// UTF-8 runes go through the shared EscapeParser (the same parser
+// InputReader uses in input_escape_parser.go) and are routed via
+// handleEvent. Tab toggles the submit mode (STEER ↔ QUEUE).
 //
 //	Enter (CR/LF)   → submitFn(buffer); buffer cleared
+//	Tab             → toggle STEER/QUEUE submit mode
 //	Backspace (DEL) → remove rune before cursor
 //	Escape (alone)  → clear buffer (does not exit steer mode)
 //	Ctrl+C  (0x03)  → interruptFn() — caller routes to TriggerInterrupt
@@ -63,7 +71,8 @@ func isEAGAIN(err error) bool {
 //	Alt+B/F          → move cursor back / forward one word
 //	Ctrl+Left/Right  → move cursor back / forward one word
 //	Left/Right       → move cursor back / forward one rune
-//	ESC [ ... ~/A-Z → swallow common escape-sequence (arrows, fn keys)
+//	Up/Down          → recall steer history
+//	Alt+Enter/Shift+Enter → insert a literal newline (multi-line compose)
 //
 // Submission UX: when Enter is pressed, submitFn receives the buffer.
 // Caller is expected to forward to Agent.InjectInputContext (or
@@ -137,6 +146,24 @@ type SteerInputReader struct {
 	// oldState, preventing termios-state descent across Pause/Resume
 	// cycles where intermediate code may have altered termios.
 	groundTruth *GroundTruthTermios
+
+	// pendingCtrlX is set when the user presses Ctrl-X, the first half
+	// of the Ctrl-X Ctrl-E editor escape sequence. The next byte is
+	// checked against Ctrl-E; if it matches, the external editor is
+	// launched with the current buffer. Any other byte clears the
+	// pending state and is processed normally.
+	pendingCtrlX bool
+
+	// searchMode is true during Ctrl-R reverse-search through steer
+	// history. While active, typed characters build the query instead
+	// of the buffer; Enter accepts the match; Esc cancels.
+	searchMode         bool
+	searchQuery        string
+	searchResult       string
+	searchResultIndex  int
+	preSearchBuffer    []byte
+	preSearchCursorPos int
+	searchBuf          []byte // multi-byte UTF-8 accumulator
 }
 
 // SteerHistoryCap bounds the in-memory steer history to a sensible
@@ -345,15 +372,40 @@ func (r *SteerInputReader) ResetBuffer() {
 // readLoop is the input-handling goroutine. Steer mode sets VMIN=0
 // and VTIME=0 on the termios (see steer_termios_*.go) so Read returns
 // immediately with 0 bytes when nothing is ready — no need for an
-// O_NONBLOCK file descriptor flag. The poll interval (5ms) is short
+// O_NONBLOCK file descriptor flag. The poll interval (10ms) is short
 // enough that typing feels instantaneous and Stop() observes the exit
 // signal within one frame.
+//
+// Input is read in multi-byte chunks (up to 64 bytes per Read) and fed
+// through the shared EscapeParser — the same parser InputReader uses —
+// instead of hand-rolling escape-sequence detection and polling loops
+// here. Emacs-style control keys are dispatched directly before the
+// parser so they aren't shadowed by the parser's own handling.
 func (r *SteerInputReader) readLoop(stopCh, doneCh chan struct{}) {
 	defer close(doneCh)
 
-	var buf [1]byte
-	ticker := time.NewTicker(5 * time.Millisecond)
+	parser := NewEscapeParser()
+	buf := make([]byte, 64)
+	ticker := time.NewTicker(10 * time.Millisecond)
 	defer ticker.Stop()
+
+	// Subscribe to terminal resize events so the steer panel
+	// re-renders with correct dimensions after a SIGWINCH. The footer's
+	// own resize watcher handles the scroll region; we just need to
+	// refresh our pinned line content.
+	var resizeCh chan os.Signal
+	if sig := resizeSignal(); sig != nil {
+		resizeCh = make(chan os.Signal, 1)
+		signal.Notify(resizeCh, sig)
+		defer signal.Stop(resizeCh)
+	}
+
+	// pasteMatch tracks how many bytes of the bracketed-paste end
+	// sequence (ESC [ 201~) have been seen consecutively while a
+	// paste is in flight. A local rather than a struct field because
+	// readLoop is the sole consumer and bracketed-paste handling is
+	// strictly sequential (single goroutine, no overlap).
+	pasteMatch := 0
 
 	for {
 		select {
@@ -362,7 +414,7 @@ func (r *SteerInputReader) readLoop(stopCh, doneCh chan struct{}) {
 		default:
 		}
 
-		n, err := os.Stdin.Read(buf[:])
+		n, err := os.Stdin.Read(buf)
 		if n == 0 {
 			// No byte ready (or EOF). Sleep briefly via the ticker
 			// instead of busy-spinning, then re-check stopCh.
@@ -373,74 +425,219 @@ func (r *SteerInputReader) readLoop(stopCh, doneCh chan struct{}) {
 			select {
 			case <-stopCh:
 				return
+			case <-resizeCh:
+				// Terminal resized — re-render the steer line so the
+				// caret and content adapt to the new width.
+				r.renderLine()
 			case <-ticker.C:
 			}
 			continue
 		}
 
-		b := buf[0]
+		for i := 0; i < n; i++ {
+			b := buf[i]
 
-		// While a bracketed paste is in flight, ALL bytes go into
-		// pasteBuf verbatim — including newlines and what would
-		// otherwise be control characters. The only escape is the
-		// "ESC [ 201~" terminator, which we detect inline.
-		r.mu.Lock()
-		inPaste := r.pasteActive
-		r.mu.Unlock()
-		if inPaste {
-			if b == 0x1B {
-				// Likely the start of the paste-end sequence
-				// (ESC [ 201~). Let the escape handler peek at
-				// the follow-up bytes to confirm.
-				r.handleEscapeOrSequence()
+			// While a bracketed paste is in flight, ALL bytes go into
+			// pasteBuf verbatim — including newlines and what would
+			// otherwise be control characters. The only escape is the
+			// "ESC [ 201~" terminator, which we detect inline by
+			// matching the byte stream against bracketedPasteEndSeq.
+			r.mu.Lock()
+			inPaste := r.pasteActive
+			r.mu.Unlock()
+			if inPaste {
+				if b == bracketedPasteEndSeq[pasteMatch] {
+					pasteMatch++
+					if pasteMatch == len(bracketedPasteEndSeq) {
+						pasteMatch = 0
+						r.endPaste()
+					}
+					continue
+				}
+				// Mismatch: flush any partially-matched prefix as
+				// literal bytes, then handle the current byte.
+				if pasteMatch > 0 {
+					for _, pb := range []byte(bracketedPasteEndSeq[:pasteMatch]) {
+						r.appendPasteByte(pb)
+					}
+					pasteMatch = 0
+				}
+				r.appendPasteByte(b)
 				continue
 			}
-			r.appendPasteByte(b)
-			continue
-		}
 
-		switch {
-		case b == 0x01: // Ctrl+A — move to start
-			r.moveCursorStart()
-		case b == 0x02: // Ctrl+B — move back one rune
-			r.moveCursorBackward()
-		case b == 0x03: // Ctrl+C
-			r.handleInterrupt()
-		case b == 0x04: // Ctrl+D — forward-delete rune at cursor
-			r.deleteForward()
-		case b == 0x05: // Ctrl+E — move to end
-			r.moveCursorEnd()
-		case b == 0x06: // Ctrl+F — move forward one rune
-			r.moveCursorForward()
-		case b == 0x09: // Tab — toggle submit mode (SP-055 Phase 3b)
-			r.toggleSubmitMode()
-		case b == 0x0A: // Bare LF — Shift+Enter in terminals that
-			// distinguish (VS Code terminal, kitty in some configs).
-			// Insert a literal newline so multi-line steer composition
-			// works without needing CSI u or Alt+Enter.
-			r.insertAtCursor([]byte{'\n'})
-		case b == 0x0B: // Ctrl+K — kill to end
-			r.killToEnd()
-		case b == 0x0D: // CR — plain Enter, submits
-			r.handleSubmit()
-		case b == 0x15: // Ctrl+U — kill to start
-			r.killToStart()
-		case b == 0x17: // Ctrl+W — delete previous word
-			r.deleteWordBackward()
-		case b == 0x1B: // Escape — could be plain ESC or sequence prefix
-			r.handleEscapeOrSequence()
-		case b == 0x7F, b == 0x08: // DEL or backspace
-			r.handleBackspace()
-		case b >= 0x20 && b < 0x7F: // printable ASCII
-			r.handlePrintable(b)
-		case b >= 0xC0: // UTF-8 lead byte (multi-byte rune)
-			r.handleUTF8Lead(b)
-		default:
-			// Lone continuation bytes (0x80..0xBF) and other control
-			// bytes are dropped — they shouldn't arrive standalone in
-			// a well-formed UTF-8 stream.
+			// Ctrl-X Ctrl-E editor escape (SP-048-4f parity). The first
+			// Ctrl-X sets pendingCtrlX; if the next byte is Ctrl-E we
+			// launch the external editor, otherwise we fall through to
+			// normal processing.
+			if r.pendingCtrlX {
+				r.pendingCtrlX = false
+				if b == 0x05 { // Ctrl-E
+					r.runExternalEditor()
+					continue
+				}
+				// Not Ctrl-E — fall through to normal processing.
+			}
+
+			// While in Ctrl-R reverse-search mode, route keystrokes to
+			// the search handler instead of the normal buffer/edit
+			// dispatch. Enter accepts the match, Esc cancels, Ctrl-R
+			// cycles to the next older match, Backspace trims the
+			// query, and printable/UTF-8 bytes extend the query.
+			if r.searchMode {
+				switch {
+				case b == 0x0D: // Enter — accept match
+					r.exitSearchMode(true)
+					r.renderLine()
+					continue
+				case b == 0x1B: // Esc — cancel
+					r.exitSearchMode(false)
+					r.renderLine()
+					continue
+				case b == 0x7F || b == 0x08: // Backspace
+					r.handleSearchBackspace()
+					r.renderLine()
+					continue
+				case b >= 0x20 && b < 0x7F: // Printable ASCII
+					r.searchQuery += string(rune(b))
+					r.refreshSearchForQuery()
+					r.renderLine()
+					continue
+				case b >= 0x80: // UTF-8 — buffer until full rune
+					r.searchBuf = append(r.searchBuf, b)
+					if utf8.FullRune(r.searchBuf) {
+						r.searchQuery += string(r.searchBuf)
+						r.searchBuf = r.searchBuf[:0]
+						r.refreshSearchForQuery()
+						r.renderLine()
+					}
+					continue
+				}
+				// Other control chars in search mode: ignore.
+				continue
+			}
+
+			// Pre-handle control characters that the EscapeParser
+			// doesn't produce events for (emacs/readline-style
+			// editing). The parser handles backspace (8/127), enter
+			// (13), bare newline (10), tab (9), escape sequences (27),
+			// and printable / UTF-8 characters.
+			switch b {
+			case 0x01: // Ctrl+A — move to start
+				r.moveCursorStart()
+				continue
+			case 0x02: // Ctrl+B — move back one rune
+				r.moveCursorBackward()
+				continue
+			case 0x03: // Ctrl+C — interrupt
+				r.handleInterrupt()
+				continue
+			case 0x04: // Ctrl+D — forward-delete rune at cursor
+				r.deleteForward()
+				continue
+			case 0x05: // Ctrl+E — move to end
+				r.moveCursorEnd()
+				continue
+			case 0x06: // Ctrl+F — move forward one rune
+				r.moveCursorForward()
+				continue
+			case 0x0B: // Ctrl+K — kill to end
+				r.killToEnd()
+				continue
+			case 0x12: // Ctrl+R — reverse search
+				if r.searchMode {
+					r.cycleSearchResult()
+				} else {
+					r.enterSearchMode()
+				}
+				r.renderLine()
+				continue
+			case 0x15: // Ctrl+U — kill to start
+				r.killToStart()
+				continue
+			case 0x17: // Ctrl+W — delete previous word
+				r.deleteWordBackward()
+				continue
+			case 0x18: // Ctrl+X — start of Ctrl-X Ctrl-E sequence
+				r.pendingCtrlX = true
+				continue
+			}
+
+			// Feed everything else through the shared EscapeParser.
+			event := parser.Parse(b)
+			if event == nil {
+				continue
+			}
+			r.handleEvent(event)
+			// Drain any pending events the parser queued (e.g. a
+			// printable byte carried over after an escape sequence).
+			for parser.hasPending {
+				pending := parser.Parse(0)
+				if pending == nil {
+					break
+				}
+				r.handleEvent(pending)
+			}
 		}
 	}
+}
+
+// handleEvent dispatches a parsed InputEvent (produced by the shared
+// EscapeParser) to the appropriate steer reader action. This replaces
+// the former hand-rolled escape-sequence / UTF-8 / CSI parsing that
+// lived in this file.
+func (r *SteerInputReader) handleEvent(event *InputEvent) {
+	switch event.Type {
+	case EventChar:
+		r.insertAtCursor([]byte(event.Data))
+	case EventBackspace:
+		r.handleBackspace()
+	case EventDelete:
+		r.deleteForward()
+	case EventEnter:
+		r.handleSubmit()
+	case EventTab:
+		r.toggleSubmitMode()
+	case EventUp:
+		r.recallHistory(-1)
+	case EventDown:
+		r.recallHistory(1)
+	case EventLeft:
+		r.moveCursorBackward()
+	case EventRight:
+		r.moveCursorForward()
+	case EventHome:
+		r.moveCursorStart()
+	case EventEnd:
+		r.moveCursorEnd()
+	case EventWordLeft:
+		r.moveWord(-1)
+	case EventWordRight:
+		r.moveWord(1)
+	case EventDeleteWordBackward:
+		r.deleteWordBackward()
+	case EventEscape:
+		r.clearBuffer()
+	case EventInterrupt:
+		r.handleInterrupt()
+	case EventPasteStart:
+		r.beginPaste()
+	case EventPasteEnd:
+		r.endPaste()
+	case EventMouse:
+		// Mouse events are not supported in steer mode — swallow.
+	}
+}
+
+// clearBuffer clears the steer buffer (plain ESC key).
+func (r *SteerInputReader) clearBuffer() {
+	r.mu.Lock()
+	r.buffer = r.buffer[:0]
+	r.cursorPos = 0
+	r.historyIndex = -1
+	r.pendingBuffer = nil
+	r.mu.Unlock()
+	r.renderLine()
 }
 
 // handleInterrupt fires the user-provided callback (typically wired to
@@ -516,129 +713,6 @@ func (r *SteerInputReader) SubmitMode() SteerSubmitMode {
 	return r.submitMode
 }
 
-// handleEscapeOrSequence handles three cases:
-//  1. Plain ESC (no follow-up byte) → clear the buffer (cancel typing).
-//  2. ESC `[` <final-byte> (CSI sequence) → dispatch to history
-//     navigation for arrow keys (`A` up, `B` down) and drain anything
-//     else (left/right, function keys, etc.).
-//  3. Bracketed-paste markers (ESC [ 200 ~ ... ESC [ 201 ~) — drained
-//     as ordinary CSI sequences; the inner content arrives as
-//     printable bytes that go through handlePrintable.
-//
-// Stdin is already non-blocking (set in readLoop), so a quick Read
-// returns immediately. If the next byte isn't ready within a short
-// poll, we treat ESC as standalone.
-func (r *SteerInputReader) handleEscapeOrSequence() {
-	clearBuffer := func() {
-		r.mu.Lock()
-		r.buffer = r.buffer[:0]
-		r.cursorPos = 0
-		r.historyIndex = -1
-		r.pendingBuffer = nil
-		r.mu.Unlock()
-		r.renderLine()
-	}
-
-	// Brief wait window for the second byte of an arrow-key sequence.
-	// Real arrow keys arrive in a tight ESC[<letter> burst (<1ms);
-	// 20ms is comfortably above that without making plain ESC feel
-	// laggy.
-	deadline := time.Now().Add(20 * time.Millisecond)
-	var probe [1]byte
-	var got byte
-	for time.Now().Before(deadline) {
-		n, _ := os.Stdin.Read(probe[:])
-		if n > 0 {
-			got = probe[0]
-			break
-		}
-		time.Sleep(2 * time.Millisecond)
-	}
-	if got == 0 {
-		// No follow-up byte — plain ESC.
-		clearBuffer()
-		return
-	}
-	if got == '\r' || got == '\n' {
-		// Alt+Enter (and Esc-then-Enter): insert a literal newline into
-		// the buffer instead of submitting. Lets the user compose a
-		// multi-line steer message. Plain Enter still submits via the
-		// readLoop dispatch above; only the ESC-prefixed variant carves
-		// out a newline.
-		r.insertAtCursor([]byte{'\n'})
-		return
-	}
-	if got == 'b' {
-		// Alt+B — move back one word.
-		r.moveWord(-1)
-		return
-	}
-	if got == 'f' {
-		// Alt+F — move forward one word.
-		r.moveWord(1)
-		return
-	}
-	if got != '[' {
-		// Not a recognized CSI sequence. Clear + drop the second byte
-		// (a follow-up edge case not worth a putback queue in v1).
-		clearBuffer()
-		return
-	}
-	// ESC `[` — read bytes until a final byte (0x40..0x7E) terminates
-	// the CSI sequence per ECMA-48. Cap the drain at a few bytes so
-	// a malformed sequence can't hang us. The final byte determines
-	// the action. We also capture parameter bytes so we can recognize
-	// the bracketed-paste markers (ESC [ 200~ start, ESC [ 201~ end).
-	var params []byte
-	drainDeadline := time.Now().Add(20 * time.Millisecond)
-	for i := 0; i < 8 && time.Now().Before(drainDeadline); i++ {
-		var b [1]byte
-		n, _ := os.Stdin.Read(b[:])
-		if n == 0 {
-			time.Sleep(1 * time.Millisecond)
-			continue
-		}
-		if b[0] >= 0x40 && b[0] <= 0x7E {
-			// Bracketed-paste markers are parameterized with 200/201
-			// and terminate with '~'. Handle them inline so the normal
-			// CSI dispatch (arrow keys etc.) stays focused.
-			if b[0] == '~' {
-				switch string(params) {
-				case "200":
-					r.beginPaste()
-					return
-				case "201":
-					r.endPaste()
-					return
-				}
-			}
-			if b[0] == 'u' {
-				// CSI u (fixterms / kitty keyboard / xterm modifyOtherKeys
-				// reporting). Format: <key>;<modifiers> u. Shift+Enter
-				// arrives as `13;2u`; any modifier on Enter is treated
-				// as "insert newline".
-				paramStr := string(params)
-				keyParam, modParam := paramStr, ""
-				if idx := strings.IndexByte(paramStr, ';'); idx >= 0 {
-					keyParam = paramStr[:idx]
-					modParam = paramStr[idx+1:]
-				}
-				if keyParam == "13" && modParam != "" && modParam != "1" {
-					r.insertAtCursor([]byte{'\n'})
-					return
-				}
-			}
-			r.dispatchCSIFinal(b[0], string(params))
-			return
-		}
-		// Parameter/intermediate bytes (0x30..0x3F, 0x20..0x2F) keep
-		// the sequence going.
-		if b[0] >= 0x30 && b[0] <= 0x3F {
-			params = append(params, b[0])
-		}
-	}
-}
-
 // beginPaste enters bracketed-paste accumulation mode. All bytes that
 // arrive between now and endPaste() are appended verbatim to pasteBuf.
 func (r *SteerInputReader) beginPaste() {
@@ -678,33 +752,6 @@ func (r *SteerInputReader) appendPasteByte(b byte) {
 func (r *SteerInputReader) hasEditedHistory() {
 	r.historyIndex = -1
 	r.pendingBuffer = nil
-}
-
-// dispatchCSIFinal acts on the terminator byte of a CSI sequence we
-// just drained. Arrow keys navigate: Up/Down recall history, Left/Right
-// move the cursor by one rune, and Ctrl+Left/Right (params "1;5") move
-// by one word. Other final bytes are swallowed silently.
-func (r *SteerInputReader) dispatchCSIFinal(final byte, params string) {
-	switch {
-	case final == 'A': // Up arrow — recall previous history entry.
-		r.recallHistory(-1)
-	case final == 'B': // Down arrow — advance toward in-progress buffer.
-		r.recallHistory(+1)
-	case final == 'C': // Right arrow / Ctrl+Right
-		if params == "1;5" {
-			r.moveWord(1) // Ctrl+Right — forward one word
-		} else {
-			r.moveCursorForward() // Plain Right — forward one rune
-		}
-	case final == 'D': // Left arrow / Ctrl+Left
-		if params == "1;5" {
-			r.moveWord(-1) // Ctrl+Left — back one word
-		} else {
-			r.moveCursorBackward() // Plain Left — back one rune
-		}
-	default:
-		// Home/End/Pg... not yet wired.
-	}
 }
 
 // recallHistory walks the steer-history index by delta. Negative steps
@@ -803,68 +850,6 @@ func (r *SteerInputReader) handleBackspace() {
 	r.pendingBuffer = nil
 	r.mu.Unlock()
 	r.renderLine()
-}
-
-// handlePrintable inserts a printable ASCII byte at the cursor and
-// redraws. Typing exits "history navigation" mode: the buffer becomes
-// editable from the recalled state and the next Up arrow starts fresh.
-func (r *SteerInputReader) handlePrintable(b byte) {
-	r.mu.Lock()
-	r.buffer = slices.Insert(r.buffer, r.cursorPos, b)
-	r.cursorPos++
-	r.historyIndex = -1
-	r.pendingBuffer = nil
-	r.mu.Unlock()
-	r.renderLine()
-}
-
-// handleUTF8Lead handles the start of a multi-byte UTF-8 sequence
-// (SP-055 Phase 3c). The lead byte's high bits encode the total
-// sequence length: 110xxxxx → 2 bytes, 1110xxxx → 3 bytes,
-// 11110xxx → 4 bytes. We read the remaining continuation bytes
-// (which all begin with 10xxxxxx) and only commit the rune to the
-// buffer once it's complete — so partial reads never render a
-// half-character on screen.
-//
-// Reads the continuation bytes via the same VMIN=0 polling stdin
-// the main loop uses. If a continuation never arrives within a short
-// window (malformed input, paste interrupted), the partial sequence
-// is dropped.
-func (r *SteerInputReader) handleUTF8Lead(lead byte) {
-	var need int
-	switch {
-	case lead&0xE0 == 0xC0:
-		need = 1 // total 2 bytes
-	case lead&0xF0 == 0xE0:
-		need = 2 // total 3 bytes
-	case lead&0xF8 == 0xF0:
-		need = 3 // total 4 bytes
-	default:
-		return // invalid lead byte
-	}
-
-	seq := make([]byte, 0, need+1)
-	seq = append(seq, lead)
-
-	deadline := time.Now().Add(20 * time.Millisecond)
-	for len(seq) < need+1 && time.Now().Before(deadline) {
-		var b [1]byte
-		n, _ := os.Stdin.Read(b[:])
-		if n == 0 {
-			time.Sleep(1 * time.Millisecond)
-			continue
-		}
-		// Continuation bytes must be 10xxxxxx.
-		if b[0]&0xC0 != 0x80 {
-			return // malformed; drop the whole sequence
-		}
-		seq = append(seq, b[0])
-	}
-	if len(seq) != need+1 {
-		return // timed out
-	}
-
-	r.insertAtCursor(seq)
 }
 
 // insertAtCursor inserts a byte sequence at the cursor position and
@@ -1061,11 +1046,36 @@ func (r *SteerInputReader) deleteForward() {
 // any future modes don't require footer changes. The cursor byte
 // offset is forwarded so the footer can render a caret at the correct
 // position for mid-buffer editing.
+//
+// When Ctrl-R reverse-search is active, the line instead shows the
+// search prompt (query + best match) so the user sees what they're
+// searching for and what will be loaded on Enter.
 func (r *SteerInputReader) renderLine() {
 	if r.footer == nil {
 		return
 	}
 	r.mu.Lock()
+
+	if r.searchMode {
+		// Render the reverse-search prompt in the steer line. The
+		// caret sits at the end so the user sees where the next query
+		// keystroke lands.
+		var text string
+		if r.searchResult != "" {
+			display := strings.ReplaceAll(r.searchResult, "\n", "\\n")
+			text = fmt.Sprintf("(search)'%s': %s", r.searchQuery, display)
+		} else {
+			text = fmt.Sprintf("(search)'%s': ", r.searchQuery)
+		}
+		prefix := SteerPromptPrefix
+		if r.submitMode == SteerSubmitModeQueue {
+			prefix = QueuePromptPrefix
+		}
+		r.mu.Unlock()
+		r.footer.SetSteerLineWithCursor(fmt.Sprintf("%s%s", prefix, text), len(prefix)+len(text))
+		return
+	}
+
 	text := string(r.buffer)
 	cursor := r.cursorPos
 	prefix := SteerPromptPrefix
@@ -1076,4 +1086,226 @@ func (r *SteerInputReader) renderLine() {
 	// cursor is a byte offset into the buffer; add the prefix byte
 	// length to get the offset within the full rendered string.
 	r.footer.SetSteerLineWithCursor(fmt.Sprintf("%s%s", prefix, text), len(prefix)+cursor)
+}
+
+// runExternalEditor opens $EDITOR (or VISUAL) with the current steer
+// buffer pre-filled, lets the user edit it, and reads the result back
+// into the buffer. Called from the readLoop goroutine — blocks until
+// the editor exits. While blocked, the goroutine is not reading stdin,
+// which is correct because the editor owns stdin during its run.
+//
+// Terminal lifecycle: we temporarily restore cooked mode (exitSteerMode
+// or groundTruth) and disable bracketed-paste / modifyOtherKeys so the
+// editor has a clean terminal. On return we re-enter steer mode and
+// re-enable our modes so the readLoop resumes cleanly.
+func (r *SteerInputReader) runExternalEditor() {
+	editor := chooseExternalEditor()
+	if editor == "" {
+		fmt.Fprint(os.Stderr, "\r\n")
+		GlyphError.Fprintf(os.Stderr, "editor: no $VISUAL or $EDITOR set and no fallback available")
+		return
+	}
+
+	// Snapshot the buffer for the temp file.
+	r.mu.Lock()
+	content := string(r.buffer)
+	r.mu.Unlock()
+
+	tmpPath, err := writeBufferToTempFile(content)
+	if err != nil {
+		fmt.Fprint(os.Stderr, "\r\n")
+		GlyphError.Fprintf(os.Stderr, "editor: failed to stage buffer: %v", err)
+		return
+	}
+	defer os.Remove(tmpPath)
+
+	// Exit steer mode so the editor has a clean terminal (cooked mode,
+	// no bracketed paste / modifyOtherKeys reporting).
+	fmt.Fprint(os.Stderr, bracketedPasteDisable)
+	fmt.Fprint(os.Stderr, modifyOtherKeysDisable)
+	r.mu.Lock()
+	oldState := r.oldState
+	gt := r.groundTruth
+	r.mu.Unlock()
+	if gt != nil {
+		_ = gt.Restore()
+	} else if oldState != nil {
+		_ = exitSteerMode(r.fd, oldState)
+	}
+	fmt.Fprintln(os.Stderr)
+
+	// Run the editor. Blocks until the editor exits.
+	cmd := exec.Command(editor, tmpPath)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	runErr := cmd.Run()
+
+	// Re-enter steer mode regardless of the editor's exit status so
+	// the readLoop can resume reading keystrokes.
+	st, enterErr := enterSteerMode(r.fd)
+	if enterErr != nil {
+		fmt.Fprint(os.Stderr, "\r\n")
+		GlyphError.Fprintf(os.Stderr, "editor: failed to re-enter steer mode: %v", enterErr)
+		return
+	}
+	r.mu.Lock()
+	r.oldState = st
+	r.mu.Unlock()
+	fmt.Fprint(os.Stderr, bracketedPasteEnable)
+	fmt.Fprint(os.Stderr, modifyOtherKeysEnable)
+
+	if runErr != nil {
+		fmt.Fprint(os.Stderr, "\r\n")
+		GlyphError.Fprintf(os.Stderr, "editor: %s exited: %v", editor, runErr)
+		r.renderLine()
+		return
+	}
+
+	// Read back the edited content.
+	fileContent, readErr := os.ReadFile(tmpPath)
+	if readErr != nil {
+		fmt.Fprint(os.Stderr, "\r\n")
+		GlyphError.Fprintf(os.Stderr, "editor: failed to read back buffer: %v", readErr)
+		r.renderLine()
+		return
+	}
+
+	// Strip the trailing newline most editors append so the buffer
+	// looks like the user typed exactly what they see.
+	newContent := strings.TrimRight(string(fileContent), "\n")
+	r.mu.Lock()
+	r.buffer = []byte(newContent)
+	r.cursorPos = len(r.buffer)
+	r.historyIndex = -1
+	r.pendingBuffer = nil
+	r.mu.Unlock()
+	r.renderLine()
+}
+
+// ─── Ctrl-R reverse-search methods (SP-048-4e parity) ──────────────────
+
+// enterSearchMode starts a new reverse-history search, saving the current
+// buffer/cursor so they can be restored on cancellation.
+func (r *SteerInputReader) enterSearchMode() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.searchMode = true
+	r.searchQuery = ""
+	r.searchResult = ""
+	r.searchResultIndex = -1
+	r.searchBuf = r.searchBuf[:0]
+	// Snapshot current buffer so Esc restores it.
+	snap := make([]byte, len(r.buffer))
+	copy(snap, r.buffer)
+	r.preSearchBuffer = snap
+	r.preSearchCursorPos = r.cursorPos
+	// Show most recent history entry for empty query.
+	if len(r.history) > 0 {
+		r.searchResult = r.history[len(r.history)-1]
+		r.searchResultIndex = len(r.history) - 1
+	}
+}
+
+// exitSearchMode leaves reverse-search mode. When accept is true the
+// current searchResult is loaded into the buffer; otherwise the
+// pre-search state is restored.
+func (r *SteerInputReader) exitSearchMode(accept bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if accept && r.searchResult != "" {
+		r.buffer = []byte(r.searchResult)
+		r.cursorPos = len(r.buffer)
+		r.historyIndex = -1
+		r.pendingBuffer = nil
+	} else {
+		r.buffer = r.preSearchBuffer
+		r.cursorPos = r.preSearchCursorPos
+	}
+	r.searchMode = false
+	r.searchQuery = ""
+	r.searchResult = ""
+	r.searchResultIndex = -1
+	r.searchBuf = r.searchBuf[:0]
+	r.preSearchBuffer = nil
+	r.preSearchCursorPos = 0
+}
+
+// handleSearchBackspace trims one rune from the search query and
+// re-runs the search.
+func (r *SteerInputReader) handleSearchBackspace() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.searchBuf = r.searchBuf[:0]
+	if len(r.searchQuery) > 0 {
+		_, size := utf8.DecodeLastRuneInString(r.searchQuery)
+		r.searchQuery = r.searchQuery[:len(r.searchQuery)-size]
+	}
+	r.refreshSearchForQueryLocked()
+}
+
+// refreshSearchForQuery re-runs the history search for the current query
+// and updates searchResult / searchResultIndex. Must NOT hold r.mu.
+func (r *SteerInputReader) refreshSearchForQuery() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.refreshSearchForQueryLocked()
+}
+
+// refreshSearchForQueryLocked is the lock-free inner search. Caller
+// must hold r.mu.
+func (r *SteerInputReader) refreshSearchForQueryLocked() {
+	if r.searchQuery == "" {
+		if len(r.history) > 0 {
+			r.searchResult = r.history[len(r.history)-1]
+			r.searchResultIndex = len(r.history) - 1
+		} else {
+			r.searchResult = ""
+			r.searchResultIndex = -1
+		}
+		return
+	}
+	// Search backwards through history for a case-insensitive match,
+	// starting from the most recent entry.
+	queryLower := strings.ToLower(r.searchQuery)
+	startIdx := len(r.history) - 1
+	for i := startIdx; i >= 0; i-- {
+		if strings.Contains(strings.ToLower(r.history[i]), queryLower) {
+			r.searchResult = r.history[i]
+			r.searchResultIndex = i
+			return
+		}
+	}
+	r.searchResult = ""
+	r.searchResultIndex = -1
+}
+
+// cycleSearchResult searches for the next older match with the current
+// query. Called when the user presses Ctrl-R again while already in
+// search mode.
+func (r *SteerInputReader) cycleSearchResult() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.searchQuery == "" {
+		// No query: cycle through history in order.
+		if len(r.history) > 0 {
+			idx := r.searchResultIndex - 1
+			if idx < 0 {
+				idx = len(r.history) - 1
+			}
+			r.searchResult = r.history[idx]
+			r.searchResultIndex = idx
+		}
+		return
+	}
+	queryLower := strings.ToLower(r.searchQuery)
+	startIdx := r.searchResultIndex - 1
+	for i := startIdx; i >= 0; i-- {
+		if strings.Contains(strings.ToLower(r.history[i]), queryLower) {
+			r.searchResult = r.history[i]
+			r.searchResultIndex = i
+			return
+		}
+	}
+	// No older match found — keep current result.
 }

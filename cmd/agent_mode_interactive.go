@@ -147,6 +147,11 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	// psql, redis-cli, node). Reset to zero on any successful read.
 	var lastInterruptAt time.Time
 
+	// pending holds carry-over text between turns: unsent steer text
+	// (→ SetInitialContent) and deferred queue messages (→ prepend to
+	// next query). Drained once per turn via DrainPendingInput.
+	var pending PendingInput
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -188,24 +193,18 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			query = strings.TrimSpace(query)
 			rawQuery := query // user's typed text, before deferred-message prepend
 
-			// SP-055 Phase 3b: drain any messages the user queued via
-			// Tab+Enter in the steer panel during the previous turn.
-			// They prepend to the typed prompt, joined as separate
-			// blockquote-style lines so the LLM reads them as ordered
-			// context the user wants addressed this turn.
-			if queued := chatAgent.DrainDeferredMessages(); len(queued) > 0 {
-				prefix := "Queued from prior turn:\n"
-				for _, msg := range queued {
-					prefix += "  • " + msg + "\n"
-				}
+			// Prepend deferred queue messages (drained at the end of the
+			// previous turn via DrainPendingInput). The queued prefix is
+			// stored on the steer coordinator so the REPL loop has a
+			// single source of truth for carry-over text.
+			if pending.QueuedPrefix != "" {
 				if query == "" {
-					query = strings.TrimSpace(prefix)
+					query = pending.QueuedPrefix
 				} else {
-					query = prefix + "\n" + query
+					query = pending.QueuedPrefix + "\n" + query
 				}
-				// Refresh the footer so the "⏸ N queued" badge clears
-				// the moment we drain. Without this nudge the badge
-				// would linger until the next tool/cost event.
+				pending.QueuedPrefix = "" // consumed
+				// Refresh the footer so the "⏸ N queued" badge clears.
 				footer.Refresh()
 			}
 			if query == "" {
@@ -350,12 +349,14 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 				}()
 			} // end if !fastPathExecuted
 
-			// Drain any unsent steer text into the InputReader so it
-			// appears pre-filled at the next prompt. This prevents the
-			// silent loss of text the user typed into the steer panel
-			// but did not submit before the turn ended.
-			if unsent := steerCoord.DrainUnsentBuffer(); unsent != "" {
-				inputReader.SetInitialContent(unsent)
+			// Drain all pending carry-over text (unsent steer buffer +
+			// deferred queue messages) in a single call. Unsent text
+			// becomes initial content for the next prompt; queued
+			// messages become a prefix that prepends to the next
+			// submitted query.
+			pending := steerCoord.DrainPendingInput()
+			if pending.InitialContent != "" {
+				inputReader.SetInitialContent(pending.InitialContent)
 			}
 			// Defensive: ensure the spinner is cleared at the end of every turn
 			// even if the streamFn never fired (e.g. zsh fast-path executed).

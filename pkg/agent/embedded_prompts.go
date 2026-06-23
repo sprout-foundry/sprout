@@ -48,25 +48,33 @@ func GetEmbeddedSystemPrompt() (string, error) {
 		return "", agenterrors.NewPermanentError("failed to extract system prompt", err)
 	}
 
-	// Add current date and time for temporal context
-	currentTime := time.Now()
-	dateTimeString := fmt.Sprintf("\n\n## Current Date and Time\n\nCurrent date: %s\nCurrent time: %s\nCurrent timezone: %s\n\n---\n",
-		currentTime.Format("2006-01-02"),
-		currentTime.Format("15:04:05"),
-		currentTime.Location().String())
-	promptContent = promptContent + dateTimeString
-
 	// Add discovered context files (AGENTS.md, Claude.md, etc.)
+	// Semi-static content — placed before the volatile timestamp so it does not
+	// invalidate the prompt-prefix cache for subsequent static content.
 	contextFiles, err := LoadContextFiles()
 	if err == nil && contextFiles != "" {
 		promptContent = promptContent + contextFiles
 	}
 
 	// Add memories (user preferences and learned patterns)
+	// Semi-static content — also placed before the volatile timestamp.
 	memories := LoadMemoriesForPrompt()
 	if memories != "" {
 		promptContent = promptContent + memories
 	}
+
+	// Add current date and time for temporal context LAST. This is the only
+	// volatile (per-call) content; keeping it at the end preserves cache
+	// eligibility for the large static prefix (system prompt + context files
+	// + memories). Providers like Anthropic cache prompt prefixes, so a
+	// second-resolution timestamp anywhere but the tail would force a full
+	// re-process of everything after it on every request.
+	currentTime := time.Now()
+	dateTimeString := fmt.Sprintf("\n\n## Current Date and Time\n\nCurrent date: %s\nCurrent time: %s\nCurrent timezone: %s\n\n---\n",
+		currentTime.Format("2006-01-02"),
+		currentTime.Format("15:04:05"),
+		currentTime.Location().String())
+	promptContent = promptContent + dateTimeString
 
 	return promptContent, nil
 }
@@ -140,7 +148,7 @@ func GetEmbeddedPlanningPrompt(createTodos bool) (string, error) {
 `
 	}
 
-	return promptContent + dateTimeString + todoIntegration, nil
+	return promptContent + todoIntegration + dateTimeString, nil
 }
 
 // extractPlanningPrompt extracts the prompt content from the planning_prompt markdown

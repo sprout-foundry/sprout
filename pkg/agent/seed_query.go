@@ -201,7 +201,7 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 		a.state.SetCurrentIteration(iteration)
 		a.state.SetCurrentContextTokens(tokenEstimate)
 		a.state.SetMaxContextTokens(contextSize)
-		a.PublishContextManagementDiagnostic(tokenEstimate, contextSize, iteration, messages)
+		a.PublishContextManagementDiagnostic(tokenEstimate, contextSize, iteration, messages, a.GetCachedTokens(), a.GetPromptTokens(), 0)
 	}
 
 	// Seed the agent with the existing conversation history so that

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -198,7 +199,9 @@ func sshServeIndexWithBase(w http.ResponseWriter, proxyBase, initialWorkspace st
 }
 
 // sshProxyHTTP forwards an HTTP request to the SSH tunnel backend and copies
-// the response back to the client.
+// the response back to the client. Streaming responses (SSE, chunked transfer)
+// are flushed incrementally so token streaming stays live through the proxy
+// instead of buffering until the response completes.
 func sshProxyHTTP(w http.ResponseWriter, r *http.Request, tunnelPort int, targetPath string) {
 	targetURL := &url.URL{
 		Scheme:   "http",
@@ -232,6 +235,28 @@ func sshProxyHTTP(w http.ResponseWriter, r *http.Request, tunnelPort int, target
 		w.Header()[key] = vals
 	}
 	w.WriteHeader(resp.StatusCode)
+
+	// If the ResponseWriter supports flushing, copy incrementally so streaming
+	// responses (agent query SSE, chunked agent output) reach the client in
+	// real time rather than buffering until the full response completes.
+	flusher, _ := w.(http.Flusher)
+	if flusher != nil {
+		buf := make([]byte, 4096)
+		for {
+			n, copyErr := resp.Body.Read(buf)
+			if n > 0 {
+				if _, wErr := w.Write(buf[:n]); wErr != nil {
+					return
+				}
+				flusher.Flush()
+			}
+			if copyErr != nil {
+				return
+			}
+		}
+	}
+	// Non-flushing writer (rare, e.g., httptest.ResponseRecorder): fall back
+	// to a single buffered copy.
 	io.Copy(w, resp.Body) //nolint:errcheck
 }
 
@@ -268,35 +293,40 @@ func sshProxyWebSocket(w http.ResponseWriter, r *http.Request, tunnelPort int, t
 
 	errCh := make(chan error, 2)
 
-	// upstream → downstream
-	go func() {
+	// pipeMessages copies WebSocket messages from src to dst until one side
+	// errors or closes. Each direction runs in its own goroutine with panic
+	// recovery so a malformed message or concurrent close on one side does
+	// not take down the daemon — this handler is the only WebSocket path
+	// that previously lacked recovery, unlike handleWebSocket and
+	// handleTerminalWebSocket which both wrap their goroutines.
+	pipeMessages := func(name string, src, dst *websocket.Conn) {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("[ssh-proxy] %s pipe panic recovered: %v", name, r)
+				errCh <- fmt.Errorf("%s pipe panic: %v", name, r)
+			}
+		}()
 		for {
-			mt, msg, err := upstream.ReadMessage()
+			mt, msg, err := src.ReadMessage()
 			if err != nil {
 				errCh <- err
 				return
 			}
-			if err := downstream.WriteMessage(mt, msg); err != nil {
+			if err := dst.WriteMessage(mt, msg); err != nil {
 				errCh <- err
 				return
 			}
 		}
-	}()
+	}
+
+	// upstream → downstream
+	go pipeMessages("upstream-to-downstream", upstream, downstream)
 
 	// downstream → upstream
-	go func() {
-		for {
-			mt, msg, err := downstream.ReadMessage()
-			if err != nil {
-				errCh <- err
-				return
-			}
-			if err := upstream.WriteMessage(mt, msg); err != nil {
-				errCh <- err
-				return
-			}
-		}
-	}()
+	go pipeMessages("downstream-to-upstream", downstream, upstream)
 
+	// Wait for one direction to finish (or error), then return. The deferred
+	// Close() calls on both connections unblock the other goroutine's
+	// ReadMessage so it exits cleanly instead of leaking.
 	<-errCh
 }

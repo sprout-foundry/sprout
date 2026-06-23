@@ -22,6 +22,13 @@ type ConnectionInfo struct {
 	ConnectedAt time.Time       // When the connection was established
 	Conn        *websocket.Conn // Underlying conn for registry lookups (SP-034-3c). Never written to directly; SafeConn owns the write path.
 
+	// SafeConn is the serialized write wrapper for this connection. Shared
+	// across all callers so cross-connection notifications (e.g., terminal
+	// displacement) use the same mutex as the owning handler goroutine,
+	// preventing concurrent-write panics. Populated by the handler that
+	// creates the connection.
+	SafeConn *SafeConn
+
 	// subscribedChannels tracks which event channels this connection has
 	// explicitly opted into (e.g., "automate"). Automate events are only
 	// forwarded to connections that have subscribed to the "automate" channel.

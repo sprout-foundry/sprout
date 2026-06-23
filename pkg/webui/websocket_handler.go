@@ -134,6 +134,15 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 			})
 			existingActive.safeConn.Close()
 			log.Printf("[SP-046] Session %s evicted for user %s", existingActive.sessionID, trackingKey)
+
+			// Also notify terminal WebSocket connections for the same tracking
+			// key so they can show a displacement banner. Terminal sessions
+			// (PTY processes) are intentionally left running — they persist
+			// across disconnects by design (ring buffer + reattach). The
+			// notification lets the client UI reflect the displacement without
+			// forcing terminal teardown, which would break the "reopen laptop
+			// and terminal is still there" UX.
+			ws.notifyTerminalConnectionsDisplaced(trackingKey)
 		}
 
 		// Now store ourselves as the active connection.
@@ -163,6 +172,7 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 		UserID:             userID,
 		ConnectedAt:        time.Now(),
 		Conn:               conn,
+		SafeConn:           safeConn, // shared write mutex for cross-connection notifications
 		subscribedChannels: make(map[string]bool),
 	})
 	defer ws.connections.Delete(conn)
@@ -896,4 +906,38 @@ func (ws *ReactWebServer) handleSyncRecoverMessage(safeConn *SafeConn, sessionID
 	}
 
 	log.Printf("[SP-046] sync_recover complete for client %s: %d files reconciled", clientID, len(result.Plan))
+}
+
+// notifyTerminalConnectionsDisplaced sends a session_displaced message to
+// all terminal WebSocket connections matching the given tracking key (user ID
+// or client ID). This is called when a chat session is taken over (SP-046) so
+// that terminal tabs on the displaced device can show a banner instead of
+// silently continuing as if nothing happened. Terminal PTY processes are NOT
+// closed — they persist across disconnects by design.
+func (ws *ReactWebServer) notifyTerminalConnectionsDisplaced(trackingKey string) {
+	displacedMsg := map[string]interface{}{
+		"type": "session_displaced",
+		"data": map[string]interface{}{
+			"reason":  "session_taken_over",
+			"message": "This session has been moved to another device",
+		},
+	}
+	ws.connections.Range(func(conn, value interface{}) bool {
+		info, ok := value.(*ConnectionInfo)
+		if !ok || info == nil || info.Type != "terminal" {
+			return true
+		}
+		// Match by UserID (service mode) or ClientID (local mode), whichever
+		// the tracking key represents.
+		if info.UserID == trackingKey || info.ClientID == trackingKey {
+			// Use the shared SafeConn (same mutex as the owning handler's
+			// goroutine) to avoid concurrent-write panics. Creating a new
+			// SafeConn here would have a separate mutex from the terminal
+			// handler's write loop, racing on the underlying *websocket.Conn.
+			if info.SafeConn != nil {
+				info.SafeConn.WriteJSON(displacedMsg)
+			}
+		}
+		return true
+	})
 }

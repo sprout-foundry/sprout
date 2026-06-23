@@ -334,25 +334,40 @@ func CreateVisionClientWithProvider(providerType api.ClientType) (api.ClientInte
 	return nil, fmt.Errorf("provider %s does not support vision models and no usable fallback is configured: %w", providerType, globalErr)
 }
 
-// GetVisionModelForProvider returns the appropriate vision model for a given provider
-// Vision models are configured in the provider JSON config files in pkg/agent_providers/configs/
-// This function creates a temporary provider client to get the configured vision model
+// GetVisionModelForProvider returns the appropriate vision model for a given provider.
+//
+// Resolution order:
+//  1. Special-cased providers (OpenAI, Ollama) check their specific config
+//     paths, falling back to the provider JSON config's vision_model field.
+//  2. Custom providers check their explicit vision_model / model_name config.
+//  3. All other providers read from the provider JSON config via a temporary
+//     client's GetVisionModel().
+//
+// Vision models are configured in the provider JSON config files in
+// pkg/agent_providers/configs/*.json under the "vision_model" field.
 func GetVisionModelForProvider(providerType api.ClientType) string {
-	// Skip providers that don't use generic provider system
 	switch providerType {
 	case api.OpenAIClientType:
-		// OpenAI uses built-in client with a fixed vision model.
+		// Read from the provider JSON config (openai.json → vision_model).
+		// Falls back to the hardcoded default only if the config is
+		// missing or the field is empty.
+		if cfg, err := factory.GlobalFactory().GetProviderConfig("openai"); err == nil {
+			if vm := strings.TrimSpace(cfg.Models.VisionModel); vm != "" {
+				return vm
+			}
+		}
 		return "gpt-4o-mini"
 	case api.OllamaClientType, api.OllamaLocalClientType:
-		// Prefer configured Ollama OCR model when available.
+		// Prefer the user's configured OCR model, then fall back to
+		// a reasonable local default. Local Ollama has no provider
+		// JSON config — the model depends on what's installed.
 		configManager, err := configuration.NewManager()
 		if err == nil {
 			config := configManager.GetConfig()
-			if config.PDFOCREnabled && config.PDFOCRProvider == "ollama" && strings.TrimSpace(config.PDFOCRModel) != "" {
+			if strings.TrimSpace(config.PDFOCRModel) != "" {
 				return EnsureOllamaModelTag(config.PDFOCRModel)
 			}
 		}
-		// Fallback to default local OCR/vision model.
 		return "glm-ocr:latest"
 	case api.OllamaCloudClientType:
 		// Ollama cloud currently does not support vision.

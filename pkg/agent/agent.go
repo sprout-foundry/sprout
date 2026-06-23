@@ -56,8 +56,15 @@ func (a *Agent) initSubManagers() {
 
 type Agent struct {
 	// Core LLM coordination
-	client           api.ClientInterface
-	clientType       api.ClientType
+	client     api.ClientInterface
+	clientType api.ClientType
+	// clientMu protects client and clientType from concurrent access.
+	// SetProvider/SetModel swap these fields while the query loop
+	// (seed_query.go), metrics, rollup, and vision checks read them.
+	// Without synchronization the two-word interface value can tear,
+	// producing garbage pointers and intermittent crashes.
+	clientMu sync.RWMutex
+
 	systemPrompt     string
 	baseSystemPrompt string // Base prompt restored when persona is cleared
 	maxIterations    int

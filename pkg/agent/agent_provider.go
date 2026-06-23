@@ -82,9 +82,7 @@ func (a *Agent) SelectProvider() error {
 		return agenterrors.NewProviderError("failed to select provider", err, "", "")
 	}
 
-	// Update agent's client type
-	a.clientType = newProvider
-
+	// Update agent's client type and client atomically
 	// Recreate client with new provider
 	model := a.configManager.GetModelForProvider(newProvider)
 	client, err := factory.CreateProviderClient(newProvider, model)
@@ -92,8 +90,8 @@ func (a *Agent) SelectProvider() error {
 		return agenterrors.NewProviderError(fmt.Sprintf("failed to create client for %s", newProvider), err, "", "")
 	}
 
-	a.client = client
-	a.client.SetDebug(a.debug)
+	client.SetDebug(a.debug)
+	a.setClient(client, newProvider)
 
 	return nil
 }

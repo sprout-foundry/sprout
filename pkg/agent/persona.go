@@ -58,7 +58,7 @@ func (a *Agent) ApplyPersona(personaID string) error {
 		if err != nil {
 			return fmt.Errorf("invalid persona provider %q: %w", persona.Provider, err)
 		}
-		if providerType != a.clientType {
+		if providerType != a.getClientType() {
 			if err := a.SetProvider(providerType); err != nil {
 				return fmt.Errorf("failed switching to persona provider %q: %w", persona.Provider, err)
 			}
@@ -207,7 +207,7 @@ func (a *Agent) GetPersonaProviderModel(personaID string) (string, string, error
 		return "", "", fmt.Errorf("persona not found or disabled: %s", personaID)
 	}
 
-	provider := strings.TrimSpace(string(a.clientType))
+	provider := strings.TrimSpace(string(a.getClientType()))
 	if provider == "" {
 		provider = strings.TrimSpace(a.GetProvider())
 	}

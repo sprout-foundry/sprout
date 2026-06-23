@@ -195,12 +195,14 @@ func handleReadFileWithImages(ctx context.Context, a *Agent, args map[string]int
 			return nil, "", fmt.Errorf("failed to resolve PDF path %s: %w", path, resolveErr)
 		}
 
-		if a != nil && a.client != nil && a.client.SupportsVision() {
-			images, text, err := handleReadPDFFileMultimodal(ctx, a, cleanPath)
-			if err != nil {
-				return nil, "", fmt.Errorf("failed to read PDF file %s: %w", path, err)
+		if a != nil {
+			if c := a.getClient(); c != nil && c.SupportsVision() {
+				images, text, err := handleReadPDFFileMultimodal(ctx, a, cleanPath)
+				if err != nil {
+					return nil, "", fmt.Errorf("failed to read PDF file %s: %w", path, err)
+				}
+				return images, text, nil
 			}
-			return images, text, nil
 		}
 
 		// Non-multimodal: extract text via OCR

@@ -21,6 +21,41 @@ import (
 // GetDebugLogPath returns the path to the current debug log file (if any)
 func (a *Agent) GetDebugLogPath() string { return a.debugLogPath }
 
+// getClient safely returns the current LLM client under the client read lock.
+// Callers must not retain the returned pointer beyond the immediate call site
+// — SetProvider may swap it concurrently. For operations that need a stable
+// reference across multiple calls, use withClient instead.
+func (a *Agent) getClient() api.ClientInterface {
+	a.clientMu.RLock()
+	defer a.clientMu.RUnlock()
+	return a.client
+}
+
+// getClientType safely returns the current provider type under the read lock.
+func (a *Agent) getClientType() api.ClientType {
+	a.clientMu.RLock()
+	defer a.clientMu.RUnlock()
+	return a.clientType
+}
+
+// setClient safely swaps both the client and clientType under the write lock.
+// Used by SetProvider and SetModel to atomically update both fields.
+func (a *Agent) setClient(client api.ClientInterface, clientType api.ClientType) {
+	a.clientMu.Lock()
+	a.client = client
+	a.clientType = clientType
+	a.clientMu.Unlock()
+}
+
+// withClient runs fn while holding the client read lock, passing a stable
+// snapshot of the current client. Use for read-only access patterns that
+// need consistency across multiple calls (e.g. metrics, vision checks).
+func (a *Agent) withClient(fn func(c api.ClientInterface)) {
+	a.clientMu.RLock()
+	defer a.clientMu.RUnlock()
+	fn(a.client)
+}
+
 // Logger returns the agent logger, initializing it lazily if needed
 func (a *Agent) Logger() *AgentLogger {
 	if a.logger == nil {
@@ -669,7 +704,7 @@ func (a *Agent) IsSessionElevated() bool {
 // callers need to pass their own context, they can set it via SetInterruptCtx
 // before calling.
 func (a *Agent) GenerateResponse(messages []api.Message) (string, error) {
-	resp, err := a.client.SendChatRequest(a.interruptCtx, messages, nil, "", false) // No tools, no reasoning, no disableThinking
+	resp, err := a.getClient().SendChatRequest(a.interruptCtx, messages, nil, "", false) // No tools, no reasoning, no disableThinking
 	if err != nil {
 		return "", agenterrors.NewProviderError("failed to generate response", err, a.GetProvider(), a.GetModel())
 	}

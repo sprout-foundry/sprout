@@ -54,6 +54,11 @@ type MessageConversion struct {
 	ArgumentsAsJSON          bool   `json:"arguments_as_json"`
 	SkipToolExecutionSummary bool   `json:"skip_tool_execution_summary"` // For providers with strict role alternation
 	ForceToolCallType        string `json:"force_tool_call_type"`        // Force tool call type to specific value (e.g., "function" for Mistral)
+	// CacheControl enables provider prompt-prefix caching (Anthropic-style
+	// cache_control: {type: "ephemeral"} markers). When true, cache breakpoints
+	// are injected at the end of the system message and tools array for providers
+	// that support it (OpenRouter forwarding to Anthropic, native Anthropic).
+	CacheControl bool `json:"cache_control,omitempty"`
 }
 
 // StreamingConfig defines streaming behavior

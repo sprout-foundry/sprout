@@ -271,6 +271,9 @@ func TestContextManagementDiagnosticEvent(t *testing.T) {
 		0.15, 0.10, 0.05, // reserved response/thinking/tool_io
 		3,    // iteration
 		120,  // message_count
+		500,  // cached_tokens
+		1000, // prompt_tokens
+		200,  // cache_write_tokens
 	)
 
 	assert.Equal(t, 70000, event["current_tokens"])
@@ -282,6 +285,10 @@ func TestContextManagementDiagnosticEvent(t *testing.T) {
 	assert.Equal(t, 0.05, event["reserved_tool_io"])
 	assert.Equal(t, 3, event["iteration"])
 	assert.Equal(t, 120, event["message_count"])
+	assert.Equal(t, 500, event["cached_tokens"])
+	assert.Equal(t, 1000, event["prompt_tokens"])
+	assert.Equal(t, 200, event["cache_write_tokens"])
+	assert.Equal(t, 0.5, event["cache_hit_rate"]) // 500 / 1000
 	assert.NotEmpty(t, event["timestamp"])
 }
 
@@ -290,8 +297,9 @@ func TestContextManagementDiagnosticEvent(t *testing.T) {
 // loaded). effective_max must not panic on the multiplication and
 // should report 0 so downstream UIs don't render misleading values.
 func TestContextManagementDiagnosticEvent_ZeroMaxTokens(t *testing.T) {
-	event := ContextManagementDiagnosticEvent(0, 0, 0.70, 0.15, 0.10, 0.05, 0, 0)
+	event := ContextManagementDiagnosticEvent(0, 0, 0.70, 0.15, 0.10, 0.05, 0, 0, 0, 0, 0)
 	assert.Equal(t, 0, event["effective_max"])
+	assert.Equal(t, 0.0, event["cache_hit_rate"]) // prompt_tokens is 0
 }
 
 // TestEventBus_PublishAfterUnsubscribeDoesNotPanic guards the race where a

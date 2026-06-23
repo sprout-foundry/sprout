@@ -112,7 +112,9 @@ func (a *Agent) PublishCompactCompleted(source string, beforeCount, afterCount, 
 // PublishContextManagementDiagnostic (SP-066 Phase 1) emits the per-iteration
 // context-budget snapshot so the WebUI metrics panel can render the effective
 // trigger threshold and verify substitution is doing the heavy lifting.
-func (a *Agent) PublishContextManagementDiagnostic(currentTokens, maxTokens, iteration, messageCount int) {
+// cachedTokens/promptTokens/cacheWriteTokens expose provider cache
+// effectiveness in the diagnostic payload.
+func (a *Agent) PublishContextManagementDiagnostic(currentTokens, maxTokens, iteration, messageCount, cachedTokens, promptTokens, cacheWriteTokens int) {
 	a.publishEvent(
 		events.EventTypeContextManagementDiagnostic,
 		events.ContextManagementDiagnosticEvent(
@@ -124,6 +126,9 @@ func (a *Agent) PublishContextManagementDiagnostic(currentTokens, maxTokens, ite
 			reservedForToolIOFraction,
 			iteration,
 			messageCount,
+			cachedTokens,
+			promptTokens,
+			cacheWriteTokens,
 		),
 	)
 }

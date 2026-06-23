@@ -611,22 +611,37 @@ func CompactStartedEvent(source string, messageCount, checkpointCount int) map[s
 //     reservation slices as fractions of max_tokens.
 //   - iteration: current iteration number from seed's OnIteration callback.
 //   - message_count: messages in the prepared prompt list.
-func ContextManagementDiagnosticEvent(currentTokens, maxTokens int, triggerFraction, reservedResponse, reservedThinking, reservedToolIO float64, iteration, messageCount int) map[string]interface{} {
+//   - cached_tokens: cumulative prompt tokens served from the provider's
+//     prompt cache so far this session.
+//   - prompt_tokens: cumulative prompt tokens charged so far this session.
+//   - cache_write_tokens: cumulative tokens written to the provider's cache
+//     (Anthropic cache_create_input_tokens). May be 0 if not tracked.
+//   - cache_hit_rate: cached_tokens / prompt_tokens, or 0 when prompt_tokens
+//     is 0. Lets the UI render cache effectiveness at a glance.
+func ContextManagementDiagnosticEvent(currentTokens, maxTokens int, triggerFraction, reservedResponse, reservedThinking, reservedToolIO float64, iteration, messageCount int, cachedTokens, promptTokens, cacheWriteTokens int) map[string]interface{} {
 	effectiveMax := 0
 	if maxTokens > 0 {
 		effectiveMax = int(float64(maxTokens) * triggerFraction)
 	}
+	cacheHitRate := 0.0
+	if promptTokens > 0 {
+		cacheHitRate = float64(cachedTokens) / float64(promptTokens)
+	}
 	return map[string]interface{}{
-		"current_tokens":    currentTokens,
-		"max_tokens":        maxTokens,
-		"effective_max":     effectiveMax,
-		"trigger_fraction":  triggerFraction,
-		"reserved_response": reservedResponse,
-		"reserved_thinking": reservedThinking,
-		"reserved_tool_io":  reservedToolIO,
-		"iteration":         iteration,
-		"message_count":     messageCount,
-		"timestamp":         time.Now().UTC().Format(time.RFC3339),
+		"current_tokens":      currentTokens,
+		"max_tokens":          maxTokens,
+		"effective_max":       effectiveMax,
+		"trigger_fraction":    triggerFraction,
+		"reserved_response":   reservedResponse,
+		"reserved_thinking":   reservedThinking,
+		"reserved_tool_io":    reservedToolIO,
+		"iteration":           iteration,
+		"message_count":       messageCount,
+		"cached_tokens":       cachedTokens,
+		"prompt_tokens":       promptTokens,
+		"cache_write_tokens":  cacheWriteTokens,
+		"cache_hit_rate":      cacheHitRate,
+		"timestamp":           time.Now().UTC().Format(time.RFC3339),
 	}
 }
 

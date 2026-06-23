@@ -14,20 +14,13 @@ import (
 // The webui sends a { "type": "security_approval_response", "data": { "request_id": "...", "approved": true/false } }
 // message when the user approves or rejects a security warning.
 func (ws *ReactWebServer) handleSecurityApprovalResponse(safeConn *SafeConn, data *SecurityApprovalResponseData, clientID string) {
-	// Route to the currently active chat's agent, since the security dialog
-	// is always shown in the context of the active chat view.
-	_, activeChatID := ws.getActiveChatContext(clientID)
-
-	clientAgent, err := ws.getChatAgent(clientID, activeChatID)
-	if err != nil || clientAgent == nil {
-		_ = safeConn.WriteJSON(map[string]interface{}{
-			"type": "error",
-			"data": map[string]string{"message": "Agent is not available"},
-		})
-		return
-	}
-
-	mgr := clientAgent.GetSecurityApprovalMgr()
+	// Use the shared webui-owned ApprovalManager directly instead of resolving
+	// the per-chat agent. All agents share this manager (injected via
+	// InjectWebUIManagers), so the response reaches the correct pending
+	// request regardless of which chat's agent created it. This avoids the
+	// expensive getChatAgent call (which may block on agent creation) in the
+	// approval response hot path.
+	mgr := ws.GetSecurityPromptMgr()
 	if mgr == nil {
 		_ = safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",
@@ -65,6 +58,8 @@ func resolveApprovalDecision(action string, approved bool) security.ApprovalDeci
 // The webui sends a { "type": "security_prompt_response", "data": { "request_id": "...", "response": true/false } }
 // message when the user responds to a file security concern prompt.
 func (ws *ReactWebServer) handleSecurityPromptResponse(safeConn *SafeConn, data *SecurityPromptResponseData, clientID string) {
+	// Use the shared webui-owned ApprovalManager directly — same rationale
+	// as handleSecurityApprovalResponse above.
 	if ws.securityPromptMgr == nil {
 		_ = safeConn.WriteJSON(map[string]interface{}{
 			"type": "error",

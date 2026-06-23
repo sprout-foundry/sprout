@@ -359,7 +359,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 	// Check for queue mode before interactive mode
 	// (skip when agent is nil in daemon mode — provider not configured yet)
 	if chatAgent != nil && chatAgent.GetConfigManager().GetConfig().GetEAMode() == "queue" {
-		return runQueueMode(ctx, chatAgent, eventBus)
+		return runQueueMode(ctx, chatAgent, eventBus, indicator)
 	}
 
 	// When agent is nil (provider not configured in daemon mode), skip to

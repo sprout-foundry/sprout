@@ -87,12 +87,6 @@ type Config struct {
 	// false explicitly to opt out of the unified resolver.
 	UnifiedRiskResolver bool `json:"unified_risk_resolver,omitempty"`
 
-	// SecurityLLMClassifier enables LLM-based risk analysis for commands the
-	// heuristic classifier flags as risky (CAUTION/DANGEROUS). The analysis is
-	// advisory — it informs the approval prompt but does not bypass the gate.
-	// Default: enabled (nil means enabled). See roadmap/SP-076.
-	SecurityLLMClassifier *SecurityLLMClassifierConfig `json:"security_llm_classifier,omitempty"`
-
 	// ResourceDirectory stores captured web/vision resources relative to the current working directory.
 	// This can be overridden at runtime with --resource-directory.
 	ResourceDirectory string `json:"resource_directory,omitempty"`
@@ -331,20 +325,6 @@ func NewConfig() *Config {
 // GetEAMode returns the current EA mode setting.
 func (c *Config) GetEAMode() string {
 	return c.EAMode
-}
-
-// IsSecurityLLMClassifierEnabled reports whether the LLM-based security
-// classifier (SP-076) should run. The classifier is ON by default: a nil
-// SecurityLLMClassifier config block means enabled, and an explicit block
-// must set Enabled=false to opt out.
-func (c *Config) IsSecurityLLMClassifierEnabled() bool {
-	if c == nil {
-		return true
-	}
-	if c.SecurityLLMClassifier == nil {
-		return true
-	}
-	return c.SecurityLLMClassifier.Enabled
 }
 
 // Validate checks the configuration for consistency and returns an error

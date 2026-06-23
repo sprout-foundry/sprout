@@ -415,24 +415,3 @@ func (a *APIKeys) Set(provider, key string) {
 	}
 	(*a)[provider] = key
 }
-
-// SecurityLLMClassifierConfig configures the LLM-based security classifier (SP-076).
-// When enabled, commands the heuristic classifier flags as CAUTION/DANGEROUS are
-// additionally analyzed by an LLM to produce a plain-language risk summary that is
-// appended to the user-facing approval prompt. The analysis is advisory — it never
-// bypasses the heuristic gate or auto-runs a command.
-type SecurityLLMClassifierConfig struct {
-	// Enabled controls whether the LLM classifier runs. Default true (so a
-	// nil *SecurityLLMClassifierConfig — i.e. no config block — means ON).
-	// Set Enabled explicitly to false to opt out.
-	Enabled bool `json:"enabled"` // default true (see IsSecurityLLMClassifierEnabled)
-
-	// Provider optionally overrides the LLM provider used for classification
-	// (e.g. "ollama-local" for a cheap local model). Empty means use the
-	// resolved default provider/model (configuration.ResolveProviderModel).
-	Provider string `json:"provider,omitempty"`
-
-	// Model optionally overrides the model used for classification. Empty
-	// means use the resolved default model.
-	Model string `json:"model,omitempty"`
-}

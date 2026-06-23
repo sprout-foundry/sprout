@@ -921,7 +921,7 @@ func newPreExecuteHook(agent *Agent) func(name string, args map[string]interface
 			// classic yes/no path until the dialog is generalized.
 			if name == "shell_command" {
 				if cmd, ok := args["command"].(string); ok && cmd != "" {
-					prompt := buildShellApprovalPrompt(secResult, agent.securityLLMAnalysisForPrompt(name, args, secResult))
+					prompt := buildShellApprovalPrompt(secResult)
 					choice := logger.AskForApprovalWithOptions(prompt, cmd)
 					decision := approvalDecisionFromCLIChoice(choice)
 					if !decision.Approved() {
@@ -931,7 +931,7 @@ func newPreExecuteHook(agent *Agent) func(name string, args map[string]interface
 					return nil
 				}
 			}
-			prompt := buildSecurityPrompt(name, args, secResult, agent.securityLLMAnalysisForPrompt(name, args, secResult))
+			prompt := buildSecurityPrompt(name, args, secResult)
 			if !logger.AskForConfirmation(prompt, false, false) {
 				return wrapSecurityCautionWithLoop(agent, agenterrors.NewSecurityError(fmt.Sprintf("user rejected %s — %s", name, secResult.Reasoning), nil), name, args)
 			}

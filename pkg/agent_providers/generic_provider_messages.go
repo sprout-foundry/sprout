@@ -106,18 +106,43 @@ func (p *GenericProvider) convertMessages(messages []api.Message, reasoning stri
 	}
 	flush()
 
-	// Inject cache_control breakpoint on the system message for providers that
-	// support prompt-prefix caching (Anthropic via OpenRouter). The system prompt
-	// is the largest static block; marking it cacheable lets the provider reuse
-	// it across requests instead of re-processing on every call.
-	// See: https://openrouter.ai/docs/features/prompt-caching
+	// Inject cache_control breakpoints for providers that support prompt-prefix
+	// caching (Anthropic via OpenRouter). Anthropic allows up to 4 breakpoints
+	// per request. We use 3 of them:
+	//
+	//  1. System message — the largest static block; caches the system prompt.
+	//  2. Last tool definition — caches the tool schema prefix (applied in
+	//     buildChatRequest, not here).
+	//  3. Last conversation message — caches the entire growing conversation
+	//     prefix so that on the NEXT turn (or next tool-call iteration within
+	//     the same turn), everything up to this point is a cache hit instead
+	//     of being reprocessed from scratch. This is the highest-impact
+	//     breakpoint for agentic workloads where the history grows every turn.
+	//
+	// Anthropic checks all previously cached prefixes on each request and uses
+	// the longest match, so the last-message breakpoint from turn N becomes a
+	// cache hit on turn N+1.
+	// See: https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching
 	if p.config.Conversion.CacheControl {
+		// Breakpoint 1: system message.
 		for i := range converted {
 			if role, ok := converted[i]["role"].(string); ok && role == "system" {
 				converted[i]["cache_control"] = map[string]interface{}{
 					"type": "ephemeral",
 				}
 				break // only mark the first (and typically only) system message
+			}
+		}
+
+		// Breakpoint 3 (of 4): last conversation message.
+		// Skip if the conversation is too short (< 2 messages) or if the last
+		// message is already the system message (avoid double-marking).
+		if len(converted) >= 2 {
+			lastIdx := len(converted) - 1
+			if _, hasCacheControl := converted[lastIdx]["cache_control"]; !hasCacheControl {
+				converted[lastIdx]["cache_control"] = map[string]interface{}{
+					"type": "ephemeral",
+				}
 			}
 		}
 	}

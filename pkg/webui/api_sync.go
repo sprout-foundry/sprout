@@ -34,13 +34,22 @@ func (ws *ReactWebServer) handleAPISyncOp(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if ws.agent == nil {
+	// Resolve the agent for this request. Prefer the server-level agent
+	// (ws.agent) for workspace-level operations like sync — the file metadata
+	// tracked by ApplySyncOp lives on the agent instance that created the
+	// files, which is ws.agent in CLI mode. In daemon mode (ws.agent == nil),
+	// fall back to the per-client agent.
+	ag := ws.agent
+	if ag == nil {
+		ag = ws.getActiveAgentForRequest(r)
+	}
+	if ag == nil {
 		http.Error(w, "agent not initialized", http.StatusServiceUnavailable)
 		return
 	}
 
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
-	result := ws.agent.ApplySyncOp(op, workspaceRoot)
+	result := ag.ApplySyncOp(op, workspaceRoot)
 
 	w.Header().Set("Content-Type", "application/json")
 	if !result.Accepted {
@@ -75,13 +84,22 @@ func (ws *ReactWebServer) handleAPISyncBatch(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if ws.agent == nil {
+	// Resolve the agent for this request. Prefer the server-level agent
+	// (ws.agent) for workspace-level operations like sync — the file metadata
+	// tracked by ApplySyncOp lives on the agent instance that created the
+	// files, which is ws.agent in CLI mode. In daemon mode (ws.agent == nil),
+	// fall back to the per-client agent.
+	ag := ws.agent
+	if ag == nil {
+		ag = ws.getActiveAgentForRequest(r)
+	}
+	if ag == nil {
 		http.Error(w, "agent not initialized", http.StatusServiceUnavailable)
 		return
 	}
 
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
-	results := ws.agent.ApplySyncOpBatch(req.Ops, workspaceRoot)
+	results := ag.ApplySyncOpBatch(req.Ops, workspaceRoot)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -96,7 +114,14 @@ func (ws *ReactWebServer) handleAPISyncStatus(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	if ws.agent == nil {
+	// Resolve the agent for this request. Prefer the server-level agent
+	// (ws.agent) for workspace-level operations like sync. In daemon mode
+	// (ws.agent == nil), fall back to the per-client agent.
+	ag := ws.agent
+	if ag == nil {
+		ag = ws.getActiveAgentForRequest(r)
+	}
+	if ag == nil {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"files": interface{}(nil),
@@ -104,7 +129,7 @@ func (ws *ReactWebServer) handleAPISyncStatus(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	files := ws.agent.GetSyncStatus()
+	files := ag.GetSyncStatus()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{

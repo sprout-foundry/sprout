@@ -89,8 +89,17 @@ func (ws *ReactWebServer) handleAPISettingsPutDefault(w http.ResponseWriter, r *
 		// Store overrides in the session's ConfigOverrides map
 		ws.mutex.Lock()
 		ctx := ws.clientContexts[clientID]
+		activeChatID := ""
 		if ctx != nil {
-			activeChatID := ctx.getActiveChatID()
+			activeChatID = ctx.getActiveChatID()
+			// Reject provider/model changes while the active chat has a query
+			// in flight — SetProvider swaps a.client without synchronization,
+			// and swapping mid-query corrupts the in-flight LLM call.
+			if ctx.hasActiveQueryForChat(activeChatID) {
+				ws.mutex.Unlock()
+				writeJSONError(w, http.StatusConflict, "Cannot change provider/model while this chat has an active run")
+				return
+			}
 			if cs := ctx.getChatSession(activeChatID); cs != nil {
 				cs.mu.Lock()
 				if cs.ConfigOverrides == nil {
@@ -109,8 +118,9 @@ func (ws *ReactWebServer) handleAPISettingsPutDefault(w http.ResponseWriter, r *
 		}
 		ws.mutex.Unlock()
 
-		// Apply to the live agent in-memory if one exists
-		if agentInst, err := ws.getClientAgent(clientID); err == nil && agentInst != nil {
+		// Apply to the live chat agent (not the client-level agent) so the
+		// override reaches the correct per-chat agent instance.
+		if agentInst, err := ws.getChatAgent(clientID, activeChatID); err == nil && agentInst != nil {
 			if newProvider != "" {
 				providerType, _ := cm.MapStringToClientType(newProvider)
 				if err := agentInst.SetProvider(providerType); err != nil {
@@ -306,23 +316,44 @@ func (ws *ReactWebServer) handlePutSessionSettings(w http.ResponseWriter, r *htt
 	cs.mu.Unlock()
 	ws.mutex.Unlock()
 
-	// Apply to live agent in-memory
+	// Apply to live chat agent (not client-level agent) so the override
+	// reaches the correct per-chat instance. Skip if the chat has an
+	// active query — SetProvider swaps a.client without synchronization.
 	providerOrModelChanged := false
-	if agentInst, err := ws.getClientAgent(clientID); err == nil && agentInst != nil {
-		if p, ok := savedOverrides["provider"].(string); ok && p != "" {
-			cm := ws.getConfigManager(r, w)
-			if cm != nil {
-				if pt, err := cm.MapStringToClientType(p); err == nil {
-					agentInst.SetProvider(pt)
-					providerOrModelChanged = true
+	activeChatIDForAgent := ""
+	ws.mutex.RLock()
+	if ctx := ws.clientContexts[clientID]; ctx != nil {
+		activeChatIDForAgent = ctx.getActiveChatID()
+	}
+	ws.mutex.RUnlock()
+
+	canChangeAgent := activeChatIDForAgent != ""
+	if canChangeAgent {
+		ws.mutex.RLock()
+		ctx := ws.clientContexts[clientID]
+		if ctx != nil && ctx.hasActiveQueryForChat(activeChatIDForAgent) {
+			canChangeAgent = false
+		}
+		ws.mutex.RUnlock()
+	}
+
+	if canChangeAgent {
+		if agentInst, err := ws.getChatAgent(clientID, activeChatIDForAgent); err == nil && agentInst != nil {
+			if p, ok := savedOverrides["provider"].(string); ok && p != "" {
+				cm := ws.getConfigManager(r, w)
+				if cm != nil {
+					if pt, err := cm.MapStringToClientType(p); err == nil {
+						agentInst.SetProvider(pt)
+						providerOrModelChanged = true
+					}
 				}
 			}
+			if m, ok := savedOverrides["model"].(string); ok && m != "" {
+				agentInst.SetModel(m)
+				providerOrModelChanged = true
+			}
+			agentInst.SetConfigOverrides(savedOverrides)
 		}
-		if m, ok := savedOverrides["model"].(string); ok && m != "" {
-			agentInst.SetModel(m)
-			providerOrModelChanged = true
-		}
-		agentInst.SetConfigOverrides(savedOverrides)
 	}
 
 	// Refresh the status bar for any provider/model change in session
@@ -466,19 +497,29 @@ func (ws *ReactWebServer) putConfigToFile(w http.ResponseWriter, r *http.Request
 	}
 	if newProvider != "" || newModel != "" {
 		clientID := ws.resolveClientID(r)
-		if agentInst, err := ws.getClientAgent(clientID); err == nil && agentInst != nil {
-			if newProvider != "" {
-				if cm := ws.getConfigManager(r, w); cm != nil {
-					if pt, err := cm.MapStringToClientType(newProvider); err == nil {
-						if err := agentInst.SetProvider(pt); err != nil {
-							log.Printf("webui: failed to set provider on live agent after persisted PUT: %v", err)
+		// Resolve the active chat ID so we apply to the correct per-chat agent.
+		activeChatID := ""
+		ws.mutex.RLock()
+		if ctx := ws.clientContexts[clientID]; ctx != nil {
+			activeChatID = ctx.getActiveChatID()
+		}
+		ws.mutex.RUnlock()
+
+		if activeChatID != "" {
+			if agentInst, err := ws.getChatAgent(clientID, activeChatID); err == nil && agentInst != nil {
+				if newProvider != "" {
+					if cm := ws.getConfigManager(r, w); cm != nil {
+						if pt, err := cm.MapStringToClientType(newProvider); err == nil {
+							if err := agentInst.SetProvider(pt); err != nil {
+								log.Printf("webui: failed to set provider on live agent after persisted PUT: %v", err)
+							}
 						}
 					}
 				}
-			}
-			if newModel != "" {
-				if err := agentInst.SetModel(newModel); err != nil {
-					log.Printf("webui: failed to set model on live agent after persisted PUT: %v", err)
+				if newModel != "" {
+					if err := agentInst.SetModel(newModel); err != nil {
+						log.Printf("webui: failed to set model on live agent after persisted PUT: %v", err)
+					}
 				}
 			}
 		}

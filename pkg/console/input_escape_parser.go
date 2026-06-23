@@ -9,6 +9,15 @@ type EscapeParser struct {
 	pendingChar byte   // Stores a character that should be processed next
 	hasPending  bool   // Whether there's a pending character
 	mouseBuf    []byte // Buffer for mouse event data
+
+	// utf8Buf accumulates bytes of a multi-byte UTF-8 sequence. When
+	// a leading byte (>= 0xC0) arrives outside an escape sequence, we
+	// buffer it here along with the expected number of continuation
+	// bytes. Without this, continuation bytes (0x80-0xBF) are silently
+	// dropped by the default case, corrupting pasted text containing
+	// non-ASCII characters (curly quotes, emoji, international text).
+	utf8Buf   []byte
+	utf8Need  int // remaining continuation bytes expected
 }
 
 // NewEscapeParser creates a new escape sequence parser
@@ -48,7 +57,47 @@ func (ep *EscapeParser) Parse(b byte) *InputEvent {
 		case 9:
 			return &InputEvent{Type: EventTab}
 		default:
-			// Return regular printable characters as character events
+			// Return regular printable characters as character events.
+			// Handle multi-byte UTF-8 sequences (pasted international
+			// text, emoji, curly quotes) by buffering continuation bytes.
+			// Without this, bytes >= 0x80 are silently dropped,
+			// corrupting pasted JSON content that contains non-ASCII
+			// characters.
+			if ep.utf8Need > 0 {
+				// We're mid-sequence: accumulate continuation bytes.
+				if b&0xC0 == 0x80 {
+					ep.utf8Buf = append(ep.utf8Buf, b)
+					ep.utf8Need--
+					if ep.utf8Need == 0 {
+						runeBytes := ep.utf8Buf
+						ep.utf8Buf = nil
+						return &InputEvent{Type: EventChar, Data: string(runeBytes)}
+					}
+					return nil
+				}
+				// Invalid continuation — the sequence was truncated.
+				// Flush what we have (best effort) and process the new
+				// byte as a potential new leading byte.
+				ep.utf8Buf = nil
+				ep.utf8Need = 0
+			}
+			// Check for UTF-8 leading byte (2-4 byte sequence).
+			if b >= 0xC0 {
+				ep.utf8Buf = append(ep.utf8Buf, b)
+				switch {
+				case b&0xE0 == 0xC0:
+					ep.utf8Need = 1 // 2-byte sequence
+				case b&0xF0 == 0xE0:
+					ep.utf8Need = 2 // 3-byte sequence
+				case b&0xF8 == 0xF0:
+					ep.utf8Need = 3 // 4-byte sequence
+				default:
+					// Invalid leading byte — emit as-is (best effort).
+					ep.utf8Buf = nil
+					return &InputEvent{Type: EventChar, Data: string([]byte{b})}
+				}
+				return nil // wait for continuation bytes
+			}
 			if b >= 32 && b <= 126 {
 				return &InputEvent{Type: EventChar, Data: string([]byte{b})}
 			}
@@ -291,4 +340,6 @@ func (ep *EscapeParser) Reset() {
 	ep.state = 0
 	ep.buffer = ep.buffer[:0]
 	ep.mouseBuf = nil
+	ep.utf8Buf = nil
+	ep.utf8Need = 0
 }

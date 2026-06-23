@@ -6,10 +6,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
@@ -113,98 +109,7 @@ func makePlanFromResults(results []agent.ReconciliationActionResult) []Reconcili
 	return plan
 }
 
-// --- Volume Corruption Recovery ---
-
-// HandleVolumeCorruption attempts to recover a corrupted workspace volume.
-// It tries: (1) git restore, (2) git clone from remote, (3) OPFS replay.
-func HandleVolumeCorruption(ctx context.Context, workspaceRoot string) error {
-	log.Printf("[SP-046] Volume corruption detected for workspace: %s", workspaceRoot)
-
-	// Strategy 1: Try git restore if .git exists
-	gitDir := filepath.Join(workspaceRoot, ".git")
-	if info, err := os.Stat(gitDir); err == nil && info.IsDir() {
-		log.Printf("[SP-046] Attempting git restore for %s", workspaceRoot)
-		if err := gitRestoreWorkspace(workspaceRoot); err != nil {
-			log.Printf("[SP-046] git restore failed: %v, trying git clone", err)
-		} else {
-			log.Printf("[SP-046] git restore succeeded for %s", workspaceRoot)
-			return nil
-		}
-	}
-
-	// Strategy 2: Try git clone from remote
-	// Check if there's a known remote URL we can clone from
-	remoteURL, err := getGitRemoteURL(workspaceRoot)
-	if err != nil || remoteURL == "" {
-		log.Printf("[SP-046] No git remote available for %s", workspaceRoot)
-	} else {
-		log.Printf("[SP-046] Attempting git clone from %s", remoteURL)
-		if err := gitCloneWorkspace(ctx, workspaceRoot, remoteURL); err != nil {
-			log.Printf("[SP-046] git clone failed: %v", err)
-		} else {
-			log.Printf("[SP-046] git clone succeeded for %s", workspaceRoot)
-			return nil
-		}
-	}
-
-	// Strategy 3: Mark for OPFS replay — the caller should trigger
-	// the browser to replay its persisted state.
-	log.Printf("[SP-046] Volume corruption recovery for %s requires OPFS replay", workspaceRoot)
-	return fmt.Errorf("volume corruption recovery for %s requires OPFS replay (no git available)", workspaceRoot)
-}
-
-// gitRestoreWorkspace runs git checkout/restore to fix a corrupted workspace.
-func gitRestoreWorkspace(workspaceRoot string) error {
-	// Clean untracked files and restore modified files
-	cmd := exec.Command("git", "checkout", "--", ".")
-	cmd.Dir = workspaceRoot
-	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("git checkout failed: %w (%s)", err, strings.TrimSpace(string(output)))
-	}
-
-	cmd = exec.Command("git", "clean", "-fd")
-	cmd.Dir = workspaceRoot
-	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("git clean failed: %w (%s)", err, strings.TrimSpace(string(output)))
-	}
-
-	return nil
-}
-
-// getGitRemoteURL returns the fetch URL of the "origin" remote.
-func getGitRemoteURL(workspaceRoot string) (string, error) {
-	cmd := exec.Command("git", "remote", "get-url", "origin")
-	cmd.Dir = workspaceRoot
-	output, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("git remote get-url failed: %w", err)
-	}
-	return strings.TrimSpace(string(output)), nil
-}
-
-// gitCloneWorkspace removes the corrupted workspace and re-clones from remote.
-func gitCloneWorkspace(ctx context.Context, workspaceRoot, remoteURL string) error {
-	parentDir := filepath.Dir(workspaceRoot)
-	dirName := filepath.Base(workspaceRoot)
-	backupDir := filepath.Join(parentDir, dirName+".corrupted."+time.Now().Format("20060102-150405"))
-
-	// Rename corrupted dir as backup
-	if err := os.Rename(workspaceRoot, backupDir); err != nil {
-		return fmt.Errorf("failed to backup corrupted workspace: %w", err)
-	}
-
-	// Clone fresh
-	cmd := exec.CommandContext(ctx, "git", "clone", remoteURL, workspaceRoot)
-	if output, err := cmd.CombinedOutput(); err != nil {
-		// Restore the backup since clone failed
-		_ = os.Rename(backupDir, workspaceRoot)
-		return fmt.Errorf("git clone failed: %w (%s)", err, strings.TrimSpace(string(output)))
-	}
-
-	// Remove backup on success
-	_ = os.RemoveAll(backupDir)
-	return nil
-}
+// --- File replay helpers ---
 
 // SendSyncReplayFile sends a single file replay patch to a client connection.
 func (ws *ReactWebServer) SendSyncReplayFile(safeConn *SafeConn, clientID, filePath, content string, seq int64) error {

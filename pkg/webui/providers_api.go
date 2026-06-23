@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	agentpkg "github.com/sprout-foundry/sprout/pkg/agent"
@@ -31,7 +32,12 @@ func (ws *ReactWebServer) handleAPIProviders(w http.ResponseWriter, r *http.Requ
 	}
 
 	clientID := ws.resolveClientID(r)
-	providers := ws.listProviders(clientID)
+	// Derive a context from the request so model discovery is cancelled if
+	// the client disconnects. Add an overall cap so the parallel fetches
+	// can't run indefinitely even if the request context never fires.
+	listCtx, listCancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer listCancel()
+	providers := ws.listProvidersCtx(listCtx, clientID)
 	currentProvider := ""
 	currentModel := ""
 
@@ -57,6 +63,15 @@ func (ws *ReactWebServer) handleAPIProviders(w http.ResponseWriter, r *http.Requ
 }
 
 func (ws *ReactWebServer) listProviders(clientID string) []providerDescriptor {
+	return ws.listProvidersCtx(context.Background(), clientID)
+}
+
+// listProvidersCtx is the context-aware variant. When derived from an HTTP
+// request, model discovery is cancelled when the client disconnects so the
+// server doesn't keep making N provider API calls for a closed browser tab.
+// It also fetches models for all providers concurrently instead of
+// sequentially, turning a 12×5s worst case into a single 5s timeout.
+func (ws *ReactWebServer) listProvidersCtx(ctx context.Context, clientID string) []providerDescriptor {
 	var configManager *configuration.Manager
 
 	agentInst, err := ws.getClientAgent(clientID)
@@ -79,23 +94,42 @@ func (ws *ReactWebServer) listProviders(clientID string) []providerDescriptor {
 	}
 
 	providerTypes := configManager.GetAvailableProviders()
-	descriptors := make([]providerDescriptor, 0, len(providerTypes))
 
-	for _, providerType := range providerTypes {
-		providerID := string(providerType)
-		var models []string
-		if agentInst != nil {
-			models = ws.modelsForProvider(providerType, agentInst)
-		} else {
-			// No agent available - try to get models from the API or catalog
-			models = ws.modelsForProviderNoAgent(providerType)
-		}
-		descriptors = append(descriptors, providerDescriptor{
-			ID:     providerID,
-			Name:   api.GetProviderName(providerType),
-			Models: models,
-		})
+	// Fetch models for all providers concurrently. Each provider gets its
+	// own sub-context with a per-provider timeout, so one slow provider
+	// can't block the entire response. The parent context (derived from
+	// the HTTP request when available) cancels all fetches if the client
+	// disconnects.
+	type providerResult struct {
+		index   int
+		desc    providerDescriptor
 	}
+
+	results := make([]providerDescriptor, len(providerTypes))
+	var wg sync.WaitGroup
+
+	for i, providerType := range providerTypes {
+		wg.Add(1)
+		go func(idx int, pt api.ClientType) {
+			defer wg.Done()
+			var models []string
+			if agentInst != nil {
+				models = ws.modelsForProviderCtx(ctx, pt, agentInst)
+			} else {
+				models = ws.modelsForProviderNoAgentCtx(ctx, pt)
+			}
+			results[idx] = providerDescriptor{
+				ID:     string(pt),
+				Name:   api.GetProviderName(pt),
+				Models: models,
+			}
+		}(i, providerType)
+	}
+	wg.Wait()
+
+	// Filter out zero-value entries (shouldn't happen since we pre-sized,
+	// but the results slice was zero-initialized and we wrote to each index).
+	descriptors := results[:]
 
 	sort.SliceStable(descriptors, func(i, j int) bool {
 		if descriptors[i].Name == descriptors[j].Name {
@@ -112,6 +146,13 @@ func (ws *ReactWebServer) listProviders(clientID string) []providerDescriptor {
 func modelsForProviderFromAPI(providerType api.ClientType) []string {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	return modelsForProviderFromAPICtx(ctx, providerType)
+}
+
+// modelsForProviderFromAPICtx is the context-aware variant. The caller
+// controls the timeout/cancellation — pass a context derived from the HTTP
+// request so in-flight API calls are cancelled when the client disconnects.
+func modelsForProviderFromAPICtx(ctx context.Context, providerType api.ClientType) []string {
 	models, err := api.GetModelsForProviderCtx(ctx, providerType)
 	if err == nil && len(models) > 0 {
 		modelIDs := make([]string, 0, len(models))
@@ -156,7 +197,15 @@ func modelsForProviderFromAPI(providerType api.ClientType) []string {
 }
 
 func (ws *ReactWebServer) modelsForProvider(providerType api.ClientType, agentInst *agentpkg.Agent) []string {
-	if models := modelsForProviderFromAPI(providerType); len(models) > 0 {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return ws.modelsForProviderCtx(ctx, providerType, agentInst)
+}
+
+// modelsForProviderCtx is the context-aware variant. Derives the model-list
+// timeout from the parent context so a client disconnect cancels the fetch.
+func (ws *ReactWebServer) modelsForProviderCtx(ctx context.Context, providerType api.ClientType, agentInst *agentpkg.Agent) []string {
+	if models := modelsForProviderFromAPICtx(ctx, providerType); len(models) > 0 {
 		return models
 	}
 
@@ -193,7 +242,14 @@ func (ws *ReactWebServer) modelsForProvider(providerType api.ClientType, agentIn
 // modelsForProviderNoAgent is like modelsForProvider but doesn't require an
 // agent instance. Used during onboarding when no provider is configured yet.
 func (ws *ReactWebServer) modelsForProviderNoAgent(providerType api.ClientType) []string {
-	if models := modelsForProviderFromAPI(providerType); len(models) > 0 {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return ws.modelsForProviderNoAgentCtx(ctx, providerType)
+}
+
+// modelsForProviderNoAgentCtx is the context-aware variant.
+func (ws *ReactWebServer) modelsForProviderNoAgentCtx(ctx context.Context, providerType api.ClientType) []string {
+	if models := modelsForProviderFromAPICtx(ctx, providerType); len(models) > 0 {
 		return models
 	}
 

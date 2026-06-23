@@ -168,12 +168,18 @@ func (a *ActivityIndicator) ReplaceLastN(line string, n int) {
 	if n < 1 {
 		n = 1
 	}
+	// Serialize the cursor-positioning writes so they can't interleave
+	// with a concurrent footer draw or InputReader render. The N row
+	// walks use \033[F (cursor up) + \033[K (clear line) which are only
+	// safe when no other chrome is writing to the terminal.
+	LockOutput()
 	// \033[F moves cursor to start of previous line; \033[K clears from
 	// cursor to end of line. Repeat n times to walk up and erase.
 	for i := 0; i < n; i++ {
 		fmt.Fprint(a.w, "\033[F\033[K")
 	}
 	fmt.Fprintln(a.w, line)
+	UnlockOutput()
 }
 
 // Elapsed returns how long the current spinner has been running. Returns
@@ -230,7 +236,14 @@ func (a *ActivityIndicator) render(frame int) {
 	msg := a.msg
 	elapsed := time.Since(a.startedAt)
 	a.mu.Unlock()
+	// Serialize against InputReader render, status footer draw, and other
+	// console chrome. Without LockOutput the spinner's cursor-positioning
+	// sequences (\r\033[K) can interleave with a footer Refresh or a
+	// keystroke render, displacing the cursor — the "characters look
+	// dropped" bug. The lock is held only for the single Fprintf write.
+	LockOutput()
 	fmt.Fprintf(a.w, "\r\033[K%s %s (%.1fs)", spinnerFrames[frame], msg, elapsed.Seconds())
+	UnlockOutput()
 }
 
 // sanitizeLine strips newlines and carriage returns so the spinner always

@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -13,8 +14,9 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/clihooks"
-	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/events"
+
+	"golang.org/x/term"
 )
 
 // AskUserOption is a single selectable choice in a structured ask_user
@@ -85,37 +87,7 @@ func NewAskUserManager() *AskUserManager {
 var (
 	nextAskReqID   int64
 	nextAskReqIDMu sync.Mutex
-
-	// askUserHistory is the process-wide history of ask_user responses,
-	// shared across all InputReader instances created for ask_user
-	// prompts so Ctrl-R / up-arrow recall works between calls.
-	askUserHistory   []string
-	askUserHistoryMu sync.Mutex
 )
-
-// globalAskUserHistory returns a copy of the shared ask_user history
-// for InputReader.SetHistory.
-func globalAskUserHistory() []string {
-	askUserHistoryMu.Lock()
-	defer askUserHistoryMu.Unlock()
-	out := make([]string, len(askUserHistory))
-	copy(out, askUserHistory)
-	return out
-}
-
-// appendGlobalAskUserHistory adds a response to the shared history,
-// capped at maxHistoryEntries (matching InputReader's cap).
-func appendGlobalAskUserHistory(answer string) {
-	askUserHistoryMu.Lock()
-	defer askUserHistoryMu.Unlock()
-	if len(askUserHistory) > 0 && askUserHistory[len(askUserHistory)-1] == answer {
-		return // skip consecutive duplicates
-	}
-	askUserHistory = append(askUserHistory, answer)
-	if over := len(askUserHistory) - 100; over > 0 {
-		askUserHistory = askUserHistory[over:]
-	}
-}
 
 func generateAskUserRequestID() string {
 	nextAskReqIDMu.Lock()
@@ -211,16 +183,17 @@ func (m *AskUserManager) SetTimeout(d time.Duration) {
 	}
 }
 
-// stdinIsTTY reports whether os.Stdin appears to be a terminal we can
-// read from interactively. Returns false when stdin is closed, redirected,
-// or otherwise not a character device — in those cases AskUser would
-// hit EOF immediately and we'd rather surface ErrAskUserNoChannel.
+// stdinIsTTY reports whether os.Stdin is connected to an interactive
+// terminal. Uses the same ioctl-based check (golang.org/x/term.IsTerminal)
+// as the security approval prompt and the rest of the agent so the two
+// code paths never disagree about whether a TTY is available.
+//
+// Previously this used os.Stdin.Stat() + os.ModeCharDevice, which can
+// diverge from the ioctl result in certain daemon/pipe configurations —
+// causing the security dialog to render while ask_user claimed no input
+// channel existed.
 func stdinIsTTY() bool {
-	fi, err := os.Stdin.Stat()
-	if err != nil {
-		return false
-	}
-	return (fi.Mode() & os.ModeCharDevice) != 0
+	return term.IsTerminal(int(os.Stdin.Fd()))
 }
 
 // AskUser prompts the user with a question and reads input from stdin.
@@ -242,55 +215,79 @@ func AskUser(req AskUserRequest) (string, error) {
 	clihooks.SuspendIndicator()
 	// SP-057 follow-up: pause the SteerInputReader so it releases stdin
 	// back to cooked mode. The ask_user tool fires mid-turn, so without
-	// this the InputReader would hit EOF immediately (the steer reader
-	// is consuming raw-mode stdin) and the tool would silently return
-	// an empty answer.
+	// this the bufio.Reader below would hit EOF immediately (the steer
+	// reader is consuming raw-mode stdin) and the tool would silently
+	// return an empty answer.
 	clihooks.PauseSteer()
 	defer clihooks.ResumeSteer()
 
 	renderCLIPrompt(os.Stdout, req)
 
-	// Use the shared InputReader for full editing parity with the REPL
-	// prompt: arrow keys, bracketed paste (with image detection + smart-
-	// save), Ctrl-R search, Ctrl-X Ctrl-E editor, UTF-8 aware editing.
-	// InputReader.ReadLine handles non-TTY fallback internally.
-	prompt := "> "
-	if req.Default != "" {
-		prompt = fmt.Sprintf("> [default: %s] ", req.Default)
-	}
-	inputReader := console.NewInputReader(prompt)
-	inputReader.SetHistory(globalAskUserHistory())
+	reader := bufio.NewReader(os.Stdin)
 
-	answer, err := inputReader.ReadLine()
+	if len(req.Options) == 0 {
+		// Freeform mode: read until a blank line (double Enter) or EOF.
+		// This allows pasting multiline text — a single newline between
+		// pasted lines is preserved; the user submits by pressing Enter
+		// on an empty line.
+		answer, err := readFreeformInput(reader)
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return "", ErrAskUserNoChannel
+			}
+			return "", fmt.Errorf("read user input: %w", err)
+		}
+		if answer == "" && req.Default != "" {
+			return req.Default, nil
+		}
+		return answer, nil
+	}
+
+	// Option mode: single line is sufficient.
+	answer, err := reader.ReadString('\n')
 	if err != nil {
 		if errors.Is(err, io.EOF) {
 			return "", ErrAskUserNoChannel
-		}
-		if err.Error() == "interrupted" {
-			return "", fmt.Errorf("user interrupted")
 		}
 		return "", fmt.Errorf("read user input: %w", err)
 	}
 	answer = strings.TrimSpace(answer)
 
-	if answer == "" && req.Default != "" {
-		return req.Default, nil
+	resolved, ok := resolveCLIOptionAnswer(answer, req)
+	if !ok {
+		return "", fmt.Errorf("invalid selection %q — expected a number 1-%d, an option label, or one of the option values", answer, len(req.Options))
 	}
+	return resolved, nil
+}
 
-	if len(req.Options) > 0 {
-		resolved, ok := resolveCLIOptionAnswer(answer, req)
-		if !ok {
-			return "", fmt.Errorf("invalid selection %q — expected a number 1-%d, an option label, or one of the option values", answer, len(req.Options))
+// readFreeformInput reads lines from the reader until a blank line is
+// encountered (the user pressed Enter on an empty line) or EOF is reached.
+// Consecutive newlines within pasted content are preserved — only a blank
+// line at the *end* terminates input. The returned string is trimmed of
+// trailing whitespace but internal newlines are kept intact.
+func readFreeformInput(reader *bufio.Reader) (string, error) {
+	var lines []string
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				// EOF counts as the terminator — return whatever we have.
+				trimmed := strings.TrimRight(line, "\n\r")
+				if trimmed != "" {
+					lines = append(lines, trimmed)
+				}
+				return strings.Join(lines, "\n"), nil
+			}
+			return "", err
 		}
-		answer = resolved
+		trimmed := strings.TrimRight(line, "\n\r")
+		if trimmed == "" && len(lines) > 0 {
+			// Blank line signals end of input (but only if we already
+			// have content — an immediate blank returns empty string).
+			return strings.Join(lines, "\n"), nil
+		}
+		lines = append(lines, trimmed)
 	}
-
-	// Persist non-empty answers to the shared history.
-	if answer != "" {
-		appendGlobalAskUserHistory(answer)
-	}
-
-	return answer, nil
 }
 
 // renderCLIPrompt writes the question and (optionally) the numbered
@@ -327,9 +324,17 @@ func renderCLIPrompt(w io.Writer, req AskUserRequest) {
 		}
 	}
 	fmt.Fprintln(w, bar)
-	// The "> " prompt is rendered by InputReader.ReadLine — it handles
-	// cursor positioning and raw-mode display. Don't print it here or
-	// it would double-render.
+	if len(req.Options) == 0 {
+		if req.Default != "" {
+			fmt.Fprintf(w, "> [default: %s] (Enter blank line to submit)\n", req.Default)
+		} else {
+			fmt.Fprintln(w, "> (Enter blank line to submit)")
+		}
+	} else if req.Default != "" {
+		fmt.Fprintf(w, "> [default: %s] ", req.Default)
+	} else {
+		fmt.Fprint(w, "> ")
+	}
 }
 
 func toEventRequest(req AskUserRequest) events.AskUserRequest {

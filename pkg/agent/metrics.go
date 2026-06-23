@@ -99,16 +99,8 @@ func (a *Agent) TrackMetricsFromResponse(promptTokens, completionTokens, totalTo
 		}
 	}
 
-	// Calculate cost savings from cached tokens
-	// Assuming cached tokens save approximately 90% of the cost (since they're reused)
-	if cachedTokens > 0 {
-		// Rough estimate: cached token value = tokens * average cost per token
-		avgCostPerToken := 0.0
-		if totalTokens > 0 && estimatedCost > 0 {
-			avgCostPerToken = estimatedCost / float64(totalTokens)
-		}
-		a.state.SetCachedCostSavings(a.state.GetCachedCostSavings() + float64(cachedTokens)*avgCostPerToken*0.9)
-	}
+	// Calculate cost savings from cached tokens using the provider-aware heuristic.
+	a.state.SetCachedCostSavings(a.state.GetCachedCostSavings() + a.calculateCachedTokenSavings(cachedTokens, totalTokens, estimatedCost))
 
 	// Trigger stats update callback if registered
 	if callback, ok := a.statsUpdateCallback.Load().(func(int, float64)); ok && callback != nil {
@@ -203,6 +195,33 @@ func (a *Agent) GetCachedTokens() int {
 // GetCachedCostSavings returns the cost savings from cached tokens
 func (a *Agent) GetCachedCostSavings() float64 {
 	return a.state.GetCachedCostSavings()
+}
+
+// calculateCachedTokenSavings estimates the cost savings from cached prompt
+// tokens. Cached tokens are served from the provider's prompt cache instead
+// of being re-processed, so they cost a fraction of normal input price.
+//
+// The discount factor is provider-dependent:
+//   - Anthropic: cache reads are 0.1× input (90% savings) — the dominant case
+//     since Anthropic's cache_control is the primary caching mechanism.
+//   - OpenAI: cache reads are 0.5× input (50% savings).
+//   - OpenRouter: passes through the underlying provider's pricing.
+//
+// We use 0.9 (90% savings) as the default because most cached_tokens reporting
+// flows through OpenRouter→Anthropic, and over-estimating savings slightly is
+// safer than under-estimating for budget planning. The method is extracted so
+// it can be refined with provider-specific pricing when available.
+//
+// cachedTokens: number of prompt tokens served from cache.
+// estimatedCost: total cost charged for this request.
+// totalTokens: total tokens (prompt + completion) for this request.
+func (a *Agent) calculateCachedTokenSavings(cachedTokens, totalTokens int, estimatedCost float64) float64 {
+	if cachedTokens <= 0 || totalTokens <= 0 || estimatedCost <= 0 {
+		return 0
+	}
+	avgCostPerToken := estimatedCost / float64(totalTokens)
+	const cachedTokenSavingsFactor = 0.9 // 90% — matches Anthropic cache-read pricing
+	return float64(cachedTokens) * avgCostPerToken * cachedTokenSavingsFactor
 }
 
 // GetContextWarningIssued returns whether a context warning has been issued

@@ -88,7 +88,28 @@ func (p *GenericProvider) buildChatRequest(messages []api.Message, tools []api.T
 
 	// Add tools if provided
 	if len(tools) > 0 {
-		request["tools"] = tools
+		if p.config.Conversion.CacheControl {
+			// Convert tools to map form so we can attach cache_control to the
+			// last tool, marking the tool definitions as cacheable prefix.
+			toolMaps := make([]map[string]interface{}, 0, len(tools))
+			for i, tool := range tools {
+				tm := map[string]interface{}{
+					"type": tool.Type,
+					"function": map[string]interface{}{
+						"name":        tool.Function.Name,
+						"description": tool.Function.Description,
+						"parameters":  tool.Function.Parameters,
+					},
+				}
+				if i == len(tools)-1 {
+					tm["cache_control"] = map[string]interface{}{"type": "ephemeral"}
+				}
+				toolMaps = append(toolMaps, tm)
+			}
+			request["tools"] = toolMaps
+		} else {
+			request["tools"] = tools
+		}
 	}
 
 	return json.Marshal(request)

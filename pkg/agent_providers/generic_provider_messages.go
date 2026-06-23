@@ -106,6 +106,22 @@ func (p *GenericProvider) convertMessages(messages []api.Message, reasoning stri
 	}
 	flush()
 
+	// Inject cache_control breakpoint on the system message for providers that
+	// support prompt-prefix caching (Anthropic via OpenRouter). The system prompt
+	// is the largest static block; marking it cacheable lets the provider reuse
+	// it across requests instead of re-processing on every call.
+	// See: https://openrouter.ai/docs/features/prompt-caching
+	if p.config.Conversion.CacheControl {
+		for i := range converted {
+			if role, ok := converted[i]["role"].(string); ok && role == "system" {
+				converted[i]["cache_control"] = map[string]interface{}{
+					"type": "ephemeral",
+				}
+				break // only mark the first (and typically only) system message
+			}
+		}
+	}
+
 	_ = reasoning // reasoning effort is sent via provider/model-specific request params, not message fields
 
 	return converted

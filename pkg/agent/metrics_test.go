@@ -434,6 +434,79 @@ func TestGetCachedCostSavings(t *testing.T) {
 	})
 }
 
+// TestCalculateCachedTokenSavings verifies the provider-aware cached-token
+// savings heuristic. The helper estimates how much money was saved by
+// prompt-cache hits using the 90% discount factor (Anthropic cache-read
+// pricing). Extracted from TrackMetricsFromResponse for testability.
+func TestCalculateCachedTokenSavings(t *testing.T) {
+	t.Parallel()
+
+	t.Run("returns zero when cachedTokens is 0", func(t *testing.T) {
+		a := newMetricsTestAgent(t)
+
+		got := a.calculateCachedTokenSavings(0, 150, 0.05)
+		if got != 0 {
+			t.Errorf("expected 0 savings for 0 cached tokens, got %f", got)
+		}
+	})
+
+	t.Run("returns zero when totalTokens is 0", func(t *testing.T) {
+		a := newMetricsTestAgent(t)
+
+		got := a.calculateCachedTokenSavings(25, 0, 0.05)
+		if got != 0 {
+			t.Errorf("expected 0 savings for 0 total tokens, got %f", got)
+		}
+	})
+
+	t.Run("returns zero when estimatedCost is 0", func(t *testing.T) {
+		a := newMetricsTestAgent(t)
+
+		got := a.calculateCachedTokenSavings(25, 150, 0)
+		if got != 0 {
+			t.Errorf("expected 0 savings for 0 cost, got %f", got)
+		}
+	})
+
+	t.Run("returns zero when estimatedCost is negative", func(t *testing.T) {
+		a := newMetricsTestAgent(t)
+
+		got := a.calculateCachedTokenSavings(25, 150, -0.05)
+		if got != 0 {
+			t.Errorf("expected 0 savings for negative cost, got %f", got)
+		}
+	})
+
+	t.Run("returns correct value for known inputs", func(t *testing.T) {
+		a := newMetricsTestAgent(t)
+
+		// cachedTokens=25, totalTokens=150, estimatedCost=0.05
+		// expected = 25 * (0.05/150) * 0.9 = 0.0075
+		got := a.calculateCachedTokenSavings(25, 150, 0.05)
+		expected := 0.0075
+		if got < expected-1e-9 || got > expected+1e-9 {
+			t.Errorf("expected savings %f, got %f", expected, got)
+		}
+	})
+
+	t.Run("handles large values without overflow", func(t *testing.T) {
+		a := newMetricsTestAgent(t)
+
+		// Large token counts with a realistic cost.
+		// cachedTokens=2_000_000, totalTokens=3_000_000, estimatedCost=100.0
+		// expected = 2_000_000 * (100.0/3_000_000) * 0.9 = 60.0
+		got := a.calculateCachedTokenSavings(2_000_000, 3_000_000, 100.0)
+		expected := 60.0
+		if got < expected-1e-6 || got > expected+1e-6 {
+			t.Errorf("expected savings %f, got %f", expected, got)
+		}
+		// Sanity: result must be finite (no NaN/Inf).
+		if got != got || got > 1e18 {
+			t.Errorf("expected finite savings, got %f", got)
+		}
+	})
+}
+
 func TestGetContextWarningIssued(t *testing.T) {
 	t.Parallel()
 

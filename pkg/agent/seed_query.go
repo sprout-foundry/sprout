@@ -126,8 +126,12 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	preSeedMsgCount := len(a.state.GetMessages())
 	preSeedUserMsg := userMessage
 
-	// Create seed provider adapter wrapping sprout's ClientInterface
-	prov, err := NewSproutProvider(a, a.client)
+	// Create seed provider adapter wrapping sprout's ClientInterface.
+	// Capture a stable client reference under the read lock — the query
+	// goroutine must use the same client instance throughout the run,
+	// even if SetProvider is called concurrently from another path.
+	clientSnap := a.getClient()
+	prov, err := NewSproutProvider(a, clientSnap)
 	if err != nil {
 		return "", fmt.Errorf("failed to create seed provider adapter: %w", err)
 	}
@@ -172,7 +176,7 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	if pruner := a.state.GetConversationPruner(); pruner != nil {
 		opts.Pruner = pruner
 	}
-	opts.LLMSummarizer = wrapLLMSummarizerWithEvents(newLLMSummarizer(a.client, a.GetProvider()), a)
+	opts.LLMSummarizer = wrapLLMSummarizerWithEvents(newLLMSummarizer(clientSnap, a.GetProvider()), a)
 
 	// SP-066 Phase 1: model-aware compaction trigger fraction. seed's default
 	// (0.85) leaves only 15% of the context window for response + thinking +

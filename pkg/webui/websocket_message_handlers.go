@@ -311,10 +311,25 @@ func (ws *ReactWebServer) notifyMissingCredentialIfNeeded(clientID, chatID, prov
 	if configuration.HasProviderAuth(providerID) {
 		return
 	}
+	// When connected via SSH, the credential must exist on the remote host
+	// (where the daemon executes queries), not just the local machine.
+	// The warning message helps the user understand why a key they set up
+	// locally may not be available.
 	msg := fmt.Sprintf(
 		"Provider %q requires an API key. Configure it in Settings → Credentials before sending messages.",
 		providerID,
 	)
+	// Check if this client context is running via an SSH remote session.
+	ws.mutex.RLock()
+	ctx := ws.clientContexts[clientID]
+	sshHost := ""
+	if ctx != nil {
+		sshHost = strings.TrimSpace(ctx.SSHHostAlias)
+	}
+	ws.mutex.RUnlock()
+	if sshHost != "" {
+		msg += fmt.Sprintf(" The key must be available on the remote host %q (where the daemon runs).", sshHost)
+	}
 	ws.publishClientEventWithChat(clientID, chatID, events.EventTypeProviderNoCredential,
 		events.ProviderNoCredentialEvent(providerID, msg))
 }

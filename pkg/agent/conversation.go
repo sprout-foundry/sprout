@@ -123,7 +123,7 @@ func (a *Agent) getCurrentCustomProvider() (*configuration.CustomProviderConfig,
 		return nil, false
 	}
 
-	provider, exists := config.CustomProviders[string(a.clientType)]
+	provider, exists := config.CustomProviders[string(a.getClientType())]
 	if !exists {
 		return nil, false
 	}
@@ -234,7 +234,7 @@ func (a *Agent) processImagesInQuery(query string) ([]api.ImageData, string, err
 
 	// Multimodal path: if the active client reports vision capability, send
 	// pasted images as direct image payloads and strip placeholder text.
-	if a.client.SupportsVision() {
+	if c := a.getClient(); c != nil && c.SupportsVision() {
 		return a.processImagesAsMultimodal(query)
 	}
 
@@ -382,7 +382,7 @@ func (a *Agent) processImagesViaOCR(query string) (string, error) {
 
 	// Resolve via unified deterministic chain:
 	// active provider vision -> explicit custom fallback -> global list -> local Ollama.
-	processor, err := tools.NewVisionProcessorWithProvider(a.debug, a.clientType)
+	processor, err := tools.NewVisionProcessorWithProvider(a.debug, a.getClientType())
 	if err != nil {
 		return query, fmt.Errorf("failed to create vision processor: %w", err)
 	}

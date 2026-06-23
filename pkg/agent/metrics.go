@@ -50,8 +50,9 @@ func (a *Agent) SetMaxIterations(max int) {
 
 // GetLastTPS returns the most recent TPS value from the provider
 func (a *Agent) GetLastTPS() float64 {
-	if a.client != nil {
-		return a.client.GetLastTPS()
+	c := a.getClient()
+	if c != nil {
+		return c.GetLastTPS()
 	}
 	return 0.0
 }
@@ -250,16 +251,18 @@ func (a *Agent) GetCurrentTPS() float64 {
 
 // GetAverageTPS returns the average TPS across all requests
 func (a *Agent) GetAverageTPS() float64 {
-	if a.client != nil {
-		return a.client.GetAverageTPS()
+	c := a.getClient()
+	if c != nil {
+		return c.GetAverageTPS()
 	}
 	return 0.0
 }
 
 // GetTPSStats returns comprehensive TPS statistics
 func (a *Agent) GetTPSStats() map[string]float64 {
-	if a.client != nil {
-		return a.client.GetTPSStats()
+	c := a.getClient()
+	if c != nil {
+		return c.GetTPSStats()
 	}
 	return map[string]float64{}
 }

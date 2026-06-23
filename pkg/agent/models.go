@@ -17,10 +17,11 @@ func (a *Agent) GetModel() string {
 		return a.state.GetSessionModel()
 	}
 	// Use the interface method to get the model
-	if a.client == nil {
+	c := a.getClient()
+	if c == nil {
 		return "unknown"
 	}
-	return a.client.GetModel()
+	return c.GetModel()
 }
 
 // GetProvider returns the current provider name
@@ -29,10 +30,11 @@ func (a *Agent) GetProvider() string {
 	if a.state != nil && a.state.GetSessionProvider() != "" {
 		return string(a.state.GetSessionProvider())
 	}
-	if a.client == nil {
+	c := a.getClient()
+	if c == nil {
 		return "unknown"
 	}
-	return a.client.GetProvider()
+	return c.GetProvider()
 }
 
 // GetProviderType returns the current provider type
@@ -41,7 +43,7 @@ func (a *Agent) GetProviderType() api.ClientType {
 	if a.state != nil && a.state.GetSessionProvider() != "" {
 		return a.state.GetSessionProvider()
 	}
-	return a.clientType
+	return a.getClientType()
 }
 
 // selectDefaultModel chooses an appropriate default model from available models
@@ -190,9 +192,8 @@ func (a *Agent) SetProvider(provider api.ClientType) error {
 	// Connection is validated on the first real request — skip the blocking
 	// connection check here so provider/model switches feel instant in the UI.
 
-	// Switch to the new client
-	a.client = newClient
-	a.clientType = provider
+	// Switch to the new client atomically (both fields under the write lock)
+	a.setClient(newClient, provider)
 
 	// Get the actual model being used (might be different due to fallback)
 	actualModel := newClient.GetModel()
@@ -276,9 +277,8 @@ func (a *Agent) SetProviderPersisted(provider api.ClientType) error {
 	// Connection is validated on the first real request — skip the blocking
 	// connection check here so provider/model switches feel instant in the CLI.
 
-	// Switch to the new client
-	a.client = newClient
-	a.clientType = provider
+	// Switch to the new client atomically (both fields under the write lock)
+	a.setClient(newClient, provider)
 
 	// Get the actual model being used (might be different due to fallback)
 	actualModel := newClient.GetModel()
@@ -328,8 +328,13 @@ func (a *Agent) SetModel(model string) error {
 	prevProvider := a.GetProvider()
 	prevModel := a.GetModel()
 
-	// Use the current provider - we don't need to determine it
-	// The user has already selected the provider via /providers select
+	// Hold the read lock for the entire SetModel operation. SetModel only
+	// changes the model name on the existing client — it doesn't swap the
+	// client pointer. Holding RLock prevents SetProvider from swapping
+	// the client out from under us mid-operation. A concurrent SetModel
+	// on the same agent is fine (RLock is shared).
+	a.clientMu.RLock()
+	defer a.clientMu.RUnlock()
 
 	// Try to set the model directly first - this allows testing unknown models
 	// Only validate against known models if the direct setting fails
@@ -383,6 +388,10 @@ func (a *Agent) SetModel(model string) error {
 func (a *Agent) SetModelPersisted(model string) error {
 	prevProvider := a.GetProvider()
 	prevModel := a.GetModel()
+
+	// Hold the read lock for the entire operation (same rationale as SetModel).
+	a.clientMu.RLock()
+	defer a.clientMu.RUnlock()
 
 	// Try to set the model directly first - this allows testing unknown models
 	// Only validate against known models if the direct setting fails

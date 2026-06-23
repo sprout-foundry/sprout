@@ -291,7 +291,7 @@ func (a *Agent) rollupSummarizeViaLLM(ctx context.Context, sources []TurnCheckpo
 		{Role: "system", Content: systemPrompt},
 		{Role: "user", Content: userContent},
 	}
-	resp, err := a.client.SendChatRequest(ctx, req, nil, "", false)
+	resp, err := a.getClient().SendChatRequest(ctx, req, nil, "", false)
 	if err != nil {
 		return "", fmt.Errorf("rollup llm call failed: %w", err)
 	}

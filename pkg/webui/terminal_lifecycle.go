@@ -11,44 +11,57 @@ import (
 
 // CloseSession terminates the shell process and removes the session from the manager.
 // All active subscribers are notified via channel close before the session is deleted.
+//
+// The process Wait() runs OUTSIDE tm.mutex so a stuck or zombie shell (NFS hang,
+// D-state process) cannot deadlock the entire TerminalManager. The session is
+// removed from the map under tm.mutex first, so no new callers can observe it
+// after the lock is released; the teardown then proceeds without holding the
+// manager-level lock.
 func (tm *TerminalManager) CloseSession(sessionID string) error {
 	tm.mutex.Lock()
-	defer tm.mutex.Unlock()
-
 	session, exists := tm.sessions[sessionID]
 	if !exists {
+		tm.mutex.Unlock()
 		return fmt.Errorf("session %s not found", sessionID)
 	}
+	// Remove from the map immediately so no new caller can reach this session.
+	// After we release tm.mutex, the session is effectively dead even though
+	// we haven't finished waiting on the process yet.
+	delete(tm.sessions, sessionID)
+	tm.mutex.Unlock()
 
-	// Ensure no command is in-flight before tearing down.
+	// Ensure no ExecuteCommandAndWait call is in-flight. execMu is per-session,
+	// so holding it here only blocks other callers of this exact session — it
+	// does not block the manager.
 	session.execMu.Lock()
 	defer session.execMu.Unlock()
 
 	// Signal all subscribers that the PTY is gone.
 	session.closeAllSubs()
 
-	// Cancel the shell process context.
+	// Cancel the shell process context and close the PTY file descriptor.
+	// Closing the PTY unblocks the PTY reader goroutine (runPTYReader).
 	session.mutex.Lock()
 	session.Active = false
 	if session.Cancel != nil {
 		session.Cancel()
 		session.Cancel = nil
 	}
-	// Close the PTY file to unblock the PTY reader goroutine.
 	if session.Pty != nil {
 		session.Pty.Close()
 		session.Pty = nil
 	}
-	// Wait for the shell to exit.
-	if session.Command != nil && session.Command.Process != nil {
-		if _, err := session.Command.Process.Wait(); err != nil {
-			log.Printf("Terminal %s: process wait: %v", sessionID, err)
-		}
-		session.Command = nil
-	}
+	cmd := session.Command
 	session.mutex.Unlock()
 
-	delete(tm.sessions, sessionID)
+	// Wait for the shell to exit OUTSIDE any manager/session lock. A hung
+	// process here does not block CloseAllSessions, CreateSession, or the
+	// cleanup worker — they only contend on tm.mutex, which we released above.
+	if cmd != nil && cmd.Process != nil {
+		if _, err := cmd.Process.Wait(); err != nil {
+			log.Printf("Terminal %s: process wait: %v", sessionID, err)
+		}
+	}
 	return nil
 }
 

@@ -162,10 +162,19 @@ func (tm *TerminalManager) runPTYReader(session *TerminalSession) {
 		if n > 0 {
 			chunk := make([]byte, n)
 			copy(chunk, buf[:n])
-			session.mutex.Lock()
-			session.LastUsed = time.Now()
-			session.mutex.Unlock()
+			// Only refresh LastUsed when at least one subscriber is actively
+			// watching. A disconnected session that still produces output
+			// (shell prompt clocks, async notifications, background jobs) must
+			// not keep itself alive forever — otherwise the cleanup worker
+			// never evicts it and the PTY process leaks until daemon restart.
+			// The ring buffer still captures the output for scrollback replay
+			// regardless of subscriber count.
 			session.broadcast(chunk)
+			if session.hasSubscribers() {
+				session.mutex.Lock()
+				session.LastUsed = time.Now()
+				session.mutex.Unlock()
+			}
 		}
 		if err != nil {
 			log.Printf("Terminal session %s PTY closed: %v", session.ID, err)

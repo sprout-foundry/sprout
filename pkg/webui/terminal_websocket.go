@@ -4,6 +4,8 @@ package webui
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
@@ -15,12 +17,26 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// generateTerminalSessionID creates a collision-resistant terminal session ID
+// using 8 bytes of cryptographic randomness (64 bits). This avoids the
+// collision risk of time-based IDs when two terminals are created in the same
+// nanosecond (possible on fast machines or during rapid reconnect cycles).
+func generateTerminalSessionID() string {
+	b := make([]byte, 8)
+	if _, err := rand.Read(b); err != nil {
+		// Extremely unlikely — crypto/rand should never fail on a healthy
+		// system. Fall back to time-based uniqueness as a last resort.
+		return fmt.Sprintf("terminal_%d", time.Now().UnixNano())
+	}
+	return "terminal_" + hex.EncodeToString(b)
+}
+
 // handleTerminalWebSocket handles terminal WebSocket connections.
 // Supports both creating new sessions and reattaching to existing sessions.
 // The client can request reattachment by passing ?reattach=<sessionID> in the URL.
 func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http.Request) {
 	// Generate a session ID early so it's available for panic recovery
-	sessionID := fmt.Sprintf("terminal_%d", time.Now().UnixNano())
+	sessionID := generateTerminalSessionID()
 
 	conn, err := ws.upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -77,7 +93,7 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 
 	// Create new session if not reattaching
 	if session == nil {
-		sessionID = fmt.Sprintf("terminal_%d", time.Now().UnixNano())
+		sessionID = generateTerminalSessionID()
 		log.Printf("Terminal WebSocket connection starting: %s", sessionID)
 
 		shellOverride := strings.TrimSpace(r.URL.Query().Get("shell"))
@@ -143,6 +159,7 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 		Type:        "terminal",
 		UserID:      ws.ExtractUserID(r),
 		ConnectedAt: time.Now(),
+		SafeConn:    safeConn, // shared write mutex for cross-connection notifications
 	})
 	defer ws.connections.Delete(conn)
 
@@ -216,6 +233,14 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 
 	// Read loop - handles incoming messages from WebSocket
 	conn.SetReadLimit(512 * 1024) // 512KB max message size
+	// Track last message time for dead-connection detection. The client sends
+	// pings every 30s, so any real connection will have activity within this
+	// window. If the individual read deadline keeps timing out (half-open
+	// TCP connection, Chrome tab freeze with no JS running), we kill the
+	// connection after this absolute cap instead of spinning forever.
+	// Matches the main /ws handler's 180s threshold.
+	lastMessage := time.Now()
+	const deadConnectionTimeout = 180 * time.Second
 	for {
 		select {
 		case <-ctx.Done():
@@ -241,7 +266,15 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 					websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 					log.Printf("Terminal %s WebSocket closed: %v", sessionID, err)
 				} else if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
-					// Heartbeat timeout, continue
+					// Individual read timed out. Check whether the connection has
+					// been dead (no messages at all) for the absolute cap — if
+					// so, it's a half-open zombie that will never recover, so
+					// close it instead of spinning.
+					if time.Since(lastMessage) > deadConnectionTimeout {
+						log.Printf("Terminal %s no activity for %s, closing dead connection", sessionID, deadConnectionTimeout)
+						cancel()
+						return
+					}
 					continue
 				} else {
 					log.Printf("Terminal %s read error: %v", sessionID, err)
@@ -251,6 +284,10 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 				cancel()
 				return
 			}
+
+			// Update last message time on successful read (includes client
+			// pings, which reset the dead-connection timer).
+			lastMessage = time.Now()
 
 			// Process message
 			msgType, ok := msg["type"].(string)
@@ -270,7 +307,6 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 					continue
 				}
 
-				fmt.Printf("Terminal WebSocket: Received input command for session %s: %q\n", sessionID, input)
 				if err := terminalManager.ExecuteCommand(sessionID, input); err != nil {
 					safeConn.WriteJSON(map[string]interface{}{
 						"type": "error",

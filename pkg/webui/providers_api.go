@@ -316,6 +316,12 @@ func (ws *ReactWebServer) handleGetModels(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// Derive a context from the request so model discovery is cancelled if
+	// the client disconnects, and cap it so the upstream API call can't run
+	// indefinitely. Mirrors handleAPIProviders' timeout.
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
 	provider := strings.TrimSpace(r.URL.Query().Get("provider"))
 	if provider == "" {
 		writeJSONError(w, http.StatusBadRequest, "provider parameter is required")
@@ -347,8 +353,45 @@ func (ws *ReactWebServer) handleGetModels(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	models, err := api.GetModelsForProvider(clientType)
+	if clientType == api.TestClientType {
+		writeJSONError(w, http.StatusBadRequest, "test provider models cannot be listed via API")
+		return
+	}
+
+	models, err := api.GetModelsForProviderCtx(ctx, clientType)
 	if err != nil {
+		// Fall back to the provider catalog if the provider is known. This
+		// keeps the model picker modal consistent with the settings dropdown
+		// (which uses modelsForProviderFromAPICtx and already falls back).
+		if provider, ok := providercatalog.FindProvider(string(clientType)); ok && len(provider.Models) > 0 {
+			result := make([]map[string]interface{}, 0, len(provider.Models))
+			for _, m := range provider.Models {
+				id := strings.TrimSpace(m.ID)
+				if id == "" {
+					continue
+				}
+				result = append(result, map[string]interface{}{
+					"id":                id,
+					"name":              m.Name,
+					"context_length":    m.ContextLength,
+					"eligible_roles":    nil,
+					"recommended_roles": nil,
+					"warnings":          nil,
+				})
+			}
+			if len(result) > 0 {
+				logRateLimitedf(
+					"model_discovery_catalog_fallback_get:"+string(clientType),
+					"webui: using provider catalog fallback for %s in handleGetModels after model discovery failure: %v",
+					clientType, err,
+				)
+				writeJSON(w, http.StatusOK, map[string]interface{}{
+					"models": result,
+					"total":  len(result),
+				})
+				return
+			}
+		}
 		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to list models: %v", err))
 		return
 	}

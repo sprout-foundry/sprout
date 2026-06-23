@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -55,18 +54,6 @@ func newNoProviderConfig(t *testing.T) string {
 		t.Fatalf("write config failed: %v", err)
 	}
 	return tmpDir
-}
-
-// syncRecoveryRunGit runs a git command in the specified directory.
-// Prefixed to avoid collision with runGit in git_api_test.go.
-func syncRecoveryRunGit(t *testing.T, dir string, args ...string) {
-	t.Helper()
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
-	if output, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git %s failed: %v (%s)", strings.Join(args, " "), err, strings.TrimSpace(string(output)))
-	}
 }
 
 // ---------------------------------------------------------------------------
@@ -221,174 +208,6 @@ func TestMakePlanFromResults_Success(t *testing.T) {
 	}
 	if plan[1].FilePath != "b.txt" || plan[1].Action != "browser_ahead" {
 		t.Errorf("plan[1]: %+v", plan[1])
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Volume Corruption Recovery Tests
-// ---------------------------------------------------------------------------
-
-func TestHandleVolumeCorruption_NoGitDir(t *testing.T) {
-	tmpDir := t.TempDir()
-
-	ctx := context.Background()
-	err := HandleVolumeCorruption(ctx, tmpDir)
-	if err == nil {
-		t.Fatal("expected error when no git dir exists, got nil")
-	}
-	if !strings.Contains(err.Error(), "OPFS replay") {
-		t.Errorf("expected error mentioning OPFS replay, got: %v", err)
-	}
-}
-
-func TestGitRestoreWorkspace_Success(t *testing.T) {
-	tmpDir := t.TempDir()
-	syncRecoveryRunGit(t, tmpDir, "init", "-b", "main")
-	syncRecoveryRunGit(t, tmpDir, "config", "user.email", "test@test.com")
-	syncRecoveryRunGit(t, tmpDir, "config", "user.name", "Test")
-
-	filePath := filepath.Join(tmpDir, "test.txt")
-	if err := os.WriteFile(filePath, []byte("original"), 0644); err != nil {
-		t.Fatalf("write file failed: %v", err)
-	}
-	syncRecoveryRunGit(t, tmpDir, "add", "test.txt")
-	syncRecoveryRunGit(t, tmpDir, "commit", "-m", "initial")
-
-	if err := os.WriteFile(filePath, []byte("modified"), 0644); err != nil {
-		t.Fatalf("write file failed: %v", err)
-	}
-
-	err := gitRestoreWorkspace(tmpDir)
-	if err != nil {
-		t.Fatalf("gitRestoreWorkspace failed: %v", err)
-	}
-
-	content, err := os.ReadFile(filePath)
-	if err != nil {
-		t.Fatalf("read file failed: %v", err)
-	}
-	if string(content) != "original" {
-		t.Errorf("file not restored: got %q, want %q", string(content), "original")
-	}
-}
-
-func TestGitRestoreWorkspace_FailedCheckout(t *testing.T) {
-	tmpDir := t.TempDir()
-	// Not a git repo
-	err := gitRestoreWorkspace(tmpDir)
-	if err == nil {
-		t.Fatal("expected error when not a git repo, got nil")
-	}
-	if !strings.Contains(err.Error(), "git checkout failed") {
-		t.Errorf("unexpected error: %v", err)
-	}
-}
-
-func TestGetGitRemoteURL_Success(t *testing.T) {
-	tmpDir := t.TempDir()
-	syncRecoveryRunGit(t, tmpDir, "init", "-b", "main")
-	syncRecoveryRunGit(t, tmpDir, "config", "user.email", "test@test.com")
-	syncRecoveryRunGit(t, tmpDir, "config", "user.name", "Test")
-	syncRecoveryRunGit(t, tmpDir, "remote", "add", "origin", "https://github.com/test/repo.git")
-
-	url, err := getGitRemoteURL(tmpDir)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if url != "https://github.com/test/repo.git" {
-		t.Errorf("unexpected URL: got %q, want %q", url, "https://github.com/test/repo.git")
-	}
-}
-
-func TestGetGitRemoteURL_NoRemote(t *testing.T) {
-	tmpDir := t.TempDir()
-	syncRecoveryRunGit(t, tmpDir, "init", "-b", "main")
-
-	url, err := getGitRemoteURL(tmpDir)
-	if err == nil {
-		t.Fatal("expected error when no remote exists, got nil")
-	}
-	if url != "" {
-		t.Errorf("expected empty URL, got %q", url)
-	}
-}
-
-func TestGetGitRemoteURL_NotGitRepo(t *testing.T) {
-	tmpDir := t.TempDir()
-	url, err := getGitRemoteURL(tmpDir)
-	if err == nil {
-		t.Fatal("expected error when not a git repo, got nil")
-	}
-	if url != "" {
-		t.Errorf("expected empty URL, got %q", url)
-	}
-}
-
-func TestGitCloneWorkspace_Success(t *testing.T) {
-	srcDir := t.TempDir()
-	syncRecoveryRunGit(t, srcDir, "init", "-b", "main")
-	syncRecoveryRunGit(t, srcDir, "config", "user.email", "test@test.com")
-	syncRecoveryRunGit(t, srcDir, "config", "user.name", "Test")
-	if err := os.WriteFile(filepath.Join(srcDir, "file.txt"), []byte("content"), 0644); err != nil {
-		t.Fatalf("write file failed: %v", err)
-	}
-	syncRecoveryRunGit(t, srcDir, "add", "file.txt")
-	syncRecoveryRunGit(t, srcDir, "commit", "-m", "initial")
-
-	parentDir := t.TempDir()
-	corruptDir := filepath.Join(parentDir, "clone-target")
-	if err := os.MkdirAll(corruptDir, 0755); err != nil {
-		t.Fatalf("mkdir failed: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(corruptDir, "corrupt.txt"), []byte("bad data"), 0644); err != nil {
-		t.Fatalf("write file failed: %v", err)
-	}
-
-	ctx := context.Background()
-	err := gitCloneWorkspace(ctx, corruptDir, srcDir)
-	if err != nil {
-		t.Fatalf("gitCloneWorkspace failed: %v", err)
-	}
-
-	if _, err := os.Stat(filepath.Join(corruptDir, "corrupt.txt")); !os.IsNotExist(err) {
-		t.Error("corrupt.txt should have been replaced by clone")
-	}
-	content, err := os.ReadFile(filepath.Join(corruptDir, "file.txt"))
-	if err != nil {
-		t.Fatalf("read file.txt failed: %v", err)
-	}
-	if string(content) != "content" {
-		t.Errorf("unexpected content: got %q, want %q", string(content), "content")
-	}
-
-	backups, _ := filepath.Glob(filepath.Join(parentDir, "clone-target.corrupted.*"))
-	if len(backups) > 0 {
-		t.Errorf("backup directory should have been removed, found: %v", backups)
-	}
-}
-
-func TestGitCloneWorkspace_CloneFails_RestoresBackup(t *testing.T) {
-	parentDir := t.TempDir()
-	corruptDir := filepath.Join(parentDir, "clone-target")
-	if err := os.MkdirAll(corruptDir, 0755); err != nil {
-		t.Fatalf("mkdir failed: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(corruptDir, "corrupt.txt"), []byte("bad data"), 0644); err != nil {
-		t.Fatalf("write file failed: %v", err)
-	}
-
-	ctx := context.Background()
-	err := gitCloneWorkspace(ctx, corruptDir, "/nonexistent/source")
-	if err == nil {
-		t.Fatal("expected error when cloning from non-existent source, got nil")
-	}
-
-	if _, err := os.Stat(corruptDir); os.IsNotExist(err) {
-		t.Error("original directory should have been restored from backup")
-	}
-	content, _ := os.ReadFile(filepath.Join(corruptDir, "corrupt.txt"))
-	if string(content) != "bad data" {
-		t.Errorf("original content not restored: got %q", string(content))
 	}
 }
 

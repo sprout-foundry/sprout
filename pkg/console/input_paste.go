@@ -2,61 +2,11 @@ package console
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"sort"
 	"strings"
-	"time"
 	"unicode/utf8"
 )
-
-// pasteAction represents the user's choice for a large paste.
-type pasteAction int
-
-const (
-	actionUseInline pasteAction = iota
-	actionSaveAsFile
-	actionCancel
-)
-
-// promptLargePasteAction asks the user what to do with a large paste.
-// It accepts an io.Reader for stdin so it can be tested with a buffer.
-// Returns one of actionUseInline, actionSaveAsFile, or actionCancel.
-func promptLargePasteAction(content string, in io.Reader) pasteAction {
-	lineCount := strings.Count(content, "\n") + 1
-	byteCount := len(content)
-
-	fmt.Fprintf(os.Stderr, "\n[paste] Large paste detected (%d lines, %d bytes)\n", lineCount, byteCount)
-	fmt.Fprintf(os.Stderr, "  [%s]se — Insert inline\n", BoldText("U"))
-	fmt.Fprintf(os.Stderr, "  [%s]ave as file & reference (default)\n", BoldText("S"))
-	fmt.Fprintf(os.Stderr, "  [%s]ancel — Discard paste\n", BoldText("C"))
-	fmt.Fprintf(os.Stderr, "  Choose: ")
-
-	buf := make([]byte, 1)
-	for {
-		n, err := in.Read(buf)
-		if err != nil || n == 0 {
-			fmt.Fprintf(os.Stderr, "\n")
-			return actionSaveAsFile
-		}
-		switch buf[0] {
-		case 'u', 'U':
-			fmt.Fprintf(os.Stderr, "\n")
-			return actionUseInline
-		case 's', 'S', '\r', '\n':
-			fmt.Fprintf(os.Stderr, "\n")
-			return actionSaveAsFile
-		case 'c', 'C':
-			fmt.Fprintf(os.Stderr, "\n")
-			return actionCancel
-		default:
-			// Erase the invalid character (backspace + overwrite with a
-			// space + backspace again) before re-prompting, so the
-			// line doesn't accumulate garbage characters.
-			fmt.Fprintf(os.Stderr, "\b \b  Choose: ")
-		}
-	}
-}
 
 func (ir *InputReader) consumeBracketedPasteByte(b byte) bool {
 	expected := bracketedPasteEndSeq[ir.bracketedMatch]
@@ -106,7 +56,6 @@ func (ir *InputReader) finalizePaste() bool {
 
 	pastedContent := ir.pasteBuffer.String()
 	ir.pasteBuffer.Reset()
-	ir.inPasteMode = false
 	ir.pasteActive = false
 
 	// Check for binary image paste data (bracketed paste may contain raw image bytes)
@@ -340,37 +289,4 @@ func runeCountAtByteIndex(s string, byteIndex int) int {
 		return utf8.RuneCountInString(s)
 	}
 	return utf8.RuneCountInString(s[:byteIndex])
-}
-
-func shouldStartHeuristicPaste(chunk []byte, timeSinceLastChar time.Duration) bool {
-	if len(chunk) < minHeuristicPasteBytes {
-		return false
-	}
-
-	printable := 0
-	for _, b := range chunk {
-		switch {
-		case b >= 32 && b <= 126:
-			printable++
-		case b == 9 || b == 10 || b == 13:
-			printable++
-		case b == 27 || b == 8 || b == 127:
-			// Explicitly exclude ESC/backspace/delete bursts.
-			return false
-		default:
-			// Ignore unsupported control bytes for paste detection.
-		}
-	}
-
-	// Require nearly all bytes to be printable paste content.
-	if printable < len(chunk)-1 {
-		return false
-	}
-
-	// For moderate bursts, still require rapid arrival.
-	if len(chunk) < pasteBurstMinBytes && timeSinceLastChar >= pasteBurstMinGap {
-		return false
-	}
-
-	return true
 }

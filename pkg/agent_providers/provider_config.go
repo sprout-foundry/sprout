@@ -56,8 +56,11 @@ type MessageConversion struct {
 	ForceToolCallType        string `json:"force_tool_call_type"`        // Force tool call type to specific value (e.g., "function" for Mistral)
 	// CacheControl enables provider prompt-prefix caching (Anthropic-style
 	// cache_control: {type: "ephemeral"} markers). When true, cache breakpoints
-	// are injected at the end of the system message and tools array for providers
-	// that support it (OpenRouter forwarding to Anthropic, native Anthropic).
+	// are injected at three locations:
+	//   1. The system message (static prefix)
+	//   2. The last tool definition (static tool schema)
+	//   3. The last conversation message (growing conversation prefix — highest impact)
+	// Anthropic allows up to 4 breakpoints; we use 3, leaving headroom for future use.
 	CacheControl bool `json:"cache_control,omitempty"`
 }
 

@@ -95,6 +95,11 @@ const (
 	EventTypeAutomateBudgetUpdate   = "automate.budget_update"
 	EventTypeAutomateOutputChunk    = "automate.output_chunk"
 	EventTypeAutomateSessionEnded   = "automate.session_ended"
+	// EventTypeSSHTunnelStatus signals that an SSH workspace tunnel has
+	// changed state — disconnected, reconnecting, or reconnected. Clients
+	// use this to show a banner or retry failed requests instead of
+	// surfacing raw 502 errors during the reconnect window.
+	EventTypeSSHTunnelStatus = "ssh_tunnel_status"
 )
 
 // EventBus manages event distribution between CLI and Web UI

@@ -51,11 +51,12 @@ func (tm *TerminalManager) ExecuteCommand(sessionID, command string) error {
 
 	// Write command to PTY
 	if session.Pty != nil {
-		fmt.Printf("Terminal %s: Writing command: %q\n", sessionID, command)
 		n, err := session.Pty.Write([]byte(command))
-		fmt.Printf("Terminal %s: Wrote %d bytes, err: %v\n", sessionID, n, err)
 		if err != nil {
 			return fmt.Errorf("failed to write command to PTY: %w", err)
+		}
+		if n == 0 {
+			return fmt.Errorf("failed to write command to PTY: wrote 0 bytes")
 		}
 	} else {
 		// Fallback for systems without PTY

@@ -294,7 +294,7 @@ func (vp *VisionProcessor) EnhanceTextWithAnalysis(text, imagePath string, analy
 	return text
 }
 
-// ProcessPDFForVision processes PDF using Ollama with glm-ocr model
+// ProcessPDFForVision processes PDF using the configured vision/OCR model
 func (vp *VisionProcessor) ProcessPDFForVision(ctx context.Context, pdfPath string) (VisionAnalysis, error) {
 	text, err := ProcessPDFWithVision(ctx, pdfPath)
 	if err != nil {

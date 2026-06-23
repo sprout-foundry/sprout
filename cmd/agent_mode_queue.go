@@ -28,20 +28,33 @@ var currentTurnRenderer atomic.Pointer[console.AssistantTurnRenderer]
 // run_subagent, etc.) are available so the LLM can manage the task lifecycle.
 // After processing a task, it loops back to check for more pending tasks.
 // Exits cleanly when the queue is empty.
-func runQueueMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events.EventBus) error {
+func runQueueMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events.EventBus, indicator *console.ActivityIndicator) error {
 	fmt.Println()
 	console.GlyphInfo.Printf("sprout · EA queue · %s · %s",
 		chatAgent.GetProvider(),
 		chatAgent.GetModel())
 
-	tq := tools.NewTaskQueue(tools.DefaultTaskQueuePath())
+	// Status footer: pinned bottom row with model/cost/context.
+	// Suppressed automatically on non-TTY.
+	footer := console.NewStatusFooter(os.Stderr, &agentFooterSource{agent: chatAgent})
+	console.RegisterGlobalStatusFooter(footer)
+	footer.Start()
+	defer footer.Stop()
 
-	// Enable streaming so the user can see what's happening
-	if !agentNoStreaming {
-		chatAgent.EnableStreaming(func(chunk string) {
-			fmt.Print(chunk)
-		})
-	}
+	// Wire event-driven output routing (streaming, tool timeline,
+	// footer refresh) — same as interactive mode. SetupAgentEvents
+	// registers a streaming callback that respects the per-turn
+	// renderer and WebUI handoff, replacing the old raw fmt.Print.
+	SetupAgentEvents(chatAgent, eventBus, indicator)
+
+	// Subscribe to tool events for per-tool progress lines and
+	// footer refreshes after each tool.
+	subCtx, cancelSub := context.WithCancel(ctx)
+	defer cancelSub()
+	resetSpawnTracking := startTerminalToolSubscriber(subCtx, chatAgent, eventBus, indicator, footer)
+	defer resetSpawnTracking()
+
+	tq := tools.NewTaskQueue(tools.DefaultTaskQueuePath())
 
 	tasksProcessed := 0
 
@@ -94,11 +107,34 @@ func runQueueMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 			// and the agent has access to run_subagent, task_queue_publish, etc.
 			query := buildQueueTaskQuery(task)
 
+			// Per-task assistant renderer: indents prose and optionally
+			// re-renders with markdown formatting at task-end.
+			turnRenderer := console.NewAssistantTurnRenderer(
+				GetTerminalWidth(),
+				console.NewMarkdownFormatter(true, true),
+			)
+			currentTurnRenderer.Store(turnRenderer)
+			if router := chatAgent.OutputRouter(); router != nil {
+				router.SetExternalWriteHook(turnRenderer.OnExternalWrite)
+			}
+
+			indicator.Start(fmt.Sprintf("Processing · %s", chatAgent.GetModel()))
 			err = ProcessQuery(ctx, chatAgent, eventBus, query)
+			indicator.Stop()
+
+			// Tear down the renderer hooks before finalizing so the
+			// re-render's own writes don't loop back through them.
+			if router := chatAgent.OutputRouter(); router != nil {
+				router.SetExternalWriteHook(nil)
+			}
+			turnRenderer.FinalizeAtTurnEnd()
+			currentTurnRenderer.Store(nil)
+
 			if err != nil {
 				fmt.Fprint(os.Stderr, "\n"+console.FormatErrorBlock(fmt.Sprintf("Error processing task %s", task.ID), err))
 				// Mark task as failed
 				_, _ = tq.PublishTask(ctx, task.ID, "failed", fmt.Sprintf("Error during processing: %v", err), nil)
+				footer.Refresh()
 				continue
 			}
 
@@ -127,6 +163,7 @@ func runQueueMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 				console.GlyphSuccess.Printf("Task %s completed", task.Title)
 			}
 
+			footer.Refresh()
 			tasksProcessed++
 		}
 	}

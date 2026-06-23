@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
+	"os/signal"
 	"slices"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -143,6 +146,24 @@ type SteerInputReader struct {
 	// oldState, preventing termios-state descent across Pause/Resume
 	// cycles where intermediate code may have altered termios.
 	groundTruth *GroundTruthTermios
+
+	// pendingCtrlX is set when the user presses Ctrl-X, the first half
+	// of the Ctrl-X Ctrl-E editor escape sequence. The next byte is
+	// checked against Ctrl-E; if it matches, the external editor is
+	// launched with the current buffer. Any other byte clears the
+	// pending state and is processed normally.
+	pendingCtrlX bool
+
+	// searchMode is true during Ctrl-R reverse-search through steer
+	// history. While active, typed characters build the query instead
+	// of the buffer; Enter accepts the match; Esc cancels.
+	searchMode         bool
+	searchQuery        string
+	searchResult       string
+	searchResultIndex  int
+	preSearchBuffer    []byte
+	preSearchCursorPos int
+	searchBuf          []byte // multi-byte UTF-8 accumulator
 }
 
 // SteerHistoryCap bounds the in-memory steer history to a sensible
@@ -368,6 +389,17 @@ func (r *SteerInputReader) readLoop(stopCh, doneCh chan struct{}) {
 	ticker := time.NewTicker(10 * time.Millisecond)
 	defer ticker.Stop()
 
+	// Subscribe to terminal resize events so the steer panel
+	// re-renders with correct dimensions after a SIGWINCH. The footer's
+	// own resize watcher handles the scroll region; we just need to
+	// refresh our pinned line content.
+	var resizeCh chan os.Signal
+	if sig := resizeSignal(); sig != nil {
+		resizeCh = make(chan os.Signal, 1)
+		signal.Notify(resizeCh, sig)
+		defer signal.Stop(resizeCh)
+	}
+
 	// pasteMatch tracks how many bytes of the bracketed-paste end
 	// sequence (ESC [ 201~) have been seen consecutively while a
 	// paste is in flight. A local rather than a struct field because
@@ -393,6 +425,10 @@ func (r *SteerInputReader) readLoop(stopCh, doneCh chan struct{}) {
 			select {
 			case <-stopCh:
 				return
+			case <-resizeCh:
+				// Terminal resized — re-render the steer line so the
+				// caret and content adapt to the new width.
+				r.renderLine()
 			case <-ticker.C:
 			}
 			continue
@@ -430,6 +466,57 @@ func (r *SteerInputReader) readLoop(stopCh, doneCh chan struct{}) {
 				continue
 			}
 
+			// Ctrl-X Ctrl-E editor escape (SP-048-4f parity). The first
+			// Ctrl-X sets pendingCtrlX; if the next byte is Ctrl-E we
+			// launch the external editor, otherwise we fall through to
+			// normal processing.
+			if r.pendingCtrlX {
+				r.pendingCtrlX = false
+				if b == 0x05 { // Ctrl-E
+					r.runExternalEditor()
+					continue
+				}
+				// Not Ctrl-E — fall through to normal processing.
+			}
+
+			// While in Ctrl-R reverse-search mode, route keystrokes to
+			// the search handler instead of the normal buffer/edit
+			// dispatch. Enter accepts the match, Esc cancels, Ctrl-R
+			// cycles to the next older match, Backspace trims the
+			// query, and printable/UTF-8 bytes extend the query.
+			if r.searchMode {
+				switch {
+				case b == 0x0D: // Enter — accept match
+					r.exitSearchMode(true)
+					r.renderLine()
+					continue
+				case b == 0x1B: // Esc — cancel
+					r.exitSearchMode(false)
+					r.renderLine()
+					continue
+				case b == 0x7F || b == 0x08: // Backspace
+					r.handleSearchBackspace()
+					r.renderLine()
+					continue
+				case b >= 0x20 && b < 0x7F: // Printable ASCII
+					r.searchQuery += string(rune(b))
+					r.refreshSearchForQuery()
+					r.renderLine()
+					continue
+				case b >= 0x80: // UTF-8 — buffer until full rune
+					r.searchBuf = append(r.searchBuf, b)
+					if utf8.FullRune(r.searchBuf) {
+						r.searchQuery += string(r.searchBuf)
+						r.searchBuf = r.searchBuf[:0]
+						r.refreshSearchForQuery()
+						r.renderLine()
+					}
+					continue
+				}
+				// Other control chars in search mode: ignore.
+				continue
+			}
+
 			// Pre-handle control characters that the EscapeParser
 			// doesn't produce events for (emacs/readline-style
 			// editing). The parser handles backspace (8/127), enter
@@ -457,11 +544,22 @@ func (r *SteerInputReader) readLoop(stopCh, doneCh chan struct{}) {
 			case 0x0B: // Ctrl+K — kill to end
 				r.killToEnd()
 				continue
+			case 0x12: // Ctrl+R — reverse search
+				if r.searchMode {
+					r.cycleSearchResult()
+				} else {
+					r.enterSearchMode()
+				}
+				r.renderLine()
+				continue
 			case 0x15: // Ctrl+U — kill to start
 				r.killToStart()
 				continue
 			case 0x17: // Ctrl+W — delete previous word
 				r.deleteWordBackward()
+				continue
+			case 0x18: // Ctrl+X — start of Ctrl-X Ctrl-E sequence
+				r.pendingCtrlX = true
 				continue
 			}
 
@@ -948,11 +1046,36 @@ func (r *SteerInputReader) deleteForward() {
 // any future modes don't require footer changes. The cursor byte
 // offset is forwarded so the footer can render a caret at the correct
 // position for mid-buffer editing.
+//
+// When Ctrl-R reverse-search is active, the line instead shows the
+// search prompt (query + best match) so the user sees what they're
+// searching for and what will be loaded on Enter.
 func (r *SteerInputReader) renderLine() {
 	if r.footer == nil {
 		return
 	}
 	r.mu.Lock()
+
+	if r.searchMode {
+		// Render the reverse-search prompt in the steer line. The
+		// caret sits at the end so the user sees where the next query
+		// keystroke lands.
+		var text string
+		if r.searchResult != "" {
+			display := strings.ReplaceAll(r.searchResult, "\n", "\\n")
+			text = fmt.Sprintf("(search)'%s': %s", r.searchQuery, display)
+		} else {
+			text = fmt.Sprintf("(search)'%s': ", r.searchQuery)
+		}
+		prefix := SteerPromptPrefix
+		if r.submitMode == SteerSubmitModeQueue {
+			prefix = QueuePromptPrefix
+		}
+		r.mu.Unlock()
+		r.footer.SetSteerLineWithCursor(fmt.Sprintf("%s%s", prefix, text), len(prefix)+len(text))
+		return
+	}
+
 	text := string(r.buffer)
 	cursor := r.cursorPos
 	prefix := SteerPromptPrefix
@@ -963,4 +1086,226 @@ func (r *SteerInputReader) renderLine() {
 	// cursor is a byte offset into the buffer; add the prefix byte
 	// length to get the offset within the full rendered string.
 	r.footer.SetSteerLineWithCursor(fmt.Sprintf("%s%s", prefix, text), len(prefix)+cursor)
+}
+
+// runExternalEditor opens $EDITOR (or VISUAL) with the current steer
+// buffer pre-filled, lets the user edit it, and reads the result back
+// into the buffer. Called from the readLoop goroutine — blocks until
+// the editor exits. While blocked, the goroutine is not reading stdin,
+// which is correct because the editor owns stdin during its run.
+//
+// Terminal lifecycle: we temporarily restore cooked mode (exitSteerMode
+// or groundTruth) and disable bracketed-paste / modifyOtherKeys so the
+// editor has a clean terminal. On return we re-enter steer mode and
+// re-enable our modes so the readLoop resumes cleanly.
+func (r *SteerInputReader) runExternalEditor() {
+	editor := chooseExternalEditor()
+	if editor == "" {
+		fmt.Fprint(os.Stderr, "\r\n")
+		GlyphError.Fprintf(os.Stderr, "editor: no $VISUAL or $EDITOR set and no fallback available")
+		return
+	}
+
+	// Snapshot the buffer for the temp file.
+	r.mu.Lock()
+	content := string(r.buffer)
+	r.mu.Unlock()
+
+	tmpPath, err := writeBufferToTempFile(content)
+	if err != nil {
+		fmt.Fprint(os.Stderr, "\r\n")
+		GlyphError.Fprintf(os.Stderr, "editor: failed to stage buffer: %v", err)
+		return
+	}
+	defer os.Remove(tmpPath)
+
+	// Exit steer mode so the editor has a clean terminal (cooked mode,
+	// no bracketed paste / modifyOtherKeys reporting).
+	fmt.Fprint(os.Stderr, bracketedPasteDisable)
+	fmt.Fprint(os.Stderr, modifyOtherKeysDisable)
+	r.mu.Lock()
+	oldState := r.oldState
+	gt := r.groundTruth
+	r.mu.Unlock()
+	if gt != nil {
+		_ = gt.Restore()
+	} else if oldState != nil {
+		_ = exitSteerMode(r.fd, oldState)
+	}
+	fmt.Fprintln(os.Stderr)
+
+	// Run the editor. Blocks until the editor exits.
+	cmd := exec.Command(editor, tmpPath)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	runErr := cmd.Run()
+
+	// Re-enter steer mode regardless of the editor's exit status so
+	// the readLoop can resume reading keystrokes.
+	st, enterErr := enterSteerMode(r.fd)
+	if enterErr != nil {
+		fmt.Fprint(os.Stderr, "\r\n")
+		GlyphError.Fprintf(os.Stderr, "editor: failed to re-enter steer mode: %v", enterErr)
+		return
+	}
+	r.mu.Lock()
+	r.oldState = st
+	r.mu.Unlock()
+	fmt.Fprint(os.Stderr, bracketedPasteEnable)
+	fmt.Fprint(os.Stderr, modifyOtherKeysEnable)
+
+	if runErr != nil {
+		fmt.Fprint(os.Stderr, "\r\n")
+		GlyphError.Fprintf(os.Stderr, "editor: %s exited: %v", editor, runErr)
+		r.renderLine()
+		return
+	}
+
+	// Read back the edited content.
+	fileContent, readErr := os.ReadFile(tmpPath)
+	if readErr != nil {
+		fmt.Fprint(os.Stderr, "\r\n")
+		GlyphError.Fprintf(os.Stderr, "editor: failed to read back buffer: %v", readErr)
+		r.renderLine()
+		return
+	}
+
+	// Strip the trailing newline most editors append so the buffer
+	// looks like the user typed exactly what they see.
+	newContent := strings.TrimRight(string(fileContent), "\n")
+	r.mu.Lock()
+	r.buffer = []byte(newContent)
+	r.cursorPos = len(r.buffer)
+	r.historyIndex = -1
+	r.pendingBuffer = nil
+	r.mu.Unlock()
+	r.renderLine()
+}
+
+// ─── Ctrl-R reverse-search methods (SP-048-4e parity) ──────────────────
+
+// enterSearchMode starts a new reverse-history search, saving the current
+// buffer/cursor so they can be restored on cancellation.
+func (r *SteerInputReader) enterSearchMode() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.searchMode = true
+	r.searchQuery = ""
+	r.searchResult = ""
+	r.searchResultIndex = -1
+	r.searchBuf = r.searchBuf[:0]
+	// Snapshot current buffer so Esc restores it.
+	snap := make([]byte, len(r.buffer))
+	copy(snap, r.buffer)
+	r.preSearchBuffer = snap
+	r.preSearchCursorPos = r.cursorPos
+	// Show most recent history entry for empty query.
+	if len(r.history) > 0 {
+		r.searchResult = r.history[len(r.history)-1]
+		r.searchResultIndex = len(r.history) - 1
+	}
+}
+
+// exitSearchMode leaves reverse-search mode. When accept is true the
+// current searchResult is loaded into the buffer; otherwise the
+// pre-search state is restored.
+func (r *SteerInputReader) exitSearchMode(accept bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if accept && r.searchResult != "" {
+		r.buffer = []byte(r.searchResult)
+		r.cursorPos = len(r.buffer)
+		r.historyIndex = -1
+		r.pendingBuffer = nil
+	} else {
+		r.buffer = r.preSearchBuffer
+		r.cursorPos = r.preSearchCursorPos
+	}
+	r.searchMode = false
+	r.searchQuery = ""
+	r.searchResult = ""
+	r.searchResultIndex = -1
+	r.searchBuf = r.searchBuf[:0]
+	r.preSearchBuffer = nil
+	r.preSearchCursorPos = 0
+}
+
+// handleSearchBackspace trims one rune from the search query and
+// re-runs the search.
+func (r *SteerInputReader) handleSearchBackspace() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.searchBuf = r.searchBuf[:0]
+	if len(r.searchQuery) > 0 {
+		_, size := utf8.DecodeLastRuneInString(r.searchQuery)
+		r.searchQuery = r.searchQuery[:len(r.searchQuery)-size]
+	}
+	r.refreshSearchForQueryLocked()
+}
+
+// refreshSearchForQuery re-runs the history search for the current query
+// and updates searchResult / searchResultIndex. Must NOT hold r.mu.
+func (r *SteerInputReader) refreshSearchForQuery() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.refreshSearchForQueryLocked()
+}
+
+// refreshSearchForQueryLocked is the lock-free inner search. Caller
+// must hold r.mu.
+func (r *SteerInputReader) refreshSearchForQueryLocked() {
+	if r.searchQuery == "" {
+		if len(r.history) > 0 {
+			r.searchResult = r.history[len(r.history)-1]
+			r.searchResultIndex = len(r.history) - 1
+		} else {
+			r.searchResult = ""
+			r.searchResultIndex = -1
+		}
+		return
+	}
+	// Search backwards through history for a case-insensitive match,
+	// starting from the most recent entry.
+	queryLower := strings.ToLower(r.searchQuery)
+	startIdx := len(r.history) - 1
+	for i := startIdx; i >= 0; i-- {
+		if strings.Contains(strings.ToLower(r.history[i]), queryLower) {
+			r.searchResult = r.history[i]
+			r.searchResultIndex = i
+			return
+		}
+	}
+	r.searchResult = ""
+	r.searchResultIndex = -1
+}
+
+// cycleSearchResult searches for the next older match with the current
+// query. Called when the user presses Ctrl-R again while already in
+// search mode.
+func (r *SteerInputReader) cycleSearchResult() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.searchQuery == "" {
+		// No query: cycle through history in order.
+		if len(r.history) > 0 {
+			idx := r.searchResultIndex - 1
+			if idx < 0 {
+				idx = len(r.history) - 1
+			}
+			r.searchResult = r.history[idx]
+			r.searchResultIndex = idx
+		}
+		return
+	}
+	queryLower := strings.ToLower(r.searchQuery)
+	startIdx := r.searchResultIndex - 1
+	for i := startIdx; i >= 0; i-- {
+		if strings.Contains(strings.ToLower(r.history[i]), queryLower) {
+			r.searchResult = r.history[i]
+			r.searchResultIndex = i
+			return
+		}
+	}
+	// No older match found — keep current result.
 }

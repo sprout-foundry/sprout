@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/url"
 	"os"
 	"os/exec"
@@ -13,6 +14,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 // ---------------------------------------------------------------------------
@@ -230,11 +233,29 @@ func (ws *ReactWebServer) stopSSHSessionLocked(key string) {
 	ws.clearClientSSHContextForSessionKey(key)
 }
 
+// publishSSHTunnelStatus broadcasts an ssh_tunnel_status event so connected
+// clients can show a banner or retry failed requests during tunnel reconnects
+// instead of surfacing raw 502 errors. The event is global (not client-scoped)
+// because tunnel state affects all clients using that SSH session.
+func (ws *ReactWebServer) publishSSHTunnelStatus(sessionKey, status, message string) {
+	if ws.eventBus == nil {
+		return
+	}
+	ws.eventBus.Publish(events.EventTypeSSHTunnelStatus, map[string]interface{}{
+		"session_key": sessionKey,
+		"status":      status,
+		"message":     message,
+	})
+}
+
 func (ws *ReactWebServer) watchSSHSession(key string, session *sshWorkspaceSession, cmd *exec.Cmd) {
 	if cmd == nil {
 		return
 	}
 	_ = cmd.Wait()
+
+	log.Printf("[ssh] tunnel for session %s disconnected, attempting reconnect", key)
+	ws.publishSSHTunnelStatus(key, "reconnecting", "SSH tunnel disconnected, reconnecting…")
 
 	// Attempt to reconnect the tunnel before giving up.
 	const maxRetries = 3
@@ -278,6 +299,8 @@ func (ws *ReactWebServer) watchSSHSession(key string, session *sshWorkspaceSessi
 			session.URL = fmt.Sprintf("http://127.0.0.1:%d", newLocalPort)
 			ws.sshSessionsMu.Unlock()
 			_ = killProcess(oldTunnel)
+			log.Printf("[ssh] tunnel for session %s reconnected on port %d (attempt %d/%d)", key, newLocalPort, attempt, maxRetries)
+			ws.publishSSHTunnelStatus(key, "reconnected", "SSH tunnel reconnected")
 			go ws.watchSSHSession(key, session, newTunnel)
 			return
 		}
@@ -287,6 +310,8 @@ func (ws *ReactWebServer) watchSSHSession(key string, session *sshWorkspaceSessi
 	}
 
 	// All reconnection attempts failed; clean up.
+	log.Printf("[ssh] tunnel for session %s failed to reconnect after %d attempts", key, maxRetries)
+	ws.publishSSHTunnelStatus(key, "disconnected", "SSH tunnel disconnected and could not be reconnected")
 	ws.sshSessionsMu.Lock()
 	defer ws.sshSessionsMu.Unlock()
 	current := ws.sshSessions[key]

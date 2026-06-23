@@ -141,6 +141,16 @@ type TerminalSession struct {
 	execMu sync.Mutex
 }
 
+// hasSubscribers reports whether at least one WebSocket subscriber is
+// currently attached to this session. Used by the PTY reader to decide
+// whether to refresh LastUsed — a disconnected session must not keep
+// itself alive purely because the shell produces background output.
+func (s *TerminalSession) hasSubscribers() bool {
+	s.subsMu.Lock()
+	defer s.subsMu.Unlock()
+	return len(s.subs) > 0
+}
+
 // subscribe adds a new WebSocket subscriber and returns its termSub.
 func (s *TerminalSession) subscribe() *termSub {
 	sub := &termSub{ch: make(chan []byte, 10000)}
@@ -399,19 +409,26 @@ func (tm *TerminalManager) GetOrCreateHiddenSessionForChat(ctx context.Context, 
 
 // waitForShellReady waits for the shell in a session to finish initializing
 // (sourcing rc files, printing banners, etc.) before commands can be sent.
-// It subscribes to the session's output and waits for a quiet period of 500ms
-// after the last output chunk, indicating the shell prompt is ready.
+// It subscribes to the session's output and waits for a quiet period after
+// the last output chunk, indicating the shell prompt is ready.
 // Returns nil if the shell becomes ready, or an error if the context expires.
 func (tm *TerminalManager) waitForShellReady(ctx context.Context, session *TerminalSession) error {
 	sub := session.subscribe()
 	defer session.unsubscribe(sub)
 
-	// Wait up to 10 seconds for shell readiness. Most shells source rc files
-	// in under 1 second, but complex setups (pyenv, nvm, starship) can take longer.
-	readyCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	// Wait up to 15 seconds for shell readiness. Most shells source rc files
+	// in under 1 second, but complex setups (pyenv, nvm, conda, starship,
+	// tmux) can produce output in bursts separated by >500ms gaps. The larger
+	// timeout accommodates these without false-positive "ready" declarations.
+	readyCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
-	quietPeriod := 500 * time.Millisecond
+	// The quiet period must be long enough to span the typical gap between
+	// rc-file output bursts (pyenv, nvm, conda each print asynchronously).
+	// 500ms was too short — a bursty shell would be declared ready mid-init,
+	// and the first command would interleave with pending output. 1s is still
+	// short enough that the total readiness wait stays under 2s for fast shells.
+	quietPeriod := 1 * time.Second
 	quietTimer := time.NewTimer(quietPeriod)
 	defer quietTimer.Stop()
 

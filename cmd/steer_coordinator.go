@@ -93,17 +93,64 @@ func (c *SteerCoordinator) EndTurn() {
 	c.reader.Stop()
 }
 
-// DrainUnsentBuffer returns any text the user typed into the steer
-// panel during the last turn but did not submit. The REPL loop calls
-// this after EndTurn and carries the text into the next ReadLine via
-// InputReader.SetInitialContent. The steer buffer is reset after drain.
-func (c *SteerCoordinator) DrainUnsentBuffer() string {
-	if c == nil || c.reader == nil {
-		return ""
+// PendingInput captures all text that should carry over from one turn
+// to the next: unsent steer text (typed but not submitted) and queued
+// messages (submitted via Tab+Enter QUEUE mode). The REPL loop drains
+// both in a single call to DrainPendingInput after EndTurn, eliminating
+// the two-channel confusion where unsent text and queued messages
+// followed different code paths.
+type PendingInput struct {
+	// InitialContent is text to pre-fill in the next prompt (unsent
+	// steer text the user may want to edit before submitting).
+	InitialContent string
+
+	// QueuedPrefix is the formatted block of deferred messages to
+	// prepend to the user's next submitted query. Empty when no
+	// messages are queued.
+	QueuedPrefix string
+
+	// QueuedCount is how many deferred messages were drained (for
+	// footer badge clearing and logging).
+	QueuedCount int
+}
+
+// DrainPendingInput consolidates the two carry-over paths (unsent steer
+// buffer + deferred queue messages) into a single drain. The REPL loop
+// calls this once after EndTurn instead of separately calling
+// DrainUnsentBuffer and DrainDeferredMessages.
+//
+// When both paths have content, the unsent text becomes the initial
+// content (pre-filled for editing) and the queued messages become the
+// prefix. This is the correct priority: the user was actively composing
+// the unsent text, so it goes into the editable buffer; the queued
+// messages are context they already decided on, so they prepend
+// silently as before.
+func (c *SteerCoordinator) DrainPendingInput() PendingInput {
+	var pi PendingInput
+
+	// 1. Drain unsent steer text → initial content for the next prompt.
+	if c != nil && c.reader != nil {
+		pi.InitialContent = c.reader.DrainUnsentBuffer()
+		c.reader.ResetBuffer()
 	}
-	text := c.reader.DrainUnsentBuffer()
-	c.reader.ResetBuffer()
-	return text
+
+	// 2. Drain deferred queue messages → formatted prefix.
+	if c != nil && c.agent != nil {
+		queued := c.agent.DrainDeferredMessages()
+		pi.QueuedCount = len(queued)
+		if len(queued) > 0 {
+			var b strings.Builder
+			b.WriteString("Queued from prior turn:\n")
+			for _, msg := range queued {
+				b.WriteString("  • ")
+				b.WriteString(msg)
+				b.WriteByte('\n')
+			}
+			pi.QueuedPrefix = strings.TrimSpace(b.String())
+		}
+	}
+
+	return pi
 }
 
 // SetGroundTruth installs the REPL's pristine termios snapshot into

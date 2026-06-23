@@ -39,7 +39,11 @@ func (a *Agent) debugLog(format string, args ...interface{}) {
 
 // getModelContextLimit returns the maximum context window for a model from the API
 func (a *Agent) getModelContextLimit() int {
-	limit, err := a.client.GetModelContextLimit()
+	c := a.getClient()
+	if c == nil {
+		return 32000
+	}
+	limit, err := c.GetModelContextLimit()
 	if err != nil {
 		// Fallback to conservative default if API method fails
 		if a.debug {

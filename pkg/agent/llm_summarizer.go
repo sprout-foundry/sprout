@@ -220,7 +220,7 @@ func (a *Agent) SummarizeViaLLM(ctx context.Context, messages []api.Message, hin
 	if a == nil {
 		return "", fmt.Errorf("agent unavailable")
 	}
-	summarizer := newLLMSummarizer(a.client, a.GetProvider())
+	summarizer := newLLMSummarizer(a.getClient(), a.GetProvider())
 	if summarizer == nil {
 		return "", fmt.Errorf("no LLM client bound; cannot summarize via LLM")
 	}

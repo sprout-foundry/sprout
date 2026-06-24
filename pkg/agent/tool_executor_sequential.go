@@ -143,8 +143,11 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 		if registry := te.getHandlerRegistry(); registry != nil {
 			if handler, found := registry.Lookup(normalizedToolName); found {
 				te.agent.debugLog("[tool] registry dispatch: %s\n", normalizedToolName)
+				// Use effectiveCwd so tools honor cd commands during a session.
+				// GetWorkspaceRoot returns the original root and ignores cd.
+				effectiveRoot := te.agent.effectiveCwd()
 				env := tools.ToolEnv{
-					WorkspaceRoot: te.agent.GetWorkspaceRoot(),
+					WorkspaceRoot: effectiveRoot,
 					ConfigManager: te.agent.GetConfigManager(),
 					EventBus:      te.agent.GetEventBus(),
 					EmbeddingMgr:  te.agent.GetEmbeddingManager(),
@@ -159,7 +162,7 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 					return
 				}
 				// Propagate execution metadata for tracing/observability.
-				execCtx := withToolExecutionMetadata(ctx, toolCallID, normalizedToolName, te.agent.GetWorkspaceRoot())
+				execCtx := withToolExecutionMetadata(ctx, toolCallID, normalizedToolName, effectiveRoot)
 				res, err := handler.Execute(execCtx, env, args)
 				if err != nil {
 					output := res.Output
@@ -206,7 +209,7 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 		}
 
 		registry := GetToolRegistry()
-		execCtx := withToolExecutionMetadata(ctx, toolCallID, normalizedToolName, te.agent.GetWorkspaceRoot())
+		execCtx := withToolExecutionMetadata(ctx, toolCallID, normalizedToolName, te.agent.effectiveCwd())
 		images, result, err := registry.ExecuteTool(execCtx, normalizedToolName, args, te.agent)
 
 		// Check for unknown tool using typed error classification first,

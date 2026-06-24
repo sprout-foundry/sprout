@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os/exec"
@@ -21,7 +22,24 @@ import (
 // It provides the same functionality as the 'sprout review' CLI command
 // but accessible through the interactive agent console
 
-type ReviewCommand struct{}
+type ReviewCommand struct {
+	ctx context.Context // SP-073: cancellation context for LLM calls
+}
+
+// SetContext sets the cancellation context for review LLM calls (SP-073).
+// When wired through the command registry, this receives the agent's
+// InterruptCtx so Stop/Ctrl+C can abort in-flight review requests.
+func (c *ReviewCommand) SetContext(ctx context.Context) {
+	c.ctx = ctx
+}
+
+// getContext returns the stored context or context.Background() as fallback.
+func (c *ReviewCommand) getContext() context.Context {
+	if c.ctx != nil {
+		return c.ctx
+	}
+	return context.Background()
+}
 
 // Name returns the command name
 func (c *ReviewCommand) Name() string {
@@ -35,12 +53,26 @@ func (c *ReviewCommand) Description() string {
 
 // Execute runs the code review command
 func (c *ReviewCommand) Execute(args []string, chatAgent *agent.Agent) error {
-	return runReviewCommand("review", false, args, chatAgent)
+	return runReviewCommand("review", false, args, chatAgent, c.getContext())
 }
 
 // ReviewDeepCommand implements the /review-deep slash command
 // This command performs a deeper evidence-focused review on staged Git changes
-type ReviewDeepCommand struct{}
+type ReviewDeepCommand struct {
+	ctx context.Context // SP-073: cancellation context
+}
+
+// SetContext sets the cancellation context for review LLM calls (SP-073).
+func (c *ReviewDeepCommand) SetContext(ctx context.Context) {
+	c.ctx = ctx
+}
+
+func (c *ReviewDeepCommand) getContext() context.Context {
+	if c.ctx != nil {
+		return c.ctx
+	}
+	return context.Background()
+}
 
 // Name returns the command name
 func (c *ReviewDeepCommand) Name() string {
@@ -54,10 +86,10 @@ func (c *ReviewDeepCommand) Description() string {
 
 // Execute runs the deep code review command
 func (c *ReviewDeepCommand) Execute(args []string, chatAgent *agent.Agent) error {
-	return runReviewCommand("review-deep", true, args, chatAgent)
+	return runReviewCommand("review-deep", true, args, chatAgent, c.getContext())
 }
 
-func runReviewCommand(commandName string, deepReview bool, args []string, chatAgent *agent.Agent) error {
+func runReviewCommand(commandName string, deepReview bool, args []string, chatAgent *agent.Agent, goCtx context.Context) error {
 	// Set git working directory from agent workspace root
 	if chatAgent != nil {
 		SetGitDir(chatAgent.GetWorkspaceRoot())
@@ -176,6 +208,7 @@ func runReviewCommand(commandName string, deepReview bool, args []string, chatAg
 		Config:           cfg,
 		Logger:           logger,
 		AgentClient:      agentClient,
+		GoCtx:            goCtx, // SP-073: pass cancellation context
 		ProjectType:      detectProjectType(),
 		CommitMessage:    extractStagedChangesSummary(),
 		KeyComments:      extractKeyCommentsFromDiff(stagedDiff),

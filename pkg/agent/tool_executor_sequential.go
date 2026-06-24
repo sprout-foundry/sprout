@@ -3,7 +3,6 @@ package agent
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -139,60 +138,12 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 
 	// Execute the tool in a goroutine
 	go func() {
-		// SP-038: Check new handler registry first for dual dispatch.
-		if registry := te.getHandlerRegistry(); registry != nil {
-			if handler, found := registry.Lookup(normalizedToolName); found {
-				te.agent.debugLog("[tool] registry dispatch: %s\n", normalizedToolName)
-				env := tools.ToolEnv{
-					WorkspaceRoot: te.agent.GetWorkspaceRoot(),
-					ConfigManager: te.agent.GetConfigManager(),
-					EventBus:      te.agent.GetEventBus(),
-					EmbeddingMgr:  te.agent.GetEmbeddingManager(),
-				}
-				// Validate arguments before execution.
-				if err := handler.Validate(args); err != nil {
-					resultChan <- struct {
-						images []api.ImageData
-						result string
-						err    error
-					}{nil, fmt.Sprintf("Validation failed: %v", err), err}
-					return
-				}
-				// Propagate execution metadata for tracing/observability.
-				execCtx := withToolExecutionMetadata(ctx, toolCallID, normalizedToolName, te.agent.GetWorkspaceRoot())
-				res, err := handler.Execute(execCtx, env, args)
-				if err != nil {
-					output := res.Output
-					resultChan <- struct {
-						images []api.ImageData
-						result string
-						err    error
-					}{nil, output, err}
-					return
-				}
-				// Map ToolResult.IsError to legacy error path.
-				if res.IsError {
-					resultChan <- struct {
-						images []api.ImageData
-						result string
-						err    error
-					}{nil, res.Output, errors.New(res.Output)}
-					return
-				}
-
-				// Convert new-style ImageData to legacy api.ImageData if present.
-				var images []api.ImageData
-				for _, img := range res.Images {
-					images = append(images, api.ImageData{URL: img.URI, Type: img.MIMEType})
-				}
-				resultChan <- struct {
-					images []api.ImageData
-					result string
-					err    error
-				}{images, res.Output, nil}
-				return
-			}
-		}
+		// SP-074: Dual-dispatch shim collapsed. All migrated tools now
+		// dispatch through tool_security.go::ExecuteTool, which consults
+		// tools.GetNewToolRegistry() first and falls through to the legacy
+		// ToolConfig registry only for tools that genuinely require *Agent
+		// access (e.g. run_subagent, run_parallel_subagents — see
+		// pkg/agent_tools/all.go for the list of migrated handlers).
 		te.agent.debugLog("[tool] legacy dispatch: %s\n", normalizedToolName)
 
 		if normalizedToolName == "mcp_tools" {

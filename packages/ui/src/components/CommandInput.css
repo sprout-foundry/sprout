@@ -3,7 +3,7 @@
   flex-direction: column;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: var(--radius-sm, 4px);
   overflow: visible;
   box-shadow: var(--shadow-subtle);
   transition:
@@ -192,7 +192,7 @@
   color: var(--text-primary);
   border: none;
   padding: 8px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm, 4px);
   cursor: pointer;
   transition:
     transform 0.2s ease,
@@ -222,7 +222,7 @@
   color: var(--accent-error);
   border: 1px solid color-mix(in srgb, var(--accent-error) 50%, var(--border-default));
   padding: 8px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm, 4px);
   cursor: pointer;
   transition:
     color 0.2s ease,
@@ -261,7 +261,7 @@
   color: var(--text-secondary);
   border: 1px solid var(--border-default);
   padding: 8px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm, 4px);
   cursor: pointer;
   transition:
     color 0.2s ease,
@@ -308,7 +308,7 @@
   color: var(--text-secondary);
   border: 1px dashed var(--border-default);
   padding: 8px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm, 4px);
   cursor: pointer;
   transition:
     color 0.2s ease,
@@ -336,7 +336,7 @@
   justify-content: center;
   width: 24px;
   height: 24px;
-  border-radius: 12px;
+  border-radius: 999px;
   border: none;
   background: var(--accent-primary, #61afef);
   color: white;
@@ -368,7 +368,7 @@
   box-shadow:
     0 4px 24px rgba(0, 0, 0, 0.25),
     0 0 0 1px rgba(255, 255, 255, 0.06);
-  border-radius: 8px;
+  border-radius: var(--radius-md, 6px);
   overflow: hidden;
 }
 
@@ -377,7 +377,7 @@
   color: var(--text-secondary);
   border: 1px solid var(--border-default);
   padding: 8px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm, 4px);
   cursor: pointer;
   transition:
     color 0.2s ease,
@@ -418,7 +418,7 @@
   padding: 6px;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: var(--radius-sm, 4px);
   min-width: 60px;
   max-width: 80px;
   flex-shrink: 0;
@@ -548,7 +548,7 @@
   justify-content: center;
   width: 30px;
   height: 30px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm, 4px);
   border: 1px solid var(--border-default);
   background: var(--bg-elevated);
   color: var(--text-secondary);
@@ -581,7 +581,7 @@
   color: var(--text-secondary);
   border: 1px solid var(--border-default);
   padding: 8px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm, 4px);
   cursor: pointer;
   transition:
     color 0.2s ease,
@@ -708,7 +708,7 @@
   margin-top: 8px;
   background: var(--bg-elevated);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: var(--radius-md, 6px);
   padding: 12px 16px;
   min-width: 200px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
@@ -743,7 +743,7 @@
 @media (max-width: 768px) {
   .command-input {
     min-height: 0;
-    border-radius: 12px;
+    border-radius: var(--radius-md, 6px);
     box-shadow: 0 10px 24px rgba(2, 6, 23, 0.26);
   }
 
@@ -772,7 +772,7 @@
   .queue-button,
   .new-session-button {
     padding: 7px;
-    border-radius: 7px;
+    border-radius: var(--radius-sm, 4px);
   }
 }
 

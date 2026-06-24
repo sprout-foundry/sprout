@@ -12,6 +12,14 @@ import (
 func (ir *InputReader) Refresh() {
 	LockOutput()
 	defer UnlockOutput()
+	ir.refreshLocked()
+}
+
+// refreshLocked redraws the current input line WITHOUT acquiring the output
+// lock. Callers must already hold LockOutput(). This separation allows
+// PrintExternal to clear the line, print an external message, and redraw
+// the input in a single atomic lock-held sequence.
+func (ir *InputReader) refreshLocked() {
 	promptRunes := []rune(stripANSIEscapeCodes(ir.prompt))
 	displayLine, displayCursorByte := ir.renderLineWithCollapsedPastes()
 	promptWidth := len(promptRunes)

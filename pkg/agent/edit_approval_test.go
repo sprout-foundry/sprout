@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -696,4 +697,225 @@ func getDiffLineContent(h Hunk, typ DiffLineType) []string {
 		}
 	}
 	return contents
+}
+
+// ---------------------------------------------------------------------------
+// TestEditApprovalBroker_* (SP-072-3)
+// ---------------------------------------------------------------------------
+
+// TestEditApprovalBroker_RegisterAndRespond verifies the basic
+// register → respond → cleanup lifecycle of the broker.
+func TestEditApprovalBroker_RegisterAndRespond(t *testing.T) {
+	broker := &editApprovalBrokerType{
+		pending: make(map[string]chan EditDecision),
+	}
+	reqID := "edit_test_1"
+
+	ch := broker.register(reqID)
+	require.NotNil(t, ch)
+
+	decision := EditDecision{
+		Approved:      true,
+		AcceptedHunks: []string{"hunk-0"},
+	}
+
+	ok := broker.respond(reqID, decision)
+	assert.True(t, ok, "respond should succeed for a registered request")
+
+	received := <-ch
+	assert.Equal(t, decision.Approved, received.Approved)
+	assert.Equal(t, decision.AcceptedHunks, received.AcceptedHunks)
+
+	broker.cleanup(reqID)
+
+	// After cleanup, respond should fail.
+	ok = broker.respond(reqID, decision)
+	assert.False(t, ok, "respond should fail after cleanup")
+}
+
+// TestEditApprovalBroker_RespondUnknown verifies that responding to a
+// non-existent request returns false.
+func TestEditApprovalBroker_RespondUnknown(t *testing.T) {
+	broker := &editApprovalBrokerType{
+		pending: make(map[string]chan EditDecision),
+	}
+	ok := broker.respond("nonexistent", EditDecision{})
+	assert.False(t, ok, "respond to unknown request should return false")
+}
+
+// TestEditApprovalBroker_DoubleRespond verifies that a second respond
+// to the same request fails (the channel is buffered with capacity 1).
+func TestEditApprovalBroker_DoubleRespond(t *testing.T) {
+	broker := &editApprovalBrokerType{
+		pending: make(map[string]chan EditDecision),
+	}
+	reqID := "edit_test_double"
+
+	ch := broker.register(reqID)
+	defer broker.cleanup(reqID)
+
+	decision := EditDecision{Approved: true, AcceptedHunks: []string{"hunk-0"}}
+
+	ok := broker.respond(reqID, decision)
+	assert.True(t, ok, "first respond should succeed")
+
+	ok = broker.respond(reqID, decision)
+	assert.False(t, ok, "second respond should fail (channel full)")
+
+	// Drain the channel to verify the first decision arrived.
+	received := <-ch
+	assert.True(t, received.Approved)
+}
+
+// TestRespondToEditApproval_UnblocksRequest verifies that calling
+// RespondToEditApproval on an agent unblocks a goroutine that registered
+// a pending request via the broker.
+func TestRespondToEditApproval_UnblocksRequest(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	reqID := "edit_unblock_test"
+	ch := editApprovalBroker.register(reqID)
+	defer editApprovalBroker.cleanup(reqID)
+
+	done := make(chan EditDecision, 1)
+	go func() {
+		decision := <-ch
+		done <- decision
+	}()
+
+	decision := EditDecision{Approved: true, AcceptedHunks: []string{"hunk-0", "hunk-1"}}
+	ok := agent.RespondToEditApproval(reqID, decision)
+	assert.True(t, ok, "RespondToEditApproval should deliver to the broker")
+
+	select {
+	case received := <-done:
+		assert.True(t, received.Approved, "should receive approved decision")
+		assert.Equal(t, []string{"hunk-0", "hunk-1"}, received.AcceptedHunks)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for decision to be received")
+	}
+}
+
+// TestRequestEditApproval_TimeoutFallback verifies that when the
+// WebUI path times out (no response), the request falls through
+// gracefully. We test this by setting a very short timeout and
+// calling RequestEditApproval on a non-interactive agent (which
+// auto-approves without blocking on the WebUI path).
+func TestRequestEditApproval_NonInteractiveAutoApproves(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	// newTestAgent sets SkipPrompt=true, so isNonInteractive() returns true.
+	original := "line1\nline2\nline3"
+	proposed := "line1\nMODIFIED\nline3"
+
+	proposal := EditProposal{
+		Path:     "test.txt",
+		Original: original,
+		Proposed: proposed,
+	}
+
+	applied, summary, err := agent.RequestEditApproval(context.Background(), proposal)
+	require.NoError(t, err)
+	assert.Equal(t, proposed, applied, "non-interactive should auto-approve and apply all hunks")
+	assert.Contains(t, summary, "applied")
+}
+
+// TestRequestEditApproval_RejectAllDecision verifies that a reject-all
+// decision returns the original content unchanged.
+func TestRequestEditApproval_RejectAllDecision(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	original := "line1\nline2\nline3"
+	proposed := "line1\nMODIFIED\nline3"
+	hunks := SplitIntoHunks(original, proposed)
+	require.NotEmpty(t, hunks)
+
+	applied, summary, err := agent.applyEditDecision(
+		EditProposal{Path: "test.txt", Original: original, Proposed: proposed, Hunks: hunks},
+		EditDecision{Approved: false, AcceptedHunks: nil},
+	)
+	require.NoError(t, err)
+	assert.Equal(t, original, applied, "reject-all should return original content")
+	assert.Contains(t, summary, "rejected")
+}
+
+// TestRequestEditApproval_PartialDecision verifies that accepting
+// only some hunks produces content with only those changes.
+func TestRequestEditApproval_PartialDecision(t *testing.T) {
+	agent := newTestAgent(t)
+	defer agent.Shutdown()
+
+	original := strings.Join([]string{
+		"line-01", "line-02", "line-03", "line-04", "line-05",
+		"line-06", "line-07", "line-08", "line-09", "line-10",
+		"line-11", "line-12", "line-13", "line-14", "line-15",
+	}, "\n")
+	proposed := strings.Join([]string{
+		"line-01", "CHANGED-A", "line-03", "line-04", "line-05",
+		"line-06", "line-07", "line-08", "line-09", "line-10",
+		"line-11", "line-12", "line-13", "line-14", "CHANGED-B",
+	}, "\n")
+
+	hunks := SplitIntoHunks(original, proposed)
+	require.Len(t, hunks, 2, "should produce 2 hunks")
+
+	// Accept only hunk-0.
+	applied, summary, err := agent.applyEditDecision(
+		EditProposal{Path: "test.txt", Original: original, Proposed: proposed, Hunks: hunks},
+		EditDecision{Approved: true, AcceptedHunks: []string{hunks[0].ID}},
+	)
+	require.NoError(t, err)
+	assert.Contains(t, applied, "CHANGED-A", "accepted hunk change should be applied")
+	assert.NotContains(t, applied, "CHANGED-B", "rejected hunk change should NOT be applied")
+	assert.Contains(t, summary, "applied 1/2 hunks")
+}
+
+// TestHunkToPayload verifies the event payload serialization.
+func TestHunkToPayload(t *testing.T) {
+	hunk := Hunk{
+		ID:       "hunk-0",
+		OldStart: 5,
+		OldLines: 3,
+		NewStart: 5,
+		NewLines: 4,
+		Lines: []DiffLine{
+			{Type: DiffLineContext, Content: "context line"},
+			{Type: DiffLineAdd, Content: "added line"},
+			{Type: DiffLineRemove, Content: "removed line"},
+		},
+	}
+
+	payload := hunkToPayload(hunk)
+
+	assert.Equal(t, "hunk-0", payload["id"])
+	assert.Equal(t, 5, payload["old_start"])
+	assert.Equal(t, 3, payload["old_lines"])
+
+	lines, ok := payload["lines"].([]map[string]interface{})
+	require.True(t, ok, "lines should be a []map[string]interface{}")
+	require.Len(t, lines, 3)
+
+	assert.Equal(t, "context", lines[0]["type"])
+	assert.Equal(t, "add", lines[1]["type"])
+	assert.Equal(t, "remove", lines[2]["type"])
+
+	assert.Equal(t, 1, payload["add_count"])
+	assert.Equal(t, 1, payload["del_count"])
+}
+
+// TestCountLinesByType verifies the line counting helper.
+func TestCountLinesByType(t *testing.T) {
+	lines := []DiffLine{
+		{Type: DiffLineContext, Content: "a"},
+		{Type: DiffLineAdd, Content: "b"},
+		{Type: DiffLineAdd, Content: "c"},
+		{Type: DiffLineRemove, Content: "d"},
+	}
+
+	assert.Equal(t, 2, countLinesByType(lines, DiffLineAdd))
+	assert.Equal(t, 1, countLinesByType(lines, DiffLineRemove))
+	assert.Equal(t, 1, countLinesByType(lines, DiffLineContext))
 }

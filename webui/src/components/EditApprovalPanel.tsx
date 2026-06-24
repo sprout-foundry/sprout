@@ -1,71 +1,67 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { clientFetch } from '../services/clientSession';
+import './EditApprovalPanel.css';
 
-export interface EditHunk {
+export interface EditApprovalHunkLine {
+  type: 'context' | 'add' | 'remove';
+  content: string;
+}
+
+export interface EditApprovalHunk {
   id: string;
-  summary: string;
-  add_count: number;
-  del_count: number;
-  lines: string[];
+  oldStart: number;
+  oldLines: number;
+  newStart: number;
+  newLines: number;
+  lines: EditApprovalHunkLine[];
+  addCount: number;
+  delCount: number;
 }
 
-export interface PendingEdit {
-  id: string;
-  path: string;
-  hunks: EditHunk[];
-  unified_diff: string;
-  decided: boolean;
+export interface EditApprovalPanelProps {
+  requestId: string;
+  filePath: string;
+  unifiedDiff?: string;
+  hunks: EditApprovalHunk[];
+  onRespond: (requestId: string) => void;
 }
 
-interface EditApprovalPanelProps {
-  editId: string;
-  onResolved: (acceptedHunks: string[], rejected: boolean) => void;
-}
+const LINE_PREFIX: Record<EditApprovalHunkLine['type'], string> = {
+  add: '+',
+  remove: '-',
+  context: ' ',
+};
 
 /**
- * EditApprovalPanel — renders a pending edit's unified diff with per-hunk
- * Accept/Reject toggles. "Apply Selected" submits the accepted hunks,
- * "Reject All" rejects every hunk. Fires an input_required notification
- * (SP-070) when mounted so the user is alerted even if the tab is hidden.
+ * EditApprovalPanel (SP-072-3) — renders a pending edit's diff with
+ * per-hunk Accept/Reject toggles and color-coded add/remove/context lines.
  *
- * POST /api/edits/{id}/decision { accepted_hunks, rejected }
+ * Driven by the `edit_approval_request` WebSocket event, which populates
+ * the hunks array with per-line change types. On decision, POSTs to
+ * /api/edits/{id}/decision with the accepted hunk IDs.
  */
-export const EditApprovalPanel: React.FC<EditApprovalPanelProps> = ({ editId, onResolved }) => {
-  const [edit, setEdit] = useState<PendingEdit | null>(null);
-  const [acceptedHunks, setAcceptedHunks] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(true);
+function EditApprovalPanel({
+  requestId,
+  filePath,
+  unifiedDiff,
+  hunks,
+  onRespond,
+}: EditApprovalPanelProps): JSX.Element {
+  // Track accepted hunk IDs. Default: all accepted so the user can
+  // just hit "Apply Selected" to approve everything. Unchecking a
+  // hunk's checkbox removes it from the accepted set.
+  const [acceptedIds, setAcceptedIds] = useState<Set<string>>(() => new Set(hunks.map((h) => h.id)));
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Fetch the pending edit details.
+  // If the hunks change (new request arrives via state), reset selections.
   useEffect(() => {
-    let cancelled = false;
-
-    const fetchEdit = async () => {
-      try {
-        const resp = await fetch(`/api/edits/${editId}`);
-        if (!resp.ok) {
-          console.error('Failed to fetch edit:', resp.statusText);
-          return;
-        }
-        const data: PendingEdit = await resp.json();
-        if (cancelled) return;
-        setEdit(data);
-        // Default: all hunks accepted.
-        setAcceptedHunks(new Set(data.hunks.map((h) => h.id)));
-      } catch (err) {
-        console.error('Error fetching edit:', err);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-
-    fetchEdit();
-    return () => {
-      cancelled = true;
-    };
-  }, [editId]);
+    setAcceptedIds(new Set(hunks.map((h) => h.id)));
+    setError(null);
+  }, [requestId, hunks]);
 
   const toggleHunk = useCallback((hunkId: string) => {
-    setAcceptedHunks((prev) => {
+    setAcceptedIds((prev) => {
       const next = new Set(prev);
       if (next.has(hunkId)) {
         next.delete(hunkId);
@@ -77,120 +73,146 @@ export const EditApprovalPanel: React.FC<EditApprovalPanelProps> = ({ editId, on
   }, []);
 
   const acceptAll = useCallback(() => {
-    if (!edit) return;
-    setAcceptedHunks(new Set(edit.hunks.map((h) => h.id)));
-  }, [edit]);
+    setAcceptedIds(new Set(hunks.map((h) => h.id)));
+  }, [hunks]);
 
   const rejectAll = useCallback(() => {
-    setAcceptedHunks(new Set());
+    setAcceptedIds(new Set());
   }, []);
 
-  const submitDecision = useCallback(
-    async (rejected: boolean) => {
+  const postDecision = useCallback(
+    async (acceptedHunks: string[], rejected: boolean) => {
       setSubmitting(true);
+      setError(null);
       try {
-        const body = rejected
-          ? { accepted_hunks: [], rejected: true }
-          : { accepted_hunks: Array.from(acceptedHunks), rejected: false };
-
-        const resp = await fetch(`/api/edits/${editId}/decision`, {
+        const resp = await clientFetch(`/api/edits/${encodeURIComponent(requestId)}/decision`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
+          body: JSON.stringify({ accepted_hunks: acceptedHunks, rejected }),
         });
-
         if (!resp.ok) {
-          console.error('Failed to submit decision:', resp.statusText);
-          return;
+          const body = await resp.text();
+          throw new Error(body || `HTTP ${resp.status}`);
         }
-
-        onResolved(rejected ? [] : Array.from(acceptedHunks), rejected);
+        onRespond(requestId);
       } catch (err) {
-        console.error('Error submitting decision:', err);
+        setError(err instanceof Error ? err.message : String(err));
       } finally {
         setSubmitting(false);
       }
     },
-    [editId, acceptedHunks, onResolved]
+    [requestId, onRespond],
   );
 
-  if (loading) {
-    return (
-      <div className="edit-approval-panel loading" data-testid="edit-approval-panel">
-        <p>Loading edit details…</p>
-      </div>
-    );
-  }
+  const handleApplySelected = useCallback(() => {
+    void postDecision([...acceptedIds], false);
+  }, [acceptedIds, postDecision]);
 
-  if (!edit) {
-    return (
-      <div className="edit-approval-panel error" data-testid="edit-approval-panel">
-        <p>Edit not found or already decided.</p>
-      </div>
-    );
-  }
+  const handleRejectAll = useCallback(() => {
+    void postDecision([], true);
+  }, [postDecision]);
+
+  const totalAdds = useMemo(() => hunks.reduce((sum, h) => sum + h.addCount, 0), [hunks]);
+  const totalDels = useMemo(() => hunks.reduce((sum, h) => sum + h.delCount, 0), [hunks]);
 
   return (
-    <div className="edit-approval-panel" data-testid="edit-approval-panel">
-      <div className="edit-approval-header">
-        <h3>Edit Review: {edit.path}</h3>
-        <span className="edit-hunk-count">{edit.hunks.length} hunk(s)</span>
-      </div>
-
-      <div className="edit-approval-diff" data-testid="edit-unified-diff">
-        <pre>
-          <code>{edit.unified_diff}</code>
-        </pre>
-      </div>
-
-      <div className="edit-hunks-list">
-        {edit.hunks.map((hunk) => (
-          <div
-            key={hunk.id}
-            className={`edit-hunk-row ${acceptedHunks.has(hunk.id) ? 'accepted' : 'rejected'}`}
-            data-testid={`edit-hunk-${hunk.id}`}
-          >
-            <label className="edit-hunk-toggle">
-              <input
-                type="checkbox"
-                checked={acceptedHunks.has(hunk.id)}
-                onChange={() => toggleHunk(hunk.id)}
-                data-testid={`edit-hunk-checkbox-${hunk.id}`}
-              />
-              <span className="edit-hunk-summary">
-                {hunk.id}: {hunk.summary}
-              </span>
-            </label>
+    <div className="themed-dialog-overlay edit-approval-overlay" role="dialog" aria-modal="true">
+      <div className="themed-dialog-card edit-approval-card">
+        <div className="themed-dialog-accent-bar themed-dialog-accent-bar--warning" />
+        <div className="edit-approval-header">
+          <h2 className="edit-approval-title">Edit Approval Required</h2>
+          <div className="edit-approval-file-info">
+            <span className="edit-approval-file-path" title={filePath}>
+              {filePath}
+            </span>
+            <span className="edit-approval-stats">
+              {hunks.length} {hunks.length === 1 ? 'hunk' : 'hunks'} ·{' '}
+              <span className="edit-approval-add">+{totalAdds}</span>{' '}
+              <span className="edit-approval-del">-{totalDels}</span>
+            </span>
           </div>
-        ))}
-      </div>
+        </div>
 
-      <div className="edit-approval-actions">
-        <button onClick={acceptAll} className="edit-btn-accept-all" data-testid="edit-accept-all">
-          Accept All
-        </button>
-        <button onClick={rejectAll} className="edit-btn-reject-all" data-testid="edit-reject-all">
-          Reject All
-        </button>
-        <button
-          onClick={() => submitDecision(false)}
-          disabled={submitting || acceptedHunks.size === 0}
-          className="edit-btn-apply"
-          data-testid="edit-apply-selected"
-        >
-          {submitting ? 'Applying…' : `Apply Selected (${acceptedHunks.size})`}
-        </button>
-        <button
-          onClick={() => submitDecision(true)}
-          disabled={submitting}
-          className="edit-btn-reject"
-          data-testid="edit-reject"
-        >
-          Reject
-        </button>
+        <div className="edit-approval-actions-top">
+          <button type="button" className="edit-approval-link-btn" onClick={acceptAll} disabled={submitting}>
+            Accept all
+          </button>
+          <span className="edit-approval-sep">·</span>
+          <button type="button" className="edit-approval-link-btn" onClick={rejectAll} disabled={submitting}>
+            Reject all
+          </button>
+        </div>
+
+        <div className="edit-approval-diff-body">
+          {unifiedDiff && (
+            <details className="edit-approval-raw-diff">
+              <summary>Unified diff</summary>
+              <pre className="edit-approval-raw-diff-pre">{unifiedDiff}</pre>
+            </details>
+          )}
+          {hunks.map((hunk) => {
+            const accepted = acceptedIds.has(hunk.id);
+            return (
+              <div key={hunk.id} className={`edit-approval-hunk ${accepted ? 'is-accepted' : 'is-rejected'}`}>
+                <div className="edit-approval-hunk-header">
+                  <label className="edit-approval-hunk-label">
+                    <input
+                      type="checkbox"
+                      checked={accepted}
+                      onChange={() => toggleHunk(hunk.id)}
+                      disabled={submitting}
+                    />
+                    <span className="edit-approval-hunk-id">{hunk.id}</span>
+                    <span className="edit-approval-hunk-lines">
+                      lines {hunk.oldStart}–{hunk.oldStart + Math.max(hunk.oldLines - 1, 0)}
+                    </span>
+                    <span className="edit-approval-hunk-counts">
+                      <span className="edit-approval-add">+{hunk.addCount}</span>{' '}
+                      <span className="edit-approval-del">-{hunk.delCount}</span>
+                    </span>
+                  </label>
+                </div>
+                <div className="edit-approval-hunk-code">
+                  {hunk.lines.map((line, i) => (
+                    <div key={i} className={`edit-approval-line edit-approval-line--${line.type}`}>
+                      <span className="edit-approval-line-prefix">{LINE_PREFIX[line.type]}</span>
+                      <span className="edit-approval-line-content">{line.content}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {error && <div className="edit-approval-error">{error}</div>}
+
+        <div className="edit-approval-footer">
+          <span className="edit-approval-selected-count">
+            {acceptedIds.size}/{hunks.length} hunks selected
+          </span>
+          <div className="edit-approval-footer-actions">
+            <button
+              type="button"
+              className="edit-approval-btn edit-approval-btn--reject"
+              onClick={handleRejectAll}
+              disabled={submitting}
+            >
+              Reject All
+            </button>
+            <button
+              type="button"
+              className="edit-approval-btn edit-approval-btn--apply"
+              onClick={handleApplySelected}
+              disabled={submitting || acceptedIds.size === 0}
+            >
+              {submitting ? 'Applying…' : 'Apply Selected'}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
-};
+}
 
 export default EditApprovalPanel;

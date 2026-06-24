@@ -58,6 +58,24 @@ func TestIsVisionModel_gemma(t *testing.T) {
 	assert.True(t, isVisionModel("gemma-3-27b-it"))
 }
 
+func TestIsVisionModel_GLMVision(t *testing.T) {
+	// GLM vision models use a "-<digit>v" suffix convention
+	assert.True(t, isVisionModel("glm-4.5v"))
+	assert.True(t, isVisionModel("glm-4.6v"))
+	assert.True(t, isVisionModel("glm-5v-turbo"))
+	assert.True(t, isVisionModel("GLM-4.6V"))
+	assert.True(t, isVisionModel("GLM-5V-Turbo"))
+}
+
+func TestIsVisionModel_GLMNonVision(t *testing.T) {
+	// GLM text-only models should NOT match
+	assert.False(t, isVisionModel("glm-5"))
+	assert.False(t, isVisionModel("glm-5-turbo"))
+	assert.False(t, isVisionModel("glm-4.7"))
+	assert.False(t, isVisionModel("GLM-4.6"))
+	assert.False(t, isVisionModel("glm-4.5"))
+}
+
 func TestIsVisionModel_caseInsensitive(t *testing.T) {
 	assert.True(t, isVisionModel("GPT-4O"))
 	assert.True(t, isVisionModel("LLAVA-1.5"))
@@ -70,6 +88,8 @@ func TestIsVisionModel_NonVisionModels(t *testing.T) {
 	assert.False(t, isVisionModel("llama-3"))
 	assert.False(t, isVisionModel("claude-3"))
 	assert.False(t, isVisionModel("o1-preview"))
+	assert.False(t, isVisionModel("glm-5"))
+	assert.False(t, isVisionModel("glm-5-turbo"))
 	assert.False(t, isVisionModel(""))
 }
 

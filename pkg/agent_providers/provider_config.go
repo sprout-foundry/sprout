@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -300,9 +301,10 @@ func (c *ProviderConfig) GetStreamingTimeout() time.Duration {
 // Uses the following priority:
 // 1. Exact model match in model_overrides
 // 2. Pattern match in pattern_overrides
-// 3. Provider default_context_limit
-// 4. Legacy context_limit field (for backward compatibility)
-// 5. Conservative fallback (32000)
+// 3. Lookup in model_info (catalog — source of truth for known models)
+// 4. Provider default_context_limit (conservative fallback when catalog is absent)
+// 5. Legacy context_limit field (for backward compatibility)
+// 6. Conservative fallback (32000)
 func (c *ProviderConfig) GetContextLimit(model string) int {
 	// 1. Check for exact model match in overrides
 	if contextLimit, exists := c.Models.ModelOverrides[model]; exists {
@@ -316,17 +318,28 @@ func (c *ProviderConfig) GetContextLimit(model string) int {
 		}
 	}
 
-	// 3. Use provider default context limit (if configured)
+	// 3. Check model_info catalog for a matching ID — handles full provider/model
+	// names like "MiniMaxAI/MiniMax-M2.7" matching ID "MiniMax-M2.7". This is the
+	// primary lookup for models published in the remote registry catalog.
+	if len(c.Models.ModelInfo) > 0 {
+		for _, mi := range c.Models.ModelInfo {
+			if mi.ContextLength > 0 && (model == mi.ID || strings.HasSuffix(model, "/"+mi.ID)) {
+				return mi.ContextLength
+			}
+		}
+	}
+
+	// 4. Use provider default context limit (fallback when catalog lacks this model)
 	if c.Models.DefaultContextLimit > 0 {
 		return c.Models.DefaultContextLimit
 	}
 
-	// 4. Fall back to legacy context_limit field (for backward compatibility)
+	// 5. Fall back to legacy context_limit field (for backward compatibility)
 	if c.Models.ContextLimit > 0 {
 		return c.Models.ContextLimit
 	}
 
-	// 5. Conservative fallback
+	// 6. Conservative fallback
 	return 32000
 }
 

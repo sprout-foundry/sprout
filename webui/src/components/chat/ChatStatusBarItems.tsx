@@ -1,5 +1,6 @@
 import { Cloud, Server, Cpu } from 'lucide-react';
 import { getPersonaColor } from '@sprout/ui';
+import { useProviderCatalog } from '../../contexts/ProviderCatalogContext';
 import './ChatStatusBarItems.css';
 
 /**
@@ -83,10 +84,16 @@ function ProviderIcon({ provider }: { provider?: string }): JSX.Element | null {
 }
 
 export function ChatStatusBarItems({ stats, isConnected, onModelClick }: ChatStatusBarItemsProps): JSX.Element | null {
+  const { getProviderName } = useProviderCatalog();
+
   if (!stats) return null;
 
   const provider = typeof stats.provider === 'string' ? stats.provider : '';
   const model = typeof stats.model === 'string' ? stats.model : '';
+  // The metrics_update event carries the raw provider id (e.g. `openrouter`).
+  // Settings dropdowns show the display name (`OpenRouter (Recommended)`);
+  // resolve through the shared catalog so the status bar matches.
+  const providerDisplay = getProviderName(provider) || provider;
   const persona = typeof stats.persona === 'string' ? stats.persona : '';
   const totalTokens = Number(stats.total_tokens ?? NaN);
   const currentCtx = Number(stats.current_context_tokens ?? NaN);
@@ -147,9 +154,16 @@ export function ChatStatusBarItems({ stats, isConnected, onModelClick }: ChatSta
     );
   }
 
-  if (provider || model) {
-    const modelLabel = model || provider;
-    const tooltip = onModelClick ? `${provider} · ${model} — click to change model` : `${provider} · ${model}`;
+  // Provider/model are already visible in the Status bar's middle section.
+  // Only surface the model here when a non-orchestrator subagent is running
+  // (persona segment already signals which agent; adding model makes it
+  // actionable) OR when disconnected (no middle-bar context available).
+  const showModel = (provider || model) && (isConnected === false || (persona && persona !== 'orchestrator'));
+  if (showModel) {
+    const modelLabel = model || providerDisplay;
+    const tooltip = onModelClick
+      ? `${providerDisplay} · ${model} — click to change model`
+      : `${providerDisplay} · ${model}`;
     segments.push(
       <span key="provider" className="chat-statusbar-item chat-statusbar-model" title={tooltip}>
         <ProviderIcon provider={provider} />

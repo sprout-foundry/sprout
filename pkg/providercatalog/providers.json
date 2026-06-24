@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-06-22T06:17:00Z",
+  "updated_at": "2026-06-23T20:30:00Z",
   "source": "refresh_provider_catalog",
   "providers": [
     {
@@ -89,6 +89,37 @@
             "tools",
             "reasoning"
           ]
+        },
+        {
+          "id": "glm-4.5v",
+          "name": "GLM-4.5V",
+          "description": "Z.AI GLM-4.5V - Vision reasoning model based on MOE architecture (106B params, 12B activation), SOTA performance in image, video, and document understanding",
+          "context_length": 16384,
+          "tags": [
+            "vision",
+            "reasoning"
+          ]
+        },
+        {
+          "id": "glm-5v-turbo",
+          "name": "GLM-5V Turbo",
+          "description": "Z.AI GLM-5V-Turbo - Multimodal coding foundation model, processes images/video/text, optimized for agent workflows and vision-based coding tasks",
+          "context_length": 200000,
+          "tags": [
+            "tools",
+            "vision"
+          ]
+        },
+        {
+          "id": "glm-5.2",
+          "name": "GLM-5.2",
+          "description": "Z.AI GLM-5.2 - Latest flagship with 1M-token context for long-horizon tasks",
+          "context_length": 1048576,
+          "tags": [
+            "tools",
+            "coding",
+            "reasoning"
+          ]
         }
       ]
     },
@@ -175,6 +206,37 @@
             "tools",
             "reasoning",
             "coding"
+          ]
+        },
+        {
+          "id": "glm-4.5v",
+          "name": "GLM-4.5V",
+          "description": "Z.AI GLM-4.5V - Vision reasoning model based on MOE architecture (106B params, 12B activation), SOTA performance in image, video, and document understanding",
+          "context_length": 16384,
+          "tags": [
+            "vision",
+            "reasoning"
+          ]
+        },
+        {
+          "id": "glm-5v-turbo",
+          "name": "GLM-5V Turbo",
+          "description": "Z.AI GLM-5V-Turbo - Multimodal coding foundation model, processes images/video/text, optimized for agent workflows and vision-based coding tasks",
+          "context_length": 200000,
+          "tags": [
+            "tools",
+            "vision"
+          ]
+        },
+        {
+          "id": "glm-5.2",
+          "name": "GLM-5.2",
+          "description": "Z.AI GLM-5.2 - Latest flagship with 1M-token context for long-horizon tasks",
+          "context_length": 1048576,
+          "tags": [
+            "tools",
+            "coding",
+            "reasoning"
           ]
         }
       ],

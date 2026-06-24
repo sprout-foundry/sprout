@@ -423,7 +423,7 @@ func (p *GenericProvider) GetModelContextLimit() (int, error) {
 	}
 
 	// 3. Fall back to the static config (model_overrides → pattern_overrides
-	//    → default_context_limit → conservative 32k).
+	//    → model_info → default_context_limit → legacy context_limit → 32k).
 	return p.config.GetContextLimit(p.model), nil
 }
 

@@ -37,7 +37,8 @@ func (a *Agent) debugLog(format string, args ...interface{}) {
 	_, _ = os.Stderr.Write([]byte(msg))
 }
 
-// getModelContextLimit returns the maximum context window for a model from the API
+// getModelContextLimit returns the maximum context window for a model from the API,
+// capped by the user's MaxContextTokens setting when set.
 func (a *Agent) getModelContextLimit() int {
 	c := a.getClient()
 	if c == nil {
@@ -45,11 +46,15 @@ func (a *Agent) getModelContextLimit() int {
 	}
 	limit, err := c.GetModelContextLimit()
 	if err != nil {
-		// Fallback to conservative default if API method fails
 		if a.debug {
 			a.Logger().Debug("[WARN] Failed to get model context limit: %v, using default\n", err)
 		}
 		return 32000
+	}
+	if a.configManager != nil {
+		if cfg := a.configManager.GetConfig(); cfg.MaxContextTokens != nil && *cfg.MaxContextTokens > 0 && limit > *cfg.MaxContextTokens {
+			limit = *cfg.MaxContextTokens
+		}
 	}
 	return limit
 }

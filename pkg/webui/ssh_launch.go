@@ -475,6 +475,11 @@ func startRemoteSSHBackend(ctx context.Context, hostAlias, sessionKey, launcherU
 		`        sleep 2`,
 		`    done`,
 		`fi`,
+		`# Ensure the lock is released on ANY exit path (set -e failure, premature`,
+		`# daemon death, explicit exit). flock auto-releases on fd close, but the`,
+		`# mkdir fallback leaves a stale lock directory that blocks subsequent`,
+		`# launches for the full 30-second timeout window.`,
+		`trap 'if [ -n "$LOCK_HELD" ]; then if command -v flock >/dev/null 2>&1; then flock -u 9 2>/dev/null || true; else rmdir "$LOCK_FILE" 2>/dev/null || true; fi; fi' EXIT`,
 		"",
 		"# If force-restart was requested, kill the old daemon now (under the lock).",
 		`if [ "$FORCE_RESTART" = "1" ]; then`,
@@ -487,16 +492,25 @@ func startRemoteSSHBackend(ctx context.Context, hostAlias, sessionKey, launcherU
 		`            pid=""`,
 		`        fi`,
 		`        [ -n "$pid" ] && [ "$pid" -gt 0 ] 2>/dev/null && kill "$pid" 2>/dev/null || true`,
-		`        sleep 1`,
+		`        # Wait for the daemon's health endpoint to go down — SIGTERM`,
+		`        # allows graceful shutdown, so the dying daemon can still`,
+		`        # respond to check_existing_daemon and be incorrectly reused.`,
+		`        for _ in 1 2 3 4 5; do`,
+		`            if command -v curl >/dev/null 2>&1; then`,
+		`                curl -sf -m 1 "http://127.0.0.1:$DAEMON_PORT/health" >/dev/null 2>&1 || break`,
+		`            elif command -v wget >/dev/null 2>&1; then`,
+		`                wget -qO- -T 1 "http://127.0.0.1:$DAEMON_PORT/health" >/dev/null 2>&1 || break`,
+		`            else`,
+		`                break`,
+		`            fi`,
+		`            sleep 1`,
+		`        done`,
 		`    fi`,
 		`fi`,
 		"",
 		"# Try to reuse an existing daemon on this host.",
 		`EXISTING_PID=$(check_existing_daemon || true)`,
 		`if [ -n "$EXISTING_PID" ]; then`,
-		`  if [ "$LOCK_HELD" = "1" ]; then`,
-		`    if command -v flock >/dev/null 2>&1; then flock -u 9 2>/dev/null || true; else rmdir "$LOCK_FILE" 2>/dev/null || true; fi`,
-		`  fi`,
 		`  printf "%s\\n%s\\n%s\\nreused\\n" "SPROUT_DAEMON_RESULT_START" "$DAEMON_PORT" "$EXISTING_PID"`,
 		`  exit 0`,
 		`fi`,
@@ -560,14 +574,6 @@ func startRemoteSSHBackend(ctx context.Context, hostAlias, sessionKey, launcherU
 		`    echo "ERROR: sprout daemon failed to start on port $DAEMON_PORT — another daemon may already be running on this host" >&2`,
 		`    exit 1`,
 		`  fi`,
-		`fi`,
-		`# Release lock`,
-		`if [ "$LOCK_HELD" = "1" ]; then`,
-		`    if command -v flock >/dev/null 2>&1; then`,
-		`        flock -u 9 2>/dev/null || true`,
-		`    else`,
-		`        rmdir "$LOCK_FILE" 2>/dev/null || true`,
-		`    fi`,
 		`fi`,
 		`printf "%s\n%s\n%s\nnew\n" "SPROUT_DAEMON_RESULT_START" "$DAEMON_PORT" "$REMOTE_PID"`,
 	}, "\n")
@@ -672,7 +678,17 @@ func verifyRemoteSproutPID(hostAlias string, remotePID int) bool {
 		// SSH error — can't verify, don't kill
 		return false
 	}
-	result := strings.TrimSpace(string(out))
+	// Extract the last non-empty line — login-profile stdout (MOTD,
+	// fortune) can prepend output that would otherwise corrupt the
+	// exact-match comparison against "sprout".
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	result := ""
+	for i := len(lines) - 1; i >= 0; i-- {
+		if line := strings.TrimSpace(lines[i]); line != "" {
+			result = line
+			break
+		}
+	}
 	return result == "sprout"
 }
 

@@ -332,6 +332,7 @@ func (p *GenericProvider) SetDebug(debug bool) {
 // SetModel sets the current model
 func (p *GenericProvider) SetModel(model string) error {
 	p.model = model
+	p.modelsCached = false
 	return nil
 }
 

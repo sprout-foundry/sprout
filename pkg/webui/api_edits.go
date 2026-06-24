@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/agent"
 )
 
 // pendingEdit tracks an edit proposal awaiting user decision.
@@ -53,6 +55,10 @@ func (ws *ReactWebServer) handleAPIEdits(w http.ResponseWriter, r *http.Request)
 
 // handleAPIEditDecision handles POST /api/edits/{id}/decision — the WebUI
 // submits the user's per-hunk accept/reject choices for a pending edit.
+// SP-072-3: routes the decision through the agent's EditApprovalBroker
+// (agent.RespondToEditApproval) which delivers to the goroutine blocked
+// in RequestEditApproval. Also updates the standalone registry for
+// backward compatibility with GET /api/edits/{id} status checks.
 func (ws *ReactWebServer) handleAPIEditDecision(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -73,31 +79,45 @@ func (ws *ReactWebServer) handleAPIEditDecision(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	// Build the EditDecision the agent expects.
+	decision := agent.EditDecision{
+		Approved:      !req.Rejected,
+		AcceptedHunks: req.AcceptedHunks,
+	}
+
+	// Deliver to the agent's broker — the goroutine blocked in
+	// RequestEditApproval is waiting on this channel.
+	ag := ws.resolveEditAgent()
+	delivered := false
+	if ag != nil {
+		delivered = ag.RespondToEditApproval(editID, decision)
+	}
+
+	// Also update the standalone registry for backward compatibility.
 	editRegistry.Lock()
-	pe, ok := editRegistry.pending[editID]
-	if !ok {
-		editRegistry.Unlock()
+	pe, regOk := editRegistry.pending[editID]
+	if regOk {
+		if pe.decisionMade {
+			editRegistry.Unlock()
+			http.Error(w, "Edit already decided", http.StatusConflict)
+			return
+		}
+		pe.decisionMade = true
+		select {
+		case pe.decisionCh <- req:
+		default:
+		}
+	}
+	editRegistry.Unlock()
+
+	if !delivered && !regOk {
+		log.Printf("handleAPIEditDecision: edit %s not found in broker or registry", editID)
 		http.Error(w, "Edit not found or already decided", http.StatusNotFound)
 		return
 	}
 
-	if pe.decisionMade {
-		editRegistry.Unlock()
-		http.Error(w, "Edit already decided", http.StatusConflict)
-		return
-	}
-
-	pe.decisionMade = true
-	editRegistry.Unlock()
-
-	// Deliver the decision to the waiting goroutine.
-	select {
-	case pe.decisionCh <- req:
-		log.Printf("handleAPIEditDecision: delivered decision for edit %s (accepted=%d, rejected=%v)",
-			editID, len(req.AcceptedHunks), req.Rejected)
-	default:
-		log.Printf("handleAPIEditDecision: no listener for edit %s", editID)
-	}
+	log.Printf("handleAPIEditDecision: delivered decision for edit %s (accepted=%d, rejected=%v)",
+		editID, len(req.AcceptedHunks), req.Rejected)
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"edit_id":       editID,
@@ -105,6 +125,22 @@ func (ws *ReactWebServer) handleAPIEditDecision(w http.ResponseWriter, r *http.R
 		"accepted":      len(req.AcceptedHunks),
 		"rejected":      req.Rejected,
 	})
+}
+
+// resolveEditAgent returns an agent instance for delivering edit approval
+// decisions. In shared mode (CLI+WebUI), ws.agent is the single agent.
+// In daemon mode, we need any agent — since the broker is package-level,
+// any instance works. We try ws.agent first, then the default chat agent.
+func (ws *ReactWebServer) resolveEditAgent() *agent.Agent {
+	if ws.agent != nil {
+		return ws.agent
+	}
+	// Daemon mode: try to get any chat agent. The broker is package-level
+	// so any agent instance can resolve any request ID.
+	if ag, err := ws.getChatAgent(defaultWebClientID, ""); err == nil && ag != nil {
+		return ag
+	}
+	return nil
 }
 
 // handleAPIEditStatus handles GET /api/edits/{id} — returns the current

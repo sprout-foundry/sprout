@@ -80,6 +80,7 @@ function createDefaultState(): Record<string, unknown> {
     securityApprovalRequest: null,
     securityPromptRequest: null,
     askUserRequest: null,
+    editApprovalRequest: null,
     driftNotification: null,
     modelSelectionRequest: null,
   };

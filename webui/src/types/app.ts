@@ -126,6 +126,21 @@ export interface AppState {
     multiSelect?: boolean;
     default?: string;
   } | null;
+  editApprovalRequest: {
+    requestId: string;
+    filePath: string;
+    unifiedDiff?: string;
+    hunks: Array<{
+      id: string;
+      oldStart: number;
+      oldLines: number;
+      newStart: number;
+      newLines: number;
+      lines: Array<{ type: 'context' | 'add' | 'remove'; content: string }>;
+      addCount: number;
+      delCount: number;
+    }>;
+  } | null;
   modelSelectionRequest: {
     provider: string;
     /**

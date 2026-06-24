@@ -338,6 +338,36 @@ func (a *Agent) TrackFileEdit(filePath string, originalContent string, newConten
 	return nil
 }
 
+// ---------------------------------------------------------------------------
+// Standalone (no-agent) query functions.
+//
+// These power the WebUI's changes panel when the daemon has no live
+// agent yet (e.g. the browser opened before any chat query ran). They
+// fall back to the persisted history store so the user still sees
+// cross-session change history from prior sessions.
+// ---------------------------------------------------------------------------
+
+// ListChangesPersistedOnly returns a session manifest built entirely
+// from the persisted history store — no live agent required. The JSON
+// shape matches list_changes so the frontend doesn't branch.
+func ListChangesPersistedOnly(args map[string]interface{}) (string, error) {
+	return handleListChangesPersistedOnly(args)
+}
+
+// ListChangesEmpty returns the disabled-tracker response: an empty
+// manifest with enabled=false. Used when no agent AND no persisted
+// history should be scanned (e.g. the diff endpoint, which is
+// meaningless without a tracker).
+func ListChangesEmpty() string {
+	return `{"revision_id":"","enabled":false,"count":0,"files":[]}`
+}
+
+// SummarizeMySessionEmpty returns the disabled-tracker block-summary
+// response: an empty blocks list. Used when no agent is available.
+func SummarizeMySessionEmpty() string {
+	return `{"enabled":false,"blocks":[],"totals":{"changes":0,"files":0}}`
+}
+
 // MergeSubagentChanges merges a completed subagent's tracked changes
 // into this (primary) agent's ChangeTracker, tagging each entry with
 // "subagent:<persona>". This is the missing SP-059 Phase 2c step:

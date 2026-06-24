@@ -31,6 +31,17 @@ type sproutProvider struct {
 	pastedImagesMu sync.RWMutex
 }
 
+// currentClient returns the agent's live client if available, otherwise returns the snapshot.
+// This ensures the provider uses the current model even after SetProvider/SetModel.
+func (sp *sproutProvider) currentClient() api.ClientInterface {
+	if sp.agent != nil {
+		if c := sp.agent.getClient(); c != nil {
+			return c
+		}
+	}
+	return sp.client
+}
+
 // NewSproutProvider creates a Provider that wraps a sprout ClientInterface.
 func NewSproutProvider(agent *Agent, client api.ClientInterface) (core.Provider, error) {
 	if client == nil {
@@ -167,7 +178,7 @@ func (sp *sproutProvider) doChatNonStream(ctx context.Context, req *core.ChatReq
 	messages := sp.attachPastedImages(req.Messages)
 
 	sproutReq := seedRequestToSprout(req)
-	resp, err := sp.client.SendChatRequest(ctx, messages, sproutReq.Tools, sproutReq.Reasoning, false)
+	resp, err := sp.currentClient().SendChatRequest(ctx, messages, sproutReq.Tools, sproutReq.Reasoning, false)
 	if err != nil {
 		return nil, err
 	}
@@ -200,7 +211,7 @@ func (sp *sproutProvider) doChatStream(ctx context.Context, req *core.ChatReques
 		}
 	}
 
-	resp, err := sp.client.SendChatRequestStream(ctx, messages, sproutReq.Tools, sproutReq.Reasoning, false, callback)
+	resp, err := sp.currentClient().SendChatRequestStream(ctx, messages, sproutReq.Tools, sproutReq.Reasoning, false, callback)
 	if err != nil {
 		return nil, err
 	}
@@ -239,7 +250,7 @@ func (sp *sproutProvider) attachPastedImages(messages []core.Message) []core.Mes
 		return messages
 	}
 
-	if !sp.client.SupportsVision() {
+	if !sp.currentClient().SupportsVision() {
 		return messages
 	}
 
@@ -327,7 +338,7 @@ func (sp *sproutProvider) ChatStream(ctx context.Context, req *core.ChatRequest,
 // Retry logic is handled by the seed core's chatFn in conversation.go;
 // this layer no longer retries to avoid nested retry explosion.
 func (sp *sproutProvider) doChatWithRetryStreaming(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, callback api.StreamCallback) (*api.ChatResponse, error) {
-	resp, err := sp.client.SendChatRequestStream(ctx, messages, tools, reasoning, false, callback)
+	resp, err := sp.currentClient().SendChatRequestStream(ctx, messages, tools, reasoning, false, callback)
 	if err != nil {
 		sp.recordProviderError(err, 0)
 		return nil, err
@@ -341,17 +352,17 @@ func (sp *sproutProvider) doChatWithRetryStreaming(ctx context.Context, messages
 }
 
 func (sp *sproutProvider) Info() core.ProviderInfo {
-	ctxLimit, _ := sp.client.GetModelContextLimit()
+	ctxLimit, _ := sp.currentClient().GetModelContextLimit()
 	return core.ProviderInfo{
-		Model:       sp.client.GetModel(),
+		Model:       sp.currentClient().GetModel(),
 		ContextSize: ctxLimit,
-		HasVision:   sp.client.SupportsVision(),
+		HasVision:   sp.currentClient().SupportsVision(),
 	}
 }
 
 func (sp *sproutProvider) GetModel() string {
-	if sp.client != nil {
-		return sp.client.GetModel()
+	if c := sp.currentClient(); c != nil {
+		return c.GetModel()
 	}
 	return "unknown"
 }

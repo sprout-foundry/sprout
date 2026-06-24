@@ -45,6 +45,7 @@ const DEFAULT_APP_STATE: AppState = {
   securityApprovalRequest: null,
   securityPromptRequest: null,
   askUserRequest: null,
+  editApprovalRequest: null,
       modelSelectionRequest: null,
     driftNotification: null,
   };/**

@@ -171,6 +171,7 @@ export default function useWebSocketEvents({
             securityApprovalRequest: null,
             securityPromptRequest: null,
             askUserRequest: null,
+            editApprovalRequest: null,
           }));
         } else if (backendProcessing) {
           debugLog('[reconnect] Backend still processing but frontend is idle — restoring processing state');

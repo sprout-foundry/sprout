@@ -664,18 +664,26 @@ func (s *AgentStateManager) SetTraceSession(ts interface{}) {
 // --- Session config ---
 
 func (s *AgentStateManager) GetSessionProvider() api.ClientType {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return s.sessionProvider
 }
 
 func (s *AgentStateManager) SetSessionProvider(ct api.ClientType) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.sessionProvider = ct
 }
 
 func (s *AgentStateManager) GetSessionModel() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return s.sessionModel
 }
 
 func (s *AgentStateManager) SetSessionModel(m string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.sessionModel = m
 }
 

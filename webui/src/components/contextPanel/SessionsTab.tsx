@@ -84,7 +84,6 @@ export function SessionsTab({
                     className="history-rollback-btn"
                     onClick={() => handleRestoreSession(session.session_id)}
                     disabled={isLoadingSessions}
-                    style={{ marginTop: '4px' }}
                   >
                     Restore
                   </button>

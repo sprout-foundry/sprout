@@ -141,7 +141,7 @@ export default function SidebarLogsPane({ logs }: SidebarLogsPaneProps): JSX.Ele
       <div className="logs-toolbar">
         <div className="logs-toolbar-summary">
           <span>{formattedLines.length} rows</span>
-          <span>buffered up to {MAX_LOG_ROWS}</span>
+          <span>showing last {MAX_LOG_ROWS}</span>
         </div>
         <div className="logs-toolbar-actions">
           <button
@@ -173,7 +173,6 @@ export default function SidebarLogsPane({ logs }: SidebarLogsPaneProps): JSX.Ele
           return (
             <div key={logEntry.id} className={`term-log-line term-log-${logEntry.level}`}>
               <span className="term-log-time">{timestamp}</span>
-              <span className="term-log-type">[{logEntry.type}]</span>
               <span className="term-log-msg">{message}</span>
             </div>
           );

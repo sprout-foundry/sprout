@@ -15,8 +15,6 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/clihooks"
 	"github.com/sprout-foundry/sprout/pkg/events"
-
-	"golang.org/x/term"
 )
 
 // AskUserOption is a single selectable choice in a structured ask_user
@@ -183,17 +181,16 @@ func (m *AskUserManager) SetTimeout(d time.Duration) {
 	}
 }
 
-// stdinIsTTY reports whether os.Stdin is connected to an interactive
-// terminal. Uses the same ioctl-based check (golang.org/x/term.IsTerminal)
-// as the security approval prompt and the rest of the agent so the two
-// code paths never disagree about whether a TTY is available.
-//
-// Previously this used os.Stdin.Stat() + os.ModeCharDevice, which can
-// diverge from the ioctl result in certain daemon/pipe configurations —
-// causing the security dialog to render while ask_user claimed no input
-// channel existed.
+// stdinIsTTY reports whether os.Stdin appears to be a terminal we can
+// read from interactively. Returns false when stdin is closed, redirected,
+// or otherwise not a character device — in those cases AskUser would
+// hit EOF immediately and we'd rather surface ErrAskUserNoChannel.
 func stdinIsTTY() bool {
-	return term.IsTerminal(int(os.Stdin.Fd()))
+	fi, err := os.Stdin.Stat()
+	if err != nil {
+		return false
+	}
+	return (fi.Mode() & os.ModeCharDevice) != 0
 }
 
 // AskUser prompts the user with a question and reads input from stdin.

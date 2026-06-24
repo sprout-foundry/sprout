@@ -100,6 +100,7 @@ export async function fetchRuntimeConfig(): Promise<RuntimeConfig> {
         authMode: (json as any).authMode ?? 'none',
         appMode: (json as any).appMode ?? 'local',
         buildVersion: (json as any).buildVersion ?? 'dev',
+        sharedMode: (json as any).sharedMode ?? false,
       };
       lastConfig = config;
       console.log('bootstrap: fetched config from /api/bootstrap');

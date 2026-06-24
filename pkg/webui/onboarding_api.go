@@ -3,6 +3,7 @@
 package webui
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -13,6 +14,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"time"
 
 	agentprovs "github.com/sprout-foundry/sprout/pkg/agent_providers"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
@@ -339,7 +341,11 @@ func (ws *ReactWebServer) handleAPIOnboardingStatus(w http.ResponseWriter, r *ht
 	}
 
 	cfg := cm.GetConfig()
-	descriptors := ws.listProviders(ws.resolveClientID(r))
+	// Derive a context from the request so model discovery is cancelled if
+	// the client disconnects. Matches handleAPIProviders' timeout.
+	listCtx, listCancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer listCancel()
+	descriptors := ws.listProvidersCtx(listCtx, ws.resolveClientID(r))
 	providers := make([]onboardingProvider, 0, len(descriptors))
 	indexByID := make(map[string]onboardingProvider, len(descriptors))
 

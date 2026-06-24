@@ -10,12 +10,14 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	agent_commands "github.com/sprout-foundry/sprout/pkg/agent_commands"
 	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/notify"
 	"github.com/sprout-foundry/sprout/pkg/zsh"
 )
 
@@ -351,6 +353,10 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 			console.GlyphSuccess.Printf("Completed in %s", FormatDuration(duration))
 		}
 
+		// SP-070: Fire completion notification (bell + OS notify) when the
+		// turn ran long enough, gated by NotificationsConfig.
+		maybeNotifyCompletion(chatAgent, duration)
+
 		return nil
 
 	case <-ctx.Done():
@@ -377,5 +383,55 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 		}
 		eventBus.Publish(events.EventTypeError, errorEvent)
 		return fmt.Errorf("query interrupted: %w", ctx.Err())
+	}
+}
+
+// notifyOnce ensures the OS notifier is created only once per process.
+var (
+	notifyOnce     sync.Once
+	notifyInstance notify.Notifier
+)
+
+// maybeNotifyCompletion fires a terminal bell and/or OS desktop notification
+// after a query completes, gated by NotificationsConfig. Only fires when the
+// turn duration exceeds config.MinSeconds (default 10s) so quick turns don't
+// spam the user. Suppressed entirely in non-interactive (piped) mode.
+//
+// SP-070 Phase 1: CLI terminal bell + OS notification on turn completion.
+func maybeNotifyCompletion(chatAgent *agent.Agent, duration time.Duration) {
+	// Don't notify if output is being piped (no terminal to ring).
+	if !StdinIsTerminal() {
+		return
+	}
+
+	cfg := chatAgent.GetConfig()
+	if cfg == nil || cfg.Notifications == nil {
+		// Default behavior: ring bell on TTY for turns > 10s, no OS notify.
+		// This matches the spec's "default on for interactive TTY" guidance.
+		if duration >= 10*time.Second {
+			fmt.Fprint(os.Stderr, "\a")
+		}
+		return
+	}
+
+	nc := cfg.Notifications.Resolve()
+
+	// Duration gate — skip notification for short turns.
+	if duration < time.Duration(nc.MinSeconds*float64(time.Second)) {
+		return
+	}
+
+	if nc.CLIBell {
+		fmt.Fprint(os.Stderr, "\a")
+	}
+
+	if nc.OSNotify {
+		notifyOnce.Do(func() {
+			notifyInstance = notify.New()
+		})
+		// Fire-and-forget — notification failure should never block the REPL.
+		go func() {
+			_ = notifyInstance.Notify("Sprout", "Task complete")
+		}()
 	}
 }

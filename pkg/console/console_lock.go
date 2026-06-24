@@ -21,6 +21,13 @@ func LockOutput() { outputMu.Lock() }
 // UnlockOutput releases the console output mutex.
 func UnlockOutput() { outputMu.Unlock() }
 
+// TryLockOutput attempts to acquire the console output mutex without blocking.
+// Returns true if the lock was acquired, false if it is held by another goroutine.
+// Callers MUST check the return value and only call UnlockOutput on true.
+func TryLockOutput() bool {
+	return outputMu.TryLock()
+}
+
 // WithOutput runs fn while holding the console output mutex. Use this
 // wrapper for short, self-contained ANSI render sequences.
 func WithOutput(fn func()) {

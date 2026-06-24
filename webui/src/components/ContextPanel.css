@@ -349,6 +349,161 @@
   background: var(--bg-primary, #0d1117);
 }
 
+/* ── Sessions panel ─────────────────────────────────────────────── */
+
+.history-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 4px 8px 8px;
+}
+
+.history-refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.12s var(--ease-out), color 0.12s var(--ease-out);
+}
+
+.history-refresh-btn:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.history-refresh-btn:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 1px;
+}
+
+.history-error-inline {
+  padding: 6px 8px;
+  margin-bottom: 8px;
+  font-size: 11px;
+  color: var(--accent-error);
+  background: var(--bg-error);
+  border-radius: var(--radius-sm);
+}
+
+.history-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background 0.1s var(--ease-out);
+}
+
+.history-item:hover {
+  background: var(--bg-elevated);
+}
+
+.history-item.session-current {
+  background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
+}
+
+.session-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.history-main {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.history-id {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.history-time {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.history-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.session-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.session-dir {
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  font-family: var(--font-mono);
+}
+
+.session-current-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--accent-primary) 15%, transparent);
+  color: var(--accent-primary);
+  flex-shrink: 0;
+}
+
+.history-rollback-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  font-size: 11px;
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.12s var(--ease-out), color 0.12s var(--ease-out), border-color 0.12s var(--ease-out);
+}
+
+.history-rollback-btn:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+.history-rollback-btn:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 1px;
+}
+
+.history-rollback-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 /* ── Skeleton loading states ───────────────────────────────────── */
 
 .context-panel-loading {

@@ -1,5 +1,6 @@
-import { Bot, Settings, CloudOff } from 'lucide-react';
+import { Settings, CloudOff } from 'lucide-react';
 import { forwardRef } from 'react';
+import SproutLogo from '../SproutLogo';
 
 interface EmptyChatPanelProps {
   /** Show offline panel when backend requires health check and is unreachable */
@@ -41,7 +42,7 @@ export const EmptyChatPanel = forwardRef<HTMLDivElement, EmptyChatPanelProps>(fu
       <div className="chat-container chat-container--empty" ref={ref}>
         <div className="welcome-message no-provider-state">
           <div className="welcome-icon">
-            <Bot size={32} />
+            <SproutLogo showWordmark={false} />
           </div>
           <div className="welcome-text">No AI provider configured</div>
           <div className="welcome-hint">
@@ -69,7 +70,7 @@ export const EmptyChatPanel = forwardRef<HTMLDivElement, EmptyChatPanelProps>(fu
     <div className="chat-container chat-container--empty" ref={ref}>
       <div className="welcome-message">
         <div className="welcome-icon">
-          <Bot size={32} />
+          <SproutLogo showWordmark={false} />
         </div>
         <div className="welcome-text">
           Welcome to sprout! I&apos;m ready to help you with code analysis, editing, and more.

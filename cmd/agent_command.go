@@ -81,6 +81,12 @@ func runStartupPermissionCheck() error {
 }
 
 func createChatAgent() (*agent.Agent, error) {
+	// Proactive CLI onboarding: if no provider is configured and we're in
+	// an interactive terminal, guide the user through setup before trying
+	// to create an agent. Onboarding persists the provider+model to config
+	// so the subsequent NewAgent() call picks up the fresh configuration.
+	maybeRunOnboarding()
+
 	var chatAgent *agent.Agent
 	var err error
 

@@ -3,7 +3,9 @@
 package webui
 
 import (
+	"context"
 	"net/http"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
@@ -25,7 +27,11 @@ func (ws *ReactWebServer) handleAPISettingsSubagentTypesGet(w http.ResponseWrite
 	// when no config manager is available. See the matching comment on
 	// handleAPISettingsProvidersGet for the rationale.
 	cm := ws.resolveConfigManagerQuietly(r)
-	providers := ws.listProviders(ws.resolveClientID(r))
+	// Derive a context from the request so model discovery is cancelled
+	// if the client disconnects. Matches handleAPIProviders' timeout.
+	listCtx, listCancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer listCancel()
+	providers := ws.listProvidersCtx(listCtx, ws.resolveClientID(r))
 
 	if cm == nil {
 		writeJSON(w, http.StatusOK, map[string]interface{}{

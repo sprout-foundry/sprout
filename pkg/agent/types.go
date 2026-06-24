@@ -99,6 +99,7 @@ type AgentState struct {
 	CompletionTokens        int     `json:"completion_tokens"`
 	EstimatedTokenResponses int     `json:"estimated_token_responses"`
 	CachedTokens            int     `json:"cached_tokens"`
+	CacheWriteTokens        int     `json:"cache_write_tokens,omitempty"`
 	CachedCostSavings       float64 `json:"cached_cost_savings"`
 }
 

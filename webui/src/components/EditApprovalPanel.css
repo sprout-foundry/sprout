@@ -1,0 +1,283 @@
+/* ── EditApprovalPanel (SP-072-3) ────────────────────────────── */
+
+.edit-approval-card {
+  width: min(720px, 100%);
+  max-height: 80vh;
+}
+
+/* Header */
+.edit-approval-header {
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.edit-approval-title {
+  margin: 0 0 6px;
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.edit-approval-file-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.edit-approval-file-path {
+  font-family: var(--font-mono, 'SF Mono', 'Fira Code', monospace);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 400px;
+}
+
+.edit-approval-stats {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.edit-approval-add {
+  color: var(--accent-success);
+}
+
+.edit-approval-del {
+  color: var(--accent-error);
+}
+
+/* Top quick actions */
+.edit-approval-actions-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 20px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.edit-approval-link-btn {
+  background: none;
+  border: none;
+  color: var(--accent-primary);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  transition: background 0.15s;
+}
+
+.edit-approval-link-btn:hover:not(:disabled) {
+  background: var(--accent-primary-bg-hover);
+}
+
+.edit-approval-link-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.edit-approval-sep {
+  color: var(--text-muted);
+}
+
+/* Diff body */
+.edit-approval-diff-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 16px;
+  background: var(--bg-code);
+}
+
+/* Raw unified diff toggle */
+.edit-approval-raw-diff {
+  margin-bottom: 12px;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+}
+
+.edit-approval-raw-diff summary {
+  cursor: pointer;
+  padding: 4px 0;
+  color: var(--text-secondary);
+}
+
+.edit-approval-raw-diff-pre {
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  background: var(--bg-primary);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono, 'SF Mono', 'Fira Code', monospace);
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  overflow-x: auto;
+  white-space: pre;
+}
+
+/* Hunk container */
+.edit-approval-hunk {
+  margin-bottom: 16px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+
+.edit-approval-hunk.is-accepted {
+  border-left: 3px solid var(--accent-success);
+}
+
+.edit-approval-hunk.is-rejected {
+  border-left: 3px solid var(--accent-error);
+  opacity: 0.7;
+}
+
+/* Hunk header */
+.edit-approval-hunk-header {
+  padding: 6px 12px;
+  background: var(--bg-tertiary);
+}
+
+.edit-approval-hunk-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+.edit-approval-hunk-label input[type='checkbox'] {
+  accent-color: var(--accent-success);
+}
+
+.edit-approval-hunk-id {
+  font-family: var(--font-mono, 'SF Mono', 'Fira Code', monospace);
+  color: var(--text-accent);
+}
+
+.edit-approval-hunk-lines {
+  color: var(--text-tertiary);
+}
+
+.edit-approval-hunk-counts {
+  margin-left: auto;
+}
+
+/* Code lines */
+.edit-approval-hunk-code {
+  font-family: var(--font-mono, 'SF Mono', 'Fira Code', monospace);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+
+.edit-approval-line {
+  display: flex;
+  padding: 0 8px;
+  min-height: 1.5em;
+}
+
+.edit-approval-line--add {
+  background: var(--bg-success);
+}
+
+.edit-approval-line--remove {
+  background: var(--bg-error);
+}
+
+.edit-approval-line--context {
+  background: transparent;
+}
+
+.edit-approval-line-prefix {
+  flex-shrink: 0;
+  width: 16px;
+  text-align: center;
+  user-select: none;
+}
+
+.edit-approval-line--add .edit-approval-line-prefix {
+  color: var(--accent-success);
+}
+
+.edit-approval-line--remove .edit-approval-line-prefix {
+  color: var(--accent-error);
+}
+
+.edit-approval-line--context .edit-approval-line-prefix {
+  color: var(--text-muted);
+}
+
+.edit-approval-line-content {
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--text-primary);
+}
+
+.edit-approval-line--context .edit-approval-line-content {
+  color: var(--text-secondary);
+}
+
+/* Error */
+.edit-approval-error {
+  padding: 8px 20px;
+  font-size: var(--text-sm);
+  color: var(--accent-error);
+  background: var(--bg-error);
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* Footer */
+.edit-approval-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border-default);
+  background: var(--bg-tertiary);
+}
+
+.edit-approval-selected-count {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
+
+.edit-approval-footer-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.edit-approval-btn {
+  padding: 6px 16px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+  border: 1px solid transparent;
+}
+
+.edit-approval-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.edit-approval-btn--reject {
+  background: transparent;
+  border-color: var(--border-default);
+  color: var(--text-secondary);
+}
+
+.edit-approval-btn--reject:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--accent-error);
+}
+
+.edit-approval-btn--apply {
+  background: var(--accent-primary);
+  color: var(--bg-secondary);
+}
+
+.edit-approval-btn--apply:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent-primary) 85%, white);
+}

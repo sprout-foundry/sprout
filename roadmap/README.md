@@ -65,10 +65,10 @@ architectural area, its current state, and open work.
 | SP-064 | [Automate CLI — Status, Stop, Logs](./SP-064-automate-cli-monitoring.md) | 📋 Proposed |
 | SP-065 | [WebUI Automations Panel](./SP-065-automate-webui-panel.md) | 📋 Proposed |
 | SP-068 | [Security Check Consolidation — One Risk Scale, One Resolver, One Broker](./SP-068-security-check-consolidation.md) | 📋 Proposed |
-| SP-069 | [Pull Request Creation](./SP-069-pull-request-creation.md) | 📋 Proposed (gap analysis) |
-| SP-070 | [Agent Completion Notifications](./SP-070-completion-notifications.md) | 📋 Proposed (gap analysis) |
-| SP-071 | [Conversation Rewind & Edit-and-Resend](./SP-071-conversation-rewind.md) | 📋 Proposed (gap analysis) |
-| SP-072 | [Per-Hunk Diff Approval — Approve-Before-Apply](./SP-072-diff-approval.md) | 📋 Proposed (gap analysis) |
+| SP-069 | [Pull Request Creation](./SP-069-pull-request-creation.md) | ✅ Implemented |
+| SP-070 | [Agent Completion Notifications](./SP-070-completion-notifications.md) | ✅ Implemented |
+| SP-071 | [Conversation Rewind & Edit-and-Resend](./SP-071-conversation-rewind.md) | ✅ Implemented |
+| SP-072 | [Per-Hunk Diff Approval — Approve-Before-Apply](./SP-072-diff-approval.md) | ✅ Implemented |
 | SP-073 | [Cooperative Cancellation — Stop Actually Aborts](./SP-073-cooperative-cancellation.md) | 📋 Proposed (tech-debt audit) |
 | SP-074 | [Finish the Tool-Registry Migration](./SP-074-tool-registry-migration.md) | 📋 Proposed (tech-debt audit) |
 | SP-075 | [Large-File Decomposition](./SP-075-large-file-decomposition.md) | 📋 Proposed (tech-debt audit) |

@@ -218,6 +218,35 @@ export interface AskUserRequestData {
   status?: string;
 }
 
+/** A single line in a diff hunk with its change type. */
+export interface EditHunkLine {
+  type: 'context' | 'add' | 'remove';
+  content: string;
+}
+
+/** A discrete change region in a unified diff for edit approval. */
+export interface EditHunk {
+  id: string;
+  old_start: number;
+  old_lines: number;
+  new_start: number;
+  new_lines: number;
+  lines: EditHunkLine[];
+  add_count: number;
+  del_count: number;
+}
+
+/** Payload for an edit_approval_request event (SP-072-3). */
+export interface EditApprovalRequestData {
+  request_id: string;
+  file_path: string;
+  unified_diff?: string;
+  hunks: EditHunk[];
+  timestamp?: string;
+  /** "responded" suppresses the dialog (echo from the decision POST). */
+  status?: string;
+}
+
 // ── Terminal Session Data Types ─────────────────────────────────────
 
 export interface TerminalSessionReadyData {
@@ -264,6 +293,7 @@ export type WsEvent =
   | { type: 'security_approval_request'; data?: SecurityApprovalRequestData; id?: string; timestamp?: string }
   | { type: 'security_prompt_request'; data?: SecurityPromptRequestData; id?: string; timestamp?: string }
   | { type: 'ask_user_request'; data?: AskUserRequestData; id?: string; timestamp?: string }
+  | { type: 'edit_approval_request'; data?: EditApprovalRequestData; id?: string; timestamp?: string }
   | { type: 'validation'; data?: Record<string, unknown>; id?: string; timestamp?: string }
   | { type: 'terminal_output'; data?: Record<string, unknown>; id?: string; timestamp?: string }
   | { type: 'session_terminated'; data?: Record<string, unknown>; id?: string; timestamp?: string }

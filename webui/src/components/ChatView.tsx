@@ -10,7 +10,7 @@ import { clientFetch } from '../services/clientSession';
 import { showThemedAlert, showThemedConfirm } from './ThemedDialog';
 import type { QueryProgress } from '../types/app';
 import { ChatFooter, ChatHeader, EmptyChatPanel, MessageItem } from './chat';
-import type { ChatProps, ToolExecution } from './chat/types';
+import type { ChatProps, Message, ToolExecution } from './chat/types';
 import CommandInput from './CommandInput';
 import InlineTodoSummary from './InlineTodoSummary';
 import './Chat.css';
@@ -118,9 +118,32 @@ function Chat(props: ChatProps): JSX.Element {
     [filteredToolExecutions],
   );
 
-  const formatTime = (date: Date) => {
+  // Stable reference — passed to memoized MessageItem. An inline arrow
+  // here would create a new function every render (e.g. on every chat
+  // input keystroke), breaking MessageItem's memo so every message
+  // would re-execute its markdown + MessageSegments pipeline. That was
+  // the visible "footnote flicker on every keypress" bug.
+  const formatTime = useCallback((date: Date) => {
     return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  };
+  }, []);
+
+  // Stable Virtuoso itemContent — see the `formatTime` comment above.
+  // An inline arrow recreates the function on every parent render,
+  // and Virtuoso then treats every row as new and re-runs all the
+  // MessageItem renders even though props are identical.
+  const renderMessageItem = useCallback(
+    (index: number, message: Message) => (
+      <MessageItem
+        message={message}
+        onToolPillClick={onToolPillClick}
+        findMatchingToolExecution={findMatchingToolExecution}
+        getToolStatus={getToolStatusForMessage}
+        formatTime={formatTime}
+        messageIndex={index}
+      />
+    ),
+    [onToolPillClick, findMatchingToolExecution, getToolStatusForMessage, formatTime],
+  );
 
   const handleReloadWithoutSSHPath = useCallback(() => {
     const { origin, pathname } = window.location;
@@ -218,17 +241,8 @@ function Chat(props: ChatProps): JSX.Element {
               followOutput={(isAtBottom) => (isAtBottom ? 'smooth' : false)}
               initialTopMostItemIndex={messages.length - 1}
               increaseViewportBy={{ top: 400, bottom: 400 }}
-              atBottomStateChange={(atBottom) => setIsAtBottom(atBottom)}
-              itemContent={(_index, message) => (
-                <MessageItem
-                  message={message}
-                  onToolPillClick={onToolPillClick}
-                  findMatchingToolExecution={findMatchingToolExecution}
-                  getToolStatus={getToolStatusForMessage}
-                  formatTime={formatTime}
-                  messageIndex={_index}
-                />
-              )}
+              atBottomStateChange={setIsAtBottom}
+              itemContent={renderMessageItem}
               components={{
                 Header: () => <ChatHeader worktreePath={worktreePath} />,
                 Footer: () => (

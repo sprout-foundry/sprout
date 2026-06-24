@@ -251,12 +251,14 @@ func TestHandleAPIAutomateWorkflows_EmptyDir(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
-	var resp []interface{}
+	var resp struct {
+		Workflows []interface{} `json:"workflows"`
+	}
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if len(resp) != 0 {
-		t.Errorf("expected empty array when dir doesn't exist, got %d items", len(resp))
+	if len(resp.Workflows) != 0 {
+		t.Errorf("expected empty array when dir doesn't exist, got %d items", len(resp.Workflows))
 	}
 }
 
@@ -280,10 +282,13 @@ func TestHandleAPIAutomateWorkflows_WithWorkflows(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	var items []map[string]interface{}
-	if err := json.NewDecoder(rec.Body).Decode(&items); err != nil {
+	var envelope struct {
+		Workflows []map[string]interface{} `json:"workflows"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&envelope); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
+	items := envelope.Workflows
 	if len(items) != 2 {
 		t.Fatalf("expected 2 workflows, got %d", len(items))
 	}
@@ -340,12 +345,14 @@ func TestHandleAPIAutomateSessionsList_Empty(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
-	var resp []interface{}
+	var resp struct {
+		Sessions []interface{} `json:"sessions"`
+	}
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if len(resp) != 0 {
-		t.Errorf("expected empty list, got %d items", len(resp))
+	if len(resp.Sessions) != 0 {
+		t.Errorf("expected empty list, got %d items", len(resp.Sessions))
 	}
 }
 
@@ -377,10 +384,13 @@ func TestHandleAPIAutomateSessionsList_WithSessions(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	var resp []sessionResponse
-	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+	var envelope struct {
+		Sessions []sessionResponse `json:"sessions"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&envelope); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
+	resp := envelope.Sessions
 	if len(resp) != 2 {
 		t.Fatalf("expected 2 sessions, got %d", len(resp))
 	}
@@ -426,13 +436,15 @@ func TestHandleAPIAutomateSessionsList_StatusEnrichment(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	var resp []sessionResponse
-	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+	var envelope struct {
+		Sessions []sessionResponse `json:"sessions"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&envelope); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
 
 	statuses := make(map[string]string)
-	for _, s := range resp {
+	for _, s := range envelope.Sessions {
 		statuses[s.Workflow] = s.Status
 	}
 	if statuses["live-wf"] != "running" {

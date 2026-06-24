@@ -97,7 +97,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   border: none;
   background: transparent;
   color: var(--text-tertiary);
@@ -134,7 +134,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   border: none;
   background: transparent;
   color: var(--text-tertiary);
@@ -640,7 +640,7 @@
 .provider-setup-btn {
   margin-top: 8px;
   padding: 10px 20px;
-  border-radius: var(--radius-lg, 8px);
+  border-radius: var(--radius-sm, 4px);
   border: 1px solid var(--border-default);
   background: var(--bg-elevated);
   color: var(--text-primary);
@@ -1379,8 +1379,8 @@
   min-width: 0;
   padding: 8px 10px;
   border-radius: 8px;
-  background: rgba(var(--accent-primary-rgb, 99, 102, 241), 0.08);
-  border: 1px solid rgba(var(--accent-primary-rgb, 99, 102, 241), 0.18);
+  background: color-mix(in srgb, var(--accent-primary) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 18%, transparent);
 }
 
 .subagent-current-text,
@@ -1509,7 +1509,7 @@
 
 .subagent-link-btn {
   padding: 6px 10px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm, 4px);
   border: 1px solid var(--border-default);
   background: var(--bg-secondary);
   color: var(--text-secondary);
@@ -2109,7 +2109,7 @@
 .chat-offline-retry-btn {
   margin-top: 4px;
   padding: 10px 20px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm, 4px);
   border: 1px solid var(--border-default);
   background: var(--bg-elevated);
   color: var(--text-primary);

@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 
 	utils "github.com/sprout-foundry/sprout/pkg/utils"
@@ -212,8 +213,19 @@ func isVisionModel(modelID string) bool {
 			return true
 		}
 	}
+
+	// GLM vision models use a "-<digit>v" suffix convention:
+	// glm-4.5v, glm-4.6v, glm-5v-turbo, etc.
+	if strings.HasPrefix(modelLower, "glm-") && glmVisionSuffix.MatchString(modelLower) {
+		return true
+	}
+
 	return false
 }
+
+// glmVisionSuffix matches the "v" vision suffix in GLM model IDs.
+// Matches: "4.5v", "4.6v", "5v", "5v-turbo" — but NOT "4.5", "4.6", "5-turbo".
+var glmVisionSuffix = regexp.MustCompile(`\dv\b`)
 
 // containsReasoningModel checks if a model supports reasoning
 func containsReasoningModel(model string) bool {

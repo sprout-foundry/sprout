@@ -663,7 +663,13 @@ func SetupAgentEvents(chatAgent *agent.Agent, eventBus *events.EventBus, indicat
 				r.WriteChunk(chunk)
 				return
 			}
-			fmt.Print(chunk)
+			// Between turns: route through PrintExternal so background
+			// messages (security cautions, late tool logs) don't corrupt
+			// the active input line. When ReadLine is active, PrintExternal
+			// clears the input line, prints the message, and redraws the
+			// prompt + buffer below it — all under the console output lock.
+			// When no ReadLine is active, it falls back to fmt.Print.
+			console.PrintExternal(chunk)
 		})
 	}
 }

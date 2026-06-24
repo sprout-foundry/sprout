@@ -685,7 +685,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 	// so they're left at zero; TrackMetricsFromResponse treats them as
 	// "unknown split" and still applies the totals correctly.
 	if result.TokensUsed > 0 || result.Cost > 0 {
-		a.TrackMetricsFromResponse(0, 0, int(result.TokensUsed), result.Cost, 0)
+		a.TrackMetricsFromResponse(0, 0, int(result.TokensUsed), result.Cost, 0, 0)
 		a.Logger().Debug("Tracked subagent costs: %d tokens, $%.6f\n", result.TokensUsed, result.Cost)
 	}
 
@@ -1069,7 +1069,7 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 					fmt.Sscanf(totalCostStr, "%f", &totalCost)
 
 					// Add to parent agent's totals using TrackMetricsFromResponse
-					a.TrackMetricsFromResponse(promptTokens, completionTokens, totalTokens, totalCost, cachedTokens)
+					a.TrackMetricsFromResponse(promptTokens, completionTokens, totalTokens, totalCost, cachedTokens, 0)
 					a.Logger().Debug("Tracked parallel subagent [%s] costs: %d tokens, $%.6f\n", taskID, totalTokens, totalCost)
 				}
 			}

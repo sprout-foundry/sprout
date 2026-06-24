@@ -376,7 +376,7 @@ func TestEmitJSONResult_SuccessWithAgent(t *testing.T) {
 	defer a.Shutdown()
 
 	// Populate metrics via TrackMetricsFromResponse (the only public setter)
-	a.TrackMetricsFromResponse(1000, 500, 1500, 0.05, 0)
+	a.TrackMetricsFromResponse(1000, 500, 1500, 0.05, 0, 0)
 
 	query := "write a hello world program"
 	startTime := time.Now().Add(-5 * time.Second)
@@ -425,9 +425,9 @@ func TestEmitJSONResult_SuccessWithAccumulatedMetrics(t *testing.T) {
 	defer a.Shutdown()
 
 	// Simulate multiple API calls accumulating metrics
-	a.TrackMetricsFromResponse(500, 200, 700, 0.02, 0)
-	a.TrackMetricsFromResponse(600, 300, 900, 0.03, 0)
-	a.TrackMetricsFromResponse(400, 100, 500, 0.01, 0)
+	a.TrackMetricsFromResponse(500, 200, 700, 0.02, 0, 0)
+	a.TrackMetricsFromResponse(600, 300, 900, 0.03, 0, 0)
+	a.TrackMetricsFromResponse(400, 100, 500, 0.01, 0, 0)
 
 	output := captureStdout(t, func() {
 		emitJSONResult("test query", time.Now(), nil, a)

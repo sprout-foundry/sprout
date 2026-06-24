@@ -269,7 +269,7 @@ func TestRaceConcurrentStatsCallback(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for j := 0; j < 100; j++ {
-			agent.TrackMetricsFromResponse(100, 50, 150, 0.01, 0)
+			agent.TrackMetricsFromResponse(100, 50, 150, 0.01, 0, 0)
 		}
 	}()
 

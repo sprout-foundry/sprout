@@ -151,6 +151,14 @@ func (sp *sproutProvider) accumulateResponseCost(resp *core.ChatResponse) {
 	if cost := api.UsageCost(resp.Usage); cost > 0 {
 		sp.agent.state.AddCost(cost)
 	}
+	if n := resp.Usage.CachedTokens; n > 0 {
+		sp.agent.state.SetCachedTokens(sp.agent.state.GetCachedTokens() + n)
+	}
+	if resp.Usage.CacheWriteTokens != nil {
+		if n := *resp.Usage.CacheWriteTokens; n > 0 {
+			sp.agent.state.SetCacheWriteTokens(sp.agent.state.GetCacheWriteTokens() + n)
+		}
+	}
 }
 
 // doChatNonStream performs a non-streaming chat request.

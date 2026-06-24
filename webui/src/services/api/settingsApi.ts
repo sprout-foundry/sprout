@@ -156,7 +156,15 @@ export async function updateSkills(fetchFn: typeof fetch, skills: SkillsResponse
 export async function getSubagentTypes(fetchFn: typeof fetch): Promise<SubagentTypesResponse> {
   const response = await fetchFn('/api/settings/subagent-types');
   if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-  return response.json();
+  const data = await response.json();
+  // Strip the `test` mock-client sentinel from the catalog — see
+  // miscApi.stripTestProvider for the rationale.
+  if (Array.isArray(data.available_providers)) {
+    data.available_providers = data.available_providers.filter(
+      (p: { id?: string }) => p?.id !== 'test',
+    );
+  }
+  return data;
 }
 
 export async function getHotkeys(fetchFn: typeof fetch): Promise<HotkeyConfig> {

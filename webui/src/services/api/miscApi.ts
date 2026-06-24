@@ -33,12 +33,24 @@ export async function checkHealth(fetchFn: typeof fetch): Promise<boolean> {
 
 // ── Providers ──────────────────────────────────────────────────────
 
+/**
+ * `test` is the in-process mock sentinel (`api.TestClientType` on the Go side).
+ * Defense-in-depth: the daemon filters it out of GetAvailableProviders(), but
+ * we also strip it here in case an older daemon or a stale CustomProviders
+ * entry re-introduces it — selecting it from the UI and persisting it to
+ * LastUsedProvider silently breaks the next session.
+ */
+export function stripTestProvider<T extends { id: string }>(providers: readonly T[]): T[] {
+  return providers.filter((p) => p.id !== 'test');
+}
+
 export async function getProviders(
   fetchFn: typeof fetch,
 ): Promise<{ providers: ProviderOption[]; current_provider?: string; current_model?: string }> {
   const response = await fetchFn('/api/providers');
   if (!response.ok) throw new Error('Failed to fetch providers');
-  return response.json();
+  const data = await response.json();
+  return { ...data, providers: stripTestProvider(data.providers ?? []) };
 }
 
 export async function getProviderModels(fetchFn: typeof fetch, provider: string): Promise<ProviderModelsResponse> {

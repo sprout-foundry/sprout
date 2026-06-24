@@ -32,6 +32,22 @@ func (ws *ReactWebServer) resolveChatID(r *http.Request, clientID string) string
 	return chatID
 }
 
+// rejectIfSharedMode returns true (and writes a 403) when the server is in
+// shared-agent mode and the requested operation would create/modify chat
+// sessions beyond the single shared one. In shared mode, the WebUI is coupled
+// to the CLI's agent — multi-chat doesn't make sense because there's only one
+// agent instance and one conversation.
+//
+// Returns false (no rejection) when not in shared mode.
+func (ws *ReactWebServer) rejectIfSharedMode(w http.ResponseWriter) bool {
+	if !ws.IsSharedMode() {
+		return false
+	}
+	writeJSONErr(w, http.StatusForbidden, "shared_mode",
+		"Multi-chat is disabled in shared mode (CLI + WebUI coupled). Use the terminal or daemon mode for multiple chats.")
+	return true
+}
+
 // handleAPIChatSessions handles GET /api/chat-sessions - lists all chat sessions
 // for the requesting client with metadata.
 func (ws *ReactWebServer) handleAPIChatSessions(w http.ResponseWriter, r *http.Request) {
@@ -103,6 +119,9 @@ func (ws *ReactWebServer) handleAPIChatSessionsCreate(w http.ResponseWriter, r *
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	if ws.rejectIfSharedMode(w) {
+		return
+	}
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxQueryBodyBytes)
 	var req struct {
@@ -169,6 +188,9 @@ func (ws *ReactWebServer) handleAPIChatSessionsCreate(w http.ResponseWriter, r *
 func (ws *ReactWebServer) handleAPIChatSessionsDelete(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if ws.rejectIfSharedMode(w) {
 		return
 	}
 
@@ -522,6 +544,9 @@ func (ws *ReactWebServer) handleAPIChatSessionsSwitch(w http.ResponseWriter, r *
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	if ws.rejectIfSharedMode(w) {
+		return
+	}
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxQueryBodyBytes)
 	var req struct {
@@ -710,6 +735,9 @@ func (ws *ReactWebServer) handleAPIChatSessionClearHistory(w http.ResponseWriter
 func (ws *ReactWebServer) handleAPIChatSessionsDeleteAll(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if ws.rejectIfSharedMode(w) {
 		return
 	}
 

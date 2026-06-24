@@ -808,6 +808,20 @@ func (ws *ReactWebServer) getChatAgent(clientID, chatID string) (*agent.Agent, e
 		workspaceDir = filepath.Join(workspaceRoot, configuration.ConfigDirName)
 	}
 
+	// In shared mode (CLI + WebUI in the same process), seed the default
+	// chat session with the CLI's agent instance so both frontends share
+	// one conversation history, one session, and one state. This bypasses
+	// the lazy-create path in getOrCreateAgent.
+	if ws.IsSharedMode() && clientID == defaultWebClientID && chatID == defaultChatID {
+		if ws.agent != nil && cs.Agent == nil {
+			cs.mu.Lock()
+			if cs.Agent == nil {
+				cs.Agent = ws.agent
+			}
+			cs.mu.Unlock()
+		}
+	}
+
 	agentInst, err := cs.getOrCreateAgent(workspaceRoot, configBase, workspaceDir, eventBus, clientID, userID, ws.withAgentWorkspace)
 	if err != nil {
 		if errors.Is(err, agent.ErrModelNotAvailable) || errors.Is(err, agent.ErrProviderNotConfigured) {
@@ -842,6 +856,36 @@ func (ws *ReactWebServer) getChatAgent(clientID, chatID string) (*agent.Agent, e
 	}
 
 	return agentInst, nil
+}
+
+// SyncSharedAgentState exports the shared agent's state (conversation history,
+// session ID, etc.) into the WebUI's default chat session. Called by the CLI's
+// ProcessQuery wrapper after each CLI query completes, so the browser tab has
+// fresh history when it reconnects or refreshes.
+//
+// Only meaningful in shared-agent mode (ws.agent != nil). In daemon mode this
+// is a no-op because each chat manages its own agent independently.
+func (ws *ReactWebServer) SyncSharedAgentState(agentInst *agent.Agent) error {
+	if !ws.IsSharedMode() || agentInst == nil {
+		return nil
+	}
+	snapshot, err := agentInst.ExportState()
+	if err != nil {
+		return fmt.Errorf("export agent state: %w", err)
+	}
+	ws.mutex.Lock()
+	defer ws.mutex.Unlock()
+	ctx := ws.getOrCreateClientContextLocked(defaultWebClientID)
+	ctx.ensureDefaultChatSession()
+	if cs, ok := ctx.ChatSessions[defaultChatID]; ok {
+		cs.mu.Lock()
+		cs.AgentState = append([]byte(nil), snapshot...)
+		cs.LastActiveAt = time.Now()
+		cs.mu.Unlock()
+	}
+	ctx.AgentState = append([]byte(nil), snapshot...)
+	ctx.LastSeenAt = time.Now()
+	return nil
 }
 
 func (ws *ReactWebServer) setClientQueryActive(clientID string, active bool) {

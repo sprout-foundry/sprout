@@ -33,6 +33,14 @@ type injectInputMsg struct {
 func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	a.initSubManagers()
 
+	// Guard against concurrent queries on the same Agent instance. In
+	// shared-agent mode (CLI + WebUI), the second caller gets
+	// ErrQueryInProgress instead of corrupting the message list.
+	if err := a.TryBeginQuery(); err != nil {
+		return "", err
+	}
+	defer a.EndQuery()
+
 	// ---- Pre-loop hooks (moved from old ConversationHandler.ProcessQuery) ----
 
 	// Reset termination reason for fresh query

@@ -37,6 +37,7 @@ type ConversationState struct {
 	CompletionTokens        int              `json:"completion_tokens"`
 	EstimatedTokenResponses int              `json:"estimated_token_responses"`
 	CachedTokens            int              `json:"cached_tokens"`
+	CacheWriteTokens        int              `json:"cache_write_tokens,omitempty"`
 	CachedCostSavings       float64          `json:"cached_cost_savings"`
 	LastUpdated             time.Time        `json:"last_updated"`
 	SessionID               string           `json:"session_id"`
@@ -255,6 +256,7 @@ func (a *Agent) SaveStateScoped(sessionID, workingDir string) error {
 		CompletionTokens:        a.state.GetCompletionTokens(),
 		EstimatedTokenResponses: a.state.GetEstimatedTokenResponses(),
 		CachedTokens:            a.state.GetCachedTokens(),
+		CacheWriteTokens:        a.state.GetCacheWriteTokens(),
 		CachedCostSavings:       a.state.GetCachedCostSavings(),
 		LastUpdated:             time.Now(),
 		SessionID:               cleanSessionID,
@@ -700,6 +702,7 @@ func (a *Agent) ApplyState(state *ConversationState) {
 	a.state.SetCompletionTokens(state.CompletionTokens)
 	a.state.SetEstimatedTokenResponses(state.EstimatedTokenResponses)
 	a.state.SetCachedTokens(state.CachedTokens)
+	a.state.SetCacheWriteTokens(state.CacheWriteTokens)
 	a.state.SetCachedCostSavings(state.CachedCostSavings)
 
 	// CRITICAL: Reset session state to prevent hanging issues after session restore

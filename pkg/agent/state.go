@@ -30,6 +30,7 @@ func (a *Agent) ExportState() ([]byte, error) {
 		CompletionTokens:        a.state.GetCompletionTokens(),
 		EstimatedTokenResponses: a.state.GetEstimatedTokenResponses(),
 		CachedTokens:            a.state.GetCachedTokens(),
+		CacheWriteTokens:        a.state.GetCacheWriteTokens(),
 		CachedCostSavings:       a.state.GetCachedCostSavings(),
 	}
 	return json.Marshal(state)
@@ -58,6 +59,7 @@ func (a *Agent) ImportState(data []byte) error {
 	a.state.SetCompletionTokens(state.CompletionTokens)
 	a.state.SetEstimatedTokenResponses(state.EstimatedTokenResponses)
 	a.state.SetCachedTokens(state.CachedTokens)
+	a.state.SetCacheWriteTokens(state.CacheWriteTokens)
 	a.state.SetCachedCostSavings(state.CachedCostSavings)
 	return nil
 }

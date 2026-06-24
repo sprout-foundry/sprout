@@ -83,6 +83,8 @@ type StateManager interface {
 	// Cache stats
 	GetCachedTokens() int
 	SetCachedTokens(int)
+	GetCacheWriteTokens() int
+	SetCacheWriteTokens(int)
 	GetCachedCostSavings() float64
 	SetCachedCostSavings(float64)
 
@@ -187,6 +189,7 @@ type AgentStateManager struct {
 	totalToolCalls              int
 	estimatedTokenResponses     int
 	cachedTokens                int
+	cacheWriteTokens            int
 	cachedCostSavings           float64
 	activeSkills                []string
 	activePersona               string
@@ -492,6 +495,18 @@ func (s *AgentStateManager) SetCachedTokens(n int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.cachedTokens = n
+}
+
+func (s *AgentStateManager) GetCacheWriteTokens() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.cacheWriteTokens
+}
+
+func (s *AgentStateManager) SetCacheWriteTokens(n int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.cacheWriteTokens = n
 }
 
 func (s *AgentStateManager) GetCachedCostSavings() float64 {

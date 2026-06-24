@@ -62,14 +62,18 @@ func (a *Agent) GetPromptTokens() int {
 	return a.state.GetPromptTokens()
 }
 
-// TrackMetricsFromResponse updates agent metrics from API response usage data
-func (a *Agent) TrackMetricsFromResponse(promptTokens, completionTokens, totalTokens int, estimatedCost float64, cachedTokens int) {
+// TrackMetricsFromResponse updates agent metrics from API response usage data.
+// cacheWriteTokens is the number of prompt tokens written to the provider cache
+// on this request (Anthropic/OpenRouter cache_creation_input_tokens). Pass 0
+// when the provider does not report write tokens.
+func (a *Agent) TrackMetricsFromResponse(promptTokens, completionTokens, totalTokens int, estimatedCost float64, cachedTokens, cacheWriteTokens int) {
 	a.state.IncrementLLMCallCount()
 	a.state.SetTotalTokens(a.state.GetTotalTokens() + totalTokens)
 	a.state.SetPromptTokens(a.state.GetPromptTokens() + promptTokens)
 	a.state.SetCompletionTokens(a.state.GetCompletionTokens() + completionTokens)
 	a.state.AddCost(estimatedCost)
 	a.state.SetCachedTokens(a.state.GetCachedTokens() + cachedTokens)
+	a.state.SetCacheWriteTokens(a.state.GetCacheWriteTokens() + cacheWriteTokens)
 
 	// Fleet budget tracking: debit tokens to the shared fleet tracker.
 	if a.fleetBudgetTracker != nil && a.fleetBudgetLimit > 0 {
@@ -191,6 +195,11 @@ func (a *Agent) MarkEstimatedTokenUsageResponse() {
 // GetCachedTokens returns the total cached/reused tokens
 func (a *Agent) GetCachedTokens() int {
 	return a.state.GetCachedTokens()
+}
+
+// GetCacheWriteTokens returns the total tokens written to the provider cache
+func (a *Agent) GetCacheWriteTokens() int {
+	return a.state.GetCacheWriteTokens()
 }
 
 // GetCachedCostSavings returns the cost savings from cached tokens

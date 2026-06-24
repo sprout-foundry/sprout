@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-06-23T20:30:00Z",
+  "updated_at": "2026-06-24T12:00:36Z",
   "source": "refresh_provider_catalog",
   "providers": [
     {
@@ -124,84 +124,89 @@
       ]
     },
     {
-      "api_key_help": "Use your GLM Coding Plan API key (separate from the general API key). Set ZAI_CODING_API_KEY env var.",
-      "api_key_label": "GLM Coding Plan API Key",
-      "default_model": "glm-5",
-      "description": "Z.AI coding-plan endpoint with dedicated /api/coding/paas/v4 base URL for devpack users.",
-      "docs_url": "https://docs.z.ai/devpack/overview",
       "id": "zai-coding",
+      "name": "GLM Coding Plan",
+      "description": "Z.AI coding-plan endpoint with dedicated /api/coding/paas/v4 base URL for devpack users.",
+      "setup_hint": "Use this entry if your key is on a GLM Coding Plan subscription.",
+      "docs_url": "https://docs.z.ai/devpack/overview",
+      "signup_url": "https://platform.z.ai/",
+      "api_key_label": "GLM Coding Plan API Key",
+      "api_key_help": "Use your GLM Coding Plan API key (separate from the general API key). Set ZAI_CODING_API_KEY env var.",
+      "default_model": "glm-5",
+      "recommended_model": "glm-5",
+      "recommended_model_why": "Current flagship GLM coding model with strong tool and agent support.",
       "models": [
         {
-          "context_length": 128000,
-          "description": "Z.AI GLM-4.5 - Previous generation with 128K context window",
           "id": "GLM-4.5",
           "name": "GLM-4.5",
+          "description": "Z.AI GLM-4.5 - Previous generation with 128K context window",
+          "context_length": 128000,
           "tags": [
             "tools"
           ]
         },
         {
-          "context_length": 128000,
-          "description": "Z.AI GLM-4.5 Air - Lightweight version with 128K context window",
           "id": "GLM-4.5-air",
           "name": "GLM-4.5 Air",
+          "description": "Z.AI GLM-4.5 Air - Lightweight version with 128K context window",
+          "context_length": 128000,
           "tags": [
             "tools"
           ]
         },
         {
-          "context_length": 200000,
-          "description": "Z.AI GLM-4.6 - Coding optimized model with 200K context window",
           "id": "GLM-4.6",
           "name": "GLM-4.6",
+          "description": "Z.AI GLM-4.6 - Coding optimized model with 200K context window",
+          "context_length": 200000,
           "tags": [
             "tools"
           ]
         },
         {
-          "context_length": 200000,
-          "description": "Z.AI GLM-4.6 with vision capabilities",
           "id": "glm-4.6v",
           "name": "GLM-4.6 Vision",
+          "description": "Z.AI GLM-4.6 with vision capabilities",
+          "context_length": 200000,
           "tags": [
             "tools",
             "vision"
           ]
         },
         {
-          "context_length": 200000,
-          "description": "Z.AI GLM-4.7 - Latest GLM-4.x model with 200K context window, designed for development environments",
           "id": "glm-4.7",
           "name": "GLM-4.7",
+          "description": "Z.AI GLM-4.7 - Latest GLM-4.x model with 200K context window, designed for development environments",
+          "context_length": 200000,
           "tags": [
             "tools"
           ]
         },
         {
-          "context_length": 200000,
-          "description": "Z.AI GLM-5 - Flagship model with 200K context, 128K max output, agentic coding",
           "id": "glm-5",
           "name": "GLM-5",
+          "description": "Z.AI GLM-5 - Flagship model with 200K context, 128K max output, agentic coding",
+          "context_length": 200000,
           "tags": [
             "tools",
             "coding"
           ]
         },
         {
-          "context_length": 200000,
-          "description": "Z.AI GLM-5-Turbo - Optimized for agent/tool tasks with 200K context, 128K max output",
           "id": "glm-5-turbo",
           "name": "GLM-5 Turbo",
+          "description": "Z.AI GLM-5-Turbo - Optimized for agent/tool tasks with 200K context, 128K max output",
+          "context_length": 200000,
           "tags": [
             "tools",
             "coding"
           ]
         },
         {
-          "context_length": 200000,
-          "description": "Z.AI GLM-5.1 - Enhanced GLM-5 with improved reasoning and tool use capabilities",
           "id": "glm-5.1",
           "name": "GLM-5.1",
+          "description": "Z.AI GLM-5.1 - Enhanced GLM-5 with improved reasoning and tool use capabilities",
+          "context_length": 200000,
           "tags": [
             "tools",
             "reasoning",
@@ -239,13 +244,7 @@
             "reasoning"
           ]
         }
-      ],
-      "name": "GLM Coding Plan",
-      "recommended": false,
-      "recommended_model": "glm-5",
-      "recommended_model_why": "Current flagship GLM coding model with strong tool and agent support.",
-      "setup_hint": "Use this entry if your key is on a GLM Coding Plan subscription.",
-      "signup_url": "https://platform.z.ai/"
+      ]
     },
     {
       "id": "minimax",
@@ -615,7 +614,7 @@
         {
           "id": "aion-labs/aion-rp-llama-3.1-8b",
           "name": "AionLabs: Aion-RP 1.0 (8B)",
-          "description": "Aion-RP-Llama-3.1-8B ranks the highest in the character evaluation portion of the RPBench-Auto benchmark, a roleplaying-specific variant of Arena-Hard-Auto, where LLMs evaluate each other\u2019s responses. It is a fine-tuned base model...",
+          "description": "Aion-RP-Llama-3.1-8B ranks the highest in the character evaluation portion of the RPBench-Auto benchmark, a roleplaying-specific variant of Arena-Hard-Auto, where LLMs evaluate each other’s responses. It is a fine-tuned base model...",
           "context_length": 32768,
           "input_cost": 0.7999999999999999,
           "output_cost": 1.5999999999999999
@@ -671,7 +670,7 @@
         {
           "id": "amazon/nova-premier-v1",
           "name": "Amazon: Nova Premier 1.0",
-          "description": "Amazon Nova Premier is the most capable of Amazon\u2019s multimodal models for complex reasoning tasks and for use as the best teacher for distilling custom models.",
+          "description": "Amazon Nova Premier is the most capable of Amazon’s multimodal models for complex reasoning tasks and for use as the best teacher for distilling custom models.",
           "context_length": 1000000,
           "tags": [
             "tools",
@@ -716,18 +715,6 @@
           "output_cost": 1.25
         },
         {
-          "id": "anthropic/claude-3.5-haiku",
-          "name": "Anthropic: Claude 3.5 Haiku",
-          "description": "Claude 3.5 Haiku features offers enhanced capabilities in speed, coding accuracy, and tool use. Engineered to excel in real-time applications, it delivers quick response times that are essential for dynamic...",
-          "context_length": 200000,
-          "tags": [
-            "tools",
-            "vision"
-          ],
-          "input_cost": 0.7999999999999999,
-          "output_cost": 4
-        },
-        {
           "id": "anthropic/claude-fable-5",
           "name": "Anthropic: Claude Fable 5",
           "description": "Claude Fable 5 is a Mythos-class model from Anthropic, built for autonomous knowledge work and coding. It supports text, image, and file inputs with text output, with reasoning support and...",
@@ -744,7 +731,7 @@
         {
           "id": "anthropic/claude-haiku-4.5",
           "name": "Anthropic: Claude Haiku 4.5",
-          "description": "Claude Haiku 4.5 is Anthropic\u2019s fastest and most efficient model, delivering near-frontier intelligence at a fraction of the cost and latency of larger Claude models. Matching Claude Sonnet 4\u2019s performance...",
+          "description": "Claude Haiku 4.5 is Anthropic’s fastest and most efficient model, delivering near-frontier intelligence at a fraction of the cost and latency of larger Claude models. Matching Claude Sonnet 4’s performance...",
           "context_length": 200000,
           "tags": [
             "tools",
@@ -758,7 +745,7 @@
         {
           "id": "anthropic/claude-opus-4",
           "name": "Anthropic: Claude Opus 4",
-          "description": "Claude Opus 4 is benchmarked as the world\u2019s best coding model, at time of release, bringing sustained performance on complex, long-running tasks and agent workflows. It sets new benchmarks in...",
+          "description": "Claude Opus 4 is benchmarked as the world’s best coding model, at time of release, bringing sustained performance on complex, long-running tasks and agent workflows. It sets new benchmarks in...",
           "context_length": 200000,
           "tags": [
             "tools",
@@ -771,7 +758,7 @@
         {
           "id": "anthropic/claude-opus-4.1",
           "name": "Anthropic: Claude Opus 4.1",
-          "description": "Claude Opus 4.1 is an updated version of Anthropic\u2019s flagship model, offering improved performance in coding, reasoning, and agentic tasks. It achieves 74.5% on SWE-bench Verified and shows notable gains...",
+          "description": "Claude Opus 4.1 is an updated version of Anthropic’s flagship model, offering improved performance in coding, reasoning, and agentic tasks. It achieves 74.5% on SWE-bench Verified and shows notable gains...",
           "context_length": 200000,
           "tags": [
             "tools",
@@ -785,7 +772,7 @@
         {
           "id": "anthropic/claude-opus-4.5",
           "name": "Anthropic: Claude Opus 4.5",
-          "description": "Claude Opus 4.5 is Anthropic\u2019s frontier reasoning model optimized for complex software engineering, agentic workflows, and long-horizon computer use. It offers strong multimodal capabilities, competitive performance across real-world coding and...",
+          "description": "Claude Opus 4.5 is Anthropic’s frontier reasoning model optimized for complex software engineering, agentic workflows, and long-horizon computer use. It offers strong multimodal capabilities, competitive performance across real-world coding and...",
           "context_length": 200000,
           "tags": [
             "tools",
@@ -799,7 +786,7 @@
         {
           "id": "anthropic/claude-opus-4.6",
           "name": "Anthropic: Claude Opus 4.6",
-          "description": "Opus 4.6 is Anthropic\u2019s strongest model for coding and long-running professional tasks. It is built for agents that operate across entire workflows rather than single prompts, making it especially effective...",
+          "description": "Opus 4.6 is Anthropic’s strongest model for coding and long-running professional tasks. It is built for agents that operate across entire workflows rather than single prompts, making it especially effective...",
           "context_length": 1000000,
           "tags": [
             "tools",
@@ -896,7 +883,7 @@
         {
           "id": "anthropic/claude-sonnet-4.5",
           "name": "Anthropic: Claude Sonnet 4.5",
-          "description": "Claude Sonnet 4.5 is Anthropic\u2019s most advanced Sonnet model to date, optimized for real-world agents and coding workflows. It delivers state-of-the-art performance on coding benchmarks such as SWE-bench Verified, with...",
+          "description": "Claude Sonnet 4.5 is Anthropic’s most advanced Sonnet model to date, optimized for real-world agents and coding workflows. It delivers state-of-the-art performance on coding benchmarks such as SWE-bench Verified, with...",
           "context_length": 1000000,
           "tags": [
             "tools",
@@ -924,7 +911,7 @@
         {
           "id": "arcee-ai/coder-large",
           "name": "Arcee AI: Coder Large",
-          "description": "Coder\u2011Large is a 32 B\u2011parameter offspring of Qwen 2.5\u2011Instruct that has been further trained on permissively\u2011licensed GitHub, CodeSearchNet and synthetic bug\u2011fix corpora. It supports a 32k context window, enabling multi\u2011file...",
+          "description": "Coder‑Large is a 32 B‑parameter offspring of Qwen 2.5‑Instruct that has been further trained on permissively‑licensed GitHub, CodeSearchNet and synthetic bug‑fix corpora. It supports a 32k context window, enabling multi‑file...",
           "context_length": 32768,
           "input_cost": 0.5,
           "output_cost": 0.7999999999999999
@@ -936,11 +923,10 @@
           "context_length": 262144,
           "tags": [
             "tools",
-            "reasoning",
-            "structured_output"
+            "reasoning"
           ],
-          "input_cost": 0.22,
-          "output_cost": 0.85
+          "input_cost": 0.25,
+          "output_cost": 0.7999999999999999
         },
         {
           "id": "arcee-ai/trinity-mini",
@@ -958,7 +944,7 @@
         {
           "id": "arcee-ai/virtuoso-large",
           "name": "Arcee AI: Virtuoso Large",
-          "description": "Virtuoso\u2011Large is Arcee's top\u2011tier general\u2011purpose LLM at 72 B parameters, tuned to tackle cross\u2011domain reasoning, creative writing and enterprise QA. Unlike many 70 B peers, it retains the 128 k...",
+          "description": "Virtuoso‑Large is Arcee's top‑tier general‑purpose LLM at 72 B parameters, tuned to tackle cross‑domain reasoning, creative writing and enterprise QA. Unlike many 70 B peers, it retains the 128 k...",
           "context_length": 131072,
           "tags": [
             "tools"
@@ -969,7 +955,7 @@
         {
           "id": "baidu/ernie-4.5-vl-424b-a47b",
           "name": "Baidu: ERNIE 4.5 VL 424B A47B",
-          "description": "ERNIE-4.5-VL-424B-A47B is a multimodal Mixture-of-Experts (MoE) model from Baidu\u2019s ERNIE 4.5 series, featuring 424B total parameters with 47B active per token. It is trained jointly on text and image data...",
+          "description": "ERNIE-4.5-VL-424B-A47B is a multimodal Mixture-of-Experts (MoE) model from Baidu’s ERNIE 4.5 series, featuring 424B total parameters with 47B active per token. It is trained jointly on text and image data...",
           "context_length": 131072,
           "tags": [
             "vision",
@@ -1009,7 +995,7 @@
         {
           "id": "bytedance-seed/seed-2.0-lite",
           "name": "ByteDance Seed: Seed-2.0-Lite",
-          "description": "Seed-2.0-Lite is a versatile, cost\u2011efficient enterprise workhorse that delivers strong multimodal and agent capabilities while offering noticeably lower latency, making it a practical default choice for most production workloads across...",
+          "description": "Seed-2.0-Lite is a versatile, cost‑efficient enterprise workhorse that delivers strong multimodal and agent capabilities while offering noticeably lower latency, making it a practical default choice for most production workloads across...",
           "context_length": 262144,
           "tags": [
             "tools",
@@ -1049,7 +1035,7 @@
         {
           "id": "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
           "name": "Venice: Uncensored (free)",
-          "description": "Venice Uncensored Dolphin Mistral 24B Venice Edition is a fine-tuned variant of Mistral-Small-24B-Instruct-2501, developed by dphn.ai in collaboration with Venice.ai. This model is designed as an \u201cuncensored\u201d instruct-tuned LLM, preserving...",
+          "description": "Venice Uncensored Dolphin Mistral 24B Venice Edition is a fine-tuned variant of Mistral-Small-24B-Instruct-2501, developed by dphn.ai in collaboration with Venice.ai. This model is designed as an “uncensored” instruct-tuned LLM, preserving...",
           "context_length": 32768,
           "tags": [
             "structured_output"
@@ -1263,18 +1249,6 @@
           "output_cost": 0.87
         },
         {
-          "id": "essentialai/rnj-1-instruct",
-          "name": "EssentialAI: Rnj 1 Instruct",
-          "description": "Rnj-1 is an 8B-parameter, dense, open-weight model family developed by Essential AI and trained from scratch with a focus on programming, math, and scientific reasoning. The model demonstrates strong performance...",
-          "context_length": 32768,
-          "tags": [
-            "tools",
-            "structured_output"
-          ],
-          "input_cost": 0.15,
-          "output_cost": 0.15
-        },
-        {
           "id": "google/gemini-2.5-flash",
           "name": "Google: Gemini 2.5 Flash",
           "description": "Gemini 2.5 Flash is Google's state-of-the-art workhorse model, specifically designed for advanced reasoning, coding, mathematics, and scientific tasks. It includes built-in \"thinking\" capabilities, enabling it to provide responses with greater...",
@@ -1331,7 +1305,7 @@
         {
           "id": "google/gemini-2.5-pro",
           "name": "Google: Gemini 2.5 Pro",
-          "description": "Gemini 2.5 Pro is Google\u2019s state-of-the-art AI model designed for advanced reasoning, coding, mathematics, and scientific tasks. It employs \u201cthinking\u201d capabilities, enabling it to reason through responses with enhanced accuracy...",
+          "description": "Gemini 2.5 Pro is Google’s state-of-the-art AI model designed for advanced reasoning, coding, mathematics, and scientific tasks. It employs “thinking” capabilities, enabling it to reason through responses with enhanced accuracy...",
           "context_length": 1048576,
           "tags": [
             "tools",
@@ -1345,7 +1319,7 @@
         {
           "id": "google/gemini-2.5-pro-preview",
           "name": "Google: Gemini 2.5 Pro Preview 06-05",
-          "description": "Gemini 2.5 Pro is Google\u2019s state-of-the-art AI model designed for advanced reasoning, coding, mathematics, and scientific tasks. It employs \u201cthinking\u201d capabilities, enabling it to reason through responses with enhanced accuracy...",
+          "description": "Gemini 2.5 Pro is Google’s state-of-the-art AI model designed for advanced reasoning, coding, mathematics, and scientific tasks. It employs “thinking” capabilities, enabling it to reason through responses with enhanced accuracy...",
           "context_length": 1048576,
           "tags": [
             "tools",
@@ -1359,7 +1333,7 @@
         {
           "id": "google/gemini-2.5-pro-preview-05-06",
           "name": "Google: Gemini 2.5 Pro Preview 05-06",
-          "description": "Gemini 2.5 Pro is Google\u2019s state-of-the-art AI model designed for advanced reasoning, coding, mathematics, and scientific tasks. It employs \u201cthinking\u201d capabilities, enabling it to reason through responses with enhanced accuracy...",
+          "description": "Gemini 2.5 Pro is Google’s state-of-the-art AI model designed for advanced reasoning, coding, mathematics, and scientific tasks. It employs “thinking” capabilities, enabling it to reason through responses with enhanced accuracy...",
           "context_length": 1048576,
           "tags": [
             "tools",
@@ -1387,7 +1361,7 @@
         {
           "id": "google/gemini-3-pro-image",
           "name": "Google: Nano Banana Pro (Gemini 3 Pro Image)",
-          "description": "Nano Banana Pro is Google\u2019s most advanced image-generation and editing model, built on Gemini 3 Pro. It extends the original Nano Banana with significantly improved multimodal reasoning, real-world grounding, and...",
+          "description": "Nano Banana Pro is Google’s most advanced image-generation and editing model, built on Gemini 3 Pro. It extends the original Nano Banana with significantly improved multimodal reasoning, real-world grounding, and...",
           "context_length": 65536,
           "tags": [
             "tools",
@@ -1401,7 +1375,7 @@
         {
           "id": "google/gemini-3-pro-image-preview",
           "name": "Google: Nano Banana Pro (Gemini 3 Pro Image Preview)",
-          "description": "Nano Banana Pro is Google\u2019s most advanced image-generation and editing model, built on Gemini 3 Pro. It extends the original Nano Banana with significantly improved multimodal reasoning, real-world grounding, and...",
+          "description": "Nano Banana Pro is Google’s most advanced image-generation and editing model, built on Gemini 3 Pro. It extends the original Nano Banana with significantly improved multimodal reasoning, real-world grounding, and...",
           "context_length": 65536,
           "tags": [
             "vision",
@@ -1414,7 +1388,7 @@
         {
           "id": "google/gemini-3.1-flash-image",
           "name": "Google: Nano Banana 2 (Gemini 3.1 Flash Image)",
-          "description": "Gemini 3.1 Flash Image, a.k.a. \"Nano Banana 2,\" is Google\u2019s latest state of the art image generation and editing model, delivering Pro-level visual quality at Flash speed. It combines advanced...",
+          "description": "Gemini 3.1 Flash Image, a.k.a. \"Nano Banana 2,\" is Google’s latest state of the art image generation and editing model, delivering Pro-level visual quality at Flash speed. It combines advanced...",
           "context_length": 131072,
           "tags": [
             "vision",
@@ -1427,7 +1401,7 @@
         {
           "id": "google/gemini-3.1-flash-image-preview",
           "name": "Google: Nano Banana 2 (Gemini 3.1 Flash Image Preview)",
-          "description": "Gemini 3.1 Flash Image Preview, a.k.a. \"Nano Banana 2,\" is Google\u2019s latest state of the art image generation and editing model, delivering Pro-level visual quality at Flash speed. It combines...",
+          "description": "Gemini 3.1 Flash Image Preview, a.k.a. \"Nano Banana 2,\" is Google’s latest state of the art image generation and editing model, delivering Pro-level visual quality at Flash speed. It combines...",
           "context_length": 131072,
           "tags": [
             "vision",
@@ -1440,7 +1414,7 @@
         {
           "id": "google/gemini-3.1-flash-lite",
           "name": "Google: Gemini 3.1 Flash Lite",
-          "description": "Gemini 3.1 Flash Lite is Google\u2019s GA high-efficiency multimodal model optimized for low-latency, high-volume workloads. It supports text, image, video, audio, and PDF inputs, and is designed for lightweight agentic...",
+          "description": "Gemini 3.1 Flash Lite is Google’s GA high-efficiency multimodal model optimized for low-latency, high-volume workloads. It supports text, image, video, audio, and PDF inputs, and is designed for lightweight agentic...",
           "context_length": 1048576,
           "tags": [
             "tools",
@@ -1468,7 +1442,7 @@
         {
           "id": "google/gemini-3.1-pro-preview",
           "name": "Google: Gemini 3.1 Pro Preview",
-          "description": "Gemini 3.1 Pro Preview is Google\u2019s frontier reasoning model, delivering enhanced software engineering performance, improved agentic reliability, and more efficient token usage across complex workflows. Building on the multimodal foundation...",
+          "description": "Gemini 3.1 Pro Preview is Google’s frontier reasoning model, delivering enhanced software engineering performance, improved agentic reliability, and more efficient token usage across complex workflows. Building on the multimodal foundation...",
           "context_length": 1048576,
           "tags": [
             "tools",
@@ -1559,7 +1533,7 @@
         {
           "id": "google/gemma-3n-e4b-it",
           "name": "Google: Gemma 3n 4B",
-          "description": "Gemma 3n E4B-it is optimized for efficient execution on mobile and low-resource devices, such as phones, laptops, and tablets. It supports multimodal inputs\u2014including text, visual data, and audio\u2014enabling diverse tasks...",
+          "description": "Gemma 3n E4B-it is optimized for efficient execution on mobile and low-resource devices, such as phones, laptops, and tablets. It supports multimodal inputs—including text, visual data, and audio—enabling diverse tasks...",
           "context_length": 32768,
           "tags": [
             "structured_output"
@@ -1570,7 +1544,7 @@
         {
           "id": "google/gemma-4-26b-a4b-it",
           "name": "Google: Gemma 4 26B A4B",
-          "description": "Gemma 4 26B A4B IT is an instruction-tuned Mixture-of-Experts (MoE) model from Google DeepMind. Despite 25.2B total parameters, only 3.8B activate per token during inference \u2014 delivering near-31B quality at...",
+          "description": "Gemma 4 26B A4B IT is an instruction-tuned Mixture-of-Experts (MoE) model from Google DeepMind. Despite 25.2B total parameters, only 3.8B activate per token during inference — delivering near-31B quality at...",
           "context_length": 262144,
           "tags": [
             "tools",
@@ -1584,7 +1558,7 @@
         {
           "id": "google/gemma-4-26b-a4b-it:free",
           "name": "Google: Gemma 4 26B A4B  (free)",
-          "description": "Gemma 4 26B A4B IT is an instruction-tuned Mixture-of-Experts (MoE) model from Google DeepMind. Despite 25.2B total parameters, only 3.8B activate per token during inference \u2014 delivering near-31B quality at...",
+          "description": "Gemma 4 26B A4B IT is an instruction-tuned Mixture-of-Experts (MoE) model from Google DeepMind. Despite 25.2B total parameters, only 3.8B activate per token during inference — delivering near-31B quality at...",
           "context_length": 262144,
           "tags": [
             "tools",
@@ -1689,7 +1663,7 @@
         {
           "id": "inclusionai/ling-2.6-1t",
           "name": "inclusionAI: Ling-2.6-1T",
-          "description": "Ling-2.6-1T is an instant (instruct) model from inclusionAI and the company\u2019s trillion-parameter flagship, designed for real-world agents that require fast execution and high efficiency at scale. It uses a \u201cfast...",
+          "description": "Ling-2.6-1T is an instant (instruct) model from inclusionAI and the company’s trillion-parameter flagship, designed for real-world agents that require fast execution and high efficiency at scale. It uses a “fast...",
           "context_length": 262144,
           "tags": [
             "tools",
@@ -1742,7 +1716,7 @@
         {
           "id": "kwaipilot/kat-coder-pro-v2",
           "name": "Kwaipilot: KAT-Coder-Pro V2",
-          "description": "KAT-Coder-Pro V2 is the latest high-performance model in KwaiKAT\u2019s KAT-Coder series, designed for complex enterprise-grade software engineering and SaaS integration. It builds on the agentic coding strengths of earlier versions,...",
+          "description": "KAT-Coder-Pro V2 is the latest high-performance model in KwaiKAT’s KAT-Coder series, designed for complex enterprise-grade software engineering and SaaS integration. It builds on the agentic coding strengths of earlier versions,...",
           "context_length": 256000,
           "tags": [
             "tools",
@@ -1774,7 +1748,7 @@
         {
           "id": "liquid/lfm-2.5-1.2b-thinking:free",
           "name": "LiquidAI: LFM2.5-1.2B-Thinking (free)",
-          "description": "LFM2.5-1.2B-Thinking is a lightweight reasoning-focused model optimized for agentic tasks, data extraction, and RAG\u2014while still running comfortably on edge devices. It supports long context (up to 32K tokens) and is...",
+          "description": "LFM2.5-1.2B-Thinking is a lightweight reasoning-focused model optimized for agentic tasks, data extraction, and RAG—while still running comfortably on edge devices. It supports long context (up to 32K tokens) and is...",
           "context_length": 32768,
           "tags": [
             "tools",
@@ -1796,7 +1770,7 @@
         {
           "id": "meta-llama/llama-3-8b-instruct",
           "name": "Meta: Llama 3 8B Instruct",
-          "description": "Meta's latest class of model (Llama 3) launched with a variety of sizes & flavors. This 8B instruct-tuned version was optimized for high quality dialogue usecases. It has demonstrated strong...",
+          "description": "Meta's latest class of model (Llama 3) launched with a variety of sizes \u0026 flavors. This 8B instruct-tuned version was optimized for high quality dialogue usecases. It has demonstrated strong...",
           "context_length": 8192,
           "tags": [
             "structured_output"
@@ -1807,7 +1781,7 @@
         {
           "id": "meta-llama/llama-3.1-70b-instruct",
           "name": "Meta: Llama 3.1 70B Instruct",
-          "description": "Meta's latest class of model (Llama 3.1) launched with a variety of sizes & flavors. This 70B instruct-tuned version is optimized for high quality dialogue usecases. It has demonstrated strong...",
+          "description": "Meta's latest class of model (Llama 3.1) launched with a variety of sizes \u0026 flavors. This 70B instruct-tuned version is optimized for high quality dialogue usecases. It has demonstrated strong...",
           "context_length": 131072,
           "tags": [
             "tools",
@@ -1819,7 +1793,7 @@
         {
           "id": "meta-llama/llama-3.1-8b-instruct",
           "name": "Meta: Llama 3.1 8B Instruct",
-          "description": "Meta's latest class of model (Llama 3.1) launched with a variety of sizes & flavors. This 8B instruct-tuned version is fast and efficient. It has demonstrated strong performance compared to...",
+          "description": "Meta's latest class of model (Llama 3.1) launched with a variety of sizes \u0026 flavors. This 8B instruct-tuned version is fast and efficient. It has demonstrated strong performance compared to...",
           "context_length": 131072,
           "tags": [
             "tools",
@@ -1929,7 +1903,7 @@
           "tags": [
             "structured_output"
           ],
-          "input_cost": 0.065,
+          "input_cost": 0.07,
           "output_cost": 0.14
         },
         {
@@ -2034,8 +2008,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.25,
-          "output_cost": 1
+          "input_cost": 0.24,
+          "output_cost": 0.96
         },
         {
           "id": "minimax/minimax-m3",
@@ -2141,7 +2115,7 @@
         {
           "id": "mistralai/mistral-large-2512",
           "name": "Mistral: Mistral Large 3 2512",
-          "description": "Mistral Large 3 2512 is Mistral\u2019s most capable model to date, featuring a sparse mixture-of-experts architecture with 41B active parameters (675B total), and released under the Apache 2.0 license.",
+          "description": "Mistral Large 3 2512 is Mistral’s most capable model to date, featuring a sparse mixture-of-experts architecture with 41B active parameters (675B total), and released under the Apache 2.0 license.",
           "context_length": 262144,
           "tags": [
             "tools",
@@ -2154,7 +2128,7 @@
         {
           "id": "mistralai/mistral-medium-3",
           "name": "Mistral: Mistral Medium 3",
-          "description": "Mistral Medium 3 is a high-performance enterprise-grade language model designed to deliver frontier-level capabilities at significantly reduced operational cost. It balances state-of-the-art reasoning and multimodal performance with 8\u00d7 lower cost...",
+          "description": "Mistral Medium 3 is a high-performance enterprise-grade language model designed to deliver frontier-level capabilities at significantly reduced operational cost. It balances state-of-the-art reasoning and multimodal performance with 8× lower cost...",
           "context_length": 131072,
           "tags": [
             "tools",
@@ -2314,7 +2288,7 @@
         {
           "id": "moonshotai/kimi-k2-thinking",
           "name": "MoonshotAI: Kimi K2 Thinking",
-          "description": "Kimi K2 Thinking is Moonshot AI\u2019s most advanced open reasoning model to date, extending the K2 series into agentic, long-horizon reasoning. Built on the trillion-parameter Mixture-of-Experts (MoE) architecture introduced in...",
+          "description": "Kimi K2 Thinking is Moonshot AI’s most advanced open reasoning model to date, extending the K2 series into agentic, long-horizon reasoning. Built on the trillion-parameter Mixture-of-Experts (MoE) architecture introduced in...",
           "context_length": 262144,
           "tags": [
             "tools",
@@ -2350,7 +2324,7 @@
             "structured_output"
           ],
           "input_cost": 0.66,
-          "output_cost": 3.5
+          "output_cost": 3.41
         },
         {
           "id": "moonshotai/kimi-k2.7-code",
@@ -2363,13 +2337,13 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.612,
-          "output_cost": 3.0690000000000004
+          "input_cost": 0.74,
+          "output_cost": 3.5
         },
         {
           "id": "morph/morph-v3-fast",
           "name": "Morph: Morph V3 Fast",
-          "description": "Morph's fastest apply model for code edits. ~10,500 tokens/sec with 96% accuracy for rapid code transformations. The model requires the prompt to be in the following format: <instruction>{instruction}</instruction> <code>{initial_code}</code> <update>{edit_snippet}</update>...",
+          "description": "Morph's fastest apply model for code edits. ~10,500 tokens/sec with 96% accuracy for rapid code transformations. The model requires the prompt to be in the following format: \u003cinstruction\u003e{instruction}\u003c/instruction\u003e \u003ccode\u003e{initial_code}\u003c/code\u003e \u003cupdate\u003e{edit_snippet}\u003c/update\u003e...",
           "context_length": 81920,
           "input_cost": 0.7999999999999999,
           "output_cost": 1.2
@@ -2377,7 +2351,7 @@
         {
           "id": "morph/morph-v3-large",
           "name": "Morph: Morph V3 Large",
-          "description": "Morph's high-accuracy apply model for complex code edits. ~4,500 tokens/sec with 98% accuracy for precise code transformations. The model requires the prompt to be in the following format: <instruction>{instruction}</instruction> <code>{initial_code}</code>...",
+          "description": "Morph's high-accuracy apply model for complex code edits. ~4,500 tokens/sec with 98% accuracy for precise code transformations. The model requires the prompt to be in the following format: \u003cinstruction\u003e{instruction}\u003c/instruction\u003e \u003ccode\u003e{initial_code}\u003c/code\u003e...",
           "context_length": 262144,
           "tags": [
             "structured_output"
@@ -2386,16 +2360,16 @@
           "output_cost": 1.9
         },
         {
-          "id": "nex-agi/nex-n2-pro:free",
-          "name": "Nex AGI: Nex-N2-Pro (free)",
+          "id": "nex-agi/nex-n2-pro",
+          "name": "Nex AGI: Nex-N2-Pro",
           "description": "Nex-N2-Pro is an agentic mixture-of-experts model from Nex AGI, with 17B active parameters out of 397B total. Built on the Qwen3.5 architecture, it accepts text and image input and produces...",
           "context_length": 262144,
           "tags": [
-            "tools",
             "vision",
-            "reasoning",
-            "structured_output"
-          ]
+            "reasoning"
+          ],
+          "input_cost": 0.25,
+          "output_cost": 1
         },
         {
           "id": "nousresearch/hermes-3-llama-3.1-405b",
@@ -2452,7 +2426,7 @@
         {
           "id": "nvidia/llama-3.3-nemotron-super-49b-v1.5",
           "name": "NVIDIA: Llama 3.3 Nemotron Super 49B V1.5",
-          "description": "Llama-3.3-Nemotron-Super-49B-v1.5 is a 49B-parameter, English-centric reasoning/chat model derived from Meta\u2019s Llama-3.3-70B-Instruct with a 128K context. It\u2019s post-trained for agentic workflows (RAG, tool calling) via SFT across math, code, science, and...",
+          "description": "Llama-3.3-Nemotron-Super-49B-v1.5 is a 49B-parameter, English-centric reasoning/chat model derived from Meta’s Llama-3.3-70B-Instruct with a 128K context. It’s post-trained for agentic workflows (RAG, tool calling) via SFT across math, code, science, and...",
           "context_length": 131072,
           "tags": [
             "tools",
@@ -2488,7 +2462,7 @@
         {
           "id": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
           "name": "NVIDIA: Nemotron 3 Nano Omni (free)",
-          "description": "NVIDIA Nemotron\u2122 3 Nano Omni is a 30B-A3B open multimodal model designed to function as a perception and context sub-agent in enterprise agent systems. It accepts text, image, video, and...",
+          "description": "NVIDIA Nemotron™ 3 Nano Omni is a 30B-A3B open multimodal model designed to function as a perception and context sub-agent in enterprise agent systems. It accepts text, image, video, and...",
           "context_length": 256000,
           "tags": [
             "tools",
@@ -2556,7 +2530,7 @@
         {
           "id": "nvidia/nemotron-nano-12b-v2-vl:free",
           "name": "NVIDIA: Nemotron Nano 12B 2 VL (free)",
-          "description": "NVIDIA Nemotron Nano 2 VL is a 12-billion-parameter open multimodal reasoning model designed for video understanding and document intelligence. It introduces a hybrid Transformer-Mamba architecture, combining transformer-level accuracy with Mamba\u2019s...",
+          "description": "NVIDIA Nemotron Nano 2 VL is a 12-billion-parameter open multimodal reasoning model designed for video understanding and document intelligence. It introduces a hybrid Transformer-Mamba architecture, combining transformer-level accuracy with Mamba’s...",
           "context_length": 128000,
           "tags": [
             "tools",
@@ -2688,7 +2662,7 @@
         {
           "id": "openai/gpt-4.1-nano",
           "name": "OpenAI: GPT-4.1 Nano",
-          "description": "For tasks that demand low latency, GPT\u20114.1 nano is the fastest and cheapest model in the GPT-4.1 series. It delivers exceptional performance at a small size with its 1 million...",
+          "description": "For tasks that demand low latency, GPT‑4.1 nano is the fastest and cheapest model in the GPT-4.1 series. It delivers exceptional performance at a small size with its 1 million...",
           "context_length": 1047576,
           "tags": [
             "tools",
@@ -2740,7 +2714,7 @@
         {
           "id": "openai/gpt-4o-2024-11-20",
           "name": "OpenAI: GPT-4o (2024-11-20)",
-          "description": "The 2024-11-20 version of GPT-4o offers a leveled-up creative writing ability with more natural, engaging, and tailored writing to improve relevance & readability. It\u2019s also better at working with uploaded...",
+          "description": "The 2024-11-20 version of GPT-4o offers a leveled-up creative writing ability with more natural, engaging, and tailored writing to improve relevance \u0026 readability. It’s also better at working with uploaded...",
           "context_length": 128000,
           "tags": [
             "tools",
@@ -2801,7 +2775,7 @@
         {
           "id": "openai/gpt-5",
           "name": "OpenAI: GPT-5",
-          "description": "GPT-5 is OpenAI\u2019s most advanced model, offering major improvements in reasoning, code quality, and user experience. It is optimized for complex tasks that require step-by-step reasoning, instruction following, and accuracy...",
+          "description": "GPT-5 is OpenAI’s most advanced model, offering major improvements in reasoning, code quality, and user experience. It is optimized for complex tasks that require step-by-step reasoning, instruction following, and accuracy...",
           "context_length": 400000,
           "tags": [
             "tools",
@@ -2895,7 +2869,7 @@
         {
           "id": "openai/gpt-5-pro",
           "name": "OpenAI: GPT-5 Pro",
-          "description": "GPT-5 Pro is OpenAI\u2019s most advanced model, offering major improvements in reasoning, code quality, and user experience. It is optimized for complex tasks that require step-by-step reasoning, instruction following, and...",
+          "description": "GPT-5 Pro is OpenAI’s most advanced model, offering major improvements in reasoning, code quality, and user experience. It is optimized for complex tasks that require step-by-step reasoning, instruction following, and...",
           "context_length": 400000,
           "tags": [
             "tools",
@@ -2923,7 +2897,7 @@
         {
           "id": "openai/gpt-5.1-chat",
           "name": "OpenAI: GPT-5.1 Chat",
-          "description": "GPT-5.1 Chat (AKA Instant is the fast, lightweight member of the 5.1 family, optimized for low-latency chat while retaining strong general intelligence. It uses adaptive reasoning to selectively \u201cthink\u201d on...",
+          "description": "GPT-5.1 Chat (AKA Instant is the fast, lightweight member of the 5.1 family, optimized for low-latency chat while retaining strong general intelligence. It uses adaptive reasoning to selectively “think” on...",
           "context_length": 128000,
           "tags": [
             "tools",
@@ -2950,7 +2924,7 @@
         {
           "id": "openai/gpt-5.1-codex-max",
           "name": "OpenAI: GPT-5.1-Codex-Max",
-          "description": "GPT-5.1-Codex-Max is OpenAI\u2019s latest agentic coding model, designed for long-running, high-context software development tasks. It is based on an updated version of the 5.1 reasoning stack and trained on agentic...",
+          "description": "GPT-5.1-Codex-Max is OpenAI’s latest agentic coding model, designed for long-running, high-context software development tasks. It is based on an updated version of the 5.1 reasoning stack and trained on agentic...",
           "context_length": 400000,
           "tags": [
             "tools",
@@ -2992,7 +2966,7 @@
         {
           "id": "openai/gpt-5.2-chat",
           "name": "OpenAI: GPT-5.2 Chat",
-          "description": "GPT-5.2 Chat (AKA Instant) is the fast, lightweight member of the 5.2 family, optimized for low-latency chat while retaining strong general intelligence. It uses adaptive reasoning to selectively \u201cthink\u201d on...",
+          "description": "GPT-5.2 Chat (AKA Instant) is the fast, lightweight member of the 5.2 family, optimized for low-latency chat while retaining strong general intelligence. It uses adaptive reasoning to selectively “think” on...",
           "context_length": 128000,
           "tags": [
             "tools",
@@ -3019,7 +2993,7 @@
         {
           "id": "openai/gpt-5.2-pro",
           "name": "OpenAI: GPT-5.2 Pro",
-          "description": "GPT-5.2 Pro is OpenAI\u2019s most advanced model, offering major improvements in agentic coding and long context performance over GPT-5 Pro. It is optimized for complex tasks that require step-by-step reasoning,...",
+          "description": "GPT-5.2 Pro is OpenAI’s most advanced model, offering major improvements in agentic coding and long context performance over GPT-5 Pro. It is optimized for complex tasks that require step-by-step reasoning,...",
           "context_length": 400000,
           "tags": [
             "tools",
@@ -3046,7 +3020,7 @@
         {
           "id": "openai/gpt-5.3-codex",
           "name": "OpenAI: GPT-5.3-Codex",
-          "description": "GPT-5.3-Codex is OpenAI\u2019s most advanced agentic coding model, combining the frontier software engineering performance of GPT-5.2-Codex with the broader reasoning and professional knowledge capabilities of GPT-5.2. It achieves state-of-the-art results...",
+          "description": "GPT-5.3-Codex is OpenAI’s most advanced agentic coding model, combining the frontier software engineering performance of GPT-5.2-Codex with the broader reasoning and professional knowledge capabilities of GPT-5.2. It achieves state-of-the-art results...",
           "context_length": 400000,
           "tags": [
             "tools",
@@ -3060,7 +3034,7 @@
         {
           "id": "openai/gpt-5.4",
           "name": "OpenAI: GPT-5.4",
-          "description": "GPT-5.4 is OpenAI\u2019s latest frontier model, unifying the Codex and GPT lines into a single system. It features a 1M+ token context window (922K input, 128K output) with support for...",
+          "description": "GPT-5.4 is OpenAI’s latest frontier model, unifying the Codex and GPT lines into a single system. It features a 1M+ token context window (922K input, 128K output) with support for...",
           "context_length": 1050000,
           "tags": [
             "tools",
@@ -3129,7 +3103,7 @@
         {
           "id": "openai/gpt-5.5",
           "name": "OpenAI: GPT-5.5",
-          "description": "GPT-5.5 is OpenAI\u2019s frontier model designed for complex professional workloads, building on GPT-5.4 with stronger reasoning, higher reliability, and improved token efficiency on hard tasks. It features a 1M+ token...",
+          "description": "GPT-5.5 is OpenAI’s frontier model designed for complex professional workloads, building on GPT-5.4 with stronger reasoning, higher reliability, and improved token efficiency on hard tasks. It features a 1M+ token...",
           "context_length": 1050000,
           "tags": [
             "tools",
@@ -3143,7 +3117,7 @@
         {
           "id": "openai/gpt-5.5-pro",
           "name": "OpenAI: GPT-5.5 Pro",
-          "description": "GPT-5.5 Pro is OpenAI\u2019s high-capability model optimized for deep reasoning and accuracy on complex, high-stakes workloads. It features a 1M+ token context window (922K input, 128K output) with support for...",
+          "description": "GPT-5.5 Pro is OpenAI’s high-capability model optimized for deep reasoning and accuracy on complex, high-stakes workloads. It features a 1M+ token context window (922K input, 128K output) with support for...",
           "context_length": 1050000,
           "tags": [
             "tools",
@@ -3363,7 +3337,7 @@
         {
           "id": "openai/o4-mini-deep-research",
           "name": "OpenAI: o4 Mini Deep Research",
-          "description": "o4-mini-deep-research is OpenAI's faster, more affordable deep research model\u2014ideal for tackling complex, multi-step research tasks.\n\nNote: This model always uses the 'web_search' tool which adds additional cost.",
+          "description": "o4-mini-deep-research is OpenAI's faster, more affordable deep research model—ideal for tackling complex, multi-step research tasks.\n\nNote: This model always uses the 'web_search' tool which adds additional cost.",
           "context_length": 200000,
           "tags": [
             "tools",
@@ -3464,7 +3438,7 @@
         {
           "id": "perplexity/sonar",
           "name": "Perplexity: Sonar",
-          "description": "Sonar is lightweight, affordable, fast, and simple to use \u2014 now featuring citations and the ability to customize sources. It is designed for companies seeking to integrate lightweight question-and-answer features...",
+          "description": "Sonar is lightweight, affordable, fast, and simple to use — now featuring citations and the ability to customize sources. It is designed for companies seeking to integrate lightweight question-and-answer features...",
           "context_length": 127072,
           "tags": [
             "vision"
@@ -3562,19 +3536,6 @@
             "tools",
             "reasoning"
           ]
-        },
-        {
-          "id": "prime-intellect/intellect-3",
-          "name": "Prime Intellect: INTELLECT-3",
-          "description": "INTELLECT-3 is a 106B-parameter Mixture-of-Experts model (12B active) post-trained from GLM-4.5-Air-Base using supervised fine-tuning (SFT) followed by large-scale reinforcement learning (RL). It offers state-of-the-art performance for its size across math,...",
-          "context_length": 131072,
-          "tags": [
-            "tools",
-            "reasoning",
-            "structured_output"
-          ],
-          "input_cost": 0.19999999999999998,
-          "output_cost": 1.1
         },
         {
           "id": "qwen/qwen-2.5-72b-instruct",
@@ -3736,7 +3697,7 @@
         {
           "id": "qwen/qwen3-30b-a3b-thinking-2507",
           "name": "Qwen: Qwen3 30B A3B Thinking 2507",
-          "description": "Qwen3-30B-A3B-Thinking-2507 is a 30B parameter Mixture-of-Experts reasoning model optimized for complex tasks requiring extended multi-step thinking. The model is designed specifically for \u201cthinking mode,\u201d where internal reasoning traces are separated...",
+          "description": "Qwen3-30B-A3B-Thinking-2507 is a 30B parameter Mixture-of-Experts reasoning model optimized for complex tasks requiring extended multi-step thinking. The model is designed specifically for “thinking mode,” where internal reasoning traces are separated...",
           "context_length": 131072,
           "tags": [
             "tools",
@@ -3869,7 +3830,7 @@
         {
           "id": "qwen/qwen3-next-80b-a3b-instruct",
           "name": "Qwen: Qwen3 Next 80B A3B Instruct",
-          "description": "Qwen3-Next-80B-A3B-Instruct is an instruction-tuned chat model in the Qwen3-Next series optimized for fast, stable responses without \u201cthinking\u201d traces. It targets complex tasks across reasoning, code generation, knowledge QA, and multilingual...",
+          "description": "Qwen3-Next-80B-A3B-Instruct is an instruction-tuned chat model in the Qwen3-Next series optimized for fast, stable responses without “thinking” traces. It targets complex tasks across reasoning, code generation, knowledge QA, and multilingual...",
           "context_length": 262144,
           "tags": [
             "tools",
@@ -3881,7 +3842,7 @@
         {
           "id": "qwen/qwen3-next-80b-a3b-instruct:free",
           "name": "Qwen: Qwen3 Next 80B A3B Instruct (free)",
-          "description": "Qwen3-Next-80B-A3B-Instruct is an instruction-tuned chat model in the Qwen3-Next series optimized for fast, stable responses without \u201cthinking\u201d traces. It targets complex tasks across reasoning, code generation, knowledge QA, and multilingual...",
+          "description": "Qwen3-Next-80B-A3B-Instruct is an instruction-tuned chat model in the Qwen3-Next series optimized for fast, stable responses without “thinking” traces. It targets complex tasks across reasoning, code generation, knowledge QA, and multilingual...",
           "context_length": 262144,
           "tags": [
             "tools",
@@ -3891,7 +3852,7 @@
         {
           "id": "qwen/qwen3-next-80b-a3b-thinking",
           "name": "Qwen: Qwen3 Next 80B A3B Thinking",
-          "description": "Qwen3-Next-80B-A3B-Thinking is a reasoning-first chat model in the Qwen3-Next line that outputs structured \u201cthinking\u201d traces by default. It\u2019s designed for hard multi-step problems; math proofs, code synthesis/debugging, logic, and agentic...",
+          "description": "Qwen3-Next-80B-A3B-Thinking is a reasoning-first chat model in the Qwen3-Next line that outputs structured “thinking” traces by default. It’s designed for hard multi-step problems; math proofs, code synthesis/debugging, logic, and agentic...",
           "context_length": 262144,
           "tags": [
             "tools",
@@ -4110,7 +4071,7 @@
         {
           "id": "qwen/qwen3.6-27b",
           "name": "Qwen: Qwen3.6 27B",
-          "description": "Qwen3.6 27B is a dense 27-billion-parameter language model from the Qwen Team at Alibaba, released in April 2026. It features hybrid multimodal capabilities \u2014 accepting text, image, and video inputs...",
+          "description": "Qwen3.6 27B is a dense 27-billion-parameter language model from the Qwen Team at Alibaba, released in April 2026. It features hybrid multimodal capabilities — accepting text, image, and video inputs...",
           "context_length": 262144,
           "tags": [
             "tools",
@@ -4249,6 +4210,20 @@
           "output_cost": 3
         },
         {
+          "id": "sakana/fugu-ultra",
+          "name": "Sakana: Fugu Ultra",
+          "description": "Fugu Ultra is the higher-performance model in Sakana AI's Fugu family. Rather than a single monolithic model, Fugu is a learned multi-agent orchestration system: a language model trained to route...",
+          "context_length": 1000000,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 5,
+          "output_cost": 30
+        },
+        {
           "id": "sao10k/l3-lunaris-8b",
           "name": "Sao10K: Llama 3 8B Lunaris",
           "description": "Lunaris 8B is a versatile generalist and roleplaying model based on Llama 3. It's a strategic merge of multiple models, designed to balance creativity with improved logic and general knowledge....",
@@ -4372,12 +4347,8 @@
           "name": "TheDrummer: Rocinante 12B",
           "description": "Rocinante 12B is designed for engaging storytelling and rich prose. Early testers have reported: - Expanded vocabulary with unique and expressive word choices - Enhanced creativity for vivid narratives -...",
           "context_length": 32768,
-          "tags": [
-            "tools",
-            "structured_output"
-          ],
-          "input_cost": 0.16999999999999998,
-          "output_cost": 0.43
+          "input_cost": 0.25,
+          "output_cost": 0.5
         },
         {
           "id": "thedrummer/skyfall-36b-v2",
@@ -4451,7 +4422,7 @@
         {
           "id": "x-ai/grok-4.20-multi-agent",
           "name": "xAI: Grok 4.20 Multi-Agent",
-          "description": "Grok 4.20 Multi-Agent is a variant of xAI\u2019s Grok 4.20 designed for collaborative, agent-based workflows. Multiple agents operate in parallel to conduct deep research, coordinate tool use, and synthesize information...",
+          "description": "Grok 4.20 Multi-Agent is a variant of xAI’s Grok 4.20 designed for collaborative, agent-based workflows. Multiple agents operate in parallel to conduct deep research, coordinate tool use, and synthesize information...",
           "context_length": 2000000,
           "tags": [
             "vision",
@@ -4478,7 +4449,7 @@
         {
           "id": "x-ai/grok-build-0.1",
           "name": "xAI: Grok Build 0.1",
-          "description": "Grok Build 0.1 is xAI\u2019s fast coding model trained specifically for agentic software engineering workflows. It supports text and image inputs with text output, and is optimized for interactive coding...",
+          "description": "Grok Build 0.1 is xAI’s fast coding model trained specifically for agentic software engineering workflows. It supports text and image inputs with text output, and is optimized for interactive coding...",
           "context_length": 256000,
           "tags": [
             "tools",
@@ -4500,13 +4471,13 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.14,
+          "input_cost": 0.105,
           "output_cost": 0.28
         },
         {
           "id": "xiaomi/mimo-v2.5-pro",
           "name": "Xiaomi: MiMo-V2.5-Pro",
-          "description": "MiMo-V2.5-Pro is Xiaomi\u2019s flagship model, delivering strong performance in general agentic capabilities, complex software engineering, and long-horizon tasks, with top rankings on benchmarks such as ClawEval, GDPVal, and SWE-bench Pro....",
+          "description": "MiMo-V2.5-Pro is Xiaomi’s flagship model, delivering strong performance in general agentic capabilities, complex software engineering, and long-horizon tasks, with top rankings on benchmarks such as ClawEval, GDPVal, and SWE-bench Pro....",
           "context_length": 1048576,
           "tags": [
             "tools",
@@ -4585,7 +4556,7 @@
         {
           "id": "z-ai/glm-4.7",
           "name": "Z.ai: GLM 4.7",
-          "description": "GLM-4.7 is Z.ai\u2019s latest flagship model, featuring upgrades in two key areas: enhanced programming capabilities and more stable multi-step reasoning/execution. It demonstrates significant improvements in executing complex agent tasks while...",
+          "description": "GLM-4.7 is Z.ai’s latest flagship model, featuring upgrades in two key areas: enhanced programming capabilities and more stable multi-step reasoning/execution. It demonstrates significant improvements in executing complex agent tasks while...",
           "context_length": 202752,
           "tags": [
             "tools",
@@ -4611,7 +4582,7 @@
         {
           "id": "z-ai/glm-5",
           "name": "Z.ai: GLM 5",
-          "description": "GLM-5 is Z.ai\u2019s flagship open-source foundation model engineered for complex systems design and long-horizon agent workflows. Built for expert developers, it delivers production-grade performance on large-scale programming tasks, rivaling leading...",
+          "description": "GLM-5 is Z.ai’s flagship open-source foundation model engineered for complex systems design and long-horizon agent workflows. Built for expert developers, it delivers production-grade performance on large-scale programming tasks, rivaling leading...",
           "context_length": 202752,
           "tags": [
             "tools",
@@ -4657,8 +4628,22 @@
             "reasoning",
             "structured_output"
           ],
+          "input_cost": 0.95,
+          "output_cost": 3
+        },
+        {
+          "id": "z-ai/glm-5v-turbo",
+          "name": "Z.ai: GLM 5V Turbo",
+          "description": "GLM-5V-Turbo is Z.ai’s first native multimodal agent foundation model, built for vision-based coding and agent-driven tasks. It natively handles image, video, and text inputs, excels at long-horizon planning, complex coding,...",
+          "context_length": 202752,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
           "input_cost": 1.2,
-          "output_cost": 4.1
+          "output_cost": 4
         },
         {
           "id": "~anthropic/claude-fable-latest",
@@ -4756,7 +4741,7 @@
             "structured_output"
           ],
           "input_cost": 0.66,
-          "output_cost": 3.5
+          "output_cost": 3.41
         },
         {
           "id": "~openai/gpt-latest",
@@ -4847,7 +4832,7 @@
         {
           "id": "anthropic/claude-sonnet-4-6",
           "name": "anthropic/claude-sonnet-4-6",
-          "description": "Claude Sonnet 4.6 delivers frontier intelligence at scale\u2014built for coding, agents, and enterprise workflows.",
+          "description": "Claude Sonnet 4.6 delivers frontier intelligence at scale—built for coding, agents, and enterprise workflows.",
           "context_length": 1000000,
           "tags": [
             "tools",
@@ -5273,7 +5258,7 @@
         {
           "id": "microsoft/phi-4",
           "name": "microsoft/phi-4",
-          "description": "Phi-4 is a model built upon a blend of synthetic datasets, data from filtered public domain websites, and acquired academic books and Q&A datasets. The goal of this approach was to ensure that small capable models were trained with data focused on high quality and advanced reasoning.",
+          "description": "Phi-4 is a model built upon a blend of synthetic datasets, data from filtered public domain websites, and acquired academic books and Q\u0026A datasets. The goal of this approach was to ensure that small capable models were trained with data focused on high quality and advanced reasoning.",
           "context_length": 16384,
           "tags": [
             "structured_output"
@@ -5317,8 +5302,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.5,
-          "output_cost": 2.25
+          "input_cost": 0.45,
+          "output_cost": 2.1
         },
         {
           "id": "mistralai/Mistral-Nemo-Instruct-2407",
@@ -5346,7 +5331,7 @@
         {
           "id": "mistralai/Mistral-Small-3.2-24B-Instruct-2506",
           "name": "mistralai/Mistral-Small-3.2-24B-Instruct-2506",
-          "description": "Mistral-Small-3.2-24B-Instruct is a drop-in upgrade over the 3.1 release, with markedly better instruction following, roughly half the infinite-generation errors, and a more robust function-calling interface\u2014while otherwise matching or slightly improving on all previous text and vision benchmarks.",
+          "description": "Mistral-Small-3.2-24B-Instruct is a drop-in upgrade over the 3.1 release, with markedly better instruction following, roughly half the infinite-generation errors, and a more robust function-calling interface—while otherwise matching or slightly improving on all previous text and vision benchmarks.",
           "context_length": 128000,
           "tags": [
             "tools",
@@ -5448,7 +5433,7 @@
         {
           "id": "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning",
           "name": "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning",
-          "description": "Nemotron 3 Nano Omni is an open multimodal model built on a hybrid Mixture-of-Experts (MoE) architecture, engineered for high efficiency and strong accuracy across image, video, audio, and text inputs. It powers always-on sub-agents for computer use, document intelligence, and audio-video understanding\u2014replacing fragmented vision, speech, and language pipelines with a single unified inference pass.",
+          "description": "Nemotron 3 Nano Omni is an open multimodal model built on a hybrid Mixture-of-Experts (MoE) architecture, engineered for high efficiency and strong accuracy across image, video, audio, and text inputs. It powers always-on sub-agents for computer use, document intelligence, and audio-video understanding—replacing fragmented vision, speech, and language pipelines with a single unified inference pass.",
           "context_length": 262144,
           "tags": [
             "tools",
@@ -5539,7 +5524,7 @@
         {
           "id": "openai/gpt-oss-20b",
           "name": "openai/gpt-oss-20b",
-          "description": "gpt-oss-20b is an open-weight 21B parameter model released by OpenAI under the Apache 2.0 license. It uses a Mixture-of-Experts (MoE) architecture with 3.6B active parameters per forward pass, optimized for lower-latency inference. The model is trained in OpenAI\u2019s Harmony response format and supports reasoning level configuration, fine-tuning, and agentic capabilities including function calling, tool use, and structured outputs.",
+          "description": "gpt-oss-20b is an open-weight 21B parameter model released by OpenAI under the Apache 2.0 license. It uses a Mixture-of-Experts (MoE) architecture with 3.6B active parameters per forward pass, optimized for lower-latency inference. The model is trained in OpenAI’s Harmony response format and supports reasoning level configuration, fine-tuning, and agentic capabilities including function calling, tool use, and structured outputs.",
           "context_length": 131072,
           "tags": [
             "tools",
@@ -5640,7 +5625,7 @@
         {
           "id": "Qwen/Qwen3-Max",
           "name": "Qwen/Qwen3-Max",
-          "description": "The latest flagship model in the Qwen family. State-of-the-art results across a comprehensive suite of benchmarks \u2014 including knowledge, reasoning, coding, instruction following, human preference alignment, agent tasks, and multilingual understanding.",
+          "description": "The latest flagship model in the Qwen family. State-of-the-art results across a comprehensive suite of benchmarks — including knowledge, reasoning, coding, instruction following, human preference alignment, agent tasks, and multilingual understanding.",
           "context_length": 256000,
           "tags": [
             "tools",
@@ -5676,7 +5661,7 @@
         {
           "id": "Qwen/Qwen3-VL-235B-A22B-Instruct",
           "name": "Qwen/Qwen3-VL-235B-A22B-Instruct",
-          "description": "Meet Qwen3-VL \u2014 the most powerful vision-language model in the Qwen series to date.  This generation delivers comprehensive upgrades across the board: superior text understanding & generation, deeper visual perception & reasoning, extended context length, enhanced spatial and video dynamics comprehension, and stronger agent interaction capabilities.",
+          "description": "Meet Qwen3-VL — the most powerful vision-language model in the Qwen series to date.  This generation delivers comprehensive upgrades across the board: superior text understanding \u0026 generation, deeper visual perception \u0026 reasoning, extended context length, enhanced spatial and video dynamics comprehension, and stronger agent interaction capabilities.",
           "context_length": 262144,
           "tags": [
             "tools",
@@ -5689,7 +5674,7 @@
         {
           "id": "Qwen/Qwen3-VL-30B-A3B-Instruct",
           "name": "Qwen/Qwen3-VL-30B-A3B-Instruct",
-          "description": "Meet Qwen3-VL \u2014 the most powerful vision-language model in the Qwen series to date.  This generation delivers comprehensive upgrades across the board: superior text understanding & generation, deeper visual perception & reasoning, extended context length, enhanced spatial and video dynamics comprehension, and stronger agent interaction capabilities.",
+          "description": "Meet Qwen3-VL — the most powerful vision-language model in the Qwen series to date.  This generation delivers comprehensive upgrades across the board: superior text understanding \u0026 generation, deeper visual perception \u0026 reasoning, extended context length, enhanced spatial and video dynamics comprehension, and stronger agent interaction capabilities.",
           "context_length": 262144,
           "tags": [
             "tools",
@@ -5784,7 +5769,7 @@
         {
           "id": "Qwen/Qwen3.7-Max",
           "name": "Qwen/Qwen3.7-Max",
-          "description": "The largest and most capable in the Qwen3.7 series. Qwen3.7 is a next\u2011generation flagship model designed for the agent\u2011centric.",
+          "description": "The largest and most capable in the Qwen3.7 series. Qwen3.7 is a next‑generation flagship model designed for the agent‑centric.",
           "context_length": 256000,
           "tags": [
             "tools",
@@ -5813,17 +5798,6 @@
           ],
           "input_cost": 0.8500000000000001,
           "output_cost": 0.8500000000000001
-        },
-        {
-          "id": "stepfun-ai/Step-3.5-Flash",
-          "name": "stepfun-ai/Step-3.5-Flash",
-          "description": "Step 3.5 Flash is an open-source reasoning model by StepFun with 196B total parameters (11B active) using Mixture of Experts. It features a 256K context window, deep reasoning, tool calling, and agentic capabilities, achieving 97.3 on AIME 2025 and 74.4% on SWE-bench Verified.",
-          "context_length": 262144,
-          "tags": [
-            "tools"
-          ],
-          "input_cost": 0.09,
-          "output_cost": 0.3
         },
         {
           "id": "stepfun-ai/Step-3.7-Flash",
@@ -5867,7 +5841,7 @@
         {
           "id": "zai-org/GLM-4.6",
           "name": "zai-org/GLM-4.6",
-          "description": "Compared with GLM-4.5, GLM-4.6 brings several key improvements:  Longer context window: The context window has been expanded from 128K to 200K tokens, enabling the model to handle more complex agentic tasks. Superior coding performance: The model achieves higher scores on code benchmarks and demonstrates better real-world performance in applications such as Claude Code\u3001Cline\u3001Roo Code and Kilo Code, including improvements in generating visually polished front-end pages. Advanced reasoning: GLM-4.6 shows a clear improvement in reasoning performance and supports tool use during inference, leading to stronger overall capability. More capable agents: GLM-4.6 exhibits stronger performance in tool using and search-based agents, and integrates more effectively within agent frameworks. Refined writing: Better aligns with human preferences in style and readability, and performs more naturally in role-playing scenarios.",
+          "description": "Compared with GLM-4.5, GLM-4.6 brings several key improvements:  Longer context window: The context window has been expanded from 128K to 200K tokens, enabling the model to handle more complex agentic tasks. Superior coding performance: The model achieves higher scores on code benchmarks and demonstrates better real-world performance in applications such as Claude Code、Cline、Roo Code and Kilo Code, including improvements in generating visually polished front-end pages. Advanced reasoning: GLM-4.6 shows a clear improvement in reasoning performance and supports tool use during inference, leading to stronger overall capability. More capable agents: GLM-4.6 exhibits stronger performance in tool using and search-based agents, and integrates more effectively within agent frameworks. Refined writing: Better aligns with human preferences in style and readability, and performs more naturally in role-playing scenarios.",
           "context_length": 202752,
           "tags": [
             "tools",
@@ -5939,8 +5913,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 1.2,
-          "output_cost": 4.2
+          "input_cost": 0.9500000000000001,
+          "output_cost": 2.9999999999999996
         }
       ]
     },

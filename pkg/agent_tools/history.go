@@ -2,6 +2,7 @@ package tools
 
 import (
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -134,6 +135,27 @@ func RollbackChanges(revisionID string, filePath string, confirm bool) (Rollback
 
 		if targetChange == nil {
 			return RollbackResult{}, fmt.Errorf("no active change found for file '%s' in revision '%s'", filePath, revisionID)
+		}
+
+		// Staleness guard: skip if the file was modified after this snapshot.
+		// Compares current disk content against NewCode (what the agent
+		// wrote). If they differ, the file was committed or edited
+		// intentionally since the snapshot, and rolling back would clobber
+		// that change.
+		if targetChange.NewCode != "" && targetChange.NewCode != history.RedactedContentMarker {
+			if current, err := os.ReadFile(targetChange.Filename); err == nil {
+				if string(current) != targetChange.NewCode {
+					return RollbackResult{
+						Output: fmt.Sprintf("Skipped rollback of '%s': file was modified after the snapshot (content differs from recorded state). The file may have been committed or edited intentionally.", filePath),
+						Metadata: map[string]interface{}{
+							"action":      "stale_skip",
+							"revision_id": revisionID,
+							"file_path":   filePath,
+						},
+						Success: true,
+					}, nil
+				}
+			}
 		}
 
 		if err := filesystem.SaveFile(targetChange.Filename, targetChange.OriginalCode); err != nil {

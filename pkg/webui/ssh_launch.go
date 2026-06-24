@@ -281,30 +281,12 @@ func (ws *ReactWebServer) launchSSHWorkspace(req sshLaunchRequestDTO) (result *s
 	logger.Logf("remote SSH backend installed at %s (uploaded=%v)", remoteBinary, binaryWasUploaded)
 
 	// When a new binary was freshly uploaded (different fingerprint from any
-	// previously-cached remote binary), kill any existing daemon so it restarts
-	// with the updated binary.  This avoids the common case where a stale daemon
-	// is reused indefinitely after a local sprout upgrade.
+	// previously-cached remote binary), force-restart the daemon so it picks
+	// up the new binary. This happens inside startRemoteSSHBackend under a
+	// cross-session lock to avoid races when concurrent SSH launches target
+	// the same host.
 	if binaryWasUploaded {
-		logger.Logf("new backend binary uploaded; stopping any existing remote daemon to force restart")
-		killOld := newSSHCommandContext(launchCtx, hostAlias,
-			fmt.Sprintf(
-				`DAEMON_PORT=%d; `+
-					`pid=""; `+
-					`if command -v lsof >/dev/null 2>&1; then pid=$(lsof -ti tcp:"$DAEMON_PORT" -sTCP:LISTEN 2>/dev/null | head -1); `+
-					`elif command -v ss >/dev/null 2>&1; then pid=$(ss -tlnpH "sport = :$DAEMON_PORT" 2>/dev/null | sed -n 's/.*pid=\([0-9]*\).*/\1/p' | head -1); `+
-					`fi; `+
-					`[ -n "$pid" ] && [ "$pid" -gt 0 ] 2>/dev/null && kill "$pid" 2>/dev/null || true`,
-				DaemonPort,
-			),
-		)
-		if out, killErr := killOld.CombinedOutput(); killErr == nil {
-			if output := trimSSHOutput(out); output != "" {
-				logger.Logf("kill-old-daemon output:\n%s", output)
-			}
-			logger.Logf("kill-old-daemon: sent kill signal to any existing daemon on port %d", DaemonPort)
-		} else {
-			logger.Logf("kill-old-daemon: no existing daemon to kill (or kill failed): %v", killErr)
-		}
+		logger.Logf("new backend binary uploaded; will force-restart existing daemon during backend start")
 	}
 
 	ws.setSSHLaunchStatus(sessionKey, "allocating-local-port", "Allocating local tunnel port...", true, "")
@@ -317,7 +299,7 @@ func (ws *ReactWebServer) launchSSHWorkspace(req sshLaunchRequestDTO) (result *s
 
 	launcherURL := fmt.Sprintf("http://127.0.0.1:%d", ws.port)
 	ws.setSSHLaunchStatus(sessionKey, "starting-remote-backend", fmt.Sprintf("Starting remote backend on %s...", hostAlias), true, "")
-	remotePort, remotePID, reusedDaemon, err := startRemoteSSHBackend(launchCtx, hostAlias, sessionKey, launcherURL, remoteWorkspacePath, remoteBinary, logger)
+	remotePort, remotePID, reusedDaemon, err := startRemoteSSHBackend(launchCtx, hostAlias, sessionKey, launcherURL, remoteWorkspacePath, remoteBinary, binaryWasUploaded, logger)
 	if err != nil {
 		return nil, fmt.Errorf("start remote SSH backend: %w", err)
 	}
@@ -408,7 +390,7 @@ func (ws *ReactWebServer) launchSSHWorkspace(req sshLaunchRequestDTO) (result *s
 // Remote backend start/stop
 // ---------------------------------------------------------------------------
 
-func startRemoteSSHBackend(ctx context.Context, hostAlias, sessionKey, launcherURL, remoteWorkspacePath, remoteBinary string, logger *sshLaunchLogger) (remotePort int, remotePID int, reused bool, err error) {
+func startRemoteSSHBackend(ctx context.Context, hostAlias, sessionKey, launcherURL, remoteWorkspacePath, remoteBinary string, forceRestart bool, logger *sshLaunchLogger) (remotePort int, remotePID int, reused bool, err error) {
 	workspaceRaw := strings.TrimSpace(remoteWorkspacePath)
 	if workspaceRaw == "" {
 		workspaceRaw = "$HOME"
@@ -429,7 +411,7 @@ func startRemoteSSHBackend(ctx context.Context, hostAlias, sessionKey, launcherU
 		// Use "set -i" to force interactive mode so that the common non-
 		// interactive guard ([[ $- != *i* ]] && return) in .bashrc does
 		// not cause an early exit before API keys are exported.
-		`_src_rc() { if [ -f "$1" ]; then set +e; set -i; . "$1" 2>/dev/null; set +i; set -e; fi; }`,
+		`_src_rc() { if [ -f "$1" ]; then set +e; set -i; . "$1" >/dev/null 2>&1; set +i; set -e; fi; }`,
 		`case "$(basename "${SHELL:-sh}")" in`,
 		`  zsh) _src_rc "$HOME/.zshenv"; _src_rc "$HOME/.zprofile"; _src_rc "$HOME/.zshrc" ;;`,
 		`  bash) _src_rc "$HOME/.bash_profile"; _src_rc "$HOME/.bashrc" ;;`,
@@ -439,6 +421,7 @@ func startRemoteSSHBackend(ctx context.Context, hostAlias, sessionKey, launcherU
 		`set +i`,
 		`unset -f _src_rc`,
 		`DAEMON_PORT=` + fmt.Sprintf("%d", DaemonPort),
+		`FORCE_RESTART=` + map[bool]string{true: "1", false: "0"}[forceRestart],
 		"",
 		"# check_existing_daemon: health-probe port DAEMON_PORT and return PID if healthy.",
 		`check_existing_daemon() {`,
@@ -471,10 +454,50 @@ func startRemoteSSHBackend(ctx context.Context, hostAlias, sessionKey, launcherU
 		`  return 0`,
 		`}`,
 		"",
+		"# Acquire a cross-session lock so concurrent SSH launches to this host",
+		"# don't race to kill/start the daemon. Uses flock on Linux; falls back",
+		"# to a mkdir-based mutex on systems without flock (macOS).",
+		`LOCK_DIR="$HOME/.cache/sprout-webui"`,
+		`LOCK_FILE="$LOCK_DIR/daemon-start.lock"`,
+		`LOCK_HELD=""`,
+		`mkdir -p "$LOCK_DIR" 2>/dev/null || true`,
+		`if command -v flock >/dev/null 2>&1; then`,
+		`    exec 9>"$LOCK_FILE"`,
+		`    if flock -w 30 9 2>/dev/null; then`,
+		`        LOCK_HELD=1`,
+		`    fi`,
+		`else`,
+		`    for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do`,
+		`        if mkdir "$LOCK_FILE" 2>/dev/null; then`,
+		`            LOCK_HELD=1`,
+		`            break`,
+		`        fi`,
+		`        sleep 2`,
+		`    done`,
+		`fi`,
+		"",
+		"# If force-restart was requested, kill the old daemon now (under the lock).",
+		`if [ "$FORCE_RESTART" = "1" ]; then`,
+		`    if [ "$LOCK_HELD" = "1" ]; then`,
+		`        if command -v lsof >/dev/null 2>&1; then`,
+		`            pid=$(lsof -ti tcp:"$DAEMON_PORT" -sTCP:LISTEN 2>/dev/null | head -1)`,
+		`        elif command -v ss >/dev/null 2>&1; then`,
+		`            pid=$(ss -tlnpH "sport = :$DAEMON_PORT" 2>/dev/null | sed -n 's/.*pid=\([0-9]*\).*/\1/p' | head -1)`,
+		`        else`,
+		`            pid=""`,
+		`        fi`,
+		`        [ -n "$pid" ] && [ "$pid" -gt 0 ] 2>/dev/null && kill "$pid" 2>/dev/null || true`,
+		`        sleep 1`,
+		`    fi`,
+		`fi`,
+		"",
 		"# Try to reuse an existing daemon on this host.",
 		`EXISTING_PID=$(check_existing_daemon || true)`,
 		`if [ -n "$EXISTING_PID" ]; then`,
-		`  printf "%s\\n%s\\nreused\\n" "$DAEMON_PORT" "$EXISTING_PID"`,
+		`  if [ "$LOCK_HELD" = "1" ]; then`,
+		`    if command -v flock >/dev/null 2>&1; then flock -u 9 2>/dev/null || true; else rmdir "$LOCK_FILE" 2>/dev/null || true; fi`,
+		`  fi`,
+		`  printf "%s\\n%s\\n%s\\nreused\\n" "SPROUT_DAEMON_RESULT_START" "$DAEMON_PORT" "$EXISTING_PID"`,
 		`  exit 0`,
 		`fi`,
 		"",
@@ -538,7 +561,15 @@ func startRemoteSSHBackend(ctx context.Context, hostAlias, sessionKey, launcherU
 		`    exit 1`,
 		`  fi`,
 		`fi`,
-		`printf "%s\n%s\nnew\n" "$DAEMON_PORT" "$REMOTE_PID"`,
+		`# Release lock`,
+		`if [ "$LOCK_HELD" = "1" ]; then`,
+		`    if command -v flock >/dev/null 2>&1; then`,
+		`        flock -u 9 2>/dev/null || true`,
+		`    else`,
+		`        rmdir "$LOCK_FILE" 2>/dev/null || true`,
+		`    fi`,
+		`fi`,
+		`printf "%s\n%s\n%s\nnew\n" "SPROUT_DAEMON_RESULT_START" "$DAEMON_PORT" "$REMOTE_PID"`,
 	}, "\n")
 
 	cmd := newSSHCommandContext(ctx, hostAlias, script)
@@ -547,16 +578,23 @@ func startRemoteSSHBackend(ctx context.Context, hostAlias, sessionKey, launcherU
 		return 0, 0, false, fmt.Errorf("start remote backend for %s: %w", hostAlias, err)
 	}
 
-	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-	if len(lines) < 2 {
-		return 0, 0, false, fmt.Errorf("failed to determine remote backend port for %s", hostAlias)
+	// Extract the result block between sentinel markers. RC file sourcing
+	// can emit stray stdout (fortune, neofetch, MOTD) that would otherwise
+	// corrupt the line-based parsing.
+	result, err := extractSentinelResult(string(out), "SPROUT_DAEMON_RESULT_START")
+	if err != nil {
+		return 0, 0, false, fmt.Errorf("failed to determine remote backend port for %s: %w", hostAlias, err)
+	}
+	lines := strings.Split(strings.TrimSpace(result), "\n")
+	if len(lines) < 3 { // port + pid + status
+		return 0, 0, false, fmt.Errorf("unexpected remote backend output format for %s", hostAlias)
 	}
 	remotePort, err = strconv.Atoi(strings.TrimSpace(lines[0]))
 	if err != nil || remotePort <= 0 {
 		return 0, 0, false, fmt.Errorf("invalid remote web port for %s", hostAlias)
 	}
 	remotePID, _ = strconv.Atoi(strings.TrimSpace(lines[1]))
-	wasReused := len(lines) >= 3 && strings.TrimSpace(lines[2]) == "reused"
+	wasReused := strings.TrimSpace(lines[2]) == "reused"
 	return remotePort, remotePID, wasReused, nil
 }
 
@@ -702,6 +740,23 @@ func isRetryableSSHHealthError(err error) bool {
 		strings.Contains(msg, "connection refused") ||
 		strings.Contains(msg, "unexpected eof") ||
 		strings.Contains(msg, "eof")
+}
+
+// extractSentinelResult finds the content after a sentinel marker line in
+// SSH command output. RC file sourcing (fortune, neofetch, MOTD) can emit
+// stray stdout that corrupts line-based parsing — the sentinel ensures we
+// only parse the intentional result block.
+func extractSentinelResult(output, marker string) (string, error) {
+	idx := strings.Index(output, marker)
+	if idx < 0 {
+		return "", fmt.Errorf("sentinel marker %q not found in output", marker)
+	}
+	// Return everything after the marker line (skip the marker itself + newline)
+	rest := output[idx+len(marker):]
+	// Skip the newline after the marker
+	rest = strings.TrimPrefix(rest, "\n")
+	rest = strings.TrimPrefix(rest, "\r\n")
+	return rest, nil
 }
 
 // ---------------------------------------------------------------------------

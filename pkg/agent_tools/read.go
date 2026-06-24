@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
@@ -47,7 +48,9 @@ func ReadFileWithRange(ctx context.Context, filePath string, startLine, endLine 
 	}
 
 	// Security check passed - now check if file exists
-	info, err := os.Stat(cleanPath)
+	// Note: os.Stat uses blocking syscalls. On network filesystems, this can hang.
+	// The symlink resolution above already has a timeout; stat gets a short timeout too.
+	info, err := statWithTimeout(ctx, cleanPath)
 	if os.IsNotExist(err) {
 		return "", fmt.Errorf("file does not exist: %s", cleanPath)
 	}
@@ -87,7 +90,7 @@ func ReadFileWithRange(ctx context.Context, filePath string, startLine, endLine 
 
 	if startLine > 0 || endLine > 0 {
 		// For line-range reads, just read up to maxFileSize (could be lineRangeMaxSize)
-		content, err = io.ReadAll(file)
+		content, err = readAllWithContext(ctx, cleanPath, maxFileSize)
 		if err != nil {
 			return "", fmt.Errorf("read file %s: %w", cleanPath, err)
 		}
@@ -105,9 +108,9 @@ func ReadFileWithRange(ctx context.Context, filePath string, startLine, endLine 
 		tailSize := maxFileSize - headSize
 
 		head := make([]byte, headSize)
-		n, err := file.Read(head)
+		n, err := fileReadWithContext(ctx, cleanPath, 0, head)
 		if err != nil && err != io.EOF {
-			return "", fmt.Errorf("read file %s: %w", cleanPath, err)
+			return "", fmt.Errorf("read head %s: %w", cleanPath, err)
 		}
 		head = head[:n]
 		headLines = strings.Count(string(head), "\n")
@@ -117,14 +120,11 @@ func ReadFileWithRange(ctx context.Context, filePath string, startLine, endLine 
 		if tailOffset < 0 {
 			tailOffset = 0
 		}
-		if _, err := file.Seek(tailOffset, io.SeekStart); err != nil {
-			return "", fmt.Errorf("seek in file %s: %w", cleanPath, err)
-		}
 
 		tail := make([]byte, tailSize)
-		n, err = file.Read(tail)
+		n, err = fileReadWithContext(ctx, cleanPath, tailOffset, tail)
 		if err != nil && err != io.EOF {
-			return "", fmt.Errorf("read file %s: %w", cleanPath, err)
+			return "", fmt.Errorf("read tail %s: %w", cleanPath, err)
 		}
 		tail = tail[:n]
 		tailLines = strings.Count(string(tail), "\n")
@@ -137,8 +137,8 @@ func ReadFileWithRange(ctx context.Context, filePath string, startLine, endLine 
 		content = []byte(string(head) + "\n\n... [~" + fmt.Sprintf("%d", omittedKB) + "KB omitted] ...\n\n" + string(tail))
 		truncated = true
 	} else {
-		// For smaller files, read all content
-		content, err = io.ReadAll(file)
+		// For smaller files, read all content with context cancellation support
+		content, err = readAllWithContext(ctx, cleanPath, int(maxFileSize))
 		if err != nil {
 			return "", fmt.Errorf("read file %s: %w", cleanPath, err)
 		}
@@ -263,4 +263,122 @@ func isBinaryContent(content []byte) bool {
 	}
 
 	return false
+}
+
+// statWithTimeout wraps os.Stat with a timeout to guard against hangs
+// on unresponsive network filesystems (NFS, cloud mounts, Docker volumes).
+// If the context has no Done channel, os.Stat is called directly.
+func statWithTimeout(ctx context.Context, path string) (os.FileInfo, error) {
+	if ctx.Done() == nil {
+		return os.Stat(path)
+	}
+
+	type result struct {
+		info os.FileInfo
+		err  error
+	}
+	resultCh := make(chan result, 1)
+	go func() {
+		info, err := os.Stat(path)
+		resultCh <- result{info, err}
+	}()
+
+	select {
+	case res := <-resultCh:
+		return res.info, res.err
+	case <-time.After(5 * time.Second):
+		return nil, fmt.Errorf("stat timed out after 5s for: %s", path)
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// readAllWithContext reads an entire file with context cancellation support.
+// The read runs in a goroutine so the caller can return immediately on context
+// cancellation rather than blocking on a stuck filesystem. maxSize limits the
+// bytes read. If the context has no Done channel (e.g., context.Background()),
+// the syscall is invoked directly to avoid goroutine overhead.
+func readAllWithContext(ctx context.Context, path string, maxSize int) ([]byte, error) {
+	// For non-cancellable contexts, skip the goroutine entirely.
+	if ctx.Done() == nil {
+		file, err := os.Open(path)
+		if err != nil {
+			return nil, fmt.Errorf("open file: %w", err)
+		}
+		defer file.Close()
+		return io.ReadAll(io.LimitReader(file, int64(maxSize)))
+	}
+
+	type readResult struct {
+		data []byte
+		err  error
+	}
+	resultCh := make(chan readResult, 1)
+
+	go func() {
+		file, err := os.Open(path)
+		if err != nil {
+			resultCh <- readResult{nil, fmt.Errorf("open file: %w", err)}
+			return
+		}
+		defer file.Close()
+		data, err := io.ReadAll(io.LimitReader(file, int64(maxSize)))
+		resultCh <- readResult{data, err}
+	}()
+
+	select {
+	case res := <-resultCh:
+		return res.data, res.err
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// fileReadWithContext reads a specific portion of a file using read(2) syscalls.
+// This is used for head+tail reads where we need precise positioning.
+// If the context has no Done channel, the syscall is invoked directly.
+func fileReadWithContext(ctx context.Context, path string, offset int64, buf []byte) (int, error) {
+	if ctx.Done() == nil {
+		file, err := os.Open(path)
+		if err != nil {
+			return 0, fmt.Errorf("open file: %w", err)
+		}
+		defer file.Close()
+		if offset > 0 {
+			if _, err := file.Seek(offset, io.SeekStart); err != nil {
+				return 0, fmt.Errorf("seek: %w", err)
+			}
+		}
+		return file.Read(buf)
+	}
+
+	type readResult struct {
+		n   int
+		err error
+	}
+	resultCh := make(chan readResult, 1)
+
+	go func() {
+		file, err := os.Open(path)
+		if err != nil {
+			resultCh <- readResult{0, fmt.Errorf("open file: %w", err)}
+			return
+		}
+		defer file.Close()
+		if offset > 0 {
+			if _, err := file.Seek(offset, io.SeekStart); err != nil {
+				resultCh <- readResult{0, fmt.Errorf("seek: %w", err)}
+				return
+			}
+		}
+		n, err := file.Read(buf)
+		resultCh <- readResult{n, err}
+	}()
+
+	select {
+	case res := <-resultCh:
+		return res.n, res.err
+	case <-ctx.Done():
+		return 0, ctx.Err()
+	}
 }

@@ -17,6 +17,7 @@ import type {
   SecurityApprovalRequestData,
   SecurityPromptRequestData,
   AskUserRequestData,
+  EditApprovalRequestData,
   DriftDetectedData,
 } from '@sprout/events';
 import type { Message, ToolExecution, SubagentActivity } from '@sprout/ui';
@@ -750,6 +751,46 @@ const handleAskUserRequest = (ctx: EventHandlerContext): void => {
   debugLog('[ask_user] Question:', data.question, 'options:', data.options?.length ?? 0);
 };
 
+// Handle edit_approval_request event (SP-072-3)
+const handleEditApprovalRequest = (ctx: EventHandlerContext): void => {
+  const { event, setState } = ctx;
+  const logEntry = createLogEntry(event);
+  logEntry.category = 'system';
+  logEntry.level = 'warning';
+  const data = (event.data ?? {}) as EditApprovalRequestData;
+  if (data.status === 'responded') return;
+  if (!data.request_id || !data.file_path) return;
+
+  const hunks = Array.isArray(data.hunks)
+    ? data.hunks.map((h) => ({
+        id: String(h.id || ''),
+        oldStart: Number(h.old_start ?? 0),
+        oldLines: Number(h.old_lines ?? 0),
+        newStart: Number(h.new_start ?? 0),
+        newLines: Number(h.new_lines ?? 0),
+        lines: Array.isArray(h.lines)
+          ? h.lines.map((l) => ({
+              type: (l.type === 'add' || l.type === 'remove' ? l.type : 'context') as 'context' | 'add' | 'remove',
+              content: String(l.content || ''),
+            }))
+          : [],
+        addCount: Number(h.add_count ?? 0),
+        delCount: Number(h.del_count ?? 0),
+      }))
+    : [];
+
+  setState((prev) => ({
+    editApprovalRequest: {
+      requestId: String(data.request_id),
+      filePath: String(data.file_path),
+      unifiedDiff: data.unified_diff != null ? String(data.unified_diff) : undefined,
+      hunks,
+    },
+    logs: appendCappedLog(prev.logs, logEntry),
+  }));
+  debugLog('[edit_approval] Request:', data.file_path, 'hunks:', hunks.length);
+};
+
 /**
  * Handles drift_detected events: sets drift notification state so the
  * DriftNotification component can render a banner with action buttons.
@@ -924,6 +965,8 @@ export function useWebSocketEventHandler({
           return handleSecurityPromptRequest(ctx);
         case 'ask_user_request':
           return handleAskUserRequest(ctx);
+        case 'edit_approval_request':
+          return handleEditApprovalRequest(ctx);
         case 'input_required':
           return handleInputRequired(ctx);
         case 'drift_detected':

@@ -42,6 +42,13 @@ const (
 	EventTypeSecurityApprovalRequest = "security_approval_request"
 	EventTypeSecurityPromptRequest  = "security_prompt_request"
 	EventTypeAskUserRequest        = "ask_user_request"
+	// EventTypeEditApprovalRequest (SP-072-3) is published when the
+	// per-hunk diff approval gate routes a proposed file edit through the
+	// WebUI for interactive review. The payload carries the request ID,
+	// file path, and the diff hunks with per-line change type so the
+	// frontend can render a color-coded review panel with per-hunk
+	// accept/reject toggles.
+	EventTypeEditApprovalRequest = "edit_approval_request"
 	// EventTypeInputRequired is published when the agent is blocked waiting
 	// for human input — a security approval, an ask_user prompt, or any
 	// other blocking interaction. This is a higher-level signal than the
@@ -172,6 +179,7 @@ func (eb *EventBus) Publish(eventType string, data any) {
 	isCritical := eventType == EventTypeSecurityApprovalRequest ||
 		eventType == EventTypeSecurityPromptRequest ||
 		eventType == EventTypeAskUserRequest ||
+		eventType == EventTypeEditApprovalRequest ||
 		eventType == EventTypeInputRequired
 
 	// Publish to all subscribers without holding the lock
@@ -416,6 +424,23 @@ func SecurityApprovalRequestEvent(requestID, toolName, riskLevel, reasoning stri
 		payload[k] = v
 	}
 	return payload
+}
+
+// EditApprovalRequestEvent (SP-072-3) creates an edit_approval_request
+// event payload for the per-hunk diff approval gate. requestID uniquely
+// identifies the approval so the WebUI can POST a decision back to
+// /api/edits/{requestID}/decision. path is the file being edited.
+// hunks is a JSON-serializable representation of each diff hunk with
+// its line-level change type (context/add/remove). unifiedDiff is the
+// raw unified-diff string for display.
+func EditApprovalRequestEvent(requestID, path, unifiedDiff string, hunks []map[string]interface{}) map[string]interface{} {
+	return map[string]interface{}{
+		"request_id":    requestID,
+		"file_path":     path,
+		"unified_diff":  unifiedDiff,
+		"hunks":         hunks,
+		"timestamp":     time.Now().UTC().Format(time.RFC3339),
+	}
 }
 
 // TodoUpdateEvent creates a todo update event

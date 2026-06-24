@@ -4,6 +4,7 @@ import AppContent from './components/AppContent';
 import AskUserDialog from './components/AskUserDialog';
 import { DisconnectedOverlay } from './components/DisconnectedOverlay';
 import DriftNotification from './components/DriftNotification';
+import EditApprovalPanel from './components/EditApprovalPanel';
 import ErrorBoundary from './components/ErrorBoundary';
 import ModelSelectionModal from './components/ModelSelectionModal';
 import Notification from './components/Notification';
@@ -66,6 +67,7 @@ function App() {
       securityApprovalRequest: null,
       securityPromptRequest: null,
       askUserRequest: null,
+      editApprovalRequest: null,
       modelSelectionRequest: null,
       driftNotification: null,
     };
@@ -190,6 +192,14 @@ function AppInner() {
   const { handleGitCommit, handleGitAICommit, handleGitStage, handleGitUnstage, handleGitDiscard } = useGitHandlers({
     setGitRefreshToken,
   });
+
+  // Clear the edit approval request state after the panel's REST POST completes.
+  const handleEditApprovalResolved = useCallback(
+    () => {
+      setState((_prev) => ({ editApprovalRequest: null }));
+    },
+    [setState],
+  );
 
   // ── Initialization ───────────────────────────────────────────────
 
@@ -351,6 +361,15 @@ function AppInner() {
                       multiSelect={state.askUserRequest.multiSelect}
                       defaultValue={state.askUserRequest.default}
                       onRespond={handleAskUserResponse}
+                    />
+                  )}
+                  {state.editApprovalRequest && (
+                    <EditApprovalPanel
+                      requestId={state.editApprovalRequest.requestId}
+                      filePath={state.editApprovalRequest.filePath}
+                      unifiedDiff={state.editApprovalRequest.unifiedDiff}
+                      hunks={state.editApprovalRequest.hunks}
+                      onRespond={handleEditApprovalResolved}
                     />
                   )}
                   {state.driftNotification && (

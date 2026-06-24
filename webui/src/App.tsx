@@ -20,6 +20,7 @@ import { HotkeyProvider } from './contexts/HotkeyContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { LocalEventsProvider } from './services/localEventsProvider';
 import { PlatformNavProvider } from './contexts/PlatformNavContext';
+import { ProviderCatalogProvider } from './contexts/ProviderCatalogContext';
 import { SproutAdapterProvider } from './contexts/SproutAdapterContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import './App.css';
@@ -277,6 +278,7 @@ function AppInner() {
           <ThemeProvider>
             <HotkeyProvider>
               <EditorManagerProvider>
+                <ProviderCatalogProvider isConnected={state.isConnected}>
                 <UIManager>
                   <AppContent
                     state={state}
@@ -408,6 +410,7 @@ function AppInner() {
                     updateOnboarding={updateOnboarding}
                   />
                 </UIManager>
+                </ProviderCatalogProvider>
               </EditorManagerProvider>
             </HotkeyProvider>
           </ThemeProvider>

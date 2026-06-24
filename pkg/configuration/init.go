@@ -431,11 +431,15 @@ func GetAvailableProviders() []string {
 	providerFactory := providers.GlobalFactory()
 	factoryProviders := providerFactory.GetAvailableProviders()
 
-	// Add the special providers that aren't in the factory (built-in ones)
+	// Add the special providers that aren't in the factory (built-in ones).
+	// `test` (api.TestClientType) is intentionally excluded — it's an in-process
+	// mock sentinel for unit tests; if a user selected it from a settings
+	// dropdown and it landed on disk as LastUsedProvider, the next session
+	// would silently route to a no-op mock client. Tests that need the mock
+	// construct api.TestClientType directly.
 	specialProviders := []string{
 		"ollama-local",
 		"ollama-cloud",
-		"test",
 		"editor",
 	}
 

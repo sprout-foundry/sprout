@@ -35,6 +35,7 @@ var (
 	maxIterations              int
 	agentNoStreaming           bool
 	agentShowReasoningTerminal bool
+	agentReasoningMode         string // "hidden" (default), "fold", "full"
 	agentSystemPromptFile      string
 	agentSystemPrompt          string
 	agentUnsafe                bool
@@ -174,6 +175,7 @@ func init() {
 	agentCmd.Flags().IntVar(&maxIterations, "max-iterations", 0, "Maximum iterations per prompt before stopping (default: 0 = unlimited)")
 	agentCmd.Flags().BoolVar(&agentNoStreaming, "no-stream", false, "Disable streaming mode (useful for scripts and pipelines) (or set SPROUT_NO_STREAM=1)")
 	agentCmd.Flags().BoolVar(&agentShowReasoningTerminal, "show-reasoning-terminal", false, "Render reasoning stream chunks in terminal output (default: hidden; WebUI still receives reasoning)")
+	agentCmd.Flags().StringVar(&agentReasoningMode, "reasoning", "", "Reasoning display mode: 'hidden' (default), 'fold' (collapsed token count), 'full' (stream raw text)")
 	agentCmd.Flags().StringVar(&agentSystemPromptFile, "system-prompt", "", "File path containing custom system prompt")
 	agentCmd.Flags().StringVar(&agentSystemPrompt, "system-prompt-str", "", "Direct system prompt string")
 	agentCmd.Flags().BoolVar(&agentUnsafe, "unsafe", false, "UNSAFE MODE: Bypass most security checks (still blocks critical system operations)")

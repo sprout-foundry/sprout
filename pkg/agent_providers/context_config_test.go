@@ -96,6 +96,114 @@ func TestConfigurationBasedContextLimits(t *testing.T) {
 	}
 }
 
+// TestModelInfoContextLimits verifies that GetContextLimit falls back to
+// model_info entries when no override or pattern matches.
+// This is critical for provider/model names like "MiniMaxAI/MiniMax-M2.7"
+// that need to resolve against model_info ID "MiniMax-M2.7".
+func TestModelInfoContextLimits(t *testing.T) {
+	config := &ProviderConfig{
+		Name:     "test-deepinfra",
+		Endpoint: "https://api.example.com",
+		Auth: AuthConfig{
+			Type: "bearer",
+		},
+		Defaults: RequestDefaults{
+			Model: "default-model",
+		},
+		Models: ModelConfig{
+			// Provider default (would apply without model_info fallback)
+			DefaultContextLimit: 131072,
+			ModelInfo: []ModelInfo{
+				{ID: "MiniMax-M2.5", ContextLength: 196608},
+				{ID: "MiniMax-M2.7", ContextLength: 196608},
+				{ID: "MiniMax-M2.5-Lightning", ContextLength: 1000000},
+				{ID: "gpt-4o", ContextLength: 128000},
+			},
+		},
+	}
+
+	testCases := []struct {
+		modelName     string
+		expectedLimit int
+		description   string
+	}{
+		{
+			modelName:     "MiniMaxAI/MiniMax-M2.7",
+			expectedLimit: 196608,
+			description:   "Full provider/model name suffix matches model_info ID",
+		},
+		{
+			modelName:     "deepinfra/MiniMax-M2.5",
+			expectedLimit: 196608,
+			description:   "Different provider prefix still matches via /suffix",
+		},
+		{
+			modelName:     "MiniMax-M2.5",
+			expectedLimit: 196608,
+			description:   "Exact ID match",
+		},
+		{
+			modelName:     "MiniMax-M2.5-Lightning",
+			expectedLimit: 1000000,
+			description:   "1M context from model_info",
+		},
+		{
+			modelName:     "unknown-model",
+			expectedLimit: 131072,
+			description:   "No match in model_info, falls back to default_context_limit",
+		},
+		{
+			modelName:     "gpt-4o",
+			expectedLimit: 128000,
+			description:   "model_info entry with exact match",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.modelName, func(t *testing.T) {
+			limit := config.GetContextLimit(tc.modelName)
+			if limit != tc.expectedLimit {
+				t.Errorf("Expected context limit %d for %s (%s), got %d",
+					tc.expectedLimit, tc.modelName, tc.description, limit)
+			}
+		})
+	}
+}
+
+// TestPatternOverrideBeatsModelInfo verifies that pattern_overrides take
+// priority over model_info entries (step 2 > step 3 in the resolution order).
+func TestPatternOverrideBeatsModelInfo(t *testing.T) {
+	config := &ProviderConfig{
+		Name:     "test-provider",
+		Endpoint: "https://api.example.com",
+		Auth: AuthConfig{
+			Type: "bearer",
+		},
+		Defaults: RequestDefaults{
+			Model: "default-model",
+		},
+		Models: ModelConfig{
+			DefaultContextLimit: 131072,
+			PatternOverrides: []PatternOverride{
+				{
+					Pattern:      "MiniMax-.*",
+					ContextLimit: 999999, // Intentional admin override — larger than catalog
+				},
+			},
+			ModelInfo: []ModelInfo{
+				{ID: "MiniMax-M2.5", ContextLength: 196608},
+				{ID: "MiniMax-M2.7", ContextLength: 196608},
+			},
+		},
+	}
+
+	// Pattern override should win over model_info for the same model
+	limit := config.GetContextLimit("MiniMaxAI/MiniMax-M2.7")
+	if limit != 999999 {
+		t.Errorf("Expected pattern override 999999 to beat model_info 196608, got %d", limit)
+	}
+}
+
 func TestConfigurationBasedCompletionLimits(t *testing.T) {
 	config := &ProviderConfig{
 		Name:     "test-provider",

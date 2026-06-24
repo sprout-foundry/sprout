@@ -9,6 +9,7 @@ import CredentialsSettingsTab from './CredentialsSettingsTab';
 // Import from settings/ subdirectory
 import AgentBehaviorSettingsTab from './settings/AgentBehaviorSettingsTab';
 import CommitReviewSettingsTab from './settings/CommitReviewSettingsTab';
+import ComputerUseSettingsTab from './settings/ComputerUseSettingsTab';
 import EmbeddingSettingsTab from './settings/EmbeddingSettingsTab';
 import GeneralSettingsTab from './settings/GeneralSettingsTab';
 import LanguageServersSettingsTab from './settings/LanguageServersSettingsTab';
@@ -478,6 +479,18 @@ function SettingsPanel({
         return (
           <NotificationsSettingsTab
             renderLocalToggle={fieldRenderers.renderLocalToggle}
+          />
+        );
+
+      /* ── Experimental section ──────────────────────── */
+      case 'experimental-computer-use':
+        return (
+          <ComputerUseSettingsTab
+            settings={activeSettings ?? settings}
+            renderToggle={fieldRenderers.renderToggle}
+            renderNumberInput={fieldRenderers.renderNumberInput}
+            renderLocalToggle={fieldRenderers.renderLocalToggle}
+            updateSetting={mutations.updateSetting}
           />
         );
 

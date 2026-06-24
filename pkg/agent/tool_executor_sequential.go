@@ -144,6 +144,7 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 		// ToolConfig registry only for tools that genuinely require *Agent
 		// access (e.g. run_subagent, run_parallel_subagents — see
 		// pkg/agent_tools/all.go for the list of migrated handlers).
+		// tool_security.go::ExecuteTool uses effectiveCwd() for WorkspaceRoot.
 		te.agent.debugLog("[tool] legacy dispatch: %s\n", normalizedToolName)
 
 		if normalizedToolName == "mcp_tools" {
@@ -157,7 +158,7 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 		}
 
 		registry := GetToolRegistry()
-		execCtx := withToolExecutionMetadata(ctx, toolCallID, normalizedToolName, te.agent.GetWorkspaceRoot())
+		execCtx := withToolExecutionMetadata(ctx, toolCallID, normalizedToolName, te.agent.effectiveCwd())
 		images, result, err := registry.ExecuteTool(execCtx, normalizedToolName, args, te.agent)
 
 		// Check for unknown tool using typed error classification first,

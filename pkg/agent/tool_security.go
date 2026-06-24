@@ -247,7 +247,8 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 	var env tools.ToolEnv
 	if agent != nil {
 		env.EventBus = agent.GetEventBus()
-		env.WorkspaceRoot = agent.GetWorkspaceRoot()
+		// Use effectiveCwd so tools honor cd commands during a session.
+		env.WorkspaceRoot = agent.effectiveCwd()
 		// SP-074-2: Route tool output through the agent's output system
 		// (PrintLineAsync → OutputRouter) instead of os.Stdout.
 		env.OutputWriter = newOutputRouter(agent)

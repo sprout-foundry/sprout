@@ -214,6 +214,19 @@ func (ir *InputReader) ReadLine() (string, error) {
 	fmt.Print(modifyOtherKeysEnable)
 	defer fmt.Print(modifyOtherKeysDisable)
 
+	// Register as the active input reader so background goroutines
+	// (async output worker, tool handlers) can print messages via
+	// PrintExternal without corrupting the input line. Cleared on
+	// return. Must be under LockOutput to race with PrintExternal.
+	LockOutput()
+	setActiveInputReader(ir)
+	UnlockOutput()
+	defer func() {
+		LockOutput()
+		setActiveInputReader(nil)
+		UnlockOutput()
+	}()
+
 	// Initialize line state
 	ir.line = ""
 	ir.cursorPos = 0

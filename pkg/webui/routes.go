@@ -122,6 +122,7 @@ func (ws *ReactWebServer) registerSettingsRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/hotkeys", ws.handleAPIHotkeys)
 	mux.HandleFunc("/api/hotkeys/validate", ws.handleAPIHotkeysValidate)
 	mux.HandleFunc("/api/hotkeys/preset", ws.handleAPIHotkeysPreset)
+	mux.HandleFunc("/api/computer-use/test", ws.handleAPIComputerUseTest)
 }
 
 func (ws *ReactWebServer) registerWorkspaceRoutes(mux *http.ServeMux) {

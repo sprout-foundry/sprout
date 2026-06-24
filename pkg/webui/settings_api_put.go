@@ -751,6 +751,24 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 		knownKeys["disable_thinking"] = true
 		cfg.DisableThinking, _ = v.(bool)
 	}
+	if v, ok := patch["max_context_tokens"]; ok {
+		knownKeys["max_context_tokens"] = true
+		if v == nil {
+			cfg.MaxContextTokens = nil
+		} else {
+			n, ok2 := asInt(v)
+			if !ok2 || n < 0 {
+				return nil, fmt.Errorf("max_context_tokens must be a non-negative integer (0 = no limit)")
+			}
+			if n == 0 {
+				cfg.MaxContextTokens = nil
+			} else if n < 1024 {
+				return nil, fmt.Errorf("max_context_tokens must be at least 1024 when set (got %d)", n)
+			} else {
+				cfg.MaxContextTokens = &n
+			}
+		}
+	}
 	if v, ok := patch["ea_mode"]; ok {
 		knownKeys["ea_mode"] = true
 		s, _ := v.(string)
@@ -942,6 +960,24 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 		// bundled ONNX EmbeddingGemma-300M today.
 		ei.IndexDir = truncateString(ei.IndexDir, maxSettingPathLength)
 		cfg.EmbeddingIndex = &ei
+	}
+
+	// ComputerUse — *ComputerUseConfig, use JSON marshal/unmarshal (SP-063)
+	if v, ok := patch["computer_use"]; ok {
+		knownKeys["computer_use"] = true
+		raw, err := json.Marshal(v)
+		if err != nil {
+			return nil, fmt.Errorf("invalid computer_use config: %w", err)
+		}
+		var cu configuration.ComputerUseConfig
+		if err := json.Unmarshal(raw, &cu); err != nil {
+			return nil, fmt.Errorf("invalid computer_use config: %w", err)
+		}
+		cu.AuditLogDir = truncateString(cu.AuditLogDir, maxSettingPathLength)
+		for i, p := range cu.WorkspaceAllowlist {
+			cu.WorkspaceAllowlist[i] = truncateString(p, maxSettingPathLength)
+		}
+		cfg.ComputerUse = &cu
 	}
 
 	// LanguageServers — []LanguageServerOverride, use JSON marshal/unmarshal

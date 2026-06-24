@@ -241,6 +241,14 @@ type Config struct {
 	// and a workspace-overlay mode.
 	Shell ShellConfig `json:"shell,omitempty"`
 
+	// MaxContextTokens caps the effective context window used when building
+	// requests. When set, the agent acts as if the model has at most this
+	// many tokens of context, limiting how large an input (and therefore
+	// completion budget) a single request can claim. Useful as a cost-control
+	// measure when using models with very large native context windows
+	// (e.g. 1M-token models billed per input token). Nil or 0 means no cap.
+	MaxContextTokens *int `json:"max_context_tokens,omitempty"`
+
 	// Notifications Configuration (SP-070) — controls how the agent
 	// notifies the user when long-running turns complete.
 	Notifications *NotificationsConfig `json:"notifications,omitempty"`

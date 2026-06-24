@@ -81,7 +81,7 @@ export interface SettingsPanelProps {
 
 /* ─── Hierarchical section model (SP-017) ──────────────────── */
 
-export type SettingsSection = 'agent' | 'workspace' | 'environment' | 'editor';
+export type SettingsSection = 'agent' | 'workspace' | 'environment' | 'editor' | 'experimental';
 
 export type SettingsSubsection =
   // Agent (session scope)
@@ -101,7 +101,9 @@ export type SettingsSubsection =
   | 'env-ocr'
   // Editor
   | 'editor-preferences'
-  | 'editor-notifications';
+  | 'editor-notifications'
+  // Experimental (global scope)
+  | 'experimental-computer-use';
 
 export interface SectionDef {
   id: SettingsSection;
@@ -158,6 +160,13 @@ export const SECTION_GROUPS: SectionDef[] = [
       { id: 'editor-notifications', label: 'Notifications' },
     ],
   },
+  {
+    id: 'experimental',
+    label: 'Experimental',
+    scope: 'global',
+    description: 'Preview features — use at your own risk',
+    subsections: [{ id: 'experimental-computer-use', label: 'Computer Use' }],
+  },
 ];
 
 /** Map a subsection ID to its parent section. */
@@ -192,6 +201,7 @@ export function subsectionToLegacyTab(subsectionId: SettingsSubsection): Setting
     'env-ocr': 'pdf-ocr',
     'editor-preferences': 'general',
     'editor-notifications': 'general',
+    'experimental-computer-use': 'general',
   };
   return map[subsectionId];
 }

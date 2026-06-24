@@ -152,6 +152,10 @@ func sanitizedConfig(cfg *configuration.Config) map[string]interface{} {
 		"enable_zsh_command_detection":   cfg.EnableZshCommandDetection,
 		"auto_execute_detected_commands": cfg.AutoExecuteDetectedCommands,
 		"embedding_index":                cfg.EmbeddingIndex,
+		// SP-063: Computer Use config — gates the computer_user persona's
+		// desktop-control tools. Exposed read-only here; edits round-trip
+		// through applyPartialSettings.
+		"computer_use":                   cfg.ComputerUse,
 		"ea_mode":                        cfg.EAMode,
 		"subagent_max_depth":             cfg.SubagentMaxDepth,
 		"approved_shell_commands":        cfg.ApprovedShellCommands,
@@ -162,8 +166,9 @@ func sanitizedConfig(cfg *configuration.Config) map[string]interface{} {
 		// value selector is editable via the settings UI; the
 		// per-profile map is read-only here (advanced; edit
 		// config.json directly for now).
-		"risk_profile":  cfg.RiskProfile,
-		"risk_profiles": cfg.RiskProfiles,
+		"risk_profile":       cfg.RiskProfile,
+		"risk_profiles":      cfg.RiskProfiles,
+		"max_context_tokens": cfg.MaxContextTokens,
 	}
 	return out
 }

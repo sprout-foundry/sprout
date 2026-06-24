@@ -97,7 +97,10 @@ func (a *ActivityIndicator) Update(msg string) {
 }
 
 // Stop halts the ticker and erases the spinner line. Idempotent — safe to
-// call when the indicator is already stopped.
+// call when the indicator is already stopped. Never blocks for more than
+// 500ms — if the render goroutine is stuck (e.g., outputMu held by a
+// blocked write on a saturated PTY), Stop returns without waiting for it,
+// avoiding a cascade deadlock that freezes the entire terminal.
 func (a *ActivityIndicator) Stop() {
 	if a == nil || !a.isTTY {
 		return
@@ -113,10 +116,32 @@ func (a *ActivityIndicator) Stop() {
 	a.mu.Unlock()
 
 	close(stopCh)
-	<-doneCh
+
+	// Wait for the render goroutine to acknowledge stop, but with a timeout.
+	// The render goroutine may be stuck on LockOutput() if another goroutine
+	// is blocked holding outputMu during a stuck I/O write (PTY buffer full,
+	// NFS hang, etc.). Waiting forever here cascades into a full terminal
+	// freeze — the subscriber goroutine that called Stop is also the one
+	// processing ToolEnd events, so a frozen Stop means no more events are
+	// processed and every subsequent tool's spinner spins forever.
+	select {
+	case <-doneCh:
+	case <-time.After(500 * time.Millisecond):
+		// Render goroutine is stuck; proceed without it. It will exit on
+		// its own once LockOutput unblocks (or the process exits).
+	}
 
 	// \r returns the cursor to column 0; \033[K clears to end-of-line.
-	fmt.Fprint(a.w, "\r\033[K")
+	// Use TryLockOutput to avoid re-entering the same deadlock that may
+	// have trapped the render goroutine.
+	if TryLockOutput() {
+		fmt.Fprint(a.w, "\r\033[K")
+		UnlockOutput()
+	} else {
+		// Best-effort clear without the lock — the worst case is a
+		// momentary visual glitch, which is far better than a deadlock.
+		fmt.Fprint(a.w, "\r\033[K")
+	}
 }
 
 // Replace atomically stops the spinner and prints line in its place,
@@ -169,17 +194,21 @@ func (a *ActivityIndicator) ReplaceLastN(line string, n int) {
 		n = 1
 	}
 	// Serialize the cursor-positioning writes so they can't interleave
-	// with a concurrent footer draw or InputReader render. The N row
-	// walks use \033[F (cursor up) + \033[K (clear line) which are only
-	// safe when no other chrome is writing to the terminal.
-	LockOutput()
+	// with a concurrent footer draw or InputReader render. Use TryLock
+	// to avoid the cascade deadlock (see render/Stop comments).
+	if !TryLockOutput() {
+		// Fallback: print without cursor manipulation. Less pretty but
+		// never deadlocks.
+		fmt.Fprintln(a.w, line)
+		return
+	}
+	defer UnlockOutput()
 	// \033[F moves cursor to start of previous line; \033[K clears from
 	// cursor to end of line. Repeat n times to walk up and erase.
 	for i := 0; i < n; i++ {
 		fmt.Fprint(a.w, "\033[F\033[K")
 	}
 	fmt.Fprintln(a.w, line)
-	UnlockOutput()
 }
 
 // Elapsed returns how long the current spinner has been running. Returns
@@ -237,11 +266,15 @@ func (a *ActivityIndicator) render(frame int) {
 	elapsed := time.Since(a.startedAt)
 	a.mu.Unlock()
 	// Serialize against InputReader render, status footer draw, and other
-	// console chrome. Without LockOutput the spinner's cursor-positioning
-	// sequences (\r\033[K) can interleave with a footer Refresh or a
-	// keystroke render, displacing the cursor — the "characters look
-	// dropped" bug. The lock is held only for the single Fprintf write.
-	LockOutput()
+	// console chrome. Use TryLock instead of blocking Lock to avoid the
+	// cascade deadlock: if another goroutine is holding outputMu during a
+	// blocked I/O write (PTY buffer full, NFS hang), blocking here would
+	// trap the render goroutine so Stop()'s doneCh never fires, which in
+	// turn freezes the event subscriber (which calls Stop from ToolEnd).
+	// Skipping a single frame is harmless; the spinner resumes next tick.
+	if !TryLockOutput() {
+		return
+	}
 	fmt.Fprintf(a.w, "\r\033[K%s %s (%.1fs)", spinnerFrames[frame], msg, elapsed.Seconds())
 	UnlockOutput()
 }

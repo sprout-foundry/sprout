@@ -6,9 +6,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 	"unicode/utf16"
 	"unicode/utf8"
 
@@ -176,10 +178,45 @@ func SafeResolvePath(filePath string) (string, error) {
 	return SafeResolvePathWithBypass(context.Background(), filePath)
 }
 
+// symlinkTimeout is the maximum time allowed for symlink resolution.
+// Network filesystems (NFS, cloud mounts) can hang indefinitely on EvalSymlinks
+// if the server is unreachable. This prevents file operations from blocking forever.
+const symlinkTimeout = 3 * time.Second
+
+// evalSymlinksWithTimeout wraps filepath.EvalSymlinks with a timeout guard.
+// Returns ctx.Err() if the timeout fires before resolution completes.
+func evalSymlinksWithTimeout(ctx context.Context, path string) (string, error) {
+	type result struct {
+		path string
+		err  error
+	}
+	done := make(chan result, 1)
+	go func() {
+		resolved, err := filepath.EvalSymlinks(path)
+		done <- result{resolved, err}
+	}()
+	select {
+	case res := <-done:
+		return res.path, res.err
+	case <-ctx.Done():
+		return "", ctx.Err()
+	case <-time.After(symlinkTimeout):
+		return "", fmt.Errorf("symlink resolution timed out after %v for: %s", symlinkTimeout, path)
+	}
+}
+
 // SafeResolvePathWithBypass validates a file path for reading, checking that it's
 // within the working directory and handling symlinks properly. Optional bypass
 // can be enabled via context when user has explicitly approved the operation.
 func SafeResolvePathWithBypass(ctx context.Context, filePath string) (string, error) {
+	start := time.Now()
+	defer func() {
+		if elapsed := time.Since(start); elapsed > 1*time.Second {
+			// Log slow path resolution — usually indicates a network filesystem issue
+			log.Printf("WARN: SafeResolvePathWithBypass took %v for %s", elapsed, filePath)
+		}
+	}()
+
 	if filePath == "" {
 		return "", fmt.Errorf("empty file path provided")
 	}
@@ -212,14 +249,14 @@ func SafeResolvePathWithBypass(ctx context.Context, filePath string) (string, er
 		return "", fmt.Errorf("failed to get absolute path: %w", err)
 	}
 
-	// Resolve symlinks to their targets
-	resolvedAbs, err := filepath.EvalSymlinks(absPath)
+	// Resolve symlinks with timeout guard to prevent hangs on unresponsive network mounts
+	resolvedAbs, err := evalSymlinksWithTimeout(ctx, absPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve path (including symlink evaluation): %w", err)
 	}
 
 	// Also resolve CWD in case it's a symlink
-	resolvedCwd, err := filepath.EvalSymlinks(cwdAbs)
+	resolvedCwd, err := evalSymlinksWithTimeout(ctx, cwdAbs)
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve cwd symlink: %w", err)
 	}

@@ -59,6 +59,11 @@ func (h *gitHandler) Execute(ctx context.Context, env ToolEnv, args map[string]a
 	operation, _ := extractString(args, "operation")
 	argsStr, _ := extractString(args, "args")
 
+	// Normalize args: strip a leading duplicate of the git subcommand.
+	// LLMs commonly pass args like "push origin main" when operation is already
+	// "push", resulting in "git push push origin main" — a confusing error.
+	argsStr = normalizeGitArgs(GitOperationType(operation), argsStr)
+
 	// Validate operation
 	validOps := []string{"commit", "push", "pull", "fetch", "add", "rm", "mv", "reset", "rebase", "merge", "checkout", "branch_delete", "tag", "clean", "stash", "am", "apply", "cherry_pick", "revert", "restore"}
 	valid := false

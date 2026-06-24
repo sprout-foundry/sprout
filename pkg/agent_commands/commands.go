@@ -2,6 +2,7 @@ package commands
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -113,6 +114,9 @@ func NewCommandRegistry() *CommandRegistry {
 
 	// SP-058: risk profile management
 	registry.Register(&RiskProfileCommand{})
+
+	// Cost control
+	registry.Register(&MaxContextCommand{})
 
 	registry.Register(&SetupCommand{})
 
@@ -227,6 +231,13 @@ func (r *CommandRegistry) Execute(input string, chatAgent *agent.Agent) error {
 		// Filter out --json flag for the command
 		filteredArgs := filterArgs(args, "--json")
 		return jsonCmd.ExecuteWithJSONOutput(filteredArgs, chatAgent, ctx)
+	}
+
+	// SP-073: Wire the agent's interrupt context into commands that support
+	// SetContext, so Stop/Ctrl+C can abort long-running LLM calls (shell
+	// script generation, self-review, commit review, etc.).
+	if contextSetter, ok := cmd.(interface{ SetContext(context.Context) }); ok && chatAgent != nil {
+		contextSetter.SetContext(chatAgent.InterruptCtx())
 	}
 
 	// Default execution for commands without context support

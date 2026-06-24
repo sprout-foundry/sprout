@@ -23,6 +23,18 @@ export default function PerformanceSettingsTab({ renderNumberInput, renderTextIn
       )}
 
       <div className="settings-section-spaced">
+        <h4>Cost Control</h4>
+        {renderNumberInput(
+          'max_context_tokens',
+          'Max context tokens',
+          0,
+          undefined,
+          1000,
+          'Cap the effective context window for all models (e.g. 32000). Limits how many tokens can be claimed per request, reducing costs on large-context models. Leave blank or set to 0 for no limit.',
+        )}
+      </div>
+
+      <div className="settings-section-spaced">
         <h4>Resource Storage</h4>
         {renderTextInput(
           'resource_directory',

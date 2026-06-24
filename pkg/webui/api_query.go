@@ -362,6 +362,23 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 		clientAgent.SetSystemPrompt(query.SystemPrompt)
 	}
 
+	// Shared-agent guard: in shared mode the CLI and WebUI share one Agent.
+	// If the CLI is mid-query, reject immediately so the user gets a clear
+	// "busy" message instead of a 500 or silent timeout.
+	if ws.IsSharedMode() && clientAgent.IsQueryInProgress() {
+		ws.mutex.Lock()
+		if ws.activeQueries > 0 {
+			ws.activeQueries--
+		}
+		if ctx := ws.clientContexts[clientID]; ctx != nil {
+			ctx.setChatQueryActive(chatID, false, "")
+		}
+		ws.mutex.Unlock()
+		writeJSONErr(w, http.StatusConflict, "agent_busy",
+			"The terminal is currently processing a query. Try again in a moment.")
+		return
+	}
+
 	// Run the query asynchronously. The web UI consumes progress and completion via WebSocket.
 	go func() {
 		defer func() {

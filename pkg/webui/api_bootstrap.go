@@ -25,6 +25,11 @@ type RuntimeConfig struct {
 
 	// BuildVersion is the version string embedded at build time.
 	BuildVersion string `json:"buildVersion"`
+
+	// SharedMode is true when the server shares the CLI's agent instance
+	// (non-daemon interactive mode). The frontend uses this to hide
+	// multi-chat UI and show "coupled with terminal" messaging.
+	SharedMode bool `json:"sharedMode"`
 }
 
 func (ws *ReactWebServer) handleAPIBootstrap(w http.ResponseWriter, r *http.Request) {
@@ -59,6 +64,7 @@ func (ws *ReactWebServer) handleAPIBootstrap(w http.ResponseWriter, r *http.Requ
 		AuthMode:     authMode,
 		AppMode:      appMode,
 		BuildVersion: "dev",
+		SharedMode:   ws.IsSharedMode(),
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(config)

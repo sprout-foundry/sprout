@@ -6,6 +6,7 @@ package cmd
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -280,6 +281,12 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 		duration := time.Since(startTime)
 
 		if res.err != nil {
+			// If the WebUI is using the shared agent, show a friendly message
+			// instead of the raw error. The query was not processed.
+			if errors.Is(res.err, agent.ErrQueryInProgress) {
+				console.GlyphWarning.Fprintf(os.Stderr, "The Web UI is currently processing a query. Try again in a moment.\n")
+				return markReported(res.err)
+			}
 			// Print the response (user-friendly error message) if available.
 			// When we show it here, mark the returned error as already-reported
 			// so Execute() doesn't print the raw wrapped chain a second time.
@@ -324,6 +331,12 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 			completedEvent["chat_id"] = chatID
 		}
 		eventBus.Publish(events.EventTypeQueryCompleted, completedEvent)
+
+		// In shared-agent mode, sync the agent state back to the WebUI so
+		// the browser tab's conversation history stays current after CLI queries.
+		if ws := getSharedWebServer(); ws != nil {
+			_ = ws.SyncSharedAgentState(chatAgent)
+		}
 
 		switch chatAgent.GetLastRunTerminationReason() {
 		case agent.RunTerminationMaxIterations:

@@ -79,6 +79,17 @@ type ReactWebServer struct {
 	serverCtx                       atomic.Value // context.Context — safe to read without ws.mutex
 }
 
+// IsSharedMode reports whether the server is in "shared agent" mode —
+// where a CLI process launched the web server with a live agent. In this
+// mode, the WebUI shares the CLI's agent instance (same conversation,
+// same session) instead of creating its own per-chat agents.
+//
+// This is the non-daemon interactive case: `sprout` started with a TTY
+// passes its agent to NewReactWebServer, while `sprout daemon` passes nil.
+func (ws *ReactWebServer) IsSharedMode() bool {
+	return ws.agent != nil && !ws.serviceMode
+}
+
 // NewReactWebServer creates a new React web server
 func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, bindAddr string, socketPath string, authToken string) (*ReactWebServer, error) {
 	// Socket mode is mutually exclusive with TCP

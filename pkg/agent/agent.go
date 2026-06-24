@@ -228,10 +228,13 @@ type Agent struct {
 	// Stored as a value-backed pointer so tests can swap it freely.
 	auditLogger *tools.AuditLogger
 
+	// queryInProgress guards ProcessQuery against concurrent execution.
+	// When two frontends share the same Agent instance (CLI + WebUI in
+	// non-daemon mode), only one query can run at a time. The second caller
+	// gets ErrQueryInProgress and must retry or show a "busy" message.
+	queryInProgress atomic.Bool
+
 	// Security telemetry counters (Task 3) — track post-caution LLM behavior.
-	// Incremented atomically because seed may execute SafeForParallel tools
-	// concurrently, each running the pre-execute hook. Exposed via getters
-	// and the JSON result metrics.
 	secCautionsIssued      atomic.Int64
 	secRetriesAfterCaution atomic.Int64
 	secLoopsDetected       atomic.Int64

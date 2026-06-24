@@ -25,6 +25,7 @@ import {
   getFileIcon,
   getFileIconColor,
 } from './editorTabIcons';
+import { isSharedMode } from '../utils/sharedMode';
 import './EditorTabs.css';
 
 interface EditorTabsProps {
@@ -473,8 +474,8 @@ function EditorTabs({
                 </div>
               );
             })}
-            {/* New Chat button (Plus icon) */}
-            {!compact && onCreateChat && (
+            {/* New Chat button (Plus icon) — hidden in shared mode */}
+            {!compact && onCreateChat && !isSharedMode() && (
               <button
                 className="tab new-chat"
                 onClick={handleNewChat}
@@ -485,8 +486,8 @@ function EditorTabs({
                 <Plus size={14} />
               </button>
             )}
-            {/* New Chat in Worktree button */}
-            {!compact && onCreateChatInWorktree && (
+            {/* New Chat in Worktree button — hidden in shared mode */}
+            {!compact && onCreateChatInWorktree && !isSharedMode() && (
               <button
                 className="tab new-worktree"
                 onClick={handleNewWorktreeChat}
@@ -660,7 +661,7 @@ function EditorTabs({
       >
         {emptyAreaContextMenu && (
           <>
-            {!compact && onCreateChat && (
+            {!compact && onCreateChat && !isSharedMode() && (
               <button
                 className="context-menu-item"
                 onClick={() => {
@@ -672,7 +673,7 @@ function EditorTabs({
                 <span>New Chat</span>
               </button>
             )}
-            {!compact && onCreateChatInWorktree && (
+            {!compact && onCreateChatInWorktree && !isSharedMode() && (
               <button
                 className="context-menu-item"
                 onClick={() => {

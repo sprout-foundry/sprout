@@ -17,4 +17,8 @@ export interface RuntimeConfig {
 
   /** Version string embedded at build time */
   buildVersion: string;
+
+  /** True when the server shares the CLI's agent (non-daemon interactive mode).
+   * The frontend hides multi-chat UI and shows "coupled with terminal" messaging. */
+  sharedMode?: boolean;
 }

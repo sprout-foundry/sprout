@@ -149,6 +149,12 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 				log.Fatalf("%v", webErr)
 			}
 
+			// In shared mode, register the server so the CLI's ProcessQuery
+			// wrapper can sync agent state after each CLI query.
+			if !daemonMode {
+				setSharedWebServer(webServer)
+			}
+
 			// Inject webui-owned managers into the agent so that security
 			// prompts and ask_user requests route through the same instances
 			// the webui handlers resolve responses on — no global singletons.
@@ -160,6 +166,19 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 				// correctly: use the event bus only when a browser tab is open,
 				// otherwise fall back to CLI prompting (avoids 5-min timeouts).
 				chatAgent.SetHasActiveWebUIClients(webServer.HasActiveWebUIClients)
+
+				// In shared mode (non-daemon interactive), seed the agent's
+				// event metadata with the default client/chat IDs so that
+				// CLI-initiated queries publish events the WebUI can route.
+				// Without this, CLI events lack client_id/chat_id and the
+				// WebUI tab never receives streaming output or completion
+				// notifications for CLI queries.
+				if !daemonMode {
+					chatAgent.SetEventMetadata(map[string]interface{}{
+						"client_id": "default",
+						"chat_id":   "default",
+					})
+				}
 			}
 
 			startInstanceTracker(ctx, port, chatAgent)

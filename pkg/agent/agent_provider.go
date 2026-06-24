@@ -29,6 +29,12 @@ var ErrModelNotAvailable = errors.New("configured model is not available for thi
 // of crashing the daemon.
 var ErrProviderNotConfigured = errors.New("provider is not configured — configure via webui settings")
 
+// ErrQueryInProgress is returned when ProcessQuery is called while another
+// query is already running on the same Agent instance. This happens when two
+// frontends (CLI REPL and WebUI) share the same Agent — only one query can
+// execute at a time to prevent message-list and state corruption.
+var ErrQueryInProgress = errors.New("a query is already in progress on this agent")
+
 // isNonInteractive returns true if the process is running in non-interactive
 // mode (stdin is not a terminal). Used to prevent blocking prompts when
 // running as a daemon, in tests, or piped input.

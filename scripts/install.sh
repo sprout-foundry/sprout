@@ -765,32 +765,6 @@ main() {
             log_warn "sprout not found at $binary_path"
         fi
 
-        # Clean up legacy ledit binary if present
-        local legacy_binary
-        legacy_binary=$(command -v ledit 2>/dev/null || true)
-        if [ -n "$legacy_binary" ]; then
-            log_info "Removing legacy 'ledit' binary..."
-            rm -f "$legacy_binary" 2>/dev/null || sudo rm -f "$legacy_binary" 2>/dev/null || true
-        fi
-
-        # Clean up legacy ledit service files
-        case "$(uname -s)" in
-            Darwin)
-                if [ -f "${HOME}/Library/LaunchAgents/com.ledit.daemon.plist" ]; then
-                    launchctl unload "${HOME}/Library/LaunchAgents/com.ledit.daemon.plist" 2>/dev/null || true
-                    rm -f "${HOME}/Library/LaunchAgents/com.ledit.daemon.plist"
-                fi
-                ;;
-            Linux)
-                if [ -f "${HOME}/.config/systemd/user/ledit.service" ]; then
-                    systemctl --user stop ledit.service 2>/dev/null || true
-                    systemctl --user disable ledit.service 2>/dev/null || true
-                    rm -f "${HOME}/.config/systemd/user/ledit.service"
-                    systemctl --user daemon-reload 2>/dev/null || true
-                fi
-                ;;
-        esac
-
         # Config + state cleanup (skip with --keep-config).
         remove_config_dirs "$keep_config"
 
@@ -890,38 +864,6 @@ main() {
 
     # Verify installation
     verify_installation "$install_dir"
-
-    # Clean up legacy ledit binary if present on PATH
-    local legacy_binary
-    legacy_binary=$(command -v ledit 2>/dev/null || true)
-    if [ -n "$legacy_binary" ]; then
-        log_info "Removing legacy 'ledit' binary..."
-        if ! rm -f "$legacy_binary" 2>/dev/null; then
-            if command -v sudo >/dev/null 2>&1; then
-                sudo rm -f "$legacy_binary" 2>/dev/null || true
-            fi
-        fi
-    fi
-
-    # Clean up legacy ledit service files
-    case "$(uname -s)" in
-        Darwin)
-            if [ -f "${HOME}/Library/LaunchAgents/com.ledit.daemon.plist" ]; then
-                log_info "Removing legacy ledit service..."
-                launchctl unload "${HOME}/Library/LaunchAgents/com.ledit.daemon.plist" 2>/dev/null || true
-                rm -f "${HOME}/Library/LaunchAgents/com.ledit.daemon.plist"
-            fi
-            ;;
-        Linux)
-            if [ -f "${HOME}/.config/systemd/user/ledit.service" ]; then
-                log_info "Removing legacy ledit service..."
-                systemctl --user stop ledit.service 2>/dev/null || true
-                systemctl --user disable ledit.service 2>/dev/null || true
-                rm -f "${HOME}/.config/systemd/user/ledit.service"
-                systemctl --user daemon-reload 2>/dev/null || true
-            fi
-            ;;
-    esac
 
     # If the service was previously installed, reinstall it now so the service
     # unit/plist points at the newly installed binary. Skip on Termux — it

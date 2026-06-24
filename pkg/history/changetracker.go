@@ -543,6 +543,30 @@ func isWithinWorkspace(filename string) bool {
 	return !strings.HasPrefix(relPath, "..")
 }
 
+// isFileStale reports whether the file on disk differs from the content
+// the agent wrote (change.NewCode). When true, the file was modified
+// intentionally after the snapshot — by a git commit, another session, or
+// manual edit — and rolling it back would clobber that change.
+//
+// Returns false (not stale / safe to rollback) when:
+//   - The file doesn't exist on disk (rollback is creating/restoring it)
+//   - The disk content matches NewCode exactly (nothing changed since)
+//   - NewCode is empty (no baseline to compare against — likely a delete op)
+//   - NewCode is the redacted marker (can't compare, allow the rollback)
+//
+// Returns true (stale / skip rollback) when the disk content differs from
+// NewCode, meaning someone modified the file after the agent's snapshot.
+func isFileStale(filename, newCode string) bool {
+	if newCode == "" || newCode == RedactedContentMarker {
+		return false
+	}
+	current, err := os.ReadFile(filename)
+	if err != nil {
+		return false // file doesn't exist — safe to restore
+	}
+	return string(current) != newCode
+}
+
 func handleRevisionRollback(group RevisionGroup) error {
 	fmt.Printf("Rolling back all changes in revision %s...\n", group.RevisionID)
 
@@ -560,6 +584,15 @@ func handleRevisionRollback(group RevisionGroup) error {
 		// intentional changes outside this project.
 		if !isWithinWorkspace(change.Filename) {
 			fmt.Printf("  Skipping %s: outside current workspace (safety check)\n", change.Filename)
+			continue
+		}
+
+		// Staleness guard: if the file on disk no longer matches what the
+		// agent wrote (NewCode), it was modified intentionally after this
+		// snapshot — by a git commit, another session, or manual edit.
+		// Rolling it back would silently clobber that change.
+		if isFileStale(change.Filename, change.NewCode) {
+			fmt.Printf("  Skipping %s: file modified since snapshot (safety check)\n", change.Filename)
 			continue
 		}
 

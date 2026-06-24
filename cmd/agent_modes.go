@@ -612,7 +612,19 @@ func SetupAgentEvents(chatAgent *agent.Agent, eventBus *events.EventBus, indicat
 	// When WebUI is inactive, events only flow to terminal.
 	if router := chatAgent.OutputRouter(); router != nil {
 		router.SetEventBus(eventBus)
-		router.SetReasoningTerminalEnabled(agentShowReasoningTerminal)
+		// SP-056: Resolve reasoning display mode. --reasoning takes
+		// precedence over the legacy --show-reasoning-terminal flag.
+		// Modes: "hidden" (no reasoning in terminal), "fold" (collapsed
+		// token count — the default for interactive REPL), "full" (raw
+		// reasoning text streams to terminal). The fold callback itself
+		// is wired by the REPL loop in agent_mode_interactive.go.
+		reasoningMode := agentReasoningMode
+		if reasoningMode == "" {
+			if agentShowReasoningTerminal {
+				reasoningMode = "full"
+			}
+		}
+		router.SetReasoningTerminalEnabled(reasoningMode == "full")
 	}
 
 	// Set a simple streaming callback for direct terminal output of

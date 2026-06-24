@@ -20,7 +20,10 @@ package webui
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+
+	"github.com/sprout-foundry/sprout/pkg/agent"
 )
 
 func (ws *ReactWebServer) registerChangesRoutes(mux *http.ServeMux) {
@@ -34,6 +37,10 @@ func (ws *ReactWebServer) registerChangesRoutes(mux *http.ServeMux) {
 // handleAPIChangesSession returns the current session manifest. Mirrors
 // the LLM tool list_changes; supports the same since / tool /
 // path_pattern query params.
+//
+// When no live agent exists (daemon mode, browser opened before first
+// chat query), it falls back to the persisted history store so the
+// panel still shows cross-session change history rather than a 503.
 func (ws *ReactWebServer) handleAPIChangesSession(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -41,10 +48,6 @@ func (ws *ReactWebServer) handleAPIChangesSession(w http.ResponseWriter, r *http
 	}
 	clientID := ws.resolveClientID(r)
 	agentInst, err := ws.getClientAgent(clientID)
-	if err != nil || agentInst == nil {
-		writeChangesError(w, http.StatusServiceUnavailable, "no agent available for client")
-		return
-	}
 
 	args := map[string]interface{}{}
 	q := r.URL.Query()
@@ -57,6 +60,18 @@ func (ws *ReactWebServer) handleAPIChangesSession(w http.ResponseWriter, r *http
 	if v := q.Get("path_pattern"); v != "" {
 		args["path_pattern"] = v
 	}
+
+	if err != nil || agentInst == nil {
+		// No live agent — fall back to persisted-only history.
+		out, perr := agent.ListChangesPersistedOnly(args)
+		if perr != nil {
+			writeChangesError(w, http.StatusInternalServerError, perr.Error())
+			return
+		}
+		writeChangesJSON(w, out)
+		return
+	}
+
 	out, err := agentInst.ListChanges(args)
 	if err != nil {
 		writeChangesError(w, http.StatusInternalServerError, err.Error())
@@ -67,6 +82,11 @@ func (ws *ReactWebServer) handleAPIChangesSession(w http.ResponseWriter, r *http
 
 // handleAPIChangesDiff returns the unified diff for one file. Requires
 // a `path` query param. Mirrors show_my_change.
+//
+// Without a live agent, diffs aren't computable (they require the
+// in-memory tracker's before/after content). Returns an empty
+// not-found envelope rather than a 503 so the panel degrades
+// gracefully.
 func (ws *ReactWebServer) handleAPIChangesDiff(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -80,7 +100,7 @@ func (ws *ReactWebServer) handleAPIChangesDiff(w http.ResponseWriter, r *http.Re
 	clientID := ws.resolveClientID(r)
 	agentInst, err := ws.getClientAgent(clientID)
 	if err != nil || agentInst == nil {
-		writeChangesError(w, http.StatusServiceUnavailable, "no agent available for client")
+		writeChangesJSON(w, fmt.Sprintf(`{"found":false,"path":%q}`, path))
 		return
 	}
 	out, err := agentInst.ShowMyChange(path)
@@ -93,6 +113,9 @@ func (ws *ReactWebServer) handleAPIChangesDiff(w http.ResponseWriter, r *http.Re
 
 // handleAPIChangesSummary returns the grouped activity-block digest.
 // Mirrors summarize_my_session — no parameters.
+//
+// Without a live agent, returns an empty disabled response so the
+// panel shows "no changes this session" instead of a 503 error.
 func (ws *ReactWebServer) handleAPIChangesSummary(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -101,7 +124,7 @@ func (ws *ReactWebServer) handleAPIChangesSummary(w http.ResponseWriter, r *http
 	clientID := ws.resolveClientID(r)
 	agentInst, err := ws.getClientAgent(clientID)
 	if err != nil || agentInst == nil {
-		writeChangesError(w, http.StatusServiceUnavailable, "no agent available for client")
+		writeChangesJSON(w, agent.SummarizeMySessionEmpty())
 		return
 	}
 	out, err := agentInst.SummarizeMySession()
@@ -114,6 +137,10 @@ func (ws *ReactWebServer) handleAPIChangesSummary(w http.ResponseWriter, r *http
 
 // handleAPIChangesTimeline returns the cross-session unified timeline.
 // Mirrors my_recent_changes; accepts ?since=<duration|RFC3339>.
+//
+// The timeline is persisted-history based, so it works even without
+// a live agent. When there IS an agent, it merges session-scoped
+// in-memory entries as well.
 func (ws *ReactWebServer) handleAPIChangesTimeline(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -122,7 +149,17 @@ func (ws *ReactWebServer) handleAPIChangesTimeline(w http.ResponseWriter, r *htt
 	clientID := ws.resolveClientID(r)
 	agentInst, err := ws.getClientAgent(clientID)
 	if err != nil || agentInst == nil {
-		writeChangesError(w, http.StatusServiceUnavailable, "no agent available for client")
+		// No live agent — use the persisted-only path directly.
+		args := map[string]interface{}{"include_persisted": true}
+		if v := r.URL.Query().Get("since"); v != "" {
+			args["since"] = v
+		}
+		out, perr := agent.ListChangesPersistedOnly(args)
+		if perr != nil {
+			writeChangesError(w, http.StatusInternalServerError, perr.Error())
+			return
+		}
+		writeChangesJSON(w, out)
 		return
 	}
 	out, err := agentInst.MyRecentChanges(r.URL.Query().Get("since"))
@@ -152,7 +189,7 @@ func (ws *ReactWebServer) handleAPIChangesRevert(w http.ResponseWriter, r *http.
 	clientID := ws.resolveClientID(r)
 	agentInst, err := ws.getClientAgent(clientID)
 	if err != nil || agentInst == nil {
-		writeChangesError(w, http.StatusServiceUnavailable, "no agent available for client")
+		writeChangesError(w, http.StatusConflict, "No active agent session to revert changes from")
 		return
 	}
 

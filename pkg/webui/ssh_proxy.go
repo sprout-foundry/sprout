@@ -11,15 +11,18 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
 	"github.com/gorilla/websocket"
 )
 
-// sshProxyHTTPClient is shared across proxy calls. Long timeout because some
-// API calls (e.g. streaming queries) can run for several minutes.
+// sshProxyHTTPClient is shared across proxy calls.
 var sshProxyHTTPClient = &http.Client{
-	Timeout: 10 * time.Minute,
+	// No client-level timeout — cancellation is driven by the request
+	// context (r.Context()) passed to http.NewRequestWithContext in
+	// sshProxyHTTP. A fixed timeout would silently truncate legitimate
+	// long-running streaming responses (SSE agent output, large file
+	// transfers). The browser disconnect cancels the upstream request
+	// promptly via context cancellation.
 	CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
 		return http.ErrUseLastResponse
 	},

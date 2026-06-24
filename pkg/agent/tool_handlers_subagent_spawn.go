@@ -543,19 +543,19 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 				}
 				a.Logger().Debug("Using persona '%s': provider=%s model=%s system_prompt=%s\n",
 					persona, provider, model, systemPromptPath)
-				a.warnSubagentFallback(fmt.Sprintf("persona '%s'", persona), strings.TrimSpace(subagentType.Provider), strings.TrimSpace(subagentType.Model), provider, model)
+				a.warnSubagentFallback(fmt.Sprintf("persona '%s'", persona), strings.TrimSpace(subagentType.Provider), strings.TrimSpace(subagentType.Model), strings.TrimSpace(config.SubagentProvider), strings.TrimSpace(config.SubagentModel), provider, model)
 			} else {
 				a.Logger().Debug("Warning: Persona '%s' not found or disabled, using default subagent config\n", persona)
 				provider = config.GetSubagentProvider()
 				model = config.GetSubagentModel()
-				a.warnSubagentFallback("default subagent config", strings.TrimSpace(config.SubagentProvider), strings.TrimSpace(config.SubagentModel), provider, model)
+				a.warnSubagentFallback("default subagent config", "", "", strings.TrimSpace(config.SubagentProvider), strings.TrimSpace(config.SubagentModel), provider, model)
 			}
 		} else {
 			// No persona specified, use default subagent config
 			provider = config.GetSubagentProvider()
 			model = config.GetSubagentModel()
 			a.Logger().Debug("Using subagent provider=%s model=%s from config\n", provider, model)
-			a.warnSubagentFallback("default subagent config", strings.TrimSpace(config.SubagentProvider), strings.TrimSpace(config.SubagentModel), provider, model)
+			a.warnSubagentFallback("default subagent config", "", "", strings.TrimSpace(config.SubagentProvider), strings.TrimSpace(config.SubagentModel), provider, model)
 		}
 
 		// If no explicit subagent config is set (SubagentProvider and SubagentModel are empty
@@ -576,7 +576,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		a.Logger().Debug("Warning: No config manager available, using parent agent defaults\n")
 		provider = a.GetProvider()
 		model = a.GetModel()
-		a.warnSubagentFallback("missing config manager", "", "", provider, model)
+		a.warnSubagentFallback("missing config manager", "", "", "", "", provider, model)
 	}
 
 	// Resolve system prompt: inline text takes precedence over file path.
@@ -915,7 +915,7 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 		config := a.configManager.GetConfig()
 		subagentProvider = config.GetSubagentProvider()
 		subagentModel = config.GetSubagentModel()
-		a.warnSubagentFallback("parallel subagent defaults", strings.TrimSpace(config.SubagentProvider), strings.TrimSpace(config.SubagentModel), subagentProvider, subagentModel)
+		a.warnSubagentFallback("parallel subagent defaults", "", "", strings.TrimSpace(config.SubagentProvider), strings.TrimSpace(config.SubagentModel), subagentProvider, subagentModel)
 
 		// If no explicit subagent config, inherit from parent agent's runtime values.
 		if config.SubagentProvider == "" && config.SubagentModel == "" {
@@ -1163,18 +1163,29 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 	return string(jsonBytes), nil
 }
 
-func (a *Agent) warnSubagentFallback(scope, configuredProvider, configuredModel, effectiveProvider, effectiveModel string) {
-	usesProviderFallback := configuredProvider == "" && strings.TrimSpace(effectiveProvider) != ""
-	usesModelFallback := configuredModel == "" && strings.TrimSpace(effectiveModel) != ""
+func (a *Agent) warnSubagentFallback(scope, personaProvider, personaModel, configProvider, configModel, effectiveProvider, effectiveModel string) {
+	personaProvider = strings.TrimSpace(personaProvider)
+	personaModel = strings.TrimSpace(personaModel)
+	configProvider = strings.TrimSpace(configProvider)
+	configModel = strings.TrimSpace(configModel)
+	effectiveProvider = strings.TrimSpace(effectiveProvider)
+	effectiveModel = strings.TrimSpace(effectiveModel)
+
+	// Only warn when effective values came from a TRUE fallback — i.e., both
+	// the persona AND the config-level provider/model are absent. That means
+	// the resolved values were inherited from the parent agent's runtime
+	// provider/model, which is the only scenario worth surfacing to the user.
+	usesProviderFallback := personaProvider == "" && configProvider == "" && effectiveProvider != ""
+	usesModelFallback := personaModel == "" && configModel == "" && effectiveModel != ""
 	if !usesProviderFallback && !usesModelFallback {
 		return
 	}
 
-	provider := strings.TrimSpace(effectiveProvider)
+	provider := effectiveProvider
 	if provider == "" {
 		provider = "<system default>"
 	}
-	model := strings.TrimSpace(effectiveModel)
+	model := effectiveModel
 	if model == "" {
 		model = "<provider default>"
 	}

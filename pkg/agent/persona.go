@@ -207,25 +207,54 @@ func (a *Agent) GetPersonaProviderModel(personaID string) (string, string, error
 		return "", "", fmt.Errorf("persona not found or disabled: %s", personaID)
 	}
 
-	provider := strings.TrimSpace(string(a.getClientType()))
+	// Resolve provider and model independently against the same chain
+	// used at spawn time (tool_handlers_subagent_spawn.go):
+	//
+	//   persona.Provider   → config.SubagentProvider   → parent runtime provider
+	//   persona.Model      → config.SubagentModel      → default model for resolved provider
+	//
+	// Each field resolves independently so a persona with only a Model
+	// override still picks up the config-level Provider (and vice versa),
+	// without duplicating the parent-fallback expression in every branch.
+	//
+	// Note: we read the raw config.SubagentProvider / config.SubagentModel
+	// fields rather than the GetSubagentProvider / GetSubagentModel helpers
+	// because those helpers cascade to LastUsedProvider / ProviderPriority
+	// — which would make "config has no defaults" indistinguishable from
+	// "config has the runtime default", defeating the purpose of this
+	// resolution chain (and disagreeing with what the spawn code does).
+	provider := strings.TrimSpace(persona.Provider)
 	if provider == "" {
-		provider = strings.TrimSpace(a.GetProvider())
+		provider = strings.TrimSpace(config.SubagentProvider)
 	}
-	if strings.TrimSpace(persona.Provider) != "" {
-		provider = strings.TrimSpace(persona.Provider)
+	if provider == "" {
+		provider = a.parentRuntimeProvider()
 	}
 
-	model := a.GetModel()
-	if strings.TrimSpace(persona.Provider) != "" && strings.TrimSpace(persona.Model) == "" {
+	model := strings.TrimSpace(persona.Model)
+	if model == "" {
+		model = strings.TrimSpace(config.SubagentModel)
+	}
+	if model == "" {
 		if providerType, err := a.configManager.MapStringToClientType(provider); err == nil {
 			model = a.configManager.GetModelForProvider(providerType)
 		}
 	}
-	if strings.TrimSpace(persona.Model) != "" {
-		model = strings.TrimSpace(persona.Model)
+	if model == "" {
+		model = a.GetModel()
 	}
 
 	return provider, model, nil
+}
+
+// parentRuntimeProvider returns the parent agent's effective provider key,
+// preferring the live client type over the config string when both are set.
+// Used as the terminal fallback in GetPersonaProviderModel.
+func (a *Agent) parentRuntimeProvider() string {
+	if p := strings.TrimSpace(string(a.getClientType())); p != "" {
+		return p
+	}
+	return strings.TrimSpace(a.GetProvider())
 }
 
 // GetAvailableToolNames returns the effective tool names available to the active session.

@@ -152,6 +152,12 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
   // Fetch guard refs
   const isFetchingWorkflowsRef = useRef(false);
   const isFetchingSessionsRef = useRef(false);
+  // Tracks whether we've already attempted a workflows fetch for the
+  // current Available-tab visit. Without this, the "available" effect
+  // re-fires forever when the workflow list is empty (workflows.length
+  // stays 0; workflowsLoading flips back to false; effect deps change
+  // → another fetch). Reset to false when activeTab leaves Available.
+  const hasFetchedWorkflowsRef = useRef(false);
 
   /* ── Data Fetching ─────────────────────────────────────── */
 
@@ -294,12 +300,18 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
 
   /* ── Polling ───────────────────────────────────────────── */
 
-  // Fetch workflows when switching to available tab
+  // Fetch workflows once per visit to the Available tab. The empty-list
+  // case must not trigger a refetch on every render — see the
+  // `hasFetchedWorkflowsRef` comment above.
   useEffect(() => {
-    if (activeTab === 'available' && workflows.length === 0 && !workflowsLoading) {
-      fetchWorkflows();
+    if (activeTab !== 'available') {
+      hasFetchedWorkflowsRef.current = false;
+      return;
     }
-  }, [activeTab, workflows.length, workflowsLoading, fetchWorkflows]);
+    if (hasFetchedWorkflowsRef.current) return;
+    hasFetchedWorkflowsRef.current = true;
+    fetchWorkflows();
+  }, [activeTab, fetchWorkflows]);
 
   // Poll sessions when on running or recent tab
   useEffect(() => {

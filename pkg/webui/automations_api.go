@@ -61,21 +61,21 @@ func (ws *ReactWebServer) handleAPIAutomateWorkflows(w http.ResponseWriter, r *h
 		return
 	}
 
-	workflows, err := automate.Discover(automate.Dir())
-	if err != nil {
-		if automate.IsNotExists(err) {
-			writeJSON(w, http.StatusOK, []struct{}{})
-			return
-		}
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to scan automate directory: %v", err))
-		return
-	}
-
 	type workflowItem struct {
 		Name        string `json:"name"`
 		Description string `json:"description,omitempty"`
 		Filename    string `json:"filename"`
 		FilePath    string `json:"file_path"`
+	}
+
+	workflows, err := automate.Discover(automate.Dir())
+	if err != nil {
+		if automate.IsNotExists(err) {
+			writeJSON(w, http.StatusOK, map[string]any{"workflows": []workflowItem{}})
+			return
+		}
+		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("failed to scan automate directory: %v", err))
+		return
 	}
 
 	items := make([]workflowItem, 0, len(workflows))
@@ -88,7 +88,7 @@ func (ws *ReactWebServer) handleAPIAutomateWorkflows(w http.ResponseWriter, r *h
 		})
 	}
 
-	writeJSON(w, http.StatusOK, items)
+	writeJSON(w, http.StatusOK, map[string]any{"workflows": items})
 }
 
 // handleAPIAutomateSessionsList returns every automate session from
@@ -111,7 +111,7 @@ func (ws *ReactWebServer) handleAPIAutomateSessionsList(w http.ResponseWriter, r
 		enriched = append(enriched, makeSessionResponse(s))
 	}
 
-	writeJSON(w, http.StatusOK, enriched)
+	writeJSON(w, http.StatusOK, map[string]any{"sessions": enriched})
 }
 
 // handleAPIAutomateSessionsAll is the catch-all handler for the

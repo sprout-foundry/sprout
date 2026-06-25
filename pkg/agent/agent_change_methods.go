@@ -290,9 +290,9 @@ func (a *Agent) SummarizeMySession() (string, error) {
 }
 
 // MyRecentChanges returns the cross-session timeline. Thin wrapper
-// around list_changes(include_persisted=true, since=…).
+// around list_changes(include_persisted=true, include_cross_session=true, since=…).
 func (a *Agent) MyRecentChanges(since string) (string, error) {
-	args := map[string]interface{}{"include_persisted": true}
+	args := map[string]interface{}{"include_persisted": true, "include_cross_session": true}
 	if since != "" {
 		args["since"] = since
 	}

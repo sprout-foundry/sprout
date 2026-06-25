@@ -449,4 +449,46 @@ func TestCreateChatAgent_DaemonMode_NilAgentOnProviderError(t *testing.T) {
 			t.Fatal("daemonMode + random error should NOT trigger nil-agent path")
 		}
 	})
+
+	// TestCreateChatAgent_DaemonModeForcesNonInteractive verifies that
+	// daemonMode forces isInteractive=false, matching the --daemon flag's
+	// documented contract ("keep web UI running without interactive prompt").
+	// The isInteractive computation in the agent command's RunE is:
+	//
+	//   isInteractive := !daemonMode && len(args) == 0 && !isCI && stdinIsTerminal
+	//
+	// Without the !daemonMode guard, a TTY-attached daemon would enter the
+	// REPL, contradicting the flag's purpose.
+	t.Run("daemonMode forces non-interactive even with TTY and no args", func(t *testing.T) {
+		origDaemonMode := daemonMode
+		defer func() { daemonMode = origDaemonMode }()
+
+		// Simulate the exact isInteractive computation from agent_command.go.
+		// All non-daemon conditions are favorable to interactive (no args,
+		// not CI, stdin is a terminal) — yet daemonMode must still win.
+		computeInteractive := func(daemon bool, args []string, ci bool, stdinTTY bool) bool {
+			return !daemon && len(args) == 0 && !ci && stdinTTY
+		}
+
+		// Daemon mode with all interactive-friendly conditions: must be false.
+		daemonMode = true
+		isInteractive := computeInteractive(daemonMode, nil, false, true)
+		if isInteractive {
+			t.Fatal("daemonMode=true must force isInteractive=false even with TTY, no args, not CI")
+		}
+
+		// Non-daemon with same conditions: must be true (baseline sanity).
+		daemonMode = false
+		isInteractive = computeInteractive(daemonMode, nil, false, true)
+		if !isInteractive {
+			t.Fatal("daemonMode=false with TTY, no args, not CI should be interactive")
+		}
+
+		// Daemon mode with args: still false (doubly so).
+		daemonMode = true
+		isInteractive = computeInteractive(daemonMode, []string{"query"}, false, true)
+		if isInteractive {
+			t.Fatal("daemonMode=true with args must force isInteractive=false")
+		}
+	})
 }

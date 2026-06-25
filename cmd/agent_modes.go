@@ -63,6 +63,11 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 	// "no provider configured" when the webui can handle provider setup interactively.
 	if daemonMode {
 		os.Setenv("SPROUT_DAEMON", "1")
+		// Unset on RunAgent exit so the flag never leaks to subprocesses
+		// the user explicitly runs after us, or to tests sharing the process.
+		// Children spawned during the daemon's lifetime inherit the var at
+		// fork time and are unaffected by the unset on our exit.
+		defer os.Unsetenv("SPROUT_DAEMON")
 
 		// Set up log rotation for managed daemon services (SPROUT_SERVICE=1).
 		// This must happen early, before any stdout/stderr writes, so that
@@ -284,7 +289,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 				// task_queue.json flock against new sessions). Fall
 				// through to the shutdown path so terminal close cleans
 				// up the process.
-							if sig == syscall.SIGHUP && daemonMode {
+				if sig == syscall.SIGHUP && daemonMode {
 				fmt.Println()
 				console.GlyphAction.Printf("Received SIGHUP, reloading configuration...")
 				if chatAgent != nil {

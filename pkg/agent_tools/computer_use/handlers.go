@@ -165,12 +165,15 @@ func (h *takeScreenshotHandler) Execute(_ context.Context, _ tools.ToolEnv, args
 	}
 
 	b64 := base64.StdEncoding.EncodeToString(img)
-	out, _ := json.Marshal(map[string]any{
+	out, err := json.Marshal(map[string]any{
 		"image_base64": b64,
 		"width":        dims.Width,
 		"height":       dims.Height,
 		"display_id":   "default",
 	})
+	if err != nil {
+		return tools.ToolResult{Output: fmt.Sprintf("marshal screenshot result: %v", err), IsError: true}, err
+	}
 
 	return tools.ToolResult{
 		Output: string(out),

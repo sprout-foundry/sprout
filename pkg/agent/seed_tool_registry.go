@@ -64,6 +64,14 @@ func newSeedToolRegistryWithPublisher(agent *Agent, ep core.EventPublisher) *cor
 	})
 
 	for _, cfg := range GetToolRegistry().GetAllToolConfigs() {
+		// Don't register subagent-spawning tools for agents at their depth
+		// limit. The PreExecuteHook blocks execution as a safety net, but
+		// if the tool is visible the LLM still wastes turns attempting the
+		// call before discovering it's blocked. Filtering at registration
+		// means the tool never appears in the API request at all.
+		if !agent.CanSpawnSubagents() && (cfg.Name == "run_subagent" || cfg.Name == "run_parallel_subagents") {
+			continue
+		}
 		if err := registry.Register(convertToSeedToolConfig(cfg, agent)); err != nil {
 			// Local registry deduplicates by name, so Register should never
 			// fail with "already registered". Anything else is a programmer

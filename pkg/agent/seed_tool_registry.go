@@ -514,9 +514,10 @@ func handleToolError(agent *Agent, err error, toolName string) (string, error) {
 		// Task 4: tier-aware guidance suffix parsed from the error message.
 		suffix := tierFromMessage(safeMsg)
 		if agent != nil {
-			agent.PrintLine("")
-			agent.PrintLine(fmt.Sprintf("[⚠️  SECURITY CAUTION - LLM VERIFICATION REQUIRED] %s", safeMsg))
-			agent.PrintLine("")
+			console.PrintExternal(fmt.Sprintf("\n[⚠️  SECURITY CAUTION - LLM VERIFICATION REQUIRED] %s\n", safeMsg))
+			// Publish to event bus so the WebUI sidebar log shows the
+			// caution; PrintExternal only writes to the terminal.
+			agent.PublishAgentMessage("info", fmt.Sprintf("[⚠️  SECURITY CAUTION - LLM VERIFICATION REQUIRED] %s", safeMsg), nil)
 			// Task 2: audit-log the handler-level security block.
 			assessment := RiskAssessment{
 				Sources: []RiskSource{RiskSourceHandler},
@@ -695,9 +696,10 @@ func wrapSecurityCaution(agent *Agent, err error) error {
 	}
 
 	if agent != nil {
-		agent.PrintLine("")
-		agent.PrintLine(fmt.Sprintf("[⚠️  SECURITY CAUTION - LLM VERIFICATION REQUIRED] %s", safeMsg))
-		agent.PrintLine("")
+		console.PrintExternal(fmt.Sprintf("\n[⚠️  SECURITY CAUTION - LLM VERIFICATION REQUIRED] %s\n", safeMsg))
+		// Publish to event bus so the WebUI sidebar log shows the
+		// caution; PrintExternal only writes to the terminal.
+		agent.PublishAgentMessage("info", fmt.Sprintf("[⚠️  SECURITY CAUTION - LLM VERIFICATION REQUIRED] %s", safeMsg), nil)
 	}
 	// Preserve the SecurityError type so ClassifyError still returns
 	// ActionEscalate downstream. Seed's pre-execute hook path wraps the
@@ -758,9 +760,10 @@ func wrapSecurityCautionWithLoop(agent *Agent, err error, toolName string, args 
 				"Stop attempting this operation and choose a different approach. Last reason: %s",
 			newCount, safeMsg)
 		if agent != nil {
-			agent.PrintLine("")
-			agent.PrintLine(fmt.Sprintf("[🛑 SECURITY LOOP DETECTED] %s", safeMsg))
-			agent.PrintLine("")
+			console.PrintExternal(fmt.Sprintf("\n[🛑 SECURITY LOOP DETECTED] %s\n", safeMsg))
+			// Publish to event bus so the WebUI sidebar log shows the
+			// loop detection; PrintExternal only writes to the terminal.
+			agent.PublishAgentMessage("info", fmt.Sprintf("[🛑 SECURITY LOOP DETECTED] %s", safeMsg), nil)
 			// Task 2: audit-log the loop detection.
 			assessment := RiskAssessment{
 				Level:   configuration.RiskLevelCritical,
@@ -775,9 +778,10 @@ func wrapSecurityCautionWithLoop(agent *Agent, err error, toolName string, args 
 	// Standard caution path (count < threshold).
 	suffix := tierFromMessage(safeMsg)
 	if agent != nil {
-		agent.PrintLine("")
-		agent.PrintLine(fmt.Sprintf("[⚠️  SECURITY CAUTION - LLM VERIFICATION REQUIRED] %s", safeMsg))
-		agent.PrintLine("")
+		console.PrintExternal(fmt.Sprintf("\n[⚠️  SECURITY CAUTION - LLM VERIFICATION REQUIRED] %s\n", safeMsg))
+		// Publish to event bus so the WebUI sidebar log shows the
+		// caution; PrintExternal only writes to the terminal.
+		agent.PublishAgentMessage("info", fmt.Sprintf("[⚠️  SECURITY CAUTION - LLM VERIFICATION REQUIRED] %s", safeMsg), nil)
 		// Task 2: audit-log the block.
 		assessment := RiskAssessment{
 			Sources: []RiskSource{RiskSourceClassifier},

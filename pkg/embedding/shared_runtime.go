@@ -55,16 +55,33 @@ func acquireSharedONNXProvider(ctx context.Context, modelDir string, modelConfig
 
 	key := sharedONNXKey(modelDir, modelConfig.Dims)
 
+	// Fast path: check cache under the lock.
+	sharedONNXMu.Lock()
+	if e, ok := sharedONNXByModel[key]; ok {
+		sharedONNXMu.Unlock()
+		return e.provider, e.runtime, nil
+	}
+	sharedONNXMu.Unlock()
+
+	// Cache miss: build (and possibly download ~180MB) OUTSIDE the lock so
+	// other embedding operations and agent reasoning are not blocked during
+	// network I/O. The first caller to succeed wins; concurrent callers may
+	// build duplicates, but only one is stored — the rest are closed.
+	provider, runtime, err := buildONNXProvider(ctx, modelDir, modelConfig)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Store under the lock with a double-check: another goroutine may have
+	// built and cached the same key while we were building.
 	sharedONNXMu.Lock()
 	defer sharedONNXMu.Unlock()
 
 	if e, ok := sharedONNXByModel[key]; ok {
+		// Another caller cached a provider first — use theirs, close ours.
+		provider.Close()
+		runtime.Close()
 		return e.provider, e.runtime, nil
-	}
-
-	provider, runtime, err := buildONNXProvider(ctx, modelDir, modelConfig)
-	if err != nil {
-		return nil, nil, err
 	}
 
 	sharedONNXByModel[key] = &sharedONNXEntry{provider: provider, runtime: runtime}

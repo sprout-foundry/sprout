@@ -74,15 +74,20 @@ func (m *DefaultMCPManager) AddServer(config MCPServerConfig) error {
 
 // RemoveServer removes an MCP server
 func (m *DefaultMCPManager) RemoveServer(name string) error {
+	// Extract and deregister the server under the lock, then stop it
+	// outside the lock. server.Stop() can block up to 5s waiting for
+	// graceful shutdown; holding m.mutex across that freezes all
+	// ListServers/GetServer calls, causing UI hangs.
 	m.mutex.Lock()
-	defer m.mutex.Unlock()
-
 	server, exists := m.servers[name]
 	if !exists {
+		m.mutex.Unlock()
 		return fmt.Errorf("MCP server %s not found", name)
 	}
+	delete(m.servers, name)
+	m.mutex.Unlock()
 
-	// Stop the server if it's running
+	// Stop the server if it's running — no longer holds the global lock.
 	if server.IsRunning() {
 		ctx := context.Background()
 		if err := server.Stop(ctx); err != nil {
@@ -91,8 +96,6 @@ func (m *DefaultMCPManager) RemoveServer(name string) error {
 			}
 		}
 	}
-
-	delete(m.servers, name)
 
 	if m.logger != nil {
 		m.logger.LogProcessStep(fmt.Sprintf("[x] Removed MCP server: %s", name))

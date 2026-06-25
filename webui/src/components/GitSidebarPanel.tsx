@@ -242,7 +242,10 @@ function GitSidebarPanel({
   const handleOpenPrDialog = () => {
     setPrTitle('');
     setPrBody('');
-    setPrBase(gitBranches.current || '');
+    // Leave base empty so the backend infers the repo's default branch.
+    // Seeding with gitBranches.current would send base==head for feature
+    // branches, causing PR creation to fail or target the wrong base.
+    setPrBase('');
     setPrDraft(false);
     setIsCreatingPr(false);
     setPrSuccessUrl(null);

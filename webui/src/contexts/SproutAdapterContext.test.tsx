@@ -29,6 +29,7 @@ vi.mock('../services/clientSession', () => {
     ...actual,
     clientFetch: vi.fn(),
     getWebUIClientId: vi.fn(() => 'test-client-id'),
+    resolveWebUIClientId: vi.fn(() => Promise.resolve('test-client-id')),
     WEBUI_CLIENT_ID_HEADER: 'X-Sprout-Client-ID',
     __esModule: true,
   };
@@ -36,7 +37,7 @@ vi.mock('../services/clientSession', () => {
 
 // Import after mocking to get the mocked functions
 import { installAdapter, getAdapter } from '../services/apiAdapter';
-import { clientFetch, getWebUIClientId, WEBUI_CLIENT_ID_HEADER } from '../services/clientSession';
+import { clientFetch, resolveWebUIClientId, WEBUI_CLIENT_ID_HEADER } from '../services/clientSession';
 
 // ---------------------------------------------------------------------------
 // Mock Adapter Helper

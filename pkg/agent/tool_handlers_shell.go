@@ -173,6 +173,17 @@ func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface
 		}
 	}
 
+	// Block git stash operations. `git stash` saves the working tree and
+	// reverts it to HEAD; `git stash pop`/`apply` restores via a 3-way
+	// merge that can silently revert files when conflicts arise (the
+	// exact bug that caused normalizeGitArgs, staleness guards, and the
+	// read.go context refactor to disappear from the working tree).
+	// stash list/show are read-only and allowed via shellLooksReadOnly.
+	if isGitStashCommand(command) {
+		return "", agenterrors.NewSecurityError(
+			fmt.Sprintf("git stash operations are blocked via shell_command — stash pop/apply can silently revert files via merge conflicts. Use 'git stash' manually in your terminal if needed (command: '%s')", command), nil)
+	}
+
 	// Block git write operations unless the active persona has CapabilityGitWrite.
 	// Staging operations (git add) are always allowed per policy.
 	// Read-only operations (status, log, diff, etc.) are always allowed through shell_command.

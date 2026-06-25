@@ -171,6 +171,32 @@ func (ct *ChangeTracker) TrackShellTurn(workDir, toolCall string, destructive bo
 		return
 	}
 
+	// `git stash` and `git stash pop` are uniquely dangerous to the shell-
+	// walk diff because the stash pop's 3-way merge can silently revert
+	// files to a state the agent never wrote. The diff would detect those
+	// reverted files as "modified by the shell command" and record them
+	// as agent mutations with empty/placeholder .original content.
+	//
+	// Other destructive git commands (checkout, restore, reset) revert
+	// files to HEAD — a known-good baseline — and the diff correctly
+	// attributes those reverts with real OriginalCode for recovery.
+	// Stash is different because the stash entry may predate the current
+	// working state, so the "original" captured is meaningless.
+	//
+	// When a stash operation is detected, re-prime the cache (new state
+	// = new baseline) instead of diffing against the stale pre-stash
+	// cache.
+	if destructive && isGitStashOperation(toolCall) {
+		snap, _, _ := ct.walkWorkspace(workDir, nil, true)
+		if snap == nil {
+			snap = map[string]*shellSnapshotEntry{}
+		}
+		ct.shellCache = snap
+		ct.shellCacheRoot = absWorkDir
+		ct.logf("git stash operation detected (%s), re-primed shell cache (no diff against stale baseline)", toolCall)
+		return
+	}
+
 	newSnap, pending, truncated := ct.walkWorkspace(workDir, ct.shellCache, destructive)
 	if newSnap == nil {
 		return
@@ -280,4 +306,80 @@ func (ct *ChangeTracker) logf(format string, args ...any) {
 	// agent is nil the tracker is in an unusual state (test path) and
 	// silent is fine.
 	_ = strings.TrimSpace(format)
+}
+
+// isGitStashOperation reports whether `command` contains a `git stash`
+// invocation (bare stash, push, pop, apply, drop, clear — but NOT
+// list/show which are read-only). Used by the ChangeTracker to detect
+// when a stash operation has potentially corrupted the working tree
+// via merge conflicts, so the cache can be re-primed instead of
+// diffed against a stale baseline.
+func isGitStashOperation(command string) bool {
+	for _, seg := range splitForGitRevertCheck(command) {
+		fields := strings.Fields(seg)
+		if len(fields) < 2 {
+			continue
+		}
+		gitIdx := -1
+		for i, f := range fields {
+			if f == "git" {
+				gitIdx = i
+				break
+			}
+		}
+		if gitIdx == -1 || gitIdx+1 >= len(fields) {
+			continue
+		}
+		subIdx := gitIdx + 1
+		for subIdx < len(fields) {
+			f := fields[subIdx]
+			if strings.HasPrefix(f, "-") {
+				if f == "-c" || f == "-C" {
+					subIdx += 2
+				} else {
+					subIdx++
+				}
+				continue
+			}
+			break
+		}
+		if subIdx >= len(fields) {
+			continue
+		}
+		sub := strings.TrimRight(fields[subIdx], ");\"'")
+		if sub != "stash" {
+			continue
+		}
+		// Check sub-subcommand: list/show are read-only, everything else
+		// (including bare stash) is a stash operation.
+		if subIdx+1 < len(fields) {
+			subSub := strings.TrimRight(fields[subIdx+1], ");\"'")
+			if subSub == "list" || subSub == "show" {
+				continue
+			}
+		}
+		return true
+	}
+	return false
+}
+
+// splitForGitRevertCheck splits a command at &&, ||, ;, | boundaries.
+// Not quote-aware (same trade-off as splitShellSegments in
+// shell_destructive.go — false positive direction is safe here).
+func splitForGitRevertCheck(cmd string) []string {
+	replaced := cmd
+	for _, op := range []string{"&&", "||"} {
+		replaced = strings.ReplaceAll(replaced, op, "\x00")
+	}
+	for _, op := range []string{";", "|"} {
+		replaced = strings.ReplaceAll(replaced, op, "\x00")
+	}
+	parts := strings.Split(replaced, "\x00")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if s := strings.TrimSpace(p); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
 }

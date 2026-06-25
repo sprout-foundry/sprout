@@ -118,18 +118,46 @@ func IsGitDiscardCommand(command string) bool {
 			break
 		}
 		
-		if subcommand != "" {
-			// git restore always discards (working tree or staged changes)
-			if subcommand == "restore" {
-				return true
+			if subcommand != "" {
+		// git restore always discards (working tree or staged changes)
+		if subcommand == "restore" {
+			return true
+		}
+		// git reset can discard staged changes (even without --hard)
+		if subcommand == "reset" {
+			return true
+		}
+		// git stash: pop/apply/drop/clear are destructive. bare stash
+		// and stash push revert the working tree. stash list/show are
+		// read-only and NOT gated here.
+		if subcommand == "stash" {
+			// Check the sub-subcommand (the token after "stash")
+			stashSub := ""
+			if len(parts) > 2 {
+				// Find the token after the "stash" subcommand position
+				for i := 1; i < len(parts); i++ {
+					part := parts[i]
+					if strings.HasPrefix(part, "-") {
+						if part == "-c" || part == "-C" || part == "--exec-path" || part == "--git-dir" || part == "--work-tree" {
+							i++
+						}
+						continue
+					}
+					// Found the subcommand — now check if there's a sub-sub
+					cleaned := strings.TrimRight(part, ");\"'")
+					if cleaned == "stash" && i+1 < len(parts) {
+						stashSub = strings.TrimRight(parts[i+1], ");\"'")
+					}
+					break
+				}
 			}
-			// git reset can discard staged changes (even without --hard)
-			if subcommand == "reset" {
+			if stashSub == "list" || stashSub == "show" {
+				// Read-only — don't gate
+			} else {
 				return true
 			}
 		}
-		
-		// Move past this git invocation to check for more
+	}// Move past this git invocation to check for more
 		remaining = remaining[idx+1:]
 	}
 }

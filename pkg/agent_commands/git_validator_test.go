@@ -310,6 +310,52 @@ func TestIsGitDiscardCommand(t *testing.T) {
 			command: "(git reset --hard)",
 			want:    true,
 		},
+		// stash detection — all stash variants are gated as discard
+		{
+			name:    "bare git stash",
+			command: "git stash",
+			want:    true,
+		},
+		{
+			name:    "git stash push",
+			command: "git stash push",
+			want:    true,
+		},
+		{
+			name:    "git stash pop",
+			command: "git stash pop",
+			want:    true,
+		},
+		{
+			name:    "git stash apply",
+			command: "git stash apply",
+			want:    true,
+		},
+		{
+			name:    "git stash drop",
+			command: "git stash drop",
+			want:    true,
+		},
+		{
+			name:    "git stash clear",
+			command: "git stash clear",
+			want:    true,
+		},
+		{
+			name:    "compound command with stash",
+			command: "cd /path && git stash && go build ./...",
+			want:    true,
+		},
+		{
+			name:    "stash list (read-only, not discard)",
+			command: "git stash list",
+			want:    false,
+		},
+		{
+			name:    "stash show (read-only, not discard)",
+			command: "git stash show",
+			want:    false,
+		},
 	}
 
 	for _, tt := range tests {

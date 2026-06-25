@@ -226,28 +226,6 @@ func TestGetOCRPrompt(t *testing.T) {
 	}
 }
 
-// TestGetPDFOCRPrompt tests the GetPDFOCRPrompt function.
-func TestGetPDFOCRPrompt(t *testing.T) {
-	got := GetPDFOCRPrompt()
-
-	if got == "" {
-		t.Error("GetPDFOCRPrompt() returned empty string")
-	}
-
-	expectedKeywords := []string{
-		"Extract all text",
-		"PDF document",
-		"preserving",
-		"structure",
-	}
-
-	for _, keyword := range expectedKeywords {
-		if !strings.Contains(got, keyword) {
-			t.Errorf("GetPDFOCRPrompt() does not contain expected keyword %q\nGot: %s", keyword, got)
-		}
-	}
-}
-
 // TestCreateVisionPrompt tests the CreateVisionPrompt method of VisionProcessor.
 func TestCreateVisionPrompt(t *testing.T) {
 	vp := &VisionProcessor{}

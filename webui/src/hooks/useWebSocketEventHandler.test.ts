@@ -83,6 +83,7 @@ function createDefaultState(): Record<string, unknown> {
     editApprovalRequest: null,
     driftNotification: null,
     modelSelectionRequest: null,
+    outputVerbosity: 'default' as const,
   };
 }
 

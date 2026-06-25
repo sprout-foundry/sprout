@@ -46,9 +46,12 @@ const DEFAULT_APP_STATE: AppState = {
   securityPromptRequest: null,
   askUserRequest: null,
   editApprovalRequest: null,
-      modelSelectionRequest: null,
-    driftNotification: null,
-  };/**
+  modelSelectionRequest: null,
+  driftNotification: null,
+  outputVerbosity: 'default' as const,
+};
+
+/**
  * Simple reducer that applies a state update.
  *
  * Handles both:

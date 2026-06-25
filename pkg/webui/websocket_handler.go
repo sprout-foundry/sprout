@@ -397,7 +397,7 @@ func (ws *ReactWebServer) shouldForwardEventToConnection(event events.UIEvent, c
 	// Only forward automate.* events to connections that have opted in
 	// via {type: "subscribe", data: {channel: "automate"}}.
 	if strings.HasPrefix(event.Type, "automate.") {
-		if !connInfo.subscribedChannels["automate"] {
+		if !connInfo.isSubscribedToChannel("automate") {
 			return false
 		}
 		// Connection has opted in — allow the event. Automate events
@@ -538,7 +538,7 @@ func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, sessionID s
 			connInfoVal, ok := ws.connections.Load(safeConn.Conn())
 			if ok {
 				if ci, ok := connInfoVal.(*ConnectionInfo); ok {
-					ci.subscribedChannels[data.Channel] = true
+					ci.subscribeToChannel(data.Channel)
 				}
 			}
 		}
@@ -735,7 +735,7 @@ func (ws *ReactWebServer) waitForTakeover(conn *websocket.Conn, sessionID string
 	// multi-gigabyte WebSocket frame during the takeover window.
 	conn.SetReadLimit(512 * 1024)
 	// Set a generous read deadline so the client has time to decide.
-	conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	conn.SetReadDeadline(time.Now().Add(10 * time.Second))
 	_, rawMsg, err := conn.ReadMessage()
 	if err != nil {
 		return false

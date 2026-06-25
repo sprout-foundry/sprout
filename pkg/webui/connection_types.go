@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -32,7 +33,28 @@ type ConnectionInfo struct {
 	// subscribedChannels tracks which event channels this connection has
 	// explicitly opted into (e.g., "automate"). Automate events are only
 	// forwarded to connections that have subscribed to the "automate" channel.
+	// Protected by channelsMu — written from the read goroutine (subscribe
+	// message) and read from the write goroutine (event fan-out).
 	subscribedChannels map[string]bool
+	channelsMu         sync.RWMutex
+}
+
+// subscribeToChannel marks a channel as subscribed, safe for concurrent use.
+func (ci *ConnectionInfo) subscribeToChannel(channel string) {
+	ci.channelsMu.Lock()
+	defer ci.channelsMu.Unlock()
+	if ci.subscribedChannels == nil {
+		ci.subscribedChannels = make(map[string]bool)
+	}
+	ci.subscribedChannels[channel] = true
+}
+
+// isSubscribedToChannel reports whether the connection has subscribed to
+// the given channel, safe for concurrent use.
+func (ci *ConnectionInfo) isSubscribedToChannel(channel string) bool {
+	ci.channelsMu.RLock()
+	defer ci.channelsMu.RUnlock()
+	return ci.subscribedChannels[channel]
 }
 
 type contextKey string

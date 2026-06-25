@@ -1,7 +1,11 @@
 import { createContext, useContext, useMemo, type ReactNode, useCallback } from 'react';
 import type { APIAdapter } from '../services/apiAdapter';
 import { getAdapter } from '../services/apiAdapter';
-import { clientFetch, getWebUIClientId, WEBUI_CLIENT_ID_HEADER } from '../services/clientSession';
+import {
+  clientFetch,
+  resolveWebUIClientId,
+  WEBUI_CLIENT_ID_HEADER,
+} from '../services/clientSession';
 
 interface SproutAdapterContextValue {
   adapter: APIAdapter | null;
@@ -36,8 +40,14 @@ export function useSproutFetch(): (input: RequestInfo | URL, init?: RequestInit)
 
   return useCallback(
     async (input: RequestInfo | URL, init?: RequestInit) => {
+      // Resolve the client ID asynchronously. In cloud mode (cross-origin),
+      // getWebUIClientId() (synchronous) would generate a bogus UUID because
+      // document.cookie is unreadable — that bogus ID poisons sessionStorage
+      // and makes resolveWebUIClientId()'s fast-path skip server recovery.
+      // Awaiting resolveWebUIClientId() ensures the real ID is used.
+      const clientId = await resolveWebUIClientId();
       const headers = new Headers(init?.headers || {});
-      headers.set(WEBUI_CLIENT_ID_HEADER, getWebUIClientId());
+      headers.set(WEBUI_CLIENT_ID_HEADER, clientId);
 
       if (adapter) {
         // Cloud mode: route through adapter (adapter.fetch does NOT add client ID header)

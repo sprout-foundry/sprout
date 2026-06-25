@@ -316,7 +316,6 @@ func (c *ScriptedClient) buildChatResponse(
 
 // SendChatRequest sends a chat request and returns a scripted response
 func (c *ScriptedClient) SendChatRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
-	_ = ctx
 	c.mu.Lock()
 
 	// Record sent request
@@ -378,11 +377,14 @@ func (c *ScriptedClient) SendChatRequest(ctx context.Context, messages []api.Mes
 		return nil, resp.Error
 	}
 
-	// Check for delay (rate limit simulation)
+	// Check for delay (rate limit simulation). Honor both the per-call ctx
+	// and the client's own ctx so callers can cancel in-flight delays.
 	if resp != nil && resp.Delay > 0 {
 		c.debugLog("Applying delay of %v", resp.Delay)
 		select {
 		case <-time.After(resp.Delay):
+		case <-ctx.Done():
+			return nil, ctx.Err()
 		case <-c.ctx.Done():
 			return nil, c.ctx.Err()
 		}
@@ -408,7 +410,6 @@ func (c *ScriptedClient) SendChatRequest(ctx context.Context, messages []api.Mes
 
 // SendChatRequestStream sends a streaming chat request with full simulation support
 func (c *ScriptedClient) SendChatRequestStream(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool, callback api.StreamCallback) (*api.ChatResponse, error) {
-	_ = ctx
 	c.mu.Lock()
 
 	// Record sent request
@@ -472,11 +473,13 @@ func (c *ScriptedClient) SendChatRequestStream(ctx context.Context, messages []a
 		return nil, resp.Error
 	}
 
-	// Check for delay
+	// Check for delay. Honor both the per-call ctx and the client's own ctx.
 	if resp != nil && resp.Delay > 0 {
 		c.debugLog("Applying delay of %v", resp.Delay)
 		select {
 		case <-time.After(resp.Delay):
+		case <-ctx.Done():
+			return nil, ctx.Err()
 		case <-c.ctx.Done():
 			return nil, c.ctx.Err()
 		}
@@ -502,6 +505,8 @@ func (c *ScriptedClient) SendChatRequestStream(ctx context.Context, messages []a
 		// Stream each chunk
 		for i, chunk := range streamConfig.Chunks {
 			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
 			case <-c.ctx.Done():
 				// Context cancellation: do NOT advance index (soft interruption, retry makes sense)
 				return nil, c.ctx.Err()
@@ -531,6 +536,8 @@ func (c *ScriptedClient) SendChatRequestStream(ctx context.Context, messages []a
 			if streamConfig.ChunkDelay > 0 && i < len(streamConfig.Chunks)-1 {
 				select {
 				case <-time.After(streamConfig.ChunkDelay):
+				case <-ctx.Done():
+					return nil, ctx.Err()
 				case <-c.ctx.Done():
 					// Context cancellation: do NOT advance index
 					return nil, c.ctx.Err()
@@ -589,7 +596,6 @@ func (c *ScriptedClient) SendChatRequestStream(ctx context.Context, messages []a
 
 // SendVisionRequest sends a vision-enabled chat request
 func (c *ScriptedClient) SendVisionRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
-	_ = ctx
 	if !c.supportsVision {
 		return nil, errors.New("vision requests not supported in ScriptedClient")
 	}
@@ -671,11 +677,13 @@ func (c *ScriptedClient) SendVisionRequest(ctx context.Context, messages []api.M
 		return nil, errorToReturn
 	}
 
-	// Check for delay (outside lock)
+	// Check for delay (outside lock). Honor both the per-call ctx and client's own ctx.
 	if delay > 0 {
 		c.debugLog("Vision request applying delay of %v", delay)
 		select {
 		case <-time.After(delay):
+		case <-ctx.Done():
+			return nil, ctx.Err()
 		case <-c.ctx.Done():
 			return nil, c.ctx.Err()
 		}

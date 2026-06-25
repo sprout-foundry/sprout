@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/automate"
 	"github.com/sprout-foundry/sprout/pkg/webui"
 )
 
@@ -30,6 +31,11 @@ type webUIHostRecord struct {
 type desiredWebUIHostRecord struct {
 	PID       int       `json:"pid"`
 	UpdatedAt time.Time `json:"updated_at"`
+	// StartedAt is the wall-clock time the desired host process was
+	// created. Used with processStartedBefore to guard against PID reuse:
+	// if the original host died and the OS recycled the PID, the new
+	// process will have a later start time.
+	StartedAt time.Time `json:"started_at,omitempty"`
 }
 
 type webUISupervisor struct {
@@ -154,7 +160,7 @@ func (s *webUISupervisor) reconcile(ctx context.Context) {
 	if err := saveWebUIHostRecord(webUIHostRecord{
 		PID:       pid,
 		Port:      s.port,
-		StartedAt: now,
+		StartedAt: recordProcessStartTime(pid),
 		UpdatedAt: now,
 	}); err != nil {
 		log.Printf("[debug] failed to save WebUI host record: %v", err)
@@ -222,6 +228,18 @@ func loadDesiredWebUIHostPID() int {
 	if record.PID <= 0 {
 		return 0
 	}
+	// Staleness guard: the desired-host record is refreshed every heartbeat
+	// (hostHeartbeatInterval). If it's older than hostStaleAfter the host
+	// likely died without cleaning up — don't trust the PID.
+	if time.Since(record.UpdatedAt) > hostStaleAfter {
+		return 0
+	}
+	// PID-reuse guard: verify the process at this PID is the same one that
+	// was recorded. If the host died and the OS recycled the PID, refuse to
+	// treat the unrelated process as the desired host.
+	if !automate.VerifyProcessStartedBefore(record.PID, record.StartedAt) {
+		return 0
+	}
 	return record.PID
 }
 
@@ -232,6 +250,7 @@ func saveDesiredWebUIHostPID(pid int) error {
 	record := desiredWebUIHostRecord{
 		PID:       pid,
 		UpdatedAt: time.Now(),
+		StartedAt: recordProcessStartTime(pid),
 	}
 	encoded, err := json.MarshalIndent(record, "", "  ")
 	if err != nil {
@@ -258,7 +277,16 @@ func isHostRecordAlive(record webUIHostRecord) bool {
 	if time.Since(record.UpdatedAt) > hostStaleAfter {
 		return false
 	}
-	return isProcessAlive(record.PID)
+	if !isProcessAlive(record.PID) {
+		return false
+	}
+	// PID-reuse guard: if StartedAt is recorded, verify the process at this
+	// PID is the same one that created the host record. Without this check,
+	// a recycled PID causes the supervisor to "attach" to an unrelated process.
+	if !record.StartedAt.IsZero() && !automate.VerifyProcessStartedBefore(record.PID, record.StartedAt) {
+		return false
+	}
+	return true
 }
 
 func isProcessAlive(pid int) bool {

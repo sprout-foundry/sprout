@@ -859,6 +859,20 @@ func runAutomateStop(sessionID string) error {
 		return nil
 	}
 
+	// PID-reuse guard: verify the process at this PID is the same one that
+	// started this session. If the OS recycled the PID after the workflow
+	// died without cleaning up, we must not signal the unrelated process.
+	if !automate.VerifyProcessStartedBefore(info.PID, info.StartedAt) {
+		console.GlyphWarning.Printf(
+			"Session %s recorded PID %d started at %s, but the current process at that PID started later — possible PID reuse. Refusing to signal. Cleaned up PID file.",
+			sessionID, info.PID, info.StartedAt.Format(time.RFC3339),
+		)
+		if err := automate.RemoveSessionFile(sproutDir, sessionID); err != nil {
+			fmt.Fprintf(os.Stderr, "warn: %v\n", err)
+		}
+		return nil
+	}
+
 	console.GlyphAction.Printf("Stopping session %s (PID %d, workflow: %s)...", sessionID, info.PID, info.Workflow)
 
 	ok, err := automate.StopProcess(info.PID)
@@ -895,6 +909,15 @@ func runAutomateStopAll() error {
 	for _, s := range sessions {
 		if !automate.IsProcessAlive(s.PID) {
 			// Already dead, just clean up
+			_ = automate.RemoveSessionFile(sproutDir, s.SessionID)
+			continue
+		}
+		// PID-reuse guard (same as runAutomateStop).
+		if !automate.VerifyProcessStartedBefore(s.PID, s.StartedAt) {
+			console.GlyphWarning.Printf(
+				"Session %s PID %d appears recycled — skipping and cleaning up.",
+				s.SessionID, s.PID,
+			)
 			_ = automate.RemoveSessionFile(sproutDir, s.SessionID)
 			continue
 		}

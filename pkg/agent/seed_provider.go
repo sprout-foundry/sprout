@@ -190,24 +190,26 @@ func (sp *sproutProvider) doChatStream(ctx context.Context, req *core.ChatReques
 	// Attach pasted images to the first user message
 	messages := sp.attachPastedImages(req.Messages)
 
-	// Create a stream handler that writes to the agent's output manager
-	handler := &streamHandler{}
-
 	sproutReq := seedRequestToSprout(req)
+
+	// Route every chunk through OutputRouter.RouteStreamChunk so it reaches
+	// BOTH paths:
+	//   - EventBus → stream_chunk events → WebUI (real-time streaming)
+	//   - streamingCallback → CLI terminal (character-by-character display)
+	//
+	// Previously the callback called the raw streamingCallback directly,
+	// which is a no-op for WebUI agents — so stream_chunk events were never
+	// published and the browser saw only the final query_completed payload.
+	// RouteStreamChunk publishes the event AND calls the callback, so both
+	// CLI and WebUI get every chunk with no duplication.
 	callback := func(content string, contentType string) {
-		switch contentType {
-		case "reasoning":
-			handler.reasoning = true
-			if sp.agent != nil && sp.agent.output.GetReasoningCallback() != nil {
-				sp.agent.output.GetReasoningCallback()(content)
-			}
+		if contentType == "reasoning" {
 			sp.agent.output.GetReasoningBuffer().WriteString(content)
-		default:
-			handler.reasoning = false
-			if sp.agent != nil && sp.agent.output.GetStreamingCallback() != nil {
-				sp.agent.output.GetStreamingCallback()(content)
-			}
+		} else {
 			sp.agent.output.GetStreamingBuffer().WriteString(content)
+		}
+		if router := sp.agent.OutputRouter(); router != nil {
+			router.RouteStreamChunk(content, contentType)
 		}
 	}
 
@@ -216,27 +218,6 @@ func (sp *sproutProvider) doChatStream(ctx context.Context, req *core.ChatReques
 		return nil, err
 	}
 	return sproutResponseToSeed(resp), nil
-}
-
-// streamHandler implements core.StreamHandler
-type streamHandler struct {
-	reasoning bool
-}
-
-func (h *streamHandler) OnContent(content string) {
-	// Already handled in the callback
-}
-
-func (h *streamHandler) OnReasoning(content string) {
-	// Already handled in the callback
-}
-
-func (h *streamHandler) OnDone(resp *core.ChatResponse) {
-	// Already handled in the callback
-}
-
-func (h *streamHandler) OnError(err error) {
-	// Already handled in the callback
 }
 
 // attachPastedImages attaches previously registered image data to the first
@@ -315,12 +296,19 @@ func (sp *sproutProvider) ChatStream(ctx context.Context, req *core.ChatRequest,
 	// Attach pasted images to the first user message
 	messages := sp.attachPastedImages(req.Messages)
 
+	// Route through OutputRouter.RouteStreamChunk (same as doChatStream)
+	// and forward to the seed handler so both the EventBus/WebUI and the
+	// seed core's stream handling receive every chunk.
 	callback := func(content string, contentType string) {
-		switch contentType {
-		case "reasoning":
+		if contentType == "reasoning" {
 			handler.OnReasoning(content)
-		default:
+			sp.agent.output.GetReasoningBuffer().WriteString(content)
+		} else {
 			handler.OnContent(content)
+			sp.agent.output.GetStreamingBuffer().WriteString(content)
+		}
+		if router := sp.agent.OutputRouter(); router != nil {
+			router.RouteStreamChunk(content, contentType)
 		}
 	}
 

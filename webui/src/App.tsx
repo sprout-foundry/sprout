@@ -1,5 +1,5 @@
 import { EventsContextProvider, useEvents } from '@sprout/events';
-import { useState, useCallback, useRef, useMemo } from 'react';
+import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import AppContent from './components/AppContent';
 import AskUserDialog from './components/AskUserDialog';
 import { DisconnectedOverlay } from './components/DisconnectedOverlay';
@@ -71,6 +71,7 @@ function App() {
       editApprovalRequest: null,
       modelSelectionRequest: null,
       driftNotification: null,
+      outputVerbosity: 'default' as const,
     };
   }, []);
 
@@ -139,6 +140,35 @@ function AppInner() {
   // ── Hooks ───────────────────────────────────────────────────────
 
   const apiService = ApiService.getInstance();
+
+  // SP-076: sync output_verbosity from backend settings into AppState.
+  // The settings panel saves to the backend config; the frontend reads
+  // it back here so MessageItem can filter narration in compact mode.
+  useEffect(() => {
+    if (!state.isConnected) return;
+    let cancelled = false;
+    apiService
+      .getSettings()
+      .then((settings) => {
+        if (cancelled) return;
+        const verbosity = settings.output_verbosity;
+        if (
+          verbosity === 'compact' ||
+          verbosity === 'default' ||
+          verbosity === 'verbose'
+        ) {
+          if (verbosity !== state.outputVerbosity) {
+            setState(() => ({ outputVerbosity: verbosity }));
+          }
+        }
+      })
+      .catch(() => {
+        // Settings load failure is non-fatal — default verbosity applies.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [state.isConnected, apiService, setState]);
 
   const { handleModelChange, handleProviderChange, handleViewChange, pendingProviderRef } = useModelProviderHandlers({
     state,

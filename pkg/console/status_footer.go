@@ -339,6 +339,13 @@ func (f *StatusFooter) reservedRows() int {
 // 3 rows when a steer input is active (steer + rule + content). No-op when
 // the terminal is too short for both the footer and any usable scroll area.
 func (f *StatusFooter) applyScrollRegion() {
+	f.applyScrollRegionLocked()
+}
+
+// applyScrollRegionLocked is the lock-free inner body of applyScrollRegion.
+// Caller must hold outputMu. Safe to call from printExternalLocked where
+// the lock is already held.
+func (f *StatusFooter) applyScrollRegionLocked() {
 	_, rows := f.terminalSize()
 	reserved := f.reservedRows()
 	if rows < reserved+1 {
@@ -489,10 +496,6 @@ func (f *StatusFooter) ClearSteerLine() {
 // \0337/\0338) so any in-flight prompt rendering above the footer is
 // not perturbed.
 func (f *StatusFooter) draw() {
-	cols, rows := f.terminalSize()
-	if rows < f.reservedRows()+1 {
-		return
-	}
 	// Serialize against InputReader render and other console chrome so
 	// the multi-step save-cursor / move / clear / restore sequence can't
 	// interleave with a keystroke render. Without this, typing between
@@ -501,6 +504,18 @@ func (f *StatusFooter) draw() {
 	// has been displaced mid-render).
 	LockOutput()
 	defer UnlockOutput()
+	f.drawLocked()
+}
+
+// drawLocked is the lock-free inner body of draw. Caller MUST hold
+// outputMu. Extracted so printExternalLocked (which already holds
+// outputMu from PrintExternal) can re-render the footer without
+// re-acquiring the non-reentrant mutex and deadlocking.
+func (f *StatusFooter) drawLocked() {
+	cols, rows := f.terminalSize()
+	if rows < f.reservedRows()+1 {
+		return
+	}
 	line := f.composeLine(cols)
 	rule := strings.Repeat("─", cols)
 

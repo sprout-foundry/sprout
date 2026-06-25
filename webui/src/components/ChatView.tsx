@@ -46,6 +46,7 @@ function Chat(props: ChatProps): JSX.Element {
     isConnected,
     backendReachable,
     onRetryConnection,
+    outputVerbosity = 'default',
   } = props;
 
   const chatShellRef = useRef<HTMLDivElement>(null);
@@ -127,22 +128,41 @@ function Chat(props: ChatProps): JSX.Element {
     return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }, []);
 
+  // SP-076: messages ref so renderMessageItem can read the next message
+  // without putting `messages` in its useCallback deps (which would
+  // recreate the callback on every streaming chunk and defeat
+  // MessageItem's memo, re-running markdown + MessageSegments for
+  // every visible row).
+  const messagesRef = useRef<Message[]>(messages);
+  messagesRef.current = messages;
+
   // Stable Virtuoso itemContent — see the `formatTime` comment above.
   // An inline arrow recreates the function on every parent render,
   // and Virtuoso then treats every row as new and re-runs all the
   // MessageItem renders even though props are identical.
   const renderMessageItem = useCallback(
-    (index: number, message: Message) => (
-      <MessageItem
-        message={message}
-        onToolPillClick={onToolPillClick}
-        findMatchingToolExecution={findMatchingToolExecution}
-        getToolStatus={getToolStatusForMessage}
-        formatTime={formatTime}
-        messageIndex={index}
-      />
-    ),
-    [onToolPillClick, findMatchingToolExecution, getToolStatusForMessage, formatTime],
+    (index: number, message: Message) => {
+      // SP-076: the next message in the visible list. If it's another
+      // assistant message, this one is inter-tool narration (not the
+      // terminal answer) — compact mode hides it. Computed here so
+      // MessageItem stays a pure presentational component.
+      const nextMessage =
+        index + 1 < messagesRef.current.length ? messagesRef.current[index + 1] : null;
+      const hasNextAssistantMessage = nextMessage?.type === 'assistant';
+      return (
+        <MessageItem
+          message={message}
+          onToolPillClick={onToolPillClick}
+          findMatchingToolExecution={findMatchingToolExecution}
+          getToolStatus={getToolStatusForMessage}
+          formatTime={formatTime}
+          messageIndex={index}
+          outputVerbosity={outputVerbosity}
+          hasNextAssistantMessage={hasNextAssistantMessage}
+        />
+      );
+    },
+    [onToolPillClick, findMatchingToolExecution, getToolStatusForMessage, formatTime, outputVerbosity],
   );
 
   const handleReloadWithoutSSHPath = useCallback(() => {

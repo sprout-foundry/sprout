@@ -158,6 +158,8 @@ export interface AppState {
     sessionId: string;
     options: string[];
   } | null;
+  /** Controls how much inter-tool-call narration and streaming detail is shown. */
+  outputVerbosity: 'compact' | 'default' | 'verbose';
 }
 
 export interface OnboardingState {

@@ -266,6 +266,14 @@ func (r *SteerInputReader) Start() {
 	fmt.Fprint(os.Stderr, modifyOtherKeysEnable)
 
 	r.renderLine()
+
+	// Register as the active steer reader so background goroutines
+	// (async output worker, tool handlers) can print messages via
+	// PrintExternal without corrupting the steer panel. Cleared on Stop.
+	LockOutput()
+	setActiveSteerReader(r)
+	UnlockOutput()
+
 	go r.readLoop(stopCh, doneCh)
 }
 
@@ -319,6 +327,14 @@ func (r *SteerInputReader) Stop() {
 	} else if oldState != nil {
 		_ = exitSteerMode(r.fd, oldState)
 	}
+	// Clear the active steer reader slot so PrintExternal no longer
+	// routes through this reader after Stop. Must happen before we
+	// clear the steer line so any final mid-stop messages still go
+	// through the correct path.
+	LockOutput()
+	setActiveSteerReader(nil)
+	UnlockOutput()
+
 	// Clear the pinned line via the footer.
 	if r.footer != nil {
 		r.footer.ClearSteerLine()
@@ -1122,6 +1138,66 @@ func (r *SteerInputReader) renderLine() {
 	// cursor is a byte offset into the buffer; add the prefix byte
 	// length to get the offset within the full rendered string.
 	r.footer.SetSteerLineWithCursor(fmt.Sprintf("%s%s", prefix, text), len(prefix)+cursor)
+}
+
+// printExternalLocked prints a message above the scroll region without
+// disturbing the steer panel's pinned row. Caller MUST hold outputMu.
+//
+// Approach:
+//   1. Reset the scroll region to the full screen so the message can
+//      be written anywhere.
+//   2. Move the cursor to a row above the pinned steer area so the
+//      message lands in the conversation area, not on top of the panel.
+//   3. Write the message (it scrolls within the now-full region).
+//   4. Re-apply the footer's scroll region (clamps pinned rows back).
+//   5. Re-render the footer's pinned rows so the user sees their typed
+//      buffer in the right place.
+//
+// We bypass r.renderLine() here because it routes through
+// footer.SetSteerLineWithCursor → footer.draw(), which re-acquires
+// outputMu. We already hold outputMu (from PrintExternal), and
+// sync.Mutex is non-reentrant, so the re-acquire would deadlock.
+// Instead we set the footer's steer state directly and call
+// drawLocked(), the lock-free variant.
+func (r *SteerInputReader) printExternalLocked(msg string) {
+	if r.footer == nil {
+		fmt.Print(msg)
+		return
+	}
+	if !strings.HasSuffix(msg, "\n") {
+		msg += "\n"
+	}
+	// Reset scroll region to full screen.
+	fmt.Fprint(r.footer.w, "\033[r")
+	// Move cursor to the bottom of the scrollable area (just above
+	// the reserved rows) so the message lands in the conversation
+	// area, not on top of the steer panel.
+	_, rows := r.footer.terminalSize()
+	reserved := r.footer.reservedRows()
+	if rows > reserved+1 {
+		fmt.Fprintf(r.footer.w, "\033[%d;1H", rows-reserved)
+	}
+	fmt.Fprint(r.footer.w, msg)
+	// Re-clamp the scroll region.
+	r.footer.applyScrollRegionLocked()
+	// Update the footer's steer state directly (the same mutation
+	// renderLine → SetSteerLineWithCursor would do), then redraw with
+	// the lock-free variant. We hold outputMu; footer.draw() would
+	// try to re-acquire it and deadlock.
+	r.mu.Lock()
+	text := string(r.buffer)
+	cursor := r.cursorPos
+	prefix := SteerPromptPrefix
+	if r.submitMode == SteerSubmitModeQueue {
+		prefix = QueuePromptPrefix
+	}
+	r.mu.Unlock()
+	r.footer.mu.Lock()
+	r.footer.steerActive = true
+	r.footer.steerLine = fmt.Sprintf("%s%s", prefix, text)
+	r.footer.steerCursor = len(prefix) + cursor
+	r.footer.mu.Unlock()
+	r.footer.drawLocked()
 }
 
 // runExternalEditor opens $EDITOR (or VISUAL) with the current steer

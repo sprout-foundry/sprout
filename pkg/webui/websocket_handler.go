@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/events"
@@ -206,12 +207,63 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 		"data": map[string]interface{}{"connected": true, "session_id": sessionID, "client_id": clientID},
 	})
 
-	// Replay any missed events before we start the live loop. Subscribing
-	// AFTER the replay ensures the client sees buffered events strictly
-	// before any live events that arrive on this connection — there's no
-	// chance of seeing seq N+5 (live) before seq N+3 (replay).
+	// Subscribe to events BEFORE replay so live events published during the
+	// replay window are captured instead of being lost. The EventBus channel
+	// is buffered (1024), so it absorbs any burst without blocking.
+	eventCh := ws.eventBus.Subscribe(sessionID)
+	defer ws.eventBus.Unsubscribe(sessionID)
+
+	// Replay any missed events before we start the live loop.
+	// Because we subscribed above, any live events published during replay
+	// land in eventCh. We capture them in a drain goroutine and flush them
+	// after the replay batch so the client sees buffered events first, then
+	// live ones — preserving the invariant that seq N+3 (replay) arrives
+	// before seq N+5 (live).
 	if reattachChatID != "" {
+		// Drain goroutine: captures live events that arrive during replay.
+		var capturedMu sync.Mutex
+		var capturedEvents []events.UIEvent
+		drainStop := make(chan struct{})
+		drainDone := make(chan struct{})
+		go func() {
+			defer close(drainDone)
+			for {
+				select {
+				case <-drainStop:
+					return
+				case ev := <-eventCh:
+					capturedMu.Lock()
+					capturedEvents = append(capturedEvents, ev)
+					capturedMu.Unlock()
+				}
+			}
+		}()
+
 		ws.deliverChatRunReplay(safeConn, clientID, reattachChatID, afterSeq)
+
+		// Stop the drain goroutine and flush captured live events.
+		close(drainStop)
+		<-drainDone
+
+		// Get connInfo for filtering captured events.
+		connInfoVal, ok := ws.connections.Load(conn)
+		var connInfo *ConnectionInfo
+		if ok {
+			connInfo, _ = connInfoVal.(*ConnectionInfo)
+		}
+
+		capturedMu.Lock()
+		captured := capturedEvents
+		capturedMu.Unlock()
+		for _, ev := range captured {
+			if connInfo != nil && !ws.shouldForwardEventToConnection(ev, connInfo) {
+				continue
+			}
+			if err := safeConn.WriteJSON(ev); err != nil {
+				log.Printf("WebSocket %s write error flushing captured events: %v", sessionID, err)
+				return
+			}
+		}
 	}
 
 	// Set up close handler to send disconnect status
@@ -219,10 +271,6 @@ func (ws *ReactWebServer) handleWebSocket(w http.ResponseWriter, r *http.Request
 		log.Printf("WebSocket %s closing with code %d: %s", sessionID, code, text)
 		return nil
 	})
-
-	// Subscribe to events with unique session ID to support multiple clients
-	eventCh := ws.eventBus.Subscribe(sessionID)
-	defer ws.eventBus.Unsubscribe(sessionID)
 
 	// Use separate goroutines for reading and writing
 	// This is the standard pattern for bidirectional WebSocket communication
@@ -440,9 +488,23 @@ func (ws *ReactWebServer) shouldForwardEventToConnection(event events.UIEvent, c
 		}
 		// Client ID matches, now check chat_id if present
 		if strings.TrimSpace(targetChatID) != "" {
-			// Event has chat_id - connection must match or be unfiltered
-			if strings.TrimSpace(connInfo.ChatID) != "" && strings.TrimSpace(connInfo.ChatID) != strings.TrimSpace(targetChatID) {
-				return false
+			targetChat := strings.TrimSpace(targetChatID)
+			// Event has chat_id - connection must match, be unfiltered, or be subscribed.
+			// Security-scoped events are strict: they only allow when the connection's
+			// primary chat_id matches (or is unfiltered), NOT via chatSubscribers.
+			if isSecurityScopedEvent(event.Type) {
+				if strings.TrimSpace(connInfo.ChatID) != "" && strings.TrimSpace(connInfo.ChatID) != targetChat {
+					return false
+				}
+			} else {
+				// For normal events: allow if connection has no specific chat,
+				// its primary chat matches, or it has explicitly subscribed to
+				// the target chat (multi-chat switch over persistent WS).
+				if strings.TrimSpace(connInfo.ChatID) != "" &&
+					strings.TrimSpace(connInfo.ChatID) != targetChat &&
+					!ws.connectionSubscribedToChat(connInfo, targetChat) {
+					return false
+				}
 			}
 		}
 		return true
@@ -450,9 +512,12 @@ func (ws *ReactWebServer) shouldForwardEventToConnection(event events.UIEvent, c
 
 	// No client_id in event - check chat_id targeting
 	if strings.TrimSpace(targetChatID) != "" {
+		targetChat := strings.TrimSpace(targetChatID)
 		// Event has chat_id but no client_id
-		// Forward if connection has matching chat_id or no specific chat
-		if strings.TrimSpace(connInfo.ChatID) != "" && strings.TrimSpace(connInfo.ChatID) != strings.TrimSpace(targetChatID) {
+		// Forward if connection has matching chat_id, no specific chat, or is subscribed.
+		if strings.TrimSpace(connInfo.ChatID) != "" &&
+			strings.TrimSpace(connInfo.ChatID) != targetChat &&
+			!ws.connectionSubscribedToChat(connInfo, targetChat) {
 			return false
 		}
 		return true

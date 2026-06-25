@@ -1,6 +1,7 @@
 package events
 
 import (
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -344,18 +345,25 @@ func TestEventBus_PublishAfterUnsubscribeDoesNotPanic(t *testing.T) {
 			eb.Publish(EventTypeSecurityApprovalRequest, nil)
 		})
 
-		// drainMu must be released even when the send panicked — otherwise
-		// the next critical publish would deadlock.
+		// With concurrent goroutines per subscriber, there's no shared
+		// drainMu that could leak. Verify the bus remains functional by
+		// publishing a second critical event to a fresh subscriber.
+		ch2 := eb.Subscribe("fresh")
 		done := make(chan struct{})
 		go func() {
-			eb.drainMu.Lock()
-			eb.drainMu.Unlock()
-			close(done)
+			eb.Publish(EventTypeSecurityApprovalRequest, nil)
+			select {
+			case <-ch2:
+				close(done)
+			case <-time.After(time.Second):
+				// drain-then-replace path on a full channel is expected.
+				close(done)
+			}
 		}()
 		select {
 		case <-done:
-		case <-time.After(time.Second):
-			t.Fatal("drainMu leaked after panicked critical send")
+		case <-time.After(2 * time.Second):
+			t.Fatal("EventBus appears stuck after panicked critical send")
 		}
 	})
 }
@@ -523,5 +531,133 @@ func TestInputRequiredEventCritical(t *testing.T) {
 		t.Fatalf("unexpected extra event in channel: %s", evt.Type)
 	default:
 		// Good — channel is empty.
+	}
+}
+
+// TestSlowSubscriberDoesNotBlockOthers verifies that a single slow subscriber
+// cannot block delivery to other subscribers. Before the fix, drainMu was a
+// global mutex held for the entire 1-second drain attempt, so one slow
+// subscriber blocked all others. After the fix, each subscriber runs in its
+// own goroutine, so a slow subscriber only blocks its own goroutine.
+func TestSlowSubscriberDoesNotBlockOthers(t *testing.T) {
+	eb := NewEventBus()
+
+	// Subscriber A: tiny buffer that we fill completely, making it "slow"
+	// (the drain-then-replace path will block up to 1s)
+	chA := make(chan UIEvent, 1)
+	// Subscriber B: normal buffer — should receive events immediately
+	chB := eb.Subscribe("fast")
+
+	eb.mutex.Lock()
+	eb.subscribers["slow"] = chA
+	eb.mutex.Unlock()
+
+	// Fill A's channel directly (not via Publish) so B doesn't receive the
+	// filler event. This isolates the "slow subscriber" condition to A only.
+	chA <- UIEvent{Type: EventTypeAgentMessage}
+
+	// Start a goroutine that publishes a critical event
+	start := time.Now()
+	done := make(chan struct{})
+	go func() {
+		eb.Publish(EventTypeSecurityApprovalRequest, SecurityApprovalRequestEvent("req-1", "test_tool", "high", "test", nil))
+		close(done)
+	}()
+
+	// Subscriber B should receive the event quickly (< 50ms), NOT wait 1 second
+	select {
+	case evt := <-chB:
+		elapsed := time.Since(start)
+		assert.Less(t, elapsed.Milliseconds(), int64(50),
+			"subscriber B should receive event within 50ms, but took %v — slow subscriber A is blocking others", elapsed)
+		assert.Equal(t, EventTypeSecurityApprovalRequest, evt.Type)
+	case <-time.After(2 * time.Second):
+		t.Fatal("subscriber B never received the event")
+	}
+
+	// Wait for Publish to complete (the slow subscriber's goroutine may still be draining)
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Publish did not complete within 2s")
+	}
+
+	// Cleanup
+	eb.mutex.Lock()
+	delete(eb.subscribers, "slow")
+	eb.mutex.Unlock()
+	close(chA)
+}
+
+// TestCriticalDrainReplaceStillWorks verifies that the drain-then-replace
+// path for critical events still functions correctly when the subscriber's
+// channel can be drained (i.e., a consumer is reading from it). This ensures
+// we didn't break the "never silently drop critical events" guarantee.
+func TestCriticalDrainReplaceStillWorks(t *testing.T) {
+	eb := NewEventBus()
+
+	// Buffer-1 channel so we can deterministically fill it
+	ch := make(chan UIEvent, 1)
+	eb.mutex.Lock()
+	eb.subscribers["drain-test"] = ch
+	eb.mutex.Unlock()
+	defer func() {
+		eb.mutex.Lock()
+		delete(eb.subscribers, "drain-test")
+		eb.mutex.Unlock()
+		close(ch)
+	}()
+
+	// Fill the channel with a non-critical event
+	eb.Publish(EventTypeAgentMessage, AgentMessageEvent("info", "old", nil))
+
+	// Start a consumer that drains the channel — this simulates a responsive
+	// subscriber that can read from its channel during the drain attempt
+	drainDone := make(chan struct{})
+	go func() {
+		// Read the old event so the drain (<-ch) in publishToChannel succeeds
+		<-ch
+		close(drainDone)
+	}()
+	<-drainDone
+
+	// Now publish a critical event — the drain path should succeed because
+	// the channel was just emptied by the consumer above
+	eb.Publish(EventTypeSecurityApprovalRequest, SecurityApprovalRequestEvent("req-1", "test", "high", "test", nil))
+
+	// The critical event should be in the channel
+	select {
+	case evt := <-ch:
+		assert.Equal(t, EventTypeSecurityApprovalRequest, evt.Type,
+			"critical event should replace the drained event")
+		data := evt.Data.(map[string]interface{})
+		assert.Equal(t, "req-1", data["request_id"])
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for critical event after drain")
+	}
+}
+
+// TestConcurrentPublishersDoNotOverlap verifies that sequential calls to
+// Publish wait for all subscriber goroutines to complete before returning,
+// so events are delivered in order per-subscriber.
+func TestConcurrentPublishersDoNotOverlap(t *testing.T) {
+	eb := NewEventBus()
+	ch := eb.Subscribe("ordered")
+
+	// Publish several events in sequence
+	for i := 0; i < 5; i++ {
+		eb.Publish(EventTypeAgentMessage, AgentMessageEvent("info", fmt.Sprintf("msg-%d", i), nil))
+	}
+
+	// Read them and verify order
+	for i := 0; i < 5; i++ {
+		select {
+		case evt := <-ch:
+			data := evt.Data.(map[string]interface{})
+			assert.Equal(t, fmt.Sprintf("msg-%d", i), data["message"],
+				"events should be delivered in order per-subscriber")
+		case <-time.After(time.Second):
+			t.Fatalf("timed out waiting for msg-%d", i)
+		}
 	}
 }

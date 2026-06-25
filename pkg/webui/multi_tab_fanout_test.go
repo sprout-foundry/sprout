@@ -142,3 +142,207 @@ func TestShouldForwardEventToConnection_NoChatScopeStillRequiresClientMatch(t *t
 		t.Error("clientID-only event must not fan out; only chat-scoped events do")
 	}
 }
+
+// TestShouldForwardEventToConnection_PersistentWSChatSwitch verifies the
+// fix for the multi-chat-switch bug: when a user switches chats in the UI
+// over a persistent WebSocket, connInfo.ChatID still reflects the original
+// chat but the connection has subscribed to the new chat via chatSubscribers.
+// Events for the new chat with a matching clientID should be forwarded.
+func TestShouldForwardEventToConnection_PersistentWSChatSwitch(t *testing.T) {
+	ws := &ReactWebServer{
+		chatSubscribers: newChatSubscribersRegistry(),
+	}
+
+	conn := fakeConn()
+	connInfo := &ConnectionInfo{
+		ClientID: "client-1",
+		ChatID:   "chat-A", // Original chat from handshake
+		Conn:     conn,
+	}
+
+	// User switches to chat-B in the UI — subscribes via chatSubscribers.
+	ws.chatSubscribers.Subscribe("chat-B", conn)
+
+	// Event for chat-B with matching clientID.
+	ev := events.UIEvent{
+		Type: events.EventTypeStreamChunk,
+		Data: map[string]interface{}{
+			"client_id": "client-1",
+			"chat_id":   "chat-B",
+			"content":   "streaming output",
+		},
+	}
+
+	if !ws.shouldForwardEventToConnection(ev, connInfo) {
+		t.Error("event for subscribed chat-B should be forwarded even though connInfo.ChatID is chat-A")
+	}
+}
+
+// TestShouldForwardEventToConnection_PersistentWSChatSwitch_NoSubscribe
+// verifies cross-chat isolation is preserved: without an explicit Subscribe
+// call, events for a different chat are still dropped even when clientID
+// matches.
+func TestShouldForwardEventToConnection_PersistentWSChatSwitch_NoSubscribe(t *testing.T) {
+	ws := &ReactWebServer{
+		chatSubscribers: newChatSubscribersRegistry(),
+	}
+
+	conn := fakeConn()
+	connInfo := &ConnectionInfo{
+		ClientID: "client-1",
+		ChatID:   "chat-A",
+		Conn:     conn,
+	}
+	// NOTE: No Subscribe("chat-B", conn) call here.
+
+	ev := events.UIEvent{
+		Type: events.EventTypeStreamChunk,
+		Data: map[string]interface{}{
+			"client_id": "client-1",
+			"chat_id":   "chat-B",
+			"content":   "streaming output",
+		},
+	}
+
+	if ws.shouldForwardEventToConnection(ev, connInfo) {
+		t.Error("event for chat-B should be dropped when connection is NOT subscribed to chat-B")
+	}
+}
+
+// TestShouldForwardEventToConnection_SecurityEventStrictWithSubscribe
+// verifies that security-scoped events (ask_user_request, security_approval_request,
+// security_prompt_request) do NOT benefit from chatSubscribers subscription.
+// Even when the connection has subscribed to the target chat, security events
+// still require the connection's primary chatID to match (or be unfiltered).
+func TestShouldForwardEventToConnection_SecurityEventStrictWithSubscribe(t *testing.T) {
+	ws := &ReactWebServer{
+		chatSubscribers: newChatSubscribersRegistry(),
+	}
+
+	conn := fakeConn()
+	connInfo := &ConnectionInfo{
+		ClientID: "client-1",
+		ChatID:   "chat-A",
+		Conn:     conn,
+	}
+
+	// Connection subscribed to chat-B.
+	ws.chatSubscribers.Subscribe("chat-B", conn)
+
+	// Security event for chat-B with matching clientID.
+	// This should NOT be forwarded because security events are strict.
+	ev := events.UIEvent{
+		Type: events.EventTypeAskUserRequest,
+		Data: map[string]interface{}{
+			"client_id":  "client-1",
+			"chat_id":    "chat-B",
+			"request_id": "ask-1",
+			"question":   "approve this?",
+		},
+	}
+
+	if ws.shouldForwardEventToConnection(ev, connInfo) {
+		t.Error("ask_user_request must NOT be forwarded via chatSubscribers even when subscribed")
+	}
+
+	// Same for security_approval_request.
+	ev2 := events.UIEvent{
+		Type: events.EventTypeSecurityApprovalRequest,
+		Data: map[string]interface{}{
+			"client_id":  "client-1",
+			"chat_id":    "chat-B",
+			"request_id": "sec-1",
+			"tool_name":  "shell_command",
+		},
+	}
+	if ws.shouldForwardEventToConnection(ev2, connInfo) {
+		t.Error("security_approval_request must NOT be forwarded via chatSubscribers even when subscribed")
+	}
+
+	// Same for security_prompt_request.
+	ev3 := events.UIEvent{
+		Type: events.EventTypeSecurityPromptRequest,
+		Data: map[string]interface{}{
+			"client_id":  "client-1",
+			"chat_id":    "chat-B",
+			"request_id": "prompt-1",
+		},
+	}
+	if ws.shouldForwardEventToConnection(ev3, connInfo) {
+		t.Error("security_prompt_request must NOT be forwarded via chatSubscribers even when subscribed")
+	}
+
+	// Same for edit_approval_request — it is also security-scoped.
+	ev4 := events.UIEvent{
+		Type: events.EventTypeEditApprovalRequest,
+		Data: map[string]interface{}{
+			"client_id":  "client-1",
+			"chat_id":    "chat-B",
+			"request_id": "edit-1",
+		},
+	}
+	if ws.shouldForwardEventToConnection(ev4, connInfo) {
+		t.Error("edit_approval_request must NOT be forwarded via chatSubscribers even when subscribed")
+	}
+}
+
+// TestShouldForwardEventToConnection_NoClientID_UsesChatSubscribers
+// verifies that events with chat_id but NO client_id also honor
+// chatSubscribers when the connection's primary chatID differs.
+func TestShouldForwardEventToConnection_NoClientID_UsesChatSubscribers(t *testing.T) {
+	ws := &ReactWebServer{
+		chatSubscribers: newChatSubscribersRegistry(),
+	}
+
+	conn := fakeConn()
+	connInfo := &ConnectionInfo{
+		ClientID: "client-1",
+		ChatID:   "chat-A",
+		Conn:     conn,
+	}
+
+	// Connection subscribed to chat-B.
+	ws.chatSubscribers.Subscribe("chat-B", conn)
+
+	// Event with chat_id but no client_id.
+	ev := events.UIEvent{
+		Type: events.EventTypeQueryProgress,
+		Data: map[string]interface{}{
+			"chat_id": "chat-B",
+			"message": "query progress update",
+		},
+	}
+
+	if !ws.shouldForwardEventToConnection(ev, connInfo) {
+		t.Error("chat-only event should be forwarded when connection is subscribed to the chat")
+	}
+}
+
+// TestShouldForwardEventToConnection_NoClientID_NoSubscribe
+// verifies that events with chat_id but no client_id are still dropped
+// when the connection is NOT subscribed to the target chat.
+func TestShouldForwardEventToConnection_NoClientID_NoSubscribe(t *testing.T) {
+	ws := &ReactWebServer{
+		chatSubscribers: newChatSubscribersRegistry(),
+	}
+
+	conn := fakeConn()
+	connInfo := &ConnectionInfo{
+		ClientID: "client-1",
+		ChatID:   "chat-A",
+		Conn:     conn,
+	}
+	// NOTE: No Subscribe("chat-B", conn).
+
+	ev := events.UIEvent{
+		Type: events.EventTypeQueryProgress,
+		Data: map[string]interface{}{
+			"chat_id": "chat-B",
+			"message": "query progress update",
+		},
+	}
+
+	if ws.shouldForwardEventToConnection(ev, connInfo) {
+		t.Error("chat-only event should be dropped when connection is NOT subscribed to chat-B")
+	}
+}

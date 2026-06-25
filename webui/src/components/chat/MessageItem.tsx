@@ -20,6 +20,20 @@ interface MessageItemProps {
    * Passed through to MessageBubble for data-message-index attribute.
    */
   messageIndex?: number;
+  /**
+   * SP-076: display verbosity for inter-tool narration filtering.
+   * `compact` hides short narration messages between tool calls;
+   * `default` shows everything (no filtering);
+   * `verbose` shows everything with reasoning expanded inline.
+   */
+  outputVerbosity?: 'compact' | 'default' | 'verbose';
+  /**
+   * SP-076: whether this message is followed by another assistant
+   * message in the chat history. When true, the message is mid-conversation
+   * (narration between tool calls or interim reasoning), not the terminal
+   * answer. Used by `compact` mode to hide inter-tool narration.
+   */
+  hasNextAssistantMessage?: boolean;
 }
 
 export const MessageItem = memo(function MessageItem({
@@ -29,6 +43,8 @@ export const MessageItem = memo(function MessageItem({
   getToolStatus,
   formatTime,
   messageIndex,
+  outputVerbosity = 'default',
+  hasNextAssistantMessage = false,
 }: MessageItemProps) {
   // Suppress empty bubbles. Session restore replays the assistant turn
   // boundaries verbatim, including tool-only turns whose persisted
@@ -46,6 +62,23 @@ export const MessageItem = memo(function MessageItem({
   if (!hasContent && !hasReasoning && !hasToolRefs) {
     return null;
   }
+
+  // SP-076 compact mode: hide short narration messages that sit between
+  // tool calls. These are the "Let me check..." interjections the model
+  // emits before each tool invocation — useful in `verbose` for debugging,
+  // noisy in `compact`. Heuristic: assistant message with toolRefs AND
+  // short prose (< 120 chars) AND not the terminal answer (more
+  // assistant messages follow). The terminal answer always renders even
+  // if short, because there's no `hasNextAssistantMessage`.
+  const isInterToolNarration =
+    message.type === 'assistant' &&
+    hasToolRefs &&
+    hasContent &&
+    message.content.length < 120 &&
+    hasNextAssistantMessage;
+  if (outputVerbosity === 'compact' && isInterToolNarration) {
+    return null;
+  }
   return (
     <MessageBubble
       type={message.type}
@@ -59,7 +92,12 @@ export const MessageItem = memo(function MessageItem({
       {message.type === 'assistant' ? (
         <>
           {message.reasoning && message.reasoning.trim() && (
-            <details className="reasoning-block" open={false}>
+            // SP-076: verbose mode expands reasoning inline instead of
+            // hiding it behind a <details> toggle.
+            <details
+              className="reasoning-block"
+              open={outputVerbosity === 'verbose'}
+            >
               <summary className="reasoning-summary">
                 <BrainCircuit size={13} className="reasoning-icon" />
                 <span>Reasoning</span>

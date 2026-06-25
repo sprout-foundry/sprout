@@ -247,10 +247,26 @@ func handleGitOperation(ctx context.Context, a *Agent, args map[string]interface
 	if argsStr != "" {
 		pseudoCmd += " " + argsStr
 	}
-	if risk := a.EvaluateOperationRisk(pseudoCmd); risk == configuration.RiskLevelHigh {
+	// Resolution mirrors the shell_command risk gate (see comment block
+	// above this function):
+	//   Critical → ALWAYS reject. No persona, profile, or interactive
+	//              prompt can override this.
+	//   High     → reject unless the user (or a subagent inheriting root
+	//              authority) approves via highRiskApprovedForCommand.
+	//              The hard-reject that used to live here meant an
+	//              approved `git checkout` was still blocked — the
+	//              approval prompt below (approvalPrompter) was never
+	//              reached because this check returned early.
+	if risk := a.EvaluateOperationRisk(pseudoCmd); risk == configuration.RiskLevelCritical {
 		return "", agenterrors.NewSecurityError(
-			fmt.Sprintf("high-risk git operation rejected by persona risk cascade: %s (command: '%s')", risk, pseudoCmd), nil,
+			fmt.Sprintf("critical git operation blocked (cannot be approved by any profile or persona): '%s'", pseudoCmd), nil,
 		)
+	} else if risk == configuration.RiskLevelHigh {
+		if !a.highRiskApprovedForCommand(ctx, pseudoCmd) {
+			return "", agenterrors.NewSecurityError(
+				fmt.Sprintf("high-risk git operation rejected by persona risk cascade: %s (command: '%s')", risk, pseudoCmd), nil,
+			)
+		}
 	}
 
 	// Enrich context with workspace root so executeGitCommand runs in the

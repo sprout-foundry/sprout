@@ -326,7 +326,6 @@ func downloadTo(url, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
 
 	src := io.Reader(resp.Body)
 	if resp.ContentLength > 0 {
@@ -342,7 +341,14 @@ func downloadTo(url, dst string) error {
 	}
 
 	if _, err := io.Copy(f, src); err != nil {
+		f.Close()
 		return err
+	}
+	// Close explicitly so flush/write errors surfaced at close time (e.g.
+	// disk full, NFS commit failure) are not silently dropped — a partially
+	// written archive would otherwise be treated as a complete download.
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("flush %s: %w", dst, err)
 	}
 	return nil
 }

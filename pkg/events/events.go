@@ -114,10 +114,6 @@ type EventBus struct {
 	subscribers map[string]chan UIEvent
 	mutex       sync.RWMutex
 	nextID      int64
-
-	// drainMu serializes critical event delivery so that concurrent
-	// critical events don't race on the drain-then-send sequence.
-	drainMu sync.Mutex
 }
 
 // subscriberBufferSize is the per-subscriber channel capacity. Non-critical
@@ -182,27 +178,34 @@ func (eb *EventBus) Publish(eventType string, data any) {
 		eventType == EventTypeEditApprovalRequest ||
 		eventType == EventTypeInputRequired
 
-	// Publish to all subscribers without holding the lock
+	// Publish to all subscribers concurrently so a single slow subscriber
+	// cannot block delivery to the rest. Each subscriber runs in its own
+	// goroutine; a WaitGroup ensures sequential Publish calls don't overlap.
+	var wg sync.WaitGroup
 	for _, ch := range subscribers {
-		// Recover from send on closed channel — Unsubscribe may close ch
-		// concurrently after we copied the subscriber list. `defer recover()`
-		// does NOT recover panics: recover() only returns non-nil when
-		// called inside a deferred function body, not when it IS the
-		// deferred call.
-		func() {
-			defer func() { _ = recover() }()
-			eb.publishToChannel(ch, event, eventType, isCritical)
-		}()
+		wg.Add(1)
+		go func(ch chan UIEvent) {
+			defer wg.Done()
+			// Recover from send on closed channel — Unsubscribe may close ch
+			// concurrently after we copied the subscriber list. `defer recover()`
+			// does NOT recover panics: recover() only returns non-nil when
+			// called inside a deferred function body, not when it IS the
+			// deferred call.
+			func() {
+				defer func() { _ = recover() }()
+				eb.publishToChannel(ch, event, eventType, isCritical)
+			}()
+		}(ch)
 	}
+	wg.Wait()
 }
 
 // publishToChannel sends an event to a single subscriber channel.
 // May panic if ch is closed; the caller wraps the call in a recover().
-// drainMu is released via defer so a panic on the send doesn't leak the lock.
+// Each subscriber is delivered in its own goroutine, so a slow subscriber
+// cannot block delivery to others.
 func (eb *EventBus) publishToChannel(ch chan UIEvent, event UIEvent, eventType string, isCritical bool) {
 	if isCritical {
-		eb.drainMu.Lock()
-		defer eb.drainMu.Unlock()
 		select {
 		case ch <- event:
 		default:

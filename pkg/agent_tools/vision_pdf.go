@@ -20,6 +20,19 @@ import (
 
 // ============================================================================
 // PDF Processing
+//
+// Two-stage pipeline:
+//   1. Text extraction via pypdf — fast path for text-based PDFs (cross-platform,
+//      no remote calls).
+//   2. Page-rasterization OCR via the configured vision client — for scanned
+//      / image-heavy PDFs that have no extractable text.
+//
+// The previous direct-PDF OCR path (sending the raw PDF blob to the vision
+// model in one request) was removed: it was unreliable across providers, had
+// no retry semantics, and failed silently for PDFs above the model's input
+// size limit. The page-rasterization path renders PNGs locally via
+// pypdfium2 and sends each page as an image — a format every vision model
+// accepts and a well-trodden code path.
 // ============================================================================
 
 const (
@@ -27,35 +40,17 @@ const (
 	maxPDFOCRPages  = 8
 )
 
-// ProcessPDFWithVision processes a PDF file using the configured vision/OCR model
+// ProcessPDFWithVision processes a PDF file using the configured vision client.
+// The pipeline is identical to ProcessPDFForTextOnly today; this entry point
+// remains for callers that historically used it.
 func ProcessPDFWithVision(ctx context.Context, pdfPath string) (string, error) {
-	resolvedPath, cleanup, err := ResolvePDFInputPath(ctx, pdfPath)
-	if err != nil {
-		return "", fmt.Errorf("resolve PDF input path: %w", err)
-	}
-	defer cleanup()
-
-	pythonExec, err := GetPDFPythonExecutable()
-	if err != nil {
-		return "", fmt.Errorf("PDF precheck: %w", err)
-	}
-
-	client, err := CreateVisionClient()
-	if err != nil {
-		return "", fmt.Errorf("create vision client for PDF OCR: %w", err)
-	}
-
-	text, err := processPDFWithProvider(ctx, resolvedPath, pythonExec, client)
-	if err != nil {
-		return "", fmt.Errorf("PDF OCR: %w", err)
-	}
-
-	return text, nil
+	return ProcessPDFForTextOnly(ctx, pdfPath)
 }
 
 // ProcessPDFForTextOnly processes a PDF to extract text content.
 // First tries pypdf text extraction (no vision client required).
-// If text extraction fails and a vision client is available, falls back to OCR.
+// If text extraction fails or the PDF has no extractable text and a vision
+// client is available, falls back to page-rasterization OCR.
 func ProcessPDFForTextOnly(ctx context.Context, pdfPath string) (string, error) {
 	resolvedPath, cleanup, err := ResolvePDFInputPath(ctx, pdfPath)
 	if err != nil {
@@ -76,14 +71,13 @@ func ProcessPDFForTextOnly(ctx context.Context, pdfPath string) (string, error) 
 	if err != nil {
 		return "", fmt.Errorf("PDF has no extractable text and no vision client available for OCR: %w", err)
 	}
-	if pythonExec != "" {
-		return processPDFForOCROnly(ctx, resolvedPath, pythonExec, client)
+	if pythonExec == "" {
+		return "", fmt.Errorf("PDF has no extractable text and Python is unavailable for page rasterization OCR")
 	}
-
-	return "", fmt.Errorf("PDF has no extractable text and Python is unavailable for page rasterization OCR")
+	return processPDFForOCROnly(ctx, resolvedPath, pythonExec, client)
 }
 
-// processPDFForOCROnly processes a PDF using OCR steps only (skips pypdf text extraction).
+// processPDFForOCROnly processes a PDF using page-rasterization OCR (skips pypdf text extraction).
 func processPDFForOCROnly(ctx context.Context, pdfPath, pythonExec string, client api.ClientInterface) (string, error) {
 	fileInfo, err := os.Stat(pdfPath)
 	if err != nil {
@@ -95,11 +89,6 @@ func processPDFForOCROnly(ctx context.Context, pdfPath, pythonExec string, clien
 		return "", fmt.Errorf("PDF file too large (%d MB, maximum size is %d MB)", fileInfo.Size()/1024/1024, maxSize/1024/1024)
 	}
 
-	directOCRText, directOCRErr := processPDFWithVisionModel(ctx, pdfPath, client)
-	if directOCRErr == nil && len(strings.TrimSpace(directOCRText)) > 0 {
-		return directOCRText, nil
-	}
-
 	ocrText, ocrErr := processPDFWithOCR(ctx, pdfPath, pythonExec, client)
 	if ocrErr == nil && len(strings.TrimSpace(ocrText)) > 0 {
 		return ocrText, nil
@@ -108,7 +97,9 @@ func processPDFForOCROnly(ctx context.Context, pdfPath, pythonExec string, clien
 	return "", fmt.Errorf("PDF no extractable text: page OCR: %w", ocrErr)
 }
 
-// The caller must invoke the returned cleanup function when done with the resolved path.
+// ResolvePDFInputPath resolves a PDF input (local path or http(s) URL) to a
+// local path that downstream code can read. The caller must invoke the
+// returned cleanup function when done with the resolved path.
 func ResolvePDFInputPath(ctx context.Context, inputPath string) (string, func(), error) {
 	if strings.HasPrefix(inputPath, "http://") || strings.HasPrefix(inputPath, "https://") {
 		return downloadRemotePDFToTemp(ctx, inputPath)
@@ -165,54 +156,17 @@ func downloadRemotePDFToTemp(ctx context.Context, url string) (string, func(), e
 	return tmp.Name(), cleanup, nil
 }
 
-// processPDFWithProvider processes a PDF using the specified provider and model
-// Works cross-platform without system dependencies (poppler, tesseract, etc.)
-func processPDFWithProvider(ctx context.Context, pdfPath, pythonExec string, client api.ClientInterface) (string, error) {
-	// Check file size
-	fileInfo, err := os.Stat(pdfPath)
-	if err != nil {
-		return "", fmt.Errorf("stat PDF file: %w", err)
-	}
-
-	maxSize := int64(50 * 1024 * 1024) // 50MB for PDF OCR
-	if fileInfo.Size() > maxSize {
-		return "", fmt.Errorf("PDF file too large (%d MB), maximum size is %d MB", fileInfo.Size()/1024/1024, maxSize/1024/1024)
-	}
-
-	// First try to extract text using pypdf (works for text-based PDFs, cross-platform)
-	text, hasText, err := extractTextWithPypdf(ctx, pdfPath, pythonExec)
-	if err == nil && hasText && len(strings.TrimSpace(text)) > 0 {
-		return text, nil
-	}
-
-	// For scanned/image-heavy PDFs, first try direct PDF OCR in a single model request.
-	directOCRText, directOCRErr := processPDFWithVisionModel(ctx, pdfPath, client)
-	if directOCRErr == nil && len(strings.TrimSpace(directOCRText)) > 0 {
-		return directOCRText, nil
-	}
-
-	// If no text found, try OCR by extracting images from PDF (bounded work).
-	if !hasText || len(strings.TrimSpace(text)) == 0 {
-		ocrText, ocrErr := processPDFWithOCR(ctx, pdfPath, pythonExec, client)
-		if ocrErr == nil && len(strings.TrimSpace(ocrText)) > 0 {
-			return ocrText, nil
-		}
-		return "", fmt.Errorf("PDF no extractable text: image OCR: %w", ocrErr)
-	}
-
-	return text, nil
-}
-
 // extractTextWithPypdf extracts text from PDF using pypdf (5000 char output limit).
 func extractTextWithPypdf(ctx context.Context, pdfPath, pythonExec string) (string, bool, error) {
 	cmd := newPypdfTextExtractionCommand(ctx, pythonExec, pdfPath, 5000)
 	return executePypdfTextExtraction(cmd)
 }
 
-// processPDFWithOCR extracts images from PDF and uses vision model for OCR
-// Cross-platform solution using pypdf for image extraction (BSD licensed)
+// processPDFWithOCR renders PDF pages to PNGs (via pypdfium2) and sends each
+// to the vision client for OCR. If page rasterization yields nothing, falls
+// back to per-image extraction via pypdf. Cross-platform, no system deps
+// (no poppler, no tesseract).
 func processPDFWithOCR(ctx context.Context, pdfPath, pythonExec string, client api.ClientInterface) (string, error) {
-	// Prefer page-level rasterization so OCR is one request per page.
 	pageImages, pageErr := extractPageImagesFromPDF(ctx, pdfPath, pythonExec)
 	if pageErr == nil && len(pageImages) > 0 {
 		if len(pageImages) > maxPDFOCRPages {
@@ -224,7 +178,6 @@ func processPDFWithOCR(ctx context.Context, pdfPath, pythonExec string, client a
 		}
 	}
 
-	// Extract images from PDF using pypdf (cross-platform, no external deps)
 	images, err := extractImagesFromPDF(ctx, pdfPath, pythonExec)
 	if err != nil {
 		if pageErr != nil {
@@ -244,7 +197,6 @@ func processPDFWithOCR(ctx context.Context, pdfPath, pythonExec string, client a
 	text, ocrErr := processOCRImages(ctx, images, client, "Image")
 	if ocrErr != nil {
 		if pageErr != nil {
-			// Note: pageErr is included with %v for context but not wrapped - only ocrErr is the primary error
 			return "", fmt.Errorf("both OCR paths: page=%v, image=%w", pageErr, ocrErr)
 		}
 		return "", fmt.Errorf("OCR image processing: %w", ocrErr)
@@ -278,10 +230,8 @@ func processOCRImages(ctx context.Context, images [][]byte, client api.ClientInt
 
 		imgBase64 := base64.StdEncoding.EncodeToString(preparedData)
 
-		// Create prompt for OCR
 		prompt := GetOCRPrompt()
 
-		// Create message with image
 		messages := []api.Message{
 			{
 				Role:    "user",
@@ -290,8 +240,8 @@ func processOCRImages(ctx context.Context, images [][]byte, client api.ClientInt
 			},
 		}
 
-		// Send request. The parent context is threaded through so the
-		// Stop button can abort in-flight vision/OCR calls (SP-034-1c).
+		// The parent context is threaded through so the Stop button can
+		// abort in-flight vision/OCR calls (SP-034-1c).
 		response, err := client.SendVisionRequest(ctx, messages, nil, "", false)
 		if err != nil {
 			failures++
@@ -368,7 +318,7 @@ try:
     from pypdf import PdfReader
     from PIL import Image
     import io
-    
+
     reader = PdfReader(sys.argv[1])
     images = []
     for page_num, page in enumerate(reader.pages):
@@ -379,7 +329,7 @@ try:
                     try:
                         data = xobjects[obj].get_data()
                         filter_type = str(xobjects[obj].get('/Filter', ''))
-                        
+
                         # Handle different filter types
                         if 'DCTDecode' in filter_type:
                             # JPEG encoded - decode directly with PIL
@@ -397,7 +347,7 @@ try:
                                 if 'RGB' in cs:
                                     color_mode = 'RGB'
                             img = Image.frombytes(color_mode, (width, height), data)
-                        
+
                         # Convert to PNG
                         png_io = io.BytesIO()
                         img.save(png_io, 'PNG')
@@ -417,47 +367,6 @@ except Exception as e:
 	}
 
 	return decodeBase64ImagePayload(output), nil
-}
-
-// processPDFWithVisionModel sends PDF directly to the vision/OCR model
-// This is cross-platform and doesn't require poppler or tesseract
-func processPDFWithVisionModel(ctx context.Context, pdfPath string, client api.ClientInterface) (string, error) {
-	// Read PDF file
-	data, err := os.ReadFile(pdfPath)
-	if err != nil {
-		return "", fmt.Errorf("read PDF: %w", err)
-	}
-	if !looksLikePDF(data) {
-		return "", fmt.Errorf("input is not a valid PDF file (missing %%PDF header)")
-	}
-
-	// Convert to base64
-	pdfBase64 := base64.StdEncoding.EncodeToString(data)
-
-	// Create prompt for OCR
-	prompt := GetPDFOCRPrompt()
-
-	// Create message with PDF — the vision/OCR model supports PDF natively
-	messages := []api.Message{
-		{
-			Role:    "user",
-			Content: prompt,
-			Images:  []api.ImageData{{Base64: pdfBase64, Type: "application/pdf"}},
-		},
-	}
-
-	// Send request to Ollama. The parent context is threaded through so the
-	// Stop button can abort in-flight vision/OCR calls (SP-034-1c).
-	response, err := client.SendVisionRequest(ctx, messages, nil, "", false)
-	if err != nil {
-		return "", fmt.Errorf("OCR request: %w", err)
-	}
-
-	if len(response.Choices) == 0 {
-		return "", fmt.Errorf("no response from OCR model")
-	}
-
-	return response.Choices[0].Message.Content, nil
 }
 
 var dataURLPattern = regexp.MustCompile(`data:[^;\s]+;base64,[A-Za-z0-9+/=]+`)
@@ -549,15 +458,14 @@ func decodeBase64ImagePayload(output []byte) [][]byte {
 
 // SimplePDFInfo returns basic info about PDF file
 func SimplePDFInfo(pdfPath string) (map[string]interface{}, error) {
-	// Check file size before processing (limit to 20MB for safety)
 	fileInfo, err := os.Stat(pdfPath)
 	if err != nil {
 		return nil, fmt.Errorf("stat PDF file: %w", err)
 	}
 
-	maxSize := int64(20 * 1024 * 1024) // 20MB
+	maxSize := int64(20 * 1024 * 1024)
 	if fileInfo.Size() > maxSize {
-		return nil, fmt.Errorf("PDF file too large (%d MB), maximum size is %d MB", fileInfo.Size()/1024/1024, maxSize/1024/1024)
+		return nil, fmt.Errorf("PDF file too large (%d MB, maximum size is %d MB)", fileInfo.Size()/1024/1024, maxSize/1024/1024)
 	}
 
 	f, r, err := pdf.Open(pdfPath)
@@ -574,7 +482,6 @@ func SimplePDFInfo(pdfPath string) (map[string]interface{}, error) {
 	info["page_count"] = r.NumPage()
 	info["has_text"] = false
 
-	// Check if PDF has extractable text
 	for pageNum := 1; pageNum <= r.NumPage(); pageNum++ {
 		p := r.Page(pageNum)
 		if p.V.IsNull() {

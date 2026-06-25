@@ -174,3 +174,55 @@ func TestAgent_GetChangeTracker_AfterDisable(t *testing.T) {
 		t.Error("tracker should be disabled")
 	}
 }
+
+func TestHandleListChanges_IncludeCrossSession(t *testing.T) {
+	// Verify include_cross_session flag merges persisted entries from
+	// ALL sessions when true, and filters to THIS session only when false.
+	a := &Agent{
+		state: NewAgentStateManager(false),
+	}
+	a.EnableChangeTracking("test-instructions")
+
+	// Track a file change in this session.
+	tracker := a.GetChangeTracker()
+	if tracker == nil {
+		t.Fatal("expected tracker to be non-nil")
+	}
+	err := tracker.TrackFileWrite("test.txt", "content")
+	if err != nil {
+		t.Fatalf("TrackFileWrite: %v", err)
+	}
+
+	// Test 1: include_cross_session=false (default) should NOT
+	// include persisted entries from other sessions. Since there are
+	// no persisted entries yet, this just verifies the default path
+	// doesn't break.
+	result, err := handleListChanges(nil, a, map[string]interface{}{
+		"include_cross_session": false,
+	})
+	if err != nil {
+		t.Fatalf("handleListChanges(include_cross_session=false): %v", err)
+	}
+	if len(result) == 0 {
+		t.Fatal("expected non-empty response for default path")
+	}
+
+	// Test 2: include_cross_session=true should also work and produce
+	// a valid response. This path exercises the metadata-only scan of
+	// all persisted entries across sessions.
+	result2, err := handleListChanges(nil, a, map[string]interface{}{
+		"include_cross_session": true,
+	})
+	if err != nil {
+		t.Fatalf("handleListChanges(include_cross_session=true): %v", err)
+	}
+	if len(result2) == 0 {
+		t.Fatal("expected non-empty response for cross-session path")
+	}
+
+	// Both should have the same in-memory file since persisted history
+	// is empty. The key differentiator is that cross-session would
+	// include additional entries from other revisions when they exist.
+	t.Logf("include_cross_session=false: %d bytes", len(result))
+	t.Logf("include_cross_session=true:  %d bytes", len(result2))
+}

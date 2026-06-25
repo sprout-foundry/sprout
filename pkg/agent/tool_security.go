@@ -32,6 +32,12 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 		agent.debugLog("[tool] tool dispatched via new registry: %s\n", toolName)
 	}
 
+	// SP-063: computer-use tools are restricted to the computer_user persona.
+	// Inert unless computer use is enabled (the restricted-name set is empty).
+	if isComputerUseToolBlocked(toolName, agent) {
+		return nil, "", fmt.Errorf("tool %q is only available to the computer_user persona", toolName)
+	}
+
 	// CRITICAL: Depth-based subagent nesting prevention
 	// Agents at or beyond the maximum nesting depth cannot spawn further subagents.
 	// This prevents runaway agent chains while allowing configurable multi-level nesting

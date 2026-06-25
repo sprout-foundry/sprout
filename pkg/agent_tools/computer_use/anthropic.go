@@ -124,10 +124,7 @@ func doDrag(b ComputerBackend, params map[string]any, button MouseButton) error 
 	// start and end (no-op drag).
 	to, err := extractCoordinate(params, "to_coordinate")
 	if err != nil {
-		// Fallback: if no to_coordinate, coordinate is the destination and
-		// the start is implicit. We can't know the start, so skip silently.
-		// In practice the model should provide to_coordinate for drags.
-		return nil
+		return fmt.Errorf("'to_coordinate' parameter is required for drag action")
 	}
 	return b.MouseDrag(*from, *to, button)
 }
@@ -169,7 +166,11 @@ func doWait(params map[string]any) error {
 	if ms > maxWaitMs {
 		return fmt.Errorf("wait time exceeds maximum of %d ms", maxWaitMs)
 	}
-	time.Sleep(time.Duration(ms) * time.Millisecond)
+	// Note: TranslateAnthropicAction has no context parameter.
+	// The handler-level "wait" tool (waitHandler.Execute) supports context.
+	timer := time.NewTimer(time.Duration(ms) * time.Millisecond)
+	defer timer.Stop()
+	<-timer.C
 	return nil
 }
 

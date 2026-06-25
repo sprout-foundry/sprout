@@ -27,6 +27,7 @@ type auditingBackend struct {
 	mu    sync.Mutex
 	w     *os.File
 	now   func() time.Time
+	closed bool
 }
 
 // NewAuditingBackend wraps inner, writing audit records to
@@ -45,10 +46,14 @@ func NewAuditingBackend(inner ComputerBackend, dir, sessionID string) (*auditing
 	return &auditingBackend{inner: inner, w: f, now: time.Now}, nil
 }
 
-// Close releases the underlying log file.
+// Close releases the underlying log file. Subsequent records are no-ops.
 func (a *auditingBackend) Close() error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	if a.closed {
+		return nil
+	}
+	a.closed = true
 	if a.w == nil {
 		return nil
 	}
@@ -60,7 +65,7 @@ func (a *auditingBackend) Close() error {
 func (a *auditingBackend) record(action string, args map[string]any, opErr error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if a.w == nil {
+	if a.closed || a.w == nil {
 		return
 	}
 	rec := AuditRecord{Time: a.now().UTC().Format(time.RFC3339), Action: action, Args: args}

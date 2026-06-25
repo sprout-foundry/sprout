@@ -86,7 +86,7 @@ func (b *subprocessBackend) Screenshot(region *Rect) ([]byte, Size, error) {
 func (b *subprocessBackend) MouseClick(x, y int, button MouseButton, double bool) error {
 	switch b.cliTool {
 	case "cliclick":
-		verb := map[MouseButton]string{MouseLeft: "c", MouseRight: "rc", MouseMiddle: "c"}[button]
+		verb := map[MouseButton]string{MouseLeft: "c", MouseRight: "rc", MouseMiddle: "mc"}[button]
 		if double {
 			verb = "dc"
 		}

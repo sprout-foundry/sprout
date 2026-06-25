@@ -327,6 +327,10 @@ Examples:
 		// before RunAgent has a chance to set the env var.
 		if daemonMode {
 			os.Setenv("SPROUT_DAEMON", "1")
+			// Defensive unset on command exit. RunAgent also defers its own
+			// unset, but this handler may return early (provider errors,
+			// session-load failures) before RunAgent runs.
+			defer os.Unsetenv("SPROUT_DAEMON")
 		}
 
 		chatAgent, err := createChatAgent()
@@ -339,7 +343,7 @@ Examples:
 		if chatAgent == nil && daemonMode {
 			isCI := os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != ""
 			stdinIsTerminal := term.IsTerminal(int(os.Stdin.Fd()))
-			isInteractive := len(args) == 0 && !isCI && stdinIsTerminal
+			isInteractive := !daemonMode && len(args) == 0 && !isCI && stdinIsTerminal
 			return RunAgent(nil, isInteractive, args)
 		}
 
@@ -471,8 +475,9 @@ Examples:
 			stdinIsTerminal = false
 		}
 
-		// We're interactive only if we have a terminal, no args, and not in CI
-		isInteractive := len(args) == 0 && !isCI && stdinIsTerminal
+		// We're interactive only if we have a terminal, no args, not in CI,
+		// and not running as a daemon (daemon serves the web UI only).
+		isInteractive := !daemonMode && len(args) == 0 && !isCI && stdinIsTerminal
 
 		// Use the new simplified enhanced mode
 		return RunAgent(chatAgent, isInteractive, args)

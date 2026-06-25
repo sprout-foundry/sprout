@@ -161,6 +161,53 @@ func minimalAgent(t *testing.T) *Agent {
 // Test 1: postProcessResult with empty result
 // ---------------------------------------------------------------------------
 
+func TestSeedRegistry_FiltersSubagentToolsAtDepthLimit(t *testing.T) {
+	// A subagent at depth 1 with a non-coordinator root (MaxSubagentDepth=1)
+	// cannot spawn further subagents. The seed registry must NOT register
+	// run_subagent / run_parallel_subagents for such an agent — otherwise
+	// the LLM sees the tool, wastes turns attempting the call, and gets
+	// confused by the PreExecuteHook error.
+	agent := minimalAgent(t)
+	agent.subagentDepth = 1 // depth 1 = first-level subagent; MaxSubagentDepth()=1 → CanSpawn=false
+
+	registry := newSeedToolRegistryWithPublisher(agent, nil)
+
+	if registry.HasTool("run_subagent") {
+		t.Error("run_subagent should not be registered for an agent at its depth limit")
+	}
+	if registry.HasTool("run_parallel_subagents") {
+		t.Error("run_parallel_subagents should not be registered for an agent at its depth limit")
+	}
+
+	// Sanity check: non-subagent tools ARE still registered.
+	if !registry.HasTool("read_file") {
+		t.Error("read_file should still be registered")
+	}
+	if !registry.HasTool("shell_command") {
+		t.Error("shell_command should still be registered")
+	}
+}
+
+func TestSeedRegistry_KeepsSubagentToolsForPrimaryAgent(t *testing.T) {
+	// The primary agent (depth 0) with MaxSubagentDepth=1 can spawn
+	// subagents (0 < 1 = true). The tools must be present.
+	agent := minimalAgent(t)
+	agent.subagentDepth = 0
+
+	registry := newSeedToolRegistryWithPublisher(agent, nil)
+
+	if !registry.HasTool("run_subagent") {
+		t.Error("run_subagent should be registered for the primary agent")
+	}
+	if !registry.HasTool("run_parallel_subagents") {
+		t.Error("run_parallel_subagents should be registered for the primary agent")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test 1: postProcessResult with empty result
+// ---------------------------------------------------------------------------
+
 func TestPostProcessResult_EmptyResult(t *testing.T) {
 	ctx := context.Background()
 	agent := minimalAgent(t)

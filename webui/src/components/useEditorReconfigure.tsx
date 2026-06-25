@@ -16,7 +16,7 @@ import { EditorState } from '@codemirror/state';
 import type { Compartment, Extension } from '@codemirror/state';
 import { EditorView as CMEditorView, lineNumbers } from '@codemirror/view';
 import { lineNumbersRelative } from '@uiw/codemirror-extensions-line-numbers-relative';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { inlayHintsExtension } from '../extensions/inlayHints';
 import { resolveLanguageId, getLanguageExtensions } from '../extensions/languageRegistry';
 import { buildLSPPluginExtensions, lspSyncOnDocChange } from '../extensions/lspExtensions';
@@ -90,6 +90,14 @@ export function useEditorReconfigure(options: UseEditorReconfigureOptions): void
   // Language reconfiguration
   // ---------------------------------------------------------------------------
 
+  // Monotonic token that invalidates stale async LSP client resolutions.
+  // Each language reconfiguration increments it; the async closure captures
+  // its token and bails out if it no longer matches. This prevents a slow
+  // request for an old language from installing LSP extensions for the
+  // wrong language after a language-override change (which reuses the same
+  // EditorView, so viewRef.current === view passes but the language is stale).
+  const lspConfigTokenRef = useRef(0);
+
   useEffect(() => {
     const view = viewRef.current;
     if (!view || !buffer) return;
@@ -110,12 +118,13 @@ export function useEditorReconfigure(options: UseEditorReconfigureOptions): void
 
     const lspService = getLSPClientService();
     const filePath = buffer.file?.path ?? '';
+    const token = ++lspConfigTokenRef.current;
 
     if (languageId && LSP_SUPPORTED_LANGUAGES.has(languageId)) {
       void (async () => {
         try {
           const client = await lspService.getClientForLanguage(languageId);
-          if (client && viewRef.current === view && view.dom?.isConnected) {
+          if (client && viewRef.current === view && view.dom?.isConnected && token === lspConfigTokenRef.current) {
             view.dispatch({
               effects: compartments.lsp.reconfigure([
                 ...buildLSPPluginExtensions(client, filePath, languageId),

@@ -246,15 +246,16 @@ export class OPFSReplicaService {
 
       await this.writeFile(patch.path, content);
 
-      this.metadataIndex.set(
-        patch.path,
-        defaultMetadata(
-          this.mergeMetadata(this.metadataIndex.get(patch.path) ?? defaultMetadata(), {
-            ...patch.metadata,
-            size: bytes,
-          }),
-        ),
-      );
+      const existingMeta = this.metadataIndex.get(patch.path) ?? defaultMetadata();
+      const merged = this.mergeMetadata(existingMeta, {
+        ...patch.metadata,
+        size: bytes,
+      });
+      // mergeMetadata's zero-gate prevents size=0 from overwriting a stale
+      // nonzero value, but a genuinely empty file must record size 0.
+      // Override here since applyPatch knows the true byte count.
+      merged.size = bytes;
+      this.metadataIndex.set(patch.path, defaultMetadata(merged));
     }
 
     await this.persistMetadataIndex();

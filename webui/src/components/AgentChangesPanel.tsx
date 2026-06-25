@@ -31,7 +31,7 @@ import {
   FileMinus,
   FolderCog,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ApiService } from '../services/api';
 import type {
   SessionChangeEntry,
@@ -193,24 +193,34 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
 
   // ── Diff modal ─────────────────────────────────────────────────
 
+  // Monotonic token that invalidates stale diff fetches. If the user
+  // opens diff A then B quickly, A's late response must not overwrite
+  // B's diff text while the modal header shows path B.
+  const diffTokenRef = useRef(0);
+
   const openDiff = useCallback(
     async (path: string) => {
+      const token = ++diffTokenRef.current;
       setDiffPath(path);
       setDiffOpen(true);
       setDiffLoading(true);
       setDiffText('');
       try {
         const res = await apiService.getAgentChangeDiff(path);
+        if (token !== diffTokenRef.current) return;
         if (!res.found) {
           setDiffText(`(no tracked change for ${path})`);
         } else {
           setDiffText(res.diff || '(empty diff)');
         }
       } catch (err) {
+        if (token !== diffTokenRef.current) return;
         const msg = err instanceof Error ? err.message : String(err);
         setDiffText(`Error fetching diff: ${msg}`);
       } finally {
-        setDiffLoading(false);
+        if (token === diffTokenRef.current) {
+          setDiffLoading(false);
+        }
       }
     },
     [apiService],

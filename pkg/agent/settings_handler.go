@@ -236,6 +236,12 @@ func allSettings() []settingDetail {
 			getValue:     func(cfg *configuration.Config) string { return cfg.SelfReviewGateMode },
 		},
 		{
+			key:          "output_verbosity",
+			description:  "How much inter-tool-call narration the UI shows",
+			validValues:  "compact, default, verbose",
+			getValue:     func(cfg *configuration.Config) string { return cfg.OutputVerbosity },
+		},
+		{
 			key:          "commit_provider",
 			description:  "Provider for commit message generation",
 			validValues:  "provider name or empty to inherit from provider",
@@ -420,6 +426,7 @@ var supportedSettings = map[string]string{
 	"default_subagent_persona": "Persona used when run_subagent omits the persona argument",
 	"disabled_personas":        "Comma-separated persona IDs hidden from /persona list and spawning",
 	"self_review_gate_mode":    "Self-review gate mode (off/code/always)",
+	"output_verbosity":         "Output verbosity level (compact/default/verbose)",
 }
 
 // validateSettingKey checks that a key is a recognized setting.
@@ -468,6 +475,8 @@ func getConfigValue(cfg *configuration.Config, key string) (string, error) {
 		return strings.Join(cfg.DisabledPersonas, ","), nil
 	case "self_review_gate_mode":
 		return cfg.SelfReviewGateMode, nil
+	case "output_verbosity":
+		return cfg.OutputVerbosity, nil
 	default:
 		return "", validateSettingKey(key)
 	}
@@ -548,6 +557,13 @@ func setConfigValue(cfg *configuration.Config, key, value string) error {
 			cfg.SelfReviewGateMode = strings.ToLower(value)
 		default:
 			return fmt.Errorf("self_review_gate_mode must be off, code, or always, got %q", value)
+		}
+	case "output_verbosity":
+		switch strings.ToLower(value) {
+		case "compact", "default", "verbose", "":
+			cfg.OutputVerbosity = strings.ToLower(value)
+		default:
+			return fmt.Errorf("output_verbosity must be compact, default, or verbose, got %q", value)
 		}
 	default:
 		return validateSettingKey(key)

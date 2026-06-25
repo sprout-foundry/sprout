@@ -169,6 +169,8 @@ func sanitizedConfig(cfg *configuration.Config) map[string]interface{} {
 		"risk_profile":       cfg.RiskProfile,
 		"risk_profiles":      cfg.RiskProfiles,
 		"max_context_tokens": cfg.MaxContextTokens,
+		// SP-076: display verbosity for inter-tool narration filtering.
+		"output_verbosity": cfg.OutputVerbosity,
 	}
 	return out
 }
@@ -371,6 +373,7 @@ func truncateConfigStrings(cfg *configuration.Config) *configuration.Config {
 	cfg.ReasoningEffort = truncateString(cfg.ReasoningEffort, maxSettingEnumLength)
 	cfg.HistoryScope = truncateString(cfg.HistoryScope, maxSettingEnumLength)
 	cfg.SelfReviewGateMode = truncateString(cfg.SelfReviewGateMode, maxSettingEnumLength)
+	cfg.OutputVerbosity = truncateString(cfg.OutputVerbosity, maxSettingEnumLength)
 	cfg.ResourceDirectory = truncateString(cfg.ResourceDirectory, maxSettingPathLength)
 	cfg.SystemPromptText = truncateString(cfg.SystemPromptText, maxSettingPromptLength)
 	cfg.LastUsedProvider = truncateString(cfg.LastUsedProvider, maxSettingNameLength)

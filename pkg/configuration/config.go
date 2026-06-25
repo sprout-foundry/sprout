@@ -35,6 +35,10 @@ const (
 	SelfReviewGateModeOff    = "off"
 	SelfReviewGateModeCode   = "code"
 	SelfReviewGateModeAlways = "always"
+
+	OutputVerbosityCompact = "compact"
+	OutputVerbosityDefault = "default"
+	OutputVerbosityVerbose = "verbose"
 )
 
 // Config represents the unified application configuration
@@ -257,6 +261,14 @@ type Config struct {
 	// diff approval gate for agent file writes.
 	EditApproval *EditApprovalConfig `json:"edit_approval,omitempty"`
 
+	// OutputVerbosity controls how much inter-tool-call narration and
+	// streaming detail the UI shows. Valid values: "compact" (hide
+	// interim model messages, show only tool results and final text),
+	// "default" (show tool calls with results, show streaming final
+	// text), "verbose" (show everything including interim narration).
+	// Empty defaults to "default".
+	OutputVerbosity string `json:"output_verbosity,omitempty"`
+
 	// Other flags
 	FromAgent bool `json:"-"` // Internal flag, not persisted
 
@@ -347,6 +359,14 @@ func (c *Config) Validate() error {
 	if c.SelfReviewGateMode != "" && !validModes[c.SelfReviewGateMode] {
 		return fmt.Errorf("invalid self_review_gate_mode %q: must be one of %q, %q, %q",
 			c.SelfReviewGateMode, SelfReviewGateModeOff, SelfReviewGateModeCode, SelfReviewGateModeAlways)
+	}
+
+	// Validate output verbosity
+	switch c.OutputVerbosity {
+	case "", OutputVerbosityCompact, OutputVerbosityDefault, OutputVerbosityVerbose:
+	default:
+		return fmt.Errorf("invalid output_verbosity %q: must be one of %q, %q, %q",
+			c.OutputVerbosity, OutputVerbosityCompact, OutputVerbosityDefault, OutputVerbosityVerbose)
 	}
 
 	// Validate PDF OCR settings

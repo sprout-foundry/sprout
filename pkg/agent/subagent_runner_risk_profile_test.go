@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"testing"
 
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
@@ -28,7 +29,7 @@ func TestSubagentRunner_InheritsRiskProfileOverrideFromParent(t *testing.T) {
 	}
 	runner := NewSubagentRunner(parent, shared)
 
-	sub, err := runner.createSubagent(SubagentOptions{})
+	sub, err := runner.createSubagent(SubagentOptions{}, context.Background())
 	if err != nil {
 		t.Fatalf("createSubagent failed: %v", err)
 	}
@@ -60,7 +61,7 @@ func TestSubagentRunner_InheritsSessionFolderAllowlist(t *testing.T) {
 	}
 	runner := NewSubagentRunner(parent, shared)
 
-	sub, err := runner.createSubagent(SubagentOptions{})
+	sub, err := runner.createSubagent(SubagentOptions{}, context.Background())
 	if err != nil {
 		t.Fatalf("createSubagent failed: %v", err)
 	}
@@ -104,7 +105,7 @@ func TestSubagentRunner_NoRiskProfileOverrideWhenParentHasNone(t *testing.T) {
 	}
 	runner := NewSubagentRunner(parent, shared)
 
-	sub, err := runner.createSubagent(SubagentOptions{})
+	sub, err := runner.createSubagent(SubagentOptions{}, context.Background())
 	if err != nil {
 		t.Fatalf("createSubagent failed: %v", err)
 	}

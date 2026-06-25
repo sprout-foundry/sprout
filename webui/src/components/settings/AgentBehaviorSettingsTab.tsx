@@ -31,6 +31,12 @@ export default function AgentBehaviorSettingsTab({
     <div className="section">
       <h4>Behavior</h4>
       {renderSelect('reasoning_effort', 'Reasoning effort', ['low', 'medium', 'high'])}
+      {renderSelect(
+        'output_verbosity',
+        'Output verbosity',
+        ['', 'compact', 'default', 'verbose'],
+        'Controls how much narration the UI shows. compact hides inter-tool-call text; default shows tools and final answer; verbose shows everything.',
+      )}
       {renderToggle('disable_thinking', 'Disable thinking for thinking models')}
       {renderToggle('skip_prompt', 'Skip confirmation prompt')}
       {renderToggle('enable_pre_write_validation', 'Pre-write validation')}

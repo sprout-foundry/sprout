@@ -201,6 +201,8 @@ export interface ChatProps {
   // Backend reachability (cloud mode)
   backendReachable?: boolean;
   onRetryConnection?: () => void;
+  // SP-076: display verbosity for inter-tool narration filtering
+  outputVerbosity?: 'compact' | 'default' | 'verbose';
 }
 
 // ── Constants ──────────────────────────────────────────────────────────

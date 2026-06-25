@@ -4,6 +4,7 @@
 
 export interface SproutSettings {
   reasoning_effort: string;
+  output_verbosity: string;
   disable_thinking?: boolean;
   risk_profile?: string;
   system_prompt_text: string;

@@ -634,6 +634,17 @@ func applyPartialSettings(cfg *configuration.Config, patch map[string]interface{
 		}
 		cfg.SelfReviewGateMode = s
 	}
+	if v, ok := patch["output_verbosity"]; ok {
+		knownKeys["output_verbosity"] = true
+		s, _ := v.(string)
+		s = strings.ToLower(strings.TrimSpace(truncateString(s, maxSettingEnumLength)))
+		switch s {
+		case "", "compact", "default", "verbose":
+			cfg.OutputVerbosity = s
+		default:
+			return nil, fmt.Errorf("validate output_verbosity: must be 'compact', 'default', or 'verbose' (got %q)", s)
+		}
+	}
 	if v, ok := patch["subagent_provider"]; ok {
 		knownKeys["subagent_provider"] = true
 		s, _ := v.(string)

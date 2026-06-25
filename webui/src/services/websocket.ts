@@ -330,6 +330,12 @@ class WebSocketService {
           this.intentionalClose = true;
           this.stopPingInterval();
           this.stopPongWatchdog();
+          // Neutralize handlers so the server's subsequent close of this
+          // connection doesn't fire onclose and race with a future connect().
+          if (this.ws) {
+            this.ws.onclose = null;
+            this.ws.onerror = null;
+          }
           this.notifyCallbacks({
             type: 'session_displaced',
             data: data.data || {},

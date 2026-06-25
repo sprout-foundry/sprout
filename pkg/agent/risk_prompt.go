@@ -3,19 +3,11 @@ package agent
 import (
 	"context"
 	"fmt"
-	"io"
-	"os"
 
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/security"
 	"github.com/sprout-foundry/sprout/pkg/utils"
 )
-
-// getApprovalLogWriter returns the writer for non-fatal approval-side-effect
-// messages (allowlist persist failures, elevation notices). Defaults to
-// stderr; tests can swap via the unexported var below.
-var approvalLogWriter io.Writer = os.Stderr
-
-func getApprovalLogWriter() io.Writer { return approvalLogWriter }
 
 // webuiHighRiskRiskClass is the risk-class label sent to the WebUI
 // approval dialog for cascade-gated high-risk operations. It mirrors
@@ -158,10 +150,10 @@ func (a *Agent) applyApprovalDecision(decision security.ApprovalDecision, comman
 			// Surface but don't block — the user still gets one-time
 			// approval; persistence failure just means future runs
 			// will re-prompt.
-			fmt.Fprintf(getApprovalLogWriter(), "[approval] failed to persist allowlist entry: %v\n", err)
+			console.PrintExternal(fmt.Sprintf("[approval] failed to persist allowlist entry: %v\n", err))
 		}
 	case security.ApprovalElevate:
 		a.ElevateSessionToPermissive()
-		fmt.Fprintln(getApprovalLogWriter(), "[approval] session risk profile elevated to 'permissive'. Run /risk-profile permissive to make this persistent across restarts.")
+		console.PrintExternal("[approval] session risk profile elevated to 'permissive'. Run /risk-profile permissive to make this persistent across restarts.\n")
 	}
 }

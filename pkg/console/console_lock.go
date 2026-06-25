@@ -30,6 +30,17 @@ var outputMu sync.Mutex
 // without adding a separate mutex.
 var activeInputReader *InputReader
 
+// activeSteerReader points to the SteerInputReader whose readLoop is
+// currently active (or nil). Set by SteerInputReader.Start, cleared by
+// Stop. Read by PrintExternal so mid-turn security cautions can print
+// above the scroll region without corrupting the pinned steer panel.
+//
+// The InputReader and SteerInputReader never both register at the same
+// time: InputReader.ReadLine is active between turns, SteerInputReader
+// during turns. PrintExternal checks the steer slot first (turns), then
+// the input slot (between turns), then falls through to fmt.Print.
+var activeSteerReader *SteerInputReader
+
 // LockOutput acquires the console output mutex.
 func LockOutput() { outputMu.Lock() }
 
@@ -57,6 +68,12 @@ func setActiveInputReader(ir *InputReader) {
 	activeInputReader = ir
 }
 
+// setActiveSteerReader records the SteerInputReader whose read loop is
+// active. Must be called under LockOutput. Pass nil to clear.
+func setActiveSteerReader(sr *SteerInputReader) {
+	activeSteerReader = sr
+}
+
 // PrintExternal prints a message to the terminal without corrupting an
 // active input line. When a ReadLine loop is active (activeInputReader is
 // set), the message is printed by clearing the current input line,
@@ -73,12 +90,17 @@ func setActiveInputReader(ir *InputReader) {
 func PrintExternal(msg string) {
 	outputMu.Lock()
 	defer outputMu.Unlock()
-	ir := activeInputReader
-	if ir == nil {
-		fmt.Print(msg)
+	// Check steer reader first (active during turns), then input reader
+	// (active between turns), then fall through to raw fmt.Print.
+	if sr := activeSteerReader; sr != nil {
+		sr.printExternalLocked(msg)
 		return
 	}
-	ir.printExternalLocked(msg)
+	if ir := activeInputReader; ir != nil {
+		ir.printExternalLocked(msg)
+		return
+	}
+	fmt.Print(msg)
 }
 
 // printExternalLocked prints a message above the active input line and

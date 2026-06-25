@@ -996,8 +996,11 @@ func (c *MCPClient) reconnect(ctx context.Context) {
 
 	// Start the server again via startInternal (bypasses reconnecting guard).
 	// This will increment restartCount and create a new health check goroutine.
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	//
+	// Pass ctx directly — startInternal creates its own cancellable child
+	// context (c.ctx/c.cancel). Wrapping ctx in WithCancel with defer cancel()
+	// here would cancel that child the moment reconnect() returns, instantly
+	// killing the process we just started.
 
 	// startInternal() sets connectedAt = time.Now(), which the health check
 	// uses for the 2-minute stability reset of failureTimestamps.

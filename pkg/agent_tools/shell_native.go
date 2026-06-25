@@ -84,8 +84,11 @@ func runShellCommand(ctx context.Context, command string, streamOutput bool) (st
 			return "", fmt.Errorf("start command: %w", err)
 		}
 
-		// Buffer to capture output for return value
-		var outputBuf bytes.Buffer
+		// Buffer to capture output for return value. Must be concurrency-safe:
+		// stdout and stderr goroutines write to it simultaneously via io.MultiWriter.
+		// A plain bytes.Buffer races under -race (the adoption path in
+		// runShellCommandAdoptable uses syncBuffer for the same reason).
+		var outputBuf syncBuffer
 
 		// Stream stdout and stderr in real-time
 		// Use goroutines to handle both concurrently

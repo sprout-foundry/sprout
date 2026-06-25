@@ -1272,7 +1272,7 @@ func TestCreateSubagent_StampsDepthAndPersonaIntoEventMetadata(t *testing.T) {
 	}
 	runner := NewSubagentRunner(parent, shared)
 
-	subAgent, err := runner.createSubagent(SubagentOptions{Persona: "coder"})
+	subAgent, err := runner.createSubagent(SubagentOptions{Persona: "coder"}, context.Background())
 	if err != nil {
 		t.Fatalf("createSubagent failed: %v", err)
 	}
@@ -1305,13 +1305,13 @@ func TestCreateSubagent_GrandchildDepthIsTwo(t *testing.T) {
 	}
 
 	// Spawn child (depth 1)
-	child, err := NewSubagentRunner(parent, shared).createSubagent(SubagentOptions{Persona: "orchestrator"})
+	child, err := NewSubagentRunner(parent, shared).createSubagent(SubagentOptions{Persona: "orchestrator"}, context.Background())
 	if err != nil {
 		t.Fatalf("createSubagent(child) failed: %v", err)
 	}
 
 	// Spawn grandchild from child (depth 2)
-	grand, err := NewSubagentRunner(child, shared).createSubagent(SubagentOptions{Persona: "coder"})
+	grand, err := NewSubagentRunner(child, shared).createSubagent(SubagentOptions{Persona: "coder"}, context.Background())
 	if err != nil {
 		t.Fatalf("createSubagent(grandchild) failed: %v", err)
 	}
@@ -1346,7 +1346,7 @@ func TestCreateSubagent_PreservesParentMetadata(t *testing.T) {
 		WorkspaceRoot: parent.workspaceRoot,
 	}
 
-	subAgent, err := NewSubagentRunner(parent, shared).createSubagent(SubagentOptions{Persona: "coder"})
+	subAgent, err := NewSubagentRunner(parent, shared).createSubagent(SubagentOptions{Persona: "coder"}, context.Background())
 	if err != nil {
 		t.Fatalf("createSubagent failed: %v", err)
 	}
@@ -1382,7 +1382,7 @@ func TestCreateSubagent_SharesClarificationManager(t *testing.T) {
 
 	runner := NewSubagentRunner(parent, shared)
 
-	child, err := runner.createSubagent(SubagentOptions{Persona: "coder"})
+	child, err := runner.createSubagent(SubagentOptions{Persona: "coder"}, context.Background())
 	if err != nil {
 		t.Fatalf("createSubagent failed: %v", err)
 	}
@@ -1392,6 +1392,95 @@ func TestCreateSubagent_SharesClarificationManager(t *testing.T) {
 	}
 	if child.clarificationManager != parent.clarificationManager {
 		t.Fatal("child.clarificationManager != parent.clarificationManager — subagents must share the parent's manager by pointer")
+	}
+}
+
+// TestCreateSubagent_InterruptCtxDerivedFromParent verifies that the
+// subagent's interrupt context is derived from the parent context passed
+// to createSubagent, NOT from context.Background(). This is the
+// regression guard for the deadlock where Ctrl+C cancelled the parent's
+// interrupt but the subagent's LLM calls (using their own
+// context.Background()-derived ctx) kept running — the goroutine leaked
+// and the 5-second grace in runTask expired.
+//
+// Before the fix: subAgent.InterruptCtx().Err() was nil even after the
+// parent ctx was cancelled, because createSubagent created the interrupt
+// context from context.Background().
+// After the fix: cancelling the parent ctx propagates to the subagent's
+// interrupt ctx.
+func TestCreateSubagent_InterruptCtxDerivedFromParent(t *testing.T) {
+	parent := newIsolatedTestAgent(t)
+	defer parent.Shutdown()
+
+	shared := &SharedState{
+		EventBus:      events.NewEventBus(),
+		TodoManager:   tools.NewTodoManager(),
+		ConfigManager: parent.configManager,
+		WorkspaceRoot: parent.workspaceRoot,
+	}
+	runner := NewSubagentRunner(parent, shared)
+
+	// Create a cancellable parent context (simulating runCtx in runTask).
+	parentCtx, parentCancel := context.WithCancel(context.Background())
+	defer parentCancel()
+
+	sub, err := runner.createSubagent(SubagentOptions{Persona: "coder"}, parentCtx)
+	if err != nil {
+		t.Fatalf("createSubagent failed: %v", err)
+	}
+	defer sub.Shutdown()
+
+	subInterruptCtx := sub.InterruptCtx()
+	if subInterruptCtx == nil {
+		t.Fatal("subagent interrupt context is nil")
+	}
+	if subInterruptCtx.Err() != nil {
+		t.Fatalf("subagent interrupt context already cancelled before parent cancel: %v", subInterruptCtx.Err())
+	}
+
+	// Cancel the parent context — this simulates Ctrl+C propagating
+	// through the primary's interrupt → tool executor → runCtx.
+	parentCancel()
+
+	// The subagent's interrupt context must now observe the cancellation.
+	// A short wait ensures context propagation completes.
+	select {
+	case <-subInterruptCtx.Done():
+		// Expected: cancellation propagated.
+	case <-time.After(time.Second):
+		t.Fatal("subagent interrupt context was not cancelled after parent context cancellation — " +
+			"createSubagent must derive from parentCtx, not context.Background()")
+	}
+}
+
+// TestCreateSubagent_DefaultMaxIterationsBounded verifies that the subagent
+// gets a non-zero maxIterations so a stuck subagent can't loop indefinitely.
+// The previous code set maxIterations: 0 (unlimited), which let a coder
+// subagent run 164 iterations before the user noticed and Ctrl+C'd.
+func TestCreateSubagent_DefaultMaxIterationsBounded(t *testing.T) {
+	parent := newIsolatedTestAgent(t)
+	defer parent.Shutdown()
+
+	shared := &SharedState{
+		EventBus:      events.NewEventBus(),
+		TodoManager:   tools.NewTodoManager(),
+		ConfigManager: parent.configManager,
+		WorkspaceRoot: parent.workspaceRoot,
+	}
+	runner := NewSubagentRunner(parent, shared)
+
+	sub, err := runner.createSubagent(SubagentOptions{Persona: "coder"}, context.Background())
+	if err != nil {
+		t.Fatalf("createSubagent failed: %v", err)
+	}
+	defer sub.Shutdown()
+
+	if sub.maxIterations == 0 {
+		t.Fatal("subagent maxIterations is 0 (unlimited) — must be bounded to prevent " +
+			"runaway iteration loops that burn tokens until the user manually kills the process")
+	}
+	if sub.maxIterations < 10 {
+		t.Errorf("subagent maxIterations = %d, want >= 10 for real-world tasks", sub.maxIterations)
 	}
 }
 

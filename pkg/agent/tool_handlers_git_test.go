@@ -348,3 +348,52 @@ func TestExtractGitSubcommand(t *testing.T) {
 		})
 	}
 }
+
+func TestIsGitStashCommand(t *testing.T) {
+	tests := []struct {
+		name    string
+		command string
+		want    bool
+	}{
+		// Blocked (destructive stash operations)
+		{"bare git stash", "git stash", true},
+		{"git stash push", "git stash push", true},
+		{"git stash push -m msg", "git stash push -m 'wip'", true},
+		{"git stash pop", "git stash pop", true},
+		{"git stash apply", "git stash apply", true},
+		{"git stash apply stash@{0}", "git stash apply stash@{0}", true},
+		{"git stash drop", "git stash drop", true},
+		{"git stash clear", "git stash clear", true},
+		{"compound stash + build", "cd /repo && git stash && go build ./...", true},
+		{"stash with -c flag", "git -c core.safecrlf=false stash", true},
+		{"stash with -C flag", "git -C /path stash pop", true},
+
+		// Allowed (read-only)
+		{"stash list", "git stash list", false},
+		{"stash show", "git stash show", false},
+		{"stash show -p", "git stash show -p", false},
+		{"stash list with flags", "git stash list --oneline", false},
+
+		// Non-stash commands
+		{"git status", "git status", false},
+		{"git log", "git log", false},
+		{"git add", "git add file.go", false},
+		{"git commit", "git commit -m 'msg'", false},
+		{"non-git command", "ls -la", false},
+		{"empty string", "", false},
+		{"git checkout (gated elsewhere)", "git checkout main", false},
+		{"git restore (gated elsewhere)", "git restore file.go", false},
+
+		// Edge: quoted content shouldn't trigger false positive
+		{"stash mentioned in quotes", `echo "git stash is dangerous"`, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isGitStashCommand(tt.command)
+			if got != tt.want {
+				t.Errorf("isGitStashCommand(%q) = %v, want %v", tt.command, got, tt.want)
+			}
+		})
+	}
+}

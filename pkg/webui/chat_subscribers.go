@@ -167,7 +167,7 @@ func (ws *ReactWebServer) connectionSubscribedToChat(connInfo *ConnectionInfo, c
 // another tab would be both wrong and a security leak.
 func isSecurityScopedEvent(eventType string) bool {
 	switch eventType {
-	case eventTypeSecurityApproval, eventTypeSecurityPrompt, eventTypeAskUser:
+	case eventTypeSecurityApproval, eventTypeSecurityPrompt, eventTypeAskUser, eventTypeEditApproval:
 		return true
 	}
 	return false
@@ -179,4 +179,5 @@ const (
 	eventTypeSecurityApproval = "security_approval_request"
 	eventTypeSecurityPrompt   = "security_prompt_request"
 	eventTypeAskUser          = "ask_user_request"
+	eventTypeEditApproval     = "edit_approval_request"
 )

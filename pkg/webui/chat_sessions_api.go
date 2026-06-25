@@ -251,6 +251,25 @@ func (ws *ReactWebServer) handleAPIChatSessionsDelete(w http.ResponseWriter, r *
 		})
 		return
 	}
+	// --- Atomic validation-and-delete region ---
+	//
+	// CRITICAL: ws.mutex is held from the initial lookup through the delete
+	// below. This prevents a concurrent handleAPIQuery from acquiring ws.mutex,
+	// seeing the chat as inactive, and starting a query on a chat that's being
+	// deleted.
+	//
+	// The cs.mu is only needed to read cs.ActiveQuery and cs.WorktreePath.
+	// Once we have those values, cs.mu can be released because ws.mutex
+	// prevents any concurrent setChatQueryActive from running (which is the
+	// only path that modifies cs.ActiveQuery).
+	//
+	// After confirming the chat is inactive, we set the top-level ActiveQuery
+	// flag to true BEFORE removing the chat from the map. This ensures that
+	// any concurrent query handler that subsequently acquires the lock sees
+	// hasActiveQueryForChat(chatID) == true (via the top-level fallback when
+	// the chat is absent from the map) and rejects. We reset the flag after
+	// releasing the lock so the window where ActiveQuery is spuriously true
+	// is bounded to the time between ws.mutex.Unlock() and the re-acquire.
 	cs.mu.Lock()
 	isActive := cs.ActiveQuery
 	worktreePath := cs.WorktreePath
@@ -266,8 +285,39 @@ func (ws *ReactWebServer) handleAPIChatSessionsDelete(w http.ResponseWriter, r *
 		})
 		return
 	}
+
+	// Mark the chat as "being deleted" by setting the top-level ActiveQuery
+	// flag. This prevents a concurrent query handler from starting a query on
+	// this chat ID — hasActiveQueryForChat(chatID) falls back to
+	// ctx.ActiveQuery when the chat is absent from the map.
+	ctx.ActiveQuery = true
+	ctx.CurrentQuery = ""
+
 	workspaceRoot := ctx.WorkspaceRoot
 	delete(ctx.ChatSessions, chatID)
+	ws.mutex.Unlock()
+
+	// Reset the top-level ActiveQuery flag based on remaining chats.
+	// This must happen after releasing ws.mutex so that any concurrent query
+	// handler that runs during the window sees ActiveQuery == true and rejects.
+	ws.mutex.Lock()
+	ctx = ws.clientContexts[clientID]
+	if ctx != nil {
+		anyActive := false
+		for _, other := range ctx.ChatSessions {
+			other.mu.RLock()
+			if other.ActiveQuery {
+				anyActive = true
+				other.mu.RUnlock()
+				break
+			}
+			other.mu.RUnlock()
+		}
+		ctx.ActiveQuery = anyActive
+		if !anyActive {
+			ctx.CurrentQuery = ""
+		}
+	}
 	ws.mutex.Unlock()
 
 	log.Printf("handleAPIChatSessionsDelete: deleted chat session %s for client %s", chatID, clientID)

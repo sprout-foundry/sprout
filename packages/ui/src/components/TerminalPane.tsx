@@ -157,17 +157,25 @@ function TerminalPane({
     if (!isActive || !termRef.current || !createWasmShell) return;
 
     let disposed = false;
-    createWasmShell().then((shell) => {
-      if (disposed || !shell) return;
+    let shell: { write: (data: string) => void; onData: (cb: (data: string) => void) => void; close: () => void } | null = null;
+    let inputDisposable: { dispose: () => void } | null = null;
+
+    createWasmShell().then((s) => {
+      if (disposed || !s) return;
+      shell = s;
       shell.onData((data: string) => {
         termRef.current?.write(data);
       });
-      termRef.current?.onData((data) => {
-        shell.write(data);
-      });
+      inputDisposable = termRef.current?.onData((data) => {
+        shell?.write(data);
+      }) ?? null;
     });
 
-    return () => { disposed = true; };
+    return () => {
+      disposed = true;
+      inputDisposable?.dispose();
+      shell?.close();
+    };
   }, [isActive, createWasmShell]);
 
   // Resize on split change

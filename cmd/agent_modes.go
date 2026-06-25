@@ -207,13 +207,13 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 
 			daemonStartupLoop:
 				for {
-					if webServer.IsRunning() {
+					if webServer.IsRunning() || webUISup.HasAttached() {
 						break
 					}
 
 					select {
 					case <-startupDeadline.C:
-						if !webServer.IsRunning() {
+						if !webServer.IsRunning() && !webUISup.HasAttached() {
 							return fmt.Errorf("web UI failed to start on port %d (daemon mode)", port)
 						}
 						break daemonStartupLoop

@@ -3,6 +3,7 @@ package agent
 import (
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 
@@ -211,4 +212,44 @@ func TestRecoverProviderStartup_DaemonMode_SSHDaemonEnv(t *testing.T) {
 	if provider != "" || model != "" {
 		t.Errorf("expected empty provider and model, got provider=%q model=%q", provider, model)
 	}
+}
+
+// ---------------------------------------------------------------------------
+// TestSSHDaemon_UnsetFlipsDetection
+//
+// Documents the env-var lifecycle contract enforced by the daemon-mode
+// launch path in cmd/agent_modes.go and cmd/agent_command.go:
+//
+//   - When --daemon is passed, the process sets SPROUT_DAEMON=1 so that
+//     isSSHDaemon() returns true during provider resolution.
+//   - When the daemon process exits, a `defer os.Unsetenv("SPROUT_DAEMON")`
+//     removes the flag from the process environment so it does NOT leak
+//     to subprocesses the user explicitly spawns afterward (or to tests
+//     sharing the same process).
+//
+// This test validates the consumer end of that contract: isSSHDaemon()
+// must flip from true to false the instant SPROUT_DAEMON is unset.
+// If a future regression leaves the env var set (e.g., remove the defer,
+// forget to call os.Unsetenv), downstream code would silently take the
+// daemon code path in non-daemon processes.
+// ---------------------------------------------------------------------------
+
+func TestSSHDaemon_UnsetFlipsDetection(t *testing.T) {
+	// Set SPROUT_DAEMON and verify isSSHDaemon() picks it up.
+	t.Setenv("SPROUT_DAEMON", "1")
+	if !isSSHDaemon() {
+		t.Fatal("precondition: isSSHDaemon() must be true when SPROUT_DAEMON=1")
+	}
+
+	// Simulate the defer os.Unsetenv("SPROUT_DAEMON") that cmd/agent_modes.go
+	// and cmd/agent_command.go register when the daemon exits. After this,
+	// isSSHDaemon() must return false — otherwise the flag has leaked to
+	// code paths that should treat this as a non-daemon process.
+	os.Unsetenv("SPROUT_DAEMON")
+	if isSSHDaemon() {
+		t.Fatal("isSSHDaemon() must return false after SPROUT_DAEMON is unset; the env var leaked")
+	}
+
+	// t.Setenv auto-restores SPROUT_DAEMON=1 on test cleanup, but that
+	// restoration is harmless because the test has already finished.
 }

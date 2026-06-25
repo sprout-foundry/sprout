@@ -61,6 +61,16 @@ func handleListChanges(_ context.Context, a *Agent, args map[string]interface{})
 		includePersisted = v
 	}
 
+	// include_cross_session, when true, merges persisted changes from
+	// ALL sessions instead of only the current one. Used by the
+	// timeline ("Recent history") tab so cross-session change history
+	// is visible even when a live agent is running. The default path
+	// (session tab) uses session-scoped merge to keep noise out.
+	includeCrossSession := false
+	if v, ok := args["include_cross_session"].(bool); ok {
+		includeCrossSession = v
+	}
+
 	if tracker == nil || !tracker.IsEnabled() {
 		if groupBy == "block" {
 			return `{"enabled":false,"blocks":[],"totals":{"changes":0,"files":0}}`, nil
@@ -77,7 +87,7 @@ func handleListChanges(_ context.Context, a *Agent, args map[string]interface{})
 		return buildBlockSummary(tracker.GetRevisionID(), changes)
 	}
 
-	return buildFileList(tracker, changes, includeDiff, includePersisted, args)
+	return buildFileList(tracker, changes, includeDiff, includePersisted, includeCrossSession, args)
 }
 
 // handleListChangesPersistedOnly is the include_persisted path when no
@@ -134,7 +144,7 @@ func handleListChangesPersistedOnly(args map[string]interface{}) (string, error)
 
 // buildFileList renders the per-file shape for list_changes. Used both
 // for session-only and session+persisted output.
-func buildFileList(tracker *ChangeTracker, changes []TrackedFileChange, includeDiff, includePersisted bool, args map[string]interface{}) (string, error) {
+func buildFileList(tracker *ChangeTracker, changes []TrackedFileChange, includeDiff, includePersisted, includeCrossSession bool, args map[string]interface{}) (string, error) {
 	type bulkItemEntry struct {
 		Path string `json:"path"`
 		Op   string `json:"op"`
@@ -216,12 +226,14 @@ func buildFileList(tracker *ChangeTracker, changes []TrackedFileChange, includeD
 		// on a large history.
 		if persisted, err := history.GetAllChangesMetadata(); err == nil {
 			for _, ch := range persisted {
-				// Session filter: skip other sessions' revisions.
-				if sessionRevID != "" && ch.RequestHash != sessionRevID {
+				// Session filter: skip other sessions' revisions
+				// unless include_cross_session is true (timeline path).
+				if !includeCrossSession && sessionRevID != "" && ch.RequestHash != sessionRevID {
 					continue
 				}
 				// Dedup: skip if the in-memory buffer already shows
-				// this path (it has newer or equal info).
+				// this path (it has newer or equal info). Applies to
+				// both same-session and cross-session merges.
 				if seenInMemory[ch.Filename] {
 					continue
 				}

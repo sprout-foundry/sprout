@@ -164,6 +164,14 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 			agent.Logger().Info("Tool registry initialized")
 		}
 
+		// SP-063: register computer_user desktop-control tools when explicitly
+		// enabled in config. No-op (and harmless) when disabled or when the
+		// platform lacks the required CLI tools.
+		if agent.configManager != nil {
+			if cuErr := RegisterComputerUseTools(agent.configManager.GetConfig()); cuErr != nil && agent.debug {
+				agent.Logger().Info("computer_use tools not registered: %v", cuErr)
+			}
+		}
 	}
 
 	// Load command history from configuration

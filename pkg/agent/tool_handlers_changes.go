@@ -534,7 +534,15 @@ func selectRevertCandidates(changes []TrackedFileChange, scope, since string) ([
 	// Collapse to earliest entry per path (preserving the first
 	// OriginalCode encountered for each file). The slice is in
 	// append-order so the first occurrence wins.
+	//
+	// Also track the latest NewCode per path so the staleness guard
+	// can compare disk content against the current intended state
+	// (not just the earliest edit's NewCode).
 	seen := make(map[string]bool, len(filtered))
+	latestNewCode := make(map[string]string, len(filtered))
+	for _, ch := range filtered {
+		latestNewCode[ch.FilePath] = ch.NewCode
+	}
 	earliest := make([]TrackedFileChange, 0, len(filtered))
 	for _, ch := range filtered {
 		key := ch.FilePath
@@ -542,6 +550,7 @@ func selectRevertCandidates(changes []TrackedFileChange, scope, since string) ([
 			continue
 		}
 		seen[key] = true
+		ch.NewCode = latestNewCode[key]
 		earliest = append(earliest, ch)
 	}
 	return earliest, nil
@@ -564,6 +573,14 @@ func (a *Agent) revertOne(ch TrackedFileChange) (string, bool, string) {
 	// majority without aborting on a single stray path.
 	if a.IsPathOutsideWorkspace(abs) {
 		return "", false, "path is outside the workspace — skipped"
+	}
+
+	// Staleness guard: if the file on disk no longer matches what the
+	// agent wrote (NewCode), it was modified intentionally after the
+	// snapshot — by a git commit, another session, or manual edit.
+	// Reverting would silently clobber that newer work.
+	if isStaleForRevert(abs, ch.NewCode) {
+		return "", false, "file modified since snapshot (stale — skipped)"
 	}
 
 	tracker := a.GetChangeTracker()
@@ -696,4 +713,27 @@ func isRecoverableOriginal(original string) bool {
 		return false
 	}
 	return true
+}
+
+// isStaleForRevert reports whether the file on disk differs from the
+// agent's recorded NewCode, meaning someone modified it intentionally
+// after the snapshot (git commit, manual edit, another session). If so,
+// reverting to OriginalCode would silently clobber that newer work.
+//
+// Returns false (safe to proceed) when:
+//   - newCode is empty (no baseline to compare)
+//   - newCode is the redacted marker (can't compare)
+//   - the file doesn't exist on disk (create/delete is safe)
+//   - the disk content matches newCode (nothing changed since)
+//
+// Returns true (stale — skip) when disk content differs from newCode.
+func isStaleForRevert(absPath, newCode string) bool {
+	if newCode == "" || newCode == RedactedContentMarker {
+		return false
+	}
+	current, err := os.ReadFile(absPath)
+	if err != nil {
+		return false // file doesn't exist — safe to proceed
+	}
+	return string(current) != newCode
 }

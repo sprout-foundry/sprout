@@ -101,6 +101,28 @@ func handleRecoverFile(_ context.Context, a *Agent, args map[string]interface{})
 		return jsonRecoverResult(false, abs, "", "path is outside the workspace — refusing cross-workspace restore"), nil
 	}
 
+	// Staleness guard: if the file on disk no longer matches what the
+	// agent wrote (NewCode), it was modified intentionally after the
+	// snapshot. Recovering would silently clobber that newer work.
+	//
+	// For scope="session_start", `match` is the EARLIEST change, but
+	// staleness must compare disk against the LATEST NewCode (the
+	// agent's most recent write to this path). Otherwise a file edited
+	// twice in the same session looks "stale" (disk=v2, earliest
+	// NewCode=v1) even though nobody external touched it.
+	stalenessNewCode := match.NewCode
+	if scope == "session_start" {
+		for _, ch := range changes {
+			chAbs, chErr := filepath.Abs(ch.FilePath)
+			if chErr == nil && chAbs == abs && ch.NewCode != "" {
+				stalenessNewCode = ch.NewCode
+			}
+		}
+	}
+	if isStaleForRevert(abs, stalenessNewCode) {
+		return jsonRecoverResult(false, abs, "stale_skip", "file was modified since the snapshot — refusing to overwrite (content may have been committed or edited intentionally)"), nil
+	}
+
 	// "create" with no original → recovery is delete.
 	if match.Operation == "create" {
 		if removeErr := os.Remove(abs); removeErr != nil && !os.IsNotExist(removeErr) {

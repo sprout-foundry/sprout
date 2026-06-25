@@ -3,7 +3,6 @@ package agent
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
@@ -94,21 +93,12 @@ func (a *Agent) Rewind(opts RewindOptions) (*RewindResult, error) {
 				continue
 			}
 
-			// Check if the file has been modified since the agent last touched it.
-			// We compare the current on-disk content against the ChangeTracker's
-			// NewCode from the most recent change (the last content the agent
-			// wrote). If they differ, someone else modified the file and we skip it.
-			if match := resolveRecoveryTarget(tracker.GetChanges(), abs); match != nil && match.NewCode != "" {
-				current, err := os.ReadFile(abs)
-				if err == nil && string(current) != match.NewCode {
-					// File was modified outside the agent — skip
-					filesSkipped = append(filesSkipped, abs)
-					continue
-				}
-			}
-
 			// Call handleRecoverFile with scope="session_start" to restore
 			// the file to its state before the agent first touched it.
+			// handleRecoverFile has its own staleness guard that compares
+			// disk against the latest NewCode for this path — if the file
+			// was modified externally, it returns stale_skip and we log
+			// it as skipped.
 			result, err := handleRecoverFile(nil, a, map[string]interface{}{
 				"path":  abs,
 				"scope": "session_start",

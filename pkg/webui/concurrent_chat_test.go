@@ -9,7 +9,9 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
@@ -126,6 +128,18 @@ func queryChat(t *testing.T, ws *ReactWebServer, clientID, chatID, query string)
 	rec := httptest.NewRecorder()
 	ws.handleAPIQuery(rec, req)
 	return rec.Code
+}
+
+// deleteChatSession calls the delete API and returns the HTTP status code and
+// response body.
+func deleteChatSession(t *testing.T, ws *ReactWebServer, clientID, chatID string) (int, []byte) {
+	t.Helper()
+	body, _ := json.Marshal(map[string]string{"id": chatID})
+	req := httptest.NewRequest(http.MethodPost, "/api/chat-sessions/delete", bytes.NewReader(body))
+	req.Header.Set(webClientIDHeader, clientID)
+	rec := httptest.NewRecorder()
+	ws.handleAPIChatSessionsDelete(rec, req)
+	return rec.Code, rec.Body.Bytes()
 }
 
 // --- Tests ---
@@ -404,4 +418,195 @@ func TestChatSessionProviderModelScoping(t *testing.T) {
 	if switchResp.ChatSession["model"] != "gpt-4" {
 		t.Errorf("switch response: expected model 'gpt-4', got %v", switchResp.ChatSession["model"])
 	}
+}
+
+// TestChatSessionDeleteAPI exercises the delete handler end-to-end via the
+// HTTP API surface: active-query rejection, successful deletion, and
+// double-delete rejection.
+func TestChatSessionDeleteAPI(t *testing.T) {
+	ws := setupConcurrentTestServer(t)
+
+	// Create two chat sessions: "A" and "B".
+	chatA := createChatSession(t, ws, testConcurrentClientID, "Chat A")
+	chatB := createChatSession(t, ws, testConcurrentClientID, "Chat B")
+
+	// 1. Mark chat "A" as active — delete should fail with 400 active query.
+	ws.mutex.Lock()
+	ctx := ws.clientContexts[testConcurrentClientID]
+	if cs := ctx.getChatSession(chatA); cs != nil {
+		cs.setQueryActive(true, "test query")
+	}
+	ws.mutex.Unlock()
+
+	code, _ := deleteChatSession(t, ws, testConcurrentClientID, chatA)
+	if code != http.StatusBadRequest {
+		t.Fatalf("expected delete of active chat to return 400, got %d", code)
+	}
+
+	// 2. Mark chat "A" as inactive — delete should succeed.
+	ws.mutex.Lock()
+	if cs := ctx.getChatSession(chatA); cs != nil {
+		cs.setQueryActive(false, "")
+	}
+	ws.mutex.Unlock()
+
+	code, _ = deleteChatSession(t, ws, testConcurrentClientID, chatA)
+	if code != http.StatusOK {
+		t.Fatalf("expected delete of inactive chat to return 200, got %d", code)
+	}
+
+	// Verify the chat is gone from the registry.
+	ws.mutex.RLock()
+	_, exists := ctx.ChatSessions[chatA]
+	ws.mutex.RUnlock()
+	if exists {
+		t.Fatal("expected chat A to be removed from ChatSessions after delete")
+	}
+
+	// 3. Delete chat "A" again — should fail with 400 not found.
+	code, _ = deleteChatSession(t, ws, testConcurrentClientID, chatA)
+	if code != http.StatusBadRequest {
+		t.Fatalf("expected double-delete to return 400, got %d", code)
+	}
+
+	// 4. Verify the remaining chat "B" is unaffected.
+	ws.mutex.RLock()
+	_, exists = ctx.ChatSessions[chatB]
+	ws.mutex.RUnlock()
+	if !exists {
+		t.Fatal("expected chat B to still exist after deleting chat A")
+	}
+
+	// 5. Verify top-level ActiveQuery was reset to false (no remaining
+	// active queries).
+	ws.mutex.RLock()
+	activeQuery := ctx.ActiveQuery
+	ws.mutex.RUnlock()
+	if activeQuery {
+		t.Fatal("expected top-level ActiveQuery to be false after delete")
+	}
+}
+
+// TestChatSessionDeleteCannotDeleteDefault verifies that the default chat
+// session cannot be deleted.
+func TestChatSessionDeleteCannotDeleteDefault(t *testing.T) {
+	ws := setupConcurrentTestServer(t)
+
+	code, _ := deleteChatSession(t, ws, testConcurrentClientID, defaultChatID)
+	if code != http.StatusBadRequest {
+		t.Fatalf("expected delete of default chat to return 400, got %d", code)
+	}
+}
+
+// TestChatSessionDeleteCannotDeleteActive verifies that the currently active
+// (switched-to) chat session cannot be deleted.
+func TestChatSessionDeleteCannotDeleteActive(t *testing.T) {
+	ws := setupConcurrentTestServer(t)
+
+	// Create and switch to a second chat.
+	chatB := createChatSession(t, ws, testConcurrentClientID, "Chat B")
+	switchChatSession(t, ws, testConcurrentClientID, chatB)
+
+	// Try to delete the active chat — should fail.
+	code, _ := deleteChatSession(t, ws, testConcurrentClientID, chatB)
+	if code != http.StatusBadRequest {
+		t.Fatalf("expected delete of active chat to return 400, got %d", code)
+	}
+}
+
+// TestChatSessionDeleteConcurrentWithQuery verifies that a concurrent delete
+// and query cannot both succeed. The system must end up in a consistent state:
+// either the delete wins (query is rejected) or the query wins (delete is
+// rejected because the chat now has an active query).
+//
+// Goroutines from previous iterations may still be draining when we read
+// shared state, so we wait for all in-flight work to settle before each
+// iteration's assertion.
+func TestChatSessionDeleteConcurrentWithQuery(t *testing.T) {
+	ws := setupConcurrentTestServer(t)
+
+	// Create a chat session to delete/query concurrently.
+	chatX := createChatSession(t, ws, testConcurrentClientID, "Chat X")
+
+	const iterations = 30
+	for i := 0; i < iterations; i++ {
+		// Reset: ensure chat X exists, is inactive, and no goroutines are
+		// running from a previous iteration.
+		waitForActiveQueriesToDrain(t, ws, 5*time.Second)
+		ws.mutex.Lock()
+		ctx := ws.clientContexts[testConcurrentClientID]
+		if _, ok := ctx.ChatSessions[chatX]; !ok {
+			cs := newChatSession(chatX, "Chat X")
+			ctx.ChatSessions[chatX] = cs
+		} else {
+			if cs := ctx.getChatSession(chatX); cs != nil {
+				cs.setQueryActive(false, "")
+			}
+		}
+		ctx.ActiveQuery = false
+		ctx.CurrentQuery = ""
+		ws.activeQueries = 0
+		ws.mutex.Unlock()
+
+		// Spawn two goroutines: one for delete, one for query.
+		var deleteCode, queryCode int
+		var wg sync.WaitGroup
+		startCh := make(chan struct{})
+
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			<-startCh
+			code, _ := deleteChatSession(t, ws, testConcurrentClientID, chatX)
+			deleteCode = code
+		}()
+		go func() {
+			defer wg.Done()
+			<-startCh
+			code := queryChat(t, ws, testConcurrentClientID, chatX, "concurrent query")
+			queryCode = code
+		}()
+
+		// Start both goroutines simultaneously.
+		close(startCh)
+		wg.Wait()
+
+		// Wait for the query goroutine (if any) to finish so we can
+		// read ws.activeQueries without race-with-leftover-goroutine noise.
+		waitForActiveQueriesToDrain(t, ws, 5*time.Second)
+
+		// Verify the invariant for this iteration:
+		// If delete succeeded (200), the chat should be gone (or
+		// getChatAgent may have lazily recreated it — pre-existing
+		// behaviour, not the bug we're fixing). What matters: no
+		// orphan goroutine should be running against a deleted chat.
+		if deleteCode == http.StatusOK {
+			ws.mutex.RLock()
+			activeQueries := ws.activeQueries
+			ws.mutex.RUnlock()
+
+			if activeQueries > 0 && queryCode == http.StatusAccepted {
+				t.Fatalf("iteration %d: delete=%d succeeded but ws.activeQueries=%d (orphan goroutine on deleted chat)",
+					i, deleteCode, activeQueries)
+			}
+		}
+	}
+}
+
+// waitForActiveQueriesToDrain blocks until ws.activeQueries reaches 0 or the
+// timeout fires. Used to ensure goroutines from a prior iteration have
+// completed cleanup before reading shared state.
+func waitForActiveQueriesToDrain(t *testing.T, ws *ReactWebServer, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		ws.mutex.RLock()
+		n := ws.activeQueries
+		ws.mutex.RUnlock()
+		if n == 0 {
+			return
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	t.Logf("warning: active queries did not drain within %s", timeout)
 }

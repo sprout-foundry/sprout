@@ -110,10 +110,12 @@ func (r *SubagentRunner) RunParallel(ctx context.Context, tasks []SubagentTask, 
 			if t.WorkingDir != "" {
 				taskOpts.WorkingDir = t.WorkingDir
 			}
+			// Note: tokens are already debited per-LLM-call by the subagent via
+			// SetFleetBudget → tracker.Add() in trackFleetBudgetForResponse.
+			// Do NOT add result.TokensUsed again here — that would double-count.
 			result := r.runTask(parallelCtx, t.ID, t.Prompt, taskOpts, &cumulativeTokens, int64(opts.FleetTokenBudget))
 			results[idx] = result
 			if result != nil {
-				cumulativeTokens.Add(int64(result.TokensUsed))
 				if result.Cancelled {
 					r.metricActive.Add(-1)
 					r.metricCancelled.Add(1)

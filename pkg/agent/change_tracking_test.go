@@ -675,6 +675,14 @@ func TestRecovery_ResolvesCorrectlyAfterChdir(t *testing.T) {
 		t.Fatalf("TrackFileWrite: %v", err)
 	}
 
+	// Simulate the agent actually writing the new content to disk
+	// (TrackFileWrite only records the change; it doesn't write the
+	// file). The staleness guard compares disk vs NewCode, so the
+	// disk must reflect the agent's edit for recovery to proceed.
+	if err := os.WriteFile(filePath, []byte("modified content\n"), 0644); err != nil {
+		t.Fatalf("write new content: %v", err)
+	}
+
 	// Simulate a `cd` to a different directory.
 	otherDir := t.TempDir()
 	os.Chdir(otherDir)

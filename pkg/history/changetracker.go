@@ -567,11 +567,94 @@ func isFileStale(filename, newCode string) bool {
 	return string(current) != newCode
 }
 
+// isFileStaleForRestore reports whether the file on disk differs from
+// BOTH the pre-agent state (originalCode) and the agent's edit
+// (newCode). It is the restore counterpart of isFileStale.
+//
+// The restore operation writes newCode back to disk. It is safe when
+// the disk currently holds either originalCode (the agent's change was
+// rolled back, so restoring re-applies it) or newCode itself (already
+// in the target state — a no-op write). It is UNSAFE when the disk
+// holds neither — someone modified the file intentionally after the
+// snapshot (git commit, another session, manual edit), and restoring
+// would silently clobber that work.
+//
+// Returns false (not stale / safe to restore) when:
+//   - The file doesn't exist on disk (restore is creating it)
+//   - newCode is empty (no baseline to compare — nothing to restore)
+//   - newCode is the redacted marker (can't compare)
+//   - The disk content matches originalCode (rolled-back state)
+//   - The disk content matches newCode (already in target state)
+//
+// Returns true (stale / skip restore) when the disk content matches
+// neither originalCode nor newCode.
+func isFileStaleForRestore(filename, originalCode, newCode string) bool {
+	if newCode == "" || newCode == RedactedContentMarker {
+		return false
+	}
+	current, err := os.ReadFile(filename)
+	if err != nil {
+		return false // file doesn't exist — safe to restore (create)
+	}
+	currentStr := string(current)
+	return currentStr != originalCode && currentStr != newCode
+}
+
+// dedupChangesByFilename collapses multiple changes to the same file
+// into a single entry, keeping the earliest OriginalCode (the true
+// pre-session state for rollback) and the latest NewCode (the current
+// intended state for staleness comparison and restore). The latest
+// FileRevisionHash is kept so status updates target the most recent
+// change record.
+//
+// Without deduplication, a file edited twice (v0→v1, then v1→v2)
+// produces two change records. Rollback's staleness check on the first
+// (NewCode=v1) would see disk=v2 and skip, while the second writes
+// OriginalCode=v1 — an intermediate state, not the true original v0.
+// Dedup ensures rollback sees one entry (OriginalCode=v0, NewCode=v2)
+// and correctly restores v0.
+func dedupChangesByFilename(changes []ChangeLog) []ChangeLog {
+	if len(changes) <= 1 {
+		return changes
+	}
+
+	// Changes are sorted by timestamp descending (most recent first).
+	// Walk in REVERSE (oldest first) so the first occurrence wins for
+	// OriginalCode; track the latest NewCode and FileRevisionHash.
+	sortChangesByTimestamp(changes) // ensures most-recent-first
+
+	earliest := make(map[string]int) // filename → index in result
+	var result []ChangeLog
+
+	for i := len(changes) - 1; i >= 0; i-- {
+		change := changes[i]
+		if idx, exists := earliest[change.Filename]; exists {
+			// We've seen this file. Patch in the latest NewCode and
+			// FileRevisionHash (this entry is newer because we're
+			// iterating from oldest to newest).
+			result[idx].NewCode = change.NewCode
+			result[idx].FileRevisionHash = change.FileRevisionHash
+		} else {
+			earliest[change.Filename] = len(result)
+			result = append(result, change)
+		}
+	}
+
+	return result
+}
+
 func handleRevisionRollback(group RevisionGroup) error {
 	fmt.Printf("Rolling back all changes in revision %s...\n", group.RevisionID)
 
-	activeChanges := getActiveChanges(group.Changes)
-	for _, change := range activeChanges {
+	// Deduplicate by filename: keep the earliest OriginalCode (true
+	// pre-session state) and the latest NewCode (current disk baseline
+	// for staleness comparison). Without this, a file edited twice
+	// (v0→v1, then v1→v2) produces two change records; the first one's
+	// staleness check sees disk=v2 ≠ NewCode=v1 and skips, while the
+	// second writes OriginalCode=v1 (an intermediate state, not the
+	// true original v0).
+	deduped := dedupChangesByFilename(getActiveChanges(group.Changes))
+	for _, change := range deduped {
 		// Skip files with redacted content (external files)
 		if change.OriginalCode == RedactedContentMarker {
 			fmt.Printf("  Skipping %s: content was redacted (external file)\n", change.Filename)
@@ -616,7 +699,9 @@ func handleRevisionRollback(group RevisionGroup) error {
 func handleRevisionRestore(group RevisionGroup) error {
 	fmt.Printf("Restoring all changes in revision %s...\n", group.RevisionID)
 
-	for _, change := range group.Changes {
+	// Deduplicate by filename (see handleRevisionRollback for rationale).
+	deduped := dedupChangesByFilename(group.Changes)
+	for _, change := range deduped {
 		// Skip files with redacted content (external files)
 		if change.NewCode == RedactedContentMarker {
 			fmt.Printf("  Skipping %s: content was redacted (external file)\n", change.Filename)
@@ -627,6 +712,18 @@ func handleRevisionRestore(group RevisionGroup) error {
 		// See handleRevisionRollback for rationale.
 		if !isWithinWorkspace(change.Filename) {
 			fmt.Printf("  Skipping %s: outside current workspace (safety check)\n", change.Filename)
+			continue
+		}
+
+		// Staleness guard (mirrors handleRevisionRollback): if the file
+		// on disk no longer matches either the pre-agent state
+		// (OriginalCode) or the agent's edit (NewCode), it was modified
+		// intentionally after this snapshot — by a git commit, another
+		// session, or manual edit. Restoring would silently clobber that
+		// change. Without this guard, restore blindly overwrites files
+		// that may contain newer committed work.
+		if isFileStaleForRestore(change.Filename, change.OriginalCode, change.NewCode) {
+			fmt.Printf("  Skipping %s: file modified since snapshot (safety check)\n", change.Filename)
 			continue
 		}
 

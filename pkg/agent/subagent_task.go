@@ -36,8 +36,9 @@ func (r *SubagentRunner) runTask(
 	}
 	defer cancel()
 
-	// Create subagent
-	subAgent, err := r.createSubagent(opts)
+	// Create subagent, deriving its interrupt context from runCtx so
+	// cancellation propagates into the subagent's LLM calls.
+	subAgent, err := r.createSubagent(opts, runCtx)
 	if err != nil {
 		return &SubagentResult{
 			ID:      taskID,
@@ -178,7 +179,11 @@ func (r *SubagentRunner) runTask(
 	var lineBuf strings.Builder
 	subAgent.EnableStreaming(func(chunk string) {
 		var pending []string
-		outputMu.Lock()
+		// RouteStreamChunk holds outputMu (via TryLock) before calling this
+		// callback. Using TryLock here avoids re-entrancy deadlock: if the lock
+		// is already held by the router, proceed without it — the router
+		// serialises the write.
+		selfLocked := outputMu.TryLock()
 		lineBuf.WriteString(chunk)
 		for {
 			content := lineBuf.String()
@@ -195,7 +200,9 @@ func (r *SubagentRunner) runTask(
 				lineBuf.WriteString(content[idx+1:])
 			}
 		}
-		outputMu.Unlock()
+		if selfLocked {
+			outputMu.Unlock()
+		}
 
 		for _, line := range pending {
 			_, _ = os.Stderr.Write([]byte(line))
@@ -299,16 +306,23 @@ func (r *SubagentRunner) runTask(
 		}
 	}
 
-	// Flush any remaining buffered output
-	outputMu.Lock()
-	if lineBuf.Len() > 0 {
-		remaining := strings.TrimSpace(lineBuf.String())
-		if remaining != "" {
-			_, _ = os.Stderr.Write([]byte(dimGray + prefix + reset + " " + remaining + "\n"))
+	// Flush any remaining buffered output. Use TryLock instead of blocking
+	// Lock: if the goroutine leaked (the 5-second grace above expired),
+	// it may still be holding outputMu inside its streaming callback. A
+	// blocking Lock here would hang runTask indefinitely — leaving
+	// DecrementActiveSubagents un-fired ("1 sub" badge stuck in the
+	// footer) and blocking the parent's tool result. Best-effort flush
+	// on cancellation is fine; any buffered bytes are cosmetic.
+	if outputMu.TryLock() {
+		if lineBuf.Len() > 0 {
+			remaining := strings.TrimSpace(lineBuf.String())
+			if remaining != "" {
+				_, _ = os.Stderr.Write([]byte(dimGray + prefix + reset + " " + remaining + "\n"))
+			}
+			lineBuf.Reset()
 		}
-		lineBuf.Reset()
+		outputMu.Unlock()
 	}
-	outputMu.Unlock()
 
 	// Mark as completed
 	running.Completed.Store(true)

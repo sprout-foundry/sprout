@@ -53,6 +53,10 @@ export interface UseEditorEventsOptions {
   onToggleFormatOnSave?: () => void;
   onOpenLivePreview?: () => void;
   onToggleMarkdownPreview?: () => void;
+  /** Ref tracking whether this pane is the active one. When false, the
+   *  document-level event listeners early-return so commands (format, undo,
+   *  goto-line, etc.) only affect the focused pane, not every mounted pane. */
+  isActiveRef: React.MutableRefObject<boolean>;
 }
 
 /**
@@ -91,7 +95,14 @@ export function useEditorEvents(options: UseEditorEventsOptions): void {
         toggleLinkedScroll,
         handleFindAllReferences,
         onGoToWorkspaceSymbol,
+        isActiveRef,
       } = optionsRef.current;
+
+      // Guard: only the active editor pane should respond to document-level
+      // command events. Without this check, every mounted EditorPane (split
+      // panes, background tabs) processes the same command — format, undo,
+      // goto-line, etc. would fire across all panes simultaneously.
+      if (!isActiveRef.current) return;
 
       if (e.type === 'editor-goto-line') {
         const customEvent = e as CustomEvent;

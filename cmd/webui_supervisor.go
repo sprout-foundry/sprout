@@ -41,6 +41,11 @@ type webUISupervisor struct {
 	mu               sync.Mutex
 	attachedAnnounce bool
 	startAnnounce    bool
+	// attached is true once this supervisor has determined another healthy
+	// process owns the Web UI host role (and consequently shut down its own
+	// server). The startup loop in agent_modes.go checks this to avoid
+	// timing out when attach-to-existing is the correct outcome.
+	attached bool
 }
 
 func newWebUISupervisor(ws *webui.ReactWebServer, port int, announceStart func(port int), announceAttach func(port int)) *webUISupervisor {
@@ -55,6 +60,16 @@ func newWebUISupervisor(ws *webui.ReactWebServer, port int, announceStart func(p
 		startAnnounce:    false,
 		attachedAnnounce: false,
 	}
+}
+
+// HasAttached reports whether the supervisor has determined that another
+// healthy process owns the Web UI host role. Callers that are waiting for
+// a local web server to start should break out of their wait loop when
+// this returns true — there is no local server coming.
+func (s *webUISupervisor) HasAttached() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.attached
 }
 
 func (s *webUISupervisor) Run(ctx context.Context) {
@@ -90,6 +105,7 @@ func (s *webUISupervisor) reconcile(ctx context.Context) {
 				}
 			}
 			s.mu.Lock()
+			s.attached = true
 			if !s.attachedAnnounce && s.announceAttach != nil {
 				s.attachedAnnounce = true
 				s.announceAttach(s.port)
@@ -111,6 +127,7 @@ func (s *webUISupervisor) reconcile(ctx context.Context) {
 			}
 		}
 		s.mu.Lock()
+		s.attached = true
 		if !s.attachedAnnounce && s.announceAttach != nil {
 			s.attachedAnnounce = true
 			s.announceAttach(record.Port)

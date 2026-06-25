@@ -62,6 +62,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     setWhitespaceRenderingMode,
     isFormatOnSaveEnabled,
     setFormatOnSaveEnabled,
+    activePaneId,
   } = useEditorManager();
   const { themePack, customHighlightStyle } = useTheme();
   const { hotkeys } = useHotkeys();
@@ -230,9 +231,16 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   // actionsRef holds only a stable closure over the ref-mirrored saveRef —
   // no actual changing state. Initialized once; no need to update.
 
+  // Tracks whether this pane is the active one. Updated on every render so
+  // useEditorEvents' stable handler can read the latest value via the ref
+  // without needing to re-subscribe document listeners.
+  const isActiveRef = useRef(false);
+  isActiveRef.current = paneId === activePaneId;
+
   useEditorEvents({
     viewRef,
     bufferRef,
+    isActiveRef,
     handleGoToLine: semantic.handleGoToLine,
     onToggleWordWrap: settings.onToggleWordWrap,
     onToggleMinimap: settings.onToggleMinimap,

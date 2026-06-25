@@ -197,7 +197,28 @@ class WebSocketService {
 
     debugLog('Connecting to WebSocket:', wsUrl);
 
-    this.ws = new WebSocket(appendClientIdToUrl(wsUrl));
+    try {
+      this.ws = new WebSocket(appendClientIdToUrl(wsUrl));
+    } catch (err) {
+      // new WebSocket() can throw synchronously (malformed URL, CSP
+      // violation). Without this guard, `connecting` stays true forever,
+      // blocking every subsequent connect() attempt at the top-of-method
+      // early return — the client can never recover.
+      this.connecting = false;
+      debugLog('[WebSocket] Failed to construct WebSocket:', err);
+      if (!this.intentionalClose && this.reconnectAttempts < this.maxReconnectAttempts) {
+        this.reconnectAttempts++;
+        const backoffDelay = Math.min(
+          this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1) + Math.random() * 1000,
+          30000,
+        );
+        this.reconnectTimeout = setTimeout(() => {
+          this.reconnectTimeout = null;
+          this.connect();
+        }, backoffDelay);
+      }
+      return;
+    }
 
     this.ws.onopen = () => {
       this.connecting = false;

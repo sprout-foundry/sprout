@@ -9,8 +9,19 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/factory"
 )
 
-// createSubagent creates a new in-process agent for subagent execution
-func (r *SubagentRunner) createSubagent(opts SubagentOptions) (*Agent, error) {
+// defaultSubagentMaxIterations caps the number of LLM iterations a subagent
+// may run. 0 (unlimited) let a stuck subagent loop 164+ times burning tokens
+// before the user noticed. 50 is generous for real coding tasks but stops
+// runaway loops within a few minutes. Can be overridden per-call via
+// SubagentOptions.MaxIterations once that field exists.
+const defaultSubagentMaxIterations = 50
+
+// createSubagent creates a new in-process agent for subagent execution.
+// parentCtx is used as the base for the subagent's interrupt context so
+// that cancellation of the parent's run context (Ctrl+C, timeout, etc.)
+// propagates into the subagent's in-flight LLM calls — without this the
+// subagent's HTTP requests ignore cancellation and the goroutine leaks.
+func (r *SubagentRunner) createSubagent(opts SubagentOptions, parentCtx context.Context) (*Agent, error) {
 	if r.shared == nil || r.shared.ConfigManager == nil {
 		return nil, fmt.Errorf("shared state and config manager are required")
 	}
@@ -62,8 +73,12 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions) (*Agent, error) {
 		effectiveWorkspaceRoot = opts.WorkingDir
 	}
 
-	// Create interrupt context for this subagent
-	interruptCtx, interruptCancel := context.WithCancel(context.Background())
+	// Create interrupt context derived from the parent's context so
+	// cancellation (Ctrl+C, timeout, runCtx cancel) propagates into the
+	// subagent's LLM calls. Previously this used context.Background(),
+	// making the subagent un-cancellable — the in-flight HTTP request
+	// ignored the parent's interrupt and the goroutine leaked.
+	interruptCtx, interruptCancel := context.WithCancel(parentCtx)
 
 	// Create sub-managers
 	stateMgr := NewAgentStateManager(false)
@@ -76,7 +91,7 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions) (*Agent, error) {
 		client:              client,
 		systemPrompt:        systemPrompt,
 		baseSystemPrompt:    systemPrompt,
-		maxIterations:       0, // unlimited
+		maxIterations:       defaultSubagentMaxIterations, // bounded to prevent runaway loops
 		clientType:          clientType,
 		debug:               r.parentAgent != nil && r.parentAgent.debug,
 		configManager:       r.shared.ConfigManager,
@@ -84,6 +99,7 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions) (*Agent, error) {
 		inputInjectionChan:  make(chan string, inputInjectionBufferSize),
 		interruptCtx:        interruptCtx,
 		interruptCancel:     interruptCancel,
+		parentInterruptCtx:  parentCtx, // preserve parent link across resetInterruptForNewQuery/ClearInterrupt
 		workspaceRoot:       effectiveWorkspaceRoot,
 		state:               stateMgr,
 		output:              outputMgr,

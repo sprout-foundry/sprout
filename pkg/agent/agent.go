@@ -89,6 +89,14 @@ type Agent struct {
 	interruptMu         sync.Mutex // protects interruptCtx + interruptCancel
 	interruptCtx        context.Context
 	interruptCancel     context.CancelFunc
+	// parentInterruptCtx is the base context the subagent's interrupt
+	// context should always derive from. For the primary agent this is
+	// nil (equivalent to context.Background()). For subagents it is the
+	// parent's runCtx passed to createSubagent, so that cancelling the
+	// parent (Ctrl+C, timeout) propagates into the subagent's LLM calls
+	// even after resetInterruptForNewQuery or ClearInterrupt replace the
+	// interruptCtx.
+	parentInterruptCtx context.Context
 
 	// Sub-managers — Agent coordinates through these interfaces
 	state    StateManager       // Conversation history, checkpoints, tokens, cost, persona, etc.

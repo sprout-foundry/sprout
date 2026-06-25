@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"testing"
 
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
@@ -36,7 +37,7 @@ func TestSubagentRunner_InheritsTerminalManagerFromParent(t *testing.T) {
 	// RunParallel. We call it directly so the test stays focused on the
 	// inheritance behavior rather than a full subagent run (which would
 	// require provider credentials etc).
-	sub, err := runner.createSubagent(SubagentOptions{})
+	sub, err := runner.createSubagent(SubagentOptions{}, context.Background())
 	if err != nil {
 		t.Fatalf("createSubagent failed: %v", err)
 	}
@@ -73,7 +74,7 @@ func TestSubagentRunner_NoTerminalManagerWhenParentHasNone(t *testing.T) {
 	}
 	runner := NewSubagentRunner(parent, shared)
 
-	sub, err := runner.createSubagent(SubagentOptions{})
+	sub, err := runner.createSubagent(SubagentOptions{}, context.Background())
 	if err != nil {
 		t.Fatalf("createSubagent failed: %v", err)
 	}

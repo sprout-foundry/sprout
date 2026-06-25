@@ -20,10 +20,10 @@ import (
 // SP-034-1c — vision/PDF ctx-threading tests
 //
 // These tests verify the core invariant of the refactor: the ctx parameter
-// threaded through ProcessImagesInText / AnalyzeImage / processPDFWithVisionModel
-// / processOCRImages actually reaches the leaf SendVisionRequest call, so a
-// cancelled context aborts in-flight vision API work instead of hanging on a
-// real network request.
+// threaded through ProcessImagesInText / AnalyzeImage / processOCRImages
+// actually reaches the leaf SendVisionRequest call, so a cancelled context
+// aborts in-flight vision API work instead of hanging on a real network
+// request.
 //
 // They use a mock vision client (ctxVisionMockClient) — no network, no API keys.
 // =============================================================================
@@ -207,35 +207,7 @@ func TestAnalyzeImage_RespectsContextDuringCall(t *testing.T) {
 }
 
 // =============================================================================
-// Test 3: processPDFWithVisionModel — pre-cancelled ctx
-// processPDFWithVisionModel is unexported but same-package, so we call directly.
-// It reads the PDF file, checks looksLikePDF, then calls SendVisionRequest.
-// =============================================================================
-
-func TestProcessPDFWithVisionModel_CancelledContext(t *testing.T) {
-	mock := &ctxVisionMockClient{sendVisionBehavior: "cancel-fast"}
-
-	pdfPath := writeTempPDF(t)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // pre-cancel
-
-	text, err := processPDFWithVisionModel(ctx, pdfPath, mock)
-
-	// Pre-refactor, ctx would be context.Background() and the mock would
-	// return a successful (non-empty) response. With the refactor, the
-	// cancelled ctx makes the mock return ctx.Err().
-	requireError(t, err, "processPDFWithVisionModel with pre-cancelled ctx should return an error")
-	if text != "" {
-		t.Errorf("expected empty text on cancelled ctx, got %q", text)
-	}
-	if !mock.sendVisionCalled {
-		t.Fatal("expected SendVisionRequest to be called — ctx must reach the leaf site")
-	}
-}
-
-// =============================================================================
-// Test 4: processOCRImages — pre-cancelled ctx
+// Test 3: processOCRImages — pre-cancelled ctx
 // processOCRImages is unexported but same-package, so we call directly.
 // It optimizes each image then calls SendVisionRequest per image.
 // =============================================================================

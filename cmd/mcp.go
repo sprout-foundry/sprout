@@ -103,15 +103,19 @@ func runMCPAdd() error {
 	}
 
 	// Display templates (filter out generic templates for main menu)
-	fmt.Println("Select server type:")
-	for i, t := range templates {
-		// Skip generic templates in the main menu
+	var visibleTemplates []mcp.MCPServerTemplate
+	for _, t := range templates {
 		if t.ID == "http-generic" || t.ID == "stdio-generic" {
 			continue
 		}
+		visibleTemplates = append(visibleTemplates, t)
+	}
+
+	fmt.Println("Select server type:")
+	for i, t := range visibleTemplates {
 		fmt.Printf("%d. %s\n    %s\n", i+1, t.Name, t.Description)
 	}
-	fmt.Printf("%d. Custom MCP Server (stdio or http)\n", len(templates)+1)
+	fmt.Printf("%d. Custom MCP Server (stdio or http)\n", len(visibleTemplates)+1)
 	fmt.Print("Choice: ")
 
 	choice, err := reader.ReadString('\n')
@@ -121,17 +125,16 @@ func runMCPAdd() error {
 	choice = strings.TrimSpace(choice)
 
 	choiceNum, err := strconv.Atoi(choice)
-	if err != nil || choiceNum < 1 || choiceNum > len(templates)+1 {
+	if err != nil || choiceNum < 1 || choiceNum > len(visibleTemplates)+1 {
 		return fmt.Errorf("invalid choice: %s", choice)
 	}
 
 	// Handle custom server option
-	if choiceNum == len(templates)+1 {
+	if choiceNum == len(visibleTemplates)+1 {
 		return setupCustomMCPServer(&mcpConfig, reader, registry)
 	}
 
-	// Get selected template (adjust for skipped generics)
-	selectedTemplate := templates[choiceNum-1]
+	selectedTemplate := visibleTemplates[choiceNum-1]
 
 	// Prompt for server name (with default from template)
 	serverName := selectedTemplate.ID

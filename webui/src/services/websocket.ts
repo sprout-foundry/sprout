@@ -265,6 +265,7 @@ class WebSocketService {
     };
 
     this.ws.onclose = (event) => {
+      this.connecting = false;
       debugLog('WebSocket disconnected:', event);
       this.stopPingInterval();
       this.stopPongWatchdog();
@@ -306,6 +307,36 @@ class WebSocketService {
       try {
         const data = JSON.parse(event.data);
 
+        // Handle session_conflict: the backend detected another active WebSocket
+        // for this user/client and is waiting for a session_takeover confirmation.
+        // Auto-respond so the connection proceeds without a 60s hang.
+        if (data.type === 'session_conflict') {
+          debugLog('[WebSocket] Session conflict detected, sending takeover confirmation');
+          if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            try {
+              this.ws.send(JSON.stringify({ type: 'session_takeover' }));
+            } catch (err) {
+              debugLog('[WebSocket] Failed to send session_takeover:', err);
+            }
+          }
+          // Do NOT notifyCallbacks — this is a transport-level handshake, not an app event.
+          return;
+        }
+
+        // Handle session_displaced: another session has taken over this connection.
+        // Stop reconnecting — the new connection is authoritative.
+        if (data.type === 'session_displaced') {
+          debugLog('[WebSocket] Session displaced by another connection:', data.data?.message);
+          this.intentionalClose = true;
+          this.stopPingInterval();
+          this.stopPongWatchdog();
+          this.notifyCallbacks({
+            type: 'session_displaced',
+            data: data.data || {},
+          });
+          return;
+        }
+
         // Handle pong responses from server
         if (data.type === 'pong') {
           this.handlePong();
@@ -338,6 +369,7 @@ class WebSocketService {
    *  of reconnecting. */
   disconnect() {
     this.intentionalClose = true;
+    this.connecting = false;
     this.wasConnectedBefore = false;
     this.pendingQueue = []; // Clear queue on explicit disconnect
     if (this.reconnectTimeout) {
@@ -368,6 +400,7 @@ class WebSocketService {
     // cancelling it on heartbeat staleness. Sent before the close below.
     this.sendControl('pause');
     this.intentionalClose = true;
+    this.connecting = false;
     // Intentionally do NOT reset wasConnectedBefore — see comment above.
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
@@ -408,6 +441,7 @@ class WebSocketService {
       this.ws = null;
     }
     // Reset state for fresh reconnection
+    this.connecting = false;
     this.reconnectAttempts = 0;
     this.intentionalClose = false;
     // Connect immediately (fire-and-forget — errors are handled by connect()

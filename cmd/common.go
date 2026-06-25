@@ -3,14 +3,18 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"time"
 
+	"github.com/gofrs/flock"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
+
+const instanceLockTimeout = 5 * time.Second
 
 // InstanceInfo represents a running sprout instance
 type InstanceInfo struct {
@@ -89,6 +93,49 @@ func saveInstances(instances map[string]InstanceInfo) error {
 		return fmt.Errorf("failed to rename instances temp file: %w", err)
 	}
 	return nil
+}
+
+// withInstanceLock acquires an exclusive interprocess lock on instances.json,
+// loads the current contents, hands the map to the mutate function for
+// modification, and persists the result. The flock prevents last-writer-wins
+// data loss when multiple sprout processes heartbeat concurrently.
+func withInstanceLock(ctx context.Context, mutate func(instances map[string]InstanceInfo) error) error {
+	configDir := getConfigDir()
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		return fmt.Errorf("failed to create config dir for instances: %w", err)
+	}
+	instancesFile := filepath.Join(configDir, "instances.json")
+	// Ensure the file exists so flock can open it.
+	if err := touchFile(instancesFile); err != nil {
+		return fmt.Errorf("failed to touch instances file: %w", err)
+	}
+
+	lock := flock.New(instancesFile + ".lock")
+	locked, err := lock.TryLockContext(ctx, instanceLockTimeout)
+	if err != nil {
+		return fmt.Errorf("failed to acquire instances lock: %w", err)
+	}
+	if !locked {
+		return fmt.Errorf("timed out acquiring instances lock")
+	}
+	defer func() { _ = lock.Unlock() }()
+
+	instances, err := loadInstances()
+	if err != nil {
+		instances = make(map[string]InstanceInfo)
+	}
+	if err := mutate(instances); err != nil {
+		return err
+	}
+	return saveInstances(instances)
+}
+
+func touchFile(path string) error {
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	return f.Close()
 }
 
 // cleanStaleInstances removes instances that haven't pinged recently

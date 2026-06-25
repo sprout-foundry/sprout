@@ -354,7 +354,7 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			// becomes initial content for the next prompt; queued
 			// messages become a prefix that prepends to the next
 			// submitted query.
-			pending := steerCoord.DrainPendingInput()
+			pending = steerCoord.DrainPendingInput()
 			if pending.InitialContent != "" {
 				inputReader.SetInitialContent(pending.InitialContent)
 			}

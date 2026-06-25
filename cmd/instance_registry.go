@@ -35,39 +35,36 @@ func startInstanceTracker(ctx context.Context, port int, chatAgent *agent.Agent)
 		defer ticker.Stop()
 
 		writeHeartbeat := func() {
-			instances, err := loadInstances()
-			if err != nil {
-				instances = make(map[string]InstanceInfo)
-			}
-			cleanStaleInstances(instances, time.Now().Add(-instanceStaleAfter))
-
 			sessionID := ""
 			if chatAgent != nil {
 				sessionID = chatAgent.GetSessionID()
 			}
 
 			now := time.Now()
-			instances[instanceID] = InstanceInfo{
-				ID:         instanceID,
-				Port:       port,
-				PID:        os.Getpid(),
-				StartTime:  startedAt,
-				WorkingDir: workingDir,
-				LastPing:   now,
-				SessionID:  sessionID,
-			}
-			if err := saveInstances(instances); err != nil {
+			err := withInstanceLock(ctx, func(instances map[string]InstanceInfo) error {
+				cleanStaleInstances(instances, now.Add(-instanceStaleAfter))
+				instances[instanceID] = InstanceInfo{
+					ID:         instanceID,
+					Port:       port,
+					PID:        os.Getpid(),
+					StartTime:  startedAt,
+					WorkingDir: workingDir,
+					LastPing:   now,
+					SessionID:  sessionID,
+				}
+				return nil
+			})
+			if err != nil {
 				log.Printf("[debug] failed to save instance heartbeat: %v", err)
 			}
 		}
 
 		removeHeartbeat := func() {
-			instances, err := loadInstances()
+			err := withInstanceLock(context.Background(), func(instances map[string]InstanceInfo) error {
+				delete(instances, instanceID)
+				return nil
+			})
 			if err != nil {
-				return
-			}
-			delete(instances, instanceID)
-			if err := saveInstances(instances); err != nil {
 				log.Printf("[debug] failed to save instance heartbeat: %v", err)
 			}
 		}

@@ -202,6 +202,9 @@ function CommandPalette({
   const fileSearchTokenRef = useRef(0);
   useEffect(() => {
     if (!searchQuery || !onSearchFiles || (searchMode !== 'all' && searchMode !== 'files')) {
+      // Invalidate any in-flight search so a stale result can't repopulate
+      // after the user cleared or changed the query.
+      fileSearchTokenRef.current++;
       setFileResults([]);
       return;
     }
@@ -229,6 +232,7 @@ function CommandPalette({
       !onSearchWorkspaceSymbols ||
       (searchMode !== 'all' && searchMode !== 'symbols')
     ) {
+      wsSymbolTokenRef.current++;
       setWorkspaceSymbols([]);
       return;
     }

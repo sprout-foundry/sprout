@@ -574,7 +574,7 @@ function CommandInput({
       setIsHistoryMode(true);
     }
 
-    setHistory(createEmptyState());
+    setHistory((prev) => ({ ...prev, index: newIndex }));
 
     updateValue(newInputValue, { start: newInputValue.length, end: newInputValue.length });
   };

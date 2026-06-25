@@ -274,11 +274,13 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
           });
         }
 
-        // Fetch children for newly expanded directories that don't have children loaded
-        // Fetch from deepest to shallowest so parent structures are in place
+        // Fetch children for newly expanded directories that don't have children loaded.
+        // Sort shallow→deep so parent directories exist in state before we
+        // attach children to them — updateFileChildren() no-ops if the
+        // parent node isn't found, so fetching deepest-first (the previous
+        // order) silently dropped ancestors and broke deep-path reveals.
         if (newAncestors.length > 0) {
-          // Sort by depth (deepest first)
-          const sortedAncestors = [...newAncestors].sort((a, b) => b.split('/').length - a.split('/').length);
+          const sortedAncestors = [...newAncestors].sort((a, b) => a.split('/').length - b.split('/').length);
 
           for (const dirPath of sortedAncestors) {
             const dir = findFileByPath(filesRef.current, dirPath);

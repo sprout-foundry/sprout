@@ -227,7 +227,15 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	// restored sessions send the entire raw history (potentially hundreds of
 	// messages with tool calls) instead of the compacted summary, causing
 	// provider 400 errors due to mismatched tool calls/responses.
-	if cps := a.state.GetTurnCheckpoints(); len(cps) > 0 {
+	// Acquire the checkpoint read-lock to avoid racing with concurrent
+	// checkpointing and rollup operations that modify the slice.
+	cps := func() []TurnCheckpoint {
+		mu := a.state.GetCheckpointMutex()
+		mu.RLock()
+		defer mu.RUnlock()
+		return a.state.GetTurnCheckpoints()
+	}()
+	if len(cps) > 0 {
 		seedCPs := make([]core.TurnCheckpoint, len(cps))
 		for i, cp := range cps {
 			// Convert sprout's CheckpointFileChange manifest to seed's

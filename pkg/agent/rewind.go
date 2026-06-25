@@ -54,8 +54,9 @@ func (a *Agent) Rewind(opts RewindOptions) (*RewindResult, error) {
 	// 4. Determine the truncation point
 	startIndex := target.StartIndex
 
-	// 5. Count what will be discarded
-	discardedCheckpoints := checkpoints[opts.ToTurnIndex+1:]
+	// 5. Count what will be discarded (includes the checkpoint at ToTurnIndex,
+	// which will be dropped in step 9 since its StartIndex == startIndex).
+	discardedCheckpoints := checkpoints[opts.ToTurnIndex:]
 	turnsDiscarded := len(discardedCheckpoints)
 	messagesRemoved := len(msgs) - startIndex
 

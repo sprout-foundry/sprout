@@ -186,6 +186,21 @@ func (c *SteerCoordinator) handleSteerSubmit(text string) {
 		rejectCommandIntent(intent, text, "steer", "wait for the prompt to finish (Ctrl+C / Esc to interrupt now)")
 		return
 	}
+	// If a subagent is currently running, route the steer to it directly
+	// via InjectInputIntoActive (parity with the WebUI's steer path in
+	// api_query.go). Without this, the message lands in the primary's
+	// inputInjectionChan — but the primary is blocked inside the
+	// run_subagent tool call and won't consume the channel until the
+	// subagent finishes, so the steer silently no-ops. Injecting into
+	// the active subagent delivers the message at the next iteration
+	// boundary of the subagent's own conversation loop.
+	if runner := c.agent.GetSubagentRunner(); runner != nil {
+		if _, ok := runner.InjectInputIntoActive(text); ok {
+			fmt.Fprintln(os.Stderr)
+			console.GlyphAction.Fprintf(os.Stderr, "steer → subagent: %s", text)
+			return
+		}
+	}
 	if err := c.agent.InjectInputContext(text); err != nil {
 		fmt.Fprintln(os.Stderr)
 		console.GlyphError.Fprintf(os.Stderr, "steer dropped: %v", err)

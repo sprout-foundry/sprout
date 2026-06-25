@@ -81,7 +81,11 @@ func (a *Agent) HandleInterrupt() string {
 
 // ClearInterrupt resets the interrupt state
 func (a *Agent) ClearInterrupt() {
-	newCtx, newCancel := context.WithCancel(context.Background())
+	base := a.parentInterruptCtx
+	if base == nil {
+		base = context.Background()
+	}
+	newCtx, newCancel := context.WithCancel(base)
 	a.interruptMu.Lock()
 	oldCancel := a.interruptCancel
 	a.interruptCtx = newCtx
@@ -99,6 +103,13 @@ func (a *Agent) ClearInterrupt() {
 // the cancelled ctx would otherwise persist and instantly abort the next
 // HTTP request (now that SP-034-1e wires interruptCtx into the request body).
 // Idempotent — if the ctx is already non-cancelled, this is essentially a no-op.
+//
+// For subagents, the new context is derived from parentInterruptCtx (the
+// parent's runCtx) so that cancelling the parent still propagates into the
+// subagent's LLM calls after the reset. Without this, the first
+// resetInterruptForNewQuery call inside ProcessQuery would sever the parent
+// linkage established by createSubagent, making the subagent un-cancellable
+// again — the exact deadlock we fixed.
 func (a *Agent) resetInterruptForNewQuery() {
 	a.interruptMu.Lock()
 	if a.interruptCtx != nil {
@@ -111,7 +122,11 @@ func (a *Agent) resetInterruptForNewQuery() {
 			return
 		}
 	}
-	newCtx, newCancel := context.WithCancel(context.Background())
+	base := a.parentInterruptCtx
+	if base == nil {
+		base = context.Background()
+	}
+	newCtx, newCancel := context.WithCancel(base)
 	a.interruptCtx = newCtx
 	a.interruptCancel = newCancel
 	a.interruptMu.Unlock()

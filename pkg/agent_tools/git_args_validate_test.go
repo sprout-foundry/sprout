@@ -649,3 +649,66 @@ type alwaysApprovePrompter struct{}
 func (p *alwaysApprovePrompter) PromptForApproval(command string) (bool, error) {
 	return true, nil
 }
+
+// ---------------------------------------------------------------------------
+// ValidateGitArgs - Whitespace delimiter injection (regression: tab/newline bypass)
+// ---------------------------------------------------------------------------
+// Git accepts tabs, newlines, and multiple spaces as delimiters between a flag
+// and its value. A literal "-c core." substring check is defeated by
+// "-c\tcore.hooksPath=...". configKeyPrefix now normalizes whitespace via
+// strings.Fields before the substring checks, so these variants must be caught.
+
+func TestValidateGitArgs_ConfigInjection_WhitespaceDelimiters(t *testing.T) {
+	tests := []struct {
+		name string
+		args string
+	}{
+		{"tab between -c and key", "-c\tcore.hooksPath=/tmp/evil"},
+		{"newline between -c and key", "-c\ncore.hooksPath=/tmp/evil"},
+		{"multiple spaces between -c and key", "-c  core.hooksPath=/tmp/evil"},
+		{"tab + surrounding args", "log -c\tcore.hooksPath=/tmp/evil --oneline"},
+		{"tab on gitProxy", "-c\tcore.gitProxy=evil.sh"},
+		{"tab on sshCommand", "-c\tcore.sshCommand=evil"},
+		{"tab on fsmonitor", "-c\tcore.fsmonitor=evil"},
+		{"tab on credential", "-c\tcredential.helper=!sh"},
+		{"tab on remote", "-c\tremote.origin.uploadpack=evil"},
+		{"tab on filter", "-c\tfilter.evil.clean=cat /etc/passwd"},
+		{"carriage return between -c and key", "-c\r\ncore.hooksPath=/tmp/evil"},
+		{"vertical tab", "-c\vcore.hooksPath=/tmp/evil"},
+		{"form feed", "-c\fcore.hooksPath=/tmp/evil"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateGitArgs(tt.args)
+			if err == nil {
+				t.Fatalf("ValidateGitArgs(%q) should have returned error (whitespace delimiter bypass) but got nil", tt.args)
+			}
+			if !strings.Contains(err.Error(), "config injection") {
+				t.Errorf("Error should mention 'config injection' category but got: %v", err)
+			}
+		})
+	}
+}
+
+// Safe -c flags with whitespace must not be false-positive blocked.
+// This guards against the normalization being too aggressive.
+func TestValidateGitArgs_SafeCFlags_WithTabs(t *testing.T) {
+	tests := []struct {
+		name string
+		args string
+	}{
+		{"safe user.name with tab", "-c\tuser.name=Test"},
+		{"safe core.autocrlf with multiple spaces", "-c  core.autocrlf=false"},
+		{"safe core.pager with newline", "-c\ncore.pager=cat"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateGitArgs(tt.args)
+			if err != nil {
+				t.Errorf("ValidateGitArgs(%q) should allow safe -c flag but got: %v", tt.args, err)
+			}
+		})
+	}
+}

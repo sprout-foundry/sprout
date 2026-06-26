@@ -19,6 +19,8 @@ interface ProviderMutationParams {
   setProviderContextSize: (v: number) => void;
   providerEnvVar: string;
   setProviderEnvVar: (v: string) => void;
+  providerApiKey: string;
+  setProviderApiKey: (v: string) => void;
   providerSupportsVision: boolean;
   setProviderSupportsVision: (v: boolean) => void;
   providerVisionModel: string;
@@ -58,6 +60,8 @@ export function useProviderMutations(params: ProviderMutationParams) {
     setProviderContextSize,
     providerEnvVar,
     setProviderEnvVar,
+    providerApiKey,
+    setProviderApiKey,
     providerSupportsVision,
     setProviderSupportsVision,
     providerVisionModel,
@@ -73,6 +77,7 @@ export function useProviderMutations(params: ProviderMutationParams) {
     setProviderModelName('');
     setProviderContextSize(0);
     setProviderEnvVar('');
+    setProviderApiKey('');
     setProviderSupportsVision(false);
     setProviderVisionModel('');
     setProviderModelContextSizes('');
@@ -83,6 +88,7 @@ export function useProviderMutations(params: ProviderMutationParams) {
     setProviderModelName,
     setProviderContextSize,
     setProviderEnvVar,
+    setProviderApiKey,
     setProviderSupportsVision,
     setProviderVisionModel,
     setProviderModelContextSizes,
@@ -109,6 +115,26 @@ export function useProviderMutations(params: ProviderMutationParams) {
       };
       await ctx.api.addCustomProvider(provider);
       ctx.addNotification('success', 'Providers', `Provider "${providerName}" added`, 3000);
+
+      // If the user pasted a literal API key, persist it after the
+      // provider record exists. A credential save failure should not
+      // undo the provider creation — the provider is already saved, so
+      // we surface a warning but leave it in place.
+      const trimmedKey = providerApiKey.trim();
+      if (trimmedKey) {
+        try {
+          await ctx.api.setProviderCredential(providerName.trim(), trimmedKey);
+        } catch (credErr) {
+          debugLog('[SettingsPanel] failed to save provider credential:', credErr);
+          ctx.addNotification(
+            'info',
+            'Providers',
+            `Provider "${providerName}" added, but the API key could not be saved. Set it via env var instead.`,
+            6000,
+          );
+        }
+      }
+
       resetProviderForm();
       ctx.refreshProviderCatalog?.();
     } catch (err) {
@@ -124,6 +150,7 @@ export function useProviderMutations(params: ProviderMutationParams) {
     providerModelName,
     providerContextSize,
     providerEnvVar,
+    providerApiKey,
     providerSupportsVision,
     providerVisionModel,
     providerModelContextSizes,
@@ -148,6 +175,26 @@ export function useProviderMutations(params: ProviderMutationParams) {
       };
       await ctx.api.updateCustomProvider(editingProvider.originalName, provider);
       ctx.addNotification('success', 'Providers', `Provider "${editingProvider.originalName}" updated`, 3000);
+
+      // Persist a pasted API key after the provider update succeeds.
+      // We write the key against the (possibly renamed) current name so
+      // it lands on the right record. A credential failure must not
+      // roll back the provider update — warn and leave it alone.
+      const trimmedKey = providerApiKey.trim();
+      if (trimmedKey) {
+        try {
+          await ctx.api.setProviderCredential(providerName.trim(), trimmedKey);
+        } catch (credErr) {
+          debugLog('[SettingsPanel] failed to save provider credential:', credErr);
+          ctx.addNotification(
+            'info',
+            'Providers',
+            `Provider "${editingProvider.originalName}" updated, but the API key could not be saved.`,
+            6000,
+          );
+        }
+      }
+
       resetProviderForm();
       ctx.refreshProviderCatalog?.();
     } catch (err) {
@@ -164,6 +211,7 @@ export function useProviderMutations(params: ProviderMutationParams) {
     providerModelName,
     providerContextSize,
     providerEnvVar,
+    providerApiKey,
     providerSupportsVision,
     providerVisionModel,
     providerModelContextSizes,

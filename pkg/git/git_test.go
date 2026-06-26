@@ -688,3 +688,202 @@ func TestPerformGitCommit(t *testing.T) {
 
 // TestGitStatusParsing removed as per code review fix
 // (reimplemented parsing logic instead of testing GetGitStatus function)
+
+// ---------------------------------------------------------------------------
+// IsFileContentCommitted tests
+//
+// IsFileContentCommitted is the git-awareness primitive used by the
+// revert/recover staleness guards to refuse rolling back work that the
+// user has committed to version control. It must return (true, nil)
+// only when the file is tracked by git AND the working-tree copy
+// matches HEAD. Every other state returns (false, nil) (or an error).
+//
+// The implementation relies on the process CWD (GetGitRootDir), so each
+// test chdir's into a freshly-initialized temp repo and restores CWD on
+// cleanup. This follows the existing pattern in this file.
+// ---------------------------------------------------------------------------
+
+// initialCWD is captured at test binary startup, before any test has had
+// a chance to os.Chdir into (and out of) a temp directory. Some existing
+// tests in this file leave the process CWD pointing at a deleted temp dir
+// after cleanup, which would make os.Getwd() fail in later tests. Restoring
+// to initialCWD is always safe because it is valid for the entire process.
+var initialCWD, _ = os.Getwd()
+
+// withDir runs fn inside dir and guarantees the original working
+// directory is restored afterwards, even if the test fails. It uses
+// initialCWD (captured at process start) rather than os.Getwd(), which
+// may return an error if a prior test left CWD pointing at a deleted
+// temp directory.
+func withDir(t *testing.T, dir string, fn func()) {
+	t.Helper()
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("Failed to change to %s: %v", dir, err)
+	}
+	defer func() {
+		if err := os.Chdir(initialCWD); err != nil {
+			t.Errorf("Failed to restore working directory: %v", err)
+		}
+	}()
+	fn()
+}
+
+// TestIsFileContentCommitted_CleanCommittedFile verifies the "happy
+// path": a tracked file whose working-tree content matches HEAD is
+// reported as committed-clean → (true, nil).
+func TestIsFileContentCommitted_CleanCommittedFile(t *testing.T) {
+	dir := newTestGitRepo(t)
+	fp := filepath.Join(dir, "committed.txt")
+	assert.NoError(t, os.WriteFile(fp, []byte("committed content"), 0644))
+	gitRun(t, dir, "add", "committed.txt")
+	gitRun(t, dir, "commit", "-m", "add committed.txt")
+
+	withDir(t, dir, func() {
+		committed, err := IsFileContentCommitted("committed.txt")
+		assert.NoError(t, err)
+		assert.True(t, committed, "a committed file with a clean working tree should be reported as committed")
+	})
+}
+
+// TestIsFileContentCommitted_ModifiedAfterCommit verifies that a file
+// modified after committing (uncommitted changes present) is reported
+// as NOT committed-clean → (false, nil).
+func TestIsFileContentCommitted_ModifiedAfterCommit(t *testing.T) {
+	dir := newTestGitRepo(t)
+	fp := filepath.Join(dir, "tracked.txt")
+	assert.NoError(t, os.WriteFile(fp, []byte("v1"), 0644))
+	gitRun(t, dir, "add", "tracked.txt")
+	gitRun(t, dir, "commit", "-m", "add tracked.txt")
+
+	// Modify the tracked file after committing.
+	assert.NoError(t, os.WriteFile(fp, []byte("v2-modified"), 0644))
+
+	withDir(t, dir, func() {
+		committed, err := IsFileContentCommitted("tracked.txt")
+		assert.NoError(t, err)
+		assert.False(t, committed, "a file with uncommitted modifications should NOT be reported as committed")
+	})
+}
+
+// TestIsFileContentCommitted_UntrackedFile verifies the tracked-file
+// gate: a file that exists on disk but was never `git add`ed must be
+// reported as NOT committed-clean → (false, nil).
+//
+// This is a critical regression test. Before the fix, the
+// implementation used only `git diff --quiet HEAD -- <path>`, which
+// exits 0 for untracked files (git diff does not include them). An
+// untracked file would have been incorrectly reported as
+// committed-clean, breaking the staleness guard. The two-step
+// implementation (ls-files --error-unmatch + diff) fixes this.
+func TestIsFileContentCommitted_UntrackedFile(t *testing.T) {
+	dir := newTestGitRepo(t)
+	fp := filepath.Join(dir, "untracked.txt")
+	assert.NoError(t, os.WriteFile(fp, []byte("never added to git"), 0644))
+
+	withDir(t, dir, func() {
+		committed, err := IsFileContentCommitted("untracked.txt")
+		assert.NoError(t, err)
+		assert.False(t, committed, "an untracked file must NOT be reported as committed-clean")
+	})
+}
+
+// TestIsFileContentCommitted_NotAGitRepo verifies that outside a git
+// repository, the function returns (false, nil) — no git protection
+// applies, and the caller falls back to the content-only check.
+func TestIsFileContentCommitted_NotAGitRepo(t *testing.T) {
+	dir := t.TempDir()
+	fp := filepath.Join(dir, "plain.txt")
+	assert.NoError(t, os.WriteFile(fp, []byte("plain content"), 0644))
+
+	withDir(t, dir, func() {
+		committed, err := IsFileContentCommitted("plain.txt")
+		assert.NoError(t, err)
+		assert.False(t, committed, "outside a git repo, no git protection applies")
+	})
+}
+
+// TestIsFileContentCommitted_CommittedThenSameContent verifies THE
+// bug scenario: a file was committed to git, and the agent later
+// wrote (or the working tree holds) the same content. The content is
+// committed-clean, so IsFileContentCommitted MUST return true — this
+// is what blocks the staleness guard from reverting committed work.
+//
+// Flow: create file → commit "v1" → (simulate: agent writes "v1")
+// → working tree matches HEAD → IsFileContentCommitted == true.
+func TestIsFileContentCommitted_CommittedThenSameContent(t *testing.T) {
+	dir := newTestGitRepo(t)
+	fp := filepath.Join(dir, "feature.txt")
+	content := "v1-agent-edit"
+
+	// Commit the content the agent would later write.
+	assert.NoError(t, os.WriteFile(fp, []byte(content), 0644))
+	gitRun(t, dir, "add", "feature.txt")
+	gitRun(t, dir, "commit", "-m", "add feature.txt")
+
+	// At this point the working tree matches HEAD (the committed
+	// content). This is the exact state after the agent's edit was
+	// committed: disk == NewCode == HEAD.
+	withDir(t, dir, func() {
+		committed, err := IsFileContentCommitted("feature.txt")
+		assert.NoError(t, err)
+		assert.True(t, committed, "committed content (disk == HEAD) must be reported as committed-clean")
+	})
+}
+
+// TestIsFileContentCommitted_ModifiedThenUnmodifiedToNewContent
+// verifies the "uncommitted" branch: commit "v1", then write "v2"
+// (uncommitted). Even though disk == "v2" (matches the intended
+// NewCode), the file differs from HEAD, so it is NOT committed-clean
+// → (false, nil). This confirms that content that hasn't been
+// committed yet does NOT trigger the git-protection path.
+func TestIsFileContentCommitted_ModifiedThenUncommittedToNew(t *testing.T) {
+	dir := newTestGitRepo(t)
+	fp := filepath.Join(dir, "wip.txt")
+	assert.NoError(t, os.WriteFile(fp, []byte("v1"), 0644))
+	gitRun(t, dir, "add", "wip.txt")
+	gitRun(t, dir, "commit", "-m", "add wip.txt")
+
+	// Write new content but DON'T commit — uncommitted modification.
+	assert.NoError(t, os.WriteFile(fp, []byte("v2-new"), 0644))
+
+	withDir(t, dir, func() {
+		committed, err := IsFileContentCommitted("wip.txt")
+		assert.NoError(t, err)
+		assert.False(t, committed, "uncommitted modifications must NOT be reported as committed-clean")
+	})
+}
+
+// TestIsFileContentCommitted_StagedButUncommitted verifies that a
+// staged file (git add but no commit) is NOT committed-clean — staging
+// alone does not commit to HEAD.
+func TestIsFileContentCommitted_StagedButUncommitted(t *testing.T) {
+	dir := newTestGitRepo(t)
+	fp := filepath.Join(dir, "staged.txt")
+	assert.NoError(t, os.WriteFile(fp, []byte("staged content"), 0644))
+	gitRun(t, dir, "add", "staged.txt") // staged, NOT committed
+
+	withDir(t, dir, func() {
+		committed, err := IsFileContentCommitted("staged.txt")
+		assert.NoError(t, err)
+		assert.False(t, committed, "a staged-but-uncommitted file is not committed to HEAD")
+	})
+}
+
+// TestIsFileContentCommitted_FileInSubdirectory verifies the path
+// resolution logic (GetFileGitPath) works for files in nested
+// directories, not just top-level files.
+func TestIsFileContentCommitted_FileInSubdirectory(t *testing.T) {
+	dir := newTestGitRepo(t)
+	sub := filepath.Join(dir, "pkg", "core")
+	assert.NoError(t, os.MkdirAll(sub, 0755))
+	fp := filepath.Join(sub, "handler.go")
+	assert.NoError(t, os.WriteFile(fp, []byte("package core"), 0644))
+	gitRun(t, dir, "add", "pkg/core/handler.go")
+	gitRun(t, dir, "commit", "-m", "add handler.go")
+
+	withDir(t, dir, func() {
+		committed, err := IsFileContentCommitted("pkg/core/handler.go")
+		assert.NoError(t, err)
+		assert.True(t, committed, "a committed file in a subdirectory should be reported as committed")
+	})
+}

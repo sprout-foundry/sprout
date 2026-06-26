@@ -164,6 +164,10 @@ The `ChangeTracker` (in `pkg/agent/change_tracking*.go`) records every file muta
 
 **Trust `files_modified`.** Do NOT revert files outside that list. If the working tree contains diff you don't recognize, check the subagent's manifest before treating it as out-of-scope.
 
+**Git is authoritative for committed content (SP-077).** The ChangeTracker defers to git for content that is committed at HEAD. Two mechanisms prevent committed work from being silently reverted:
+- **Phase 1 (filter):** `filterGitSourcedDeltas` in `TrackShellTurn` suppresses working-tree deltas whose post-operation content matches HEAD. These deltas are caused by git operations (merge, checkout, reset, pull) — not agent edits — and recording their stale pre-operation bytes as recoverable `OriginalCode` caused recurring data-loss incidents.
+- **Phase 2 (sweep):** `sweepCommittedSnapshots` in `Commit()` marks persisted snapshots as `"superseded"` when their `NewCode` matches HEAD, preventing old snapshots from prior sessions from being reverted.
+
 ## Integration with Sprout Foundry
 
 This repo's binary and packages (`@sprout/events`, `@sprout/ui`) are consumed by [`../sprout-foundry`](../sprout-foundry). Both repos must stay in sync.

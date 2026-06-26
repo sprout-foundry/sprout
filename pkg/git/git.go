@@ -342,3 +342,94 @@ func IsFileContentCommitted(filePath string) (bool, error) {
 	// exit code 0: tracked AND working tree matches HEAD → PROTECTED.
 	return true, nil
 }
+
+// CommittedFilePaths returns a set of absolute filesystem paths for
+// files that are tracked by git AND whose working-tree content is
+// identical to HEAD (committed-clean). This is the batch equivalent of
+// IsFileContentCommitted: instead of two subprocess calls per file, it
+// runs just two commands total (git ls-files + git diff --name-only HEAD)
+// and builds the full set in one pass.
+//
+// All git commands are run with cmd.Dir=workDir so the function does
+// not depend on the process CWD — it resolves the repo containing
+// workDir regardless of where the agent process is running.
+//
+// Callers use this to identify working-tree deltas caused by git
+// operations (merge, checkout, reset, pull) that should NOT be recorded
+// as recoverable agent edits — a file whose post-operation content
+// matches HEAD was aligned to a committed state by git, not edited by
+// the agent, so there is nothing legitimate to "recover" back to.
+//
+// Returns (nil, nil) when workDir is not inside a git repository — no
+// git protection applies and callers should record all deltas.
+func CommittedFilePaths(workDir string) (map[string]bool, error) {
+	if workDir == "" {
+		return nil, nil
+	}
+
+	// Resolve the repo root containing workDir.
+	rootCmd := SafeGitCmd(workDir, "rev-parse", "--show-toplevel")
+	rootOut, err := rootCmd.Output()
+	if err != nil {
+		return nil, nil // not a git repo
+	}
+	root := strings.TrimSpace(string(rootOut))
+	if root == "" {
+		return nil, nil
+	}
+
+	// The workDir itself may be a symlink — the workspace walker records
+	// paths using the original (pre-symlink) workDir, while git resolves
+	// symlinks and reports the real path. We must build absolute paths
+	// in BOTH forms so the caller can match regardless of which form the
+	// walker used. This mirrors the symlink resolution strategy in
+	// GetFileGitPath and the agent's isOutsideWorkspace helper.
+	rootResolved := root
+	if evaled, e := filepath.EvalSymlinks(root); e == nil {
+		rootResolved = evaled
+	}
+
+	// Step 1: enumerate every tracked file (repo-relative paths,
+	// null-terminated for robustness against spaces / special chars).
+	trackedCmd := SafeGitCmd(workDir, "ls-files", "-z")
+	trackedOut, err := trackedCmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("git ls-files: %w", err)
+	}
+
+	// Step 2: enumerate files that differ from HEAD. `git diff
+	// --name-only` (without --quiet) exits 0 on success regardless of
+	// whether differences exist; the differing paths are in stdout.
+	diffCmd := SafeGitCmd(workDir, "diff", "--name-only", "-z", "--no-ext-diff", "HEAD")
+	diffOut, err := diffCmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("git diff --name-only HEAD: %w", err)
+	}
+
+	// Build the "differs from HEAD" set for O(1) lookup.
+	differs := make(map[string]bool)
+	for _, p := range strings.Split(string(diffOut), "\x00") {
+		if p != "" {
+			differs[p] = true
+		}
+	}
+
+	// Committed-clean = tracked AND NOT in the diff set. Resolve each
+	// repo-relative path to absolute filesystem paths in BOTH the raw
+	// git-root form and the symlink-resolved form, so callers using
+	// either representation of the workspace can match.
+	committed := make(map[string]bool)
+	for _, p := range strings.Split(string(trackedOut), "\x00") {
+		if p == "" {
+			continue
+		}
+		if differs[p] {
+			continue
+		}
+		committed[filepath.Join(root, p)] = true
+		if rootResolved != root {
+			committed[filepath.Join(rootResolved, p)] = true
+		}
+	}
+	return committed, nil
+}

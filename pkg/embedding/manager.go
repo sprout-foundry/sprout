@@ -500,6 +500,19 @@ func (m *EmbeddingManager) BuildIndexBackground(ctx context.Context) <-chan *Bui
 			m.mu.Unlock()
 		}()
 
+		// Honor the manager's close signal before doing any work. Without
+		// this check, a DisableEmbeddingIndex call arriving after the
+		// goroutine is launched would not abort the 10-minute WalkTimeout
+		// nor the Init/build work; the goroutine would either run to
+		// completion against torn-down state or hit ErrStoreClosed deep
+		// in the embedder. Surface the close as the result instead.
+		select {
+		case <-m.closeCh():
+			ch <- &BuildResult{Err: ErrStoreClosed}
+			return
+		default:
+		}
+
 		ctx, cancel := context.WithTimeout(ctx, WalkTimeout)
 		defer cancel()
 
@@ -528,6 +541,21 @@ type BuildResult struct {
 // This is called at agent startup so the index is ready for duplicate
 // detection and context enrichment without waiting for an explicit query.
 // A 2-minute timeout prevents the build from hanging indefinitely.
+//
+// Two teardown paths are honored so a DisableEmbeddingIndex call arriving
+// during the startup sleep (or during Init/Build) does not race into a
+// closed store and panic:
+//
+//  1. The 3-second startup sleep selects on m.closeCh() so Close() can
+//     wake it early.
+//  2. After the sleep returns, m.closeCh() is re-checked *before* the
+//     BuildIndex call. This catches the case where Close() ran while the
+//     sleep was in flight (sleep saw the wake-up but the goroutine still
+//     proceeded because the select picked the timer branch first).
+//
+// As a last line of defense, HNSWStore.Store/ReplaceAll/DeleteByFile/
+// DeleteByIDs/Save return ErrStoreClosed instead of panicking on a nil
+// records map if the goroutine still loses the race.
 func (m *EmbeddingManager) AutoBuildWhenReady() {
 	// Wait a few seconds so we don't compete with startup I/O.
 	// Use a select-based timer so Close() can wake us early.
@@ -535,6 +563,16 @@ func (m *EmbeddingManager) AutoBuildWhenReady() {
 	case <-time.After(3 * time.Second):
 	case <-m.closeCh():
 		return
+	}
+
+	// Re-check the close signal before doing any work. The select above
+	// can return through either branch when both fire concurrently; if
+	// Close() ran while we were waking up, bail before reaching into
+	// m.store (which Close() has already nulled out).
+	select {
+	case <-m.closeCh():
+		return
+	default:
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -557,6 +595,15 @@ func (m *EmbeddingManager) closeCh() <-chan struct{} {
 		m.closeChan = make(chan struct{})
 	}
 	return m.closeChan
+}
+
+// CloseNotify returns a channel that is closed when the manager is closed.
+// Long-running goroutines owned by other packages (e.g. agent.MigrateMemories)
+// select on this channel so they can abort when DisableEmbeddingIndex tears
+// the manager down. The returned channel is the same one internal goroutines
+// see, so a single Close() wakes every waiter.
+func (m *EmbeddingManager) CloseNotify() <-chan struct{} {
+	return m.closeCh()
 }
 
 // UpdateFile incrementally updates the index for a single file.
@@ -692,6 +739,12 @@ func (m *EmbeddingManager) Close() error {
 	}
 	m.indexMgr = nil
 
+	// Drop the cachedProvider reference so the underlying provider (and
+	// its internal state) can be GC'd. Without this, m.cachedProvider
+	// outlives Close() and pins the (now-closed) provider alive for the
+	// remainder of the manager's lifetime.
+	m.cachedProvider = nil
+
 	if m.onnxRuntime != nil {
 		if !m.providerShared {
 			if err := m.onnxRuntime.Close(); err != nil && firstErr == nil {
@@ -706,13 +759,21 @@ func (m *EmbeddingManager) Close() error {
 	m.initError = nil // cleared to allow re-initialization after Close()
 
 	// Signal long-running goroutines to abort.
-	if m.closeChan != nil {
-		select {
-		case <-m.closeChan:
-			// Already closed
-		default:
-			close(m.closeChan)
-		}
+	//
+	// closeChan is lazily created by closeCh()/CloseNotify() on first read.
+	// If a goroutine launched before Close() reached its first call to
+	// closeCh() — and Close() acquired m.mu first — closeChan would be
+	// nil at this point and the goroutine would sleep past its abort
+	// signal. Eagerly create the channel here under the same lock so the
+	// close is unconditional, even if no reader has materialized yet.
+	if m.closeChan == nil {
+		m.closeChan = make(chan struct{})
+	}
+	select {
+	case <-m.closeChan:
+		// Already closed
+	default:
+		close(m.closeChan)
 	}
 
 	return firstErr

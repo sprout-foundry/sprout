@@ -498,6 +498,22 @@ func (a *Agent) isProviderAvailable(provider api.ClientType) bool {
 func (a *Agent) ClearSessionOverrides() {
 	a.state.SetSessionProvider("")
 	a.state.SetSessionModel("")
+	// SP-063: reset per-session computer-use consent so the next session
+	// re-prompts. The persistent workspace allowlist survives (it's in
+	// config), but the transient session flag does not.
+	a.ResetComputerUseSessionApproval()
+}
+
+// ResetComputerUseSessionApproval clears the per-session computer-use opt-in
+// flag (SP-063). Called from ClearSessionOverrides when a session ends so
+// that the next session re-prompts the user for consent.
+func (a *Agent) ResetComputerUseSessionApproval() {
+	if a == nil {
+		return
+	}
+	a.computerUseMu.Lock()
+	a.computerUseSessionApproved = false
+	a.computerUseMu.Unlock()
 }
 
 // HasSessionOverrides returns true if there are session-scoped provider/model overrides

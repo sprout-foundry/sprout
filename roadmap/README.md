@@ -34,6 +34,7 @@ architectural area, its current state, and open work.
 | SP-074 | [Finish the Tool-Registry Migration](./SP-074-tool-registry-migration.md) | ✅ Implemented (Phases 1–4 complete) |
 | SP-060 | [Desktop App — Per-Workspace Server Mode](./SP-060-desktop-serve.md) | ✅ Implemented |
 | SP-026 | [Coordinator Persona (formerly Executive Assistant)](./SP-026-executive-assistant.md) | ✅ Implemented (renamed 2026-06-03; legacy aliases preserved) |
+| SP-067 | [Automate Workflow Completion Injection](./SP-067-automate-completion-injection.md) | ✅ Implemented |
 
 ## In Progress
 
@@ -41,6 +42,7 @@ architectural area, its current state, and open work.
 |------|-------|--------|
 | SP-015 | [Cloud Platform Integration](./SP-015-cloud-platform.md) | 🚧 Partially implemented |
 | SP-063 | [Real `computer_user` Persona — Mouse/Keyboard/Screenshot Agent](./SP-063-computer-use-persona.md) | 🚧 Partially implemented (core: backend + tools + persona + safety gates; remaining: WebUI settings + interactive opt-in) |
+| SP-076 | [WebUI Streaming Fix + Verbosity Modes](./SP-076-webui-streaming-verbosity.md) | 🚧 Partially implemented (Phases 1–2 shipped: backend `RouteStreamChunk` routing + frontend `stream_chunk` handler; Phase 3 verbosity setting + Phase 4 backend test remain) |
 
 ## Proposed
 
@@ -66,8 +68,10 @@ architectural area, its current state, and open work.
 | SP-056 | [CLI Reasoning Fold — Collapsed Thinking Indicator](./SP-056-cli-reasoning-fold.md) | 📋 Proposed |
 | SP-058 | [Selective Grammar Embedding for WASM and Daemon](./SP-058-selective-grammar-embed.md) | 📋 Proposed |
 | SP-061 | [Remove Static Embedding Provider, Consolidate on ONNX](./SP-061-remove-static-embeddings.md) | 📋 Proposed |
+| SP-062 | [CLI-Native Background Shell Execution](./SP-062-cli-background-shell.md) | 📋 Proposed |
 | SP-064 | [Automate CLI — Status, Stop, Logs](./SP-064-automate-cli-monitoring.md) | 📋 Proposed |
 | SP-065 | [WebUI Automations Panel](./SP-065-automate-webui-panel.md) | 📋 Proposed |
+| SP-066 | [Preserve Key Order in Structured File Tools](./SP-066-structured-file-key-order.md) | 📋 Proposed |
 | SP-068 | [Security Check Consolidation — One Risk Scale, One Resolver, One Broker](./SP-068-security-check-consolidation.md) | 📋 Proposed |
 | SP-073 | [Cooperative Cancellation — Stop Actually Aborts](./SP-073-cooperative-cancellation.md) | 📋 Proposed (tech-debt audit) |
 | SP-075 | [Large-File Decomposition](./SP-075-large-file-decomposition.md) | 📋 Proposed (tech-debt audit) |

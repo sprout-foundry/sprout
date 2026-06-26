@@ -145,6 +145,7 @@ func RollbackChanges(revisionID string, filePath string, confirm bool) (Rollback
 		// committed, refuse). Outside a git repo or for untracked files, the
 		// content check alone decides.
 		if !history.IsRevertSafe(targetChange.Filename, targetChange.NewCode) {
+			history.AuditRevertSkip("RollbackChanges", targetChange.Filename, "stale or committed")
 			return RollbackResult{
 				Output: fmt.Sprintf("Skipped rollback of '%s': file was modified after the snapshot (content differs from recorded state) or the content is now committed to git. The file may have been committed or edited intentionally.", filePath),
 				Metadata: map[string]interface{}{
@@ -156,6 +157,7 @@ func RollbackChanges(revisionID string, filePath string, confirm bool) (Rollback
 			}, nil
 		}
 
+		history.AuditRevertWrite("RollbackChanges", targetChange.Filename, "OriginalCode")
 		if err := filesystem.SaveFile(targetChange.Filename, targetChange.OriginalCode); err != nil {
 			return RollbackResult{}, fmt.Errorf("restore file content: %w", err)
 		}

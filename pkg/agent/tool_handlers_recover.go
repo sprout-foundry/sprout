@@ -46,6 +46,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/sprout-foundry/sprout/pkg/history"
 )
 
 func handleRecoverFile(_ context.Context, a *Agent, args map[string]interface{}) (string, error) {
@@ -120,6 +122,7 @@ func handleRecoverFile(_ context.Context, a *Agent, args map[string]interface{})
 		}
 	}
 	if isStaleForRevert(abs, stalenessNewCode) {
+		history.AuditRevertSkip("handleRecoverFile", abs, "stale or committed")
 		return jsonRecoverResult(false, abs, "stale_skip", "file was modified since the snapshot — refusing to overwrite (content may have been committed or edited intentionally)"), nil
 	}
 
@@ -156,6 +159,7 @@ func handleRecoverFile(_ context.Context, a *Agent, args map[string]interface{})
 		return jsonRecoverResult(false, abs, "", "refusing to write redacted marker to disk"), nil
 	}
 
+	history.AuditRevertWrite("handleRecoverFile", abs, "OriginalCode")
 	if writeErr := os.WriteFile(abs, []byte(match.OriginalCode), 0o644); writeErr != nil {
 		return jsonRecoverResult(false, abs, "", fmt.Sprintf("write failed: %v", writeErr)), nil
 	}

@@ -95,17 +95,13 @@ function WelcomeContent({
       icon: <Settings size={18} />,
       title: 'Settings',
       description: 'Customize your editor',
-      action:
-        onOpenSettings ??
-        (() => window.dispatchEvent(new CustomEvent('sprout:open-settings-focus'))),
+      action: onOpenSettings ?? (() => window.dispatchEvent(new CustomEvent('sprout:open-settings-focus'))),
     },
     {
       icon: <Zap size={18} />,
       title: 'Keyboard Shortcuts',
       description: 'Edit your bindings',
-      action:
-        onOpenHotkeysConfig ??
-        (() => window.dispatchEvent(new CustomEvent('sprout:open-hotkeys-config'))),
+      action: onOpenHotkeysConfig ?? (() => window.dispatchEvent(new CustomEvent('sprout:open-hotkeys-config'))),
     },
   ];
 
@@ -146,9 +142,9 @@ function WelcomeContent({
         </section>
 
         {/* The legacy "Get Started" section was decorative cards that
-          * duplicated Quick Actions (Command Palette, Run Commands, View Git,
-          * AI Chat) with no click handler. Removed in favor of Quick Actions
-          * + Resources, which actually do things. */}
+         * duplicated Quick Actions (Command Palette, Run Commands, View Git,
+         * AI Chat) with no click handler. Removed in favor of Quick Actions
+         * + Resources, which actually do things. */}
 
         <section className="welcome-section welcome-links">
           <h2>Resources</h2>

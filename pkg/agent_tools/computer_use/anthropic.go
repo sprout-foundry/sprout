@@ -36,9 +36,11 @@ func TranslateAnthropicAction(action string, params map[string]any) (any, error)
 		return doScreenshot(backend, params)
 
 	case "mouse_move":
-		// No backend method for raw cursor move yet. Document the limitation.
-		// A future ComputerBackend version may add MoveTo(x, y) error.
-		return nil, nil
+		coord, err := extractCoordinate(params, "coordinate")
+		if err != nil {
+			return nil, err
+		}
+		return nil, backend.MoveTo(coord.X, coord.Y)
 
 	case "left_click":
 		return doClick(backend, params, MouseLeft, false)
@@ -53,9 +55,20 @@ func TranslateAnthropicAction(action string, params map[string]any) (any, error)
 		return nil, doClickErr(backend, params, MouseLeft, true)
 
 	case "triple_click":
-		// Limitation: we only have single/double. Approximate with a single
-		// double-click. A real triple-click requires a separate backend method.
-		return nil, doClickErr(backend, params, MouseLeft, true)
+		// Three rapid single clicks at the same spot approximate a triple-click.
+		// (MouseClick's signature only has a "double" bool, so we issue three
+		// single clicks in sequence. All major OSes register three rapid clicks
+		// at the same coordinate as a triple-click.)
+		coord, err := extractCoordinate(params, "coordinate")
+		if err != nil {
+			return nil, err
+		}
+		for i := 0; i < 3; i++ {
+			if err := backend.MouseClick(coord.X, coord.Y, MouseLeft, false); err != nil {
+				return nil, err
+			}
+		}
+		return nil, nil
 
 	case "left_click_drag":
 		return nil, doDrag(backend, params, MouseLeft)
@@ -67,9 +80,11 @@ func TranslateAnthropicAction(action string, params map[string]any) (any, error)
 		return nil, doKey(backend, params)
 
 	case "hold_key":
-		// Limitation: we have no hold/release pair. Map to a single press.
-		// A real hold_key requires HoldKey(key)/ReleaseKey(key) backend methods.
-		return nil, doKey(backend, params)
+		// hold_key requires HoldKey/ReleaseKey backend methods that don't exist
+		// yet. Rather than silently degrading to a single press (which has
+		// different semantics), return an error so callers know the action is
+		// unsupported.
+		return nil, fmt.Errorf("hold_key action is not supported by this backend (requires HoldKey/ReleaseKey methods)")
 
 	case "scroll":
 		return nil, doScroll(backend, params)
@@ -114,17 +129,15 @@ func doClickErr(b ComputerBackend, params map[string]any, button MouseButton, do
 }
 
 func doDrag(b ComputerBackend, params map[string]any, button MouseButton) error {
-	from, err := extractCoordinate(params, "coordinate")
+	from, err := extractCoordinate(params, "start_coordinate")
 	if err != nil {
-		return err
+		return fmt.Errorf("'start_coordinate' parameter is required for drag action")
 	}
-	// Anthropic's left_click_drag uses coordinate as the end point with an
-	// implicit start. Without persistent cursor state we approximate by
-	// reading to_coordinate if supplied, otherwise treat coordinate as both
-	// start and end (no-op drag).
-	to, err := extractCoordinate(params, "to_coordinate")
+	// Anthropic's left_click_drag uses start_coordinate as the start point and
+	// coordinate as the end point.
+	to, err := extractCoordinate(params, "coordinate")
 	if err != nil {
-		return fmt.Errorf("'to_coordinate' parameter is required for drag action")
+		return fmt.Errorf("'coordinate' parameter is required for drag action")
 	}
 	return b.MouseDrag(*from, *to, button)
 }
@@ -154,15 +167,20 @@ func doScroll(b ComputerBackend, params map[string]any) error {
 	if err != nil {
 		return err
 	}
-	amount := extractOptionalInt(params, "amount")
-	return b.Scroll(dir, amount, nil)
+	amount := extractOptionalInt(params, "scroll_amount")
+	var at *Point
+	if coord, err := extractCoordinate(params, "coordinate"); err == nil {
+		at = coord
+	}
+	return b.Scroll(dir, amount, at)
 }
 
 func doWait(params map[string]any) error {
-	ms := extractOptionalInt(params, "milliseconds")
-	if ms <= 0 {
-		return fmt.Errorf("'milliseconds' parameter is required for wait action")
+	duration := extractOptionalFloat(params, "duration")
+	if duration <= 0 {
+		return fmt.Errorf("'duration' parameter is required for wait action")
 	}
+	ms := int(duration * 1000)
 	if ms > maxWaitMs {
 		return fmt.Errorf("wait time exceeds maximum of %d ms", maxWaitMs)
 	}
@@ -211,5 +229,25 @@ func toInt(v any) (int, error) {
 		return int(n), nil
 	default:
 		return 0, fmt.Errorf("cannot convert %T to int", v)
+	}
+}
+
+// extractOptionalFloat returns an optional float64 or zero.
+// JSON numbers unmarshal as float64, so this handles both int and float64
+// sources gracefully.
+func extractOptionalFloat(params map[string]any, key string) float64 {
+	val, exists := params[key]
+	if !exists || val == nil {
+		return 0
+	}
+	switch v := val.(type) {
+	case float64:
+		return v
+	case int:
+		return float64(v)
+	case int64:
+		return float64(v)
+	default:
+		return 0
 	}
 }

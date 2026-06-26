@@ -88,8 +88,7 @@ function SubagentTreeNode({ node, defaultExpanded = true }: SubagentTreeNodeProp
 
   const isRunning = !run.isComplete;
   const hasFailures =
-    run.completionMessage?.toLowerCase().includes('fail') ||
-    run.completionMessage?.toLowerCase().includes('error');
+    run.completionMessage?.toLowerCase().includes('fail') || run.completionMessage?.toLowerCase().includes('error');
   const startTime = run.spawnActivity?.timestamp || run.activities[0]?.timestamp;
 
   return (
@@ -99,10 +98,19 @@ function SubagentTreeNode({ node, defaultExpanded = true }: SubagentTreeNodeProp
       data-running={isRunning ? 'true' : 'false'}
       style={{ '--st-color': color, '--st-persona-color': personaColor } as React.CSSProperties}
     >
-      <button className="subagent-tree-node-header" onClick={hasChildren ? toggle : undefined} type="button" aria-expanded={hasChildren ? expanded : undefined}>
+      <button
+        className="subagent-tree-node-header"
+        onClick={hasChildren ? toggle : undefined}
+        type="button"
+        aria-expanded={hasChildren ? expanded : undefined}
+      >
         <span className="subagent-tree-node-left">
           {hasChildren ? (
-            expanded ? <ChevronDown size={13} className="subagent-tree-chevron" /> : <ChevronRight size={13} className="subagent-tree-chevron" />
+            expanded ? (
+              <ChevronDown size={13} className="subagent-tree-chevron" />
+            ) : (
+              <ChevronRight size={13} className="subagent-tree-chevron" />
+            )
           ) : (
             <span className="subagent-tree-chevron-placeholder" />
           )}
@@ -120,7 +128,9 @@ function SubagentTreeNode({ node, defaultExpanded = true }: SubagentTreeNodeProp
               className="subagent-tree-depth-badge"
               title={subagentDepthLabel(depth)}
               aria-label={subagentDepthLabel(depth)}
-            >D{depth}</span>
+            >
+              D{depth}
+            </span>
           )}
           {run.isParallel && <span className="subagent-tree-parallel-badge">parallel</span>}
         </span>
@@ -130,12 +140,8 @@ function SubagentTreeNode({ node, defaultExpanded = true }: SubagentTreeNodeProp
               {formatDuration(startTime, run.completionTimestamp || undefined)}
             </span>
           )}
-          {run.tokensUsed > 0 && (
-            <span className="subagent-tree-metric">{formatTokens(run.tokensUsed)} tok</span>
-          )}
-          {run.cost > 0 && (
-            <span className="subagent-tree-metric">{formatCost(run.cost)}</span>
-          )}
+          {run.tokensUsed > 0 && <span className="subagent-tree-metric">{formatTokens(run.tokensUsed)} tok</span>}
+          {run.cost > 0 && <span className="subagent-tree-metric">{formatCost(run.cost)}</span>}
         </span>
       </button>
 

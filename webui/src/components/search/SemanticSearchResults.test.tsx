@@ -60,10 +60,7 @@ async function renderResults(results: SemanticSearchResult[]) {
 
 describe('SemanticSearchResults', () => {
   it('renders results with no clusters in original order', async () => {
-    const results = [
-      makeResult({ file: '/a.ts', name: 'funcA' }),
-      makeResult({ file: '/b.ts', name: 'funcB' }),
-    ];
+    const results = [makeResult({ file: '/a.ts', name: 'funcA' }), makeResult({ file: '/b.ts', name: 'funcB' })];
     await renderResults(results);
 
     const rows = container!.querySelectorAll('.search-semantic-result');

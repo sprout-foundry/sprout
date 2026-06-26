@@ -242,9 +242,7 @@ export function useChatSessionManager({
         return;
       }
       if (lc === '/provider' || lc.startsWith('/provider ')) {
-        window.dispatchEvent(
-          new CustomEvent('sprout:open-settings-focus', { detail: { focus: 'provider' } }),
-        );
+        window.dispatchEvent(new CustomEvent('sprout:open-settings-focus', { detail: { focus: 'provider' } }));
         setInputValue('');
         return;
       }

@@ -58,8 +58,8 @@ function ModelSelectionModal({
   const icon = isWarning ? '⚠' : '✱';
   const description = isWarning ? (
     <>
-      The configured model is not available for provider <strong>{provider}</strong>. Please select a different model
-      to continue.
+      The configured model is not available for provider <strong>{provider}</strong>. Please select a different model to
+      continue.
     </>
   ) : (
     <>
@@ -192,51 +192,51 @@ function ModelSelectionModal({
                       const warnings = model.warnings ?? [];
                       const recommendedRole = recommended.includes('primary') ? 'primary' : recommended[0];
                       return (
-                  <li key={model.id}>
-                    <button
-                      type="button"
-                      className={`model-selection-item ${
-                        selectedModel === model.id ? 'model-selection-item--selected' : ''
-                      }`}
-                      onClick={() => setSelectedModel(model.id)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          handleSelect();
-                        }
-                      }}
-                      aria-selected={selectedModel === model.id}
-                      role="option"
-                    >
-                      <span className="model-selection-item-text">{model.id}</span>
-                      {recommendedRole && (
-                        <span
-                          className="model-selection-badge model-selection-badge--recommended"
-                          title={`Recommended for ${recommended.join(', ')} — passed the capability probe`}
-                        >
-                          ★ {recommendedRole}
-                        </span>
-                      )}
-                      {!recommendedRole && eligible.length > 0 && (
-                        <span
-                          className="model-selection-badge model-selection-badge--eligible"
-                          title={`Eligible for ${eligible.join(', ')} (not yet probe-verified)`}
-                        >
-                          eligible
-                        </span>
-                      )}
-                      {warnings.length > 0 && (
-                        <span
-                          className="model-selection-badge model-selection-badge--warning"
-                          title={warnings.join('; ')}
-                          aria-label={`Warning: ${warnings.join('; ')}`}
-                        >
-                          ⚠
-                        </span>
-                      )}
-                      {selectedModel === model.id && <span className="model-selection-item-check">✓</span>}
-                    </button>
-                  </li>
+                        <li key={model.id}>
+                          <button
+                            type="button"
+                            className={`model-selection-item ${
+                              selectedModel === model.id ? 'model-selection-item--selected' : ''
+                            }`}
+                            onClick={() => setSelectedModel(model.id)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleSelect();
+                              }
+                            }}
+                            aria-selected={selectedModel === model.id}
+                            role="option"
+                          >
+                            <span className="model-selection-item-text">{model.id}</span>
+                            {recommendedRole && (
+                              <span
+                                className="model-selection-badge model-selection-badge--recommended"
+                                title={`Recommended for ${recommended.join(', ')} — passed the capability probe`}
+                              >
+                                ★ {recommendedRole}
+                              </span>
+                            )}
+                            {!recommendedRole && eligible.length > 0 && (
+                              <span
+                                className="model-selection-badge model-selection-badge--eligible"
+                                title={`Eligible for ${eligible.join(', ')} (not yet probe-verified)`}
+                              >
+                                eligible
+                              </span>
+                            )}
+                            {warnings.length > 0 && (
+                              <span
+                                className="model-selection-badge model-selection-badge--warning"
+                                title={warnings.join('; ')}
+                                aria-label={`Warning: ${warnings.join('; ')}`}
+                              >
+                                ⚠
+                              </span>
+                            )}
+                            {selectedModel === model.id && <span className="model-selection-item-check">✓</span>}
+                          </button>
+                        </li>
                       );
                     })}
                   </ul>

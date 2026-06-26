@@ -75,13 +75,7 @@ interface ClusterGroupProps {
   onMouseLeave: () => void;
 }
 
-function ClusterGroup({
-  clusterId,
-  results,
-  onFileClick,
-  onMouseEnter,
-  onMouseLeave,
-}: ClusterGroupProps): JSX.Element {
+function ClusterGroup({ clusterId, results, onFileClick, onMouseEnter, onMouseLeave }: ClusterGroupProps): JSX.Element {
   return (
     <>
       <div className="search-duplicate-hint">

@@ -46,7 +46,9 @@
   font: inherit;
   cursor: pointer;
   border-radius: 3px;
-  transition: background var(--t-fast, 0.12s) ease, color var(--t-fast, 0.12s) ease;
+  transition:
+    background var(--t-fast, 0.12s) ease,
+    color var(--t-fast, 0.12s) ease;
 }
 
 .chat-statusbar-model-button:hover {

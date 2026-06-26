@@ -131,9 +131,7 @@ describe('TasksPage', () => {
   it('shows New Task button in header', () => {
     renderSync();
     const buttons = container.querySelectorAll('button');
-    const newTaskButton = Array.from(buttons).find(
-      (b) => b.textContent.includes('New Task'),
-    );
+    const newTaskButton = Array.from(buttons).find((b) => b.textContent.includes('New Task'));
     expect(newTaskButton).not.toBeUndefined();
   });
 });

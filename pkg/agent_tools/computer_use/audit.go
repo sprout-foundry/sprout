@@ -97,6 +97,12 @@ func (a *auditingBackend) MouseDrag(from, to Point, button MouseButton) error {
 	return err
 }
 
+func (a *auditingBackend) MoveTo(x, y int) error {
+	err := a.inner.MoveTo(x, y)
+	a.record("mouse_move", map[string]any{"x": x, "y": y}, err)
+	return err
+}
+
 func (a *auditingBackend) KeyboardType(text string) error {
 	err := a.inner.KeyboardType(text)
 	// Record the character count, not the text, to avoid logging secrets typed

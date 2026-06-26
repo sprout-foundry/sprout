@@ -72,8 +72,12 @@
 }
 
 @keyframes subagent-tree-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .subagent-tree-status-ok {
@@ -165,24 +169,24 @@
 
 /* ── Depth-based color overrides via data-depth ────────────────────── */
 
-.subagent-tree-node[data-depth="0"] > .subagent-tree-node-header {
+.subagent-tree-node[data-depth='0'] > .subagent-tree-node-header {
   border-left-color: var(--subagent-depth-0);
 }
 
-.subagent-tree-node[data-depth="1"] > .subagent-tree-node-header {
+.subagent-tree-node[data-depth='1'] > .subagent-tree-node-header {
   border-left-color: var(--subagent-depth-1);
 }
 
-.subagent-tree-node[data-depth="2"] > .subagent-tree-node-header {
+.subagent-tree-node[data-depth='2'] > .subagent-tree-node-header {
   border-left-color: var(--subagent-depth-2);
 }
 
-.subagent-tree-node[data-depth="3"] > .subagent-tree-node-header {
+.subagent-tree-node[data-depth='3'] > .subagent-tree-node-header {
   border-left-color: var(--subagent-depth-3);
 }
 
 /* ── Active (running) node highlight ───────────────────────────────── */
 
-.subagent-tree-node[data-running="true"] > .subagent-tree-node-header {
+.subagent-tree-node[data-running='true'] > .subagent-tree-node-header {
   background: rgba(99, 102, 241, 0.04);
 }

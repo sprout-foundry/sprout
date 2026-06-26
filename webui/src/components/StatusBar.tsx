@@ -91,10 +91,7 @@ function StatusBar({
 }: WebuiStatusBarProps): JSX.Element {
   // Notification context — derive unread count for the bell badge
   const { notifications } = useNotifications();
-  const unreadCount = useMemo(
-    () => notifications.filter((n) => !n.read).length,
-    [notifications],
-  );
+  const unreadCount = useMemo(() => notifications.filter((n) => !n.read).length, [notifications]);
 
   // Internal notification panel state
   const [isNotificationCenterOpen, setIsNotificationCenterOpen] = useState(false);

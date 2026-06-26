@@ -175,7 +175,7 @@
   --inset-highlight-5: rgba(255, 255, 255, 0.05);
   --inset-highlight-6: rgba(255, 255, 255, 0.06);
   --inset-highlight-8: rgba(255, 255, 255, 0.08);
-  --inset-highlight-10: rgba(255, 255, 255, 0.10);
+  --inset-highlight-10: rgba(255, 255, 255, 0.1);
 
   /* Subagent nesting-depth colors. Surfaced via DEPTH_COLORS in
    * SubagentTree.tsx so the tree's left-border, persona text, and
@@ -881,7 +881,12 @@ body,
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
   cursor: pointer;
-  transition: background, color, border-color, box-shadow, transform 0.15s var(--ease-out);
+  transition:
+    background,
+    color,
+    border-color,
+    box-shadow,
+    transform 0.15s var(--ease-out);
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -976,7 +981,9 @@ body,
 
 .panes-container.layout-split-vertical .pane-wrapper {
   flex: 1;
-  min-width: calc(100% / 7); /* divisor = maxPanes+1 (7) ensures 6 side-by-side panes always fit: 6/7 ≈ 86% total min, leaving 14% buffer */
+  min-width: calc(
+    100% / 7
+  ); /* divisor = maxPanes+1 (7) ensures 6 side-by-side panes always fit: 6/7 ≈ 86% total min, leaving 14% buffer */
 }
 
 .panes-container.layout-split-vertical .pane-wrapper:not(:first-child):not(:last-child) {
@@ -990,7 +997,9 @@ body,
 
 .panes-container.layout-split-horizontal .pane-wrapper {
   flex: 1;
-  min-height: calc(100% / 7); /* divisor = maxPanes+1 (7) ensures 6 stacked panes always fit: 6/7 ≈ 86% total min, leaving 14% buffer */
+  min-height: calc(
+    100% / 7
+  ); /* divisor = maxPanes+1 (7) ensures 6 stacked panes always fit: 6/7 ≈ 86% total min, leaving 14% buffer */
 }
 
 .panes-container.layout-split-horizontal .pane-wrapper:first-child {
@@ -1008,7 +1017,9 @@ body,
 
 .panes-container.layout-split-grid .pane-wrapper {
   flex: 1;
-  min-width: calc(100% / 7); /* divisor = maxPanes+1 (7) ensures 6 side-by-side panes always fit: 6/7 ≈ 86% total min, leaving 14% buffer */
+  min-width: calc(
+    100% / 7
+  ); /* divisor = maxPanes+1 (7) ensures 6 side-by-side panes always fit: 6/7 ≈ 86% total min, leaving 14% buffer */
   min-height: 100px;
 }
 

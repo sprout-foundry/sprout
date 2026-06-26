@@ -237,17 +237,30 @@ func (c *PersistentContextConfig) Resolve() PersistentContextConfig {
 	return result
 }
 
-// ChangeTrackingConfig gates and tunes the ChangeTracker's
-// shell-mutation snapshot pass. Direct file-tool tracking (write_file,
-// edit_file, patch_structured_file) is always on; this struct only
-// touches the walker that runs before/after every shell_command.
+// ChangeTrackingConfig gates and tunes the ChangeTracker. When Enabled
+// is false (the default) the entire subsystem is dormant — no file
+// changes are recorded, no revision history is written, and the
+// rollback/recover/view_history tools are no-ops. When Enabled is true
+// the per-shell_command snapshot walk runs (tuned by the remaining
+// fields) and direct file-tool tracking (write_file, edit_file,
+// patch_structured_file) records changes.
 type ChangeTrackingConfig struct {
+	// Enabled controls whether the change tracking subsystem is active
+	// at all. When false, no file changes are recorded, no revision
+	// history is written, and the rollback/recover/view_history tools
+	// are no-ops.
+	//
+	// Defaults to true. The git-awareness guards (IsRevertSafe) now
+	// prevent the subsystem from reverting committed work, so tracking
+	// stays on by default. Set to false to disable the entire subsystem.
+	Enabled *bool `json:"enabled,omitempty"`
+
 	// ShellWalkEnabled controls whether the per-shell_command snapshot
 	// walk runs at all. Disable for workspaces where the walk cost is
 	// unacceptable (e.g., very-large monorepos with novel bloat
 	// directories) or for users who don't care about recovering
 	// shell-deleted untracked files. Direct file-tool tracking is
-	// unaffected. Default: true.
+	// unaffected. Default: true. Only meaningful when Enabled is true.
 	ShellWalkEnabled *bool `json:"shell_walk_enabled,omitempty"`
 
 	// MaxFiles caps the number of files visited in a single walk.
@@ -342,10 +355,18 @@ func (c *ChangeTrackingConfig) Resolve() ChangeTrackingConfig {
 		MaxDurationMs:              500,
 		AutoSkipFileCountThreshold: 1500,
 	}
-	enabled := true
-	result.ShellWalkEnabled = &enabled
+	// Change tracking is enabled by default. The git-awareness guards
+	// (IsRevertSafe) prevent the subsystem from reverting committed
+	// work, so it stays on unless the user explicitly sets
+	// change_tracking.enabled = false.
+	enabledDefault := true
+	result.Enabled = &enabledDefault
+	result.ShellWalkEnabled = &enabledDefault
 	if c == nil {
 		return result
+	}
+	if c.Enabled != nil {
+		result.Enabled = c.Enabled
 	}
 	if c.ShellWalkEnabled != nil {
 		flag := *c.ShellWalkEnabled

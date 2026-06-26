@@ -33,6 +33,18 @@ func (a *Agent) EnableChangeTracking(instructions string) {
 		a.Logger().Debug("DEBUG: EnableChangeTracking called (tracker nil: %v)\n", a.changeTracker == nil)
 	}
 
+	// Check the config gate BEFORE creating or enabling the tracker.
+	// When change_tracking.enabled is explicitly false, the entire
+	// subsystem stays dormant — no tracker is created, no shell walks,
+	// no revision history, no rollback/recover tools active. Default
+	// is enabled.
+	if !a.isChangeTrackingEnabledByConfig() {
+		if a.debug {
+			a.Logger().Debug("DEBUG: change tracking disabled by config (change_tracking.enabled = false)\n")
+		}
+		return
+	}
+
 	if a.changeTracker == nil {
 		// First enable of this session — create the tracker with a
 		// stable revisionID + instructions that will persist for the
@@ -142,6 +154,36 @@ func (a *Agent) applyChangeTrackingConfig() {
 	a.changeTracker.shellMaxTotalBytes = resolved.MaxTotalBytes
 	a.changeTracker.shellMaxDuration = time.Duration(resolved.MaxDurationMs) * time.Millisecond
 	a.changeTracker.shellAutoSkipFileCountThreshold = resolved.AutoSkipFileCountThreshold
+}
+
+// isChangeTrackingEnabledByConfig reads the change_tracking.enabled
+// setting from configuration. The semantics are intentionally split
+// between test and production paths to preserve backward compatibility
+// with the dozens of existing tests that call EnableChangeTracking
+// without setting up a config manager:
+//
+//   - No config manager (test path) → true. Historical behavior is
+//     preserved; tracking is enabled.
+//   - Has config manager but no config or no change_tracking section
+//     → true. The default is enabled; the git-awareness guards protect
+//     committed work.
+//   - Has change_tracking.enabled set → use that explicit value.
+func (a *Agent) isChangeTrackingEnabledByConfig() bool {
+	// No config manager (test path) → preserve historical behavior:
+	// tracking is enabled. This avoids breaking dozens of existing tests
+	// that call EnableChangeTracking without setting up a config.
+	if a.configManager == nil {
+		return true
+	}
+	cfg := a.configManager.GetConfig()
+	if cfg == nil || cfg.ChangeTracking == nil {
+		return true // production default: enabled
+	}
+	resolved := cfg.ChangeTracking.Resolve()
+	if resolved.Enabled == nil {
+		return true
+	}
+	return *resolved.Enabled
 }
 
 // DisableChangeTracking disables change tracking

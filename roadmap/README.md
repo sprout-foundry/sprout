@@ -35,6 +35,7 @@ architectural area, its current state, and open work.
 | SP-060 | [Desktop App — Per-Workspace Server Mode](./SP-060-desktop-serve.md) | ✅ Implemented |
 | SP-026 | [Coordinator Persona (formerly Executive Assistant)](./SP-026-executive-assistant.md) | ✅ Implemented (renamed 2026-06-03; legacy aliases preserved) |
 | SP-067 | [Automate Workflow Completion Injection](./SP-067-automate-completion-injection.md) | ✅ Implemented |
+| SP-076 | [WebUI Streaming Fix + Verbosity Modes](./SP-076-webui-streaming-verbosity.md) | ✅ Implemented |
 
 ## In Progress
 
@@ -42,7 +43,6 @@ architectural area, its current state, and open work.
 |------|-------|--------|
 | SP-015 | [Cloud Platform Integration](./SP-015-cloud-platform.md) | 🚧 Partially implemented |
 | SP-063 | [Real `computer_user` Persona — Mouse/Keyboard/Screenshot Agent](./SP-063-computer-use-persona.md) | 🚧 Partially implemented (core: backend + tools + persona + safety gates; remaining: WebUI settings + interactive opt-in) |
-| SP-076 | [WebUI Streaming Fix + Verbosity Modes](./SP-076-webui-streaming-verbosity.md) | 🚧 Partially implemented (Phases 1–2 shipped: backend `RouteStreamChunk` routing + frontend `stream_chunk` handler; Phase 3 verbosity setting + Phase 4 backend test remain) |
 
 ## Proposed
 

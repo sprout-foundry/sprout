@@ -149,6 +149,13 @@ type Agent struct {
 	// already opted in once.
 	automateApprovedWorkflows map[string]struct{}
 
+	// computerUseMu guards computerUseSessionApproved.
+	computerUseMu sync.Mutex
+	// computerUseSessionApproved records whether the user has consented
+	// to computer-use actions during this chat session (SP-063 per-session
+	// opt-in). Reset when the session resets (ClearSessionOverrides).
+	computerUseSessionApproved bool
+
 	// Embedding index manager for duplicate detection on file writes.
 	embeddingMu  sync.RWMutex // protects embeddingMgr
 	embeddingMgr *embedding.EmbeddingManager

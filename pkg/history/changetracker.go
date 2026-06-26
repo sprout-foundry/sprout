@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
+	"github.com/sprout-foundry/sprout/pkg/git"
 )
 
 // RedactedContentMarker is the canonical marker used when file content is
@@ -567,6 +568,68 @@ func isFileStale(filename, newCode string) bool {
 	return string(current) != newCode
 }
 
+// IsRevertSafe reports whether it is SAFE to proceed with a revert that
+// writes OriginalCode back to disk. It is the canonical git-aware
+// staleness guard for ALL rollback/revert paths (the history package's
+// handleRevisionRollback, the agent_tools RollbackChanges single-file
+// path, and the agent package's recover_file / revert_my_changes).
+//
+// It returns true (safe to proceed) when the revert will NOT clobber
+// intentional work, and false (must skip) when it would. The decision
+// layers two checks:
+//
+//  1. Content-identity: if the file on disk no longer matches the
+//     content the agent wrote (newCode), it was modified intentionally
+//     after the snapshot — return false (stale). Empty or redacted
+//     newCode, or a missing file, means there's no baseline to compare
+//     against, so the content check is skipped (return true).
+//
+//  2. Git-awareness (NEW): even when disk == newCode, the agent's edit
+//     may have since been committed to git. Writing OriginalCode back
+//     would silently undo committed, version-controlled work. If the
+//     working-tree copy matches HEAD (committed, clean), return false
+//     (protected). A git error (e.g. not a repo, or untracked file)
+//     means no git protection applies, so the content check alone
+//     decides — return true.
+//
+// The function never blocks legitimate reverts: outside a git repo, on
+// untracked files, or when the file has uncommitted modifications, the
+// content check is the sole authority.
+func IsRevertSafe(filename, newCode string) bool {
+	// 1. Empty or redacted newCode: no baseline to compare against.
+	//    Allow (matches the historical isFileStale behaviour).
+	if newCode == "" || newCode == RedactedContentMarker {
+		return true
+	}
+	// 2. Read disk content. A missing file means the revert is
+	//    restoring/creating it — safe.
+	current, err := os.ReadFile(filename)
+	if err != nil {
+		return true // file doesn't exist — safe to restore/create
+	}
+	// 3. disk != newCode: the file was modified after the snapshot
+	//    (git commit, manual edit, another session) — STALE, skip.
+	if string(current) != newCode {
+		return false
+	}
+	// 4. disk == newCode, but check git: if this content is committed
+	//    to HEAD, reverting to OriginalCode would undo committed work.
+	committed, gitErr := git.IsFileContentCommitted(filename)
+	if gitErr != nil {
+		// git check failed (e.g. transient error) — fall back to the
+		// conservative content-only behaviour so we don't block a
+		// revert the user may genuinely want.
+		return true
+	}
+	if committed {
+		// File matches HEAD → committed work → refuse the revert.
+		return false
+	}
+	// 5. disk == newCode and not committed → safe to revert
+	//    (the historical behaviour).
+	return true
+}
+
 // isFileStaleForRestore reports whether the file on disk differs from
 // BOTH the pre-agent state (originalCode) and the agent's edit
 // (newCode). It is the restore counterpart of isFileStale.
@@ -674,7 +737,12 @@ func handleRevisionRollback(group RevisionGroup) error {
 		// agent wrote (NewCode), it was modified intentionally after this
 		// snapshot — by a git commit, another session, or manual edit.
 		// Rolling it back would silently clobber that change.
-		if isFileStale(change.Filename, change.NewCode) {
+		//
+		// IsRevertSafe additionally applies git-awareness: even when disk
+		// matches NewCode, if that content has been committed to git HEAD
+		// (the work is now version-controlled), the revert is refused so it
+		// can't silently undo committed work.
+		if !IsRevertSafe(change.Filename, change.NewCode) {
 			fmt.Printf("  Skipping %s: file modified since snapshot (safety check)\n", change.Filename)
 			continue
 		}

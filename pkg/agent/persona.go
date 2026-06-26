@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/sprout-foundry/sprout/pkg/console"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/personas"
 )
@@ -117,6 +118,20 @@ func (a *Agent) ApplyPersona(personaID string) error {
 	}
 
 	a.state.SetActivePersona(personaID)
+
+	// SP-063: warn the user every time they switch to computer_user. The
+	// persona controls the real desktop — a click can send an email, delete
+	// a file, or submit a payment. The safety surface is incomplete (no
+	// panic key, no destructive-app denylist, no per-session opt-in), so
+	// this warning is the primary guardrail until those land.
+	if personaID == personas.IDComputerUser {
+		warning := "\n" + console.ColorizeBold("⚠  COMPUTER USE ACTIVE", console.ColorYellow) + "\n" +
+			console.Colorize("The agent can now control your mouse, keyboard, and screen.", console.ColorYellow) + "\n" +
+			console.Colorize("Watch the screen. Stop the agent (Ctrl+C) if it does something unexpected.", console.ColorYellow) + "\n" +
+			console.Colorize("Per-session opt-in, panic key, and destructive-app blocking are NOT yet implemented.", console.ColorYellow) + "\n"
+		console.PrintExternal(warning)
+		a.PublishAgentMessage("warning", "Computer use is active — the agent can control your mouse, keyboard, and screen. Watch the screen and stop it (Ctrl+C) if needed. Safety guardrails (session opt-in, panic key, destructive-app blocking) are not yet implemented.", nil)
+	}
 
 	// When the primary agent (depth 0) sets its persona, record it as the root persona.
 	// Subagents inherit this through rootPersonaID propagation.

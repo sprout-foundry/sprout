@@ -36,12 +36,12 @@ architectural area, its current state, and open work.
 | SP-026 | [Coordinator Persona (formerly Executive Assistant)](./SP-026-executive-assistant.md) | ✅ Implemented (renamed 2026-06-03; legacy aliases preserved) |
 | SP-067 | [Automate Workflow Completion Injection](./SP-067-automate-completion-injection.md) | ✅ Implemented |
 | SP-076 | [WebUI Streaming Fix + Verbosity Modes](./SP-076-webui-streaming-verbosity.md) | ✅ Implemented |
+| SP-015 | [Cloud Platform Integration](./SP-015-cloud-platform.md) | ✅ Implemented (sprout-side R1–R7 complete; cross-repo evolution in [`../sprout-foundry`](../sprout-foundry/AGENTS.md)) |
 
 ## In Progress
 
 | Spec | Title | Status |
 |------|-------|--------|
-| SP-015 | [Cloud Platform Integration](./SP-015-cloud-platform.md) | 🚧 Partially implemented |
 | SP-063 | [Real `computer_user` Persona — Mouse/Keyboard/Screenshot Agent](./SP-063-computer-use-persona.md) | 🚧 Partially implemented (core: backend + tools + persona + safety gates; remaining: WebUI settings + interactive opt-in) |
 
 ## Proposed

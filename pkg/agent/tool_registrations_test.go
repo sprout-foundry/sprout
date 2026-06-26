@@ -195,6 +195,7 @@ func TestNewDefaultToolRegistry_ParameterAlternatives(t *testing.T) {
 		{"manage_memory", "name", []string{"title", "memory"}},
 		{"rollback_changes", "file_path", []string{"filename"}},
 		{"view_history", "file_filter", []string{"filename"}},
+		{"TodoWrite", "todos", []string{"tasks", "items", "task_list", "todo_list"}},
 	}
 
 	for _, tc := range tests {
@@ -367,6 +368,41 @@ func TestNewDefaultToolRegistry_ParameterTypes(t *testing.T) {
 		}
 		if !paramFound {
 			t.Errorf("tool %q: parameter %q not found", tc.tool, tc.paramName)
+		}
+	}
+}
+
+// TestNewDefaultToolRegistry_ToolAliases verifies that tools with aliases
+// have the correct aliases configured.
+func TestNewDefaultToolRegistry_ToolAliases(t *testing.T) {
+	registry := newDefaultToolRegistry()
+
+	type aliasCheck struct {
+		tool     string
+		aliases  []string
+	}
+
+	tests := []aliasCheck{
+		{"TodoWrite", []string{"todo_write", "todo_update"}},
+	}
+
+	for _, tc := range tests {
+		config, found := registry.GetToolConfig(tc.tool)
+		if !found {
+			t.Errorf("tool %q not found", tc.tool)
+			continue
+		}
+		if len(config.Aliases) != len(tc.aliases) {
+			t.Errorf("tool %q: expected %d aliases %v, got %d %v",
+				tc.tool, len(tc.aliases), tc.aliases,
+				len(config.Aliases), config.Aliases)
+			continue
+		}
+		for i, alias := range tc.aliases {
+			if i >= len(config.Aliases) || config.Aliases[i] != alias {
+				t.Errorf("tool %q: expected alias %q at index %d, got %q",
+					tc.tool, alias, i, config.Aliases[i])
+			}
 		}
 	}
 }

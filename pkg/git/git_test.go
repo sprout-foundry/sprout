@@ -887,3 +887,91 @@ func TestIsFileContentCommitted_FileInSubdirectory(t *testing.T) {
 		assert.True(t, committed, "a committed file in a subdirectory should be reported as committed")
 	})
 }
+
+// ---------------------------------------------------------------------------
+// CommittedFilePaths — batch git-awareness for SP-077
+// ---------------------------------------------------------------------------
+
+// TestCommittedFilePaths_OnlyCommittedFiles verifies that the batch
+// helper returns exactly the set of tracked files whose working-tree
+// content matches HEAD — committed-clean files are in the set, files
+// with uncommitted modifications are not, and untracked files are not.
+func TestCommittedFilePaths_OnlyCommittedFiles(t *testing.T) {
+	dir := newTestGitRepo(t)
+
+	// Committed-clean file.
+	clean := filepath.Join(dir, "clean.go")
+	assert.NoError(t, os.WriteFile(clean, []byte("clean"), 0644))
+	gitRun(t, dir, "add", "clean.go")
+	gitRun(t, dir, "commit", "-m", "add clean")
+
+	// Committed then modified (uncommitted change).
+	modified := filepath.Join(dir, "modified.go")
+	assert.NoError(t, os.WriteFile(modified, []byte("v1"), 0644))
+	gitRun(t, dir, "add", "modified.go")
+	gitRun(t, dir, "commit", "-m", "add modified")
+	assert.NoError(t, os.WriteFile(modified, []byte("v2-uncommitted"), 0644))
+
+	// Untracked file (never committed).
+	untracked := filepath.Join(dir, "untracked.go")
+	assert.NoError(t, os.WriteFile(untracked, []byte("new"), 0644))
+
+	committed, err := CommittedFilePaths(dir)
+	assert.NoError(t, err)
+	assert.NotNil(t, committed)
+
+	// clean.go and init.go (from newTestGitRepo) should be committed-clean.
+	assert.True(t, committed[clean], "clean.go should be in the committed set")
+	assert.True(t, committed[filepath.Join(dir, "init.go")], "init.go should be in the committed set")
+
+	// modified.go should NOT be (has uncommitted changes).
+	assert.False(t, committed[modified], "modified.go should NOT be in the committed set")
+
+	// untracked.go should NOT be (not tracked at all).
+	assert.False(t, committed[untracked], "untracked.go should NOT be in the committed set")
+}
+
+// TestCommittedFilePaths_NotARepo returns nil set when workDir is not
+// inside a git repository — no git protection applies.
+func TestCommittedFilePaths_NotARepo(t *testing.T) {
+	dir := t.TempDir()
+	committed, err := CommittedFilePaths(dir)
+	assert.NoError(t, err)
+	assert.Nil(t, committed, "outside a git repo, should return nil set")
+}
+
+// TestCommittedFilePaths_EmptyWorkDir returns nil for empty workDir.
+func TestCommittedFilePaths_EmptyWorkDir(t *testing.T) {
+	committed, err := CommittedFilePaths("")
+	assert.NoError(t, err)
+	assert.Nil(t, committed)
+}
+
+// TestCommittedFilePaths_DetectsGitMergeScenario verifies the exact
+// SP-077 scenario: after content is committed and a "merge" brings the
+// working tree to match HEAD, CommittedFilePaths identifies all merged
+// files as committed-clean.
+func TestCommittedFilePaths_DetectsGitMergeScenario(t *testing.T) {
+	dir := newTestGitRepo(t)
+
+	// Commit two files.
+	fileA := filepath.Join(dir, "a.go")
+	fileB := filepath.Join(dir, "b.go")
+	assert.NoError(t, os.WriteFile(fileA, []byte("a"), 0644))
+	assert.NoError(t, os.WriteFile(fileB, []byte("b"), 0644))
+	gitRun(t, dir, "add", "a.go", "b.go")
+	gitRun(t, dir, "commit", "-m", "add a and b")
+
+	// Simulate pre-merge stale state on disk (files have old content).
+	assert.NoError(t, os.WriteFile(fileA, []byte("stale-a"), 0644))
+	assert.NoError(t, os.WriteFile(fileB, []byte("stale-b"), 0644))
+
+	// Simulate the merge: restore committed content.
+	assert.NoError(t, os.WriteFile(fileA, []byte("a"), 0644))
+	assert.NoError(t, os.WriteFile(fileB, []byte("b"), 0644))
+
+	committed, err := CommittedFilePaths(dir)
+	assert.NoError(t, err)
+	assert.True(t, committed[fileA], "after merge, a.go matches HEAD → committed-clean")
+	assert.True(t, committed[fileB], "after merge, b.go matches HEAD → committed-clean")
+}

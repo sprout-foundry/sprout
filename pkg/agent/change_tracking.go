@@ -10,7 +10,9 @@ import (
 	"time"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/git"
 	"github.com/sprout-foundry/sprout/pkg/history"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // RedactedContentMarker aliases history.RedactedContentMarker so existing call
@@ -291,11 +293,12 @@ func (ct *ChangeTracker) Commit(llmResponse string, conversation []api.Message) 
 		return nil
 	}
 	ct.mu.Lock()
-	defer ct.mu.Unlock()
 	if len(ct.changes) == 0 {
+		ct.mu.Unlock()
 		return nil
 	}
 	if ct.committedChangeCount >= len(ct.changes) {
+		ct.mu.Unlock()
 		return nil
 	}
 
@@ -306,6 +309,7 @@ func (ct *ChangeTracker) Commit(llmResponse string, conversation []api.Message) 
 		// Record base revision with conversation
 		revisionID, err := history.RecordBaseRevision(ct.revisionID, ct.instructions, llmResponse, historyConversation)
 		if err != nil {
+			ct.mu.Unlock()
 			return fmt.Errorf("failed to record base revision: %w", err)
 		}
 
@@ -319,7 +323,7 @@ func (ct *ChangeTracker) Commit(llmResponse string, conversation []api.Message) 
 	// full, permission error, …) doesn't leave the counter stale — the
 	// next Commit call must resume from the change that actually
 	// failed, not re-record the ones that already succeeded. The lock
-	// is held for the whole function, so the increment is safe.
+	// is held for the whole loop, so the increment is safe.
 	for ct.committedChangeCount < len(ct.changes) {
 		change := ct.changes[ct.committedChangeCount]
 		description := fmt.Sprintf("%s via %s", change.Operation, change.ToolCall)
@@ -337,12 +341,79 @@ func (ct *ChangeTracker) Commit(llmResponse string, conversation []api.Message) 
 			ct.getAgentModel(), // editingModel
 		)
 		if err != nil {
+			ct.mu.Unlock()
 			return fmt.Errorf("failed to record change for %s: %w", change.FilePath, err)
 		}
 		ct.committedChangeCount++
 	}
 
+	// Snapshot the changes for the sweep. The sweep (below) invokes git
+	// subprocess calls which may block — holding ct.mu during that would
+	// risk deadlocking with the turn-checkpoint goroutine that reads
+	// ct.changes. Copy under the lock, then release.
+	changesSnapshot := make([]TrackedFileChange, len(ct.changes))
+	copy(changesSnapshot, ct.changes)
+	ct.mu.Unlock()
+
+	// SP-077 Phase 2: sweep committed changes and mark any whose NewCode
+	// now matches git HEAD as "superseded". These changes have been
+	// committed to version control — they are no longer recoverable agent
+	// edits. This prevents a stale snapshot from a prior session from
+	// being reverted and silently undoing committed work.
+	//
+	// The sweep is best-effort: a git error or non-repo workspace just
+	// means the sweep is skipped (the changes remain "active"). This is
+	// safe — the Phase 1 filter already prevents NEW git-sourced deltas
+	// from being recorded, and the existing IsRevertSafe guard catches
+	// committed content on the write-back path.
+	ct.sweepCommittedSnapshots(changesSnapshot)
+
 	return nil
+}
+
+// sweepCommittedSnapshots marks committed snapshots as "superseded"
+// when their NewCode matches git HEAD. A snapshot whose content is now
+// committed to version control is no longer a recoverable agent edit —
+// reverting it would undo committed work (SP-077 Phase 2).
+//
+// Takes a pre-snapshotted copy of ct.changes (so the caller can release
+// ct.mu before invoking the git subprocess calls inside). The snapshot
+// should be taken under ct.mu to avoid a race with concurrent
+// Clear()/Reset().
+//
+// Best-effort: a git error or non-repo workspace skips the sweep
+// entirely (changes remain "active"). Safe to call after every Commit;
+// already-superseded entries are not re-marked (idempotent).
+func (ct *ChangeTracker) sweepCommittedSnapshots(changes []TrackedFileChange) {
+	if ct.agent == nil {
+		return
+	}
+	workDir := ct.agent.workspaceRoot
+	if workDir == "" {
+		return
+	}
+	committed, err := git.CommittedFilePaths(workDir)
+	if err != nil || committed == nil {
+		return
+	}
+	for _, ch := range changes {
+		// Only sweep changes with recoverable content and non-empty
+		// NewCode (the state the agent produced). Deletes and creates
+		// without content have nothing to compare.
+		if ch.NewCode == "" || ch.NewCode == RedactedContentMarker {
+			continue
+		}
+		if !committed[ch.FilePath] {
+			continue
+		}
+		// Recompute the file revision hash (same formula as
+		// history.RecordChangeWithDetails) so we can target the exact
+		// on-disk metadata record.
+		hash := utils.GenerateFileRevisionHash(ch.FilePath, ch.NewCode)
+		if markErr := history.MarkChangeSuperseded(hash); markErr != nil {
+			ct.logf("SP-077: failed to mark %s as superseded: %v", ch.FilePath, markErr)
+		}
+	}
 }
 
 // convertToHistoryMessages converts api.Message to history.APIMessage format

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"sync"
 	"testing"
 	"time"
 
@@ -171,6 +172,78 @@ func TestHNSWStoreStaleGraphKeyRecovery(t *testing.T) {
 		require.NoError(t, s.Store([]VectorRecord{rec}))
 	})
 	require.Equal(t, 1, s.Size())
+}
+
+// TestHNSWStoreClosedMutatorsReturnErrStoreClosed covers the panic that
+// surfaced when a background goroutine (AutoBuildWhenReady) raced against
+// a DisableEmbeddingIndex call: the manager's Close() sets s.records = nil,
+// and a stale Store() goroutine tripped "assignment to entry in nil map".
+// All mutating operations must now return ErrStoreClosed instead.
+func TestHNSWStoreClosedMutatorsReturnErrStoreClosed(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "test.hnsw")
+
+	s, err := NewHNSWStore(path, "v1")
+	require.NoError(t, err)
+
+	rec := VectorRecord{
+		ID: "x:1", File: "x.go", Embedding: []float32{1, 0, 0}, IndexedAt: time.Now(),
+	}
+	require.NoError(t, s.Store([]VectorRecord{rec}))
+
+	// Close twice should be a no-op the second time (and not error).
+	require.NoError(t, s.Close())
+	require.NoError(t, s.Close(), "Close must be idempotent")
+
+	// Every mutating operation must return ErrStoreClosed instead of
+	// panicking on the nil records map.
+	require.ErrorIs(t, s.Store([]VectorRecord{rec}), ErrStoreClosed)
+	require.ErrorIs(t, s.ReplaceAll([]VectorRecord{rec}), ErrStoreClosed)
+	require.ErrorIs(t, s.DeleteByIDs([]string{"x:1"}), ErrStoreClosed)
+	require.ErrorIs(t, s.DeleteByFile("x.go"), ErrStoreClosed)
+	require.ErrorIs(t, s.Save(), ErrStoreClosed)
+}
+
+// TestHNSWStoreConcurrentStoreClose_NoPanic drives the store directly with
+// the same shape of race the embedding-manager goroutines face: a Store()
+// running in one goroutine while Close() runs in another. Either Store
+// completes normally (no close yet) or it returns ErrStoreClosed; what it
+// must NOT do is panic. The previous code panicked with
+// "assignment to entry in nil map" whenever Close won the race.
+func TestHNSWStoreConcurrentStoreClose_NoPanic(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "test.hnsw")
+
+	for i := 0; i < 50; i++ {
+		s, err := NewHNSWStore(path, "v1")
+		require.NoError(t, err)
+
+		rec := VectorRecord{
+			ID: fmt.Sprintf("r:%d", i), File: "r.go",
+			Embedding: []float32{1, 0, 0}, IndexedAt: time.Now(),
+		}
+
+		var wg sync.WaitGroup
+		var storeErr error
+
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			storeErr = s.Store([]VectorRecord{rec})
+		}()
+		go func() {
+			defer wg.Done()
+			// Tiny jitter increases the chance of mid-write close.
+			time.Sleep(time.Microsecond)
+			_ = s.Close()
+		}()
+
+		require.NotPanics(t, wg.Wait, "concurrent Store+Close must not panic")
+		if storeErr != nil {
+			require.ErrorIs(t, storeErr, ErrStoreClosed,
+				"Store should either succeed or return ErrStoreClosed; got %v", storeErr)
+		}
+	}
 }
 
 func TestHNSWStoreEmptyQuery(t *testing.T) {

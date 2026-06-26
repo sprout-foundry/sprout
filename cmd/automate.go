@@ -18,9 +18,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spf13/cobra"
 	"github.com/sprout-foundry/sprout/pkg/automate"
 	"github.com/sprout-foundry/sprout/pkg/console"
-	"github.com/spf13/cobra"
 )
 
 var (
@@ -358,10 +358,10 @@ func runWorkflowByPath(path string) error {
 
 	// Write PID file
 	pidInfo := &automate.AutomateSessionInfo{
-		Workflow:    filepath.Base(path),
-		PID:         cmd.Process.Pid,
-		StartedAt:   time.Now(),
-		Kind:        "automate",
+		Workflow:  filepath.Base(path),
+		PID:       cmd.Process.Pid,
+		StartedAt: time.Now(),
+		Kind:      "automate",
 	}
 	if automateBudgetUSD > 0 {
 		pidInfo.BudgetUSD = &automateBudgetUSD
@@ -747,7 +747,7 @@ func readAllSessions(sproutDir string) ([]sessionEntry, error) {
 			continue
 		}
 		sessions = append(sessions, sessionEntry{
-			SessionID:          sessionID,
+			SessionID:           sessionID,
 			AutomateSessionInfo: *info,
 		})
 	}
@@ -778,12 +778,12 @@ func printStatusTable(sessions []sessionEntry) {
 
 func printStatusJSON(sessions []sessionEntry) error {
 	type statusEntry struct {
-		SessionID       string `json:"session_id"`
-		Workflow        string `json:"workflow"`
-		Status          string `json:"status"`
-		PID             int    `json:"pid"`
-		StartedAt       string `json:"started_at"`
-		ElapsedSeconds  int64  `json:"elapsed_seconds"`
+		SessionID      string `json:"session_id"`
+		Workflow       string `json:"workflow"`
+		Status         string `json:"status"`
+		PID            int    `json:"pid"`
+		StartedAt      string `json:"started_at"`
+		ElapsedSeconds int64  `json:"elapsed_seconds"`
 	}
 
 	entries := make([]statusEntry, 0, len(sessions))

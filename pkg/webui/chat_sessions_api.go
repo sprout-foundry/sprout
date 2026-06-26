@@ -105,10 +105,10 @@ func (ws *ReactWebServer) handleAPIChatSessions(w http.ResponseWriter, r *http.R
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"message":         "success",
-		"chat_sessions":   sessionList,
-		"active_chat_id":  activeChatID,
-		"total_sessions":  len(sessionList),
+		"message":        "success",
+		"chat_sessions":  sessionList,
+		"active_chat_id": activeChatID,
+		"total_sessions": len(sessionList),
 	})
 }
 
@@ -683,9 +683,9 @@ func (ws *ReactWebServer) handleAPIChatSessionsSwitch(w http.ResponseWriter, r *
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"message":         "Chat session switched",
-		"active_chat_id":  chatID,
-		"chat_session":    cs.chatSessionWithMessages(),
+		"message":        "Chat session switched",
+		"active_chat_id": chatID,
+		"chat_session":   cs.chatSessionWithMessages(),
 	})
 }
 
@@ -858,9 +858,9 @@ func (ws *ReactWebServer) handleAPIChatSessionsDeleteAll(w http.ResponseWriter, 
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"message":          "Chat sessions deleted",
-		"deleted_count":    deletedCount,
-		"active_chat_id":   defaultChatID,
+		"message":        "Chat sessions deleted",
+		"deleted_count":  deletedCount,
+		"active_chat_id": defaultChatID,
 	})
 }
 

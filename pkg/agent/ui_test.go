@@ -6,15 +6,15 @@ import (
 )
 
 type testUIMock struct {
-	interactive      bool
-	dropdownResult   interface{}
-	dropdownErr      error
-	promptResult     QuickOption
-	promptErr        error
+	interactive       bool
+	dropdownResult    interface{}
+	dropdownErr       error
+	promptResult      QuickOption
+	promptErr         error
 	dropdownCallCount int
-	promptCallCount  int
-	lastPrompt       string
-	lastHorizontal   bool
+	promptCallCount   int
+	lastPrompt        string
+	lastHorizontal    bool
 }
 
 func (m *testUIMock) ShowDropdown(ctx context.Context, items interface{}, opts DropdownOptions) (interface{}, error) {

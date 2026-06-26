@@ -549,5 +549,3 @@ func normalizeHeaderName(name string) string {
 
 	return strings.Join(parts, "-")
 }
-
-

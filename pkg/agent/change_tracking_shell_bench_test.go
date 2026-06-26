@@ -51,8 +51,8 @@ func BenchmarkShellLooksReadOnly(b *testing.B) {
 		"grep -r foo .",
 		"git status",
 		"cat README.md",
-		"sed -i 's/foo/bar/' file.txt", // unsafe path
-		"go build ./...",                // unsafe path
+		"sed -i 's/foo/bar/' file.txt",      // unsafe path
+		"go build ./...",                    // unsafe path
 		"find . -name '*.go' | xargs wc -l", // pipe path
 	}
 	b.ResetTimer()

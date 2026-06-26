@@ -86,7 +86,7 @@ func restoreHooks(s savedHooks) {
 	prHTTPClient = s.prHTTPClient
 	GetDefaultBranch = s.getDefaultBranch
 	GitHubAPIBaseURL = s.GitHubAPIBaseURL
-}// =============================================================================
+} // =============================================================================
 // TestParseGitHubRemoteURL
 // =============================================================================
 
@@ -1567,10 +1567,10 @@ func TestCreatePullRequest_GetOwnerRepoNonGithub(t *testing.T) {
 // =============================================================================
 
 var (
-	_ func(string) (string, string, error)                        = ParseGitHubRemoteURL
+	_ func(string) (string, string, error)                                          = ParseGitHubRemoteURL
 	_ func(context.Context, string, PullRequestRequest) (*PullRequestResult, error) = CreatePullRequest
-	_ func(context.Context, string, string, string) (string, error) = synthesizePRBody
-	_ func(string) (string, int)                                  = extractPRURLAndNumber
-	_ func(string, string, string, string, bool) string           = buildFallbackGHCommand
-	_ func(string) string                                         = shellQuote
+	_ func(context.Context, string, string, string) (string, error)                 = synthesizePRBody
+	_ func(string) (string, int)                                                    = extractPRURLAndNumber
+	_ func(string, string, string, string, bool) string                             = buildFallbackGHCommand
+	_ func(string) string                                                           = shellQuote
 )

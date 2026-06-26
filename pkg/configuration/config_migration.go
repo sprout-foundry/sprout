@@ -137,11 +137,11 @@ func buildMigrationChain(fromVersion, toVersion string) []migrationStep {
 // It preserves any existing non-zero values and applies defaults to missing or zero fields.
 func applyAPITimeoutDefaults(raw map[string]interface{}) {
 	const (
-		defaultConnectionTimeout      = 300.0
-		defaultFirstChunkTimeout      = 600.0
-		defaultChunkTimeout           = 600.0
-		defaultOverallTimeout         = 1800.0
-		defaultCommitMessageTimeout   = 300.0
+		defaultConnectionTimeout    = 300.0
+		defaultFirstChunkTimeout    = 600.0
+		defaultChunkTimeout         = 600.0
+		defaultOverallTimeout       = 1800.0
+		defaultCommitMessageTimeout = 300.0
 	)
 
 	var apiTimeouts map[string]interface{}

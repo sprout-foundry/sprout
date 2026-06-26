@@ -147,9 +147,9 @@ func (h *searchMemoriesHandler) Execute(ctx context.Context, env ToolEnv, args m
 	if env.EventBus != nil {
 		env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
 			"tool":          "search_memories",
-			"query":        query,
+			"query":         query,
 			"results_found": len(results),
-			"tokens":       estimateTokenUsage(output),
+			"tokens":        estimateTokenUsage(output),
 		})
 	}
 
@@ -166,10 +166,10 @@ func (h *searchMemoriesHandler) Execute(ctx context.Context, env ToolEnv, args m
 
 // memorySearchResult holds a single result from a text-based memory search.
 type memorySearchResult struct {
-	Name       string
-	Preview    string
-	Score      float64
-	Content    string
+	Name    string
+	Preview string
+	Score   float64
+	Content string
 }
 
 // searchMemoriesByText lists all memory files and scores them against the query

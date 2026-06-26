@@ -16,8 +16,8 @@ type EscapeParser struct {
 	// bytes. Without this, continuation bytes (0x80-0xBF) are silently
 	// dropped by the default case, corrupting pasted text containing
 	// non-ASCII characters (curly quotes, emoji, international text).
-	utf8Buf   []byte
-	utf8Need  int // remaining continuation bytes expected
+	utf8Buf  []byte
+	utf8Need int // remaining continuation bytes expected
 }
 
 // NewEscapeParser creates a new escape sequence parser

@@ -99,72 +99,72 @@ func TestNormalizeWhitespaceWithMapping(t *testing.T) {
 		validateMapping bool // whether to validate mapping properties
 	}{
 		{
-			name:           "simple string",
-			input:          "hello world",
-			wantNormalized: "hello world",
+			name:            "simple string",
+			input:           "hello world",
+			wantNormalized:  "hello world",
 			wantMapLen:      11,
 			validateMapping: true,
 		},
 		{
-			name:           "multiple spaces",
-			input:          "hello    world",
-			wantNormalized: "hello world",
+			name:            "multiple spaces",
+			input:           "hello    world",
+			wantNormalized:  "hello world",
 			wantMapLen:      11,
 			validateMapping: true,
 		},
 		{
-			name:           "tabs",
-			input:          "hello\tworld",
-			wantNormalized: "hello world",
+			name:            "tabs",
+			input:           "hello\tworld",
+			wantNormalized:  "hello world",
 			wantMapLen:      11,
 			validateMapping: true,
 		},
 		{
-			name:           "newlines",
-			input:          "hello\nworld",
-			wantNormalized: "hello world",
+			name:            "newlines",
+			input:           "hello\nworld",
+			wantNormalized:  "hello world",
 			wantMapLen:      11,
 			validateMapping: true,
 		},
 		{
-			name:           "mixed whitespace",
-			input:          "hello \t\n world",
-			wantNormalized: "hello world",
+			name:            "mixed whitespace",
+			input:           "hello \t\n world",
+			wantNormalized:  "hello world",
 			wantMapLen:      11,
 			validateMapping: true,
 		},
 		{
-			name:           "empty string",
-			input:          "",
-			wantNormalized: "",
+			name:            "empty string",
+			input:           "",
+			wantNormalized:  "",
 			wantMapLen:      0,
 			validateMapping: true,
 		},
 		{
-			name:           "only whitespace",
-			input:          "   \t\n  ",
-			wantNormalized: "",
+			name:            "only whitespace",
+			input:           "   \t\n  ",
+			wantNormalized:  "",
 			wantMapLen:      0,
 			validateMapping: true,
 		},
 		{
-			name:           "leading whitespace",
-			input:          "  hello world",
-			wantNormalized: "hello world",
+			name:            "leading whitespace",
+			input:           "  hello world",
+			wantNormalized:  "hello world",
 			wantMapLen:      11,
 			validateMapping: true,
 		},
 		{
-			name:           "code with indentation",
-			input:          "    func test() {\n        return\n    }",
-			wantNormalized: "func test() { return }",
+			name:            "code with indentation",
+			input:           "    func test() {\n        return\n    }",
+			wantNormalized:  "func test() { return }",
 			wantMapLen:      22, // Actual mapping length from the function
 			validateMapping: true,
 		},
 		{
-			name:           "single word",
-			input:          "hello",
-			wantNormalized: "hello",
+			name:            "single word",
+			input:           "hello",
+			wantNormalized:  "hello",
 			wantMapLen:      5,
 			validateMapping: true,
 		},
@@ -213,11 +213,11 @@ func TestNormalizeWhitespaceWithMapping(t *testing.T) {
 // TestValidateMapping tests the validateMapping function from normalization.go
 func TestValidateMapping(t *testing.T) {
 	tests := []struct {
-		name       string
-		input      string
-		mapping    []int
-		normalized string
-		wantErr    bool
+		name        string
+		input       string
+		mapping     []int
+		normalized  string
+		wantErr     bool
 		errContains string
 	}{
 		{
@@ -242,35 +242,35 @@ func TestValidateMapping(t *testing.T) {
 			wantErr:    false,
 		},
 		{
-			name:       "mapping with negative position",
-			input:      "hello",
-			mapping:    []int{0, 1, -1, 3, 4},
-			normalized: "hello",
-			wantErr:    true,
+			name:        "mapping with negative position",
+			input:       "hello",
+			mapping:     []int{0, 1, -1, 3, 4},
+			normalized:  "hello",
+			wantErr:     true,
 			errContains: "negative position",
 		},
 		{
-			name:       "mapping exceeds input length",
-			input:      "hello",
-			mapping:    []int{0, 1, 2, 3, 100},
-			normalized: "hello",
-			wantErr:    true,
+			name:        "mapping exceeds input length",
+			input:       "hello",
+			mapping:     []int{0, 1, 2, 3, 100},
+			normalized:  "hello",
+			wantErr:     true,
 			errContains: "exceeds input length",
 		},
 		{
-			name:       "mapping length mismatch",
-			input:      "hello",
-			mapping:    []int{0, 1, 2, 3, 4},
-			normalized: "helo", // shorter than mapping
-			wantErr:    true,
+			name:        "mapping length mismatch",
+			input:       "hello",
+			mapping:     []int{0, 1, 2, 3, 4},
+			normalized:  "helo", // shorter than mapping
+			wantErr:     true,
 			errContains: "length mismatch",
 		},
 		{
-			name:       "mapping not monotonically increasing",
-			input:      "hello",
-			mapping:    []int{0, 2, 1, 3, 4},
-			normalized: "hello",
-			wantErr:    true,
+			name:        "mapping not monotonically increasing",
+			input:       "hello",
+			mapping:     []int{0, 2, 1, 3, 4},
+			normalized:  "hello",
+			wantErr:     true,
 			errContains: "not monotonically increasing",
 		},
 	}
@@ -360,10 +360,10 @@ func TestFindMatchEndPosition(t *testing.T) {
 // TestFindLineNumber tests the findLineNumber function from edit.go
 func TestFindLineNumber(t *testing.T) {
 	tests := []struct {
-		name      string
-		content   string
-		search    string
-		want      int
+		name    string
+		content string
+		search  string
+		want    int
 	}{
 		{
 			name:    "find at line 1",
@@ -429,7 +429,7 @@ func TestFindLineNumber(t *testing.T) {
 			name:    "normalized match doesn't trigger for short strings",
 			content: "hi\tthere\nfoo bar",
 			search:  "hi there", // 8 chars - less than 10, shouldn't match via normalization
-			want:    0, // Short string doesn't use normalized match
+			want:    0,          // Short string doesn't use normalized match
 		},
 		{
 			name:    "single line",
@@ -529,85 +529,85 @@ func TestPerformNormalizedReplacement(t *testing.T) {
 // TestFindAndReplaceWithNormalization tests the findAndReplaceWithNormalization function from normalization.go
 func TestFindAndReplaceWithNormalization(t *testing.T) {
 	tests := []struct {
-		name            string
-		content         string
-		oldString       string
-		newString       string
+		name              string
+		content           string
+		oldString         string
+		newString         string
 		normalizedContent string
-		normalizedOld   string
-		contentMap      []int
-		want            string
-		wantErr         bool
-		errContains     string
+		normalizedOld     string
+		contentMap        []int
+		want              string
+		wantErr           bool
+		errContains       string
 	}{
 		{
-			name:             "simple replacement",
-			content:          "hello world",
-			oldString:        "hello",
-			newString:        "hi",
+			name:              "simple replacement",
+			content:           "hello world",
+			oldString:         "hello",
+			newString:         "hi",
 			normalizedContent: "hello world",
-			normalizedOld:    "hello",
-			contentMap:       []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
-			want:             "hi world",
-			wantErr:          false,
+			normalizedOld:     "hello",
+			contentMap:        []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+			want:              "hi world",
+			wantErr:           false,
 		},
 		{
-			name:             "replacement with whitespace mapping",
-			content:          "hello    world",
-			oldString:        "hello    world",
-			newString:        "hello there",
+			name:              "replacement with whitespace mapping",
+			content:           "hello    world",
+			oldString:         "hello    world",
+			newString:         "hello there",
 			normalizedContent: "hello world",
-			normalizedOld:    "hello world",
-			contentMap:       []int{0, 1, 2, 3, 4, 8, 9, 10, 11, 12, 13},
-			want:             "hello there",
-			wantErr:          false,
+			normalizedOld:     "hello world",
+			contentMap:        []int{0, 1, 2, 3, 4, 8, 9, 10, 11, 12, 13},
+			want:              "hello there",
+			wantErr:           false,
 		},
 		{
-			name:             "replacement at start",
-			content:          "hello beautiful world",
-			oldString:        "hello beautiful",
-			newString:        "hi there",
+			name:              "replacement at start",
+			content:           "hello beautiful world",
+			oldString:         "hello beautiful",
+			newString:         "hi there",
 			normalizedContent: "hello beautiful world",
-			normalizedOld:    "hello beautiful",
-			contentMap:       []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}, // Fixed length
-			want:             "hi there world",
-			wantErr:          false,
+			normalizedOld:     "hello beautiful",
+			contentMap:        []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}, // Fixed length
+			want:              "hi there world",
+			wantErr:           false,
 		},
 		{
-			name:             "normalized old not found",
-			content:          "hello world",
-			oldString:        "goodbye",
-			newString:        "farewell",
+			name:              "normalized old not found",
+			content:           "hello world",
+			oldString:         "goodbye",
+			newString:         "farewell",
 			normalizedContent: "hello world",
-			normalizedOld:    "goodbye",
-			contentMap:       []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
-			want:             "",
-			wantErr:          true,
-			errContains:      "not found in normalized content",
+			normalizedOld:     "goodbye",
+			contentMap:        []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+			want:              "",
+			wantErr:           true,
+			errContains:       "not found in normalized content",
 		},
 		{
-			name:             "invalid mapping - negative position",
-			content:          "hello world",
-			oldString:        "hello",
-			newString:        "hi",
+			name:              "invalid mapping - negative position",
+			content:           "hello world",
+			oldString:         "hello",
+			newString:         "hi",
 			normalizedContent: "hello world",
-			normalizedOld:    "hello",
-			contentMap:       []int{0, 1, -1, 3, 4, 5, 6, 7, 8, 9, 10},
-			want:             "",
-			wantErr:          true,
-			errContains:      "validate position mapping",
+			normalizedOld:     "hello",
+			contentMap:        []int{0, 1, -1, 3, 4, 5, 6, 7, 8, 9, 10},
+			want:              "",
+			wantErr:           true,
+			errContains:       "validate position mapping",
 		},
 		{
-			name:             "position out of bounds",
-			content:          "hello world",
-			oldString:        "hello",
-			newString:        "hi",
+			name:              "position out of bounds",
+			content:           "hello world",
+			oldString:         "hello",
+			newString:         "hi",
 			normalizedContent: "hello world",
-			normalizedOld:    "hello",
-			contentMap:       []int{0, 1, 2, 3}, // Too short - will cause length mismatch error
-			want:             "",
-			wantErr:          true,
-			errContains:      "length mismatch", // Error is about length mismatch, not out of bounds
+			normalizedOld:     "hello",
+			contentMap:        []int{0, 1, 2, 3}, // Too short - will cause length mismatch error
+			want:              "",
+			wantErr:           true,
+			errContains:       "length mismatch", // Error is about length mismatch, not out of bounds
 		},
 	}
 
@@ -646,7 +646,7 @@ func TestCheckPDFPython3Available(t *testing.T) {
 		// This test ensures the function doesn't panic
 		// It may return an error if python3 is not available, which is fine
 		err := CheckPDFPython3Available()
-		
+
 		// We don't assert on the error result because it depends on the test environment
 		// The important thing is that it doesn't panic
 		_ = err

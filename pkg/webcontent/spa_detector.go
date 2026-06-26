@@ -244,9 +244,9 @@ func findMatchingCloseDiv(s string) int {
 			// </div> comes first: it closes one level of nesting.
 			absClose := i + closePos // absolute position of </div> in s
 			depth--
-			i = absClose + 6        // skip past </div>
+			i = absClose + 6 // skip past </div>
 			if depth == 0 {
-				return absClose     // return absolute position in s
+				return absClose // return absolute position in s
 			}
 		} else {
 			// <div comes first: open a new nesting level.

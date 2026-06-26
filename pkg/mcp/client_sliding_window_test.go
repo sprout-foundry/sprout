@@ -451,8 +451,8 @@ func TestReconnect_MixedOldAndRecentFailures(t *testing.T) {
 	client.running = true
 	client.stopping = false
 	client.failureTimestamps = []time.Time{
-		now.Add(-25 * time.Hour), // pruned (>24h)
-		now.Add(-25 * time.Hour), // pruned (>24h)
+		now.Add(-25 * time.Hour),   // pruned (>24h)
+		now.Add(-25 * time.Hour),   // pruned (>24h)
 		now.Add(-90 * time.Second), // kept in 24h, not in 60s
 		now.Add(-85 * time.Second), // kept in 24h, not in 60s
 		now.Add(-10 * time.Second), // in 60s

@@ -653,22 +653,22 @@ func verifyRemoteSproutPID(hostAlias string, remotePID int) bool {
 		`  echo "dead"`,
 		`  exit 0`,
 		`fi`,
-			// Linux: /proc/$PID/cmdline is null-separated
-	`if [ -r "/proc/$PID/cmdline" ]; then`,
-	fmt.Sprintf(`  CMDLINE=$(tr "\\0" " " < /proc/$PID/cmdline 2>/dev/null)`),
-	`  case "$CMDLINE" in`,
-	`    *"sprout agent --daemon"*|*"sprout serve"*|*"sprout --daemon"*) echo "sprout"; exit 0 ;;`,
-	`    *) echo "other"; exit 0 ;;`,
-	`  esac`,
-	`fi`,
-	// macOS / BSD: ps command
-	`if command -v ps >/dev/null 2>&1; then`,
-	`  CMDLINE=$(ps -o command= -p "$PID" 2>/dev/null | head -1)`,
-	`  case "$CMDLINE" in`,
-	`    *"sprout agent --daemon"*|*"sprout serve"*|*"sprout --daemon"*) echo "sprout"; exit 0 ;;`,
-	`    *) echo "other"; exit 0 ;;`,
-	`  esac`,
-	`fi`,// Couldn't determine — conservative "don't kill"
+		// Linux: /proc/$PID/cmdline is null-separated
+		`if [ -r "/proc/$PID/cmdline" ]; then`,
+		fmt.Sprintf(`  CMDLINE=$(tr "\\0" " " < /proc/$PID/cmdline 2>/dev/null)`),
+		`  case "$CMDLINE" in`,
+		`    *"sprout agent --daemon"*|*"sprout serve"*|*"sprout --daemon"*) echo "sprout"; exit 0 ;;`,
+		`    *) echo "other"; exit 0 ;;`,
+		`  esac`,
+		`fi`,
+		// macOS / BSD: ps command
+		`if command -v ps >/dev/null 2>&1; then`,
+		`  CMDLINE=$(ps -o command= -p "$PID" 2>/dev/null | head -1)`,
+		`  case "$CMDLINE" in`,
+		`    *"sprout agent --daemon"*|*"sprout serve"*|*"sprout --daemon"*) echo "sprout"; exit 0 ;;`,
+		`    *) echo "other"; exit 0 ;;`,
+		`  esac`,
+		`fi`, // Couldn't determine — conservative "don't kill"
 		`echo "unknown"`,
 	}, "\n")
 

@@ -45,7 +45,7 @@ func TestMCPClient_Initialize_WithCat(t *testing.T) {
 	config := MCPServerConfig{
 		Name:    "test-server",
 		Command: "sleep",
-		Args:    []string{"30"}, // Sleep for 30 seconds (longer than timeout)
+		Args:    []string{"30"},  // Sleep for 30 seconds (longer than timeout)
 		Timeout: 2 * time.Second, // Short timeout
 	}
 
@@ -95,7 +95,7 @@ func TestMCPClient_sendRequest_WithPipeInjection(t *testing.T) {
 	config := MCPServerConfig{
 		Name:    "test-server",
 		Command: "sleep",
-		Args:    []string{"30"}, // Sleep for 30 seconds (longer than timeout)
+		Args:    []string{"30"},  // Sleep for 30 seconds (longer than timeout)
 		Timeout: 2 * time.Second, // Short timeout
 	}
 

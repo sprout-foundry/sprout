@@ -36,19 +36,19 @@ const (
 type MessageSource string
 
 const (
-	MessageSourceOriginal     MessageSource = "original"
+	MessageSourceOriginal      MessageSource = "original"
 	MessageSourceLLMCheckpoint MessageSource = "llm_checkpoint"
 )
 
 // MessageAnnotation is the per-message diagnostic view. Index aligns
 // 1:1 with TranscriptSnapshot.State.Messages.
 type MessageAnnotation struct {
-	Index          int           `json:"index"`
-	Role           string        `json:"role"`
-	Source         MessageSource `json:"source"`
-	ContentChars   int           `json:"content_chars"`
-	ToolCallCount  int           `json:"tool_call_count,omitempty"`
-	FirstLine      string        `json:"first_line,omitempty"`
+	Index         int           `json:"index"`
+	Role          string        `json:"role"`
+	Source        MessageSource `json:"source"`
+	ContentChars  int           `json:"content_chars"`
+	ToolCallCount int           `json:"tool_call_count,omitempty"`
+	FirstLine     string        `json:"first_line,omitempty"`
 }
 
 // CompactPreview captures the would-be result of running /compact right
@@ -88,8 +88,8 @@ const (
 	transcriptFileChangeSourcePrimary  = "primary"
 	transcriptFileChangeSourceSubagent = "subagent"
 
-	subagentFilesHeader      = "[subagent files modified]"
-	subagentFilesFooter      = "[/subagent files modified]"
+	subagentFilesHeader = "[subagent files modified]"
+	subagentFilesFooter = "[/subagent files modified]"
 )
 
 // TranscriptSnapshot is the file shape written by /transcript and by

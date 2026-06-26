@@ -136,7 +136,7 @@ func TestPickRollupTarget_LevelOnePromotion(t *testing.T) {
 func TestUnionFileChanges_LastWriteWins(t *testing.T) {
 	sources := []TurnCheckpoint{
 		{FileChanges: []CheckpointFileChange{{Path: "a.go", Op: "A"}, {Path: "b.go", Op: "M"}}},
-		{FileChanges: []CheckpointFileChange{{Path: "a.go", Op: "M"}}},          // modify the file added earlier
+		{FileChanges: []CheckpointFileChange{{Path: "a.go", Op: "M"}}},                          // modify the file added earlier
 		{FileChanges: []CheckpointFileChange{{Path: "b.go", Op: "D"}, {Path: "c.go", Op: "A"}}}, // delete b, add c
 	}
 	got := unionFileChanges(sources)

@@ -156,10 +156,10 @@ func (h *listDirHandler) Execute(ctx context.Context, env ToolEnv, args map[stri
 		sb.WriteString(fmt.Sprintf("%-45s %12s  %s\n", name, sizeStr, entryType))
 
 		structuredResults = append(structuredResults, map[string]any{
-			"name":    name,
-			"isDir":   isDir,
-			"size":    size,
-			"type":    entryType,
+			"name":  name,
+			"isDir": isDir,
+			"size":  size,
+			"type":  entryType,
 		})
 	}
 

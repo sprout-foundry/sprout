@@ -172,15 +172,15 @@ func setupWorkspaceTree(t *testing.T) string {
 
 	// Code files (should be returned by WalkCodeFiles)
 	codeFiles := map[string]string{
-		"main.go":         "package main",
-		"app.ts":          "import React",
-		"util.js":         "export default {}",
-		"component.tsx":   "<div/>",
-		"style.jsx":       "export default () => {}",
-		"module.mjs":      "import { x } from 'y'",
-		"script.py":       "import sys",
-		"src/lib.go":      "package src",
-		"src/handler.ts":  "const handler = () => {}",
+		"main.go":        "package main",
+		"app.ts":         "import React",
+		"util.js":        "export default {}",
+		"component.tsx":  "<div/>",
+		"style.jsx":      "export default () => {}",
+		"module.mjs":     "import { x } from 'y'",
+		"script.py":      "import sys",
+		"src/lib.go":     "package src",
+		"src/handler.ts": "const handler = () => {}",
 	}
 
 	// Non-code indexable files (should only appear in WalkAllIndexableFiles)
@@ -212,29 +212,29 @@ func setupWorkspaceTree(t *testing.T) string {
 
 	// Plant files inside ignored directories that MUST NOT appear in results.
 	ignoredFiles := map[string]string{
-		".git/config":          "[core]",
-		".git/objects/00":     "blob",
+		".git/config":               "[core]",
+		".git/objects/00":           "blob",
 		"node_modules/pkg/index.js": "module.exports={}",
-		"vendor/std/lib.go":    "package std",
-		"dist/bundle.js":       "eval('x')",
-		"dist/output.js":       "eval('y')",
-		"build/main.js":        "console.log('build')",
-		"__pycache__/mod.pyc":  "\x00\x01",
-		".venv/lib/dep.py":     "pass",
-		".tox/test/script.sh":  "#!/bin/sh",
-		".next/build.js":       "next build",
-		".nuxt/index.ts":       "nuxt",
-		"coverage/report.js":   "cov",
-		".cache/data.go":       "cached",
-		".gradle/build.gradle": "gradle",
-		".mvn/wrapper.java":    "mvn",
-		"target/class.java":    "javac",
-		".idea/workspace.xml":  "<project>",
-		".vscode/settings.json": "{}",
-		".terraform/main.tf":   "resource",
-		".sprout/run.log":      "run",
-		".ledit/revisions.md":  "rev",
-		".agent-i/session.md":  "agent",
+		"vendor/std/lib.go":         "package std",
+		"dist/bundle.js":            "eval('x')",
+		"dist/output.js":            "eval('y')",
+		"build/main.js":             "console.log('build')",
+		"__pycache__/mod.pyc":       "\x00\x01",
+		".venv/lib/dep.py":          "pass",
+		".tox/test/script.sh":       "#!/bin/sh",
+		".next/build.js":            "next build",
+		".nuxt/index.ts":            "nuxt",
+		"coverage/report.js":        "cov",
+		".cache/data.go":            "cached",
+		".gradle/build.gradle":      "gradle",
+		".mvn/wrapper.java":         "mvn",
+		"target/class.java":         "javac",
+		".idea/workspace.xml":       "<project>",
+		".vscode/settings.json":     "{}",
+		".terraform/main.tf":        "resource",
+		".sprout/run.log":           "run",
+		".ledit/revisions.md":       "rev",
+		".agent-i/session.md":       "agent",
 	}
 	for rel, content := range ignoredFiles {
 		create(rel, content)
@@ -396,9 +396,9 @@ func TestShouldIgnorePath(t *testing.T) {
 	root := t.TempDir()
 
 	cases := []struct {
-		rel    string // relative to root
-		want   bool
-		label  string
+		rel   string // relative to root
+		want  bool
+		label string
 	}{
 		// Ignored directories
 		{".git/HEAD", true, "git root"},

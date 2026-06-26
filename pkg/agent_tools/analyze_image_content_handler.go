@@ -15,7 +15,7 @@ func (h *analyzeImageContentHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "analyze_image_content",
 		Description: "Analyze images/PDFs for text/code extraction or general insights. Supports local file paths and remote HTTP(S) URLs.",
-		Required: []string{"image_path"},
+		Required:    []string{"image_path"},
 		Parameters: []ParameterDef{
 			{Name: "image_path", Type: "string", Required: true, Description: "Path or URL to an image or PDF to analyze (local path or HTTP(S) URL)"},
 			{Name: "analysis_prompt", Type: "string", Description: "Optional custom vision prompt"},

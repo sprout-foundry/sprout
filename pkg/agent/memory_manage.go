@@ -22,7 +22,7 @@ import (
 //   - "list"   args: (none)
 //   - "delete" args: name (required)
 //   - "search" args: query (required), threshold (optional, default 0.75),
-//                    top_k (optional, default 5)
+//     top_k (optional, default 5)
 func handleManageMemory(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	rawOp, _ := args["operation"].(string)
 	op := strings.TrimSpace(strings.ToLower(rawOp))

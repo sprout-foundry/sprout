@@ -511,14 +511,14 @@ func hunkToPayload(h Hunk) map[string]interface{} {
 		}
 	}
 	return map[string]interface{}{
-		"id":         h.ID,
-		"old_start":  h.OldStart,
-		"old_lines":  h.OldLines,
-		"new_start":  h.NewStart,
-		"new_lines":  h.NewLines,
-		"lines":      lines,
-		"add_count":  countLinesByType(h.Lines, DiffLineAdd),
-		"del_count":  countLinesByType(h.Lines, DiffLineRemove),
+		"id":        h.ID,
+		"old_start": h.OldStart,
+		"old_lines": h.OldLines,
+		"new_start": h.NewStart,
+		"new_lines": h.NewLines,
+		"lines":     lines,
+		"add_count": countLinesByType(h.Lines, DiffLineAdd),
+		"del_count": countLinesByType(h.Lines, DiffLineRemove),
 	}
 }
 

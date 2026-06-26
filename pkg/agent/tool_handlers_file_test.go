@@ -10,9 +10,9 @@ import (
 
 func TestIsImageExtension(t *testing.T) {
 	tests := []struct {
-		name    string
-		input   string
-		want    bool
+		name  string
+		input string
+		want  bool
 	}{
 		// True cases
 		{"png", "file.png", true},

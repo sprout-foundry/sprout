@@ -17,14 +17,14 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/gorilla/websocket"
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	agenttools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/events"
 	lspproxy "github.com/sprout-foundry/sprout/pkg/lsp/proxy"
 	"github.com/sprout-foundry/sprout/pkg/providercatalog"
 	"github.com/sprout-foundry/sprout/pkg/security"
-	agenttools "github.com/sprout-foundry/sprout/pkg/agent_tools"
-	"github.com/gorilla/websocket"
 )
 
 // ReactWebServer provides the React web UI
@@ -70,12 +70,12 @@ type ReactWebServer struct {
 	lastClientContextCleanupRemoved int
 	totalClientContextsRemoved      int
 	lspManager                      *lspproxy.Manager
-	normalizedAllowedOrigins        []string // Pre-normalized from SPROUT_ALLOWED_ORIGINS env var
-	trustedUserHeader               string   // Header name for user ID extraction in service mode
-	serviceMode                     bool     // true when running as a managed service (SPROUT_SERVICE=1)
-	authToken                       string   // Auth token for write endpoint protection (SPROUT_AUTH_TOKEN)
-	socketPath                      string   // Unix domain socket path (when non-empty, listen on socket instead of TCP)
-	startOnce                       sync.Once // Ensures background workers are started exactly once
+	normalizedAllowedOrigins        []string     // Pre-normalized from SPROUT_ALLOWED_ORIGINS env var
+	trustedUserHeader               string       // Header name for user ID extraction in service mode
+	serviceMode                     bool         // true when running as a managed service (SPROUT_SERVICE=1)
+	authToken                       string       // Auth token for write endpoint protection (SPROUT_AUTH_TOKEN)
+	socketPath                      string       // Unix domain socket path (when non-empty, listen on socket instead of TCP)
+	startOnce                       sync.Once    // Ensures background workers are started exactly once
 	serverCtx                       atomic.Value // context.Context — safe to read without ws.mutex
 }
 
@@ -279,12 +279,12 @@ func NewReactWebServer(agent *agent.Agent, eventBus *events.EventBus, port int, 
 		upgrader: websocket.Upgrader{
 			CheckOrigin: newCheckOriginFunc(bindAddr, normalizedAllowedOrigins),
 		},
-		terminalManager:   NewTerminalManager(workspaceRoot),
-		startTime:         time.Now(),
-		fixReviewJobs:     make(map[string]*gitFixReviewJob),
-		sshSessions:       make(map[string]*sshWorkspaceSession),
-		sshInFlight:       make(map[string]chan struct{}),
-		sshLaunchStatuses: make(map[string]*sshLaunchStatus),
+		terminalManager:          NewTerminalManager(workspaceRoot),
+		startTime:                time.Now(),
+		fixReviewJobs:            make(map[string]*gitFixReviewJob),
+		sshSessions:              make(map[string]*sshWorkspaceSession),
+		sshInFlight:              make(map[string]chan struct{}),
+		sshLaunchStatuses:        make(map[string]*sshLaunchStatus),
 		normalizedAllowedOrigins: normalizedAllowedOrigins,
 		trustedUserHeader:        trustedUserHeader,
 		serviceMode:              serviceMode,
@@ -408,4 +408,3 @@ func (ws *ReactWebServer) GetSecurityPromptMgr() *security.ApprovalManager {
 func (ws *ReactWebServer) GetAskUserMgr() *agenttools.AskUserManager {
 	return ws.askUserMgr
 }
-

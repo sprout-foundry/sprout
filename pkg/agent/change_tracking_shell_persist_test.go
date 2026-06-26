@@ -55,7 +55,7 @@ func TestShellSkipDirs_EvictsLRUWhenOverCap(t *testing.T) {
 	// Pre-populate the file with maxPersistedWorkspaces + 2 entries,
 	// each with a distinct LastUsed timestamp.
 	schema := shellSkipDirsFileSchema{
-		Version: 1,
+		Version:    1,
 		Workspaces: make(map[string][]string),
 		LastUsed:   make(map[string]int64),
 	}

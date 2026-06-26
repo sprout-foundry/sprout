@@ -31,8 +31,8 @@ import (
 // ctxVisionMockClient implements api.ClientInterface for ctx-propagation tests.
 // All methods besides SendVisionRequest are no-ops that return zero values.
 type ctxVisionMockClient struct {
-	mu                sync.Mutex
-	sendVisionCalled  bool
+	mu               sync.Mutex
+	sendVisionCalled bool
 	// behavior controls how SendVisionRequest responds:
 	//   "cancel-fast"  → check ctx.Err() and return immediately (no block)
 	//   "block-until-cancel" → select on ctx.Done() (proves ctx is threaded)
@@ -78,21 +78,21 @@ func (m *ctxVisionMockClient) SendChatRequest(ctx context.Context, messages []ap
 func (m *ctxVisionMockClient) SendChatRequestStream(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool, callback api.StreamCallback) (*api.ChatResponse, error) {
 	return &api.ChatResponse{}, nil
 }
-func (m *ctxVisionMockClient) CheckConnection() error            { return nil }
-func (m *ctxVisionMockClient) SetDebug(debug bool)               {}
-func (m *ctxVisionMockClient) SetModel(model string) error       { return nil }
-func (m *ctxVisionMockClient) GetModel() string                  { return "mock-model" }
-func (m *ctxVisionMockClient) GetProvider() string               { return "mock" }
+func (m *ctxVisionMockClient) CheckConnection() error             { return nil }
+func (m *ctxVisionMockClient) SetDebug(debug bool)                {}
+func (m *ctxVisionMockClient) SetModel(model string) error        { return nil }
+func (m *ctxVisionMockClient) GetModel() string                   { return "mock-model" }
+func (m *ctxVisionMockClient) GetProvider() string                { return "mock" }
 func (m *ctxVisionMockClient) GetModelContextLimit() (int, error) { return 128000, nil }
 func (m *ctxVisionMockClient) ListModels(ctx context.Context) ([]api.ModelInfo, error) {
 	return nil, nil
 }
-func (m *ctxVisionMockClient) SupportsVision() bool  { return true }
-func (m *ctxVisionMockClient) GetVisionModel() string { return "mock-vision-model" }
-func (m *ctxVisionMockClient) GetLastTPS() float64    { return 0 }
-func (m *ctxVisionMockClient) GetAverageTPS() float64 { return 0 }
+func (m *ctxVisionMockClient) SupportsVision() bool            { return true }
+func (m *ctxVisionMockClient) GetVisionModel() string          { return "mock-vision-model" }
+func (m *ctxVisionMockClient) GetLastTPS() float64             { return 0 }
+func (m *ctxVisionMockClient) GetAverageTPS() float64          { return 0 }
 func (m *ctxVisionMockClient) GetTPSStats() map[string]float64 { return nil }
-func (m *ctxVisionMockClient) ResetTPSStats()         {}
+func (m *ctxVisionMockClient) ResetTPSStats()                  {}
 
 // --- helpers ---
 

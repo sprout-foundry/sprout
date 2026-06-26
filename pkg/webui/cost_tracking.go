@@ -146,9 +146,9 @@ func (cs *CostStore) GetDailyCosts(days int) []DailyCost {
 
 // DailyCost represents cost for a single day
 type DailyCost struct {
-	Date       string              `json:"date"`
-	TotalCost  float64             `json:"total_cost"`
-	ByProvider map[string]float64  `json:"by_provider,omitempty"`
+	Date       string             `json:"date"`
+	TotalCost  float64            `json:"total_cost"`
+	ByProvider map[string]float64 `json:"by_provider,omitempty"`
 }
 
 // CostSummary represents aggregated cost data

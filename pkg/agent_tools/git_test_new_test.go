@@ -11,10 +11,10 @@ import (
 
 func TestBuildGitCommand(t *testing.T) {
 	tests := []struct {
-		name      string
-		op        GitOperationType
-		args      string
-		expected  string
+		name     string
+		op       GitOperationType
+		args     string
+		expected string
 	}{
 		// basic operations with args
 		{"commit with args", GitOpCommit, "-m 'initial'", "git commit -m 'initial'"},

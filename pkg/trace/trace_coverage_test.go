@@ -221,20 +221,20 @@ func TestRecordTurn_LargeData(t *testing.T) {
 	}
 
 	record := TurnRecord{
-		RunID:            s.GetRunID(),
-		TurnIndex:        0,
-		SystemPrompt:     largePrompt,
-		UserPrompt:       strings.Repeat("User prompt text. ", 200),
+		RunID:              s.GetRunID(),
+		TurnIndex:          0,
+		SystemPrompt:       largePrompt,
+		UserPrompt:         strings.Repeat("User prompt text. ", 200),
 		UserPromptOriginal: strings.Repeat("Original user prompt. ", 200),
-		MessagesSent:      messages,
-		ToolSchemaPayload: json.RawMessage(`[{"type":"function"}]`),
-		RawResponse:       strings.Repeat("response body ", 1000),
-		ParsedToolCalls:   toolCalls,
-		ParserErrors:      []string{"error1", "error2", "error3"},
-		FallbackUsed:      true,
-		FallbackOutput:    strings.Repeat("fallback ", 500),
-		MachineLabels:     []string{"label1", "label2", "label3", "label4"},
-		Timestamp:         "2024-06-15T10:30:00Z",
+		MessagesSent:       messages,
+		ToolSchemaPayload:  json.RawMessage(`[{"type":"function"}]`),
+		RawResponse:        strings.Repeat("response body ", 1000),
+		ParsedToolCalls:    toolCalls,
+		ParserErrors:       []string{"error1", "error2", "error3"},
+		FallbackUsed:       true,
+		FallbackOutput:     strings.Repeat("fallback ", 500),
+		MachineLabels:      []string{"label1", "label2", "label3", "label4"},
+		Timestamp:          "2024-06-15T10:30:00Z",
 	}
 
 	if err := s.RecordTurn(record); err != nil {
@@ -271,10 +271,10 @@ func TestRecordToolCall_AllFields(t *testing.T) {
 	defer s.Close()
 
 	record := ToolCallRecord{
-		RunID:          s.GetRunID(),
-		TurnIndex:      3,
-		ToolIndex:      7,
-		ToolName:       "edit_file",
+		RunID:     s.GetRunID(),
+		TurnIndex: 3,
+		ToolIndex: 7,
+		ToolName:  "edit_file",
 		Args: map[string]interface{}{
 			"path":    "/src/main.go",
 			"content": "package main\n\nfunc main() {}",
@@ -285,11 +285,11 @@ func TestRecordToolCall_AllFields(t *testing.T) {
 			"content": "package main\n\nfunc main() {}",
 			"append":  false,
 		},
-		Success:      false,
-		FullResult:   strings.Repeat("error line\n", 100),
-		ModelResult:  "truncated error output",
+		Success:       false,
+		FullResult:    strings.Repeat("error line\n", 100),
+		ModelResult:   "truncated error output",
 		ErrorCategory: "timeout",
-		ErrorMessage: "operation timed out after 30s",
+		ErrorMessage:  "operation timed out after 30s",
 		MachineLabels: []string{
 			LabelToolCallTimeout,
 			LabelToolCallExecutionError,
@@ -368,13 +368,13 @@ func TestRecordArtifact_VariousTypes(t *testing.T) {
 
 	for i, tt := range artifactTypes {
 		record := ArtifactManifest{
-			RunID:        s.GetRunID(),
-			RelativePath: "path/to/artifact_" + tt.artType,
-			SizeBytes:    int64(1024 * (i + 1)),
-			Hash:         strings.Repeat(string('a'+byte(i)), 64),
-			ArtifactType: tt.artType,
+			RunID:         s.GetRunID(),
+			RelativePath:  "path/to/artifact_" + tt.artType,
+			SizeBytes:     int64(1024 * (i + 1)),
+			Hash:          strings.Repeat(string('a'+byte(i)), 64),
+			ArtifactType:  tt.artType,
 			MachineLabels: tt.labels,
-			Timestamp:    "2024-06-15T10:32:00Z",
+			Timestamp:     "2024-06-15T10:32:00Z",
 		}
 
 		if err := s.RecordArtifact(record); err != nil {

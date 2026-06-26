@@ -20,25 +20,25 @@ import (
 // hydration scans. These are build artifacts, dependency caches, and VCS
 // data that are not needed in the OPFS replica.
 var excludedDirNames = map[string]bool{
-	".git":        true,
+	".git":         true,
 	"node_modules": true,
-	".DS_Store":   true,
-	"__pycache__": true,
-	".next":       true,
-	"dist":        true,
-	".cache":      true,
+	".DS_Store":    true,
+	"__pycache__":  true,
+	".next":        true,
+	"dist":         true,
+	".cache":       true,
 }
 
 // excludedBinaryExtensions lists file extensions that are considered binary.
 // These files are still transferred, but those larger than 1MB are skipped.
 var excludedBinaryExtensions = map[string]bool{
-	".exe":   true, ".dll":    true, ".so":     true, ".dylib": true,
-	".png":   true, ".jpg":   true, ".jpeg":   true, ".gif":   true,
-	".ico":   true, ".woff":  true, ".woff2":  true, ".ttf":   true,
-	".eot":   true, ".zip":   true, ".tar":    true, ".gz":    true,
-	".rar":   true, ".7z":    true, ".mp3":    true, ".mp4":   true,
-	".avi":   true, ".mov":   true, ".wmv":    true, ".wasm":  true,
-	".sqlite": true, ".db":   true,
+	".exe": true, ".dll": true, ".so": true, ".dylib": true,
+	".png": true, ".jpg": true, ".jpeg": true, ".gif": true,
+	".ico": true, ".woff": true, ".woff2": true, ".ttf": true,
+	".eot": true, ".zip": true, ".tar": true, ".gz": true,
+	".rar": true, ".7z": true, ".mp3": true, ".mp4": true,
+	".avi": true, ".mov": true, ".wmv": true, ".wasm": true,
+	".sqlite": true, ".db": true,
 }
 
 // sensitiveFileNames lists filenames that should never be transmitted during
@@ -128,10 +128,10 @@ func isSensitiveFile(relPath string) bool {
 // populate its OPFS replica (SP-046 §6).
 //
 // Protocol phases:
-//   1. Scan workspace, collect file list
-//   2. Send hydrate_manifest with totals and ETA
-//   3. Stream each file as hydrate_file
-//   4. Send hydrate_complete with transfer statistics
+//  1. Scan workspace, collect file list
+//  2. Send hydrate_manifest with totals and ETA
+//  3. Stream each file as hydrate_file
+//  4. Send hydrate_complete with transfer statistics
 func (ws *ReactWebServer) handleColdHydrateRequest(safeConn *SafeConn, workspaceRoot string) {
 	// Validate workspace root
 	if workspaceRoot == "" {

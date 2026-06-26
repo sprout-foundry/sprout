@@ -69,7 +69,7 @@ type semanticReferenceLocation struct {
 
 type semanticReferences struct {
 	Locations  []semanticReferenceLocation `json:"locations"`
-	SymbolName string                     `json:"symbolName"`
+	SymbolName string                      `json:"symbolName"`
 }
 
 type semanticCodeActionEdit struct {
@@ -98,34 +98,34 @@ type semanticSignatureHelpParameter struct {
 }
 
 type semanticSignatureHelpSignature struct {
-	Label         string                          `json:"label"`
-	Documentation string                          `json:"documentation,omitempty"`
+	Label         string                           `json:"label"`
+	Documentation string                           `json:"documentation,omitempty"`
 	Parameters    []semanticSignatureHelpParameter `json:"parameters"`
 }
 
 type semanticSignatureHelp struct {
 	Signatures      []semanticSignatureHelpSignature `json:"signatures"`
 	ActiveSignature int                              `json:"activeSignature"`
-	ActiveParameter  int                              `json:"activeParameter"`
+	ActiveParameter int                              `json:"activeParameter"`
 }
 
 type semanticResponse struct {
-	Message      string                    `json:"message"`
-	Path         string                  `json:"path"`
-	LanguageID   string                  `json:"language_id"`
-	Method       string                  `json:"method"`
-	Capabilities semanticCapabilities    `json:"capabilities"`
-	Diagnostics  []semanticDiagnostic    `json:"diagnostics,omitempty"`
-	Definition   *semanticDefinition    `json:"definition,omitempty"`
-	Hover        *semanticHover          `json:"hover,omitempty"`
-	Rename       *semanticRename        `json:"rename,omitempty"`
-	References   *semanticReferences    `json:"references,omitempty"`
-	CodeActions  []semanticCodeAction   `json:"code_actions,omitempty"`
-	InlayHints   []semanticInlayHint   `json:"inlay_hints,omitempty"`
+	Message       string                 `json:"message"`
+	Path          string                 `json:"path"`
+	LanguageID    string                 `json:"language_id"`
+	Method        string                 `json:"method"`
+	Capabilities  semanticCapabilities   `json:"capabilities"`
+	Diagnostics   []semanticDiagnostic   `json:"diagnostics,omitempty"`
+	Definition    *semanticDefinition    `json:"definition,omitempty"`
+	Hover         *semanticHover         `json:"hover,omitempty"`
+	Rename        *semanticRename        `json:"rename,omitempty"`
+	References    *semanticReferences    `json:"references,omitempty"`
+	CodeActions   []semanticCodeAction   `json:"code_actions,omitempty"`
+	InlayHints    []semanticInlayHint    `json:"inlay_hints,omitempty"`
 	SignatureHelp *semanticSignatureHelp `json:"signature_help,omitempty"`
-	Error        string                  `json:"error,omitempty"`
-	Version      string                  `json:"version"`
-	DurationMs   int64                   `json:"duration_ms,omitempty"`
+	Error         string                 `json:"error,omitempty"`
+	Version       string                 `json:"version"`
+	DurationMs    int64                  `json:"duration_ms,omitempty"`
 }
 
 type semanticToolInput = lspsemantic.ToolInput
@@ -389,7 +389,7 @@ func applyToolResult(result *semanticResponse, toolResult semanticToolResult, wo
 		result.SignatureHelp = &semanticSignatureHelp{
 			Signatures:      sigs,
 			ActiveSignature: sh.ActiveSignature,
-			ActiveParameter:  sh.ActiveParameter,
+			ActiveParameter: sh.ActiveParameter,
 		}
 	}
 }

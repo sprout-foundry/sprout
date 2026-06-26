@@ -16,31 +16,31 @@ import (
 // is correctly parsed from the SPROUT_TRUSTED_USER_HEADER environment variable.
 func TestTrustedUserHeaderParsing(t *testing.T) {
 	tests := []struct {
-		name               string
-		envValue           string
-		serviceMode        bool
-		expectedHeader     string
+		name                string
+		envValue            string
+		serviceMode         bool
+		expectedHeader      string
 		expectedServiceMode bool
 	}{
 		{
-			name:               "header set in service mode",
-			envValue:           "X-User-ID",
-			serviceMode:        true,
-			expectedHeader:     "X-User-ID",
+			name:                "header set in service mode",
+			envValue:            "X-User-ID",
+			serviceMode:         true,
+			expectedHeader:      "X-User-ID",
 			expectedServiceMode: true,
 		},
 		{
-			name:               "header not set",
-			envValue:           "",
-			serviceMode:        false,
-			expectedHeader:     "",
+			name:                "header not set",
+			envValue:            "",
+			serviceMode:         false,
+			expectedHeader:      "",
 			expectedServiceMode: false,
 		},
 		{
-			name:               "header with whitespace trimmed",
-			envValue:           "  X-User-ID  ",
-			serviceMode:        true,
-			expectedHeader:     "X-User-ID",
+			name:                "header with whitespace trimmed",
+			envValue:            "  X-User-ID  ",
+			serviceMode:         true,
+			expectedHeader:      "X-User-ID",
 			expectedServiceMode: true,
 		},
 	}
@@ -60,9 +60,9 @@ func TestTrustedUserHeaderParsing(t *testing.T) {
 
 			// Create the server which should parse the trusted user header
 			server, err := NewReactWebServer(nil, eventBus, 0, "127.0.0.1", "", "")
-	if err != nil {
-		t.Fatal(err)
-		}
+			if err != nil {
+				t.Fatal(err)
+			}
 
 			// Verify the parsed values match expectations
 			if server.trustedUserHeader != tt.expectedHeader {
@@ -79,95 +79,95 @@ func TestTrustedUserHeaderParsing(t *testing.T) {
 // the user ID from requests in service mode, and returns empty string in local mode.
 func TestExtractUserID(t *testing.T) {
 	tests := []struct {
-		name          string
-		serviceMode   bool
-		headerName    string
-		headerValue   string
+		name           string
+		serviceMode    bool
+		headerName     string
+		headerValue    string
 		expectedUserID string
 	}{
 		{
-			name:          "service mode with valid header",
-			serviceMode:   true,
-			headerName:    "X-User-ID",
-			headerValue:   "user123",
+			name:           "service mode with valid header",
+			serviceMode:    true,
+			headerName:     "X-User-ID",
+			headerValue:    "user123",
 			expectedUserID: "user123",
 		},
 		{
-			name:          "service mode with missing header",
-			serviceMode:   true,
-			headerName:    "X-User-ID",
-			headerValue:   "",
+			name:           "service mode with missing header",
+			serviceMode:    true,
+			headerName:     "X-User-ID",
+			headerValue:    "",
 			expectedUserID: "",
 		},
 		{
-			name:          "local mode ignores header (security)",
-			serviceMode:   false,
-			headerName:    "X-User-ID",
-			headerValue:   "user123",
+			name:           "local mode ignores header (security)",
+			serviceMode:    false,
+			headerName:     "X-User-ID",
+			headerValue:    "user123",
 			expectedUserID: "", // Must be empty in local mode
 		},
 		{
-			name:          "service mode without configured header",
-			serviceMode:   true,
-			headerName:    "",
-			headerValue:   "user123",
+			name:           "service mode without configured header",
+			serviceMode:    true,
+			headerName:     "",
+			headerValue:    "user123",
 			expectedUserID: "",
 		},
 		{
-			name:          "service mode with empty header name",
-			serviceMode:   true,
-			headerName:    "",
-			headerValue:   "",
+			name:           "service mode with empty header name",
+			serviceMode:    true,
+			headerName:     "",
+			headerValue:    "",
 			expectedUserID: "",
 		},
 		// Validation tests for Issue 3
 		{
-			name:          "header value with whitespace is trimmed and accepted",
-			serviceMode:   true,
-			headerName:    "X-User-ID",
-			headerValue:   "  user123  ",
+			name:           "header value with whitespace is trimmed and accepted",
+			serviceMode:    true,
+			headerName:     "X-User-ID",
+			headerValue:    "  user123  ",
 			expectedUserID: "user123",
 		},
 		{
-			name:          "header value exceeding 256 chars is rejected",
-			serviceMode:   true,
-			headerName:    "X-User-ID",
-			headerValue:   strings.Repeat("a", 257),
+			name:           "header value exceeding 256 chars is rejected",
+			serviceMode:    true,
+			headerName:     "X-User-ID",
+			headerValue:    strings.Repeat("a", 257),
 			expectedUserID: "",
 		},
 		{
-			name:          "header value with special chars like semicolon is rejected",
-			serviceMode:   true,
-			headerName:    "X-User-ID",
-			headerValue:   "user;123",
+			name:           "header value with special chars like semicolon is rejected",
+			serviceMode:    true,
+			headerName:     "X-User-ID",
+			headerValue:    "user;123",
 			expectedUserID: "",
 		},
 		{
-			name:          "header value with script tag is rejected",
-			serviceMode:   true,
-			headerName:    "X-User-ID",
-			headerValue:   "<script>alert('xss')</script>",
+			name:           "header value with script tag is rejected",
+			serviceMode:    true,
+			headerName:     "X-User-ID",
+			headerValue:    "<script>alert('xss')</script>",
 			expectedUserID: "",
 		},
 		{
-			name:          "header value with valid special chars like @ is accepted",
-			serviceMode:   true,
-			headerName:    "X-User-ID",
-			headerValue:   "user@example.com",
+			name:           "header value with valid special chars like @ is accepted",
+			serviceMode:    true,
+			headerName:     "X-User-ID",
+			headerValue:    "user@example.com",
 			expectedUserID: "user@example.com",
 		},
 		{
-			name:          "header value with hyphens and dots is accepted",
-			serviceMode:   true,
-			headerName:    "X-User-ID",
-			headerValue:   "user-123.sso",
+			name:           "header value with hyphens and dots is accepted",
+			serviceMode:    true,
+			headerName:     "X-User-ID",
+			headerValue:    "user-123.sso",
 			expectedUserID: "user-123.sso",
 		},
 		{
-			name:          "header value with underscore and colon is accepted",
-			serviceMode:   true,
-			headerName:    "X-User-ID",
-			headerValue:   "user_name:123",
+			name:           "header value with underscore and colon is accepted",
+			serviceMode:    true,
+			headerName:     "X-User-ID",
+			headerValue:    "user_name:123",
 			expectedUserID: "user_name:123",
 		},
 	}
@@ -176,9 +176,9 @@ func TestExtractUserID(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			eventBus := events.NewEventBus()
 			server, err := NewReactWebServer(nil, eventBus, 0, "127.0.0.1", "", "")
-	if err != nil {
-		t.Fatal(err)
-		}
+			if err != nil {
+				t.Fatal(err)
+			}
 			server.serviceMode = tt.serviceMode
 			server.trustedUserHeader = tt.headerName
 
@@ -207,13 +207,13 @@ func TestUserIDContextFunctions(t *testing.T) {
 	server, err := NewReactWebServer(nil, eventBus, 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
-		}
+	}
 
 	// Test contextWithUserID and UserIDFromContext
 	t.Run("context with user ID", func(t *testing.T) {
 		req, err := http.NewRequest("GET", "/test", nil)
-	if err != nil {
-		t.Fatalf("Failed to create request: %v", err)
+		if err != nil {
+			t.Fatalf("Failed to create request: %v", err)
 		}
 		req.Header.Set("X-User-ID", "test-user-123")
 		server.serviceMode = true
@@ -229,8 +229,8 @@ func TestUserIDContextFunctions(t *testing.T) {
 
 	t.Run("context without user ID", func(t *testing.T) {
 		req, err := http.NewRequest("GET", "/test", nil)
-	if err != nil {
-		t.Fatalf("Failed to create request: %v", err)
+		if err != nil {
+			t.Fatalf("Failed to create request: %v", err)
 		}
 
 		ctx := server.contextWithUserID(req.Context(), req)
@@ -249,13 +249,13 @@ func TestGetClientContextForRequestPopulatesUserID(t *testing.T) {
 	server, err := NewReactWebServer(nil, eventBus, 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
-		}
+	}
 
 	t.Run("UserID populated from context", func(t *testing.T) {
 		// Create a request with user ID in context
 		req, err := http.NewRequest("GET", "/test", nil)
-	if err != nil {
-		t.Fatalf("Failed to create request: %v", err)
+		if err != nil {
+			t.Fatalf("Failed to create request: %v", err)
 		}
 
 		// Set user ID in context
@@ -274,8 +274,8 @@ func TestGetClientContextForRequestPopulatesUserID(t *testing.T) {
 	t.Run("UserID not overwritten on subsequent calls", func(t *testing.T) {
 		// Create a request with a different user ID in context
 		req, err := http.NewRequest("GET", "/test", nil)
-	if err != nil {
-		t.Fatalf("Failed to create request: %v", err)
+		if err != nil {
+			t.Fatalf("Failed to create request: %v", err)
 		}
 
 		// First call sets UserID
@@ -297,8 +297,8 @@ func TestGetClientContextForRequestPopulatesUserID(t *testing.T) {
 	t.Run("UserID not set when empty in context", func(t *testing.T) {
 		// Create a request without user ID in context
 		req, err := http.NewRequest("GET", "/test", nil)
-	if err != nil {
-		t.Fatalf("Failed to create request: %v", err)
+		if err != nil {
+			t.Fatalf("Failed to create request: %v", err)
 		}
 		// Use a different client ID to avoid reusing cached context
 		req.Header.Set("X-Sprout-Client-ID", "different-client")
@@ -312,4 +312,3 @@ func TestGetClientContextForRequestPopulatesUserID(t *testing.T) {
 		}
 	})
 }
-

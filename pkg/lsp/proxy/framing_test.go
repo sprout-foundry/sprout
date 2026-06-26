@@ -167,8 +167,6 @@ func TestReadMessage(t *testing.T) {
 	})
 }
 
-
-
 func TestMessageReader(t *testing.T) {
 	t.Run("NewMessageReader creates reader", func(t *testing.T) {
 		r := strings.NewReader("test")
@@ -260,7 +258,7 @@ func TestReadMessageReadBodyNonEOFError(t *testing.T) {
 	t.Run("non-EOF/non-UnexpectedEOF error reading body", func(t *testing.T) {
 		// Covers line 84: io.ReadFull returns some other error
 		r := &readErrorReader{
-			header: "Content-Length: 10\n\n",
+			header:  "Content-Length: 10\n\n",
 			bodyErr: errors.New("read failure"),
 		}
 		_, err := ReadMessage(r)

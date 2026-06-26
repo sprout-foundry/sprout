@@ -108,14 +108,14 @@ func TestNormalizeShortTitle(t *testing.T) {
 			want:  "Adds auth",
 		},
 		{
-			name:  "strips multiline and backticks and title prefix",
+			name: "strips multiline and backticks and title prefix",
 			// First line: "title: `Adds auth" — no trailing backtick on first line,
 			// so backtick before "Adds" remains (Trim only removes leading/trailing).
 			input: "title: `Adds auth\nmore stuff`",
 			want:  "`Adds auth",
 		},
 		{
-			name:  "multiline first line has backticks and title prefix",
+			name: "multiline first line has backticks and title prefix",
 			// First line after split: "title:   `Adds auth`"
 			// Trim(backtick) removes trailing ` → "title:   `Adds auth"
 			// TrimPrefix("title:") → "   `Adds auth" → TrimSpace → "`Adds auth"
@@ -258,7 +258,7 @@ func TestWrapText(t *testing.T) {
 			name:       "long paragraph wraps at line length",
 			text:       "This is a somewhat long paragraph that should be wrapped into multiple lines at the specified line length boundary.",
 			lineLength: 40,
-			want: "This is a somewhat long paragraph that\nshould be wrapped into multiple lines at\nthe specified line length boundary.",
+			want:       "This is a somewhat long paragraph that\nshould be wrapped into multiple lines at\nthe specified line length boundary.",
 		},
 		{
 			name:       "multiple paragraphs",
@@ -270,7 +270,7 @@ func TestWrapText(t *testing.T) {
 			name:       "multiple paragraphs with long lines",
 			text:       "This is a very long first paragraph that will need to be wrapped across multiple lines in the output.\n\nThis is the second paragraph also quite lengthy and requiring wrapping.",
 			lineLength: 40,
-			want: "This is a very long first paragraph that\nwill need to be wrapped across multiple\nlines in the output.\n\nThis is the second paragraph also quite\nlengthy and requiring wrapping.",
+			want:       "This is a very long first paragraph that\nwill need to be wrapped across multiple\nlines in the output.\n\nThis is the second paragraph also quite\nlengthy and requiring wrapping.",
 		},
 		{
 			name:       "single word longer than line length",

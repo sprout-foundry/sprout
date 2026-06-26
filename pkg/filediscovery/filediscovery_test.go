@@ -73,7 +73,7 @@ func TestGetIgnoreRules_LeditIgnore(t *testing.T) {
 
 func TestGetIgnoreRules_BothFiles(t *testing.T) {
 	root := makeTree(t, map[string]string{
-		".gitignore":     "*.log\n",
+		".gitignore":      "*.log\n",
 		".sprout/.ignore": "dist/\n",
 	})
 	rules := GetIgnoreRules(root)
@@ -99,10 +99,10 @@ func newFD() *FileDiscovery {
 
 func TestDiscoverBasic_ReturnsFiles(t *testing.T) {
 	root := makeTree(t, map[string]string{
-		"main.go":       "package main",
-		"util.go":       "package main",
-		"README.md":     "hello",
-		".hidden":       "secret",
+		"main.go":        "package main",
+		"util.go":        "package main",
+		"README.md":      "hello",
+		".hidden":        "secret",
 		"sub/handler.go": "package sub",
 	})
 
@@ -175,7 +175,7 @@ func TestDiscoverBasic_ExcludeExtFilter(t *testing.T) {
 
 func TestDiscoverBasic_ExcludeDirs(t *testing.T) {
 	root := makeTree(t, map[string]string{
-		"main.go":            "package main",
+		"main.go":             "package main",
 		"node_modules/lib.js": "exports = {}",
 	})
 
@@ -371,7 +371,7 @@ func TestGetIgnoreRules_LeditPriority(t *testing.T) {
 	// Test that .sprout/.ignore rules are applied in addition to .gitignore
 	// Both should be combined
 	root := makeTree(t, map[string]string{
-		".gitignore":     "*.log\n",
+		".gitignore":      "*.log\n",
 		".sprout/.ignore": "secret.txt\n*.tmp\n",
 	})
 	rules := GetIgnoreRules(root)
@@ -397,13 +397,13 @@ func TestGetIgnoreRules_LeditPriority(t *testing.T) {
 
 func TestBuildWorkspaceStructure_GroupsFilesByDirectory(t *testing.T) {
 	root := makeTree(t, map[string]string{
-		"main.go":         "package main",
-		"util.go":         "package main",
-		"README.md":       "hello",
-		"src/handler.go":  "package src",
-		"src/utils.go":    "package src",
-		"cmd/server.go":   "package main",
-		"cmd/client.go":   "package main",
+		"main.go":        "package main",
+		"util.go":        "package main",
+		"README.md":      "hello",
+		"src/handler.go": "package src",
+		"src/utils.go":   "package src",
+		"cmd/server.go":  "package main",
+		"cmd/client.go":  "package main",
 	})
 
 	fd := newFD()
@@ -948,10 +948,10 @@ func TestFilterFiles_ExcludeExtensions(t *testing.T) {
 
 func TestFilterFiles_IncludePaths(t *testing.T) {
 	root := makeTree(t, map[string]string{
-		"src/main.go":    "package main",
-		"src/util.go":    "package main",
-		"tests/test.go":  "package tests",
-		"README.md":      "hello",
+		"src/main.go":   "package main",
+		"src/util.go":   "package main",
+		"tests/test.go": "package tests",
+		"README.md":     "hello",
 	})
 
 	fd := newFD()
@@ -1093,8 +1093,8 @@ func TestFilterFiles_SizeRange(t *testing.T) {
 
 func TestFilterFiles_ModifiedAfter(t *testing.T) {
 	root := makeTree(t, map[string]string{
-		"old.txt":  "old content",
-		"new.txt":  "new content",
+		"old.txt": "old content",
+		"new.txt": "new content",
 	})
 
 	// Set modification times — calculate all times upfront to avoid race conditions
@@ -1179,8 +1179,8 @@ func TestFilterFiles_NilCriteria(t *testing.T) {
 
 func TestFilterFiles_MultipleCriteria(t *testing.T) {
 	root := makeTree(t, map[string]string{
-		"src/main.go":   "package main",
-		"src/test.go":   "package main",
+		"src/main.go":    "package main",
+		"src/test.go":    "package main",
 		"docs/readme.md": "hello",
 	})
 
@@ -1547,8 +1547,8 @@ func TestDeduplicateAndFilter_ConvertsToAbsolutePath(t *testing.T) {
 	wsInfo := &WorkspaceInfo{RootDir: resolvedRoot}
 
 	files := []string{
-		"main.go",     // Relative path
-		"./main.go",   // Relative with dot
+		"main.go",   // Relative path
+		"./main.go", // Relative with dot
 	}
 
 	result := fd.deduplicateAndFilter(files, wsInfo)
@@ -1602,7 +1602,7 @@ func TestDeduplicateAndFilter_SkipsNonExistentFiles(t *testing.T) {
 
 	files := []string{
 		filepath.Join(root, "main.go"),
-		filepath.Join(root, "nonexistent.go"), // Doesn't exist
+		filepath.Join(root, "nonexistent.go"),  // Doesn't exist
 		filepath.Join(root, "also_missing.go"), // Doesn't exist
 	}
 
@@ -1620,7 +1620,7 @@ func TestDeduplicateAndFilter_SkipsNonExistentFiles(t *testing.T) {
 
 func TestDeduplicateAndFilter_SkipsDirectories(t *testing.T) {
 	root := makeTree(t, map[string]string{
-		"main.go":    "package main",
+		"main.go":     "package main",
 		"src/util.go": "package src",
 	})
 
@@ -1756,8 +1756,8 @@ func TestFindWithDirectoryWalk_SkipsCommonExcludedDirs(t *testing.T) {
 	root := makeTree(t, map[string]string{
 		"main.go":             "package main",
 		"node_modules/lib.js": "exports = {}",
-		"vendor/utils.go":      "package vendor",
-		"target/class.class":   "compiled",
+		"vendor/utils.go":     "package vendor",
+		"target/class.class":  "compiled",
 		"build/app.js":        "bundle",
 		"dist/bundle.js":      "minified",
 		"src/handler.go":      "package src",
@@ -2052,11 +2052,11 @@ func TestRerankWithSymbols_Sorting(t *testing.T) {
 
 func TestWorkspaceInfo_BuildsCorrectly(t *testing.T) {
 	root := makeTree(t, map[string]string{
-		"main.go":         "package main",
-		"src/handler.go":  "package src",
-		"README.md":       "hello",
-		"cmd/server.go":   "package cmd",
-		"cmd/client.go":   "package cmd",
+		"main.go":        "package main",
+		"src/handler.go": "package src",
+		"README.md":      "hello",
+		"cmd/server.go":  "package cmd",
+		"cmd/client.go":  "package cmd",
 	})
 
 	old, err := os.Getwd()
@@ -2175,12 +2175,12 @@ func TestFindWithFindCommand_BasicPattern(t *testing.T) {
 	}
 
 	root := makeTree(t, map[string]string{
-		"main.go":          "package main",
-		"util.go":          "package util",
-		"handler.go":       "package handler",
-		"README.md":        "hello",
-		"sub/sub.go":       "package sub",
-		"other/script.js":  "console.log()",
+		"main.go":         "package main",
+		"util.go":         "package util",
+		"handler.go":      "package handler",
+		"README.md":       "hello",
+		"sub/sub.go":      "package sub",
+		"other/script.js": "console.log()",
 	})
 
 	fd := newFD()
@@ -2249,12 +2249,12 @@ func TestFindWithFindCommand_MultiplePatterns(t *testing.T) {
 	}
 
 	root := makeTree(t, map[string]string{
-		"main.go":     "package main",
-		"util.go":     "package util",
-		"script.js":   "console.log()",
-		"style.css":   "body {}",
-		"README.md":   "hello",
-		"data.json":   "{}",
+		"main.go":   "package main",
+		"util.go":   "package util",
+		"script.js": "console.log()",
+		"style.css": "body {}",
+		"README.md": "hello",
+		"data.json": "{}",
 	})
 
 	fd := newFD()
@@ -2396,9 +2396,9 @@ func TestFindWithGrepCommand_ContentSearch(t *testing.T) {
 	}
 
 	root := makeTree(t, map[string]string{
-		"main.go":  "package main\n\nfunc main() {\n\tfmt.Println(\"hello\")\n}",
-		"util.go":  "package util\n\nfunc helper() {\n\t// helper function\n}",
-		"api.go":   "package api\n\nfunc APIHandler() {\n\t// handles API requests\n}",
+		"main.go":   "package main\n\nfunc main() {\n\tfmt.Println(\"hello\")\n}",
+		"util.go":   "package util\n\nfunc helper() {\n\t// helper function\n}",
+		"api.go":    "package api\n\nfunc APIHandler() {\n\t// handles API requests\n}",
 		"README.md": "# Project\n\nThis is a test project.",
 	})
 
@@ -2656,12 +2656,12 @@ func TestDiscoverFilesRobust_WithShellPatterns(t *testing.T) {
 	}
 
 	root := makeTree(t, map[string]string{
-		"main.go":     "package main",
-		"util.go":     "package util",
-		"handler.go":  "package handler",
-		"script.js":   "console.log()",
-		"README.md":   "hello",
-		"sub/sub.go":  "package sub",
+		"main.go":       "package main",
+		"util.go":       "package util",
+		"handler.go":    "package handler",
+		"script.js":     "console.log()",
+		"README.md":     "hello",
+		"sub/sub.go":    "package sub",
 		"other/test.go": "package test",
 	})
 
@@ -2713,9 +2713,9 @@ func TestIgnoreRules_NotYetIntegratedInDiscoverBasic(t *testing.T) {
 	// This test documents the current behavior: ignore rules are parsed
 	// but not applied in discoverBasic()
 	root := makeTree(t, map[string]string{
-		".gitignore":  "*.log\nbuild/\n",
-		"main.go":     "package main",
-		"debug.log":   "debug output",
+		".gitignore":   "*.log\nbuild/\n",
+		"main.go":      "package main",
+		"debug.log":    "debug output",
 		"build/app.js": "bundle",
 	})
 
@@ -2835,8 +2835,8 @@ func TestDiscoverBasic_PermissionDenied(t *testing.T) {
 
 func TestDiscoverBasic_WithMaxFilesZero(t *testing.T) {
 	root := makeTree(t, map[string]string{
-		"main.go": "package main",
-		"util.go": "package util",
+		"main.go":    "package main",
+		"util.go":    "package util",
 		"handler.go": "package handler",
 	})
 
@@ -2900,10 +2900,10 @@ func TestDeduplicateAndFilter_InvalidPaths(t *testing.T) {
 	wsInfo := &WorkspaceInfo{RootDir: root}
 
 	files := []string{
-		validFile,                         // valid
-		"",                                // empty path
-		"\x00invalid",                     // invalid path with null byte (may not work on all platforms)
-		"/nonexistent/outside/file.go",   // outside workspace
+		validFile,                      // valid
+		"",                             // empty path
+		"\x00invalid",                  // invalid path with null byte (may not work on all platforms)
+		"/nonexistent/outside/file.go", // outside workspace
 	}
 
 	// Should not crash on invalid paths
@@ -2924,7 +2924,7 @@ func TestApplyFiltersAndLimits_EmptyFileList(t *testing.T) {
 	fd := newFD()
 
 	result := fd.applyFiltersAndLimits([]string{}, &DiscoveryOptions{
-		MaxFiles: 10,
+		MaxFiles:    10,
 		ExcludeDirs: []string{"node_modules"},
 	})
 

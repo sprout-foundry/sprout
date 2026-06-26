@@ -152,118 +152,118 @@ func handleSettingsTestCredential(a *Agent, args map[string]interface{}) (string
 
 // settingDetail holds metadata for a setting key used by describe and describe_all.
 type settingDetail struct {
-	key          string
-	description  string
-	validValues  string
-	getValue     func(cfg *configuration.Config) string
+	key         string
+	description string
+	validValues string
+	getValue    func(cfg *configuration.Config) string
 }
 
 // allSettings returns the complete list of setting definitions including extended settings.
 func allSettings() []settingDetail {
 	return []settingDetail{
 		{
-			key:          "provider",
-			description:  "Current LLM provider",
-			validValues:  "openai, anthropic, deepseek, openrouter, ollama, ollama-local, lmstudio, deepinfra, cerebras, chutes, minimax, mistral, zai, or custom provider names",
-			getValue:     func(cfg *configuration.Config) string { return cfg.LastUsedProvider },
+			key:         "provider",
+			description: "Current LLM provider",
+			validValues: "openai, anthropic, deepseek, openrouter, ollama, ollama-local, lmstudio, deepinfra, cerebras, chutes, minimax, mistral, zai, or custom provider names",
+			getValue:    func(cfg *configuration.Config) string { return cfg.LastUsedProvider },
 		},
 		{
-			key:          "model",
-			description:  "Current model for the active provider",
-			validValues:  "provider-specific model name",
-			getValue:     func(cfg *configuration.Config) string { m := cfg.GetModelForProvider(cfg.LastUsedProvider); return m },
+			key:         "model",
+			description: "Current model for the active provider",
+			validValues: "provider-specific model name",
+			getValue:    func(cfg *configuration.Config) string { m := cfg.GetModelForProvider(cfg.LastUsedProvider); return m },
 		},
 		{
-			key:          "reasoning_effort",
-			description:  "Reasoning effort",
-			validValues:  "low, medium, high",
-			getValue:     func(cfg *configuration.Config) string { return cfg.ReasoningEffort },
+			key:         "reasoning_effort",
+			description: "Reasoning effort",
+			validValues: "low, medium, high",
+			getValue:    func(cfg *configuration.Config) string { return cfg.ReasoningEffort },
 		},
 		{
-			key:          "disable_thinking",
-			description:  "Disable thinking mode",
-			validValues:  "true, false",
-			getValue:     func(cfg *configuration.Config) string { return fmt.Sprintf("%v", cfg.DisableThinking) },
+			key:         "disable_thinking",
+			description: "Disable thinking mode",
+			validValues: "true, false",
+			getValue:    func(cfg *configuration.Config) string { return fmt.Sprintf("%v", cfg.DisableThinking) },
 		},
 		{
-			key:          "resource_directory",
-			description:  "Directory for captured web/vision resources",
-			validValues:  "any valid file path",
-			getValue:     func(cfg *configuration.Config) string { return cfg.ResourceDirectory },
+			key:         "resource_directory",
+			description: "Directory for captured web/vision resources",
+			validValues: "any valid file path",
+			getValue:    func(cfg *configuration.Config) string { return cfg.ResourceDirectory },
 		},
 		{
-			key:          "history_scope",
-			description:  "Change history scope",
-			validValues:  "project, global",
-			getValue:     func(cfg *configuration.Config) string { return cfg.HistoryScope },
+			key:         "history_scope",
+			description: "Change history scope",
+			validValues: "project, global",
+			getValue:    func(cfg *configuration.Config) string { return cfg.HistoryScope },
 		},
 		{
-			key:          "ea_mode",
-			description:  "Executive Assistant mode",
-			validValues:  "interactive, queue",
-			getValue:     func(cfg *configuration.Config) string { return cfg.EAMode },
+			key:         "ea_mode",
+			description: "Executive Assistant mode",
+			validValues: "interactive, queue",
+			getValue:    func(cfg *configuration.Config) string { return cfg.EAMode },
 		},
 		{
-			key:          "subagent_provider",
-			description:  "Provider used for subagents",
-			validValues:  "provider name or empty to inherit from provider",
-			getValue:     func(cfg *configuration.Config) string { return cfg.SubagentProvider },
+			key:         "subagent_provider",
+			description: "Provider used for subagents",
+			validValues: "provider name or empty to inherit from provider",
+			getValue:    func(cfg *configuration.Config) string { return cfg.SubagentProvider },
 		},
 		{
-			key:          "subagent_model",
-			description:  "Model used for subagents",
-			validValues:  "provider-specific model name or empty to use provider default",
-			getValue:     func(cfg *configuration.Config) string { return cfg.SubagentModel },
+			key:         "subagent_model",
+			description: "Model used for subagents",
+			validValues: "provider-specific model name or empty to use provider default",
+			getValue:    func(cfg *configuration.Config) string { return cfg.SubagentModel },
 		},
 		{
-			key:          "default_subagent_persona",
-			description:  "Persona used when run_subagent is invoked without a persona argument",
-			validValues:  "persona ID (e.g. general, coder, reviewer) or empty to fall back to 'general'",
-			getValue:     func(cfg *configuration.Config) string { return cfg.DefaultSubagentPersona },
+			key:         "default_subagent_persona",
+			description: "Persona used when run_subagent is invoked without a persona argument",
+			validValues: "persona ID (e.g. general, coder, reviewer) or empty to fall back to 'general'",
+			getValue:    func(cfg *configuration.Config) string { return cfg.DefaultSubagentPersona },
 		},
 		{
-			key:          "disabled_personas",
-			description:  "Comma-separated persona IDs hidden from /persona list and subagent spawning",
-			validValues:  "comma-separated persona IDs (e.g. researcher,web_scraper) or empty to enable all",
+			key:         "disabled_personas",
+			description: "Comma-separated persona IDs hidden from /persona list and subagent spawning",
+			validValues: "comma-separated persona IDs (e.g. researcher,web_scraper) or empty to enable all",
 			getValue: func(cfg *configuration.Config) string {
 				return strings.Join(cfg.DisabledPersonas, ",")
 			},
 		},
 		{
-			key:          "self_review_gate_mode",
-			description:  "Self-review gate mode",
-			validValues:  "off, code, always",
-			getValue:     func(cfg *configuration.Config) string { return cfg.SelfReviewGateMode },
+			key:         "self_review_gate_mode",
+			description: "Self-review gate mode",
+			validValues: "off, code, always",
+			getValue:    func(cfg *configuration.Config) string { return cfg.SelfReviewGateMode },
 		},
 		{
-			key:          "output_verbosity",
-			description:  "How much inter-tool-call narration the UI shows",
-			validValues:  "compact, default, verbose",
-			getValue:     func(cfg *configuration.Config) string { return cfg.OutputVerbosity },
+			key:         "output_verbosity",
+			description: "How much inter-tool-call narration the UI shows",
+			validValues: "compact, default, verbose",
+			getValue:    func(cfg *configuration.Config) string { return cfg.OutputVerbosity },
 		},
 		{
-			key:          "commit_provider",
-			description:  "Provider for commit message generation",
-			validValues:  "provider name or empty to inherit from provider",
-			getValue:     func(cfg *configuration.Config) string { return cfg.CommitProvider },
+			key:         "commit_provider",
+			description: "Provider for commit message generation",
+			validValues: "provider name or empty to inherit from provider",
+			getValue:    func(cfg *configuration.Config) string { return cfg.CommitProvider },
 		},
 		{
-			key:          "commit_model",
-			description:  "Model for commit message generation",
-			validValues:  "provider-specific model name or empty to use provider default",
-			getValue:     func(cfg *configuration.Config) string { return cfg.CommitModel },
+			key:         "commit_model",
+			description: "Model for commit message generation",
+			validValues: "provider-specific model name or empty to use provider default",
+			getValue:    func(cfg *configuration.Config) string { return cfg.CommitModel },
 		},
 		{
-			key:          "review_provider",
-			description:  "Provider for code review commands",
-			validValues:  "provider name or empty to inherit from provider",
-			getValue:     func(cfg *configuration.Config) string { return cfg.ReviewProvider },
+			key:         "review_provider",
+			description: "Provider for code review commands",
+			validValues: "provider name or empty to inherit from provider",
+			getValue:    func(cfg *configuration.Config) string { return cfg.ReviewProvider },
 		},
 		{
-			key:          "review_model",
-			description:  "Model for code review commands",
-			validValues:  "provider-specific model name or empty to use provider default",
-			getValue:     func(cfg *configuration.Config) string { return cfg.ReviewModel },
+			key:         "review_model",
+			description: "Model for code review commands",
+			validValues: "provider-specific model name or empty to use provider default",
+			getValue:    func(cfg *configuration.Config) string { return cfg.ReviewModel },
 		},
 	}
 }

@@ -18,9 +18,9 @@ import (
 //
 //   - "read"    args: status (optional), limit (optional)
 //   - "add"     args: title (required), description, priority,
-//                     working_dir, persona (optional)
+//     working_dir, persona (optional)
 //   - "publish" args: task_id (required), status (required),
-//                     result (optional), subtasks (optional)
+//     result (optional), subtasks (optional)
 func handleTaskQueue(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	rawOp, _ := args["operation"].(string)
 	op := strings.TrimSpace(strings.ToLower(rawOp))

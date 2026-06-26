@@ -203,4 +203,3 @@ func TestCloseSessionDoesNotPanic(t *testing.T) {
 	}
 	t.Logf("all %d CloseSession iterations completed without panic", iterations)
 }
-

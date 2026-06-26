@@ -1144,14 +1144,14 @@ func (r *SteerInputReader) renderLine() {
 // disturbing the steer panel's pinned row. Caller MUST hold outputMu.
 //
 // Approach:
-//   1. Reset the scroll region to the full screen so the message can
-//      be written anywhere.
-//   2. Move the cursor to a row above the pinned steer area so the
-//      message lands in the conversation area, not on top of the panel.
-//   3. Write the message (it scrolls within the now-full region).
-//   4. Re-apply the footer's scroll region (clamps pinned rows back).
-//   5. Re-render the footer's pinned rows so the user sees their typed
-//      buffer in the right place.
+//  1. Reset the scroll region to the full screen so the message can
+//     be written anywhere.
+//  2. Move the cursor to a row above the pinned steer area so the
+//     message lands in the conversation area, not on top of the panel.
+//  3. Write the message (it scrolls within the now-full region).
+//  4. Re-apply the footer's scroll region (clamps pinned rows back).
+//  5. Re-render the footer's pinned rows so the user sees their typed
+//     buffer in the right place.
 //
 // We bypass r.renderLine() here because it routes through
 // footer.SetSteerLineWithCursor → footer.draw(), which re-acquires

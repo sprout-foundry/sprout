@@ -39,15 +39,15 @@ func (m *mockAgentClient) SendChatRequest(ctx context.Context, messages []api.Me
 func (m *mockAgentClient) SendChatRequestStream(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool, callback api.StreamCallback) (*api.ChatResponse, error) {
 	return m.SendChatRequest(context.Background(), messages, tools, reasoning, disableThinking)
 }
-func (m *mockAgentClient) CheckConnection() error                                      { return nil }
-func (m *mockAgentClient) SetDebug(debug bool)                                         {}
-func (m *mockAgentClient) SetModel(model string) error                                  { return nil }
-func (m *mockAgentClient) GetModel() string                                             { return m.model }
-func (m *mockAgentClient) GetProvider() string                                          { return m.provider }
-func (m *mockAgentClient) GetModelContextLimit() (int, error)                           { return 128000, nil }
-func (m *mockAgentClient) ListModels(ctx context.Context) ([]api.ModelInfo, error)      { return nil, nil }
-func (m *mockAgentClient) SupportsVision() bool                                         { return false }
-func (m *mockAgentClient) GetVisionModel() string                                       { return "" }
+func (m *mockAgentClient) CheckConnection() error                                  { return nil }
+func (m *mockAgentClient) SetDebug(debug bool)                                     {}
+func (m *mockAgentClient) SetModel(model string) error                             { return nil }
+func (m *mockAgentClient) GetModel() string                                        { return m.model }
+func (m *mockAgentClient) GetProvider() string                                     { return m.provider }
+func (m *mockAgentClient) GetModelContextLimit() (int, error)                      { return 128000, nil }
+func (m *mockAgentClient) ListModels(ctx context.Context) ([]api.ModelInfo, error) { return nil, nil }
+func (m *mockAgentClient) SupportsVision() bool                                    { return false }
+func (m *mockAgentClient) GetVisionModel() string                                  { return "" }
 func (m *mockAgentClient) SendVisionRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	return nil, nil
 }
@@ -137,7 +137,7 @@ func TestExtractSpec_ValidJSON(t *testing.T) {
 		}, nil
 	})
 
-	result, err := extractor.ExtractSpec(context.Background(), 
+	result, err := extractor.ExtractSpec(context.Background(),
 		[]Message{
 			{Role: "user", Content: "I need a REST API"},
 			{Role: "assistant", Content: "I'll build that for you"},
@@ -202,7 +202,7 @@ func TestExtractSpec_MarkdownWrappedJSON(t *testing.T) {
 		}, nil
 	})
 
-	result, err := extractor.ExtractSpec(context.Background(), 
+	result, err := extractor.ExtractSpec(context.Background(),
 		[]Message{{Role: "user", Content: "test"}},
 		"test intent",
 	)
@@ -230,7 +230,7 @@ func TestExtractSpec_InvalidJSON(t *testing.T) {
 		}, nil
 	})
 
-	_, err := extractor.ExtractSpec(context.Background(), 
+	_, err := extractor.ExtractSpec(context.Background(),
 		[]Message{{Role: "user", Content: "test"}},
 		"test intent",
 	)
@@ -251,7 +251,7 @@ func TestExtractSpec_RateLimitError(t *testing.T) {
 		return nil, errors.New("HTTP 429: rate limit exceeded")
 	})
 
-	_, err := extractor.ExtractSpec(context.Background(), 
+	_, err := extractor.ExtractSpec(context.Background(),
 		[]Message{{Role: "user", Content: "test"}},
 		"test intent",
 	)
@@ -272,7 +272,7 @@ func TestExtractSpec_GenericAPIError(t *testing.T) {
 		return nil, errors.New("connection timeout")
 	})
 
-	_, err := extractor.ExtractSpec(context.Background(), 
+	_, err := extractor.ExtractSpec(context.Background(),
 		[]Message{{Role: "user", Content: "test"}},
 		"test intent",
 	)
@@ -299,7 +299,7 @@ func TestExtractSpec_PromptContent(t *testing.T) {
 		}, nil
 	})
 
-	_, err := extractor.ExtractSpec(context.Background(), 
+	_, err := extractor.ExtractSpec(context.Background(),
 		[]Message{
 			{Role: "user", Content: "I want to build a CLI tool"},
 			{Role: "assistant", Content: "Sure, I'll help with that"},
@@ -765,7 +765,7 @@ func TestExtractAndValidate(t *testing.T) {
 		cfg:    &configuration.Config{},
 	}
 
-	scopeResult, spec, err := service.ExtractAndValidate(context.Background(), 
+	scopeResult, spec, err := service.ExtractAndValidate(context.Background(),
 		[]Message{{Role: "user", Content: "Build feature X"}},
 		"diff --git a/main.go\n+func featureX() {}",
 		"Build feature X",
@@ -809,7 +809,7 @@ func TestExtractAndValidate_ExtractionError(t *testing.T) {
 		cfg:    &configuration.Config{},
 	}
 
-	_, _, err := service.ExtractAndValidate(context.Background(), 
+	_, _, err := service.ExtractAndValidate(context.Background(),
 		[]Message{{Role: "user", Content: "test"}},
 		"diff",
 		"intent",
@@ -855,7 +855,7 @@ func TestExtractAndValidate_ValidationError(t *testing.T) {
 		cfg:    &configuration.Config{},
 	}
 
-	_, spec, err := service.ExtractAndValidate(context.Background(), 
+	_, spec, err := service.ExtractAndValidate(context.Background(),
 		[]Message{{Role: "user", Content: "test"}},
 		"diff",
 		"intent",
@@ -951,7 +951,7 @@ func TestExtractSpec_InvalidJSONInsideBraces(t *testing.T) {
 		}, nil
 	})
 
-	_, err := extractor.ExtractSpec(context.Background(), 
+	_, err := extractor.ExtractSpec(context.Background(),
 		[]Message{{Role: "user", Content: "test"}},
 		"test intent",
 	)
@@ -1103,7 +1103,7 @@ func TestExtractSpec_ConfidenceBoundaryValues(t *testing.T) {
 				}, nil
 			})
 
-			result, err := extractor.ExtractSpec(context.Background(), 
+			result, err := extractor.ExtractSpec(context.Background(),
 				[]Message{{Role: "user", Content: "test"}},
 				"test intent",
 			)

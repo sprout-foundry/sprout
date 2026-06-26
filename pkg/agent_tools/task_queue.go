@@ -26,8 +26,8 @@ type Task struct {
 	ID           string    `json:"id"`
 	Title        string    `json:"title"`
 	Description  string    `json:"description,omitempty"`
-	Status       string    `json:"status"`        // pending, in_progress, completed, failed, blocked
-	Priority     string    `json:"priority"`      // high, medium, low
+	Status       string    `json:"status"`   // pending, in_progress, completed, failed, blocked
+	Priority     string    `json:"priority"` // high, medium, low
 	AssignedTo   string    `json:"assigned_to,omitempty"`
 	WorkingDir   string    `json:"working_dir,omitempty"`
 	Persona      string    `json:"persona,omitempty"`

@@ -250,12 +250,12 @@ func validateProviderName(provider string) error {
 // into the SproutWasm global.
 func credentialJSFuncs() map[string]interface{} {
 	return map[string]interface{}{
-		"setCredential":  js.FuncOf(setCredentialFunc),
-		"getCredential":  js.FuncOf(getCredentialFunc),
+		"setCredential":    js.FuncOf(setCredentialFunc),
+		"getCredential":    js.FuncOf(getCredentialFunc),
 		"deleteCredential": js.FuncOf(deleteCredentialFunc),
-		"listCredentials": js.FuncOf(listCredentialsFunc),
-		"hasCredential":  js.FuncOf(hasCredentialFunc),
-		"injectHostKeys": js.FuncOf(injectHostKeysFunc),
+		"listCredentials":  js.FuncOf(listCredentialsFunc),
+		"hasCredential":    js.FuncOf(hasCredentialFunc),
+		"injectHostKeys":   js.FuncOf(injectHostKeysFunc),
 	}
 }
 

@@ -454,7 +454,7 @@ func TestShouldForwardEventToConnectionComplex2(t *testing.T) {
 		event := events.UIEvent{
 			Type: events.EventTypeSecurityApprovalRequest,
 			Data: map[string]interface{}{
-				"client_id": "client456",
+				"client_id":  "client456",
 				"request_id": "req123",
 			},
 		}

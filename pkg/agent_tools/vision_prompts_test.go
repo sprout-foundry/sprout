@@ -8,8 +8,8 @@ import (
 // TestGeneratePromptForMode tests the GeneratePromptForMode function with various modes.
 func TestGeneratePromptForMode(t *testing.T) {
 	tests := []struct {
-		name        string
-		mode        string
+		name         string
+		mode         string
 		wantContains []string // Substrings that should be present in the result
 	}{
 		{
@@ -231,8 +231,8 @@ func TestCreateVisionPrompt(t *testing.T) {
 	vp := &VisionProcessor{}
 
 	tests := []struct {
-		name        string
-		imagePath   string
+		name         string
+		imagePath    string
 		wantContains []string
 	}{
 		{

@@ -224,7 +224,7 @@ func TestSecurityApprovalManager_ExtrasInEvent(t *testing.T) {
 	}()
 
 	extras := map[string]string{
-		"command": "rm -rf /tmp/test",
+		"command":   "rm -rf /tmp/test",
 		"risk_type": "some risk",
 	}
 

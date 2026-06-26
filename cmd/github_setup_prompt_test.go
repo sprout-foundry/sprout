@@ -38,7 +38,7 @@ func (m *mockConfigManager) UpdateConfig(updateFunc func(c *configuration.Config
 // configManagerWithOverride allows overriding UpdateConfig for testing
 type configManagerWithOverride struct {
 	mockConfigManager *mockConfigManager
-	updateFn        func(func(c *configuration.Config) error) error
+	updateFn          func(func(c *configuration.Config) error) error
 }
 
 func (m *configManagerWithOverride) GetConfig() *configuration.Config {
@@ -54,12 +54,12 @@ func (m *configManagerWithOverride) UpdateConfig(updateFunc func(c *configuratio
 
 // mockAgent implements GitHubSetupAgentInterface for testing
 type mockAgent struct {
-	configManager    interface {
+	configManager interface {
 		GetConfig() *configuration.Config
 		UpdateConfig(func(c *configuration.Config) error) error
 	}
 	mcpToolsRefreshed bool
-	refreshErr       error
+	refreshErr        error
 }
 
 func (m *mockAgent) GetConfigManager() interface {
@@ -212,94 +212,94 @@ func TestPromptGitHubMCPSetupIfNeeded_DetectRepoNil(t *testing.T) {
 
 func TestPromptGitHubSetupVariants_UserInput(t *testing.T) {
 	testCases := []struct {
-		name           string
-		input          string
-		setupSucceeds  bool
-		saveErr        error
-		expectSetup    bool
-		expectSave     bool
-		expectRefresh  bool
+		name          string
+		input         string
+		setupSucceeds bool
+		saveErr       error
+		expectSetup   bool
+		expectSave    bool
+		expectRefresh bool
 	}{
 		{
-			name:           "s - setup",
-			input:          "s\n",
-			setupSucceeds:  true,
-			saveErr:        nil,
-			expectSetup:    true,
-			expectSave:     true,
-			expectRefresh:  true,
+			name:          "s - setup",
+			input:         "s\n",
+			setupSucceeds: true,
+			saveErr:       nil,
+			expectSetup:   true,
+			expectSave:    true,
+			expectRefresh: true,
 		},
 		{
-			name:           "setup - setup",
-			input:          "setup\n",
-			setupSucceeds:  true,
-			saveErr:        nil,
-			expectSetup:    true,
-			expectSave:     true,
-			expectRefresh:  true,
+			name:          "setup - setup",
+			input:         "setup\n",
+			setupSucceeds: true,
+			saveErr:       nil,
+			expectSetup:   true,
+			expectSave:    true,
+			expectRefresh: true,
 		},
 		{
-			name:           "yes - setup",
-			input:          "yes\n",
-			setupSucceeds:  true,
-			saveErr:        nil,
-			expectSetup:    true,
-			expectSave:     true,
-			expectRefresh:  true,
+			name:          "yes - setup",
+			input:         "yes\n",
+			setupSucceeds: true,
+			saveErr:       nil,
+			expectSetup:   true,
+			expectSave:    true,
+			expectRefresh: true,
 		},
 		{
-			name:           "y - setup",
-			input:          "y\n",
-			setupSucceeds:  true,
-			saveErr:        nil,
-			expectSetup:    true,
-			expectSave:     true,
-			expectRefresh:  true,
+			name:          "y - setup",
+			input:         "y\n",
+			setupSucceeds: true,
+			saveErr:       nil,
+			expectSetup:   true,
+			expectSave:    true,
+			expectRefresh: true,
 		},
 		{
-			name:           "n - dismiss prompt",
-			input:          "n\n",
-			setupSucceeds:  false,
-			saveErr:        nil,
-			expectSetup:    false,
-			expectSave:     false,
-			expectRefresh:  false,
+			name:          "n - dismiss prompt",
+			input:         "n\n",
+			setupSucceeds: false,
+			saveErr:       nil,
+			expectSetup:   false,
+			expectSave:    false,
+			expectRefresh: false,
 		},
 		{
-			name:           "never - dismiss prompt",
-			input:          "never\n",
-			setupSucceeds:  false,
-			saveErr:        nil,
-			expectSetup:    false,
-			expectSave:     false,
-			expectRefresh:  false,
+			name:          "never - dismiss prompt",
+			input:         "never\n",
+			setupSucceeds: false,
+			saveErr:       nil,
+			expectSetup:   false,
+			expectSave:    false,
+			expectRefresh: false,
 		},
 		{
-			name:           "no - dismiss prompt",
-			input:          "no\n",
-			setupSucceeds:  false,
-			saveErr:        nil,
-			expectSetup:    false,
-			expectSave:     false,
-			expectRefresh:  false,
+			name:          "no - dismiss prompt",
+			input:         "no\n",
+			setupSucceeds: false,
+			saveErr:       nil,
+			expectSetup:   false,
+			expectSave:    false,
+			expectRefresh: false,
 		},
 		{
-			name:           "empty - skip silently",
-			input:          "\n",
-			setupSucceeds:  false,
-			saveErr:        nil,
-			expectSetup:    false,
-			expectSave:     false,
-			expectRefresh:  false,
+			name:          "empty - skip silently",
+			input:         "\n",
+			setupSucceeds: false,
+			saveErr:       nil,
+			expectSetup:   false,
+			expectSave:    false,
+			expectRefresh: false,
 		},
 		{
-			name:           "garbage - skip silently",
-			input:          "xyz123\n",
-			setupSucceeds:  false,
-			saveErr:        nil,
-			expectSetup:    false,
-			expectSave:     false,
-			expectRefresh:  false,
+			name:          "garbage - skip silently",
+			input:         "xyz123\n",
+			setupSucceeds: false,
+			saveErr:       nil,
+			expectSetup:   false,
+			expectSave:    false,
+			expectRefresh: false,
 		},
 	}
 
@@ -362,8 +362,8 @@ func TestPromptGitHubSetupVariants_UserInput(t *testing.T) {
 			// Create mock agent - use a different approach that allows override
 			updateCalled := false
 			testConfig := &configuration.Config{
-				SkipPrompt:        false,
-				MCP:               mcp.MCPConfig{},
+				SkipPrompt:       false,
+				MCP:              mcp.MCPConfig{},
 				DismissedPrompts: make(map[string]bool),
 			}
 			mockCfgMgr := &configManagerWithOverride{
@@ -377,7 +377,7 @@ func TestPromptGitHubSetupVariants_UserInput(t *testing.T) {
 			}
 
 			mockAgt := &mockAgent{
-				configManager:    mockCfgMgr,
+				configManager:     mockCfgMgr,
 				mcpToolsRefreshed: false,
 			}
 
@@ -477,14 +477,14 @@ func TestPromptGitHubMCPSetupIfNeeded_SaveServerFails(t *testing.T) {
 
 	mockCfgMgr := &mockConfigManager{
 		config: &configuration.Config{
-			SkipPrompt:        false,
-			MCP:               mcp.MCPConfig{},
+			SkipPrompt:       false,
+			MCP:              mcp.MCPConfig{},
 			DismissedPrompts: make(map[string]bool),
 		},
 	}
 
 	mockAgt := &mockAgent{
-		configManager:    mockCfgMgr,
+		configManager:     mockCfgMgr,
 		mcpToolsRefreshed: false,
 	}
 
@@ -546,14 +546,14 @@ func TestPromptGitHubMCPSetupIfNeeded_SetupFails(t *testing.T) {
 
 	mockCfgMgr := &mockConfigManager{
 		config: &configuration.Config{
-			SkipPrompt:        false,
-			MCP:               mcp.MCPConfig{},
+			SkipPrompt:       false,
+			MCP:              mcp.MCPConfig{},
 			DismissedPrompts: make(map[string]bool),
 		},
 	}
 
 	mockAgt := &mockAgent{
-		configManager:    mockCfgMgr,
+		configManager:     mockCfgMgr,
 		mcpToolsRefreshed: false,
 	}
 
@@ -604,8 +604,8 @@ func TestPromptGitHubMCPSetupIfNeeded_UpdateConfigFails(t *testing.T) {
 	mockCfgMgr := &configManagerWithOverride{
 		mockConfigManager: &mockConfigManager{
 			config: &configuration.Config{
-				SkipPrompt:        false,
-				MCP:               mcp.MCPConfig{},
+				SkipPrompt:       false,
+				MCP:              mcp.MCPConfig{},
 				DismissedPrompts: make(map[string]bool),
 			},
 		},
@@ -615,7 +615,7 @@ func TestPromptGitHubMCPSetupIfNeeded_UpdateConfigFails(t *testing.T) {
 	}
 
 	mockAgt := &mockAgent{
-		configManager:    mockCfgMgr,
+		configManager:     mockCfgMgr,
 		mcpToolsRefreshed: false,
 	}
 
@@ -681,8 +681,8 @@ func TestPromptGitHubMCPSetupIfNeeded_RefreshToolsFails(t *testing.T) {
 
 	mockCfgMgr := &mockConfigManager{
 		config: &configuration.Config{
-			SkipPrompt:        false,
-			MCP:               mcp.MCPConfig{},
+			SkipPrompt:       false,
+			MCP:              mcp.MCPConfig{},
 			DismissedPrompts: make(map[string]bool),
 		},
 	}
@@ -753,8 +753,8 @@ func TestPromptGitHubMCPSetupIfNeeded_SetupCancelled(t *testing.T) {
 
 	mockCfgMgr := &mockConfigManager{
 		config: &configuration.Config{
-			SkipPrompt:        false,
-			MCP:               mcp.MCPConfig{},
+			SkipPrompt:       false,
+			MCP:              mcp.MCPConfig{},
 			DismissedPrompts: make(map[string]bool),
 		},
 	}
@@ -798,8 +798,8 @@ func TestPromptGitHubMCPSetupIfNeeded_NilDismissedPrompts(t *testing.T) {
 
 	mockCfgMgr := &mockConfigManager{
 		config: &configuration.Config{
-			SkipPrompt:        false,
-			MCP:               mcp.MCPConfig{},
+			SkipPrompt:       false,
+			MCP:              mcp.MCPConfig{},
 			DismissedPrompts: nil, // nil map
 		},
 	}
@@ -888,8 +888,8 @@ func TestPromptGitHubMCPSetupIfNeeded_ReaderError(t *testing.T) {
 
 	mockCfgMgr := &mockConfigManager{
 		config: &configuration.Config{
-			SkipPrompt:        false,
-			MCP:               mcp.MCPConfig{},
+			SkipPrompt:       false,
+			MCP:              mcp.MCPConfig{},
 			DismissedPrompts: make(map[string]bool),
 		},
 	}
@@ -949,8 +949,8 @@ func TestPromptGitHubMCPSetupIfNeeded_DismissedPromptUpdated(t *testing.T) {
 
 	mockCfgMgr := &mockConfigManager{
 		config: &configuration.Config{
-			SkipPrompt:        false,
-			MCP:               mcp.MCPConfig{},
+			SkipPrompt:       false,
+			MCP:              mcp.MCPConfig{},
 			DismissedPrompts: make(map[string]bool),
 		},
 	}
@@ -1031,14 +1031,14 @@ func TestPromptGitHubMCPSetupIfNeeded_YesVariants(t *testing.T) {
 
 			mockCfgMgr := &mockConfigManager{
 				config: &configuration.Config{
-					SkipPrompt:        false,
-					MCP:               mcp.MCPConfig{},
+					SkipPrompt:       false,
+					MCP:              mcp.MCPConfig{},
 					DismissedPrompts: make(map[string]bool),
 				},
 			}
 
 			mockAgt := &mockAgent{
-				configManager:    mockCfgMgr,
+				configManager:     mockCfgMgr,
 				mcpToolsRefreshed: false,
 			}
 
@@ -1098,8 +1098,8 @@ func TestPromptGitHubMCPSetupIfNeeded_NoVariants(t *testing.T) {
 
 			mockCfgMgr := &mockConfigManager{
 				config: &configuration.Config{
-					SkipPrompt:        false,
-					MCP:               mcp.MCPConfig{},
+					SkipPrompt:       false,
+					MCP:              mcp.MCPConfig{},
 					DismissedPrompts: make(map[string]bool),
 				},
 			}

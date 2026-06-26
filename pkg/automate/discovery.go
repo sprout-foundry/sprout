@@ -208,8 +208,8 @@ func (s *Summary) IsApprovalRequired() bool {
 // BudgetSummary mirrors the cmd-level budget config in a package that has no
 // cmd dependency, so the overview renderer can display it.
 type BudgetSummary struct {
-	USD     float64
-	WarnAt  []float64
+	USD    float64
+	WarnAt []float64
 }
 
 // InitialSummary describes the initial run.

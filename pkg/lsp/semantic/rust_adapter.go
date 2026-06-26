@@ -67,7 +67,9 @@ func (a rustAdapter) Run(input ToolInput) (ToolResult, error) {
 type cargoMessage struct {
 	Reason  string `json:"reason"`
 	Message struct {
-		Code    *struct{ Code string `json:"code"` } `json:"code"`
+		Code *struct {
+			Code string `json:"code"`
+		} `json:"code"`
 		Level   string `json:"level"`
 		Message string `json:"message"`
 		Spans   []struct {

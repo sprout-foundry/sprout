@@ -6,10 +6,10 @@ import (
 	"strconv"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/ui"
 	"golang.org/x/term"
-	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 // SessionsCommand handles session management with auto-tracking and session recovery

@@ -96,9 +96,9 @@ func TestHandleTodoWriteValidV2(t *testing.T) {
 	result, err := handleTodoWrite(context.Background(), a, map[string]interface{}{
 		"todos": []interface{}{
 			map[string]interface{}{
-				"content":  "Build feature",
-				"status":   "pending",
-				"id":       "task-1",
+				"content": "Build feature",
+				"status":  "pending",
+				"id":      "task-1",
 			},
 			map[string]interface{}{
 				"content":  "Write tests",

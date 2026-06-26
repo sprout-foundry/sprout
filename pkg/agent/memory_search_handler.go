@@ -114,9 +114,9 @@ func handleSearchMemoriesJSON(ctx context.Context, a *Agent, query string, topK 
 	}
 
 	type memoryResult struct {
-		Name       string  `json:"name"`
-		Relevance  float32 `json:"relevance"`
-		Title      string  `json:"title,omitempty"`
+		Name      string  `json:"name"`
+		Relevance float32 `json:"relevance"`
+		Title     string  `json:"title,omitempty"`
 	}
 
 	var output []memoryResult

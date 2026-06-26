@@ -44,12 +44,12 @@ func TestValidateSessionID_Create(t *testing.T) {
 
 	// Invalid characters error
 	invalidIDs := []string{
-		"abc def",    // space
-		"abc/def",    // slash
-		"abc:def",    // colon
-		"abc@def",    // at
-		"abc#def",    // hash
-		"abc!def",    // exclamation
+		"abc def", // space
+		"abc/def", // slash
+		"abc:def", // colon
+		"abc@def", // at
+		"abc#def", // hash
+		"abc!def", // exclamation
 	}
 	for _, id := range invalidIDs {
 		err = validateSessionID(id)

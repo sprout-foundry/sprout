@@ -154,7 +154,7 @@ func newDefaultToolRegistry() *ToolRegistry {
 	// (include_persisted). Replaces the four pre-consolidation tools:
 	// list_changes, show_my_change, summarize_my_session, my_recent_changes.
 	registry.RegisterTool(ToolConfig{
-		Name: "list_changes",
+		Name:        "list_changes",
 		Description: "List files you've created, modified, or deleted this session. Returns `{revision_id, files: [{path, op, tool, timestamp, recoverable}]}`. `op` is \"create\"/\"edit\"/\"delete\"/\"bulk\". Bulk entries (rollups from `git checkout .` or build commands) carry `bulk_count` + `bulk_items` (path+op summaries).\n\n**Output-shape args** (all optional):\n• `include_diff` (bool) — adds a `diff` field with unified pre-session vs current diff per non-bulk entry. Use for \"what did you change in foo.go?\" without re-reading.\n• `group_by=\"block\"` — replaces `files` with `blocks: [{started_at, ended_at, tools, files}]` grouped by 30-second activity windows. Use for \"summarize what you've been doing\".\n• `include_persisted` (bool) — merges hot+warm persistent-history records so the timeline spans previous sessions. Items get `source`, `revision_id`, `tier`.\n\n**Use it**: before declaring a task complete, when drafting commit messages, when the user asks what changed, and for cross-session reasoning.\n\nShell commands (sed, mv, rm, tee, …) are tracked via a workspace-walk diff around every `shell_command`. Files outside the workspace, binaries, and files >1 MiB are reported with `recoverable: false`.",
 		Parameters: []ParameterConfig{
 			{"since", "string", false, []string{}, "Optional cutoff: RFC3339 timestamp or duration (2d, 12h, 30m). Only changes at/after this time."},
@@ -171,7 +171,7 @@ func newDefaultToolRegistry() *ToolRegistry {
 	// previous file= scope was removed; use recover_file(scope=
 	// "session_start") for single-file pre-session restores.
 	registry.RegisterTool(ToolConfig{
-		Name: "revert_my_changes",
+		Name:        "revert_my_changes",
 		Description: "Bulk-undo YOUR session edits using ChangeTracker originals — does NOT touch git or other agents' / user's in-progress work.\n\n**Scope** (pick one):\n• `scope=\"all\"` (default) — every file the tracker recorded this session.\n• `since=<RFC3339 timestamp OR duration>` (e.g. \"30m\", \"2h\", \"2026-05-27T10:00:00Z\") — changes at/after that time.\n\nPer file: edits → write originals back; deletes → un-delete; creates → remove the file. Returns `{restored, failed, summary, entries: [{path, action, ok, message}]}`.\n\nFor SINGLE-file recovery use `recover_file` (`scope=\"session_start\"` for pre-session, `scope=\"latest\"` for last edit).\n\n**Prefer this over `git checkout`/`git reset`** — git wipes EVERYTHING including the user's uncommitted work; this only touches files YOU edited.",
 		Parameters: []ParameterConfig{
 			{"scope", "string", false, []string{}, "\"all\" to revert every change this session. Default when no other filter is provided."},
@@ -184,7 +184,7 @@ func newDefaultToolRegistry() *ToolRegistry {
 	// recover_file tool and the standalone recover_bulk via the
 	// `scope` parameter.
 	registry.RegisterTool(ToolConfig{
-		Name: "recover_file",
+		Name:        "recover_file",
 		Description: "Restore one file (or one bulk entry's worth of files) from the ChangeTracker's session buffer. Works for any tool's edits — write_file, edit_file, or shell_command (rm, sed -i, mv, `git checkout .`).\n\n**`scope`**:\n• `\"latest\"` (default) — restore to the state immediately before the most recent tracked change for `path`. Undoes one specific edit.\n• `\"session_start\"` — restore to the state before the agent first touched this file this session. Use when the file went through multiple edits.\n• `\"bulk\"` — treat `path` as the bulk entry's `path` from list_changes (e.g. \"git checkout .\"). Restores every packed file. Use to undo a high-volume destructive command.\n\n**Per-op (single-file scopes)**: edit/modified → write originals back; delete → un-delete; create → remove the file.\n\nWhen scope is `\"latest\"` or `\"session_start\"` and `path` was packed into a bulk entry, recover_file finds it inside the bulk and restores just that one file.\n\n**Returns**: single-file scopes → `{recovered, path, action, message}`. Bulk scope → `{found, bulk_path, restored, failed, summary, entries[]}`.\n\n**Safety**: only files the tracker recorded can be recovered — call list_changes first. Files with `recoverable: false` (binary, >1 MiB, outside workspace) cannot be restored. Bulk entries recorded as count-only (memory cap exceeded) cannot be bulk-recovered.",
 		Parameters: []ParameterConfig{
 			{"path", "string", true, []string{"file_path", "bulk_path"}, "Absolute or relative path to the file to recover. For scope=\"bulk\", use the bulk entry's `path` field from list_changes."},

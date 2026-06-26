@@ -141,14 +141,14 @@ func TestTruncateDiffOutput(t *testing.T) {
 			want: "12345",
 		},
 		{
-			name:     "over max bytes truncated",
-			diff:     "12345678901234567890", maxBytes: 10,
-			want:     "1234567890\n\n... [diff truncated]",
+			name: "over max bytes truncated",
+			diff: "12345678901234567890", maxBytes: 10,
+			want: "1234567890\n\n... [diff truncated]",
 		},
 		{
-			name:     "empty string",
-			diff:     "", maxBytes: 10,
-			want:     "",
+			name: "empty string",
+			diff: "", maxBytes: 10,
+			want: "",
 		},
 	}
 

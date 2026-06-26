@@ -4,11 +4,11 @@ import "testing"
 
 func TestDisplayWidth(t *testing.T) {
 	cases := map[string]int{
-		"":          0,
-		"hello":     5,
-		"日本":        4, // two wide runes
-		"a日b":       4, // 1 + 2 + 1
-		"café":       4, // accented (precomposed) = 1 col
+		"":                   0,
+		"hello":              5,
+		"日本":                 4, // two wide runes
+		"a日b":                4, // 1 + 2 + 1
+		"café":               4, // accented (precomposed) = 1 col
 		"\x1b[31mred\x1b[0m": 3, // ANSI stripped
 	}
 	for in, want := range cases {

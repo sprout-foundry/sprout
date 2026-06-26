@@ -16,7 +16,7 @@ func (h *taskQueuePublishHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "task_queue_publish",
 		Description: "Update a task in the persistent queue. Used to claim tasks (set status to in_progress), record completion, failed or blocked status, or publish failure. Optionally break a task into subtasks.",
-		Required: []string{"task_id", "status"},
+		Required:    []string{"task_id", "status"},
 		Parameters: []ParameterDef{
 			{Name: "task_id", Type: "string", Required: true, Description: "The task ID to update"},
 			{Name: "status", Type: "string", Required: true, Description: "New status: in_progress, completed, failed, or blocked"},

@@ -3,9 +3,9 @@
 package agent
 
 import (
-	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"encoding/json"
 	"fmt"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"os"
 	"path/filepath"
 	"strconv"

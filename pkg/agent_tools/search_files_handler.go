@@ -44,8 +44,8 @@ func (h *searchFilesHandler) Execute(ctx context.Context, env ToolEnv, args map[
 	// Event publishing (optional — runs only when EventBus is configured)
 	if env.EventBus != nil {
 		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool":     toolName,
-			"params":   args,
+			"tool":   toolName,
+			"params": args,
 		})
 		defer func() {
 			env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{

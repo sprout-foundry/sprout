@@ -21,7 +21,7 @@ type ConversationTurn struct {
 	PromptEmbedding   []float32 `json:"prompt_embedding,omitempty"`
 	FilesTouched      []string  `json:"files_touched,omitempty"`
 	WorkingDir        string    `json:"working_dir"`
-	Duration          float64   `json:"duration"`   // seconds from prompt to turn completion
+	Duration          float64   `json:"duration"`    // seconds from prompt to turn completion
 	TokenUsage        int       `json:"token_usage"` // total tokens in this turn
 }
 
@@ -34,12 +34,12 @@ func NewConversationTurn(sessionID string, turnNumber int, userPrompt, workingDi
 	}
 
 	return &ConversationTurn{
-		ID:          id,
-		SessionID:   sessionID,
-		TurnNumber:  turnNumber,
-		Timestamp:   time.Now().UTC(),
-		UserPrompt:  userPrompt,
-		WorkingDir:  workingDir,
+		ID:         id,
+		SessionID:  sessionID,
+		TurnNumber: turnNumber,
+		Timestamp:  time.Now().UTC(),
+		UserPrompt: userPrompt,
+		WorkingDir: workingDir,
 	}, nil
 }
 

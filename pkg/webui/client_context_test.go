@@ -276,9 +276,9 @@ func TestClearCachedAgent(t *testing.T) {
 	ws.mutex.Lock()
 	ws.clientContexts = map[string]*webClientContext{
 		"client-1": {
-			Agent:          nil, // No real agent to test, but we test the function doesn't panic
-			ChatSessions:   map[string]*chatSession{},
-			DefaultChatID:  "default",
+			Agent:         nil, // No real agent to test, but we test the function doesn't panic
+			ChatSessions:  map[string]*chatSession{},
+			DefaultChatID: "default",
 		},
 	}
 	ws.mutex.Unlock()
@@ -367,7 +367,7 @@ func TestResolveWorkspaceRootForChat(t *testing.T) {
 	ws.clientContexts = map[string]*webClientContext{
 		"default": {
 			WorkspaceRoot: "/workspace",
-			ChatSessions:  map[string]*chatSession{
+			ChatSessions: map[string]*chatSession{
 				"default": {WorktreePath: ""},
 			},
 			DefaultChatID: "default",
@@ -391,7 +391,7 @@ func TestResolveWorkspaceRootForChatWithWorktree(t *testing.T) {
 	ws.clientContexts = map[string]*webClientContext{
 		"default": {
 			WorkspaceRoot: "/workspace",
-			ChatSessions:  map[string]*chatSession{
+			ChatSessions: map[string]*chatSession{
 				"default": {WorktreePath: "/workspace/wt"},
 			},
 			DefaultChatID: "default",

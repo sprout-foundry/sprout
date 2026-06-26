@@ -1,9 +1,9 @@
 package codereview
 
 import (
-	"fmt"
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"

@@ -54,12 +54,12 @@ import (
 )
 
 const (
-	defaultTTL               = 5 * time.Minute
-	defaultNegativeTTL       = 30 * time.Second
-	defaultHTTPTimeout       = 500 * time.Millisecond
-	defaultIndexTimeout      = 1 * time.Second
-	maxResponseBytes   int64 = 1 << 20 // 1 MiB
-	defaultRegistryURL       = "https://sprout-foundry.github.io/sprout"
+	defaultTTL                = 5 * time.Minute
+	defaultNegativeTTL        = 30 * time.Second
+	defaultHTTPTimeout        = 500 * time.Millisecond
+	defaultIndexTimeout       = 1 * time.Second
+	maxResponseBytes    int64 = 1 << 20 // 1 MiB
+	defaultRegistryURL        = "https://sprout-foundry.github.io/sprout"
 )
 
 // RemoteAuthConfig duplicates AuthConfig without the runtime-only Key field.
@@ -111,18 +111,18 @@ type RemoteModelInfo struct {
 
 // RemoteModelConfig duplicates ModelConfig.
 type RemoteModelConfig struct {
-	DefaultContextLimit        int                   `json:"default_context_limit"`
-	DefaultMaxCompletionTokens int                   `json:"default_max_completion_tokens,omitempty"`
-	ModelOverrides             map[string]int        `json:"model_overrides"`
-	MaxCompletionOverrides     map[string]int        `json:"max_completion_overrides,omitempty"`
+	DefaultContextLimit        int                     `json:"default_context_limit"`
+	DefaultMaxCompletionTokens int                     `json:"default_max_completion_tokens,omitempty"`
+	ModelOverrides             map[string]int          `json:"model_overrides"`
+	MaxCompletionOverrides     map[string]int          `json:"max_completion_overrides,omitempty"`
 	PatternOverrides           []RemotePatternOverride `json:"pattern_overrides"`
 	CompletionPatternOverrides []RemotePatternOverride `json:"completion_pattern_overrides,omitempty"`
-	ModelInfo                  []RemoteModelInfo     `json:"model_info,omitempty"`
-	ContextLimit               int                   `json:"context_limit,omitempty"`
-	SupportsVision             bool                  `json:"supports_vision"`
-	VisionModel                string                `json:"vision_model"`
-	DefaultModel               string                `json:"default_model"`
-	AvailableModels            []string              `json:"available_models"`
+	ModelInfo                  []RemoteModelInfo       `json:"model_info,omitempty"`
+	ContextLimit               int                     `json:"context_limit,omitempty"`
+	SupportsVision             bool                    `json:"supports_vision"`
+	VisionModel                string                  `json:"vision_model"`
+	DefaultModel               string                  `json:"default_model"`
+	AvailableModels            []string                `json:"available_models"`
 }
 
 // RemoteRetryConfig duplicates RetryConfig.

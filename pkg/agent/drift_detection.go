@@ -20,10 +20,10 @@ const MaxDriftRejections = 3
 // DriftDetector tracks conversational drift by comparing the current turn's
 // embedding against the session's original intent embedding.
 type DriftDetector struct {
-	mu             sync.Mutex
-	threshold      float64 // cosine similarity threshold (default: 0.60)
-	checkInterval  int     // check every N turns (default: 5)
-	driftCount     int     // number of drift detections in this session
+	mu            sync.Mutex
+	threshold     float64 // cosine similarity threshold (default: 0.60)
+	checkInterval int     // check every N turns (default: 5)
+	driftCount    int     // number of drift detections in this session
 	// rejectionCount tracks consecutive rejections (reset by RecordAcceptance)
 	rejectionCount int
 	suppressed     bool // true after MaxDriftRejections consecutive rejections

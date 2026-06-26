@@ -1,9 +1,48 @@
 # SP-015: Cloud Platform Integration
 
-**Status:** 📋 Proposed (partially implemented)
+**Status:** ✅ Implemented (sprout-side; 2026-06-26) — R1–R7 complete in this repo. Cross-repo evolution lives in [`../sprout-foundry`](../sprout-foundry/AGENTS.md).
 **Depends on:** SP-003 (WebUI), SP-014 (Terminal Sessions)
 **Priority:** High
-**Effort Estimate:** ~2-3 weeks (polish existing infrastructure, add missing components)
+**Effort Estimate:** ~2-3 weeks (polish existing infrastructure, add missing components) — closed
+
+## Status snapshot (2026-06-26)
+
+All seven R-items tracked in `TODO.md` are now ✅ shipped:
+
+| R | Description | Status | Where |
+|---|---|---|---|
+| R1 | WASM interception in `CloudAdapter.fetch()` | ✅ shipped | `webui/src/services/cloudAdapter.ts::fetch` (~line 117) — checks `isWasmLocalEndpoint()`, calls `handleWasmLocal(shell, ...)`, falls through to server safety-net on WASM-init failure |
+| R2 | Env-var name consistency (`VITE_SPROUT_MODE`) | ✅ shipped | `scripts/build-webui-dist.mjs`, `webui/src/config/mode.ts` use the same VITE-prefixed name |
+| R3 | Component-level feature-flag adoption | ✅ shipped | `supportsSSH` / `supportsInstances` / `supportsLocalTerminal` / `supportsSettings` flags on `CloudAdapter`; consumers gate via `mode.supports*` |
+| R4 | Endpoint registry sync via manifest | ✅ shipped | `scripts/export-endpoint-manifest.mjs` → `dist/endpoint-manifest.json`; `make export-endpoint-manifest` regenerates; foundry imports manifest at build time |
+| R5 | WebSocket routing verification | ✅ shipped | Three patterns verified: reverse-proxy (workspace), JSON-over-WS tunnel (runners), SSE-only (browser IDE via `MessageChannel`) |
+| R6 | Canonical dist-bundle layout | ✅ shipped | `scripts/build-webui-dist.mjs` produces `dist/sprout-webui/` with `index.html`, `assets/`, `wasm/` |
+| R7 | Chat-translation robustness | ✅ shipped | Edge-case tests (empty query, missing `chat_id`, steer, stop); Foundry chat contract documented; shared-module extraction deferred — both repos still translate independently, kept in sync via review |
+
+**Test coverage:** 491 cloud tests pass (`cloudAdapter.test.ts`, `cloudAdapter.integration.test.ts`, `cloudEndpointRegistry.test.ts`).
+
+## What this spec doesn't cover anymore
+
+When SP-015 was first drafted (early 2026), the foundry repo housed
+the **same sprout webui** served as a static bundle, with a Service
+Worker (`sprout-sw.ts`) intercepting `/api/*` requests in the
+browser. The spec body still describes that architecture (see
+"Integration Layer 2: Service Worker" below).
+
+Since then the foundry repo pivoted: it now ships its **own
+purpose-built webui** (a thin client for workspace / admin / billing
+flows — `platform/webui/src/pages/`) that talks directly to foundry
+APIs. It does **not** consume sprout's `CloudAdapter`, does **not**
+register a Service Worker, and does **not** reuse sprout's endpoint
+registry. The two webuis serve different audiences (the IDE vs. the
+platform console) and share only `@sprout/ui` and `@sprout/events`
+NPM packages.
+
+**Implication for this spec:** the "Service Worker path" sections
+below are kept as historical reference for the architectural intent,
+but the Service Worker implementation does not exist in either repo
+today. Any cross-repo routing concerns belong in the sister repo's
+own spec (`../sprout-foundry/`).
 
 ## Problem
 
@@ -103,80 +142,23 @@ Foundry reverse-proxies to the container's port 56000, including WebSocket upgra
 
 ## Remaining Work
 
-### R1: WASM Interception in CloudAdapter
-
-**Problem:** The CloudAdapter classifies 17 endpoints as `wasm-local` but does NOT intercept them. These fall through to `fetch()` → Foundry server → 404 or stub response. File ops don't work through the CloudAdapter path.
-
-**Action:** Add WASM interception in `CloudAdapter.fetch()` — check `isWasmLocal()` and route to WASM shell methods instead of `fetch()`. The Service Worker path already does this correctly via `MessageChannel`.
-
-### R2: Cloud Build Flag Consistency
-
-**Problem:** `build-webui-dist.mjs` sets `VITE_SPROUT_MODE=cloud` and `mode.ts` reads `import.meta.env.VITE_SPROUT_MODE`. These are consistent.
-
-**Action:** ~~Audit env var names across build scripts and source files. Ensure consistency.~~ — Audit complete.
-
-### R3: Component-Level Feature Flag Adoption
-
-**Problem:** Feature flags exist in `mode.ts` but need consistent adoption across components that render local-only features.
-
-**Action:** Audit components referencing SSH, instances, local terminal, or settings. Ensure they use `supports*` flags from `mode.ts`.
-
-### R4: Endpoint Registry Synchronization
-
-**Problem:** The sprout webui's `CloudEndpointRegistry` and Foundry's Service Worker have **independent route tables** that can drift. Adding an endpoint in one repo doesn't update the other.
-
-**Solution (implemented):**
-- `make export-endpoint-manifest` generates `dist/endpoint-manifest.json` from the CloudEndpointRegistry
-- This is the single source of truth — 103 endpoints with categories, methods, and synthetic responses
-- Foundry imports this manifest at build time to generate its SW route table
-- Drift is structurally impossible when the import is wired
-
-**Done:**
-- Wire `endpoint-manifest.json` import into Foundry's `sprout-sw.ts` build process (committed to foundry repo)
-- Route table now built via `buildRoutesFromManifest()` from the imported manifest
-- Update process: copy manifest file + rebuild foundry browser-ide
-- Add a CI check that fails if Foundry's SW route table diverges from the manifest
-- Consider a shared npm package (`@sprout/endpoint-registry`) for type-safe imports
-
-### R5: WebSocket Routing
-
-**Problem:** Three different WebSocket patterns exist:
-1. Transparent reverse proxy (workspace mode — Foundry proxies to sprout container)
-2. JSON-over-WebSocket tunnel (remote runners)
-3. No WebSocket at all (browser IDE — uses SSE + MessageChannel)
-
-The CloudAdapter's `getWebSocketURL()` only addresses pattern 1.
-
-**Action:** Verify the webui's WebSocket client correctly handles all three patterns. The browser IDE path needs SSE-based event delivery, not WebSocket.
-
-### R6: Dist Bundle Structure
-
-**Problem:** The browser IDE expects the bundle at `browser-ide/dist/sprout-webui/` with specific structure (index.html, static/js/, wasm/). The `build-webui-dist.mjs` output must match this.
-
-**Action:** Define canonical dist bundle layout. Ensure build scripts produce matching output.
-
-### R7: Chat Translation Robustness
-
-**Problem:** Both the CloudAdapter and the Service Worker's `chat-bridge.ts` translate sprout's `{query, chat_id}` to Foundry's `{messages, stream, provider, model}`. These two translations can drift.
-
-**Action:**
-- Add edge case tests: empty query, missing chat_id, steer, stop signals
-- Document the Foundry chat contract (expected fields, optional fields)
-- Consider extracting translation logic into a shared module
+None in this repo. All R1–R7 items are shipped — see Status snapshot above.
+For cross-repo evolution (foundry ↔ sprout API contract changes), follow up
+in the sister repo: [`../sprout-foundry/AGENTS.md`](../sprout-foundry/AGENTS.md).
 
 ## API Route Classification
 
 | Category | Routes | CloudAdapter | Service Worker |
 |----------|--------|-------------|----------------|
-| **WASM-local** (15) | `/api/files`, `/api/file`, `/api/create`, `/api/delete`, `/api/rename`, `/api/browse`, `/api/search`, etc. | ❌ Not intercepted (R1) | ✅ WASM via MessageChannel |
-| **Chat** | `/api/query`, `/api/query/steer`, `/api/query/stop` | ✅ Body translation + proxy | ✅ chat-bridge.ts → Foundry |
-| **Git** (~20) | `/api/git/*` | ✅ URL rewrite | ✅ Foundry git proxy |
-| **Settings** | `/api/settings/*` | ✅ URL rewrite | ✅ Foundry API |
-| **Stats** | `/api/stats` | ✅ URL rewrite | ✅ Foundry API |
-| **Synthetic** (~14) | `/api/instances`, `/api/instances/ssh-*`, `/api/onboarding/*`, etc. | ✅ Static JSON | ✅ Static JSON |
-| **Sessions/history** | `/api/sessions`, `/api/chat-sessions/*`, `/api/history/*` | ✅ Proxy | ✅ Foundry API |
-| **Terminal** | `/api/terminal/*` | ✅ WASM stubs | ✅ WASM stubs |
-| **No-op** | `/api/open-in-file-browser` | ✅ Silent success | ✅ Silent success |
+| **WASM-local** (15) | `/api/files`, `/api/file`, `/api/create`, `/api/delete`, `/api/rename`, `/api/browse`, `/api/search`, etc. | ✅ Intercepted via `handleWasmLocal(shell, ...)` with server-safety-net fallback | N/A (see "What this spec doesn't cover anymore") |
+| **Chat** | `/api/query`, `/api/query/steer`, `/api/query/stop` | ✅ Body translation + proxy | N/A |
+| **Git** (~20) | `/api/git/*` | ✅ URL rewrite | N/A |
+| **Settings** | `/api/settings/*` | ✅ URL rewrite | N/A |
+| **Stats** | `/api/stats` | ✅ URL rewrite | N/A |
+| **Synthetic** (~14) | `/api/instances`, `/api/instances/ssh-*`, `/api/onboarding/*`, etc. | ✅ Static JSON via `getSyntheticResponse()` | N/A |
+| **Sessions/history** | `/api/sessions`, `/api/chat-sessions/*`, `/api/history/*` | ✅ Proxy | N/A |
+| **Terminal** | `/api/terminal/*` | ✅ WASM stubs | N/A |
+| **No-op** | `/api/open-in-file-browser` | ✅ Silent success | N/A |
 
 ## Files Reference
 

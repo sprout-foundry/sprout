@@ -134,17 +134,6 @@ jobs:
     - name: Prepare grammar blobs
       run: make prepare-grammars
 
-    - name: Sync workspace package versions to release tag
-      # Keeps packages/ui and packages/events package.json versions
-      # aligned with the git tag so publish-{ui,events}.yml's
-      # version-match check passes without manual ceremony each release.
-      # Tag is "vX.Y.Z"; npm version drops the leading "v".
-      run: |
-        VERSION="${{ steps.get_version.outputs.VERSION }}"
-        NPM_VERSION="${VERSION#v}"
-        (cd packages/ui && npm version "$NPM_VERSION" --no-git-tag-version --allow-same-version)
-        (cd packages/events && npm version "$NPM_VERSION" --no-git-tag-version --allow-same-version)
-
     - name: Build and deploy React UI
       shell: bash
       run: make deploy-ui

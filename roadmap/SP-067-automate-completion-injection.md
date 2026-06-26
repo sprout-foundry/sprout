@@ -1,6 +1,6 @@
 # SP-067: Automate Workflow Completion Injection
 
-**Status:** ✅ Implemented
+**Status:** ✅ Implemented (2026-06-06)
 **Date:** 2026-06-06
 **Depends on:** SP-065 (event bus, BPM, event types already defined)
 **Priority:** Medium
@@ -12,7 +12,7 @@ When a model calls `run_automate` as a tool, the workflow starts in the backgrou
 
 This prevents autonomous watchdog patterns. The model cannot say "start this workflow and restart it until it passes" because it has no way to be notified of completion without spinning on a poll loop.
 
-## Proposed Solution
+## Solution
 
 When `run_automate` is invoked as a tool call (not the CLI), inject a self-contained completion message back into the model via the existing `InjectInputContext` pathway. The injection fires in the same goroutine that already watches `proc.Done()` and publishes the `automate.session_ended` event.
 
@@ -23,9 +23,9 @@ The message must be **self-contained** — it cannot assume the model remembers 
 - Workflow filename and description (captured at launch time)
 - Session ID
 - Status + exit code
-- Last 2KB of captured output (so the model can reason about failures without a follow-up tool call)
+- Last 2KB of captured output (only on failure, for diagnostics)
 
-Example:
+Example (failure):
 
 ```
 [automate] Background workflow completed:
@@ -39,42 +39,31 @@ Example:
     make: *** [test] Error 2
 ```
 
+Success messages omit the `Output (last 2KB)` block — the model gets the status and exit code without needing the tail.
+
 ### When injection fires
 
 Only when the workflow was launched via the `run_automate` tool — i.e., when `handleRunAutomate` was called by the agent. CLI-launched workflows (`sprout automate run`) go through `cmd/automate.go` and never touch this code path, so no guard is needed.
 
-### Guard: only inject when an active agent session exists
+### Guards
 
-If the agent's event bus is nil (shouldn't happen in the tool-call path, but defensive), skip injection. If the context is cancelled (agent shutting down), skip injection.
+- **Event bus / agent nil check**: If the agent's event bus is nil (shouldn't happen in the tool-call path, but defensive), skip injection.
+- **Context cancellation**: If the agent's `ctx` is cancelled (shutting down), the goroutine's `select` falls into the `<-ctx.Done()` case and the injection is skipped.
+- **Output tail bounded**: `completionMessageTailLimit = 2048` (constant) caps the tail read by `readOutputTail` to avoid injecting enormous logs into the model's context.
 
 ### Output tail helper
 
-A small function `readOutputTail(path string, maxBytes int) string` reads the last N bytes of a file. Handles file-not-found and read errors gracefully (returns empty string). Used by the injection goroutine to include error context.
+`readOutputTail(path string, maxBytes int) string` reads the last N bytes of a file. Handles file-not-found and read errors gracefully (returns empty string), and strips non-printable control characters before returning. Used by the injection goroutine to include error context.
 
-## Implementation
+## Implementation status
 
-### Files changed
-
-1. **`pkg/agent/tool_handlers_automate.go`** — In the `proc.Done()` goroutine, after publishing the `session_ended` event, call `a.InjectInputContext()` with the self-contained message. Capture `desc` in the goroutine closure.
-
-2. **`pkg/agent/tool_handlers_automate.go`** — Add `readOutputTail()` helper function.
-
-3. **`pkg/agent/tool_registrations.go`** — Update `run_automate` tool description to mention that the model will receive a completion injection, so it knows it can optionally defer polling.
-
-4. **`pkg/agent/tool_handlers_automate_test.go`** (new) — Tests for:
-   - Injection message content and format on success
-   - Injection message content and format on failure (exit code ≠ 0)
-   - Output tail reading (file exists, file missing, empty file)
-   - No injection when context is cancelled
-   - Self-contained message includes workflow name and description
-
-### Test strategy
-
-Use the existing `BackgroundProcess` test harness (or a lightweight mock). Verify:
-- The injection channel receives the expected message
-- The message contains workflow name, description, session ID, status, and output tail
-- Context cancellation suppresses the injection
-- Output tail is bounded to the configured max bytes
+| Phase | Status | Where |
+|---|---|---|
+| 1 Extract `buildAutomateCompletionMessage` so it can be unit-tested without real BPM | ✅ done | `pkg/agent/tool_handlers_automate.go` |
+| 2 Inject via `a.InjectInputContext(injectMsg)` in the `proc.Done()` goroutine, with `ctx.Done()` fallback | ✅ done | same file, inside `handleRunAutomate` |
+| 3 `readOutputTail` helper (2KB cap, control-char strip, error-tolerant) | ✅ done | same file |
+| 4 `run_automate` tool description mentions completion injection so the model knows it can defer polling | ✅ done | `pkg/agent/tool_registrations.go:486` |
+| 5 Tests — injection format (success + failure), output tail (exists/missing/empty), context-cancel skip, self-contained payload | ✅ done | `pkg/agent/tool_handlers_automate_test.go` |
 
 ## Future work
 

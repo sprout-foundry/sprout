@@ -1,7 +1,4 @@
 {
-  "bugs": {
-    "url": "https://github.com/sprout-foundry/sprout/issues"
-  },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.0",
     "@codemirror/commands": "^6.10.0",
@@ -85,20 +82,6 @@
       "default": "./dist/style.css"
     }
   },
-  "files": [
-    "dist",
-    "LICENSE",
-    "CHANGELOG.md"
-  ],
-  "homepage": "https://github.com/sprout-foundry/sprout/tree/main/packages/ui",
-  "keywords": [
-    "react",
-    "editor",
-    "terminal",
-    "ide",
-    "code-editor",
-    "sprout"
-  ],
   "license": "MIT",
   "main": "dist/index.cjs.js",
   "module": "dist/index.esm.js",
@@ -107,14 +90,6 @@
     "@sprout/events": "file:../events",
     "react": ">=18.0.0",
     "react-dom": ">=18.0.0"
-  },
-  "publishConfig": {
-    "access": "public"
-  },
-  "repository": {
-    "directory": "packages/ui",
-    "type": "git",
-    "url": "git+https://github.com/sprout-foundry/sprout.git"
   },
   "scripts": {
     "build": "vite build",
@@ -125,5 +100,5 @@
   },
   "sideEffects": false,
   "types": "dist/index.d.ts",
-  "version": "0.16.17"
+  "version": "1.0.0"
 }

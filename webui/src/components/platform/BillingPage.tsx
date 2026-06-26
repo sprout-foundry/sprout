@@ -278,7 +278,7 @@ const BillingPage: React.FC = () => {
                         flexShrink: 0,
                       }}>3</span>
                       <div>
-                        <strong style={{ color: '#065f46' }}>What's Restored</strong>
+                        <strong style={{ color: '#065f46' }}>What&apos;s Restored</strong>
                         <p style={{ margin: '0.25rem 0 0 0', color: '#047857', fontSize: '0.875rem' }}>
                           All features have been restored: workspace access, task runner, and LLM credits.
                         </p>

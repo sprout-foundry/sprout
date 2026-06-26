@@ -38,6 +38,19 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 		return nil, "", fmt.Errorf("tool %q is only available to the computer_user persona", toolName)
 	}
 
+	// SP-063: per-session opt-in. Even after the persona-activation gates
+	// pass, the FIRST computer-use action in a session must get explicit
+	// user consent. Placed AFTER isComputerUseToolBlocked so that only
+	// legitimate computer-use calls (correct persona + registered tool)
+	// incur the potentially blocking consent dialog. Non-computer-use tools
+	// and wrong-persona calls are already filtered above. Once approved,
+	// the session flag makes this a fast no-op for the rest of the session.
+	if agent != nil && computerUseToolNames[toolName] {
+		if err := agent.checkComputerUseSessionOptIn(toolName); err != nil {
+			return nil, "", err
+		}
+	}
+
 	// CRITICAL: Depth-based subagent nesting prevention
 	// Agents at or beyond the maximum nesting depth cannot spawn further subagents.
 	// This prevents runaway agent chains while allowing configurable multi-level nesting

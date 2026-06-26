@@ -22,6 +22,22 @@ import (
 // Integration entry point
 // ---------------------------------------------------------------------------
 
+// registerPastedImagesWithProvider hands extracted image data to the provider
+// so it can attach the images to the first user message in each Chat request.
+// If the provider is not a *sproutProvider (e.g. a mock in tests), the images
+// are logged and skipped rather than silently dropped.
+func registerPastedImagesWithProvider(a *Agent, prov core.Provider, images map[string][]api.ImageData) {
+	if len(images) == 0 {
+		return
+	}
+	sp, ok := prov.(*sproutProvider)
+	if !ok {
+		a.Logger().Debug("[WARN] Cannot register pasted images: provider is not *sproutProvider (got %T)\n", prov)
+		return
+	}
+	sp.RegisterPastedImages(images)
+}
+
 // injectInputMsg carries a user-steer message from the forwarder goroutine
 // into the injector goroutine in processQueryWithSeed.
 type injectInputMsg struct {
@@ -122,11 +138,10 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 		Images:  images,
 	}
 
-	// Register pasted images with the provider for attachment during Chat requests
-	// The map key is the file path so the provider can match them up.
+	// Group extracted images for provider registration. All images from this
+	// query are attached to the first user message by attachPastedImages.
 	pastedImageMap := make(map[string][]api.ImageData)
 	if len(images) > 0 {
-		// All images are from the same query — group them under a single key
 		pastedImageMap["_current"] = images
 	}
 
@@ -143,6 +158,12 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to create seed provider adapter: %w", err)
 	}
+
+	// Register pasted images with the provider so attachPastedImages can
+	// attach them to the first user message in each Chat request. Without
+	// this call the provider's pastedImages map stays empty and images
+	// extracted by processImagesInQuery never reach the model.
+	registerPastedImagesWithProvider(a, prov, pastedImageMap)
 
 	_ = prov // provider ready for seed agent construction
 

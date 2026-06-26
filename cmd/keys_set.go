@@ -8,9 +8,9 @@ import (
 	"os"
 	"strings"
 
+	"github.com/spf13/cobra"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/credentials"
-	"github.com/spf13/cobra"
 )
 
 // keysSetCmd adds or replaces an API key for a built-in provider.

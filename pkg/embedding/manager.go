@@ -21,7 +21,7 @@ type EmbeddingManager struct {
 	store         VectorStore
 	indexMgr      *IndexManager
 	initialized   bool
-	building      bool // true while BuildIndex is running
+	building      bool  // true while BuildIndex is running
 	initError     error // cached error from failed Init()
 	config        *configuration.EmbeddingIndexConfig
 	workspaceRoot string
@@ -329,7 +329,7 @@ func (m *EmbeddingManager) BuildIndexBackground(ctx context.Context) <-chan *Bui
 		stats, err := m.buildIndexLocked(ctx)
 		ch <- &BuildResult{
 			Stats: stats,
-			Err:  err,
+			Err:   err,
 		}
 	}()
 

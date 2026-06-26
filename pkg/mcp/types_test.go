@@ -134,12 +134,12 @@ func TestMCPServerConfig_UnmarshalJSON_WithCredentials(t *testing.T) {
 				"timeout": "60s"
 			}`,
 			expect: MCPServerConfig{
-				Name:    "http-server",
-				Type:    "http",
-				URL:     "http://localhost:3000",
-				Env:     map[string]string{"PATH": "/usr/bin"},
+				Name:        "http-server",
+				Type:        "http",
+				URL:         "http://localhost:3000",
+				Env:         map[string]string{"PATH": "/usr/bin"},
 				Credentials: map[string]string{"BEARER": "token-xyz"},
-				Timeout: 60 * time.Second,
+				Timeout:     60 * time.Second,
 			},
 		},
 	}
@@ -241,8 +241,8 @@ func TestMCPError_MarshalJSON(t *testing.T) {
 			wantJSON: `{"code":-32700,"message":"Parse error"}`,
 		},
 		{
-			name: "zero values",
-			err:  MCPError{},
+			name:     "zero values",
+			err:      MCPError{},
 			wantJSON: `{"code":0,"message":""}`,
 		},
 	}
@@ -365,8 +365,8 @@ func TestMCPError_Error_EdgeCases(t *testing.T) {
 
 func TestMCPMessage_MarshalUnmarshal(t *testing.T) {
 	tests := []struct {
-		name   string
-		msg    MCPMessage
+		name string
+		msg  MCPMessage
 	}{
 		{
 			name: "request with string id",
@@ -445,8 +445,8 @@ func TestMCPMessage_MarshalUnmarshal(t *testing.T) {
 
 func TestMCPTool_MarshalUnmarshal(t *testing.T) {
 	tests := []struct {
-		name  string
-		tool  MCPTool
+		name string
+		tool MCPTool
 	}{
 		{
 			name: "full tool",
@@ -766,7 +766,7 @@ func TestMCPToolCallResult_MarshalUnmarshal(t *testing.T) {
 
 func TestMCPContent_MarshalUnmarshal(t *testing.T) {
 	tests := []struct {
-		name   string
+		name    string
 		content MCPContent
 	}{
 		{

@@ -631,7 +631,7 @@ func TestValidate_StepInvalidWhen(t *testing.T) {
 
 func TestValidate_InitialBothPromptAndFile(t *testing.T) {
 	cfg := &AgentWorkflowConfig{
-		Steps: []AgentWorkflowStep{{Prompt: "step"}},
+		Steps:   []AgentWorkflowStep{{Prompt: "step"}},
 		Initial: &AgentWorkflowInitial{Prompt: "ip", PromptFile: "if"},
 	}
 	err := cfg.validate()
@@ -643,7 +643,7 @@ func TestValidate_InitialBothPromptAndFile(t *testing.T) {
 func TestValidate_RuntimeInvalidReasoningEffort(t *testing.T) {
 	cfg := &AgentWorkflowConfig{
 		Steps: []AgentWorkflowStep{{
-			Prompt: "t",
+			Prompt:               "t",
 			AgentWorkflowRuntime: AgentWorkflowRuntime{ReasoningEffort: "turbo"},
 		}},
 	}
@@ -672,7 +672,7 @@ func TestValidate_RuntimeNegativeMaxIterations(t *testing.T) {
 	n := -1
 	cfg := &AgentWorkflowConfig{
 		Steps: []AgentWorkflowStep{{
-			Prompt: "t",
+			Prompt:               "t",
 			AgentWorkflowRuntime: AgentWorkflowRuntime{MaxIterations: &n},
 		}},
 	}
@@ -736,7 +736,7 @@ func TestValidate_RuntimeValidMaxIterationsZero(t *testing.T) {
 	n := 0
 	cfg := &AgentWorkflowConfig{
 		Steps: []AgentWorkflowStep{{
-			Prompt: "t",
+			Prompt:               "t",
 			AgentWorkflowRuntime: AgentWorkflowRuntime{MaxIterations: &n},
 		}},
 	}
@@ -747,7 +747,7 @@ func TestValidate_RuntimeValidMaxIterationsZero(t *testing.T) {
 
 func TestValidate_OrchestrationDefaults(t *testing.T) {
 	cfg := &AgentWorkflowConfig{
-		Steps: []AgentWorkflowStep{{Prompt: "t"}},
+		Steps:         []AgentWorkflowStep{{Prompt: "t"}},
 		Orchestration: &AgentWorkflowOrchestrationConfig{Enabled: true},
 	}
 	if err := cfg.validate(); err != nil {
@@ -929,9 +929,9 @@ func TestLoadWorkflowExecutionState_FileNotFound(t *testing.T) {
 	cfg := &AgentWorkflowConfig{
 		Steps: []AgentWorkflowStep{{Prompt: "t"}},
 		Orchestration: &AgentWorkflowOrchestrationConfig{
-			Enabled:       true,
-			StateFile:     sf,
-			EventsFile:    ef,
+			Enabled:    true,
+			StateFile:  sf,
+			EventsFile: ef,
 		},
 	}
 	if err := cfg.validate(); err != nil {
@@ -960,9 +960,9 @@ func TestLoadWorkflowExecutionState_ValidFile(t *testing.T) {
 	cfg := &AgentWorkflowConfig{
 		Steps: []AgentWorkflowStep{{Prompt: "t"}},
 		Orchestration: &AgentWorkflowOrchestrationConfig{
-			Enabled:       true,
-			StateFile:     sf,
-			EventsFile:    ef,
+			Enabled:    true,
+			StateFile:  sf,
+			EventsFile: ef,
 		},
 	}
 	if err := cfg.validate(); err != nil {
@@ -994,9 +994,9 @@ func TestLoadWorkflowExecutionState_VersionZeroGetsBumped(t *testing.T) {
 	cfg := &AgentWorkflowConfig{
 		Steps: []AgentWorkflowStep{{Prompt: "t"}},
 		Orchestration: &AgentWorkflowOrchestrationConfig{
-			Enabled:       true,
-			StateFile:     sf,
-			EventsFile:    filepath.Join(tmpDir, "events.jsonl"),
+			Enabled:    true,
+			StateFile:  sf,
+			EventsFile: filepath.Join(tmpDir, "events.jsonl"),
 		},
 	}
 	cfg.validate()
@@ -1021,9 +1021,9 @@ func TestLoadWorkflowExecutionState_NegativeNextStepIndexGetsCorrected(t *testin
 	cfg := &AgentWorkflowConfig{
 		Steps: []AgentWorkflowStep{{Prompt: "t"}},
 		Orchestration: &AgentWorkflowOrchestrationConfig{
-			Enabled:       true,
-			StateFile:     sf,
-			EventsFile:    filepath.Join(tmpDir, "events.jsonl"),
+			Enabled:    true,
+			StateFile:  sf,
+			EventsFile: filepath.Join(tmpDir, "events.jsonl"),
 		},
 	}
 	cfg.validate()
@@ -1049,9 +1049,9 @@ func TestLoadWorkflowExecutionState_CompletedReturnsNew(t *testing.T) {
 	cfg := &AgentWorkflowConfig{
 		Steps: []AgentWorkflowStep{{Prompt: "t"}},
 		Orchestration: &AgentWorkflowOrchestrationConfig{
-			Enabled:       true,
-			StateFile:     sf,
-			EventsFile:    filepath.Join(tmpDir, "events.jsonl"),
+			Enabled:    true,
+			StateFile:  sf,
+			EventsFile: filepath.Join(tmpDir, "events.jsonl"),
 		},
 	}
 	cfg.validate()
@@ -1077,9 +1077,9 @@ func TestLoadWorkflowExecutionState_InvalidJSON(t *testing.T) {
 	cfg := &AgentWorkflowConfig{
 		Steps: []AgentWorkflowStep{{Prompt: "t"}},
 		Orchestration: &AgentWorkflowOrchestrationConfig{
-			Enabled:       true,
-			StateFile:     sf,
-			EventsFile:    filepath.Join(tmpDir, "events.jsonl"),
+			Enabled:    true,
+			StateFile:  sf,
+			EventsFile: filepath.Join(tmpDir, "events.jsonl"),
 		},
 	}
 	cfg.validate()
@@ -1175,9 +1175,9 @@ func TestPersistWorkflowExecutionState_RoundTrip(t *testing.T) {
 	cfg := &AgentWorkflowConfig{
 		Steps: []AgentWorkflowStep{{Prompt: "t"}},
 		Orchestration: &AgentWorkflowOrchestrationConfig{
-			Enabled:       true,
-			StateFile:     sf,
-			EventsFile:    ef,
+			Enabled:    true,
+			StateFile:  sf,
+			EventsFile: ef,
 		},
 	}
 	cfg.validate()
@@ -1234,7 +1234,7 @@ func TestEmitWorkflowOrchestrationEvent_ValidEvent(t *testing.T) {
 
 	cfg := &AgentWorkflowConfig{
 		Orchestration: &AgentWorkflowOrchestrationConfig{
-			Enabled:   true,
+			Enabled:    true,
 			EventsFile: ef,
 		},
 	}
@@ -1265,7 +1265,7 @@ func TestEmitWorkflowOrchestrationEvent_ValidEvent(t *testing.T) {
 func TestEmitWorkflowOrchestrationEvent_EmptyEventsFile(t *testing.T) {
 	cfg := &AgentWorkflowConfig{
 		Orchestration: &AgentWorkflowOrchestrationConfig{
-			Enabled:   true,
+			Enabled:    true,
 			EventsFile: "",
 		},
 	}
@@ -1281,7 +1281,7 @@ func TestEmitWorkflowOrchestrationEvent_MultipleEvents(t *testing.T) {
 
 	cfg := &AgentWorkflowConfig{
 		Orchestration: &AgentWorkflowOrchestrationConfig{
-			Enabled:   true,
+			Enabled:    true,
 			EventsFile: ef,
 		},
 	}

@@ -17,8 +17,8 @@ type enhancedMockClient struct {
 	modelFlag          string
 }
 
-func (m *enhancedMockClient) GetModel() string              { return m.modelFlag }
-func (m *enhancedMockClient) SupportsVision() bool          { return m.supportsVisionFlag }
+func (m *enhancedMockClient) GetModel() string     { return m.modelFlag }
+func (m *enhancedMockClient) SupportsVision() bool { return m.supportsVisionFlag }
 
 // =====================================================================
 // isVisionModel

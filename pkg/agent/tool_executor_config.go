@@ -13,7 +13,7 @@ const maxToolFailureMessageChars = 4000     // ~1000 tokens worst-case (4 chars/
 const defaultFetchURLResultMaxChars = 80000 // Raised from 60000 to 80000 (better web content coverage)
 const defaultFetchURLArchiveDir = "/tmp/sprout/downloads"
 const defaultAnalyzeImageResultExcerptChars = 4000
-const defaultToolResultMaxChars = 50000     // Universal cap on tool result size (~12K tokens)
+const defaultToolResultMaxChars = 50000 // Universal cap on tool result size (~12K tokens)
 
 // getToolTimeout returns the timeout duration for tool execution
 // Subagents get 30 minutes (for large file operations), other tools get 5 minutes

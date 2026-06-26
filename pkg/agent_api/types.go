@@ -15,19 +15,19 @@ import (
 // Seed owns the type definitions; sprout consumes them.
 // ---------------------------------------------------------------------------
 
-type ImageData  = core.ImageData
-type Message    = core.Message
-type ToolCall   = core.ToolCall
+type ImageData = core.ImageData
+type Message = core.Message
+type ToolCall = core.ToolCall
 type ToolCallFunction = core.ToolCallFunction
-type Tool       = core.Tool
-type ToolFunction   = core.ToolFunction
+type Tool = core.Tool
+type ToolFunction = core.ToolFunction
 type ToolParameters = core.ToolParameters
-type ToolParameter  = core.ToolParameter
-type ChatRequest  = core.ChatRequest
+type ToolParameter = core.ToolParameter
+type ChatRequest = core.ChatRequest
 type ChatResponse = core.ChatResponse
-type ChatChoice   = core.ChatChoice
-type ChatUsage    = core.ChatUsage
-type Choice       = ChatChoice
+type ChatChoice = core.ChatChoice
+type ChatUsage = core.ChatUsage
+type Choice = ChatChoice
 
 // ---------------------------------------------------------------------------
 // Provider and client interfaces — sprout-specific, not part of seed.

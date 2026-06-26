@@ -1000,11 +1000,11 @@ func TestMCPClient_sendRequest_ContextCancellation(t *testing.T) {
 
 func TestMCPClient_sendRequest_TableDriven(t *testing.T) {
 	tests := []struct {
-		name           string
-		method         string
-		params         interface{}
-		expectedID     string
-		shouldMarshal  bool
+		name          string
+		method        string
+		params        interface{}
+		expectedID    string
+		shouldMarshal bool
 	}{
 		{
 			name:          "Initialize request",
@@ -1021,7 +1021,7 @@ func TestMCPClient_sendRequest_TableDriven(t *testing.T) {
 			shouldMarshal: true,
 		},
 		{
-			name: "Call tool request",
+			name:   "Call tool request",
 			method: "tools/call",
 			params: map[string]interface{}{
 				"name":      "test_tool",
@@ -1258,8 +1258,8 @@ func TestMCPClient_Integration_WithEchoServer(t *testing.T) {
 
 func TestMCPClient_ErrorMessages_Initialize(t *testing.T) {
 	tests := []struct {
-		name    string
-		err     error
+		name     string
+		err      error
 		contains []string
 	}{
 		{
@@ -1293,8 +1293,8 @@ func TestMCPClient_ErrorMessages_Initialize(t *testing.T) {
 
 func TestMCPClient_ErrorMessages_ListTools(t *testing.T) {
 	tests := []struct {
-		name    string
-		err     error
+		name     string
+		err      error
 		contains []string
 	}{
 		{
@@ -1342,8 +1342,8 @@ func TestMCPClient_ErrorMessages_ListTools(t *testing.T) {
 
 func TestMCPClient_ErrorMessages_CallTool(t *testing.T) {
 	tests := []struct {
-		name    string
-		err     error
+		name     string
+		err      error
 		contains []string
 	}{
 		{

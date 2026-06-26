@@ -14,14 +14,14 @@ import (
 func TestCustomProviderPerModelContextSizes(t *testing.T) {
 	t.Run("per-model context sizes are preserved", func(t *testing.T) {
 		cfg := CustomProviderConfig{
-			Name:      "test-provider",
-			Endpoint:  "https://api.example.com/v1",
-			ModelName: "test-model",
+			Name:        "test-provider",
+			Endpoint:    "https://api.example.com/v1",
+			ModelName:   "test-model",
 			ContextSize: 32768,
 			ModelContextSizes: map[string]int{
-				"small-model":  8192,
-				"large-model":  131072,
-				"ultra-model":  2097152,
+				"small-model": 8192,
+				"large-model": 131072,
+				"ultra-model": 2097152,
 			},
 		}
 
@@ -49,9 +49,9 @@ func TestCustomProviderPerModelContextSizes(t *testing.T) {
 
 	t.Run("nil model context sizes map is initialized", func(t *testing.T) {
 		cfg := CustomProviderConfig{
-			Name:      "test-provider",
-			Endpoint:  "https://api.example.com/v1",
-			ModelName: "test-model",
+			Name:              "test-provider",
+			Endpoint:          "https://api.example.com/v1",
+			ModelName:         "test-model",
 			ModelContextSizes: nil,
 		}
 
@@ -63,9 +63,9 @@ func TestCustomProviderPerModelContextSizes(t *testing.T) {
 
 	t.Run("context size defaults to 32768 when not set", func(t *testing.T) {
 		cfg := CustomProviderConfig{
-			Name:      "test-provider",
-			Endpoint:  "https://api.example.com/v1",
-			ModelName: "test-model",
+			Name:        "test-provider",
+			Endpoint:    "https://api.example.com/v1",
+			ModelName:   "test-model",
 			ContextSize: 0,
 		}
 
@@ -76,13 +76,13 @@ func TestCustomProviderPerModelContextSizes(t *testing.T) {
 
 	t.Run("toProviderConfig converts model context sizes to overrides", func(t *testing.T) {
 		cfg := CustomProviderConfig{
-			Name:      "test-provider",
-			Endpoint:  "https://api.example.com/v1",
-			ModelName: "test-model",
+			Name:        "test-provider",
+			Endpoint:    "https://api.example.com/v1",
+			ModelName:   "test-model",
 			ContextSize: 32768,
 			ModelContextSizes: map[string]int{
-				"small-model":  8192,
-				"large-model":  131072,
+				"small-model": 8192,
+				"large-model": 131072,
 			},
 		}
 
@@ -96,9 +96,9 @@ func TestCustomProviderPerModelContextSizes(t *testing.T) {
 
 	t.Run("toProviderConfig only includes positive context sizes", func(t *testing.T) {
 		cfg := CustomProviderConfig{
-			Name:      "test-provider",
-			Endpoint:  "https://api.example.com/v1",
-			ModelName: "test-model",
+			Name:        "test-provider",
+			Endpoint:    "https://api.example.com/v1",
+			ModelName:   "test-model",
 			ContextSize: 32768,
 			ModelContextSizes: map[string]int{
 				"zero-model":  0,
@@ -119,13 +119,13 @@ func TestCustomProviderPerModelContextSizes(t *testing.T) {
 
 	t.Run("save and load preserves model context sizes", func(t *testing.T) {
 		cfg := CustomProviderConfig{
-			Name:      "test-provider",
-			Endpoint:  "https://api.example.com/v1",
-			ModelName: "test-model",
+			Name:        "test-provider",
+			Endpoint:    "https://api.example.com/v1",
+			ModelName:   "test-model",
 			ContextSize: 32768,
 			ModelContextSizes: map[string]int{
-				"small-model":  8192,
-				"large-model":  131072,
+				"small-model": 8192,
+				"large-model": 131072,
 			},
 		}
 

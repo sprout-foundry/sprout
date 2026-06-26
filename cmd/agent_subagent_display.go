@@ -81,8 +81,8 @@ func formatSpawnLine(chatAgent *agent.Agent, depth int, persona string, maxCtx i
 // formatSubagentDoneLine renders the per-subagent completion summary —
 // the closing bracket for the spawn line. Format:
 //
-//	  ↳ [persona] done · 12,345 tok · $0.0234 · 4.2s
-//	  ↳ [persona] cancelled (budget_exceeded) · 8,901 tok · $0.0102 · 2.1s
+//	↳ [persona] done · 12,345 tok · $0.0234 · 4.2s
+//	↳ [persona] cancelled (budget_exceeded) · 8,901 tok · $0.0102 · 2.1s
 //
 // Indents at depth 1 to nest visually under the parent's run_subagent
 // row. Numeric fields are omitted when zero so a no-cost / no-token

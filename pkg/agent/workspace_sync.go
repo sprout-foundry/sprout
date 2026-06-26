@@ -182,10 +182,10 @@ const (
 
 // ReconciliationActionResult is the per-file reconciliation outcome.
 type ReconciliationActionResult struct {
-	FilePath     string                  `json:"file_path"`
+	FilePath     string                   `json:"file_path"`
 	Action       ReconciliationActionType `json:"action"`
-	ContainerSeq int64                   `json:"container_seq"`
-	BrowserSeq   int64                   `json:"browser_seq"`
+	ContainerSeq int64                    `json:"container_seq"`
+	BrowserSeq   int64                    `json:"browser_seq"`
 }
 
 // ReconcileSeqNumbers compares browser-supplied per-file sequence numbers
@@ -503,9 +503,9 @@ type SyncOp struct {
 
 // SyncOpResult is the server response to a SyncOp application.
 type SyncOpResult struct {
-	Accepted     bool   `json:"accepted"`      // Whether the op was applied
-	ConflictPath string `json:"conflict_path"` // Set if there's a container-side conflict (path to .theirs file)
-	ContainerSeq int64  `json:"container_seq"` // Current container sequence after applying
+	Accepted     bool   `json:"accepted"`        // Whether the op was applied
+	ConflictPath string `json:"conflict_path"`   // Set if there's a container-side conflict (path to .theirs file)
+	ContainerSeq int64  `json:"container_seq"`   // Current container sequence after applying
 	Error        string `json:"error,omitempty"` // Error message if not accepted
 }
 
@@ -716,7 +716,7 @@ func (a *Agent) applySyncOpInternal(op SyncOp, workspaceRoot string) SyncOpResul
 		}
 		// Move metadata from old path to new path
 		a.fileMetadata.set(op.Path, WorkspaceFileMetadata{}) // clear old
-		op.Path = op.NewPath                                // update key for subsequent metadata update
+		op.Path = op.NewPath                                 // update key for subsequent metadata update
 	}
 
 	// 7. Update metadata

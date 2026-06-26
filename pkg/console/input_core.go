@@ -70,14 +70,14 @@ type InputReader struct {
 	hasEditedLine bool
 
 	// Paste detection
-	pasteBuffer      strings.Builder
-	pasteTimer       *time.Timer
-	pasteActive      bool
-	lastCharTime     time.Time
-	bracketedPaste   bool
-	bracketedMatch   int
-	bracketedSawCR   bool
-	collapsedPastes  []pasteSpan
+	pasteBuffer     strings.Builder
+	pasteTimer      *time.Timer
+	pasteActive     bool
+	lastCharTime    time.Time
+	bracketedPaste  bool
+	bracketedMatch  int
+	bracketedSawCR  bool
+	collapsedPastes []pasteSpan
 
 	// Raw binary buffer for image paste detection (accumulated alongside text pasteBuffer)
 	rawPasteBuffer []byte
@@ -137,9 +137,9 @@ type pasteSpan struct {
 }
 
 const (
-	bracketedPasteEnable   = "\033[?2004h"
-	bracketedPasteDisable  = "\033[?2004l"
-	bracketedPasteEndSeq   = "\x1b[201~"
+	bracketedPasteEnable  = "\033[?2004h"
+	bracketedPasteDisable = "\033[?2004l"
+	bracketedPasteEndSeq  = "\x1b[201~"
 	// modifyOtherKeysEnable asks xterm-protocol-compatible terminals
 	// (Windows Terminal, kitty, alacritty, foot, iTerm2 w/ CSI u, etc.)
 	// to report modified keystrokes — most importantly Shift+Enter as
@@ -699,4 +699,3 @@ func (ir *InputReader) handleSearchModeByte(b byte) (result searchByteResult, in
 		return searchContinue, ""
 	}
 }
-

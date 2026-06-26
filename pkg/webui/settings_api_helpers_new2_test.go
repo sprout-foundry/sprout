@@ -344,10 +344,10 @@ func TestExtractPathSegment2(t *testing.T) {
 // Test asInt function
 func TestAsInt2(t *testing.T) {
 	tests := []struct {
-		name    string
-		v       interface{}
-		want    int
-		wantOK  bool
+		name   string
+		v      interface{}
+		want   int
+		wantOK bool
 	}{
 		{
 			name:   "float64 integer value",

@@ -153,8 +153,8 @@ func TestRaceConcurrentIterationAccess(t *testing.T) {
 // shell command history on the Agent is safe.
 func TestRaceConcurrentShellCommandHistory(t *testing.T) {
 	agent := &Agent{
-		state:             NewAgentStateManager(false),
-		output:            NewAgentOutputManager(),
+		state:               NewAgentStateManager(false),
+		output:              NewAgentOutputManager(),
 		shellCommandHistory: make(map[string]*ShellCommandResult),
 	}
 

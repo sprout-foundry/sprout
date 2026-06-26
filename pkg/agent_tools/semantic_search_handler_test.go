@@ -44,7 +44,8 @@ func TestSemanticSearchHandler_Definition(t *testing.T) {
 	}
 }
 
-func TestSemanticSearchHandler_Validate(t *testing.T) {	t.Parallel()
+func TestSemanticSearchHandler_Validate(t *testing.T) {
+	t.Parallel()
 	h := &semanticSearchHandler{}
 
 	// Missing query
@@ -139,63 +140,63 @@ func TestSemanticSearchHandler_ArgExtraction(t *testing.T) {
 		wantThreshold float64
 	}{
 		{
-			name: "defaults",
-			args: map[string]any{"query": "test"},
-			wantTopK: 5,
+			name:          "defaults",
+			args:          map[string]any{"query": "test"},
+			wantTopK:      5,
 			wantThreshold: 0.75,
 		},
 		{
-			name: "custom top_k as int",
-			args: map[string]any{"query": "test", "top_k": 10},
-			wantTopK: 10,
+			name:          "custom top_k as int",
+			args:          map[string]any{"query": "test", "top_k": 10},
+			wantTopK:      10,
 			wantThreshold: 0.75,
 		},
 		{
-			name: "custom top_k as float64 (JSON number)",
-			args: map[string]any{"query": "test", "top_k": float64(15)},
-			wantTopK: 15,
+			name:          "custom top_k as float64 (JSON number)",
+			args:          map[string]any{"query": "test", "top_k": float64(15)},
+			wantTopK:      15,
 			wantThreshold: 0.75,
 		},
 		{
-			name: "top_k clamped to 1",
-			args: map[string]any{"query": "test", "top_k": -3},
-			wantTopK: 1,
+			name:          "top_k clamped to 1",
+			args:          map[string]any{"query": "test", "top_k": -3},
+			wantTopK:      1,
 			wantThreshold: 0.75,
 		},
 		{
-			name: "custom threshold as float64",
-			args: map[string]any{"query": "test", "threshold": 0.5},
-			wantTopK: 5,
+			name:          "custom threshold as float64",
+			args:          map[string]any{"query": "test", "threshold": 0.5},
+			wantTopK:      5,
 			wantThreshold: 0.5,
 		},
 		{
-			name: "custom threshold as float32",
-			args: map[string]any{"query": "test", "threshold": float32(0.6)},
-			wantTopK: 5,
+			name:          "custom threshold as float32",
+			args:          map[string]any{"query": "test", "threshold": float32(0.6)},
+			wantTopK:      5,
 			wantThreshold: 0.6,
 		},
 		{
-			name: "custom threshold as int",
-			args: map[string]any{"query": "test", "threshold": 0},
-			wantTopK: 5,
+			name:          "custom threshold as int",
+			args:          map[string]any{"query": "test", "threshold": 0},
+			wantTopK:      5,
 			wantThreshold: 0,
 		},
 		{
-			name: "threshold clamped low",
-			args: map[string]any{"query": "test", "threshold": -0.5},
-			wantTopK: 5,
+			name:          "threshold clamped low",
+			args:          map[string]any{"query": "test", "threshold": -0.5},
+			wantTopK:      5,
 			wantThreshold: 0,
 		},
 		{
-			name: "threshold clamped high",
-			args: map[string]any{"query": "test", "threshold": 1.5},
-			wantTopK: 5,
+			name:          "threshold clamped high",
+			args:          map[string]any{"query": "test", "threshold": 1.5},
+			wantTopK:      5,
 			wantThreshold: 1,
 		},
 		{
-			name: "both custom",
-			args: map[string]any{"query": "test", "top_k": 20, "threshold": 0.85},
-			wantTopK: 20,
+			name:          "both custom",
+			args:          map[string]any{"query": "test", "top_k": 20, "threshold": 0.85},
+			wantTopK:      20,
 			wantThreshold: 0.85,
 		},
 	}
@@ -264,7 +265,7 @@ func TestSemanticSearchHandler_FormatSearchResults(t *testing.T) {
 				Name:      "Login",
 				Signature: "func Login(username, password string) (*User, error)",
 				StartLine: 10,
-				EndLine: 45,
+				EndLine:   45,
 				Language:  "go",
 			},
 			Similarity: 0.92,

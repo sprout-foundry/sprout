@@ -16,7 +16,7 @@ func (h *todoReadHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "todo_read",
 		Description: "Read the current to-do list for the session.",
-		Required: []string{},
+		Required:    []string{},
 		Parameters:  []ParameterDef{},
 	}
 }

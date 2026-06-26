@@ -307,8 +307,8 @@ func TestPlanCmd_MaxNArgs(t *testing.T) {
 
 func TestPlanCmd_FlagShorthands(t *testing.T) {
 	shorthandTests := []struct {
-		name     string
-		flag     string
+		name      string
+		flag      string
 		shorthand string
 	}{
 		{"model shorthand", "model", "m"},

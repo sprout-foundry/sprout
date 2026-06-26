@@ -15,24 +15,24 @@ import (
 
 // ReconciliationAction describes what recovery action to take for a single file.
 type ReconciliationAction struct {
-	FilePath       string    `json:"file_path"`
-	Action         string    `json:"action"` // "sync_ok", "container_ahead", "browser_ahead", "diverged"
-	ContainerSeq   int64     `json:"container_seq"`
-	BrowserSeq     int64     `json:"browser_seq"`
-	ContainerContent string  `json:"container_content,omitempty"`
+	FilePath         string    `json:"file_path"`
+	Action           string    `json:"action"` // "sync_ok", "container_ahead", "browser_ahead", "diverged"
+	ContainerSeq     int64     `json:"container_seq"`
+	BrowserSeq       int64     `json:"browser_seq"`
+	ContainerContent string    `json:"container_content,omitempty"`
 	ContainerModTime time.Time `json:"container_mod_time,omitempty"`
 }
 
 // SyncRecoverData is the payload the browser sends in a sync_recover message.
 type SyncRecoverData struct {
-	ClientID string            `json:"client_id"`
-	Seqs     map[string]int64  `json:"seqs"` // file_path -> browser_seq
+	ClientID string           `json:"client_id"`
+	Seqs     map[string]int64 `json:"seqs"` // file_path -> browser_seq
 }
 
 // SyncReconcileData is the server's response with a reconciliation plan.
 type SyncReconcileData struct {
-	ClientID string                  `json:"client_id"`
-	Plan     []ReconciliationAction  `json:"plan"`
+	ClientID string                 `json:"client_id"`
+	Plan     []ReconciliationAction `json:"plan"`
 }
 
 // SyncReplayFileData is the payload for a single file replay.

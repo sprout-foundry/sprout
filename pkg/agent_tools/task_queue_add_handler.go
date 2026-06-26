@@ -15,7 +15,7 @@ func (h *taskQueueAddHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "task_queue_add",
 		Description: "Add a new task to the persistent task queue. Tasks persist across sessions and can be processed by the Executive Assistant persona.",
-		Required: []string{"title"},
+		Required:    []string{"title"},
 		Parameters: []ParameterDef{
 			{Name: "title", Type: "string", Required: true, Description: "Task title (required)"},
 			{Name: "description", Type: "string", Description: "Detailed task description"},

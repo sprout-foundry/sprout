@@ -118,10 +118,10 @@ func TestCheckPatchConflict_ContainerSeqDoesntMatter(t *testing.T) {
 	agent, _ := newTestAgentWithEventBus(t)
 
 	agent.SetFileMetadata("container.txt", WorkspaceFileMetadata{
-		BrowserSeq:        5,
-		ContainerSeq:      10,          // Container ahead of browser
-		LastSyncedBrowser: 5,           // Browser fully synced
-		LastSyncedContainer: 3,         // Browser hasn't seen latest container writes
+		BrowserSeq:          5,
+		ContainerSeq:        10, // Container ahead of browser
+		LastSyncedBrowser:   5,  // Browser fully synced
+		LastSyncedContainer: 3,  // Browser hasn't seen latest container writes
 	})
 
 	// CheckPatchConflict only checks browser-side unsynced edits.

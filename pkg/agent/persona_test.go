@@ -694,12 +694,12 @@ func TestWarnSubagentFallback_DoesNotFireWhenConfigHasDefaults(t *testing.T) {
 	// captured by the spawn-time test below.
 	agent.warnSubagentFallback(
 		"persona 'reviewer'",
-		"",                  // personaProvider (empty — persona has no explicit)
-		"",                  // personaModel (empty)
-		"custom-provider",   // configProvider (set!)
-		"custom-model",      // configModel (set!)
-		"custom-provider",   // effectiveProvider
-		"custom-model",      // effectiveModel
+		"",                // personaProvider (empty — persona has no explicit)
+		"",                // personaModel (empty)
+		"custom-provider", // configProvider (set!)
+		"custom-model",    // configModel (set!)
+		"custom-provider", // effectiveProvider
+		"custom-model",    // effectiveModel
 	)
 	// No assertion needed — the function should return without printing.
 	// If the bug regressed, it would emit a [WARN] line to stdout.
@@ -718,12 +718,12 @@ func TestWarnSubagentFallback_FiresWhenBothPersonaAndConfigEmpty(t *testing.T) {
 	// in tool_handlers_subagent_test.go.
 	agent.warnSubagentFallback(
 		"persona 'reviewer'",
-		"",                 // personaProvider empty
-		"",                 // personaModel empty
-		"",                 // configProvider empty — true fallback!
-		"",                 // configModel empty — true fallback!
-		"parent-provider",  // effectiveProvider (from parent)
-		"parent-model",     // effectiveModel (from parent)
+		"",                // personaProvider empty
+		"",                // personaModel empty
+		"",                // configProvider empty — true fallback!
+		"",                // configModel empty — true fallback!
+		"parent-provider", // effectiveProvider (from parent)
+		"parent-model",    // effectiveModel (from parent)
 	)
 }
 
@@ -735,10 +735,10 @@ func TestWarnSubagentFallback_FiresForModelOnlyFallback(t *testing.T) {
 
 	agent.warnSubagentFallback(
 		"persona 'reviewer'",
-		"",                 // personaProvider empty
-		"",                 // personaModel empty
-		"custom-provider",  // configProvider set
-		"",                 // configModel empty — model fell back to parent
+		"",                // personaProvider empty
+		"",                // personaModel empty
+		"custom-provider", // configProvider set
+		"",                // configModel empty — model fell back to parent
 		"custom-provider",
 		"parent-model",
 	)

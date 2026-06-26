@@ -208,13 +208,13 @@ func (ws *ReactWebServer) handleAPIGitCommitShow(w http.ResponseWriter, r *http.
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"message":   "success",
-		"hash":      fullHash,
+		"message":    "success",
+		"hash":       fullHash,
 		"short_hash": shortHash,
-		"author":    metaParts[1],
-		"date":      metaParts[2],
-		"ref_names": strings.TrimSpace(metaParts[3]),
-		"subject":   metaParts[4],
+		"author":     metaParts[1],
+		"date":       metaParts[2],
+		"ref_names":  strings.TrimSpace(metaParts[3]),
+		"subject":    metaParts[4],
 		"files":      files,
 		"diff":       diff,
 		"stats":      stats,

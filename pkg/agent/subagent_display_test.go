@@ -21,10 +21,10 @@ func TestSubagentStatSuffix(t *testing.T) {
 		t.Errorf("empty result suffix = %q, want \"\"", got)
 	}
 	res := &SubagentResult{
-		TokensUsed: 12500,
-		Cost:       0.0234,
-		ToolCalls:  4,
-		Elapsed:    8100 * time.Millisecond,
+		TokensUsed:  12500,
+		Cost:        0.0234,
+		ToolCalls:   4,
+		Elapsed:     8100 * time.Millisecond,
 		FileChanges: []TrackedFileChange{{}, {}, {}},
 	}
 	got := subagentStatSuffix(res)
@@ -39,6 +39,6 @@ func TestSubagentStatSuffix(t *testing.T) {
 }
 
 func TestPrintSubagentDone_NilSafe(t *testing.T) {
-	printSubagentDone("coder", nil)            // must not panic
+	printSubagentDone("coder", nil)                                        // must not panic
 	printSubagentDone("coder", &SubagentResult{Error: errors.New("boom")}) // error path
 }

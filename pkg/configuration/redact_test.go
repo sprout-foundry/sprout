@@ -42,19 +42,19 @@ func TestRedactConfig_WithMCPServers(t *testing.T) {
 	config := Config{
 		Version: "2.0",
 		MCP: mcp.MCPConfig{
-			Enabled:     true,
-			AutoStart:   true,
+			Enabled:      true,
+			AutoStart:    true,
 			AutoDiscover: true,
-			Timeout:     30 * time.Second,
+			Timeout:      30 * time.Second,
 			Servers: map[string]mcp.MCPServerConfig{
 				"test-server": {
-					Name:     "test-server",
-					Command:  "npx",
-					Args:     []string{"-y", "@server"},
+					Name:    "test-server",
+					Command: "npx",
+					Args:    []string{"-y", "@server"},
 					Env: map[string]string{
-						"API_KEY":               "secret123",
-						"NORMAL_VAR":           "public_value",
-						"ANOTHER_SECRET":       "topsecret",
+						"API_KEY":        "secret123",
+						"NORMAL_VAR":     "public_value",
+						"ANOTHER_SECRET": "topsecret",
 					},
 					Credentials: map[string]string{
 						"DB_PASSWORD": "$secret:db_password",
@@ -64,9 +64,9 @@ func TestRedactConfig_WithMCPServers(t *testing.T) {
 					Timeout:   60 * time.Second,
 				},
 				"http-server": {
-					Name:  "http-server",
-					Type:  "http",
-					URL:   "https://api.example.com",
+					Name: "http-server",
+					Type: "http",
+					URL:  "https://api.example.com",
 					Env: map[string]string{
 						"HTTP_SECRET": "http_secret_value",
 					},
@@ -135,7 +135,7 @@ func TestRedactConfig_OriginalNotMutated(t *testing.T) {
 			Enabled: true,
 			Servers: map[string]mcp.MCPServerConfig{
 				"server1": {
-					Name:  "server1",
+					Name:    "server1",
 					Command: "test",
 					Env: map[string]string{
 						"SECRET_KEY": "original_secret_value",
@@ -214,11 +214,11 @@ func TestRedactConfig_PreservesNonSecretFields(t *testing.T) {
 			},
 		},
 		Preferences: map[string]interface{}{
-			"theme": "dark",
+			"theme":    "dark",
 			"fontSize": 14,
 		},
-		ResourceDirectory:         "/tmp/resources",
-		ReasoningEffort:           "high",
+		ResourceDirectory: "/tmp/resources",
+		ReasoningEffort:   "high",
 	}
 
 	result := RedactConfig(&config)
@@ -303,21 +303,21 @@ func TestRedactConfig_MultipleServers(t *testing.T) {
 			Enabled: true,
 			Servers: map[string]mcp.MCPServerConfig{
 				"server1": {
-					Name:  "server1",
+					Name:    "server1",
 					Command: "cmd1",
 					Env: map[string]string{
 						"SECRET1": "value1",
 					},
 				},
 				"server2": {
-					Name:  "server2",
+					Name:    "server2",
 					Command: "cmd2",
 					Credentials: map[string]string{
 						"SECRET2": "$secret:secret2",
 					},
 				},
 				"server3": {
-					Name:  "server3",
+					Name:    "server3",
 					Command: "cmd3",
 					Env: map[string]string{
 						"SECRET3": "value3",
@@ -365,7 +365,7 @@ func TestRedactConfig_ReturnsCopyNotReference(t *testing.T) {
 			Enabled: true,
 			Servers: map[string]mcp.MCPServerConfig{
 				"server1": {
-					Name:  "server1",
+					Name:    "server1",
 					Command: "cmd",
 					Env: map[string]string{
 						"SECRET": "original",

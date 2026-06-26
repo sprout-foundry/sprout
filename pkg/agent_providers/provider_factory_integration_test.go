@@ -249,33 +249,33 @@ func TestUpsertConfigInvalid(t *testing.T) {
 	}
 
 	tests := []struct {
-		name        string
-		cfg         *ProviderConfig
+		name            string
+		cfg             *ProviderConfig
 		wantErrContains string
 	}{
 		{
-			name:        "nil_config_returns_nil",
-			cfg:         nil,
+			name:            "nil_config_returns_nil",
+			cfg:             nil,
 			wantErrContains: "", // nil config is a no-op, returns nil
 		},
 		{
-			name:        "empty_config_overwritten_by_key",
-			cfg:         &ProviderConfig{Endpoint: "https://example.com/v1", Auth: AuthConfig{Type: "bearer"}, Models: ModelConfig{DefaultContextLimit: 8192}},
+			name:            "empty_config_overwritten_by_key",
+			cfg:             &ProviderConfig{Endpoint: "https://example.com/v1", Auth: AuthConfig{Type: "bearer"}, Models: ModelConfig{DefaultContextLimit: 8192}},
 			wantErrContains: "", // UpsertConfig overwrites cfg.Name with the key, so this succeeds
 		},
 		{
-			name:        "empty_endpoint",
-			cfg:         &ProviderConfig{Auth: AuthConfig{Type: "bearer"}, Models: ModelConfig{DefaultContextLimit: 8192}},
+			name:            "empty_endpoint",
+			cfg:             &ProviderConfig{Auth: AuthConfig{Type: "bearer"}, Models: ModelConfig{DefaultContextLimit: 8192}},
 			wantErrContains: "invalid provider config",
 		},
 		{
-			name:        "empty_auth_type",
-			cfg:         &ProviderConfig{Endpoint: "https://example.com/v1", Models: ModelConfig{DefaultContextLimit: 8192}},
+			name:            "empty_auth_type",
+			cfg:             &ProviderConfig{Endpoint: "https://example.com/v1", Models: ModelConfig{DefaultContextLimit: 8192}},
 			wantErrContains: "invalid provider config",
 		},
 		{
-			name:        "zero_context_limits",
-			cfg:         &ProviderConfig{Endpoint: "https://example.com/v1", Auth: AuthConfig{Type: "bearer"}, Models: ModelConfig{}},
+			name:            "zero_context_limits",
+			cfg:             &ProviderConfig{Endpoint: "https://example.com/v1", Auth: AuthConfig{Type: "bearer"}, Models: ModelConfig{}},
 			wantErrContains: "invalid provider config",
 		},
 	}
@@ -550,27 +550,27 @@ func TestValidateProvider(t *testing.T) {
 			model:    "any-model", // openai has no AvailableModels, so any model is valid
 			wantErr:  false,
 		},
-			{
-		name:     "nonexistent_provider",
-		provider: "nonexistent",
-		model:    "any-model",
-		wantErr:  true,
-		errContains: "not found",
-	},
-	{
-		name:     "model_not_in_available_list",
-		provider: "validate-only-test",
-		model:    "model-c",
-		wantErr:  true,
-		errContains: "not available",
-	},
-	{
-		name:     "model_in_available_list",
-		provider: "validate-only-test",
-		model:    "model-a",
-		wantErr:  false,
-	},
-}
+		{
+			name:        "nonexistent_provider",
+			provider:    "nonexistent",
+			model:       "any-model",
+			wantErr:     true,
+			errContains: "not found",
+		},
+		{
+			name:        "model_not_in_available_list",
+			provider:    "validate-only-test",
+			model:       "model-c",
+			wantErr:     true,
+			errContains: "not available",
+		},
+		{
+			name:     "model_in_available_list",
+			provider: "validate-only-test",
+			model:    "model-a",
+			wantErr:  false,
+		},
+	}
 
 	// Upsert a provider with an explicit AvailableModels list for the "model_not_in_available_list" subtest
 	validateCfg := &ProviderConfig{
@@ -585,7 +585,8 @@ func TestValidateProvider(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {err := f.ValidateProvider(tt.provider, tt.model)
+		t.Run(tt.name, func(t *testing.T) {
+			err := f.ValidateProvider(tt.provider, tt.model)
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("expected error, got nil")

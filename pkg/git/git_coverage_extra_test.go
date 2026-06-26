@@ -705,7 +705,7 @@ func TestGenerateCommitMessageFromStagedDiff_AllDeletedFiles(t *testing.T) {
 	}
 
 	result, err := GenerateCommitMessageFromStagedDiff(mockClient, CommitMessageOptions{
-		Diff: "-func OldHandler() {}\n-func Legacy() {}",
+		Diff:   "-func OldHandler() {}\n-func Legacy() {}",
 		Branch: "main",
 		FileChanges: []CommitFileChange{
 			{Status: "D", Path: "old_handler.go"},
@@ -725,7 +725,7 @@ func TestGenerateCommitMessageFromStagedDiff_AllRenamedFiles(t *testing.T) {
 	}
 
 	result, err := GenerateCommitMessageFromStagedDiff(mockClient, CommitMessageOptions{
-		Diff: "-old_name\n+new_name",
+		Diff:   "-old_name\n+new_name",
 		Branch: "main",
 		FileChanges: []CommitFileChange{
 			{Status: "R100", Path: "old.go\tnew.go"},

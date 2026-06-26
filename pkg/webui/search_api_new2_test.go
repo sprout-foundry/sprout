@@ -176,13 +176,13 @@ func TestIsBinaryFile2(t *testing.T) {
 
 	// Create test files
 	testFiles := map[string][]byte{
-		"text.go":       []byte("package main\n\nfunc main() {\n\tprintln(\"hello\")\n}"),
-		"text.txt":      []byte("This is a plain text file\nWith multiple lines\n"),
-		"text.js":       []byte("console.log('hello');\nconst x = 42;\n"),
-		"binary.png":    []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00}, // PNG magic bytes + null byte
-		"binary.jpg":    []byte{0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x00, 0x01}, // JPEG magic bytes + null
-		"binary.exe":    []byte{0x4D, 0x5A, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00, 0x04, 0x00}, // MZ header + null
-		"has_null.txt":  []byte("text\x00with\x00nulls"),
+		"text.go":      []byte("package main\n\nfunc main() {\n\tprintln(\"hello\")\n}"),
+		"text.txt":     []byte("This is a plain text file\nWith multiple lines\n"),
+		"text.js":      []byte("console.log('hello');\nconst x = 42;\n"),
+		"binary.png":   []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00}, // PNG magic bytes + null byte
+		"binary.jpg":   []byte{0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x00, 0x01}, // JPEG magic bytes + null
+		"binary.exe":   []byte{0x4D, 0x5A, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00, 0x04, 0x00}, // MZ header + null
+		"has_null.txt": []byte("text\x00with\x00nulls"),
 	}
 
 	for name, content := range testFiles {
@@ -462,8 +462,8 @@ func TestGetContextLines2(t *testing.T) {
 func TestCompileSearchPatternEdgeCases2(t *testing.T) {
 	t.Run("special characters in regex", func(t *testing.T) {
 		pattern, err := compileSearchPattern("test.*", false, false, true)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
 		}
 		if !pattern.MatchString("test") {
 			t.Error("should match 'test'")
@@ -475,8 +475,8 @@ func TestCompileSearchPatternEdgeCases2(t *testing.T) {
 
 	t.Run("unicode characters", func(t *testing.T) {
 		pattern, err := compileSearchPattern("hello", false, false, false)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
 		}
 		if !pattern.MatchString("héllo") {
 			// This might fail depending on regex engine unicode handling

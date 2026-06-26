@@ -583,5 +583,3 @@ func captureSelectors(page *rod.Page, selectors []string, responseMaxChars int) 
 	}
 	return captures, nil
 }
-
-

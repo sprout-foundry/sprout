@@ -24,32 +24,38 @@ func newBHMockRegistry(tools ...Tool) *bhMockRegistry {
 	return m
 }
 
-func (m *bhMockRegistry) RegisterTool(tool Tool) error          { m.tools[tool.Name()] = tool; return nil }
-func (m *bhMockRegistry) GetTool(name string) (Tool, bool)     { t, ok := m.tools[name]; return t, ok }
-func (m *bhMockRegistry) UnregisterTool(name string) error     { delete(m.tools, name); return nil }
-func (m *bhMockRegistry) ListTools() []Tool                    { out := make([]Tool, 0, len(m.tools)); for _, t := range m.tools { out = append(out, t) }; return out }
+func (m *bhMockRegistry) RegisterTool(tool Tool) error     { m.tools[tool.Name()] = tool; return nil }
+func (m *bhMockRegistry) GetTool(name string) (Tool, bool) { t, ok := m.tools[name]; return t, ok }
+func (m *bhMockRegistry) UnregisterTool(name string) error { delete(m.tools, name); return nil }
+func (m *bhMockRegistry) ListTools() []Tool {
+	out := make([]Tool, 0, len(m.tools))
+	for _, t := range m.tools {
+		out = append(out, t)
+	}
+	return out
+}
 func (m *bhMockRegistry) ListToolsByCategory(category string) []Tool { return m.ListTools() }
 
 // bhMockTool is a configurable mock implementing Tool.
 type bhMockTool struct {
-	name               string
-	desc               string
-	cat                string
-	available          bool
-	canExec            bool
-	requiredPerms      []string
-	estimatedDuration  time.Duration
-	executeFn          func(ctx context.Context, params Parameters) (*Result, error)
+	name              string
+	desc              string
+	cat               string
+	available         bool
+	canExec           bool
+	requiredPerms     []string
+	estimatedDuration time.Duration
+	executeFn         func(ctx context.Context, params Parameters) (*Result, error)
 }
 
-func (m *bhMockTool) Name() string                { return m.name }
-func (m *bhMockTool) Description() string          { return m.desc }
-func (m *bhMockTool) Category() string             { return m.cat }
-func (m *bhMockTool) IsAvailable() bool            { return m.available }
+func (m *bhMockTool) Name() string        { return m.name }
+func (m *bhMockTool) Description() string { return m.desc }
+func (m *bhMockTool) Category() string    { return m.cat }
+func (m *bhMockTool) IsAvailable() bool   { return m.available }
 func (m *bhMockTool) CanExecute(ctx context.Context, params Parameters) bool {
 	return m.canExec
 }
-func (m *bhMockTool) RequiredPermissions() []string { return m.requiredPerms }
+func (m *bhMockTool) RequiredPermissions() []string    { return m.requiredPerms }
 func (m *bhMockTool) EstimatedDuration() time.Duration { return m.estimatedDuration }
 func (m *bhMockTool) Execute(ctx context.Context, params Parameters) (*Result, error) {
 	if m.executeFn != nil {
@@ -111,9 +117,9 @@ func TestExecuteTool_NilTool_ReturnsError(t *testing.T) {
 
 func TestExecuteTool_UnavailableTool_ReturnsFalse(t *testing.T) {
 	tool := &bhMockTool{
-		name:       "offline_tool",
-		available:  false,
-		canExec:    true,
+		name:      "offline_tool",
+		available: false,
+		canExec:   true,
 	}
 	exec := newTestExecutor(tool)
 
@@ -142,9 +148,9 @@ func TestExecuteTool_UnavailableTool_ReturnsFalse(t *testing.T) {
 
 func TestExecuteTool_Timeout_ExceedsDuration(t *testing.T) {
 	tool := &bhMockTool{
-		name:       "slow_tool",
-		available:  true,
-		canExec:    true,
+		name:      "slow_tool",
+		available: true,
+		canExec:   true,
 		executeFn: func(ctx context.Context, params Parameters) (*Result, error) {
 			select {
 			case <-time.After(5 * time.Second):

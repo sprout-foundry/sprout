@@ -148,9 +148,9 @@ func TestEmbeddedIndexReferencesAvailableRootAssets(t *testing.T) {
 	for _, match := range matches {
 		assetName := path.Base(match[1])
 		server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
-	if err != nil {
-		t.Fatal(err)
-	}
+		if err != nil {
+			t.Fatal(err)
+		}
 		if _, err := server.readRootAsset(assetName); err != nil {
 			t.Fatalf("embedded index.html references missing root asset %q: %v", assetName, err)
 		}

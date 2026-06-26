@@ -117,7 +117,7 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 		return matches
 	})
 
-// SP-055: steer coordinator owns the pinned steer-input panel for
+	// SP-055: steer coordinator owns the pinned steer-input panel for
 	// the lifetime of this REPL. Constructed once with the agent +
 	// footer references; StartTurn / EndTurn drive the per-iteration
 	// lifecycle below.

@@ -15,8 +15,8 @@ import (
 	"context"
 	"encoding/json"
 	"strings"
-	"testing"
 	"syscall/js"
+	"testing"
 
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 )

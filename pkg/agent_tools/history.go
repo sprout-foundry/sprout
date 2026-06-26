@@ -73,11 +73,11 @@ func ViewHistory(limit int, fileFilter string, since *time.Time, showContent boo
 	}
 
 	metadata := map[string]interface{}{
-		"limit":         limit,
-		"file_filter":   fileFilter,
-		"show_content":  showContent,
-		"entry_count":   len(changes),
-		"revision_ids":  revisionIDs,
+		"limit":        limit,
+		"file_filter":  fileFilter,
+		"show_content": showContent,
+		"entry_count":  len(changes),
+		"revision_ids": revisionIDs,
 	}
 	if since != nil {
 		metadata["since"] = since.Format(time.RFC3339)
@@ -332,12 +332,12 @@ func listAvailableRevisions() (RollbackResult, error) {
 	groups := groupChangesByRevision(active)
 
 	opts := formatRevisionOpts{
-		ShowContent:  false,
-		ShowStatus:   false,
+		ShowContent:      false,
+		ShowStatus:       false,
 		ShowInstructions: false,
-		TimeFormat:   time.RFC3339,
-		TitlePrefix:  "**Revision ID:** ",
-		FilesLabel:   "**Files changed:** ",
+		TimeFormat:       time.RFC3339,
+		TitlePrefix:      "**Revision ID:** ",
+		FilesLabel:       "**Files changed:** ",
 	}
 
 	var builder strings.Builder

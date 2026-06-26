@@ -833,7 +833,7 @@ func TestManagerGetOrCreateFindByIDFallback(t *testing.T) {
 		// Let's set a config where a language ID can be found by its ID field but not LanguageIDs
 		m.SetConfig([]LanguageServerConfig{
 			{
-				ID:          "special-go", // ID that GetOrCreate can find by ID
+				ID:          "special-go",       // ID that GetOrCreate can find by ID
 				LanguageIDs: []string{"golang"}, // NOT "special-go"
 				Binary:      "cat",
 				Args:        []string{},

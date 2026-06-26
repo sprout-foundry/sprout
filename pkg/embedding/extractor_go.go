@@ -239,7 +239,7 @@ func funcBody(fset *token.FileSet, src string, d *ast.FuncDecl) string {
 		return ""
 	}
 	srcLines := strings.Split(src, "\n")
-	start := fset.Position(d.Body.Pos()).Line // opening brace line
+	start := fset.Position(d.Body.Pos()).Line   // opening brace line
 	end := fset.Position(d.Body.End()).Line - 1 // closing brace line
 
 	if start >= len(srcLines) {

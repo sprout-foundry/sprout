@@ -104,7 +104,7 @@ func TestIsProviderConfigError_WrappedWithFMT(t *testing.T) {
 // wrapError is a test helper to simulate fmt.Errorf wrapping.
 func wrapError(err error, prefix string) error {
 	return &wrappedError{
-		msg:  prefix,
+		msg:   prefix,
 		cause: err,
 	}
 }

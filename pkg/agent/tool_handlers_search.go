@@ -10,9 +10,9 @@ import (
 	"strconv"
 	"strings"
 
-	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 	"github.com/sprout-foundry/sprout/pkg/utils"
 
@@ -36,8 +36,6 @@ func getSearchMaxBytes() int {
 }
 
 // Tool handler implementations for search operations
-
-
 
 func handleSearchFiles(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	var pattern string
@@ -103,7 +101,7 @@ func handleSearchFiles(ctx context.Context, a *Agent, args map[string]interface{
 	excluded := map[string]bool{
 		".git":         true,
 		"node_modules": true,
-		".sprout":       true,
+		".sprout":      true,
 		".venv":        true,
 		"dist":         true,
 		"build":        true,

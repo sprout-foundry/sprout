@@ -125,9 +125,9 @@ func TestGemmaTokenizer_RealModel(t *testing.T) {
 	}
 	var fixture struct {
 		Cases []struct {
-			Name   string  `json:"name"`
-			Input  string  `json:"input"`
-			IDs    []int32 `json:"ids"`
+			Name   string   `json:"name"`
+			Input  string   `json:"input"`
+			IDs    []int32  `json:"ids"`
 			Tokens []string `json:"tokens"`
 		} `json:"cases"`
 		Special map[string]int32 `json:"special"`

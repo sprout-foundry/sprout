@@ -17,14 +17,14 @@ import (
 
 // proxyChatRequest represents the Foundry proxy chat request format.
 type proxyChatRequest struct {
-	Provider      string            `json:"provider,omitempty"`
-	Model         string            `json:"model,omitempty"`
+	Provider      string             `json:"provider,omitempty"`
+	Model         string             `json:"model,omitempty"`
 	Messages      []proxyChatMessage `json:"messages"`
-	Stream        bool              `json:"stream"` // Accepted for format compatibility; streaming is always used
-	ChatID        string            `json:"chat_id,omitempty"`
-	Steer         bool              `json:"steer,omitempty"`
-	WorkspaceRoot string            `json:"workspace_root,omitempty"`
-	SystemPrompt  string            `json:"system_prompt,omitempty"`
+	Stream        bool               `json:"stream"` // Accepted for format compatibility; streaming is always used
+	ChatID        string             `json:"chat_id,omitempty"`
+	Steer         bool               `json:"steer,omitempty"`
+	WorkspaceRoot string             `json:"workspace_root,omitempty"`
+	SystemPrompt  string             `json:"system_prompt,omitempty"`
 }
 
 // proxyChatMessage represents a message in the chat format.

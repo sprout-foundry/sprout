@@ -371,7 +371,7 @@ func TestGetSkill(t *testing.T) {
 					"project-planning": {ID: "project-planning", Name: "Project Planning", Enabled: true},
 				},
 			},
-			id: "project-planning",
+			id:       "project-planning",
 			expected: &Skill{ID: "project-planning", Name: "Project Planning", Enabled: true},
 		},
 		{
@@ -638,10 +638,10 @@ func TestIsWorkspaceConfigPresent(t *testing.T) {
 
 func TestParseSkillFrontMatter(t *testing.T) {
 	tests := []struct {
-		name          string
-		content       string
-		expectedName  string
-		expectedDesc  string
+		name         string
+		content      string
+		expectedName string
+		expectedDesc string
 	}{
 		{
 			name: "parses name and description from front matter",
@@ -650,8 +650,8 @@ name: My Skill
 description: Does something useful
 ---
 Some body content here.`,
-			expectedName:  "My Skill",
-			expectedDesc:  "Does something useful",
+			expectedName: "My Skill",
+			expectedDesc: "Does something useful",
 		},
 		{
 			name: "handles front matter with only name",
@@ -659,8 +659,8 @@ Some body content here.`,
 name: Just Name
 ---
 Body.`,
-			expectedName:  "Just Name",
-			expectedDesc:  "",
+			expectedName: "Just Name",
+			expectedDesc: "",
 		},
 		{
 			name: "handles front matter with only description",
@@ -668,36 +668,36 @@ Body.`,
 description: Just Description
 ---
 Body.`,
-			expectedName:  "",
-			expectedDesc:  "Just Description",
+			expectedName: "",
+			expectedDesc: "Just Description",
 		},
 		{
 			name: "handles empty front matter",
 			content: `---
 ---
 Body.`,
-			expectedName:  "",
-			expectedDesc:  "",
+			expectedName: "",
+			expectedDesc: "",
 		},
 		{
 			name: "ignores content outside front matter",
 			content: `No front matter here.
 name: should not parse
 description: should not parse`,
-			expectedName:  "",
-			expectedDesc:  "",
+			expectedName: "",
+			expectedDesc: "",
 		},
 		{
-			name: "handles content with no front matter delimiters",
-			content: `Just plain text.`,
-			expectedName:  "",
-			expectedDesc:  "",
+			name:         "handles content with no front matter delimiters",
+			content:      `Just plain text.`,
+			expectedName: "",
+			expectedDesc: "",
 		},
 		{
-			name: "handles empty content",
-			content: "",
-			expectedName:  "",
-			expectedDesc:  "",
+			name:         "handles empty content",
+			content:      "",
+			expectedName: "",
+			expectedDesc: "",
 		},
 		{
 			name: "preserves extra fields in front matter without interference",
@@ -708,8 +708,8 @@ version: 1.0
 description: Skill Description
 ---
 Body.`,
-			expectedName:  "Skill Name",
-			expectedDesc:  "Skill Description",
+			expectedName: "Skill Name",
+			expectedDesc: "Skill Description",
 		},
 	}
 

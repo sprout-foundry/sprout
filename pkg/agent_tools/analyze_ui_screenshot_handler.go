@@ -15,7 +15,7 @@ func (h *analyzeUIScreenshotHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "analyze_ui_screenshot",
 		Description: "Analyze UI screenshots, mockups, or live HTML pages for implementation feedback. Accepts image files (PNG/JPG/WebP), remote image URLs, and local HTML files which are automatically rendered via a headless browser before analysis. Ideal for quick visual testing of dev builds and design reviews.",
-		Required: []string{"image_path"},
+		Required:    []string{"image_path"},
 		Parameters: []ParameterDef{
 			{Name: "image_path", Type: "string", Required: true, Description: "Path or URL to the UI screenshot or HTML file"},
 			{Name: "analysis_prompt", Type: "string", Description: "Optional custom vision prompt for analysis"},

@@ -115,8 +115,9 @@ func shouldSkipNode(nodeType string) bool {
 // plus nested members (struct fields, interface methods) up to maxDepth.
 //
 // maxDepth semantics:
-//   1 — extract only top-level symbols (depth 0)
-//   2+ — also extract nested members (depth 1)
+//
+//	1 — extract only top-level symbols (depth 0)
+//	2+ — also extract nested members (depth 1)
 func extractGoSymbols(root *gotreesitter.Node, bt *gotreesitter.BoundTree, maxDepth int, lang string) []ScopedSymbol {
 	var symbols []ScopedSymbol
 
@@ -275,9 +276,10 @@ func extractGoReceiverName(methodNode *gotreesitter.Node, bt *gotreesitter.Bound
 // extractGoStructFields extracts field declarations from a struct_type node.
 //
 // The tree-sitter Go grammar produces:
-//   struct_type → struct [anon] field_declaration_list
-//   field_declaration_list → { [anon] field_declaration ... }
-//   field_declaration → field_identifier type (or just type for embedded)
+//
+//	struct_type → struct [anon] field_declaration_list
+//	field_declaration_list → { [anon] field_declaration ... }
+//	field_declaration → field_identifier type (or just type for embedded)
 func extractGoStructFields(structNode *gotreesitter.Node, bt *gotreesitter.BoundTree, scope string) []ScopedSymbol {
 	if structNode == nil {
 		return nil
@@ -340,8 +342,9 @@ func extractGoFieldDeclarationName(fdNode *gotreesitter.Node, bt *gotreesitter.B
 // extractGoInterfaceMethods extracts method signatures from an interface_type node.
 //
 // The tree-sitter Go grammar produces:
-//   interface_type → interface [anon] { [anon] method_elem ... }
-//   method_elem → field_identifier parameter_list type
+//
+//	interface_type → interface [anon] { [anon] method_elem ... }
+//	method_elem → field_identifier parameter_list type
 func extractGoInterfaceMethods(ifaceNode *gotreesitter.Node, bt *gotreesitter.BoundTree, scope string) []ScopedSymbol {
 	if ifaceNode == nil {
 		return nil
@@ -831,7 +834,9 @@ func extractPythonDecoratedSymbol(node *gotreesitter.Node, bt *gotreesitter.Boun
 // extractPythonClassMembers extracts method and attribute definitions from a class node.
 //
 // The tree-sitter Python grammar produces for "total: int = 0":
-//   block → assignment → identifier : type = integer
+//
+//	block → assignment → identifier : type = integer
+//
 // We check for assignment nodes whose first named child is a simple identifier.
 func extractPythonClassMembers(classNode *gotreesitter.Node, bt *gotreesitter.BoundTree, scope, lang string) []ScopedSymbol {
 	if classNode == nil {

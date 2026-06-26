@@ -105,10 +105,10 @@ func TestWriteSessionFile_AllFields(t *testing.T) {
 func TestWriteSessionFile_OptionalFieldsNil(t *testing.T) {
 	sproutDir := t.TempDir()
 	info := &AutomateSessionInfo{
-		Workflow:   "minimal",
-		PID:        999,
-		StartedAt:  time.Now().UTC(),
-		Kind:       "automate",
+		Workflow:  "minimal",
+		PID:       999,
+		StartedAt: time.Now().UTC(),
+		Kind:      "automate",
 	}
 
 	err := WriteSessionFile(sproutDir, "session-min", info)

@@ -152,9 +152,9 @@ func TestSanitizeVisionFileComponent_ZC(t *testing.T) {
 func TestClassifyPDFProcessingErrorCode_ZC(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name  string
-		err   error
-		want  string
+		name string
+		err  error
+		want string
 	}{
 		{
 			name: "nil error returns PDFProcessingFailed",
@@ -343,54 +343,54 @@ func TestLimitVisionOutputText_ZC(t *testing.T) {
 func TestGetFileExtension_ZC(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name  string
-		path  string
-		want  string
+		name string
+		path string
+		want string
 	}{
 		{
 			name: "simple file",
-			path:  "document.pdf",
-			want:  ".pdf",
+			path: "document.pdf",
+			want: ".pdf",
 		},
 		{
 			name: "uppercase extension",
-			path:  "image.PNG",
-			want:  ".png",
+			path: "image.PNG",
+			want: ".png",
 		},
 		{
 			name: "mixed case extension",
-			path:  "Image.JpEg",
-			want:  ".jpeg",
+			path: "Image.JpEg",
+			want: ".jpeg",
 		},
 		{
 			name: "no extension",
-			path:  "Makefile",
-			want:  "",
+			path: "Makefile",
+			want: "",
 		},
 		{
 			name: "path with directory",
-			path:  "/home/user/docs/report.PDF",
-			want:  ".pdf",
+			path: "/home/user/docs/report.PDF",
+			want: ".pdf",
 		},
 		{
 			name: "dot file",
-			path:  ".gitignore",
-			want:  ".gitignore",
+			path: ".gitignore",
+			want: ".gitignore",
 		},
 		{
 			name: "empty path",
-			path:  "",
-			want:  "",
+			path: "",
+			want: "",
 		},
 		{
 			name: "multiple dots",
-			path:  "archive.tar.gz",
-			want:  ".gz",
+			path: "archive.tar.gz",
+			want: ".gz",
 		},
 		{
 			name: "windows path",
-			path:  "C:\\Users\\file.TXT",
-			want:  ".txt",
+			path: "C:\\Users\\file.TXT",
+			want: ".txt",
 		},
 	}
 	for _, tt := range tests {
@@ -407,44 +407,44 @@ func TestGetFileExtension_ZC(t *testing.T) {
 func TestGetBaseName_ZC(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name  string
-		path  string
-		want  string
+		name string
+		path string
+		want string
 	}{
 		{
 			name: "simple file",
-			path:  "document.pdf",
-			want:  "document.pdf",
+			path: "document.pdf",
+			want: "document.pdf",
 		},
 		{
 			name: "full path",
-			path:  "/home/user/docs/report.pdf",
-			want:  "report.pdf",
+			path: "/home/user/docs/report.pdf",
+			want: "report.pdf",
 		},
 		{
 			name: "relative path",
-			path:  "../sibling/file.go",
-			want:  "file.go",
+			path: "../sibling/file.go",
+			want: "file.go",
 		},
 		{
 			name: "trailing slash dir",
-			path:  "/home/user/docs/",
-			want:  "docs",
+			path: "/home/user/docs/",
+			want: "docs",
 		},
 		{
 			name: "root",
-			path:  "/",
-			want:  "/",
+			path: "/",
+			want: "/",
 		},
 		{
 			name: "empty string",
-			path:  "",
-			want:  ".",
+			path: "",
+			want: ".",
 		},
 		{
 			name: "current dir",
-			path:  ".",
-			want:  ".",
+			path: ".",
+			want: ".",
 		},
 	}
 	for _, tt := range tests {

@@ -124,8 +124,8 @@ func TestNormalizeArguments(t *testing.T) {
 			},
 		},
 		{
-			name:  "handles nil input",
-			input: nil,
+			name:     "handles nil input",
+			input:    nil,
 			expected: nil,
 		},
 	}
@@ -157,21 +157,21 @@ func TestCategorizeError(t *testing.T) {
 		messageContains string
 	}{
 		{
-			name:     "unknown tool",
-			err:      error(nil),
-			category: "unknown_tool",
+			name:            "unknown tool",
+			err:             error(nil),
+			category:        "unknown_tool",
 			messageContains: "unknown",
 		},
 		{
-			name:     "timeout",
-			err:      error(nil),
-			category: "timeout",
+			name:            "timeout",
+			err:             error(nil),
+			category:        "timeout",
 			messageContains: "timed out",
 		},
 		{
-			name:     "validation error",
-			err:      error(nil),
-			category: "validation",
+			name:            "validation error",
+			err:             error(nil),
+			category:        "validation",
 			messageContains: "parsing",
 		},
 	}

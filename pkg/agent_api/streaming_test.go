@@ -829,21 +829,21 @@ func TestStreamingResponseBuilder_DataPrefixVariants(t *testing.T) {
 		wantErr  bool
 	}{
 		{
-			name: "Standard data: prefix",
+			name:  "Standard data: prefix",
 			input: "data: {\"id\":\"test\",\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}\n\n",
 			expected: []StreamingChatResponse{
 				{ID: "test", Choices: []StreamingChoice{{Index: 0, Delta: StreamingDelta{Content: "Hello"}}}},
 			},
 		},
 		{
-			name: "Data: without space (some providers use this)",
+			name:  "Data: without space (some providers use this)",
 			input: "data:{\"id\":\"test\",\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}\n\n",
 			expected: []StreamingChatResponse{
 				{ID: "test", Choices: []StreamingChoice{{Index: 0, Delta: StreamingDelta{Content: "Hello"}}}},
 			},
 		},
 		{
-			name: "Multiple SSE events",
+			name:  "Multiple SSE events",
 			input: "data: {\"id\":\"test\",\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}\n\ndata: {\"choices\":[{\"delta\":{\"content\":\" World\"}}]}\n\n",
 			expected: []StreamingChatResponse{
 				{ID: "test", Choices: []StreamingChoice{{Index: 0, Delta: StreamingDelta{Content: "Hello"}}}},
@@ -851,13 +851,13 @@ func TestStreamingResponseBuilder_DataPrefixVariants(t *testing.T) {
 			},
 		},
 		{
-			name: "Done message",
-			input: "data: [DONE]\n\n",
+			name:     "Done message",
+			input:    "data: [DONE]\n\n",
 			expected: nil, // [DONE] returns io.EOF, not a response
-			wantErr: true,
+			wantErr:  true,
 		},
 		{
-			name: "Empty line skipped",
+			name:  "Empty line skipped",
 			input: "\ndata: {\"id\":\"test\",\"choices\":[{\"delta\":{\"content\":\"Hello\"}}]}\n\n",
 			expected: []StreamingChatResponse{
 				{ID: "test", Choices: []StreamingChoice{{Index: 0, Delta: StreamingDelta{Content: "Hello"}}}},

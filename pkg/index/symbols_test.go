@@ -110,11 +110,11 @@ var SingleVar = "test"
 	}
 
 	var found struct {
-		constant  bool
-		variable  bool
+		constant   bool
+		variable   bool
 		interface_ bool
-		func_     bool
-		type_     bool
+		func_      bool
+		type_      bool
 	}
 	for _, fs := range idx.Files {
 		for _, s := range fs.Symbols {
@@ -228,12 +228,12 @@ export const helper = () => {};
 	}
 
 	var found struct {
-		constant bool
-		variable bool
+		constant   bool
+		variable   bool
 		interface_ bool
-		type_ bool
-		class bool
-		func_ bool
+		type_      bool
+		class      bool
+		func_      bool
 	}
 	for _, fs := range idx.Files {
 		for _, s := range fs.Symbols {

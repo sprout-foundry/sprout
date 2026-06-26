@@ -58,11 +58,11 @@ type SecurityManager interface {
 // AgentSecurityManager implements SecurityManager, holding all security-related state
 // previously managed directly by the Agent struct.
 type AgentSecurityManager struct {
-	securityApprovalMgr     *security.ApprovalManager
-	askUserMgr              *agenttools.AskUserManager
-	unsafeMode              bool
-	unsafeShellMode         bool
-	securityBypassMu        sync.RWMutex
+	securityApprovalMgr *security.ApprovalManager
+	askUserMgr          *agenttools.AskUserManager
+	unsafeMode          bool
+	unsafeShellMode     bool
+	securityBypassMu    sync.RWMutex
 	// sessionAllowedFolders holds absolute path prefixes the user
 	// approved via "Allow this folder for the rest of the session"
 	// on the filesystem approval dialog. Replaces the old global

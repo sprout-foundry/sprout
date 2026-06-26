@@ -285,7 +285,7 @@ func TestCanExecuteInParallelFetchURL(t *testing.T) {
 	agent := &Agent{
 		client:       &providerOverrideClient{TestClient: &factory.TestClient{}, provider: "openrouter"},
 		interruptCtx: context.Background(),
-		output: NewAgentOutputManager(),
+		output:       NewAgentOutputManager(),
 	}
 	agent.output.SetOutputMutex(&sync.Mutex{})
 	executor := NewToolExecutor(agent)
@@ -308,7 +308,7 @@ func TestCanExecuteInParallelMixedBatchDenied(t *testing.T) {
 	agent := &Agent{
 		client:       &providerOverrideClient{TestClient: &factory.TestClient{}, provider: "openrouter"},
 		interruptCtx: context.Background(),
-		output: NewAgentOutputManager(),
+		output:       NewAgentOutputManager(),
 	}
 	agent.output.SetOutputMutex(&sync.Mutex{})
 	executor := NewToolExecutor(agent)
@@ -331,7 +331,7 @@ func TestCanExecuteInParallelProviderOrderingRestrictions(t *testing.T) {
 	agent := &Agent{
 		client:       &providerOverrideClient{TestClient: &factory.TestClient{}, provider: "deepseek"},
 		interruptCtx: context.Background(),
-		output: NewAgentOutputManager(),
+		output:       NewAgentOutputManager(),
 	}
 	agent.output.SetOutputMutex(&sync.Mutex{})
 	executor := NewToolExecutor(agent)
@@ -408,7 +408,7 @@ func TestCanExecuteInParallelSearchFiles(t *testing.T) {
 	agent := &Agent{
 		client:       &providerOverrideClient{TestClient: &factory.TestClient{}, provider: "openrouter"},
 		interruptCtx: context.Background(),
-		output: NewAgentOutputManager(),
+		output:       NewAgentOutputManager(),
 	}
 	agent.output.SetOutputMutex(&sync.Mutex{})
 	executor := NewToolExecutor(agent)
@@ -431,7 +431,7 @@ func TestCanExecuteInParallelSearchFilesProviderRestrictions(t *testing.T) {
 	agent := &Agent{
 		client:       &providerOverrideClient{TestClient: &factory.TestClient{}, provider: "minimax"},
 		interruptCtx: context.Background(),
-		output: NewAgentOutputManager(),
+		output:       NewAgentOutputManager(),
 	}
 	agent.output.SetOutputMutex(&sync.Mutex{})
 	executor := NewToolExecutor(agent)

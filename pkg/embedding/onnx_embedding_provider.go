@@ -44,8 +44,8 @@ type ONNXEmbeddingProvider struct {
 	runtime   *ONNXRuntime
 	session   *onnxruntime.DynamicAdvancedSession
 	tokenizer *GemmaTokenizer
-	dims      int           // output dimensions (after MRL truncation)
-	fullDims  int           // model's native output dimensions (e.g., 768)
+	dims      int // output dimensions (after MRL truncation)
+	fullDims  int // model's native output dimensions (e.g., 768)
 	modelHash string
 	closed    bool
 

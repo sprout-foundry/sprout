@@ -24,8 +24,8 @@ func TestWritePanicError_SendsErrorEvent(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, err := testUpgrader.Upgrade(w, r, nil)
-	if err != nil {
-		t.Fatalf("upgrade failed: %v", err)
+		if err != nil {
+			t.Fatalf("upgrade failed: %v", err)
 		}
 		defer conn.Close()
 
@@ -108,8 +108,8 @@ func TestWritePanicError_MarksConnectionClosed(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, err := testUpgrader.Upgrade(w, r, nil)
-	if err != nil {
-		t.Fatalf("upgrade failed: %v", err)
+		if err != nil {
+			t.Fatalf("upgrade failed: %v", err)
 		}
 		defer conn.Close()
 

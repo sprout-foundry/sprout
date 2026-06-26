@@ -17,19 +17,20 @@ import (
 // GET /api/terminal/agent-sessions
 //
 // Response format:
-// {
-//   "sessions": [
-//     {
-//       "id": "bg-npm-install-a1b2c3d4",
-//       "name": "npm install ...",
-//       "status": "active",
-//       "chat_id": "chat-123",
-//       "output_preview": "last 500 bytes of output",
-//       "started_at": 1234567890
-//     }
-//   ],
-//   "count": 1
-// }
+//
+//	{
+//	  "sessions": [
+//	    {
+//	      "id": "bg-npm-install-a1b2c3d4",
+//	      "name": "npm install ...",
+//	      "status": "active",
+//	      "chat_id": "chat-123",
+//	      "output_preview": "last 500 bytes of output",
+//	      "started_at": 1234567890
+//	    }
+//	  ],
+//	  "count": 1
+//	}
 func (ws *ReactWebServer) handleAPIAgentSessions(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)

@@ -12,9 +12,9 @@ import (
 // description for each known risk type.
 func TestFormatRiskType_AllTypes(t *testing.T) {
 	tests := []struct {
-		riskType   string
-		expected   string
-		contains   string // substring that must appear
+		riskType string
+		expected string
+		contains string // substring that must appear
 	}{
 		{"mass_deletion", "Mass deletion", "Mass deletion"},
 		{"source_code_destruction", "Source code destruction", "Source code destruction"},

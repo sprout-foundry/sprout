@@ -27,8 +27,8 @@ func TestRedactServerConfig(t *testing.T) {
 
 	t.Run("credentials_are_masked", func(t *testing.T) {
 		server := MCPServerConfig{
-			Name:      "test",
-			Command:   "npx",
+			Name:    "test",
+			Command: "npx",
 			Credentials: map[string]string{
 				"GITHUB_TOKEN": "ghp_abcdefghijklmnopqrstuvwxyz1234567890",
 				"API_KEY":      "sk-abc12345678901234567",
@@ -64,10 +64,10 @@ func TestRedactServerConfig(t *testing.T) {
 		server := MCPServerConfig{
 			Name: "test",
 			Env: map[string]string{
-				"GITHUB_TOKEN":     "ghp_abc123",
-				"PATH":             "/usr/bin",
-				"MY_SECRET":        "secret123",
-				"NODE_ENV":         "production",
+				"GITHUB_TOKEN": "ghp_abc123",
+				"PATH":         "/usr/bin",
+				"MY_SECRET":    "secret123",
+				"NODE_ENV":     "production",
 			},
 		}
 

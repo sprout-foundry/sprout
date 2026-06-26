@@ -106,10 +106,10 @@ func TestSaveLoadRoundTrip_UnicodeValues(t *testing.T) {
 	t.Setenv("SPROUT_CONFIG", dir)
 
 	original := Store{
-		"日本語プロバイダー": "sk-にほんご-αβγ",
-		"provider-🚀":       "key-with-é-ñ-ü-ö-ß",
-		"中文":              "密钥值🔑",
-		"mixed":             "Hello世界🌍Cyber sécurité",
+		"日本語プロバイダー":  "sk-にほんご-αβγ",
+		"provider-🚀": "key-with-é-ñ-ü-ö-ß",
+		"中文":         "密钥值🔑",
+		"mixed":      "Hello世界🌍Cyber sécurité",
 	}
 	if err := Save(original); err != nil {
 		t.Fatalf("save: %v", err)

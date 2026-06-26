@@ -15,9 +15,9 @@ var ErrRateLimited = fmt.Errorf("computer-use action rate limit exceeded")
 // model stuck in a click loop can't drive the OS faster than the cap before the
 // user notices.
 type rateLimitedBackend struct {
-	inner    ComputerBackend
+	inner     ComputerBackend
 	maxPerMin int
-	now      func() time.Time
+	now       func() time.Time
 
 	mu     sync.Mutex
 	window []time.Time

@@ -133,12 +133,12 @@ func TestParseGoVetErrorsEmpty(t *testing.T) {
 
 func TestParseGoplsDefinition(t *testing.T) {
 	tests := []struct {
-		name      string
-		output    string
-		wantPath  string
-		wantLine  int
-		wantCol   int
-		wantOK    bool
+		name     string
+		output   string
+		wantPath string
+		wantLine int
+		wantCol  int
+		wantOK   bool
 	}{
 		{
 			name:     "valid definition",
@@ -552,11 +552,11 @@ func TestGoAdapterRunDefinitionNoGopls(t *testing.T) {
 
 	adapter := NewGoAdapter()
 	result, err := adapter.Run(ToolInput{
-		Method:      "definition",
-		Content:     "package main\n",
-		FilePath:    "main.go",
+		Method:        "definition",
+		Content:       "package main\n",
+		FilePath:      "main.go",
 		WorkspaceRoot: "/tmp",
-		Position:    &Position{Line: 1, Column: 1},
+		Position:      &Position{Line: 1, Column: 1},
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -574,11 +574,11 @@ func TestGoAdapterRunHoverNoGopls(t *testing.T) {
 
 	adapter := NewGoAdapter()
 	result, err := adapter.Run(ToolInput{
-		Method:      "hover",
-		Content:     "package main\n",
-		FilePath:    "main.go",
+		Method:        "hover",
+		Content:       "package main\n",
+		FilePath:      "main.go",
 		WorkspaceRoot: "/tmp",
-		Position:    &Position{Line: 1, Column: 1},
+		Position:      &Position{Line: 1, Column: 1},
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -596,11 +596,11 @@ func TestGoAdapterRunRenameNoGopls(t *testing.T) {
 
 	adapter := NewGoAdapter()
 	result, err := adapter.Run(ToolInput{
-		Method:      "rename",
-		Content:     "package main\n",
-		FilePath:    "main.go",
+		Method:        "rename",
+		Content:       "package main\n",
+		FilePath:      "main.go",
 		WorkspaceRoot: "/tmp",
-		Position:    &Position{Line: 1, Column: 1},
+		Position:      &Position{Line: 1, Column: 1},
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -618,11 +618,11 @@ func TestGoAdapterRunReferencesNoGopls(t *testing.T) {
 
 	adapter := NewGoAdapter()
 	result, err := adapter.Run(ToolInput{
-		Method:      "references",
-		Content:     "package main\n",
-		FilePath:    "main.go",
+		Method:        "references",
+		Content:       "package main\n",
+		FilePath:      "main.go",
 		WorkspaceRoot: "/tmp",
-		Position:    &Position{Line: 1, Column: 1},
+		Position:      &Position{Line: 1, Column: 1},
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

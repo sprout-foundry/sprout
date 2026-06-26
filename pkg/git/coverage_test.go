@@ -160,7 +160,7 @@ func TestGenerateCommitMessageFromStagedDiff_Timeout(t *testing.T) {
 	delayedClient := &timeoutTestClient{
 		mockAPIClient: &mockAPIClient{
 			delay:  10 * time.Second,
-			stopCh:  stopCh,
+			stopCh: stopCh,
 		},
 		timeoutSec: 1, // 1 second timeout - much shorter than 10s mock delay
 	}
@@ -777,9 +777,9 @@ func TestGenerateMessage_AllEmptyPriorities(t *testing.T) {
 	}
 
 	tests := []struct {
-		name  string
+		name    string
 		changes []CommitFileChange
-		want  string
+		want    string
 	}{
 		{
 			name:    "empty changes",
@@ -1276,19 +1276,19 @@ func (m *mockAPIClient) SendChatRequestStream(ctx context.Context, messages []ap
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (m *mockAPIClient) CheckConnection() error      { return nil }
-func (m *mockAPIClient) SetDebug(bool)               {}
-func (m *mockAPIClient) SetModel(string) error       { return nil }
-func (m *mockAPIClient) GetModel() string            { return "mock" }
-func (m *mockAPIClient) GetProvider() string         { return "mock" }
-func (m *mockAPIClient) GetModelContextLimit() (int, error) { return 4096, nil }
+func (m *mockAPIClient) CheckConnection() error                                  { return nil }
+func (m *mockAPIClient) SetDebug(bool)                                           {}
+func (m *mockAPIClient) SetModel(string) error                                   { return nil }
+func (m *mockAPIClient) GetModel() string                                        { return "mock" }
+func (m *mockAPIClient) GetProvider() string                                     { return "mock" }
+func (m *mockAPIClient) GetModelContextLimit() (int, error)                      { return 4096, nil }
 func (m *mockAPIClient) ListModels(ctx context.Context) ([]api.ModelInfo, error) { return nil, nil }
-func (m *mockAPIClient) SupportsVision() bool        { return false }
-func (m *mockAPIClient) GetVisionModel() string      { return "" }
+func (m *mockAPIClient) SupportsVision() bool                                    { return false }
+func (m *mockAPIClient) GetVisionModel() string                                  { return "" }
 func (m *mockAPIClient) SendVisionRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	return nil, fmt.Errorf("not implemented")
 }
-func (m *mockAPIClient) GetLastTPS() float64          { return 0 }
-func (m *mockAPIClient) GetAverageTPS() float64       { return 0 }
+func (m *mockAPIClient) GetLastTPS() float64             { return 0 }
+func (m *mockAPIClient) GetAverageTPS() float64          { return 0 }
 func (m *mockAPIClient) GetTPSStats() map[string]float64 { return nil }
-func (m *mockAPIClient) ResetTPSStats()               {}
+func (m *mockAPIClient) ResetTPSStats()                  {}

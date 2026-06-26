@@ -683,4 +683,3 @@ func isCriticalSystemOperation(toolName string, args map[string]interface{}) boo
 
 	return configuration.IsCriticalOperation(cmdRaw)
 }
-

@@ -41,8 +41,8 @@ func (a *Agent) collectCheckpointFileMetadata() ([]CheckpointFileChange, string)
 //
 // Output shape (added as additional bullet lines):
 //
-//	- Files: A pkg/auth/session.go, M pkg/auth/jwt.go
-//	- Revision: rev-7a3c2e (call view_history with this revision_id to inspect the diff)
+//   - Files: A pkg/auth/session.go, M pkg/auth/jwt.go
+//   - Revision: rev-7a3c2e (call view_history with this revision_id to inspect the diff)
 func appendFileMetadataToSummary(summary string, changes []CheckpointFileChange, revisionID string) string {
 	if len(changes) == 0 && revisionID == "" {
 		return summary

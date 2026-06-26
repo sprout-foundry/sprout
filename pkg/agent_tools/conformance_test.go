@@ -597,9 +597,9 @@ func TestFetchURLConformance_Validate_ValidHTTP(t *testing.T) {
 func TestFetchURLConformance_ImageURLDetection(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		url        string
-		wantMime   string
-		wantImage  bool
+		url       string
+		wantMime  string
+		wantImage bool
 	}{
 		{"https://example.com/image.png", "image/png", true},
 		{"https://example.com/photo.jpg", "image/jpeg", true},
@@ -1141,7 +1141,7 @@ func TestFormatSizeConformance(t *testing.T) {
 		{100, "100 B"},
 		{1023, "1023 B"},
 		{1024, "1.0 KB"},
-		{1024*1024, "1.0 MB"},
+		{1024 * 1024, "1.0 MB"},
 		{1024 * 1024 * 1024, "1.0 GB"},
 	}
 
@@ -1156,9 +1156,9 @@ func TestFormatSizeConformance(t *testing.T) {
 func TestSplitURLSchemeConformance(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		url     string
-		wantS   string
-		wantP   string
+		url   string
+		wantS string
+		wantP string
 	}{
 		{"https://example.com/path", "https", "/path"},
 		{"http://example.com", "http", ""},
@@ -1235,8 +1235,8 @@ func TestEstimateTokenUsageConformance(t *testing.T) {
 	t.Parallel()
 	require.Equal(t, 0, estimateTokenUsage(""))
 	require.Equal(t, 10, estimateTokenUsage(strings.Repeat("a", 40))) // 40 chars / 4 = 10
-	require.Equal(t, 1, estimateTokenUsage("abcde"))                    // 5 chars / 4 = 1 (integer division)
-	require.Equal(t, 0, estimateTokenUsage("ab"))                       // 2 chars / 4 = 0
+	require.Equal(t, 1, estimateTokenUsage("abcde"))                  // 5 chars / 4 = 1 (integer division)
+	require.Equal(t, 0, estimateTokenUsage("ab"))                     // 2 chars / 4 = 0
 }
 
 // ---------------------------------------------------------------------------

@@ -40,8 +40,8 @@ type FileDiscovery struct {
 	logger *utils.Logger
 
 	// cache for workspace structure results
-	cacheMu     sync.RWMutex
-	cacheMap    map[string]*cacheEntry
+	cacheMu  sync.RWMutex
+	cacheMap map[string]*cacheEntry
 }
 
 // cacheEntry holds a cached workspace structure result

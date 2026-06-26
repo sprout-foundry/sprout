@@ -62,11 +62,11 @@ func TestTrimSSHOutput2(t *testing.T) {
 		{
 			name: "multiline output with no truncation",
 			raw:  []byte(strings.Repeat("a\n", 1000)), // 2000 chars (1000 * 2)
-			want: strings.Repeat("a\n", 999) + "a", // TrimSpace removes final trailing newline
+			want: strings.Repeat("a\n", 999) + "a",    // TrimSpace removes final trailing newline
 		},
 		{
 			name: "very long multiline output with truncation",
-			raw:  []byte(strings.Repeat("ab\n", 2000)), // 6000 chars - over limit
+			raw:  []byte(strings.Repeat("ab\n", 2000)),                    // 6000 chars - over limit
 			want: strings.Repeat("ab\n", 1333) + "a" + "\n...[truncated]", // 4000 chars exactly + suffix
 		},
 		{
@@ -98,9 +98,9 @@ func TestTrimSSHOutput2(t *testing.T) {
 // Test shellEscapeSSH function
 func TestShellEscapeSSH2(t *testing.T) {
 	tests := []struct {
-		name string
+		name  string
 		value string
-		want string
+		want  string
 	}{
 		{
 			name:  "simple string",

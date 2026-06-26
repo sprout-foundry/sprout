@@ -65,6 +65,8 @@ interface MutationHookParams {
   setProviderContextSize: (v: number) => void;
   providerEnvVar: string;
   setProviderEnvVar: (v: string) => void;
+  providerApiKey: string;
+  setProviderApiKey: (v: string) => void;
   providerSupportsVision: boolean;
   setProviderSupportsVision: (v: boolean) => void;
   providerVisionModel: string;
@@ -126,6 +128,8 @@ export function useSettingsMutation(params: MutationHookParams) {
     setProviderContextSize,
     providerEnvVar,
     setProviderEnvVar,
+    providerApiKey,
+    setProviderApiKey,
     providerSupportsVision,
     setProviderSupportsVision,
     providerVisionModel,
@@ -196,6 +200,8 @@ export function useSettingsMutation(params: MutationHookParams) {
     setProviderContextSize,
     providerEnvVar,
     setProviderEnvVar,
+    providerApiKey,
+    setProviderApiKey,
     providerSupportsVision,
     setProviderSupportsVision,
     providerVisionModel,

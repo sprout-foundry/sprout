@@ -715,25 +715,24 @@ func isRecoverableOriginal(original string) bool {
 	return true
 }
 
-// isStaleForRevert reports whether the file on disk differs from the
-// agent's recorded NewCode, meaning someone modified it intentionally
-// after the snapshot (git commit, manual edit, another session). If so,
-// reverting to OriginalCode would silently clobber that newer work.
+// isStaleForRevert reports whether reverting the file must be skipped
+// because the revert would clobber intentional work. It returns true
+// (stale — skip) when:
+//   - the file on disk differs from the agent's recorded NewCode
+//     (modified after the snapshot by a git commit, manual edit, or
+//     another session), OR
+//   - the disk content matches NewCode but that content is now
+//     committed to git HEAD (the work is version-controlled and
+//     reverting to OriginalCode would silently undo it).
 //
-// Returns false (safe to proceed) when:
-//   - newCode is empty (no baseline to compare)
-//   - newCode is the redacted marker (can't compare)
+// It returns false (safe to proceed) when:
+//   - newCode is empty or the redacted marker (no baseline to compare)
 //   - the file doesn't exist on disk (create/delete is safe)
-//   - the disk content matches newCode (nothing changed since)
+//   - the disk content matches newCode and is not committed to git
 //
-// Returns true (stale — skip) when disk content differs from newCode.
+// isStaleForRevert is the negation of history.IsRevertSafe so the agent
+// package and the history package share a single canonical, git-aware
+// staleness decision. See history.IsRevertSafe for the full rationale.
 func isStaleForRevert(absPath, newCode string) bool {
-	if newCode == "" || newCode == RedactedContentMarker {
-		return false
-	}
-	current, err := os.ReadFile(absPath)
-	if err != nil {
-		return false // file doesn't exist — safe to proceed
-	}
-	return string(current) != newCode
+	return !history.IsRevertSafe(absPath, newCode)
 }

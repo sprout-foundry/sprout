@@ -235,6 +235,8 @@ function SettingsPanel({
     setProviderContextSize: state.setProviderContextSize,
     providerEnvVar: state.providerEnvVar,
     setProviderEnvVar: state.setProviderEnvVar,
+    providerApiKey: state.providerApiKey,
+    setProviderApiKey: state.setProviderApiKey,
     providerSupportsVision: state.providerSupportsVision,
     setProviderSupportsVision: state.setProviderSupportsVision,
     providerVisionModel: state.providerVisionModel,
@@ -415,6 +417,7 @@ function SettingsPanel({
             providerModelName={state.providerModelName}
             providerContextSize={state.providerContextSize}
             providerEnvVar={state.providerEnvVar}
+            providerApiKey={state.providerApiKey}
             providerSupportsVision={state.providerSupportsVision}
             providerVisionModel={state.providerVisionModel}
             providerModelContextSizes={state.providerModelContextSizes}
@@ -426,6 +429,7 @@ function SettingsPanel({
             setProviderModelName={state.setProviderModelName}
             setProviderContextSize={state.setProviderContextSize}
             setProviderEnvVar={state.setProviderEnvVar}
+            setProviderApiKey={state.setProviderApiKey}
             setProviderSupportsVision={state.setProviderSupportsVision}
             setProviderVisionModel={state.setProviderVisionModel}
             setProviderModelContextSizes={state.setProviderModelContextSizes}

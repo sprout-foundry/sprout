@@ -1,12 +1,15 @@
 package embedding
 
 import (
+	"container/list"
 	"context"
+	"crypto/md5"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
@@ -20,9 +23,9 @@ type EmbeddingManager struct {
 	provider      EmbeddingProvider
 	store         VectorStore
 	indexMgr      *IndexManager
-	initialized   bool
-	building      bool  // true while BuildIndex is running
-	initError     error // cached error from failed Init()
+	initialized   atomic.Bool // set true only after all fields are written; read lock-free by IsInitialized
+	building      bool        // true while BuildIndex is running; guarded by mu
+	initError     error       // cached error from failed Init(); guarded by mu
 	config        *configuration.EmbeddingIndexConfig
 	workspaceRoot string
 
@@ -47,6 +50,181 @@ type EmbeddingManager struct {
 	// closeChan is closed by Close() to signal long-running goroutines
 	// (e.g., AutoBuildWhenReady) to abort early.
 	closeChan chan struct{}
+
+	// cachedProvider wraps the raw provider with an LRU content-hash cache.
+	// This is the provider exposed via GetConversationStore().Provider().
+	cachedProvider *cachedProvider
+}
+
+const maxEmbedCacheEntries = 1024
+
+// cachedProvider wraps an EmbeddingProvider with a content-hash cache.
+// Identical text inputs return the cached vector without re-embedding.
+//
+// The eviction order is a FIFO backed by container/list (doubly-linked
+// list), NOT a slice. A reslicing slice (`s = s[1:]`) leaks its backing
+// array: the array's capacity only grows over the cache's lifetime, so a
+// long-running daemon would accumulate a ~1M-entry string-header array
+// (~15MB) holding only 1024 live entries. The list's nodes are GC'd on
+// eviction, keeping the cache's memory footprint strictly bounded.
+type cachedProvider struct {
+	inner     EmbeddingProvider
+	cache     map[string][]float32
+	cacheMu   sync.Mutex
+	cacheList *list.List // FIFO eviction order; *list.Element is the map value
+}
+
+func newCachedProvider(inner EmbeddingProvider) *cachedProvider {
+	return &cachedProvider{
+		inner:     inner,
+		cache:     make(map[string][]float32),
+		cacheList: list.New(),
+	}
+}
+
+func contentHash(text string) string {
+	// Non-cryptographic cache key. md5 is used purely for its uniform
+	// 128-bit distribution as a map key; collision resistance is irrelevant
+	// (worst case is a harmless cache miss on collision).
+	return fmt.Sprintf("%x", md5.Sum([]byte(text)))
+}
+
+func (c *cachedProvider) evictIfFull() {
+	for c.cacheList.Len() >= maxEmbedCacheEntries {
+		oldest := c.cacheList.Front()
+		if oldest == nil {
+			break
+		}
+		h := oldest.Value.(string)
+		c.cacheList.Remove(oldest)
+		delete(c.cache, h)
+	}
+}
+
+func (c *cachedProvider) Embed(ctx context.Context, text string) ([]float32, error) {
+	h := contentHash(text)
+	c.cacheMu.Lock()
+	if v, ok := c.cache[h]; ok {
+		// Return a copy so the caller can't mutate the cached vector.
+		res := make([]float32, len(v))
+		copy(res, v)
+		c.cacheMu.Unlock()
+		return res, nil
+	}
+	c.cacheMu.Unlock()
+
+	vec, err := c.inner.Embed(ctx, text)
+	if err != nil {
+		return nil, err
+	}
+
+	c.cacheMu.Lock()
+	defer c.cacheMu.Unlock()
+	// Double-check: another goroutine may have populated the cache while we
+	// were embedding. Return a copy of the cached entry so callers can't
+	// mutate the shared vector.
+	if v, ok := c.cache[h]; ok {
+		res := make([]float32, len(v))
+		copy(res, v)
+		return res, nil
+	}
+	c.evictIfFull()
+	// Store a private copy in the cache; return the original to the caller.
+	// If we cached vec itself, a mutating caller would corrupt the cache.
+	cached := make([]float32, len(vec))
+	copy(cached, vec)
+	c.cache[h] = cached
+	c.cacheList.PushBack(h)
+	return vec, nil
+}
+
+func (c *cachedProvider) EmbedBatch(ctx context.Context, texts []string) ([][]float32, error) {
+	// Check cache for each text; collect misses.
+	type miss struct {
+		index int
+		text  string
+	}
+	hits := make([][]float32, len(texts))
+	var misses []miss
+
+	for i, text := range texts {
+		h := contentHash(text)
+		c.cacheMu.Lock()
+		if v, ok := c.cache[h]; ok {
+			res := make([]float32, len(v))
+			copy(res, v)
+			hits[i] = res
+			c.cacheMu.Unlock()
+			continue
+		}
+		c.cacheMu.Unlock()
+		misses = append(misses, miss{index: i, text: text})
+	}
+
+	if len(misses) > 0 {
+		batchTexts := make([]string, len(misses))
+		for i, m := range misses {
+			batchTexts[i] = m.text
+		}
+		results, err := c.inner.EmbedBatch(ctx, batchTexts)
+		if err != nil {
+			return nil, err
+		}
+
+		c.cacheMu.Lock()
+		for i, m := range misses {
+			h := contentHash(m.text)
+			// Double-check on miss.
+			if v, ok := c.cache[h]; ok {
+				res := make([]float32, len(v))
+				copy(res, v)
+				hits[m.index] = res
+			} else {
+				vec := results[i]
+				c.evictIfFull()
+				// Cache a private copy; return the original to the caller.
+				cached := make([]float32, len(vec))
+				copy(cached, vec)
+				c.cache[h] = cached
+				c.cacheList.PushBack(h)
+				hits[m.index] = vec
+			}
+		}
+		c.cacheMu.Unlock()
+	}
+
+	return hits, nil
+}
+
+func (c *cachedProvider) Dimensions() int {
+	return c.inner.Dimensions()
+}
+
+func (c *cachedProvider) Name() string {
+	return c.inner.Name()
+}
+
+func (c *cachedProvider) ModelHash() string {
+	return c.inner.ModelHash()
+}
+
+// EmbedWithPrefix is intentionally uncached: prefix embedding is used by the
+// code-index search path (index.go QuerySimilar), which goes through the
+// IndexManager's own provider reference, NOT this cachedProvider. Only the
+// conversation store (EmbedAndStoreTurn, rollup embedding, semantic recall,
+// proactive context) flows through the cached wrapper, and those paths call
+// Embed/EmbedBatch without a prefix. Caching prefixed calls with a composite
+// key would add complexity for a path that never re-embeds the same text.
+func (c *cachedProvider) EmbedWithPrefix(ctx context.Context, text string, prefix string) ([]float32, error) {
+	return c.inner.EmbedWithPrefix(ctx, text, prefix)
+}
+
+func (c *cachedProvider) EmbedBatchWithPrefix(ctx context.Context, texts []string, prefix string) ([][]float32, error) {
+	return c.inner.EmbedBatchWithPrefix(ctx, texts, prefix)
+}
+
+func (c *cachedProvider) Close() error {
+	return nil // the inner provider is managed by the EmbeddingManager
 }
 
 // NewEmbeddingManager creates a new manager with the given config.
@@ -75,7 +253,7 @@ func (m *EmbeddingManager) Init(ctx context.Context) error {
 
 // initLocked performs the actual initialization. The caller must hold m.mu.
 func (m *EmbeddingManager) initLocked(ctx context.Context) error {
-	if m.initialized {
+	if m.initialized.Load() {
 		return nil
 	}
 
@@ -121,11 +299,14 @@ func (m *EmbeddingManager) initLocked(ctx context.Context) error {
 	})
 
 	m.provider = provider
+	m.cachedProvider = newCachedProvider(provider)
 	m.onnxRuntime = runtime
 	m.providerShared = true
 	m.store = store
 	m.indexMgr = indexMgr
-	m.initialized = true
+	// Store true last so concurrent IsInitialized() reads cannot observe a
+	// partially-initialized manager (all other fields are written above under m.mu).
+	m.initialized.Store(true)
 
 	return nil
 }
@@ -147,7 +328,7 @@ func (m *EmbeddingManager) createONNXProvider(ctx context.Context) (EmbeddingPro
 func (m *EmbeddingManager) snapshotIndexMgr() (*IndexManager, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if !m.initialized {
+	if !m.initialized.Load() {
 		return nil, fmt.Errorf("embedding: manager not initialized")
 	}
 	return m.indexMgr, nil
@@ -200,9 +381,10 @@ func (m *EmbeddingManager) SetForTesting(provider EmbeddingProvider, store Vecto
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.provider = provider
+	m.cachedProvider = newCachedProvider(provider)
 	m.store = store
 	m.indexMgr = indexMgr
-	m.initialized = true
+	m.initialized.Store(true)
 
 	// Resolve indexDir using the same logic as initLocked so that
 	// GetConversationStore can create the conversation store in the right place.
@@ -210,10 +392,10 @@ func (m *EmbeddingManager) SetForTesting(provider EmbeddingProvider, store Vecto
 }
 
 // IsInitialized returns whether the manager has been initialized.
+// Safe to call without holding m.mu — initialized is an atomic so this never
+// blocks, even while Init() is running and holding m.mu during ONNX loading.
 func (m *EmbeddingManager) IsInitialized() bool {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.initialized
+	return m.initialized.Load()
 }
 
 // IsBuilding returns true if an index build is currently in progress.
@@ -318,6 +500,19 @@ func (m *EmbeddingManager) BuildIndexBackground(ctx context.Context) <-chan *Bui
 			m.mu.Unlock()
 		}()
 
+		// Honor the manager's close signal before doing any work. Without
+		// this check, a DisableEmbeddingIndex call arriving after the
+		// goroutine is launched would not abort the 10-minute WalkTimeout
+		// nor the Init/build work; the goroutine would either run to
+		// completion against torn-down state or hit ErrStoreClosed deep
+		// in the embedder. Surface the close as the result instead.
+		select {
+		case <-m.closeCh():
+			ch <- &BuildResult{Err: ErrStoreClosed}
+			return
+		default:
+		}
+
 		ctx, cancel := context.WithTimeout(ctx, WalkTimeout)
 		defer cancel()
 
@@ -346,6 +541,21 @@ type BuildResult struct {
 // This is called at agent startup so the index is ready for duplicate
 // detection and context enrichment without waiting for an explicit query.
 // A 2-minute timeout prevents the build from hanging indefinitely.
+//
+// Two teardown paths are honored so a DisableEmbeddingIndex call arriving
+// during the startup sleep (or during Init/Build) does not race into a
+// closed store and panic:
+//
+//  1. The 3-second startup sleep selects on m.closeCh() so Close() can
+//     wake it early.
+//  2. After the sleep returns, m.closeCh() is re-checked *before* the
+//     BuildIndex call. This catches the case where Close() ran while the
+//     sleep was in flight (sleep saw the wake-up but the goroutine still
+//     proceeded because the select picked the timer branch first).
+//
+// As a last line of defense, HNSWStore.Store/ReplaceAll/DeleteByFile/
+// DeleteByIDs/Save return ErrStoreClosed instead of panicking on a nil
+// records map if the goroutine still loses the race.
 func (m *EmbeddingManager) AutoBuildWhenReady() {
 	// Wait a few seconds so we don't compete with startup I/O.
 	// Use a select-based timer so Close() can wake us early.
@@ -353,6 +563,16 @@ func (m *EmbeddingManager) AutoBuildWhenReady() {
 	case <-time.After(3 * time.Second):
 	case <-m.closeCh():
 		return
+	}
+
+	// Re-check the close signal before doing any work. The select above
+	// can return through either branch when both fire concurrently; if
+	// Close() ran while we were waking up, bail before reaching into
+	// m.store (which Close() has already nulled out).
+	select {
+	case <-m.closeCh():
+		return
+	default:
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -375,6 +595,15 @@ func (m *EmbeddingManager) closeCh() <-chan struct{} {
 		m.closeChan = make(chan struct{})
 	}
 	return m.closeChan
+}
+
+// CloseNotify returns a channel that is closed when the manager is closed.
+// Long-running goroutines owned by other packages (e.g. agent.MigrateMemories)
+// select on this channel so they can abort when DisableEmbeddingIndex tears
+// the manager down. The returned channel is the same one internal goroutines
+// see, so a single Close() wakes every waiter.
+func (m *EmbeddingManager) CloseNotify() <-chan struct{} {
+	return m.closeCh()
 }
 
 // UpdateFile incrementally updates the index for a single file.
@@ -449,9 +678,11 @@ func (m *EmbeddingManager) GetConversationStore(ctx context.Context) (*Conversat
 		return nil, err
 	}
 
-	// Create conversation store in the same directory as the main index
+	// Create conversation store with the cached provider so that all
+	// Embed/EmbedBatch calls (turn embedding, rollup embedding, proactive
+	// context, semantic recall) benefit from the content-hash cache.
 	convoPath := filepath.Join(m.indexDir, "conversation_turns.hnsw")
-	convoStore, err := NewConversationStore(m.provider, convoPath, m.provider.ModelHash())
+	convoStore, err := NewConversationStore(m.cachedProvider, convoPath, m.provider.ModelHash())
 	if err != nil {
 		return nil, fmt.Errorf("embedding: create conversation store: %w", err)
 	}
@@ -508,6 +739,12 @@ func (m *EmbeddingManager) Close() error {
 	}
 	m.indexMgr = nil
 
+	// Drop the cachedProvider reference so the underlying provider (and
+	// its internal state) can be GC'd. Without this, m.cachedProvider
+	// outlives Close() and pins the (now-closed) provider alive for the
+	// remainder of the manager's lifetime.
+	m.cachedProvider = nil
+
 	if m.onnxRuntime != nil {
 		if !m.providerShared {
 			if err := m.onnxRuntime.Close(); err != nil && firstErr == nil {
@@ -518,17 +755,25 @@ func (m *EmbeddingManager) Close() error {
 	}
 	m.providerShared = false
 
-	m.initialized = false
+	m.initialized.Store(false)
 	m.initError = nil // cleared to allow re-initialization after Close()
 
 	// Signal long-running goroutines to abort.
-	if m.closeChan != nil {
-		select {
-		case <-m.closeChan:
-			// Already closed
-		default:
-			close(m.closeChan)
-		}
+	//
+	// closeChan is lazily created by closeCh()/CloseNotify() on first read.
+	// If a goroutine launched before Close() reached its first call to
+	// closeCh() — and Close() acquired m.mu first — closeChan would be
+	// nil at this point and the goroutine would sleep past its abort
+	// signal. Eagerly create the channel here under the same lock so the
+	// close is unconditional, even if no reader has materialized yet.
+	if m.closeChan == nil {
+		m.closeChan = make(chan struct{})
+	}
+	select {
+	case <-m.closeChan:
+		// Already closed
+	default:
+		close(m.closeChan)
 	}
 
 	return firstErr

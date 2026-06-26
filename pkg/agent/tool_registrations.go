@@ -134,8 +134,9 @@ func newDefaultToolRegistry() *ToolRegistry {
 	registry.RegisterTool(ToolConfig{
 		Name:        "TodoWrite",
 		Description: "Use this tool to create and manage a structured task list for your current coding session.",
+		Aliases:     []string{"todo_write", "todo_update"},
 		Parameters: []ParameterConfig{
-			{"todos", "array", true, []string{}, "Array of todo items: [{content, status, activeForm?, priority?, id?}]"},
+			{"todos", "array", true, []string{"tasks", "items", "task_list", "todo_list"}, "Array of todo items: [{content, status, activeForm?, priority?, id?}]"},
 		},
 		Handler: handleTodoWrite,
 	})

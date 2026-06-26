@@ -26,18 +26,22 @@ import (
 // a wider historical range and whose Summary covers many turns. See SP-066
 // for the architecture.
 
-// Rollup tuning constants. Conservative defaults intended to keep the active
-// checkpoint list bounded under ~40 entries for a 500-turn session; tunable
-// from telemetry once we have real session data.
+// Rollup tuning constants. Calibrated from the SP-066 2026-06-08 audit,
+// which found that the original 10+20=30 threshold never fired on real
+// user workloads (longest observed session reached 21 checkpoints).
+// Lowered to 5+15=20 so the first rollup fires within a moderate coding
+// session, exercising the Phase 2 hierarchy as a real safety net instead
+// of dormant code. See roadmap/SP-066-never-ending-context.md "Adjacent
+// question raised by the audit".
 const (
 	// recentTurnsToPreserve is the number of most-recent Level=0 checkpoints
 	// kept at full fidelity. The rollup worker never folds entries in this
 	// window even if the level-0 count exceeds the threshold.
-	recentTurnsToPreserve = 10
+	recentTurnsToPreserve = 5
 
 	// rollupSourceCount is the number of source checkpoints folded into a
 	// single rollup at any level. Same N at every level for simplicity.
-	rollupSourceCount = 20
+	rollupSourceCount = 15
 
 	// rollupTriggerCount is the per-level checkpoint count that triggers a
 	// rollup. Anything ≥ this number at level L (excluding the recency

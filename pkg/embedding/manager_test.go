@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
@@ -141,7 +143,7 @@ func TestEmbeddingManager_IndexSize_AfterInit(t *testing.T) {
 
 	// Manually set internal state.
 	mgr.store = store
-	mgr.initialized = true
+	mgr.initialized.Store(true)
 
 	size := mgr.IndexSize()
 	if size != 3 {
@@ -195,7 +197,7 @@ func TestEmbeddingManager_CheckDuplicates_WithConfigThreshold(t *testing.T) {
 	mgr.store = store
 	mgr.provider = provider
 	mgr.indexMgr = NewIndexManager(provider, store, IndexOptions{BatchSize: 16, MaxBodyLen: 500})
-	mgr.initialized = true
+	mgr.initialized.Store(true)
 
 	// Add a known record.
 	if err := store.Store([]VectorRecord{{
@@ -246,7 +248,7 @@ func TestEmbeddingManager_CheckDuplicates_UsesConfigDefaults(t *testing.T) {
 	provider := &constantProvider{vec: []float32{1, 0, 0}}
 	mgr.store = store
 	mgr.indexMgr = NewIndexManager(provider, store, IndexOptions{BatchSize: 16, MaxBodyLen: 500})
-	mgr.initialized = true
+	mgr.initialized.Store(true)
 
 	content := `package pkg
 
@@ -313,7 +315,7 @@ func TestEmbeddingManager_Close_AfterInit(t *testing.T) {
 	}
 
 	mgr.store = store
-	mgr.initialized = true
+	mgr.initialized.Store(true)
 
 	// Close should succeed (store has no dirty state).
 	err = mgr.Close()
@@ -338,7 +340,7 @@ func TestEmbeddingManager_Close_Idempotent(t *testing.T) {
 	}
 
 	mgr.store = store
-	mgr.initialized = true
+	mgr.initialized.Store(true)
 
 	// Close twice should not error.
 	_ = mgr.Close()
@@ -440,5 +442,80 @@ func TestEmbeddingManager_IsInitialized_Concurrent(t *testing.T) {
 		if initialized := <-done; initialized {
 			t.Error("expected all goroutines to see not-initialized state")
 		}
+	}
+}
+
+// TestEmbeddingManager_CloseNotify_ClosesOnClose pins the contract that
+// CloseNotify() returns a channel which Close() closes. Long-running
+// goroutines owned by other packages (e.g. agent.MigrateMemories) rely
+// on this to abort when DisableEmbeddingIndex tears down the manager.
+func TestEmbeddingManager_CloseNotify_ClosesOnClose(t *testing.T) {
+	mgr := NewEmbeddingManager(nil, t.TempDir())
+
+	ch := mgr.CloseNotify()
+	select {
+	case <-ch:
+		t.Fatal("CloseNotify channel should not be closed before Close")
+	default:
+	}
+
+	require.NoError(t, mgr.Close())
+
+	select {
+	case <-ch:
+		// expected
+	case <-time.After(2 * time.Second):
+		t.Fatal("CloseNotify channel should be closed after Close")
+	}
+}
+
+// TestEmbeddingManager_AutoBuildWhenReady_AbortsOnClose reproduces the
+// panic surface:
+//
+//	panic: assignment to entry in nil map
+//	(*HNSWStore).Store                        store_hnsw.go
+//	(*IndexManager).BuildIndex                index.go
+//	(*EmbeddingManager).buildIndexLocked      manager.go
+//	(*EmbeddingManager).BuildIndex             manager.go
+//	(*EmbeddingManager).AutoBuildWhenReady    manager.go
+//
+// triggered by EnableEmbeddingIndex followed by an immediate
+// DisableEmbeddingIndex (user toggled off indexing before the 3-second
+// startup sleep completed). The fix has two layers:
+//
+//  1. AutoBuildWhenReady re-checks closeCh() *after* the sleep returns,
+//     so the goroutine returns before reaching into m.store.
+//  2. HNSWStore.Store/ReplaceAll/DeleteByIDs/etc. return ErrStoreClosed
+//     instead of panicking on the nil records map if the goroutine still
+//     loses the race.
+//
+// This test verifies layer 1: launching AutoBuildWhenReady and immediately
+// closing must return promptly (well under the 3s sleep budget) without
+// touching m.store. It does NOT exercise the real ONNX provider — Init is
+// short-circuited by the closeCh check, so no model load is attempted.
+func TestEmbeddingManager_AutoBuildWhenReady_AbortsOnClose(t *testing.T) {
+	dir := t.TempDir()
+	cfg := &configuration.EmbeddingIndexConfig{IndexDir: dir}
+	mgr := NewEmbeddingManager(cfg, dir)
+
+	done := make(chan struct{})
+	require.NotPanics(t, func() {
+		go func() {
+			defer close(done)
+			mgr.AutoBuildWhenReady()
+		}()
+	})
+
+	// Close immediately, racing against the 3-second sleep.
+	require.NoError(t, mgr.Close())
+
+	// AutoBuildWhenReady should return promptly via the closeCh branch.
+	// Allow a generous upper bound (1s) — the race window is microseconds
+	// in practice, but CI under load can stall.
+	select {
+	case <-done:
+		// expected
+	case <-time.After(1 * time.Second):
+		t.Fatal("AutoBuildWhenReady did not return after Close() within 1s")
 	}
 }

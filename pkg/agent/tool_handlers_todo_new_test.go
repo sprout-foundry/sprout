@@ -39,15 +39,42 @@ func TestHandleTodoWriteNotArrayV2(t *testing.T) {
 func TestHandleTodoWriteNotObjectV2(t *testing.T) {
 	a := newTestAgent(t)
 
-	// todos array but element is not an object
-	_, err := handleTodoWrite(context.Background(), a, map[string]interface{}{
+	// Bare string items are now accepted (coerced to content + pending status)
+	result, err := handleTodoWrite(context.Background(), a, map[string]interface{}{
 		"todos": []interface{}{"not an object"},
 	})
-	if err == nil {
-		t.Error("expected error when todo element is not an object")
+	if err != nil {
+		t.Fatalf("bare string items should be accepted, got error: %v", err)
 	}
-	if err != nil && !strings.Contains(err.Error(), "each todo must be an object") {
-		t.Errorf("expected 'each todo must be an object' error, got: %v", err)
+	if !strings.Contains(result, "1 items") {
+		t.Errorf("expected result to mention 1 item, got: %s", result)
+	}
+
+	// Verify the bare string was coerced correctly
+	todos := a.GetTodoManager().Read()
+	if len(todos) != 1 {
+		t.Fatalf("expected 1 todo, got %d", len(todos))
+	}
+	if todos[0].Content != "not an object" {
+		t.Errorf("content = %q; want %q", todos[0].Content, "not an object")
+	}
+	if todos[0].Status != "pending" {
+		t.Errorf("status = %q; want %q", todos[0].Status, "pending")
+	}
+}
+
+func TestHandleTodoWriteInvalidTypeV2(t *testing.T) {
+	a := newTestAgent(t)
+
+	// Numeric items should still fail (not object or string)
+	_, err := handleTodoWrite(context.Background(), a, map[string]interface{}{
+		"todos": []interface{}{42},
+	})
+	if err == nil {
+		t.Error("expected error when todo element is neither object nor string")
+	}
+	if err != nil && !strings.Contains(err.Error(), "each todo must be an object or string") {
+		t.Errorf("expected 'each todo must be an object or string' error, got: %v", err)
 	}
 }
 

@@ -5,11 +5,11 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/clihooks"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
+	git "github.com/sprout-foundry/sprout/pkg/git"
 )
 
 // GitOperationType defines the type of git operation
@@ -66,12 +66,6 @@ func ExecuteGitOperation(ctx context.Context, op GitOperation, sessionID string,
 		return commitFlowExecutor.ExecuteGitCommitFlow()
 	}
 
-	// Normalize args: strip a leading duplicate of the git subcommand.
-	// LLMs commonly pass args like "push origin main" when operation is already
-	// "push", resulting in "git push push origin main" — a confusing error.
-	// This normalization handles that mistake transparently.
-	op.Args = normalizeGitArgs(op.Operation, op.Args)
-
 	// Validate git arguments for dangerous patterns before proceeding
 	if err := ValidateGitArgs(op.Args); err != nil {
 		return "", fmt.Errorf("git argument validation: %w", err)
@@ -115,43 +109,6 @@ func PromptForGitApprovalStdin(command string) (bool, error) {
 	return input == "y" || input == "yes", nil
 }
 
-// normalizeGitArgs strips a leading duplicate of the git subcommand from args.
-//
-// LLMs commonly include the operation name in the args field, e.g. calling
-// git(operation="push", args="push origin main") instead of args="origin main".
-// Without normalization this produces "git push push origin main", which fails
-// with a confusing git error ("src refspec origin does not match any").
-//
-// This function detects when the first token of args matches the operation's
-// subcommand and strips it. It also handles the underscore variant (e.g.
-// "cherry_pick" vs "cherry-pick").
-func normalizeGitArgs(op GitOperationType, args string) string {
-	if args == "" {
-		return args
-	}
-
-	// Determine the expected subcommand for this operation
-	subcommand := string(op)
-	if op == GitOpBranchDelete {
-		subcommand = "branch"
-	} else {
-		subcommand = strings.ReplaceAll(subcommand, "_", "-")
-	}
-
-	fields := strings.Fields(args)
-	if len(fields) == 0 {
-		return args
-	}
-
-	first := fields[0]
-	if first == subcommand {
-		// Strip the duplicate subcommand, preserve the rest
-		return strings.Join(fields[1:], " ")
-	}
-
-	return args
-}
-
 // buildGitCommand builds the full git command string
 func buildGitCommand(op GitOperationType, args string) string {
 	var subcommand string
@@ -190,13 +147,11 @@ func executeGitCommand(ctx context.Context, op GitOperationType, args string) (s
 		cmdArgs = append(cmdArgs, strings.Fields(args)...)
 	}
 
-	// Execute the command
-	cmd := exec.Command("git", cmdArgs...)
-
-	// Set working directory from the workspace on context (multi-window daemon support)
-	if wd := filesystem.WorkspaceRootFromContext(ctx); wd != "" {
-		cmd.Dir = wd
-	}
+	// Use SafeGitCmd so mutating operations are blocked when running under
+	// `go test` without an explicit working directory, preventing accidental
+	// mutations to the host repository.
+	wd := filesystem.WorkspaceRootFromContext(ctx)
+	cmd := git.SafeGitCmd(wd, cmdArgs...)
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {

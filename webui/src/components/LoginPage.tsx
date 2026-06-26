@@ -20,11 +20,18 @@ export default function LoginPage() {
     <div className="login-page">
       <form onSubmit={handleSubmit} className="login-form">
         <h2 className="login-title">Sign in to Sprout</h2>
-        {error && <p className="login-error" role="alert">{error}</p>}
+        {error && (
+          <p className="login-error" role="alert">
+            {error}
+          </p>
+        )}
         <input
           type="password"
           value={inputToken}
-          onChange={(e) => { setInputToken(e.target.value); setError(''); }}
+          onChange={(e) => {
+            setInputToken(e.target.value);
+            setError('');
+          }}
           placeholder="Enter auth token"
           className="login-input"
           aria-label="Auth token"

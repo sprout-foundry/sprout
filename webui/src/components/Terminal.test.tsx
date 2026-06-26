@@ -319,7 +319,6 @@ describe('Terminal split functionality', () => {
     container = view.container;
     root = view.root;
 
-
     // First click: activate
     act(() => {
       getVerticalBtn(container).dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -330,8 +329,9 @@ describe('Terminal split functionality', () => {
     // The button moves between panes on toggle (actions cluster anchors to
     // the rightmost/top-most pane), so re-query each time.
     act(() => {
-      (container.querySelector('[aria-label="Unsplit terminal"]') as HTMLElement)
-        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      (container.querySelector('[aria-label="Unsplit terminal"]') as HTMLElement).dispatchEvent(
+        new MouseEvent('click', { bubbles: true }),
+      );
     });
 
     // Button should no longer be active. After unsplit, the vertical-split
@@ -346,7 +346,6 @@ describe('Terminal split functionality', () => {
     const view = renderTerminal();
     container = view.container;
     root = view.root;
-
 
     // Activate
     act(() => {
@@ -380,8 +379,9 @@ describe('Terminal split functionality', () => {
     // Deactivate — re-query the unsplit button each step (it moves between
     // panes when the actions cluster's host pane changes).
     act(() => {
-      (container.querySelector('[aria-label="Unsplit terminal"]') as HTMLElement)
-        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      (container.querySelector('[aria-label="Unsplit terminal"]') as HTMLElement).dispatchEvent(
+        new MouseEvent('click', { bubbles: true }),
+      );
     });
 
     const panesContainer = getPanesContainer(container);
@@ -765,8 +765,9 @@ describe('Terminal split functionality', () => {
     expect(getVerticalBtn(container).classList.contains('split-btn-active')).toBe(true);
 
     act(() => {
-      (container.querySelector('[aria-label="Unsplit terminal"]') as HTMLElement)
-        .dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      (container.querySelector('[aria-label="Unsplit terminal"]') as HTMLElement).dispatchEvent(
+        new MouseEvent('click', { bubbles: true }),
+      );
     });
 
     // Both buttons should be inactive — re-query, since the actions cluster
@@ -951,7 +952,6 @@ describe('Terminal split lifecycle and edge cases', () => {
     container = view.container;
     root = view.root;
 
-
     // First split
     act(() => {
       getVerticalBtn(container).dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -976,7 +976,6 @@ describe('Terminal split lifecycle and edge cases', () => {
     const view = renderTerminal({ isExpanded: true });
     container = view.container;
     root = view.root;
-
 
     // First split
     act(() => {

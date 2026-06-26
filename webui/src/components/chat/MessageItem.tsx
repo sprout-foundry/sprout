@@ -94,10 +94,7 @@ export const MessageItem = memo(function MessageItem({
           {message.reasoning && message.reasoning.trim() && (
             // SP-076: verbose mode expands reasoning inline instead of
             // hiding it behind a <details> toggle.
-            <details
-              className="reasoning-block"
-              open={outputVerbosity === 'verbose'}
-            >
+            <details className="reasoning-block" open={outputVerbosity === 'verbose'}>
               <summary className="reasoning-summary">
                 <BrainCircuit size={13} className="reasoning-icon" />
                 <span>Reasoning</span>

@@ -99,9 +99,21 @@ vi.mock('lucide-react', async () => {
     return Comp;
   };
   const icons = [
-    'X', 'TriangleAlert', 'Terminal',
-    'Copy', 'ClipboardPaste', 'Search', 'Trash2', 'Rows2', 'Columns2', 'TextSelect', 'Link2',
-    'ChevronUp', 'ChevronDown', 'Type', 'Hash',
+    'X',
+    'TriangleAlert',
+    'Terminal',
+    'Copy',
+    'ClipboardPaste',
+    'Search',
+    'Trash2',
+    'Rows2',
+    'Columns2',
+    'TextSelect',
+    'Link2',
+    'ChevronUp',
+    'ChevronDown',
+    'Type',
+    'Hash',
   ];
   const mod = {};
   for (const name of icons) {
@@ -711,12 +723,7 @@ describe('TerminalPane pty_exit exited state', () => {
   it('does NOT have terminal-pane-exited class initially', async () => {
     // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
-      root.render(
-        <TerminalPane
-          isActive={true}
-          isConnected={true}
-        />,
-      );
+      root.render(<TerminalPane isActive={true} isConnected={true} />);
     });
     await flushPromises();
 
@@ -728,12 +735,7 @@ describe('TerminalPane pty_exit exited state', () => {
   it('adds terminal-pane-exited class after pty_exit event', async () => {
     // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
-      root.render(
-        <TerminalPane
-          isActive={true}
-          isConnected={true}
-        />,
-      );
+      root.render(<TerminalPane isActive={true} isConnected={true} />);
     });
     await flushPromises();
 
@@ -754,13 +756,7 @@ describe('TerminalPane pty_exit exited state', () => {
 
     // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
-      root.render(
-        <TerminalPane
-          isActive={true}
-          isConnected={true}
-                   onProcessExit={onProcessExit}
-        />,
-      );
+      root.render(<TerminalPane isActive={true} isConnected={true} onProcessExit={onProcessExit} />);
     });
     await flushPromises();
 
@@ -777,12 +773,7 @@ describe('TerminalPane pty_exit exited state', () => {
   it('blocks onData input when in exited state', async () => {
     // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
-      root.render(
-        <TerminalPane
-          isActive={true}
-          isConnected={true}
-        />,
-      );
+      root.render(<TerminalPane isActive={true} isConnected={true} />);
     });
     await flushPromises();
 
@@ -808,12 +799,7 @@ describe('TerminalPane pty_exit exited state', () => {
   it('blocks onPaste input when in exited state', async () => {
     // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
-      root.render(
-        <TerminalPane
-          isActive={true}
-          isConnected={true}
-        />,
-      );
+      root.render(<TerminalPane isActive={true} isConnected={true} />);
     });
     await flushPromises();
 
@@ -844,13 +830,7 @@ describe('TerminalPane pty_exit exited state', () => {
 
     // eslint-disable-next-line testing-library/no-unnecessary-act
     await act(async () => {
-      root.render(
-        <TerminalPane
-          isActive={true}
-          isConnected={true}
-                   onProcessExit={onProcessExit}
-        />,
-      );
+      root.render(<TerminalPane isActive={true} isConnected={true} onProcessExit={onProcessExit} />);
     });
     await flushPromises();
 

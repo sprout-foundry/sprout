@@ -1,4 +1,18 @@
-import { Trash2, Columns2, Rows2, Plus, Check, ZoomIn, ZoomOut, Type, Copy, ChevronUp, ChevronDown, SquarePlus, MoreHorizontal } from 'lucide-react';
+import {
+  Trash2,
+  Columns2,
+  Rows2,
+  Plus,
+  Check,
+  ZoomIn,
+  ZoomOut,
+  Type,
+  Copy,
+  ChevronUp,
+  ChevronDown,
+  SquarePlus,
+  MoreHorizontal,
+} from 'lucide-react';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './Terminal.css';
 import { TerminalTabBar, type AttachableSession } from '@sprout/ui';
@@ -434,10 +448,14 @@ function Terminal({
           aria-label="Expand terminal"
           aria-expanded={false}
         >
-          <span className="terminal-collapsed-mark" aria-hidden="true">$</span>
+          <span className="terminal-collapsed-mark" aria-hidden="true">
+            $
+          </span>
           {focusedSession && (
             <span className="terminal-collapsed-session" title={focusedSession.name}>
-              <span className="terminal-collapsed-sep" aria-hidden="true">·</span>
+              <span className="terminal-collapsed-sep" aria-hidden="true">
+                ·
+              </span>
               <span className="terminal-collapsed-session-name">{focusedSession.name}</span>
               {totalSessions > 1 && <span className="terminal-collapsed-count">{totalSessions}</span>}
             </span>
@@ -461,7 +479,9 @@ function Terminal({
                     style={splitStyleForPane(index)}
                     onMouseDown={() => setFocusedPaneId(pane.id)}
                   >
-                    <div className={`terminal-pane-tab-bar${isActionsPane ? ' terminal-pane-tab-bar--with-actions' : ''}`}>
+                    <div
+                      className={`terminal-pane-tab-bar${isActionsPane ? ' terminal-pane-tab-bar--with-actions' : ''}`}
+                    >
                       <div className="terminal-pane-tabs">
                         <TerminalTabBar
                           sessions={pane.sessions}
@@ -531,7 +551,9 @@ function Terminal({
                               className={`terminal-btn split-btn ${splitDirection === 'vertical' ? 'split-btn-active' : ''}`}
                               onClick={() => toggleSplit('vertical')}
                               title={splitDirection === 'vertical' ? 'Unsplit terminal' : 'Split terminal vertically'}
-                              aria-label={splitDirection === 'vertical' ? 'Unsplit terminal' : 'Split terminal vertically'}
+                              aria-label={
+                                splitDirection === 'vertical' ? 'Unsplit terminal' : 'Split terminal vertically'
+                              }
                               aria-pressed={splitDirection === 'vertical'}
                             >
                               <Columns2 size={16} />
@@ -539,8 +561,12 @@ function Terminal({
                             <button
                               className={`terminal-btn split-btn ${splitDirection === 'horizontal' ? 'split-btn-active' : ''}`}
                               onClick={() => toggleSplit('horizontal')}
-                              title={splitDirection === 'horizontal' ? 'Unsplit terminal' : 'Split terminal horizontally'}
-                              aria-label={splitDirection === 'horizontal' ? 'Unsplit terminal' : 'Split terminal horizontally'}
+                              title={
+                                splitDirection === 'horizontal' ? 'Unsplit terminal' : 'Split terminal horizontally'
+                              }
+                              aria-label={
+                                splitDirection === 'horizontal' ? 'Unsplit terminal' : 'Split terminal horizontally'
+                              }
                               aria-pressed={splitDirection === 'horizontal'}
                             >
                               <Rows2 size={16} />
@@ -590,7 +616,9 @@ function Terminal({
                                   <div className="terminal-overflow-header">Font size</div>
                                   <button
                                     className="terminal-overflow-item"
-                                    onClick={() => { zoomOut(); }}
+                                    onClick={() => {
+                                      zoomOut();
+                                    }}
                                     type="button"
                                     role="menuitem"
                                   >
@@ -599,7 +627,9 @@ function Terminal({
                                   </button>
                                   <button
                                     className="terminal-overflow-item"
-                                    onClick={() => { zoomIn(); }}
+                                    onClick={() => {
+                                      zoomIn();
+                                    }}
                                     type="button"
                                     role="menuitem"
                                   >
@@ -608,7 +638,10 @@ function Terminal({
                                   </button>
                                   <button
                                     className="terminal-overflow-item"
-                                    onClick={() => { resetFontSize(); setShowOverflowMenu(false); }}
+                                    onClick={() => {
+                                      resetFontSize();
+                                      setShowOverflowMenu(false);
+                                    }}
                                     type="button"
                                     role="menuitem"
                                   >
@@ -619,7 +652,9 @@ function Terminal({
                                   <div className="terminal-overflow-divider" role="separator" />
                                   <button
                                     className={`terminal-overflow-item${copyOnSelect ? ' terminal-overflow-item--active' : ''}`}
-                                    onClick={() => { toggleCopyOnSelect(); }}
+                                    onClick={() => {
+                                      toggleCopyOnSelect();
+                                    }}
                                     type="button"
                                     role="menuitemcheckbox"
                                     aria-checked={copyOnSelect}

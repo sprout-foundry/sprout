@@ -43,7 +43,9 @@
   border: 1px solid var(--border-default);
   border-radius: 8px;
   background: var(--bg-elevated);
-  transition: border-color 0.12s var(--ease-out), box-shadow 0.12s var(--ease-out);
+  transition:
+    border-color 0.12s var(--ease-out),
+    box-shadow 0.12s var(--ease-out);
 }
 
 .git-history-filter:focus-within {
@@ -83,7 +85,9 @@
   border-radius: 4px;
   cursor: pointer;
   flex-shrink: 0;
-  transition: color 0.12s ease, background 0.12s ease;
+  transition:
+    color 0.12s ease,
+    background 0.12s ease;
 }
 
 .git-history-filter-clear:hover {

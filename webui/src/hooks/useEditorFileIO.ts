@@ -350,101 +350,102 @@ export function useEditorFileIO(
 
   // ── Save buffer ──────────────────────────────────────────────────
 
-  const handleSave = useCallback(async () => {
-    const buf = bufferRef.current;
-    if (!buf || !viewRef.current) return;
+  const handleSave = useCallback(
+    async () => {
+      const buf = bufferRef.current;
+      if (!buf || !viewRef.current) return;
 
-    // Only save real file buffers with on-disk paths.
-    if (buf.kind !== 'file' || buf.file.path.startsWith('__workspace/')) return;
+      // Only save real file buffers with on-disk paths.
+      if (buf.kind !== 'file' || buf.file.path.startsWith('__workspace/')) return;
 
-    setSaving(true);
-    setError(null);
+      setSaving(true);
+      setError(null);
 
-    // Track this save as in-flight to suppress redundant external change events
-    saveInFlightRef.current.add(buf.file.path);
+      // Track this save as in-flight to suppress redundant external change events
+      saveInFlightRef.current.add(buf.file.path);
 
-    // Notify the external file watcher and auto-reload cooldown *before*
-    // the HTTP roundtrip. The server-side fsnotify fires as soon as it
-    // writes the file, and the WebSocket "file_content_changed" event can
-    // reach the browser *before* the HTTP save response.
-    document.dispatchEvent(
-      new CustomEvent('file:editor-saved', {
-        detail: { path: buf.file.path, mtime: Math.floor(Date.now() / 1000) },
-      }),
-    );
-
-    try {
-      const saveResult = await saveBuffer(buf.id);
-      const serverMtime = saveResult && typeof saveResult.mod_time === 'number' ? saveResult.mod_time : null;
-
-      // If format-on-save was applied, update the CodeMirror view with the formatted content.
-      // Guard against overwriting user edits made while the save was in flight.
-      if (saveResult?.formattedContent && viewRef.current) {
-        const docNow = viewRef.current.state.doc.toString();
-        // Only apply formatted content if the editor still matches what we saved
-        if (docNow === buf.content) {
-          isExternalUpdateRef.current = true;
-          try {
-            viewRef.current.dispatch({
-              changes: { from: 0, to: viewRef.current.state.doc.length, insert: saveResult.formattedContent },
-              annotations: suppressHistoryAnnotations,
-              effects: setOriginalContent.of(saveResult.formattedContent),
-            });
-            setLocalContent(saveResult.formattedContent);
-            updateBufferContent(buf.id, saveResult.formattedContent);
-          } finally {
-            isExternalUpdateRef.current = false;
-          }
-        }
-      }
-
-      // Note: originalContent is updated by saveBuffer in EditorManagerContext
-      // (no need to call setBufferOriginalContent here).
-
-      // Re-dispatch with the authoritative server mtime
+      // Notify the external file watcher and auto-reload cooldown *before*
+      // the HTTP roundtrip. The server-side fsnotify fires as soon as it
+      // writes the file, and the WebSocket "file_content_changed" event can
+      // reach the browser *before* the HTTP save response.
       document.dispatchEvent(
         new CustomEvent('file:editor-saved', {
-          detail: {
-            path: buf.file.path,
-            mtime: serverMtime ?? Math.floor(Date.now() / 1000),
-          },
+          detail: { path: buf.file.path, mtime: Math.floor(Date.now() / 1000) },
         }),
       );
 
-      // Re-run diagnostics on save (e.g., go vet save-only checks)
-      if (buf.file.path && viewRef.current) {
-        await fetchDiagnosticsRef.current(buf.file.path, viewRef.current.state.doc.toString(), 'save');
-      }
+      try {
+        const saveResult = await saveBuffer(buf.id);
+        const serverMtime = saveResult && typeof saveResult.mod_time === 'number' ? saveResult.mod_time : null;
 
-      // Re-fetch diff after save
-      if (buf.file.path && viewRef.current) {
-        try {
-          const diffResponse = await apiService.getGitDiff(buf.file.path);
-          if (diffResponse.diff && diffResponse.diff.trim()) {
-            updateDiffGutter(viewRef.current, diffResponse.diff);
-          } else {
-            clearDiffGutter(viewRef.current);
+        // If format-on-save was applied, update the CodeMirror view with the formatted content.
+        // Guard against overwriting user edits made while the save was in flight.
+        if (saveResult?.formattedContent && viewRef.current) {
+          const docNow = viewRef.current.state.doc.toString();
+          // Only apply formatted content if the editor still matches what we saved
+          if (docNow === buf.content) {
+            isExternalUpdateRef.current = true;
+            try {
+              viewRef.current.dispatch({
+                changes: { from: 0, to: viewRef.current.state.doc.length, insert: saveResult.formattedContent },
+                annotations: suppressHistoryAnnotations,
+                effects: setOriginalContent.of(saveResult.formattedContent),
+              });
+              setLocalContent(saveResult.formattedContent);
+              updateBufferContent(buf.id, saveResult.formattedContent);
+            } finally {
+              isExternalUpdateRef.current = false;
+            }
           }
-        } catch (err) {
-          debugLog('[useEditorFileIO] Failed to re-fetch git diff after save:', err);
-          notificationBus.notify('warning', 'Git Diff', 'Failed to re-fetch git diff after save');
         }
+
+        // Note: originalContent is updated by saveBuffer in EditorManagerContext
+        // (no need to call setBufferOriginalContent here).
+
+        // Re-dispatch with the authoritative server mtime
+        document.dispatchEvent(
+          new CustomEvent('file:editor-saved', {
+            detail: {
+              path: buf.file.path,
+              mtime: serverMtime ?? Math.floor(Date.now() / 1000),
+            },
+          }),
+        );
+
+        // Re-run diagnostics on save (e.g., go vet save-only checks)
+        if (buf.file.path && viewRef.current) {
+          await fetchDiagnosticsRef.current(buf.file.path, viewRef.current.state.doc.toString(), 'save');
+        }
+
+        // Re-fetch diff after save
+        if (buf.file.path && viewRef.current) {
+          try {
+            const diffResponse = await apiService.getGitDiff(buf.file.path);
+            if (diffResponse.diff && diffResponse.diff.trim()) {
+              updateDiffGutter(viewRef.current, diffResponse.diff);
+            } else {
+              clearDiffGutter(viewRef.current);
+            }
+          } catch (err) {
+            debugLog('[useEditorFileIO] Failed to re-fetch git diff after save:', err);
+            notificationBus.notify('warning', 'Git Diff', 'Failed to re-fetch git diff after save');
+          }
+        }
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to save file';
+        setError(errorMessage);
+        log.error(`Save error: ${errorMessage}`, { title: 'Save Error' });
+      } finally {
+        saveInFlightRef.current.delete(buf.file.path);
+        setSaving(false);
       }
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to save file';
-      setError(errorMessage);
-      log.error(`Save error: ${errorMessage}`, { title: 'Save Error' });
-    } finally {
-      saveInFlightRef.current.delete(buf.file.path);
-      setSaving(false);
-    }
-  },
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     // Safe: the only intentional dep is `saveBuffer` (stable context callback).
     // All other non-stable values are accessed via refs (`bufferRef`, `viewRef`,
     // `saveInFlightRef`, `fetchDiagnosticsRef`, `isExternalUpdateRef`, `apiService`)
     // or are React state setters (which are stable by React contract).
-    [saveBuffer]
+    [saveBuffer],
   );
 
   // Keep saveRef in sync

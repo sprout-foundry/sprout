@@ -143,7 +143,13 @@ const WorkspacePane: React.FC<WorkspacePaneProps> = React.memo(
       }
       case 'review':
         return (
-          <Suspense fallback={<div style={{ padding: 'var(--space-6)' }}><SkeletonText lines={6} /></div>}>
+          <Suspense
+            fallback={
+              <div style={{ padding: 'var(--space-6)' }}>
+                <SkeletonText lines={6} />
+              </div>
+            }
+          >
             <ReviewWorkspaceTab {...reviewProps} />
           </Suspense>
         );

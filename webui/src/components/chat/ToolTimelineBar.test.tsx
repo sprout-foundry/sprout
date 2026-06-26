@@ -73,9 +73,11 @@ describe('ToolTimelineBar', () => {
 
   it('shows a green check card for a recently-completed tool', () => {
     act(() => {
-      root.render(createElement(ToolTimelineBar, { toolExecutions: [
-        tool({ status: 'completed', startTime: new Date(Date.now() - 200), endTime: new Date() }),
-      ]}));
+      root.render(
+        createElement(ToolTimelineBar, {
+          toolExecutions: [tool({ status: 'completed', startTime: new Date(Date.now() - 200), endTime: new Date() })],
+        }),
+      );
     });
     expect(container.querySelector('.tool-timeline-card--completed')).not.toBeNull();
     expect(container.querySelector('.tool-timeline-icon-ok')).not.toBeNull();
@@ -83,9 +85,11 @@ describe('ToolTimelineBar', () => {
 
   it('shows a red X card for an error tool', () => {
     act(() => {
-      root.render(createElement(ToolTimelineBar, { toolExecutions: [
-        tool({ status: 'error', startTime: new Date(Date.now() - 200), endTime: new Date() }),
-      ]}));
+      root.render(
+        createElement(ToolTimelineBar, {
+          toolExecutions: [tool({ status: 'error', startTime: new Date(Date.now() - 200), endTime: new Date() })],
+        }),
+      );
     });
     expect(container.querySelector('.tool-timeline-card--error')).not.toBeNull();
     expect(container.querySelector('.tool-timeline-icon-error')).not.toBeNull();
@@ -126,9 +130,7 @@ describe('ToolTimelineBar', () => {
 
   it('renders persona badge with the persona color when persona is set', () => {
     act(() => {
-      root.render(createElement(ToolTimelineBar, { toolExecutions: [
-        tool({ persona: 'coder', status: 'running' }),
-      ]}));
+      root.render(createElement(ToolTimelineBar, { toolExecutions: [tool({ persona: 'coder', status: 'running' })] }));
     });
     const badge = container.querySelector('.tool-timeline-persona') as HTMLElement | null;
     expect(badge).not.toBeNull();
@@ -138,9 +140,7 @@ describe('ToolTimelineBar', () => {
   });
 
   it('caps the visible cards at maxVisible (most recent wins)', () => {
-    const tools = Array.from({ length: 8 }, (_, i) =>
-      tool({ id: `t${i}`, tool: `tool_${i}`, status: 'running' }),
-    );
+    const tools = Array.from({ length: 8 }, (_, i) => tool({ id: `t${i}`, tool: `tool_${i}`, status: 'running' }));
     act(() => {
       root.render(createElement(ToolTimelineBar, { toolExecutions: tools, maxVisible: 3 }));
     });

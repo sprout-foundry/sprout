@@ -54,21 +54,13 @@ export interface SproutEmbedWasmAPI {
     durationMs: number;
   }>;
   getSemanticStatus(): Promise<SemanticStatus>;
-  searchSemantic(
-    query: string,
-    topK?: number,
-    threshold?: number,
-  ): Promise<SemanticSearchResult[]>;
+  searchSemantic(query: string, topK?: number, threshold?: number): Promise<SemanticSearchResult[]>;
   updateSemanticFile(filePath: string): Promise<{ ok: boolean }>;
   listMemories(): Promise<MemoryEntry[]>;
   readMemory(name: string): Promise<{ name: string; content: string }>;
   saveMemory(name: string, content: string): Promise<{ ok: boolean; name: string }>;
   deleteMemory(name: string): Promise<{ ok: boolean }>;
-  searchMemories(
-    query: string,
-    topK?: number,
-    threshold?: number,
-  ): Promise<MemorySearchResult[]>;
+  searchMemories(query: string, topK?: number, threshold?: number): Promise<MemorySearchResult[]>;
 }
 
 declare global {
@@ -91,9 +83,7 @@ let embeddingPromise: Promise<SproutEmbedWasmAPI> | null = null;
  *
  * @param opts.wasmUrl - Override the WASM URL (default: '/wasm/embedding.wasm')
  */
-export async function loadEmbeddingWasm(opts?: {
-  wasmUrl?: string;
-}): Promise<SproutEmbedWasmAPI> {
+export async function loadEmbeddingWasm(opts?: { wasmUrl?: string }): Promise<SproutEmbedWasmAPI> {
   if (embeddingPromise) {
     return embeddingPromise;
   }
@@ -110,9 +100,7 @@ export async function loadEmbeddingWasm(opts?: {
     // wasm_exec.js should already be loaded by the shell module.
     // The Go constructor is on window.Go.
     if (!window.Go) {
-      throw new Error(
-        'wasm_exec.js not loaded — the shell WASM must be initialized first',
-      );
+      throw new Error('wasm_exec.js not loaded — the shell WASM must be initialized first');
     }
 
     const go = new window.Go();
@@ -122,10 +110,7 @@ export async function loadEmbeddingWasm(opts?: {
     }
 
     const buffer = await response.arrayBuffer();
-    const { instance } = await WebAssembly.instantiate(
-      buffer,
-      go.importObject,
-    );
+    const { instance } = await WebAssembly.instantiate(buffer, go.importObject);
 
     // Run the Go instance (blocks until main() hits channel wait).
     go.run(instance);

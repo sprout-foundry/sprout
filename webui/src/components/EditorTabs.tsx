@@ -18,13 +18,7 @@ import { useTabDragReorder } from '../hooks/useTabDragReorder';
 import { type EditorBuffer } from '../types/editor';
 import { ContextMenu } from '@sprout/ui';
 import { showThemedConfirm } from './ThemedDialog';
-import {
-  catchIfAsync,
-  getBufferIcon,
-  getChatId,
-  getFileIcon,
-  getFileIconColor,
-} from './editorTabIcons';
+import { catchIfAsync, getBufferIcon, getChatId, getFileIcon, getFileIconColor } from './editorTabIcons';
 import { isSharedMode } from '../utils/sharedMode';
 import './EditorTabs.css';
 
@@ -160,10 +154,11 @@ function EditorTabs({
     if (buffer.isPinned && buffer.kind !== 'chat') return;
 
     if (buffer.isModified) {
-      const ok = await showThemedConfirm(
-        `You have unsaved changes in "${buffer.file.name}". Close without saving?`,
-        { title: 'Unsaved changes', type: 'danger', confirmLabel: 'Close without saving' },
-      );
+      const ok = await showThemedConfirm(`You have unsaved changes in "${buffer.file.name}". Close without saving?`, {
+        title: 'Unsaved changes',
+        type: 'danger',
+        confirmLabel: 'Close without saving',
+      });
       if (!ok) return;
       closeBuffer(buffer.id);
       return;
@@ -279,10 +274,11 @@ function EditorTabs({
     if (modifiedTargets.length > 0) {
       const names = modifiedTargets.map((b) => b.file.name).join(', ');
       const display = names.length > 60 ? `${names.slice(0, 60)}… and ${modifiedTargets.length - 1} more` : names;
-      const ok = await showThemedConfirm(
-        `You have unsaved changes in:\n${display}\n\nClose all without saving?`,
-        { title: 'Unsaved changes', type: 'danger', confirmLabel: 'Close without saving' },
-      );
+      const ok = await showThemedConfirm(`You have unsaved changes in:\n${display}\n\nClose all without saving?`, {
+        title: 'Unsaved changes',
+        type: 'danger',
+        confirmLabel: 'Close without saving',
+      });
       if (!ok) return;
     }
 
@@ -436,15 +432,23 @@ function EditorTabs({
                         {buffer.file.name}
                       </span>
                     )}
-                    {buffer.isModified && <span className="tab-modified" aria-label="Unsaved changes">●</span>}
+                    {buffer.isModified && (
+                      <span className="tab-modified" aria-label="Unsaved changes">
+                        ●
+                      </span>
+                    )}
                     {buffer.externallyModified && (
-                      <span className="tab-externally-modified" title="File changed on disk" aria-label="Changed on disk">
+                      <span
+                        className="tab-externally-modified"
+                        title="File changed on disk"
+                        aria-label="Changed on disk"
+                      >
                         <RefreshCw size={11} aria-hidden="true" />
                       </span>
                     )}
                     {/* Pin button hidden on chat tabs — pin/unpin a chat
-                      * isn't a typical workflow, and the pinned-default-chat
-                      * gets a forced pinned state via context anyway. */}
+                     * isn't a typical workflow, and the pinned-default-chat
+                     * gets a forced pinned state via context anyway. */}
                     {buffer.kind !== 'chat' && (
                       <button
                         className="pin-indicator"
@@ -511,10 +515,10 @@ function EditorTabs({
       </div>
 
       {/* Unsaved-changes confirm uses the same themed dialog as the rest of
-        * the app (see SettingsPanel etc.) — surfaced via a useEffect just
-        * below when `showConfirm` flips truthy. The bespoke .close-confirm
-        * dialog used to live here and was the only place in the editor
-        * that didn't use showThemedConfirm. */}
+       * the app (see SettingsPanel etc.) — surfaced via a useEffect just
+       * below when `showConfirm` flips truthy. The bespoke .close-confirm
+       * dialog used to live here and was the only place in the editor
+       * that didn't use showThemedConfirm. */}
 
       {/* ── Tab Context Menu ─────────────────────────────────────── */}
       <ContextMenu
@@ -560,8 +564,8 @@ function EditorTabs({
               </button>
             ))}
             {/* Pin is meaningless for chat tabs (defaults are forced
-              * pinned by the context). Only surface the action on real
-              * file tabs. */}
+             * pinned by the context). Only surface the action on real
+             * file tabs. */}
             {activeContextBuffer.kind !== 'chat' && (
               <button
                 className="context-menu-item"

@@ -111,8 +111,7 @@ const handleQueryStarted = (ctx: EventHandlerContext): void => {
     // added it optimistically (e.g. for concurrent queries). Only add if the
     // last message is not already a user message with the same content.
     const lastMsg = prev.messages[prev.messages.length - 1];
-    const alreadyPresent =
-      lastMsg != null && lastMsg.type === 'user' && lastMsg.content === startedQuery;
+    const alreadyPresent = lastMsg != null && lastMsg.type === 'user' && lastMsg.content === startedQuery;
 
     return {
       isProcessing: true,
@@ -450,9 +449,7 @@ const handleSubagentActivity = (ctx: EventHandlerContext): void => {
     taskCount: typeof data.task_count === 'number' ? data.task_count : undefined,
     failures: typeof data.failures === 'number' ? data.failures : undefined,
     status:
-      typeof data.status === 'string'
-        ? (data.status as 'queued' | 'started' | 'completed' | 'cancelled')
-        : undefined,
+      typeof data.status === 'string' ? (data.status as 'queued' | 'started' | 'completed' | 'cancelled') : undefined,
     reason: typeof data.reason === 'string' ? data.reason : undefined,
     tokensUsed: typeof data.tokens_used === 'number' ? data.tokens_used : undefined,
     elapsedMs: typeof data.elapsed_ms === 'number' ? data.elapsed_ms : undefined,

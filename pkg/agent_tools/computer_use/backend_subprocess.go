@@ -123,6 +123,16 @@ func (b *subprocessBackend) MouseDrag(from, to Point, button MouseButton) error 
 	return fmt.Errorf("no input tool available")
 }
 
+func (b *subprocessBackend) MoveTo(x, y int) error {
+	switch b.cliTool {
+	case "cliclick":
+		return b.run("cliclick", fmt.Sprintf("m:%d,%d", x, y))
+	case "xdotool":
+		return b.run("xdotool", "mousemove", strconv.Itoa(x), strconv.Itoa(y))
+	}
+	return fmt.Errorf("no input tool available")
+}
+
 func (b *subprocessBackend) KeyboardType(text string) error {
 	switch b.cliTool {
 	case "cliclick":

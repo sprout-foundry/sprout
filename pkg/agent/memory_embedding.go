@@ -83,11 +83,18 @@ func DeleteMemoryEmbedding(mgr *embedding.EmbeddingManager, name string) error {
 //
 // Migration skips files that are already embedded (by checking if a record
 // with ID "memory:<name>" exists in the store).
+//
+// The manager's closeChan is also selected alongside ctx.Done() so a
+// DisableEmbeddingIndex call that arrives mid-migration aborts the loop
+// promptly instead of continuing to call provider.Embed / store.Store on
+// a torn-down manager.
 func MigrateMemories(ctx context.Context, mgr *embedding.EmbeddingManager) {
 	migrationOnce.Do(func() {
 		if mgr == nil {
 			return
 		}
+
+		closeCh := mgr.CloseNotify()
 
 		memories, err := LoadAllMemories()
 		if err != nil {
@@ -98,6 +105,15 @@ func MigrateMemories(ctx context.Context, mgr *embedding.EmbeddingManager) {
 		if len(memories) == 0 {
 			debugLogf("[memory-embedding] migration: no existing memories to migrate")
 			return
+		}
+
+		// Abort before opening the store if the manager has already been
+		// closed (e.g. DisableEmbeddingIndex raced with EnableEmbeddingIndex).
+		select {
+		case <-closeCh:
+			debugLogf("[memory-embedding] migration: manager closed before start")
+			return
+		default:
 		}
 
 		store, err := mgr.GetConversationStore(ctx)
@@ -122,10 +138,16 @@ func MigrateMemories(ctx context.Context, mgr *embedding.EmbeddingManager) {
 
 		migrated := 0
 		for _, mem := range memories {
-			// Check for cancellation before each memory migration
+			// Check for cancellation before each memory migration.
+			// closeCh closes when the manager is closed via Disable; ctx.Done
+			// fires when the agent's interrupt ctx is cancelled. Either is a
+			// clean stop signal.
 			select {
 			case <-ctx.Done():
 				debugLogf("[memory-embedding] migration: cancelled, stopping after %d memories", migrated)
+				return
+			case <-closeCh:
+				debugLogf("[memory-embedding] migration: manager closed, stopping after %d memories", migrated)
 				return
 			default:
 			}
@@ -149,7 +171,7 @@ func MigrateMemories(ctx context.Context, mgr *embedding.EmbeddingManager) {
 		if migrated > 0 {
 			debugLogf("[memory-embedding] migration: embedded %d/%d memories", migrated, len(memories))
 		} else {
-			debugLogf("[memory-embedding] migration: all %d memories already embedded", len(memories))
+			debugLogf("[memory-embedding] migration: all %d memories already embedded", migrated)
 		}
 	})
 }

@@ -26,6 +26,29 @@ import (
 // appended in sorted order by KnownProviderNames().
 var staticProviderNames = providers.KnownProviders()
 
+// isCustomProvider reports whether a provider name was added by the user via
+// the custom-providers settings (not a built-in or factory-registered one).
+// A custom provider that shadows a built-in name is treated as built-in so
+// it still gets full ListModels validation.
+func isCustomProvider(provider string) bool {
+	for _, b := range KnownProviderNames() {
+		if b == provider {
+			return false
+		}
+	}
+	if cfg, err := Load(); err == nil {
+		if _, ok := cfg.CustomProviders[provider]; ok {
+			return true
+		}
+	}
+	if customs, err := LoadCustomProviders(); err == nil {
+		if _, ok := customs[provider]; ok {
+			return true
+		}
+	}
+	return false
+}
+
 // knownProviderDisplayNames maps provider names to their display names.
 // This is the single source of truth for provider display names in CLI/UI.
 // Generated from provider configs - use providers.ProviderDisplayNames() for the full map.
@@ -459,6 +482,15 @@ func ValidateAndSaveAPIKey(provider, key string) (int, error) {
 
 	models, err := api.GetModelsForProviderCtx(ctx, clientType)
 	if err != nil {
+		// For custom providers, ListModels validation is best-effort — many
+		// custom endpoints don't expose a standard /models route. Save the
+		// key anyway; the user can test it later via the "Test connection"
+		// button. For built-in providers, validation failure means the key
+		// is genuinely broken, so restore the old key and reject.
+		if isCustomProvider(provider) {
+			log.Printf("[config] API key for custom provider %q saved without validation (ListModels failed: %v)", provider, err)
+			return 0, nil
+		}
 		// Validation failed - restore old key if it existed
 		if hasOldValue {
 			if restoreErr := credentials.SetToActiveBackend(provider, oldValue); restoreErr != nil {

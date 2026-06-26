@@ -96,8 +96,12 @@ func TestInitialize_GetAvailableProviders(t *testing.T) {
 		providerSet[p] = true
 	}
 	assert.True(t, providerSet["ollama-local"], "should include ollama-local")
-	assert.True(t, providerSet["test"], "should include test")
 	assert.True(t, providerSet["editor"], "should include editor")
+
+	// The "test" client type is an in-process mock sentinel (api.TestClientType).
+	// It must NOT appear in GetAvailableProviders — if it reaches disk as
+	// LastUsedProvider, the next session silently routes to a no-op mock.
+	assert.False(t, providerSet["test"], "test must not be a selectable provider")
 }
 
 func TestInitialize_LoadOrInitConfig_SkipPrompt(t *testing.T) {

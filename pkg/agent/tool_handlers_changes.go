@@ -580,6 +580,7 @@ func (a *Agent) revertOne(ch TrackedFileChange) (string, bool, string) {
 	// snapshot — by a git commit, another session, or manual edit.
 	// Reverting would silently clobber that newer work.
 	if isStaleForRevert(abs, ch.NewCode) {
+		history.AuditRevertSkip("revertOne", abs, "stale or committed")
 		return "", false, "file modified since snapshot (stale — skipped)"
 	}
 
@@ -608,6 +609,7 @@ func (a *Agent) revertOne(ch TrackedFileChange) (string, bool, string) {
 	if ch.OriginalCode == RedactedContentMarker {
 		return "", false, "refusing to write redacted marker to disk"
 	}
+	history.AuditRevertWrite("revertOne", abs, "OriginalCode")
 	if err := os.WriteFile(abs, []byte(ch.OriginalCode), 0o644); err != nil {
 		return "", false, fmt.Sprintf("write: %v", err)
 	}

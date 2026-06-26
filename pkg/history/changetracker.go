@@ -743,6 +743,7 @@ func handleRevisionRollback(group RevisionGroup) error {
 		// (the work is now version-controlled), the revert is refused so it
 		// can't silently undo committed work.
 		if !IsRevertSafe(change.Filename, change.NewCode) {
+			AuditRevertSkip("handleRevisionRollback", change.Filename, "stale or committed")
 			fmt.Printf("  Skipping %s: file modified since snapshot (safety check)\n", change.Filename)
 			continue
 		}
@@ -751,6 +752,7 @@ func handleRevisionRollback(group RevisionGroup) error {
 
 		// Write content directly to avoid any encoding transformations
 		// Use filesystem.WriteFileWithDir which does raw binary write
+		AuditRevertWrite("handleRevisionRollback", change.Filename, "OriginalCode")
 		err := filesystem.WriteFileWithDir(change.Filename, []byte(change.OriginalCode), 0644)
 		if err != nil {
 			return fmt.Errorf("failed to rollback %s: %w", change.Filename, err)
@@ -791,6 +793,7 @@ func handleRevisionRestore(group RevisionGroup) error {
 		// change. Without this guard, restore blindly overwrites files
 		// that may contain newer committed work.
 		if isFileStaleForRestore(change.Filename, change.OriginalCode, change.NewCode) {
+			AuditRevertSkip("handleRevisionRestore", change.Filename, "stale")
 			fmt.Printf("  Skipping %s: file modified since snapshot (safety check)\n", change.Filename)
 			continue
 		}
@@ -798,6 +801,7 @@ func handleRevisionRestore(group RevisionGroup) error {
 		fmt.Printf("  Restoring %s...\n", change.Filename)
 
 		// Write content directly to avoid any encoding transformations
+		AuditRevertWrite("handleRevisionRestore", change.Filename, "NewCode")
 		err := filesystem.WriteFileWithDir(change.Filename, []byte(change.NewCode), 0644)
 		if err != nil {
 			return fmt.Errorf("failed to restore %s: %w", change.Filename, err)

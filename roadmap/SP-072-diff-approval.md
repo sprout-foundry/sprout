@@ -1,6 +1,6 @@
 # SP-072: Per-Hunk Diff Approval — Optional Approve-Before-Apply for Agent Edits
 
-**Status:** 📋 Proposed
+**Status:** ✅ Implemented
 **Date:** 2026-06-14
 **Depends on:** Change Tracking (`pkg/agent/change_tracking*.go`), SP-049 (security/approval surfaces), SP-003 (WebUI)
 **Priority:** Medium

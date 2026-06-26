@@ -4,6 +4,7 @@ package embedding
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -12,6 +13,12 @@ import (
 
 	"github.com/coder/hnsw"
 )
+
+// ErrStoreClosed is returned by mutating operations (Store, ReplaceAll,
+// DeleteByFile, DeleteByIDs, Save) invoked after Close. It exists to turn a
+// pre-existing nil-map panic into a recoverable error when a background
+// goroutine races with a Disable/Close call from the foreground.
+var ErrStoreClosed = errors.New("embedding: hnsw store is closed")
 
 // metaFile holds the model hash in a sidecar JSON file.
 type metaFile struct {
@@ -36,6 +43,12 @@ type HNSWStore struct {
 	records map[string]VectorRecord
 	path    string
 	dirty   bool
+	// closed is set by Close and observed by every mutating operation. After
+	// Close, s.records is set to nil to release memory; any goroutine that
+	// still holds a reference and races to write would otherwise panic with
+	// "assignment to entry in nil map". The flag turns that panic into a
+	// recoverable ErrStoreClosed.
+	closed bool
 }
 
 // metaPath returns the path to the sidecar .meta JSON file for this store.
@@ -240,6 +253,11 @@ func newConfiguredGraph() *hnsw.Graph[string] {
 // Records are written before the graph so a crash mid-save leaves records
 // ahead of the graph (recoverable) rather than vice versa (panic-prone).
 func (s *HNSWStore) Save() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return ErrStoreClosed
+	}
 	if err := s.saveRecords(); err != nil {
 		return fmt.Errorf("hnsw: save records: %w", err)
 	}
@@ -253,6 +271,9 @@ func (s *HNSWStore) Save() error {
 func (s *HNSWStore) Store(records []VectorRecord) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.closed {
+		return ErrStoreClosed
+	}
 
 	for i := range records {
 		rec := &records[i]
@@ -336,6 +357,9 @@ func (s *HNSWStore) Query(vec []float32, topK int, threshold float32) ([]QueryRe
 func (s *HNSWStore) DeleteByFile(filePath string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.closed {
+		return ErrStoreClosed
+	}
 
 	normalized := filepath.Clean(filePath)
 
@@ -368,6 +392,9 @@ func (s *HNSWStore) DeleteByFile(filePath string) error {
 func (s *HNSWStore) DeleteByIDs(ids []string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.closed {
+		return ErrStoreClosed
+	}
 
 	var deleted int
 	for _, id := range ids {
@@ -413,6 +440,9 @@ func (s *HNSWStore) DeleteByIDs(ids []string) error {
 func (s *HNSWStore) ReplaceAll(records []VectorRecord) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.closed {
+		return ErrStoreClosed
+	}
 
 	// Build the dedup'd records map first so the graph and the store
 	// agree on which record won the collision (the LAST one wins,
@@ -453,10 +483,21 @@ func (s *HNSWStore) Size() int {
 }
 
 // Close saves the graph and records to disk if there are pending changes,
-// then clears internal state.
+// then clears internal state. It is safe to call multiple times — subsequent
+// calls return ErrStoreClosed-on-mutate semantics without re-persisting.
+//
+// After Close, mutating operations (Store, ReplaceAll, DeleteByFile,
+// DeleteByIDs, Save) return ErrStoreClosed rather than panicking on the
+// nil records map. Read operations (Size, LoadAll, Query) continue to
+// observe whatever state was on disk before Close, since Close is
+// responsible for the final flush.
 func (s *HNSWStore) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	if s.closed {
+		return nil
+	}
 
 	if s.dirty {
 		if err := s.saveRecords(); err != nil {
@@ -469,5 +510,6 @@ func (s *HNSWStore) Close() error {
 
 	s.records = nil
 	s.dirty = false
+	s.closed = true
 	return nil
 }

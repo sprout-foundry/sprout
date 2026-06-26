@@ -1,6 +1,6 @@
 # SP-069: Pull Request Creation — Close the "agent did the work, now what?" Gap
 
-**Status:** 📋 Proposed
+**Status:** ✅ Implemented
 **Date:** 2026-06-14
 **Depends on:** SP-049 (Shell Permission Overhaul — git-write gating), SP-004 (Security)
 **Priority:** High

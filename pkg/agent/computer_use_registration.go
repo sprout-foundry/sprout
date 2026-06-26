@@ -8,8 +8,11 @@ import (
 
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/agent_tools/computer_use"
+	"github.com/sprout-foundry/sprout/pkg/clihooks"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/personas"
+	"github.com/sprout-foundry/sprout/pkg/security"
+	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // computerUseOnce guards one-time registration of the computer-use tools into
@@ -117,6 +120,14 @@ func (a *Agent) checkComputerUseActivation() error {
 	if a.IsSubagent() {
 		return fmt.Errorf("computer_user must be a top-level persona; it cannot be activated inside a subagent (no silent autonomous computer control)")
 	}
+	// SP-063: reject non-interactive activation. cfg.SkipPrompt is true for
+	// `sprout agent --skip-prompt`, automate workflows that run the agent, and
+	// the daemon serving API requests (see cmd/agent_modes.go). Computer use
+	// must never start silently — it always requires explicit interactive
+	// consent, so block under all three conditions.
+	if cfg.SkipPrompt {
+		return fmt.Errorf("the computer_user persona cannot run under --skip-prompt or in daemon mode (computer use requires explicit interactive consent)")
+	}
 	if support := computer_use.CheckPlatformSupport(); !support.Supported {
 		return fmt.Errorf("computer use is unavailable on this machine: %s", support.Reason)
 	}
@@ -140,4 +151,223 @@ func isComputerUseToolBlocked(toolName string, agent *Agent) bool {
 	}
 	active := normalizeAgentPersonaID(agent.state.GetActivePersona())
 	return active != personas.IDComputerUser
+}
+
+// ---------------------------------------------------------------------------
+// SP-063: Per-session opt-in
+// ---------------------------------------------------------------------------
+
+// checkComputerUseSessionOptIn enforces the per-session consent gate for
+// computer-use actions (SP-063). On the first computer-use tool call in a
+// chat session it prompts the user for explicit consent via the standard
+// WebUI + CLI approval cascade. Once approved (or when the workspace is on
+// the persistent allowlist), subsequent calls are fast-pathed. Returns nil
+// when the action may proceed, an error when it must be blocked.
+//
+// The check is placed in ExecuteTool AFTER isComputerUseToolBlocked so that:
+//  1. Non-computer-use tools skip the check entirely (the name set acts as
+//     a cheap filter).
+//  2. Wrong-persona calls are rejected before reaching the prompt.
+//  3. Only legitimate computer-use calls incur the (potentially blocking)
+//     consent dialog.
+func (a *Agent) checkComputerUseSessionOptIn(toolName string) error {
+	if a == nil {
+		return nil
+	}
+
+	// Fast path: already approved this session.
+	a.computerUseMu.Lock()
+	approved := a.computerUseSessionApproved
+	a.computerUseMu.Unlock()
+	if approved {
+		return nil
+	}
+
+	cfg := a.GetConfig()
+	if cfg == nil || cfg.ComputerUse == nil {
+		// No config or no computer-use config — this gate is inert. The
+		// isComputerUseToolBlocked check upstream already ensures the tools
+		// are registered, so reaching here without config means the feature
+		// wasn't enabled through the normal path. Allow (defense in depth
+		// is handled by activation gates).
+		return nil
+	}
+
+	// Auto-approve when the workspace is on the persistent allowlist.
+	ws := a.effectiveCwd()
+	if ws != "" && isWorkspaceComputerUseAllowlisted(ws, cfg.ComputerUse.WorkspaceAllowlist) {
+		a.computerUseMu.Lock()
+		a.computerUseSessionApproved = true
+		a.computerUseMu.Unlock()
+		if a.debug {
+			a.debugLog("[computer-use] session auto-approved via workspace allowlist: %s\n", ws)
+		}
+		return nil
+	}
+
+	actionDesc := computerUseActionDescription(toolName)
+	prompt := fmt.Sprintf(
+		"The computer_user persona is about to control your desktop for the first time this session.\n\n"+
+			"Workspace: %s\n"+
+			"Action: %s\n\n"+
+			"Allow this session to use computer use?",
+		ws, actionDesc,
+	)
+
+	// ---- WebUI path ----
+	// Prefer the browser dialog when a WebUI client is connected, matching
+	// the existing security-approval pattern in ExecuteTool /
+	// handleFileSecurityError.
+	if mgr := a.GetSecurityApprovalMgr(); mgr != nil && a.GetEventBus() != nil && a.HasActiveWebUIClients() {
+		clihooks.SuspendIndicator()
+		clihooks.PauseSteer()
+		defer clihooks.ResumeSteer()
+
+		if a.debug {
+			a.debugLog("[computer-use] requesting per-session opt-in via webui for %s (workspace: %s)\n", toolName, ws)
+		}
+		extras := map[string]string{
+			"risk_type": "Computer Use Opt-In",
+			"workspace": ws,
+			"action":    toolName,
+			"kind":      "computer_use_optin",
+		}
+		decision, outcome := mgr.RequestApprovalDecisionWithOutcome(
+			a.GetEventBus(),
+			security.ApprovalRequest{
+				Kind:            security.ApprovalKindTool,
+				DefaultResponse: false,
+				ToolName:        toolName,
+				RiskLevel:       "CAUTION",
+				Reasoning:       prompt,
+				ClientID:        a.GetEventClientID(),
+				UserID:          a.GetEventUserID(),
+				Extras:          extras,
+			},
+		)
+		if outcome == security.ApprovalOutcomeResponded {
+			return a.applyComputerUseOptInDecision(decision, ws)
+		}
+		// Timed out or browser disconnected — fall through to CLI prompt
+		// so a user at the terminal can respond (same rationale as the
+		// tool-security path).
+		if a.debug {
+			a.debugLog("[computer-use] webui opt-in unanswered (outcome=%d) — falling back to CLI\n", outcome)
+		}
+	}
+
+	// ---- CLI fallback ----
+	logger := utils.GetLogger(cfg != nil && cfg.SkipPrompt)
+	if logger != nil && logger.IsInteractive() {
+		if !logger.AskForConfirmation(prompt, false, true) {
+			if a.debug {
+				a.debugLog("[computer-use] user denied per-session opt-in (CLI) for %s\n", toolName)
+			}
+			return fmt.Errorf("computer use denied: the user declined the per-session opt-in")
+		}
+		// CLI path is yes/no only — record as session-scoped approval.
+		return a.applyComputerUseOptInDecision(security.ApprovalApproveOnce, ws)
+	}
+
+	// Non-interactive with no WebUI response — block for safety.
+	return fmt.Errorf("computer use requires interactive opt-in consent — no approval mechanism available (re-run interactively or add the workspace to computer_use.workspace_allowlist in settings)")
+}
+
+// applyComputerUseOptInDecision records the user's consent choice, persists
+// "always" approvals to disk, writes an audit-log entry, and returns nil
+// when the action may proceed. ApprovalDeny returns an error.
+func (a *Agent) applyComputerUseOptInDecision(decision security.ApprovalDecision, workspace string) error {
+	switch decision {
+	case security.ApprovalDeny:
+		if a.debug {
+			a.debugLog("[computer-use] user denied per-session opt-in (workspace: %s)\n", workspace)
+		}
+		return fmt.Errorf("computer use denied: the user declined the per-session opt-in")
+	case security.ApprovalApproveAlways:
+		// Persist the workspace root to the allowlist so future sessions
+		// in this directory auto-approve.
+		if err := a.persistComputerUseWorkspaceAllowlist(workspace); err != nil {
+			if a.debug {
+				a.debugLog("[computer-use] failed to persist workspace allowlist: %v (continuing with session approval)\n", err)
+			}
+			// Non-fatal: still approve for this session.
+		}
+		fallthrough
+	default:
+		// ApproveOnce, Elevate, AllowFolderSession all collapse to
+		// session-scoped approval (the dialog conceptually only offers
+		// once / always / deny for computer use).
+		a.computerUseMu.Lock()
+		a.computerUseSessionApproved = true
+		a.computerUseMu.Unlock()
+		computer_use.RecordSafetyEvent("opt_in", map[string]any{
+			"workspace": workspace,
+			"scope":     decision.String(),
+		})
+		if a.debug {
+			a.debugLog("[computer-use] session opt-in approved (scope=%s, workspace=%s)\n", decision.String(), workspace)
+		}
+		return nil
+	}
+}
+
+// persistComputerUseWorkspaceAllowlist appends workspace to the persistent
+// ComputerUse.WorkspaceAllowlist in config and saves to disk. Idempotent.
+func (a *Agent) persistComputerUseWorkspaceAllowlist(workspace string) error {
+	if a == nil || workspace == "" {
+		return fmt.Errorf("cannot allowlist empty workspace")
+	}
+	mgr := a.GetConfigManager()
+	if mgr == nil {
+		return fmt.Errorf("no config manager — cannot persist workspace allowlist")
+	}
+	return mgr.UpdateConfig(func(cfg *configuration.Config) error {
+		if cfg.ComputerUse == nil {
+			cfg.ComputerUse = &configuration.ComputerUseConfig{}
+		}
+		for _, w := range cfg.ComputerUse.WorkspaceAllowlist {
+			if w == workspace {
+				return nil // dedup
+			}
+		}
+		cfg.ComputerUse.WorkspaceAllowlist = append(cfg.ComputerUse.WorkspaceAllowlist, workspace)
+		return nil
+	})
+}
+
+// isWorkspaceComputerUseAllowlisted reports whether the given workspace path
+// sits under (or equals) any entry in the allowlist. Both sides are
+// normalized so trailing slashes and symlinks don't cause false negatives.
+func isWorkspaceComputerUseAllowlisted(workspace string, allowlist []string) bool {
+	if workspace == "" || len(allowlist) == 0 {
+		return false
+	}
+	normalized := normalizePath(workspace)
+	for _, entry := range allowlist {
+		if isUnderPrefix(normalized, normalizePath(entry)) {
+			return true
+		}
+	}
+	return false
+}
+
+// computerUseActionDescription returns a human-readable one-line description
+// of what the named computer-use tool does, for the consent dialog.
+func computerUseActionDescription(toolName string) string {
+	switch toolName {
+	case "take_screenshot":
+		return "capture a screenshot of your screen"
+	case "mouse_click":
+		return "click the mouse"
+	case "mouse_drag":
+		return "drag the mouse"
+	case "keyboard_type":
+		return "type on the keyboard"
+	case "keyboard_press":
+		return "press a keyboard key"
+	case "scroll":
+		return "scroll the screen"
+	default:
+		return fmt.Sprintf("perform a computer-use action (%s)", toolName)
+	}
 }

@@ -66,9 +66,7 @@ function makeNarration(content: string, toolRefs?: Message['toolRefs']): Message
 
 describe('MessageItem verbosity filter (SP-076)', () => {
   it('hides short inter-tool narration in compact mode', () => {
-    const message = makeNarration('Let me check the file', [
-      { id: 't1', name: 'read_file' },
-    ]);
+    const message = makeNarration('Let me check the file', [{ id: 't1', name: 'read_file' }]);
     act(() => {
       root.render(
         createElement(MessageItem, {
@@ -134,9 +132,7 @@ describe('MessageItem verbosity filter (SP-076)', () => {
   });
 
   it('shows inter-tool narration in default mode', () => {
-    const message = makeNarration('Let me check the file', [
-      { id: 't1', name: 'read_file' },
-    ]);
+    const message = makeNarration('Let me check the file', [{ id: 't1', name: 'read_file' }]);
     act(() => {
       root.render(
         createElement(MessageItem, {
@@ -152,9 +148,7 @@ describe('MessageItem verbosity filter (SP-076)', () => {
   });
 
   it('shows inter-tool narration in verbose mode', () => {
-    const message = makeNarration('Let me check the file', [
-      { id: 't1', name: 'read_file' },
-    ]);
+    const message = makeNarration('Let me check the file', [{ id: 't1', name: 'read_file' }]);
     act(() => {
       root.render(
         createElement(MessageItem, {

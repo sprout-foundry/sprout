@@ -117,7 +117,8 @@ function TodoPanel({ todos, isLoading = false }: TodoPanelProps): JSX.Element {
           // Long content gets a chevron so the user can expand to see the full text wrapped.
           const isLong = displayText.length > 60 || showsSecondary;
           const priorityClass = todo.priority ? `todo-priority-${todo.priority}` : '';
-          const itemClass = `todo-item todo-${todo.status} ${priorityClass} ${isExpanded ? 'todo-expanded' : ''}`.trim();
+          const itemClass =
+            `todo-item todo-${todo.status} ${priorityClass} ${isExpanded ? 'todo-expanded' : ''}`.trim();
           return (
             <button
               key={todo.id}
@@ -138,9 +139,7 @@ function TodoPanel({ todos, isLoading = false }: TodoPanelProps): JSX.Element {
               <span className="todo-status-icon">{getStatusIcon(todo.status)}</span>
               <span className={`todo-content ${isExpanded ? 'todo-content--expanded' : ''}`}>
                 {displayText}
-                {showsSecondary && isExpanded && (
-                  <span className="todo-secondary">{todo.content}</span>
-                )}
+                {showsSecondary && isExpanded && <span className="todo-secondary">{todo.content}</span>}
               </span>
               {isLong && (
                 <span className="todo-chevron" aria-hidden="true">

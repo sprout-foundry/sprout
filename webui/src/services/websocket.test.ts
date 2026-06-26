@@ -960,17 +960,11 @@ describe('WebSocketService - reattach on reconnect', () => {
     await triggerWebSocketOpen();
 
     // Verify clientFetch was called for status check
-    expect(clientFetch).toHaveBeenCalledWith(
-      '/api/query/status?chat_id=chat-abc',
-    );
+    expect(clientFetch).toHaveBeenCalledWith('/api/query/status?chat_id=chat-abc');
 
     // Verify the WebSocket URL includes reattach params
-    expect(appendClientIdToUrl).toHaveBeenCalledWith(
-      expect.stringContaining('reattach=chat-abc'),
-    );
-    expect(appendClientIdToUrl).toHaveBeenCalledWith(
-      expect.stringContaining('after_seq=42'),
-    );
+    expect(appendClientIdToUrl).toHaveBeenCalledWith(expect.stringContaining('reattach=chat-abc'));
+    expect(appendClientIdToUrl).toHaveBeenCalledWith(expect.stringContaining('after_seq=42'));
   });
 
   it('skips reattach when backend is NOT processing', async () => {
@@ -998,9 +992,7 @@ describe('WebSocketService - reattach on reconnect', () => {
     expect(clientFetch).toHaveBeenCalled();
 
     // Verify reattach params are NOT in the URL
-    expect(appendClientIdToUrl).not.toHaveBeenCalledWith(
-      expect.stringContaining('reattach='),
-    );
+    expect(appendClientIdToUrl).not.toHaveBeenCalledWith(expect.stringContaining('reattach='));
   });
 
   it('skips reattach when activeChatId is null', async () => {
@@ -1024,9 +1016,7 @@ describe('WebSocketService - reattach on reconnect', () => {
 
     // clientFetch should NOT have been called (no active chat)
     expect(clientFetch).not.toHaveBeenCalled();
-    expect(appendClientIdToUrl).not.toHaveBeenCalledWith(
-      expect.stringContaining('reattach='),
-    );
+    expect(appendClientIdToUrl).not.toHaveBeenCalledWith(expect.stringContaining('reattach='));
   });
 
   it('skips reattach when no last seq is known for the chat', async () => {
@@ -1075,9 +1065,7 @@ describe('WebSocketService - reattach on reconnect', () => {
     await triggerWebSocketOpen();
 
     // Reattach params should NOT be in URL (fetch failed)
-    expect(appendClientIdToUrl).not.toHaveBeenCalledWith(
-      expect.stringContaining('reattach='),
-    );
+    expect(appendClientIdToUrl).not.toHaveBeenCalledWith(expect.stringContaining('reattach='));
   });
 
   it('does not add reattach params on initial connection (wasConnectedBefore=false)', async () => {
@@ -1092,9 +1080,7 @@ describe('WebSocketService - reattach on reconnect', () => {
 
     // clientFetch should NOT have been called on initial connect
     expect(clientFetch).not.toHaveBeenCalled();
-    expect(appendClientIdToUrl).not.toHaveBeenCalledWith(
-      expect.stringContaining('reattach='),
-    );
+    expect(appendClientIdToUrl).not.toHaveBeenCalledWith(expect.stringContaining('reattach='));
   });
 });
 

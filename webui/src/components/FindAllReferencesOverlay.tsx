@@ -291,7 +291,7 @@ const FindAllReferencesOverlayImpl = ({
       </div>
     </div>
   );
-}
+};
 
 export const FindAllReferencesOverlay = React.memo(FindAllReferencesOverlayImpl, areFindAllReferencesPropsEqual);
 

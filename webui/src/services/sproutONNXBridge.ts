@@ -78,9 +78,7 @@ export function bridgeBrowserProvider(provider: BrowserONNXProvider): SproutONNX
  *
  * Idempotent — calling twice replaces the existing bridge cleanly.
  */
-export function installSproutONNXBridge(
-  options?: Partial<EmbeddingOptions>,
-): BrowserONNXProvider {
+export function installSproutONNXBridge(options?: Partial<EmbeddingOptions>): BrowserONNXProvider {
   const provider = new BrowserONNXProvider(options);
   const bridge = bridgeBrowserProvider(provider);
   (globalThis as { __sproutONNX?: SproutONNXBridge }).__sproutONNX = bridge;

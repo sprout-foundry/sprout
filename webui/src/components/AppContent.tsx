@@ -173,9 +173,7 @@ const AppContent: React.FC<AppContentProps> = ({
     (provider: string) => {
       const p = provider || state.provider || '';
       if (!p || p === 'editor') {
-        window.dispatchEvent(
-          new CustomEvent('sprout:open-settings-focus', { detail: { focus: 'provider' } }),
-        );
+        window.dispatchEvent(new CustomEvent('sprout:open-settings-focus', { detail: { focus: 'provider' } }));
         return;
       }
       // useAppStoreSetState takes an updater that returns a *partial*
@@ -468,12 +466,7 @@ const AppContent: React.FC<AppContentProps> = ({
       // (useAppContentHotkeys already listens for sprout:hotkey events).
       window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId } }));
     },
-    [
-      onSidebarToggle,
-      onTerminalExpandedChange,
-      isTerminalExpanded,
-      handleOpenHotkeysConfig,
-    ],
+    [onSidebarToggle, onTerminalExpandedChange, isTerminalExpanded, handleOpenHotkeysConfig],
   );
 
   const {

@@ -7,11 +7,7 @@
 
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import {
-  EditorPaneFooter,
-  areEditorPaneFooterPropsEqual,
-  type EditorPaneFooterProps,
-} from './EditorPaneFooter';
+import { EditorPaneFooter, areEditorPaneFooterPropsEqual, type EditorPaneFooterProps } from './EditorPaneFooter';
 
 // ---------------------------------------------------------------------------
 // Mocks

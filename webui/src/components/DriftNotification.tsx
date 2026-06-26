@@ -15,12 +15,7 @@ export interface DriftNotificationProps {
  * conversation drift and offers the user options to continue or start
  * a new chat.
  */
-function DriftNotification({
-  similarity,
-  threshold,
-  onContinue,
-  onNewChat,
-}: DriftNotificationProps): JSX.Element {
+function DriftNotification({ similarity, threshold, onContinue, onNewChat }: DriftNotificationProps): JSX.Element {
   const simPercent = Math.round(similarity * 100);
   const threshPercent = Math.round(threshold * 100);
 
@@ -36,12 +31,7 @@ function DriftNotification({
   const hasNewChat = true;
 
   return (
-    <div
-      className="drift-overlay"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Conversation drift detected"
-    >
+    <div className="drift-overlay" role="dialog" aria-modal="true" aria-label="Conversation drift detected">
       <div className="drift-card" onClick={(e) => e.stopPropagation()}>
         {/* Accent bar - warning color */}
         <div className="drift-accent-bar" />
@@ -54,9 +44,7 @@ function DriftNotification({
 
         {/* Body */}
         <div className="drift-body">
-          <p className="drift-message">
-            The conversation has drifted from the original topic.
-          </p>
+          <p className="drift-message">The conversation has drifted from the original topic.</p>
           <div className="drift-stats">
             <div className="drift-stat">
               <span className="drift-stat-label">Similarity</span>
@@ -67,28 +55,18 @@ function DriftNotification({
               <span className="drift-stat-value">{threshPercent}%</span>
             </div>
           </div>
-          <p className="drift-hint">
-            Would you like to continue this conversation or start a new one?
-          </p>
+          <p className="drift-hint">Would you like to continue this conversation or start a new one?</p>
         </div>
 
         {/* Footer */}
         <div className="drift-footer">
           {hasContinue && (
-            <button
-              type="button"
-              className="drift-btn drift-btn--continue"
-              onClick={handleContinue}
-            >
+            <button type="button" className="drift-btn drift-btn--continue" onClick={handleContinue}>
               Continue
             </button>
           )}
           {hasNewChat && (
-            <button
-              type="button"
-              className="drift-btn drift-btn--new-chat"
-              onClick={handleNewChat}
-            >
+            <button type="button" className="drift-btn drift-btn--new-chat" onClick={handleNewChat}>
               New Chat
             </button>
           )}

@@ -56,19 +56,26 @@ const mockScrollPastEnd = vi.fn(() => 'cm-scrollPastEnd');
 
 // Compartment must be a real constructor (not vi.fn) because the hook uses `new Compartment()`
 function MockCompartment() {
-  this.of = (ext) => `compartment-of(${typeof ext === 'string' ? ext : Array.isArray(ext) ? (ext.length ? ext[0] : 'empty-array') : typeof ext})`;
+  this.of = (ext) =>
+    `compartment-of(${typeof ext === 'string' ? ext : Array.isArray(ext) ? (ext.length ? ext[0] : 'empty-array') : typeof ext})`;
   this.reconfigure = vi.fn();
 }
 const mockCompartment = MockCompartment;
 
 // Local extension mocks
-const mockCreateAutoCloseTagCompartment = vi.fn(() => ({ of: (...a) => mockGetInitialAutoCloseTagExtensions(...a), reconfigure: vi.fn() }));
-const mockGetInitialAutoCloseTagExtensions = vi.fn((id) => id ? `autoCloseTag(${id})` : 'autoCloseTag-none');
+const mockCreateAutoCloseTagCompartment = vi.fn(() => ({
+  of: (...a) => mockGetInitialAutoCloseTagExtensions(...a),
+  reconfigure: vi.fn(),
+}));
+const mockGetInitialAutoCloseTagExtensions = vi.fn((id) => (id ? `autoCloseTag(${id})` : 'autoCloseTag-none'));
 const mockBracketColorizationPlugin = vi.fn(() => 'mock-bracketColorization');
 const mockCreateCodeActionsExtension = vi.fn(() => 'mock-codeActions');
 const mockCodeLensPlugin = vi.fn(() => 'mock-codeLens');
-const mockCreateEmmetCompartment = vi.fn(() => ({ of: (...a) => mockGetInitialEmmetExtensions(...a), reconfigure: vi.fn() }));
-const mockGetInitialEmmetExtensions = vi.fn((id) => id ? `emmet(${id})` : 'emmet-none');
+const mockCreateEmmetCompartment = vi.fn(() => ({
+  of: (...a) => mockGetInitialEmmetExtensions(...a),
+  reconfigure: vi.fn(),
+}));
+const mockGetInitialEmmetExtensions = vi.fn((id) => (id ? `emmet(${id})` : 'emmet-none'));
 const mockErrorLensPlugin = vi.fn(() => 'mock-errorLens');
 const mockCreateHoverTooltipExtension = vi.fn(() => 'mock-hoverTooltip');
 const mockIndentGuidesPlugin = vi.fn(() => 'mock-indentGuides');
@@ -257,16 +264,26 @@ afterEach(() => {
 
 function renderHook() {
   let ret = null;
-  function W() { ret = useEditorExtensions(); return null; }
+  function W() {
+    ret = useEditorExtensions();
+    return null;
+  }
   act(() => root.render(createElement(W)));
   return ret;
 }
 
 function buildOpts(opts = {}) {
   const o = {
-    paneId: 'pane-1', wordWrapEnabled: false, relativeLineNumbersEnabled: false,
-    minimapEnabled: false, editorFontSize: 14, editorTabSize: 4, editorUsesTabs: false,
-    whitespaceRenderingMode: 'none', inlayHintsEnabled: false, signatureHelpEnabled: false,
+    paneId: 'pane-1',
+    wordWrapEnabled: false,
+    relativeLineNumbersEnabled: false,
+    minimapEnabled: false,
+    editorFontSize: 14,
+    editorTabSize: 4,
+    editorUsesTabs: false,
+    whitespaceRenderingMode: 'none',
+    inlayHintsEnabled: false,
+    signatureHelpEnabled: false,
     languageId: 'typescript',
     themePack: { mode: 'dark', editorSyntaxStyle: 'default' },
     customHighlightStyle: null,
@@ -277,16 +294,22 @@ function buildOpts(opts = {}) {
   return {
     paneId: o.paneId,
     settings: {
-      wordWrapEnabled: o.wordWrapEnabled, relativeLineNumbersEnabled: o.relativeLineNumbersEnabled,
-      minimapEnabled: o.minimapEnabled, editorFontSize: o.editorFontSize,
-      editorTabSize: o.editorTabSize, editorUsesTabs: o.editorUsesTabs,
+      wordWrapEnabled: o.wordWrapEnabled,
+      relativeLineNumbersEnabled: o.relativeLineNumbersEnabled,
+      minimapEnabled: o.minimapEnabled,
+      editorFontSize: o.editorFontSize,
+      editorTabSize: o.editorTabSize,
+      editorUsesTabs: o.editorUsesTabs,
       whitespaceRenderingMode: o.whitespaceRenderingMode,
-      inlayHintsEnabled: o.inlayHintsEnabled, signatureHelpEnabled: o.signatureHelpEnabled,
+      inlayHintsEnabled: o.inlayHintsEnabled,
+      signatureHelpEnabled: o.signatureHelpEnabled,
     },
     theme: { themePack: o.themePack, customHighlightStyle: o.customHighlightStyle },
     buffer: {
       languageId: o.languageId,
-      getFilePath: mockGetFilePath, getFileExt: mockGetFileExt, getContent: mockGetContent,
+      getFilePath: mockGetFilePath,
+      getFileExt: mockGetFileExt,
+      getContent: mockGetContent,
     },
     actions: { getSaveFn: mockGetSaveFn },
     hotkeysCompartmentExtension: o.hotkeysCompartmentExtension,
@@ -299,8 +322,12 @@ function buildOpts(opts = {}) {
 // ---------------------------------------------------------------------------
 
 describe('exported constants', () => {
-  it('TAB_SIZE_TABS_MODE equals 0', () => { expect(TAB_SIZE_TABS_MODE).toBe(0); });
-  it('TAB_SIZE_DEFAULT equals 4', () => { expect(TAB_SIZE_DEFAULT).toBe(4); });
+  it('TAB_SIZE_TABS_MODE equals 0', () => {
+    expect(TAB_SIZE_TABS_MODE).toBe(0);
+  });
+  it('TAB_SIZE_DEFAULT equals 4', () => {
+    expect(TAB_SIZE_DEFAULT).toBe(4);
+  });
 });
 
 describe('compartment creation', () => {
@@ -418,60 +445,60 @@ describe('tab size handling', () => {
 describe('line wrapping', () => {
   it('includes lineWrapping when enabled', () => {
     const ext = renderHook().buildExtensions(buildOpts({ wordWrapEnabled: true }));
-    expect(ext.some(e => typeof e === 'string' && e.includes('cm-lineWrapping'))).toBe(true);
+    expect(ext.some((e) => typeof e === 'string' && e.includes('cm-lineWrapping'))).toBe(true);
   });
 
   it('excludes lineWrapping when disabled', () => {
     const ext = renderHook().buildExtensions(buildOpts({ wordWrapEnabled: false }));
-    expect(ext.some(e => typeof e === 'string' && e.includes('cm-lineWrapping'))).toBe(false);
+    expect(ext.some((e) => typeof e === 'string' && e.includes('cm-lineWrapping'))).toBe(false);
   });
 });
 
 describe('relative line numbers', () => {
   it('uses lineNumbersRelative when enabled', () => {
     const ext = renderHook().buildExtensions(buildOpts({ relativeLineNumbersEnabled: true }));
-    expect(ext.some(e => typeof e === 'string' && e.includes('uiw-lineNumbersRelative'))).toBe(true);
+    expect(ext.some((e) => typeof e === 'string' && e.includes('uiw-lineNumbersRelative'))).toBe(true);
   });
 
   it('uses regular lineNumbers when disabled', () => {
     const ext = renderHook().buildExtensions(buildOpts({ relativeLineNumbersEnabled: false }));
-    expect(ext.some(e => typeof e === 'string' && e.includes('cm-lineNumbers'))).toBe(true);
+    expect(ext.some((e) => typeof e === 'string' && e.includes('cm-lineNumbers'))).toBe(true);
   });
 });
 
 describe('minimap', () => {
   it('includes minimap when enabled', () => {
     const ext = renderHook().buildExtensions(buildOpts({ minimapEnabled: true }));
-    expect(ext.some(e => typeof e === 'string' && e.includes('mock-minimap'))).toBe(true);
+    expect(ext.some((e) => typeof e === 'string' && e.includes('mock-minimap'))).toBe(true);
   });
 
   it('excludes minimap when disabled', () => {
     const ext = renderHook().buildExtensions(buildOpts({ minimapEnabled: false }));
-    expect(ext.some(e => typeof e === 'string' && e.includes('mock-minimap'))).toBe(false);
+    expect(ext.some((e) => typeof e === 'string' && e.includes('mock-minimap'))).toBe(false);
   });
 });
 
 describe('inlay hints', () => {
   it('includes inlay hints when enabled', () => {
     const ext = renderHook().buildExtensions(buildOpts({ inlayHintsEnabled: true, languageId: 'typescript' }));
-    expect(ext.some(e => typeof e === 'string' && e.includes('mock-inlayHints(typescript)'))).toBe(true);
+    expect(ext.some((e) => typeof e === 'string' && e.includes('mock-inlayHints(typescript)'))).toBe(true);
   });
 
   it('excludes inlay hints when disabled', () => {
     const ext = renderHook().buildExtensions(buildOpts({ inlayHintsEnabled: false }));
-    expect(ext.some(e => typeof e === 'string' && e.includes('mock-inlayHints'))).toBe(false);
+    expect(ext.some((e) => typeof e === 'string' && e.includes('mock-inlayHints'))).toBe(false);
   });
 });
 
 describe('signature help', () => {
   it('includes signature help when enabled', () => {
     const ext = renderHook().buildExtensions(buildOpts({ signatureHelpEnabled: true, languageId: 'typescript' }));
-    expect(ext.some(e => typeof e === 'string' && e.includes('mock-signatureHelp(typescript)'))).toBe(true);
+    expect(ext.some((e) => typeof e === 'string' && e.includes('mock-signatureHelp(typescript)'))).toBe(true);
   });
 
   it('excludes signature help when disabled', () => {
     const ext = renderHook().buildExtensions(buildOpts({ signatureHelpEnabled: false }));
-    expect(ext.some(e => typeof e === 'string' && e.includes('mock-signatureHelp'))).toBe(false);
+    expect(ext.some((e) => typeof e === 'string' && e.includes('mock-signatureHelp'))).toBe(false);
   });
 });
 
@@ -532,7 +559,7 @@ describe('LSP compartment', () => {
   it('starts with empty array placeholder', () => {
     const ext = renderHook().buildExtensions(buildOpts());
     // LSP wraps [] initially, no LSP-specific extensions
-    const hasLsp = ext.some(e => typeof e === 'string' && e.includes('lsp-'));
+    const hasLsp = ext.some((e) => typeof e === 'string' && e.includes('lsp-'));
     expect(hasLsp).toBe(false);
   });
 });

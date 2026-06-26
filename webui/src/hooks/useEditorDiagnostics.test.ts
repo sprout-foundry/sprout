@@ -313,12 +313,7 @@ describe('semantic diagnostics success', () => {
       await getReturn().fetchDiagnostics('/test/file.ts', 'const x = 1;');
     });
 
-    expect(mockGetSemanticDiagnostics).toHaveBeenCalledWith(
-      '/test/file.ts',
-      'const x = 1;',
-      'typescript',
-      'edit',
-    );
+    expect(mockGetSemanticDiagnostics).toHaveBeenCalledWith('/test/file.ts', 'const x = 1;', 'typescript', 'edit');
     expect(mockDebouncedUpdate).toHaveBeenCalledWith(viewRef.current, expect.any(Array));
   });
 
@@ -476,12 +471,7 @@ describe('trigger parameter', () => {
       await getReturn().fetchDiagnostics('/test/file.ts', 'const x = 1;');
     });
 
-    expect(mockGetSemanticDiagnostics).toHaveBeenCalledWith(
-      '/test/file.ts',
-      'const x = 1;',
-      'typescript',
-      'edit',
-    );
+    expect(mockGetSemanticDiagnostics).toHaveBeenCalledWith('/test/file.ts', 'const x = 1;', 'typescript', 'edit');
   });
 
   it('passes "save" trigger when specified', async () => {
@@ -493,12 +483,7 @@ describe('trigger parameter', () => {
       await getReturn().fetchDiagnostics('/test/file.ts', 'const x = 1;', 'save');
     });
 
-    expect(mockGetSemanticDiagnostics).toHaveBeenCalledWith(
-      '/test/file.ts',
-      'const x = 1;',
-      'typescript',
-      'save',
-    );
+    expect(mockGetSemanticDiagnostics).toHaveBeenCalledWith('/test/file.ts', 'const x = 1;', 'typescript', 'save');
   });
 });
 
@@ -510,7 +495,9 @@ describe('unmount guard during async', () => {
   it('does not apply diagnostics if viewRef becomes null during semantic fetch', async () => {
     let resolveSemantic;
     mockGetSemanticDiagnostics.mockReturnValue(
-      new Promise((resolve) => { resolveSemantic = resolve; }),
+      new Promise((resolve) => {
+        resolveSemantic = resolve;
+      }),
     );
 
     const { getReturn, viewRef } = renderTestHook({

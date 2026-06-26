@@ -63,6 +63,20 @@ func (m *MockBackend) MouseClick(x, y int, button MouseButton, double bool) erro
 	return nil
 }
 
+func (m *MockBackend) MoveTo(x, y int) error {
+	m.mu.Lock()
+	m.Records = append(m.Records, MockBackendRecord{
+		Action: "MoveTo",
+		Args:   map[string]any{"x": x, "y": y},
+	})
+	m.mu.Unlock()
+
+	if m.OverrideError != nil {
+		return m.OverrideError
+	}
+	return nil
+}
+
 func (m *MockBackend) MouseDrag(from, to Point, button MouseButton) error {
 	m.mu.Lock()
 	m.Records = append(m.Records, MockBackendRecord{

@@ -40,6 +40,7 @@ type ComputerBackend interface {
 	Screenshot(region *Rect) (image []byte, dims Size, err error)
 	MouseClick(x, y int, button MouseButton, double bool) error
 	MouseDrag(from, to Point, button MouseButton) error
+	MoveTo(x, y int) error
 	KeyboardType(text string) error
 	KeyboardPress(key string) error
 	Scroll(dir ScrollDir, amount int, at *Point) error

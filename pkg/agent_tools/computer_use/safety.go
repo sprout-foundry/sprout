@@ -74,6 +74,13 @@ func (r *rateLimitedBackend) MouseDrag(from, to Point, button MouseButton) error
 	return r.inner.MouseDrag(from, to, button)
 }
 
+func (r *rateLimitedBackend) MoveTo(x, y int) error {
+	if !r.allow() {
+		return ErrRateLimited
+	}
+	return r.inner.MoveTo(x, y)
+}
+
 func (r *rateLimitedBackend) KeyboardType(text string) error {
 	if !r.allow() {
 		return ErrRateLimited

@@ -777,7 +777,12 @@
   font-weight: 600;
   letter-spacing: 0.03em;
   gap: 4px;
-  transition: background, color, border-color, box-shadow, transform 0.15s ease;
+  transition:
+    background,
+    color,
+    border-color,
+    box-shadow,
+    transform 0.15s ease;
   user-select: none;
 }
 

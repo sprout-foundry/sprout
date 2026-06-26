@@ -7,11 +7,7 @@
 
 import { Fragment, act } from 'react';
 import { createRoot } from 'react-dom/client';
-import {
-  EditorContextMenu,
-  areContextMenuEqual,
-  type EditorContextMenuProps,
-} from './EditorContextMenu';
+import { EditorContextMenu, areContextMenuEqual, type EditorContextMenuProps } from './EditorContextMenu';
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -110,8 +106,12 @@ describe('areContextMenuEqual', () => {
 
   describe('returns false when relevant props differ', () => {
     it('different contextMenu inner object reference', () => {
-      const prev = makeProps({ contextMenu: makeContextMenuBag({ contextMenu: { x: 100, y: 200, hasSelection: false } }) });
-      const next = makeProps({ contextMenu: makeContextMenuBag({ contextMenu: { x: 100, y: 200, hasSelection: false } }) });
+      const prev = makeProps({
+        contextMenu: makeContextMenuBag({ contextMenu: { x: 100, y: 200, hasSelection: false } }),
+      });
+      const next = makeProps({
+        contextMenu: makeContextMenuBag({ contextMenu: { x: 100, y: 200, hasSelection: false } }),
+      });
       expect(areContextMenuEqual(prev, next)).toBe(false);
     });
 
@@ -295,9 +295,7 @@ describe('EditorContextMenu rendering', () => {
       isSemanticLanguage: () => true,
     });
     const menu = document.querySelector('.context-menu');
-    const labels = Array.from(menu!.querySelectorAll('.menu-item-label')).map(
-      (el) => el.textContent,
-    );
+    const labels = Array.from(menu!.querySelectorAll('.menu-item-label')).map((el) => el.textContent);
     expect(labels).toContain('Go to Definition');
     expect(labels).toContain('Find All References');
   });
@@ -310,9 +308,7 @@ describe('EditorContextMenu rendering', () => {
       isSemanticLanguage: () => false,
     });
     const menu = document.querySelector('.context-menu');
-    const labels = Array.from(menu!.querySelectorAll('.menu-item-label')).map(
-      (el) => el.textContent,
-    );
+    const labels = Array.from(menu!.querySelectorAll('.menu-item-label')).map((el) => el.textContent);
     expect(labels).not.toContain('Go to Definition');
     expect(labels).not.toContain('Find All References');
   });

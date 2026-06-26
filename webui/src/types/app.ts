@@ -22,7 +22,17 @@ import type { ChatSession } from '../services/chatSessions';
 // Import canonical types from @sprout/ui
 
 // Re-export for downstream consumers
-export type { Message, ToolExecution, SubagentActivity, LogEntry, TodoStatus, TodoItem, TodoPriority, FileEdit, ToolRef };
+export type {
+  Message,
+  ToolExecution,
+  SubagentActivity,
+  LogEntry,
+  TodoStatus,
+  TodoItem,
+  TodoPriority,
+  FileEdit,
+  ToolRef,
+};
 
 // ── WebUI-specific Types ─────────────────────────────────────────────
 

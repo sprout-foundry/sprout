@@ -103,10 +103,7 @@ function BudgetBar({ spent, cap }: BudgetBarProps): JSX.Element {
 
   return (
     <div className="automations-budget-bar">
-      <div
-        className="automations-budget-fill"
-        style={{ width: `${pct}%`, background: color }}
-      />
+      <div className="automations-budget-fill" style={{ width: `${pct}%`, background: color }} />
       <span className="automations-budget-text">
         ${spent.toFixed(2)} / ${cap.toFixed(2)}
       </span>
@@ -224,9 +221,7 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
   const handleRunWorkflow = useCallback(async () => {
     if (!runModal.workflow) return;
 
-    const confirmed = window.confirm(
-      `Run workflow "${runModal.workflow.name}"?`
-    );
+    const confirmed = window.confirm(`Run workflow "${runModal.workflow.name}"?`);
     if (!confirmed) return;
 
     setIsRunningWorkflow(true);
@@ -276,10 +271,9 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
       setStoppingIds((prev) => new Set(prev).add(sessionId));
 
       try {
-        const response = await clientFetch(
-          `/api/automate/sessions/${encodeURIComponent(sessionId)}/stop`,
-          { method: 'POST' }
-        );
+        const response = await clientFetch(`/api/automate/sessions/${encodeURIComponent(sessionId)}/stop`, {
+          method: 'POST',
+        });
         if (!response.ok) {
           throw new Error(`Failed to stop session: ${friendlyStatus(response.status)}`);
         }
@@ -295,7 +289,7 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
         });
       }
     },
-    [fetchSessions]
+    [fetchSessions],
   );
 
   /* ── Polling ───────────────────────────────────────────── */
@@ -408,9 +402,7 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
                   <div key={wf.filename} className="automations-workflow-card">
                     <div className="automations-workflow-info">
                       <div className="automations-workflow-name">{wf.name}</div>
-                      {wf.description && (
-                        <div className="automations-workflow-desc">{wf.description}</div>
-                      )}
+                      {wf.description && <div className="automations-workflow-desc">{wf.description}</div>}
                     </div>
                     <button
                       className="automations-run-btn"
@@ -473,9 +465,7 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
                       <span className="automations-status-dot" />
                       <span>Running</span>
                     </span>
-                    <span className="automations-session-elapsed">
-                      {formatDuration(session.started_at)}
-                    </span>
+                    <span className="automations-session-elapsed">{formatDuration(session.started_at)}</span>
                     <span className="automations-session-budget">
                       {session.budget_usd > 0 ? (
                         <BudgetBar spent={0} cap={session.budget_usd} />
@@ -507,7 +497,9 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
                   </div>
                 ))}
                 {/* Force re-render for tick-based elapsed updates */}
-                <span className="sr-only" aria-live="polite">{tick}</span>
+                <span className="sr-only" aria-live="polite">
+                  {tick}
+                </span>
               </div>
             )}
           </div>
@@ -557,9 +549,7 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
                       <span className="automations-status-dot" />
                       <span>{session.status === 'exited' ? 'Exited' : 'Stopped'}</span>
                     </span>
-                    <span className="automations-session-elapsed">
-                      {formatDuration(session.started_at)}
-                    </span>
+                    <span className="automations-session-elapsed">{formatDuration(session.started_at)}</span>
                   </div>
                 ))}
               </div>
@@ -571,10 +561,7 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
       {/* ── Session Detail Panel ──────────────────────────── */}
       {selectedSessionId && (
         <div className="automations-detail-overlay">
-          <AutomationsSessionDetail
-            sessionId={selectedSessionId}
-            onClose={closeDetail}
-          />
+          <AutomationsSessionDetail sessionId={selectedSessionId} onClose={closeDetail} />
         </div>
       )}
 
@@ -585,12 +572,7 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
           <div className="automations-modal-content">
             <div className="automations-modal-header">
               <h3 id="run-modal-title">Run Workflow</h3>
-              <button
-                className="automations-modal-close"
-                onClick={closeRunModal}
-                title="Close"
-                aria-label="Close"
-              >
+              <button className="automations-modal-close" onClick={closeRunModal} title="Close" aria-label="Close">
                 <X size={16} />
               </button>
             </div>
@@ -614,13 +596,9 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
                     placeholder="No limit"
                     className="automations-input"
                     value={runModal.budgetUsd}
-                    onChange={(e) =>
-                      setRunModal((prev) => ({ ...prev, budgetUsd: e.target.value }))
-                    }
+                    onChange={(e) => setRunModal((prev) => ({ ...prev, budgetUsd: e.target.value }))}
                   />
-                  <span className="automations-field-hint">
-                    Optional — max spend cap in USD
-                  </span>
+                  <span className="automations-field-hint">Optional — max spend cap in USD</span>
                 </label>
 
                 <label className="automations-field" htmlFor="automation-heartbeat">
@@ -633,31 +611,21 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
                     placeholder="30"
                     className="automations-input"
                     value={runModal.heartbeat}
-                    onChange={(e) =>
-                      setRunModal((prev) => ({ ...prev, heartbeat: e.target.value }))
-                    }
+                    onChange={(e) => setRunModal((prev) => ({ ...prev, heartbeat: e.target.value }))}
                   />
-                  <span className="automations-field-hint">
-                    Optional — heartbeat interval in seconds
-                  </span>
+                  <span className="automations-field-hint">Optional — heartbeat interval in seconds</span>
                 </label>
               </div>
             </div>
 
             <div className="automations-modal-footer">
-              <button
-                className="automations-modal-cancel-btn"
-                onClick={closeRunModal}
-                disabled={isRunningWorkflow}
-              >
+              <button className="automations-modal-cancel-btn" onClick={closeRunModal} disabled={isRunningWorkflow}>
                 Cancel
               </button>
-              <button
-                className="automations-modal-run-btn"
-                onClick={handleRunWorkflow}
-                disabled={isRunningWorkflow}
-              >
-                {isRunningWorkflow ? 'Starting...' : (
+              <button className="automations-modal-run-btn" onClick={handleRunWorkflow} disabled={isRunningWorkflow}>
+                {isRunningWorkflow ? (
+                  'Starting...'
+                ) : (
                   <>
                     <Zap size={14} />
                     <span>Run</span>

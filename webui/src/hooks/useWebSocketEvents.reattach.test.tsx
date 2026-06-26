@@ -208,13 +208,15 @@ describe('useWebSocketEvents reattach sync', () => {
     });
     expect(WebSocketService.getInstance().setActiveChatId).toHaveBeenCalledWith('chat-same');
 
-    const callCountAfterFirst = (WebSocketService.getInstance().setActiveChatId as ReturnType<typeof vi.fn>).mock.calls.length;
+    const callCountAfterFirst = (WebSocketService.getInstance().setActiveChatId as ReturnType<typeof vi.fn>).mock.calls
+      .length;
 
     // Re-render with same value — useEffect should skip (dependency unchanged)
     act(() => {
       root.render(createElement(TestComponent));
     });
-    const callCountAfterSecond = (WebSocketService.getInstance().setActiveChatId as ReturnType<typeof vi.fn>).mock.calls.length;
+    const callCountAfterSecond = (WebSocketService.getInstance().setActiveChatId as ReturnType<typeof vi.fn>).mock.calls
+      .length;
 
     expect(callCountAfterSecond).toBe(callCountAfterFirst);
   });

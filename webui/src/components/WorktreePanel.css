@@ -70,7 +70,12 @@
   cursor: pointer;
   font-size: 13px;
   font-weight: 500;
-  transition: background, color, border-color, box-shadow, transform 0.2s;
+  transition:
+    background,
+    color,
+    border-color,
+    box-shadow,
+    transform 0.2s;
 }
 
 .worktree-btn-secondary:hover {
@@ -88,7 +93,12 @@
   border: 1px solid var(--border-color);
   border-radius: 6px;
   cursor: pointer;
-  transition: background, color, border-color, box-shadow, transform 0.2s;
+  transition:
+    background,
+    color,
+    border-color,
+    box-shadow,
+    transform 0.2s;
 }
 
 .worktree-btn-icon:hover {
@@ -157,7 +167,12 @@
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
-  transition: background, color, border-color, box-shadow, transform 0.2s;
+  transition:
+    background,
+    color,
+    border-color,
+    box-shadow,
+    transform 0.2s;
 }
 
 .worktree-btn-primary:hover {
@@ -184,7 +199,12 @@
   border: 1px solid var(--border-color);
   border-radius: 6px;
   cursor: pointer;
-  transition: background, color, border-color, box-shadow, transform 0.2s;
+  transition:
+    background,
+    color,
+    border-color,
+    box-shadow,
+    transform 0.2s;
 }
 
 .worktree-item-header:hover {
@@ -202,7 +222,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background, color, border-color, box-shadow, transform 0.2s;
+  transition:
+    background,
+    color,
+    border-color,
+    box-shadow,
+    transform 0.2s;
 }
 
 .worktree-expand-btn:hover {
@@ -253,7 +278,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background, color, border-color, box-shadow, transform 0.2s;
+  transition:
+    background,
+    color,
+    border-color,
+    box-shadow,
+    transform 0.2s;
 }
 
 .worktree-remove-btn:hover {
@@ -313,7 +343,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background, color, border-color, box-shadow, transform 0.2s;
+  transition:
+    background,
+    color,
+    border-color,
+    box-shadow,
+    transform 0.2s;
 }
 
 .worktree-modal-close:hover {
@@ -349,7 +384,12 @@
   background: var(--input-bg);
   color: var(--text-primary);
   font-size: 14px;
-  transition: background, color, border-color, box-shadow, transform 0.2s;
+  transition:
+    background,
+    color,
+    border-color,
+    box-shadow,
+    transform 0.2s;
 }
 
 .worktree-form-group input:focus {
@@ -380,7 +420,12 @@
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: background, color, border-color, box-shadow, transform 0.2s;
+  transition:
+    background,
+    color,
+    border-color,
+    box-shadow,
+    transform 0.2s;
 }
 
 .worktree-btn-secondary {

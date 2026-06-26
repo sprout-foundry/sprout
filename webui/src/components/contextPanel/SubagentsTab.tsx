@@ -78,26 +78,16 @@ export function SubagentsTab({
     <div className="context-panel-tools-list">
       {subagentRuns.length > 0 && (
         <div className="subagent-resource-summary">
-          <span className="subagent-stat-chip subagent-stat-active">
-            {resourceCounts.active} active
-          </span>
+          <span className="subagent-stat-chip subagent-stat-active">{resourceCounts.active} active</span>
           {resourceCounts.queued > 0 && (
-            <span className="subagent-stat-chip subagent-stat-queued">
-              {resourceCounts.queued} queued
-            </span>
+            <span className="subagent-stat-chip subagent-stat-queued">{resourceCounts.queued} queued</span>
           )}
-          <span className="subagent-stat-chip subagent-stat-completed">
-            {resourceCounts.completed} completed
-          </span>
+          <span className="subagent-stat-chip subagent-stat-completed">{resourceCounts.completed} completed</span>
           {resourceCounts.failed > 0 && (
-            <span className="subagent-stat-chip subagent-stat-failed">
-              {resourceCounts.failed} failed
-            </span>
+            <span className="subagent-stat-chip subagent-stat-failed">{resourceCounts.failed} failed</span>
           )}
           {resourceCounts.cancelled > 0 && (
-            <span className="subagent-stat-chip subagent-stat-cancelled">
-              {resourceCounts.cancelled} cancelled
-            </span>
+            <span className="subagent-stat-chip subagent-stat-cancelled">{resourceCounts.cancelled} cancelled</span>
           )}
         </div>
       )}
@@ -235,32 +225,37 @@ export function SubagentsTab({
               )}
 
               <div className="subagent-card-actions">
-                {isActive && (() => {
-                  // Distinct runner task IDs in this section. For a single
-                  // run_subagent call there's one; for run_parallel_subagents
-                  // there's one per task. We cancel them in one click.
-                  const runnerTaskIds = Array.from(
-                    new Set(activities.map((a) => a.taskId).filter((v): v is string => !!v)),
-                  );
-                  if (runnerTaskIds.length === 0) return null;
-                  const cancelling = cancellingTools.has(tool.id);
-                  return (
-                    <button
-                      type="button"
-                      className="subagent-link-btn subagent-link-btn-stop"
-                      onClick={() => void handleCancelSection(tool.id, runnerTaskIds)}
-                      disabled={cancelling}
-                      title={
-                        runnerTaskIds.length > 1
-                          ? `Cancel ${runnerTaskIds.length} running subagents`
-                          : 'Cancel this subagent'
-                      }
-                    >
-                      <Square size={11} />
-                      {cancelling ? 'Cancelling…' : runnerTaskIds.length > 1 ? `Stop (${runnerTaskIds.length})` : 'Stop'}
-                    </button>
-                  );
-                })()}
+                {isActive &&
+                  (() => {
+                    // Distinct runner task IDs in this section. For a single
+                    // run_subagent call there's one; for run_parallel_subagents
+                    // there's one per task. We cancel them in one click.
+                    const runnerTaskIds = Array.from(
+                      new Set(activities.map((a) => a.taskId).filter((v): v is string => !!v)),
+                    );
+                    if (runnerTaskIds.length === 0) return null;
+                    const cancelling = cancellingTools.has(tool.id);
+                    return (
+                      <button
+                        type="button"
+                        className="subagent-link-btn subagent-link-btn-stop"
+                        onClick={() => void handleCancelSection(tool.id, runnerTaskIds)}
+                        disabled={cancelling}
+                        title={
+                          runnerTaskIds.length > 1
+                            ? `Cancel ${runnerTaskIds.length} running subagents`
+                            : 'Cancel this subagent'
+                        }
+                      >
+                        <Square size={11} />
+                        {cancelling
+                          ? 'Cancelling…'
+                          : runnerTaskIds.length > 1
+                            ? `Stop (${runnerTaskIds.length})`
+                            : 'Stop'}
+                      </button>
+                    );
+                  })()}
                 {activities.length > 3 && (
                   <button className="subagent-link-btn" onClick={() => toggleSubagentExpansion(tool.id)}>
                     {expanded ? 'Show fewer updates' : 'Show all updates'}

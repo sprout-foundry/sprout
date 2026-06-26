@@ -65,7 +65,13 @@ export interface GitSidebarPanelProps {
   onDiscardFile: (path: string) => void;
   onSectionAction: (section: FileSection) => void;
   onOpenFile?: (path: string) => void;
-  onPullRequest: (params: { title: string; body?: string; base?: string; head?: string; draft?: boolean }) => Promise<{ url: string; number: number; state: string }>;
+  onPullRequest: (params: {
+    title: string;
+    body?: string;
+    base?: string;
+    head?: string;
+    draft?: boolean;
+  }) => Promise<{ url: string; number: number; state: string }>;
 }
 
 function GitSidebarPanel({
@@ -400,22 +406,14 @@ function GitSidebarPanel({
           value={commitMessage}
           onChange={(e) => onCommitMessageChange(e.target.value)}
           onKeyDown={(e) => {
-            if (
-              (e.metaKey || e.ctrlKey) &&
-              e.key === 'Enter' &&
-              hasStagedFiles &&
-              commitMessage.trim() &&
-              !isActing
-            ) {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && hasStagedFiles && commitMessage.trim() && !isActing) {
               e.preventDefault();
               onCommit();
             }
           }}
           disabled={!hasStagedFiles || isActing}
           placeholder={
-            hasStagedFiles
-              ? 'Write commit message… (⌘/Ctrl+Enter to commit)'
-              : 'Stage files to write a commit message'
+            hasStagedFiles ? 'Write commit message… (⌘/Ctrl+Enter to commit)' : 'Stage files to write a commit message'
           }
           aria-label="Commit message"
           className="git-sidebar-commit-input"
@@ -529,11 +527,7 @@ function GitSidebarPanel({
             <Search size={18} />
             <div>
               <div className="git-sidebar-clean-state-title">No files match “{fileFilter}”</div>
-              <button
-                type="button"
-                className="git-sidebar-clean-state-action"
-                onClick={() => setFileFilter('')}
-              >
+              <button type="button" className="git-sidebar-clean-state-action" onClick={() => setFileFilter('')}>
                 Clear filter
               </button>
             </div>
@@ -850,7 +844,17 @@ function GitSidebarPanel({
                 <div className="themed-dialog-body">
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                     <div>
-                      <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+                      <label
+                        style={{
+                          display: 'block',
+                          fontSize: 11,
+                          fontWeight: 600,
+                          color: 'var(--text-tertiary)',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.06em',
+                          marginBottom: 4,
+                        }}
+                      >
                         Title *
                       </label>
                       <input
@@ -869,7 +873,17 @@ function GitSidebarPanel({
                       />
                     </div>
                     <div>
-                      <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+                      <label
+                        style={{
+                          display: 'block',
+                          fontSize: 11,
+                          fontWeight: 600,
+                          color: 'var(--text-tertiary)',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.06em',
+                          marginBottom: 4,
+                        }}
+                      >
                         Description
                       </label>
                       <textarea
@@ -882,7 +896,17 @@ function GitSidebarPanel({
                       />
                     </div>
                     <div>
-                      <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+                      <label
+                        style={{
+                          display: 'block',
+                          fontSize: 11,
+                          fontWeight: 600,
+                          color: 'var(--text-tertiary)',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.06em',
+                          marginBottom: 4,
+                        }}
+                      >
                         Base branch
                       </label>
                       <input
@@ -906,7 +930,15 @@ function GitSidebarPanel({
                 </div>
 
                 {prError && (
-                  <div style={{ padding: 'var(--space-4) var(--space-4)', color: 'var(--accent-error)', fontSize: 13, background: 'var(--color-error-bg)', borderRadius: 'var(--radius-md)' }}>
+                  <div
+                    style={{
+                      padding: 'var(--space-4) var(--space-4)',
+                      color: 'var(--accent-error)',
+                      fontSize: 13,
+                      background: 'var(--color-error-bg)',
+                      borderRadius: 'var(--radius-md)',
+                    }}
+                  >
                     {prError}
                   </div>
                 )}

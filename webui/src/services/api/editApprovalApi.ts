@@ -39,7 +39,7 @@ export async function getPendingEdit(editId: string): Promise<PendingEdit> {
 /** Submit the user's per-hunk accept/reject decision. */
 export async function submitEditDecision(
   editId: string,
-  decision: EditDecision
+  decision: EditDecision,
 ): Promise<{ edit_id: string; decided: boolean }> {
   const resp = await fetch(`/api/edits/${editId}/decision`, {
     method: 'POST',

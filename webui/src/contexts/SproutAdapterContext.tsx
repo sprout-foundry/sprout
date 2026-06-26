@@ -1,11 +1,7 @@
 import { createContext, useContext, useMemo, type ReactNode, useCallback } from 'react';
 import type { APIAdapter } from '../services/apiAdapter';
 import { getAdapter } from '../services/apiAdapter';
-import {
-  clientFetch,
-  resolveWebUIClientId,
-  WEBUI_CLIENT_ID_HEADER,
-} from '../services/clientSession';
+import { clientFetch, resolveWebUIClientId, WEBUI_CLIENT_ID_HEADER } from '../services/clientSession';
 
 interface SproutAdapterContextValue {
   adapter: APIAdapter | null;

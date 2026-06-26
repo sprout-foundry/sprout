@@ -158,7 +158,7 @@ describe('PlatformNav Integration: CloudAdapter with platform nav items', () => 
     // Simulate what Sidebar.tsx does: read platformNavItems and sort them
     const { platformNavItems } = latestContext;
     const sorted = [...platformNavItems].sort(
-      (a: PlatformNavItem, b: PlatformNavItem) => (a.order ?? Infinity) - (b.order ?? Infinity)
+      (a: PlatformNavItem, b: PlatformNavItem) => (a.order ?? Infinity) - (b.order ?? Infinity),
     );
 
     expect(sorted[0].id).toBe('tasks');

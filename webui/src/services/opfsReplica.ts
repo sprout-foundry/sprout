@@ -107,9 +107,7 @@ const METADATA_INDEX_PATH = '.opfs-meta/index.json';
 function base64Decode(base64: string): string {
   try {
     const binary = atob(base64);
-    return new TextDecoder().decode(
-      Uint8Array.from(binary, (c) => c.charCodeAt(0)),
-    );
+    return new TextDecoder().decode(Uint8Array.from(binary, (c) => c.charCodeAt(0)));
   } catch (e) {
     throw new Error(`invalid base64 content: ${e instanceof Error ? e.message : String(e)}`);
   }
@@ -179,7 +177,7 @@ export class OPFSReplicaService {
     }
 
     try {
-      this.root = await navigator.storage.getDirectory() as FileSystemDirectoryHandle;
+      this.root = (await navigator.storage.getDirectory()) as FileSystemDirectoryHandle;
       await this.loadMetadataIndex();
       this.initialized = true;
     } catch {
@@ -192,9 +190,7 @@ export class OPFSReplicaService {
    * Creates or updates the entire replica from a file manifest.
    * Returns the count of files written and their total byte size.
    */
-  async initReplica(
-    manifest: OPFSManifestEntry[],
-  ): Promise<{ fileCount: number; totalSize: number }> {
+  async initReplica(manifest: OPFSManifestEntry[]): Promise<{ fileCount: number; totalSize: number }> {
     if (!this.isReady()) return { fileCount: 0, totalSize: 0 };
 
     let fileCount = 0;
@@ -206,10 +202,7 @@ export class OPFSReplicaService {
 
       await this.writeFile(entry.path, content);
 
-      this.metadataIndex.set(
-        entry.path,
-        defaultMetadata({ ...entry.metadata, size: bytes }),
-      );
+      this.metadataIndex.set(entry.path, defaultMetadata({ ...entry.metadata, size: bytes }));
 
       fileCount++;
       totalSize += bytes;
@@ -303,10 +296,7 @@ export class OPFSReplicaService {
       }
     }
 
-    const totalSize = Array.from(this.metadataIndex.values()).reduce(
-      (sum, m) => sum + m.size,
-      0,
-    );
+    const totalSize = Array.from(this.metadataIndex.values()).reduce((sum, m) => sum + m.size, 0);
 
     return {
       fileCount: this.metadataIndex.size,
@@ -319,10 +309,7 @@ export class OPFSReplicaService {
    * Merges partial metadata for a file into the in-memory index and
    * persists it.
    */
-  async storeMetadata(
-    path: string,
-    metadata: Partial<OPFSFileMetadata>,
-  ): Promise<void> {
+  async storeMetadata(path: string, metadata: Partial<OPFSFileMetadata>): Promise<void> {
     if (!this.isReady()) return;
 
     const existing = this.metadataIndex.get(path);
@@ -332,10 +319,7 @@ export class OPFSReplicaService {
       return;
     }
 
-    this.metadataIndex.set(
-      path,
-      defaultMetadata(this.mergeMetadata(existing, metadata)),
-    );
+    this.metadataIndex.set(path, defaultMetadata(this.mergeMetadata(existing, metadata)));
     await this.persistMetadataIndex();
   }
 
@@ -346,10 +330,7 @@ export class OPFSReplicaService {
    * overwrite the existing value. This prevents accidental zeroing of
    * sequence counters and preserves untouched metadata fields.
    */
-  private mergeMetadata(
-    existing: OPFSFileMetadata,
-    partial: Partial<OPFSFileMetadata>,
-  ): OPFSFileMetadata {
+  private mergeMetadata(existing: OPFSFileMetadata, partial: Partial<OPFSFileMetadata>): OPFSFileMetadata {
     const result = { ...existing };
     if (partial.browserSeq !== undefined && partial.browserSeq !== 0) {
       result.browserSeq = partial.browserSeq;
@@ -407,9 +388,7 @@ export class OPFSReplicaService {
       }
 
       const serialized: SerializedMetadataIndex = JSON.parse(content);
-      this.metadataIndex = new Map(
-        Object.entries(serialized).map(([path, meta]) => [path, meta]),
-      );
+      this.metadataIndex = new Map(Object.entries(serialized).map(([path, meta]) => [path, meta]));
     } catch {
       // Corrupt or missing index — start fresh
       this.metadataIndex = new Map();

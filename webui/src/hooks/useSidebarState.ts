@@ -65,7 +65,14 @@ function loadPersistedString<T extends string>(key: string, fallback: T, validVa
   return fallback;
 }
 
-const VALID_SECTION_TABS: readonly SectionTab[] = ['git', 'logs', 'files', 'settings', 'search', 'automations'] as const;
+const VALID_SECTION_TABS: readonly SectionTab[] = [
+  'git',
+  'logs',
+  'files',
+  'settings',
+  'search',
+  'automations',
+] as const;
 
 export function useSidebarState(): UseSidebarStateReturn {
   const [isMobile, setIsMobile] = useState(false);

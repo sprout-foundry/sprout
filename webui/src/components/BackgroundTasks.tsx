@@ -188,8 +188,7 @@ function BackgroundTasks({ onAttachSession }: BackgroundTasksProps): JSX.Element
   void tick;
 
   const count = sessions.length;
-  const triggerTitle =
-    count > 0 ? `${count} background ${count === 1 ? 'task' : 'tasks'}` : 'Background tasks';
+  const triggerTitle = count > 0 ? `${count} background ${count === 1 ? 'task' : 'tasks'}` : 'Background tasks';
 
   return (
     <div className="background-tasks-dropdown">

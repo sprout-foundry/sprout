@@ -73,10 +73,7 @@ export function useEditorSymbols(
   // parent passes a new string object with identical content, the hash stays
   // the same and useMemo skips re-extraction. Wrapped in useMemo so the
   // dual-hash is only recomputed when the string reference actually changes.
-  const contentKey = useMemo(
-    () => (localContent ? contentChecksum(localContent) : ''),
-    [localContent],
-  );
+  const contentKey = useMemo(() => (localContent ? contentChecksum(localContent) : ''), [localContent]);
 
   // Stage 1: Extract ALL symbols from the content.
   // Memoized on content fingerprint and extension only — does NOT depend on cursor position.

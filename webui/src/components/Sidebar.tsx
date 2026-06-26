@@ -320,10 +320,14 @@ function Sidebar({
       case 'search':
         return renderSearchSection();
       case 'automations':
-        return <AutomationsPanel onNavigateToSession={(id) => {
-          // TODO: Navigate to session output view
-          debugLog('[Sidebar] Navigate to automation session:', id);
-        }} />;
+        return (
+          <AutomationsPanel
+            onNavigateToSession={(id) => {
+              // TODO: Navigate to session output view
+              debugLog('[Sidebar] Navigate to automation session:', id);
+            }}
+          />
+        );
       case 'settings':
         return supportsSettings ? (
           <SidebarSettingsSection

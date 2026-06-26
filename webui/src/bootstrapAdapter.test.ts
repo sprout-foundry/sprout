@@ -236,9 +236,7 @@ describe('bootstrapAdapter', () => {
         const config = await fetchRuntimeConfig();
 
         expect(config).toEqual(serverConfig);
-        expect(consoleLogSpy).toHaveBeenCalledWith(
-          'bootstrap: fetched config from /api/bootstrap'
-        );
+        expect(consoleLogSpy).toHaveBeenCalledWith('bootstrap: fetched config from /api/bootstrap');
       });
 
       it('caches the fetched config in getBootstrapConfig', async () => {
@@ -254,9 +252,7 @@ describe('bootstrapAdapter', () => {
           json: () => Promise.resolve(serverConfig),
         } as any);
 
-        const { fetchRuntimeConfig, getBootstrapConfig } = await import(
-          './bootstrapAdapter'
-        );
+        const { fetchRuntimeConfig, getBootstrapConfig } = await import('./bootstrapAdapter');
         await fetchRuntimeConfig();
 
         const cached = getBootstrapConfig();
@@ -279,10 +275,7 @@ describe('bootstrapAdapter', () => {
         expect(config.wsURL).toBe('ws://env:9090/ws');
         expect(config.appMode).toBe('cloud');
         expect(config.buildVersion).toBe('2.0.0');
-        expect(consoleWarnSpy).toHaveBeenCalledWith(
-          expect.stringContaining('using VITE env vars'),
-          expect.anything()
-        );
+        expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('using VITE env vars'), expect.anything());
       });
 
       it('falls back to env vars when server returns 500', async () => {
@@ -299,10 +292,7 @@ describe('bootstrapAdapter', () => {
 
         expect(config.apiBaseURL).toBe('http://env:9090');
         expect(config.wsURL).toBe('ws://env:9090/ws');
-        expect(consoleWarnSpy).toHaveBeenCalledWith(
-          expect.stringContaining('using VITE env vars'),
-          expect.anything()
-        );
+        expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('using VITE env vars'), expect.anything());
       });
 
       it('uses partial env vars with defaults for missing fields in local mode', async () => {
@@ -335,9 +325,7 @@ describe('bootstrapAdapter', () => {
         expect(config.authMode).toBe('none');
         expect(config.appMode).toBe('local');
         expect(config.buildVersion).toBe('dev');
-        expect(consoleLogSpy).toHaveBeenCalledWith(
-          'bootstrap: using localhost defaults'
-        );
+        expect(consoleLogSpy).toHaveBeenCalledWith('bootstrap: using localhost defaults');
       });
 
       it('uses localhost defaults when server returns non-JSON and no env vars', async () => {
@@ -354,9 +342,7 @@ describe('bootstrapAdapter', () => {
 
         expect(config.apiBaseURL).toBe('http://localhost:56000');
         expect(config.wsURL).toBe('ws://localhost:56000/ws');
-        expect(consoleLogSpy).toHaveBeenCalledWith(
-          'bootstrap: using localhost defaults'
-        );
+        expect(consoleLogSpy).toHaveBeenCalledWith('bootstrap: using localhost defaults');
       });
     });
 
@@ -371,10 +357,7 @@ describe('bootstrapAdapter', () => {
         const config = await fetchRuntimeConfig();
 
         expect(config.apiBaseURL).toBe('http://fallback:3000');
-        expect(consoleWarnSpy).toHaveBeenCalledWith(
-          expect.stringContaining('using VITE env vars'),
-          expect.anything()
-        );
+        expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('using VITE env vars'), expect.anything());
       });
 
       it('falls back when server returns JSON without apiBaseURL', async () => {
@@ -388,10 +371,7 @@ describe('bootstrapAdapter', () => {
 
         expect(config.apiBaseURL).toBe('http://fallback:3000');
         // fetchError is null here because JSON parsed OK but validation failed
-        expect(consoleWarnSpy).toHaveBeenCalledWith(
-          'bootstrap: using VITE env vars (fetch failed: %s)',
-          null
-        );
+        expect(consoleWarnSpy).toHaveBeenCalledWith('bootstrap: using VITE env vars (fetch failed: %s)', null);
       });
 
       it('uses server config even when partially missing optional fields', async () => {
@@ -460,9 +440,7 @@ describe('bootstrapAdapter', () => {
         json: () => Promise.resolve(serverConfig),
       } as any);
 
-      const { fetchRuntimeConfig, getBootstrapConfig } = await import(
-        './bootstrapAdapter'
-      );
+      const { fetchRuntimeConfig, getBootstrapConfig } = await import('./bootstrapAdapter');
       await fetchRuntimeConfig();
 
       expect(getBootstrapConfig()).toEqual(serverConfig);
@@ -470,9 +448,7 @@ describe('bootstrapAdapter', () => {
 
     it('returns localhost defaults before fetchRuntimeConfig resolves', async () => {
       // Mock fetch to hang so the auto-run never completes
-      fetchSpy.mockImplementation(
-        () => new Promise(() => {})
-      );
+      fetchSpy.mockImplementation(() => new Promise(() => {}));
 
       const { getBootstrapConfig } = await import('./bootstrapAdapter');
 

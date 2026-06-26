@@ -391,7 +391,7 @@ describe('Sidebar PlatformNav Integration', () => {
             ...minimalProps,
             currentView: 'billing',
             onViewChange,
-          })
+          }),
         );
       });
 
@@ -424,13 +424,13 @@ describe('Sidebar PlatformNav Integration', () => {
 
       // Find positions
       const mainTablistIdx = children.findIndex(
-        (c) => c.getAttribute('role') === 'tablist' && c.querySelector('button[aria-label="Git"]')
+        (c) => c.getAttribute('role') === 'tablist' && c.querySelector('button[aria-label="Git"]'),
       );
       const platformNavIdx = children.findIndex(
-        (c) => c.tagName === 'NAV' && c.getAttribute('aria-label') === 'Platform navigation'
+        (c) => c.tagName === 'NAV' && c.getAttribute('aria-label') === 'Platform navigation',
       );
       const bottomTablistIdx = children.findIndex(
-        (c) => c.getAttribute('role') === 'tablist' && c.querySelector('button[aria-label="Logs"]')
+        (c) => c.getAttribute('role') === 'tablist' && c.querySelector('button[aria-label="Logs"]'),
       );
 
       // Platform nav should be after main tablist and before bottom tablist

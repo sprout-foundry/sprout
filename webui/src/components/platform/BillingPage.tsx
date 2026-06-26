@@ -222,21 +222,30 @@ const BillingPage: React.FC = () => {
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div style={{ flex: 1 }}>
-                  <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.25rem', color: '#065f46' }}>
-                    Account Reactivation
-                  </h3>
+                  <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.25rem', color: '#065f46' }}>Account Reactivation</h3>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                     {/* Step 1: Welcome Back */}
                     <div
                       data-testid="reactivation-step-1"
                       style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}
                     >
-                      <span style={{
-                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                        width: '2rem', height: '2rem', borderRadius: '50%',
-                        background: '#065f46', color: '#fff', fontWeight: 'bold', fontSize: '0.875rem',
-                        flexShrink: 0,
-                      }}>1</span>
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          width: '2rem',
+                          height: '2rem',
+                          borderRadius: '50%',
+                          background: '#065f46',
+                          color: '#fff',
+                          fontWeight: 'bold',
+                          fontSize: '0.875rem',
+                          flexShrink: 0,
+                        }}
+                      >
+                        1
+                      </span>
                       <div>
                         <strong style={{ color: '#065f46' }}>Welcome Back! 🎉</strong>
                         <p style={{ margin: '0.25rem 0 0 0', color: '#047857', fontSize: '0.875rem' }}>
@@ -250,12 +259,23 @@ const BillingPage: React.FC = () => {
                       data-testid="reactivation-step-2"
                       style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}
                     >
-                      <span style={{
-                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                        width: '2rem', height: '2rem', borderRadius: '50%',
-                        background: '#065f46', color: '#fff', fontWeight: 'bold', fontSize: '0.875rem',
-                        flexShrink: 0,
-                      }}>2</span>
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          width: '2rem',
+                          height: '2rem',
+                          borderRadius: '50%',
+                          background: '#065f46',
+                          color: '#fff',
+                          fontWeight: 'bold',
+                          fontSize: '0.875rem',
+                          flexShrink: 0,
+                        }}
+                      >
+                        2
+                      </span>
                       <div>
                         <strong style={{ color: '#065f46' }}>What Happened</strong>
                         <p style={{ margin: '0.25rem 0 0 0', color: '#047857', fontSize: '0.875rem' }}>
@@ -271,12 +291,23 @@ const BillingPage: React.FC = () => {
                       data-testid="reactivation-step-3"
                       style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}
                     >
-                      <span style={{
-                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                        width: '2rem', height: '2rem', borderRadius: '50%',
-                        background: '#065f46', color: '#fff', fontWeight: 'bold', fontSize: '0.875rem',
-                        flexShrink: 0,
-                      }}>3</span>
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          width: '2rem',
+                          height: '2rem',
+                          borderRadius: '50%',
+                          background: '#065f46',
+                          color: '#fff',
+                          fontWeight: 'bold',
+                          fontSize: '0.875rem',
+                          flexShrink: 0,
+                        }}
+                      >
+                        3
+                      </span>
                       <div>
                         <strong style={{ color: '#065f46' }}>What&apos;s Restored</strong>
                         <p style={{ margin: '0.25rem 0 0 0', color: '#047857', fontSize: '0.875rem' }}>
@@ -290,12 +321,23 @@ const BillingPage: React.FC = () => {
                       data-testid="reactivation-step-4"
                       style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}
                     >
-                      <span style={{
-                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                        width: '2rem', height: '2rem', borderRadius: '50%',
-                        background: '#065f46', color: '#fff', fontWeight: 'bold', fontSize: '0.875rem',
-                        flexShrink: 0,
-                      }}>4</span>
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          width: '2rem',
+                          height: '2rem',
+                          borderRadius: '50%',
+                          background: '#065f46',
+                          color: '#fff',
+                          fontWeight: 'bold',
+                          fontSize: '0.875rem',
+                          flexShrink: 0,
+                        }}
+                      >
+                        4
+                      </span>
                       <div>
                         <strong style={{ color: '#065f46' }}>Need Help?</strong>
                         <p style={{ margin: '0.25rem 0 0 0', color: '#047857', fontSize: '0.875rem' }}>
@@ -307,8 +349,12 @@ const BillingPage: React.FC = () => {
                           <button
                             onClick={openBillingPortal}
                             style={{
-                              background: 'none', border: 'none', color: '#065f46',
-                              textDecoration: 'underline', cursor: 'pointer', padding: 0,
+                              background: 'none',
+                              border: 'none',
+                              color: '#065f46',
+                              textDecoration: 'underline',
+                              cursor: 'pointer',
+                              padding: 0,
                               fontSize: '0.875rem',
                             }}
                           >
@@ -324,9 +370,14 @@ const BillingPage: React.FC = () => {
                   data-testid="dismiss-reactivation"
                   onClick={dismissReactivation}
                   style={{
-                    background: 'none', border: 'none', cursor: 'pointer',
-                    fontSize: '1.25rem', color: '#065f46', padding: '0.25rem',
-                    flexShrink: 0, marginLeft: '1rem',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: '1.25rem',
+                    color: '#065f46',
+                    padding: '0.25rem',
+                    flexShrink: 0,
+                    marginLeft: '1rem',
                   }}
                   aria-label="Dismiss reactivation message"
                 >
@@ -340,7 +391,9 @@ const BillingPage: React.FC = () => {
           <div className="platform-card">
             <div className="platform-card-header">
               <h3 className="platform-card-title">Current Plan</h3>
-              <span className="platform-status-badge running" data-testid="current-tier">{billing.tier.toUpperCase()}</span>
+              <span className="platform-status-badge running" data-testid="current-tier">
+                {billing.tier.toUpperCase()}
+              </span>
             </div>
             <div className="platform-card-body">
               You are on the <strong>{billing.tier}</strong> plan. Usage resets on{' '}
@@ -439,10 +492,14 @@ const BillingPage: React.FC = () => {
           )}
 
           {/* Proration History */}
-          <div data-testid="proration-preview"><ProrationDisplay prorationRecords={prorationRecords} /></div>
+          <div data-testid="proration-preview">
+            <ProrationDisplay prorationRecords={prorationRecords} />
+          </div>
 
           {/* Invoice History */}
-          <div data-testid="invoice-history"><InvoiceHistory /></div>
+          <div data-testid="invoice-history">
+            <InvoiceHistory />
+          </div>
 
           {billing.overage && (
             <div className="platform-card warning">

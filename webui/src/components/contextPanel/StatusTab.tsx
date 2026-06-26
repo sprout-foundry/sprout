@@ -120,11 +120,15 @@ export function StatusTab({ chatProps, statusMetrics, liveDurationMs }: StatusTa
             <span className="status-metric-label">Files</span>
           </div>
           <div className="status-metric">
-            <span className={`status-metric-value${statusMetrics.totalAdditions > 0 ? ' status-metric-add' : ''}`}>+{statusMetrics.totalAdditions}</span>
+            <span className={`status-metric-value${statusMetrics.totalAdditions > 0 ? ' status-metric-add' : ''}`}>
+              +{statusMetrics.totalAdditions}
+            </span>
             <span className="status-metric-label">Added</span>
           </div>
           <div className="status-metric">
-            <span className={`status-metric-value${statusMetrics.totalDeletions > 0 ? ' status-metric-del' : ''}`}>-{statusMetrics.totalDeletions}</span>
+            <span className={`status-metric-value${statusMetrics.totalDeletions > 0 ? ' status-metric-del' : ''}`}>
+              -{statusMetrics.totalDeletions}
+            </span>
             <span className="status-metric-label">Removed</span>
           </div>
         </div>

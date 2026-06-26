@@ -236,9 +236,15 @@ func (a *ActivityIndicator) IsActive() bool {
 }
 
 func (a *ActivityIndicator) run() {
+	// Capture channels at spawn time. If Stop times out and Start creates new
+	// channels before this goroutine exits, accessing a.stopCh/a.doneCh via
+	// the struct would race with the new goroutine and double-close doneCh.
+	stopCh := a.stopCh
+	doneCh := a.doneCh
+
 	ticker := time.NewTicker(spinnerCadence)
 	defer ticker.Stop()
-	defer close(a.doneCh)
+	defer close(doneCh)
 
 	// Render the first frame immediately so the user sees something within
 	// 0ms rather than waiting for the first tick.
@@ -247,7 +253,7 @@ func (a *ActivityIndicator) run() {
 
 	for {
 		select {
-		case <-a.stopCh:
+		case <-stopCh:
 			return
 		case <-ticker.C:
 			a.render(frame)

@@ -189,7 +189,13 @@ function CommitDetailPanel({
   const fullMessage = detail.subject || commit.message || '';
   const subject = firstLine(fullMessage);
   const bodyStart = fullMessage.indexOf('\n');
-  const body = bodyStart >= 0 ? fullMessage.slice(bodyStart + 1).replace(/^\n+/, '').trimEnd() : '';
+  const body =
+    bodyStart >= 0
+      ? fullMessage
+          .slice(bodyStart + 1)
+          .replace(/^\n+/, '')
+          .trimEnd()
+      : '';
 
   return (
     <div className="commit-detail-panel">
@@ -207,7 +213,9 @@ function CommitDetailPanel({
                 className="commit-detail-nav-btn"
                 onClick={() => prevCommit && onSelectCommit(prevCommit)}
                 disabled={!prevCommit}
-                title={prevCommit ? `Newer: ${prevCommit.short_hash} ${firstLine(prevCommit.message)}` : 'Newest commit'}
+                title={
+                  prevCommit ? `Newer: ${prevCommit.short_hash} ${firstLine(prevCommit.message)}` : 'Newest commit'
+                }
                 aria-label="Previous (newer) commit"
               >
                 <ChevronLeft size={14} />
@@ -217,7 +225,9 @@ function CommitDetailPanel({
                 className="commit-detail-nav-btn"
                 onClick={() => nextCommit && onSelectCommit(nextCommit)}
                 disabled={!nextCommit}
-                title={nextCommit ? `Older: ${nextCommit.short_hash} ${firstLine(nextCommit.message)}` : 'Oldest commit'}
+                title={
+                  nextCommit ? `Older: ${nextCommit.short_hash} ${firstLine(nextCommit.message)}` : 'Oldest commit'
+                }
                 aria-label="Next (older) commit"
               >
                 <ChevronRight size={14} />

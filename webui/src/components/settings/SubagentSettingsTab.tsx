@@ -127,9 +127,7 @@ export default function SubagentSettingsTab({
                 <span className="persona-mapping-value">
                   {personaProvider ? personaProvider : <em>default provider</em>}
                 </span>
-                <span className="persona-mapping-value">
-                  {personaModel ? personaModel : <em>default model</em>}
-                </span>
+                <span className="persona-mapping-value">{personaModel ? personaModel : <em>default model</em>}</span>
               </div>
             );
           })}

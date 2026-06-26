@@ -22,8 +22,7 @@ vi.mock('lucide-react', () => {
   const icons = ['ChevronRight', 'ChevronDown', 'Loader2', 'CheckCircle2', 'XCircle', 'Bot'];
   const result: Record<string, (props: any) => JSX.Element> = {};
   for (const name of icons) {
-    result[name] = (props: any) =>
-      h('svg', { 'data-testid': name.toLowerCase().replace('2', ''), ...props });
+    result[name] = (props: any) => h('svg', { 'data-testid': name.toLowerCase().replace('2', ''), ...props });
   }
   return result;
 });
@@ -759,8 +758,16 @@ describe('SubagentTree', () => {
 
   describe('multiple root nodes', () => {
     it('renders multiple independent root nodes', () => {
-      const run1 = makeRun({ toolCallId: 'run-1', depth: 0, spawnActivity: makeActivity({ id: 'act-1', timestamp: new Date('2024-01-01T00:00:00Z') }) });
-      const run2 = makeRun({ toolCallId: 'run-2', depth: 0, spawnActivity: makeActivity({ id: 'act-2', timestamp: new Date('2024-01-01T00:00:01Z') }) });
+      const run1 = makeRun({
+        toolCallId: 'run-1',
+        depth: 0,
+        spawnActivity: makeActivity({ id: 'act-1', timestamp: new Date('2024-01-01T00:00:00Z') }),
+      });
+      const run2 = makeRun({
+        toolCallId: 'run-2',
+        depth: 0,
+        spawnActivity: makeActivity({ id: 'act-2', timestamp: new Date('2024-01-01T00:00:01Z') }),
+      });
 
       act(() => {
         root.render(createElement(SubagentTree, { runs: [run1, run2] }));
@@ -806,7 +813,11 @@ describe('buildTree', () => {
 
   it('handles multiple root nodes', () => {
     const root1 = makeRun({ toolCallId: 'r1', depth: 0 });
-    const root2 = makeRun({ toolCallId: 'r2', depth: 0, spawnActivity: makeActivity({ id: 'act-r2', timestamp: new Date('2024-01-01T00:00:01Z') }) });
+    const root2 = makeRun({
+      toolCallId: 'r2',
+      depth: 0,
+      spawnActivity: makeActivity({ id: 'act-r2', timestamp: new Date('2024-01-01T00:00:01Z') }),
+    });
 
     const result = buildTree([root1, root2]);
 

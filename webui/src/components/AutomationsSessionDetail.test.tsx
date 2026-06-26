@@ -71,9 +71,7 @@ describe('AutomationsSessionDetail', () => {
     // before the promises resolve, so it shows placeholder content (not "Loading...")
     vi.mocked(clientFetch).mockReturnValue(new Promise(() => {}));
 
-    render(
-      <AutomationsSessionDetail sessionId="test-session" onClose={() => {}} />
-    );
+    render(<AutomationsSessionDetail sessionId="test-session" onClose={() => {}} />);
 
     // Shows placeholder data from props before session fetch resolves
     expect(screen.getByText('test-session')).toBeInTheDocument();
@@ -82,30 +80,20 @@ describe('AutomationsSessionDetail', () => {
   });
 
   it('shows session ID and workflow name', async () => {
-    mockFetchSequence(
-      sessionResp('sess-001', 'running', 'my-workflow'),
-      outputResp('', 0, 0),
-    );
+    mockFetchSequence(sessionResp('sess-001', 'running', 'my-workflow'), outputResp('', 0, 0));
 
-    render(
-      <AutomationsSessionDetail sessionId="sess-001" onClose={() => {}} />
-    );
+    render(<AutomationsSessionDetail sessionId="sess-001" onClose={() => {}} />);
 
     await waitFor(() => {
       expect(screen.getByText('sess-001')).toBeInTheDocument();
-      expect(screen.getByText('my-workflow')).toBeInTheDocument();
     });
+    expect(screen.getByText('my-workflow')).toBeInTheDocument();
   });
 
   it('shows Running status badge for running sessions', async () => {
-    mockFetchSequence(
-      sessionResp('s1', 'running'),
-      outputResp('', 0, 0),
-    );
+    mockFetchSequence(sessionResp('s1', 'running'), outputResp('', 0, 0));
 
-    render(
-      <AutomationsSessionDetail sessionId="s1" onClose={() => {}} />
-    );
+    render(<AutomationsSessionDetail sessionId="s1" onClose={() => {}} />);
 
     await waitFor(() => {
       expect(screen.getByText('Running')).toBeInTheDocument();
@@ -113,14 +101,9 @@ describe('AutomationsSessionDetail', () => {
   });
 
   it('shows Exited status badge for exited sessions', async () => {
-    mockFetchSequence(
-      sessionResp('s1', 'exited'),
-      outputResp('', 0, 0),
-    );
+    mockFetchSequence(sessionResp('s1', 'exited'), outputResp('', 0, 0));
 
-    render(
-      <AutomationsSessionDetail sessionId="s1" onClose={() => {}} />
-    );
+    render(<AutomationsSessionDetail sessionId="s1" onClose={() => {}} />);
 
     await waitFor(() => {
       expect(screen.getByText('Exited')).toBeInTheDocument();
@@ -128,14 +111,9 @@ describe('AutomationsSessionDetail', () => {
   });
 
   it('shows Stopped status badge for stopped sessions', async () => {
-    mockFetchSequence(
-      sessionResp('s1', 'stopped'),
-      outputResp('', 0, 0),
-    );
+    mockFetchSequence(sessionResp('s1', 'stopped'), outputResp('', 0, 0));
 
-    render(
-      <AutomationsSessionDetail sessionId="s1" onClose={() => {}} />
-    );
+    render(<AutomationsSessionDetail sessionId="s1" onClose={() => {}} />);
 
     await waitFor(() => {
       expect(screen.getByText('Stopped')).toBeInTheDocument();
@@ -146,14 +124,9 @@ describe('AutomationsSessionDetail', () => {
     vi.useFakeTimers();
     vi.setSystemTime(1_000_000_000); // Date.now()/1000 === EPOCH_S
 
-    mockFetchSequence(
-      sessionResp('s1', 'running', 'wf', 0, '/tmp/out.txt', EPOCH_S - 45),
-      outputResp('', 0, 0),
-    );
+    mockFetchSequence(sessionResp('s1', 'running', 'wf', 0, '/tmp/out.txt', EPOCH_S - 45), outputResp('', 0, 0));
 
-    render(
-      <AutomationsSessionDetail sessionId="s1" onClose={() => {}} />
-    );
+    render(<AutomationsSessionDetail sessionId="s1" onClose={() => {}} />);
 
     await waitFor(() => {
       expect(screen.getByText('45s')).toBeInTheDocument();
@@ -161,14 +134,9 @@ describe('AutomationsSessionDetail', () => {
   });
 
   it('shows budget cap when budget_usd > 0', async () => {
-    mockFetchSequence(
-      sessionResp('s1', 'running', 'wf', 10),
-      outputResp('', 0, 0),
-    );
+    mockFetchSequence(sessionResp('s1', 'running', 'wf', 10), outputResp('', 0, 0));
 
-    render(
-      <AutomationsSessionDetail sessionId="s1" onClose={() => {}} />
-    );
+    render(<AutomationsSessionDetail sessionId="s1" onClose={() => {}} />);
 
     await waitFor(() => {
       expect(screen.getByText('$10.00 cap')).toBeInTheDocument();
@@ -176,14 +144,9 @@ describe('AutomationsSessionDetail', () => {
   });
 
   it('shows "No limit" when budget_usd is 0', async () => {
-    mockFetchSequence(
-      sessionResp('s1', 'running', 'wf', 0),
-      outputResp('', 0, 0),
-    );
+    mockFetchSequence(sessionResp('s1', 'running', 'wf', 0), outputResp('', 0, 0));
 
-    render(
-      <AutomationsSessionDetail sessionId="s1" onClose={() => {}} />
-    );
+    render(<AutomationsSessionDetail sessionId="s1" onClose={() => {}} />);
 
     await waitFor(() => {
       expect(screen.getByText('No limit')).toBeInTheDocument();
@@ -191,14 +154,9 @@ describe('AutomationsSessionDetail', () => {
   });
 
   it('shows "No limit" when budget_usd is null', async () => {
-    mockFetchSequence(
-      sessionResp('s1', 'running', 'wf', null),
-      outputResp('', 0, 0),
-    );
+    mockFetchSequence(sessionResp('s1', 'running', 'wf', null), outputResp('', 0, 0));
 
-    render(
-      <AutomationsSessionDetail sessionId="s1" onClose={() => {}} />
-    );
+    render(<AutomationsSessionDetail sessionId="s1" onClose={() => {}} />);
 
     await waitFor(() => {
       expect(screen.getByText('No limit')).toBeInTheDocument();
@@ -206,14 +164,9 @@ describe('AutomationsSessionDetail', () => {
   });
 
   it('shows output stream when output_file_path exists and output is present', async () => {
-    mockFetchSequence(
-      sessionResp('s1', 'running', 'wf', 0, '/tmp/out.txt'),
-      outputResp('line1\nline2', 10, 10),
-    );
+    mockFetchSequence(sessionResp('s1', 'running', 'wf', 0, '/tmp/out.txt'), outputResp('line1\nline2', 10, 10));
 
-    render(
-      <AutomationsSessionDetail sessionId="s1" onClose={() => {}} />
-    );
+    render(<AutomationsSessionDetail sessionId="s1" onClose={() => {}} />);
 
     // RTL normalizes whitespace in text matching, so use a function matcher
     await waitFor(() => {
@@ -225,14 +178,9 @@ describe('AutomationsSessionDetail', () => {
   });
 
   it('shows "No output captured" when output_file_path is empty string', async () => {
-    mockFetchSequence(
-      sessionResp('s1', 'running', 'wf', 0, ''),
-      outputResp('', 0, 0),
-    );
+    mockFetchSequence(sessionResp('s1', 'running', 'wf', 0, ''), outputResp('', 0, 0));
 
-    render(
-      <AutomationsSessionDetail sessionId="s1" onClose={() => {}} />
-    );
+    render(<AutomationsSessionDetail sessionId="s1" onClose={() => {}} />);
 
     await waitFor(() => {
       expect(screen.getByText('No output captured')).toBeInTheDocument();
@@ -240,14 +188,9 @@ describe('AutomationsSessionDetail', () => {
   });
 
   it('shows "(empty)" when output_file_path exists but output is empty', async () => {
-    mockFetchSequence(
-      sessionResp('s1', 'running', 'wf', 0, '/tmp/empty.txt'),
-      outputResp('', 0, 0),
-    );
+    mockFetchSequence(sessionResp('s1', 'running', 'wf', 0, '/tmp/empty.txt'), outputResp('', 0, 0));
 
-    render(
-      <AutomationsSessionDetail sessionId="s1" onClose={() => {}} />
-    );
+    render(<AutomationsSessionDetail sessionId="s1" onClose={() => {}} />);
 
     await waitFor(() => {
       expect(screen.getByText('(empty)')).toBeInTheDocument();
@@ -255,14 +198,9 @@ describe('AutomationsSessionDetail', () => {
   });
 
   it('shows step progress placeholder', async () => {
-    mockFetchSequence(
-      sessionResp('s1', 'running'),
-      outputResp('', 0, 0),
-    );
+    mockFetchSequence(sessionResp('s1', 'running'), outputResp('', 0, 0));
 
-    render(
-      <AutomationsSessionDetail sessionId="s1" onClose={() => {}} />
-    );
+    render(<AutomationsSessionDetail sessionId="s1" onClose={() => {}} />);
 
     await waitFor(() => {
       expect(screen.getByText('Step progress not available')).toBeInTheDocument();
@@ -270,14 +208,9 @@ describe('AutomationsSessionDetail', () => {
   });
 
   it('shows budget events placeholder with utilization text', async () => {
-    mockFetchSequence(
-      sessionResp('s1', 'running', 'wf', 25),
-      outputResp('', 0, 0),
-    );
+    mockFetchSequence(sessionResp('s1', 'running', 'wf', 25), outputResp('', 0, 0));
 
-    render(
-      <AutomationsSessionDetail sessionId="s1" onClose={() => {}} />
-    );
+    render(<AutomationsSessionDetail sessionId="s1" onClose={() => {}} />);
 
     await waitFor(() => {
       expect(screen.getByText('Utilization: $0.00 / $25.00')).toBeInTheDocument();
@@ -285,14 +218,9 @@ describe('AutomationsSessionDetail', () => {
   });
 
   it('shows budget events placeholder without budget when budget is 0', async () => {
-    mockFetchSequence(
-      sessionResp('s1', 'running', 'wf', 0),
-      outputResp('', 0, 0),
-    );
+    mockFetchSequence(sessionResp('s1', 'running', 'wf', 0), outputResp('', 0, 0));
 
-    render(
-      <AutomationsSessionDetail sessionId="s1" onClose={() => {}} />
-    );
+    render(<AutomationsSessionDetail sessionId="s1" onClose={() => {}} />);
 
     await waitFor(() => {
       expect(screen.getByText('No budget tracking available')).toBeInTheDocument();
@@ -301,14 +229,9 @@ describe('AutomationsSessionDetail', () => {
 
   it('close button calls onClose', async () => {
     const onClose = vi.fn();
-    mockFetchSequence(
-      sessionResp('s1', 'running'),
-      outputResp('', 0, 0),
-    );
+    mockFetchSequence(sessionResp('s1', 'running'), outputResp('', 0, 0));
 
-    render(
-      <AutomationsSessionDetail sessionId="s1" onClose={onClose} />
-    );
+    render(<AutomationsSessionDetail sessionId="s1" onClose={onClose} />);
 
     await waitFor(() => {
       expect(screen.getByText('Running')).toBeInTheDocument();
@@ -320,14 +243,9 @@ describe('AutomationsSessionDetail', () => {
 
   it('Escape key calls onClose', async () => {
     const onClose = vi.fn();
-    mockFetchSequence(
-      sessionResp('s1', 'running'),
-      outputResp('', 0, 0),
-    );
+    mockFetchSequence(sessionResp('s1', 'running'), outputResp('', 0, 0));
 
-    render(
-      <AutomationsSessionDetail sessionId="s1" onClose={onClose} />
-    );
+    render(<AutomationsSessionDetail sessionId="s1" onClose={onClose} />);
 
     await waitFor(() => {
       expect(screen.getByText('Running')).toBeInTheDocument();
@@ -338,14 +256,9 @@ describe('AutomationsSessionDetail', () => {
   });
 
   it('shows error on fetch failure', async () => {
-    mockFetchSequence(
-      mr(false, {}, 500),
-      mr(false, {}, 500),
-    );
+    mockFetchSequence(mr(false, {}, 500), mr(false, {}, 500));
 
-    render(
-      <AutomationsSessionDetail sessionId="s1" onClose={() => {}} />
-    );
+    render(<AutomationsSessionDetail sessionId="s1" onClose={() => {}} />);
 
     await waitFor(() => {
       expect(screen.getByText('Failed to fetch session: 500')).toBeInTheDocument();
@@ -367,9 +280,7 @@ describe('AutomationsSessionDetail', () => {
       outputResp('', 0, 0),
     );
 
-    render(
-      <AutomationsSessionDetail sessionId="s1" onClose={() => {}} />
-    );
+    render(<AutomationsSessionDetail sessionId="s1" onClose={() => {}} />);
 
     // Wait for initial renders to settle
     await waitFor(() => {
@@ -408,9 +319,7 @@ describe('AutomationsSessionDetail', () => {
       outputResp('', 0, 0),
     );
 
-    render(
-      <AutomationsSessionDetail sessionId="s1" onClose={() => {}} />
-    );
+    render(<AutomationsSessionDetail sessionId="s1" onClose={() => {}} />);
 
     await waitFor(() => {
       expect(screen.getByText('Running')).toBeInTheDocument();
@@ -439,14 +348,9 @@ describe('AutomationsSessionDetail', () => {
   it('output auto-scrolls on new output', async () => {
     vi.useFakeTimers();
 
-    mockFetchSequence(
-      sessionResp('s1', 'running'),
-      outputResp('initial output', 14, 14),
-    );
+    mockFetchSequence(sessionResp('s1', 'running'), outputResp('initial output', 14, 14));
 
-    render(
-      <AutomationsSessionDetail sessionId="s1" onClose={() => {}} />
-    );
+    render(<AutomationsSessionDetail sessionId="s1" onClose={() => {}} />);
 
     await waitFor(() => {
       expect(screen.getByText('initial output')).toBeInTheDocument();
@@ -469,9 +373,7 @@ describe('AutomationsSessionDetail', () => {
       outputResp('part2', 10, 10),
     );
 
-    render(
-      <AutomationsSessionDetail sessionId="s1" onClose={() => {}} />
-    );
+    render(<AutomationsSessionDetail sessionId="s1" onClose={() => {}} />);
 
     // Wait for initial output
     await waitFor(() => {

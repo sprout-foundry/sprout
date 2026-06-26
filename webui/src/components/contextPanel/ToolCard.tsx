@@ -34,8 +34,7 @@ const hasTruncation = (d: unknown): d is TruncationDetails =>
 /** Depth badge tier — drives CSS-side coloring via [data-depth-tier].
  *  Avoids inline hex (CLAUDE.md design-system rule) and keeps the
  *  palette themable. */
-const getDepthBadgeTier = (depth: number): 'orchestrator' | 'deep' =>
-  depth >= 2 ? 'deep' : 'orchestrator';
+const getDepthBadgeTier = (depth: number): 'orchestrator' | 'deep' => (depth >= 2 ? 'deep' : 'orchestrator');
 
 interface ToolCardProps {
   tool: ToolExecution;

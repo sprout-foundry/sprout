@@ -369,7 +369,9 @@
   border-radius: var(--radius-sm);
   color: var(--text-secondary);
   cursor: pointer;
-  transition: background 0.12s var(--ease-out), color 0.12s var(--ease-out);
+  transition:
+    background 0.12s var(--ease-out),
+    color 0.12s var(--ease-out);
 }
 
 .history-refresh-btn:hover {
@@ -485,7 +487,10 @@
   color: var(--text-secondary);
   cursor: pointer;
   flex-shrink: 0;
-  transition: background 0.12s var(--ease-out), color 0.12s var(--ease-out), border-color 0.12s var(--ease-out);
+  transition:
+    background 0.12s var(--ease-out),
+    color 0.12s var(--ease-out),
+    border-color 0.12s var(--ease-out);
 }
 
 .history-rollback-btn:hover {

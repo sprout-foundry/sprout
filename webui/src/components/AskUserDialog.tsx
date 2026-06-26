@@ -42,7 +42,10 @@ function AskUserDialog({
 
   const initialSelection = useMemo(() => {
     if (!hasOptions || !defaultValue) return new Set<string>();
-    const values = defaultValue.split(',').map((v) => v.trim()).filter(Boolean);
+    const values = defaultValue
+      .split(',')
+      .map((v) => v.trim())
+      .filter(Boolean);
     return new Set<string>(values);
   }, [hasOptions, defaultValue]);
 
@@ -51,10 +54,7 @@ function AskUserDialog({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const firstOptionRef = useRef<HTMLButtonElement>(null);
 
-  const buildSelectionResponse = useCallback(
-    (set: Set<string>): string => Array.from(set).join(','),
-    [],
-  );
+  const buildSelectionResponse = useCallback((set: Set<string>): string => Array.from(set).join(','), []);
 
   const submitSingleOption = useCallback(
     (opt: AskUserDialogOption) => {
@@ -89,21 +89,18 @@ function AskUserDialog({
     onRespond(requestId, trimmedResponse);
   }, [requestId, response, onRespond, hasOptions, isMulti, selected, defaultValue, buildSelectionResponse]);
 
-  const toggleOption = useCallback(
-    (opt: AskUserDialogOption) => {
-      const value = optionValue(opt);
-      setSelected((prev) => {
-        const next = new Set(prev);
-        if (next.has(value)) {
-          next.delete(value);
-        } else {
-          next.add(value);
-        }
-        return next;
-      });
-    },
-    [],
-  );
+  const toggleOption = useCallback((opt: AskUserDialogOption) => {
+    const value = optionValue(opt);
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(value)) {
+        next.delete(value);
+      } else {
+        next.add(value);
+      }
+      return next;
+    });
+  }, []);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -158,7 +155,9 @@ function AskUserDialog({
         <div className="ask-user-accent-bar" />
 
         <div className="ask-user-header">
-          <span className="ask-user-icon" aria-hidden="true">?</span>
+          <span className="ask-user-icon" aria-hidden="true">
+            ?
+          </span>
           <div className="ask-user-heading-stack">
             {header && <span className="ask-user-chip">{header}</span>}
             <h2 className="ask-user-title">Question</h2>
@@ -209,13 +208,11 @@ function AskUserDialog({
                     {...ariaProps}
                   >
                     <span className="ask-user-option-marker" aria-hidden="true">
-                      {isMulti ? (isSelected ? '☑' : '☐') : (isSelected ? '●' : '○')}
+                      {isMulti ? (isSelected ? '☑' : '☐') : isSelected ? '●' : '○'}
                     </span>
                     <span className="ask-user-option-body">
                       <span className="ask-user-option-label">{opt.label}</span>
-                      {opt.description && (
-                        <span className="ask-user-option-description">{opt.description}</span>
-                      )}
+                      {opt.description && <span className="ask-user-option-description">{opt.description}</span>}
                     </span>
                   </button>
                 );

@@ -94,7 +94,12 @@
   font-size: 11px;
   font-weight: 600;
   font-family: var(--font-sans);
-  transition: background, color, border-color, box-shadow, transform 0.15s var(--ease-out);
+  transition:
+    background,
+    color,
+    border-color,
+    box-shadow,
+    transform 0.15s var(--ease-out);
 }
 
 .search-option-btn:hover {
@@ -160,7 +165,12 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  transition: background, color, border-color, box-shadow, transform 0.15s var(--ease-out);
+  transition:
+    background,
+    color,
+    border-color,
+    box-shadow,
+    transform 0.15s var(--ease-out);
 }
 
 .search-replace-btn:hover:not(:disabled) {
@@ -813,7 +823,7 @@
   font-size: 12px;
   color: var(--text-secondary);
   border-left: 2px solid var(--accent-warning, #f0ad4e);
-  background: var(--bg-tertiary, rgba(255,255,255,0.03));
+  background: var(--bg-tertiary, rgba(255, 255, 255, 0.03));
   border-radius: 0 4px 4px 0;
 }
 

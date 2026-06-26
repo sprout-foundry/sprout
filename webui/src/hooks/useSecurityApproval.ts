@@ -13,12 +13,7 @@ import type { AppState } from '../types/app';
 //
 // Backend rejects unknown values; keep this union in sync with the Go
 // validator in pkg/webui/websocket_message_types.go.
-export type SecurityApprovalAction =
-  | 'approve_once'
-  | 'approve_always'
-  | 'elevate'
-  | 'allow_folder_session'
-  | 'deny';
+export type SecurityApprovalAction = 'approve_once' | 'approve_always' | 'elevate' | 'allow_folder_session' | 'deny';
 
 export interface UseSecurityApprovalReturn {
   handleSecurityApprovalResponse: (requestId: string, approved: boolean, action?: SecurityApprovalAction) => void;

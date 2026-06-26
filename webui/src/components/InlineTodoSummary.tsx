@@ -47,10 +47,12 @@ function InlineTodoSummary({ todos, isLoading = false, onOpenTasksTab }: InlineT
   const active = findActiveTask(todos);
   const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
 
-  const activeLabel = active ? (active.activeForm || active.content) : null;
+  const activeLabel = active ? active.activeForm || active.content : null;
 
   return (
-    <div className={`inline-todo-summary ${expanded ? 'inline-todo-summary--expanded' : ''} ${flashing ? 'inline-todo-summary--flash' : ''}`}>
+    <div
+      className={`inline-todo-summary ${expanded ? 'inline-todo-summary--expanded' : ''} ${flashing ? 'inline-todo-summary--flash' : ''}`}
+    >
       <button
         type="button"
         className="inline-todo-summary-bar"
@@ -65,11 +67,7 @@ function InlineTodoSummary({ todos, isLoading = false, onOpenTasksTab }: InlineT
           {completed}/{total}
           <span className="inline-todo-summary-count-label"> done</span>
         </span>
-        <div
-          className="inline-todo-summary-bar-fill"
-          role="presentation"
-          style={{ width: `${pct}%` }}
-        />
+        <div className="inline-todo-summary-bar-fill" role="presentation" style={{ width: `${pct}%` }} />
         {activeLabel ? (
           <span className="inline-todo-summary-active">
             <span className="inline-todo-summary-active-dot" aria-hidden="true" />
@@ -86,11 +84,7 @@ function InlineTodoSummary({ todos, isLoading = false, onOpenTasksTab }: InlineT
         <div className="inline-todo-summary-body">
           <TodoPanel todos={todos} isLoading={isLoading} />
           {onOpenTasksTab && (
-            <button
-              type="button"
-              className="inline-todo-summary-open"
-              onClick={onOpenTasksTab}
-            >
+            <button type="button" className="inline-todo-summary-open" onClick={onOpenTasksTab}>
               Open in side panel
             </button>
           )}

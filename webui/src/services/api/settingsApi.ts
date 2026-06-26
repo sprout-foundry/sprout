@@ -160,9 +160,7 @@ export async function getSubagentTypes(fetchFn: typeof fetch): Promise<SubagentT
   // Strip the `test` mock-client sentinel from the catalog — see
   // miscApi.stripTestProvider for the rationale.
   if (Array.isArray(data.available_providers)) {
-    data.available_providers = data.available_providers.filter(
-      (p: { id?: string }) => p?.id !== 'test',
-    );
+    data.available_providers = data.available_providers.filter((p: { id?: string }) => p?.id !== 'test');
   }
   return data;
 }

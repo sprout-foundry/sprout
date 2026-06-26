@@ -232,16 +232,27 @@ class GemmaBpeTokenizer {
     // input must become id 109 rather than going through BPE.
     this.addedByContent = new Map();
     const lengthSet = new Set<number>();
-    let bos = -1, eos = -1, pad = -1, unk = -1;
+    let bos = -1,
+      eos = -1,
+      pad = -1,
+      unk = -1;
     for (const at of config.added_tokens ?? []) {
       if (!at.content) continue;
       this.addedByContent.set(at.content, at.id);
       lengthSet.add(at.content.length);
       switch (at.content) {
-        case '<bos>': bos = at.id; break;
-        case '<eos>': eos = at.id; break;
-        case '<pad>': pad = at.id; break;
-        case '<unk>': unk = at.id; break;
+        case '<bos>':
+          bos = at.id;
+          break;
+        case '<eos>':
+          eos = at.id;
+          break;
+        case '<pad>':
+          pad = at.id;
+          break;
+        case '<unk>':
+          unk = at.id;
+          break;
       }
     }
     this.addedLengths = Array.from(lengthSet).sort((a, b) => b - a);
@@ -306,9 +317,7 @@ class GemmaBpeTokenizer {
    * Find the earliest position in text where any added token matches.
    * At each position the longest matching token wins (HF semantics).
    */
-  private findLeftmostAddedToken(text: string):
-    | { start: number; length: number; id: number }
-    | null {
+  private findLeftmostAddedToken(text: string): { start: number; length: number; id: number } | null {
     if (this.addedByContent.size === 0) return null;
     for (let s = 0; s < text.length; s++) {
       for (const l of this.addedLengths) {
@@ -457,9 +466,15 @@ export class BrowserONNXProvider {
     this.defaultPrefix = options?.prefix ?? 'query';
   }
 
-  isReady(): boolean { return this.ready; }
-  dimensions(): number { return 768; }
-  getBackend(): string | null { return this.detectedBackend; }
+  isReady(): boolean {
+    return this.ready;
+  }
+  dimensions(): number {
+    return 768;
+  }
+  getBackend(): string | null {
+    return this.detectedBackend;
+  }
 
   async initialize(): Promise<void> {
     if (this.ready) return;
@@ -496,9 +511,7 @@ export class BrowserONNXProvider {
     }
     if (texts.length === 0) return [];
     const prefixStr = EMBEDDINGGEMMA_PREFIXES[prefix ?? this.defaultPrefix] ?? '';
-    const seqs = texts.map((t) =>
-      this.wrapAndTruncate(this.tokenizer!.encodeWithBOSAndEOS(prefixStr + t))
-    );
+    const seqs = texts.map((t) => this.wrapAndTruncate(this.tokenizer!.encodeWithBOSAndEOS(prefixStr + t)));
     const pooled = await this.runInference(seqs);
     return pooled.map((v) => this.normalize(v));
   }

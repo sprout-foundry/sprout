@@ -67,7 +67,9 @@ function ActiveSubagentCard({ run }: ActiveSubagentCardProps): JSX.Element {
               className="subagent-feed-depth-badge"
               title={subagentDepthLabel(depth)}
               aria-label={subagentDepthLabel(depth)}
-            >D{depth}</span>
+            >
+              D{depth}
+            </span>
           )}
           {run.isParallel && <span className="subagent-feed-badge">parallel</span>}
         </span>
@@ -75,12 +77,8 @@ function ActiveSubagentCard({ run }: ActiveSubagentCardProps): JSX.Element {
           {run.outputLines.length > 0 && (
             <span className="subagent-feed-line-count">{run.outputLines.length} lines</span>
           )}
-          {run.tokensUsed > 0 && (
-            <span className="subagent-feed-metric">{formatTokens(run.tokensUsed)} tok</span>
-          )}
-          {run.cost > 0 && (
-            <span className="subagent-feed-metric">{formatCost(run.cost)}</span>
-          )}
+          {run.tokensUsed > 0 && <span className="subagent-feed-metric">{formatTokens(run.tokensUsed)} tok</span>}
+          {run.cost > 0 && <span className="subagent-feed-metric">{formatCost(run.cost)}</span>}
           {startTime && <span className="subagent-feed-duration">{formatDuration(startTime)}</span>}
           {hasOutput && (
             <span className="subagent-feed-toggle">
@@ -121,10 +119,12 @@ function CompletedSubagentCard({ run }: CompletedSubagentCardProps): JSX.Element
       <span className="subagent-feed-persona">{run.persona}</span>
       {depth > 0 && (
         <span
-              className="subagent-feed-depth-badge"
-              title={subagentDepthLabel(depth)}
-              aria-label={subagentDepthLabel(depth)}
-            >D{depth}</span>
+          className="subagent-feed-depth-badge"
+          title={subagentDepthLabel(depth)}
+          aria-label={subagentDepthLabel(depth)}
+        >
+          D{depth}
+        </span>
       )}
       {run.isParallel && <span className="subagent-feed-badge">parallel</span>}
       <span className="subagent-feed-sep">·</span>
@@ -192,10 +192,18 @@ export function SubagentActivityFeed({ activities }: SubagentActivityFeedProps):
           )}
           <span
             className={`subagent-feed-view-toggle ${viewMode === 'tree' ? 'subagent-feed-view-toggle--active' : ''}`}
-            onClick={(e) => { e.stopPropagation(); setViewMode((v) => v === 'flat' ? 'tree' : 'flat'); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setViewMode((v) => (v === 'flat' ? 'tree' : 'flat'));
+            }}
             role="button"
             tabIndex={0}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); setViewMode((v) => v === 'flat' ? 'tree' : 'flat'); } }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.stopPropagation();
+                setViewMode((v) => (v === 'flat' ? 'tree' : 'flat'));
+              }
+            }}
           >
             {viewMode === 'flat' ? 'Tree' : 'List'}
           </span>
@@ -231,9 +239,7 @@ export function SubagentActivityFeed({ activities }: SubagentActivityFeedProps):
                   {totalTokens > 0 && (
                     <span className="subagent-feed-summary-metric">{formatTokens(totalTokens)} tok</span>
                   )}
-                  {totalCost > 0 && (
-                    <span className="subagent-feed-summary-metric">{formatCost(totalCost)}</span>
-                  )}
+                  {totalCost > 0 && <span className="subagent-feed-summary-metric">{formatCost(totalCost)}</span>}
                 </div>
               );
             }

@@ -110,7 +110,8 @@
 }
 
 @keyframes inline-todo-pulse {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 1;
     transform: scale(1);
   }
@@ -163,7 +164,9 @@
   font-family: var(--font-sans);
   font-size: var(--text-xs);
   cursor: pointer;
-  transition: background 0.12s var(--ease-out), color 0.12s var(--ease-out);
+  transition:
+    background 0.12s var(--ease-out),
+    color 0.12s var(--ease-out);
 }
 
 .inline-todo-summary-open:hover {

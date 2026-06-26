@@ -85,7 +85,7 @@ export interface RevertResponse {
 // ── Endpoints ───────────────────────────────────────────────────────
 
 export interface SessionChangesFilter {
-  since?: string;        // RFC3339
+  since?: string; // RFC3339
   tool?: string;
   path_pattern?: string; // glob
 }
@@ -108,10 +108,7 @@ export async function getSessionChanges(
   return response.json();
 }
 
-export async function getChangeDiff(
-  fetchFn: typeof fetch,
-  path: string,
-): Promise<ChangeDiffResponse> {
+export async function getChangeDiff(fetchFn: typeof fetch, path: string): Promise<ChangeDiffResponse> {
   const params = new URLSearchParams({ path });
   const response = await fetchFn(`/api/changes/diff?${params.toString()}`);
   if (!response.ok) {
@@ -121,9 +118,7 @@ export async function getChangeDiff(
   return response.json();
 }
 
-export async function getSessionSummary(
-  fetchFn: typeof fetch,
-): Promise<SessionSummaryResponse> {
+export async function getSessionSummary(fetchFn: typeof fetch): Promise<SessionSummaryResponse> {
   const response = await fetchFn('/api/changes/summary');
   if (!response.ok) {
     const text = await response.text();
@@ -132,13 +127,8 @@ export async function getSessionSummary(
   return response.json();
 }
 
-export async function getChangesTimeline(
-  fetchFn: typeof fetch,
-  since?: string,
-): Promise<TimelineResponse> {
-  const url = since
-    ? `/api/changes/timeline?since=${encodeURIComponent(since)}`
-    : '/api/changes/timeline';
+export async function getChangesTimeline(fetchFn: typeof fetch, since?: string): Promise<TimelineResponse> {
+  const url = since ? `/api/changes/timeline?since=${encodeURIComponent(since)}` : '/api/changes/timeline';
   const response = await fetchFn(url);
   if (!response.ok) {
     const text = await response.text();
@@ -153,10 +143,7 @@ export interface RevertRequest {
   since?: string;
 }
 
-export async function revertChanges(
-  fetchFn: typeof fetch,
-  req: RevertRequest,
-): Promise<RevertResponse> {
+export async function revertChanges(fetchFn: typeof fetch, req: RevertRequest): Promise<RevertResponse> {
   const response = await fetchFn('/api/changes/revert', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

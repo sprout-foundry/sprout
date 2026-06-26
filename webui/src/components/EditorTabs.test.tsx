@@ -18,11 +18,34 @@ vi.mock('../contexts/EditorManagerContext', () => ({
 vi.mock('lucide-react', () => {
   const mockComponent = (props: any) => null;
   const icons = [
-    'X', 'AlertTriangle', 'FolderOpen', 'FileCode', 'FileText', 'File',
-    'Code2', 'Globe', 'Palette', 'Settings', 'Terminal', 'Braces',
-    'MessageSquareText', 'GitCompareArrows', 'ShieldCheck', 'ArrowRightLeft',
-    'PanelRightOpen', 'Eye', 'Sparkles', 'Pin', 'Plus', 'GitBranch',
-    'Pencil', 'Trash2', 'ImageIcon', 'Video', 'Headphones', 'FileWarning',
+    'X',
+    'AlertTriangle',
+    'FolderOpen',
+    'FileCode',
+    'FileText',
+    'File',
+    'Code2',
+    'Globe',
+    'Palette',
+    'Settings',
+    'Terminal',
+    'Braces',
+    'MessageSquareText',
+    'GitCompareArrows',
+    'ShieldCheck',
+    'ArrowRightLeft',
+    'PanelRightOpen',
+    'Eye',
+    'Sparkles',
+    'Pin',
+    'Plus',
+    'GitBranch',
+    'Pencil',
+    'Trash2',
+    'ImageIcon',
+    'Video',
+    'Headphones',
+    'FileWarning',
   ];
   const result: Record<string, any> = {};
   icons.forEach((name) => {
@@ -40,9 +63,7 @@ vi.mock('@sprout/ui', () => ({
   // observable effect. We add the listeners only while isOpen=true and
   // tear them down on close, matching the real component's lifecycle.
   ContextMenu: ({ children, isOpen, onClose, className, zIndex }: any) => {
-    const menuRef = (window as any).React?.useRef
-      ? (window as any).React.useRef<HTMLDivElement>(null)
-      : null;
+    const menuRef = (window as any).React?.useRef ? (window as any).React.useRef<HTMLDivElement>(null) : null;
     // Lazy-import React so this mock file doesn't have to declare it as
     // a top-level dep — vitest hoists vi.mock above the imports, and
     // top-level `import React from 'react'` here would be hoisted with it.

@@ -256,8 +256,17 @@ function setupHook(opts = {}) {
     history: { reconfigure: vi.fn() },
   };
 
-  return { viewRef, buffer, bufferRef, indentManuallySetRef, fetchDiagnosticsRef,
-    isExternalUpdateRef, paneId, setters, compartments };
+  return {
+    viewRef,
+    buffer,
+    bufferRef,
+    indentManuallySetRef,
+    fetchDiagnosticsRef,
+    isExternalUpdateRef,
+    paneId,
+    setters,
+    compartments,
+  };
 }
 
 beforeEach(() => {
@@ -293,10 +302,15 @@ function renderHook(setup) {
   let hookReturn = null;
   function Wrapper() {
     hookReturn = useEditorFileIO(
-      setup.viewRef, setup.buffer, setup.bufferRef,
-      setup.compartments, setup.indentManuallySetRef,
-      setup.fetchDiagnosticsRef, setup.paneId,
-      setup.setters, setup.isExternalUpdateRef,
+      setup.viewRef,
+      setup.buffer,
+      setup.bufferRef,
+      setup.compartments,
+      setup.indentManuallySetRef,
+      setup.fetchDiagnosticsRef,
+      setup.paneId,
+      setup.setters,
+      setup.isExternalUpdateRef,
     );
     return null;
   }
@@ -496,7 +510,9 @@ describe('loadFile — indent detection', () => {
   it('applies indent detection with tabs when detected', async () => {
     const setup = setupHook();
     mockDetectIndentation.mockReturnValue({
-      useTabs: true, indentWidth: 4, indentedLineCount: 10,
+      useTabs: true,
+      indentWidth: 4,
+      indentedLineCount: 10,
     });
     const hook = renderHook(setup);
 
@@ -511,7 +527,9 @@ describe('loadFile — indent detection', () => {
   it('applies indent detection with spaces', async () => {
     const setup = setupHook();
     mockDetectIndentation.mockReturnValue({
-      useTabs: false, indentWidth: 2, indentedLineCount: 5,
+      useTabs: false,
+      indentWidth: 2,
+      indentedLineCount: 5,
     });
     const hook = renderHook(setup);
 
@@ -539,7 +557,9 @@ describe('loadFile — indent detection', () => {
   it('falls back to defaults when not enough indented lines', async () => {
     const setup = setupHook();
     mockDetectIndentation.mockReturnValue({
-      useTabs: false, indentWidth: 4, indentedLineCount: 1,
+      useTabs: false,
+      indentWidth: 4,
+      indentedLineCount: 1,
     });
     const hook = renderHook(setup);
 
@@ -583,10 +603,7 @@ describe('loadFile — fetch diagnostics', () => {
       await hook.loadFile('/test/file.ts');
     });
 
-    expect(setup.fetchDiagnosticsRef.current).toHaveBeenCalledWith(
-      '/test/file.ts',
-      'file content from disk',
-    );
+    expect(setup.fetchDiagnosticsRef.current).toHaveBeenCalledWith('/test/file.ts', 'file content from disk');
   });
 });
 

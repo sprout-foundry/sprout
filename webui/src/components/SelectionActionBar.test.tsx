@@ -49,10 +49,12 @@ describe('SelectionActionBar (@sprout/ui import)', () => {
 
   it('renders without crashing', () => {
     act(() => {
-      root.render(createElement(SelectionActionBar, {
-        count: 3,
-        onClear: vi.fn(),
-      }));
+      root.render(
+        createElement(SelectionActionBar, {
+          count: 3,
+          onClear: vi.fn(),
+        }),
+      );
     });
 
     expect(container.querySelector('.selection-action-bar')).not.toBeNull();
@@ -60,10 +62,12 @@ describe('SelectionActionBar (@sprout/ui import)', () => {
 
   it('displays correct count text for singular', () => {
     act(() => {
-      root.render(createElement(SelectionActionBar, {
-        count: 1,
-        onClear: vi.fn(),
-      }));
+      root.render(
+        createElement(SelectionActionBar, {
+          count: 1,
+          onClear: vi.fn(),
+        }),
+      );
     });
 
     const countEl = container.querySelector('.selection-count');
@@ -72,10 +76,12 @@ describe('SelectionActionBar (@sprout/ui import)', () => {
 
   it('displays correct count text for plural', () => {
     act(() => {
-      root.render(createElement(SelectionActionBar, {
-        count: 5,
-        onClear: vi.fn(),
-      }));
+      root.render(
+        createElement(SelectionActionBar, {
+          count: 5,
+          onClear: vi.fn(),
+        }),
+      );
     });
 
     const countEl = container.querySelector('.selection-count');
@@ -86,10 +92,12 @@ describe('SelectionActionBar (@sprout/ui import)', () => {
     const onClear = vi.fn();
 
     act(() => {
-      root.render(createElement(SelectionActionBar, {
-        count: 3,
-        onClear,
-      }));
+      root.render(
+        createElement(SelectionActionBar, {
+          count: 3,
+          onClear,
+        }),
+      );
     });
 
     const btn = container.querySelector<HTMLButtonElement>('.clear-selection-btn');

@@ -262,9 +262,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
           />
         );
       case 'status':
-        return (
-          <StatusTab chatProps={chatProps} statusMetrics={statusMetrics} liveDurationMs={liveDurationMs} />
-        );
+        return <StatusTab chatProps={chatProps} statusMetrics={statusMetrics} liveDurationMs={liveDurationMs} />;
       default:
         return (
           <SubagentsTab

@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 // File size constants for read operations
@@ -265,50 +265,33 @@ func isBinaryContent(content []byte) bool {
 	return false
 }
 
-// statWithTimeout wraps os.Stat with a timeout to guard against hangs
+// statWithTimeout wraps os.Stat with a short timeout to guard against hangs
 // on unresponsive network filesystems (NFS, cloud mounts, Docker volumes).
-// If the context has no Done channel, os.Stat is called directly.
 func statWithTimeout(ctx context.Context, path string) (os.FileInfo, error) {
-	if ctx.Done() == nil {
-		return os.Stat(path)
-	}
-
-	type result struct {
+	type statResult struct {
 		info os.FileInfo
 		err  error
 	}
-	resultCh := make(chan result, 1)
+	resultCh := make(chan statResult, 1)
 	go func() {
 		info, err := os.Stat(path)
-		resultCh <- result{info, err}
+		resultCh <- statResult{info, err}
 	}()
-
 	select {
-	case res := <-resultCh:
-		return res.info, res.err
-	case <-time.After(5 * time.Second):
-		return nil, fmt.Errorf("stat timed out after 5s for: %s", path)
 	case <-ctx.Done():
 		return nil, ctx.Err()
+	case <-time.After(5 * time.Second):
+		return nil, fmt.Errorf("stat timed out after 5s for: %s", path)
+	case res := <-resultCh:
+		return res.info, res.err
 	}
 }
 
 // readAllWithContext reads an entire file with context cancellation support.
-// The read runs in a goroutine so the caller can return immediately on context
-// cancellation rather than blocking on a stuck filesystem. maxSize limits the
-// bytes read. If the context has no Done channel (e.g., context.Background()),
-// the syscall is invoked directly to avoid goroutine overhead.
+// Unlike io.ReadAll, this launches the read in a goroutine so that if the context
+// is cancelled (e.g., tool timeout fires), the goroutine is abandoned rather than
+// blocking until EOF. The maxSize parameter limits memory usage for very large files.
 func readAllWithContext(ctx context.Context, path string, maxSize int) ([]byte, error) {
-	// For non-cancellable contexts, skip the goroutine entirely.
-	if ctx.Done() == nil {
-		file, err := os.Open(path)
-		if err != nil {
-			return nil, fmt.Errorf("open file: %w", err)
-		}
-		defer file.Close()
-		return io.ReadAll(io.LimitReader(file, int64(maxSize)))
-	}
-
 	type readResult struct {
 		data []byte
 		err  error
@@ -322,36 +305,28 @@ func readAllWithContext(ctx context.Context, path string, maxSize int) ([]byte, 
 			return
 		}
 		defer file.Close()
-		data, err := io.ReadAll(io.LimitReader(file, int64(maxSize)))
-		resultCh <- readResult{data, err}
+
+		limited := &io.LimitedReader{R: file, N: int64(maxSize)}
+		data, err := io.ReadAll(limited)
+		if err != nil {
+			resultCh <- readResult{nil, fmt.Errorf("read file: %w", err)}
+			return
+		}
+		resultCh <- readResult{data: data}
 	}()
 
 	select {
 	case res := <-resultCh:
 		return res.data, res.err
 	case <-ctx.Done():
+		// Abandon the goroutine — file handle will be GC'd eventually
 		return nil, ctx.Err()
 	}
 }
 
 // fileReadWithContext reads a specific portion of a file using read(2) syscalls.
 // This is used for head+tail reads where we need precise positioning.
-// If the context has no Done channel, the syscall is invoked directly.
 func fileReadWithContext(ctx context.Context, path string, offset int64, buf []byte) (int, error) {
-	if ctx.Done() == nil {
-		file, err := os.Open(path)
-		if err != nil {
-			return 0, fmt.Errorf("open file: %w", err)
-		}
-		defer file.Close()
-		if offset > 0 {
-			if _, err := file.Seek(offset, io.SeekStart); err != nil {
-				return 0, fmt.Errorf("seek: %w", err)
-			}
-		}
-		return file.Read(buf)
-	}
-
 	type readResult struct {
 		n   int
 		err error
@@ -365,6 +340,7 @@ func fileReadWithContext(ctx context.Context, path string, offset int64, buf []b
 			return
 		}
 		defer file.Close()
+
 		if offset > 0 {
 			if _, err := file.Seek(offset, io.SeekStart); err != nil {
 				resultCh <- readResult{0, fmt.Errorf("seek: %w", err)}

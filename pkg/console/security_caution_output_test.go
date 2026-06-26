@@ -269,31 +269,23 @@ func TestPrintExternal_SteerActive_RoutesToSteerReader(t *testing.T) {
 
 	output := buf.String()
 
-	// The output should contain the scroll-region reset sequence
-	// (\033[r) that printExternalLocked emits first.
-	if !strings.Contains(output, "\033[r") {
-		t.Error("Output missing scroll-region reset sequence \\033[r — steer path was not used")
-	}
-
-	// The output should contain the message bytes.
+	// The output should contain the message bytes. On a non-TTY footer
+	// (terminalSize returns 0,0) cursor positioning is skipped, so the
+	// message is written directly — no ANSI prefix.
 	if !strings.Contains(output, "steer test message") {
 		t.Error("Output missing message bytes — steer path was not used")
 	}
 }
 
-// TestPrintExternal_SteerActive_PrintExternalLocked_ScrollResetAndMessage
-// verifies the ANSI sequence ordering in printExternalLocked: scroll reset,
-// then cursor positioning (when terminal is large enough), then message,
-// then scroll region re-clamp.
-func TestPrintExternal_SteerActive_PrintExternalLocked_ScrollResetAndMessage(t *testing.T) {
-	// Create a pipe to act as a fake TTY fd so terminalSize() returns
-	// real dimensions. We use a real os.File so term.IsTerminal is
-	// false (pipes aren't TTYs), but we can set fd >= 0 so
-	// terminalSize() calls term.GetSize.
-	//
+// TestPrintExternal_SteerActive_PrintExternalLocked_CursorPositionAndMessage
+// verifies the ANSI sequence ordering in printExternalLocked: cursor
+// positioning (when terminal is large enough), then message. The scroll
+// region is NOT reset — the existing region already protects the pinned
+// rows, and resetting it would let the message scroll them away.
+func TestPrintExternal_SteerActive_PrintExternalLocked_CursorPositionAndMessage(t *testing.T) {
 	// Since pipes aren't TTYs, terminalSize will fail and return (0,0).
-	// applyScrollRegionLocked will bail early. The scroll-reset and
-	// message bytes are still written, which is what we verify.
+	// Cursor positioning is skipped (rows < reserved+1). The message
+	// is still written, which is what we verify.
 	var buf bytes.Buffer
 	footer := NewStatusFooter(&buf, nil)
 
@@ -313,14 +305,15 @@ func TestPrintExternal_SteerActive_PrintExternalLocked_ScrollResetAndMessage(t *
 
 	output := buf.String()
 
-	// Verify the scroll-region reset is the first thing emitted.
-	if !strings.HasPrefix(output, "\033[r") {
-		t.Errorf("Output should start with \\033[r, got %q", output)
-	}
-
-	// Verify the message appears after the reset.
+	// Verify the message is emitted.
 	if !strings.Contains(output, "security caution mid-turn") {
 		t.Error("Output missing message — steer path was not used")
+	}
+
+	// Verify NO scroll-region reset is emitted — resetting it is the
+	// bug that breaks the CLI by scrolling pinned rows away.
+	if strings.Contains(output, "\033[r") {
+		t.Error("Output contains scroll-region reset \\033[r — this breaks the pinned rows")
 	}
 }
 
@@ -418,8 +411,8 @@ func TestPrintExternal_SteerReader_SetActiveSlot(t *testing.T) {
 
 // TestPrintExternal_SteerActive_TerminalSizeFallback verifies that when
 // the footer's terminalSize() returns (0,0) (non-TTY), printExternalLocked
-// still writes the scroll-reset and message (just skips cursor positioning
-// and scroll re-clamp because rows < reserved+1).
+// still writes the message (just skips cursor positioning because
+// rows < reserved+1).
 func TestPrintExternal_SteerActive_TerminalSizeFallback(t *testing.T) {
 	var buf bytes.Buffer
 	footer := NewStatusFooter(&buf, nil) // non-TTY: fd=-1, terminalSize returns (0,0)
@@ -446,17 +439,13 @@ func TestPrintExternal_SteerActive_TerminalSizeFallback(t *testing.T) {
 
 	output := buf.String()
 
-	// Scroll reset should still be emitted.
-	if !strings.Contains(output, "\033[r") {
-		t.Error("Missing scroll-region reset — printExternalLocked did not execute")
-	}
-	// Message should still be emitted.
+	// Message should be emitted.
 	if !strings.Contains(output, "non-tty fallback test") {
 		t.Error("Missing message — printExternalLocked did not write the message")
 	}
-	// Cursor positioning should NOT be emitted (rows-reserved would be negative).
-	// The only \033[ sequence should be the \033[r reset, not a cursor move.
-	// (applyScrollRegionLocked bails early when rows < reserved+1.)
+	// Cursor positioning and scroll-region reset should NOT be emitted
+	// (rows-reserved would be negative). No ANSI sequences at all on
+	// a non-TTY with (0,0) terminal size.
 }
 
 // TestPrintExternal_SteerActive_WithRealTerminalSize verifies the full
@@ -465,15 +454,11 @@ func TestPrintExternal_SteerActive_TerminalSizeFallback(t *testing.T) {
 func TestPrintExternal_SteerActive_WithRealTerminalSize(t *testing.T) {
 	// term.GetSize needs a real TTY fd — we can't fake it with a pipe.
 	// However, we can verify the routing works by checking that the
-	// scroll-reset and message are written to the footer's buffer.
-	// The cursor positioning and scroll re-clamp depend on terminalSize
-	// returning real values, which requires a real TTY.
+	// message is written to the footer's buffer.
 	//
 	// On non-TTY, terminalSize returns (0,0) so:
-	// - \033[r is written (always)
 	// - cursor positioning is skipped (rows-reserved <= 0)
 	// - message is written (always)
-	// - applyScrollRegionLocked is called but bails (rows < reserved+1)
 	// - renderLine is called but is a no-op (footer.isTTY is false)
 	//
 	// This is the expected behavior for non-TTY environments.
@@ -502,12 +487,13 @@ func TestPrintExternal_SteerActive_WithRealTerminalSize(t *testing.T) {
 
 	output := buf.String()
 
-	// Verify the sequence: scroll reset + message.
-	if !strings.HasPrefix(output, "\033[r") {
-		t.Errorf("Output should start with \\033[r, got %q", output)
-	}
+	// Verify the message is written.
 	if !strings.Contains(output, "full sequence test") {
 		t.Error("Missing message in output")
+	}
+	// Verify NO scroll-region reset — the fix removed it.
+	if strings.Contains(output, "\033[r") {
+		t.Error("Output contains scroll-region reset \\033[r — this should not be emitted")
 	}
 }
 
@@ -615,23 +601,20 @@ func TestPrintExternal_SteerActive_FooterNil_FallsThroughToFmtPrint(t *testing.T
 
 // TestPrintExternal_SteerActive_ScrollRegionSequence verifies that
 // printExternalLocked emits the correct ANSI sequences in order:
-// 1. \033[r (scroll region reset)
-// 2. \033[N;1H (cursor positioning, when terminal is large enough)
-// 3. message
-// 4. \033[1;Mdr (scroll region re-clamp, when terminal is large enough)
+// 1. \033[N;1H (cursor positioning, when terminal is large enough)
+// 2. message
+// The scroll region is NOT reset — the existing region already protects
+// the pinned rows. Resetting it is the bug that breaks the CLI.
 func TestPrintExternal_SteerActive_ScrollRegionSequence(t *testing.T) {
 	// We need a footer that reports real terminal dimensions for the
 	// full sequence to be emitted. Since we can't create a real TTY
-	// in a unit test, we verify the partial sequence (reset + message)
-	// which is the critical part for routing correctness.
+	// in a unit test, we verify the message is written and that NO
+	// scroll-region reset is emitted (the critical correctness check).
 	//
-	// The full sequence (with cursor positioning and re-clamp) is
-	// verified by code review — the logic is straightforward:
-	//   fmt.Fprint(w, "\033[r")
+	// The full sequence (with cursor positioning) is verified by code
+	// review — the logic is straightforward:
 	//   if rows > reserved+1: fmt.Fprintf(w, "\033[%d;1H", rows-reserved)
 	//   fmt.Fprint(w, msg)
-	//   applyScrollRegionLocked()  → emits \033[1;Mdr
-	//   renderLine()
 
 	var buf bytes.Buffer
 	footer := NewStatusFooter(&buf, nil)
@@ -651,12 +634,14 @@ func TestPrintExternal_SteerActive_ScrollRegionSequence(t *testing.T) {
 
 	output := buf.String()
 
-	// Minimum: scroll reset + message (always emitted).
-	if !strings.HasPrefix(output, "\033[r") {
-		t.Error("Output should start with scroll-region reset \\033[r")
-	}
+	// Message should be present.
 	if !strings.Contains(output, "sequence test") {
 		t.Error("Output should contain message")
+	}
+	// NO scroll-region reset — this is the regression check for the
+	// bug where resetting the region scrolled pinned rows away.
+	if strings.Contains(output, "\033[r") {
+		t.Error("Output should NOT contain scroll-region reset \\033[r — this breaks pinned rows")
 	}
 }
 

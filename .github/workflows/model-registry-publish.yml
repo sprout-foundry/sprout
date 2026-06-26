@@ -71,6 +71,13 @@ jobs:
         # The community path lets a contributor add a provider to GitHub
         # Pages without growing the binary. Cross-dir id collisions are
         # caught by generate-provider-index.sh below.
+        #
+        # Local-only providers (non-HTTPS endpoint, e.g. lmstudio at
+        # http://127.0.0.1) are skipped: they ship embedded in the binary
+        # and are meaningless to remote fetchers, which would reject them
+        # anyway — the registry requires HTTPS (SSRF guard). The same
+        # filter runs in generate-provider-index.sh so the index lists
+        # exactly the providers that got copied.
         run: |
           set -euo pipefail
           shopt -s nullglob
@@ -80,6 +87,11 @@ jobs:
                      pkg/agent_providers/community-configs/*.json; do
             [[ -f "$cfg" ]] || continue
             name=$(basename "$cfg")
+            ep=$(jq -r '.endpoint // ""' "$cfg")
+            if [[ "${ep,,}" != https://* ]]; then
+              echo "skip $name (non-HTTPS endpoint, local-only): $ep"
+              continue
+            fi
             jq --arg sv 1 --arg ts "$TIMESTAMP" \
               '. + {schema_version: ($sv | tonumber), published_at: $ts}' \
               "$cfg" > "providers/$name"

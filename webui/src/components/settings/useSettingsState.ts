@@ -92,6 +92,8 @@ interface UseSettingsStateReturn {
   setProviderContextSize: (v: number) => void;
   providerEnvVar: string;
   setProviderEnvVar: (v: string) => void;
+  providerApiKey: string;
+  setProviderApiKey: (v: string) => void;
   providerSupportsVision: boolean;
   setProviderSupportsVision: (v: boolean) => void;
   providerVisionModel: string;
@@ -154,6 +156,7 @@ export function useSettingsState(
   const [providerModelName, setProviderModelName] = useState('');
   const [providerContextSize, setProviderContextSize] = useState(32768);
   const [providerEnvVar, setProviderEnvVar] = useState('');
+  const [providerApiKey, setProviderApiKey] = useState('');
   const [providerSupportsVision, setProviderSupportsVision] = useState(false);
   const [providerVisionModel, setProviderVisionModel] = useState('');
   const [providerModelContextSizes, setProviderModelContextSizes] = useState<string>('');
@@ -376,6 +379,8 @@ export function useSettingsState(
     setProviderContextSize,
     providerEnvVar,
     setProviderEnvVar,
+    providerApiKey,
+    setProviderApiKey,
     providerSupportsVision,
     setProviderSupportsVision,
     providerVisionModel,

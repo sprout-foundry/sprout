@@ -8,6 +8,7 @@ import (
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/agent_providers"
 	"github.com/sprout-foundry/sprout/pkg/factory"
+	"github.com/sprout-foundry/sprout/pkg/modelcontract"
 )
 
 // GetModel gets the current model being used by the agent
@@ -46,11 +47,21 @@ func (a *Agent) GetProviderType() api.ClientType {
 	return a.getClientType()
 }
 
-// selectDefaultModel chooses an appropriate default model from available models
+// selectDefaultModel chooses an appropriate default model from available models.
+// It prefers probe-recommended candidates first (primary > subagent), then falls
+// back to per-provider string-matching heuristics, and finally to the first model.
 func (a *Agent) selectDefaultModel(models []api.ModelInfo, provider api.ClientType) string {
 	// If there are no models, return empty
 	if len(models) == 0 {
 		return ""
+	}
+
+	// Probe-first: prefer models with RecommendedRoles from the capability probe.
+	// Primary (complex stage passed) is the strongest signal; subagent (gates
+	// passed) is the next tier. Only use this path if at least one model has
+	// probe-backed recommendations — empty RecommendedRoles means un-probed.
+	if probe := selectProbeRecommended(models); probe != "" {
+		return probe
 	}
 
 	// Provider-specific logic to select best default model
@@ -101,6 +112,25 @@ func (a *Agent) selectDefaultModel(models []api.ModelInfo, provider api.ClientTy
 
 	// Default: return the first model
 	return models[0].ID
+}
+
+// selectProbeRecommended scans the model list for probe-backed recommendations.
+// It returns the first model whose RecommendedRoles contains "primary" (strongest
+// signal — complex stage passed). If none have "primary", it returns the first
+// model with "subagent" (gates passed). Returns "" if no probe-backed candidate
+// exists. An empty RecommendedRoles slice means the model was never probed and
+// is ignored by this function.
+func selectProbeRecommended(models []api.ModelInfo) string {
+	var firstSubagent string
+	for _, m := range models {
+		if modelcontract.RoleHas(m.RecommendedRoles, modelcontract.RolePrimary) {
+			return m.ID
+		}
+		if firstSubagent == "" && modelcontract.RoleHas(m.RecommendedRoles, modelcontract.RoleSubagent) {
+			firstSubagent = m.ID
+		}
+	}
+	return firstSubagent
 }
 
 // getDefaultModelFromFactory gets the default model from the provider factory for dynamic providers

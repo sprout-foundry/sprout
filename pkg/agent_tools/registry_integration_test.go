@@ -40,9 +40,8 @@ func TestRegistry_AllToolsHaveValidDefinitions(t *testing.T) {
 	}
 }
 
-// TestRegistry_AllToolsRespectPersonaFilter confirms that a freshly built
-// registry behaves correctly with ForPersona and that its counts match
-// expectations (ForPersona currently returns all tools regardless of persona).
+// TestRegistry_AllToolsRespectPersonaFilter confirms that ForPersona filters
+// correctly against an allowlist and that an empty allowlist returns all tools.
 func TestRegistry_AllToolsRespectPersonaFilter(t *testing.T) {
 	reg := NewToolRegistry()
 
@@ -58,25 +57,40 @@ func TestRegistry_AllToolsRespectPersonaFilter(t *testing.T) {
 		t.Fatal("registry has no tools after registration")
 	}
 
-	personas := []string{"coder", "tester", ""}
-	for _, persona := range personas {
-		t.Run(persona, func(t *testing.T) {
-			personaTools := reg.ForPersona(persona)
+	t.Run("empty allowlist returns all tools", func(t *testing.T) {
+		tools := reg.ForPersona(nil)
+		if len(tools) != total {
+			t.Errorf("ForPersona(nil) returned %d tools, expected %d", len(tools), total)
+		}
+		tools = reg.ForPersona([]string{})
+		if len(tools) != total {
+			t.Errorf("ForPersona([]) returned %d tools, expected %d", len(tools), total)
+		}
+	})
 
-			if persona == "" {
-				// Empty persona should return every tool.
-				if len(personaTools) != total {
-					t.Errorf("ForPersona(\"\") returned %d tools, expected %d", len(personaTools), total)
-				}
-			} else {
-				// ForPersona is not yet persona-aware; it returns all tools.
-				if len(personaTools) == 0 {
-					t.Errorf("ForPersona(%q) returned an empty map", persona)
-				}
-				t.Logf("ForPersona(%q) returned %d tool(s)", persona, len(personaTools))
+	t.Run("subset allowlist returns only matching tools", func(t *testing.T) {
+		allowlist := []string{"read_file", "write_file", "git"}
+		tools := reg.ForPersona(allowlist)
+		if len(tools) != len(allowlist) {
+			t.Errorf("ForPersona(%v) returned %d tools, expected %d", allowlist, len(tools), len(allowlist))
+		}
+		for _, name := range allowlist {
+			if _, ok := tools[name]; !ok {
+				t.Errorf("ForPersona missing tool %q", name)
 			}
-		})
-	}
+		}
+	})
+
+	t.Run("allowlist with unknown tool skips silently", func(t *testing.T) {
+		allowlist := []string{"read_file", "does_not_exist"}
+		tools := reg.ForPersona(allowlist)
+		if len(tools) != 1 {
+			t.Errorf("ForPersona returned %d tools, expected 1", len(tools))
+		}
+		if _, ok := tools["does_not_exist"]; ok {
+			t.Error("unknown tool should not appear in result")
+		}
+	})
 
 	// Smoke-check that Names() returns a sorted slice.
 	names := reg.Names()

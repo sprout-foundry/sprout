@@ -2,7 +2,9 @@ package agent
 
 import (
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
@@ -397,5 +399,81 @@ func TestStaticGateAutoApprove_ElevatedSessionNonHardBlock(t *testing.T) {
 	secResult.IsHardBlock = true
 	if a.staticGateAutoApprove(secResult) {
 		t.Error("staticGateAutoApprove should NOT auto-approve hard blocks under elevation")
+	}
+}
+
+// TestOutputRouter_WriteRoutesToPrintLineAsync verifies that the outputRouter
+// io.Writer flushes complete lines to agent.PrintLineAsync and buffers partial
+// lines until a newline arrives.
+//
+// The streaming callback is the observable sink for printLineInternal — if
+// outputRouter fails to call PrintLineAsync, no lines reach the callback.
+func TestOutputRouter_WriteRoutesToPrintLineAsync(t *testing.T) {
+	a := NewTestAgent()
+	a.output.SetOutputMutex(&sync.Mutex{})
+
+	var got []string
+	var mu sync.Mutex
+	a.output.SetStreamingCallback(func(s string) {
+		mu.Lock()
+		got = append(got, s)
+		mu.Unlock()
+	})
+	a.output.SetStreamingEnabled(true)
+	a.output.SetOutputRouter(NewOutputRouter(a, nil))
+
+	w := newOutputRouter(a)
+
+	// Two complete lines in one Write — both must arrive as separate flushed lines.
+	if _, err := w.Write([]byte("line1\nline2\n")); err != nil {
+		t.Fatalf("Write error: %v", err)
+	}
+
+	// A partial line followed by its completion should arrive as ONE flushed
+	// line, not two. The router must buffer the partial chunk.
+	if _, err := w.Write([]byte("partial")); err != nil {
+		t.Fatalf("Write error: %v", err)
+	}
+	if _, err := w.Write([]byte(" line\n")); err != nil {
+		t.Fatalf("Write error: %v", err)
+	}
+
+	// Async worker drains the channel; poll with a short timeout.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		mu.Lock()
+		n := len(got)
+		mu.Unlock()
+		if n >= 3 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(got) != 3 {
+		t.Fatalf("expected 3 flushed lines, got %d: %v", len(got), got)
+	}
+	want := []string{"line1\n", "line2\n", "partial line\n"}
+	for i, w := range want {
+		if got[i] != w {
+			t.Errorf("line %d: got %q, want %q", i, got[i], w)
+		}
+	}
+}
+
+// TestOutputRouter_NilAgentFallback verifies that when the agent is nil,
+// Write forwards directly to os.Stdout (no panic, byte count passthrough).
+// It does not — and cannot — capture stdout from inside the test process, so
+// the assertion is limited to: no panic, return value matches input length.
+func TestOutputRouter_NilAgentFallback(t *testing.T) {
+	w := newOutputRouter(nil)
+	n, err := w.Write([]byte("hello\n"))
+	if err != nil {
+		t.Fatalf("Write error: %v", err)
+	}
+	if n != 6 {
+		t.Errorf("Write returned n=%d, want 6", n)
 	}
 }

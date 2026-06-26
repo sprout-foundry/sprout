@@ -164,6 +164,18 @@ type SteerInputReader struct {
 	preSearchBuffer    []byte
 	preSearchCursorPos int
 	searchBuf          []byte // multi-byte UTF-8 accumulator
+
+	// SP-078 Phase 2: optional completion provider for the steer
+	// panel. Set via SetCompleter. nil = Ctrl-] (and any future
+	// completion binding) is a silent no-op. The provider receives
+	// the current buffer + cursorPos and returns ordered candidate
+	// replacements, same shape as the InputReader's completer.
+	//
+	// completionCycle tracks the active multi-press cycle. Allocated
+	// lazily on first apply; cycle.Reset() is called on every buffer
+	// edit so the next press starts fresh.
+	completer      CompletionProvider
+	completionCycle *CompletionCycle
 }
 
 // SteerHistoryCap bounds the in-memory steer history to a sensible
@@ -577,6 +589,9 @@ func (r *SteerInputReader) readLoop(stopCh, doneCh chan struct{}) {
 			case 0x18: // Ctrl+X — start of Ctrl-X Ctrl-E sequence
 				r.pendingCtrlX = true
 				continue
+			case 0x1d: // Ctrl+] — completion cycle (SP-078 Phase 2)
+				r.handleSteerCompletion()
+				continue
 			}
 
 			// Feed everything else through the shared EscapeParser.
@@ -719,6 +734,67 @@ func (r *SteerInputReader) toggleSubmitMode() {
 	r.renderLine()
 }
 
+// SetCompleter installs a completion provider for the steer panel
+// (SP-078 Phase 2). Bound to Ctrl-] (the only free completion binding
+// — Tab is reserved for STEER ↔ QUEUE mode toggle). The provider
+// receives the current buffer + cursor position and returns ordered
+// candidate replacements. Pass nil to disable completion.
+//
+// Mirrors (*InputReader).SetCompleter in pkg/console/input_completion.go;
+// the underlying cycle state machine is shared via completion.go.
+func (r *SteerInputReader) SetCompleter(c CompletionProvider) {
+	r.mu.Lock()
+	r.completer = c
+	if r.completionCycle != nil {
+		r.completionCycle.Reset()
+	}
+	r.mu.Unlock()
+}
+
+// handleSteerCompletion is the Ctrl-] dispatch. It cycles through
+// candidates from the configured completer (same UX as InputReader's
+// Tab cycle): the first press applies the first candidate; subsequent
+// presses with no intervening edit cycle through candidates; any edit
+// to the buffer starts a fresh cycle. Silent no-op when no completer
+// is installed or the completer returns zero candidates.
+//
+// Callers must NOT hold r.mu.
+func (r *SteerInputReader) handleSteerCompletion() {
+	r.mu.Lock()
+	if r.completer == nil {
+		r.mu.Unlock()
+		return
+	}
+	if r.completionCycle == nil {
+		r.completionCycle = &CompletionCycle{}
+	}
+	line := string(r.buffer)
+	newLine, newCursorPos, ok := CycleCompletion(r.completionCycle, line, r.cursorPos, r.completer)
+	if !ok {
+		r.mu.Unlock()
+		return
+	}
+	r.buffer = []byte(newLine)
+	r.cursorPos = newCursorPos
+	if r.cursorPos > len(r.buffer) {
+		r.cursorPos = len(r.buffer)
+	}
+	r.historyIndex = -1
+	r.pendingBuffer = nil
+	r.completionCycle.Advance(newLine)
+	r.mu.Unlock()
+	r.renderLine()
+}
+
+// resetCompletionCycleLocked clears the active completion cycle so
+// the next Ctrl-] press starts fresh from the current buffer. Caller
+// MUST hold r.mu.
+func (r *SteerInputReader) resetCompletionCycleLocked() {
+	if r.completionCycle != nil {
+		r.completionCycle.Reset()
+	}
+}
+
 // SubmitMode reports the current Enter-binding. Exposed for tests.
 func (r *SteerInputReader) SubmitMode() SteerSubmitMode {
 	if r == nil {
@@ -854,6 +930,7 @@ func (r *SteerInputReader) recallHistory(delta int) {
 	}
 	r.cursorPos = len(r.buffer)
 	r.historyIndex = newIdx
+	r.resetCompletionCycleLocked()
 	r.mu.Unlock()
 	r.renderLine()
 }
@@ -900,6 +977,7 @@ func (r *SteerInputReader) handleBackspace() {
 	}
 	r.historyIndex = -1
 	r.pendingBuffer = nil
+	r.resetCompletionCycleLocked()
 	r.mu.Unlock()
 	r.renderLine()
 }
@@ -913,6 +991,7 @@ func (r *SteerInputReader) insertAtCursor(data []byte) {
 	r.cursorPos += len(data)
 	r.historyIndex = -1
 	r.pendingBuffer = nil
+	r.resetCompletionCycleLocked()
 	r.mu.Unlock()
 	r.renderLine()
 }
@@ -1041,6 +1120,7 @@ func (r *SteerInputReader) deleteWordBackward() {
 	r.cursorPos = pos
 	r.historyIndex = -1
 	r.pendingBuffer = nil
+	r.resetCompletionCycleLocked()
 	r.mu.Unlock()
 	r.renderLine()
 }
@@ -1056,6 +1136,7 @@ func (r *SteerInputReader) killToEnd() {
 	r.buffer = r.buffer[:r.cursorPos]
 	r.historyIndex = -1
 	r.pendingBuffer = nil
+	r.resetCompletionCycleLocked()
 	r.mu.Unlock()
 	r.renderLine()
 }
@@ -1072,6 +1153,7 @@ func (r *SteerInputReader) killToStart() {
 	r.cursorPos = 0
 	r.historyIndex = -1
 	r.pendingBuffer = nil
+	r.resetCompletionCycleLocked()
 	r.mu.Unlock()
 	r.renderLine()
 }
@@ -1088,6 +1170,7 @@ func (r *SteerInputReader) deleteForward() {
 	r.buffer = slices.Delete(r.buffer, r.cursorPos, r.cursorPos+sz)
 	r.historyIndex = -1
 	r.pendingBuffer = nil
+	r.resetCompletionCycleLocked()
 	r.mu.Unlock()
 	r.renderLine()
 }
@@ -1095,13 +1178,21 @@ func (r *SteerInputReader) deleteForward() {
 // renderLine asks the footer to repaint the pinned input row with the
 // current buffer and a mode-specific prefix. The prefix is included
 // here (not in the footer) so the footer stays content-agnostic and
-// any future modes don't require footer changes. The cursor byte
-// offset is forwarded so the footer can render a caret at the correct
-// position for mid-buffer editing.
+// any future modes don't require footer changes.
+//
+// SP-078 Phase 1: width-aware. The buffer is soft-wrapped to the
+// terminal width (cols) and the cursor position is mapped to a
+// (visualRow, colOnRow) pair so the caret lands at the correct cell
+// even when the buffer overflows the panel width or contains
+// hard-break \n that produce multi-row input. The footer's
+// SetSteerLineWrapped handles the scroll-region reservation, the
+// caret row placement, and the maxSteerRows cap.
 //
 // When Ctrl-R reverse-search is active, the line instead shows the
 // search prompt (query + best match) so the user sees what they're
-// searching for and what will be loaded on Enter.
+// searching for and what will be loaded on Enter. Reverse-search is
+// intentionally single-line — it always fits in one row, so it uses
+// the legacy SetSteerLineWithCursor path.
 func (r *SteerInputReader) renderLine() {
 	if r.footer == nil {
 		return
@@ -1109,9 +1200,7 @@ func (r *SteerInputReader) renderLine() {
 	r.mu.Lock()
 
 	if r.searchMode {
-		// Render the reverse-search prompt in the steer line. The
-		// caret sits at the end so the user sees where the next query
-		// keystroke lands.
+		// Reverse-search is a single-line prompt; legacy path is fine.
 		var text string
 		if r.searchResult != "" {
 			display := strings.ReplaceAll(r.searchResult, "\n", "\\n")
@@ -1129,15 +1218,34 @@ func (r *SteerInputReader) renderLine() {
 	}
 
 	text := string(r.buffer)
-	cursor := r.cursorPos
+	cursorByte := r.cursorPos
 	prefix := SteerPromptPrefix
 	if r.submitMode == SteerSubmitModeQueue {
 		prefix = QueuePromptPrefix
 	}
 	r.mu.Unlock()
-	// cursor is a byte offset into the buffer; add the prefix byte
-	// length to get the offset within the full rendered string.
-	r.footer.SetSteerLineWithCursor(fmt.Sprintf("%s%s", prefix, text), len(prefix)+cursor)
+
+	// Width-aware wrap. The footer's TerminalSize returns (cols, rows)
+	// but on non-TTY fd=-1 the values are 0; fall back to 80 cols so
+	// tests still produce a sensible layout.
+	cols, _ := r.footer.TerminalSize()
+	if cols <= 0 {
+		cols = 80
+	}
+	full := prefix + text
+	// prefixWidth accounts for wide-rune prefixes; for ASCII prefixes
+	// this equals len(prefix). Use displayWidth directly to avoid
+	// re-counting ANSI bytes (the steer buffer is plain text so the
+	// difference only matters if a future prefix includes color).
+	prefixWidth := displayWidth(prefix)
+	_, cursorRow, cursorCol, _, _ := wrappedGeometry(
+		cols, prefixWidth, full, len(prefix)+cursorByte,
+	)
+	// wrappedGeometry uses cols-promptWidth budgeting internally; we
+	// passed `prefixWidth` as the prompt width, which means cursorCol
+	// already accounts for the prefix columns. Footer takes (row, col)
+	// in the post-wrap visual-line array.
+	r.footer.SetSteerLineWrapped(full, cursorRow, cursorCol)
 }
 
 // printExternalLocked prints a message in the scrollable area without

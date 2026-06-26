@@ -163,6 +163,19 @@ func (c *SteerCoordinator) SetGroundTruth(gt *console.GroundTruthTermios) {
 	c.reader.SetGroundTruth(gt)
 }
 
+// SetCompleter installs a slash-command completion provider on the
+// steer reader (SP-078 Phase 2). Bound to Ctrl-] — Tab is reserved
+// for the STEER ↔ QUEUE mode toggle. The same provider can be passed
+// to both inputReader.SetCompleter (Tab, REPL prompt) and
+// steerCoord.SetCompleter (Ctrl-], mid-turn) so completion works in
+// both surfaces.
+func (c *SteerCoordinator) SetCompleter(p console.CompletionProvider) {
+	if c == nil || c.reader == nil {
+		return
+	}
+	c.reader.SetCompleter(p)
+}
+
 // handleSteerSubmit forwards the user's typed message to the agent's
 // inputInjectionChan (which the seed-integration bridge then routes
 // into seed's InjectInput). On success an acknowledgement is printed

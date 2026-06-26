@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-06-24T12:00:36Z",
+  "updated_at": "2026-06-26T11:50:04Z",
   "source": "refresh_provider_catalog",
   "providers": [
     {
@@ -1995,8 +1995,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.15,
-          "output_cost": 0.8999999999999999
+          "input_cost": 0.12,
+          "output_cost": 0.48
         },
         {
           "id": "minimax/minimax-m2.7",
@@ -2008,8 +2008,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.24,
-          "output_cost": 0.96
+          "input_cost": 0.18,
+          "output_cost": 0.72
         },
         {
           "id": "minimax/minimax-m3",
@@ -2480,8 +2480,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.09,
-          "output_cost": 0.44999999999999996
+          "input_cost": 0.08499999999999999,
+          "output_cost": 0.39999999999999997
         },
         {
           "id": "nvidia/nemotron-3-super-120b-a12b:free",
@@ -3175,8 +3175,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.039,
-          "output_cost": 0.18
+          "input_cost": 0.03,
+          "output_cost": 0.15
         },
         {
           "id": "openai/gpt-oss-120b:free",
@@ -5465,8 +5465,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.1,
-          "output_cost": 0.5
+          "input_cost": 0.085,
+          "output_cost": 0.4
         },
         {
           "id": "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B",

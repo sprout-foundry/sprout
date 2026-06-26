@@ -226,6 +226,7 @@ describe('bootstrapAdapter', () => {
           authMode: 'bearer',
           appMode: 'cloud',
           buildVersion: '1.0.0',
+          sharedMode: false,
         };
         fetchSpy.mockResolvedValue({
           json: () => Promise.resolve(serverConfig),
@@ -247,6 +248,7 @@ describe('bootstrapAdapter', () => {
           authMode: 'none',
           appMode: 'local',
           buildVersion: '1.0.0',
+          sharedMode: false,
         };
         fetchSpy.mockResolvedValue({
           json: () => Promise.resolve(serverConfig),
@@ -452,6 +454,7 @@ describe('bootstrapAdapter', () => {
         authMode: 'bearer',
         appMode: 'cloud',
         buildVersion: '3.0.0',
+        sharedMode: false,
       };
       fetchSpy.mockResolvedValue({
         json: () => Promise.resolve(serverConfig),

@@ -107,7 +107,9 @@
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.12s ease, border-color 0.12s ease;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease;
 }
 
 .sidebar .settings-no-match-action:hover {
@@ -329,7 +331,9 @@
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   background: var(--bg-elevated);
-  transition: border-color 0.12s var(--ease-out), box-shadow 0.12s var(--ease-out);
+  transition:
+    border-color 0.12s var(--ease-out),
+    box-shadow 0.12s var(--ease-out);
 }
 
 .sidebar .settings-list-filter:focus-within {
@@ -535,7 +539,10 @@
   color: var(--text-primary);
   cursor: pointer;
   flex-shrink: 0;
-  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease;
 }
 
 .sidebar .theme-picker-btn:hover {
@@ -812,7 +819,12 @@
   font-family: var(--font-sans);
   font-weight: 600;
   cursor: pointer;
-  transition: background, color, border-color, box-shadow, transform 0.12s var(--ease-out);
+  transition:
+    background,
+    color,
+    border-color,
+    box-shadow,
+    transform 0.12s var(--ease-out);
 }
 
 .sidebar .settings-subsection-btn:hover {
@@ -1133,7 +1145,12 @@
   justify-content: center;
   padding: 0;
   font-size: 12px;
-  transition: background, color, border-color, box-shadow, transform 0.12s var(--ease-out);
+  transition:
+    background,
+    color,
+    border-color,
+    box-shadow,
+    transform 0.12s var(--ease-out);
 }
 
 .sidebar .crud-btn:hover {
@@ -1161,7 +1178,12 @@
   align-items: center;
   justify-content: center;
   gap: var(--space-2);
-  transition: background, color, border-color, box-shadow, transform 0.12s var(--ease-out);
+  transition:
+    background,
+    color,
+    border-color,
+    box-shadow,
+    transform 0.12s var(--ease-out);
 }
 
 .sidebar .crud-add-btn:hover {
@@ -1207,7 +1229,12 @@
   font-family: var(--font-sans);
   font-weight: 600;
   cursor: pointer;
-  transition: background, color, border-color, box-shadow, transform 0.12s var(--ease-out);
+  transition:
+    background,
+    color,
+    border-color,
+    box-shadow,
+    transform 0.12s var(--ease-out);
 }
 
 .sidebar .crud-inline-form .form-btn.primary {

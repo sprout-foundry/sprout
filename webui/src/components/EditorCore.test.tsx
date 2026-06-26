@@ -200,55 +200,67 @@ describe('EditorCore', () => {
   // ── markdown preview ───
   describe('markdown preview', () => {
     it('renders only editor in off mode for markdown files', () => {
-      renderComponent(createBaseProps({
-        isMarkdownFile: true,
-        markdownPreviewMode: 'off',
-      }));
+      renderComponent(
+        createBaseProps({
+          isMarkdownFile: true,
+          markdownPreviewMode: 'off',
+        }),
+      );
       expect(container.querySelector('.editor')).toBeTruthy();
       expect(container.querySelector('.pane-md-preview-split')).toBeFalsy();
     });
 
     it('renders split layout with editor and preview pane', () => {
-      renderComponent(createBaseProps({
-        isMarkdownFile: true,
-        markdownPreviewMode: 'split',
-        localContent: '# Hello',
-      }));
+      renderComponent(
+        createBaseProps({
+          isMarkdownFile: true,
+          markdownPreviewMode: 'split',
+          localContent: '# Hello',
+        }),
+      );
       expect(container.querySelector('.editor')).toBeTruthy();
       expect(container.querySelector('.pane-md-preview-split')).toBeTruthy();
     });
 
     it('applies md-split class to wrapper in split mode', () => {
-      renderComponent(createBaseProps({
-        isMarkdownFile: true,
-        markdownPreviewMode: 'split',
-      }));
+      renderComponent(
+        createBaseProps({
+          isMarkdownFile: true,
+          markdownPreviewMode: 'split',
+        }),
+      );
       expect(container.querySelector('.pane-content-wrapper-md-split')).toBeTruthy();
     });
 
     it('applies md-editor-side class to pane-content in split mode', () => {
-      renderComponent(createBaseProps({
-        isMarkdownFile: true,
-        markdownPreviewMode: 'split',
-      }));
+      renderComponent(
+        createBaseProps({
+          isMarkdownFile: true,
+          markdownPreviewMode: 'split',
+        }),
+      );
       expect(container.querySelector('.pane-content-md-editor-side')).toBeTruthy();
     });
 
     it('renders full preview mode for markdown files (no editor div)', () => {
-      renderComponent(createBaseProps({
-        isMarkdownFile: true,
-        markdownPreviewMode: 'preview',
-        localContent: '# Preview',
-      }));
+      renderComponent(
+        createBaseProps({
+          isMarkdownFile: true,
+          markdownPreviewMode: 'preview',
+          localContent: '# Preview',
+        }),
+      );
       expect(container.querySelector('.editor')).toBeFalsy();
       expect(container.querySelector('.pane-content-md-preview-full')).toBeTruthy();
     });
 
     it('does NOT render preview when not a markdown file even with preview mode', () => {
-      renderComponent(createBaseProps({
-        isMarkdownFile: false,
-        markdownPreviewMode: 'preview',
-      }));
+      renderComponent(
+        createBaseProps({
+          isMarkdownFile: false,
+          markdownPreviewMode: 'preview',
+        }),
+      );
       expect(container.querySelector('.editor')).toBeTruthy();
       expect(container.querySelector('.pane-content-md-preview-full')).toBeFalsy();
     });

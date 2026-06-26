@@ -73,8 +73,7 @@ function GitHistoryPanel({
     [commits, selectedCommit],
   );
   const prevCommit = selectedIndex > 0 ? commits[selectedIndex - 1] : null;
-  const nextCommit =
-    selectedIndex >= 0 && selectedIndex < commits.length - 1 ? commits[selectedIndex + 1] : null;
+  const nextCommit = selectedIndex >= 0 && selectedIndex < commits.length - 1 ? commits[selectedIndex + 1] : null;
 
   const fetchCommits = useCallback(
     async (offset: number, append: boolean, signal?: AbortSignal) => {

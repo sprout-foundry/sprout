@@ -534,11 +534,7 @@ function ProviderPrioritySection({ settings, availableProviders, updateSetting }
 
       <div className="config-item settings-help-spaced-top">
         <div className="settings-inline-row">
-          <select
-            className="styled-select"
-            value={pendingAdd}
-            onChange={(e) => setPendingAdd(e.target.value)}
-          >
+          <select className="styled-select" value={pendingAdd} onChange={(e) => setPendingAdd(e.target.value)}>
             <option value="">
               {candidateOptions.length === 0 ? 'All providers already in list' : 'Select provider to add…'}
             </option>

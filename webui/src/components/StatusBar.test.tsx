@@ -416,9 +416,7 @@ describe('StatusBar', () => {
       const handleClick = vi.fn();
 
       await act(async () => {
-        root.render(
-          <StatusBar workspacePath="/some/path" onWorkspaceClick={handleClick} />,
-        );
+        root.render(<StatusBar workspacePath="/some/path" onWorkspaceClick={handleClick} />);
       });
 
       const indicator = container.querySelector('.statusbar-item-workspace');

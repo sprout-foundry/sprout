@@ -291,9 +291,7 @@ export function useTerminalPanes(options: UseTerminalPanesOptions): UseTerminalP
 
       const remaining = pane.sessions.filter((s) => s.id !== sessionId);
       const newActive =
-        pane.activeSessionId === sessionId
-          ? nextActiveAfterClose(pane.sessions, sessionId)
-          : pane.activeSessionId;
+        pane.activeSessionId === sessionId ? nextActiveAfterClose(pane.sessions, sessionId) : pane.activeSessionId;
 
       updatePane(paneId, (p) => ({
         ...p,
@@ -330,20 +328,17 @@ export function useTerminalPanes(options: UseTerminalPanesOptions): UseTerminalP
     [updatePane],
   );
 
-  const handleSessionActivity = useCallback(
-    (paneId: string, sessionId: string) => {
-      const pane = panesRef.current.find((p) => p.id === paneId);
-      if (!pane) return;
-      if (pane.activeSessionId === sessionId) return;
-      setActivitySessionIds((prev) => {
-        if (prev.has(sessionId)) return prev;
-        const next = new Set(prev);
-        next.add(sessionId);
-        return next;
-      });
-    },
-    [],
-  );
+  const handleSessionActivity = useCallback((paneId: string, sessionId: string) => {
+    const pane = panesRef.current.find((p) => p.id === paneId);
+    if (!pane) return;
+    if (pane.activeSessionId === sessionId) return;
+    setActivitySessionIds((prev) => {
+      if (prev.has(sessionId)) return prev;
+      const next = new Set(prev);
+      next.add(sessionId);
+      return next;
+    });
+  }, []);
 
   const clearActivityForSession = useCallback((sessionId: string) => {
     setActivitySessionIds((prev) => {
@@ -486,9 +481,7 @@ export function useTerminalPanes(options: UseTerminalPanesOptions): UseTerminalP
     const w = rect?.width ?? 0;
     const h = rect?.height ?? 0;
     if (w === 0 && h === 0) return MAX_PANES_HARD_CAP;
-    const limit = direction === 'vertical'
-      ? Math.floor(w / MIN_PANE_WIDTH_PX)
-      : Math.floor(h / MIN_PANE_HEIGHT_PX);
+    const limit = direction === 'vertical' ? Math.floor(w / MIN_PANE_WIDTH_PX) : Math.floor(h / MIN_PANE_HEIGHT_PX);
     return Math.min(MAX_PANES_HARD_CAP, Math.max(2, limit));
   }, []);
 

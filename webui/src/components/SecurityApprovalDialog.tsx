@@ -192,7 +192,9 @@ function SecurityApprovalDialog({
           )}
           {fsKind === 'fs_external' && fsFolder && (
             <div className="security-approval-target-wrapper">
-              <div className="security-approval-target-label">Folder to allowlist if you pick &ldquo;Allow folder this session&rdquo;</div>
+              <div className="security-approval-target-label">
+                Folder to allowlist if you pick &ldquo;Allow folder this session&rdquo;
+              </div>
               <div className="security-approval-target-box">{fsFolder}</div>
             </div>
           )}
@@ -201,18 +203,17 @@ function SecurityApprovalDialog({
         {/* SP-058: disclaimer for the Elevate action, shown only in 4-option mode */}
         {allowOptions && !isFilesystem && (
           <div className="security-approval-elevate-note" role="note">
-            <strong>Elevate</strong> bumps this session to the <code>permissive</code> risk profile —
-            you won&apos;t see high-risk prompts again until restart. Critical operations
-            (rm&nbsp;-rf&nbsp;/, fork bombs) still block. Run{' '}
+            <strong>Elevate</strong> bumps this session to the <code>permissive</code> risk profile — you won&apos;t see
+            high-risk prompts again until restart. Critical operations (rm&nbsp;-rf&nbsp;/, fork bombs) still block. Run{' '}
             <code>/risk-profile&nbsp;permissive</code> to make this persistent.
           </div>
         )}
         {/* Filesystem sensitive-tier note: explain why "Allow folder this session" is missing */}
         {fsKind === 'fs_sensitive' && (
           <div className="security-approval-elevate-note" role="note">
-            This is a <strong>sensitive</strong> path (system directory, or a home-directory path while your
-            working directory is outside <code>$HOME</code>). It can&apos;t be added to the session allowlist —
-            every access will prompt.
+            This is a <strong>sensitive</strong> path (system directory, or a home-directory path while your working
+            directory is outside <code>$HOME</code>). It can&apos;t be added to the session allowlist — every access
+            will prompt.
           </div>
         )}
 

@@ -63,7 +63,8 @@ export default function ProviderModelSubsection({
     // If the new provider's models don't include the current model, reset model selection
     const newProvider = providers.find((p) => p.id === newProviderId);
     const availableForProvider = newProvider?.models || [];
-    const shouldResetModel = !newProviderId || (availableForProvider.length > 0 && !availableForProvider.includes(model));
+    const shouldResetModel =
+      !newProviderId || (availableForProvider.length > 0 && !availableForProvider.includes(model));
     if (shouldResetModel) {
       onModelChange('');
     }
@@ -114,7 +115,10 @@ export default function ProviderModelSubsection({
               disabled={disabled}
               title={`Select ${scope} provider`}
             >
-              <option value="">Default (inherit from {scope === 'session' ? 'workspace or global' : scope === 'workspace' ? 'global' : 'provider default'})</option>
+              <option value="">
+                Default (inherit from{' '}
+                {scope === 'session' ? 'workspace or global' : scope === 'workspace' ? 'global' : 'provider default'})
+              </option>
               {providers.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
@@ -133,9 +137,7 @@ export default function ProviderModelSubsection({
               disabled={disabled || !provider || models.length === 0}
               title={`Select ${scope} model`}
             >
-              {model && !models.includes(model) && (
-                <option value={model}>{model}</option>
-              )}
+              {model && !models.includes(model) && <option value={model}>{model}</option>}
               {models.length === 0 && <option value="">No models available</option>}
               {models.map((m) => (
                 <option key={m} value={m}>

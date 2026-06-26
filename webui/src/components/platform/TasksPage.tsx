@@ -394,9 +394,7 @@ const TasksPage: React.FC = () => {
                 <ListChecks size={20} />
               </div>
               <div className="platform-list-item-content">
-                <div className="platform-list-item-title">
-                  {task.prompt || formatTaskId(task.task_id)}
-                </div>
+                <div className="platform-list-item-title">{task.prompt || formatTaskId(task.task_id)}</div>
                 <div className="platform-list-item-subtitle">{task.repo_url}</div>
               </div>
               <div className="platform-list-item-meta">

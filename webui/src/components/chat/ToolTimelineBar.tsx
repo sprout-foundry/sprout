@@ -32,7 +32,10 @@ const DEFAULT_MAX_VISIBLE = 4;
 // consecutive tools while still letting the bar disappear on true idle.
 const HIDE_GRACE_MS = 4000;
 
-export function ToolTimelineBar({ toolExecutions, maxVisible = DEFAULT_MAX_VISIBLE }: ToolTimelineBarProps): JSX.Element | null {
+export function ToolTimelineBar({
+  toolExecutions,
+  maxVisible = DEFAULT_MAX_VISIBLE,
+}: ToolTimelineBarProps): JSX.Element | null {
   // Live tick so in-flight elapsed times update without parent re-renders.
   // 250ms is fine-grained enough to feel live without being wasteful.
   const [, forceTick] = useState(0);
@@ -151,11 +154,7 @@ function ToolTimelineCard({ tool, now }: ToolTimelineCardProps): JSX.Element {
         )}
       </span>
       {tool.persona ? (
-        <span
-          className="tool-timeline-persona"
-          style={{ color: personaColor }}
-          title={`Persona: ${tool.persona}`}
-        >
+        <span className="tool-timeline-persona" style={{ color: personaColor }} title={`Persona: ${tool.persona}`}>
           {tool.persona}
         </span>
       ) : null}

@@ -66,9 +66,7 @@ const mockFs = new MockFS();
 // Helpers — mock navigator.storage for isAvailable checks
 // ---------------------------------------------------------------------------
 
-function setupMockNavigatorStorage(
-  mode: 'available' | 'unavailable' | 'error' = 'available',
-) {
+function setupMockNavigatorStorage(mode: 'available' | 'unavailable' | 'error' = 'available') {
   if (mode === 'available') {
     (navigator as any).storage = {
       getDirectory: () => Promise.resolve({} as FileSystemDirectoryHandle),
@@ -77,7 +75,9 @@ function setupMockNavigatorStorage(
     (navigator as any).storage = {} as StorageManager;
   } else {
     (navigator as any).storage = {
-      getDirectory: () => { throw new Error('OPFS access denied'); },
+      getDirectory: () => {
+        throw new Error('OPFS access denied');
+      },
     } as StorageManager;
   }
 }
@@ -215,15 +215,12 @@ describe('OPFSReplicaService', () => {
       const result = await service.initReplica(manifest);
       expect(result.fileCount).toBe(2);
       const expectedBytes =
-        new TextEncoder().encode('Hello, world!').length +
-        new TextEncoder().encode('{"key":"value"}').length;
+        new TextEncoder().encode('Hello, world!').length + new TextEncoder().encode('{"key":"value"}').length;
       expect(result.totalSize).toBe(expectedBytes);
     });
 
     it('creates files in nested directories', async () => {
-      const manifest: OPFSManifestEntry[] = [
-        { path: 'a/b/c/deep.txt', content: 'deep content' },
-      ];
+      const manifest: OPFSManifestEntry[] = [{ path: 'a/b/c/deep.txt', content: 'deep content' }];
       const result = await service.initReplica(manifest);
       expect(result.fileCount).toBe(1);
       expect(result.totalSize).toBe(new TextEncoder().encode('deep content').length);
@@ -254,9 +251,7 @@ describe('OPFSReplicaService', () => {
     });
 
     it('persists metadata index to OPFS', async () => {
-      await service.initReplica([
-        { path: 'test.txt', content: 'test content' },
-      ]);
+      await service.initReplica([{ path: 'test.txt', content: 'test content' }]);
 
       // The metadata index file should exist in our mock
       const metaEntry = mockFs.readFile('.opfs-meta/index.json');
@@ -271,17 +266,13 @@ describe('OPFSReplicaService', () => {
       const freshService = new OPFSReplicaService();
       await freshService.init();
 
-      const result = await freshService.initReplica([
-        { path: 'test.txt', content: 'content' },
-      ]);
+      const result = await freshService.initReplica([{ path: 'test.txt', content: 'content' }]);
       expect(result.fileCount).toBe(0);
       expect(result.totalSize).toBe(0);
     });
 
     it('handles manifest entry with empty content', async () => {
-      const manifest: OPFSManifestEntry[] = [
-        { path: 'empty.txt', content: '' },
-      ];
+      const manifest: OPFSManifestEntry[] = [{ path: 'empty.txt', content: '' }];
       const result = await service.initReplica(manifest);
       expect(result.fileCount).toBe(1);
       expect(result.totalSize).toBe(0);
@@ -607,9 +598,7 @@ describe('OPFSReplicaService', () => {
       await service.init();
       patchServiceMethods(service);
 
-      await service.initReplica([
-        { path: 'file.txt', content: 'data' },
-      ]);
+      await service.initReplica([{ path: 'file.txt', content: 'data' }]);
 
       const status = service.getStatus();
       expect(status.lastSyncTimestamp).toBeNull();
@@ -986,7 +975,11 @@ describe('OPFSReplicaService', () => {
       patchServiceMethods(service);
 
       await service.initReplica([
-        { path: 'full.txt', content: 'data', metadata: { browserSeq: 1, containerSeq: 2, lastSynced: 100, size: 10, modifiedAt: '2024-01-01' } },
+        {
+          path: 'full.txt',
+          content: 'data',
+          metadata: { browserSeq: 1, containerSeq: 2, lastSynced: 100, size: 10, modifiedAt: '2024-01-01' },
+        },
         { path: 'partial.txt', content: 'data', metadata: { browserSeq: 3 } },
         { path: 'no-meta.txt', content: 'data' },
       ]);

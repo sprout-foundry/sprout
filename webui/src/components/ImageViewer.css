@@ -129,7 +129,12 @@
   border-radius: 4px;
   background: var(--bg-secondary);
   cursor: pointer;
-  transition: background, color, border-color, box-shadow, transform 0.15s ease;
+  transition:
+    background,
+    color,
+    border-color,
+    box-shadow,
+    transform 0.15s ease;
   white-space: nowrap;
 }
 

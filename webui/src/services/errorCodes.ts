@@ -26,7 +26,7 @@ export type ServerErrorCode =
   | 'model_not_available' // configured model is gone — show model selector
   | 'invalid_request' // generic validation failure on inbound message
   | 'unauthorized' // service-mode auth failure
-  | (string & {}); // accept any code; this trick keeps autocomplete on the known ones
+  | (string & Record<string, never>); // accept any code; this trick keeps autocomplete on the known ones
 
 /**
  * Shape we expect on the `data` field of any error-type WS event or

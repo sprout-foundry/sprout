@@ -631,6 +631,7 @@ class LSPClientService {
       // expose the field.
       const caps = (client as unknown as { serverCapabilities?: unknown }).serverCapabilities;
       if (caps) {
+        // eslint-disable-next-line no-console
         console.info('[LSPClientService]', languageId, 'capabilities:', caps);
       }
 

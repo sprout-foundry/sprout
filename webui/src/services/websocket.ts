@@ -549,9 +549,10 @@ class WebSocketService {
 
   /** Track __seq from incoming events for reattach support. */
   private trackSeq(event: WsEvent): void {
-    const seq = (event as any).__seq;
+    const seq = (event as WsEvent & { __seq?: unknown }).__seq;
     if (typeof seq !== 'number') return;
-    const chatId = (event.data as any)?.chat_id || this.activeChatId;
+    const dataChatId = (event.data as Record<string, unknown> | null)?.chat_id;
+    const chatId = typeof dataChatId === 'string' ? dataChatId : this.activeChatId;
     if (!chatId) return;
     const current = this.chatSeq.get(chatId);
     if (current === undefined || seq > current) {

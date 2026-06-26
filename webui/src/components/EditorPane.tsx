@@ -329,6 +329,44 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
     onFormatDocument: handleFormatDocument,
   });
 
+  // EditorCore documents that `initOptions` must stay reference-stable so the
+  // EditorView isn't torn down per keystroke. `localContent` is therefore
+  // *not* in the dep array — `useEditorViewInit` reads it once for the
+  // initial view content; subsequent updates flow through `onUpdateRef`.
+  const editorCoreInitOptions = useMemo(() => ({
+    paneId,
+    buffer,
+    localContent,
+    compartments,
+    buildExtensions,
+    themePack,
+    customHighlightStyle,
+    keymapsRef,
+    localContentRef,
+    openWorkspaceBuffer,
+    onCancelPendingFlush: cancelPendingFlush,
+    onUpdateRef,
+    settingsRef,
+    actionsRef,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [paneId, buffer, compartments, buildExtensions, themePack, customHighlightStyle, openWorkspaceBuffer, cancelPendingFlush, onUpdateRef, settingsRef, actionsRef]);
+
+  const editorCoreReconfigureOptions = useMemo(() => ({
+    buffer,
+    compartments,
+    hotkeys,
+    keymapsRef,
+    editorFontSize: settings.editorFontSize,
+    editorTabSize: settings.editorTabSize,
+    editorUsesTabs: settings.editorUsesTabs,
+    wordWrapEnabled: settings.wordWrapEnabled,
+    minimapEnabled: settings.minimapEnabled,
+    relativeLineNumbersEnabled: settings.relativeLineNumbersEnabled,
+    whitespaceRenderingMode,
+    inlayHintsEnabled: settings.inlayHintsEnabled,
+    signatureHelpEnabled: settings.signatureHelpEnabled,
+  }), [buffer, compartments, hotkeys, settings.editorFontSize, settings.editorTabSize, settings.editorUsesTabs, settings.wordWrapEnabled, settings.minimapEnabled, settings.relativeLineNumbersEnabled, whitespaceRenderingMode, settings.inlayHintsEnabled, settings.signatureHelpEnabled]);
+
   if (!buffer || !buffer.file || buffer.file.isDir) {
     return <WelcomeTab onOpenCommandPalette={onOpenCommandPalette} />;
   }
@@ -373,42 +411,8 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   }
 
   // EditorCore documents that `initOptions` must stay reference-stable so the
-  // EditorView isn't torn down per keystroke. `localContent` is therefore
-  // *not* in the dep array — `useEditorViewInit` reads it once for the
-  // initial view content; subsequent updates flow through `onUpdateRef`.
-  const editorCoreInitOptions = useMemo(() => ({
-    paneId,
-    buffer,
-    localContent,
-    compartments,
-    buildExtensions,
-    themePack,
-    customHighlightStyle,
-    keymapsRef,
-    localContentRef,
-    openWorkspaceBuffer,
-    onCancelPendingFlush: cancelPendingFlush,
-    onUpdateRef,
-    settingsRef,
-    actionsRef,
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [paneId, buffer, compartments, buildExtensions, themePack, customHighlightStyle, openWorkspaceBuffer, cancelPendingFlush, onUpdateRef, settingsRef, actionsRef]);
-
-  const editorCoreReconfigureOptions = useMemo(() => ({
-    buffer,
-    compartments,
-    hotkeys,
-    keymapsRef,
-    editorFontSize: settings.editorFontSize,
-    editorTabSize: settings.editorTabSize,
-    editorUsesTabs: settings.editorUsesTabs,
-    wordWrapEnabled: settings.wordWrapEnabled,
-    minimapEnabled: settings.minimapEnabled,
-    relativeLineNumbersEnabled: settings.relativeLineNumbersEnabled,
-    whitespaceRenderingMode,
-    inlayHintsEnabled: settings.inlayHintsEnabled,
-    signatureHelpEnabled: settings.signatureHelpEnabled,
-  }), [buffer, compartments, hotkeys, settings.editorFontSize, settings.editorTabSize, settings.editorUsesTabs, settings.wordWrapEnabled, settings.minimapEnabled, settings.relativeLineNumbersEnabled, whitespaceRenderingMode, settings.inlayHintsEnabled, settings.signatureHelpEnabled]);
+  // EditorView isn't torn down per keystroke. These useMemos are declared
+  // above (before the early returns) to comply with react-hooks/rules-of-hooks.
 
   return (
     <div className="editor-pane">

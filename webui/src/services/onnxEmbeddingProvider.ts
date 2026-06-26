@@ -352,7 +352,7 @@ class GemmaBpeTokenizer {
    */
   private applyBPE(symbols: string[]): string[] {
     if (symbols.length < 2) return symbols;
-    while (true) {
+    for (;;) {
       let bestRank = Number.MAX_SAFE_INTEGER;
       let bestIdx = -1;
       for (let i = 0; i < symbols.length - 1; i++) {

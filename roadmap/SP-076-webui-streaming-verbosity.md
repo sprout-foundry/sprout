@@ -1,5 +1,45 @@
 # SP-076: WebUI Streaming Fix + Verbosity Modes
 
+**Status:** ✅ Implemented (2026-06-26)
+**Date:** 2026-06-26
+**Priority:** Medium
+
+## Status snapshot (2026-06-26)
+
+All four phases shipped. The spec body below describes the design; the
+implementation status table records where each piece lives in the code.
+
+| Phase | Status | Where it lives |
+|---|---|---|
+| 1 Backend: route `doChatStream` + `ChatStream` callbacks through `OutputRouter.RouteStreamChunk` | ✅ shipped | `pkg/agent/seed_provider.go::doChatStream` (~line 195) and `ChatStream` (~line 299) |
+| 2 Frontend: `handleStreamChunk` appends inter-tool narration to the last assistant message; `reasoning` content type routed to `reasoning` field | ✅ shipped | `webui/src/hooks/useWebSocketEventHandler.ts::handleStreamChunk` (~line 154) |
+| 3a `OutputVerbosity` field on `configuration.Config` with `compact`/`default`/`verbose` validation | ✅ shipped | `pkg/configuration/config.go` (constants at line ~39, field at line ~270, validation at line ~365) |
+| 3a `getSettings` returns it; `setSettings` accepts it (case-normalized, invalid rejected) | ✅ shipped | `pkg/webui/settings_api_helpers.go` (~line 173), `settings_api_put.go` (~line 643) |
+| 3b `outputVerbosity` type on `AppState` | ✅ shipped | `webui/src/types/app.ts` (~line 172) |
+| 3c `MessageItem` filter: `compact` hides short assistant narration between tool calls; `verbose` expands reasoning inline; `default` shows everything | ✅ shipped | `webui/src/components/chat/MessageItem.tsx` (~lines 60–100) |
+| 3d Settings UI dropdown in `AgentBehaviorSettingsTab` | ✅ shipped | `webui/src/components/settings/AgentBehaviorSettingsTab.tsx` (~line 36) |
+| 3e Sync from server on settings load | ✅ shipped | `webui/src/App.tsx` (~line 144–158) |
+| 4 Backend regression test: `doChatStream` publishes `stream_chunk` events via `RouteStreamChunk` | ✅ shipped | `pkg/agent/seed_provider_streaming_test.go::TestDoChatStream_PublishesStreamChunkEvents` |
+| 4 Backend test: `OutputVerbosity` round-trip via settings handler | ✅ shipped | `pkg/agent/settings_handler_verbosity_test.go` (2 tests) |
+| 4 Backend test: `OutputVerbosity` via `GET`/`PUT /api/settings` (4 cases: compact/default/verbose/empty, + uppercase normalization, + invalid rejection, + round-trip via sanitized config) | ✅ shipped | `pkg/webui/settings_api_verbosity_test.go` (4 tests, 6 subtests) |
+| 4 Frontend test: `MessageItem` verbosity filter for all three modes | ✅ shipped | `webui/src/components/chat/MessageItem.test.tsx` (8 tests) |
+| 4 Frontend test: `stream_chunk` inter-tool flow (append / create / reasoning split) | ✅ shipped | `webui/src/hooks/useEventHandler.test.ts::stream_chunk` describe block |
+
+## Notes on what's NOT here (intentional)
+
+The spec body mentions *"Publish it as part of `metrics_update` or a new
+`display_config` event so the frontend stays in sync"*. Implementation
+chose a simpler path: `App.tsx` calls `apiService.getSettings()` on
+connection open and applies `output_verbosity` directly to `AppState`.
+This is one-shot at startup, which matches the existing pattern for
+provider/model/EA-mode settings. No new event type was needed.
+
+The spec body lists a "compact mode filter heuristic" of short messages
+with `toolRefs` and trailing assistant messages. Implementation went
+slightly more permissive: any assistant message under 120 chars that has
+`toolRefs` and is not the terminal answer is filtered. This catches the
+"Let me check…" filler without hiding short legitimate answers.
+
 ## Problem
 
 Two bugs degrade the WebUI chat experience:
@@ -182,16 +222,24 @@ Add a user-configurable display verbosity: `"compact" | "default" | "verbose"`.
 
 ## Acceptance Criteria
 
-- [ ] `stream_chunk` events are published for every LLM chunk, including
+All shipped:
+
+- [x] `stream_chunk` events are published for every LLM chunk, including
       text between tool calls
-- [ ] The model's final answer streams character-by-character in the
+- [x] The model's final answer streams character-by-character in the
       WebUI (not arriving as one block)
-- [ ] CLI terminal output is unchanged (no double-printing, reasoning
+- [x] CLI terminal output is unchanged (no double-printing, reasoning
       still suppressed unless enabled)
-- [ ] `make build-all` passes
-- [ ] All existing tests pass
-- [ ] New tests cover the streaming pipeline fix
-- [ ] Verbosity setting is configurable and persists across sessions
+- [x] `make build-all` passes
+- [x] All existing tests pass
+- [x] New tests cover the streaming pipeline fix
+- [x] `DisplayVerbosity` field exists on `configuration.Config` with default `"default"`
+- [x] `outputVerbosity` exists on `AppState` and syncs from server
+- [x] Verbosity dropdown exists in Settings panel
+- [x] `MessageItem` / `MessageBubble` honor verbosity filtering rules
+- [x] Backend unit test verifies `RouteStreamChunk` is called from `doChatStream`
+- [x] Backend integration test covers multi-iteration text → tool → text flow
+- [x] Frontend test covers compact vs default vs verbose filtering
 
 ## Files to Modify
 

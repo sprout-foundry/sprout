@@ -1,6 +1,6 @@
 # SP-050: Orchestrator Persona Collapse — One Persona, Configurable Git-Write
 
-**Status:** 📋 Proposed
+**Status:** ✅ Implemented
 **Date:** 2026-05-22
 **Depends on:** SP-026 (Executive Assistant), SP-049 (Shell Permission Overhaul — only loosely; this spec touches the persona layer, not the classifier)
 **Priority:** Medium-High (cleanup that closes a real source of bugs and divergence)

@@ -46,6 +46,28 @@ fi
 
 # --- Extract provider names + detect cross-dir collisions ---
 # Avoid `declare -A` to keep this runnable on macOS bash 3.2.
+#
+# Local-only providers (non-HTTPS endpoint, e.g. lmstudio at
+# http://127.0.0.1) are excluded from the registry index: they ship
+# embedded in the binary and are meaningless to remote fetchers, which
+# would reject them anyway — the registry requires HTTPS (SSRF guard).
+# The publish workflow's copy step applies the same filter so the index
+# lists exactly the providers that got published.
+
+# is_https_endpoint reads .endpoint from a config file and returns 0
+# (true) if it starts with https://. A missing/empty endpoint is
+# treated as non-publishable. Case-insensitive on the scheme to match
+# the workflow's jq check. Bash 3.2-safe — no ${var,,}.
+is_https_endpoint() {
+    local file="$1" ep=""
+    if command -v jq >/dev/null 2>&1; then
+        ep="$(jq -r '.endpoint // ""' "$file" 2>/dev/null || true)"
+    else
+        ep="$(grep -o '"endpoint"[[:space:]]*:[[:space:]]*"[^"]*"' "$file" 2>/dev/null \
+            | sed 's/.*"endpoint"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/' || true)"
+    fi
+    [[ "$ep" == [hH][tT][tT][pP][sS]://* ]]
+}
 
 PROVIDERS=()
 EMBEDDED_NAMES=""
@@ -54,6 +76,10 @@ EMBEDDED_NAMES=""
 # for the bash-3.2 idiom.
 for file in ${JSON_FILES[@]+"${JSON_FILES[@]}"}; do
     provider="$(basename "$file" .json)"
+    if ! is_https_endpoint "$file"; then
+        echo "skip $provider (non-HTTPS endpoint, local-only)" >&2
+        continue
+    fi
     EMBEDDED_NAMES+="$provider"$'\n'
     PROVIDERS+=("$provider")
 done
@@ -62,12 +88,25 @@ done
 # array under `set -u`; bare "${ARR[@]}" trips "unbound variable" there.
 for file in ${COMMUNITY_JSON_FILES[@]+"${COMMUNITY_JSON_FILES[@]}"}; do
     provider="$(basename "$file" .json)"
-    if printf '%s' "$EMBEDDED_NAMES" | grep -qx "$provider"; then
+    if ! is_https_endpoint "$file"; then
+        echo "skip $provider (non-HTTPS endpoint, local-only)" >&2
+        continue
+    fi
+    if printf '%s' "$EMBEDDED_NAMES" | grep -qxF -- "$provider"; then
         echo "Error: provider '$provider' exists in both configs/ and community-configs/ — remove one" >&2
         exit 1
     fi
     PROVIDERS+=("$provider")
 done
+
+# If every provider was filtered out as local-only (non-HTTPS), fail
+# loudly rather than publishing an empty index that would wipe the
+# registry. A genuinely empty source dir is already caught above; this
+# guards the case where files exist but none are publishable.
+if [[ ${#PROVIDERS[@]} -eq 0 ]]; then
+    echo "Error: no publishable providers found — all have non-HTTPS endpoints (local-only)" >&2
+    exit 1
+fi
 
 # Sort alphabetically
 IFS=$'\n' SORTED=($(printf '%s\n' "${PROVIDERS[@]}" | sort)); unset IFS

@@ -1,6 +1,6 @@
 # SP-071: Conversation Rewind & Edit-and-Resend — Undo a Wrong Turn
 
-**Status:** 📋 Proposed
+**Status:** ✅ Implemented
 **Date:** 2026-06-14
 **Depends on:** SP-066 (TurnCheckpoint structure), SP-024 (context management), Change Tracking (`pkg/agent/change_tracking*.go`)
 **Priority:** Medium-High

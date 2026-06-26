@@ -92,10 +92,16 @@ type ProactiveContextResult struct {
 //
 // The retrieval pipeline:
 //  1. Embed the query text using the static provider
-//  2. Load all conversation_turn records from the store
-//  3. Optionally filter by working directory (WorkspaceScoped)
-//  4. Score each candidate with cosine similarity + 30-day half-life decay
+//  2. Query the HNSW index for the top-K nearest neighbors (O(log N))
+//  3. Filter to Type=="conversation_turn" and optionally by working directory
+//  4. Re-score with cosine similarity × 30-day half-life decay
 //  5. Filter by MinRelevanceScore, sort descending, cap at MaxContextualResults
+//
+// If the HNSW query returns no same-workspace matches (e.g. when the
+// relevant turns rank beyond the top-K window under raw cosine), the
+// pipeline falls back to a brute-force LoadAll scan for stores under 2000
+// records — preserving the exact-match recall of the pre-HNSW path where
+// the O(N) cost is negligible. Larger stores rely on HNSW alone.
 //
 // Graceful degradation: all errors are logged and nil/empty is returned.
 // The agent should never be blocked by a retrieval failure.
@@ -162,51 +168,7 @@ func RetrieveProactiveContext(
 		return nil, nil
 	}
 
-	// Load all records and filter to conversation turns
-	allRecords, err := store.LoadAll()
-	if err != nil {
-		debugLogf("[proactive-context] failed to load records: %v", err)
-		return nil, nil
-	}
-
-	candidates := make([]embedding.VectorRecord, 0, len(allRecords))
-	for i := range allRecords {
-		if allRecords[i].Type == "conversation_turn" {
-			candidates = append(candidates, allRecords[i])
-		}
-	}
-	if len(candidates) == 0 {
-		return nil, nil
-	}
-
-	// Score, filter, and collect (negative cosine similarities are filtered
-	// by the MinRelevanceScore >= 0.50 threshold, so they are never included).
-	scored := make([]ProactiveContextResult, 0, len(candidates))
-	for _, record := range candidates {
-		// Workspace-scoped filtering
-		if config.WorkspaceScoped && workingDir != "" {
-			recWD, ok := record.Metadata["workingDir"].(string)
-			if !ok || recWD != workingDir {
-				continue
-			}
-		}
-
-		// Skip records with no embedding (shouldn't happen, but defensive)
-		if len(record.Embedding) == 0 {
-			continue
-		}
-
-		similarity := embedding.CosineSimilarity(queryEmb, record.Embedding)
-		decayedScore := embedding.ScoreWithDecay(float64(similarity), record.IndexedAt, now)
-
-		if decayedScore >= config.MinRelevanceScore {
-			scored = append(scored, ProactiveContextResult{
-				Record: record,
-				Score:  decayedScore,
-			})
-		}
-	}
-
+	scored := retrieveProactiveViaHNSW(store, queryEmb, config, workingDir, now)
 	if len(scored) == 0 {
 		return nil, nil
 	}
@@ -222,10 +184,120 @@ func RetrieveProactiveContext(
 	}
 
 	// Per-retrieval informational log — debug-only.
-	debugLogf("[proactive-context] retrieved %d/%d candidates above threshold %.2f",
-		len(scored), len(candidates), config.MinRelevanceScore)
+	debugLogf("[proactive-context] retrieved %d candidates above decayed threshold %.2f",
+		len(scored), config.MinRelevanceScore)
 
 	return scored, nil
+}
+
+// proactiveRawSimilarityFloor is the minimum RAW cosine similarity an HNSW
+// candidate must have to be retrieved at all. It is deliberately lower than
+// MinRelevanceScore (which semantically refers to the DECAYED score): a record
+// with raw similarity 0.35 and a fresh IndexedAt can decay to a score near
+// 0.35, which may clear a user-set MinRelevanceScore of 0.30, but we still
+// want a noise floor so HNSW doesn't return thousands of low-signal hits on
+// large stores. Keep this as a separate constant so lowering MinRelevanceScore
+// below it doesn't flood HNSW with noise.
+const proactiveRawSimilarityFloor = 0.30
+
+// retrieveProactiveViaHNSW runs the HNSW query + post-filter pipeline. If the
+// filtered set is empty but the store is small, it falls back to the old
+// brute-force LoadAll path — HNSW's approximate top-K can miss same-workspace
+// matches that rank beyond topK under cosine but are still relevant after
+// workspace + type filtering. The fallback keeps the refactoring from
+// regressing recall on small stores where the O(N) cost is negligible.
+func retrieveProactiveViaHNSW(
+	store *embedding.ConversationStore,
+	queryEmb []float32,
+	config ProactiveContextConfig,
+	workingDir string,
+	now time.Time,
+) []ProactiveContextResult {
+	topK := config.MaxContextualResults * 4
+	if topK < 4 {
+		topK = 4
+	}
+
+	// Use the lower raw-similarity floor for the HNSW pre-filter so
+	// decayed-but-relevant matches survive; MinRelevanceScore is applied
+	// post-query on the decayed score (its semantic purpose).
+	rawThreshold := float32(proactiveRawSimilarityFloor)
+	if float64(rawThreshold) > config.MinRelevanceScore {
+		rawThreshold = float32(config.MinRelevanceScore)
+	}
+
+	rawResults, err := store.Query(queryEmb, topK, rawThreshold)
+	if err != nil {
+		debugLogf("[proactive-context] HNSW query failed: %v", err)
+		return nil
+	}
+
+	scored := filterAndScoreProactive(rawResults, config, workingDir, now)
+	if len(scored) > 0 {
+		return scored
+	}
+
+	// Fallback: HNSW's approximate top-K may have missed same-workspace
+	// matches that rank beyond topK by raw cosine. For small stores the
+	// brute-force O(N) cost is negligible, and falling back preserves the
+	// exact-match recall of the pre-refactoring LoadAll path. Cap at a few
+	// thousand records so a pathological store can't stall startup.
+	if store.Size() > 2000 {
+		return nil
+	}
+	allRecords, err := store.LoadAll()
+	if err != nil {
+		debugLogf("[proactive-context] fallback LoadAll failed: %v", err)
+		return nil
+	}
+	bruteResults := make([]embedding.QueryResult, 0, len(allRecords))
+	for _, rec := range allRecords {
+		if len(rec.Embedding) == 0 {
+			continue
+		}
+		sim := embedding.CosineSimilarity(queryEmb, rec.Embedding)
+		if sim >= rawThreshold {
+			bruteResults = append(bruteResults, embedding.QueryResult{Record: rec, Similarity: sim})
+		}
+	}
+	return filterAndScoreProactive(bruteResults, config, workingDir, now)
+}
+
+// filterAndScoreProactive applies the type filter, workspace filter, and
+// time-decay re-scoring to a set of raw query results, returning only those
+// whose decayed score meets config.MinRelevanceScore. Shared between the HNSW
+// path and the brute-force fallback so both apply identical post-filtering.
+func filterAndScoreProactive(
+	rawResults []embedding.QueryResult,
+	config ProactiveContextConfig,
+	workingDir string,
+	now time.Time,
+) []ProactiveContextResult {
+	scored := make([]ProactiveContextResult, 0, len(rawResults))
+	for _, r := range rawResults {
+		// Only surface per-turn records (not rollups or memories).
+		if r.Record.Type != "conversation_turn" {
+			continue
+		}
+
+		// Workspace-scoped filtering
+		if config.WorkspaceScoped && workingDir != "" {
+			recWD, ok := r.Record.Metadata["workingDir"].(string)
+			if !ok || recWD != workingDir {
+				continue
+			}
+		}
+
+		decayedScore := embedding.ScoreWithDecay(float64(r.Similarity), r.Record.IndexedAt, now)
+
+		if decayedScore >= config.MinRelevanceScore {
+			scored = append(scored, ProactiveContextResult{
+				Record: r.Record,
+				Score:  decayedScore,
+			})
+		}
+	}
+	return scored
 }
 
 // FormatProactiveContext formats retrieved results as a "Previous Work" section

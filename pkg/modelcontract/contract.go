@@ -157,6 +157,19 @@ func CapabilitiesFromTags(tags []string) Capabilities {
 	}
 }
 
+// RoleHas reports whether roles contains role (exact match). It treats the
+// modelcontract role names as opaque strings, so adding a new role never
+// requires touching this helper — only the call sites that interpret the
+// string need to know what to do with it.
+func RoleHas(roles []string, role string) bool {
+	for _, r := range roles {
+		if r == role {
+			return true
+		}
+	}
+	return false
+}
+
 // Bool returns a pointer to b, for setting tri-state capabilities.
 func Bool(b bool) *bool { return &b }
 

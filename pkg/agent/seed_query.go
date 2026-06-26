@@ -215,6 +215,15 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	// fires earlier — by default at 0.70 instead of 0.85.
 	opts.CompactionTriggerFraction = a.computeCompactionTriggerFraction()
 
+	// SP-066 substitution target: when pressure fires and we substitute
+	// checkpoint summaries for raw messages, target 50% of the context
+	// window rather than seed's default 85%. Substitution is a one-way
+	// information-loss operation, so paying the cost should buy many turns
+	// of headroom instead of re-substituting one checkpoint every turn.
+	// The emergency drop/truncate cascade (Phase 1+) is unaffected and
+	// still targets 85%.
+	opts.SubstitutionTargetFraction = 0.50
+
 	if a.systemPrompt != "" {
 		opts.SystemPrompt = a.systemPrompt
 	}

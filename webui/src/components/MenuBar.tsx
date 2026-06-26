@@ -17,10 +17,7 @@ import { supportsLocalTerminal } from '../config/mode';
 /*  Menu definitions (identical to the original component)             */
 /* ------------------------------------------------------------------ */
 
-function buildMenus(
-  username: string | null | undefined,
-  _currentBranch: string | null | undefined,
-): MenuDefinition[] {
+function buildMenus(username: string | null | undefined, _currentBranch: string | null | undefined): MenuDefinition[] {
   // ── File menu ─────────────────────────────────────────────────
   const fileItems: MenuBarItem[] = [
     { label: 'New File', commandId: 'new_file' },
@@ -120,10 +117,7 @@ const MenuBarWrapper = (): JSX.Element => {
   const currentBranch: string | null | undefined = ctx.currentBranch;
   const toggleCommand = ctx.toggleCommand;
 
-  const menus = useMemo(
-    () => buildMenus(username, currentBranch),
-    [username, currentBranch],
-  );
+  const menus = useMemo(() => buildMenus(username, currentBranch), [username, currentBranch]);
 
   /* ── Toggle state resolver (identical to original) ─────────── */
   const getToggleState = useMemo(() => {
@@ -135,40 +129,29 @@ const MenuBarWrapper = (): JSX.Element => {
   }, []);
 
   /* ── Command execution ─────────────────────────────────────── */
-  const handleCommandExecute = useCallback(
-    (commandId: string) => {
-      switch (commandId) {
-        case 'keyboard_shortcuts':
-          window.dispatchEvent(new CustomEvent('sprout:open-hotkeys-config'));
-          break;
-        case 'about':
-          alert('sprout WebUI\nVersion 1.0.0\n\nA modern, keyboard-accessible code editor.');
-          break;
-        case 'report_issue':
-          window.open(
-            'https://github.com/alantheprice/sprout/issues/new',
-            '_blank',
-            'noopener,noreferrer',
-          );
-          break;
-        default:
-          window.dispatchEvent(
-            new CustomEvent('sprout:hotkey', { detail: { commandId } }),
-          );
-          break;
-      }
-    },
-    [],
-  );
+  const handleCommandExecute = useCallback((commandId: string) => {
+    switch (commandId) {
+      case 'keyboard_shortcuts':
+        window.dispatchEvent(new CustomEvent('sprout:open-hotkeys-config'));
+        break;
+      case 'about':
+        alert('sprout WebUI\nVersion 1.0.0\n\nA modern, keyboard-accessible code editor.');
+        break;
+      case 'report_issue':
+        window.open('https://github.com/alantheprice/sprout/issues/new', '_blank', 'noopener,noreferrer');
+        break;
+      default:
+        window.dispatchEvent(new CustomEvent('sprout:hotkey', { detail: { commandId } }));
+        break;
+    }
+  }, []);
 
   /* ── Toggle command handler ────────────────────────────────── */
   // Replicates the original: always dispatches the custom event,
   // then delegates to the adapter's toggleCommand if available.
   const handleToggleCommand = useCallback(
     (commandId: string) => {
-      window.dispatchEvent(
-        new CustomEvent('sprout:toggle-command', { detail: { commandId } }),
-      );
+      window.dispatchEvent(new CustomEvent('sprout:toggle-command', { detail: { commandId } }));
       if (typeof toggleCommand === 'function') {
         toggleCommand(commandId);
       }

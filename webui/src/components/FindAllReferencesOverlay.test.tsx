@@ -215,10 +215,7 @@ describe('FindAllReferencesOverlay rendering', () => {
 
   it('marks first item as selected by default', () => {
     renderOverlay({
-      references: [
-        makeRef({ line: 1 }),
-        makeRef({ line: 5 }),
-      ],
+      references: [makeRef({ line: 1 }), makeRef({ line: 5 })],
     });
     const items = container.querySelectorAll('.find-refs-item');
     expect(items[0].getAttribute('data-selected')).toBe('true');

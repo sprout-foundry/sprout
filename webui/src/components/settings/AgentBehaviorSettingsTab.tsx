@@ -20,11 +20,12 @@ export default function AgentBehaviorSettingsTab({
   renderToggle,
   renderTextareaInput,
 }: AgentBehaviorSettingsTabProps) {
-  const customProfiles = settings && (settings as unknown as { risk_profiles?: Record<string, unknown> }).risk_profiles
-    ? Object.keys((settings as unknown as { risk_profiles?: Record<string, unknown> }).risk_profiles ?? {})
-        .filter((name) => !BUILT_IN_RISK_PROFILES.includes(name))
-        .sort()
-    : [];
+  const customProfiles =
+    settings && (settings as unknown as { risk_profiles?: Record<string, unknown> }).risk_profiles
+      ? Object.keys((settings as unknown as { risk_profiles?: Record<string, unknown> }).risk_profiles ?? {})
+          .filter((name) => !BUILT_IN_RISK_PROFILES.includes(name))
+          .sort()
+      : [];
   const riskProfileOptions = [...BUILT_IN_RISK_PROFILES, ...customProfiles];
 
   return (

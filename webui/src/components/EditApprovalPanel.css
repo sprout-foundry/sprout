@@ -253,7 +253,9 @@
   font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.15s, opacity 0.15s;
+  transition:
+    background 0.15s,
+    opacity 0.15s;
   border: 1px solid transparent;
 }
 

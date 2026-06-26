@@ -480,10 +480,11 @@ export const useGitWorkspace = ({
   const handleDiscardFile = useCallback(
     (filePath: string) => {
       runGitAction(async () => {
-        const confirmed = await showThemedConfirm(
-          `Discard local changes to ${filePath}? This cannot be undone.`,
-          { title: 'Discard changes', type: 'danger', confirmLabel: 'Discard' },
-        );
+        const confirmed = await showThemedConfirm(`Discard local changes to ${filePath}? This cannot be undone.`, {
+          title: 'Discard changes',
+          type: 'danger',
+          confirmLabel: 'Discard',
+        });
         if (!confirmed) return;
         await onGitDiscard([filePath]);
       }, `Failed to discard ${filePath}`);
@@ -680,9 +681,13 @@ export const useGitWorkspace = ({
   }, [fetchFn, runGitAction]);
 
   const handleCreatePullRequest = useCallback(
-    async (
-      params: { title: string; body?: string; base?: string; head?: string; draft?: boolean },
-    ): Promise<{ url: string; number: number; state: string }> => {
+    async (params: {
+      title: string;
+      body?: string;
+      base?: string;
+      head?: string;
+      draft?: boolean;
+    }): Promise<{ url: string; number: number; state: string }> => {
       setGitActionError(null);
       setGitActionWarning(null);
       setIsGitActing(true);

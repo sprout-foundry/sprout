@@ -228,6 +228,21 @@ lint-fix:
 	@echo "Auto-fixing frontend linting issues..."
 	@cd webui && npm run lint:fix && npm run format && echo "Lint fix completed"
 
+# Quality gates
+.PHONY: vet fmt-check
+vet: prepare-grammars
+	go vet ./...
+
+fmt-check:
+	@unformatted=$$(gofmt -l pkg/ cmd/ internal/ 2>/dev/null); \
+	if [ -n "$$unformatted" ]; then \
+		echo "❌ gofmt found unformatted files:"; \
+		echo "$$unformatted"; \
+		exit 1; \
+	else \
+		echo "✅ all Go files are gofmt-clean"; \
+	fi
+
 # Build React web UI only (doesn't deploy to Go static)
 # Root npm ci installs every workspace (packages/events, packages/ui, webui);
 # the @sprout/* packages are then built explicitly because their `prepare`

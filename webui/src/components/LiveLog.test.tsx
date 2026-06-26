@@ -58,10 +58,12 @@ describe('LiveLog (@sprout/ui import)', () => {
     const lines = [makeLine('1', 'First log line'), makeLine('2', 'Second log line')];
 
     act(() => {
-      root.render(createElement(LiveLog, {
-        lines,
-        maxLines: 10,
-      }));
+      root.render(
+        createElement(LiveLog, {
+          lines,
+          maxLines: 10,
+        }),
+      );
     });
 
     expect(container.querySelector('.subagent-feed-log')).not.toBeNull();
@@ -69,26 +71,27 @@ describe('LiveLog (@sprout/ui import)', () => {
 
   it('returns null when lines array is empty', () => {
     act(() => {
-      root.render(createElement(LiveLog, {
-        lines: [],
-        maxLines: 10,
-      }));
+      root.render(
+        createElement(LiveLog, {
+          lines: [],
+          maxLines: 10,
+        }),
+      );
     });
 
     expect(container.querySelector('.subagent-feed-log')).toBeNull();
   });
 
   it('renders each line in a log-line container', () => {
-    const lines = [
-      makeLine('1', 'Hello'),
-      makeLine('2', 'World'),
-    ];
+    const lines = [makeLine('1', 'Hello'), makeLine('2', 'World')];
 
     act(() => {
-      root.render(createElement(LiveLog, {
-        lines,
-        maxLines: 10,
-      }));
+      root.render(
+        createElement(LiveLog, {
+          lines,
+          maxLines: 10,
+        }),
+      );
     });
 
     const lineEls = container.querySelectorAll('.subagent-feed-log-line');
@@ -99,10 +102,12 @@ describe('LiveLog (@sprout/ui import)', () => {
     const lines = [makeLine('1', 'Log message here')];
 
     act(() => {
-      root.render(createElement(LiveLog, {
-        lines,
-        maxLines: 10,
-      }));
+      root.render(
+        createElement(LiveLog, {
+          lines,
+          maxLines: 10,
+        }),
+      );
     });
 
     const textEl = container.querySelector('.subagent-feed-log-text');
@@ -113,10 +118,12 @@ describe('LiveLog (@sprout/ui import)', () => {
     const lines = [makeLine('1', 'Task output', { taskId: 'task-1' })];
 
     act(() => {
-      root.render(createElement(LiveLog, {
-        lines,
-        maxLines: 10,
-      }));
+      root.render(
+        createElement(LiveLog, {
+          lines,
+          maxLines: 10,
+        }),
+      );
     });
 
     const taskEl = container.querySelector('.subagent-feed-log-task');
@@ -128,10 +135,12 @@ describe('LiveLog (@sprout/ui import)', () => {
     const lines = [makeLine('1', 'No task')];
 
     act(() => {
-      root.render(createElement(LiveLog, {
-        lines,
-        maxLines: 10,
-      }));
+      root.render(
+        createElement(LiveLog, {
+          lines,
+          maxLines: 10,
+        }),
+      );
     });
 
     expect(container.querySelector('.subagent-feed-log-task')).toBeNull();
@@ -147,10 +156,12 @@ describe('LiveLog (@sprout/ui import)', () => {
     ];
 
     act(() => {
-      root.render(createElement(LiveLog, {
-        lines,
-        maxLines: 3,
-      }));
+      root.render(
+        createElement(LiveLog, {
+          lines,
+          maxLines: 3,
+        }),
+      );
     });
 
     const lineEls = container.querySelectorAll('.subagent-feed-log-line');
@@ -166,11 +177,13 @@ describe('LiveLog (@sprout/ui import)', () => {
     const lines = [makeLine('1', 'Custom class test')];
 
     act(() => {
-      root.render(createElement(LiveLog, {
-        lines,
-        maxLines: 10,
-        className: 'my-custom-class',
-      }));
+      root.render(
+        createElement(LiveLog, {
+          lines,
+          maxLines: 10,
+          className: 'my-custom-class',
+        }),
+      );
     });
 
     const logEl = container.querySelector('.subagent-feed-log');
@@ -182,10 +195,12 @@ describe('LiveLog (@sprout/ui import)', () => {
     const lines = [makeLine('1', 'No custom class')];
 
     act(() => {
-      root.render(createElement(LiveLog, {
-        lines,
-        maxLines: 10,
-      }));
+      root.render(
+        createElement(LiveLog, {
+          lines,
+          maxLines: 10,
+        }),
+      );
     });
 
     const logEl = container.querySelector('.subagent-feed-log');

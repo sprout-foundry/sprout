@@ -269,10 +269,7 @@ describe('test button', () => {
     const btn = screen.getByRole('button', { name: /send test notification/i });
     await userEvent.click(btn);
 
-    expect(mockNotify).toHaveBeenCalledWith(
-      'Sprout',
-      'Test notification — desktop notifications are working!',
-    );
+    expect(mockNotify).toHaveBeenCalledWith('Sprout', 'Test notification — desktop notifications are working!');
   });
 
   it('shows blocked status when clicked with denied permission', async () => {
@@ -308,10 +305,7 @@ describe('test button', () => {
     expect(mockRequestPermission).toHaveBeenCalledTimes(1);
 
     await waitFor(() => {
-      expect(mockNotify).toHaveBeenCalledWith(
-        'Sprout',
-        'Test notification — desktop notifications are working!',
-      );
+      expect(mockNotify).toHaveBeenCalledWith('Sprout', 'Test notification — desktop notifications are working!');
     });
   });
 

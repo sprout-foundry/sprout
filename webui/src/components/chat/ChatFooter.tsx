@@ -115,7 +115,9 @@ export function ChatFooter({
             </div>
           ) : null}
           <SkeletonText lines={2} gap="6px" lineHeight="14px" lastLineWidth="40%" />
-          <span className="sr-only">{activeTodoLabel ? `Processing: ${activeTodoLabel}` : 'Processing your request...'}</span>
+          <span className="sr-only">
+            {activeTodoLabel ? `Processing: ${activeTodoLabel}` : 'Processing your request...'}
+          </span>
         </div>
       </div>,
     );

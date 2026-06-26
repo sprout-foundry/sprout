@@ -32,7 +32,8 @@ const DEFAULTS: Required<PersistentContextSettings> = {
 };
 
 export default function PersistentContextSettingsTab({ settings, updateSetting }: PersistentContextSettingsTabProps) {
-  const pc = (settings as unknown as { persistent_context?: PersistentContextSettings } | null)?.persistent_context ?? {};
+  const pc =
+    (settings as unknown as { persistent_context?: PersistentContextSettings } | null)?.persistent_context ?? {};
 
   const get = <K extends keyof Required<PersistentContextSettings>>(k: K): Required<PersistentContextSettings>[K] => {
     const v = pc[k];
@@ -241,8 +242,8 @@ function PreviewRetrievalPanel() {
     <div className="pc-preview-panel">
       <h4>Preview retrieval</h4>
       <div className="config-help settings-help-spaced">
-        See exactly which past turns the saved settings above would inject for a query, so you can tune the
-        relevance score / result count before committing.
+        See exactly which past turns the saved settings above would inject for a query, so you can tune the relevance
+        score / result count before committing.
       </div>
 
       <div className="settings-inline-row settings-help-spaced">
@@ -314,4 +315,3 @@ function PreviewRetrievalPanel() {
     </div>
   );
 }
-

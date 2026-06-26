@@ -87,10 +87,7 @@ function Chat(props: ChatProps): JSX.Element {
     }
     return map;
   }, [toolExecutions]);
-  const getToolStatusForMessage = useCallback(
-    (toolId: string) => toolStatusById.get(toolId),
-    [toolStatusById],
-  );
+  const getToolStatusForMessage = useCallback((toolId: string) => toolStatusById.get(toolId), [toolStatusById]);
 
   useLayoutEffect(() => {
     const node = inputContainerRef.current;
@@ -146,8 +143,7 @@ function Chat(props: ChatProps): JSX.Element {
       // assistant message, this one is inter-tool narration (not the
       // terminal answer) — compact mode hides it. Computed here so
       // MessageItem stays a pure presentational component.
-      const nextMessage =
-        index + 1 < messagesRef.current.length ? messagesRef.current[index + 1] : null;
+      const nextMessage = index + 1 < messagesRef.current.length ? messagesRef.current[index + 1] : null;
       const hasNextAssistantMessage = nextMessage?.type === 'assistant';
       return (
         <MessageItem
@@ -185,39 +181,39 @@ function Chat(props: ChatProps): JSX.Element {
     [onInputChange],
   );
 
-  const handleRewindAndResend = useCallback(async (messageContent: string, messageIndex: number) => {
-    if (isRewinding) return;
-    // The toTurn is a checkpoint index: user messages are at even indices (0, 2, 4, ...)
-    // and correspond to checkpoints 0, 1, 2, ....  To rewind BEFORE this checkpoint
-    // pass k - 1 (where k = Math.floor(messageIndex / 2)).  For the very first message
-    // the result is 0 which is a harmless no-op.
-    const toTurn = Math.max(0, Math.floor(messageIndex / 2) - 1);
+  const handleRewindAndResend = useCallback(
+    async (messageContent: string, messageIndex: number) => {
+      if (isRewinding) return;
+      // The toTurn is a checkpoint index: user messages are at even indices (0, 2, 4, ...)
+      // and correspond to checkpoints 0, 1, 2, ....  To rewind BEFORE this checkpoint
+      // pass k - 1 (where k = Math.floor(messageIndex / 2)).  For the very first message
+      // the result is 0 which is a harmless no-op.
+      const toTurn = Math.max(0, Math.floor(messageIndex / 2) - 1);
 
-    const confirmed = await showThemedConfirm(
-      `Discard all turns after this message and revert file changes?`,
-      {
+      const confirmed = await showThemedConfirm(`Discard all turns after this message and revert file changes?`, {
         title: 'Edit & Resend',
         confirmLabel: 'Resend',
         cancelLabel: 'Cancel',
         type: 'danger',
-      },
-    );
-    if (!confirmed) return;
+      });
+      if (!confirmed) return;
 
-    setIsRewinding(true);
-    try {
-      await rewindQuery(clientFetch, toTurn, true, chatId);
-      onInputChange(messageContent);
-    } catch (e) {
-      console.error('Rewind failed:', e);
-      await showThemedAlert(
-        `Rewind failed: ${e instanceof Error ? e.message : 'Unknown error'}`,
-        { title: 'Rewind Failed', type: 'error' },
-      );
-    } finally {
-      setIsRewinding(false);
-    }
-  }, [isRewinding, onInputChange, chatId]);
+      setIsRewinding(true);
+      try {
+        await rewindQuery(clientFetch, toTurn, true, chatId);
+        onInputChange(messageContent);
+      } catch (e) {
+        console.error('Rewind failed:', e);
+        await showThemedAlert(`Rewind failed: ${e instanceof Error ? e.message : 'Unknown error'}`, {
+          title: 'Rewind Failed',
+          type: 'error',
+        });
+      } finally {
+        setIsRewinding(false);
+      }
+    },
+    [isRewinding, onInputChange, chatId],
+  );
 
   const handleToggleIndex = useCallback(async (enabled: boolean) => {
     try {
@@ -254,7 +250,12 @@ function Chat(props: ChatProps): JSX.Element {
             onRequestProviderSetup={onRequestProviderSetup}
           />
         ) : (
-          <div ref={chatContainerRef} role="log" aria-label="Chat messages" style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+          <div
+            ref={chatContainerRef}
+            role="log"
+            aria-label="Chat messages"
+            style={{ flex: 1, minHeight: 0, position: 'relative' }}
+          >
             <Virtuoso
               ref={virtuosoRef}
               data={messages}

@@ -103,9 +103,9 @@ const SYNTHETIC_TOKENIZER: TokenizerJSON = {
       '▁a': 31,
     },
     merges: [
-      ['a', 'b'],     // a + b -> ab
-      ['ab', 'c'],    // ab + c -> abc
-      ['▁', 'a'],     // ▁ + a -> ▁a
+      ['a', 'b'], // a + b -> ab
+      ['ab', 'c'], // ab + c -> abc
+      ['▁', 'a'], // ▁ + a -> ▁a
     ],
   },
   added_tokens: [
@@ -141,10 +141,11 @@ describe('GemmaBpeTokenizer schema parsing', () => {
   });
 
   it('rejects non-BPE tokenizers', () => {
-    expect(() =>
-      new GemmaBpeTokenizer({
-        model: { type: 'WordLevel', vocab: {}, merges: [] },
-      } as unknown as TokenizerJSON)
+    expect(
+      () =>
+        new GemmaBpeTokenizer({
+          model: { type: 'WordLevel', vocab: {}, merges: [] },
+        } as unknown as TokenizerJSON),
     ).toThrow();
   });
 
@@ -194,7 +195,7 @@ describe('GemmaBpeTokenizer against real EmbeddingGemma fixture', () => {
       'sprout',
       'models',
       'embeddinggemma-300m',
-      'tokenizer.json'
+      'tokenizer.json',
     );
     let tokenizerSource: string;
     try {

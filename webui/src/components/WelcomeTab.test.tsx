@@ -280,9 +280,7 @@ describe('WelcomeTab', () => {
       });
       // The Settings card used to call onOpenCommandPalette (a stub); now it
       // actually opens settings via the global event the sidebar listens for.
-      const fired = dispatchSpy.mock.calls.some(
-        (args) => (args[0] as Event).type === 'sprout:open-settings-focus',
-      );
+      const fired = dispatchSpy.mock.calls.some((args) => (args[0] as Event).type === 'sprout:open-settings-focus');
       expect(fired).toBe(true);
       dispatchSpy.mockRestore();
     });
@@ -296,9 +294,7 @@ describe('WelcomeTab', () => {
       act(() => {
         shortcutsButton!.click();
       });
-      const fired = dispatchSpy.mock.calls.some(
-        (args) => (args[0] as Event).type === 'sprout:open-hotkeys-config',
-      );
+      const fired = dispatchSpy.mock.calls.some((args) => (args[0] as Event).type === 'sprout:open-hotkeys-config');
       expect(fired).toBe(true);
       dispatchSpy.mockRestore();
     });

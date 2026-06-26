@@ -162,7 +162,7 @@ function installAdapterForConfig(config: RuntimeConfig): void {
         apiBase: config.apiBaseURL,
         wsUrl: config.wsURL,
         navItems: CLOUD_NAV_ITEMS,
-      })
+      }),
     );
   } else {
     // eslint-disable-next-line no-console

@@ -7,8 +7,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/sprout-foundry/sprout/pkg/ast"
 	gotreesitter "github.com/odvcencio/gotreesitter"
+	"github.com/sprout-foundry/sprout/pkg/ast"
 )
 
 // tsTestFilePattern matches common test file naming conventions.

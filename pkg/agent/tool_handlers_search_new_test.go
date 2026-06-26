@@ -9,10 +9,10 @@ import (
 func TestBytesIndexByte(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name  string
-		b     []byte
-		c     byte
-		want  int
+		name string
+		b    []byte
+		c    byte
+		want int
 	}{
 		{
 			name: "found at first position",

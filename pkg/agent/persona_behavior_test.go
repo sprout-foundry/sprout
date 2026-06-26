@@ -156,12 +156,12 @@ func TestGetAvailableToolNames(t *testing.T) {
 
 	// Verify known tools are present.
 	known := map[string]bool{
-		"shell_command":          false,
-		"read_file":              false,
-		"write_file":             false,
-		"edit_file":              false,
-		"write_structured_file":  false,
-		"search_files":           false,
+		"shell_command":         false,
+		"read_file":             false,
+		"write_file":            false,
+		"edit_file":             false,
+		"write_structured_file": false,
+		"search_files":          false,
 	}
 
 	for _, name := range names {

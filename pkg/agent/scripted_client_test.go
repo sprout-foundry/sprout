@@ -304,7 +304,7 @@ func TestScriptedClient_SendChatRequestStream_ErrorAfterChunks(t *testing.T) {
 	client := NewScriptedClient(
 		&ScriptedResponse{
 			StreamConfig: &StreamConfig{
-				Chunks:         []string{"chunk1", "chunk2", "chunk3"},
+				Chunks:           []string{"chunk1", "chunk2", "chunk3"},
 				ErrorAfterChunks: 2,
 			},
 		},

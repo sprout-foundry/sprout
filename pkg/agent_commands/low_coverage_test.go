@@ -623,7 +623,7 @@ func TestModelsCommand_FuzzySearchModels(t *testing.T) {
 		{
 			name:      "empty query returns all results",
 			query:     "",
-			wantCount: 5, // empty string matches all (score 150 each)
+			wantCount: 5,  // empty string matches all (score 150 each)
 			wantFirst: "", // order not guaranteed for equal scores
 		},
 	}
@@ -928,9 +928,9 @@ func TestCommandRegistry_IsSlashCommand(t *testing.T) {
 	r := NewCommandRegistry()
 
 	tests := []struct {
-		name   string
-		input  string
-		want   bool
+		name  string
+		input string
+		want  bool
 	}{
 		{"valid slash command", "/help", true},
 		{"valid bang command", "!ls", true},

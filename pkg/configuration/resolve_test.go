@@ -9,10 +9,10 @@ import (
 
 func TestHasProviderAuth(t *testing.T) {
 	tests := []struct {
-		name              string
-		provider          string
-		setupEnv          func()
-		expectHasAuth     bool
+		name          string
+		provider      string
+		setupEnv      func()
+		expectHasAuth bool
 	}{
 		{
 			name:     "local provider (ollama) always returns true",

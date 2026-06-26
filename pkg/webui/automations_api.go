@@ -34,14 +34,14 @@ import (
 // sessionResponse is the JSON shape returned for automate session
 // detail and list endpoints, enriched with live process status.
 type sessionResponse struct {
-	SessionID      string     `json:"session_id,omitempty"`
-	Workflow       string     `json:"workflow"`
-	PID            int        `json:"pid"`
-	Status         string     `json:"status"`
-	StartedAt      time.Time  `json:"started_at"`
-	Kind           string     `json:"kind"`
-	OutputFilePath string     `json:"output_file_path,omitempty"`
-	BudgetUSD      *float64   `json:"budget_usd,omitempty"`
+	SessionID      string    `json:"session_id,omitempty"`
+	Workflow       string    `json:"workflow"`
+	PID            int       `json:"pid"`
+	Status         string    `json:"status"`
+	StartedAt      time.Time `json:"started_at"`
+	Kind           string    `json:"kind"`
+	OutputFilePath string    `json:"output_file_path,omitempty"`
+	BudgetUSD      *float64  `json:"budget_usd,omitempty"`
 }
 
 // registerAutomateRoutes adds the automate panel endpoints to the mux.
@@ -354,10 +354,10 @@ func (ws *ReactWebServer) handleAPIAutomateRun(w http.ResponseWriter, r *http.Re
 	}
 
 	var req struct {
-		Workflow     string   `json:"workflow"`
-		BudgetUSD    *float64 `json:"budget_usd,omitempty"`
-		BudgetWarn   *string  `json:"budget_warn,omitempty"`
-		Heartbeat    *int     `json:"heartbeat,omitempty"`
+		Workflow   string   `json:"workflow"`
+		BudgetUSD  *float64 `json:"budget_usd,omitempty"`
+		BudgetWarn *string  `json:"budget_warn,omitempty"`
+		Heartbeat  *int     `json:"heartbeat,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid JSON body")

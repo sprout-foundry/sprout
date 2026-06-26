@@ -32,10 +32,10 @@ type frontendDiagnostic struct {
 
 // diagnosticsResponse is the JSON response for POST /api/diagnostics.
 type diagnosticsResponse struct {
-	Message      string               `json:"message"`
-	Path         string               `json:"path"`
-	Diagnostics  []frontendDiagnostic `json:"diagnostics"`
-	Version      string               `json:"version"`
+	Message     string               `json:"message"`
+	Path        string               `json:"path"`
+	Diagnostics []frontendDiagnostic `json:"diagnostics"`
+	Version     string               `json:"version"`
 }
 
 // handleAPIDiagnostics handles POST /api/diagnostics.
@@ -126,13 +126,13 @@ func validationToFrontend(d validation.Diagnostic, content string) frontendDiagn
 
 // diagnosticToOffsets computes byte-offset from/to for a validation.Diagnostic.
 //
-//	- For syntax errors (source = "gofmt"), the error message typically contains
-//	  line/column info like "<standard input>:42:5: expected ...". We parse
-//	  the line and column, then convert to byte offsets.
-//	- For import issues where line and column are both 1, we set from=0,
-//	  to=len(content) to span the entire file (the import system doesn't
-//	  provide specific locations).
-//	- For diagnostics with valid line/column > 1, convert directly.
+//   - For syntax errors (source = "gofmt"), the error message typically contains
+//     line/column info like "<standard input>:42:5: expected ...". We parse
+//     the line and column, then convert to byte offsets.
+//   - For import issues where line and column are both 1, we set from=0,
+//     to=len(content) to span the entire file (the import system doesn't
+//     provide specific locations).
+//   - For diagnostics with valid line/column > 1, convert directly.
 func diagnosticToOffsets(d validation.Diagnostic, content string) (int, int) {
 	// Import issues: span the entire file.
 	if d.Line == 1 && d.Column == 1 && d.Source == "goimports" {

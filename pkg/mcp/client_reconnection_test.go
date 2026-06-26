@@ -32,8 +32,8 @@ func TestCalculateBackoff(t *testing.T) {
 		{"attempt_4_8s", 4, 8 * time.Second},
 		{"attempt_5_16s", 5, 16 * time.Second},
 		{"attempt_6_32s", 6, 32 * time.Second},
-		{"attempt_7", 7, 64 * time.Second},       // 64s, not capped yet
-		{"attempt_8", 8, 128 * time.Second},      // 128s, not capped yet
+		{"attempt_7", 7, 64 * time.Second},              // 64s, not capped yet
+		{"attempt_8", 8, 128 * time.Second},             // 128s, not capped yet
 		{"attempt_10_capped_5min", 10, 5 * time.Minute}, // 512s capped at 5min
 	}
 

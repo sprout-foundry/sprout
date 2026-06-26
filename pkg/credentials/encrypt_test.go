@@ -19,9 +19,9 @@ func TestEncryptDecryptRoundTrip(t *testing.T) {
 
 	// Create a test store
 	store := Store{
-		"openai":     "sk-test123",
-		"anthropic":  "sk-anthropic456",
-		"gemini":     "sk-gemini789",
+		"openai":    "sk-test123",
+		"anthropic": "sk-anthropic456",
+		"gemini":    "sk-gemini789",
 	}
 
 	// Marshal to JSON
@@ -666,7 +666,7 @@ func TestDecryptStore_PlaintextSizeLimit(t *testing.T) {
 	t.Run("accepts_at_limit", func(t *testing.T) {
 		// Build a valid JSON object that's exactly MaxDecryptedSize bytes
 		template := `{"key": "`
-		suffix := `"}`                 // 2 bytes
+		suffix := `"}` // 2 bytes
 		payloadSize := MaxDecryptedSize - len(template) - len(suffix)
 		payload := make([]byte, payloadSize)
 		for i := range payload {

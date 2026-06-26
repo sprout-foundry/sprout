@@ -64,7 +64,7 @@ func TestExtractTgzBySuffix_RealFile(t *testing.T) {
 	const innerPath = "onnxruntime-linux-aarch64-test/lib/libonnxruntime.so.test"
 	if err := buildTgz(archivePath, map[string]string{
 		"onnxruntime-linux-aarch64-test/lib/README.md": "ignore me",
-		innerPath:                                       payload,
+		innerPath: payload,
 		"onnxruntime-linux-aarch64-test/include/header.h": "ignore me too",
 	}); err != nil {
 		t.Fatal(err)
@@ -100,8 +100,8 @@ func TestExtractZipBySuffix_RealFile(t *testing.T) {
 	archivePath := filepath.Join(dir, "test.zip")
 	const payload = "fake-dll-bytes"
 	if err := buildZip(archivePath, map[string]string{
-		"onnxruntime-win-x64-test/lib/onnxruntime.dll":   payload,
-		"onnxruntime-win-x64-test/include/api.h":         "ignore",
+		"onnxruntime-win-x64-test/lib/onnxruntime.dll": payload,
+		"onnxruntime-win-x64-test/include/api.h":       "ignore",
 	}); err != nil {
 		t.Fatal(err)
 	}

@@ -49,9 +49,9 @@ func TestClassifyGitOperation_FlagAwareReset(t *testing.T) {
 	}
 
 	tests := []struct {
-		name    string
-		args    map[string]interface{}
-		want    SecurityResult
+		name string
+		args map[string]interface{}
+		want SecurityResult
 	}{
 		// Dangerous resets
 		{"reset --hard", map[string]interface{}{"operation": "reset", "args": "--hard HEAD~5"}, dangerous},
@@ -106,9 +106,9 @@ func TestClassifyGitOperation_FlagAwareRebase(t *testing.T) {
 	}
 
 	tests := []struct {
-		name    string
-		args    map[string]interface{}
-		want    SecurityResult
+		name string
+		args map[string]interface{}
+		want SecurityResult
 	}{
 		// Dangerous rebases
 		{"rebase -i", map[string]interface{}{"operation": "rebase", "args": "-i HEAD~3"}, dangerous},

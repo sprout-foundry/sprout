@@ -80,7 +80,7 @@ func TestRiskGates_GlobalClassifierIsNotBypassedByPersona(t *testing.T) {
 // This proves defense-in-depth: neither gate can be bypassed by relying on
 // the other, and both provide independent layers of protection.
 func TestRiskGates_BothGatesEvaluate(t *testing.T) {
-			tests := []struct {
+	tests := []struct {
 		name          string
 		command       string
 		toolName      string
@@ -102,7 +102,7 @@ func TestRiskGates_BothGatesEvaluate(t *testing.T) {
 			args:          map[string]interface{}{"command": "git push --force"},
 			pseudoCommand: "git push --force",
 		},
-	}// Configure a SubagentType like the EA persona — with force_flag and
+	} // Configure a SubagentType like the EA persona — with force_flag and
 	// rm_recursive in its HighRiskNever list (the default EA configuration).
 	eaRules := configuration.DefaultAutoApproveRules()
 	eaPersona := configuration.SubagentType{
@@ -145,10 +145,10 @@ func TestRiskGates_BothGatesEvaluate(t *testing.T) {
 // command comes through the "git" tool (not shell_command).
 func TestRiskGates_BothGatesEvaluate_GitTool(t *testing.T) {
 	tests := []struct {
-		name         string
-		operation    string
-		args         map[string]interface{}
-		pseudoCmd    string
+		name      string
+		operation string
+		args      map[string]interface{}
+		pseudoCmd string
 	}{
 		{
 			name:      "git push --force via git tool",

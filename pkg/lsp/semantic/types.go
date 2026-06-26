@@ -8,13 +8,13 @@ type Position struct {
 
 // Capabilities describes which semantic features are available for a language.
 type Capabilities struct {
-	Diagnostics  bool `json:"diagnostics"`
-	Definition  bool `json:"definition"`
-	Hover       bool `json:"hover"`
-	Rename      bool `json:"rename"`
-	References  bool `json:"references"`
-	CodeActions bool `json:"code_actions"`
-	InlayHints  bool `json:"inlay_hints"`
+	Diagnostics   bool `json:"diagnostics"`
+	Definition    bool `json:"definition"`
+	Hover         bool `json:"hover"`
+	Rename        bool `json:"rename"`
+	References    bool `json:"references"`
+	CodeActions   bool `json:"code_actions"`
+	InlayHints    bool `json:"inlay_hints"`
 	SignatureHelp bool `json:"signature_help"`
 }
 
@@ -101,10 +101,10 @@ type ToolCodeAction struct {
 
 // ToolInlayHint is an adapter inlay hint in editor offset coordinates.
 type ToolInlayHint struct {
-	From  int    `json:"from"`   // 0-based byte offset where hint is displayed
-	To    int    `json:"to"`     // 0-based byte offset (end of hint range, typically From)
-	Label string `json:"label"`  // text to display
-	Kind  string `json:"kind"`   // "type", "parameter", or "none"
+	From  int    `json:"from"`  // 0-based byte offset where hint is displayed
+	To    int    `json:"to"`    // 0-based byte offset (end of hint range, typically From)
+	Label string `json:"label"` // text to display
+	Kind  string `json:"kind"`  // "type", "parameter", or "none"
 }
 
 // ToolSignatureHelpParameter is a single parameter in a function signature.
@@ -124,21 +124,21 @@ type ToolSignatureHelpSignature struct {
 type ToolSignatureHelp struct {
 	Signatures      []ToolSignatureHelpSignature `json:"signatures"`
 	ActiveSignature int                          `json:"activeSignature"`
-	ActiveParameter  int                          `json:"activeParameter"`
+	ActiveParameter int                          `json:"activeParameter"`
 }
 
 // ToolResult is the normalized adapter response.
 type ToolResult struct {
-	Capabilities Capabilities        `json:"capabilities"`
-	Diagnostics  []ToolDiagnostic   `json:"diagnostics,omitempty"`
-	Definition   *ToolDefinition    `json:"definition,omitempty"`
-	Hover        *ToolHover         `json:"hover,omitempty"`
-	Rename       *ToolRename        `json:"rename,omitempty"`
-	References   *ToolReferences   `json:"references,omitempty"`
-	CodeActions  []ToolCodeAction  `json:"code_actions,omitempty"`
-	InlayHints   []ToolInlayHint   `json:"inlay_hints,omitempty"`
+	Capabilities  Capabilities       `json:"capabilities"`
+	Diagnostics   []ToolDiagnostic   `json:"diagnostics,omitempty"`
+	Definition    *ToolDefinition    `json:"definition,omitempty"`
+	Hover         *ToolHover         `json:"hover,omitempty"`
+	Rename        *ToolRename        `json:"rename,omitempty"`
+	References    *ToolReferences    `json:"references,omitempty"`
+	CodeActions   []ToolCodeAction   `json:"code_actions,omitempty"`
+	InlayHints    []ToolInlayHint    `json:"inlay_hints,omitempty"`
 	SignatureHelp *ToolSignatureHelp `json:"signature_help,omitempty"`
-	Error        string             `json:"error,omitempty"`
+	Error         string             `json:"error,omitempty"`
 	// DurationMs is the wall-clock time the adapter took to run, in milliseconds.
 	// Populated by the registry dispatch layer, not by individual adapters.
 	DurationMs int64 `json:"duration_ms,omitempty"`

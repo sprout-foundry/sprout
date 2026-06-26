@@ -304,7 +304,7 @@ func TestEditorConfig_ZeroValues(t *testing.T) {
 
 func TestEditorConfig_SliceFieldMarshaling(t *testing.T) {
 	tests := []struct {
-		name   string
+		name     string
 		patterns []string
 	}{
 		{"multiple patterns", []string{"*.log", "dist/", "node_modules/"}},

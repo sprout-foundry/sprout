@@ -84,12 +84,12 @@ func (ws *ReactWebServer) handleAPIWorkspaceGet(w http.ResponseWriter, r *http.R
 	isProject, markers := IsProjectDirectory(workspaceRoot)
 
 	response := map[string]interface{}{
-		"daemon_root":                ws.GetDaemonRoot(),
-		"workspace_root":             workspaceRoot,
-		"is_project":                 isProject,
-		"project_markers":            markers,
-		"needs_workspace_selection":  !isProject,
-		"recent_workspaces":          GetRecentWorkspaces(),
+		"daemon_root":               ws.GetDaemonRoot(),
+		"workspace_root":            workspaceRoot,
+		"is_project":                isProject,
+		"project_markers":           markers,
+		"needs_workspace_selection": !isProject,
+		"recent_workspaces":         GetRecentWorkspaces(),
 	}
 
 	// If workspace is not a project, suggest nearby projects
@@ -141,7 +141,7 @@ func (ws *ReactWebServer) handleAPIWorkspaceSet(w http.ResponseWriter, r *http.R
 	// absolute path. We need to store the remote path format instead so that
 	// relative path resolution (like for pasted images) works correctly on the
 	// remote backend.
-	// 
+	//
 	// The SSH session already has the remote workspace path (e.g., "$HOME/project").
 	// We use that directly instead of the locally-resolved absolute path.
 	if req.Path != "" && ws.isSSHProxyRequest(r) {
@@ -358,4 +358,3 @@ func (ws *ReactWebServer) handleAPIWorkspaceProjects(w http.ResponseWriter, r *h
 		"cached":      cached,
 	})
 }
-

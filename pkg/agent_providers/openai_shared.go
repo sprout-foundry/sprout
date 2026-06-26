@@ -1,8 +1,8 @@
 package providers
 
 import (
-	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"fmt"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"strconv"
 	"strings"
 

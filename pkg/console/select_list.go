@@ -59,14 +59,14 @@ type SelectList struct {
 	opts SelectListOptions
 
 	mu       sync.Mutex
-	cursor   int      // index into the filtered list
-	filter   string   // current filter text (Searchable=true only)
-	filtered []int    // indices into opts.Items, in display order
-	offset   int      // scroll offset into filtered (top-of-page)
-	rendered int      // number of rows we last drew (for in-place redraw)
+	cursor   int    // index into the filtered list
+	filter   string // current filter text (Searchable=true only)
+	filtered []int  // indices into opts.Items, in display order
+	offset   int    // scroll offset into filtered (top-of-page)
+	rendered int    // number of rows we last drew (for in-place redraw)
 
-	fd     int
-	isTTY  bool
+	fd    int
+	isTTY bool
 
 	// dismissKey holds the printable text of the key that dismissed
 	// the picker under DismissOnAnyKey. Empty when the picker exited

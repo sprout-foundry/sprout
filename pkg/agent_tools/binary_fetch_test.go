@@ -55,7 +55,7 @@ func TestClassifyByPathExtension_URLs(t *testing.T) {
 		{"https://example.com/gif/anim.gif", ResponseKindImage},
 		{"https://example.com/photo.webp", ResponseKindImage},
 		{"https://example.com/photo.avif", ResponseKindImage},
-		{"/local/path/file.png", ResponseKindImage},          // local path, no scheme prefix
+		{"/local/path/file.png", ResponseKindImage}, // local path, no scheme prefix
 		{"/local/path/file.pdf", ResponseKindPDF},
 	}
 	for _, tt := range tests {

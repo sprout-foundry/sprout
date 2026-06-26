@@ -159,20 +159,20 @@ func (ct *ChangeTracker) RecordShellMutations(before, after map[string]*shellSna
 // emitWithBulkRollup is the rollup path taken when a single shell
 // command exceeded shellBulkThreshold. Strategy:
 //
-//   1. Bucket the pending mutations by their TOP-LEVEL workspace
-//      directory. Root-level files (no enclosing dir) form a special
-//      bucket of their own.
-//   2. Root-level files always emit per-file — there is no useful
-//      directory label for them ("workspace root" reads as everything)
-//      and they're overwhelmingly config / lockfile / README edits
-//      that the user wants to see.
-//   3. Each non-root bucket collapses into ONE rollup row labeled by
-//      the deepest workspace-relative path ALL items in the bucket
-//      share. So `repo/foo.js + repo/bar/baz.js` → `repo/`; if every
-//      item sits under `env/lib/python3.x/site-packages/...` the
-//      label sharpens to that deepest shared prefix.
-//   4. The top-level dir for each bucket joins autoSkipDirs so the
-//      next shell command's walk doesn't re-traverse it.
+//  1. Bucket the pending mutations by their TOP-LEVEL workspace
+//     directory. Root-level files (no enclosing dir) form a special
+//     bucket of their own.
+//  2. Root-level files always emit per-file — there is no useful
+//     directory label for them ("workspace root" reads as everything)
+//     and they're overwhelmingly config / lockfile / README edits
+//     that the user wants to see.
+//  3. Each non-root bucket collapses into ONE rollup row labeled by
+//     the deepest workspace-relative path ALL items in the bucket
+//     share. So `repo/foo.js + repo/bar/baz.js` → `repo/`; if every
+//     item sits under `env/lib/python3.x/site-packages/...` the
+//     label sharpens to that deepest shared prefix.
+//  4. The top-level dir for each bucket joins autoSkipDirs so the
+//     next shell command's walk doesn't re-traverse it.
 //
 // Honest cross-directory refactors above the threshold (e.g. a
 // 250-file rename touching 25 top-level dirs) collapse into 25 rollup

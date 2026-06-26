@@ -157,9 +157,9 @@ func TestGenerateFallbackCommitMessage_Empty(t *testing.T) {
 
 func TestGenerateFallbackCommitMessage_SingleFile(t *testing.T) {
 	tests := []struct {
-		name  string
+		name   string
 		change CommitFileChange
-		want  string
+		want   string
 	}{
 		{"single added", CommitFileChange{Status: "A", Path: "main.go"}, "Update main.go"},
 		{"single modified", CommitFileChange{Status: "M", Path: "utils.go"}, "Update utils.go"},
@@ -179,9 +179,9 @@ func TestGenerateFallbackCommitMessage_SingleFile(t *testing.T) {
 
 func TestGenerateFallbackCommitMessage_MultipleSameType(t *testing.T) {
 	tests := []struct {
-		name  string
+		name    string
 		changes []CommitFileChange
-		want  string
+		want    string
 	}{
 		{
 			"multiple added",

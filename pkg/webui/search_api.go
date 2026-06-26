@@ -17,9 +17,9 @@ import (
 	"strings"
 	"time"
 
+	ignore "github.com/sabhiram/go-gitignore"
 	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/filediscovery"
-	ignore "github.com/sabhiram/go-gitignore"
 )
 
 const (

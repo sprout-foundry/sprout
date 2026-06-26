@@ -50,15 +50,15 @@ func TestAgentResultMetrics_Serialization_AllFields(t *testing.T) {
 
 	// Ensure exactly these keys and no extras
 	expectedKeys := map[string]bool{
-		"elapsed_seconds":              true,
-		"tokens_in":                    true,
-		"tokens_out":                   true,
-		"llm_calls":                    true,
-		"provider":                     true,
-		"model":                        true,
-		"security_cautions_issued":     true,
+		"elapsed_seconds":                true,
+		"tokens_in":                      true,
+		"tokens_out":                     true,
+		"llm_calls":                      true,
+		"provider":                       true,
+		"model":                          true,
+		"security_cautions_issued":       true,
 		"security_retries_after_caution": true,
-		"security_loops_detected":      true,
+		"security_loops_detected":        true,
 	}
 	for k := range result {
 		if !expectedKeys[k] {
@@ -547,7 +547,7 @@ func TestEmitJSONResult_QueryPreserved(t *testing.T) {
 		"query with \"quotes\" and \\backslashes\\",
 		"query with\nnewlines\nand\ttabs",
 		"unicode: 日本語 中文 한국어 🚀",
-		"", // empty query
+		"",                         // empty query
 		strings.Repeat("a", 10000), // long query
 	}
 

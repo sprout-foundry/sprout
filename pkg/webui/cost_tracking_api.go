@@ -84,4 +84,3 @@ func (ws *ReactWebServer) handleCostsDetail(w http.ResponseWriter, r *http.Reque
 		"end_date":    now.Format("2006-01-02"),
 	})
 }
-

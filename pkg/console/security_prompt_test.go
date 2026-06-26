@@ -29,10 +29,10 @@ func TestWriteSecurityHeader(t *testing.T) {
 
 	out := buf.String()
 	cases := []string{
-		"⚠",                                       // glyph
-		"High-risk operation — approve to run",   // prompt
-		"Command",                                 // label
-		"rm -rf /tmp/foo",                         // target
+		"⚠",                                    // glyph
+		"High-risk operation — approve to run", // prompt
+		"Command",                              // label
+		"rm -rf /tmp/foo",                      // target
 	}
 	for _, want := range cases {
 		if !strings.Contains(out, want) {

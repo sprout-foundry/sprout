@@ -1,8 +1,8 @@
 package embedding
 
 import (
-	"context"
 	"bytes"
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -16,36 +16,36 @@ var skipDirs = map[string]bool{
 	"node_modules": true,
 	"vendor":       true,
 	// Version control
-	".git":         true,
+	".git": true,
 	// Python
-	"__pycache__":  true,
-	".tox":         true,
-	".venv":        true,
-	"venv":         true,
+	"__pycache__": true,
+	".tox":        true,
+	".venv":       true,
+	"venv":        true,
 	// JavaScript/Node
-	".next":        true,
-	".nuxt":        true,
-	"coverage":     true,
-	".cache":       true,
+	".next":    true,
+	".nuxt":    true,
+	"coverage": true,
+	".cache":   true,
 	// Java/Kotlin
-	".gradle":      true,
-	".mvn":         true,
+	".gradle": true,
+	".mvn":    true,
 	// Build artifacts
-	"dist":         true,
-	"build":        true,
-	"out":          true,
-	"target":       true,
+	"dist":             true,
+	"build":            true,
+	"out":              true,
+	"target":           true,
 	"storybook-static": true, // Storybook build output
-	".storybook":   true,     // Storybook config
+	".storybook":       true, // Storybook config
 	// IDE
-	".idea":        true,
-	".vscode":      true,
+	".idea":   true,
+	".vscode": true,
 	// Terraform
-	".terraform":   true,
+	".terraform": true,
 	// Sprout-specific
-	".ledit":       true, // Agent revision history / session data
-	".agent-i":     true, // Agent session data
-	".sprout":      true, // Sprout runtime data (run/embeddings)
+	".ledit":   true, // Agent revision history / session data
+	".agent-i": true, // Agent session data
+	".sprout":  true, // Sprout runtime data (run/embeddings)
 }
 
 // ShouldIgnorePath reports whether the given path should be excluded from
@@ -189,9 +189,9 @@ func isSpecialFilename(path string) bool {
 // included. Directories matching Layer 1 skip patterns are pruned (no recursion).
 //
 // It accepts a context for cancellation and applies three protections:
-//  - A 30-second absolute timeout (WalkTimeout).
-//  - A maximum directory depth of 15 (MaxDepth).
-//  - A cap of 10,000 collected files (MaxFileCount).
+//   - A 30-second absolute timeout (WalkTimeout).
+//   - A maximum directory depth of 15 (MaxDepth).
+//   - A cap of 10,000 collected files (MaxFileCount).
 //
 // Progress is logged every ProgressInterval files.
 // If the context is cancelled or any limit is hit, the files collected so far
@@ -207,9 +207,9 @@ func WalkCodeFiles(ctx context.Context, root string) ([]string, error) {
 // .json, .sh, etc.) and special filenames (Makefile, Dockerfile, .gitignore, etc.).
 //
 // It accepts a context for cancellation and applies three protections:
-//  - A 30-second absolute timeout (WalkTimeout).
-//  - A maximum directory depth of 15 (MaxDepth).
-//  - A cap of 10,000 collected files (MaxFileCount).
+//   - A 30-second absolute timeout (WalkTimeout).
+//   - A maximum directory depth of 15 (MaxDepth).
+//   - A cap of 10,000 collected files (MaxFileCount).
 //
 // Progress is logged every ProgressInterval files.
 // If the context is cancelled or any limit is hit, the files collected so far

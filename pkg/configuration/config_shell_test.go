@@ -111,10 +111,10 @@ func TestShellConfig_LoadWithoutShellSection(t *testing.T) {
 
 func TestShellConfig_Validate(t *testing.T) {
 	tests := []struct {
-		name        string
-		shell       ShellConfig
-		wantErr     bool
-		validateFn  func(ShellConfig) error
+		name       string
+		shell      ShellConfig
+		wantErr    bool
+		validateFn func(ShellConfig) error
 	}{
 		{
 			name: "valid prefix patterns",
@@ -174,8 +174,8 @@ func TestShellConfig_Validate(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "nil config validates without error",
-			shell: ShellConfig{},
+			name:    "nil config validates without error",
+			shell:   ShellConfig{},
 			wantErr: false,
 		},
 	}

@@ -8,8 +8,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	agent_api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/embedding"
 	"github.com/sprout-foundry/sprout/pkg/events"
@@ -155,15 +155,15 @@ func (e *SubagentError) Error() string {
 
 // SubagentOptions configures an in-process subagent
 type SubagentOptions struct {
-	Persona      string          // "coder", "tester", "debugger", etc.
-	Model        string          // optional model override
-	Provider     string          // optional provider override
-	SystemPrompt string          // optional system prompt override
-	MaxTokens    int             // token budget (0 = unlimited)
-	Timeout      time.Duration   // execution timeout (0 = unlimited)
-	WorkingDir             string          // optional: override workspace root (must be within $HOME)
-	MaxConcurrentSubagents int             // max parallel subagents (0 = unlimited, default unlimited)
-	FleetTokenBudget       int             // shared token budget across all parallel subagents (0 = unlimited)
+	Persona                string        // "coder", "tester", "debugger", etc.
+	Model                  string        // optional model override
+	Provider               string        // optional provider override
+	SystemPrompt           string        // optional system prompt override
+	MaxTokens              int           // token budget (0 = unlimited)
+	Timeout                time.Duration // execution timeout (0 = unlimited)
+	WorkingDir             string        // optional: override workspace root (must be within $HOME)
+	MaxConcurrentSubagents int           // max parallel subagents (0 = unlimited, default unlimited)
+	FleetTokenBudget       int           // shared token budget across all parallel subagents (0 = unlimited)
 }
 
 // SharedState holds resources shared between parent and subagents
@@ -177,31 +177,31 @@ type SharedState struct {
 
 // SubagentResult is the structured output from a subagent
 type SubagentResult struct {
-	ID              string
-	Output          string
-	Error           error
-	TokensUsed      int
-	Cost            float64
-	ToolCalls       int
+	ID         string
+	Output     string
+	Error      error
+	TokensUsed int
+	Cost       float64
+	ToolCalls  int
 	// Iterations is the assistant-turn count consumed by this subagent
 	// run. Surfaced to the primary via SubagentRunMetrics.Iterations so
 	// the model has visibility into how many LLM rounds a delegated task
 	// burned. SP-059 Phase 5.
-	Iterations      int
-	Elapsed         time.Duration
-	Cancelled       bool
-	BudgetExceeded  bool  // true if task was skipped because fleet budget was already exceeded before starting
-	Truncated       bool  // true if subagent was cut short due to fleet budget exceeded mid-run
+	Iterations     int
+	Elapsed        time.Duration
+	Cancelled      bool
+	BudgetExceeded bool // true if task was skipped because fleet budget was already exceeded before starting
+	Truncated      bool // true if subagent was cut short due to fleet budget exceeded mid-run
 	// FileChanges is the manifest of writes/edits this subagent performed,
 	// captured via its own ChangeTracker. nil when tracking wasn't
 	// initialized for this run. SP-059 Phase 2c.
-	FileChanges     []TrackedFileChange
+	FileChanges []TrackedFileChange
 	// ProgressLog is a per-run timeline of notable subagent events
 	// (spawn, output, complete). Surfaced to the primary's LLM via the
 	// SubagentReturn envelope so the model can reason about *what* the
 	// subagent did, not just the final assistant message. Capped to
 	// subagentProgressLogCap entries. SP-059 Phase 3a.
-	ProgressLog     []SubagentProgressEntry
+	ProgressLog []SubagentProgressEntry
 }
 
 // SubagentProgressEntry is one timeline entry from a subagent run. Kept

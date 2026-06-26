@@ -194,22 +194,23 @@ func init() {
 
 	// Initialize environment-based defaults
 	cobra.OnInitialize(func() {
-			// Check for SPROUT_NO_STREAM environment variable
-	if configuration.GetEnvSimple("NO_STREAM") == "1" || configuration.GetEnvSimple("NO_STREAM") == "true" {
-		agentNoStreaming = true
-	}
-	// Check for SPROUT_SHOW_REASONING_TERMINAL environment variable
-	if configuration.GetEnvSimple("SHOW_REASONING_TERMINAL") == "1" || strings.EqualFold(configuration.GetEnvSimple("SHOW_REASONING_TERMINAL"), "true") {
-		agentShowReasoningTerminal = true
-	}
-	// Check for SPROUT_NO_SUBAGENTS environment variable
-	if configuration.GetEnvSimple("NO_SUBAGENTS") == "1" || configuration.GetEnvSimple("NO_SUBAGENTS") == "true" {
-		agentNoSubagents = true
-	}
-	// Check for SPROUT_NO_CONNECTION_CHECK environment variable
-	if configuration.GetEnvSimple("NO_CONNECTION_CHECK") == "1" || configuration.GetEnvSimple("NO_CONNECTION_CHECK") == "true" {
-		agentNoConnectionCheck = true
-	}})
+		// Check for SPROUT_NO_STREAM environment variable
+		if configuration.GetEnvSimple("NO_STREAM") == "1" || configuration.GetEnvSimple("NO_STREAM") == "true" {
+			agentNoStreaming = true
+		}
+		// Check for SPROUT_SHOW_REASONING_TERMINAL environment variable
+		if configuration.GetEnvSimple("SHOW_REASONING_TERMINAL") == "1" || strings.EqualFold(configuration.GetEnvSimple("SHOW_REASONING_TERMINAL"), "true") {
+			agentShowReasoningTerminal = true
+		}
+		// Check for SPROUT_NO_SUBAGENTS environment variable
+		if configuration.GetEnvSimple("NO_SUBAGENTS") == "1" || configuration.GetEnvSimple("NO_SUBAGENTS") == "true" {
+			agentNoSubagents = true
+		}
+		// Check for SPROUT_NO_CONNECTION_CHECK environment variable
+		if configuration.GetEnvSimple("NO_CONNECTION_CHECK") == "1" || configuration.GetEnvSimple("NO_CONNECTION_CHECK") == "true" {
+			agentNoConnectionCheck = true
+		}
+	})
 }
 
 func completePersonaFlag(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {

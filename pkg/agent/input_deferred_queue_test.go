@@ -42,7 +42,7 @@ func TestDeferredQueue_EmptyDrainReturnsNil(t *testing.T) {
 func TestDeferredQueue_EmptyStringIgnored(t *testing.T) {
 	a := &Agent{}
 	a.EnqueueDeferredMessage("")
-	a.EnqueueDeferredMessage("  ")  // whitespace is preserved (no auto-trim here)
+	a.EnqueueDeferredMessage("  ") // whitespace is preserved (no auto-trim here)
 	a.EnqueueDeferredMessage("real")
 
 	got := a.DrainDeferredMessages()

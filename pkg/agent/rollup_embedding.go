@@ -77,12 +77,12 @@ func (a *Agent) embedRollupCheckpoint(ctx context.Context, sessionID string, rol
 	}
 
 	metadata := map[string]interface{}{
-		"sessionId":         sessionID,
-		"checkpoint_id":     rollup.ID,
-		"level":             rollup.Level,
-		"covered_turns":     rollup.CoveredTurns,
-		"start_index":       rollup.StartIndex,
-		"end_index":         rollup.EndIndex,
+		"sessionId":     sessionID,
+		"checkpoint_id": rollup.ID,
+		"level":         rollup.Level,
+		"covered_turns": rollup.CoveredTurns,
+		"start_index":   rollup.StartIndex,
+		"end_index":     rollup.EndIndex,
 	}
 	if safeActionable != "" {
 		metadata["actionable_summary"] = safeActionable

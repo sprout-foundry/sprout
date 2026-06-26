@@ -355,7 +355,8 @@ func (w *MCPToolWrapper) ValidateArgs(args map[string]interface{}) error {
 // extractValidationFailures converts a jsonschema validation error into
 // structured ValidationFailure entries suitable for LLM consumption.
 // jsonschema/v6 returns multi-line errors like:
-//   "jsonschema validation failed with 'file:///.../schema#'\n- at '': missing property 'query'\n- at '/query': got number, want string"
+//
+//	"jsonschema validation failed with 'file:///.../schema#'\n- at '': missing property 'query'\n- at '/query': got number, want string"
 func extractValidationFailures(err error) []ValidationFailure {
 	if err == nil {
 		return nil

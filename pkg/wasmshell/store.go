@@ -17,7 +17,7 @@ type StoreWriter interface {
 type noopStore struct{}
 
 func (noopStore) SaveFile(string, string) {}
-func (noopStore) DeleteFile(string)      {}
+func (noopStore) DeleteFile(string)       {}
 
 // storeWriter holds the active StoreWriter (defaults to no-op).
 var storeWriter StoreWriter = noopStore{}

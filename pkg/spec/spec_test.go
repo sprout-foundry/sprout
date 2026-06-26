@@ -775,13 +775,13 @@ func TestChangesToDiff(t *testing.T) {
 			RevisionID: "rev-single",
 			Changes: []history.ChangeLog{
 				{
-					RequestHash:    "rev-single",
-					Filename:       "main.go",
-					OriginalCode:   "package main\n\nfunc main() {}",
-					NewCode:        "package main\n\nfunc main() {\n\tfmt.Println(\"hello\")\n}",
-					Description:    "Add hello print",
-					Status:         "active",
-					Timestamp:      time.Now(),
+					RequestHash:     "rev-single",
+					Filename:        "main.go",
+					OriginalCode:    "package main\n\nfunc main() {}",
+					NewCode:         "package main\n\nfunc main() {\n\tfmt.Println(\"hello\")\n}",
+					Description:     "Add hello print",
+					Status:          "active",
+					Timestamp:       time.Now(),
 					HasConversation: false,
 				},
 			},
@@ -818,12 +818,12 @@ func TestChangesToDiff(t *testing.T) {
 			RevisionID: "rev-identical",
 			Changes: []history.ChangeLog{
 				{
-					Filename:       "main.go",
-					OriginalCode:   "package main",
-					NewCode:        "package main",
-					Description:    "no change",
-					Status:         "active",
-					Timestamp:      time.Now(),
+					Filename:        "main.go",
+					OriginalCode:    "package main",
+					NewCode:         "package main",
+					Description:     "no change",
+					Status:          "active",
+					Timestamp:       time.Now(),
 					HasConversation: false,
 				},
 			},
@@ -847,21 +847,21 @@ func TestChangesToDiff(t *testing.T) {
 			RevisionID: "rev-mixed",
 			Changes: []history.ChangeLog{
 				{
-					Filename:       "active.go",
-					OriginalCode:   "old",
-					NewCode:        "new",
-					Description:    "active change",
-					Status:         "active",
-					Timestamp:      time.Now(),
+					Filename:        "active.go",
+					OriginalCode:    "old",
+					NewCode:         "new",
+					Description:     "active change",
+					Status:          "active",
+					Timestamp:       time.Now(),
 					HasConversation: false,
 				},
 				{
-					Filename:       "reverted.go",
-					OriginalCode:   "old2",
-					NewCode:        "new2",
-					Description:    "reverted change",
-					Status:         "reverted",
-					Timestamp:      time.Now(),
+					Filename:        "reverted.go",
+					OriginalCode:    "old2",
+					NewCode:         "new2",
+					Description:     "reverted change",
+					Status:          "reverted",
+					Timestamp:       time.Now(),
 					HasConversation: false,
 				},
 			},
@@ -886,19 +886,19 @@ func TestChangesToDiff(t *testing.T) {
 			RevisionID: "rev-multi",
 			Changes: []history.ChangeLog{
 				{
-					Filename:       "file1.go",
-					OriginalCode:   "old1",
-					NewCode:        "new1",
-					Status:         "active",
-					Timestamp:      time.Now(),
+					Filename:        "file1.go",
+					OriginalCode:    "old1",
+					NewCode:         "new1",
+					Status:          "active",
+					Timestamp:       time.Now(),
 					HasConversation: false,
 				},
 				{
-					Filename:       "file2.go",
-					OriginalCode:   "old2",
-					NewCode:        "new2",
-					Status:         "active",
-					Timestamp:      time.Now(),
+					Filename:        "file2.go",
+					OriginalCode:    "old2",
+					NewCode:         "new2",
+					Status:          "active",
+					Timestamp:       time.Now(),
 					HasConversation: false,
 				},
 			},
@@ -942,11 +942,11 @@ func main() {
 			RevisionID: "rev-prefix",
 			Changes: []history.ChangeLog{
 				{
-					Filename:       "main.go",
-					OriginalCode:   original,
-					NewCode:        newCode,
-					Status:         "active",
-					Timestamp:      time.Now(),
+					Filename:        "main.go",
+					OriginalCode:    original,
+					NewCode:         newCode,
+					Status:          "active",
+					Timestamp:       time.Now(),
 					HasConversation: false,
 				},
 			},
@@ -969,11 +969,11 @@ func main() {
 			RevisionID: "rev-newfile",
 			Changes: []history.ChangeLog{
 				{
-					Filename:       "newfile.go",
-					OriginalCode:   "",
-					NewCode:        "package newfile\n\nfunc NewFunc() {}",
-					Status:         "active",
-					Timestamp:      time.Now(),
+					Filename:        "newfile.go",
+					OriginalCode:    "",
+					NewCode:         "package newfile\n\nfunc NewFunc() {}",
+					Status:          "active",
+					Timestamp:       time.Now(),
 					HasConversation: false,
 				},
 			},
@@ -1001,7 +1001,7 @@ func main() {
 func TestBuildConversationFromRevision(t *testing.T) {
 	t.Run("uses conversation from revision when available", func(t *testing.T) {
 		revision := &history.RevisionGroup{
-			RevisionID: "rev-with-conv",
+			RevisionID:   "rev-with-conv",
 			Instructions: "Test instructions",
 			Response:     "Test response",
 			Conversation: []history.APIMessage{
@@ -1028,7 +1028,7 @@ func TestBuildConversationFromRevision(t *testing.T) {
 
 	t.Run("falls back to instructions/response when no conversation", func(t *testing.T) {
 		revision := &history.RevisionGroup{
-			RevisionID: "rev-no-conv",
+			RevisionID:   "rev-no-conv",
 			Instructions: "Implement login",
 			Response:     "I will create a login form",
 			Conversation: nil,
@@ -1048,7 +1048,7 @@ func TestBuildConversationFromRevision(t *testing.T) {
 
 	t.Run("empty conversation falls back to instructions/response", func(t *testing.T) {
 		revision := &history.RevisionGroup{
-			RevisionID: "rev-empty-conv",
+			RevisionID:   "rev-empty-conv",
 			Instructions: "Do something",
 			Response:     "Done",
 			Conversation: []history.APIMessage{},
@@ -1392,8 +1392,8 @@ func TestCanonicalSpec_JSON_Complex(t *testing.T) {
 
 func TestSpecExtractionResult_JSON_ConfidenceValues(t *testing.T) {
 	testCases := []struct {
-		name     string
-		conf     float64
+		name string
+		conf float64
 	}{
 		{"confidence_0", 0.0},
 		{"confidence_1", 1.0},
@@ -1663,11 +1663,11 @@ func main() {
 		RevisionID: "rev-multiline",
 		Changes: []history.ChangeLog{
 			{
-				Filename:       "main.go",
-				OriginalCode:   original,
-				NewCode:        newCode,
-				Status:         "active",
-				Timestamp:      time.Now(),
+				Filename:        "main.go",
+				OriginalCode:    original,
+				NewCode:         newCode,
+				Status:          "active",
+				Timestamp:       time.Now(),
 				HasConversation: false,
 			},
 		},

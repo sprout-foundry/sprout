@@ -46,7 +46,7 @@ func TestGetOptimizedToolDefinitions(t *testing.T) {
 	// Check that specific standard tools are present
 	// Note: run_parallel_subagents may be filtered by custom provider config
 	requiredTools := []string{"shell_command", "read_file", "edit_file", "write_file"}
-	optionalTools := []string{"run_parallel_subagents"}  // May be filtered
+	optionalTools := []string{"run_parallel_subagents"} // May be filtered
 
 	toolMap := make(map[string]bool)
 

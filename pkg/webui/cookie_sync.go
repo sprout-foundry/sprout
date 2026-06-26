@@ -16,9 +16,9 @@ import (
 // where JavaScript on the webui origin cannot read cookies set on the API
 // origin (document.cookie is origin-scoped). Without this header, a page
 // reload in cross-origin mode loses the client ID because:
-//   1. sessionStorage is cleared (tab discard) or empty (fresh page load)
-//   2. document.cookie cannot read cookies from a different origin
-//   3. A new client ID is generated, losing all server-side state
+//  1. sessionStorage is cleared (tab discard) or empty (fresh page load)
+//  2. document.cookie cannot read cookies from a different origin
+//  3. A new client ID is generated, losing all server-side state
 //
 // With this header, the client reads X-Sprout-Client-ID from every API
 // response (exposed via Access-Control-Expose-Headers) and writes it to
@@ -40,12 +40,12 @@ const clientIDResponseHeader = "X-Sprout-Client-ID"
 //
 // This middleware solves that by:
 //
-// 1. Reading the client ID from the header, cookie, or falling back to default
-// 2. Writing a Set-Cookie with that client ID on every response
-// 3. Echoing the resolved client ID in the X-Sprout-Client-ID response header
-// 4. The cookie is configured with SameSite=None; Secure for cross-origin
-//    delivery over HTTPS, or SameSite=Lax for local dev (where Secure is
-//    not possible on HTTP)
+//  1. Reading the client ID from the header, cookie, or falling back to default
+//  2. Writing a Set-Cookie with that client ID on every response
+//  3. Echoing the resolved client ID in the X-Sprout-Client-ID response header
+//  4. The cookie is configured with SameSite=None; Secure for cross-origin
+//     delivery over HTTPS, or SameSite=Lax for local dev (where Secure is
+//     not possible on HTTP)
 //
 // On the next request (including after a page reload), the browser sends
 // the cookie automatically (because credentials: 'include' is set on all

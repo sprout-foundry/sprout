@@ -107,7 +107,7 @@ func TestRunShellCommand_Streaming_ConcurrentInvocations(t *testing.T) {
 	}
 
 	wg.Wait()
-		for i, err := range errs {
+	for i, err := range errs {
 		if err != nil {
 			t.Errorf("concurrent streaming call %d failed: %v", i, err)
 		}

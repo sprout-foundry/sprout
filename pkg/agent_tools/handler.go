@@ -4,8 +4,7 @@
 // searching code, delegating to subagents, automating browsers, and more. Each tool
 // implements the ToolHandler interface and is registered with the ToolRegistry.
 //
-//
-// ToolHandler interface
+// # ToolHandler interface
 //
 // The ToolHandler interface replaced the legacy `type ToolHandler func(ctx, args,
 // agent) (images, output, error)` func type. The old func-based system tightly coupled
@@ -20,8 +19,7 @@
 //	    Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error)
 //	}
 //
-//
-// Adding a new tool
+// # Adding a new tool
 //
 // 1. Create a new file in this package (e.g., `my_tool_handler.go`).
 // 2. Define a struct and implement the four ToolHandler methods.
@@ -29,8 +27,7 @@
 //
 // See AGENTS.md for tool documentation and conventions.
 //
-//
-// Migration from legacy func-style handlers
+// # Migration from legacy func-style handlers
 //
 // The legacy tool system used function types directly coupled to *Agent. The new
 // interface-based system decouples tools from the agent via ToolEnv, which provides
@@ -132,7 +129,7 @@ type AskUserService interface {
 // ApprovalResult contains the outcome of an approval request.
 type ApprovalResult struct {
 	Approved    bool   `json:"approved"`
-	Reason      string `json:"reason,omitempty"`     // "rejected", "timed_out", "cancelled"
+	Reason      string `json:"reason,omitempty"`       // "rejected", "timed_out", "cancelled"
 	UserComment string `json:"user_comment,omitempty"` // Optional feedback from user
 }
 

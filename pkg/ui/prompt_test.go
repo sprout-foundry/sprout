@@ -256,9 +256,9 @@ func TestDisplayNumberedListWithDescriptions(t *testing.T) {
 
 func TestPromptForConfirmation(t *testing.T) {
 	cases := []struct {
-		name   string
-		input  string
-		want   bool
+		name  string
+		input string
+		want  bool
 	}{
 		// -- affirmative inputs --
 		{"lowercase y", "y", true},

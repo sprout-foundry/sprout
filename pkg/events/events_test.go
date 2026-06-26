@@ -266,9 +266,9 @@ func TestRecallDiagnosticEvent_EmptyScores(t *testing.T) {
 // consumers don't redo the arithmetic.
 func TestContextManagementDiagnosticEvent(t *testing.T) {
 	event := ContextManagementDiagnosticEvent(
-		70000,           // current_tokens
-		200000,          // max_tokens
-		0.70,            // trigger_fraction
+		70000,            // current_tokens
+		200000,           // max_tokens
+		0.70,             // trigger_fraction
 		0.15, 0.10, 0.05, // reserved response/thinking/tool_io
 		3,    // iteration
 		120,  // message_count

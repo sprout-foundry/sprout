@@ -43,7 +43,7 @@ const (
 	OllamaClientType      ClientType = "ollama" // Alias for ollama-local
 	OllamaLocalClientType ClientType = "ollama-local"
 	OllamaCloudClientType ClientType = "ollama-cloud"
-	TestClientType        ClientType = "test" // Mock provider for CI/testing
+	TestClientType        ClientType = "test"   // Mock provider for CI/testing
 	EditorClientType      ClientType = "editor" // Editor-only mode, no AI provider
 )
 
@@ -54,17 +54,17 @@ const (
 // Use providers.AllProviderNames(), providers.KnownProviders(), or providers.ProviderDisplayNames()
 // to get the list of providers without hardcoding them in this package.
 const (
-	OpenAIClientType   ClientType = "openai"
+	OpenAIClientType     ClientType = "openai"
 	OpenRouterClientType ClientType = "openrouter"
-	ZAIClientType      ClientType = "zai"
-	DeepInfraClientType ClientType = "deepinfra"
-	DeepSeekClientType  ClientType = "deepseek"
-	LMStudioClientType ClientType = "lmstudio"
-	MistralClientType  ClientType = "mistral"
-	MinimaxClientType  ClientType = "minimax"
-	ChutesClientType   ClientType = "chutes"
-	CerebrasClientType ClientType = "cerebras"
-	ZAICodingClientType ClientType = "zai-coding"
+	ZAIClientType        ClientType = "zai"
+	DeepInfraClientType  ClientType = "deepinfra"
+	DeepSeekClientType   ClientType = "deepseek"
+	LMStudioClientType   ClientType = "lmstudio"
+	MistralClientType    ClientType = "mistral"
+	MinimaxClientType    ClientType = "minimax"
+	ChutesClientType     ClientType = "chutes"
+	CerebrasClientType   ClientType = "cerebras"
+	ZAICodingClientType  ClientType = "zai-coding"
 )
 
 // NewUnifiedClient creates a client with default model for the provider
@@ -184,21 +184,21 @@ func GetProviderName(clientType ClientType) string {
 	// Mapping of provider client types to display names
 	// This is kept in sync with providers.ProviderDisplayNames() to avoid circular dependencies
 	providerDisplayNames := map[ClientType]string{
-		OpenAIClientType:         "OpenAI",
-		OpenRouterClientType:     "OpenRouter (Recommended)",
-		ZAIClientType:            "Z.AI",
-		ZAICodingClientType:      "GLM Coding Plan",
-		DeepInfraClientType:      "DeepInfra",
-		DeepSeekClientType:       "DeepSeek",
-		LMStudioClientType:       "LM Studio",
-		MistralClientType:        "Mistral",
-		MinimaxClientType:        "MiniMax",
-		ChutesClientType:         "Chutes",
-		CerebrasClientType:       "Cerebras",
-		OllamaCloudClientType:    "Ollama (Cloud)",
-		OllamaLocalClientType:    "Ollama (Local)",
-		TestClientType:           "Test Provider",
-		EditorClientType:         "Editor Mode",
+		OpenAIClientType:      "OpenAI",
+		OpenRouterClientType:  "OpenRouter (Recommended)",
+		ZAIClientType:         "Z.AI",
+		ZAICodingClientType:   "GLM Coding Plan",
+		DeepInfraClientType:   "DeepInfra",
+		DeepSeekClientType:    "DeepSeek",
+		LMStudioClientType:    "LM Studio",
+		MistralClientType:     "Mistral",
+		MinimaxClientType:     "MiniMax",
+		ChutesClientType:      "Chutes",
+		CerebrasClientType:    "Cerebras",
+		OllamaCloudClientType: "Ollama (Cloud)",
+		OllamaLocalClientType: "Ollama (Local)",
+		TestClientType:        "Test Provider",
+		EditorClientType:      "Editor Mode",
 	}
 
 	// Check if we have a display name for this provider

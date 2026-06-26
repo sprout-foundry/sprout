@@ -1234,22 +1234,31 @@ func (c *trackingClient) SendChatRequestStream(ctx context.Context, messages []a
 	return c.SendChatRequest(ctx, messages, tools, reasoning, disableThinking)
 }
 
-func (c *trackingClient) CheckConnection() error                                          { return nil }
-func (c *trackingClient) SetDebug(d bool)                                                { c.debug = d }
-func (c *trackingClient) SetModel(m string) error                                        { c.model = m; return nil }
-func (c *trackingClient) GetModel() string                                               { if c.model == "" { return "test-model" }; return c.model }
-func (c *trackingClient) GetProvider() string                                            { return "test" }
-func (c *trackingClient) GetModelContextLimit() (int, error)                             { return 4096, nil }
-func (c *trackingClient) ListModels(ctx context.Context) ([]api.ModelInfo, error)        { return []api.ModelInfo{{Name: "test-model", ContextLength: 4096}}, nil }
-func (c *trackingClient) SupportsVision() bool                                           { return false }
-func (c *trackingClient) GetVisionModel() string                                         { return "" }
+func (c *trackingClient) CheckConnection() error  { return nil }
+func (c *trackingClient) SetDebug(d bool)         { c.debug = d }
+func (c *trackingClient) SetModel(m string) error { c.model = m; return nil }
+func (c *trackingClient) GetModel() string {
+	if c.model == "" {
+		return "test-model"
+	}
+	return c.model
+}
+func (c *trackingClient) GetProvider() string                { return "test" }
+func (c *trackingClient) GetModelContextLimit() (int, error) { return 4096, nil }
+func (c *trackingClient) ListModels(ctx context.Context) ([]api.ModelInfo, error) {
+	return []api.ModelInfo{{Name: "test-model", ContextLength: 4096}}, nil
+}
+func (c *trackingClient) SupportsVision() bool   { return false }
+func (c *trackingClient) GetVisionModel() string { return "" }
 func (c *trackingClient) SendVisionRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	return nil, fmt.Errorf("vision not supported")
 }
-func (c *trackingClient) GetLastTPS() float64            { return 100 }
-func (c *trackingClient) GetAverageTPS() float64         { return 100 }
-func (c *trackingClient) GetTPSStats() map[string]float64 { return map[string]float64{"last": 100, "average": 100} }
-func (c *trackingClient) ResetTPSStats()                 {}
+func (c *trackingClient) GetLastTPS() float64    { return 100 }
+func (c *trackingClient) GetAverageTPS() float64 { return 100 }
+func (c *trackingClient) GetTPSStats() map[string]float64 {
+	return map[string]float64{"last": 100, "average": 100}
+}
+func (c *trackingClient) ResetTPSStats() {}
 
 // =============================================================================
 // SP-051: depth + active_persona event metadata on subagent creation
@@ -1483,4 +1492,3 @@ func TestCreateSubagent_DefaultMaxIterationsBounded(t *testing.T) {
 		t.Errorf("subagent maxIterations = %d, want >= 10 for real-world tasks", sub.maxIterations)
 	}
 }
-

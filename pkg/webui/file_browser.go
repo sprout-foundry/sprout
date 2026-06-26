@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/sprout-foundry/sprout/pkg/filediscovery"
 	ignore "github.com/sabhiram/go-gitignore"
+	"github.com/sprout-foundry/sprout/pkg/filediscovery"
 )
 
 // handleAPIBrowse handles API requests for directory browsing

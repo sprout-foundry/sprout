@@ -76,12 +76,12 @@ func TestFormatSpawnLine_IncludesMaxContext(t *testing.T) {
 
 func TestBuildQueueTaskQuery_CoverageExtra(t *testing.T) {
 	task := tools.Task{
-		ID:          "task-cov",
-		Title:       "coverage task",
-		Description: "cov description",
-		WorkingDir:  "/tmp/cov",
-		Persona:     "coder",
-		Priority:    "high",
+		ID:           "task-cov",
+		Title:        "coverage task",
+		Description:  "cov description",
+		WorkingDir:   "/tmp/cov",
+		Persona:      "coder",
+		Priority:     "high",
 		ParentTaskID: "parent-cov",
 	}
 	query := buildQueueTaskQuery(task)

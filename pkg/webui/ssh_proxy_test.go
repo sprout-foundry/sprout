@@ -564,8 +564,8 @@ func TestSSHProxyRealBackendIntegration(t *testing.T) {
 
 	t.Run("index_has_proxy_base", func(t *testing.T) {
 		resp, err := client.Get(baseURL + "/")
-	if err != nil {
-		t.Fatalf("GET /: %v", err)
+		if err != nil {
+			t.Fatalf("GET /: %v", err)
 		}
 		defer resp.Body.Close()
 		body, _ := io.ReadAll(resp.Body)
@@ -579,8 +579,8 @@ func TestSSHProxyRealBackendIntegration(t *testing.T) {
 
 	t.Run("health_proxied", func(t *testing.T) {
 		resp, err := client.Get(baseURL + "/health")
-	if err != nil {
-		t.Fatalf("GET /health: %v", err)
+		if err != nil {
+			t.Fatalf("GET /health: %v", err)
 		}
 		defer resp.Body.Close()
 		body, _ := io.ReadAll(resp.Body)
@@ -598,8 +598,8 @@ func TestSSHProxyRealBackendIntegration(t *testing.T) {
 
 	t.Run("workspace_api_proxied", func(t *testing.T) {
 		resp, err := client.Get(baseURL + "/api/workspace")
-	if err != nil {
-		t.Fatalf("GET /api/workspace: %v", err)
+		if err != nil {
+			t.Fatalf("GET /api/workspace: %v", err)
 		}
 		defer resp.Body.Close()
 		body, _ := io.ReadAll(resp.Body)
@@ -618,8 +618,8 @@ func TestSSHProxyRealBackendIntegration(t *testing.T) {
 	t.Run("websocket_proxied", func(t *testing.T) {
 		wsURL := fmt.Sprintf("ws://127.0.0.1:%s/ssh/%s/ws", localPort, r.Replace(sshSessionRaw))
 		conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	if err != nil {
-		t.Fatalf("WS dial to %s: %v", wsURL, err)
+		if err != nil {
+			t.Fatalf("WS dial to %s: %v", wsURL, err)
 		}
 		defer conn.Close()
 

@@ -454,10 +454,10 @@ func TestDefaultLanguageServersFindLanguageServer(t *testing.T) {
 		// Go
 		"go": "go",
 		// TypeScript/JavaScript
-		"typescript":      "typescript",
-		"typescript-jsx":  "typescript",
-		"javascript":      "typescript",
-		"javascript-jsx":  "typescript",
+		"typescript":     "typescript",
+		"typescript-jsx": "typescript",
+		"javascript":     "typescript",
+		"javascript-jsx": "typescript",
 		// Python
 		"python": "python",
 		// Rust

@@ -250,10 +250,10 @@ func TestRedactEnvMap(t *testing.T) {
 
 	t.Run("non_sensitive_keys_preserved", func(t *testing.T) {
 		input := map[string]string{
-			"PATH_EXTRA":   "/usr/bin",
-			"HOME_DIR":     "/home/user",
-			"DISPLAY":      ":0",
-			"EDITOR":       "vim",
+			"PATH_EXTRA": "/usr/bin",
+			"HOME_DIR":   "/home/user",
+			"DISPLAY":    ":0",
+			"EDITOR":     "vim",
 		}
 		result := RedactEnvMap(input)
 
@@ -266,10 +266,10 @@ func TestRedactEnvMap(t *testing.T) {
 	t.Run("mixed_map", func(t *testing.T) {
 		input := map[string]string{
 			"OPENAI_API_KEY": "sk-proj-abc123",
-			"PATH":            "/usr/local/bin:/usr/bin:/bin",
-			"MY_SECRET":       "top-secret-value",
-			"NODE_ENV":        "production",
-			"TERM":            "xterm-256color",
+			"PATH":           "/usr/local/bin:/usr/bin:/bin",
+			"MY_SECRET":      "top-secret-value",
+			"NODE_ENV":       "production",
+			"TERM":           "xterm-256color",
 		}
 		result := RedactEnvMap(input)
 
@@ -524,4 +524,3 @@ func TestRedactJSONBytes(t *testing.T) {
 		assert.Contains(t, string(result), "true")
 	})
 }
-

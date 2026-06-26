@@ -227,12 +227,12 @@ func TestAddTemplate_DefaultsType(t *testing.T) {
 
 func TestCreateServerConfig_Basic(t *testing.T) {
 	tmpl := MCPServerTemplate{
-		ID:          "test-tmpl",
-		Name:        "Test Template",
-		Type:        "stdio",
-		Command:     "npx",
-		Args:        []string{"-y", "some-mcp-server"},
-		Timeout:     30 * time.Second,
+		ID:      "test-tmpl",
+		Name:    "Test Template",
+		Type:    "stdio",
+		Command: "npx",
+		Args:    []string{"-y", "some-mcp-server"},
+		Timeout: 30 * time.Second,
 		EnvVars: []EnvVarTemplate{
 			{Name: "API_KEY", Required: true, Secret: true, Description: "API key"},
 			{Name: "MODEL", Required: false, Secret: false, Default: "gpt-4"},
@@ -254,7 +254,7 @@ func TestCreateServerConfig_Basic(t *testing.T) {
 
 func TestCreateServerConfig_CustomURL(t *testing.T) {
 	tmpl := MCPServerTemplate{
-		ID:  "http-tmpl",
+		ID:   "http-tmpl",
 		Name: "HTTP Template",
 		Type: "http",
 		URL:  "https://default.example.com/mcp",

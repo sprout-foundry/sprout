@@ -71,15 +71,15 @@ func LogRequestPayloadOnError(payload []byte, provider, model string, streaming 
 	WriteLocalCopyRequest("lastRequest.json", payload)
 
 	entry := map[string]interface{}{
-		"timestamp":       time.Now().Format(time.RFC3339Nano),
-		"provider":        provider,
-		"model":           model,
-		"streaming":       streaming,
-		"error_type":      errorType,
-		"error_message":   err.Error(),
-		"error":           err.Error(),
-		"error_details":   formatErrorDetails(err),
-		"request":         json.RawMessage(payload),
+		"timestamp":     time.Now().Format(time.RFC3339Nano),
+		"provider":      provider,
+		"model":         model,
+		"streaming":     streaming,
+		"error_type":    errorType,
+		"error_message": err.Error(),
+		"error":         err.Error(),
+		"error_details": formatErrorDetails(err),
+		"request":       json.RawMessage(payload),
 	}
 
 	data, err := json.MarshalIndent(entry, "", "  ")

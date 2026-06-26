@@ -14,10 +14,10 @@ import (
 // sent without actually performing any network I/O. Lets us assert on URL
 // rewriting without spinning up an HTTPS server with valid TLS.
 type captureTransport struct {
-	mu       sync.Mutex
-	lastReq  *http.Request
-	resp     *http.Response
-	respErr  error
+	mu      sync.Mutex
+	lastReq *http.Request
+	resp    *http.Response
+	respErr error
 }
 
 func (c *captureTransport) RoundTrip(r *http.Request) (*http.Response, error) {
@@ -492,4 +492,3 @@ func TestSetCorsProxy_RejectsInvalidURLs(t *testing.T) {
 	}
 	SetCorsProxy("")
 }
-

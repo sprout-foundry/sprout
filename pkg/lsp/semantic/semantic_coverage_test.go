@@ -253,7 +253,7 @@ type errWriteCloser struct {
 }
 
 func (e *errWriteCloser) Write(p []byte) (int, error) { return 0, e.err }
-func (e *errWriteCloser) Close() error                 { return nil }
+func (e *errWriteCloser) Close() error                { return nil }
 
 // =============================================================================
 // runTypeScriptTool — cover edge cases for node exec failure

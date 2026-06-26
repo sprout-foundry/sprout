@@ -37,7 +37,8 @@ func (p *GenericProvider) buildChatRequest(messages []api.Message, tools []api.T
 			// Count leading assistant messages to strip (without tool_calls)
 			stripEnd := nonSystemStart
 			for stripEnd < len(convertedMessages) && convertedMessages[stripEnd]["role"] == "assistant" {
-				if tc, hasToolCalls := convertedMessages[stripEnd]["tool_calls"]; hasToolCalls && tc != nil {					break // Preserve assistant messages with tool_calls
+				if tc, hasToolCalls := convertedMessages[stripEnd]["tool_calls"]; hasToolCalls && tc != nil {
+					break // Preserve assistant messages with tool_calls
 				}
 				stripEnd++
 			}
@@ -385,5 +386,3 @@ func (p *GenericProvider) buildHTTPRequestCtx(ctx context.Context, body []byte, 
 
 	return req, nil
 }
-
-

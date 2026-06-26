@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sprout-foundry/sprout/pkg/history"
 	"github.com/spf13/cobra"
+	"github.com/sprout-foundry/sprout/pkg/history"
 )
 
 var historyCmd = &cobra.Command{

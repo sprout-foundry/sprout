@@ -3,8 +3,8 @@ package commands
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestGetProviderDisplayName(t *testing.T) {
@@ -292,8 +292,8 @@ func TestProviderDropdownItemValue(t *testing.T) {
 
 func TestProviderDropdownItemAvailableField(t *testing.T) {
 	tests := []struct {
-		name     string
-		item     providerDropdownItem
+		name      string
+		item      providerDropdownItem
 		wantAvail bool
 	}{
 		{

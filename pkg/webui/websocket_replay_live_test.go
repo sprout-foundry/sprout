@@ -61,8 +61,8 @@ func TestReplayCapturesLiveEventsDuringFlush(t *testing.T) {
 		// then publish a live event during the replay window.
 		time.Sleep(50 * time.Millisecond)
 		srv.publishClientEventWithChat(clientID, chatID, events.EventTypeStreamChunk, map[string]interface{}{
-			"content":  "live-d",
-			"__live":   true,
+			"content": "live-d",
+			"__live":  true,
 		})
 	}()
 

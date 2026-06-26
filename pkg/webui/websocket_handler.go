@@ -16,8 +16,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/gorilla/websocket"
+	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 // activeWSConn tracks a single active WebSocket connection for a user

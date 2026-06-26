@@ -114,7 +114,10 @@ func TestDetectImageMagic_AVIF(t *testing.T) {
 	// "avis" brand should also match
 	data2 := make([]byte, 12)
 	copy(data2[4:8], []byte("ftyp"))
-	data2[8] = 'a'; data2[9] = 'v'; data2[10] = 'i'; data2[11] = 's'
+	data2[8] = 'a'
+	data2[9] = 'v'
+	data2[10] = 'i'
+	data2[11] = 's'
 	ext2, _ := DetectImageMagic(data2)
 	if ext2 != ".avif" {
 		t.Errorf("expected .avif for avis brand, got %s", ext2)
@@ -123,7 +126,10 @@ func TestDetectImageMagic_AVIF(t *testing.T) {
 	// "mif1" brand should also match
 	data3 := make([]byte, 12)
 	copy(data3[4:8], []byte("ftyp"))
-	data3[8] = 'm'; data3[9] = 'i'; data3[10] = 'f'; data3[11] = '1'
+	data3[8] = 'm'
+	data3[9] = 'i'
+	data3[10] = 'f'
+	data3[11] = '1'
 	ext3, _ := DetectImageMagic(data3)
 	if ext3 != ".avif" {
 		t.Errorf("expected .avif for mif1 brand, got %s", ext3)
@@ -365,4 +371,3 @@ func TestSavePastedImage_WithBaseDir(t *testing.T) {
 		t.Error("expected image directory to be a directory")
 	}
 }
-

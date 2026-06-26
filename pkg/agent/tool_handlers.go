@@ -176,7 +176,6 @@ func isGitWriteCommand(command string) bool {
 	}
 }
 
-
 // isGitStashCommand checks whether `command` contains a `git stash`
 // invocation that is not purely read-only. `git stash` (bare or with
 // `push`) saves the working tree and reverts it to HEAD — the save

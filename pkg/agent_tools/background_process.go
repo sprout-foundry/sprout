@@ -27,10 +27,10 @@ type BackgroundProcess struct {
 	ID         string    // "bg-<sanitized-prefix>-<random-hex>"
 	Cmd        *exec.Cmd // the running process (nil after exit)
 	Process    *os.Process
-	OutputPath string  // path to accumulated output temp file
-	Dir        string  // working directory
-	Command    string  // original command string
-	Kind       string  // "shell" (default), "automate", etc.
+	OutputPath string // path to accumulated output temp file
+	Dir        string // working directory
+	Command    string // original command string
+	Kind       string // "shell" (default), "automate", etc.
 	StartedAt  time.Time
 	LastPolled time.Time
 	done       chan struct{} // closed when process exits

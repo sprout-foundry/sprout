@@ -162,12 +162,12 @@ Example 1: File operations with wrapping
         if err != nil {
             return nil, fmt.Errorf("failed to read config file %s: %w", path, err)
         }
-        
+
         config, err := parseConfig(data)
         if err != nil {
             return nil, fmt.Errorf("failed to parse config: %w", err)
         }
-        
+
         return config, nil
     }
 
@@ -175,15 +175,15 @@ Example 2: Multiple operations with secondary context
     func ProcessFile(path string) error {
         // Try page-based OCR
         pageErr := rasterizePage(path)
-        
+
         // Try image-based OCR
         ocrErr := extractAndOCR(path)
-        
+
         // Both failed - report primary error, secondary as context
         if pageErr != nil && ocrErr != nil {
             return fmt.Errorf("both OCR paths failed: page=%v, image=%w", pageErr, ocrErr)
         }
-        
+
         return nil
     }
 
@@ -192,11 +192,11 @@ Example 3: Validation errors
         if user.Name == "" {
             return NewValidationError("name", "cannot be empty")
         }
-        
+
         if !isValidEmail(user.Email) {
             return NewValidationError("email", "invalid format")
         }
-        
+
         return nil
     }
 

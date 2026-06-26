@@ -49,8 +49,8 @@ func TestFormatSelfReviewResult_WithSpecResult(t *testing.T) {
 		Summary:      "Summary text",
 		SpecResult: &spec.SpecExtractionResult{
 			Spec: &spec.CanonicalSpec{
-				Objective: "Implement feature X",
-				InScope:  []string{"task A", "task B"},
+				Objective:  "Implement feature X",
+				InScope:    []string{"task A", "task B"},
 				OutOfScope: []string{"task C"},
 			},
 			Confidence: 0.85,
@@ -318,8 +318,8 @@ func TestFormatSelfReviewResult_ConfidenceFormatting(t *testing.T) {
 
 	for _, tt := range tests {
 		result := &spec.ChangeReviewResult{
-			RevisionID:   "rev",
-			Summary:      "test",
+			RevisionID: "rev",
+			Summary:    "test",
 			SpecResult: &spec.SpecExtractionResult{
 				Spec:       &spec.CanonicalSpec{Objective: "obj"},
 				Confidence: tt.confidence,

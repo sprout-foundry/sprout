@@ -20,12 +20,12 @@ import (
 
 // Manager manages LSP server processes across workspaces and languages.
 type Manager struct {
-	mu       sync.Mutex
-	servers  map[string]*serverEntry // key: "workspacePath|languageID"
-	configs  []LanguageServerConfig
-	ctx      context.Context
-	cancel   context.CancelFunc
-	wg       sync.WaitGroup
+	mu      sync.Mutex
+	servers map[string]*serverEntry // key: "workspacePath|languageID"
+	configs []LanguageServerConfig
+	ctx     context.Context
+	cancel  context.CancelFunc
+	wg      sync.WaitGroup
 }
 
 // serverEntry tracks an LSP process and its usage.

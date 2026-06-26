@@ -704,9 +704,9 @@ func TestMCPManager_AddServer_HTTPType(t *testing.T) {
 	manager := NewMCPManager(nil)
 
 	config := MCPServerConfig{
-		Name:    "http-server",
-		Type:    "http",
-		URL:     "https://example.com/mcp",
+		Name: "http-server",
+		Type: "http",
+		URL:  "https://example.com/mcp",
 	}
 
 	err := manager.AddServer(config)
@@ -818,12 +818,12 @@ func TestServerNameValidation_SpecialCharacters(t *testing.T) {
 		"server,",
 		"server?",
 		"server/",
-		" server",      // Leading space
-		"server ",      // Trailing space
-		"server name",  // Middle space
-		"\tserver",     // Leading tab
-		"server\n",     // Trailing newline
-		"日本語",         // Unicode characters
+		" server",       // Leading space
+		"server ",       // Trailing space
+		"server name",   // Middle space
+		"\tserver",      // Leading tab
+		"server\n",      // Trailing newline
+		"日本語",           // Unicode characters
 		"server@domain", // @ symbol
 	}
 
@@ -1025,7 +1025,7 @@ func TestAutoDiscoverGitHubServer_ServerStartsFails(t *testing.T) {
 	// Set up mock server factory that starts but fails on ListTools
 	manager.serverFactory = func(config MCPServerConfig, logger *utils.Logger) MCPServer {
 		mockServer := newMockMCPServer(config.Name)
-		mockServer.startError = nil // Start succeeds
+		mockServer.startError = nil                                   // Start succeeds
 		mockServer.listToolsErr = errors.New("server not responding") // ListTools fails
 		return mockServer
 	}

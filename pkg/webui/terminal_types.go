@@ -101,23 +101,23 @@ func shellResolvePath(name string) string {
 // The shell process keeps running even when no WebSocket is connected; output is
 // buffered in the ring for replay on reconnect.
 type TerminalSession struct {
-	ID       string
-	Command  *exec.Cmd
-	Pty      *os.File
-	Cancel   context.CancelFunc
-	Active   bool
-	mutex    sync.RWMutex
+	ID        string
+	Command   *exec.Cmd
+	Pty       *os.File
+	Cancel    context.CancelFunc
+	Active    bool
+	mutex     sync.RWMutex
 	LastUsed  time.Time
 	StartedAt time.Time // When the session was created (for duration display)
-	Size     *pty.Winsize
+	Size      *pty.Winsize
 
 	// Hidden session metadata — used for agent background PTY sessions.
-	Hidden      bool   `json:"-"`
+	Hidden       bool   `json:"-"`
 	IsBackground bool   `json:"-"` // true for background sessions (2-hour timeout vs 30-min for regular hidden)
-	Owner       string `json:"-"` // "agent" or other entity that created this session
-	ChatID      string `json:"-"` // chat session that owns this terminal
-	Name        string `json:"-"` // human-readable name (e.g. command prefix for background tasks)
-	AutoClose   bool   `json:"-"` // reserved for Phase B: close automatically when inactive
+	Owner        string `json:"-"` // "agent" or other entity that created this session
+	ChatID       string `json:"-"` // chat session that owns this terminal
+	Name         string `json:"-"` // human-readable name (e.g. command prefix for background tasks)
+	AutoClose    bool   `json:"-"` // reserved for Phase B: close automatically when inactive
 
 	// NoPTY indicates this session is running in fallback mode without a real
 	// PTY (e.g. on Alpine Linux or minimal containers where /dev/pts is

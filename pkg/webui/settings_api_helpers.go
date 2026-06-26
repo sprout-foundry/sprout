@@ -117,21 +117,21 @@ var validHistoryScopes = map[string]bool{
 // sensitive fields stripped so they are never sent to the browser.
 func sanitizedConfig(cfg *configuration.Config) map[string]interface{} {
 	out := map[string]interface{}{
-		"version":                        cfg.Version,
-		"last_used_provider":             cfg.LastUsedProvider,
-		"provider_models":                cfg.ProviderModels,
-		"provider_priority":              cfg.ProviderPriority,
-		"mcp":                            mcp.RedactMCPConfig(cfg.MCP),
-		"resource_directory":             cfg.ResourceDirectory,
-		"reasoning_effort":               cfg.ReasoningEffort,
-		"system_prompt_text":             cfg.SystemPromptText,
-		"skip_prompt":                    cfg.SkipPrompt,
-		"api_timeouts":                   cfg.APITimeouts,
-		"custom_providers":               sanitizedCustomProviders(cfg.CustomProviders),
-		"history_scope":                  cfg.HistoryScope,
-		"self_review_gate_mode":          cfg.SelfReviewGateMode,
-		"subagent_provider":              cfg.SubagentProvider,
-		"subagent_model":                 cfg.SubagentModel,
+		"version":               cfg.Version,
+		"last_used_provider":    cfg.LastUsedProvider,
+		"provider_models":       cfg.ProviderModels,
+		"provider_priority":     cfg.ProviderPriority,
+		"mcp":                   mcp.RedactMCPConfig(cfg.MCP),
+		"resource_directory":    cfg.ResourceDirectory,
+		"reasoning_effort":      cfg.ReasoningEffort,
+		"system_prompt_text":    cfg.SystemPromptText,
+		"skip_prompt":           cfg.SkipPrompt,
+		"api_timeouts":          cfg.APITimeouts,
+		"custom_providers":      sanitizedCustomProviders(cfg.CustomProviders),
+		"history_scope":         cfg.HistoryScope,
+		"self_review_gate_mode": cfg.SelfReviewGateMode,
+		"subagent_provider":     cfg.SubagentProvider,
+		"subagent_model":        cfg.SubagentModel,
 		// SubagentTypes is catalog-derived and never persisted — exposed via
 		// GET /api/settings/subagent-types for the persona list view. Keeping
 		// it out of the generic settings payload prevents round-trip PUTs
@@ -148,20 +148,20 @@ func sanitizedConfig(cfg *configuration.Config) map[string]interface{} {
 		"pdf_ocr_provider":               cfg.PDFOCRProvider,
 		"pdf_ocr_model":                  cfg.PDFOCRModel,
 		"skills":                         cfg.Skills,
-		"disable_thinking":              cfg.DisableThinking,
+		"disable_thinking":               cfg.DisableThinking,
 		"enable_zsh_command_detection":   cfg.EnableZshCommandDetection,
 		"auto_execute_detected_commands": cfg.AutoExecuteDetectedCommands,
 		"embedding_index":                cfg.EmbeddingIndex,
 		// SP-063: Computer Use config — gates the computer_user persona's
 		// desktop-control tools. Exposed read-only here; edits round-trip
 		// through applyPartialSettings.
-		"computer_use":                   cfg.ComputerUse,
-		"ea_mode":                        cfg.EAMode,
-		"subagent_max_depth":             cfg.SubagentMaxDepth,
-		"approved_shell_commands":        cfg.ApprovedShellCommands,
-		"language_servers":               cfg.LanguageServers,
-		"security_policy":                cfg.SecurityPolicy,
-		"persistent_context":             cfg.PersistentContext,
+		"computer_use":            cfg.ComputerUse,
+		"ea_mode":                 cfg.EAMode,
+		"subagent_max_depth":      cfg.SubagentMaxDepth,
+		"approved_shell_commands": cfg.ApprovedShellCommands,
+		"language_servers":        cfg.LanguageServers,
+		"security_policy":         cfg.SecurityPolicy,
+		"persistent_context":      cfg.PersistentContext,
 		// SP-058: risk profile + per-profile overrides. The single-
 		// value selector is editable via the settings UI; the
 		// per-profile map is read-only here (advanced; edit

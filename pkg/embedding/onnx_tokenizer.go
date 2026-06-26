@@ -170,6 +170,7 @@ func NewGemmaTokenizer(path string) (*GemmaTokenizer, error) {
 // parseMerges accepts either of the two HF merge formats:
 //   - newer: [["first","second"], ...]
 //   - older: ["first second", ...]
+//
 // EmbeddingGemma uses the newer form; the older form is kept so unit tests
 // that hand-craft tiny tokenizers can stay readable.
 func parseMerges(raw json.RawMessage) ([]bpePair, error) {

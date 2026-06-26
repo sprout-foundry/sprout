@@ -17,9 +17,9 @@ import (
 func TestHandleAPIFileCheckModified(t *testing.T) {
 	t.Run("non-POST returns 405", func(t *testing.T) {
 		server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
-	if err != nil {
-		t.Fatal(err)
-	}
+		if err != nil {
+			t.Fatal(err)
+		}
 		req := httptest.NewRequest(http.MethodGet, "/api/file/check-modified", nil)
 		rec := httptest.NewRecorder()
 
@@ -33,9 +33,9 @@ func TestHandleAPIFileCheckModified(t *testing.T) {
 	t.Run("invalid JSON returns 400", func(t *testing.T) {
 		dir := t.TempDir()
 		server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
-	if err != nil {
-		t.Fatal(err)
-	}
+		if err != nil {
+			t.Fatal(err)
+		}
 		server.workspaceRoot = dir
 		// Ensure client context gets the right workspaceRoot
 		server.getOrCreateClientContext(defaultWebClientID).WorkspaceRoot = dir
@@ -53,9 +53,9 @@ func TestHandleAPIFileCheckModified(t *testing.T) {
 	t.Run("POST with modified files returns changed entries", func(t *testing.T) {
 		dir := t.TempDir()
 		server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
-	if err != nil {
-		t.Fatal(err)
-	}
+		if err != nil {
+			t.Fatal(err)
+		}
 		server.workspaceRoot = dir
 		server.getOrCreateClientContext(defaultWebClientID).WorkspaceRoot = dir
 
@@ -103,9 +103,9 @@ func TestHandleAPIFileCheckModified(t *testing.T) {
 	t.Run("POST with unchanged files returns empty modified array", func(t *testing.T) {
 		dir := t.TempDir()
 		server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
-	if err != nil {
-		t.Fatal(err)
-	}
+		if err != nil {
+			t.Fatal(err)
+		}
 		server.workspaceRoot = dir
 		server.getOrCreateClientContext(defaultWebClientID).WorkspaceRoot = dir
 
@@ -144,9 +144,9 @@ func TestHandleAPIFileCheckModified(t *testing.T) {
 	t.Run("POST with path outside workspace is skipped", func(t *testing.T) {
 		dir := t.TempDir()
 		server, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
-	if err != nil {
-		t.Fatal(err)
-	}
+		if err != nil {
+			t.Fatal(err)
+		}
 		server.workspaceRoot = dir
 		server.getOrCreateClientContext(defaultWebClientID).WorkspaceRoot = dir
 

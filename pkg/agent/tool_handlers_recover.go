@@ -6,19 +6,19 @@
 // the `scope` argument:
 //
 //   - scope="latest"        (default) Restore the file to the state
-//                           immediately before its most-recent tracked
-//                           change. The historical recover_file shape.
+//     immediately before its most-recent tracked
+//     change. The historical recover_file shape.
 //
 //   - scope="session_start" Restore to the EARLIEST captured original —
-//                           the file as it was before the agent touched
-//                           it at all this session. Replaces the
-//                           revert_my_changes(file=…) scope.
+//     the file as it was before the agent touched
+//     it at all this session. Replaces the
+//     revert_my_changes(file=…) scope.
 //
 //   - scope="bulk"          Treat `path` as a bulk entry's FilePath (a
-//                           command label like "git checkout ." or a
-//                           dir like "webui/src/"). Walks the entry's
-//                           BulkItems and restores every packed file.
-//                           Replaces the standalone recover_bulk tool.
+//     command label like "git checkout ." or a
+//     dir like "webui/src/"). Walks the entry's
+//     BulkItems and restores every packed file.
+//     Replaces the standalone recover_bulk tool.
 //
 // Selection rules:
 //   - Most-recent matching change for `path` wins for scope="latest"

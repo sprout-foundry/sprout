@@ -237,7 +237,7 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 
 	log.Printf("handleAPIQuery: processing query: %s", query.Query)
 	clientID := ws.resolveClientID(r)
-	
+
 	// Resolve chat_id: prefer body parameter, fall back to query parameter
 	chatID := strings.TrimSpace(query.ChatID)
 	if chatID == "" {
@@ -637,4 +637,3 @@ func (ws *ReactWebServer) handleAPIQueryStatus(w http.ResponseWriter, r *http.Re
 		"chat_id": chatID,
 	})
 }
-

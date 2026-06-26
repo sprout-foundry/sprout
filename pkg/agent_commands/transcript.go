@@ -18,10 +18,10 @@ import (
 // ~/.sprout/transcripts/<scope>/<session>/<utc>-manual.json. Subcommands
 // enrich or change the output:
 //
-//   /transcript                # snapshot only
-//   /transcript preview        # snapshot + would-be /compact preview
-//   /transcript markdown       # snapshot + rendered .md alongside
-//   /transcript diff           # snapshot + diff vs previous snapshot
+//	/transcript                # snapshot only
+//	/transcript preview        # snapshot + would-be /compact preview
+//	/transcript markdown       # snapshot + rendered .md alongside
+//	/transcript diff           # snapshot + diff vs previous snapshot
 //
 // Multiple subcommands can be combined (e.g. `/transcript preview diff`).
 // All snapshots include per-message source annotations so a reader can

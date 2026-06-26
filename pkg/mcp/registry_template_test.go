@@ -247,10 +247,10 @@ func TestLoadTemplatesFromConfig_EmptyTemplates(t *testing.T) {
 
 func TestCreateServerConfig_HTTPServer(t *testing.T) {
 	tmpl := MCPServerTemplate{
-		ID:          "http-server-tmpl",
-		Name:        "HTTP Server Template",
-		Type:        "http",
-		URL:         "https://api.example.com/mcp",
+		ID:   "http-server-tmpl",
+		Name: "HTTP Server Template",
+		Type: "http",
+		URL:  "https://api.example.com/mcp",
 		EnvVars: []EnvVarTemplate{
 			{Name: "API_KEY", Required: true, Secret: true},
 		},
@@ -338,8 +338,8 @@ func TestCreateServerConfig_CustomValuesOverrideTemplate(t *testing.T) {
 		"custom-server",
 		map[string]string{"KEY": "value"},
 		"https://custom.example.com/mcp", // Custom URL
-		"custom-command",                  // Custom command
-		[]string{"--custom", "--args"},    // Custom args
+		"custom-command",                 // Custom command
+		[]string{"--custom", "--args"},   // Custom args
 	)
 
 	assert.Equal(t, "https://custom.example.com/mcp", config.URL, "custom URL should override template")
@@ -424,9 +424,9 @@ func TestCreateServerConfig_ServerName(t *testing.T) {
 
 func TestCreateServerConfig_CommandTypes(t *testing.T) {
 	testCases := []struct {
-		name     string
-		command  string
-		args     []string
+		name    string
+		command string
+		args    []string
 	}{
 		{"npx with package", "npx", []string{"-y", "@pkg/server"}},
 		{"uvx with package", "uvx", []string{"pkg-server"}},

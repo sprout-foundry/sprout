@@ -17,8 +17,9 @@ import (
 // immediate feedback before a user invests time in configuration.
 //
 // Response shapes:
-//   enabled  → { "status": "ok",      "message": "Backend ready" }
-//   disabled → { "status": "disabled", "message": "Computer use is not enabled" }
+//
+//	enabled  → { "status": "ok",      "message": "Backend ready" }
+//	disabled → { "status": "disabled", "message": "Computer use is not enabled" }
 func (ws *ReactWebServer) handleAPIComputerUseTest(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)

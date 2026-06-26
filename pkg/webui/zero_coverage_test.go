@@ -304,9 +304,9 @@ func TestIsExtDelimiter_ZC(t *testing.T) {
 func TestValidationToFrontend_ZC(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name        string
-		d           validation.Diagnostic
-		content     string
+		name         string
+		d            validation.Diagnostic
+		content      string
 		wantSeverity string
 		wantMessage  string
 		wantSource   string
@@ -321,7 +321,7 @@ func TestValidationToFrontend_ZC(t *testing.T) {
 				Message:  "unexpected token",
 				Source:   "gofmt",
 			},
-			content:    "package main\n\nvar x = 10",
+			content:      "package main\n\nvar x = 10",
 			wantSeverity: "error",
 			wantMessage:  "unexpected token",
 			wantSource:   "gofmt",
@@ -336,7 +336,7 @@ func TestValidationToFrontend_ZC(t *testing.T) {
 				Message:  "unused import",
 				Source:   "goimports",
 			},
-			content:    "package main\nimport \"unused\"",
+			content:      "package main\nimport \"unused\"",
 			wantSeverity: "warning",
 			wantMessage:  "unused import",
 			wantSource:   "goimports",
@@ -351,7 +351,7 @@ func TestValidationToFrontend_ZC(t *testing.T) {
 				Message:  "",
 				Source:   "",
 			},
-			content:    "hello",
+			content:      "hello",
 			wantSeverity: "",
 			wantMessage:  "",
 			wantSource:   "",
@@ -366,7 +366,7 @@ func TestValidationToFrontend_ZC(t *testing.T) {
 				Message:  "syntax error: <standard input>:3:2: expected declaration",
 				Source:   "gofmt",
 			},
-			content:    "line1\nline2\nline3",
+			content:      "line1\nline2\nline3",
 			wantSeverity: "error",
 			wantMessage:  "syntax error: <standard input>:3:2: expected declaration",
 			wantSource:   "gofmt",
@@ -426,9 +426,9 @@ func TestDiagnosticToOffsets_ZC(t *testing.T) {
 		{
 			name: "goimports line=1 col=1 spans entire file",
 			d: validation.Diagnostic{
-				Line:   1,
-				Column: 1,
-				Source: "goimports",
+				Line:    1,
+				Column:  1,
+				Source:  "goimports",
 				Message: "unused import",
 			},
 			content:  "package main\nimport \"fmt\"",
@@ -437,9 +437,9 @@ func TestDiagnosticToOffsets_ZC(t *testing.T) {
 		{
 			name: "gofmt with parseable error",
 			d: validation.Diagnostic{
-				Line:   0,
-				Column: 0,
-				Source: "gofmt",
+				Line:    0,
+				Column:  0,
+				Source:  "gofmt",
 				Message: "syntax error: <standard input>:2:5: expected token",
 			},
 			content:  "line1\nline2\nline3",
@@ -448,9 +448,9 @@ func TestDiagnosticToOffsets_ZC(t *testing.T) {
 		{
 			name: "fallback uses diagnostic line/col",
 			d: validation.Diagnostic{
-				Line:   2,
-				Column: 1,
-				Source: "some-other",
+				Line:    2,
+				Column:  1,
+				Source:  "some-other",
 				Message: "some error",
 			},
 			content:  "line1\nline2",
@@ -459,9 +459,9 @@ func TestDiagnosticToOffsets_ZC(t *testing.T) {
 		{
 			name: "line=0 col=0 non-gofmt falls back to entire content",
 			d: validation.Diagnostic{
-				Line:   0,
-				Column: 0,
-				Source: "unknown",
+				Line:    0,
+				Column:  0,
+				Source:  "unknown",
 				Message: "error",
 			},
 			content:  "hello",
@@ -470,9 +470,9 @@ func TestDiagnosticToOffsets_ZC(t *testing.T) {
 		{
 			name: "goimports with non-1/1 falls through to line/col",
 			d: validation.Diagnostic{
-				Line:   2,
-				Column: 3,
-				Source: "goimports",
+				Line:    2,
+				Column:  3,
+				Source:  "goimports",
 				Message: "error",
 			},
 			content:  "line1\nline2\nline3",

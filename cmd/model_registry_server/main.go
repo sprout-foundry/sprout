@@ -68,8 +68,8 @@ func main() {
 
 	// Configure server with appropriate timeouts
 	server := &http.Server{
-		Addr:          fmt.Sprintf("%s:%d", *addr, *port),
-		Handler:       mux,
+		Addr:           fmt.Sprintf("%s:%d", *addr, *port),
+		Handler:        mux,
 		ReadTimeout:    defaultReadTimeout,
 		WriteTimeout:   defaultWriteTimeout,
 		IdleTimeout:    defaultIdleTimeout,

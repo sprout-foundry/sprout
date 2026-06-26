@@ -69,10 +69,10 @@ type GrammarCache interface {
 
 // MemoryCache is the default in-memory implementation of GrammarCache.
 type MemoryCache struct {
-	mu    sync.RWMutex
-	data  map[string]*GrammarBlob
-	hits  atomic.Int64
-	misses atomic.Int64
+	mu        sync.RWMutex
+	data      map[string]*GrammarBlob
+	hits      atomic.Int64
+	misses    atomic.Int64
 	evictions atomic.Int64
 }
 
@@ -290,4 +290,3 @@ func PreloadCache() int {
 	}
 	return loaded
 }
-

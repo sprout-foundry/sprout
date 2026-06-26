@@ -123,8 +123,8 @@ func TestClassifyError_SecurityTakesPriority(t *testing.T) {
 
 func TestRetryAction_String(t *testing.T) {
 	tests := []struct {
-		action     RetryAction
-		expected   string
+		action   RetryAction
+		expected string
 	}{
 		{ActionRetry, "retry"},
 		{ActionFail, "fail"},

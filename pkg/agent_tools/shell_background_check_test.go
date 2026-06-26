@@ -360,4 +360,3 @@ func TestCheckBackgroundOutput_StatusRunning(t *testing.T) {
 		t.Errorf("expected status 'running', got %q", parsed["status"])
 	}
 }
-

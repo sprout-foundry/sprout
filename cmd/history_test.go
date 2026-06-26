@@ -31,9 +31,9 @@ func TestParseDuration_Days(t *testing.T) {
 		{"0d", 0, false},
 		{" 7d ", 168, false}, // trimmed
 		{"100d", 2400, false},
-		{"-1d", 0, true},    // negative
-		{"ad", 0, true},     // non-numeric
-		{"", 0, true},       // empty
+		{"-1d", 0, true}, // negative
+		{"ad", 0, true},  // non-numeric
+		{"", 0, true},    // empty
 	}
 
 	for _, tc := range tests {

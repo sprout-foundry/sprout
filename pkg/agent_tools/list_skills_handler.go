@@ -33,8 +33,8 @@ func (h *listSkillsHandler) Execute(ctx context.Context, env ToolEnv, args map[s
 	toolName := h.Name()
 	if env.EventBus != nil {
 		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool":     toolName,
-			"params":   args,
+			"tool":   toolName,
+			"params": args,
 		})
 		defer func() {
 			env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
@@ -65,8 +65,8 @@ func (h *listSkillsHandler) Execute(ctx context.Context, env ToolEnv, args map[s
 		}
 
 		return ToolResult{
-			Output:    formatSkillList(skills),
-			IsError:   false,
+			Output:  formatSkillList(skills),
+			IsError: false,
 		}, nil
 	}
 

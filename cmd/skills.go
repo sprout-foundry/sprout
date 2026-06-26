@@ -9,9 +9,9 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/spf13/cobra"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/console"
-	"github.com/spf13/cobra"
 )
 
 var skillsCmd = &cobra.Command{

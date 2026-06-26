@@ -27,10 +27,10 @@ var ErrNoGitHubAuth = errors.New("no GitHub authentication available")
 
 // PullRequestRequest describes a pull request to create.
 type PullRequestRequest struct {
-	Title     string   // PR title (required)
-	Body      string   // PR body; synthesised from commits when empty
-	Base      string   // target branch; default = repo default branch
-	Head      string   // source branch; default = current HEAD branch
+	Title     string // PR title (required)
+	Body      string // PR body; synthesised from commits when empty
+	Base      string // target branch; default = repo default branch
+	Head      string // source branch; default = current HEAD branch
 	Draft     bool
 	Reviewers []string // usernames (API-only; ignored by gh CLI fallback)
 }
@@ -491,7 +491,7 @@ func buildFallbackGHCommand(head, base, title, body string, draft bool) string {
 }
 
 // shellQuote returns a single-quoted, shell-safe representation of s.
-// Handles the classic '\'' escaping pattern.
+// Handles the classic '\” escaping pattern.
 func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
 }

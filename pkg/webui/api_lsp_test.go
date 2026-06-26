@@ -10,10 +10,10 @@ import (
 	"os/exec"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"github.com/sprout-foundry/sprout/pkg/events"
 	lspproxy "github.com/sprout-foundry/sprout/pkg/lsp/proxy"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestHandleLSPStatus(t *testing.T) {

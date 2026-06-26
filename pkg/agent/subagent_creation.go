@@ -106,9 +106,9 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions, parentCtx context.
 		security:            securityMgr,
 		mcpSub:              mcpMgr,
 		// Shared resources
-		todoMgr:        r.shared.TodoManager,
-		eventBus:       r.shared.EventBus,
-		embeddingMgr:   r.shared.EmbeddingMgr,
+		todoMgr:      r.shared.TodoManager,
+		eventBus:     r.shared.EventBus,
+		embeddingMgr: r.shared.EmbeddingMgr,
 	}
 
 	// Share the parent's clarificationManager so subagents can call

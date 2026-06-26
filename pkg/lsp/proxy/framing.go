@@ -12,7 +12,7 @@ import (
 
 const (
 	headerContentLength = "Content-Length:"
-	headerDelimiter   = "\r\n\r\n"
+	headerDelimiter     = "\r\n\r\n"
 )
 
 // ErrInvalidMessage is returned when a message cannot be parsed.

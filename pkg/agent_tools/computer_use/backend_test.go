@@ -96,10 +96,10 @@ func TestSubprocessBackend_DoubleClickRepeats(t *testing.T) {
 
 func TestNormalizeKeyXdotool(t *testing.T) {
 	cases := map[string]string{
-		"cmd+space":     "super+space",
-		"enter":         "Return",
-		"ctrl+shift+t":  "ctrl+shift+t",
-		"escape":        "Escape",
+		"cmd+space":    "super+space",
+		"enter":        "Return",
+		"ctrl+shift+t": "ctrl+shift+t",
+		"escape":       "Escape",
 	}
 	for in, want := range cases {
 		if got := normalizeKeyXdotool(in); got != want {

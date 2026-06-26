@@ -19,22 +19,22 @@ func TestNormalizeSessionID(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "simple_valid",
+			name:  "simple_valid",
 			input: "abc123",
 			want:  "abc123",
 		},
 		{
-			name: "with_spaces",
+			name:  "with_spaces",
 			input: "  my-session  ",
 			want:  "my-session",
 		},
 		{
-			name: "legacy_prefix_stripped",
+			name:  "legacy_prefix_stripped",
 			input: "session_my-id",
 			want:  "my-id",
 		},
 		{
-			name: "legacy_prefix_with_spaces",
+			name:  "legacy_prefix_with_spaces",
 			input: "  session_test  ",
 			want:  "test",
 		},
@@ -414,5 +414,3 @@ func TestImportStateFromJSONFileInvalidJSON(t *testing.T) {
 		t.Fatal("expected error for invalid JSON")
 	}
 }
-
-

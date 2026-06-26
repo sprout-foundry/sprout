@@ -15,7 +15,7 @@ func (h *activateSkillHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "activate_skill",
 		Description: "Activate a skill to load its instructions into the current session context. Use this when you need the skill's expertise for the current task.",
-		Required: []string{"skill_id"},
+		Required:    []string{"skill_id"},
 		Parameters: []ParameterDef{
 			{Name: "skill_id", Type: "string", Required: true, Description: "The ID of the skill to activate (e.g., 'project-planning', 'browse-debugging')"},
 		},

@@ -141,9 +141,9 @@ func TestMessage_JSON_EmptyContent(t *testing.T) {
 func TestMessage_JSON_WithEmptyImagesSlice(t *testing.T) {
 	// Explicitly set to empty slice (not nil)
 	msg := Message{
-		Role:   "user",
+		Role:    "user",
 		Content: "Hi",
-		Images: []ImageData{},
+		Images:  []ImageData{},
 	}
 	data, err := json.Marshal(msg)
 	if err != nil {
@@ -297,10 +297,10 @@ func TestTokenUsage_JSON_Roundtrip(t *testing.T) {
 
 func TestChatResponse_JSON_Roundtrip(t *testing.T) {
 	resp := ChatResponse{
-		ID:     "chatcmpl-123",
-		Object: "chat.completion",
+		ID:      "chatcmpl-123",
+		Object:  "chat.completion",
 		Created: 1700000000,
-		Model:  "gpt-4",
+		Model:   "gpt-4",
 		Choices: []Choice{
 			{
 				Index: 0,
@@ -485,7 +485,7 @@ func TestPricingTable_JSON_Empty(t *testing.T) {
 func TestPricingTable_JSON_WithModels(t *testing.T) {
 	pt := PricingTable{
 		Models: map[string]ModelPricing{
-			"gpt-4": {InputCost: 0.03, OutputCost: 0.06},
+			"gpt-4":   {InputCost: 0.03, OutputCost: 0.06},
 			"gpt-3.5": {InputCost: 0.0015, OutputCost: 0.002},
 		},
 	}
@@ -1279,9 +1279,9 @@ func TestAgentContext_JSON_Roundtrip(t *testing.T) {
 		CurrentFiles:  []string{"main.go", "config.yaml"},
 		GitStatus:     "modified: 3 files",
 		Metadata: map[string]string{
-			"branch":    "main",
-			"commit":    "abc123",
-			"author":    "developer",
+			"branch": "main",
+			"commit": "abc123",
+			"author": "developer",
 		},
 	}
 	data, err := json.Marshal(ctx)
@@ -1421,9 +1421,9 @@ func TestPatchResolution_MarshalJSON_AllFieldsSet(t *testing.T) {
 		Status:          "pending_review",
 		SingleFile:      "diff single file content",
 		MultiFile: map[string]string{
-			"a.go":  "diff a",
-			"b.go":  "diff b",
-			"c.go":  "diff c",
+			"a.go": "diff a",
+			"b.go": "diff b",
+			"c.go": "diff c",
 		},
 	}
 	data, err := pr.MarshalJSON()
@@ -1469,8 +1469,8 @@ func TestCodeReviewResult_JSON_PatchResolutionRoundtrip(t *testing.T) {
 		},
 	}
 	result := CodeReviewResult{
-		Approved: true,
-		Feedback: "Approved",
+		Approved:        true,
+		Feedback:        "Approved",
 		PatchResolution: &pr,
 	}
 	data, err := json.Marshal(result)

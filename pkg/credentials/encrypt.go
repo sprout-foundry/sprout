@@ -1,11 +1,11 @@
 package credentials
 
 import (
-	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"io"
 	"log"
 	"os"
@@ -223,7 +223,7 @@ func DecryptStore(data []byte) ([]byte, error) {
 				return nil, fmt.Errorf("failed to read decrypted data: %w", readErr)
 			}
 			if !IsPlaintextJSON(decrypted) {
-				return nil, fmt.Errorf("decrypted data is not valid JSON — the machine key may be wrong (was key.age regenerated?). "+
+				return nil, fmt.Errorf("decrypted data is not valid JSON — the machine key may be wrong (was key.age regenerated?). " +
 					"Run 'sprout keys migrate' to re-encrypt with the current machine key")
 			}
 			return decrypted, nil
@@ -379,28 +379,28 @@ func saveUnlocked(store Store) error {
 	if mode == "passphrase" {
 		passphrase := strings.TrimSpace(envutil.GetEnvSimple("KEY_PASSPHRASE"))
 		if passphrase == "" {
-					return fmt.Errorf("cannot save: API keys are passphrase-encrypted but SPROUT_KEY_PASSPHRASE is not set. "+
-			"Set SPROUT_KEY_PASSPHRASE or run 'sprout keys encrypt' to switch to machine-key mode")
+			return fmt.Errorf("cannot save: API keys are passphrase-encrypted but SPROUT_KEY_PASSPHRASE is not set. " +
+				"Set SPROUT_KEY_PASSPHRASE or run 'sprout keys encrypt' to switch to machine-key mode")
+		}
+		encrypted, err = EncryptWithPassphrase(data, passphrase)
+	} else if mode == "" && strings.TrimSpace(envutil.GetEnvSimple("KEY_PASSPHRASE")) != "" {
+		encrypted, err = EncryptWithPassphrase(data, strings.TrimSpace(envutil.GetEnvSimple("KEY_PASSPHRASE")))
+		if err == nil {
+			_ = SetEncryptionMode("passphrase")
+		}
+	} else {
+		encrypted, err = EncryptStore(data)
+		if err == nil && mode == "" {
+			_ = SetEncryptionMode("machine-key")
+		}
 	}
-	encrypted, err = EncryptWithPassphrase(data, passphrase)
-} else if mode == "" && strings.TrimSpace(envutil.GetEnvSimple("KEY_PASSPHRASE")) != "" {
-	encrypted, err = EncryptWithPassphrase(data, strings.TrimSpace(envutil.GetEnvSimple("KEY_PASSPHRASE")))
-	if err == nil {
-		_ = SetEncryptionMode("passphrase")
+	if err != nil {
+		return fmt.Errorf("failed to encrypt API keys: %w", err)
 	}
-} else {
-	encrypted, err = EncryptStore(data)
-	if err == nil && mode == "" {
-		_ = SetEncryptionMode("machine-key")
+	if err := AtomicWriteFile(path, encrypted, 0600); err != nil {
+		return err
 	}
-}
-if err != nil {
-	return fmt.Errorf("failed to encrypt API keys: %w", err)
-}
-if err := AtomicWriteFile(path, encrypted, 0600); err != nil {
-	return err
-}
-return nil
+	return nil
 }
 
 // saveToPath saves the API keys store to a specific path without acquiring a lock.
@@ -431,7 +431,7 @@ func saveToPath(path string, configDir string, store Store) error {
 		// Passphrase mode: encrypt with the user's passphrase
 		passphrase := strings.TrimSpace(envutil.GetEnvSimple("KEY_PASSPHRASE"))
 		if passphrase == "" {
-			return fmt.Errorf("cannot save: API keys are passphrase-encrypted but SPROUT_KEY_PASSPHRASE is not set. "+
+			return fmt.Errorf("cannot save: API keys are passphrase-encrypted but SPROUT_KEY_PASSPHRASE is not set. " +
 				"Set SPROUT_KEY_PASSPHRASE or run 'sprout keys encrypt' to switch to machine-key mode")
 		}
 		encrypted, err = EncryptWithPassphrase(data, passphrase)
@@ -670,8 +670,8 @@ func Save(store Store) error {
 		// Passphrase mode: encrypt with the user's passphrase
 		passphrase := strings.TrimSpace(envutil.GetEnvSimple("KEY_PASSPHRASE"))
 		if passphrase == "" {
-			return fmt.Errorf("cannot save: API keys are passphrase-encrypted but SPROUT_KEY_PASSPHRASE is not set. "+
-			"Set SPROUT_KEY_PASSPHRASE or run 'sprout keys encrypt' to switch to machine-key mode")
+			return fmt.Errorf("cannot save: API keys are passphrase-encrypted but SPROUT_KEY_PASSPHRASE is not set. " +
+				"Set SPROUT_KEY_PASSPHRASE or run 'sprout keys encrypt' to switch to machine-key mode")
 		}
 		encrypted, err = EncryptWithPassphrase(data, passphrase)
 	} else if mode == "" && strings.TrimSpace(envutil.GetEnvSimple("KEY_PASSPHRASE")) != "" {

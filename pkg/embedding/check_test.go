@@ -647,7 +647,7 @@ func TestSortMatchesBySimilarityDesc(t *testing.T) {
 }
 
 func TestSortMatchesBySimilarityDesc_Empty(t *testing.T) {
-	sortMatchesBySimilarityDesc(nil)       // should not panic
+	sortMatchesBySimilarityDesc(nil)             // should not panic
 	sortMatchesBySimilarityDesc([]QueryResult{}) // should not panic
 }
 
@@ -752,10 +752,10 @@ func (c *constantProvider) EmbedBatchWithPrefix(_ context.Context, texts []strin
 	return c.EmbedBatch(nil, texts)
 }
 
-func (c *constantProvider) Dimensions() int    { return len(c.vec) }
-func (c *constantProvider) Name() string       { return "constant" }
-func (c *constantProvider) ModelHash() string  { return "constant-model-hash" }
-func (c *constantProvider) Close() error       { return nil }
+func (c *constantProvider) Dimensions() int   { return len(c.vec) }
+func (c *constantProvider) Name() string      { return "constant" }
+func (c *constantProvider) ModelHash() string { return "constant-model-hash" }
+func (c *constantProvider) Close() error      { return nil }
 
 // ─── embeddingText tests ───
 
@@ -1003,7 +1003,7 @@ func TestNormalizeVectorForCheck(t *testing.T) {
 	// The check flow doesn't normalize; it relies on CosineSimilarity which
 	// normalizes internally. Verify that CosineSimilarity handles the vectors
 	// correctly regardless of their norms.
-	a := []float32{3, 4} // magnitude 5
+	a := []float32{3, 4}     // magnitude 5
 	b := []float32{0.6, 0.8} // magnitude 1, same direction
 
 	sim := CosineSimilarity(a, b)

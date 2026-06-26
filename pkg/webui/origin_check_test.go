@@ -14,43 +14,43 @@ import (
 // is correctly parsed from the SPROUT_ALLOWED_ORIGINS environment variable.
 func TestAllowedOriginsParsing(t *testing.T) {
 	tests := []struct {
-		name           string
-		envValue       string
+		name            string
+		envValue        string
 		expectedOrigins []string
 	}{
 		{
-			name:           "single origin",
-			envValue:       "https://example.com",
+			name:            "single origin",
+			envValue:        "https://example.com",
 			expectedOrigins: []string{"https://example.com"},
 		},
 		{
-			name:           "multiple origins comma-separated",
-			envValue:       "https://example.com,https://test.com",
+			name:            "multiple origins comma-separated",
+			envValue:        "https://example.com,https://test.com",
 			expectedOrigins: []string{"https://example.com", "https://test.com"},
 		},
 		{
-			name:           "multiple origins with spaces",
-			envValue:       "https://example.com, https://test.com , https://another.com",
+			name:            "multiple origins with spaces",
+			envValue:        "https://example.com, https://test.com , https://another.com",
 			expectedOrigins: []string{"https://example.com", "https://test.com", "https://another.com"},
 		},
 		{
-			name:           "origins with ports",
-			envValue:       "https://example.com:3000,http://localhost:8080",
+			name:            "origins with ports",
+			envValue:        "https://example.com:3000,http://localhost:8080",
 			expectedOrigins: []string{"https://example.com:3000", "http://localhost:8080"},
 		},
 		{
-			name:           "empty string",
-			envValue:       "",
+			name:            "empty string",
+			envValue:        "",
 			expectedOrigins: []string{},
 		},
 		{
-			name:           "only whitespace",
-			envValue:       "   ",
+			name:            "only whitespace",
+			envValue:        "   ",
 			expectedOrigins: []string{},
 		},
 		{
-			name:           "mixed case origins",
-			envValue:       "HTTPS://Example.com,http://LOCALHOST:8080",
+			name:            "mixed case origins",
+			envValue:        "HTTPS://Example.com,http://LOCALHOST:8080",
 			expectedOrigins: []string{"https://example.com", "http://localhost:8080"},
 		},
 	}
@@ -65,9 +65,9 @@ func TestAllowedOriginsParsing(t *testing.T) {
 
 			// Create the server which should parse the allowedOrigins
 			server, err := NewReactWebServer(nil, eventBus, 0, "127.0.0.1", "", "")
-	if err != nil {
-		t.Fatal(err)
-		}
+			if err != nil {
+				t.Fatal(err)
+			}
 
 			// Verify the parsed origins match expectations
 			if len(server.normalizedAllowedOrigins) != len(tt.expectedOrigins) {
@@ -96,67 +96,67 @@ func TestCheckOrigin_AllowedOrigins(t *testing.T) {
 	server, err := NewReactWebServer(nil, eventBus, 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
-		}
+	}
 
 	tests := []struct {
-		name           string
-		originHeader   string
-		shouldAllow    bool
+		name         string
+		originHeader string
+		shouldAllow  bool
 	}{
 		{
-			name:           "empty origin header - should allow",
-			originHeader:   "",
-			shouldAllow:    true,
+			name:         "empty origin header - should allow",
+			originHeader: "",
+			shouldAllow:  true,
 		},
 		{
-			name:           "localhost - should allow",
-			originHeader:   "http://localhost:3000",
-			shouldAllow:    true,
+			name:         "localhost - should allow",
+			originHeader: "http://localhost:3000",
+			shouldAllow:  true,
 		},
 		{
-			name:           "127.0.0.1 - should allow",
-			originHeader:   "http://127.0.0.1:8080",
-			shouldAllow:    true,
+			name:         "127.0.0.1 - should allow",
+			originHeader: "http://127.0.0.1:8080",
+			shouldAllow:  true,
 		},
 		{
-			name:           "origin in allowlist - should allow",
-			originHeader:   "https://example.com",
-			shouldAllow:    true,
+			name:         "origin in allowlist - should allow",
+			originHeader: "https://example.com",
+			shouldAllow:  true,
 		},
 		{
-			name:           "origin in allowlist with port - should allow",
-			originHeader:   "https://test.com:3000",
-			shouldAllow:    true,
+			name:         "origin in allowlist with port - should allow",
+			originHeader: "https://test.com:3000",
+			shouldAllow:  true,
 		},
 		{
-			name:           "origin in allowlist with http - should allow",
-			originHeader:   "http://app.internal",
-			shouldAllow:    true,
+			name:         "origin in allowlist with http - should allow",
+			originHeader: "http://app.internal",
+			shouldAllow:  true,
 		},
 		{
-			name:           "origin in allowlist different case - should allow",
-			originHeader:   "HTTPS://EXAMPLE.COM",
-			shouldAllow:    true,
+			name:         "origin in allowlist different case - should allow",
+			originHeader: "HTTPS://EXAMPLE.COM",
+			shouldAllow:  true,
 		},
 		{
-			name:           "origin not in allowlist - should reject",
-			originHeader:   "https://malicious.com",
-			shouldAllow:    false,
+			name:         "origin not in allowlist - should reject",
+			originHeader: "https://malicious.com",
+			shouldAllow:  false,
 		},
 		{
-			name:           "default port 443 matches base https origin",
-			originHeader:   "https://example.com:443",
-			shouldAllow:    true,
+			name:         "default port 443 matches base https origin",
+			originHeader: "https://example.com:443",
+			shouldAllow:  true,
 		},
 		{
-			name:           "non-default port not in allowlist - should reject",
-			originHeader:   "https://example.com:8443",
-			shouldAllow:    false,
+			name:         "non-default port not in allowlist - should reject",
+			originHeader: "https://example.com:8443",
+			shouldAllow:  false,
 		},
 		{
-			name:           "similar but different domain - should reject",
-			originHeader:   "https://example.com.evil.com",
-			shouldAllow:    false,
+			name:         "similar but different domain - should reject",
+			originHeader: "https://example.com.evil.com",
+			shouldAllow:  false,
 		},
 	}
 
@@ -193,32 +193,32 @@ func TestCheckOrigin_EmptyAllowedOrigins(t *testing.T) {
 	serverLocalhost, err := NewReactWebServer(nil, eventBus, 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
-		}
+	}
 
 	tests := []struct {
-		name           string
-		originHeader   string
-		shouldAllow    bool
+		name         string
+		originHeader string
+		shouldAllow  bool
 	}{
 		{
-			name:           "empty origin header",
-			originHeader:   "",
-			shouldAllow:    true,
+			name:         "empty origin header",
+			originHeader: "",
+			shouldAllow:  true,
 		},
 		{
-			name:           "localhost",
-			originHeader:   "http://localhost:3000",
-			shouldAllow:    true,
+			name:         "localhost",
+			originHeader: "http://localhost:3000",
+			shouldAllow:  true,
 		},
 		{
-			name:           "127.0.0.1",
-			originHeader:   "http://127.0.0.1:8080",
-			shouldAllow:    true,
+			name:         "127.0.0.1",
+			originHeader: "http://127.0.0.1:8080",
+			shouldAllow:  true,
 		},
 		{
-			name:           "non-localhost domain",
-			originHeader:   "https://example.com",
-			shouldAllow:    false,
+			name:         "non-localhost domain",
+			originHeader: "https://example.com",
+			shouldAllow:  false,
 		},
 	}
 
@@ -247,24 +247,24 @@ func TestCheckOrigin_EmptyAllowedOrigins(t *testing.T) {
 	}
 
 	allInterfaceTests := []struct {
-		name           string
-		originHeader   string
-		shouldAllow    bool
+		name         string
+		originHeader string
+		shouldAllow  bool
 	}{
 		{
-			name:           "localhost with 0.0.0.0 binding",
-			originHeader:   "http://localhost:3000",
-			shouldAllow:    true,
+			name:         "localhost with 0.0.0.0 binding",
+			originHeader: "http://localhost:3000",
+			shouldAllow:  true,
 		},
 		{
-			name:           "arbitrary domain with 0.0.0.0 binding",
-			originHeader:   "https://any-domain.com",
-			shouldAllow:    true,
+			name:         "arbitrary domain with 0.0.0.0 binding",
+			originHeader: "https://any-domain.com",
+			shouldAllow:  true,
 		},
 		{
-			name:           "another arbitrary domain with 0.0.0.0 binding",
-			originHeader:   "https://cloud-service.app",
-			shouldAllow:    true,
+			name:         "another arbitrary domain with 0.0.0.0 binding",
+			originHeader: "https://cloud-service.app",
+			shouldAllow:  true,
 		},
 	}
 
@@ -302,24 +302,24 @@ func TestCheckOrigin_AllowedOriginsWithZeroZeroZeroZero(t *testing.T) {
 	}
 
 	tests := []struct {
-		name           string
-		originHeader   string
-		shouldAllow    bool
+		name         string
+		originHeader string
+		shouldAllow  bool
 	}{
 		{
-			name:           "origin in allowlist",
-			originHeader:   "https://example.com",
-			shouldAllow:    true,
+			name:         "origin in allowlist",
+			originHeader: "https://example.com",
+			shouldAllow:  true,
 		},
 		{
-			name:           "origin NOT in allowlist but 0.0.0.0 binding",
-			originHeader:   "https://not-in-allowlist.com",
-			shouldAllow:    true, // 0.0.0.0 allows any origin
+			name:         "origin NOT in allowlist but 0.0.0.0 binding",
+			originHeader: "https://not-in-allowlist.com",
+			shouldAllow:  true, // 0.0.0.0 allows any origin
 		},
 		{
-			name:           "localhost with 0.0.0.0 binding",
-			originHeader:   "http://localhost:3000",
-			shouldAllow:    true,
+			name:         "localhost with 0.0.0.0 binding",
+			originHeader: "http://localhost:3000",
+			shouldAllow:  true,
 		},
 	}
 
@@ -354,19 +354,19 @@ func TestCheckOrigin_IPV6Binding(t *testing.T) {
 	}
 
 	tests := []struct {
-		name           string
-		originHeader   string
-		shouldAllow    bool
+		name         string
+		originHeader string
+		shouldAllow  bool
 	}{
 		{
-			name:           "localhost with IPv6 binding",
-			originHeader:   "http://localhost:3000",
-			shouldAllow:    true,
+			name:         "localhost with IPv6 binding",
+			originHeader: "http://localhost:3000",
+			shouldAllow:  true,
 		},
 		{
-			name:           "arbitrary domain with IPv6 binding",
-			originHeader:   "https://any-domain.com",
-			shouldAllow:    true, // :: allows any origin like 0.0.0.0
+			name:         "arbitrary domain with IPv6 binding",
+			originHeader: "https://any-domain.com",
+			shouldAllow:  true, // :: allows any origin like 0.0.0.0
 		},
 	}
 
@@ -397,27 +397,27 @@ func TestCheckOrigin_InvalidOrigin(t *testing.T) {
 	server, err := NewReactWebServer(nil, eventBus, 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
-		}
+	}
 
 	tests := []struct {
-		name           string
-		originHeader   string
-		shouldAllow    bool
+		name         string
+		originHeader string
+		shouldAllow  bool
 	}{
 		{
-			name:           "malformed URL",
-			originHeader:   "not-a-url",
-			shouldAllow:    false,
+			name:         "malformed URL",
+			originHeader: "not-a-url",
+			shouldAllow:  false,
 		},
 		{
-			name:           "missing scheme",
-			originHeader:   "example.com",
-			shouldAllow:    false,
+			name:         "missing scheme",
+			originHeader: "example.com",
+			shouldAllow:  false,
 		},
 		{
-			name:           "origin with invalid characters",
-			originHeader:   "https://ex ample.com",
-			shouldAllow:    false,
+			name:         "origin with invalid characters",
+			originHeader: "https://ex ample.com",
+			shouldAllow:  false,
 		},
 	}
 
@@ -448,37 +448,37 @@ func TestCheckOrigin_CaseInsensitive(t *testing.T) {
 	server, err := NewReactWebServer(nil, eventBus, 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
-		}
+	}
 
 	tests := []struct {
-		name           string
-		originHeader   string
-		shouldAllow    bool
+		name         string
+		originHeader string
+		shouldAllow  bool
 	}{
 		{
-			name:           "exact match",
-			originHeader:   "HTTPS://Example.COM:3000",
-			shouldAllow:    true,
+			name:         "exact match",
+			originHeader: "HTTPS://Example.COM:3000",
+			shouldAllow:  true,
 		},
 		{
-			name:           "lowercase",
-			originHeader:   "https://example.com:3000",
-			shouldAllow:    true,
+			name:         "lowercase",
+			originHeader: "https://example.com:3000",
+			shouldAllow:  true,
 		},
 		{
-			name:           "uppercase",
-			originHeader:   "HTTPS://EXAMPLE.COM:3000",
-			shouldAllow:    true,
+			name:         "uppercase",
+			originHeader: "HTTPS://EXAMPLE.COM:3000",
+			shouldAllow:  true,
 		},
 		{
-			name:           "mixed case",
-			originHeader:   "HtTpS://ExAmPlE.cOm:3000",
-			shouldAllow:    true,
+			name:         "mixed case",
+			originHeader: "HtTpS://ExAmPlE.cOm:3000",
+			shouldAllow:  true,
 		},
 		{
-			name:           "scheme lowercase",
-			originHeader:   "http://localhost:8080",
-			shouldAllow:    true,
+			name:         "scheme lowercase",
+			originHeader: "http://localhost:8080",
+			shouldAllow:  true,
 		},
 	}
 
@@ -510,7 +510,7 @@ func TestCheckOrigin_IPv6Localhost(t *testing.T) {
 	server, err := NewReactWebServer(nil, eventBus, 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
-		}
+	}
 
 	tests := []struct {
 		name         string
@@ -568,7 +568,7 @@ func TestCheckOrigin_DefaultPortNormalization(t *testing.T) {
 	server, err := NewReactWebServer(nil, eventBus, 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
-		}
+	}
 
 	tests := []struct {
 		name         string
@@ -629,7 +629,7 @@ func TestCheckOrigin_DefaultPortNormalization_ConfigWithPort(t *testing.T) {
 	server, err := NewReactWebServer(nil, eventBus, 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
-		}
+	}
 
 	tests := []struct {
 		name         string
@@ -682,7 +682,7 @@ func TestCheckOrigin_TrailingSlash(t *testing.T) {
 	server, err := NewReactWebServer(nil, eventBus, 0, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
-		}
+	}
 
 	tests := []struct {
 		name         string

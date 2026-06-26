@@ -14,13 +14,13 @@ import (
 )
 
 var (
-	disableWebUI       bool
-	noProjectSkills    bool
-	webPort            int
-	webBindAddr        string
-	daemonMode         bool
-	bindSocket         string
-	secretToken        string
+	disableWebUI    bool
+	noProjectSkills bool
+	webPort         int
+	webBindAddr     string
+	daemonMode      bool
+	bindSocket      string
+	secretToken     string
 )
 
 func init() {

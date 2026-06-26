@@ -63,7 +63,7 @@ func extractContextLimitTokenPair(err error) contextLimitPair {
 }
 
 func containsIgnoreCase(s, substr string) bool {
-	return regexp.MustCompile("(?i)"+regexp.QuoteMeta(substr)).MatchString(s)
+	return regexp.MustCompile("(?i)" + regexp.QuoteMeta(substr)).MatchString(s)
 }
 
 func TestIsContextLimitError(t *testing.T) {

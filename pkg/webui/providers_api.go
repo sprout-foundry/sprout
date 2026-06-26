@@ -101,8 +101,8 @@ func (ws *ReactWebServer) listProvidersCtx(ctx context.Context, clientID string)
 	// the HTTP request when available) cancels all fetches if the client
 	// disconnects.
 	type providerResult struct {
-		index   int
-		desc    providerDescriptor
+		index int
+		desc  providerDescriptor
 	}
 
 	results := make([]providerDescriptor, len(providerTypes))
@@ -413,4 +413,3 @@ func (ws *ReactWebServer) handleGetModels(w http.ResponseWriter, r *http.Request
 		"total":  len(result),
 	})
 }
-

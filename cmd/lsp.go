@@ -7,9 +7,9 @@ import (
 	"os"
 	"strings"
 
+	"github.com/spf13/cobra"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/lsp/proxy"
-	"github.com/spf13/cobra"
 )
 
 var lspCmd = &cobra.Command{

@@ -3,11 +3,11 @@ package credentials
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
-	"github.com/sprout-foundry/sprout/pkg/envutil"
 )
 
 const (
@@ -20,8 +20,8 @@ const (
 // Package-level caching for GetStorageBackend() to avoid repeated auto-detection.
 // Uses sync.Once to ensure the backend is resolved exactly once per process lifetime.
 var (
-	backendOnce     sync.Once
-	cachedBackend   Backend
+	backendOnce      sync.Once
+	cachedBackend    Backend
 	cachedBackendErr error
 )
 
@@ -194,8 +194,8 @@ func SetStorageMode(mode string) error {
 // 1. If SPROUT_CREDENTIAL_BACKEND=keyring → OSKeyringBackend
 // 2. If SPROUT_CREDENTIAL_BACKEND=file → FileBackend
 // 3. Auto-detect: try OSKeyringBackend.Get("__sprout_probe__") to check availability
-//    - If available → use OSKeyringBackend (persist mode as "keyring")
-//    - If unavailable → fallback to FileBackend (persist mode as "file")
+//   - If available → use OSKeyringBackend (persist mode as "keyring")
+//   - If unavailable → fallback to FileBackend (persist mode as "file")
 //
 // The backend is resolved once per process lifetime using sync.Once caching.
 // Call ResetStorageBackend() to force re-detection (useful for tests).

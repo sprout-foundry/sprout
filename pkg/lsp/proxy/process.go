@@ -10,16 +10,16 @@ import (
 
 // LSPProcess represents a running language server process.
 type LSPProcess struct {
-	cmd    *exec.Cmd
+	cmd *exec.Cmd
 
 	stdinPipe  io.WriteCloser
 	stdoutPipe io.Reader
 
-	closeMu    sync.Mutex // protects closed and err
-	closed     bool
-	err        error // exit error
+	closeMu sync.Mutex // protects closed and err
+	closed  bool
+	err     error // exit error
 
-	subMu      sync.RWMutex // protects subscribers
+	subMu       sync.RWMutex // protects subscribers
 	subscribers map[chan string]struct{}
 }
 
@@ -52,9 +52,9 @@ func StartLSPProcess(ctx context.Context, workspacePath, binary string, args []s
 	}
 
 	proc := &LSPProcess{
-		cmd:       cmd,
-		stdinPipe: stdinPipe,
-		stdoutPipe: stdoutPipe,
+		cmd:         cmd,
+		stdinPipe:   stdinPipe,
+		stdoutPipe:  stdoutPipe,
 		subscribers: make(map[chan string]struct{}),
 	}
 

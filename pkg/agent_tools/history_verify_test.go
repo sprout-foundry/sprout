@@ -9,10 +9,10 @@ import (
 func TestFormatRevisionOutputExact(t *testing.T) {
 	changes := []history.ChangeLog{
 		{
-			RequestHash: "abc123",
-			Filename:    "test.go",
-			AgentModel:  "test-model",
-			Status:      "active",
+			RequestHash:  "abc123",
+			Filename:     "test.go",
+			AgentModel:   "test-model",
+			Status:       "active",
 			Instructions: "some instructions",
 		},
 	}
@@ -42,12 +42,12 @@ func TestFormatRevisionOutputExact(t *testing.T) {
 
 	t.Run("rollback list format", func(t *testing.T) {
 		opts := formatRevisionOpts{
-			ShowContent:  false,
-			ShowStatus:   false,
+			ShowContent:      false,
+			ShowStatus:       false,
 			ShowInstructions: false,
-			TimeFormat:   "2006-01-02 15:04:05",
-			TitlePrefix:  "**Revision ID:** ",
-			FilesLabel:   "**Files Changed:** ",
+			TimeFormat:       "2006-01-02 15:04:05",
+			TitlePrefix:      "**Revision ID:** ",
+			FilesLabel:       "**Files Changed:** ",
 		}
 		out := formatRevision(group, opts)
 		t.Logf("Output:\n%q", out)

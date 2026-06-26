@@ -361,7 +361,7 @@ func TestShouldForwardEventToConnectionChatIDFiltering(t *testing.T) {
 	connMatchingBoth := &ConnectionInfo{ClientID: "client-a", ChatID: "chat-1"}
 	connWrongChat := &ConnectionInfo{ClientID: "client-a", ChatID: "chat-2"}
 	connUnfiltered := &ConnectionInfo{ClientID: "client-a", ChatID: ""}
-	
+
 	if !ws.shouldForwardEventToConnection(eventBoth, connMatchingBoth) {
 		t.Fatal("expected event with client_id and chat_id to match connection with both")
 	}
@@ -379,7 +379,7 @@ func TestShouldForwardEventToConnectionChatIDFiltering(t *testing.T) {
 	}
 	connMatchingChat := &ConnectionInfo{ClientID: "client-b", ChatID: "chat-1"}
 	connWrongChatOnly := &ConnectionInfo{ClientID: "client-b", ChatID: "chat-2"}
-	
+
 	if !ws.shouldForwardEventToConnection(eventChatOnly, connMatchingChat) {
 		t.Fatal("expected event with chat_id to match connection with same chat_id")
 	}
@@ -393,7 +393,7 @@ func TestShouldForwardEventToConnectionChatIDFiltering(t *testing.T) {
 		Data: map[string]interface{}{"message": "test"},
 	}
 	connAny := &ConnectionInfo{ClientID: "client-a", ChatID: "chat-1"}
-	
+
 	if ws.shouldForwardEventToConnection(eventNeither, connAny) {
 		t.Fatal("expected event with no client_id or chat_id to be blocked")
 	}

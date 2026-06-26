@@ -32,13 +32,13 @@ func TestTraceSessionConcurrentTurnWrites(t *testing.T) {
 			for j := 0; j < writesPerGoroutine; j++ {
 				turnIndex := goroutineID*writesPerGoroutine + j
 				record := TurnRecord{
-					RunID:            session.GetRunID(),
-					TurnIndex:        turnIndex,
-					SystemPrompt:     "system prompt",
-					UserPrompt:       "user prompt",
+					RunID:              session.GetRunID(),
+					TurnIndex:          turnIndex,
+					SystemPrompt:       "system prompt",
+					UserPrompt:         "user prompt",
 					UserPromptOriginal: "original prompt",
-					RawResponse:      "response",
-					Timestamp:        "2024-01-01T00:00:00Z",
+					RawResponse:        "response",
+					Timestamp:          "2024-01-01T00:00:00Z",
 				}
 
 				if err := session.RecordTurn(record); err != nil {
@@ -113,15 +113,15 @@ func TestTraceSessionConcurrentToolCallWrites(t *testing.T) {
 			for j := 0; j < writesPerGoroutine; j++ {
 				toolIndex := goroutineID*writesPerGoroutine + j
 				record := ToolCallRecord{
-					RunID:      session.GetRunID(),
-					TurnIndex:  goroutineID,
-					ToolIndex:  toolIndex,
-					ToolName:   "test_tool",
-					Args:       map[string]interface{}{"arg1": "value1"},
-					Success:    true,
-					FullResult: "result",
+					RunID:       session.GetRunID(),
+					TurnIndex:   goroutineID,
+					ToolIndex:   toolIndex,
+					ToolName:    "test_tool",
+					Args:        map[string]interface{}{"arg1": "value1"},
+					Success:     true,
+					FullResult:  "result",
 					ModelResult: "model result",
-					Timestamp:  "2024-01-01T00:00:00Z",
+					Timestamp:   "2024-01-01T00:00:00Z",
 				}
 
 				if err := session.RecordToolCall(record); err != nil {
@@ -136,12 +136,12 @@ func TestTraceSessionConcurrentToolCallWrites(t *testing.T) {
 
 	// Verify the session is still functional
 	testRecord := ToolCallRecord{
-		RunID:      session.GetRunID(),
-		TurnIndex:  0,
-		ToolIndex:  99999,
-		ToolName:   "final_tool",
-		Success:    true,
-		Timestamp:  "2024-01-01T00:00:00Z",
+		RunID:     session.GetRunID(),
+		TurnIndex: 0,
+		ToolIndex: 99999,
+		ToolName:  "final_tool",
+		Success:   true,
+		Timestamp: "2024-01-01T00:00:00Z",
 	}
 	if err := session.RecordToolCall(testRecord); err != nil {
 		t.Errorf("Failed to record tool call after concurrent writes: %v", err)

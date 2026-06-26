@@ -399,8 +399,8 @@ func TestBPM_SessionID_Format(t *testing.T) {
 	defer bpm.Close()
 
 	tests := []struct {
-		command  string
-		prefix   string
+		command string
+		prefix  string
 	}{
 		{"echo hello", "bg-echo-"},
 		{"ls -la", "bg-ls-"},

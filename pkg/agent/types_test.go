@@ -17,17 +17,17 @@ func TestAgentStateJSONRoundTrip(t *testing.T) {
 		TurnCheckpoints: []TurnCheckpoint{
 			{StartIndex: 0, EndIndex: 1, Summary: "greeting"},
 		},
-		PreviousSummary:          "initial prompt",
-		CompactSummary:           "short summary",
-		TaskActions:              []TaskAction{{Type: "file_created", Description: "created test.go"}},
-		SessionID:                "session-123",
-		TotalTokens:              1500,
-		TotalCost:                0.05,
-		PromptTokens:             1000,
-		CompletionTokens:         500,
-		EstimatedTokenResponses:  200,
-		CachedTokens:             300,
-		CachedCostSavings:        0.01,
+		PreviousSummary:         "initial prompt",
+		CompactSummary:          "short summary",
+		TaskActions:             []TaskAction{{Type: "file_created", Description: "created test.go"}},
+		SessionID:               "session-123",
+		TotalTokens:             1500,
+		TotalCost:               0.05,
+		PromptTokens:            1000,
+		CompletionTokens:        500,
+		EstimatedTokenResponses: 200,
+		CachedTokens:            300,
+		CachedCostSavings:       0.01,
 	}
 
 	data, err := json.Marshal(original)

@@ -222,9 +222,9 @@ func TestClassifyToolCallCategories(t *testing.T) {
 // command scenarios beyond the main entry point.
 func TestClassifyShellCommandCategories(t *testing.T) {
 	tests := []struct {
-		name    string
-		command string
-		wantCat RiskCategory
+		name     string
+		command  string
+		wantCat  RiskCategory
 		wantRisk SecurityRisk
 	}{
 		// Read-only commands
@@ -355,9 +355,9 @@ func TestRiskCategoryFromRiskType(t *testing.T) {
 // are consistent with each other across various classification scenarios.
 func TestSecurityResultCategoryConsistency(t *testing.T) {
 	tests := []struct {
-		name           string
-		toolName       string
-		args           map[string]interface{}
+		name            string
+		toolName        string
+		args            map[string]interface{}
 		wantDestructive bool
 	}{
 		{"rm -rf / is destructive", "shell_command", map[string]interface{}{"command": "rm -rf /"}, true},

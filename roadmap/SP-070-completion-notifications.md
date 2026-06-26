@@ -1,6 +1,6 @@
 # SP-070: Agent Completion Notifications — Tell the User When It's Their Turn
 
-**Status:** 📋 Proposed
+**Status:** ✅ Implemented
 **Date:** 2026-06-14
 **Depends on:** SP-067 (event injection plumbing), SP-012 (notification center / `notificationBus`)
 **Priority:** High

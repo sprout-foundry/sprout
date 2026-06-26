@@ -1140,18 +1140,17 @@ func (r *SteerInputReader) renderLine() {
 	r.footer.SetSteerLineWithCursor(fmt.Sprintf("%s%s", prefix, text), len(prefix)+cursor)
 }
 
-// printExternalLocked prints a message above the scroll region without
-// disturbing the steer panel's pinned row. Caller MUST hold outputMu.
+// printExternalLocked prints a message in the scrollable area without
+// disturbing the steer panel's pinned rows. Caller MUST hold outputMu.
 //
-// Approach:
-//  1. Reset the scroll region to the full screen so the message can
-//     be written anywhere.
-//  2. Move the cursor to a row above the pinned steer area so the
-//     message lands in the conversation area, not on top of the panel.
-//  3. Write the message (it scrolls within the now-full region).
-//  4. Re-apply the footer's scroll region (clamps pinned rows back).
-//  5. Re-render the footer's pinned rows so the user sees their typed
-//     buffer in the right place.
+// The scroll region is ALREADY set to exclude the pinned rows (footer +
+// steer panel) by applyScrollRegionLocked when the steer reader
+// started. Writing at the last row of that region and letting \n scroll
+// keeps the pinned rows stationary — that's the whole point of scroll
+// regions. We must NOT reset the region to full screen (\033[r) here:
+// doing so makes the pinned rows part of the scrollable area, so the
+// message's trailing \n scrolls the steer panel and footer up off the
+// screen, destroying the terminal layout ("breaking the CLI").
 //
 // We bypass r.renderLine() here because it routes through
 // footer.SetSteerLineWithCursor → footer.draw(), which re-acquires
@@ -1167,23 +1166,29 @@ func (r *SteerInputReader) printExternalLocked(msg string) {
 	if !strings.HasSuffix(msg, "\n") {
 		msg += "\n"
 	}
-	// Reset scroll region to full screen.
-	fmt.Fprint(r.footer.w, "\033[r")
-	// Move cursor to the bottom of the scrollable area (just above
-	// the reserved rows) so the message lands in the conversation
-	// area, not on top of the steer panel.
+	// Position the cursor at the bottom of the existing scrollable
+	// area (just above the reserved rows). Do NOT reset the scroll
+	// region — the region already protects the pinned rows, and
+	// resetting it lets the message's \n scroll them away.
 	_, rows := r.footer.terminalSize()
 	reserved := r.footer.reservedRows()
 	if rows > reserved+1 {
 		fmt.Fprintf(r.footer.w, "\033[%d;1H", rows-reserved)
 	}
+	// Write the message. The trailing \n scrolls within the scroll
+	// region, pushing prior conversation content up while the pinned
+	// steer panel and footer stay fixed.
 	fmt.Fprint(r.footer.w, msg)
-	// Re-clamp the scroll region.
-	r.footer.applyScrollRegionLocked()
-	// Update the footer's steer state directly (the same mutation
-	// renderLine → SetSteerLineWithCursor would do), then redraw with
-	// the lock-free variant. We hold outputMu; footer.draw() would
-	// try to re-acquire it and deadlock.
+	// Position the cursor at the bottom of the scrollable area again
+	// (the \n above left it on the first pinned row).
+	if rows > reserved+1 {
+		fmt.Fprintf(r.footer.w, "\033[%d;1H", rows-reserved)
+	}
+	// Re-render the footer's pinned rows so the user sees their typed
+	// buffer in the right place. Set the footer's steer state directly
+	// (the same mutation renderLine → SetSteerLineWithCursor would do)
+	// and call drawLocked, the lock-free variant — we hold outputMu and
+	// footer.draw() would try to re-acquire it, deadlocking.
 	r.mu.Lock()
 	text := string(r.buffer)
 	cursor := r.cursorPos

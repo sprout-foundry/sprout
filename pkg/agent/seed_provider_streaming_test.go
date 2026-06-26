@@ -45,26 +45,26 @@ func (m *streamingTestClient) SendChatRequestStream(ctx context.Context, message
 	}, nil
 }
 
-func (m *streamingTestClient) CheckConnection() error                  { return nil }
-func (m *streamingTestClient) SetDebug(bool)                           {}
-func (m *streamingTestClient) SetModel(string) error                   { return nil }
-func (m *streamingTestClient) GetModel() string                        { return m.model }
-func (m *streamingTestClient) GetProvider() string                     { return "test-provider" }
-func (m *streamingTestClient) GetModelContextLimit() (int, error)      { return 128000, nil }
+func (m *streamingTestClient) CheckConnection() error             { return nil }
+func (m *streamingTestClient) SetDebug(bool)                      {}
+func (m *streamingTestClient) SetModel(string) error              { return nil }
+func (m *streamingTestClient) GetModel() string                   { return m.model }
+func (m *streamingTestClient) GetProvider() string                { return "test-provider" }
+func (m *streamingTestClient) GetModelContextLimit() (int, error) { return 128000, nil }
 func (m *streamingTestClient) ListModels(context.Context) ([]api.ModelInfo, error) {
 	return nil, nil
 }
-func (m *streamingTestClient) SupportsVision() bool                    { return m.supportsVison }
-func (m *streamingTestClient) GetVisionModel() string                  { return "" }
+func (m *streamingTestClient) SupportsVision() bool   { return m.supportsVison }
+func (m *streamingTestClient) GetVisionModel() string { return "" }
 func (m *streamingTestClient) SendVisionRequest(context.Context, []api.Message, []api.Tool, string, bool) (*api.ChatResponse, error) {
 	return nil, nil
 }
-func (m *streamingTestClient) GetLastTPS() float64                     { return 0 }
-func (m *streamingTestClient) GetAverageTPS() float64                  { return 0 }
-func (m *streamingTestClient) GetTPSStats() map[string]float64         { return nil }
-func (m *streamingTestClient) ResetTPSStats()                          {}
+func (m *streamingTestClient) GetLastTPS() float64                             { return 0 }
+func (m *streamingTestClient) GetAverageTPS() float64                          { return 0 }
+func (m *streamingTestClient) GetTPSStats() map[string]float64                 { return nil }
+func (m *streamingTestClient) ResetTPSStats()                                  {}
 func (m *streamingTestClient) RegisterPastedImages(map[string][]api.ImageData) {}
-func (m *streamingTestClient) ClearPastedImages()                      {}
+func (m *streamingTestClient) ClearPastedImages()                              {}
 
 // TestDoChatStream_PublishesStreamChunkEvents verifies that doChatStream
 // routes streaming chunks through OutputRouter.RouteStreamChunk so they

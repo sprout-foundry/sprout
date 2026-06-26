@@ -13,8 +13,8 @@ import (
 	"strings"
 	"testing"
 
-	gitops "github.com/sprout-foundry/sprout/pkg/git"
 	"github.com/sprout-foundry/sprout/pkg/events"
+	gitops "github.com/sprout-foundry/sprout/pkg/git"
 )
 
 // newTestGitRepo creates a git repo with an initial commit on main.

@@ -797,5 +797,3 @@ func TestOnboardingComplete_EmptyModel_PersistsDefaultOnAgentFailure(t *testing.
 		t.Logf("Onboarding returned unexpected status code %d", rec.Code)
 	}
 }
-
-

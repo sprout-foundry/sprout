@@ -83,41 +83,41 @@ func TestNewDefaultToolRegistry_ToolParameters(t *testing.T) {
 
 	// Each tool's expected parameter count and required parameter count.
 	type toolParamExpectation struct {
-		paramCount     int
-		requiredCount  int
-		requiredNames  []string
+		paramCount    int
+		requiredCount int
+		requiredNames []string
 	}
 
 	expectations := map[string]toolParamExpectation{
 		"shell_command":           {paramCount: 5, requiredCount: 0, requiredNames: []string{}},
-		"git":                    {paramCount: 2, requiredCount: 1, requiredNames: []string{"operation"}},
-		"commit":                 {paramCount: 2, requiredCount: 0, requiredNames: []string{}},
-		"create_pull_request":    {paramCount: 6, requiredCount: 1, requiredNames: []string{"title"}},
-		"read_file":              {paramCount: 2, requiredCount: 1, requiredNames: []string{"path"}},
-		"write_file":             {paramCount: 2, requiredCount: 2, requiredNames: []string{"path", "content"}},
-		"edit_file":              {paramCount: 3, requiredCount: 3, requiredNames: []string{"path", "old_str", "new_str"}},
-		"write_structured_file":  {paramCount: 4, requiredCount: 2, requiredNames: []string{"path", "data"}},
-		"patch_structured_file":  {paramCount: 5, requiredCount: 1, requiredNames: []string{"path"}},
-		"TodoWrite":              {paramCount: 1, requiredCount: 1, requiredNames: []string{"todos"}},
-		"TodoRead":               {paramCount: 0, requiredCount: 0, requiredNames: []string{}},
-		"ask_user":               {paramCount: 5, requiredCount: 1, requiredNames: []string{"question"}},
-		"run_subagent":           {paramCount: 5, requiredCount: 2, requiredNames: []string{"prompt", "persona"}},
-		"run_parallel_subagents": {paramCount: 1, requiredCount: 1, requiredNames: []string{"subagents"}},
-		"search_files":           {paramCount: 6, requiredCount: 1, requiredNames: []string{"search_pattern"}},
-		"repo_map":               {paramCount: 1, requiredCount: 0, requiredNames: []string{}},
-		"web_search":             {paramCount: 1, requiredCount: 1, requiredNames: []string{"query"}},
-		"fetch_url":              {paramCount: 1, requiredCount: 1, requiredNames: []string{"url"}},
-		"browse_url":             {paramCount: 20, requiredCount: 1, requiredNames: []string{"url"}},
-		"analyze_ui_screenshot":  {paramCount: 4, requiredCount: 1, requiredNames: []string{"image_path"}},
-		"analyze_image_content":  {paramCount: 3, requiredCount: 1, requiredNames: []string{"image_path"}},
-		"view_history":           {paramCount: 4, requiredCount: 0, requiredNames: []string{}},
-		"rollback_changes":       {paramCount: 3, requiredCount: 0, requiredNames: []string{}},
-		"self_review":            {paramCount: 1, requiredCount: 0, requiredNames: []string{}},
-		"list_skills":            {paramCount: 0, requiredCount: 0, requiredNames: []string{}},
-		"activate_skill":         {paramCount: 1, requiredCount: 1, requiredNames: []string{"skill_id"}},
-		"manage_memory":          {paramCount: 6, requiredCount: 1, requiredNames: []string{"operation"}},
-		"manage_settings":        {paramCount: 4, requiredCount: 1, requiredNames: []string{"operation"}},
-		"task_queue":             {paramCount: 11, requiredCount: 1, requiredNames: []string{"operation"}},
+		"git":                     {paramCount: 2, requiredCount: 1, requiredNames: []string{"operation"}},
+		"commit":                  {paramCount: 2, requiredCount: 0, requiredNames: []string{}},
+		"create_pull_request":     {paramCount: 6, requiredCount: 1, requiredNames: []string{"title"}},
+		"read_file":               {paramCount: 2, requiredCount: 1, requiredNames: []string{"path"}},
+		"write_file":              {paramCount: 2, requiredCount: 2, requiredNames: []string{"path", "content"}},
+		"edit_file":               {paramCount: 3, requiredCount: 3, requiredNames: []string{"path", "old_str", "new_str"}},
+		"write_structured_file":   {paramCount: 4, requiredCount: 2, requiredNames: []string{"path", "data"}},
+		"patch_structured_file":   {paramCount: 5, requiredCount: 1, requiredNames: []string{"path"}},
+		"TodoWrite":               {paramCount: 1, requiredCount: 1, requiredNames: []string{"todos"}},
+		"TodoRead":                {paramCount: 0, requiredCount: 0, requiredNames: []string{}},
+		"ask_user":                {paramCount: 5, requiredCount: 1, requiredNames: []string{"question"}},
+		"run_subagent":            {paramCount: 5, requiredCount: 2, requiredNames: []string{"prompt", "persona"}},
+		"run_parallel_subagents":  {paramCount: 1, requiredCount: 1, requiredNames: []string{"subagents"}},
+		"search_files":            {paramCount: 6, requiredCount: 1, requiredNames: []string{"search_pattern"}},
+		"repo_map":                {paramCount: 1, requiredCount: 0, requiredNames: []string{}},
+		"web_search":              {paramCount: 1, requiredCount: 1, requiredNames: []string{"query"}},
+		"fetch_url":               {paramCount: 1, requiredCount: 1, requiredNames: []string{"url"}},
+		"browse_url":              {paramCount: 20, requiredCount: 1, requiredNames: []string{"url"}},
+		"analyze_ui_screenshot":   {paramCount: 4, requiredCount: 1, requiredNames: []string{"image_path"}},
+		"analyze_image_content":   {paramCount: 3, requiredCount: 1, requiredNames: []string{"image_path"}},
+		"view_history":            {paramCount: 4, requiredCount: 0, requiredNames: []string{}},
+		"rollback_changes":        {paramCount: 3, requiredCount: 0, requiredNames: []string{}},
+		"self_review":             {paramCount: 1, requiredCount: 0, requiredNames: []string{}},
+		"list_skills":             {paramCount: 0, requiredCount: 0, requiredNames: []string{}},
+		"activate_skill":          {paramCount: 1, requiredCount: 1, requiredNames: []string{"skill_id"}},
+		"manage_memory":           {paramCount: 6, requiredCount: 1, requiredNames: []string{"operation"}},
+		"manage_settings":         {paramCount: 4, requiredCount: 1, requiredNames: []string{"operation"}},
+		"task_queue":              {paramCount: 11, requiredCount: 1, requiredNames: []string{"operation"}},
 		"run_automate":            {paramCount: 1, requiredCount: 1, requiredNames: []string{"workflow"}},
 		"list_automate_workflows": {paramCount: 0, requiredCount: 0, requiredNames: []string{}},
 	}
@@ -236,8 +236,8 @@ func TestNewDefaultToolRegistry_ParameterTypes(t *testing.T) {
 	registry := newDefaultToolRegistry()
 
 	type typeCheck struct {
-		tool        string
-		paramName   string
+		tool         string
+		paramName    string
 		expectedType string
 	}
 

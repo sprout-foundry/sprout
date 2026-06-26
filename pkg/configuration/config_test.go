@@ -183,9 +183,9 @@ func TestGetDefaultConfigDirUsesHomeEnvWhenXDGUnset(t *testing.T) {
 
 func TestGetSubagentMaxParallel(t *testing.T) {
 	tests := []struct {
-		name       string
-		config    *Config
-		expected  int
+		name     string
+		config   *Config
+		expected int
 	}{
 		{
 			name: "returns configured value when greater than 0",
@@ -223,7 +223,7 @@ func TestGetSubagentParallelEnabled(t *testing.T) {
 	falseVal := false
 
 	tests := []struct {
-		name      string
+		name     string
 		config   *Config
 		expected bool
 	}{
@@ -235,12 +235,12 @@ func TestGetSubagentParallelEnabled(t *testing.T) {
 			expected: true,
 		},
 		{
-			name:      "returns false when field is explicitly set to false",
+			name:     "returns false when field is explicitly set to false",
 			config:   &Config{SubagentParallelEnabled: &falseVal},
 			expected: false,
 		},
 		{
-			name:      "returns true when field not set (default config)",
+			name:     "returns true when field not set (default config)",
 			config:   &Config{},
 			expected: true,
 		},
@@ -270,14 +270,14 @@ func TestPersistentContextConfigResolve_NilReturnsDefaults(t *testing.T) {
 
 func TestPersistentContextConfigResolve_ExplicitValuesPreserved(t *testing.T) {
 	cfg := &PersistentContextConfig{
-		ProactiveContextEnabled:   false,
-		MaxContextualResults:      10,
-		MinRelevanceScore:         0.75,
-		MaxContextChars:           8000,
-		WorkspaceScopedRetrieval:  true,
-		DriftDetectionEnabled:     false,
-		DriftThreshold:            0.80,
-		DriftCheckInterval:        10,
+		ProactiveContextEnabled:  false,
+		MaxContextualResults:     10,
+		MinRelevanceScore:        0.75,
+		MaxContextChars:          8000,
+		WorkspaceScopedRetrieval: true,
+		DriftDetectionEnabled:    false,
+		DriftThreshold:           0.80,
+		DriftCheckInterval:       10,
 	}
 	result := cfg.Resolve()
 
@@ -294,9 +294,9 @@ func TestPersistentContextConfigResolve_ExplicitValuesPreserved(t *testing.T) {
 func TestPersistentContextConfigResolve_PartialOverrides(t *testing.T) {
 	cfg := &PersistentContextConfig{
 		ProactiveContextEnabled:  false,
-		MaxContextualResults:     0,    // zero — should get default
-		MinRelevanceScore:        0.8,  // explicit
-		MaxContextChars:          0,    // zero — should get default
+		MaxContextualResults:     0,   // zero — should get default
+		MinRelevanceScore:        0.8, // explicit
+		MaxContextChars:          0,   // zero — should get default
 		WorkspaceScopedRetrieval: true,
 		DriftThreshold:           0.70, // explicit
 		DriftCheckInterval:       0,    // zero — should get default
@@ -304,13 +304,13 @@ func TestPersistentContextConfigResolve_PartialOverrides(t *testing.T) {
 	result := cfg.Resolve()
 
 	assert.False(t, result.ProactiveContextEnabled)
-	assert.Equal(t, 5, result.MaxContextualResults)      // default
-	assert.Equal(t, 0.8, result.MinRelevanceScore)       // explicit
-	assert.Equal(t, 4000, result.MaxContextChars)        // default
+	assert.Equal(t, 5, result.MaxContextualResults) // default
+	assert.Equal(t, 0.8, result.MinRelevanceScore)  // explicit
+	assert.Equal(t, 4000, result.MaxContextChars)   // default
 	assert.True(t, result.WorkspaceScopedRetrieval)
-	assert.False(t, result.DriftDetectionEnabled)        // false (zero value) treated as explicit
-	assert.Equal(t, 0.70, result.DriftThreshold)         // explicit
-	assert.Equal(t, 5, result.DriftCheckInterval)        // default
+	assert.False(t, result.DriftDetectionEnabled) // false (zero value) treated as explicit
+	assert.Equal(t, 0.70, result.DriftThreshold)  // explicit
+	assert.Equal(t, 5, result.DriftCheckInterval) // default
 }
 
 func TestPersistentContextConfigResolve_DoesNotMutateOriginal(t *testing.T) {
@@ -413,4 +413,3 @@ func TestPersonaCatalog_Immutable(t *testing.T) {
 	assert.Greater(t, len(freshGeneral.AllowedTools), 1,
 		"catalog should hydrate full tool list, not be affected by prior mutation")
 }
-

@@ -19,8 +19,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/fsnotify/fsnotify"
+	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 const (
@@ -42,7 +42,7 @@ type fileWatcher struct {
 	eventBus  *events.EventBus
 	fsWatcher *fsnotify.Watcher
 	watches   map[string]watchEntry // canonical (absolute) path → entry
-	debounces map[string]time.Time   // path → last event emit time
+	debounces map[string]time.Time  // path → last event emit time
 	mu        sync.Mutex
 	cancel    context.CancelFunc
 }

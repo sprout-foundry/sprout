@@ -120,10 +120,10 @@ func (ws *ReactWebServer) handleAPIEditDecision(w http.ResponseWriter, r *http.R
 		editID, len(req.AcceptedHunks), req.Rejected)
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"edit_id":       editID,
-		"decided":       true,
-		"accepted":      len(req.AcceptedHunks),
-		"rejected":      req.Rejected,
+		"edit_id":  editID,
+		"decided":  true,
+		"accepted": len(req.AcceptedHunks),
+		"rejected": req.Rejected,
 	})
 }
 

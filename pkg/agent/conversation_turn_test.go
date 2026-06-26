@@ -366,14 +366,14 @@ func TestConversationTurn_ToVectorRecord(t *testing.T) {
 func TestConversationTurn_ToVectorRecord_EmptyEmbedding(t *testing.T) {
 	// Test ToVectorRecord when PromptEmbedding is nil.
 	turn := &ConversationTurn{
-		ID:          "test-id-123",
-		SessionID:   "session-abc",
-		TurnNumber:  1,
-		Timestamp:   time.Now().UTC(),
-		UserPrompt:  "simple prompt",
-		WorkingDir:  "/workspace",
-		Duration:    2.0,
-		TokenUsage:  100,
+		ID:         "test-id-123",
+		SessionID:  "session-abc",
+		TurnNumber: 1,
+		Timestamp:  time.Now().UTC(),
+		UserPrompt: "simple prompt",
+		WorkingDir: "/workspace",
+		Duration:   2.0,
+		TokenUsage: 100,
 		// PromptEmbedding intentionally left nil
 	}
 
@@ -441,14 +441,14 @@ func TestConversationTurn_ToVectorRecord_NonASCIITruncation(t *testing.T) {
 	}
 
 	turn := &ConversationTurn{
-		ID:          "test-id-unicode",
-		SessionID:   "session-unicode",
-		TurnNumber:  1,
-		Timestamp:   time.Now().UTC(),
-		UserPrompt:  longPrompt,
-		WorkingDir:  "/workspace",
-		Duration:    1.0,
-		TokenUsage:  50,
+		ID:         "test-id-unicode",
+		SessionID:  "session-unicode",
+		TurnNumber: 1,
+		Timestamp:  time.Now().UTC(),
+		UserPrompt: longPrompt,
+		WorkingDir: "/workspace",
+		Duration:   1.0,
+		TokenUsage: 50,
 	}
 
 	record := turn.ToVectorRecord()
@@ -474,14 +474,14 @@ func TestConversationTurn_ToVectorRecord_NonASCIITruncation(t *testing.T) {
 func TestConversationTurn_ToVectorRecord_MinimalFields(t *testing.T) {
 	// Test ToVectorRecord with minimal required fields only.
 	turn := &ConversationTurn{
-		ID:          "test-id-789",
-		SessionID:   "session-minimal",
-		TurnNumber:  1,
-		Timestamp:   time.Now().UTC(),
-		UserPrompt:  "minimal prompt",
-		WorkingDir:  "/workspace",
-		Duration:    1.5,
-		TokenUsage:  50,
+		ID:         "test-id-789",
+		SessionID:  "session-minimal",
+		TurnNumber: 1,
+		Timestamp:  time.Now().UTC(),
+		UserPrompt: "minimal prompt",
+		WorkingDir: "/workspace",
+		Duration:   1.5,
+		TokenUsage: 50,
 		// ActionableSummary, FilesTouched, PromptEmbedding left at zero/nil
 	}
 

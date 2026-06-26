@@ -15,7 +15,7 @@ func (h *taskQueueReadHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "task_queue_read",
 		Description: "Read pending tasks from the persistent task queue. Returns tasks sorted by priority (high > medium > low). The queue persists across sessions and is stored at ~/.config/sprout/task_queue.json.",
-		Required: []string{},
+		Required:    []string{},
 		Parameters: []ParameterDef{
 			{Name: "status", Type: "string", Description: "Filter tasks by status: pending, in_progress, completed, failed, blocked, or all (default: pending)"},
 			{Name: "limit", Type: "integer", Description: "Maximum number of tasks to return (default: 10)"},

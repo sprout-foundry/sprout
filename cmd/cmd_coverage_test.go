@@ -449,10 +449,18 @@ func TestCategorizeChanges_MixedCategories(t *testing.T) {
 	}
 	// Should contain multiple categories
 	found := 0
-	if strings.Contains(result, "Error handling") { found++ }
-	if strings.Contains(result, "Test") { found++ }
-	if strings.Contains(result, "Debug") { found++ }
-	if strings.Contains(result, "removal") { found++ }
+	if strings.Contains(result, "Error handling") {
+		found++
+	}
+	if strings.Contains(result, "Test") {
+		found++
+	}
+	if strings.Contains(result, "Debug") {
+		found++
+	}
+	if strings.Contains(result, "removal") {
+		found++
+	}
 	if found < 2 {
 		t.Errorf("expected at least 2 categories, got %d from: %s", found, result)
 	}

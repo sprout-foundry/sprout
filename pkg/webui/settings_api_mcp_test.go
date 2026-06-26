@@ -181,7 +181,7 @@ func TestGetServerCredentials_StatusSetAndMissing(t *testing.T) {
 		Command: "node",
 		Args:    []string{"server.js"},
 		Credentials: map[string]string{
-			"API_KEY":    mcp.SecretRef("myserver", "API_KEY"),
+			"API_KEY":     mcp.SecretRef("myserver", "API_KEY"),
 			"DB_PASSWORD": mcp.SecretRef("myserver", "DB_PASSWORD"),
 		},
 	})
@@ -235,7 +235,7 @@ func TestPutServerCredentials_Success(t *testing.T) {
 
 	body := map[string]interface{}{
 		"credentials": map[string]string{
-			"API_KEY":    "my-secret-key",
+			"API_KEY":     "my-secret-key",
 			"DB_PASSWORD": "my-db-pass",
 		},
 	}

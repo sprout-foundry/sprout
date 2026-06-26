@@ -76,7 +76,7 @@ func TestIsGitWriteCommand(t *testing.T) {
 		{"git switch main", false},
 		{"git restore file.txt", false},
 		{"git restore --staged file.txt", false},
-		{"git reset HEAD~1", false},                  // mixed reset
+		{"git reset HEAD~1", false}, // mixed reset
 		{"git reset --soft HEAD~1", false},
 		{"git -C /path/to/repo reset --soft HEAD~1", false},
 		{"git clean -fd", false},
@@ -178,9 +178,9 @@ func TestIsGitHistoryRewriteCommand(t *testing.T) {
 		{"git branch -d old-feature", true},
 		{"git branch -D feature", true},
 		{"git branch --delete feature", true},
-		{"git branch feature", false},   // create
-		{"git branch -a", false},        // list
-		{"git branch --list", false},    // list
+		{"git branch feature", false}, // create
+		{"git branch -a", false},      // list
+		{"git branch --list", false},  // list
 
 		// tag delete.
 		{"git tag -d v1.0", true},
@@ -219,7 +219,7 @@ func TestIsGitHistoryRewriteCommand(t *testing.T) {
 
 func TestIsGitCommitSubcommand(t *testing.T) {
 	tests := []struct {
-		command   string
+		command  string
 		isCommit bool
 	}{
 		{"git commit -m 'x'", true},
@@ -248,7 +248,6 @@ func TestIsGitCommitSubcommand(t *testing.T) {
 		}
 	}
 }
-
 
 func TestExtractGitCommitArgs(t *testing.T) {
 	tests := []struct {
@@ -301,11 +300,11 @@ func TestShellSplit(t *testing.T) {
 		{`"hello world"`, []string{"hello world"}},
 		{`"nested 'quotes' inside"`, []string{"nested 'quotes' inside"}},
 		{`mix"ed"quotes`, []string{"mixedquotes"}},
-		{`""`, []string{""}},           // empty quotes → empty token
-		{`''`, []string{""}},           // empty single quotes → empty token
-		{"hello", []string{"hello"}},    // single word
-		{"a\nb", []string{"a", "b"}},    // newline as delimiter
-		{"a\tb", []string{"a", "b"}},    // tab as delimiter
+		{`""`, []string{""}},         // empty quotes → empty token
+		{`''`, []string{""}},         // empty single quotes → empty token
+		{"hello", []string{"hello"}}, // single word
+		{"a\nb", []string{"a", "b"}}, // newline as delimiter
+		{"a\tb", []string{"a", "b"}}, // tab as delimiter
 	}
 
 	for _, tc := range tests {
@@ -320,7 +319,6 @@ func TestShellSplit(t *testing.T) {
 		}
 	}
 }
-
 
 func TestExtractGitSubcommand(t *testing.T) {
 	t.Parallel()

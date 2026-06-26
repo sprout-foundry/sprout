@@ -91,6 +91,7 @@ func (a *Agent) IsEmbeddingIndexEnabled() bool {
 // recall / duplicate detection is explicitly wanted. Enable it via any of:
 //   - workspace config `embedding_index.enabled: true` (set by /index or the UI toggle), or
 //   - env `SPROUT_ENABLE_EMBEDDING_AUTOINDEX=1` for default-on globally.
+//
 // `SPROUT_DISABLE_EMBEDDING_AUTOINDEX=1` always wins and hard-disables (used by
 // the test suites — see cmd/main_test.go and pkg/agent's TestMain).
 //

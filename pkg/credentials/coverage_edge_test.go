@@ -183,12 +183,12 @@ func TestResolve_SpecialCharProviderNames(t *testing.T) {
 	t.Setenv("SPROUT_CONFIG", dir)
 
 	store := Store{
-		"provider/with/slashes":  "key-slashes",
-		"provider.with.dots":     "key-dots",
-		"provider-with-dashes":   "key-dashes",
+		"provider/with/slashes":     "key-slashes",
+		"provider.with.dots":        "key-dots",
+		"provider-with-dashes":      "key-dashes",
 		"provider_with_underscores": "key-underscores",
-		"UPPERCASE-PROVIDER":     "key-upper",
-		"provider with spaces":   "key-spaces",
+		"UPPERCASE-PROVIDER":        "key-upper",
+		"provider with spaces":      "key-spaces",
 	}
 	if err := Save(store); err != nil {
 		t.Fatalf("save: %v", err)

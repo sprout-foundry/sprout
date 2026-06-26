@@ -87,7 +87,7 @@ func TestAgent_EnableChangeTracking_CreatesTracker(t *testing.T) {
 func TestAgent_EnableChangeTracking_PreservesExistingTracker(t *testing.T) {
 	ws := t.TempDir()
 	a := &Agent{
-		state:        NewAgentStateManager(false),
+		state:         NewAgentStateManager(false),
 		workspaceRoot: ws,
 	}
 	a.EnableChangeTracking("first instructions")

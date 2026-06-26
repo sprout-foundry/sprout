@@ -133,4 +133,3 @@ func TestClientType_Constants(t *testing.T) {
 	assert.Equal(t, ClientType("test"), TestClientType)
 	assert.Equal(t, ClientType("editor"), EditorClientType)
 }
-

@@ -8,12 +8,12 @@ import (
 	"time"
 
 	core "github.com/sprout-foundry/seed/core"
-	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/agent_api"
-	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/console"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
+	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/security"
 	"github.com/sprout-foundry/sprout/pkg/utils"
 )
@@ -563,6 +563,7 @@ func handleToolError(agent *Agent, err error, toolName string) (string, error) {
 		return fmt.Sprintf("Error: %s", safeMsg), err
 	}
 }
+
 // isLocalProvider returns true if the provider runs locally and never sends
 // data outside the user's network. Secret redaction is skipped for these
 // providers since there's no off-network leakage risk.
@@ -573,7 +574,7 @@ func isLocalProvider(agent *Agent) bool {
 	ct := agent.GetProviderType()
 	switch ct {
 	case api.OllamaLocalClientType,
-		api.OllamaClientType,      // "ollama" alias for ollama-local
+		api.OllamaClientType, // "ollama" alias for ollama-local
 		api.OllamaCloudClientType,
 		api.LMStudioClientType,
 		api.TestClientType,

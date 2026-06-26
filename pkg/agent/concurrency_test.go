@@ -372,22 +372,24 @@ func (c *testRaceMockClient) SendChatRequestStream(ctx context.Context, messages
 	return &api.ChatResponse{}, nil
 }
 
-func (c *testRaceMockClient) CheckConnection() error                                      { return nil }
-func (c *testRaceMockClient) SetDebug(debug bool)                                         {}
-func (c *testRaceMockClient) SetModel(model string) error                                 { return nil }
-func (c *testRaceMockClient) GetModel() string                                            { return "test" }
-func (c *testRaceMockClient) GetProvider() string                                         { return "test" }
-func (c *testRaceMockClient) GetModelContextLimit() (int, error)                          { return 128000, nil }
-func (c *testRaceMockClient) ListModels(ctx context.Context) ([]api.ModelInfo, error)     { return nil, nil }
-func (c *testRaceMockClient) SupportsVision() bool                                        { return true }
-func (c *testRaceMockClient) GetVisionModel() string                                      { return "" }
+func (c *testRaceMockClient) CheckConnection() error             { return nil }
+func (c *testRaceMockClient) SetDebug(debug bool)                {}
+func (c *testRaceMockClient) SetModel(model string) error        { return nil }
+func (c *testRaceMockClient) GetModel() string                   { return "test" }
+func (c *testRaceMockClient) GetProvider() string                { return "test" }
+func (c *testRaceMockClient) GetModelContextLimit() (int, error) { return 128000, nil }
+func (c *testRaceMockClient) ListModels(ctx context.Context) ([]api.ModelInfo, error) {
+	return nil, nil
+}
+func (c *testRaceMockClient) SupportsVision() bool   { return true }
+func (c *testRaceMockClient) GetVisionModel() string { return "" }
 func (c *testRaceMockClient) SendVisionRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	return &api.ChatResponse{}, nil
 }
-func (c *testRaceMockClient) GetLastTPS() float64                                         { return 0 }
-func (c *testRaceMockClient) GetAverageTPS() float64                                      { return 0 }
-func (c *testRaceMockClient) GetTPSStats() map[string]float64                             { return nil }
-func (c *testRaceMockClient) ResetTPSStats()                                              {}
+func (c *testRaceMockClient) GetLastTPS() float64             { return 0 }
+func (c *testRaceMockClient) GetAverageTPS() float64          { return 0 }
+func (c *testRaceMockClient) GetTPSStats() map[string]float64 { return nil }
+func (c *testRaceMockClient) ResetTPSStats()                  {}
 
 // testRaceError is a minimal error type used in the initErr race test.
 type testRaceError struct {

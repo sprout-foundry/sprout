@@ -16,8 +16,8 @@ import (
 	"strings"
 	"time"
 
-	agentprovs "github.com/sprout-foundry/sprout/pkg/agent_providers"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	agentprovs "github.com/sprout-foundry/sprout/pkg/agent_providers"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/providercatalog"
 )

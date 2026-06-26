@@ -201,11 +201,11 @@ func TestCommitAndReviewConfigsIndependent(t *testing.T) {
 // TestReviewConfigWithMultipleProviders tests review config with different providers
 func TestReviewConfigWithMultipleProviders(t *testing.T) {
 	tests := []struct {
-		name          string
-		provider      string
-		model         string
-		lastUsed      string
-		expected      string
+		name     string
+		provider string
+		model    string
+		lastUsed string
+		expected string
 	}{
 		{
 			name:     "openai",

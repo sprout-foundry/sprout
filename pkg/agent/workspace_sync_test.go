@@ -670,8 +670,8 @@ func TestApplySyncOp_EmptyPathFails(t *testing.T) {
 func TestApplySyncOp_NilAgent(t *testing.T) {
 	var a *Agent
 	op := SyncOp{
-		OpType: "write",
-		Path:   "x.txt",
+		OpType:  "write",
+		Path:    "x.txt",
 		Content: "data",
 	}
 	result := a.ApplySyncOp(op, "/tmp")
@@ -695,7 +695,7 @@ func TestApplySyncOp_ConflictWritesTheirs(t *testing.T) {
 
 	// Container has unsynced writes.
 	a.SetFileMetadata("conflict.txt", WorkspaceFileMetadata{
-		ContainerSeq:      5,
+		ContainerSeq:        5,
 		LastSyncedContainer: 3,
 	})
 
@@ -807,7 +807,7 @@ func TestApplySyncOpBatch_StopsOnConflict(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.SetFileMetadata("conflict.txt", WorkspaceFileMetadata{
-		ContainerSeq:      5,
+		ContainerSeq:        5,
 		LastSyncedContainer: 3,
 	})
 
@@ -904,9 +904,9 @@ func TestApplySyncOp_RenameMovesMetadata(t *testing.T) {
 	// (ContainerSeq was bumped to 1 by the write; without this the
 	//  ContainerSeq > LastSyncedContainer conflict check would fire.)
 	a.SetFileMetadata("old.txt", WorkspaceFileMetadata{
-		BrowserSeq:        1,
-		LastSyncedBrowser: 1,
-		ContainerSeq:      1,
+		BrowserSeq:          1,
+		LastSyncedBrowser:   1,
+		ContainerSeq:        1,
 		LastSyncedContainer: 1,
 	})
 
@@ -965,12 +965,12 @@ func TestGetSyncStatus_Empty(t *testing.T) {
 func TestGetSyncStatus_WithMetadata(t *testing.T) {
 	a := &Agent{}
 	a.SetFileMetadata("x.txt", WorkspaceFileMetadata{
-		BrowserSeq:     5,
-		ContainerSeq:   3,
+		BrowserSeq:   5,
+		ContainerSeq: 3,
 	})
 	a.SetFileMetadata("y.txt", WorkspaceFileMetadata{
-		BrowserSeq:     2,
-		ContainerSeq:   1,
+		BrowserSeq:   2,
+		ContainerSeq: 1,
 	})
 
 	status := a.GetSyncStatus()
@@ -1003,15 +1003,15 @@ func TestReconcileSeqNumbers_SyncOK(t *testing.T) {
 	ag := newTestAgent(t)
 
 	ag.SetFileMetadata("a.txt", WorkspaceFileMetadata{
-		BrowserSeq:        5,
-		ContainerSeq:      5,
-		LastSyncedBrowser: 5,
+		BrowserSeq:          5,
+		ContainerSeq:        5,
+		LastSyncedBrowser:   5,
 		LastSyncedContainer: 5,
 	})
 	ag.SetFileMetadata("b.txt", WorkspaceFileMetadata{
-		BrowserSeq:        3,
-		ContainerSeq:      3,
-		LastSyncedBrowser: 3,
+		BrowserSeq:          3,
+		ContainerSeq:        3,
+		LastSyncedBrowser:   3,
 		LastSyncedContainer: 3,
 	})
 
@@ -1038,9 +1038,9 @@ func TestReconcileSeqNumbers_ContainerAhead(t *testing.T) {
 	ag := newTestAgent(t)
 
 	ag.SetFileMetadata("foo.txt", WorkspaceFileMetadata{
-		BrowserSeq:        2,
-		ContainerSeq:      5,
-		LastSyncedBrowser: 2,
+		BrowserSeq:          2,
+		ContainerSeq:        5,
+		LastSyncedBrowser:   2,
 		LastSyncedContainer: 2, // container has written past what browser saw
 	})
 
@@ -1071,9 +1071,9 @@ func TestReconcileSeqNumbers_BrowserAhead(t *testing.T) {
 	ag := newTestAgent(t)
 
 	ag.SetFileMetadata("bar.txt", WorkspaceFileMetadata{
-		BrowserSeq:        5,
-		ContainerSeq:      3,
-		LastSyncedBrowser: 3, // browser has edits container hasn't synced
+		BrowserSeq:          5,
+		ContainerSeq:        3,
+		LastSyncedBrowser:   3, // browser has edits container hasn't synced
 		LastSyncedContainer: 3,
 	})
 
@@ -1107,9 +1107,9 @@ func TestReconcileSeqNumbers_Diverged(t *testing.T) {
 	// - Browser has edits past last_synced_browser (5 > 3)
 	// - Container has writes past last_synced_container (7 > 3)
 	ag.SetFileMetadata("conflict.txt", WorkspaceFileMetadata{
-		BrowserSeq:        5,
-		ContainerSeq:      7,
-		LastSyncedBrowser: 3,
+		BrowserSeq:          5,
+		ContainerSeq:        7,
+		LastSyncedBrowser:   3,
 		LastSyncedContainer: 3,
 	})
 
@@ -1146,7 +1146,7 @@ func TestReconcileSeqNumbers_NilMetadata(t *testing.T) {
 	// Do NOT set any file metadata — metadata store stays nil/empty
 
 	browserSeqs := map[string]int64{
-		"new.txt": 5,
+		"new.txt":  5,
 		"zero.txt": 0,
 	}
 
@@ -1173,8 +1173,8 @@ func TestReconcileSeqNumbers_NilMetadata(t *testing.T) {
 func TestReconcileSeqNumbers_EmptySeqs(t *testing.T) {
 	ag := newTestAgent(t)
 	ag.SetFileMetadata("a.txt", WorkspaceFileMetadata{
-		BrowserSeq:    5,
-		ContainerSeq:  5,
+		BrowserSeq:   5,
+		ContainerSeq: 5,
 	})
 
 	results, err := ReconcileSeqNumbers(ag, map[string]int64{})
@@ -1190,15 +1190,15 @@ func TestReconcileSeqNumbers_FileNotInMetadata(t *testing.T) {
 	ag := newTestAgent(t)
 	// Set metadata for one file but NOT the other
 	ag.SetFileMetadata("known.txt", WorkspaceFileMetadata{
-		BrowserSeq:    2,
-		ContainerSeq:  2,
-		LastSyncedBrowser: 2,
+		BrowserSeq:          2,
+		ContainerSeq:        2,
+		LastSyncedBrowser:   2,
 		LastSyncedContainer: 2,
 	})
 
 	browserSeqs := map[string]int64{
-		"known.txt": 2,
-		"unknown.txt": 3, // no metadata — browser is ahead
+		"known.txt":        2,
+		"unknown.txt":      3, // no metadata — browser is ahead
 		"zero_unknown.txt": 0, // seq 0 — should be excluded
 	}
 
@@ -1268,7 +1268,7 @@ func TestDetermineReconcileAction_EdgeCases(t *testing.T) {
 		want       ReconciliationActionType
 	}{
 		{
-			name: "exact_match_sync_ok",
+			name:       "exact_match_sync_ok",
 			browserSeq: 10,
 			md: WorkspaceFileMetadata{
 				ContainerSeq: 10,
@@ -1276,7 +1276,7 @@ func TestDetermineReconcileAction_EdgeCases(t *testing.T) {
 			want: ReconcileSyncOK,
 		},
 		{
-			name: "both_zero_sync_ok",
+			name:       "both_zero_sync_ok",
 			browserSeq: 0,
 			md: WorkspaceFileMetadata{
 				ContainerSeq: 0,
@@ -1284,57 +1284,57 @@ func TestDetermineReconcileAction_EdgeCases(t *testing.T) {
 			want: ReconcileSyncOK,
 		},
 		{
-			name: "browser_has_unsynced_edits_only",
+			name:       "browser_has_unsynced_edits_only",
 			browserSeq: 10,
 			md: WorkspaceFileMetadata{
-				ContainerSeq:      5,
-				LastSyncedBrowser: 5,
+				ContainerSeq:        5,
+				LastSyncedBrowser:   5,
 				LastSyncedContainer: 5,
 			},
 			want: ReconcileBrowserAhead,
 		},
 		{
-			name: "container_ahead_with_acknowledged_browser",
+			name:       "container_ahead_with_acknowledged_browser",
 			browserSeq: 5,
 			md: WorkspaceFileMetadata{
-				ContainerSeq: 10,
-				LastSyncedBrowser: 5,
+				ContainerSeq:        10,
+				LastSyncedBrowser:   5,
 				LastSyncedContainer: 5,
 			},
 			want: ReconcileContainerAhead,
 		},
 		{
-			name: "diverged_both_sides_unsynced",
+			name:       "diverged_both_sides_unsynced",
 			browserSeq: 10,
 			md: WorkspaceFileMetadata{
-				ContainerSeq: 12,
-				LastSyncedBrowser: 5,
+				ContainerSeq:        12,
+				LastSyncedBrowser:   5,
 				LastSyncedContainer: 5,
 			},
 			want: ReconcileDiverged,
 		},
 		{
-			name: "fallback_browser_less_than_container_no_sync_state",
+			name:       "fallback_browser_less_than_container_no_sync_state",
 			browserSeq: 3,
 			md: WorkspaceFileMetadata{
-				ContainerSeq:      7,
-				LastSyncedBrowser: 3,
+				ContainerSeq:        7,
+				LastSyncedBrowser:   3,
 				LastSyncedContainer: 7,
 			},
 			want: ReconcileContainerAhead,
 		},
 		{
-			name: "fallback_browser_greater_than_container_no_sync_state",
+			name:       "fallback_browser_greater_than_container_no_sync_state",
 			browserSeq: 7,
 			md: WorkspaceFileMetadata{
-				ContainerSeq:      3,
-				LastSyncedBrowser: 7,
+				ContainerSeq:        3,
+				LastSyncedBrowser:   7,
 				LastSyncedContainer: 3,
 			},
 			want: ReconcileBrowserAhead,
 		},
 		{
-			name: "negative_seqs_sync_ok",
+			name:       "negative_seqs_sync_ok",
 			browserSeq: -1,
 			md: WorkspaceFileMetadata{
 				ContainerSeq: -1,
@@ -1342,7 +1342,7 @@ func TestDetermineReconcileAction_EdgeCases(t *testing.T) {
 			want: ReconcileSyncOK,
 		},
 		{
-			name: "negative_browser_less_than_container",
+			name:       "negative_browser_less_than_container",
 			browserSeq: -5,
 			md: WorkspaceFileMetadata{
 				ContainerSeq: 0,
@@ -1350,21 +1350,21 @@ func TestDetermineReconcileAction_EdgeCases(t *testing.T) {
 			want: ReconcileContainerAhead,
 		},
 		{
-			name: "only_browser_has_edits_no_container_writes",
+			name:       "only_browser_has_edits_no_container_writes",
 			browserSeq: 8,
 			md: WorkspaceFileMetadata{
-				ContainerSeq:      5,
-				LastSyncedBrowser: 5,
+				ContainerSeq:        5,
+				LastSyncedBrowser:   5,
 				LastSyncedContainer: 5,
 			},
 			want: ReconcileBrowserAhead,
 		},
 		{
-			name: "only_container_has_writes_no_browser_edits",
+			name:       "only_container_has_writes_no_browser_edits",
 			browserSeq: 5,
 			md: WorkspaceFileMetadata{
-				ContainerSeq:      8,
-				LastSyncedBrowser: 5,
+				ContainerSeq:        8,
+				LastSyncedBrowser:   5,
 				LastSyncedContainer: 5,
 			},
 			want: ReconcileContainerAhead,

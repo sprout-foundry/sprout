@@ -37,9 +37,9 @@ type AgentResultMetrics struct {
 
 	// Security telemetry — track post-caution LLM behavior so external tools
 	// can measure SECURITY_CAUTION_REQUIRED signal effectiveness.
-	SecurityCautionsIssued      int64 `json:"security_cautions_issued"`      // Times a SECURITY_CAUTION_REQUIRED was produced
+	SecurityCautionsIssued      int64 `json:"security_cautions_issued"`       // Times a SECURITY_CAUTION_REQUIRED was produced
 	SecurityRetriesAfterCaution int64 `json:"security_retries_after_caution"` // Times the LLM retried the same blocked op after a caution
-	SecurityLoopsDetected       int64 `json:"security_loops_detected"`       // Times loop-detection fired (3+ identical blocks)
+	SecurityLoopsDetected       int64 `json:"security_loops_detected"`        // Times loop-detection fired (3+ identical blocks)
 }
 
 // outputFormatJSON is the flag value for JSON output mode.

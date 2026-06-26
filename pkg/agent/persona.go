@@ -337,4 +337,3 @@ func (a *Agent) canSpawnNonDelegatable(target string) bool {
 	}
 	return false
 }
-

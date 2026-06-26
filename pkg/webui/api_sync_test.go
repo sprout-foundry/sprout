@@ -208,7 +208,7 @@ func TestHandleAPISyncOp_ConflictDetection(t *testing.T) {
 
 	// Pre-set metadata: container has unsynced writes.
 	ws.agent.SetFileMetadata("conflict.txt", agent.WorkspaceFileMetadata{
-		ContainerSeq:      5,
+		ContainerSeq:        5,
 		LastSyncedContainer: 3,
 	})
 
@@ -405,7 +405,7 @@ func TestHandleAPISyncBatch_StopsOnConflict(t *testing.T) {
 
 	// Set conflict on the second file.
 	ws.agent.SetFileMetadata("conflict.txt", agent.WorkspaceFileMetadata{
-		ContainerSeq:      5,
+		ContainerSeq:        5,
 		LastSyncedContainer: 3,
 	})
 
@@ -522,11 +522,11 @@ func TestHandleAPISyncStatus_WithMetadata(t *testing.T) {
 	}
 	ws.agent = &agent.Agent{}
 	ws.agent.SetFileMetadata("x.txt", agent.WorkspaceFileMetadata{
-		BrowserSeq: 5,
+		BrowserSeq:   5,
 		ContainerSeq: 3,
 	})
 	ws.agent.SetFileMetadata("y.txt", agent.WorkspaceFileMetadata{
-		BrowserSeq: 2,
+		BrowserSeq:   2,
 		ContainerSeq: 1,
 	})
 

@@ -18,17 +18,17 @@ const (
 
 // AgentWorkflowConfig defines non-interactive workflow orchestration.
 type AgentWorkflowConfig struct {
-	Description              string                            `json:"description,omitempty"`
-	Initial                  *AgentWorkflowInitial             `json:"initial,omitempty"`
-	Steps                    []AgentWorkflowStep               `json:"steps"`
-	ContinueOnError          bool                              `json:"continue_on_error,omitempty"`
-	PersistRuntimeOverrides  *bool                             `json:"persist_runtime_overrides,omitempty"`
-	Orchestration            *AgentWorkflowOrchestrationConfig `json:"orchestration,omitempty"`
-	NoWebUI                  *bool                             `json:"no_web_ui,omitempty"`
-	WebPort                  *int                              `json:"web_port,omitempty"`
-	Daemon                   *bool                             `json:"daemon,omitempty"`
-	Budget                   *AgentWorkflowBudgetConfig        `json:"budget,omitempty"`
-	Progress                 *AgentWorkflowProgressConfig      `json:"progress,omitempty"`
+	Description             string                            `json:"description,omitempty"`
+	Initial                 *AgentWorkflowInitial             `json:"initial,omitempty"`
+	Steps                   []AgentWorkflowStep               `json:"steps"`
+	ContinueOnError         bool                              `json:"continue_on_error,omitempty"`
+	PersistRuntimeOverrides *bool                             `json:"persist_runtime_overrides,omitempty"`
+	Orchestration           *AgentWorkflowOrchestrationConfig `json:"orchestration,omitempty"`
+	NoWebUI                 *bool                             `json:"no_web_ui,omitempty"`
+	WebPort                 *int                              `json:"web_port,omitempty"`
+	Daemon                  *bool                             `json:"daemon,omitempty"`
+	Budget                  *AgentWorkflowBudgetConfig        `json:"budget,omitempty"`
+	Progress                *AgentWorkflowProgressConfig      `json:"progress,omitempty"`
 
 	// RequiresApproval controls whether the run_automate agent tool must
 	// surface an intent-confirmation prompt to the user before launching
@@ -121,17 +121,17 @@ type workflowExecutionState struct {
 
 // AgentWorkflowRuntime contains runtime options aligned with agent CLI flags.
 type AgentWorkflowRuntime struct {
-	SkipPrompt        *bool  `json:"skip_prompt,omitempty"`
-	Provider          string `json:"provider,omitempty"`
-	Model             string `json:"model,omitempty"`
-	Persona           string `json:"persona,omitempty"`
-	DryRun            *bool  `json:"dry_run,omitempty"`
-	MaxIterations     *int   `json:"max_iterations,omitempty"`
-	NoStream          *bool  `json:"no_stream,omitempty"`
-	SystemPrompt      string `json:"system_prompt,omitempty"`
-	SystemPromptFile  string `json:"system_prompt_file,omitempty"`
-	Unsafe            *bool  `json:"unsafe,omitempty"`
-	NoSubagents       *bool  `json:"no_subagents,omitempty"`
+	SkipPrompt        *bool                     `json:"skip_prompt,omitempty"`
+	Provider          string                    `json:"provider,omitempty"`
+	Model             string                    `json:"model,omitempty"`
+	Persona           string                    `json:"persona,omitempty"`
+	DryRun            *bool                     `json:"dry_run,omitempty"`
+	MaxIterations     *int                      `json:"max_iterations,omitempty"`
+	NoStream          *bool                     `json:"no_stream,omitempty"`
+	SystemPrompt      string                    `json:"system_prompt,omitempty"`
+	SystemPromptFile  string                    `json:"system_prompt_file,omitempty"`
+	Unsafe            *bool                     `json:"unsafe,omitempty"`
+	NoSubagents       *bool                     `json:"no_subagents,omitempty"`
 	ResourceDirectory string                    `json:"resource_directory,omitempty"`
 	ReasoningEffort   string                    `json:"reasoning_effort,omitempty"`
 	SubagentOverrides WorkflowSubagentOverrides `json:"subagent_overrides,omitempty"`

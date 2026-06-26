@@ -49,10 +49,10 @@ type ExportOptions struct {
 
 // ExportResult contains statistics about an export run.
 type ExportResult struct {
-	SessionsScanned   int `json:"sessions_scanned"`
-	SessionsExported  int `json:"sessions_exported"`
-	ExamplesGenerated int `json:"examples_generated"`
-	SessionsFiltered  int `json:"sessions_filtered"`
+	SessionsScanned   int    `json:"sessions_scanned"`
+	SessionsExported  int    `json:"sessions_exported"`
+	ExamplesGenerated int    `json:"examples_generated"`
+	SessionsFiltered  int    `json:"sessions_filtered"`
 	OutputPath        string `json:"output_path"`
 }
 
@@ -69,7 +69,7 @@ type ShareGPTConversation struct {
 
 // ShareGPTMessage is a single message in a ShareGPT conversation.
 type ShareGPTMessage struct {
-	Role    string `json:"role"`    // "system", "user", "assistant"
+	Role    string `json:"role"` // "system", "user", "assistant"
 	Content string `json:"content"`
 }
 

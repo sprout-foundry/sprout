@@ -16,7 +16,7 @@ import (
 const logRateMinInterval = 5 * time.Minute
 
 var (
-	logRateMu      sync.Mutex
+	logRateMu       sync.Mutex
 	logRateLastSeen = map[string]time.Time{}
 )
 

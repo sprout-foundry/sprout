@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sprout-foundry/sprout/pkg/credentials"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/credentials"
 	"github.com/sprout-foundry/sprout/pkg/mcp"
 )
 
@@ -60,11 +60,11 @@ func (ws *ReactWebServer) handleAPISettingsMCPServers(w http.ResponseWriter, r *
 
 // mcpConfigResponse wraps MCPConfig for JSON serialization with masked env vars.
 type mcpConfigResponse struct {
-	Enabled      bool                           `json:"enabled"`
-	Servers      map[string]mcpServerResponse    `json:"servers"`
-	AutoStart    bool                           `json:"auto_start"`
-	AutoDiscover bool                           `json:"auto_discover"`
-	Timeout      time.Duration                  `json:"timeout"`
+	Enabled      bool                         `json:"enabled"`
+	Servers      map[string]mcpServerResponse `json:"servers"`
+	AutoStart    bool                         `json:"auto_start"`
+	AutoDiscover bool                         `json:"auto_discover"`
+	Timeout      time.Duration                `json:"timeout"`
 }
 
 // mcpServerResponse wraps MCPServerConfig with masked env vars and credentials for the API response.
@@ -456,13 +456,13 @@ func (ws *ReactWebServer) handleAPISettingsMCPServerCredentials(w http.ResponseW
 
 // credentialStatusResponse represents the status of a single credential.
 type credentialStatusResponse struct {
-	Status    string `json:"status"`     // "set" or "missing"
-	HasValue  bool   `json:"has_value"`
+	Status   string `json:"status"` // "set" or "missing"
+	HasValue bool   `json:"has_value"`
 }
 
 // getServerCredentialsResponse is the response for GET /api/settings/mcp/servers/{name}/credentials.
 type getServerCredentialsResponse struct {
-	Server      string                          `json:"server"`
+	Server      string                              `json:"server"`
 	Credentials map[string]credentialStatusResponse `json:"credentials"`
 }
 

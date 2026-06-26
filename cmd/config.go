@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/spf13/cobra"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 var configCmd = &cobra.Command{

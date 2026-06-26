@@ -147,44 +147,44 @@ func TestParseFilenameFromStatusLine(t *testing.T) {
 
 func TestSelectAllModifiedFiles(t *testing.T) {
 	tests := []struct {
-		name               string
-		validStatusLines   []string
-		wantFiles          []string
+		name             string
+		validStatusLines []string
+		wantFiles        []string
 	}{
 		{
-			name:               "empty list",
-			validStatusLines:   []string{},
-			wantFiles:          nil,
+			name:             "empty list",
+			validStatusLines: []string{},
+			wantFiles:        nil,
 		},
 		{
-			name: "single file",
-			validStatusLines:   []string{"M main.go"},
-			wantFiles:          []string{"main.go"},
+			name:             "single file",
+			validStatusLines: []string{"M main.go"},
+			wantFiles:        []string{"main.go"},
 		},
 		{
-			name: "multiple files",
-			validStatusLines:   []string{"M main.go", "A newfile.go", "D oldfile.go"},
-			wantFiles:          []string{"main.go", "newfile.go", "oldfile.go"},
+			name:             "multiple files",
+			validStatusLines: []string{"M main.go", "A newfile.go", "D oldfile.go"},
+			wantFiles:        []string{"main.go", "newfile.go", "oldfile.go"},
 		},
 		{
-			name: "files with spaces in names",
-			validStatusLines:   []string{"M file with spaces.go", "A another file.txt"},
-			wantFiles:          []string{"file with spaces.go", "another file.txt"},
+			name:             "files with spaces in names",
+			validStatusLines: []string{"M file with spaces.go", "A another file.txt"},
+			wantFiles:        []string{"file with spaces.go", "another file.txt"},
 		},
 		{
-			name: "files with paths",
-			validStatusLines:   []string{"M pkg/utils/file.go", "A cmd/main.go"},
-			wantFiles:          []string{"pkg/utils/file.go", "cmd/main.go"},
+			name:             "files with paths",
+			validStatusLines: []string{"M pkg/utils/file.go", "A cmd/main.go"},
+			wantFiles:        []string{"pkg/utils/file.go", "cmd/main.go"},
 		},
 		{
-			name: "mixed status codes",
-			validStatusLines:   []string{"MM file.go", "A  new.txt", "D  old.txt", "?? untracked.go"},
-			wantFiles:          []string{"file.go", "new.txt", "old.txt", "untracked.go"},
+			name:             "mixed status codes",
+			validStatusLines: []string{"MM file.go", "A  new.txt", "D  old.txt", "?? untracked.go"},
+			wantFiles:        []string{"file.go", "new.txt", "old.txt", "untracked.go"},
 		},
 		{
-			name: "renamed files",
-			validStatusLines:   []string{"R  old.go -> new.go"},
-			wantFiles:          []string{"old.go -> new.go"},
+			name:             "renamed files",
+			validStatusLines: []string{"R  old.go -> new.go"},
+			wantFiles:        []string{"old.go -> new.go"},
 		},
 		{
 			name: "many files",

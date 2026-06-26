@@ -187,38 +187,38 @@ func TestMarkdownFormatter_UnderscoreItalicCommonMarkBoundaries(t *testing.T) {
 	formatter := NewMarkdownFormatter(true, true)
 
 	tests := []struct {
-		name     string
-		input    string
+		name      string
+		input     string
 		hasItalic bool
 	}{
 		{
-			name:     "standalone italic underscore",
-			input:    "hello _world_ goodbye",
+			name:      "standalone italic underscore",
+			input:     "hello _world_ goodbye",
 			hasItalic: true,
 		},
 		{
-			name:     "identifier with underscores is NOT italic",
-			input:    "handle_read_file",
+			name:      "identifier with underscores is NOT italic",
+			input:     "handle_read_file",
 			hasItalic: false,
 		},
 		{
-			name:     "multiple underscores in identifier",
-			input:    "some_long_function_name",
+			name:      "multiple underscores in identifier",
+			input:     "some_long_function_name",
 			hasItalic: false,
 		},
 		{
-			name:     "underscore at end of identifier followed by space-underscore",
-			input:    "func_name _is italic_",
+			name:      "underscore at end of identifier followed by space-underscore",
+			input:     "func_name _is italic_",
 			hasItalic: true,
 		},
 		{
-			name:     "underscore at start then identifier",
-			input:    "_italic_ then some_func",
+			name:      "underscore at start then identifier",
+			input:     "_italic_ then some_func",
 			hasItalic: true,
 		},
 		{
-			name:     "single underscore not followed by closing underscore",
-			input:    "it's a contraction test_here",
+			name:      "single underscore not followed by closing underscore",
+			input:     "it's a contraction test_here",
 			hasItalic: false,
 		},
 	}

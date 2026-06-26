@@ -9,19 +9,19 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sprout-foundry/sprout/pkg/training"
 	"github.com/spf13/cobra"
+	"github.com/sprout-foundry/sprout/pkg/training"
 )
 
 var (
-	exportFormat      string
-	exportOutput      string
-	exportAll         bool
-	exportMinTurns    int
-	exportMinActions  int
-	exportNoToolRes   bool
-	exportIncludeSys  bool
-	exportSession     string
+	exportFormat     string
+	exportOutput     string
+	exportAll        bool
+	exportMinTurns   int
+	exportMinActions int
+	exportNoToolRes  bool
+	exportIncludeSys bool
+	exportSession    string
 )
 
 var exportTrainingCmd = &cobra.Command{

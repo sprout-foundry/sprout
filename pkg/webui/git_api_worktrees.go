@@ -13,11 +13,11 @@ import (
 
 // WorktreeInfo contains information about a git worktree
 type WorktreeInfo struct {
-	Path        string `json:"path"`
-	Branch      string `json:"branch"`
-	IsMain      bool   `json:"is_main"`
-	IsCurrent   bool   `json:"is_current"`
-	ParentPath  string `json:"parent_path,omitempty"`
+	Path         string `json:"path"`
+	Branch       string `json:"branch"`
+	IsMain       bool   `json:"is_main"`
+	IsCurrent    bool   `json:"is_current"`
+	ParentPath   string `json:"parent_path,omitempty"`
 	ParentBranch string `json:"parent_branch,omitempty"`
 }
 
@@ -35,9 +35,9 @@ func (ws *ReactWebServer) handleAPIGitWorktrees(w http.ResponseWriter, r *http.R
 	if err := checkCmd.Run(); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
-			"message":    "not_git_repo",
-			"worktrees":  []WorktreeInfo{},
-			"current":    "",
+			"message":   "not_git_repo",
+			"worktrees": []WorktreeInfo{},
+			"current":   "",
 		})
 		return
 	}
@@ -160,9 +160,9 @@ func (ws *ReactWebServer) handleAPIGitWorktreeCreate(w http.ResponseWriter, r *h
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxQueryBodyBytes)
 	var req struct {
-		Path     string `json:"path"`
-		Branch   string `json:"branch"`
-		BaseRef  string `json:"base_ref,omitempty"`
+		Path    string `json:"path"`
+		Branch  string `json:"branch"`
+		BaseRef string `json:"base_ref,omitempty"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -236,10 +236,10 @@ func (ws *ReactWebServer) handleAPIGitWorktreeCreate(w http.ResponseWriter, r *h
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"message":  "Worktree created successfully",
-		"path":     absPath,
-		"branch":   req.Branch,
-		"output":   strings.TrimSpace(string(output)),
+		"message": "Worktree created successfully",
+		"path":    absPath,
+		"branch":  req.Branch,
+		"output":  strings.TrimSpace(string(output)),
 	})
 }
 
@@ -301,9 +301,9 @@ func (ws *ReactWebServer) handleAPIGitWorktreeRemove(w http.ResponseWriter, r *h
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"message":  "Worktree removed successfully",
-		"path":     absPath,
-		"output":   strings.TrimSpace(string(output)),
+		"message": "Worktree removed successfully",
+		"path":    absPath,
+		"output":  strings.TrimSpace(string(output)),
 	})
 }
 

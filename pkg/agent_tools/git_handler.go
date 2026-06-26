@@ -17,7 +17,7 @@ func (h *gitHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "git",
 		Description: "Execute git operations that modify repository state or require network access. All destructive operations require user approval. Commit operations should use the /commit slash command for the interactive commit flow. For read-only operations (status, log, diff, branch, show), use shell_command instead.",
-		Required: []string{"operation"},
+		Required:    []string{"operation"},
 		Parameters: []ParameterDef{
 			{Name: "operation", Type: "string", Required: true, Description: "Git operation type: commit, push, pull, fetch, add, rm, mv, reset, rebase, merge, checkout, branch_delete, tag, clean, stash, am, apply, cherry_pick, revert, restore"},
 			{Name: "args", Type: "string", Description: "Arguments to pass to the git command (optional). For pull: --rebase, --ff-only, remote/branch. For fetch: --all, --prune, remote."},
@@ -32,13 +32,13 @@ func (h *gitHandler) Validate(args map[string]any) error {
 
 // dangerousOperations require user confirmation before execution
 var dangerousOps = map[string]bool{
-	"reset":        true,
-	"rebase":       true,
-	"clean":        true,
+	"reset":         true,
+	"rebase":        true,
+	"clean":         true,
 	"branch_delete": true,
-	"revert":       true,
-	"merge":        true,
-	"push":         true,
+	"revert":        true,
+	"merge":         true,
+	"push":          true,
 }
 
 func (h *gitHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
@@ -181,7 +181,7 @@ func (h *gitHandler) Execute(ctx context.Context, env ToolEnv, args map[string]a
 				fmt.Fprintf(os.Stderr, "WARNING: Dangerous git operation %q without approval manager\n", operation)
 			}
 		}
-	// SecuritySafe: no approval needed, skip entirely
+		// SecuritySafe: no approval needed, skip entirely
 	}
 
 	result, err := execShellCmd(ctx, gitCmd, env.WorkspaceRoot)

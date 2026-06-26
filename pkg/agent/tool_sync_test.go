@@ -221,10 +221,10 @@ func sortedValidTypes() []string {
 
 // TestToolSync_AlternativeNamesMatch tests that alternative parameter names
 // (aliases) are consistent between the two registries. It verifies that:
-//   1. Both registries agree on the set of parameter names for every tool.
-//   2. The sprout alternatives list is well-formed (non-empty, valid strings).
-//   3. No parameter name in sprout is hidden inside an alternative list of
-//      another tool (prevents accidental duplication).
+//  1. Both registries agree on the set of parameter names for every tool.
+//  2. The sprout alternatives list is well-formed (non-empty, valid strings).
+//  3. No parameter name in sprout is hidden inside an alternative list of
+//     another tool (prevents accidental duplication).
 //
 // Note: seed's public API (GetTool/GetTools) returns ToolParameters which
 // does not include alternatives — they are absorbed by buildSchema. The

@@ -768,26 +768,26 @@ func TestGetStagedDiff_Success(t *testing.T) {
 // =============================================================================
 
 var (
-	_ func(string) string                                     = CleanCommitMessage
-	_ func(string) (string, string, error)                    = ParseCommitMessage
-	_ func() (string, error)                                  = GetGitRootDir
-	_ func(string) (string, error)                            = GetFileGitPath
-	_ func() (string, error)                                  = GetGitRemoteURL
-	_ func() (string, int, int, error)                        = GetGitStatus
-	_ func(int) ([]string, error)                             = GetRecentTouchedFiles
-	_ func(string, int) (string, error)                       = GetRecentFileLog
-	_ func(string, string, string) error                      = AddAndCommitFile
-	_ func(string, string, int) error                         = AddAllAndCommit
-	_ func() (string, error)                                  = GetUncommittedChanges
-	_ func() (string, error)                                  = GetStagedChanges
-	_ func(string) error                                      = CheckStagedChanges
-	_ func(string) (string, error)                            = GetStagedDiff
-	_ func(string, string) error                              = PerformGitCommit
-	_ func([]CommitFileChange) string                         = generateFallbackCommitMessage
-	_ func(string) string                                     = actionFromStatus
-	_ func(string) bool                                       = isDefaultBranch
-	_ func(string) string                                     = NormalizeShortTitle
-	_ func(string, int) string                                = TruncateRunes
-	_ func(string, int) string                                = WrapText
+	_ func(string) string                                                           = CleanCommitMessage
+	_ func(string) (string, string, error)                                          = ParseCommitMessage
+	_ func() (string, error)                                                        = GetGitRootDir
+	_ func(string) (string, error)                                                  = GetFileGitPath
+	_ func() (string, error)                                                        = GetGitRemoteURL
+	_ func() (string, int, int, error)                                              = GetGitStatus
+	_ func(int) ([]string, error)                                                   = GetRecentTouchedFiles
+	_ func(string, int) (string, error)                                             = GetRecentFileLog
+	_ func(string, string, string) error                                            = AddAndCommitFile
+	_ func(string, string, int) error                                               = AddAllAndCommit
+	_ func() (string, error)                                                        = GetUncommittedChanges
+	_ func() (string, error)                                                        = GetStagedChanges
+	_ func(string) error                                                            = CheckStagedChanges
+	_ func(string) (string, error)                                                  = GetStagedDiff
+	_ func(string, string) error                                                    = PerformGitCommit
+	_ func([]CommitFileChange) string                                               = generateFallbackCommitMessage
+	_ func(string) string                                                           = actionFromStatus
+	_ func(string) bool                                                             = isDefaultBranch
+	_ func(string) string                                                           = NormalizeShortTitle
+	_ func(string, int) string                                                      = TruncateRunes
+	_ func(string, int) string                                                      = WrapText
 	_ func(api.ClientInterface, CommitMessageOptions) (*CommitMessageResult, error) = GenerateCommitMessageFromStagedDiff
 )

@@ -1,11 +1,11 @@
 package trace
 
 import (
-	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"os"
 	"path/filepath"
 	"sync"
@@ -16,7 +16,7 @@ import (
 
 // RunMetadata represents metadata for a single sprout invocation/run
 type RunMetadata struct {
-	RunID        string            `json:"run_id"`
+	RunID         string            `json:"run_id"`
 	Timestamp     string            `json:"timestamp"`
 	Provider      string            `json:"provider"`
 	Model         string            `json:"model"`
@@ -24,61 +24,61 @@ type RunMetadata struct {
 	Persona       string            `json:"persona"`
 	WorkflowName  string            `json:"workflow_name"`
 	WorkflowIndex int               `json:"workflow_index"`
-	EnvConfig    map[string]string `json:"env_config"`
+	EnvConfig     map[string]string `json:"env_config"`
 }
 
 // TurnRecord represents a single model turn (request + response)
 type TurnRecord struct {
-	RunID            string          `json:"run_id"`
-	TurnIndex         int             `json:"turn_index"`
-	SystemPrompt      string          `json:"system_prompt"`
-	UserPrompt        string          `json:"user_prompt"`
+	RunID              string          `json:"run_id"`
+	TurnIndex          int             `json:"turn_index"`
+	SystemPrompt       string          `json:"system_prompt"`
+	UserPrompt         string          `json:"user_prompt"`
 	UserPromptOriginal string          `json:"user_prompt_original"` // Pre-truncation
-	MessagesSent      []api.Message  `json:"messages_sent"`
-	ToolSchemaPayload json.RawMessage `json:"tool_schema_payload"`
-	RawResponse      string          `json:"raw_response"`
-	ParsedToolCalls  []api.ToolCall `json:"parsed_tool_calls"`
-	ParserErrors     []string        `json:"parser_errors"`
-	FallbackUsed     bool            `json:"fallback_used"`
-	FallbackOutput   string          `json:"fallback_output"`
-	MachineLabels     []string        `json:"machine_labels"`
-	Timestamp         string          `json:"timestamp"`
+	MessagesSent       []api.Message   `json:"messages_sent"`
+	ToolSchemaPayload  json.RawMessage `json:"tool_schema_payload"`
+	RawResponse        string          `json:"raw_response"`
+	ParsedToolCalls    []api.ToolCall  `json:"parsed_tool_calls"`
+	ParserErrors       []string        `json:"parser_errors"`
+	FallbackUsed       bool            `json:"fallback_used"`
+	FallbackOutput     string          `json:"fallback_output"`
+	MachineLabels      []string        `json:"machine_labels"`
+	Timestamp          string          `json:"timestamp"`
 }
 
 // ToolCallRecord represents a single tool execution
 type ToolCallRecord struct {
-	RunID             string                 `json:"run_id"`
-	TurnIndex          int                    `json:"turn_index"` // Index within turn
-	ToolIndex         int                    `json:"tool_index"` // Index within turn
-	ToolName          string                 `json:"tool_name"`
-	Args              map[string]interface{} `json:"args"`
-	ArgsNormalized     map[string]interface{} `json:"args_normalized"`
-	Success           bool                   `json:"success"`
-	FullResult        string                 `json:"full_result"`   // Untruncated
-	ModelResult       string                 `json:"model_result"`  // As model sees it
-	ErrorCategory     string                 `json:"error_category"` // validation, unknown_tool, timeout, etc.
-	ErrorMessage      string                 `json:"error_message"`
-	MachineLabels      []string               `json:"machine_labels"`
-	Timestamp         string                 `json:"timestamp"`
+	RunID          string                 `json:"run_id"`
+	TurnIndex      int                    `json:"turn_index"` // Index within turn
+	ToolIndex      int                    `json:"tool_index"` // Index within turn
+	ToolName       string                 `json:"tool_name"`
+	Args           map[string]interface{} `json:"args"`
+	ArgsNormalized map[string]interface{} `json:"args_normalized"`
+	Success        bool                   `json:"success"`
+	FullResult     string                 `json:"full_result"`    // Untruncated
+	ModelResult    string                 `json:"model_result"`   // As model sees it
+	ErrorCategory  string                 `json:"error_category"` // validation, unknown_tool, timeout, etc.
+	ErrorMessage   string                 `json:"error_message"`
+	MachineLabels  []string               `json:"machine_labels"`
+	Timestamp      string                 `json:"timestamp"`
 }
 
 // ArtifactManifest represents filesystem outputs from a run
 type ArtifactManifest struct {
-	RunID      string         `json:"run_id"`
-	RelativePath string         `json:"relative_path"`
-	SizeBytes   int64          `json:"size_bytes"`
-	Hash        string         `json:"hash"` // SHA-256
-	ArtifactType string         `json:"artifact_type"` // file_edit, file_create, etc.
-	MachineLabels []string       `json:"machine_labels"`
-	Timestamp    string         `json:"timestamp"`
+	RunID         string   `json:"run_id"`
+	RelativePath  string   `json:"relative_path"`
+	SizeBytes     int64    `json:"size_bytes"`
+	Hash          string   `json:"hash"`          // SHA-256
+	ArtifactType  string   `json:"artifact_type"` // file_edit, file_create, etc.
+	MachineLabels []string `json:"machine_labels"`
+	Timestamp     string   `json:"timestamp"`
 }
 
 // Machine label constants
 const (
 	// Path violations
-	LabelPathViolationAbsolute    = "path_violation_absolute"
+	LabelPathViolationAbsolute   = "path_violation_absolute"
 	LabelPathViolationNested     = "path_violation_nested"
-	LabelPathViolationDisallowed  = "path_violation_disallowed_prefix"
+	LabelPathViolationDisallowed = "path_violation_disallowed_prefix"
 
 	// Schema violations
 	LabelSchemaEnvelopeViolation = "schema_envelope_violation"
@@ -86,23 +86,23 @@ const (
 
 	// Tool call issues
 	LabelToolCallValidationFailure = "tool_call_validation_failure"
-	LabelToolCallUnknownTool      = "tool_call_unknown_tool"
-	LabelToolCallTimeout         = "tool_call_timeout"
-	LabelToolCallExecutionError  = "tool_call_execution_error"
+	LabelToolCallUnknownTool       = "tool_call_unknown_tool"
+	LabelToolCallTimeout           = "tool_call_timeout"
+	LabelToolCallExecutionError    = "tool_call_execution_error"
 )
 
 // TraceSession manages dataset collection for a single sprout run
 type TraceSession struct {
-	mu          sync.RWMutex
-	RunID       string
-	RunDir      string
-	RunsFile    *jsonlWriter
-	TurnsFile   *jsonlWriter
-	ToolsFile   *jsonlWriter
+	mu            sync.RWMutex
+	RunID         string
+	RunDir        string
+	RunsFile      *jsonlWriter
+	TurnsFile     *jsonlWriter
+	ToolsFile     *jsonlWriter
 	ArtifactsFile *jsonlWriter
-	Metadata    RunMetadata
-	IsEnabled   bool
-	closed      bool
+	Metadata      RunMetadata
+	IsEnabled     bool
+	closed        bool
 }
 
 // GetRunID returns the run ID
@@ -173,7 +173,7 @@ func NewTraceSession(traceDir, provider, model string) (*TraceSession, error) {
 	}
 
 	metadata := RunMetadata{
-		RunID:        runID,
+		RunID:         runID,
 		Timestamp:     now.UTC().Format(time.RFC3339),
 		Provider:      provider,
 		Model:         model,
@@ -185,14 +185,14 @@ func NewTraceSession(traceDir, provider, model string) (*TraceSession, error) {
 	}
 
 	session := &TraceSession{
-		RunID:        runID,
-		RunDir:       runDir,
-		RunsFile:     runsWriter,
-		TurnsFile:    turnsWriter,
-		ToolsFile:    toolsWriter,
+		RunID:         runID,
+		RunDir:        runDir,
+		RunsFile:      runsWriter,
+		TurnsFile:     turnsWriter,
+		ToolsFile:     toolsWriter,
 		ArtifactsFile: artifactsWriter,
-		Metadata:     metadata,
-		IsEnabled:    true,
+		Metadata:      metadata,
+		IsEnabled:     true,
 	}
 
 	// Write run metadata - if this fails, close all writers and return error

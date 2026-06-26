@@ -78,6 +78,7 @@ func TestCompactTokens_Boundaries(t *testing.T) {
 		}
 	}
 }
+
 // SP-048-5c
 func TestCompactCost(t *testing.T) {
 	cases := []struct {

@@ -212,51 +212,51 @@ func TestFormatBulkTodoSuccess(t *testing.T) {
 
 func TestFormatStatusUpdate(t *testing.T) {
 	tests := []struct {
-		name      string
-		status    string
-		title     string
-		id        string
-		remaining int
+		name        string
+		status      string
+		title       string
+		id          string
+		remaining   int
 		mustContain string
 	}{
 		{
-			name:      "in_progress",
-			status:    "in_progress",
-			title:     "Write tests",
-			id:        "todo_1",
-			remaining: 3,
+			name:        "in_progress",
+			status:      "in_progress",
+			title:       "Write tests",
+			id:          "todo_1",
+			remaining:   3,
 			mustContain: "[~] Started: Write tests [todo_1]",
 		},
 		{
-			name:      "completed with remaining",
-			status:    "completed",
-			title:     "Write tests",
-			id:        "todo_1",
-			remaining: 2,
+			name:        "completed with remaining",
+			status:      "completed",
+			title:       "Write tests",
+			id:          "todo_1",
+			remaining:   2,
 			mustContain: "[OK] Completed: Write tests [todo_1] (2 remaining)",
 		},
 		{
-			name:      "completed with none remaining",
-			status:    "completed",
-			title:     "Write tests",
-			id:        "todo_1",
-			remaining: 0,
+			name:        "completed with none remaining",
+			status:      "completed",
+			title:       "Write tests",
+			id:          "todo_1",
+			remaining:   0,
 			mustContain: "[done] Completed: Write tests - All todos done!",
 		},
 		{
-			name:      "cancelled",
-			status:    "cancelled",
-			title:     "Write tests",
-			id:        "todo_1",
-			remaining: 3,
+			name:        "cancelled",
+			status:      "cancelled",
+			title:       "Write tests",
+			id:          "todo_1",
+			remaining:   3,
 			mustContain: "[FAIL] Cancelled: Write tests [todo_1]",
 		},
 		{
-			name:      "pending (default case)",
-			status:    "pending",
-			title:     "Write tests",
-			id:        "todo_1",
-			remaining: 3,
+			name:        "pending (default case)",
+			status:      "pending",
+			title:       "Write tests",
+			id:          "todo_1",
+			remaining:   3,
 			mustContain: "[edit] Updated: Write tests [todo_1] → pending",
 		},
 	}
@@ -272,10 +272,10 @@ func TestFormatStatusUpdate(t *testing.T) {
 
 func TestFormatBulkStatusSummary(t *testing.T) {
 	tests := []struct {
-		name          string
-		updatedCount  int
-		results       []string
-		expected      string
+		name         string
+		updatedCount int
+		results      []string
+		expected     string
 	}{
 		{
 			name:         "zero updates",

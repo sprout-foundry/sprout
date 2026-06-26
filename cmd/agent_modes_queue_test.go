@@ -85,12 +85,12 @@ func TestBuildQueueTaskQuery_WithWorkingDir(t *testing.T) {
 
 func TestBuildQueueTaskQuery_WithPersona(t *testing.T) {
 	task := tools.Task{
-		ID:         "test-persona",
-		Title:      "Write unit tests",
-		Priority:   "high",
-		Persona:    "tester",
-		Status:     "pending",
-		CreatedAt:  time.Now(),
+		ID:        "test-persona",
+		Title:     "Write unit tests",
+		Priority:  "high",
+		Persona:   "tester",
+		Status:    "pending",
+		CreatedAt: time.Now(),
 	}
 
 	query := buildQueueTaskQuery(task)

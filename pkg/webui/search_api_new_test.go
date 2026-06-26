@@ -12,57 +12,57 @@ import (
 
 func TestCompileSearchPattern_PlainText(t *testing.T) {
 	tests := []struct {
-		name      string
-		query     string
-		casesens  bool
-		whole     bool
-		isRegex   bool
-		wantMatch []string
+		name        string
+		query       string
+		casesens    bool
+		whole       bool
+		isRegex     bool
+		wantMatch   []string
 		wantNomatch []string
 	}{
 		{
-			name: "simple plain text",
-			query: "hello",
-			casesens: true,
-			whole: false,
-			isRegex: false,
-			wantMatch: []string{"hello", "say hello world"},
+			name:        "simple plain text",
+			query:       "hello",
+			casesens:    true,
+			whole:       false,
+			isRegex:     false,
+			wantMatch:   []string{"hello", "say hello world"},
 			wantNomatch: []string{"HELLO", "say HELLO"},
 		},
 		{
-			name: "case-insensitive plain text",
-			query: "hello",
-			casesens: false,
-			whole: false,
-			isRegex: false,
-			wantMatch: []string{"hello", "HELLO", "HeLLo", "say Hello world"},
+			name:        "case-insensitive plain text",
+			query:       "hello",
+			casesens:    false,
+			whole:       false,
+			isRegex:     false,
+			wantMatch:   []string{"hello", "HELLO", "HeLLo", "say Hello world"},
 			wantNomatch: []string{},
 		},
 		{
-			name: "whole word plain text",
-			query: "foo",
-			casesens: true,
-			whole: true,
-			isRegex: false,
-			wantMatch: []string{"foo bar", "the foo", "foo", "a foo b"},
+			name:        "whole word plain text",
+			query:       "foo",
+			casesens:    true,
+			whole:       true,
+			isRegex:     false,
+			wantMatch:   []string{"foo bar", "the foo", "foo", "a foo b"},
 			wantNomatch: []string{"foobar", "foofoo", "a_foo_b"},
 		},
 		{
-			name: "special regex chars escaped in plain text",
-			query: "foo.bar",
-			casesens: true,
-			whole: false,
-			isRegex: false,
-			wantMatch: []string{"foo.bar"},
+			name:        "special regex chars escaped in plain text",
+			query:       "foo.bar",
+			casesens:    true,
+			whole:       false,
+			isRegex:     false,
+			wantMatch:   []string{"foo.bar"},
 			wantNomatch: []string{"fooxbar"},
 		},
 		{
-			name: "regex mode no escaping",
-			query: "foo.bar",
-			casesens: true,
-			whole: false,
-			isRegex: true,
-			wantMatch: []string{"foo.bar", "fooxbar", "foo-bar"},
+			name:        "regex mode no escaping",
+			query:       "foo.bar",
+			casesens:    true,
+			whole:       false,
+			isRegex:     true,
+			wantMatch:   []string{"foo.bar", "fooxbar", "foo-bar"},
 			wantNomatch: []string{},
 		},
 	}

@@ -83,9 +83,9 @@ func TestDefaultAutoApproveRules_ContainsExpectedCategories(t *testing.T) {
 
 func TestSubagentTypeGetAutoApproveRules_WithRules(t *testing.T) {
 	rules := AutoApproveRules{
-		LowRiskOps:     []string{"custom_op"},
-		MediumRiskOps:  []string{"another_op"},
-		HighRiskNever:  []string{"bad_op"},
+		LowRiskOps:    []string{"custom_op"},
+		MediumRiskOps: []string{"another_op"},
+		HighRiskNever: []string{"bad_op"},
 	}
 	st := SubagentType{
 		ID:               "custom",
@@ -102,9 +102,9 @@ func TestSubagentTypeGetAutoApproveRules_WithRules(t *testing.T) {
 
 func TestSubagentTypeGetAutoApproveRules_WithoutRules(t *testing.T) {
 	st := SubagentType{
-		ID:        "default_persona",
-		Name:      "Default",
-		Enabled:   true,
+		ID:      "default_persona",
+		Name:    "Default",
+		Enabled: true,
 	}
 	st.AutoApproveRules = nil
 
@@ -121,9 +121,9 @@ func TestSubagentTypeGetAutoApproveRules_WithoutRules(t *testing.T) {
 
 func TestContainsForceFlag_ExactFlags(t *testing.T) {
 	tests := []struct {
-		name    string
-		cmd     string
-		want    bool
+		name string
+		cmd  string
+		want bool
 	}{
 		{"--force flag", "some --force command", true},
 		{"-f standalone flag", "git commit -f -m msg", true},
@@ -132,14 +132,14 @@ func TestContainsForceFlag_ExactFlags(t *testing.T) {
 		{"no force flag", "git status", false},
 		{"empty string", "", false},
 		{"-f for non-force command python3", "python3 -f script.py", false},
-		{"tar -f is not force", "tar -xzf archive.tar.gz", false},  // tar's -f specifies filename, not force; tar not in force-capable list
-		{"grep -f is not force", "grep -f patterns.txt file", false}, // grep's -f means "read patterns from file"; grep not in force-capable list
-		{"git -f between git and subcommand", "git -f commit", false}, // -f between git and subcommand is malformed; not a valid git flag position
+		{"tar -f is not force", "tar -xzf archive.tar.gz", false},          // tar's -f specifies filename, not force; tar not in force-capable list
+		{"grep -f is not force", "grep -f patterns.txt file", false},       // grep's -f means "read patterns from file"; grep not in force-capable list
+		{"git -f between git and subcommand", "git -f commit", false},      // -f between git and subcommand is malformed; not a valid git flag position
 		{"rsync --force is always force", "rsync --force src/ dst/", true}, // --force is always treated as force regardless of command
-		{"cp -rf combined flag", "cp -rf /a /b", true}, // cp's -rf is combined flag with f; cp is in force-capable list
-		{"mv -f force overwrite", "mv -f old new", true}, // mv's -f is force overwrite; mv is in force-capable list
-		{"docker rm -f", "docker rm -f container", true}, // docker's -f is force remove; docker is in force-capable list
-		{"docker rm --force", "docker rm --force container", true}, // --force is always treated as force
+		{"cp -rf combined flag", "cp -rf /a /b", true},                     // cp's -rf is combined flag with f; cp is in force-capable list
+		{"mv -f force overwrite", "mv -f old new", true},                   // mv's -f is force overwrite; mv is in force-capable list
+		{"docker rm -f", "docker rm -f container", true},                   // docker's -f is force remove; docker is in force-capable list
+		{"docker rm --force", "docker rm --force container", true},         // --force is always treated as force
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -153,9 +153,9 @@ func TestContainsForceFlag_ExactFlags(t *testing.T) {
 
 func TestContainsForceFlag_CombinedShortFlags(t *testing.T) {
 	tests := []struct {
-		name    string
-		cmd     string
-		want    bool
+		name string
+		cmd  string
+		want bool
 	}{
 		{"-rf combined", "rm -rf /tmp", true},
 		{"-fr combined", "rm -fr /tmp", true},
@@ -180,9 +180,9 @@ func TestContainsForceFlag_CombinedShortFlags(t *testing.T) {
 
 func TestCategorizeCommand_GitSubcommands(t *testing.T) {
 	tests := []struct {
-		name    string
-		cmd     string
-		want    string
+		name string
+		cmd  string
+		want string
 	}{
 		{"git status", "git status", "git_status"},
 		{"git log", "git log", "git_log"},
@@ -222,9 +222,9 @@ func TestCategorizeCommand_GitSubcommands(t *testing.T) {
 
 func TestCategorizeCommand_NonGitCommands(t *testing.T) {
 	tests := []struct {
-		name    string
-		cmd     string
-		want    string
+		name string
+		cmd  string
+		want string
 	}{
 		{"rm command", "rm file.txt", "rm_command"},
 		{"docker command", "docker ps", "docker"},
@@ -265,9 +265,9 @@ func TestCategorizeCommand_NonGitCommands(t *testing.T) {
 
 func TestMatchesRiskPattern_ForceFlag(t *testing.T) {
 	tests := []struct {
-		name    string
-		cmd     string
-		want    bool
+		name string
+		cmd  string
+		want bool
 	}{
 		{"with --force", "cmd --force arg", true},
 		{"without --force", "cmd arg", false},
@@ -284,9 +284,9 @@ func TestMatchesRiskPattern_ForceFlag(t *testing.T) {
 
 func TestMatchesRiskPattern_RmRecursive(t *testing.T) {
 	tests := []struct {
-		name    string
-		cmd     string
-		want    bool
+		name string
+		cmd  string
+		want bool
 	}{
 		{"rm -r", "rm -r dir/", true},
 		{"rm -rf", "rm -rf /tmp/*", true},
@@ -321,9 +321,9 @@ func TestMatchesRiskPattern_RmRecursive(t *testing.T) {
 
 func TestMatchesRiskPattern_GitResetHard(t *testing.T) {
 	tests := []struct {
-		name    string
-		cmd     string
-		want    bool
+		name string
+		cmd  string
+		want bool
 	}{
 		{"git reset --hard", "git reset --hard HEAD~1", true},
 		{"git reset without --hard", "git reset HEAD~1", false},
@@ -341,9 +341,9 @@ func TestMatchesRiskPattern_GitResetHard(t *testing.T) {
 
 func TestMatchesRiskPattern_GitClean(t *testing.T) {
 	tests := []struct {
-		name    string
-		cmd     string
-		want    bool
+		name string
+		cmd  string
+		want bool
 	}{
 		{"git clean", "git clean -fd", true},
 		{"no clean", "git status", false},
@@ -360,9 +360,9 @@ func TestMatchesRiskPattern_GitClean(t *testing.T) {
 
 func TestMatchesRiskPattern_GitPushForce(t *testing.T) {
 	tests := []struct {
-		name    string
-		cmd     string
-		want    bool
+		name string
+		cmd  string
+		want bool
 	}{
 		{"git push --force", "git push --force origin main", true},
 		{"git push -f", "git push -f origin main", true},
@@ -381,9 +381,9 @@ func TestMatchesRiskPattern_GitPushForce(t *testing.T) {
 
 func TestMatchesRiskPattern_DockerPrune(t *testing.T) {
 	tests := []struct {
-		name    string
-		cmd     string
-		want    bool
+		name string
+		cmd  string
+		want bool
 	}{
 		{"docker prune", "docker system prune", true},
 		{"docker without prune", "docker ps", false},
@@ -411,10 +411,10 @@ func TestMatchesRiskPattern_UnknownPattern(t *testing.T) {
 
 func TestFirstFieldAfter(t *testing.T) {
 	tests := []struct {
-		name    string
-		s       string
-		prefix  string
-		want    string
+		name   string
+		s      string
+		prefix string
+		want   string
 	}{
 		{"simple", "git status --short", "git", "status"},
 		{"no match", "hello world", "git", "hello"},
@@ -558,9 +558,9 @@ func TestSubagentTypeEvaluateOperationRisk_ForceFlagEscalation(t *testing.T) {
 
 func TestSubagentTypeEvaluateOperationRisk_NoAutoApproveRules(t *testing.T) {
 	st := SubagentType{
-		ID:              "default_persona",
-		Name:            "Default",
-		Enabled:         true,
+		ID:      "default_persona",
+		Name:    "Default",
+		Enabled: true,
 	}
 	// No AutoApproveRules set — should use defaults
 	got := st.EvaluateOperationRisk("git status")
@@ -579,9 +579,9 @@ func TestSubagentTypeEvaluateOperationRisk_CaseInsensitive(t *testing.T) {
 	st := evalRiskHelper()
 
 	tests := []struct {
-		name    string
-		cmd     string
-		want    RiskLevel
+		name string
+		cmd  string
+		want RiskLevel
 	}{
 		{"mixed case rm", "RM -rf /tmp", RiskLevelHigh},
 		{"mixed case git", "GIT STATUS", RiskLevelLow},
@@ -600,9 +600,9 @@ func TestSubagentTypeEvaluateOperationRisk_CaseInsensitive(t *testing.T) {
 func TestSubagentTypeEvaluateOperationRisk_CustomRules(t *testing.T) {
 	// Create custom rules where everything is low risk
 	customRules := &AutoApproveRules{
-		LowRiskOps:     []string{"shell_command", "write_file", "git_commit", "git_push"},
-		MediumRiskOps:  []string{},
-		HighRiskNever:  []string{"dangerous_op"},
+		LowRiskOps:    []string{"shell_command", "write_file", "git_commit", "git_push"},
+		MediumRiskOps: []string{},
+		HighRiskNever: []string{"dangerous_op"},
 	}
 	st := SubagentType{
 		ID:               "custom_persona",
@@ -628,9 +628,9 @@ func TestSubagentTypeEvaluateOperationRisk_CustomRules(t *testing.T) {
 func TestSubagentTypeEvaluateOperationRisk_CustomHighRiskPattern(t *testing.T) {
 	// Create rules with a custom high-risk pattern
 	customRules := &AutoApproveRules{
-		LowRiskOps:     []string{"read_file"},
-		MediumRiskOps:  []string{"write_file"},
-		HighRiskNever:  []string{"dangerous_op", "force_flag", "rm_recursive"},
+		LowRiskOps:    []string{"read_file"},
+		MediumRiskOps: []string{"write_file"},
+		HighRiskNever: []string{"dangerous_op", "force_flag", "rm_recursive"},
 	}
 	st := SubagentType{
 		ID:               "custom_persona",
@@ -692,9 +692,9 @@ func TestRiskLevelConstants(t *testing.T) {
 func TestCategorizeCommand_CaseVariations(t *testing.T) {
 	// categorizeCommand expects pre-lowercased input (caller lowercases first)
 	tests := []struct {
-		name    string
-		cmd     string
-		want    string
+		name string
+		cmd  string
+		want string
 	}{
 		{"lowercase git", "git status", "git_status"},
 		{"lowercase git commit", "git commit -m msg", "git_commit"},
@@ -717,9 +717,9 @@ func TestCategorizeCommand_CaseVariations(t *testing.T) {
 
 func TestContainsForceFlag_EdgeCases(t *testing.T) {
 	tests := []struct {
-		name    string
-		cmd     string
-		want    bool
+		name string
+		cmd  string
+		want bool
 	}{
 		{"diff is not -f", "diff file1 file2", false},
 		{"diff contains f but not flag", "diff -u file1 file2", false},

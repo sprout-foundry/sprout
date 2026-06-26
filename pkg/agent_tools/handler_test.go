@@ -399,8 +399,8 @@ func TestToolResultWithStructuredOut(t *testing.T) {
 	t.Parallel()
 	data := map[string]int{"key": 42}
 	r := ToolResult{
-		Output:          "structured",
-		StructuredOut:   data,
+		Output:        "structured",
+		StructuredOut: data,
 	}
 	got, ok := r.StructuredOut.(map[string]int)
 	if !ok {
@@ -510,11 +510,11 @@ func TestToolEnvFields(t *testing.T) {
 	am := &mockApprovalManager{approved: true}
 
 	env := ToolEnv{
-		EventBus:      nil, // hard to construct without events package internals
-		WorkspaceRoot: "/home/user/project",
-		OutputWriter:  sw,
+		EventBus:        nil, // hard to construct without events package internals
+		WorkspaceRoot:   "/home/user/project",
+		OutputWriter:    sw,
 		ApprovalManager: am,
-		MaxTokensFunc: func() int { return 4096 },
+		MaxTokensFunc:   func() int { return 4096 },
 	}
 
 	if env.WorkspaceRoot != "/home/user/project" {
@@ -562,37 +562,37 @@ func TestAllToolsRegistration(t *testing.T) {
 	}
 
 	expectedNames := map[string]string{
-		"read_file":               "read_file",
-		"list_directory":          "list_directory",
-		"fetch_url":               "fetch_url",
-		"search_files":            "search_files",
-		"repo_map":                "repo_map",
-		"rollback_changes":        "rollback_changes",
-		"view_history":            "view_history",
-		"list_skills":             "list_skills",
-		"embedding_index":         "embedding_index",
-		"write_file":              "write_file",
-		"write_structured_file":   "write_structured_file",
-		"edit_file":               "edit_file",
-		"shell_command":           "shell_command",
-		"save_memory":             "save_memory",
-		"search_memories":         "search_memories",
-		"task_queue_add":          "task_queue_add",
-		"task_queue_publish":      "task_queue_publish",
-		"task_queue_read":         "task_queue_read",
-		"todo_write":              "todo_write",
-		"todo_read":               "todo_read",
-		"ask_user":                "ask_user",
-		"patch_structured_file":   "patch_structured_file",
-		"self_review":             "self_review",
-		"commit":                  "commit",
-		"git":                     "git",
-		"activate_skill":          "activate_skill",
-		"browse_url":              "browse_url",
-		"web_search":              "web_search",
-		"semantic_search":         "semantic_search",
-		"analyze_image_content":   "analyze_image_content",
-		"analyze_ui_screenshot":   "analyze_ui_screenshot",
+		"read_file":             "read_file",
+		"list_directory":        "list_directory",
+		"fetch_url":             "fetch_url",
+		"search_files":          "search_files",
+		"repo_map":              "repo_map",
+		"rollback_changes":      "rollback_changes",
+		"view_history":          "view_history",
+		"list_skills":           "list_skills",
+		"embedding_index":       "embedding_index",
+		"write_file":            "write_file",
+		"write_structured_file": "write_structured_file",
+		"edit_file":             "edit_file",
+		"shell_command":         "shell_command",
+		"save_memory":           "save_memory",
+		"search_memories":       "search_memories",
+		"task_queue_add":        "task_queue_add",
+		"task_queue_publish":    "task_queue_publish",
+		"task_queue_read":       "task_queue_read",
+		"todo_write":            "todo_write",
+		"todo_read":             "todo_read",
+		"ask_user":              "ask_user",
+		"patch_structured_file": "patch_structured_file",
+		"self_review":           "self_review",
+		"commit":                "commit",
+		"git":                   "git",
+		"activate_skill":        "activate_skill",
+		"browse_url":            "browse_url",
+		"web_search":            "web_search",
+		"semantic_search":       "semantic_search",
+		"analyze_image_content": "analyze_image_content",
+		"analyze_ui_screenshot": "analyze_ui_screenshot",
 	}
 
 	var foundNames []string
@@ -623,7 +623,7 @@ func TestAllToolsRegistration(t *testing.T) {
 		}
 	}
 
-			// Verify required parameters for each handler
+	// Verify required parameters for each handler
 	for _, h := range tools {
 		def := h.Definition()
 		switch def.Name {
@@ -753,7 +753,7 @@ func TestAllToolsRegistration(t *testing.T) {
 			}
 		}
 	}
-}// ---------------------------------------------------------------------------
+} // ---------------------------------------------------------------------------
 // Unregister Tests
 // ---------------------------------------------------------------------------
 

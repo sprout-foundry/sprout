@@ -15,7 +15,7 @@ func (h *commitHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "commit",
 		Description: "Commit staged changes with an auto-generated commit message. Use this tool instead of running 'git commit' directly. This tool uses the commit message generation and validation system. For read-only operations like status, log, diff, use shell_command instead.",
-		Required: []string{},
+		Required:    []string{},
 		Parameters: []ParameterDef{
 			{Name: "message", Type: "string", Description: "Commit message (optional). If not provided, a message will be auto-generated based on the staged changes."},
 			{Name: "notes", Type: "string", Description: "Optional notes/context to integrate into the auto-generated commit message. Use this to provide context about why the changes were made, what task they relate to, or any other information that should be captured in the commit. These notes are combined with the diff analysis to produce a better commit message. Ignored if 'message' parameter is provided."},

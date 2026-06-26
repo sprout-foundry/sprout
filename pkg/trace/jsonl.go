@@ -22,7 +22,7 @@ func newJSONLWriter(path string) (*jsonlWriter, error) {
 	}
 
 	return &jsonlWriter{
-		file:   file,
+		file:    file,
 		encoder: json.NewEncoder(file),
 	}, nil
 }

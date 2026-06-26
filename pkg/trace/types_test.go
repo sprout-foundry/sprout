@@ -78,10 +78,10 @@ func TestRecordTurn_WritesAndVerifiesJSON(t *testing.T) {
 	toolCall.Function.Arguments = `{"path":"/tmp/test.go"}`
 
 	record := TurnRecord{
-		RunID:             s.GetRunID(),
-		TurnIndex:         0,
-		SystemPrompt:      "You are a helpful assistant.",
-		UserPrompt:        "Read the file",
+		RunID:              s.GetRunID(),
+		TurnIndex:          0,
+		SystemPrompt:       "You are a helpful assistant.",
+		UserPrompt:         "Read the file",
 		UserPromptOriginal: "Read the file",
 		MessagesSent: []api.Message{
 			{Role: "user", Content: "Read the file"},
@@ -317,13 +317,13 @@ func TestRecordArtifact_Verifies(t *testing.T) {
 	defer s.Close()
 
 	record := ArtifactManifest{
-		RunID:        s.GetRunID(),
-		RelativePath: "src/main.go",
-		SizeBytes:    2048,
-		Hash:         "abc123def456",
-		ArtifactType: "file_edit",
+		RunID:         s.GetRunID(),
+		RelativePath:  "src/main.go",
+		SizeBytes:     2048,
+		Hash:          "abc123def456",
+		ArtifactType:  "file_edit",
 		MachineLabels: []string{LabelPathViolationAbsolute},
-		Timestamp:    "2024-06-15T10:32:00Z",
+		Timestamp:     "2024-06-15T10:32:00Z",
 	}
 
 	if err := s.RecordArtifact(record); err != nil {
@@ -780,15 +780,15 @@ func TestGetRunDir(t *testing.T) {
 
 func TestLabelConstants(t *testing.T) {
 	labels := map[string]string{
-		"LabelPathViolationAbsolute":       LabelPathViolationAbsolute,
-		"LabelPathViolationNested":         LabelPathViolationNested,
-		"LabelPathViolationDisallowed":     LabelPathViolationDisallowed,
-		"LabelSchemaEnvelopeViolation":      LabelSchemaEnvelopeViolation,
-		"LabelLayoutViolation":             LabelLayoutViolation,
-		"LabelToolCallValidationFailure":    LabelToolCallValidationFailure,
-		"LabelToolCallUnknownTool":         LabelToolCallUnknownTool,
-		"LabelToolCallTimeout":             LabelToolCallTimeout,
-		"LabelToolCallExecutionError":      LabelToolCallExecutionError,
+		"LabelPathViolationAbsolute":     LabelPathViolationAbsolute,
+		"LabelPathViolationNested":       LabelPathViolationNested,
+		"LabelPathViolationDisallowed":   LabelPathViolationDisallowed,
+		"LabelSchemaEnvelopeViolation":   LabelSchemaEnvelopeViolation,
+		"LabelLayoutViolation":           LabelLayoutViolation,
+		"LabelToolCallValidationFailure": LabelToolCallValidationFailure,
+		"LabelToolCallUnknownTool":       LabelToolCallUnknownTool,
+		"LabelToolCallTimeout":           LabelToolCallTimeout,
+		"LabelToolCallExecutionError":    LabelToolCallExecutionError,
 	}
 
 	for name, val := range labels {
@@ -806,7 +806,7 @@ func TestLabelConstants(t *testing.T) {
 func TestNewJSONLWriter_BadDirectory(t *testing.T) {
 	// Create a path in a directory that doesn't exist
 	badPath := filepath.Join(t.TempDir(), "nonexistent", "deep", "nested", "file.jsonl")
-	
+
 	// Verify directory doesn't exist
 	if _, err := os.Stat(filepath.Dir(badPath)); err == nil {
 		t.Fatal("expected nonexistent directory")

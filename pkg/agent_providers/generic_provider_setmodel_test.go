@@ -11,7 +11,7 @@ import (
 func TestGenericProviderSetModelInvalidatesCache(t *testing.T) {
 	// Create a minimal provider with a model that has a context limit
 	config := &ProviderConfig{
-		Name: "test-provider",
+		Name:     "test-provider",
 		Endpoint: "https://api.test-provider.com/v1",
 		Auth: AuthConfig{
 			Type: "none",
@@ -59,7 +59,7 @@ func TestGenericProviderSetModelInvalidatesCache(t *testing.T) {
 func TestGenericProviderSetModelPreservesCache(t *testing.T) {
 	// Create a minimal provider
 	config := &ProviderConfig{
-		Name: "test-provider",
+		Name:     "test-provider",
 		Endpoint: "https://api.test-provider.com/v1",
 		Auth: AuthConfig{
 			Type: "none",
@@ -103,7 +103,7 @@ func TestGenericProviderSetModelPreservesCache(t *testing.T) {
 func TestGenericProviderSetModelMultipleTimes(t *testing.T) {
 	// Create a minimal provider
 	config := &ProviderConfig{
-		Name: "test-provider",
+		Name:     "test-provider",
 		Endpoint: "https://api.test-provider.com/v1",
 		Auth: AuthConfig{
 			Type: "none",
@@ -146,7 +146,7 @@ func TestGenericProviderSetModelMultipleTimes(t *testing.T) {
 func TestGenericProviderSetModelWithModelsCached(t *testing.T) {
 	// Create a minimal provider
 	config := &ProviderConfig{
-		Name: "test-provider",
+		Name:     "test-provider",
 		Endpoint: "https://api.test-provider.com/v1",
 		Auth: AuthConfig{
 			Type: "none",

@@ -226,16 +226,16 @@ func TestGetBaseName(t *testing.T) {
 func TestImageAnalysisResponseSerialization(t *testing.T) {
 	t.Run("successful response", func(t *testing.T) {
 		resp := ImageAnalysisResponse{
-			Success:       true,
-			ToolInvoked:   true,
-			InputResolved: true,
-			OCRAttempted:  true,
-			InputType:     "local_file",
-			InputPath:     "/path/to/image.png",
-			ExtractedText: "Sample text from image",
+			Success:         true,
+			ToolInvoked:     true,
+			InputResolved:   true,
+			OCRAttempted:    true,
+			InputType:       "local_file",
+			InputPath:       "/path/to/image.png",
+			ExtractedText:   "Sample text from image",
 			OutputTruncated: false,
-			OriginalChars: 100,
-			ReturnedChars: 100,
+			OriginalChars:   100,
+			ReturnedChars:   100,
 			Analysis: &VisionAnalysis{
 				ImagePath:   "/path/to/image.png",
 				Description: "A sample image",

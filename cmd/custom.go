@@ -10,10 +10,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/sprout-foundry/sprout/pkg/console"
-	"github.com/sprout-foundry/sprout/pkg/configuration"
-	"github.com/sprout-foundry/sprout/pkg/secretdetect"
 	"github.com/spf13/cobra"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/console"
+	"github.com/sprout-foundry/sprout/pkg/secretdetect"
 )
 
 var customModelCmd = &cobra.Command{
@@ -194,7 +194,7 @@ func runCustomModelAdd() error {
 				selectedVisionModel, err := resolvePreferredCustomProviderModel(trimmed, models)
 				if err != nil {
 					fmt.Println()
-				console.GlyphWarning.Printf("%v", err)
+					console.GlyphWarning.Printf("%v", err)
 					continue
 				}
 				provider.VisionModel = selectedVisionModel

@@ -23,10 +23,10 @@ type AuditRecord struct {
 // per-session JSONL log under the configured directory. It is the outermost
 // decorator so it captures the action the user actually authorized.
 type auditingBackend struct {
-	inner ComputerBackend
-	mu    sync.Mutex
-	w     *os.File
-	now   func() time.Time
+	inner  ComputerBackend
+	mu     sync.Mutex
+	w      *os.File
+	now    func() time.Time
 	closed bool
 }
 

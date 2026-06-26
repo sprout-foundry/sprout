@@ -68,9 +68,9 @@ func TestWorkspaceFileMetadata_HasUnsyncedBrowserEdits_LargeSeq(t *testing.T) {
 func TestWorkspaceFileMetadata_HasUnsyncedBrowserEdits_ContainerDoesntMatter(t *testing.T) {
 	md := WorkspaceFileMetadata{
 		BrowserSeq:          5,
-		ContainerSeq:        20,            // Container far ahead
-		LastSyncedBrowser:   5,             // Browser fully synced
-		LastSyncedContainer: 1,             // Browser hasn't seen latest container writes
+		ContainerSeq:        20, // Container far ahead
+		LastSyncedBrowser:   5,  // Browser fully synced
+		LastSyncedContainer: 1,  // Browser hasn't seen latest container writes
 	}
 	assert.False(t, md.HasUnsyncedBrowserEdits(), "container-side unsynced writes should not affect HasUnsyncedBrowserEdits")
 }
@@ -82,9 +82,9 @@ func TestAgentSetAndGetFileMetadata_RoundTrip(t *testing.T) {
 
 	testPath := "roundtrip.txt"
 	original := WorkspaceFileMetadata{
-		BrowserSeq:        42,
-		ContainerSeq:      10,
-		LastSyncedBrowser: 38,
+		BrowserSeq:          42,
+		ContainerSeq:        10,
+		LastSyncedBrowser:   38,
 		LastSyncedContainer: 8,
 	}
 

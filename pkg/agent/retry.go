@@ -6,14 +6,14 @@
 //
 // Classification is driven by the error category:
 //
-//	- TransientError      → Retry (backoff)
-//	- RateLimitError      → Retry (longer backoff)
-//	- SecurityError       → Escalate (ask user/LLM)
-//	- InvalidInputError   → Fail (input must be fixed)
-//	- ContextError        → Fail (context overflow, needs compaction)
-//	- PermanentError      → Fail (non-recoverable)
-//	- ProviderError       → Fail (auth/config) or Retry (server errors) depending on Retryable field
-//	- Unknown errors      → Retry once then Fail
+//   - TransientError      → Retry (backoff)
+//   - RateLimitError      → Retry (longer backoff)
+//   - SecurityError       → Escalate (ask user/LLM)
+//   - InvalidInputError   → Fail (input must be fixed)
+//   - ContextError        → Fail (context overflow, needs compaction)
+//   - PermanentError      → Fail (non-recoverable)
+//   - ProviderError       → Fail (auth/config) or Retry (server errors) depending on Retryable field
+//   - Unknown errors      → Retry once then Fail
 package agent
 
 import (

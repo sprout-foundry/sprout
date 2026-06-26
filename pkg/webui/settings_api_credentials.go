@@ -76,7 +76,7 @@ type providerCredentialStatusResponse struct {
 
 // getCredentialsResponse is the response for GET /api/settings/credentials.
 type getCredentialsResponse struct {
-	StorageBackend string                        `json:"storage_backend"`
+	StorageBackend string                             `json:"storage_backend"`
 	Providers      []providerCredentialStatusResponse `json:"providers"`
 }
 
@@ -259,7 +259,7 @@ func (ws *ReactWebServer) handleAPISettingsCredentialsPut(w http.ResponseWriter,
 	// Warn if provider has an existing multi-key pool that would be overwritten
 	if existingSize, _ := credentials.GetPoolSize(provider); existingSize > 1 {
 		writeJSON(w, http.StatusConflict, map[string]interface{}{
-			"success": false,
+			"success":  false,
 			"provider": provider,
 			"warning": fmt.Sprintf(
 				"Provider %q has %d keys in its pool. Use the pool API (POST/DELETE /api/settings/credentials/%s/pool) to manage keys individually.",

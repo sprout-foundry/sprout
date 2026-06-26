@@ -593,19 +593,19 @@ func (m *mockClient) SendChatRequestStream(ctx context.Context, messages []api.M
 	return nil, nil
 }
 
-func (m *mockClient) CheckConnection() error                        { return nil }
-func (m *mockClient) SetDebug(debug bool)                           {}
-func (m *mockClient) SetModel(model string) error                   { return nil }
-func (m *mockClient) GetModel() string                              { return "mock" }
-func (m *mockClient) GetProvider() string                           { return "mock" }
-func (m *mockClient) GetModelContextLimit() (int, error)            { return 0, nil }
+func (m *mockClient) CheckConnection() error                                  { return nil }
+func (m *mockClient) SetDebug(debug bool)                                     {}
+func (m *mockClient) SetModel(model string) error                             { return nil }
+func (m *mockClient) GetModel() string                                        { return "mock" }
+func (m *mockClient) GetProvider() string                                     { return "mock" }
+func (m *mockClient) GetModelContextLimit() (int, error)                      { return 0, nil }
 func (m *mockClient) ListModels(ctx context.Context) ([]api.ModelInfo, error) { return nil, nil }
-func (m *mockClient) SupportsVision() bool                          { return false }
-func (m *mockClient) GetVisionModel() string                        { return "" }
+func (m *mockClient) SupportsVision() bool                                    { return false }
+func (m *mockClient) GetVisionModel() string                                  { return "" }
 func (m *mockClient) SendVisionRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	return nil, nil
 }
-func (m *mockClient) GetLastTPS() float64                           { return 0 }
-func (m *mockClient) GetAverageTPS() float64                        { return 0 }
-func (m *mockClient) GetTPSStats() map[string]float64               { return nil }
-func (m *mockClient) ResetTPSStats()                                {}
+func (m *mockClient) GetLastTPS() float64             { return 0 }
+func (m *mockClient) GetAverageTPS() float64          { return 0 }
+func (m *mockClient) GetTPSStats() map[string]float64 { return nil }
+func (m *mockClient) ResetTPSStats()                  {}

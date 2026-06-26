@@ -4,16 +4,16 @@
 // rest were folded into options on these:
 //
 //   - list_changes
-//       Manifest of the session's changes, with three optional knobs:
-//         include_diff: bool        per-file unified diff (was show_my_change)
-//         group_by: "block"|""      activity-block summary (was summarize_my_session)
-//         include_persisted: bool   merge hot+warm history (was my_recent_changes)
-//       Plus the existing filters: since, tool, path_pattern.
+//     Manifest of the session's changes, with three optional knobs:
+//     include_diff: bool        per-file unified diff (was show_my_change)
+//     group_by: "block"|""      activity-block summary (was summarize_my_session)
+//     include_persisted: bool   merge hot+warm history (was my_recent_changes)
+//     Plus the existing filters: since, tool, path_pattern.
 //
 //   - revert_my_changes
-//       Bulk undo by scope ("all" or "since"). The previous file= scope was
-//       removed because recover_file(scope="session_start") does the same
-//       thing with clearer semantics.
+//     Bulk undo by scope ("all" or "since"). The previous file= scope was
+//     removed because recover_file(scope="session_start") does the same
+//     thing with clearer semantics.
 //
 // Recovery of an individual file (or bulk entry, or session-start state)
 // lives in tool_handlers_recover.go.
@@ -460,8 +460,8 @@ func buildUnifiedDiff(path, before, after string) string {
 //
 //   - scope="all"            Restore every file the tracker recorded.
 //   - since="<RFC3339|dur>"  Revert changes recorded at or after the
-//                            given timestamp (e.g. "2026-05-27T10:00:00Z"
-//                            or "30m"). When set, scope defaults to "all".
+//     given timestamp (e.g. "2026-05-27T10:00:00Z"
+//     or "30m"). When set, scope defaults to "all".
 //
 // Returns a JSON envelope listing per-file outcomes so the model can
 // report exactly what happened back to the user.

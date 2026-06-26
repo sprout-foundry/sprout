@@ -27,7 +27,7 @@ func TestIsHTMLContent(t *testing.T) {
 		{"application/json", "application/json", false},
 		{"empty string", "", false},
 		{"text/plain", "text/plain", false},
-	{"application/octet-stream", "application/octet-stream", false},
+		{"application/octet-stream", "application/octet-stream", false},
 		{"TEXT/HTML uppercase", "TEXT/HTML", true},
 	}
 	for _, tc := range tests {

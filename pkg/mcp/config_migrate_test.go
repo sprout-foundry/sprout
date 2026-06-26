@@ -39,11 +39,11 @@ func setupConfigTestEnv(t *testing.T) string {
 // the saved file (so we can inspect env values without deserialising through
 // the custom UnmarshalJSON which would resolve the timeout field).
 type rawMCPConfigFile struct {
-	Enabled      bool                         `json:"enabled"`
-	Servers      map[string]rawServerOnDisk   `json:"servers"`
-	AutoStart    bool                         `json:"auto_start"`
-	AutoDiscover bool                         `json:"auto_discover"`
-	Timeout      interface{}                  `json:"timeout"` // string or number
+	Enabled      bool                       `json:"enabled"`
+	Servers      map[string]rawServerOnDisk `json:"servers"`
+	AutoStart    bool                       `json:"auto_start"`
+	AutoDiscover bool                       `json:"auto_discover"`
+	Timeout      interface{}                `json:"timeout"` // string or number
 }
 
 type rawServerOnDisk struct {
@@ -55,7 +55,7 @@ type rawServerOnDisk struct {
 	Env         map[string]string `json:"env,omitempty"`
 	Credentials map[string]string `json:"credentials,omitempty"`
 	WorkingDir  string            `json:"working_dir,omitempty"`
-	Timeout     interface{}      `json:"timeout,omitempty"`
+	Timeout     interface{}       `json:"timeout,omitempty"`
 	AutoStart   bool              `json:"auto_start"`
 	MaxRestarts int               `json:"max_restarts"`
 }

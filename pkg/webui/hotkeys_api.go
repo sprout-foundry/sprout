@@ -43,8 +43,8 @@ func (ws *ReactWebServer) handleAPIHotkeysValidate(w http.ResponseWriter, r *htt
 
 	// Return the validated config
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"valid":   true,
-		"config":  config,
+		"valid":  true,
+		"config": config,
 	})
 }
 

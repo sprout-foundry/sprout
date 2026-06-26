@@ -99,10 +99,10 @@ func TestShouldStopExecution(t *testing.T) {
 	te := &ToolExecutor{}
 
 	tests := []struct {
-		name    string
-		tool    string
-		result  string
-		want    bool
+		name   string
+		tool   string
+		result string
+		want   bool
 	}{
 		{
 			name:   "critical error",

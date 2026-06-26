@@ -310,5 +310,3 @@ func goRecvType(expr ast.Expr) string {
 		return "?"
 	}
 }
-
-

@@ -43,8 +43,8 @@ func (h *embeddingIndexHandler) Execute(ctx context.Context, env ToolEnv, args m
 	// EventBus events are optional — best-effort side effect only, not a gate
 	if env.EventBus != nil {
 		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool":     toolName,
-			"params":   args,
+			"tool":   toolName,
+			"params": args,
 		})
 		defer func() {
 			env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
@@ -176,8 +176,8 @@ func (h *embeddingIndexHandler) handleStatus(cfg *configuration.EmbeddingIndexCo
 	}
 
 	return ToolResult{
-		Output:    sb.String(),
-		IsError:   false,
+		Output:  sb.String(),
+		IsError: false,
 	}, nil
 }
 
@@ -202,8 +202,8 @@ func (h *embeddingIndexHandler) handleBuild(ctx context.Context, mgr *embedding.
 	sb.WriteString(fmt.Sprintf("  Duration: %s\n", stats.Duration))
 
 	return ToolResult{
-		Output:    sb.String(),
-		IsError:   false,
+		Output:  sb.String(),
+		IsError: false,
 	}, nil
 }
 
@@ -228,7 +228,7 @@ func (h *embeddingIndexHandler) handleUpdate(ctx context.Context, mgr *embedding
 	sb.WriteString(fmt.Sprintf("  Duration: %s\n", stats.Duration))
 
 	return ToolResult{
-		Output:    sb.String(),
-		IsError:   false,
+		Output:  sb.String(),
+		IsError: false,
 	}, nil
 }

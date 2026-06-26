@@ -11,11 +11,11 @@ func SweepStaleSessions(sproutDir string) (int, error) {
 
 // AutomateSessionInfo is a stub type for JS/WASM builds.
 type AutomateSessionInfo struct {
-	Workflow       string `json:"workflow"`
-	PID            int    `json:"pid"`
+	Workflow       string      `json:"workflow"`
+	PID            int         `json:"pid"`
 	StartedAt      interface{} `json:"started_at"`
-	OutputFilePath string `json:"output_file_path,omitempty"`
-	Kind           string `json:"kind"`
+	OutputFilePath string      `json:"output_file_path,omitempty"`
+	Kind           string      `json:"kind"`
 }
 
 // WriteSessionFile is a no-op for JS/WASM builds.

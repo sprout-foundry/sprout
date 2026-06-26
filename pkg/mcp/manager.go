@@ -27,7 +27,7 @@ func NewMCPManager(logger *utils.Logger) *DefaultMCPManager {
 	}
 	// Set default server factory
 	m.serverFactory = m.defaultServerFactory
-			return m
+	return m
 }
 
 // addServerUnlocked is a helper method that adds a server assuming the caller already holds the lock

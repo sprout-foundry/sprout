@@ -27,12 +27,12 @@ type GitHubSetupAgentInterface interface {
 
 // Function variables for dependency injection (useful for testing)
 var (
-	getwdFunc                = os.Getwd
-	shouldPromptGitHubSetup  = mcp.ShouldPromptGitHubSetup
-	detectGitHubRepo         = mcp.DetectGitHubRepo
-	runGitHubMCPSetup        = mcp.RunGitHubMCPSetup
-	saveGitHubMCPServer      = mcp.SaveGitHubMCPServer
-	newReaderFromStdin       = func(in *os.File) *bufio.Reader {
+	getwdFunc               = os.Getwd
+	shouldPromptGitHubSetup = mcp.ShouldPromptGitHubSetup
+	detectGitHubRepo        = mcp.DetectGitHubRepo
+	runGitHubMCPSetup       = mcp.RunGitHubMCPSetup
+	saveGitHubMCPServer     = mcp.SaveGitHubMCPServer
+	newReaderFromStdin      = func(in *os.File) *bufio.Reader {
 		return bufio.NewReader(in)
 	}
 )

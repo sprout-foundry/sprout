@@ -373,14 +373,15 @@ func CombinedSecurityAssessment(
 		toolName == "write_structured_file" || toolName == "patch_structured_file" {
 		if pathRaw, ok := args["path"].(string); ok && pathRaw != "" {
 			assessment.PathAllowed = policy.IsPathAllowed(pathRaw)
-					if !assessment.PathAllowed {
-			msg := "path denied by workspace security policy"
-			if assessment.OverrideAction != "" {
-				assessment.OverrideAction += "; " + msg
-			} else {
-				assessment.OverrideAction = msg
+			if !assessment.PathAllowed {
+				msg := "path denied by workspace security policy"
+				if assessment.OverrideAction != "" {
+					assessment.OverrideAction += "; " + msg
+				} else {
+					assessment.OverrideAction = msg
+				}
 			}
-		}}
+		}
 	}
 
 	return assessment

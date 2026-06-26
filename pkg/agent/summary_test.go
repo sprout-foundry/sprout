@@ -105,8 +105,8 @@ func TestTokenDiscrepancy(t *testing.T) {
 	agent.state.SetCachedTokens(7500)
 
 	// Simulate the calculation from summary.go
-	processedPromptTokens := agent.state.GetPromptTokens() - agent.state.GetCachedTokens()  // 500
-	processedTokens := processedPromptTokens + agent.state.GetCompletionTokens() // 700
+	processedPromptTokens := agent.state.GetPromptTokens() - agent.state.GetCachedTokens() // 500
+	processedTokens := processedPromptTokens + agent.state.GetCompletionTokens()           // 700
 
 	expectedProcessed := agent.state.GetTotalTokens() - agent.state.GetCachedTokens() // 1000
 

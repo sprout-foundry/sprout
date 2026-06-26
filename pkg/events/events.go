@@ -33,15 +33,15 @@ const (
 	EventTypeToolEnd                 = "tool_end"
 	EventTypeSubagentActivity        = "subagent_activity"
 	EventTypeTodoUpdate              = "todo_update"
-	EventTypeFileChanged            = "file_changed"
-	EventTypeWorkspacePatch         = "workspace_patch"
-	EventTypeFileContentChanged     = "file_content_changed"
+	EventTypeFileChanged             = "file_changed"
+	EventTypeWorkspacePatch          = "workspace_patch"
+	EventTypeFileContentChanged      = "file_content_changed"
 	EventTypeStreamChunk             = "stream_chunk"
 	EventTypeMetricsUpdate           = "metrics_update"
 	EventTypeValidation              = "validation"
 	EventTypeSecurityApprovalRequest = "security_approval_request"
-	EventTypeSecurityPromptRequest  = "security_prompt_request"
-	EventTypeAskUserRequest        = "ask_user_request"
+	EventTypeSecurityPromptRequest   = "security_prompt_request"
+	EventTypeAskUserRequest          = "ask_user_request"
 	// EventTypeEditApprovalRequest (SP-072-3) is published when the
 	// per-hunk diff approval gate routes a proposed file edit through the
 	// WebUI for interactive review. The payload carries the request ID,
@@ -55,21 +55,21 @@ const (
 	// specific security_approval_request / security_prompt_request / ask_user_request
 	// events: it lets notification subscribers (CLI bell, browser notification)
 	// listen to a single "the agent needs you" signal.
-	EventTypeInputRequired               = "input_required"
-	EventTypeAgentMessage                = "agent_message"
+	EventTypeInputRequired = "input_required"
+	EventTypeAgentMessage  = "agent_message"
 	// EventTypeProviderNoCredential is published when a provider change
 	// would activate a provider that requires an API key but doesn't
 	// have one configured. The frontend surfaces it as a sticky toast
 	// pointing at Settings → Credentials, distinct from generic warning
 	// messages that get inlined into the active assistant bubble.
-	EventTypeProviderNoCredential    = "provider_no_credential"
-	EventTypeWorkspaceChanged        = "workspace_changed"
-	EventTypeSessionTerminated       = "session_terminated"
-	EventTypeDriftDetected           = "drift_detected"
+	EventTypeProviderNoCredential = "provider_no_credential"
+	EventTypeWorkspaceChanged     = "workspace_changed"
+	EventTypeSessionTerminated    = "session_terminated"
+	EventTypeDriftDetected        = "drift_detected"
 	// EventTypeSessionChanged signals that a chat session's metadata
 	// (name, pin state, active state) changed and tabs viewing that chat
 	// should reconcile. SP-034-3e.
-	EventTypeSessionChanged          = "session_changed"
+	EventTypeSessionChanged = "session_changed"
 	// EventTypeDelegateClarificationRequested is published when a delegate
 	// agent requests clarification from its parent agent.
 	EventTypeDelegateClarificationRequested = "delegate_clarification_requested"
@@ -438,11 +438,11 @@ func SecurityApprovalRequestEvent(requestID, toolName, riskLevel, reasoning stri
 // raw unified-diff string for display.
 func EditApprovalRequestEvent(requestID, path, unifiedDiff string, hunks []map[string]interface{}) map[string]interface{} {
 	return map[string]interface{}{
-		"request_id":    requestID,
-		"file_path":     path,
-		"unified_diff":  unifiedDiff,
-		"hunks":         hunks,
-		"timestamp":     time.Now().UTC().Format(time.RFC3339),
+		"request_id":   requestID,
+		"file_path":    path,
+		"unified_diff": unifiedDiff,
+		"hunks":        hunks,
+		"timestamp":    time.Now().UTC().Format(time.RFC3339),
 	}
 }
 
@@ -524,8 +524,8 @@ func WorkspaceChangedEvent(daemonRoot, workspaceRoot, previousWorkspaceRoot stri
 // SecurityPromptRequestEvent creates a security prompt request event for the webui
 func SecurityPromptRequestEvent(requestID, prompt string, defaultResponse bool, extras map[string]string) map[string]interface{} {
 	payload := map[string]interface{}{
-		"request_id":      requestID,
-		"prompt":          prompt,
+		"request_id":       requestID,
+		"prompt":           prompt,
 		"default_response": defaultResponse,
 	}
 	for k, v := range extras {
@@ -547,11 +547,11 @@ func SecurityPromptResponseEvent(requestID, response bool) map[string]interface{
 // payload carries these fields verbatim so the WebUI can render
 // options, header, and the multi-select / default affordances.
 type AskUserRequest struct {
-	Question    string                  `json:"question"`
-	Header      string                  `json:"header,omitempty"`
-	Options     []AskUserRequestOption  `json:"options,omitempty"`
-	MultiSelect bool                    `json:"multi_select,omitempty"`
-	Default     string                  `json:"default,omitempty"`
+	Question    string                 `json:"question"`
+	Header      string                 `json:"header,omitempty"`
+	Options     []AskUserRequestOption `json:"options,omitempty"`
+	MultiSelect bool                   `json:"multi_select,omitempty"`
+	Default     string                 `json:"default,omitempty"`
 }
 
 // AskUserRequestOption is a single selectable choice in an ask_user prompt.
@@ -661,20 +661,20 @@ func ContextManagementDiagnosticEvent(currentTokens, maxTokens int, triggerFract
 		cacheHitRate = float64(cachedTokens) / float64(promptTokens)
 	}
 	return map[string]interface{}{
-		"current_tokens":      currentTokens,
-		"max_tokens":          maxTokens,
-		"effective_max":       effectiveMax,
-		"trigger_fraction":    triggerFraction,
-		"reserved_response":   reservedResponse,
-		"reserved_thinking":   reservedThinking,
-		"reserved_tool_io":    reservedToolIO,
-		"iteration":           iteration,
-		"message_count":       messageCount,
-		"cached_tokens":       cachedTokens,
-		"prompt_tokens":       promptTokens,
-		"cache_write_tokens":  cacheWriteTokens,
-		"cache_hit_rate":      cacheHitRate,
-		"timestamp":           time.Now().UTC().Format(time.RFC3339),
+		"current_tokens":     currentTokens,
+		"max_tokens":         maxTokens,
+		"effective_max":      effectiveMax,
+		"trigger_fraction":   triggerFraction,
+		"reserved_response":  reservedResponse,
+		"reserved_thinking":  reservedThinking,
+		"reserved_tool_io":   reservedToolIO,
+		"iteration":          iteration,
+		"message_count":      messageCount,
+		"cached_tokens":      cachedTokens,
+		"prompt_tokens":      promptTokens,
+		"cache_write_tokens": cacheWriteTokens,
+		"cache_hit_rate":     cacheHitRate,
+		"timestamp":          time.Now().UTC().Format(time.RFC3339),
 	}
 }
 
@@ -706,11 +706,11 @@ func RecallDiagnosticEvent(embedDurationMS float64, candidatesConsidered, inject
 // unchanged pre-compact totals.
 func CompactCompletedEvent(source string, beforeCount, afterCount int, summaryChars int, err error) map[string]interface{} {
 	data := map[string]interface{}{
-		"source":             source,
+		"source":               source,
 		"before_message_count": beforeCount,
 		"after_message_count":  afterCount,
-		"summary_chars":      summaryChars,
-		"timestamp":          time.Now().UTC().Format(time.RFC3339),
+		"summary_chars":        summaryChars,
+		"timestamp":            time.Now().UTC().Format(time.RFC3339),
 	}
 	if err != nil {
 		data["error"] = err.Error()
@@ -724,11 +724,11 @@ func CompactCompletedEvent(source string, beforeCount, afterCount int, summaryCh
 // DriftDetectedEvent creates a drift notification event for the WebUI
 func DriftDetectedEvent(similarity float64, threshold float64, sessionID string) map[string]interface{} {
 	return map[string]interface{}{
-		"similarity":  similarity,
-		"threshold":   threshold,
-		"sessionId":   sessionID,
-		"timestamp":   time.Now().UTC().Format(time.RFC3339),
-		"options":     []string{"continue", "new_chat"},
+		"similarity": similarity,
+		"threshold":  threshold,
+		"sessionId":  sessionID,
+		"timestamp":  time.Now().UTC().Format(time.RFC3339),
+		"options":    []string{"continue", "new_chat"},
 	}
 }
 
@@ -745,12 +745,12 @@ func AutomateSessionStartedEvent(sessionID, workflow, kind string) map[string]in
 // AutomateBudgetUpdateEvent creates a budget_update event payload.
 func AutomateBudgetUpdateEvent(sessionID string, spentUSD, budgetUSD float64, fraction float64, iteration int) map[string]interface{} {
 	return map[string]interface{}{
-		"session_id":  sessionID,
-		"spent_usd":   spentUSD,
-		"budget_usd":  budgetUSD,
-		"fraction":    fraction,
-		"iteration":   iteration,
-		"timestamp":   time.Now().UTC().Format(time.RFC3339),
+		"session_id": sessionID,
+		"spent_usd":  spentUSD,
+		"budget_usd": budgetUSD,
+		"fraction":   fraction,
+		"iteration":  iteration,
+		"timestamp":  time.Now().UTC().Format(time.RFC3339),
 	}
 }
 

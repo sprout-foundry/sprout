@@ -9,10 +9,10 @@ import (
 // TestCommitProviderEdgeCases tests edge cases for commit provider configuration
 func TestCommitProviderEdgeCases(t *testing.T) {
 	tests := []struct {
-		name              string
-		config            *Config
-		expectedProvider  string
-		expectedModel     string
+		name             string
+		config           *Config
+		expectedProvider string
+		expectedModel    string
 	}{
 		{
 			name: "whitespace provider returns as-is",
@@ -26,9 +26,9 @@ func TestCommitProviderEdgeCases(t *testing.T) {
 		{
 			name: "whitespace model returns as-is",
 			config: &Config{
-				CommitProvider:  "openai",
-				CommitModel:     "  ",
-				ProviderModels:  map[string]string{"openai": "gpt-4"},
+				CommitProvider: "openai",
+				CommitModel:    "  ",
+				ProviderModels: map[string]string{"openai": "gpt-4"},
 			},
 			expectedProvider: "openai",
 			expectedModel:    "  ", // Whitespace is not empty, so it's returned as-is
@@ -46,20 +46,20 @@ func TestCommitProviderEdgeCases(t *testing.T) {
 		{
 			name: "all fallback levels exhausted returns default",
 			config: &Config{
-				CommitProvider:    "",
+				CommitProvider:   "",
 				LastUsedProvider: "",
-				ProviderPriority:  []string{},
+				ProviderPriority: []string{},
 				ProviderModels:   map[string]string{"ollama-local": "qwen3-coder:30b"}, // Ultimate default has this model
 			},
-			expectedProvider: "ollama-local", // Ultimate default
+			expectedProvider: "ollama-local",    // Ultimate default
 			expectedModel:    "qwen3-coder:30b", // Model from the default provider
 		},
 		{
 			name: "provider priority first is empty string",
 			config: &Config{
-				CommitProvider:    "",
+				CommitProvider:   "",
 				LastUsedProvider: "",
-				ProviderPriority:  []string{"", "openai"},
+				ProviderPriority: []string{"", "openai"},
 			},
 			expectedProvider: "", // Empty string is first in priority
 			expectedModel:    "",
@@ -67,9 +67,9 @@ func TestCommitProviderEdgeCases(t *testing.T) {
 		{
 			name: "multiple fallback levels",
 			config: &Config{
-				CommitProvider:    "",
+				CommitProvider:   "",
 				LastUsedProvider: "",
-				ProviderPriority:  []string{"deepinfra", "zai", "openai"},
+				ProviderPriority: []string{"deepinfra", "zai", "openai"},
 				ProviderModels:   map[string]string{"deepinfra": "deepseek-ai/DeepSeek-V3.1-Terminus"},
 			},
 			expectedProvider: "deepinfra",
@@ -91,10 +91,10 @@ func TestCommitProviderEdgeCases(t *testing.T) {
 // TestReviewProviderEdgeCases tests edge cases for review provider configuration
 func TestReviewProviderEdgeCases(t *testing.T) {
 	tests := []struct {
-		name              string
-		config            *Config
-		expectedProvider  string
-		expectedModel     string
+		name             string
+		config           *Config
+		expectedProvider string
+		expectedModel    string
 	}{
 		{
 			name: "whitespace provider returns as-is",
@@ -108,9 +108,9 @@ func TestReviewProviderEdgeCases(t *testing.T) {
 		{
 			name: "whitespace model returns as-is",
 			config: &Config{
-				ReviewProvider:  "openai",
-				ReviewModel:     "  ",
-				ProviderModels:  map[string]string{"openai": "gpt-4-turbo"},
+				ReviewProvider: "openai",
+				ReviewModel:    "  ",
+				ProviderModels: map[string]string{"openai": "gpt-4-turbo"},
 			},
 			expectedProvider: "openai",
 			expectedModel:    "  ", // Whitespace is not empty, so it's returned as-is
@@ -133,7 +133,7 @@ func TestReviewProviderEdgeCases(t *testing.T) {
 				ProviderPriority: []string{},
 				ProviderModels:   map[string]string{"ollama-local": "qwen3-coder:30b"}, // Ultimate default has this model
 			},
-			expectedProvider: "ollama-local", // Ultimate default
+			expectedProvider: "ollama-local",    // Ultimate default
 			expectedModel:    "qwen3-coder:30b", // Model from the default provider
 		},
 		{
@@ -141,7 +141,7 @@ func TestReviewProviderEdgeCases(t *testing.T) {
 			config: &Config{
 				ReviewProvider:   "",
 				LastUsedProvider: "",
-				ProviderPriority:  []string{"ollama-cloud", "openrouter"},
+				ProviderPriority: []string{"ollama-cloud", "openrouter"},
 				ProviderModels:   map[string]string{"ollama-cloud": "deepseek-v3.1:671b", "openrouter": "openai/gpt-5"},
 			},
 			expectedProvider: "ollama-cloud",
@@ -198,10 +198,10 @@ func TestCommitReviewConfigMutability(t *testing.T) {
 // TestCommitReviewConfigConsistency tests that getters return consistent values
 func TestCommitReviewConfigConsistency(t *testing.T) {
 	cfg := &Config{
-		CommitProvider:  "openai",
-		CommitModel:     "gpt-4",
-		ReviewProvider:  "ollama-local",
-		ReviewModel:     "qwen3-coder:30b",
+		CommitProvider: "openai",
+		CommitModel:    "gpt-4",
+		ReviewProvider: "ollama-local",
+		ReviewModel:    "qwen3-coder:30b",
 		ProviderModels: map[string]string{
 			"openai":       "gpt-4",
 			"ollama-local": "qwen3-coder:30b",
@@ -221,10 +221,10 @@ func TestCommitReviewConfigConsistency(t *testing.T) {
 // TestCommitReviewConfigEmptyStringHandling tests empty string handling
 func TestCommitReviewConfigEmptyStringHandling(t *testing.T) {
 	cfg := &Config{
-		CommitProvider:  "",
-		CommitModel:     "",
-		ReviewProvider:  "",
-		ReviewModel:     "",
+		CommitProvider:   "",
+		CommitModel:      "",
+		ReviewProvider:   "",
+		ReviewModel:      "",
 		LastUsedProvider: "openrouter",
 		ProviderModels: map[string]string{
 			"openrouter": "openai/gpt-5",
@@ -241,10 +241,10 @@ func TestCommitReviewConfigEmptyStringHandling(t *testing.T) {
 // TestCommitReviewConfigModelProviderMismatch tests when model doesn't match provider
 func TestCommitReviewConfigModelProviderMismatch(t *testing.T) {
 	cfg := &Config{
-		CommitProvider:  "openai",
-		CommitModel:     "gpt-4", // Model matches provider
-		ReviewProvider:  "ollama-local",
-		ReviewModel:     "deepseek-v3", // This is an ollama-cloud model, not ollama-local
+		CommitProvider: "openai",
+		CommitModel:    "gpt-4", // Model matches provider
+		ReviewProvider: "ollama-local",
+		ReviewModel:    "deepseek-v3", // This is an ollama-cloud model, not ollama-local
 		ProviderModels: map[string]string{
 			"openai":       "gpt-4",
 			"ollama-local": "qwen3-coder:30b",
@@ -272,10 +272,10 @@ func TestCommitReviewConfigWithNilConfig(t *testing.T) {
 // TestCommitReviewConfigSettersEmptyString tests that setters accept empty strings
 func TestCommitReviewConfigSettersEmptyString(t *testing.T) {
 	cfg := &Config{
-		CommitProvider:  "openai",
-		CommitModel:     "gpt-4",
-		ReviewProvider:  "ollama-local",
-		ReviewModel:     "qwen3-coder:30b",
+		CommitProvider: "openai",
+		CommitModel:    "gpt-4",
+		ReviewProvider: "ollama-local",
+		ReviewModel:    "qwen3-coder:30b",
 	}
 
 	// Set to empty strings

@@ -147,19 +147,19 @@ func applyWorkflowInitialOverrides(chatAgent *agent.Agent, cfg *AgentWorkflowCon
 }
 
 type workflowRuntimeSnapshot struct {
-	Provider               string
-	Model                  string
-	Persona                string
-	ReasoningEffort        string
-	SkipPrompt             bool
-	Unsafe                 bool
-	MaxIterations          int
-	NoStream               bool
-	DryRunEnv              string
-	NoSubagentsEnv         string
-	ResourceDirectoryEnv   string
-	SystemPrompt           string
-	CustomReasoningEfforts map[string]string
+	Provider                string
+	Model                   string
+	Persona                 string
+	ReasoningEffort         string
+	SkipPrompt              bool
+	Unsafe                  bool
+	MaxIterations           int
+	NoStream                bool
+	DryRunEnv               string
+	NoSubagentsEnv          string
+	ResourceDirectoryEnv    string
+	SystemPrompt            string
+	CustomReasoningEfforts  map[string]string
 	SubagentOverridesBackup map[string]struct {
 		OriginalProvider string
 		OriginalModel    string

@@ -262,7 +262,7 @@ func TestNormalizeShortTitle_ExtraCases(t *testing.T) {
 			want:  "",
 		},
 		{
-			name:  "backtick inside colon space",
+			name: "backtick inside colon space",
 			// Lead/trail backticks stripped → "Title:` Hello"
 			// TrimPrefix("Title:") → "` Hello" → TrimSpace stays (only leading space)
 			input: "`Title:` Hello`",
@@ -307,7 +307,7 @@ func TestWrapText_ExtraCases(t *testing.T) {
 			text:       "hello\nworld",
 			lineLength: 72,
 			// strings.Fields splits on \n too, so words are joined with spaces when wrapped
-			want:       "hello world",
+			want: "hello world",
 		},
 		{
 			name:       "single newline with wrapping",
@@ -393,7 +393,7 @@ func TestTruncateRunes_UnicodeEdgeCases(t *testing.T) {
 			max:  3,
 			want: "日本語",
 		},
-				{
+		{
 			name: "japanese chars max 6",
 			s:    "日本語テスト",
 			max:  6,
@@ -410,7 +410,7 @@ func TestTruncateRunes_UnicodeEdgeCases(t *testing.T) {
 			name: "japanese shorter",
 			s:    "日",
 			max:  3,
-			want:  "日",
+			want: "日",
 		},
 		{
 			name: "emoji chars max 3",
@@ -445,35 +445,35 @@ func TestTruncateRunes_UnicodeEdgeCases(t *testing.T) {
 			max:  6,
 			// 7 runes > 6: runes[:3]="Hel" + "..." = "Hel..."
 			want: "Hel...",
-		},{
+		}, {
 			name: "zero max unicode",
 			s:    "日本語",
 			max:  0,
-			want:  "",
+			want: "",
 		},
 		{
 			name: "negative max unicode",
 			s:    "日本語",
 			max:  -5,
-			want:  "",
+			want: "",
 		},
 		{
 			name: "max 1 with unicode",
 			s:    "日本語",
 			max:  1,
-			want:  "日",
+			want: "日",
 		},
 		{
 			name: "max 2 with unicode",
 			s:    "日本語",
 			max:  2,
-			want:  "日本",
+			want: "日本",
 		},
 		{
 			name: "empty string unicode max",
 			s:    "",
 			max:  5,
-			want:  "",
+			want: "",
 		},
 	}
 	for _, tt := range tests {
@@ -512,11 +512,11 @@ func TestTruncateRunes_AllSpacesBeforeEllipsis(t *testing.T) {
 // Compile-time check that all target functions exist and are callable.
 // If any function is removed or renamed, this file will fail to compile.
 var (
-	_ func(string) []CommitFileChange   = parseStagedFileChanges
-	_ func(string) string                = actionFromStatus
-	_ func(string) bool                  = isDefaultBranch
-	_ func(string) string                = NormalizeShortTitle
-	_ func(string, int) string           = WrapText
-	_ func(string, int) string           = TruncateRunes
-	_ func([]CommitFileChange) string     = generateFallbackCommitMessage
+	_ func(string) []CommitFileChange = parseStagedFileChanges
+	_ func(string) string             = actionFromStatus
+	_ func(string) bool               = isDefaultBranch
+	_ func(string) string             = NormalizeShortTitle
+	_ func(string, int) string        = WrapText
+	_ func(string, int) string        = TruncateRunes
+	_ func([]CommitFileChange) string = generateFallbackCommitMessage
 )

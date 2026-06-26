@@ -121,11 +121,11 @@ func TestHandleRunSubagent_LocalOnly_Validation(t *testing.T) {
 // are rejected regardless of mode
 func TestHandleRunSubagent_Delegatable_Validation(t *testing.T) {
 	tests := []struct {
-		name         string
-		delegatable  bool
-		cloudMode    bool
-		wantErr      bool
-		errContains  string
+		name        string
+		delegatable bool
+		cloudMode   bool
+		wantErr     bool
+		errContains string
 	}{
 		{
 			name:        "Non-delegatable persona rejected in cloud mode",
@@ -226,12 +226,12 @@ func TestHandleRunSubagent_Delegatable_Validation(t *testing.T) {
 // LocalOnly and Delegatable flags interact
 func TestHandleRunSubagent_CombinedValidation(t *testing.T) {
 	tests := []struct {
-		name         string
-		localOnly    bool
-		delegatable  bool
-		cloudMode    bool
-		wantErr      bool
-		errContains  string
+		name        string
+		localOnly   bool
+		delegatable bool
+		cloudMode   bool
+		wantErr     bool
+		errContains string
 	}{
 		{
 			name:        "LocalOnly+NonDelegatable in cloud mode - LocalOnly error takes precedence",

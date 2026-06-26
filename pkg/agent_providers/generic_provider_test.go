@@ -921,8 +921,8 @@ func TestConvertMessagesMergesConsecutiveUserMessages(t *testing.T) {
 			{ID: "call_1", Type: "function"},
 		}},
 		{Role: "tool", Content: "fix applied", ToolCallID: "call_1"},
-		{Role: "user", Content: "continue"},     // first retry
-		{Role: "user", Content: "continue"},     // second retry (duplicate due to API error)
+		{Role: "user", Content: "continue"}, // first retry
+		{Role: "user", Content: "continue"}, // second retry (duplicate due to API error)
 	}
 
 	converted := provider.convertMessages(messages, "")

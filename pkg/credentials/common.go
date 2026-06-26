@@ -1,8 +1,8 @@
 package credentials
 
 import (
-	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"fmt"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"os"
 	"path/filepath"
 	"strings"

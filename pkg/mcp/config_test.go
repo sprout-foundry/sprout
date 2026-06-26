@@ -25,7 +25,7 @@ func TestValidateConfig_ValidConfig(t *testing.T) {
 				Args:        []string{"-y", "@modelcontextprotocol/server-github"},
 				AutoStart:   true,
 				MaxRestarts: 3,
-				Timeout:    30 * time.Second,
+				Timeout:     30 * time.Second,
 			},
 		},
 	}
@@ -54,7 +54,7 @@ func TestValidateConfig_ServerNameMismatch(t *testing.T) {
 				Command:     "npx",
 				AutoStart:   true,
 				MaxRestarts: 3,
-				Timeout:    30 * time.Second,
+				Timeout:     30 * time.Second,
 			},
 		},
 	}
@@ -69,9 +69,9 @@ func TestValidateConfig_HTTP_MissingURL(t *testing.T) {
 		Enabled: true,
 		Servers: map[string]MCPServerConfig{
 			"github": {
-				Name:    "github",
-				Type:    "http",
-				URL:    "", // Missing URL for HTTP server
+				Name:      "github",
+				Type:      "http",
+				URL:       "", // Missing URL for HTTP server
 				AutoStart: true,
 			},
 		},
@@ -122,10 +122,10 @@ func TestValidateConfig_NegativeTimeout(t *testing.T) {
 		Enabled: true,
 		Servers: map[string]MCPServerConfig{
 			"github": {
-				Name:        "github",
-				Command:     "npx",
-				AutoStart:   true,
-				Timeout:    -1 * time.Second, // Negative
+				Name:      "github",
+				Command:   "npx",
+				AutoStart: true,
+				Timeout:   -1 * time.Second, // Negative
 			},
 		},
 	}
@@ -171,9 +171,9 @@ func TestAddServer_HTTP_MissingURL(t *testing.T) {
 	}
 
 	err := config.AddServer(MCPServerConfig{
-		Name:  "http-server",
-		Type:  "http",
-		URL:   "",
+		Name: "http-server",
+		Type: "http",
+		URL:  "",
 	})
 
 	assert.Error(t, err)
@@ -240,7 +240,7 @@ func TestAddServer_Success(t *testing.T) {
 		Args:        []string{"-y", "some-server"},
 		AutoStart:   true,
 		MaxRestarts: 5,
-		Timeout:    60 * time.Second,
+		Timeout:     60 * time.Second,
 	})
 	require.NoError(t, err)
 
@@ -313,7 +313,7 @@ func TestGetConfigSummary_IncludesServerInfo(t *testing.T) {
 		Enabled:      true,
 		AutoStart:    true,
 		AutoDiscover: true,
-		Timeout:     30 * time.Second,
+		Timeout:      30 * time.Second,
 		Servers: map[string]MCPServerConfig{
 			"github": {
 				Name:        "github",
@@ -321,7 +321,7 @@ func TestGetConfigSummary_IncludesServerInfo(t *testing.T) {
 				Args:        []string{"-y", "server"},
 				AutoStart:   true,
 				MaxRestarts: 3,
-				Timeout:    30 * time.Second,
+				Timeout:     30 * time.Second,
 				Env: map[string]string{
 					"PATH": "/usr/bin",
 				},
@@ -354,7 +354,7 @@ func TestGetConfigSummary_HidesEnvValues(t *testing.T) {
 				Command: "npx",
 				Env: map[string]string{
 					"GITHUB_TOKEN": "secret-token-123", // Should be hidden
-					"PATH":      "/usr/bin",        // Non-secret, should show
+					"PATH":         "/usr/bin",         // Non-secret, should show
 				},
 			},
 		},
@@ -407,7 +407,7 @@ func TestHasGitHubToken_NoToken(t *testing.T) {
 
 func TestHasGitHubToken_EmptyServer(t *testing.T) {
 	config := MCPConfig{
-		Enabled:  true,
+		Enabled: true,
 		Servers: map[string]MCPServerConfig{},
 	}
 

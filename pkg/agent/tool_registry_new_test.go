@@ -64,7 +64,7 @@ func TestToolRegistry_extractParameter(t *testing.T) {
 	r := &ToolRegistry{tools: make(map[string]ToolConfig)}
 
 	args := map[string]interface{}{
-		"name":    "value",
+		"name":     "value",
 		"alt_name": "alt_value",
 	}
 
@@ -313,7 +313,7 @@ func TestToolRegistry_validateParameters(t *testing.T) {
 
 	// All required present
 	args := map[string]interface{}{
-		"name": "hello",
+		"name":  "hello",
 		"count": 5,
 	}
 	result, err := r.validateParameters(tool, args, nil)

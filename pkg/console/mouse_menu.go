@@ -275,7 +275,8 @@ func (cm *ContextMenu) Render() {
 
 // ParseMouseEvent parses a mouse escape sequence into a MouseEvent
 // Format: ESC [ M Cb Cx Cy (X10 mode)
-//         ESC [ < Cb;Cx;Cy M (SGR mode)
+//
+//	ESC [ < Cb;Cx;Cy M (SGR mode)
 func ParseMouseEvent(data string) (*MouseEvent, error) {
 	if len(data) < 4 || data[0] != '\x1b' || data[1] != '[' || (data[2] != 'M' && data[2] != '<') {
 		return nil, fmt.Errorf("not a mouse event")

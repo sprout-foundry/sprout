@@ -7,8 +7,8 @@ import (
 	"time"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
-	"github.com/sprout-foundry/sprout/pkg/events"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 // TestSubagentCancellationPropagates is the regression test for the
@@ -276,7 +276,7 @@ func TestInjectInputIntoActiveRoutesToSubagent(t *testing.T) {
 		return NewScriptedClient(
 			NewScriptedResponseBuilder().
 				Content("subagent working").
-				Delay(10*time.Second). // keep subagent alive long enough to steer
+				Delay(10 * time.Second). // keep subagent alive long enough to steer
 				Build(),
 		), nil
 	}
@@ -336,7 +336,7 @@ func TestSubagentOutputFlushUsesTryLockOnCancel(t *testing.T) {
 		return NewScriptedClient(
 			NewScriptedResponseBuilder().
 				Content("working").
-				Delay(30*time.Second).
+				Delay(30 * time.Second).
 				Build(),
 		), nil
 	}

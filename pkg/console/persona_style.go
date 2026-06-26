@@ -28,16 +28,16 @@ import (
 //
 // Update both files together when reassigning a persona.
 const (
-	personaColorCoder        = "\033[36m"      // cyan
-	personaColorTester       = "\033[32m"      // green
-	personaColorDebugger     = "\033[33m"      // yellow
-	personaColorResearcher   = "\033[35m"      // magenta
-	personaColorReviewer     = "\033[34m"      // blue
-	personaColorRefactor     = "\033[37m"      // white
-	personaColorWebScraper   = "\033[1;35m"    // bold magenta — matches WebUI purple, distinct from researcher
-	personaColorOrchestrator = "\033[1;33m"    // bold yellow — matches WebUI amber, readable on light terminals
-	personaColorEA           = "\033[1;36m"    // bold cyan — top-level coordinator
-	personaColorGeneral      = "\033[90m"      // dim gray fallback
+	personaColorCoder        = "\033[36m"   // cyan
+	personaColorTester       = "\033[32m"   // green
+	personaColorDebugger     = "\033[33m"   // yellow
+	personaColorResearcher   = "\033[35m"   // magenta
+	personaColorReviewer     = "\033[34m"   // blue
+	personaColorRefactor     = "\033[37m"   // white
+	personaColorWebScraper   = "\033[1;35m" // bold magenta — matches WebUI purple, distinct from researcher
+	personaColorOrchestrator = "\033[1;33m" // bold yellow — matches WebUI amber, readable on light terminals
+	personaColorEA           = "\033[1;36m" // bold cyan — top-level coordinator
+	personaColorGeneral      = "\033[90m"   // dim gray fallback
 	personaResetANSI         = "\033[0m"
 )
 
@@ -81,7 +81,8 @@ func PersonaColor(personaID string) string {
 // own tool lines get no badge so the existing UX is preserved.
 //
 // Example: PersonaBadge(1, "coder") → "\033[36m[coder]\033[0m "
-//          PersonaBadge(0, "orchestrator") → ""
+//
+//	PersonaBadge(0, "orchestrator") → ""
 func PersonaBadge(depth int, personaID string) string {
 	personaID = strings.TrimSpace(personaID)
 	if depth <= 0 || personaID == "" {

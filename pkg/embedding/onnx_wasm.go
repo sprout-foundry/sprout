@@ -74,9 +74,9 @@ type ONNXRuntime struct {
 	closed bool
 }
 
-func NewONNXRuntime() (*ONNXRuntime, error)              { return &ONNXRuntime{}, nil }
+func NewONNXRuntime() (*ONNXRuntime, error)                { return &ONNXRuntime{}, nil }
 func NewONNXRuntimeWithDir(_ string) (*ONNXRuntime, error) { return &ONNXRuntime{}, nil }
-func (r *ONNXRuntime) Ready() bool                       { return r != nil && !r.closed }
+func (r *ONNXRuntime) Ready() bool                         { return r != nil && !r.closed }
 func (r *ONNXRuntime) Close() error {
 	if r != nil {
 		r.closed = true

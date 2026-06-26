@@ -386,9 +386,9 @@ func (ws *ReactWebServer) handleAPIChatSessionCreateInWorktree(w http.ResponseWr
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusConflict)
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"error":               "A worktree already exists at the computed path. Use a different branch name or manually remove the existing worktree first.",
-			"code":                "worktree_path_conflict",
-			"worktree_path":       worktreePath,
+			"error":         "A worktree already exists at the computed path. Use a different branch name or manually remove the existing worktree first.",
+			"code":          "worktree_path_conflict",
+			"worktree_path": worktreePath,
 		})
 		return
 	}

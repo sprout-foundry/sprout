@@ -10,7 +10,7 @@
 //   - Hot  (most recent HotCount revisions):  kept verbatim
 //   - Warm (next WarmCount):                  conversation.json dropped
 //   - Dropped (everything older):             deleted (or archived if
-//                                             ArchiveFrozen is enabled)
+//     ArchiveFrozen is enabled)
 //
 // Position is by revision-directory mtime (newest first). The view
 // tools (view_history) bump mtime when they access a revision so an

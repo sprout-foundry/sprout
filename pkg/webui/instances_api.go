@@ -3,9 +3,9 @@
 package webui
 
 import (
-	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"bufio"
 	"encoding/json"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -95,9 +95,9 @@ type sshLaunchStatusDTO struct {
 	UpdatedAt  time.Time `json:"updated_at"`
 	// ProxyBase, ProxyURL, and LocalPort are non-empty/non-zero when the launch
 	// has completed successfully (in_progress=false, last_error="").
-	ProxyBase  string    `json:"proxy_base,omitempty"`
-	ProxyURL   string    `json:"proxy_url,omitempty"`
-	LocalPort  int       `json:"local_port,omitempty"`
+	ProxyBase string `json:"proxy_base,omitempty"`
+	ProxyURL  string `json:"proxy_url,omitempty"`
+	LocalPort int    `json:"local_port,omitempty"`
 }
 
 func (ws *ReactWebServer) handleAPIInstances(w http.ResponseWriter, r *http.Request) {

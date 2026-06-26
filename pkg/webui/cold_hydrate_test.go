@@ -286,9 +286,9 @@ func TestHandleColdHydrateRequest_BasicFlow(t *testing.T) {
 	// Create a temp workspace with 3 files
 	dir := t.TempDir()
 	fileContents := map[string]string{
-		"hello.txt":     "hello world",
-		"foo.go":        "package foo",
-		"bar/baz.json":  `{"key":"value"}`,
+		"hello.txt":    "hello world",
+		"foo.go":       "package foo",
+		"bar/baz.json": `{"key":"value"}`,
 	}
 	for name, content := range fileContents {
 		path := filepath.Join(dir, name)
@@ -851,11 +851,11 @@ func TestHydrateRequestData_Validate(t *testing.T) {
 
 func TestHandleColdHydrateRequest_EstimateSeconds(t *testing.T) {
 	tests := []struct {
-		name              string
-		totalBytes        int64
-		wantEstimateMin   int64
-		wantEstimateMax   int64
-		fileName          string
+		name            string
+		totalBytes      int64
+		wantEstimateMin int64
+		wantEstimateMax int64
+		fileName        string
 	}{
 		{"empty workspace", 0, 0, 0, ""},
 		{"small content ~1KB", 1024, 1, 1, "small.txt"},
@@ -1528,7 +1528,7 @@ func TestHandleColdHydrateRequest_SymlinkSkipped(t *testing.T) {
 
 func TestIsSensitiveFile(t *testing.T) {
 	tests := []struct {
-		path       string
+		path        string
 		isSensitive bool
 	}{
 		// Sensitive by name

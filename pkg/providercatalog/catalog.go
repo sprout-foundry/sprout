@@ -24,11 +24,11 @@
 package providercatalog
 
 import (
-	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"context"
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"io"
 	"net/http"
 	"os"

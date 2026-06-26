@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/agent_tools"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // ---------------------------------------------------------------------------

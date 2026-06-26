@@ -49,7 +49,7 @@ func TestDefaultTaskQueuePath(t *testing.T) {
 
 func TestAddTask(t *testing.T) {
 	tq := newTestTaskQueue(t)
-	task, err := tq.AddTask(context.Background(),"Build the robot", "Assemble parts", "high", "/tmp/build", "engineer")
+	task, err := tq.AddTask(context.Background(), "Build the robot", "Assemble parts", "high", "/tmp/build", "engineer")
 	require.NoError(t, err)
 	require.NotNil(t, task)
 	assert.Equal(t, "Build the robot", task.Title)
@@ -63,7 +63,7 @@ func TestAddTask(t *testing.T) {
 
 	// Verify persisted to disk
 	tq2 := NewTaskQueue(tq.filePath)
-	tasks, err := tq2.ReadTasks(context.Background(),"all", 10)
+	tasks, err := tq2.ReadTasks(context.Background(), "all", 10)
 	require.NoError(t, err)
 	assert.Len(t, tasks, 1)
 	assert.Equal(t, task.ID, tasks[0].ID)
@@ -72,26 +72,26 @@ func TestAddTask(t *testing.T) {
 
 func TestAddTaskDefaultPriority(t *testing.T) {
 	tq := newTestTaskQueue(t)
-	task, err := tq.AddTask(context.Background(),"Check logs", "", "", "", "")
+	task, err := tq.AddTask(context.Background(), "Check logs", "", "", "", "")
 	require.NoError(t, err)
 	assert.Equal(t, "medium", task.Priority)
 }
 
 func TestAddTaskInvalidPriority(t *testing.T) {
 	tq := newTestTaskQueue(t)
-	task, err := tq.AddTask(context.Background(),"Deploy", "", "ultra", "", "")
+	task, err := tq.AddTask(context.Background(), "Deploy", "", "ultra", "", "")
 	require.NoError(t, err)
 	assert.Equal(t, "medium", task.Priority)
 }
 
 func TestAddTaskMultiple(t *testing.T) {
 	tq := newTestTaskQueue(t)
-	_, err := tq.AddTask(context.Background(),"Task A", "", "high", "", "")
+	_, err := tq.AddTask(context.Background(), "Task A", "", "high", "", "")
 	require.NoError(t, err)
-	_, err = tq.AddTask(context.Background(),"Task B", "", "low", "", "")
+	_, err = tq.AddTask(context.Background(), "Task B", "", "low", "", "")
 	require.NoError(t, err)
 
-	tasks, err := tq.ReadTasks(context.Background(),"all", 10)
+	tasks, err := tq.ReadTasks(context.Background(), "all", 10)
 	require.NoError(t, err)
 	assert.Len(t, tasks, 2)
 }
@@ -100,21 +100,21 @@ func TestAddTaskMultiple(t *testing.T) {
 
 func TestReadTasksEmpty(t *testing.T) {
 	tq := newTestTaskQueue(t)
-	tasks, err := tq.ReadTasks(context.Background(),"pending", 10)
+	tasks, err := tq.ReadTasks(context.Background(), "pending", 10)
 	require.NoError(t, err)
 	assert.Empty(t, tasks)
 }
 
 func TestReadTasksByStatus(t *testing.T) {
 	tq := newTestTaskQueue(t)
-	tq.AddTask(context.Background(),"Pending work", "", "medium", "", "")
-	tq.AddTask(context.Background(),"Done work", "", "medium", "", "")
+	tq.AddTask(context.Background(), "Pending work", "", "medium", "", "")
+	tq.AddTask(context.Background(), "Done work", "", "medium", "", "")
 	writeRawQueue(t, tq, []Task{
 		{ID: "a", Title: "Pending work", Status: "pending", Priority: "medium", CreatedAt: time.Now()},
 		{ID: "b", Title: "Done work", Status: "completed", Priority: "medium", CreatedAt: time.Now()},
 	})
 
-	tasks, err := tq.ReadTasks(context.Background(),"pending", 10)
+	tasks, err := tq.ReadTasks(context.Background(), "pending", 10)
 	require.NoError(t, err)
 	assert.Len(t, tasks, 1)
 	assert.Equal(t, "Pending work", tasks[0].Title)
@@ -128,7 +128,7 @@ func TestReadTasksAll(t *testing.T) {
 		{ID: "c", Title: "B", Status: "blocked", Priority: "medium", CreatedAt: time.Now()},
 	})
 
-	tasks, err := tq.ReadTasks(context.Background(),"all", 10)
+	tasks, err := tq.ReadTasks(context.Background(), "all", 10)
 	require.NoError(t, err)
 	assert.Len(t, tasks, 3)
 }
@@ -141,7 +141,7 @@ func TestReadTasksLimit(t *testing.T) {
 	}
 	writeRawQueue(t, tq, tasksRaw)
 
-	tasks, err := tq.ReadTasks(context.Background(),"all", 5)
+	tasks, err := tq.ReadTasks(context.Background(), "all", 5)
 	require.NoError(t, err)
 	assert.Len(t, tasks, 5)
 }
@@ -154,7 +154,7 @@ func TestReadTasksDefaultLimit(t *testing.T) {
 	}
 	writeRawQueue(t, tq, tasksRaw)
 
-	tasks, err := tq.ReadTasks(context.Background(),"all", 0)
+	tasks, err := tq.ReadTasks(context.Background(), "all", 0)
 	require.NoError(t, err)
 	assert.Len(t, tasks, 10) // default limit
 }
@@ -167,7 +167,7 @@ func TestReadTasksPrioritySort(t *testing.T) {
 		{ID: "medium", Title: "medium", Status: "pending", Priority: "medium", CreatedAt: time.Now()},
 	})
 
-	tasks, err := tq.ReadTasks(context.Background(),"all", 10)
+	tasks, err := tq.ReadTasks(context.Background(), "all", 10)
 	require.NoError(t, err)
 	assert.Len(t, tasks, 3)
 	assert.Equal(t, "high", tasks[0].Priority)
@@ -183,7 +183,7 @@ func TestReadTasksSortByCreatedAtWithinSamePriority(t *testing.T) {
 		{ID: "a", Title: "earlier", Status: "pending", Priority: "medium", CreatedAt: base},
 	})
 
-	tasks, err := tq.ReadTasks(context.Background(),"all", 10)
+	tasks, err := tq.ReadTasks(context.Background(), "all", 10)
 	require.NoError(t, err)
 	assert.Equal(t, "a", tasks[0].ID) // earlier first
 	assert.Equal(t, "b", tasks[1].ID)
@@ -193,52 +193,52 @@ func TestReadTasksSortByCreatedAtWithinSamePriority(t *testing.T) {
 
 func TestPublishTaskUpdateStatus(t *testing.T) {
 	tq := newTestTaskQueue(t)
-	task, err := tq.AddTask(context.Background(),"My task", "", "medium", "", "")
+	task, err := tq.AddTask(context.Background(), "My task", "", "medium", "", "")
 	require.NoError(t, err)
 
-	result, err := tq.PublishTask(context.Background(),task.ID, "completed", "", nil)
+	result, err := tq.PublishTask(context.Background(), task.ID, "completed", "", nil)
 	require.NoError(t, err)
 	assert.Len(t, result, 1)
 	assert.Equal(t, "completed", result[0].Status)
 
 	// Verify persisted
-	tasks, err := tq.ReadTasks(context.Background(),"all", 10)
+	tasks, err := tq.ReadTasks(context.Background(), "all", 10)
 	require.NoError(t, err)
 	assert.Equal(t, "completed", tasks[0].Status)
 }
 
 func TestPublishTaskWithResult(t *testing.T) {
 	tq := newTestTaskQueue(t)
-	task, err := tq.AddTask(context.Background(),"Test", "", "medium", "", "")
+	task, err := tq.AddTask(context.Background(), "Test", "", "medium", "", "")
 	require.NoError(t, err)
 
-	result, err := tq.PublishTask(context.Background(),task.ID, "completed", "All tests passed", nil)
+	result, err := tq.PublishTask(context.Background(), task.ID, "completed", "All tests passed", nil)
 	require.NoError(t, err)
 	assert.Equal(t, "All tests passed", result[0].Result)
 }
 
 func TestPublishTaskNotFound(t *testing.T) {
 	tq := newTestTaskQueue(t)
-	_, err := tq.PublishTask(context.Background(),"nonexistent", "completed", "", nil)
+	_, err := tq.PublishTask(context.Background(), "nonexistent", "completed", "", nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 }
 
 func TestPublishTaskInvalidStatus(t *testing.T) {
 	tq := newTestTaskQueue(t)
-	task, err := tq.AddTask(context.Background(),"Test", "", "medium", "", "")
+	task, err := tq.AddTask(context.Background(), "Test", "", "medium", "", "")
 	require.NoError(t, err)
-	_, err = tq.PublishTask(context.Background(),task.ID, "banana", "", nil)
+	_, err = tq.PublishTask(context.Background(), task.ID, "banana", "", nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid status")
 }
 
 func TestPublishTaskWithSubtasks(t *testing.T) {
 	tq := newTestTaskQueue(t)
-	parent, err := tq.AddTask(context.Background(),"Parent task", "", "high", "", "")
+	parent, err := tq.AddTask(context.Background(), "Parent task", "", "high", "", "")
 	require.NoError(t, err)
 
-	result, err := tq.PublishTask(context.Background(),parent.ID, "in_progress", "", []SubtaskInput{
+	result, err := tq.PublishTask(context.Background(), parent.ID, "in_progress", "", []SubtaskInput{
 		{Title: "Sub 1", Priority: "high"},
 		{Title: "Sub 2", Priority: "low"},
 	})
@@ -253,10 +253,10 @@ func TestPublishTaskWithSubtasks(t *testing.T) {
 
 func TestSubtasksInheritParent(t *testing.T) {
 	tq := newTestTaskQueue(t)
-	parent, err := tq.AddTask(context.Background(),"Parent task", "", "high", "", "")
+	parent, err := tq.AddTask(context.Background(), "Parent task", "", "high", "", "")
 	require.NoError(t, err)
 
-	result, err := tq.PublishTask(context.Background(),parent.ID, "in_progress", "", []SubtaskInput{
+	result, err := tq.PublishTask(context.Background(), parent.ID, "in_progress", "", []SubtaskInput{
 		{Title: "Child", WorkingDir: "/sub", Persona: "worker"},
 	})
 	require.NoError(t, err)
@@ -267,10 +267,10 @@ func TestSubtasksInheritParent(t *testing.T) {
 
 func TestPublishTaskSubtaskDefaultPriority(t *testing.T) {
 	tq := newTestTaskQueue(t)
-	parent, err := tq.AddTask(context.Background(),"Parent", "", "high", "", "")
+	parent, err := tq.AddTask(context.Background(), "Parent", "", "high", "", "")
 	require.NoError(t, err)
 
-	result, err := tq.PublishTask(context.Background(),parent.ID, "in_progress", "", []SubtaskInput{
+	result, err := tq.PublishTask(context.Background(), parent.ID, "in_progress", "", []SubtaskInput{
 		{Title: "Child", Priority: "invalid_priority"},
 	})
 	require.NoError(t, err)
@@ -281,7 +281,7 @@ func TestPublishTaskSubtaskDefaultPriority(t *testing.T) {
 
 func TestAtomicWrite(t *testing.T) {
 	tq := newTestTaskQueue(t)
-	_, err := tq.AddTask(context.Background(),"Task 1", "", "medium", "", "")
+	_, err := tq.AddTask(context.Background(), "Task 1", "", "medium", "", "")
 	require.NoError(t, err)
 
 	// Verify file exists and is valid JSON
@@ -304,7 +304,7 @@ func TestEmptyFileHandling(t *testing.T) {
 	require.NoError(t, os.WriteFile(path, []byte(""), 0644))
 
 	tq := NewTaskQueue(path)
-	tasks, err := tq.ReadTasks(context.Background(),"all", 10)
+	tasks, err := tq.ReadTasks(context.Background(), "all", 10)
 	require.NoError(t, err)
 	assert.Empty(t, tasks)
 }
@@ -314,7 +314,7 @@ func TestMissingFileHandling(t *testing.T) {
 	path := filepath.Join(dir, "queue.json") // does not exist yet
 
 	tq := NewTaskQueue(path)
-	tasks, err := tq.ReadTasks(context.Background(),"all", 10)
+	tasks, err := tq.ReadTasks(context.Background(), "all", 10)
 	require.NoError(t, err)
 	assert.Empty(t, tasks)
 }
@@ -337,7 +337,7 @@ func TestCorruptFileEmptyID(t *testing.T) {
 	writeRawQueue(t, tq, []Task{
 		{ID: "", Title: "Bad", Status: "pending", Priority: "medium", CreatedAt: time.Now()},
 	})
-	_, err := tq.ReadTasks(context.Background(),"all", 10)
+	_, err := tq.ReadTasks(context.Background(), "all", 10)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "empty ID")
 }
@@ -347,7 +347,7 @@ func TestCorruptFileEmptyStatus(t *testing.T) {
 	writeRawQueue(t, tq, []Task{
 		{ID: "abc", Title: "Bad", Status: "", Priority: "medium", CreatedAt: time.Now()},
 	})
-	_, err := tq.ReadTasks(context.Background(),"all", 10)
+	_, err := tq.ReadTasks(context.Background(), "all", 10)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "empty status")
 }
@@ -357,7 +357,7 @@ func TestCorruptFileInvalidStatus(t *testing.T) {
 	writeRawQueue(t, tq, []Task{
 		{ID: "abc", Title: "Bad", Status: "banana", Priority: "medium", CreatedAt: time.Now()},
 	})
-	_, err := tq.ReadTasks(context.Background(),"all", 10)
+	_, err := tq.ReadTasks(context.Background(), "all", 10)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid status")
 }
@@ -367,7 +367,7 @@ func TestInvalidPriorityOnRead(t *testing.T) {
 	writeRawQueue(t, tq, []Task{
 		{ID: "abc", Title: "Fix me", Status: "pending", Priority: "urgent", CreatedAt: time.Now()},
 	})
-	tasks, err := tq.ReadTasks(context.Background(),"all", 10)
+	tasks, err := tq.ReadTasks(context.Background(), "all", 10)
 	require.NoError(t, err)
 	assert.Len(t, tasks, 1)
 	assert.Equal(t, "medium", tasks[0].Priority) // defaulted
@@ -377,7 +377,7 @@ func TestAddTaskCreatesDirectory(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "sub", "deep", "queue.json") // dir doesn't exist
 	tq := NewTaskQueue(path)
-	task, err := tq.AddTask(context.Background(),"Test", "", "medium", "", "")
+	task, err := tq.AddTask(context.Background(), "Test", "", "medium", "", "")
 	require.NoError(t, err)
 	assert.NotEmpty(t, task.ID)
 }
@@ -387,10 +387,10 @@ func TestPublishTaskCreatesDirectory(t *testing.T) {
 	path := filepath.Join(dir, "sub", "queue.json")
 	tq := NewTaskQueue(path)
 	// First add a task to the non-existent file
-	task, err := tq.AddTask(context.Background(),"Base", "", "medium", "", "")
+	task, err := tq.AddTask(context.Background(), "Base", "", "medium", "", "")
 	require.NoError(t, err)
 	// Then publish (should also create dir if needed)
-	result, err := tq.PublishTask(context.Background(),task.ID, "completed", "", nil)
+	result, err := tq.PublishTask(context.Background(), task.ID, "completed", "", nil)
 	require.NoError(t, err)
 	assert.Equal(t, "completed", result[0].Status)
 }
@@ -409,7 +409,7 @@ func TestConcurrentAdd(t *testing.T) {
 			defer wg.Done()
 			// Use the SAME TaskQueue instance — the sync.Mutex handles in-process safety.
 			// File locking (flock) handles cross-process safety only.
-			_, err := tq.AddTask(context.Background(),"concurrent task", "", "medium", "", "")
+			_, err := tq.AddTask(context.Background(), "concurrent task", "", "medium", "", "")
 			errCh <- err
 		}()
 	}
@@ -422,7 +422,7 @@ func TestConcurrentAdd(t *testing.T) {
 	}
 
 	// All tasks should be present (no lost writes)
-	tasks, err := tq.ReadTasks(context.Background(),"all", 100)
+	tasks, err := tq.ReadTasks(context.Background(), "all", 100)
 	require.NoError(t, err)
 	assert.Len(t, tasks, goroutines, "all concurrent adds should be persisted without data loss")
 }
@@ -437,12 +437,12 @@ func TestConcurrentAddAndRead(t *testing.T) {
 		wg.Add(2)
 		go func() {
 			defer wg.Done()
-			_, err := tq.AddTask(context.Background(),"concurrent task", "", "medium", "", "")
+			_, err := tq.AddTask(context.Background(), "concurrent task", "", "medium", "", "")
 			errCh <- err
 		}()
 		go func() {
 			defer wg.Done()
-			_, err := tq.ReadTasks(context.Background(),"all", 100)
+			_, err := tq.ReadTasks(context.Background(), "all", 100)
 			errCh <- err
 		}()
 	}
@@ -455,14 +455,14 @@ func TestConcurrentAddAndRead(t *testing.T) {
 	}
 
 	// All adds should have succeeded
-	tasks, err := tq.ReadTasks(context.Background(),"all", 100)
+	tasks, err := tq.ReadTasks(context.Background(), "all", 100)
 	require.NoError(t, err)
 	assert.Len(t, tasks, adds, "all concurrent adds should survive concurrent reads")
 }
 
 func TestConcurrentPublishAndRead(t *testing.T) {
 	tq := newTestTaskQueue(t)
-	task, err := tq.AddTask(context.Background(),"Base task", "", "medium", "", "")
+	task, err := tq.AddTask(context.Background(), "Base task", "", "medium", "", "")
 	require.NoError(t, err)
 
 	const writers = 5
@@ -474,12 +474,12 @@ func TestConcurrentPublishAndRead(t *testing.T) {
 		wg.Add(2)
 		go func(idx int) {
 			defer wg.Done()
-			_, err := tq.PublishTask(context.Background(),task.ID, statuses[idx], "", nil)
+			_, err := tq.PublishTask(context.Background(), task.ID, statuses[idx], "", nil)
 			errCh <- err
 		}(i)
 		go func() {
 			defer wg.Done()
-			_, err := tq.ReadTasks(context.Background(),"all", 100)
+			_, err := tq.ReadTasks(context.Background(), "all", 100)
 			errCh <- err
 		}()
 	}
@@ -492,7 +492,7 @@ func TestConcurrentPublishAndRead(t *testing.T) {
 	}
 
 	// Final state: last writer wins (that's fine—mutex serializes, no corruption)
-	tasks, err := tq.ReadTasks(context.Background(),"all", 100)
+	tasks, err := tq.ReadTasks(context.Background(), "all", 100)
 	require.NoError(t, err)
 	assert.Len(t, tasks, 1)
 }
@@ -501,12 +501,12 @@ func TestConcurrentPublishAndRead(t *testing.T) {
 
 func TestAddThenReadWithoutLoad(t *testing.T) {
 	tq := newTestTaskQueue(t)
-	task, err := tq.AddTask(context.Background(),"First", "", "high", "", "")
+	task, err := tq.AddTask(context.Background(), "First", "", "high", "", "")
 	require.NoError(t, err)
 
 	// A brand-new TaskQueue instance should see the data without calling Load()
 	tq2 := NewTaskQueue(tq.filePath)
-	tasks, err := tq2.ReadTasks(context.Background(),"all", 10)
+	tasks, err := tq2.ReadTasks(context.Background(), "all", 10)
 	require.NoError(t, err)
 	assert.Len(t, tasks, 1)
 	assert.Equal(t, task.ID, tasks[0].ID)
@@ -514,12 +514,12 @@ func TestAddThenReadWithoutLoad(t *testing.T) {
 
 func TestAddThenPublishWithoutLoad(t *testing.T) {
 	tq := newTestTaskQueue(t)
-	task, err := tq.AddTask(context.Background(),"First", "", "high", "", "")
+	task, err := tq.AddTask(context.Background(), "First", "", "high", "", "")
 	require.NoError(t, err)
 
 	// A brand-new TaskQueue instance should publish without calling Load()
 	tq2 := NewTaskQueue(tq.filePath)
-	result, err := tq2.PublishTask(context.Background(),task.ID, "completed", "done", nil)
+	result, err := tq2.PublishTask(context.Background(), task.ID, "completed", "done", nil)
 	require.NoError(t, err)
 	assert.Equal(t, "completed", result[0].Status)
 	assert.Equal(t, "done", result[0].Result)

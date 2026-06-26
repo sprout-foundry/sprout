@@ -41,8 +41,8 @@ func TestFormatRelativeTime_Minutes(t *testing.T) {
 	now := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
 
 	tests := []struct {
-		ago     time.Duration
-		want    string
+		ago  time.Duration
+		want string
 	}{
 		{1 * time.Minute, "1 minute ago"},
 		{1*time.Minute + 30*time.Second, "1 minute ago"},
@@ -117,7 +117,7 @@ func TestFormatRelativeTime_Weeks(t *testing.T) {
 		ago  time.Duration
 		want string
 	}{
-		{7 * 24 * time.Hour,     "1 week ago"},
+		{7 * 24 * time.Hour, "1 week ago"},
 		{7*24*time.Hour + 12*time.Hour, "1 week ago"},
 		{2 * 7 * 24 * time.Hour, "2 weeks ago"},
 		{3 * 7 * 24 * time.Hour, "3 weeks ago"},
@@ -141,12 +141,12 @@ func TestFormatRelativeTime_Months(t *testing.T) {
 		ago  time.Duration
 		want string
 	}{
-		{30 * 24 * time.Hour,     "1 month ago"},
+		{30 * 24 * time.Hour, "1 month ago"},
 		{30*24*time.Hour + 12*time.Hour, "1 month ago"},
-		{60 * 24 * time.Hour,     "2 months ago"},
-		{90 * 24 * time.Hour,     "3 months ago"},
-		{180 * 24 * time.Hour,    "6 months ago"},
-		{365 * 24 * time.Hour,    "12 months ago"},
+		{60 * 24 * time.Hour, "2 months ago"},
+		{90 * 24 * time.Hour, "3 months ago"},
+		{180 * 24 * time.Hour, "6 months ago"},
+		{365 * 24 * time.Hour, "12 months ago"},
 	}
 
 	for _, tc := range tests {

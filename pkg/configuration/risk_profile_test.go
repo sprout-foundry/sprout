@@ -174,10 +174,10 @@ func TestIsCriticalOperation(t *testing.T) {
 	}
 
 	notCritical := []string{
-		"rm -rf foo",         // recursive but not root
-		"rm -rf /tmp/cache",  // /tmp is fine
-		"rm /etc/hosts",      // not recursive
-		"echo 'rm -rf /'",    // rm inside quoted arg
+		"rm -rf foo",        // recursive but not root
+		"rm -rf /tmp/cache", // /tmp is fine
+		"rm /etc/hosts",     // not recursive
+		"echo 'rm -rf /'",   // rm inside quoted arg
 		"echo hello",
 		"git push",
 		"ls /",

@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sprout-foundry/sprout/pkg/mcp"
 	"github.com/spf13/cobra"
+	"github.com/sprout-foundry/sprout/pkg/mcp"
 )
 
 // =============================================================================
@@ -62,7 +62,6 @@ func replaceStdinWithClosedPipe(t *testing.T) (restore func()) {
 		os.Stdin = oldStdin
 	}
 }
-
 
 // Test 1: runMCPList
 // =============================================================================

@@ -15,7 +15,7 @@ func (h *webSearchHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "web_search",
 		Description: "Search web for relevant URLs",
-		Required: []string{"query"},
+		Required:    []string{"query"},
 		Parameters: []ParameterDef{
 			{Name: "query", Type: "string", Required: true, Description: "Search query to find relevant web content"},
 		},

@@ -45,9 +45,9 @@ func (ws *ReactWebServer) handleLSPStatus(w http.ResponseWriter, r *http.Request
 	}
 
 	resp := struct {
-		Servers    []serverInfo `json:"servers"`
-		Active     int          `json:"active"`
-		Workspace  string       `json:"workspace"`
+		Servers   []serverInfo `json:"servers"`
+		Active    int          `json:"active"`
+		Workspace string       `json:"workspace"`
 	}{
 		Servers:   servers,
 		Active:    ws.lspManager.Count(),

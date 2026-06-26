@@ -58,8 +58,8 @@ func (ws *ReactWebServer) handleAPIConfirm(w http.ResponseWriter, r *http.Reques
 				"success": true,
 				"message": "Security approval response recorded",
 			})
-					return
-	}
+			return
+		}
 	}
 
 	// Try security prompt response (legacy boolean path for file content

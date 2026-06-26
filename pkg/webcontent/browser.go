@@ -1,8 +1,8 @@
 package webcontent
 
 import (
-	"fmt"
 	"context"
+	"fmt"
 )
 
 // BrowserRenderer renders HTML pages using a headless browser.

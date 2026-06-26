@@ -5,10 +5,10 @@ import (
 )
 
 const (
-	RunTerminationCompleted            = "completed"
-	RunTerminationMaxIterations        = "max_iterations"
-	RunTerminationInterrupted          = "interrupted"
-	RunTerminationFleetBudgetExceeded  = "fleet_budget_exceeded"
+	RunTerminationCompleted           = "completed"
+	RunTerminationMaxIterations       = "max_iterations"
+	RunTerminationInterrupted         = "interrupted"
+	RunTerminationFleetBudgetExceeded = "fleet_budget_exceeded"
 )
 
 // GetTotalTokens returns the total tokens used across all requests

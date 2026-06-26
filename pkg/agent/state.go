@@ -76,10 +76,10 @@ func (a *Agent) replaceTaskActions(actions []TaskAction) {
 
 // validateStateFilePath validates that a filename is safe for state file operations.
 // It prevents:
-//   1. Absolute path writes (e.g., /etc/passwd)
-//   2. Path traversal via ".." components (e.g., ../../etc/passwd)
-//   3. Null bytes in filenames (cross-platform consistency)
-//   4. Symlinks that could redirect writes to arbitrary files
+//  1. Absolute path writes (e.g., /etc/passwd)
+//  2. Path traversal via ".." components (e.g., ../../etc/passwd)
+//  3. Null bytes in filenames (cross-platform consistency)
+//  4. Symlinks that could redirect writes to arbitrary files
 //
 // Only simple filenames or safe relative paths within the current directory are allowed.
 func validateStateFilePath(filename string) (string, error) {

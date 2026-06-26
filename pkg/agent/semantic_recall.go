@@ -62,7 +62,7 @@ type RecalledItem struct {
 // telemetry event surfaces. Lives alongside the items so callers can ship
 // both in one publish.
 type recallRetrievalDiagnostic struct {
-	EmbedDurationMS     float64
+	EmbedDurationMS      float64
 	CandidatesConsidered int
 	Injected             int
 	InjectedChars        int

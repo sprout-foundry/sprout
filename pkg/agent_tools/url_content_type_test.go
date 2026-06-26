@@ -47,10 +47,10 @@ func TestResponseKind_String(t *testing.T) {
 
 func TestClassifyContentType(t *testing.T) {
 	tests := []struct {
-		name       string
+		name        string
 		contentType string
-		urlPath    string
-		expected   ResponseKind
+		urlPath     string
+		expected    ResponseKind
 	}{
 		// PDF
 		{"pdf", "application/pdf", "https://example.com/doc", ResponseKindPDF},

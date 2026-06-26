@@ -6,20 +6,20 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/spf13/cobra"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/trace"
 	"github.com/sprout-foundry/sprout/pkg/utils"
-	"github.com/spf13/cobra"
 )
 
 // CommandConfig represents the common configuration shared across commands
 type CommandConfig struct {
-	SkipPrompt    bool
-	Model         string
-	DryRun        bool
-	Logger        *utils.Logger
-	Config        *configuration.Config
-	TraceSession  *trace.TraceSession
+	SkipPrompt      bool
+	Model           string
+	DryRun          bool
+	Logger          *utils.Logger
+	Config          *configuration.Config
+	TraceSession    *trace.TraceSession
 	TraceDatasetDir string
 }
 
@@ -34,7 +34,7 @@ type BaseCommand struct {
 type CommandFlags struct {
 	SkipPrompt      *bool
 	Model           *string
-	DryRun         *bool
+	DryRun          *bool
 	TraceDatasetDir *string
 }
 
@@ -92,12 +92,12 @@ func (b *BaseCommand) Initialize() error {
 
 	// Update command config
 	b.cfg = &CommandConfig{
-		SkipPrompt:    *b.flags.SkipPrompt,
-		Model:         *b.flags.Model,
-		DryRun:        *b.flags.DryRun,
-		Logger:        logger,
-		Config:        cfg,
-		TraceSession:  traceSession,
+		SkipPrompt:      *b.flags.SkipPrompt,
+		Model:           *b.flags.Model,
+		DryRun:          *b.flags.DryRun,
+		Logger:          logger,
+		Config:          cfg,
+		TraceSession:    traceSession,
 		TraceDatasetDir: traceDir,
 	}
 

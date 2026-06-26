@@ -245,7 +245,7 @@ func formatTodoWritePreview(arguments string) string {
 // formatRunSubagentPreview extracts the persona from args and looks up its
 // effective provider/model via the agent's persona resolver. Format:
 //
-//	 (coder · anthropic/claude-haiku-4-5)
+//	(coder · anthropic/claude-haiku-4-5)
 //
 // Falls back to just persona name (or empty) when the lookup fails.
 func formatRunSubagentPreview(chatAgent *agent.Agent, arguments string) string {

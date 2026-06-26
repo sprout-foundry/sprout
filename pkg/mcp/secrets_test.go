@@ -301,10 +301,10 @@ func TestMaskEnvVars(t *testing.T) {
 
 	t.Run("mixed map", func(t *testing.T) {
 		env := map[string]string{
-			"OPENAI_API_KEY":          "sk-abcdefghijklmnop",
+			"OPENAI_API_KEY":               "sk-abcdefghijklmnop",
 			"GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_1234567890",
-			"PATH":                        "/usr/bin",
-			"MODEL":                       "gpt-4",
+			"PATH":                         "/usr/bin",
+			"MODEL":                        "gpt-4",
 		}
 		got := MaskEnvVars(env)
 		assert.Equal(t, "sk-a****", got["OPENAI_API_KEY"])
@@ -454,10 +454,10 @@ func TestMigrateEnvSecretsFromServer(t *testing.T) {
 
 		config := &MCPServerConfig{
 			Env: map[string]string{
-				"OPENAI_API_KEY":          "sk-openai",
-				"AUTH_TOKEN":              "bearer-xyz",
-				"MY_SECRET":               "super-secret",
-				"PATH":                    "/usr/bin",
+				"OPENAI_API_KEY": "sk-openai",
+				"AUTH_TOKEN":     "bearer-xyz",
+				"MY_SECRET":      "super-secret",
+				"PATH":           "/usr/bin",
 			},
 		}
 
@@ -534,9 +534,9 @@ func TestResolveEnvVars(t *testing.T) {
 		require.NoError(t, err)
 
 		env := map[string]string{
-			"AUTH_TOKEN":     SecretRef("mixserver", "AUTH_TOKEN"),
-			"PATH":           "/usr/local/bin",
-			"MAX_TOKENS":     "4096",
+			"AUTH_TOKEN": SecretRef("mixserver", "AUTH_TOKEN"),
+			"PATH":       "/usr/local/bin",
+			"MAX_TOKENS": "4096",
 		}
 
 		result, err := ResolveEnvVars("mixserver", env)
@@ -656,5 +656,3 @@ func TestMigrateEnvSecrets(t *testing.T) {
 		assert.Equal(t, "sk-roundtrip", resolved["OPENAI_API_KEY"])
 	})
 }
-
-

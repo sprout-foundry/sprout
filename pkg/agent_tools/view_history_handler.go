@@ -36,8 +36,8 @@ func (h *viewHistoryHandler) Execute(ctx context.Context, env ToolEnv, args map[
 	toolName := h.Name()
 	if env.EventBus != nil {
 		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool":     toolName,
-			"params":   args,
+			"tool":   toolName,
+			"params": args,
 		})
 		defer func() {
 			env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{

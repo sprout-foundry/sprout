@@ -88,10 +88,10 @@ func TestCheckActiveSessions_ServerError(t *testing.T) {
 
 func TestParseSessionResponse(t *testing.T) {
 	tests := []struct {
-		name       string
-		body       string
-		wantCount  int
-		wantErr    bool
+		name        string
+		body        string
+		wantCount   int
+		wantErr     bool
 		errContains string
 	}{
 		{
@@ -135,39 +135,39 @@ func TestParseSessionResponse(t *testing.T) {
 			wantCount: 0,
 		},
 		{
-			name:      "count_as_string_is_error",
-			body:      `{"count":"five"}`,
-			wantErr:   true,
+			name:        "count_as_string_is_error",
+			body:        `{"count":"five"}`,
+			wantErr:     true,
 			errContains: "unexpected type for count",
 		},
 		{
-			name:      "count_as_bool_is_error",
-			body:      `{"count":true}`,
-			wantErr:   true,
+			name:        "count_as_bool_is_error",
+			body:        `{"count":true}`,
+			wantErr:     true,
 			errContains: "unexpected type for count",
 		},
 		{
-			name:      "count_as_array_is_error",
-			body:      `{"count":[1,2]}`,
-			wantErr:   true,
+			name:        "count_as_array_is_error",
+			body:        `{"count":[1,2]}`,
+			wantErr:     true,
 			errContains: "unexpected type for count",
 		},
 		{
-			name:      "count_as_object_is_error",
-			body:      `{"count":{"nested":1}}`,
-			wantErr:   true,
+			name:        "count_as_object_is_error",
+			body:        `{"count":{"nested":1}}`,
+			wantErr:     true,
 			errContains: "unexpected type for count",
 		},
 		{
-			name:      "invalid_json",
-			body:      `not json`,
-			wantErr:   true,
+			name:        "invalid_json",
+			body:        `not json`,
+			wantErr:     true,
 			errContains: "failed to parse response",
 		},
 		{
-			name:      "empty_body",
-			body:      ``,
-			wantErr:   true,
+			name:        "empty_body",
+			body:        ``,
+			wantErr:     true,
 			errContains: "failed to parse response",
 		},
 		{

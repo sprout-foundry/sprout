@@ -48,14 +48,14 @@ func IsGitCheckoutSubcommand(command string) bool {
 		if idx == -1 {
 			return false
 		}
-		
+
 		gitCmd := remaining[idx:]
 		parts := strings.Fields(gitCmd)
 		if len(parts) < 2 {
 			remaining = remaining[idx+1:]
 			continue
 		}
-		
+
 		// Skip leading flags (e.g., -c key=val, -C path, --no-pager)
 		for i := 1; i < len(parts); i++ {
 			part := parts[i]
@@ -74,7 +74,7 @@ func IsGitCheckoutSubcommand(command string) bool {
 			// If we found a non-flag, non-checkout subcommand, stop checking this git invocation
 			break
 		}
-		
+
 		// Move past this git invocation to check for more
 		remaining = remaining[idx+1:]
 	}
@@ -94,14 +94,14 @@ func IsGitDiscardCommand(command string) bool {
 		if idx == -1 {
 			return false
 		}
-		
+
 		gitCmd := remaining[idx:]
 		parts := strings.Fields(gitCmd)
 		if len(parts) < 2 {
 			remaining = remaining[idx+1:]
 			continue
 		}
-		
+
 		// Find the subcommand (skip leading flags like -c, -C)
 		subcommand := ""
 		for i := 1; i < len(parts); i++ {
@@ -117,47 +117,47 @@ func IsGitDiscardCommand(command string) bool {
 			subcommand = strings.TrimRight(part, ");\"'")
 			break
 		}
-		
-			if subcommand != "" {
-		// git restore always discards (working tree or staged changes)
-		if subcommand == "restore" {
-			return true
-		}
-		// git reset can discard staged changes (even without --hard)
-		if subcommand == "reset" {
-			return true
-		}
-		// git stash: pop/apply/drop/clear are destructive. bare stash
-		// and stash push revert the working tree. stash list/show are
-		// read-only and NOT gated here.
-		if subcommand == "stash" {
-			// Check the sub-subcommand (the token after "stash")
-			stashSub := ""
-			if len(parts) > 2 {
-				// Find the token after the "stash" subcommand position
-				for i := 1; i < len(parts); i++ {
-					part := parts[i]
-					if strings.HasPrefix(part, "-") {
-						if part == "-c" || part == "-C" || part == "--exec-path" || part == "--git-dir" || part == "--work-tree" {
-							i++
-						}
-						continue
-					}
-					// Found the subcommand — now check if there's a sub-sub
-					cleaned := strings.TrimRight(part, ");\"'")
-					if cleaned == "stash" && i+1 < len(parts) {
-						stashSub = strings.TrimRight(parts[i+1], ");\"'")
-					}
-					break
-				}
-			}
-			if stashSub == "list" || stashSub == "show" {
-				// Read-only — don't gate
-			} else {
+
+		if subcommand != "" {
+			// git restore always discards (working tree or staged changes)
+			if subcommand == "restore" {
 				return true
 			}
-		}
-	}// Move past this git invocation to check for more
+			// git reset can discard staged changes (even without --hard)
+			if subcommand == "reset" {
+				return true
+			}
+			// git stash: pop/apply/drop/clear are destructive. bare stash
+			// and stash push revert the working tree. stash list/show are
+			// read-only and NOT gated here.
+			if subcommand == "stash" {
+				// Check the sub-subcommand (the token after "stash")
+				stashSub := ""
+				if len(parts) > 2 {
+					// Find the token after the "stash" subcommand position
+					for i := 1; i < len(parts); i++ {
+						part := parts[i]
+						if strings.HasPrefix(part, "-") {
+							if part == "-c" || part == "-C" || part == "--exec-path" || part == "--git-dir" || part == "--work-tree" {
+								i++
+							}
+							continue
+						}
+						// Found the subcommand — now check if there's a sub-sub
+						cleaned := strings.TrimRight(part, ");\"'")
+						if cleaned == "stash" && i+1 < len(parts) {
+							stashSub = strings.TrimRight(parts[i+1], ");\"'")
+						}
+						break
+					}
+				}
+				if stashSub == "list" || stashSub == "show" {
+					// Read-only — don't gate
+				} else {
+					return true
+				}
+			}
+		} // Move past this git invocation to check for more
 		remaining = remaining[idx+1:]
 	}
 }
@@ -170,13 +170,13 @@ func ExtractGitSubcommand(command string) string {
 	if idx == -1 {
 		return "unknown"
 	}
-	
+
 	gitCmd := command[idx:]
 	parts := strings.Fields(gitCmd)
 	if len(parts) < 2 {
 		return "unknown"
 	}
-	
+
 	for i := 1; i < len(parts); i++ {
 		part := parts[i]
 		if strings.HasPrefix(part, "-") {

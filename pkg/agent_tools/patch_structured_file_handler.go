@@ -16,7 +16,7 @@ func (h *patchStructuredFileHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "patch_structured_file",
 		Description: "Apply JSON Patch operations (add/replace/remove/test) to existing JSON/YAML then write it back",
-		Required: []string{"path"},
+		Required:    []string{"path"},
 		Parameters: []ParameterDef{
 			{Name: "path", Type: "string", Required: true, Description: "Path to the structured file to patch"},
 			{Name: "patch_ops", Type: "array", Description: "JSON Patch operations array"},

@@ -35,15 +35,15 @@ func (m *mockClient) SendChatRequestStream(ctx context.Context, messages []Messa
 	return m.SendChatRequest(context.Background(), messages, tools, reasoning, disableThinking)
 }
 
-func (m *mockClient) CheckConnection() error                                      { return nil }
-func (m *mockClient) SetDebug(debug bool)                                         {}
-func (m *mockClient) SetModel(model string) error                                  { m.model = model; return nil }
-func (m *mockClient) GetModel() string                                             { return m.model }
-func (m *mockClient) GetProvider() string                                          { return m.provider }
-func (m *mockClient) GetModelContextLimit() (int, error)                           { return 128000, nil }
-func (m *mockClient) ListModels(ctx context.Context) ([]ModelInfo, error)          { return nil, nil }
-func (m *mockClient) SupportsVision() bool                                         { return false }
-func (m *mockClient) GetVisionModel() string                                       { return "" }
+func (m *mockClient) CheckConnection() error                              { return nil }
+func (m *mockClient) SetDebug(debug bool)                                 {}
+func (m *mockClient) SetModel(model string) error                         { m.model = model; return nil }
+func (m *mockClient) GetModel() string                                    { return m.model }
+func (m *mockClient) GetProvider() string                                 { return m.provider }
+func (m *mockClient) GetModelContextLimit() (int, error)                  { return 128000, nil }
+func (m *mockClient) ListModels(ctx context.Context) ([]ModelInfo, error) { return nil, nil }
+func (m *mockClient) SupportsVision() bool                                { return false }
+func (m *mockClient) GetVisionModel() string                              { return "" }
 func (m *mockClient) SendVisionRequest(ctx context.Context, messages []Message, tools []Tool, reasoning string, disableThinking bool) (*ChatResponse, error) {
 	return &ChatResponse{
 		Choices: []Choice{{
@@ -53,10 +53,10 @@ func (m *mockClient) SendVisionRequest(ctx context.Context, messages []Message, 
 		}},
 	}, nil
 }
-func (m *mockClient) GetLastTPS() float64            { return 0 }
-func (m *mockClient) GetAverageTPS() float64         { return 0 }
+func (m *mockClient) GetLastTPS() float64             { return 0 }
+func (m *mockClient) GetAverageTPS() float64          { return 0 }
 func (m *mockClient) GetTPSStats() map[string]float64 { return nil }
-func (m *mockClient) ResetTPSStats()                 {}
+func (m *mockClient) ResetTPSStats()                  {}
 
 func TestProviderAdapterRateLimiter_AcquiresToken(t *testing.T) {
 	provider := "test-rate-limit-provider"
@@ -231,8 +231,8 @@ func TestProviderAdapterRateLimiter_ClientTypeMapping(t *testing.T) {
 	// Verify that real ClientType constants produce the expected rate limiter defaults.
 	// This catches mismatches between ClientType string values and getDefaultRateForProvider.
 	testCases := []struct {
-		clientType   ClientType
-		expectedRate float64
+		clientType    ClientType
+		expectedRate  float64
 		expectedBurst int
 	}{
 		{OpenAIClientType, 1.0, 5},

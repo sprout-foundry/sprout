@@ -70,8 +70,8 @@ func TestLineCapWriter_SuppressionAcrossChunkBoundary(t *testing.T) {
 	// count across chunks.
 	sink, buf := captureSink()
 	w := NewLineCapWriter(8, sink)
-	w.Write(strings.Repeat("a", 5))       // under cap, all emitted
-	w.Write(strings.Repeat("b", 5))       // crosses cap: 3 emitted, 2 dropped
+	w.Write(strings.Repeat("a", 5))         // under cap, all emitted
+	w.Write(strings.Repeat("b", 5))         // crosses cap: 3 emitted, 2 dropped
 	w.Write(strings.Repeat("c", 10) + "\n") // 10 dropped, then newline
 	got := buf.String()
 	// First 8 chars emitted (5 a's + 3 b's), then marker, then newline.

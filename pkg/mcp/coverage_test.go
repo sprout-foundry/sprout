@@ -212,8 +212,8 @@ type mockRunningServer struct {
 
 func (m *mockRunningServer) Start(ctx context.Context) error { return nil }
 func (m *mockRunningServer) Stop(ctx context.Context) error  { return nil }
-func (m *mockRunningServer) IsRunning() bool                { return true }
-func (m *mockRunningServer) GetName() string                { return m.name }
+func (m *mockRunningServer) IsRunning() bool                 { return true }
+func (m *mockRunningServer) GetName() string                 { return m.name }
 func (m *mockRunningServer) GetConfig() MCPServerConfig {
 	return MCPServerConfig{Name: m.name}
 }
@@ -244,8 +244,8 @@ type mockStoppedServer struct {
 
 func (m *mockStoppedServer) Start(ctx context.Context) error { return nil }
 func (m *mockStoppedServer) Stop(ctx context.Context) error  { return nil }
-func (m *mockStoppedServer) IsRunning() bool                { return false }
-func (m *mockStoppedServer) GetName() string                { return m.name }
+func (m *mockStoppedServer) IsRunning() bool                 { return false }
+func (m *mockStoppedServer) GetName() string                 { return m.name }
 func (m *mockStoppedServer) GetConfig() MCPServerConfig {
 	return MCPServerConfig{Name: m.name}
 }
@@ -399,23 +399,23 @@ func TestParseGitHubRemoteURL_AdditionalEdgeCases(t *testing.T) {
 		expected *GitHubRepoInfo
 	}{
 		{
-			name:  "empty string",
-			input: "",
+			name:     "empty string",
+			input:    "",
 			expected: &GitHubRepoInfo{},
 		},
 		{
 			name:     "just git@github.com: prefix",
 			input:    "git@github.com:",
-			expected:  nil,
+			expected: nil,
 		},
 		{
 			name:     "only owner, no repo",
 			input:    "git@github.com:owner",
-			expected:  nil,
+			expected: nil,
 		},
 		{
-			name:  "both owner and repo empty",
-			input: "git@github.com:/",
+			name:     "both owner and repo empty",
+			input:    "git@github.com:/",
 			expected: &GitHubRepoInfo{},
 		},
 		{

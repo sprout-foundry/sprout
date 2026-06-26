@@ -50,9 +50,9 @@ func TestCostFromJSON_DifferingPropertyNames(t *testing.T) {
 
 func TestModelPricingPerMillion_Variants(t *testing.T) {
 	cases := []struct {
-		name              string
-		entry             map[string]any
-		wantIn, wantOut   float64
+		name            string
+		entry           map[string]any
+		wantIn, wantOut float64
 	}{
 		{
 			name:    "per-token strings (openrouter/deepinfra)",

@@ -76,7 +76,7 @@ func TestCanExecuteInParallel(t *testing.T) {
 		expected  bool
 	}{
 		{
-			name:     "single tool call - no parallel",
+			name: "single tool call - no parallel",
 			toolCalls: []api.ToolCall{{ID: "c1", Function: struct {
 				Name      string `json:"name"`
 				Arguments string `json:"arguments"`
@@ -156,7 +156,7 @@ func TestCanExecuteInParallel(t *testing.T) {
 			expected: false,
 		},
 		{
-			name:     "same fetch_url - parallel",
+			name: "same fetch_url - parallel",
 			toolCalls: []api.ToolCall{
 				{ID: "c1", Function: struct {
 					Name      string `json:"name"`

@@ -151,10 +151,10 @@ func TestSP068_AllowlistedCommandApproved(t *testing.T) {
 // hard-block.
 //
 // The test exercises two layers:
-//   1. ResolveToolRisk — must return Critical + IsHardBlock regardless of
-//      the allowlist entry.
-//   2. unifiedSecurityGate — must return a non-nil security error regardless
-//      of the allowlist entry.
+//  1. ResolveToolRisk — must return Critical + IsHardBlock regardless of
+//     the allowlist entry.
+//  2. unifiedSecurityGate — must return a non-nil security error regardless
+//     of the allowlist entry.
 func TestSP068_CriticalHardBlockUnoverridable(t *testing.T) {
 	// Critical command corpus. Each must be recognized by
 	// configuration.IsCriticalOperation (the canonical pattern list that
@@ -263,9 +263,9 @@ func TestSP068_CriticalBlocksWhileAllowlistWorksForNonCritical(t *testing.T) {
 	err := agent.configManager.UpdateConfigNoSave(func(cfg *configuration.Config) error {
 		cfg.UnifiedRiskResolver = true
 		cfg.ApprovedShellCommands = []string{
-			"rm -rf /",     // critical — must still block
-			"ls -la",       // safe (Low) — allowlist works
-			"git status",   // safe (Low) — allowlist works
+			"rm -rf /",   // critical — must still block
+			"ls -la",     // safe (Low) — allowlist works
+			"git status", // safe (Low) — allowlist works
 		}
 		return nil
 	})

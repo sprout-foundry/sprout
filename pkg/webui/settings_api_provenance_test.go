@@ -65,8 +65,8 @@ func TestExpandNestedKeys_EmptyMap(t *testing.T) {
 
 func TestExpandNestedKeys_MixedValues(t *testing.T) {
 	input := map[string]interface{}{
-		"simple":      "value",
-		"top_level":   123,
+		"simple":    "value",
+		"top_level": 123,
 		"nested": map[string]interface{}{
 			"a": 1,
 			"b": 2,
@@ -180,13 +180,13 @@ func TestHandleGetProvenanceSettings_NestedKey_FromWorkspace(t *testing.T) {
 	globalCfg := &configuration.Config{
 		APITimeouts: &configuration.APITimeoutConfig{
 			ConnectionTimeoutSec: 30,
-			ChunkTimeoutSec:     60,
+			ChunkTimeoutSec:      60,
 		},
 	}
 	workspaceCfg := &configuration.Config{
 		APITimeouts: &configuration.APITimeoutConfig{
 			ConnectionTimeoutSec: 45, // different
-			ChunkTimeoutSec:     90,   // different
+			ChunkTimeoutSec:      90, // different
 		},
 	}
 
@@ -253,14 +253,14 @@ func TestHandleGetProvenanceSettings_NestedSessionOverride(t *testing.T) {
 	globalCfg := &configuration.Config{
 		APITimeouts: &configuration.APITimeoutConfig{
 			ConnectionTimeoutSec: 30,
-			ChunkTimeoutSec:     60,
+			ChunkTimeoutSec:      60,
 		},
 	}
 	// Workspace has different overall_timeout_sec
 	workspaceCfg := &configuration.Config{
 		APITimeouts: &configuration.APITimeoutConfig{
-			ConnectionTimeoutSec:  30,
-			ChunkTimeoutSec:       60,
+			ConnectionTimeoutSec: 30,
+			ChunkTimeoutSec:      60,
 			OverallTimeoutSec:    300,
 		},
 	}

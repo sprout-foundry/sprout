@@ -635,7 +635,7 @@ func (cc *webClientContext) setChatSessionWorktree(chatID, worktreePath string) 
 	if !ok {
 		return fmt.Errorf("chat session not found")
 	}
-	
+
 	cs.setWorktreePath(worktreePath)
 	return nil
 }

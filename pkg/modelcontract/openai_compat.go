@@ -93,12 +93,12 @@ func parseOpenAICompat(body []byte, a OpenAICompatAdapter) []CanonicalModel {
 			continue
 		}
 		m := CanonicalModel{
-			ID:            e.ID,
-			Provider:      a.ProviderID,
-			DisplayName:   e.ID,
-			Status:        StatusActive,
-			Source:        a.ProviderID + ":/v1/models",
-			Capabilities:  Capabilities{Streaming: Bool(true)},
+			ID:               e.ID,
+			Provider:         a.ProviderID,
+			DisplayName:      e.ID,
+			Status:           StatusActive,
+			Source:           a.ProviderID + ":/v1/models",
+			Capabilities:     Capabilities{Streaming: Bool(true)},
 			InputModalities:  []string{"text"},
 			OutputModalities: []string{"text"},
 		}

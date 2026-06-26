@@ -10,9 +10,9 @@ import (
 	"strings"
 	"sync" // For thread-safe initialization
 
-	"gopkg.in/natefinch/lumberjack.v2"
 	"github.com/sprout-foundry/sprout/pkg/clihooks"
 	"github.com/sprout-foundry/sprout/pkg/envutil"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 // Logger represents a workspace logger.

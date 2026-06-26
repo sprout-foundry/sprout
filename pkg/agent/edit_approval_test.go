@@ -248,109 +248,109 @@ func TestApplyHunks_RejectAll(t *testing.T) {
 func TestApplyHunks_PartialAccept(t *testing.T) {
 	// Space changes >6 lines apart so difflib produces separate hunks.
 	original := strings.Join([]string{
-		"package main",                        // 0
-		"",                                    // 1
-		"import \"fmt\"",                      // 2
-		"",                                    // 3
-		"const Version = \"1.0.0\"",           // 4  <-- change 1
-		"",                                    // 5
-		"type App struct {",                   // 6
-		"	Name string",                       // 7
-		"}",                                   // 8
-		"",                                    // 9
-		"func (a *App) Init() {",              // 10
-		"	fmt.Println(\"init\")",             // 11
-		"}",                                   // 12
-		"",                                    // 13
-		"func (a *App) Setup() {",             // 14
-		"	fmt.Println(\"setup\")",            // 15
-		"}",                                   // 16
-		"",                                    // 17
-		"func (a *App) Config() {",            // 18
-		"	fmt.Println(\"config\")",           // 19
-		"}",                                   // 20
-		"",                                    // 21
-		"func (a *App) Validate() {",          // 22
-		"	fmt.Println(\"validate\")",         // 23
-		"}",                                   // 24
-		"",                                    // 25
-		"func (a *App) New() *App {",          // 26  <-- change 2
-		"	return &App{}",                     // 27
-		"}",                                   // 28
-		"",                                    // 29
-		"func (a *App) Run() {",               // 30
-		"	fmt.Println(a.Name)",               // 31
-		"}",                                   // 32
-		"",                                    // 33
-		"func (a *App) Stop() {",              // 34
-		"	fmt.Println(\"stopped\")",          // 35
-		"}",                                   // 36
-		"",                                    // 37
-		"func (a *App) Cleanup() {",           // 38
-		"	fmt.Println(\"cleanup\")",          // 39
-		"}",                                   // 40
-		"",                                    // 41
-		"func (a *App) Shutdown() {",          // 42
-		"	fmt.Println(\"shutdown\")",         // 43
-		"}",                                   // 44
-		"",                                    // 45
-		"func main() {",                       // 46  <-- change 3
-		"	app := &App{}",                     // 47
-		"	app.Run()",                         // 48
-		"}",                                   // 49
+		"package main",               // 0
+		"",                           // 1
+		"import \"fmt\"",             // 2
+		"",                           // 3
+		"const Version = \"1.0.0\"",  // 4  <-- change 1
+		"",                           // 5
+		"type App struct {",          // 6
+		"	Name string",               // 7
+		"}",                          // 8
+		"",                           // 9
+		"func (a *App) Init() {",     // 10
+		"	fmt.Println(\"init\")",     // 11
+		"}",                          // 12
+		"",                           // 13
+		"func (a *App) Setup() {",    // 14
+		"	fmt.Println(\"setup\")",    // 15
+		"}",                          // 16
+		"",                           // 17
+		"func (a *App) Config() {",   // 18
+		"	fmt.Println(\"config\")",   // 19
+		"}",                          // 20
+		"",                           // 21
+		"func (a *App) Validate() {", // 22
+		"	fmt.Println(\"validate\")", // 23
+		"}",                          // 24
+		"",                           // 25
+		"func (a *App) New() *App {", // 26  <-- change 2
+		"	return &App{}",             // 27
+		"}",                          // 28
+		"",                           // 29
+		"func (a *App) Run() {",      // 30
+		"	fmt.Println(a.Name)",       // 31
+		"}",                          // 32
+		"",                           // 33
+		"func (a *App) Stop() {",     // 34
+		"	fmt.Println(\"stopped\")",  // 35
+		"}",                          // 36
+		"",                           // 37
+		"func (a *App) Cleanup() {",  // 38
+		"	fmt.Println(\"cleanup\")",  // 39
+		"}",                          // 40
+		"",                           // 41
+		"func (a *App) Shutdown() {", // 42
+		"	fmt.Println(\"shutdown\")", // 43
+		"}",                          // 44
+		"",                           // 45
+		"func main() {",              // 46  <-- change 3
+		"	app := &App{}",             // 47
+		"	app.Run()",                 // 48
+		"}",                          // 49
 	}, "\n")
 
 	proposed := strings.Join([]string{
-		"package main",                        // 0
-		"",                                    // 1
-		"import \"fmt\"",                      // 2
-		"",                                    // 3
-		"const Version = \"2.0.0\"",           // 4  <-- CHANGED
-		"",                                    // 5
-		"type App struct {",                   // 6
-		"	Name string",                       // 7
-		"}",                                   // 8
-		"",                                    // 9
-		"func (a *App) Init() {",              // 10
-		"	fmt.Println(\"init\")",             // 11
-		"}",                                   // 12
-		"",                                    // 13
-		"func (a *App) Setup() {",             // 14
-		"	fmt.Println(\"setup\")",            // 15
-		"}",                                   // 16
-		"",                                    // 17
-		"func (a *App) Config() {",            // 18
-		"	fmt.Println(\"config\")",           // 19
-		"}",                                   // 20
-		"",                                    // 21
-		"func (a *App) Validate() {",          // 22
-		"	fmt.Println(\"validate\")",         // 23
-		"}",                                   // 24
-		"",                                    // 25
-		"func (a *App) New() *App {",          // 26  <-- CHANGED
-		"	return &App{Name: \"default\"}",    // 27  <-- CHANGED
-		"}",                                   // 28
-		"",                                    // 29
-		"func (a *App) Run() {",               // 30
-		"	fmt.Println(a.Name)",               // 31
-		"}",                                   // 32
-		"",                                    // 33
-		"func (a *App) Stop() {",              // 34
-		"	fmt.Println(\"stopped\")",          // 35
-		"}",                                   // 36
-		"",                                    // 37
-		"func (a *App) Cleanup() {",           // 38
-		"	fmt.Println(\"cleanup\")",          // 39
-		"}",                                   // 40
-		"",                                    // 41
-		"func (a *App) Shutdown() {",          // 42
-		"	fmt.Println(\"shutdown\")",         // 43
-		"}",                                   // 44
-		"",                                    // 45
-		"func main() {",                       // 46  <-- CHANGED
-		"	app := &App{Name: \"main-app\"}",   // 47  <-- CHANGED
-		"	app.Run()",                         // 48
-		"}",                                   // 49
+		"package main",                     // 0
+		"",                                 // 1
+		"import \"fmt\"",                   // 2
+		"",                                 // 3
+		"const Version = \"2.0.0\"",        // 4  <-- CHANGED
+		"",                                 // 5
+		"type App struct {",                // 6
+		"	Name string",                     // 7
+		"}",                                // 8
+		"",                                 // 9
+		"func (a *App) Init() {",           // 10
+		"	fmt.Println(\"init\")",           // 11
+		"}",                                // 12
+		"",                                 // 13
+		"func (a *App) Setup() {",          // 14
+		"	fmt.Println(\"setup\")",          // 15
+		"}",                                // 16
+		"",                                 // 17
+		"func (a *App) Config() {",         // 18
+		"	fmt.Println(\"config\")",         // 19
+		"}",                                // 20
+		"",                                 // 21
+		"func (a *App) Validate() {",       // 22
+		"	fmt.Println(\"validate\")",       // 23
+		"}",                                // 24
+		"",                                 // 25
+		"func (a *App) New() *App {",       // 26  <-- CHANGED
+		"	return &App{Name: \"default\"}",  // 27  <-- CHANGED
+		"}",                                // 28
+		"",                                 // 29
+		"func (a *App) Run() {",            // 30
+		"	fmt.Println(a.Name)",             // 31
+		"}",                                // 32
+		"",                                 // 33
+		"func (a *App) Stop() {",           // 34
+		"	fmt.Println(\"stopped\")",        // 35
+		"}",                                // 36
+		"",                                 // 37
+		"func (a *App) Cleanup() {",        // 38
+		"	fmt.Println(\"cleanup\")",        // 39
+		"}",                                // 40
+		"",                                 // 41
+		"func (a *App) Shutdown() {",       // 42
+		"	fmt.Println(\"shutdown\")",       // 43
+		"}",                                // 44
+		"",                                 // 45
+		"func main() {",                    // 46  <-- CHANGED
+		"	app := &App{Name: \"main-app\"}", // 47  <-- CHANGED
+		"	app.Run()",                       // 48
+		"}",                                // 49
 	}, "\n")
 
 	hunks := SplitIntoHunks(original, proposed)

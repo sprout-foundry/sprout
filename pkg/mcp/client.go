@@ -17,29 +17,29 @@ import (
 
 // MCPClient implements the MCPServer interface for subprocess-based MCP servers
 type MCPClient struct {
-	config             MCPServerConfig
-	cmd                *exec.Cmd
-	stdin              io.WriteCloser
-	stdout             io.ReadCloser
-	stderr             io.ReadCloser
-	running            bool
-	initialized        bool
-	mutex              sync.RWMutex
-	logger             *utils.Logger
-	messageID          int64
-	pendingReqs        map[string]chan MCPMessage
-	reqMutex           sync.RWMutex
-	restartCount       int
-	ctx                context.Context
-	cancel             context.CancelFunc
+	config       MCPServerConfig
+	cmd          *exec.Cmd
+	stdin        io.WriteCloser
+	stdout       io.ReadCloser
+	stderr       io.ReadCloser
+	running      bool
+	initialized  bool
+	mutex        sync.RWMutex
+	logger       *utils.Logger
+	messageID    int64
+	pendingReqs  map[string]chan MCPMessage
+	reqMutex     sync.RWMutex
+	restartCount int
+	ctx          context.Context
+	cancel       context.CancelFunc
 	// Health check and reconnection fields
-	healthInterval     time.Duration
-	stopping           bool
-	reconnecting       bool
-	reconnectAttempt   int
-	connectedAt        time.Time
-	healthCheckCancel  context.CancelFunc
-	healthCheckCtx     context.Context
+	healthInterval    time.Duration
+	stopping          bool
+	reconnecting      bool
+	reconnectAttempt  int
+	connectedAt       time.Time
+	healthCheckCancel context.CancelFunc
+	healthCheckCtx    context.Context
 
 	// Sliding-window failure tracking
 	failureTimestamps []time.Time

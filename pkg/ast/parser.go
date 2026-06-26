@@ -120,7 +120,7 @@ type langEntry struct {
 
 var (
 	langCacheMu sync.RWMutex
-	langCache    = make(map[string]*langEntry)
+	langCache   = make(map[string]*langEntry)
 )
 
 // getLanguage resolves a language name to its gotreesitter.Language,

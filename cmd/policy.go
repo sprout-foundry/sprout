@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/spf13/cobra"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"gopkg.in/yaml.v3"
 )
 

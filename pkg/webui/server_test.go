@@ -134,11 +134,11 @@ func TestMultipleServersOnDifferentPorts(t *testing.T) {
 	server1, err := NewReactWebServer(agent1, eventBus1, port1, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
-		}
+	}
 	server2, err := NewReactWebServer(agent2, eventBus2, port2, "127.0.0.1", "", "")
 	if err != nil {
 		t.Fatal(err)
-		}
+	}
 
 	// Start both servers
 	ctx1, cancel1 := context.WithCancel(context.Background())

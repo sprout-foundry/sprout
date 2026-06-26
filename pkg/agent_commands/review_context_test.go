@@ -201,9 +201,9 @@ func TestShouldSkipFileForContext(t *testing.T) {
 
 func TestIsImportantComment(t *testing.T) {
 	tests := []struct {
-		name     string
-		comment  string
-		wantImp  bool
+		name    string
+		comment string
+		wantImp bool
 	}{
 		// Keywords that trigger importance
 		{

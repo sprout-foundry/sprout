@@ -20,12 +20,12 @@ func TestValidateReasoningEffort_ZC(t *testing.T) {
 		input string
 		err   bool
 	}{
-		{"", false},       // empty is valid
+		{"", false}, // empty is valid
 		{"low", false},
 		{"medium", false},
 		{"high", false},
 		{"invalid", true},
-		{"LOW", true},     // case-sensitive
+		{"LOW", true}, // case-sensitive
 	}
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
@@ -255,8 +255,8 @@ func TestCompileSearchPattern_ZC(t *testing.T) {
 	t.Parallel()
 	t.Run("plain_text", func(t *testing.T) {
 		re, err := compileSearchPattern("hello", false, false, false)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
 		}
 		if !re.MatchString("hello world") {
 			t.Error("should match plain text")
@@ -264,8 +264,8 @@ func TestCompileSearchPattern_ZC(t *testing.T) {
 	})
 	t.Run("case_insensitive", func(t *testing.T) {
 		re, err := compileSearchPattern("Hello", false, false, false)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
 		}
 		if !re.MatchString("hello world") {
 			t.Error("should match case-insensitive")
@@ -273,8 +273,8 @@ func TestCompileSearchPattern_ZC(t *testing.T) {
 	})
 	t.Run("case_sensitive", func(t *testing.T) {
 		re, err := compileSearchPattern("Hello", true, false, false)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
 		}
 		if re.MatchString("hello world") {
 			t.Error("should NOT match case-sensitive")
@@ -282,8 +282,8 @@ func TestCompileSearchPattern_ZC(t *testing.T) {
 	})
 	t.Run("whole_word", func(t *testing.T) {
 		re, err := compileSearchPattern("test", false, true, false)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
 		}
 		if !re.MatchString("this is a test here") {
 			t.Error("should match whole word")
@@ -291,8 +291,8 @@ func TestCompileSearchPattern_ZC(t *testing.T) {
 	})
 	t.Run("regex_mode", func(t *testing.T) {
 		re, err := compileSearchPattern("foo.*bar", false, false, true)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
 		}
 		if !re.MatchString("fooxyzbar") {
 			t.Error("should match regex pattern")
@@ -300,8 +300,8 @@ func TestCompileSearchPattern_ZC(t *testing.T) {
 	})
 	t.Run("regex_escapes_special", func(t *testing.T) {
 		re, err := compileSearchPattern("func()", false, false, false)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
 		}
 		if !re.MatchString("call func() now") {
 			t.Error("should match escaped special chars")

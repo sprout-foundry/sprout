@@ -61,8 +61,8 @@ func TestGetToolTimeoutEnvOverrideInvalid(t *testing.T) {
 
 func TestIsSubagentTool(t *testing.T) {
 	tests := []struct {
-		name  string
-		want  bool
+		name string
+		want bool
 	}{
 		{"run_subagent", true},
 		{"run_parallel_subagents", true},

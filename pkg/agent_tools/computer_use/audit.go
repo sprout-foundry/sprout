@@ -79,6 +79,18 @@ func (a *auditingBackend) record(action string, args map[string]any, opErr error
 	_, _ = a.w.Write(append(line, '\n'))
 }
 
+// RecordSafetyEvent records a safety-related event (e.g. per-session opt-in
+// consent) to the audit log when the active backend is an auditingBackend.
+// It is a no-op when the backend is not audit-wrapped (e.g. MockBackend in
+// tests or when the audit directory could not be created). This lets callers
+// in the agent layer emit opt-in / denial events without needing to know
+// whether the audit decorator is present.
+func RecordSafetyEvent(action string, args map[string]any) {
+	if ab, ok := backend.(*auditingBackend); ok {
+		ab.record(action, args, nil)
+	}
+}
+
 func (a *auditingBackend) Screenshot(region *Rect) ([]byte, Size, error) {
 	img, dims, err := a.inner.Screenshot(region)
 	a.record("screenshot", map[string]any{"region": region, "bytes": len(img)}, err)

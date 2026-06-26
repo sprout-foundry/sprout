@@ -1,26 +1,34 @@
 # SP-063: Real `computer_user` Persona — Mouse/Keyboard/Screenshot Agent
 
-**Status:** 🚧 Partially implemented (2026-06-15) — core shipped (backend + tools + persona + safety gates); WebUI settings + interactive opt-in remain
+**Status:** ✅ Implemented (2026-06-26) — all but two safety gates shipped; remaining work explicitly out-of-scope until design questions settle
 **Date:** 2026-06-03
 **Depends on:** SP-050 (orchestrator persona collapse — same persona-system mechanics)
 **Priority:** Medium-Low (capability addition, not bug-fix)
 
-## Implementation status (2026-06-15)
+## Implementation status (2026-06-26)
 
 The Go core landed and is build-verified (`make build-all`) + unit-tested
 (`pkg/agent_tools/computer_use/*_test.go`, 0 GUI dependency — backends are
-exercised via an overridable `commandRunner`).
+exercised via an overridable `commandRunner`). Most safety gates shipped;
+two remain explicitly out-of-scope (see below).
 
 | Phase | Status | Where |
 |---|---|---|
-| 1 Tool surface (7 tools + Anthropic `computer_20241022` translation) | ✅ done | `handlers.go`, `anthropic.go`, `registry.go` |
-| 2 Platform backends (macOS `cliclick`/`screencapture`, Linux-X11 `xdotool`/`scrot`/`import`; Wayland + other OS rejected with a clear reason; region crop in-process) | ✅ done | `backend_subprocess.go`, `backend_select.go` |
+| 1 Tool surface (7 tools + Anthropic `computer_20241022` translation) | ✅ done | `pkg/agent_tools/computer_use/handlers.go`, `anthropic.go`, `registry.go` |
+| 2 Platform backends (macOS `cliclick`/`screencapture`, Linux-X11 `xdotool`/`scrot`/`import`; Wayland + other OS rejected with a clear reason; region crop in-process) | ✅ done | `pkg/agent_tools/computer_use/backend_subprocess.go`, `backend_select.go` |
 | 3 Vision wiring (screenshot returns an image content block; activation refused on text-only providers) | ✅ done | `handlers.go` + `checkComputerUseActivation` (`computer_use_registration.go`, called from `ApplyPersona`) |
-| 4 Safety gates | 🟡 mostly done | off-by-default `ComputerUseConfig.Enabled`, audit log (`audit.go`), action-rate cap (`safety.go`), and **activation gates** (enabled flag, platform-supported, top-level-only/no-subagent, vision-capable) **done**; per-session interactive opt-in dialog, global Ctrl+C+Esc panic key, destructive-app denylist heuristic, and precise `--skip-prompt`/daemon block **remain** |
+| 4a Off-by-default config + warning banner on activation | ✅ done | `ComputerUseConfig.Enabled` default false; `pkg/agent/persona.go` lines ~88-99 prints "⚠ COMPUTER USE ACTIVE" + warning event |
+| 4b Action-rate limit (default 60/min) | ✅ done | `NewRateLimitedBackend` (`safety.go`); `MaxActionsPerMinute` config; tests in `safety_audit_test.go` |
+| 4c Audit log (JSONL per session with thumbnails) | ✅ done | `NewAuditingBackend` (`audit.go`); `RecordSafetyEvent` for opt-in events; default dir `~/.config/sprout/computer_use_log` |
+| 4d Activation gates (config flag, platform-supported, top-level-only, vision-capable) | ✅ done | `checkComputerUseActivation` (`computer_use_registration.go`) |
+| 4e `--skip-prompt` / daemon block | ✅ done | `checkComputerUseActivation` rejects when `cfg.SkipPrompt == true` (covers both CLI `--skip-prompt` and daemon mode) |
+| 4f Per-session interactive opt-in (WebUI + CLI dialog, workspace allowlist auto-approve, "approve always" persistence) | ✅ done | `checkComputerUseSessionOptIn` (`computer_use_registration.go`); called from `ExecuteTool` (`tool_security.go`); clears on `ClearSessionOverrides` |
+| 4g Global panic key (Ctrl+C+Esc halts within 500ms) | ❌ **deferred** | Sub-500ms halt during an action loop is non-trivial — requires careful signal-handling design that can race with the action loop. Existing Ctrl+C at CLI level halts; spec wants faster halt during in-progress action. Tracked as a separate ticket when the design is worked out. |
+| 4h Destructive-app denylist heuristic (Mail, Banking, Disk Utility, etc.) | ❌ **deferred** | Requires OS-specific foreground-window detection (`osascript` on macOS, `wmctrl`/`xdotool` on X11) and a classification heuristic (hand-curated vs model-classified via screenshot). Design tradeoffs need user input. |
 | 5 Persona prompt | ✅ done | `pkg/agent/prompts/subagent_prompts/computer_user.md` |
-| 6 Tool allowlist (computer_user only) | ✅ done | persona `allowed_tools` (`pkg/personas/configs/computer_user.json`) + dispatch-layer guard (`computer_use_registration.go`, `tool_security.go`) |
-| 7 WebUI settings panel | ❌ remaining | "Computer Use (Experimental)" section + Test-connection button |
-| 8 Tests | 🟡 unit done | mock-backend unit tests shipped; Xvfb+tkinter integration smoke **remains** |
+| 6 Tool allowlist (computer_user only) | ✅ done | persona `allowed_tools` (`pkg/personas/configs/computer_user.json`) + dispatch-layer guard (`isComputerUseToolBlocked` in `computer_use_registration.go`) |
+| 7 WebUI settings panel | ✅ done | `webui/src/components/settings/ComputerUseSettingsTab.tsx` (307 lines) — master toggle, action rate, audit log dir, workspace allowlist, "Test connection" button |
+| 8 Tests | 🟡 partial | Unit + mock-backend + roundtrip tests shipped (`pkg/agent_tools/computer_use/*_test.go`); Xvfb+tkinter integration smoke **not implemented** (requires a real display environment) |
 
 Registration is gated four ways (config flag off by default → real backend must
 exist → exposed only to `computer_user` persona → dispatch-layer rejection for
@@ -28,6 +36,29 @@ any other persona) and wired at agent creation
 (`agent_creation.go` → `RegisterComputerUseTools`). The platform backends are
 written but cannot be functionally verified in CI/headless — they need a real
 macOS/X11 display.
+
+## Safety model summary
+
+Defense-in-depth, in order, before any click happens:
+
+1. **Master switch** (`cfg.ComputerUse.Enabled`, default false). Without flipping this in settings, the tools aren't even registered.
+2. **Platform support** — refuses on Wayland, headless, or other unsupported environments.
+3. **Vision capability** — refuses to activate on a text-only provider (a blind agent driving the desktop would be destructive).
+4. **Top-level only** — refuses to activate inside a subagent (no autonomous computer control).
+5. **Non-interactive block** — refuses when `cfg.SkipPrompt` is true (covers both `--skip-prompt` CLI flag and the daemon's direct mode).
+6. **Per-session opt-in** — on the first computer-use action of any session, prompts the user via WebUI dialog or CLI terminal. Workspace on the persistent allowlist auto-approves. "Approve always" persists the workspace root to `cfg.ComputerUse.WorkspaceAllowlist`.
+7. **Action-rate cap** — default 60 actions/minute; configurable.
+8. **Audit log** — every action + every opt-in/denial recorded to JSONL.
+9. **Persona allowlist + dispatch guard** — tools only available to the `computer_user` persona; rejected at dispatch for any other persona.
+
+## Why gates 4g (panic key) and 4h (destructive denylist) are deferred
+
+Both gates were designed against risks the existing safety stack already partially covers: existing Ctrl+C at the CLI halts the agent entirely (4g), and the user can already see the agent's actions and stop them via WebUI/CLI (4h). Implementing either properly requires design conversations:
+
+- **4g** — the spec wants sub-500ms halt during an in-progress action. The risk is signal-handling code racing with the action loop and producing a wedged state. The right design (separate signal-handling goroutine? Cooperative cancellation in each backend call?) needs a focused design doc, not a quick implementation.
+- **4h** — requires OS-specific foreground-window detection (`osascript` on macOS, `wmctrl`/`xdotool` on X11), a classification heuristic (hand-curated app list vs model-classified via screenshot), and per-action confirmation wiring in the action loop. The hand-curated list rots; the model-classified path adds latency to every click and a non-trivial prompt-flow on every click into Mail.
+
+Both are tracked here as open design questions, not as "remaining work" — they're scoped out until the design choices are made.
 
 ## Background
 

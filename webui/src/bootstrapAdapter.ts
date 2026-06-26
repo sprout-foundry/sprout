@@ -15,6 +15,16 @@ import type { PlatformNavItem } from './services/apiAdapter';
 import { CloudAdapter } from './services/cloudAdapter';
 import type { RuntimeConfig } from './types/runtimeConfig';
 
+/** Shape of the JSON returned by /api/bootstrap (all fields optional). */
+interface BootstrapResponse {
+  apiBaseURL?: string;
+  wsURL?: string;
+  authMode?: 'none' | 'bearer';
+  appMode?: 'local' | 'cloud';
+  buildVersion?: string;
+  sharedMode?: boolean;
+}
+
 const CLOUD_NAV_ITEMS: PlatformNavItem[] = [
   { id: 'tasks', label: 'Tasks', href: '/tasks', icon: 'list-checks', order: 1 },
   { id: 'billing', label: 'Billing', href: '/billing', icon: 'credit-card', order: 2 },
@@ -93,29 +103,32 @@ export async function fetchRuntimeConfig(): Promise<RuntimeConfig> {
   try {
     const resp = await fetch('/api/bootstrap');
     const json = await resp.json();
-    if (json && typeof json === 'object' && typeof (json as any).apiBaseURL === 'string') {
+    const data = json as BootstrapResponse;
+    if (json && typeof json === 'object' && typeof data.apiBaseURL === 'string') {
       const config: RuntimeConfig = {
-        apiBaseURL: (json as any).apiBaseURL,
-        wsURL: (json as any).wsURL,
-        authMode: (json as any).authMode ?? 'none',
-        appMode: (json as any).appMode ?? 'local',
-        buildVersion: (json as any).buildVersion ?? 'dev',
-        sharedMode: (json as any).sharedMode ?? false,
+        apiBaseURL: data.apiBaseURL,
+        wsURL: data.wsURL ?? '',
+        authMode: data.authMode ?? 'none',
+        appMode: data.appMode ?? 'local',
+        buildVersion: data.buildVersion ?? 'dev',
+        sharedMode: data.sharedMode ?? false,
       };
       lastConfig = config;
+      // eslint-disable-next-line no-console
       console.log('bootstrap: fetched config from /api/bootstrap');
       installAdapterForConfig(config);
       return config;
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     // fetch failed or response was invalid — fall through to tier 2
-    fetchError = err?.message || String(err);
+    fetchError = err instanceof Error ? err.message : String(err);
   }
 
   // — Tier 2: Vite env vars —
   const fromEnv = fromEnvVars();
   if (fromEnv) {
     lastConfig = fromEnv;
+    // eslint-disable-next-line no-console
     console.warn('bootstrap: using VITE env vars (fetch failed: %s)', fetchError);
     installAdapterForConfig(fromEnv);
     return fromEnv;
@@ -123,6 +136,7 @@ export async function fetchRuntimeConfig(): Promise<RuntimeConfig> {
 
   // — Tier 3: localhost defaults —
   lastConfig = LOCALHOST_DEFAULTS;
+  // eslint-disable-next-line no-console
   console.log('bootstrap: using localhost defaults');
   installAdapterForConfig(LOCALHOST_DEFAULTS);
   return LOCALHOST_DEFAULTS;
@@ -141,6 +155,7 @@ export function getBootstrapConfig(): RuntimeConfig {
  */
 function installAdapterForConfig(config: RuntimeConfig): void {
   if (config.appMode === 'cloud') {
+    // eslint-disable-next-line no-console
     console.log('bootstrap: active mode = cloud, installing CloudAdapter');
     installAdapter(
       new CloudAdapter({
@@ -150,6 +165,7 @@ function installAdapterForConfig(config: RuntimeConfig): void {
       })
     );
   } else {
+    // eslint-disable-next-line no-console
     console.log('bootstrap: active mode = local, no adapter installed');
   }
 }

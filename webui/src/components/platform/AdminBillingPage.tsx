@@ -5,6 +5,11 @@ import { processRefund, getRefunds, getDunningReport, getCharges } from '../../s
 import { debugLog } from '../../utils/log';
 import './PlatformPages.css';
 
+/** Refund that may carry an admin_user_id (optional field from backend). */
+interface RefundWithAdmin extends Refund {
+  admin_user_id?: string;
+}
+
 const AdminBillingPage: React.FC = () => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -118,10 +123,14 @@ const AdminBillingPage: React.FC = () => {
   const fmtCurrency = (c: number) => new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(c/100);
   const fmtDate = (s: string) => new Date(s).toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
 
-  if (loading) return <div className="platform-page-loading">Loading...</div>;
-  if (!isAdmin) return (
-    <div className="platform-page"><div className="platform-page-error"><h3>Access Denied</h3><p>Admin privileges required.</p></div></div>
-  );
+  if (loading) {
+    return <div className="platform-page-loading">Loading...</div>;
+  }
+  if (!isAdmin) {
+    return (
+      <div className="platform-page"><div className="platform-page-error"><h3>Access Denied</h3><p>Admin privileges required.</p></div></div>
+    );
+  }
 
   const modalOverlayStyle: React.CSSProperties = {
     position:'fixed',top:0,left:0,right:0,bottom:0,backgroundColor:'rgba(0,0,0,0.5)',
@@ -301,8 +310,8 @@ const AdminBillingPage: React.FC = () => {
                   <div><strong>Reason:</strong> <span data-testid="refund-reason">{selectedRefund.reason}</span></div>
                   <div><strong>Status:</strong> <span data-testid="refund-status">{selectedRefund.status}</span></div>
                   <div><strong>Date:</strong> <span data-testid="refund-date">{fmtDate(selectedRefund.created_at)}</span></div>
-                  {'admin_user_id' in selectedRefund && (selectedRefund as any).admin_user_id && (
-                    <div><strong>Admin:</strong> <span data-testid="admin-user">{(selectedRefund as any).admin_user_id}</span></div>
+                  {'admin_user_id' in selectedRefund && (selectedRefund as RefundWithAdmin).admin_user_id && (
+                    <div><strong>Admin:</strong> <span data-testid="admin-user">{(selectedRefund as RefundWithAdmin).admin_user_id}</span></div>
                   )}
                 </div>
               </div>

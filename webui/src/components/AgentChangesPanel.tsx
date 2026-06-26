@@ -455,7 +455,7 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
           {isEmpty && (
             <div className="changes-empty">
               <Inbox size={32} />
-              <p>The agent hasn't changed anything this session yet.</p>
+              <p>The agent hasn&apos;t changed anything this session yet.</p>
               <p className="changes-empty-hint">
                 When the agent edits, creates, or deletes files, each entry will
                 have a <Eye size={12} aria-hidden="true" /> view-diff and{' '}

@@ -343,8 +343,8 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
         fetchSessions();
       }
     };
-    window.addEventListener('sprout-navigate-automation' as any, handler as any);
-    return () => window.removeEventListener('sprout-navigate-automation' as any, handler as any);
+    window.addEventListener('sprout-navigate-automation', handler as EventListener);
+    return () => window.removeEventListener('sprout-navigate-automation', handler as EventListener);
   }, [fetchSessions]);
 
   /* ── Derived data ──────────────────────────────────────── */

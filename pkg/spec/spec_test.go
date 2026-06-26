@@ -1,12 +1,14 @@
 package spec
 
 import (
+	"context"
 	"encoding/json"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/history"
 )
 
@@ -1089,8 +1091,76 @@ func TestBuildConversationFromRevision(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// buildReviewSummary
+// ReviewTrackedChanges - Empty Instructions regression tests
 // ---------------------------------------------------------------------------
+
+func TestReviewTrackedChanges_EmptyInstructions_DerivesFromConversation(t *testing.T) {
+	// This test verifies that when Instructions is empty (e.g. older revisions),
+	// ExtractSpec derives intent from the conversation instead of failing.
+	extractor := newTestExtractor(func(messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
+		return &api.ChatResponse{
+			Choices: []api.Choice{{
+				Message: api.Message{Content: `{"objective":"Build CLI","in_scope":["CLI"],"out_of_scope":[],"acceptance":[],"context":"","confidence":0.9,"reasoning":"test"}`},
+			}},
+		}, nil
+	})
+
+	// Simulate: Instructions is empty, but Conversation has a user message
+	revision := &history.RevisionGroup{
+		RevisionID:   "rev-empty-instructions",
+		Instructions: "",
+		Response:     "I'll build that",
+		Conversation: []history.APIMessage{
+			{Role: "user", Content: "Build a CLI tool"},
+			{Role: "assistant", Content: "I'll build that"},
+		},
+	}
+
+	conversation := buildConversationFromRevision(revision)
+	userIntent := revision.Instructions
+
+	result, err := extractor.ExtractSpec(context.Background(), conversation, userIntent)
+	if err != nil {
+		t.Fatalf("expected no error (intent should be derived from conversation), got: %v", err)
+	}
+	if result.Spec.UserPrompt != "Build a CLI tool" {
+		t.Errorf("expected derived UserPrompt='Build a CLI tool', got %q", result.Spec.UserPrompt)
+	}
+}
+
+func TestReviewTrackedChanges_EmptyInstructions_NoUserMessage_UsesFallback(t *testing.T) {
+	// When Instructions is empty and Conversation is empty,
+	// buildConversationFromRevision synthesizes a 2-message conversation
+	// with empty content. deriveUserIntent skips the empty user message
+	// and returns the fallback placeholder, so ExtractSpec succeeds
+	// (rather than erroring) with the placeholder as UserPrompt.
+	extractor := newTestExtractor(func(messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
+		return &api.ChatResponse{
+			Choices: []api.Choice{{
+				Message: api.Message{Content: `{"objective":"placeholder","in_scope":[],"out_of_scope":[],"acceptance":[],"context":"","confidence":0.5,"reasoning":"test"}`},
+			}},
+		}, nil
+	})
+
+	revision := &history.RevisionGroup{
+		RevisionID:   "rev-empty-everything",
+		Instructions: "",
+		Response:     "",
+		Conversation: []history.APIMessage{},
+	}
+
+	conversation := buildConversationFromRevision(revision)
+	userIntent := revision.Instructions
+
+	result, err := extractor.ExtractSpec(context.Background(), conversation, userIntent)
+	if err != nil {
+		t.Fatalf("expected no error (fallback placeholder should be used), got: %v", err)
+	}
+	expected := "(no explicit user intent provided — infer objective from conversation context)"
+	if result.Spec.UserPrompt != expected {
+		t.Errorf("expected fallback placeholder, got %q", result.Spec.UserPrompt)
+	}
+}
 
 func TestBuildReviewSummary(t *testing.T) {
 	specResult := &SpecExtractionResult{

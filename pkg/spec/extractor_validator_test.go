@@ -81,17 +81,79 @@ func newTestValidator(mockFn func(messages []api.Message, tools []api.Tool, reas
 func TestExtractSpec_InputValidation(t *testing.T) {
 	extractor := newTestExtractor(nil)
 
-	t.Run("empty userIntent returns error", func(t *testing.T) {
-		_, err := extractor.ExtractSpec(context.Background(), []Message{{Role: "user", Content: "hi"}}, "")
-		if err == nil {
-			t.Fatal("expected error for empty userIntent")
+	t.Run("empty userIntent derives from conversation", func(t *testing.T) {
+		extractor := newTestExtractor(func(messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
+			return &api.ChatResponse{
+				Choices: []api.Choice{{
+					Message: api.Message{Content: `{"objective":"derived","in_scope":[],"out_of_scope":[],"acceptance":[],"context":"","confidence":0.8,"reasoning":"test"}`},
+				}},
+			}, nil
+		})
+		result, err := extractor.ExtractSpec(context.Background(), []Message{{Role: "user", Content: "Build a CLI tool"}}, "")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
 		}
-		if !strings.Contains(err.Error(), "userIntent cannot be empty") {
+		if result.Spec.UserPrompt != "Build a CLI tool" {
+			t.Errorf("expected derived UserPrompt='Build a CLI tool', got %q", result.Spec.UserPrompt)
+		}
+	})
+
+	t.Run("empty userIntent with no user-role message uses fallback", func(t *testing.T) {
+		extractor := newTestExtractor(func(messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
+			return &api.ChatResponse{
+				Choices: []api.Choice{{
+					Message: api.Message{Content: `{"objective":"fallback","in_scope":[],"out_of_scope":[],"acceptance":[],"context":"","confidence":0.5,"reasoning":"test"}`},
+				}},
+			}, nil
+		})
+		result, err := extractor.ExtractSpec(context.Background(),
+			[]Message{{Role: "assistant", Content: "Here's the output"}},
+			"",
+		)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		expected := "(no explicit user intent provided — infer objective from conversation context)"
+		if result.Spec.UserPrompt != expected {
+			t.Errorf("expected fallback placeholder, got %q", result.Spec.UserPrompt)
+		}
+	})
+
+	t.Run("empty userIntent with empty conversation returns error", func(t *testing.T) {
+		_, err := extractor.ExtractSpec(context.Background(), []Message{}, "")
+		if err == nil {
+			t.Fatal("expected error for empty userIntent + empty conversation")
+		}
+		if !strings.Contains(err.Error(), "conversation cannot be empty") {
 			t.Errorf("unexpected error: %v", err)
 		}
 	})
 
-	t.Run("empty conversation returns error", func(t *testing.T) {
+	t.Run("empty userIntent with only assistant/tool messages uses fallback", func(t *testing.T) {
+		extractor := newTestExtractor(func(messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
+			return &api.ChatResponse{
+				Choices: []api.Choice{{
+					Message: api.Message{Content: `{"objective":"fallback","in_scope":[],"out_of_scope":[],"acceptance":[],"context":"","confidence":0.5,"reasoning":"test"}`},
+				}},
+			}, nil
+		})
+		result, err := extractor.ExtractSpec(context.Background(),
+			[]Message{
+				{Role: "assistant", Content: "Processing..."},
+				{Role: "tool", Content: "Result"},
+			},
+			"",
+		)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		expected := "(no explicit user intent provided — infer objective from conversation context)"
+		if result.Spec.UserPrompt != expected {
+			t.Errorf("expected fallback placeholder, got %q", result.Spec.UserPrompt)
+		}
+	})
+
+	t.Run("empty conversation with valid userIntent returns error", func(t *testing.T) {
 		_, err := extractor.ExtractSpec(context.Background(), []Message{}, "build a thing")
 		if err == nil {
 			t.Fatal("expected error for empty conversation")
@@ -101,13 +163,86 @@ func TestExtractSpec_InputValidation(t *testing.T) {
 		}
 	})
 
-	t.Run("nil conversation returns error", func(t *testing.T) {
+	t.Run("nil conversation with valid userIntent returns error", func(t *testing.T) {
 		_, err := extractor.ExtractSpec(context.Background(), nil, "build a thing")
 		if err == nil {
 			t.Fatal("expected error for nil conversation")
 		}
 		if !strings.Contains(err.Error(), "conversation cannot be empty") {
 			t.Errorf("unexpected error: %v", err)
+		}
+	})
+}
+
+// ---------------------------------------------------------------------------
+// deriveUserIntent
+// ---------------------------------------------------------------------------
+
+func TestDeriveUserIntent(t *testing.T) {
+	t.Run("first user message wins", func(t *testing.T) {
+		intent := deriveUserIntent([]Message{
+			{Role: "user", Content: "First request"},
+			{Role: "assistant", Content: "OK"},
+			{Role: "user", Content: "Second request"},
+		})
+		if intent != "First request" {
+			t.Errorf("expected 'First request', got %q", intent)
+		}
+	})
+
+	t.Run("case-insensitive role match", func(t *testing.T) {
+		intent := deriveUserIntent([]Message{
+			{Role: "User", Content: "Mixed case role"},
+		})
+		if intent != "Mixed case role" {
+			t.Errorf("expected 'Mixed case role', got %q", intent)
+		}
+	})
+
+	t.Run("empty content skipped", func(t *testing.T) {
+		intent := deriveUserIntent([]Message{
+			{Role: "user", Content: "   "},
+			{Role: "assistant", Content: "Response"},
+			{Role: "user", Content: "Real request"},
+		})
+		if intent != "Real request" {
+			t.Errorf("expected 'Real request', got %q", intent)
+		}
+	})
+
+	t.Run("no user message returns placeholder", func(t *testing.T) {
+		intent := deriveUserIntent([]Message{
+			{Role: "assistant", Content: "Hello"},
+			{Role: "tool", Content: "Result"},
+		})
+		expected := "(no explicit user intent provided — infer objective from conversation context)"
+		if intent != expected {
+			t.Errorf("expected placeholder, got %q", intent)
+		}
+	})
+
+	t.Run("empty conversation returns placeholder", func(t *testing.T) {
+		intent := deriveUserIntent([]Message{})
+		expected := "(no explicit user intent provided — infer objective from conversation context)"
+		if intent != expected {
+			t.Errorf("expected placeholder, got %q", intent)
+		}
+	})
+
+	t.Run("nil conversation returns placeholder", func(t *testing.T) {
+		intent := deriveUserIntent(nil)
+		expected := "(no explicit user intent provided — infer objective from conversation context)"
+		if intent != expected {
+			t.Errorf("expected placeholder, got %q", intent)
+		}
+	})
+
+	t.Run("trims whitespace from content", func(t *testing.T) {
+		intent := deriveUserIntent([]Message{
+			{Role: "user", Content: "  Trimmed request  "},
+		})
+		if intent != "Trimmed request" {
+			t.Errorf("expected 'Trimmed request', got %q", intent)
 		}
 	})
 }

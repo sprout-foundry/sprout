@@ -1,6 +1,6 @@
 # SP-074: Finish the Tool-Registry Migration — Retire the Dual-Dispatch Shim
 
-**Status:** 📋 Proposed
+**Status:** ✅ Shipped (Phases 1–4 complete; 2026-06-26)
 **Date:** 2026-06-15
 **Depends on:** none (completes the deferred SP-038 work)
 **Priority:** Medium (tech debt; removes a class of "which registry?" bugs)

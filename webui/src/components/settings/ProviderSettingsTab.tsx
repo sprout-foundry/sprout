@@ -16,6 +16,7 @@ interface ProviderSettingsTabProps {
   providerModelName: string;
   providerContextSize: number;
   providerEnvVar: string;
+  providerApiKey: string;
   providerSupportsVision: boolean;
   providerVisionModel: string;
   providerModelContextSizes: string;
@@ -39,6 +40,7 @@ interface ProviderSettingsTabProps {
   setProviderModelName: (v: string) => void;
   setProviderContextSize: (v: number) => void;
   setProviderEnvVar: (v: string) => void;
+  setProviderApiKey: (v: string) => void;
   setProviderSupportsVision: (v: boolean) => void;
   setProviderVisionModel: (v: string) => void;
   setProviderModelContextSizes: (v: string) => void;
@@ -57,6 +59,7 @@ export default function ProviderSettingsTab({
   providerModelName,
   providerContextSize,
   providerEnvVar,
+  providerApiKey,
   providerSupportsVision,
   providerVisionModel,
   providerModelContextSizes,
@@ -71,6 +74,7 @@ export default function ProviderSettingsTab({
   setProviderModelName,
   setProviderContextSize,
   setProviderEnvVar,
+  setProviderApiKey,
   setProviderSupportsVision,
   setProviderVisionModel,
   setProviderModelContextSizes,
@@ -260,6 +264,7 @@ export default function ProviderSettingsTab({
                   setProviderModelName(cfg.model_name || '');
                   setProviderContextSize(cfg.context_size || 32768);
                   setProviderEnvVar(cfg.env_var || '');
+                  setProviderApiKey('');
                   setProviderSupportsVision(!!cfg.supports_vision);
                   setProviderVisionModel(cfg.vision_model || '');
                   const mcs = cfg.model_context_sizes;
@@ -350,6 +355,18 @@ export default function ProviderSettingsTab({
               <small className="config-help">Format: model_name:context_size, separated by commas</small>
             </div>
             <div className="form-row">
+              <label>API Key (optional)</label>
+              <input
+                type="password"
+                className="styled-input"
+                value={providerApiKey}
+                onChange={(e) => setProviderApiKey(e.target.value)}
+                placeholder="Paste API key, or use env var below"
+                autoComplete="off"
+              />
+              <small className="config-help">Enter the key directly, or set an env var name below instead</small>
+            </div>
+            <div className="form-row">
               <label>API Key Env Var (optional)</label>
               <input
                 type="text"
@@ -406,6 +423,7 @@ export default function ProviderSettingsTab({
               setProviderModelName('');
               setProviderContextSize(32768);
               setProviderEnvVar('');
+              setProviderApiKey('');
               setProviderSupportsVision(false);
               setProviderVisionModel('');
               setProviderModelContextSizes('');

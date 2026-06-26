@@ -227,9 +227,15 @@ func recalledItemFromRecord(r embedding.QueryResult, expectedSessionID string, n
 // FormatSemanticRecall renders the recall items as a markdown block to
 // inject into the system supplement. Returns "" when there's nothing
 // to inject so the caller can short-circuit.
-func FormatSemanticRecall(items []RecalledItem) string {
+//
+// maxChars caps the total output size. Use semanticRecallMaxInjectedChars
+// (8000) for the default ceiling, or a model-aware value for per-model tuning.
+func FormatSemanticRecall(items []RecalledItem, maxChars int) string {
 	if len(items) == 0 {
 		return ""
+	}
+	if maxChars <= 0 {
+		maxChars = semanticRecallMaxInjectedChars
 	}
 
 	var b strings.Builder
@@ -239,7 +245,7 @@ func FormatSemanticRecall(items []RecalledItem) string {
 	total := 0
 	for _, item := range items {
 		block := formatRecalledBlock(item)
-		if total+len(block) > semanticRecallMaxInjectedChars {
+		if total+len(block) > maxChars {
 			break
 		}
 		b.WriteString(block)
@@ -292,7 +298,13 @@ func (a *Agent) InjectSemanticRecall(ctx context.Context, query string) {
 		return
 	}
 
-	formatted := FormatSemanticRecall(items)
+	// Compute a model-aware char budget: 2% of context window, converted
+	// from tokens to chars (~4 chars/token), floored at 2000, ceiling at
+	// semanticRecallMaxInjectedChars (8000). For a 32K model this yields
+	// ~2560 chars; for 128K it hits the 8000 ceiling.
+	maxChars := computeRecallMaxChars(a.GetMaxContextTokens())
+
+	formatted := FormatSemanticRecall(items, maxChars)
 	diag.Injected = len(items)
 	diag.InjectedChars = len(formatted)
 	a.PublishRecallDiagnostic(diag)
@@ -313,6 +325,24 @@ func (a *Agent) InjectSemanticRecall(ctx context.Context, query string) {
 	a.setPendingSystemSupplement(combined)
 
 	debugLogf("[semantic-recall] injected %d items (%d chars)", len(items), len(formatted))
+}
+
+// computeRecallMaxChars returns a model-aware character budget for semantic
+// recall injection. It targets 2% of the model's context window, converted
+// from tokens to chars (~4 chars/token), with a floor of 2000 and a ceiling
+// of semanticRecallMaxInjectedChars (8000).
+func computeRecallMaxChars(maxTokens int) int {
+	if maxTokens <= 0 {
+		return semanticRecallMaxInjectedChars
+	}
+	chars := int(float64(maxTokens) * 0.02 * 4)
+	if chars < 2000 {
+		chars = 2000
+	}
+	if chars > semanticRecallMaxInjectedChars {
+		chars = semanticRecallMaxInjectedChars
+	}
+	return chars
 }
 
 // presentCheckpointIDs returns the set of checkpoint IDs currently in the

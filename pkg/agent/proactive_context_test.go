@@ -1580,3 +1580,495 @@ func TestProactiveContextConfig_Resolve_RetentionDays_PartialConfig(t *testing.T
 	assert.Equal(t, 5, resolved.MaxContextualResults, "MaxContextualResults should get default")
 	assert.Equal(t, 4000, resolved.MaxContextChars, "MaxContextChars should get default")
 }
+
+// ========================================================================
+// HNSW refactoring: filterAndScoreProactive tests
+// ========================================================================
+
+// These tests exercise the post-filtering logic that is shared between the
+// HNSW path and the brute-force fallback. They use synthetic
+// embedding.QueryResult slices so we don't need a real ONNX runtime.
+
+func TestFilterAndScoreProactive_TypeFiltering_ExcludesNonTurns(t *testing.T) {
+	now := time.Now().UTC()
+	config := DefaultProactiveContextConfig()
+
+	rawResults := []embedding.QueryResult{
+		{
+			Record: embedding.VectorRecord{
+				ID:        "mem:1",
+				Type:      "memory",
+				Signature: "A memory record",
+				IndexedAt: now,
+			},
+			Similarity: 0.99, // top raw match, but wrong type
+		},
+		{
+			Record: embedding.VectorRecord{
+				ID:        "rollup:1",
+				Type:      "checkpoint_rollup",
+				Signature: "A rollup record",
+				IndexedAt: now,
+			},
+			Similarity: 0.95,
+		},
+		{
+			Record: embedding.VectorRecord{
+				ID:        "turn:1",
+				Type:      "conversation_turn",
+				Signature: "A real conversation turn",
+				IndexedAt: now,
+				Metadata: map[string]interface{}{
+					"workingDir": "/tmp/ws",
+				},
+			},
+			Similarity: 0.60,
+		},
+	}
+
+	scored := filterAndScoreProactive(rawResults, config, "/tmp/ws", now)
+
+	require.Len(t, scored, 1, "only conversation_turn records should pass the type filter")
+	assert.Equal(t, "turn:1", scored[0].Record.ID)
+}
+
+func TestFilterAndScoreProactive_WorkspaceScoped_ExcludesOtherWorkspaces(t *testing.T) {
+	now := time.Now().UTC()
+	config := DefaultProactiveContextConfig()
+	config.WorkspaceScoped = true
+
+	rawResults := []embedding.QueryResult{
+		{
+			Record: embedding.VectorRecord{
+				ID:        "turn:a",
+				Type:      "conversation_turn",
+				Signature: "Turn in workspace A",
+				IndexedAt: now,
+				Metadata: map[string]interface{}{
+					"workingDir": "/workspace-a",
+				},
+			},
+			Similarity: 0.90,
+		},
+		{
+			Record: embedding.VectorRecord{
+				ID:        "turn:b",
+				Type:      "conversation_turn",
+				Signature: "Turn in workspace B",
+				IndexedAt: now,
+				Metadata: map[string]interface{}{
+					"workingDir": "/workspace-b",
+				},
+			},
+			Similarity: 0.85,
+		},
+	}
+
+	scored := filterAndScoreProactive(rawResults, config, "/workspace-a", now)
+
+	require.Len(t, scored, 1, "only workspace-a records should pass")
+	assert.Equal(t, "turn:a", scored[0].Record.ID)
+}
+
+func TestFilterAndScoreProactive_WorkspaceDisabled_AllowsAllWorkspaces(t *testing.T) {
+	now := time.Now().UTC()
+	config := DefaultProactiveContextConfig()
+	config.WorkspaceScoped = false
+
+	rawResults := []embedding.QueryResult{
+		{
+			Record: embedding.VectorRecord{
+				ID:        "turn:a",
+				Type:      "conversation_turn",
+				Signature: "Turn in workspace A",
+				IndexedAt: now,
+				Metadata: map[string]interface{}{
+					"workingDir": "/workspace-a",
+				},
+			},
+			Similarity: 0.90,
+		},
+		{
+			Record: embedding.VectorRecord{
+				ID:        "turn:b",
+				Type:      "conversation_turn",
+				Signature: "Turn in workspace B",
+				IndexedAt: now,
+				Metadata: map[string]interface{}{
+					"workingDir": "/workspace-b",
+				},
+			},
+			Similarity: 0.85,
+		},
+	}
+
+	scored := filterAndScoreProactive(rawResults, config, "/workspace-a", now)
+
+	require.Len(t, scored, 2, "both workspaces should pass when WorkspaceScoped is false")
+	// Higher similarity should come first (both are equally fresh, so decay is identical)
+	assert.Equal(t, "turn:a", scored[0].Record.ID, "higher similarity should rank first")
+	assert.Equal(t, "turn:b", scored[1].Record.ID)
+}
+
+func TestFilterAndScoreProactive_TimeDecay_OlderRecordWithHigherRawSimilarity(t *testing.T) {
+	now := time.Now().UTC()
+	config := DefaultProactiveContextConfig()
+	config.WorkspaceScoped = true
+	config.MinRelevanceScore = 0.10 // low threshold so both decayed scores pass
+
+	// Older record has higher raw similarity but is 60 days old.
+	// Recent record has slightly lower raw similarity but is only 1 hour old.
+	// After time-decay, the recent record should score higher.
+	rawResults := []embedding.QueryResult{
+		{
+			Record: embedding.VectorRecord{
+				ID:        "turn:old",
+				Type:      "conversation_turn",
+				Signature: "Old but very similar",
+				IndexedAt: now.Add(-60 * 24 * time.Hour), // 60 days ago
+				Metadata: map[string]interface{}{
+					"workingDir": "/tmp/ws",
+				},
+			},
+			Similarity: 0.95, // high raw similarity
+		},
+		{
+			Record: embedding.VectorRecord{
+				ID:        "turn:recent",
+				Type:      "conversation_turn",
+				Signature: "Recent and similar",
+				IndexedAt: now.Add(-1 * time.Hour), // 1 hour ago
+				Metadata: map[string]interface{}{
+					"workingDir": "/tmp/ws",
+				},
+			},
+			Similarity: 0.70, // lower raw similarity
+		},
+	}
+
+	scored := filterAndScoreProactive(rawResults, config, "/tmp/ws", now)
+
+	require.Len(t, scored, 2, "both should pass the low min threshold")
+
+	// The recent record should have a higher decayed score.
+	// Old: 0.95 * 0.5^(60/30) = 0.95 * 0.25 = 0.2375
+	// Recent: 0.70 * 0.5^(1h/720h) ≈ 0.70 * 0.999 ≈ 0.699
+	var recentScore, oldScore float64
+	for _, r := range scored {
+		if r.Record.ID == "turn:recent" {
+			recentScore = r.Score
+		} else if r.Record.ID == "turn:old" {
+			oldScore = r.Score
+		}
+	}
+	assert.Greater(t, recentScore, oldScore,
+		"recent record should have higher decayed score despite lower raw similarity")
+	assert.Greater(t, recentScore, 0.6, "recent score should be near 0.70")
+	assert.Less(t, oldScore, 0.3, "60-day-old score should be heavily decayed")
+}
+
+func TestFilterAndScoreProactive_MinRelevanceScoreFilter(t *testing.T) {
+	now := time.Now().UTC()
+	config := DefaultProactiveContextConfig()
+	config.MinRelevanceScore = 0.80
+	config.WorkspaceScoped = true
+
+	rawResults := []embedding.QueryResult{
+		{
+			Record: embedding.VectorRecord{
+				ID:        "turn:high",
+				Type:      "conversation_turn",
+				Signature: "High similarity",
+				IndexedAt: now,
+				Metadata: map[string]interface{}{
+					"workingDir": "/tmp/ws",
+				},
+			},
+			Similarity: 0.95, // fresh, so decayed ≈ 0.95
+		},
+		{
+			Record: embedding.VectorRecord{
+				ID:        "turn:low",
+				Type:      "conversation_turn",
+				Signature: "Low similarity",
+				IndexedAt: now,
+				Metadata: map[string]interface{}{
+					"workingDir": "/tmp/ws",
+				},
+			},
+			Similarity: 0.60, // fresh, so decayed ≈ 0.60 — below 0.80 threshold
+		},
+	}
+
+	scored := filterAndScoreProactive(rawResults, config, "/tmp/ws", now)
+
+	require.Len(t, scored, 1, "only the high-similarity record should pass the 0.80 threshold")
+	assert.Equal(t, "turn:high", scored[0].Record.ID)
+}
+
+func TestFilterAndScoreProactive_EmptyInput(t *testing.T) {
+	config := DefaultProactiveContextConfig()
+
+	// nil input → returns empty (non-nil) slice via make([]T, 0, 0)
+	scored := filterAndScoreProactive(nil, config, "/tmp/ws", time.Now().UTC())
+	assert.Empty(t, scored, "nil input should return an empty result slice")
+
+	// empty input
+	scored = filterAndScoreProactive([]embedding.QueryResult{}, config, "/tmp/ws", time.Now().UTC())
+	require.NotNil(t, scored, "empty input should return empty slice, not nil")
+	assert.Empty(t, scored)
+}
+
+func TestFilterAndScoreProactive_AllFiltered_ReturnsEmpty(t *testing.T) {
+	now := time.Now().UTC()
+	config := DefaultProactiveContextConfig()
+	config.WorkspaceScoped = true
+
+	// All records are from a different workspace — everything should be filtered out.
+	rawResults := []embedding.QueryResult{
+		{
+			Record: embedding.VectorRecord{
+				ID:        "turn:other",
+				Type:      "conversation_turn",
+				Signature: "Wrong workspace",
+				IndexedAt: now,
+				Metadata: map[string]interface{}{
+					"workingDir": "/other-ws",
+				},
+			},
+			Similarity: 0.95,
+		},
+	}
+
+	scored := filterAndScoreProactive(rawResults, config, "/my-ws", now)
+	assert.Empty(t, scored, "all records from wrong workspace should be filtered out")
+}
+
+func TestFilterAndScoreProactive_FallbackSimulatesMissedHNSWMatch(t *testing.T) {
+	// This simulates the brute-force fallback scenario: HNSW's approximate
+	// top-K returned only records from a different workspace, but a full
+	// scan would find a same-workspace match with slightly lower raw cosine.
+	// The filterAndScoreProactive function is the shared post-filter used
+	// by both the HNSW path and the brute-force fallback.
+	//
+	// Scenario: HNSW top-K only returned cross-workspace results.
+	// The HNSW path calls filterAndScoreProactive → gets 0 results.
+	// The fallback calls LoadAll, computes brute-force similarities, then
+	// calls filterAndScoreProactive again with the full set.
+	now := time.Now().UTC()
+	config := DefaultProactiveContextConfig()
+	config.WorkspaceScoped = true
+
+	// HNSW path: only cross-workspace results (what HNSW top-K returned)
+	hnswResults := []embedding.QueryResult{
+		{
+			Record: embedding.VectorRecord{
+				ID:        "turn:other1",
+				Type:      "conversation_turn",
+				Signature: "Cross-workspace result",
+				IndexedAt: now,
+				Metadata: map[string]interface{}{
+					"workingDir": "/other-ws",
+				},
+			},
+			Similarity: 0.90,
+		},
+	}
+
+	hnswScored := filterAndScoreProactive(hnswResults, config, "/my-ws", now)
+	assert.Empty(t, hnswScored, "HNSW results should all be filtered by workspace")
+
+	// Brute-force fallback: includes the same-workspace match that HNSW missed
+	bruteResults := append([]embedding.QueryResult{
+		{
+			Record: embedding.VectorRecord{
+				ID:        "turn:mine",
+				Type:      "conversation_turn",
+				Signature: "Same-workspace match",
+				IndexedAt: now,
+				Metadata: map[string]interface{}{
+					"workingDir": "/my-ws",
+				},
+			},
+			Similarity: 0.55, // lower raw similarity (HNSW didn't surface it in top-K)
+		},
+	}, hnswResults...)
+
+	bruteScored := filterAndScoreProactive(bruteResults, config, "/my-ws", now)
+	require.Len(t, bruteScored, 1, "brute-force fallback should find the same-workspace match")
+	assert.Equal(t, "turn:mine", bruteScored[0].Record.ID)
+}
+
+// ========================================================================
+// HNSW refactoring: RetrieveProactiveContext integration tests
+// ========================================================================
+
+func TestRetrieveProactiveContext_TypeFiltering_ExcludesNonTurns(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping embedding test in short mode")
+	}
+	ctx := context.Background()
+	now := time.Now().UTC()
+	mgr, store := setupProactiveManager(t)
+	defer mgr.Close()
+
+	// Store a conversation turn
+	turn, err := NewConversationTurn("session-type", 1,
+		"How do I implement a REST API?", "/tmp/workspace")
+	require.NoError(t, err)
+	turn.ActionableSummary = "Implement REST API"
+	turn.Timestamp = now.Add(-1 * time.Hour)
+	require.NoError(t, EmbedAndStoreTurn(ctx, mgr, turn))
+
+	// Manually add a non-turn record to the store to test type filtering
+	nonTurnRecord := embedding.VectorRecord{
+		ID:        "memory:1",
+		Type:      "memory",
+		Signature: "How do I implement a REST API?",
+		IndexedAt: now,
+		Metadata: map[string]interface{}{
+			"workingDir": "/tmp/workspace",
+		},
+	}
+	// Embed the same text so it has a vector
+	emb, err := store.Provider().Embed(ctx, nonTurnRecord.Signature)
+	require.NoError(t, err)
+	nonTurnRecord.Embedding = emb
+	require.NoError(t, store.Store([]embedding.VectorRecord{nonTurnRecord}))
+
+	// Query — only conversation_turn records should be returned
+	results, err := RetrieveProactiveContext(
+		ctx, mgr, DefaultProactiveContextConfig(),
+		"How to build a REST API?",
+		"/tmp/workspace", now,
+	)
+	require.NoError(t, err)
+
+	// All returned results must be conversation_turn type
+	for _, r := range results {
+		assert.Equal(t, "conversation_turn", r.Record.Type,
+			"only conversation_turn records should be returned, got type %q", r.Record.Type)
+	}
+}
+
+func TestRetrieveProactiveContext_WorkspaceDisabled_ReturnsCrossWorkspace(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping embedding test in short mode")
+	}
+	ctx := context.Background()
+	now := time.Now().UTC()
+	mgr, _ := setupProactiveManager(t)
+	defer mgr.Close()
+
+	// Store a turn in a different workspace
+	turn, err := NewConversationTurn("session-other-ws", 1,
+		"How do I implement a REST API?", "/other-workspace")
+	require.NoError(t, err)
+	turn.ActionableSummary = "Implement REST API"
+	turn.Timestamp = now.Add(-1 * time.Hour)
+	require.NoError(t, EmbedAndStoreTurn(ctx, mgr, turn))
+
+	// Query from a different workspace with WorkspaceScoped disabled
+	config := DefaultProactiveContextConfig()
+	config.WorkspaceScoped = false
+
+	results, err := RetrieveProactiveContext(
+		ctx, mgr, config,
+		"How to build a REST API?",
+		"/my-workspace", now,
+	)
+	require.NoError(t, err)
+
+	// With WorkspaceScoped=false, the cross-workspace turn should be returned
+	if len(results) > 0 {
+		wd, _ := results[0].Record.Metadata["workingDir"].(string)
+		assert.Equal(t, "/other-workspace", wd,
+			"with WorkspaceScoped=false, cross-workspace results should be returned")
+	}
+}
+
+func TestRetrieveProactiveContext_MaxResultsCap_CapsResults(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping embedding test in short mode")
+	}
+	ctx := context.Background()
+	now := time.Now().UTC()
+	mgr, _ := setupProactiveManager(t)
+	defer mgr.Close()
+
+	// Store 8 turns with the same content
+	for i := 0; i < 8; i++ {
+		turn, err := NewConversationTurn("session-cap2", i+1,
+			"How do I implement a REST API in Go?", "/tmp/workspace")
+		require.NoError(t, err)
+		turn.ActionableSummary = "Implement REST API"
+		turn.Timestamp = now.Add(-time.Duration(i) * time.Minute)
+		require.NoError(t, EmbedAndStoreTurn(ctx, mgr, turn))
+	}
+
+	// Set a custom cap of 2
+	config := DefaultProactiveContextConfig()
+	config.MaxContextualResults = 2
+
+	results, err := RetrieveProactiveContext(
+		ctx, mgr, config,
+		"How to build a REST API?", "/tmp/workspace", now,
+	)
+	require.NoError(t, err)
+
+	assert.LessOrEqual(t, len(results), 2,
+		"results should be capped at MaxContextualResults=2")
+}
+
+func TestRetrieveProactiveContext_TimeDecay_OlderRecordDecays(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping embedding test in short mode")
+	}
+	ctx := context.Background()
+	now := time.Now().UTC()
+	mgr, _ := setupProactiveManager(t)
+	defer mgr.Close()
+
+	// Store two turns with identical content but very different ages
+	turnRecent, err := NewConversationTurn("session-decay-recent", 1,
+		"How do I implement a REST API in Go?", "/tmp/workspace")
+	require.NoError(t, err)
+	turnRecent.ActionableSummary = "Implement REST API"
+	turnRecent.Timestamp = now.Add(-1 * time.Hour)
+	require.NoError(t, EmbedAndStoreTurn(ctx, mgr, turnRecent))
+
+	turnOld, err := NewConversationTurn("session-decay-old", 1,
+		"How do I implement a REST API in Go?", "/tmp/workspace")
+	require.NoError(t, err)
+	turnOld.ActionableSummary = "Implement REST API"
+	turnOld.Timestamp = now.Add(-60 * 24 * time.Hour) // 60 days old
+	require.NoError(t, EmbedAndStoreTurn(ctx, mgr, turnOld))
+
+	results, err := RetrieveProactiveContext(
+		ctx, mgr, DefaultProactiveContextConfig(),
+		"How to build a REST API in Go?",
+		"/tmp/workspace", now,
+	)
+	require.NoError(t, err)
+
+	require.GreaterOrEqual(t, len(results), 1, "should get at least one result")
+
+	// Find the scores for both turns
+	var recentScore, oldScore float64
+	var foundRecent, foundOld bool
+	for _, r := range results {
+		if r.Record.ID == turnRecent.ID {
+			recentScore = r.Score
+			foundRecent = true
+		}
+		if r.Record.ID == turnOld.ID {
+			oldScore = r.Score
+			foundOld = true
+		}
+	}
+
+	if foundRecent && foundOld {
+		assert.Greater(t, recentScore, oldScore,
+			"recent turn should score higher than 60-day-old turn due to time decay")
+	}
+}

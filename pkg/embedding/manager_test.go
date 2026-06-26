@@ -141,7 +141,7 @@ func TestEmbeddingManager_IndexSize_AfterInit(t *testing.T) {
 
 	// Manually set internal state.
 	mgr.store = store
-	mgr.initialized = true
+	mgr.initialized.Store(true)
 
 	size := mgr.IndexSize()
 	if size != 3 {
@@ -195,7 +195,7 @@ func TestEmbeddingManager_CheckDuplicates_WithConfigThreshold(t *testing.T) {
 	mgr.store = store
 	mgr.provider = provider
 	mgr.indexMgr = NewIndexManager(provider, store, IndexOptions{BatchSize: 16, MaxBodyLen: 500})
-	mgr.initialized = true
+	mgr.initialized.Store(true)
 
 	// Add a known record.
 	if err := store.Store([]VectorRecord{{
@@ -246,7 +246,7 @@ func TestEmbeddingManager_CheckDuplicates_UsesConfigDefaults(t *testing.T) {
 	provider := &constantProvider{vec: []float32{1, 0, 0}}
 	mgr.store = store
 	mgr.indexMgr = NewIndexManager(provider, store, IndexOptions{BatchSize: 16, MaxBodyLen: 500})
-	mgr.initialized = true
+	mgr.initialized.Store(true)
 
 	content := `package pkg
 
@@ -313,7 +313,7 @@ func TestEmbeddingManager_Close_AfterInit(t *testing.T) {
 	}
 
 	mgr.store = store
-	mgr.initialized = true
+	mgr.initialized.Store(true)
 
 	// Close should succeed (store has no dirty state).
 	err = mgr.Close()
@@ -338,7 +338,7 @@ func TestEmbeddingManager_Close_Idempotent(t *testing.T) {
 	}
 
 	mgr.store = store
-	mgr.initialized = true
+	mgr.initialized.Store(true)
 
 	// Close twice should not error.
 	_ = mgr.Close()

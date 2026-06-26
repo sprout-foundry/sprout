@@ -1,9 +1,19 @@
-# SP-026: Executive Assistant Persona
+# SP-026: Coordinator Persona (formerly "Executive Assistant")
 
-**Status:** 📋 Proposed  
-**Depends on:** SP-001 (Agent Core), SP-023 (In-Process Subagents), SP-022 (Workspace Management)  
-**Priority:** High  
+**Status:** ✅ Implemented (renamed 2026-06-03, see commit `516a9d41`)
+**Date:** 2026-06-03 (rename); original EA groundwork landed across 2026-04 → 2026-06-03
+**Depends on:** SP-001 (Agent Core), SP-023 (In-Process Subagents), SP-022 (Workspace Management)
+**Priority:** High
 **Effort Estimate:** ~4-5 weeks (5 phases)
+
+> **Note:** This persona shipped as **Coordinator** on 2026-06-03 (commit
+> `516a9d41` — "refactor(personas): rename code_reviewer to reviewer and
+> executive_assistant to coordinator"). The legacy name is preserved as an
+> alias — `executive_assistant`, `ea`, and `assistant` all canonicalize to
+> `coordinator` via `pkg/personas/configs/coordinator.json`. See
+> `docs/PERSONAS.md` and `pkg/agent/persona_test.go:779` for the canonicalization
+> test. The body of this spec describes the original EA design; the renames in
+> the "Files Changed" section were applied as part of `516a9d41`.
 
 ## Problem
 

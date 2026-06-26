@@ -1,6 +1,6 @@
 # SP-051: Depth-Aware Subagent UI — Visible Nesting in the CLI
 
-**Status:** 📋 Proposed
+**Status:** ✅ Implemented
 **Date:** 2026-05-22
 **Depends on:** SP-026 (Executive Assistant — introduced `subagentDepth`), SP-048 (CLI Delight — added the terminal tool-event subscriber), SP-050 (Orchestrator Persona Collapse — keeps the depth model honest about which persona owns which level)
 **Priority:** Medium-High (the EA → orchestrator → specialist chain is currently invisible in the CLI; users can't tell when work has been delegated or what's running underneath)

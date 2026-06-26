@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
@@ -20,9 +21,9 @@ type EmbeddingManager struct {
 	provider      EmbeddingProvider
 	store         VectorStore
 	indexMgr      *IndexManager
-	initialized   bool
-	building      bool  // true while BuildIndex is running
-	initError     error // cached error from failed Init()
+	initialized   atomic.Bool // set true only after all fields are written; read lock-free by IsInitialized
+	building      bool        // true while BuildIndex is running; guarded by mu
+	initError     error       // cached error from failed Init(); guarded by mu
 	config        *configuration.EmbeddingIndexConfig
 	workspaceRoot string
 
@@ -75,7 +76,7 @@ func (m *EmbeddingManager) Init(ctx context.Context) error {
 
 // initLocked performs the actual initialization. The caller must hold m.mu.
 func (m *EmbeddingManager) initLocked(ctx context.Context) error {
-	if m.initialized {
+	if m.initialized.Load() {
 		return nil
 	}
 
@@ -125,7 +126,9 @@ func (m *EmbeddingManager) initLocked(ctx context.Context) error {
 	m.providerShared = true
 	m.store = store
 	m.indexMgr = indexMgr
-	m.initialized = true
+	// Store true last so concurrent IsInitialized() reads cannot observe a
+	// partially-initialized manager (all other fields are written above under m.mu).
+	m.initialized.Store(true)
 
 	return nil
 }
@@ -147,7 +150,7 @@ func (m *EmbeddingManager) createONNXProvider(ctx context.Context) (EmbeddingPro
 func (m *EmbeddingManager) snapshotIndexMgr() (*IndexManager, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if !m.initialized {
+	if !m.initialized.Load() {
 		return nil, fmt.Errorf("embedding: manager not initialized")
 	}
 	return m.indexMgr, nil
@@ -202,7 +205,7 @@ func (m *EmbeddingManager) SetForTesting(provider EmbeddingProvider, store Vecto
 	m.provider = provider
 	m.store = store
 	m.indexMgr = indexMgr
-	m.initialized = true
+	m.initialized.Store(true)
 
 	// Resolve indexDir using the same logic as initLocked so that
 	// GetConversationStore can create the conversation store in the right place.
@@ -210,10 +213,10 @@ func (m *EmbeddingManager) SetForTesting(provider EmbeddingProvider, store Vecto
 }
 
 // IsInitialized returns whether the manager has been initialized.
+// Safe to call without holding m.mu — initialized is an atomic so this never
+// blocks, even while Init() is running and holding m.mu during ONNX loading.
 func (m *EmbeddingManager) IsInitialized() bool {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.initialized
+	return m.initialized.Load()
 }
 
 // IsBuilding returns true if an index build is currently in progress.
@@ -518,7 +521,7 @@ func (m *EmbeddingManager) Close() error {
 	}
 	m.providerShared = false
 
-	m.initialized = false
+	m.initialized.Store(false)
 	m.initError = nil // cleared to allow re-initialization after Close()
 
 	// Signal long-running goroutines to abort.

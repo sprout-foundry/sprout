@@ -190,3 +190,26 @@ func (h *gitHandler) Execute(ctx context.Context, env ToolEnv, args map[string]a
 	}
 	return ToolResult{Output: result}, nil
 }
+
+// normalizeGitArgs strips a leading duplicate of the git subcommand from args.
+// LLMs commonly pass args like "push origin main" when operation is already
+// "push", producing "git push push origin main". Handles underscore→hyphen
+// conversion (cherry_pick → cherry-pick) and branch_delete → branch.
+func normalizeGitArgs(op GitOperationType, args string) string {
+	if args == "" {
+		return args
+	}
+
+	subcommand := string(op)
+	if op == GitOpBranchDelete {
+		subcommand = "branch"
+	} else {
+		subcommand = strings.ReplaceAll(subcommand, "_", "-")
+	}
+
+	fields := strings.Fields(args)
+	if len(fields) > 0 && fields[0] == subcommand {
+		return strings.Join(fields[1:], " ")
+	}
+	return args
+}

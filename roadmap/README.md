@@ -25,8 +25,15 @@ architectural area, its current state, and open work.
 | SP-050 | [Orchestrator Persona Collapse — One Persona, Configurable Git-Write](./SP-050-orchestrator-persona-collapse.md) | ✅ Implemented |
 | SP-051 | [Depth-Aware Subagent UI — Visible Nesting in the CLI](./SP-051-depth-aware-subagent-ui.md) | ✅ Implemented |
 | SP-053 | [WebUI CLI Parity — Persona/Depth, Live Tools, Cost Footer](./SP-053-webui-cli-parity.md) | ✅ Implemented |
-
+| SP-049 | [Shell Permission Overhaul — Tiered Allow-Lists & User Policy](./SP-049-shell-permission-overhaul.md) | ✅ Implemented |
+| SP-059 | [Subagent ↔ Primary Interaction Overhaul](./SP-059-subagent-interaction.md) | ✅ Implemented |
+| SP-069 | [Pull Request Creation](./SP-069-pull-request-creation.md) | ✅ Implemented |
+| SP-070 | [Agent Completion Notifications](./SP-070-completion-notifications.md) | ✅ Implemented |
+| SP-071 | [Conversation Rewind & Edit-and-Resend](./SP-071-conversation-rewind.md) | ✅ Implemented |
+| SP-072 | [Per-Hunk Diff Approval — Approve-Before-Apply](./SP-072-diff-approval.md) | ✅ Implemented |
+| SP-074 | [Finish the Tool-Registry Migration](./SP-074-tool-registry-migration.md) | ✅ Implemented (Phases 1–4 complete) |
 | SP-060 | [Desktop App — Per-Workspace Server Mode](./SP-060-desktop-serve.md) | ✅ Implemented |
+| SP-026 | [Coordinator Persona (formerly Executive Assistant)](./SP-026-executive-assistant.md) | ✅ Implemented (renamed 2026-06-03; legacy aliases preserved) |
 
 ## In Progress
 
@@ -51,26 +58,18 @@ architectural area, its current state, and open work.
 | SP-022 | [Workspace Management & Project Detection](./SP-022-workspace-management.md) | 📋 Proposed |
 | SP-023 | [In-Process Subagent Execution](./SP-023-in-process-subagents.md) | 📋 Proposed |
 | SP-025 | [Tree-Sitter Integration — Real AST](./SP-025-tree-sitter-integration.md) | 📋 Proposed |
-| SP-026 | [Executive Assistant Persona](./SP-026-executive-assistant.md) | 📋 Proposed |
 | SP-027 | [Persistent Context & Conversational Memory](./SP-027-persistent-context.md) | 📋 Proposed |
 | SP-045 | [WASM Build Feature Parity](./SP-045-wasm-feature-parity.md) | 📋 Proposed |
 | SP-046 | [Browser-Primary Workspace Sync Model](./SP-046-workspace-sync-model.md) | 📋 Proposed |
 | SP-048 | [CLI Delight — Terminal UX Polish](./SP-048-cli-delight.md) | 📋 Proposed |
-| SP-049 | [Shell Permission Overhaul — Tiered Allow-Lists & User Policy](./SP-049-shell-permission-overhaul.md) | ✅ Implemented |
 | SP-054 | [LSP Language Coverage Expansion](./SP-054-lsp-language-coverage.md) | 📋 Proposed |
 | SP-056 | [CLI Reasoning Fold — Collapsed Thinking Indicator](./SP-056-cli-reasoning-fold.md) | 📋 Proposed |
 | SP-058 | [Selective Grammar Embedding for WASM and Daemon](./SP-058-selective-grammar-embed.md) | 📋 Proposed |
-| SP-059 | [Subagent ↔ Primary Interaction Overhaul](./SP-059-subagent-interaction.md) | ✅ Implemented |
 | SP-061 | [Remove Static Embedding Provider, Consolidate on ONNX](./SP-061-remove-static-embeddings.md) | 📋 Proposed |
 | SP-064 | [Automate CLI — Status, Stop, Logs](./SP-064-automate-cli-monitoring.md) | 📋 Proposed |
 | SP-065 | [WebUI Automations Panel](./SP-065-automate-webui-panel.md) | 📋 Proposed |
 | SP-068 | [Security Check Consolidation — One Risk Scale, One Resolver, One Broker](./SP-068-security-check-consolidation.md) | 📋 Proposed |
-| SP-069 | [Pull Request Creation](./SP-069-pull-request-creation.md) | ✅ Implemented |
-| SP-070 | [Agent Completion Notifications](./SP-070-completion-notifications.md) | ✅ Implemented |
-| SP-071 | [Conversation Rewind & Edit-and-Resend](./SP-071-conversation-rewind.md) | ✅ Implemented |
-| SP-072 | [Per-Hunk Diff Approval — Approve-Before-Apply](./SP-072-diff-approval.md) | ✅ Implemented |
 | SP-073 | [Cooperative Cancellation — Stop Actually Aborts](./SP-073-cooperative-cancellation.md) | 📋 Proposed (tech-debt audit) |
-| SP-074 | [Finish the Tool-Registry Migration](./SP-074-tool-registry-migration.md) | ✅ Implemented (Phases 1–4 complete) |
 | SP-075 | [Large-File Decomposition](./SP-075-large-file-decomposition.md) | 📋 Proposed (tech-debt audit) |
 
 ## Future / On Hold

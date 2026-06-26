@@ -1,6 +1,6 @@
 # SP-049: Shell Permission Overhaul — User-Configurable Policy & Headless Hardening
 
-**Status:** 📋 Proposed
+**Status:** ✅ Implemented (Phases 3a–3d complete)
 **Date:** 2026-05-22
 **Depends on:** SP-004 (Security, Validation & MCP) — extends existing classifier
 **Priority:** High (closes a real headless data-loss path for `git reset --hard`)

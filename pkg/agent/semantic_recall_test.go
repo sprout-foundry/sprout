@@ -95,7 +95,7 @@ func TestRecalledItemFromRecord_EmptySignatureRejected(t *testing.T) {
 // nothing to inject; the caller short-circuits on this so we don't append
 // a stray header to the system supplement.
 func TestFormatSemanticRecall_Empty(t *testing.T) {
-	if got := FormatSemanticRecall(nil); got != "" {
+	if got := FormatSemanticRecall(nil, 0); got != "" {
 		t.Fatalf("expected empty string, got %q", got)
 	}
 }
@@ -109,7 +109,7 @@ func TestFormatSemanticRecall_RendersBlocks(t *testing.T) {
 		{Level: 1, Similarity: 0.7, AgeDays: 5, Summary: "first item"},
 		{Level: 0, Similarity: 0.6, AgeDays: 1, Summary: "second item", Actionable: "do X"},
 	}
-	got := FormatSemanticRecall(items)
+	got := FormatSemanticRecall(items, semanticRecallMaxInjectedChars)
 	if !strings.Contains(got, "Recalled From Session History") {
 		t.Errorf("missing section header: %q", got)
 	}
@@ -137,7 +137,7 @@ func TestFormatSemanticRecall_RespectsCharBudget(t *testing.T) {
 		{Level: 0, Summary: big},
 		{Level: 0, Summary: big},
 	}
-	got := FormatSemanticRecall(items)
+	got := FormatSemanticRecall(items, semanticRecallMaxInjectedChars)
 	// Total should be bounded near the budget plus the section header.
 	if len(got) > semanticRecallMaxInjectedChars+500 {
 		t.Fatalf("output exceeds budget by too much: got %d, budget %d", len(got), semanticRecallMaxInjectedChars)

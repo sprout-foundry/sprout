@@ -77,6 +77,10 @@ func main() {
 
 		// Write per-provider canonical JSON for the registry server.
 		if *registryDir != "" {
+			// Carry forward probe data from any prior per-provider file so that
+			// refresh_provider_catalog alone (without enrich_registry) doesn't
+			// silently drop Probe + RecommendedRoles.
+			canon = carryForwardProbeData(*registryDir, providerID, canon)
 			writeProviderJSON(*registryDir, providerID, now, canon)
 		}
 	}
@@ -105,6 +109,52 @@ func main() {
 	} else {
 		fmt.Printf("wrote per-provider JSON files to %s/models/\n", *registryDir)
 	}
+}
+
+// carryForwardProbeData reads any prior per-provider JSON file and stamps the
+// Probe + RecommendedRoles from the prior file onto the freshly-built canonical
+// models. Models that are new (not in the prior file) are left untouched;
+// models removed by the provider (in fresh but not in prior) also keep no probe
+// data — we don't carry stale verdicts for models that no longer exist. The
+// models slice is mutated in-place and also returned for caller convenience.
+// This ensures refresh_provider_catalog alone doesn't silently drop probe data.
+func carryForwardProbeData(registryDir, providerID string, models []modelcontract.CanonicalModel) []modelcontract.CanonicalModel {
+	priorPath := filepath.Join(registryDir, "models", providerID+".json")
+	data, err := os.ReadFile(priorPath)
+	if err != nil {
+		// No prior file — nothing to carry forward.
+		return models
+	}
+
+	var prior modelcontract.ProviderFile
+	if err := json.Unmarshal(data, &prior); err != nil {
+		fmt.Fprintf(os.Stderr, "warn: could not parse prior %s: %v\n", priorPath, err)
+		return models
+	}
+
+	// Build a lookup of prior probe data keyed by model ID.
+	priorProbe := make(map[string]*modelcontract.ProbeResult, len(prior.Models))
+	priorRoles := make(map[string][]string, len(prior.Models))
+	for _, m := range prior.Models {
+		if m.Probe != nil {
+			priorProbe[m.ID] = m.Probe
+		}
+		if len(m.RecommendedRoles) > 0 {
+			priorRoles[m.ID] = append([]string(nil), m.RecommendedRoles...)
+		}
+	}
+
+	// Stamp probe data onto the fresh models.
+	for i := range models {
+		if probe, ok := priorProbe[models[i].ID]; ok {
+			models[i].Probe = probe
+		}
+		if roles, ok := priorRoles[models[i].ID]; ok {
+			models[i].RecommendedRoles = roles
+		}
+	}
+
+	return models
 }
 
 // writeProviderJSON writes a per-provider canonical model file (schema 2) for

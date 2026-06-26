@@ -10,6 +10,7 @@ import (
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/modelcontract"
 )
 
 // TestGetModel tests the GetModel method
@@ -1047,5 +1048,93 @@ func TestSetProvider_WithSessionOverrideFlag(t *testing.T) {
 	// Verify GetProviderType returns the new provider type
 	if agent.GetProviderType() != "session-override" {
 		t.Errorf("Expected GetProviderType to return 'session-override', got %q", agent.GetProviderType())
+	}
+}
+
+// TestSelectProbeRecommended verifies the probe-first default-model selection.
+// Capability probe results drive selection when present; un-probed models keep
+// the legacy behavior (no RecommendedRoles → ignored).
+func TestSelectProbeRecommended(t *testing.T) {
+	tests := []struct {
+		name   string
+		models []api.ModelInfo
+		want   string
+	}{
+		{
+			name:   "empty list",
+			models: nil,
+			want:   "",
+		},
+		{
+			name: "all un-probed — no probe-backed candidate",
+			models: []api.ModelInfo{
+				{ID: "alpha", RecommendedRoles: nil},
+				{ID: "beta", RecommendedRoles: []string{}},
+			},
+			want: "",
+		},
+		{
+			name: "primary beats subagent",
+			models: []api.ModelInfo{
+				{ID: "small", RecommendedRoles: []string{"subagent"}},
+				{ID: "strong", RecommendedRoles: []string{"primary", "subagent"}},
+				{ID: "medium", RecommendedRoles: []string{"primary"}},
+			},
+			want: "strong", // first primary in iteration order
+		},
+		{
+			name: "subagent-only after no-primary",
+			models: []api.ModelInfo{
+				{ID: "first", RecommendedRoles: []string{"subagent"}},
+				{ID: "second", RecommendedRoles: []string{"subagent"}},
+			},
+			want: "first",
+		},
+		{
+			name: "un-probed is ignored even when first",
+			models: []api.ModelInfo{
+				{ID: "unprobed", RecommendedRoles: nil},
+				{ID: "good", RecommendedRoles: []string{"subagent"}},
+			},
+			want: "good",
+		},
+		{
+			name: "unknown role label is ignored",
+			models: []api.ModelInfo{
+				{ID: "x", RecommendedRoles: []string{"vision"}}, // not primary/subagent
+				{ID: "y", RecommendedRoles: []string{"subagent"}},
+			},
+			want: "y",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := selectProbeRecommended(tt.models)
+			if got != tt.want {
+				t.Errorf("selectProbeRecommended() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestModelcontractRoleHas covers the membership helper used by
+// selectProbeRecommended (and shared via pkg/modelcontract with the webui).
+func TestModelcontractRoleHas(t *testing.T) {
+	if modelcontract.RoleHas(nil, modelcontract.RolePrimary) {
+		t.Error("RoleHas(nil, primary) = true, want false")
+	}
+	if modelcontract.RoleHas([]string{}, modelcontract.RolePrimary) {
+		t.Error("RoleHas([], primary) = true, want false")
+	}
+	if !modelcontract.RoleHas([]string{modelcontract.RolePrimary}, modelcontract.RolePrimary) {
+		t.Error("RoleHas([primary], primary) = false, want true")
+	}
+	if modelcontract.RoleHas([]string{modelcontract.RolePrimary}, modelcontract.RoleSubagent) {
+		t.Error("RoleHas([primary], subagent) = true, want false")
+	}
+	// Exact match — substring "primary" inside "primary-only" must not match.
+	if modelcontract.RoleHas([]string{"primary-only"}, modelcontract.RolePrimary) {
+		t.Error("substring match leaked through RoleHas")
 	}
 }

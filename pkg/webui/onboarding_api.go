@@ -19,6 +19,8 @@ import (
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	agentprovs "github.com/sprout-foundry/sprout/pkg/agent_providers"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/modelcontract"
+	"github.com/sprout-foundry/sprout/pkg/modelregistry"
 	"github.com/sprout-foundry/sprout/pkg/providercatalog"
 )
 
@@ -169,6 +171,20 @@ func applyOnboardingPresentation(entry onboardingProvider) onboardingProvider {
 		}
 	}
 
+	// Probe-first: the capability probe is the authoritative signal for whether
+	// a model is usable for primary or subagent work; if the published registry
+	// carries probe-backed recommendations for this provider, prefer the
+	// strongest one over both the curated catalog entry and the prefix-match
+	// fallback below. A short timeout keeps onboarding responsive if the
+	// registry is slow or unreachable; any error / no-data falls through to
+	// the existing logic. Priority: probe > catalog curated > prefix-match.
+	if probe := probeRecommendedModel(entry.ID); probe != "" {
+		entry.RecommendedModel = probe
+		if entry.RecommendedModelWhy == "" {
+			entry.RecommendedModelWhy = "Picked the strongest model confirmed by automated capability testing."
+		}
+	}
+
 	presentation, ok := onboardingProviderPresentations[entry.ID]
 	if !ok {
 		return entry
@@ -206,6 +222,45 @@ func applyOnboardingPresentation(entry onboardingProvider) onboardingProvider {
 	}
 	return entry
 }
+
+// probeRecommendedModel fetches the per-provider file from the published model
+// registry and returns the strongest probe-backed model ID for onboarding, or
+// "" if none. Prefers models whose RecommendedRoles contain "primary" (complex
+// stage passed — the strongest signal); falls back to "subagent" (gates passed).
+// A short context timeout keeps onboarding responsive if the registry is slow;
+// any error or no-data yields "" so the caller falls back to existing logic.
+func probeRecommendedModel(providerID string) string {
+	if !modelregistry.IsEnabled() {
+		return ""
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	raw, err := modelregistry.FetchModels(ctx, providerID)
+	if err != nil || len(raw) == 0 {
+		return ""
+	}
+	var primaryPick, subagentPick string
+	for _, m := range raw {
+		if modelcontract.RoleHas(m.RecommendedRoles, modelcontract.RolePrimary) {
+			if primaryPick == "" {
+				primaryPick = m.ID
+			}
+		} else if modelcontract.RoleHas(m.RecommendedRoles, modelcontract.RoleSubagent) {
+			if subagentPick == "" {
+				subagentPick = m.ID
+			}
+		}
+	}
+	if primaryPick != "" {
+		return primaryPick
+	}
+	return subagentPick
+}
+
+// resolveRecommendedModel picks the first model whose ID starts with any of
+// the curated prefixes (case-insensitive); falls back to the first available
+// model. Used only as a last-resort default when neither the catalog nor the
+// capability probe yielded a recommendation.
 
 func resolveRecommendedModel(models []string, prefixes []string) string {
 	for _, prefix := range prefixes {

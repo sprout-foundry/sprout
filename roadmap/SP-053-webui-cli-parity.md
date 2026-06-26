@@ -1,6 +1,6 @@
 # SP-053: WebUI CLI Parity — Persona/Depth, Live Tools, Cost Footer
 
-**Status:** 📋 Proposed
+**Status:** ✅ Implemented
 **Date:** 2026-05-22
 **Depends on:** SP-051 (Depth-Aware Subagent UI — backend now publishes `subagent_depth` + `active_persona` on every event; this spec consumes them in the WebUI), SP-048 (CLI Delight — the model + ToolCard parity targets), SP-050 (Persona Collapse — keeps "orchestrator" stable as the depth-1 ID)
 **Priority:** Medium-High (closes the visible feature gap between the polished CLI and the still-flat WebUI; users on each surface see meaningfully different fidelity today)

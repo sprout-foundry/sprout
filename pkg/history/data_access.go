@@ -280,6 +280,15 @@ func updateChangeStatus(fileRevisionHash, status string) error {
 	return nil
 }
 
+// MarkChangeSuperseded marks a change record as "superseded" — the
+// change has been committed to version control and is no longer a
+// recoverable agent edit. This is used by the SP-077 sweep in
+// ChangeTracker.Commit() to prevent old snapshots from being reverted
+// after their content has been committed to git HEAD.
+func MarkChangeSuperseded(fileRevisionHash string) error {
+	return updateChangeStatus(fileRevisionHash, "superseded")
+}
+
 // fetchAllChanges retrieves all change logs from the filesystem.
 func fetchAllChanges() ([]ChangeLog, error) {
 	if err := ensureChangesDirs(); err != nil {

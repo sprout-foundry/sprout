@@ -43,6 +43,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/git"
 )
 
 const (
@@ -202,6 +204,20 @@ func (ct *ChangeTracker) TrackShellTurn(workDir, toolCall string, destructive bo
 		return
 	}
 
+	// SP-077: Filter out deltas caused by git operations. When a git
+	// command (merge, checkout, reset, pull) brings committed content
+	// into the working tree, the walker sees the resulting file changes
+	// as mutations. But these are not agent-authored edits — the
+	// "before" bytes are stale relative to the now-current HEAD, and
+	// recording them as recoverable OriginalCode creates the recurring
+	// failure mode where committed work later gets silently reverted.
+	//
+	// The filter checks: for each delta, does the post-operation content
+	// match HEAD? If so, git brought this file to a committed state —
+	// there is nothing legitimate to "recover" back to. The delta is
+	// suppressed entirely (not recorded).
+	pending = ct.filterGitSourcedDeltas(pending, workDir)
+
 	// Surface truncation as a manifest entry on destructive walks. Non-
 	// destructive truncation already gets logged; for destructive ops we
 	// want it impossible to miss because partial coverage might hide
@@ -291,6 +307,48 @@ func (ct *ChangeTracker) SyncShellCacheForPath(path string) {
 		}
 	}
 	ct.shellCache[abs] = entry
+}
+
+// filterGitSourcedDeltas removes deltas whose post-operation content
+// matches git HEAD — i.e. deltas that a git operation (merge, checkout,
+// reset, pull) produced by aligning the working tree to committed
+// content. These are NOT agent-authored edits; recording them with
+// recoverable OriginalCode would persist stale pre-operation bytes that
+// can later be written back, silently reverting committed work (SP-077).
+//
+// The check is batched: one call to git.CommittedFilePaths builds the
+// full set of committed-clean files for the repo, then each delta's
+// path is tested against the set in O(1). Non-repo workspaces (or any
+// git error) result in NO filtering — all deltas pass through unchanged
+// so the legitimate recovery value of shell-mutation tracking is
+// preserved outside git repos.
+//
+// Path-only entries (content was too large/binary) are kept: we can't
+// cheaply verify their committed status without reading them from disk,
+// and they carry no recoverable OriginalCode payload anyway (the Skipped
+// sentinel makes them non-recoverable by design).
+func (ct *ChangeTracker) filterGitSourcedDeltas(pending []pendingShellChange, workDir string) []pendingShellChange {
+	if len(pending) == 0 {
+		return pending
+	}
+	committed, err := git.CommittedFilePaths(workDir)
+	if err != nil || committed == nil {
+		return pending
+	}
+	kept := pending[:0] // reuse backing array
+	for _, p := range pending {
+		// A delta where the post-state (After) matches HEAD means git
+		// brought the file to a committed state. Deletes have After==nil
+		// so they can never match HEAD — keep them (a real deletion by
+		// `rm` should stay recoverable). Path-only entries (Skipped) are
+		// also kept — no content payload to protect against.
+		if p.After != nil && p.After.Content != nil && committed[p.Path] {
+			ct.logf("SP-077: suppressing git-sourced delta for %s (post-op content matches HEAD)", p.Path)
+			continue
+		}
+		kept = append(kept, p)
+	}
+	return kept
 }
 
 // logf routes a debug-level shell-snapshot message through the agent's

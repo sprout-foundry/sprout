@@ -36,12 +36,20 @@ func NewSpecExtractor(cfg *configuration.Config, logger *utils.Logger) (*SpecExt
 
 // ExtractSpec analyzes conversation and extracts canonical spec
 func (e *SpecExtractor) ExtractSpec(ctx context.Context, conversation []Message, userIntent string) (*SpecExtractionResult, error) {
-	// Validate inputs
-	if userIntent == "" {
-		return nil, fmt.Errorf("userIntent cannot be empty")
-	}
+	// Validate conversation first — it's always required.
 	if len(conversation) == 0 {
 		return nil, fmt.Errorf("conversation cannot be empty")
+	}
+
+	// Derive userIntent from the conversation when not provided. Older
+	// revisions may have empty Instructions (e.g. recorded before the
+	// field was wired through NewChangeTracker, or merged from subagents
+	// that didn't thread the parent's intent). The first user-role message
+	// is the natural source; if absent, deriveUserIntent returns a
+	// non-empty fallback placeholder so extraction always has a signal.
+	effectiveIntent := userIntent
+	if strings.TrimSpace(effectiveIntent) == "" {
+		effectiveIntent = deriveUserIntent(conversation)
 	}
 
 	// Build conversation text for LLM
@@ -53,7 +61,7 @@ func (e *SpecExtractor) ExtractSpec(ctx context.Context, conversation []Message,
 	// Build the full prompt
 	prompt := SpecExtractionPrompt()
 	fullPrompt := fmt.Sprintf("%s\n\nConversation:\n%s\n\nUser's Primary Intent: %s",
-		prompt, conversationText.String(), userIntent)
+		prompt, conversationText.String(), effectiveIntent)
 
 	// Call LLM to extract spec
 	e.logger.LogProcessStep("Extracting canonical specification from conversation...")
@@ -105,7 +113,7 @@ func (e *SpecExtractor) ExtractSpec(ctx context.Context, conversation []Message,
 	spec := &CanonicalSpec{
 		ID:           specID,
 		CreatedAt:    time.Now(),
-		UserPrompt:   userIntent,
+		UserPrompt:   effectiveIntent,
 		Objective:    result.Objective,
 		InScope:      result.InScope,
 		OutOfScope:   result.OutOfScope,
@@ -144,4 +152,20 @@ func (e *SpecExtractor) UpdateSpec(ctx context.Context, existing *CanonicalSpec,
 	result.Spec.CreatedAt = existing.CreatedAt
 
 	return result.Spec, nil
+}
+
+// deriveUserIntent returns the first user-role message's content from
+// the conversation. Returns an explicit fallback when no user message
+// is present so the extraction LLM always has some signal to ground
+// the spec in, even if it's just "infer from context".
+func deriveUserIntent(conversation []Message) string {
+	for _, msg := range conversation {
+		if strings.EqualFold(strings.TrimSpace(msg.Role), "user") {
+			content := strings.TrimSpace(msg.Content)
+			if content != "" {
+				return content
+			}
+		}
+	}
+	return "(no explicit user intent provided — infer objective from conversation context)"
 }

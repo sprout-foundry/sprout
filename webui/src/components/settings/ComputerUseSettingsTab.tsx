@@ -34,9 +34,7 @@ export default function ComputerUseSettingsTab({
   updateSetting,
 }: ComputerUseSettingsTabProps) {
   // ── Audit log dir (read-only display) ──────────────────────
-  const auditLogDir = String(
-    getNestedValue(settings ?? {}, 'computer_use.audit_log_dir') ?? '',
-  );
+  const auditLogDir = String(getNestedValue(settings ?? {}, 'computer_use.audit_log_dir') ?? '');
 
   // ── Workspace allowlist (textarea, newline-separated) ──────
   const persistedAllowlist: string[] = settings
@@ -103,9 +101,7 @@ export default function ComputerUseSettingsTab({
   }, []);
 
   // ── Local toggle: enable/disable ───────────────────────────
-  const computerUseEnabled = Boolean(
-    getNestedValue(settings ?? {}, 'computer_use.enabled'),
-  );
+  const computerUseEnabled = Boolean(getNestedValue(settings ?? {}, 'computer_use.enabled'));
 
   const handleToggleEnabled = useCallback(
     (next: boolean) => {
@@ -157,9 +153,8 @@ export default function ComputerUseSettingsTab({
             color: 'var(--text-primary, inherit)',
           }}
         >
-          <strong style={{ color: 'var(--accent-warning)' }}>Experimental.</strong>{' '}
-          Computer Use gives the AI direct control of your mouse, keyboard, and
-          screen. Use with caution.
+          <strong style={{ color: 'var(--accent-warning)' }}>Experimental.</strong> Computer Use gives the AI direct
+          control of your mouse, keyboard, and screen. Use with caution.
         </span>
       </div>
 
@@ -224,8 +219,8 @@ export default function ComputerUseSettingsTab({
           </button>
         </div>
         <div className="config-help">
-          Where per-session JSONL action logs are written. Defaults to{' '}
-          <code>~/.config/sprout/computer_use_log</code> when empty.
+          Where per-session JSONL action logs are written. Defaults to <code>~/.config/sprout/computer_use_log</code>{' '}
+          when empty.
         </div>
       </div>
 
@@ -258,9 +253,8 @@ export default function ComputerUseSettingsTab({
           }}
         />
         <div className="config-help">
-          One path per line. Workspace roots listed here auto-approve computer
-          use for the session without the per-session opt-in prompt. Lines are
-          trimmed; blank lines are ignored.
+          One path per line. Workspace roots listed here auto-approve computer use for the session without the
+          per-session opt-in prompt. Lines are trimmed; blank lines are ignored.
         </div>
       </div>
 
@@ -278,11 +272,7 @@ export default function ComputerUseSettingsTab({
             gap: '6px',
           }}
         >
-          {testPhase === 'testing' ? (
-            <Loader2 size={14} className="spinning" />
-          ) : (
-            <Camera size={14} />
-          )}
+          {testPhase === 'testing' ? <Loader2 size={14} className="spinning" /> : <Camera size={14} />}
           {testPhase === 'testing'
             ? 'Testing...'
             : testPhase === 'ok'

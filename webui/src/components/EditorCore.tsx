@@ -30,10 +30,7 @@ export interface EditorCoreProps {
  * parent is responsible for keeping these stable), and reference equality for
  * ref objects and function props.  Primitive props are compared by value.
  */
-export function areEditorCorePropsEqual(
-  prev: EditorCoreProps,
-  next: EditorCoreProps,
-): boolean {
+export function areEditorCorePropsEqual(prev: EditorCoreProps, next: EditorCoreProps): boolean {
   // ref objects are stable by definition
   if (prev.editorRef !== next.editorRef) return false;
   if (prev.viewRef !== next.viewRef) return false;
@@ -110,7 +107,10 @@ const EditorCoreImpl = (props: EditorCoreProps): JSX.Element => {
       <div className={`pane-content-wrapper${markdownPreviewMode === 'split' ? ' pane-content-wrapper-md-split' : ''}`}>
         {isMarkdownFile && markdownPreviewMode === 'preview' ? (
           <div className="pane-content pane-content-md-preview-full">
-            <MarkdownPreview content={localContent} scrollRef={markdownPreviewBodyRef as React.RefObject<HTMLDivElement>} />
+            <MarkdownPreview
+              content={localContent}
+              scrollRef={markdownPreviewBodyRef as React.RefObject<HTMLDivElement>}
+            />
           </div>
         ) : (
           <>
@@ -122,7 +122,10 @@ const EditorCoreImpl = (props: EditorCoreProps): JSX.Element => {
             </div>
             {markdownPreviewMode === 'split' && (
               <div className="pane-md-preview-split">
-                <MarkdownPreview content={localContent} scrollRef={markdownPreviewBodyRef as React.RefObject<HTMLDivElement>} />
+                <MarkdownPreview
+                  content={localContent}
+                  scrollRef={markdownPreviewBodyRef as React.RefObject<HTMLDivElement>}
+                />
               </div>
             )}
           </>

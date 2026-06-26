@@ -38,12 +38,7 @@ export interface FieldRenderers {
     step?: number,
     helpText?: string,
   ) => JSX.Element | null;
-  renderTextInput: (
-    settingKey: string,
-    label: string,
-    placeholder?: string,
-    helpText?: string,
-  ) => JSX.Element | null;
+  renderTextInput: (settingKey: string, label: string, placeholder?: string, helpText?: string) => JSX.Element | null;
   renderTextareaInput: (
     settingKey: string,
     label: string,
@@ -115,12 +110,7 @@ export function useSettingsFieldRenderers(params: FieldRenderersParams): FieldRe
     );
   };
 
-  const renderLocalToggle = (
-    checked: boolean,
-    label: string,
-    onChange: (next: boolean) => void,
-    helpText?: string,
-  ) => (
+  const renderLocalToggle = (checked: boolean, label: string, onChange: (next: boolean) => void, helpText?: string) => (
     <div className="config-item">
       <label className="styled-toggle">
         <input type="checkbox" checked={checked} onChange={() => onChange(!checked)} />

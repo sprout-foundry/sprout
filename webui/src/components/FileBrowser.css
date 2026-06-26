@@ -49,7 +49,12 @@
   cursor: pointer;
   padding: 4px;
   border-radius: 4px;
-  transition: background, color, border-color, box-shadow, transform 0.2s;
+  transition:
+    background,
+    color,
+    border-color,
+    box-shadow,
+    transform 0.2s;
 }
 
 .filebrowser-close:hover {
@@ -79,7 +84,12 @@
   border-radius: 4px;
   cursor: pointer;
   font-size: 12px;
-  transition: background, color, border-color, box-shadow, transform 0.2s;
+  transition:
+    background,
+    color,
+    border-color,
+    box-shadow,
+    transform 0.2s;
 }
 
 .filebrowser-nav-button:hover:not(:disabled) {
@@ -230,7 +240,12 @@
   cursor: pointer;
   font-size: 13px;
   font-weight: 500;
-  transition: background, color, border-color, box-shadow, transform 0.2s;
+  transition:
+    background,
+    color,
+    border-color,
+    box-shadow,
+    transform 0.2s;
 }
 
 .filebrowser-button:hover:not(:disabled) {

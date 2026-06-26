@@ -34,21 +34,15 @@ export function DisconnectedOverlay({ isConnected }: DisconnectedOverlayProps): 
   if (!show) return null;
 
   return (
-    <div
-      className="disconnected-overlay"
-      role="alertdialog"
-      aria-modal="true"
-      aria-label="Disconnected from sprout"
-    >
+    <div className="disconnected-overlay" role="alertdialog" aria-modal="true" aria-label="Disconnected from sprout">
       <div className="disconnected-overlay__card">
         <div className="disconnected-overlay__icon" aria-hidden="true">
           ⚠
         </div>
         <h2 className="disconnected-overlay__title">Disconnected from sprout</h2>
         <p className="disconnected-overlay__body">
-          The connection to the sprout server was lost and isn&apos;t coming back. The CLI may have
-          been closed, the daemon stopped, or the host detached. What you see here may be out of
-          date.
+          The connection to the sprout server was lost and isn&apos;t coming back. The CLI may have been closed, the
+          daemon stopped, or the host detached. What you see here may be out of date.
         </p>
         <button
           type="button"

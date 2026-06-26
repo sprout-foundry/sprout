@@ -143,7 +143,12 @@
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: background, color, border-color, box-shadow, transform 0.15s ease;
+  transition:
+    background,
+    color,
+    border-color,
+    box-shadow,
+    transform 0.15s ease;
 }
 
 .drift-btn:focus-visible {

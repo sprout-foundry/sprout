@@ -43,7 +43,10 @@ export default function SecuritySettingsTab({
       { title: 'Remove approved command', type: 'warning', confirmLabel: 'Remove' },
     );
     if (!confirmed) return;
-    await updateSetting('approved_shell_commands', approved.filter((c) => c !== cmd));
+    await updateSetting(
+      'approved_shell_commands',
+      approved.filter((c) => c !== cmd),
+    );
   };
 
   return (
@@ -225,7 +228,10 @@ function SecurityPolicyEditor({ settings, updateSetting }: SecurityPolicyEditorP
   const addRule = () => {
     if (!ruleDraft.pattern.trim()) return;
     update({
-      rules: [...rules, { ...ruleDraft, pattern: ruleDraft.pattern.trim(), reason: ruleDraft.reason?.trim() || undefined }],
+      rules: [
+        ...rules,
+        { ...ruleDraft, pattern: ruleDraft.pattern.trim(), reason: ruleDraft.reason?.trim() || undefined },
+      ],
     });
     setRuleDraft({ pattern: '', action: 'prompt', reason: '' });
   };
@@ -306,9 +312,7 @@ function SecurityPolicyEditor({ settings, updateSetting }: SecurityPolicyEditorP
 
           <div className="config-item settings-section-spaced">
             <label>Pattern rules</label>
-            <div className="config-help">
-              Each rule pairs a glob/regex pattern with an action. First match wins.
-            </div>
+            <div className="config-help">Each rule pairs a glob/regex pattern with an action. First match wins.</div>
 
             {rules.length > 0 && (
               <ul className="settings-list settings-help-spaced-top">

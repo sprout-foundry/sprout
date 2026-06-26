@@ -230,15 +230,12 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
 
   const revertOne = useCallback(
     async (path: string) => {
-      const ok = await showThemedConfirm(
-        `Restore ${path} to the state before the agent's first edit this session?`,
-        {
-          title: 'Revert this file?',
-          confirmLabel: 'Revert',
-          cancelLabel: 'Keep changes',
-          type: 'warning',
-        },
-      );
+      const ok = await showThemedConfirm(`Restore ${path} to the state before the agent's first edit this session?`, {
+        title: 'Revert this file?',
+        confirmLabel: 'Revert',
+        cancelLabel: 'Keep changes',
+        type: 'warning',
+      });
       if (!ok) return;
       try {
         const res = await apiService.revertAgentChanges({ file: path });
@@ -419,9 +416,7 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
           onClick={() => setTab('session')}
         >
           This session
-          {summary && summary.totals.changes > 0 && (
-            <span className="changes-tab-badge">{summary.totals.files}</span>
-          )}
+          {summary && summary.totals.changes > 0 && <span className="changes-tab-badge">{summary.totals.files}</span>}
         </button>
         <button
           type="button"
@@ -457,9 +452,8 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
               <Inbox size={32} />
               <p>The agent hasn&apos;t changed anything this session yet.</p>
               <p className="changes-empty-hint">
-                When the agent edits, creates, or deletes files, each entry will
-                have a <Eye size={12} aria-hidden="true" /> view-diff and{' '}
-                <Undo2 size={12} aria-hidden="true" /> revert button.
+                When the agent edits, creates, or deletes files, each entry will have a{' '}
+                <Eye size={12} aria-hidden="true" /> view-diff and <Undo2 size={12} aria-hidden="true" /> revert button.
               </p>
             </div>
           )}
@@ -468,9 +462,9 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
               <div className="changes-totals">
                 <FileText size={14} />
                 <span>
-                  {summary.totals.changes} change{summary.totals.changes === 1 ? '' : 's'} across{' '}
-                  {summary.totals.files} file{summary.totals.files === 1 ? '' : 's'}, in{' '}
-                  {summary.blocks.length} activity block{summary.blocks.length === 1 ? '' : 's'}
+                  {summary.totals.changes} change{summary.totals.changes === 1 ? '' : 's'} across {summary.totals.files}{' '}
+                  file{summary.totals.files === 1 ? '' : 's'}, in {summary.blocks.length} activity block
+                  {summary.blocks.length === 1 ? '' : 's'}
                 </span>
                 <div style={{ flex: 1 }} />
                 <button
@@ -495,11 +489,7 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
         <div className="changes-timeline">
           <div className="changes-timeline-controls">
             <label htmlFor="timeline-since">Since:</label>
-            <select
-              id="timeline-since"
-              value={timelineSince}
-              onChange={(e) => setTimelineSince(e.target.value)}
-            >
+            <select id="timeline-since" value={timelineSince} onChange={(e) => setTimelineSince(e.target.value)}>
               <option value="1d">Last 1 day</option>
               <option value="7d">Last 7 days</option>
               <option value="30d">Last 30 days</option>
@@ -572,9 +562,7 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
                 Close
               </button>
             </div>
-            <pre className="changes-diff-body">
-              {diffLoading ? 'Loading…' : diffText}
-            </pre>
+            <pre className="changes-diff-body">{diffLoading ? 'Loading…' : diffText}</pre>
           </div>
         </div>
       )}

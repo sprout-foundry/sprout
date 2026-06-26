@@ -213,7 +213,13 @@ export function ChatStatusBarItems({ stats, isConnected, onModelClick }: ChatSta
   // dot when a segment is missing.
   const out: JSX.Element[] = [];
   segments.forEach((seg, i) => {
-    if (i > 0) out.push(<span key={`sep-${i}`} className="chat-statusbar-sep" aria-hidden="true">·</span>);
+    if (i > 0) {
+      out.push(
+        <span key={`sep-${i}`} className="chat-statusbar-sep" aria-hidden="true">
+          ·
+        </span>,
+      );
+    }
     out.push(seg);
   });
 

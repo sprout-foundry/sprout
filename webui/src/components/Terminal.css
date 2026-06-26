@@ -79,7 +79,9 @@
   user-select: none;
   text-align: left;
   flex-shrink: 0;
-  transition: background 120ms var(--ease-out), color 120ms var(--ease-out);
+  transition:
+    background 120ms var(--ease-out),
+    color 120ms var(--ease-out);
 }
 
 .terminal-collapsed-strip:hover {
@@ -420,7 +422,9 @@
   font-family: inherit;
   cursor: pointer;
   text-align: left;
-  transition: background 0.12s var(--ease-out), color 0.12s var(--ease-out);
+  transition:
+    background 0.12s var(--ease-out),
+    color 0.12s var(--ease-out);
 }
 
 .terminal-overflow-item:hover {

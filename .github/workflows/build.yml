@@ -39,6 +39,12 @@ jobs:
     - name: Install dependencies
       run: go mod download
 
+    - name: Run go vet
+      run: make vet
+
+    - name: Check gofmt
+      run: make fmt-check
+
     - name: Set up Node.js
       uses: actions/setup-node@v5
       with:
@@ -57,10 +63,8 @@ jobs:
         npm run build -w @sprout/events
         npm run build -w @sprout/ui
 
-    - name: Lint frontend (non-blocking)
-      continue-on-error: true
-      run: |
-        make lint || echo "::warning::make lint reported issues. See lint step above for details."
+    - name: Lint frontend
+      run: make lint
 
     - name: Check for duplicate components (SP-039 enforcement)
       run: bash scripts/check-no-duplicate-components.sh

@@ -151,9 +151,7 @@ class WebSocketService {
       const lastSeq = this.chatSeq.get(chatId);
       if (lastSeq !== undefined) {
         try {
-          const resp = await clientFetch(
-            `/api/query/status?chat_id=${encodeURIComponent(chatId)}`,
-          );
+          const resp = await clientFetch(`/api/query/status?chat_id=${encodeURIComponent(chatId)}`);
           const body: { active?: boolean; chat_id?: string } = await resp.json();
           if (body.active === true) {
             reattachChatId = body.chat_id ?? chatId;

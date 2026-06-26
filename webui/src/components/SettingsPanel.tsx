@@ -142,9 +142,7 @@ function SettingsPanel({
         section.label.toLowerCase().includes(normalizedQuery) ||
         section.description.toLowerCase().includes(normalizedQuery) ||
         section.scope.toLowerCase().includes(normalizedQuery);
-      const matchingSubs = section.subsections.filter((sub) =>
-        sub.label.toLowerCase().includes(normalizedQuery),
-      );
+      const matchingSubs = section.subsections.filter((sub) => sub.label.toLowerCase().includes(normalizedQuery));
       if (sectionMatches || matchingSubs.length > 0) {
         return {
           ...section,
@@ -342,10 +340,7 @@ function SettingsPanel({
 
       case 'agent-memory':
         return (
-          <PersistentContextSettingsTab
-            settings={activeSettings ?? settings}
-            updateSetting={mutations.updateSetting}
-          />
+          <PersistentContextSettingsTab settings={activeSettings ?? settings} updateSetting={mutations.updateSetting} />
         );
 
       /* ── Workspace section ─────────────────────────── */
@@ -361,10 +356,7 @@ function SettingsPanel({
 
       case 'workspace-lsp':
         return (
-          <LanguageServersSettingsTab
-            settings={activeSettings ?? settings}
-            updateSetting={mutations.updateSetting}
-          />
+          <LanguageServersSettingsTab settings={activeSettings ?? settings} updateSetting={mutations.updateSetting} />
         );
 
       case 'workspace-mcp':
@@ -476,11 +468,7 @@ function SettingsPanel({
         );
 
       case 'editor-notifications':
-        return (
-          <NotificationsSettingsTab
-            renderLocalToggle={fieldRenderers.renderLocalToggle}
-          />
-        );
+        return <NotificationsSettingsTab renderLocalToggle={fieldRenderers.renderLocalToggle} />;
 
       /* ── Experimental section ──────────────────────── */
       case 'experimental-computer-use':
@@ -557,10 +545,7 @@ function SettingsPanel({
             aria-expanded={expandedSections.has(section.id)}
           >
             <span className="settings-section-label">{section.label}</span>
-            <span
-              className={`settings-scope-badge scope-${section.scope}`}
-              title={scopeTitle[section.scope]}
-            >
+            <span className={`settings-scope-badge scope-${section.scope}`} title={scopeTitle[section.scope]}>
               {section.scope}
             </span>
             <ChevronRight className="settings-section-chevron" size={14} />

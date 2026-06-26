@@ -66,7 +66,10 @@
   color: var(--text-secondary);
   border-radius: 6px;
   cursor: pointer;
-  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease;
 }
 
 .commit-detail-nav-btn:hover:not(:disabled) {

@@ -69,9 +69,7 @@ function AutomationsSessionDetail({ sessionId, onClose }: AutomationsSessionDeta
 
   const fetchSession = useCallback(async () => {
     try {
-      const response = await clientFetch(
-        `/api/automate/sessions/${encodeURIComponent(sessionId)}`
-      );
+      const response = await clientFetch(`/api/automate/sessions/${encodeURIComponent(sessionId)}`);
       if (!response.ok) {
         if (response.status === 404) {
           setSession(null);
@@ -89,7 +87,7 @@ function AutomationsSessionDetail({ sessionId, onClose }: AutomationsSessionDeta
   const fetchOutput = useCallback(async () => {
     try {
       const response = await clientFetch(
-        `/api/automate/sessions/${encodeURIComponent(sessionId)}/output?since=${outputOffsetRef.current}`
+        `/api/automate/sessions/${encodeURIComponent(sessionId)}/output?since=${outputOffsetRef.current}`,
       );
       if (!response.ok) {
         throw new Error(`Failed to fetch output: ${response.status}`);
@@ -186,13 +184,7 @@ function AutomationsSessionDetail({ sessionId, onClose }: AutomationsSessionDeta
       tabIndex={-1}
     >
       {/* Close Button */}
-      <button
-        type="button"
-        className="automations-detail-close"
-        onClick={onClose}
-        title="Close"
-        aria-label="Close"
-      >
+      <button type="button" className="automations-detail-close" onClick={onClose} title="Close" aria-label="Close">
         <X size={16} />
       </button>
 
@@ -202,24 +194,16 @@ function AutomationsSessionDetail({ sessionId, onClose }: AutomationsSessionDeta
           <div className="automations-detail-session-id" title={session?.session_id}>
             {session?.session_id || sessionId}
           </div>
-          <div className="automations-detail-workflow-name">
-            {session?.workflow || 'Unknown'}
-          </div>
+          <div className="automations-detail-workflow-name">{session?.workflow || 'Unknown'}</div>
         </div>
         <div className="automations-detail-header-meta">
           <span className={`automations-status-badge ${session?.status || 'running'}`}>
             <span className="automations-status-dot" />
             <span>
-              {session?.status === 'exited'
-                ? 'Exited'
-                : session?.status === 'stopped'
-                  ? 'Stopped'
-                  : 'Running'}
+              {session?.status === 'exited' ? 'Exited' : session?.status === 'stopped' ? 'Stopped' : 'Running'}
             </span>
           </span>
-          {session && (
-            <span className="automations-detail-elapsed">{elapsed}</span>
-          )}
+          {session && <span className="automations-detail-elapsed">{elapsed}</span>}
         </div>
       </div>
 
@@ -228,13 +212,8 @@ function AutomationsSessionDetail({ sessionId, onClose }: AutomationsSessionDeta
         <div className="automations-detail-section-title">Budget</div>
         {session?.budget_usd && session.budget_usd > 0 ? (
           <div className="automations-budget-bar">
-            <div
-              className="automations-budget-fill"
-              style={{ width: '0%', background: 'var(--accent-success)' }}
-            />
-            <span className="automations-budget-text">
-              ${(session.budget_usd || 0).toFixed(2)} cap
-            </span>
+            <div className="automations-budget-fill" style={{ width: '0%', background: 'var(--accent-success)' }} />
+            <span className="automations-budget-text">${(session.budget_usd || 0).toFixed(2)} cap</span>
           </div>
         ) : (
           <div className="automations-no-budget">No limit</div>
@@ -250,11 +229,7 @@ function AutomationsSessionDetail({ sessionId, onClose }: AutomationsSessionDeta
           <div className="automations-output-empty">{error}</div>
         ) : session?.output_file_path ? (
           <div className="automations-output-container">
-            <pre
-              className="automations-output-pre"
-              ref={outputContainerRef}
-              onScroll={handleScroll}
-            >
+            <pre className="automations-output-pre" ref={outputContainerRef} onScroll={handleScroll}>
               <code className="automations-output-code">{output || '(empty)'}</code>
             </pre>
           </div>
@@ -267,9 +242,7 @@ function AutomationsSessionDetail({ sessionId, onClose }: AutomationsSessionDeta
       <div className="automations-detail-section">
         <div className="automations-detail-section-title">Step Progress</div>
         {/* TODO(SP-065-4c): Implement step timeline when agent workflow state is exposed via API */}
-        <div className="automations-detail-placeholder">
-          Step progress not available
-        </div>
+        <div className="automations-detail-placeholder">Step progress not available</div>
       </div>
 
       {/* Budget Events Section */}

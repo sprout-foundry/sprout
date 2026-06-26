@@ -56,10 +56,7 @@ export interface EditorPaneFooterProps {
  * React.memo skips re-renders when the parent recreates these wrapper objects
  * with the same underlying values/functions.
  */
-export function areEditorPaneFooterPropsEqual(
-  prev: EditorPaneFooterProps,
-  next: EditorPaneFooterProps,
-): boolean {
+export function areEditorPaneFooterPropsEqual(prev: EditorPaneFooterProps, next: EditorPaneFooterProps): boolean {
   if (prev.buffer !== next.buffer) return false;
   if (prev.selectionInfo !== next.selectionInfo) return false;
   if (prev.whitespaceRenderingMode !== next.whitespaceRenderingMode) return false;

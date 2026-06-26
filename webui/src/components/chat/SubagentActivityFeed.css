@@ -165,8 +165,13 @@
 }
 
 @keyframes subagent-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 
 /* ── Icon & Persona ───────────────────────────────────────────────────── */
@@ -255,33 +260,33 @@
 
 /* ── Depth-based left border colors ───────────────────────────────────── */
 
-.subagent-feed-card[data-depth="0"] {
+.subagent-feed-card[data-depth='0'] {
   --card-border-color: var(--subagent-depth-0);
   border-left-color: var(--subagent-depth-0);
 }
 
-.subagent-feed-card[data-depth="1"] {
+.subagent-feed-card[data-depth='1'] {
   --card-border-color: var(--subagent-depth-1);
   border-left-color: var(--subagent-depth-1);
   padding-left: 16px;
 }
 
-.subagent-feed-card[data-depth="2"] {
+.subagent-feed-card[data-depth='2'] {
   --card-border-color: var(--subagent-depth-2);
   border-left-color: var(--subagent-depth-2);
   padding-left: 32px;
 }
 
-.subagent-feed-card[data-depth="3"] {
+.subagent-feed-card[data-depth='3'] {
   --card-border-color: var(--subagent-depth-3);
   border-left-color: var(--subagent-depth-3);
   padding-left: 48px;
 }
 
 /* Depth connector line (vertical bar inside the indent area) */
-.subagent-feed-card[data-depth="1"]::before,
-.subagent-feed-card[data-depth="2"]::before,
-.subagent-feed-card[data-depth="3"]::before {
+.subagent-feed-card[data-depth='1']::before,
+.subagent-feed-card[data-depth='2']::before,
+.subagent-feed-card[data-depth='3']::before {
   content: '';
   position: absolute;
   left: 8px;
@@ -292,11 +297,11 @@
   opacity: 0.3;
 }
 
-.subagent-feed-card[data-depth="2"]::before {
+.subagent-feed-card[data-depth='2']::before {
   left: 24px;
 }
 
-.subagent-feed-card[data-depth="3"]::before {
+.subagent-feed-card[data-depth='3']::before {
   left: 40px;
 }
 
@@ -354,7 +359,12 @@
   padding: 2px 7px;
   border-radius: 4px;
   cursor: pointer;
-  transition: background, color, border-color, box-shadow, transform 0.15s ease;
+  transition:
+    background,
+    color,
+    border-color,
+    box-shadow,
+    transform 0.15s ease;
   margin-left: 6px;
 }
 

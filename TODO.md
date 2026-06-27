@@ -200,6 +200,182 @@ UX parity (Medium): the pinned steer-input panel (`pkg/console/steer_input.go`, 
 
 - [ ] SP-078-4: `grep -rn "TODO(SP-078)" pkg/console/` is empty; `make build-all` + `go test ./...` green; add a recording-style screenshot or `browse_url` snapshot of a wrapped steer so future regressions surface at review time.
 
+## SP-066: Never-Ending Context — Phase 3d tie-breaker + calibration
+_Spec: `roadmap/SP-066-never-ending-context.md` (status: ✅ Substantially Shipped; Phase 3d ⏸ deferred)_
+
+Foundation (Low-Medium): Phases 1–3 are shipped except 3d (embedding-driven rollup clustering) and an adjacent calibration question about `rollupTriggerCount + recentTurnsToPreserve = 30` being set higher than real workloads exercise. Both are tagged "don't pick up without first revisiting whether rollups even fire."
+
+- [ ] SP-066-A: First, run the adjacent calibration experiment — drop `rollupTriggerCount + recentTurnsToPreserve` from 30 → 20 (or 15) in `pkg/agent/rollup.go`, observe whether real-world sessions routinely cross the new threshold. Acceptance: telemetry from `rollup.go` shows rollups firing on at least one non-test session in the developer's local `~/.sprout/sessions/` corpus; the call site change is one constant.
+- [ ] SP-066-3d: If and only if calibration shows rollups are now routine, implement `Embeddings as a rollup tie-breaker` — (a) cluster N per-turn checkpoints by embedding similarity before summarizing (tighter per-cluster summaries than one monolithic LLM call); (b) detect topic shifts as natural rollup boundaries via sharp similarity drops between turns. Acceptance: rollups emit per-cluster summaries when topic shifts are detected; existing rollup tests still green; `go test ./pkg/agent/...` passes.
+
+## SP-008: Reliability Engineering — Structured Logging + Typed Errors + Race
+_Spec: `roadmap/SP-008-reliability-engineering.md` (status: 📋 Proposed)_
+
+Tech debt (Medium, ~3–4 weeks across 3 phases): agent lifecycle is debugged via `fmt.Printf` and string-matched errors; no `-race` in CI; transient/rate-limit/overflow errors lack retry policy. Three parallel tracks (channel patterns, typed errors, structured logging) with explicit phase validation.
+
+### Phase 1 — Foundations
+
+- [ ] SP-008-1a: Track A1 — channel patterns for `ProcessQuery` feedback loop (async output + MCP callbacks).
+- [ ] SP-008-1b: Track A3 — add `-race` to default test invocation; write `pkg/agent/concurrency_test.go`.
+- [ ] SP-008-1c: Track B1 — create `pkg/errors/types.go` with all error categories (transient / rate-limit / context-overflow / security / auth).
+- [ ] SP-008-1d: Track B2 — create `pkg/logging/structured.go` interface (configurable to file + console simultaneously).
+
+### Phase 2 — Migration
+
+- [ ] SP-008-2a: Track A2 — locking audit of `CheckFileContentSecurity`, `ProcessQuery`, tool handlers.
+- [ ] SP-008-2b: Track B3 — migrate agent lifecycle and tool execution logging to the structured logger.
+- [ ] SP-008-2c: Track B4 — implement `handleToolError` retry logic (transient + rate-limit retry; security stop; overflow compact).
+- [ ] SP-008-2d: Replace string matching in `api_client.go`'s `ErrorHandler` with typed errors.
+
+### Phase 3 — Validation
+
+- [ ] SP-008-3a: Full `-race` test suite passing in CI without `-short`.
+- [ ] SP-008-3b: 100% of `pkg/agent/` errors use typed errors (no bare `fmt.Errorf` for return paths).
+- [ ] SP-008-3c: All `fmt.Printf` debug statements in `pkg/agent/` (non-test) replaced with structured logger; verify session context (sessionID, iteration, provider, model) appears in every entry.
+- [ ] SP-008-3d: Integration test — agent recovers from transient, rate-limit, and context-overflow errors per the retry policy.
+
+## SP-010: Editor Modernization — CodeMirror Decomposition + Missing IDE Features
+_Spec: `roadmap/SP-010-editor-modernization.md` (status: 📋 Proposed)_
+
+Tooling (Medium, ~5 weeks across 3 phases): `EditorPane.tsx` is a monolithic file mixing extension setup, diagnostics, file IO, scroll sync, symbols, cursor, and toolbar. Decompose it into focused hooks + sub-components, then ship the IDE features (error lens, word highlights, inlay hints, signature help) that the LSP infrastructure already supports.
+
+### Phase 1 — Decompose EditorPane
+
+- [ ] SP-010-1a: Extract `useEditorExtensions.ts` (CodeMirror extension set from buffer config, ~150 lines) — new file `webui/src/hooks/useEditorExtensions.ts`.
+- [ ] SP-010-1b: Extract `useEditorDiagnostics.ts` (diagnostic fetching + lint gutter updates, ~120 lines) — new file `webui/src/hooks/useEditorDiagnostics.ts`.
+- [ ] SP-010-1c: Extract `useEditorFileIO.ts` (file load/save + external change handling, ~200 lines) — new file `webui/src/hooks/useEditorFileIO.ts`.
+- [ ] SP-010-1d: Extract `useEditorScrollSync.ts` (scroll position persistence + cross-pane sync, ~100 lines) — new file `webui/src/hooks/useEditorScrollSync.ts`.
+- [ ] SP-010-1e: Extract `useEditorSymbols.ts` (symbol extraction + breadcrumb data, ~100 lines) — new file `webui/src/hooks/useEditorSymbols.ts`.
+- [ ] SP-010-1f: Extract `useEditorCursor.ts` (cursor position tracking + selection state, ~80 lines) — new file `webui/src/hooks/useEditorCursor.ts`.
+- [ ] SP-010-1g: New `webui/src/components/EditorCore.tsx` (~200 lines, CodeMirror EditorView mount point + extension context) and `EditorToolbarActions.tsx` (~150 lines, toolbar buttons).
+- [ ] SP-010-1h: Reduce `webui/src/components/EditorPane.tsx` to a composition root (~300 lines) orchestrating the hooks and sub-components.
+- [ ] SP-010-1i: Acceptance: `EditorPane.tsx` under 400 lines; all extracted hooks under 200 lines each; `make build-all` passes.
+
+### Phase 2 — Missing IDE Features
+
+- [ ] SP-010-2a: `webui/src/extensions/errorLens.ts` — `StateField` reading diagnostics from the existing lint diagnostics compartment; renders `Decoration.widget` at end of each diagnostic line in faded text, clickable to focus. Debounce 300ms to batch rapid updates. Add `errorLens.css`.
+- [ ] SP-010-2b: `webui/src/extensions/wordHighlights.ts` — verify existing `highlightSelectionMatches` from `@codemirror/search` works correctly (already imported in `EditorPane.tsx:1394`); add custom styling.
+- [ ] SP-010-2c: `webui/src/extensions/inlayHints.ts` — request LSP inlay hints via semantic API for TypeScript/Go; show type annotations + parameter names inline. Toggle via editor settings or menu bar.
+- [ ] SP-010-2d: `webui/src/extensions/signatureHelp.ts` — when typing `(` or `,` inside a function call, show tooltip with current parameter signature + documentation (LSP `signatureHelp` capability).
+- [ ] SP-010-2e: Wire all four extensions into `EditorPane.tsx`.
+
+### Phase 3 — Performance & Polish
+
+- [ ] SP-010-3a: Wrap `EditorTabs`, `EditorBreadcrumb`, `EditorToolbar` with `React.memo`.
+- [ ] SP-010-3b: Fix symbol extraction — key to content checksum, not cursor position.
+- [ ] SP-010-3c: Add `title` attribute to tab names showing full file path on hover.
+- [ ] SP-010-3d: Remove the 3-pane limit — allow up to 6 panes (configurable) in `EditorManagerContext.tsx`.
+- [ ] SP-010-3e: Add file-type icons to editor tabs based on extension.
+- [ ] SP-010-3f: Wire existing formatter to save action as opt-in "format on save" setting in the editor toolbar.
+
+## SP-011: Terminal Parity — Per-Pane Sessions + Bug Fixes + Optional Features
+_Spec: `roadmap/SP-011-terminal-parity.md` (status: 📋 Proposed)_
+
+Bug fixes / UX (Medium, ~3 weeks): the WebUI terminal has a flat session model that breaks when tabs + split coexist, processes that exit cleanly don't auto-close or restart, and the optional features (search, clickable file paths, copy-on-select, scrollback persistence) are absent.
+
+### Phase 1 — Critical Bug Fixes
+
+- [ ] SP-011-1a: Add `onProcessExit?: () => void` prop to `TerminalPane`. On `pty_exit` event: write `[Process exited]` to xterm, set connected false, close WebSocket cleanly, call `onProcessExit()` after 1s delay so the user sees the message.
+- [ ] SP-011-1b: `Terminal.tsx::handlePaneExit` — if secondary pane's session exits, auto-close the split; if last session in last pane, auto-restart after 1.5s (`pane-N`, default shell); if last session in pane with other panes, close the pane; if multiple sessions, close the exited one and switch to next.
+- [ ] SP-011-1c: Replace flat session model with `PaneState { id, sessions, activeSessionId }`. Each pane has its own tab bar; the global `(+)` shell picker is hidden when split is active (each pane's `(+)` creates in that pane only).
+- [ ] SP-011-1d: `toggleSplit(direction)` — if unsplit, create secondary pane and move current active session to it; if split, merge all back to primary and close secondary; if switching directions, change direction only.
+- [ ] SP-011-1e: Acceptance: opening a split, typing `exit` in one pane auto-closes the split (or restarts the last pane); tabs remain scoped to their pane.
+
+### Phase 2 — Polish
+
+- [ ] SP-011-2a: Add CSS for `.terminal-tab.exited` (opacity 0.5, italic); show "Session ended. Starting new session..." before auto-restart.
+- [ ] SP-011-2b: Verify zoom buttons (+/-) are visible in the terminal header, change xterm font size, persist to localStorage across reloads, show font size on hover. Fix any broken data flow from `Terminal` → `TerminalPane` → xterm.
+- [ ] SP-011-2c: Audit `packages/ui/src/components/Terminal.tsx` — if used in storybook/examples, update to match the new per-pane model; if unused, remove to avoid confusion.
+
+### Phase 3 — Missing Features (optional)
+
+- [ ] SP-011-3a: Terminal search (`Ctrl+Shift+F`) — install `@xterm/addon-search`; search bar above the terminal pane; match counter + case-sensitive/regex toggles.
+- [ ] SP-011-3b: Clickable file paths — detect `./foo.go:12:34` patterns in terminal output via `Terminal.registerLinkProvider()`; dispatch event to open file in editor at line/col.
+- [ ] SP-011-3c: Copy-on-select — auto-copy selected text to clipboard.
+- [ ] SP-011-3d: Scrollback persistence — save terminal buffer to IndexedDB on unmount; restore on reconnect.
+
+## SP-014: Agent Terminal Sessions — Hidden PTY for Agent Shell Commands
+_Spec: `roadmap/SP-014-agent-terminal-sessions.md` (status: 📋 Proposed)_
+
+Foundation (Medium, ~2–3 weeks across 3 phases): agent shell commands in WebUI mode currently go through plain `os/exec` and lose shell state across tool calls. Add hidden PTY-backed sessions (sentinel-based sync exec, ring buffer output capture, background mode via `background=true`) plus a frontend Background Tasks panel.
+
+### Phase A — Hidden Session Infrastructure
+
+- [ ] SP-014-A1: New `pkg/webui/terminal_agent_exec.go` — `ExecuteCommandAndWait()`: sentinel-based sync command execution via PTY (`command && echo "__SPROUT_DONE__:$?" || echo "__SPROUT_DONE__:$?"`); subscribe a temp `termSub` to capture output; scan for sentinel to detect completion + extract exit code; fallback timeout (30s default).
+- [ ] SP-014-A2: Add `Hidden`, `Owner`, `ChatID`, `Name`, `AutoClose` fields to `TerminalSession` in `pkg/webui/terminal_types.go`; add `CreateHiddenSession()` and `ListHiddenSessions()` methods.
+- [ ] SP-014-A3: `pkg/webui/terminal_lifecycle.go` — exclude hidden sessions from default listing; longer cleanup timeout for background sessions (2 hours vs 30 minutes default).
+- [ ] SP-014-A4: New `pkg/webui/api_agent_sessions.go` — REST endpoints: `GET /api/terminal/agent-sessions` (list hidden sessions with status + last N bytes output), `POST /api/terminal/agent-sessions/{id}/attach` (promote to visible), `GET /api/terminal/agent-sessions/{id}/output` (ring buffer as text), `DELETE /api/terminal/agent-sessions/{id}` (kill and remove).
+- [ ] SP-014-A5: Register agent session API routes in `pkg/webui/server.go`.
+
+### Phase B — Agent Integration + Background Mode
+
+- [ ] SP-014-B1: `pkg/agent_tools/shell.go` — add `TerminalManager` check; route through hidden PTY when available (WebUI mode); CLI mode falls through to existing `os/exec` unchanged.
+- [ ] SP-014-B2: `pkg/agent/shell.go` — pass through `TerminalManager` for hidden session creation; expose accessor via `pkg/webui/client_context.go`.
+- [ ] SP-014-B3: `pkg/agent/tool_definitions.go` — add `background` (bool, default false) parameter to `shell_command` tool definition.
+- [ ] SP-014-B4: `pkg/agent/tool_handlers_shell.go` — handle `background=true`: write command to hidden PTY, return immediately with `{session_id, status: "running", message}`; handle `session_id` (without command): return accumulated output `{session_id, status, output, exit_code}`.
+- [ ] SP-014-B5: Limit of 5 concurrent background sessions per chat to prevent resource abuse (Open Question #2 resolution).
+
+### Phase C — Frontend Background Tasks Panel + Attach Flow
+
+- [ ] SP-014-C1: New `webui/src/components/BackgroundTasks.tsx` — collapsible panel showing running background agent sessions with status, output preview, "Attach" and "Kill" buttons. Polling-based 5s refresh (could upgrade to WebSocket events later).
+- [ ] SP-014-C2: Wire Background Tasks panel into terminal area in `webui/src/components/Terminal.tsx`.
+- [ ] SP-014-C3: `webui/src/components/TerminalTabBar.tsx` — "Agent Sessions" dropdown showing attachable hidden sessions.
+- [ ] SP-014-C4: `webui/src/services/api/terminalApi.ts` — add API calls for agent session management (list, attach, output, kill).
+- [ ] SP-014-C5: Attach flow — `POST /api/terminal/agent-sessions/{id}/attach` clears `Hidden` flag → session appears in terminal tab bar → existing `reattach` mechanism handles scrollback replay + live output subscription.
+
+## SP-027: Persistent Context — Embedding-Driven Memory Layer
+_Spec: `roadmap/SP-027-persistent-context.md` (status: 📋 Proposed)_
+
+Foundation (Medium, ~4 phases): embed and store every conversation turn in a dedicated `ConversationStore`; proactively prime new sessions with relevant past work on the first prompt; detect topic drift mid-conversation and offer a handoff; bridge file-based memories to the same semantic index so the agent can search them.
+
+### Phase 1 — Conversation Turn Embedding
+
+- [ ] SP-027-1a: New `pkg/embedding/conversation_store.go` — `ConversationStore` wrapping a second `JSONLFileStore` instance.
+- [ ] SP-027-1b: New `pkg/agent/conversation_turn.go` — `ConversationTurn` struct, `EmbedAndStoreTurn()` function.
+- [ ] SP-027-1c: Modify `pkg/agent/turn_checkpoints.go` — call `EmbedAndStoreTurn()` after checkpoint recording. Graceful degradation: turn checkpoint still recorded if embedding/storage fails.
+- [ ] SP-027-1d: Modify `pkg/embedding/manager.go` — add `GetConversationStore()` with lazy initialization.
+- [ ] SP-027-1e: Modify `pkg/agent/persistence.go` — add `SessionIntentEmbedding []float32` to `ConversationState` (saved on first turn, restored on session load).
+- [ ] SP-027-1f: Tests — embed → store round-trip; graceful failure on storage error.
+
+### Phase 2 — Proactive Context Retrieval
+
+- [ ] SP-027-2a: New `pkg/agent/proactive_context.go` — query store with time decay; format top-K results for system prompt injection.
+- [ ] SP-027-2b: Modify `pkg/agent/conversation.go` — hook `proactiveContext.Inject()` in pre-loop of `ProcessQuery()` (top-5 relevant past turns injected on first turn).
+- [ ] SP-027-2c: Modify `pkg/configuration/config.go` — add `PersistentContextConfig` (`ProactiveContextEnabled`, `MaxContextualResults`, `MinRelevanceScore`, `MaxContextChars`, `WorkspaceScopedRetrieval`).
+- [ ] SP-027-2d: Tests — retrieval with time decay; empty store handling.
+
+### Phase 3 — Drift Detection
+
+- [ ] SP-027-3a: New `pkg/agent/drift_detection.go` — intent tracking, similarity check, non-blocking notification (WebUI toast + CLI prompt after turn completion).
+- [ ] SP-027-3b: Modify `pkg/agent/conversation.go` — hook drift check after turn completion; suppress after 3 rejections per session.
+- [ ] SP-027-3c: Modify `pkg/webui/chat_sessions.go` — add `CreateSessionWithHandoff()` method (carries intent embedding forward to new session).
+- [ ] SP-027-3d: New WebUI drift notification component (non-modal toast).
+- [ ] SP-027-3e: Modify `pkg/configuration/config.go` — add `DriftDetectionEnabled`, `DriftThreshold` (start conservative 0.60), `DriftCheckInterval`.
+
+### Phase 4 — Memory Integration
+
+- [ ] SP-027-4a: Modify `pkg/embedding/conversation_store.go` — add `StoreMemory()` method.
+- [ ] SP-027-4b: New `pkg/agent/memory_embedding.go` — embed and index memories into conversation store (`Type: "memory"` records).
+- [ ] SP-027-4c: Modify `pkg/agent/memory.go` — call `EmbedMemory()` on `SaveMemory()` / `DeleteMemory()`.
+- [ ] SP-027-4d: Modify `pkg/agent/tool_definitions.go` — register `search_memories(query: string, max_results?: int)` tool returning `[]{name, title, relevance}`.
+- [ ] SP-027-4e: Modify `pkg/agent/memory_handlers.go` — add `handleSearchMemories()`.
+- [ ] SP-027-4f: One-time migration on first launch — all existing `~/.config/sprout/memories/*.md` embedded and indexed into the conversation store in a background operation.
+- [ ] SP-027-4g: `ConversationTurnRetention` (default 365 days) — records older than retention silently dropped on store open; log count of pruned records.
+- [ ] SP-027-4h: Tests — memory embedding round-trip; search tool correctness.
+
+## SP-056: CLI Reasoning Fold — Collapsed Thinking Indicator
+_Spec: `roadmap/SP-056-cli-reasoning-fold.md` (status: 📋 Proposed)_
+
+UX (Low-Medium, ~1 day): CLI has only two reasoning display modes — hidden (silence) or full (dim wall of CoT). Add a third `fold` mode: a single pinned `⋯ thinking · N tokens · T elapsed` line that updates in place every ~100ms during the thinking phase, then resolves to `⋯ thought for 1.2k tokens · 3.4s` when assistant text begins. Built on the existing `OutputRouter` + `ActivityIndicator`.
+
+- [ ] SP-056-1: New `pkg/console/reasoning_fold.go` — `ReasoningFold` struct (`indicator *ActivityIndicator`, `startedAt`, `tokenEstimate`, `active`, `mu`). Methods: `Start()` (begin tracking + spawn updating line), `Chunk(text string)` (ingest one chunk, update count), `Resolve()` (emit summary, clear pinned line). Token estimate uses byte/4 heuristic (UX feel, not billing accuracy).
+- [ ] SP-056-2: Extend `pkg/console/activity_indicator.go` — add `SetStatic(line string)` that pins a non-animated line to the same row (for fold mode without a spinning frame).
+- [ ] SP-056-3: Replace binary `--show-reasoning` flag with `--reasoning=<mode>` (`hidden` (default), `fold` (new), `full` (was `--show-reasoning=true`)). Keep `--show-reasoning` as back-compat alias for `--reasoning=full`.
+- [ ] SP-056-4: `pkg/agent/output_router.go` — add `SetReasoningCallback(fn func(chunk string))` parallel to `EnableStreaming`; CLI plumbs fold updates without changing the WebUI event-bus contract.
+- [ ] SP-056-5: `cmd/agent_modes.go::SetupAgentEvents` — wire `fold.Chunk(chunk)` on reasoning events when `reasoningMode == ReasoningFold`; on first assistant stream chunk, call `fold.Resolve()` before falling through to the existing stream-chunk path.
+- [ ] SP-056-6: Edge cases — (a) resolve on first tool event when reasoning ends with no assistant text; (b) each burst gets its own resolved line for multi-burst sequences; (c) `NO_COLOR`/non-TTY degrades to single Fprintln per chunk burst + summary at end; (d) Ctrl+C interrupt resolves to `⋯ thinking interrupted (N tokens)` instead of orphan "thinking" line.
+- [ ] SP-056-7: Tests — Start/Chunk/Resolve lifecycle, NO_COLOR degradation, interrupt path, multi-burst sequences. Acceptance: with `--reasoning=fold` (or once it's default), reasoning-heavy turns show a live-updating progress line during the thinking phase; resolved summary stays in scrollback; fold line never clobbers tool-spinner rows or assistant streaming.
+
 ## Automation-Process: Workflow TODO Processor Issues (3 issues from workflow diagnostics)
 _Inline diagnosis (handled directly by orchestrator, NOT delegated to workflow): during a workflow diagnostic run we observed (1) failing webui tests, (2) the workflow-automation skill lacks details of the actual coordinated flow, (3) subagent provider/model sometimes diverges from `subagent_overrides`. The orchestrator is fixing these in-place; they are tracked here for visibility only._
 

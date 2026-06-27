@@ -9,13 +9,13 @@
     ]
   },
   "continue_on_error": true,
-  "description": "Processes TODO.md items one at a time with full build/test/review cycle, then commits each. Coordinator (zai:glm-5.1) delegates to subagents (ai-worker:qwen3.6-27b).",
+  "description": "Processes TODO.md items one at a time with full build/test/review cycle, then commits each. Coordinator (minimax:MiniMax-M3) delegates to subagents (ai-worker:qwen3.6-27b).",
   "initial": {
     "max_iterations": 500,
-    "model": "glm-5.1",
+    "model": "MiniMax-M3",
     "persona": "coordinator",
     "prompt_file": "automate/workflow_prompt.md",
-    "provider": "zai",
+    "provider": "minimax",
     "risk_profile": "permissive",
     "skip_prompt": true,
     "subagent_overrides": {

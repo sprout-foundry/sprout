@@ -96,6 +96,17 @@ func (h *readFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 		})
 	}
 
+	// SP-046-2: Record the read for staleness tracking (all code paths, including PDF)
+	// Use a defer so this runs regardless of which branch handles the file.
+	if tracker := GetGlobalTurnReadTracker(); tracker != nil {
+		meta, _ := GetGlobalSyncState().GetMetadata(path)
+		seq := int64(0)
+		if meta != nil {
+			seq = meta.BrowserSeq
+		}
+		tracker.RecordRead(path, seq)
+	}
+
 	// Check if this is a PDF file
 	if strings.ToLower(filepath.Ext(path)) == ".pdf" {
 		return h.handlePDF(ctx, env, path)

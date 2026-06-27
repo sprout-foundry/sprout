@@ -99,6 +99,20 @@ UX gap (Medium-High, ~1–2 days): today, installing a skill requires manually c
 - [ ] SP-086-5: Tests for each install path (local/git/url/registry); malformed frontmatter rejection; overwrite prompt; uninstall cleanup; CLI flag parsing.
 - [ ] SP-086-6: Acceptance: `sprout skill install <git-url>` clones the repo, finds SKILL.md files, registers them; `sprout skill update <id>` refreshes from origin; `sprout skill remove <id>` cleans up both SKILL.md and origin metadata; malformed SKILL.md rejected with clear error; `make build-all` clean; CLI + WebUI tests green.
 
+## SP-087: Full Playwright Coverage of the WebUI
+_Spec: `roadmap/SP-087-full-playwright-webui-coverage.md` (status: 📋 Spec)_
+
+Test coverage gap (High, ~2–3 weeks phased): the webui has 152 jsdom-based Vitest tests that mock everything (APIs, WebSocket, timers) — they verify rendering with mocked data, not real end-to-end behavior. The 3 existing Playwright specs (`test/desktop-smoke.spec.js`, `test/desktop-e2e-smoke.spec.js`, `test/full-user-flow.spec.js`) cover only the Electron launcher and desktop shell, not the webui SPA itself. 111 webui components have no test at all.
+
+- [ ] SP-087-1: **Phase 0** — verify `sprout serve --mock-llm` exists; add if missing. Verify Vite dev server starts cleanly in headless mode. Smoke-test the existing 3 Playwright specs to confirm the local dev environment works.
+- [ ] SP-087-2: **Phase 1 fixtures** — `test/webui/fixtures/{sprout,vite,page}.ts` (startSprout, startViteDevServer, gotoWebui with port allocation + temp workspace + cleanup); `test/webui/start-stack.mjs` orchestration script (spawns both, writes ports to `.ports.json`, forwards logs, handles SIGTERM). Update `playwright.config.js` with a `webui` project that targets `./test/webui` and uses `webServer` to bootstrap the stack.
+- [ ] SP-087-3: **Phase 2 testids** — add `data-testid` attributes to Tier 1 webui components (chat, sessions, settings, file tree, editor, terminal, onboarding, command palette, worktree management). Create `test/webui/testids.ts` as the canonical registry. Pre-commit grep ensures every `data-testid` in `webui/src/` is declared.
+- [ ] SP-087-4: **Phase 3 Tier 1 tests** — write ~27 tests across 10 spec files covering: chat send+receive, sessions picker+load, settings providers, model picker, file tree+editor+save, terminal run, onboarding flow, command palette open+execute, worktree create+switch. All green locally and in CI.
+- [ ] SP-087-5: **Phase 4 Tier 2 tests** — write ~20 tests across 11 spec files covering: MCP server mgmt, background tasks, git ops (with local bare remote), cost/status bar updates, steer input, multi-chat, workspace picker, search panel, markdown viewer, binary viewer, theme toggle, OS notifications.
+- [ ] SP-087-6: **Phase 5 Tier 3 edge cases** — write ~10 tests covering: empty workspace, empty session list, 1000-message session, very long paths, special chars in filenames, network failures during chat.
+- [ ] SP-087-7: **Phase 6 docs + CI** — new `.github/workflows/webui-e2e.yml` (sharded across 4 jobs, retry-once on flake, uploads `test-results-html/` artifact on failure). New `package.json` script `test:webui-e2e`. Doc at `docs/webui-e2e.md`: how to run locally, how to write a test, how to debug a failure, how to add a new `data-testid`.
+- [ ] SP-087-8: Acceptance: `npm run test:webui-e2e` finishes in <5 min, all green; single-spec runs via `npx playwright test --project=webui <path>`; failing tests produce HTML report with screenshots/traces/videos; 50+ user-facing surfaces covered; CI blocks merge on failure; `docs/webui-e2e.md` complete.
+
 ## SP-069: PR Creation — credential-store lookup for GitHub token
 _Spec: `roadmap/SP-069-pull-request-creation.md` (status: ✅ Implemented; one residual TODO)_
 

@@ -506,6 +506,39 @@ func (a *Agent) GetEmbeddingManager() *embedding.EmbeddingManager {
 	return a.embeddingMgr
 }
 
+// GetVisionProcessor returns the agent's vision processor, creating it
+// lazily on first call. The processor is cached for the life of the Agent
+// so that subsequent calls reuse the same vision client and cache.
+// Returns nil if no vision-capable provider is available, or if the agent
+// is nil.
+func (a *Agent) GetVisionProcessor() *tools.VisionProcessor {
+	if a == nil {
+		return nil
+	}
+	a.visionProcMu.RLock()
+	if a.visionProc != nil {
+		p := a.visionProc
+		a.visionProcMu.RUnlock()
+		return p
+	}
+	a.visionProcMu.RUnlock()
+
+	// Double-check pattern: lock and check again under write lock
+	a.visionProcMu.Lock()
+	defer a.visionProcMu.Unlock()
+	if a.visionProc != nil {
+		return a.visionProc
+	}
+
+	// Lazy-init: create a vision processor using the agent's active provider
+	proc, err := tools.NewVisionProcessorWithProvider(a.debug, a.getClientType())
+	if err != nil {
+		return nil
+	}
+	a.visionProc = proc
+	return proc
+}
+
 // GetTodoManager returns the per-agent todo manager.
 // This ensures session isolation in daemon mode where multiple agents
 // run concurrently.

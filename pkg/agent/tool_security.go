@@ -280,6 +280,14 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 		// SP-074-3: Wire ApprovalManager adapter so migrated tools can
 		// request security approvals through the normal CLI/WebUI flow.
 		env.ApprovalManager = newToolsApprovalAdapter(agent)
+		// SP-079-1: Wire new ToolEnv fields for vision, embedding, and
+		// the remaining subsystem interfaces.
+		env.EmbeddingMgr = agent.GetEmbeddingManager()
+		env.VisionProcessor = agent.GetVisionProcessor()
+		// WebBrowser, SkillLoader, SearchEngine: wired once handler migrations
+		// create the necessary adapter types (see roadmap/SP-079-migrate-stub-tool-handlers.md).
+		// For now the fields remain nil — migrated handlers check for nil and report
+		// "unavailable" until their phase adds the adapter + wiring.
 	} else {
 		env.OutputWriter = os.Stdout
 		env.MaxTokensFunc = func() int { return 0 }

@@ -386,6 +386,16 @@ func TestWriteStructuredFileHandler_Execute_RelativePath(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestWriteStructuredFileHandler_Definition_KeyOrderPreservation(t *testing.T) {
+	t.Parallel()
+	h := &writeStructuredFileHandler{}
+	def := h.Definition()
+
+	descLower := strings.ToLower(def.Description)
+	require.Contains(t, descLower, "key", "description should mention 'key' for order preservation")
+	require.Contains(t, descLower, "order", "description should mention 'order' for order preservation")
+}
+
 func TestWriteStructuredFileHandler_Validate(t *testing.T) {
 	t.Parallel()
 	h := &writeStructuredFileHandler{}

@@ -103,11 +103,14 @@ func TestSP077_SuppressesGitMergeDeltas(t *testing.T) {
 	}
 }
 
-// TestSP077_SuppressesGitCheckoutDeltas reproduces the `git checkout .`
-// case: the command reverts uncommitted changes, bringing files back to
-// HEAD. The tracker should NOT record the pre-checkout content as
-// recoverable because the post-checkout content matches HEAD.
-func TestSP077_SuppressesGitCheckoutDeltas(t *testing.T) {
+// TestSP077_PreservesGitCheckoutDeltas confirms that `git checkout --
+// file` — a destructive command that destroys uncommitted work — is
+// PRESERVED by the filter so the destroyed content is recoverable via
+// recover_file. This is the key behavior change from the original
+// SP-077: destructive commands that align files to HEAD but destroy
+// uncommitted work in the process must keep the delta so the work can
+// be recovered.
+func TestSP077_PreservesGitCheckoutDeltas(t *testing.T) {
 	dir := setupGitRepoCT(t)
 
 	// Create and commit a file at HEAD.
@@ -128,13 +131,22 @@ func TestSP077_SuppressesGitCheckoutDeltas(t *testing.T) {
 
 	tracker.TrackShellTurn(dir, "git checkout -- config.go", true)
 
-	// The checkout brought config.go back to HEAD content. The delta
-	// (port=9090 → port=8080) should be suppressed because the
-	// post-checkout content matches HEAD.
+	// The checkout destroyed uncommitted work (port=9090). The delta
+	// should be PRESERVED so the destroyed content is recoverable.
+	var found bool
 	for _, ch := range tracker.changes {
 		if ch.FilePath == file {
-			t.Errorf("SP-077: git checkout delta was NOT suppressed for %s: %+v", file, ch)
+			found = true
+			if ch.OriginalCode != "port = 9090\n" {
+				t.Errorf("expected OriginalCode 'port = 9090\\n', got %q", ch.OriginalCode)
+			}
+			if ch.NewCode != "port = 8080\n" {
+				t.Errorf("expected NewCode 'port = 8080\\n', got %q", ch.NewCode)
+			}
 		}
+	}
+	if !found {
+		t.Errorf("SP-077: git checkout delta was NOT preserved — expected recoverable entry for destroyed uncommitted work on %s", file)
 	}
 }
 

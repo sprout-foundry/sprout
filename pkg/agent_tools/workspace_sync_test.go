@@ -1,8 +1,11 @@
 package tools
 
 import (
+	"os"
 	"sync"
 	"testing"
+
+	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 // --- SyncState: UpdateContainerPatch ---
@@ -528,4 +531,241 @@ func itoa(n int64) string {
 		digits = append([]byte{'-'}, digits...)
 	}
 	return string(digits)
+}
+
+// --- HandleContainerPatchWithConflictDetection ---
+
+func TestWorkspace_HandleContainerPatchWithConflictDetection_CleanApply(t *testing.T) {
+	ss := NewSyncState()
+
+	// No conflict: browser_seq == last_synced_browser (both 0 on fresh file).
+	event := &PatchEvent{
+		Path:         "pkg/app/main.go",
+		ContainerSeq: 2,
+		Content:      "package main\n",
+	}
+	meta, conflict, err := ss.HandleContainerPatchWithConflictDetection("pkg/app/main.go", event, "", nil)
+	if err != nil {
+		t.Fatalf("HandleContainerPatchWithConflictDetection: %v", err)
+	}
+	if conflict != nil {
+		t.Fatalf("expected no conflict, got %+v", conflict)
+	}
+	if meta.ContainerSeq != 2 {
+		t.Errorf("ContainerSeq = %d; want 2", meta.ContainerSeq)
+	}
+	if meta.LastSyncedContainer != 2 {
+		t.Errorf("LastSyncedContainer = %d; want 2", meta.LastSyncedContainer)
+	}
+}
+
+func TestWorkspace_HandleContainerPatchWithConflictDetection_Conflict(t *testing.T) {
+	ss := NewSyncState()
+
+	// Use a flat path to avoid needing parent directories in CWD.
+	path := "bar.go"
+
+	// Create conflict state: browser made edits the container hasn't seen.
+	ss.ApplyBrowserOp(path, "browser content")
+	ss.mu.Lock()
+	m := ss.files[path]
+	if m == nil {
+		ss.mu.Unlock()
+		t.Fatal("metadata not found after ApplyBrowserOp")
+	}
+	// Manually create the gap: browser made another edit but container hasn't synced.
+	m.BrowserSeq = 2
+	m.LastSyncedBrowser = 1
+	ss.mu.Unlock()
+
+	// Now container tries to write.
+	event := &PatchEvent{
+		Path:         path,
+		ContainerSeq: 5,
+		Content:      "container content v5",
+	}
+	meta, conflict, err := ss.HandleContainerPatchWithConflictDetection(path, event, "browser content v2", nil)
+	if err != nil {
+		t.Fatalf("HandleContainerPatchWithConflictDetection: %v", err)
+	}
+	if meta == nil {
+		t.Fatal("expected metadata copy, got nil")
+	}
+	if conflict == nil {
+		t.Fatal("expected conflict result, got nil")
+	}
+
+	if conflict.Path != path {
+		t.Errorf("Path = %q; want %q", conflict.Path, path)
+	}
+	expectedTheirs := path + ".theirs"
+	if conflict.TheirsPath != expectedTheirs {
+		t.Errorf("TheirsPath = %q; want %q", conflict.TheirsPath, expectedTheirs)
+	}
+	if conflict.HashContainer != computeHash("container content v5") {
+		t.Errorf("HashContainer = %q; want %q", conflict.HashContainer, computeHash("container content v5"))
+	}
+	if conflict.HashBrowser != computeHash("browser content v2") {
+		t.Errorf("HashBrowser = %q; want %q", conflict.HashBrowser, computeHash("browser content v2"))
+	}
+	if conflict.Message == "" {
+		t.Error("Message should not be empty")
+	}
+
+	// Verify .theirs file was written with correct content.
+	content, err := os.ReadFile(expectedTheirs)
+	if err != nil {
+		t.Fatalf("reading .theirs file: %v", err)
+	}
+	if string(content) != "container content v5" {
+		t.Errorf(".theirs content = %q; want %q", string(content), "container content v5")
+	}
+	os.Remove(expectedTheirs) // cleanup
+
+	// Verify metadata was NOT updated by the container patch (conflict path).
+	// ContainerSeq stays at whatever it was before (ApplyBrowserOp set it to 1).
+	if meta.ContainerSeq != 1 {
+		t.Errorf("ContainerSeq should not change on conflict, got %d (expected 1 from ApplyBrowserOp)", meta.ContainerSeq)
+	}
+}
+
+func TestWorkspace_HandleContainerPatchWithConflictDetection_EmptyBrowserContent(t *testing.T) {
+	ss := NewSyncState()
+	path := "empty_test.go"
+
+	// Create conflict state.
+	ss.ApplyBrowserOp(path, "browser content")
+	ss.mu.Lock()
+	m := ss.files[path]
+	m.BrowserSeq = 2
+	m.LastSyncedBrowser = 1
+	ss.mu.Unlock()
+
+	event := &PatchEvent{
+		Path:         path,
+		ContainerSeq: 3,
+		Content:      "container content",
+	}
+	meta, conflict, err := ss.HandleContainerPatchWithConflictDetection(path, event, "", nil)
+	if err != nil {
+		t.Fatalf("HandleContainerPatchWithConflictDetection: %v", err)
+	}
+	if conflict == nil {
+		t.Fatal("expected conflict, got nil")
+	}
+	// Empty browser content should produce hash of empty string.
+	expectedHash := computeHash("")
+	if conflict.HashBrowser != expectedHash {
+		t.Errorf("HashBrowser with empty content = %q; want %q", conflict.HashBrowser, expectedHash)
+	}
+
+	theirsRel := path + ".theirs"
+	os.Remove(theirsRel) // cleanup
+	_ = meta
+}
+
+func TestWorkspace_HandleContainerPatchWithConflictDetection_EventEmission(t *testing.T) {
+	ss := NewSyncState()
+	bus := events.NewEventBus()
+	sub := bus.Subscribe("test_conflict")
+
+	path := "event_test.go"
+
+	// Create conflict state.
+	ss.ApplyBrowserOp(path, "browser content")
+	ss.mu.Lock()
+	m := ss.files[path]
+	m.BrowserSeq = 2
+	m.LastSyncedBrowser = 1
+	ss.mu.Unlock()
+
+	event := &PatchEvent{
+		Path:         path,
+		ContainerSeq: 7,
+		Content:      "container event content",
+	}
+	_, conflict, err := ss.HandleContainerPatchWithConflictDetection(path, event, "browser v2", bus)
+	if err != nil {
+		t.Fatalf("HandleContainerPatchWithConflictDetection: %v", err)
+	}
+	if conflict == nil {
+		t.Fatal("expected conflict, got nil")
+	}
+
+	// Read the event from the channel.
+	ev := <-sub
+	if ev.Type != "workspace.conflict_detected" {
+		t.Errorf("event type = %q; want %q", ev.Type, "workspace.conflict_detected")
+	}
+	data, ok := ev.Data.(map[string]interface{})
+	if !ok {
+		t.Fatalf("event data is not map[string]interface{}, got %T", ev.Data)
+	}
+	if data["path"] != path {
+		t.Errorf("path = %v; want %v", data["path"], path)
+	}
+	if data["theirs_path"] != path+".theirs" {
+		t.Errorf("theirs_path = %v; want %v", data["theirs_path"], path+".theirs")
+	}
+	if data["hash_container"] != computeHash("container event content") {
+		t.Errorf("hash_container = %v; want %v", data["hash_container"], computeHash("container event content"))
+	}
+	if data["hash_browser"] != computeHash("browser v2") {
+		t.Errorf("hash_browser = %v; want %v", data["hash_browser"], computeHash("browser v2"))
+	}
+	if _, has := data["modified_at"]; !has {
+		t.Error("expected modified_at field in event payload")
+	}
+
+	bus.Unsubscribe("test_conflict")
+	theirsRel := path + ".theirs"
+	os.Remove(theirsRel) // cleanup
+}
+
+func TestWorkspace_HandleContainerPatchWithConflictDetection_NoEventBus(t *testing.T) {
+	// Verify nil eventBus is handled gracefully (no panic).
+	ss := NewSyncState()
+	path := "no_bus.go"
+
+	ss.ApplyBrowserOp(path, "content")
+	ss.mu.Lock()
+	m := ss.files[path]
+	m.BrowserSeq = 2
+	m.LastSyncedBrowser = 1
+	ss.mu.Unlock()
+
+	event := &PatchEvent{
+		Path:         path,
+		ContainerSeq: 1,
+		Content:      "data",
+	}
+	_, conflict, err := ss.HandleContainerPatchWithConflictDetection(path, event, "b", nil)
+	if err != nil {
+		t.Fatalf("HandleContainerPatchWithConflictDetection: %v", err)
+	}
+	if conflict == nil {
+		t.Fatal("expected conflict, got nil")
+	}
+
+	theirsRel := path + ".theirs"
+	os.Remove(theirsRel) // cleanup
+}
+
+func TestComputeHash(t *testing.T) {
+	h1 := computeHash("hello")
+	if h1 == "" {
+		t.Error("hash should not be empty")
+	}
+	h2 := computeHash("hello")
+	if h1 != h2 {
+		t.Errorf("same content produces different hashes: %q vs %q", h1, h2)
+	}
+	h3 := computeHash("world")
+	if h1 == h3 {
+		t.Error("different content should produce different hashes")
+	}
+	h4 := computeHash("")
+	if h4 == "" {
+		t.Error("empty content hash should not be empty string")
+	}
 }

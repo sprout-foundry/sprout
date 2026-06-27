@@ -13,7 +13,7 @@ UX parity (Medium): the pinned steer-input panel (`pkg/console/steer_input.go`, 
 
 ### Phase 4 — close-out
 
-- [ ] SP-078-4: `grep -rn "TODO(SP-078)" pkg/console/` is empty; `make build-all` + `go test ./...` green; add a recording-style screenshot or `browse_url` snapshot of a wrapped steer so future regressions surface at review time.
+- [x] SP-078-4: ✅ Closed — `grep -rn "TODO(SP-078)" pkg/console/` is empty; `make build-all` + `go test ./...` green; regression artifact added at `pkg/console/steer_wrap_snapshot_test.go` (10 subtests: narrow ASCII, wide CJK, combining chars, wrap boundary, overflow, empty, single line, hard line break, cursor at start, very narrow terminal).
 
 ## SP-066: Never-Ending Context — Phase 3d tie-breaker + calibration
 _Spec: `roadmap/SP-066-never-ending-context.md` (status: ✅ Substantially Shipped; Phase 3d ⏸ deferred)_

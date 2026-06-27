@@ -1,7 +1,7 @@
 package console
 
 import (
-	"io"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -458,21 +458,47 @@ func captureStdout(t *testing.T, fn func()) string {
 		t.Fatalf("pipe: %v", err)
 	}
 	os.Stdout = w
-	defer func() {
-		os.Stdout = oldStdout
+	t.Cleanup(func() { os.Stdout = oldStdout })
+
+	done := make(chan string, 1)
+	go func() {
+		var buf strings.Builder
+		tmp := make([]byte, 4096)
+		for {
+			n, readErr := r.Read(tmp)
+			if n > 0 {
+				buf.Write(tmp[:n])
+			}
+			if readErr != nil {
+				break
+			}
+		}
+		done <- buf.String()
 	}()
 
+	defer func() { _ = w.Close() }()
 	fn()
+	_ = w.Close()
+	return <-done
+}
 
-	if err := w.Close(); err != nil {
-		t.Fatalf("close writer: %v", err)
-	}
+// TestCaptureStdout_LargeOutput exercises captureStdout with output that
+// exceeds the OS pipe buffer (64 KiB on Linux). Without a concurrent
+// reader, the writer inside fn() would block once the buffer fills.
+func TestCaptureStdout_LargeOutput(t *testing.T) {
+	const size = 256 * 1024 // 4x the typical pipe buffer
+	want := strings.Repeat("x", size)
 
-	out, err := io.ReadAll(r)
-	if err != nil {
-		t.Fatalf("read output: %v", err)
+	out := captureStdout(t, func() {
+		fmt.Print(want)
+	})
+
+	if len(out) != size {
+		t.Fatalf("captured %d bytes, want %d", len(out), size)
 	}
-	return string(out)
+	if out != want {
+		t.Fatal("output content mismatch")
+	}
 }
 
 func TestNavigateHistoryClearsCollapsedPastes(t *testing.T) {

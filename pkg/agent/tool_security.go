@@ -285,10 +285,9 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 		env.EmbeddingMgr = agent.GetEmbeddingManager()
 		env.VisionProcessor = agent.GetVisionProcessor()
 		env.WebBrowser = tools.NewBrowserAdapter()
-		// SkillLoader, SearchEngine: wired once handler migrations
-		// create the necessary adapter types (see roadmap/SP-079-migrate-stub-tool-handlers.md).
-		// For now the fields remain nil — migrated handlers check for nil and report
-		// "unavailable" until their phase adds the adapter + wiring.
+		env.SkillLoader = newSkillLoaderAdapter(agent)
+		// SearchEngine: wired once handler migrations create the necessary adapter type
+		// (see roadmap/SP-079-migrate-stub-tool-handlers.md).
 	} else {
 		env.OutputWriter = os.Stdout
 		env.MaxTokensFunc = func() int { return 0 }

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
@@ -412,4 +413,223 @@ func TestWriteStructuredFileHandler_Validate(t *testing.T) {
 	err = h.Validate(map[string]any{"path": "file.json", "data": map[string]any{}, "format": "  "})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "must not be empty")
+}
+
+// ---------------------------------------------------------------------------
+// SP-082-1: Round-trip order-preservation tests
+// ---------------------------------------------------------------------------
+
+// TestWriteStructuredFile_JSON_OrderPreservation verifies that when the
+// handler receives RawArgsJSON, key insertion order from the original JSON
+// is preserved in the output — not alphabetically sorted.
+func TestWriteStructuredFile_JSON_OrderPreservation(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &writeStructuredFileHandler{}
+	ctx := newTestCtx(dir)
+
+	// Raw JSON with a specific key order that is NOT alphabetical.
+	// Alphabetical would be: dependencies, description, name, version
+	rawArgs := `{"path":"` + filepath.Join(dir, "order.json") +
+		`","data":{"name":"test-pkg","version":"1.0.0","dependencies":{"express":"^4.0.0"},"description":"A test package"}}`
+
+	path := filepath.Join(dir, "order.json")
+	env := newTestEnv(t, dir)
+	env.RawArgsJSON = rawArgs
+
+	res, err := h.Execute(ctx, env, map[string]any{
+		"path": path,
+		"data": map[string]any{
+			"name":         "test-pkg",
+			"version":      "1.0.0",
+			"dependencies": map[string]any{"express": "^4.0.0"},
+			"description":  "A test package",
+		},
+	})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+
+	fileData, err := os.ReadFile(path)
+	require.NoError(t, err)
+	content := string(fileData)
+
+	// The keys should appear in insertion order: name → version → dependencies → description
+	// NOT alphabetical order (which would be: dependencies, description, name, version)
+	nameIdx := strings.Index(content, `"name"`)
+	versionIdx := strings.Index(content, `"version"`)
+	depsIdx := strings.Index(content, `"dependencies"`)
+	descIdx := strings.Index(content, `"description"`)
+
+	// All keys should be found
+	require.NotEqual(t, -1, nameIdx, "name key should exist")
+	require.NotEqual(t, -1, versionIdx, "version key should exist")
+	require.NotEqual(t, -1, depsIdx, "dependencies key should exist")
+	require.NotEqual(t, -1, descIdx, "description key should exist")
+
+	// Verify insertion order: name before version before dependencies before description
+	require.Less(t, nameIdx, versionIdx, "name should appear before version (insertion order)")
+	require.Less(t, versionIdx, depsIdx, "version should appear before dependencies (insertion order)")
+	require.Less(t, depsIdx, descIdx, "dependencies should appear before description (insertion order)")
+}
+
+// TestWriteStructuredFile_YAML_OrderPreservation verifies that when
+// RawArgsJSON is provided for a .yaml target, key insertion order is
+// preserved in the serialized output.
+func TestWriteStructuredFile_YAML_OrderPreservation(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &writeStructuredFileHandler{}
+	ctx := newTestCtx(dir)
+
+	rawArgs := `{"path":"` + filepath.Join(dir, "order.yaml") +
+		`","data":{"name":"test-pkg","version":"1.0.0","dependencies":{"express":"^4.0.0"},"description":"A test package"}}`
+
+	path := filepath.Join(dir, "order.yaml")
+	env := newTestEnv(t, dir)
+	env.RawArgsJSON = rawArgs
+
+	res, err := h.Execute(ctx, env, map[string]any{
+		"path": path,
+		"data": map[string]any{
+			"name":         "test-pkg",
+			"version":      "1.0.0",
+			"dependencies": map[string]any{"express": "^4.0.0"},
+			"description":  "A test package",
+		},
+	})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+
+	fileData, err := os.ReadFile(path)
+	require.NoError(t, err)
+	content := string(fileData)
+
+	// After stripJSONStyle, the output is native YAML (not JSON).
+	// Keys should appear in insertion order: name → version → dependencies → description.
+	nameIdx := strings.Index(content, "name:")
+	versionIdx := strings.Index(content, "version:")
+	depsIdx := strings.Index(content, "dependencies:")
+	descIdx := strings.Index(content, "description:")
+
+	require.NotEqual(t, -1, nameIdx, "name key should exist")
+	require.NotEqual(t, -1, versionIdx, "version key should exist")
+	require.NotEqual(t, -1, depsIdx, "dependencies key should exist")
+	require.NotEqual(t, -1, descIdx, "description key should exist")
+
+	require.Less(t, nameIdx, versionIdx, "name should appear before version")
+	require.Less(t, versionIdx, depsIdx, "version should appear before dependencies")
+	require.Less(t, depsIdx, descIdx, "dependencies should appear before description")
+
+	// Also verify values are correct by parsing back with yaml.v3
+	var parsed map[string]interface{}
+	require.NoError(t, yaml.Unmarshal(fileData, &parsed))
+	parsed = normalizeYAMLValue(parsed).(map[string]interface{})
+	require.Equal(t, "test-pkg", parsed["name"])
+	require.Equal(t, "1.0.0", parsed["version"])
+	require.Equal(t, "A test package", parsed["description"])
+}
+
+// TestWriteStructuredFile_YAML_LiteralBlockRoundTrip verifies that
+// multi-line string values round-trip correctly through the YAML writer.
+func TestWriteStructuredFile_YAML_LiteralBlockRoundTrip(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &writeStructuredFileHandler{}
+	ctx := newTestCtx(dir)
+
+	// Multi-line script value with embedded newlines.
+	rawArgs := `{"path":"` + filepath.Join(dir, "multiline.yaml") +
+		`","data":{"script":"echo hello\necho world","name":"test"}}`
+
+	path := filepath.Join(dir, "multiline.yaml")
+	env := newTestEnv(t, dir)
+	env.RawArgsJSON = rawArgs
+
+	res, err := h.Execute(ctx, env, map[string]any{
+		"path": path,
+		"data": map[string]any{
+			"script": "echo hello\necho world",
+			"name":   "test",
+		},
+	})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+
+	fileData, err := os.ReadFile(path)
+	require.NoError(t, err)
+
+	// Parse back and verify the multi-line string content is identical
+	var parsed map[string]interface{}
+	require.NoError(t, yaml.Unmarshal(fileData, &parsed))
+	parsed = normalizeYAMLValue(parsed).(map[string]interface{})
+
+	scriptVal, ok := parsed["script"].(string)
+	require.True(t, ok, "script should be a string")
+	require.Equal(t, "echo hello\necho world", scriptVal,
+		"multi-line string should round-trip with identical content")
+
+	require.Equal(t, "test", parsed["name"])
+}
+
+// TestWriteStructuredFile_NestedOrderPreservation verifies that nested
+// object keys also preserve their insertion order.
+func TestWriteStructuredFile_NestedOrderPreservation(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &writeStructuredFileHandler{}
+	ctx := newTestCtx(dir)
+
+	// Nested structure with specific key orders at each level.
+	rawArgs := `{"path":"` + filepath.Join(dir, "nested.json") +
+		`","data":{"project":{"name":"x","version":"1.0"},"build":{"target":"linux","arch":"amd64"}}}`
+
+	path := filepath.Join(dir, "nested.json")
+	env := newTestEnv(t, dir)
+	env.RawArgsJSON = rawArgs
+
+	res, err := h.Execute(ctx, env, map[string]any{
+		"path": path,
+		"data": map[string]any{
+			"project": map[string]any{
+				"name":    "x",
+				"version": "1.0",
+			},
+			"build": map[string]any{
+				"target": "linux",
+				"arch":   "amd64",
+			},
+		},
+	})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+
+	fileData, err := os.ReadFile(path)
+	require.NoError(t, err)
+	content := string(fileData)
+
+	// Top-level: project before build
+	projectIdx := strings.Index(content, `"project"`)
+	buildIdx := strings.Index(content, `"build"`)
+	require.NotEqual(t, -1, projectIdx, "project key should exist")
+	require.NotEqual(t, -1, buildIdx, "build key should exist")
+	require.Less(t, projectIdx, buildIdx, "project should appear before build (insertion order)")
+
+	// Nested: name before version inside project
+	projectBlockStart := projectIdx
+	projectBlockEnd := buildIdx
+	projectBlock := content[projectBlockStart:projectBlockEnd]
+	nameIdx := strings.Index(projectBlock, `"name"`)
+	versionIdx := strings.Index(projectBlock, `"version"`)
+	require.NotEqual(t, -1, nameIdx, "name key should exist inside project")
+	require.NotEqual(t, -1, versionIdx, "version key should exist inside project")
+	require.Less(t, nameIdx, versionIdx, "name should appear before version inside project")
+
+	// Nested: target before arch inside build
+	buildBlockStart := buildIdx
+	buildBlock := content[buildBlockStart:]
+	targetIdx := strings.Index(buildBlock, `"target"`)
+	archIdx := strings.Index(buildBlock, `"arch"`)
+	require.NotEqual(t, -1, targetIdx, "target key should exist inside build")
+	require.NotEqual(t, -1, archIdx, "arch key should exist inside build")
+	require.Less(t, targetIdx, archIdx, "target should appear before arch inside build")
 }

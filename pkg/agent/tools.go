@@ -66,7 +66,7 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 
 	// Use the tool registry for data-driven tool execution
 	ctx := filesystem.WithWorkspaceRoot(context.Background(), a.GetWorkspaceRoot())
-	_, result, err := registry.ExecuteTool(ctx, toolName, args, a)
+	_, result, err := registry.ExecuteTool(ctx, toolName, args, a, toolCall.Function.Arguments)
 
 	// Track tool call count
 	a.state.IncrementTotalToolCalls()

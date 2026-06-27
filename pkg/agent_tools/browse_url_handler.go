@@ -2,7 +2,7 @@ package tools
 
 import (
 	"context"
-	"fmt"
+	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
@@ -48,6 +48,7 @@ func (h *browseURLHandler) Validate(args map[string]any) error {
 
 func (h *browseURLHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
 	toolName := h.Name()
+	var hadError bool
 	if env.EventBus != nil {
 		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
 			"tool":   toolName,
@@ -56,15 +57,46 @@ func (h *browseURLHandler) Execute(ctx context.Context, env ToolEnv, args map[st
 		defer func() {
 			env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
 				"tool":  toolName,
-				"error": true,
+				"error": hadError,
 			})
 		}()
 	}
 
-	// TODO: Full implementation requires *Agent access for GetPlaywrightBrowserManager()
-	// and headless browser control. This is a thin wrapper stub.
-	return ToolResult{
-		Output:  "browse_url requires full *Agent refactoring for complete functionality. This handler cannot operate a headless browser without access to the Agent's Playwright browser manager. Please use the legacy interface or complete the migration.",
-		IsError: true,
-	}, fmt.Errorf("browse_url requires full *Agent refactoring")
+	url, err := extractString(args, "url")
+	if err != nil {
+		hadError = true
+		return ToolResult{Output: err.Error(), IsError: true}, nil
+	}
+
+	// Check if browser is available
+	if env.WebBrowser == nil {
+		hadError = true
+		errMsg := "browser not available: WebBrowser is not configured in this environment"
+		return ToolResult{Output: errMsg, IsError: true}, nil
+	}
+
+	// Validate action-specific requirements (mirrors legacy handler)
+	if action, ok := args["action"].(string); ok && strings.ToLower(action) == "screenshot" {
+		if sp, ok := args["screenshot_path"].(string); !ok || sp == "" {
+			hadError = true
+			errMsg := "screenshot_path is required for action=screenshot"
+			return ToolResult{Output: errMsg, IsError: true}, nil
+		}
+	}
+
+	// Build opts map from args (everything except url)
+	opts := make(map[string]any)
+	for k, v := range args {
+		if k != "url" {
+			opts[k] = v
+		}
+	}
+
+	result, err := env.WebBrowser.BrowseURL(ctx, url, opts)
+	if err != nil {
+		hadError = true
+		return ToolResult{Output: err.Error(), IsError: true}, nil
+	}
+
+	return ToolResult{Output: result}, nil
 }

@@ -40,9 +40,10 @@
 // handler exists in the new registry, it falls back to the legacy func-style handlers.
 // This allows incremental migration without breaking existing functionality.
 //
-// Some current tools (e.g., browseURLHandler, runSubagentHandler) are thin wrappers
-// around legacy agent methods, pending full refactoring. These are marked with comments
-// in all.go.
+// The subagent tools (run_subagent / run_parallel_subagents) intentionally
+// remain in the seed registry under pkg/agent because they need *Agent
+// access for nested runner orchestration. See pkg/agent_tools/all.go for
+// the canonical tool list.
 package tools
 
 import (

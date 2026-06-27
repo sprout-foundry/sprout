@@ -284,7 +284,8 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 		// the remaining subsystem interfaces.
 		env.EmbeddingMgr = agent.GetEmbeddingManager()
 		env.VisionProcessor = agent.GetVisionProcessor()
-		// WebBrowser, SkillLoader, SearchEngine: wired once handler migrations
+		env.WebBrowser = tools.NewBrowserAdapter()
+		// SkillLoader, SearchEngine: wired once handler migrations
 		// create the necessary adapter types (see roadmap/SP-079-migrate-stub-tool-handlers.md).
 		// For now the fields remain nil — migrated handlers check for nil and report
 		// "unavailable" until their phase adds the adapter + wiring.

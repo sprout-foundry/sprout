@@ -12,8 +12,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/events"
@@ -215,6 +219,12 @@ func (m *BackgroundProcessManager) StartWithOptions(ctx context.Context, command
 		return "", fmt.Errorf("start command: %w", err)
 	}
 
+	// Write the PID file alongside the output file for orphan cleanup
+	pidPath := filepath.Join(m.baseDir, sessionID+".pid")
+	if err := os.WriteFile(pidPath, []byte(fmt.Sprintf("%d\n", cmd.Process.Pid)), 0600); err != nil {
+		log.Printf("warn: failed to write PID file %s: %v", pidPath, err)
+	}
+
 	proc := &BackgroundProcess{
 		ID:         sessionID,
 		Cmd:        cmd,
@@ -274,6 +284,14 @@ func (m *BackgroundProcessManager) AdoptProcess(cmd *exec.Cmd, outputPath string
 		return "", fmt.Errorf("failed to generate session ID: %w", err)
 	}
 	sessionID := fmt.Sprintf("bg-%s-%s", sanitizedPrefix, randomHex)
+
+	// Write the PID file for orphan cleanup support
+	pidPath := filepath.Join(m.baseDir, sessionID+".pid")
+	if cmd.Process != nil {
+		if err := os.WriteFile(pidPath, []byte(fmt.Sprintf("%d\n", cmd.Process.Pid)), 0600); err != nil {
+			log.Printf("warn: failed to write PID file %s: %v", pidPath, err)
+		}
+	}
 
 	proc := &BackgroundProcess{
 		ID:         sessionID,
@@ -451,6 +469,11 @@ func (m *BackgroundProcessManager) Close() {
 	m.StopAll()
 }
 
+// GetBaseDir returns the base directory used for output and PID files.
+func (m *BackgroundProcessManager) GetBaseDir() string {
+	return m.baseDir
+}
+
 // cleanupLoop runs every 60 seconds to reap exited and expired processes.
 func (m *BackgroundProcessManager) cleanupLoop() {
 	defer m.cleanupWg.Done()
@@ -575,4 +598,201 @@ func generateRandomHexCLI(n int) (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(b), nil
+}
+
+// GetBackgroundOutputBaseDir returns the standard default baseDir path used
+// by BackgroundProcessManager for output and PID files. Callers outside the
+// tools package (e.g., agent startup code) can use this to locate the
+// directory for orphan cleanup without knowing BPM internals.
+func GetBackgroundOutputBaseDir() string {
+	return filepath.Join(os.TempDir(), "sprout-bg")
+}
+
+// orphanCleanupItem holds parsed info from a .pid file for batch processing.
+type orphanCleanupItem struct {
+	pid        int
+	pidFile    string
+	outputFile string
+}
+
+// CleanupOrphanedBackgroundProcesses scans the baseDir for .pid files left
+// behind by background processes whose sprout parent exited uncleanly.
+// For each orphaned PID, it attempts to terminate the process (SIGTERM →
+// SIGKILL) and removes both the .pid and .output files.
+//
+// Returns an error only if the baseDir itself can't be read. Individual file
+// errors are logged but don't cause the function to return an error.
+func CleanupOrphanedBackgroundProcesses(baseDir string) error {
+	return CleanupOrphanedBackgroundProcessesWithContext(context.Background(), baseDir)
+}
+
+// CleanupOrphanedBackgroundProcessesWithContext works like
+// CleanupOrphanedBackgroundProcesses but accepts a context for cancellation
+// and timeout control. PIDs are processed concurrently with a worker pool of
+// 16 goroutines. A 5-second deadline is applied to the entire operation.
+func CleanupOrphanedBackgroundProcessesWithContext(ctx context.Context, baseDir string) error {
+	// Ensure the baseDir exists (it may not have been created yet)
+	if err := os.MkdirAll(baseDir, 0o700); err != nil {
+		log.Printf("warn: failed to create background output directory %s: %v", baseDir, err)
+		return fmt.Errorf("create background output directory: %w", err)
+	}
+
+	// Apply a 5-second timeout to the entire cleanup operation
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	// Scan for .pid files
+	pattern := filepath.Join(baseDir, "*.pid")
+	pidFiles, _ := filepath.Glob(pattern)
+	// Glob may return nil on error; that's fine — just skip cleanup
+	if pidFiles == nil {
+		pidFiles = []string{}
+	}
+
+	if len(pidFiles) == 0 {
+		return nil
+	}
+
+	// Pre-parse all .pid files into work items (fast I/O, no sleeps)
+	var items []orphanCleanupItem
+	for _, pidFile := range pidFiles {
+		data, err := os.ReadFile(pidFile)
+		if err != nil {
+			log.Printf("warn: failed to read PID file %s: %v", pidFile, err)
+			continue
+		}
+
+		pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+		if err != nil {
+			log.Printf("warn: failed to parse PID from %s: %v", pidFile, err)
+			// Stale/unparseable file — remove it immediately
+			_ = os.Remove(pidFile)
+			continue
+		}
+
+		// Derive the session ID from the .pid file name
+		// e.g., "bg-sleep-abc123.pid" → "bg-sleep-abc123"
+		base := filepath.Base(pidFile)
+		sessionID := strings.TrimSuffix(base, ".pid")
+
+		items = append(items, orphanCleanupItem{
+			pid:        pid,
+			pidFile:    pidFile,
+			outputFile: filepath.Join(baseDir, sessionID+".output"),
+		})
+	}
+
+	if len(items) == 0 {
+		return nil
+	}
+
+	// Process PIDs concurrently with a worker pool
+	const workers = 16
+	itemCh := make(chan orphanCleanupItem, len(items))
+	for _, item := range items {
+		itemCh <- item
+	}
+	close(itemCh)
+
+	var wg sync.WaitGroup
+	var processedCount atomic.Int64
+
+	for i := 0; i < workers && i < len(items); i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for item := range itemCh {
+				// Check context before starting work on this item
+				select {
+				case <-ctx.Done():
+					return
+				default:
+				}
+
+				// Terminate the orphan (fast for dead processes, ~200ms for alive)
+				terminateOrphanedPIDWithTimeout(item.pid, 200*time.Millisecond)
+
+				// Clean up both files (whether the process was alive or not)
+				if err := os.Remove(item.pidFile); err != nil {
+					log.Printf("warn: failed to remove PID file %s: %v", item.pidFile, err)
+				}
+				if err := os.Remove(item.outputFile); err != nil {
+					log.Printf("warn: failed to remove output file %s: %v", item.outputFile, err)
+				}
+				processedCount.Add(1)
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	// If context was cancelled mid-batch, log a summary
+	if err := ctx.Err(); err != nil && err != context.DeadlineExceeded {
+		done := processedCount.Load()
+		log.Printf("warn: orphan cleanup cancelled after processing %d of %d files: %v", done, len(items), err)
+	} else if err == context.DeadlineExceeded {
+		done := processedCount.Load()
+		log.Printf("warn: orphan cleanup timed out after processing %d of %d files", done, len(items))
+	}
+
+	return nil
+}
+
+// terminateOrphanedPID probes a PID and terminates it if it's still alive.
+// On Unix, uses Signal(0) to probe and SIGTERM/SIGKILL to terminate.
+// On Windows, os.FindProcess always succeeds, so we attempt Kill() directly
+// and ignore "process already dead" errors.
+//
+// Deprecated: Use terminateOrphanedPIDWithTimeout instead. Kept for
+// backward compatibility with existing callers.
+func terminateOrphanedPID(pid int) {
+	terminateOrphanedPIDWithTimeout(pid, 200*time.Millisecond)
+}
+
+// terminateOrphanedPIDWithTimeout probes a PID and terminates it if it's
+// still alive. Takes a configurable grace period between SIGTERM and SIGKILL.
+//
+// On Unix, uses Signal(0) to probe and SIGTERM/grace/SIGKILL to terminate.
+// On Windows, os.FindProcess always succeeds, so we attempt Kill() directly
+// and ignore "process already dead" errors.
+//
+// Dead processes return immediately (no sleep). Only alive processes wait
+// for the grace period between SIGTERM and SIGKILL.
+func terminateOrphanedPIDWithTimeout(pid int, gracePeriod time.Duration) {
+	proc, err := os.FindProcess(pid)
+	if err != nil {
+		return
+	}
+
+	if runtime.GOOS == "windows" {
+		// On Windows, FindProcess always succeeds. Just attempt Kill
+		// and ignore errors (process may already be dead).
+		_ = proc.Kill()
+		return
+	}
+
+	// Unix: probe with Signal(0) to check if process exists
+	err = proc.Signal(syscall.Signal(0))
+	if err != nil {
+		// Process is gone (ESRCH) or we can't signal it.
+		// EPERM means process exists but different UID — treat as alive.
+		if errno, ok := err.(syscall.Errno); ok && errno != syscall.EPERM {
+			return // Process is gone
+		}
+		if se, ok := err.(*os.SyscallError); ok {
+			if _, ok := se.Err.(syscall.Errno); ok && se.Err != syscall.EPERM {
+				return // Process is gone
+			}
+		}
+		// If we get here, it's EPERM — process exists, try to terminate
+		_ = proc.Signal(syscall.SIGTERM)
+		time.Sleep(gracePeriod)
+		_ = proc.Signal(syscall.SIGKILL)
+		return
+	}
+
+	// Process is alive — terminate it
+	_ = proc.Signal(syscall.SIGTERM)
+	time.Sleep(gracePeriod)
+	_ = proc.Signal(syscall.SIGKILL)
 }

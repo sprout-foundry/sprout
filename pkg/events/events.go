@@ -107,6 +107,11 @@ const (
 	// use this to show a banner or retry failed requests instead of
 	// surfacing raw 502 errors during the reconnect window.
 	EventTypeSSHTunnelStatus = "ssh_tunnel_status"
+	// EventTypeWorkspaceConflict (SP-046-3) is published when a container
+	// patch conflicts with unsynced browser edits. The container writes its
+	// version as <path>.theirs instead of overwriting. The payload carries
+	// path, theirs_path, hash_container, hash_browser, and modified_at.
+	EventTypeWorkspaceConflict = "workspace.conflict_detected"
 )
 
 // EventBus manages event distribution between CLI and Web UI

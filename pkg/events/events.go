@@ -118,6 +118,11 @@ const (
 	// running job after this event. The payload carries session_id and
 	// last_heartbeat (time.RFC3339).
 	EventTypeWorkspaceHeartbeatLost = "workspace.heartbeat_lost"
+	// EventTypeWorkspaceSessionMoved (SP-046-5) is published when a user
+	// takes over a session on a new device, causing the previous device's
+	// WebSocket to be closed. The payload carries session_id and new_device_id.
+	// The displaced browser surfaces "This session moved to another device."
+	EventTypeWorkspaceSessionMoved = "workspace.session_moved"
 )
 
 // EventBus manages event distribution between CLI and Web UI

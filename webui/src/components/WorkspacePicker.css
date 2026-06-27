@@ -20,7 +20,7 @@
   padding: 20px;
   background: var(--editor-pane-bg-secondary);
   border: 1px solid var(--border-subtle);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   margin-bottom: 24px;
 }
 
@@ -32,7 +32,7 @@
   height: 48px;
   background: var(--accent-color);
   color: var(--accent-bg);
-  border-radius: 10px;
+  border-radius: var(--radius-xl);
   flex-shrink: 0;
 }
 
@@ -54,7 +54,7 @@
   color: var(--text-primary);
   background: var(--editor-pane-bg);
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-size: 12px;
 }
 
@@ -92,7 +92,7 @@
   padding: 12px 14px;
   background: var(--editor-pane-bg-secondary);
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   margin-bottom: 8px;
   cursor: pointer;
   transition:
@@ -184,7 +184,7 @@
   color: var(--text-secondary);
   background: var(--editor-pane-bg);
   border: 1px solid var(--border-subtle);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   white-space: nowrap;
 }
 
@@ -195,7 +195,7 @@
   padding: 10px 20px;
   background: var(--editor-pane-bg-secondary);
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   color: var(--text-primary);
   font-size: 14px;
   font-weight: 500;
@@ -245,7 +245,7 @@
 
 .workspace-picker::-webkit-scrollbar-thumb {
   background: var(--scrollbar-thumb);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 
 .workspace-picker::-webkit-scrollbar-thumb:hover {

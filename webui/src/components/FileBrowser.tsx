@@ -18,7 +18,7 @@ export interface FileNode {
 interface FileBrowserProps {
   isOpen: boolean;
   initialPath?: string;
-  onSelect: (file: FileNode) => void;
+  onSelect: (files: FileNode[]) => void;
   onCancel: () => void;
   allowDirectories?: boolean;
   allowedExtensions?: string[];
@@ -37,7 +37,7 @@ function FileBrowser({
   const [currentPath, setCurrentPath] = useState(initialPath);
   const [pathInput, setPathInput] = useState(initialPath);
   const [files, setFiles] = useState<FileNode[]>([]);
-  const [selectedFile, setSelectedFile] = useState<FileNode | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,7 +45,7 @@ function FileBrowser({
     if (isOpen) {
       setCurrentPath(initialPath);
       setPathInput(initialPath);
-      setSelectedFile(null);
+      setSelectedIds(new Set());
     }
   }, [initialPath, isOpen]);
 
@@ -55,7 +55,6 @@ function FileBrowser({
       setError(null);
 
       try {
-        // Use the actual API to browse files
         const response = await clientFetch(`${browseEndpoint}?path=${encodeURIComponent(path)}`);
         if (!response.ok) {
           throw new Error(`Failed to browse directory: ${response.statusText}`);
@@ -72,21 +71,19 @@ function FileBrowser({
         }));
 
         const sortedFiles = directoryFiles.sort((a, b) => {
-          // Directories first
           if (a.type !== b.type) {
             return a.type === 'directory' ? -1 : 1;
           }
-          // Then alphabetically
           return a.name.localeCompare(b.name);
         });
 
         setFiles(sortedFiles);
-        setSelectedFile(null);
+        setSelectedIds(new Set());
       } catch (err) {
         debugLog('[FileBrowser] Failed to load directory:', err);
         setError(err instanceof Error ? err.message : 'Failed to load directory');
         setFiles([]);
-        setSelectedFile(null);
+        setSelectedIds(new Set());
       } finally {
         setLoading(false);
       }
@@ -100,24 +97,43 @@ function FileBrowser({
     }
   }, [isOpen, currentPath, loadDirectory]);
 
-  const handleFileClick = (file: FileNode) => {
-    if (file.type === 'directory') {
+  // Resolve a node by id from the flat directory listing (current directory only).
+  const findNodeById = useCallback((id: string): FileNode | undefined => files.find((f) => f.id === id), [files]);
+
+  const toggleSelection = (file: FileNode) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(file.id)) {
+        next.delete(file.id);
+      } else {
+        next.add(file.id);
+      }
+      return next;
+    });
+  };
+
+  const handleFileClick = (file: FileNode, event: React.MouseEvent) => {
+    if (file.type === 'directory' && !event.metaKey && !event.ctrlKey && !event.shiftKey) {
+      // Single click on a directory (without modifier) navigates into it.
       setCurrentPath(file.path);
       setPathInput(file.path);
-    } else {
-      setSelectedFile(file);
+      return;
     }
+    toggleSelection(file);
   };
 
   const handleFileDoubleClick = (file: FileNode) => {
     if (file.type === 'file' || allowDirectories) {
-      onSelect(file);
+      onSelect([file]);
     }
   };
 
   const handleSelect = () => {
-    if (selectedFile) {
-      handleFileDoubleClick(selectedFile);
+    const selected = Array.from(selectedIds)
+      .map((id) => findNodeById(id))
+      .filter((node): node is FileNode => node !== undefined);
+    if (selected.length > 0) {
+      onSelect(selected);
     }
   };
 
@@ -149,20 +165,27 @@ function FileBrowser({
 
   if (!isOpen) return null;
 
+  const selectButtonDisabled =
+    selectedIds.size === 0 ||
+    Array.from(selectedIds)
+      .map((id) => findNodeById(id))
+      .filter((node): node is FileNode => node !== undefined && node.type === 'directory' && !allowDirectories).length > 0;
+
   return (
     <div className="filebrowser-overlay" onClick={onCancel}>
       <div className="filebrowser-container" onClick={(e) => e.stopPropagation()}>
-        {/* Header */}
         <div className="filebrowser-header">
           <h3>
             <FolderOpen size={16} style={{ marginRight: 6, verticalAlign: 'middle' }} /> File Browser
+            {selectedIds.size > 0 && (
+              <span className="filebrowser-selection-count">{selectedIds.size} selected</span>
+            )}
           </h3>
           <button className="filebrowser-close" onClick={onCancel}>
             <X size={16} />
           </button>
         </div>
 
-        {/* Navigation */}
         <div className="filebrowser-nav">
           <button className="filebrowser-nav-button" onClick={navigateUp} disabled={currentPath === '/'}>
             <ArrowUp size={14} style={{ marginRight: 4, verticalAlign: 'middle' }} /> Up
@@ -183,7 +206,6 @@ function FileBrowser({
           </div>
         </div>
 
-        {/* File List */}
         <div className="filebrowser-content">
           {loading ? (
             <div className="filebrowser-loading" role="status" aria-label="Loading files">
@@ -206,10 +228,18 @@ function FileBrowser({
               {filteredFiles.map((file) => (
                 <div
                   key={file.id}
-                  className={`filebrowser-item ${selectedFile?.id === file.id ? 'selected' : ''}`}
-                  onClick={() => handleFileClick(file)}
+                  className={`filebrowser-item ${selectedIds.has(file.id) ? 'selected' : ''}`}
+                  onClick={(e) => handleFileClick(file, e)}
                   onDoubleClick={() => handleFileDoubleClick(file)}
                 >
+                  <input
+                    type="checkbox"
+                    className="filebrowser-checkbox"
+                    checked={selectedIds.has(file.id)}
+                    onChange={() => toggleSelection(file)}
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label={`Select ${file.name}`}
+                  />
                   <div className="filebrowser-icon">
                     {file.type === 'directory' ? <Folder size={16} /> : <File size={16} />}
                   </div>
@@ -227,9 +257,10 @@ function FileBrowser({
           )}
         </div>
 
-        {/* Footer */}
         <div className="filebrowser-footer">
-          <div className="filebrowser-help">Click to select, double-click to choose</div>
+          <div className="filebrowser-help">
+            Click to select, double-click or use Select to confirm. Hold Ctrl/Cmd to add to selection.
+          </div>
           <div className="filebrowser-actions">
             <button className="filebrowser-button secondary" onClick={onCancel}>
               Cancel
@@ -237,9 +268,16 @@ function FileBrowser({
             <button
               className="filebrowser-button primary"
               onClick={handleSelect}
-              disabled={!selectedFile || (!allowDirectories && selectedFile.type === 'directory')}
+              disabled={selectButtonDisabled}
+              title={
+                selectedIds.size === 0
+                  ? 'Select at least one file'
+                  : selectedIds.size === 1
+                    ? 'Select 1 file'
+                    : `Select ${selectedIds.size} files`
+              }
             >
-              Select
+              Select {selectedIds.size > 0 && `(${selectedIds.size})`}
             </button>
           </div>
         </div>

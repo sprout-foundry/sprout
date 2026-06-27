@@ -215,14 +215,16 @@ const BillingPage: React.FC = () => {
               style={{
                 marginBottom: '1rem',
                 padding: '1.5rem',
-                background: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%)',
-                border: '1px solid #6ee7b7',
+                background: 'var(--bg-success)',
+                border: '1px solid var(--accent-success)',
                 borderRadius: '0.75rem',
               }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div style={{ flex: 1 }}>
-                  <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.25rem', color: '#065f46' }}>Account Reactivation</h3>
+                  <h3 style={{ margin: '0 0 1rem 0', fontSize: '1.25rem', color: 'var(--accent-success)' }}>
+                    Account Reactivation
+                  </h3>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                     {/* Step 1: Welcome Back */}
                     <div
@@ -237,7 +239,7 @@ const BillingPage: React.FC = () => {
                           width: '2rem',
                           height: '2rem',
                           borderRadius: '50%',
-                          background: '#065f46',
+                          background: 'var(--accent-success)',
                           color: '#fff',
                           fontWeight: 'bold',
                           fontSize: '0.875rem',
@@ -247,8 +249,8 @@ const BillingPage: React.FC = () => {
                         1
                       </span>
                       <div>
-                        <strong style={{ color: '#065f46' }}>Welcome Back! 🎉</strong>
-                        <p style={{ margin: '0.25rem 0 0 0', color: '#047857', fontSize: '0.875rem' }}>
+                        <strong style={{ color: 'var(--accent-success)' }}>Welcome Back! 🎉</strong>
+                        <p style={{ margin: '0.25rem 0 0 0', color: 'var(--accent-success)', fontSize: '0.875rem' }}>
                           Your account has been reactivated successfully.
                         </p>
                       </div>
@@ -267,7 +269,7 @@ const BillingPage: React.FC = () => {
                           width: '2rem',
                           height: '2rem',
                           borderRadius: '50%',
-                          background: '#065f46',
+                          background: 'var(--accent-success)',
                           color: '#fff',
                           fontWeight: 'bold',
                           fontSize: '0.875rem',
@@ -277,8 +279,8 @@ const BillingPage: React.FC = () => {
                         2
                       </span>
                       <div>
-                        <strong style={{ color: '#065f46' }}>What Happened</strong>
-                        <p style={{ margin: '0.25rem 0 0 0', color: '#047857', fontSize: '0.875rem' }}>
+                        <strong style={{ color: 'var(--accent-success)' }}>What Happened</strong>
+                        <p style={{ margin: '0.25rem 0 0 0', color: 'var(--accent-success)', fontSize: '0.875rem' }}>
                           {suspensionDate
                             ? `Your payment failed on ${new Date(suspensionDate).toLocaleDateString()}, which temporarily suspended your service. We're glad to have you back!`
                             : `Your payment failed recently, which temporarily suspended your service. We're glad to have you back!`}
@@ -299,7 +301,7 @@ const BillingPage: React.FC = () => {
                           width: '2rem',
                           height: '2rem',
                           borderRadius: '50%',
-                          background: '#065f46',
+                          background: 'var(--accent-success)',
                           color: '#fff',
                           fontWeight: 'bold',
                           fontSize: '0.875rem',
@@ -309,8 +311,8 @@ const BillingPage: React.FC = () => {
                         3
                       </span>
                       <div>
-                        <strong style={{ color: '#065f46' }}>What&apos;s Restored</strong>
-                        <p style={{ margin: '0.25rem 0 0 0', color: '#047857', fontSize: '0.875rem' }}>
+                        <strong style={{ color: 'var(--accent-success)' }}>What&apos;s Restored</strong>
+                        <p style={{ margin: '0.25rem 0 0 0', color: 'var(--accent-success)', fontSize: '0.875rem' }}>
                           All features have been restored: workspace access, task runner, and LLM credits.
                         </p>
                       </div>
@@ -329,7 +331,7 @@ const BillingPage: React.FC = () => {
                           width: '2rem',
                           height: '2rem',
                           borderRadius: '50%',
-                          background: '#065f46',
+                          background: 'var(--accent-success)',
                           color: '#fff',
                           fontWeight: 'bold',
                           fontSize: '0.875rem',
@@ -339,10 +341,10 @@ const BillingPage: React.FC = () => {
                         4
                       </span>
                       <div>
-                        <strong style={{ color: '#065f46' }}>Need Help?</strong>
-                        <p style={{ margin: '0.25rem 0 0 0', color: '#047857', fontSize: '0.875rem' }}>
+                        <strong style={{ color: 'var(--accent-success)' }}>Need Help?</strong>
+                        <p style={{ margin: '0.25rem 0 0 0', color: 'var(--accent-success)', fontSize: '0.875rem' }}>
                           Visit our{' '}
-                          <a href="/support" style={{ color: '#065f46', textDecoration: 'underline' }}>
+                          <a href="/support" style={{ color: 'var(--accent-success)', textDecoration: 'underline' }}>
                             support center
                           </a>{' '}
                           or{' '}
@@ -351,7 +353,7 @@ const BillingPage: React.FC = () => {
                             style={{
                               background: 'none',
                               border: 'none',
-                              color: '#065f46',
+                              color: 'var(--accent-success)',
                               textDecoration: 'underline',
                               cursor: 'pointer',
                               padding: 0,
@@ -374,7 +376,7 @@ const BillingPage: React.FC = () => {
                     border: 'none',
                     cursor: 'pointer',
                     fontSize: '1.25rem',
-                    color: '#065f46',
+                    color: 'var(--accent-success)',
                     padding: '0.25rem',
                     flexShrink: 0,
                     marginLeft: '1rem',

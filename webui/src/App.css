@@ -114,6 +114,7 @@
   --radius-md: 6px;
   --radius-lg: 8px;
   --radius-xl: 12px;
+  --radius-pill: 999px;
 
   --shadow-subtle: 0 2px 6px rgba(2, 6, 23, 0.32);
   --shadow-elevated: 0 10px 22px rgba(2, 6, 23, 0.42);
@@ -1316,7 +1317,7 @@ body,
   gap: 4px;
   min-height: 22px;
   padding: 2px 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--accent-success) 18%, transparent);
   color: var(--accent-success);
   font-size: 11px;
@@ -1341,7 +1342,7 @@ body,
   align-items: center;
   min-height: 22px;
   padding: 0 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: color-mix(in srgb, var(--accent-primary) 16%, transparent);
   color: var(--accent-primary);
   font-size: 11px;

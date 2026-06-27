@@ -22,7 +22,7 @@ import (
 )
 
 // ExecuteTool executes a tool with standardized parameter validation and error handling
-func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args map[string]interface{}, agent *Agent) ([]api.ImageData, string, error) {
+func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args map[string]interface{}, agent *Agent, rawArgsJSON string) ([]api.ImageData, string, error) {
 	handler, found := tools.GetNewToolRegistry().Lookup(toolName)
 	if !found {
 		return nil, "", agenterrors.NewInvalidInputError("unknown tool '"+toolName+"'", nil)
@@ -287,6 +287,9 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 		env.WebBrowser = tools.NewBrowserAdapter()
 		env.SkillLoader = newSkillLoaderAdapter(agent)
 		env.SearchEngine = newSearchEngineAdapter(agent)
+		// SP-082-1: Pass the raw JSON args so handlers can recover key
+		// insertion order from the LLM's original tool call.
+		env.RawArgsJSON = rawArgsJSON
 	} else {
 		env.OutputWriter = os.Stdout
 		env.MaxTokensFunc = func() int { return 0 }

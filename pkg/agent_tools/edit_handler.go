@@ -86,6 +86,11 @@ func (h *editFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 		return ToolResult{Output: err.Error(), IsError: true}, err
 	}
 
+	// SP-046-2: Check staleness before editing
+	if err := CheckStaleness(path); err != nil {
+		return ToolResult{Output: err.Error(), IsError: true}, err
+	}
+
 	// Publish tool start event
 	if env.EventBus != nil {
 		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{

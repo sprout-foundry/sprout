@@ -317,6 +317,16 @@ Examples:
 			return nil
 		}
 
+		// SP-056-3: validate --reasoning flag value.
+		// Empty string means default (hidden); allowed explicit values:
+		// "hidden", "fold", "full".
+		switch agentReasoningMode {
+		case "", "hidden", "fold", "full":
+			// valid
+		default:
+			return fmt.Errorf("invalid --reasoning value %q: must be 'hidden', 'fold', or 'full'", agentReasoningMode)
+		}
+
 		// Propagate --no-project-skills to env so config loading skips discovery
 		if noProjectSkills {
 			os.Setenv("SPROUT_NO_PROJECT_SKILLS", "1")

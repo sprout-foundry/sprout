@@ -36,6 +36,12 @@ type ActivityIndicator struct {
 	startedAt time.Time
 	stopCh    chan struct{}
 	doneCh    chan struct{}
+
+	// Static text mode (SP-056). When isStatic is true, the indicator row
+	// shows a fixed line instead of the animated spinner. SetStatic() switches
+	// into this mode; ClearStatic() returns to normal.
+	isStatic  bool
+	staticMsg string
 }
 
 // NewActivityIndicator constructs an indicator that writes to w. If w is
@@ -72,6 +78,9 @@ func (a *ActivityIndicator) Start(msg string) {
 		a.mu.Unlock()
 		return
 	}
+	// Clear any lingering static text before starting the spinner.
+	a.isStatic = false
+	a.staticMsg = ""
 	a.active = true
 	a.msg = msg
 	a.startedAt = time.Now()
@@ -106,29 +115,36 @@ func (a *ActivityIndicator) Stop() {
 		return
 	}
 	a.mu.Lock()
-	if !a.active {
-		a.mu.Unlock()
-		return
+	if a.isStatic {
+		// Clear any static text first.
+		a.isStatic = false
+		a.staticMsg = ""
 	}
-	a.active = false
-	stopCh := a.stopCh
-	doneCh := a.doneCh
-	a.mu.Unlock()
+	stoppingActive := a.active
+	if !stoppingActive {
+		a.mu.Unlock()
+	}
+	if stoppingActive {
+		a.active = false
+		stopCh := a.stopCh
+		doneCh := a.doneCh
+		a.mu.Unlock()
 
-	close(stopCh)
+		close(stopCh)
 
-	// Wait for the render goroutine to acknowledge stop, but with a timeout.
-	// The render goroutine may be stuck on LockOutput() if another goroutine
-	// is blocked holding outputMu during a stuck I/O write (PTY buffer full,
-	// NFS hang, etc.). Waiting forever here cascades into a full terminal
-	// freeze — the subscriber goroutine that called Stop is also the one
-	// processing ToolEnd events, so a frozen Stop means no more events are
-	// processed and every subsequent tool's spinner spins forever.
-	select {
-	case <-doneCh:
-	case <-time.After(500 * time.Millisecond):
-		// Render goroutine is stuck; proceed without it. It will exit on
-		// its own once LockOutput unblocks (or the process exits).
+		// Wait for the render goroutine to acknowledge stop, but with a timeout.
+		// The render goroutine may be stuck on LockOutput() if another goroutine
+		// is blocked holding outputMu during a stuck I/O write (PTY buffer full,
+		// NFS hang, etc.). Waiting forever here cascades into a full terminal
+		// freeze — the subscriber goroutine that called Stop is also the one
+		// processing ToolEnd events, so a frozen Stop means no more events are
+		// processed and every subsequent tool's spinner spins forever.
+		select {
+		case <-doneCh:
+		case <-time.After(500 * time.Millisecond):
+			// Render goroutine is stuck; proceed without it. It will exit on
+			// its own once LockOutput unblocks (or the process exits).
+		}
 	}
 
 	// \r returns the cursor to column 0; \033[K clears to end-of-line.
@@ -233,6 +249,67 @@ func (a *ActivityIndicator) IsActive() bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return a.active
+}
+
+// IsTTY reports whether the indicator's writer is a TTY.
+func (a *ActivityIndicator) IsTTY() bool {
+	if a == nil {
+		return false
+	}
+	return a.isTTY
+}
+
+// SetStatic pins a non-animated line to the indicator row. It stops any
+// running spinner and replaces it with static text. The text updates in
+// place on subsequent calls until ClearStatic is used. No-op when not a TTY.
+func (a *ActivityIndicator) SetStatic(line string) {
+	if a == nil || !a.isTTY {
+		return
+	}
+	a.mu.Lock()
+	// Stop spinner goroutine if active (same pattern as Stop()).
+	if a.active {
+		a.active = false
+		stopCh := a.stopCh
+		doneCh := a.doneCh
+		a.mu.Unlock()
+		close(stopCh)
+		select {
+		case <-doneCh:
+		case <-time.After(500 * time.Millisecond):
+		}
+		a.mu.Lock()
+	}
+	a.isStatic = true
+	a.staticMsg = line
+	a.mu.Unlock()
+
+	// Render static line (same pattern as render, but no spinner/elapsed).
+	if TryLockOutput() {
+		fmt.Fprint(a.w, "\r\033[K"+sanitizeLine(line))
+		UnlockOutput()
+	}
+}
+
+// ClearStatic removes the static text from the indicator row, clearing the line.
+// No-op when not a TTY or when no static text is set.
+func (a *ActivityIndicator) ClearStatic() {
+	if a == nil || !a.isTTY {
+		return
+	}
+	a.mu.Lock()
+	if !a.isStatic {
+		a.mu.Unlock()
+		return
+	}
+	a.isStatic = false
+	a.staticMsg = ""
+	a.mu.Unlock()
+
+	if TryLockOutput() {
+		fmt.Fprint(a.w, "\r\033[K")
+		UnlockOutput()
+	}
 }
 
 func (a *ActivityIndicator) run() {

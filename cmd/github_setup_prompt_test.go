@@ -313,6 +313,7 @@ func TestPromptGitHubSetupVariants_UserInput(t *testing.T) {
 			origSave := saveGitHubMCPServer
 			origStdin := os.Stdin
 			origNewReader := newReaderFromStdin
+			origSetCred := setCredentialStore
 
 			// Setup mocks
 			getwdFunc = func() (string, error) {
@@ -346,6 +347,8 @@ func TestPromptGitHubSetupVariants_UserInput(t *testing.T) {
 				saveCalled = true
 				return tc.saveErr
 			}
+
+			setCredentialStore = func(provider, value string) error { return nil }
 
 			// Create pipe for stdin
 			r, w, _ := os.Pipe()
@@ -410,6 +413,7 @@ func TestPromptGitHubSetupVariants_UserInput(t *testing.T) {
 			saveGitHubMCPServer = origSave
 			os.Stdin = origStdin
 			newReaderFromStdin = origNewReader
+			setCredentialStore = origSetCred
 		})
 	}
 }
@@ -426,6 +430,7 @@ func TestPromptGitHubMCPSetupIfNeeded_SaveServerFails(t *testing.T) {
 	origSave := saveGitHubMCPServer
 	origStdin := os.Stdin
 	origNewReader := newReaderFromStdin
+	origSetCred := setCredentialStore
 
 	defer func() {
 		getwdFunc = origGetwd
@@ -435,6 +440,7 @@ func TestPromptGitHubMCPSetupIfNeeded_SaveServerFails(t *testing.T) {
 		saveGitHubMCPServer = origSave
 		os.Stdin = origStdin
 		newReaderFromStdin = origNewReader
+		setCredentialStore = origSetCred
 	}()
 
 	getwdFunc = func() (string, error) {
@@ -462,6 +468,8 @@ func TestPromptGitHubMCPSetupIfNeeded_SaveServerFails(t *testing.T) {
 	saveGitHubMCPServer = func(config *mcp.MCPServerConfig) error {
 		return errors.New("save failed")
 	}
+
+	setCredentialStore = func(provider, value string) error { return nil }
 
 	// Create pipe for stdin
 	r, w, _ := os.Pipe()
@@ -504,6 +512,7 @@ func TestPromptGitHubMCPSetupIfNeeded_SetupFails(t *testing.T) {
 	origRunSetup := runGitHubMCPSetup
 	origStdin := os.Stdin
 	origNewReader := newReaderFromStdin
+	origSetCred := setCredentialStore
 
 	defer func() {
 		getwdFunc = origGetwd
@@ -512,6 +521,7 @@ func TestPromptGitHubMCPSetupIfNeeded_SetupFails(t *testing.T) {
 		runGitHubMCPSetup = origRunSetup
 		os.Stdin = origStdin
 		newReaderFromStdin = origNewReader
+		setCredentialStore = origSetCred
 	}()
 
 	getwdFunc = func() (string, error) {
@@ -631,6 +641,7 @@ func TestPromptGitHubMCPSetupIfNeeded_RefreshToolsFails(t *testing.T) {
 	origSave := saveGitHubMCPServer
 	origStdin := os.Stdin
 	origNewReader := newReaderFromStdin
+	origSetCred := setCredentialStore
 
 	defer func() {
 		getwdFunc = origGetwd
@@ -640,6 +651,7 @@ func TestPromptGitHubMCPSetupIfNeeded_RefreshToolsFails(t *testing.T) {
 		saveGitHubMCPServer = origSave
 		os.Stdin = origStdin
 		newReaderFromStdin = origNewReader
+		setCredentialStore = origSetCred
 	}()
 
 	getwdFunc = func() (string, error) {
@@ -666,6 +678,8 @@ func TestPromptGitHubMCPSetupIfNeeded_RefreshToolsFails(t *testing.T) {
 	saveGitHubMCPServer = func(config *mcp.MCPServerConfig) error {
 		return nil
 	}
+
+	setCredentialStore = func(provider, value string) error { return nil }
 
 	// Create pipe for stdin
 	r, w, _ := os.Pipe()
@@ -704,6 +718,7 @@ func TestPromptGitHubMCPSetupIfNeeded_SetupCancelled(t *testing.T) {
 	origSave := saveGitHubMCPServer
 	origStdin := os.Stdin
 	origNewReader := newReaderFromStdin
+	origSetCred := setCredentialStore
 
 	defer func() {
 		getwdFunc = origGetwd
@@ -713,6 +728,7 @@ func TestPromptGitHubMCPSetupIfNeeded_SetupCancelled(t *testing.T) {
 		saveGitHubMCPServer = origSave
 		os.Stdin = origStdin
 		newReaderFromStdin = origNewReader
+		setCredentialStore = origSetCred
 	}()
 
 	getwdFunc = func() (string, error) {
@@ -738,6 +754,8 @@ func TestPromptGitHubMCPSetupIfNeeded_SetupCancelled(t *testing.T) {
 		saveCalled = true
 		return nil
 	}
+
+	setCredentialStore = func(provider, value string) error { return nil }
 
 	// Create pipe for stdin
 	r, w, _ := os.Pipe()
@@ -983,6 +1001,7 @@ func TestPromptGitHubMCPSetupIfNeeded_YesVariants(t *testing.T) {
 			origSave := saveGitHubMCPServer
 			origStdin := os.Stdin
 			origNewReader := newReaderFromStdin
+			origSetCred := setCredentialStore
 
 			defer func() {
 				getwdFunc = origGetwd
@@ -992,6 +1011,7 @@ func TestPromptGitHubMCPSetupIfNeeded_YesVariants(t *testing.T) {
 				saveGitHubMCPServer = origSave
 				os.Stdin = origStdin
 				newReaderFromStdin = origNewReader
+				setCredentialStore = origSetCred
 			}()
 
 			getwdFunc = func() (string, error) {
@@ -1016,6 +1036,8 @@ func TestPromptGitHubMCPSetupIfNeeded_YesVariants(t *testing.T) {
 			saveGitHubMCPServer = func(config *mcp.MCPServerConfig) error {
 				return nil
 			}
+
+			setCredentialStore = func(provider, value string) error { return nil }
 
 			// Create pipe with variant input
 			r, w, _ := os.Pipe()
@@ -1115,5 +1137,283 @@ func TestPromptGitHubMCPSetupIfNeeded_NoVariants(t *testing.T) {
 				t.Errorf("expected github_mcp_setup to be true for variant %q", variant)
 			}
 		})
+	}
+}
+
+// =============================================================================
+// TestPromptGitHubMCPSetupIfNeeded_CredentialStoreSave
+// =============================================================================
+
+func TestPromptGitHubMCPSetupIfNeeded_CredentialStoreSave(t *testing.T) {
+	origGetwd := getwdFunc
+	origShouldPrompt := shouldPromptGitHubSetup
+	origDetect := detectGitHubRepo
+	origRunSetup := runGitHubMCPSetup
+	origSave := saveGitHubMCPServer
+	origStdin := os.Stdin
+	origNewReader := newReaderFromStdin
+	origSetCred := setCredentialStore
+
+	defer func() {
+		getwdFunc = origGetwd
+		shouldPromptGitHubSetup = origShouldPrompt
+		detectGitHubRepo = origDetect
+		runGitHubMCPSetup = origRunSetup
+		saveGitHubMCPServer = origSave
+		os.Stdin = origStdin
+		newReaderFromStdin = origNewReader
+		setCredentialStore = origSetCred
+	}()
+
+	getwdFunc = func() (string, error) {
+		return "/test/dir", nil
+	}
+
+	shouldPromptGitHubSetup = func(workingDir string, cfg mcp.MCPConfig, dismissedPrompts map[string]bool) bool {
+		return true
+	}
+
+	repoInfo := &mcp.GitHubRepoInfo{Owner: "testowner", Repo: "testrepo"}
+	detectGitHubRepo = func(workingDir string) *mcp.GitHubRepoInfo {
+		return repoInfo
+	}
+
+	runGitHubMCPSetup = func(ctx context.Context, repo *mcp.GitHubRepoInfo, reader *bufio.Reader) (*mcp.MCPServerConfig, error) {
+		return &mcp.MCPServerConfig{
+			Name: "github",
+			Type: "http",
+			URL:  "https://api.githubcopilot.com/mcp/",
+			Env:  map[string]string{"GITHUB_PERSONAL_ACCESS_TOKEN": "my-pat-123"},
+		}, nil
+	}
+
+	saveGitHubMCPServer = func(config *mcp.MCPServerConfig) error {
+		return nil
+	}
+
+	var capturedProvider, capturedValue string
+	setCredentialStore = func(provider, value string) error {
+		capturedProvider = provider
+		capturedValue = value
+		return nil
+	}
+
+	// Create pipe for stdin
+	r, w, _ := os.Pipe()
+	go func() {
+		w.WriteString("s\n")
+		w.Close()
+	}()
+	os.Stdin = r
+
+	newReaderFromStdin = func(in *os.File) *bufio.Reader {
+		return bufio.NewReader(in)
+	}
+
+	mockCfgMgr := &mockConfigManager{
+		config: &configuration.Config{
+			SkipPrompt:       false,
+			MCP:              mcp.MCPConfig{},
+			DismissedPrompts: make(map[string]bool),
+		},
+	}
+
+	mockAgt := &mockAgent{
+		configManager:     mockCfgMgr,
+		mcpToolsRefreshed: false,
+	}
+
+	promptGitHubMCPSetupIfNeeded(mockAgt)
+
+	if capturedProvider != "github" {
+		t.Errorf("setCredentialStore provider = %q, want 'github'", capturedProvider)
+	}
+	if capturedValue != "my-pat-123" {
+		t.Errorf("setCredentialStore value = %q, want 'my-pat-123'", capturedValue)
+	}
+}
+
+// =============================================================================
+// TestPromptGitHubMCPSetupIfNeeded_NoPATToStore
+// =============================================================================
+
+func TestPromptGitHubMCPSetupIfNeeded_NoPATToStore(t *testing.T) {
+	origGetwd := getwdFunc
+	origShouldPrompt := shouldPromptGitHubSetup
+	origDetect := detectGitHubRepo
+	origRunSetup := runGitHubMCPSetup
+	origSave := saveGitHubMCPServer
+	origStdin := os.Stdin
+	origNewReader := newReaderFromStdin
+	origSetCred := setCredentialStore
+
+	defer func() {
+		getwdFunc = origGetwd
+		shouldPromptGitHubSetup = origShouldPrompt
+		detectGitHubRepo = origDetect
+		runGitHubMCPSetup = origRunSetup
+		saveGitHubMCPServer = origSave
+		os.Stdin = origStdin
+		newReaderFromStdin = origNewReader
+		setCredentialStore = origSetCred
+	}()
+
+	getwdFunc = func() (string, error) {
+		return "/test/dir", nil
+	}
+
+	shouldPromptGitHubSetup = func(workingDir string, cfg mcp.MCPConfig, dismissedPrompts map[string]bool) bool {
+		return true
+	}
+
+	repoInfo := &mcp.GitHubRepoInfo{Owner: "testowner", Repo: "testrepo"}
+	detectGitHubRepo = func(workingDir string) *mcp.GitHubRepoInfo {
+		return repoInfo
+	}
+
+	// Simulate OAuth setup — no GITHUB_PERSONAL_ACCESS_TOKEN in Env
+	runGitHubMCPSetup = func(ctx context.Context, repo *mcp.GitHubRepoInfo, reader *bufio.Reader) (*mcp.MCPServerConfig, error) {
+		return &mcp.MCPServerConfig{
+			Name: "github",
+			Type: "http",
+			URL:  "https://api.githubcopilot.com/mcp/",
+			// Env is nil — simulates OAuth-based setup
+		}, nil
+	}
+
+	saveGitHubMCPServer = func(config *mcp.MCPServerConfig) error {
+		return nil
+	}
+
+	credStoreCalled := false
+	setCredentialStore = func(provider, value string) error {
+		credStoreCalled = true
+		return nil
+	}
+
+	// Create pipe for stdin
+	r, w, _ := os.Pipe()
+	go func() {
+		w.WriteString("s\n")
+		w.Close()
+	}()
+	os.Stdin = r
+
+	newReaderFromStdin = func(in *os.File) *bufio.Reader {
+		return bufio.NewReader(in)
+	}
+
+	mockCfgMgr := &mockConfigManager{
+		config: &configuration.Config{
+			SkipPrompt:       false,
+			MCP:              mcp.MCPConfig{},
+			DismissedPrompts: make(map[string]bool),
+		},
+	}
+
+	mockAgt := &mockAgent{
+		configManager:     mockCfgMgr,
+		mcpToolsRefreshed: false,
+	}
+
+	promptGitHubMCPSetupIfNeeded(mockAgt)
+
+	if credStoreCalled {
+		t.Error("setCredentialStore should NOT have been called when server has no PAT in Env")
+	}
+}
+
+// =============================================================================
+// TestPromptGitHubMCPSetupIfNeeded_CredentialStoreError
+// =============================================================================
+
+func TestPromptGitHubMCPSetupIfNeeded_CredentialStoreError(t *testing.T) {
+	origGetwd := getwdFunc
+	origShouldPrompt := shouldPromptGitHubSetup
+	origDetect := detectGitHubRepo
+	origRunSetup := runGitHubMCPSetup
+	origSave := saveGitHubMCPServer
+	origStdin := os.Stdin
+	origNewReader := newReaderFromStdin
+	origSetCred := setCredentialStore
+
+	defer func() {
+		getwdFunc = origGetwd
+		shouldPromptGitHubSetup = origShouldPrompt
+		detectGitHubRepo = origDetect
+		runGitHubMCPSetup = origRunSetup
+		saveGitHubMCPServer = origSave
+		os.Stdin = origStdin
+		newReaderFromStdin = origNewReader
+		setCredentialStore = origSetCred
+	}()
+
+	getwdFunc = func() (string, error) {
+		return "/test/dir", nil
+	}
+
+	shouldPromptGitHubSetup = func(workingDir string, cfg mcp.MCPConfig, dismissedPrompts map[string]bool) bool {
+		return true
+	}
+
+	repoInfo := &mcp.GitHubRepoInfo{Owner: "testowner", Repo: "testrepo"}
+	detectGitHubRepo = func(workingDir string) *mcp.GitHubRepoInfo {
+		return repoInfo
+	}
+
+	runGitHubMCPSetup = func(ctx context.Context, repo *mcp.GitHubRepoInfo, reader *bufio.Reader) (*mcp.MCPServerConfig, error) {
+		return &mcp.MCPServerConfig{
+			Name: "github",
+			Type: "http",
+			URL:  "https://api.githubcopilot.com/mcp/",
+			Env:  map[string]string{"GITHUB_PERSONAL_ACCESS_TOKEN": "my-pat-123"},
+		}, nil
+	}
+
+	saveCalled := false
+	saveGitHubMCPServer = func(config *mcp.MCPServerConfig) error {
+		saveCalled = true
+		return nil
+	}
+
+	setCredentialStore = func(provider, value string) error {
+		return errors.New("mock credential store error")
+	}
+
+	// Create pipe for stdin
+	r, w, _ := os.Pipe()
+	go func() {
+		w.WriteString("s\n")
+		w.Close()
+	}()
+	os.Stdin = r
+
+	newReaderFromStdin = func(in *os.File) *bufio.Reader {
+		return bufio.NewReader(in)
+	}
+
+	mockCfgMgr := &mockConfigManager{
+		config: &configuration.Config{
+			SkipPrompt:       false,
+			MCP:              mcp.MCPConfig{},
+			DismissedPrompts: make(map[string]bool),
+		},
+	}
+
+	mockAgt := &mockAgent{
+		configManager:     mockCfgMgr,
+		mcpToolsRefreshed: false,
+	}
+
+	promptGitHubMCPSetupIfNeeded(mockAgt)
+
+	// saveGitHubMCPServer should have been called before the credential store attempt
+	if !saveCalled {
+		t.Error("expected saveGitHubMCPServer to be called before credential store attempt")
+	}
+
+	// RefreshMCPTools should still be called despite the credential store error
+	if !mockAgt.mcpToolsRefreshed {
+		t.Error("expected RefreshMCPTools to be called even when credential store fails")
 	}
 }

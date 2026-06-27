@@ -34,10 +34,10 @@ _Spec: `roadmap/SP-081-delete-dead-global-executor.md` (status: 📋 Spec; clean
 
 Cleanup (Low, ~1 hour): `pkg/tools/global.go` exposes `InitializeGlobalExecutor` / `GetGlobalExecutor` / `ExecuteWithGlobal` with **zero non-test callers** (verified via `grep`). The init function carries a misleading "TODO: Make this configurable based on security settings" comment that has no consumer.
 
-- [ ] SP-081-1: Audit callers (`grep -rn "tools\.GetGlobalExecutor\|tools\.InitializeGlobalExecutor\|tools\.ExecuteWithGlobal" pkg/ cmd/`); confirm zero non-test callers.
-- [ ] SP-081-2: Delete `pkg/tools/global.go`.
-- [ ] SP-081-3: Delete `pkg/tools/executor_behavior_test.go` if its only purpose was the global executor; otherwise prune the global-executor cases and keep the rest.
-- [ ] SP-081-4: Acceptance: file does not exist; grep returns zero matches; `go build ./...` clean; `go test ./...` green.
+- [x] SP-081-1: Audit callers (`grep -rn "tools\.GetGlobalExecutor\|tools\.InitializeGlobalExecutor\|tools\.ExecuteWithGlobal" pkg/ cmd/`); confirm zero non-test callers. _Audit complete: zero matches across `pkg/` and `cmd/` for `InitializeGlobalExecutor`, `GetGlobalExecutor`, `ExecuteWithGlobal`, `ExecuteToolCall` (global), `ExecuteToolByName` (global), `RegisterTool` (global), `GetTool` (global), `ListTools` (global). The legitimate `*Executor` method receivers in `executor.go` and `executor_test.go` are unrelated and unaffected._
+- [x] SP-081-2: Delete `pkg/tools/global.go`. _Shipped in `d14db7d` — file deleted (105 lines)._
+- [x] SP-081-3: Delete `pkg/tools/executor_behavior_test.go` if its only purpose was the global executor; otherwise prune the global-executor cases and keep the rest. _Verified: `pkg/tools/executor_behavior_test.go` exercises `NewExecutor`, `NewSimplePermissionChecker`, `normalizeArgsForTool`, `*Executor.ExecuteTool`, `*Executor.ExecuteToolByName`, and `*Executor` session lifecycle — NONE of these touch `global.go`. The test file is preserved unchanged._
+- [x] SP-081-4: Acceptance: file does not exist; grep returns zero matches; `go build ./...` clean; `go test ./...` green. _Verified: `ls pkg/tools/global.go` fails (file deleted); grep for `InitializeGlobalExecutor`/`GetGlobalExecutor`/`ExecuteWithGlobal` returns zero matches; `go build ./...` + `make build-all` clean; `go test ./pkg/tools/... ./pkg/agent_tools/... ./pkg/agent/...` all green._
 
 ## SP-082: Preserve Key Insertion Order in Structured File Tools
 _Spec: `roadmap/SP-082-preserve-structured-file-key-order.md` (status: 📋 Spec; supersedes original `roadmap/SP-066-structured-file-key-order.md` with concrete plan)_

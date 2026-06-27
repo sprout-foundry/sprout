@@ -289,13 +289,20 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			currentTurnRenderer.Store(turnRenderer)
 			if router := chatAgent.OutputRouter(); router != nil {
 				router.SetExternalWriteHook(turnRenderer.OnExternalWrite)
-				// SP-061: route reasoning chunks to the renderer's
-				// dedicated sink so they collapse into a single
-				// "▽ Thinking · N kB" header rather than streaming
-				// raw monologue. Only takes effect when
-				// SetReasoningTerminalEnabled(true) — by default the
-				// CLI still suppresses reasoning entirely.
-				router.SetReasoningCallback(turnRenderer.WriteReasoningChunk)
+				// SP-056: When reasoning mode is "fold", route reasoning chunks to
+				// the fold instead of the turn renderer's collapsed header.
+				if fold := currentReasoningFold; fold != nil {
+					fold.Start()
+					router.SetReasoningCallback(fold.Chunk)
+				} else {
+					// SP-061: route reasoning chunks to the renderer's
+					// dedicated sink so they collapse into a single
+					// "▽ Thinking · N kB" header rather than streaming
+					// raw monologue. Only takes effect when
+					// SetReasoningTerminalEnabled(true) — by default the
+					// CLI still suppresses reasoning entirely.
+					router.SetReasoningCallback(turnRenderer.WriteReasoningChunk)
+				}
 			}
 
 			// SP-048-1b: Try fast paths BEFORE starting the "Thinking"
@@ -364,6 +371,11 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 				// stale renderer on the next turn (each turn builds a
 				// new renderer above).
 				router.SetReasoningCallback(nil)
+				// SP-056: Resolve any active fold at turn end (catches the case
+				// where reasoning ended but no assistant text arrived).
+				if fold := currentReasoningFold; fold != nil && fold.IsActive() {
+					fold.Resolve()
+				}
 			}
 			turnRenderer.FinalizeAtTurnEnd()
 			currentTurnRenderer.Store(nil)

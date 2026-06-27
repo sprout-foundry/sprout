@@ -722,3 +722,74 @@ func TestRouteAgentMessage_HandsOffToolLogToWebUI(t *testing.T) {
 	assert.NotEmpty(t, termWrites, "error messages must never be suppressed")
 	mu.Unlock()
 }
+
+func TestOutputRouter_SetReasoningCallback_RoutesOnlyToCallback(t *testing.T) {
+	// Create an output router with no event bus (terminal-only mode)
+	router := NewOutputRouter(nil, nil)
+
+	// Track what the callback receives
+	var received []string
+	router.SetReasoningCallback(func(chunk string) {
+		received = append(received, chunk)
+	})
+
+	// Route a reasoning chunk
+	router.RouteStreamChunk("thinking step 1", "reasoning")
+
+	// The callback should receive it
+	if len(received) != 1 || received[0] != "thinking step 1" {
+		t.Errorf("reasoning callback should receive chunk, got %v", received)
+	}
+
+	// Route a non-reasoning chunk — it should NOT go to the reasoning callback
+	// (it goes to the streaming path instead)
+	router.RouteStreamChunk("hello", "text")
+	if len(received) != 1 {
+		t.Errorf("non-reasoning chunk should NOT go to reasoning callback, got %v", received)
+	}
+
+	// Clear the callback — reasoning should fall through
+	router.SetReasoningCallback(nil)
+	received = nil
+	router.SetReasoningTerminalEnabled(true)
+	router.RouteStreamChunk("thinking step 2", "reasoning")
+	// With no callback and reasoningTerminalEnabled, reasoning falls through
+	// to the streaming path (no-op here since no streaming callback is set)
+	// The reasoning callback should NOT receive anything since it was cleared
+	if len(received) != 0 {
+		t.Errorf("cleared callback should not receive anything, got %v", received)
+	}
+}
+
+func TestOutputRouter_SetReasoningCallback_NilEventBus(t *testing.T) {
+	// Ensure the router works with a nil event bus
+	router := NewOutputRouter(nil, nil)
+	if router.Mode() != OutputModeTerminal {
+		t.Errorf("expected OutputModeTerminal, got %v", router.Mode())
+	}
+
+	var received []string
+	router.SetReasoningCallback(func(chunk string) {
+		received = append(received, chunk)
+	})
+
+	router.RouteStreamChunk("test reasoning", "reasoning")
+	if len(received) != 1 {
+		t.Errorf("expected 1 chunk, got %d", len(received))
+	}
+}
+
+func TestOutputRouter_SetReasoningCallback_WithEventBus(t *testing.T) {
+	bus := events.NewEventBus()
+	router := NewOutputRouter(nil, bus)
+
+	var received []string
+	router.SetReasoningCallback(func(chunk string) {
+		received = append(received, chunk)
+	})
+
+	router.RouteStreamChunk("test reasoning", "reasoning")
+	if len(received) != 1 {
+		t.Errorf("expected 1 chunk, got %d", len(received))
+	}
+}

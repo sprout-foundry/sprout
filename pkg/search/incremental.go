@@ -178,3 +178,30 @@ func MarkSessionDirty(sessionID string) {
 		GlobalUpdater.MarkDirty(sessionID)
 	}
 }
+
+// ResetGlobalUpdaterForTest stops the current global updater (if any), then
+// re-initializes the sync.Once so subsequent InitGlobalUpdater calls take
+// effect. Returns the previous updater so callers can restore it. Intended
+// for tests that need to redirect the index to a temp dir.
+//
+// Note: the underlying *IndexUpdater may still hold pending timer events
+// scheduled with the OLD path. The Stop() call here cancels them.
+func ResetGlobalUpdaterForTest() (old *IndexUpdater) {
+	if GlobalUpdater != nil {
+		GlobalUpdater.Stop()
+	}
+	old = GlobalUpdater
+	GlobalUpdater = nil
+	globalUpdaterOnce = sync.Once{}
+	return old
+}
+
+// RestoreGlobalUpdater puts the global back to its prior state after a
+// test called ResetGlobalUpdaterForTest. Stops the current global first.
+func RestoreGlobalUpdater(old *IndexUpdater) {
+	if GlobalUpdater != nil {
+		GlobalUpdater.Stop()
+	}
+	GlobalUpdater = old
+	globalUpdaterOnce = sync.Once{}
+}

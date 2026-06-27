@@ -13,6 +13,7 @@ import (
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
+	"github.com/sprout-foundry/sprout/pkg/search"
 )
 
 const (
@@ -24,6 +25,11 @@ const (
 // Reset to default when running tests (helps with parallel test safety)
 func init() {
 	getStateDirFunc = defaultGetStateDir
+	// Initialize the search index updater for debounced incremental updates.
+	sd, err := defaultGetStateDir()
+	if err == nil {
+		search.InitGlobalUpdater(filepath.Join(sd, "search-index.json"), sd)
+	}
 }
 
 // ConversationState represents the state of a conversation that can be persisted
@@ -272,7 +278,11 @@ func (a *Agent) SaveStateScoped(sessionID, workingDir string) error {
 		return fmt.Errorf("failed to marshal state: %w", err)
 	}
 
-	return os.WriteFile(stateFile, data, 0600)
+	err = os.WriteFile(stateFile, data, 0600)
+	if err == nil {
+		search.MarkSessionDirty(cleanSessionID)
+	}
+	return err
 }
 
 // LoadStateWithoutAgent loads a conversation state by session ID without an Agent instance

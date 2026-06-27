@@ -864,7 +864,7 @@
 .sidebar .styled-toggle .toggle-track {
   width: 34px;
   height: 18px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--border-default);
   position: relative;
   transition: background 0.2s var(--ease-out);

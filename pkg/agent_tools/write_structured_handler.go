@@ -23,7 +23,7 @@ func (h *writeStructuredFileHandler) Name() string {
 func (h *writeStructuredFileHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "write_structured_file",
-		Description: "Write schema-validated structured data to JSON/YAML with deterministic formatting",
+		Description: "Write schema-validated structured data to JSON/YAML with deterministic formatting. Key insertion order is preserved — fields appear in the file in the order you provide them, producing predictable diffs.",
 		Parameters: []ParameterDef{
 			{
 				Name:        "path",

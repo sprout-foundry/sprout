@@ -29,7 +29,7 @@
   color: var(--text-secondary);
   cursor: pointer;
   padding: 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -112,7 +112,7 @@
   padding: 16px;
   background: var(--editor-pane-bg-secondary);
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   cursor: pointer;
   transition:
     background,
@@ -142,7 +142,7 @@
   height: 40px;
   background: var(--accent-color);
   color: var(--accent-bg);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   flex-shrink: 0;
 }
 
@@ -180,7 +180,7 @@
   padding: 16px;
   background: var(--editor-pane-bg-secondary);
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   cursor: default;
   transition:
     background,
@@ -203,7 +203,7 @@
   height: 44px;
   background: var(--accent-color);
   color: var(--accent-bg);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   flex-shrink: 0;
 }
 
@@ -236,7 +236,7 @@
   padding: 12px 16px;
   background: var(--editor-pane-bg-secondary);
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   cursor: pointer;
   transition:
     background,
@@ -318,7 +318,7 @@
   font-weight: 600;
   background: var(--editor-pane-bg-secondary);
   border: 1px solid var(--border-subtle);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
   color: var(--text-primary);
 }
@@ -335,7 +335,7 @@
 
 .welcome-content::-webkit-scrollbar-thumb {
   background: var(--scrollbar-thumb);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 
 .welcome-content::-webkit-scrollbar-thumb:hover {

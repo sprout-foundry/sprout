@@ -161,11 +161,10 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 		execCtx := withToolExecutionMetadata(ctx, toolCallID, normalizedToolName, te.agent.effectiveCwd())
 		images, result, err := registry.ExecuteTool(execCtx, normalizedToolName, args, te.agent)
 
-		// Check for unknown tool using typed error classification first,
-		// then fall back to string matching for untyped errors (backward compat).
-		// TODO: migrate registry to return InvalidInputError for unknown tools
-		// so this string check can be removed entirely.
-		if err != nil && (agenterrors.IsInvalidInput(err) || strings.Contains(err.Error(), "unknown tool")) {
+		// Unknown-tool detection uses typed error classification only.
+		// Tools return agenterrors.NewInvalidInputError("unknown tool: ..."),
+		// detected here via agenterrors.IsInvalidInput.
+		if err != nil && agenterrors.IsInvalidInput(err) {
 			if fallbackResult, fallbackErr, handled := te.tryExecuteMCPTool(normalizedToolName, args); handled {
 				resultChan <- struct {
 					images []api.ImageData

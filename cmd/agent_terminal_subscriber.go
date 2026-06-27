@@ -96,6 +96,11 @@ func startTerminalToolSubscriber(ctx context.Context, chatAgent *agent.Agent, ev
 						indicator.Stop()
 						continue
 					}
+					// SP-056-6a: Resolve any active reasoning fold on the first tool event
+					// when reasoning ended but no assistant text arrived to trigger resolution.
+					if fold := currentReasoningFold; fold != nil && fold.IsActive() {
+						fold.Resolve()
+					}
 					args, _ := data["arguments"].(string)
 					if id, _ := data["tool_call_id"].(string); id != "" && args != "" {
 						pendingArgs[id] = args

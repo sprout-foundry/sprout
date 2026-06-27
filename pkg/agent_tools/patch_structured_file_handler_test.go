@@ -39,6 +39,19 @@ func assertKeyOrder(t *testing.T, content string, keys []string) {
 	}
 }
 
+func TestPatchStructuredFile_Definition_KeyOrderPreservation(t *testing.T) {
+	h := &patchStructuredFileHandler{}
+	def := h.Definition()
+
+	descLower := strings.ToLower(def.Description)
+	if !strings.Contains(descLower, "order") {
+		t.Fatalf("description should mention 'order' for key order preservation, got: %s", def.Description)
+	}
+	if !strings.Contains(descLower, "diff") {
+		t.Fatalf("description should mention 'diff' for minimal diff, got: %s", def.Description)
+	}
+}
+
 func TestPatchStructuredFile_PreservesOrder_JSON(t *testing.T) {
 	// Create a temp JSON file with keys in non-alphabetical order.
 	tmpDir := t.TempDir()

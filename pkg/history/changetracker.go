@@ -596,6 +596,17 @@ func isFileStale(filename, newCode string) bool {
 // untracked files, or when the file has uncommitted modifications, the
 // content check is the sole authority.
 func IsRevertSafe(filename, newCode string) bool {
+	return IsRevertSafeWithOriginal(filename, newCode, "")
+}
+
+// IsRevertSafeWithOriginal is the full-aware staleness guard used by
+// recovery paths that have the OriginalCode (the content to be written
+// back). The original-aware path allows recovery when the file on disk
+// matches HEAD (a destructive git command aligned it to HEAD) but the
+// OriginalCode is NOT the HEAD content — meaning the original was
+// uncommitted work that the destructive command destroyed. Restoring
+// it does NOT undo committed work; it restores destroyed work.
+func IsRevertSafeWithOriginal(filename, newCode, originalCode string) bool {
 	// 1. Empty or redacted newCode: no baseline to compare against.
 	//    Allow (matches the historical isFileStale behaviour).
 	if newCode == "" || newCode == RedactedContentMarker {
@@ -614,6 +625,11 @@ func IsRevertSafe(filename, newCode string) bool {
 	}
 	// 4. disk == newCode, but check git: if this content is committed
 	//    to HEAD, reverting to OriginalCode would undo committed work.
+	//    BUT: if originalCode is provided and does NOT match HEAD, then
+	//    the snapshot captured uncommitted work that a destructive git
+	//    command (checkout, reset, clean) aligned to HEAD. Restoring
+	//    originalCode does NOT undo committed work — it restores
+	//    destroyed uncommitted work. Allow it.
 	committed, gitErr := git.IsFileContentCommitted(filename)
 	if gitErr != nil {
 		// git check failed (e.g. transient error) — fall back to the
@@ -622,7 +638,16 @@ func IsRevertSafe(filename, newCode string) bool {
 		return true
 	}
 	if committed {
-		// File matches HEAD → committed work → refuse the revert.
+		// File matches HEAD → committed work. But if the originalCode
+		// is different from what's on disk (HEAD), restoring it would
+		// bring back uncommitted work that git destroyed — not undo a
+		// commit. Allow this specific case.
+		if originalCode != "" && originalCode != RedactedContentMarker && originalCode != string(current) {
+			return true
+		}
+		// File matches HEAD and original would write HEAD content back
+		// (or original is empty/redacted) → refuse to avoid undoing
+		// committed work.
 		return false
 	}
 	// 5. disk == newCode and not committed → safe to revert
@@ -742,7 +767,7 @@ func handleRevisionRollback(group RevisionGroup) error {
 		// matches NewCode, if that content has been committed to git HEAD
 		// (the work is now version-controlled), the revert is refused so it
 		// can't silently undo committed work.
-		if !IsRevertSafe(change.Filename, change.NewCode) {
+		if !IsRevertSafeWithOriginal(change.Filename, change.NewCode, change.OriginalCode) {
 			AuditRevertSkip("handleRevisionRollback", change.Filename, "stale or committed")
 			fmt.Printf("  Skipping %s: file modified since snapshot (safety check)\n", change.Filename)
 			continue

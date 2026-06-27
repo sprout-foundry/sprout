@@ -164,8 +164,10 @@ type ApprovalManager interface {
 // WebBrowser provides headless browser navigation for URL/content analysis.
 type WebBrowser interface {
 	// BrowseURL navigates to a URL and returns rendered content.
-	// The opts parameter carries action, selectors, and other options
-	// (passed as a map of string to any for schema flexibility).
+	// The opts parameter carries tool arguments (action, viewport dimensions,
+	// selectors, steps, etc.) as a flexible map. Implementations are expected
+	// to convert this map into their internal option struct (e.g.
+	// webcontent.BrowseOptions) and perform any action-specific validation.
 	BrowseURL(ctx context.Context, url string, opts map[string]any) (string, error)
 }
 

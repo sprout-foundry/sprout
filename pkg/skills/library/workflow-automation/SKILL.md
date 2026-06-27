@@ -43,6 +43,246 @@ Then generate the workflow JSON using the **Full Autonomous Workflow template** 
 
 ---
 
+## The Coordinated Flow — How a Workflow Actually Runs
+
+When you run a full autonomous TODO workflow, the work flows through **three layers of personas**, each delegating to the next. Understanding this chain is the single most important thing for debugging why a workflow didn't do what you expected.
+
+### The Three Layers
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Layer 1: Coordinator (initial.persona = "coordinator") │
+│  Owns the whole run — reads TODO.md, picks items,       │
+│  delegates each to an orchestrator, commits results,    │
+│  marks [x], moves on.                                   │
+└──────────────────────┬──────────────────────────────────┘
+                       │ run_subagent(persona="orchestrator")
+                       ▼
+┌─────────────────────────────────────────────────────────┐
+│  Layer 2: Orchestrator (one per TODO item)              │
+│  Owns ONE TODO item end-to-end. Delegates to            │
+│  coder → tester → reviewer. Does NOT touch git or       │
+│  write commits — that's the coordinator's job.          │
+└──────────────────────┬──────────────────────────────────┘
+                       │ run_subagent(persona="coder")
+                       │ run_subagent(persona="tester")
+                       │ run_subagent(persona="reviewer")
+                       ▼
+┌─────────────────────────────────────────────────────────┐
+│  Layer 3: Leaf workers (coder / tester /                │
+│  reviewer / debugger)                                   │
+│  Focused, well-scoped work. Return results and exit.    │
+└─────────────────────────────────────────────────────────┘
+```
+
+### What the Coordinator Actually Does
+
+The coordinator is the `initial.persona` in the workflow JSON. It receives the prompt from `automate/workflow_prompt.md`, which drives a loop like this:
+
+1. Read `TODO.md`, find the first `[ ]` item
+2. Create a `task_queue` entry for tracking
+3. **Delegate to orchestrator** via `run_subagent(persona="orchestrator")` with verbatim instructions (see below)
+4. **Verify the orchestrator delegated** — check its output for `run_subagent` calls to coder/tester/reviewer. If it did the work directly, treat as failure and retry
+5. Verify the build passes
+6. Commit the changes (coordinator is the ONLY layer that touches git)
+7. Mark the TODO item `[x]`
+8. Move to the next item
+
+The coordinator is responsible for the git safety rules: no `git push`, no `git rebase`, no `git reset --hard`, no `git checkout`/`git restore`/`git switch`. These are hardcoded in the workflow prompt.
+
+### What the Orchestrator Actually Does
+
+The orchestrator is spawned by the coordinator via `run_subagent(persona="orchestrator")`. The coordinator pastes these verbatim instructions into the orchestrator's prompt (excerpted from `automate/workflow_prompt.md`):
+
+```
+You are the orchestrator for this task. You MUST delegate all
+implementation, testing, and review work to specialized subagents.
+Do NOT write code, tests, or perform reviews yourself. Follow this
+exact sequence using run_subagent (serialized, NOT parallel):
+
+  a) Activate relevant skills first.
+  b) Write code: Delegate to coder persona.
+  c) Verify build: Run the project build command.
+  d) Write tests: Delegate to tester persona.
+  e) Run tests: Execute the test suite. Iterate if needed.
+  f) Code review: Delegate to reviewer persona.
+  g) Fix review findings: Delegate to coder for MUST_FIX / SHOULD_FIX.
+  h) Final verification: Run build and tests.
+  i) Report back: List all files changed, test results, concerns.
+
+Rules: Use ONLY run_subagent (serialized). Never write code yourself.
+```
+
+**Key constraint:** The orchestrator MUST delegate — it must not write code, tests, or reviews itself. The coordinator verifies this by checking the orchestrator's output for `run_subagent` calls. If the orchestrator skipped delegation, the coordinator retries with a stronger reminder.
+
+**The orchestrator does NOT:**
+- Touch git (no commits, no staging, no pushes)
+- Write commits
+- Mark TODO items as complete
+- Process multiple TODO items
+
+### Strict Separation of Concerns
+
+| Action | Coordinator | Orchestrator | Leaf workers |
+|--------|-------------|--------------|--------------|
+| Read TODO.md | ✓ | — | — |
+| Delegate via `run_subagent` | ✓ (to orchestrator) | ✓ (to coder/tester/reviewer) | — |
+| Write code | — | — | ✓ (coder) |
+| Write tests | — | — | ✓ (tester) |
+| Review code | — | — | ✓ (reviewer) |
+| Run build/tests | ✓ (verify) | ✓ (iterate) | — |
+| Git operations (commit, stage) | ✓ | **NEVER** | **NEVER** |
+| Mark TODO `[x]` | ✓ | — | — |
+
+When a user reports "my workflow didn't commit" or "my orchestrator wrote code directly," the issue is almost always a breakdown in this chain — either the orchestrator didn't delegate, or the coordinator didn't verify.
+
+---
+
+## subagent_overrides — The Resolution Chain
+
+When a workflow spawns a subagent with a given persona (e.g., `run_subagent(persona="coder")`), the runtime must decide which provider and model to use. The `subagent_overrides` in your workflow JSON is the highest-priority input in this decision. Here's the exact chain.
+
+### Resolution Order (highest to lowest priority)
+
+For each spawned subagent with persona **X**, the runtime evaluates in this order (first match wins):
+
+1. **Workflow `subagent_overrides[X]`** — patched into `cfg.SubagentTypes[X].Provider/Model` at workflow start by `applyWorkflowSubagentOverrides` in `cmd/agent_workflow_loader.go`. This is the highest priority.
+2. **Persisted persona config** — `SubagentTypes[X].Provider/Model` from the user's saved config (set via `manage_settings` or manual config edit).
+3. **Global config** — `subagent_provider` / `subagent_model` from the user's config.
+4. **Parent agent** — the provider/model of the agent that spawned the subagent (final fallback).
+
+Provider and model resolve **independently** — a persona with only a model override still picks up the config-level provider (and vice versa).
+
+The code implementing this chain is `GetPersonaProviderModel` in `pkg/agent/persona.go`:
+
+```go
+// Resolution chain (simplified):
+provider := persona.Provider        // step 1: workflow override or persisted config
+if provider == "" {
+    provider = config.SubagentProvider  // step 2: global config
+}
+if provider == "" {
+    provider = parentRuntimeProvider()  // step 3: parent agent
+}
+
+model := persona.Model              // step 1: workflow override or persisted config
+if model == "" {
+    model = config.SubagentModel    // step 2: global config
+}
+if model == "" {
+    model = providerDefaultModel()  // step 3: provider's default
+}
+if model == "" {
+    model = parentModel()           // step 4: parent agent
+}
+```
+
+### How Overrides Are Applied at Runtime
+
+When the workflow starts, `applyWorkflowInitialOverrides` in `cmd/agent_workflow_runtime.go` calls:
+
+```go
+chatAgent.GetConfigManager().UpdateConfigNoSave(func(cfg *configuration.Config) error {
+    applyWorkflowSubagentOverrides(cfg.SubagentTypes, runtime.SubagentOverrides)
+    return nil
+})
+```
+
+This patches the in-memory `SubagentTypes` map **before** any subagents are spawned. The key detail: `UpdateConfigNoSave` means the changes are in-memory only — they don't persist to disk unless `persist_runtime_overrides: true` is set in the workflow JSON. **The Go default when the field is omitted is `true` (persist)** — so autonomous workflows typically set `persist_runtime_overrides: false` explicitly to prevent the workflow from changing the user's global defaults.
+
+### Silent-Skip Cases
+
+`applyWorkflowSubagentOverrides` skips an override entry (no error) in three cases. Each skip emits an INFO log line on stderr via `log.Printf` — **no debug flag is required**; the logs always appear in the workflow output:
+
+| Case | What happens | How to diagnose |
+|------|-------------|-----------------|
+| **Unknown persona key** | The key doesn't match any entry in `SubagentTypes` (and no alias match). The override is ignored. | Look for `[workflow] subagent_overrides: unknown persona "X"` in the workflow stderr/output. Also check your config: `manage_settings` or inspect `~/.config/sprout/config.json` for `subagent_types`. |
+| **Disabled persona** | The persona exists in `SubagentTypes` but has `enabled: false`. The override is ignored. | Look for `[workflow] subagent_overrides: disabled persona "X"` in stderr. Also check your config for `subagent_types.<persona>.enabled`. |
+| **Empty override** | Both `provider` AND `model` are empty strings. The entry is skipped (nothing to apply). | Check your workflow JSON — did you accidentally omit both fields? `{"coder": {}}` is a no-op. |
+
+**Persona ID normalization:** Keys are normalized before lookup — lowercased with hyphens replaced by underscores. So `"repo-orchestrator"`, `"repo_orchestrator"`, and `"Repo_Orchestrator"` all resolve to the same entry. Aliases defined in `SubagentTypes` are also checked.
+
+**Debugging tip:** If your subagents aren't using the models you expected, look for `[workflow] subagent_overrides` log lines in the workflow output. Every apply and every skip is logged:
+
+```
+[workflow] subagent_overrides applied: persona "coder" → provider=ai-worker model=qwen3.6-27b
+[workflow] subagent_overrides: unknown persona "unknown_persona" — no matching SubagentTypes entry or alias; override ignored (provider=ai-worker model=qwen3.6-27b)
+```
+
+---
+
+## Reading the Canonical Example — `automate/workflow.json`
+
+This repo's `automate/workflow.json` is the reference implementation of a full autonomous TODO processor. Walk through it field by field:
+
+```json
+{
+  "__runCommand": "sprout agent --workflow-config automate/workflow.json",
+  "budget": {
+    "on_exceed": "truncate",
+    "usd": 10,
+    "warn_at": [0.5, 0.8]
+  },
+  "continue_on_error": true,
+  "description": "Processes TODO.md items one at a time with full build/test/review cycle...",
+  "initial": {
+    "max_iterations": 500,
+    "model": "MiniMax-M3",
+    "persona": "coordinator",
+    "prompt_file": "automate/workflow_prompt.md",
+    "provider": "minimax",
+    "risk_profile": "permissive",
+    "skip_prompt": true,
+    "subagent_overrides": {
+      "coder":      { "model": "qwen3.6-27b", "provider": "ai-worker" },
+      "debugger":   { "model": "qwen3.6-27b", "provider": "ai-worker" },
+      "reviewer":   { "model": "qwen3.6-27b", "provider": "ai-worker" },
+      "tester":     { "model": "qwen3.6-27b", "provider": "ai-worker" },
+      "orchestrator": { "model": "qwen3.6-27b", "provider": "ai-worker" }
+    }
+  },
+  "no_web_ui": true,
+  "persist_runtime_overrides": false,
+  "progress": {
+    "heartbeat_seconds": 600
+  }
+}
+```
+
+### Field-by-Field Explanation
+
+| Field | Value | Why it matters |
+|-------|-------|----------------|
+| `__runCommand` | `"sprout agent --workflow-config automate/workflow.json"` | Documentation only — records the CLI invocation. Used by `list_automate_workflows` and the WebUI panel to show users how to run the workflow from the command line. Not consumed by the runtime. |
+| `description` | `"Processes TODO.md items..."` | Shown by `list_automate_workflows` and the WebUI panel. Helps users identify which workflow to run when they have multiple. Always include a clear one-sentence description. |
+| `budget.usd` | `10` | Hard cap on total USD spend across primary + all subagents. Prevents runaway costs on autonomous runs. |
+| `budget.on_exceed` | `"truncate"` | When the budget is reached, finish the current LLM response then stop. The run doesn't abort mid-token — it completes the current response gracefully. |
+| `budget.warn_at` | `[0.5, 0.8]` | Emit a stdout warning at 50% and 80% of the budget. Helps the user gauge spending before the cap hits. |
+| `continue_on_error` | `true` | If one TODO item fails (build can't be fixed after 2 attempts), the coordinator marks it as failed and moves to the next item. The workflow doesn't stop entirely. |
+| `no_web_ui` | `true` | Skip the WebUI bootstrap. Autonomous workflows run in the background — they don't need an interactive UI. |
+| `persist_runtime_overrides` | `false` | Don't write the subagent overrides to the user's config file. Keeps the workflow self-contained — running it doesn't change your global defaults. **Note: the Go default when this field is omitted is `true` (persist)** — autonomous workflows set `false` explicitly. |
+| `initial.persona` | `"coordinator"` | The coordinator persona runs the whole workflow. It's the entry point — the agent that receives the prompt from `workflow_prompt.md`. |
+| `initial.provider` / `initial.model` | `"minimax"` / `"MiniMax-M3"` | The primary agent (coordinator) uses this model. This is the "brain" that makes decisions about which TODO item to process next, whether to retry, etc. |
+| `initial.subagent_overrides` | 5 entries → `ai-worker/qwen3.6-27b` | Routes all spawned subagents (orchestrator + 4 leaf workers) to a cheaper model. The coordinator/orchestrator use the expensive primary model for decisions; the leaf workers use the cheaper model for focused implementation. This is the cost optimization pattern: ~50x cheaper per token for subagents that handle 70-80% of the actual work. |
+| `initial.max_iterations` | `500` | Maximum tool-use iterations for the coordinator. High enough to process many TODO items, but not infinite. |
+| `initial.risk_profile` | `"permissive"` | Allows the coordinator to use git operations, file writes, and shell commands. Required for a workflow that commits and modifies files. |
+| `initial.skip_prompt` | `true` | No user interaction during the run. The workflow is fully autonomous. |
+| `progress.heartbeat_seconds` | `600` | Print a budget/progress heartbeat every 600 seconds (10 min) to stdout. Format: `[budget] $X of $Y · iter N · elapsed Tm`. Useful for monitoring long runs. |
+
+### The Prompt File — `automate/workflow_prompt.md`
+
+The coordinator's instructions come from `automate/workflow_prompt.md` (referenced via `initial.prompt_file`). Its structure:
+
+1. **Role definition** — "You are an autonomous Coordinator agent processing a TODO.md list"
+2. **Per-item workflow** — the 10-step loop: read TODO.md → create task_queue entry → delegate to orchestrator → verify delegation → verify build → commit → mark `[x]` → update task_queue → next item
+3. **Rules** — max 200 items, 2-attempt retry on failure, no `git add .`, commit after each item
+4. **Git safety rules** — explicit forbidden operations (push, rebase, reset --hard, checkout, restore, switch, amend, fixup, force push)
+5. **Isolation rules** — focus only on current TODO item, don't touch other changes, retry on external conflicts up to 3 times, mark blocked if conflicts persist
+
+The prompt also contains the **verbatim orchestrator instructions** that the coordinator pastes into every `run_subagent(persona="orchestrator")` call — the 9-step sequence (activate skills → coder → build → tester → tests → reviewer → fix findings → final verify → report) with the strict rule: "Use ONLY run_subagent. Never write code yourself."
+
+---
+
 ## Launching a Workflow (run_automate)
 
 When the user asks to *run* an existing workflow (as opposed to authoring one), follow this sequence every time:
@@ -192,14 +432,9 @@ Only consult this section when the user has explicitly asked for something other
 
 ### The Canonical Type: Full Autonomous TODO Processor
 
-For completeness, here's what the default does:
+The coordinator reads TODO.md, delegates each `[ ]` item to an orchestrator (which further delegates to coder → tester → reviewer), verifies the build, commits, marks `[x]`, and repeats.
 
-1. Reads TODO.md, finds the first incomplete `[ ]` item
-2. Delegates the item to an orchestrator subagent (which further delegates to coder → tester → reviewer)
-3. Verifies the build passes after each item
-4. Commits the changes
-5. Marks the TODO item `[x]` complete
-6. Moves to the next item, repeats until done
+**See "The Coordinated Flow" section above** for the full operational breakdown of the coordinator → orchestrator → leaf worker chain, including what each layer is allowed to do and the strict separation of concerns.
 
 **Requirements**: TODO.md with `[ ]` items. The `project-planning` skill is the recommended way to produce a good TODO.md, but any markdown checklist works.
 
@@ -346,8 +581,6 @@ Default suggestion: $5 for first-time runs, $10–20 for known-good workflows. A
 
 #### Subagent Overrides (critical for cost control)
 
-Explain this section carefully:
-
 ```json
 "subagent_overrides": {
   "coder": { "provider": "cheaper-provider", "model": "cheaper-model" },
@@ -357,7 +590,7 @@ Explain this section carefully:
 }
 ```
 
-**What this does**: When the primary agent delegates work to subagents, each persona uses the provider/model specified here instead of the default. This is the primary cost control mechanism.
+Each persona key here routes spawned subagents to a specific provider/model instead of the global default. This is the primary cost control mechanism — subagents handle 70-80% of the actual work.
 
 **Implications to discuss with the user**:
 - If subagent models are too weak, code quality suffers and the primary agent spends more iterations fixing mistakes (which costs more in the long run)
@@ -366,16 +599,15 @@ Explain this section carefully:
 - The `repo_orchestrator` persona (if used) needs to be strong enough to delegate correctly — don't skimp here
 - Note: `repo_orchestrator` is an alias for `orchestrator`. It can be overridden as a subagent only when spawned by the `coordinator` persona. Other personas cannot delegate to `orchestrator`.
 
+**See "subagent_overrides — The Resolution Chain" section above** for the exact resolution order (workflow override → persisted config → global config → parent agent), silent-skip cases, and debugging tips.
+
 ### For the Full Autonomous TODO Processor specifically:
 
-Explain the complete lifecycle:
-1. The coordinator reads TODO.md, picks the first `[ ]` item
-2. It updates an in-session `TodoWrite` list to "processing item N" so progress is visible in the UI
-3. It delegates to an `orchestrator` subagent (which further delegates to coder → tester → reviewer)
-4. After completion, it verifies the build, commits, marks the TODO.md item `[x]`
-5. Moves to the next item
+The coordinator loops through TODO.md: picks each `[ ]` item, delegates to an orchestrator (which further delegates to coder → tester → reviewer), verifies the build, commits, marks `[x]`, then moves on.
 
 **TODO.md is the persistent record.** The `[ ]` → `[x]` transition in the markdown file is the only state that survives the run. `TodoWrite` is a transient UI helper, NOT a persistence layer — don't reach for `task_queue` here; this workflow doesn't use it.
+
+**See "The Coordinated Flow" section above** for the full operational breakdown — what the coordinator, orchestrator, and leaf workers actually do, the separation-of-concerns matrix, and the verbatim orchestrator prompt the coordinator pastes.
 
 **Key decision points for the user**:
 - How many TODO items to process per session (`max_iterations` on the initial)

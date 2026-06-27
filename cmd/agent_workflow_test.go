@@ -970,3 +970,83 @@ func TestSubagentOverridesWorkflowConfigParsing(t *testing.T) {
 		t.Fatalf("expected step tester provider deepinfra, got %q", cfg.Steps[0].SubagentOverrides["tester"].Provider)
 	}
 }
+
+func TestPickSubagentDefault(t *testing.T) {
+	t.Parallel()
+
+	t.Run("orchestrator present", func(t *testing.T) {
+		overrides := WorkflowSubagentOverrides{
+			"orchestrator": {Provider: "ai-worker", Model: "qwen3.6-27b"},
+			"coder":        {Provider: "openai", Model: "gpt-5"},
+		}
+		pick := pickSubagentDefault(overrides)
+		if pick.Provider != "ai-worker" || pick.Model != "qwen3.6-27b" {
+			t.Fatalf("expected orchestrator override, got provider=%q model=%q", pick.Provider, pick.Model)
+		}
+	})
+
+	t.Run("coder present only", func(t *testing.T) {
+		overrides := WorkflowSubagentOverrides{
+			"coder": {Provider: "openai", Model: "gpt-5"},
+		}
+		pick := pickSubagentDefault(overrides)
+		if pick.Provider != "openai" || pick.Model != "gpt-5" {
+			t.Fatalf("expected coder override, got provider=%q model=%q", pick.Provider, pick.Model)
+		}
+	})
+
+	t.Run("empty map returns zero value", func(t *testing.T) {
+		overrides := WorkflowSubagentOverrides{}
+		pick := pickSubagentDefault(overrides)
+		if pick.Provider != "" || pick.Model != "" {
+			t.Fatalf("expected zero value, got provider=%q model=%q", pick.Provider, pick.Model)
+		}
+	})
+
+	t.Run("alphabetical tiebreak", func(t *testing.T) {
+		overrides := WorkflowSubagentOverrides{
+			"tester":      {Provider: "anthropic", Model: "claude-haiku"},
+			"code_reviewer": {Provider: "openrouter", Model: "gemini-2.5-pro"},
+		}
+		pick := pickSubagentDefault(overrides)
+		// "code_reviewer" sorts before "tester" alphabetically
+		if pick.Provider != "openrouter" || pick.Model != "gemini-2.5-pro" {
+			t.Fatalf("expected code_reviewer (alphabetical first), got provider=%q model=%q", pick.Provider, pick.Model)
+		}
+	})
+
+	t.Run("skips entries with both empty provider and model", func(t *testing.T) {
+		overrides := WorkflowSubagentOverrides{
+			"orchestrator": {},
+			"coder":        {Provider: "openai", Model: "gpt-5"},
+		}
+		pick := pickSubagentDefault(overrides)
+		if pick.Provider != "openai" || pick.Model != "gpt-5" {
+			t.Fatalf("expected coder override, got provider=%q model=%q", pick.Provider, pick.Model)
+		}
+	})
+
+	t.Run("normalizes keys (case-insensitive, hyphens→underscores)", func(t *testing.T) {
+		// "Orchestrator" (capitalized) should normalize to "orchestrator"
+		// and be preferred over the coder entry.
+		overrides := WorkflowSubagentOverrides{
+			"Orchestrator": {Provider: "ai-worker", Model: "qwen3.6-27b"},
+			"Coder":        {Provider: "openai", Model: "gpt-5"},
+		}
+		pick := pickSubagentDefault(overrides)
+		// "Orchestrator" normalizes to "orchestrator" and is preferred over coder.
+		if pick.Provider != "ai-worker" || pick.Model != "qwen3.6-27b" {
+			t.Fatalf("expected Orchestrator override (normalized), got provider=%q model=%q", pick.Provider, pick.Model)
+		}
+	})
+
+	t.Run("coder-only with mixed casing", func(t *testing.T) {
+		overrides := WorkflowSubagentOverrides{
+			"CODER": {Provider: "openai", Model: "gpt-5"},
+		}
+		pick := pickSubagentDefault(overrides)
+		if pick.Provider != "openai" || pick.Model != "gpt-5" {
+			t.Fatalf("expected CODER override (normalized to coder), got provider=%q model=%q", pick.Provider, pick.Model)
+		}
+	})
+}

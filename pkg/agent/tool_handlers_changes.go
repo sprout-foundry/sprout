@@ -579,7 +579,7 @@ func (a *Agent) revertOne(ch TrackedFileChange) (string, bool, string) {
 	// agent wrote (NewCode), it was modified intentionally after the
 	// snapshot — by a git commit, another session, or manual edit.
 	// Reverting would silently clobber that newer work.
-	if isStaleForRevert(abs, ch.NewCode) {
+	if isStaleForRevertWithOriginal(abs, ch.NewCode, ch.OriginalCode) {
 		history.AuditRevertSkip("revertOne", abs, "stale or committed")
 		return "", false, "file modified since snapshot (stale — skipped)"
 	}
@@ -737,4 +737,12 @@ func isRecoverableOriginal(original string) bool {
 // staleness decision. See history.IsRevertSafe for the full rationale.
 func isStaleForRevert(absPath, newCode string) bool {
 	return !history.IsRevertSafe(absPath, newCode)
+}
+
+// isStaleForRevertWithOriginal is the original-aware variant used by
+// recovery paths that have the snapshot's OriginalCode. This allows
+// recovery of uncommitted work destroyed by a destructive git command
+// (git checkout, git reset, git clean) that aligned the file to HEAD.
+func isStaleForRevertWithOriginal(absPath, newCode, originalCode string) bool {
+	return !history.IsRevertSafeWithOriginal(absPath, newCode, originalCode)
 }

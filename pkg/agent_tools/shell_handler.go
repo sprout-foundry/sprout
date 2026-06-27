@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
 // shellCommandHandler implements ToolHandler for the shell_command tool.
@@ -143,6 +144,14 @@ func (h *shellCommandHandler) Validate(args map[string]any) error {
 }
 
 func (h *shellCommandHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
+	// Inject env.WorkspaceRoot into context so runShellCommand resolves
+	// the correct cmd.Dir. Without this, the shell falls back to
+	// os.Getwd() which is the package source dir during tests —
+	// creating nested .git repos that corrupt the ChangeTracker.
+	if env.WorkspaceRoot != "" {
+		ctx = filesystem.WithWorkspaceRoot(ctx, env.WorkspaceRoot)
+	}
+
 	// Extract parameters
 	var command string
 	if cmdRaw, ok := args["command"]; ok && cmdRaw != nil {

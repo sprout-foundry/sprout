@@ -6,43 +6,6 @@ record.
 
 **Status of related specs:** SP-063 (`computer_user` persona) is **partially implemented** — its core shipped; remaining work (panic key 4g, destructive-app denylist 4h) is tracked in `roadmap/SP-063-computer-use-persona.md`, not here. SP-073 (`cooperative cancellation`) shipped 2026-06-26 — all three phases green (TODO(SP-034-1c) markers cleared); further work would be new tickets, not this list.
 
-## SP-022: Remote Provider Registry — Phase 1 Foundation
-_Spec: `roadmap/SP-022-remote-provider-registry.md` (status: 📋 Proposed; Phases 1–2 partial)_
-
-Foundation (Medium): publish provider connection configs to GitHub Pages alongside model data, fetch at startup, merge over embedded baseline with thread-safe factory. Eliminates the embedded-only model and unlocks community provider PRs without a code release.
-
-### Phase 1 — package + factory thread-safety
-
-- [ ] SP-022-1a: Create `pkg/providerregistry/` package — define `RemoteProviderConfig` struct (duplicated fields from `ProviderConfig` to avoid import cycle), `ToProviderConfig()` converter, `FetchProviderConfig(ctx, providerID)`, `FetchAllProviders(ctx)` with cache/singleflight/TTL/negative-cache.
-- [ ] SP-022-1b: Add `sync.RWMutex` to `ProviderFactory` — protect `configs` and `registry.ProviderConfigs` maps; all read methods acquire RLock, all write methods acquire Lock.
-- [ ] SP-022-1c: Add `UpsertConfig(name string, cfg *ProviderConfig)` to `ProviderFactory` — acquires write lock, updates both `f.configs[name]` and `f.registry.ProviderConfigs[name]`.
-- [ ] SP-022-1d: Add SSRF validation to `pkg/providerregistry/` — reject non-HTTPS endpoints, private IPs, localhost.
-
-### Phase 2 — async remote refresh + global factory
-
-- [ ] SP-022-2a: Add async `refreshFromRemote()` to `factory.init()` with `inTestBinary()` guard — fetches all remote provider configs and upserts into the global factory.
-- [ ] SP-022-2b: Export global factory accessor from `pkg/factory/` (e.g., `GlobalFactory() *providers.ProviderFactory` or `GlobalAvailableProviders() []string`).
-- [ ] SP-022-2c: Fix `GetAvailableProviders()` in `pkg/configuration/init.go` to use the global factory instead of creating a throwaway instance.
-- [ ] SP-022-2d: Add `PROVIDER_REGISTRY_URL` env var support — default reuses same base as `MODEL_REGISTRY_URL`; support `"off"`/`"none"`/`"disabled"` to disable.
-
-### Phase 3 — publish pipeline
-
-- [ ] SP-022-3a: Create `scripts/generate-provider-index.sh` — generates `providers/index.json` listing all provider config files with timestamps.
-- [ ] SP-022-3b: Extend `.github/workflows/model-registry-publish.yml` — add step to copy `configs/*.json` to the GitHub Pages artifact with `schema_version` + `published_at` metadata injection via `jq`.
-- [ ] SP-022-3c: Publish the 7 missing provider model files (cerebras, chutes, deepseek, lmstudio, mistral, ollama-turbo, openai) — ensure `refresh_provider_catalog` covers all 11 providers (may require adding API keys for missing providers to CI secrets).
-
-### Phase 4 — provider-config cleanup
-
-- [ ] SP-022-4a: Fix `lmstudio` API key inconsistency — update `pkg/agent_providers/configs/lmstudio.json` auth type to `"none"`, regenerate `provider_gen.go`, and update `credentials/resolve.go` to consistently mark lmstudio as not requiring a key.
-
-### Phase 5 — docs + tests
-
-- [ ] SP-022-5a: Add `CONTRIBUTING.md` section documenting the provider addition pattern: create JSON config → run `generate_providers.go` → open PR → CI auto-publishes.
-- [ ] SP-022-5b: Unit tests for `pkg/providerregistry/` — cache hit/miss, negative cache, singleflight dedup, TTL expiry, offline fallback, SSRF rejection.
-- [ ] SP-022-5c: Unit tests for `UpsertConfig()` — concurrent read/write safety, both maps updated atomically.
-- [ ] SP-022-5d: Integration test: embedded-only mode (no remote) works correctly; remote configs merge over embedded.
-- [ ] SP-022-5e: Verify `make build-all` passes after all changes.
-
 ## SP-054: LSP Language Coverage
 _Spec: `roadmap/SP-054-lsp-language-coverage.md` (status: 📋 Proposed)_
 

@@ -7,7 +7,11 @@
 package tools
 
 import (
+	"crypto/sha256"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -176,4 +180,110 @@ func (ss *SyncState) GetAllMetadata() map[string]*FileMetadata {
 		result[path] = &cp
 	}
 	return result
+}
+
+// ConflictResult is returned when a container patch conflicts with unsynced
+// browser edits. The container's content is safely written as a .theirs
+// sibling instead of overwriting the browser's version.
+type ConflictResult struct {
+	// Path is the original file path that had the conflict.
+	Path string `json:"path"`
+	// TheirsPath is the <path>.theirs sibling file location.
+	TheirsPath string `json:"theirs_path"`
+	// HashContainer is the SHA-256 hex digest of the container's content.
+	HashContainer string `json:"hash_container"`
+	// HashBrowser is the SHA-256 hex digest of the browser's current content.
+	HashBrowser string `json:"hash_browser"`
+	// Message is a human-readable explanation.
+	Message string `json:"message"`
+}
+
+// computeHash returns the hex-encoded SHA-256 of the given content.
+func computeHash(content string) string {
+	h := sha256.Sum256([]byte(content))
+	return fmt.Sprintf("%x", h)
+}
+
+// EventPublisher is the minimal interface satisfied by events.EventBus.
+// Defined locally to avoid an import-cycle dependency from agent_tools → events
+// (agent_tools is used by both the daemon and the WASM browser build).
+type EventPublisher interface {
+	Publish(eventType string, data any)
+}
+
+// eventWorkspaceConflict mirrors events.EventTypeWorkspaceConflict.
+// Defined locally to avoid an import-cycle dependency.
+const eventWorkspaceConflict = "workspace.conflict_detected"
+
+// HandleContainerPatchWithConflictDetection applies a container→browser patch
+// with full conflict detection (SP-046-3).
+//
+// On clean apply (no conflict): returns (&metadataCopy, nil, nil).
+// On conflict: returns (&metadataCopy, &ConflictResult, nil).
+// On error: returns (nil, nil, err).
+func (ss *SyncState) HandleContainerPatchWithConflictDetection(
+	path string,
+	event *PatchEvent,
+	browserContent string,
+	eventBus EventPublisher,
+) (*FileMetadata, *ConflictResult, error) {
+	ss.mu.Lock()
+	defer ss.mu.Unlock()
+
+	// Guard against path traversal attacks on .theirs write.
+	if strings.Contains(path, "..") || filepath.IsAbs(path) {
+		return nil, nil, fmt.Errorf("invalid path for conflict detection: %s", path)
+	}
+
+	m := ss.getOrCreate(path)
+
+	// No conflict: apply the patch normally.
+	if m.BrowserSeq <= m.LastSyncedBrowser {
+		m.ContainerSeq = event.ContainerSeq
+		m.LastSyncedContainer = event.ContainerSeq
+		m.ModifiedAt = time.Now()
+
+		cp := *m
+		return &cp, nil, nil
+	}
+
+	// Conflict detected: browser has unsynced edits.
+	conflictTime := time.Now()
+	theirsPath := path + ".theirs"
+
+	// Write the container's version as a .theirs sibling (don't overwrite browser file).
+	if err := os.WriteFile(theirsPath, []byte(event.Content), 0644); err != nil {
+		return nil, nil, fmt.Errorf("writing conflict sibling %s: %w", theirsPath, err)
+	}
+
+	hashContainer := computeHash(event.Content)
+	hashBrowser := computeHash(browserContent)
+
+	message := fmt.Sprintf(
+		"conflict on %s: browser_seq=%d > last_synced_browser=%d — container version saved as %s",
+		path, m.BrowserSeq, m.LastSyncedBrowser, theirsPath,
+	)
+
+	cp := *m
+
+	conflict := &ConflictResult{
+		Path:          path,
+		TheirsPath:    theirsPath,
+		HashContainer: hashContainer,
+		HashBrowser:   hashBrowser,
+		Message:       message,
+	}
+
+	// Emit the event (if bus is available).
+	if eventBus != nil {
+		eventBus.Publish(eventWorkspaceConflict, map[string]interface{}{
+			"path":           path,
+			"theirs_path":    theirsPath,
+			"hash_container": hashContainer,
+			"hash_browser":   hashBrowser,
+			"modified_at":    conflictTime.Format(time.RFC3339),
+		})
+	}
+
+	return &cp, conflict, nil
 }

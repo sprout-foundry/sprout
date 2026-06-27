@@ -3,7 +3,6 @@
 package tools
 
 import (
-	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -95,7 +94,7 @@ func NewBackgroundProcessManager() *BackgroundProcessManager {
 	m := &BackgroundProcessManager{
 		processes:   make(map[string]*BackgroundProcess),
 		expiry:      2 * time.Hour,
-		maxSessions: 10,
+		maxSessions: 5, // per-chat cap matching WebUI's maxBackgroundSessionsPerChat
 		baseDir:     baseDir,
 		done:        make(chan struct{}),
 	}
@@ -149,13 +148,6 @@ func (m *BackgroundProcessManager) StartWithOptions(ctx context.Context, command
 		return "", fmt.Errorf("command cannot be empty")
 	}
 
-	m.mu.RLock()
-	if len(m.processes) >= m.maxSessions {
-		m.mu.RUnlock()
-		return "", fmt.Errorf("background session limit reached (%d active)", m.maxSessions)
-	}
-	m.mu.RUnlock()
-
 	shell := os.Getenv("SHELL")
 	if shell == "" {
 		shell = "/bin/sh"
@@ -173,11 +165,21 @@ func (m *BackgroundProcessManager) StartWithOptions(ctx context.Context, command
 	// Set process group so we can kill the entire group on stop
 	setProcessGroup(cmd)
 
-	// Generate session ID
+	// Atomic cap check, session ID generation, output file creation,
+	// process start, and map insertion — all under a single lock to
+	// prevent TOCTOU races under concurrent Start() calls.
+	m.mu.Lock()
+	if len(m.processes) >= m.maxSessions {
+		m.mu.Unlock()
+		return "", fmt.Errorf("background session limit reached (%d active)", m.maxSessions)
+	}
+
+	// Generate session ID inside the lock to prevent collisions
 	prefix := extractCommandPrefixCLI(command)
 	sanitizedPrefix := sanitizeSessionIDPartCLI(prefix)
 	randomHex, err := generateRandomHexCLI(4)
 	if err != nil {
+		m.mu.Unlock()
 		return "", fmt.Errorf("failed to generate session ID: %w", err)
 	}
 	sessionID := fmt.Sprintf("bg-%s-%s", sanitizedPrefix, randomHex)
@@ -186,16 +188,14 @@ func (m *BackgroundProcessManager) StartWithOptions(ctx context.Context, command
 	outputPath := filepath.Join(m.baseDir, sessionID+".output")
 	outputFile, err := os.OpenFile(outputPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
+		m.mu.Unlock()
 		return "", fmt.Errorf("create output file: %w", err)
 	}
 
-	// Buffer for early output capture
-	var outputBuf bytes.Buffer
-
-	// Build the writer chain: always include the file and the in-memory buffer.
+	// Build the writer chain: always include the file.
 	// For automate sessions with an event bus, tee through the chunk publisher.
 	var writers []io.Writer
-	writers = append(writers, outputFile, &outputBuf)
+	writers = append(writers, outputFile)
 
 	var publisher *OutputChunkPublisher
 	if kind == "automate" && opts != nil && opts.EventBus != nil {
@@ -211,6 +211,7 @@ func (m *BackgroundProcessManager) StartWithOptions(ctx context.Context, command
 	if err := cmd.Start(); err != nil {
 		outputFile.Close()
 		os.Remove(outputPath)
+		m.mu.Unlock()
 		return "", fmt.Errorf("start command: %w", err)
 	}
 
@@ -224,11 +225,15 @@ func (m *BackgroundProcessManager) StartWithOptions(ctx context.Context, command
 		Kind:       kind,
 		StartedAt:  time.Now(),
 		LastPolled: time.Now(),
+		exitCode:   -1,
 		done:       make(chan struct{}),
 		publisher:  publisher,
 	}
 
-	// Monitor process exit in a goroutine
+	m.processes[sessionID] = proc
+	m.mu.Unlock()
+
+	// Monitor process exit in a goroutine (started after releasing lock)
 	go func() {
 		waitErr := cmd.Wait() // reap the zombie
 		exitCode := extractExitCode(waitErr)
@@ -245,10 +250,6 @@ func (m *BackgroundProcessManager) StartWithOptions(ctx context.Context, command
 		// Close the output file handle after process exits
 		outputFile.Close()
 	}()
-
-	m.mu.Lock()
-	m.processes[sessionID] = proc
-	m.mu.Unlock()
 
 	return sessionID, nil
 }
@@ -284,6 +285,7 @@ func (m *BackgroundProcessManager) AdoptProcess(cmd *exec.Cmd, outputPath string
 		Kind:       "shell",
 		StartedAt:  time.Now(),
 		LastPolled: time.Now(),
+		exitCode:   -1,
 		done:       make(chan struct{}),
 	}
 
@@ -357,7 +359,6 @@ func (m *BackgroundProcessManager) Stop(sessionID string, grace time.Duration) e
 
 	proc.mu.Lock()
 	process := proc.Process
-	cmd := proc.Cmd
 	proc.mu.Unlock()
 
 	if process == nil {
@@ -390,13 +391,10 @@ func (m *BackgroundProcessManager) Stop(sessionID string, grace time.Duration) e
 		proc.mu.Unlock()
 
 		if stillActive {
-			// Force kill the process group
+			// Force kill the process group.
 			_ = killProcessGroup(process)
-			if cmd != nil {
-				_ = cmd.Wait() // reap
-			}
-			// Update process state so IsActive() returns false immediately.
-			// Don't close proc.done — the monitor goroutine owns that.
+			// Don't call cmd.Wait() here — the monitor goroutine owns that.
+			// The monitor goroutine will reap and update state.
 			proc.mu.Lock()
 			if proc.Process != nil {
 				proc.exitCode = 1 // killed
@@ -495,11 +493,18 @@ func (m *BackgroundProcessManager) cleanup() {
 
 		// Check for inactivity expiry (2 hours)
 		if !isExited && now.Sub(lastUsed) > m.expiry {
-			// Kill expired process
+			// Nil out process fields BEFORE killing so the monitor goroutine's
+			// exit handler becomes a no-op on state updates.
+			proc.mu.Lock()
 			p := proc.Process
+			proc.Process = nil
+			proc.Cmd = nil
+			proc.mu.Unlock()
 			if p != nil {
 				_ = killProcessGroup(p)
 			}
+			// Don't call cmd.Wait() — the monitor goroutine may still be
+			// waiting. It will see nil fields and skip its state changes.
 			_ = os.Remove(proc.OutputPath)
 			toDelete = append(toDelete, id)
 			continue

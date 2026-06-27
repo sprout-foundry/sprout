@@ -1,6 +1,8 @@
 package tools
 
 import (
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -632,4 +634,247 @@ func TestWriteStructuredFile_NestedOrderPreservation(t *testing.T) {
 	require.NotEqual(t, -1, targetIdx, "target key should exist inside build")
 	require.NotEqual(t, -1, archIdx, "arch key should exist inside build")
 	require.Less(t, targetIdx, archIdx, "target should appear before arch inside build")
+}
+
+// ---------------------------------------------------------------------------
+// SP-082-3: Additional round-trip order-preservation tests
+// ---------------------------------------------------------------------------
+
+// TestWriteStructuredFile_PackageJSON_Order verifies the canonical package.json
+// acceptance criterion: key order from RawArgsJSON is preserved through write,
+// including nested objects, and the result is valid JSON.
+func TestWriteStructuredFile_PackageJSON_Order(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &writeStructuredFileHandler{}
+	ctx := newTestCtx(dir)
+
+	path := filepath.Join(dir, "package.json")
+
+	// RawArgsJSON with the exact key order from the spec.
+	// Top-level: name → version → description → dependencies → scripts
+	// Inside dependencies: express → lodash
+	// Inside scripts: build → test → start
+	rawArgs := `{"path":"` + path + `","data":{"name":"my-pkg","version":"1.0.0","description":"A sample package","dependencies":{"express":"^4.18.0","lodash":"^4.17.0"},"scripts":{"build":"tsc","test":"jest","start":"node index.js"}}}`
+
+	env := newTestEnv(t, dir)
+	env.RawArgsJSON = rawArgs
+
+	res, err := h.Execute(ctx, env, map[string]any{
+		"path": path,
+		"data": map[string]any{
+			"name":        "my-pkg",
+			"version":     "1.0.0",
+			"description": "A sample package",
+			"dependencies": map[string]any{
+				"express": "^4.18.0",
+				"lodash":  "^4.17.0",
+			},
+			"scripts": map[string]any{
+				"build": "tsc",
+				"test":  "jest",
+				"start": "node index.js",
+			},
+		},
+	})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+
+	fileData, err := os.ReadFile(path)
+	require.NoError(t, err)
+	content := string(fileData)
+
+	// Verify the file is valid JSON (round-trip parse).
+	var parsed map[string]any
+	require.NoError(t, json.Unmarshal(fileData, &parsed), "output must be valid JSON")
+
+	// Top-level key order: name → version → description → dependencies → scripts
+	nameIdx := strings.Index(content, `"name"`)
+	versionIdx := strings.Index(content, `"version"`)
+	descIdx := strings.Index(content, `"description"`)
+	depsIdx := strings.Index(content, `"dependencies"`)
+	scriptsIdx := strings.Index(content, `"scripts"`)
+
+	require.NotEqual(t, -1, nameIdx, "name key should exist")
+	require.NotEqual(t, -1, versionIdx, "version key should exist")
+	require.NotEqual(t, -1, descIdx, "description key should exist")
+	require.NotEqual(t, -1, depsIdx, "dependencies key should exist")
+	require.NotEqual(t, -1, scriptsIdx, "scripts key should exist")
+
+	require.Less(t, nameIdx, versionIdx, "name should appear before version")
+	require.Less(t, versionIdx, descIdx, "version should appear before description")
+	require.Less(t, descIdx, depsIdx, "description should appear before dependencies")
+	require.Less(t, depsIdx, scriptsIdx, "dependencies should appear before scripts (NOT alphabetical)")
+
+	// Nested: express before lodash inside dependencies.
+	// Find the dependencies block and check ordering within it.
+	// Since express and lodash don't appear elsewhere, simple Index works.
+	expressIdx := strings.Index(content, `"express"`)
+	lodashIdx := strings.Index(content, `"lodash"`)
+	require.NotEqual(t, -1, expressIdx, "express should exist inside dependencies")
+	require.NotEqual(t, -1, lodashIdx, "lodash should exist inside dependencies")
+	require.Less(t, expressIdx, lodashIdx, "express should appear before lodash")
+
+	// Nested: build before test before start inside scripts.
+	buildIdx := strings.Index(content, `"build"`)
+	testIdx := strings.Index(content, `"test"`)
+	startIdx := strings.Index(content, `"start"`)
+	require.NotEqual(t, -1, buildIdx, "build should exist inside scripts")
+	require.NotEqual(t, -1, testIdx, "test should exist inside scripts")
+	require.NotEqual(t, -1, startIdx, "start should exist inside scripts")
+	require.Less(t, buildIdx, testIdx, "build should appear before test")
+	require.Less(t, testIdx, startIdx, "test should appear before start")
+}
+
+// TestWriteStructuredFile_DockerCompose_RoundTrip verifies a docker-compose.yml
+// shaped document: key order is preserved (version → services → volumes, NOT
+// alphabetical) and values round-trip correctly through yaml.Unmarshal.
+func TestWriteStructuredFile_DockerCompose_RoundTrip(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &writeStructuredFileHandler{}
+	ctx := newTestCtx(dir)
+
+	path := filepath.Join(dir, "docker-compose.yml")
+
+	// RawArgsJSON with version → services → volumes order.
+	// Inside services: web → db, inside web: image → ports → volumes.
+	rawArgs := `{"path":"` + path + `","data":{"version":"3.8","services":{"web":{"image":"nginx:latest","ports":["80:80"],"volumes":["./html:/usr/share/nginx/html"]},"db":{"image":"postgres:15","environment":{"POSTGRES_DB":"myapp"}}},"volumes":{"data":{"driver":"local"}}}}`
+
+	env := newTestEnv(t, dir)
+	env.RawArgsJSON = rawArgs
+
+	res, err := h.Execute(ctx, env, map[string]any{
+		"path": path,
+		"data": map[string]any{
+			"version": "3.8",
+			"services": map[string]any{
+				"web": map[string]any{
+					"image":   "nginx:latest",
+					"ports":   []any{"80:80"},
+					"volumes": []any{"./html:/usr/share/nginx/html"},
+				},
+				"db": map[string]any{
+					"image": "postgres:15",
+					"environment": map[string]any{
+						"POSTGRES_DB": "myapp",
+					},
+				},
+			},
+			"volumes": map[string]any{
+				"data": map[string]any{
+					"driver": "local",
+				},
+			},
+		},
+	})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+
+	fileData, err := os.ReadFile(path)
+	require.NoError(t, err)
+	content := string(fileData)
+
+	// Key order: version → services → volumes (NOT alphabetical: services, version, volumes).
+	versionIdx := strings.Index(content, "version:")
+	servicesIdx := strings.Index(content, "services:")
+	// Match top-level "volumes:" (starts at beginning of line with no indentation).
+	// The nested "volumes:" inside the web service is indented, so searching for
+	// "\nvolumes:" ensures we get the top-level key, not the nested one.
+	volumesIdx := strings.Index(content, "\nvolumes:")
+
+	require.NotEqual(t, -1, versionIdx, "version key should exist")
+	require.NotEqual(t, -1, servicesIdx, "services key should exist")
+	require.NotEqual(t, -1, volumesIdx, "volumes key should exist")
+
+	require.Less(t, versionIdx, servicesIdx, "version should appear before services (NOT alphabetical)")
+	require.Less(t, servicesIdx, volumesIdx, "services should appear before volumes")
+
+	// Nested: web before db inside services.
+	webIdx := strings.Index(content, "web:")
+	dbIdx := strings.Index(content, "db:")
+	require.NotEqual(t, -1, webIdx, "web service should exist")
+	require.NotEqual(t, -1, dbIdx, "db service should exist")
+	require.Less(t, webIdx, dbIdx, "web should appear before db")
+
+	// Round-trip: parse back with yaml.Unmarshal and verify values.
+	var parsed map[string]interface{}
+	require.NoError(t, yaml.Unmarshal(fileData, &parsed), "output must be valid YAML")
+	parsed = normalizeYAMLValue(parsed).(map[string]interface{})
+
+	// Verify top-level values.
+	ver, ok := parsed["version"].(string)
+	require.True(t, ok, "version should be a string, got %T", parsed["version"])
+	require.Equal(t, "3.8", ver, "version should round-trip as string")
+
+	// Verify services structure.
+	services, ok := parsed["services"].(map[string]interface{})
+	require.True(t, ok, "services should be a map")
+	require.Contains(t, services, "web", "web service should exist")
+	require.Contains(t, services, "db", "db service should exist")
+
+	// Verify web service details.
+	web, ok := services["web"].(map[string]interface{})
+	require.True(t, ok, "web should be a map")
+	require.Equal(t, "nginx:latest", web["image"], "web image should match")
+
+	// Verify db service details.
+	db, ok := services["db"].(map[string]interface{})
+	require.True(t, ok, "db should be a map")
+	require.Equal(t, "postgres:15", db["image"], "db image should match")
+
+	// Verify volumes structure.
+	vols, ok := parsed["volumes"].(map[string]interface{})
+	require.True(t, ok, "volumes should be a map")
+	require.Contains(t, vols, "data", "data volume should exist")
+}
+
+// TestWriteStructuredFile_LargeDocument_Order writes a document with 50 keys
+// in deterministic non-alphabetical order (k01…k50) via RawArgsJSON and
+// verifies every key appears in the exact insertion order in the output.
+func TestWriteStructuredFile_LargeDocument_Order(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	h := &writeStructuredFileHandler{}
+	ctx := newTestCtx(dir)
+
+	path := filepath.Join(dir, "large.json")
+
+	// Build a RawArgsJSON with 50 keys k01..k50 and values v01..v50.
+	// Using raw JSON string so order is preserved from the source (NOT a Go map).
+	var keys []string
+	var parts []string
+	for i := 1; i <= 50; i++ {
+		k := fmt.Sprintf("k%02d", i)
+		keys = append(keys, k)
+		parts = append(parts, fmt.Sprintf(`"k%02d":"v%02d"`, i, i))
+	}
+	dataJSON := "{" + strings.Join(parts, ",") + "}"
+	rawArgs := `{"path":"` + path + `","data":` + dataJSON + "}"
+
+	env := newTestEnv(t, dir)
+	env.RawArgsJSON = rawArgs
+
+	res, err := h.Execute(ctx, env, map[string]any{
+		"path": path,
+		"data": nil, // Execute requires "data" to be present; ignored when RawArgsJSON is set
+	})
+	require.NoError(t, err)
+	require.False(t, res.IsError)
+
+	fileData, err := os.ReadFile(path)
+	require.NoError(t, err)
+	content := string(fileData)
+
+	// Verify each key's byte offset is strictly less than the next key's.
+	// This proves insertion order k01 → k02 → ... → k50 is preserved.
+	for i := 0; i < len(keys)-1; i++ {
+		currIdx := strings.Index(content, `"`+keys[i]+`"`)
+		nextIdx := strings.Index(content, `"`+keys[i+1]+`"`)
+		require.NotEqual(t, -1, currIdx, "key %s should exist in output", keys[i])
+		require.NotEqual(t, -1, nextIdx, "key %s should exist in output", keys[i+1])
+		require.Less(t, currIdx, nextIdx,
+			"key %s (pos %d) should appear before key %s (pos %d) — insertion order must be preserved",
+			keys[i], currIdx, keys[i+1], nextIdx)
+	}
 }

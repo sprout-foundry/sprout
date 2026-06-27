@@ -14,6 +14,7 @@ import "sync"
 var (
 	mu          sync.RWMutex
 	suspendFunc func()
+	resumeFunc  func()
 	steerPause  func()
 	steerResume func()
 )
@@ -32,6 +33,26 @@ func SetSuspendIndicator(fn func()) {
 func SuspendIndicator() {
 	mu.RLock()
 	fn := suspendFunc
+	mu.RUnlock()
+	if fn != nil {
+		fn()
+	}
+}
+
+// SetResumeIndicator installs (or clears, with nil) the global function
+// used to resume the active CLI activity indicator. Called by the indicator
+// owner (typically the agent CLI entry point).
+func SetResumeIndicator(fn func()) {
+	mu.Lock()
+	defer mu.Unlock()
+	resumeFunc = fn
+}
+
+// ResumeIndicator runs the registered resume hook if one is set. Safe to
+// call from anywhere; no-op when nothing is registered.
+func ResumeIndicator() {
+	mu.RLock()
+	fn := resumeFunc
 	mu.RUnlock()
 	if fn != nil {
 		fn()

@@ -8,8 +8,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/sprout-foundry/sprout/pkg/console"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/noninteractive"
+	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
 // errReported marks an error whose user-facing message has already been
@@ -55,6 +56,20 @@ func renderExecuteError(err error) {
 	if err == nil || errors.Is(err, errReported) {
 		return
 	}
+
+	// --why flag: print the risk assessment for security errors
+	if whyFlag {
+		var agentErr *agenterrors.AgentError
+		if errors.As(err, &agentErr) && agentErr.Category == agenterrors.CategorySecurity {
+			why := agentErr.Why()
+			if why != "" {
+				fmt.Fprintln(os.Stderr)
+				fmt.Fprintln(os.Stderr, "  Risk assessment:")
+				fmt.Fprintf(os.Stderr, "    %s\n", why)
+			}
+		}
+	}
+
 	// Provider-config / non-interactive failures: show the specific cause
 	// (e.g. "HTTP 404: model not found", "Unknown Model") as the headline, then
 	// a concise setup block. We deliberately don't replace the cause with a

@@ -105,8 +105,8 @@ func (h *patchStructuredFileHandler) Execute(ctx context.Context, env ToolEnv, a
 		return ToolResult{Output: fmt.Sprintf("Failed to read file %s: %v", path, err), IsError: true}, nil
 	}
 
-	// Parse existing document
-	doc, err := deserializeStructuredContent(format, string(fileContent))
+	// Parse existing document into yaml.Node to preserve key order
+	docNode, err := parseToYamlNode(format, string(fileContent))
 	if err != nil {
 		return ToolResult{Output: fmt.Sprintf("Failed to parse file %s: %v", path, err), IsError: true}, nil
 	}
@@ -118,7 +118,7 @@ func (h *patchStructuredFileHandler) Execute(ctx context.Context, env ToolEnv, a
 			return ToolResult{Output: fmt.Sprintf("Invalid patch operations: %v", err), IsError: true}, nil
 		}
 		for _, op := range ops {
-			doc, err = applyPatchOperation(doc, op)
+			docNode, err = applyPatchOperationNode(docNode, op)
 			if err != nil {
 				return ToolResult{Output: fmt.Sprintf("Failed to apply patch operation %s: %v", op.Op, err), IsError: true}, nil
 			}
@@ -127,8 +127,8 @@ func (h *patchStructuredFileHandler) Execute(ctx context.Context, env ToolEnv, a
 		return ToolResult{Output: fmt.Sprintf("Either 'patch_ops' or 'data' must be provided")}, nil
 	}
 
-	// Write back the modified document
-	content, err := serializeStructuredContent(format, doc)
+	// Write back the modified document, preserving key order
+	content, err := serializeYamlNode(format, docNode)
 	if err != nil {
 		return ToolResult{Output: fmt.Sprintf("Failed to serialize modified document: %v", err), IsError: true}, nil
 	}

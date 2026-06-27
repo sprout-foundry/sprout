@@ -568,7 +568,15 @@ func (a *Agent) ShouldGateEdit(path string) bool {
 //
 // Both conditions must lead to the same behavior because either one means
 // there is no live user at a terminal to answer an approval prompt.
+//
+// SP-068 Phase 3: SPROUT_FORCE_INTERACTIVE=1 forces the interactive path
+// for testing — the WebUI approval surface is still gated by
+// HasActiveWebUIClients(), so the flag alone is not enough to make prompts
+// actually fire; it just disables the stdin/SkipPrompt short-circuit.
 func (a *Agent) isNonInteractive() bool {
+	if strings.TrimSpace(os.Getenv("SPROUT_FORCE_INTERACTIVE")) == "1" {
+		return false
+	}
 	if !term.IsTerminal(int(os.Stdin.Fd())) {
 		return true
 	}

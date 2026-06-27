@@ -139,7 +139,7 @@
 
 .automations-output-pre::-webkit-scrollbar-thumb {
   background: var(--border-default);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
 }
 
 .automations-output-pre::-webkit-scrollbar-track {

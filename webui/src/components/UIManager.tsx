@@ -76,7 +76,7 @@ function UIManager({ children }: UIManagerProps): JSX.Element {
     initialPath?: string;
     allowDirectories?: boolean;
     allowedExtensions?: string[];
-    resolve?: (file: FileNode) => void;
+    resolve?: (files: FileNode[]) => void;
   }>({
     isOpen: false,
     allowDirectories: false,
@@ -248,9 +248,9 @@ function UIManager({ children }: UIManagerProps): JSX.Element {
     setInputPromptState((prev) => ({ ...prev, isOpen: false, promptId: undefined }));
   };
 
-  const handleFileBrowserSelect = (file: FileNode) => {
+  const handleFileBrowserSelect = (files: FileNode[]) => {
     if (fileBrowserState.resolve) {
-      fileBrowserState.resolve(file);
+      fileBrowserState.resolve(files);
     }
     setFileBrowserState((prev) => ({ ...prev, isOpen: false }));
   };

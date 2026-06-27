@@ -6,6 +6,49 @@ record.
 
 **Status of related specs:** SP-063 (`computer_user` persona) is **partially implemented** — its core shipped; remaining work (panic key 4g, destructive-app denylist 4h) is tracked in `roadmap/SP-063-computer-use-persona.md`, not here. SP-073 (`cooperative cancellation`) shipped 2026-06-26 — all three phases green (TODO(SP-034-1c) markers cleared); further work would be new tickets, not this list.
 
+## SP-079: Migrate Stub Tool Handlers off the Legacy `*Agent` Path
+_Spec: `roadmap/SP-079-migrate-stub-tool-handlers.md` (status: 📋 Spec; new ticket from a TODO cluster identified 2026-06-27)_
+
+LLM usability (Medium-High, ~1–2 weeks): 5 handlers in the new `pkg/agent_tools/*_handler.go` path (`analyze_image_content`, `analyze_ui_screenshot`, `browse_url`, `activate_skill`, `web_search`) are stubs that return `requires full *Agent refactoring` errors. SP-074 explicitly deferred "every handler's rewrite" as out of scope; this finishes that deferred work.
+
+- [ ] SP-079-1: Extend `ToolEnv` with `VisionProcessor *VisionProcessor`, `WebBrowser WebBrowser`, `SkillLoader SkillLoader`, `SearchEngine SearchEngine` fields; populate them in the dispatch shim (`pkg/agent/tool_definitions.go`).
+- [ ] SP-079-2: Rewrite `analyze_image_content` and `analyze_ui_screenshot` handlers to call `env.VisionProcessor.AnalyzeImage(ctx, path, prompt)`.
+- [ ] SP-079-3: Rewrite `browse_url` handler to call `env.WebBrowser.BrowseURL(ctx, url, opts)`.
+- [ ] SP-079-4: Rewrite `activate_skill` handler to call `env.SkillLoader.Load(ctx, skillID)` and format instructions.
+- [ ] SP-079-5: Rewrite `web_search` handler to call `env.SearchEngine.Search(ctx, query)`.
+- [ ] SP-079-6: Add 4 conformance tests in `pkg/agent_tools/new_tools_conformance_test.go` (one per handler) that compare output against the legacy handler for the same args.
+- [ ] SP-079-7: Once all 5 are migrated, remove the "thin wrappers … pending full refactoring" caveat from `pkg/agent_tools/handler.go:43`. Acceptance: `grep -rn "requires full.*Agent refactoring" pkg/agent_tools/` returns nothing; all 5 conformance tests pass; `make build-all` clean; legacy handler tests still green.
+
+## SP-080: Type the Unknown-Tool Error in ToolRegistry
+_Spec: `roadmap/SP-080-type-unknown-tool-error.md` (status: 📋 Spec; residual tech debt)_
+
+Cleanup (Low, ~half a day): `pkg/agent/tool_executor_sequential.go:166` falls back to `strings.Contains(err.Error(), "unknown tool")` because the new registry returns a plain error rather than the typed `agenterrors.NewInvalidInputError` that already exists.
+
+- [ ] SP-080-1: In `pkg/agent_tools/registry.go::ExecuteTool`, replace the unknown-tool `fmt.Errorf("unknown tool: %s", name)` with `agenterrors.NewInvalidInputError("unknown tool: "+name, nil)`.
+- [ ] SP-080-2: Remove the `strings.Contains(err.Error(), "unknown tool")` branch from `pkg/agent/tool_executor_sequential.go:166`; rely solely on `agenterrors.IsInvalidInput(err)`.
+- [ ] SP-080-3: Update tests in `pkg/agent_tools/new_tools_conformance_test.go` and `pkg/agent_tools/registry_integration_test.go` to assert `agenterrors.IsInvalidInput` rather than substring matching.
+- [ ] SP-080-4: Acceptance: `grep -rn '"unknown tool"' pkg/agent_tools/ pkg/agent/` returns nothing in non-test code; `go test ./pkg/agent_tools/... ./pkg/agent/...` green.
+
+## SP-081: Delete the Dead `pkg/tools/global.go` Executor
+_Spec: `roadmap/SP-081-delete-dead-global-executor.md` (status: 📋 Spec; cleanup)_
+
+Cleanup (Low, ~1 hour): `pkg/tools/global.go` exposes `InitializeGlobalExecutor` / `GetGlobalExecutor` / `ExecuteWithGlobal` with **zero non-test callers** (verified via `grep`). The init function carries a misleading "TODO: Make this configurable based on security settings" comment that has no consumer.
+
+- [ ] SP-081-1: Audit callers (`grep -rn "tools\.GetGlobalExecutor\|tools\.InitializeGlobalExecutor\|tools\.ExecuteWithGlobal" pkg/ cmd/`); confirm zero non-test callers.
+- [ ] SP-081-2: Delete `pkg/tools/global.go`.
+- [ ] SP-081-3: Delete `pkg/tools/executor_behavior_test.go` if its only purpose was the global executor; otherwise prune the global-executor cases and keep the rest.
+- [ ] SP-081-4: Acceptance: file does not exist; grep returns zero matches; `go build ./...` clean; `go test ./...` green.
+
+## SP-082: Preserve Key Insertion Order in Structured File Tools
+_Spec: `roadmap/SP-082-preserve-structured-file-key-order.md` (status: 📋 Spec; supersedes original `roadmap/SP-066-structured-file-key-order.md` with concrete plan)_
+
+UX / diff hygiene (Medium, ~half a week): `write_structured_file` and `patch_structured_file` use `map[string]interface{}` internally, which `encoding/json` and `gopkg.in/yaml.v2` both emit in alphabetical order. `package.json` and similar convention-driven formats lose readability, and every patch produces a full re-sort diff even for 1-field changes.
+
+- [ ] SP-082-1: Replace `map[string]interface{}` with `*yaml.Node` (gopkg.in/yaml.v3) as the internal representation in `pkg/agent_tools/write_structured_file.go` and `pkg/agent_tools/patch_structured_file.go`.
+- [ ] SP-082-2: Update `patch_structured_file` to read the original file as a `*yaml.Node` and apply patches via an adapter (`yamlNodeFromMap` / `mapFromYamlNode`).
+- [ ] SP-082-3: Add round-trip tests in `pkg/agent_tools/write_structured_handler_test.go` and `pkg/agent_tools/patch_structured_handler_test.go` — JSON, YAML, and `package.json`-style ordering.
+- [ ] SP-082-4: Update the tool definitions to note that key order is preserved. Acceptance: a `package.json` written via the tool retains the LLM-supplied key order; a 1-field patch produces a 1-line diff; `go test ./pkg/agent_tools/...` green; existing patch tests still pass.
+
 ## SP-069: PR Creation — credential-store lookup for GitHub token
 _Spec: `roadmap/SP-069-pull-request-creation.md` (status: ✅ Implemented; one residual TODO)_
 

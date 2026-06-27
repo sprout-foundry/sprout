@@ -25,7 +25,7 @@ import (
 func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args map[string]interface{}, agent *Agent) ([]api.ImageData, string, error) {
 	handler, found := tools.GetNewToolRegistry().Lookup(toolName)
 	if !found {
-		return nil, "", fmt.Errorf("unknown tool '%s'", toolName)
+		return nil, "", agenterrors.NewInvalidInputError("unknown tool '"+toolName+"'", nil)
 	}
 
 	if agent != nil && agent.debug {

@@ -65,13 +65,13 @@ func AllTools() []ToolHandler {
 		// Git tools
 		&commitHandler{},
 		&gitHandler{},
-		// Skill tools (thin wrapper pending *Agent refactoring)
+		// Skill tools
 		&activateSkillHandler{},
-		// Browser/search tools (thin wrappers pending *Agent refactoring)
+		// Browser/search tools
 		&browseURLHandler{},
 		&webSearchHandler{},
 		&semanticSearchHandler{},
-		// Image/analysis tools (thin wrappers pending *Agent refactoring)
+		// Image/analysis tools
 		&analyzeImageContentHandler{},
 		&analyzeUIScreenshotHandler{},
 	}

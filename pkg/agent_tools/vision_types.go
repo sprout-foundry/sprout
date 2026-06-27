@@ -35,6 +35,9 @@ const (
 	visionMinDimension             = 256   // Minimum dimension in pixels
 	visionMaxDimension             = 4096  // Maximum pixels on longest edge for vision models
 	visionMaxReturnedTextChars     = 20000 // Raised from 12000 to 20000 for better PDF/doc coverage
+
+	// visionModeFrontend is the analysis mode used by the analyze_ui_screenshot tool
+	visionModeFrontend = "frontend"
 )
 
 // getVisionMaxReturnedTextChars returns the max text chars limit from env or default

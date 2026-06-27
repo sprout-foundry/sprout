@@ -4,16 +4,16 @@ Active work tracked here. Completed items are removed once their parent spec is
 done — the spec file (`roadmap/SP-###.md`) plus git history are the historical
 record.
 
-**Status of related specs:** SP-063 (`computer_user` persona) is **partially implemented** — its core shipped; remaining work (panic key 4g, destructive-app denylist 4h) is tracked in `roadmap/SP-063-computer-use-persona.md`, not here. SP-073 (`cooperative cancellation`) shipped 2026-06-26 — all three phases green (TODO(SP-034-1c) markers cleared); further work would be new tickets, not this list.
+**Status of related specs:** SP-063 (`computer_user` persona) core shipped 2026-06-26; remaining work (panic key 4g, destructive-app denylist 4h, plus a minor indent cleanup) is tracked as actionable items below (SP-063-4g, SP-063-4h, SP-063-cleanup). SP-073 (`cooperative cancellation`) shipped 2026-06-26 — all three phases green (TODO(SP-034-1c) markers cleared); further work would be new tickets, not this list.
 
 ## SP-079: Migrate Stub Tool Handlers off the Legacy `*Agent` Path
 _Spec: `roadmap/SP-079-migrate-stub-tool-handlers.md` (status: 📋 Spec; new ticket from a TODO cluster identified 2026-06-27)_
 
 LLM usability (Medium-High, ~1–2 weeks): 5 handlers in the new `pkg/agent_tools/*_handler.go` path (`analyze_image_content`, `analyze_ui_screenshot`, `browse_url`, `activate_skill`, `web_search`) are stubs that return `requires full *Agent refactoring` errors. SP-074 explicitly deferred "every handler's rewrite" as out of scope; this finishes that deferred work.
 
-- [ ] SP-079-1: Extend `ToolEnv` with `VisionProcessor *VisionProcessor`, `WebBrowser WebBrowser`, `SkillLoader SkillLoader`, `SearchEngine SearchEngine` fields; populate them in the dispatch shim (`pkg/agent/tool_definitions.go`).
-- [ ] SP-079-2: Rewrite `analyze_image_content` and `analyze_ui_screenshot` handlers to call `env.VisionProcessor.AnalyzeImage(ctx, path, prompt)`.
-- [ ] SP-079-3: Rewrite `browse_url` handler to call `env.WebBrowser.BrowseURL(ctx, url, opts)`.
+- [x] SP-079-1: Extend `ToolEnv` with `VisionProcessor *VisionProcessor`, `WebBrowser WebBrowser`, `SkillLoader SkillLoader`, `SearchEngine SearchEngine` fields; populate them in the dispatch shim (`pkg/agent/tool_definitions.go`).
+- [x] SP-079-2: Rewrite `analyze_image_content` and `analyze_ui_screenshot` handlers to call `env.VisionProcessor.AnalyzeImage(ctx, path, prompt)`.
+- [x] SP-079-3: Rewrite `browse_url` handler to call `env.WebBrowser.BrowseURL(ctx, url, opts)`.
 - [ ] SP-079-4: Rewrite `activate_skill` handler to call `env.SkillLoader.Load(ctx, skillID)` and format instructions.
 - [ ] SP-079-5: Rewrite `web_search` handler to call `env.SearchEngine.Search(ctx, query)`.
 - [ ] SP-079-6: Add 4 conformance tests in `pkg/agent_tools/new_tools_conformance_test.go` (one per handler) that compare output against the legacy handler for the same args.
@@ -112,6 +112,36 @@ Test coverage gap (High, ~2–3 weeks phased): the webui has 152 jsdom-based Vit
 - [ ] SP-087-6: **Phase 5 Tier 3 edge cases** — write ~10 tests covering: empty workspace, empty session list, 1000-message session, very long paths, special chars in filenames, network failures during chat.
 - [ ] SP-087-7: **Phase 6 docs + CI** — new `.github/workflows/webui-e2e.yml` (sharded across 4 jobs, retry-once on flake, uploads `test-results-html/` artifact on failure). New `package.json` script `test:webui-e2e`. Doc at `docs/webui-e2e.md`: how to run locally, how to write a test, how to debug a failure, how to add a new `data-testid`.
 - [ ] SP-087-8: Acceptance: `npm run test:webui-e2e` finishes in <5 min, all green; single-spec runs via `npx playwright test --project=webui <path>`; failing tests produce HTML report with screenshots/traces/videos; 50+ user-facing surfaces covered; CI blocks merge on failure; `docs/webui-e2e.md` complete.
+
+## SP-063-4g: Sub-500ms panic-key halt for in-flight computer-use actions
+_Spec: `roadmap/SP-063-computer-use-persona.md` (status: 📋 Spec — phase 4g explicitly deferred)_
+
+Safety (Medium, ~3–5 days design + impl): existing Ctrl+C at the CLI halts the agent process, but at process-granularity — it doesn't catch the agent mid-action. The spec wants Ctrl+C+Esc (or similar chord) to halt a running `computer_user` action within 500ms, regardless of which backend is active. Today, if `cliclick` is mid-click-sequence or `xdotool` is mid-key-hold, the only way out is to wait for the subprocess to return or `kill -9`. The risk the spec calls out: a signal handler racing with the action loop can wedge the agent (e.g., backend subprocess orphaned, agent in a state where it can't dispatch further tools cleanly).
+
+- [ ] SP-063-4g-design: Write a focused design doc at `roadmap/SP-063-panic-key-design.md` answering: (a) signal-handling goroutine vs cooperative cancellation through `ctx`; (b) what state the action loop needs to track to be cleanly cancellable; (c) how to ensure the backend subprocess is killed if the parent exits (process group / `setsid` on Linux, `osascript` quirks on macOS); (d) how to surface "halted by panic key" to the audit log. Acceptance: design doc reviewed; signal-handling approach chosen.
+- [ ] SP-063-4g-impl: Implement per the design doc — panic-key handler in `pkg/agent_tools/computer_use/panic_key.go` (or wherever the design says), plumb a `context.CancelCause` through `RunAction`/`ComputerBackend` interface, kill the subprocess tree on cancel, record the event to audit log. Tests: synthetic test using a backend that sleeps for 2s, send the cancel, assert termination < 500ms; audit log has a `panic_key` entry; the agent state remains dispatchable after cancellation.
+- [ ] SP-063-4g-platform: Wire the panic key to the actual key chord on macOS (`CGEventTap`) and Linux X11 (`xdotool`-monitor or `XRecord` extension). The X11 path needs the `xrecord` library or shelling out; the macOS path needs an event tap registered before the agent starts. Reuse the existing platform-select pattern (`backend_select.go`).
+- [ ] SP-063-4g-docs: Update `roadmap/SP-063-computer-use-persona.md` to mark phase 4g ✅; add a "Panic key" section to the safety model summary; link the design doc. Acceptance: spec status flipped; chord documented in user-facing docs; design doc linked.
+
+## SP-063-4h: Destructive-app denylist for computer-use actions
+_Spec: `roadmap/SP-063-computer-use-persona.md` (status: 📋 Spec — phase 4h explicitly deferred)_
+
+Safety (Medium-Low, ~1 week): today's safety stack stops at "is the agent allowed to click anything?" but doesn't ask "is it about to click on Mail's Send button / a banking app's Transfer / Disk Utility's Erase?" The spec wants an OS-specific foreground-window detection + classification layer that prompts the user before the agent can interact with apps that have destructive or sensitive actions reachable by a click.
+
+- [ ] SP-063-4h-design: Design doc at `roadmap/SP-063-destructive-denylist-design.md` covering: (a) **detection** — `osascript -e 'tell application "System Events" to get name of (first application process whose frontmost is true)'` on macOS; `xdotool getactivewindow getwindowname` (or `wmctrl -l`) on X11. (b) **classification** — hand-curated list of bundle IDs / window title regexes (Mail, Disk Utility, banking apps, password managers, anything with sudo/gui prompts) vs model-classified via a quick screenshot pre-classification. (c) **prompt placement** — before the click, not after; what does the action loop look like with the pre-click classification step; what does the user see (per-app "always allow" allowlist too?). Acceptance: detection+classification approach chosen; tradeoffs documented.
+- [ ] SP-063-4h-list: Curate the initial denylist — bundle IDs on macOS (`com.apple.mail`, `com.apple.diskutility`, `com.apple.systempreferences`, bank apps, password managers like 1Password/Keychain Access, browsers while in incognito); window title regexes on Linux (`Disk Utility`, `Authenticate`, `sudo`, `passwd`, banking apps' window titles). Store as `pkg/agent_tools/computer_use/denylist.json` with a "category" field (financial, system, destructive, password_manager) so the user can override at allowlist granularity.
+- [ ] SP-063-4h-detect: Implement `pkg/agent_tools/computer_use/foreground.go` with `GetForegroundApp() (bundleID, title string, err error)` returning the platform-appropriate values; platform-select via the existing `backend_select.go` pattern (macOS/Linux/headless/unsupported).
+- [ ] SP-063-4h-classify: `pkg/agent_tools/computer_use/denylist.go` — `IsDestructiveApp(bundleID, title string) (category string, blocked bool)` consulting the JSON; per-user override file at `~/.config/sprout/computer_use_denylist_overrides.json` so power users can override the default list without forking.
+- [ ] SP-063-4h-prompt: Wire into `pkg/agent_tools/computer_use/handlers.go` — before any `mouse_click`/`keyboard_press` whose target is in a destructive app, run `GetForegroundApp` + `IsDestructiveApp`; if destructive, prompt via the same WebUI/CLI cascade used by `checkComputerUseSessionOptIn`. Per-session "always allow this app" persists to allowlist.
+- [ ] SP-063-4h-tests: Unit tests for the JSON list loader (valid/invalid schema), per-user override merge (override wins on conflict), foreground detection mocks per platform, classification (positive + negative cases), prompt integration (mock approval manager receives the request with destructive-app context in extras). Integration smoke on a real macOS or X11 box (manual, not CI).
+- [ ] SP-063-4h-docs: Update `roadmap/SP-063-computer-use-persona.md` to mark phase 4h ✅; add a "Destructive-app gate" section to the safety model summary; document the per-user override file format. Acceptance: spec status flipped; safety model extended; user docs explain how to override the denylist.
+
+## SP-063-cleanup: Fix broken indentation in `pkg/agent/tool_security.go` near SP-079 wiring
+_Spec: none (audit finding from SP-063 review)_
+
+Cleanup (Low, ~5 min): when reviewing `pkg/agent/tool_security.go` for the SP-063 audit, the indentation around the `env.WebBrowser` / `env.SkillLoader` / `env.SearchEngine` lines (the SP-079 wiring) is malformed — there is a stray `}` and inconsistent tab indentation that doesn't match the surrounding `if agent != nil { ... } else { ... }` block structure. The code compiles because the brace count is right, but the visual structure is misleading and will confuse anyone reading the dispatch path.
+
+- [ ] SP-063-cleanup-1: Reformat the `if agent != nil { ... } else { ... }` block in `pkg/agent/tool_security.go` (around line 210–240) so the SP-079 fields (`env.WebBrowser`, `env.SkillLoader`, `env.SearchEngine`) are inside the `if agent != nil {` arm with consistent indentation. Run `make fmt-check` to confirm `gofmt` is happy. Acceptance: `gofmt -d pkg/agent/tool_security.go` returns nothing; visual review shows the field assignments are inside the correct arm; build still passes; no behavior change.
 
 ## SP-069: PR Creation — credential-store lookup for GitHub token
 _Spec: `roadmap/SP-069-pull-request-creation.md` (status: ✅ Implemented; one residual TODO)_

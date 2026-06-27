@@ -3,7 +3,6 @@
 package cmd
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -604,6 +603,11 @@ func cwdStr() string {
 // --- displayVerboseLog ---
 
 // captureStdout captures fmt.Print/Printf output from the given function.
+//
+// It uses a goroutine to drain the read end of the pipe concurrently with
+// writing. This avoids deadlocks when the captured output exceeds the OS
+// pipe buffer size (typically 64 KiB on Linux, e.g. emitJSONResult on a
+// real git repo). See agent_result_test.go:TestEmitJSONResult_SuccessWithAgent.
 func captureStdout(t *testing.T, fn func()) string {
 	t.Helper()
 	oldStdout := os.Stdout
@@ -612,12 +616,48 @@ func captureStdout(t *testing.T, fn func()) string {
 		t.Fatalf("failed to create pipe: %v", err)
 	}
 	os.Stdout = w
+	t.Cleanup(func() { os.Stdout = oldStdout })
+
+	done := make(chan string, 1)
+	go func() {
+		var buf strings.Builder
+		tmp := make([]byte, 4096)
+		for {
+			n, readErr := r.Read(tmp)
+			if n > 0 {
+				buf.Write(tmp[:n])
+			}
+			if readErr != nil {
+				break
+			}
+		}
+		done <- buf.String()
+	}()
+
+	defer func() { _ = w.Close() }()
 	fn()
-	w.Close()
-	os.Stdout = oldStdout
-	var buf bytes.Buffer
-	buf.ReadFrom(r)
-	return buf.String()
+	_ = w.Close()
+	return <-done
+}
+
+// TestCaptureStdout_LargeOutput exercises captureStdout with output that
+// exceeds the OS pipe buffer (64 KiB on Linux). Without a concurrent
+// reader, the writer goroutine inside fn() would block once the buffer
+// fills, deadlocking the test until its timeout.
+func TestCaptureStdout_LargeOutput(t *testing.T) {
+	const size = 256 * 1024 // 4x the typical pipe buffer
+	want := strings.Repeat("x", size)
+
+	out := captureStdout(t, func() {
+		fmt.Print(want)
+	})
+
+	if len(out) != size {
+		t.Fatalf("captured %d bytes, want %d", len(out), size)
+	}
+	if out != want {
+		t.Fatal("output content mismatch")
+	}
 }
 
 func TestDisplayVerboseLog_NoLeditDir(t *testing.T) {

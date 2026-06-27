@@ -184,6 +184,30 @@ func NewSecurityError(message string, cause error) *AgentError {
 	}
 }
 
+// NewSecurityErrorWithAssessment creates a non-retryable security error
+// that carries a RiskAssessment explanation for the --why diagnostic.
+// The assessment is stored in the error's metadata under the "assessment" key.
+func NewSecurityErrorWithAssessment(message string, assessment string, cause error) *AgentError {
+	err := &AgentError{
+		Category:  CategorySecurity,
+		Message:   message,
+		Cause:     cause,
+		Retryable: false,
+		Metadata:  make(map[string]string),
+	}
+	err.Metadata["assessment"] = assessment
+	return err
+}
+
+// Why returns the RiskAssessment explanation attached to this error,
+// or "" if no assessment was attached. Used by the --why CLI flag.
+func (e *AgentError) Why() string {
+	if e.Metadata == nil {
+		return ""
+	}
+	return e.Metadata["assessment"]
+}
+
 // NewInvalidInputError creates a non-retryable invalid input error.
 // Examples: invalid parameters, malformed requests.
 func NewInvalidInputError(message string, cause error) *AgentError {

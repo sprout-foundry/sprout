@@ -19,6 +19,7 @@ import (
 var startupChecksOnce sync.Once
 var isolatedConfig bool
 var debugPprofAddr string
+var whyFlag bool
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -141,6 +142,7 @@ func init() {
 	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.config/sprout/config.json)")
 	rootCmd.PersistentFlags().BoolVar(&isolatedConfig, "isolated-config", false, "Use per-working-directory config at ./.sprout (clone from main config on first run)")
 	rootCmd.PersistentFlags().StringVar(&debugPprofAddr, "debug-pprof", "", "If set, start a pprof HTTP server on this address (e.g. localhost:6060) for live memory/CPU profiling")
+	rootCmd.PersistentFlags().BoolVar(&whyFlag, "why", false, "Print detailed risk assessment on security errors")
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.

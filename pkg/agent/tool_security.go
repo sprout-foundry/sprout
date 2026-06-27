@@ -390,8 +390,8 @@ func (a *Agent) unifiedSecurityGate(name string, args map[string]interface{}) er
 	// Hard blocks are unconditional — no approval path can override
 	if assessment.IsHardBlock || assessment.Level == configuration.RiskLevelCritical {
 		a.logSecurityDecision(name, args, assessment, "blocked")
-		return agenterrors.NewSecurityError(
-			fmt.Sprintf("security hard block: %s — %s. This operation cannot be approved by any profile or flag.", name, assessment.Reason), nil,
+		return agenterrors.NewSecurityErrorWithAssessment(
+			fmt.Sprintf("security hard block: %s — %s. This operation cannot be approved by any profile or flag.", name, assessment.Reason), assessment.Explain(), nil,
 		)
 	}
 
@@ -401,8 +401,8 @@ func (a *Agent) unifiedSecurityGate(name string, args map[string]interface{}) er
 		if cmd, ok := args["command"].(string); ok && cmd != "" {
 			if !a.highRiskApprovedForCommand(nil, cmd) {
 				a.logSecurityDecision(name, args, assessment, "blocked")
-				return agenterrors.NewSecurityError(
-					fmt.Sprintf("security hard block: %s — %s. This operation cannot be approved by any profile or flag.", name, assessment.Reason), nil,
+				return agenterrors.NewSecurityErrorWithAssessment(
+					fmt.Sprintf("security hard block: %s — %s. This operation cannot be approved by any profile or flag.", name, assessment.Reason), assessment.Explain(), nil,
 				)
 			}
 		} else {
@@ -443,8 +443,8 @@ func (a *Agent) unifiedSecurityGate(name string, args map[string]interface{}) er
 	if assessment.RequiresIntentConfirmation {
 		if a.IsSubagent() {
 			a.logSecurityDecision(name, args, assessment, "blocked")
-			return agenterrors.NewSecurityError(
-				fmt.Sprintf("security confirmation required: %s — %s. Re-run interactively, use --risk-profile=permissive, or use ask_user to confirm.", name, assessment.Reason), nil,
+			return agenterrors.NewSecurityErrorWithAssessment(
+				fmt.Sprintf("security confirmation required: %s — %s. Re-run interactively, use --risk-profile=permissive, or use ask_user to confirm.", name, assessment.Reason), assessment.Explain(), nil,
 			)
 		}
 		// For intent confirmation, go through the approval prompt
@@ -462,123 +462,12 @@ func (a *Agent) unifiedSecurityGate(name string, args map[string]interface{}) er
 }
 
 // unifiedSecurityPrompt handles the interactive approval flow for Medium
-// risk or intent-confirmation operations in the unified gate. Reuses the
-// existing WebUI / CLI prompt wiring so the UX doesn't change.
+// risk or intent-confirmation operations in the unified gate. Delegates to
+// RequestApproval which owns surface selection, fallback, and 4-option
+// outcome (SP-068 Phase 3).
 func (a *Agent) unifiedSecurityPrompt(name string, args map[string]interface{}, assessment RiskAssessment) error {
-	isSubagent := a.IsSubagent()
-
-	// Unsafe mode or session elevation skips prompts for non-hard-block
-	// operations in the unified path too.
-	if a.GetUnsafeMode() || a.IsSessionElevated() {
-		if a.debug {
-			a.debugLog("[UNLOCK] Unified gate auto-approve (unsafe/elevated): %s\n", name)
-		}
-		return nil
-	}
-
-	// --unsafe-shell bypasses Medium-tier shell prompts in the unified path
-	// so the flag behaves consistently regardless of which gate path is active.
-	if a.GetUnsafeShellMode() && name == "shell_command" &&
-		assessment.Level == configuration.RiskLevelMedium &&
-		!assessment.RequiresIntentConfirmation {
-		if a.debug {
-			a.debugLog("[UNLOCK] Unsafe shell mode: bypassing shell security prompt for %s (level: %s)\n", name, assessment.Level)
-		}
-		return nil
-	}
-
-	// Persistent allowlist for shell commands
-	if name == "shell_command" {
-		if cmd, ok := args["command"].(string); ok && cmd != "" && a.IsShellCommandAllowlisted(cmd) {
-			return nil
-		}
-	}
-
-	// WebUI approval path — interactive only.
-	// Non-interactive runs skip the browser dialog (see isNonInteractive).
-	hasInteractiveSurface := !a.isNonInteractive() && !isSubagent && a.HasActiveWebUIClients()
-	if mgr := a.GetSecurityApprovalMgr(); mgr != nil && a.GetEventBus() != nil && hasInteractiveSurface {
-		// Suspend CLI spinner and steer reader before blocking on the
-		// webui response — prevents terminal corruption during the wait.
-		clihooks.SuspendIndicator()
-		clihooks.PauseSteer()
-		defer clihooks.ResumeSteer()
-
-		extras := map[string]string{}
-		extras["risk_level"] = string(assessment.Level)
-		switch name {
-		case "shell_command":
-			if cmd, ok := args["command"].(string); ok && cmd != "" {
-				extras["command"] = cmd
-				extras["allow_options"] = "true"
-			}
-		case "write_file", "edit_file", "write_structured_file", "patch_structured_file":
-			if path, ok := args["path"].(string); ok && path != "" {
-				extras["target"] = path
-			}
-		}
-		riskLabel := string(assessment.Level)
-		if name == "shell_command" && assessment.RequiresIntentConfirmation {
-			riskLabel = "INTENT"
-		}
-		if assessment.RequiresIntentConfirmation {
-			extras["intent_confirmation"] = "true"
-		}
-		if cmd, ok := args["command"].(string); ok && cmd != "" {
-			decision := mgr.RequestToolApprovalDecision(a.GetEventBus(), a.GetEventClientID(), a.GetEventUserID(), name, riskLabel, assessment.Reason, extras)
-			if !decision.Approved() {
-				a.logSecurityDecision(name, args, assessment, "blocked")
-				return agenterrors.NewSecurityError(fmt.Sprintf("security rejected: %s — %s. The user declined approval.", name, assessment.Reason), nil)
-			}
-			a.applyApprovalDecision(decision, cmd)
-			a.logSecurityDecision(name, args, assessment, "approved")
-			return nil
-		}
-		if !mgr.RequestToolApproval(a.GetEventBus(), a.GetEventClientID(), a.GetEventUserID(), name, riskLabel, assessment.Reason, extras) {
-			a.logSecurityDecision(name, args, assessment, "blocked")
-			return agenterrors.NewSecurityError(fmt.Sprintf("security rejected: %s — %s. The user declined approval.", name, assessment.Reason), nil)
-		}
-		a.logSecurityDecision(name, args, assessment, "approved")
-		return nil
-	}
-
-	// CLI approval path
-	cfg := a.GetConfig()
-	logger := utils.GetLogger(cfg != nil && cfg.SkipPrompt)
-	canPrompt := logger != nil && logger.IsInteractive() && !isSubagent
-
-	if canPrompt {
-		prompt := fmt.Sprintf("⚠  Security Warning — %s\n\nReasoning: %s\n\nDo you want to proceed?",
-			strings.ToUpper(string(assessment.Level)), assessment.Reason)
-		if !logger.AskForConfirmation(prompt, false, false) {
-			a.logSecurityDecision(name, args, assessment, "blocked")
-			return agenterrors.NewSecurityError(fmt.Sprintf("security rejected: %s — %s. The user declined approval.", name, assessment.Reason), nil)
-		}
-		a.logSecurityDecision(name, args, assessment, "approved")
-		return nil
-	}
-
-	// Non-interactive: permissive-by-default, matching the legacy
-	// pre-execute hook (seed_tool_registry.go ~line 780).
-	// Automation runs inside a container/sandbox, so routine approval
-	// prompts are auto-approved to avoid dead-ending a run that has
-	// no human to ask. Hard blocks (Critical) are caught earlier in
-	// unifiedSecurityGate and never reach here.
-	if a.isNonInteractive() {
-		if a.debug {
-			a.debugLog("[non-interactive] auto-approving %s (level: %s) — no interactive surface available\n",
-				name, assessment.Level)
-		}
-		return nil
-	}
-
-	// No interactive surface and not flagged non-interactive (e.g. a
-	// misconfigured daemon). Fail safe.
-	a.logSecurityDecision(name, args, assessment, "blocked")
-	return agenterrors.NewSecurityError(
-		fmt.Sprintf("security confirmation required: %s — %s. Re-run interactively, use --risk-profile=permissive, or use ask_user to confirm.",
-			name, assessment.Reason), nil,
-	)
+	_, err := a.RequestApproval(assessment, name, args)
+	return err
 }
 
 // buildSecurityPrompt constructs a detailed security approval prompt for the user

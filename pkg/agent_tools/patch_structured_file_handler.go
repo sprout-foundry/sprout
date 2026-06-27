@@ -47,7 +47,16 @@ func (h *patchStructuredFileHandler) Execute(ctx context.Context, env ToolEnv, a
 		}()
 	}
 
-	path, _ := extractString(args, "path")
+	path, err := extractString(args, "path")
+	if err != nil {
+		return ToolResult{Output: err.Error(), IsError: true}, err
+	}
+
+	// SP-046-2: Check staleness before patching
+	if err := CheckStaleness(path); err != nil {
+		return ToolResult{Output: err.Error(), IsError: true}, err
+	}
+
 	format, _ := extractString(args, "format")
 
 	// Infer format from file extension if not provided

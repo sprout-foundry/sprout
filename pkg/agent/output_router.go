@@ -191,22 +191,20 @@ func (r *OutputRouter) RouteStreamChunk(chunk string, contentType string) {
 	// Publish to event bus for WebUI consumption (when active)
 	r.publish(events.EventTypeStreamChunk, events.StreamChunkEvent(chunk, contentType))
 
-	// Reasoning is visible to the event bus by default, but not the terminal.
-	if !r.shouldRenderReasoning(contentType) {
-		return
-	}
-
-	// Reasoning chunks: prefer the dedicated reasoning sink when one is
-	// registered. The CLI uses this to collapse the thinking stream into
-	// a single "▽ Thinking…" header instead of mixing it inline with the
-	// prose stream. Without a dedicated sink, reasoning falls through to
-	// the regular streamingCallback (and renders as raw monologue), which
-	// was the pre-collapse behaviour.
+	// Reasoning chunks: route to the dedicated reasoning callback first,
+	// regardless of the reasoningTerminalEnabled flag. The callback is a
+	// separate sink (e.g., CLI collapsed header) that should always receive
+	// reasoning data when registered.
 	if contentType == "reasoning" {
 		if reasoningCb := r.getReasoningCallback(); reasoningCb != nil {
 			reasoningCb(chunk)
 			return
 		}
+	}
+
+	// Reasoning is visible to the event bus by default, but not the terminal.
+	if !r.shouldRenderReasoning(contentType) {
+		return
 	}
 
 	// Terminal: write via streamingCallback if set (real-time character output)

@@ -213,12 +213,14 @@ func TestAutomateSessionsAll_DispatchEmptyPathToList(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
-	var resp []interface{}
+	var resp struct {
+		Sessions []interface{} `json:"sessions"`
+	}
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if len(resp) != 0 {
-		t.Errorf("expected empty list, got %d items", len(resp))
+	if len(resp.Sessions) != 0 {
+		t.Errorf("expected empty list, got %d items", len(resp.Sessions))
 	}
 }
 

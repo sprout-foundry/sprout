@@ -318,11 +318,14 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 					fmt.Println()
 					console.GlyphPaused.Printf("Received signal %v, interrupting active task...", sig)
 					console.GlyphDim.Printf("  (Press Ctrl+C again quickly to force quit)")
-					if chatAgent != nil {
-						chatAgent.TriggerInterrupt()
-					}
-					continue
+									if chatAgent != nil {
+					chatAgent.TriggerInterrupt()
 				}
+				// SP-056-6d: Resolve any active reasoning fold on interrupt.
+				if fold := currentReasoningFold; fold != nil && fold.IsActive() {
+					fold.Interrupt()
+				}
+				continue}
 
 				fmt.Println()
 				console.GlyphStopped.Printf("Received signal %v, shutting down gracefully...", sig)
@@ -630,6 +633,12 @@ func SetupAgentEvents(chatAgent *agent.Agent, eventBus *events.EventBus, indicat
 			}
 		}
 		router.SetReasoningTerminalEnabled(reasoningMode == "full")
+		// SP-056: Initialize the reasoning fold when mode is "fold".
+		if reasoningMode == "fold" {
+			currentReasoningFold = console.NewReasoningFold(indicator)
+		} else {
+			currentReasoningFold = nil
+		}
 	}
 
 	// Set a simple streaming callback for direct terminal output of
@@ -655,6 +664,11 @@ func SetupAgentEvents(chatAgent *agent.Agent, eventBus *events.EventBus, indicat
 				// the ttft. Subsequent chunks are a no-op so reading the
 				// timestamp later yields "first token landed at X".
 				noteFirstStreamChunk()
+				// SP-056: Resolve any active reasoning fold on the first assistant
+				// text chunk so the fold line is finalized before prose appears.
+				if fold := currentReasoningFold; fold != nil && fold.IsActive() {
+					fold.Resolve()
+				}
 			}
 			// A browser is watching the Web UI — hand off there instead of
 			// duplicating the token stream in the terminal. Print one handoff
@@ -684,3 +698,9 @@ func SetupAgentEvents(chatAgent *agent.Agent, eventBus *events.EventBus, indicat
 // callback registered in SetupAgentEvents loads from this pointer on each
 // chunk so per-turn renderers can be swapped without re-registering the
 // callback. Safe because only one turn is active at a time in a CLI REPL.
+
+// currentReasoningFold holds the ReasoningFold instance for the current
+// session when reasoningMode == "fold". Created once at startup in
+// SetupAgentEvents and reused across turns. Accessed from agent_mode_interactive.go
+// and agent_terminal_subscriber.go.
+var currentReasoningFold *console.ReasoningFold

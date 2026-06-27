@@ -13,6 +13,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/console"
+	"github.com/sprout-foundry/sprout/pkg/credentials"
 	"github.com/sprout-foundry/sprout/pkg/mcp"
 )
 
@@ -35,6 +36,7 @@ var (
 	newReaderFromStdin      = func(in *os.File) *bufio.Reader {
 		return bufio.NewReader(in)
 	}
+	setCredentialStore      = credentials.SetToActiveBackend
 )
 
 // promptGitHubMCPSetupIfNeeded checks whether we should offer GitHub MCP
@@ -115,6 +117,14 @@ func promptGitHubMCPSetupIfNeeded(chatAgent interface{}) {
 		if saveErr := saveGitHubMCPServer(server); saveErr != nil {
 			console.GlyphWarning.Printf("Failed to save GitHub MCP config: %v", saveErr)
 			return
+		}
+		// After successful save, also store the PAT in the credential store if present.
+		if server != nil && server.Env != nil {
+			if pat, ok := server.Env["GITHUB_PERSONAL_ACCESS_TOKEN"]; ok && pat != "" {
+				if err := setCredentialStore("github", pat); err != nil {
+					console.GlyphWarning.Printf("Warning: failed to save GitHub PAT to credential store: %v", err)
+				}
+			}
 		}
 		// Reload MCP in the running agent so tools become available immediately.
 		if refreshMCPTools != nil {

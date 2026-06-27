@@ -22,6 +22,11 @@ import (
 // preventing repeated cleanup in daemon mode where multiple agents are created.
 var sessionCleanupOnce sync.Once
 
+// backgroundOrphanCleanupOnce ensures orphaned background process cleanup
+// runs only once per process. At startup it kills any background processes
+// left behind by a previous unclean exit (kill, segfault, etc.).
+var backgroundOrphanCleanupOnce sync.Once
+
 func isDebugEnvEnabled() bool {
 	value := strings.TrimSpace(configuration.GetEnvSimple("DEBUG"))
 	if value == "" {
@@ -123,6 +128,13 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 			if err := cleanupMemorySessions(); err != nil && agent.debug {
 				_, _ = os.Stderr.Write([]byte(fmt.Sprintf("WARNING: Failed to clean up old sessions: %v\n", err)))
 			}
+		})
+
+		// SP-062: Clean up orphaned background processes from previous
+		// unclean exits (kill, segfault, etc.) once per process.
+		// Delegated to a build-tagged helper (no-op in WASM).
+		backgroundOrphanCleanupOnce.Do(func() {
+			cleanupOrphanedBackgroundProcesses(agent.debug)
 		})
 
 		// Sweep expired persistent context entries based on retention policy

@@ -232,14 +232,21 @@ func runShellCommandAdoptable(ctx context.Context, command string, bpm *Backgrou
 
 	case <-ctx.Done():
 		if ctx.Err() == context.DeadlineExceeded {
-			// Tool deadline hit — promote to background instead of killing
-			outputFile.Close() // Close our handle; BPM will reopen for reading
-
+			// Tool deadline hit — promote to background instead of killing.
 			sessionID, adoptErr := bpm.AdoptProcess(cmd, outputPath, command, cmd.Dir, waitCh)
 			if adoptErr == nil {
+				// Do NOT close outputFile on successful adoption. The child
+				// writes to an internal Go pipe whose drain goroutine keeps
+				// outputFile open through io.MultiWriter. Closing it here
+				// would stop the drain goroutine, fill the pipe, and SIGPIPE
+				// the child on its next echo. The BPM reads the file with
+				// os.ReadFile (which opens its own handle) — our leftover
+				// write handle is harmless and will be cleaned up when the
+				// drain goroutine exits after cmd.Wait().
 				return formatBackgroundPromotionMessage(sessionID, command, outputBuf.String()), nil
 			}
-			// Adoption failed — kill the process and clean up
+			// Adoption failed — close our handle and clean up
+			outputFile.Close()
 			_ = cmd.Process.Kill()
 			<-waitCh // reap the zombie
 			os.Remove(outputPath)
@@ -249,6 +256,7 @@ func runShellCommandAdoptable(ctx context.Context, command string, bpm *Backgrou
 		// Non-deadline cancellation (user Ctrl+C) — kill the process
 		_ = cmd.Process.Kill()
 		<-waitCh // reap the zombie
+		outputFile.Close()
 		os.Remove(outputPath)
 		return "", ctx.Err()
 	}

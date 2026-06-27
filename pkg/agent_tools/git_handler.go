@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/events"
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
 type gitHandler struct{}
@@ -42,6 +43,15 @@ var dangerousOps = map[string]bool{
 }
 
 func (h *gitHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
+	// Inject env.WorkspaceRoot into context so downstream code
+	// (executeGitCommand, SafeGitCmd, etc.) resolves the correct
+	// working directory. Without this, git commands fall back to
+	// os.Getwd() which is the package source dir during tests —
+	// creating nested .git repos that corrupt the ChangeTracker.
+	if env.WorkspaceRoot != "" {
+		ctx = filesystem.WithWorkspaceRoot(ctx, env.WorkspaceRoot)
+	}
+
 	toolName := h.Name()
 	if env.EventBus != nil {
 		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{

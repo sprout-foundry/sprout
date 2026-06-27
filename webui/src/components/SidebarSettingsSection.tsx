@@ -207,8 +207,8 @@ export default function SidebarSettingsSection({
             type="button"
             className="settings-link-btn settings-link-btn--hotkeys"
             onClick={() => {
-              // Dispatch event to open hotkeys config
-              window.dispatchEvent(new CustomEvent('sprout:open-hotkeys-config'));
+              // Dispatch a dedicated event so it doesn't trigger the keyboard-shortcuts modal.
+              window.dispatchEvent(new CustomEvent('sprout:open-hotkeys-json'));
             }}
           >
             <Keyboard size={14} />

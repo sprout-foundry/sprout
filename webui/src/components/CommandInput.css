@@ -60,7 +60,7 @@
   height: 20px;
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   cursor: pointer;
   color: var(--text-secondary);
   font-size: 10px;
@@ -117,7 +117,7 @@
 
 .input-field::-webkit-scrollbar-thumb {
   background: var(--border-default);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
 }
 
 .input-actions {
@@ -275,7 +275,7 @@
   min-width: 14px;
   height: 14px;
   padding: 0 3px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--accent-primary);
   color: var(--accent-fg);
   font-size: 10px;
@@ -443,7 +443,7 @@
   right: -4px;
   width: 18px;
   height: 18px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--bg-elevated);
   border: 1px solid var(--border-default);
   color: var(--text-secondary);

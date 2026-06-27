@@ -112,7 +112,7 @@
 .markdown-preview-body .code-block {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 10px;
   margin: 8px 0;
   overflow-x: auto;
@@ -136,7 +136,7 @@
   text-transform: uppercase;
   background: var(--bg-elevated);
   padding: 2px 6px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
 }
 
 /* Tables */
@@ -165,7 +165,7 @@
 /* Images */
 .markdown-preview-body img {
   max-width: 100%;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
 }
 
 /* Horizontal rule */

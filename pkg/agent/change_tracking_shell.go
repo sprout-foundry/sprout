@@ -213,10 +213,18 @@ func (ct *ChangeTracker) TrackShellTurn(workDir, toolCall string, destructive bo
 	// failure mode where committed work later gets silently reverted.
 	//
 	// The filter checks: for each delta, does the post-operation content
-	// match HEAD? If so, git brought this file to a committed state —
-	// there is nothing legitimate to "recover" back to. The delta is
-	// suppressed entirely (not recorded).
-	pending = ct.filterGitSourcedDeltas(pending, workDir)
+	// match HEAD? If so, git brought this file to a committed state.
+	//
+	// For NON-DESTRUCTIVE commands (merge, pull, fetch): the delta is
+	// suppressed — git brought committed content, nothing to recover.
+	//
+	// For DESTRUCTIVE commands (checkout, reset, clean): the delta is
+	// preserved IF the before-content differed from the after-content —
+	// meaning the destructive command changed the file's content, not
+	// just touched its mtime. The before-content might have been
+	// uncommitted agent work that the command destroyed; preserving the
+	// delta makes it recoverable via recover_file.
+	pending = ct.filterGitSourcedDeltas(pending, workDir, destructive)
 
 	// Surface truncation as a manifest entry on destructive walks. Non-
 	// destructive truncation already gets logged; for destructive ops we
@@ -327,7 +335,7 @@ func (ct *ChangeTracker) SyncShellCacheForPath(path string) {
 // cheaply verify their committed status without reading them from disk,
 // and they carry no recoverable OriginalCode payload anyway (the Skipped
 // sentinel makes them non-recoverable by design).
-func (ct *ChangeTracker) filterGitSourcedDeltas(pending []pendingShellChange, workDir string) []pendingShellChange {
+func (ct *ChangeTracker) filterGitSourcedDeltas(pending []pendingShellChange, workDir string, destructive bool) []pendingShellChange {
 	if len(pending) == 0 {
 		return pending
 	}
@@ -343,6 +351,19 @@ func (ct *ChangeTracker) filterGitSourcedDeltas(pending []pendingShellChange, wo
 		// `rm` should stay recoverable). Path-only entries (Skipped) are
 		// also kept — no content payload to protect against.
 		if p.After != nil && p.After.Content != nil && committed[p.Path] {
+			if destructive {
+				// For destructive commands (checkout, reset, clean),
+				// check whether the BEFORE content was different from
+				// the AFTER content. If before != after, the command
+				// changed the file's content — the before-state might
+				// have been uncommitted agent work that was destroyed.
+				// Preserve the delta so it's recoverable.
+				if p.Before != nil && p.Before.Content != nil && !shellContentsEqual(p.Before, p.After) {
+					ct.logf("SP-077: preserving delta for %s (destructive git command changed content from uncommitted state)", p.Path)
+					kept = append(kept, p)
+					continue
+				}
+			}
 			ct.logf("SP-077: suppressing git-sourced delta for %s (post-op content matches HEAD)", p.Path)
 			continue
 		}

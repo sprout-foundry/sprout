@@ -286,8 +286,7 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 		env.VisionProcessor = agent.GetVisionProcessor()
 		env.WebBrowser = tools.NewBrowserAdapter()
 		env.SkillLoader = newSkillLoaderAdapter(agent)
-		// SearchEngine: wired once handler migrations create the necessary adapter type
-		// (see roadmap/SP-079-migrate-stub-tool-handlers.md).
+		env.SearchEngine = newSearchEngineAdapter(agent)
 	} else {
 		env.OutputWriter = os.Stdout
 		env.MaxTokensFunc = func() int { return 0 }

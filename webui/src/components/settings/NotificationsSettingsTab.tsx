@@ -113,10 +113,10 @@ export default function NotificationsSettingsTab({ renderLocalToggle }: Notifica
               fontSize: '12px',
               color:
                 permission === 'granted'
-                  ? 'var(--accent-success, #28a745)'
+                  ? 'var(--accent-success)'
                   : permission === 'denied'
-                    ? 'var(--accent-danger, #dc3545)'
-                    : 'var(--text-secondary, #888)',
+                    ? 'var(--accent-error)'
+                    : 'var(--text-secondary)',
               display: 'flex',
               alignItems: 'center',
               gap: '4px',
@@ -156,12 +156,12 @@ export default function NotificationsSettingsTab({ renderLocalToggle }: Notifica
           )}
         </button>
         {testStatus === 'blocked' && (
-          <div className="config-help" style={{ color: 'var(--accent-danger, #dc3545)' }}>
+          <div className="config-help" style={{ color: 'var(--accent-error)' }}>
             Browser notifications are blocked. Check your browser settings to allow them.
           </div>
         )}
         {testStatus === 'sent' && (
-          <div className="config-help" style={{ color: 'var(--accent-success, #28a745)' }}>
+          <div className="config-help" style={{ color: 'var(--accent-success)' }}>
             Test notification sent successfully!
           </div>
         )}

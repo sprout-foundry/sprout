@@ -323,8 +323,8 @@ function Sidebar({
         return (
           <AutomationsPanel
             onNavigateToSession={(id) => {
-              // TODO: Navigate to session output view
               debugLog('[Sidebar] Navigate to automation session:', id);
+              onSectionChange?.('automations');
             }}
           />
         );

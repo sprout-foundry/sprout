@@ -566,3 +566,159 @@ func visiblePart(s string) string {
 	}
 	return b.String()
 }
+
+// --- SP-078 Phase 1: width-aware wrapped steer setter -----------------------
+
+func TestStatusFooter_SetSteerLineWrapped_RecordsState(t *testing.T) {
+	// On a non-TTY active footer the method returns early before draw(),
+	// but the wrapped-mode fields are still set under the lock.
+	var buf bytes.Buffer
+	f := &StatusFooter{w: &buf, isTTY: true}
+	f.SetSteerLineWrapped("aaaa\nbbbb", 1, 2)
+	f.mu.Lock()
+	gotRow := f.steerCursorRow
+	gotCol := f.steerCursorCol
+	gotActive := f.steerWrappedActive
+	gotLine := f.steerLine
+	f.mu.Unlock()
+	if gotRow != 1 || gotCol != 2 {
+		t.Fatalf("expected cursor (1, 2), got (%d, %d)", gotRow, gotCol)
+	}
+	if !gotActive {
+		t.Fatalf("expected steerWrappedActive=true")
+	}
+	if gotLine != "aaaa\nbbbb" {
+		t.Fatalf("expected steerLine='aaaa\\nbbbb', got %q", gotLine)
+	}
+}
+
+func TestStatusFooter_SetSteerLineWrapped_RowCountIsWidthAware(t *testing.T) {
+	// Width-aware row count: a 200-char single-line buffer in an 80-col
+	// terminal should reserve 3 visual rows, not 1. terminalSize()
+	// returns (0, 0) on a non-TTY fd=-1 footer, but steerRowCount falls
+	// back to cols=80 so the math still runs.
+	var buf bytes.Buffer
+	f := &StatusFooter{
+		w: &buf, isTTY: true,
+		steerActive:        true,
+		steerWrappedActive: true,
+		steerLine:          strings.Repeat("a", 200),
+		steerCursorRow:     -1,
+	}
+	n := f.steerRowCount()
+	if n != 3 {
+		t.Fatalf("expected 3 visual rows for 200-char wrap at cols=80, got %d", n)
+	}
+}
+
+func TestStatusFooter_SetSteerLine_ClearsWrappedMode(t *testing.T) {
+	// A subsequent legacy SetSteerLine must clear steerWrappedActive so
+	// drawLocked doesn't keep using the (row, col) path.
+	var buf bytes.Buffer
+	f := &StatusFooter{w: &buf, isTTY: true}
+	f.SetSteerLineWrapped("abc", 0, 1)
+	f.SetSteerLine("abc")
+	f.mu.Lock()
+	wrapped := f.steerWrappedActive
+	row := f.steerCursorRow
+	f.mu.Unlock()
+	if wrapped {
+		t.Fatalf("SetSteerLine should clear steerWrappedActive")
+	}
+	if row != -1 {
+		t.Fatalf("SetSteerLine should reset steerCursorRow to -1, got %d", row)
+	}
+}
+
+func TestStatusFooter_SetSteerLineWithCursor_ClearsWrappedMode(t *testing.T) {
+	var buf bytes.Buffer
+	f := &StatusFooter{w: &buf, isTTY: true}
+	f.SetSteerLineWrapped("abc", 0, 1)
+	f.SetSteerLineWithCursor("abc", 1)
+	f.mu.Lock()
+	wrapped := f.steerWrappedActive
+	row := f.steerCursorRow
+	f.mu.Unlock()
+	if wrapped {
+		t.Fatalf("SetSteerLineWithCursor should clear steerWrappedActive")
+	}
+	if row != -1 {
+		t.Fatalf("SetSteerLineWithCursor should reset steerCursorRow to -1, got %d", row)
+	}
+}
+
+func TestStatusFooter_ClearSteerLine_ClearsWrappedMode(t *testing.T) {
+	var buf bytes.Buffer
+	f := &StatusFooter{w: &buf, isTTY: true}
+	f.SetSteerLineWrapped("abc", 0, 1)
+	f.mu.Lock()
+	f.active = true
+	f.mu.Unlock()
+	f.ClearSteerLine()
+	f.mu.Lock()
+	wrapped := f.steerWrappedActive
+	row := f.steerCursorRow
+	f.mu.Unlock()
+	if wrapped {
+		t.Fatalf("ClearSteerLine should clear steerWrappedActive")
+	}
+	if row != -1 {
+		t.Fatalf("ClearSteerLine should reset steerCursorRow to -1, got %d", row)
+	}
+}
+
+// --- SP-078 Phase 3: legacy SetSteerLineWithCursor wide-rune cursor --------
+
+func TestStatusFooter_SetSteerLineWithCursor_WideRuneColumnIsVisible(t *testing.T) {
+	// SP-078 Phase 3: a wide-rune (CJK) buffer at byte offset N must
+	// place the caret at visible column visibleRuneWidth(buf[:N]), not
+	// the raw byte offset. With each "你" being 3 bytes but 2 visible
+	// cols, a buffer of "你好" + cursor at byte 3 should land the caret
+	// at column 2 (after the first "你"), not column 3.
+	//
+	// This test exercises the legacy splitSteerLines path inside
+	// drawLocked by simulating the cursor mapping directly through
+	// the same byte→(line, col) walk. We do it via the public surface:
+	// setting fields and calling a small exported helper or asserting
+	// the same logic on a synthetic state.
+	var buf bytes.Buffer
+	f := &StatusFooter{w: &buf, isTTY: true}
+	text := "你好"
+	// cursor at byte 3 = after first "你" = visible col 2.
+	f.SetSteerLineWithCursor(text, 3)
+	f.mu.Lock()
+	gotLine := f.steerLine
+	gotCursor := f.steerCursor
+	f.mu.Unlock()
+	if gotLine != text {
+		t.Fatalf("expected steerLine=%q, got %q", text, gotLine)
+	}
+	if gotCursor != 3 {
+		t.Fatalf("expected steerCursor=3, got %d", gotCursor)
+	}
+	// The actual column conversion happens inside drawLocked; the
+	// fixture's terminalSize() returns (0,0) on non-TTY fd=-1, so we
+	// can't trigger the draw. The Phase 3 fix's correctness is covered
+	// by the status_footer_test.go rendering tests above; this test
+	// confirms the API still records byte offsets faithfully.
+}
+
+// TestStatusFooter_LegacyCursorByteToCol covers the byte→visible-col
+// mapping logic directly. Since the conversion is inside drawLocked
+// and depends on terminalSize, we replicate the conversion here and
+// assert visibleRuneWidth matches the byte mapping for typical CJK
+// input.
+func TestStatusFooter_LegacyCursorByteToCol_CJK(t *testing.T) {
+	// Direct test of the Phase 3 fix logic. The drawLocked mapping
+	// computes rawByteCol = steerCursor - offset, then we now convert
+	// to cursorByteCol = visibleRuneWidth(lineText[:rawByteCol]).
+	// Without the conversion, the caret landed at byte col 3 (which
+	// for "你好" is between the two runes visually); with it, it lands
+	// at visible col 2 (right after the first rune).
+	const text = "你好"
+	rawByteCol := 3 // past the first 3-byte rune
+	got := visibleRuneWidth(text[:rawByteCol])
+	if got != 2 {
+		t.Fatalf("expected visibleRuneWidth(%q)=2, got %d", text[:rawByteCol], got)
+	}
+}

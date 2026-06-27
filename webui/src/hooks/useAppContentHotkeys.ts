@@ -149,13 +149,16 @@ export const useAppContentHotkeys = ({
     setIsCommandPaletteOpen,
   ]);
 
-  // Listen for open hotkeys config event
+  // Listen for open hotkeys config event — the modal listens for the
+  // legacy `sprout:open-hotkeys-config` event (Help menu / Welcome tab),
+  // and the explicit "Edit Keyboard Shortcuts (JSON)" button dispatches
+  // a dedicated event so it doesn't accidentally open the modal.
   useEffect(() => {
     const handleOpenHotkeys = () => {
       handleOpenHotkeysConfig();
     };
-    window.addEventListener('sprout:open-hotkeys-config', handleOpenHotkeys);
-    return () => window.removeEventListener('sprout:open-hotkeys-config', handleOpenHotkeys);
+    window.addEventListener('sprout:open-hotkeys-json', handleOpenHotkeys);
+    return () => window.removeEventListener('sprout:open-hotkeys-json', handleOpenHotkeys);
   }, [handleOpenHotkeysConfig]);
 
   return { handleOpenHotkeysConfig };

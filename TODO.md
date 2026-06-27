@@ -6,6 +6,13 @@ record.
 
 **Status of related specs:** SP-063 (`computer_user` persona) is **partially implemented** — its core shipped; remaining work (panic key 4g, destructive-app denylist 4h) is tracked in `roadmap/SP-063-computer-use-persona.md`, not here. SP-073 (`cooperative cancellation`) shipped 2026-06-26 — all three phases green (TODO(SP-034-1c) markers cleared); further work would be new tickets, not this list.
 
+## SP-069: PR Creation — credential-store lookup for GitHub token
+_Spec: `roadmap/SP-069-pull-request-creation.md` (status: ✅ Implemented; one residual TODO)_
+
+Follow-up (Low, ~half a day): the PR-creation flow's REST-API branch (`pkg/git/pull_request.go:171`) only checks `GH_TOKEN` env var, not the credential store. The spec explicitly documents "credential store → `GH_TOKEN` → `gh`" as the resolution order, and `cmd/github_setup_prompt.go` already prompts to configure `gh`/token — the token just isn't consulted from where the user stored it.
+
+- [ ] SP-069-cred: In `pkg/git/pull_request.go`, before the `GH_TOKEN` lookup, check `pkg/credentials` for a `github` provider entry (resolution order per spec §Open Questions: credential store → `GH_TOKEN` → `gh`). Update `cmd/github_setup_prompt.go`'s existing flow to write to the credential store on success so the next PR doesn't need `GH_TOKEN` in env. Add a unit test covering all three branches. Acceptance: a user who runs `sprout setup github` once can open subsequent PRs without exporting `GH_TOKEN`; the spec's resolution order is honored; existing PR tests still pass.
+
 ## SP-078: Steer-Panel UX Parity — Wrap-Aware Rendering, Tab Completion
 _Spec: `roadmap/SP-078-steer-panel-ux-parity.md` (status: 📋 Proposed; Phases 1–3 shipped)_
 

@@ -126,6 +126,11 @@ type ToolEnv struct {
 	// SearchEngine performs Google Custom Search API queries.
 	// Nil means web search is not available.
 	SearchEngine SearchEngine
+	// RawArgsJSON is the raw JSON string of the tool arguments as sent by the
+	// LLM. When set, handlers can parse this to recover the original key
+	// insertion order of nested maps (e.g., the "data" field in
+	// write_structured_file) before Go's map iteration randomizes it.
+	RawArgsJSON string
 }
 
 // AskUserService is the interface ask_user-style tools use to drive an

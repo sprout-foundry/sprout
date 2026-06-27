@@ -110,7 +110,18 @@ func (h *writeStructuredFileHandler) Execute(ctx context.Context, env ToolEnv, a
 		}
 	}
 
-	content, err := serializeStructuredContent(format, data)
+	// SP-082-1: Preserve key insertion order from the LLM's original JSON.
+	// When RawArgsJSON is available, parse the "data" sub-object directly from
+	// the source text into a *yaml.Node (which preserves map key order), then
+	// serialize that.  Fall back to converting args data through mapToYamlNode
+	// when RawArgsJSON is absent (e.g., unit tests that construct args as Go maps).
+	var content string
+	if env.RawArgsJSON != "" {
+		content, err = serializeWithOrder(env.RawArgsJSON, format)
+	} else {
+		node := mapToYamlNode(data)
+		content, err = serializeYamlNode(format, node)
+	}
 	if err != nil {
 		return ToolResult{Output: fmt.Sprintf("failed to serialize structured content: %v", err), IsError: true}, err
 	}

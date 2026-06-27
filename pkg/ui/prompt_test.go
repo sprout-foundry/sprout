@@ -2,8 +2,10 @@ package ui
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -11,19 +13,42 @@ import (
 
 // captureStdout redirects os.Stdout to a pipe, runs fn, then returns
 // the captured output as a string.
+//
+// Uses a goroutine to drain the read end of the pipe concurrently with
+// writing, so callers can emit arbitrarily large output without deadlocking
+// the writer when the OS pipe buffer (~64 KiB on Linux) fills.
 func captureStdout(fn func()) string {
 	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
+	r, w, err := os.Pipe()
+	if err != nil {
+		panic(fmt.Sprintf("captureStdout: pipe: %v", err))
+	}
 	os.Stdout = w
 
+	done := make(chan string, 1)
+	go func() {
+		var buf strings.Builder
+		tmp := make([]byte, 4096)
+		for {
+			n, readErr := r.Read(tmp)
+			if n > 0 {
+				buf.Write(tmp[:n])
+			}
+			if readErr != nil {
+				break
+			}
+		}
+		done <- buf.String()
+	}()
+
+	defer func() {
+		_ = w.Close()
+		os.Stdout = oldStdout
+	}()
 	fn()
-
-	w.Close()
+	_ = w.Close()
 	os.Stdout = oldStdout
-
-	var buf bytes.Buffer
-	io.Copy(&buf, r)
-	return buf.String()
+	return <-done
 }
 
 // withStdin temporarily replaces os.Stdin with a pipe fed by `input`,
@@ -74,6 +99,25 @@ func bothStdinStdout(stdinInput string, fn func()) (string, bool) {
 }
 
 // ─── constants ─────────────────────────────────────────────────────────
+
+// TestCaptureStdout_LargeOutput exercises captureStdout with output that
+// exceeds the OS pipe buffer (64 KiB on Linux). Without a concurrent
+// reader, the writer inside fn() would block once the buffer fills.
+func TestCaptureStdout_LargeOutput(t *testing.T) {
+	const size = 256 * 1024 // 4x the typical pipe buffer
+	want := strings.Repeat("x", size)
+
+	out := captureStdout(func() {
+		fmt.Print(want)
+	})
+
+	if len(out) != size {
+		t.Fatalf("captured %d bytes, want %d", len(out), size)
+	}
+	if out != want {
+		t.Fatal("output content mismatch")
+	}
+}
 
 func TestDefaultPrompt(t *testing.T) {
 	const want = "Enter option number (or 0 to cancel): "

@@ -1,28 +1,49 @@
 package configuration
 
 import (
-	"bytes"
-	"io"
+	"fmt"
 	"os"
 	"strings"
 	"testing"
 )
 
-// captureStdout captures output written to stdout during function execution
+// captureStdout captures output written to stdout during function execution.
+//
+// Uses a goroutine to drain the read end of the pipe concurrently with
+// writing, so callers can emit arbitrarily large output without deadlocking
+// the writer when the OS pipe buffer (~64 KiB on Linux) fills.
 func captureStdout(fn func()) string {
 	old := os.Stdout
-	r, w, _ := os.Pipe()
+	r, w, err := os.Pipe()
+	if err != nil {
+		panic(fmt.Sprintf("captureStdout: pipe: %v", err))
+	}
 	os.Stdout = w
 
+	done := make(chan string, 1)
+	go func() {
+		var buf strings.Builder
+		tmp := make([]byte, 4096)
+		for {
+			n, readErr := r.Read(tmp)
+			if n > 0 {
+				buf.Write(tmp[:n])
+			}
+			if readErr != nil {
+				break
+			}
+		}
+		done <- buf.String()
+	}()
+
+	defer func() {
+		_ = w.Close()
+		os.Stdout = old
+	}()
 	fn()
-
-	// Restore stdout
-	w.Close()
+	_ = w.Close()
 	os.Stdout = old
-
-	var buf bytes.Buffer
-	io.Copy(&buf, r)
-	return buf.String()
+	return <-done
 }
 
 func TestShowWelcomeMessage(t *testing.T) {
@@ -116,5 +137,24 @@ func TestShowNextSteps_EditorOnly(t *testing.T) {
 	// Should mention that AI features are not available
 	if !strings.Contains(output, "not available") {
 		t.Errorf("ShowNextSteps(%q) should indicate AI features are not available, got:\n%s", provider, output)
+	}
+}
+
+// TestCaptureStdout_LargeOutput exercises captureStdout with output that
+// exceeds the OS pipe buffer (64 KiB on Linux). Without a concurrent
+// reader, the writer inside fn() would block once the buffer fills.
+func TestCaptureStdout_LargeOutput(t *testing.T) {
+	const size = 256 * 1024 // 4x the typical pipe buffer
+	want := strings.Repeat("x", size)
+
+	out := captureStdout(func() {
+		fmt.Print(want)
+	})
+
+	if len(out) != size {
+		t.Fatalf("captured %d bytes, want %d", len(out), size)
+	}
+	if out != want {
+		t.Fatal("output content mismatch")
 	}
 }

@@ -112,6 +112,12 @@ const (
 	// version as <path>.theirs instead of overwriting. The payload carries
 	// path, theirs_path, hash_container, hash_browser, and modified_at.
 	EventTypeWorkspaceConflict = "workspace.conflict_detected"
+	// EventTypeWorkspaceHeartbeatLost (SP-046-4) is published when a session's
+	// heartbeat has been missed for >60s, indicating the browser tab may have
+	// been closed or the connection lost. The container will terminate the
+	// running job after this event. The payload carries session_id and
+	// last_heartbeat (time.RFC3339).
+	EventTypeWorkspaceHeartbeatLost = "workspace.heartbeat_lost"
 )
 
 // EventBus manages event distribution between CLI and Web UI

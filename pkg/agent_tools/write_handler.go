@@ -67,6 +67,11 @@ func (h *writeFileHandler) Execute(ctx context.Context, env ToolEnv, args map[st
 		return ToolResult{Output: err.Error(), IsError: true}, err
 	}
 
+	// SP-046-2: Check staleness before writing
+	if err := CheckStaleness(path); err != nil {
+		return ToolResult{Output: err.Error(), IsError: true}, err
+	}
+
 	// Publish tool start event
 	if env.EventBus != nil {
 		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{

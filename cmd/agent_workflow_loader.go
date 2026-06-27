@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"sort"
 	"strings"
@@ -341,9 +342,12 @@ func findSubagentTypeMapKey(subagentTypes map[string]configuration.SubagentType,
 
 // applyWorkflowSubagentOverrides patches the SubagentTypes map entries matching
 // the given overrides. No error is returned for unknown personas — they are skipped.
+// Log lines are emitted for every skip and every successful apply so that silent
+// divergence between the workflow JSON and the actual SubagentTypes is visible.
 func applyWorkflowSubagentOverrides(subagentTypes map[string]configuration.SubagentType, overrides WorkflowSubagentOverrides) {
 	for personaID, override := range overrides {
 		if override.Provider == "" && override.Model == "" {
+			log.Printf("[workflow] subagent_overrides: empty override for %q — both provider and model are empty; nothing to apply", personaID)
 			continue
 		}
 		normalizedID := normalizeWorkflowPersonaID(personaID)
@@ -352,10 +356,12 @@ func applyWorkflowSubagentOverrides(subagentTypes map[string]configuration.Subag
 		}
 		mapKey, found := findSubagentTypeMapKey(subagentTypes, normalizedID)
 		if !found {
+			log.Printf("[workflow] subagent_overrides: unknown persona %q — no matching SubagentTypes entry or alias; override ignored (provider=%s model=%s)", personaID, override.Provider, override.Model)
 			continue
 		}
 		st := subagentTypes[mapKey]
 		if !st.Enabled {
+			log.Printf("[workflow] subagent_overrides: disabled persona %q — enabled=false; override ignored (provider=%s model=%s)", personaID, override.Provider, override.Model)
 			continue
 		}
 		if override.Provider != "" {
@@ -365,6 +371,7 @@ func applyWorkflowSubagentOverrides(subagentTypes map[string]configuration.Subag
 			st.Model = override.Model
 		}
 		subagentTypes[mapKey] = st
+		log.Printf("[workflow] subagent_overrides applied: persona %q → provider=%s model=%s", personaID, st.Provider, st.Model)
 	}
 }
 

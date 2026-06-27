@@ -32,6 +32,7 @@ func (h *analyzeUIScreenshotHandler) Validate(args map[string]any) error {
 
 func (h *analyzeUIScreenshotHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
 	toolName := h.Name()
+	var succeeded bool
 	if env.EventBus != nil {
 		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
 			"tool":   toolName,
@@ -40,15 +41,38 @@ func (h *analyzeUIScreenshotHandler) Execute(ctx context.Context, env ToolEnv, a
 		defer func() {
 			env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
 				"tool":  toolName,
-				"error": true,
+				"error": !succeeded,
 			})
 		}()
 	}
 
-	// TODO: Full implementation requires *Agent access for GetVisionProcessor()
-	// and vision model integration for screenshot analysis. This is a thin wrapper stub.
-	return ToolResult{
-		Output:  "analyze_ui_screenshot requires full *Agent refactoring for complete functionality. This handler cannot analyze UI screenshots without access to the Agent's vision processor. Please use the legacy interface or complete the migration.",
-		IsError: true,
-	}, fmt.Errorf("analyze_ui_screenshot requires full *Agent refactoring")
+	imagePath, err := extractString(args, "image_path")
+	if err != nil {
+		return ToolResult{Output: err.Error(), IsError: true}, err
+	}
+
+	analysisPrompt := ""
+	if v, ok := args["analysis_prompt"].(string); ok {
+		analysisPrompt = v
+	}
+
+	// TODO(SP-079-3): When browser support lands in ToolEnv, use viewportWidth/viewportHeight
+	// to render HTML content before analysis. For now, only direct image paths are supported.
+
+	// Detect HTML content — requires a browser to render, which is not yet
+	// wired into ToolEnv (separate SP task).
+	if IsHTMLInput(imagePath) {
+		return ToolResult{
+			Output:  "HTML content requires a browser for rendering. Please provide a screenshot image file instead.",
+			IsError: true,
+		}, fmt.Errorf("html content requires browser rendering")
+	}
+
+	result, err := AnalyzeImage(ctx, imagePath, analysisPrompt, visionModeFrontend)
+	if err != nil {
+		return ToolResult{Output: result, IsError: true}, err
+	}
+
+	succeeded = true
+	return ToolResult{Output: result}, nil
 }

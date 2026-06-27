@@ -130,6 +130,9 @@ func (ws *ReactWebServer) registerWorkspaceRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/workspace/browse", ws.handleAPIWorkspaceBrowse)
 	mux.HandleFunc("/api/workspace/symbols", ws.handleAPIWorkspaceSymbols)
 	mux.HandleFunc("/api/workspace/projects", ws.handleAPIWorkspaceProjects)
+	// SP-046: workspace sync handlers
+	mux.HandleFunc("/api/workspace/sync", ws.handleAPIWorkspaceSync)
+	mux.HandleFunc("/api/workspace/takeover", ws.handleAPIWorkspaceTakeover)
 	mux.HandleFunc("/api/instances", ws.handleAPIInstances)
 	mux.HandleFunc("/api/instances/select", ws.handleAPIInstanceSelect)
 	mux.HandleFunc("/api/instances/ssh-hosts", ws.handleAPISSHHosts)

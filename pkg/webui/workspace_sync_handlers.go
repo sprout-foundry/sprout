@@ -16,6 +16,7 @@ import (
 	"net/http"
 
 	agenttools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 // workspaceSyncState is the package-level sync state for the workspace sync
@@ -23,6 +24,10 @@ import (
 // ReactWebServer instances. In a multi-tenant future, this would be keyed by
 // user or workspace.
 var workspaceSyncState = agenttools.NewSyncState()
+
+// activeSessionRegistry is the package-level multi-device session registry for
+// SP-046-5. It tracks which device currently holds an active session.
+var activeSessionRegistry = NewActiveSessionRegistry()
 
 // syncRequest is the JSON body shape for POST /api/workspace/sync.
 type syncRequest struct {
@@ -104,4 +109,72 @@ func (ws *ReactWebServer) handleAPIWorkspaceSync(w http.ResponseWriter, r *http.
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(metadata)
+}
+
+// takeoverRequest is the JSON body shape for POST /api/workspace/takeover.
+type takeoverRequest struct {
+	SessionID string `json:"session_id"`
+	DeviceID  string `json:"device_id"`
+}
+
+// handleAPIWorkspaceTakeover handles POST /api/workspace/takeover (SP-046-5).
+//
+// A new device requests to take over an existing session. If the session is
+// already active on another device, the old device is swapped out and a
+// workspace.session_moved event is published so the displaced browser can
+// surface the overlay.
+func (ws *ReactWebServer) handleAPIWorkspaceTakeover(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, 1024) // small body
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Failed to read request body", http.StatusBadRequest)
+		return
+	}
+	if len(body) == 0 {
+		http.Error(w, "request body is required", http.StatusBadRequest)
+		return
+	}
+
+	var req takeoverRequest
+	if err := json.Unmarshal(body, &req); err != nil {
+		log.Printf("[workspace-takeover] bad request: %v", err)
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	if req.SessionID == "" || req.DeviceID == "" {
+		http.Error(w, "session_id and device_id are required", http.StatusBadRequest)
+		return
+	}
+
+	// Atomically swap the active device.
+	oldDevice := activeSessionRegistry.RequestTakeover(req.SessionID, req.DeviceID)
+
+	w.Header().Set("Content-Type", "application/json")
+
+	if oldDevice != "" {
+		// Publish session_moved event so the displaced browser can show the overlay.
+		ws.eventBus.Publish(events.EventTypeWorkspaceSessionMoved, map[string]interface{}{
+			"session_id":     req.SessionID,
+			"previous_device": oldDevice,
+			"new_device":     req.DeviceID,
+		})
+
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"taken_over":       true,
+			"previous_device": oldDevice,
+		})
+	} else {
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"taken_over": false,
+		})
+	}
 }

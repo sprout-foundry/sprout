@@ -14,12 +14,26 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/sprout-foundry/sprout/pkg/credentials"
 )
 
 // ErrNoGitHubAuth is the sentinel returned when neither a GH_TOKEN nor the gh
 // CLI are available for PR creation.  The wrapped error message contains the
 // exact gh pr create command the user can run manually.
 var ErrNoGitHubAuth = errors.New("no GitHub authentication available")
+
+// resolveGitHubCredential is the function used to look up a GitHub credential
+// from the active credential store. The default implementation calls
+// credentials.GetFromActiveBackend("github"). Tests may override this variable
+// to avoid touching real credential storage.
+var resolveGitHubCredential = func() (string, error) {
+	token, _, err := credentials.GetFromActiveBackend("github")
+	if err != nil {
+		return "", err
+	}
+	return token, nil
+}
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -131,8 +145,8 @@ func splitOwnerRepo(raw string) (string, string, error) {
 //
 // Resolution order:
 //
-//  1. GitHub REST API (requires GH_TOKEN env var)
-//  2. gh pr create shell-out (fallback when no token)
+//  1. GitHub REST API (credential store → GH_TOKEN env var)
+//  2. gh pr create shell-out (fallback when no token available)
 //  3. Structured error with the exact gh command the user can run manually
 //
 // If req.Head is empty, the current branch name is used.
@@ -168,9 +182,14 @@ func CreatePullRequest(ctx context.Context, repoDir string, req PullRequestReque
 	}
 
 	// --- Try GitHub REST API first ---
-	// TODO(SP-004): Check credential store before falling back to GH_TOKEN
-	token := os.Getenv("GH_TOKEN")
+	// Resolution order: credential store → GH_TOKEN env → gh CLI fallback.
+	var token string
 	var apiErr error
+	if credToken, credErr := resolveGitHubCredential(); credErr == nil && credToken != "" {
+		token = credToken
+	} else {
+		token = os.Getenv("GH_TOKEN")
+	}
 	if token != "" {
 		owner, repo, getErr := getOwnerRepo(ctx, repoDir)
 		if getErr == nil {

@@ -159,7 +159,7 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 
 		registry := GetToolRegistry()
 		execCtx := withToolExecutionMetadata(ctx, toolCallID, normalizedToolName, te.agent.effectiveCwd())
-		images, result, err := registry.ExecuteTool(execCtx, normalizedToolName, args, te.agent)
+		images, result, err := registry.ExecuteTool(execCtx, normalizedToolName, args, te.agent, toolCall.Function.Arguments)
 
 		// Unknown-tool detection uses typed error classification only.
 		// Tools return agenterrors.NewInvalidInputError("unknown tool: ..."),

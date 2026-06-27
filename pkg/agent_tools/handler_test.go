@@ -588,6 +588,164 @@ func TestToolEnvFields(t *testing.T) {
 	}
 }
 
+// ---------------------------------------------------------------------------
+// SP-079-1: ToolEnv extended fields (VisionProcessor, WebBrowser, SkillLoader, SearchEngine)
+// ---------------------------------------------------------------------------
+
+func TestToolEnv_VisionProcessor_FieldPresence(t *testing.T) {
+	t.Parallel()
+	proc := NewVisionProcessor(nil, nil, false)
+	env := ToolEnv{
+		VisionProcessor: proc,
+	}
+	if env.VisionProcessor == nil {
+		t.Fatal("VisionProcessor should not be nil after assignment")
+	}
+	if env.VisionProcessor != proc {
+		t.Error("VisionProcessor should be the same instance that was set")
+	}
+}
+
+func TestToolEnv_VisionProcessor_NilSafety(t *testing.T) {
+	t.Parallel()
+	var env ToolEnv
+	// Default zero-value should have nil VisionProcessor.
+	if env.VisionProcessor != nil {
+		t.Error("VisionProcessor should be nil by default")
+	}
+	// Accessing nil VisionProcessor should not panic (just check for nil).
+	if env.VisionProcessor == nil {
+		// This is the expected path — tool handlers check nil before use.
+	}
+}
+
+// mockWebBrowser implements WebBrowser for testing.
+type mockWebBrowser struct {
+	result string
+	err    error
+}
+
+func (m *mockWebBrowser) BrowseURL(_ context.Context, _ string, _ map[string]any) (string, error) {
+	return m.result, m.err
+}
+
+func TestToolEnv_WebBrowser_FieldPresence(t *testing.T) {
+	t.Parallel()
+	browser := &mockWebBrowser{result: "page content"}
+	env := ToolEnv{
+		WebBrowser: browser,
+	}
+	if env.WebBrowser == nil {
+		t.Fatal("WebBrowser should not be nil after assignment")
+	}
+	if env.WebBrowser != browser {
+		t.Error("WebBrowser should be the same instance that was set")
+	}
+	// Verify the mock works through the interface.
+	result, err := env.WebBrowser.BrowseURL(context.Background(), "http://example.com", nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != "page content" {
+		t.Errorf("BrowseURL result = %q, want %q", result, "page content")
+	}
+}
+
+func TestToolEnv_WebBrowser_NilSafety(t *testing.T) {
+	t.Parallel()
+	var env ToolEnv
+	if env.WebBrowser != nil {
+		t.Error("WebBrowser should be nil by default")
+	}
+}
+
+// mockSkillLoader implements SkillLoader for testing.
+type mockSkillLoader struct {
+	result *SkillInfo
+	err    error
+}
+
+func (m *mockSkillLoader) LoadSkill(_ string) (*SkillInfo, error) {
+	return m.result, m.err
+}
+
+func TestToolEnv_SkillLoader_FieldPresence(t *testing.T) {
+	t.Parallel()
+	skillInfo := &SkillInfo{ID: "test-skill", Name: "Test Skill", Description: "A test skill"}
+	loader := &mockSkillLoader{result: skillInfo}
+	env := ToolEnv{
+		SkillLoader: loader,
+	}
+	if env.SkillLoader == nil {
+		t.Fatal("SkillLoader should not be nil after assignment")
+	}
+	if env.SkillLoader != loader {
+		t.Error("SkillLoader should be the same instance that was set")
+	}
+	// Verify the mock works through the interface.
+	info, err := env.SkillLoader.LoadSkill("test-skill")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if info == nil {
+		t.Fatal("LoadSkill returned nil info")
+	}
+	if info.ID != "test-skill" {
+		t.Errorf("LoadSkill().ID = %q, want %q", info.ID, "test-skill")
+	}
+	if info.Name != "Test Skill" {
+		t.Errorf("LoadSkill().Name = %q, want %q", info.Name, "Test Skill")
+	}
+}
+
+func TestToolEnv_SkillLoader_NilSafety(t *testing.T) {
+	t.Parallel()
+	var env ToolEnv
+	if env.SkillLoader != nil {
+		t.Error("SkillLoader should be nil by default")
+	}
+}
+
+// mockSearchEngine implements SearchEngine for testing.
+type mockSearchEngine struct {
+	result string
+	err    error
+}
+
+func (m *mockSearchEngine) Search(_ context.Context, _ string) (string, error) {
+	return m.result, m.err
+}
+
+func TestToolEnv_SearchEngine_FieldPresence(t *testing.T) {
+	t.Parallel()
+	engine := &mockSearchEngine{result: "Search results for test"}
+	env := ToolEnv{
+		SearchEngine: engine,
+	}
+	if env.SearchEngine == nil {
+		t.Fatal("SearchEngine should not be nil after assignment")
+	}
+	if env.SearchEngine != engine {
+		t.Error("SearchEngine should be the same instance that was set")
+	}
+	// Verify the mock works through the interface.
+	result, err := env.SearchEngine.Search(context.Background(), "test query")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result != "Search results for test" {
+		t.Errorf("Search result = %q, want %q", result, "Search results for test")
+	}
+}
+
+func TestToolEnv_SearchEngine_NilSafety(t *testing.T) {
+	t.Parallel()
+	var env ToolEnv
+	if env.SearchEngine != nil {
+		t.Error("SearchEngine should be nil by default")
+	}
+}
+
 // mockApprovalManager implements ApprovalManager for testing.
 type mockApprovalManager struct {
 	approved    bool

@@ -112,6 +112,19 @@ type ToolEnv struct {
 	// TTY (no WebUI client). Tools use this to decide whether to render
 	// rich CLI output (boxes, colors) for the user.
 	IsInteractiveCLI bool
+	// VisionProcessor, when set, lets vision-dependent tools analyze
+	// images and UI screenshots without holding an *Agent reference.
+	// Nil means the tool must report "vision unavailable".
+	VisionProcessor *VisionProcessor
+	// WebBrowser runs headless browser navigation (Playwright/rod wrapper).
+	// Nil means the tool must report "browser unavailable".
+	WebBrowser WebBrowser
+	// SkillLoader resolves skill IDs to their on-disk instructions.
+	// Nil means skill loading is not available.
+	SkillLoader SkillLoader
+	// SearchEngine performs Google Custom Search API queries.
+	// Nil means web search is not available.
+	SearchEngine SearchEngine
 }
 
 // AskUserService is the interface ask_user-style tools use to drive an
@@ -138,6 +151,46 @@ type ApprovalManager interface {
 	// RequestApproval asks the user to approve a tool execution.
 	// Returns an ApprovalResult with the outcome and optional context.
 	RequestApproval(requestID, toolName, riskLevel, prompt string, extras map[string]string) ApprovalResult
+}
+
+// ---------------------------------------------------------------------------
+// SP-079-1: Agent subsystem interfaces
+// ---------------------------------------------------------------------------
+
+// VisionProcessor is defined in vision_types.go as a concrete struct.
+// We use the pointer directly here — no separate interface needed since
+// the type already lives in this package.
+
+// WebBrowser provides headless browser navigation for URL/content analysis.
+type WebBrowser interface {
+	// BrowseURL navigates to a URL and returns rendered content.
+	// The opts parameter carries action, selectors, and other options
+	// (passed as a map of string to any for schema flexibility).
+	BrowseURL(ctx context.Context, url string, opts map[string]any) (string, error)
+}
+
+// SkillInfo is the canonical description of a skill loaded from disk or
+// embedded. It lives here (rather than in pkg/agent) so that pkg/agent_tools
+// can reference it without creating an import cycle.
+type SkillInfo struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Path        string `json:"path"`
+	Content     string `json:"content"`
+	Source      string `json:"source"` // "builtin", "user", or "project"
+}
+
+// SkillLoader resolves skill IDs to their on-disk instructions.
+type SkillLoader interface {
+	// LoadSkill resolves a skill ID and returns its metadata and content.
+	LoadSkill(skillID string) (*SkillInfo, error)
+}
+
+// SearchEngine performs web search queries via Google Custom Search API.
+type SearchEngine interface {
+	// Search runs a web search query and returns formatted results.
+	Search(ctx context.Context, query string) (string, error)
 }
 
 // ImageData represents an image returned by a vision-capable tool.

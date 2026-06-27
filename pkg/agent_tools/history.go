@@ -144,7 +144,7 @@ func RollbackChanges(revisionID string, filePath string, confirm bool) (Rollback
 		// stale) with git-awareness (disk == NewCode but matches HEAD →
 		// committed, refuse). Outside a git repo or for untracked files, the
 		// content check alone decides.
-		if !history.IsRevertSafe(targetChange.Filename, targetChange.NewCode) {
+		if !history.IsRevertSafeWithOriginal(targetChange.Filename, targetChange.NewCode, targetChange.OriginalCode) {
 			history.AuditRevertSkip("RollbackChanges", targetChange.Filename, "stale or committed")
 			return RollbackResult{
 				Output: fmt.Sprintf("Skipped rollback of '%s': file was modified after the snapshot (content differs from recorded state) or the content is now committed to git. The file may have been committed or edited intentionally.", filePath),

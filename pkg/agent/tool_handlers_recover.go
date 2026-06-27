@@ -121,7 +121,7 @@ func handleRecoverFile(_ context.Context, a *Agent, args map[string]interface{})
 			}
 		}
 	}
-	if isStaleForRevert(abs, stalenessNewCode) {
+	if isStaleForRevertWithOriginal(abs, stalenessNewCode, match.OriginalCode) {
 		history.AuditRevertSkip("handleRecoverFile", abs, "stale or committed")
 		return jsonRecoverResult(false, abs, "stale_skip", "file was modified since the snapshot — refusing to overwrite (content may have been committed or edited intentionally)"), nil
 	}

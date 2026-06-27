@@ -621,6 +621,43 @@ func TestActivateSkillHandlerConformance(t *testing.T) {
 	if err := h.Validate(map[string]any{"skill_id": 123}); err == nil {
 		t.Error("Validate(non-string skill_id) should return error")
 	}
+
+	// ---------------------------------------------------------------------------
+	// Execute: success path with fake SkillLoader
+	// ---------------------------------------------------------------------------
+	ctx := context.Background()
+	env := ToolEnv{
+		SkillLoader: &fakeSkillLoader{
+			skills: map[string]*SkillInfo{
+				"project-planning": {
+					ID:          "project-planning",
+					Name:        "Project Planning",
+					Description: "Strategic planning and alignment for new (greenfield) or existing (brownfield) projects...",
+					Content:     "# Project Planning Skill\n\nDo strategic planning.",
+					Source:      "builtin",
+				},
+			},
+		},
+	}
+	result, err := h.Execute(ctx, env, map[string]any{"skill_id": "project-planning"})
+	if err != nil {
+		t.Fatalf("Execute should not return error, got: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("Execute result should not be IsError, output: %s", result.Output)
+	}
+	if !strings.Contains(result.Output, "Activated skill") {
+		t.Error("Execute output should contain 'Activated skill'")
+	}
+	if !strings.Contains(result.Output, "Description:") {
+		t.Error("Execute output should contain 'Description:'")
+	}
+	if !strings.Contains(result.Output, "Project Planning") {
+		t.Error("Execute output should contain skill name")
+	}
+	if !strings.Contains(result.Output, "Instructions loaded into context") {
+		t.Error("Execute output should contain 'Instructions loaded into context'")
+	}
 }
 
 // TestAddMemoryHandlerConformance and TestDeleteMemoryHandlerConformance

@@ -7,6 +7,13 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
+// activateSkillHandler activates a skill by loading its instructions via
+// the SkillLoader dependency. It is a thin tool that returns formatted
+// skill instructions — it does NOT mutate agent state directly.
+//
+// The agent-state side effects (adding to ActiveSkills, folding content
+// into systemPrompt) remain in the legacy handleActivateSkill and will
+// be migrated in a follow-up phase.
 type activateSkillHandler struct{}
 
 func (h *activateSkillHandler) Name() string { return "activate_skill" }
@@ -29,6 +36,7 @@ func (h *activateSkillHandler) Validate(args map[string]any) error {
 
 func (h *activateSkillHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
 	toolName := h.Name()
+	var hadError bool
 	if env.EventBus != nil {
 		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
 			"tool":   toolName,
@@ -37,17 +45,40 @@ func (h *activateSkillHandler) Execute(ctx context.Context, env ToolEnv, args ma
 		defer func() {
 			env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
 				"tool":  toolName,
-				"error": true,
+				"error": hadError,
 			})
 		}()
 	}
 
-	skillID, _ := extractString(args, "skill_id")
+	// Extract skill_id with fallback to "skill" (matching legacy handleActivateSkill)
+	skillID, err := extractString(args, "skill_id")
+	if err != nil {
+		skillID, err = extractString(args, "skill")
+		if err != nil {
+			hadError = true
+			return ToolResult{Output: "skill_id is required", IsError: true}, nil
+		}
+	}
 
-	// TODO: Full implementation requires *Agent access for skill manager,
-	// GetAvailableSkills(), and LoadSkill(). This is a thin wrapper stub.
+	// Check if SkillLoader is available
+	if env.SkillLoader == nil {
+		hadError = true
+		return ToolResult{Output: "skill loading not available: SkillLoader is not configured", IsError: true}, nil
+	}
+
+	// Load the skill
+	skillInfo, err := env.SkillLoader.LoadSkill(skillID)
+	if err != nil {
+		hadError = true
+		return ToolResult{Output: err.Error(), IsError: true}, nil
+	}
+	if skillInfo == nil {
+		hadError = true
+		return ToolResult{Output: fmt.Sprintf("skill '%s' returned no data", skillID), IsError: true}, nil
+	}
+
 	return ToolResult{
-		Output:  fmt.Sprintf("Skill activation requires full *Agent refactoring for complete functionality. Cannot activate skill %q without access to the Agent's skill manager. Please use the legacy interface or complete the migration.", skillID),
-		IsError: true,
-	}, fmt.Errorf("activate_skill requires full *Agent refactoring")
+		Output: fmt.Sprintf("Activated skill '%s' (%s).\n\nDescription: %s\n\nInstructions loaded into context.",
+			skillInfo.Name, skillInfo.ID, skillInfo.Description),
+	}, nil
 }

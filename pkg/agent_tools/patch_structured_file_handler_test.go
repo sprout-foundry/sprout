@@ -430,3 +430,103 @@ func TestPatchStructuredFile_RemoveKey_JSON(t *testing.T) {
 		t.Errorf("author should still be z:\n%s", outStr)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// SP-082-3: Single-field diff test
+// ---------------------------------------------------------------------------
+
+// TestPatchStructuredFile_SingleFieldDiff creates a JSON file with 10 top-level
+// keys, patches ONE field, then computes a line-by-line diff to verify that
+// exactly 1 line differs — proving that a 1-field patch produces a 1-line diff.
+func TestPatchStructuredFile_SingleFieldDiff(t *testing.T) {
+	tmpDir := t.TempDir()
+	jsonPath := filepath.Join(tmpDir, "config.json")
+
+	// Write the original file in the exact format the serializer produces
+	// (2-space indent, space after colon, no trailing comma on last item)
+	// so that the line-by-line diff is apples-to-apples.
+	//
+	// IMPORTANT: This hand-crafted JSON format MUST match the nodeToJSON
+	// serializer's exact output format (pkg/agent_tools/structured_helpers.go)
+	// for the 1-line diff assertion to remain valid.  If nodeToJSON's formatting
+	// changes, this test's input must be updated accordingly.
+	input := `{
+  "a": "1",
+  "b": "2",
+  "c": "3",
+  "d": "4",
+  "e": "5",
+  "f": "6",
+  "g": "7",
+  "h": "8",
+  "i": "9",
+  "j": "10"
+}
+`
+	if err := os.WriteFile(jsonPath, []byte(input), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Keep the original content for diff comparison.
+	originalContent, err := os.ReadFile(jsonPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	h := &patchStructuredFileHandler{}
+	ctx := context.Background()
+	env := ToolEnv{}
+	result, err := h.Execute(ctx, env, map[string]any{
+		"path": jsonPath,
+		"patch_ops": []interface{}{
+			map[string]interface{}{"op": "replace", "path": "/e", "value": "5.1"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Execute returned error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("Execute returned IsError: %s", result.Output)
+	}
+
+	patchedContent, err := os.ReadFile(jsonPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Compute a line-by-line diff: split both by \n and count differing lines.
+	originalLines := strings.Split(string(originalContent), "\n")
+	patchedLines := strings.Split(string(patchedContent), "\n")
+
+	// Normalize to the same length for comparison.
+	maxLen := len(originalLines)
+	if len(patchedLines) > maxLen {
+		maxLen = len(patchedLines)
+	}
+
+	differingLines := 0
+	for i := 0; i < maxLen; i++ {
+		orig := ""
+		patch := ""
+		if i < len(originalLines) {
+			orig = originalLines[i]
+		}
+		if i < len(patchedLines) {
+			patch = patchedLines[i]
+		}
+		if orig != patch {
+			differingLines++
+		}
+	}
+
+	// Exactly 1 line should differ (the line containing "e" with value changed from "5" to "5.1").
+	if differingLines != 1 {
+		t.Errorf("Expected exactly 1 differing line, got %d.\nOriginal lines:\n%s\nPatched lines:\n%s",
+			differingLines, string(originalContent), string(patchedContent))
+	}
+
+	// Verify the patched value is correct.
+	if !strings.Contains(string(patchedContent), `"5.1"`) {
+		t.Errorf("Output should contain updated value 5.1:\n%s", string(patchedContent))
+	}
+}

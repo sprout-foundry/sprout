@@ -553,7 +553,7 @@ func TestEmitJSONResult_QueryPreserved(t *testing.T) {
 
 	for _, query := range testCases {
 		t.Run(fmt.Sprintf("query_len_%d", len(query)), func(t *testing.T) {
-			output := captureStdoutLarge(t, func() {
+			output := captureStdout(t, func() {
 				emitJSONResult(query, time.Now(), nil, nil)
 			})
 
@@ -1196,40 +1196,6 @@ func createTestAgent(t *testing.T) *agent.Agent {
 		t.Fatalf("failed to create test agent: %v", err)
 	}
 	return a
-}
-
-// captureStdoutLarge is like captureStdout but uses a goroutine to drain the
-// read end of the pipe concurrently with writing. This avoids deadlocks when
-// the captured output exceeds the OS pipe buffer size (typically 64KB on Linux).
-func captureStdoutLarge(t *testing.T, fn func()) string {
-	t.Helper()
-	oldStdout := os.Stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("failed to create pipe: %v", err)
-	}
-	os.Stdout = w
-
-	done := make(chan string, 1)
-	go func() {
-		var buf strings.Builder
-		tmp := make([]byte, 4096)
-		for {
-			n, readErr := r.Read(tmp)
-			if n > 0 {
-				buf.Write(tmp[:n])
-			}
-			if readErr != nil {
-				break
-			}
-		}
-		done <- buf.String()
-	}()
-
-	fn()
-	w.Close()
-	os.Stdout = oldStdout
-	return <-done
 }
 
 // assertJSONString checks that the map contains the given key with the expected string value.

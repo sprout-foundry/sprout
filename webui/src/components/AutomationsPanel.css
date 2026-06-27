@@ -29,7 +29,7 @@
   height: 28px;
   padding: 0 8px;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-tertiary);
   font-family: var(--font-mono);
@@ -64,7 +64,7 @@
   min-width: 16px;
   height: 14px;
   padding: 0 4px;
-  border-radius: 7px;
+  border-radius: var(--radius-lg);
   background: var(--accent-secondary);
   color: var(--accent-fg);
   font-size: 10px;
@@ -87,7 +87,7 @@
 
 .automations-tab-content::-webkit-scrollbar-thumb {
   background: var(--border-default);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
 }
 
 .automations-tab-content::-webkit-scrollbar-track {
@@ -116,7 +116,7 @@
   gap: 12px;
   padding: 10px 12px;
   border: 1px solid var(--border-subtle);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--bg-primary);
   transition:
     background 0.15s ease,
@@ -164,7 +164,7 @@
   height: 28px;
   padding: 0 10px;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--accent-success) 15%, transparent);
   color: var(--accent-success);
   font-family: var(--font-mono);
@@ -304,7 +304,7 @@
   align-items: center;
   gap: 5px;
   padding: 2px 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
@@ -358,7 +358,7 @@
   height: 24px;
   padding: 0 8px;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--accent-error) 10%, transparent);
   color: var(--accent-error);
   font-family: var(--font-mono);
@@ -390,7 +390,7 @@
 .automations-budget-bar {
   position: relative;
   height: 10px;
-  border-radius: 5px;
+  border-radius: var(--radius-md);
   background: var(--bg-elevated);
   overflow: hidden;
   min-width: 60px;
@@ -401,7 +401,7 @@
   top: 0;
   left: 0;
   height: 100%;
-  border-radius: 5px;
+  border-radius: var(--radius-md);
   transition:
     width 0.3s ease,
     background 0.3s ease;
@@ -455,7 +455,7 @@
   flex-direction: column;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-elevated);
   overflow: hidden;
 }
@@ -483,7 +483,7 @@
   width: 24px;
   height: 24px;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
@@ -550,7 +550,7 @@
   height: 32px;
   padding: 0 8px;
   border: 1px solid var(--border-default);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: var(--bg-primary);
   color: var(--text-primary);
   font-family: var(--font-mono);
@@ -584,7 +584,7 @@
   height: 32px;
   padding: 0 12px;
   border: 1px solid var(--border-default);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: var(--bg-primary);
   color: var(--text-secondary);
   font-family: var(--font-mono);
@@ -613,7 +613,7 @@
   height: 32px;
   padding: 0 14px;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: var(--accent-primary);
   color: var(--accent-fg);
   font-family: var(--font-mono);
@@ -652,7 +652,7 @@
   gap: 8px;
   margin: 8px;
   padding: 8px 10px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--accent-error) 10%, transparent);
   color: var(--accent-error);
   font-size: 11px;
@@ -694,4 +694,33 @@
   .automations-col-actions {
     width: 60px;
   }
+}
+
+/* Load-more pagination button (sessions lists) */
+.automations-load-more {
+  display: block;
+  width: 100%;
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease,
+    border-color 0.12s ease;
+}
+
+.automations-load-more:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+.automations-load-more:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
 }

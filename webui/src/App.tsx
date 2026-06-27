@@ -6,6 +6,7 @@ import { DisconnectedOverlay } from './components/DisconnectedOverlay';
 import DriftNotification from './components/DriftNotification';
 import EditApprovalPanel from './components/EditApprovalPanel';
 import ErrorBoundary from './components/ErrorBoundary';
+import KeyboardShortcutsModal from './components/KeyboardShortcutsModal';
 import ModelSelectionModal from './components/ModelSelectionModal';
 import Notification from './components/Notification';
 import OnboardingDialog from './components/OnboardingDialog';
@@ -103,6 +104,29 @@ function AppInner() {
   const [inputValue, setInputValue] = useState('');
   const [recentFiles, setRecentFiles] = useState<Array<{ path: string; modified: boolean }>>([]);
   const [gitRefreshToken, setGitRefreshToken] = useState(0);
+  const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
+
+  // Keyboard shortcuts modal — listen for menu/welcome-tab event and `?` shortcut.
+  // The menu dispatches `sprout:open-hotkeys-config`; the dedicated JSON-editing
+  // path (SidebarSettingsSection's "Edit Keyboard Shortcuts (JSON)" button) uses
+  // `sprout:open-hotkeys-json` so it doesn't trigger the modal.
+  useEffect(() => {
+    const handler = () => setShowKeyboardShortcuts(true);
+    window.addEventListener('sprout:open-hotkeys-config', handler);
+    return () => window.removeEventListener('sprout:open-hotkeys-config', handler);
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== '?' || e.ctrlKey || e.metaKey || e.altKey) return;
+      const el = document.activeElement as HTMLElement | null;
+      if (el?.tagName === 'INPUT' || el?.tagName === 'TEXTAREA' || el?.isContentEditable) return;
+      e.preventDefault();
+      setShowKeyboardShortcuts(true);
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   const {
     isMobile,
@@ -432,6 +456,9 @@ function AppInner() {
                       onInstallGitBash={onInstallGitBash}
                       updateOnboarding={updateOnboarding}
                     />
+                    {showKeyboardShortcuts && (
+                      <KeyboardShortcutsModal onClose={() => setShowKeyboardShortcuts(false)} />
+                    )}
                   </UIManager>
                 </ProviderCatalogProvider>
               </EditorManagerProvider>

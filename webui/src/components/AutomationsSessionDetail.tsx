@@ -241,18 +241,25 @@ function AutomationsSessionDetail({ sessionId, onClose }: AutomationsSessionDeta
       {/* Step Timeline Section */}
       <div className="automations-detail-section">
         <div className="automations-detail-section-title">Step Progress</div>
-        {/* TODO(SP-065-4c): Implement step timeline when agent workflow state is exposed via API */}
-        <div className="automations-detail-placeholder">Step progress not available</div>
+        {/* SP-065-4c: step events are not yet exposed by the automate backend.
+            The session response only includes workflow-level status; per-step
+            state (when each step ran, cost, output) requires backend changes
+            tracked under SP-065. */}
+        <div className="automations-detail-placeholder">
+          Step-level events aren't tracked yet. The workflow &quot;{session?.workflow ?? ''}&quot; is currently{' '}
+          {session?.status ?? 'unknown'}.
+        </div>
       </div>
 
-      {/* Budget Events Section */}
+      {/* Budget Section */}
       <div className="automations-detail-section">
-        <div className="automations-detail-section-title">Budget Events</div>
-        {/* TODO(SP-065-4d): Implement per-session budget event logging in a follow-up */}
+        <div className="automations-detail-section-title">Budget</div>
+        {/* SP-065-4d: per-event budget log isn't tracked yet; show the session-level
+            cap the workflow was started with. Per-step cost requires backend changes. */}
         <div className="automations-detail-placeholder">
           {session?.budget_usd && session.budget_usd > 0
-            ? `Utilization: $0.00 / $${session.budget_usd.toFixed(2)}`
-            : 'No budget tracking available'}
+            ? `Session budget cap: $${session.budget_usd.toFixed(2)}. Per-event cost tracking is not available yet.`
+            : 'No budget cap was set for this session.'}
         </div>
       </div>
     </div>

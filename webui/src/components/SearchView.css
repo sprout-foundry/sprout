@@ -349,7 +349,7 @@
   padding: 2px 6px;
   background: var(--accent-primary-alpha, rgba(14, 165, 233, 0.15));
   color: var(--accent-primary);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-weight: 600;
   flex-shrink: 0;
 }

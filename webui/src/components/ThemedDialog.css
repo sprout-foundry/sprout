@@ -388,7 +388,7 @@
   gap: var(--space-1);
   min-height: 22px;
   padding: 0 var(--space-3);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-family: var(--font-sans);
   font-size: var(--text-xs);
   font-weight: 700;

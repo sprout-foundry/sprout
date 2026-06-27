@@ -86,7 +86,7 @@ export const InvoiceHistory: React.FC = () => {
                     </td>
                     <td style={{ padding: '12px' }}>
                       {hasProration ? (
-                        <span style={{ color: prorationTotal > 0 ? '#22c55e' : '#ef4444' }}>
+                        <span style={{ color: prorationTotal > 0 ? 'var(--accent-success)' : 'var(--accent-error)' }}>
                           {prorationTotal > 0 ? '+' : ''}
                           {formatCurrency(prorationTotal)}
                         </span>

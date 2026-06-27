@@ -140,6 +140,12 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
   // Stop loading tracking
   const [stoppingIds, setStoppingIds] = useState<Set<string>>(new Set());
 
+  // Pagination for running/recent session lists
+  const AUTOMATIONS_SESSIONS_INITIAL = 10;
+  const AUTOMATIONS_SESSIONS_INCREMENT = 10;
+  const [visibleRunning, setVisibleRunning] = useState(AUTOMATIONS_SESSIONS_INITIAL);
+  const [visibleRecent, setVisibleRecent] = useState(AUTOMATIONS_SESSIONS_INITIAL);
+
   // Tick for live elapsed time display
   const [tick, setTick] = useState(0);
 
@@ -192,6 +198,8 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
       }
       const data: SessionsResponse = await response.json();
       setSessions(data?.sessions || []);
+      setVisibleRunning(AUTOMATIONS_SESSIONS_INITIAL);
+      setVisibleRecent(AUTOMATIONS_SESSIONS_INITIAL);
     } catch (err) {
       debugLog('[AutomationsPanel] Failed to fetch sessions:', err);
       setSessionsError(err instanceof Error ? err.message : String(err));
@@ -346,6 +354,11 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
   const runningSessions = sessions.filter((s) => s.status === 'running');
   const recentSessions = sessions.filter((s) => s.status !== 'running');
 
+  const visibleRunningSessions = runningSessions.slice(0, visibleRunning);
+  const visibleRecentSessions = recentSessions.slice(0, visibleRecent);
+  const runningOverflow = Math.max(0, runningSessions.length - visibleRunning);
+  const recentOverflow = Math.max(0, recentSessions.length - visibleRecent);
+
   /* ── Tab labels ────────────────────────────────────────── */
 
   const tabLabels: { id: TabId; label: string; count?: number }[] = [
@@ -448,7 +461,7 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
                   <span className="automations-col-budget">Budget</span>
                   <span className="automations-col-actions" />
                 </div>
-                {runningSessions.map((session) => (
+                {visibleRunningSessions.map((session) => (
                   <div
                     key={session.session_id}
                     className="automations-session-row clickable"
@@ -496,6 +509,16 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
                     </span>
                   </div>
                 ))}
+                {/* Pagination: show more if there are running sessions past the visible window */}
+                {runningOverflow > 0 && (
+                  <button
+                    type="button"
+                    className="automations-load-more"
+                    onClick={() => setVisibleRunning((n) => n + AUTOMATIONS_SESSIONS_INCREMENT)}
+                  >
+                    Show more ({runningOverflow} more)
+                  </button>
+                )}
                 {/* Force re-render for tick-based elapsed updates */}
                 <span className="sr-only" aria-live="polite">
                   {tick}
@@ -531,7 +554,7 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
                   <span className="automations-col-status">Status</span>
                   <span className="automations-col-elapsed">Duration</span>
                 </div>
-                {recentSessions.map((session) => (
+                {visibleRecentSessions.map((session) => (
                   <div
                     key={session.session_id}
                     className={`automations-session-row ${onNavigateToSession ? 'clickable' : ''}`}
@@ -552,6 +575,16 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
                     <span className="automations-session-elapsed">{formatDuration(session.started_at)}</span>
                   </div>
                 ))}
+                {/* Pagination: show more if there are recent sessions past the visible window */}
+                {recentOverflow > 0 && (
+                  <button
+                    type="button"
+                    className="automations-load-more"
+                    onClick={() => setVisibleRecent((n) => n + AUTOMATIONS_SESSIONS_INCREMENT)}
+                  >
+                    Show more ({recentOverflow} more)
+                  </button>
+                )}
               </div>
             )}
           </div>

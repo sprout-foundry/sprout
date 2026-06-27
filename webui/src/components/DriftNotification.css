@@ -30,7 +30,7 @@
 .drift-card {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-elevated);
   width: 90%;
   max-width: 480px;
@@ -94,7 +94,7 @@
   margin-bottom: 16px;
   padding: 12px;
   background: var(--bg-tertiary);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
 }
 
 .drift-stat {
@@ -139,7 +139,7 @@
 .drift-btn {
   padding: 8px 20px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;

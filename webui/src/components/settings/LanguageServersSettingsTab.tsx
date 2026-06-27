@@ -2,6 +2,7 @@ import { Trash2, Plus, Save, X } from 'lucide-react';
 import { useState } from 'react';
 import type { SproutSettings } from '../../services/api';
 import { showThemedConfirm } from '../ThemedDialog';
+import ListFilter from './ListFilter';
 
 interface LanguageServerOverride {
   id: string;
@@ -24,6 +25,8 @@ interface DraftForm {
   install_hint: string;
 }
 
+const FILTER_THRESHOLD = 4;
+
 const emptyDraft: DraftForm = { id: '', binary: '', args: '', language_ids: '', install_hint: '' };
 
 function toCSV(arr?: string[]): string {
@@ -44,6 +47,15 @@ export default function LanguageServersSettingsTab({ settings, updateSetting }: 
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [draft, setDraft] = useState<DraftForm>(emptyDraft);
   const [adding, setAdding] = useState(false);
+  const [serverFilter, setServerFilter] = useState('');
+  const normalizedFilter = serverFilter.trim().toLowerCase();
+  const filteredServers = normalizedFilter
+    ? servers.filter(
+        (s) =>
+          s.id.toLowerCase().includes(normalizedFilter) ||
+          (s.binary || '').toLowerCase().includes(normalizedFilter),
+      )
+    : servers;
 
   const persist = (next: LanguageServerOverride[]) => {
     void updateSetting('language_servers', next);
@@ -116,33 +128,49 @@ export default function LanguageServersSettingsTab({ settings, updateSetting }: 
 
       {servers.length === 0 && !formActive && <div className="settings-empty">No language server overrides</div>}
 
-      {servers.length > 0 && (
+      {servers.length >= FILTER_THRESHOLD && (
+        <ListFilter
+          value={serverFilter}
+          onChange={setServerFilter}
+          placeholder={`Filter ${servers.length} servers…`}
+          ariaLabel="Filter language servers"
+        />
+      )}
+
+      {normalizedFilter && filteredServers.length === 0 && (
+        <div className="settings-empty">No servers match "{serverFilter}"</div>
+      )}
+
+      {filteredServers.length > 0 && (
         <ul className="settings-list settings-help-spaced">
-          {servers.map((s, idx) => (
-            <li key={`${s.id}-${idx}`} className="settings-list-row ls-row">
-              <div className="ls-row-body">
-                <div className="ls-row-title">{s.id}</div>
-                <div className="ls-row-cmd">
-                  {s.binary} {(s.args ?? []).join(' ')}
+          {filteredServers.map((s) => {
+            const idx = servers.indexOf(s);
+            return (
+              <li key={`${s.id}-${idx}`} className="settings-list-row ls-row">
+                <div className="ls-row-body">
+                  <div className="ls-row-title">{s.id}</div>
+                  <div className="ls-row-cmd">
+                    {s.binary} {(s.args ?? []).join(' ')}
+                  </div>
+                  {s.language_ids && s.language_ids.length > 0 && (
+                    <div className="ls-row-langs">Languages: {s.language_ids.join(', ')}</div>
+                  )}
                 </div>
-                {s.language_ids && s.language_ids.length > 0 && (
-                  <div className="ls-row-langs">Languages: {s.language_ids.join(', ')}</div>
-                )}
-              </div>
-              <button type="button" className="settings-action-btn" onClick={() => startEdit(idx)}>
-                Edit
-              </button>
-              <button
-                type="button"
-                className="settings-icon-btn danger"
-                aria-label={`Remove override ${s.id}`}
-                title="Remove override"
-                onClick={() => void remove(idx)}
-              >
-                <Trash2 size={14} />
-              </button>
-            </li>
-          ))}
+                <button type="button" className="settings-action-btn" onClick={() => startEdit(idx)}>
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  className="settings-icon-btn danger"
+                  aria-label={`Remove override ${s.id}`}
+                  title="Remove override"
+                  onClick={() => void remove(idx)}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </li>
+            );
+          })}
         </ul>
       )}
 

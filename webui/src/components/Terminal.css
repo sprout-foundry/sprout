@@ -492,7 +492,7 @@
 
 .terminal-output::-webkit-scrollbar-thumb {
   background: var(--border-default);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
 }
 
 @media (max-width: 768px) {

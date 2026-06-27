@@ -107,6 +107,9 @@ func NewCommandRegistry() *CommandRegistry {
 	// Register indexing command
 	registry.Register(&IndexCommand{})
 
+	// Register search command
+	registry.Register(&SearchCommand{})
+
 	// Register edit command
 	registry.Register(&EditCommand{})
 

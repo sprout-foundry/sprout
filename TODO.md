@@ -49,6 +49,56 @@ UX / diff hygiene (Medium, ~half a week): `write_structured_file` and `patch_str
 - [ ] SP-082-3: Add round-trip tests in `pkg/agent_tools/write_structured_handler_test.go` and `pkg/agent_tools/patch_structured_handler_test.go` — JSON, YAML, and `package.json`-style ordering.
 - [ ] SP-082-4: Update the tool definitions to note that key order is preserved. Acceptance: a `package.json` written via the tool retains the LLM-supplied key order; a 1-field patch produces a 1-line diff; `go test ./pkg/agent_tools/...` green; existing patch tests still pass.
 
+## SP-083: Cross-Session Search — Find Past Conversations by Content
+_Spec: `roadmap/SP-083-cross-session-search.md` (status: 📋 Spec)_
+
+User productivity (Medium, ~1–2 days): there is no way to search across saved sessions by content. A user with ~10+ sessions has to manually scan `/sessions` picker labels to find one — but labels are often vague first-message previews. Sessions are JSON-on-disk in `~/.sprout/sessions/scoped/<hash>/session_<id>.json`, so a search index is straightforward to build.
+
+- [ ] SP-083-1: Add `pkg/search/` with `SessionIndex` (version, built_at, sessions map with name/working_dir/text/tokens) + atomic build/load with mtime-based incremental update. Persist to `~/.sprout/sessions/search-index.json`.
+- [ ] SP-083-2: Implement ranking (exact phrase > all terms > any term; tie-break by `LastUpdated` desc) + result formatting with 200-char excerpt and bracketed match highlighting.
+- [ ] SP-083-3: Hook into `pkg/agent/persistence.go::SaveSession` for incremental index update; debounce writes (max once per 5s).
+- [ ] SP-083-4: Add `/search <query>` slash command in `pkg/agent_commands/` with `--reindex`, `--cwd`, `--since`, `--until`, `--limit`, `--json` flags. Also expose `sprout search` subcommand for scripting.
+- [ ] SP-083-5: Add `/api/sessions/search` HTTP endpoint in `pkg/webui/` reusing the same index + result format.
+- [ ] SP-083-6: Wire WebUI sessions sidebar (`webui/src/components/Sidebar.tsx`) search input → API call → filter results → click-to-load.
+- [ ] SP-083-7: Acceptance: `/search "embedding"` returns matches in <100ms once the index is built; incremental update fires on session save without full rebuild; missing/corrupt index triggers full rebuild; `make build-all` clean; tests in `pkg/search/`, `pkg/webui/`, and `webui/src/components/` all green.
+
+## SP-084: Export Sessions to Shareable Markdown / HTML
+_Spec: `roadmap/SP-084-export-session-markdown.md` (status: 📋 Spec)_
+
+User value (Medium, ~1–2 days): the existing `pkg/training/export.go` only emits ShareGPT/OpenAI/Alpaca JSONL for fine-tuning. Users have no way to export a session as Markdown (for blog posts, Slack, git) or HTML (for email, archive). Manual copy-paste from the WebUI loses structure.
+
+- [ ] SP-084-1: `pkg/export/session_export.go` with `ExportMarkdown`, `ExportHTML` (self-contained with embedded CSS), `ExportJSON` (lossless round-trip). Use `pkg/secretdetect` for default redaction.
+- [ ] SP-084-2: `cmd/export.go` CLI subcommand with `--format <markdown|html|json>`, `--output`, `--latest`, `--all`, `--include-tool-calls`, `--no-cost`, `--secret-redaction`.
+- [ ] SP-084-3: `pkg/webui/export_api.go` HTTP endpoint serving WebUI downloads.
+- [ ] SP-084-4: WebUI session-detail view "Export" button + dialog (format radio + download trigger). Sessions sidebar "Export all" link for batch zip.
+- [ ] SP-084-5: Markdown round-trip test (parse exported Markdown back into messages and verify equality). HTML test verifies self-contained (no external link/script refs). JSON test verifies lossless.
+- [ ] SP-084-6: Acceptance: `sprout export --latest` produces a Markdown file that renders correctly on GitHub and in `glow`/`mdcat`; HTML opens in any browser with no external asset requests; JSON round-trips losslessly; `make build-all` clean; CLI + WebUI tests green.
+
+## SP-085: Cost Analytics Dashboard — Model / Provider / Day Breakdown
+_Spec: `roadmap/SP-085-cost-analytics-dashboard.md` (status: 📋 Spec)_
+
+Missing UI for existing backend (Medium, ~2–3 days): `pkg/webui/cost_tracking.go::CostStore` and `/api/costs/{summary,history,detail}` already exist (with tests). What's missing is a WebUI page that consumes them. The cloud endpoint registry references the endpoints but no WebUI page actually uses them.
+
+- [ ] SP-085-1: Audit `/api/costs/*` response shapes; extend with `by_provider` and `by_model` if missing (additive change, no existing-consumer break).
+- [ ] SP-085-2: `webui/src/pages/CostsPage.tsx` with time-range filter (7d / 30d / 90d / all) wired to all child components.
+- [ ] SP-085-3: `CostSummaryCards` (today / week / month / total) + `DailySpendChart` (bar chart, last 30d).
+- [ ] SP-085-4: `ByModelChart` (horizontal stacked bar) + `ProviderTable` (provider × current/previous month × delta).
+- [ ] SP-085-5: `TopSessionsTable` (10 most expensive sessions in range, sortable, click-to-load).
+- [ ] SP-085-6: Sidebar entry + empty state ("no cost data yet" copy) + error states for endpoint failures.
+- [ ] SP-085-7: Acceptance: Costs page opens from sidebar; renders correctly with zero/sample/1000-row data; time-range filter updates all four components coherently; charts use design tokens and respect theme toggle; clicking a session loads it; `make build-all` clean; `pkg/webui/cost_tracking_api_test.go` + new WebUI tests green.
+
+## SP-086: Skill Install — Pull Skills from Git, URLs, and Registries
+_Spec: `roadmap/SP-086-skill-install-command.md` (status: 📋 Spec)_
+
+UX gap (Medium-High, ~1–2 days): today, installing a skill requires manually creating `~/.config/sprout/skills/<id>/SKILL.md` with valid frontmatter. There's no way to install from a git URL, a gist, or a shared registry. `discoverUserSkills` already handles local FS skills; this adds a fetch step.
+
+- [ ] SP-086-1: `pkg/skills/install.go` core — `InstallFromGit`, `InstallFromURL`, `InstallFromPath`, `InstallFromRegistry`, `Uninstall`, `Update`. Validates frontmatter (`name` + `description` required); records origin metadata to `.sprout-origin.json`.
+- [ ] SP-086-2: `pkg/skills/registry.go` + embedded `pkg/skills/library/registry.json` with 3–5 starter skills (e.g., `security-review`, `release-notes`).
+- [ ] SP-086-3: Extend `pkg/agent_commands/skill.go` with `install`, `update`, `remove` subcommands + `--force` flag.
+- [ ] SP-086-4: `pkg/webui/skills_api.go` HTTP endpoints + WebUI `SkillsSettingsTab` (install from URL input + list of installed skills with remove/update buttons).
+- [ ] SP-086-5: Tests for each install path (local/git/url/registry); malformed frontmatter rejection; overwrite prompt; uninstall cleanup; CLI flag parsing.
+- [ ] SP-086-6: Acceptance: `sprout skill install <git-url>` clones the repo, finds SKILL.md files, registers them; `sprout skill update <id>` refreshes from origin; `sprout skill remove <id>` cleans up both SKILL.md and origin metadata; malformed SKILL.md rejected with clear error; `make build-all` clean; CLI + WebUI tests green.
+
 ## SP-069: PR Creation — credential-store lookup for GitHub token
 _Spec: `roadmap/SP-069-pull-request-creation.md` (status: ✅ Implemented; one residual TODO)_
 

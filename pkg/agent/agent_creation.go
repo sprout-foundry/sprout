@@ -132,11 +132,9 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 
 		// SP-062: Clean up orphaned background processes from previous
 		// unclean exits (kill, segfault, etc.) once per process.
+		// Delegated to a build-tagged helper (no-op in WASM).
 		backgroundOrphanCleanupOnce.Do(func() {
-			baseDir := tools.GetBackgroundOutputBaseDir()
-			if err := tools.CleanupOrphanedBackgroundProcesses(baseDir); err != nil && agent.debug {
-				_, _ = os.Stderr.Write([]byte(fmt.Sprintf("WARNING: Failed to clean up orphaned background processes: %v\n", err)))
-			}
+			cleanupOrphanedBackgroundProcesses(agent.debug)
 		})
 
 		// Sweep expired persistent context entries based on retention policy

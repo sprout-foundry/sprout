@@ -304,9 +304,11 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 	var persona string
 	var systemPromptPath string
 	var systemPromptText string
+	personaExplicitlyProvided := false
 	if personaVal, ok := args["persona"]; ok && personaVal != nil {
 		if personaStr, ok := personaVal.(string); ok && personaStr != "" {
 			persona = personaStr
+			personaExplicitlyProvided = true
 			a.Logger().Debug("Subagent persona specified: %s\n", persona)
 		}
 	}
@@ -571,6 +573,18 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 				model = parentModel
 			}
 			a.Logger().Debug("Inheriting parent agent provider/model: provider=%s model=%s\n", provider, model)
+		}
+
+		// Log no-persona spawn resolution for observability. persona is defaulted
+		// to "general" earlier in this function (or to cfg.DefaultSubagentPersona),
+		// so we check the explicit-provided flag rather than the empty string —
+		// without this, the log line would never fire.
+		if !personaExplicitlyProvided {
+			source := "global subagent default"
+			if config.SubagentProvider == "" && config.SubagentModel == "" {
+				source = "parent fallback"
+			}
+			a.Logger().Info("no-persona subagent spawn: provider=%s model=%s source=%s (resolved persona=%s)\n", provider, model, source, persona)
 		}
 	} else {
 		a.Logger().Debug("Warning: No config manager available, using parent agent defaults\n")

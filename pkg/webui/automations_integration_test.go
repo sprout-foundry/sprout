@@ -74,10 +74,13 @@ func TestAutomateIntegration_FullWorkflow(t *testing.T) {
 		t.Fatalf("workflows: expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	var workflows []map[string]interface{}
-	if err := json.NewDecoder(rec.Body).Decode(&workflows); err != nil {
+	var envelope struct {
+		Workflows []map[string]interface{} `json:"workflows"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&envelope); err != nil {
 		t.Fatalf("decode workflows: %v", err)
 	}
+	workflows := envelope.Workflows
 	if len(workflows) != 1 {
 		t.Fatalf("expected 1 workflow, got %d", len(workflows))
 	}
@@ -98,12 +101,14 @@ func TestAutomateIntegration_FullWorkflow(t *testing.T) {
 		t.Fatalf("sessions list (empty): expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	var sessions []sessionResponse
-	if err := json.NewDecoder(rec.Body).Decode(&sessions); err != nil {
+	var sessionsEnvelope struct {
+		Sessions []sessionResponse `json:"sessions"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&sessionsEnvelope); err != nil {
 		t.Fatalf("decode sessions: %v", err)
 	}
-	if len(sessions) != 0 {
-		t.Errorf("expected empty session list, got %d items", len(sessions))
+	if len(sessionsEnvelope.Sessions) != 0 {
+		t.Errorf("expected empty session list, got %d items", len(sessionsEnvelope.Sessions))
 	}
 
 	// 4. Create a session file with PID 1 (init, always alive on Unix) to
@@ -126,10 +131,13 @@ func TestAutomateIntegration_FullWorkflow(t *testing.T) {
 		t.Fatalf("sessions list (with session): expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	sessions = nil
-	if err := json.NewDecoder(rec.Body).Decode(&sessions); err != nil {
+	var sessionsEnvelope2 struct {
+		Sessions []sessionResponse `json:"sessions"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&sessionsEnvelope2); err != nil {
 		t.Fatalf("decode sessions after create: %v", err)
 	}
+	sessions := sessionsEnvelope2.Sessions
 	if len(sessions) != 1 {
 		t.Fatalf("expected 1 session, got %d", len(sessions))
 	}
@@ -198,12 +206,14 @@ func TestAutomateIntegration_FullWorkflow(t *testing.T) {
 		t.Fatalf("sessions list (after stop): expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	sessions = nil
-	if err := json.NewDecoder(rec.Body).Decode(&sessions); err != nil {
+	var sessionsEnvelope3 struct {
+		Sessions []sessionResponse `json:"sessions"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&sessionsEnvelope3); err != nil {
 		t.Fatalf("decode sessions after stop: %v", err)
 	}
-	if len(sessions) != 0 {
-		t.Errorf("expected empty session list after stop, got %d items", len(sessions))
+	if len(sessionsEnvelope3.Sessions) != 0 {
+		t.Errorf("expected empty session list after stop, got %d items", len(sessionsEnvelope3.Sessions))
 	}
 
 	// 9. Verify the session file is actually removed from disk.

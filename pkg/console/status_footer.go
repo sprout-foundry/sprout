@@ -56,6 +56,17 @@ type StatusFooter struct {
 	// can reapply the scroll region and blank any orphaned rows.
 	lastSteerRows int
 
+	// SP-078 Phase 1: when steerCursorRow >= 0, drawLocked uses the
+	// width-aware WrapSteerLayout path instead of the legacy
+	// byte-offset (steerCursor) splitSteerLines path. steerCursorRow
+	// and steerCursorCol are 0-based (row, col) into the visual row
+	// array (NOT byte offsets), so the caret lands at the correct cell
+	// even after soft wraps. Set by SetSteerLineWrapped; cleared by
+	// SetSteerLine / SetSteerLineWithCursor.
+	steerCursorRow     int
+	steerCursorCol     int
+	steerWrappedActive bool
+
 	winchStop chan struct{}
 	winchDone chan struct{}
 
@@ -310,11 +321,34 @@ const (
 const maxSteerRows = 6
 
 // steerRowCount returns how many footer rows the current steer buffer
-// needs. 0 when steer is inactive, otherwise 1 + line-break count
-// (clamped to [1, maxSteerRows]).
+// needs. 0 when steer is inactive. Otherwise:
+//   - wrapped mode (SP-078): the visual row count of WrapSteerLayout,
+//     capped at [1, maxSteerRows]. This is width-aware: a 200-char
+//     buffer in an 80-col terminal reserves 3 rows even without any
+//     embedded \n.
+//   - legacy mode: 1 + (number of \n in the buffer), clamped to
+//     [1, maxSteerRows].
 func (f *StatusFooter) steerRowCount() int {
 	if !f.steerActive {
 		return 0
+	}
+	if f.steerWrappedActive {
+		cols, _ := f.terminalSize()
+		if cols <= 0 {
+			cols = 80
+		}
+		// Compute visual rows without cursor mapping: cursorByte=-1
+		// still produces a full layout, just with the cursor pinned to
+		// the end. Use 0 so WrapSteerLayout still returns all rows.
+		rows, _, _ := WrapSteerLayout(f.steerLine, 0, cols, 0)
+		n := len(rows)
+		if n < 1 {
+			n = 1
+		}
+		if n > maxSteerRows {
+			n = maxSteerRows
+		}
+		return n
 	}
 	lines := strings.Count(f.steerLine, "\n") + 1
 	if lines < 1 {
@@ -365,6 +399,10 @@ func (f *StatusFooter) applyScrollRegionLocked() {
 // the user types — each keystroke replaces the prior content. Safe to
 // call repeatedly; the scroll region is re-applied only when the row
 // count changes. SP-055.
+//
+// SP-078: also clears steerWrappedActive so a subsequent legacy
+// SetSteerLine after SetSteerLineWrapped reverts to the byte-offset
+// render path.
 func (f *StatusFooter) SetSteerLine(text string) {
 	if f == nil || !f.isTTY {
 		return
@@ -375,6 +413,9 @@ func (f *StatusFooter) SetSteerLine(text string) {
 	f.steerActive = true
 	f.steerLine = text
 	f.steerCursor = -1
+	f.steerWrappedActive = false
+	f.steerCursorRow = -1
+	f.steerCursorCol = 0
 	active := f.active
 	newRows := f.steerRowCount()
 	f.mu.Unlock()
@@ -409,6 +450,50 @@ func (f *StatusFooter) SetSteerLineWithCursor(text string, cursorByteOffset int)
 	f.steerActive = true
 	f.steerLine = text
 	f.steerCursor = cursorByteOffset
+	f.steerWrappedActive = false
+	f.steerCursorRow = -1
+	f.steerCursorCol = 0
+	active := f.active
+	newRows := f.steerRowCount()
+	f.mu.Unlock()
+	if !active {
+		return
+	}
+	if !wasActive || newRows != prevRows {
+		if wasActive && newRows < prevRows {
+			f.clearOrphanedSteerRows(prevRows, newRows)
+		}
+		f.applyScrollRegion()
+	}
+	f.draw()
+}
+
+// SetSteerLineWrapped is the SP-078 width-aware variant. text is the
+// full steer buffer (already prefixed). cursorRow and cursorCol are
+// 0-based indices into the VISUAL row array the footer will render
+// after hard-break (\n) split + soft wrap to the terminal width.
+//
+// Use this when the buffer can exceed the panel width; the legacy
+// SetSteerLineWithCursor path splits on \n only and overflows
+// horizontally on over-wide lines. cursorRow < 0 is treated as
+// "caret at end of last visible row."
+//
+// The footer reserves enough scroll-region rows for the visual row
+// count (capped at maxSteerRows) and shifts the caret row back into
+// the visible window when truncation occurs.
+func (f *StatusFooter) SetSteerLineWrapped(text string, cursorRow, cursorCol int) {
+	if f == nil || !f.isTTY {
+		return
+	}
+	f.mu.Lock()
+	wasActive := f.steerActive
+	prevRows := f.lastSteerRows
+	f.steerActive = true
+	f.steerLine = text
+	f.steerCursor = -1
+	f.steerWrappedActive = true
+	f.steerCursorRow = cursorRow
+	f.steerCursorCol = cursorCol
 	active := f.active
 	newRows := f.steerRowCount()
 	f.mu.Unlock()
@@ -464,6 +549,9 @@ func (f *StatusFooter) ClearSteerLine() {
 	f.steerActive = false
 	f.steerLine = ""
 	f.steerCursor = -1
+	f.steerWrappedActive = false
+	f.steerCursorRow = -1
+	f.steerCursorCol = 0
 	f.lastSteerRows = 0
 	active := f.active
 	f.mu.Unlock()
@@ -531,43 +619,55 @@ func (f *StatusFooter) drawLocked() {
 	// UI" without leaking color into surrounding output.
 	fmt.Fprint(f.w, "\0337")
 	if steerActive && steerRows > 0 {
-		// Render the steer panel above the rule, one terminal row per
-		// `\n`-separated line of the buffer. The steer rows use a
-		// brighter color (bold bright-cyan) so they read as "active
-		// input" vs the muted status footer chrome below.
-		lines := splitSteerLines(steerLine, steerRows)
+		// SP-078 Phase 1: two render paths.
+		//   - Wrapped mode (width-aware): build visual rows via
+		//     WrapSteerLayout, render each as its own terminal row.
+		//   - Legacy mode: splitSteerLines on \n only.
+		var lines []string
+		var cursorLineIdx, cursorByteCol int
+		if f.steerWrappedActive {
+			lines, cursorLineIdx, cursorByteCol = WrapSteerLayout(steerLine, f.steerCursorByteOffset(), cols, maxSteerRows)
+		} else {
+			lines = splitSteerLines(steerLine, steerRows)
 
-		// Map steerCursor (byte offset into the full steerLine) to a
-		// (lineIndex, byteColWithinLine) pair so we can render the
-		// caret on the correct row at the correct column. When
-		// steerCursor < 0 we fall back to legacy behavior: caret at
-		// the end of the last line.
-		cursorLineIdx := len(lines) - 1 // default: last line
-		cursorByteCol := -1             // -1 = caret at end (legacy)
-		if steerCursor >= 0 {
-			cursorByteCol = 0
-			offset := 0
-			for i, lineText := range lines {
-				lineEnd := offset + len(lineText)
-				if steerCursor <= lineEnd || i == len(lines)-1 {
-					cursorLineIdx = i
-					cursorByteCol = steerCursor - offset
-					if cursorByteCol < 0 {
-						cursorByteCol = 0
+			// Map steerCursor (byte offset into the full steerLine) to a
+			// (lineIndex, visualColWithinLine) pair so we can render the
+			// caret on the correct row at the correct column. When
+			// steerCursor < 0 we fall back to legacy behavior: caret at
+			// the end of the last line.
+			//
+			// SP-078 Phase 3: the column passed to steerRowTextWithCursor
+			// must be a VISIBLE column, not a byte offset. Otherwise a
+			// wide-rune (CJK) content where each rune is 3 bytes but 2
+			// visible columns lands the caret at half the column. Use
+			// visibleRuneWidth(lineText[:byteCol]) to convert.
+			cursorLineIdx = len(lines) - 1 // default: last line
+			cursorByteCol = -1             // -1 = caret at end (legacy)
+			if steerCursor >= 0 {
+				offset := 0
+				for i, lineText := range lines {
+					lineEnd := offset + len(lineText)
+					if steerCursor <= lineEnd || i == len(lines)-1 {
+						cursorLineIdx = i
+						rawByteCol := steerCursor - offset
+						if rawByteCol < 0 {
+							rawByteCol = 0
+						}
+						if rawByteCol > len(lineText) {
+							rawByteCol = len(lineText)
+						}
+						cursorByteCol = visibleRuneWidth(lineText[:rawByteCol])
+						break
 					}
-					if cursorByteCol > len(lineText) {
-						cursorByteCol = len(lineText)
-					}
-					break
+					offset = lineEnd + 1 // +1 for the \n separator
 				}
-				offset = lineEnd + 1 // +1 for the \n separator
 			}
 		}
 
 		for i, lineText := range lines {
 			withCursor := false
 			col := -1
-			if steerCursor >= 0 {
+			if steerCursor >= 0 || f.steerWrappedActive {
 				// Cursor-aware path: caret only on the line the cursor
 				// actually falls on, at the computed column.
 				if i == cursorLineIdx {
@@ -814,6 +914,27 @@ func (f *StatusFooter) terminalSize() (cols, rows int) {
 		return 0, 0
 	}
 	return c, r
+}
+
+// TerminalSize is the exported alias of terminalSize, for callers
+// outside the console package (e.g. SteerInputReader's width-aware
+// render path). Returns (cols, rows). Both are 0 when the footer is
+// not attached to a real TTY (fd < 0 or GetSize errored).
+func (f *StatusFooter) TerminalSize() (cols, rows int) {
+	return f.terminalSize()
+}
+
+// steerCursorByteOffset returns the byte cursor position within
+// steerLine for the active render path. In wrapped mode
+// (SP-078), the caller pre-computes (row, col) and we have no
+// meaningful byte offset, so callers pass it via (steerCursorRow,
+// steerCursorCol) directly; this returns -1 to signal "use the
+// (row, col) path." In legacy mode, it returns steerCursor.
+func (f *StatusFooter) steerCursorByteOffset() int {
+	if f.steerWrappedActive {
+		return -1
+	}
+	return f.steerCursor
 }
 
 // ---------------------------------------------------------------------------

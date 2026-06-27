@@ -203,27 +203,27 @@ describe('AutomationsSessionDetail', () => {
     render(<AutomationsSessionDetail sessionId="s1" onClose={() => {}} />);
 
     await waitFor(() => {
-      expect(screen.getByText('Step progress not available')).toBeInTheDocument();
+      expect(screen.getByText(/Step-level events aren't tracked yet/)).toBeInTheDocument();
     });
   });
 
-  it('shows budget events placeholder with utilization text', async () => {
+  it('shows budget section with cap text when budget is set', async () => {
     mockFetchSequence(sessionResp('s1', 'running', 'wf', 25), outputResp('', 0, 0));
 
     render(<AutomationsSessionDetail sessionId="s1" onClose={() => {}} />);
 
     await waitFor(() => {
-      expect(screen.getByText('Utilization: $0.00 / $25.00')).toBeInTheDocument();
+      expect(screen.getByText(/Session budget cap: \$25\.00/)).toBeInTheDocument();
     });
   });
 
-  it('shows budget events placeholder without budget when budget is 0', async () => {
+  it('shows budget section fallback when budget is 0', async () => {
     mockFetchSequence(sessionResp('s1', 'running', 'wf', 0), outputResp('', 0, 0));
 
     render(<AutomationsSessionDetail sessionId="s1" onClose={() => {}} />);
 
     await waitFor(() => {
-      expect(screen.getByText('No budget tracking available')).toBeInTheDocument();
+      expect(screen.getByText('No budget cap was set for this session.')).toBeInTheDocument();
     });
   });
 

@@ -98,30 +98,22 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	// SP-048-2a: slash command tab completion. Re-builds a fresh registry
 	// per call so newly-installed MCP commands (which can be added mid-
 	// session) are reflected in completion.
-	inputReader.SetCompleter(func(line string, cursorPos int) []string {
-		if !strings.HasPrefix(line, "/") || cursorPos != len(line) {
-			return nil
-		}
-		// Don't complete once the user has moved past the command name.
-		if strings.ContainsAny(line, " \t") {
-			return nil
-		}
-		prefix := strings.ToLower(line[1:])
-		registry := agent_commands.NewCommandRegistry()
-		var matches []string
-		for _, name := range registry.CompletionCandidates() {
-			if strings.HasPrefix(strings.ToLower(name), prefix) {
-				matches = append(matches, "/"+name)
-			}
-		}
-		return matches
-	})
+	// SP-048-2a: slash command tab completion. Re-builds a fresh registry
+	// per call so newly-installed MCP commands (which can be added mid-
+	// session) are reflected in completion.
+	completer := buildSlashCommandCompleter()
+	inputReader.SetCompleter(completer)
 
 	// SP-055: steer coordinator owns the pinned steer-input panel for
 	// the lifetime of this REPL. Constructed once with the agent +
 	// footer references; StartTurn / EndTurn drive the per-iteration
 	// lifecycle below.
 	steerCoord := NewSteerCoordinator(chatAgent, footer)
+
+	// SP-078 Phase 2: same slash-command completer on the steer panel
+	// so Ctrl-] cycles slash commands mid-turn (Tab is reserved for
+	// STEER ↔ QUEUE mode toggle on the steer panel).
+	steerCoord.SetCompleter(completer)
 
 	// Capture a ground-truth termios snapshot of stdin in its default
 	// cooked state (the terminal is fully cooked at this point — no

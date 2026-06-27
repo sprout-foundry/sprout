@@ -97,8 +97,10 @@ type InputReader struct {
 	completer CompletionProvider
 	// Active cycle state. Refreshed when Tab is pressed against a buffer
 	// that differs from the last applied completion (i.e. the user typed
-	// something between Tab presses).
-	completionCycle *completionCycle
+	// something between Tab presses). SP-078: type aliased to the shared
+	// CompletionCycle so the same cycle state machine is reusable from
+	// SteerInputReader.
+	completionCycle *CompletionCycle
 
 	// SP-048-4f: tracks the half-typed Ctrl-X prefix of the Ctrl-X Ctrl-E
 	// editor-escape sequence. Reset on any keystroke that isn't Ctrl-E.

@@ -160,6 +160,11 @@ type Agent struct {
 	embeddingMu  sync.RWMutex // protects embeddingMgr
 	embeddingMgr *embedding.EmbeddingManager
 
+	// Vision processor for image/PDF/OCR analysis (SP-079-1).
+	// Lazily initialized on first GetVisionProcessor() call.
+	visionProcMu sync.RWMutex // protects visionProcessor
+	visionProc   *tools.VisionProcessor
+
 	// backgroundWg tracks background goroutines that use embeddingMgr or other
 	// resources. Shutdown() waits for these before closing resources.
 	backgroundWg sync.WaitGroup

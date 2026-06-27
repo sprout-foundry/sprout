@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -134,6 +136,29 @@ func applyWorkflowRuntimeOverrides(chatAgent *agent.Agent, runtime AgentWorkflow
 		}); err != nil {
 			return fmt.Errorf("failed to apply workflow runtime overrides: %w", err)
 		}
+
+		// Path B fix: if no global subagent defaults are set, seed them from the
+		// overrides so no-persona run_subagent calls inside the workflow still
+		// pick up a workflow-appropriate model instead of inheriting the
+		// coordinator's primary provider/model.
+		if err := chatAgent.GetConfigManager().UpdateConfigNoSave(func(cfg *configuration.Config) error {
+			if cfg.SubagentProvider != "" || cfg.SubagentModel != "" {
+				return nil
+			}
+			pick := pickSubagentDefault(runtime.SubagentOverrides)
+			if pick.Provider != "" {
+				cfg.SubagentProvider = pick.Provider
+			}
+			if pick.Model != "" {
+				cfg.SubagentModel = pick.Model
+			}
+			if pick.Provider != "" || pick.Model != "" {
+				log.Printf("[workflow] global subagent defaults not set — seeding from overrides: provider=%s model=%s", pick.Provider, pick.Model)
+			}
+			return nil
+		}); err != nil {
+			return fmt.Errorf("failed to seed global subagent defaults: %w", err)
+		}
 	}
 
 	return nil
@@ -144,6 +169,40 @@ func applyWorkflowInitialOverrides(chatAgent *agent.Agent, cfg *AgentWorkflowCon
 		return nil
 	}
 	return applyWorkflowRuntimeOverrides(chatAgent, cfg.Initial.AgentWorkflowRuntime)
+}
+
+// pickSubagentDefault selects a deterministic override entry to use as the
+// global subagent default when no global SubagentProvider/SubagentModel is set.
+// Preference order: orchestrator → coder → first entry alphabetically.
+// Persona IDs are normalized (lowercase, hyphens→underscores) before matching
+// to stay consistent with applyWorkflowSubagentOverrides / GetSubagentType.
+func pickSubagentDefault(overrides WorkflowSubagentOverrides) workflowSubagentOverride {
+	// Prefer orchestrator, then coder — match against normalized keys so
+	// "Orchestrator", "ORCHESTRATOR", "repo_orchestrator" all resolve.
+	wanted := []string{"orchestrator", "coder"}
+	for _, target := range wanted {
+		for key, v := range overrides {
+			if normalizeWorkflowPersonaID(key) != target {
+				continue
+			}
+			if v.Provider != "" || v.Model != "" {
+				return v
+			}
+		}
+	}
+	// Fall back to first entry alphabetically.
+	keys := make([]string, 0, len(overrides))
+	for k := range overrides {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		v := overrides[k]
+		if v.Provider != "" || v.Model != "" {
+			return v
+		}
+	}
+	return workflowSubagentOverride{}
 }
 
 type workflowRuntimeSnapshot struct {

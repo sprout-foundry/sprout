@@ -66,18 +66,20 @@ func newTestGitRepoWithBranch(t *testing.T, branch string, commitMessages []stri
 
 // saveHooks stores the current overridable hooks so tests can restore them.
 type savedHooks struct {
-	runGhCommand     func(ctx context.Context, dir string, args ...string) ([]byte, error)
-	prHTTPClient     *http.Client
-	getDefaultBranch func(ctx context.Context, repoDir string) (string, error)
-	GitHubAPIBaseURL string
+	runGhCommand          func(ctx context.Context, dir string, args ...string) ([]byte, error)
+	prHTTPClient          *http.Client
+	getDefaultBranch      func(ctx context.Context, repoDir string) (string, error)
+	GitHubAPIBaseURL      string
+	resolveGitHubCred     func() (string, error)
 }
 
 func saveHooks() savedHooks {
 	return savedHooks{
-		runGhCommand:     RunGhCommand,
-		prHTTPClient:     prHTTPClient,
-		getDefaultBranch: GetDefaultBranch,
-		GitHubAPIBaseURL: GitHubAPIBaseURL,
+		runGhCommand:        RunGhCommand,
+		prHTTPClient:        prHTTPClient,
+		getDefaultBranch:    GetDefaultBranch,
+		GitHubAPIBaseURL:    GitHubAPIBaseURL,
+		resolveGitHubCred:   resolveGitHubCredential,
 	}
 }
 
@@ -86,6 +88,7 @@ func restoreHooks(s savedHooks) {
 	prHTTPClient = s.prHTTPClient
 	GetDefaultBranch = s.getDefaultBranch
 	GitHubAPIBaseURL = s.GitHubAPIBaseURL
+	resolveGitHubCredential = s.resolveGitHubCred
 } // =============================================================================
 // TestParseGitHubRemoteURL
 // =============================================================================
@@ -1560,6 +1563,215 @@ func TestCreatePullRequest_GetOwnerRepoNonGithub(t *testing.T) {
 	if result.URL != "https://github.com/owner/repo/pull/12" {
 		t.Errorf("URL = %q, want gh-fallback URL", result.URL)
 	}
+}
+
+// =============================================================================
+// TestCreatePullRequest_TokenResolutionOrder
+// =============================================================================
+
+func TestCreatePullRequest_TokenResolutionOrder(t *testing.T) {
+	t.Run("credential-store-hit-beats-GH_TOKEN", func(t *testing.T) {
+		saved := saveHooks()
+		defer restoreHooks(saved)
+
+		dir := newTestGitRepoWithOrigin(t, "https://github.com/testorg/testrepo.git")
+		gitRun(t, dir, "checkout", "-b", "feature-cred")
+
+		GetDefaultBranch = func(_ context.Context, _ string) (string, error) {
+			return "main", nil
+		}
+
+		resolveGitHubCredential = func() (string, error) {
+			return "cred-store-token", nil
+		}
+
+		t.Setenv("GH_TOKEN", "env-token")
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if auth := r.Header.Get("Authorization"); auth != "token cred-store-token" {
+				t.Errorf("Authorization header = %q, want 'token cred-store-token' (credential store should beat env)", auth)
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusCreated)
+			json.NewEncoder(w).Encode(prAPIResponse{
+				HTMLURL: "https://github.com/testorg/testrepo/pull/77",
+				Number:  77,
+				State:   "open",
+			})
+		}))
+		defer server.Close()
+
+		prHTTPClient = server.Client()
+		GitHubAPIBaseURL = server.URL
+
+		ctx := context.Background()
+		result, err := CreatePullRequest(ctx, dir, PullRequestRequest{
+			Title: "Cred store token",
+			Head:  "feature-cred",
+			Base:  "main",
+		})
+		if err != nil {
+			t.Fatalf("CreatePullRequest failed: %v", err)
+		}
+		if result == nil {
+			t.Fatal("expected non-nil result")
+		}
+		if result.Number != 77 {
+			t.Errorf("Number = %d, want 77", result.Number)
+		}
+	})
+
+	t.Run("credential-store-empty-falls-through-to-GH_TOKEN", func(t *testing.T) {
+		saved := saveHooks()
+		defer restoreHooks(saved)
+
+		dir := newTestGitRepoWithOrigin(t, "https://github.com/testorg/testrepo.git")
+		gitRun(t, dir, "checkout", "-b", "feature-env")
+
+		GetDefaultBranch = func(_ context.Context, _ string) (string, error) {
+			return "main", nil
+		}
+
+		resolveGitHubCredential = func() (string, error) {
+			return "", nil // "not found" — empty string, nil error
+		}
+
+		t.Setenv("GH_TOKEN", "env-token")
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if auth := r.Header.Get("Authorization"); auth != "token env-token" {
+				t.Errorf("Authorization header = %q, want 'token env-token' (env should be used when cred store is empty)", auth)
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusCreated)
+			json.NewEncoder(w).Encode(prAPIResponse{
+				HTMLURL: "https://github.com/testorg/testrepo/pull/78",
+				Number:  78,
+				State:   "open",
+			})
+		}))
+		defer server.Close()
+
+		prHTTPClient = server.Client()
+		GitHubAPIBaseURL = server.URL
+
+		ctx := context.Background()
+		result, err := CreatePullRequest(ctx, dir, PullRequestRequest{
+			Title: "Env token fallback",
+			Head:  "feature-env",
+			Base:  "main",
+		})
+		if err != nil {
+			t.Fatalf("CreatePullRequest failed: %v", err)
+		}
+		if result == nil {
+			t.Fatal("expected non-nil result")
+		}
+		if result.Number != 78 {
+			t.Errorf("Number = %d, want 78", result.Number)
+		}
+	})
+
+	t.Run("both-empty-falls-through-to-gh-CLI", func(t *testing.T) {
+		saved := saveHooks()
+		defer restoreHooks(saved)
+
+		dir := newTestGitRepoWithOrigin(t, "https://github.com/testorg/testrepo.git")
+		gitRun(t, dir, "checkout", "-b", "feature-gh-cli")
+
+		GetDefaultBranch = func(_ context.Context, _ string) (string, error) {
+			return "main", nil
+		}
+
+		resolveGitHubCredential = func() (string, error) {
+			return "", nil
+		}
+
+		t.Setenv("GH_TOKEN", "")
+
+		RunGhCommand = func(_ context.Context, _ string, args ...string) ([]byte, error) {
+			return []byte("https://github.com/testorg/testrepo/pull/99\n"), nil
+		}
+
+		ctx := context.Background()
+		result, err := CreatePullRequest(ctx, dir, PullRequestRequest{
+			Title: "GH CLI fallback",
+			Head:  "feature-gh-cli",
+			Base:  "main",
+		})
+		if err != nil {
+			t.Fatalf("expected success via gh fallback, got: %v", err)
+		}
+		if result == nil {
+			t.Fatal("expected non-nil result")
+		}
+		if result.URL != "https://github.com/testorg/testrepo/pull/99" {
+			t.Errorf("URL = %q, want gh-fallback URL", result.URL)
+		}
+		if result.Number != 99 {
+			t.Errorf("Number = %d, want 99", result.Number)
+		}
+	})
+
+	t.Run("credential-store-error-falls-through-to-GH_TOKEN", func(t *testing.T) {
+		saved := saveHooks()
+		defer restoreHooks(saved)
+
+		dir := newTestGitRepoWithOrigin(t, "https://github.com/testorg/testrepo.git")
+		gitRun(t, dir, "checkout", "-b", "feature-cred-err")
+
+		GetDefaultBranch = func(_ context.Context, _ string) (string, error) {
+			return "main", nil
+		}
+
+		resolveGitHubCredential = func() (string, error) {
+			return "", errors.New("keyring not available")
+		}
+
+		t.Setenv("GH_TOKEN", "env-token")
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if auth := r.Header.Get("Authorization"); auth != "token env-token" {
+				t.Errorf("Authorization header = %q, want 'token env-token' (env should be used when cred store errors)", auth)
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusCreated)
+			json.NewEncoder(w).Encode(prAPIResponse{
+				HTMLURL: "https://github.com/testorg/testrepo/pull/79",
+				Number:  79,
+				State:   "open",
+			})
+		}))
+		defer server.Close()
+
+		prHTTPClient = server.Client()
+		GitHubAPIBaseURL = server.URL
+
+		ctx := context.Background()
+		result, err := CreatePullRequest(ctx, dir, PullRequestRequest{
+			Title: "Cred store error fallback",
+			Head:  "feature-cred-err",
+			Base:  "main",
+		})
+		if err != nil {
+			t.Fatalf("CreatePullRequest failed: %v", err)
+		}
+		if result == nil {
+			t.Fatal("expected non-nil result")
+		}
+		if result.Number != 79 {
+			t.Errorf("Number = %d, want 79", result.Number)
+		}
+	})
 }
 
 // =============================================================================

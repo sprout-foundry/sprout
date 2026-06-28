@@ -50,6 +50,9 @@ const (
 	// execution time (not by the pre-execute gate). Used when the only
 	// signal available is the typed SecurityError returned by the handler.
 	RiskSourceHandler RiskSource = "handler"
+	// RiskSourcePasswordPrompter — password prompter is registered, so
+	// privileged commands (sudo, passwd) are downgraded from block to prompt.
+	RiskSourcePasswordPrompter RiskSource = "password-prompter"
 )
 
 // RiskAssessment is the canonical, single-vocabulary verdict for a tool
@@ -93,7 +96,22 @@ type RiskAssessment struct {
 // explain`) and shadow-mode logging.
 func (a *Agent) ResolveToolRisk(toolName string, args map[string]interface{}) RiskAssessment {
 	// 1. Static classifier (always)
-	assessment := assessmentFromClassifier(tools.ClassifyToolCall(toolName, args))
+	secResult := tools.ClassifyToolCall(toolName, args)
+	assessment := assessmentFromClassifier(secResult)
+
+	// SP-089-4: when a password prompter is registered, downgrade privileged
+	// commands (sudo, passwd, su) from High/Critical block to Medium prompt.
+	// This lets the user actually type their password instead of the command
+	// being hard-blocked. Destructive commands (rm -rf, dd, mkfs) are NEVER
+	// downgraded — only RiskCategoryPrivileged.
+	if toolName == "shell_command" && a != nil && a.HasPasswordPrompter() {
+		if secResult.Category == tools.RiskCategoryPrivileged && assessment.Level.Rank() >= configuration.RiskLevelHigh.Rank() {
+			assessment.Level = configuration.RiskLevelMedium
+			assessment.IsHardBlock = false
+			assessment.Sources = append(assessment.Sources, RiskSourcePasswordPrompter)
+			assessment.Reason = "privileged command allowed with password prompter (sudo/passwd will prompt for password)"
+		}
+	}
 
 	// 2. Persona cascade (shell_command only)
 	if toolName == "shell_command" && a != nil {

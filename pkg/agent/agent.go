@@ -140,6 +140,13 @@ type Agent struct {
 	// Lazy-initialized on first use when terminalManager is nil.
 	backgroundProcessManager *tools.BackgroundProcessManager
 
+	// passwordPrompter handles interactive password prompts for shell commands
+	// (sudo, passwd, ssh-keygen passphrase). When nil, password-requiring
+	// commands are blocked by the classifier as before. Set at startup based
+	// on the execution surface (WebUI prompter if event bus + clients, CLI
+	// prompter if TTY, nil otherwise).
+	passwordPrompter tools.PasswordPrompter
+
 	// automateApprovedMu guards automateApprovedWorkflows.
 	automateApprovedMu sync.Mutex
 	// automateApprovedWorkflows tracks workflow filenames the user has

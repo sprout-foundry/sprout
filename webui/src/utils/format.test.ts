@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { formatRelativeDate, firstLine, classifyDiffLine } from './format';
+import { formatRelativeDate, firstLine, classifyDiffLine, formatDollar } from './format';
 
 describe('formatRelativeDate', () => {
   beforeEach(() => {
@@ -189,5 +189,23 @@ describe('classifyDiffLine', () => {
 
   it("handles '+++' taking precedence over '+' classification", () => {
     expect(classifyDiffLine('+++ header')).toBe('file');
+  });
+});
+
+describe('formatDollar', () => {
+  it('formats with 4 decimal places and dollar sign', () => {
+    expect(formatDollar(1.2345)).toBe('$1.2345');
+  });
+
+  it('formats zero correctly', () => {
+    expect(formatDollar(0)).toBe('$0.0000');
+  });
+
+  it('pads short decimals', () => {
+    expect(formatDollar(5)).toBe('$5.0000');
+  });
+
+  it('truncates long decimals', () => {
+    expect(formatDollar(1.23456789)).toBe('$1.2346');
   });
 });

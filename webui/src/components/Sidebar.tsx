@@ -7,6 +7,7 @@ import { usePlatformNav } from '../contexts/PlatformNavContext';
 import { useTheme } from '../contexts/ThemeContext';
 import type { WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
 import { debugLog } from '../utils/log';
+import { ApiService, type SessionSearchResult } from '../services/api';
 import { useSidebarEventHandlers } from '../hooks/useSidebarEventHandlers';
 import { useSidebarModel } from '../hooks/useSidebarModel';
 import {
@@ -35,6 +36,9 @@ import {
   LayoutDashboard,
   ExternalLink,
   Zap,
+  X,
+  Loader2,
+  Download,
 } from 'lucide-react';
 import AutomationsPanel from './AutomationsPanel';
 import SearchView from './SearchView';
@@ -122,6 +126,8 @@ interface SidebarProps {
     onCheckoutCommit: (commitHash: string) => Promise<{ message: string }>;
     onRevertCommit: (commitHash: string) => Promise<{ message: string }>;
   };
+  /** Called when a session search result is clicked to restore that session */
+  onSessionSearchRestore?: (sessionId: string) => void;
 }
 
 /**
@@ -147,6 +153,42 @@ const PLATFORM_ICON_MAP: Record<string, LucideIcon> = {
   'layout-dashboard': LayoutDashboard,
   'external-link': ExternalLink,
 };
+
+/** Format a relative time string for session search results */
+function formatSessionDate(isoString: string): string {
+  const date = new Date(isoString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHour = Math.floor(diffMin / 60);
+  const diffDay = Math.floor(diffHour / 24);
+  const diffMonth = Math.floor(diffDay / 30);
+  const diffYear = Math.floor(diffDay / 365);
+
+  if (diffSec < 60) return 'just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  if (diffHour < 24) return `${diffHour}h ago`;
+  if (diffDay < 30) return `${diffDay}d ago`;
+  if (diffMonth < 12) return `${diffMonth}mo ago`;
+  return `${diffYear}y ago`;
+}
+
+/** Render an excerpt string, converting [matched] terms to highlighted spans */
+function renderSessionExcerpt(excerpt: string): React.ReactNode {
+  const parts = excerpt.split(/(\[.+?\])/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('[') && part.endsWith(']')) {
+      const text = part.slice(1, -1);
+      return (
+        <span key={i} className="sidebar-session-search-match">
+          {text}
+        </span>
+      );
+    }
+    return <span key={i}>{part}</span>;
+  });
+}
 
 function Sidebar({
   isConnected,
@@ -185,6 +227,7 @@ function Sidebar({
   gitPanel,
   onRequestProviderSetup,
   onViewChange,
+  onSessionSearchRestore,
 }: SidebarProps): JSX.Element {
   const { themePack, availableThemePacks, setThemePack, importTheme, removeTheme } = useTheme();
   const { applyPreset } = useHotkeys();
@@ -261,6 +304,161 @@ function Sidebar({
   );
 
   const [isResizing, setIsResizing] = useState(false);
+
+  // ── Session search state ─────────────────────────────────────────
+  const [sessionSearchQuery, setSessionSearchQuery] = useState('');
+  const [sessionSearchResults, setSessionSearchResults] = useState<SessionSearchResult[]>([]);
+  const [sessionSearchLoading, setSessionSearchLoading] = useState(false);
+  const [sessionSearchError, setSessionSearchError] = useState<string | null>(null);
+  const [sessionSearchFocused, setSessionSearchFocused] = useState(false);
+
+  // ── Export all sessions state ──────────────────────────────────────
+  const [isExportingAll, setIsExportingAll] = useState(false);
+  const [exportAllError, setExportAllError] = useState<string | null>(null);
+
+  // Debounced search execution
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const executeSessionSearch = useCallback(
+    async (q: string) => {
+      if (!q.trim()) {
+        setSessionSearchResults([]);
+        setSessionSearchError(null);
+        return;
+      }
+      setSessionSearchLoading(true);
+      setSessionSearchError(null);
+      try {
+        const resp = await ApiService.getInstance().searchSessions(q.trim(), { limit: 20 });
+        setSessionSearchResults(resp.results || []);
+      } catch (err) {
+        setSessionSearchError(err instanceof Error ? err.message : 'Search failed');
+        setSessionSearchResults([]);
+      } finally {
+        setSessionSearchLoading(false);
+      }
+    },
+    [],
+  );
+
+  const handleSessionSearchChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const value = e.target.value;
+      setSessionSearchQuery(value);
+
+      // Clear previous timer
+      if (searchTimerRef.current) {
+        clearTimeout(searchTimerRef.current);
+      }
+
+      if (!value.trim()) {
+        setSessionSearchResults([]);
+        setSessionSearchError(null);
+        setSessionSearchLoading(false);
+        return;
+      }
+
+      // Debounce by 300ms
+      searchTimerRef.current = setTimeout(() => {
+        executeSessionSearch(value);
+      }, 300);
+    },
+    [executeSessionSearch],
+  );
+
+  const handleSessionSearchClear = useCallback(() => {
+    setSessionSearchQuery('');
+    setSessionSearchResults([]);
+    setSessionSearchError(null);
+    setSessionSearchLoading(false);
+    if (searchTimerRef.current) {
+      clearTimeout(searchTimerRef.current);
+    }
+  }, []);
+
+  const handleSessionSearchBlur = useCallback(() => {
+    // Delay to allow clicking results before closing
+    setTimeout(() => setSessionSearchFocused(false), 150);
+  }, []);
+
+  const handleSessionSearchFocus = useCallback(() => {
+    setSessionSearchFocused(true);
+  }, []);
+
+  const handleSessionSearchResultClick = useCallback(
+    (sessionId: string) => {
+      onSessionSearchRestore?.(sessionId);
+      setSessionSearchQuery('');
+      setSessionSearchResults([]);
+      setSessionSearchError(null);
+      setSessionSearchLoading(false);
+      setSessionSearchFocused(false);
+    },
+    [onSessionSearchRestore],
+  );
+
+  // ── Export all sessions handler ────────────────────────────────────
+  const handleExportAllSessions = useCallback(async () => {
+    if (isExportingAll) return;
+    setExportAllError(null);
+    setIsExportingAll(true);
+
+    try {
+      const response = await ApiService.getInstance().getSessions('current');
+      const sessions = Array.isArray(response?.sessions) ? response.sessions : [];
+
+      // Filter to only sessions with messages
+      const sessionsToExport = sessions.filter((s) => s.message_count > 0);
+
+      for (const session of sessionsToExport) {
+        // Bulk export defaults to safe/redacted (no no_secret_redaction parameter).
+        // Users who need unredacted exports should use the per-session ExportDialog.
+        const url = `/api/sessions/${encodeURIComponent(session.session_id)}/export?format=markdown&include_tool_calls=false&include_cost=true`;
+
+        // HEAD pre-check: skip silently if the session was deleted between getSessions() and now.
+        try {
+          const headResp = await fetch(url, { method: 'HEAD' });
+          if (!headResp.ok) {
+            console.warn(`[export-all] Skipping session ${session.session_id}: HEAD ${headResp.status}`);
+            continue;
+          }
+        } catch {
+          console.warn(`[export-all] Skipping session ${session.session_id}: HEAD request failed`);
+          continue;
+        }
+
+        // Trigger download for each session sequentially with a small delay
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = '';
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+
+        // Small delay to avoid browser blocking multiple downloads
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      }
+    } catch (err) {
+      setExportAllError(`Failed to export sessions: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setIsExportingAll(false);
+    }
+  }, [isExportingAll]);
+
+  // Show dropdown when: focused + has query, or has active results with query
+  const showSessionSearchDropdown =
+    !effectiveSidebarCollapsed &&
+    sessionSearchFocused &&
+    (sessionSearchQuery.trim().length > 0 || sessionSearchLoading || sessionSearchResults.length > 0 || sessionSearchError !== null);
+
+  // Clean up timer on unmount
+  useEffect(() => {
+    return () => {
+      if (searchTimerRef.current) {
+        clearTimeout(searchTimerRef.current);
+      }
+    };
+  }, []);
 
   // .resizing class disables CSS transitions during drag to prevent lag
   const handleSidebarResizeStart = useCallback(() => {
@@ -400,16 +598,124 @@ function Sidebar({
             <SproutLogo showWordmark={false} compact />
           </button>
           {!effectiveSidebarCollapsed ? (
-            <LocationSwitcher
-              isConnected={isConnected}
-              instances={instances}
-              selectedInstancePID={selectedInstancePID}
-              isSwitchingInstance={isSwitchingInstance}
-              onInstanceChange={onInstanceChange}
-              sidebarCollapsed={effectiveSidebarCollapsed}
-            />
+            <>
+              <LocationSwitcher
+                isConnected={isConnected}
+                instances={instances}
+                selectedInstancePID={selectedInstancePID}
+                isSwitchingInstance={isSwitchingInstance}
+                onInstanceChange={onInstanceChange}
+                sidebarCollapsed={effectiveSidebarCollapsed}
+              />
+              {/* Session search input */}
+              <div className="sidebar-session-search">
+                <Search size={14} className="sidebar-session-search-icon" strokeWidth={2} />
+                <input
+                  type="text"
+                  className="sidebar-session-search-input"
+                  placeholder="Search sessions..."
+                  value={sessionSearchQuery}
+                  onChange={handleSessionSearchChange}
+                  onFocus={handleSessionSearchFocus}
+                  onBlur={handleSessionSearchBlur}
+                  data-testid="sidebar-session-search-input"
+                  aria-label="Search sessions"
+                />
+                {sessionSearchQuery && (
+                  <button
+                    type="button"
+                    className="sidebar-session-search-clear"
+                    onClick={handleSessionSearchClear}
+                    aria-label="Clear search"
+                    data-testid="sidebar-session-search-clear"
+                  >
+                    <X size={12} strokeWidth={2} />
+                  </button>
+                )}
+              </div>
+
+              {/* Export all sessions button */}
+              <div className="sidebar-export-all-wrapper">
+                <button
+                  type="button"
+                  className="sidebar-export-all-btn"
+                  onClick={handleExportAllSessions}
+                  disabled={isExportingAll}
+                  data-testid="sidebar-export-all"
+                  aria-label="Export all sessions"
+                  title="Export all sessions"
+                >
+                  {isExportingAll ? (
+                    <>
+                      <Loader2 size={14} className="sidebar-export-all-spinner" strokeWidth={2} />
+                      Exporting...
+                    </>
+                  ) : (
+                    <>
+                      <Download size={14} strokeWidth={2} />
+                      Export all
+                    </>
+                  )}
+                </button>
+                {exportAllError && (
+                  <div className="sidebar-export-all-error" role="alert">
+                    {exportAllError}
+                  </div>
+                )}
+              </div>
+            </>
           ) : null}
         </div>
+
+        {/* Session search dropdown (overlay below pinned header) */}
+        {showSessionSearchDropdown && (
+          <div className="sidebar-session-search-dropdown" data-testid="sidebar-session-search-dropdown">
+            {sessionSearchLoading ? (
+              <div className="sidebar-session-search-loading" data-testid="sidebar-session-search-loading">
+                <Loader2 size={14} className="sidebar-session-search-spinner" />
+                <span>Searching...</span>
+              </div>
+            ) : sessionSearchError ? (
+              <div className="sidebar-session-search-error" data-testid="sidebar-session-search-error">
+                {sessionSearchError}
+              </div>
+            ) : sessionSearchResults.length === 0 && sessionSearchQuery.trim().length > 0 ? (
+              <div className="sidebar-session-search-no-results" data-testid="sidebar-session-search-no-results">
+                No matching sessions
+              </div>
+            ) : (
+              sessionSearchResults.map((result) => (
+                <button
+                  key={result.session_id}
+                  type="button"
+                  className="sidebar-session-search-result"
+                  onClick={() => handleSessionSearchResultClick(result.session_id)}
+                  data-testid="sidebar-session-search-result"
+                  data-session-id={result.session_id}
+                >
+                  <div className="sidebar-session-search-result-header">
+                    <span className="sidebar-session-search-result-name" title={result.name || result.session_id}>
+                      {result.name || result.session_id}
+                    </span>
+                    <span className="sidebar-session-search-result-date" title={result.last_updated}>
+                      {formatSessionDate(result.last_updated)}
+                    </span>
+                  </div>
+                  {result.excerpt && (
+                    <div className="sidebar-session-search-result-excerpt">
+                      {renderSessionExcerpt(result.excerpt)}
+                    </div>
+                  )}
+                  {result.match_score >= 2 && (
+                    <span className="sidebar-session-search-result-score" title={`Match score: ${result.match_score}`}>
+                      {result.match_score === 3 ? '★' : '☆'}
+                    </span>
+                  )}
+                </button>
+              ))
+            )}
+          </div>
+        )}
 
         {/* Icon rail (always visible) + Content pane (only when expanded) */}
         <div className="sidebar-body">

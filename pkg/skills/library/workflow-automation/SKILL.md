@@ -234,11 +234,11 @@ This repo's `automate/workflow.json` is the reference implementation of a full a
     "risk_profile": "permissive",
     "skip_prompt": true,
     "subagent_overrides": {
-      "coder":      { "model": "qwen3.6-27b", "provider": "ai-worker" },
-      "debugger":   { "model": "qwen3.6-27b", "provider": "ai-worker" },
-      "reviewer":   { "model": "qwen3.6-27b", "provider": "ai-worker" },
-      "tester":     { "model": "qwen3.6-27b", "provider": "ai-worker" },
-      "orchestrator": { "model": "qwen3.6-27b", "provider": "ai-worker" }
+      "coder":      { "model": "Qwen3.6-27B-FP8", "provider": "ai-worker" },
+      "debugger":   { "model": "Qwen3.6-27B-FP8", "provider": "ai-worker" },
+      "reviewer":   { "model": "Qwen3.6-27B-FP8", "provider": "ai-worker" },
+      "tester":     { "model": "Qwen3.6-27B-FP8", "provider": "ai-worker" },
+      "orchestrator": { "model": "MiniMax-M3", "provider": "minimax" }
     }
   },
   "no_web_ui": true,

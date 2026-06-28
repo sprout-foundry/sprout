@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/trace"
 )
 
@@ -115,7 +116,7 @@ func (te *ToolExecutor) categorizeError(toolName string, err error) (string, str
 	errorMsg := err.Error()
 
 	// Check for unknown tool
-	if strings.Contains(errorMsg, "unknown tool") || strings.Contains(errorMsg, "tool not found") {
+	if agenterrors.IsInvalidInput(err) || strings.Contains(errorMsg, "unknown tool") || strings.Contains(errorMsg, "tool not found") {
 		return "unknown_tool", errorMsg
 	}
 

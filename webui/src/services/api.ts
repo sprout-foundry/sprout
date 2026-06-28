@@ -40,6 +40,8 @@ export type {
   SkillConfig,
   SkillsResponse,
   SubagentTypeInfo,
+  SessionSearchResult,
+  SessionSearchResponse,
 } from './api/types';
 
 // Re-export SSHWorkspaceOpenError as a value for backward compatibility

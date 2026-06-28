@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -621,6 +622,43 @@ func TestActivateSkillHandlerConformance(t *testing.T) {
 	if err := h.Validate(map[string]any{"skill_id": 123}); err == nil {
 		t.Error("Validate(non-string skill_id) should return error")
 	}
+
+	// ---------------------------------------------------------------------------
+	// Execute: success path with fake SkillLoader
+	// ---------------------------------------------------------------------------
+	ctx := context.Background()
+	env := ToolEnv{
+		SkillLoader: &fakeSkillLoader{
+			skills: map[string]*SkillInfo{
+				"project-planning": {
+					ID:          "project-planning",
+					Name:        "Project Planning",
+					Description: "Strategic planning and alignment for new (greenfield) or existing (brownfield) projects...",
+					Content:     "# Project Planning Skill\n\nDo strategic planning.",
+					Source:      "builtin",
+				},
+			},
+		},
+	}
+	result, err := h.Execute(ctx, env, map[string]any{"skill_id": "project-planning"})
+	if err != nil {
+		t.Fatalf("Execute should not return error, got: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("Execute result should not be IsError, output: %s", result.Output)
+	}
+	if !strings.Contains(result.Output, "Activated skill") {
+		t.Error("Execute output should contain 'Activated skill'")
+	}
+	if !strings.Contains(result.Output, "Description:") {
+		t.Error("Execute output should contain 'Description:'")
+	}
+	if !strings.Contains(result.Output, "Project Planning") {
+		t.Error("Execute output should contain skill name")
+	}
+	if !strings.Contains(result.Output, "Instructions loaded into context") {
+		t.Error("Execute output should contain 'Instructions loaded into context'")
+	}
 }
 
 // TestAddMemoryHandlerConformance and TestDeleteMemoryHandlerConformance
@@ -865,6 +903,78 @@ func TestWebSearchHandlerConformance(t *testing.T) {
 	if err := h.Validate(map[string]any{"query": 123}); err == nil {
 		t.Error("Validate(non-string query) should return error")
 	}
+
+	// ---------------------------------------------------------------------------
+	// Execute: success path with fake SearchEngine
+	// ---------------------------------------------------------------------------
+	ctx := context.Background()
+	fakeEngine := &fakeSearchEngine{
+		results: map[string]string{
+			"Go testing best practices": "Search results for \"Go testing best practices\":\n1. Table-driven tests\n2. Subtests",
+		},
+	}
+	env := ToolEnv{SearchEngine: fakeEngine}
+	result, err := h.Execute(ctx, env, map[string]any{"query": "Go testing best practices"})
+	if err != nil {
+		t.Fatalf("Execute should not return error, got: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("Execute result should not be IsError, output: %s", result.Output)
+	}
+	if !strings.Contains(result.Output, "Search results for") {
+		t.Errorf("Execute output should contain 'Search results for', got: %s", result.Output)
+	}
+	if !strings.Contains(result.Output, "Go testing best practices") {
+		t.Errorf("Execute output should contain query, got: %s", result.Output)
+	}
+
+	// ---------------------------------------------------------------------------
+	// Execute: nil SearchEngine
+	// ---------------------------------------------------------------------------
+	envNil := ToolEnv{}
+	result, err = h.Execute(ctx, envNil, map[string]any{"query": "test"})
+	if err != nil {
+		t.Fatalf("Execute should not return error, got: %v", err)
+	}
+	if !result.IsError {
+		t.Fatalf("Execute result should be IsError when SearchEngine is nil, output: %s", result.Output)
+	}
+	if !strings.Contains(result.Output, "search engine not available") {
+		t.Errorf("Execute output should mention 'search engine not available', got: %s", result.Output)
+	}
+
+	// ---------------------------------------------------------------------------
+	// Execute: error path
+	// ---------------------------------------------------------------------------
+	fakeErr := &fakeSearchEngine{
+		fail:   true,
+		failErr: errors.New("search API unavailable"),
+	}
+	envErr := ToolEnv{SearchEngine: fakeErr}
+	result, err = h.Execute(ctx, envErr, map[string]any{"query": "anything"})
+	if err != nil {
+		t.Fatalf("Execute should not return error, got: %v", err)
+	}
+	if !result.IsError {
+		t.Fatalf("Execute result should be IsError on search failure, output: %s", result.Output)
+	}
+	if !strings.Contains(result.Output, "search API unavailable") {
+		t.Errorf("Execute output should contain 'search API unavailable', got: %s", result.Output)
+	}
+}
+
+// fakeSearchEngine is a test double for the SearchEngine interface.
+type fakeSearchEngine struct {
+	results map[string]string
+	fail    bool
+	failErr error
+}
+
+func (f *fakeSearchEngine) Search(ctx context.Context, query string) (string, error) {
+	if f.fail {
+		return "", f.failErr
+	}
+	return f.results[query], nil
 }
 
 func TestSemanticSearchHandlerConformance(t *testing.T) {

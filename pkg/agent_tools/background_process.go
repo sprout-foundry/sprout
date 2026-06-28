@@ -641,15 +641,39 @@ func CleanupOrphanedBackgroundProcessesWithContext(ctx context.Context, baseDir 
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	// Scan for .pid files
-	pattern := filepath.Join(baseDir, "*.pid")
-	pidFiles, _ := filepath.Glob(pattern)
-	// Glob may return nil on error; that's fine — just skip cleanup
+	// Scan for .pid files. These are the authoritative orphans — they mark
+	// processes whose sprout parent exited before the process did. The
+	// matching .output file is removed alongside.
+	pidPattern := filepath.Join(baseDir, "*.pid")
+	pidFiles, _ := filepath.Glob(pidPattern)
 	if pidFiles == nil {
 		pidFiles = []string{}
 	}
 
-	if len(pidFiles) == 0 {
+	// Also scan for orphaned .output files (no matching .pid) — these are
+	// stale leftovers from sessions whose .pid was cleaned up by a previous
+	// run or whose process was never tracked by the BPM. Without this
+	// pass they accumulate in /tmp/sprout-bg/ forever.
+	outputPattern := filepath.Join(baseDir, "*.output")
+	outputFiles, _ := filepath.Glob(outputPattern)
+	if outputFiles == nil {
+		outputFiles = []string{}
+	}
+
+	pidSet := make(map[string]struct{}, len(pidFiles))
+	for _, f := range pidFiles {
+		pidSet[filepath.Base(f)] = struct{}{}
+	}
+	var strayOutputs []string
+	for _, f := range outputFiles {
+		sid := strings.TrimSuffix(filepath.Base(f), ".output")
+		if _, paired := pidSet[sid+".pid"]; paired {
+			continue
+		}
+		strayOutputs = append(strayOutputs, f)
+	}
+
+	if len(pidFiles) == 0 && len(strayOutputs) == 0 {
 		return nil
 	}
 
@@ -665,8 +689,12 @@ func CleanupOrphanedBackgroundProcessesWithContext(ctx context.Context, baseDir 
 		pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
 		if err != nil {
 			log.Printf("warn: failed to parse PID from %s: %v", pidFile, err)
-			// Stale/unparseable file — remove it immediately
+			// Stale/unparseable file — remove both the .pid and its
+			// (likely-stale) .output companion. Without removing the
+			// output, it sits in /tmp/sprout-bg/ forever.
 			_ = os.Remove(pidFile)
+			sid := strings.TrimSuffix(filepath.Base(pidFile), ".pid")
+			_ = os.Remove(filepath.Join(baseDir, sid+".output"))
 			continue
 		}
 
@@ -682,57 +710,71 @@ func CleanupOrphanedBackgroundProcessesWithContext(ctx context.Context, baseDir 
 		})
 	}
 
-	if len(items) == 0 {
+	if len(items) == 0 && len(strayOutputs) == 0 {
 		return nil
 	}
 
-	// Process PIDs concurrently with a worker pool
-	const workers = 16
-	itemCh := make(chan orphanCleanupItem, len(items))
-	for _, item := range items {
-		itemCh <- item
+	// Process PIDs concurrently with a worker pool (only if we have PIDs)
+	if len(items) > 0 {
+		const workers = 16
+		itemCh := make(chan orphanCleanupItem, len(items))
+		for _, item := range items {
+			itemCh <- item
+		}
+		close(itemCh)
+
+		var wg sync.WaitGroup
+		var processedCount atomic.Int64
+
+		for i := 0; i < workers && i < len(items); i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for item := range itemCh {
+					// Check context before starting work on this item
+					select {
+					case <-ctx.Done():
+						return
+					default:
+					}
+
+					// Terminate the orphan (fast for dead processes, ~200ms for alive)
+					terminateOrphanedPIDWithTimeout(item.pid, 200*time.Millisecond)
+
+					// Clean up both files (whether the process was alive or not).
+					// Missing files are expected during concurrent cleanup or when
+					// a previous run already removed them — not an error.
+					if err := os.Remove(item.pidFile); err != nil && !os.IsNotExist(err) {
+						log.Printf("warn: failed to remove PID file %s: %v", item.pidFile, err)
+					}
+					if err := os.Remove(item.outputFile); err != nil && !os.IsNotExist(err) {
+						log.Printf("warn: failed to remove output file %s: %v", item.outputFile, err)
+					}
+					processedCount.Add(1)
+				}
+			}()
+		}
+
+		wg.Wait()
+
+		// If context was cancelled mid-batch, log a summary
+		if err := ctx.Err(); err != nil && err != context.DeadlineExceeded {
+			done := processedCount.Load()
+			log.Printf("warn: orphan cleanup cancelled after processing %d of %d files: %v", done, len(items), err)
+		} else if err == context.DeadlineExceeded {
+			done := processedCount.Load()
+			log.Printf("warn: orphan cleanup timed out after processing %d of %d files", done, len(items))
+		}
 	}
-	close(itemCh)
 
-	var wg sync.WaitGroup
-	var processedCount atomic.Int64
-
-	for i := 0; i < workers && i < len(items); i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for item := range itemCh {
-				// Check context before starting work on this item
-				select {
-				case <-ctx.Done():
-					return
-				default:
-				}
-
-				// Terminate the orphan (fast for dead processes, ~200ms for alive)
-				terminateOrphanedPIDWithTimeout(item.pid, 200*time.Millisecond)
-
-				// Clean up both files (whether the process was alive or not)
-				if err := os.Remove(item.pidFile); err != nil {
-					log.Printf("warn: failed to remove PID file %s: %v", item.pidFile, err)
-				}
-				if err := os.Remove(item.outputFile); err != nil {
-					log.Printf("warn: failed to remove output file %s: %v", item.outputFile, err)
-				}
-				processedCount.Add(1)
-			}
-		}()
-	}
-
-	wg.Wait()
-
-	// If context was cancelled mid-batch, log a summary
-	if err := ctx.Err(); err != nil && err != context.DeadlineExceeded {
-		done := processedCount.Load()
-		log.Printf("warn: orphan cleanup cancelled after processing %d of %d files: %v", done, len(items), err)
-	} else if err == context.DeadlineExceeded {
-		done := processedCount.Load()
-		log.Printf("warn: orphan cleanup timed out after processing %d of %d files", done, len(items))
+	// Remove stray .output files (no matching .pid). These accumulate when
+	// the .pid was cleaned up but the .output file lingered, or when a
+	// process was started outside the BPM. Done outside the worker pool
+	// because there's no I/O wait — just file removes.
+	for _, stray := range strayOutputs {
+		if err := os.Remove(stray); err != nil && !os.IsNotExist(err) {
+			log.Printf("warn: failed to remove stray output file %s: %v", stray, err)
+		}
 	}
 
 	return nil

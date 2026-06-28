@@ -308,6 +308,17 @@ func (a *Agent) BuildCheckpointCompactedMessages(messages []api.Message) ([]api.
 			continue
 		}
 
+		// Expand EndIndex to absorb any trailing tool messages whose tool_call_id
+		// references an assistant message within the checkpoint range. Without this,
+		// partial coverage of an assistant+tool_calls block leaves orphan tool
+		// messages in the conversation — providers with strict tool-call syntax
+		// (MiniMax, DeepSeek) reject the whole request as
+		// "tool call result does not follow tool call".
+		expandedEnd := expandCheckpointRangeForToolResults(messages, checkpoint.StartIndex, checkpoint.EndIndex)
+		if expandedEnd > checkpoint.EndIndex {
+			checkpoint.EndIndex = expandedEnd
+		}
+
 		// This checkpoint is consumed (applied to the compaction)
 		compacted = append(compacted, messages[nextIndex:checkpoint.StartIndex]...)
 
@@ -352,6 +363,13 @@ func (a *Agent) BuildCheckpointCompactedMessages(messages []api.Message) ([]api.
 
 	compacted = append(compacted, messages[nextIndex:]...)
 
+	// Defense in depth: walk the final compacted slice and drop any orphan
+	// tool messages that survived all other paths (manual edits, restored
+	// sessions, rollups from prior sessions). An orphan is a tool-role
+	// message whose tool_call_id has no parent assistant tool_calls block
+	// immediately preceding it.
+	compacted = dropOrphanToolMessages(compacted, a.debug)
+
 	// FIX: Ensure we don't have consecutive assistant messages at the boundary.
 	// If the last inserted summary is followed by an assistant message without tool_calls,
 	// remove the following assistant message to avoid llama.cpp error:
@@ -371,6 +389,87 @@ func (a *Agent) BuildCheckpointCompactedMessages(messages []api.Message) ([]api.
 	}
 
 	return compacted, remaining
+}
+
+// expandCheckpointRangeForToolResults grows endIndex to include any trailing
+// tool-role messages whose tool_call_id matches an assistant tool_calls
+// block inside [startIndex, endIndex]. Bounds the expansion to the message
+// slice so we never run past the end.
+func expandCheckpointRangeForToolResults(messages []api.Message, startIndex, endIndex int) int {
+	if endIndex >= len(messages)-1 {
+		return endIndex
+	}
+
+	// Collect the set of tool_call_ids declared by assistant messages in the range.
+	parentIDs := make(map[string]struct{})
+	for i := startIndex; i <= endIndex; i++ {
+		m := messages[i]
+		if m.Role != "assistant" {
+			continue
+		}
+		for _, tc := range m.ToolCalls {
+			if tc.ID != "" {
+				parentIDs[tc.ID] = struct{}{}
+			}
+		}
+	}
+	if len(parentIDs) == 0 {
+		return endIndex
+	}
+
+	// Walk forward as long as we keep finding tool messages that match an
+	// in-range parent. We don't expand across other role boundaries — once
+	// we hit a non-tool message (assistant, user, system) we stop, because
+	// that message was intentionally excluded from the checkpoint.
+	for endIndex+1 < len(messages) && messages[endIndex+1].Role == "tool" {
+		if _, ok := parentIDs[messages[endIndex+1].ToolCallID]; !ok {
+			break
+		}
+		endIndex++
+	}
+	return endIndex
+}
+
+// dropOrphanToolMessages scans messages in order and drops tool-role messages
+// whose tool_call_id has no preceding assistant tool_calls block with a
+// matching ID. Returns the cleaned slice. Used as a final invariant guard
+// before the conversation reaches a strict-syntax provider.
+func dropOrphanToolMessages(messages []api.Message, debug bool) []api.Message {
+	if len(messages) == 0 {
+		return messages
+	}
+
+	// Build a set of every tool_call_id any assistant message in this
+	// conversation has ever declared. An orphan is a tool message whose
+	// tool_call_id isn't in this set — that means no parent assistant
+	// exists anywhere upstream of it.
+	knownIDs := make(map[string]struct{})
+	for _, m := range messages {
+		if m.Role != "assistant" {
+			continue
+		}
+		for _, tc := range m.ToolCalls {
+			if tc.ID != "" {
+				knownIDs[tc.ID] = struct{}{}
+			}
+		}
+	}
+
+	out := make([]api.Message, 0, len(messages))
+	dropped := 0
+	for _, m := range messages {
+		if m.Role == "tool" && m.ToolCallID != "" {
+			if _, ok := knownIDs[m.ToolCallID]; !ok {
+				dropped++
+				continue
+			}
+		}
+		out = append(out, m)
+	}
+	if debug && dropped > 0 {
+		_ = dropped // debug-only counter; log via caller if needed
+	}
+	return out
 }
 
 // TriggerCompaction used to live here as a 3-tier compaction fallback

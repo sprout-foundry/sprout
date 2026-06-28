@@ -22,10 +22,10 @@ import (
 )
 
 // ExecuteTool executes a tool with standardized parameter validation and error handling
-func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args map[string]interface{}, agent *Agent) ([]api.ImageData, string, error) {
+func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args map[string]interface{}, agent *Agent, rawArgsJSON string) ([]api.ImageData, string, error) {
 	handler, found := tools.GetNewToolRegistry().Lookup(toolName)
 	if !found {
-		return nil, "", fmt.Errorf("unknown tool '%s'", toolName)
+		return nil, "", agenterrors.NewInvalidInputError("unknown tool '"+toolName+"'", nil)
 	}
 
 	if agent != nil && agent.debug {
@@ -285,10 +285,11 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 		env.EmbeddingMgr = agent.GetEmbeddingManager()
 		env.VisionProcessor = agent.GetVisionProcessor()
 		env.WebBrowser = tools.NewBrowserAdapter()
-		// SkillLoader, SearchEngine: wired once handler migrations
-		// create the necessary adapter types (see roadmap/SP-079-migrate-stub-tool-handlers.md).
-		// For now the fields remain nil — migrated handlers check for nil and report
-		// "unavailable" until their phase adds the adapter + wiring.
+		env.SkillLoader = newSkillLoaderAdapter(agent)
+		env.SearchEngine = newSearchEngineAdapter(agent)
+		// SP-082-1: Pass the raw JSON args so handlers can recover key
+		// insertion order from the LLM's original tool call.
+		env.RawArgsJSON = rawArgsJSON
 	} else {
 		env.OutputWriter = os.Stdout
 		env.MaxTokensFunc = func() int { return 0 }

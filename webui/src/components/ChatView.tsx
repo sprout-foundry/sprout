@@ -1,5 +1,5 @@
 import { ChatMessageContextMenu } from '@sprout/ui';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Download } from 'lucide-react';
 import { useRef, useCallback, useState, useMemo, useLayoutEffect } from 'react';
 import type { CSSProperties } from 'react';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
@@ -13,6 +13,7 @@ import { ChatFooter, ChatHeader, EmptyChatPanel, MessageItem } from './chat';
 import type { ChatProps, Message, ToolExecution } from './chat/types';
 import CommandInput from './CommandInput';
 import InlineTodoSummary from './InlineTodoSummary';
+import ExportDialog from './ExportDialog';
 import './Chat.css';
 
 function Chat(props: ChatProps): JSX.Element {
@@ -56,6 +57,9 @@ function Chat(props: ChatProps): JSX.Element {
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [inputContainerHeight, setInputContainerHeight] = useState(0);
   const [isRewinding, setIsRewinding] = useState(false);
+  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
+
+  const sessionId = chatId ?? '';
 
   const inputValueRef = useRef(inputValue);
   inputValueRef.current = inputValue;
@@ -240,6 +244,21 @@ function Chat(props: ChatProps): JSX.Element {
       style={{ '--chat-input-height': `${inputContainerHeight}px` } as CSSProperties}
     >
       <div className="chat-main">
+        {/* Export button — shown when a session is active */}
+        {sessionId && (
+          <div className="chat-toolbar">
+            <button
+              type="button"
+              className="chat-export-btn"
+              onClick={() => setIsExportDialogOpen(true)}
+              data-testid="chat-export-button"
+            >
+              <Download size={14} />
+              Export
+            </button>
+          </div>
+        )}
+
         <InlineTodoSummary todos={currentTodos} isLoading={isProcessing && currentTodos.length === 0} />
         {showOffline ? (
           <EmptyChatPanel ref={chatContainerRef} showOffline onRetryConnection={onRetryConnection} />
@@ -352,6 +371,12 @@ function Chat(props: ChatProps): JSX.Element {
         containerRef={chatContainerRef}
         onInsertAtCursor={handleInsertAtCursor}
         onRewindAndResend={isRewinding ? undefined : handleRewindAndResend}
+      />
+
+      <ExportDialog
+        isOpen={isExportDialogOpen}
+        onClose={() => setIsExportDialogOpen(false)}
+        sessionId={sessionId}
       />
     </div>
   );

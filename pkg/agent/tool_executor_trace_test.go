@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/trace"
 )
 
@@ -182,7 +183,7 @@ func TestCategorizeError(t *testing.T) {
 			var err error
 			switch tt.category {
 			case "unknown_tool":
-				err = &toolError{msg: "unknown tool"}
+				err = agenterrors.NewInvalidInputError("unknown tool", nil)
 			case "timeout":
 				err = &toolError{msg: "tool execution timed out"}
 			case "validation":

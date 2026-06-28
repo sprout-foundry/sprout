@@ -1,7 +1,7 @@
 # SP-059: Subagent ↔ Primary Interaction Overhaul + Delegate Retirement
 
-**Status:** ✅ Implemented (Phases 1–6 complete; delegate tool retired)
-**Date:** 2026-05-26 (original) · 2026-05-31 (amended)
+**Status:** ✅ Implemented (Phases 1–6 complete; delegate tool retired; audited 2026-06-27)
+**Date:** 2026-05-26 (original) · 2026-05-31 (amended) · 2026-06-27 (audit reconciliation)
 **Depends on:** SP-006 (Delegate Tool, shipped — being retired by this spec)
 **Priority:** High (closes silent-cancel and silent-steering UX bugs; pays
 down result-envelope tech debt; collapses the dual delegate/subagent
@@ -9,6 +9,20 @@ architecture into a single mechanism)
 **Scope:** Six phases. Phases 1–2 are largely shipped. Phases 3–6 are the
 remaining work: port the few delegate-only features worth keeping, then
 delete the delegate tool entirely.
+
+> **Audit reconciliation (2026-06-27):** The "❌ Pending" markers on
+> phases 4/5/6 in the residual table below were stale — they predate
+> commit `0ee1a3e3` ("refactor(agent): remove delegate tool in favor of
+> subagent system") which actually shipped all three phases. The status
+> header already said "Phases 1–6 complete" but the table contradicted
+> it. This audit verified the shipping state by file:line evidence and
+> flipped the markers; the detailed per-phase evidence and the
+> porting-feature review are in `roadmap/SP-059-6a-review.md`. If you
+> see another "❌ Pending" appear in this table in the future, treat it
+> as suspect and verify with `git log --oneline -- pkg/agent/delegate_*`
+> before picking it up — the four dropped capabilities (async, freeform
+> role, per-call tools allowlist, `FollowUpMessages`) are non-goals by
+> design.
 
 ## Problem
 
@@ -92,9 +106,9 @@ and in places non-existent. Three classes of issue:
 | Result envelope is `map[string]string` not typed | Low (refactor hygiene) | 2a | ✅ Shipped (`SubagentReturn`) |
 | Primary's LLM gets no partial visibility into subagent progress | High (capability) | 3a | ✅ Shipped — `ProgressLog` in `SubagentReturn` carries the full timeline; mid-flight injection N/A for sync subagents |
 | Stub handlers in new registry return errors | Low today (dead path) | 3b | ✅ Shipped (handler files deleted) |
-| Subagents can't request user clarification mid-run | Medium (capability) | 4 | ❌ Pending — wire `clarificationManager` into `createSubagent` |
-| `SubagentReturn` missing useful `DelegateResult` fields (e.g. `Iterations`) | Low (parity for delegate removal) | 5 | ❌ Pending |
-| `delegate` + `delegate_status` tools duplicate `run_subagent` with weaker operational tooling | High (architectural debt) | 6 | ❌ Pending — delete the dual system |
+| Subagents can't request user clarification mid-run | Medium (capability) | 4 | ✅ Shipped — `subagent_creation.go:114-117` shares `parent.clarificationManager`; tests at `subagent_runner_test.go:1399-1403` assert the child receives the parent's manager by pointer |
+| `SubagentReturn` missing useful `DelegateResult` fields (e.g. `Iterations`) | Low (parity for delegate removal) | 5 | ✅ Shipped — `SubagentReturn.Iterations` at `subagent_types.go:53`, `SubagentRunMetrics.Iterations` at `subagent_types.go:190` |
+| `delegate` + `delegate_status` tools duplicate `run_subagent` with weaker operational tooling | High (architectural debt) | 6 | ✅ Shipped — all 8 delegate files deleted (commit `0ee1a3e3`); review at `roadmap/SP-059-6a-review.md` confirms no live consumers or needed delegate features missing from `run_subagent` |
 
 ## Proposed Solution
 

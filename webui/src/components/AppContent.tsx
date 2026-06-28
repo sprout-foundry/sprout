@@ -195,6 +195,28 @@ const AppContent: React.FC<AppContentProps> = ({
   const buffersRef = useRef(buffers);
   buffersRef.current = buffers;
 
+  // Session search restore: call API then dispatch the custom event
+  const log = useLog();
+  const handleSessionSearchRestore = useCallback(
+    async (sessionId: string) => {
+      try {
+        const response = await apiService.restoreSession(sessionId);
+        if (response.messages?.length) {
+          window.dispatchEvent(
+            new CustomEvent('sprout:session-restored', {
+              detail: { messages: response.messages },
+            }),
+          );
+        }
+      } catch (err) {
+        log.error(`Failed to restore session: ${err instanceof Error ? err.message : String(err)}`, {
+          title: 'Session Restore Error',
+        });
+      }
+    },
+    [apiService, log],
+  );
+
   const initialViewSyncRef = useRef(false);
 
   useChatSessionsSync({
@@ -648,6 +670,7 @@ const AppContent: React.FC<AppContentProps> = ({
           onSidebarWidthPersist={onSidebarWidthPersist}
           onSidebarWidthReset={onSidebarWidthReset}
           onProviderChange={onProviderChange}
+          onSessionSearchRestore={handleSessionSearchRestore}
           gitPanel={{
             gitStatus,
             gitBranches,

@@ -1,0 +1,107 @@
+.provider-table {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.provider-table--error {
+  border-color: var(--accent-error);
+  color: var(--accent-error);
+}
+
+.provider-table table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.provider-table thead {
+  font-size: var(--text-xs, 0.75rem);
+  font-weight: 600;
+  color: var(--text-secondary, var(--text-primary));
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.provider-table thead tr {
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.provider-table thead th {
+  padding: var(--space-2) var(--space-1);
+  text-align: left;
+}
+
+.provider-table-col--this-month,
+.provider-table-col--last-month,
+.provider-table-col--delta {
+  text-align: right;
+}
+
+.provider-table-row {
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--border-default);
+  font-size: var(--text-sm, 0.875rem);
+  color: var(--text-primary);
+}
+
+.provider-table-row:last-child {
+  border-bottom: none;
+}
+
+.provider-table-cell {
+  padding: var(--space-2) var(--space-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.provider-table-cell--this-month,
+.provider-table-cell--last-month,
+.provider-table-cell--delta {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.provider-table-cell--delta-up {
+  color: var(--accent-error);
+}
+
+.provider-table-cell--delta-down {
+  color: var(--brand-teal);
+}
+
+.provider-table-cell--delta-flat {
+  color: var(--text-secondary, var(--text-primary));
+}
+
+.provider-table-empty {
+  padding: var(--space-4);
+  text-align: center;
+  color: var(--text-secondary, var(--text-primary));
+  font-size: var(--text-sm, 0.875rem);
+}
+
+/* Skeleton loading styles */
+.provider-table-row--skeleton {
+  opacity: 0.6;
+}
+
+.provider-table-cell--skeleton {
+  background: var(--bg-tertiary, var(--bg-primary));
+  border-radius: var(--radius-sm);
+  height: 16px;
+  animation: provider-table-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes provider-table-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}

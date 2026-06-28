@@ -11,10 +11,10 @@ import (
 
 // defaultSubagentMaxIterations caps the number of LLM iterations a subagent
 // may run. 0 (unlimited) let a stuck subagent loop 164+ times burning tokens
-// before the user noticed. 50 is generous for real coding tasks but stops
-// runaway loops within a few minutes. Can be overridden per-call via
-// SubagentOptions.MaxIterations once that field exists.
-const defaultSubagentMaxIterations = 50
+// before the user noticed. 200 is generous for real coding tasks but still
+// stops runaway loops within a reasonable window. Can be overridden per-call
+// via SubagentOptions.MaxIterations once that field exists.
+const defaultSubagentMaxIterations = 200
 
 // createSubagent creates a new in-process agent for subagent execution.
 // parentCtx is used as the base for the subagent's interrupt context so

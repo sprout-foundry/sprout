@@ -49,6 +49,12 @@ const (
 	// frontend can render a color-coded review panel with per-hunk
 	// accept/reject toggles.
 	EventTypeEditApprovalRequest = "edit_approval_request"
+	// EventTypePasswordRequest (SP-089-3) is published when a shell command
+	// needs a password from the user (sudo, passwd, ssh-keygen passphrase,
+	// etc.). The payload carries the request ID, the command, and the prompt
+	// text detected on the child's stdout. The browser renders a password
+	// input and POSTs the response to /api/password/{requestID}/respond.
+	EventTypePasswordRequest = "password_request"
 	// EventTypeInputRequired is published when the agent is blocked waiting
 	// for human input — a security approval, an ask_user prompt, or any
 	// other blocking interaction. This is a higher-level signal than the
@@ -192,6 +198,7 @@ func (eb *EventBus) Publish(eventType string, data any) {
 		eventType == EventTypeSecurityPromptRequest ||
 		eventType == EventTypeAskUserRequest ||
 		eventType == EventTypeEditApprovalRequest ||
+		eventType == EventTypePasswordRequest ||
 		eventType == EventTypeInputRequired
 
 	// Publish to all subscribers concurrently so a single slow subscriber
@@ -459,6 +466,20 @@ func EditApprovalRequestEvent(requestID, path, unifiedDiff string, hunks []map[s
 		"unified_diff": unifiedDiff,
 		"hunks":        hunks,
 		"timestamp":    time.Now().UTC().Format(time.RFC3339),
+	}
+}
+
+// PasswordRequestEvent (SP-089-3) creates a password_request event payload.
+// requestID uniquely identifies the request so the WebUI can POST a
+// response to /api/password/{requestID}/respond. command is the shell
+// command that triggered the prompt. prompt is the raw prompt text
+// detected on the child's stdout/stderr (e.g., "[sudo] password for user:").
+func PasswordRequestEvent(requestID, command, prompt string) map[string]interface{} {
+	return map[string]interface{}{
+		"request_id": requestID,
+		"command":    command,
+		"prompt":     prompt,
+		"timestamp":  time.Now().UTC().Format(time.RFC3339),
 	}
 }
 

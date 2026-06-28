@@ -46,7 +46,7 @@ func TestDualDispatch_RegistryWins(t *testing.T) {
 	// Use the legacy registry — ExecuteTool will dual-dispatch via new registry first
 	legacyRegistry := newDefaultToolRegistry()
 
-	images, result, err := legacyRegistry.ExecuteTool(context.Background(), toolName, nil, nil)
+	images, result, err := legacyRegistry.ExecuteTool(context.Background(), toolName, nil, nil, "")
 
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)

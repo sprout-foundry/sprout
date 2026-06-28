@@ -1,0 +1,315 @@
+/* Export Dialog Overlay */
+.export-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 20px;
+  animation: export-dialog-fade-in 0.2s ease-out;
+}
+
+/* Export Dialog Card */
+.export-dialog-card {
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md, 12px);
+  box-shadow: var(--shadow-elevated, 0 8px 32px rgba(0, 0, 0, 0.2));
+  width: 100%;
+  max-width: 460px;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Export Dialog Header */
+.export-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4, 16px) var(--space-5, 20px);
+  border-bottom: 1px solid var(--border-color, var(--border-subtle));
+  background: var(--bg-secondary);
+}
+
+.export-dialog-header h2 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.export-dialog-header .export-dialog-icon {
+  color: var(--accent-color, var(--accent-primary));
+}
+
+.export-dialog-session-name {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-tertiary);
+  margin-left: 4px;
+}
+
+.export-dialog-close {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background 0.2s,
+    color 0.2s;
+}
+
+.export-dialog-close:hover {
+  background: var(--hover-bg, var(--bg-tertiary));
+  color: var(--text-primary);
+}
+
+.export-dialog-close:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Export Dialog Content */
+.export-dialog-content {
+  padding: var(--space-5, 20px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4, 16px);
+  overflow-y: auto;
+}
+
+/* Export Dialog Form Group */
+.export-dialog-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2, 8px);
+}
+
+.export-dialog-form-group > label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+/* Radio Group */
+.export-dialog-radio-group {
+  display: flex;
+  gap: var(--space-2, 8px);
+}
+
+.export-dialog-radio-item {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-color, var(--border-subtle));
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background 0.15s,
+    box-shadow 0.15s;
+  user-select: none;
+}
+
+.export-dialog-radio-item:hover {
+  border-color: var(--border-strong, var(--border-color));
+  background: var(--bg-tertiary, var(--bg-primary));
+}
+
+.export-dialog-radio-item.selected {
+  border-color: var(--accent-color, var(--accent-primary));
+  background: color-mix(in srgb, var(--accent-color, var(--accent-primary)) 10%, var(--bg-primary));
+  box-shadow: 0 0 0 2px var(--accent-color-opacity, var(--accent-primary-alpha, transparent));
+}
+
+.export-dialog-radio-input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.export-dialog-radio-input:focus-visible + .export-dialog-radio-icon {
+  outline: 2px solid var(--accent-color, var(--accent-primary));
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.export-dialog-radio-icon {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+
+.export-dialog-radio-item.selected .export-dialog-radio-icon {
+  color: var(--accent-color, var(--accent-primary));
+}
+
+.export-dialog-radio-label {
+  flex: 1;
+  text-align: center;
+}
+
+/* Checkbox */
+.export-dialog-checkbox-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+}
+
+.export-dialog-checkbox {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: var(--accent-color, var(--accent-primary));
+}
+
+.export-dialog-checkbox:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.export-dialog-checkbox-label {
+  font-size: 13px;
+  color: var(--text-primary);
+  cursor: pointer;
+  user-select: none;
+}
+
+/* Error */
+.export-dialog-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: var(--space-3, 12px);
+  background: var(--error-bg, color-mix(in srgb, var(--accent-error) 10%, var(--bg-primary)));
+  border: 1px solid var(--error-border, var(--accent-error));
+  border-radius: var(--radius-sm, 6px);
+  color: var(--error-text, var(--accent-error));
+  font-size: 13px;
+  animation: export-dialog-shake 0.3s ease-out;
+}
+
+.export-dialog-error-icon {
+  flex-shrink: 0;
+  color: var(--error-text, var(--accent-error));
+}
+
+/* Actions */
+.export-dialog-actions {
+  display: flex;
+  gap: var(--space-3, 12px);
+  margin-top: var(--space-1, 4px);
+}
+
+.export-dialog-actions button {
+  flex: 1;
+  padding: 10px 16px;
+  border-radius: var(--radius-sm, 6px);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background 0.2s,
+    color 0.2s,
+    border-color 0.2s,
+    box-shadow 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.export-dialog-btn-cancel {
+  background: var(--button-secondary-bg, var(--bg-primary));
+  color: var(--text-primary);
+  border: 1px solid var(--border-color, var(--border-subtle));
+}
+
+.export-dialog-btn-cancel:hover:not(:disabled) {
+  background: var(--button-secondary-hover-bg, var(--bg-secondary));
+  border-color: var(--border-color-hover, var(--border-strong));
+}
+
+.export-dialog-btn-download {
+  background: var(--button-primary-bg, var(--accent-color, var(--accent-primary)));
+  color: var(--button-primary-text, #fff);
+  border: none;
+}
+
+.export-dialog-btn-download:hover:not(:disabled) {
+  background: var(--button-primary-hover-bg, color-mix(in srgb, var(--accent-color, var(--accent-primary)) 85%, #000));
+}
+
+.export-dialog-btn-cancel:disabled,
+.export-dialog-btn-download:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .export-dialog-overlay {
+    padding: 10px;
+  }
+
+  .export-dialog-card {
+    max-width: 100%;
+    max-height: 95vh;
+  }
+
+  .export-dialog-content {
+    padding: 16px;
+  }
+
+  .export-dialog-actions {
+    flex-direction: column;
+  }
+
+  .export-dialog-actions button {
+    width: 100%;
+  }
+}
+
+/* Animations */
+@keyframes export-dialog-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes export-dialog-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-4px);
+  }
+  75% {
+    transform: translateX(4px);
+  }
+}

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
@@ -57,21 +58,21 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 		// Check for common misnamed tools and suggest corrections
 		suggestion := a.suggestCorrectToolName(toolName)
 		if suggestion != "" {
-			return "", fmt.Errorf("unknown tool '%s'. Did you mean '%s'? Valid tools are: %s",
-				toolName, suggestion, strings.Join(validTools, ", "))
+			return "", agenterrors.NewInvalidInputError(fmt.Sprintf("unknown tool '%s'. Did you mean '%s'? Valid tools are: %s",
+				toolName, suggestion, strings.Join(validTools, ", ")), nil)
 		}
-		return "", fmt.Errorf("unknown tool '%s'. Valid tools are: %s", toolName, strings.Join(validTools, ", "))
+		return "", agenterrors.NewInvalidInputError(fmt.Sprintf("unknown tool '%s'. Valid tools are: %s", toolName, strings.Join(validTools, ", ")), nil)
 	}
 
 	// Use the tool registry for data-driven tool execution
 	ctx := filesystem.WithWorkspaceRoot(context.Background(), a.GetWorkspaceRoot())
-	_, result, err := registry.ExecuteTool(ctx, toolName, args, a)
+	_, result, err := registry.ExecuteTool(ctx, toolName, args, a, toolCall.Function.Arguments)
 
 	// Track tool call count
 	a.state.IncrementTotalToolCalls()
 
 	// If tool not found in registry, check for special cases
-	if err != nil && strings.Contains(err.Error(), "unknown tool") {
+	if err != nil && agenterrors.IsInvalidInput(err) {
 		// Handle mcp_tools meta-tool
 		if toolName == "mcp_tools" {
 			return a.handleMCPToolsCommand(args)
@@ -81,7 +82,7 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 		if isMCPTool {
 			return a.executeMCPTool(toolName, args)
 		}
-		return "", fmt.Errorf("unknown tool %q: %w", toolName, err)
+		return "", agenterrors.NewInvalidInputError(fmt.Sprintf("unknown tool '%s'", toolName), err)
 	}
 
 	if err != nil {

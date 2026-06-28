@@ -62,3 +62,8 @@ export function splitPath(path: string): { dir: string; name: string } {
   if (idx < 0) return { dir: '', name: path };
   return { dir: path.slice(0, idx + 1), name: path.slice(idx + 1) };
 }
+
+/** Format a number as a dollar amount with 4 decimal places (e.g. "$1.2345"). */
+export function formatDollar(value: number): string {
+  return '$' + value.toFixed(4);
+}

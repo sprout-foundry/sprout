@@ -98,7 +98,7 @@ func (ws *ReactWebServer) handleAPISessionsSearch(w http.ResponseWriter, r *http
 	// Check if reindex is requested
 	reindex := reindexStr == "true" || reindexStr == "1"
 
-	// Load existing index
+	// Load existing index; on corrupt data, fall through to rebuild.
 	indexPath := search.DefaultIndexPath()
 	if indexPath == "" {
 		writeJSONError(w, http.StatusInternalServerError, "could not determine home directory")
@@ -107,12 +107,12 @@ func (ws *ReactWebServer) handleAPISessionsSearch(w http.ResponseWriter, r *http
 
 	idx, err := search.LoadIndex(indexPath)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, fmt.Sprintf("load search index: %v", err))
-		return
+		log.Printf("corrupt search index, rebuilding: %v", err)
+		idx = nil
 	}
 
-	// Build index if reindex requested or index is empty
-	if reindex || len(idx.Sessions) == 0 {
+	// Build index if reindex requested, index is empty, or load failed (corrupt).
+	if reindex || idx == nil || len(idx.Sessions) == 0 {
 		sessionsDir := filepath.Join(filepath.Dir(indexPath), "scoped")
 		buildIdx := idx
 		if reindex {

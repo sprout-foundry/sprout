@@ -1,0 +1,104 @@
+.by-model-chart {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.by-model-chart--error {
+  border-color: var(--accent-error);
+  color: var(--accent-error);
+}
+
+.by-model-chart-title {
+  font-size: var(--text-sm, 0.875rem);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: var(--space-3);
+}
+
+.by-model-empty {
+  padding: var(--space-4);
+  text-align: center;
+  color: var(--text-secondary, var(--text-primary));
+  font-size: var(--text-sm, 0.875rem);
+}
+
+.by-model-row {
+  display: grid;
+  grid-template-columns: 160px 1fr 80px;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.by-model-row:last-child {
+  margin-bottom: 0;
+}
+
+.by-model-label {
+  font-size: var(--text-sm, 0.875rem);
+  color: var(--text-primary);
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.by-model-bar-track {
+  background: var(--bg-tertiary, var(--bg-primary));
+  border-radius: var(--radius-sm);
+  height: 20px;
+  overflow: hidden;
+}
+
+.by-model-bar {
+  height: 100%;
+  border-radius: var(--radius-sm);
+  transition: width 200ms ease;
+  min-width: 2px;
+}
+
+.by-model-value {
+  font-size: var(--text-sm, 0.875rem);
+  color: var(--text-primary);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Skeleton loading styles */
+.by-model-row--skeleton {
+  opacity: 0.6;
+}
+
+.by-model-label--skeleton,
+.by-model-value--skeleton {
+  background: var(--bg-tertiary, var(--bg-primary));
+  border-radius: var(--radius-sm);
+  height: 16px;
+  animation: by-model-pulse 1.5s ease-in-out infinite;
+}
+
+.by-model-label--skeleton {
+  width: 80%;
+}
+
+.by-model-value--skeleton {
+  width: 60%;
+}
+
+.by-model-bar--skeleton {
+  background: var(--bg-tertiary, var(--bg-primary));
+  width: 60%;
+  animation: by-model-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes by-model-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}

@@ -1,0 +1,60 @@
+.cost-summary-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+@media (max-width: 768px) {
+  .cost-summary-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.cost-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+}
+
+.cost-card-label {
+  font-size: var(--text-sm, 0.875rem);
+  color: var(--text-secondary, var(--text-primary));
+  margin-bottom: var(--space-1);
+}
+
+.cost-card-value {
+  font-size: var(--text-2xl, 1.5rem);
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.cost-card-sublabel {
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--text-secondary, var(--text-primary));
+  margin-top: var(--space-1);
+}
+
+.cost-card--loading {
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.cost-card--error .cost-card-value {
+  color: var(--accent-error);
+}
+
+.cost-card-error-icon {
+  color: var(--accent-error);
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+}

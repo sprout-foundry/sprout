@@ -1,0 +1,46 @@
+.daily-spend-chart {
+  width: 100%;
+  min-height: 200px;
+  margin-bottom: var(--space-4);
+}
+
+.daily-spend-chart svg {
+  width: 100%;
+  height: 240px;
+}
+
+.daily-spend-bar {
+  fill: var(--accent-primary);
+  transition: fill 120ms ease;
+}
+
+.daily-spend-bar:hover {
+  fill: var(--accent-primary-bg-hover, var(--accent-primary));
+}
+
+.daily-spend-empty {
+  padding: var(--space-4);
+  color: var(--text-secondary, var(--text-primary));
+  text-align: center;
+}
+
+.daily-spend-error {
+  color: var(--accent-error);
+  padding: var(--space-3);
+}
+
+.daily-spend-loading-bar {
+  fill: var(--bg-tertiary, var(--bg-secondary));
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.daily-spend-chart-label {
+  fill: var(--text-secondary, var(--text-primary));
+  font-size: 10px;
+  font-family: var(--font-sans, system-ui, -apple-system, sans-serif);
+}

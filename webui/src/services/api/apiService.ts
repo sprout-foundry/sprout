@@ -43,6 +43,8 @@ import type {
   SkillsResponse,
   SubagentTypeInfo,
   ProviderModelsResponse,
+  SessionSearchResponse,
+  SessionSearchResult,
 } from './types';
 import * as workspaceApi from './workspaceApi';
 
@@ -738,6 +740,18 @@ class ApiService {
     working_directory?: string;
   }> {
     return sessionApi.restoreSession(clientFetch, sessionId);
+  }
+
+  async searchSessions(
+    query: string,
+    options?: {
+      cwd?: string;
+      since?: string;
+      until?: string;
+      limit?: number;
+    },
+  ): Promise<SessionSearchResponse> {
+    return sessionApi.searchSessions(clientFetch, query, options);
   }
 
   // ── Settings ───────────────────────────────────────────────────

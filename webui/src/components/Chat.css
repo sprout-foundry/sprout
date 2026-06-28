@@ -92,6 +92,39 @@
   color: color-mix(in srgb, var(--accent-warning) 80%, var(--accent-error));
 }
 
+/* ── Chat toolbar (export button) ─────────────────────────── */
+
+.chat-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--space-2, 8px);
+  flex-shrink: 0;
+}
+
+.chat-export-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--border-color, var(--border-subtle));
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    border-color 0.15s;
+}
+
+.chat-export-btn:hover {
+  background: var(--bg-tertiary, var(--bg-secondary));
+  color: var(--text-primary);
+  border-color: var(--border-strong, var(--border-color));
+}
+
 /* ── Mobile context panel toggle ────────────────────────────── */
 
 @media (max-width: 1024px) {

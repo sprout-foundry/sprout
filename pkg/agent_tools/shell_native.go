@@ -132,6 +132,12 @@ func runShellCommand(ctx context.Context, command string, streamOutput bool) (st
 		return runShellCommandAdoptable(ctx, command, bpm)
 	}
 
+	// If a password prompter is registered, use the password-aware path
+	// that can detect prompts on stdout and route them to the prompter.
+	if pp := PasswordPrompterFromContext(ctx); pp != nil {
+		return runShellCommandWithPasswordSupport(ctx, command, pp)
+	}
+
 	// Fallback: no BPM available, use standard CommandContext (kills on cancel)
 	shell := os.Getenv("SHELL")
 	if shell == "" {

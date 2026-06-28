@@ -1,0 +1,88 @@
+.costs-page {
+  padding: var(--space-4);
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  min-height: 100%;
+}
+
+.costs-title {
+  font-size: var(--text-2xl, 1.5rem);
+  font-weight: 600;
+  margin: 0 0 var(--space-4) 0;
+  color: var(--text-primary);
+}
+
+.costs-time-range {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.costs-time-range-btn {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-sm, 0.875rem);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.costs-time-range-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary);
+}
+
+.costs-time-range-btn:hover {
+  background: var(--bg-tertiary, var(--bg-secondary));
+}
+
+.costs-time-range-btn--active {
+  background: var(--accent-primary);
+  color: var(--accent-fg);
+  border-color: var(--accent-primary);
+}
+
+.costs-loading,
+.costs-error,
+.costs-empty {
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-4);
+}
+
+.costs-loading {
+  background: var(--bg-secondary);
+  color: var(--text-secondary, var(--text-primary));
+}
+
+.costs-error {
+  background: var(--bg-secondary);
+  color: var(--accent-error);
+  border: 1px solid var(--accent-error);
+}
+
+.costs-empty {
+  background: var(--bg-secondary);
+  color: var(--text-secondary, var(--text-primary));
+  text-align: center;
+}
+
+.costs-summary-total {
+  font-size: var(--text-xl, 1.25rem);
+  font-weight: 600;
+  margin-bottom: var(--space-4);
+  color: var(--text-primary);
+}
+
+[data-testid^="cost-"][data-testid$="-placeholder"] {
+  padding: var(--space-3);
+  background: var(--bg-secondary);
+  border: 1px dashed var(--border-default);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-3);
+  color: var(--text-secondary, var(--text-primary));
+  font-size: var(--text-sm, 0.875rem);
+}

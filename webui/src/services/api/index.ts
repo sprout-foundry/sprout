@@ -34,6 +34,8 @@ export type {
   HotkeyEntry,
   HotkeyConfig,
   ProvidersResponse,
+  SessionSearchResult,
+  SessionSearchResponse,
 } from './types';
 
 export { SSHWorkspaceOpenError } from './types';

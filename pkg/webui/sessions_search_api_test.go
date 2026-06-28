@@ -572,3 +572,64 @@ func TestParseSearchDateWebUI_Invalid(t *testing.T) {
 		t.Errorf("expected 'invalid date' in error, got %v", err)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Acceptance criterion 4: Corrupt index file triggers rebuild, not 500.
+// ---------------------------------------------------------------------------
+
+func TestHandleAPISessionsSearch_CorruptIndex(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("HOME", root)
+
+	// Create session files on disk so BuildIndex can rebuild from them.
+	scopedDir := filepath.Join(root, ".sprout", "sessions", "scoped")
+	os.MkdirAll(scopedDir, 0755) //nolint:errcheck
+
+	// Write a session file using raw JSON (sessionJSON/messageRef are unexported).
+	sessData := []byte(`{
+		"session_id": "sess-embed",
+		"name": "Embedding Migration",
+		"working_directory": "/tmp/test-project",
+		"total_cost": 0.05,
+		"messages": [
+			{"role": "user", "content": "Question"},
+			{"role": "assistant", "content": "the embedding index was rebuilt after the schema migration"}
+		]
+	}`)
+	path := filepath.Join(scopedDir, "session_sess-embed.json")
+	if err := os.WriteFile(path, sessData, 0644); err != nil {
+		t.Fatalf("write session: %v", err)
+	}
+
+	// Write a corrupt index file (garbage JSON).
+	idxPath := testSearchIndexPath(root)
+	if err := os.WriteFile(idxPath, []byte("not valid json {{{"), 0644); err != nil {
+		t.Fatalf("write corrupt index: %v", err)
+	}
+
+	// Create the web server.
+	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
+	if err != nil {
+		t.Fatalf("NewReactWebServer: %v", err)
+	}
+
+	// Search should succeed — handler rebuilds from session files.
+	req := httptest.NewRequest(http.MethodGet, "/api/sessions/search?q=embedding", nil)
+	rec := httptest.NewRecorder()
+	ws.handleAPISessionsSearch(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 (recovered from corrupt index), got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp struct {
+		Total   int                      `json:"total"`
+		Results []map[string]interface{} `json:"results"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Total < 1 {
+		t.Errorf("expected at least 1 result after rebuild, got %d", resp.Total)
+	}
+}

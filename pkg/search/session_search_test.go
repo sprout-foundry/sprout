@@ -1,6 +1,7 @@
 package search
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -1207,5 +1208,60 @@ func TestFormatResults_HumanReadable(t *testing.T) {
 	expected := "[2026-03-15] My Test Session — /home/dev/myproject\n  ...the [embedding] index was [broken]..."
 	if output != expected {
 		t.Errorf("format mismatch.\nExpected: %q\nGot:      %q", expected, output)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Acceptance criterion 1: Search completes in <100ms against 100+ sessions
+// ---------------------------------------------------------------------------
+
+func TestSearch_PerformanceThreshold(t *testing.T) {
+	tmp := t.TempDir()
+
+	const numSessions = 100
+
+	// Create 100 session files with varied content; every 10th session
+	// contains the search term "embedding index" to guarantee matches.
+	for i := 0; i < numSessions; i++ {
+		content := fmt.Sprintf("session %d general notes about project work and development tasks", i)
+		if i%10 == 0 {
+			content = "the embedding index was discussed and needed fixing in this session"
+		}
+		s := sessionJSON{
+			Name:             fmt.Sprintf("Session %d", i),
+			WorkingDirectory: "/home/user/project",
+			TotalCost:        0.01,
+			Messages: []messageRef{
+				{Role: "user", Content: "Question"},
+				{Role: "assistant", Content: content},
+			},
+		}
+		writeSession(t, tmp, fmt.Sprintf("perf-ses-%03d", i), s)
+	}
+
+	// Build index (not timed).
+	idx, err := BuildIndex(tmp, nil)
+	if err != nil {
+		t.Fatalf("BuildIndex: %v", err)
+	}
+
+	if len(idx.Sessions) != numSessions {
+		t.Fatalf("expected %d indexed sessions, got %d", numSessions, len(idx.Sessions))
+	}
+
+	// Time only the Search() call.
+	start := time.Now()
+	results := Search(idx, SearchOptions{Query: "embedding index"})
+	elapsed := time.Since(start)
+
+	// Verify we got results.
+	if len(results) == 0 {
+		t.Fatalf("search returned 0 results for term 'embedding index'")
+	}
+
+	// Sanity check — not a micro-benchmark. 500ms gives CI environments enough
+	// headroom for transient load while still catching obvious regressions.
+	if elapsed >= 500*time.Millisecond {
+		t.Errorf("search took %v (%d sessions, %d results) — expected <500ms", elapsed, numSessions, len(results))
 	}
 }

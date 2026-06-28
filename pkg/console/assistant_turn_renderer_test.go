@@ -129,3 +129,119 @@ func TestShouldReformat(t *testing.T) {
 	// width=0 — no (post-stream re-render needs terminal width).
 	require.False(t, shouldReformat("# heading\n", 0))
 }
+
+func TestRenderer_ReasoningHeaderNoCursorSaveRestore(t *testing.T) {
+	// Regression: the old implementation used \0337/\0338 (DEC save/restore)
+	// which collided with concurrent cursor writers (activity indicator,
+	// status footer). The new implementation prints the header without a
+	// trailing newline and rewrites it in-place with \r\033[K.
+	r := NewAssistantTurnRenderer(80, NewMarkdownFormatter(false, false))
+	out := captureRendererStdout(t, func() {
+		r.WriteReasoningChunk("thinking step 1")
+	})
+	// The header should NOT contain \0337 or \0338.
+	require.NotContains(t, out, "\0337", "should not use DEC cursor save")
+	require.NotContains(t, "\0338", out, "should not use DEC cursor restore")
+	// The header should NOT end with a newline (it's printed in-place).
+	require.False(t, strings.HasSuffix(out, "\n"), "header should not end with newline")
+	// The header should contain the thinking text.
+	require.Contains(t, out, "▽ Thinking…")
+}
+
+func TestRenderer_ReasoningSummaryRewritesInPlace(t *testing.T) {
+	// Regression: endReasoningLocked should rewrite the header row in-place
+	// using \r\033[K + summary + \n, without using \0338.
+	r := NewAssistantTurnRenderer(80, NewMarkdownFormatter(false, false))
+	out := captureRendererStdout(t, func() {
+		r.WriteReasoningChunk("thinking step 1")
+		r.WriteReasoningChunk("thinking step 2")
+		// Simulate prose arriving to trigger endReasoningLocked.
+		r.WriteChunk("hello\n")
+	})
+	// No DEC save/restore sequences.
+	require.NotContains(t, out, "\0337", "should not use DEC cursor save")
+	require.NotContains(t, "\0338", "should not use DEC cursor restore")
+	// The summary line should be present.
+	require.Contains(t, out, "▽ Thinking ·")
+	require.Contains(t, out, "tokens")
+	// The prose should follow with correct indent.
+	require.Contains(t, out, "  hello\n")
+}
+
+func TestRenderer_ReasoningPhysicalLinesAccounting(t *testing.T) {
+	// Regression: after reasoning header + summary, physicalLines should
+	// reflect exactly 1 row (the summary line), and atLineStart should
+	// be true so the next prose chunk gets indented correctly.
+	r := NewAssistantTurnRenderer(80, NewMarkdownFormatter(false, false))
+	captureRendererStdout(t, func() {
+		r.WriteReasoningChunk("thinking")
+		r.WriteChunk("first line\nsecond line\n")
+	})
+	// After reasoning summary (1 row) + "first line\n" (1 row) + "second line\n" (1 row)
+	// = 3 physical lines total.
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	require.Equal(t, 3, r.physicalLines, "physicalLines should count reasoning summary + 2 prose lines")
+	require.True(t, r.atLineStart, "should be at line start after trailing newline")
+	require.Equal(t, 0, r.curLineRunes, "curLineRunes should be 0 at line start")
+}
+
+func TestRenderer_ReasoningThenProseIndentsCorrectly(t *testing.T) {
+	// Regression: after reasoning, the first prose chunk should be indented
+	// correctly (not double-indented or missing indent).
+	r := NewAssistantTurnRenderer(80, NewMarkdownFormatter(false, false))
+	out := captureRendererStdout(t, func() {
+		r.WriteReasoningChunk("thinking")
+		r.WriteChunk("prose\n")
+	})
+	// The summary line ends with \n, so "prose" starts on a fresh line
+	// and should get exactly one indent.
+	require.Contains(t, out, "  prose\n")
+}
+
+func TestRenderer_EndReasoningNoOpWhenInactive(t *testing.T) {
+	// Calling EndReasoning when no reasoning was streamed should be a no-op.
+	r := NewAssistantTurnRenderer(80, NewMarkdownFormatter(false, false))
+	out := captureRendererStdout(t, func() {
+		r.EndReasoning()
+		r.WriteChunk("hello\n")
+	})
+	require.Equal(t, "  hello\n", out)
+	require.NotContains(t, out, "Thinking")
+}
+
+func TestRenderer_FinalizeAtTurnEndReasoningOnly(t *testing.T) {
+	// A reasoning-only turn (no prose) should finalize the header at
+	// FinalizeAtTurnEnd without crashing.
+	r := NewAssistantTurnRenderer(80, NewMarkdownFormatter(false, false))
+	out := captureRendererStdout(t, func() {
+		r.WriteReasoningChunk("thinking")
+		r.FinalizeAtTurnEnd()
+	})
+	require.NotContains(t, out, "\0337", "should not use DEC cursor save")
+	require.NotContains(t, "\0338", "should not use DEC cursor restore")
+	require.Contains(t, out, "▽ Thinking ·")
+}
+
+func TestRenderer_CursorOnFreshRow(t *testing.T) {
+	// Regression for MUST_FIX #1: after reasoning finalizes, the cursor
+	// is on a fresh row (endReasoningLocked's \n advanced past it),
+	// so the streaming callback's `firstProseChunk` gate must NOT
+	// inject another \n. CursorOnFreshRow is the renderer's
+	// authoritative answer.
+	r := NewAssistantTurnRenderer(80, NewMarkdownFormatter(false, false))
+	// Before any reasoning or prose, the renderer is at line start.
+	require.True(t, r.CursorOnFreshRow(), "fresh renderer should be at line start")
+	captureRendererStdout(t, func() {
+		// First reasoning chunk prints the header — mid-line, not at
+		// line start.
+		r.WriteReasoningChunk("thinking")
+	})
+	require.False(t, r.CursorOnFreshRow(), "mid-reasoning should not be at line start")
+	captureRendererStdout(t, func() {
+		// First prose chunk triggers endReasoningLocked → cursor
+		// advances past the summary's \n → fresh row again.
+		r.WriteChunk("hello\n")
+	})
+	require.True(t, r.CursorOnFreshRow(), "after reasoning summary \\n + prose \\n, should be at fresh row")
+}

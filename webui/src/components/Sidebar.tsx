@@ -38,6 +38,7 @@ import {
   Zap,
   X,
   Loader2,
+  Download,
 } from 'lucide-react';
 import AutomationsPanel from './AutomationsPanel';
 import SearchView from './SearchView';
@@ -311,6 +312,10 @@ function Sidebar({
   const [sessionSearchError, setSessionSearchError] = useState<string | null>(null);
   const [sessionSearchFocused, setSessionSearchFocused] = useState(false);
 
+  // ── Export all sessions state ──────────────────────────────────────
+  const [isExportingAll, setIsExportingAll] = useState(false);
+  const [exportAllError, setExportAllError] = useState<string | null>(null);
+
   // Debounced search execution
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -391,6 +396,54 @@ function Sidebar({
     },
     [onSessionSearchRestore],
   );
+
+  // ── Export all sessions handler ────────────────────────────────────
+  const handleExportAllSessions = useCallback(async () => {
+    if (isExportingAll) return;
+    setExportAllError(null);
+    setIsExportingAll(true);
+
+    try {
+      const response = await ApiService.getInstance().getSessions('current');
+      const sessions = Array.isArray(response?.sessions) ? response.sessions : [];
+
+      // Filter to only sessions with messages
+      const sessionsToExport = sessions.filter((s) => s.message_count > 0);
+
+      for (const session of sessionsToExport) {
+        // Bulk export defaults to safe/redacted (no no_secret_redaction parameter).
+        // Users who need unredacted exports should use the per-session ExportDialog.
+        const url = `/api/sessions/${encodeURIComponent(session.session_id)}/export?format=markdown&include_tool_calls=false&include_cost=true`;
+
+        // HEAD pre-check: skip silently if the session was deleted between getSessions() and now.
+        try {
+          const headResp = await fetch(url, { method: 'HEAD' });
+          if (!headResp.ok) {
+            console.warn(`[export-all] Skipping session ${session.session_id}: HEAD ${headResp.status}`);
+            continue;
+          }
+        } catch {
+          console.warn(`[export-all] Skipping session ${session.session_id}: HEAD request failed`);
+          continue;
+        }
+
+        // Trigger download for each session sequentially with a small delay
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = '';
+        document.body.appendChild(anchor);
+        anchor.click();
+        document.body.removeChild(anchor);
+
+        // Small delay to avoid browser blocking multiple downloads
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      }
+    } catch (err) {
+      setExportAllError(`Failed to export sessions: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setIsExportingAll(false);
+    }
+  }, [isExportingAll]);
 
   // Show dropdown when: focused + has query, or has active results with query
   const showSessionSearchDropdown =
@@ -578,6 +631,36 @@ function Sidebar({
                   >
                     <X size={12} strokeWidth={2} />
                   </button>
+                )}
+              </div>
+
+              {/* Export all sessions button */}
+              <div className="sidebar-export-all-wrapper">
+                <button
+                  type="button"
+                  className="sidebar-export-all-btn"
+                  onClick={handleExportAllSessions}
+                  disabled={isExportingAll}
+                  data-testid="sidebar-export-all"
+                  aria-label="Export all sessions"
+                  title="Export all sessions"
+                >
+                  {isExportingAll ? (
+                    <>
+                      <Loader2 size={14} className="sidebar-export-all-spinner" strokeWidth={2} />
+                      Exporting...
+                    </>
+                  ) : (
+                    <>
+                      <Download size={14} strokeWidth={2} />
+                      Export all
+                    </>
+                  )}
+                </button>
+                {exportAllError && (
+                  <div className="sidebar-export-all-error" role="alert">
+                    {exportAllError}
+                  </div>
                 )}
               </div>
             </>

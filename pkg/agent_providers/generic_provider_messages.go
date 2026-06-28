@@ -106,6 +106,19 @@ func (p *GenericProvider) convertMessages(messages []api.Message, reasoning stri
 	}
 	flush()
 
+	// Defense in depth: drop any tool-role messages whose tool_call_id has no
+	// parent assistant tool_calls block. Strict-syntax providers (MiniMax,
+	// DeepSeek) reject the whole request as "tool call result does not
+	// follow tool call" otherwise. The same orphan can arise from manual
+	// edits, restored sessions, or any other path that bypasses
+	// BuildCheckpointCompactedMessages' guard. We only apply this to
+	// strict-syntax providers because non-strict ones (OpenAI, Anthropic)
+	// tolerate dropped tool results as long as the conversation stays
+	// coherent.
+	if p.requiresStrictToolCallSyntax() {
+		converted = dropOrphanToolResults(converted)
+	}
+
 	// Inject cache_control breakpoints for providers that support prompt-prefix
 	// caching (Anthropic via OpenRouter). Anthropic allows up to 4 breakpoints
 	// per request. We use 3 of them:
@@ -267,4 +280,88 @@ func (p *GenericProvider) getModelCompletionLimit() int {
 	}
 
 	return 0
+}
+
+// requiresStrictToolCallSyntax reports whether the configured provider
+// enforces strict assistant/tool_call pairing for tool results. Returns
+// true for MiniMax/DeepSeek and any other provider/model combo that the
+// provider catalogue flags as strict.
+func (p *GenericProvider) requiresStrictToolCallSyntax() bool {
+	if p == nil || p.config == nil {
+		return false
+	}
+	name := strings.ToLower(strings.TrimSpace(p.config.Name))
+	if name == "minimax" || name == "deepseek" {
+		return true
+	}
+	if strings.Contains(strings.ToLower(strings.TrimSpace(p.model)), "minimax") {
+		return true
+	}
+	if strings.Contains(strings.ToLower(strings.TrimSpace(p.model)), "deepseek") {
+		return true
+	}
+	return false
+}
+
+// dropOrphanToolResults walks a converted message slice and drops any
+// tool-role message whose tool_call_id is not declared by the nearest
+// preceding assistant message's tool_calls block. Used as a final
+// invariant guard before sending to strict-syntax providers. Does NOT
+// drop the parent assistant message — providers handle an empty trailing
+// assistant fine, and dropping it risks removing important context (tool
+// calls the model already saw, plus any reasoning attached to it).
+//
+// Parallel tool calls: an assistant may issue multiple tool_calls at once
+// (e.g. c1, c2). The results come back as a contiguous block of tool
+// messages: tool(c1), tool(c2). For the second tool message, the
+// immediately-preceding entry is another tool message, not the assistant.
+// The correct check is: walk backward past any consecutive tool messages
+// to find the nearest assistant, then match tool_call_id against that
+// assistant's tool_calls list.
+func dropOrphanToolResults(converted []map[string]interface{}) []map[string]interface{} {
+	if len(converted) == 0 {
+		return converted
+	}
+	out := make([]map[string]interface{}, 0, len(converted))
+	for i, entry := range converted {
+		role, _ := entry["role"].(string)
+		if role != "tool" {
+			out = append(out, entry)
+			continue
+		}
+		// An empty tool_call_id means the message can't be matched to a
+		// specific parent — preserve it rather than treating it as a
+		// guaranteed orphan. (Misconfigured providers with
+		// IncludeToolCallID=false fall in this case; we don't want to
+		// strip their tool results.)
+		want, _ := entry["tool_call_id"].(string)
+		if want == "" {
+			out = append(out, entry)
+			continue
+		}
+		// Find the nearest assistant by walking backward past any
+		// interleaved tool messages (parallel tool-call block).
+		orphan := true
+		for j := i - 1; j >= 0; j-- {
+			prev := converted[j]
+			prevRole, _ := prev["role"].(string)
+			if prevRole == "assistant" {
+				tcs, _ := prev["tool_calls"].([]map[string]interface{})
+				for _, tc := range tcs {
+					if id, _ := tc["id"].(string); id == want {
+						orphan = false
+					}
+				}
+				break // matched or not; stop at the first assistant
+			}
+			if prevRole != "tool" {
+				break // any other role boundary (user/system/...) breaks the block
+			}
+		}
+		if orphan {
+			continue
+		}
+		out = append(out, entry)
+	}
+	return out
 }

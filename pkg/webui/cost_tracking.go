@@ -153,21 +153,25 @@ type DailyCost struct {
 
 // CostSummary represents aggregated cost data
 type CostSummary struct {
-	TotalCost  float64            `json:"total_cost"`
-	ByProvider map[string]float64 `json:"by_provider"`
-	ByModel    map[string]float64 `json:"by_model"`
-	Last30Days float64            `json:"last_30_days"`
-	Last7Days  float64            `json:"last_7_days"`
-	ThisMonth  float64            `json:"this_month"`
-	LastMonth  float64            `json:"last_month"`
+	TotalCost            float64            `json:"total_cost"`
+	ByProvider           map[string]float64 `json:"by_provider"`
+	ByModel              map[string]float64 `json:"by_model"`
+	ByProviderThisMonth  map[string]float64 `json:"by_provider_this_month"`
+	ByProviderLastMonth  map[string]float64 `json:"by_provider_last_month"`
+	Last30Days           float64            `json:"last_30_days"`
+	Last7Days            float64            `json:"last_7_days"`
+	ThisMonth            float64            `json:"this_month"`
+	LastMonth            float64            `json:"last_month"`
 }
 
 // GetCostSummary returns overall cost summary
 func (cs *CostStore) GetCostSummary() CostSummary {
 	now := time.Now()
 	summary := CostSummary{
-		ByProvider: make(map[string]float64),
-		ByModel:    make(map[string]float64),
+		ByProvider:           make(map[string]float64),
+		ByModel:              make(map[string]float64),
+		ByProviderThisMonth:  make(map[string]float64),
+		ByProviderLastMonth:  make(map[string]float64),
 	}
 
 	// Get last 30 days
@@ -197,10 +201,12 @@ func (cs *CostStore) GetCostSummary() CostSummary {
 		// This month
 		if r.Timestamp.After(startOfMonth) {
 			summary.ThisMonth += r.Cost
+			summary.ByProviderThisMonth[r.Provider] += r.Cost
 		}
 		// Last month
 		if r.Timestamp.After(startOfLastMonth) && r.Timestamp.Before(startOfMonth) {
 			summary.LastMonth += r.Cost
+			summary.ByProviderLastMonth[r.Provider] += r.Cost
 		}
 	}
 

@@ -332,6 +332,32 @@ func TestGetCostSummary_AllFields(t *testing.T) {
 	if !floatEq(summary.LastMonth, expectedLastMonth, 0.0001) {
 		t.Errorf("LastMonth = %f, want %f", summary.LastMonth, expectedLastMonth)
 	}
+
+	// ByProviderThisMonth
+	var expectedThisMonthProvider = make(map[string]float64)
+	for _, r := range cs.records {
+		if r.Timestamp.After(startOfThisMonth) {
+			expectedThisMonthProvider[r.Provider] += r.Cost
+		}
+	}
+	for provider, expected := range expectedThisMonthProvider {
+		if !floatEq(summary.ByProviderThisMonth[provider], expected, 0.0001) {
+			t.Errorf("ByProviderThisMonth[%s] = %f, want %f", provider, summary.ByProviderThisMonth[provider], expected)
+		}
+	}
+
+	// ByProviderLastMonth
+	var expectedLastMonthProvider = make(map[string]float64)
+	for _, r := range cs.records {
+		if r.Timestamp.After(startOfLastMonth) && r.Timestamp.Before(startOfThisMonth) {
+			expectedLastMonthProvider[r.Provider] += r.Cost
+		}
+	}
+	for provider, expected := range expectedLastMonthProvider {
+		if !floatEq(summary.ByProviderLastMonth[provider], expected, 0.0001) {
+			t.Errorf("ByProviderLastMonth[%s] = %f, want %f", provider, summary.ByProviderLastMonth[provider], expected)
+		}
+	}
 }
 
 func TestGetCostSummary_Empty(t *testing.T) {
@@ -359,6 +385,12 @@ func TestGetCostSummary_Empty(t *testing.T) {
 	}
 	if len(summary.ByModel) != 0 {
 		t.Errorf("ByModel should be empty, got %v", summary.ByModel)
+	}
+	if len(summary.ByProviderThisMonth) != 0 {
+		t.Errorf("ByProviderThisMonth should be empty, got %v", summary.ByProviderThisMonth)
+	}
+	if len(summary.ByProviderLastMonth) != 0 {
+		t.Errorf("ByProviderLastMonth should be empty, got %v", summary.ByProviderLastMonth)
 	}
 }
 

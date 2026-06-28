@@ -1,0 +1,153 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { clientFetch } from '../services/clientSession';
+import ByModelChart from './ByModelChart';
+import CostSummaryCards, { type CostSummary } from './CostSummaryCards';
+import DailySpendChart, { type DailyCost } from './DailySpendChart';
+import ProviderTable from './ProviderTable';
+import './CostsPage.css';
+
+type TimeRange = '7d' | '30d' | '90d' | 'all';
+
+const TIME_RANGE_DAYS: Record<TimeRange, number> = {
+  '7d': 7,
+  '30d': 30,
+  '90d': 90,
+  all: 365,
+};
+
+const TIME_RANGES: TimeRange[] = ['7d', '30d', '90d', 'all'];
+
+interface CostHistory {
+  daily_costs: DailyCost[];
+  days: number;
+}
+
+export default function CostsPage() {
+  const [timeRange, setTimeRange] = useState<TimeRange>('30d');
+  const [summary, setSummary] = useState<CostSummary | null>(null);
+  const [history, setHistory] = useState<CostHistory | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  const fetchCosts = useCallback(async (range: TimeRange) => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setLoading(true);
+    setError(null);
+    try {
+      const [summaryRes, historyRes] = await Promise.all([
+        clientFetch('/api/costs/summary', { signal: controller.signal }),
+        clientFetch(`/api/costs/history?days=${TIME_RANGE_DAYS[range]}`, { signal: controller.signal }),
+      ]);
+      if (controller.signal.aborted) return;
+      if (!summaryRes.ok) {
+        throw new Error(`Summary request failed: ${summaryRes.status}`);
+      }
+      if (!historyRes.ok) {
+        throw new Error(`History request failed: ${historyRes.status}`);
+      }
+      const summaryData: CostSummary = await summaryRes.json();
+      const historyData: CostHistory = await historyRes.json();
+      if (controller.signal.aborted) return;
+      setSummary(summaryData);
+      setHistory(historyData);
+    } catch (e) {
+      if (e instanceof Error && e.name === 'AbortError') return;
+      if (controller.signal.aborted) return;
+      setError(e instanceof Error ? e.message : 'Unknown error');
+      setSummary(null);
+      setHistory(null);
+    } finally {
+      if (!controller.signal.aborted) {
+        setLoading(false);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchCosts(timeRange);
+  }, [timeRange, fetchCosts]);
+
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
+
+  const hasData =
+    summary !== null &&
+    history !== null &&
+    (summary.total_cost > 0 || (history.daily_costs && history.daily_costs.length > 0));
+
+  return (
+    <div className="costs-page" data-testid="costs-page">
+      <h1 className="costs-title">Costs</h1>
+
+      <div className="costs-time-range" role="group" aria-label="Time range">
+        {TIME_RANGES.map((range) => {
+          const isActive = timeRange === range;
+          return (
+            <button
+              key={range}
+              type="button"
+              className={
+                'costs-time-range-btn' + (isActive ? ' costs-time-range-btn--active' : '')
+              }
+              data-testid={`costs-time-range-${range}`}
+              aria-pressed={isActive}
+              onClick={() => setTimeRange(range)}
+            >
+              {range}
+            </button>
+          );
+        })}
+      </div>
+
+      {loading && (
+        <div className="costs-loading" data-testid="costs-loading" role="status">
+          Loading costs…
+        </div>
+      )}
+
+      {error && !loading && (
+        <div className="costs-error" data-testid="costs-error" role="alert">
+          Error: {error}
+        </div>
+      )}
+
+      {!loading && !error && !hasData && (
+        <div className="costs-empty" data-testid="costs-empty">
+          No cost data yet.
+        </div>
+      )}
+
+      {!loading && !error && hasData && (
+        <>
+          <div className="costs-summary-total" data-testid="costs-summary-total">
+            Total: ${summary!.total_cost.toFixed(4)}
+          </div>
+          {(() => {
+            const today = new Date().toISOString().slice(0, 10);
+            const todayCost = history?.daily_costs.find((d) => d.date === today)?.total_cost ?? 0;
+            return (
+              <>
+                <CostSummaryCards summary={summary} todayCost={todayCost} />
+                <DailySpendChart
+                  dailyCosts={history?.daily_costs ?? []}
+                  days={history?.days ?? 30}
+                />
+                <ByModelChart byModel={summary.by_model ?? {}} />
+                <ProviderTable summary={summary} />
+                <div data-testid="cost-top-sessions-table-placeholder">
+                  Top sessions table goes here (SP-085-5)
+                </div>
+              </>
+            );
+          })()}
+        </>
+      )}
+    </div>
+  );
+}

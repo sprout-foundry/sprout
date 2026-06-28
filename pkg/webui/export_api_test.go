@@ -99,15 +99,23 @@ func setupExportTest(t *testing.T) (*ReactWebServer, string) {
 	root := t.TempDir()
 	t.Setenv("HOME", root)
 
-	// The webui TestMain overrides GetStateDir to a temp dir for
-	// isolation. Re-aim it at our per-test root so writeTestSession
-	// files are visible to the handler.
+	// webui's TestMain installs a package-wide state-dir hook via
+	// agent.SetTestStateDirHook, so t.Setenv("HOME", root) alone
+	// won't redirect GetStateDir to our per-test temp root. We use
+	// SetGetStateDirForTest to install our own override, then capture
+	// the PREVIOUS hook and explicitly re-install it on cleanup.
+	//
+	// Note: SetGetStateDirFunc returns the previous function rather
+	// than a restore closure, so calling `restore()` directly would
+	// simply invoke defaultGetStateDir() and discard the result. We
+	// re-install the captured previous function via a second
+	// SetGetStateDirFunc call to actually undo the override.
 	sessionsDir := filepath.Join(root, ".sprout", "sessions")
 	if err := os.MkdirAll(sessionsDir, 0o700); err != nil {
 		t.Fatalf("mkdir sessions dir: %v", err)
 	}
-	restore := agent.SetGetStateDirForTest(sessionsDir)
-	t.Cleanup(func() { restore() })
+	previousGetStateDir := agent.SetGetStateDirForTest(sessionsDir)
+	t.Cleanup(func() { agent.SetGetStateDirFunc(previousGetStateDir) })
 
 	ws, err := NewReactWebServer(nil, events.NewEventBus(), 0, "127.0.0.1", "", "")
 	if err != nil {

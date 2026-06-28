@@ -498,6 +498,25 @@ func (a *Agent) GetBackgroundProcessManager() *tools.BackgroundProcessManager {
 	return a.backgroundProcessManager
 }
 
+// SetPasswordPrompter registers a password prompter for shell commands.
+// When set, privileged commands (sudo, passwd) are allowed to run with
+// password assistance instead of being hard-blocked. Pass nil to disable.
+func (a *Agent) SetPasswordPrompter(pp tools.PasswordPrompter) {
+	a.passwordPrompter = pp
+}
+
+// GetPasswordPrompter returns the registered password prompter, or nil.
+func (a *Agent) GetPasswordPrompter() tools.PasswordPrompter {
+	return a.passwordPrompter
+}
+
+// HasPasswordPrompter returns true if a password prompter is registered.
+// Used by the risk resolver to decide whether to downgrade privileged
+// commands from block to prompt.
+func (a *Agent) HasPasswordPrompter() bool {
+	return a.passwordPrompter != nil
+}
+
 // GetEmbeddingManager returns the embedding index manager (may be nil if
 // embedding is not configured or enabled in the agent's config).
 func (a *Agent) GetEmbeddingManager() *embedding.EmbeddingManager {

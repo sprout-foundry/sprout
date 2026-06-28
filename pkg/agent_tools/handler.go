@@ -40,9 +40,10 @@
 // handler exists in the new registry, it falls back to the legacy func-style handlers.
 // This allows incremental migration without breaking existing functionality.
 //
-// Some current tools (e.g., browseURLHandler, runSubagentHandler) are thin wrappers
-// around legacy agent methods, pending full refactoring. These are marked with comments
-// in all.go.
+// The subagent tools (run_subagent / run_parallel_subagents) intentionally
+// remain in the seed registry under pkg/agent because they need *Agent
+// access for nested runner orchestration. See pkg/agent_tools/all.go for
+// the canonical tool list.
 package tools
 
 import (
@@ -125,6 +126,11 @@ type ToolEnv struct {
 	// SearchEngine performs Google Custom Search API queries.
 	// Nil means web search is not available.
 	SearchEngine SearchEngine
+	// RawArgsJSON is the raw JSON string of the tool arguments as sent by the
+	// LLM. When set, handlers can parse this to recover the original key
+	// insertion order of nested maps (e.g., the "data" field in
+	// write_structured_file) before Go's map iteration randomizes it.
+	RawArgsJSON string
 }
 
 // AskUserService is the interface ask_user-style tools use to drive an

@@ -2,11 +2,13 @@ package tools
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
+// webSearchHandler performs web searches via the SearchEngine dependency.
+// It returns formatted search results — it does NOT replicate the legacy
+// handler's captureWebText side-effect (that remains in the legacy path).
 type webSearchHandler struct{}
 
 func (h *webSearchHandler) Name() string { return "web_search" }
@@ -29,6 +31,7 @@ func (h *webSearchHandler) Validate(args map[string]any) error {
 
 func (h *webSearchHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
 	toolName := h.Name()
+	var hadError bool
 	if env.EventBus != nil {
 		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
 			"tool":   toolName,
@@ -37,15 +40,27 @@ func (h *webSearchHandler) Execute(ctx context.Context, env ToolEnv, args map[st
 		defer func() {
 			env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
 				"tool":  toolName,
-				"error": true,
+				"error": hadError,
 			})
 		}()
 	}
 
-	// TODO: Full implementation requires *Agent access for GetSearchEngine() which
-	// needs Google Custom Search API key from config. This is a thin wrapper stub.
-	return ToolResult{
-		Output:  "web_search requires full *Agent refactoring for complete functionality. This handler cannot perform web searches without access to the Agent's search engine (Google Custom Search API key). Please use the legacy interface or complete the migration.",
-		IsError: true,
-	}, fmt.Errorf("web_search requires full *Agent refactoring")
+	query, err := extractString(args, "query")
+	if err != nil {
+		hadError = true
+		return ToolResult{Output: err.Error(), IsError: true}, nil
+	}
+
+	if env.SearchEngine == nil {
+		hadError = true
+		return ToolResult{Output: "search engine not available: SearchEngine is not configured", IsError: true}, nil
+	}
+
+	result, err := env.SearchEngine.Search(ctx, query)
+	if err != nil {
+		hadError = true
+		return ToolResult{Output: err.Error(), IsError: true}, nil
+	}
+
+	return ToolResult{Output: result}, nil
 }

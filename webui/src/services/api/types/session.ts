@@ -50,3 +50,21 @@ export interface SessionRestoreResponse {
   name?: string;
   working_directory?: string;
 }
+
+/** Result from cross-session content search */
+export interface SessionSearchResult {
+  session_id: string;
+  name: string;
+  working_directory: string;
+  last_updated: string;
+  total_cost: number;
+  excerpt: string;
+  match_score: number; // 1 (any term), 2 (all terms), 3 (exact phrase)
+}
+
+/** Response from GET /api/sessions/search */
+export interface SessionSearchResponse {
+  query: string;
+  total: number;
+  results: SessionSearchResult[];
+}

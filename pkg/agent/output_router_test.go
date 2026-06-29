@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -231,17 +232,22 @@ func TestRouteAgentMessage_PublishesToEventBus(t *testing.T) {
 	}
 }
 
-// TestRouteAgentMessage_CallsStreamingCallback verifies callback invocation
-func TestRouteAgentMessage_CallsStreamingCallback(t *testing.T) {
+// TestRouteAgentMessage_DoesNotCallStreamingCallback verifies that when
+// the OutputRouter is initialized (the common CLI case), agent messages
+// (tool logs, system info, warnings) do NOT route through the streaming
+// callback. The streaming callback is the renderer's WriteChunk path,
+// reserved for prose tokens via RouteStreamChunk. Chrome must clear the
+// current row (\r\033[K) before printing so partial prose lines (no
+// trailing \n) don't get appended to.
+//
+// See pkg/agent/output_router.go writeTerminalMessage for the rationale.
+func TestRouteAgentMessage_DoesNotCallStreamingCallback(t *testing.T) {
 	var callbackCalled bool
-	var receivedMessage string
 	var callbackMu sync.Mutex
-
 	callback := func(message string) {
 		callbackMu.Lock()
 		defer callbackMu.Unlock()
 		callbackCalled = true
-		receivedMessage = message
 	}
 
 	agent := &Agent{
@@ -252,14 +258,43 @@ func TestRouteAgentMessage_CallsStreamingCallback(t *testing.T) {
 	agent.output.SetOutputMutex(&sync.Mutex{})
 	router := NewOutputRouter(agent, nil)
 
-	message := "system message"
-	router.RouteAgentMessage("info", message, nil)
+	router.RouteAgentMessage("info", "system message", nil)
 
 	callbackMu.Lock()
 	defer callbackMu.Unlock()
-	assert.True(t, callbackCalled, "streamingCallback should be called")
-	assert.Contains(t, receivedMessage, message)
-	assert.Contains(t, receivedMessage, "\n", "message should have newline")
+	assert.False(t, callbackCalled, "streamingCallback must NOT be called when OutputRouter is set — chrome goes through \\r\\033[K clear path")
+}
+
+// TestRouteAgentMessage_GoesToStdoutDirectly verifies chrome lands on
+// stdout with a row clear so it doesn't collide with partial stream lines.
+func TestRouteAgentMessage_GoesToStdoutDirectly(t *testing.T) {
+	agent := &Agent{
+		output: NewAgentOutputManager(),
+	}
+	agent.output.SetStreamingEnabled(true)
+	// Set a callback that would fail the test if invoked — defense in depth.
+	agent.output.SetStreamingCallback(func(string) {
+		t.Fatal("streamingCallback must not be invoked for agent messages")
+	})
+	agent.output.SetOutputMutex(&sync.Mutex{})
+	router := NewOutputRouter(agent, nil)
+
+	// Capture stdout for the duration of the call.
+	orig := os.Stdout
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	os.Stdout = w
+	defer func() { os.Stdout = orig }()
+
+	router.RouteAgentMessage("info", "hello chrome", nil)
+	w.Close()
+
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+	out := buf.String()
+	assert.Contains(t, out, "\r\033[K", "row clear must precede chrome output")
+	assert.Contains(t, out, "hello chrome")
+	assert.Contains(t, out, "\n", "trailing newline")
 }
 
 // TestRouteToolLog_PublishesCorrectEvent verifies tool log event structure
@@ -622,38 +657,58 @@ func TestRouteStreamChunk_ContentTypeVariations(t *testing.T) {
 }
 
 // TestRouteTerminalOnly_DoesNotPublishEvent verifies that RouteTerminalOnly
-// writes to the terminal callback but does NOT publish to the event bus.
+// writes to the terminal (stdout with row clear) but does NOT publish to the
+// event bus and does NOT route through the streaming callback (which is
+// reserved for prose via RouteStreamChunk).
 func TestRouteTerminalOnly_DoesNotPublishEvent(t *testing.T) {
 	bus := events.NewEventBus()
 	ch := bus.Subscribe("test")
 	defer bus.Unsubscribe("test")
 
-	var callbackCalled bool
-	var receivedMessage string
-	var callbackMu sync.Mutex
-
-	callback := func(message string) {
-		callbackMu.Lock()
-		defer callbackMu.Unlock()
-		callbackCalled = true
-		receivedMessage = message
+	// The streaming callback must NOT fire for chrome.
+	var streamingCalled bool
+	var streamingMu sync.Mutex
+	streamingCb := func(message string) {
+		streamingMu.Lock()
+		defer streamingMu.Unlock()
+		streamingCalled = true
 	}
 
 	agent := &Agent{
 		output: NewAgentOutputManager(),
 	}
 	agent.output.SetStreamingEnabled(true)
-	agent.output.SetStreamingCallback(callback)
+	agent.output.SetStreamingCallback(streamingCb)
 	agent.output.SetOutputMutex(&sync.Mutex{})
 	router := NewOutputRouter(agent, bus)
 
-	router.RouteTerminalOnly("hello terminal")
+	// Capture stdout.
+	orig := os.Stdout
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	os.Stdout = w
+	defer func() { os.Stdout = orig }()
 
-	// Verify terminal callback was invoked
-	callbackMu.Lock()
-	assert.True(t, callbackCalled, "streamingCallback should be called for terminal output")
-	assert.Contains(t, receivedMessage, "hello terminal")
-	callbackMu.Unlock()
+	router.RouteTerminalOnly("hello terminal")
+	w.Close()
+
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+	out := buf.String()
+
+	if !strings.Contains(out, "hello terminal\n") {
+		t.Errorf("expected stdout to contain %q, got %q", "hello terminal\n", out)
+	}
+	if !strings.Contains(out, "\r\033[K") {
+		t.Errorf("expected stdout to contain row clear, got %q", out)
+	}
+
+	// Streaming callback must NOT have fired.
+	streamingMu.Lock()
+	defer streamingMu.Unlock()
+	if streamingCalled {
+		t.Error("streamingCallback must not fire for terminal-only output")
+	}
 
 	// Verify no event was published
 	select {

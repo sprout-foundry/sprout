@@ -310,13 +310,18 @@ func (r *OutputRouter) writeTerminalMessage(message string) {
 		defer mu.Unlock()
 	}
 
-	// Route through streamingCallback if available
-	if agent != nil && agent.output.IsStreamingEnabled() && agent.output.GetStreamingCallback() != nil {
-		agent.output.GetStreamingCallback()(message)
-		return
-	}
-
-	// Direct terminal output
+	// Direct terminal output. The streamingCallback is reserved for
+	// prose tokens (RouteStreamChunk → renderer.WriteChunk). Chrome
+	// (tool logs, agent messages, system info) must NOT route through
+	// it because the callback writes raw to the terminal with no row
+	// clear, which appends chrome to whatever partial prose line is
+	// on the current row — the "Now I have a clear picture…→ TodoWrite"
+	// clobbering symptom.
+	//
+	// \r\033[K moves to col 0 of the current row and clears to EOL so
+	// any partial prose (no trailing \n) gets wiped before the chrome
+	// lands. CI mode is detected first so non-TTY pipelines get plain
+	// output without ANSI clears.
 	if configuration.GetEnvSimple("CI_MODE") == "1" || os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
 		_, _ = os.Stdout.Write([]byte(message))
 		return

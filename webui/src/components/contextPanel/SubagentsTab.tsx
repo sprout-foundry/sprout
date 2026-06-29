@@ -75,7 +75,7 @@ export function SubagentsTab({
   }, [subagentRuns]);
 
   return (
-    <div className="context-panel-tools-list">
+    <div className="context-panel-tools-list" data-testid="context-panel-subagents">
       {subagentRuns.length > 0 && (
         <div className="subagent-resource-summary">
           <span className="subagent-stat-chip subagent-stat-active">{resourceCounts.active} active</span>

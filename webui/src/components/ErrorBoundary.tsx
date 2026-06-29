@@ -85,7 +85,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       // Default error UI
       const heading = this.props.panelName ? `Error in ${this.props.panelName}` : 'Something went wrong';
       return (
-        <div className="error-boundary">
+        <div className="error-boundary" data-testid="app-error-banner">
           <div className="error-boundary-content">
             <h2>
               <TriangleAlert size={24} className="inline-block mr-2 align-text-bottom" /> {heading}

@@ -86,7 +86,7 @@ export function ChatFooter({
 
   if (queryProgress) {
     elements.push(
-      <div key="progress" className="query-progress">
+      <div key="progress" className="query-progress" data-testid="chat-query-progress">
         <div className="progress-header">
           <span className="progress-icon">
             <Zap size={14} />
@@ -106,7 +106,7 @@ export function ChatFooter({
 
   if (isProcessing && !hasToolsToShow && !queryProgress && !hasSubagentActivity) {
     elements.push(
-      <div key="processing" className="processing-indicator" role="status" aria-label="Processing request">
+      <div key="processing" className="processing-indicator" role="status" aria-label="Processing request" data-testid="chat-processing">
         <div className="processing-content">
           {activeTodoLabel ? (
             <div className="processing-active-task" aria-live="polite">
@@ -125,7 +125,7 @@ export function ChatFooter({
 
   if (lastError) {
     elements.push(
-      <div key="error" className="error-indicator">
+      <div key="error" className="error-indicator" data-testid="chat-error">
         <div className="error-content">
           <div className="error-icon">
             <AlertTriangle size={14} />

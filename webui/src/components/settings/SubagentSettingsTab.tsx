@@ -34,7 +34,7 @@ export default function SubagentSettingsTab({
     .sort(([a], [b]) => a.localeCompare(b));
 
   return (
-    <div className="section">
+    <div className="section" data-testid="settings-subagent-tab">
       <h4>Default Subagent</h4>
 
       <div className="config-item">

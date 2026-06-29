@@ -305,6 +305,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
               : { width: `${state.panelCollapsed ? PANEL_COLLAPSED_WIDTH : state.panelWidth}px` }
           }
           ref={state.panelContainerRef}
+          data-testid="context-panel"
         >
           <div className="side-panel-rail">
             {chatPanelTabs.map((tab) => (
@@ -315,6 +316,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
                 title={tab.label}
                 aria-label={tab.label}
                 aria-pressed={state.chatTab === tab.id}
+                data-testid="context-panel-tab"
               >
                 {tab.icon}
               </button>
@@ -323,6 +325,7 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
               className="side-collapse-btn"
               onClick={() => state.setPanelCollapsed((prev) => !prev)}
               title={state.panelCollapsed ? 'Expand panel' : 'Collapse panel'}
+              data-testid="context-panel-collapse"
             >
               {state.panelCollapsed ? <PanelRightOpen size={14} /> : <PanelRightClose size={14} />}
             </button>

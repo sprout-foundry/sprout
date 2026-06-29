@@ -185,6 +185,17 @@ func (f *StatusFooter) Refresh() {
 // SetProseStreaming toggles the prose-streaming gate. When true,
 // Refresh() is a no-op so the footer's cursor save/restore can't race
 // with prose being written to the scroll region.
+//
+// This method MUST NOT take outputMu. It is called from the
+// AssistantTurnRenderer's WriteChunk / resetSegment paths, both of
+// which already hold LockOutput — and resetSegment fires from
+// FinalizeAtTurnEnd, also under LockOutput. Calling Refresh() (which
+// calls draw → LockOutput) here would be a re-entrant lock on a
+// non-reentrant sync.Mutex, self-deadlocking the REPL goroutine at
+// every turn end. That hang left the steer panel on screen and
+// blocked the next ReadLine, reproducing the "can't submit
+// follow-ups, must hard-close" symptom. Callers that need a catch-up
+// draw call Refresh() themselves once the lock is released.
 func (f *StatusFooter) SetProseStreaming(active bool) {
 	if f == nil {
 		return
@@ -192,11 +203,6 @@ func (f *StatusFooter) SetProseStreaming(active bool) {
 	f.mu.Lock()
 	f.proseStreaming = active
 	f.mu.Unlock()
-	// If streaming just ended, refresh the footer to pick up any cost /
-	// context changes that accumulated while draws were suppressed.
-	if !active {
-		f.Refresh()
-	}
 }
 
 // Resize handles a terminal-size change (SIGWINCH). The OLD footer rows

@@ -38,6 +38,12 @@ func beginTurn(chatAgent *agent.Agent) *console.AssistantTurnRenderer {
 		GetTerminalWidth(),
 		console.NewMarkdownFormatter(true, true),
 	)
+	// Wire the status footer so the renderer can suppress its refresh
+	// during active prose streaming — the root cause of the "scattered
+	// characters" clobbering symptom.
+	if footer := console.GetGlobalStatusFooter(); footer != nil {
+		r.SetFooter(footer)
+	}
 	currentTurnRenderer.Store(r)
 	firstProseChunk.Store(false)
 	if router := chatAgent.OutputRouter(); router != nil {

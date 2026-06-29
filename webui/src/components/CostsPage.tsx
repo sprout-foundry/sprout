@@ -24,7 +24,11 @@ interface CostHistory {
   days: number;
 }
 
-export default function CostsPage() {
+interface CostsPageProps {
+  onSessionClick?: (sessionId: string) => void;
+}
+
+export default function CostsPage({ onSessionClick }: CostsPageProps = {}) {
   const [timeRange, setTimeRange] = useState<TimeRange>('30d');
   const [summary, setSummary] = useState<CostSummary | null>(null);
   const [history, setHistory] = useState<CostHistory | null>(null);
@@ -121,7 +125,7 @@ export default function CostsPage() {
 
       {!loading && !error && !hasData && (
         <div className="costs-empty" data-testid="costs-empty">
-          No cost data yet.
+          No cost data yet — costs will appear here after your first chat.
         </div>
       )}
 
@@ -142,7 +146,7 @@ export default function CostsPage() {
                 />
                 <ByModelChart byModel={summary.by_model ?? {}} />
                 <ProviderTable summary={summary} />
-                <TopSessionsTable sessions={summary.top_sessions ?? []} loading={loading} />
+                <TopSessionsTable sessions={summary.top_sessions ?? []} loading={loading} onSessionClick={onSessionClick} />
               </>
             );
           })()}

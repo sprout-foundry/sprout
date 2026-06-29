@@ -5,7 +5,7 @@ import type { QueryProgress } from '../types/app';
 import ContextPanel, { type ContextPanelHandle } from './ContextPanel';
 import ErrorBoundary from './ErrorBoundary';
 
-const PLATFORM_VIEWS = new Set(['tasks', 'billing', 'team']);
+const PLATFORM_VIEWS = new Set(['tasks', 'billing', 'team', 'costs']);
 const CONTEXT_PANEL_COLLAPSED_KEY = 'sprout.contextPanel.collapsed';
 
 export interface ContextSidebarProps {
@@ -13,7 +13,7 @@ export interface ContextSidebarProps {
   isTablet: boolean;
   showContextSidebar: boolean;
   contextPanelRef: React.RefObject<ContextPanelHandle>;
-  currentView: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team';
+  currentView: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs';
   toolExecutions: ToolExecution[];
   fileEdits: FileEdit[];
   logs: LogEntry[];

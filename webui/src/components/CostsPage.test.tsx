@@ -397,4 +397,86 @@ describe('CostsPage', () => {
     });
     expect(screen.getByText('No session data available.')).toBeInTheDocument();
   });
+
+  // ---------------------------------------------------------------------------
+  // SP-085-6 + SP-085-7 tests
+  // ---------------------------------------------------------------------------
+
+  it('shows the updated empty state copy', async () => {
+    mockBoth(
+      { total_cost: 0, by_provider: {}, by_model: {} },
+      { daily_costs: [], days: 30 },
+    );
+    render(<CostsPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('costs-empty')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('costs-empty')).toHaveTextContent(
+      'No cost data yet — costs will appear here after your first chat.',
+    );
+  });
+
+  it('shows the error state when the API returns 500', async () => {
+    vi.mocked(clientFetch).mockResolvedValue(makeResp({ ok: false, status: 500 }));
+    render(<CostsPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('costs-error')).toBeInTheDocument();
+    });
+  });
+
+  it('calls onSessionClick when a session row is clicked', async () => {
+    const onSessionClick = vi.fn();
+    mockBoth(
+      {
+        total_cost: 5.0,
+        by_provider: {},
+        by_model: {},
+        by_provider_this_month: {},
+        by_provider_last_month: {},
+        top_sessions: [
+          {
+            session_id: 'sess-1',
+            title: 'Test',
+            working_dir: '/tmp',
+            total_cost: 5.0,
+            last_updated: new Date().toISOString(),
+          },
+        ],
+      },
+      { daily_costs: [{ date: '2025-01-01', total_cost: 5.0 }], days: 30 },
+    );
+    render(<CostsPage onSessionClick={onSessionClick} />);
+    await waitFor(() => expect(screen.getByTestId('row-sess-1')).toBeInTheDocument());
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('row-sess-1'));
+    });
+    expect(onSessionClick).toHaveBeenCalledWith('sess-1');
+  });
+
+  it('renders 1000 daily_costs rows without crashing', async () => {
+    // Use a base date and offset by `i` days to ensure unique YYYY-MM-DD keys
+    // (the chart uses `date` as the React key). Start at 2020-01-01 so 1000
+    // consecutive days stay well within a 3-year span.
+    const base = new Date('2020-01-01T00:00:00Z');
+    const daily_costs = Array.from({ length: 1000 }, (_, i) => {
+      const d = new Date(base.getTime() + i * 24 * 60 * 60 * 1000);
+      const iso = d.toISOString().slice(0, 10);
+      return { date: iso, total_cost: i * 0.001 };
+    });
+    mockBoth(
+      {
+        total_cost: 499.5,
+        by_provider: {},
+        by_model: {},
+        by_provider_this_month: {},
+        by_provider_last_month: {},
+        top_sessions: [],
+      },
+      { daily_costs, days: 365 },
+    );
+    render(<CostsPage />);
+    await waitFor(() => expect(screen.getByTestId('daily-spend-chart')).toBeInTheDocument());
+    // Should render without crashing; we don't need to assert on every row
+    expect(screen.getByTestId('daily-spend-chart')).toBeInTheDocument();
+  });
 });

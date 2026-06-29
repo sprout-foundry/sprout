@@ -324,3 +324,9 @@ func (a *Agent) generateSessionName() string {
 	}
 	return "Unnamed session"
 }
+
+// GetSessionName returns a readable name for the current session.
+// It is the exported form of generateSessionName.
+func (a *Agent) GetSessionName() string {
+	return a.generateSessionName()
+}

@@ -242,8 +242,9 @@ function Chat(props: ChatProps): JSX.Element {
       className="chat-shell"
       ref={chatShellRef}
       style={{ '--chat-input-height': `${inputContainerHeight}px` } as CSSProperties}
+      data-testid="chat-shell"
     >
-      <div className="chat-main">
+      <div className="chat-main" data-testid="chat-main">
         {/* Export button — shown when a session is active */}
         {sessionId && (
           <div className="chat-toolbar">
@@ -273,6 +274,7 @@ function Chat(props: ChatProps): JSX.Element {
             ref={chatContainerRef}
             role="log"
             aria-label="Chat messages"
+            data-testid="chat-message-list"
             style={{ flex: 1, minHeight: 0, position: 'relative' }}
           >
             <Virtuoso
@@ -310,6 +312,7 @@ function Chat(props: ChatProps): JSX.Element {
                 onClick={() => virtuosoRef.current?.scrollToIndex({ index: 'LAST', behavior: 'smooth', align: 'end' })}
                 type="button"
                 aria-label="Scroll to bottom"
+                data-testid="chat-scroll-bottom"
               >
                 <ChevronDown size={18} />
               </button>

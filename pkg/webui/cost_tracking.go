@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 	"time"
 
@@ -24,6 +25,10 @@ type CostRecord struct {
 	Cost         float64   `json:"cost"`
 	SessionID    string    `json:"session_id,omitempty"`
 	ChatID       string    `json:"chat_id,omitempty"`
+	// Optional session metadata populated at record time.
+	Title       string `json:"title,omitempty"`
+	WorkingDir  string `json:"working_dir,omitempty"`
+	LastUpdated string `json:"last_updated,omitempty"` // RFC3339 timestamp
 }
 
 // CostStore handles persisting and querying cost records
@@ -63,6 +68,11 @@ func GetCostStore() *CostStore {
 
 // RecordCost adds a new cost record
 func (cs *CostStore) RecordCost(provider, model, sessionID, chatID string, promptTokens, outputTokens int, cost float64) {
+	cs.RecordCostWithSession(provider, model, sessionID, chatID, "", "", promptTokens, outputTokens, cost)
+}
+
+// RecordCostWithSession adds a new cost record with optional session metadata.
+func (cs *CostStore) RecordCostWithSession(provider, model, sessionID, chatID, title, workingDir string, promptTokens, outputTokens int, cost float64) {
 	if cost <= 0 {
 		return
 	}
@@ -75,6 +85,9 @@ func (cs *CostStore) RecordCost(provider, model, sessionID, chatID string, promp
 		Cost:         cost,
 		SessionID:    sessionID,
 		ChatID:       chatID,
+		Title:        title,
+		WorkingDir:   workingDir,
+		LastUpdated:  time.Now().Format(time.RFC3339),
 	}
 
 	cs.mu.Lock()
@@ -151,6 +164,15 @@ type DailyCost struct {
 	ByProvider map[string]float64 `json:"by_provider,omitempty"`
 }
 
+// SessionCostRow represents a single session's aggregated cost data
+type SessionCostRow struct {
+	SessionID   string  `json:"session_id"`
+	Title       string  `json:"title"`
+	WorkingDir  string  `json:"working_dir"`
+	TotalCost   float64 `json:"total_cost"`
+	LastUpdated string  `json:"last_updated"` // RFC3339 timestamp
+}
+
 // CostSummary represents aggregated cost data
 type CostSummary struct {
 	TotalCost            float64            `json:"total_cost"`
@@ -162,10 +184,13 @@ type CostSummary struct {
 	Last7Days            float64            `json:"last_7_days"`
 	ThisMonth            float64            `json:"this_month"`
 	LastMonth            float64            `json:"last_month"`
+	TopSessions          []SessionCostRow   `json:"top_sessions"`
 }
 
-// GetCostSummary returns overall cost summary
-func (cs *CostStore) GetCostSummary() CostSummary {
+// GetCostSummary returns overall cost summary.
+// When start and end are both zero, all records are included (all-time).
+// When start/end are set, TopSessions is filtered to that range.
+func (cs *CostStore) GetCostSummary(start, end time.Time) CostSummary {
 	now := time.Now()
 	summary := CostSummary{
 		ByProvider:           make(map[string]float64),
@@ -180,11 +205,51 @@ func (cs *CostStore) GetCostSummary() CostSummary {
 	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 	startOfLastMonth := startOfMonth.AddDate(0, -1, 1)
 
+	// Check if a date range was requested
+	hasRange := !start.IsZero() && !end.IsZero()
+
 	cs.mu.RLock()
 	defer cs.mu.RUnlock()
 
+	// Per-session aggregation for TopSessions
+	type sessionAccum struct {
+		totalCost  float64
+		title      string
+		workingDir string
+		lastUpdate string
+	}
+	sessionMap := make(map[string]*sessionAccum)
+
 	for _, r := range cs.records {
-		// Always add to totals
+		// Skip records outside the requested range for TopSessions
+		inRange := true
+		if hasRange {
+			if !r.Timestamp.After(start) || !r.Timestamp.Before(end.Add(24 * time.Hour)) {
+				inRange = false
+			}
+		}
+
+		if inRange && r.SessionID != "" {
+			acc, ok := sessionMap[r.SessionID]
+			if !ok {
+				acc = &sessionAccum{}
+				sessionMap[r.SessionID] = acc
+			}
+			acc.totalCost += r.Cost
+			if acc.title == "" && r.Title != "" {
+				acc.title = r.Title
+			}
+			if acc.workingDir == "" && r.WorkingDir != "" {
+				acc.workingDir = r.WorkingDir
+			}
+			if r.LastUpdated != "" && (acc.lastUpdate == "" || r.LastUpdated > acc.lastUpdate) {
+				acc.lastUpdate = r.LastUpdated
+			} else if acc.lastUpdate == "" {
+				acc.lastUpdate = r.Timestamp.Format(time.RFC3339)
+			}
+		}
+
+		// Always add to totals (all-time)
 		summary.TotalCost += r.Cost
 		summary.ByProvider[r.Provider] += r.Cost
 		key := r.Provider + ":" + r.Model
@@ -208,6 +273,26 @@ func (cs *CostStore) GetCostSummary() CostSummary {
 			summary.LastMonth += r.Cost
 			summary.ByProviderLastMonth[r.Provider] += r.Cost
 		}
+	}
+
+	// Build TopSessions: sort by cost desc, take top 10
+	summary.TopSessions = make([]SessionCostRow, 0, len(sessionMap))
+	for sid, acc := range sessionMap {
+		summary.TopSessions = append(summary.TopSessions, SessionCostRow{
+			SessionID:   sid,
+			Title:       acc.title,
+			WorkingDir:  acc.workingDir,
+			TotalCost:   acc.totalCost,
+			LastUpdated: acc.lastUpdate,
+		})
+	}
+	// Sort descending by cost
+	sort.Slice(summary.TopSessions, func(i, j int) bool {
+		return summary.TopSessions[i].TotalCost > summary.TopSessions[j].TotalCost
+	})
+	// Cap at 10
+	if len(summary.TopSessions) > 10 {
+		summary.TopSessions = summary.TopSessions[:10]
 	}
 
 	return summary

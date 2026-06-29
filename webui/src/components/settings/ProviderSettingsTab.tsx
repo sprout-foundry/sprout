@@ -127,8 +127,8 @@ export default function ProviderSettingsTab({
   };
 
   return (
-    <div className="section">
-      <div className="current-provider-section">
+    <div className="section" data-testid="settings-providers-tab">
+      <div className="current-provider-section" data-testid="settings-current-provider">
         <h4>Current Provider</h4>
         {loadingProviderInfo ? (
           <div className="settings-skeleton" role="status" aria-label="Loading provider info">
@@ -147,6 +147,7 @@ export default function ProviderSettingsTab({
                     value={currentProviderId}
                     onChange={(e) => persistPrimary('provider', e.target.value)}
                     disabled={primarySaving !== null}
+                    data-testid="settings-primary-provider"
                   >
                     {!currentProviderId && <option value="">Not configured</option>}
                     {availableProviders!.map((p) => (
@@ -164,6 +165,7 @@ export default function ProviderSettingsTab({
                     value={currentModelId}
                     onChange={(e) => persistPrimary('model', e.target.value)}
                     disabled={primarySaving !== null || !currentProviderId || availableModelsForCurrent.length === 0}
+                    data-testid="settings-primary-model"
                   >
                     {currentModelId && !availableModelsForCurrent.includes(currentModelId) && (
                       <option value={currentModelId}>{currentModelId}</option>

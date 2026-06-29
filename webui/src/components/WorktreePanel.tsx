@@ -161,7 +161,7 @@ export default function WorktreePanel({ onClose: _onClose }: WorktreePanelProps)
 
   if (isLoading) {
     return (
-      <div className="worktree-panel embedded">
+      <div className="worktree-panel embedded" data-testid="worktree-panel">
         <div className="worktree-panel-content worktree-loading">
           <p>Loading worktrees...</p>
         </div>
@@ -170,9 +170,9 @@ export default function WorktreePanel({ onClose: _onClose }: WorktreePanelProps)
   }
 
   return (
-    <div className="worktree-panel embedded">
+    <div className="worktree-panel embedded" data-testid="worktree-panel">
       <div className="worktree-panel-toolbar">
-        <button className="worktree-btn-secondary" onClick={() => setIsCreateDialogOpen(true)}>
+        <button className="worktree-btn-secondary" onClick={() => setIsCreateDialogOpen(true)} data-testid="worktree-create-button">
           <Plus size={16} />
           New Worktree
         </button>
@@ -199,8 +199,8 @@ export default function WorktreePanel({ onClose: _onClose }: WorktreePanelProps)
             </button>
           </div>
         ) : (
-          <div className="worktree-list">
-            <div className="worktree-item is-main">
+          <div className="worktree-list" data-testid="worktree-list">
+            <div className="worktree-item is-main" data-testid="worktree-item">
               <div className="worktree-item-header">
                 <button
                   className="worktree-expand-btn"
@@ -220,12 +220,13 @@ export default function WorktreePanel({ onClose: _onClose }: WorktreePanelProps)
             {worktrees
               .filter((wt) => !wt.is_current)
               .map((wt) => (
-                <div key={wt.path} className="worktree-item">
+                <div key={wt.path} className="worktree-item" data-testid="worktree-item">
                   <div className="worktree-item-header">
                     <button
                       className="worktree-expand-btn"
                       onClick={() => handleCheckout(wt.path)}
                       aria-label="Switch to worktree"
+                      data-testid="worktree-switch"
                     >
                       <ChevronRight size={16} />
                     </button>
@@ -239,6 +240,7 @@ export default function WorktreePanel({ onClose: _onClose }: WorktreePanelProps)
                       className="worktree-remove-btn"
                       onClick={() => handleRemove(wt.path)}
                       aria-label="Remove worktree"
+                      data-testid="worktree-delete"
                     >
                       <X size={14} />
                     </button>

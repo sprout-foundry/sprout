@@ -136,7 +136,7 @@ const EditorPaneFooterImpl: FC<EditorPaneFooterProps> = ({
   }, [content]);
 
   return (
-    <div className="pane-footer">
+    <div className="pane-footer" data-testid="editor-footer">
       <div className="editor-stats">
         <span className="line-count">Lines: {lineCount}</span>
         <span className="char-count">Chars: {charCount}</span>
@@ -217,6 +217,7 @@ const EditorPaneFooterImpl: FC<EditorPaneFooterProps> = ({
           onClick={handleWhitespaceToggle}
           onKeyDown={(e) => handleKeyDown(e, handleWhitespaceToggle)}
           title="Click to change whitespace rendering (none → boundary → all)"
+          data-testid="settings-whitespace-mode"
         >
           WS: {whitespaceRenderingMode === 'none' ? 'off' : whitespaceRenderingMode}
         </span>

@@ -39,6 +39,7 @@ import {
   X,
   Loader2,
   Download,
+  CircleDollarSign,
 } from 'lucide-react';
 import AutomationsPanel from './AutomationsPanel';
 import SearchView from './SearchView';
@@ -61,8 +62,8 @@ interface SidebarProps {
   /** Callback to open provider setup / onboarding dialog */
   onRequestProviderSetup?: () => void;
   availableModels?: string[];
-  currentView?: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team';
-  onViewChange?: (view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team') => void;
+  currentView?: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs';
+  onViewChange?: (view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs') => void;
   stats?: {
     queryCount: number;
     filesModified: number;
@@ -143,7 +144,7 @@ const MAIN_SECTION_TABS: { id: SectionTab; icon: LucideIcon; label: string }[] =
 ];
 
 /** Valid platform view IDs for type-safe navigation */
-const VALID_PLATFORM_VIEWS = new Set(['tasks', 'billing', 'team']);
+const VALID_PLATFORM_VIEWS = new Set(['tasks', 'billing', 'team', 'costs']);
 
 /** Icon name-to-component mapping for platform nav items */
 const PLATFORM_ICON_MAP: Record<string, LucideIcon> = {
@@ -577,7 +578,7 @@ function Sidebar({
   };
 
   return (
-    <div className="sidebar-resize-wrapper" style={{ flexShrink: 0 }}>
+    <div className="sidebar-resize-wrapper" style={{ flexShrink: 0 }} data-testid="sidebar-container">
       <div
         className={`sidebar ${isMobile ? 'mobile' : ''} ${finalIsMobileMenuOpen ? 'open' : 'closed'} ${effectiveSidebarCollapsed ? 'collapsed' : ''} ${isResizing ? 'resizing' : ''}`}
         style={
@@ -594,6 +595,7 @@ function Sidebar({
             onClick={handleLogoToggle}
             aria-label={isMobile ? 'Close sidebar' : effectiveSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             title={isMobile ? 'Close sidebar' : effectiveSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            data-testid="sidebar-brand"
           >
             <SproutLogo showWordmark={false} compact />
           </button>
@@ -720,7 +722,12 @@ function Sidebar({
         {/* Icon rail (always visible) + Content pane (only when expanded) */}
         <div className="sidebar-body">
           {/* Icon Rail */}
-          <div className="sidebar-icon-rail" role="navigation" aria-label="Sidebar navigation">
+          <div
+            className="sidebar-icon-rail"
+            role="navigation"
+            aria-label="Sidebar navigation"
+            data-testid="sidebar-icon-rail"
+          >
             {/* Main section tabs: git, files, search */}
             <div role="tablist" aria-orientation="vertical">
               {MAIN_SECTION_TABS.map((tab) => (
@@ -733,6 +740,7 @@ function Sidebar({
                   onClick={() => handleSectionTabClick(tab.id)}
                   title={tab.label}
                   aria-label={tab.label}
+                  data-testid={`sidebar-${tab.id}-tab`}
                 >
                   <tab.icon size={18} strokeWidth={1.5} />
                 </button>
@@ -755,7 +763,7 @@ function Sidebar({
                         className={`rail-icon ${isActive ? 'active' : ''}`}
                         onClick={() => {
                           if (onViewChange && VALID_PLATFORM_VIEWS.has(item.id)) {
-                            onViewChange(item.id as 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team');
+                            onViewChange(item.id as 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs');
                           }
                         }}
                         title={item.label}
@@ -769,6 +777,21 @@ function Sidebar({
               </>
             )}
 
+            {/* Costs — local feature, always visible */}
+            <div role="tablist" aria-orientation="vertical">
+              <button
+                role="tab"
+                aria-selected={currentView === 'costs'}
+                className={`rail-icon ${currentView === 'costs' ? 'active' : ''}`}
+                onClick={() => onViewChange?.('costs')}
+                title="Costs"
+                aria-label="Costs"
+                data-testid="sidebar-costs-button"
+              >
+                <CircleDollarSign size={18} strokeWidth={1.5} />
+              </button>
+            </div>
+
             {/* Settings & Logs tabs */}
             <div role="tablist" aria-orientation="vertical">
               {supportsSettings && (
@@ -780,6 +803,7 @@ function Sidebar({
                   onClick={() => handleSectionTabClick('settings')}
                   title="Settings"
                   aria-label="Settings"
+                  data-testid="sidebar-settings-toggle"
                 >
                   <Settings size={18} strokeWidth={1.5} />
                 </button>
@@ -792,6 +816,7 @@ function Sidebar({
                 onClick={() => handleSectionTabClick('logs')}
                 title="Logs"
                 aria-label="Logs"
+                data-testid="sidebar-logs-tab"
               >
                 <ScrollText size={18} strokeWidth={1.5} />
               </button>

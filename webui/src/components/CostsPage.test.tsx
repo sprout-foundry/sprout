@@ -11,6 +11,7 @@ vi.mock('./CostSummaryCards.css', () => ({}));
 vi.mock('./DailySpendChart.css', () => ({}));
 vi.mock('./ByModelChart.css', () => ({}));
 vi.mock('./ProviderTable.css', () => ({}));
+vi.mock('./TopSessionsTable.css', () => ({}));
 
 import { clientFetch } from '../services/clientSession';
 
@@ -219,7 +220,7 @@ describe('CostsPage', () => {
     expect(screen.getByTestId('daily-spend-chart')).toBeInTheDocument();
     expect(screen.getByTestId('by-model-chart')).toBeInTheDocument();
     expect(screen.getByTestId('provider-table')).toBeInTheDocument();
-    expect(screen.getByTestId('cost-top-sessions-table-placeholder')).toBeInTheDocument();
+    expect(screen.getByTestId('top-sessions-table')).toBeInTheDocument();
   });
 
   it('renders CostSummaryCards with values from summary', async () => {
@@ -336,5 +337,146 @@ describe('CostsPage', () => {
     expect(screen.getByTestId('provider-row-openai')).toBeInTheDocument();
     // openai: this=2.0, last=1.0 → up 100%
     expect(screen.getByTestId('provider-delta-openai-up')).toBeInTheDocument();
+  });
+
+  it('renders TopSessionsTable with session rows from top_sessions', async () => {
+    mockBoth(
+      {
+        total_cost: 5.0,
+        by_provider: { openai: 5.0 },
+        by_model: { 'openai:gpt-4': 5.0 },
+        by_provider_this_month: { openai: 5.0 },
+        by_provider_last_month: {},
+        top_sessions: [
+          {
+            session_id: 'sess-alpha',
+            title: 'Alpha Session',
+            working_dir: '/project/alpha',
+            total_cost: 2.5,
+            last_updated: new Date().toISOString(),
+          },
+          {
+            session_id: 'sess-beta',
+            title: 'Beta Session',
+            working_dir: '/project/beta',
+            total_cost: 1.5,
+            last_updated: new Date(Date.now() - 3600000).toISOString(),
+          },
+        ],
+      },
+      { daily_costs: [{ date: '2025-01-01', total_cost: 5.0 }], days: 30 },
+    );
+    render(<CostsPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('top-sessions-table')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('row-sess-alpha')).toBeInTheDocument();
+    expect(screen.getByTestId('row-sess-beta')).toBeInTheDocument();
+    // Default sort is cost desc, so alpha (2.5) should appear before beta (1.5)
+    const table = screen.getByTestId('top-sessions-table');
+    const bodyRows = table.querySelectorAll('tbody tr');
+    expect(bodyRows[0]).toHaveTextContent('Alpha Session');
+    expect(bodyRows[1]).toHaveTextContent('Beta Session');
+  });
+
+  it('TopSessionsTable shows empty state when top_sessions is absent', async () => {
+    mockBoth(
+      {
+        total_cost: 1.0,
+        by_provider: { openai: 1.0 },
+        by_model: { 'openai:gpt-4': 1.0 },
+        by_provider_this_month: {},
+        by_provider_last_month: {},
+        // No top_sessions field
+      },
+      { daily_costs: [{ date: '2025-01-01', total_cost: 1.0 }], days: 30 },
+    );
+    render(<CostsPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('top-sessions-table')).toBeInTheDocument();
+    });
+    expect(screen.getByText('No session data available.')).toBeInTheDocument();
+  });
+
+  // ---------------------------------------------------------------------------
+  // SP-085-6 + SP-085-7 tests
+  // ---------------------------------------------------------------------------
+
+  it('shows the updated empty state copy', async () => {
+    mockBoth(
+      { total_cost: 0, by_provider: {}, by_model: {} },
+      { daily_costs: [], days: 30 },
+    );
+    render(<CostsPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('costs-empty')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('costs-empty')).toHaveTextContent(
+      'No cost data yet — costs will appear here after your first chat.',
+    );
+  });
+
+  it('shows the error state when the API returns 500', async () => {
+    vi.mocked(clientFetch).mockResolvedValue(makeResp({ ok: false, status: 500 }));
+    render(<CostsPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('costs-error')).toBeInTheDocument();
+    });
+  });
+
+  it('calls onSessionClick when a session row is clicked', async () => {
+    const onSessionClick = vi.fn();
+    mockBoth(
+      {
+        total_cost: 5.0,
+        by_provider: {},
+        by_model: {},
+        by_provider_this_month: {},
+        by_provider_last_month: {},
+        top_sessions: [
+          {
+            session_id: 'sess-1',
+            title: 'Test',
+            working_dir: '/tmp',
+            total_cost: 5.0,
+            last_updated: new Date().toISOString(),
+          },
+        ],
+      },
+      { daily_costs: [{ date: '2025-01-01', total_cost: 5.0 }], days: 30 },
+    );
+    render(<CostsPage onSessionClick={onSessionClick} />);
+    await waitFor(() => expect(screen.getByTestId('row-sess-1')).toBeInTheDocument());
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('row-sess-1'));
+    });
+    expect(onSessionClick).toHaveBeenCalledWith('sess-1');
+  });
+
+  it('renders 1000 daily_costs rows without crashing', async () => {
+    // Use a base date and offset by `i` days to ensure unique YYYY-MM-DD keys
+    // (the chart uses `date` as the React key). Start at 2020-01-01 so 1000
+    // consecutive days stay well within a 3-year span.
+    const base = new Date('2020-01-01T00:00:00Z');
+    const daily_costs = Array.from({ length: 1000 }, (_, i) => {
+      const d = new Date(base.getTime() + i * 24 * 60 * 60 * 1000);
+      const iso = d.toISOString().slice(0, 10);
+      return { date: iso, total_cost: i * 0.001 };
+    });
+    mockBoth(
+      {
+        total_cost: 499.5,
+        by_provider: {},
+        by_model: {},
+        by_provider_this_month: {},
+        by_provider_last_month: {},
+        top_sessions: [],
+      },
+      { daily_costs, days: 365 },
+    );
+    render(<CostsPage />);
+    await waitFor(() => expect(screen.getByTestId('daily-spend-chart')).toBeInTheDocument());
+    // Should render without crashing; we don't need to assert on every row
+    expect(screen.getByTestId('daily-spend-chart')).toBeInTheDocument();
   });
 });

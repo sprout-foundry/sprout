@@ -115,7 +115,7 @@ export function ToolTimelineBar({
   if (!shouldRender) return null;
 
   return (
-    <div className="tool-timeline-bar" role="status" aria-label="Active tools">
+    <div className="tool-timeline-bar" role="status" aria-label="Active tools" data-testid="chat-tool-timeline">
       {visible.map((tool) => (
         <ToolTimelineCard key={tool.id} tool={tool} now={now} />
       ))}

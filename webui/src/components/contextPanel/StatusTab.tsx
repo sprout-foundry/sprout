@@ -16,7 +16,7 @@ export function StatusTab({ chatProps, statusMetrics, liveDurationMs }: StatusTa
   const chatStats = chatProps?.stats ?? null;
 
   return (
-    <div className="context-panel-status">
+    <div className="context-panel-status" data-testid="context-panel-status">
       <div className="status-section">
         <div className="status-section-title">
           <Activity size={12} /> Processing

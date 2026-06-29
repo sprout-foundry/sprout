@@ -62,7 +62,7 @@ interface AppContentProps {
   onSidebarToggle: () => void;
   onToggleSidebar: () => void;
   onCloseSidebar: () => void;
-  onViewChange: (view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team') => void;
+  onViewChange: (view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs') => void;
   onModelChange: (model: string) => void;
   onProviderChange: (provider: string) => void;
   onSendMessage: (message: string) => void;
@@ -230,7 +230,7 @@ const AppContent: React.FC<AppContentProps> = ({
   useActiveChatTab({ activeBufferId, buffersRef, activeChatId, onActiveChatChange });
 
   const handlePrimaryViewChange = useCallback(
-    (view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team') => {
+    (view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs') => {
       if (view === 'chat') {
         openWorkspaceBuffer({
           kind: 'chat',
@@ -761,6 +761,7 @@ const AppContent: React.FC<AppContentProps> = ({
                 reviewProps={reviewProps}
                 diffState={diffState}
                 handleOutlineNavigateToSymbol={handleOutlineNavigateToSymbol}
+                onSessionRestore={handleSessionSearchRestore}
               />
             </ErrorBoundary>
           </div>

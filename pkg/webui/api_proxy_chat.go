@@ -230,11 +230,13 @@ func (ws *ReactWebServer) handleAPIProxyChatQuery(w http.ResponseWriter, r *http
 
 		// Record cost after query completes
 		if cost := clientAgent.GetTotalCost(); cost > 0 {
-			GetCostStore().RecordCost(
+			GetCostStore().RecordCostWithSession(
 				clientAgent.GetProvider(),
 				clientAgent.GetModel(),
 				clientAgent.GetSessionID(),
 				chatID,
+				clientAgent.GetSessionName(),
+				clientAgent.GetWorkspaceRoot(),
 				clientAgent.GetPromptTokens(),
 				clientAgent.GetCompletionTokens(),
 				cost,

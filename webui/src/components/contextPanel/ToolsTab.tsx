@@ -26,7 +26,7 @@ export function ToolsTab({
   toggleToolExpansion,
 }: ToolsTabProps) {
   return (
-    <div className="context-panel-tools-list">
+    <div className="context-panel-tools-list" data-testid="context-panel-tools">
       {toolExecutions.length === 0 ? (
         <div className="context-panel-empty">Tool calls will appear here.</div>
       ) : (

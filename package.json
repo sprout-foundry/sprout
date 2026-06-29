@@ -106,7 +106,8 @@
     "@storybook/addon-links": "^8.6.18",
     "@storybook/react-vite": "^8.6.18",
     "electron": "^39.8.5",
-    "electron-builder": "^26.8.1"
+    "electron-builder": "^26.8.1",
+    "tsx": "^4.22.4"
   },
   "homepage": "https://github.com/sprout-foundry/sprout#readme",
   "keywords": [],
@@ -137,9 +138,10 @@
     "desktop:release": "electron-builder --publish onTagOrDraft",
     "desktop:verify": "node scripts/verify-electron-package.mjs",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "test:desktop-smoke": "playwright test --config=playwright.config.js",
+    "test:desktop-smoke": "SPROUT_SKIP_WEBSERVER=1 playwright test --config=playwright.config.js --project=desktop",
     "test:desktop-smoke:modules": "node -e \"const {spawnSync}=require('child_process'),path=require('path'),fs=require('fs'),d='desktop';for(const m of fs.readdirSync(d).filter(f=>f.endsWith('.js')&&!f.includes('.bak'))){const r=spawnSync(process.execPath,['--check',path.join(d,m)],{encoding:'utf8'});if(r.status!==0){console.error(m,r.stderr);process.exit(1);}console.log('OK',m);}\"",
-    "test:webui-e2e": "node test/ui_e2e_workflow.js"
+    "test:webui-e2e": "playwright test --project=webui",
+    "test:webui-e2e:headed": "playwright test --project=webui --headed"
   },
   "version": "1.0.0",
   "workspaces": [

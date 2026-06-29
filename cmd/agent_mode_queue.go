@@ -7,20 +7,12 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"sync/atomic"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
-
-// currentTurnRenderer holds the AssistantTurnRenderer for the in-progress
-// REPL turn (or nil between turns / outside the REPL). The streaming
-// callback registered in SetupAgentEvents loads from this pointer on each
-// chunk so per-turn renderers can be swapped without re-registering the
-// callback. Safe because only one turn is active at a time in a CLI REPL.
-var currentTurnRenderer atomic.Pointer[console.AssistantTurnRenderer]
 
 // runQueueMode handles autonomous EA queue mode. It reads pending tasks from
 // the persistent task queue and processes each one by delegating to the agent
@@ -108,27 +100,27 @@ func runQueueMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 			query := buildQueueTaskQuery(task)
 
 			// Per-task assistant renderer: indents prose and optionally
-			// re-renders with markdown formatting at task-end.
-			turnRenderer := console.NewAssistantTurnRenderer(
-				GetTerminalWidth(),
-				console.NewMarkdownFormatter(true, true),
-			)
-			currentTurnRenderer.Store(turnRenderer)
+			// re-renders with markdown formatting at task-end. Wire
+			// reasoning chunks to the renderer's collapsed header so
+			// they don't flood the terminal with raw monologue —
+			// matches the interactive mode wiring.
+			turnRenderer := beginTurn(chatAgent)
 			if router := chatAgent.OutputRouter(); router != nil {
-				router.SetExternalWriteHook(turnRenderer.OnExternalWrite)
+				if fold := currentReasoningFold; fold != nil {
+					fold.Start()
+					router.SetReasoningCallback(fold.Chunk)
+				} else {
+					router.SetReasoningCallback(turnRenderer.WriteReasoningChunk)
+				}
 			}
 
 			indicator.Start(fmt.Sprintf("Processing · %s", chatAgent.GetModel()))
 			err = ProcessQuery(ctx, chatAgent, eventBus, query)
 			indicator.Stop()
 
-			// Tear down the renderer hooks before finalizing so the
+			// Tear down the renderer hooks and finalize so the
 			// re-render's own writes don't loop back through them.
-			if router := chatAgent.OutputRouter(); router != nil {
-				router.SetExternalWriteHook(nil)
-			}
-			turnRenderer.FinalizeAtTurnEnd()
-			currentTurnRenderer.Store(nil)
+			endTurn(chatAgent, turnRenderer)
 
 			if err != nil {
 				fmt.Fprint(os.Stderr, "\n"+console.FormatErrorBlock(fmt.Sprintf("Error processing task %s", task.ID), err))

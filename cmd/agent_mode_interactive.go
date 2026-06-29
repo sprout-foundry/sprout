@@ -282,13 +282,8 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			// prose segment with markdown formatting (cursor-clear +
 			// reprint). Wire OnExternalWrite into the OutputRouter so
 			// tool-log lines break the current prose segment cleanly.
-			turnRenderer := console.NewAssistantTurnRenderer(
-				GetTerminalWidth(),
-				console.NewMarkdownFormatter(true, true),
-			)
-			currentTurnRenderer.Store(turnRenderer)
+			turnRenderer := beginTurn(chatAgent)
 			if router := chatAgent.OutputRouter(); router != nil {
-				router.SetExternalWriteHook(turnRenderer.OnExternalWrite)
 				// SP-056: When reasoning mode is "fold", route reasoning chunks to
 				// the fold instead of the turn renderer's collapsed header.
 				if fold := currentReasoningFold; fold != nil {
@@ -366,19 +361,13 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			// external-write hook BEFORE FinalizeAtTurnEnd so the
 			// re-render's own writes don't loop back through it.
 			if router := chatAgent.OutputRouter(); router != nil {
-				router.SetExternalWriteHook(nil)
-				// Drop the reasoning sink too so it doesn't fire into a
-				// stale renderer on the next turn (each turn builds a
-				// new renderer above).
-				router.SetReasoningCallback(nil)
 				// SP-056: Resolve any active fold at turn end (catches the case
 				// where reasoning ended but no assistant text arrived).
 				if fold := currentReasoningFold; fold != nil && fold.IsActive() {
 					fold.Resolve()
 				}
 			}
-			turnRenderer.FinalizeAtTurnEnd()
-			currentTurnRenderer.Store(nil)
+			endTurn(chatAgent, turnRenderer)
 			// SP-070-2: notify the user when a long turn completes
 			notifyTurnCompletion(chatAgent, turnStart, agentSkipPrompt)
 			// SP-048-3: refresh the footer at turn-end so cost / context /

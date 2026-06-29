@@ -295,51 +295,25 @@ func InstallFromURL(ctx context.Context, url string, opts InstallOptions) ([]Ins
 	return results, nil
 }
 
-// InstallFromRegistry installs a skill by registry ID from the embedded registry.json.
+// InstallFromRegistry installs a skill by registry ID from the embedded registry.
+// It looks up the entry, clones the git repo (or uses a local path in test mode),
+// extracts the skill subdirectory, and installs the found SKILL.md.
 func InstallFromRegistry(ctx context.Context, registryID string, opts InstallOptions) ([]InstallResult, error) {
-	registryPath := filepath.Join("pkg", "skills", "registry.json")
-	data, err := os.ReadFile(registryPath)
+	registry, isTestOverride, err := effectiveRegistry()
 	if err != nil {
-		// registry.json doesn't exist yet — acceptable for this slice
-		return nil, fmt.Errorf("registry not yet wired: %w", err)
+		return nil, fmt.Errorf("install from registry: %w", err)
 	}
 
-	var registry map[string]map[string]string
-	if err := json.Unmarshal(data, &registry); err != nil {
-		return nil, fmt.Errorf("parse registry: %w", err)
-	}
-
-	entry, ok := registry[registryID]
-	if !ok {
-		return nil, fmt.Errorf("skill %q not found in registry", registryID)
-	}
-
-	url, hasURL := entry["url"]
-	if !hasURL || url == "" {
-		return nil, fmt.Errorf("registry entry %q has no URL", registryID)
-	}
-
-	origin := Origin{
-		Type:        "registry",
-		RegistryID:  registryID,
-		URL:         url,
-		InstalledAt: time.Now(),
-	}
-
-	// Fetch from the registry URL
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	entry, err := registry.LookupByID(registryID)
 	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
+		return nil, fmt.Errorf("install from registry: %w", err)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("fetch registry skill: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("fetch registry skill: status %d", resp.StatusCode)
+	// Check if we're in test override mode with a local file:// URL.
+	// This allows tests to avoid network/git dependencies.
+	localPath := ""
+	if isTestOverride && strings.HasPrefix(entry.GitURL, "file://") {
+		localPath = strings.TrimPrefix(entry.GitURL, "file://")
 	}
 
 	tmpDir, err := os.MkdirTemp("", "sprout-skill-registry-*")
@@ -347,19 +321,84 @@ func InstallFromRegistry(ctx context.Context, registryID string, opts InstallOpt
 		return nil, fmt.Errorf("create temp dir: %w", err)
 	}
 	defer os.RemoveAll(tmpDir)
+	// NOTE: tmpDir is reassigned below (to stageDir) in the production path,
+	// but the defer above already captured the original clone dir value at
+	// defer-time, so both dirs get cleaned up independently.
 
-	skillFile := filepath.Join(tmpDir, SkillFileName)
-	w, err := os.Create(skillFile)
+	if localPath != "" {
+		// Test override: copy from local path instead of git clone.
+		srcSubdir := filepath.Join(localPath, entry.PathInRepo)
+
+		// Validate that the resolved path stays inside the local source root.
+		cleanBase := filepath.Clean(localPath)
+		cleanSub := filepath.Clean(srcSubdir)
+		rel, relErr := filepath.Rel(cleanBase, cleanSub)
+		if relErr != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+			return nil, fmt.Errorf("path_in_repo escapes clone root: %s", entry.PathInRepo)
+		}
+
+		if _, err := os.Stat(srcSubdir); os.IsNotExist(err) {
+			return nil, fmt.Errorf("registry skill path not found: %s", srcSubdir)
+		}
+		if err := copyDir(srcSubdir, tmpDir); err != nil {
+			return nil, fmt.Errorf("copy skill dir: %w", err)
+		}
+	} else {
+		// Production: clone from git.
+		if !gitAvailable() {
+			return nil, ErrGitNotAvailable
+		}
+
+		cloneArgs := []string{"clone", "--depth", "1", "--branch", entry.GitRef, entry.GitURL, tmpDir}
+		cmd := exec.CommandContext(ctx, "git", cloneArgs...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return nil, fmt.Errorf("git clone: %s: %w", string(out), err)
+		}
+
+		// Locate the skill subdirectory within the cloned repo.
+		srcSubdir := filepath.Join(tmpDir, entry.PathInRepo)
+
+		// Validate that path_in_repo stays inside the clone root.
+		cleanBase := filepath.Clean(tmpDir)
+		cleanSub := filepath.Clean(srcSubdir)
+		rel, relErr := filepath.Rel(cleanBase, cleanSub)
+		if relErr != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+			return nil, fmt.Errorf("path_in_repo escapes clone root: %s", entry.PathInRepo)
+		}
+
+		if _, err := os.Stat(srcSubdir); os.IsNotExist(err) {
+			return nil, fmt.Errorf("path_in_repo not found in cloned repo: %s", srcSubdir)
+		}
+
+		// Copy the subdirectory to a fresh staging dir.
+		stageDir, err := os.MkdirTemp("", "sprout-skill-stage-*")
+		if err != nil {
+			return nil, fmt.Errorf("create staging dir: %w", err)
+		}
+		defer os.RemoveAll(stageDir)
+
+		if err := copyDir(srcSubdir, stageDir); err != nil {
+			return nil, fmt.Errorf("copy skill subdirectory: %w", err)
+		}
+
+		// Swap tmpDir to point at the staged content.
+		// The original clone dir is still cleaned up by the earlier defer.
+		tmpDir = stageDir
+	}
+
+	// Find SKILL.md in the staged directory.
+	skills, err := findSkillMD(tmpDir)
 	if err != nil {
-		return nil, fmt.Errorf("create temp SKILL.md: %w", err)
+		return nil, fmt.Errorf("find SKILL.md: %w", err)
 	}
-	if _, err := io.Copy(w, resp.Body); err != nil {
-		w.Close()
-		return nil, fmt.Errorf("write SKILL.md: %w", err)
+	if len(skills) == 0 {
+		return nil, fmt.Errorf("no SKILL.md files found in registry skill directory")
 	}
-	w.Close()
 
-	content, err := os.ReadFile(skillFile)
+	// Install the first (and expected single) SKILL.md.
+	skillMD := skills[0]
+	srcDir := filepath.Dir(skillMD)
+	content, err := os.ReadFile(skillMD)
 	if err != nil {
 		return nil, fmt.Errorf("read SKILL.md: %w", err)
 	}
@@ -370,7 +409,15 @@ func InstallFromRegistry(ctx context.Context, registryID string, opts InstallOpt
 
 	skillID := fm.Name
 
-	result, err := installSkill(tmpDir, skillID, origin, opts)
+	origin := Origin{
+		Type:        "registry",
+		URL:         entry.GitURL,
+		Ref:         entry.GitRef,
+		RegistryID:  entry.ID,
+		InstalledAt: time.Now(),
+	}
+
+	result, err := installSkill(srcDir, skillID, origin, opts)
 	if err != nil {
 		return nil, err
 	}

@@ -45,6 +45,7 @@ var advancedAgentFlags = []string{
 	"bind-socket",
 	"secret",
 	"output-json",
+	"mock-llm",
 }
 
 func init() {

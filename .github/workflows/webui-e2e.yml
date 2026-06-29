@@ -1,0 +1,91 @@
+# SP-087-7: WebUI Playwright E2E test suite (CI)
+# Runs the full webui e2e suite (64 tests, 27 specs) across 4 parallel shards.
+# Flake retry: playwright.config.js sets retries: process.env.CI ? 1 : 0,
+# and GH Actions sets CI=true automatically.
+
+name: WebUI E2E
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: webui-e2e-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number) || format('ref-{0}', github.ref) }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: E2E (shard ${{ matrix.shard }}/4)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.25'
+        cache-dependency-path: go.sum
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v5
+      with:
+        node-version: '22'
+        cache: 'npm'
+        cache-dependency-path: package-lock.json
+
+    - name: Install Node.js dependencies (root workspaces)
+      # Single `npm ci` from root installs every workspace
+      # (packages/events, packages/ui, webui) plus root devDeps.
+      run: npm ci
+
+    - name: Build shared workspace packages
+      # webui imports @sprout/events and @sprout/ui from their `dist/`
+      # outputs (no `prepare` script — removed in 61ba3f17).
+      run: |
+        npm run build -w @sprout/events
+        npm run build -w @sprout/ui
+
+    - name: Install Chromium browser
+      # Only chromium is needed — the webui project uses chromium exclusively.
+      # --with-deps pulls in system libraries (libatk, libcups, etc.) on Ubuntu.
+      run: npx playwright install --with-deps chromium
+
+    - name: Run E2E shard ${{ matrix.shard }}/4
+      # CI=true is set by GH Actions automatically, which triggers
+      # playwright.config.js retries: process.env.CI ? 1 : 0 (retry-once on flake).
+      # The webServer block in playwright.config.js boots sprout + Vite via
+      # `npx tsx test/webui/start-stack.mjs` — no manual start needed.
+      run: npm run test:webui-e2e -- --shard=${{ matrix.shard }}/4
+
+    - name: Upload test results (HTML report)
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: e2e-html-report-shard-${{ matrix.shard }}
+        path: test-results-html/
+        if-no-files-found: ignore
+        retention-days: 7
+
+    - name: Upload test results (traces, videos, screenshots)
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: e2e-test-results-shard-${{ matrix.shard }}
+        path: test-results/
+        if-no-files-found: ignore
+        retention-days: 7

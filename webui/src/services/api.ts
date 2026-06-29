@@ -39,6 +39,8 @@ export type {
   CustomProvidersResponse,
   SkillConfig,
   SkillsResponse,
+  SkillInstallResult,
+  SkillRegistryEntry,
   SubagentTypeInfo,
   SessionSearchResult,
   SessionSearchResponse,

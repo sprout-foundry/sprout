@@ -47,9 +47,9 @@ type Origin struct {
 
 // InstallResult describes what was installed.
 type InstallResult struct {
-	SkillID    string
-	InstallDir string
-	Origin     Origin
+	SkillID    string `json:"skill_id"`
+	InstallDir string `json:"install_dir"`
+	Origin     Origin `json:"origin"`
 }
 
 // LoadOrigin reads <installDir>/.sprout-origin.json.

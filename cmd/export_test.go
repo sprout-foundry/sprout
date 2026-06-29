@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -159,7 +160,7 @@ func TestExportCmd_MarkdownDefault(t *testing.T) {
 
 	cmd := makeExportCmd()
 	cmd.SetArgs([]string{"test-export-1"})
-	output := captureStdoutCLI(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		_ = cmd.Execute()
 	})
 
@@ -174,7 +175,7 @@ func TestExportCmd_HTML(t *testing.T) {
 
 	cmd := makeExportCmd()
 	cmd.SetArgs([]string{"test-export-1", "--format", "html"})
-	output := captureStdoutCLI(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		_ = cmd.Execute()
 	})
 
@@ -189,7 +190,7 @@ func TestExportCmd_JSON(t *testing.T) {
 
 	cmd := makeExportCmd()
 	cmd.SetArgs([]string{"test-export-1", "--format", "json"})
-	output := captureStdoutCLI(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		_ = cmd.Execute()
 	})
 
@@ -226,7 +227,7 @@ func TestExportCmd_All(t *testing.T) {
 
 	cmd := makeExportCmd()
 	cmd.SetArgs([]string{"--all"})
-	output := captureStdoutCLI(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		_ = cmd.Execute()
 	})
 
@@ -241,7 +242,7 @@ func TestExportCmd_Latest(t *testing.T) {
 
 	cmd := makeExportCmd()
 	cmd.SetArgs([]string{"--latest"})
-	output := captureStdoutCLI(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		_ = cmd.Execute()
 	})
 
@@ -257,7 +258,7 @@ func TestExportCmd_NoCost_And_IncludeToolCalls(t *testing.T) {
 	// First, WITH tool calls and cost (to verify presence)
 	cmd1 := makeExportCmd()
 	cmd1.SetArgs([]string{"test-tool-calls", "--format", "markdown", "--include-tool-calls"})
-	outputWith := captureStdoutCLI(t, func() {
+	outputWith := testutil.CaptureStdout(t, func() {
 		_ = cmd1.Execute()
 	})
 	assert.Contains(t, outputWith, "read_file", "with --include-tool-calls should show tool name")
@@ -267,7 +268,7 @@ func TestExportCmd_NoCost_And_IncludeToolCalls(t *testing.T) {
 	// Now with --no-cost
 	cmd2 := makeExportCmd()
 	cmd2.SetArgs([]string{"test-tool-calls", "--format", "markdown", "--include-tool-calls", "--no-cost"})
-	outputNoCost := captureStdoutCLI(t, func() {
+	outputNoCost := testutil.CaptureStdout(t, func() {
 		_ = cmd2.Execute()
 	})
 	assert.Contains(t, outputNoCost, "read_file", "tool calls still present with --no-cost")
@@ -301,7 +302,7 @@ func TestExportCmd_MissingSession(t *testing.T) {
 func TestExportCmd_Help(t *testing.T) {
 	cmd := makeExportCmd()
 	cmd.SetArgs([]string{"--help"})
-	output := captureStdoutCLI(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		_ = cmd.Execute()
 	})
 
@@ -355,7 +356,7 @@ func TestExportCmd_All_JSON(t *testing.T) {
 
 	cmd := makeExportCmd()
 	cmd.SetArgs([]string{"--all", "--format", "json"})
-	output := captureStdoutCLI(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		_ = cmd.Execute()
 	})
 
@@ -370,7 +371,7 @@ func TestExportCmd_All_Markdown_Separators(t *testing.T) {
 
 	cmd := makeExportCmd()
 	cmd.SetArgs([]string{"--all", "--format", "markdown"})
-	output := captureStdoutCLI(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		_ = cmd.Execute()
 	})
 
@@ -383,7 +384,7 @@ func TestExportCmd_NoPrettyJSON(t *testing.T) {
 
 	cmd := makeExportCmd()
 	cmd.SetArgs([]string{"test-export-1", "--format", "json", "--no-pretty-json"})
-	output := captureStdoutCLI(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		_ = cmd.Execute()
 	})
 

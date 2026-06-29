@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/sprout-foundry/sprout/pkg/testutil"
 )
 
 // setupEmbeddingTestEnv creates a temp config dir with an embedding index dir,
@@ -69,7 +71,7 @@ func TestEmbeddingsClear_DefaultAll(t *testing.T) {
 	// Default is "all" — should clear everything
 	embeddingsClearType = "all"
 	embeddingsClearYes = true
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := runEmbeddingsClear()
 		if err != nil {
 			t.Fatalf("runEmbeddingsClear() error: %v", err)
@@ -103,7 +105,7 @@ func TestEmbeddingsClear_TypeCode(t *testing.T) {
 
 	embeddingsClearType = "code"
 	embeddingsClearYes = true
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := runEmbeddingsClear()
 		if err != nil {
 			t.Fatalf("runEmbeddingsClear() error: %v", err)
@@ -138,7 +140,7 @@ func TestEmbeddingsClear_TypeConversationTurn(t *testing.T) {
 
 	embeddingsClearType = "conversation_turn"
 	embeddingsClearYes = true
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := runEmbeddingsClear()
 		if err != nil {
 			t.Fatalf("runEmbeddingsClear() error: %v", err)
@@ -173,7 +175,7 @@ func TestEmbeddingsClear_TypeMemory(t *testing.T) {
 
 	embeddingsClearType = "memory"
 	embeddingsClearYes = true
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := runEmbeddingsClear()
 		if err != nil {
 			t.Fatalf("runEmbeddingsClear() error: %v", err)
@@ -230,7 +232,7 @@ func TestEmbeddingsClear_NoIndexDir(t *testing.T) {
 
 	embeddingsClearType = "all"
 	embeddingsClearYes = true
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := runEmbeddingsClear()
 		if err != nil {
 			t.Fatalf("runEmbeddingsClear() error: %v", err)
@@ -254,7 +256,7 @@ func TestEmbeddingsClear_EmptyIndexDir(t *testing.T) {
 
 	embeddingsClearType = "all"
 	embeddingsClearYes = true
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := runEmbeddingsClear()
 		if err != nil {
 			t.Fatalf("runEmbeddingsClear() error: %v", err)
@@ -281,7 +283,7 @@ func TestEmbeddingsClear_TypeCode_NoONNXFiles(t *testing.T) {
 
 	embeddingsClearType = "code"
 	embeddingsClearYes = true
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := runEmbeddingsClear()
 		if err != nil {
 			t.Fatalf("runEmbeddingsClear() error: %v", err)
@@ -308,7 +310,7 @@ func TestEmbeddingsClear_FullCodeFiles(t *testing.T) {
 
 	embeddingsClearType = "code"
 	embeddingsClearYes = true
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := runEmbeddingsClear()
 		if err != nil {
 			t.Fatalf("runEmbeddingsClear() error: %v", err)
@@ -337,7 +339,7 @@ func TestEmbeddingsClear_FullConversationFiles(t *testing.T) {
 
 	embeddingsClearType = "conversation_turn"
 	embeddingsClearYes = true
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := runEmbeddingsClear()
 		if err != nil {
 			t.Fatalf("runEmbeddingsClear() error: %v", err)
@@ -369,7 +371,7 @@ func TestEmbeddingsClear_All_Mixed(t *testing.T) {
 
 	embeddingsClearType = "all"
 	embeddingsClearYes = true
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := runEmbeddingsClear()
 		if err != nil {
 			t.Fatalf("runEmbeddingsClear() error: %v", err)
@@ -403,7 +405,7 @@ func TestEmbeddingsClear_UseDefaultConfigDir(t *testing.T) {
 
 	embeddingsClearType = "code"
 	embeddingsClearYes = true
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := runEmbeddingsClear()
 		if err != nil {
 			t.Fatalf("runEmbeddingsClear() error: %v", err)
@@ -432,7 +434,7 @@ func TestEmbeddingsClear_DryRun_All(t *testing.T) {
 
 	embeddingsClearType = "all"
 	embeddingsClearDryRun = true
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := runEmbeddingsClear()
 		if err != nil {
 			t.Fatalf("runEmbeddingsClear() error: %v", err)
@@ -463,7 +465,7 @@ func TestEmbeddingsClear_DryRun_Code(t *testing.T) {
 
 	embeddingsClearType = "code"
 	embeddingsClearDryRun = true
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := runEmbeddingsClear()
 		if err != nil {
 			t.Fatalf("runEmbeddingsClear() error: %v", err)
@@ -490,7 +492,7 @@ func TestEmbeddingsClear_DryRun_NoFiles(t *testing.T) {
 
 	embeddingsClearType = "all"
 	embeddingsClearDryRun = true
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := runEmbeddingsClear()
 		if err != nil {
 			t.Fatalf("runEmbeddingsClear() error: %v", err)
@@ -545,7 +547,7 @@ func TestEmbeddingsClear_YesSkipsConfirm(t *testing.T) {
 	// --yes should skip the confirmation prompt entirely
 	embeddingsClearType = "code"
 	embeddingsClearYes = true
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := runEmbeddingsClear()
 		if err != nil {
 			t.Fatalf("runEmbeddingsClear() error: %v", err)
@@ -577,7 +579,7 @@ func TestEmbeddingsClear_DryRun_NoConfirm(t *testing.T) {
 	embeddingsClearDryRun = true
 	embeddingsClearYes = false
 
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		err := runEmbeddingsClear()
 		if err != nil {
 			t.Fatalf("runEmbeddingsClear() error: %v", err)

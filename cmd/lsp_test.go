@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/sprout-foundry/sprout/pkg/lsp/proxy"
+	"github.com/sprout-foundry/sprout/pkg/testutil"
 )
 
 // =============================================================================
@@ -20,7 +21,7 @@ func TestRunLSPList(t *testing.T) {
 	t.Setenv("LEDIT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		err := runLSPList()
 		if err != nil {
 			t.Fatalf("runLSPList() error: %v", err)
@@ -64,7 +65,7 @@ func TestRunLSPInstall_Python(t *testing.T) {
 	t.Setenv("LEDIT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		err := runLSPInstall("python")
 		if err != nil {
 			t.Fatalf("runLSPInstall('python') error: %v", err)
@@ -87,7 +88,7 @@ func TestRunLSPInstall_Go(t *testing.T) {
 	t.Setenv("LEDIT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		err := runLSPInstall("go")
 		if err != nil {
 			t.Fatalf("runLSPInstall('go') error: %v", err)
@@ -107,7 +108,7 @@ func TestRunLSPInstall_TypeScript(t *testing.T) {
 	t.Setenv("LEDIT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		err := runLSPInstall("typescript")
 		if err != nil {
 			t.Fatalf("runLSPInstall('typescript') error: %v", err)
@@ -127,7 +128,7 @@ func TestRunLSPInstall_CaseInsensitive(t *testing.T) {
 	t.Setenv("LEDIT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		err := runLSPInstall("Go")
 		if err != nil {
 			t.Fatalf("runLSPInstall('Go') error: %v", err)
@@ -144,7 +145,7 @@ func TestRunLSPInstall_WhitespaceTrimmed(t *testing.T) {
 	t.Setenv("LEDIT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		err := runLSPInstall("  rust  ")
 		if err != nil {
 			t.Fatalf("runLSPInstall('  rust  ') error: %v", err)
@@ -183,7 +184,7 @@ func TestRunLSPInstall_Shell(t *testing.T) {
 	t.Setenv("LEDIT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		err := runLSPInstall("shell")
 		if err != nil {
 			t.Fatalf("runLSPInstall('shell') error: %v", err)
@@ -221,7 +222,7 @@ func TestRunLSPInstall_WithCustomOverride(t *testing.T) {
 		t.Fatalf("failed to write config: %v", err)
 	}
 
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		err := runLSPInstall("go")
 		if err != nil {
 			t.Fatalf("runLSPInstall('go') error: %v", err)
@@ -246,7 +247,7 @@ func TestRunLSPStatus(t *testing.T) {
 	t.Setenv("LEDIT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		err := runLSPStatus()
 		if err != nil {
 			t.Fatalf("runLSPStatus() error: %v", err)
@@ -412,7 +413,7 @@ func TestLspCmd_NoArgs_ShowsHelp(t *testing.T) {
 	t.Setenv("LEDIT_CONFIG", tmpDir)
 	t.Setenv("SPROUT_CONFIG", tmpDir)
 
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		if err := lspCmd.RunE(lspCmd, []string{}); err != nil {
 			t.Fatalf("lspCmd.RunE failed: %v", err)
 		}

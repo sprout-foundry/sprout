@@ -1,12 +1,11 @@
 package agent
 
 import (
-	"fmt"
-	"os"
 	"strings"
 	"testing"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/testutil"
 )
 
 // TestTokenTrackingAccuracy verifies that token tracking is accurate
@@ -183,57 +182,6 @@ func TestClampingBehavior(t *testing.T) {
 	}
 }
 
-func captureStdout(t *testing.T, fn func()) string {
-	t.Helper()
-	oldStdout := os.Stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("failed to create pipe: %v", err)
-	}
-	os.Stdout = w
-	t.Cleanup(func() { os.Stdout = oldStdout })
-
-	done := make(chan string, 1)
-	go func() {
-		var buf strings.Builder
-		tmp := make([]byte, 4096)
-		for {
-			n, readErr := r.Read(tmp)
-			if n > 0 {
-				buf.Write(tmp[:n])
-			}
-			if readErr != nil {
-				break
-			}
-		}
-		done <- buf.String()
-	}()
-
-	defer func() { _ = w.Close() }()
-	fn()
-	_ = w.Close()
-	return <-done
-}
-
-// TestCaptureStdout_LargeOutput exercises captureStdout with output that
-// exceeds the OS pipe buffer (64 KiB on Linux). Without a concurrent
-// reader, the writer inside fn() would block once the buffer fills.
-func TestCaptureStdout_LargeOutput(t *testing.T) {
-	const size = 256 * 1024 // 4x the typical pipe buffer
-	want := strings.Repeat("x", size)
-
-	out := captureStdout(t, func() {
-		fmt.Print(want)
-	})
-
-	if len(out) != size {
-		t.Fatalf("captured %d bytes, want %d", len(out), size)
-	}
-	if out != want {
-		t.Fatal("output content mismatch")
-	}
-}
-
 func TestComputeConversationSummaryMetrics(t *testing.T) {
 	messages := []api.Message{
 		{Role: "system", Content: "sys"},
@@ -275,7 +223,7 @@ func TestPrintConversationSummaryDoesNotPanicWithSingleMessage(t *testing.T) {
 	agent.state.SetMessages([]api.Message{{Role: "user", Content: "hello"}})
 	agent.state.SetMaxContextTokens(120000)
 
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		agent.PrintConversationSummary(true)
 	})
 
@@ -298,7 +246,7 @@ func TestPrintConversationSummaryShowsEstimatedTokenNote(t *testing.T) {
 	agent.state.SetCompletionTokens(2433)
 	agent.state.SetCachedTokens(71400)
 
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		agent.PrintConversationSummary(true)
 	})
 

@@ -30,8 +30,7 @@ func runQueueMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 	// Suppressed automatically on non-TTY.
 	footer := console.NewStatusFooter(os.Stderr, &agentFooterSource{agent: chatAgent})
 	console.RegisterGlobalStatusFooter(footer)
-	// Footer disabled — cursor positioning races with prose streaming.
-	// footer.Start()
+	footer.Start()
 	defer footer.Stop()
 
 	// Wire event-driven output routing (streaming, tool timeline,

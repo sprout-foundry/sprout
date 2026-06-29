@@ -39,6 +39,7 @@ import {
   X,
   Loader2,
   Download,
+  CircleDollarSign,
 } from 'lucide-react';
 import AutomationsPanel from './AutomationsPanel';
 import SearchView from './SearchView';
@@ -61,8 +62,8 @@ interface SidebarProps {
   /** Callback to open provider setup / onboarding dialog */
   onRequestProviderSetup?: () => void;
   availableModels?: string[];
-  currentView?: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team';
-  onViewChange?: (view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team') => void;
+  currentView?: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs';
+  onViewChange?: (view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs') => void;
   stats?: {
     queryCount: number;
     filesModified: number;
@@ -143,7 +144,7 @@ const MAIN_SECTION_TABS: { id: SectionTab; icon: LucideIcon; label: string }[] =
 ];
 
 /** Valid platform view IDs for type-safe navigation */
-const VALID_PLATFORM_VIEWS = new Set(['tasks', 'billing', 'team']);
+const VALID_PLATFORM_VIEWS = new Set(['tasks', 'billing', 'team', 'costs']);
 
 /** Icon name-to-component mapping for platform nav items */
 const PLATFORM_ICON_MAP: Record<string, LucideIcon> = {
@@ -755,7 +756,7 @@ function Sidebar({
                         className={`rail-icon ${isActive ? 'active' : ''}`}
                         onClick={() => {
                           if (onViewChange && VALID_PLATFORM_VIEWS.has(item.id)) {
-                            onViewChange(item.id as 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team');
+                            onViewChange(item.id as 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs');
                           }
                         }}
                         title={item.label}
@@ -768,6 +769,21 @@ function Sidebar({
                 </nav>
               </>
             )}
+
+            {/* Costs — local feature, always visible */}
+            <div role="tablist" aria-orientation="vertical">
+              <button
+                role="tab"
+                aria-selected={currentView === 'costs'}
+                className={`rail-icon ${currentView === 'costs' ? 'active' : ''}`}
+                onClick={() => onViewChange?.('costs')}
+                title="Costs"
+                aria-label="Costs"
+                data-testid="sidebar-costs-button"
+              >
+                <CircleDollarSign size={18} strokeWidth={1.5} />
+              </button>
+            </div>
 
             {/* Settings & Logs tabs */}
             <div role="tablist" aria-orientation="vertical">

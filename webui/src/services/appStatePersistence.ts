@@ -100,7 +100,7 @@ export const loadPersistedAppState = (): Partial<AppState> | null => {
       model: typeof parsed.model === 'string' ? parsed.model || '' : '',
       sessionId: typeof parsed.sessionId === 'string' ? parsed.sessionId : null,
       queryCount: typeof parsed.queryCount === 'number' ? parsed.queryCount : 0,
-      currentView: ['chat', 'editor', 'git', 'tasks', 'billing', 'team'].includes(parsed.currentView)
+      currentView: ['chat', 'editor', 'git', 'tasks', 'billing', 'team', 'costs'].includes(parsed.currentView)
         ? parsed.currentView
         : 'chat',
       messages: parsedMessages,

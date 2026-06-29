@@ -819,6 +819,40 @@ class ApiService {
     return settingsApi.updateSkills(clientFetch, skills);
   }
 
+  // ── SP-086-4: Skill install / manage ────────────────────────
+
+  async listInstalledSkills(): Promise<
+    Array<{
+      id: string;
+      origin: { type: string; installed_at?: string };
+      installed_at?: string;
+      updated_at?: string;
+    }>
+  > {
+    return settingsApi.listInstalledSkills(clientFetch);
+  }
+
+  async listSkillRegistry(): Promise<
+    import('./types/settings').SkillRegistryEntry[]
+  > {
+    return settingsApi.listSkillRegistry(clientFetch);
+  }
+
+  async installSkill(
+    source: string,
+    opts?: { ref?: string; force?: boolean },
+  ): Promise<import('./types/settings').SkillInstallResult[]> {
+    return settingsApi.installSkill(clientFetch, source, opts);
+  }
+
+  async updateSkill(id: string): Promise<import('./types/settings').SkillInstallResult[]> {
+    return settingsApi.updateSkill(clientFetch, id);
+  }
+
+  async removeSkill(id: string): Promise<{ status: string; id: string }> {
+    return settingsApi.removeSkill(clientFetch, id);
+  }
+
   async getSubagentTypes(): Promise<{
     subagent_types: Record<string, SubagentTypeInfo>;
     available_providers: Array<{ id: string; name: string; models: string[] }>;

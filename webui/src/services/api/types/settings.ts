@@ -136,6 +136,30 @@ export interface SkillsResponse {
   skills: Record<string, SkillConfig>;
 }
 
+// SP-086-4: Install/manage skills via the HTTP API.
+export interface SkillInstallResult {
+  skill_id: string;
+  install_dir: string;
+  origin: {
+    type: string;
+    url?: string;
+    path?: string;
+    registry_id?: string;
+    ref?: string;
+    commit_sha?: string;
+    installed_at: string;
+  };
+}
+
+export interface SkillRegistryEntry {
+  id: string;
+  name: string;
+  description: string;
+  git_url: string;
+  git_ref: string;
+  path_in_repo: string;
+}
+
 export interface SubagentTypeInfo {
   id: string;
   name: string;

@@ -4,6 +4,7 @@ package webui
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
@@ -273,7 +274,7 @@ func TestGetCostSummary_AllFields(t *testing.T) {
 		{Timestamp: lastMonthDate, Provider: "anthropic", Model: "claude", Cost: 0.08},
 	}
 
-	summary := cs.GetCostSummary()
+	summary := cs.GetCostSummary(time.Time{}, time.Time{})
 
 	// Total cost should be sum of all
 	if !floatEq(summary.TotalCost, 0.05+0.03+0.10+0.02+0.08, 0.0001) {
@@ -363,7 +364,7 @@ func TestGetCostSummary_AllFields(t *testing.T) {
 func TestGetCostSummary_Empty(t *testing.T) {
 	cs := makeCostStore(t)
 
-	summary := cs.GetCostSummary()
+	summary := cs.GetCostSummary(time.Time{}, time.Time{})
 
 	if summary.TotalCost != 0 {
 		t.Errorf("TotalCost = %f, want 0", summary.TotalCost)
@@ -448,5 +449,173 @@ func TestForcePersist_EmptyStore(t *testing.T) {
 	// Empty array should be written
 	if string(data) != "[]" {
 		t.Errorf("persisted data = %q, want []", string(data))
+	}
+}
+
+func TestCostSummary_TopSessions_Populated(t *testing.T) {
+	cs := makeCostStore(t)
+	now := time.Now()
+
+	// Create 12 sessions with descending costs
+	for i := 0; i < 12; i++ {
+		cost := float64(12-i) * 0.01
+		cs.records = append(cs.records, CostRecord{
+			Timestamp:  now.Add(-time.Duration(i) * time.Hour),
+			Provider:   "openai",
+			Model:      "gpt-4",
+			Cost:       cost,
+			SessionID:  fmt.Sprintf("sess-%d", i),
+			Title:      fmt.Sprintf("Session %d", i),
+			WorkingDir: fmt.Sprintf("/workspace/%d", i),
+			LastUpdated: now.Format(time.RFC3339),
+		})
+	}
+
+	summary := cs.GetCostSummary(time.Time{}, time.Time{})
+
+	// Should have exactly 10 rows (top 10 of 12)
+	if len(summary.TopSessions) != 10 {
+		t.Fatalf("expected 10 top sessions, got %d", len(summary.TopSessions))
+	}
+
+	// Should be sorted by cost descending
+	for i := 0; i < len(summary.TopSessions)-1; i++ {
+		if summary.TopSessions[i].TotalCost < summary.TopSessions[i+1].TotalCost {
+			t.Errorf("TopSessions not sorted desc: row %d cost %f < row %d cost %f",
+				i, summary.TopSessions[i].TotalCost, i+1, summary.TopSessions[i+1].TotalCost)
+		}
+	}
+
+	// Most expensive should be sess-0 (cost=0.12)
+	if summary.TopSessions[0].SessionID != "sess-0" {
+		t.Errorf("top session = %q, want %q", summary.TopSessions[0].SessionID, "sess-0")
+	}
+	if !floatEq(summary.TopSessions[0].TotalCost, 0.12, 0.0001) {
+		t.Errorf("top session cost = %f, want 0.12", summary.TopSessions[0].TotalCost)
+	}
+}
+
+func TestCostSummary_TopSessions_FilteredByTimeRange(t *testing.T) {
+	cs := makeCostStore(t)
+	now := time.Now()
+
+	// Old session (outside range)
+	cs.records = append(cs.records, CostRecord{
+		Timestamp:  now.AddDate(0, 0, -60),
+		Provider:   "openai",
+		Model:      "gpt-4",
+		Cost:       1.00,
+		SessionID:  "old-sess",
+		Title:      "Old Session",
+		WorkingDir: "/old",
+		LastUpdated: now.AddDate(0, 0, -60).Format(time.RFC3339),
+	})
+
+	// Recent session (inside range)
+	cs.records = append(cs.records, CostRecord{
+		Timestamp:  now.Add(-1 * time.Hour),
+		Provider:   "openai",
+		Model:      "gpt-4",
+		Cost:       0.05,
+		SessionID:  "new-sess",
+		Title:      "New Session",
+		WorkingDir: "/new",
+		LastUpdated: now.Format(time.RFC3339),
+	})
+
+	startDate := now.AddDate(0, 0, -30)
+	endDate := now
+
+	summary := cs.GetCostSummary(startDate, endDate)
+
+	// Should only include the recent session
+	if len(summary.TopSessions) != 1 {
+		t.Fatalf("expected 1 top session, got %d", len(summary.TopSessions))
+	}
+	if summary.TopSessions[0].SessionID != "new-sess" {
+		t.Errorf("top session = %q, want %q", summary.TopSessions[0].SessionID, "new-sess")
+	}
+}
+
+func TestCostSummary_TopSessions_Empty(t *testing.T) {
+	cs := makeCostStore(t)
+
+	summary := cs.GetCostSummary(time.Time{}, time.Time{})
+
+	if summary.TopSessions == nil {
+		t.Error("TopSessions should be empty slice, not nil")
+	}
+	if len(summary.TopSessions) != 0 {
+		t.Errorf("expected 0 top sessions, got %d", len(summary.TopSessions))
+	}
+}
+
+func TestCostSummary_TopSessions_MultipleRecordsPerSession(t *testing.T) {
+	cs := makeCostStore(t)
+	now := time.Now()
+
+	// Two records for the same session
+	cs.records = append(cs.records,
+		CostRecord{
+			Timestamp:  now.Add(-2 * time.Hour),
+			Provider:   "openai",
+			Model:      "gpt-4",
+			Cost:       0.05,
+			SessionID:  "sess-multi",
+			Title:      "Multi-record Session",
+			WorkingDir: "/workspace",
+			LastUpdated: now.Add(-2 * time.Hour).Format(time.RFC3339),
+		},
+		CostRecord{
+			Timestamp:  now.Add(-1 * time.Hour),
+			Provider:   "anthropic",
+			Model:      "claude",
+			Cost:       0.10,
+			SessionID:  "sess-multi",
+			Title:      "Multi-record Session",
+			WorkingDir: "/workspace",
+			LastUpdated: now.Format(time.RFC3339),
+		},
+	)
+
+	summary := cs.GetCostSummary(time.Time{}, time.Time{})
+
+	if len(summary.TopSessions) != 1 {
+		t.Fatalf("expected 1 top session, got %d", len(summary.TopSessions))
+	}
+	row := summary.TopSessions[0]
+	if row.SessionID != "sess-multi" {
+		t.Errorf("session = %q, want %q", row.SessionID, "sess-multi")
+	}
+	if !floatEq(row.TotalCost, 0.15, 0.0001) {
+		t.Errorf("cost = %f, want 0.15", row.TotalCost)
+	}
+	if row.Title != "Multi-record Session" {
+		t.Errorf("title = %q, want %q", row.Title, "Multi-record Session")
+	}
+	if row.WorkingDir != "/workspace" {
+		t.Errorf("working_dir = %q, want %q", row.WorkingDir, "/workspace")
+	}
+}
+
+func TestCostSummary_TopSessions_NoSessionID(t *testing.T) {
+	cs := makeCostStore(t)
+	now := time.Now()
+
+	// Records without session IDs should not appear in TopSessions
+	cs.records = append(cs.records,
+		CostRecord{
+			Timestamp: now.Add(-1 * time.Hour),
+			Provider:  "openai",
+			Model:     "gpt-4",
+			Cost:      0.05,
+			SessionID: "", // no session
+		},
+	)
+
+	summary := cs.GetCostSummary(time.Time{}, time.Time{})
+
+	if len(summary.TopSessions) != 0 {
+		t.Errorf("expected 0 top sessions (no session IDs), got %d", len(summary.TopSessions))
 	}
 }

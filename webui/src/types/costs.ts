@@ -11,4 +11,14 @@ export interface CostSummary {
   last_7_days?: number;
   this_month?: number;
   last_month?: number;
+  top_sessions?: SessionCostRow[];
+}
+
+/** Single row of session-level cost data returned in CostSummary.top_sessions. */
+export interface SessionCostRow {
+  session_id: string;
+  title: string;
+  working_dir: string;
+  total_cost: number;
+  last_updated: string; // RFC3339 timestamp
 }

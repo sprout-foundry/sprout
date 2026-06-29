@@ -1,7 +1,7 @@
 import { useCallback, useEffect } from 'react';
 
 export interface UseFileHandlerParams {
-  onViewChange: (view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team') => void;
+  onViewChange: (view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs') => void;
   openFile: (file: { path: string; name: string; isDir: boolean; size: number; modified: number; ext: string }) => void;
 }
 

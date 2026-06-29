@@ -70,6 +70,14 @@ type StatusFooter struct {
 	winchStop chan struct{}
 	winchDone chan struct{}
 
+	// proseStreaming is set by the AssistantTurnRenderer while prose
+	// chunks are actively being written. When true, Refresh() skips
+	// the draw to avoid DEC save/restore (\0337/\0338) racing with
+	// cursor movement in the scroll region — the saved position goes
+	// stale when content scrolls between save and restore, scattering
+	// prose characters across the screen.
+	proseStreaming bool
+
 	// Cost-warn thresholds (USD). Costs above warn render yellow; above
 	// alert render red. Sane defaults; future config wiring possible.
 	WarnCost  float64
@@ -155,17 +163,40 @@ func (f *StatusFooter) Start() {
 
 // Refresh re-reads the source and redraws the footer. Idempotent and
 // cheap; safe to call from event subscribers on each ToolEnd.
+//
+// Skipped while prose is actively streaming (proseStreaming flag set by
+// the AssistantTurnRenderer) to avoid the DEC save/restore cursor
+// sequences racing with scroll-region content — the root cause of the
+// "scattered characters" clobbering symptom.
 func (f *StatusFooter) Refresh() {
 	if f == nil || !f.isTTY {
 		return
 	}
 	f.mu.Lock()
 	active := f.active
+	streaming := f.proseStreaming
 	f.mu.Unlock()
-	if !active {
+	if !active || streaming {
 		return
 	}
 	f.draw()
+}
+
+// SetProseStreaming toggles the prose-streaming gate. When true,
+// Refresh() is a no-op so the footer's cursor save/restore can't race
+// with prose being written to the scroll region.
+func (f *StatusFooter) SetProseStreaming(active bool) {
+	if f == nil {
+		return
+	}
+	f.mu.Lock()
+	f.proseStreaming = active
+	f.mu.Unlock()
+	// If streaming just ended, refresh the footer to pick up any cost /
+	// context changes that accumulated while draws were suppressed.
+	if !active {
+		f.Refresh()
+	}
 }
 
 // Resize handles a terminal-size change (SIGWINCH). The OLD footer rows
@@ -892,6 +923,15 @@ func RegisterGlobalStatusFooter(f *StatusFooter) {
 	globalFooterMu.Lock()
 	defer globalFooterMu.Unlock()
 	globalFooter = f
+}
+
+// GetGlobalStatusFooter returns the process-wide footer, or nil if none
+// is registered. Used by the AssistantTurnRenderer to suppress footer
+// refresh during active prose streaming.
+func GetGlobalStatusFooter() *StatusFooter {
+	globalFooterMu.RLock()
+	defer globalFooterMu.RUnlock()
+	return globalFooter
 }
 
 // StopGlobalStatusFooter resets the registered global footer's scroll

@@ -64,6 +64,22 @@ type AssistantTurnRenderer struct {
 	startRawWidth int
 	formatter     *MarkdownFormatter
 	indent        string
+
+	// footer is the status footer to suppress during active prose
+	// streaming. When non-nil, SetProseStreaming(true) is called on
+	// the first WriteChunk of each segment and SetProseStreaming(false)
+	// on segment end (OnExternalWrite / FinalizeAtTurnEnd).
+	footer *StatusFooter
+}
+
+// SetFooter wires the status footer so the renderer can suppress its
+// refresh during active prose streaming — the root cause of the
+// "scattered characters" clobbering symptom (DEC save/restore cursor
+// races with scroll-region content).
+func (r *AssistantTurnRenderer) SetFooter(f *StatusFooter) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.footer = f
 }
 
 // NewAssistantTurnRenderer constructs a renderer with the given terminal
@@ -208,6 +224,13 @@ func (r *AssistantTurnRenderer) WriteChunk(chunk string) {
 	// prose row lands.
 	r.endReasoningLocked()
 
+	// Suppress footer refresh while prose is streaming. The footer's
+	// DEC save/restore (\0337/\0338) races with scroll-region scrolling,
+	// displacing the cursor and scattering characters.
+	if r.footer != nil && r.seg.Len() == 0 {
+		r.footer.SetProseStreaming(true)
+	}
+
 	r.seg.WriteString(chunk)
 	indentCols := displayWidth(r.indent)
 
@@ -331,6 +354,10 @@ func formatBytesShort(n int) string {
 }
 
 func (r *AssistantTurnRenderer) resetSegment() {
+	// Re-enable footer refresh now that the prose segment is done.
+	if r.footer != nil {
+		r.footer.SetProseStreaming(false)
+	}
 	r.seg.Reset()
 	r.atLineStart = true
 	r.curLineRunes = 0

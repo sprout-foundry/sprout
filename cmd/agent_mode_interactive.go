@@ -42,7 +42,10 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	// the input prompt then renders on top of it.
 	footer := console.NewStatusFooter(os.Stderr, &agentFooterSource{agent: chatAgent})
 	console.RegisterGlobalStatusFooter(footer)
-	footer.Start()
+	// Footer disabled — its DEC save/restore + absolute cursor positioning
+	// (\0337 / \033[%d;1H / \0338) during Refresh races with prose streaming
+	// and scatters characters across the screen. See paste_20260629_125609.
+	// footer.Start()
 	defer footer.Stop()
 
 	// Compact startup chrome: a single greeting line with the active

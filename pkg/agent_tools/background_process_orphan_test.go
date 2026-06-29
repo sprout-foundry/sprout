@@ -3,6 +3,7 @@
 package tools
 
 import (
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -109,12 +110,11 @@ func TestCleanupOrphanedBackgroundProcesses_UnparseablePID(t *testing.T) {
 	_, err = os.Stat(pidPath)
 	assert.True(t, os.IsNotExist(err), "unparseable pid file should be removed")
 
-	// The output file is NOT removed because the `continue` after the
-	// unparseable PID path skips the sessionID derivation and output
-	// file removal entirely. This is a known limitation of the code.
+	// The orphan-output sweep now picks up .output files without a
+	// matching .pid, so this stale output gets removed too.
 	_, err = os.Stat(outputPath)
-	assert.False(t, os.IsNotExist(err),
-		"output file is NOT removed for unparseable PIDs (known limitation — continue skips output cleanup)")
+	assert.True(t, os.IsNotExist(err),
+		"stray output file (no matching .pid) is removed by the orphan-output sweep")
 }
 
 func TestCleanupOrphanedBackgroundProcesses_NoPIDFiles(t *testing.T) {
@@ -185,4 +185,111 @@ func TestCleanupOrphanedBackgroundProcesses_MultipleOrphans(t *testing.T) {
 		_, err = os.Stat(outputPath)
 		assert.True(t, os.IsNotExist(err), "output file %d should be removed", i)
 	}
+}
+
+// TestCleanupOrphanedBackgroundProcesses_StrayOutput covers the case where
+// an .output file exists without a corresponding .pid file (e.g., the PID
+// file was already removed by a previous run, or the process was started
+// outside the BPM). Without the stray-output sweep these accumulate forever
+// in /tmp/sprout-bg/.
+func TestCleanupOrphanedBackgroundProcesses_StrayOutput(t *testing.T) {
+	t.Parallel()
+
+	baseDir := t.TempDir()
+
+	// Create three stray .output files (no matching .pid) and one
+	// properly-paired .pid/.output pair (must NOT be touched by the
+	// stray sweep since its .pid is present).
+	strayIDs := []string{"bg-stray-aaaaaaaaaa", "bg-stray-bbbbbbbbbb", "bg-stray-cccccccccc"}
+	for _, sid := range strayIDs {
+		require.NoError(t, os.WriteFile(
+			filepath.Join(baseDir, sid+".output"),
+			[]byte("stale\n"),
+			0600,
+		))
+	}
+
+	pairedSID := "bg-paired-ddddddddd"
+	require.NoError(t, os.WriteFile(
+		filepath.Join(baseDir, pairedSID+".pid"),
+		[]byte("999999999\n"), // unused — process is gone
+		0600,
+	))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(baseDir, pairedSID+".output"),
+		[]byte("paired\n"),
+		0600,
+	))
+
+	// Run cleanup
+	err := CleanupOrphanedBackgroundProcesses(baseDir)
+	require.NoError(t, err)
+
+	// All stray .output files should be gone
+	for _, sid := range strayIDs {
+		_, statErr := os.Stat(filepath.Join(baseDir, sid+".output"))
+		assert.True(t, os.IsNotExist(statErr), "stray output %s should be removed", sid)
+	}
+
+	// The paired .output should also be gone (matched its .pid, which the
+	// worker pool removed alongside)
+	_, statErr := os.Stat(filepath.Join(baseDir, pairedSID+".output"))
+	assert.True(t, os.IsNotExist(statErr), "paired output should be removed with its .pid")
+	_, statErr = os.Stat(filepath.Join(baseDir, pairedSID+".pid"))
+	assert.True(t, os.IsNotExist(statErr), "paired pid should be removed")
+}
+
+// TestCleanupOrphanedBackgroundProcesses_MissingFilesSilent verifies that
+// when a .pid or .output file is missing at removal time (e.g., removed
+// concurrently or already gone), the cleanup function does NOT log a
+// "warn: failed to remove" message. This is the regression test for the
+// noisy startup warnings the user reported.
+func TestCleanupOrphanedBackgroundProcesses_MissingFilesSilent(t *testing.T) {
+	t.Parallel()
+
+	baseDir := t.TempDir()
+
+	// Write a .pid file pointing to a dead PID, but DO NOT create the
+	// matching .output file. The cleanup must remove the .pid silently
+	// and the missing .output must not trigger a warning.
+	deadPID := 999999998
+	sessionID := "bg-silent-test-eeeeeee"
+	pidPath := filepath.Join(baseDir, sessionID+".pid")
+	require.NoError(t, os.WriteFile(pidPath, []byte(strconv.Itoa(deadPID)+"\n"), 0600))
+	// Intentionally no .output file
+
+	// Capture log output to verify no "warn: failed to remove" lines.
+	logFile := filepath.Join(t.TempDir(), "captured.log")
+
+	// Redirect log output for this test
+	origOutput := log.Writer()
+	log.SetOutput(openFileForLogCapture(logFile))
+	defer log.SetOutput(origOutput)
+
+	err := CleanupOrphanedBackgroundProcesses(baseDir)
+	require.NoError(t, err)
+
+	// Read captured log
+	logBytes, readErr := os.ReadFile(logFile)
+	require.NoError(t, readErr)
+	logOutput := string(logBytes)
+
+	assert.NotContains(t, logOutput, "warn: failed to remove output file",
+		"missing .output file should not produce a warning, got: %s", logOutput)
+	assert.NotContains(t, logOutput, "warn: failed to remove PID file",
+		"missing .pid file should not produce a warning, got: %s", logOutput)
+
+	// PID file should still be removed
+	_, statErr := os.Stat(pidPath)
+	assert.True(t, os.IsNotExist(statErr), "pid file should be removed")
+}
+
+// openFileForLogCapture opens a file for log output capture. Returns
+// io.Writer compatible with log.SetOutput.
+func openFileForLogCapture(path string) *os.File {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	if err != nil {
+		panic(err)
+	}
+	return f
 }

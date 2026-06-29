@@ -87,6 +87,13 @@ func NewAssistantTurnRenderer(width int, formatter *MarkdownFormatter) *Assistan
 // monologue. The header is finalized into "▽ Thinking · N kB (~N tokens)"
 // by the next prose chunk (via WriteChunk) or by FinalizeAtTurnEnd.
 //
+// The header is printed WITHOUT a trailing newline so that
+// endReasoningLocked can rewrite it in-place on the same row using
+// `\r\033[K` + summary + `\n`. This avoids DEC save/restore (`\0337`/`\0338`)
+// entirely — those sequences collide with concurrent writers (activity
+// indicator, status footer, InputReader) that use `\r\033[K` and can
+// corrupt the cursor position on many terminals.
+//
 // No-op when the chunk is empty. Safe to call concurrently with other
 // renderer methods — internal mutex guards the state.
 func (r *AssistantTurnRenderer) WriteReasoningChunk(chunk string) {
@@ -99,16 +106,21 @@ func (r *AssistantTurnRenderer) WriteReasoningChunk(chunk string) {
 	defer UnlockOutput()
 
 	if !r.reasoningActive {
-		// Print the header on a fresh row so it sits cleanly between
-		// the assistant header and the prose that follows. Dim color
-		// reads as "ambient detail" rather than active output.
-		fmt.Printf("%s%s%s▽ Thinking…%s\n", r.indent, ColorDim, ColorItalic, ColorReset)
+		// Print the header on the current row WITHOUT a trailing newline.
+		// The activity indicator's Stop() already cleared the row with
+		// `\r\033[K` and left the cursor at column 0, so we can write
+		// directly. Both this method and Indicator.render() hold outputMu,
+		// so no concurrent writer can interleave.
+		fmt.Printf("%s%s%s▽ Thinking…%s", r.indent, ColorDim, ColorItalic, ColorReset)
 		r.reasoningActive = true
-		// The header consumed exactly one physical row regardless of
-		// terminal width (it's well under any reasonable width); track
-		// it so the prose segment's clear-and-rerender at turn end
-		// doesn't accidentally walk over the header.
-		r.physicalLines++
+		// We're mid-line on the header row. Track the visual width so
+		// subsequent WriteChunk calls indent correctly.
+		r.atLineStart = false
+		r.curLineRunes = displayWidth(r.indent) + displayWidth("▽ Thinking…")
+		// physicalLines is NOT incremented here — the header occupies the
+		// same row that the spinner's Stop() already cleared. It will be
+		// incremented in endReasoningLocked when the summary line gets
+		// its trailing \n.
 	}
 	r.reasoningBytes += len(chunk)
 }
@@ -118,6 +130,12 @@ func (r *AssistantTurnRenderer) WriteReasoningChunk(chunk string) {
 // mutex held. Idempotent — no-op when no reasoning was streamed this
 // turn. Token estimate uses the common rule of thumb (1 token ≈ 4
 // bytes); it's a hint, not an accounting source.
+//
+// The header was printed without a trailing newline by WriteReasoningChunk,
+// so we rewrite it in-place: `\r\033[K` clears the current row, then we
+// print the summary + `\n` to advance to the next row. No cursor save/restore
+// needed — we're already on the correct row because both this path and the
+// indicator/footer hold outputMu for serialization.
 func (r *AssistantTurnRenderer) endReasoningLocked() {
 	if !r.reasoningActive {
 		return
@@ -126,11 +144,18 @@ func (r *AssistantTurnRenderer) endReasoningLocked() {
 	bytes := r.reasoningBytes
 	r.reasoningBytes = 0
 
-	// Step one row up onto the header, clear it, reprint the summary.
-	fmt.Print("\033[1A\r\033[K")
+	// Rewrite the header row in-place. `\r` returns to column 0,
+	// `\033[K` clears to end of line, then we print the summary.
+	fmt.Print("\r\033[K")
 	fmt.Printf("%s%s%s▽ Thinking · %s · ~%d tokens%s\n",
 		r.indent, ColorDim, ColorItalic,
 		formatBytesShort(bytes), bytes/4, ColorReset)
+
+	// The summary line (with its trailing \n) consumed exactly one physical
+	// row. The cursor is now at the start of the next row.
+	r.physicalLines++
+	r.atLineStart = true
+	r.curLineRunes = 0
 }
 
 // EndReasoning is the exported counterpart of endReasoningLocked for
@@ -144,6 +169,21 @@ func (r *AssistantTurnRenderer) EndReasoning() {
 	LockOutput()
 	defer UnlockOutput()
 	r.endReasoningLocked()
+}
+
+// CursorOnFreshRow reports whether the renderer is currently sitting at
+// the start of an untouched row (column 0, no in-progress text). True
+// after endReasoningLocked (which advances past the summary's \n) and
+// after each completed newline in WriteChunk. Used by the CLI's
+// streaming callback to decide whether to inject a separator \n before
+// the first prose chunk: when false, the cursor is mid-line (the
+// indicator's cleared residue) and the \n is required to escape it;
+// when true, the cursor is already on a fresh row and the \n would add
+// a spurious blank line — notably when reasoning ran first.
+func (r *AssistantTurnRenderer) CursorOnFreshRow() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.atLineStart
 }
 
 // WriteChunk emits a chunk of assistant text to stdout, prefixing each line
@@ -261,13 +301,34 @@ func (r *AssistantTurnRenderer) FinalizeAtTurnEnd() {
 	fmt.Print("\033[?25l")
 	defer fmt.Print("\033[?25h")
 
-	// Cursor to column 0, then up to the first row of the streamed segment,
-	// then clear from cursor to end of screen.
+	// Walk back to the first row of the streamed segment and clear each
+	// row line-by-line with `\033[K` (clear to end of line) rather than
+	// `\033[J` (clear to end of screen). The screen-level clear was
+	// wiping background stderr output that happened to sit below the
+	// segment — the status footer's pinned row and the steer panel
+	// both render in the scrollback area, and `\033[J` would erase
+	// their rows along with the prose. The line-by-line clear only
+	// touches the segment's own rows.
 	fmt.Print("\r")
 	if upRows > 0 {
 		fmt.Printf("\033[%dA", upRows)
 	}
-	fmt.Print("\033[J")
+	// Clear the first (top) row of the segment, then walk down with
+	// `\r\033[K\033[1B` for each subsequent row. `\r\033[K` clears the
+	// current line, `\033[1B` moves down to the next row, repeat.
+	for i := 0; i < upRows; i++ {
+		fmt.Print("\r\033[K")
+		if i < upRows-1 {
+			fmt.Print("\033[1B")
+		}
+	}
+	// After the loop, the cursor is at the start of the LAST row of the
+	// segment (or the top row if upRows == 1). Walk back up to the top
+	// of the segment so the formatted text prints from the start.
+	if upRows > 1 {
+		fmt.Printf("\033[%dA", upRows-1)
+	}
+	fmt.Print("\r")
 
 	// Width-aware elements (the horizontal rule) should span the content area —
 	// the terminal width minus the prose indent.

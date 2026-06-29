@@ -679,6 +679,26 @@ func SetupAgentEvents(chatAgent *agent.Agent, eventBus *events.EventBus, indicat
 			}
 			indicator.Stop()
 			if r := currentTurnRenderer.Load(); r != nil {
+				// First prose chunk of a turn: the cursor is wherever the
+				// indicator's Stop() left it on the shared TTY cursor
+				// (col 0 of the cleared indicator row). Force a fresh
+				// line so the renderer can safely emit indent + text
+				// without those characters landing mid-line and
+				// overwriting the indicator's residue. Once is enough —
+				// subsequent chunks of the same stream continue from
+				// the row we just moved to. Without this, the leading
+				// 4-10 chars of the streamed prose collide with the
+				// previous stderr writer and the first prose line
+				// visibly starts mid-word.
+				//
+				// Skip the separator when the renderer's cursor is
+				// already on a fresh row — true after reasoning ran
+				// first (endReasoningLocked advanced past the summary
+				// \n) and after any completed-line prose. Injecting
+				// another \n there produces a spurious blank line.
+				if chunk != "" && firstProseChunk.CompareAndSwap(false, true) && !r.CursorOnFreshRow() {
+					fmt.Println()
+				}
 				r.WriteChunk(chunk)
 				return
 			}
@@ -693,14 +713,13 @@ func SetupAgentEvents(chatAgent *agent.Agent, eventBus *events.EventBus, indicat
 	}
 }
 
-// currentTurnRenderer holds the AssistantTurnRenderer for the in-progress
-// REPL turn (or nil between turns / outside the REPL). The streaming
-// callback registered in SetupAgentEvents loads from this pointer on each
-// chunk so per-turn renderers can be swapped without re-registering the
-// callback. Safe because only one turn is active at a time in a CLI REPL.
-
 // currentReasoningFold holds the ReasoningFold instance for the current
 // session when reasoningMode == "fold". Created once at startup in
 // SetupAgentEvents and reused across turns. Accessed from agent_mode_interactive.go
 // and agent_terminal_subscriber.go.
 var currentReasoningFold *console.ReasoningFold
+
+// Turn state singletons (currentTurnRenderer, firstProseChunk) and the
+// beginTurn/endTurn helpers live in agent_mode_state.go so they are
+// declared in one place and both interactive and queue mode use the same
+// reset pattern.

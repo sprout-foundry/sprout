@@ -240,6 +240,26 @@ func (r *AssistantTurnRenderer) OnExternalWrite() {
 	r.resetSegment()
 }
 
+// OnExternalWriteRows finalizes the current segment and advances
+// physicalLines by `n` rows to account for external writes that
+// consumed terminal rows (e.g. a blank-line separator or a multi-line
+// todo block). This keeps the renderer's row math in sync so that
+// FinalizeAtTurnEnd walks back the correct number of rows.
+//
+// When n == 0 the segment is still reset (same as OnExternalWrite).
+// When n > 0 the renderer treats the external write as if it had
+// emitted n newline-terminated rows: physicalLines advances, the
+// cursor is considered at the start of a fresh row, and the segment
+// buffer resets.
+func (r *AssistantTurnRenderer) OnExternalWriteRows(n int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.physicalLines += n
+	r.atLineStart = true
+	r.curLineRunes = 0
+	r.seg.Reset()
+}
+
 // FinalizeAtTurnEnd is called once the assistant's turn has completed (after
 // the spinner stops, after any post-turn book-keeping). If the current
 // segment has substantial markdown content and stdout is a TTY, the
@@ -286,8 +306,8 @@ func (r *AssistantTurnRenderer) FinalizeAtTurnEnd() {
 	// ended mid-line (no trailing \n), the in-progress line's rows haven't
 	// been counted in physicalLines — add them now.
 	upRows := r.physicalLines
-	if !r.atLineStart {
-		upRows += physicalRows(r.curLineRunes, r.terminalWidth) - 1
+	if r.curLineRunes > 0 {
+		upRows += physicalRows(r.curLineRunes, r.terminalWidth)
 	}
 
 	// Hide the cursor for the duration of the clear-and-reprint dance.

@@ -17,7 +17,21 @@ func (ws *ReactWebServer) handleCostsSummary(w http.ResponseWriter, r *http.Requ
 	}
 
 	costStore := GetCostStore()
-	summary := costStore.GetCostSummary()
+
+	// Parse optional date range (matching /api/costs/detail pattern)
+	var startDate, endDate time.Time
+	if start := r.URL.Query().Get("start_date"); start != "" {
+		if t, err := time.Parse("2006-01-02", start); err == nil {
+			startDate = t
+		}
+	}
+	if end := r.URL.Query().Get("end_date"); end != "" {
+		if t, err := time.Parse("2006-01-02", end); err == nil {
+			endDate = t
+		}
+	}
+
+	summary := costStore.GetCostSummary(startDate, endDate)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(summary)

@@ -119,6 +119,8 @@ func (ws *ReactWebServer) registerSettingsRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/settings/credentials", ws.handleAPISettingsCredentials)
 	mux.HandleFunc("/api/settings/credentials/", ws.handleAPISettingsCredentials)
 	mux.HandleFunc("/api/settings/skills", ws.handleAPISettingsSkills)
+	mux.HandleFunc("/api/skills", ws.handleAPIListSkills)
+	mux.HandleFunc("/api/skills/", ws.handleAPISkillsRoutes)
 	mux.HandleFunc("/api/settings/subagent-types", ws.handleAPISettingsSubagentTypes)
 	mux.HandleFunc("/api/settings/subagent-types/", ws.handleAPISettingsSubagentTypes)
 	mux.HandleFunc("/api/hotkeys", ws.handleAPIHotkeys)

@@ -175,7 +175,7 @@ export function SubagentActivityFeed({ activities }: SubagentActivityFeedProps):
   if (!hasContent) return null;
 
   return (
-    <div className={`subagent-feed ${visible ? '' : 'subagent-feed--collapsed'}`}>
+    <div className={`subagent-feed ${visible ? '' : 'subagent-feed--collapsed'}`} data-testid="chat-subagent-feed">
       <button
         className="subagent-feed-toggle-bar"
         onClick={() => setVisible((prev) => !prev)}

@@ -56,6 +56,7 @@ var (
 	agentBudgetUSD        float64
 	agentBudgetWarn       string
 	agentHeartbeatSeconds int
+	agentMockLLM          bool
 )
 
 // runStartupPermissionCheck performs a security check on config file permissions
@@ -190,6 +191,7 @@ func init() {
 	agentCmd.Flags().IntVar(&agentHeartbeatSeconds, "heartbeat", 0, "Print [budget] progress every N seconds during the run (overrides progress.heartbeat_seconds)")
 	agentCmd.Flags().StringVar(&agentTraceDatasetDir, "trace-dataset-dir", "", "Enable dataset trace mode and write to directory (also settable via SPROUT_TRACE_DATASET_DIR env var)")
 	agentCmd.Flags().BoolVar(&agentPromptStdin, "prompt-stdin", false, "Read the prompt from stdin (avoids OS ARG_MAX limits for large prompts)")
+	agentCmd.Flags().BoolVar(&agentMockLLM, "mock-llm", false, "Use a stub LLM provider that returns canned responses (for testing)")
 	_ = agentCmd.RegisterFlagCompletionFunc("persona", completePersonaFlag)
 
 	// Initialize environment-based defaults
@@ -343,6 +345,9 @@ Examples:
 			// session-load failures) before RunAgent runs.
 			defer os.Unsetenv("SPROUT_DAEMON")
 		}
+
+		// Propagate --mock-llm flag to the agent package before agent creation.
+		agent.UseMockLLM = agentMockLLM
 
 		chatAgent, err := createChatAgent()
 		if err != nil {

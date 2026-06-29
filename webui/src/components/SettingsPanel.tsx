@@ -501,9 +501,9 @@ function SettingsPanel({
   };
 
   return (
-    <div className="settings-panel">
+    <div className="settings-panel" data-testid="settings-panel">
       {/* Filter bar */}
-      <div className="settings-filter">
+      <div className="settings-filter" data-testid="settings-filter">
         <Search size={12} className="settings-filter-icon" aria-hidden="true" />
         <input
           ref={filterInputRef}
@@ -540,7 +540,7 @@ function SettingsPanel({
       ) : null}
 
       {filteredSections.map((section) => (
-        <div key={section.id} className={`settings-section ${expandedSections.has(section.id) ? 'expanded' : ''}`}>
+        <div key={section.id} className={`settings-section ${expandedSections.has(section.id) ? 'expanded' : ''}`} data-testid="settings-section">
           {/* Section header (clickable to toggle) */}
           <button
             type="button"
@@ -637,6 +637,7 @@ function SettingsPanel({
                       aria-controls={`settings-subpanel-${sub.id}`}
                       className={`settings-subsection-btn ${isActive ? 'active' : ''}`}
                       onClick={() => setActiveSubsection(sub.id)}
+                      data-testid={`settings-${sub.id}-tab`}
                     >
                       {sub.label}
                     </button>
@@ -661,7 +662,7 @@ function SettingsPanel({
       ))}
       {/* Credentials — separate panel per spec, not inside any section */}
       {credentialsMatches && (
-        <div className="settings-credentials-link">
+        <div className="settings-credentials-link" data-testid="settings-credentials-link">
           <button
             type="button"
             className={`settings-section-header ${showCredentials ? 'expanded' : ''}`}

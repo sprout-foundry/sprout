@@ -154,7 +154,7 @@ function StatusBar({
   ) : undefined;
 
   return (
-    <div className="statusbar-wrapper">
+    <div className="statusbar-wrapper" data-testid="status-bar">
       {workspaceName && (
         <div
           className="statusbar-item statusbar-item-workspace"
@@ -163,6 +163,7 @@ function StatusBar({
           tabIndex={0}
           title={`Workspace: ${workspacePath}`}
           aria-label={`Workspace: ${workspaceName}`}
+          data-testid="status-bar-workspace"
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
@@ -191,6 +192,7 @@ function StatusBar({
         role="button"
         tabIndex={0}
         aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount})` : ''}`}
+        data-testid="status-bar-notification"
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();

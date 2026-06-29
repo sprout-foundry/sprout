@@ -108,7 +108,7 @@ export default function MCPSettingsTab({
   };
 
   return (
-    <div className="section">
+    <div className="section" data-testid="settings-mcp-tab">
       <h4>MCP Configuration</h4>
 
       {renderToggle('mcp.enabled', 'MCP enabled')}

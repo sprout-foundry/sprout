@@ -15,6 +15,7 @@ import WorkspacePane from './WorkspacePane';
 const TasksPage = lazy(() => import('./platform').then((m) => ({ default: m.TasksPage })));
 const TeamPage = lazy(() => import('./platform').then((m) => ({ default: m.TeamPage })));
 const BillingPage = lazy(() => import('./platform').then((m) => ({ default: m.BillingPage })));
+const CostsPage = lazy(() => import('./CostsPage').then((m) => ({ default: m.default })));
 
 const RouteFallback: React.FC = () => (
   <div className="editor-workspace-route-fallback">
@@ -23,7 +24,7 @@ const RouteFallback: React.FC = () => (
 );
 
 export interface EditorWorkspaceProps {
-  currentView: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team';
+  currentView: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs';
   perChatCache?: Record<string, PerChatState>;
   activeChatId?: string | null;
   onCreateChat?: () => Promise<string | null>;
@@ -31,6 +32,8 @@ export interface EditorWorkspaceProps {
   reviewProps: React.ComponentProps<typeof WorkspacePane>['reviewProps'];
   diffState: React.ComponentProps<typeof WorkspacePane>['diffState'];
   handleOutlineNavigateToSymbol: (line: number) => void;
+  /** Called when a cost session row is clicked to restore that session */
+  onSessionRestore?: (sessionId: string) => void;
 }
 
 // Cache pane flex styles by weight. Bounded so that drag-resizing (which
@@ -113,6 +116,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   reviewProps,
   diffState,
   handleOutlineNavigateToSymbol,
+  onSessionRestore,
 }) => {
   const {
     panes,
@@ -565,6 +569,16 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
       <Suspense fallback={<RouteFallback />}>
         <TeamPage />
       </Suspense>
+    );
+  }
+
+  if (currentView === 'costs') {
+    return (
+      <ErrorBoundary>
+        <Suspense fallback={<RouteFallback />}>
+          <CostsPage onSessionClick={onSessionRestore} />
+        </Suspense>
+      </ErrorBoundary>
     );
   }
 

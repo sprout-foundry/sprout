@@ -141,6 +141,7 @@ function ModelSelectionModal({
       role="dialog"
       aria-modal="true"
       aria-label={isWarning ? 'Model selection required' : 'Choose a model'}
+      data-testid="model-picker"
     >
       <div
         className={`model-selection-card${isWarning ? '' : ' model-selection-card--switch'}`}
@@ -207,6 +208,7 @@ function ModelSelectionModal({
                             }}
                             aria-selected={selectedModel === model.id}
                             role="option"
+                            data-testid="model-picker-option"
                           >
                             <span className="model-selection-item-text">{model.id}</span>
                             {recommendedRole && (
@@ -234,7 +236,7 @@ function ModelSelectionModal({
                                 ⚠
                               </span>
                             )}
-                            {selectedModel === model.id && <span className="model-selection-item-check">✓</span>}
+                            {selectedModel === model.id && <span className="model-selection-item-check" data-testid="model-picker-current">✓</span>}
                           </button>
                         </li>
                       );

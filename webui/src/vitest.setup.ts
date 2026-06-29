@@ -6,6 +6,18 @@ import { vi } from 'vitest';
 // This shim is kept as a safety net for any remaining `jest.*` references
 // in comments or edge cases. New test files should use `vi.*` exclusively.
 
+// Skip DOM-specific mocks when running in node environment (e.g., testids.test.ts).
+// SP-087-3: test/webui/testids.test.ts uses the @vitest-environment node pragma
+// and must not load any jsdom-only globals like window/document.
+const isNodeEnv = typeof window === 'undefined';
+
+// Hoisted originals so afterEach can restore them regardless of env.
+// They stay undefined in node env; the afterEach guard handles that.
+let originalCreateRange: typeof document.createRange | undefined;
+let originalGetClientRects: typeof Element.prototype.getClientRects | undefined;
+let originalGetBoundingClientRect: typeof Element.prototype.getBoundingClientRect | undefined;
+let originalGetContext: typeof HTMLCanvasElement.prototype.getContext | undefined;
+
 // @ts-expect-error — jest is a compatibility global (deprecated shim)
 global.jest = {
   fn: vi.fn,
@@ -23,56 +35,57 @@ global.jest = {
 };
 
 // Mock window.matchMedia
-Object.defineProperty(window, 'matchMedia', {
-  writable: true,
-  value: vi.fn().mockImplementation((query) => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addListener: vi.fn(),
-    removeListener: vi.fn(),
+if (!isNodeEnv) {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: vi.fn().mockImplementation((query) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+
+  // Mock ResizeObserver
+  global.ResizeObserver = vi.fn().mockImplementation(() => ({
+    observe: vi.fn(),
+    unobserve: vi.fn(),
+    disconnect: vi.fn(),
+  }));
+
+  // Mock IntersectionObserver
+  global.IntersectionObserver = vi.fn().mockImplementation(() => ({
+    observe: vi.fn(),
+    unobserve: vi.fn(),
+    disconnect: vi.fn(),
+  }));
+
+  // Mock File API
+  global.File = class MockFile extends File {
+    constructor(parts: any[], filename: string, properties?: any) {
+      super(parts, filename, properties);
+      Object.defineProperty(this, 'name', { value: filename, writable: false });
+    }
+  };
+
+  // Mock Worker for CodeMirror
+  global.Worker = vi.fn().mockImplementation(() => ({
+    postMessage: vi.fn(),
     addEventListener: vi.fn(),
     removeEventListener: vi.fn(),
-    dispatchEvent: vi.fn(),
-  })),
-});
+    terminate: vi.fn(),
+  }));
 
-// Mock ResizeObserver
-global.ResizeObserver = vi.fn().mockImplementation(() => ({
-  observe: vi.fn(),
-  unobserve: vi.fn(),
-  disconnect: vi.fn(),
-}));
-
-// Mock IntersectionObserver
-global.IntersectionObserver = vi.fn().mockImplementation(() => ({
-  observe: vi.fn(),
-  unobserve: vi.fn(),
-  disconnect: vi.fn(),
-}));
-
-// Mock File API
-global.File = class MockFile extends File {
-  constructor(parts: any[], filename: string, properties?: any) {
-    super(parts, filename, properties);
-    Object.defineProperty(this, 'name', { value: filename, writable: false });
-  }
-};
-
-// Mock Worker for CodeMirror
-global.Worker = vi.fn().mockImplementation(() => ({
-  postMessage: vi.fn(),
-  addEventListener: vi.fn(),
-  removeEventListener: vi.fn(),
-  terminate: vi.fn(),
-}));
-
-// Mock getClientRects for text ranges (CodeMirror requirement)
-const originalCreateRange = document.createRange;
-document.createRange = vi.fn(() => {
-  const range = originalCreateRange.call(document);
-  return {
-    ...range,
+  // Mock getClientRects for text ranges (CodeMirror requirement)
+  originalCreateRange = document.createRange;
+  document.createRange = vi.fn(() => {
+    const range = originalCreateRange.call(document);
+    return {
+      ...range,
     getClientRects: vi.fn(() => ({
       length: 0,
       item: vi.fn(() => null),
@@ -115,7 +128,7 @@ document.createRange = vi.fn(() => {
 }) as () => Range;
 
 // Mock Element.getClientRects
-const originalGetClientRects = Element.prototype.getClientRects;
+  originalGetClientRects = Element.prototype.getClientRects;
 Element.prototype.getClientRects = vi.fn(function () {
   // For text nodes, return empty list
   if (this.nodeType === Node.TEXT_NODE) {
@@ -129,7 +142,7 @@ Element.prototype.getClientRects = vi.fn(function () {
 });
 
 // Mock Element.getBoundingClientRect
-const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
+  originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
 Element.prototype.getBoundingClientRect = vi.fn(function () {
   if (this.nodeType === Node.TEXT_NODE) {
     return {
@@ -150,7 +163,7 @@ Element.prototype.getBoundingClientRect = vi.fn(function () {
 // Mock canvas.getContext (used by @sprout/ui for icon rendering)
 // jsdom doesn't implement canvas; without this mock, any component that
 // calls canvas.getContext() throws and silently kills the React render.
-const originalGetContext = HTMLCanvasElement.prototype.getContext;
+  originalGetContext = HTMLCanvasElement.prototype.getContext;
 HTMLCanvasElement.prototype.getContext = vi.fn(function (contextId: string) {
   if (contextId === '2d') {
     return {
@@ -262,6 +275,7 @@ Element.prototype.blur = vi.fn();
 
 // Mock click
 Element.prototype.click = vi.fn();
+} // end if (!isNodeEnv)
 
 // Reset all mocks before each test
 beforeEach(() => {
@@ -270,6 +284,7 @@ beforeEach(() => {
 
 // Restore original implementations after each test
 afterEach(() => {
+  if (isNodeEnv) return;
   document.createRange = originalCreateRange;
   Element.prototype.getClientRects = originalGetClientRects;
   Element.prototype.getBoundingClientRect = originalGetBoundingClientRect;

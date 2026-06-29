@@ -444,7 +444,7 @@ function EditorPane({ paneId, onOpenCommandPalette }: EditorPaneProps): JSX.Elem
   // above (before the early returns) to comply with react-hooks/rules-of-hooks.
 
   return (
-    <div className="editor-pane">
+    <div className="editor-pane" data-testid="editor-pane">
       <EditorToolbar
         saving={saving}
         breadcrumbProps={{

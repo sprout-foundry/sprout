@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/sprout-foundry/sprout/pkg/mcp"
+	"github.com/sprout-foundry/sprout/pkg/testutil"
 )
 
 // =============================================================================
@@ -70,7 +71,7 @@ func TestRunMCPList(t *testing.T) {
 	_, cleanup := setupMCPTestEnv(t)
 	defer cleanup()
 
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		if err := runMCPList(); err != nil {
 			t.Fatalf("runMCPList returned error: %v", err)
 		}
@@ -102,7 +103,7 @@ func TestRunMCPTest_EmptyServers(t *testing.T) {
 	restoreStdin := replaceStdinWithClosedPipe(t)
 	defer restoreStdin()
 
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		if err := runMCPTest(""); err != nil {
 			t.Fatalf("runMCPTest returned error: %v", err)
 		}
@@ -131,7 +132,7 @@ func TestRunMCPRemove_NoServers(t *testing.T) {
 	defer restoreStdin()
 
 	var rmErr error
-	out := captureStdout(t, func() {
+	out := testutil.CaptureStdout(t, func() {
 		rmErr = runMCPRemove("")
 	})
 

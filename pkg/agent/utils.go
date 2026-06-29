@@ -143,9 +143,9 @@ func (a *Agent) printLineInternalLocked(text string, manageLock bool) {
 	// Fallback for when router isn't initialized yet
 	a.PublishAgentMessage("info", message, nil)
 
-	// Terminal output: direct write with row clear. The streamingCallback
-	// is reserved for prose tokens (RouteStreamChunk); chrome must clear
-	// the current row first so it doesn't append to partial prose.
+	// Terminal output: direct write. The streamingCallback is reserved
+	// for prose tokens (RouteStreamChunk); chrome must not route through
+	// it. No \r\033[K prefix — that would clear in-progress prose.
 	if manageLock && a.output != nil {
 		if mu := a.output.GetOutputMutex(); mu != nil {
 			mu.Lock()
@@ -153,7 +153,6 @@ func (a *Agent) printLineInternalLocked(text string, manageLock bool) {
 		}
 	}
 
-	_, _ = os.Stdout.Write([]byte("\r\033[K"))
 	_, _ = os.Stdout.Write([]byte(message))
 }
 

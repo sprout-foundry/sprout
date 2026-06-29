@@ -11,6 +11,7 @@ vi.mock('./CostSummaryCards.css', () => ({}));
 vi.mock('./DailySpendChart.css', () => ({}));
 vi.mock('./ByModelChart.css', () => ({}));
 vi.mock('./ProviderTable.css', () => ({}));
+vi.mock('./TopSessionsTable.css', () => ({}));
 
 import { clientFetch } from '../services/clientSession';
 
@@ -219,7 +220,7 @@ describe('CostsPage', () => {
     expect(screen.getByTestId('daily-spend-chart')).toBeInTheDocument();
     expect(screen.getByTestId('by-model-chart')).toBeInTheDocument();
     expect(screen.getByTestId('provider-table')).toBeInTheDocument();
-    expect(screen.getByTestId('cost-top-sessions-table-placeholder')).toBeInTheDocument();
+    expect(screen.getByTestId('top-sessions-table')).toBeInTheDocument();
   });
 
   it('renders CostSummaryCards with values from summary', async () => {
@@ -336,5 +337,64 @@ describe('CostsPage', () => {
     expect(screen.getByTestId('provider-row-openai')).toBeInTheDocument();
     // openai: this=2.0, last=1.0 → up 100%
     expect(screen.getByTestId('provider-delta-openai-up')).toBeInTheDocument();
+  });
+
+  it('renders TopSessionsTable with session rows from top_sessions', async () => {
+    mockBoth(
+      {
+        total_cost: 5.0,
+        by_provider: { openai: 5.0 },
+        by_model: { 'openai:gpt-4': 5.0 },
+        by_provider_this_month: { openai: 5.0 },
+        by_provider_last_month: {},
+        top_sessions: [
+          {
+            session_id: 'sess-alpha',
+            title: 'Alpha Session',
+            working_dir: '/project/alpha',
+            total_cost: 2.5,
+            last_updated: new Date().toISOString(),
+          },
+          {
+            session_id: 'sess-beta',
+            title: 'Beta Session',
+            working_dir: '/project/beta',
+            total_cost: 1.5,
+            last_updated: new Date(Date.now() - 3600000).toISOString(),
+          },
+        ],
+      },
+      { daily_costs: [{ date: '2025-01-01', total_cost: 5.0 }], days: 30 },
+    );
+    render(<CostsPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('top-sessions-table')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('row-sess-alpha')).toBeInTheDocument();
+    expect(screen.getByTestId('row-sess-beta')).toBeInTheDocument();
+    // Default sort is cost desc, so alpha (2.5) should appear before beta (1.5)
+    const table = screen.getByTestId('top-sessions-table');
+    const bodyRows = table.querySelectorAll('tbody tr');
+    expect(bodyRows[0]).toHaveTextContent('Alpha Session');
+    expect(bodyRows[1]).toHaveTextContent('Beta Session');
+  });
+
+  it('TopSessionsTable shows empty state when top_sessions is absent', async () => {
+    mockBoth(
+      {
+        total_cost: 1.0,
+        by_provider: { openai: 1.0 },
+        by_model: { 'openai:gpt-4': 1.0 },
+        by_provider_this_month: {},
+        by_provider_last_month: {},
+        // No top_sessions field
+      },
+      { daily_costs: [{ date: '2025-01-01', total_cost: 1.0 }], days: 30 },
+    );
+    render(<CostsPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('top-sessions-table')).toBeInTheDocument();
+    });
+    expect(screen.getByText('No session data available.')).toBeInTheDocument();
   });
 });

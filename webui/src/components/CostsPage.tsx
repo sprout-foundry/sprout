@@ -4,6 +4,8 @@ import ByModelChart from './ByModelChart';
 import CostSummaryCards, { type CostSummary } from './CostSummaryCards';
 import DailySpendChart, { type DailyCost } from './DailySpendChart';
 import ProviderTable from './ProviderTable';
+import TopSessionsTable from './TopSessionsTable';
+import type { SessionCostRow } from '../types/costs';
 import './CostsPage.css';
 
 type TimeRange = '7d' | '30d' | '90d' | 'all';
@@ -140,9 +142,7 @@ export default function CostsPage() {
                 />
                 <ByModelChart byModel={summary.by_model ?? {}} />
                 <ProviderTable summary={summary} />
-                <div data-testid="cost-top-sessions-table-placeholder">
-                  Top sessions table goes here (SP-085-5)
-                </div>
+                <TopSessionsTable sessions={summary.top_sessions ?? []} loading={loading} />
               </>
             );
           })()}

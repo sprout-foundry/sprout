@@ -1,53 +1,14 @@
 package configuration
 
 import (
-	"fmt"
-	"os"
 	"strings"
 	"testing"
+
+	"github.com/sprout-foundry/sprout/pkg/testutil"
 )
 
-// captureStdout captures output written to stdout during function execution.
-//
-// Uses a goroutine to drain the read end of the pipe concurrently with
-// writing, so callers can emit arbitrarily large output without deadlocking
-// the writer when the OS pipe buffer (~64 KiB on Linux) fills.
-func captureStdout(fn func()) string {
-	old := os.Stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		panic(fmt.Sprintf("captureStdout: pipe: %v", err))
-	}
-	os.Stdout = w
-
-	done := make(chan string, 1)
-	go func() {
-		var buf strings.Builder
-		tmp := make([]byte, 4096)
-		for {
-			n, readErr := r.Read(tmp)
-			if n > 0 {
-				buf.Write(tmp[:n])
-			}
-			if readErr != nil {
-				break
-			}
-		}
-		done <- buf.String()
-	}()
-
-	defer func() {
-		_ = w.Close()
-		os.Stdout = old
-	}()
-	fn()
-	_ = w.Close()
-	os.Stdout = old
-	return <-done
-}
-
 func TestShowWelcomeMessage(t *testing.T) {
-	output := captureStdout(ShowWelcomeMessage)
+	output := testutil.CaptureStdout(t, ShowWelcomeMessage)
 
 	// Verify daemon command is mentioned
 	if !strings.Contains(output, "sprout agent -d") {
@@ -95,7 +56,7 @@ func TestShowNextSteps_NormalProvider(t *testing.T) {
 	provider := "openrouter"
 	configDir := "/tmp/ledit-config"
 
-	output := captureStdout(func() {
+	output := testutil.CaptureStdout(t, func() {
 		ShowNextSteps(provider, configDir)
 	})
 
@@ -120,7 +81,7 @@ func TestShowNextSteps_EditorOnly(t *testing.T) {
 	provider := "editor"
 	configDir := "/tmp/ledit-config"
 
-	output := captureStdout(func() {
+	output := testutil.CaptureStdout(t, func() {
 		ShowNextSteps(provider, configDir)
 	})
 
@@ -137,24 +98,5 @@ func TestShowNextSteps_EditorOnly(t *testing.T) {
 	// Should mention that AI features are not available
 	if !strings.Contains(output, "not available") {
 		t.Errorf("ShowNextSteps(%q) should indicate AI features are not available, got:\n%s", provider, output)
-	}
-}
-
-// TestCaptureStdout_LargeOutput exercises captureStdout with output that
-// exceeds the OS pipe buffer (64 KiB on Linux). Without a concurrent
-// reader, the writer inside fn() would block once the buffer fills.
-func TestCaptureStdout_LargeOutput(t *testing.T) {
-	const size = 256 * 1024 // 4x the typical pipe buffer
-	want := strings.Repeat("x", size)
-
-	out := captureStdout(func() {
-		fmt.Print(want)
-	})
-
-	if len(out) != size {
-		t.Fatalf("captured %d bytes, want %d", len(out), size)
-	}
-	if out != want {
-		t.Fatal("output content mismatch")
 	}
 }

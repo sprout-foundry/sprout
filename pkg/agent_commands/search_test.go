@@ -5,12 +5,12 @@ package commands
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/sprout-foundry/sprout/pkg/search"
+	"github.com/sprout-foundry/sprout/pkg/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -90,33 +90,6 @@ func setupTestSearchIndex(t *testing.T) string {
 	require.NoError(t, search.SaveIndex(search.DefaultIndexPath(), idx))
 
 	return tmpDir
-}
-
-// ---------------------------------------------------------------------------
-// captureStdout replaces os.Stdout with a pipe, runs f, then returns all
-// captured output as a string.
-// ---------------------------------------------------------------------------
-
-func captureStdout(t *testing.T, f func()) string {
-	t.Helper()
-	old := os.Stdout
-	r, w, err := os.Pipe()
-	require.NoError(t, err)
-	os.Stdout = w
-
-	// Run in a goroutine so the pipe doesn't block on large writes.
-	done := make(chan struct{})
-	go func() {
-		f()
-		w.Close()       // Close pipe FIRST so io.ReadAll returns
-		os.Stdout = old // Then restore stdout
-		close(done)
-	}()
-
-	<-done
-	data, err := io.ReadAll(r)
-	require.NoError(t, err)
-	return string(data)
 }
 
 // ---------------------------------------------------------------------------
@@ -204,7 +177,7 @@ func TestSearchCommand_SearchQuery(t *testing.T) {
 	setupTestSearchIndex(t)
 
 	cmd := &SearchCommand{}
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		err := cmd.Execute([]string{"embedding"}, nil)
 		require.NoError(t, err)
 	})
@@ -217,7 +190,7 @@ func TestSearchCommand_ExactPhrase(t *testing.T) {
 	setupTestSearchIndex(t)
 
 	cmd := &SearchCommand{}
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		err := cmd.Execute([]string{"embedding index"}, nil)
 		require.NoError(t, err)
 	})
@@ -230,7 +203,7 @@ func TestSearchCommand_MultiWordQuery(t *testing.T) {
 	setupTestSearchIndex(t)
 
 	cmd := &SearchCommand{}
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		err := cmd.Execute([]string{"auth", "config"}, nil)
 		require.NoError(t, err)
 	})
@@ -243,7 +216,7 @@ func TestSearchCommand_NoMatch(t *testing.T) {
 	setupTestSearchIndex(t)
 
 	cmd := &SearchCommand{}
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		err := cmd.Execute([]string{"xyznonexistentquery"}, nil)
 		require.NoError(t, err)
 	})
@@ -255,7 +228,7 @@ func TestSearchCommand_JsonOutput(t *testing.T) {
 	setupTestSearchIndex(t)
 
 	cmd := &SearchCommand{}
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		ctx := &CommandContext{OutputFormat: OutputJSON}
 		err := cmd.ExecuteWithJSONOutput([]string{"embedding"}, nil, ctx)
 		require.NoError(t, err)
@@ -276,7 +249,7 @@ func TestSearchCommand_JsonNoResults(t *testing.T) {
 	setupTestSearchIndex(t)
 
 	cmd := &SearchCommand{}
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		ctx := &CommandContext{OutputFormat: OutputJSON}
 		err := cmd.ExecuteWithJSONOutput([]string{"xyznonexistentquery"}, nil, ctx)
 		require.NoError(t, err)
@@ -292,7 +265,7 @@ func TestSearchCommand_CwdFilter(t *testing.T) {
 	setupTestSearchIndex(t)
 
 	cmd := &SearchCommand{}
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		err := cmd.Execute([]string{"--cwd", "/tmp/repro", "auth"}, nil)
 		require.NoError(t, err)
 	})
@@ -308,7 +281,7 @@ func TestSearchCommand_SinceFilter(t *testing.T) {
 	setupTestSearchIndex(t)
 
 	cmd := &SearchCommand{}
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		err := cmd.Execute([]string{"--since", "2020-01-01", "test"}, nil)
 		require.NoError(t, err)
 	})
@@ -322,7 +295,7 @@ func TestSearchCommand_UntilFilter(t *testing.T) {
 	setupTestSearchIndex(t)
 
 	cmd := &SearchCommand{}
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		err := cmd.Execute([]string{"--until", "2000-01-01", "test"}, nil)
 		require.NoError(t, err)
 	})
@@ -335,7 +308,7 @@ func TestSearchCommand_Limit(t *testing.T) {
 	setupTestSearchIndex(t)
 
 	cmd := &SearchCommand{}
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		err := cmd.Execute([]string{"--limit", "1", "embedding"}, nil)
 		require.NoError(t, err)
 	})
@@ -348,7 +321,7 @@ func TestSearchCommand_Reindex(t *testing.T) {
 	setupTestSearchIndex(t)
 
 	cmd := &SearchCommand{}
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		err := cmd.Execute([]string{"--reindex", "embedding"}, nil)
 		require.NoError(t, err)
 	})
@@ -370,7 +343,7 @@ func TestSearchCommand_RFC3339Date(t *testing.T) {
 	setupTestSearchIndex(t)
 
 	cmd := &SearchCommand{}
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		err := cmd.Execute([]string{"--since", "2020-01-01T00:00:00Z", "test"}, nil)
 		require.NoError(t, err)
 	})
@@ -383,7 +356,7 @@ func TestSearchCommand_CombinedFlags(t *testing.T) {
 	setupTestSearchIndex(t)
 
 	cmd := &SearchCommand{}
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		err := cmd.Execute([]string{"--cwd", "/home/user/project", "--limit", "1", "help"}, nil)
 		require.NoError(t, err)
 	})
@@ -559,11 +532,11 @@ func TestGetSessionsDir(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// Test captureStdout itself (sanity check)
+// Test testutil.CaptureStdout itself (sanity check)
 // ---------------------------------------------------------------------------
 
 func TestCaptureStdout_Correctness(t *testing.T) {
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		fmt.Fprint(os.Stdout, "hello world")
 	})
 	assert.Equal(t, "hello world", output)
@@ -577,7 +550,7 @@ func TestSearchCommand_QueryBeforeAndAfterFlags(t *testing.T) {
 	setupTestSearchIndex(t)
 
 	cmd := &SearchCommand{}
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		err := cmd.Execute([]string{"auth", "--cwd", "/tmp/repro", "error"}, nil)
 		require.NoError(t, err)
 	})
@@ -602,7 +575,7 @@ func TestSearchCommand_ReindexOnEmpty(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(sessionsDir, "session_test-embed.json"), []byte(session1JSON), 0o644))
 
 	cmd := &SearchCommand{}
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		err := cmd.Execute([]string{"--reindex", "embedding"}, nil)
 		require.NoError(t, err)
 	})
@@ -628,7 +601,7 @@ func TestSearchCommand_AutoBuildEmptyIndex(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(sessionsDir, "session_test-embed.json"), []byte(session1JSON), 0o644))
 
 	cmd := &SearchCommand{}
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		err := cmd.Execute([]string{"embedding"}, nil)
 		require.NoError(t, err)
 	})

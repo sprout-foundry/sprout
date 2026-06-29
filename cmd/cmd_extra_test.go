@@ -9,6 +9,7 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/testutil"
 )
 
 // =============================================================================
@@ -16,35 +17,35 @@ import (
 // =============================================================================
 
 func TestRunDiag_PrintsHeader(t *testing.T) {
-	out := captureStdout(t, runDiag)
+	out := testutil.CaptureStdout(t, runDiag)
 	if !strings.Contains(out, "Configuration Diagnostics") {
 		t.Errorf("expected 'Configuration Diagnostics' in output, got:\n%s", out)
 	}
 }
 
 func TestRunDiag_PrintsGlobalConfigPath(t *testing.T) {
-	out := captureStdout(t, runDiag)
+	out := testutil.CaptureStdout(t, runDiag)
 	if !strings.Contains(out, "Global config:") {
 		t.Errorf("expected 'Global config:' in output, got:\n%s", out)
 	}
 }
 
 func TestRunDiag_PrintsProjectConfigPath(t *testing.T) {
-	out := captureStdout(t, runDiag)
+	out := testutil.CaptureStdout(t, runDiag)
 	if !strings.Contains(out, "Project-local config:") {
 		t.Errorf("expected 'Project-local config:' in output, got:\n%s", out)
 	}
 }
 
 func TestRunDiag_PrintsPythonRuntimeSection(t *testing.T) {
-	out := captureStdout(t, runDiag)
+	out := testutil.CaptureStdout(t, runDiag)
 	if !strings.Contains(out, "Python runtime:") {
 		t.Errorf("expected 'Python runtime:' section in output, got:\n%s", out)
 	}
 }
 
 func TestRunDiag_PrintsCustomProviders(t *testing.T) {
-	out := captureStdout(t, runDiag)
+	out := testutil.CaptureStdout(t, runDiag)
 	// Should always print something about custom providers (either found or warning)
 	hasProvidersInfo := strings.Contains(out, "Custom providers") ||
 		strings.Contains(out, "custom providers")
@@ -278,14 +279,14 @@ func TestCreatePlanningAgent_PlanCreateTodosFlag(t *testing.T) {
 }
 
 func TestRunDiag_PrintsProviderDirectory(t *testing.T) {
-	out := captureStdout(t, runDiag)
+	out := testutil.CaptureStdout(t, runDiag)
 	if !strings.Contains(out, "Custom provider directory:") {
 		t.Errorf("expected 'Custom provider directory:' in output, got:\n%s", out)
 	}
 }
 
 func TestRunDiag_PrintsPDFRuntimeSection(t *testing.T) {
-	out := captureStdout(t, runDiag)
+	out := testutil.CaptureStdout(t, runDiag)
 	if !strings.Contains(out, "PDF Python runtime") {
 		t.Errorf("expected 'PDF Python runtime' in output, got:\n%s", out)
 	}

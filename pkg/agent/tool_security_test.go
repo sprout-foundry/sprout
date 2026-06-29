@@ -476,15 +476,13 @@ func TestOutputRouter_WriteRoutesToPrintLineAsync(t *testing.T) {
 	w.Close()
 
 	out := buf.String()
+	// Each line must arrive on stdout, newline-terminated. No \r\033[K
+	// prefix — in TTY mode the externalWriteHook handles row management,
+	// and in non-TTY mode there's no cursor to clear.
 	for _, want := range wantLines {
 		if !strings.Contains(out, want) {
 			t.Errorf("expected stdout to contain %q, got %q", want, out)
 		}
-	}
-	// Each line must be preceded by a row-clear.
-	clearCount := strings.Count(out, "\r\033[K")
-	if clearCount < 3 {
-		t.Errorf("expected at least 3 \\r\\033[K row clears (one per line), got %d in: %q", clearCount, out)
 	}
 }
 

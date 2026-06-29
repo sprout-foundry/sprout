@@ -292,7 +292,6 @@ func TestRouteAgentMessage_GoesToStdoutDirectly(t *testing.T) {
 	var buf bytes.Buffer
 	_, _ = io.Copy(&buf, r)
 	out := buf.String()
-	assert.Contains(t, out, "\r\033[K", "row clear must precede chrome output")
 	assert.Contains(t, out, "hello chrome")
 	assert.Contains(t, out, "\n", "trailing newline")
 }
@@ -698,9 +697,6 @@ func TestRouteTerminalOnly_DoesNotPublishEvent(t *testing.T) {
 
 	if !strings.Contains(out, "hello terminal\n") {
 		t.Errorf("expected stdout to contain %q, got %q", "hello terminal\n", out)
-	}
-	if !strings.Contains(out, "\r\033[K") {
-		t.Errorf("expected stdout to contain row clear, got %q", out)
 	}
 
 	// Streaming callback must NOT have fired.

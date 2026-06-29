@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
@@ -314,20 +313,15 @@ func (r *OutputRouter) writeTerminalMessage(message string) {
 	// prose tokens (RouteStreamChunk → renderer.WriteChunk). Chrome
 	// (tool logs, agent messages, system info) must NOT route through
 	// it because the callback writes raw to the terminal with no row
-	// clear, which appends chrome to whatever partial prose line is
-	// on the current row — the "Now I have a clear picture…→ TodoWrite"
-	// clobbering symptom.
+	// management, which appends chrome to whatever partial prose line
+	// is on the current row.
 	//
-	// \r\033[K moves to col 0 of the current row and clears to EOL so
-	// any partial prose (no trailing \n) gets wiped before the chrome
-	// lands. CI mode is detected first so non-TTY pipelines get plain
-	// output without ANSI clears.
-	if configuration.GetEnvSimple("CI_MODE") == "1" || os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
-		_, _ = os.Stdout.Write([]byte(message))
-		return
-	}
-
-	_, _ = os.Stdout.Write([]byte("\r\033[K"))
+	// No \r\033[K prefix: in TTY mode, that would clear any in-progress
+	// prose on the current row (the "word by word deleting" symptom).
+	// The externalWriteHook has already reset the renderer's prose
+	// segment, and the indicator's Stop has cleared the spinner row,
+	// so the cursor is already at a clean position. In non-TTY mode
+	// there's no cursor to manage at all.
 	_, _ = os.Stdout.Write([]byte(message))
 }
 

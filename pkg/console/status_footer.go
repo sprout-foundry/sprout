@@ -603,7 +603,13 @@ func (f *StatusFooter) ClearSteerLine() {
 		fmt.Fprint(f.w, "\033[r")
 		fmt.Fprint(f.w, "\0337")
 		for i := 0; i < prevRows; i++ {
-			row := rows - 1 - prevRows + i + 1
+			// Match steerRowFor(rows, prevRows, i): the steer panel is
+			// drawn at `rows-1-steerRows+i`, so we blank that same row.
+			// A prior version used `+1` here, which cleared the rule
+			// row (repainted immediately by draw()) instead of the
+			// steer text row — leaving stale steer text on screen after
+			// EndTurn (visible above the next idle prompt).
+			row := rows - 1 - prevRows + i
 			if row < 1 {
 				continue
 			}

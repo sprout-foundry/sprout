@@ -21,7 +21,7 @@ export function SessionsTab({
   handleRestoreSession,
 }: SessionsTabProps) {
   return (
-    <div className="context-panel-tools-list">
+    <div className="context-panel-tools-list" data-testid="context-panel-sessions">
       <div className="history-toolbar">
         <button className="history-refresh-btn" onClick={loadSessions} disabled={isLoadingSessions}>
           <RotateCcw size={12} /> Refresh

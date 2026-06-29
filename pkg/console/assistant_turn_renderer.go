@@ -283,79 +283,20 @@ func (r *AssistantTurnRenderer) FinalizeAtTurnEnd() {
 		r.resetSegment()
 		return
 	}
-	if !shouldReformat(text, r.terminalWidth) {
-		r.resetSegment()
-		return
-	}
-	// If the terminal was resized while this turn streamed, the rows already on
-	// screen were re-soft-wrapped by the terminal to the new width, so our
-	// captured-width row accounting no longer matches what's displayed. Running
-	// the clear-and-reprint dance would walk back over the wrong number of rows
-	// and corrupt the scrollback. Skip the markdown reformat in that case — the
-	// raw streamed text is already on screen and correctly wrapped.
-	if w := currentStdoutWidth(); w > 0 && r.startRawWidth > 0 && w != r.startRawWidth {
-		r.resetSegment()
-		return
-	}
-	if !isStdoutTTY() {
-		r.resetSegment()
-		return
-	}
 
-	// Compute how many rows we need to walk back through. If the stream
-	// ended mid-line (no trailing \n), the in-progress line's rows haven't
-	// been counted in physicalLines — add them now.
-	upRows := r.physicalLines
-	if r.curLineRunes > 0 {
-		upRows += physicalRows(r.curLineRunes, r.terminalWidth)
-	}
-
-	// Hide the cursor for the duration of the clear-and-reprint dance.
-	// Without this, the terminal cursor visibly jumps to the top of the
-	// segment and then back down as the formatted text renders, which
-	// reads as a "blink" — especially noticeable for tall code blocks.
-	// `\033[?25l` hides; `\033[?25h` restores. Restoration is wrapped in
-	// a defer-equivalent so an early return inside `emitFormatted`
-	// doesn't leave the user with an invisible cursor for the rest of
-	// the session.
-	fmt.Print("\033[?25l")
-	defer fmt.Print("\033[?25h")
-
-	// Walk back to the first row of the streamed segment and clear each
-	// row line-by-line with `\033[K` (clear to end of line) rather than
-	// `\033[J` (clear to end of screen). The screen-level clear was
-	// wiping background stderr output that happened to sit below the
-	// segment — the status footer's pinned row and the steer panel
-	// both render in the scrollback area, and `\033[J` would erase
-	// their rows along with the prose. The line-by-line clear only
-	// touches the segment's own rows.
-	fmt.Print("\r")
-	if upRows > 0 {
-		fmt.Printf("\033[%dA", upRows)
-	}
-	// Clear the first (top) row of the segment, then walk down with
-	// `\r\033[K\033[1B` for each subsequent row. `\r\033[K` clears the
-	// current line, `\033[1B` moves down to the next row, repeat.
-	for i := 0; i < upRows; i++ {
-		fmt.Print("\r\033[K")
-		if i < upRows-1 {
-			fmt.Print("\033[1B")
-		}
-	}
-	// After the loop, the cursor is at the start of the LAST row of the
-	// segment (or the top row if upRows == 1). Walk back up to the top
-	// of the segment so the formatted text prints from the start.
-	if upRows > 1 {
-		fmt.Printf("\033[%dA", upRows-1)
-	}
-	fmt.Print("\r")
-
-	// Width-aware elements (the horizontal rule) should span the content area —
-	// the terminal width minus the prose indent.
-	r.formatter.SetWidth(r.terminalWidth - displayWidth(r.indent))
-	formatted := r.formatter.Format(text)
-	// Emit formatted text with the same indent as the live stream.
-	r.emitFormatted(formatted)
+	// The markdown re-render (clear streamed text + emit ANSI-formatted
+	// version) is DISABLED. It was the primary cause of CLI output
+	// clobbering: the formatter changes the line count (removes code
+	// fences, adds language headers, collapses blank lines), so the
+	// re-emitted text doesn't match the row count of what was cleared.
+	// The cursor ends up at the wrong position and the next turn's
+	// output clobbers the residue.
+	//
+	// The streamed text is already readable — it just lacks ANSI colors.
+	// The trade-off (no syntax highlighting in the CLI) is worth the
+	// reliability. If reformatting is re-enabled in the future, the
+	// formatter's output MUST have the exact same number of visible
+	// rows as the streamed segment, or the cursor math will break.
 	r.resetSegment()
 }
 

@@ -145,8 +145,9 @@ function OnboardingDialog({
       role="dialog"
       aria-modal="true"
       aria-label={onboarding.isReonboarding ? 'Change provider' : 'Set up sprout'}
+      data-testid="onboarding-overlay"
     >
-      <div className="onboarding-card">
+      <div className="onboarding-card" data-testid="onboarding-card">
         {onboarding.isReonboarding && (
           <button
             type="button"
@@ -154,6 +155,7 @@ function OnboardingDialog({
             onClick={() => updateOnboarding((prev) => ({ ...prev, open: false }))}
             disabled={onboarding.submitting || onboarding.checking || onboarding.validationSuccess}
             aria-label="Close"
+            data-testid="onboarding-close"
           >
             <X size={18} />
           </button>
@@ -224,8 +226,8 @@ function OnboardingDialog({
           </div>
         )}
 
-        <div className="onboarding-step-title">1. Choose an inference provider</div>
-        <div className="onboarding-provider-grid">
+        <div className="onboarding-step-title" data-testid="onboarding-step">1. Choose an inference provider</div>
+        <div className="onboarding-provider-grid" data-testid="onboarding-provider-grid">
           {recommendedProviders.map((providerOption) => (
             <button
               key={providerOption.id}
@@ -233,6 +235,7 @@ function OnboardingDialog({
               className={`onboarding-provider-card ${onboarding.provider === providerOption.id ? 'selected' : ''} ${providerOption.has_credential ? 'configured' : ''}`}
               onClick={() => onProviderChange(providerOption.id)}
               disabled={onboarding.submitting || onboarding.checking}
+              data-testid="onboarding-provider-card"
             >
               <span className="onboarding-provider-name">{providerOption.name}</span>
               {providerOption.has_credential && (
@@ -255,6 +258,7 @@ function OnboardingDialog({
               className="onboarding-toggle-btn"
               onClick={() => updateOnboarding((prev) => ({ ...prev, showAllProviders: !prev.showAllProviders }))}
               disabled={onboarding.submitting || onboarding.checking}
+              data-testid="onboarding-toggle-providers"
             >
               {onboarding.showAllProviders ? 'Hide other providers' : 'Show other providers'}
             </button>
@@ -325,7 +329,7 @@ function OnboardingDialog({
             </div>
           )}
 
-        <div className="onboarding-step-title">2. Choose a model</div>
+        <div className="onboarding-step-title" data-testid="onboarding-step">2. Choose a model</div>
         <label htmlFor="onboarding-model">Model</label>
         <div className="onboarding-model-combobox" ref={comboboxRef}>
           <input
@@ -341,6 +345,7 @@ function OnboardingDialog({
             placeholder="Enter model name"
             disabled={onboarding.submitting || onboarding.checking}
             autoComplete="off"
+            data-testid="onboarding-model-input"
           />
           {modelListOpen && displayModels && (
             <ul className="onboarding-model-list">
@@ -380,6 +385,7 @@ function OnboardingDialog({
               }
               placeholder="Paste API key"
               disabled={onboarding.submitting || onboarding.checking}
+              data-testid="onboarding-api-key"
             />
             {selectedProvider.api_key_help && <div className="onboarding-help">{selectedProvider.api_key_help}</div>}
           </>
@@ -415,11 +421,12 @@ function OnboardingDialog({
               className="onboarding-skip-btn"
               onClick={onSkip}
               disabled={onboarding.submitting || onboarding.checking || onboarding.validationSuccess}
+              data-testid="onboarding-skip"
             >
               Skip — use as editor
             </button>
           )}
-          <button type="button" onClick={onRefresh} disabled={onboarding.submitting || onboarding.validationSuccess}>
+          <button type="button" onClick={onRefresh} disabled={onboarding.submitting || onboarding.validationSuccess} data-testid="onboarding-refresh">
             Refresh
           </button>
           <button
@@ -427,6 +434,7 @@ function OnboardingDialog({
             className={onboarding.validationSuccess ? 'primary success' : 'primary'}
             onClick={onComplete}
             disabled={onboarding.submitting || onboarding.checking || onboarding.validationSuccess}
+            data-testid="onboarding-done"
           >
             {onboarding.validationSuccess
               ? 'Done ✓'

@@ -185,7 +185,7 @@ function WelcomeTab(props: WelcomeTabProps): JSX.Element {
   // When workspace selection is needed (not a project), show the picker
   if (!isLoading && workspaceInfo.needs_workspace_selection) {
     return (
-      <div className="welcome-tab">
+      <div className="welcome-tab" data-testid="editor-welcome-tab">
         <WorkspacePickerView workspaceInfo={workspaceInfo} homeDir={homeDir} setWorkspace={setWorkspace} />
       </div>
     );
@@ -193,7 +193,7 @@ function WelcomeTab(props: WelcomeTabProps): JSX.Element {
 
   // Normal welcome content
   return (
-    <div className="welcome-tab">
+    <div className="welcome-tab" data-testid="editor-welcome-tab">
       <WelcomeContent {...props} />
     </div>
   );

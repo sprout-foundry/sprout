@@ -118,7 +118,7 @@ export default function SkillsSettingsTab({ settings, toggleSkill }: SkillsSetti
   }
 
   return (
-    <div className="section">
+    <div className="section" data-testid="settings-skills-tab">
       <h4>Skills</h4>
 
       {/* ── Install new skill panel ─────────────────────── */}

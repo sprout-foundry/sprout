@@ -55,6 +55,12 @@ func (a *Agent) executeShellCommandWithTruncation(ctx context.Context, command s
 		ctx = tools.WithBackgroundProcessManager(ctx, a.backgroundProcessManager)
 	}
 
+	// Wire PasswordPrompter into context so the shell tool can route
+	// password prompts (sudo, passwd) to the registered handler.
+	if a.passwordPrompter != nil {
+		ctx = tools.WithPasswordPrompter(ctx, a.passwordPrompter)
+	}
+
 	headTokenLimit, tailTokenLimit := getShellOutputTokenLimits()
 
 	// Check if we've run this exact command before
@@ -264,6 +270,12 @@ func (a *Agent) checkBackgroundOutput(ctx context.Context, sessionID string, wai
 		ctx = tools.WithBackgroundProcessManager(ctx, a.backgroundProcessManager)
 	}
 
+	// Wire PasswordPrompter into context so the shell tool can route
+	// password prompts (sudo, passwd) to the registered handler.
+	if a.passwordPrompter != nil {
+		ctx = tools.WithPasswordPrompter(ctx, a.passwordPrompter)
+	}
+
 	result, err := tools.CheckBackgroundOutputWait(ctx, sessionID, waitSeconds)
 	if err != nil {
 		return "", fmt.Errorf("failed to check background session %s: %w", sessionID, err)
@@ -306,6 +318,12 @@ func (a *Agent) executeShellCommandBackground(ctx context.Context, command strin
 			a.backgroundProcessManager = tools.NewBackgroundProcessManager()
 		}
 		ctx = tools.WithBackgroundProcessManager(ctx, a.backgroundProcessManager)
+	}
+
+	// Wire PasswordPrompter into context so the shell tool can route
+	// password prompts (sudo, passwd) to the registered handler.
+	if a.passwordPrompter != nil {
+		ctx = tools.WithPasswordPrompter(ctx, a.passwordPrompter)
 	}
 
 	a.Logger().Debug("Executing shell command in background: %s\n", command)

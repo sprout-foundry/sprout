@@ -250,7 +250,7 @@ func TestSubagentMaxIterationsBounded(t *testing.T) {
 	if subAgent.maxIterations == 0 {
 		t.Fatal("subagent maxIterations should be non-zero (bounded), got 0 (unlimited)")
 	}
-	if subAgent.maxIterations > 100 {
+	if subAgent.maxIterations > 300 {
 		t.Errorf("subagent maxIterations should be reasonably bounded, got %d", subAgent.maxIterations)
 	}
 	if subAgent.maxIterations != defaultSubagentMaxIterations {

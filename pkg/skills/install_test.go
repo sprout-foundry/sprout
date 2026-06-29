@@ -286,3 +286,89 @@ func TestValidateFrontmatter(t *testing.T) {
 		})
 	}
 }
+
+func TestInstallFromRegistry_OverrideForTest(t *testing.T) {
+	// Set up a temp skills install dir.
+	t.Setenv("SPROUT_SKILLS_DIR", t.TempDir())
+
+	// Create a fake skill source on disk.
+	srcDir := t.TempDir()
+	skillSubdir := filepath.Join(srcDir, "skills", "test-skill")
+	if err := os.MkdirAll(skillSubdir, 0o755); err != nil {
+		t.Fatalf("create skill subdir: %v", err)
+	}
+	// Write a SKILL.md whose frontmatter name matches the registry ID.
+	skillContent := `---
+name: test-skill
+description: A test skill for InstallFromRegistry
+---
+# Test Skill Body
+`
+	if err := os.WriteFile(filepath.Join(skillSubdir, SkillFileName), []byte(skillContent), 0o644); err != nil {
+		t.Fatalf("write SKILL.md: %v", err)
+	}
+
+	// Build a fake registry entry pointing to the local source.
+	fakeReg := &Registry{
+		Version: 1,
+		Skills: []RegistryEntry{
+			{
+				ID:          "test-skill",
+				Name:        "Test Skill",
+				Description: "A test skill for InstallFromRegistry",
+				GitURL:      "file://" + srcDir,
+				GitRef:      "main",
+				PathInRepo:  "skills/test-skill",
+			},
+		},
+	}
+
+	// Override the registry for this test.
+	RegistryOverrideForTest(fakeReg)
+	defer RegistryOverrideForTest(nil)
+
+	// Run the install.
+	results, err := InstallFromRegistry(context.Background(), "test-skill", InstallOptions{})
+	if err != nil {
+		t.Fatalf("InstallFromRegistry: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+
+	res := results[0]
+	if res.SkillID != "test-skill" {
+		t.Errorf("SkillID = %q, want %q", res.SkillID, "test-skill")
+	}
+
+	// Check SKILL.md exists in install dir.
+	skillMD := filepath.Join(res.InstallDir, SkillFileName)
+	if _, err := os.Stat(skillMD); os.IsNotExist(err) {
+		t.Error("SKILL.md not found in install dir")
+	}
+
+	// Verify origin metadata.
+	if res.Origin.Type != "registry" {
+		t.Errorf("origin.Type = %q, want %q", res.Origin.Type, "registry")
+	}
+	if res.Origin.RegistryID != "test-skill" {
+		t.Errorf("origin.RegistryID = %q, want %q", res.Origin.RegistryID, "test-skill")
+	}
+}
+
+func TestInstallFromRegistry_NotFound(t *testing.T) {
+	// Explicitly clear any test override so this test always exercises the
+	// embedded registry path, even if other tests run in parallel.
+	RegistryOverrideForTest(nil)
+	defer RegistryOverrideForTest(nil)
+
+	t.Setenv("SPROUT_SKILLS_DIR", t.TempDir())
+
+	_, err := InstallFromRegistry(context.Background(), "does-not-exist", InstallOptions{})
+	if err == nil {
+		t.Fatal("expected error for unknown registry ID")
+	}
+	if !errors.Is(err, ErrRegistryNotFound) {
+		t.Errorf("expected ErrRegistryNotFound, got: %v", err)
+	}
+}

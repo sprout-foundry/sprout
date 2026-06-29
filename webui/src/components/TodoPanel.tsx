@@ -57,7 +57,7 @@ function TodoPanel({ todos, isLoading = false }: TodoPanelProps): JSX.Element {
 
   if (showLoadingState) {
     return (
-      <div className="todo-panel">
+      <div className="todo-panel" data-testid="context-panel-tasks">
         <div className="todo-header">
           <span className="todo-title">📋 Tasks</span>
           <span className="todo-count-summary">Loading...</span>
@@ -79,7 +79,7 @@ function TodoPanel({ todos, isLoading = false }: TodoPanelProps): JSX.Element {
 
   if (todos.length === 0) {
     return (
-      <div className="todo-panel">
+      <div className="todo-panel" data-testid="context-panel-tasks">
         <div className="todo-header">
           <span className="todo-title">📋 Tasks</span>
           <span className="todo-count-summary">Idle</span>
@@ -97,7 +97,7 @@ function TodoPanel({ todos, isLoading = false }: TodoPanelProps): JSX.Element {
   }
 
   return (
-    <div className="todo-panel">
+    <div className="todo-panel" data-testid="context-panel-tasks">
       <div className="todo-header">
         <span className="todo-title">📋 Tasks</span>
         <span className="todo-count-summary">

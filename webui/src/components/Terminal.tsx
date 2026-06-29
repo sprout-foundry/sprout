@@ -430,6 +430,7 @@ function Terminal({
         .filter(Boolean)
         .join(' ')}
       style={{ height: `${isExpanded ? terminalHeight : collapsedHeight}px` }}
+      data-testid="terminal-container"
     >
       {isExpanded && (
         <div
@@ -447,6 +448,7 @@ function Terminal({
           title="Expand terminal (Ctrl+`)"
           aria-label="Expand terminal"
           aria-expanded={false}
+          data-testid="terminal-toggle"
         >
           <span className="terminal-collapsed-mark" aria-hidden="true">
             $
@@ -461,7 +463,7 @@ function Terminal({
             </span>
           )}
           <span className="terminal-collapsed-spacer" />
-          <ChevronUp size={16} aria-hidden="true" />
+          <ChevronUp size={16} aria-hidden="true" data-testid="terminal-collapse" />
         </button>
       )}
 
@@ -478,9 +480,11 @@ function Terminal({
                     className={`terminal-pane-wrapper${isSplitActive && pane.id === focusedPaneId ? ' terminal-pane-wrapper--focused' : ''}`}
                     style={splitStyleForPane(index)}
                     onMouseDown={() => setFocusedPaneId(pane.id)}
+                    data-testid="terminal-pane"
                   >
                     <div
                       className={`terminal-pane-tab-bar${isActionsPane ? ' terminal-pane-tab-bar--with-actions' : ''}`}
+                      data-testid="terminal-tab-bar"
                     >
                       <div className="terminal-pane-tabs">
                         <TerminalTabBar

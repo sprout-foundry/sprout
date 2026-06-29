@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/sprout-foundry/sprout/pkg/testutil"
 )
 
 // =============================================================================
@@ -1322,7 +1324,7 @@ func TestDisplayVerboseLog_Truncation(t *testing.T) {
 
 	// Write 25001 lines to just exceed the 20000 line limit.
 	// We use short lines and only slightly above the limit to avoid
-	// pipe buffer deadlocks in captureStdout.
+	// pipe buffer deadlocks in testutil.CaptureStdout.
 	var buf strings.Builder
 	for i := 0; i < 25001; i++ {
 		buf.WriteString("x\n")
@@ -1334,7 +1336,7 @@ func TestDisplayVerboseLog_Truncation(t *testing.T) {
 	defer os.Chdir(origDir)
 	os.Chdir(dir)
 
-	out := captureStdout(t, displayVerboseLog)
+	out := testutil.CaptureStdout(t, displayVerboseLog)
 
 	if !strings.Contains(out, "Displaying last 20000 lines") {
 		t.Errorf("expected truncation message, got output length %d", len(out))

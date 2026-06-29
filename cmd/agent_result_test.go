@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/testutil"
 )
 
 // =============================================================================
@@ -381,7 +382,7 @@ func TestEmitJSONResult_SuccessWithAgent(t *testing.T) {
 	query := "write a hello world program"
 	startTime := time.Now().Add(-5 * time.Second)
 
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		emitJSONResult(query, startTime, nil, a)
 	})
 
@@ -429,7 +430,7 @@ func TestEmitJSONResult_SuccessWithAccumulatedMetrics(t *testing.T) {
 	a.TrackMetricsFromResponse(600, 300, 900, 0.03, 0, 0)
 	a.TrackMetricsFromResponse(400, 100, 500, 0.01, 0, 0)
 
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		emitJSONResult("test query", time.Now(), nil, a)
 	})
 
@@ -456,7 +457,7 @@ func TestEmitJSONResult_ErrorCase(t *testing.T) {
 
 	testErr := errors.New("API rate limit exceeded")
 
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		emitJSONResult("refactor code", time.Now(), testErr, a)
 	})
 
@@ -481,7 +482,7 @@ func TestEmitJSONResult_ErrorCase(t *testing.T) {
 }
 
 func TestEmitJSONResult_NilAgent(t *testing.T) {
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		emitJSONResult("test with nil agent", time.Now(), nil, nil)
 	})
 
@@ -517,7 +518,7 @@ func TestEmitJSONResult_NilAgent(t *testing.T) {
 func TestEmitJSONResult_NilAgentWithError(t *testing.T) {
 	testErr := fmt.Errorf("agent initialization failed: no API key")
 
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		emitJSONResult("broken query", time.Now(), testErr, nil)
 	})
 
@@ -553,7 +554,7 @@ func TestEmitJSONResult_QueryPreserved(t *testing.T) {
 
 	for _, query := range testCases {
 		t.Run(fmt.Sprintf("query_len_%d", len(query)), func(t *testing.T) {
-			output := captureStdout(t, func() {
+			output := testutil.CaptureStdout(t, func() {
 				emitJSONResult(query, time.Now(), nil, nil)
 			})
 
@@ -576,7 +577,7 @@ func TestEmitJSONResult_ElapsedSeconds(t *testing.T) {
 	// Verify elapsed time is computed from the provided startTime
 	startTime := time.Now().Add(-10 * time.Second)
 
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		emitJSONResult("timing test", startTime, nil, nil)
 	})
 
@@ -596,7 +597,7 @@ func TestEmitJSONResult_ElapsedSeconds(t *testing.T) {
 
 func TestEmitJSONResult_OutputIsValidJSON(t *testing.T) {
 	// Ensure the output is always valid JSON regardless of input
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		emitJSONResult("validate JSON", time.Now(), nil, nil)
 	})
 
@@ -609,7 +610,7 @@ func TestEmitJSONResult_OutputIsValidJSON(t *testing.T) {
 
 func TestEmitJSONResult_Indentation(t *testing.T) {
 	// Verify the output uses indented formatting (as set by enc.SetIndent)
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		emitJSONResult("indent test", time.Now(), nil, nil)
 	})
 
@@ -657,7 +658,7 @@ func TestEmitJSONResult_FreshRepoNoHEAD_StagedAndUnstaged(t *testing.T) {
 	defer os.Chdir(origDir)
 
 	// Call emitJSONResult and capture output
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		emitJSONResult("fresh repo test", time.Now(), nil, nil)
 	})
 
@@ -711,7 +712,7 @@ func TestEmitJSONResult_FreshRepoNoHEAD_StagedOnly(t *testing.T) {
 	}
 	defer os.Chdir(origDir)
 
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		emitJSONResult("staged only test", time.Now(), nil, nil)
 	})
 
@@ -771,7 +772,7 @@ func TestEmitJSONResult_FreshRepoNoHEAD_Deduplication(t *testing.T) {
 	}
 	defer os.Chdir(origDir)
 
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		emitJSONResult("dedup test", time.Now(), nil, nil)
 	})
 
@@ -807,7 +808,7 @@ func TestEmitJSONResult_FreshRepoNoHEAD_EmptyWorktree(t *testing.T) {
 	}
 	defer os.Chdir(origDir)
 
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		emitJSONResult("empty worktree test", time.Now(), nil, nil)
 	})
 
@@ -862,7 +863,7 @@ func TestEmitJSONResult_UntrackedFilesIncluded(t *testing.T) {
 	}
 	defer os.Chdir(origDir)
 
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		emitJSONResult("untracked test", time.Now(), nil, nil)
 	})
 
@@ -904,7 +905,7 @@ func TestEmitJSONResult_UntrackedFilesDiff(t *testing.T) {
 	}
 	defer os.Chdir(origDir)
 
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		emitJSONResult("untracked diff test", time.Now(), nil, nil)
 	})
 
@@ -949,7 +950,7 @@ func TestEmitJSONResult_UntrackedFilesNotDuplicate(t *testing.T) {
 	}
 	defer os.Chdir(origDir)
 
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		emitJSONResult("dedup untracked test", time.Now(), nil, nil)
 	})
 
@@ -1006,7 +1007,7 @@ func TestEmitJSONResult_TrackedRepoUntrackedFiles(t *testing.T) {
 	}
 	defer os.Chdir(origDir)
 
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		emitJSONResult("tracked repo untracked test", time.Now(), nil, nil)
 	})
 
@@ -1063,7 +1064,7 @@ func TestEmitJSONResult_GitignoredFilesExcluded(t *testing.T) {
 	}
 	defer os.Chdir(origDir)
 
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		emitJSONResult("gitignore test", time.Now(), nil, nil)
 	})
 

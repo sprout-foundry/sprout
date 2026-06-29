@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/testutil"
 )
 
 // =============================================================================
@@ -210,7 +212,7 @@ func TestItoa(t *testing.T) {
 // =============================================================================
 
 func TestPrintVersionInfo(t *testing.T) {
-	out := captureStdout(t, printVersionInfo)
+	out := testutil.CaptureStdout(t, printVersionInfo)
 
 	// Should always contain these strings
 	if !strings.Contains(out, "sprout version") {

@@ -5,13 +5,13 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
-	"io"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/spf13/cobra"
 	"github.com/sprout-foundry/sprout/pkg/search"
+	"github.com/sprout-foundry/sprout/pkg/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -91,31 +91,6 @@ func setupCLISearchIndex(t *testing.T) string {
 }
 
 // ---------------------------------------------------------------------------
-// captureStdoutCLI replaces os.Stdout, runs f, returns captured text.
-// ---------------------------------------------------------------------------
-
-func captureStdoutCLI(t *testing.T, f func()) string {
-	t.Helper()
-	old := os.Stdout
-	r, w, err := os.Pipe()
-	require.NoError(t, err)
-	os.Stdout = w
-
-	done := make(chan struct{})
-	go func() {
-		f()
-		w.Close()       // Close pipe FIRST so io.ReadAll returns
-		os.Stdout = old // Then restore stdout
-		close(done)
-	}()
-
-	<-done
-	data, err := io.ReadAll(r)
-	require.NoError(t, err)
-	return string(data)
-}
-
-// ---------------------------------------------------------------------------
 // makeSearchCmd creates a standalone cobra command with the same flags as
 // searchCmd but WITHOUT being a child of rootCmd (which would trigger the
 // web-server startup in PersistentPreRunE).  This lets us call Execute()
@@ -156,7 +131,7 @@ func TestSearchCmd_SearchQuery(t *testing.T) {
 
 	cmd := makeSearchCmd()
 	cmd.SetArgs([]string{"embedding"})
-	output := captureStdoutCLI(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		_ = cmd.Execute()
 	})
 
@@ -170,7 +145,7 @@ func TestSearchCmd_JsonOutput(t *testing.T) {
 
 	cmd := makeSearchCmd()
 	cmd.SetArgs([]string{"--json", "embedding"})
-	output := captureStdoutCLI(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		_ = cmd.Execute()
 	})
 
@@ -187,7 +162,7 @@ func TestSearchCmd_CwdFilter(t *testing.T) {
 
 	cmd := makeSearchCmd()
 	cmd.SetArgs([]string{"--cwd", "/tmp/repro", "auth"})
-	output := captureStdoutCLI(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		_ = cmd.Execute()
 	})
 
@@ -203,7 +178,7 @@ func TestSearchCmd_Limit(t *testing.T) {
 
 	cmd := makeSearchCmd()
 	cmd.SetArgs([]string{"--limit", "1", "embedding"})
-	output := captureStdoutCLI(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		_ = cmd.Execute()
 	})
 
@@ -217,7 +192,7 @@ func TestSearchCmd_Reindex(t *testing.T) {
 
 	cmd := makeSearchCmd()
 	cmd.SetArgs([]string{"--reindex", "embedding"})
-	output := captureStdoutCLI(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		_ = cmd.Execute()
 	})
 
@@ -231,7 +206,7 @@ func TestSearchCmd_DateFilters(t *testing.T) {
 	// --since in the past: should match
 	cmd := makeSearchCmd()
 	cmd.SetArgs([]string{"--since", "2020-01-01", "test"})
-	output := captureStdoutCLI(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		_ = cmd.Execute()
 	})
 	// "test" appears in session 2's messages ("test this auth error")
@@ -240,7 +215,7 @@ func TestSearchCmd_DateFilters(t *testing.T) {
 	// --until in the past: should not match (sessions are recent)
 	cmd2 := makeSearchCmd()
 	cmd2.SetArgs([]string{"--until", "2000-01-01", "test"})
-	output = captureStdoutCLI(t, func() {
+	output = testutil.CaptureStdout(t, func() {
 		_ = cmd2.Execute()
 	})
 	// No matching sessions message from FormatResults
@@ -252,7 +227,7 @@ func TestSearchCmd_JsonNoResults(t *testing.T) {
 
 	cmd := makeSearchCmd()
 	cmd.SetArgs([]string{"--json", "xyznonexistentquery"})
-	output := captureStdoutCLI(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		_ = cmd.Execute()
 	})
 
@@ -289,7 +264,7 @@ func TestSearchCmd_ExactPhrase(t *testing.T) {
 
 	cmd := makeSearchCmd()
 	cmd.SetArgs([]string{"embedding index"})
-	output := captureStdoutCLI(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		_ = cmd.Execute()
 	})
 
@@ -301,7 +276,7 @@ func TestSearchCmd_MultiTermQuery(t *testing.T) {
 
 	cmd := makeSearchCmd()
 	cmd.SetArgs([]string{"auth", "config"})
-	output := captureStdoutCLI(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		_ = cmd.Execute()
 	})
 
@@ -313,7 +288,7 @@ func TestSearchCmd_NoMatch(t *testing.T) {
 
 	cmd := makeSearchCmd()
 	cmd.SetArgs([]string{"xyznonexistentquery"})
-	output := captureStdoutCLI(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		_ = cmd.Execute()
 	})
 
@@ -370,8 +345,8 @@ func TestGetCLISessionsDir(t *testing.T) {
 // Tests — stdout capture sanity
 // ---------------------------------------------------------------------------
 
-func TestCaptureStdoutCLI_Correctness(t *testing.T) {
-	output := captureStdoutCLI(t, func() {
+func TestCaptureStdout_Correctness(t *testing.T) {
+	output := testutil.CaptureStdout(t, func() {
 		buf := &bytes.Buffer{}
 		buf.WriteString("hello world")
 		os.Stdout.WriteString(buf.String())
@@ -388,7 +363,7 @@ func TestSearchCmd_CombinedFlags(t *testing.T) {
 
 	cmd := makeSearchCmd()
 	cmd.SetArgs([]string{"--cwd", "/home/user/project", "--limit", "1", "--since", "2020-01-01", "help"})
-	output := captureStdoutCLI(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		_ = cmd.Execute()
 	})
 
@@ -410,7 +385,7 @@ func TestSearchCmd_ReindexEmptyIndex(t *testing.T) {
 
 	cmd := makeSearchCmd()
 	cmd.SetArgs([]string{"--reindex", "embedding"})
-	output := captureStdoutCLI(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		_ = cmd.Execute()
 	})
 
@@ -431,7 +406,7 @@ func TestSearchCmd_AutoBuildEmptyIndex(t *testing.T) {
 
 	cmd := makeSearchCmd()
 	cmd.SetArgs([]string{"embedding"})
-	output := captureStdoutCLI(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		_ = cmd.Execute()
 	})
 
@@ -444,7 +419,7 @@ func TestSearchCmd_RFC3339Date(t *testing.T) {
 
 	cmd := makeSearchCmd()
 	cmd.SetArgs([]string{"--since", "2020-01-01T00:00:00Z", "test"})
-	output := captureStdoutCLI(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		_ = cmd.Execute()
 	})
 
@@ -456,7 +431,7 @@ func TestSearchCmd_FormatOutput(t *testing.T) {
 
 	cmd := makeSearchCmd()
 	cmd.SetArgs([]string{"embedding"})
-	output := captureStdoutCLI(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		_ = cmd.Execute()
 	})
 

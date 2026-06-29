@@ -1,10 +1,11 @@
 package console
 
 import (
-	"fmt"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/sprout-foundry/sprout/pkg/testutil"
 )
 
 func TestNewInputReader(t *testing.T) {
@@ -203,7 +204,7 @@ func TestRefreshCancelsPendingWrapBeforeRedraw(t *testing.T) {
 	ir.currentPhysicalLine = 0
 	ir.lastWrapPending = true
 
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		ir.Backspace()
 	})
 
@@ -222,7 +223,7 @@ func TestRefreshPlacesCursorAtLineEndForExactBoundary(t *testing.T) {
 	ir.line = "abcdefghi"
 	ir.cursorPos = len(ir.line)
 
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		ir.Refresh()
 	})
 
@@ -241,7 +242,7 @@ func TestApplyTerminalWidthChangeResetsRedrawState(t *testing.T) {
 	ir.currentPhysicalLine = 0
 	ir.lastWrapPending = true
 
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		changed := ir.applyTerminalWidthChange(10, 6)
 		if !changed {
 			t.Fatal("expected width change to be handled")
@@ -265,7 +266,7 @@ func TestApplyTerminalWidthChangeNoOpWhenWidthUnchanged(t *testing.T) {
 	ir := NewInputReader("> ")
 	ir.terminalWidth = 10
 
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		changed := ir.applyTerminalWidthChange(10, 10)
 		if changed {
 			t.Fatal("expected unchanged width to be ignored")
@@ -446,58 +447,6 @@ func TestDeleteAtCollapsedPasteBoundaryDeletesWholePaste(t *testing.T) {
 	}
 	if len(ir.collapsedPastes) != 0 {
 		t.Fatalf("expected collapsed spans to be removed, got %d", len(ir.collapsedPastes))
-	}
-}
-
-func captureStdout(t *testing.T, fn func()) string {
-	t.Helper()
-
-	oldStdout := os.Stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("pipe: %v", err)
-	}
-	os.Stdout = w
-	t.Cleanup(func() { os.Stdout = oldStdout })
-
-	done := make(chan string, 1)
-	go func() {
-		var buf strings.Builder
-		tmp := make([]byte, 4096)
-		for {
-			n, readErr := r.Read(tmp)
-			if n > 0 {
-				buf.Write(tmp[:n])
-			}
-			if readErr != nil {
-				break
-			}
-		}
-		done <- buf.String()
-	}()
-
-	defer func() { _ = w.Close() }()
-	fn()
-	_ = w.Close()
-	return <-done
-}
-
-// TestCaptureStdout_LargeOutput exercises captureStdout with output that
-// exceeds the OS pipe buffer (64 KiB on Linux). Without a concurrent
-// reader, the writer inside fn() would block once the buffer fills.
-func TestCaptureStdout_LargeOutput(t *testing.T) {
-	const size = 256 * 1024 // 4x the typical pipe buffer
-	want := strings.Repeat("x", size)
-
-	out := captureStdout(t, func() {
-		fmt.Print(want)
-	})
-
-	if len(out) != size {
-		t.Fatalf("captured %d bytes, want %d", len(out), size)
-	}
-	if out != want {
-		t.Fatal("output content mismatch")
 	}
 }
 

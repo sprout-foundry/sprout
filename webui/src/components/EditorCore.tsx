@@ -118,7 +118,7 @@ const EditorCoreImpl = (props: EditorCoreProps): JSX.Element => {
               className={`pane-content${markdownPreviewMode === 'split' ? ' pane-content-md-editor-side' : ''}`}
               onContextMenu={onContextMenu}
             >
-              <div ref={editorRef as React.RefObject<HTMLDivElement>} className="editor" />
+              <div ref={editorRef as React.RefObject<HTMLDivElement>} className="editor" data-testid="editor" />
             </div>
             {markdownPreviewMode === 'split' && (
               <div className="pane-md-preview-split">

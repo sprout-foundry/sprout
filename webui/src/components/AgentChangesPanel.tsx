@@ -408,7 +408,7 @@ function AgentChangesPanel({ onAskAgent, onFileClick }: AgentChangesPanelProps):
   // ── Render ─────────────────────────────────────────────────────
 
   return (
-    <div className="agent-changes-panel">
+    <div className="agent-changes-panel" data-testid="context-panel-changes">
       <div className="changes-tabs">
         <button
           type="button"

@@ -16,6 +16,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/factory"
 	"github.com/sprout-foundry/sprout/pkg/noninteractive"
 	"github.com/sprout-foundry/sprout/pkg/personas"
+	"golang.org/x/term"
 )
 
 // sessionCleanupOnce ensures session cleanup runs only once per process,
@@ -136,6 +137,18 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 		backgroundOrphanCleanupOnce.Do(func() {
 			cleanupOrphanedBackgroundProcesses(agent.debug)
 		})
+
+		// SP-089-4: auto-register a CLI password prompter when stdin is a
+		// TTY. The WebUI prompter is registered lazily by the WebUI server
+		// (via SetPasswordPrompter) when a client connects. This is
+		// best-effort: if stdin is not a TTY, passwordPrompter stays nil
+		// and sudo commands are blocked as before (safe default).
+		if isInteractiveTerminal() {
+			agent.passwordPrompter = NewCLIPasswordPrompter()
+			if agent.debug {
+				agent.Logger().Info("Registered CLI password prompter (TTY detected)")
+			}
+		}
 
 		// Sweep expired persistent context entries based on retention policy
 		if agent.configManager != nil {
@@ -582,4 +595,10 @@ func (a *Agent) autoActivateCoordinatorPersona() {
 	}
 	// Surface the activation so users can see why behavior changed.
 	console.GlyphInfo.Fprintf(os.Stderr, "Activated coordinator persona because workspace is $HOME (disable with 'disable_coordinator_auto_activate' in config)")
+}
+
+// isInteractiveTerminal returns true if stdin is a TTY, indicating the
+// agent is running in an interactive CLI session (not piped, daemon, CI).
+func isInteractiveTerminal() bool {
+	return term.IsTerminal(int(os.Stdin.Fd()))
 }

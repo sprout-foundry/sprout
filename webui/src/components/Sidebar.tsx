@@ -578,7 +578,7 @@ function Sidebar({
   };
 
   return (
-    <div className="sidebar-resize-wrapper" style={{ flexShrink: 0 }}>
+    <div className="sidebar-resize-wrapper" style={{ flexShrink: 0 }} data-testid="sidebar-container">
       <div
         className={`sidebar ${isMobile ? 'mobile' : ''} ${finalIsMobileMenuOpen ? 'open' : 'closed'} ${effectiveSidebarCollapsed ? 'collapsed' : ''} ${isResizing ? 'resizing' : ''}`}
         style={
@@ -595,6 +595,7 @@ function Sidebar({
             onClick={handleLogoToggle}
             aria-label={isMobile ? 'Close sidebar' : effectiveSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             title={isMobile ? 'Close sidebar' : effectiveSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            data-testid="sidebar-brand"
           >
             <SproutLogo showWordmark={false} compact />
           </button>
@@ -721,7 +722,12 @@ function Sidebar({
         {/* Icon rail (always visible) + Content pane (only when expanded) */}
         <div className="sidebar-body">
           {/* Icon Rail */}
-          <div className="sidebar-icon-rail" role="navigation" aria-label="Sidebar navigation">
+          <div
+            className="sidebar-icon-rail"
+            role="navigation"
+            aria-label="Sidebar navigation"
+            data-testid="sidebar-icon-rail"
+          >
             {/* Main section tabs: git, files, search */}
             <div role="tablist" aria-orientation="vertical">
               {MAIN_SECTION_TABS.map((tab) => (
@@ -734,6 +740,7 @@ function Sidebar({
                   onClick={() => handleSectionTabClick(tab.id)}
                   title={tab.label}
                   aria-label={tab.label}
+                  data-testid={`sidebar-${tab.id}-tab`}
                 >
                   <tab.icon size={18} strokeWidth={1.5} />
                 </button>
@@ -796,6 +803,7 @@ function Sidebar({
                   onClick={() => handleSectionTabClick('settings')}
                   title="Settings"
                   aria-label="Settings"
+                  data-testid="sidebar-settings-toggle"
                 >
                   <Settings size={18} strokeWidth={1.5} />
                 </button>
@@ -808,6 +816,7 @@ function Sidebar({
                 onClick={() => handleSectionTabClick('logs')}
                 title="Logs"
                 aria-label="Logs"
+                data-testid="sidebar-logs-tab"
               >
                 <ScrollText size={18} strokeWidth={1.5} />
               </button>

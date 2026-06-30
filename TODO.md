@@ -813,13 +813,26 @@ re-sync of the README. There may be additional specs that flipped from
 Proposed to Implemented whose spec headers were not updated. This
 ticket is a quick verification pass.
 
-- [ ] **SP-102-1:** Read every spec file `roadmap/SP-*.md`, compare
+- [x] **SP-102-1:** Read every spec file `roadmap/SP-*.md`, compare
   its `**Status:**` line against the README table row. List any
   discrepancies in a comment on this ticket.
-- [ ] **SP-102-2:** Update any drifted spec headers (should be <10
+
+  _Audit complete: 76 SP files reviewed. After the SP-096-1..14 commit
+  batch, only 9 spec files remain `📋 Proposed`, and all 9 match the
+  README's `📋 Proposed` row exactly (SP-008, SP-011, SP-012, SP-016b,
+  SP-027, SP-045, SP-046, SP-054, SP-075). No drift._
+
+- [x] **SP-102-2:** Update any drifted spec headers (should be <10
   edits; if more, open separate tickets).
-- [ ] **SP-102-3:** Verify SP-076 is reflected correctly (header
+
+  _No updates required — drift = 0. All 14 formerly-drifted specs were
+  fixed in SP-096._
+
+- [x] **SP-102-3:** Verify SP-076 is reflected correctly (header
   already says `✅ Implemented (2026-06-26)`; confirm).
+
+  _Confirmed: `roadmap/SP-076-webui-streaming-verbosity.md` header is
+  `**Status:** ✅ Implemented (2026-06-26)`. Matches README._
 
 ### Acceptance
 

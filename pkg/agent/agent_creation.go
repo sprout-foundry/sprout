@@ -333,31 +333,10 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 	// --mock-llm flag override: use a deterministic mock provider instead of
 	// any real LLM. Checked before the test-under-go-test path so that
 	// `sprout serve` (which sets UseMockLLM=true) works even outside tests.
-	if UseMockLLM {
-		client := NewMockLLMProvider()
-		if model != "" {
-			client.SetModel(model)
-		}
-		client.SetDebug(isDebugEnvEnabled())
-
-		providerName := client.GetProvider()
-		systemPrompt, err := GetEmbeddedSystemPromptWithProvider(providerName)
-		if err != nil {
-			return nil, agenterrors.NewPermanentError("failed to load system prompt", err)
-		}
-		systemPrompt = resolveConfiguredSystemPrompt(configManager.GetConfig(), systemPrompt)
-
-		return initAgentFromResolvedProvider(agentInitParams{
-			client:          client,
-			clientType:      api.TestClientType,
-			systemPrompt:    systemPrompt,
-			configManager:   configManager,
-			workspaceRoot:   workspaceRoot,
-			debug:           isDebugEnvEnabled(),
-			interruptCtx:    context.Background(),
-			interruptCancel: func() { /* no-op */ },
-			isProduction:    true,
-		})
+	// The mock provider implementation is excluded from the WASM build
+	// (//go:build !js), so this helper is a no-op there.
+	if handled, agent, err := tryMockLLMAgent(model, configManager, workspaceRoot); handled {
+		return agent, err
 	}
 
 	// If running under `go test`, prefer the test/mock client to avoid network/API key

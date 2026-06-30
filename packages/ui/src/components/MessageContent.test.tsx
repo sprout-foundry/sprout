@@ -342,7 +342,6 @@ function MockMarkdown({
 
 vi.mock('react-markdown', () => ({ __esModule: true, default: MockMarkdown }));
 vi.mock('remark-gfm', () => ({ default: [] }));
-vi.mock('remark-breaks', () => ({ default: [] }));
 
 import MessageContent from './MessageContent';
 

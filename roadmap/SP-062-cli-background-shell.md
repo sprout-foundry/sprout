@@ -1,6 +1,6 @@
 # SP-062: CLI-Native Background Shell Execution
 
-**Status:** 📋 Proposed
+**Status:** ✅ Implemented (BackgroundProcessManager wired into shell dispatch)
 **Date:** 2026-05-31
 **Depends on:** None (extends existing `shell_command` tool)
 **Priority:** High

@@ -13,7 +13,7 @@ interface MarkdownPreviewProps {
 
 function MarkdownPreview({ content, scrollRef }: MarkdownPreviewProps): JSX.Element {
   return (
-    <div className="markdown-preview">
+    <div className="markdown-preview" data-testid="markdown-preview">
       <div className="markdown-preview-body" ref={scrollRef}>
         <ReactMarkdown
           remarkPlugins={[remarkGfm, remarkBreaks]}

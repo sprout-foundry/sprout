@@ -1,6 +1,6 @@
 # SP-085: Cost Analytics Dashboard — Model / Provider / Day Breakdown
 
-**Status:** 📋 Spec
+**Status:** ✅ Implemented (2026-06-30)
 **Date:** 2026-06-27
 **Depends on:** `pkg/webui/cost_tracking.go::CostStore` (already implemented), `/api/costs/*` endpoints (already implemented)
 **Priority:** Medium (backend exists; this is the missing UI layer)

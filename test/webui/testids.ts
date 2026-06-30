@@ -24,6 +24,11 @@ const TESTIDS = {
   // Chat
   'chat-shell': 'chat-shell',
   'chat-main': 'chat-main',
+  'chat-input': 'chat-input',
+  'chat-send': 'chat-send',
+  'chat-message': 'chat-message',
+  'chat-message-user': 'chat-message-user',
+  'chat-message-assistant': 'chat-message-assistant',
   'chat-message-list': 'chat-message-list',
   'chat-scroll-bottom': 'chat-scroll-bottom',
   'chat-export-button': 'chat-export-button',
@@ -37,6 +42,9 @@ const TESTIDS = {
   'chat-tool-timeline': 'chat-tool-timeline',
   'chat-subagent-feed': 'chat-subagent-feed',
   'chat-query-progress': 'chat-query-progress',
+  'chat-sessions-empty': 'chat-sessions-empty',
+  'chat-item': 'chat-item',
+  'chat-new-button': 'chat-new-button',
 
   // Sidebar
   'sidebar-container': 'sidebar-container',
@@ -46,8 +54,6 @@ const TESTIDS = {
   'sidebar-sessions-search-dropdown': 'sidebar-session-search-dropdown',
   'sidebar-sessions-search-loading': 'sidebar-session-search-loading',
   'sidebar-sessions-search-error': 'sidebar-session-search-error',
-  'sidebar-sessions-search-no-results': 'sidebar-session-search-no-results',
-  'sidebar-sessions-search-result': 'sidebar-session-search-result',
   'sidebar-costs-button': 'sidebar-costs-button',
   'sidebar-settings-toggle': 'sidebar-settings-toggle',
   'sidebar-export-all': 'sidebar-export-all',
@@ -61,6 +67,7 @@ const TESTIDS = {
   // Editor
   'editor': 'editor',
   'editor-pane': 'editor-pane',
+  'editor-empty': 'editor-empty',
   'editor-language-switcher': 'language-switcher-button',
   'editor-language-popup': 'language-switcher-popup',
   'editor-footer': 'editor-footer',
@@ -229,6 +236,31 @@ const TESTIDS = {
 
   // App
   'app-error-banner': 'app-error-banner',
+
+  // SP-090: Phase 2 testids added to close Playwright coverage gap
+  'file-tree': 'file-tree',
+  'file-tree-item': 'file-tree-item',
+  'file-tree-empty': 'file-tree-empty',
+  'background-tasks-trigger': 'background-tasks-trigger',
+  'background-tasks-popover': 'background-tasks-popover',
+  'background-task-item': 'background-task-item',
+  'background-task-attach': 'background-task-attach',
+  'background-task-kill': 'background-task-kill',
+  'mcp-server-form': 'mcp-server-form',
+  'mcp-server-name-input': 'mcp-server-name-input',
+  'mcp-server-command-input': 'mcp-server-command-input',
+  'mcp-server-add-button': 'mcp-server-add-button',
+  'mcp-server-row': 'mcp-server-row',
+  'mcp-server-delete-button': 'mcp-server-delete-button',
+  'git-push-button': 'git-push-button',
+  'git-remote-url': 'git-remote-url',
+  'status-bar-cost': 'status-bar-cost',
+  'markdown-preview': 'markdown-preview',
+  'binary-viewer': 'binary-viewer',
+  'workspace-picker': 'workspace-picker',
+  'workspace-picker-option': 'workspace-picker-option',
+  'theme-toggle': 'theme-toggle',
+  'disconnected-overlay': 'disconnected-overlay',
 } as const;
 
 // Derived set for O(1) coverage lookups

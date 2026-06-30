@@ -3,13 +3,6 @@
 // Tests that the UI handles a session with many messages gracefully:
 // the chat scrolls to bottom, message list renders without freezing,
 // and jumping to a specific message by index works.
-//
-// MISSING TESTIDS (documented in test/webui/tier3-gap-report.md):
-//   - `chat-message` — individual message element in the chat list (NOT in registry)
-//   - `chat-message-user` — user message role indicator (NOT in registry)
-//   - `chat-message-assistant` — assistant message role indicator (NOT in registry)
-// These tests are currently `test.fixme()` and will run once the missing
-// testids are added to the registry.
 
 import { test, expect, chromium, type Browser, type Page } from '@playwright/test';
 import { startSprout, type SproutHandle } from './fixtures/sprout';
@@ -42,139 +35,133 @@ test.describe.configure({ mode: 'serial' });
 test.setTimeout(60_000);
 
 test.describe('Large Session', () => {
-  test.fixme(
-    'chat scrolls to bottom when opening a large session — chat-message / chat-message-user / chat-message-assistant testids missing (SP-087-6 followup)',
-    async () => {
-      await page.goto(vite.url, { waitUntil: 'networkidle' });
-      await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
+  test('chat scrolls to bottom when opening a large session', async () => {
+    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
-      const createResp = await fetch(`${sprout.baseUrl}/api/chat-sessions/create`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: 'Large Session Test' }),
-      });
+    const createResp = await fetch(`${sprout.baseUrl}/api/chat-sessions/create`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Large Session Test' }),
+    });
 
-      if (!createResp.ok) {
-        await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 10_000 });
-        return;
-      }
+    if (!createResp.ok) {
+      await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 10_000 });
+      return;
+    }
 
-      const createData: any = await createResp.json();
-      const sessionId = createData.id;
-      expect(sessionId).toBeDefined();
+    const createData: any = await createResp.json();
+    const sessionId = createData.id;
+    expect(sessionId).toBeDefined();
 
-      const textarea = page.locator('[data-testid="chat-shell"] textarea').first();
-      const isTextareaVisible = await textarea.isVisible({ timeout: 10_000 }).catch(() => false);
+    // Use the chat-input testid
+    const textarea = page.getByTestId(TESTIDS['chat-input']);
+    const isTextareaVisible = await textarea.isVisible({ timeout: 10_000 }).catch(() => false);
 
-      if (!isTextareaVisible) {
-        await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 10_000 });
-        return;
-      }
+    if (!isTextareaVisible) {
+      await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 10_000 });
+      return;
+    }
 
-      // Send a batch of messages to build up the session (smaller count for speed)
-      const messageCount = 20;
-      for (let i = 0; i < messageCount; i++) {
-        const msg = `Test message #${i + 1} — padding to simulate a large session load`;
-        await textarea.fill(msg);
-        await textarea.press('Enter');
-        await expect(textarea).toHaveValue('', { timeout: 10_000 });
-      }
+    // Send a batch of messages to build up the session (smaller count for speed)
+    const messageCount = 20;
+    for (let i = 0; i < messageCount; i++) {
+      const msg = `Test message #${i + 1} — padding to simulate a large session load`;
+      await textarea.fill(msg);
+      await textarea.press('Enter');
+      await expect(textarea).toHaveValue('', { timeout: 10_000 });
+    }
 
-      const messageList = page.getByTestId(TESTIDS['chat-message-list']);
-      await expect(async () => {
-        const count = await messageList.locator('> *').count();
-        expect(count).toBeGreaterThan(10);
-      }).toPass({ timeout: 30_000 });
+    const messageList = page.getByTestId(TESTIDS['chat-message-list']);
+    await expect(async () => {
+      const count = await messageList.locator('> *').count();
+      expect(count).toBeGreaterThan(10);
+    }).toPass({ timeout: 30_000 });
 
-      // NOTE: chat-scroll-bottom IS in the testid registry.
-      const scrollBottom = page.getByTestId(TESTIDS['chat-scroll-bottom']);
-      const isScrollBottomVisible = await scrollBottom.isVisible({ timeout: 5_000 }).catch(() => false);
+    // Check for scroll-to-bottom button
+    const scrollBottom = page.getByTestId(TESTIDS['chat-scroll-bottom']);
+    const isScrollBottomVisible = await scrollBottom.isVisible({ timeout: 5_000 }).catch(() => false);
 
-      if (isScrollBottomVisible) {
-        await expect(scrollBottom).toBeVisible({ timeout: 5_000 });
-      } else {
-        await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 5_000 });
-      }
-    },
-  );
-
-  test.fixme(
-    'message list renders large sessions without freezing — chat-message / chat-message-user / chat-message-assistant testids missing (SP-087-6 followup)',
-    async () => {
-      await page.goto(vite.url, { waitUntil: 'networkidle' });
-      await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
-
-      const textarea = page.locator('[data-testid="chat-shell"] textarea').first();
-      const isTextareaVisible = await textarea.isVisible({ timeout: 10_000 }).catch(() => false);
-
-      if (!isTextareaVisible) {
-        await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 10_000 });
-        return;
-      }
-
-      const startTime = Date.now();
-      const messageCount = 15;
-
-      for (let i = 0; i < messageCount; i++) {
-        const msg = `Performance test message #${i + 1} with some padding text`;
-        await textarea.fill(msg);
-        await textarea.press('Enter');
-        await expect(textarea).toHaveValue('', { timeout: 10_000 });
-      }
-
-      const messageList = page.getByTestId(TESTIDS['chat-message-list']);
-      await expect(async () => {
-        const count = await messageList.locator('> *').count();
-        expect(count).toBeGreaterThan(10);
-      }).toPass({ timeout: 30_000 });
-
-      const elapsed = Date.now() - startTime;
-      expect(elapsed).toBeLessThan(10_000);
-
+    if (isScrollBottomVisible) {
+      await expect(scrollBottom).toBeVisible({ timeout: 5_000 });
+    } else {
       await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 5_000 });
-    },
-  );
+    }
+  });
 
-  test.fixme(
-    'jumping to a specific message by index works — chat-message / chat-message-user / chat-message-assistant testids missing (SP-087-6 followup)',
-    async () => {
-      await page.goto(vite.url, { waitUntil: 'networkidle' });
-      await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
+  test('message list renders large sessions without freezing', async () => {
+    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
-      const textarea = page.locator('[data-testid="chat-shell"] textarea').first();
-      const isTextareaVisible = await textarea.isVisible({ timeout: 10_000 }).catch(() => false);
+    // Use the chat-input testid
+    const textarea = page.getByTestId(TESTIDS['chat-input']);
+    const isTextareaVisible = await textarea.isVisible({ timeout: 10_000 }).catch(() => false);
 
-      if (!isTextareaVisible) {
-        await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 10_000 });
-        return;
-      }
+    if (!isTextareaVisible) {
+      await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 10_000 });
+      return;
+    }
 
-      const sentinelText = 'SENTINEL_MESSAGE_FOR_JUMP_TEST';
-      for (let i = 0; i < 10; i++) {
-        const msg = i === 5 ? sentinelText : `Message before/after sentinel #${i}`;
-        await textarea.fill(msg);
-        await textarea.press('Enter');
-        await expect(textarea).toHaveValue('', { timeout: 10_000 });
-      }
+    const startTime = Date.now();
+    const messageCount = 15;
 
-      const messageList = page.getByTestId(TESTIDS['chat-message-list']);
-      await expect(async () => {
-        const count = await messageList.locator('> *').count();
-        expect(count).toBeGreaterThan(5);
-      }).toPass({ timeout: 30_000 });
+    for (let i = 0; i < messageCount; i++) {
+      const msg = `Performance test message #${i + 1} with some padding text`;
+      await textarea.fill(msg);
+      await textarea.press('Enter');
+      await expect(textarea).toHaveValue('', { timeout: 10_000 });
+    }
 
-      // NOTE: chat-message is NOT in the testid registry.
-      const sentinelLocator = page.locator(`text="${sentinelText}"`).first();
-      const isSentinelVisible = await sentinelLocator.isVisible({ timeout: 5_000 }).catch(() => false);
+    const messageList = page.getByTestId(TESTIDS['chat-message-list']);
+    await expect(async () => {
+      const count = await messageList.locator('> *').count();
+      expect(count).toBeGreaterThan(10);
+    }).toPass({ timeout: 30_000 });
 
-      if (isSentinelVisible) {
-        await sentinelLocator.scrollIntoViewIfNeeded().catch(() => {
-          // scrollIntoViewIfNeeded may throw if element is already visible — that is fine
-        });
-        await expect(sentinelLocator).toBeVisible({ timeout: 5_000 });
-      } else {
-        await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 5_000 });
-      }
-    },
-  );
+    const elapsed = Date.now() - startTime;
+    expect(elapsed).toBeLessThan(10_000);
+
+    await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 5_000 });
+  });
+
+  test('jumping to a specific message by index works', async () => {
+    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
+
+    // Use the chat-input testid
+    const textarea = page.getByTestId(TESTIDS['chat-input']);
+    const isTextareaVisible = await textarea.isVisible({ timeout: 10_000 }).catch(() => false);
+
+    if (!isTextareaVisible) {
+      await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 10_000 });
+      return;
+    }
+
+    const sentinelText = 'SENTINEL_MESSAGE_FOR_JUMP_TEST';
+    for (let i = 0; i < 10; i++) {
+      const msg = i === 5 ? sentinelText : `Message before/after sentinel #${i}`;
+      await textarea.fill(msg);
+      await textarea.press('Enter');
+      await expect(textarea).toHaveValue('', { timeout: 10_000 });
+    }
+
+    const messageList = page.getByTestId(TESTIDS['chat-message-list']);
+    await expect(async () => {
+      const count = await messageList.locator('> *').count();
+      expect(count).toBeGreaterThan(5);
+    }).toPass({ timeout: 30_000 });
+
+    // Look for the sentinel message
+    const sentinelLocator = page.locator(`text="${sentinelText}"`).first();
+    const isSentinelVisible = await sentinelLocator.isVisible({ timeout: 5_000 }).catch(() => false);
+
+    if (isSentinelVisible) {
+      await sentinelLocator.scrollIntoViewIfNeeded().catch(() => {
+        // scrollIntoViewIfNeeded may throw if element is already visible — that is fine
+      });
+      await expect(sentinelLocator).toBeVisible({ timeout: 5_000 });
+    } else {
+      await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 5_000 });
+    }
+  });
 });

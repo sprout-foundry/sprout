@@ -149,6 +149,7 @@ export default function SidebarSettingsSection({
               value={themePack.id}
               onChange={(e) => setThemePack(e.target.value)}
               className="styled-select theme-picker-select"
+              data-testid="theme-toggle"
             >
               {availableThemePacks.map((pack) => (
                 <option key={pack.id} value={pack.id}>

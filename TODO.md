@@ -423,3 +423,406 @@ two weeks, then decide what to keep.
   no per-subagent detail view; SP-051 shipped depth in CLI but not WebUI.
 - **Multi-workspace sprout** daemon — feature requested twice in the past
   month.
+
+---
+
+## SP-096: Roadmap status sync (full audit + 14 spec-header fixes)
+
+_Status reconciliation (~1.5 days)._ After merging origin/main (commit
+`656db751`), the README is authoritative and shows many more specs as
+✅ Implemented than the spec headers themselves admit. The 2026-06-30
+TODO audit fixed 12; this ticket finishes the remaining **14 spec
+headers** so the automate runner knows what's actually open. No code
+work — pure metadata.
+
+### How to do each item
+
+Open `roadmap/SP-###.md`, change `**Status:** 📋 Proposed` →
+`**Status:** ✅ Implemented (<one-line summary>)`. Use the README's
+phrasing as a guide. Commit with
+`chore(roadmap): mark SP-### as shipped`. Each is independently
+committable.
+
+### Specs to fix (in priority order)
+
+- [ ] **SP-096-1: SP-013.** `pkg/agent/settings_handler.go` (572 lines)
+  ships `manage_settings` with get/set/list_providers/test_credential/
+  describe/describe_all/preview. README says Implemented.
+
+- [ ] **SP-096-2: SP-014.** README says Implemented (hidden PTY routing
+  + background mode). Verify by reading
+  `cmd/agent_terminal_subscriber.go` (added in the latest merge) +
+  TerminalManager hooks; update spec header.
+
+- [ ] **SP-096-3: SP-022 (workspace-management variant).** README says
+  Implemented (WorkspacePicker + WorkspacePane + LocationSwitcher +
+  WorkspaceBar). Spec at `roadmap/SP-022-workspace-management.md`
+  still says Proposed. Update header.
+
+- [ ] **SP-096-4: SP-009.** README says Implemented (Storybook + MDX
+  docs + Chromatic; webui imports `@sprout/ui`). Spec at
+  `roadmap/SP-009-component-library-maturation.md` still says Proposed.
+  Update header.
+
+- [ ] **SP-096-5: SP-010.** README says Implemented (EditorPane 2604→513
+  lines; EditorCore extracted; 18 bug fixes). Spec at
+  `roadmap/SP-010-editor-modernization.md` still says Proposed.
+
+- [ ] **SP-096-6: SP-062.** README says Implemented (BPM wired into
+  shell dispatch; `pkg/agent_tools/shell.go` already handles
+  `COMMAND_PROMOTED_TO_BACKGROUND`). Spec at
+  `roadmap/SP-062-cli-background-shell.md` still says Proposed. NOTE:
+  this also makes SP-097 much smaller — see revised scope below.
+
+- [ ] **SP-096-7: SP-068.** README says Implemented (Phases 1-3
+  shipped: single resolver, single broker, `sprout explain` —
+  `cmd/explain.go` exists at 200+ lines, `pkg/agent/risk_assessment.go`
+  exists). Spec at `roadmap/SP-068-security-check-consolidation.md`
+  still says Proposed.
+
+- [ ] **SP-096-8: SP-073.** README says Implemented (zero
+  `TODO(SP-034-1c)` markers remain; all 10 sites threaded with
+  `context.Context`). Spec at
+  `roadmap/SP-073-cooperative-cancellation.md` still says Proposed.
+
+- [ ] **SP-096-9: SP-058.** Daemon binary is 149 MB (per `899d667f`),
+  22 MB below 171 MB target. Spec at
+  `roadmap/SP-058-selective-grammar-embed.md` still says Proposed.
+
+- [ ] **SP-096-10: SP-061.** Static embedding provider removed
+  (SP-091-2). Spec at
+  `roadmap/SP-061-remove-static-embeddings.md` still says Proposed.
+
+- [ ] **SP-096-11: SP-064.** `cmd/automate.go::runAutomateStatus`,
+  `runAutomateStop`, `runAutomateStopAll` exist; BPM.Stop is wired.
+
+- [ ] **SP-096-12: SP-065.** `pkg/webui/automations_api.go` +
+  `webui/src/components/AutomationsPanel.tsx` + WS wiring landed in
+  commit `4f0a81c5`.
+
+- [ ] **SP-096-13: SP-017.** README says implemented ("scoped labels
+  shipped"). The spec's broader goal (collapsible sections) is pending
+  — header should say `✅ Implemented (Phase 1); collapsible sections
+  pending → see SP-101`.
+
+- [ ] **SP-096-14: SP-048.** README says "status footer + glyph
+  vocabulary shipped". Header should say
+  `✅ Partially Implemented (status footer + glyphs); tool timeline +
+  silence-fill pending → see SP-101`.
+
+### Drift to fix in TODO.md cross-reference
+
+After running SP-096-1..14, also update the "Things to consider after
+SP-091 → SP-095 ship" section at the bottom of TODO.md to remove
+"Storybook" (SP-009 done), "Component library" (SP-009 done), and any
+other items whose backing spec is now flipped.
+
+### Acceptance
+
+- `grep -lE "Status.*Proposed" roadmap/SP-*.md | wc -l` returns only the
+  genuinely-open specs (SP-008, SP-011 [Phase 1 mostly done], SP-012
+  [partial], SP-016b, SP-027, SP-045, SP-046, SP-054, SP-075).
+- Each updated spec header matches what the README shows.
+- All commits are pure metadata changes; `git diff --stat` shows no code
+  lines added.
+
+---
+
+## SP-097: SP-062 CLI Background Shell — Remaining Surface Work
+
+_~1.5 days, 2 phases._ After merge, SP-062 is mostly done: BPM is
+wired, `pkg/agent_tools/shell.go` already handles
+`COMMAND_PROMOTED_TO_BACKGROUND`, the error message at line 198 already
+mentions BPM as an alternative. What's left is the **human-facing CLI
+surface** and the **LLM-facing tool schema** polish.
+
+### Phase 1: Standalone CLI monitor commands (~1 day)
+
+**New `cmd/shell_bg.go`:** mirrors the existing `cmd/automate.go`
+status/stop pattern but for the BackgroundProcessManager directly.
+
+- `sprout shell-bg list [--json]` — table of active BPM sessions with
+  ID, owner, command preview, runtime.
+- `sprout shell-bg status <id>` — full accumulated output (head +
+  tail), runtime, current status.
+- `sprout shell-bg stop <id> [--grace=10s]` — graceful stop with the
+  same SIGINT→SIGTERM→SIGKILL cascade as `cmd/automate.go::runAutomateStop`.
+- `sprout shell-bg stop-all` — same as above, all sessions.
+
+**Wire into `cmd/root.go` as `RootCmd.AddCommand(...)` so they appear
+in `--help` output and tab-complete.**
+
+Phase 2: Tool-schema update (~0.5 day)
+
+**Edit `pkg/agent/tool_registrations.go`:**
+- Find the `shell_command` tool description. Currently it warns that
+  `background`/`check_background`/`stop_background` may fail in CLI
+  mode. Replace that with: "All background operations work in CLI as
+  well as WebUI; promoted sessions are discoverable via
+  `sprout shell-bg list`."
+- Update the `description` field of the schema to mention the new CLI
+  commands so the LLM can suggest them.
+
+**Edit `pkg/skills/library/self-help/SKILL.md`:**
+- Remove the caveat about background mode being WebUI-only.
+
+### Phase order
+
+- [ ] **SP-097-1:** `cmd/shell_bg.go` (4 subcommands) + Cobra wiring
+  + tests. _~1 day._
+
+- [ ] **SP-097-2:** Update tool_registrations.go + self-help SKILL.md.
+  _~0.5 day._
+
+### Acceptance
+
+- `sprout shell-bg --help` lists the four commands.
+- A user running `sprout agent --no-web-ui "start dev server"` then
+  `sprout shell-bg status <id>` in another shell sees live output.
+- The string "background mode requires WebUI terminal manager" no
+  longer appears anywhere in the binary's strings table.
+
+---
+
+## SP-098: SP-075 Large-File Decomposition — Second Pass
+
+_~1 week, 5-7 phases._ Most of SP-075's original worst offenders were
+already split since the spec was written (2026-06-15): `cmd/agent_modes.go`
+2344 → 732 lines, `pkg/configuration/config.go` 2833 → 388, etc. But a
+new batch of files has grown large. The runner should split these in
+priority order.
+
+### Current state (2026-06-30 audit)
+
+| File | Lines | Recommendation |
+|---|---|---|
+| `pkg/console/steer_input.go` | 1536 | Extract `streak.go` (typed streak + persistence) and `autocomplete.go` (tab completion + ghost text) — keep core loop in place. |
+| `pkg/agent_tools/structured_helpers.go` | 1190 | Split JSON / YAML / TOML helpers into `structured_json.go` etc. by format. |
+| `pkg/lsp/semantic/go_adapter.go` | 1188 | Extract per-symbol-kind scanners (struct, interface, func) into separate files. |
+| `pkg/agent_tools/vision_types.go` | 1188 | Split type defs vs. prompt-builder helpers. |
+| `pkg/console/status_footer.go` | 1132 | Extract token / cost / model-status into focused files. |
+| `cmd/mcp.go` | 1105 | Extract per-tool MCP command surfaces. |
+| `cmd/automate.go` | 1070 | Extract status / stop / list sub-commands. |
+| `pkg/mcp/client.go` | 1060 | Extract transport / protocol / resource-readers. |
+| `pkg/ast/symbols.go` | 1040 | Split per-language scanners. |
+| `pkg/agent/tool_handlers_subagent_spawn.go` | 990 | Per-spec: spawn vs. build vs. run. |
+| `pkg/agent/seed_tool_registry.go` | 982 | Group tool descriptions by domain. |
+| `webui/src/components/Sidebar.tsx` | 851 | Extract section components. |
+| `webui/src/components/AppContent.tsx` | 843 | Extract chat vs. editor vs. terminal layouts. |
+| `webui/src/components/PaneLayoutManager.tsx` | 732 | Extract per-pane logic. |
+
+### Phase order (each ~0.5 day)
+
+- [ ] **SP-098-1:** `pkg/console/steer_input.go` (1536 → <800). Extract
+  `streak.go` and `autocomplete.go`. _Highest-impact: this file
+  dominates the steer panel that the user sees every turn._
+
+- [ ] **SP-098-2:** `cmd/mcp.go` (1105 → <800). Extract per-tool
+  commands. _Best for `make build-all` since MCP is in the build path._
+
+- [ ] **SP-098-3:** `pkg/agent_tools/structured_helpers.go` (1190 →
+  <800). Extract per-format helpers. _Pure data, low risk._
+
+- [ ] **SP-098-4:** `pkg/agent_tools/vision_types.go` (1188 → <800).
+  Split types from helpers.
+
+- [ ] **SP-098-5:** `pkg/console/status_footer.go` (1132 → <800). Split
+  per-section rendering.
+
+- [ ] **SP-098-6:** `cmd/automate.go` (1070 → <800). Move
+  status/stop/list to sibling files.
+
+- [ ] **SP-098-7:** `pkg/ast/symbols.go` (1040 → <800). Per-language.
+
+### Acceptance
+
+- Every targeted file ends under 800 lines.
+- `go build ./...` clean after each extraction (per AGENTS.md
+  refactoring protocol).
+- All existing tests in each split file's package continue to pass.
+
+---
+
+## SP-099: SP-008 Track A — Concurrency Hardening
+
+_~2 weeks, 3 phases._ Track B (typed errors) is fully covered by SP-094.
+Track A has 4 open phases from SP-008 that have never been scoped into
+real tickets. This ticket scopes them.
+
+### Scope
+
+**Phase 1: CI race detection by default.**
+- Edit `Makefile` `test` target to include `-race` (not just `test-race`).
+- Audit which `-short` skips disable race coverage; remove them from the
+  default path or add a separate `test-race-short` target.
+- Add a step to `.github/workflows/build.yml` that runs `go test -race
+  ./...` on every PR.
+
+**Phase 2: Locking audit + ADR.**
+- New `docs/adr-0007-locking-strategy.md` codifying: when to use
+  `sync.Mutex` vs `sync.RWMutex` vs channels vs atomic, with the 25
+  existing mutexes classified under one of these patterns.
+- Per-spec pattern: rename to `mu sync.Mutex` (drop the domain prefix)
+  everywhere except where the prefix encodes ownership semantics.
+
+**Phase 3: `-race` clean.**
+- Run `go test -race ./...` with `-count=3` to flush flaky races.
+- File and fix every race report (expected: a handful of test fixtures
+  + 1-2 real races in event publishing).
+
+### Phase order
+
+- [ ] **SP-099-1:** CI race detection by default (Makefile + workflow).
+  ~0.5 day.
+
+- [ ] **SP-099-2:** Locking strategy ADR + mutex rename pass.
+  ~1 day.
+
+- [ ] **SP-099-3:** Run `-race -count=3 ./...`, fix what surfaces.
+  ~1.5 days.
+
+### Acceptance
+
+- `make test` includes `-race` by default.
+- `go test -race -count=3 ./...` returns zero race reports.
+- ADR-0007 merged.
+
+---
+
+## SP-100: SP-045 WASM Parity — Tier 2a (onnxruntime-web bridge)
+
+_~3 days, 2 phases._ Tier 1 and Tier 2 are done per SP-045 §6.
+Tier 2a (onnxruntime-web bridge in the browser) is the next concrete
+unblocking piece. Currently WASM users only get the static-provider
+embeddings; this brings ONNX quality to the browser.
+
+### Scope
+
+Phase 1: surface the existing bridge as `SproutWasm.embedding*`.
+
+**Edit `cmd/wasm/embedding_funcs.go`:**
+- Add `SproutWasm.embeddingModel = "gemma-300m"` constant + load
+  helper that resolves the right asset path.
+- Add `SproutWasm.switchEmbeddingBackend(name string)` — switches
+  between `static` and `onnx-web`.
+- Add `SproutWasm.embeddingBackendStatus() { backend, model,
+  dimensions, ready }`.
+
+Phase 2: lazy-load the onnxruntime-web bundle.
+
+**New `webui/public/wasm/onnxruntime-web-loader.js` (~80 lines):**
+- Detects the active backend; only injects `<script src=onnxruntime-web>`
+  if `onnx` is selected.
+- Caches the promise so the second call reuses the resolved runtime.
+- Falls back to static with a console warning if the network blocks the
+  script.
+
+### Phase order
+
+- [ ] **SP-100-1:** Wire `embedding_funcs.go` to expose ONNX status +
+  switch. _~1 day._
+
+- [ ] **SP-100-2:** Lazy-load `onnxruntime-web` from the WASM HTML
+  shell. _~2 days._
+
+### Acceptance
+
+- `SproutWasm.switchEmbeddingBackend("onnx")` resolves, fires the
+  lazy-load, and the next `searchSemantic` call uses ONNX vectors.
+- Default remains `static` so existing WASM users see no change.
+- A test asserts the loader is not fetched when backend is `static`.
+
+---
+
+## SP-101: Partial-spec gap fills (SP-011, SP-012, SP-017, SP-048)
+
+_~3 days, 4 phases._ After merging origin/main, the README reports
+several specs as `Partially Implemented` — the foundational pieces are
+shipped but specific pending phases remain. The automate runner can
+close the gaps as a single batch.
+
+### Phase 1: SP-011 — terminal exit-pane handling polish (~0.5 day)
+
+The Phase 1 fixes (P1.1 `onProcessExit`, P1.2 per-pane session model,
+P1.3 split-mode button cleanup) are largely shipped. What's pending is
+**P1.4** — the parent Terminal's cleanup logic when `onProcessExit`
+fires (auto-close secondary split pane; auto-create a fresh session
+after 1.5s if last; close tab + switch to next if multi-tab). Currently
+the callback exists in TerminalPane but Terminal.tsx may not handle all
+the cases.
+
+**Verify and finish:**
+- [ ] **SP-101-1:** Read `webui/src/components/Terminal.tsx`, find the
+  `onProcessExit` handler. Test the three cleanup paths with a real
+  terminal session. Fix any that misbehave. Add vitest coverage if
+  missing.
+
+### Phase 2: SP-012 — notification center (~1 day)
+
+README says "notification center pending". SP-012 Phase 1 calls for a
+non-blocking toast/snackbar UI for system messages (rate-limit warnings,
+auth failures, agent blocked on permission, etc.). Right now those
+messages go to the in-terminal `PublishAgentMessage` stream and risk
+clobbering input state (cf. the recent fix in `10a9cbd5 fix(agent):
+route security cautions via event bus`).
+
+- [ ] **SP-101-2:** Add `webui/src/components/NotificationCenter.tsx`
+  (~150 lines). Subscribes to a new event category
+  `notification` published via the event bus. Renders as a fixed
+  top-right stack with auto-dismiss after 5s. Covers 4 event types:
+  `rate_limit`, `auth_failure`, `permission_required`,
+  `agent_blocked`. Mirrors the spec body for Phase 1.
+
+### Phase 3: SP-017 — collapsible sections (~1 day)
+
+README says "scoped labels shipped; collapsible sections pending".
+
+- [ ] **SP-101-3:** Add `<details>`-style collapsible groups to
+  `SettingsPanel.tsx`, grouped by layer (Global / Workspace / Session).
+  Use a `sectionState` local store (or `localStorage` for persistence).
+  Cover the four "scope groups" SP-017 names. Add a vitest covering
+  collapse/expand + persistence across reloads.
+
+### Phase 4: SP-048 — tool execution timeline (~0.5 day)
+
+README says "tool timeline + silence-fill pending". The silence-fill
+part is covered by SP-091-4. Remaining: tool timeline — render
+`PublishToolStart` / `PublishToolEnd` events as a vertical timeline in
+the terminal output.
+
+- [ ] **SP-101-4:** Edit `pkg/console/terminal_subscriber.go` (or
+  wherever the tool events render) to emit per-tool entries with:
+  glyph, tool name, elapsed ms, result icon. Format example per the
+  spec: `[✓] read_file (124ms) · pkg/foo.go`. Add a vitest that
+  simulates 3 tool events and asserts the rendered timeline matches.
+
+### Acceptance
+
+- [ ] SP-011 P1.4 verified in browser session + tests cover all three
+  cleanup paths.
+- [ ] NotificationCenter renders and dismisses correctly.
+- [ ] Settings panel has 3+ collapsible scope groups that persist
+  across reload.
+- [ ] Tool timeline renders correctly across 5+ events.
+
+---
+
+## SP-102: Drift audit for newly-merged specs (post-merge verification)
+
+_~0.5 day._ The `656db751` merge brought in 6 new commits and a
+re-sync of the README. There may be additional specs that flipped from
+Proposed to Implemented whose spec headers were not updated. This
+ticket is a quick verification pass.
+
+- [ ] **SP-102-1:** Read every spec file `roadmap/SP-*.md`, compare
+  its `**Status:**` line against the README table row. List any
+  discrepancies in a comment on this ticket.
+- [ ] **SP-102-2:** Update any drifted spec headers (should be <10
+  edits; if more, open separate tickets).
+- [ ] **SP-102-3:** Verify SP-076 is reflected correctly (header
+  already says `✅ Implemented (2026-06-26)`; confirm).
+
+### Acceptance
+
+- README and spec headers match for all 74 SP files.
+- SP-076 is correctly flagged as done.

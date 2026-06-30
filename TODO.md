@@ -641,8 +641,14 @@ priority order.
   seams; the remaining 1313 lines are the core input loop with no
   further clean splits without larger structural changes._
 
-- [ ] **SP-098-2:** `cmd/mcp.go` (1105 → <800). Extract per-tool
+- [x] **SP-098-2:** `cmd/mcp.go` (1105 → <800). Extract per-tool
   commands. _Best for `make build-all` since MCP is in the build path._
+
+  _Shipped: `cmd/mcp.go` 1105 → 71 lines (target hit, exceeded). Per-tool
+  commands extracted: `mcp_add.go` (762 lines), `mcp_list.go` (92),
+  `mcp_remove.go` (97), `mcp_test_cmd.go` (134 — named to avoid Go's
+  `_test.go` build convention). 38/38 MCP tests pass. `sprout mcp --help`
+  shows all 4 subcommands. Pure refactor, no logic change._
 
 - [ ] **SP-098-3:** `pkg/agent_tools/structured_helpers.go` (1190 →
   <800). Extract per-format helpers. _Pure data, low risk._

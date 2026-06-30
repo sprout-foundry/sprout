@@ -1178,6 +1178,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
               onDrop={(event) => handleDrop(event, file.path)}
               onContextMenu={handleItemContextMenu}
               role="treeitem"
+              data-testid="file-tree-item"
               tabIndex={0}
               aria-level={depth + 1}
               aria-setsize={fileList.length}
@@ -1275,7 +1276,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
     // ── Main render ─────────────────────────────────────────────────────
 
     return (
-      <div className="file-tree">
+      <div className="file-tree" data-testid="file-tree">
         <div className="file-tree-header">
           <div className="header-left">
             <span className="header-title">Files</span>
@@ -1433,7 +1434,7 @@ const FileTree = forwardRef<FileTreeHandle, FileTreeProps>(
             </div>
           ) : null}
           {isFiltering && treeData.length === 0 && !loading && !error ? (
-            <div className="file-tree-no-results" role="status">
+            <div className="file-tree-no-results" role="status" data-testid="file-tree-empty">
               <span>No files matching &quot;{filterQuery}&quot;</span>
             </div>
           ) : null}

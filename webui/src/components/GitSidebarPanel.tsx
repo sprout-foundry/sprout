@@ -283,7 +283,7 @@ function GitSidebarPanel({
     <div className="git-sidebar-panel">
       <div className="git-sidebar-header">
         <div className="git-sidebar-toolbar-row">
-          <label className="git-branch-select-wrap" htmlFor="git-branch-select">
+          <label className="git-branch-select-wrap" htmlFor="git-branch-select" data-testid="git-remote-url">
             <span className="branch-icon">
               <GitBranch size={14} />
             </span>
@@ -351,6 +351,7 @@ function GitSidebarPanel({
             <button
               type="button"
               className="git-header-action-btn"
+              data-testid="git-push-button"
               onClick={onPush}
               disabled={isActing || isLoading}
               title={

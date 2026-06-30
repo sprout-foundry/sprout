@@ -361,8 +361,8 @@ func (m *Manager) saveConfigLocked() error {
 		return err
 	}
 
-	// Conflict detected: reload from disk and merge our pending changes.
-	log.Printf("[config] conflict detected, reloading from disk and retrying: %v", err)
+	// Config changed on disk (likely another process); reload and merge our pending changes.
+	log.Printf("[config] merged external config change: %v", err)
 	if mergeErr := m.reloadAndMergeLocked(); mergeErr != nil {
 		return fmt.Errorf("config conflict, reload-merge failed: %w (original: %v)", mergeErr, err)
 	}

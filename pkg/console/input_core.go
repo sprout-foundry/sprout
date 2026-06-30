@@ -2,6 +2,7 @@ package console
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -616,7 +617,18 @@ func (ir *InputReader) handleReadError(err error, nonBlocking bool, resizeCh cha
 	if isInterrupted && ir.processPendingResize(resizeCh, parser) {
 		return true, nil
 	}
-	// Real error - return it wrapped with context
+	// Real error — return it wrapped with context.
+	// When stdin EOF arrives in the raw read loop (not the Ctrl-D path
+	// at line ~381), log a diagnostic to help distinguish an attached-TTY
+	// EOF (unexpected but possible) from a TTY that was revoked underneath
+	// the process (pane closed, SSH timeout, parent exited).
+	if errors.Is(err, io.EOF) {
+		if term.IsTerminal(ir.termFd) {
+			fmt.Fprintf(os.Stderr, "[console] stdin EOF received on attached terminal (fd=%d); exiting REPL\n", ir.termFd)
+		} else {
+			fmt.Fprintf(os.Stderr, "[console] stdin EOF: terminal no longer attached (fd=%d); this typically means the controlling TTY was closed (terminal pane closed, SSH timeout, parent process exited). Exiting REPL.\n", ir.termFd)
+		}
+	}
 	return false, fmt.Errorf("stdin read error: %w", err)
 }
 

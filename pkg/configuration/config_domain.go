@@ -61,6 +61,11 @@ type ComputerUseConfig struct {
 	// WorkspaceAllowlist lists workspace roots where computer use is
 	// auto-approved for the session without the per-session opt-in prompt.
 	WorkspaceAllowlist []string `json:"workspace_allowlist,omitempty"`
+
+	// PanicKeyChord is the key chord that triggers the panic key. Defaults
+	// to "ctrl+shift+escape". Set to "disabled" to turn off the panic key
+	// entirely.
+	PanicKeyChord string `json:"panic_key_chord,omitempty"`
 }
 
 // Resolve returns a copy with defaults filled in for zero-value fields.
@@ -68,6 +73,7 @@ func (c *ComputerUseConfig) Resolve() ComputerUseConfig {
 	result := ComputerUseConfig{
 		Enabled:             false,
 		MaxActionsPerMinute: 60,
+		PanicKeyChord:       "ctrl+shift+escape",
 	}
 	if c != nil {
 		result.Enabled = c.Enabled
@@ -76,6 +82,11 @@ func (c *ComputerUseConfig) Resolve() ComputerUseConfig {
 		}
 		result.AuditLogDir = c.AuditLogDir
 		result.WorkspaceAllowlist = append([]string{}, c.WorkspaceAllowlist...)
+		// PanicKeyChord: if non-empty, use it. "disabled" is preserved as an
+		// explicit-off sentinel. Empty string defaults to "ctrl+shift+escape".
+		if c.PanicKeyChord != "" {
+			result.PanicKeyChord = c.PanicKeyChord
+		}
 	}
 	return result
 }

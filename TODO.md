@@ -302,11 +302,19 @@ this for files. We mirror it for shell commands.
   / bulk-reject shortcuts. Broker gated on the flag. 14 new tests pass._
   Build green.
 
-- [ ] **SP-093-3:** `ShellApprovalRequestPayload` event + WebUI panel
+- [x] **SP-093-3:** `ShellApprovalRequestPayload` event + WebUI panel
   + handler. Wires into the existing WS pipeline. New
   `pkg/webui/shell_approval_api.go` (decision endpoint). Tests:
   `ShellApprovalPanel.test.tsx`, `shell_approval_event_test.go`.
   _Effort: ~1 day._
+
+  _Shipped (despite orchestrator timeout): New `pkg/events/shell_approval.go`
+  with payload types + unit tests. New `pkg/webui/shell_approval_api.go`
+  decision endpoint. New `webui/src/components/ShellApprovalPanel.tsx` +
+  `.css` (tokens only) + `.test.tsx`. Wired via `useWebSocketEventHandler`
+  and `AppStateContext`. All backend + Vitest tests pass; build green.
+  (Note: The orchestrator timed out at 30 min but had already created
+  all required files; verified by hand after timeout.)_
 
 ### Acceptance
 

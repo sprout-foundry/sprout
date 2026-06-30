@@ -1,6 +1,6 @@
 # SP-087: Full Playwright Coverage of the WebUI
 
-**Status:** 📋 Spec
+**Status:** ✅ Implemented (2026-06-30; acceptance criterion 3 partial — trace/video/screenshot config deferred, see SP-087-acceptance.md)
 **Date:** 2026-06-27
 **Depends on:** existing Playwright dep (`@playwright/test ^1.57.0`); existing `sprout` Go binary; existing Vite dev server on port 3000
 **Priority:** High (large test-coverage gap; 111 webui components have no test at all, and even the tested ones are jsdom-only with mocked APIs)

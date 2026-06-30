@@ -110,6 +110,9 @@ func NewCommandRegistry() *CommandRegistry {
 	// Register search command
 	registry.Register(&SearchCommand{})
 
+	// Register recall command
+	registry.Register(&RecallCommand{})
+
 	// Register skill command
 	registry.Register(&SkillCommand{})
 

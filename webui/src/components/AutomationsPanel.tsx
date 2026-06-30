@@ -1,11 +1,12 @@
 import { Play, Square, Zap, X, AlertCircle } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
+import type { WsEvent } from '@sprout/events';
 import { clientFetch } from '../services/clientSession';
 import { debugLog } from '../utils/log';
+import { WebSocketService } from '../services/websocket';
+import { subscribeAutomate } from '../services/automateEvents';
 import AutomationsSessionDetail from './AutomationsSessionDetail';
 import './AutomationsPanel.css';
-
-const POLL_INTERVAL_MS = 3000;
 
 /* ── Type Interfaces ───────────────────────────────────────── */
 
@@ -300,7 +301,7 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
     [fetchSessions],
   );
 
-  /* ── Polling ───────────────────────────────────────────── */
+  /* ── Event-driven session refetch (replaces polling) ──────── */
 
   // Fetch workflows once per visit to the Available tab. The empty-list
   // case must not trigger a refetch on every render — see the
@@ -315,13 +316,60 @@ function AutomationsPanel({ onNavigateToSession }: AutomationsPanelProps): JSX.E
     fetchWorkflows();
   }, [activeTab, fetchWorkflows]);
 
-  // Poll sessions when on running or recent tab
+  // Subscribe to the automate WebSocket channel. Send once on mount AND
+  // every time the WS reconnects — if the user opens this panel before
+  // the initial WebSocket handshake completes, the cold-start subscribe
+  // would otherwise sit in the message queue (which only flushes on
+  // reconnect) and be silently dropped. We listen for connection_status
+  // with `connected: true` to handle initial connect and reconnect
+  // uniformly.
   useEffect(() => {
-    if (activeTab !== 'running' && activeTab !== 'recent') return;
+    const sendSubscribe = () => {
+      WebSocketService.getInstance().sendEvent({
+        type: 'subscribe',
+        data: { channel: 'automate' },
+      });
+    };
 
-    fetchSessions();
-    const intervalId = setInterval(fetchSessions, POLL_INTERVAL_MS);
-    return () => clearInterval(intervalId);
+    sendSubscribe();
+
+    // The WebSocketService already emits a synthetic connection_status
+    // event with connected: true both for initial connect and reconnect,
+    // so listening here covers both cases uniformly. Treat any event that
+    // carries `connected === true` as "send subscribe now".
+    const handleEvent = (event: WsEvent) => {
+      if (event.type !== 'connection_status') return;
+      const data = event.data as { connected?: boolean } | undefined;
+      if (data?.connected === true) {
+        sendSubscribe();
+      }
+    };
+    WebSocketService.getInstance().onEvent(handleEvent);
+    return () => {
+      WebSocketService.getInstance().removeEvent(handleEvent);
+    };
+  }, []);
+
+  // Refetch sessions when automate lifecycle events arrive.
+  useEffect(() => {
+    return subscribeAutomate((eventType, payload) => {
+      if (eventType === 'automate.session_started' || eventType === 'automate.session_ended') {
+        // Only refetch when the panel is viewing a sessions tab.
+        // The event fires globally so we let the panel decide whether to act.
+        if (activeTab === 'running' || activeTab === 'recent') {
+          fetchSessions();
+        }
+      }
+      // budget_update and output_chunk are handled by AutomationsSessionDetail
+    });
+  }, [activeTab, fetchSessions]);
+
+  // Initial fetch when switching to running or recent tab (no polling —
+  // events drive subsequent updates).
+  useEffect(() => {
+    if (activeTab === 'running' || activeTab === 'recent') {
+      fetchSessions();
+    }
   }, [activeTab, fetchSessions]);
 
   // Tick for live elapsed time display on running tab

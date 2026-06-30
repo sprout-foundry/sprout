@@ -625,9 +625,21 @@ priority order.
 
 ### Phase order (each ~0.5 day)
 
-- [ ] **SP-098-1:** `pkg/console/steer_input.go` (1536 → <800). Extract
+- [x] **SP-098-1:** `pkg/console/steer_input.go` (1536 → <800). Extract
   `streak.go` and `autocomplete.go`. _Highest-impact: this file
   dominates the steer panel that the user sees every turn._
+
+  _Shipped (with pivot): The original spec described a "typed streak"
+  and "ghost text" autocomplete feature that don't exist in the file
+  (already-removed scope drift from SP-078). Pivoted to a coherent
+  2-file extraction:
+  - `pkg/console/steer_search.go` (133 lines) — Ctrl-R reverse-search subsystem
+  - `pkg/console/steer_editor.go` (103 lines) — `runExternalEditor` helpers
+  Result: `steer_input.go` 1536 → 1313 lines (-223). Pure refactor,
+  no logic change, no test skips. Build green, all tests pass.
+  The <800-line target is not achievable with further clean extraction
+  seams; the remaining 1313 lines are the core input loop with no
+  further clean splits without larger structural changes._
 
 - [ ] **SP-098-2:** `cmd/mcp.go` (1105 → <800). Extract per-tool
   commands. _Best for `make build-all` since MCP is in the build path._

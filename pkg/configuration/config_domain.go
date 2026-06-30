@@ -143,6 +143,12 @@ func (c *NotificationsConfig) Resolve() NotificationsConfig {
 type EditApprovalConfig struct {
 	Mode  string   `json:"mode,omitempty"`
 	Paths []string `json:"paths,omitempty"`
+
+	// ShellCommand enables per-part shell approval prompts (SP-093-2).
+	// When true, a multi-part shell command is split and each part is
+	// approved individually via Agent.RequestShellApproval. Default: false,
+	// which preserves the existing 4-option prompt for the whole command.
+	ShellCommand bool `json:"shell_command,omitempty" yaml:"shell_command,omitempty"`
 }
 
 func (c *EditApprovalConfig) Resolve() EditApprovalConfig {
@@ -150,6 +156,7 @@ func (c *EditApprovalConfig) Resolve() EditApprovalConfig {
 	if c != nil {
 		result.Mode = c.Mode
 		result.Paths = c.Paths
+		result.ShellCommand = c.ShellCommand
 	}
 	if result.Mode == "" {
 		result.Mode = "off"

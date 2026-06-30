@@ -66,14 +66,24 @@ type ComputerUseConfig struct {
 	// to "ctrl+shift+escape". Set to "disabled" to turn off the panic key
 	// entirely.
 	PanicKeyChord string `json:"panic_key_chord,omitempty"`
+
+	// DestructiveAppGate controls whether the destructive-app denylist gate
+	// is active. When true (default), actions targeting apps on the
+	// denylist prompt the user for approval before proceeding.
+	DestructiveAppGate bool `json:"destructive_app_gate,omitempty"`
+
+	// OverrideFilePath is an optional override of the per-user denylist
+	// override file location. When empty, the default path
+	// (~/.config/sprout/computer_use_denylist_overrides.json) is used.
+	OverrideFilePath string `json:"denylist_override_file,omitempty"`
 }
 
 // Resolve returns a copy with defaults filled in for zero-value fields.
 func (c *ComputerUseConfig) Resolve() ComputerUseConfig {
 	result := ComputerUseConfig{
-		Enabled:             false,
 		MaxActionsPerMinute: 60,
 		PanicKeyChord:       "ctrl+shift+escape",
+		DestructiveAppGate:  true,
 	}
 	if c != nil {
 		result.Enabled = c.Enabled
@@ -87,6 +97,13 @@ func (c *ComputerUseConfig) Resolve() ComputerUseConfig {
 		if c.PanicKeyChord != "" {
 			result.PanicKeyChord = c.PanicKeyChord
 		}
+		// DestructiveAppGate defaults to true. Because it's a plain bool
+		// (not a pointer), we can't distinguish "not set" from "set to
+		// false" — so the default is always true when computer use is
+		// enabled. Users who want to disable it must use a pointer-based
+		// config override (out of scope for this change).
+		result.DestructiveAppGate = true
+		result.OverrideFilePath = c.OverrideFilePath
 	}
 	return result
 }

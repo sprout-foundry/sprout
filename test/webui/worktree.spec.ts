@@ -1,9 +1,9 @@
 // SP-087-4 — Worktree spec: worktree panel and branch management
 //
-// NOTE: All tests are fixme'd because the worktree panel is conditionally
+// NOTE: All tests are skipped because the worktree panel is conditionally
 // rendered — it requires the sidebar git section to be active and a trigger
 // mechanism that is not yet stable in the test fixtures. Re-enable once
-// SP-087-2 wires the trigger reliably.
+// a reliable panel trigger is wired into the fixtures.
 
 import { test, expect, chromium, type Browser, type Page } from '@playwright/test';
 import { startSprout, type SproutHandle } from './fixtures/sprout';
@@ -36,8 +36,8 @@ test.describe.configure({ mode: 'serial' });
 test.setTimeout(60_000);
 
 test.describe('Worktree', () => {
-  test.fixme(
-    'worktree-panel is visible or accessible via a UI trigger — trigger not stable (SP-087-2 followup)',
+  test.skip(
+    'worktree-panel is visible or accessible via a UI trigger — panel trigger not stable in fixtures',
     async () => {
       // ORIGINAL TEST BODY (unchanged):
       // "worktree-panel is visible or accessible via a UI trigger"
@@ -75,8 +75,8 @@ test.describe('Worktree', () => {
     },
   );
 
-  test.fixme(
-    'worktree-create-button is interactable when panel is open — trigger not stable (SP-087-2 followup)',
+  test.skip(
+    'worktree-create-button is interactable when panel is open — panel trigger not stable in fixtures',
     async () => {
       // ORIGINAL TEST BODY (unchanged):
       // "worktree-create-button is interactable when panel is open"
@@ -110,8 +110,8 @@ test.describe('Worktree', () => {
     },
   );
 
-  test.fixme(
-    'worktree-list is visible when the panel is open — trigger not stable (SP-087-2 followup)',
+  test.skip(
+    'worktree-list is visible when the panel is open — panel trigger not stable in fixtures',
     async () => {
       // ORIGINAL TEST BODY (unchanged):
       // "worktree-list is visible when the panel is open"

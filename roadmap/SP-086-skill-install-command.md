@@ -1,6 +1,6 @@
 # SP-086: Skill Install — Pull Skills from Git, URLs, and Registries
 
-**Status:** 📋 Spec
+**Status:** ✅ Implemented (2026-06-30)
 **Date:** 2026-06-27
 **Depends on:** none (the skill discovery layer at `pkg/configuration/config_skills.go::discoverUserSkills` already handles local filesystem skills; this just adds a *fetch* step)
 **Priority:** Medium-High (real UX gap; current flow forces users to manually copy SKILL.md files)

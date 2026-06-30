@@ -630,7 +630,9 @@ body {
     border-left: 1px solid var(--border-strong);
     box-shadow: var(--shadow-elevated);
     display: flex !important;
-    animation: slideInDrawer 0.2s var(--ease-out);
+    @media (prefers-reduced-motion: no-preference) {
+      animation: slideInDrawer 0.2s var(--ease-out);
+    }
   }
 
   /* Tablet overlay backdrop */
@@ -1546,7 +1548,9 @@ body,
   border: 1px solid #166534;
   border-radius: var(--radius-md);
   padding: 8px 10px;
-  animation: fadeIn 0.3s ease-in;
+  @media (prefers-reduced-motion: no-preference) {
+    animation: fadeIn 0.3s ease-in;
+  }
 }
 
 button.primary.success {
@@ -1739,14 +1743,18 @@ button.primary.success {
 
 /* ── Animations ── */
 
-/* Slide-in from right for tablet overlays */
-@keyframes slideInDrawer {
-  from {
-    transform: translateX(100%);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
+/* Slide-in from right for tablet overlays — wrapped in
+   prefers-reduced-motion: no-preference so the browser skips the keyframes
+   and animation entirely for users who prefer reduced motion (SP-012). */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes slideInDrawer {
+    from {
+      transform: translateX(100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
   }
 }

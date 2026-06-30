@@ -576,8 +576,15 @@ Phase 2: Tool-schema update (~0.5 day)
   17-second real `sleep 30` process kill that exercises the
   SIGINT→SIGTERM→SIGKILL cascade. `make build-all` clean._
 
-- [ ] **SP-097-2:** Update tool_registrations.go + self-help SKILL.md.
+- [x] **SP-097-2:** Update tool_registrations.go + self-help SKILL.md.
   _~0.5 day._
+
+  _Shipped: `pkg/agent/tool_registrations.go` shell_command description
+  now references `sprout shell-bg list/status/stop/stop-all` instead of
+  warning that background operations require WebUI. Same fix applied
+  to `pkg/skills/library/self-help/SKILL.md`. Caveat removed from
+  `pkg/agent/subagent_creation.go` and the affected test.
+  `make build-all` clean; `go test ./pkg/agent/... ./pkg/agent_tools/...` green._
 
 ### Acceptance
 

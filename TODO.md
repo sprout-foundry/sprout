@@ -650,8 +650,14 @@ priority order.
   `_test.go` build convention). 38/38 MCP tests pass. `sprout mcp --help`
   shows all 4 subcommands. Pure refactor, no logic change._
 
-- [ ] **SP-098-3:** `pkg/agent_tools/structured_helpers.go` (1190 →
+- [x] **SP-098-3:** `pkg/agent_tools/structured_helpers.go` (1190 →
   <800). Extract per-format helpers. _Pure data, low risk._
+
+  _Shipped: 1190 → 194 lines. Extracted `structured_json.go` (32),
+  `structured_yaml_node.go` (276), `structured_schema.go` (190),
+  `structured_patches.go` (534). No TOML existed in the file — only
+  JSON + YAML. Pure refactor, no logic change, no test skips. Build
+  green, full `pkg/agent_tools/...` test suite passes._
 
 - [ ] **SP-098-4:** `pkg/agent_tools/vision_types.go` (1188 → <800).
   Split types from helpers.

@@ -1,6 +1,6 @@
 # SP-083: Cross-Session Search — Find Past Conversations by Content
 
-**Status:** 📋 Spec
+**Status:** ✅ Implemented (2026-06-30)
 **Date:** 2026-06-27
 **Depends on:** none (sessions are JSON-on-disk in `~/.sprout/sessions/scoped/<hash>/session_<id>.json`)
 **Priority:** Medium (high user value, low technical risk)

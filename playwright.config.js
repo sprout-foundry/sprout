@@ -22,6 +22,12 @@ const config = {
       testDir: './test/webui',
       testMatch: ['**/*.spec.ts'],
       timeout: 120000,
+      // SP-090-1: capture artifacts for debugging failures.
+      use: {
+        trace: 'on-first-retry',
+        video: 'on-first-retry',
+        screenshot: 'only-on-failure',
+      },
     },
   ],
 

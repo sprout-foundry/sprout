@@ -1,6 +1,6 @@
 # SP-082: Preserve Key Insertion Order in Structured File Tools
 
-**Status:** 📋 Spec (supersedes the original SP-066 key-order proposal with a concrete implementation plan)
+**Status:** ✅ Implemented (2026-06-30) — supersedes the original SP-066 key-order proposal
 **Date:** 2026-06-27
 **Depends on:** none
 **Priority:** Medium (UX / diff hygiene — affects every `write_structured_file` / `patch_structured_file` call)

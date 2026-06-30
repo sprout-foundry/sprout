@@ -202,6 +202,7 @@ export function ChatStatusBarItems({ stats, isConnected, onModelClick }: ChatSta
       <span
         key="cost"
         className={`chat-statusbar-item chat-statusbar-cost ${costClass(totalCost)}`}
+        data-testid="status-bar-cost"
         title="Session cost"
       >
         {formatCost(totalCost)}

@@ -1,6 +1,6 @@
 # SP-056: CLI Reasoning Fold — Collapsed Thinking Indicator
 
-**Status:** 📋 Proposed
+**Status:** ✅ Implemented (2026-06-30)
 **Date:** 2026-05-24
 **Depends on:** `pkg/agent/output_router.go` reasoning routing (already in place — binary on/off via `--show-reasoning`), CLI ergonomics Phase 1/2/3 (status footer + glyph vocabulary + tool collapse, all shipped).
 **Priority:** Medium — current behavior is "all or nothing": reasoning is either invisible or streams the full chain-of-thought (often hundreds of dim-styled tokens) into the scroll region. A fold mode would let users *see that the model is thinking* without the noise.

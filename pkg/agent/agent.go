@@ -156,12 +156,16 @@ type Agent struct {
 	// already opted in once.
 	automateApprovedWorkflows map[string]struct{}
 
-	// computerUseMu guards computerUseSessionApproved.
+	// computerUseMu guards computerUseSessionApproved and computerUseAppAllowlist.
 	computerUseMu sync.Mutex
 	// computerUseSessionApproved records whether the user has consented
 	// to computer-use actions during this chat session (SP-063 per-session
 	// opt-in). Reset when the session resets (ClearSessionOverrides).
 	computerUseSessionApproved bool
+	// computerUseAppAllowlist tracks apps the user has explicitly allowed
+	// for the rest of this session (SP-063-4h-prompt allow-always).
+	// Keys are bundle IDs (macOS) or "class:<window_class>" (Linux).
+	computerUseAppAllowlist map[string]bool
 
 	// Embedding index manager for duplicate detection on file writes.
 	embeddingMu  sync.RWMutex // protects embeddingMgr
@@ -335,4 +339,34 @@ func (a *Agent) SetBudgetExceededCallback(fn func(spent, limit float64)) {
 		return
 	}
 	a.budgetExceededCallback.Store(fn)
+}
+
+// ---------------------------------------------------------------------------
+// SP-063-4h: Per-session app allowlist for destructive-app gate
+// ---------------------------------------------------------------------------
+
+// IsAppAllowedForComputerUse reports whether the given app key is in the
+// per-session allowlist. The key is a bundle ID (macOS) or a window class
+// (Linux). Guarded by computerUseMu.
+func (a *Agent) IsAppAllowedForComputerUse(key string) bool {
+	if a == nil {
+		return false
+	}
+	a.computerUseMu.Lock()
+	defer a.computerUseMu.Unlock()
+	return a.computerUseAppAllowlist != nil && a.computerUseAppAllowlist[key]
+}
+
+// AllowAppForComputerUse adds the given app key to the per-session
+// allowlist. Guarded by computerUseMu.
+func (a *Agent) AllowAppForComputerUse(key string) {
+	if a == nil {
+		return
+	}
+	a.computerUseMu.Lock()
+	defer a.computerUseMu.Unlock()
+	if a.computerUseAppAllowlist == nil {
+		a.computerUseAppAllowlist = make(map[string]bool)
+	}
+	a.computerUseAppAllowlist[key] = true
 }

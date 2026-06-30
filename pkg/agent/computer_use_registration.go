@@ -69,6 +69,14 @@ func RegisterComputerUseTools(cfg *configuration.Config) error {
 	}
 	computer_use.SetBackend(backend)
 
+	// SP-063-4h: wire the destructive-app gate into the auditing backend's
+	// PreActionHook. The hook fires before MouseClick, MouseDrag,
+	// KeyboardPress, and Scroll — the four action methods that could
+	// interact with a denylisted app.
+	if cu.DestructiveAppGate {
+		computer_use.SetBackendPreActionHook(computerUseDestructiveAppGateFn)
+	}
+
 	computerUseOnce.Do(func() {
 		newReg := tools.GetNewToolRegistry()
 		canon := GetToolRegistry()

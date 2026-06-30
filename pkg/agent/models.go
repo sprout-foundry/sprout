@@ -502,6 +502,10 @@ func (a *Agent) ClearSessionOverrides() {
 	// re-prompts. The persistent workspace allowlist survives (it's in
 	// config), but the transient session flag does not.
 	a.ResetComputerUseSessionApproval()
+	// SP-063-4h: clear the per-session app allowlist too.
+	a.computerUseMu.Lock()
+	a.computerUseAppAllowlist = nil
+	a.computerUseMu.Unlock()
 }
 
 // ResetComputerUseSessionApproval clears the per-session computer-use opt-in

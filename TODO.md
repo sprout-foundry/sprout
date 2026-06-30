@@ -288,11 +288,19 @@ this for files. We mirror it for shell commands.
   and risk folding. Pure functions only — no agent wiring, no UI._
   Build green.
 
-- [ ] **SP-093-2:** `Agent.RequestShellApproval` + CLI 4-option picker per
+- [x] **SP-093-2:** `Agent.RequestShellApproval` + CLI 4-option picker per
   part (arrow-key picker that toggles parts). Existing 4-option prompt
   remains the default; opt-in via `configuration.EditApprovalConfig` with
   a new `shell_command: bool` flag (default `false` so no behavior change
   for existing users). _Effort: ~1 day._
+
+  _Shipped: `pkg/configuration/config_domain.go` got `ShellCommand bool`
+  flag (default false → opt-in). `Agent.RequestShellApproval` projects
+  parts into `[]console.ShellPartInfo` (avoids import cycle) and
+  dispatches to WebUI (stub) or CLI picker. `pkg/console/shell_approval_picker.go`
+  implements an io-injectable `PromptShellApprovalParts` with bulk-accept
+  / bulk-reject shortcuts. Broker gated on the flag. 14 new tests pass._
+  Build green.
 
 - [ ] **SP-093-3:** `ShellApprovalRequestPayload` event + WebUI panel
   + handler. Wires into the existing WS pipeline. New

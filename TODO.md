@@ -193,7 +193,7 @@ loop. What's missing is the proactive surface — a CLI command and a webUI
   pass covering all spec cases plus edge cases (negative limit, missing
   flag, nil agent, JSON marshal shape). `make build-all` clean._
 
-- [ ] **SP-092-3:** WebUI `/api/recall` endpoint +
+- [x] **SP-092-3:** WebUI `/api/recall` endpoint +
   `PastSessionsHint` sidebar component. New `pkg/webui/recall_api.go`,
   new `webui/src/components/PastSessionsHint.tsx` + `.css`. Mounted in
   `Sidebar.tsx`. Click-to-restore uses the existing
@@ -201,6 +201,12 @@ loop. What's missing is the proactive surface — a CLI command and a webUI
   `past-sessions-hint` to the testid registry. Tests:
   `PastSessionsHint.test.tsx` covers debounce, empty state, zero results,
   and click-to-restore. _Effort: ~1 day._
+
+  _Shipped: 99-line backend handler + 116-line React component + 119-line
+  CSS (tokens only, no raw hex). 7 Go tests + 6 Vitest tests pass.
+  TestIDs registered. Component mounted in Sidebar.tsx. Click-to-restore
+  dispatches the existing sprout:session-restored event._
+  Build green.
 
 ### Acceptance
 

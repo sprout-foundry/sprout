@@ -375,7 +375,22 @@ task_queue_publish(
 
 ---
 
-## 5. Configuration File Locations
+## 5. Background Shell Sessions
+
+Long-running commands can be promoted to background via `shell_command(background=true, command="...")`. The returned `session_id` lets you:
+
+| Command | Purpose |
+|---------|---------|
+| `sprout shell-bg list` | List active background sessions |
+| `sprout shell-bg status <id>` | Get accumulated output + runtime + status |
+| `sprout shell-bg stop <id>` | Stop a session (graceful SIGINT→SIGTERM→SIGKILL cascade) |
+| `sprout shell-bg stop-all` | Stop every active session |
+
+Works in both CLI and WebUI modes.
+
+---
+
+## 6. Configuration File Locations
 
 | Location | Purpose |
 |----------|---------|

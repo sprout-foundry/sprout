@@ -119,7 +119,7 @@ func TestHandleStopBackground_NoManager(t *testing.T) {
 
 	require.Error(t, err)
 	assert.True(t, result.IsError)
-	assert.Contains(t, result.Output, "stop_background requires WebUI terminal manager or CLI background process manager")
+	assert.Contains(t, result.Output, "stop_background requires a TerminalManager (WebUI) or BackgroundProcessManager (CLI) attached to the agent context")
 }
 
 // ---------------------------------------------------------------------------

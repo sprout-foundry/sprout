@@ -55,6 +55,11 @@ type DenylistEntry struct {
 	// Populated at load time, not serialized.
 	FromOverride bool
 
+	// Allow is true when this entry is an explicit "allow" sentinel.
+	// An override entry with Allow:true removes matching default entries
+	// from the effective denylist (the user explicitly whitelisted the app).
+	Allow bool
+
 	// classRegex and titleRegex are compiled at load time.
 	classRegex *regexp.Regexp
 	titleRegex *regexp.Regexp
@@ -141,6 +146,7 @@ func (l *Loader) OverridePath() string {
 }
 
 // IsDestructiveApp classifies a foreground-app tuple against the effective denylist.
+// Entries with Allow:true short-circuit to "not destructive" (empty Classification).
 func (l *Loader) IsDestructiveApp(fg ForegroundInfo) Classification {
 	l.mu.RLock()
 	list := l.list
@@ -150,6 +156,10 @@ func (l *Loader) IsDestructiveApp(fg ForegroundInfo) Classification {
 		entry := list[i]
 		if !matchesEntry(entry, fg) {
 			continue
+		}
+		// Allow:true entries explicitly whitelist the app.
+		if entry.Allow {
+			return Classification{}
 		}
 		return Classification{
 			Category:     entry.Category,
@@ -188,6 +198,7 @@ type jsonEntry struct {
 	WindowTitleRegex string `json:"window_title_regex,omitempty"`
 	Category         string `json:"category"`
 	Reason           string `json:"reason"`
+	Allow            bool   `json:"allow,omitempty"`
 }
 
 type denylistJSON struct {
@@ -210,6 +221,7 @@ func loadDefaultList() ([]DenylistEntry, error) {
 			WindowTitleRegex: e.WindowTitleRegex,
 			Category:         Category(e.Category),
 			Reason:           e.Reason,
+			Allow:            e.Allow,
 		})
 	}
 	for _, e := range raw.Linux {
@@ -219,6 +231,7 @@ func loadDefaultList() ([]DenylistEntry, error) {
 			WindowTitleRegex: e.WindowTitleRegex,
 			Category:         Category(e.Category),
 			Reason:           e.Reason,
+			Allow:            e.Allow,
 		})
 	}
 	return out, nil
@@ -247,6 +260,7 @@ func loadOverrideFile(path string) ([]DenylistEntry, error) {
 			Category:         Category(e.Category),
 			Reason:           e.Reason,
 			FromOverride:     true,
+			Allow:            e.Allow,
 		})
 	}
 	for _, e := range raw.Linux {
@@ -257,6 +271,7 @@ func loadOverrideFile(path string) ([]DenylistEntry, error) {
 			Category:         Category(e.Category),
 			Reason:           e.Reason,
 			FromOverride:     true,
+			Allow:            e.Allow,
 		})
 	}
 	return out, nil
@@ -264,6 +279,8 @@ func loadOverrideFile(path string) ([]DenylistEntry, error) {
 
 // mergeLists applies override semantics:
 //   - Override entry with same BundleID or WindowClassRegex REPLACES default entry.
+//   - Override entry with Allow:true and matching key REMOVES the default entry
+//     from the effective denylist (the override stays as an allow sentinel).
 //   - Override entry with new key ADDS to effective list.
 //   - Override entries retain FromOverride=true; defaults retain FromOverride=false.
 func mergeLists(defaults, overrides []DenylistEntry) []DenylistEntry {
@@ -276,6 +293,11 @@ func mergeLists(defaults, overrides []DenylistEntry) []DenylistEntry {
 		replaced := false
 		for i := range out {
 			if entriesMatch(out[i], ov) {
+				// Allow:true override removes the matching default entry.
+				if ov.Allow {
+					out = append(out[:i], out[i+1:]...)
+					break
+				}
 				ovCopy := ov
 				if ovCopy.BundleID == "" {
 					ovCopy.BundleID = out[i].BundleID
@@ -353,4 +375,79 @@ func expandPath(path string) string {
 		return filepath.Join(home, path[2:])
 	}
 	return path
+}
+
+// AddAllowEntry adds an "allow: true" override entry for the given app key.
+// If bundleID is non-empty, the entry matches by bundle_id; otherwise by
+// windowClassRegex. The override file is updated and the loader reloaded.
+// Safe to call concurrently.
+func AddAllowEntry(loader *Loader, bundleID, windowClassRegex string) error {
+	if loader == nil {
+		return fmt.Errorf("loader is nil")
+	}
+	if bundleID == "" && windowClassRegex == "" {
+		return fmt.Errorf("must provide bundleID or windowClassRegex")
+	}
+
+	path := loader.OverridePath()
+	if path == "" {
+		return fmt.Errorf("no override file path configured")
+	}
+
+	// Read existing overrides (tolerate missing file).
+	var existing denylistJSON
+	data, err := os.ReadFile(path)
+	if err == nil {
+		if parseErr := json.Unmarshal(data, &existing); parseErr != nil {
+			return fmt.Errorf("parse existing override file: %w", parseErr)
+		}
+	}
+
+	// Build the new override entry.
+	var newEntry jsonEntry
+	if bundleID != "" {
+		newEntry = jsonEntry{BundleID: bundleID, Allow: true}
+	} else {
+		newEntry = jsonEntry{WindowClassRegex: windowClassRegex, Allow: true}
+	}
+
+	// Determine which platform section to use.
+	if bundleID != "" {
+		// macOS section.
+		for i, e := range existing.Macos {
+			if e.BundleID == bundleID {
+				existing.Macos[i] = newEntry
+				return writeOverrideFile(path, existing)
+			}
+		}
+		existing.Macos = append(existing.Macos, newEntry)
+	} else {
+		// Linux section.
+		for i, e := range existing.Linux {
+			if e.WindowClassRegex == windowClassRegex {
+				existing.Linux[i] = newEntry
+				return writeOverrideFile(path, existing)
+			}
+		}
+		existing.Linux = append(existing.Linux, newEntry)
+	}
+
+	if err := writeOverrideFile(path, existing); err != nil {
+		return err
+	}
+	return loader.Reload()
+}
+
+// writeOverrideFile serializes the denylistJSON to the override file path,
+// creating parent directories as needed.
+func writeOverrideFile(path string, raw denylistJSON) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return fmt.Errorf("create override dir: %w", err)
+	}
+	data, err := json.MarshalIndent(raw, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal override JSON: %w", err)
+	}
+	return os.WriteFile(path, data, 0o600)
 }

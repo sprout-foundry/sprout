@@ -125,12 +125,22 @@ func (a *Agent) ApplyPersona(personaID string) error {
 	// panic key, no destructive-app denylist, no per-session opt-in), so
 	// this warning is the primary guardrail until those land.
 	if personaID == personas.IDComputerUser {
+		// SP-063-4h: register this agent as the active computer-use agent
+		// so the PreActionHook can look it up.
+		SetActiveComputerUseAgent(a)
+
 		warning := "\n" + console.ColorizeBold("⚠  COMPUTER USE ACTIVE", console.ColorYellow) + "\n" +
 			console.Colorize("The agent can now control your mouse, keyboard, and screen.", console.ColorYellow) + "\n" +
 			console.Colorize("Watch the screen. Stop the agent (Ctrl+C) if it does something unexpected.", console.ColorYellow) + "\n" +
 			console.Colorize("Per-session opt-in, panic key, and destructive-app blocking are NOT yet implemented.", console.ColorYellow) + "\n"
 		console.PrintExternal(warning)
 		a.PublishAgentMessage("warning", "Computer use is active — the agent can control your mouse, keyboard, and screen. Watch the screen and stop it (Ctrl+C) if needed. Safety guardrails (session opt-in, panic key, destructive-app blocking) are not yet implemented.", nil)
+	} else {
+		// SP-063-4h: clear the active agent when switching away from
+		// computer_user so the PreActionHook skips the gate.
+		if prev := a.state.GetActivePersona(); prev == personas.IDComputerUser || personaID != personas.IDComputerUser {
+			SetActiveComputerUseAgent(nil)
+		}
 	}
 
 	// When the primary agent (depth 0) sets its persona, record it as the root persona.

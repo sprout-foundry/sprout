@@ -139,7 +139,7 @@ export default function MCPSettingsTab({
         <div className="crud-list">
           {filteredServerEntries.map(([name, cfg]) => {
             return (
-              <div key={name} className="crud-item">
+              <div key={name} className="crud-item" data-testid="mcp-server-row">
                 <span className="crud-item-name">{name}</span>
                 <span className="crud-item-detail">{cfg.command || ''}</span>
                 <button
@@ -170,6 +170,7 @@ export default function MCPSettingsTab({
                 <button
                   type="button"
                   className="crud-btn danger"
+                  data-testid="mcp-server-delete-button"
                   title="Delete server"
                   onClick={async () => {
                     const confirmed = await showThemedConfirm(

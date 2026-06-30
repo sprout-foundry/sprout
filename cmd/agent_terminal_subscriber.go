@@ -333,6 +333,25 @@ func startTerminalToolSubscriber(ctx context.Context, chatAgent *agent.Agent, ev
 					// invalidates the row math the next ToolEnd would use.
 					run = nil
 					footer.Refresh()
+				case events.EventTypeAgentMessage:
+					category, _ := data["category"].(string)
+					message, _ := data["message"].(string)
+					if message == "" {
+						break
+					}
+					indicator.Stop()
+					console.LockOutput()
+					switch category {
+					case "security_caution":
+						fmt.Fprintf(os.Stderr, "%s[⚠️  SECURITY CAUTION] %s\n", console.GlyphWarning.Prefix(), message)
+					case "security_loop":
+						fmt.Fprintf(os.Stderr, "%s[🛑 SECURITY LOOP] %s\n", console.GlyphError.Prefix(), message)
+					default:
+						fmt.Fprintf(os.Stderr, "%s%s\n", console.GlyphInfo.Prefix(), message)
+					}
+					console.UnlockOutput()
+					run = nil
+					footer.Refresh()
 				}
 			}
 		}

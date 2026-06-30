@@ -1,6 +1,6 @@
 # SP-063: Real `computer_user` Persona — Mouse/Keyboard/Screenshot Agent
 
-**Status:** ✅ Implemented (2026-06-26) — all but two safety gates shipped; remaining work explicitly out-of-scope until design questions settle
+**Status:** ✅ Implemented — all safety gates shipped as of 2026-06-30; gate 4h (destructive-app denylist) still tracked separately
 **Date:** 2026-06-03
 **Depends on:** SP-050 (orchestrator persona collapse — same persona-system mechanics)
 **Priority:** Medium-Low (capability addition, not bug-fix)
@@ -23,7 +23,7 @@ two remain explicitly out-of-scope (see below).
 | 4d Activation gates (config flag, platform-supported, top-level-only, vision-capable) | ✅ done | `checkComputerUseActivation` (`computer_use_registration.go`) |
 | 4e `--skip-prompt` / daemon block | ✅ done | `checkComputerUseActivation` rejects when `cfg.SkipPrompt == true` (covers both CLI `--skip-prompt` and daemon mode) |
 | 4f Per-session interactive opt-in (WebUI + CLI dialog, workspace allowlist auto-approve, "approve always" persistence) | ✅ done | `checkComputerUseSessionOptIn` (`computer_use_registration.go`); called from `ExecuteTool` (`tool_security.go`); clears on `ClearSessionOverrides` |
-| 4g Global panic key (Ctrl+C+Esc halts within 500ms) | ❌ **deferred** | Sub-500ms halt during an action loop is non-trivial — requires careful signal-handling design that can race with the action loop. Existing Ctrl+C at CLI level halts; spec wants faster halt during in-progress action. Tracked as a separate ticket when the design is worked out. |
+| 4g Global panic key (Ctrl+C+Esc halts within 500ms) | ✅ **done** (2026-06-30) | `pkg/agent_tools/computer_use/panic_key.go` (logic), `panic_key_chord*.go` (OS chord watcher), `process_group_{unix,other}.go` (subprocess tree kill), design doc at `roadmap/SP-063-panic-key-design.md`. Default chord `Ctrl+Shift+Escape` (configurable via `ComputerUseConfig.PanicKeyChord`). WebUI Stop button remains the primary halt path; OS chord watcher is best-effort (goroutine verifies tool availability and runs polling loop so `Stop()` is cancellable; real CGEventTap / XRecord chord detection deferred to a follow-up — see design doc §Open Questions). |
 | 4h Destructive-app denylist heuristic (Mail, Banking, Disk Utility, etc.) | ❌ **deferred** | Requires OS-specific foreground-window detection (`osascript` on macOS, `wmctrl`/`xdotool` on X11) and a classification heuristic (hand-curated vs model-classified via screenshot). Design tradeoffs need user input. |
 | 5 Persona prompt | ✅ done | `pkg/agent/prompts/subagent_prompts/computer_user.md` |
 | 6 Tool allowlist (computer_user only) | ✅ done | persona `allowed_tools` (`pkg/personas/configs/computer_user.json`) + dispatch-layer guard (`isComputerUseToolBlocked` in `computer_use_registration.go`) |
@@ -50,15 +50,13 @@ Defense-in-depth, in order, before any click happens:
 7. **Action-rate cap** — default 60 actions/minute; configurable.
 8. **Audit log** — every action + every opt-in/denial recorded to JSONL.
 9. **Persona allowlist + dispatch guard** — tools only available to the `computer_user` persona; rejected at dispatch for any other persona.
+10. **Panic key** (`Ctrl+Shift+Escape`, configurable) — emergency-stop chord that (i) sets a halted flag on a `PanicableBackend` decorator wrapping the subprocess backend, (ii) kills any in-flight subprocess tree via a process-group `SIGKILL`, (iii) cancels the agent's `interruptCtx` (reusing the existing WebUI-Stop path), and (iv) records `panic_key_triggered` / `panic_key_duplicate` / `panic_key_reset` audit events. After a halt the user must re-consent to computer use (`computerUseSessionApproved` is reset). See `roadmap/SP-063-panic-key-design.md` for full design.
 
-## Why gates 4g (panic key) and 4h (destructive denylist) are deferred
+## Why gate 4h (destructive denylist) is deferred
 
-Both gates were designed against risks the existing safety stack already partially covers: existing Ctrl+C at the CLI halts the agent entirely (4g), and the user can already see the agent's actions and stop them via WebUI/CLI (4h). Implementing either properly requires design conversations:
+Gate 4g (panic key) shipped on 2026-06-30 — see the `PanicableBackend` decorator at `pkg/agent_tools/computer_use/panic_key.go` and the design doc at `roadmap/SP-063-panic-key-design.md`. The OS-level chord watcher (macOS CGEventTap, Linux XRecord) is best-effort and the WebUI Stop button remains the primary halt path. Real chord detection via CGO is the only deferred sub-task — tracked as an open follow-up.
 
-- **4g** — the spec wants sub-500ms halt during an in-progress action. The risk is signal-handling code racing with the action loop and producing a wedged state. The right design (separate signal-handling goroutine? Cooperative cancellation in each backend call?) needs a focused design doc, not a quick implementation.
-- **4h** — requires OS-specific foreground-window detection (`osascript` on macOS, `wmctrl`/`xdotool` on X11), a classification heuristic (hand-curated app list vs model-classified via screenshot), and per-action confirmation wiring in the action loop. The hand-curated list rots; the model-classified path adds latency to every click and a non-trivial prompt-flow on every click into Mail.
-
-Both are tracked here as open design questions, not as "remaining work" — they're scoped out until the design choices are made.
+Gate 4h remains deferred: requires OS-specific foreground-window detection (`osascript` on macOS, `wmctrl`/`xdotool` on X11), a classification heuristic (hand-curated app list vs model-classified via screenshot), and per-action confirmation wiring in the action loop. The hand-curated list rots; the model-classified path adds latency to every click and a non-trivial prompt-flow on every click into Mail.
 
 ## Background
 

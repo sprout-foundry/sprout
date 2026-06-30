@@ -40,6 +40,9 @@
         "context_length": 200000,
         "description": "Z.AI GLM-5 - Flagship model with 200K context, 128K max output, agentic coding",
         "id": "glm-5",
+        "input_cost": 1,
+        "output_cost": 3.2,
+        "cached_input_cost": 0.2,
         "name": "GLM-5",
         "tags": [
           "tools",
@@ -50,6 +53,9 @@
         "context_length": 200000,
         "description": "Z.AI GLM-5.1 - Enhanced GLM-5 with improved reasoning and tool use capabilities",
         "id": "glm-5.1",
+        "input_cost": 1.4,
+        "output_cost": 4.4,
+        "cached_input_cost": 0.26,
         "name": "GLM-5.1",
         "tags": [
           "tools",
@@ -61,6 +67,9 @@
         "context_length": 1048576,
         "description": "Z.AI GLM-5.2 - Latest flagship with 1M-token context for long-horizon tasks",
         "id": "glm-5.2",
+        "input_cost": 1.4,
+        "output_cost": 4.4,
+        "cached_input_cost": 0.26,
         "name": "GLM-5.2",
         "tags": [
           "tools",
@@ -72,6 +81,9 @@
         "context_length": 200000,
         "description": "Z.AI GLM-5-Turbo - Optimized for agent/tool tasks with 200K context, 128K max output",
         "id": "glm-5-turbo",
+        "input_cost": 1.2,
+        "output_cost": 4,
+        "cached_input_cost": 0.24,
         "name": "GLM-5 Turbo",
         "tags": [
           "tools",
@@ -82,6 +94,9 @@
         "context_length": 200000,
         "description": "Z.AI GLM-4.7 - Latest GLM-4.x model with 200K context window, designed for development environments",
         "id": "glm-4.7",
+        "input_cost": 0.6,
+        "output_cost": 2.2,
+        "cached_input_cost": 0.11,
         "name": "GLM-4.7",
         "tags": [
           "tools",
@@ -92,6 +107,9 @@
         "context_length": 200000,
         "description": "Z.AI GLM-4.6 - Coding optimized model with 200K context window",
         "id": "GLM-4.6",
+        "input_cost": 0.6,
+        "output_cost": 2.2,
+        "cached_input_cost": 0.11,
         "name": "GLM-4.6",
         "tags": [
           "tools",
@@ -102,6 +120,9 @@
         "context_length": 200000,
         "description": "Z.AI GLM-4.6 with vision capabilities",
         "id": "glm-4.6v",
+        "input_cost": 0.3,
+        "output_cost": 0.9,
+        "cached_input_cost": 0.05,
         "name": "GLM-4.6 Vision",
         "tags": [
           "tools",
@@ -113,6 +134,9 @@
         "context_length": 200000,
         "description": "Z.AI GLM-5V-Turbo - Multimodal coding foundation model, processes images/video/text, optimized for agent workflows and vision-based coding tasks",
         "id": "glm-5v-turbo",
+        "input_cost": 1.2,
+        "output_cost": 4,
+        "cached_input_cost": 0.24,
         "name": "GLM-5V Turbo",
         "tags": [
           "tools",
@@ -124,6 +148,9 @@
         "context_length": 16384,
         "description": "Z.AI GLM-4.5V - Vision reasoning model based on MOE architecture (106B params, 12B activation), SOTA performance in image, video, and document understanding",
         "id": "glm-4.5v",
+        "input_cost": 0.6,
+        "output_cost": 1.8,
+        "cached_input_cost": 0.11,
         "name": "GLM-4.5V",
         "tags": [
           "vision",
@@ -134,6 +161,9 @@
         "context_length": 128000,
         "description": "Z.AI GLM-4.5 - Previous generation with 128K context window",
         "id": "GLM-4.5",
+        "input_cost": 0.6,
+        "output_cost": 2.2,
+        "cached_input_cost": 0.11,
         "name": "GLM-4.5",
         "tags": [
           "tools"
@@ -143,6 +173,9 @@
         "context_length": 128000,
         "description": "Z.AI GLM-4.5 Air - Lightweight version with 128K context window",
         "id": "GLM-4.5-air",
+        "input_cost": 0.2,
+        "output_cost": 1.1,
+        "cached_input_cost": 0.03,
         "name": "GLM-4.5 Air",
         "tags": [
           "tools"

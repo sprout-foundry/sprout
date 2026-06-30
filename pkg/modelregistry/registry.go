@@ -43,6 +43,7 @@ type ModelInfo struct {
 	Cost             float64  `json:"cost,omitempty"`
 	InputCost        float64  `json:"input_cost,omitempty"`
 	OutputCost       float64  `json:"output_cost,omitempty"`
+	CachedInputCost  float64  `json:"cached_input_cost,omitempty"`
 	ContextLength    int      `json:"context_length,omitempty"`
 	Tags             []string `json:"tags,omitempty"`
 	EligibleRoles    []string `json:"eligible_roles,omitempty"`
@@ -61,6 +62,7 @@ type RawModel struct {
 	Cost             float64  `json:"cost,omitempty"`
 	InputCost        float64  `json:"input_cost,omitempty"`
 	OutputCost       float64  `json:"output_cost,omitempty"`
+	CachedInputCost  float64  `json:"cached_input_cost,omitempty"`
 	ContextLength    int      `json:"context_length,omitempty"`
 	Tags             []string `json:"tags,omitempty"`
 	EligibleRoles    []string `json:"eligible_roles,omitempty"`
@@ -358,6 +360,7 @@ func canonicalToLegacy(cm modelcontract.CanonicalModel) ModelInfo {
 	if cm.Pricing != nil {
 		mi.InputCost = cm.Pricing.InputPerMTok
 		mi.OutputCost = cm.Pricing.OutputPerMTok
+		mi.CachedInputCost = cm.Pricing.CachedPerMTok
 		if mi.InputCost > 0 || mi.OutputCost > 0 {
 			mi.Cost = (mi.InputCost + mi.OutputCost) / 2.0
 		}
@@ -377,6 +380,7 @@ func convertToRaw(models []ModelInfo) []RawModel {
 			Cost:             m.Cost,
 			InputCost:        m.InputCost,
 			OutputCost:       m.OutputCost,
+			CachedInputCost:  m.CachedInputCost,
 			ContextLength:    m.ContextLength,
 			Tags:             append([]string(nil), m.Tags...),
 			EligibleRoles:    append([]string(nil), m.EligibleRoles...),

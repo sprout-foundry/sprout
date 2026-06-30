@@ -6,10 +6,12 @@
 package agent
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"strings"
 
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
@@ -388,4 +390,69 @@ func (p ShellProposal) HighRiskParts() []ShellPart {
 		}
 	}
 	return result
+}
+
+// ---------------------------------------------------------------------------
+// Agent.RequestShellApproval
+// ---------------------------------------------------------------------------
+
+// RequestShellApproval asks the user (CLI or WebUI) to approve each part of
+// the shell command individually. Returns a map from part ID to approved bool.
+//
+// Flow:
+//   1. If no parts, returns empty map and nil error.
+//   2. If the WebUI has an active surface, dispatch via the security
+//      approval manager (for now, return a "all approved" map — SP-093-3
+//      implements the real WebUI per-part dialog).
+//   3. Otherwise, call console.PromptShellApprovalParts (the CLI picker).
+//
+// Errors come from the picker (e.g. context cancelled); a per-part
+// rejection does NOT return an error — it's encoded in the decisions map.
+func (a *Agent) RequestShellApproval(ctx context.Context, p ShellProposal) (map[string]bool, error) {
+	if len(p.Parts) == 0 {
+		return map[string]bool{}, nil
+	}
+
+	// WebUI surface — stub for now (SP-093-3 wires real per-part UI).
+	isSubagent := a.IsSubagent()
+	hasWebUI := !a.isNonInteractive() && !isSubagent && a.HasActiveWebUIClients()
+	if hasWebUI {
+		if a.debug {
+			a.debugLog("[SHELL-PART] RequestShellApproval: WebUI active — returning stub all-approved (SP-093-3)\n")
+		}
+		decisions := make(map[string]bool, len(p.Parts))
+		for _, part := range p.Parts {
+			decisions[part.ID] = true
+		}
+		return decisions, nil
+	}
+
+	// CLI surface — use the per-part picker.
+	// Project ShellParts into console.ShellPartInfo (avoids cyclic import).
+	parts := make([]console.ShellPartInfo, len(p.Parts))
+	for i, part := range p.Parts {
+		parts[i] = console.ShellPartInfo{
+			ID:        part.ID,
+			Text:      part.Text,
+			Kind:      string(part.Kind),
+			Semantic:  part.Semantic,
+			RiskLabel: kindRiskLabel(part.Kind),
+		}
+	}
+	return console.PromptShellApprovalParts(ctx, parts)
+}
+
+// kindRiskLabel returns a short risk-tier label for CLI display.
+func kindRiskLabel(kind CommandKind) string {
+	switch kind {
+	case CommandKindRm, CommandKindGitReset, CommandKindKubectl:
+		return "CRITICAL"
+	case CommandKindDocker, CommandKindGitPush:
+		return "HIGH"
+	case CommandKindChmod, CommandKindChown,
+		CommandKindWriteRedirect, CommandKindHttpPost:
+		return "MEDIUM"
+	default:
+		return "LOW"
+	}
 }

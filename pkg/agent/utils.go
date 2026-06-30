@@ -143,12 +143,9 @@ func (a *Agent) printLineInternalLocked(text string, manageLock bool) {
 	// Fallback for when router isn't initialized yet
 	a.PublishAgentMessage("info", message, nil)
 
-	// Terminal output: if streamingCallback is set, route through it
-	if a.output != nil && a.output.IsStreamingEnabled() && a.output.GetStreamingCallback() != nil {
-		a.output.GetStreamingCallback()(message)
-		return
-	}
-
+	// Terminal output: direct write. The streamingCallback is reserved
+	// for prose tokens (RouteStreamChunk); chrome must not route through
+	// it. No \r\033[K prefix — that would clear in-progress prose.
 	if manageLock && a.output != nil {
 		if mu := a.output.GetOutputMutex(); mu != nil {
 			mu.Lock()

@@ -1,6 +1,7 @@
 package agent
 
 import (
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
@@ -104,7 +105,8 @@ func (a *Agent) TrackMetricsFromResponse(promptTokens, completionTokens, totalTo
 		}
 	}
 
-	// Calculate cost savings from cached tokens using the provider-aware heuristic.
+	// Calculate cost savings from cached tokens using the per-model pricing
+	// resolver. Returns 0 when the cached rate is unknown — no fabrication.
 	a.state.SetCachedCostSavings(a.state.GetCachedCostSavings() + a.calculateCachedTokenSavings(cachedTokens, totalTokens, estimatedCost))
 
 	// Trigger stats update callback if registered
@@ -211,16 +213,19 @@ func (a *Agent) GetCachedCostSavings() float64 {
 // tokens. Cached tokens are served from the provider's prompt cache instead
 // of being re-processed, so they cost a fraction of normal input price.
 //
-// The discount factor is provider-dependent:
-//   - Anthropic: cache reads are 0.1× input (90% savings) — the dominant case
-//     since Anthropic's cache_control is the primary caching mechanism.
-//   - OpenAI: cache reads are 0.5× input (50% savings).
-//   - OpenRouter: passes through the underlying provider's pricing.
+// When the (provider, model) pair resolves to a known cached-input rate
+// strictly less than the standard input rate, savings are exact:
 //
-// We use 0.9 (90% savings) as the default because most cached_tokens reporting
-// flows through OpenRouter→Anthropic, and over-estimating savings slightly is
-// safer than under-estimating for budget planning. The method is extracted so
-// it can be refined with provider-specific pricing when available.
+//	savings = cachedTokens × (inputPrice − cachedInputPrice) / 1M
+//
+// The provider's reported estimatedCost already includes the discount on
+// cached tokens, so this difference is the unrealized cost — i.e. the savings.
+//
+// When the cached rate is unknown (provider/model not in catalogue, or
+// catalogue entry omits a distinct cached rate) the function returns 0
+// rather than fabricating a number. The provider-reported total cost
+// already reflects whatever rate was actually charged, so the ledger is
+// always accurate; only the estimated savings display is suppressed.
 //
 // cachedTokens: number of prompt tokens served from cache.
 // estimatedCost: total cost charged for this request.
@@ -229,9 +234,35 @@ func (a *Agent) calculateCachedTokenSavings(cachedTokens, totalTokens int, estim
 	if cachedTokens <= 0 || totalTokens <= 0 || estimatedCost <= 0 {
 		return 0
 	}
-	avgCostPerToken := estimatedCost / float64(totalTokens)
-	const cachedTokenSavingsFactor = 0.9 // 90% — matches Anthropic cache-read pricing
-	return float64(cachedTokens) * avgCostPerToken * cachedTokenSavingsFactor
+
+	// Try exact savings from per-model pricing.
+	provider := a.GetProvider()
+	model := a.GetModel()
+	if inputPerM, _, cachedPerM, ok := api.ResolveModelPricing(provider, model); ok && inputPerM > 0 {
+		switch {
+		case cachedPerM > 0 && cachedPerM < inputPerM:
+			// Exact: tokens that would have cost inputPrice actually cost
+			// cachedPrice. Savings is the unrealized cost difference.
+			return float64(cachedTokens) * (inputPerM - cachedPerM) / 1e6
+		case cachedPerM >= inputPerM:
+			// Cached price == input price (no discount). Provider reports
+			// cache hits but bills at standard rate — no savings to claim.
+			return 0
+		default:
+			// cachedPerM == 0: the provider/model has catalogue pricing
+			// but does not expose a distinct cached rate. Caching may
+			// still have happened (cachedTokens > 0) but we don't know
+			// the discount. Do not fabricate a number — return 0 rather
+			// than falling through to the 90% heuristic.
+			return 0
+		}
+	}
+
+	// Resolver miss: the (provider, model) pair is not in the catalogue at
+	// all. We have no reliable pricing to compute against. Return 0 rather
+	// than fabricate a 90% savings number from a cost figure we cannot
+	// attribute to a known price.
+	return 0
 }
 
 // GetContextWarningIssued returns whether a context warning has been issued

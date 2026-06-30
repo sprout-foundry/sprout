@@ -89,6 +89,59 @@ func TestModelPricingPerMillion_Variants(t *testing.T) {
 	}
 }
 
+func TestModelCachedPricingPerMillion(t *testing.T) {
+	cases := []struct {
+		name     string
+		entry    map[string]any
+		wantCached float64
+	}{
+		{
+			// OpenRouter-style: pricing.input_cache_read as a per-token USD
+			// string. 0.0000003/token * 1e6 = 0.30/M.
+			name:       "input_cache_read per-token string (openrouter)",
+			entry:      map[string]any{"pricing": map[string]any{"input_cache_read": "0.0000003"}},
+			wantCached: 0.3,
+		},
+		{
+			// pricing.cached_input as a numeric per-token USD value.
+			name:       "cached_input numeric per-token",
+			entry:      map[string]any{"pricing": map[string]any{"cached_input": 0.0000003}},
+			wantCached: 0.3,
+		},
+		{
+			// cents_per_cached_input_token: 0.03 cents/token.
+			// /100 then *1e6 = *1e4 → 0.03 * 1e4 = 300.0
+			name:       "cents per cached token",
+			entry:      map[string]any{"pricing": map[string]any{"cents_per_cached_input_token": 0.03}},
+			wantCached: 300.0,
+		},
+		{
+			// cached_input_per_million_tokens: already per-million.
+			name:       "per-million already",
+			entry:      map[string]any{"pricing": map[string]any{"cached_input_per_million_tokens": 0.3}},
+			wantCached: 0.3,
+		},
+		{
+			name:       "no cached field present",
+			entry:      map[string]any{"pricing": map[string]any{"prompt": "0.000002", "completion": "0.000006"}},
+			wantCached: 0,
+		},
+		{
+			name:       "empty entry",
+			entry:      map[string]any{},
+			wantCached: 0,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := ModelCachedPricingPerMillion(tc.entry)
+			if !approxEqual(got, tc.wantCached) {
+				t.Errorf("got %v, want %v", got, tc.wantCached)
+			}
+		})
+	}
+}
+
 func approxEqual(a, b float64) bool {
 	d := a - b
 	if d < 0 {

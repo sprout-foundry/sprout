@@ -23,6 +23,8 @@ func TestParseDeepInfra(t *testing.T) {
 	   "pricing":{"type":"tokens","cents_per_input_token":0.00012,"cents_per_output_token":0.0006}},
 	  {"model_name":"meta/no-tools-8k","reported_type":"text-generation","max_tokens":8000,
 	   "tags":["json"],"pricing":{"type":"tokens","cents_per_input_token":0.00001,"cents_per_output_token":0.00002}},
+	  {"model_name":"cached/model","reported_type":"text-generation","max_tokens":128000,
+	   "tags":["tools"],"pricing":{"type":"tokens","cents_per_input_token":0.0001,"cents_per_output_token":0.0005,"cents_per_cached_input_token":0.00001}},
 	  {"model_name":"old/model","reported_type":"text-generation","deprecated":1693526400,"max_tokens":128000},
 	  {"model_name":"black-forest/FLUX","reported_type":"text-to-image","max_tokens":null}
 	]`)
@@ -32,8 +34,8 @@ func TestParseDeepInfra(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Image + deprecated models are filtered out.
-	if len(models) != 2 {
-		t.Fatalf("expected 2 models, got %d: %+v", len(models), models)
+	if len(models) != 3 {
+		t.Fatalf("expected 3 models, got %d: %+v", len(models), models)
 	}
 
 	qwen, ok := find(models, "Qwen/Qwen3-Max")
@@ -54,6 +56,16 @@ func TestParseDeepInfra(t *testing.T) {
 	noTools, _ := find(models, "meta/no-tools-8k")
 	if !IsKnownFalse(noTools.Capabilities.Tools) {
 		t.Errorf("expected tools known-false, got %v", noTools.Capabilities.Tools)
+	}
+
+	// Model with cached-input pricing → verify cents_per_cached_input_token is
+	// extracted and converted to per-million correctly.
+	cached, _ := find(models, "cached/model")
+	if cached.Pricing == nil {
+		t.Fatal("cached/model has no pricing")
+	}
+	if !approx(cached.Pricing.CachedPerMTok, 0.1) {
+		t.Errorf("cached price: got %v, want 0.1 (0.00001 cents/token * 1e4)", cached.Pricing.CachedPerMTok)
 	}
 }
 
@@ -155,6 +167,49 @@ func TestFillEligibleRoles_AttachesContextWarning(t *testing.T) {
 	}
 	if len(models[2].EligibleRoles) != 0 || len(models[2].Warnings) != 0 {
 		t.Errorf("blocked: expected no roles and no warning, got roles=%v warnings=%v", models[2].EligibleRoles, models[2].Warnings)
+	}
+}
+
+func TestOpenRouterAdapter_CachePricing(t *testing.T) {
+	body := []byte(`{"data":[
+	  {"id":"anthropic/claude","name":"Claude","context_length":200000,
+	   "pricing":{"prompt":"0.000003","completion":"0.000015","input_cache_read":"0.0000003"}},
+	  {"id":"plain/uncached","context_length":128000,
+	   "pricing":{"prompt":"0.000001","completion":"0.000002"}},
+	  {"id":"free/cached","context_length":64000,
+	   "pricing":{"prompt":"0","completion":"0","input_cache_read":"0"}}
+	]}`)
+
+	models, err := parseOpenRouter(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Model with a real cache-read rate → cached price set to per-million value.
+	claude, ok := find(models, "anthropic/claude")
+	if !ok {
+		t.Fatal("anthropic/claude missing")
+	}
+	if claude.Pricing == nil || !approx(claude.Pricing.CachedPerMTok, 0.3) {
+		t.Errorf("claude cached price: got %+v", claude.Pricing)
+	}
+
+	// Model without input_cache_read → CachedPerMTok is 0 (field absent).
+	uncached, ok := find(models, "plain/uncached")
+	if !ok {
+		t.Fatal("plain/uncached missing")
+	}
+	if uncached.Pricing == nil || uncached.Pricing.CachedPerMTok != 0 {
+		t.Errorf("uncached model should have 0 CachedPerMTok: %+v", uncached.Pricing)
+	}
+
+	// Model with input_cache_read="0" → free cache is valid; CachedPerMTok is 0.
+	free, ok := find(models, "free/cached")
+	if !ok {
+		t.Fatal("free/cached missing")
+	}
+	if free.Pricing == nil || free.Pricing.CachedPerMTok != 0 {
+		t.Errorf("free cached model should have 0 CachedPerMTok: %+v", free.Pricing)
 	}
 }
 

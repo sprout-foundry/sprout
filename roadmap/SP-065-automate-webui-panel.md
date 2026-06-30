@@ -1,6 +1,6 @@
 # SP-065: WebUI Automations Panel
 
-**Status:** 📋 Proposed
+**Status:** ✅ Implemented (live WS event stream; commit 4f0a81c5)
 **Date:** 2026-06-04
 **Depends on:** SP-064 (uses the same BPM Stop primitive and PID-file format for cross-process discovery)
 **Priority:** Medium

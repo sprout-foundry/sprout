@@ -159,5 +159,6 @@ func init() {
 	rootCmd.AddCommand(planCmd)
 	rootCmd.AddCommand(historyCmd)
 	rootCmd.AddCommand(automateCmd)
+	rootCmd.AddCommand(shellBgCmd)
 	rootCmd.AddCommand(prCmd)
 }

@@ -96,9 +96,7 @@ export type SettingsSubsection =
   | 'workspace-lsp'
   // Environment (global scope)
   | 'env-providers'
-  | 'env-performance'
-  | 'env-commit-review'
-  | 'env-ocr'
+  | 'env-advanced'
   // Editor
   | 'editor-preferences'
   | 'editor-notifications'
@@ -145,9 +143,7 @@ export const SECTION_GROUPS: SectionDef[] = [
     description: 'Global infrastructure config (~/.config/sprout)',
     subsections: [
       { id: 'env-providers', label: 'Providers' },
-      { id: 'env-performance', label: 'Performance' },
-      { id: 'env-commit-review', label: 'Commit & Review' },
-      { id: 'env-ocr', label: 'PDF OCR' },
+      { id: 'env-advanced', label: 'Advanced' },
     ],
   },
   {
@@ -196,9 +192,11 @@ export function subsectionToLegacyTab(subsectionId: SettingsSubsection): Setting
     'workspace-mcp': 'mcp',
     'workspace-lsp': 'general',
     'env-providers': 'providers',
-    'env-performance': 'performance',
-    'env-commit-review': 'commit-review',
-    'env-ocr': 'pdf-ocr',
+    // env-advanced is the collapsed Advanced tab (SP-091-10 / SP-017). It
+    // renders Performance + Commit & Review + OCR side-by-side. Route its
+    // legacy fetch effect through 'performance' as a representative
+    // global-scope ancestor so any state-layer fetch fires correctly.
+    'env-advanced': 'performance',
     'editor-preferences': 'general',
     'editor-notifications': 'general',
     'experimental-computer-use': 'general',

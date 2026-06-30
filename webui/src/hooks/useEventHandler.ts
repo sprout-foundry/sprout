@@ -25,6 +25,7 @@ import {
 import { ensureCompletedAssistantMessage } from '../utils/chatCompletion';
 import { debugLog, error as logError } from '../utils/log';
 import { appendCappedLog } from '../utils/logCap';
+import { emitAutomate } from '../services/automateEvents';
 
 const MAX_TOOL_EXECUTIONS = 200;
 
@@ -923,6 +924,17 @@ export function useEventHandler({
           logs: appendCappedLog(prev.logs, logEntry),
         }));
         debugLog('[security] Prompt request:', eventData?.file_path, eventData?.concern);
+        break;
+
+      case 'automate.session_started':
+      case 'automate.session_ended':
+      case 'automate.output_chunk':
+      case 'automate.budget_update':
+        logEntry.category = 'system';
+        logEntry.level = 'info';
+        emitAutomate(event.type, eventData);
+        setState((prev) => ({ logs: appendCappedLog(prev.logs, logEntry) }));
+        debugLog('[automate] Event:', event.type, eventData);
         break;
 
       default:

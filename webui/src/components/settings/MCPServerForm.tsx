@@ -41,7 +41,7 @@ export default function MCPServerForm({
 }: MCPServerFormProps) {
   if (editingServer) {
     return (
-      <div className="crud-inline-form">
+      <div className="crud-inline-form" data-testid="mcp-server-form">
         <div className="form-row">
           <label>Name</label>
           <input
@@ -50,6 +50,7 @@ export default function MCPServerForm({
             value={serverName}
             onChange={(e) => setServerName(e.target.value)}
             placeholder="server-name"
+            data-testid="mcp-server-name-input"
             disabled={editingServer.mode === 'edit'}
           />
         </div>
@@ -61,6 +62,7 @@ export default function MCPServerForm({
             value={serverCommand}
             onChange={(e) => setServerCommand(e.target.value)}
             placeholder="npx or path/to/binary"
+            data-testid="mcp-server-command-input"
           />
         </div>
         <div className="form-row">
@@ -164,6 +166,7 @@ export default function MCPServerForm({
           <button
             type="button"
             className="form-btn primary"
+            data-testid="mcp-server-add-button"
             onClick={editingServer.mode === 'edit' ? handleUpdateServer : handleAddServer}
           >
             {editingServer.mode === 'edit' ? 'Update' : 'Add'}

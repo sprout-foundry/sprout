@@ -1,10 +1,13 @@
 package agent
 
 import (
+	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/agent_tools/computer_use"
@@ -85,6 +88,22 @@ func RegisterComputerUseTools(cfg *configuration.Config) error {
 			names[name] = true
 		}
 		computerUseToolNames = names
+
+		// Start the OS-chord watcher for the panic key. Best-effort: failure
+		// here must not block the rest of computer-use registration.
+		panicKeyChord := cu.PanicKeyChord
+		if !computer_use.IsChordDisabled(panicKeyChord) {
+			// Use a timeout context so an unresponsive osascript/xdotool
+			// can't hang agent creation.
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			watcher := computer_use.NewChordWatcher(panicKeyChord)
+			startErr := watcher.Start(ctx)
+			cancel()
+			if startErr != nil {
+				log.Printf("[computer-use] panic-key chord watcher unavailable: %v", startErr)
+			}
+			computer_use.SetActiveChordWatcher(watcher)
+		}
 	})
 	return nil
 }

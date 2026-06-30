@@ -418,7 +418,8 @@ two weeks, then decide what to keep.
 ## Things to consider after SP-091 → SP-095 ship
 
 - **WASM stub-tools** — running the WASM build against `pkg/agent_tools/`
-  with CGO-only handlers stubbed (already partly done per SP-058 / SP-061).
+  with CGO-only handlers stubbed (grammar embed + static-embed removal
+  shipped per SP-058/SP-061; remaining work is handler-stub coverage).
 - **Subagent webui panel** — there's an active conversation indicator but
   no per-subagent detail view; SP-051 shipped depth in CLI but not WebUI.
 - **Multi-workspace sprout** daemon — feature requested twice in the past
@@ -445,72 +446,70 @@ committable.
 
 ### Specs to fix (in priority order)
 
-- [ ] **SP-096-1: SP-013.** `pkg/agent/settings_handler.go` (572 lines)
+- [x] **SP-096-1: SP-013.** `pkg/agent/settings_handler.go` (572 lines)
   ships `manage_settings` with get/set/list_providers/test_credential/
   describe/describe_all/preview. README says Implemented.
 
-- [ ] **SP-096-2: SP-014.** README says Implemented (hidden PTY routing
+- [x] **SP-096-2: SP-014.** README says Implemented (hidden PTY routing
   + background mode). Verify by reading
   `cmd/agent_terminal_subscriber.go` (added in the latest merge) +
   TerminalManager hooks; update spec header.
 
-- [ ] **SP-096-3: SP-022 (workspace-management variant).** README says
+- [x] **SP-096-3: SP-022 (workspace-management variant).** README says
   Implemented (WorkspacePicker + WorkspacePane + LocationSwitcher +
   WorkspaceBar). Spec at `roadmap/SP-022-workspace-management.md`
   still says Proposed. Update header.
 
-- [ ] **SP-096-4: SP-009.** README says Implemented (Storybook + MDX
+- [x] **SP-096-4: SP-009.** README says Implemented (Storybook + MDX
   docs + Chromatic; webui imports `@sprout/ui`). Spec at
   `roadmap/SP-009-component-library-maturation.md` still says Proposed.
   Update header.
 
-- [ ] **SP-096-5: SP-010.** README says Implemented (EditorPane 2604→513
+- [x] **SP-096-5: SP-010.** README says Implemented (EditorPane 2604→513
   lines; EditorCore extracted; 18 bug fixes). Spec at
   `roadmap/SP-010-editor-modernization.md` still says Proposed.
 
-- [ ] **SP-096-6: SP-062.** README says Implemented (BPM wired into
+- [x] **SP-096-6: SP-062.** README says Implemented (BPM wired into
   shell dispatch; `pkg/agent_tools/shell.go` already handles
   `COMMAND_PROMOTED_TO_BACKGROUND`). Spec at
   `roadmap/SP-062-cli-background-shell.md` still says Proposed. NOTE:
   this also makes SP-097 much smaller — see revised scope below.
 
-- [ ] **SP-096-7: SP-068.** README says Implemented (Phases 1-3
+- [x] **SP-096-7: SP-068.** README says Implemented (Phases 1-3
   shipped: single resolver, single broker, `sprout explain` —
   `cmd/explain.go` exists at 200+ lines, `pkg/agent/risk_assessment.go`
-  exists). Spec at `roadmap/SP-068-security-check-consolidation.md`
-  still says Proposed.
+  exists). Spec at
+  `roadmap/SP-068-security-check-consolidation.md` still says Proposed.
 
-- [ ] **SP-096-8: SP-073.** README says Implemented (zero
+- [x] **SP-096-8: SP-073.** README says Implemented (zero
   `TODO(SP-034-1c)` markers remain; all 10 sites threaded with
   `context.Context`). Spec at
   `roadmap/SP-073-cooperative-cancellation.md` still says Proposed.
 
-- [ ] **SP-096-9: SP-058.** Daemon binary is 149 MB (per `899d667f`),
+- [x] **SP-096-9: SP-058.** Daemon binary is 149 MB (per `899d667f`),
   22 MB below 171 MB target. Spec at
   `roadmap/SP-058-selective-grammar-embed.md` still says Proposed.
 
-- [ ] **SP-096-10: SP-061.** Static embedding provider removed
+- [x] **SP-096-10: SP-061.** Static embedding provider removed
   (SP-091-2). Spec at
   `roadmap/SP-061-remove-static-embeddings.md` still says Proposed.
 
-- [ ] **SP-096-11: SP-064.** `cmd/automate.go::runAutomateStatus`,
+- [x] **SP-096-11: SP-064.** `cmd/automate.go::runAutomateStatus`,
   `runAutomateStop`, `runAutomateStopAll` exist; BPM.Stop is wired.
 
-- [ ] **SP-096-12: SP-065.** `pkg/webui/automations_api.go` +
+- [x] **SP-096-12: SP-065.** `pkg/webui/automations_api.go` +
   `webui/src/components/AutomationsPanel.tsx` + WS wiring landed in
   commit `4f0a81c5`.
 
-- [ ] **SP-096-13: SP-017.** README says implemented ("scoped labels
+- [x] **SP-096-13: SP-017.** README says implemented ("scoped labels
   shipped"). The spec's broader goal (collapsible sections) is pending
   — header should say `✅ Implemented (Phase 1); collapsible sections
   pending → see SP-101`.
 
-- [ ] **SP-096-14: SP-048.** README says "status footer + glyph
+- [x] **SP-096-14: SP-048.** README says "status footer + glyph
   vocabulary shipped". Header should say
   `✅ Partially Implemented (status footer + glyphs); tool timeline +
-  silence-fill pending → see SP-101`.
-
-### Drift to fix in TODO.md cross-reference
+  silence-fill pending → see SP-101`.### Drift to fix in TODO.md cross-reference
 
 After running SP-096-1..14, also update the "Things to consider after
 SP-091 → SP-095 ship" section at the bottom of TODO.md to remove

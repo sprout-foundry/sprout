@@ -105,6 +105,7 @@ func DefaultLoader() *Loader {
 		if err := l.Reload(); err != nil {
 			panic(fmt.Sprintf("default denylist load failed (build error): %v", err))
 		}
+		defaultLoader = l
 	})
 	return defaultLoader
 }
@@ -293,9 +294,12 @@ func mergeLists(defaults, overrides []DenylistEntry) []DenylistEntry {
 		replaced := false
 		for i := range out {
 			if entriesMatch(out[i], ov) {
-				// Allow:true override removes the matching default entry.
+				// Allow:true override removes the matching default entry
+				// from the effective list (and the override itself is not
+				// kept — the absence of the default is the signal).
 				if ov.Allow {
 					out = append(out[:i], out[i+1:]...)
+					replaced = true
 					break
 				}
 				ovCopy := ov

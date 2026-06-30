@@ -668,8 +668,14 @@ priority order.
   Pure refactor, no logic change, no test skips. Build green, full
   `pkg/agent_tools/...` test suite passes._
 
-- [ ] **SP-098-5:** `pkg/console/status_footer.go` (1132 → <800). Split
+- [x] **SP-098-5:** `pkg/console/status_footer.go` (1132 → <800). Split
   per-section rendering.
+
+  _Shipped: 1132 → 710 lines. Extracted `status_footer_badges.go` (133,
+  badge styling), `status_footer_format.go` (152, formatting helpers),
+  `status_footer_scroll.go` (83, scroll region), `status_footer_steer.go`
+  (98, steer row rendering). Pure refactor, no logic change, no test
+  skips. Build green, 529 console tests pass._
 
 - [ ] **SP-098-6:** `cmd/automate.go` (1070 → <800). Move
   status/stop/list to sibling files.

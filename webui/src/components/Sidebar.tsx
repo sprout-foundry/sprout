@@ -682,7 +682,7 @@ function Sidebar({
                 {sessionSearchError}
               </div>
             ) : sessionSearchResults.length === 0 && sessionSearchQuery.trim().length > 0 ? (
-              <div className="sidebar-session-search-no-results" data-testid="sidebar-session-search-no-results">
+              <div className="sidebar-session-search-no-results" data-testid="chat-sessions-empty">
                 No matching sessions
               </div>
             ) : (
@@ -692,7 +692,7 @@ function Sidebar({
                   type="button"
                   className="sidebar-session-search-result"
                   onClick={() => handleSessionSearchResultClick(result.session_id)}
-                  data-testid="sidebar-session-search-result"
+                  data-testid="chat-item"
                   data-session-id={result.session_id}
                 >
                   <div className="sidebar-session-search-result-header">

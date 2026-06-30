@@ -2,6 +2,7 @@ import { X } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { clientFetch } from '../services/clientSession';
 import { debugLog } from '../utils/log';
+import { subscribeAutomate } from '../services/automateEvents';
 import './AutomationsSessionDetail.css';
 
 /* ── Type Interfaces ───────────────────────────────────────── */
@@ -45,8 +46,8 @@ function AutomationsSessionDetail({ sessionId, onClose }: AutomationsSessionDeta
 
   const outputContainerRef = useRef<HTMLPreElement>(null);
   const isAutoScrolling = useRef<boolean>(true);
-  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const outputOffsetRef = useRef<number>(0);
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /* ── Format Duration ─────────────────────────────────── */
 
@@ -140,27 +141,34 @@ function AutomationsSessionDetail({ sessionId, onClose }: AutomationsSessionDeta
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
+  // Event-driven refetch (replaces setInterval polling).
+  // - automate.output_chunk: debounced 250ms re-fetch of session output.
+  // - automate.session_started / session_ended: re-fetch session metadata.
+  // Both filter by session_id so a panel for "s1" doesn't react to events
+  // about "s2". The combined cleanup unsubscribes AND clears any pending
+  // debounce timer so we never setState after unmount.
   useEffect(() => {
-    if (session?.status !== 'running') {
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
-        pollIntervalRef.current = null;
+    const unsub = subscribeAutomate((eventType, payload) => {
+      if (payload.session_id !== sessionId) return;
+
+      if (eventType === 'automate.output_chunk') {
+        if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = setTimeout(() => {
+          debounceTimerRef.current = null;
+          fetchOutput();
+        }, 250);
+      } else if (eventType === 'automate.session_started' || eventType === 'automate.session_ended') {
+        fetchSession();
       }
-      return;
-    }
-
-    pollIntervalRef.current = setInterval(() => {
-      fetchSession();
-      fetchOutput();
-    }, 2000);
-
+    });
     return () => {
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
-        pollIntervalRef.current = null;
+      unsub();
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
       }
     };
-  }, [session?.status, fetchSession, fetchOutput]);
+  }, [sessionId, fetchOutput, fetchSession]);
 
   /* ── After output changes, scroll if auto-scrolling ──── */
 

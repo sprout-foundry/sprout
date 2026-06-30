@@ -686,7 +686,12 @@ priority order.
   test skips. Build green, 20/20 automate tests pass. `sprout automate
   --help` shows all 5 subcommands._
 
-- [ ] **SP-098-7:** `pkg/ast/symbols.go` (1040 → <800). Per-language.
+- [x] **SP-098-7:** `pkg/ast/symbols.go` (1040 → <800). Per-language.
+
+  _Shipped: 1040 → 181 lines. Extracted `symbols_go.go` (267),
+  `symbols_python.go` (245), `symbols_typescript.go` (364). Pure
+  refactor, no logic change, no test skips. Build green, 100/100 ast
+  tests pass._
 
 ### Acceptance
 

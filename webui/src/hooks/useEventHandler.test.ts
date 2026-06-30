@@ -76,10 +76,15 @@ vi.mock('../utils/agentMessages', () => ({
   }),
 }));
 
+vi.mock('../services/automateEvents', () => ({
+  emitAutomate: vi.fn(),
+}));
+
 // Static import — Vitest hoists vi.mock above all imports automatically
 import type { AppState } from '../types/app';
 import { useEventHandler } from './useEventHandler';
 import type { UseEventHandlerOptions, UseEventHandlerReturn } from './useEventHandler';
+import { emitAutomate } from '../services/automateEvents';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -2407,6 +2412,111 @@ describe('file_content_changed', () => {
     document.removeEventListener('file_externally_modified', handler);
 
     expect(dispatchedEvent.captured).toBe(true);
+    expect(stateHolder.current.logs).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: automate.* events
+// ---------------------------------------------------------------------------
+
+describe('automate.* events', () => {
+  it('dispatches automate.session_started to emitAutomate', () => {
+    const { setStateMock, stateHolder } = setupHandler();
+
+    act(() => {
+      root.render(createElement(HookWrapper, { options: setupHandlerInner(setStateMock) }));
+    });
+
+    const { handleEvent } = getHandleEvent();
+
+    act(() => {
+      handleEvent({
+        type: 'automate.session_started',
+        data: { session_id: 'abc123', workflow: 'my-test', kind: 'workflow' },
+      });
+    });
+
+    expect(vi.mocked(emitAutomate)).toHaveBeenCalledWith('automate.session_started', {
+      session_id: 'abc123',
+      workflow: 'my-test',
+      kind: 'workflow',
+    });
+    // Also adds a log entry
+    expect(stateHolder.current.logs).toHaveLength(1);
+    expect(stateHolder.current.logs[0].type).toBe('automate.session_started');
+  });
+
+  it('dispatches automate.session_ended to emitAutomate', () => {
+    const { setStateMock, stateHolder } = setupHandler();
+
+    act(() => {
+      root.render(createElement(HookWrapper, { options: setupHandlerInner(setStateMock) }));
+    });
+
+    const { handleEvent } = getHandleEvent();
+
+    act(() => {
+      handleEvent({
+        type: 'automate.session_ended',
+        data: { session_id: 'abc123', status: 'exited', total_cost: 1.5 },
+      });
+    });
+
+    expect(vi.mocked(emitAutomate)).toHaveBeenCalledWith('automate.session_ended', {
+      session_id: 'abc123',
+      status: 'exited',
+      total_cost: 1.5,
+    });
+    expect(stateHolder.current.logs).toHaveLength(1);
+  });
+
+  it('dispatches automate.output_chunk to emitAutomate', () => {
+    const { setStateMock, stateHolder } = setupHandler();
+
+    act(() => {
+      root.render(createElement(HookWrapper, { options: setupHandlerInner(setStateMock) }));
+    });
+
+    const { handleEvent } = getHandleEvent();
+
+    act(() => {
+      handleEvent({
+        type: 'automate.output_chunk',
+        data: { session_id: 'abc123', offset: 100, chunk_len: 50 },
+      });
+    });
+
+    expect(vi.mocked(emitAutomate)).toHaveBeenCalledWith('automate.output_chunk', {
+      session_id: 'abc123',
+      offset: 100,
+      chunk_len: 50,
+    });
+    expect(stateHolder.current.logs).toHaveLength(1);
+  });
+
+  it('dispatches automate.budget_update to emitAutomate', () => {
+    const { setStateMock, stateHolder } = setupHandler();
+
+    act(() => {
+      root.render(createElement(HookWrapper, { options: setupHandlerInner(setStateMock) }));
+    });
+
+    const { handleEvent } = getHandleEvent();
+
+    act(() => {
+      handleEvent({
+        type: 'automate.budget_update',
+        data: { session_id: 'abc123', spent_usd: 2.5, budget_usd: 10, fraction: 0.25 },
+      });
+    });
+
+    expect(vi.mocked(emitAutomate)).toHaveBeenCalledWith('automate.budget_update', {
+      session_id: 'abc123',
+      spent_usd: 2.5,
+      budget_usd: 10,
+      fraction: 0.25,
+    });
     expect(stateHolder.current.logs).toHaveLength(1);
   });
 });

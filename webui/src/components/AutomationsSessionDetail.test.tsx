@@ -12,6 +12,20 @@ vi.mock('../utils/log', () => ({
   debugLog: vi.fn(),
 }));
 
+vi.mock('../services/automateEvents', () => {
+  const handlers: Array<(eventType: string, payload: unknown) => void> = [];
+  return {
+    subscribeAutomate: vi.fn((handler: (eventType: string, payload: unknown) => void) => {
+      handlers.push(handler);
+      return () => {
+        const idx = handlers.indexOf(handler);
+        if (idx >= 0) handlers.splice(idx, 1);
+      };
+    }),
+    __getHandlers: () => handlers,
+  };
+});
+
 vi.mock('./AutomationsSessionDetail.css', () => ({}));
 
 // Import AFTER mocking
@@ -265,58 +279,77 @@ describe('AutomationsSessionDetail', () => {
     });
   });
 
-  it('polls while running — calls session+output endpoints every 2s', async () => {
+  it('refetches output when output_chunk event arrives for matching session', async () => {
     vi.useFakeTimers();
 
-    // Initial: session + output
-    // Poll 1: session + output
-    // Poll 2: session + output
+    // Initial: session + output("part1")
     mockFetchSequence(
       sessionResp('s1', 'running'),
-      outputResp('', 0, 0),
-      sessionResp('s1', 'running'),
-      outputResp('', 0, 0),
-      sessionResp('s1', 'running'),
-      outputResp('', 0, 0),
+      outputResp('part1', 5, 5),
+      outputResp('part2', 10, 10),
     );
 
     render(<AutomationsSessionDetail sessionId="s1" onClose={() => {}} />);
 
-    // Wait for initial renders to settle
+    // Wait for initial output
     await waitFor(() => {
-      expect(screen.getByText('Running')).toBeInTheDocument();
+      expect(screen.getByText('part1')).toBeInTheDocument();
     });
 
-    const initialCalls = vi.mocked(clientFetch).mock.calls.length;
+    // Simulate the output_chunk event for this session
+    const { __getHandlers } = await import('../services/automateEvents');
+    const handlers = __getHandlers();
+    if (handlers.length > 0) {
+      handlers[0]('automate.output_chunk', { session_id: 's1', offset: 5, chunk_len: 5 });
+    }
 
-    // Advance past one polling interval
-    vi.advanceTimersByTime(2500);
+    // Advance timers past the 250ms debounce
+    vi.advanceTimersByTime(300);
     await Promise.resolve();
 
-    // Should have made 2 more calls (session + output)
-    expect(vi.mocked(clientFetch).mock.calls.length).toBe(initialCalls + 2);
-
-    // Advance past another polling interval
-    vi.advanceTimersByTime(2500);
-    await Promise.resolve();
-
-    // Should have 2 more calls
-    expect(vi.mocked(clientFetch).mock.calls.length).toBe(initialCalls + 4);
+    // After the event, part2 should be appended
+    await waitFor(() => {
+      expect(screen.getByText('part1part2')).toBeInTheDocument();
+    });
   });
 
-  it('stops polling when session status changes to exited', async () => {
+  it('ignores output_chunk event for non-matching session_id', async () => {
     vi.useFakeTimers();
 
-    // Initial: session(running) + output
-    // Poll 1: session(exited) + output
-    // Extra responses to absorb any additional interval fires before cleanup
+    mockFetchSequence(
+      sessionResp('s1', 'running'),
+      outputResp('part1', 5, 5),
+    );
+
+    render(<AutomationsSessionDetail sessionId="s1" onClose={() => {}} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('part1')).toBeInTheDocument();
+    });
+
+    const callsBefore = vi.mocked(clientFetch).mock.calls.length;
+
+    // Simulate output_chunk for a DIFFERENT session
+    const { __getHandlers } = await import('../services/automateEvents');
+    const handlers = __getHandlers();
+    if (handlers.length > 0) {
+      handlers[0]('automate.output_chunk', { session_id: 'other-session', offset: 5, chunk_len: 5 });
+    }
+
+    vi.advanceTimersByTime(500);
+    await Promise.resolve();
+
+    // No extra fetch calls — the event was filtered out
+    expect(vi.mocked(clientFetch).mock.calls.length).toBe(callsBefore);
+  });
+
+  it('refetches session metadata when session_ended event arrives', async () => {
+    vi.useFakeTimers();
+
     mockFetchSequence(
       sessionResp('s1', 'running'),
       outputResp('', 0, 0),
       sessionResp('s1', 'exited'),
-      outputResp('', 0, 0),
-      sessionResp('s1', 'exited'),
-      outputResp('', 0, 0),
     );
 
     render(<AutomationsSessionDetail sessionId="s1" onClose={() => {}} />);
@@ -325,29 +358,19 @@ describe('AutomationsSessionDetail', () => {
       expect(screen.getByText('Running')).toBeInTheDocument();
     });
 
-    // Advance past one polling interval — session changes to exited
-    vi.advanceTimersByTime(2500);
-    await vi.runOnlyPendingTimersAsync();
+    // Simulate session_ended event
+    const { __getHandlers } = await import('../services/automateEvents');
+    const handlers = __getHandlers();
+    if (handlers.length > 0) {
+      handlers[0]('automate.session_ended', { session_id: 's1', status: 'exited' });
+    }
 
-    // Verify the status updated in the UI
-    expect(screen.getByText('Exited')).toBeInTheDocument();
-
-    // Advance further — no more polling since status is exited
-    vi.advanceTimersByTime(5000);
-    await vi.runOnlyPendingTimersAsync();
-
-    // The call count should be stable — no new calls after cleanup.
-    // We use >= 4 (initial 2 + at least 1 poll) and check no new calls were made
-    // in the final 5s window by verifying the last response index didn't increase.
-    const callsAfterFirstPoll = vi.mocked(clientFetch).mock.calls.length;
-    vi.advanceTimersByTime(5000);
-    await vi.runOnlyPendingTimersAsync();
-    expect(vi.mocked(clientFetch).mock.calls.length).toBe(callsAfterFirstPoll);
+    await waitFor(() => {
+      expect(screen.getByText('Exited')).toBeInTheDocument();
+    });
   });
 
   it('output auto-scrolls on new output', async () => {
-    vi.useFakeTimers();
-
     mockFetchSequence(sessionResp('s1', 'running'), outputResp('initial output', 14, 14));
 
     render(<AutomationsSessionDetail sessionId="s1" onClose={() => {}} />);
@@ -361,15 +384,14 @@ describe('AutomationsSessionDetail', () => {
     expect(preEl).toBeInTheDocument();
   });
 
-  it('appends output on subsequent polling fetches', async () => {
+  it('appends output on subsequent event-driven fetches', async () => {
     vi.useFakeTimers();
 
     // Initial: session(running) + output("part1")
-    // Poll 1: session(running) + output("part2")
+    // Event triggers output fetch("part2")
     mockFetchSequence(
       sessionResp('s1', 'running'),
       outputResp('part1', 5, 5),
-      sessionResp('s1', 'running'),
       outputResp('part2', 10, 10),
     );
 
@@ -380,13 +402,57 @@ describe('AutomationsSessionDetail', () => {
       expect(screen.getByText('part1')).toBeInTheDocument();
     });
 
-    // Advance past one polling interval
-    vi.advanceTimersByTime(2500);
+    // Simulate output_chunk event to trigger refetch
+    const { __getHandlers } = await import('../services/automateEvents');
+    const handlers = __getHandlers();
+    if (handlers.length > 0) {
+      handlers[0]('automate.output_chunk', { session_id: 's1', offset: 5, chunk_len: 5 });
+    }
+
+    // Advance past the debounce timer
+    vi.advanceTimersByTime(300);
     await Promise.resolve();
 
-    // After polling, both parts should be visible (appended)
+    // After the event-driven fetch, both parts should be visible (appended)
     await waitFor(() => {
       expect(screen.getByText('part1part2')).toBeInTheDocument();
     });
+  });
+
+  it('does not fetch output after unmount when debounce is pending', async () => {
+    vi.useFakeTimers();
+
+    mockFetchSequence(
+      sessionResp('s1', 'running'),
+      outputResp('part1', 5, 5),
+    );
+
+    const { unmount } = render(<AutomationsSessionDetail sessionId="s1" onClose={() => {}} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('part1')).toBeInTheDocument();
+    });
+
+    const callsBefore = vi.mocked(clientFetch).mock.calls.length;
+
+    // Trigger an output_chunk event to start the debounce timer
+    const { __getHandlers } = await import('../services/automateEvents');
+    const handlers = __getHandlers();
+    if (handlers.length > 0) {
+      handlers[0]('automate.output_chunk', { session_id: 's1', offset: 5, chunk_len: 5 });
+    }
+
+    // Unmount before the 250ms debounce fires — the cleanup must cancel
+    // the pending setTimeout so fetchOutput doesn't fire on a dead component.
+    unmount();
+
+    // Advance past the debounce window
+    vi.advanceTimersByTime(500);
+    // Drain pending microtasks
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // No additional fetch calls after unmount
+    expect(vi.mocked(clientFetch).mock.calls.length).toBe(callsBefore);
   });
 });

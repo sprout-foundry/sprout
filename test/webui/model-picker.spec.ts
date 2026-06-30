@@ -3,11 +3,11 @@
 // Tests that the model picker is reachable and that the option list
 // contains at least one selectable model option.
 //
-// NOTE: Both tests are fixme'd because the model-picker only renders
+// NOTE: Both tests are skipped because the model-picker only renders
 // when at least one provider is configured. The test fixtures do not
 // pre-configure any provider, so the picker is invisible in the
-// current environment. Re-enable once SP-087-2 adds a pre-configured
-// fixture or wires the trigger reliably.
+// current environment. Re-enable once a pre-configured fixture is
+// added or the mock-llm provides model metadata.
 
 import { test, expect, chromium, type Browser, type Page } from '@playwright/test';
 import { startSprout, type SproutHandle } from './fixtures/sprout';
@@ -40,8 +40,8 @@ test.describe.configure({ mode: 'serial' });
 test.setTimeout(60_000);
 
 test.describe('Model Picker', () => {
-  test.fixme(
-    'model-picker is reachable via status bar button — requires configured providers (SP-087-2 followup)',
+  test.skip(
+    'model-picker is reachable via status bar button — requires pre-configured provider',
     async () => {
       // ORIGINAL TEST BODY (unchanged):
       // "model-picker is reachable via status bar button"
@@ -81,8 +81,8 @@ test.describe('Model Picker', () => {
     },
   );
 
-  test.fixme(
-    'model-picker-option list has at least one option — requires configured providers (SP-087-2 followup)',
+  test.skip(
+    'model-picker-option list has at least one option — requires pre-configured provider',
     async () => {
       // ORIGINAL TEST BODY (unchanged):
       // "model-picker-option list has at least one option when picker is opened"

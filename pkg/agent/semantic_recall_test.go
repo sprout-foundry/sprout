@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"math"
 	"strings"
 	"testing"
@@ -141,5 +142,177 @@ func TestFormatSemanticRecall_RespectsCharBudget(t *testing.T) {
 	// Total should be bounded near the budget plus the section header.
 	if len(got) > semanticRecallMaxInjectedChars+500 {
 		t.Fatalf("output exceeds budget by too much: got %d, budget %d", len(got), semanticRecallMaxInjectedChars)
+	}
+}
+
+// TestRecall_NilAgent confirms the nil-receiver guard. We need this so
+// CLI callers can short-circuit before constructing an Agent.
+func TestRecall_NilAgent(t *testing.T) {
+	var a *Agent
+	items, err := a.Recall(context.Background(), "anything", 5)
+	if err != nil {
+		t.Fatalf("nil-agent Recall must not error, got: %v", err)
+	}
+	if items != nil {
+		t.Fatalf("nil-agent Recall must return nil items, got: %v", items)
+	}
+}
+
+// TestRecall_NoEmbeddingManager confirms that an Agent without an
+// embedding manager returns (nil, nil) gracefully, without touching
+// the store. The CLI path (--limit N for an offline Agent) hits this.
+func TestRecall_NoEmbeddingManager(t *testing.T) {
+	a := &Agent{}
+	items, err := a.Recall(context.Background(), "anything", 5)
+	if err != nil {
+		t.Fatalf("no-manager Recall must not error, got: %v", err)
+	}
+	if items != nil {
+		t.Fatalf("no-manager Recall must return nil items, got: %v", items)
+	}
+}
+
+// TestRecall_NonPositiveLimit confirms the limit<=0 short-circuit
+// fires for every non-positive value the CLI might pass via --limit.
+func TestRecall_NonPositiveLimit(t *testing.T) {
+	cases := []struct {
+		name  string
+		limit int
+	}{
+		{"negative", -1},
+		{"zero", 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			a := &Agent{}
+			items, err := a.Recall(context.Background(), "anything", tc.limit)
+			if err != nil {
+				t.Fatalf("Recall(limit=%d) must not error, got: %v", tc.limit, err)
+			}
+			if items != nil {
+				t.Fatalf("Recall(limit=%d) must return nil items, got: %v", tc.limit, items)
+			}
+		})
+	}
+}
+
+// TestRecall_LimitTruncatesAndFiltersBySession exercises the full Recall
+// path with a mock embedding manager. It verifies that:
+//   - limit truncates the returned slice to the requested size
+//   - cross-session records are excluded (SP-066 in-session scope)
+func TestRecall_LimitTruncatesAndFiltersBySession(t *testing.T) {
+	ctx := context.Background()
+
+	// Build an EmbeddingManager with a mock provider.
+	mgr := newTestEmbeddingMgr(t)
+	defer mgr.Close()
+
+	// Populate the conversation store with test records:
+	// 4 records from "this-session" + 1 from "other-session".
+	store, err := mgr.GetConversationStore(ctx)
+	if err != nil {
+		t.Fatalf("failed to get conversation store: %v", err)
+	}
+
+	now := time.Now().UTC()
+	provider := store.Provider()
+
+	// Create embeddings for each record text.
+	embed1, _ := provider.Embed(ctx, "first recalled summary about testing")
+	embed2, _ := provider.Embed(ctx, "second recalled summary about auth")
+	embed3, _ := provider.Embed(ctx, "third recalled summary about config")
+	embed4, _ := provider.Embed(ctx, "fourth recalled summary about deploy")
+	embedOther, _ := provider.Embed(ctx, "cross session summary about something")
+
+	records := []embedding.VectorRecord{
+		{
+			ID:        "rollup:cp-1",
+			Signature: "first recalled summary about testing",
+			Embedding: embed1,
+			IndexedAt: now.Add(-1 * 24 * time.Hour),
+			Metadata: map[string]interface{}{
+				"sessionId":     "this-session",
+				"checkpoint_id": "cp-1",
+				"level":         float64(0),
+			},
+		},
+		{
+			ID:        "rollup:cp-2",
+			Signature: "second recalled summary about auth",
+			Embedding: embed2,
+			IndexedAt: now.Add(-2 * 24 * time.Hour),
+			Metadata: map[string]interface{}{
+				"sessionId":     "this-session",
+				"checkpoint_id": "cp-2",
+				"level":         float64(0),
+			},
+		},
+		{
+			ID:        "rollup:cp-3",
+			Signature: "third recalled summary about config",
+			Embedding: embed3,
+			IndexedAt: now.Add(-3 * 24 * time.Hour),
+			Metadata: map[string]interface{}{
+				"sessionId":     "this-session",
+				"checkpoint_id": "cp-3",
+				"level":         float64(0),
+			},
+		},
+		{
+			ID:        "rollup:cp-4",
+			Signature: "fourth recalled summary about deploy",
+			Embedding: embed4,
+			IndexedAt: now.Add(-4 * 24 * time.Hour),
+			Metadata: map[string]interface{}{
+				"sessionId":     "this-session",
+				"checkpoint_id": "cp-4",
+				"level":         float64(0),
+			},
+		},
+		{
+			ID:        "rollup:cp-other",
+			Signature: "cross session summary about something",
+			Embedding: embedOther,
+			IndexedAt: now.Add(-1 * 24 * time.Hour),
+			Metadata: map[string]interface{}{
+				"sessionId":     "other-session",
+				"checkpoint_id": "cp-other",
+				"level":         float64(0),
+			},
+		},
+	}
+
+	if err := store.Store(records); err != nil {
+		t.Fatalf("failed to store test records: %v", err)
+	}
+
+	// Wire the manager into an Agent and set the session ID.
+	a := &Agent{}
+	a.embeddingMgr = mgr
+	a.SetSessionID("this-session")
+
+	// Query with limit=2; expect at most 2 items, all from "this-session".
+	items, err := a.Recall(ctx, "testing auth config", 2)
+	if err != nil {
+		t.Fatalf("Recall returned error: %v", err)
+	}
+
+	// Verify limit truncation.
+	if len(items) > 2 {
+		t.Fatalf("Recall returned %d items, want at most 2", len(items))
+	}
+	if len(items) == 0 {
+		t.Fatal("Recall returned no items, expected at least 1")
+	}
+
+	// Verify no cross-session leakage.
+	for _, item := range items {
+		// The items themselves don't carry sessionId directly, but
+		// retrieveSemanticRecall filters by session before returning.
+		// We verify indirectly: the cross-session record's checkpoint_id
+		// is "cp-other" — if it leaked through, we'd see it.
+		if item.CheckpointID == "cp-other" {
+			t.Errorf("cross-session record leaked through: checkpoint_id=%q", item.CheckpointID)
+		}
 	}
 }

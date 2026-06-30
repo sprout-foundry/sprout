@@ -22,12 +22,12 @@ should be added as SP-092+ rather than expanding this list.
 
 ### Phase 1 — Embedding consolidation (1 day, ~5% binary shrink)
 
-- [ ] **SP-091-1: SP-058 selective grammar embed.** Strip the 100 grammar blobs
+- [x] **SP-091-1: SP-058 selective grammar embed.** Strip the 100 grammar blobs
   we don't use from `pkg/ast.SupportedLanguages` (currently 5 of 100 active).
   Goal: ~13 MB off the WASM bundle, ~20 MB off the daemon. Spec already
   written (`roadmap/SP-058-selective-grammar-embed.md`); no spec work needed.
 
-- [ ] **SP-091-2: SP-061 retire the static embedding provider.** Two parallel
+- [x] **SP-091-2: SP-061 retire the static embedding provider.** Two parallel
   providers exist (static / ONNX). ONNX is the higher-quality path; static
   only exists for WASM-without-CGO. Once SP-058 lands (fewer grammars shipped)
   and the ONNX WASM bridge is verified, remove the static provider entirely.
@@ -36,14 +36,14 @@ should be added as SP-092+ rather than expanding this list.
 
 ### Phase 2 — Terminal + CLI regression bugs (~1 day)
 
-- [ ] **SP-091-3: SP-011 critical terminal bugs.** Audit
+- [x] **SP-091-3: SP-011 critical terminal bugs.** Audit
   `pkg/console/terminal*.go` and `webui/src/components/Terminal*.tsx` for the
   three issues called out in the spec (exit doesn't close pane, scroll-back
   lost on tab switch, paste of large content silently truncates). Pick the
   one that most affects the REPL day-to-day and fix. Spec:
   `roadmap/SP-011-terminal-parity.md`.
 
-- [ ] **SP-091-4: SP-048 silence-fill between submit and first token.** When
+- [x] **SP-091-4: SP-048 silence-fill between submit and first token.** When
   the model takes >2s to respond, the CLI is silent. Spec proposes a single
   status line ("thinking…" with elapsed timer) that the agent emits on its
   own turn-start and erases on first stream chunk. ~50 lines in
@@ -52,7 +52,7 @@ should be added as SP-092+ rather than expanding this list.
 
 ### Phase 3 — Reliability + observability (~1 day)
 
-- [ ] **SP-091-5: SP-008 typed error hierarchy.** The codebase has ~366
+- [x] **SP-091-5: SP-008 typed error hierarchy.** The codebase has ~366
   `fmt.Errorf` sites in `pkg/agent/` with no classification. Define a small
   typed error tree in `pkg/agent/errors.go` (RetryableError, RateLimitError,
   ContextCancelledError, InvalidToolInputError, ProviderError) and migrate
@@ -60,7 +60,7 @@ should be added as SP-092+ rather than expanding this list.
   metric labels, and better error messages. Spec:
   `roadmap/SP-008-reliability-engineering.md` §"Observability" Phase 2.
 
-- [ ] **SP-091-6: SP-008 structured-log context propagation.** `pkg/logging`
+- [x] **SP-091-6: SP-008 structured-log context propagation.** `pkg/logging`
   has a `slog` wrapper; only ~3 packages use it. Add `.With(sessionID,
   iteration, provider, model)` propagation through `Agent.ProcessQuery` so
   every log line in a turn is automatically correlated. Spec:
@@ -95,7 +95,7 @@ should be added as SP-092+ rather than expanding this list.
 
 ### Phase 6 — Spec retirement
 
-- [ ] **SP-091-11:** Delete `roadmap/SP-006-delegate-tool.md` and
+- [x] **SP-091-11:** Delete `roadmap/SP-006-delegate-tool.md` and
   `roadmap/SP-066-structured-file-key-order.md` — both are superseded (the
   spec files themselves note this; only the README carried stale entries).
   Their content is preserved in git history.

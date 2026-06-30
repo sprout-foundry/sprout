@@ -151,6 +151,7 @@ type ModelInfo struct {
 	Cost          float64  `json:"cost,omitempty"`
 	InputCost     float64  `json:"input_cost,omitempty"`
 	OutputCost    float64  `json:"output_cost,omitempty"`
+	CachedInputCost float64 `json:"cached_input_cost,omitempty"`
 	ContextLength int      `json:"context_length,omitempty"`
 	Tags          []string `json:"tags,omitempty"`
 	// EligibleRoles lists the agentic roles a model meets the minimum
@@ -363,6 +364,7 @@ func CanonicalToModelInfo(m modelcontract.CanonicalModel) ModelInfo {
 	if m.Pricing != nil {
 		mi.InputCost = m.Pricing.InputPerMTok
 		mi.OutputCost = m.Pricing.OutputPerMTok
+		mi.CachedInputCost = m.Pricing.CachedPerMTok
 		if mi.InputCost > 0 || mi.OutputCost > 0 {
 			mi.Cost = (mi.InputCost + mi.OutputCost) / 2.0
 		}
@@ -389,6 +391,7 @@ func modelInfoToCanonical(m ModelInfo) modelcontract.CanonicalModel {
 		cm.Pricing = &modelcontract.Pricing{
 			InputPerMTok:  m.InputCost,
 			OutputPerMTok: m.OutputCost,
+			CachedPerMTok: m.CachedInputCost,
 			Currency:      "USD",
 		}
 	}
@@ -432,6 +435,7 @@ func convertRegistryModels(raw []modelregistry.RawModel) []ModelInfo {
 			Cost:             m.Cost,
 			InputCost:        m.InputCost,
 			OutputCost:       m.OutputCost,
+			CachedInputCost:  m.CachedInputCost,
 			ContextLength:    m.ContextLength,
 			Tags:             append([]string(nil), m.Tags...),
 			EligibleRoles:    append([]string(nil), m.EligibleRoles...),
@@ -632,8 +636,9 @@ func (w *openRouterListModelsWrapper) ListModels(ctx context.Context) ([]ModelIn
 			Name        string `json:"name"`
 			Description string `json:"description"`
 			Pricing     struct {
-				Prompt     string `json:"prompt"`
-				Completion string `json:"completion"`
+				Prompt         string `json:"prompt"`
+				Completion     string `json:"completion"`
+				InputCacheRead string `json:"input_cache_read"`
 			} `json:"pricing"`
 			ContextLength int `json:"context_length"`
 		} `json:"data"`
@@ -663,6 +668,11 @@ func (w *openRouterListModelsWrapper) ListModels(ctx context.Context) ([]ModelIn
 		if model.Pricing.Completion != "" {
 			if completionCost, err := parseFloat(model.Pricing.Completion); err == nil {
 				modelInfo.OutputCost = completionCost * 1000000 // Convert to per million tokens
+			}
+		}
+		if model.Pricing.InputCacheRead != "" {
+			if cacheCost, err := parseFloat(model.Pricing.InputCacheRead); err == nil {
+				modelInfo.CachedInputCost = cacheCost * 1000000
 			}
 		}
 
@@ -750,6 +760,7 @@ func (w *deepInfraListModelsWrapper) ListModels(ctx context.Context) ([]ModelInf
 		if in, out := ModelPricingPerMillion(e); in > 0 || out > 0 {
 			m.InputCost, m.OutputCost = in, out
 			m.Cost = (in + out) / 2.0
+			m.CachedInputCost = ModelCachedPricingPerMillion(e)
 		}
 		models = append(models, m)
 	}
@@ -899,11 +910,14 @@ type genericConfigListModelsWrapper struct {
 
 // configModelInfo mirrors providers.ModelInfo for our local use
 type configModelInfo struct {
-	ID            string   `json:"id"`
-	Name          string   `json:"name,omitempty"`
-	Description   string   `json:"description,omitempty"`
-	ContextLength int      `json:"context_length"`
-	Tags          []string `json:"tags,omitempty"`
+	ID              string   `json:"id"`
+	Name            string   `json:"name,omitempty"`
+	Description     string   `json:"description,omitempty"`
+	InputCost       float64  `json:"input_cost,omitempty"`
+	OutputCost      float64  `json:"output_cost,omitempty"`
+	CachedInputCost float64  `json:"cached_input_cost,omitempty"`
+	ContextLength   int      `json:"context_length"`
+	Tags            []string `json:"tags,omitempty"`
 }
 
 // configModels mirrors providers.ModelConfig for our local use
@@ -960,12 +974,18 @@ func (w *genericConfigListModelsWrapper) loadBuiltInProviderModels() ([]ModelInf
 	models := make([]ModelInfo, len(providerConfig.Models.ModelInfo))
 	for i, mi := range providerConfig.Models.ModelInfo {
 		models[i] = ModelInfo{
-			ID:            mi.ID,
-			Name:          mi.Name,
-			Description:   mi.Description,
-			Provider:      w.providerName,
-			ContextLength: mi.ContextLength,
-			Tags:          mi.Tags,
+			ID:              mi.ID,
+			Name:            mi.Name,
+			Description:     mi.Description,
+			Provider:        w.providerName,
+			InputCost:       mi.InputCost,
+			OutputCost:      mi.OutputCost,
+			CachedInputCost: mi.CachedInputCost,
+			ContextLength:   mi.ContextLength,
+			Tags:            mi.Tags,
+		}
+		if mi.InputCost > 0 || mi.OutputCost > 0 {
+			models[i].Cost = (mi.InputCost + mi.OutputCost) / 2.0
 		}
 	}
 	return models, nil

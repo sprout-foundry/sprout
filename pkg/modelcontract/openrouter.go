@@ -57,8 +57,9 @@ type openRouterModel struct {
 		OutputModalities []string `json:"output_modalities"`
 	} `json:"architecture"`
 	Pricing struct {
-		Prompt     string `json:"prompt"`
-		Completion string `json:"completion"`
+		Prompt         string `json:"prompt"`
+		Completion     string `json:"completion"`
+		InputCacheRead string `json:"input_cache_read"`
 	} `json:"pricing"`
 	TopProvider struct {
 		ContextLength       int `json:"context_length"`
@@ -108,7 +109,14 @@ func parseOpenRouter(body []byte) ([]CanonicalModel, error) {
 		in, inOK := parsePerTokenUSD(e.Pricing.Prompt)
 		out2, outOK := parsePerTokenUSD(e.Pricing.Completion)
 		if inOK || outOK {
-			m.Pricing = &Pricing{InputPerMTok: in, OutputPerMTok: out2, Currency: "USD"}
+			p := &Pricing{InputPerMTok: in, OutputPerMTok: out2, Currency: "USD"}
+			// OpenRouter exposes a distinct cached-input rate for models
+			// whose underlying provider supports prompt caching (Anthropic,
+			// DeepSeek, Google, …). "0" means free, which is a valid price.
+			if cached, ok := parsePerTokenUSD(e.Pricing.InputCacheRead); ok {
+				p.CachedPerMTok = cached
+			}
+			m.Pricing = p
 		}
 		out = append(out, m)
 	}

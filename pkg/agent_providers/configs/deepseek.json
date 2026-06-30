@@ -38,6 +38,9 @@
         "context_length": 1000000,
         "description": "DeepSeek-V4 Flash - Cost-effective model with 1M context, optimized for speed",
         "id": "deepseek-v4-flash",
+        "input_cost": 0.14,
+        "output_cost": 0.28,
+        "cached_input_cost": 0.0028,
         "name": "DeepSeek V4 Flash",
         "tags": [
           "coding",
@@ -48,6 +51,9 @@
         "context_length": 1000000,
         "description": "DeepSeek-V4 Pro - 1.6T parameter MoE model with 49B activated parameters",
         "id": "deepseek-v4-pro",
+        "input_cost": 0.435,
+        "output_cost": 0.87,
+        "cached_input_cost": 0.003625,
         "name": "DeepSeek V4 Pro",
         "tags": [
           "coding",
@@ -59,6 +65,9 @@
         "context_length": 1000000,
         "description": "DeepSeek-V4 Flash Max - Maximum reasoning mode of V4 Flash",
         "id": "deepseek-v4-flash-max",
+        "input_cost": 0.14,
+        "output_cost": 0.28,
+        "cached_input_cost": 0.0028,
         "name": "DeepSeek V4 Flash Max",
         "tags": [
           "coding",
@@ -70,6 +79,9 @@
         "context_length": 128000,
         "description": "DeepSeek-V3 - Previous generation model",
         "id": "deepseek-v3",
+        "input_cost": 0.27,
+        "output_cost": 1.1,
+        "cached_input_cost": 0.027,
         "name": "DeepSeek V3",
         "tags": [
           "coding"
@@ -77,8 +89,11 @@
       },
       {
         "context_length": 1000000,
-        "description": "DeepSeek Chat - General purpose chat model",
+        "description": "DeepSeek Chat - General purpose chat model (alias for V4 Flash non-thinking)",
         "id": "deepseek-chat",
+        "input_cost": 0.14,
+        "output_cost": 0.28,
+        "cached_input_cost": 0.0028,
         "name": "DeepSeek Chat",
         "tags": [
           "chat"
@@ -86,8 +101,11 @@
       },
       {
         "context_length": 1000000,
-        "description": "DeepSeek Reasoner - Reasoning optimized model",
+        "description": "DeepSeek Reasoner - Reasoning optimized model (alias for V4 Flash thinking)",
         "id": "deepseek-reasoner",
+        "input_cost": 0.55,
+        "output_cost": 2.19,
+        "cached_input_cost": 0.014,
         "name": "DeepSeek Reasoner",
         "tags": [
           "reasoning"

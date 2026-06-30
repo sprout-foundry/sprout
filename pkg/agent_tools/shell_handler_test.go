@@ -132,10 +132,10 @@ func TestShellCommandHandler_Execute_Background_NoTerminalManager(t *testing.T) 
 		"command":    "echo background-test",
 		"background": true,
 	})
-	// Background mode requires TerminalManager which is not available in test context
+	// Background mode requires TerminalManager or BackgroundProcessManager which are not available in test context
 	require.Error(t, err)
 	require.True(t, res.IsError)
-	require.Contains(t, res.Output, "terminal manager")
+	require.Contains(t, res.Output, "TerminalManager (WebUI) or BackgroundProcessManager (CLI)")
 }
 
 func TestShellCommandHandler_Execute_CheckBackground_NoTerminalManager(t *testing.T) {
@@ -149,7 +149,7 @@ func TestShellCommandHandler_Execute_CheckBackground_NoTerminalManager(t *testin
 	})
 	require.Error(t, err)
 	require.True(t, res.IsError)
-	require.Contains(t, res.Output, "terminal manager")
+	require.Contains(t, res.Output, "TerminalManager (WebUI) or BackgroundProcessManager (CLI)")
 }
 
 func TestShellCommandHandler_Execute_StopBackground_NoTerminalManager(t *testing.T) {
@@ -163,7 +163,7 @@ func TestShellCommandHandler_Execute_StopBackground_NoTerminalManager(t *testing
 	})
 	require.Error(t, err)
 	require.True(t, res.IsError)
-	require.Contains(t, res.Output, "terminal manager")
+	require.Contains(t, res.Output, "TerminalManager (WebUI) or BackgroundProcessManager (CLI)")
 }
 
 func TestShellCommandHandler_Execute_SecurityBlock(t *testing.T) {

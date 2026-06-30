@@ -307,9 +307,9 @@ func (h *shellCommandHandler) handleStopBackground(ctx context.Context, env Tool
 	bpm := BackgroundProcessManagerFromContext(ctx)
 	if bpm == nil {
 		return ToolResult{
-			Output:  "stop_background requires WebUI terminal manager or CLI background process manager",
+			Output:  "stop_background requires a TerminalManager (WebUI) or BackgroundProcessManager (CLI) attached to the agent context",
 			IsError: true,
-		}, fmt.Errorf("stop_background requires WebUI terminal manager or CLI background process manager")
+		}, fmt.Errorf("stop_background requires a TerminalManager (WebUI) or BackgroundProcessManager (CLI) attached to the agent context")
 	}
 
 	err := bpm.Stop(sessionID, 10*time.Second)

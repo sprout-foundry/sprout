@@ -121,6 +121,21 @@ func formatToolPreview(chatAgent *agent.Agent, toolName, arguments string) strin
 // with a status-coded glyph (✓ done, → active, · pending, ⏹ cancelled).
 // Truncates long lists to keep the terminal scannable.
 func formatTodoListBlock(todosRaw []interface{}) string {
+	return formatTodoListBlockLocked(todosRaw)
+}
+
+// todoBlockRowCount returns the number of terminal rows that
+// fmt.Fprintln(os.Stdout, formatTodoListBlock(todosRaw)) will consume.
+// The block string has a header row plus one row per item (each item
+// prefixed by \n). fmt.Fprintln adds a final \n. So the visible rows
+// = strings.Count(block, "\n") + 1.
+func todoBlockRowCount(todosRaw []interface{}) int {
+	block := formatTodoListBlockLocked(todosRaw)
+	return strings.Count(block, "\n") + 1
+}
+
+// formatTodoListBlockLocked is the internal implementation.
+func formatTodoListBlockLocked(todosRaw []interface{}) string {
 	type todoEntry struct {
 		content string
 		status  string

@@ -16,7 +16,7 @@ function formatFileSize(bytes: number): string {
 
 function BinaryFileViewer({ fileName, fileSize }: BinaryFileViewerProps): JSX.Element {
   return (
-    <div className="editor-pane binary-file-viewer">
+    <div className="editor-pane binary-file-viewer" data-testid="binary-viewer">
       <div className="binary-file-viewer-content">
         <File size={48} className="binary-file-viewer-icon" strokeWidth={1.5} />
         <h2 className="binary-file-viewer-title">Binary file cannot be opened in the editor</h2>

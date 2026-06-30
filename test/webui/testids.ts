@@ -64,6 +64,13 @@ const TESTIDS = {
   'sidebar-automations-tab': 'sidebar-automations-tab',
   'sidebar-logs-tab': 'sidebar-logs-tab',
 
+  // SP-092-3: Past sessions hint
+  'past-sessions-hint': 'past-sessions-hint',
+  'past-sessions-hint-input': 'past-sessions-hint-input',
+  'past-sessions-hint-loading': 'past-sessions-hint-loading',
+  'past-sessions-hint-empty': 'past-sessions-hint-empty',
+  'past-sessions-hint-card-abc123': 'past-sessions-hint-card-abc123',
+
   // Editor
   'editor': 'editor',
   'editor-pane': 'editor-pane',

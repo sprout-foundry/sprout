@@ -54,13 +54,18 @@ func (a *Agent) RefreshRuntimeConfig(ctx context.Context) error {
 		return err
 	}
 
-	// --- Step C: Refresh the tool cache ---
-	if refreshErr := a.RefreshMCPTools(); refreshErr != nil {
-		if a.debug {
-			a.Logger().Warn("Failed to refresh MCP tool cache after reconcile: %v", refreshErr)
-		}
-		// Non-fatal: the cache will be rebuilt lazily on next use.
-	}
+	// --- Step C: Mark initialized and clear tool cache ---
+	// reconcileMCPServers already started the configured servers. We mark
+	// MCP as initialized so getMCPTools() doesn't re-run the add-all loop
+	// in initializeMCP() (which would duplicate-add servers and conflict
+	// with our reconcile state). Then we clear the cache so the next
+	// getMCPTools() call refreshes the tool list from the now-running
+	// servers via GetAllTools().
+	a.mcpSub.LockInit()
+	a.mcpSub.SetInitialized(true)
+	a.mcpSub.SetInitError(nil)
+	a.mcpSub.SetToolsCache(nil)
+	a.mcpSub.UnlockInit()
 
 	return nil
 }

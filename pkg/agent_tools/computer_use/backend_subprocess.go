@@ -2,6 +2,7 @@ package computer_use
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"image"
 	"image/png"
@@ -42,6 +43,46 @@ func (b *subprocessBackend) run(name string, args ...string) error {
 	return nil
 }
 
+// runWithCtx is like run but uses exec.CommandContext so the subprocess can
+// be cancelled when the panic key fires. It also calls the package-level
+// processStartedHook / processFinishedHook so PanicableBackend can track the
+// in-flight process for kill-on-halt.
+//
+// When processStartedHook is nil (no PanicableBackend active), runWithCtx
+// falls back to b.run() so that tests stubbing commandRunner still work.
+func (b *subprocessBackend) runWithCtx(ctx context.Context, name string, args ...string) error {
+	// Read hooks under lock, then release for the duration of the subprocess.
+	hooksMu.Lock()
+	startedHook := processStartedHook
+	finishedHook := processFinishedHook
+	hooksMu.Unlock()
+
+	// Fast path: no panic-key decorator active — use the stubbable path.
+	if startedHook == nil {
+		return b.run(name, args...)
+	}
+
+	cmd := exec.CommandContext(ctx, name, args...)
+	SetProcessGroup(cmd)
+	var buf bytes.Buffer
+	cmd.Stdout = &buf
+	cmd.Stderr = &buf
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("start %s %s: %w", name, strings.Join(args, " "), err)
+	}
+
+	// Track whether the start hook actually fired (TOCTOU mitigation).
+	startedHook(cmd.Process)
+	err := cmd.Wait()
+	if finishedHook != nil {
+		finishedHook()
+	}
+	if err != nil {
+		return fmt.Errorf("%s %s: %w (%s)", name, strings.Join(args, " "), err, strings.TrimSpace(buf.String()))
+	}
+	return nil
+}
+
 // Screenshot captures the full screen to a temp PNG, reads it, and crops to
 // region in-process when one is requested.
 func (b *subprocessBackend) Screenshot(region *Rect) ([]byte, Size, error) {
@@ -59,7 +100,7 @@ func (b *subprocessBackend) Screenshot(region *Rect) ([]byte, Size, error) {
 	default:
 		return nil, Size{}, fmt.Errorf("no screenshot tool available")
 	}
-	if err := b.run(b.capTool, args...); err != nil {
+	if err := b.runWithCtx(context.Background(), b.capTool, args...); err != nil {
 		return nil, Size{}, err
 	}
 
@@ -90,7 +131,7 @@ func (b *subprocessBackend) MouseClick(x, y int, button MouseButton, double bool
 		if double {
 			verb = "dc"
 		}
-		return b.run("cliclick", fmt.Sprintf("%s:%d,%d", verb, x, y))
+		return b.runWithCtx(context.Background(), "cliclick", fmt.Sprintf("%s:%d,%d", verb, x, y))
 	case "xdotool":
 		btn := map[MouseButton]string{MouseLeft: "1", MouseMiddle: "2", MouseRight: "3"}[button]
 		args := []string{"mousemove", strconv.Itoa(x), strconv.Itoa(y), "click"}
@@ -98,7 +139,7 @@ func (b *subprocessBackend) MouseClick(x, y int, button MouseButton, double bool
 			args = append(args, "--repeat", "2")
 		}
 		args = append(args, btn)
-		return b.run("xdotool", args...)
+		return b.runWithCtx(context.Background(), "xdotool", args...)
 	}
 	return fmt.Errorf("no input tool available")
 }
@@ -106,14 +147,14 @@ func (b *subprocessBackend) MouseClick(x, y int, button MouseButton, double bool
 func (b *subprocessBackend) MouseDrag(from, to Point, button MouseButton) error {
 	switch b.cliTool {
 	case "cliclick":
-		return b.run("cliclick",
+		return b.runWithCtx(context.Background(), "cliclick",
 			fmt.Sprintf("dd:%d,%d", from.X, from.Y),
 			fmt.Sprintf("dm:%d,%d", to.X, to.Y),
 			fmt.Sprintf("du:%d,%d", to.X, to.Y),
 		)
 	case "xdotool":
 		btn := map[MouseButton]string{MouseLeft: "1", MouseMiddle: "2", MouseRight: "3"}[button]
-		return b.run("xdotool",
+		return b.runWithCtx(context.Background(), "xdotool",
 			"mousemove", strconv.Itoa(from.X), strconv.Itoa(from.Y),
 			"mousedown", btn,
 			"mousemove", strconv.Itoa(to.X), strconv.Itoa(to.Y),
@@ -126,9 +167,9 @@ func (b *subprocessBackend) MouseDrag(from, to Point, button MouseButton) error 
 func (b *subprocessBackend) MoveTo(x, y int) error {
 	switch b.cliTool {
 	case "cliclick":
-		return b.run("cliclick", fmt.Sprintf("m:%d,%d", x, y))
+		return b.runWithCtx(context.Background(), "cliclick", fmt.Sprintf("m:%d,%d", x, y))
 	case "xdotool":
-		return b.run("xdotool", "mousemove", strconv.Itoa(x), strconv.Itoa(y))
+		return b.runWithCtx(context.Background(), "xdotool", "mousemove", strconv.Itoa(x), strconv.Itoa(y))
 	}
 	return fmt.Errorf("no input tool available")
 }
@@ -136,9 +177,9 @@ func (b *subprocessBackend) MoveTo(x, y int) error {
 func (b *subprocessBackend) KeyboardType(text string) error {
 	switch b.cliTool {
 	case "cliclick":
-		return b.run("cliclick", "t:"+text)
+		return b.runWithCtx(context.Background(), "cliclick", "t:"+text)
 	case "xdotool":
-		return b.run("xdotool", "type", "--clearmodifiers", "--", text)
+		return b.runWithCtx(context.Background(), "xdotool", "type", "--clearmodifiers", "--", text)
 	}
 	return fmt.Errorf("no input tool available")
 }
@@ -149,7 +190,7 @@ func (b *subprocessBackend) KeyboardPress(key string) error {
 		return b.pressChordCliclick(key)
 	case "xdotool":
 		// xdotool understands chords natively (e.g. "ctrl+shift+t", "Return").
-		return b.run("xdotool", "key", normalizeKeyXdotool(key))
+		return b.runWithCtx(context.Background(), "xdotool", "key", normalizeKeyXdotool(key))
 	}
 	return fmt.Errorf("no input tool available")
 }
@@ -162,16 +203,16 @@ func (b *subprocessBackend) Scroll(dir ScrollDir, amount int, at *Point) error {
 	case "xdotool":
 		btn := map[ScrollDir]string{ScrollUp: "4", ScrollDown: "5", ScrollLeft: "6", ScrollRight: "7"}[dir]
 		if at != nil {
-			if err := b.run("xdotool", "mousemove", strconv.Itoa(at.X), strconv.Itoa(at.Y)); err != nil {
+			if err := b.runWithCtx(context.Background(), "xdotool", "mousemove", strconv.Itoa(at.X), strconv.Itoa(at.Y)); err != nil {
 				return err
 			}
 		}
-		return b.run("xdotool", "click", "--repeat", strconv.Itoa(amount), btn)
+		return b.runWithCtx(context.Background(), "xdotool", "click", "--repeat", strconv.Itoa(amount), btn)
 	case "cliclick":
 		// cliclick has no portable scroll verb; emulate with arrow/page keys.
 		key := map[ScrollDir]string{ScrollUp: "arrow-up", ScrollDown: "arrow-down", ScrollLeft: "arrow-left", ScrollRight: "arrow-right"}[dir]
 		for i := 0; i < amount; i++ {
-			if err := b.run("cliclick", "kp:"+key); err != nil {
+			if err := b.runWithCtx(context.Background(), "cliclick", "kp:"+key); err != nil {
 				return err
 			}
 		}
@@ -185,7 +226,7 @@ func (b *subprocessBackend) Scroll(dir ScrollDir, amount int, at *Point) error {
 func (b *subprocessBackend) pressChordCliclick(key string) error {
 	parts := strings.Split(key, "+")
 	if len(parts) == 1 {
-		return b.run("cliclick", "kp:"+normalizeKeyCliclick(parts[0]))
+		return b.runWithCtx(context.Background(), "cliclick", "kp:"+normalizeKeyCliclick(parts[0]))
 	}
 	var args []string
 	mods := parts[:len(parts)-1]
@@ -197,7 +238,7 @@ func (b *subprocessBackend) pressChordCliclick(key string) error {
 	for i := len(mods) - 1; i >= 0; i-- {
 		args = append(args, "ku:"+normalizeModCliclick(mods[i]))
 	}
-	return b.run("cliclick", args...)
+	return b.runWithCtx(context.Background(), "cliclick", args...)
 }
 
 func normalizeModCliclick(m string) string {

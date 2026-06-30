@@ -1,0 +1,242 @@
+{
+  "version": 1,
+  "description": "Default destructive-app denylist for SP-063-4h. Categories: financial, system, destructive, password_manager. Override at ~/.config/sprout/computer_use_denylist_overrides.json (override wins on conflict). See roadmap/SP-063-destructive-denylist-design.md.",
+  "macos": [
+    {
+      "bundle_id": "com.apple.mail",
+      "category": "destructive",
+      "reason": "Send button in Mail sends email to recipients."
+    },
+    {
+      "bundle_id": "com.apple.diskutility",
+      "category": "destructive",
+      "reason": "Erase button formats a disk."
+    },
+    {
+      "bundle_id": "com.apple.systempreferences",
+      "category": "system",
+      "reason": "System Settings can change security / network / privacy settings."
+    },
+    {
+      "bundle_id": "com.apple.Terminal",
+      "category": "destructive",
+      "window_title_regex": "(?i)\\b(sudo|passwd|rm\\s+-rf|diskutil\\s+erase)\\b",
+      "reason": "Terminal with destructive commands in title can run privileged or destructive actions."
+    },
+    {
+      "bundle_id": "com.apple.iTerm",
+      "category": "destructive",
+      "window_title_regex": "(?i)\\b(sudo|passwd|rm\\s+-rf|diskutil\\s+erase)\\b",
+      "reason": "iTerm2 with destructive commands in title can run privileged or destructive actions."
+    },
+    {
+      "bundle_id": "com.agilebits.onepassword7",
+      "category": "password_manager",
+      "reason": "Password manager — auto-fill could leak credentials."
+    },
+    {
+      "bundle_id": "com.1password.1password",
+      "category": "password_manager",
+      "reason": "Password manager (1Password 8+) — auto-fill could leak credentials."
+    },
+    {
+      "bundle_id": "com.apple.keychainaccess",
+      "category": "password_manager",
+      "reason": "Keychain Access — exposes stored credentials."
+    },
+    {
+      "bundle_id": "com.bitwarden.desktop",
+      "category": "password_manager",
+      "reason": "Bitwarden password manager — auto-fill could leak credentials."
+    },
+    {
+      "bundle_id": "com.lastpass.LastPass",
+      "category": "password_manager",
+      "reason": "LastPass password manager — auto-fill could leak credentials."
+    },
+    {
+      "bundle_id": "com.bankofamerica.BankofAmerica",
+      "category": "financial",
+      "reason": "Bank of America desktop app — financial transactions reachable by clicks."
+    },
+    {
+      "bundle_id": "com.chase.signin",
+      "category": "financial",
+      "reason": "Chase desktop app — financial transactions reachable by clicks."
+    },
+    {
+      "bundle_id": "com.wellsfargo.WellsFargo",
+      "category": "financial",
+      "reason": "Wells Fargo desktop app — financial transactions reachable by clicks."
+    },
+    {
+      "bundle_id": "com.paypal.ppclient",
+      "category": "financial",
+      "reason": "PayPal desktop app — financial transactions reachable by clicks."
+    },
+    {
+      "bundle_id": "com.coinbase.pro",
+      "category": "financial",
+      "reason": "Coinbase Pro desktop app — financial transactions reachable by clicks."
+    },
+    {
+      "bundle_id": "com.apple.Safari",
+      "category": "financial",
+      "window_title_regex": "(?i)(incognito|private)",
+      "reason": "Safari in incognito mode — typed URLs aren't logged, harder to audit mistakes."
+    },
+    {
+      "bundle_id": "com.google.Chrome",
+      "category": "financial",
+      "window_title_regex": "(?i)(incognito|private)",
+      "reason": "Chrome in incognito mode — typed URLs aren't logged, harder to audit mistakes."
+    },
+    {
+      "bundle_id": "org.mozilla.firefox",
+      "category": "financial",
+      "window_title_regex": "(?i)(incognito|private)",
+      "reason": "Firefox in private browsing mode — typed URLs aren't logged, harder to audit mistakes."
+    },
+    {
+      "bundle_id": "com.microsoft.Edge",
+      "category": "financial",
+      "window_title_regex": "(?i)(InPrivate|incognito|private)",
+      "reason": "Edge in InPrivate mode — typed URLs aren't logged, harder to audit mistakes."
+    },
+    {
+      "bundle_id": "com.brave.Browser",
+      "category": "financial",
+      "window_title_regex": "(?i)(incognito|private)",
+      "reason": "Brave in incognito mode — typed URLs aren't logged, harder to audit mistakes."
+    },
+    {
+      "bundle_id": "com.apple.finder",
+      "category": "destructive",
+      "window_title_regex": "(?i)\\b(Empty Trash|Move to Trash|delete permanently)\\b",
+      "reason": "Finder with destructive action in title — empty trash / permanent delete."
+    }
+  ],
+  "linux": [
+    {
+      "window_class_regex": "Thunderbird",
+      "category": "destructive",
+      "window_title_regex": "(?i)\\b(Compose|Send|New Message)\\b",
+      "reason": "Thunderbird compose window — Send button sends email."
+    },
+    {
+      "window_class_regex": "evolution",
+      "category": "destructive",
+      "window_title_regex": "(?i)\\b(Compose|Send|New Message)\\b",
+      "reason": "Evolution compose window — Send button sends email."
+    },
+    {
+      "window_class_regex": "gnome-disks",
+      "category": "destructive",
+      "window_title_regex": "(?i)(Erase|Format|Disk Utility)",
+      "reason": "GNOME Disks erase / format dialog."
+    },
+    {
+      "window_class_regex": "polkit-gnome-authentication-agent",
+      "category": "destructive",
+      "reason": "Polkit authentication agent — password prompt for privileged actions."
+    },
+    {
+      "window_class_regex": "polkit-kde-authentication-agent-1",
+      "category": "destructive",
+      "reason": "KDE Polkit authentication agent — password prompt for privileged actions."
+    },
+    {
+      "window_class_regex": "pam-tally",
+      "category": "destructive",
+      "reason": "PAM password prompt — type into a password field."
+    },
+    {
+      "window_class_regex": "ssh-askpass",
+      "category": "password_manager",
+      "reason": "SSH passphrase prompt — typing here leaks the passphrase."
+    },
+    {
+      "window_class_regex": "gcr-prompter",
+      "category": "password_manager",
+      "reason": "GNOME keyring / GPG passphrase prompt — typing here leaks the passphrase."
+    },
+    {
+      "window_class_regex": "Pinentry",
+      "category": "password_manager",
+      "reason": "GPG pinentry prompt — typing here leaks the passphrase."
+    },
+    {
+      "window_class_regex": "keepassxc",
+      "category": "password_manager",
+      "reason": "KeePassXC password manager — auto-fill could leak credentials."
+    },
+    {
+      "window_class_regex": "Bitwarden",
+      "category": "password_manager",
+      "reason": "Bitwarden password manager — auto-fill could leak credentials."
+    },
+    {
+      "window_class_regex": "1Password",
+      "category": "password_manager",
+      "reason": "1Password password manager — auto-fill could leak credentials."
+    },
+    {
+      "window_class_regex": "lastpass",
+      "category": "password_manager",
+      "reason": "LastPass password manager — auto-fill could leak credentials."
+    },
+    {
+      "window_class_regex": "google-chrome",
+      "category": "financial",
+      "window_title_regex": "(?i)(incognito|private)",
+      "reason": "Chrome in incognito mode — typed URLs aren't logged, harder to audit mistakes."
+    },
+    {
+      "window_class_regex": "firefox",
+      "category": "financial",
+      "window_title_regex": "(?i)(incognito|private)",
+      "reason": "Firefox in private browsing mode — typed URLs aren't logged, harder to audit mistakes."
+    },
+    {
+      "window_class_regex": "chromium",
+      "category": "financial",
+      "window_title_regex": "(?i)(incognito|private)",
+      "reason": "Chromium in incognito mode — typed URLs aren't logged, harder to audit mistakes."
+    },
+    {
+      "window_class_regex": "microsoft-edge",
+      "category": "financial",
+      "window_title_regex": "(?i)(InPrivate|incognito|private)",
+      "reason": "Edge in InPrivate mode — typed URLs aren't logged, harder to audit mistakes."
+    },
+    {
+      "window_class_regex": "Brave-browser",
+      "category": "financial",
+      "window_title_regex": "(?i)(incognito|private)",
+      "reason": "Brave in incognito mode — typed URLs aren't logged, harder to audit mistakes."
+    },
+    {
+      "window_class_regex": "gnome-terminal-server|tilix|xterm|urxvt|konsole|alacritty|kitty|foot|st",
+      "category": "destructive",
+      "window_title_regex": "(?i)\\b(sudo|passwd|rm\\s+-rf|dd\\s+if|mkfs|diskutil\\s+erase)\\b",
+      "reason": "Terminal emulator with destructive command in title — sudo, rm -rf, dd, mkfs all reachable by Enter."
+    },
+    {
+      "window_class_regex": "nautilus|thunar|dolphin|nemo",
+      "category": "destructive",
+      "window_title_regex": "(?i)\\b(Delete permanently|Move to Trash|Empty Trash)\\b",
+      "reason": "File manager with destructive action in title — delete permanently or empty trash."
+    },
+    {
+      "window_class_regex": "gnome-control-center|kde-control-center",
+      "category": "system",
+      "reason": "System Settings can change security / network / privacy settings."
+    },
+    {
+      "window_class_regex": ".*",
+      "category": "destructive",
+      "window_title_regex": "(?i)\\b(Authenticate|sudo password|Password:|enter password|Passphrase:)\\b",
+      "reason": "Generic authentication prompt — even non-classified apps become destructive when prompting for a password. Catch-all for ad-hoc shell scripts / custom dialogs."
+    }
+  ]
+}

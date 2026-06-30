@@ -12,10 +12,48 @@ vi.mock('../utils/log', () => ({
   debugLog: vi.fn(),
 }));
 
+vi.mock('../services/websocket', () => {
+  const eventListeners: Array<(event: { type: string; data?: unknown }) => void> = [];
+  // Stable mocks shared across all getInstance() invocations so tests can
+  // assert call counts and recorded listeners consistently.
+  const sendEvent = vi.fn();
+  const onEvent = vi.fn((cb: (event: { type: string; data?: unknown }) => void) => {
+    eventListeners.push(cb);
+  });
+  const removeEvent = vi.fn((cb: (event: { type: string; data?: unknown }) => void) => {
+    const idx = eventListeners.indexOf(cb);
+    if (idx >= 0) eventListeners.splice(idx, 1);
+  });
+  const instance = { sendEvent, onEvent, removeEvent };
+  const mockModule = {
+    WebSocketService: {
+      getInstance: vi.fn(() => instance),
+    },
+    __getSendEvent: () => sendEvent,
+    __getEventListeners: () => eventListeners,
+  };
+  return mockModule;
+});
+
+vi.mock('../services/automateEvents', () => {
+  const handlers: Array<(eventType: string, payload: unknown) => void> = [];
+  return {
+    subscribeAutomate: vi.fn((handler: (eventType: string, payload: unknown) => void) => {
+      handlers.push(handler);
+      return () => {
+        const idx = handlers.indexOf(handler);
+        if (idx >= 0) handlers.splice(idx, 1);
+      };
+    }),
+    __getHandlers: () => handlers,
+  };
+});
+
 vi.mock('./AutomationsPanel.css', () => ({}));
 
 // Import AFTER mocking
 import { clientFetch } from '../services/clientSession';
+import { WebSocketService } from '../services/websocket';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -82,11 +120,24 @@ function stopBtn(id: string) {
 // ── Tests ───────────────────────────────────────────────────────────────────
 
 describe('AutomationsPanel', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.stubGlobal(
       'confirm',
       vi.fn(() => true),
     );
+    // Reset stable mocks so each test sees a clean slate. The stable-mock
+    // shape (introduced above so reconnect tests can read call counts
+    // consistently) means call state would otherwise leak across tests.
+    const ws = (await import('../services/websocket')) as unknown as {
+      __getSendEvent: () => ReturnType<typeof vi.fn>;
+      __getEventListeners: () => unknown[];
+    };
+    ws.__getSendEvent().mockClear();
+    ws.__getEventListeners().length = 0;
+    const ae = (await import('../services/automateEvents')) as unknown as {
+      __getHandlers: () => unknown[];
+    };
+    ae.__getHandlers().length = 0;
   });
 
   afterEach(() => {
@@ -926,47 +977,27 @@ describe('AutomationsPanel', () => {
     });
   });
 
-  // ── Polling Behavior (requires fake timers) ──────────────────
+  // ── Event-driven refetch (replaces polling) ──────────────────
 
-  it('polls sessions periodically when on the Running tab', async () => {
-    vi.useFakeTimers();
-
-    mockFetchSequence(
-      seResp([
-        {
-          session_id: 'poll-test',
-          workflow: 'w',
-          pid: 1,
-          status: 'running',
-          started_at: EPOCH_S - 10,
-          kind: 'workflow',
-          output_file_path: '/t/o.txt',
-          budget_usd: 0,
-        },
-      ]),
-    );
-
+  it('sends subscribe message on mount', async () => {
+    const { __getSendEvent } = await import('../services/websocket');
+    mockFetchSequence(wfResp([]));
     render(<AutomationsPanel />);
-    fireEvent.click(screen.getByRole('tab', { name: 'Running' }));
 
     await waitFor(() => {
-      expect(screen.getByText('w')).toBeInTheDocument();
-    });
-
-    vi.advanceTimersByTime(3000); // past one polling interval
-
-    await waitFor(() => {
-      expect(vi.mocked(clientFetch).mock.calls.length).toBeGreaterThan(1);
+      expect(__getSendEvent()).toHaveBeenCalledWith({
+        type: 'subscribe',
+        data: { channel: 'automate' },
+      });
     });
   });
 
-  it('stops polling when switching away from Running tab', async () => {
-    vi.useFakeTimers();
-
+  it('refetches sessions when automate.session_started event arrives', async () => {
     mockFetchSequence(
+      wfResp([]),
       seResp([
         {
-          session_id: 'poll-test',
+          session_id: 'event-test',
           workflow: 'w',
           pid: 1,
           status: 'running',
@@ -984,15 +1015,72 @@ describe('AutomationsPanel', () => {
     await waitFor(() => {
       expect(screen.getByText('w')).toBeInTheDocument();
     });
-    const afterRunning = vi.mocked(clientFetch).mock.calls.length;
 
-    // Switch away — stops polling
-    fireEvent.click(screen.getByRole('tab', { name: 'Available' }));
-    vi.advanceTimersByTime(12000);
+    const callsBeforeEvent = vi.mocked(clientFetch).mock.calls.length;
+
+    // Simulate the session_started event
+    const { __getHandlers } = await import('../services/automateEvents');
+    const handlers = __getHandlers();
+    if (handlers.length > 0) {
+      handlers[0]('automate.session_started', { session_id: 'new-session' });
+    }
+
+    await waitFor(() => {
+      expect(vi.mocked(clientFetch).mock.calls.length).toBeGreaterThan(callsBeforeEvent);
+    });
+  });
+
+  it('does not refetch sessions for session_started when on Available tab', async () => {
+    mockFetchSequence(wfResp([]));
+    render(<AutomationsPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: 'Available' })).toHaveAttribute('aria-selected', 'true');
+    });
+
+    const callsBeforeEvent = vi.mocked(clientFetch).mock.calls.length;
+
+    // Simulate the session_started event while on Available tab
+    const { __getHandlers } = await import('../services/automateEvents');
+    const handlers = __getHandlers();
+    if (handlers.length > 0) {
+      handlers[0]('automate.session_started', { session_id: 'new-session' });
+    }
     await Promise.resolve();
 
-    // At most 1 extra call (Available tab fetches workflows once)
-    expect(vi.mocked(clientFetch).mock.calls.length - afterRunning).toBeLessThanOrEqual(1);
+    // No extra session fetch calls (only the initial workflow fetch)
+    expect(vi.mocked(clientFetch).mock.calls.length).toBe(callsBeforeEvent);
+  });
+
+  it('re-sends subscribe on connection_status connected event (cold-start + reconnect)', async () => {
+    const { __getSendEvent, __getEventListeners } = await import('../services/websocket');
+    mockFetchSequence(wfResp([]));
+    render(<AutomationsPanel />);
+
+    await waitFor(() => {
+      expect(__getSendEvent()).toHaveBeenCalledWith({
+        type: 'subscribe',
+        data: { channel: 'automate' },
+      });
+    });
+
+    const sendEventMock = __getSendEvent();
+    const callsBeforeReconnect = sendEventMock.mock.calls.length;
+
+    // Simulate a reconnect: the WebSocketService emits connection_status with
+    // connected: true. The panel must re-send subscribe to recover.
+    const listeners = __getEventListeners();
+    if (listeners.length > 0) {
+      listeners[0]({ type: 'connection_status', data: { connected: true } });
+    }
+
+    await waitFor(() => {
+      expect(sendEventMock.mock.calls.length).toBeGreaterThan(callsBeforeReconnect);
+    });
+
+    // Verify the most recent call was still a subscribe
+    const lastCall = sendEventMock.mock.calls[sendEventMock.mock.calls.length - 1];
+    expect(lastCall[0]).toEqual({ type: 'subscribe', data: { channel: 'automate' } });
   });
 
   // ── Accessibility ────────────────────────────────────────────

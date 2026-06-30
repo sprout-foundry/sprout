@@ -9,14 +9,32 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	core "github.com/sprout-foundry/seed/core"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
+
+// diagnosticsDir returns the directory under the sprout config dir where
+// tool-threading diagnostic transcripts are written. It creates the directory
+// and returns an error if it cannot.
+func diagnosticsDir() (string, error) {
+	configDir, err := configuration.GetConfigDir()
+	if err != nil {
+		return "", fmt.Errorf("resolve config dir: %w", err)
+	}
+	dir := filepath.Join(configDir, "diagnostics", "threading")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", fmt.Errorf("create diagnostics dir: %w", err)
+	}
+	return dir, nil
+}
 
 // ---------------------------------------------------------------------------
 // Integration entry point
@@ -244,6 +262,26 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 		a.state.SetCurrentContextTokens(tokenEstimate)
 		a.state.SetMaxContextTokens(contextSize)
 		a.PublishContextManagementDiagnostic(tokenEstimate, contextSize, iteration, messages, a.GetCachedTokens(), a.GetPromptTokens(), 0)
+	}
+
+	// Diagnostic capture: when seed detects a tool-call threading violation
+	// (the recurring MiniMax 2013 "tool call result does not follow tool call"
+	// rejection), save the full prepared transcript to disk so the failure can
+	// be reproduced and root-caused. Captures land under
+	// <config-dir>/diagnostics/threading/. The callback is fire-and-forget:
+	// a write failure is logged but never breaks the conversation.
+	opts.OnDiagnosticCapture = func(c core.DiagnosticCapture) {
+		dir, err := diagnosticsDir()
+		if err != nil {
+			a.Logger().Debug("[diagnostic] could not resolve config dir: %v\n", err)
+			return
+		}
+		path, err := core.WriteDiagnosticTranscript(c, dir)
+		if err != nil {
+			a.Logger().Debug("[diagnostic] failed to write transcript: %v\n", err)
+			return
+		}
+		a.Logger().Debug("[diagnostic] saved tool-threading transcript (%s, %d violation(s)): %s\n", c.Trigger, len(c.Violations), path)
 	}
 
 	// Seed the agent with the existing conversation history so that

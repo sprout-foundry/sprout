@@ -1,6 +1,8 @@
 package agent
 
 import (
+	"bytes"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -8,6 +10,7 @@ import (
 
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/stretchr/testify/require"
 )
 
 // TestFormatRiskType_AllTypes verifies that formatRiskType returns a human-readable
@@ -406,59 +409,79 @@ func TestStaticGateAutoApprove_ElevatedSessionNonHardBlock(t *testing.T) {
 // io.Writer flushes complete lines to agent.PrintLineAsync and buffers partial
 // lines until a newline arrives.
 //
-// The streaming callback is the observable sink for printLineInternal — if
-// outputRouter fails to call PrintLineAsync, no lines reach the callback.
+// Chrome (tool logs, system messages) must NOT route through the streaming
+// callback — that's reserved for prose via RouteStreamChunk. Chrome goes to
+// stdout with a row clear (\r\033[K) so partial prose streams don't get
+// appended to. So this test asserts the lines land on stdout (not the
+// streaming callback) and are newline-terminated in order.
 func TestOutputRouter_WriteRoutesToPrintLineAsync(t *testing.T) {
 	a := NewTestAgent()
 	a.output.SetOutputMutex(&sync.Mutex{})
 
-	var got []string
-	var mu sync.Mutex
+	// The streaming callback must NOT fire for chrome. If it does, the
+	// bug that caused prose/tool-log clobbering has regressed.
 	a.output.SetStreamingCallback(func(s string) {
-		mu.Lock()
-		got = append(got, s)
-		mu.Unlock()
+		t.Fatalf("streamingCallback must not fire for chrome: got %q", s)
 	})
 	a.output.SetStreamingEnabled(true)
 	a.output.SetOutputRouter(NewOutputRouter(a, nil))
 
-	w := newOutputRouter(a)
+	// Capture stdout so we can assert what actually reaches the terminal.
+	orig := os.Stdout
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	os.Stdout = w
+	defer func() { os.Stdout = orig }()
+
+	wRouter := newOutputRouter(a)
 
 	// Two complete lines in one Write — both must arrive as separate flushed lines.
-	if _, err := w.Write([]byte("line1\nline2\n")); err != nil {
+	if _, err := wRouter.Write([]byte("line1\nline2\n")); err != nil {
 		t.Fatalf("Write error: %v", err)
 	}
 
 	// A partial line followed by its completion should arrive as ONE flushed
 	// line, not two. The router must buffer the partial chunk.
-	if _, err := w.Write([]byte("partial")); err != nil {
+	if _, err := wRouter.Write([]byte("partial")); err != nil {
 		t.Fatalf("Write error: %v", err)
 	}
-	if _, err := w.Write([]byte(" line\n")); err != nil {
+	if _, err := wRouter.Write([]byte(" line\n")); err != nil {
 		t.Fatalf("Write error: %v", err)
 	}
 
-	// Async worker drains the channel; poll with a short timeout.
+	// Poll the pipe until all 3 lines arrive (or 2s timeout). PrintLineAsync
+	// is asynchronous — a worker drains the channel.
+	wantLines := []string{"line1\n", "line2\n", "partial line\n"}
+	var buf bytes.Buffer
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
-		mu.Lock()
-		n := len(got)
-		mu.Unlock()
-		if n >= 3 {
+		tmp := make([]byte, 4096)
+		_ = r.SetReadDeadline(time.Now().Add(50 * time.Millisecond))
+		n, _ := r.Read(tmp)
+		if n > 0 {
+			buf.Write(tmp[:n])
+		}
+		out := buf.String()
+		allFound := true
+		for _, want := range wantLines {
+			if !strings.Contains(out, want) {
+				allFound = false
+				break
+			}
+		}
+		if allFound {
 			break
 		}
-		time.Sleep(10 * time.Millisecond)
 	}
+	w.Close()
 
-	mu.Lock()
-	defer mu.Unlock()
-	if len(got) != 3 {
-		t.Fatalf("expected 3 flushed lines, got %d: %v", len(got), got)
-	}
-	want := []string{"line1\n", "line2\n", "partial line\n"}
-	for i, w := range want {
-		if got[i] != w {
-			t.Errorf("line %d: got %q, want %q", i, got[i], w)
+	out := buf.String()
+	// Each line must arrive on stdout, newline-terminated. No \r\033[K
+	// prefix — in TTY mode the externalWriteHook handles row management,
+	// and in non-TTY mode there's no cursor to clear.
+	for _, want := range wantLines {
+		if !strings.Contains(out, want) {
+			t.Errorf("expected stdout to contain %q, got %q", want, out)
 		}
 	}
 }

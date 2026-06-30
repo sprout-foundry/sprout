@@ -70,6 +70,14 @@ type StatusFooter struct {
 	winchStop chan struct{}
 	winchDone chan struct{}
 
+	// proseStreaming is set by the AssistantTurnRenderer while prose
+	// chunks are actively being written. When true, Refresh() skips
+	// the draw to avoid DEC save/restore (\0337/\0338) racing with
+	// cursor movement in the scroll region — the saved position goes
+	// stale when content scrolls between save and restore, scattering
+	// prose characters across the screen.
+	proseStreaming bool
+
 	// Cost-warn thresholds (USD). Costs above warn render yellow; above
 	// alert render red. Sane defaults; future config wiring possible.
 	WarnCost  float64
@@ -155,17 +163,46 @@ func (f *StatusFooter) Start() {
 
 // Refresh re-reads the source and redraws the footer. Idempotent and
 // cheap; safe to call from event subscribers on each ToolEnd.
+//
+// Skipped while prose is actively streaming (proseStreaming flag set by
+// the AssistantTurnRenderer) to avoid the DEC save/restore cursor
+// sequences racing with scroll-region content — the root cause of the
+// "scattered characters" clobbering symptom.
 func (f *StatusFooter) Refresh() {
 	if f == nil || !f.isTTY {
 		return
 	}
 	f.mu.Lock()
 	active := f.active
+	streaming := f.proseStreaming
 	f.mu.Unlock()
-	if !active {
+	if !active || streaming {
 		return
 	}
 	f.draw()
+}
+
+// SetProseStreaming toggles the prose-streaming gate. When true,
+// Refresh() is a no-op so the footer's cursor save/restore can't race
+// with prose being written to the scroll region.
+//
+// This method MUST NOT take outputMu. It is called from the
+// AssistantTurnRenderer's WriteChunk / resetSegment paths, both of
+// which already hold LockOutput — and resetSegment fires from
+// FinalizeAtTurnEnd, also under LockOutput. Calling Refresh() (which
+// calls draw → LockOutput) here would be a re-entrant lock on a
+// non-reentrant sync.Mutex, self-deadlocking the REPL goroutine at
+// every turn end. That hang left the steer panel on screen and
+// blocked the next ReadLine, reproducing the "can't submit
+// follow-ups, must hard-close" symptom. Callers that need a catch-up
+// draw call Refresh() themselves once the lock is released.
+func (f *StatusFooter) SetProseStreaming(active bool) {
+	if f == nil {
+		return
+	}
+	f.mu.Lock()
+	f.proseStreaming = active
+	f.mu.Unlock()
 }
 
 // Resize handles a terminal-size change (SIGWINCH). The OLD footer rows
@@ -566,7 +603,13 @@ func (f *StatusFooter) ClearSteerLine() {
 		fmt.Fprint(f.w, "\033[r")
 		fmt.Fprint(f.w, "\0337")
 		for i := 0; i < prevRows; i++ {
-			row := rows - 1 - prevRows + i + 1
+			// Match steerRowFor(rows, prevRows, i): the steer panel is
+			// drawn at `rows-1-steerRows+i`, so we blank that same row.
+			// A prior version used `+1` here, which cleared the rule
+			// row (repainted immediately by draw()) instead of the
+			// steer text row — leaving stale steer text on screen after
+			// EndTurn (visible above the next idle prompt).
+			row := rows - 1 - prevRows + i
 			if row < 1 {
 				continue
 			}
@@ -892,6 +935,15 @@ func RegisterGlobalStatusFooter(f *StatusFooter) {
 	globalFooterMu.Lock()
 	defer globalFooterMu.Unlock()
 	globalFooter = f
+}
+
+// GetGlobalStatusFooter returns the process-wide footer, or nil if none
+// is registered. Used by the AssistantTurnRenderer to suppress footer
+// refresh during active prose streaming.
+func GetGlobalStatusFooter() *StatusFooter {
+	globalFooterMu.RLock()
+	defer globalFooterMu.RUnlock()
+	return globalFooter
 }
 
 // StopGlobalStatusFooter resets the registered global footer's scroll

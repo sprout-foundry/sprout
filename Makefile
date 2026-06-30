@@ -4,7 +4,7 @@
 .PHONY: help test test-unit test-unit-lowmem test-integration test-e2e test-smoke test-desktop-smoke test-all test-ci test-coverage \
        clean build build-all install build-version build-ui deploy-ui build-wasm \
        verify-ui-embedded test-webui lint lint-fix dev build-webui-dist build-webui-dist-local \
-       verify-dist verify-dist-local
+       verify-dist verify-dist-local automate-run
 
 # Default target
 help:
@@ -39,6 +39,12 @@ help:
 	@echo "  make build-cloud            - Build cloud-mode binary (sprout-cloud)"
 	@echo "  make verify-dist            - Verify cloud-mode dist bundle serves correctly"
 	@echo "  make verify-dist-local      - Verify local-mode dist bundle serves correctly"
+	@echo ""
+	@echo "Automation:"
+	@echo "  make automate-run WORKFLOW=<file>    - Run automate workflow under a renamed binary"
+	@echo "                                         (sprout-automate) so pkill -f sprout inside"
+	@echo "                                         the workflow can't kill itself."
+	@echo "                                         Pass flags via AUTOMATE_ARGS=\"--yes --budget-usd 5\""
 	@echo ""
 	@echo "Version Management:"
 	@echo "  ./scripts/version-manager.sh build    - Build with version info"
@@ -199,6 +205,48 @@ install: build
 	cp sprout ~/.local/bin/sprout
 	cp sprout ~/go/bin/sprout 2>/dev/null || true
 	@echo "Install completed"
+
+# Run an automate workflow under a renamed binary so the workflow's own
+# process tree (parent + child coordinator) shows up in `ps` as
+# `sprout-automate` instead of `sprout`. The Playwright fixture still
+# spawns `./sprout` for the e2e test backend — that one is the only
+# process matching `pkill -f sprout` and it's the one the workflow
+# legitimately owns, so a coder that tries to "clean up stale sprout
+# processes" can only ever reach its own test backend.
+#
+# Usage:
+#   make automate-run WORKFLOW=workflow.json
+#   make automate-run WORKFLOW=workflow.json AUTOMATE_ARGS="--yes --budget-usd 5"
+#   make automate-run WORKFLOW=automate/workflow.json   # dir prefix is stripped
+#
+# We use Make variables (not positional args) because Make parses
+# `--flag` before any rule runs and rejects unknown options, and because
+# positional args like `workflow.json` would compete with Make's built-in
+# implicit rules (looking for a `.c → .json` compiler chain). The
+# variable form sidesteps both: args reach the recipe intact and never
+# enter Make's target-search machinery.
+#
+# The cp (not mv) is critical: test/webui/fixtures/sprout.ts hardcodes
+# the on-disk path `./sprout` for the test backend. The renamed copy
+# propagates through `os.Executable()` in cmd/automate.go (line ~320)
+# to the child coordinator, so the whole automation tree inherits the
+# new argv[0] without any code changes.
+.PHONY: automate-run
+
+automate-run: build
+	@if [ -z "$(WORKFLOW)" ]; then \
+		echo "Usage: make automate-run WORKFLOW=<workflow-file> [AUTOMATE_ARGS=\"...\"]"; \
+		echo "Example: make automate-run WORKFLOW=workflow.json"; \
+		echo ""; \
+		echo "Available workflows:"; \
+		ls automate/*.json 2>/dev/null | sed 's|automate/|  |' || echo "  (none)"; \
+		exit 1; \
+	fi
+	@cp sprout sprout-automate
+	@chmod +x sprout-automate
+	@echo "Renamed sprout → sprout-automate (covered by existing 'sprout-*' gitignore rule)"
+	@echo "Running workflow as sprout-automate (workflow=$(notdir $(WORKFLOW)), extra=$(AUTOMATE_ARGS))"
+	@./sprout-automate automate run $(notdir $(WORKFLOW)) $(AUTOMATE_ARGS)
 
 # Build sprout binary with parallel compilation and cache
 build-parallel: prepare-grammars

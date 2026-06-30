@@ -10,18 +10,18 @@ import (
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
-// tryMockLLMAgent returns a fully-initialized Agent backed by the mock LLM
-// provider, or (nil, nil) when the --mock-llm flag is not set.
+// tryMockLLMAgent handles the --mock-llm override. When UseMockLLM is set,
+// returns (true, agent, nil) on success or (true, nil, err) on failure.
+// When UseMockLLM is false, returns (false, nil, nil) so the caller
+// falls through to the regular provider-resolution path.
 //
-// Split out of agent_creation.go because the mock provider itself is
-// native-only (see mock_provider.go's //go:build !js constraint). Keeping
-// the wiring here means agent_creation.go compiles cleanly for both
-// GOOS=js and native targets — the wasm side has its own stub.
-func tryMockLLMAgent(configManager *configuration.Manager, workspaceRoot string, model string) (*Agent, error) {
+// MockLLMProvider is a test-only deterministic stand-in; it is excluded
+// from the WASM build (this file's `!js` tag), where the no-op stub in
+// mock_provider_init_js.go applies.
+func tryMockLLMAgent(model string, configManager *configuration.Manager, workspaceRoot string) (bool, *Agent, error) {
 	if !UseMockLLM {
-		return nil, nil
+		return false, nil, nil
 	}
-
 	client := NewMockLLMProvider()
 	if model != "" {
 		client.SetModel(model)
@@ -31,11 +31,11 @@ func tryMockLLMAgent(configManager *configuration.Manager, workspaceRoot string,
 	providerName := client.GetProvider()
 	systemPrompt, err := GetEmbeddedSystemPromptWithProvider(providerName)
 	if err != nil {
-		return nil, agenterrors.NewPermanentError("failed to load system prompt", err)
+		return true, nil, agenterrors.NewPermanentError("failed to load system prompt", err)
 	}
 	systemPrompt = resolveConfiguredSystemPrompt(configManager.GetConfig(), systemPrompt)
 
-	return initAgentFromResolvedProvider(agentInitParams{
+	agent, err := initAgentFromResolvedProvider(agentInitParams{
 		client:          client,
 		clientType:      api.TestClientType,
 		systemPrompt:    systemPrompt,
@@ -43,7 +43,8 @@ func tryMockLLMAgent(configManager *configuration.Manager, workspaceRoot string,
 		workspaceRoot:   workspaceRoot,
 		debug:           isDebugEnvEnabled(),
 		interruptCtx:    context.Background(),
-		interruptCancel: func() {},
+		interruptCancel: func() { /* no-op */ },
 		isProduction:    true,
 	})
+	return true, agent, err
 }

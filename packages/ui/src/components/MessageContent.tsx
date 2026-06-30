@@ -1,7 +1,6 @@
 import type { AnchorHTMLAttributes, HTMLAttributes, ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import remarkBreaks from 'remark-breaks';
 import { stripAnsiCodes } from '../utils/ansi';
 import { flattenMarkdownText, isMarkdownCodeBlock, isLocalFilePath } from '../utils/markdownCode';
 
@@ -12,7 +11,7 @@ interface MessageContentProps {
 function MessageContent({ content }: MessageContentProps): JSX.Element {
   return (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkBreaks]}
+      remarkPlugins={[remarkGfm]}
       components={{
         code({ className, children, ...props }: HTMLAttributes<HTMLElement> & { children?: ReactNode }) {
           const languageMatch = /language-(\w+)/.exec(className || '');

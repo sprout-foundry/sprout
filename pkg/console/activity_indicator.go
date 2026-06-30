@@ -106,23 +106,34 @@ func (a *ActivityIndicator) Update(msg string) {
 }
 
 // Stop halts the ticker and erases the spinner line. Idempotent — safe to
-// call when the indicator is already stopped. Never blocks for more than
-// 500ms — if the render goroutine is stuck (e.g., outputMu held by a
-// blocked write on a saturated PTY), Stop returns without waiting for it,
-// avoiding a cascade deadlock that freezes the entire terminal.
+// call when the indicator is already stopped. When the indicator is already
+// fully idle (no spinner, no static text), Stop is a true no-op and writes
+// nothing to the terminal, so redundant calls from hot loops (e.g. the
+// streaming callback calling Stop on every prose chunk) never clobber the
+// current row. Never blocks for more than 500ms — if the render goroutine
+// is stuck (e.g., outputMu held by a blocked write on a saturated PTY),
+// Stop returns without waiting for it, avoiding a cascade deadlock that
+// freezes the entire terminal.
 func (a *ActivityIndicator) Stop() {
 	if a == nil || !a.isTTY {
 		return
 	}
 	a.mu.Lock()
+	hadStatic := a.isStatic
 	if a.isStatic {
-		// Clear any static text first.
 		a.isStatic = false
 		a.staticMsg = ""
 	}
 	stoppingActive := a.active
-	if !stoppingActive {
+	// When fully idle (no spinner running, no static text), there is
+	// nothing on the indicator row to erase. Emitting \r\033[K in this
+	// state would clear whatever NOW occupies the row — typically
+	// streaming assistant prose, since the streaming callback calls
+	// Stop() on every chunk. Returning early prevents the
+	// "word-by-word deleting" visual effect.
+	if !stoppingActive && !hadStatic {
 		a.mu.Unlock()
+		return
 	}
 	if stoppingActive {
 		a.active = false
@@ -145,11 +156,14 @@ func (a *ActivityIndicator) Stop() {
 			// Render goroutine is stuck; proceed without it. It will exit on
 			// its own once LockOutput unblocks (or the process exits).
 		}
+	} else {
+		a.mu.Unlock()
 	}
 
 	// \r returns the cursor to column 0; \033[K clears to end-of-line.
-	// Use TryLockOutput to avoid re-entering the same deadlock that may
-	// have trapped the render goroutine.
+	// We only reach here when a spinner or static text was actually on
+	// the row. Use TryLockOutput to avoid re-entering the same deadlock
+	// that may have trapped the render goroutine.
 	if TryLockOutput() {
 		fmt.Fprint(a.w, "\r\033[K")
 		UnlockOutput()

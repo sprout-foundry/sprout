@@ -50,8 +50,9 @@ func RegisterComputerUseTools(cfg *configuration.Config) error {
 		return fmt.Errorf("computer use unavailable: %w", err)
 	}
 
-	// Compose decorators: handler → audit → rate-limit → real backend.
-	var backend computer_use.ComputerBackend = computer_use.NewRateLimitedBackend(real, cu.MaxActionsPerMinute)
+	// Compose decorators: real → panicable → rate-limited → auditing.
+	panicable := computer_use.NewPanicableBackend(real)
+	var backend computer_use.ComputerBackend = computer_use.NewRateLimitedBackend(panicable, cu.MaxActionsPerMinute)
 	auditDir := cu.AuditLogDir
 	if auditDir == "" {
 		if home, herr := os.UserHomeDir(); herr == nil {

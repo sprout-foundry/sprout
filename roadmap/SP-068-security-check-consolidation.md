@@ -1,6 +1,6 @@
 # SP-068: Security Check Consolidation — One Risk Scale, One Resolver, One Broker
 
-**Status:** 📋 Proposed
+**Status:** ✅ Implemented (Phases 1–3 shipped: single resolver, single broker, sprout explain)
 **Date:** 2026-06-09
 **Depends on:** SP-004 (Security), SP-049 (Shell Permission Overhaul), SP-058 (4-option approval)
 **Priority:** Medium (no new capability; removes a recurring correctness/UX hazard)

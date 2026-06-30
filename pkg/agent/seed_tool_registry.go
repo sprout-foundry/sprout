@@ -11,7 +11,6 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/agent_api"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
-	"github.com/sprout-foundry/sprout/pkg/console"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/security"
@@ -536,9 +535,7 @@ func handleToolError(agent *Agent, err error, toolName string) (string, error) {
 	case ActionFail:
 		// Permanent/invalid input/context overflow — no retry.
 		if agent != nil {
-			agent.PrintLine("")
-			agent.PrintLine(fmt.Sprintf("%sTool '%s' failed: %s", console.GlyphError.Prefix(), toolName, safeMsg))
-			agent.PrintLine("")
+			agent.PublishAgentMessage("tool_error", fmt.Sprintf("Tool '%s' failed: %s", toolName, safeMsg), nil)
 		}
 		return fmt.Sprintf("Error: %s", safeMsg), err
 
@@ -547,16 +544,16 @@ func handleToolError(agent *Agent, err error, toolName string) (string, error) {
 		// Log and return as normal error for potential retry.
 		// Sub-classify so the LLM gets more context for its retry decision.
 		if agent != nil {
-			agent.PrintLine("")
+			var label string
 			switch {
 			case agenterrors.IsRateLimited(err):
-				agent.PrintLine(fmt.Sprintf("%sTool '%s' failed (rate limited): %s", console.GlyphError.Prefix(), toolName, safeMsg))
+				label = "Tool '" + toolName + "' failed (rate limited): " + safeMsg
 			case agenterrors.IsProviderError(err):
-				agent.PrintLine(fmt.Sprintf("%sTool '%s' failed (provider): %s", console.GlyphError.Prefix(), toolName, safeMsg))
+				label = "Tool '" + toolName + "' failed (provider): " + safeMsg
 			default:
-				agent.PrintLine(fmt.Sprintf("%sTool '%s' failed (transient): %s", console.GlyphError.Prefix(), toolName, safeMsg))
+				label = "Tool '" + toolName + "' failed (transient): " + safeMsg
 			}
-			agent.PrintLine("")
+			agent.PublishAgentMessage("tool_error", label, nil)
 		}
 		return fmt.Sprintf("Error: %s", safeMsg), err
 	}

@@ -9,7 +9,6 @@ import (
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
-	"github.com/sprout-foundry/sprout/pkg/console"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/security"
 )
@@ -205,9 +204,7 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 		safeErr := sanitizeToolFailureMessage(err.Error())
 
 		// Ensure the error is visible to the user immediately
-		te.agent.PrintLine("")
-		te.agent.PrintLine(fmt.Sprintf("%sTool '%s' failed: %s", console.GlyphError.Prefix(), normalizedToolName, safeErr))
-		te.agent.PrintLine("")
+		te.agent.PublishAgentMessage("tool_error", fmt.Sprintf("Tool '%s' failed: %s", normalizedToolName, safeErr), nil)
 		fullResult = fmt.Sprintf("Error: %s", safeErr)
 	}
 

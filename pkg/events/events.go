@@ -49,6 +49,12 @@ const (
 	// frontend can render a color-coded review panel with per-hunk
 	// accept/reject toggles.
 	EventTypeEditApprovalRequest = "edit_approval_request"
+	// EventTypeShellApprovalRequest (SP-093-3) is published when a shell
+	// command needs per-part approval. The payload carries the request ID,
+	// the command, the split parts (with kind/semantic/risk), a unified-view
+	// string, and the overall risk level. The WebUI renders a per-part
+	// approval panel and POSTs back to /api/shell-approvals/{id}/decision.
+	EventTypeShellApprovalRequest = "shell_approval_request"
 	// EventTypePasswordRequest (SP-089-3) is published when a shell command
 	// needs a password from the user (sudo, passwd, ssh-keygen passphrase,
 	// etc.). The payload carries the request ID, the command, and the prompt

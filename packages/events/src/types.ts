@@ -247,6 +247,25 @@ export interface EditApprovalRequestData {
   status?: string;
 }
 
+/** A single part of a shell command in a shell_approval_request event (SP-093-3). */
+export interface ShellApprovalPartData {
+  id: string;
+  text: string;
+  kind: string;
+  semantic: string;
+  risk: string;
+}
+
+/** Payload for a shell_approval_request event (SP-093-3). */
+export interface ShellApprovalRequestData {
+  request_id: string;
+  command: string;
+  parts: ShellApprovalPartData[];
+  unified_view: string;
+  risk_level: string;
+  timestamp?: string;
+}
+
 // ── Terminal Session Data Types ─────────────────────────────────────
 
 export interface TerminalSessionReadyData {

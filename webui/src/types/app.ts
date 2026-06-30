@@ -136,6 +136,19 @@ export interface AppState {
     multiSelect?: boolean;
     default?: string;
   } | null;
+  shellApprovalRequest: {
+    requestId: string;
+    command: string;
+    parts: Array<{
+      id: string;
+      text: string;
+      kind: string;
+      semantic: string;
+      risk: string;
+    }>;
+    unifiedView: string;
+    riskLevel: string;
+  } | null;
   editApprovalRequest: {
     requestId: string;
     filePath: string;

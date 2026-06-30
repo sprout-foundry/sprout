@@ -69,6 +69,8 @@ func (ws *ReactWebServer) registerQueryRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/query/rewind", ws.handleAPIQueryRewind)
 	// SP-072-4: per-hunk edit approval endpoints.
 	mux.HandleFunc("/api/edits/", ws.handleAPIEdits)
+	// SP-093-3: per-part shell approval decision endpoint.
+	mux.HandleFunc("/api/shell-approvals/", ws.handleAPIShellApprovals)
 	// SP-089-3: password prompt endpoints.
 	mux.HandleFunc("/api/password/", ws.handleAPIPasswordRoutes)
 	// SP-059: per-subagent cancel; path is /api/subagent/{id}/cancel.

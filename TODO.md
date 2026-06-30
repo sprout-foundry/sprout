@@ -659,8 +659,14 @@ priority order.
   JSON + YAML. Pure refactor, no logic change, no test skips. Build
   green, full `pkg/agent_tools/...` test suite passes._
 
-- [ ] **SP-098-4:** `pkg/agent_tools/vision_types.go` (1188 → <800).
+- [x] **SP-098-4:** `pkg/agent_tools/vision_types.go` (1188 → <800).
   Split types from helpers.
+
+  _Shipped: 1166 → 150 lines. Extracted `vision_client.go` (385 lines,
+  constructors/factory), `vision_image.go` (460 lines, processor +
+  AnalyzeImage), `vision_utils.go` (227 lines, truncation/persistence).
+  Pure refactor, no logic change, no test skips. Build green, full
+  `pkg/agent_tools/...` test suite passes._
 
 - [ ] **SP-098-5:** `pkg/console/status_footer.go` (1132 → <800). Split
   per-section rendering.

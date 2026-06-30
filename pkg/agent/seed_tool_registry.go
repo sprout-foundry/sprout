@@ -11,7 +11,6 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/agent_api"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
-	"github.com/sprout-foundry/sprout/pkg/console"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/security"
@@ -119,8 +118,8 @@ func convertToSeedToolConfig(cfg ToolConfig, agent *Agent) core.ToolConfig {
 			logToolExecution(agent, name)
 			imgs, result, err := h(ctx, agent, args)
 			if err != nil {
-				msg, _ := handleToolError(agent, err, name)
-				return imgs, msg, err
+				msg, wrappedErr := handleToolError(agent, err, name)
+				return imgs, msg, wrappedErr
 			}
 			// Success — clear the security block counter for this tool+args
 			// so the circuit breaker only tracks *consecutive* failures.
@@ -493,8 +492,9 @@ func logToolExecution(_ *Agent, _ string) {
 // returns it along with the original error. Returning a non-nil error ensures
 // seed's circuit breaker failure tracking and success/error classification
 // work correctly, while the result string is sanitized for secret safety
-// and model context. It also prints [FAIL] or [⚠️ SECURITY CAUTION] lines
-// to the terminal (routed through the streaming callback for subagents).
+// and model context. Security cautions are published via PublishAgentMessage
+// for terminal rendering; the error is wrapped with SECURITY_CAUTION_REQUIRED
+// so the LLM receives the guidance in its tool result.
 func handleToolError(agent *Agent, err error, toolName string) (string, error) {
 	if err == nil {
 		return "", nil
@@ -514,10 +514,7 @@ func handleToolError(agent *Agent, err error, toolName string) (string, error) {
 		// Task 4: tier-aware guidance suffix parsed from the error message.
 		suffix := tierFromMessage(safeMsg)
 		if agent != nil {
-			console.PrintExternal(fmt.Sprintf("[⚠️  SECURITY CAUTION - LLM VERIFICATION REQUIRED] %s\n", safeMsg))
-			// Publish to event bus so the WebUI sidebar log shows the
-			// caution; PrintExternal only writes to the terminal.
-			agent.PublishAgentMessage("info", fmt.Sprintf("[⚠️  SECURITY CAUTION - LLM VERIFICATION REQUIRED] %s", safeMsg), nil)
+			agent.PublishAgentMessage("security_caution", safeMsg, nil)
 			// Task 2: audit-log the handler-level security block.
 			assessment := RiskAssessment{
 				Sources: []RiskSource{RiskSourceHandler},
@@ -538,9 +535,7 @@ func handleToolError(agent *Agent, err error, toolName string) (string, error) {
 	case ActionFail:
 		// Permanent/invalid input/context overflow — no retry.
 		if agent != nil {
-			agent.PrintLine("")
-			agent.PrintLine(fmt.Sprintf("%sTool '%s' failed: %s", console.GlyphError.Prefix(), toolName, safeMsg))
-			agent.PrintLine("")
+			agent.PublishAgentMessage("tool_error", fmt.Sprintf("Tool '%s' failed: %s", toolName, safeMsg), nil)
 		}
 		return fmt.Sprintf("Error: %s", safeMsg), err
 
@@ -549,16 +544,16 @@ func handleToolError(agent *Agent, err error, toolName string) (string, error) {
 		// Log and return as normal error for potential retry.
 		// Sub-classify so the LLM gets more context for its retry decision.
 		if agent != nil {
-			agent.PrintLine("")
+			var label string
 			switch {
 			case agenterrors.IsRateLimited(err):
-				agent.PrintLine(fmt.Sprintf("%sTool '%s' failed (rate limited): %s", console.GlyphError.Prefix(), toolName, safeMsg))
+				label = "Tool '" + toolName + "' failed (rate limited): " + safeMsg
 			case agenterrors.IsProviderError(err):
-				agent.PrintLine(fmt.Sprintf("%sTool '%s' failed (provider): %s", console.GlyphError.Prefix(), toolName, safeMsg))
+				label = "Tool '" + toolName + "' failed (provider): " + safeMsg
 			default:
-				agent.PrintLine(fmt.Sprintf("%sTool '%s' failed (transient): %s", console.GlyphError.Prefix(), toolName, safeMsg))
+				label = "Tool '" + toolName + "' failed (transient): " + safeMsg
 			}
-			agent.PrintLine("")
+			agent.PublishAgentMessage("tool_error", label, nil)
 		}
 		return fmt.Sprintf("Error: %s", safeMsg), err
 	}
@@ -697,10 +692,7 @@ func wrapSecurityCaution(agent *Agent, err error) error {
 	}
 
 	if agent != nil {
-		console.PrintExternal(fmt.Sprintf("[⚠️  SECURITY CAUTION - LLM VERIFICATION REQUIRED] %s\n", safeMsg))
-		// Publish to event bus so the WebUI sidebar log shows the
-		// caution; PrintExternal only writes to the terminal.
-		agent.PublishAgentMessage("info", fmt.Sprintf("[⚠️  SECURITY CAUTION - LLM VERIFICATION REQUIRED] %s", safeMsg), nil)
+		agent.PublishAgentMessage("security_caution", safeMsg, nil)
 	}
 	// Preserve the SecurityError type so ClassifyError still returns
 	// ActionEscalate downstream. Seed's pre-execute hook path wraps the
@@ -761,10 +753,7 @@ func wrapSecurityCautionWithLoop(agent *Agent, err error, toolName string, args 
 				"Stop attempting this operation and choose a different approach. Last reason: %s",
 			newCount, safeMsg)
 		if agent != nil {
-			console.PrintExternal(fmt.Sprintf("[🛑 SECURITY LOOP DETECTED] %s\n", safeMsg))
-			// Publish to event bus so the WebUI sidebar log shows the
-			// loop detection; PrintExternal only writes to the terminal.
-			agent.PublishAgentMessage("info", fmt.Sprintf("[🛑 SECURITY LOOP DETECTED] %s", safeMsg), nil)
+			agent.PublishAgentMessage("security_loop", safeMsg, nil)
 			// Task 2: audit-log the loop detection.
 			assessment := RiskAssessment{
 				Level:   configuration.RiskLevelCritical,
@@ -779,10 +768,7 @@ func wrapSecurityCautionWithLoop(agent *Agent, err error, toolName string, args 
 	// Standard caution path (count < threshold).
 	suffix := tierFromMessage(safeMsg)
 	if agent != nil {
-		console.PrintExternal(fmt.Sprintf("[⚠️  SECURITY CAUTION - LLM VERIFICATION REQUIRED] %s\n", safeMsg))
-		// Publish to event bus so the WebUI sidebar log shows the
-		// caution; PrintExternal only writes to the terminal.
-		agent.PublishAgentMessage("info", fmt.Sprintf("[⚠️  SECURITY CAUTION - LLM VERIFICATION REQUIRED] %s", safeMsg), nil)
+		agent.PublishAgentMessage("security_caution", safeMsg, nil)
 		// Task 2: audit-log the block.
 		assessment := RiskAssessment{
 			Sources: []RiskSource{RiskSourceClassifier},

@@ -195,7 +195,7 @@ func ExecuteShellCommandBackground(ctx context.Context, command string, sessionI
 		return string(resultBytes), nil
 	}
 
-	return "", fmt.Errorf("background mode requires WebUI terminal manager or BackgroundProcessManager")
+	return "", fmt.Errorf("background command requires a TerminalManager (WebUI) or BackgroundProcessManager (CLI) attached to the agent context")
 }
 
 // maxBackgroundWaitSeconds caps the wait_seconds parameter on
@@ -279,7 +279,7 @@ func CheckBackgroundOutputWait(ctx context.Context, sessionID string, waitSecond
 			return string(resultBytes), status == "exited", nil
 		}
 
-		return "", false, fmt.Errorf("background output retrieval requires WebUI terminal manager or BackgroundProcessManager")
+		return "", false, fmt.Errorf("background output retrieval requires a TerminalManager (WebUI) or BackgroundProcessManager (CLI) attached to the agent context")
 	}
 
 	if waitSeconds <= 0 {

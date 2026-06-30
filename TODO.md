@@ -274,9 +274,19 @@ this for files. We mirror it for shell commands.
 
 ### Phase order
 
-- [ ] **SP-093-1:** `ShellProposal` + `SplitShellIntoParts` + 5 destructive
+- [x] **SP-093-1:** `ShellProposal` + `SplitShellIntoParts` + 5 destructive
   classifiers. Pure functions, fully unit-tested in
   `shell_approval_test.go`. No agent wiring, no UI. _Effort: ~1 day._
+
+  _Shipped: 391-line `pkg/agent/shell_approval.go` with 9 CommandKind
+  constants (rm, git_push, git_reset, kubectl, docker, chmod, chown,
+  write_redirect, http_post, unknown), paren-/quote-aware
+  `SplitShellIntoParts`, regex-based `ClassifyShellSegment`,
+  `NewShellProposal` composer, and `MostDestructivePart` /
+  `HighRiskParts` methods. 54 tests pass covering all regex patterns,
+  tokenizer edge cases (balanced parens, quoted strings, sequential IDs),
+  and risk folding. Pure functions only — no agent wiring, no UI._
+  Build green.
 
 - [ ] **SP-093-2:** `Agent.RequestShellApproval` + CLI 4-option picker per
   part (arrow-key picker that toggles parts). Existing 4-option prompt

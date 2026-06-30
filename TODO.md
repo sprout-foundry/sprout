@@ -24,50 +24,50 @@ _Guidance for every item below: add the `data-testid` to an existing semantic el
 
 **Chat surface (8 testids) — `webui/src/components/ChatView.tsx`:**
 
-- [ ] **SP-090-2:** Add `chat-input` to the chat input `<textarea>`, `chat-send` to the send button (or the element that submits on Enter). Note: existing Tier 1 specs use a `[data-testid="chat-shell"] textarea` fallback — replace those fallbacks with the new testids once added. _Files: `ChatView.tsx`; affects `test/webui/chat.spec.ts`, `tier2-steer-input.spec.ts`, `tier3-network-failure.spec.ts`._
-- [ ] **SP-090-3:** Add `chat-message`, `chat-message-user`, `chat-message-assistant` to the per-message wrapper elements in the message list. Existing specs use `messageList.locator('> *')` — replace with these. _File: `ChatView.tsx`; affects `tier3-large-session.spec.ts`._
-- [ ] **SP-090-4:** Add `chat-sessions-empty` to the sidebar empty-state CTA and `chat-item` to individual session list items. _File: `webui/src/components/Sidebar.tsx`; affects `tier2-multi-chat.spec.ts`, `tier3-empty-session-list.spec.ts`._
-- [ ] **SP-090-5:** Add `chat-new-button` to the "new chat" button in the sidebar. _File: `Sidebar.tsx`; affects `tier2-multi-chat.spec.ts`._
+- [x] **SP-090-2:** Add `chat-input` to the chat input `<textarea>`, `chat-send` to the send button (or the element that submits on Enter). Note: existing Tier 1 specs use a `[data-testid="chat-shell"] textarea` fallback — replace those fallbacks with the new testids once added. _Files: `ChatView.tsx`; affects `test/webui/chat.spec.ts`, `tier2-steer-input.spec.ts`, `tier3-network-failure.spec.ts`._
+- [x] **SP-090-3:** Add `chat-message`, `chat-message-user`, `chat-message-assistant` to the per-message wrapper elements in the message list. Existing specs use `messageList.locator('> *')` — replace with these. _File: `ChatView.tsx`; affects `tier3-large-session.spec.ts`._
+- [x] **SP-090-4:** Add `chat-sessions-empty` to the sidebar empty-state CTA and `chat-item` to individual session list items. _File: `webui/src/components/Sidebar.tsx`; affects `tier2-multi-chat.spec.ts`, `tier3-empty-session-list.spec.ts`._
+- [x] **SP-090-5:** Add `chat-new-button` to the "new chat" button in the sidebar. _File: `Sidebar.tsx`; affects `tier2-multi-chat.spec.ts`._
 
 **File tree (3 testids) — `webui/src/components/SidebarFilesSection.tsx`:**
 
-- [ ] **SP-090-6:** Add `file-tree` to the file tree panel container, `file-tree-item` to each file/folder row, and `file-tree-empty` to the empty-state indicator. Existing specs use `[class*="file-tree"]` fallbacks — replace. _File: `SidebarFilesSection.tsx`; affects `tier3-long-paths.spec.ts`, `tier3-special-chars.spec.ts`, `tier3-empty-workspace.spec.ts`._
+- [x] **SP-090-6:** Add `file-tree` to the file tree panel container, `file-tree-item` to each file/folder row, and `file-tree-empty` to the empty-state indicator. Existing specs use `[class*="file-tree"]` fallbacks — replace. _File: `SidebarFilesSection.tsx`; affects `tier3-long-paths.spec.ts`, `tier3-special-chars.spec.ts`, `tier3-empty-workspace.spec.ts`._
 
 **Background tasks (5 testids) — `webui/src/components/BackgroundTasks.tsx`:**
 
-- [ ] **SP-090-7:** Add `background-tasks-trigger` (the button), `background-tasks-popover` (the dropdown), `background-task-item` (each task row), `background-task-attach` and `background-task-kill` (the action buttons). _File: `BackgroundTasks.tsx`; affects `tier2-background-tasks.spec.ts`._
+- [x] **SP-090-7:** Add `background-tasks-trigger` (the button), `background-tasks-popover` (the dropdown), `background-task-item` (each task row), `background-task-attach` and `background-task-kill` (the action buttons). _File: `BackgroundTasks.tsx`; affects `tier2-background-tasks.spec.ts`._
 
 **MCP servers (6 testids) — `webui/src/components/settings/MCPServerForm.tsx`:**
 
-- [ ] **SP-090-8:** Add `mcp-server-form` (form wrapper), `mcp-server-name-input`, `mcp-server-command-input`, `mcp-server-add-button`, `mcp-server-row` (each server entry), `mcp-server-delete-button`. _File: `MCPServerForm.tsx`; affects `tier2-mcp-servers.spec.ts`._
+- [x] **SP-090-8:** Add `mcp-server-form` (form wrapper), `mcp-server-name-input`, `mcp-server-command-input`, `mcp-server-add-button`, `mcp-server-row` (each server entry), `mcp-server-delete-button`. _File: `MCPServerForm.tsx`; affects `tier2-mcp-servers.spec.ts`._
 
 **Git panel (2 testids) — `webui/src/components/GitSidebarPanel.tsx`:**
 
-- [ ] **SP-090-9:** Add `git-push-button` and `git-remote-url`. _File: `GitSidebarPanel.tsx`; affects `tier2-git-ops.spec.ts`._
+- [x] **SP-090-9:** Add `git-push-button` and `git-remote-url`. _File: `GitSidebarPanel.tsx`; affects `tier2-git-ops.spec.ts`._
 
 **Costs status bar (1 testid) — `webui/src/components/chat/ChatStatusBarItems.tsx`:**
 
-- [ ] **SP-090-10:** Add `status-bar-cost` to the cost text rendered in the chat status bar. _File: `ChatStatusBarItems.tsx`; affects `tier2-costs-status.spec.ts`._
+- [x] **SP-090-10:** Add `status-bar-cost` to the cost text rendered in the chat status bar. _File: `ChatStatusBarItems.tsx`; affects `tier2-costs-status.spec.ts`._
 
 **Viewers (2 testids) — `MarkdownPreview.tsx`, `BinaryFileViewer.tsx`:**
 
-- [ ] **SP-090-11:** Add `markdown-preview` to `webui/src/components/MarkdownPreview.tsx` and `binary-viewer` to `webui/src/components/BinaryFileViewer.tsx`. _Affects `tier2-markdown-viewer.spec.ts`, `tier2-binary-viewer.spec.ts`._
+- [x] **SP-090-11:** Add `markdown-preview` to `webui/src/components/MarkdownPreview.tsx` and `binary-viewer` to `webui/src/components/BinaryFileViewer.tsx`. _Affects `tier2-markdown-viewer.spec.ts`, `tier2-binary-viewer.spec.ts`._
 
 **Workspace picker (2 testids) — `webui/src/components/WorkspacePicker.tsx`:**
 
-- [ ] **SP-090-12:** Add `workspace-picker` (the dropdown/modal) and `workspace-picker-option` (each workspace option). _File: `WorkspacePicker.tsx`; affects `tier2-workspace-picker.spec.ts`._
+- [x] **SP-090-12:** Add `workspace-picker` (the dropdown/modal) and `workspace-picker-option` (each workspace option). _File: `WorkspacePicker.tsx`; affects `tier2-workspace-picker.spec.ts`._
 
 **Theme toggle (1 testid) — `webui/src/components/Sidebar.tsx` / `SidebarSettingsSection.tsx`:**
 
-- [ ] **SP-090-13:** Add `theme-toggle` to the theme selector/toggle element. _Affects `tier2-theme-toggle.spec.ts`._
+- [x] **SP-090-13:** Add `theme-toggle` to the theme selector/toggle element. _Affects `tier2-theme-toggle.spec.ts`._
 
 **Empty states + disconnect overlay (3 testids):**
 
-- [ ] **SP-090-14:** Add `editor-empty` to the editor pane empty state (`webui/src/components/WelcomeTab.tsx` or `EditorPane.tsx`) and `disconnected-overlay` to `webui/src/components/DisconnectedOverlay.tsx`. _Affects `tier3-empty-workspace.spec.ts`, `tier3-network-failure.spec.ts`._
+- [x] **SP-090-14:** Add `editor-empty` to the editor pane empty state (`webui/src/components/WelcomeTab.tsx` or `EditorPane.tsx`) and `disconnected-overlay` to `webui/src/components/DisconnectedOverlay.tsx`. _Affects `tier3-empty-workspace.spec.ts`, `tier3-network-failure.spec.ts`._
 
 ### Phase 3 — Flip `test.fixme()` → `test()` and get green (17 spec files, 45 tests)
 
-- [ ] **SP-090-15:** After the testids from Phase 2 are in place, convert every `test.fixme(...)` back to `test(...)` across all 17 affected spec files. Remove the inline "missing testid" comments. Verify the testid registry test (`test/webui/testids.test.ts`) passes. The affected files:
+- [x] **SP-090-15:** After the testids from Phase 2 are in place, convert every `test.fixme(...)` back to `test(...)` across all 17 affected spec files. Remove the inline "missing testid" comments. Verify the testid registry test (`test/webui/testids.test.ts`) passes. The affected files:
   - **Tier 1:** `model-picker.spec.ts` (2), `worktree.spec.ts` (3)
   - **Tier 2:** `tier2-background-tasks.spec.ts` (2), `tier2-binary-viewer.spec.ts` (1), `tier2-costs-status.spec.ts` (1), `tier2-git-ops.spec.ts` (2), `tier2-markdown-viewer.spec.ts` (1), `tier2-mcp-servers.spec.ts` (2), `tier2-multi-chat.spec.ts` (2), `tier2-search-panel.spec.ts` (0 — already real), `tier2-steer-input.spec.ts` (1), `tier2-theme-toggle.spec.ts` (2), `tier2-workspace-picker.spec.ts` (2)
   - **Tier 3:** `tier3-empty-session-list.spec.ts` (3), `tier3-empty-workspace.spec.ts` (3), `tier3-large-session.spec.ts` (4), `tier3-long-paths.spec.ts` (4), `tier3-network-failure.spec.ts` (5), `tier3-special-chars.spec.ts` (5)

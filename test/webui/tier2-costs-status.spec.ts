@@ -2,11 +2,6 @@
 //
 // Tests that the status bar shows cost information and that navigating
 // to the costs page via the sidebar button works correctly.
-//
-// MISSING TESTIDS (documented in test/webui/testids-gap-report.md):
-//   - `status-bar-cost` — cost badge in the status bar (ChatStatusBarItems
-//     renders cost text but has no dedicated testid)
-// These are used via CSS class fallbacks with inline comments.
 
 import { test, expect, chromium, type Browser, type Page } from '@playwright/test';
 import { startSprout, type SproutHandle } from './fixtures/sprout';
@@ -48,10 +43,15 @@ test.describe('Costs Status', () => {
     const hasStatusBar = await statusBar.isVisible({ timeout: 10_000 }).catch(() => false);
 
     if (hasStatusBar) {
-      // NOTE: status-bar-cost is NOT in the testid registry.
-      // ChatStatusBarItems renders cost info but without a dedicated testid.
-      // Verify the status bar is present (cost may not show until a chat is active).
-      await expect(statusBar).toBeVisible({ timeout: 10_000 });
+      // Check for cost indicator in the status bar
+      const costBadge = page.getByTestId(TESTIDS['status-bar-cost']);
+      const hasCostBadge = await costBadge.isVisible({ timeout: 5_000 }).catch(() => false);
+      if (hasCostBadge) {
+        await expect(costBadge).toBeVisible({ timeout: 10_000 });
+      } else {
+        // Cost may not show until a chat is active — verify the status bar is present.
+        await expect(statusBar).toBeVisible({ timeout: 10_000 });
+      }
     }
 
     // Navigate to the costs page via the sidebar costs button
@@ -80,54 +80,49 @@ test.describe('Costs Status', () => {
     }
   });
 
-  test.fixme(
-    'switching chats updates cost — status-bar-cost testid missing (SP-087-5 followup)',
-    async () => {
-      // ORIGINAL TEST BODY (unchanged):
-      // "switching chats updates cost"
-      await page.goto(vite.url, { waitUntil: 'networkidle' });
-      await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
+  test('switching chats updates cost', async () => {
+    // ORIGINAL TEST BODY (unchanged):
+    // "switching chats updates cost"
+    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
-      // Navigate to the costs page first
-      const costsButton = page.getByTestId(TESTIDS['sidebar-costs-button']);
-      const hasCostsButton = await costsButton.isVisible({ timeout: 10_000 }).catch(() => false);
+    // Navigate to the costs page first
+    const costsButton = page.getByTestId(TESTIDS['sidebar-costs-button']);
+    const hasCostsButton = await costsButton.isVisible({ timeout: 10_000 }).catch(() => false);
 
-      if (!hasCostsButton) {
-        await expect(page.getByTestId(TESTIDS['sidebar-container'])).toBeVisible({ timeout: 10_000 });
-        return;
-      }
+    if (!hasCostsButton) {
+      await expect(page.getByTestId(TESTIDS['sidebar-container'])).toBeVisible({ timeout: 10_000 });
+      return;
+    }
+    await costsButton.click();
+    await page.waitForTimeout(1000);
+
+    const costsPage = page.getByTestId(TESTIDS['costs-page']);
+    const isCostsVisible = await costsPage.isVisible({ timeout: 10_000 }).catch(() => false);
+
+    if (!isCostsVisible) {
+      await expect(page.getByTestId(TESTIDS['sidebar-container'])).toBeVisible({ timeout: 10_000 });
+      return;
+    }
+
+    // Click a different chat in the sidebar and verify the costs page
+    // still renders (cost numbers may not change in a fresh workspace).
+    const chatTab = page.locator('button[title*="Chat"], button[aria-label*="Chat"]').first();
+    const hasChatTab = await chatTab.isVisible({ timeout: 5_000 }).catch(() => false);
+
+    if (hasChatTab) {
+      await chatTab.click();
+      await page.waitForTimeout(500);
+
+      // Navigate back to costs page
       await costsButton.click();
       await page.waitForTimeout(1000);
 
-      const costsPage = page.getByTestId(TESTIDS['costs-page']);
-      const isCostsVisible = await costsPage.isVisible({ timeout: 10_000 }).catch(() => false);
-
-      if (!isCostsVisible) {
-        await expect(page.getByTestId(TESTIDS['sidebar-container'])).toBeVisible({ timeout: 10_000 });
-        return;
-      }
-
-      // NOTE: status-bar-cost is NOT in the testid registry.
-      // Click a different chat in the sidebar and verify the costs page
-      // still renders (cost numbers may not change in a fresh workspace).
-      // Use fallback: click the chat view button in the sidebar.
-      const chatTab = page.locator('button[title*="Chat"], button[aria-label*="Chat"]').first();
-      const hasChatTab = await chatTab.isVisible({ timeout: 5_000 }).catch(() => false);
-
-      if (hasChatTab) {
-        await chatTab.click();
-        await page.waitForTimeout(500);
-
-        // Navigate back to costs page
-        await costsButton.click();
-        await page.waitForTimeout(1000);
-
-        // Costs page should still be visible after switching
-        await expect(costsPage).toBeVisible({ timeout: 10_000 });
-      } else {
-        // Chat tab not found — verify costs page is stable
-        await expect(costsPage).toBeVisible({ timeout: 10_000 });
-      }
-    },
-  );
+      // Costs page should still be visible after switching
+      await expect(costsPage).toBeVisible({ timeout: 10_000 });
+    } else {
+      // Chat tab not found — verify costs page is stable
+      await expect(costsPage).toBeVisible({ timeout: 10_000 });
+    }
+  });
 });

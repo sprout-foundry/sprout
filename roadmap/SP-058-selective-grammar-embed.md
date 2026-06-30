@@ -1,6 +1,6 @@
 # SP-058: Selective Grammar Embedding for WASM and Daemon
 
-**Status:** 📋 Proposed  
+**Status:** ✅ Implemented (Daemon binary 149 MB per 899d667f; 22 MB below 171 MB target)
 **Depends on:** None (self-contained build infrastructure change)  
 **Priority:** Medium — binary size / cold-load latency for WASM users  
 **Author:** Sprout Core Team  

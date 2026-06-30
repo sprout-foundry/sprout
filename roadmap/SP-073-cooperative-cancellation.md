@@ -1,6 +1,6 @@
 # SP-073: Cooperative Cancellation — Thread Context So Stop Actually Aborts
 
-**Status:** 📋 Proposed
+**Status:** ✅ Implemented (zero TODO(SP-034-1c) markers remain; all 10 sites threaded)
 **Date:** 2026-06-15
 **Depends on:** none (completes the deferred SP-034-1c work)
 **Priority:** Medium-High (closes a real "Stop doesn't stop" UX gap)

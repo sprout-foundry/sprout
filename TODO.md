@@ -567,8 +567,14 @@ Phase 2: Tool-schema update (~0.5 day)
 
 ### Phase order
 
-- [ ] **SP-097-1:** `cmd/shell_bg.go` (4 subcommands) + Cobra wiring
+- [x] **SP-097-1:** `cmd/shell_bg.go` (4 subcommands) + Cobra wiring
   + tests. _~1 day._
+
+  _Shipped: 635-line `cmd/shell_bg.go` with `list [--json]`, `status <id>`,
+  `stop <id> [--grace=10s]`, `stop-all` subcommands. Wired into
+  `cmd/root.go` alongside `automateCmd`. 15 tests pass including a
+  17-second real `sleep 30` process kill that exercises the
+  SIGINT→SIGTERM→SIGKILL cascade. `make build-all` clean._
 
 - [ ] **SP-097-2:** Update tool_registrations.go + self-help SKILL.md.
   _~0.5 day._

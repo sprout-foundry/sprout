@@ -59,9 +59,10 @@ type deepInfraModel struct {
 	Tags       []string `json:"tags"`
 	ReplacedBy string   `json:"replaced_by"`
 	Pricing    struct {
-		Type                string  `json:"type"`
-		CentsPerInputToken  float64 `json:"cents_per_input_token"`
-		CentsPerOutputToken float64 `json:"cents_per_output_token"`
+		Type                    string  `json:"type"`
+		CentsPerInputToken      float64 `json:"cents_per_input_token"`
+		CentsPerOutputToken     float64 `json:"cents_per_output_token"`
+		CentsPerCachedInputToken float64 `json:"cents_per_cached_input_token"`
 	} `json:"pricing"`
 }
 
@@ -110,11 +111,15 @@ func parseDeepInfra(body []byte) ([]CanonicalModel, error) {
 		}
 		if e.Pricing.Type == "tokens" && (e.Pricing.CentsPerInputToken > 0 || e.Pricing.CentsPerOutputToken > 0) {
 			// cents-per-token → USD per million tokens: ×1e6 tokens ÷100 cents = ×1e4.
-			m.Pricing = &Pricing{
+			p := &Pricing{
 				InputPerMTok:  e.Pricing.CentsPerInputToken * 1e4,
 				OutputPerMTok: e.Pricing.CentsPerOutputToken * 1e4,
 				Currency:      "USD",
 			}
+			if e.Pricing.CentsPerCachedInputToken > 0 {
+				p.CachedPerMTok = e.Pricing.CentsPerCachedInputToken * 1e4
+			}
+			m.Pricing = p
 		}
 		out = append(out, m)
 	}

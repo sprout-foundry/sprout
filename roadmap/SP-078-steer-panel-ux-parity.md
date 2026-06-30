@@ -1,6 +1,6 @@
 # SP-078: Steer-Panel UX Parity — Wrap-Aware Rendering, Tab Completion
 
-**Status:** 📋 Proposed
+**Status:** ✅ Implemented (2026-06-30; Phases 1–4 complete)
 **Date:** 2026-06-26
 **Depends on:** SP-055 (CLI pinned input — shipped), SP-048 (CLI Delight — established the StatusFooter pattern)
 **Priority:** Medium — user-visible CLI regression vs the regular REPL prompt and a recurring source of "the steer panel feels half-baked" reports.

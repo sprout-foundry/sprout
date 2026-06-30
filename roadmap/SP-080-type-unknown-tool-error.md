@@ -1,6 +1,6 @@
 # SP-080: Type the Unknown-Tool Error in ToolRegistry
 
-**Status:** 📋 Spec
+**Status:** ✅ Implemented (2026-06-30)
 **Date:** 2026-06-27
 **Depends on:** none
 **Priority:** Low (cleanup; removes a string-matching fallback)

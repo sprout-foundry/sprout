@@ -1,6 +1,6 @@
 # SP-081: Delete the Dead `pkg/tools/global.go` Executor
 
-**Status:** 📋 Spec
+**Status:** ✅ Implemented (2026-06-30)
 **Date:** 2026-06-27
 **Depends on:** none
 **Priority:** Low (cleanup; removes a misleading TODO and dead code path)

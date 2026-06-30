@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-06-28T11:15:48Z",
+  "updated_at": "2026-06-30T11:49:56Z",
   "source": "refresh_provider_catalog",
   "providers": [
     {
@@ -763,20 +763,6 @@
           ],
           "input_cost": 5,
           "output_cost": 25
-        },
-        {
-          "id": "anthropic/claude-opus-4.6-fast",
-          "name": "Anthropic: Claude Opus 4.6 (Fast)",
-          "description": "Fast-mode variant of [Opus 4.6](/anthropic/claude-opus-4.6) - identical capabilities with higher output speed at premium 6x pricing.\n\nLearn more in Anthropic's docs: https://platform.claude.com/docs/en/build-with-claude/fast-mode",
-          "context_length": 1000000,
-          "tags": [
-            "tools",
-            "vision",
-            "reasoning",
-            "structured_output"
-          ],
-          "input_cost": 30,
-          "output_cost": 150
         },
         {
           "id": "anthropic/claude-opus-4.7",
@@ -2290,8 +2276,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.66,
-          "output_cost": 3.41
+          "input_cost": 0.55,
+          "output_cost": 3.1999999999999997
         },
         {
           "id": "moonshotai/kimi-k2.7-code",
@@ -4242,10 +4228,9 @@
           "context_length": 262144,
           "tags": [
             "tools",
-            "reasoning",
-            "structured_output"
+            "reasoning"
           ],
-          "input_cost": 0.09,
+          "input_cost": 0.09999999999999999,
           "output_cost": 0.3
         },
         {
@@ -4582,8 +4567,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.98,
-          "output_cost": 3.08
+          "input_cost": 0.975,
+          "output_cost": 4.300000000000001
         },
         {
           "id": "z-ai/glm-5.2",
@@ -4595,7 +4580,7 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.95,
+          "input_cost": 0.94,
           "output_cost": 3
         },
         {
@@ -4707,8 +4692,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.66,
-          "output_cost": 3.41
+          "input_cost": 0.55,
+          "output_cost": 3.1999999999999997
         },
         {
           "id": "~openai/gpt-latest",
@@ -4865,6 +4850,20 @@
           ],
           "input_cost": 0.5,
           "output_cost": 2.9999999999999996
+        },
+        {
+          "id": "deepreinforce-ai/Ornith-1.0-35B",
+          "name": "deepreinforce-ai/Ornith-1.0-35B",
+          "description": "Ornith-1.0-35B is DeepReinforce's open (MIT-licensed) agentic-coding model: an RL post-train of Qwen3.5-35B-A3B, a 35B-total / ~3B-active Mixture-of-Experts with hybrid Gated-DeltaNet attention. It targets state-of-the-art open-model coding-agent performance (SWE-bench Verified 75.6, Terminal-Bench 2.1 64.2) with a 262K-token context, thinking/reasoning mode, tool calling, and image + video understanding.",
+          "context_length": 262144,
+          "tags": [
+            "tools",
+            "vision",
+            "reasoning",
+            "structured_output"
+          ],
+          "input_cost": 0.13999999999999999,
+          "output_cost": 1
         },
         {
           "id": "deepseek-ai/DeepSeek-R1-0528",
@@ -5269,8 +5268,8 @@
             "reasoning",
             "structured_output"
           ],
-          "input_cost": 0.45,
-          "output_cost": 2.1
+          "input_cost": 0.4,
+          "output_cost": 2
         },
         {
           "id": "mistralai/Mistral-Nemo-Instruct-2407",

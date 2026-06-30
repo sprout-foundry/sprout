@@ -64,6 +64,22 @@ type AssistantTurnRenderer struct {
 	startRawWidth int
 	formatter     *MarkdownFormatter
 	indent        string
+
+	// footer is the status footer to suppress during active prose
+	// streaming. When non-nil, SetProseStreaming(true) is called on
+	// the first WriteChunk of each segment and SetProseStreaming(false)
+	// on segment end (OnExternalWrite / FinalizeAtTurnEnd).
+	footer *StatusFooter
+}
+
+// SetFooter wires the status footer so the renderer can suppress its
+// refresh during active prose streaming — the root cause of the
+// "scattered characters" clobbering symptom (DEC save/restore cursor
+// races with scroll-region content).
+func (r *AssistantTurnRenderer) SetFooter(f *StatusFooter) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.footer = f
 }
 
 // NewAssistantTurnRenderer constructs a renderer with the given terminal
@@ -186,6 +202,20 @@ func (r *AssistantTurnRenderer) CursorOnFreshRow() bool {
 	return r.atLineStart
 }
 
+// ReasoningActive reports whether a reasoning header ("▽ Thinking…") is
+// currently printed on the renderer's row waiting to be finalized in
+// place by endReasoningLocked. The streaming callback uses this to
+// suppress the separator \n on the first prose chunk: when reasoning is
+// active, the cursor is mid-line on the header row, and endReasoningLocked
+// will rewrite that exact row via \r\033[K. Injecting a \n first would
+// advance past the header row, leaving "▽ Thinking…" orphaned and
+// placing the summary on the wrong row.
+func (r *AssistantTurnRenderer) ReasoningActive() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.reasoningActive
+}
+
 // WriteChunk emits a chunk of assistant text to stdout, prefixing each line
 // with the configured indent. The chunk is also appended to the current
 // segment buffer for potential post-segment re-render.
@@ -207,6 +237,13 @@ func (r *AssistantTurnRenderer) WriteChunk(chunk string) {
 	// "▽ Thinking…" line collapses to the summary before the first
 	// prose row lands.
 	r.endReasoningLocked()
+
+	// Suppress footer refresh while prose is streaming. The footer's
+	// DEC save/restore (\0337/\0338) races with scroll-region scrolling,
+	// displacing the cursor and scattering characters.
+	if r.footer != nil && r.seg.Len() == 0 {
+		r.footer.SetProseStreaming(true)
+	}
 
 	r.seg.WriteString(chunk)
 	indentCols := displayWidth(r.indent)
@@ -240,6 +277,26 @@ func (r *AssistantTurnRenderer) OnExternalWrite() {
 	r.resetSegment()
 }
 
+// OnExternalWriteRows finalizes the current segment and advances
+// physicalLines by `n` rows to account for external writes that
+// consumed terminal rows (e.g. a blank-line separator or a multi-line
+// todo block). This keeps the renderer's row math in sync so that
+// FinalizeAtTurnEnd walks back the correct number of rows.
+//
+// When n == 0 the segment is still reset (same as OnExternalWrite).
+// When n > 0 the renderer treats the external write as if it had
+// emitted n newline-terminated rows: physicalLines advances, the
+// cursor is considered at the start of a fresh row, and the segment
+// buffer resets.
+func (r *AssistantTurnRenderer) OnExternalWriteRows(n int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.physicalLines += n
+	r.atLineStart = true
+	r.curLineRunes = 0
+	r.seg.Reset()
+}
+
 // FinalizeAtTurnEnd is called once the assistant's turn has completed (after
 // the spinner stops, after any post-turn book-keeping). If the current
 // segment has substantial markdown content and stdout is a TTY, the
@@ -263,79 +320,33 @@ func (r *AssistantTurnRenderer) FinalizeAtTurnEnd() {
 		r.resetSegment()
 		return
 	}
-	if !shouldReformat(text, r.terminalWidth) {
-		r.resetSegment()
-		return
-	}
-	// If the terminal was resized while this turn streamed, the rows already on
-	// screen were re-soft-wrapped by the terminal to the new width, so our
-	// captured-width row accounting no longer matches what's displayed. Running
-	// the clear-and-reprint dance would walk back over the wrong number of rows
-	// and corrupt the scrollback. Skip the markdown reformat in that case — the
-	// raw streamed text is already on screen and correctly wrapped.
-	if w := currentStdoutWidth(); w > 0 && r.startRawWidth > 0 && w != r.startRawWidth {
-		r.resetSegment()
-		return
-	}
-	if !isStdoutTTY() {
-		r.resetSegment()
-		return
-	}
 
-	// Compute how many rows we need to walk back through. If the stream
-	// ended mid-line (no trailing \n), the in-progress line's rows haven't
-	// been counted in physicalLines — add them now.
-	upRows := r.physicalLines
+	// The markdown re-render (clear streamed text + emit ANSI-formatted
+	// version) is DISABLED. It was the primary cause of CLI output
+	// clobbering: the formatter changes the line count (removes code
+	// fences, adds language headers, collapses blank lines), so the
+	// re-emitted text doesn't match the row count of what was cleared.
+	// The cursor ends up at the wrong position and the next turn's
+	// output clobbers the residue.
+	//
+	// The streamed text is already readable — it just lacks ANSI colors.
+	// The trade-off (no syntax highlighting in the CLI) is worth the
+	// reliability. If reformatting is re-enabled in the future, the
+	// formatter's output MUST have the exact same number of visible
+	// rows as the streamed segment, or the cursor math will break.
+	//
+	// Ensure a trailing newline so the cursor is on a fresh row before
+	// the caller writes the turn summary / renders the next prompt.
+	// Streaming prose frequently ends without a trailing \n (the model's
+	// last chunk is mid-sentence or ends in a space). Before the
+	// indicator.Stop() fix, Stop() emitted \r\033[K on every call and
+	// acted as an implicit "cursor at column 0" guarantee at turn end.
+	// Now that Stop() is a true no-op when idle, FinalizeAtTurnEnd owns
+	// this responsibility — without it, the per-turn summary line glues
+	// onto the partial prose row and the prompt's \r\033[K clobbers it.
 	if !r.atLineStart {
-		upRows += physicalRows(r.curLineRunes, r.terminalWidth) - 1
+		fmt.Print("\n")
 	}
-
-	// Hide the cursor for the duration of the clear-and-reprint dance.
-	// Without this, the terminal cursor visibly jumps to the top of the
-	// segment and then back down as the formatted text renders, which
-	// reads as a "blink" — especially noticeable for tall code blocks.
-	// `\033[?25l` hides; `\033[?25h` restores. Restoration is wrapped in
-	// a defer-equivalent so an early return inside `emitFormatted`
-	// doesn't leave the user with an invisible cursor for the rest of
-	// the session.
-	fmt.Print("\033[?25l")
-	defer fmt.Print("\033[?25h")
-
-	// Walk back to the first row of the streamed segment and clear each
-	// row line-by-line with `\033[K` (clear to end of line) rather than
-	// `\033[J` (clear to end of screen). The screen-level clear was
-	// wiping background stderr output that happened to sit below the
-	// segment — the status footer's pinned row and the steer panel
-	// both render in the scrollback area, and `\033[J` would erase
-	// their rows along with the prose. The line-by-line clear only
-	// touches the segment's own rows.
-	fmt.Print("\r")
-	if upRows > 0 {
-		fmt.Printf("\033[%dA", upRows)
-	}
-	// Clear the first (top) row of the segment, then walk down with
-	// `\r\033[K\033[1B` for each subsequent row. `\r\033[K` clears the
-	// current line, `\033[1B` moves down to the next row, repeat.
-	for i := 0; i < upRows; i++ {
-		fmt.Print("\r\033[K")
-		if i < upRows-1 {
-			fmt.Print("\033[1B")
-		}
-	}
-	// After the loop, the cursor is at the start of the LAST row of the
-	// segment (or the top row if upRows == 1). Walk back up to the top
-	// of the segment so the formatted text prints from the start.
-	if upRows > 1 {
-		fmt.Printf("\033[%dA", upRows-1)
-	}
-	fmt.Print("\r")
-
-	// Width-aware elements (the horizontal rule) should span the content area —
-	// the terminal width minus the prose indent.
-	r.formatter.SetWidth(r.terminalWidth - displayWidth(r.indent))
-	formatted := r.formatter.Format(text)
-	// Emit formatted text with the same indent as the live stream.
-	r.emitFormatted(formatted)
 	r.resetSegment()
 }
 
@@ -370,6 +381,10 @@ func formatBytesShort(n int) string {
 }
 
 func (r *AssistantTurnRenderer) resetSegment() {
+	// Re-enable footer refresh now that the prose segment is done.
+	if r.footer != nil {
+		r.footer.SetProseStreaming(false)
+	}
 	r.seg.Reset()
 	r.atLineStart = true
 	r.curLineRunes = 0

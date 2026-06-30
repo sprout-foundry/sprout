@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/sprout-foundry/sprout/pkg/skills"
+	"github.com/sprout-foundry/sprout/pkg/testutil"
 )
 
 // runSkillExecute invokes the testable internal dispatcher and captures output.
@@ -271,7 +272,7 @@ func TestSkillCommand_JSON_ListOutput(t *testing.T) {
 	t.Setenv("SPROUT_SKILLS_DIR", tmp)
 
 	cmd := &SkillCommand{}
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		ctx := &CommandContext{OutputFormat: OutputJSON}
 		if err := cmd.ExecuteWithJSONOutput([]string{"list"}, nil, ctx); err != nil {
 			t.Errorf("ExecuteWithJSONOutput: %v", err)
@@ -306,7 +307,7 @@ func TestSkillCommand_JSON_ListOutput_WithSkills(t *testing.T) {
 	}
 
 	cmd := &SkillCommand{}
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		ctx := &CommandContext{OutputFormat: OutputJSON}
 		if err := cmd.ExecuteWithJSONOutput([]string{"list"}, nil, ctx); err != nil {
 			t.Errorf("ExecuteWithJSONOutput: %v", err)

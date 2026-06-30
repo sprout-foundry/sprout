@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/sprout-foundry/sprout/pkg/skills"
+	"github.com/sprout-foundry/sprout/pkg/testutil"
 )
 
 // writeSkillMD writes a minimal valid SKILL.md to the given directory.
@@ -166,7 +167,7 @@ func TestSkillCommand_Integration_JSONListOutput(t *testing.T) {
 
 	// Call ExecuteWithJSONOutput and capture stdout.
 	cmd := &SkillCommand{}
-	output := captureStdout(t, func() {
+	output := testutil.CaptureStdout(t, func() {
 		ctx := &CommandContext{OutputFormat: OutputJSON}
 		if err := cmd.ExecuteWithJSONOutput([]string{"list"}, nil, ctx); err != nil {
 			t.Errorf("ExecuteWithJSONOutput: %v", err)

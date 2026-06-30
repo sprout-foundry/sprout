@@ -90,6 +90,7 @@ func (ws *ReactWebServer) registerDiagnosticsRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/providers/models", ws.handleGetModels)
 	mux.HandleFunc("/api/diagnostics", ws.handleAPIDiagnostics)
 	mux.HandleFunc("/api/semantic", ws.handleAPISemantic)
+	mux.HandleFunc("/api/recall", ws.handleAPIRecall)
 	mux.HandleFunc("/api/support-bundle", ws.handleAPISupportBundle)
 }
 

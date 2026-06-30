@@ -181,12 +181,17 @@ loop. What's missing is the proactive surface — a CLI command and a webUI
   no embedding manager, non-positive limits, and session filtering.
   `go test ./pkg/agent/...` green; `make build-all` clean._
 
-- [ ] **SP-092-2:** `/recall <text>` CLI command. New
+- [x] **SP-092-2:** `/recall <text>` CLI command. New
   `pkg/agent_commands/recall_command.go`, registered in `commands.go`. Uses
   `output_writer.go` for printable output; `--json` flag emits the raw
   `[]RecalledItem` for scripting. Tests in `recall_command_test.go` cover
   empty query, zero results, hits, and the `--limit` / `--json` flags.
   _Effort: ~1 day. No webui changes._
+
+  _Shipped: 148-line `RecallCommand` implementing Command+JSONCommand.
+  Wired via `commands.go::registry.Register(&RecallCommand{})`. 16 tests
+  pass covering all spec cases plus edge cases (negative limit, missing
+  flag, nil agent, JSON marshal shape). `make build-all` clean._
 
 - [ ] **SP-092-3:** WebUI `/api/recall` endpoint +
   `PastSessionsHint` sidebar component. New `pkg/webui/recall_api.go`,

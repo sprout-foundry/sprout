@@ -26,6 +26,8 @@ export type {
   EditApprovalRequestData,
   EditHunk,
   EditHunkLine,
+  ShellApprovalPartData,
+  ShellApprovalRequestData,
   TerminalSessionReadyData,
   TerminalOutputData,
   TerminalPtyExitData,

@@ -169,10 +169,17 @@ loop. What's missing is the proactive surface — a CLI command and a webUI
 
 ### Phase order (each is independently shippable)
 
-- [ ] **SP-092-1:** Extract `Agent.Recall(ctx, query, limit) ([]RecalledItem, error)`
+- [x] **SP-092-1:** Extract `Agent.Recall(ctx, query, limit) ([]RecalledItem, error)`
   from `InjectSemanticRecall`. `InjectSemanticRecall` becomes a thin wrapper.
   Existing turn-level semantic-recall tests in `semantic_recall_test.go`
   must continue to pass. _Effort: ~0.5 day. No new CLI/webui surface yet._
+
+  _Shipped: New exported method `(a *Agent) Recall(ctx, query, limit)
+  ([]RecalledItem, error)` extracted from the body of
+  `InjectSemanticRecall`. `InjectSemanticRecall` is now a thin wrapper.
+  Added 4 new tests in `semantic_recall_test.go` covering nil agent,
+  no embedding manager, non-positive limits, and session filtering.
+  `go test ./pkg/agent/...` green; `make build-all` clean._
 
 - [ ] **SP-092-2:** `/recall <text>` CLI command. New
   `pkg/agent_commands/recall_command.go`, registered in `commands.go`. Uses

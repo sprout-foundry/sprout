@@ -677,8 +677,14 @@ priority order.
   (98, steer row rendering). Pure refactor, no logic change, no test
   skips. Build green, 529 console tests pass._
 
-- [ ] **SP-098-6:** `cmd/automate.go` (1070 → <800). Move
+- [x] **SP-098-6:** `cmd/automate.go` (1070 → <800). Move
   status/stop/list to sibling files.
+
+  _Shipped: 1070 → 216 lines. Extracted `automate_list.go` (54),
+  `automate_logs.go` (124), `automate_run.go` (448), `automate_status.go`
+  (164), `automate_stop.go` (117). Pure refactor, no logic change, no
+  test skips. Build green, 20/20 automate tests pass. `sprout automate
+  --help` shows all 5 subcommands._
 
 - [ ] **SP-098-7:** `pkg/ast/symbols.go` (1040 → <800). Per-language.
 

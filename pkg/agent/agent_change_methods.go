@@ -118,7 +118,7 @@ func (a *Agent) compactRevisionHistoryAsync() {
 	}
 	changesDropped := stats.OrphanChangesDropped + stats.OverCapChangesDropped + stats.AgedChangesDropped
 	if stats.WarmDemoted+stats.Dropped+stats.HardCapTrimmed+changesDropped > 0 {
-		a.Logger().Info("revision compaction: %d total / %d hot / %d→warm / %d dropped / %d trimmed / %d orphan-changes / %d over-cap-changes / %d aged-changes / %.2f MiB reclaimed",
+		a.Logger().Debug("revision compaction: %d total / %d hot / %d→warm / %d dropped / %d trimmed / %d orphan-changes / %d over-cap-changes / %d aged-changes / %.2f MiB reclaimed",
 			stats.TotalRevisions, stats.HotKept, stats.WarmDemoted,
 			stats.Dropped, stats.HardCapTrimmed,
 			stats.OrphanChangesDropped, stats.OverCapChangesDropped, stats.AgedChangesDropped,

@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const srcDir = path.resolve(__dirname, '..', '..', 'webui', 'src');
+const uiPkgSrcDir = path.resolve(__dirname, '..', '..', 'packages', 'ui', 'src');
 
 /** Recursively list .tsx files (excluding test/stories). */
 function listTsx(dir: string): string[] {
@@ -96,7 +97,7 @@ function escapeRegex(s: string): string {
 }
 
 describe('testid registry coverage', () => {
-  const tsxFiles = listTsx(srcDir);
+  const tsxFiles = [...listTsx(srcDir), ...listTsx(uiPkgSrcDir)];
 
   it('should have scanned some source files', () => {
     expect(tsxFiles.length).toBeGreaterThan(0);

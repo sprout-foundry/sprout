@@ -1,10 +1,13 @@
 package agent
 
 import (
+	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/agent_tools/computer_use"
@@ -66,6 +69,14 @@ func RegisterComputerUseTools(cfg *configuration.Config) error {
 	}
 	computer_use.SetBackend(backend)
 
+	// SP-063-4h: wire the destructive-app gate into the auditing backend's
+	// PreActionHook. The hook fires before MouseClick, MouseDrag,
+	// KeyboardPress, and Scroll — the four action methods that could
+	// interact with a denylisted app.
+	if cu.DestructiveAppGate {
+		computer_use.SetBackendPreActionHook(computerUseDestructiveAppGateFn)
+	}
+
 	computerUseOnce.Do(func() {
 		newReg := tools.GetNewToolRegistry()
 		canon := GetToolRegistry()
@@ -85,6 +96,22 @@ func RegisterComputerUseTools(cfg *configuration.Config) error {
 			names[name] = true
 		}
 		computerUseToolNames = names
+
+		// Start the OS-chord watcher for the panic key. Best-effort: failure
+		// here must not block the rest of computer-use registration.
+		panicKeyChord := cu.PanicKeyChord
+		if !computer_use.IsChordDisabled(panicKeyChord) {
+			// Use a timeout context so an unresponsive osascript/xdotool
+			// can't hang agent creation.
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			watcher := computer_use.NewChordWatcher(panicKeyChord)
+			startErr := watcher.Start(ctx)
+			cancel()
+			if startErr != nil {
+				log.Printf("[computer-use] panic-key chord watcher unavailable: %v", startErr)
+			}
+			computer_use.SetActiveChordWatcher(watcher)
+		}
 	})
 	return nil
 }

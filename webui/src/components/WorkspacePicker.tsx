@@ -79,7 +79,7 @@ function ProjectRow({
   onClick: () => void;
 }): JSX.Element {
   return (
-    <button className="workspace-picker-row" type="button" onClick={onClick} title={path}>
+    <button className="workspace-picker-row" type="button" onClick={onClick} title={path} data-testid="workspace-picker-option">
       <div className="workspace-picker-row-icon">{icon}</div>
       <div className="workspace-picker-row-info">
         <span className="workspace-picker-row-name">{name}</span>
@@ -112,7 +112,7 @@ function WorkspacePicker({
   const displayWorkspace = expandHomePath(currentWorkspace, homeDir) || '/';
 
   return (
-    <div className="workspace-picker">
+    <div className="workspace-picker" data-testid="workspace-picker">
       {/* ── Header ──────────────────────────────────────────────── */}
       <div className="workspace-picker-header">
         <div className="workspace-picker-header-icon">

@@ -2,11 +2,6 @@
 //
 // Tests that opening a binary file (e.g., .png) in the editor shows
 // a binary viewer placeholder or image viewer.
-//
-// MISSING TESTIDS (documented in test/webui/testids-gap-report.md):
-//   - `binary-viewer` — generic binary file viewer placeholder (NOT in registry;
-//     BinaryFileViewer component exists but has no data-testid)
-// The `editor-image-viewer` testid IS in the registry and is used by ImageViewer.
 
 import { test, expect, chromium, type Browser, type Page } from '@playwright/test';
 import { startSprout, type SproutHandle } from './fixtures/sprout';
@@ -39,68 +34,72 @@ test.describe.configure({ mode: 'serial' });
 test.setTimeout(60_000);
 
 test.describe('Binary Viewer', () => {
-  test.fixme(
-    'open .png/binary file shows binary viewer placeholder — binary-viewer testid missing (SP-087-5 followup)',
-    async () => {
-      // ORIGINAL TEST BODY (unchanged):
-      // "open .png/binary file shows binary viewer placeholder"
-      await page.goto(vite.url, { waitUntil: 'networkidle' });
-      await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
+  test('open .png/binary file shows binary viewer placeholder', async () => {
+    // ORIGINAL TEST BODY (unchanged):
+    // "open .png/binary file shows binary viewer placeholder"
+    await page.goto(vite.url, { waitUntil: 'networkidle' });
+    await expect(page.getByTestId(TESTIDS['chat-shell'])).toBeVisible({ timeout: 30_000 });
 
-      // Create a small PNG file (1x1 red pixel, base64-encoded)
-      // This is a minimal valid PNG file
-      const pngBase64 =
-        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
+    // Create a small PNG file (1x1 red pixel, base64-encoded)
+    // This is a minimal valid PNG file
+    const pngBase64 =
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
 
-      await page.evaluate(async (b64) => {
-        const binaryStr = atob(b64);
-        const bytes = new Uint8Array(binaryStr.length);
-        for (let i = 0; i < binaryStr.length; i++) {
-          bytes[i] = binaryStr.charCodeAt(i);
-        }
-        // Write the file via the backend API (may not exist — best effort)
-        try {
-          const workspace = await fetch('/api/workspace').then((r) => r.json());
-          const path = (workspace?.root || '.') + '/test-e2e.png';
-          await fetch('/api/files/write', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ path, content: b64, encoding: 'base64' }),
-          });
-        } catch {
-          // API may not support binary writes — that's ok for this test
-        }
-      }, pngBase64);
-
-      // Navigate to the files tab
-      const filesTab = page.getByTestId(TESTIDS['sidebar-files-tab']);
-      const hasFilesTab = await filesTab.isVisible({ timeout: 10_000 }).catch(() => false);
-
-      if (!hasFilesTab) {
-        await expect(page.getByTestId(TESTIDS['sidebar-container'])).toBeVisible({ timeout: 10_000 });
-        return;
+    await page.evaluate(async (b64) => {
+      const binaryStr = atob(b64);
+      const bytes = new Uint8Array(binaryStr.length);
+      for (let i = 0; i < binaryStr.length; i++) {
+        bytes[i] = binaryStr.charCodeAt(i);
       }
+      // Write the file via the backend API (may not exist — best effort)
+      try {
+        const workspace = await fetch('/api/workspace').then((r) => r.json());
+        const path = (workspace?.root || '.') + '/test-e2e.png';
+        await fetch('/api/files/write', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path, content: b64, encoding: 'base64' }),
+        });
+      } catch {
+        // API may not support binary writes — that's ok for this test
+      }
+    }, pngBase64);
 
-      await filesTab.click();
-      await page.waitForTimeout(500);
+    // Navigate to the files tab
+    const filesTab = page.getByTestId(TESTIDS['sidebar-files-tab']);
+    const hasFilesTab = await filesTab.isVisible({ timeout: 10_000 }).catch(() => false);
 
-      // Look for the PNG file in the tree
-      const fileItems = page.locator('.file-tree-item');
-      const pngFileItem = fileItems.filter({ hasText: 'test-e2e.png' });
-      const hasPngFile = await pngFileItem.first().isVisible({ timeout: 5_000 }).catch(() => false);
+    if (!hasFilesTab) {
+      await expect(page.getByTestId(TESTIDS['sidebar-container'])).toBeVisible({ timeout: 10_000 });
+      return;
+    }
 
-      if (hasPngFile) {
-        await pngFileItem.first().click();
-        await page.waitForTimeout(1000);
+    await filesTab.click();
+    await page.waitForTimeout(500);
 
-        // Check for image viewer (editor-image-viewer IS in the registry)
-        const imageView = page.getByTestId(TESTIDS['editor-image-viewer']);
-        const hasImageView = await imageView.isVisible({ timeout: 5_000 }).catch(() => false);
+    // Look for the PNG file in the tree
+    const fileItems = page.getByTestId(TESTIDS['file-tree-item']);
+    const pngFileItem = fileItems.filter({ hasText: 'test-e2e.png' });
+    const hasPngFile = await pngFileItem.first().isVisible({ timeout: 5_000 }).catch(() => false);
 
-        if (hasImageView) {
-          await expect(imageView).toBeVisible({ timeout: 10_000 });
+    if (hasPngFile) {
+      await pngFileItem.first().click();
+      await page.waitForTimeout(1000);
+
+      // Check for image viewer (editor-image-viewer IS in the registry)
+      const imageView = page.getByTestId(TESTIDS['editor-image-viewer']);
+      const hasImageView = await imageView.isVisible({ timeout: 5_000 }).catch(() => false);
+
+      if (hasImageView) {
+        await expect(imageView).toBeVisible({ timeout: 10_000 });
+      } else {
+        // Check for binary viewer placeholder
+        const binaryViewer = page.getByTestId(TESTIDS['binary-viewer']);
+        const hasBinaryViewer = await binaryViewer.isVisible({ timeout: 5_000 }).catch(() => false);
+
+        if (hasBinaryViewer) {
+          await expect(binaryViewer).toBeVisible({ timeout: 10_000 });
         } else {
-          // NOTE: binary-viewer is NOT in the testid registry.
           // Fall back to looking for binary viewer text or generic viewer elements.
           const binaryFallback = page.getByText(/binary|cannot preview|image/i).first();
           const hasBinaryFallback = await binaryFallback.isVisible({ timeout: 5_000 }).catch(() => false);
@@ -118,10 +117,10 @@ test.describe('Binary Viewer', () => {
             }
           }
         }
-      } else {
-        // PNG file not found in tree — verify the file tree is responsive
-        await expect(filesTab).toBeVisible({ timeout: 5_000 });
       }
-    },
-  );
+    } else {
+      // PNG file not found in tree — verify the file tree is responsive
+      await expect(filesTab).toBeVisible({ timeout: 5_000 });
+    }
+  });
 });

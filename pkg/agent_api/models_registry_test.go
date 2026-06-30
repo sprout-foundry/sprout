@@ -34,16 +34,17 @@ func TestConvertRegistryModels(t *testing.T) {
 	t.Run("full field mapping", func(t *testing.T) {
 		input := []modelregistry.RawModel{
 			{
-				ID:            "anthropic/claude-3",
-				Name:          "Claude 3",
-				Description:   "A large language model",
-				Provider:      "openrouter",
-				Size:          "70B",
-				Cost:          5.0,
-				InputCost:     3.0,
-				OutputCost:    7.0,
-				ContextLength: 200000,
-				Tags:          []string{"coding", "tools"},
+				ID:             "anthropic/claude-3",
+				Name:           "Claude 3",
+				Description:    "A large language model",
+				Provider:       "openrouter",
+				Size:           "70B",
+				Cost:           5.0,
+				InputCost:      3.0,
+				OutputCost:     7.0,
+				CachedInputCost: 0.3,
+				ContextLength:  200000,
+				Tags:           []string{"coding", "tools"},
 			},
 		}
 
@@ -78,11 +79,30 @@ func TestConvertRegistryModels(t *testing.T) {
 		if m.OutputCost != 7.0 {
 			t.Errorf("expected OutputCost %f, got %f", 7.0, m.OutputCost)
 		}
+		// CachedInputCost must be carried through so downstream pricing-aware
+		// code (calculateCachedTokenSavings) can compute exact savings.
+		if m.CachedInputCost != 0.3 {
+			t.Errorf("expected CachedInputCost %f, got %f", 0.3, m.CachedInputCost)
+		}
 		if m.ContextLength != 200000 {
 			t.Errorf("expected ContextLength %d, got %d", 200000, m.ContextLength)
 		}
 		if len(m.Tags) != 2 || m.Tags[0] != "coding" || m.Tags[1] != "tools" {
 			t.Errorf("expected Tags [coding, tools], got %v", m.Tags)
+		}
+	})
+
+	t.Run("CachedInputCost zero is preserved (not a discount signal)", func(t *testing.T) {
+		// CachedInputCost=0 means "provider does not expose a distinct
+		// cached rate" — this is distinct from a 0% discount which would
+		// be an error. The conversion must not silently coerce 0 to a
+		// fallback value.
+		input := []modelregistry.RawModel{
+			{ID: "no-cache", InputCost: 1.0, OutputCost: 2.0, CachedInputCost: 0},
+		}
+		result := convertRegistryModels(input)
+		if result[0].CachedInputCost != 0 {
+			t.Errorf("expected CachedInputCost to stay 0, got %f", result[0].CachedInputCost)
 		}
 	})
 

@@ -130,6 +130,79 @@ func TestIndicator_StopIdempotent(t *testing.T) {
 	// No panic = pass.
 }
 
+// TestIndicator_StopOnIdleWritesNothing is the regression for the
+// "word-by-word deleting" bug. When the indicator is fully idle (no
+// spinner running, no static text), Stop() must NOT emit \r\033[K to the
+// terminal. The streaming callback calls Stop() on every prose chunk; if
+// each redundant Stop clobbered the current row, the streaming prose got
+// erased character-by-character.
+//
+// We construct a TTY-mode indicator directly (bypassing NewActivityIndicator's
+// fd-based TTY detection, which can't see a bytes.Buffer) so the TTY code
+// path actually runs.
+func TestIndicator_StopOnIdleWritesNothing(t *testing.T) {
+	w := &nonTTYWriter{}
+	a := &ActivityIndicator{
+		w:     w,
+		isTTY: true, // force the TTY code path
+	}
+	// Indicator is idle (never Start'd, never SetStatic'd). Stop() must
+	// be a true no-op — no bytes written.
+	a.Stop()
+	if w.Len() != 0 {
+		t.Errorf("Stop() on idle indicator should write nothing; got %d bytes (%q)", w.Len(), w.String())
+	}
+
+	// Calling Stop() again on the still-idle indicator must also write nothing.
+	a.Stop()
+	if w.Len() != 0 {
+		t.Errorf("redundant Stop() on idle indicator should write nothing; got %d bytes (%q)", w.Len(), w.String())
+	}
+}
+
+// TestIndicator_StopAfterClearStaticWritesNothing verifies that after
+// SetStatic + ClearStatic (which leaves the indicator idle), subsequent
+// Stop() calls also write nothing — the static text was already cleared by
+// ClearStatic, so Stop has nothing to erase.
+func TestIndicator_StopAfterClearStaticWritesNothing(t *testing.T) {
+	w := &nonTTYWriter{}
+	a := &ActivityIndicator{
+		w:     w,
+		isTTY: true,
+	}
+	a.SetStatic("pinned text")
+	w.Reset() // discard the SetStatic render
+	a.ClearStatic()
+	// Now idle. ClearStatic wrote its own \r\033[K; verify it's there.
+	if !strings.Contains(w.String(), "\033[K") {
+		t.Fatalf("ClearStatic should have cleared the row; got %q", w.String())
+	}
+	w.Reset()
+	// Subsequent Stop() must write nothing.
+	a.Stop()
+	if w.Len() != 0 {
+		t.Errorf("Stop() after ClearStatic should write nothing; got %d bytes (%q)", w.Len(), w.String())
+	}
+}
+
+// TestIndicator_StopErasesAfterStart verifies the fix didn't break the
+// primary contract: after Start(), Stop() still erases the spinner row.
+func TestIndicator_StopErasesAfterStart(t *testing.T) {
+	w := &nonTTYWriter{}
+	a := &ActivityIndicator{
+		w:     w,
+		isTTY: true,
+	}
+	a.Start("Thinking")
+	// Give the render goroutine time to emit at least one frame.
+	time.Sleep(3 * spinnerCadence)
+	a.Stop()
+	got := w.String()
+	if !strings.Contains(got, "\r\033[K") {
+		t.Errorf("Stop() after Start() should erase the spinner row (\\r\\033[K); got %q", got)
+	}
+}
+
 // SP-048-2a: tab-completion cycle in InputReader.
 
 func TestInputReader_TabCompletion_CycleAndReset(t *testing.T) {

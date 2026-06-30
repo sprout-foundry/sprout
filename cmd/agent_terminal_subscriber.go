@@ -133,7 +133,14 @@ func startTerminalToolSubscriber(ctx context.Context, chatAgent *agent.Agent, ev
 					// Ensure the spinner lands on a fresh line so it never
 					// overwrites partial streamed text. Stdout for parity
 					// with how stream chunks were just printed.
+					console.LockOutput()
 					fmt.Fprintln(os.Stdout)
+					console.UnlockOutput()
+					// Notify the renderer that an external write consumed
+					// one terminal row so physicalLines stays in sync.
+					if r := currentTurnRenderer.Load(); r != nil {
+						r.OnExternalWriteRows(1)
+					}
 					progressMu.Lock()
 					snap, hasSnap := subagentProgress[persona]
 					progressMu.Unlock()
@@ -302,9 +309,25 @@ func startTerminalToolSubscriber(ctx context.Context, chatAgent *agent.Agent, ev
 					todosRaw, _ := data["todos"].([]interface{})
 					indicator.Stop()
 					if len(todosRaw) == 0 {
+						console.LockOutput()
 						fmt.Fprintln(os.Stdout, console.GlyphInfo.Prefix()+"Todo list cleared")
+						console.UnlockOutput()
+						// Notify the renderer that an external write consumed
+						// one terminal row so physicalLines stays in sync.
+						if r := currentTurnRenderer.Load(); r != nil {
+							r.OnExternalWriteRows(1)
+						}
 					} else {
+						rowCount := todoBlockRowCount(todosRaw)
+						console.LockOutput()
 						fmt.Fprintln(os.Stdout, formatTodoListBlock(todosRaw))
+						console.UnlockOutput()
+						// Notify the renderer that the multi-line todo block
+						// consumed rowCount terminal rows so physicalLines
+						// stays in sync for FinalizeAtTurnEnd.
+						if r := currentTurnRenderer.Load(); r != nil {
+							r.OnExternalWriteRows(rowCount)
+						}
 					}
 					// Breaks any pending collapse run — the multi-line block
 					// invalidates the row math the next ToolEnd would use.

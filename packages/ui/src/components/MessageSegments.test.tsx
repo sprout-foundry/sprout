@@ -19,7 +19,6 @@ vi.mock('react-markdown', () => {
 });
 
 vi.mock('remark-gfm', () => ({ default: [] }));
-vi.mock('remark-breaks', () => ({ default: [] }));
 
 import MessageSegments from './MessageSegments';
 import type { ToolRef } from '../types/chat';

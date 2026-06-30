@@ -247,6 +247,109 @@ func TestRenderer_CursorOnFreshRow(t *testing.T) {
 	require.True(t, r.CursorOnFreshRow(), "after reasoning summary \\n + prose \\n, should be at fresh row")
 }
 
+func TestRenderer_ReasoningActive(t *testing.T) {
+	// Regression for Bug 2: ReasoningActive() must report true while the
+	// "▽ Thinking…" header is on the row, and false after endReasoningLocked
+	// finalizes it. The streaming callback uses this to suppress the
+	// separator \n that would otherwise orphan the header row.
+	r := NewAssistantTurnRenderer(80, NewMarkdownFormatter(false, false))
+	require.False(t, r.ReasoningActive(), "fresh renderer should not have reasoning active")
+	captureRendererStdout(t, func() {
+		r.WriteReasoningChunk("thinking")
+	})
+	require.True(t, r.ReasoningActive(), "reasoning header printed, should be active")
+	captureRendererStdout(t, func() {
+		r.WriteChunk("prose\n")
+	})
+	require.False(t, r.ReasoningActive(), "after prose finalized reasoning, should not be active")
+}
+
+func TestRenderer_ReasoningHeaderRewrittenInPlace(t *testing.T) {
+	// Regression for Bug 2: when reasoning is active and the first prose
+	// chunk arrives, endReasoningLocked must rewrite the header row in
+	// place. If the streaming callback's separator \n fires between the
+	// header and the summary, the header gets orphaned on its own row and
+	// the summary appears below it — two visible lines instead of one.
+	//
+	// The byte stream contains both "▽ Thinking…" (the header) and
+	// "▽ Thinking ·" (the summary) because endReasoningLocked emits
+	// \r\033[K between them — that erases the header on a real terminal
+	// but the bytes remain in the pipe. The key invariant: there must be
+	// NO \n between the header and the \r\033[K that rewrites it. If a \n
+	// were present, the header would be on its own row, orphaned.
+	r := NewAssistantTurnRenderer(80, NewMarkdownFormatter(false, false))
+	out := captureRendererStdout(t, func() {
+		r.WriteReasoningChunk("thinking")
+		r.WriteChunk("hello\n")
+	})
+	// Locate the header and the summary in the raw byte stream.
+	headerIdx := strings.Index(out, "▽ Thinking…")
+	require.GreaterOrEqual(t, headerIdx, 0, "header should be present")
+	summaryIdx := strings.Index(out, "▽ Thinking ·")
+	require.GreaterOrEqual(t, summaryIdx, 0, "summary should be present")
+	require.Greater(t, summaryIdx, headerIdx, "summary should come after header")
+	// Between the header and the summary, there must be NO newline.
+	// If the streaming callback injected fmt.Println() here, a \n would
+	// separate them, orphaning the header on its own row.
+	between := out[headerIdx:summaryIdx]
+	require.NotContains(t, between, "\n",
+		"no separator \\n between header and in-place rewrite — header would be orphaned; got between=%q", between)
+	// The rewrite sequence (\r\033[K) must be present between them.
+	require.Contains(t, between, "\r\033[K",
+		"endReasoningLocked must erase the header row before the summary")
+	// Prose follows on the next row.
+	require.Contains(t, out, "  hello\n")
+}
+
+func TestRenderer_FinalizeEnsuresTrailingNewline(t *testing.T) {
+	// Regression for Bug 3: when streamed prose ends WITHOUT a trailing
+	// \n (the common case — the model's last chunk is mid-sentence),
+	// FinalizeAtTurnEnd must emit a \n so the cursor lands on a fresh
+	// row. Before the indicator.Stop() fix (Bug 1), Stop() unconditionally
+	// wrote \r\033[K at turn end, which acted as an implicit "cursor at
+	// column 0" guarantee. Now that Stop() is a true no-op when idle,
+	// FinalizeAtTurnEnd owns this responsibility. Without it, the
+	// per-turn summary line glues onto the partial prose row and the
+	// next prompt's \r\033[K clobbers it.
+	r := NewAssistantTurnRenderer(80, NewMarkdownFormatter(false, false))
+	out := captureRendererStdout(t, func() {
+		r.WriteChunk("partial line with no newline")
+		r.FinalizeAtTurnEnd()
+	})
+	// The prose was streamed without a trailing \n, so FinalizeAtTurnEnd
+	// must add one. The output should end with exactly one \n.
+	require.True(t, strings.HasSuffix(out, "\n"),
+		"FinalizeAtTurnEnd must emit a trailing \\n when cursor is mid-line; got %q", out)
+}
+
+func TestRenderer_FinalizeNoDoubleNewlineWhenAlreadyAtLineStart(t *testing.T) {
+	// When the prose already ended with \n (cursor on a fresh row),
+	// FinalizeAtTurnEnd must NOT add a spurious blank line.
+	r := NewAssistantTurnRenderer(80, NewMarkdownFormatter(false, false))
+	out := captureRendererStdout(t, func() {
+		r.WriteChunk("complete line\n")
+		r.FinalizeAtTurnEnd()
+	})
+	require.Equal(t, "  complete line\n", out,
+		"no extra newline when prose already ended with \\n; got %q", out)
+}
+
+func TestRenderer_FinalizeTrailingNewlineAfterReasoning(t *testing.T) {
+	// Reasoning-only turn: the reasoning header is finalized by
+	// endReasoningLocked, which advances the cursor past the summary \n
+	// (atLineStart = true). FinalizeAtTurnEnd must NOT add another \n.
+	r := NewAssistantTurnRenderer(80, NewMarkdownFormatter(false, false))
+	out := captureRendererStdout(t, func() {
+		r.WriteReasoningChunk("thinking")
+		r.FinalizeAtTurnEnd()
+	})
+	// The summary line ends with \n; no extra blank line.
+	if trailing := strings.Count(out, "\n"); trailing > 1 {
+		t.Errorf("reasoning-only finalize should have exactly one trailing \\n, got %d; output=%q", trailing, out)
+	}
+	require.True(t, strings.HasSuffix(out, "\n"), "should end with single \\n")
+}
+
 func TestOnExternalWriteAdvancesPhysicalLines(t *testing.T) {
 	// Verify that OnExternalWriteRows correctly advances physicalLines
 	// and resets the segment, so the renderer's row math stays in sync

@@ -202,6 +202,20 @@ func (r *AssistantTurnRenderer) CursorOnFreshRow() bool {
 	return r.atLineStart
 }
 
+// ReasoningActive reports whether a reasoning header ("▽ Thinking…") is
+// currently printed on the renderer's row waiting to be finalized in
+// place by endReasoningLocked. The streaming callback uses this to
+// suppress the separator \n on the first prose chunk: when reasoning is
+// active, the cursor is mid-line on the header row, and endReasoningLocked
+// will rewrite that exact row via \r\033[K. Injecting a \n first would
+// advance past the header row, leaving "▽ Thinking…" orphaned and
+// placing the summary on the wrong row.
+func (r *AssistantTurnRenderer) ReasoningActive() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.reasoningActive
+}
+
 // WriteChunk emits a chunk of assistant text to stdout, prefixing each line
 // with the configured indent. The chunk is also appended to the current
 // segment buffer for potential post-segment re-render.
@@ -320,6 +334,19 @@ func (r *AssistantTurnRenderer) FinalizeAtTurnEnd() {
 	// reliability. If reformatting is re-enabled in the future, the
 	// formatter's output MUST have the exact same number of visible
 	// rows as the streamed segment, or the cursor math will break.
+	//
+	// Ensure a trailing newline so the cursor is on a fresh row before
+	// the caller writes the turn summary / renders the next prompt.
+	// Streaming prose frequently ends without a trailing \n (the model's
+	// last chunk is mid-sentence or ends in a space). Before the
+	// indicator.Stop() fix, Stop() emitted \r\033[K on every call and
+	// acted as an implicit "cursor at column 0" guarantee at turn end.
+	// Now that Stop() is a true no-op when idle, FinalizeAtTurnEnd owns
+	// this responsibility — without it, the per-turn summary line glues
+	// onto the partial prose row and the prompt's \r\033[K clobbers it.
+	if !r.atLineStart {
+		fmt.Print("\n")
+	}
 	r.resetSegment()
 }
 

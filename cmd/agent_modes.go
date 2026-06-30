@@ -696,7 +696,14 @@ func SetupAgentEvents(chatAgent *agent.Agent, eventBus *events.EventBus, indicat
 				// first (endReasoningLocked advanced past the summary
 				// \n) and after any completed-line prose. Injecting
 				// another \n there produces a spurious blank line.
-				if chunk != "" && firstProseChunk.CompareAndSwap(false, true) && !r.CursorOnFreshRow() {
+				//
+				// Also skip when a reasoning header is still active:
+				// endReasoningLocked (called by WriteChunk below)
+				// rewrites that header row in-place via \r\033[K.
+				// Advancing to a fresh row first would orphan the
+				// "▽ Thinking…" header and place the summary on the
+				// wrong row.
+				if chunk != "" && firstProseChunk.CompareAndSwap(false, true) && !r.CursorOnFreshRow() && !r.ReasoningActive() {
 					fmt.Println()
 				}
 				r.WriteChunk(chunk)

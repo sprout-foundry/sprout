@@ -346,6 +346,10 @@ func startTerminalToolSubscriber(ctx context.Context, chatAgent *agent.Agent, ev
 						fmt.Fprintf(os.Stderr, "%s[⚠️  SECURITY CAUTION] %s\n", console.GlyphWarning.Prefix(), message)
 					case "security_loop":
 						fmt.Fprintf(os.Stderr, "%s[🛑 SECURITY LOOP] %s\n", console.GlyphError.Prefix(), message)
+					case "tool_error":
+						fmt.Fprintf(os.Stderr, "%s%s\n", console.GlyphError.Prefix(), message)
+					case "warning":
+						fmt.Fprintf(os.Stderr, "%s%s\n", console.GlyphWarning.Prefix(), message)
 					default:
 						fmt.Fprintf(os.Stderr, "%s%s\n", console.GlyphInfo.Prefix(), message)
 					}

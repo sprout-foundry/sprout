@@ -1,6 +1,6 @@
 # SP-063: Real `computer_user` Persona — Mouse/Keyboard/Screenshot Agent
 
-**Status:** ✅ Implemented — all safety gates shipped as of 2026-06-30; gate 4h (destructive-app denylist) still tracked separately
+**Status:** ✅ Implemented — all safety gates shipped as of 2026-06-30 (including gate 4h destructive-app denylist)
 **Date:** 2026-06-03
 **Depends on:** SP-050 (orchestrator persona collapse — same persona-system mechanics)
 **Priority:** Medium-Low (capability addition, not bug-fix)
@@ -24,7 +24,7 @@ two remain explicitly out-of-scope (see below).
 | 4e `--skip-prompt` / daemon block | ✅ done | `checkComputerUseActivation` rejects when `cfg.SkipPrompt == true` (covers both CLI `--skip-prompt` and daemon mode) |
 | 4f Per-session interactive opt-in (WebUI + CLI dialog, workspace allowlist auto-approve, "approve always" persistence) | ✅ done | `checkComputerUseSessionOptIn` (`computer_use_registration.go`); called from `ExecuteTool` (`tool_security.go`); clears on `ClearSessionOverrides` |
 | 4g Global panic key (Ctrl+C+Esc halts within 500ms) | ✅ **done** (2026-06-30) | `pkg/agent_tools/computer_use/panic_key.go` (logic), `panic_key_chord*.go` (OS chord watcher), `process_group_{unix,other}.go` (subprocess tree kill), design doc at `roadmap/SP-063-panic-key-design.md`. Default chord `Ctrl+Shift+Escape` (configurable via `ComputerUseConfig.PanicKeyChord`). WebUI Stop button remains the primary halt path; OS chord watcher is best-effort (goroutine verifies tool availability and runs polling loop so `Stop()` is cancellable; real CGEventTap / XRecord chord detection deferred to a follow-up — see design doc §Open Questions). |
-| 4h Destructive-app denylist heuristic (Mail, Banking, Disk Utility, etc.) | ❌ **deferred** | Requires OS-specific foreground-window detection (`osascript` on macOS, `wmctrl`/`xdotool` on X11) and a classification heuristic (hand-curated vs model-classified via screenshot). Design tradeoffs need user input. |
+| 4h Destructive-app denylist heuristic (Mail, Banking, Disk Utility, etc.) | ✅ **done** (2026-06-30) | Pre-action gate in `pkg/agent_tools/computer_use/audit.go` (`PreActionHook` on `auditingBackend`, invoked before `MouseClick`/`MouseDrag`/`KeyboardPress`/`KeyboardType`/`Scroll` — `Screenshot`/`Wait` are skipped). Foreground detection (`pkg/agent_tools/computer_use/foreground.go` + platform files) calls `osascript` on macOS, `xdotool` + optional `wmctrl` on X11, no-op on Wayland/headless. Classification consults the hand-curated `pkg/agent_tools/computer_use/denylist.json` (21 macOS + 22 Linux entries across `financial`/`system`/`destructive`/`password_manager` categories) merged with the per-user override file at `~/.config/sprout/computer_use_denylist_overrides.json` (override wins; `"allow": true` removes an entry). On match, the agent-side `DestructiveAppPrompter` (`pkg/agent/destructive_app_prompter.go`) reuses the existing `checkComputerUseSessionOptIn` approval cascade (WebUI dialog + CLI fallback). Per-session `computerUseAppAllowlist map[string]bool` short-circuits the gate after the first "Allow once". "Always allow this app" persists an `"allow": true` entry to the override file and `Reload()`s the loader. Power-user opt-out via `ComputerUseConfig.DestructiveAppGate` (default true). Design doc at `roadmap/SP-063-destructive-denylist-design.md`. 4h-prompt shipped in `274aa5f6`; 4h-tests in `cc63d744` (denylist_allow_test.go 430 LOC + destructive_app_test.go 483 LOC). |
 | 5 Persona prompt | ✅ done | `pkg/agent/prompts/subagent_prompts/computer_user.md` |
 | 6 Tool allowlist (computer_user only) | ✅ done | persona `allowed_tools` (`pkg/personas/configs/computer_user.json`) + dispatch-layer guard (`isComputerUseToolBlocked` in `computer_use_registration.go`) |
 | 7 WebUI settings panel | ✅ done | `webui/src/components/settings/ComputerUseSettingsTab.tsx` (307 lines) — master toggle, action rate, audit log dir, workspace allowlist, "Test connection" button |
@@ -51,12 +51,57 @@ Defense-in-depth, in order, before any click happens:
 8. **Audit log** — every action + every opt-in/denial recorded to JSONL.
 9. **Persona allowlist + dispatch guard** — tools only available to the `computer_user` persona; rejected at dispatch for any other persona.
 10. **Panic key** (`Ctrl+Shift+Escape`, configurable) — emergency-stop chord that (i) sets a halted flag on a `PanicableBackend` decorator wrapping the subprocess backend, (ii) kills any in-flight subprocess tree via a process-group `SIGKILL`, (iii) cancels the agent's `interruptCtx` (reusing the existing WebUI-Stop path), and (iv) records `panic_key_triggered` / `panic_key_duplicate` / `panic_key_reset` audit events. After a halt the user must re-consent to computer use (`computerUseSessionApproved` is reset). See `roadmap/SP-063-panic-key-design.md` for full design.
+11. **Destructive-app denylist gate** — before any `mouse_click` / `keyboard_press` / `scroll` / `mouse_drag` whose target app is on the curated denylist (Mail, Disk Utility, banking apps, password managers, browsers-in-incognito, generic `sudo password` prompts, …), the `PreActionHook` on `auditingBackend` calls `GetForegroundApp` (osascript on macOS, xdotool/wmctrl on X11, no-op on Wayland/headless), classifies against the merged default + override denylist (`Loader.IsDestructiveApp`), and on a match invokes the `DestructiveAppPrompter` which reuses the existing WebUI/CLI approval cascade. Per-session `computerUseAppAllowlist` short-circuits the gate after the first "Allow once". "Always allow this app" persists an `"allow": true` entry to `~/.config/sprout/computer_use_denylist_overrides.json` and reloads the loader — so future sessions don't re-prompt for the same app. Disabled by setting `ComputerUseConfig.DestructiveAppGate = false`. See `roadmap/SP-063-destructive-denylist-design.md` for full design and rationale.
 
 ## Why gate 4h (destructive denylist) is deferred
 
+_None — gate 4h shipped 2026-06-30._
+
 Gate 4g (panic key) shipped on 2026-06-30 — see the `PanicableBackend` decorator at `pkg/agent_tools/computer_use/panic_key.go` and the design doc at `roadmap/SP-063-panic-key-design.md`. The OS-level chord watcher (macOS CGEventTap, Linux XRecord) is best-effort and the WebUI Stop button remains the primary halt path. Real chord detection via CGO is the only deferred sub-task — tracked as an open follow-up.
 
-Gate 4h remains deferred: requires OS-specific foreground-window detection (`osascript` on macOS, `wmctrl`/`xdotool` on X11), a classification heuristic (hand-curated app list vs model-classified via screenshot), and per-action confirmation wiring in the action loop. The hand-curated list rots; the model-classified path adds latency to every click and a non-trivial prompt-flow on every click into Mail.
+Gate 4h (destructive-app denylist) shipped on 2026-06-30 — see the `PreActionHook` field on `auditingBackend` (`pkg/agent_tools/computer_use/audit.go`), the `Loader.IsDestructiveApp` classifier at `pkg/agent_tools/computer_use/denylist.go`, the hand-curated `pkg/agent_tools/computer_use/denylist.json`, the agent-side `DestructiveAppPrompter` at `pkg/agent/destructive_app_prompter.go`, and the design doc at `roadmap/SP-063-destructive-denylist-design.md`. Per-action prompt reuses the existing `checkComputerUseSessionOptIn` approval cascade. The hand-curated list is mitigated by per-user override entries (users can append a new app or remove an existing one via the override file). Future follow-ups: Wayland DBus portal support (out of scope for v1 — synthetic input blocked by design on Wayland), Windows native `GetForegroundWindow` (computer use on Windows is out of scope, no backend yet), and a screenshot-based model-classified fallback if usage data justifies the per-click latency cost.
+
+## Overriding the denylist
+
+The default denylist is bundled at `pkg/agent_tools/computer_use/denylist.json` and updated with each sprout release. To override without forking, create a per-user JSON file at `~/.config/sprout/computer_use_denylist_overrides.json` (override the path via `ComputerUseConfig.OverrideFilePath`). The override file has the same schema as the default:
+
+```json
+{
+  "version": 1,
+  "macos": [
+    {
+      "bundle_id": "com.apple.mail",
+      "allow": true,
+      "reason": "User explicitly allowed Mail on 2026-07-01."
+    },
+    {
+      "bundle_id": "com.example.internal-app",
+      "category": "destructive",
+      "reason": "Internal app added by user override."
+    }
+  ],
+  "linux": [
+    {
+      "window_class_regex": "Thunderbird",
+      "allow": true,
+      "reason": "User trusts Thunderbird compose in this session."
+    }
+  ]
+}
+```
+
+Merge semantics:
+
+- Same `bundle_id` (macOS) or `window_class_regex` (Linux) → override entry **replaces** the default entry entirely (override wins).
+- New `bundle_id` / `window_class_regex` → override entry is **added** to the effective list.
+- `"allow": true` → the matched default entry is **removed** from the effective list for this user (this is the "always allow this app" path, written automatically when the user clicks "Always allow" on the prompt).
+- Fields omitted from an override entry are **inherited** from the default entry (e.g., omit `reason` and the default's reason is kept).
+
+Match semantics (AND):
+
+- `bundle_id` (macOS) — exact string match.
+- `window_class_regex` (X11) — regex match against `WM_CLASS[Name]`.
+- `window_title_regex` (X11) — regex match against the window title. When both class and title regexes are set on the same entry, **both** must match (the generic `(?i)\b(Authenticate|sudo password|Password:)\b` title catch-all is intentionally combined with `.*` class so it matches any app's auth dialog).
 
 ## Background
 

@@ -7,15 +7,13 @@ import { Skeleton } from '@sprout/ui';
 import CredentialsSettingsTab from './CredentialsSettingsTab';
 
 // Import from settings/ subdirectory
+import AdvancedSettingsTab from './settings/AdvancedSettingsTab';
 import AgentBehaviorSettingsTab from './settings/AgentBehaviorSettingsTab';
-import CommitReviewSettingsTab from './settings/CommitReviewSettingsTab';
 import ComputerUseSettingsTab from './settings/ComputerUseSettingsTab';
 import EmbeddingSettingsTab from './settings/EmbeddingSettingsTab';
 import GeneralSettingsTab from './settings/GeneralSettingsTab';
 import LanguageServersSettingsTab from './settings/LanguageServersSettingsTab';
 import MCPSettingsTab from './settings/MCPSettingsTab';
-import OcrSettingsTab from './settings/OcrSettingsTab';
-import PerformanceSettingsTab from './settings/PerformanceSettingsTab';
 import PersistentContextSettingsTab from './settings/PersistentContextSettingsTab';
 import ProviderSettingsTab from './settings/ProviderSettingsTab';
 import SecuritySettingsTab from './settings/SecuritySettingsTab';
@@ -440,26 +438,16 @@ function SettingsPanel({
           />
         );
 
-      case 'env-performance':
+      case 'env-advanced':
         return (
-          <PerformanceSettingsTab
+          <AdvancedSettingsTab
+            settings={activeSettings ?? settings}
             renderNumberInput={fieldRenderers.renderNumberInput}
             renderTextInput={fieldRenderers.renderTextInput}
-          />
-        );
-
-      case 'env-commit-review':
-        return (
-          <CommitReviewSettingsTab
-            settings={activeSettings ?? settings}
+            renderToggle={fieldRenderers.renderToggle}
             commitReviewProviders={state.commitReviewProviders}
             updateSetting={mutations.updateSetting}
           />
-        );
-
-      case 'env-ocr':
-        return (
-          <OcrSettingsTab renderToggle={fieldRenderers.renderToggle} renderTextInput={fieldRenderers.renderTextInput} />
         );
 
       /* ── Editor section ────────────────────────────── */

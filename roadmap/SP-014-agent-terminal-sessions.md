@@ -1,6 +1,6 @@
 # SP-014: Agent Terminal Sessions — Hidden PTY Routing + Background Mode
 
-**Status:** 📋 Proposed  
+**Status:** ✅ Implemented (Hidden PTY routing + background mode shipped)
 **Depends on:** SP-001 (Agent Core Architecture), SP-003 (WebUI & Frontend Architecture)  
 **Priority:** High  
 **Effort Estimate:** ~2-3 weeks (3 phases)

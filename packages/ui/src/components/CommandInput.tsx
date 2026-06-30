@@ -997,7 +997,7 @@ function CommandInput({
         aria-activedescendant={slashAutocompleteOpen ? `slash-option-${slashAutocompleteIndex}` : undefined}
         rows={2}
         spellCheck={false}
-        data-testid="command-input"
+        data-testid="chat-input"
       />
 
       {slashAutocompleteOpen && (
@@ -1099,6 +1099,7 @@ function CommandInput({
         <button
           type="button"
           className="new-session-button"
+          data-testid="chat-new-button"
           onClick={handleNewSession}
           disabled={disabled}
           data-tooltip="New Session (/clear)"
@@ -1110,6 +1111,7 @@ function CommandInput({
           type="submit"
           disabled={disabled || !canSend || !isConnected}
           className="send-button"
+          data-testid="chat-send"
           data-tooltip={!isConnected ? 'Reconnecting...' : isProcessing ? 'Steer running request' : 'Send message'}
           aria-label="Send message"
         >

@@ -23,11 +23,12 @@ type AuditRecord struct {
 // per-session JSONL log under the configured directory. It is the outermost
 // decorator so it captures the action the user actually authorized.
 type auditingBackend struct {
-	inner  ComputerBackend
-	mu     sync.Mutex
-	w      *os.File
-	now    func() time.Time
-	closed bool
+	inner         ComputerBackend
+	mu            sync.Mutex
+	w             *os.File
+	now           func() time.Time
+	closed        bool
+	preActionHook func(action string, args map[string]any) error
 }
 
 // NewAuditingBackend wraps inner, writing audit records to
@@ -60,6 +61,26 @@ func (a *auditingBackend) Close() error {
 	err := a.w.Close()
 	a.w = nil
 	return err
+}
+
+// SetPreActionHook installs a hook that runs before the inner backend
+// executes an action. The hook is called for MouseClick, MouseDrag,
+// KeyboardPress, and Scroll only. If the hook returns an error, the
+// action is recorded with that error and the inner backend is NOT
+// invoked.
+func (a *auditingBackend) SetPreActionHook(fn func(action string, args map[string]any) error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.preActionHook = fn
+}
+
+// SetBackendPreActionHook is a helper for callers outside this package
+// (e.g., pkg/agent) to install a pre-action hook when the backend is
+// wrapped by an auditingBackend. It is a no-op for other backend types.
+func SetBackendPreActionHook(fn func(action string, args map[string]any) error) {
+	if ab, ok := backend.(*auditingBackend); ok {
+		ab.SetPreActionHook(fn)
+	}
 }
 
 func (a *auditingBackend) record(action string, args map[string]any, opErr error) {
@@ -98,14 +119,24 @@ func (a *auditingBackend) Screenshot(region *Rect) ([]byte, Size, error) {
 }
 
 func (a *auditingBackend) MouseClick(x, y int, button MouseButton, double bool) error {
+	args := map[string]any{"x": x, "y": y, "button": string(button), "double": double}
+	if hookErr := a.runPreActionHook("mouse_click", args); hookErr != nil {
+		a.record("mouse_click", args, hookErr)
+		return hookErr
+	}
 	err := a.inner.MouseClick(x, y, button, double)
-	a.record("mouse_click", map[string]any{"x": x, "y": y, "button": string(button), "double": double}, err)
+	a.record("mouse_click", args, err)
 	return err
 }
 
 func (a *auditingBackend) MouseDrag(from, to Point, button MouseButton) error {
+	args := map[string]any{"from": from, "to": to, "button": string(button)}
+	if hookErr := a.runPreActionHook("mouse_drag", args); hookErr != nil {
+		a.record("mouse_drag", args, hookErr)
+		return hookErr
+	}
 	err := a.inner.MouseDrag(from, to, button)
-	a.record("mouse_drag", map[string]any{"from": from, "to": to, "button": string(button)}, err)
+	a.record("mouse_drag", args, err)
 	return err
 }
 
@@ -124,15 +155,37 @@ func (a *auditingBackend) KeyboardType(text string) error {
 }
 
 func (a *auditingBackend) KeyboardPress(key string) error {
+	args := map[string]any{"key": key}
+	if hookErr := a.runPreActionHook("keyboard_press", args); hookErr != nil {
+		a.record("keyboard_press", args, hookErr)
+		return hookErr
+	}
 	err := a.inner.KeyboardPress(key)
-	a.record("keyboard_press", map[string]any{"key": key}, err)
+	a.record("keyboard_press", args, err)
 	return err
 }
 
 func (a *auditingBackend) Scroll(dir ScrollDir, amount int, at *Point) error {
+	args := map[string]any{"dir": string(dir), "amount": amount, "at": at}
+	if hookErr := a.runPreActionHook("scroll", args); hookErr != nil {
+		a.record("scroll", args, hookErr)
+		return hookErr
+	}
 	err := a.inner.Scroll(dir, amount, at)
-	a.record("scroll", map[string]any{"dir": string(dir), "amount": amount, "at": at}, err)
+	a.record("scroll", args, err)
 	return err
+}
+
+// runPreActionHook calls the preActionHook (if set) and returns nil when
+// no hook is installed or the hook succeeds.
+func (a *auditingBackend) runPreActionHook(action string, args map[string]any) error {
+	a.mu.Lock()
+	hook := a.preActionHook
+	a.mu.Unlock()
+	if hook != nil {
+		return hook(action, args)
+	}
+	return nil
 }
 
 func sanitizeSession(s string) string {

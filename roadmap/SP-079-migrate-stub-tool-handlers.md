@@ -1,6 +1,6 @@
 # SP-079: Migrate Stub Tool Handlers off the Legacy `*Agent` Path
 
-**Status:** 📋 Spec
+**Status:** ✅ Implemented (2026-06-30)
 **Date:** 2026-06-27
 **Depends on:** SP-074 (Tool-Registry Migration)
 **Priority:** Medium-High (LLM usability — these tools currently error out when invoked via the new registry)

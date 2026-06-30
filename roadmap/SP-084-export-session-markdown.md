@@ -1,6 +1,6 @@
 # SP-084: Export Sessions to Shareable Markdown / HTML
 
-**Status:** 📋 Spec
+**Status:** ✅ Implemented (2026-06-30)
 **Date:** 2026-06-27
 **Depends on:** SP-020 (Trace/Dataset Mode — same session metadata; the training export pipeline at `pkg/training/export.go` is a related but separate concern)
 **Priority:** Medium (high user value; the existing training export only emits ShareGPT/OpenAI/Alpaca JSONL for fine-tuning, not human-readable formats)

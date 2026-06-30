@@ -106,7 +106,7 @@ function WelcomeContent({
   ];
 
   return (
-    <>
+    <div data-testid="editor-empty">
       <div className="welcome-header">
         <div className="welcome-header-content">
           <h1>Welcome to sprout</h1>
@@ -173,7 +173,7 @@ function WelcomeContent({
           Pro tip: Press <kbd>{PRIMARY_KEY}+P</kbd> to open the command palette and search for any command or file
         </p>
       </div>
-    </>
+    </div>
   );
 }
 

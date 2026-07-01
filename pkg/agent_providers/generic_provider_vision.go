@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // SupportsVision returns whether the provider supports vision
@@ -54,7 +55,7 @@ func (p *GenericProvider) GetVisionModel() string {
 // SendVisionRequest sends a vision request (for providers that support it)
 func (p *GenericProvider) SendVisionRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	if !p.SupportsVision() {
-		return nil, fmt.Errorf("provider %s does not support vision", p.config.Name)
+		return nil, agenterrors.NewValidation(fmt.Sprintf("provider %s does not support vision", p.config.Name), nil)
 	}
 
 	// Use vision model if specified

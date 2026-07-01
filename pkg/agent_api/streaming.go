@@ -3,12 +3,13 @@ package api
 import (
 	"bufio"
 	"encoding/json"
-	"fmt"
 	"io"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
+
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // StreamCallback is called for each content chunk received.
@@ -355,12 +356,12 @@ func (r *SSEReader) ReadWithTimeout(timeout time.Duration) error {
 					// Process any remaining data
 					if dataBuilder.Len() > 0 && r.onEvent != nil {
 						if err := r.onEvent(event, dataBuilder.String()); err != nil {
-							return fmt.Errorf("failed to process remaining data: %w", err)
+							return agenterrors.Wrap(err, "failed to process remaining data")
 						}
 					}
 					return nil
 				}
-				return fmt.Errorf("failed to read stream: %w", result.err)
+				return agenterrors.NewNetwork("failed to read stream", result.err)
 			}
 
 			line := strings.TrimSpace(result.line)
@@ -369,7 +370,7 @@ func (r *SSEReader) ReadWithTimeout(timeout time.Duration) error {
 			if line == "" {
 				if dataBuilder.Len() > 0 && r.onEvent != nil {
 					if err := r.onEvent(event, dataBuilder.String()); err != nil {
-						return fmt.Errorf("processing SSE event: %w", err)
+						return agenterrors.Wrap(err, "processing SSE event")
 					}
 				}
 				// Reset for next event
@@ -391,7 +392,7 @@ func (r *SSEReader) ReadWithTimeout(timeout time.Duration) error {
 			// Ignore other fields like id:, retry:
 
 		case <-timerChan:
-			return fmt.Errorf("SSE stream timeout after %s", timeout)
+			return agenterrors.NewTimeout("SSE stream", timeout)
 		}
 	}
 }
@@ -405,7 +406,7 @@ func ParseSSEData(data string) (*StreamingChatResponse, error) {
 
 	var chunk StreamingChatResponse
 	if err := json.Unmarshal([]byte(data), &chunk); err != nil {
-		return nil, fmt.Errorf("failed to parse SSE data: %w", err)
+		return nil, agenterrors.Wrap(err, "failed to parse SSE data")
 	}
 
 	// Flexible cost fallback: if the typed decode didn't capture a cost

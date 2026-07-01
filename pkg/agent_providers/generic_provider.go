@@ -12,6 +12,7 @@ import (
 	"time"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/credentials"
 	"github.com/sprout-foundry/sprout/pkg/logging"
 	"github.com/sprout-foundry/sprout/pkg/modelregistry"
@@ -32,6 +33,9 @@ const maxProviderErrorBodyPreview = 240
 
 func formatProviderHTTPError(statusCode int, headers http.Header, body []byte) error {
 	message := summarizeProviderHTTPError(statusCode, headers, body)
+	// NOTE: Kept as fmt.Errorf — test TestGenericProviderTruncatesLargePlainTextErrors
+	// asserts strings.HasPrefix(err.Error(), "HTTP 502: ") which would break
+	// with NewNetwork's "[network] " prefix
 	if message == "" {
 		// Include response headers when body is empty — providers like ZAI
 		// sometimes return error info only in headers (e.g. X-Error-Code).
@@ -189,7 +193,7 @@ func modelInfoHasVisionTag(modelInfo *ModelInfo) bool {
 // NewGenericProvider creates a new generic provider from configuration
 func NewGenericProvider(config *ProviderConfig) (*GenericProvider, error) {
 	if err := config.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid provider config: %w", err)
+		return nil, agenterrors.NewValidation(fmt.Sprintf("invalid provider config: %v", err), nil)
 	}
 
 	timeout := config.GetTimeout()
@@ -212,21 +216,21 @@ func NewGenericProvider(config *ProviderConfig) (*GenericProvider, error) {
 func (p *GenericProvider) SendChatRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	requestBody, err := p.buildChatRequest(messages, tools, reasoning, disableThinking, false)
 	if err != nil {
-		return nil, fmt.Errorf("failed to build chat request: %w", err)
+		return nil, agenterrors.Wrap(err, "failed to build chat request")
 	}
 
 	req, err := p.buildHTTPRequestCtx(ctx, requestBody, false)
 	if err != nil {
 		// Log request on build error
 		logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, false, "build_http_request", err)
-		return nil, fmt.Errorf("failed to build HTTP request: %w", err)
+		return nil, agenterrors.Wrap(err, "failed to build HTTP request")
 	}
 
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
 		// Log request on HTTP error
 		logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, false, "http_request_failed", err)
-		return nil, fmt.Errorf("HTTP request failed: %w", err)
+		return nil, agenterrors.NewNetwork("HTTP request failed", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
@@ -241,7 +245,7 @@ func (p *GenericProvider) SendChatRequest(ctx context.Context, messages []api.Me
 			if retryErr != nil {
 				logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, false,
 					"retry_max_completion_tokens_build", retryErr)
-				return nil, fmt.Errorf("failed retry with max_completion_tokens: %w", retryErr)
+				return nil, agenterrors.NewNetwork("failed retry with max_completion_tokens", retryErr)
 			}
 			defer retryResp.Body.Close()
 			if retryResp.StatusCode != http.StatusOK {
@@ -255,7 +259,7 @@ func (p *GenericProvider) SendChatRequest(ctx context.Context, messages []api.Me
 			retryResponse, err := decodeChatResponseWithCost(retryResp.Body)
 			if err != nil {
 				logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, false, "decode_response", err)
-				return nil, fmt.Errorf("failed to decode response: %w", err)
+				return nil, agenterrors.NewNetwork("failed to decode response", err)
 			}
 			return retryResponse, nil
 		}
@@ -272,7 +276,7 @@ func (p *GenericProvider) SendChatRequest(ctx context.Context, messages []api.Me
 	if err != nil {
 		// Log request on decode error
 		logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, false, "decode_response", err)
-		return nil, fmt.Errorf("failed to decode response: %w", err)
+		return nil, agenterrors.NewNetwork("failed to decode response", err)
 	}
 
 	// Success - don't log the request
@@ -306,7 +310,7 @@ func decodeChatResponseWithCost(r io.Reader) (*api.ChatResponse, error) {
 // CheckConnection tests provider connection with current model
 func (p *GenericProvider) CheckConnection() error {
 	if err := p.ensureModel(); err != nil {
-		return fmt.Errorf("check connection: failed to ensure model: %w", err)
+		return agenterrors.NewNetwork("check connection: failed to ensure model", err)
 	}
 
 	// Send a minimal test request to verify the model works
@@ -319,7 +323,7 @@ func (p *GenericProvider) CheckConnection() error {
 
 	_, err := p.SendChatRequest(context.Background(), testMessages, nil, "", false)
 	if err != nil {
-		return fmt.Errorf("check connection: test request failed: %w", err)
+		return agenterrors.NewNetwork("check connection: test request failed", err)
 	}
 	return nil
 }
@@ -365,7 +369,7 @@ func (p *GenericProvider) RefreshAPIKey() error {
 
 	resolved, err := credentials.ResolveProvider(p.config.Name)
 	if err != nil {
-		return fmt.Errorf("failed to re-resolve API key for %q: %w", p.config.Name, err)
+		return agenterrors.NewNetwork(fmt.Sprintf("failed to re-resolve API key for %q", p.config.Name), err)
 	}
 
 	p.config.Auth.Key = resolved.Value
@@ -499,7 +503,7 @@ func (p *GenericProvider) ListModels(ctx context.Context) ([]api.ModelInfo, erro
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&modelsResponse); err != nil {
-		return nil, fmt.Errorf("failed to decode models response: %w", err)
+		return nil, agenterrors.NewNetwork("failed to decode models response", err)
 	}
 
 	// Build model list from endpoint data, enriched with config

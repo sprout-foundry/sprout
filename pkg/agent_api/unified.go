@@ -2,8 +2,9 @@ package api
 
 import (
 	"context"
-	"fmt"
 	"time"
+
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // UnifiedProviderWrapper wraps any provider that implements ProviderInterface
@@ -66,7 +67,7 @@ func (w *UnifiedProviderWrapper) SendChatRequest(ctx context.Context, messages [
 	duration := time.Since(startTime)
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate response: %w", err)
+		return nil, agenterrors.Wrap(err, "failed to generate response")
 	}
 
 	// Track TPS
@@ -230,7 +231,7 @@ func (w *UnifiedProviderWrapper) SendVisionRequest(ctx context.Context, messages
 	// Call provider vision method
 	response, err := w.provider.SendVisionRequest(ctx, typeMessages, typeTools, reasoning, disableThinking)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send vision request: %w", err)
+		return nil, agenterrors.Wrap(err, "failed to send vision request")
 	}
 
 	// Convert response back to API types (same as SendChatRequest)
@@ -350,7 +351,7 @@ func (w *UnifiedProviderWrapper) SendChatRequestStream(ctx context.Context, mess
 	// Call provider's streaming method
 	response, err := w.provider.SendChatRequestStream(ctx, providerMessages, providerTools, reasoning, disableThinking, providerCallback)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send streaming request: %w", err)
+		return nil, agenterrors.Wrap(err, "failed to send streaming request")
 	}
 
 	// Convert response back to API types

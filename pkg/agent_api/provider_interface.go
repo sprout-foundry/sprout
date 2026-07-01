@@ -2,10 +2,11 @@ package api
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"net/http"
 	"time"
+
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // Provider defines the interface all LLM providers must implement
@@ -180,7 +181,7 @@ func (p *BaseProvider) SupportsReasoning() bool {
 func (p *BaseProvider) MakeAuthRequest(ctx context.Context, method, url string, body io.Reader) (*http.Request, error) {
 	req, err := http.NewRequestWithContext(ctx, method, url, body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create auth request: %w", err)
+		return nil, agenterrors.NewNetwork("failed to create auth request", err)
 	}
 
 	req.Header.Set("Authorization", "Bearer "+p.apiKey)

@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/sprout-foundry/sprout/pkg/errors"
 	"gopkg.in/yaml.v3"
 )
 
@@ -31,7 +32,7 @@ func SerializeJSONOrdered(data interface{}) (string, error) {
 	}
 
 	if err := enc.Encode(val); err != nil {
-		return "", fmt.Errorf("failed to encode ordered JSON: %w", err)
+		return "", errors.NewTool("ordered", "failed to encode ordered JSON", err)
 	}
 
 	// json.Encoder.Encode appends a trailing newline; trim it to match
@@ -96,7 +97,7 @@ func orderedMapToJSON(om *OrderedMap) (json.RawMessage, error) {
 		// Encode key.
 		keyBytes, err := marshalJSONNoEscape(pair.Key)
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal JSON key %q: %w", pair.Key, err)
+			return nil, errors.NewTool("ordered", fmt.Sprintf("failed to marshal JSON key %q", pair.Key), err)
 		}
 		buf.Write(keyBytes)
 		buf.WriteByte(':')
@@ -108,7 +109,7 @@ func orderedMapToJSON(om *OrderedMap) (json.RawMessage, error) {
 		}
 		valBytes, err := marshalJSONNoEscape(val)
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal JSON value for key %q: %w", pair.Key, err)
+			return nil, errors.NewTool("ordered", fmt.Sprintf("failed to marshal JSON value for key %q", pair.Key), err)
 		}
 		buf.Write(valBytes)
 	}
@@ -150,7 +151,7 @@ func SerializeYAMLOrdered(data interface{}) (string, error) {
 	if node == nil {
 		b, err := yaml.Marshal(data)
 		if err != nil {
-			return "", fmt.Errorf("failed to marshal YAML: %w", err)
+			return "", errors.NewTool("ordered", "failed to marshal YAML", err)
 		}
 		result := string(b)
 		if len(result) == 0 || result[len(result)-1] != '\n' {
@@ -169,7 +170,7 @@ func SerializeYAMLOrdered(data interface{}) (string, error) {
 	enc := yaml.NewEncoder(&buf)
 	enc.SetIndent(2)
 	if err := enc.Encode(docNode); err != nil {
-		return "", fmt.Errorf("failed to encode YAML: %w", err)
+		return "", errors.NewTool("ordered", "failed to encode YAML", err)
 	}
 
 	result := buf.String()
@@ -232,13 +233,13 @@ func orderedMapToYAMLNode(om *OrderedMap) (*yaml.Node, error) {
 		// Value node.
 		valNode, err := orderedToYAMLNode(pair.Value)
 		if err != nil {
-			return nil, fmt.Errorf("failed to convert value for key %q: %w", pair.Key, err)
+			return nil, errors.NewTool("ordered", fmt.Sprintf("failed to convert value for key %q", pair.Key), err)
 		}
 		if valNode == nil {
 			// Fallback: marshal the value and embed it as a scalar.
 			b, mErr := yaml.Marshal(pair.Value)
 			if mErr != nil {
-				return nil, fmt.Errorf("failed to marshal value for key %q: %w", pair.Key, mErr)
+				return nil, errors.NewTool("ordered", fmt.Sprintf("failed to marshal value for key %q", pair.Key), mErr)
 			}
 			// Trim trailing newlines from yaml.Marshal output.
 			s := strings.TrimRight(string(b), "\n")
@@ -263,13 +264,13 @@ func sliceToYAMLNode(items []interface{}) (*yaml.Node, error) {
 	for i, item := range items {
 		child, err := orderedToYAMLNode(item)
 		if err != nil {
-			return nil, fmt.Errorf("failed to convert sequence element %d: %w", i, err)
+			return nil, errors.NewTool("ordered", fmt.Sprintf("failed to convert sequence element %d", i), err)
 		}
 		if child == nil {
 			// Fallback: marshal and embed.
 			b, mErr := yaml.Marshal(item)
 			if mErr != nil {
-				return nil, fmt.Errorf("failed to marshal sequence element %d: %w", i, mErr)
+				return nil, errors.NewTool("ordered", fmt.Sprintf("failed to marshal sequence element %d", i), mErr)
 			}
 			s := strings.TrimRight(string(b), "\n")
 			child = &yaml.Node{
@@ -307,12 +308,12 @@ func mapToYAMLNode(m map[string]interface{}) (*yaml.Node, error) {
 
 		valNode, err := orderedToYAMLNode(m[key])
 		if err != nil {
-			return nil, fmt.Errorf("failed to convert value for key %q: %w", key, err)
+			return nil, errors.NewTool("ordered", fmt.Sprintf("failed to convert value for key %q", key), err)
 		}
 		if valNode == nil {
 			b, mErr := yaml.Marshal(m[key])
 			if mErr != nil {
-				return nil, fmt.Errorf("failed to marshal value for key %q: %w", key, mErr)
+				return nil, errors.NewTool("ordered", fmt.Sprintf("failed to marshal value for key %q", key), mErr)
 			}
 			s := strings.TrimRight(string(b), "\n")
 			valNode = &yaml.Node{

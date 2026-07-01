@@ -9,6 +9,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/agent_providers"
 	"github.com/sprout-foundry/sprout/pkg/factory"
 	"github.com/sprout-foundry/sprout/pkg/modelcontract"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // GetModel gets the current model being used by the agent
@@ -213,7 +214,7 @@ func (a *Agent) SetProvider(provider api.ClientType) error {
 	// Create a new client with the specified provider
 	newClient, err := factory.CreateProviderClient(provider, model)
 	if err != nil {
-		return fmt.Errorf("failed to create client for provider %s: %w", api.GetProviderName(provider), err)
+		return agenterrors.NewConfig(fmt.Sprintf("failed to create client for provider %s", api.GetProviderName(provider)), err)
 	}
 
 	// Set debug mode on the new client
@@ -298,7 +299,7 @@ func (a *Agent) SetProviderPersisted(provider api.ClientType) error {
 	// Create a new client with the specified provider
 	newClient, err := factory.CreateProviderClient(provider, model)
 	if err != nil {
-		return fmt.Errorf("failed to create client for provider %s: %w", api.GetProviderName(provider), err)
+		return agenterrors.NewConfig(fmt.Sprintf("failed to create client for provider %s", api.GetProviderName(provider)), err)
 	}
 
 	// Set debug mode on the new client
@@ -315,10 +316,10 @@ func (a *Agent) SetProviderPersisted(provider api.ClientType) error {
 
 	// Save to configuration (persisted for CLI use)
 	if err := a.configManager.SetProvider(provider); err != nil {
-		return fmt.Errorf("failed to save provider: %w", err)
+		return agenterrors.NewConfig("failed to save provider", err)
 	}
 	if err := a.configManager.SetModelForProvider(provider, actualModel); err != nil {
-		return fmt.Errorf("failed to save model: %w", err)
+		return agenterrors.NewConfig("failed to save model", err)
 	}
 
 	// Update context limits for the new model
@@ -374,8 +375,8 @@ func (a *Agent) SetModel(model string) error {
 		// This provides better error messages and handles case sensitivity
 		models, getModelErr := a.getModelsForProvider(a.clientType)
 		if getModelErr != nil {
-			return fmt.Errorf("failed to set model '%s' on provider %s: %w (also failed to get model list: %v)",
-				model, api.GetProviderName(a.clientType), err, getModelErr)
+			return agenterrors.NewConfig(fmt.Sprintf("failed to set model '%s' on provider %s (also failed to get model list: %v)",
+				model, api.GetProviderName(a.clientType), getModelErr), err)
 		}
 
 		// Check if the model exists in the known list (case-insensitive)
@@ -387,15 +388,15 @@ func (a *Agent) SetModel(model string) error {
 				model = m.ID
 				// Try again with the exact model ID
 				if retryErr := a.client.SetModel(model); retryErr != nil {
-					return fmt.Errorf("model '%s' found in list but failed to set; %w", model, retryErr)
+					return agenterrors.NewConfig(fmt.Sprintf("model '%s' found in list but failed to set", model), retryErr)
 				}
 				break
 			}
 		}
 
 		if !modelFound {
-			return fmt.Errorf("model '%s' not found for provider %s and failed to set directly: %w",
-				model, api.GetProviderName(a.clientType), err)
+			return agenterrors.NewConfig(fmt.Sprintf("model '%s' not found for provider %s and failed to set directly",
+				model, api.GetProviderName(a.clientType)), err)
 		}
 	}
 
@@ -431,8 +432,8 @@ func (a *Agent) SetModelPersisted(model string) error {
 		// This provides better error messages and handles case sensitivity
 		models, getModelErr := a.getModelsForProvider(a.clientType)
 		if getModelErr != nil {
-			return fmt.Errorf("failed to set model '%s' on provider %s: %w (also failed to get model list: %v)",
-				model, api.GetProviderName(a.clientType), err, getModelErr)
+			return agenterrors.NewConfig(fmt.Sprintf("failed to set model '%s' on provider %s (also failed to get model list: %v)",
+				model, api.GetProviderName(a.clientType), getModelErr), err)
 		}
 
 		// Check if the model exists in the known list (case-insensitive)
@@ -444,15 +445,15 @@ func (a *Agent) SetModelPersisted(model string) error {
 				model = m.ID
 				// Try again with the exact model ID
 				if retryErr := a.client.SetModel(model); retryErr != nil {
-					return fmt.Errorf("model '%s' found in list but failed to set; %w", model, retryErr)
+					return agenterrors.NewConfig(fmt.Sprintf("model '%s' found in list but failed to set", model), retryErr)
 				}
 				break
 			}
 		}
 
 		if !modelFound {
-			return fmt.Errorf("model '%s' not found for provider %s and failed to set directly: %w",
-				model, api.GetProviderName(a.clientType), err)
+			return agenterrors.NewConfig(fmt.Sprintf("model '%s' not found for provider %s and failed to set directly",
+				model, api.GetProviderName(a.clientType)), err)
 		}
 	}
 
@@ -461,10 +462,10 @@ func (a *Agent) SetModelPersisted(model string) error {
 
 	// Save the selection to config (persisted for CLI use)
 	if err := a.configManager.SetProvider(a.clientType); err != nil {
-		return fmt.Errorf("failed to save provider: %w", err)
+		return agenterrors.NewConfig("failed to save provider", err)
 	}
 	if err := a.configManager.SetModelForProvider(a.clientType, model); err != nil {
-		return fmt.Errorf("failed to save model: %w", err)
+		return agenterrors.NewConfig("failed to save model", err)
 	}
 
 	// Update context limits for the new model

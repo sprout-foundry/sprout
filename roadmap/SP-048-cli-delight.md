@@ -1,6 +1,6 @@
 # SP-048: CLI Delight — Terminal UX Polish
 
-**Status:** 📋 Proposed
+**Status:** ✅ Partially Implemented (status footer + glyph vocabulary shipped; tool timeline + silence-fill pending → see SP-101)
 **Date:** 2026-05-22
 **Depends on:** None (touches existing console/agent code)
 **Priority:** Medium-High

@@ -18,6 +18,7 @@ import type {
   SecurityPromptRequestData,
   AskUserRequestData,
   EditApprovalRequestData,
+  ShellApprovalRequestData,
   DriftDetectedData,
 } from '@sprout/events';
 import type { Message, ToolExecution, SubagentActivity } from '@sprout/ui';
@@ -788,6 +789,38 @@ const handleEditApprovalRequest = (ctx: EventHandlerContext): void => {
   debugLog('[edit_approval] Request:', data.file_path, 'hunks:', hunks.length);
 };
 
+// Handle shell_approval_request event (SP-093-3)
+const handleShellApprovalRequest = (ctx: EventHandlerContext): void => {
+  const { event, setState } = ctx;
+  const logEntry = createLogEntry(event);
+  logEntry.category = 'system';
+  logEntry.level = 'warning';
+  const data = (event.data ?? {}) as ShellApprovalRequestData;
+  if (!data.request_id || !data.command) return;
+
+  const parts = Array.isArray(data.parts)
+    ? (data.parts as Array<Partial<ShellApprovalRequestData['parts'][number]>>).map((p) => ({
+        id: String(p?.id || ''),
+        text: String(p?.text || ''),
+        kind: String(p?.kind || ''),
+        semantic: String(p?.semantic || ''),
+        risk: String(p?.risk || ''),
+      }))
+    : [];
+
+  setState((prev) => ({
+    shellApprovalRequest: {
+      requestId: String(data.request_id),
+      command: String(data.command),
+      parts,
+      unifiedView: data.unified_view != null ? String(data.unified_view) : '',
+      riskLevel: String(data.risk_level || 'High'),
+    },
+    logs: appendCappedLog(prev.logs, logEntry),
+  }));
+  debugLog('[shell_approval] Request:', data.command, 'parts:', parts.length);
+};
+
 /**
  * Handles drift_detected events: sets drift notification state so the
  * DriftNotification component can render a banner with action buttons.
@@ -964,6 +997,8 @@ export function useWebSocketEventHandler({
           return handleAskUserRequest(ctx);
         case 'edit_approval_request':
           return handleEditApprovalRequest(ctx);
+        case 'shell_approval_request':
+          return handleShellApprovalRequest(ctx);
         case 'input_required':
           return handleInputRequired(ctx);
         case 'drift_detected':

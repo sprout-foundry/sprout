@@ -3,6 +3,8 @@ package agent
 import (
 	"encoding/json"
 	"fmt"
+
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // validateParameters validates and extracts parameters according to tool configuration
@@ -13,14 +15,14 @@ func (r *ToolRegistry) validateParameters(tool ToolConfig, args map[string]inter
 		value, found := r.extractParameter(param, args)
 
 		if !found && param.Required {
-			return nil, fmt.Errorf("required parameter '%s' missing", param.Name)
+			return nil, agenterrors.NewValidation(fmt.Sprintf("required parameter '%s' missing", param.Name), nil)
 		}
 
 		if found {
 			// Type validation and conversion
 			convertedValue, err := r.convertParameterType(value, param.Type, agent)
 			if err != nil {
-				return nil, fmt.Errorf("parameter '%s': %w", param.Name, err)
+				return nil, agenterrors.Wrap(err, fmt.Sprintf("parameter '%s'", param.Name))
 			}
 			validated[param.Name] = convertedValue
 		}
@@ -59,7 +61,7 @@ func getMapKeys(m map[string]interface{}) []string {
 func (r *ToolRegistry) mapToJSONString(m map[string]interface{}) (string, error) {
 	jsonBytes, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal map to JSON: %w", err)
+		return "", agenterrors.Wrap(err, "failed to marshal map to JSON")
 	}
 	return string(jsonBytes), nil
 }
@@ -81,7 +83,7 @@ func (r *ToolRegistry) convertParameterType(value interface{}, expectedType stri
 					agent.debugLog("Expected string, got map[string]interface {}. Failed to convert to JSON: %v\n", err)
 					agent.debugLog("Content as map keys: %v\n", getMapKeys(mapVal))
 				}
-				return "", fmt.Errorf("expected string, got %T (failed to convert map to JSON: %w)", value, err)
+				return "", agenterrors.Wrap(err, fmt.Sprintf("expected string, got %T (failed to convert map to JSON)", value))
 			}
 
 			if agent != nil && agent.debug {
@@ -95,7 +97,7 @@ func (r *ToolRegistry) convertParameterType(value interface{}, expectedType stri
 			agent.debugLog("Expected string, got %T. Value: %+v\n", value, value)
 		}
 
-		return "", fmt.Errorf("expected string, got %T", value)
+		return "", agenterrors.NewValidation(fmt.Sprintf("expected string, got %T", value), nil)
 
 	case "int", "integer":
 		if i, ok := value.(int); ok {
@@ -104,7 +106,7 @@ func (r *ToolRegistry) convertParameterType(value interface{}, expectedType stri
 		if f, ok := value.(float64); ok {
 			return int(f), nil
 		}
-		return 0, fmt.Errorf("expected int, got %T", value)
+		return 0, agenterrors.NewValidation(fmt.Sprintf("expected int, got %T", value), nil)
 
 	case "float64", "number":
 		if f, ok := value.(float64); ok {
@@ -113,19 +115,19 @@ func (r *ToolRegistry) convertParameterType(value interface{}, expectedType stri
 		if i, ok := value.(int); ok {
 			return float64(i), nil
 		}
-		return 0.0, fmt.Errorf("expected float64, got %T", value)
+		return 0.0, agenterrors.NewValidation(fmt.Sprintf("expected float64, got %T", value), nil)
 
 	case "bool", "boolean":
 		if b, ok := value.(bool); ok {
 			return b, nil
 		}
-		return false, fmt.Errorf("expected bool, got %T", value)
+		return false, agenterrors.NewValidation(fmt.Sprintf("expected bool, got %T", value), nil)
 
 	case "array":
 		if arr, ok := value.([]interface{}); ok {
 			return arr, nil
 		}
-		return nil, fmt.Errorf("expected array, got %T", value)
+		return nil, agenterrors.NewValidation(fmt.Sprintf("expected array, got %T", value), nil)
 
 	case "object":
 		switch typed := value.(type) {
@@ -135,7 +137,7 @@ func (r *ToolRegistry) convertParameterType(value interface{}, expectedType stri
 			// Allow top-level arrays for structured content payloads.
 			return typed, nil
 		default:
-			return nil, fmt.Errorf("expected object, got %T", value)
+			return nil, agenterrors.NewValidation(fmt.Sprintf("expected object, got %T", value), nil)
 		}
 
 	default:

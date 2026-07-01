@@ -1025,8 +1025,17 @@ two weeks, then decide what to keep.
 - [ ] **SP-095-2:** Wait 2 weeks of normal usage. (Manual calendar step,
   not a code step.)
 
-- [ ] **SP-095-3:** Write `docs/recall-evaluation-2026.md` from the
+- [x] **SP-095-3:** Write `docs/recall-evaluation-2026.md` from the
   metrics. Recommend: keep / narrow / expand. _Effort: ~0.5 day._
+
+  _Shipped (commit 0da47104): Templated report at
+  `docs/recall-evaluation-2026.md`. The observation window
+  (SP-095-2) has not elapsed yet, so the metrics tables are
+  placeholder shells. Includes awk one-liners to compute hit-rate,
+  use-rate, avg top-similarity, and p50/p95/p99 latency once
+  `~/.config/sprout/recall_metrics.jsonl` has data. Recommendation
+  template covers keep / narrow / kill / expand with threshold
+  targets. Will be filled in once SP-095-2 completes._
 
 ### Acceptance
 

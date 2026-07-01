@@ -146,14 +146,14 @@ func (vp *VisionProcessor) AnalyzeImage(ctx context.Context, imagePath string, o
 		return VisionAnalysis{}, fmt.Errorf("vision request: %w", err)
 	}
 
-	// Store usage information for cost tracking
+	// Store usage information for cost tracking (per-session + global mirror)
 	if response.Usage.TotalTokens > 0 {
-		lastVisionUsage = &VisionUsageInfo{
+		recordVisionUsage(vp, &VisionUsageInfo{
 			PromptTokens:     response.Usage.PromptTokens,
 			CompletionTokens: response.Usage.CompletionTokens,
 			TotalTokens:      response.Usage.TotalTokens,
 			EstimatedCost:    response.Usage.EstimatedCost,
-		}
+		})
 	}
 
 	// Extract response content

@@ -302,7 +302,7 @@ func getCachedVisionResult(cacheKey, imagePath, analysisMode string) (string, bo
 	fmt.Printf("[~] Using cached vision analysis for %s [%s]\n", GetBaseName(imagePath), analysisMode)
 
 	if cachedUsage != nil {
-		lastVisionUsage = cachedUsage
+		recordVisionUsage(nil, cachedUsage)
 	}
 
 	var cachedResp ImageAnalysisResponse
@@ -474,7 +474,7 @@ func AnalyzeImage(ctx context.Context, imagePath string, analysisPrompt string, 
 		return string(respJSON), nil
 	}
 
-	visionLRU.Put(cacheKey, string(respJSON), lastVisionUsage)
+	visionLRU.Put(cacheKey, string(respJSON), GetLastVisionUsage())
 
 	return string(respJSON), nil
 }

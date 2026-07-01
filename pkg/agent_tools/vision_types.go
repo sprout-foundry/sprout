@@ -2,6 +2,7 @@ package tools
 
 import (
 	"strconv"
+	"sync"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
@@ -104,23 +105,60 @@ type VisionProcessor struct {
 	visionClient api.ClientInterface
 	logger       *utils.Logger
 	debug        bool
+	usage        *VisionUsageInfo // Per-session usage tracking (SP-103-A4)
 }
 
 // ============================================================================
 // Caching and Usage Tracking
 // ============================================================================
 
-// Global variable for vision model tracking
-var lastVisionUsage *VisionUsageInfo
-
-// GetLastVisionUsage returns the usage information from the last vision model call
-func GetLastVisionUsage() *VisionUsageInfo {
-	return lastVisionUsage
+// visionLastUsageMirror provides thread-safe access to the most recent
+// vision usage info across all VisionProcessor sessions.
+type visionLastUsageMirror struct {
+	mu    sync.RWMutex
+	usage *VisionUsageInfo
 }
 
-// ClearLastVisionUsage clears the stored vision usage information
+var lastUsageMirror = &visionLastUsageMirror{}
+
+// recordVisionUsage writes usage info to both the per-session processor
+// and the cross-session global mirror. Call this from any place that
+// previously wrote to the package-global lastVisionUsage.
+//
+// If vp is nil (e.g., cache hit before a processor is created), only the
+// global mirror is updated. If usage is nil, nothing happens.
+func recordVisionUsage(vp *VisionProcessor, usage *VisionUsageInfo) {
+	if vp != nil {
+		vp.usage = usage
+	}
+	if usage == nil {
+		return
+	}
+	lastUsageMirror.mu.Lock()
+	lastUsageMirror.usage = usage
+	lastUsageMirror.mu.Unlock()
+}
+
+// GetLastVisionUsage returns the usage information from the most recent
+// vision model call across all sessions. Thread-safe.
+func GetLastVisionUsage() *VisionUsageInfo {
+	lastUsageMirror.mu.RLock()
+	defer lastUsageMirror.mu.RUnlock()
+	return lastUsageMirror.usage
+}
+
+// ClearLastVisionUsage clears the stored vision usage information.
+// Thread-safe.
 func ClearLastVisionUsage() {
-	lastVisionUsage = nil
+	lastUsageMirror.mu.Lock()
+	lastUsageMirror.usage = nil
+	lastUsageMirror.mu.Unlock()
+}
+
+// LastUsage returns the per-session usage info for this VisionProcessor.
+// Returns nil if no vision call has been made with this processor yet.
+func (vp *VisionProcessor) LastUsage() *VisionUsageInfo {
+	return vp.usage
 }
 
 // getVisionMaxReturnedTextChars returns the max text chars limit from env or default

@@ -38,13 +38,13 @@ func TestVisionUsage(t *testing.T) {
 	})
 
 	t.Run("set and retrieve", func(t *testing.T) {
-		// Set global variable directly
-		lastVisionUsage = &VisionUsageInfo{
+		// Set via recordVisionUsage helper (no processor, only global mirror)
+		recordVisionUsage(nil, &VisionUsageInfo{
 			PromptTokens:     1000,
 			CompletionTokens: 500,
 			TotalTokens:      1500,
 			EstimatedCost:    0.01,
-		}
+		})
 
 		got := GetLastVisionUsage()
 

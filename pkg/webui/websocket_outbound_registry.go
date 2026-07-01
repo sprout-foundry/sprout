@@ -79,6 +79,7 @@ var allowedOutboundMessageTypes = map[string]struct{}{
 	events.EventTypeSecurityPromptRequest:          {},
 	events.EventTypeAskUserRequest:                 {},
 	events.EventTypeEditApprovalRequest:            {},
+	events.EventTypeShellApprovalRequest:           {},
 	events.EventTypePasswordRequest:                {},
 	events.EventTypeInputRequired:                  {},
 	events.EventTypeAgentMessage:                   {},

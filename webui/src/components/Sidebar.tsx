@@ -42,6 +42,7 @@ import {
   CircleDollarSign,
 } from 'lucide-react';
 import AutomationsPanel from './AutomationsPanel';
+import PastSessionsHint from './PastSessionsHint';
 import SearchView from './SearchView';
 import SidebarFilesSection, { type FileTreeHandle } from './SidebarFilesSection';
 import SidebarGitSection from './SidebarGitSection';
@@ -665,6 +666,9 @@ function Sidebar({
                   </div>
                 )}
               </div>
+
+              {/* Past sessions semantic search (SP-092-3) */}
+              <PastSessionsHint />
             </>
           ) : null}
         </div>

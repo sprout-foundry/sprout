@@ -1,6 +1,6 @@
 # SP-013: Agent Settings Management Tool
 
-**Status:** 📋 Proposed
+**Status:** ✅ Implemented (manage_settings tool registered; pkg/agent/settings_handler.go)
 **Depends on:** SP-003
 **Priority:** Medium
 **Effort Estimate:** ~2-3 days

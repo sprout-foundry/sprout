@@ -1,6 +1,6 @@
 # SP-010: Editor Modernization
 
-**Status:** 📋 Proposed  
+**Status:** ✅ Implemented (EditorPane 2604→513 lines; EditorCore extracted; React.memo + 18 bug fixes)
 **Depends on:** SP-003 (Webui & Frontend Architecture)  
 **Priority:** High  
 **Effort Estimate:** ~4-5 weeks (3 phases)

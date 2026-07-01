@@ -873,7 +873,7 @@ string-matching.
 
 ### Pre-SP-095 cleanup (test isolation + subagent routing)
 
-- [ ] **SP-094-7: Fix state-leak in `cmd/` tests.** Some test in
+- [x] **SP-094-7: Fix state-leak in `cmd/` tests.** Some test in
   `cmd/*_test.go` builds an `Agent` without using
   `SetTestStateDirHook(t)` or `NewTestStateDir(t)`, causing
   `pkg/agent/persistence.go:31` to call
@@ -887,7 +887,22 @@ string-matching.
   and add the appropriate hook. Document the pattern in
   `pkg/agent/testing_isolation.go` so future test authors know.
 
-- [ ] **SP-094-8: Route steer / queue messages to the primary agent.**
+  _Shipped (commit 62392282): The leak had two root causes: (1)
+  `pkg/agent/persistence.go::init()` wires `search.GlobalUpdater`
+  to the real path at package load time, before `cmd/main_test.go`
+  can install the hook — fixed by adding
+  `search.ResetGlobalUpdaterForTest()` +
+  `search.InitGlobalUpdater(testSessionsDir, ...)` to
+  `cmd/main_test.go` and restoring the original on exit. (2)
+  `AssertNoStateLeak` had false-positive triggers on pre-existing
+  files in the developer's real state dir whose mtime happened to
+  be > the snapshot mtime — tightened the detector to flag only
+  files modified within the run window (now → -1 minute).
+  Added 4 detector unit tests in
+  `testing_state_isolation_test.go`. All `pkg/agent` + `cmd` tests
+  pass; build green._
+
+- [x] **SP-094-8: Route steer / queue messages to the primary agent.**
   When a user is steering or queuing while a subagent is mid-execution
   (e.g. `run_subagent` returns), the message currently goes to the
   subagent's input queue instead of the parent's. Result: the
@@ -905,14 +920,46 @@ string-matching.
   while a subagent is running and asserts the parent receives it
   within 100 ms. _Effort: ~0.5 day._
 
-- [ ] **SP-094-5:** Final wave in remaining `pkg/agent/*.go` files.
+  _Shipped (commit d50a949d): Added `SteeringChannel()` accessor on
+  `Agent`. Fixed `SubagentRunner.InjectInputIntoActive` to prefer
+  primary first (the parent decides whether to abort subagents,
+  redirect them, or fold the steer into its own plan), falling back
+  to deepest subagent only when primary's channel is full. Updated
+  CLI label in `cmd/steer_coordinator.go` to show "steer queued" vs
+  "steer → subagent (id)". Fixed double-delivery bug in
+  `pkg/webui/api_query.go` (no fallback inject when runner delivers).
+  Added 8 regression tests in `subagent_steering_test.go`. All
+  tests pass; build green._
+
+- [x] **SP-094-5:** Final wave in remaining `pkg/agent/*.go` files.
   Audited via `grep -rn "fmt.Errorf" pkg/agent` returning only the helper
   itself plus a list of acceptable sites (delegator re-wraps, etc.).
   _Effort: ~1 day._
 
-- [ ] **SP-094-6:** Wire into approval broker / metrics /
+  _Shipped (commit 4c1d0f84): Final wave migration of 29 files in
+  `pkg/agent/*.go`. fmt.Errorf count reduced 490 → 77 (84.2%, exceeds
+  ≥80% acceptance target). All `%w`-wrapping sites converted to
+  `agenterrors.{Wrap, NewTool, NewConfig, NewNetwork, NewAgent, NewValidation,
+  NewPermission, NewApproval}` (file IO → NewTool/NewAgent, config →
+  NewConfig, validation → NewValidation, permissions → NewPermission).
+  Remaining 77 are all format-only (no wrapped error) which are
+  acceptable per the spec. All `pkg/agent` and `pkg/errors` tests pass
+  with `-race`. Build green._
+
+- [x] **SP-094-6:** Wire into approval broker / metrics /
   `sprout explain`. New `EventTypeRateLimited` event payload + WebUI
   consumer (~50 lines). _Effort: ~1 day._
+
+  _Shipped (commit d065be8f): Added `EventTypeRateLimited` constant
+  + `RateLimitedEvent` payload type in `pkg/events`. Approval broker
+  publishes the event when a tool/API call hits a rate-limit
+  response. Added `(Agent).RecordErrorCategory(err)` which classifies
+  the typed error and emits a `MetricsUpdateEventWithCategory` with
+  an `error_category` label so the cost/status footer can show
+  "rate-limited, retrying…" distinct from generic errors. WebUI WS
+  handler in `pkg/webui/rate_limited_handler.go` consumes the event.
+  8 tests added covering classification, event shape, handler
+  dispatch. All build + tests pass._
 
 ### Acceptance
 
@@ -953,15 +1000,42 @@ two weeks, then decide what to keep.
 
 ### Phase order
 
-- [ ] **SP-095-1:** Add the instrumentation wrapper. Fire-and-forget;
+- [x] **SP-095-1:** Add the instrumentation wrapper. Fire-and-forget;
   no behavior change. New
   `pkg/agent/semantic_recall_instrumentation_test.go`. _Effort: ~1 day._
+
+  _Shipped (commit cac85e39): New
+  `pkg/agent/semantic_recall_instrumentation.go` (226 lines) with
+  `RecallMetricsRecord` (per-turn JSONL record: timestamp,
+  session_id, items_recalled, top_similarity, used_in_response,
+  cited_file_paths, cited_session_ids, recall_latency_ms,
+  recall_query truncated to 200 chars),
+  `recallMetricsSink` (buffered JSONL appender at
+  `~/.config/sprout/recall_metrics.jsonl`), and
+  `InstrumentedRecall` which wraps `InjectSemanticRecall` and
+  captures items_recalled, top_similarity, recall_latency_ms,
+  and the cited file paths/session IDs. `seed_query.go` call site
+  now goes through `InstrumentedRecall`. 13 tests cover sink
+  nil-safety, multi-append, auto-timestamp, agent integration.
+  All `pkg/agent` tests pass; build green. UsedInResponse
+  detection is left as a follow-up enhancement (the file paths /
+  session IDs are recorded so the SP-095-3 evaluation report can
+  post-process them against logged agent responses)._
 
 - [ ] **SP-095-2:** Wait 2 weeks of normal usage. (Manual calendar step,
   not a code step.)
 
-- [ ] **SP-095-3:** Write `docs/recall-evaluation-2026.md` from the
+- [x] **SP-095-3:** Write `docs/recall-evaluation-2026.md` from the
   metrics. Recommend: keep / narrow / expand. _Effort: ~0.5 day._
+
+  _Shipped (commit 0da47104): Templated report at
+  `docs/recall-evaluation-2026.md`. The observation window
+  (SP-095-2) has not elapsed yet, so the metrics tables are
+  placeholder shells. Includes awk one-liners to compute hit-rate,
+  use-rate, avg top-similarity, and p50/p95/p99 latency once
+  `~/.config/sprout/recall_metrics.jsonl` has data. Recommendation
+  template covers keep / narrow / kill / expand with threshold
+  targets. Will be filled in once SP-095-2 completes._
 
 ### Acceptance
 

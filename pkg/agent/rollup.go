@@ -9,6 +9,8 @@ import (
 
 	"github.com/sprout-foundry/seed/core"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
+
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
@@ -127,7 +129,7 @@ func (a *Agent) runRollupPass(ctx context.Context) error {
 	sources := checkpoints[startIdx : endIdx+1]
 	rollup, err := a.buildRollupCheckpoint(ctx, sources, level+1)
 	if err != nil {
-		return fmt.Errorf("build rollup: %w", err)
+		return agenterrors.NewTool("rollup", "build rollup", err)
 	}
 
 	a.replaceWithRollup(startIdx, endIdx, rollup)
@@ -224,7 +226,7 @@ func countLevel0After(checkpoints []TurnCheckpoint, i int) int {
 // rather than evaporating at each rollup level.
 func (a *Agent) buildRollupCheckpoint(ctx context.Context, sources []TurnCheckpoint, newLevel int) (TurnCheckpoint, error) {
 	if len(sources) == 0 {
-		return TurnCheckpoint{}, fmt.Errorf("no source checkpoints")
+		return TurnCheckpoint{}, agenterrors.NewTool("rollup", "no source checkpoints", nil)
 	}
 
 	body, err := a.rollupSummarizeViaLLM(ctx, sources)
@@ -233,7 +235,7 @@ func (a *Agent) buildRollupCheckpoint(ctx context.Context, sources []TurnCheckpo
 	}
 	body = strings.TrimSpace(body)
 	if body == "" {
-		return TurnCheckpoint{}, fmt.Errorf("empty rollup body")
+		return TurnCheckpoint{}, agenterrors.NewTool("rollup", "empty rollup body", nil)
 	}
 
 	coveredTurns := 0
@@ -269,20 +271,20 @@ func (a *Agent) buildRollupCheckpoint(ctx context.Context, sources []TurnCheckpo
 // (no header wrapping).
 func (a *Agent) rollupSummarizeViaLLM(ctx context.Context, sources []TurnCheckpoint) (string, error) {
 	if a == nil {
-		return "", fmt.Errorf("agent unavailable")
+		return "", agenterrors.NewTool("rollup", "agent unavailable", nil)
 	}
 	if a.client == nil {
-		return "", fmt.Errorf("no LLM client bound; cannot roll up")
+		return "", agenterrors.NewTool("rollup", "no LLM client bound; cannot roll up", nil)
 	}
 
 	systemPrompt := GetEmbeddedRollupPrompt()
 	if strings.TrimSpace(systemPrompt) == "" {
-		return "", fmt.Errorf("rollup prompt template is empty")
+		return "", agenterrors.NewTool("rollup", "rollup prompt template is empty", nil)
 	}
 
 	userContent := buildRollupInputBlocks(sources)
 	if strings.TrimSpace(userContent) == "" {
-		return "", fmt.Errorf("rollup input is empty")
+		return "", agenterrors.NewTool("rollup", "rollup input is empty", nil)
 	}
 
 	// Bound the rollup LLM call so a stuck provider doesn't pin the worker
@@ -297,10 +299,10 @@ func (a *Agent) rollupSummarizeViaLLM(ctx context.Context, sources []TurnCheckpo
 	}
 	resp, err := a.getClient().SendChatRequest(ctx, req, nil, "", false)
 	if err != nil {
-		return "", fmt.Errorf("rollup llm call failed: %w", err)
+		return "", agenterrors.NewTool("rollup", "rollup llm call failed", err)
 	}
 	if resp == nil || len(resp.Choices) == 0 {
-		return "", fmt.Errorf("rollup llm returned no choices")
+		return "", agenterrors.NewTool("rollup", "rollup llm returned no choices", nil)
 	}
 	return strings.TrimSpace(resp.Choices[0].Message.Content), nil
 }

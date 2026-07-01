@@ -8,7 +8,6 @@ package agent
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,11 +27,11 @@ import (
 func diagnosticsDir() (string, error) {
 	configDir, err := configuration.GetConfigDir()
 	if err != nil {
-		return "", fmt.Errorf("resolve config dir: %w", err)
+		return "", agenterrors.NewConfig("resolve config dir", err)
 	}
 	dir := filepath.Join(configDir, "diagnostics", "threading")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", fmt.Errorf("create diagnostics dir: %w", err)
+		return "", agenterrors.NewConfig("create diagnostics dir", err)
 	}
 	return dir, nil
 }
@@ -147,7 +146,7 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	// Bounded by a tight timeout because this is on the user's critical
 	// path; recall is a nice-to-have and failure must degrade gracefully.
 	recallCtx, recallCancel := context.WithTimeout(context.Background(), 2*time.Second)
-	a.InjectSemanticRecall(recallCtx, processedQuery)
+	InstrumentedRecall(a, recallCtx, processedQuery)
 	recallCancel()
 
 	// Build the user message with processed (cleaned) query and images

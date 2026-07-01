@@ -101,6 +101,21 @@ func (a *Agent) GetInputInjectionContext() <-chan string {
 	return a.inputInjectionChan
 }
 
+// SteeringChannel returns the receive-only input channel that steer/queue
+// messages are delivered to. This is the same channel used by
+// InjectInputContext — it is the "user typed something while a turn is
+// running, queue it for the next user-prompted turn" semantics (SP-055).
+//
+// Subagent plumbing consults this channel FIRST before falling back to
+// its own input channel: if the parent has a steering channel, deliver
+// to the parent, not the subagent (SP-094-8).
+func (a *Agent) SteeringChannel() <-chan string {
+	if a == nil {
+		return nil
+	}
+	return a.inputInjectionChan
+}
+
 // ClearInputInjectionContext clears any pending input injections
 func (a *Agent) ClearInputInjectionContext() {
 	a.inputInjectionMutex.Lock()

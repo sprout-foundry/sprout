@@ -492,7 +492,7 @@ func (a *Agent) processImagesViaOCR(query string) (string, error) {
 	// Process any images found in the text
 	enhancedQuery, analyses, err := processor.ProcessImagesInText(a.InterruptCtx(), query)
 	if err != nil {
-		return query, fmt.Errorf("failed to process images: %w", err)
+		return query, agenterrors.NewAgent("conversation", "failed to process images", err)
 	}
 
 	// If images were processed, log the enhancement
@@ -514,7 +514,7 @@ func readImageAsImageData(filePath string) (api.ImageData, int, error) {
 	// Check size before reading to avoid loading huge files into memory.
 	stat, err := os.Stat(filePath)
 	if err != nil {
-		return api.ImageData{}, 0, fmt.Errorf("failed to stat file: %w", err)
+		return api.ImageData{}, 0, agenterrors.NewAgent("conversation", "failed to stat file", err)
 	}
 	if stat.Size() > console.MaxPastedImageSize {
 		return api.ImageData{}, 0, fmt.Errorf("image too large (%d bytes)", stat.Size())
@@ -522,7 +522,7 @@ func readImageAsImageData(filePath string) (api.ImageData, int, error) {
 
 	data, err := os.ReadFile(filePath)
 	if err != nil {
-		return api.ImageData{}, 0, fmt.Errorf("failed to read file: %w", err)
+		return api.ImageData{}, 0, agenterrors.NewAgent("conversation", "failed to read file", err)
 	}
 
 	// Validate it is actually an image by checking magic bytes.

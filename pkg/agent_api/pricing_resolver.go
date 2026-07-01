@@ -12,7 +12,7 @@ import (
 // lookup more than once per model. A miss populates the cache; subsequent calls
 // return the cached entry until the process ends.
 var (
-	pricingResolverMu sync.Mutex
+	mu                sync.Mutex
 	pricingResolver   = map[string]resolvedPricing{}
 )
 
@@ -39,12 +39,12 @@ func ResolveModelPricing(provider, model string) (inputPerM, outputPerM, cachedP
 	}
 
 	key := provider + "/" + model
-	pricingResolverMu.Lock()
+	mu.Lock()
 	if cached, hit := pricingResolver[key]; hit {
-		pricingResolverMu.Unlock()
+		mu.Unlock()
 		return cached.inputPerM, cached.outputPerM, cached.cachedPerM, cached.inputPerM > 0 || cached.outputPerM > 0
 	}
-	pricingResolverMu.Unlock()
+	mu.Unlock()
 
 	// Resolve on miss. Timeboxed — the metrics path must not stall.
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
@@ -74,16 +74,16 @@ func ResolveModelPricing(provider, model string) (inputPerM, outputPerM, cachedP
 }
 
 func storeResolvedPricing(key string, inputPerM, outputPerM, cachedPerM float64) {
-	pricingResolverMu.Lock()
+	mu.Lock()
 	pricingResolver[key] = resolvedPricing{inputPerM: inputPerM, outputPerM: outputPerM, cachedPerM: cachedPerM}
-	pricingResolverMu.Unlock()
+	mu.Unlock()
 }
 
 // ResetPricingResolver clears the memoized pricing cache. For tests.
 func ResetPricingResolver() {
-	pricingResolverMu.Lock()
+	mu.Lock()
 	pricingResolver = map[string]resolvedPricing{}
-	pricingResolverMu.Unlock()
+	mu.Unlock()
 }
 
 // SeedPricingForTest populates the resolver cache for a specific (provider,

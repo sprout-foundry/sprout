@@ -27,7 +27,7 @@ const (
 
 var (
 	tokenCache   = make(map[string]int)
-	tokenCacheMu sync.RWMutex
+	cacheMu      sync.RWMutex
 )
 
 // EstimateTokens provides a token estimation based on OpenAI's tiktoken approach.
@@ -38,9 +38,9 @@ func EstimateTokens(text string) int {
 	}
 
 	// Fast path: cached
-	tokenCacheMu.RLock()
+	cacheMu.RLock()
 	cached, ok := tokenCache[text]
-	tokenCacheMu.RUnlock()
+	cacheMu.RUnlock()
 	if ok {
 		return cached
 	}
@@ -93,11 +93,11 @@ func EstimateTokens(text string) int {
 	}
 
 	// Store in cache (limit cache size to prevent memory issues)
-	tokenCacheMu.Lock()
+	cacheMu.Lock()
 	if len(tokenCache) < 10000 {
 		tokenCache[text] = totalTokens
 	}
-	tokenCacheMu.Unlock()
+	cacheMu.Unlock()
 
 	return totalTokens
 }

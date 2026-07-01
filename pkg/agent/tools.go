@@ -23,7 +23,7 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 
 	var args map[string]interface{}
 	if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args); err != nil {
-		return "", fmt.Errorf("failed to parse tool arguments: %w", err)
+		return "", agenterrors.Wrap(err, "failed to parse tool arguments")
 	}
 
 	// Log the tool call for debugging
@@ -86,7 +86,7 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 	}
 
 	if err != nil {
-		return result, fmt.Errorf("execute tool %q: %w", toolName, err)
+		return result, agenterrors.Wrap(err, fmt.Sprintf("execute tool %q", toolName))
 	}
 	return result, nil
 }

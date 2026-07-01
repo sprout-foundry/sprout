@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/embedding"
 )
 
@@ -30,7 +31,7 @@ type ConversationTurn struct {
 func NewConversationTurn(sessionID string, turnNumber int, userPrompt, workingDir string) (*ConversationTurn, error) {
 	id, err := generateConversationTurnID()
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate conversation turn ID: %w", err)
+		return nil, agenterrors.Wrap(err, "failed to generate conversation turn ID")
 	}
 
 	return &ConversationTurn{
@@ -55,7 +56,7 @@ func (t *ConversationTurn) String() string {
 func generateConversationTurnID() (string, error) {
 	bytes := make([]byte, 16)
 	if _, err := rand.Read(bytes); err != nil {
-		return "", fmt.Errorf("failed to generate random bytes: %w", err)
+		return "", agenterrors.Wrap(err, "failed to generate random bytes")
 	}
 	return hex.EncodeToString(bytes), nil
 }

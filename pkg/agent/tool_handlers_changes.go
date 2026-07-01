@@ -29,6 +29,7 @@ import (
 	"strings"
 	"time"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/pmezard/go-difflib/difflib"
 	"github.com/sprout-foundry/sprout/pkg/history"
 )
@@ -514,7 +515,7 @@ func selectRevertCandidates(changes []TrackedFileChange, scope, since string) ([
 	if since != "" {
 		t, err := parseRecentSince(since)
 		if err != nil {
-			return nil, fmt.Errorf("revert_my_changes: invalid 'since' (need RFC3339 like 2026-05-27T10:00:00Z or duration like 30m): %w", err)
+			return nil, agenterrors.Wrap(err, fmt.Sprintf("revert_my_changes: invalid 'since' (need RFC3339 like 2026-05-27T10:00:00Z or duration like 30m)"))
 		}
 		cutoff = t
 	}
@@ -671,7 +672,7 @@ func parseRecentSince(raw string) (time.Time, error) {
 	if d, err := time.ParseDuration(s); err == nil {
 		return time.Now().Add(-d), nil
 	}
-	return time.Time{}, fmt.Errorf("'since' must be RFC3339 (e.g. 2026-05-27T10:00:00Z), duration (2d, 12h, 30m), or empty; got %q", raw)
+	return time.Time{}, agenterrors.NewValidation(fmt.Sprintf("'since' must be RFC3339 (e.g. 2026-05-27T10:00:00Z), duration (2d, 12h, 30m), or empty; got %q", raw), nil)
 }
 
 // deriveOpFromChangeLog infers the create/edit/delete code for a

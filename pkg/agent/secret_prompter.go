@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/secretdetect"
 	"github.com/sprout-foundry/sprout/pkg/security"
@@ -55,7 +56,7 @@ func (a *secretPrompterAdapter) PromptSecretAction(secrets []security.DetectedSe
 
 	choice, err := a.agent.PromptChoice(prompt, choices)
 	if err != nil {
-		return security.SecretRedact, fmt.Errorf("prompt failed: %w", err)
+		return security.SecretRedact, agenterrors.Wrap(err, "prompt failed")
 	}
 
 	switch choice {

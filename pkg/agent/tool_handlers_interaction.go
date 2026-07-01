@@ -3,8 +3,8 @@ package agent
 import (
 	"context"
 	"errors"
-	"fmt"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 )
 
@@ -77,11 +77,11 @@ func handleAskUser(ctx context.Context, a *Agent, args map[string]interface{}) (
 func parseAskUserToolArgs(args map[string]interface{}) (tools.AskUserRequest, error) {
 	questionRaw, ok := args["question"]
 	if !ok {
-		return tools.AskUserRequest{}, fmt.Errorf("missing 'question' parameter")
+		return tools.AskUserRequest{}, agenterrors.NewValidation("missing 'question' parameter", nil)
 	}
 	question, ok := questionRaw.(string)
 	if !ok {
-		return tools.AskUserRequest{}, fmt.Errorf("'question' parameter must be a string")
+		return tools.AskUserRequest{}, agenterrors.NewValidation("'question' parameter must be a string", nil)
 	}
 	req := tools.AskUserRequest{Question: question}
 	if h, ok := args["header"].(string); ok {
@@ -143,7 +143,7 @@ func coerceAskUserOptions(raw interface{}) []tools.AskUserOption {
 
 func mapAskUserError(err error) error {
 	if errors.Is(err, tools.ErrAskUserNoChannel) {
-		return fmt.Errorf("ask_user: no interactive input channel is available (no WebUI client connected and stdin is not a TTY). Make a best-effort decision based on the existing context, or report that you cannot proceed without user input")
+		return agenterrors.NewTool("ask_user", "ask_user: no interactive input channel is available (no WebUI client connected and stdin is not a TTY). Make a best-effort decision based on the existing context, or report that you cannot proceed without user input", nil)
 	}
-	return fmt.Errorf("ask_user failed: %w", err)
+	return agenterrors.Wrap(err, "ask_user failed")
 }

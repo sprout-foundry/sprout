@@ -12,6 +12,7 @@ import (
 
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 var nonWhitespaceTokenRegex = regexp.MustCompile(`\S+`)
@@ -189,7 +190,7 @@ func (a *Agent) executeShellCommandWithTruncation(ctx context.Context, command s
 	a.AddTaskAction("command_executed", fmt.Sprintf("Executed: %s", command), command)
 
 	if err != nil {
-		return returnResult, fmt.Errorf("failed to execute shell command: %w", err)
+		return returnResult, agenterrors.NewTool("shell_command", "failed to execute shell command", err)
 	}
 	return returnResult, nil
 }
@@ -224,7 +225,7 @@ func buildTruncationNotice(headTokens, tailTokens, truncatedTokens, truncatedLin
 func (a *Agent) saveShellOutputToFile(output string) (string, error) {
 	dir := ".sprout/shell_outputs"
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", fmt.Errorf("failed to create shell output directory: %w", err)
+		return "", agenterrors.NewTool("shell_command", "failed to create shell output directory", err)
 	}
 
 	timestamp := time.Now().Format("20060102_150405")
@@ -232,7 +233,7 @@ func (a *Agent) saveShellOutputToFile(output string) (string, error) {
 	path := filepath.Join(dir, filename)
 
 	if err := os.WriteFile(path, []byte(output), 0o644); err != nil {
-		return "", fmt.Errorf("failed to write shell output file: %w", err)
+		return "", agenterrors.NewTool("shell_command", "failed to write shell output file", err)
 	}
 
 	return path, nil
@@ -278,7 +279,7 @@ func (a *Agent) checkBackgroundOutput(ctx context.Context, sessionID string, wai
 
 	result, err := tools.CheckBackgroundOutputWait(ctx, sessionID, waitSeconds)
 	if err != nil {
-		return "", fmt.Errorf("failed to check background session %s: %w", sessionID, err)
+		return "", agenterrors.Wrapf(err, "failed to check background session %s", sessionID)
 	}
 	return result, nil
 }
@@ -288,7 +289,7 @@ func (a *Agent) stopBackgroundSession(sessionID string) (string, error) {
 	// Try TerminalManager first (WebUI mode)
 	if tm := a.terminalManager; tm != nil {
 		if err := tm.StopBackgroundSession(sessionID); err != nil {
-			return "", fmt.Errorf("failed to stop background session %s: %w", sessionID, err)
+			return "", agenterrors.Wrapf(err, "failed to stop background session %s", sessionID)
 		}
 		return fmt.Sprintf("Background session %s stopped successfully", sessionID), nil
 	}
@@ -298,7 +299,7 @@ func (a *Agent) stopBackgroundSession(sessionID string) (string, error) {
 		a.backgroundProcessManager = tools.NewBackgroundProcessManager()
 	}
 	if err := a.backgroundProcessManager.Stop(sessionID, 10*time.Second); err != nil {
-		return "", fmt.Errorf("failed to stop background session %s: %w", sessionID, err)
+		return "", agenterrors.Wrapf(err, "failed to stop background session %s", sessionID)
 	}
 	return fmt.Sprintf("Background session %s stopped successfully", sessionID), nil
 }
@@ -335,7 +336,7 @@ func (a *Agent) executeShellCommandBackground(ctx context.Context, command strin
 	a.AddTaskAction("command_background_executed", fmt.Sprintf("Started background command: %s", command), command)
 
 	if err != nil {
-		return "", fmt.Errorf("failed to execute background shell command: %w", err)
+		return "", agenterrors.NewTool("shell_command", "failed to execute background shell command", err)
 	}
 	return result, nil
 }

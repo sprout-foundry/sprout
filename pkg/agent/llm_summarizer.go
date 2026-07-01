@@ -7,6 +7,7 @@ import (
 
 	"github.com/sprout-foundry/seed/core"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // llmSummarizerMaxInputChars caps the transcript sent to the summary
@@ -50,7 +51,7 @@ func newLLMSummarizer(client api.ClientInterface, providerName string) core.LLMS
 		}
 		resp, err := client.SendChatRequest(ctx, req, nil, "", false)
 		if err != nil {
-			return "", fmt.Errorf("llm summary call failed: %w", err)
+			return "", agenterrors.Wrap(err, "llm summary call failed")
 		}
 		if resp == nil || len(resp.Choices) == 0 {
 			return "", nil
@@ -218,11 +219,11 @@ func firstLine(s string) string {
 // rule-based heuristic text.
 func (a *Agent) SummarizeViaLLM(ctx context.Context, messages []api.Message, hint core.SummarizerHint) (string, error) {
 	if a == nil {
-		return "", fmt.Errorf("agent unavailable")
+		return "", agenterrors.NewAgent("llm-summarizer", "agent unavailable", nil)
 	}
 	summarizer := newLLMSummarizer(a.getClient(), a.GetProvider())
 	if summarizer == nil {
-		return "", fmt.Errorf("no LLM client bound; cannot summarize via LLM")
+		return "", agenterrors.NewAgent("llm-summarizer", "no LLM client bound; cannot summarize via LLM", nil)
 	}
 	return summarizer(ctx, messages, hint)
 }

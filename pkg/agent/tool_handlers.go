@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // Shared utility functions for tool handlers
@@ -397,13 +399,13 @@ func convertToString(param interface{}, paramName string) (string, error) {
 		// If it's a map, try to convert to JSON string
 		jsonBytes, err := json.Marshal(v)
 		if err != nil {
-			return "", fmt.Errorf("parameter '%s' is an object that cannot be converted to string: %w", paramName, err)
+			return "", agenterrors.Wrapf(err, "parameter '%s' is an object that cannot be converted to string", paramName)
 		}
 		return string(jsonBytes), nil
 	case nil:
-		return "", fmt.Errorf("parameter '%s' is missing or null", paramName)
+		return "", agenterrors.NewValidation("parameter '"+paramName+"' is missing or null", nil)
 	default:
-		return "", fmt.Errorf("parameter '%s' has invalid type %T, expected string", paramName, param)
+		return "", agenterrors.NewValidation(fmt.Sprintf("parameter '%s' has invalid type %T, expected string", paramName, param), nil)
 	}
 }
 

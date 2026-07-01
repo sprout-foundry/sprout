@@ -2,6 +2,9 @@ package tools
 
 import (
 	"context"
+	"image"
+	"image/png"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -867,5 +870,140 @@ func requireFalse(t *testing.T, v bool, msg string) {
 	t.Helper()
 	if v {
 		t.Fatalf("%s should be false", msg)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Screenshot multimodal attachment tests.
+// ---------------------------------------------------------------------------
+
+func makeTestPNG(t *testing.T) string {
+	t.Helper()
+	tmp := t.TempDir()
+	path := tmp + "/screenshot.png"
+	img := image.NewRGBA(image.Rect(0, 0, 1, 1))
+	f, err := os.Create(path)
+	requireNoError(t, err)
+	err = png.Encode(f, img)
+	requireNoError(t, err)
+	f.Close()
+	return path
+}
+
+func makeVisionProcessorForTests() *VisionProcessor {
+	// GetImageData for local files only reads the file, optimizes, and
+	// base64-encodes — it never touches visionClient. So a nil client is
+	// sufficient for testing the local-file path.
+	return &VisionProcessor{visionClient: nil, logger: nil, debug: false}
+}
+
+func TestBrowseURLHandler_ScreenshotAttachesImageWhenVisionEnabled(t *testing.T) {
+	t.Parallel()
+	screenshotPath := makeTestPNG(t)
+	mock := &mockWebBrowserForBrowseURL{
+		returnResult: "Saved screenshot to " + screenshotPath,
+	}
+	h := &browseURLHandler{}
+
+	ctx := context.Background()
+	env := ToolEnv{
+		WebBrowser:      mock,
+		VisionProcessor: makeVisionProcessorForTests(),
+	}
+	args := map[string]any{
+		"url":             "https://example.com",
+		"action":          "screenshot",
+		"screenshot_path": screenshotPath,
+	}
+
+	result, err := h.Execute(ctx, env, args)
+	requireNoError(t, err)
+	requireFalse(t, result.IsError, "IsError")
+	if len(result.Images) != 1 {
+		t.Fatalf("expected 1 image in result.Images, got %d", len(result.Images))
+	}
+	if result.Images[0].Base64 == "" {
+		t.Error("expected non-empty Base64 in attached image")
+	}
+	if result.Images[0].MIMEType == "" {
+		t.Error("expected non-empty MIMEType in attached image")
+	}
+}
+
+func TestBrowseURLHandler_ScreenshotSkipsAttachWhenVisionDisabled(t *testing.T) {
+	t.Parallel()
+	screenshotPath := makeTestPNG(t)
+	mock := &mockWebBrowserForBrowseURL{
+		returnResult: "Saved screenshot to " + screenshotPath,
+	}
+	h := &browseURLHandler{}
+
+	ctx := context.Background()
+	env := ToolEnv{
+		WebBrowser:      mock,
+		VisionProcessor: nil, // no vision capability
+	}
+	args := map[string]any{
+		"url":             "https://example.com",
+		"action":          "screenshot",
+		"screenshot_path": screenshotPath,
+	}
+
+	result, err := h.Execute(ctx, env, args)
+	requireNoError(t, err)
+	requireFalse(t, result.IsError, "IsError")
+	if len(result.Images) != 0 {
+		t.Errorf("expected no images when VisionProcessor is nil, got %d", len(result.Images))
+	}
+}
+
+func TestBrowseURLHandler_MissingScreenshotFileDoesNotError(t *testing.T) {
+	t.Parallel()
+	mock := &mockWebBrowserForBrowseURL{
+		returnResult: "Saved screenshot to /tmp/nonexistent_screenshot.png",
+	}
+	h := &browseURLHandler{}
+
+	ctx := context.Background()
+	env := ToolEnv{
+		WebBrowser:      mock,
+		VisionProcessor: makeVisionProcessorForTests(),
+	}
+	args := map[string]any{
+		"url":             "https://example.com",
+		"action":          "screenshot",
+		"screenshot_path": "/tmp/nonexistent_screenshot_abc123.png",
+	}
+
+	result, err := h.Execute(ctx, env, args)
+	requireNoError(t, err)
+	requireFalse(t, result.IsError, "IsError")
+	if len(result.Images) != 0 {
+		t.Errorf("expected no images when screenshot file is missing, got %d", len(result.Images))
+	}
+}
+
+func TestBrowseURLHandler_NonScreenshotActionDoesNotAttach(t *testing.T) {
+	t.Parallel()
+	h := &browseURLHandler{}
+	ctx := context.Background()
+	env := ToolEnv{
+		WebBrowser:      &mockWebBrowserForBrowseURL{returnResult: "page text"},
+		VisionProcessor: makeVisionProcessorForTests(),
+	}
+
+	for _, action := range []string{"text", "dom", "inspect"} {
+		t.Run(action, func(t *testing.T) {
+			args := map[string]any{
+				"url":    "https://example.com",
+				"action": action,
+			}
+			result, err := h.Execute(ctx, env, args)
+			requireNoError(t, err)
+			requireFalse(t, result.IsError, "IsError")
+			if len(result.Images) != 0 {
+				t.Errorf("expected no images for action=%q, got %d", action, len(result.Images))
+			}
+		})
 	}
 }

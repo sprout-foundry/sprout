@@ -861,7 +861,7 @@ string-matching.
   category: `IsRetryable()`, `IsAuth()`, `IsRateLimit()`, `As()` chains.
   _Effort: ~0.5 day._
 
-- [ ] **SP-094-2:** Migrate `pkg/agent_tools/*_handler.go` (~80 sites).
+- [x] **SP-094-2:** Migrate `pkg/agent_tools/*_handler.go` (~80 sites).
   Existing tests in `*_handler_test.go` catch regressions. _Effort: ~2 days._
 
 - [ ] **SP-094-3:** Migrate `pkg/agent/api_client*.go` (~40 sites) plus

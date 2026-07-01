@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -143,6 +142,15 @@ func (vp *VisionProcessor) AnalyzeImage(ctx context.Context, imagePath string, o
 		return innerErr
 	}, RetryOptions{OpName: "analyze_image"})
 	if err != nil {
+		// SP-103-A8: attempt OCR fallback when primary vision model fails
+		if shouldFallbackToOCR(err) {
+			analysis, fbErr := vp.fallbackToOCR(ctx, imagePath, prompt, imageType, imageData, err)
+			if fbErr == nil {
+				return analysis, nil
+			}
+			// Fallback exhausted; return the composed error.
+			return VisionAnalysis{}, fbErr
+		}
 		return VisionAnalysis{}, fmt.Errorf("vision request: %w", err)
 	}
 
@@ -157,23 +165,9 @@ func (vp *VisionProcessor) AnalyzeImage(ctx context.Context, imagePath string, o
 	}
 
 	// Extract response content
-	if len(response.Choices) == 0 {
-		return VisionAnalysis{}, fmt.Errorf("no response from vision model")
-	}
-
-	resultText := response.Choices[0].Message.Content
-
-	// Try to parse as JSON first, fall back to plain text
-	var analysis VisionAnalysis
-	if err := json.Unmarshal([]byte(resultText), &analysis); err != nil {
-		// If JSON parsing fails, use as plain description
-		analysis = VisionAnalysis{
-			ImagePath:   imagePath,
-			Description: resultText,
-		}
-	} else {
-		// Ensure image path is set
-		analysis.ImagePath = imagePath
+	analysis, parseErr := parseVisionResponse(response, imagePath)
+	if parseErr != nil {
+		return VisionAnalysis{}, parseErr
 	}
 
 	return analysis, nil

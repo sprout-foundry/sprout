@@ -207,6 +207,14 @@ type Config struct {
 	ReviewProvider string `json:"review_provider,omitempty"` // Provider for review commands (defaults to LastUsedProvider)
 	ReviewModel    string `json:"review_model,omitempty"`    // Model for review commands (defaults to provider's default model)
 
+	// Vision Fallback Configuration
+	// VisionFallbackToOCR enables transparent fallback to the OCR model
+	// when the primary vision model fails after retries. When true and
+	// PDFOCRModel is configured, a single OCR attempt is made as a last
+	// resort. Default: true (enabled). Controlled by VISION_FALLBACK_TO_OCR
+	// env var (SPROUT_ / LEDIT_ prefixes).
+	VisionFallbackToOCR bool `json:"vision_fallback_to_ocr,omitempty"`
+
 	// PDF OCR Configuration
 	PDFOCREnabled    bool   `json:"pdf_ocr_enabled,omitempty"`    // Enable PDF OCR processing
 	PDFOCRProvider   string `json:"pdf_ocr_provider,omitempty"`   // Provider for PDF OCR (e.g., "ollama", "openai", "deepinfra")

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
@@ -33,7 +34,7 @@ func (h *taskQueueAddHandler) Validate(args map[string]any) error {
 	}
 	if val, ok := args["priority"]; ok && val != nil {
 		if s, ok := val.(string); ok && s != "" && s != "high" && s != "medium" && s != "low" {
-			return fmt.Errorf("parameter 'priority' must be 'high', 'medium', or 'low', got %q", s)
+			return agenterrors.NewValidation(fmt.Sprintf("parameter 'priority' must be 'high', 'medium', or 'low', got %q", s), nil)
 		}
 	}
 	return nil

@@ -6,6 +6,7 @@ import (
 	"io"
 	"strings"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
@@ -44,7 +45,7 @@ func (h *writeFileHandler) Validate(args map[string]any) error {
 		return err
 	}
 	if strings.TrimSpace(path) == "" {
-		return fmt.Errorf("parameter 'path' must not be empty")
+		return agenterrors.NewValidation("parameter 'path' must not be empty", nil)
 	}
 
 	content, err := extractString(args, "content")
@@ -85,7 +86,7 @@ func (h *writeFileHandler) Execute(ctx context.Context, env ToolEnv, args map[st
 		return ToolResult{
 			Output:  "",
 			IsError: true,
-		}, fmt.Errorf("write file %q: %w", path, err)
+		}, agenterrors.NewTool("write_file", fmt.Sprintf("write file %q: %v", path, err), err)
 	}
 
 	// Publish tool end event

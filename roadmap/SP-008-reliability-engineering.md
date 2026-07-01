@@ -1,6 +1,6 @@
 # SP-008: Reliability Engineering — Concurrency & Observability
 
-**Status:** 📋 Proposed  
+**Status:** ⚠️ Partially Shipped — Track A concurrency tests, semantic-recall instrumentation, and vision metrics shipped (2026-06-24 → 2026-06-30); structured-log context propagation and typed error hierarchy pending (see SP-094 / SP-099)  
 **Depends on:** None  
 **Priority:** High  
 **Effort Estimate:** ~3-4 weeks (2 tracks, parallelizable)

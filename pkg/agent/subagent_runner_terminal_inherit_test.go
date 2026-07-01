@@ -11,8 +11,8 @@ import (
 // TestSubagentRunner_InheritsTerminalManagerFromParent locks in the fix for
 // the regression where subagents (including the persona/orchestrator chain)
 // failed shell_command background=true / check_background / stop_background
-// with "background mode requires WebUI terminal manager" even when the
-// root agent had a TerminalManager attached. The Agent struct construction
+// because no TerminalManager or BackgroundProcessManager was attached, even
+// when the root agent had a TerminalManager. The Agent struct construction
 // in createSubagent was propagating todoMgr / eventBus / embeddingMgr from
 // the parent but missing terminalManager.
 func TestSubagentRunner_InheritsTerminalManagerFromParent(t *testing.T) {

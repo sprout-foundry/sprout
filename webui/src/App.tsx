@@ -12,6 +12,7 @@ import Notification from './components/Notification';
 import OnboardingDialog from './components/OnboardingDialog';
 import SecurityApprovalDialog from './components/SecurityApprovalDialog';
 import SecurityPromptDialog from './components/SecurityPromptDialog';
+import ShellApprovalPanel from './components/ShellApprovalPanel';
 import UIManager from './components/UIManager';
 import UpdateNotification from './components/UpdateNotification';
 import { MAX_PERSISTED_LOGS } from './constants/app';
@@ -70,6 +71,7 @@ function App() {
       securityPromptRequest: null,
       askUserRequest: null,
       editApprovalRequest: null,
+      shellApprovalRequest: null,
       modelSelectionRequest: null,
       driftNotification: null,
       outputVerbosity: 'default' as const,

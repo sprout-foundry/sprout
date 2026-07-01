@@ -1,6 +1,6 @@
 # SP-022: Workspace Management & Project Detection
 
-**Status:** 📋 Proposed  
+**Status:** ✅ Implemented (WorkspacePicker + WorkspacePane + LocationSwitcher + WorkspaceBar)
 **Depends on:** SP-001 (Agent Core), SP-003 (Webui), SP-019 (Multi-Chat Sessions)  
 **Priority:** High  
 **Effort Estimate:** ~2 weeks (2 phases)

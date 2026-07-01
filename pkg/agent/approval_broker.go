@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -212,6 +213,54 @@ func (a *Agent) RequestApproval(assessment RiskAssessment, toolName string, args
 	if canPrompt {
 		// For shell_command: use the 4-option approval picker (AskForApprovalWithOptions)
 		if toolName == "shell_command" {
+			// SP-093-2: per-part picker (opt-in via EditApprovalConfig.ShellCommand).
+			if cfg != nil && cfg.EditApproval != nil && cfg.EditApproval.ShellCommand &&
+				args["command"] != "" {
+				if cmd, ok := args["command"].(string); ok && cmd != "" {
+					proposal := NewShellProposal(cmd)
+					pickerCtx, pickerCancel := context.WithTimeout(context.Background(), utils.ApprovalPromptTimeout)
+					decisions, pickErr := a.RequestShellApproval(pickerCtx, proposal)
+					pickerCancel()
+					if pickErr != nil {
+						a.logSecurityDecision(toolName, args, assessment, "blocked")
+						return BrokerDecision{
+							Approved: false, Decision: security.ApprovalDeny,
+							Surface: "cli", Assessment: assessment,
+						}, agenterrors.NewSecurityErrorWithAssessment(
+							fmt.Sprintf("security rejected: %s — picker error: %v", toolName, pickErr),
+							assessment.Explain(), nil,
+						)
+					}
+					// Per-part decision: any rejection -> deny whole command.
+					allApproved := true
+					for _, part := range proposal.Parts {
+						if approved, ok := decisions[part.ID]; !ok || !approved {
+							allApproved = false
+							break
+						}
+					}
+					if !allApproved {
+						a.logSecurityDecision(toolName, args, assessment, "blocked")
+						return BrokerDecision{
+							Approved: false, Decision: security.ApprovalDeny,
+							Outcome: security.ApprovalOutcomeResponded, Surface: "cli",
+							Assessment: assessment,
+						}, agenterrors.NewSecurityErrorWithAssessment(
+							fmt.Sprintf("security rejected: %s — one or more parts denied.", toolName),
+							assessment.Explain(), nil,
+						)
+					}
+					// All approved — persist decisions map and return.
+					a.applyApprovalDecision(security.ApprovalApproveOnce, cmd)
+					a.logSecurityDecision(toolName, args, assessment, "approved")
+					return BrokerDecision{
+						Approved: true, Decision: security.ApprovalApproveOnce,
+						Outcome: security.ApprovalOutcomeResponded, Surface: "cli",
+						Assessment: assessment,
+					}, nil
+				}
+			}
+
 			if cmd, ok := args["command"].(string); ok && cmd != "" {
 				prompt := "Security Warning — " + string(assessment.Level)
 				if assessment.RequiresIntentConfirmation {

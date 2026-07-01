@@ -1,6 +1,6 @@
 # SP-017: Settings Panel Rework — Scoped Collapsible Sections
 
-**Status:** 📋 Proposed  
+**Status:** ✅ Partially Implemented (scoped labels shipped; collapsible sections pending → see SP-101)
 **Depends on:** SP-003 (Webui & Frontend Architecture), SP-013 (Agent Settings Management)  
 **Priority:** Medium  
 **Effort Estimate:** ~1 week

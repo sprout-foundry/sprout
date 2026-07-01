@@ -1758,3 +1758,24 @@ button.primary.success {
     }
   }
 }
+
+/* ── Notification center overrides ─────────────────────────────── */
+
+/* Override the shared NotificationStack.css bottom-right positioning.
+ * The shared CSS (packages/ui/src/components/NotificationStack.css) places
+ * toasts at bottom-right; we need top-right so they don't collide with the
+ * terminal pane. This override wins because App.css is imported after the
+ * @sprout/ui cascade. */
+.notification-container {
+  top: 24px !important;
+  right: 24px !important;
+  bottom: auto !important;
+}
+
+@media (max-width: 480px) {
+  .notification-container {
+    right: 12px !important;
+    left: 12px !important;
+    max-width: none !important;
+  }
+}

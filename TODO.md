@@ -1446,8 +1446,20 @@ Phase 2: lazy-load the onnxruntime-web bundle.
 
 ### Phase order
 
-- [ ] **SP-100-1:** Wire `embedding_funcs.go` to expose ONNX status +
-  switch. _~1 day._
+- [x] **SP-100-1:** Wire `embedding_funcs.go` to expose ONNX status +
+  switch.
+
+  _Shipped (commit 8471764d): New `pkg/wasmshell/embedding_status.go`
+  (82 lines) with `EmbeddingMode` (Auto/Off/ONNX/Static),
+  thread-safe `EmbeddingStatus` snapshot, `atomic.Value`-backed
+  mode store. Lazy detection of `__sproutONNX` at init. New
+  `pkg/wasmshell/embedding_funcs.go` (145 lines) with
+  `EmbeddingProvider` wrapper that picks a backend based on mode,
+  `jsEmbeddingAPI` registered on `globalThis.__sproutEmbedding`
+  (status/setMode/currentMode). New `pkg/embedding/static_provider.go`
+  (69 lines) + stub exposing `StaticProviderName()` and
+  `StaticEmbed()` helpers. 4 tests cover mode round-trip, status
+  defaults, errors. Build green; all tests pass._ _~1 day._
 
 - [ ] **SP-100-2:** Lazy-load `onnxruntime-web` from the WASM HTML
   shell. _~2 days._

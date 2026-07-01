@@ -42,6 +42,9 @@ jobs:
           OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
         run: go run ./cmd/refresh_provider_catalog --registry-dir=models
 
+      - name: Sync embedded provider configs with canonical registry
+        run: go run ./cmd/sync_provider_configs --registry-dir=models
+
       - name: Enrich new models with capability probes
         # Probes only NEW + eligible + within-budget models (vs the live
         # registry), capped at --max-probes, so the daily inference spend stays

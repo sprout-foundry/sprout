@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -192,6 +193,14 @@ type SubagentResult struct {
 	Cancelled      bool
 	BudgetExceeded bool // true if task was skipped because fleet budget was already exceeded before starting
 	Truncated      bool // true if subagent was cut short due to fleet budget exceeded mid-run
+	// OutputComplete signals whether the subagent produced a substantive
+	// final response. false when the output is empty or suspiciously brief
+	// (under 50 trimmed chars) despite a clean exit — the orchestrator can
+	// use this to decide whether to retry, escalate, or accept. This is
+	// distinct from Error/Cancelled/BudgetExceeded (all of which also set
+	// it false): OutputComplete focuses specifically on "did the subagent
+	// actually say something useful?"
+	OutputComplete bool
 	// FileChanges is the manifest of writes/edits this subagent performed,
 	// captured via its own ChangeTracker. nil when tracking wasn't
 	// initialized for this run. SP-059 Phase 2c.
@@ -202,6 +211,34 @@ type SubagentResult struct {
 	// subagent did, not just the final assistant message. Capped to
 	// subagentProgressLogCap entries. SP-059 Phase 3a.
 	ProgressLog []SubagentProgressEntry
+}
+
+// outputCompleteThreshold is the minimum trimmed output length (in bytes)
+// for a subagent result to be considered "complete". Outputs shorter than
+// this are flagged output_complete=false so the orchestrator can decide to
+// retry or escalate. The threshold is intentionally aggressive — even valid
+// short confirmations ("Done.") are flagged as incomplete, which is the
+// correct signal for research/delegation tasks where the orchestrator needs
+// substantive findings, not just an acknowledgement.
+const outputCompleteThreshold = 50
+
+// isOutputComplete returns true when a subagent's result represents
+// substantive, actionable output rather than an empty or suspiciously brief
+// response. A result is complete only when ALL of these hold:
+//   - No error
+//   - Not cancelled, budget-exceeded, or truncated
+//   - Trimmed output is at least outputCompleteThreshold bytes
+//
+// The zero-value SubagentResult (Error=nil, Output="") returns false because
+// the length check fails — this is the safe default for early-return paths
+// that never explicitly set OutputComplete.
+func isOutputComplete(r *SubagentResult) bool {
+	if r == nil {
+		return false
+	}
+	return r.Error == nil &&
+		!r.Cancelled && !r.BudgetExceeded && !r.Truncated &&
+		len(strings.TrimSpace(r.Output)) >= outputCompleteThreshold
 }
 
 // SubagentProgressEntry is one timeline entry from a subagent run. Kept

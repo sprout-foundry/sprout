@@ -115,20 +115,10 @@ func Load() (*Config, error) {
 	config.loadedModTime = loadedMod
 	config.loadedSize = loadedSize
 
-	// Discover user-level skills from ~/.config/sprout/skills/
-	if os.Getenv("SPROUT_NO_USER_SKILLS") != "1" {
-		if discovered := discoverUserSkills(&config); len(discovered) > 0 {
-			log.Printf("[skills] Discovered %d user skill(s): %s",
-				len(discovered), strings.Join(discovered, ", "))
-		}
-	}
-
-	// Discover project-specific skills from .sprout/skills/
-	if os.Getenv("SPROUT_NO_PROJECT_SKILLS") != "1" {
-		if discovered := discoverProjectSkills(&config); len(discovered) > 0 {
-			log.Printf("[skills] Discovered %d project-local skill(s): %s",
-				len(discovered), strings.Join(discovered, ", "))
-		}
+	// Discover user-level and project-specific skills.
+	if discovered := config.discoverSkills(); len(discovered) > 0 {
+		log.Printf("[skills] Discovered %d skill(s): %s",
+			len(discovered), strings.Join(discovered, ", "))
 	}
 
 	// Self-heal a config that was poisoned by a leaky test run (e.g. a

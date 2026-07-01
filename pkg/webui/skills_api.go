@@ -129,6 +129,13 @@ func (ws *ReactWebServer) handleAPIInstallSkill(w http.ResponseWriter, r *http.R
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	// Hot-reload: make the newly installed skill discoverable via list_skills
+	// without requiring a sprout restart.
+	if ws.agent != nil {
+		if refreshErr := ws.agent.RefreshSkills(); refreshErr != nil {
+			log.Printf("[skills] installed but config reload failed: %v", refreshErr)
+		}
+	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(results)
 }
@@ -159,6 +166,12 @@ func (ws *ReactWebServer) handleAPIUpdateSkill(w http.ResponseWriter, r *http.Re
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	// Hot-reload: pick up any frontmatter changes from the updated skill.
+	if ws.agent != nil {
+		if refreshErr := ws.agent.RefreshSkills(); refreshErr != nil {
+			log.Printf("[skills] updated but config reload failed: %v", refreshErr)
+		}
+	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(results)
 }
@@ -185,6 +198,13 @@ func (ws *ReactWebServer) handleAPIRemoveSkill(w http.ResponseWriter, r *http.Re
 		log.Printf("handleAPIRemoveSkill: %v", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+	// Hot-reload: remove the uninstalled skill from the active config so it
+	// no longer appears in list_skills without a restart.
+	if ws.agent != nil {
+		if refreshErr := ws.agent.RefreshSkills(); refreshErr != nil {
+			log.Printf("[skills] removed but config reload failed: %v", refreshErr)
+		}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{"status": "removed", "id": req.ID})

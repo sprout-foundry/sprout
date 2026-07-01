@@ -102,7 +102,7 @@ func (a *Agent) initializeMCP() error {
 	shouldAutoStart := config.MCP.AutoStart || legacyEnabled
 	if shouldAutoStart {
 		if err := a.mcpSub.GetManager().StartAll(ctx); err != nil {
-			return fmt.Errorf("failed to start MCP servers: %w", err)
+			return agenterrors.NewTool("mcp", "failed to start MCP servers", err)
 		}
 
 		if a.debug {
@@ -283,7 +283,7 @@ func (a *Agent) executeMCPTool(toolName string, args map[string]interface{}) (st
 	ctx := context.Background()
 	result, err := a.mcpSub.GetManager().CallTool(ctx, serverName, actualToolName, args)
 	if err != nil {
-		return "", fmt.Errorf("failed to call MCP tool %s/%s: %w", serverName, actualToolName, err)
+		return "", agenterrors.Wrapf(err, "failed to call MCP tool %s/%s", serverName, actualToolName)
 	}
 
 	// Convert result to string
@@ -356,14 +356,14 @@ func (a *Agent) handleMCPToolsCommand(args map[string]interface{}) (string, erro
 	case "start":
 		// For now, start all servers
 		if err := a.mcpSub.GetManager().StartAll(ctx); err != nil {
-			return "", fmt.Errorf("failed to start servers: %w", err)
+			return "", agenterrors.NewTool("mcp", "failed to start servers", err)
 		}
 		return "Started all MCP servers", nil
 
 	case "stop":
 		// For now, stop all servers
 		if err := a.mcpSub.GetManager().StopAll(ctx); err != nil {
-			return "", fmt.Errorf("failed to stop servers: %w", err)
+			return "", agenterrors.NewTool("mcp", "failed to stop servers", err)
 		}
 		return "Stopped all MCP servers", nil
 

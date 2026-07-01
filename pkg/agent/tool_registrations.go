@@ -14,7 +14,7 @@ func newDefaultToolRegistry() *ToolRegistry {
 	// activity-indicator spinner would interleave with that output.
 	registry.RegisterTool(ToolConfig{
 		Name:        "shell_command",
-		Description: "Execute a shell command. Supports background execution (background=true) and checking accumulated output of a background session (check_background=session_id) and stopping a background session (stop_background=session_id)",
+		Description: "Execute a shell command. Supports background execution (background=true) and checking accumulated output of a background session (check_background=session_id) and stopping a background session (stop_background=session_id). Background operations work in CLI as well as WebUI; promoted sessions are discoverable via `sprout shell-bg list`.",
 		Parameters: []ParameterConfig{
 			{"command", "string", false, []string{"cmd"}, "The shell command to execute (required unless check_background or stop_background is provided)"},
 			{"background", "boolean", false, []string{}, "Run command in background and return immediately with session_id (default: false)"},

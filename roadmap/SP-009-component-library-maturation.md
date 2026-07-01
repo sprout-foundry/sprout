@@ -1,6 +1,6 @@
 # SP-009: Component Library Maturation — Publish & Storybook
 
-**Status:** 📋 Proposed  
+**Status:** ✅ Implemented (Storybook + MDX docs + Chromatic; webui imports @sprout/ui)
 **Depends on:** SP-003 (Webui & Frontend Architecture) — relies on the component extraction already underway  
 **Priority:** Medium  
 **Effort Estimate:** ~2-3 weeks (2 phases)

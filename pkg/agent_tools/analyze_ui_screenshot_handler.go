@@ -7,6 +7,9 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
+// visionModeFrontend is the analysis mode used by the analyze_ui_screenshot tool.
+const visionModeFrontend = "frontend"
+
 type analyzeUIScreenshotHandler struct{}
 
 func (h *analyzeUIScreenshotHandler) Name() string { return "analyze_ui_screenshot" }

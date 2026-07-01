@@ -1,6 +1,6 @@
 # SP-064: Automate CLI — Status, Stop, Logs
 
-**Status:** 📋 Proposed
+**Status:** ✅ Implemented (sprout automate status/stop/logs)
 **Date:** 2026-06-04
 **Depends on:** none (extends the existing `cmd/automate.go` surface and the BPM)
 **Priority:** Medium

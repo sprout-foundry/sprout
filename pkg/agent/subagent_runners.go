@@ -193,18 +193,35 @@ func (r *SubagentRunner) CancelAll() {
 	})
 }
 
-// InjectInputIntoActive delivers a steering message to the deepest
-// (most-recently-started) running subagent. Returns the target ID when
-// delivery succeeds, or empty string when no subagent is currently active
-// — the caller falls back to the primary's input channel in that case.
+// InjectInputIntoActive delivers a steering message to the PRIMARY agent
+// first. Only if the primary's channel is full or unavailable does it
+// fall back to the deepest (most-recently-started) running subagent.
 //
-// "Deepest" wins so that nested-subagent setups route to the one the
-// user is most likely watching activity from in the Subagents tab.
-// Selection ties broken by start time (latest wins).
+// Rationale (SP-094-8): The primary agent is what reads user steer
+// messages and decides whether to abort subagents, redirect them, or
+// fold the steer into its own plan. Routing to the subagent bypasses
+// this decision loop — the parent never sees "yes, commit and push"
+// until the subagent finishes, by which point the subagent may have
+// already taken destructive action.
+//
+// Returns the target ID ("primary" or subagent ID) when delivery
+// succeeds, or ("", false) when no target is available.
 func (r *SubagentRunner) InjectInputIntoActive(input string) (string, bool) {
 	if r == nil || input == "" {
 		return "", false
 	}
+
+	// Primary agent first.
+	if r.parentAgent != nil && r.parentAgent.inputInjectionChan != nil {
+		select {
+		case r.parentAgent.inputInjectionChan <- input:
+			return "primary", true
+		default:
+			// Primary channel full or unavailable; fall through to subagent.
+		}
+	}
+
+	// Deepest-subagent routing as fallback.
 	var best *runningSubagent
 	r.active.Range(func(_, value interface{}) bool {
 		sub, ok := value.(*runningSubagent)

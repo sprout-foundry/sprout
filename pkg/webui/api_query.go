@@ -524,18 +524,28 @@ func (ws *ReactWebServer) handleAPIQuerySteer(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// SP-059 Phase 1b: if a subagent is the active executor, route the
-	// steer to it instead of letting the message sit in the primary's
-	// queue (where it wouldn't be read until the subagent returns).
+	// SP-059 Phase 1b / SP-094-8: if a subagent is the active executor,
+	// route the steer via InjectInputIntoActive. This now prefers the
+	// primary agent first (the parent decides whether to abort subagents,
+	// redirect them, or fold the steer into its own plan). Only if the
+	// primary's channel is full does it fall back to the deepest running
+	// subagent.
 	target := "primary"
 	subagentID := ""
+	delivered := false
 	if runner := clientAgent.GetSubagentRunner(); runner != nil {
 		if id, ok := runner.InjectInputIntoActive(query.Query); ok {
-			target = "subagent"
-			subagentID = id
+			delivered = true
+			if id == "primary" {
+				target = "primary"
+			} else {
+				target = "subagent"
+				subagentID = id
+			}
 		}
 	}
-	if target == "primary" {
+	if !delivered {
+		// No runner or runner couldn't deliver — fall back to primary directly.
 		if err := clientAgent.InjectInputContext(query.Query); err != nil {
 			http.Error(w, fmt.Sprintf("Failed to steer active query: %v", err), http.StatusConflict)
 			return

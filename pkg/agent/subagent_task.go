@@ -363,6 +363,13 @@ func (r *SubagentRunner) runTask(
 		}
 		progressMu.Unlock()
 
+		// Output quality signal: set OutputComplete so the orchestrator can
+		// distinguish "subagent did useful work" from "subagent ran but
+		// produced nothing actionable". The orchestrator LLM sees this as
+		// "output_complete" in the tool result envelope and can decide to
+		// retry or escalate.
+		result.OutputComplete = isOutputComplete(result)
+
 		// Diagnostic for "subagent completed without returning anything":
 		// when a subagent exits cleanly (no error, not cancelled, not
 		// budget-exceeded) but its output is empty or too brief to convey

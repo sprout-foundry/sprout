@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
@@ -60,7 +61,7 @@ func (h *searchMemoriesHandler) Validate(args map[string]any) error {
 		return err
 	}
 	if strings.TrimSpace(query) == "" {
-		return fmt.Errorf("parameter 'query' must not be empty")
+		return agenterrors.NewValidation("parameter 'query' must not be empty", nil)
 	}
 
 	// Validate top_k if provided
@@ -69,7 +70,7 @@ func (h *searchMemoriesHandler) Validate(args map[string]any) error {
 		case int, float64:
 			// Valid
 		default:
-			return fmt.Errorf("parameter 'top_k' must be an integer, got %T", tkRaw)
+			return agenterrors.NewValidation(fmt.Sprintf("parameter 'top_k' must be an integer, got %T", tkRaw), nil)
 		}
 	}
 
@@ -79,7 +80,7 @@ func (h *searchMemoriesHandler) Validate(args map[string]any) error {
 		case float64, float32, int:
 			// Valid
 		default:
-			return fmt.Errorf("parameter 'threshold' must be a number, got %T", tRaw)
+			return agenterrors.NewValidation(fmt.Sprintf("parameter 'threshold' must be a number, got %T", tRaw), nil)
 		}
 	}
 
@@ -138,7 +139,7 @@ func (h *searchMemoriesHandler) Execute(ctx context.Context, env ToolEnv, args m
 		return ToolResult{
 			Output:  fmt.Sprintf("memory search failed: %v", err),
 			IsError: true,
-		}, fmt.Errorf("search memories: %w", err)
+		}, agenterrors.NewTool("search_memories", fmt.Sprintf("search memories: %v", err), err)
 	}
 
 	output := formatMemorySearchResults(query, results, threshold)
@@ -185,7 +186,7 @@ func searchMemoriesByText(query string, topK int, threshold float64) ([]memorySe
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("read memories directory: %w", err)
+		return nil, agenterrors.NewTool("search_memories", fmt.Sprintf("read memories directory: %v", err), err)
 	}
 
 	queryLower := strings.ToLower(query)

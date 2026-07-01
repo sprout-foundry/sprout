@@ -6,6 +6,7 @@ import (
 	"io"
 	"strings"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
@@ -60,19 +61,19 @@ func (h *writeStructuredFileHandler) Validate(args map[string]any) error {
 		return err
 	}
 	if strings.TrimSpace(path) == "" {
-		return fmt.Errorf("parameter 'path' must not be empty")
+		return agenterrors.NewValidation("parameter 'path' must not be empty", nil)
 	}
 
 	// Check that 'data' exists (required)
 	if _, exists := args["data"]; !exists {
-		return fmt.Errorf("parameter 'data' is required")
+		return agenterrors.NewValidation("parameter 'data' is required", nil)
 	}
 
 	// Validate format if provided
 	if fmtRaw, exists := args["format"]; exists && fmtRaw != nil {
 		if fmtStr, ok := fmtRaw.(string); ok {
 			if strings.TrimSpace(fmtStr) == "" {
-				return fmt.Errorf("parameter 'format' must not be empty if provided")
+				return agenterrors.NewValidation("parameter 'format' must not be empty if provided", nil)
 			}
 		}
 	}
@@ -89,13 +90,13 @@ func (h *writeStructuredFileHandler) Execute(ctx context.Context, env ToolEnv, a
 	format := inferStructuredFormat(path, getOptionalString(args, "format"))
 	if format == "" {
 		return ToolResult{Output: "unsupported structured format: use json or yaml", IsError: true},
-			fmt.Errorf("unsupported structured format: use json or yaml")
+			agenterrors.NewValidation("unsupported structured format: use json or yaml", nil)
 	}
 
 	data, exists := args["data"]
 	if !exists {
 		return ToolResult{Output: "parameter 'data' is required", IsError: true},
-			fmt.Errorf("parameter 'data' is required")
+			agenterrors.NewValidation("parameter 'data' is required", nil)
 	}
 
 	// Validate against schema if provided
@@ -140,7 +141,7 @@ func (h *writeStructuredFileHandler) Execute(ctx context.Context, env ToolEnv, a
 		return ToolResult{
 			Output:  "",
 			IsError: true,
-		}, fmt.Errorf("write structured file %q: %w", path, err)
+		}, agenterrors.NewTool("write_structured_file", fmt.Sprintf("write structured file %q: %v", path, err), err)
 	}
 
 	// Publish tool end event

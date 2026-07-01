@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
@@ -25,7 +26,7 @@ func (h *commitHandler) Definition() ToolDefinition {
 
 func (h *commitHandler) Validate(args map[string]any) error {
 	if args == nil || len(args) == 0 {
-		return fmt.Errorf("arguments must not be nil or empty")
+		return agenterrors.NewValidation("arguments must not be nil or empty", nil)
 	}
 	return nil
 }

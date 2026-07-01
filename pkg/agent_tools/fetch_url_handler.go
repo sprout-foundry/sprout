@@ -2,10 +2,11 @@ package tools
 
 import (
 	"context"
-	"fmt"
 	"mime"
 	"net/url"
 	"strings"
+
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // fetchURLHandler implements ToolHandler for the fetch_url tool.
@@ -39,16 +40,16 @@ func (h *fetchURLHandler) Validate(args map[string]any) error {
 
 	u := strings.TrimSpace(raw)
 	if u == "" {
-		return fmt.Errorf("parameter 'url' must not be empty")
+		return agenterrors.NewValidation("parameter 'url' must not be empty", nil)
 	}
 
 	// Must be an absolute HTTP(S) URL.
 	parsed, perr := url.ParseRequestURI(u)
 	if perr != nil {
-		return fmt.Errorf("parameter 'url' must be an absolute HTTP(S) URL")
+		return agenterrors.NewValidation("parameter 'url' must be an absolute HTTP(S) URL", nil)
 	}
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return fmt.Errorf("parameter 'url' must be an absolute HTTP(S) URL")
+		return agenterrors.NewValidation("parameter 'url' must be an absolute HTTP(S) URL", nil)
 	}
 
 	return nil

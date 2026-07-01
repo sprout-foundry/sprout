@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/redact"
 )
@@ -57,7 +58,7 @@ func (h *saveMemoryHandler) Validate(args map[string]any) error {
 		return err
 	}
 	if strings.TrimSpace(name) == "" {
-		return fmt.Errorf("parameter 'name' must not be empty")
+		return agenterrors.NewValidation("parameter 'name' must not be empty", nil)
 	}
 
 	content, err := extractString(args, "content")
@@ -65,7 +66,7 @@ func (h *saveMemoryHandler) Validate(args map[string]any) error {
 		return err
 	}
 	if strings.TrimSpace(content) == "" {
-		return fmt.Errorf("parameter 'content' must not be empty")
+		return agenterrors.NewValidation("parameter 'content' must not be empty", nil)
 	}
 
 	return nil
@@ -91,7 +92,7 @@ func (h *saveMemoryHandler) Execute(ctx context.Context, env ToolEnv, args map[s
 		return ToolResult{
 			Output:  fmt.Sprintf("failed to save memory '%s': %v", name, err),
 			IsError: true,
-		}, fmt.Errorf("save memory %q: %w", name, err)
+		}, agenterrors.NewTool("save_memory", fmt.Sprintf("save memory %q: %v", name, err), err)
 	}
 
 	// Publish tool end event
@@ -120,14 +121,14 @@ func (h *saveMemoryHandler) Execute(ctx context.Context, env ToolEnv, args map[s
 func saveMemoryToDisk(sanitized, content string) (string, error) {
 	memoryDir := getMemoryDir()
 	if memoryDir == "" {
-		return "", fmt.Errorf("unable to locate config directory for memories")
+		return "", agenterrors.NewConfig("unable to locate config directory for memories", nil)
 	}
 
 	filePath := filepath.Join(memoryDir, sanitized+".md")
 
 	err := os.WriteFile(filePath, []byte(content), 0600)
 	if err != nil {
-		return "", fmt.Errorf("failed to write memory file %q: %w", sanitized, err)
+		return "", agenterrors.NewTool("save_memory", fmt.Sprintf("failed to write memory file %q: %v", sanitized, err), err)
 	}
 
 	return fmt.Sprintf("Memory '%s' saved to ~/.config/sprout/memories/%s.md. This memory will be loaded in all future conversations.", sanitized, sanitized), nil

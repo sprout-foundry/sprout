@@ -110,10 +110,8 @@ type VisionProcessor struct {
 // Caching and Usage Tracking
 // ============================================================================
 
-// Global variables for vision model tracking and caching
+// Global variable for vision model tracking
 var lastVisionUsage *VisionUsageInfo
-var visionCache = make(map[string]string)                // cache key -> result
-var visionCacheUsage = make(map[string]*VisionUsageInfo) // cache key -> usage info
 
 // GetLastVisionUsage returns the usage information from the last vision model call
 func GetLastVisionUsage() *VisionUsageInfo {
@@ -137,12 +135,23 @@ func getVisionMaxReturnedTextChars() int {
 
 // GetVisionCacheStats returns statistics about vision result caching
 func GetVisionCacheStats() map[string]interface{} {
-	stats := make(map[string]interface{})
-	stats["cached_results"] = len(visionCache)
+	visionLRU.mu.Lock()
+	defer visionLRU.mu.Unlock()
 
+	stats := make(map[string]interface{})
+	stats["cached_results"] = int(visionLRU.stats.Size.Load())
+	stats["hits"] = int(visionLRU.stats.Hits.Load())
+	stats["misses"] = int(visionLRU.stats.Misses.Load())
+	stats["evictions"] = int(visionLRU.stats.Evictions.Load())
+	stats["insertions"] = int(visionLRU.stats.Insertions.Load())
+	stats["capacity"] = visionLRU.capacity
+
+	// Compute estimated savings from cached usage info
 	totalSavedCost := 0.0
-	for _, usage := range visionCacheUsage {
-		totalSavedCost += usage.EstimatedCost
+	for _, e := range visionLRU.entries {
+		if e.usage != nil {
+			totalSavedCost += e.usage.EstimatedCost
+		}
 	}
 	stats["estimated_savings"] = totalSavedCost
 

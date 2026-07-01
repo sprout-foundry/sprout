@@ -13,6 +13,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/agent_tools/computer_use"
 	"github.com/sprout-foundry/sprout/pkg/clihooks"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/personas"
 	"github.com/sprout-foundry/sprout/pkg/security"
 	"github.com/sprout-foundry/sprout/pkg/utils"
@@ -50,7 +51,7 @@ func RegisterComputerUseTools(cfg *configuration.Config) error {
 
 	real, err := computer_use.NewPlatformBackend()
 	if err != nil {
-		return fmt.Errorf("computer use unavailable: %w", err)
+		return errors.NewTool("computer_use", "computer use unavailable", err)
 	}
 
 	// Compose decorators: real → panicable → rate-limited → auditing.
@@ -143,10 +144,10 @@ func toolConfigFromHandler(h tools.ToolHandler) ToolConfig {
 func (a *Agent) checkComputerUseActivation() error {
 	cfg := a.GetConfig()
 	if cfg == nil || cfg.ComputerUse == nil || !cfg.ComputerUse.Enabled {
-		return fmt.Errorf("the computer_user persona is off by default — enable it first (set computer_use.enabled = true in settings)")
+		return errors.NewPermission("the computer_user persona is off by default — enable it first (set computer_use.enabled = true in settings)", nil)
 	}
 	if a.IsSubagent() {
-		return fmt.Errorf("computer_user must be a top-level persona; it cannot be activated inside a subagent (no silent autonomous computer control)")
+		return errors.NewPermission("computer_user must be a top-level persona; it cannot be activated inside a subagent (no silent autonomous computer control)", nil)
 	}
 	// SP-063: reject non-interactive activation. cfg.SkipPrompt is true for
 	// `sprout agent --skip-prompt`, automate workflows that run the agent, and
@@ -154,13 +155,13 @@ func (a *Agent) checkComputerUseActivation() error {
 	// must never start silently — it always requires explicit interactive
 	// consent, so block under all three conditions.
 	if cfg.SkipPrompt {
-		return fmt.Errorf("the computer_user persona cannot run under --skip-prompt or in daemon mode (computer use requires explicit interactive consent)")
+		return errors.NewPermission("the computer_user persona cannot run under --skip-prompt or in daemon mode (computer use requires explicit interactive consent)", nil)
 	}
 	if support := computer_use.CheckPlatformSupport(); !support.Supported {
-		return fmt.Errorf("computer use is unavailable on this machine: %s", support.Reason)
+		return errors.NewTool("computer_use", fmt.Sprintf("computer use is unavailable on this machine: %s", support.Reason), nil)
 	}
 	if a.client != nil && !a.client.SupportsVision() {
-		return fmt.Errorf("computer_user requires a vision-capable provider; %q has no vision support — switch to a model that accepts images", a.GetProvider())
+		return errors.NewTool("computer_use", fmt.Sprintf("computer_user requires a vision-capable provider; %q has no vision support — switch to a model that accepts images", a.GetProvider()), nil)
 	}
 	return nil
 }
@@ -291,14 +292,14 @@ func (a *Agent) checkComputerUseSessionOptIn(toolName string) error {
 			if a.debug {
 				a.debugLog("[computer-use] user denied per-session opt-in (CLI) for %s\n", toolName)
 			}
-			return fmt.Errorf("computer use denied: the user declined the per-session opt-in")
+			return errors.NewPermission("computer use denied: the user declined the per-session opt-in", nil)
 		}
 		// CLI path is yes/no only — record as session-scoped approval.
 		return a.applyComputerUseOptInDecision(security.ApprovalApproveOnce, ws)
 	}
 
 	// Non-interactive with no WebUI response — block for safety.
-	return fmt.Errorf("computer use requires interactive opt-in consent — no approval mechanism available (re-run interactively or add the workspace to computer_use.workspace_allowlist in settings)")
+	return errors.NewPermission("computer use requires interactive opt-in consent — no approval mechanism available (re-run interactively or add the workspace to computer_use.workspace_allowlist in settings)", nil)
 }
 
 // applyComputerUseOptInDecision records the user's consent choice, persists
@@ -310,7 +311,7 @@ func (a *Agent) applyComputerUseOptInDecision(decision security.ApprovalDecision
 		if a.debug {
 			a.debugLog("[computer-use] user denied per-session opt-in (workspace: %s)\n", workspace)
 		}
-		return fmt.Errorf("computer use denied: the user declined the per-session opt-in")
+		return errors.NewPermission("computer use denied: the user declined the per-session opt-in", nil)
 	case security.ApprovalApproveAlways:
 		// Persist the workspace root to the allowlist so future sessions
 		// in this directory auto-approve.
@@ -343,11 +344,11 @@ func (a *Agent) applyComputerUseOptInDecision(decision security.ApprovalDecision
 // ComputerUse.WorkspaceAllowlist in config and saves to disk. Idempotent.
 func (a *Agent) persistComputerUseWorkspaceAllowlist(workspace string) error {
 	if a == nil || workspace == "" {
-		return fmt.Errorf("cannot allowlist empty workspace")
+		return errors.NewValidation("cannot allowlist empty workspace", nil)
 	}
 	mgr := a.GetConfigManager()
 	if mgr == nil {
-		return fmt.Errorf("no config manager — cannot persist workspace allowlist")
+		return errors.NewTool("computer_use", "no config manager — cannot persist workspace allowlist", nil)
 	}
 	return mgr.UpdateConfig(func(cfg *configuration.Config) error {
 		if cfg.ComputerUse == nil {

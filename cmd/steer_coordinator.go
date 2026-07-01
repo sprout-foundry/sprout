@@ -199,18 +199,20 @@ func (c *SteerCoordinator) handleSteerSubmit(text string) {
 		rejectCommandIntent(intent, text, "steer", "wait for the prompt to finish (Ctrl+C / Esc to interrupt now)")
 		return
 	}
-	// If a subagent is currently running, route the steer to it directly
-	// via InjectInputIntoActive (parity with the WebUI's steer path in
-	// api_query.go). Without this, the message lands in the primary's
-	// inputInjectionChan — but the primary is blocked inside the
-	// run_subagent tool call and won't consume the channel until the
-	// subagent finishes, so the steer silently no-ops. Injecting into
-	// the active subagent delivers the message at the next iteration
-	// boundary of the subagent's own conversation loop.
+	// If a subagent is currently running, route the steer via
+	// InjectInputIntoActive. SP-094-8: this now prefers the primary
+	// agent first (which reads steer messages and decides whether to
+	// abort subagents, redirect them, or fold the steer into its own
+	// plan). Only if the primary's channel is full does it fall back
+	// to the deepest running subagent.
 	if runner := c.agent.GetSubagentRunner(); runner != nil {
-		if _, ok := runner.InjectInputIntoActive(text); ok {
+		if target, ok := runner.InjectInputIntoActive(text); ok {
 			fmt.Fprintln(os.Stderr)
-			console.GlyphAction.Fprintf(os.Stderr, "steer → subagent: %s", text)
+			if target == "primary" {
+				console.GlyphAction.Fprintf(os.Stderr, "steer queued: %s", text)
+			} else {
+				console.GlyphAction.Fprintf(os.Stderr, "steer → subagent (%s): %s", target, text)
+			}
 			return
 		}
 	}

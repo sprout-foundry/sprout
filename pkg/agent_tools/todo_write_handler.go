@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
@@ -25,34 +26,34 @@ func (h *todoWriteHandler) Definition() ToolDefinition {
 func (h *todoWriteHandler) Validate(args map[string]any) error {
 	todosRaw, ok := args["todos"]
 	if !ok {
-		return fmt.Errorf("parameter 'todos' is required")
+		return agenterrors.NewValidation("parameter 'todos' is required", nil)
 	}
 	todosSlice, ok := todosRaw.([]interface{})
 	if !ok {
-		return fmt.Errorf("parameter 'todos' must be an array")
+		return agenterrors.NewValidation("parameter 'todos' must be an array", nil)
 	}
 	for i, todoRaw := range todosSlice {
 		todoMap, ok := todoRaw.(map[string]interface{})
 		if !ok {
-			return fmt.Errorf("each todo must be an object, got %T at index %d", todoRaw, i)
+			return agenterrors.NewValidation(fmt.Sprintf("each todo must be an object, got %T at index %d", todoRaw, i), nil)
 		}
 		if content, ok := todoMap["content"].(string); ok {
 			if content == "" {
-				return fmt.Errorf("todo at index %d requires non-empty 'content'", i)
+				return agenterrors.NewValidation(fmt.Sprintf("todo at index %d requires non-empty 'content'", i), nil)
 			}
 		} else {
-			return fmt.Errorf("todo at index %d requires 'content' string", i)
+			return agenterrors.NewValidation(fmt.Sprintf("todo at index %d requires 'content' string", i), nil)
 		}
 		if status, ok := todoMap["status"].(string); ok {
 			if !IsValidStatus(status) {
-				return fmt.Errorf("todo at index %d: %s", i, FormatTodoStatusError(status))
+				return agenterrors.NewValidation(fmt.Sprintf("todo at index %d: %s", i, FormatTodoStatusError(status)), nil)
 			}
 		} else {
-			return fmt.Errorf("todo at index %d requires 'status' string", i)
+			return agenterrors.NewValidation(fmt.Sprintf("todo at index %d requires 'status' string", i), nil)
 		}
 		if priority, ok := todoMap["priority"].(string); ok {
 			if !IsValidPriority(priority) {
-				return fmt.Errorf("todo at index %d: %s", i, FormatTodoPriorityError(priority))
+				return agenterrors.NewValidation(fmt.Sprintf("todo at index %d: %s", i, FormatTodoPriorityError(priority)), nil)
 			}
 		}
 	}

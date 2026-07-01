@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
@@ -67,7 +68,7 @@ func (h *shellCommandHandler) Definition() ToolDefinition {
 
 func (h *shellCommandHandler) Validate(args map[string]any) error {
 	if args == nil {
-		return fmt.Errorf("arguments must not be nil")
+		return agenterrors.NewValidation("arguments must not be nil", nil)
 	}
 
 	// Extract parameters
@@ -75,7 +76,7 @@ func (h *shellCommandHandler) Validate(args map[string]any) error {
 	if cmdRaw, ok := args["command"]; ok && cmdRaw != nil {
 		cmd, err := extractString(args, "command")
 		if err != nil {
-			return fmt.Errorf("parameter 'command' must be a string")
+			return agenterrors.NewValidation("parameter 'command' must be a string", nil)
 		}
 		command = cmd
 	}
@@ -84,7 +85,7 @@ func (h *shellCommandHandler) Validate(args map[string]any) error {
 	if cbRaw, ok := args["check_background"]; ok && cbRaw != nil {
 		cb, err := extractString(args, "check_background")
 		if err != nil {
-			return fmt.Errorf("parameter 'check_background' must be a string")
+			return agenterrors.NewValidation("parameter 'check_background' must be a string", nil)
 		}
 		checkBackground = cb
 	}
@@ -93,7 +94,7 @@ func (h *shellCommandHandler) Validate(args map[string]any) error {
 	if sbRaw, ok := args["stop_background"]; ok && sbRaw != nil {
 		sb, err := extractString(args, "stop_background")
 		if err != nil {
-			return fmt.Errorf("parameter 'stop_background' must be a string")
+			return agenterrors.NewValidation("parameter 'stop_background' must be a string", nil)
 		}
 		stopBackground = sb
 	}
@@ -106,19 +107,19 @@ func (h *shellCommandHandler) Validate(args map[string]any) error {
 		case string:
 			// String "true"/"false" is acceptable from JSON
 		default:
-			return fmt.Errorf("parameter 'background' must be a boolean")
+			return agenterrors.NewValidation("parameter 'background' must be a boolean", nil)
 		}
 	}
 
 	// Reject conflicting parameters
 	if checkBackground != "" && getBoolArg(args, "background") {
-		return fmt.Errorf("check_background and background=true cannot be used together")
+		return agenterrors.NewValidation("check_background and background=true cannot be used together", nil)
 	}
 	if stopBackground != "" && getBoolArg(args, "background") {
-		return fmt.Errorf("stop_background and background=true cannot be used together")
+		return agenterrors.NewValidation("stop_background and background=true cannot be used together", nil)
 	}
 	if stopBackground != "" && checkBackground != "" {
-		return fmt.Errorf("stop_background and check_background cannot be used together")
+		return agenterrors.NewValidation("stop_background and check_background cannot be used together", nil)
 	}
 
 	// wait_seconds is only meaningful with check_background.
@@ -128,16 +129,16 @@ func (h *shellCommandHandler) Validate(args map[string]any) error {
 			return err
 		}
 		if wait < 0 {
-			return fmt.Errorf("parameter 'wait_seconds' must be >= 0")
+			return agenterrors.NewValidation("parameter 'wait_seconds' must be >= 0", nil)
 		}
 		if checkBackground == "" && wait > 0 {
-			return fmt.Errorf("wait_seconds is only valid with check_background")
+			return agenterrors.NewValidation("wait_seconds is only valid with check_background", nil)
 		}
 	}
 
 	// If neither check_background nor stop_background is set, command is required
 	if checkBackground == "" && stopBackground == "" && strings.TrimSpace(command) == "" {
-		return fmt.Errorf("command parameter is required when check_background and stop_background are not provided")
+		return agenterrors.NewValidation("command parameter is required when check_background and stop_background are not provided", nil)
 	}
 
 	return nil
@@ -193,7 +194,7 @@ func (h *shellCommandHandler) Execute(ctx context.Context, env ToolEnv, args map
 				"For inserting a delay between commands inside a script, chain with && (e.g., \"cmd1 && sleep 5 && cmd2\"). " +
 				"Standalone sleep here will be cut off at the 2-minute shell deadline and adopted as a background session; the agent will NOT have actually waited the requested duration.",
 			IsError: true,
-		}, fmt.Errorf("standalone sleep/wait not supported as a tool call — use check_background with wait_seconds instead")
+		}, agenterrors.NewTool("shell_command", "standalone sleep/wait not supported as a tool call — use check_background with wait_seconds instead", nil)
 	}
 
 	// --- Security classification ---
@@ -203,7 +204,7 @@ func (h *shellCommandHandler) Execute(ctx context.Context, env ToolEnv, args map
 		return ToolResult{
 			Output:  fmt.Sprintf("security block: shell_command — %s", secResult.Reasoning),
 			IsError: true,
-		}, fmt.Errorf("security block: shell_command — %s", secResult.Reasoning)
+		}, agenterrors.NewPermission(fmt.Sprintf("security block: shell_command — %s", secResult.Reasoning), nil)
 	}
 
 	if secResult.ShouldPrompt && env.ApprovalManager != nil {
@@ -220,7 +221,7 @@ func (h *shellCommandHandler) Execute(ctx context.Context, env ToolEnv, args map
 			return ToolResult{
 				Output:  fmt.Sprintf("shell_command rejected (%s): %s", reason, secResult.Reasoning),
 				IsError: true,
-			}, fmt.Errorf("shell_command rejected (%s): %s", reason, secResult.Reasoning)
+			}, agenterrors.NewPermission(fmt.Sprintf("shell_command rejected (%s): %s", reason, secResult.Reasoning), nil)
 		}
 	}
 	// If ShouldPrompt but ApprovalManager is nil, proceed without approval
@@ -245,7 +246,7 @@ func (h *shellCommandHandler) Execute(ctx context.Context, env ToolEnv, args map
 	// command is required for both background and normal execution
 	if strings.TrimSpace(command) == "" {
 		return ToolResult{Output: "command parameter is required", IsError: true},
-			fmt.Errorf("command parameter is required")
+			agenterrors.NewValidation("command parameter is required", nil)
 	}
 
 	// background mode
@@ -266,7 +267,7 @@ func (h *shellCommandHandler) handleCheckBackground(ctx context.Context, env Too
 		return ToolResult{
 			Output:  fmt.Sprintf("check background %q: %v", sessionID, err),
 			IsError: true,
-		}, fmt.Errorf("check background %q: %w", sessionID, err)
+		}, agenterrors.NewTool("shell_command", fmt.Sprintf("check background %q: %v", sessionID, err), err)
 	}
 
 	if env.OutputWriter != nil {
@@ -289,7 +290,7 @@ func (h *shellCommandHandler) handleStopBackground(ctx context.Context, env Tool
 			return ToolResult{
 				Output:  fmt.Sprintf("stop background %q: %v", sessionID, err),
 				IsError: true,
-			}, fmt.Errorf("stop background %q: %w", sessionID, err)
+			}, agenterrors.NewTool("shell_command", fmt.Sprintf("stop background %q: %v", sessionID, err), err)
 		}
 
 		result := fmt.Sprintf("Background session %s stopped.", sessionID)
@@ -309,7 +310,7 @@ func (h *shellCommandHandler) handleStopBackground(ctx context.Context, env Tool
 		return ToolResult{
 			Output:  "stop_background requires a TerminalManager (WebUI) or BackgroundProcessManager (CLI) attached to the agent context",
 			IsError: true,
-		}, fmt.Errorf("stop_background requires a TerminalManager (WebUI) or BackgroundProcessManager (CLI) attached to the agent context")
+		}, agenterrors.NewTool("shell_command", "stop_background requires a TerminalManager (WebUI) or BackgroundProcessManager (CLI) attached to the agent context", nil)
 	}
 
 	err := bpm.Stop(sessionID, 10*time.Second)
@@ -317,7 +318,7 @@ func (h *shellCommandHandler) handleStopBackground(ctx context.Context, env Tool
 		return ToolResult{
 			Output:  fmt.Sprintf("stop background %q: %v", sessionID, err),
 			IsError: true,
-		}, fmt.Errorf("stop background %q: %w", sessionID, err)
+		}, agenterrors.NewTool("shell_command", fmt.Sprintf("stop background %q: %v", sessionID, err), err)
 	}
 
 	result := fmt.Sprintf("Background session %s stopped.", sessionID)
@@ -338,7 +339,7 @@ func (h *shellCommandHandler) handleBackground(ctx context.Context, env ToolEnv,
 		return ToolResult{
 			Output:  fmt.Sprintf("execute background command: %v", err),
 			IsError: true,
-		}, fmt.Errorf("execute background command: %w", err)
+		}, agenterrors.NewTool("shell_command", fmt.Sprintf("execute background command: %v", err), err)
 	}
 
 	if env.OutputWriter != nil {
@@ -368,7 +369,7 @@ func (h *shellCommandHandler) handleSync(ctx context.Context, env ToolEnv, comma
 		return ToolResult{
 			Output:  fmt.Sprintf("shell_command %q: %v", command, err),
 			IsError: true,
-		}, fmt.Errorf("shell_command %q: %w", command, err)
+		}, agenterrors.NewTool("shell_command", fmt.Sprintf("shell_command %q: %v", command, err), err)
 	}
 
 	// Publish tool end event

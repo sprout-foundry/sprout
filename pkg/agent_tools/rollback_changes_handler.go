@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
@@ -29,17 +30,17 @@ func (h *rollbackChangesHandler) Definition() ToolDefinition {
 func (h *rollbackChangesHandler) Validate(args map[string]any) error {
 	if confirmVal, exists := args["confirm"]; exists && confirmVal != nil {
 		if _, ok := confirmVal.(bool); !ok {
-			return fmt.Errorf("parameter 'confirm' must be a boolean, got %T", confirmVal)
+			return agenterrors.NewValidation(fmt.Sprintf("parameter 'confirm' must be a boolean, got %T", confirmVal), nil)
 		}
 	}
 	if rid, exists := args["revision_id"]; exists && rid != nil {
 		if _, ok := rid.(string); !ok {
-			return fmt.Errorf("parameter 'revision_id' must be a string, got %T", rid)
+			return agenterrors.NewValidation(fmt.Sprintf("parameter 'revision_id' must be a string, got %T", rid), nil)
 		}
 	}
 	if fp, exists := args["file_path"]; exists && fp != nil {
 		if _, ok := fp.(string); !ok {
-			return fmt.Errorf("parameter 'file_path' must be a string, got %T", fp)
+			return agenterrors.NewValidation(fmt.Sprintf("parameter 'file_path' must be a string, got %T", fp), nil)
 		}
 	}
 	return nil

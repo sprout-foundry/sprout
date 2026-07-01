@@ -83,6 +83,14 @@ func (vp *VisionProcessor) GetImageData(ctx context.Context, imagePath string) (
 
 // DownloadImage downloads an image from URL
 func (vp *VisionProcessor) DownloadImage(ctx context.Context, url string) ([]byte, error) {
+	// Pre-flight size check: bail before reading the body if the server's
+	// Content-Length exceeds the cap. Falls back to streaming when no
+	// Content-Length is provided (chunked transfer, S3-signed URLs that
+	// reject HEAD, etc.) so we don't break working URLs.
+	if preErr := preflightRemoteSize(ctx, url, visionMaxImageFileSizeBytes); preErr != nil {
+		return nil, preErr
+	}
+
 	client := &http.Client{Timeout: 30 * time.Second}
 
 	var data []byte

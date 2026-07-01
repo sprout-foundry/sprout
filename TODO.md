@@ -319,7 +319,7 @@ caching for repeat-turn cost.
       pre-existing `TestVisionUsage` updated. Build green,
       full `pkg/agent_tools` suite passes with `-race -count=1`._
 
-- [ ] **SP-103-A5:** Pre-flight `Content-Length` HEAD on remote image and
+- [x] **SP-103-A5:** Pre-flight `Content-Length` HEAD on remote image and
       PDF downloads. Bail before reading the body if the header exceeds
       the size cap. Fall back to streaming + size-check on HEAD failure
       (e.g. S3 signed URLs sometimes reject HEAD).
@@ -327,6 +327,19 @@ caching for repeat-turn cost.
       _~0.25 day. Add `checkRemoteSize(ctx, url, cap)` helper in
       `vision_image.go` and call from `DownloadImage` and
       `downloadRemotePDFToTemp`._
+
+      _Shipped (commit 74e658a0): New `pkg/agent_tools/vision_preflight.go`
+      with `preflightRemoteSize(ctx, url, capBytes) error` plus
+      `remoteSizeExceededError` (typed, `Unwrap`-friendly, detected
+      via `IsRemoteSizeExceededError`). HEAD uses 10s timeout. Returns
+      the typed error when `Content-Length > cap`; falls back to nil
+      (stream + size cap as second layer) when (a) `Content-Length` is
+      missing, (b) HEAD returns 405 (S3 signed URLs), (c) HEAD errors,
+      or (d) ctx is pre-cancelled. Wired into `DownloadImage` (cap =
+      `visionMaxImageFileSizeBytes` 20MB) and `downloadRemotePDFToTemp`
+      (cap = new `visionMaxRemotePDFFileSizeBytes` 60MB). 11 new tests
+      cover all fallback / exceeded / boundary paths plus `Unwrap`
+      chain detection. Full `pkg/agent_tools` suite passes. Build green._
 
 - [ ] **SP-103-A6:** Translate typed errors at the response-builder
       boundary. Currently `vision_image.go:418-440` does

@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"os"
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/events"
@@ -101,5 +102,33 @@ func (h *browseURLHandler) Execute(ctx context.Context, env ToolEnv, args map[st
 		return ToolResult{Output: err.Error(), IsError: true}, nil
 	}
 
-	return ToolResult{Output: result}, nil
+	toolResult := ToolResult{Output: result}
+
+	// Best-effort: attach the screenshot as inline multimodal content so the
+	// model sees it directly without a separate analyze_image_content call.
+	// We never fail the tool if this step fails — the model still receives
+	// the path text and can call analyze_image_content as a fallback.
+	if action, ok := args["action"].(string); ok && strings.ToLower(action) == "screenshot" {
+		if sp, ok := args["screenshot_path"].(string); ok && sp != "" {
+			if _, statErr := os.Stat(sp); statErr == nil {
+				if env.VisionProcessor != nil {
+					if img, loadErr := loadScreenshotForMultimodal(ctx, env, sp); loadErr == nil {
+						toolResult.Images = []ImageData{img}
+					}
+				}
+			}
+		}
+	}
+
+	return toolResult, nil
+}
+
+// loadScreenshotForMultimodal reads a screenshot file and returns it as an
+// ImageData ready for inline multimodal attachment.
+func loadScreenshotForMultimodal(ctx context.Context, env ToolEnv, path string) (ImageData, error) {
+	base64Data, mimeType, err := env.VisionProcessor.GetImageData(ctx, path)
+	if err != nil {
+		return ImageData{}, err
+	}
+	return ImageData{Base64: base64Data, MIMEType: mimeType}, nil
 }

@@ -1537,11 +1537,12 @@ part is covered by SP-091-4. Remaining: tool timeline — render
 `PublishToolStart` / `PublishToolEnd` events as a vertical timeline in
 the terminal output.
 
-- [ ] **SP-101-4:** Edit `pkg/console/terminal_subscriber.go` (or
-  wherever the tool events render) to emit per-tool entries with:
-  glyph, tool name, elapsed ms, result icon. Format example per the
-  spec: `[✓] read_file (124ms) · pkg/foo.go`. Add a vitest that
-  simulates 3 tool events and asserts the rendered timeline matches.
+- [x] **SP-101-4:** ToolTimeline subscriber in `pkg/console/tool_timeline.go`.
+  Subscribes to `EventTypeToolStart`/`EventTypeToolEnd` on the event bus,
+  prints glyph-prefixed start/end/duration lines to a configurable writer
+  (default `os.Stderr`). Uses `TryLockOutput`/`UnlockOutput` for safe
+  interleaving. Tracks active tools by `toolCallID`; `Stop()` unsubscribes
+  and waits for the goroutine to exit. Tests in `tool_timeline_test.go`.
 
 ### Acceptance
 

@@ -38,7 +38,7 @@ architectural area, its current state, and open work.
 | SP-076 | [WebUI Streaming Fix + Verbosity Modes](./SP-076-webui-streaming-verbosity.md) | ✅ Implemented |
 | SP-015 | [Cloud Platform Integration](./SP-015-cloud-platform.md) | ✅ Implemented (sprout-side R1–R7 complete; cross-repo evolution in [`../sprout-foundry`](../sprout-foundry/AGENTS.md)) |
 | SP-063 | [Real `computer_user` Persona — Mouse/Keyboard/Screenshot Agent](./SP-063-computer-use-persona.md) | ✅ Implemented (off-by-default, 9-layer safety stack, WebUI settings; panic key + destructive denylist explicitly deferred as design questions, not remaining work) |
-| SP-006 | [Delegate Tool — In-Process Agent Delegation](./SP-006-delegate-tool.md) | ⚰️ Superseded by [SP-059](./SP-059-subagent-interaction.md) (2026-05-31) |
+| SP-006 | Delegate Tool — In-Process Agent Delegation | ⚰️ Superseded by [SP-059](./SP-059-subagent-interaction.md) (2026-05-31) |
 | SP-009 | [Component Library Maturation — Publish & Storybook](./SP-009-component-library-maturation.md) | ✅ Implemented (Storybook + MDX docs + Chromatic; webui imports `@sprout/ui`) |
 | SP-010 | [Editor Modernization](./SP-010-editor-modernization.md) | ✅ Implemented (EditorPane 2604→513 lines; EditorCore extracted; React.memo + 18 bug fixes) |
 | SP-013 | [Agent Settings Management Tool](./SP-013-agent-settings-skill.md) | ✅ Implemented (`manage_settings` tool registered; `pkg/agent/settings_handler.go`) |
@@ -49,7 +49,7 @@ architectural area, its current state, and open work.
 | SP-065 | [WebUI Automations Panel](./SP-065-automate-webui-panel.md) | ✅ Implemented (live WS event stream; commit 4f0a81c5) |
 | SP-068 | [Security Check Consolidation — One Risk Scale, One Resolver, One Broker](./SP-068-security-check-consolidation.md) | ✅ Implemented (Phases 1–3 shipped: single resolver, single broker, `sprout explain`) |
 | SP-073 | [Cooperative Cancellation — Stop Actually Aborts](./SP-073-cooperative-cancellation.md) | ✅ Implemented (zero `TODO(SP-034-1c)` markers remain; all 10 sites threaded) |
-| SP-066 | [Preserve Key Order in Structured File Tools (original)](./SP-066-structured-file-key-order.md) | ⚰️ Superseded by [SP-082](./SP-082-preserve-structured-file-key-order.md) (the implementation spec) |
+| SP-066 | [Never-Ending Context — Substitution-First Compaction, Hierarchical Rollups, Embedded Recall](./SP-066-never-ending-context.md) | ✅ Substantially Shipped (Phases 1-3 + 3b/3c shipped 2026-06-08; Phase 3d deferred → see SP-082 for related work) |
 
 ## In Progress
 
@@ -59,19 +59,19 @@ _(none)_
 
 | Spec | Title | Status |
 |------|-------|--------|
-| SP-008 | [Reliability Engineering — Concurrency & Observability](./SP-008-reliability-engineering.md) | 📋 Proposed (race-in-CI + structured logger partial; typed error hierarchy pending) |
+| SP-008 | [Reliability Engineering — Concurrency & Observability](./SP-008-reliability-engineering.md) | ⚠️ Partially Shipped (concurrency tests, semantic-recall instrumentation, vision metrics shipped 2026-06; structured-log context propagation and typed error hierarchy pending → see SP-094) |
 | SP-011 | [Terminal Parity & Bug Fixes](./SP-011-terminal-parity.md) | 📋 Proposed |
-| SP-012 | [UX Polish](./SP-012-ux-polish.md) | 📋 Proposed (status footer + glyph vocabulary shipped; notification center, mobile, reduced-motion pending) |
+| SP-012 | [UX Polish](./SP-012-ux-polish.md) | ⚠️ Partially Shipped (status footer, glyph vocabulary, notification center, reduced-motion shipped 2026-06; mobile, scroll-detection pending) |
 | SP-016b | [Expanded Embedding Index — Full Workspace Semantic Search](./SP-016b-expanded-embedding-index.md) | 📋 Proposed |
-| SP-017 | [Settings Panel Rework — Scoped Collapsible Sections](./SP-017-settings-panel-rework.md) | 📋 Proposed (scoped labels shipped; collapsible sections pending) |
+| SP-017 | [Settings Panel Rework — Scoped Collapsible Sections](./SP-017-settings-panel-rework.md) | ✅ Partially Implemented (scoped labels + collapsible Advanced section shipped; performance/OCR/commit-review tabs merged → see SP-101) |
 | SP-025 | [Tree-Sitter Integration — Real AST](./SP-025-tree-sitter-integration.md) | 📋 Spec (no code) |
 | SP-027 | [Persistent Context & Conversational Memory](./SP-027-persistent-context.md) | 📋 Proposed (compaction shipped; persistent recall deferred) |
-| SP-045 | [WASM Build Feature Parity](./SP-045-wasm-feature-parity.md) | 📋 Proposed |
+| SP-045 | [WASM Build Feature Parity](./SP-045-wasm-feature-parity.md) | ⚠️ Partially Shipped (wasmshell, embedding mode switching, onnx lazy-load, mcp_refresh tool shipped 2026-06; Tier 2b/2c tooling pending → see SP-100) |
 | SP-046 | [Browser-Primary Workspace Sync Model](./SP-046-workspace-sync-model.md) | 📋 Proposed |
-| SP-048 | [CLI Delight — Terminal UX Polish](./SP-048-cli-delight.md) | 📋 Proposed (status footer + glyph vocabulary shipped; tool timeline + silence-fill pending) |
+| SP-048 | [CLI Delight — Terminal UX Polish](./SP-048-cli-delight.md) | ✅ Partially Implemented (status footer, glyph vocabulary, tool-execution timeline shipped; silence-fill pending → see SP-101) |
 | SP-054 | [LSP Language Coverage Expansion](./SP-054-lsp-language-coverage.md) | 📋 Proposed |
-| SP-058 | [Selective Grammar Embedding for WASM and Daemon](./SP-058-selective-grammar-embed.md) | 📋 Proposed |
-| SP-061 | [Remove Static Embedding Provider, Consolidate on ONNX](./SP-061-remove-static-embeddings.md) | 📋 Proposed |
+| SP-058 | [Selective Grammar Embedding for WASM and Daemon](./SP-058-selective-grammar-embed.md) | ✅ Implemented (grammar subset pruned via SP-091-1; 22 MB saved off the daemon binary) |
+| SP-061 | [Remove Static Embedding Provider, Consolidate on ONNX](./SP-061-remove-static-embeddings.md) | ✅ Implemented (static provider removed via SP-091-2; ONNX is the sole path) |
 | SP-075 | [Large-File Decomposition](./SP-075-large-file-decomposition.md) | 📋 Proposed (config.go 2833→388, EditorPane 2604→513 shipped; several webui components + `pkg/agent/tool_handlers_subagent_spawn.go` 1208 lines still over 500) |
 
 ## Future / On Hold

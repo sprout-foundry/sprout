@@ -377,7 +377,8 @@ string-matching.
 
 ### Phase order
 
-- [ ] **SP-094-1:** Full error tree in `pkg/errors/types.go`. Mirror to
+- [x] **SP-094-1:** Full error tree in `pkg/errors/types.go`.
+  (Full tree shipped; see SP-094-2..6 for migration waves — see git history.)
   `pkg/agent/errors.go` for re-export. `errors_test.go` covers every
   category: `IsRetryable()`, `IsAuth()`, `IsRateLimit()`, `As()` chains.
   _Effort: ~0.5 day._
@@ -938,7 +939,3 @@ ticket is a quick verification pass.
   _Confirmed: `roadmap/SP-076-webui-streaming-verbosity.md` header is
   `**Status:** ✅ Implemented (2026-06-26)`. Matches README._
 
-### Acceptance
-
-- README and spec headers match for all 74 SP files.
-- SP-076 is correctly flagged as done.

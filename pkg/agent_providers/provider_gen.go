@@ -4,25 +4,27 @@
 package providers
 
 import (
-	"fmt"
 	"strings"
+
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // ClientType constants for all providers
 // These are auto-generated from provider configs (as strings to avoid import cycles)
 const (
-	CerebrasClientType    = "cerebras"
-	ChutesClientType      = "chutes"
-	DeepinfraClientType   = "deepinfra"
-	DeepseekClientType    = "deepseek"
-	LmstudioClientType    = "lmstudio"
-	MinimaxClientType     = "minimax"
-	MistralClientType     = "mistral"
+
+	CerebrasClientType = "cerebras"
+	ChutesClientType = "chutes"
+	DeepinfraClientType = "deepinfra"
+	DeepseekClientType = "deepseek"
+	LmstudioClientType = "lmstudio"
+	MinimaxClientType = "minimax"
+	MistralClientType = "mistral"
 	OllamaCloudClientType = "ollama-cloud"
-	OpenaiClientType      = "openai"
-	OpenrouterClientType  = "openrouter"
-	ZaiClientType         = "zai"
-	ZaiCodingClientType   = "zai-coding"
+	OpenaiClientType = "openai"
+	OpenrouterClientType = "openrouter"
+	ZaiClientType = "zai"
+	ZaiCodingClientType = "zai-coding"
 )
 
 // AllProviderNames returns all provider names as strings
@@ -102,7 +104,7 @@ func StringToClientType(name string) (string, error) {
 			// For custom providers or future additions
 			return normalized, nil
 		}
-		return "", fmt.Errorf("unknown provider: %s", name)
+		return "", agenterrors.NewNotFound("provider " + name)
 	}
 }
 
@@ -300,23 +302,23 @@ func KnownProviders() []string {
 func ProviderDisplayNames() map[string]string {
 	return map[string]string{
 
-		"cerebras":     "Cerebras",
-		"chutes":       "Chutes",
-		"deepinfra":    "DeepInfra",
-		"deepseek":     "DeepSeek",
-		"lmstudio":     "LM Studio",
-		"minimax":      "MiniMax",
-		"mistral":      "Mistral",
+		"cerebras": "Cerebras",
+		"chutes": "Chutes",
+		"deepinfra": "DeepInfra",
+		"deepseek": "DeepSeek",
+		"lmstudio": "LM Studio",
+		"minimax": "MiniMax",
+		"mistral": "Mistral",
 		"ollama-cloud": "Ollama (Cloud)",
-		"openai":       "OpenAI",
-		"openrouter":   "OpenRouter (Recommended)",
-		"zai":          "Z.AI",
-		"zai-coding":   "GLM Coding Plan",
+		"openai": "OpenAI",
+		"openrouter": "OpenRouter (Recommended)",
+		"zai": "Z.AI",
+		"zai-coding": "GLM Coding Plan",
 		// Special providers (no config files)
-		"ollama":       "Ollama (Local)",
+		"ollama": "Ollama (Local)",
 		"ollama-local": "Ollama (Local)",
-		"test":         "Test Provider",
-		"editor":       "Editor Mode",
-		"jinaai":       "JinaAI",
+		"test": "Test Provider",
+		"editor": "Editor Mode",
+		"jinaai": "JinaAI",
 	}
 }

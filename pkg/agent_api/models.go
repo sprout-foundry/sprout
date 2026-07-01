@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/credentials"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"github.com/sprout-foundry/sprout/pkg/modelcontract"
 	"github.com/sprout-foundry/sprout/pkg/modelregistry"
@@ -246,7 +247,7 @@ func GetModelsForProviderCtx(ctx context.Context, clientType ClientType) ([]Mode
 	// down to ModelInfo for existing consumers.
 	if canon, handled, listErr := canonicalAdapterModels(ctx, providerID); handled {
 		if listErr != nil {
-			return nil, fmt.Errorf("failed to list models for %s: %w", clientType, listErr)
+			return nil, agenterrors.Wrap(listErr, fmt.Sprintf("failed to list models for %s", clientType))
 		}
 		modelcontract.FillEligibleRoles(canon)
 		out := make([]ModelInfo, len(canon))
@@ -259,16 +260,16 @@ func GetModelsForProviderCtx(ctx context.Context, clientType ClientType) ([]Mode
 	// Fall back to the provider's direct ListModels method.
 	provider, err := createProviderForType(clientType)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create provider for %s: %w", clientType, err)
+		return nil, agenterrors.Wrap(err, fmt.Sprintf("failed to create provider for %s", clientType))
 	}
 
 	if provider == nil {
-		return nil, fmt.Errorf("provider %s does not support model listing", clientType)
+		return nil, agenterrors.NewValidation(fmt.Sprintf("provider %s does not support model listing", clientType), nil)
 	}
 
 	models, listErr := provider.ListModels(ctx)
 	if listErr != nil {
-		return nil, fmt.Errorf("failed to list models for %s: %w", clientType, listErr)
+		return nil, agenterrors.Wrap(listErr, fmt.Sprintf("failed to list models for %s", clientType))
 	}
 
 	return fillEligibleRoles(models), nil
@@ -405,7 +406,7 @@ func modelInfoToCanonical(m ModelInfo) modelcontract.CanonicalModel {
 func GetCanonicalModelsForProvider(ctx context.Context, clientType ClientType) ([]modelcontract.CanonicalModel, error) {
 	if canon, handled, err := canonicalAdapterModels(ctx, string(clientType)); handled {
 		if err != nil {
-			return nil, fmt.Errorf("failed to list models for %s: %w", clientType, err)
+			return nil, agenterrors.Wrap(err, fmt.Sprintf("failed to list models for %s", clientType))
 		}
 		modelcontract.FillEligibleRoles(canon)
 		return canon, nil
@@ -454,7 +455,7 @@ func createProviderForType(clientType ClientType) (interface {
 	case OllamaClientType, OllamaLocalClientType:
 		client, err := NewOllamaLocalClient("llama3.1:8b") // Use an available model
 		if err != nil {
-			return nil, fmt.Errorf("failed to create Ollama local client: %w", err)
+			return nil, agenterrors.Wrap(err, "failed to create Ollama local client")
 		}
 		return &ollamaLocalListModelsWrapper{client: client}, nil
 	case OllamaCloudClientType:
@@ -498,7 +499,7 @@ func (w *openAIListModelsWrapper) ListModels(ctx context.Context) ([]ModelInfo, 
 	// Use context for request timeout - no need for separate client timeout
 	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.openai.com/v1/models", nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, agenterrors.NewNetwork("failed to create request", err)
 	}
 
 	req.Header.Set("Authorization", "Bearer "+apiKey)
@@ -507,18 +508,18 @@ func (w *openAIListModelsWrapper) ListModels(ctx context.Context) ([]ModelInfo, 
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch OpenAI models: %w", err)
+		return nil, agenterrors.NewNetwork("failed to fetch OpenAI models", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to fetch OpenAI models: %w", FormatHTTPResponseError(resp.StatusCode, resp.Header, body))
+		return nil, agenterrors.NewProviderError("failed to fetch OpenAI models", FormatHTTPResponseError(resp.StatusCode, resp.Header, body), "openai", "")
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
+		return nil, agenterrors.NewNetwork("failed to read response body", err)
 	}
 
 	var modelsResp struct {
@@ -531,7 +532,7 @@ func (w *openAIListModelsWrapper) ListModels(ctx context.Context) ([]ModelInfo, 
 	}
 
 	if err := json.Unmarshal(body, &modelsResp); err != nil {
-		return nil, fmt.Errorf("failed to decode OpenAI models: %w", err)
+		return nil, agenterrors.NewConfig("failed to decode OpenAI models", err)
 	}
 
 	// Convert to ModelInfo format
@@ -605,7 +606,7 @@ func (w *openRouterListModelsWrapper) ListModels(ctx context.Context) ([]ModelIn
 
 	req, err := http.NewRequestWithContext(ctx, "GET", "https://openrouter.ai/api/v1/models", nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, agenterrors.NewNetwork("failed to create request", err)
 	}
 
 	if apiKey != "" {
@@ -616,18 +617,18 @@ func (w *openRouterListModelsWrapper) ListModels(ctx context.Context) ([]ModelIn
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch OpenRouter models: %w", err)
+		return nil, agenterrors.NewNetwork("failed to fetch OpenRouter models", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to fetch OpenRouter models: %w", FormatHTTPResponseError(resp.StatusCode, resp.Header, body))
+		return nil, agenterrors.NewProviderError("failed to fetch OpenRouter models", FormatHTTPResponseError(resp.StatusCode, resp.Header, body), "openrouter", "")
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
+		return nil, agenterrors.NewNetwork("failed to read response body", err)
 	}
 
 	var modelsResp struct {
@@ -645,7 +646,7 @@ func (w *openRouterListModelsWrapper) ListModels(ctx context.Context) ([]ModelIn
 	}
 
 	if err := json.Unmarshal(body, &modelsResp); err != nil {
-		return nil, fmt.Errorf("failed to decode OpenRouter models: %w", err)
+		return nil, agenterrors.NewConfig("failed to decode OpenRouter models", err)
 	}
 
 	// Convert to ModelInfo format
@@ -698,7 +699,7 @@ func (w *deepInfraListModelsWrapper) ListModels(ctx context.Context) ([]ModelInf
 
 	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.deepinfra.com/models/list", nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, agenterrors.NewNetwork("failed to create request", err)
 	}
 	if apiKey != "" {
 		req.Header.Set("Authorization", "Bearer "+apiKey)
@@ -708,20 +709,20 @@ func (w *deepInfraListModelsWrapper) ListModels(ctx context.Context) ([]ModelInf
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch DeepInfra models: %w", err)
+		return nil, agenterrors.NewNetwork("failed to fetch DeepInfra models", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to fetch DeepInfra models: %w", FormatHTTPResponseError(resp.StatusCode, resp.Header, body))
+		return nil, agenterrors.NewProviderError("failed to fetch DeepInfra models", FormatHTTPResponseError(resp.StatusCode, resp.Header, body), "deepinfra", "")
 	}
 
 	// Decode as raw entries so pricing can be probed via ModelPricingPerMillion
 	// (DeepInfra reports cents-per-token under pricing.cents_per_*_token).
 	var entries []map[string]any
 	if err := json.NewDecoder(resp.Body).Decode(&entries); err != nil {
-		return nil, fmt.Errorf("failed to decode DeepInfra models: %w", err)
+		return nil, agenterrors.NewConfig("failed to decode DeepInfra models", err)
 	}
 
 	models := make([]ModelInfo, 0, len(entries))
@@ -778,7 +779,7 @@ func (w *lmStudioListModelsWrapper) ListModels(ctx context.Context) ([]ModelInfo
 
 	req, err := http.NewRequestWithContext(ctx, "GET", baseURL+"/models", nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, agenterrors.NewNetwork("failed to create request", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -786,18 +787,18 @@ func (w *lmStudioListModelsWrapper) ListModels(ctx context.Context) ([]ModelInfo
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch LM Studio models: %w", err)
+		return nil, agenterrors.NewNetwork("failed to fetch LM Studio models", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to fetch LM Studio models: %w", FormatHTTPResponseError(resp.StatusCode, resp.Header, body))
+		return nil, agenterrors.NewProviderError("failed to fetch LM Studio models", FormatHTTPResponseError(resp.StatusCode, resp.Header, body), "lmstudio", "")
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
+		return nil, agenterrors.NewNetwork("failed to read response body", err)
 	}
 
 	var modelsResp struct {
@@ -809,7 +810,7 @@ func (w *lmStudioListModelsWrapper) ListModels(ctx context.Context) ([]ModelInfo
 	}
 
 	if err := json.Unmarshal(body, &modelsResp); err != nil {
-		return nil, fmt.Errorf("failed to decode LM Studio models: %w", err)
+		return nil, agenterrors.NewConfig("failed to decode LM Studio models", err)
 	}
 
 	// Convert to ModelInfo format
@@ -839,7 +840,7 @@ func (w *mistralListModelsWrapper) ListModels(ctx context.Context) ([]ModelInfo,
 	// Use OpenAI-compatible models endpoint
 	req, err := http.NewRequestWithContext(ctx, "GET", "https://api.mistral.ai/v1/models", nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, agenterrors.NewNetwork("failed to create request", err)
 	}
 
 	req.Header.Set("Authorization", "Bearer "+apiKey)
@@ -848,18 +849,18 @@ func (w *mistralListModelsWrapper) ListModels(ctx context.Context) ([]ModelInfo,
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch Mistral models: %w", err)
+		return nil, agenterrors.NewNetwork("failed to fetch Mistral models", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to fetch Mistral models: %w", FormatHTTPResponseError(resp.StatusCode, resp.Header, body))
+		return nil, agenterrors.NewProviderError("failed to fetch Mistral models", FormatHTTPResponseError(resp.StatusCode, resp.Header, body), "mistral", "")
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
+		return nil, agenterrors.NewNetwork("failed to read response body", err)
 	}
 
 	var modelsResp struct {
@@ -872,7 +873,7 @@ func (w *mistralListModelsWrapper) ListModels(ctx context.Context) ([]ModelInfo,
 	}
 
 	if err := json.Unmarshal(body, &modelsResp); err != nil {
-		return nil, fmt.Errorf("failed to decode Mistral models: %w", err)
+		return nil, agenterrors.NewConfig("failed to decode Mistral models", err)
 	}
 
 	// Convert to ModelInfo format
@@ -963,12 +964,12 @@ func (w *genericConfigListModelsWrapper) loadBuiltInProviderModels() ([]ModelInf
 
 	data, err := os.ReadFile(configPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read provider config: %w", err)
+		return nil, agenterrors.NewConfig("failed to read provider config", err)
 	}
 
 	var providerConfig config
 	if err := json.Unmarshal(data, &providerConfig); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal provider config: %w", err)
+		return nil, agenterrors.NewConfig("failed to unmarshal provider config", err)
 	}
 
 	models := make([]ModelInfo, len(providerConfig.Models.ModelInfo))
@@ -994,12 +995,12 @@ func (w *genericConfigListModelsWrapper) loadBuiltInProviderModels() ([]ModelInf
 func (w *genericConfigListModelsWrapper) loadCustomProviderModels(ctx context.Context) ([]ModelInfo, error) {
 	data, err := os.ReadFile(customProviderFilePath(w.providerName))
 	if err != nil {
-		return nil, fmt.Errorf("failed to load %s provider config: %w", w.providerName, err)
+		return nil, agenterrors.NewConfig(fmt.Sprintf("failed to load %s provider config", w.providerName), err)
 	}
 
 	var providerConfig customProviderFile
 	if err := json.Unmarshal(data, &providerConfig); err != nil {
-		return nil, fmt.Errorf("failed to parse %s provider config: %w", w.providerName, err)
+		return nil, agenterrors.NewConfig(fmt.Sprintf("failed to parse %s provider config", w.providerName), err)
 	}
 
 	models, err := fetchOpenAICompatibleModels(ctx, w.providerName, providerConfig.Endpoint)
@@ -1019,9 +1020,9 @@ func (w *genericConfigListModelsWrapper) loadCustomProviderModels(ctx context.Co
 	}
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch models from %s: %w", w.providerName, err)
+		return nil, agenterrors.Wrap(err, fmt.Sprintf("failed to fetch models from %s", w.providerName))
 	}
-	return nil, fmt.Errorf("no models available for provider %s", w.providerName)
+	return nil, agenterrors.NewNotFound(fmt.Sprintf("models for provider %s", w.providerName))
 }
 
 func customProviderFilePath(providerName string) string {
@@ -1043,7 +1044,7 @@ func fetchOpenAICompatibleModels(ctx context.Context, providerName, endpoint str
 	modelsEndpoint := strings.TrimSuffix(strings.TrimSpace(endpoint), "/chat/completions") + "/models"
 	req, err := http.NewRequestWithContext(ctx, "GET", modelsEndpoint, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, agenterrors.NewNetwork("failed to create request", err)
 	}
 
 	var apiKey string
@@ -1058,7 +1059,7 @@ func fetchOpenAICompatibleModels(ctx context.Context, providerName, endpoint str
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch models from %s: %w", providerName, err)
+		return nil, agenterrors.NewNetwork(fmt.Sprintf("failed to fetch models from %s", providerName), err)
 	}
 	defer resp.Body.Close()
 
@@ -1077,7 +1078,7 @@ func fetchOpenAICompatibleModels(ctx context.Context, providerName, endpoint str
 		} `json:"data"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		return nil, fmt.Errorf("failed to decode models response: %w", err)
+		return nil, agenterrors.NewConfig("failed to decode models response", err)
 	}
 
 	models := make([]ModelInfo, 0, len(payload.Data))

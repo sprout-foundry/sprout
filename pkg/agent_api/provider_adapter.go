@@ -1,11 +1,12 @@
 package api
 
 import (
-	"context"
+		"context"
 	"fmt"
 	"regexp"
 	"strings"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	utils "github.com/sprout-foundry/sprout/pkg/utils"
 )
 
@@ -34,7 +35,7 @@ func (a *ProviderAdapter) SendChatRequest(ctx context.Context, req *ProviderChat
 	// when multiple agents share the same provider.
 	limiter := utils.GetProviderRateLimiter(string(a.clientType))
 	if err := limiter.Wait(ctx); err != nil {
-		return nil, fmt.Errorf("rate limit wait canceled: %w", err)
+		return nil, agenterrors.NewTransientError("rate limit wait canceled", err)
 	}
 
 	// Convert ProviderChatRequest to old format
@@ -77,7 +78,7 @@ func (a *ProviderAdapter) GetAvailableModels(ctx context.Context) ([]ModelDetail
 	// Get models using the provider-specific model fetcher
 	modelInfos, err := GetModelsForProvider(a.clientType)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get models for provider %s: %w", a.clientType, err)
+		return nil, agenterrors.NewProviderError(fmt.Sprintf("failed to get models for provider %s", a.clientType), err, string(a.clientType), "")
 	}
 
 	// Convert ModelInfo to ModelDetails

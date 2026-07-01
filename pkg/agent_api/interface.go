@@ -8,6 +8,8 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/credentials"
 	"github.com/sprout-foundry/sprout/pkg/envutil"
+
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // ClientInterface defines the common interface for all API clients.
@@ -108,10 +110,10 @@ func DetermineProvider(explicitProvider string, lastUsedProvider ClientType) (Cl
 	if explicitProvider != "" {
 		provider, err := ParseProviderName(explicitProvider)
 		if err != nil {
-			return "", fmt.Errorf("invalid provider '%s': %w", explicitProvider, err)
+			return "", agenterrors.NewValidation(fmt.Sprintf("invalid provider '%s': %v", explicitProvider, err), nil)
 		}
 		if !IsProviderAvailable(provider) {
-			return "", fmt.Errorf("provider '%s' is not available (check API key)", explicitProvider)
+			return "", agenterrors.NewConfig(fmt.Sprintf("provider '%s' is not available (check API key)", explicitProvider), nil)
 		}
 		return provider, nil
 	}
@@ -171,7 +173,7 @@ func ParseProviderName(name string) (ClientType, error) {
 	case "editor":
 		return EditorClientType, nil
 	case "":
-		return "", fmt.Errorf("provider name cannot be empty")
+		return "", agenterrors.NewValidation("provider name cannot be empty", nil)
 	}
 
 	// For other providers, return as ClientType - validation happens later

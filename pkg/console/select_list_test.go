@@ -100,6 +100,8 @@ func TestSelectList_FilterBackspaceUTF8(t *testing.T) {
 }
 
 func TestRenderSelectRow_DetailRightAligned(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("CLICOLOR_FORCE", "1")
 	row := renderSelectRow("claude-opus-4-7", "anthropic", true, 60)
 	if !strings.Contains(row, "claude-opus-4-7") {
 		t.Fatalf("row=%q missing label", row)

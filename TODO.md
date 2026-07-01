@@ -290,7 +290,7 @@ caching for repeat-turn cost.
       `TestVisionCacheStats` to use the new helpers. Build green,
       full `pkg/agent_tools` test suite passes with `-race`._
 
-- [ ] **SP-103-A4:** Replace package-globals `lastVisionUsage`,
+- [x] **SP-103-A4:** Replace package-globals `lastVisionUsage`,
       `visionCache`, `visionCacheUsage` with a `*VisionProcessor`-owned
       struct returned alongside each call. Thread it through
       `AnalyzeImage` and `processOCRImages`. Lets the agent accumulate
@@ -301,6 +301,23 @@ caching for repeat-turn cost.
 
       _~0.5 day. Touches `vision_types.go`, `vision_image.go`,
       `vision_analyze.go`, `vision_pdf.go`. Verify with `go test -race`._
+
+      _Shipped (commit c16c8f16): Per-session usage tracking. The
+      `visionCache` / `visionCacheUsage` portion was previously landed
+      under SP-103-A3 (`visionLRU *VisionLRUCache`). For `lastVisionUsage`,
+      the global is replaced by `visionLastUsageMirror` (RWMutex-guarded)
+      and `VisionProcessor` gains a `usage *VisionUsageInfo` field +
+      `(*VisionProcessor).LastUsage()` method. `recordVisionUsage(vp,
+      usage)` writes per-session + cross-session mirror atomically.
+      `GetLastVisionUsage` / `ClearLastVisionUsage` use the
+      RWMutex. `vision_analyze.go:151` and `vision_image.go:305` now
+      call `recordVisionUsage(vp, ...)`. 4 new tests
+      (`TestRecordVisionUsage_PerSession`,
+      `TestRecordVisionUsage_GlobalMirror`,
+      `TestGetLastVisionUsage_Concurrency`,
+      `TestVisionProcessor_LastUsage`) pass with `-race`;
+      pre-existing `TestVisionUsage` updated. Build green,
+      full `pkg/agent_tools` suite passes with `-race -count=1`._
 
 - [ ] **SP-103-A5:** Pre-flight `Content-Length` HEAD on remote image and
       PDF downloads. Bail before reading the body if the header exceeds

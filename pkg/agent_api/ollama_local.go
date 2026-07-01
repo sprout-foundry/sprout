@@ -519,6 +519,22 @@ func (c *OllamaLocalClient) SupportsVision() bool {
 		strings.Contains(modelLower, "llama3.2")
 }
 
+// SupportsConversationalVision returns true only for multimodal chat models.
+// OCR-only models (e.g. glm-ocr) accept images but produce extraction output
+// that doesn't help free-form conversational turns — the tool path
+// (analyze_image_content) is the right channel for them. Inline embedding
+// is only useful for chat models like llama3.2-vision.
+func (c *OllamaLocalClient) SupportsConversationalVision() bool {
+	modelLower := strings.ToLower(c.model)
+	// OCR-only models accept image input but are not conversational.
+	if strings.Contains(modelLower, "ocr") {
+		return false
+	}
+	// llama3.2 and "vision" tagged models handle inline multimodal chat.
+	return strings.Contains(modelLower, "vision") ||
+		strings.Contains(modelLower, "llama3.2")
+}
+
 // GetVisionModel returns empty string as vision is not supported
 func (c *OllamaLocalClient) GetVisionModel() string {
 	return ""

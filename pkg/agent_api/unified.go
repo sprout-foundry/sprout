@@ -179,6 +179,12 @@ func (w *UnifiedProviderWrapper) SupportsVision() bool {
 	return w.provider.SupportsVision()
 }
 
+
+// SupportsConversationalVision reports whether inline multimodal turns
+// should embed the image. Defaults to false; overridden per client.
+func (w *UnifiedProviderWrapper) SupportsConversationalVision() bool {
+	return false
+}
 func (w *UnifiedProviderWrapper) GetVisionModel() string {
 	// Delegate to the underlying provider if it supports vision model
 	if visionProvider, ok := w.provider.(interface{ GetVisionModel() string }); ok {

@@ -413,6 +413,48 @@ function Terminal({
     }
   }, []);
 
+  /* ---- Exit-restart timer (Path 2: last-session restart delay) ---- */
+  const exitRestartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clear any pending restart timer on unmount or when the ref changes
+  useEffect(() => {
+    return () => {
+      if (exitRestartTimerRef.current !== null) {
+        clearTimeout(exitRestartTimerRef.current);
+        exitRestartTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  /**
+   * Wrapper around handlePaneExit that applies a 1.5 s delay ONLY for
+   * "Path 2" (last session in the only pane — restart with fresh shell).
+   * Paths 1 (split-pane close) and 3 (close tab + switch) fire immediately.
+   */
+  const handleProcessExit = useCallback(
+    (paneId: string, sessionId: string) => {
+      const pane = panes.find((p) => p.id === paneId);
+      if (!pane) return;
+
+      // Path 2: only pane AND only session → delay 1.5 s so the user sees
+      // the "[Process exited]" message before the fresh shell appears.
+      if (panes.length === 1 && pane.sessions.length === 1) {
+        if (exitRestartTimerRef.current !== null) {
+          clearTimeout(exitRestartTimerRef.current);
+        }
+        exitRestartTimerRef.current = setTimeout(() => {
+          exitRestartTimerRef.current = null;
+          handlePaneExit(paneId, sessionId);
+        }, 1500);
+        return;
+      }
+
+      // Paths 1 & 3: fire immediately (split-pane close / close-tab-switch)
+      handlePaneExit(paneId, sessionId);
+    },
+    [panes, handlePaneExit],
+  );
+
   /* ---- Computed for rendering ---- */
   const focusedPane = panes.find((p) => p.id === focusedPaneId) ?? panes[0];
   const focusedSession = focusedPane?.sessions.find((s) => s.id === focusedPane.activeSessionId);
@@ -711,7 +753,7 @@ function Terminal({
                             reattachSessionId={sessionReattachIdsRef.current.get(session.id) ?? null}
                             fontSize={fontSize}
                             copyOnSelect={copyOnSelect}
-                            onProcessExit={() => handlePaneExit(pane.id, session.id)}
+                            onProcessExit={() => handleProcessExit(pane.id, session.id)}
                             onTitleChange={(title) => handleSessionTitleChange(pane.id, session.id, title)}
                             onActivity={() => handleSessionActivity(pane.id, session.id)}
                           />

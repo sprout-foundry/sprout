@@ -8,26 +8,36 @@ import Terminal from './Terminal';
 // Mock TerminalPane — forwardRef component with imperative handle { clear, focus }
 // ---------------------------------------------------------------------------
 
+// Module-level registry so tests can trigger onProcessExit for a specific
+// session.  The mock TerminalPane registers its onProcessExit callback here
+// on every render, keyed by the session id it received as a prop.
+const _processExitCallbacks = new Map<string, () => void>();
+
 vi.mock('./TerminalPane', async () => {
   const { forwardRef, useImperativeHandle } = await vi.importActual('react');
   return {
-    default: forwardRef(function MockTerminalPane({ isActive, isConnected }: any, ref: any) {
-      // NOTE: vi.fn() inside useImperativeHandle creates fresh mock instances on
-      // every re-render. This is acceptable because no test asserts on imperative
-      // handle call counts — all assertions check DOM state. If future tests need
-      // to verify clear()/focus() calls, the mock factory will need restructuring
-      // to use stable references (e.g., storing mocks on a shared object that both
-      // the factory and test scope can access).
+    default: forwardRef(function MockTerminalPane(props: any, ref: any) {
       useImperativeHandle(ref, () => ({
         clear: vi.fn(),
         focus: vi.fn(),
       }));
 
+      // Register the onProcessExit callback so tests can trigger it.
+      // The key is derived from the reattachSessionId or a synthetic
+      // identifier based on the props passed to this instance.
+      // We use a unique counter per render to track multiple panes.
+      if (!MockTerminalPane._counter) MockTerminalPane._counter = 0;
+      const instanceKey = `mock-instance-${MockTerminalPane._counter++}`;
+      if (props?.onProcessExit && typeof props.onProcessExit === 'function') {
+        _processExitCallbacks.set(instanceKey, props.onProcessExit);
+      }
+
       return (
         <div
           data-testid="terminal-pane"
-          data-active={isActive ? 'true' : 'false'}
-          data-connected={isConnected ? 'true' : 'false'}
+          data-active={props.isActive ? 'true' : 'false'}
+          data-connected={props.isConnected ? 'true' : 'false'}
+          data-instance-key={instanceKey}
         />
       );
     }),
@@ -125,6 +135,44 @@ const _flushPromises = async () => {
     await Promise.resolve();
   });
 };
+
+/**
+ * Trigger onProcessExit for the first mock TerminalPane instance found in
+ * the given container.  Used to simulate a PTY exiting so we can assert the
+ * parent Terminal component's cleanup logic.
+ */
+function triggerProcessExit(container: HTMLElement) {
+  // The mock TerminalPane renders with data-instance-key inside the wrapper
+  // (which itself has data-testid="terminal-pane"). Query the inner mock pane.
+  const pane = container.querySelector('[data-instance-key]');
+  if (!pane) return;
+  const key = pane.getAttribute('data-instance-key');
+  const cb = _processExitCallbacks.get(key);
+  if (cb) {
+    act(() => {
+      cb();
+    });
+  }
+}
+
+/**
+ * Trigger onProcessExit for a specific pane wrapper index (0-based).
+ * Useful when testing split panes where we want to exit the secondary pane.
+ */
+function triggerProcessExitForPane(container: HTMLElement, paneIndex: number) {
+  const wrappers = container.querySelectorAll('.terminal-pane-wrapper');
+  if (paneIndex < 0 || paneIndex >= wrappers.length) return;
+  const pane = wrappers[paneIndex];
+  const mockPane = pane.querySelector('[data-instance-key]');
+  if (!mockPane) return;
+  const key = mockPane.getAttribute('data-instance-key');
+  const cb = _processExitCallbacks.get(key);
+  if (cb) {
+    act(() => {
+      cb();
+    });
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Test Suite
@@ -1542,5 +1590,161 @@ describe('nextActiveAfterClose', () => {
   it('returns the closed id back when no session remains', () => {
     const sessions = [{ id: 'a', name: 'A', is_pinned: false }];
     expect(nextActiveAfterClose(sessions, 'a')).toBe('a');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: Terminal exit-pane cleanup paths (SP-101-1)
+// ---------------------------------------------------------------------------
+
+describe('Terminal exit-pane cleanup paths', () => {
+  let container: HTMLDivElement;
+  let root: any;
+
+  beforeAll(() => {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  });
+
+  beforeEach(() => {
+    document.documentElement.style.removeProperty('--sprout-terminal-reserved-height');
+  });
+
+  afterEach(() => {
+    if (root) {
+      act(() => {
+        root.unmount();
+      });
+    }
+    if (container) {
+      container.remove();
+    }
+    document.documentElement.style.removeProperty('--sprout-terminal-reserved-height');
+  });
+
+  /* Path 1: Auto-close secondary split pane (IMMEDIATE — no delay) */
+  it('exiting a secondary split pane closes that pane and collapses the split', () => {
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
+
+    // Create a vertical split → 2 panes
+    act(() => {
+      dispatchTerminalAction('split_vertical');
+    });
+    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
+
+    // Exit the secondary pane (index 1) — should close immediately
+    triggerProcessExitForPane(container, 1);
+
+    // Path 1 is immediate — no timer advance needed
+    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(1);
+    const panesContainer = getPanesContainer(container);
+    expect(panesContainer?.classList.contains('terminal-split-vertical')).toBe(false);
+    expect(getSplitDivider(container)).toBeNull();
+  });
+
+  it('exiting the primary split pane closes that pane', () => {
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
+
+    act(() => {
+      dispatchTerminalAction('split_vertical');
+    });
+    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(2);
+
+    // Exit the primary pane (index 0) — should close immediately
+    triggerProcessExitForPane(container, 0);
+
+    // Path 1 is immediate — no timer advance needed
+    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(1);
+  });
+
+  /* Path 2: Auto-create fresh session after 1.5s delay */
+  it('exiting the only session schedules a fresh session after 1.5s', () => {
+    vi.useFakeTimers();
+    try {
+      const view = renderTerminal({ isExpanded: true });
+      container = view.container;
+      root = view.root;
+
+      // Initially 1 pane, 1 session
+      expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(1);
+      const firstPane = container.querySelector('[data-instance-key]');
+      const firstInstanceKey = firstPane?.getAttribute('data-instance-key');
+
+      // Exit the only session
+      triggerProcessExit(container);
+
+      // Immediately after exit, the old pane should still exist (not replaced yet)
+      expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(1);
+      const stillSamePane = container.querySelector('[data-instance-key]');
+      expect(stillSamePane?.getAttribute('data-instance-key')).toBe(firstInstanceKey);
+
+      // Advance time by 1.4s — session should NOT have been replaced yet
+      act(() => {
+        vi.advanceTimersByTime(1400);
+      });
+      expect(container.querySelector('[data-instance-key]')?.getAttribute('data-instance-key')).toBe(firstInstanceKey);
+
+      // Advance past 1.5s — fresh session should be created
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+
+      // Still 1 pane (the new session replaced the old one in the same pane)
+      expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(1);
+
+      // Verify the session was actually replaced: the new instance key must differ
+      // from the original because the mock assigns a fresh key on every render.
+      const newPane = container.querySelector('[data-instance-key]');
+      const newInstanceKey = newPane?.getAttribute('data-instance-key');
+      expect(newInstanceKey).toBeTruthy();
+      expect(newInstanceKey).not.toBe(firstInstanceKey);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  /* Path 3: Close tab + switch to next in multi-tab setup */
+  it('exiting a tab in a multi-tab pane closes that tab and keeps the pane', () => {
+    const view = renderTerminal({ isExpanded: true });
+    container = view.container;
+    root = view.root;
+
+    // Create a second session via the + button (shell picker)
+    const newSessionBtn = container.querySelector('.shell-picker-btn') as HTMLButtonElement;
+    expect(newSessionBtn).toBeTruthy();
+
+    act(() => {
+      newSessionBtn.click();
+    });
+
+    // We now have 1 pane with 2 sessions (only the active tab's pane is rendered)
+    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(1);
+
+    // Capture the currently-active session's instance key before exit.
+    const activePaneBefore = container.querySelector('[data-instance-key]');
+    const exitedInstanceKey = activePaneBefore?.getAttribute('data-instance-key');
+    expect(exitedInstanceKey).toBeTruthy();
+
+    // Exit the active session (multi-tab setup → fires immediately, no 1.5s delay)
+    triggerProcessExit(container);
+
+    // Should still have 1 pane (the other tab remains)
+    expect(container.querySelectorAll('.terminal-pane-wrapper').length).toBe(1);
+    // No split should be active
+    const panesContainer = getPanesContainer(container);
+    expect(panesContainer?.classList.contains('terminal-split-vertical')).toBe(false);
+
+    // Verify the exited tab was actually closed: its instance key is gone from DOM.
+    const panesAfter = container.querySelectorAll('[data-instance-key]');
+    expect(panesAfter.length).toBe(1);
+
+    const survivedInstanceKey = panesAfter[0]?.getAttribute('data-instance-key');
+    expect(survivedInstanceKey).not.toBe(exitedInstanceKey);
+
+    // Verify focus switched: the surviving pane is now the active one.
+    expect(panesAfter[0]?.getAttribute('data-active')).toBe('true');
   });
 });

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/skills"
 )
 
@@ -34,7 +35,7 @@ type SkillInfo struct {
 func LoadSkill(skillID string, config *configuration.Config) (*SkillInfo, error) {
 	skill := config.GetSkill(skillID)
 	if skill == nil {
-		return nil, fmt.Errorf("skill not found or disabled: %s", skillID)
+		return nil, agenterrors.NewNotFound(fmt.Sprintf("skill %q", skillID))
 	}
 
 	if content, err := skills.ReadContent(skillID); err == nil {
@@ -54,7 +55,7 @@ func LoadSkill(skillID string, config *configuration.Config) (*SkillInfo, error)
 
 	content, err := os.ReadFile(skillFile)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read skill file %s: %w", skillFile, err)
+		return nil, agenterrors.Wrapf(err, "failed to read skill file %s", skillFile)
 	}
 
 	return &SkillInfo{
@@ -176,7 +177,7 @@ func handleActivateSkill(ctx context.Context, a *Agent, args map[string]interfac
 	if err != nil {
 		// Try alternative parameter names
 		if skillID, err = getStringArg(args, "skill"); err != nil {
-			return "", fmt.Errorf("skill_id is required: %w", err)
+			return "", agenterrors.NewTool("skills", "skill_id is required", err)
 		}
 	}
 
@@ -193,7 +194,7 @@ func handleActivateSkill(ctx context.Context, a *Agent, args map[string]interfac
 	// Load the skill
 	skillInfo, err := LoadSkill(skillID, config)
 	if err != nil {
-		return "", fmt.Errorf("failed to activate skill: %w", err)
+		return "", agenterrors.NewTool("skills", "failed to activate skill", err)
 	}
 
 	// Add to active skills

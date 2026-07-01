@@ -135,6 +135,11 @@ const (
 	// WebSocket to be closed. The payload carries session_id and new_device_id.
 	// The displaced browser surfaces "This session moved to another device."
 	EventTypeWorkspaceSessionMoved = "workspace.session_moved"
+	// EventTypeRateLimited is published when a tool or API call hits a
+	// rate-limit response from the provider. The payload is a
+	// *RateLimitedEvent. WebUI consumes this to show "rate-limited,
+	// retrying…" and gate the input.
+	EventTypeRateLimited = "rate_limited"
 )
 
 // EventBus manages event distribution between CLI and Web UI
@@ -385,6 +390,22 @@ func MetricsUpdateEvent(totalTokens, contextTokens, maxContextTokens, iteration 
 		"max_context_tokens": maxContextTokens,
 		"iteration":          iteration,
 		"total_cost":         totalCost,
+	}
+}
+
+// MetricsUpdateEventWithCategory is the SP-094-6 variant that
+// includes the most-recent error category label so the cost/status
+// footer can render "rate-limited, retrying…" distinct from generic
+// provider errors. The default MetricsUpdateEvent still exists for
+// callers that don't have an error context.
+func MetricsUpdateEventWithCategory(totalTokens, contextTokens, maxContextTokens, iteration int, totalCost float64, errorCategory string) map[string]interface{} {
+	return map[string]interface{}{
+		"total_tokens":       totalTokens,
+		"context_tokens":     contextTokens,
+		"max_context_tokens": maxContextTokens,
+		"iteration":          iteration,
+		"total_cost":         totalCost,
+		"error_category":     errorCategory,
 	}
 }
 

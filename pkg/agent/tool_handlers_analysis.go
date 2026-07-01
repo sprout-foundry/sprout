@@ -73,7 +73,7 @@ func handleAnalyzeUIScreenshot(ctx context.Context, a *Agent, args map[string]in
 		a.Logger().Debug("HTML content detected, rendering via headless browser: %s\n", imagePath)
 		screenshotPath, err := renderHTMLContent(ctx, a, imagePath, viewportWidth, viewportHeight)
 		if err != nil {
-			return "", fmt.Errorf("failed to render HTML content: %w", err)
+			return "", agenterrors.NewTool("analysis", "failed to render HTML content", err)
 		}
 		defer os.Remove(screenshotPath)
 		effectiveImagePath = screenshotPath
@@ -82,7 +82,7 @@ func handleAnalyzeUIScreenshot(ctx context.Context, a *Agent, args map[string]in
 	result, err := tools.AnalyzeImage(ctx, effectiveImagePath, analysisPrompt, "frontend")
 	if err != nil {
 		a.Logger().Debug("Analyze UI screenshot error: %v\n", err)
-		return result, fmt.Errorf("failed to analyze UI screenshot %s: %w", imagePath, err)
+		return result, agenterrors.NewTool("analysis", fmt.Sprintf("failed to analyze UI screenshot %s", imagePath), err)
 	}
 	// Capture using the original path the user provided, not the temp screenshot
 	a.captureVisionInputAndOutput(imagePath, result)
@@ -111,12 +111,12 @@ func screenshotHTMLFile(ctx context.Context, a *Agent, htmlPath string, viewport
 	// Resolve to absolute path
 	absPath, err := filepath.Abs(htmlPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to resolve HTML file path: %w", err)
+		return "", agenterrors.NewTool("analysis", "failed to resolve HTML file path", err)
 	}
 
 	// Verify the file exists
 	if _, err := os.Stat(absPath); err != nil {
-		return "", fmt.Errorf("failed to find HTML file: %s: %w", absPath, err)
+		return "", agenterrors.NewTool("analysis", fmt.Sprintf("failed to find HTML file: %s", absPath), err)
 	}
 
 	// Serve only the single HTML file via a temp HTTP server.
@@ -135,7 +135,7 @@ func screenshotHTMLFile(ctx context.Context, a *Agent, htmlPath string, viewport
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		return "", fmt.Errorf("failed to start temporary HTTP server: %w", err)
+		return "", agenterrors.NewTool("analysis", "failed to start temporary HTTP server", err)
 	}
 
 	port := listener.Addr().(*net.TCPAddr).Port
@@ -166,7 +166,7 @@ func screenshotRemoteURL(ctx context.Context, a *Agent, targetURL string, viewpo
 	a.Logger().Debug("Screenshotting remote URL: %s\n", targetURL)
 	screenshotPath, err := captureScreenshot(ctx, a, targetURL, viewportWidth, viewportHeight)
 	if err != nil {
-		return "", fmt.Errorf("failed to screenshot URL %s: %w", targetURL, err)
+		return "", agenterrors.NewTool("analysis", fmt.Sprintf("failed to screenshot URL %s", targetURL), err)
 	}
 
 	a.Logger().Debug("URL screenshot saved to: %s\n", screenshotPath)
@@ -177,7 +177,7 @@ func screenshotRemoteURL(ctx context.Context, a *Agent, targetURL string, viewpo
 func captureScreenshot(ctx context.Context, a *Agent, target string, viewportWidth, viewportHeight int) (string, error) {
 	screenshotPath := filepath.Join(os.TempDir(), "sprout_examples", fmt.Sprintf("html_screenshot_%d.png", time.Now().UnixNano()))
 	if err := os.MkdirAll(filepath.Dir(screenshotPath), 0755); err != nil {
-		return "", fmt.Errorf("failed to create screenshot directory: %w", err)
+		return "", agenterrors.NewTool("analysis", "failed to create screenshot directory", err)
 	}
 
 	browser := webcontent.GetGlobalBrowser()
@@ -187,7 +187,7 @@ func captureScreenshot(ctx context.Context, a *Agent, target string, viewportWid
 			return "", fmt.Errorf("cannot analyze '%s': a headless browser is required to render HTML content. "+
 				"Please rebuild with the 'browser' build tag (e.g., go build -tags browser ...)", target)
 		}
-		return "", fmt.Errorf("failed to screenshot '%s': %w", target, err)
+		return "", agenterrors.NewTool("analysis", fmt.Sprintf("failed to screenshot '%s'", target), err)
 	}
 
 	return screenshotPath, nil
@@ -266,7 +266,7 @@ func handleAnalyzeImageContent(ctx context.Context, a *Agent, args map[string]in
 		choice, promptErr := a.PromptChoice(prompt, choices)
 		if promptErr != nil {
 			a.PrintLine(fmt.Sprintf("%sCould not prompt for choice: %v", console.GlyphWarning.Prefix(), promptErr))
-			return result, fmt.Errorf("prompt choice failed: %w", promptErr)
+			return result, agenterrors.NewTool("analysis", "prompt choice failed", promptErr)
 		}
 
 		if choice == "yes" {
@@ -277,7 +277,7 @@ func handleAnalyzeImageContent(ctx context.Context, a *Agent, args map[string]in
 	}
 
 	if err != nil {
-		return result, fmt.Errorf("image analysis failed: %w", err)
+		return result, agenterrors.NewTool("analysis", "image analysis failed", err)
 	}
 	a.captureVisionInputAndOutput(imagePath, result)
 
@@ -510,7 +510,7 @@ func materializeImageDataForVisionTool(img api.ImageData) (string, func(), error
 
 	data, err := base64.StdEncoding.DecodeString(encoded)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to decode attached image data: %w", err)
+		return "", nil, agenterrors.NewTool("analysis", "failed to decode attached image data", err)
 	}
 
 	ext, _ := console.DetectImageMagic(data)
@@ -523,17 +523,17 @@ func materializeImageDataForVisionTool(img api.ImageData) (string, func(), error
 
 	tempFile, err := os.CreateTemp("", "sprout-attached-image-*"+ext)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to create temp image file: %w", err)
+		return "", nil, agenterrors.NewTool("analysis", "failed to create temp image file", err)
 	}
 	tempPath := tempFile.Name()
 	if _, err := tempFile.Write(data); err != nil {
 		tempFile.Close()
 		_ = os.Remove(tempPath)
-		return "", nil, fmt.Errorf("failed to write temp image file: %w", err)
+		return "", nil, agenterrors.NewTool("analysis", "failed to write temp image file", err)
 	}
 	if err := tempFile.Close(); err != nil {
 		_ = os.Remove(tempPath)
-		return "", nil, fmt.Errorf("failed to close temp image file: %w", err)
+		return "", nil, agenterrors.NewTool("analysis", "failed to close temp image file", err)
 	}
 
 	return tempPath, func() {

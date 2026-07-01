@@ -59,9 +59,23 @@ func (p *GenericProvider) SendVisionRequest(ctx context.Context, messages []api.
 	return p.SendChatRequest(ctx, messages, tools, reasoning, disableThinking)
 }
 
-// buildMultiModalContent creates a multi-part content array for messages with images
+// buildMultiModalContent creates a multi-part content array for messages with images.
+//
+// When VISION_CACHE_IMAGES is enabled (default true for models that
+// support prompt caching, like Anthropic Claude 3.5 Sonnet/GPT-4o/etc.),
+// each image URL block carries `cache_control: {type: "ephemeral"}`. This
+// marks the image for prompt caching — the provider will cache the
+// image tokens across consecutive requests with the same image, which
+// dramatically reduces cost on multi-turn image-heavy conversations
+// (e.g. vision OCR of multi-page PDFs where the user asks several
+// follow-up questions about the images).
+//
+// The cache_control key is placed inside the image_url object so
+// providers that don't use the new top-level array form (e.g. OpenAI
+// image_url blocks) still get the right wire format.
 func (p *GenericProvider) buildMultiModalContent(text string, images []api.ImageData) interface{} {
 	parts := make([]map[string]interface{}, 0, len(images)+1)
+	cacheImages := visionCacheImagesEnabled()
 
 	// Add text part if present
 	if strings.TrimSpace(text) != "" {
@@ -78,12 +92,16 @@ func (p *GenericProvider) buildMultiModalContent(text string, images []api.Image
 			// Skip invalid images - caller should ensure valid image data
 			continue
 		}
-		parts = append(parts, map[string]interface{}{
+		imageBlock := map[string]interface{}{
 			"type": "image_url",
 			"image_url": map[string]interface{}{
 				"url": imageURL,
 			},
-		})
+		}
+		if cacheImages {
+			imageBlock["cache_control"] = map[string]string{"type": "ephemeral"}
+		}
+		parts = append(parts, imageBlock)
 	}
 
 	if len(parts) == 0 {

@@ -87,6 +87,11 @@ type ModelInfo struct {
 	Description   string   `json:"description,omitempty"`
 	ContextLength int      `json:"context_length"`
 	Tags          []string `json:"tags,omitempty"`
+	// Pricing (USD per million tokens) — optional, used by enrich_registry
+	// to estimate probe cost for models sourced from embedded configs.
+	InputCost    float64 `json:"input_cost,omitempty"`
+	OutputCost   float64 `json:"output_cost,omitempty"`
+	CachedCost   float64 `json:"cached_input_cost,omitempty"`
 }
 
 // ModelConfig defines model-related configuration

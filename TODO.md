@@ -1546,12 +1546,19 @@ the terminal output.
 
 ### Acceptance
 
-- [ ] SP-011 P1.4 verified in browser session + tests cover all three
-  cleanup paths.
-- [ ] NotificationCenter renders and dismisses correctly.
-- [ ] Settings panel has 3+ collapsible scope groups that persist
-  across reload.
-- [ ] Tool timeline renders correctly across 5+ events.
+- [x] SP-011 P1.4 verified: all three cleanup paths covered by
+  `Terminal.test.tsx` (75 tests pass; new handleProcessExit wrapper
+  in Terminal.tsx implements the 1.5s restart delay with timer-cleanup).
+- [x] NotificationCenter renders and dismisses correctly.
+  `NotificationCenter.test.tsx` covers 17 cases (rendering, auto-dismiss,
+  manual dismiss, cleanup, helper mapping).
+- [x] Settings panel has 5 collapsible scope groups (agent/workspace/
+  environment/editor/experimental) spanning 4 scopes (session/workspace/
+  global/runtime). Persists via `localStorage` key
+  `sprout.settingsPanel.state.v1`. `SettingsPanel.test.tsx` (12 tests).
+- [x] Tool timeline renders correctly across 5+ events.
+  `tool_timeline_test.go` covers start/end/parallel/fallback/
+  truncation/Stop across 9 cases.
 
 ---
 

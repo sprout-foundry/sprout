@@ -2,9 +2,9 @@ package agent
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/embedding"
 )
 
@@ -39,7 +39,7 @@ func EmbedMemory(ctx context.Context, mgr *embedding.EmbeddingManager, name stri
 
 	if err := store.StoreMemory(ctx, name, content); err != nil {
 		packageLogErrorf("[memory-embedding] failed to store memory embedding for '%s': %v", name, err)
-		return fmt.Errorf("failed to store memory embedding: %w", err)
+		return agenterrors.Wrap(err, "failed to store memory embedding")
 	}
 
 	debugLogf("[memory-embedding] successfully embedded memory '%s'", name)
@@ -70,7 +70,7 @@ func DeleteMemoryEmbedding(mgr *embedding.EmbeddingManager, name string) error {
 
 	if err := store.DeleteMemoryByName(name); err != nil {
 		packageLogErrorf("[memory-embedding] failed to delete memory embedding for '%s': %v", name, err)
-		return fmt.Errorf("failed to delete memory embedding: %w", err)
+		return agenterrors.Wrap(err, "failed to delete memory embedding")
 	}
 
 	debugLogf("[memory-embedding] successfully deleted memory embedding for '%s'", name)

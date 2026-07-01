@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/webcontent"
 )
 
@@ -130,6 +131,6 @@ func buildGitHubMCPArgs(info webcontent.GitHubURLInfo) (map[string]interface{}, 
 		}, nil
 
 	default:
-		return nil, fmt.Errorf("unsupported GitHub URL type: %s", info.Type)
+		return nil, agenterrors.NewValidation("unsupported GitHub URL type: "+info.Type, nil)
 	}
 }

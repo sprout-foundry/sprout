@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/embedding"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // SP-066 Phase 3: semantic recall of historical conversation summaries.
@@ -100,18 +101,18 @@ func retrieveSemanticRecall(
 
 	store, err := mgr.GetConversationStore(ctx)
 	if err != nil {
-		return nil, diag, fmt.Errorf("get conversation store: %w", err)
+		return nil, diag, agenterrors.NewAgent("semantic-recall", "get conversation store", err)
 	}
 	provider := store.Provider()
 	if provider == nil {
-		return nil, diag, fmt.Errorf("conversation store provider is nil")
+		return nil, diag, agenterrors.NewAgent("semantic-recall", "conversation store provider is nil", nil)
 	}
 
 	embedStart := time.Now()
 	vec, err := provider.Embed(ctx, q)
 	diag.EmbedDurationMS = float64(time.Since(embedStart).Microseconds()) / 1000.0
 	if err != nil {
-		return nil, diag, fmt.Errorf("embed query: %w", err)
+		return nil, diag, agenterrors.NewAgent("semantic-recall", "embed query", err)
 	}
 	if len(vec) == 0 {
 		return nil, diag, nil
@@ -122,7 +123,7 @@ func retrieveSemanticRecall(
 	// chance that the best-by-recency item is outside the cosine top-K.
 	rawResults, err := store.Query(vec, limit*4, semanticRecallSimilarityThreshold)
 	if err != nil {
-		return nil, diag, fmt.Errorf("query store: %w", err)
+		return nil, diag, agenterrors.NewAgent("semantic-recall", "query store", err)
 	}
 	diag.CandidatesConsidered = len(rawResults)
 

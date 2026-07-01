@@ -21,7 +21,7 @@ func handleSelfReview(ctx context.Context, a *Agent, args map[string]interface{}
 		// changes before looking up the revision.
 		if len(a.changeTracker.changes) > a.changeTracker.committedChangeCount {
 			if err := a.CommitChanges("Self-review checkpoint"); err != nil {
-				return "", fmt.Errorf("failed to checkpoint tracked changes for self-review: %w", err)
+				return "", agenterrors.NewAgent("self-review", "failed to checkpoint tracked changes for self-review", err)
 			}
 		}
 		revisionID = a.changeTracker.GetRevisionID()
@@ -31,7 +31,7 @@ func handleSelfReview(ctx context.Context, a *Agent, args map[string]interface{}
 	if revisionID == "" {
 		revisionGroups, err := history.GetRevisionGroups()
 		if err != nil {
-			return "", fmt.Errorf("failed to get revision history: %w", err)
+			return "", agenterrors.NewAgent("self-review", "failed to get revision history", err)
 		}
 		if len(revisionGroups) == 0 {
 			return "", agenterrors.NewInvalidInputError("no changes found - agent must make changes and commit them before reviewing", nil)
@@ -45,7 +45,7 @@ func handleSelfReview(ctx context.Context, a *Agent, args map[string]interface{}
 		var err error
 		cfg, err = configuration.Load()
 		if err != nil {
-			return "", fmt.Errorf("failed to load configuration: %w", err)
+			return "", agenterrors.NewConfig("failed to load configuration", err)
 		}
 	}
 
@@ -55,7 +55,7 @@ func handleSelfReview(ctx context.Context, a *Agent, args map[string]interface{}
 	// Perform the review
 	result, err := spec.ReviewTrackedChanges(ctx, revisionID, cfg, logger)
 	if err != nil {
-		return "", fmt.Errorf("self-review failed: %w", err)
+		return "", agenterrors.Wrap(err, "self-review failed")
 	}
 
 	// Format result for agent

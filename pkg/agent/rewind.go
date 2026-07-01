@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
@@ -38,8 +39,7 @@ func (a *Agent) Rewind(opts RewindOptions) (*RewindResult, error) {
 	checkpoints := a.copyTurnCheckpoints()
 	n := len(checkpoints)
 	if opts.ToTurnIndex < 0 || opts.ToTurnIndex >= n {
-		return nil, fmt.Errorf("rewind: invalid turn index %d (have %d checkpoints, valid range [0, %d])",
-			opts.ToTurnIndex, n, n-1)
+		return nil, agenterrors.NewValidation(fmt.Sprintf("rewind: invalid turn index %d (have %d checkpoints, valid range [0, %d])", opts.ToTurnIndex, n, n-1), nil)
 	}
 
 	// 2. Snapshot before rewind (so rewind is undoable via SP-071-2)

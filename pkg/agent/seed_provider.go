@@ -8,7 +8,6 @@ package agent
 
 import (
 	"context"
-	"fmt"
 	"strconv"
 	"strings"
 	"sync"
@@ -16,6 +15,7 @@ import (
 
 	core "github.com/sprout-foundry/seed/core"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
@@ -45,7 +45,7 @@ func (sp *sproutProvider) currentClient() api.ClientInterface {
 // NewSproutProvider creates a Provider that wraps a sprout ClientInterface.
 func NewSproutProvider(agent *Agent, client api.ClientInterface) (core.Provider, error) {
 	if client == nil {
-		return nil, fmt.Errorf("sprout provider requires a non-nil client")
+		return nil, agenterrors.NewValidation("sprout provider requires a non-nil client", nil)
 	}
 	return &sproutProvider{
 		agent:        agent,

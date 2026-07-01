@@ -12,6 +12,7 @@ import (
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/git"
 	"github.com/sprout-foundry/sprout/pkg/history"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
@@ -310,7 +311,7 @@ func (ct *ChangeTracker) Commit(llmResponse string, conversation []api.Message) 
 		revisionID, err := history.RecordBaseRevision(ct.revisionID, ct.instructions, llmResponse, historyConversation)
 		if err != nil {
 			ct.mu.Unlock()
-			return fmt.Errorf("failed to record base revision: %w", err)
+			return agenterrors.Wrap(err, "failed to record base revision")
 		}
 
 		// Update our revision ID to match what was actually recorded
@@ -342,7 +343,7 @@ func (ct *ChangeTracker) Commit(llmResponse string, conversation []api.Message) 
 		)
 		if err != nil {
 			ct.mu.Unlock()
-			return fmt.Errorf("failed to record change for %s: %w", change.FilePath, err)
+			return agenterrors.Wrap(err, fmt.Sprintf("failed to record change for %s", change.FilePath))
 		}
 		ct.committedChangeCount++
 	}

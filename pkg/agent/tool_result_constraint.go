@@ -5,13 +5,14 @@ package agent
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 )
 
@@ -69,7 +70,7 @@ func saveFetchURLOutputToFile(args map[string]interface{}, output string) (strin
 	}
 
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", fmt.Errorf("failed to create archive directory: %w", err)
+		return "", agenterrors.Wrap(err, "failed to create archive directory")
 	}
 
 	timestamp := time.Now().Format("20060102_150405")
@@ -89,7 +90,7 @@ func saveFetchURLOutputToFile(args map[string]interface{}, output string) (strin
 	}
 
 	if err := os.WriteFile(path, []byte(fullOutput), 0o644); err != nil {
-		return "", fmt.Errorf("failed to write fetch URL output file: %w", err)
+		return "", agenterrors.Wrap(err, "failed to write fetch URL output file")
 	}
 	return path, nil
 }

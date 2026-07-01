@@ -276,7 +276,7 @@ func resizeImageForVisionEmbed(data []byte) ([]byte, error) {
 	// Re-encode as JPEG at quality 85.
 	var buf bytes.Buffer
 	if err := jpeg.Encode(&buf, dst, &jpeg.Options{Quality: 85}); err != nil {
-		return data, fmt.Errorf("jpeg encode after resize: %w", err)
+		return data, agenterrors.NewAgent("conversation", "jpeg encode after resize", err)
 	}
 	return buf.Bytes(), nil
 }
@@ -486,7 +486,7 @@ func (a *Agent) processImagesViaOCR(query string) (string, error) {
 	// active provider vision -> explicit custom fallback -> global list -> local Ollama.
 	processor, err := tools.NewVisionProcessorWithProvider(a.debug, a.getClientType())
 	if err != nil {
-		return query, fmt.Errorf("failed to create vision processor: %w", err)
+		return query, agenterrors.NewAgent("conversation", "failed to create vision processor", err)
 	}
 
 	// Process any images found in the text

@@ -775,6 +775,12 @@ func (c *ScriptedClient) SupportsVision() bool {
 	return c.supportsVision
 }
 
+
+// SupportsConversationalVision reports whether inline multimodal turns
+// should embed the image. Defaults to false; overridden per client.
+func (c *ScriptedClient) SupportsConversationalVision() bool {
+	return false
+}
 // GetVisionModel returns the vision model name
 func (c *ScriptedClient) GetVisionModel() string {
 	c.mu.Lock()

@@ -150,6 +150,16 @@ func (a *ProviderAdapter) SupportsVision() bool {
 	return a.client.SupportsVision()
 }
 
+// SupportsConversationalVision returns whether the provider handles inline
+// multimodal chat messages. Delegates to the underlying client; falls back
+// to SupportsVision() if the client doesn't implement the new method.
+func (a *ProviderAdapter) SupportsConversationalVision() bool {
+	if typed, ok := a.client.(interface{ SupportsConversationalVision() bool }); ok {
+		return typed.SupportsConversationalVision()
+	}
+	return a.client.SupportsVision()
+}
+
 // SupportsTools returns whether the provider supports tools
 func (a *ProviderAdapter) SupportsTools() bool {
 	// Most providers support tools

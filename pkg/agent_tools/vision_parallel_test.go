@@ -83,6 +83,12 @@ func (m *indexedMock) ListModels(context.Context) ([]api.ModelInfo, error) {
 	return nil, nil
 }
 func (m *indexedMock) SupportsVision() bool            { return true }
+
+// SupportsConversationalVision reports whether inline multimodal turns
+// should embed the image. Defaults to false; overridden per client.
+func (m *indexedMock) SupportsConversationalVision() bool {
+	return false
+}
 func (m *indexedMock) GetVisionModel() string          { return "mock-vision" }
 func (m *indexedMock) GetLastTPS() float64             { return 0 }
 func (m *indexedMock) GetAverageTPS() float64          { return 0 }
@@ -148,6 +154,12 @@ func (m *failingMock) ListModels(context.Context) ([]api.ModelInfo, error) {
 	return nil, nil
 }
 func (m *failingMock) SupportsVision() bool            { return true }
+
+// SupportsConversationalVision reports whether inline multimodal turns
+// should embed the image. Defaults to false; overridden per client.
+func (m *failingMock) SupportsConversationalVision() bool {
+	return false
+}
 func (m *failingMock) GetVisionModel() string          { return "mock-vision" }
 func (m *failingMock) GetLastTPS() float64             { return 0 }
 func (m *failingMock) GetAverageTPS() float64          { return 0 }

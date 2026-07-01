@@ -209,6 +209,13 @@ type visionSupportingClient struct {
 
 func (v *visionSupportingClient) SupportsVision() bool { return v.supportsVision }
 
+
+// SupportsConversationalVision reports whether inline multimodal turns
+// should embed the image. Tracks supportsVision for test parity with prod
+// clients — most clients gate both methods on the same model capabilities.
+func (v *visionSupportingClient) SupportsConversationalVision() bool {
+	return v.supportsVision
+}
 func (v *visionSupportingClient) SendChatRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	return nil, nil
 }
@@ -315,6 +322,10 @@ func TestProcessImagesInQuery_VisionClient_NoPlaceholders_ReturnsQueryUnchanged(
 }
 
 func TestProcessImagesInQuery_NonVisionClient_InjectsToolPrompt(t *testing.T) {
+	// SP-103-C1: non-vision client now injects the OCR-tool prompt instead
+	// of passing the original query through unchanged. This is the entire
+	// point of the change — make the model call analyze_image_content to
+	// read pasted images.
 	query := "Pasted image saved to disk: ./.sprout/pasted-images/test_a.png\nPlease read this image."
 	a := &Agent{client: &visionSupportingClient{supportsVision: false}}
 
@@ -325,12 +336,18 @@ func TestProcessImagesInQuery_NonVisionClient_InjectsToolPrompt(t *testing.T) {
 	if len(images) != 0 {
 		t.Fatalf("expected no multimodal images for non-vision client, got %d", len(images))
 	}
-	if cleaned != query {
-		t.Fatalf("expected non-vision query to remain unchanged, got: %q", cleaned)
+	if !strings.Contains(cleaned, "OCR Trigger Policy") {
+		t.Fatalf("expected non-vision query to receive OCR tool prompt, got: %q", cleaned)
+	}
+	if !strings.Contains(cleaned, "./.sprout/pasted-images/test_a.png") {
+		t.Errorf("expected injected prompt to reference the pasted image path, got: %q", cleaned)
 	}
 }
 
 func TestProcessImagesInQuery_VisionProviderWithNonVisionModel_LeavesQueryTextOnly(t *testing.T) {
+	// When the active model is non-vision AND the client is non-vision,
+	// the OCR-tool prompt is now injected. The test name "LeavesQueryTextOnly"
+	// reflects the pre-C1 behavior; the new behavior is documented above.
 	query := "Pasted image saved to disk: ./.sprout/pasted-images/test_a.png\nPlease read this image."
 	a := &Agent{
 		client: &visionSupportingClient{
@@ -347,8 +364,8 @@ func TestProcessImagesInQuery_VisionProviderWithNonVisionModel_LeavesQueryTextOn
 	if len(images) != 0 {
 		t.Fatalf("expected no multimodal images for non-vision model, got %d images", len(images))
 	}
-	if cleaned != query {
-		t.Fatalf("expected non-vision query to remain unchanged, got: %q", cleaned)
+	if !strings.Contains(cleaned, "OCR Trigger Policy") {
+		t.Fatalf("expected OCR tool prompt when active model is non-vision, got: %q", cleaned)
 	}
 }
 

@@ -1,6 +1,6 @@
 # SP-087 Acceptance Report
 
-**SP-087: Full Playwright Coverage of the WebUI** — Acceptance investigation for all 6 phases (SP-087-1 through SP-087-7).
+**SP-087b: Full Playwright Coverage of the WebUI** — Acceptance investigation for all 6 phases (SP-087b-1 through SP-087b-7).
 
 **Date**: 2026-06-28
 **Investigator**: SP-087-8 investigation agent
@@ -46,7 +46,7 @@ _Updated 2026-06-30 by SP-090 Phase 3:_ the 39 `test.fixme()` calls have been co
 - The 39 `test.fixme()` tests are essentially no-ops (they pass without executing their callback), so they contribute negligible runtime
 - **Conclusion**: The suite will finish well under 5 minutes in CI — the actual test execution is lightweight (mock-LLM responses, no real AI calls), and the 4-shard parallelism further reduces wall time
 
-**All green**: The 25 Tier 1 tests have real assertions but use the `TESTIDS` registry against components that were wired in SP-087-3. The 39 `test.fixme()` tests pass by definition (Playwright skips the callback). Combined, all 64 tests complete without failure (25 passed + 39 marked as fixme). The suite exits with code 0. Note that `test.fixme()` is a distinct status from "passed" — the tests are registered but their bodies are not executed.
+**All green**: The 25 Tier 1 tests have real assertions but use the `TESTIDS` registry against components that were wired in SP-087b-3. The 39 `test.fixme()` tests pass by definition (Playwright skips the callback). Combined, all 64 tests complete without failure (25 passed + 39 marked as fixme). The suite exits with code 0. Note that `test.fixme()` is a distinct status from "passed" — the tests are registered but their bodies are not executed.
 
 ---
 

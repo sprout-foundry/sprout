@@ -210,6 +210,12 @@ func (m *MockLLMProvider) SupportsVision() bool {
 	return false
 }
 
+// SupportsConversationalVision returns false; the mock never participates
+// in inline multimodal turns.
+func (m *MockLLMProvider) SupportsConversationalVision() bool {
+	return false
+}
+
 // GetVisionModel returns empty string.
 func (m *MockLLMProvider) GetVisionModel() string {
 	return ""

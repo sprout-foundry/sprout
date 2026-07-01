@@ -1249,6 +1249,12 @@ func (c *trackingClient) ListModels(ctx context.Context) ([]api.ModelInfo, error
 	return []api.ModelInfo{{Name: "test-model", ContextLength: 4096}}, nil
 }
 func (c *trackingClient) SupportsVision() bool   { return false }
+
+// SupportsConversationalVision reports whether inline multimodal turns
+// should embed the image. Defaults to false; overridden per client.
+func (c *trackingClient) SupportsConversationalVision() bool {
+	return false
+}
 func (c *trackingClient) GetVisionModel() string { return "" }
 func (c *trackingClient) SendVisionRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	return nil, fmt.Errorf("vision not supported")

@@ -55,6 +55,12 @@ func (m *streamingTestClient) ListModels(context.Context) ([]api.ModelInfo, erro
 	return nil, nil
 }
 func (m *streamingTestClient) SupportsVision() bool   { return m.supportsVison }
+
+// SupportsConversationalVision reports whether inline multimodal turns
+// should embed the image. Defaults to false; overridden per client.
+func (m *streamingTestClient) SupportsConversationalVision() bool {
+	return false
+}
 func (m *streamingTestClient) GetVisionModel() string { return "" }
 func (m *streamingTestClient) SendVisionRequest(context.Context, []api.Message, []api.Tool, string, bool) (*api.ChatResponse, error) {
 	return nil, nil

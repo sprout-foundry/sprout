@@ -27,6 +27,11 @@ type Provider interface {
 
 	// Feature support
 	SupportsVision() bool
+	// SupportsConversationalVision reports whether the provider is suitable as
+	// the inline multimodal target for chat-format vision messages. OCR-only
+	// models accept image input but produce extraction outputs unsuitable for
+	// free-form multimodal conversation. Default: SupportsVision().
+	SupportsConversationalVision() bool
 	SupportsTools() bool
 	SupportsStreaming() bool
 	SupportsReasoning() bool
@@ -145,6 +150,12 @@ func (p *BaseProvider) IsDebug() bool {
 
 // SupportsVision returns whether the provider supports vision
 func (p *BaseProvider) SupportsVision() bool {
+	return p.supportsVision
+}
+
+// SupportsConversationalVision returns whether the provider handles inline
+// multimodal chat messages (vs. OCR-only models). Default: supportsVision.
+func (p *BaseProvider) SupportsConversationalVision() bool {
 	return p.supportsVision
 }
 

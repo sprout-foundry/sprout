@@ -167,6 +167,12 @@ func (m *MockClient) SupportsVision() bool {
 	return false
 }
 
+
+// SupportsConversationalVision reports whether inline multimodal turns
+// should embed the image. Defaults to false; overridden per client.
+func (m *MockClient) SupportsConversationalVision() bool {
+	return false
+}
 func (m *MockClient) GetVisionModel() string {
 	return ""
 }

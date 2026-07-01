@@ -20,6 +20,12 @@ type enhancedMockClient struct {
 func (m *enhancedMockClient) GetModel() string     { return m.modelFlag }
 func (m *enhancedMockClient) SupportsVision() bool { return m.supportsVisionFlag }
 
+
+// SupportsConversationalVision reports whether inline multimodal turns
+// should embed the image. Defaults to false; overridden per client.
+func (m *enhancedMockClient) SupportsConversationalVision() bool {
+	return false
+}
 // =====================================================================
 // isVisionModel
 // =====================================================================

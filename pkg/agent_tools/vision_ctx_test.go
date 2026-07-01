@@ -88,6 +88,12 @@ func (m *ctxVisionMockClient) ListModels(ctx context.Context) ([]api.ModelInfo, 
 	return nil, nil
 }
 func (m *ctxVisionMockClient) SupportsVision() bool            { return true }
+
+// SupportsConversationalVision reports whether inline multimodal turns
+// should embed the image. Defaults to false; overridden per client.
+func (m *ctxVisionMockClient) SupportsConversationalVision() bool {
+	return false
+}
 func (m *ctxVisionMockClient) GetVisionModel() string          { return "mock-vision-model" }
 func (m *ctxVisionMockClient) GetLastTPS() float64             { return 0 }
 func (m *ctxVisionMockClient) GetAverageTPS() float64          { return 0 }

@@ -1521,11 +1521,14 @@ route security cautions via event bus`).
 
 README says "scoped labels shipped; collapsible sections pending".
 
-- [ ] **SP-101-3:** Add `<details>`-style collapsible groups to
+- [x] **SP-101-3:** Add `<details>`-style collapsible groups to
   `SettingsPanel.tsx`, grouped by layer (Global / Workspace / Session).
   Use a `sectionState` local store (or `localStorage` for persistence).
   Cover the four "scope groups" SP-017 names. Add a vitest covering
   collapse/expand + persistence across reloads.
+  Covered by `SettingsPanel.test.tsx` (12 tests: section rendering, scope
+  badges, collapse/expand, body visibility, localStorage write/restore,
+  activeSubsection persistence, aria-expanded).
 
 ### Phase 4: SP-048 — tool execution timeline (~0.5 day)
 

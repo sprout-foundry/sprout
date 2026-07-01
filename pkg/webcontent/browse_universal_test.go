@@ -60,8 +60,6 @@ func TestBrowseURL_InvalidAction(t *testing.T) {
 
 func TestBrowseURL_InvalidScheme(t *testing.T) {
 	rejectCases := []string{
-		"file:///etc/passwd",
-		"FILE:///etc/passwd",
 		"javascript:alert(1)",
 		"data:text/html,<h1>hi</h1>",
 		"ftp://files.example.com",
@@ -73,9 +71,25 @@ func TestBrowseURL_InvalidScheme(t *testing.T) {
 		t.Run(u, func(t *testing.T) {
 			_, err := BrowseURL(u, BrowseOptions{})
 			assert.Error(t, err)
-			assert.Contains(t, err.Error(), "must start with http:// or https://")
+			assert.Contains(t, err.Error(), "must start with")
 		})
 	}
+	// file:// URLs require explicit opt-in
+	for _, u := range []string{"file:///etc/passwd", "FILE:///etc/passwd"} {
+		t.Run("file_rejected_"+u, func(t *testing.T) {
+			_, err := BrowseURL(u, BrowseOptions{})
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "file:// URLs require allow_file_url=true")
+		})
+	}
+	// file:// URLs with opt-in pass the scheme check (fail at renderer instead)
+	t.Run("file_allowed_with_optin", func(t *testing.T) {
+		_, err := BrowseURL("file:///tmp/test.html", BrowseOptions{AllowFileURL: true})
+		if err != nil {
+			assert.NotContains(t, err.Error(), "must start with")
+			assert.NotContains(t, err.Error(), "allow_file_url")
+		}
+	})
 	// Case-insensitive acceptance — these will fail at the nop renderer
 	// but should NOT fail at the scheme check.
 	for _, u := range []string{"HTTP://example.com", "HtTpS://example.com"} {
@@ -83,7 +97,7 @@ func TestBrowseURL_InvalidScheme(t *testing.T) {
 			_, err := BrowseURL(u, BrowseOptions{})
 			// Should NOT be a scheme error; it will be a browser error instead
 			if err != nil {
-				assert.NotContains(t, err.Error(), "must start with http:// or https://")
+				assert.NotContains(t, err.Error(), "must start with")
 			}
 		})
 	}

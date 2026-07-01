@@ -9,6 +9,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -70,6 +72,10 @@ func (r *rodRenderer) Run(ctx context.Context, url string, opts BrowseOptions) (
 				_ = removeInstrumentation()
 			}
 		}()
+	}
+
+	if err := injectCookiesAndHeaders(page, url, opts); err != nil {
+		return nil, fmt.Errorf("inject cookies/headers: %w", err)
 	}
 
 	if err := page.Timeout(getNavigationTimeout(url)).Navigate(url); err != nil {
@@ -462,6 +468,35 @@ func executeBrowseStep(page *rod.Page, step BrowseStep, timeoutMs int, result *B
 		}
 		record("eval")
 		return nil
+	case "wait_for_function":
+		if strings.TrimSpace(step.Script) == "" {
+			return fmt.Errorf("browse step wait_for_function requires script")
+		}
+		if err := page.Timeout(timeout).Wait(rod.Eval(step.Script)); err != nil {
+			return fmt.Errorf("wait_for_function: %w", err)
+		}
+		record(fmt.Sprintf("wait_for_function %s", step.Script))
+		return nil
+	case "screenshot_selector":
+		if strings.TrimSpace(step.Selector) == "" {
+			return fmt.Errorf("browse step screenshot_selector requires selector")
+		}
+		if strings.TrimSpace(step.ScreenshotPath) == "" {
+			return fmt.Errorf("browse step screenshot_selector requires screenshot_path")
+		}
+		el, err := requireElement(page, step.Selector, timeout)
+		if err != nil {
+			return fmt.Errorf("requireElement for screenshot_selector: %w", err)
+		}
+		data, err := el.Screenshot(proto.PageCaptureScreenshotFormatPng, 100)
+		if err != nil {
+			return fmt.Errorf("screenshot_selector %q: %w", step.Selector, err)
+		}
+		if err := os.WriteFile(step.ScreenshotPath, data, 0644); err != nil {
+			return fmt.Errorf("write screenshot %q: %w", step.ScreenshotPath, err)
+		}
+		record(fmt.Sprintf("screenshot_selector %s -> %s", step.Selector, step.ScreenshotPath))
+		return nil
 	default:
 		return fmt.Errorf("unknown browse step action: %s", step.Action)
 	}
@@ -582,4 +617,45 @@ func captureSelectors(page *rod.Page, selectors []string, responseMaxChars int) 
 		captures = append(captures, capture)
 	}
 	return captures, nil
+}
+
+func injectCookiesAndHeaders(page *rod.Page, targetURL string, opts BrowseOptions) error {
+	if len(opts.Headers) > 0 {
+		dict := make([]string, 0, len(opts.Headers)*2)
+		for k, v := range opts.Headers {
+			dict = append(dict, k, v)
+		}
+		_, err := page.SetExtraHeaders(dict)
+		if err != nil {
+			return fmt.Errorf("set extra headers: %w", err)
+		}
+	}
+
+	if len(opts.Cookies) == 0 {
+		return nil
+	}
+
+	parsed, err := url.Parse(targetURL)
+	if err != nil {
+		return fmt.Errorf("parse target URL for cookies: %w", err)
+	}
+	domain := parsed.Hostname()
+	if domain == "" {
+		domain = "localhost"
+	}
+
+	cookies := make([]*proto.NetworkCookieParam, 0, len(opts.Cookies))
+	for name, value := range opts.Cookies {
+		cookies = append(cookies, &proto.NetworkCookieParam{
+			Name:   name,
+			Value:  value,
+			Domain: domain,
+			Path:   "/",
+		})
+	}
+	if err := page.SetCookies(cookies); err != nil {
+		return fmt.Errorf("set cookies: %w", err)
+	}
+
+	return nil
 }

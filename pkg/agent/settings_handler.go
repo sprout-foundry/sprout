@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // handleManageSettings manages application settings and provider credentials.
@@ -14,7 +15,7 @@ import (
 func handleManageSettings(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	operation, err := getStringArg(args, "operation")
 	if err != nil {
-		return "", fmt.Errorf("operation is required: %w", err)
+		return "", agenterrors.Wrapf(err, "operation is required")
 	}
 
 	switch operation {
@@ -33,7 +34,7 @@ func handleManageSettings(ctx context.Context, a *Agent, args map[string]interfa
 	case "preview":
 		return handleSettingsPreview(a, args)
 	default:
-		return "", fmt.Errorf("unknown operation %q: must be one of get, set, list_providers, test_credential, describe, describe_all, preview", operation)
+		return "", agenterrors.NewValidation(fmt.Sprintf("unknown operation %q: must be one of get, set, list_providers, test_credential, describe, describe_all, preview", operation), nil)
 	}
 }
 
@@ -41,17 +42,17 @@ func handleManageSettings(ctx context.Context, a *Agent, args map[string]interfa
 func handleSettingsGet(a *Agent, args map[string]interface{}) (string, error) {
 	key, err := getStringArg(args, "key")
 	if err != nil {
-		return "", fmt.Errorf("key is required for get operation: %w", err)
+		return "", agenterrors.Wrapf(err, "key is required for get operation")
 	}
 
 	mgr := a.GetConfigManager()
 	if mgr == nil {
-		return "", fmt.Errorf("configuration manager not available")
+		return "", agenterrors.NewConfig("configuration manager not available", nil)
 	}
 
 	cfg := mgr.GetConfig()
 	if cfg == nil {
-		return "", fmt.Errorf("configuration not loaded")
+		return "", agenterrors.NewConfig("configuration not loaded", nil)
 	}
 
 	value, err := getConfigValue(cfg, key)
@@ -69,17 +70,17 @@ func handleSettingsGet(a *Agent, args map[string]interface{}) (string, error) {
 func handleSettingsSet(a *Agent, args map[string]interface{}) (string, error) {
 	key, err := getStringArg(args, "key")
 	if err != nil {
-		return "", fmt.Errorf("key is required for set operation: %w", err)
+		return "", agenterrors.Wrapf(err, "key is required for set operation")
 	}
 
 	value, err := getStringArg(args, "value")
 	if err != nil {
-		return "", fmt.Errorf("value is required for set operation: %w", err)
+		return "", agenterrors.Wrapf(err, "value is required for set operation")
 	}
 
 	mgr := a.GetConfigManager()
 	if mgr == nil {
-		return "", fmt.Errorf("configuration manager not available")
+		return "", agenterrors.NewConfig("configuration manager not available", nil)
 	}
 
 	if err := validateSettingKey(key); err != nil {
@@ -90,7 +91,7 @@ func handleSettingsSet(a *Agent, args map[string]interface{}) (string, error) {
 		return setConfigValue(cfg, key, value)
 	})
 	if err != nil {
-		return "", fmt.Errorf("failed to set %q: %w", key, err)
+		return "", agenterrors.Wrapf(err, "failed to set %q", key)
 	}
 
 	return fmt.Sprintf("Setting %q updated to %q", key, value), nil
@@ -100,7 +101,7 @@ func handleSettingsSet(a *Agent, args map[string]interface{}) (string, error) {
 func handleSettingsListProviders(a *Agent, args map[string]interface{}) (string, error) {
 	mgr := a.GetConfigManager()
 	if mgr == nil {
-		return "", fmt.Errorf("configuration manager not available")
+		return "", agenterrors.NewConfig("configuration manager not available", nil)
 	}
 
 	providers := mgr.GetAvailableProviders()
@@ -136,12 +137,12 @@ func handleSettingsListProviders(a *Agent, args map[string]interface{}) (string,
 func handleSettingsTestCredential(a *Agent, args map[string]interface{}) (string, error) {
 	provider, err := getStringArg(args, "provider")
 	if err != nil {
-		return "", fmt.Errorf("provider is required for test_credential operation: %w", err)
+		return "", agenterrors.Wrapf(err, "provider is required for test_credential operation")
 	}
 
 	provider = strings.TrimSpace(strings.ToLower(provider))
 	if provider == "" {
-		return "", fmt.Errorf("provider cannot be empty")
+		return "", agenterrors.NewValidation("provider cannot be empty", nil)
 	}
 
 	if configuration.HasProviderAuth(provider) {
@@ -272,19 +273,19 @@ func allSettings() []settingDetail {
 func handleSettingsDescribe(a *Agent, args map[string]interface{}) (string, error) {
 	key, err := getStringArg(args, "key")
 	if err != nil {
-		return "", fmt.Errorf("key is required for describe operation: %w", err)
+		return "", agenterrors.Wrapf(err, "key is required for describe operation")
 	}
 
 	key = strings.ToLower(strings.TrimSpace(key))
 
 	mgr := a.GetConfigManager()
 	if mgr == nil {
-		return "", fmt.Errorf("configuration manager not available")
+		return "", agenterrors.NewConfig("configuration manager not available", nil)
 	}
 
 	cfg := mgr.GetConfig()
 	if cfg == nil {
-		return "", fmt.Errorf("configuration not loaded")
+		return "", agenterrors.NewConfig("configuration not loaded", nil)
 	}
 
 	for _, s := range allSettings() {
@@ -297,19 +298,19 @@ func handleSettingsDescribe(a *Agent, args map[string]interface{}) (string, erro
 		}
 	}
 
-	return "", fmt.Errorf("unknown setting key %q", key)
+	return "", agenterrors.NewNotFound(fmt.Sprintf("setting key %q", key))
 }
 
 // handleSettingsDescribeAll returns all settings with descriptions, valid values, and current values.
 func handleSettingsDescribeAll(a *Agent, args map[string]interface{}) (string, error) {
 	mgr := a.GetConfigManager()
 	if mgr == nil {
-		return "", fmt.Errorf("configuration manager not available")
+		return "", agenterrors.NewConfig("configuration manager not available", nil)
 	}
 
 	cfg := mgr.GetConfig()
 	if cfg == nil {
-		return "", fmt.Errorf("configuration not loaded")
+		return "", agenterrors.NewConfig("configuration not loaded", nil)
 	}
 
 	var lines []string
@@ -334,24 +335,24 @@ func handleSettingsDescribeAll(a *Agent, args map[string]interface{}) (string, e
 func handleSettingsPreview(a *Agent, args map[string]interface{}) (string, error) {
 	key, err := getStringArg(args, "key")
 	if err != nil {
-		return "", fmt.Errorf("key is required for preview operation: %w", err)
+		return "", agenterrors.Wrapf(err, "key is required for preview operation")
 	}
 
 	value, err := getStringArg(args, "value")
 	if err != nil {
-		return "", fmt.Errorf("value is required for preview operation: %w", err)
+		return "", agenterrors.Wrapf(err, "value is required for preview operation")
 	}
 
 	key = strings.ToLower(strings.TrimSpace(key))
 
 	mgr := a.GetConfigManager()
 	if mgr == nil {
-		return "", fmt.Errorf("configuration manager not available")
+		return "", agenterrors.NewConfig("configuration manager not available", nil)
 	}
 
 	cfg := mgr.GetConfig()
 	if cfg == nil {
-		return "", fmt.Errorf("configuration not loaded")
+		return "", agenterrors.NewConfig("configuration not loaded", nil)
 	}
 
 	// Get current value
@@ -365,7 +366,7 @@ func handleSettingsPreview(a *Agent, args map[string]interface{}) (string, error
 			}
 		}
 		if err != nil && currentValue == "" {
-			return "", fmt.Errorf("unknown setting key %q", key)
+			return "", agenterrors.NewNotFound(fmt.Sprintf("setting key %q", key))
 		}
 	}
 
@@ -440,7 +441,7 @@ func validateSettingKey(key string) error {
 		validKeys = append(validKeys, k)
 	}
 	sort.Strings(validKeys)
-	return fmt.Errorf("unknown setting key %q; valid keys: %s", key, strings.Join(validKeys, ", "))
+	return agenterrors.NewValidation(fmt.Sprintf("unknown setting key %q; valid keys: %s", key, strings.Join(validKeys, ", ")), nil)
 }
 
 // getConfigValue returns the string representation of a config setting by key.
@@ -489,7 +490,7 @@ func setConfigValue(cfg *configuration.Config, key, value string) error {
 		cfg.LastUsedProvider = value
 	case "model":
 		if cfg.LastUsedProvider == "" {
-			return fmt.Errorf("cannot set model: no provider selected")
+			return agenterrors.NewValidation("cannot set model: no provider selected", nil)
 		}
 		if cfg.ProviderModels == nil {
 			cfg.ProviderModels = make(map[string]string)
@@ -500,7 +501,7 @@ func setConfigValue(cfg *configuration.Config, key, value string) error {
 		case "low", "medium", "high", "":
 			cfg.ReasoningEffort = strings.ToLower(value)
 		default:
-			return fmt.Errorf("reasoning_effort must be low, medium, or high, got %q", value)
+			return agenterrors.NewValidation(fmt.Sprintf("reasoning_effort must be low, medium, or high, got %q", value), nil)
 		}
 	case "disable_thinking":
 		switch strings.ToLower(value) {
@@ -509,7 +510,7 @@ func setConfigValue(cfg *configuration.Config, key, value string) error {
 		case "false":
 			cfg.DisableThinking = false
 		default:
-			return fmt.Errorf("disable_thinking must be true or false, got %q", value)
+			return agenterrors.NewValidation(fmt.Sprintf("disable_thinking must be true or false, got %q", value), nil)
 		}
 	case "resource_directory":
 		cfg.ResourceDirectory = value
@@ -518,14 +519,14 @@ func setConfigValue(cfg *configuration.Config, key, value string) error {
 		case "project", "global", "":
 			cfg.HistoryScope = strings.ToLower(value)
 		default:
-			return fmt.Errorf("history_scope must be project or global, got %q", value)
+			return agenterrors.NewValidation(fmt.Sprintf("history_scope must be project or global, got %q", value), nil)
 		}
 	case "ea_mode":
 		switch strings.ToLower(value) {
 		case "interactive", "queue", "":
 			cfg.EAMode = strings.ToLower(value)
 		default:
-			return fmt.Errorf("ea_mode must be interactive or queue, got %q", value)
+			return agenterrors.NewValidation(fmt.Sprintf("ea_mode must be interactive or queue, got %q", value), nil)
 		}
 	case "subagent_provider":
 		cfg.SubagentProvider = value
@@ -534,7 +535,7 @@ func setConfigValue(cfg *configuration.Config, key, value string) error {
 	case "default_subagent_persona":
 		v := strings.TrimSpace(value)
 		if v != "" && cfg.GetSubagentType(v) == nil {
-			return fmt.Errorf("default_subagent_persona %q is not a known persona ID or alias", v)
+			return agenterrors.NewValidation(fmt.Sprintf("default_subagent_persona %q is not a known persona ID or alias", v), nil)
 		}
 		cfg.DefaultSubagentPersona = v
 	case "disabled_personas":
@@ -546,7 +547,7 @@ func setConfigValue(cfg *configuration.Config, key, value string) error {
 				continue
 			}
 			if cfg.GetSubagentType(trimmed) == nil && !cfg.IsPersonaDisabled(trimmed) {
-				return fmt.Errorf("disabled_personas: %q is not a known persona ID or alias", trimmed)
+				return agenterrors.NewValidation(fmt.Sprintf("disabled_personas: %q is not a known persona ID or alias", trimmed), nil)
 			}
 			ids = append(ids, trimmed)
 		}
@@ -556,14 +557,14 @@ func setConfigValue(cfg *configuration.Config, key, value string) error {
 		case "off", "code", "always", "":
 			cfg.SelfReviewGateMode = strings.ToLower(value)
 		default:
-			return fmt.Errorf("self_review_gate_mode must be off, code, or always, got %q", value)
+			return agenterrors.NewValidation(fmt.Sprintf("self_review_gate_mode must be off, code, or always, got %q", value), nil)
 		}
 	case "output_verbosity":
 		switch strings.ToLower(value) {
 		case "compact", "default", "verbose", "":
 			cfg.OutputVerbosity = strings.ToLower(value)
 		default:
-			return fmt.Errorf("output_verbosity must be compact, default, or verbose, got %q", value)
+			return agenterrors.NewValidation(fmt.Sprintf("output_verbosity must be compact, default, or verbose, got %q", value), nil)
 		}
 	default:
 		return validateSettingKey(key)

@@ -10,6 +10,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // WorkspaceFileMetadata describes the per-file sync state that the
@@ -200,7 +202,7 @@ type ReconciliationActionResult struct {
 //   - both sides diverged → diverged
 func ReconcileSeqNumbers(ag *Agent, browserSeqs map[string]int64) ([]ReconciliationActionResult, error) {
 	if ag == nil {
-		return nil, fmt.Errorf("agent is nil")
+		return nil, agenterrors.NewTool("workspace_sync", "agent is nil", nil)
 	}
 	if ag.fileMetadata == nil {
 		// No metadata store means no files tracked — everything is browser_ahead
@@ -423,8 +425,8 @@ func (a *Agent) ResetFileReadsForNewTurn() {
 //     modification was NOT by this turn's earlier read, REFUSE with
 //     ErrWriteStale.
 //
-// Both refusals wrap their respective sentinels via fmt.Errorf("...: %w",
-// sentinel) so callers can distinguish them with errors.Is.
+// Both refusals wrap their respective sentinels via agenterrors.Wrapf(err, format,
+// args...) so callers can distinguish them with errors.Is.
 //
 // On nil Agent (test scaffolding), the check is a no-op.
 func (a *Agent) checkWriteStaleness(path string) error {
@@ -438,9 +440,9 @@ func (a *Agent) checkWriteStaleness(path string) error {
 	// (SP-046-1d/1f/1g); on native or free-tier WASM it's empty and this
 	// check is a no-op.
 	if md, ok := a.GetFileMetadata(path); ok && md.HasUnsyncedBrowserEdits() {
-		return fmt.Errorf(
-			"%w: %q has %d unsynced edits from the user (browser_seq=%d, last_synced=%d); ask the user whether to overwrite",
-			ErrWriteHasUnsyncedEdits, path,
+		return agenterrors.Wrapf(
+			ErrWriteHasUnsyncedEdits, "%q has %d unsynced edits from the user (browser_seq=%d, last_synced=%d); ask the user whether to overwrite",
+			path,
 			md.BrowserSeq-md.LastSyncedBrowser,
 			md.BrowserSeq, md.LastSyncedBrowser,
 		)
@@ -463,9 +465,9 @@ func (a *Agent) checkWriteStaleness(path string) error {
 	}
 
 	if !hasReadThisTurn {
-		return fmt.Errorf(
-			"%w: must call read_file(%q) first; the file may be stale and overwriting blindly is rarely correct",
-			ErrWriteStale, path,
+		return agenterrors.Wrapf(
+			ErrWriteStale, "must call read_file(%q) first; the file may be stale and overwriting blindly is rarely correct",
+			path,
 		)
 	}
 
@@ -478,9 +480,9 @@ func (a *Agent) checkWriteStaleness(path string) error {
 		readAt, ok := tracker.getReadTime(path, workspaceRoot)
 		if ok && info.ModTime().After(readAt) &&
 			time.Since(info.ModTime()) < stalenessFreshnessWindow {
-			return fmt.Errorf(
-				"%w: %q was modified after your last read_file call; re-read before writing",
-				ErrWriteStale, path,
+			return agenterrors.Wrapf(
+				ErrWriteStale, "%q was modified after your last read_file call; re-read before writing",
+				path,
 			)
 		}
 	}
@@ -514,12 +516,12 @@ type SyncOpResult struct {
 // path traversal is attempted.
 func resolveWorkspacePath(workspaceRoot, relPath string) (string, error) {
 	if relPath == "" {
-		return "", fmt.Errorf("relative path must not be empty")
+		return "", agenterrors.NewValidation("relative path must not be empty", nil)
 	}
 
 	absRoot, err := filepath.Abs(workspaceRoot)
 	if err != nil {
-		return "", fmt.Errorf("resolve workspace root: %w", err)
+		return "", agenterrors.Wrap(err, "resolve workspace root")
 	}
 
 	// Resolve symlinks in workspace root for consistent path resolution and
@@ -551,7 +553,7 @@ func resolveWorkspacePath(workspaceRoot, relPath string) (string, error) {
 				resolved = filepath.Join(resolvedRoot, relPath)
 			}
 		} else {
-			return "", fmt.Errorf("resolve path: %w", evalErr)
+			return "", agenterrors.Wrap(evalErr, "resolve path")
 		}
 	} else {
 		resolved = evaluated
@@ -560,7 +562,7 @@ func resolveWorkspacePath(workspaceRoot, relPath string) (string, error) {
 	// Verify the resolved path is within the workspace root
 	rel, err := filepath.Rel(resolvedRoot, resolved)
 	if err != nil || strings.HasPrefix(rel, "..") {
-		return "", fmt.Errorf("path traversal attempted: %q is outside workspace root %q", resolved, resolvedRoot)
+		return "", agenterrors.NewValidation(fmt.Sprintf("path traversal attempted: %q is outside workspace root %q", resolved, resolvedRoot), nil)
 	}
 
 	return resolved, nil

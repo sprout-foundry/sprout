@@ -26,7 +26,7 @@ const maxStructuredErrorDetails = 8
 func handleWriteStructuredFile(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	path, err := getFilePath(args)
 	if err != nil {
-		return "", fmt.Errorf("failed to get file path: %w", err)
+		return "", agenterrors.Wrap(err, "failed to get file path")
 	}
 
 	format := inferStructuredFormat(path, getOptionalString(args, "format"))
@@ -55,7 +55,7 @@ func handleWriteStructuredFile(ctx context.Context, a *Agent, args map[string]in
 	if schemaRaw, ok := args["schema"]; ok && schemaRaw != nil {
 		schema, err := toSchemaMap(schemaRaw)
 		if err != nil {
-			return "", fmt.Errorf("failed to parse schema: %w", err)
+			return "", agenterrors.NewTool("structured", "failed to parse schema", err)
 		}
 		if errs := validateDataAgainstSchema(data, schema, "$"); len(errs) > 0 {
 			return "", formatStructuredValidationError("write_structured_file", errs, "")
@@ -64,12 +64,12 @@ func handleWriteStructuredFile(ctx context.Context, a *Agent, args map[string]in
 
 	content, err := serializeStructuredContent(format, data)
 	if err != nil {
-		return "", fmt.Errorf("failed to serialize structured content: %w", err)
+		return "", agenterrors.NewTool("structured", "failed to serialize structured content", err)
 	}
 
 	result, err := writeFileContent(ctx, a, path, content, "write_structured_file", true)
 	if err != nil {
-		return "", fmt.Errorf("failed to write structured file %s: %w", path, err)
+		return "", agenterrors.NewTool("structured", fmt.Sprintf("failed to write structured file %s", path), err)
 	}
 	return result, nil
 }
@@ -77,7 +77,7 @@ func handleWriteStructuredFile(ctx context.Context, a *Agent, args map[string]in
 func handlePatchStructuredFile(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	path, err := getFilePath(args)
 	if err != nil {
-		return "", fmt.Errorf("failed to get file path: %w", err)
+		return "", agenterrors.Wrap(err, "failed to get file path")
 	}
 
 	opsRaw, ok := args["patch_ops"]
@@ -111,30 +111,30 @@ func handlePatchStructuredFile(ctx context.Context, a *Agent, args map[string]in
 			resolvedPath, err = filesystem.SafeResolvePathWithBypass(ctx2, path)
 		}
 		if err != nil {
-			return "", fmt.Errorf("failed to resolve file path: %w", err)
+			return "", agenterrors.NewTool("structured", "failed to resolve file path", err)
 		}
 	}
 	contentBytes, err := os.ReadFile(resolvedPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to read structured file: %w", err)
+		return "", agenterrors.NewTool("structured", "failed to read structured file", err)
 	}
 
 	doc, err := deserializeStructuredContent(format, string(contentBytes))
 	if err != nil {
-		return "", fmt.Errorf("failed to parse structured content: %w", err)
+		return "", agenterrors.NewTool("structured", "failed to parse structured content", err)
 	}
 
 	ops, err := parsePatchOperations(opsRaw)
 	if err != nil {
-		return "", fmt.Errorf("failed to parse patch operations: %w", err)
+		return "", agenterrors.NewTool("structured", "failed to parse patch operations", err)
 	}
 
 	applied := 0
 	for i, op := range ops {
 		doc, err = applyPatchOperation(doc, op)
 		if err != nil {
-			return "", fmt.Errorf("patch operation failed: tool=patch_structured_file index=%d op=%s path=%s applied=%d/%d err=%w",
-				i, op.Op, op.Path, applied, len(ops), err)
+			return "", agenterrors.Wrapf(err, "patch operation failed: tool=patch_structured_file index=%d op=%s path=%s applied=%d/%d",
+				i, op.Op, op.Path, applied, len(ops))
 		}
 		applied++
 	}
@@ -142,7 +142,7 @@ func handlePatchStructuredFile(ctx context.Context, a *Agent, args map[string]in
 	if schemaRaw, ok := args["schema"]; ok && schemaRaw != nil {
 		schema, err := toSchemaMap(schemaRaw)
 		if err != nil {
-			return "", fmt.Errorf("failed to parse schema: %w", err)
+			return "", agenterrors.NewTool("structured", "failed to parse schema", err)
 		}
 		if errs := validateDataAgainstSchema(doc, schema, "$"); len(errs) > 0 {
 			context := fmt.Sprintf("applied=%d/%d", applied, len(ops))
@@ -152,12 +152,12 @@ func handlePatchStructuredFile(ctx context.Context, a *Agent, args map[string]in
 
 	updated, err := serializeStructuredContent(format, doc)
 	if err != nil {
-		return "", fmt.Errorf("failed to serialize updated content: %w", err)
+		return "", agenterrors.NewTool("structured", "failed to serialize updated content", err)
 	}
 
 	result, err := writeFileContent(ctx, a, path, updated, "patch_structured_file", true)
 	if err != nil {
-		return "", fmt.Errorf("failed to write patched file %s: %w", path, err)
+		return "", agenterrors.NewTool("structured", fmt.Sprintf("failed to write patched file %s", path), err)
 	}
 	return result, nil
 }
@@ -461,7 +461,7 @@ func parsePatchOperations(v interface{}) ([]jsonPatchOperation, error) {
 func applyPatchOperation(doc interface{}, op jsonPatchOperation) (interface{}, error) {
 	segments, err := parseJSONPointer(op.Path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse JSON pointer: %w", err)
+		return nil, agenterrors.NewTool("structured", "failed to parse JSON pointer", err)
 	}
 
 	switch op.Op {
@@ -474,7 +474,7 @@ func applyPatchOperation(doc interface{}, op jsonPatchOperation) (interface{}, e
 	case "test":
 		actual, err := readPointerValue(doc, segments)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read pointer value: %w", err)
+			return nil, agenterrors.NewTool("structured", "failed to read pointer value", err)
 		}
 		// Normalize *OrderedMap → map[string]interface{} so that
 		// reflect.DeepEqual works when op.Value is a plain map (from JSON
@@ -521,7 +521,7 @@ func applyMutation(node interface{}, segments []string, value interface{}, op st
 		}
 		updatedChild, err := applyMutation(child, segments[1:], value, op)
 		if err != nil {
-			return nil, fmt.Errorf("failed to apply mutation: %w", err)
+			return nil, agenterrors.NewTool("structured", "failed to apply mutation", err)
 		}
 		typed.Set(token, updatedChild)
 		return typed, nil
@@ -535,7 +535,7 @@ func applyMutation(node interface{}, segments []string, value interface{}, op st
 		}
 		updatedChild, err := applyMutation(child, segments[1:], value, op)
 		if err != nil {
-			return nil, fmt.Errorf("failed to apply mutation: %w", err)
+			return nil, agenterrors.NewTool("structured", "failed to apply mutation", err)
 		}
 		typed[token] = updatedChild
 		return typed, nil
@@ -546,7 +546,7 @@ func applyMutation(node interface{}, segments []string, value interface{}, op st
 		}
 		updatedChild, err := applyMutation(typed[idx], segments[1:], value, op)
 		if err != nil {
-			return nil, fmt.Errorf("failed to apply mutation: %w", err)
+			return nil, agenterrors.NewTool("structured", "failed to apply mutation", err)
 		}
 		typed[idx] = updatedChild
 		return typed, nil

@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
+
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
@@ -40,7 +42,7 @@ func (a *Agent) ExportState() ([]byte, error) {
 func (a *Agent) ImportState(data []byte) error {
 	var state AgentState
 	if err := json.Unmarshal(data, &state); err != nil {
-		return fmt.Errorf("failed to import state: %w", err)
+		return agenterrors.NewAgent("state", "failed to import state", err)
 	}
 	a.state.SetMessages(state.Messages)
 	a.ReplaceTurnCheckpoints(state.TurnCheckpoints)
@@ -85,12 +87,12 @@ func (a *Agent) replaceTaskActions(actions []TaskAction) {
 func validateStateFilePath(filename string) (string, error) {
 	trimmed := strings.TrimSpace(filename)
 	if trimmed == "" {
-		return "", fmt.Errorf("state file path cannot be empty")
+		return "", agenterrors.NewValidation("state file path cannot be empty", nil)
 	}
 
 	// Reject null bytes (valid on some filesystems but confusing and dangerous)
 	if strings.Contains(trimmed, "\x00") {
-		return "", fmt.Errorf("state file path %q contains invalid null byte", filename)
+		return "", agenterrors.NewValidation(fmt.Sprintf("state file path %q contains invalid null byte", filename), nil)
 	}
 
 	// Clean the path to resolve any "." or ".." segments
@@ -98,22 +100,22 @@ func validateStateFilePath(filename string) (string, error) {
 
 	// Reject absolute paths
 	if filepath.IsAbs(cleaned) {
-		return "", fmt.Errorf("state file path %q cannot be an absolute path", filename)
+		return "", agenterrors.NewValidation(fmt.Sprintf("state file path %q cannot be an absolute path", filename), nil)
 	}
 
 	// Reject paths that still contain ".." after cleaning (path traversal)
 	if strings.Contains(cleaned, "..") {
-		return "", fmt.Errorf("state file path %q contains invalid path traversal components", filename)
+		return "", agenterrors.NewValidation(fmt.Sprintf("state file path %q contains invalid path traversal components", filename), nil)
 	}
 
 	// Ensure path doesn't start with path separator (extra check for Windows compatibility)
 	if strings.HasPrefix(cleaned, string(os.PathSeparator)) || strings.HasPrefix(cleaned, "/") {
-		return "", fmt.Errorf("state file path %q cannot start with path separator", filename)
+		return "", agenterrors.NewValidation(fmt.Sprintf("state file path %q cannot start with path separator", filename), nil)
 	}
 
 	// Reject symlinks to prevent writes to arbitrary files outside the working directory
 	if info, err := os.Lstat(cleaned); err == nil && info.Mode()&os.ModeSymlink != 0 {
-		return "", fmt.Errorf("state file path %q is a symlink; symlinks are not allowed for security", filename)
+		return "", agenterrors.NewValidation(fmt.Sprintf("state file path %q is a symlink; symlinks are not allowed for security", filename), nil)
 	}
 
 	return cleaned, nil
@@ -128,7 +130,7 @@ func (a *Agent) SaveStateToFile(filename string) error {
 
 	stateData, err := a.ExportState()
 	if err != nil {
-		return fmt.Errorf("failed to export state: %w", err)
+		return agenterrors.NewAgent("state", "failed to export state", err)
 	}
 	return os.WriteFile(validatedPath, stateData, 0644)
 }
@@ -142,7 +144,7 @@ func (a *Agent) LoadStateFromFile(filename string) error {
 
 	data, err := os.ReadFile(validatedPath)
 	if err != nil {
-		return fmt.Errorf("failed to read state file: %w", err)
+		return agenterrors.NewAgent("state", "failed to read state file", err)
 	}
 	return a.ImportState(data)
 }
@@ -156,12 +158,12 @@ func (a *Agent) LoadSummaryFromFile(filename string) error {
 
 	data, err := os.ReadFile(validatedPath)
 	if err != nil {
-		return fmt.Errorf("failed to read summary file: %w", err)
+		return agenterrors.NewAgent("state", "failed to read summary file", err)
 	}
 
 	var state AgentState
 	if err := json.Unmarshal(data, &state); err != nil {
-		return fmt.Errorf("failed to unmarshal summary: %w", err)
+		return agenterrors.NewAgent("state", "failed to unmarshal summary", err)
 	}
 
 	// Only load the compact summary, not the full conversation state
@@ -191,7 +193,7 @@ func (a *Agent) SaveConversationSummary() error {
 	// Save state to file
 	stateFile := ".coder_state.json"
 	if err := a.SaveStateToFile(stateFile); err != nil {
-		return fmt.Errorf("failed to save conversation state: %w", err)
+		return agenterrors.NewAgent("state", "failed to save conversation state", err)
 	}
 
 	if a.debug {

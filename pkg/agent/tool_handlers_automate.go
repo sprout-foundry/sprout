@@ -12,6 +12,7 @@ import (
 
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/automate"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
@@ -59,7 +60,7 @@ func buildAutomateCompletionMessage(wfName, wfDesc, sessionID, status string, ex
 func handleRunAutomate(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	workflowName, _ := getStringArg(args, "workflow")
 	if workflowName == "" {
-		return "", fmt.Errorf("workflow parameter is required")
+		return "", agenterrors.NewValidation("workflow parameter is required", nil)
 	}
 
 	// Resolve the automate directory
@@ -77,7 +78,7 @@ func handleRunAutomate(ctx context.Context, a *Agent, args map[string]interface{
 	// Resolve the sprout binary
 	execPath, err := os.Executable()
 	if err != nil {
-		return "", fmt.Errorf("failed to resolve sprout binary: %w", err)
+		return "", agenterrors.NewTool("automate", "failed to resolve sprout binary", err)
 	}
 
 	// Build the command — filename is validated by the shared automate
@@ -99,7 +100,7 @@ func handleRunAutomate(ctx context.Context, a *Agent, args map[string]interface{
 
 	sessionID, err := bpm.StartWithOptions(ctx, cmdStr, "", "automate", &tools.StartOptions{EventBus: a.eventBus})
 	if err != nil {
-		return "", fmt.Errorf("failed to start workflow: %w", err)
+		return "", agenterrors.NewTool("automate", "failed to start workflow", err)
 	}
 
 	// Write PID file for cross-process discoverability.
@@ -173,7 +174,7 @@ func handleListAutomateWorkflows(ctx context.Context, a *Agent, args map[string]
 		if automate.IsNotExists(err) {
 			return "No automate/ directory found. Activate the workflow-automation skill to create one.", nil
 		}
-		return "", fmt.Errorf("failed to scan %s: %w", dir, err)
+		return "", agenterrors.Wrapf(err, "failed to scan %s", dir)
 	}
 
 	if len(workflows) == 0 {
@@ -301,7 +302,7 @@ func writeAutomatePIDFile(sessionID string, bpm *tools.BackgroundProcessManager,
 	// Resolve sprout directory
 	wd, err := os.Getwd()
 	if err != nil {
-		return fmt.Errorf("get working directory: %w", err)
+		return agenterrors.NewTool("automate", "get working directory", err)
 	}
 	sproutDir := filepath.Join(wd, ".sprout")
 

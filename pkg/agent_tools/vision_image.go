@@ -426,24 +426,13 @@ func AnalyzeImage(ctx context.Context, imagePath string, analysisPrompt string, 
 
 	analysis, err := processor.AnalyzeImage(ctx, imagePath, prompt)
 	if err != nil {
-		errMsg := err.Error()
-
-		if strings.Contains(errMsg, "get image data") || strings.Contains(errMsg, "download image") {
-			if inputType == "remote_url" {
-				response.ErrorCode = ErrCodeRemoteFetchFailed
-				response.ErrorMessage = fmt.Sprintf("fetch image from remote URL: %v", err)
-			} else {
-				response.ErrorCode = ErrCodeLocalFileNotFound
-				response.ErrorMessage = fmt.Sprintf("read local file: %v", err)
-			}
-		} else if strings.Contains(errMsg, "no response from vision model") {
-			response.ErrorCode = ErrCodeInvalidResponse
-			response.ErrorMessage = "vision model returned empty response"
-		} else {
-			response.ErrorCode = ErrCodeVisionRequestFailed
-			response.ErrorMessage = fmt.Sprintf("vision analysis: %v", err)
-		}
-
+		// SP-103-A6: typed-error → ErrCode translation; falls back to the
+		// legacy strings.Contains classifier when no *TypedError is in
+		// the chain.
+		response.Success = false
+		response.InputResolved = true
+		response.OCRAttempted = true
+		applyClassifiedError(&response, err, inputType, "vision analysis")
 		respJSON, _ := json.Marshal(response)
 		return string(respJSON), nil
 	}

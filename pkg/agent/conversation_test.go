@@ -1,6 +1,10 @@
 package agent
 
 import (
+	"bytes"
+	"image"
+	"image/jpeg"
+	"image/png"
 	"strings"
 	"testing"
 
@@ -364,5 +368,165 @@ func TestBuildNonVisionImageToolPrompt(t *testing.T) {
 	}
 	if !strings.Contains(prompt, "what is this?") {
 		t.Error("expected original query in prompt")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// resizeImageForVisionEmbed tests
+// ---------------------------------------------------------------------------
+
+func encodePNG(t *testing.T, img image.Image) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatalf("encode PNG: %v", err)
+	}
+	return buf.Bytes()
+}
+
+func decodePNG(t *testing.T, data []byte) image.Image {
+	t.Helper()
+	img, err := png.Decode(bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("decode PNG: %v", err)
+	}
+	return img
+}
+
+func decodeJPEG(t *testing.T, data []byte) image.Image {
+	t.Helper()
+	img, err := jpeg.Decode(bytes.NewReader(data))
+	if err != nil {
+		t.Fatalf("decode JPEG: %v", err)
+	}
+	return img
+}
+
+func TestResizeImageForVisionEmbed_NoOpSmall(t *testing.T) {
+	// 400x300 PNG — well under 1568px on the long edge.
+	img := image.NewRGBA(image.Rect(0, 0, 400, 300))
+	data := encodePNG(t, img)
+
+	got, err := resizeImageForVisionEmbed(data)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !bytes.Equal(got, data) {
+		t.Errorf("small image should pass through unchanged: got %d bytes, want %d", len(got), len(data))
+	}
+}
+
+func TestResizeImageForVisionEmbed_ExactlyAtLimit(t *testing.T) {
+	// 1568x1568 — exactly at the limit, should be a no-op.
+	img := image.NewRGBA(image.Rect(0, 0, 1568, 1568))
+	data := encodePNG(t, img)
+
+	got, err := resizeImageForVisionEmbed(data)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !bytes.Equal(got, data) {
+		t.Errorf("image at limit should pass through unchanged: got %d bytes, want %d", len(got), len(data))
+	}
+}
+
+func TestResizeImageForVisionEmbed_ResizesLarge(t *testing.T) {
+	// 2400x1800 PNG — long edge 2400 > 1568, should resize to 1568x1176.
+	w, h := 2400, 1800
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	data := encodePNG(t, img)
+
+	got, err := resizeImageForVisionEmbed(data)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Result should be JPEG now.
+	resized := decodeJPEG(t, got)
+	bounds := resized.Bounds()
+	gotW, gotH := bounds.Dx(), bounds.Dy()
+
+	wantW := 1568
+	wantH := 1176 // 1800 * 1568 / 2400 = 1176
+	if gotW != wantW {
+		t.Errorf("width: got %d, want %d", gotW, wantW)
+	}
+	if gotH != wantH {
+		t.Errorf("height: got %d, want %d", gotH, wantH)
+	}
+}
+
+func TestResizeImageForVisionEmbed_PreservesAspect(t *testing.T) {
+	// 1000x2500 — tall image, long edge 2500 > 1568.
+	// Expected: 627x1568 (1000 * 1568 / 2500 = 627.2 → 627).
+	w, h := 1000, 2500
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	data := encodePNG(t, img)
+
+	got, err := resizeImageForVisionEmbed(data)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	resized := decodeJPEG(t, got)
+	bounds := resized.Bounds()
+	gotW, gotH := bounds.Dx(), bounds.Dy()
+
+	wantW := 627 // 1000 * 1568 / 2500 = 627.2 → 627
+	wantH := 1568
+	if gotW != wantW {
+		t.Errorf("width: got %d, want %d", gotW, wantW)
+	}
+	if gotH != wantH {
+		t.Errorf("height: got %d, want %d", gotH, wantH)
+	}
+
+	// Aspect ratio should be preserved (within rounding tolerance).
+	origAspect := float64(w) / float64(h)
+	newAspect := float64(gotW) / float64(gotH)
+	diff := origAspect - newAspect
+	if diff < 0 {
+		diff = -diff
+	}
+	if diff > 0.01 {
+		t.Errorf("aspect ratio drift: orig %.4f, new %.4f (diff %.4f)", origAspect, newAspect, diff)
+	}
+}
+
+func TestResizeImageForVisionEmbed_Undecodable(t *testing.T) {
+	// Garbage bytes — should pass through unchanged (no error, same bytes).
+	garbage := []byte{0x00, 0x01, 0x02, 0x03, 0xFF, 0xFE, 0xFD, 0xFC, 0xFB, 0xFA}
+	got, err := resizeImageForVisionEmbed(garbage)
+	if err != nil {
+		t.Logf("error returned (acceptable): %v", err)
+	}
+	if !bytes.Equal(got, garbage) {
+		t.Errorf("undecodable data should pass through unchanged: got %d bytes, want %d", len(got), len(garbage))
+	}
+}
+
+func TestResizeImageForVisionEmbed_WideImage(t *testing.T) {
+	// 3000x800 — wide image, long edge 3000 > 1568.
+	// Expected: 1568x426 (800 * 1568 / 3000 = 418.13 → 418).
+	w, h := 3000, 800
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	data := encodePNG(t, img)
+
+	got, err := resizeImageForVisionEmbed(data)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	resized := decodeJPEG(t, got)
+	bounds := resized.Bounds()
+	gotW, gotH := bounds.Dx(), bounds.Dy()
+
+	wantW := 1568
+	wantH := 418 // 800 * 1568 / 3000 = 418.13 → 418
+	if gotW != wantW {
+		t.Errorf("width: got %d, want %d", gotW, wantW)
+	}
+	if gotH != wantH {
+		t.Errorf("height: got %d, want %d", gotH, wantH)
 	}
 }

@@ -127,11 +127,11 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions, parentCtx context.
 
 	// Inherit the parent's TerminalManager. Without this, subagents (and
 	// recursively their own subagents) try to call shell_command with
-	// background=true / check_background / stop_background and fail with
-	// "background mode requires WebUI terminal manager" even though the
-	// root agent has a TerminalManager attached. The TerminalManager is
-	// process-scoped (one per WebUI server); chat IDs route work to the
-	// right session pool, so direct inheritance by reference is correct.
+	// background=true / check_background / stop_background and fail because
+	// no TerminalManager or BackgroundProcessManager is attached, even though
+	// the root agent has one. The TerminalManager is process-scoped (one per
+	// WebUI server); chat IDs route work to the right session pool, so direct
+	// inheritance by reference is correct.
 	if r.parentAgent != nil {
 		if tm := r.parentAgent.GetTerminalManager(); tm != nil {
 			agent.terminalManager = tm

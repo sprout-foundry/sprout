@@ -88,22 +88,47 @@ func ResolvePDFInputPath(ctx context.Context, inputPath string) (string, func(),
 }
 
 func downloadRemotePDFToTemp(ctx context.Context, url string) (string, func(), error) {
+	// Pre-flight size check: bail before reading the body if Content-Length
+	// exceeds the 60MB PDF cap. Falls back to streaming + io.LimitReader
+	// when Content-Length is missing.
+	if preErr := preflightRemoteSize(ctx, url, visionMaxRemotePDFFileSizeBytes); preErr != nil {
+		return "", func() {}, preErr
+	}
+
 	client := &http.Client{Timeout: 30 * time.Second}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+
+	var data []byte
+	err := DoVisionRetry(ctx, func(ctx context.Context) error {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		if err != nil {
+			return fmt.Errorf("create PDF download request: %w", err)
+		}
+		resp, err := client.Do(req)
+		if err != nil {
+			return fmt.Errorf("download PDF: %w", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			// Surface Retry-After for 429/503 and other 5xx.
+			if resp.StatusCode == 429 || resp.StatusCode == 503 || resp.StatusCode >= 500 {
+				return &RetryableHTTPError{
+					StatusCode: resp.StatusCode,
+					Status:     resp.Status,
+					Method:     req.Method,
+					URL:        url,
+					RetryAfter: parseRetryAfter(resp.Header.Get("Retry-After")),
+				}
+			}
+			return fmt.Errorf("download PDF: status %d", resp.StatusCode)
+		}
+		data, err = io.ReadAll(io.LimitReader(resp.Body, 60*1024*1024))
+		if err != nil {
+			return fmt.Errorf("read downloaded PDF bytes: %w", err)
+		}
+		return nil
+	}, RetryOptions{OpName: "download_pdf"})
 	if err != nil {
-		return "", func() {}, fmt.Errorf("create PDF download request: %w", err)
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", func() {}, fmt.Errorf("download PDF: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return "", func() {}, fmt.Errorf("download PDF: status %d", resp.StatusCode)
-	}
-	data, err := io.ReadAll(io.LimitReader(resp.Body, 60*1024*1024))
-	if err != nil {
-		return "", func() {}, fmt.Errorf("read downloaded PDF bytes: %w", err)
+		return "", func() {}, err
 	}
 	if len(data) == 0 {
 		return "", func() {}, fmt.Errorf("downloaded PDF is empty")
@@ -190,55 +215,11 @@ func processPDFWithOCR(ctx context.Context, pdfPath, pythonExec string, client a
 	return text, nil
 }
 
+// processOCRImages is the entry point for OCR processing. It keeps the
+// existing 4-arg signature for backward compatibility (used by tests in
+// other packages) and delegates to the parallel implementation.
 func processOCRImages(ctx context.Context, images [][]byte, client api.ClientInterface, sectionLabel string) (string, error) {
-	var allText strings.Builder
-	failures := 0
-	for i, imgData := range images {
-		imagePathHint := fmt.Sprintf("pdf_%s_%d.png", strings.ToLower(sectionLabel), i+1)
-		preparedData := imgData
-		imgType := detectImageMimeType(imagePathHint)
-		optimizedData, optimizedMimeType, optErr := OptimizeImageData(imagePathHint, preparedData)
-		if optErr == nil && len(optimizedData) > 0 {
-			preparedData = optimizedData
-			if optimizedMimeType != "" {
-				imgType = optimizedMimeType
-			}
-		}
-		if len(preparedData) > visionMaxImageFileSizeBytes {
-			failures++
-			if failures >= 2 {
-				break
-			}
-			continue
-		}
-		imgBase64 := base64.StdEncoding.EncodeToString(preparedData)
-		prompt := GetOCRPrompt()
-		messages := []api.Message{
-			{Role: "user", Content: prompt, Images: []api.ImageData{{Base64: imgBase64, Type: imgType}}},
-		}
-		response, err := client.SendVisionRequest(ctx, messages, nil, "", false)
-		if err != nil {
-			failures++
-			if failures >= 2 {
-				break
-			}
-			continue
-		}
-		if len(response.Choices) > 0 && response.Choices[0].Message.Content != "" {
-			if allText.Len() > 0 {
-				allText.WriteString("\n\n--- ")
-				allText.WriteString(sectionLabel)
-				allText.WriteString(" ")
-				allText.WriteString(fmt.Sprintf("%d", i+1))
-				allText.WriteString(" ---\n\n")
-			}
-			allText.WriteString(response.Choices[0].Message.Content)
-		}
-	}
-	if allText.Len() == 0 {
-		return "", fmt.Errorf("OCR failed for all extracted %ss", strings.ToLower(sectionLabel))
-	}
-	return allText.String(), nil
+	return processOCRImagesParallel(ctx, images, client, sectionLabel, nil)
 }
 
 func extractPageImagesFromPDF(ctx context.Context, pdfPath, pythonExec string) ([][]byte, error) {

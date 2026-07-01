@@ -1,23 +1,26 @@
 package console
 
 import (
-	"fmt"
 	"testing"
 )
+
+// traceMu and safePrintf live in assistant_turn_renderer_test.go so
+// they share a single serialization point with captureRendererStdout.
+// (We can't have both files define the same package var.)
 
 // Trace through what happens when ESC is followed by 'a'
 func TestTraceEscThenLetter(t *testing.T) {
 	ep := NewEscapeParser()
 
 	// ESC (27)
-	fmt.Printf("After ESC: state=%d\n", ep.state)
+	safePrintf("After ESC: state=%d\n", ep.state)
 	event := ep.Parse(27)
-	fmt.Printf("  event=%v, state=%d\n", event, ep.state)
+	safePrintf("  event=%v, state=%d\n", event, ep.state)
 
 	// 'a' (97)
-	fmt.Printf("After 'a': state=%d\n", ep.state)
+	safePrintf("After 'a': state=%d\n", ep.state)
 	event = ep.Parse(97)
-	fmt.Printf("  event=%v, state=%d\n", event, ep.state)
+	safePrintf("  event=%v, state=%d\n", event, ep.state)
 }
 
 // Trace through partial escape sequence then regular character
@@ -26,14 +29,14 @@ func TestTracePartialEscSeqThenLetter(t *testing.T) {
 
 	// ESC [ (27, 91)
 	event := ep.Parse(27)
-	fmt.Printf("After ESC: event=%v, state=%d\n", event, ep.state)
+	safePrintf("After ESC: event=%v, state=%d\n", event, ep.state)
 
 	event = ep.Parse('[')
-	fmt.Printf("After '[': event=%v, state=%d\n", event, ep.state)
+	safePrintf("After '[': event=%v, state=%d\n", event, ep.state)
 
 	// Now 'x' which is not a terminator for state 2
 	event = ep.Parse('x')
-	fmt.Printf("After 'x': event=%v, state=%d\n", event, ep.state)
+	safePrintf("After 'x': event=%v, state=%d\n", event, ep.state)
 
 	// The 'x' would be lost because in state 2, it doesn't match any terminator
 	// and falls through to return nil

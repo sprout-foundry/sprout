@@ -2,8 +2,8 @@ package tools
 
 import (
 	"context"
-	"fmt"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
@@ -68,7 +68,7 @@ func (h *analyzeUIScreenshotHandler) Execute(ctx context.Context, env ToolEnv, a
 		return ToolResult{
 			Output:  "HTML content requires a browser for rendering. Please provide a screenshot image file instead.",
 			IsError: true,
-		}, fmt.Errorf("html content requires browser rendering")
+		}, agenterrors.NewTool("analyze_ui_screenshot", "html content requires browser rendering", nil)
 	}
 
 	result, err := AnalyzeImage(ctx, imagePath, analysisPrompt, visionModeFrontend)

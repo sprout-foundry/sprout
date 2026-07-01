@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
@@ -37,7 +38,7 @@ func (h *taskQueuePublishHandler) Validate(args map[string]any) error {
 	}
 	status, _ := extractString(args, "status")
 	if !validStatuses[status] {
-		return fmt.Errorf("parameter 'status' must be one of: pending, in_progress, completed, failed, blocked, got %q", status)
+		return agenterrors.NewValidation(fmt.Sprintf("parameter 'status' must be one of: pending, in_progress, completed, failed, blocked, got %q", status), nil)
 	}
 	return nil
 }

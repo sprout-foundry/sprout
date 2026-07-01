@@ -20,6 +20,7 @@
 // bundle. The actual InferenceSession/Tensor constructors load on first
 // use via loadOnnxRuntime() below.
 import type { InferenceSession, Tensor } from 'onnxruntime-web';
+import { loadOnnxRuntimeWeb, isOnnxRuntimeWebLoaded } from './onnxruntimeWebLoader';
 
 let onnxModulePromise: Promise<typeof import('onnxruntime-web')> | null = null;
 async function loadOnnxRuntime(): Promise<typeof import('onnxruntime-web')> {
@@ -581,6 +582,15 @@ export class BrowserONNXProvider {
       opts.externalData = [{ path: basename, data: dataBytes }];
     }
 
+    // Ensure the onnxruntime-web CDN script is loaded before using the
+    // dynamic import below. loadOnnxRuntimeWeb() injects a <script> tag
+    // that populates window.ort; loadOnnxRuntime() then does `import('onnxruntime-web')`
+    // for the typed module API. If the CDN script is already present (static
+    // backend path), loadOnnxRuntimeWeb() returns immediately.
+    if (!isOnnxRuntimeWebLoaded()) {
+      await loadOnnxRuntimeWeb();
+    }
+
     const ort = await loadOnnxRuntime();
     this.session = await ort.InferenceSession.create(modelBytes, opts as InferenceSession.SessionOptions);
   }
@@ -623,8 +633,11 @@ export class BrowserONNXProvider {
       }
     }
 
-    // loadOnnxRuntime() returns the cached promise after the first call,
-    // so this awaits the already-resolved module (no extra network).
+    // Defensive: runInference could be reached directly without initialize()
+    // in custom bridges. loadOnnxRuntimeWeb is a no-op if already loaded.
+    if (!isOnnxRuntimeWebLoaded()) {
+      await loadOnnxRuntimeWeb();
+    }
     const ort = await loadOnnxRuntime();
     const inputIdsTensor = new ort.Tensor('int64', inputIdsData, [batchSize, maxLen]);
     const attentionTensor = new ort.Tensor('int64', attentionData, [batchSize, maxLen]);

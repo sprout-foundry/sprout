@@ -46,9 +46,12 @@ jobs:
         run: go run ./cmd/sync_provider_configs --registry-dir=models
 
       - name: Enrich new models with capability probes
-        # Probes only NEW + eligible + within-budget models (vs the live
-        # registry), capped at --max-probes, so the daily inference spend stays
-        # small. Prior probe results are carried forward for known models.
+        # Probes only NEW + within-budget models (vs the live
+        # registry), capped at --max-probes with fair-share allocation
+        # across providers (each gets at least 5 probes minimum).
+        # --from-embedded-configs falls back to embedded provider configs
+        # for providers without a canonical models/<id>.json file (e.g.,
+        # providers whose API key is not available in CI).
         env:
           LEDIT_MODEL_REGISTRY_URL: "disabled"
           SPROUT_MODEL_REGISTRY_URL: "disabled"
@@ -62,7 +65,7 @@ jobs:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
           OLLAMA_API_KEY: ${{ secrets.OLLAMA_API_KEY }}
-        run: go run ./cmd/enrich_registry --registry-dir=models --max-probe-cost=0.10 --max-probes=50
+        run: go run ./cmd/enrich_registry --registry-dir=models --max-probe-cost=0.10 --max-probes=50 --from-embedded-configs=pkg/agent_providers/configs
 
       - name: Generate model index
         run: bash scripts/generate-model-index.sh models/models

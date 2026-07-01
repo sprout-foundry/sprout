@@ -873,7 +873,7 @@ string-matching.
 
 ### Pre-SP-095 cleanup (test isolation + subagent routing)
 
-- [ ] **SP-094-7: Fix state-leak in `cmd/` tests.** Some test in
+- [x] **SP-094-7: Fix state-leak in `cmd/` tests.** Some test in
   `cmd/*_test.go` builds an `Agent` without using
   `SetTestStateDirHook(t)` or `NewTestStateDir(t)`, causing
   `pkg/agent/persistence.go:31` to call
@@ -886,6 +886,21 @@ string-matching.
   `go test ./cmd/ -count=1 -v 2>&1 | grep -B 5 'leaked into real state'`
   and add the appropriate hook. Document the pattern in
   `pkg/agent/testing_isolation.go` so future test authors know.
+
+  _Shipped (commit 62392282): The leak had two root causes: (1)
+  `pkg/agent/persistence.go::init()` wires `search.GlobalUpdater`
+  to the real path at package load time, before `cmd/main_test.go`
+  can install the hook — fixed by adding
+  `search.ResetGlobalUpdaterForTest()` +
+  `search.InitGlobalUpdater(testSessionsDir, ...)` to
+  `cmd/main_test.go` and restoring the original on exit. (2)
+  `AssertNoStateLeak` had false-positive triggers on pre-existing
+  files in the developer's real state dir whose mtime happened to
+  be > the snapshot mtime — tightened the detector to flag only
+  files modified within the run window (now → -1 minute).
+  Added 4 detector unit tests in
+  `testing_state_isolation_test.go`. All `pkg/agent` + `cmd` tests
+  pass; build green._
 
 - [ ] **SP-094-8: Route steer / queue messages to the primary agent.**
   When a user is steering or queuing while a subagent is mid-execution

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	modelsettings "github.com/sprout-foundry/sprout/pkg/model_settings"
 	"github.com/sprout-foundry/sprout/pkg/secretdetect"
 	"github.com/sprout-foundry/sprout/pkg/utils"
@@ -17,7 +18,7 @@ import (
 // buildChatRequest builds the request body for chat completion
 func (p *GenericProvider) buildChatRequest(messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool, stream bool) ([]byte, error) {
 	if err := p.ensureModel(); err != nil {
-		return nil, fmt.Errorf("ensure model: %w", err)
+		return nil, agenterrors.NewNetwork("ensure model", err)
 	}
 
 	// Convert messages according to provider configuration
@@ -249,10 +250,13 @@ func (p *GenericProvider) ensureModel() error {
 
 	models, err := p.ListModels(context.Background())
 	if err != nil {
-		return fmt.Errorf("failed to discover models for provider %s: %w", p.config.Name, err)
+		return agenterrors.NewNetwork(fmt.Sprintf("failed to discover models for provider %s", p.config.Name), err)
 	}
 	if len(models) == 0 || strings.TrimSpace(models[0].ID) == "" {
-		return fmt.Errorf("provider %s did not return any models", p.config.Name)
+	// NOTE: Kept as fmt.Errorf — test TestGenericProviderErrorsWhenNoModelConfiguredOrDiscoverable
+	// asserts strings.Contains(err.Error(), "did not return any models") which would break
+	// with NewNotFound's auto-appended " not found" suffix
+	return fmt.Errorf("provider %s did not return any models", p.config.Name)
 	}
 
 	p.model = strings.TrimSpace(models[0].ID)
@@ -289,7 +293,7 @@ func shouldRetryWithMaxCompletionTokens(errBody []byte) bool {
 func rewriteMaxTokensToMaxCompletionTokens(requestBody []byte) ([]byte, bool, error) {
 	var payload map[string]interface{}
 	if err := json.Unmarshal(requestBody, &payload); err != nil {
-		return nil, false, fmt.Errorf("parse request body: %w", err)
+		return nil, false, agenterrors.NewValidation(fmt.Sprintf("parse request body: %v", err), nil)
 	}
 
 	maxTokens, hasMaxTokens := payload["max_tokens"]
@@ -305,7 +309,7 @@ func rewriteMaxTokensToMaxCompletionTokens(requestBody []byte) ([]byte, bool, er
 
 	updated, err := json.Marshal(payload)
 	if err != nil {
-		return nil, false, fmt.Errorf("marshal updated request body: %w", err)
+		return nil, false, agenterrors.NewValidation(fmt.Sprintf("marshal updated request body: %v", err), nil)
 	}
 	return updated, true, nil
 }
@@ -336,7 +340,7 @@ func (p *GenericProvider) buildHTTPRequestCtx(ctx context.Context, body []byte, 
 
 	req, err := http.NewRequestWithContext(ctx, "POST", p.config.Endpoint, bytes.NewReader(body))
 	if err != nil {
-		return nil, fmt.Errorf("get model context limit: %w", err)
+		return nil, agenterrors.NewNetwork("failed to build HTTP request", err)
 	}
 
 	// Check if authentication is needed
@@ -351,7 +355,7 @@ func (p *GenericProvider) buildHTTPRequestCtx(ctx context.Context, body []byte, 
 		var authErr error
 		token, authErr = p.config.GetAuthToken()
 		if authErr != nil {
-			return nil, fmt.Errorf("authentication failed: %w", authErr)
+			return nil, agenterrors.Wrap(authErr, "authentication failed")
 		}
 	}
 

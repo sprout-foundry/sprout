@@ -11,6 +11,7 @@ import (
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/credentials"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 //go:embed configs/*.json
@@ -36,17 +37,17 @@ func NewProviderFactory() *ProviderFactory {
 // LoadConfigsFromDirectory loads all provider configurations from a directory
 func (f *ProviderFactory) LoadConfigsFromDirectory(configDir string) error {
 	if _, err := os.Stat(configDir); os.IsNotExist(err) {
-		return fmt.Errorf("config directory does not exist: %s", configDir)
+		return agenterrors.NewConfig(fmt.Sprintf("config directory does not exist: %s", configDir), nil)
 	}
 
 	files, err := filepath.Glob(filepath.Join(configDir, "*.json"))
 	if err != nil {
-		return fmt.Errorf("failed to glob config files: %w", err)
+		return agenterrors.NewConfig("failed to glob config files", err)
 	}
 
 	for _, file := range files {
 		if err := f.LoadConfigFromFile(file); err != nil {
-			return fmt.Errorf("failed to load config from %s: %w", file, err)
+			return agenterrors.NewConfig(fmt.Sprintf("failed to load config from %s", file), err)
 		}
 	}
 
@@ -57,7 +58,7 @@ func (f *ProviderFactory) LoadConfigsFromDirectory(configDir string) error {
 func (f *ProviderFactory) LoadEmbeddedConfigs() error {
 	entries, err := embeddedConfigs.ReadDir("configs")
 	if err != nil {
-		return fmt.Errorf("failed to read embedded configs directory: %w", err)
+		return agenterrors.NewConfig("failed to read embedded configs directory", err)
 	}
 
 	for _, entry := range entries {
@@ -68,11 +69,11 @@ func (f *ProviderFactory) LoadEmbeddedConfigs() error {
 		filename := filepath.Join("configs", entry.Name())
 		data, err := embeddedConfigs.ReadFile(filename)
 		if err != nil {
-			return fmt.Errorf("failed to read embedded config file %s: %w", filename, err)
+			return agenterrors.NewConfig(fmt.Sprintf("failed to read embedded config file %s", filename), err)
 		}
 
 		if err := f.LoadConfigFromBytes(data); err != nil {
-			return fmt.Errorf("failed to load embedded config from %s: %w", filename, err)
+			return agenterrors.NewConfig(fmt.Sprintf("failed to load embedded config from %s", filename), err)
 		}
 	}
 
@@ -86,7 +87,7 @@ func (f *ProviderFactory) LoadEmbeddedConfigs() error {
 func (f *ProviderFactory) loadConfigFromBytesUnlocked(data []byte, nameFallback string) error {
 	var config ProviderConfig
 	if err := json.Unmarshal(data, &config); err != nil {
-		return fmt.Errorf("failed to unmarshal config: %w", err)
+		return agenterrors.NewConfig("failed to unmarshal config", err)
 	}
 
 	if config.Name == "" && nameFallback != "" {
@@ -94,7 +95,7 @@ func (f *ProviderFactory) loadConfigFromBytesUnlocked(data []byte, nameFallback 
 	}
 
 	if err := config.Validate(); err != nil {
-		return fmt.Errorf("invalid config: %w", err)
+		return agenterrors.NewValidation(fmt.Sprintf("invalid config: %v", err), nil)
 	}
 
 	f.configs[config.Name] = &config
@@ -107,7 +108,7 @@ func (f *ProviderFactory) loadConfigFromBytesUnlocked(data []byte, nameFallback 
 func (f *ProviderFactory) LoadConfigFromFile(filename string) error {
 	data, err := os.ReadFile(filename)
 	if err != nil {
-		return fmt.Errorf("failed to read config file: %w", err)
+		return agenterrors.NewConfig("failed to read config file", err)
 	}
 
 	nameFallback := ""
@@ -136,7 +137,7 @@ func (f *ProviderFactory) CreateProvider(name string) (api.ClientInterface, erro
 	config, exists := f.configs[name]
 	if !exists {
 		f.mu.RUnlock()
-		return nil, fmt.Errorf("provider config not found: %s", name)
+		return nil, agenterrors.NewNotFound(name)
 	}
 
 	// Make a copy so we don't mutate the stored config.
@@ -161,13 +162,13 @@ func (f *ProviderFactory) CreateProvider(name string) (api.ClientInterface, erro
 func (f *ProviderFactory) CreateProviderWithModel(name, model string) (api.ClientInterface, error) {
 	provider, err := f.CreateProvider(name)
 	if err != nil {
-		return nil, fmt.Errorf("load embedded provider config: %w", err)
+		return nil, agenterrors.NewConfig(fmt.Sprintf("load embedded provider config"), err)
 	}
 
 	// Only set model if it's not empty - otherwise use the default model from config
 	if model != "" {
 		if err := provider.SetModel(model); err != nil {
-			return nil, fmt.Errorf("failed to set model %s: %w", model, err)
+			return nil, agenterrors.NewNetwork(fmt.Sprintf("failed to set model %s", model), err)
 		}
 	}
 
@@ -195,7 +196,7 @@ func (f *ProviderFactory) GetProviderConfig(name string) (*ProviderConfig, error
 
 	config, exists := f.configs[name]
 	if !exists {
-		return nil, fmt.Errorf("provider config not found: %s", name)
+		return nil, agenterrors.NewNotFound(name)
 	}
 	cfgCopy := *config
 	return &cfgCopy, nil
@@ -246,7 +247,7 @@ func (f *ProviderFactory) ValidateProvider(providerName, modelName string) error
 
 	config, exists := f.configs[providerName]
 	if !exists {
-		return fmt.Errorf("provider not found: %s", providerName)
+		return agenterrors.NewNotFound(providerName)
 	}
 
 	// Check if model is in available models list (if specified)
@@ -259,7 +260,7 @@ func (f *ProviderFactory) ValidateProvider(providerName, modelName string) error
 			}
 		}
 		if !found {
-			return fmt.Errorf("model %s not available for provider %s", modelName, providerName)
+			return agenterrors.NewValidation(fmt.Sprintf("model %s not available for provider %s", modelName, providerName), nil)
 		}
 	}
 
@@ -322,7 +323,7 @@ func (f *ProviderFactory) UpsertConfig(name string, cfg *ProviderConfig) error {
 	configCopy.Name = name
 
 	if err := configCopy.Validate(); err != nil {
-		return fmt.Errorf("invalid provider config %q: %w", name, err)
+		return agenterrors.NewValidation(fmt.Sprintf("invalid provider config %q: %v", name, err), nil)
 	}
 
 	f.mu.Lock()
@@ -342,7 +343,7 @@ func (f *ProviderFactory) ReloadConfig(filename string) error {
 
 	data, err := os.ReadFile(filename)
 	if err != nil {
-		return fmt.Errorf("failed to read config file: %w", err)
+		return agenterrors.NewConfig("failed to read config file", err)
 	}
 
 	f.mu.Lock()

@@ -41,7 +41,19 @@ func NewJSEmbeddingAPI() {
 		if len(args) < 1 {
 			return errors.New("setMode: missing mode argument")
 		}
-		SetEmbeddingMode(EmbeddingMode(args[0].String()))
+		newMode := EmbeddingMode(args[0].String())
+		SetEmbeddingMode(newMode)
+
+		// When switching to ONNX mode, trigger lazy-load of
+		// onnxruntime-web from the CDN. The JS global is a
+		// fire-and-forget callback; errors are logged on the JS side.
+		if newMode == ModeONNX {
+			loader := js.Global().Get("__sproutLoadOnnxRuntime")
+			if !loader.IsUndefined() && !loader.IsNull() && loader.Type() == js.TypeFunction {
+				loader.Invoke()
+			}
+		}
+
 		return nil
 	})
 	wrapped["currentMode"] = js.FuncOf(func(_ js.Value, _ []js.Value) interface{} {

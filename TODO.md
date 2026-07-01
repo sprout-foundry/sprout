@@ -488,7 +488,7 @@ cuts repeat-turn image cost by 90% on cache hits.
       for insufficient balance) is unrelated to this change. Build
       green; all non-ZAI unit tests pass._
 
-- [ ] **SP-103-B2:** Pre-resize images before embedding. Current code
+- [x] **SP-103-B2:** Pre-resize images before embedding. Current code
       caps at `visionMaxImageFileSizeBytes` but doesn't constrain
       dimensions. A 4K screenshot costs 4784 visual tokens on
       high-resolution-tier models vs. 1560 on standard tier — ~3× the
@@ -502,7 +502,7 @@ cuts repeat-turn image cost by 90% on cache hits.
       `vision_image.go`. Hook from `processImagesAsMultimodal` before
       the image goes into the message._
 
-- [ ] **SP-103-B3:** Image-then-text ordering. Anthropic docs:
+- [x] **SP-103-B3:** Image-then-text ordering. Anthropic docs:
       "Claude works best when images come before text." Currently the
       image blocks are appended after the text placeholder. Reorder
       so the image blocks come first in the user message content

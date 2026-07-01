@@ -22,8 +22,12 @@ func BrowseURL(url string, opts BrowseOptions) (string, error) {
 		return "", fmt.Errorf("URL cannot be empty")
 	}
 	lower := strings.ToLower(url)
-	if !strings.HasPrefix(lower, "http://") && !strings.HasPrefix(lower, "https://") {
-		return "", fmt.Errorf("URL must start with http:// or https://, got: %s", url)
+	isFile := strings.HasPrefix(lower, "file://")
+	if !isFile && !strings.HasPrefix(lower, "http://") && !strings.HasPrefix(lower, "https://") {
+		return "", fmt.Errorf("URL must start with http://, https://, or file:// (with allow_file_url=true), got: %s", url)
+	}
+	if isFile && !opts.AllowFileURL {
+		return "", fmt.Errorf("file:// URLs require allow_file_url=true")
 	}
 
 	ctx := effectiveCtx(opts)
@@ -94,6 +98,9 @@ func hasAdvancedBrowseOptions(opts BrowseOptions) bool {
 		opts.CloseSession ||
 		len(opts.Steps) > 0 ||
 		len(opts.CaptureSelectors) > 0 ||
+		len(opts.Cookies) > 0 ||
+		len(opts.Headers) > 0 ||
+		opts.AllowFileURL ||
 		opts.CaptureDOM ||
 		opts.CaptureText ||
 		opts.IncludeConsole ||

@@ -43,6 +43,12 @@ func (m *mockClient) GetProvider() string                                 { retu
 func (m *mockClient) GetModelContextLimit() (int, error)                  { return 128000, nil }
 func (m *mockClient) ListModels(ctx context.Context) ([]ModelInfo, error) { return nil, nil }
 func (m *mockClient) SupportsVision() bool                                { return false }
+
+// SupportsConversationalVision reports whether inline multimodal turns
+// should embed the image. Defaults to false; overridden per client.
+func (m *mockClient) SupportsConversationalVision() bool {
+	return false
+}
 func (m *mockClient) GetVisionModel() string                              { return "" }
 func (m *mockClient) SendVisionRequest(ctx context.Context, messages []Message, tools []Tool, reasoning string, disableThinking bool) (*ChatResponse, error) {
 	return &ChatResponse{

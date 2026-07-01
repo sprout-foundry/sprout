@@ -76,6 +76,12 @@ func (m *mockProvider) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	return m.models, m.modelsErr
 }
 func (m *mockProvider) SupportsVision() bool { return m.supportsVision }
+
+// SupportsConversationalVision reports whether inline multimodal turns
+// should embed the image. Defaults to false; overridden per client.
+func (m *mockProvider) SupportsConversationalVision() bool {
+	return false
+}
 func (m *mockProvider) SendVisionRequest(ctx context.Context, messages []Message, tools []Tool, reasoning string, disableThinking bool) (*ChatResponse, error) {
 	if m.sendVisionFunc != nil {
 		return m.sendVisionFunc(messages, tools, reasoning, disableThinking)

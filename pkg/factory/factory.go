@@ -93,6 +93,12 @@ func (t *TestClient) SupportsVision() bool {
 	return false
 }
 
+// SupportsConversationalVision returns false; the test client never
+// participates in inline multimodal turns.
+func (t *TestClient) SupportsConversationalVision() bool {
+	return false
+}
+
 func (t *TestClient) GetVisionModel() string {
 	return ""
 }

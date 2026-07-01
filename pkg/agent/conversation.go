@@ -291,15 +291,48 @@ func (a *Agent) processImagesInQuery(query string) ([]api.ImageData, string, err
 		return nil, query, nil
 	}
 
-	// Multimodal path: if the active client reports vision capability, send
-	// pasted images as direct image payloads and strip placeholder text.
-	if c := a.getClient(); c != nil && c.SupportsVision() {
+	// Multimodal path: if the active client supports *conversational* vision
+	// (chat models that handle inline image content), embed pasted images
+	// as multimodal content and strip the placeholder text. OCR-only models
+	// (glm-ocr etc.) flow through the tool path below.
+	if c := a.getClient(); c != nil && supportsConversationalVision(c) {
 		return a.processImagesAsMultimodal(query)
 	}
 
-	// Non-multimodal path: keep the original text placeholder in the prompt so
-	// the model can choose OCR/image-analysis tools.
-	return nil, query, nil
+	// Non-multimodal / OCR-only path: rewrite the query to instruct the
+	// model to call analyze_image_content for each pasted image path.
+	// processImagesViaOCR runs the actual vision analysis synchronously and
+	// inlines the resulting text descriptions so non-vision chat models
+	// can answer questions about pasted images.
+	paths := extractPastedImagePaths(query)
+	if len(paths) == 0 {
+		return nil, query, nil
+	}
+
+	if c := a.getClient(); c != nil && c.SupportsVision() {
+		// OCR-only model: keep placeholder text AND run the OCR tool inline
+		// so the chat model gets text descriptions of the images.
+		enhancedQuery, err := a.processImagesViaOCR(query)
+		if err != nil {
+			a.Logger().Debug("[WARN] OCR fallback failed: %v\n", err)
+			return nil, query, nil
+		}
+		return nil, enhancedQuery, nil
+	}
+
+	// Plain non-vision model: hand it the OCR-tool prompt so it can call
+	// analyze_image_content to read images itself.
+	return nil, a.buildNonVisionImageToolPrompt(query, paths), nil
+}
+
+// supportsConversationalVision reports whether the client's vision capability
+// is suitable for inline multimodal chat. Falls back to true when the client
+// doesn't implement SupportsConversationalVision (older or non-Ollama clients).
+func supportsConversationalVision(c api.ClientInterface) bool {
+	if typed, ok := c.(interface{ SupportsConversationalVision() bool }); ok {
+		return typed.SupportsConversationalVision()
+	}
+	return c.SupportsVision()
 }
 
 func extractPastedImagePaths(query string) []string {
@@ -373,10 +406,20 @@ func (a *Agent) processImagesAsMultimodal(query string) ([]api.ImageData, string
 	}
 
 	// Rewrite the query once, replacing every occurrence of each placeholder.
+	// SP-103-B4: when there are multiple images, label each one with a numeric
+	// hint ("[image 1 of 3: foo.png]") so the model can refer to them in
+	// follow-up answers ("see image 2"). For single-image queries we keep
+	// the simpler "[image: foo.png]" form to avoid implying there's more.
 	cleanedQuery := query
-	for _, ph := range placeholders {
+	multi := len(placeholders) > 1
+	for i, ph := range placeholders {
 		fileName := filepath.Base(ph.filePath)
-		replacement := fmt.Sprintf("[image: %s]", fileName)
+		var replacement string
+		if multi {
+			replacement = fmt.Sprintf("[image %d of %d: %s]", i+1, len(placeholders), fileName)
+		} else {
+			replacement = fmt.Sprintf("[image: %s]", fileName)
+		}
 		cleanedQuery = strings.ReplaceAll(cleanedQuery, ph.fullMatch, replacement)
 	}
 

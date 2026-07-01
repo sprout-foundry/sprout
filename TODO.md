@@ -261,7 +261,7 @@ caching for repeat-turn cost.
       `TestProcessOCRImages_CancelledContext` still passes. All
       `pkg/agent_tools` tests green; race detector clean. Build green._
 
-- [ ] **SP-103-A3:** Add mutex + LRU eviction to `visionCache`. Cache key
+- [x] **SP-103-A3:** Add mutex + LRU eviction to `visionCache`. Cache key
       becomes `sha256(filepath + mtime_ns + analysisMode + analysisPrompt)`
       so a modified file at the cached path automatically invalidates.
       Bounded at 256 entries (`VISION_CACHE_SIZE`); evict
@@ -271,6 +271,24 @@ caching for repeat-turn cost.
       _~0.5 day. Convert `map[string]string` to a hand-rolled
       doubly-linked-list LRU (avoiding a new dependency). Test that
       mutating a file at the cached path causes a miss._
+
+      _Shipped (commit 9b76fe48): New `pkg/agent_tools/vision_cache.go`
+      (266 lines) with `VisionLRUCache` (mutex + atomic counters +
+      hand-rolled doubly-linked-list LRU, head/tail sentinels).
+      `visionCache` + `visionCacheUsage` package-globals replaced with
+      single `visionLRU *VisionLRUCache`. Capacity from env
+      `VISION_CACHE_SIZE` (SPROUT_/LEDIT_ form), default 256.
+      `visionCacheKey()` computes `sha256(filepath + mtime_ns +
+      analysisMode + analysisPrompt)` — file mtime change auto-invalidates
+      (URL fallback: url-len proxy). `getCachedVisionResult` and the
+      cache write site now call `visionLRU.Get`/`Put`. `GetVisionCacheStats()`
+      reports hits, misses, evictions, insertions, size, capacity.
+      `lastVisionUsage` continues as a separate package-global. 12 new
+      tests including `TestVisionLRUCache_Concurrent` (race detector
+      clean), `TestVisionCacheKey_MtimeChanges`, `TestVisionLRU_DefaultCapacity`,
+      `TestVisionLRU_CapacityFromEnv`. Updated
+      `TestVisionCacheStats` to use the new helpers. Build green,
+      full `pkg/agent_tools` test suite passes with `-race`._
 
 - [ ] **SP-103-A4:** Replace package-globals `lastVisionUsage`,
       `visionCache`, `visionCacheUsage` with a `*VisionProcessor`-owned

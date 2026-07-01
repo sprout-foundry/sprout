@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/events"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // DefaultClarificationTimeout is the default timeout for clarification requests.
@@ -62,7 +63,7 @@ func (m *ClarificationManager) RequestClarification(ctx context.Context, subagen
 	// Generate unique request ID
 	requestID, err := generateRequestID()
 	if err != nil {
-		return "", fmt.Errorf("generate request ID: %w", err)
+		return "", agenterrors.NewAgent("clarification", "generate request ID", err)
 	}
 
 	entry := &clarificationEntry{
@@ -86,12 +87,12 @@ func (m *ClarificationManager) RequestClarification(ctx context.Context, subagen
 		m.mu.Lock()
 		delete(m.requests, requestID)
 		m.mu.Unlock()
-		return "", fmt.Errorf("clarification request cancelled: %w", ctx.Err())
+		return "", agenterrors.NewAgent("clarification", "clarification request cancelled", ctx.Err())
 	case <-time.After(m.timeout):
 		m.mu.Lock()
 		delete(m.requests, requestID)
 		m.mu.Unlock()
-		return "", fmt.Errorf("clarification request timed out after %s", m.timeout)
+		return "", agenterrors.NewAgent("clarification", fmt.Sprintf("clarification request timed out after %s", m.timeout), nil)
 	case response := <-entry.responseCh:
 		return response, nil
 	}
@@ -103,7 +104,7 @@ func (m *ClarificationManager) RespondClarification(requestID, response string) 
 	entry, ok := m.requests[requestID]
 	if !ok {
 		m.mu.Unlock()
-		return fmt.Errorf("clarification request %q not found", requestID)
+		return agenterrors.NewNotFound(fmt.Sprintf("clarification request %q not found", requestID))
 	}
 	delete(m.requests, requestID)
 	m.mu.Unlock()

@@ -2,10 +2,10 @@ package agent
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/embedding"
 )
@@ -17,7 +17,7 @@ import (
 func (a *Agent) EnableEmbeddingIndex() error {
 	cfg := a.GetConfig()
 	if cfg == nil {
-		return fmt.Errorf("no config available")
+		return agenterrors.NewConfig("no config available", nil)
 	}
 
 	ei := cfg.EmbeddingIndex
@@ -30,7 +30,7 @@ func (a *Agent) EnableEmbeddingIndex() error {
 
 	workspaceRoot := a.GetWorkspaceRoot()
 	if workspaceRoot == "" {
-		return fmt.Errorf("no workspace root available")
+		return agenterrors.NewConfig("no workspace root available", nil)
 	}
 
 	mgr := embedding.NewEmbeddingManager(ei, workspaceRoot)

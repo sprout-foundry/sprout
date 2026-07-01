@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"golang.org/x/term"
 )
@@ -39,7 +40,7 @@ func (cli *CLIPasswordPrompter) Prompt(ctx context.Context, reason string) (stri
 	fd := int(os.Stdin.Fd())
 	oldState, err := term.GetState(fd)
 	if err != nil {
-		return "", fmt.Errorf("get terminal state: %w", err)
+		return "", agenterrors.Wrap(err, "get terminal state")
 	}
 	// Restore terminal state even if ReadPassword encounters an error or
 	// context is cancelled while the goroutine is blocked on the read.
@@ -68,7 +69,7 @@ func (cli *CLIPasswordPrompter) Prompt(ctx context.Context, reason string) (stri
 		return "", ctx.Err()
 	case r := <-ch:
 		if r.err != nil {
-			return "", fmt.Errorf("read password: %w", r.err)
+			return "", agenterrors.Wrap(r.err, "read password")
 		}
 		// ReadPassword strips the terminating newline, but trim for safety.
 		return strings.TrimSuffix(string(r.password), "\n"), nil

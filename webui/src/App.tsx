@@ -8,6 +8,7 @@ import EditApprovalPanel from './components/EditApprovalPanel';
 import ErrorBoundary from './components/ErrorBoundary';
 import KeyboardShortcutsModal from './components/KeyboardShortcutsModal';
 import ModelSelectionModal from './components/ModelSelectionModal';
+import NotificationCenter from './components/NotificationCenter';
 import Notification from './components/Notification';
 import OnboardingDialog from './components/OnboardingDialog';
 import SecurityApprovalDialog from './components/SecurityApprovalDialog';
@@ -329,6 +330,7 @@ function AppInner() {
               <EditorManagerProvider>
                 <ProviderCatalogProvider isConnected={state.isConnected}>
                   <UIManager>
+                    <NotificationCenter />
                     <AppContent
                       state={state}
                       inputValue={inputValue}

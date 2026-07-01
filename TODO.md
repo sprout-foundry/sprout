@@ -867,7 +867,7 @@ string-matching.
 - [x] **SP-094-3:** Migrate `pkg/agent/api_client*.go` (~40 sites) plus
   provider-side classification (429→RateLimitError, etc.). _Effort: ~1 day._
 
-- [ ] **SP-094-4:** Migrate `pkg/agent/subagent_*.go` (~60 sites) and
+- [x] **SP-094-4:** Migrate `pkg/agent/subagent_*.go` (~60 sites) and
   remap `pkg/agent/seed_provider.go::ChatStream` retry/backoff to use
   `IsRetryable()`. _Effort: ~1.5 days._
 

@@ -6,6 +6,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // Run spawns an in-process subagent and waits for completion
@@ -87,7 +89,7 @@ func (r *SubagentRunner) RunParallel(ctx context.Context, tasks []SubagentTask, 
 				defer wg.Done()
 				results[idx] = &SubagentResult{
 					ID:             t.ID,
-					Error:          fmt.Errorf("fleet token budget exceeded"),
+					Error:          agenterrors.NewValidation("fleet token budget exceeded", nil),
 					BudgetExceeded: true,
 				}
 				return

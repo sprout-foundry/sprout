@@ -5,7 +5,17 @@ import (
 	"testing"
 )
 
+// TestMarkdownFormatter_BasicFormatting verifies that the formatter
+// produces the expected ANSI color codes and Unicode glyph markers for
+// headers, bold, italic, lists, and code blocks.
+//
+// NewMarkdownFormatter respects NO_COLOR via envutil.ResolveColorPreference,
+// so this test forces color mode on via t.Setenv. Without that, a
+// developer shell with NO_COLOR=1 (or CI without TTY) produces a
+// stripped output that contains none of the expected color codes.
 func TestMarkdownFormatter_BasicFormatting(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("CLICOLOR_FORCE", "1")
 	formatter := NewMarkdownFormatter(true, true)
 
 	tests := []struct {
@@ -184,6 +194,8 @@ func TestMarkdownFormatter_NO_COLOR_beats_FORCE_COLOR(t *testing.T) {
 }
 
 func TestMarkdownFormatter_UnderscoreItalicCommonMarkBoundaries(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("CLICOLOR_FORCE", "1")
 	formatter := NewMarkdownFormatter(true, true)
 
 	tests := []struct {

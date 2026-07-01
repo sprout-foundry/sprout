@@ -409,7 +409,7 @@ caching for repeat-turn cost.
       `go test -race ./pkg/agent_tools/ -count=1 -timeout=120s`;
       full `pkg/agent_tools` race run completes in ~44s. Build green._
 
-- [ ] **SP-103-A8:** Graceful degradation. If `SendVisionRequest` fails
+- [x] **SP-103-A8:** Graceful degradation. If `SendVisionRequest` fails
       twice on a non-OCR image, retry via the configured OCR model
       (`PDFOCRModel` if set, else fallback Ollama OCR) with the OCR
       prompt. If OCR also fails, return a structured
@@ -419,6 +419,30 @@ caching for repeat-turn cost.
       `VISION_FALLBACK_TO_OCR = true`.
 
       _~1 day. Touches `vision_analyze.go`._
+
+      _Shipped (commit 2aa92e63): New `pkg/agent_tools/vision_fallback.go`
+      with `isFallbackEnabled`, `getOCRModel`, `shouldFallbackToOCR`,
+      and `(vp *VisionProcessor).fallbackToOCR` helpers. `AnalyzeImage`
+      calls `fallbackToOCR` after `DoVisionRetry` exhausts its
+      configured attempt count. The fallback invokes the configured
+      `PDFOCRModel` (read via `configuration.GetVisionConfig()`) with
+      `GetOCRPrompt()` on a one-off ollama client; OCR attempt is
+      single-shot (no retry wrapper around it). On success, the original
+      `VisionAnalysis` returned; on failure, the error chain wraps
+      both errors so callers see "vision failed (3x): %v; OCR fallback
+      also failed: %v". New config flag `VisionFallbackToOCR`
+      (env `VISION_FALLBACK_TO_OCR`, default true) added in
+      `pkg/configuration/config.go` + `config_merge.go`. INFO logs
+      emitted at every transition via `vp.loggerInfo` helper (uses
+      `*utils.Logger.Logf` when logger set, else `fmt.Println`). 6 new
+      tests pass: gating-disabled/enabled env-var paths,
+      `shouldFallbackToOCR` classifier, log-line emission across
+      0/2/4 kv-pairs, fallback-skipped when model empty, and
+      fallback-composes-errors when OCR also fails. Pre-existing
+      `TestAnalyzeImage_CancelledContext` exercises the full path
+      end-to-end (primary failure → fallback attempt → composed error
+      on a non-reachable Ollama). Build green; full `pkg/agent_tools`
+      suite passes._
 
 ### Prompt caching + image sizing (SP-103-B) — high priority
 

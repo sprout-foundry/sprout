@@ -1,6 +1,6 @@
 # SP-012: UX Polish
 
-**Status:** 📋 Proposed  
+**Status:** ⚠️ Partially Shipped — Status footer, glyph vocabulary, notification center (top-right stack with auto-dismiss), and reduced-motion media-query wrapping shipped (2026-06-23 → 2026-06-30); mobile layout, scroll-detection, and remaining a11y polish pending  
 **Depends on:** SP-003 (Webui & Frontend Architecture), SP-010 (Editor Modernization)  
 **Priority:** Medium  
 **Effort Estimate:** ~2-3 weeks (2 phases)

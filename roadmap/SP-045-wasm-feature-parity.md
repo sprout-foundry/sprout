@@ -1,6 +1,6 @@
 # SP-045: WASM Build Feature Parity
 
-**Status:** 📋 Proposed
+**Status:** ⚠️ Partially Shipped — wasmshell foundation, embedding mode switching, onnx lazy-load bridge, and `mcp_refresh` tool shipped (2026-06-25 → 2026-06-30); Tier 2b/2c tooling and remaining feature parity pending (see SP-100)
 **Priority:** Medium
 
 ## 1. Executive Summary

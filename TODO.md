@@ -4,7 +4,7 @@ Active work tracked here. Completed items are removed once their parent spec is
 done — the spec file (`roadmap/SP-###.md`) plus git history are the historical
 record.
 
-**Roadmap drift fixed 2026-06-30:** `roadmap/README.md` was carrying 15 stale
+**Roadmap drift fixed 2026-06-30:** `roadmap/00-INDEX.md` was carrying 15 stale
 "Proposed" markers for shipped specs. Audit found: SP-006 (superseded by
 SP-059), SP-009, SP-010, SP-013, SP-022-workspace-management, SP-023, SP-062,
 SP-064, SP-065, SP-068, SP-073, and SP-066 (superseded by SP-082) are all

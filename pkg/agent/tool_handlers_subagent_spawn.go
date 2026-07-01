@@ -22,7 +22,7 @@ import (
 func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	prompt, err := convertToString(args["prompt"], "prompt")
 	if err != nil {
-		return "", fmt.Errorf("failed to convert prompt parameter: %w", err)
+		return "", agenterrors.NewValidation(fmt.Sprintf("failed to convert prompt parameter: %v", err), nil)
 	}
 
 	a.Logger().Debug("Spawning subagent with task: %s\n", truncateString(prompt, 100))
@@ -68,7 +68,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		if strings.HasPrefix(workingDir, "~/") {
 			homeDir, err := os.UserHomeDir()
 			if err != nil {
-				return "", fmt.Errorf("failed to resolve home directory: %w", err)
+				return "", agenterrors.NewConfig("failed to resolve home directory", err)
 			}
 			workingDir = filepath.Join(homeDir, workingDir[2:])
 		}
@@ -76,36 +76,36 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		// Resolve to absolute path
 		absWorkingDir, err := filepath.Abs(workingDir)
 		if err != nil {
-			return "", fmt.Errorf("failed to resolve working_dir: %w", err)
+			return "", agenterrors.NewValidation(fmt.Sprintf("failed to resolve working_dir: %v", err), nil)
 		}
 
 		// Resolve symlinks to prevent symlink escape attacks
 		resolvedWorkingDir, err := filepath.EvalSymlinks(absWorkingDir)
 		if err != nil {
-			return "", fmt.Errorf("failed to resolve working_dir symlinks: %w", err)
+			return "", agenterrors.NewValidation(fmt.Sprintf("failed to resolve working_dir symlinks: %v", err), nil)
 		}
 
 		// Verify target exists and is a directory (use resolved path)
 		info, err := os.Stat(resolvedWorkingDir)
 		if err != nil {
-			return "", fmt.Errorf("working_dir does not exist: %s", resolvedWorkingDir)
+			return "", agenterrors.NewValidation(fmt.Sprintf("working_dir does not exist: %s", resolvedWorkingDir), nil)
 		}
 		if !info.IsDir() {
-			return "", fmt.Errorf("working_dir is not a directory: %s", resolvedWorkingDir)
+			return "", agenterrors.NewValidation(fmt.Sprintf("working_dir is not a directory: %s", resolvedWorkingDir), nil)
 		}
 
 		// Verify resolved (symlink-target) path is within $HOME
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
-			return "", fmt.Errorf("failed to resolve home directory: %w", err)
+			return "", agenterrors.NewConfig("failed to resolve home directory", err)
 		}
 		// Also resolve $HOME itself in case it's a symlink
 		resolvedHome, err := filepath.EvalSymlinks(homeDir)
 		if err != nil {
-			return "", fmt.Errorf("failed to resolve home directory symlinks: %w", err)
+			return "", agenterrors.NewConfig("failed to resolve home directory symlinks", err)
 		}
 		if !isPathInWorkspace(resolvedWorkingDir, resolvedHome) {
-			return "", fmt.Errorf("working_dir resolves outside $HOME via symlink: %s -> %s", absWorkingDir, resolvedWorkingDir)
+			return "", agenterrors.NewPermission(fmt.Sprintf("working_dir resolves outside $HOME via symlink: %s -> %s", absWorkingDir, resolvedWorkingDir), nil)
 		}
 
 		workingDir = resolvedWorkingDir
@@ -142,7 +142,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 	// the agent's workspace root (set via SetWorkspaceRoot) rather than os.Getwd().
 	absWorkspaceDir, err := filepath.Abs(a.currentWorkspaceRoot())
 	if err != nil {
-		return "", fmt.Errorf("failed to resolve absolute workspace path: %w", err)
+		return "", agenterrors.NewConfig("failed to resolve absolute workspace path", err)
 	}
 
 	// Track absolute paths of all files for workspace root computation
@@ -174,7 +174,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 
 		// Verify the file exists (missing is OK - subagent can create it)
 		if _, err := os.Stat(absPath); err != nil && !os.IsNotExist(err) {
-			return "", fmt.Errorf("failed to access file %s: %w", filePath, err)
+			return "", agenterrors.NewConfig(fmt.Sprintf("failed to access file %s", filePath), err)
 		}
 
 		a.Logger().Debug("Validated file path: %s -> %s\n", filePath, absPath)
@@ -206,7 +206,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 			// because stdin is /dev/null. Instead, we must reject the request.
 			if a.IsSubagent() {
 				a.Logger().Debug("Subagent encountered external workspace request, cannot prompt for approval (running as subagent)\n")
-				return "", fmt.Errorf("file paths outside workspace require user approval: %v (cannot prompt from subagent context)", outsidePaths)
+				return "", agenterrors.NewPermission(fmt.Sprintf("file paths outside workspace require user approval: %v (cannot prompt from subagent context)", outsidePaths), nil)
 			}
 
 			// Build approval prompt
@@ -226,7 +226,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 				}
 				if !mgr.RequestToolApproval(a.GetEventBus(), a.GetEventClientID(), a.GetEventUserID(), "run_subagent", "CAUTION", prompt, extras) {
 					a.Logger().Debug("User rejected subagent access to external workspace\n")
-					return "", fmt.Errorf("file paths outside workspace rejected by user: %v", outsidePaths)
+					return "", agenterrors.NewPermission(fmt.Sprintf("file paths outside workspace rejected by user: %v", outsidePaths), nil)
 				}
 				a.Logger().Debug("User approved subagent access to external workspace via webui\n")
 			} else if canPrompt {
@@ -234,13 +234,13 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 				cliPrompt := "[WARN] Subagent External Workspace\n\n" + prompt + "\n\nAllow? (yes/no): "
 				if !logger.AskForConfirmation(cliPrompt, false, false) {
 					a.Logger().Debug("User rejected subagent access to external workspace\n")
-					return "", fmt.Errorf("file paths outside workspace rejected by user: %v", outsidePaths)
+					return "", agenterrors.NewPermission(fmt.Sprintf("file paths outside workspace rejected by user: %v", outsidePaths), nil)
 				}
 				a.Logger().Debug("User approved subagent access to external workspace via CLI\n")
 			} else {
 				// No prompting available (non-interactive): reject
 				a.Logger().Debug("Cannot prompt for subagent external workspace approval (non-interactive)\n")
-				return "", fmt.Errorf("file paths outside workspace require approval but prompting is not available: %v", outsidePaths)
+				return "", agenterrors.NewPermission(fmt.Sprintf("file paths outside workspace require approval but prompting is not available: %v", outsidePaths), nil)
 			}
 
 			// Mark each outside path's parent as session-allowed so
@@ -306,7 +306,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 
 	// Validate enhanced prompt size
 	if enhancedPrompt.Len() > MAX_SUBAGENT_CONTEXT_SIZE {
-		return "", fmt.Errorf("enhanced prompt exceeds maximum size of %d bytes", MAX_SUBAGENT_CONTEXT_SIZE)
+		return "", agenterrors.NewValidation(fmt.Sprintf("enhanced prompt exceeds maximum size of %d bytes", MAX_SUBAGENT_CONTEXT_SIZE), nil)
 	}
 
 	// Get subagent provider and model from configuration
@@ -324,7 +324,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 			if subagentType != nil {
 				// Check LocalOnly flag - reject in cloud mode
 				if subagentType.LocalOnly && !a.IsLocalMode() {
-					return "", fmt.Errorf("persona '%s' is local-only and cannot be used as a subagent in cloud mode", persona)
+					return "", agenterrors.NewValidation(fmt.Sprintf("persona '%s' is local-only and cannot be used as a subagent in cloud mode", persona), nil)
 				}
 				// Spawnability check: a Delegatable=false target may only be
 				// spawned when the active persona explicitly lists it in
@@ -336,12 +336,12 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 				// orchestrator-can't-spawn-coordinator) are needed: the
 				// missing entries express the policy directly.
 				if !subagentType.Delegatable && !a.canSpawnNonDelegatable(persona) {
-					return "", fmt.Errorf("persona '%s' is not spawnable from %q (delegatable=false and not listed in spawner's can_spawn_non_delegatable)", persona, a.GetActivePersona())
+					return "", agenterrors.NewValidation(fmt.Sprintf("persona '%s' is not spawnable from %q (delegatable=false and not listed in spawner's can_spawn_non_delegatable)", persona, a.GetActivePersona()), nil)
 				}
 				// No persona can spawn itself — orthogonal to spawn_policy.
 				currentPersona := a.GetActivePersona()
 				if currentPersona != "" && currentPersona == persona {
-					return "", fmt.Errorf("persona '%s' cannot spawn itself (prevents self-recursion)", persona)
+					return "", agenterrors.NewValidation(fmt.Sprintf("persona '%s' cannot spawn itself (prevents self-recursion)", persona), nil)
 				}
 				provider = config.GetSubagentTypeProvider(persona)
 				model = config.GetSubagentTypeModel(persona)
@@ -666,7 +666,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 	ret := buildSubagentReturn(resultMap, result, statusFromResult(result, resultMap))
 	jsonStr, jsonErr := ret.MarshalJSONIndent()
 	if jsonErr != nil {
-		return "", fmt.Errorf("failed to marshal subagent result: %w", jsonErr)
+		return "", agenterrors.NewAgent("subagent.spawn", "failed to marshal subagent result", jsonErr)
 	}
 
 	a.Logger().Debug("Subagent spawn result: %s\n", jsonStr)
@@ -721,7 +721,7 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 
 			prompt, err := convertToString(taskMap["prompt"], "prompt")
 			if err != nil {
-				return "", fmt.Errorf("failed to convert prompt parameter: %w", err)
+				return "", agenterrors.NewValidation(fmt.Sprintf("failed to convert prompt parameter: %v", err), nil)
 			}
 			task.Prompt = prompt
 
@@ -980,7 +980,7 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 	// Convert map result to JSON for return
 	jsonBytes, jsonErr := json.MarshalIndent(resultMap, "", "  ")
 	if jsonErr != nil {
-		return "", fmt.Errorf("failed to marshal parallel subagents result: %w", jsonErr)
+		return "", agenterrors.NewAgent("subagent.spawn", "failed to marshal parallel subagents result", jsonErr)
 	}
 
 	a.Logger().Debug("Parallel subagents spawn result: %s\n", string(jsonBytes))

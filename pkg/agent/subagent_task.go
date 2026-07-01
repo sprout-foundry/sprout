@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/envutil"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // runTask executes a single subagent task.  When cumulativeTokens is non-nil
@@ -42,7 +43,7 @@ func (r *SubagentRunner) runTask(
 	if err != nil {
 		return &SubagentResult{
 			ID:      taskID,
-			Error:   fmt.Errorf("create subagent: %w", err),
+			Error:   agenterrors.Wrap(err, "create subagent"),
 			Elapsed: time.Since(startTime),
 		}
 	}
@@ -269,7 +270,7 @@ func (r *SubagentRunner) runTask(
 			if p := recover(); p != nil {
 				done <- &SubagentResult{
 					ID:      taskID,
-					Error:   fmt.Errorf("subagent panic: %v", p),
+					Error:   agenterrors.NewAgent("subagent.Runner", fmt.Sprintf("subagent panic: %v", p), nil),
 					Elapsed: time.Since(startTime),
 				}
 			}
@@ -300,7 +301,7 @@ func (r *SubagentRunner) runTask(
 			packageLogWarnf("[subagent] %s did not honor cancellation within 5s — goroutine leaked", taskID)
 			result = &SubagentResult{
 				ID:      taskID,
-				Error:   fmt.Errorf("subagent did not respond to cancellation"),
+				Error:   agenterrors.NewAgent("subagent.Runner", "subagent did not respond to cancellation", nil),
 				Elapsed: time.Since(startTime),
 			}
 		}

@@ -1,12 +1,23 @@
 # Full Autonomous TODO Processor — Agent Instructions
 
-You are an autonomous Coordinator agent processing a TODO.md list. Your job is to complete each TODO item with full build/test/review rigor, commit the result, and move on.
+You are an autonomous Coordinator agent processing **the sprout repository's
+TODO list at the absolute path
+`/home/aprice/dev/sprout-foundry/sprout/TODO.md`**.
 
-**Do NOT stop until one of these is true: (a) every `[ ]` item is marked `[x]`, or (b) you hit an unrecoverable error you cannot route around.** Running low on budget, hitting a subagent failure, or a build break are NOT reasons to stop — they are reasons to keep working (retry, fix, skip-and-continue). Only stop early on a hard error you genuinely cannot proceed past.
+> ⚠️ There is **another** `TODO.md` at the parent directory
+> (`/home/aprice/dev/sprout-foundry/TODO.md`) — that file contains the
+> foundry-integration checklist and is **NOT your concern**. If you read
+> that file you will conclude "no unchecked items" and stop early. Always
+> use the absolute sprout path above; never resolve `TODO.md` via
+> `find`, `ls`, or relative paths.
+
+Your job is to complete each TODO item with full build/test/review rigor, commit the result, and move on.
+
+**Do NOT stop until one of these is true: (a) every `[ ]` item in `/home/aprice/dev/sprout-foundry/sprout/TODO.md` is marked `[x]`, or (b) you hit an unrecoverable error you cannot route around.** Running low on budget, hitting a subagent failure, or a build break are NOT reasons to stop — they are reasons to keep working (retry, fix, skip-and-continue). Only stop early on a hard error you genuinely cannot proceed past.
 
 ## Workflow for Each `[ ]` Item
 
-1. **Read TODO.md** and identify the first incomplete `[ ]` item
+1. **Read `/home/aprice/dev/sprout-foundry/sprout/TODO.md`** and identify the first incomplete `[ ]` item. Never read or `find` any other TODO.md.
 2. **Create a task_queue entry** for it (status=in_progress)
 3. **Delegate implementation** to orchestrator using run_subagent. Your prompt to the orchestrator MUST include the following instructions verbatim (this is critical — the orchestrator often skips delegation without explicit direction):
 
@@ -38,7 +49,7 @@ You are an autonomous Coordinator agent processing a TODO.md list. Your job is t
 5. **Verify the build passes** (run the project's build command like `make build-all` or `go build ./...`)
 6. **If build fails**, delegate a fix to orchestrator and re-verify
 7. **Review staged changes** with `git diff --cached`, then commit using the commit tool with the `notes` parameter (NOT the `message` parameter). Pass the TODO item description and a brief summary of what changed in `notes` so the LLM can generate a proper conventional commit message.
-8. **Mark the TODO item `[x]`** in TODO.md using edit_file
+8. **Mark the TODO item `[x]`** in `/home/aprice/dev/sprout-foundry/sprout/TODO.md` using edit_file
 9. **Update the task_queue entry** to completed
 10. **Move to the next `[ ]` item**
 

@@ -281,6 +281,9 @@ func MergeConfig(base, override *Config) *Config {
 	if override.PDFOCRModel != "" {
 		result.PDFOCRModel = override.PDFOCRModel
 	}
+	if override.VisionFallbackToOCR {
+		result.VisionFallbackToOCR = override.VisionFallbackToOCR
+	}
 
 	// Merge Skills
 	if len(override.Skills) > 0 {

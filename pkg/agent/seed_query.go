@@ -8,12 +8,12 @@ package agent
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
 	core "github.com/sprout-foundry/seed/core"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
@@ -95,7 +95,7 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	images, processedQuery, err := a.processImagesInQuery(userQuery)
 	if err != nil {
 		a.publishEvent(events.EventTypeError, events.ErrorEvent("Image processing failed", err))
-		return "", fmt.Errorf("failed to process images in query: %w", err)
+		return "", agenterrors.NewAgent("seed-query", "failed to process images in query", err)
 	}
 
 	// Set conversation start time for duration calculation
@@ -156,7 +156,7 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	clientSnap := a.getClient()
 	prov, err := NewSproutProvider(a, clientSnap)
 	if err != nil {
-		return "", fmt.Errorf("failed to create seed provider adapter: %w", err)
+		return "", agenterrors.NewAgent("seed-query", "failed to create seed provider adapter", err)
 	}
 
 	// Register pasted images with the provider so attachPastedImages can
@@ -294,7 +294,7 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	// Create seed Agent
 	seedAgent, err := core.NewAgent(opts)
 	if err != nil {
-		return "", fmt.Errorf("failed to create seed agent: %w", err)
+		return "", agenterrors.NewAgent("seed-query", "failed to create seed agent", err)
 	}
 
 	// Run the query through seed's conversation loop.
@@ -433,7 +433,7 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	if !a.IsSubagent() && a.IsChangeTrackingEnabled() && a.GetChangeCount() > 0 {
 		if err := a.runSelfReviewGate(); err != nil {
 			a.publishEvent(events.EventTypeError, events.ErrorEvent("Self-review gate failed", err))
-			return "", fmt.Errorf("failed self-review gate: %w", err)
+			return "", agenterrors.Wrap(err, "failed self-review gate")
 		}
 	}
 

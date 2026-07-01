@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/pmezard/go-difflib/difflib"
 	"github.com/sprout-foundry/sprout/pkg/events"
 	"golang.org/x/term"
@@ -238,7 +239,7 @@ func GenerateUnifiedDiff(path, original, proposed string) (string, error) {
 	}
 	result, err := difflib.GetUnifiedDiffString(diff)
 	if err != nil {
-		return "", fmt.Errorf("generate diff for %s: %w", path, err)
+		return "", agenterrors.Wrap(err, fmt.Sprintf("generate diff for %s", path))
 	}
 	return result, nil
 }

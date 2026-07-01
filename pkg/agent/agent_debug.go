@@ -1,6 +1,7 @@
 package agent
 
 import (
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"fmt"
 	"os"
 	"time"
@@ -11,7 +12,7 @@ func (a *Agent) initDebugLogger() error {
 	// Create temp file
 	f, err := os.CreateTemp("", "sprout-debug-*.log")
 	if err != nil {
-		return fmt.Errorf("initDebugLogger: failed to create temp file: %w", err)
+		return agenterrors.NewAgent("initDebugLogger", "failed to create temp file", err)
 	}
 	a.debugLogFile = f
 	a.debugLogPath = f.Name()
@@ -25,7 +26,7 @@ func (a *Agent) initDebugLogger() error {
 	a.debugLogMutex.Lock()
 	defer a.debugLogMutex.Unlock()
 	if _, err := a.debugLogFile.WriteString(header); err != nil {
-		return fmt.Errorf("initDebugLogger: failed to write header: %w", err)
+		return agenterrors.NewAgent("initDebugLogger", "failed to write header", err)
 	}
 	return nil
 }

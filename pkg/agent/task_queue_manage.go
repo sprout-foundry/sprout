@@ -9,6 +9,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // handleTaskQueue routes to the legacy per-operation handlers based on
@@ -25,7 +27,7 @@ func handleTaskQueue(ctx context.Context, a *Agent, args map[string]interface{})
 	rawOp, _ := args["operation"].(string)
 	op := strings.TrimSpace(strings.ToLower(rawOp))
 	if op == "" {
-		return "", fmt.Errorf("task_queue: 'operation' is required (one of: read, add, publish)")
+		return "", agenterrors.NewValidation("task_queue: 'operation' is required (one of: read, add, publish)", nil)
 	}
 
 	switch op {
@@ -36,6 +38,6 @@ func handleTaskQueue(ctx context.Context, a *Agent, args map[string]interface{})
 	case "publish":
 		return handleTaskQueuePublish(ctx, a, args)
 	default:
-		return "", fmt.Errorf("task_queue: unknown operation %q (want read, add, or publish)", rawOp)
+		return "", agenterrors.NewValidation(fmt.Sprintf("task_queue: unknown operation %q (want read, add, or publish)", rawOp), nil)
 	}
 }

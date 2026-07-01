@@ -47,13 +47,14 @@ import (
 	"path/filepath"
 	"strings"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/history"
 )
 
 func handleRecoverFile(_ context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	rawPath, ok := args["path"].(string)
 	if !ok || rawPath == "" {
-		return "", fmt.Errorf("recover_file: 'path' parameter is required")
+		return "", agenterrors.NewTool("recover_file", "recover_file: 'path' parameter is required", nil)
 	}
 	scope := strings.TrimSpace(asString(args["scope"]))
 	if scope == "" {
@@ -71,7 +72,7 @@ func handleRecoverFile(_ context.Context, a *Agent, args map[string]interface{})
 
 	abs, err := filepath.Abs(rawPath)
 	if err != nil {
-		return "", fmt.Errorf("recover_file: resolve %q: %w", rawPath, err)
+		return "", agenterrors.Wrapf(err, "recover_file: resolve %q", rawPath)
 	}
 
 	changes := tracker.GetChanges()
@@ -88,7 +89,7 @@ func handleRecoverFile(_ context.Context, a *Agent, args map[string]interface{})
 		// always beats a later bulk for the same path).
 		match = resolveEarliestRecoveryTarget(changes, abs)
 	default:
-		return "", fmt.Errorf("recover_file: unknown scope %q (want 'latest', 'session_start', or 'bulk')", scope)
+		return "", agenterrors.NewValidation(fmt.Sprintf("recover_file: unknown scope %q (want 'latest', 'session_start', or 'bulk')", scope), nil)
 	}
 	if match == nil {
 		return jsonRecoverResult(false, abs, "", "no tracked change recorded for this path"), nil

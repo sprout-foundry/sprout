@@ -56,7 +56,7 @@ func (a *Agent) runSelfReviewGate() error {
 	if cfg == nil {
 		cfg, cfgErr = configuration.Load()
 		if cfgErr != nil {
-			return fmt.Errorf("self-review gate blocked completion: failed to load config: %w", cfgErr)
+			return agenterrors.Wrap(cfgErr, "self-review gate blocked completion: failed to load config")
 		}
 	}
 	mode := cfg.GetSelfReviewGateMode()
@@ -72,14 +72,14 @@ func (a *Agent) runSelfReviewGate() error {
 	logger := utils.GetLogger(true)
 	result, err := spec.ReviewTrackedChanges(a.interruptCtx, revisionID, cfg, logger)
 	if err != nil {
-		return fmt.Errorf("self-review gate blocked completion: %w", err)
+		return agenterrors.Wrap(err, "self-review gate blocked completion")
 	}
 	if result.ScopeResult != nil && !result.ScopeResult.InScope {
 		summary := strings.TrimSpace(result.ScopeResult.Summary)
 		if summary == "" {
 			summary = "scope violations detected"
 		}
-		return fmt.Errorf("self-review gate blocked completion: %s", summary)
+		return agenterrors.NewAgent("self-review", "self-review gate blocked completion: "+summary, nil)
 	}
 
 	a.PrintLineAsync(fmt.Sprintf("%sSelf-review gate passed: revision %s is within scope", console.GlyphSuccess.Prefix(), revisionID))

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
@@ -223,7 +224,7 @@ func (m *MockLLMProvider) GetVisionModel() string {
 
 // SendVisionRequest returns an error (vision not supported).
 func (m *MockLLMProvider) SendVisionRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
-	return nil, fmt.Errorf("vision not supported in mock provider")
+	return nil, agenterrors.NewTool("vision", "vision not supported in mock provider", nil)
 }
 
 // GetLastTPS returns a mock TPS value.

@@ -10,6 +10,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // handleManageMemory routes to the legacy per-operation handlers based
@@ -27,7 +29,7 @@ func handleManageMemory(ctx context.Context, a *Agent, args map[string]interface
 	rawOp, _ := args["operation"].(string)
 	op := strings.TrimSpace(strings.ToLower(rawOp))
 	if op == "" {
-		return "", fmt.Errorf("manage_memory: 'operation' is required (one of: add, read, list, delete, search)")
+		return "", agenterrors.NewValidation("manage_memory: 'operation' is required (one of: add, read, list, delete, search)", nil)
 	}
 
 	switch op {
@@ -42,6 +44,6 @@ func handleManageMemory(ctx context.Context, a *Agent, args map[string]interface
 	case "search":
 		return handleSearchMemories(ctx, a, args)
 	default:
-		return "", fmt.Errorf("manage_memory: unknown operation %q (want add, read, list, delete, or search)", rawOp)
+		return "", agenterrors.NewValidation(fmt.Sprintf("manage_memory: unknown operation %q (want add, read, list, delete, or search)", rawOp), nil)
 	}
 }

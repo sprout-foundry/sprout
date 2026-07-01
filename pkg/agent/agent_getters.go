@@ -736,13 +736,13 @@ func (a *Agent) GenerateResponse(messages []api.Message) (string, error) {
 // Returns an error if the file does not exist or cannot be read.
 func (a *Agent) ReadFileContent(path string) (string, error) {
 	if a == nil {
-		return "", fmt.Errorf("agent is nil")
+		return "", agenterrors.NewValidation("agent is nil", nil)
 	}
 	workspaceRoot := a.currentWorkspaceRoot()
 	absPath := filepath.Join(workspaceRoot, path)
 	data, err := os.ReadFile(absPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to read file %s: %w", path, err)
+		return "", agenterrors.Wrap(err, fmt.Sprintf("failed to read file %s", path))
 	}
 	return string(data), nil
 }

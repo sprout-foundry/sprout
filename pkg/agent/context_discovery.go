@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // ContextFileInfo represents information about a discovered context file
@@ -43,7 +45,7 @@ func DiscoverContextFiles() (*ContextFileInfo, error) {
 	// Get current working directory
 	cwd, err := os.Getwd()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get current working directory: %w", err)
+		return nil, agenterrors.Wrap(err, "failed to get current working directory")
 	}
 
 	// Search for context files
@@ -100,7 +102,7 @@ func DiscoverContextFiles() (*ContextFileInfo, error) {
 func LoadContextFiles() (string, error) {
 	contextFile, err := DiscoverContextFiles()
 	if err != nil {
-		return "", fmt.Errorf("failed to discover context files: %w", err)
+		return "", agenterrors.Wrap(err, "failed to discover context files")
 	}
 
 	if contextFile == nil {

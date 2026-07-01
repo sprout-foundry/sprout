@@ -150,7 +150,7 @@ func recoverProviderStartup(configManager *configuration.Manager, failedProvider
 	}
 
 	if choice == 0 {
-		return "", "", fmt.Errorf("%w: %s", errProviderStartupClosed, failedProviderName)
+		return "", "", agenterrors.Wrapf(errProviderStartupClosed, "%s", failedProviderName)
 	}
 
 	// Choice 1 (or choice 2 when no model error): try a different model on the
@@ -164,7 +164,7 @@ func recoverProviderStartup(configManager *configuration.Manager, failedProvider
 		}
 		selectedModel, ok := promptModelSelection(models)
 		if !ok {
-			return "", "", fmt.Errorf("%w: %s", errProviderStartupClosed, failedProviderName)
+			return "", "", agenterrors.Wrapf(errProviderStartupClosed, "%s", failedProviderName)
 		}
 		return failedProvider, selectedModel, nil
 	}

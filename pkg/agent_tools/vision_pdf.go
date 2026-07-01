@@ -89,21 +89,39 @@ func ResolvePDFInputPath(ctx context.Context, inputPath string) (string, func(),
 
 func downloadRemotePDFToTemp(ctx context.Context, url string) (string, func(), error) {
 	client := &http.Client{Timeout: 30 * time.Second}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+
+	var data []byte
+	err := DoVisionRetry(ctx, func(ctx context.Context) error {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		if err != nil {
+			return fmt.Errorf("create PDF download request: %w", err)
+		}
+		resp, err := client.Do(req)
+		if err != nil {
+			return fmt.Errorf("download PDF: %w", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			// Surface Retry-After for 429/503 and other 5xx.
+			if resp.StatusCode == 429 || resp.StatusCode == 503 || resp.StatusCode >= 500 {
+				return &RetryableHTTPError{
+					StatusCode: resp.StatusCode,
+					Status:     resp.Status,
+					Method:     req.Method,
+					URL:        url,
+					RetryAfter: parseRetryAfter(resp.Header.Get("Retry-After")),
+				}
+			}
+			return fmt.Errorf("download PDF: status %d", resp.StatusCode)
+		}
+		data, err = io.ReadAll(io.LimitReader(resp.Body, 60*1024*1024))
+		if err != nil {
+			return fmt.Errorf("read downloaded PDF bytes: %w", err)
+		}
+		return nil
+	}, RetryOptions{OpName: "download_pdf"})
 	if err != nil {
-		return "", func() {}, fmt.Errorf("create PDF download request: %w", err)
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", func() {}, fmt.Errorf("download PDF: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return "", func() {}, fmt.Errorf("download PDF: status %d", resp.StatusCode)
-	}
-	data, err := io.ReadAll(io.LimitReader(resp.Body, 60*1024*1024))
-	if err != nil {
-		return "", func() {}, fmt.Errorf("read downloaded PDF bytes: %w", err)
+		return "", func() {}, err
 	}
 	if len(data) == 0 {
 		return "", func() {}, fmt.Errorf("downloaded PDF is empty")
@@ -216,7 +234,12 @@ func processOCRImages(ctx context.Context, images [][]byte, client api.ClientInt
 		messages := []api.Message{
 			{Role: "user", Content: prompt, Images: []api.ImageData{{Base64: imgBase64, Type: imgType}}},
 		}
-		response, err := client.SendVisionRequest(ctx, messages, nil, "", false)
+		var response *api.ChatResponse
+		err := DoVisionRetry(ctx, func(ctx context.Context) error {
+			var innerErr error
+			response, innerErr = client.SendVisionRequest(ctx, messages, nil, "", false)
+			return innerErr
+		}, RetryOptions{OpName: "ocr_vision"})
 		if err != nil {
 			failures++
 			if failures >= 2 {

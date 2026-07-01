@@ -136,7 +136,12 @@ func (vp *VisionProcessor) AnalyzeImage(ctx context.Context, imagePath string, o
 	// Get vision analysis using the vision-enabled method. The parent
 	// context is threaded through so the Stop button can abort in-flight
 	// vision calls (SP-034-1c).
-	response, err := vp.visionClient.SendVisionRequest(ctx, messages, nil, "", false)
+	var response *api.ChatResponse
+	err = DoVisionRetry(ctx, func(ctx context.Context) error {
+		var innerErr error
+		response, innerErr = vp.visionClient.SendVisionRequest(ctx, messages, nil, "", false)
+		return innerErr
+	}, RetryOptions{OpName: "analyze_image"})
 	if err != nil {
 		return VisionAnalysis{}, fmt.Errorf("vision request: %w", err)
 	}

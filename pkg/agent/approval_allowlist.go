@@ -1,9 +1,9 @@
 package agent
 
 import (
-	"fmt"
 	"path"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
@@ -52,14 +52,14 @@ func (a *Agent) IsShellCommandAllowlisted(command string) bool {
 // a save so the file's mtime updates (cheap).
 func (a *Agent) PersistShellCommandAllowlist(command string) error {
 	if a == nil {
-		return fmt.Errorf("nil agent")
+		return agenterrors.NewPermission("nil agent", nil)
 	}
 	if command == "" {
-		return fmt.Errorf("cannot allowlist empty command")
+		return agenterrors.NewValidation("cannot allowlist empty command", nil)
 	}
 	mgr := a.GetConfigManager()
 	if mgr == nil {
-		return fmt.Errorf("no config manager — cannot persist allowlist")
+		return agenterrors.NewPermission("no config manager — cannot persist allowlist", nil)
 	}
 	return mgr.UpdateConfig(func(cfg *configuration.Config) error {
 		for _, c := range cfg.ApprovedShellCommands {
@@ -79,14 +79,14 @@ func (a *Agent) PersistShellCommandAllowlist(command string) error {
 // a save so the file's mtime updates (cheap).
 func (a *Agent) PersistShellCommandPattern(pattern string) error {
 	if a == nil {
-		return fmt.Errorf("nil agent")
+		return agenterrors.NewPermission("nil agent", nil)
 	}
 	if pattern == "" {
-		return fmt.Errorf("cannot allowlist empty pattern")
+		return agenterrors.NewValidation("cannot allowlist empty pattern", nil)
 	}
 	mgr := a.GetConfigManager()
 	if mgr == nil {
-		return fmt.Errorf("no config manager — cannot persist allowlist pattern")
+		return agenterrors.NewPermission("no config manager — cannot persist allowlist pattern", nil)
 	}
 	return mgr.UpdateConfig(func(cfg *configuration.Config) error {
 		for _, p := range cfg.ApprovedShellCommandPatterns {

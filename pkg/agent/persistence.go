@@ -91,7 +91,7 @@ func normalizeSessionID(sessionID string) (string, error) {
 		return "", agenterrors.NewInvalidInputError("session ID cannot be empty", nil)
 	}
 	if strings.Contains(clean, string(os.PathSeparator)) || strings.Contains(clean, "/") {
-		return "", fmt.Errorf("session ID %q cannot contain path separators", sessionID)
+		return "", agenterrors.NewValidation(fmt.Sprintf("session ID %q cannot contain path separators", sessionID), nil)
 	}
 	return clean, nil
 }
@@ -101,13 +101,13 @@ func normalizeWorkingDirectory(workingDir string) (string, error) {
 	if trimmed == "" {
 		cwd, err := os.Getwd()
 		if err != nil {
-			return "", fmt.Errorf("failed to resolve current working directory: %w", err)
+			return "", agenterrors.Wrap(err, "failed to resolve current working directory")
 		}
 		trimmed = cwd
 	}
 	abs, err := filepath.Abs(trimmed)
 	if err != nil {
-		return "", fmt.Errorf("failed to resolve absolute working directory %q: %w", trimmed, err)
+		return "", agenterrors.Wrapf(err, "failed to resolve absolute working directory %q", trimmed)
 	}
 	// Resolve symlinks for consistent path comparison. On macOS,
 	// /var → /private/var and os.Getwd() returns the resolved path,
@@ -127,11 +127,11 @@ func workingDirectoryScopeHash(workingDir string) string {
 func buildScopedSessionFilePath(stateDir, sessionID, workingDir string) (string, error) {
 	cleanSessionID, err := normalizeSessionID(sessionID)
 	if err != nil {
-		return "", fmt.Errorf("failed to normalize session ID: %w", err)
+		return "", agenterrors.Wrap(err, "failed to normalize session ID")
 	}
 	cleanWorkingDir, err := normalizeWorkingDirectory(workingDir)
 	if err != nil {
-		return "", fmt.Errorf("failed to normalize working directory: %w", err)
+		return "", agenterrors.Wrap(err, "failed to normalize working directory")
 	}
 	scopeHash := workingDirectoryScopeHash(cleanWorkingDir)
 	return filepath.Join(stateDir, scopedSessionsDirName, scopeHash, fmt.Sprintf("%s%s.json", legacySessionPrefix, cleanSessionID)), nil
@@ -140,7 +140,7 @@ func buildScopedSessionFilePath(stateDir, sessionID, workingDir string) (string,
 func buildLegacySessionFilePath(stateDir, sessionID string) (string, error) {
 	cleanSessionID, err := normalizeSessionID(sessionID)
 	if err != nil {
-		return "", fmt.Errorf("failed to normalize session ID: %w", err)
+		return "", agenterrors.Wrap(err, "failed to normalize session ID")
 	}
 	return filepath.Join(stateDir, fmt.Sprintf("%s%s.json", legacySessionPrefix, cleanSessionID)), nil
 }
@@ -148,20 +148,20 @@ func buildLegacySessionFilePath(stateDir, sessionID string) (string, error) {
 func listScopedSessionCandidates(stateDir, sessionID string) ([]string, error) {
 	cleanSessionID, err := normalizeSessionID(sessionID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to normalize session ID: %w", err)
+		return nil, agenterrors.Wrap(err, "failed to normalize session ID")
 	}
 	scopedRoot := filepath.Join(stateDir, scopedSessionsDirName)
 	if _, err := os.Stat(scopedRoot); err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("failed to stat scoped sessions root: %w", err)
+		return nil, agenterrors.Wrap(err, "failed to stat scoped sessions root")
 	}
 	targetName := fmt.Sprintf("%s%s.json", legacySessionPrefix, cleanSessionID)
 	var candidates []string
 	walkErr := filepath.WalkDir(scopedRoot, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
-			return fmt.Errorf("failed to walk path %s in scoped session directory: %w", path, err)
+			return agenterrors.Wrapf(err, "failed to walk path %s in scoped session directory", path)
 		}
 		if d.IsDir() {
 			return nil
@@ -172,7 +172,7 @@ func listScopedSessionCandidates(stateDir, sessionID string) ([]string, error) {
 		return nil
 	})
 	if walkErr != nil {
-		return nil, fmt.Errorf("failed to scan scoped session directories: %w", walkErr)
+		return nil, agenterrors.Wrap(walkErr, "failed to scan scoped session directories")
 	}
 	return candidates, nil
 }
@@ -187,35 +187,35 @@ func resolveSessionStateFile(stateDir, sessionID, workingDir string) (string, er
 
 	candidates, err := listScopedSessionCandidates(stateDir, sessionID)
 	if err != nil {
-		return "", fmt.Errorf("failed to list scoped session candidates: %w", err)
+		return "", agenterrors.Wrap(err, "failed to list scoped session candidates")
 	}
 	if len(candidates) == 1 {
 		return candidates[0], nil
 	}
 	if len(candidates) > 1 {
-		return "", fmt.Errorf("session ID %q is ambiguous across directories (%d matches); load with directory scope", sessionID, len(candidates))
+		return "", agenterrors.NewValidation(fmt.Sprintf("session ID %q is ambiguous across directories (%d matches); load with directory scope", sessionID, len(candidates)), nil)
 	}
 
 	legacyPath, err := buildLegacySessionFilePath(stateDir, sessionID)
 	if err != nil {
-		return "", fmt.Errorf("failed to build legacy session file path: %w", err)
+		return "", agenterrors.Wrap(err, "failed to build legacy session file path")
 	}
 	if _, err := os.Stat(legacyPath); err == nil {
 		return legacyPath, nil
 	}
-	return "", fmt.Errorf("session %q not found", sessionID)
+	return "", agenterrors.NewNotFound(fmt.Sprintf("session %q", sessionID))
 }
 
 // defaultGetStateDir is the actual implementation of GetStateDir
 func defaultGetStateDir() (string, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return "", fmt.Errorf("failed to get home directory: %w", err)
+		return "", agenterrors.NewAgent("persistence", "failed to get home directory", err)
 	}
 
 	stateDir := filepath.Join(homeDir, ".sprout", "sessions")
 	if err := os.MkdirAll(stateDir, 0700); err != nil {
-		return "", fmt.Errorf("failed to create state directory: %w", err)
+		return "", agenterrors.NewAgent("persistence", "failed to create state directory", err)
 	}
 
 	return stateDir, nil
@@ -231,22 +231,22 @@ func (a *Agent) SaveState(sessionID string) error {
 func (a *Agent) SaveStateScoped(sessionID, workingDir string) error {
 	stateDir, err := GetStateDir()
 	if err != nil {
-		return fmt.Errorf("failed to get state directory: %w", err)
+		return agenterrors.NewAgent("persistence", "failed to get state directory", err)
 	}
 	cleanSessionID, err := normalizeSessionID(sessionID)
 	if err != nil {
-		return fmt.Errorf("invalid session ID: %w", err)
+		return agenterrors.Wrap(err, "invalid session ID")
 	}
 	cleanWorkingDir, err := normalizeWorkingDirectory(workingDir)
 	if err != nil {
-		return fmt.Errorf("invalid working directory: %w", err)
+		return agenterrors.Wrap(err, "invalid working directory")
 	}
 	stateFile, err := buildScopedSessionFilePath(stateDir, cleanSessionID, cleanWorkingDir)
 	if err != nil {
-		return fmt.Errorf("failed to build session file path: %w", err)
+		return agenterrors.NewAgent("persistence", "failed to build session file path", err)
 	}
 	if err := os.MkdirAll(filepath.Dir(stateFile), 0700); err != nil {
-		return fmt.Errorf("failed to create scoped session directory: %w", err)
+		return agenterrors.NewAgent("persistence", "failed to create scoped session directory", err)
 	}
 
 	// Generate session name from first user message
@@ -275,7 +275,7 @@ func (a *Agent) SaveStateScoped(sessionID, workingDir string) error {
 
 	data, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
-		return fmt.Errorf("failed to marshal state: %w", err)
+		return agenterrors.NewAgent("persistence", "failed to marshal state", err)
 	}
 
 	err = os.WriteFile(stateFile, data, 0600)
@@ -295,21 +295,21 @@ func LoadStateWithoutAgent(sessionID string) (*ConversationState, error) {
 func LoadStateWithoutAgentScoped(sessionID, workingDir string) (*ConversationState, error) {
 	stateDir, err := GetStateDir()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get state directory: %w", err)
+		return nil, agenterrors.NewAgent("persistence", "failed to get state directory", err)
 	}
 	stateFile, err := resolveSessionStateFile(stateDir, sessionID, workingDir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve session state file: %w", err)
+		return nil, agenterrors.NewAgent("persistence", "failed to resolve session state file", err)
 	}
 
 	data, err := os.ReadFile(stateFile)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read state file: %w", err)
+		return nil, agenterrors.NewAgent("persistence", "failed to read state file", err)
 	}
 
 	var state ConversationState
 	if err := json.Unmarshal(data, &state); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal state: %w", err)
+		return nil, agenterrors.NewAgent("persistence", "failed to unmarshal state", err)
 	}
 
 	return &state, nil
@@ -335,7 +335,7 @@ func ListSessionsWithTimestamps() ([]SessionInfo, error) {
 func ListAllSessionsWithTimestamps() ([]SessionInfo, error) {
 	stateDir, err := GetStateDir()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get state directory: %w", err)
+		return nil, agenterrors.NewAgent("persistence", "failed to get state directory", err)
 	}
 
 	var sessions []SessionInfo
@@ -353,7 +353,7 @@ func ListAllSessionsWithTimestamps() ([]SessionInfo, error) {
 		return nil
 	})
 	if walkErr != nil {
-		return nil, fmt.Errorf("failed to scan session directory: %w", walkErr)
+		return nil, agenterrors.NewAgent("persistence", "failed to scan session directory", walkErr)
 	}
 
 	// Get current working directory for prioritization
@@ -379,16 +379,16 @@ func ListAllSessionsWithTimestamps() ([]SessionInfo, error) {
 func ListSessionsWithTimestampsScoped(workingDir string) ([]SessionInfo, error) {
 	stateDir, err := GetStateDir()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get state directory: %w", err)
+		return nil, agenterrors.NewAgent("persistence", "failed to get state directory", err)
 	}
 	cleanWorkingDir, err := normalizeWorkingDirectory(workingDir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to normalize working directory: %w", err)
+		return nil, agenterrors.Wrap(err, "failed to normalize working directory")
 	}
 
 	sessionFiles, err := listSessionFilesForScope(stateDir, cleanWorkingDir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list session files for scope: %w", err)
+		return nil, agenterrors.NewAgent("persistence", "failed to list session files for scope", err)
 	}
 
 	sessions := make([]SessionInfo, 0, len(sessionFiles))
@@ -482,7 +482,7 @@ func listSessionFilesForScope(stateDir, workingDir string) ([]string, error) {
 			files = append(files, filepath.Join(scopeDir, entry.Name()))
 		}
 	} else if !os.IsNotExist(err) {
-		return nil, fmt.Errorf("failed to read scoped session directory: %w", err)
+		return nil, agenterrors.Wrap(err, "failed to read scoped session directory")
 	}
 
 	// Include any legacy root sessions that explicitly recorded the same working directory.
@@ -494,7 +494,7 @@ func listSessionFilesForScope(stateDir, workingDir string) ([]string, error) {
 			files = append(files, filepath.Join(stateDir, entry.Name()))
 		}
 	} else {
-		return nil, fmt.Errorf("failed to read session root directory: %w", err)
+		return nil, agenterrors.Wrap(err, "failed to read session root directory")
 	}
 
 	return files, nil
@@ -579,21 +579,21 @@ func RenameSession(sessionID string, newName string) error {
 func RenameSessionScoped(sessionID, newName, workingDir string) error {
 	stateDir, err := GetStateDir()
 	if err != nil {
-		return fmt.Errorf("failed to get state directory: %w", err)
+		return agenterrors.NewAgent("persistence", "failed to get state directory", err)
 	}
 	stateFile, err := resolveSessionStateFile(stateDir, sessionID, workingDir)
 	if err != nil {
-		return fmt.Errorf("failed to resolve session file: %w", err)
+		return agenterrors.NewAgent("persistence", "failed to resolve session file", err)
 	}
 
 	data, err := os.ReadFile(stateFile)
 	if err != nil {
-		return fmt.Errorf("failed to read session file: %w", err)
+		return agenterrors.NewAgent("persistence", "failed to read session file", err)
 	}
 
 	var state ConversationState
 	if err := json.Unmarshal(data, &state); err != nil {
-		return fmt.Errorf("failed to unmarshal state: %w", err)
+		return agenterrors.NewAgent("persistence", "failed to unmarshal state", err)
 	}
 
 	// Update the name
@@ -602,11 +602,11 @@ func RenameSessionScoped(sessionID, newName, workingDir string) error {
 	// Write back to file
 	newData, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
-		return fmt.Errorf("failed to marshal state: %w", err)
+		return agenterrors.NewAgent("persistence", "failed to marshal state", err)
 	}
 
 	if err := os.WriteFile(stateFile, newData, 0600); err != nil {
-		return fmt.Errorf("failed to write session file: %w", err)
+		return agenterrors.NewAgent("persistence", "failed to write session file", err)
 	}
 
 	return nil

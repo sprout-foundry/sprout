@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
@@ -27,7 +28,7 @@ func handleRepoMap(ctx context.Context, a *Agent, args map[string]interface{}) (
 	// Resolve to absolute path.
 	absRoot, err := filepath.Abs(rootDir)
 	if err != nil {
-		return "", fmt.Errorf("resolve directory: %w", err)
+		return "", agenterrors.NewTool("repo_map", "resolve directory", err)
 	}
 
 	// Verify that the resolved directory is within the workspace root.
@@ -35,12 +36,11 @@ func handleRepoMap(ctx context.Context, a *Agent, args map[string]interface{}) (
 	if workspaceRoot == "" {
 		workspaceRoot, err = os.Getwd()
 		if err != nil {
-			return "", fmt.Errorf("get working directory: %w", err)
-		}
-	}
+					return "", agenterrors.NewTool("repo_map", "get working directory", err)
+	}}
 	absWorkspace, err := filepath.Abs(workspaceRoot)
 	if err != nil {
-		return "", fmt.Errorf("resolve workspace root: %w", err)
+		return "", agenterrors.NewTool("repo_map", "resolve workspace root", err)
 	}
 	// Allow exact match or a proper subdirectory (with separator).
 	if absRoot != absWorkspace && !strings.HasPrefix(absRoot, absWorkspace+string(filepath.Separator)) {
@@ -51,7 +51,7 @@ func handleRepoMap(ctx context.Context, a *Agent, args map[string]interface{}) (
 
 	result, err := tools.GenerateRepoMap(ctx, rootDir)
 	if err != nil {
-		return "", fmt.Errorf("generate repo map: %w", err)
+		return "", agenterrors.NewTool("repo_map", "generate repo map", err)
 	}
 
 	return result, nil

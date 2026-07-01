@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
+
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
 
@@ -193,24 +195,24 @@ func (a *Agent) BuildTranscriptSnapshot(label string, includePreview bool) *Tran
 func (a *Agent) CaptureTranscriptSnapshot(label string, includePreview bool) (string, error) {
 	snap := a.BuildTranscriptSnapshot(label, includePreview)
 	if snap == nil {
-		return "", fmt.Errorf("agent unavailable for transcript snapshot")
+		return "", agenterrors.NewTool("transcript", "agent unavailable for transcript snapshot", nil)
 	}
 	dir, err := transcriptSessionDir(snap.SessionID, snap.WorkingDirectory)
 	if err != nil {
 		return "", err
 	}
 	if err := os.MkdirAll(dir, 0700); err != nil {
-		return "", fmt.Errorf("failed to create transcript dir: %w", err)
+		return "", agenterrors.NewTool("transcript", "failed to create transcript dir", err)
 	}
 	cleanLabel := sanitizeLabel(label)
 	filename := fmt.Sprintf("%s-%s.json", snap.Timestamp.Format("20060102T150405Z"), cleanLabel)
 	path := filepath.Join(dir, filename)
 	data, err := json.MarshalIndent(snap, "", "  ")
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal transcript snapshot: %w", err)
+		return "", agenterrors.NewTool("transcript", "failed to marshal transcript snapshot", err)
 	}
 	if err := os.WriteFile(path, data, 0600); err != nil {
-		return "", fmt.Errorf("failed to write transcript snapshot: %w", err)
+		return "", agenterrors.NewTool("transcript", "failed to write transcript snapshot", err)
 	}
 	pruneTranscriptDir(dir, transcriptMaxAutoSnapshots, transcriptMaxManualSnapshots)
 	return path, nil
@@ -267,11 +269,11 @@ func pruneBucket(dir string, files []string, cap int) {
 func LoadTranscriptSnapshot(path string) (*TranscriptSnapshot, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read transcript snapshot %s: %w", path, err)
+		return nil, agenterrors.NewTool("transcript", fmt.Sprintf("failed to read transcript snapshot %s", path), err)
 	}
 	var snap TranscriptSnapshot
 	if err := json.Unmarshal(data, &snap); err != nil {
-		return nil, fmt.Errorf("failed to parse transcript snapshot %s: %w", path, err)
+		return nil, agenterrors.NewTool("transcript", fmt.Sprintf("failed to parse transcript snapshot %s", path), err)
 	}
 	return &snap, nil
 }
@@ -288,7 +290,7 @@ func ListTranscriptSnapshots(sessionID, workingDir string) ([]string, error) {
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("failed to read transcript dir %s: %w", dir, err)
+		return nil, agenterrors.NewTool("transcript", fmt.Sprintf("failed to read transcript dir %s", dir), err)
 	}
 	out := make([]string, 0, len(entries))
 	for _, e := range entries {
@@ -776,7 +778,7 @@ func firstNonEmptyLine(s string) string {
 func transcriptSessionDir(sessionID, workingDir string) (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return "", fmt.Errorf("failed to resolve home directory: %w", err)
+		return "", agenterrors.NewTool("transcript", "failed to resolve home directory", err)
 	}
 	cleanWorkingDir, err := normalizeWorkingDirectory(workingDir)
 	if err != nil {

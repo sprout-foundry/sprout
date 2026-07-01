@@ -8,7 +8,6 @@ package agent
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,11 +27,11 @@ import (
 func diagnosticsDir() (string, error) {
 	configDir, err := configuration.GetConfigDir()
 	if err != nil {
-		return "", fmt.Errorf("resolve config dir: %w", err)
+		return "", agenterrors.NewConfig("resolve config dir", err)
 	}
 	dir := filepath.Join(configDir, "diagnostics", "threading")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", fmt.Errorf("create diagnostics dir: %w", err)
+		return "", agenterrors.NewConfig("create diagnostics dir", err)
 	}
 	return dir, nil
 }

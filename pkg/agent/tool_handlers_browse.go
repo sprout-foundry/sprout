@@ -15,7 +15,7 @@ func handleBrowseURL(ctx context.Context, a *Agent, args map[string]interface{})
 	// Extract url (required)
 	url, err := convertToString(args["url"], "url")
 	if err != nil {
-		return "", fmt.Errorf("failed to convert url parameter: %w", err)
+		return "", agenterrors.NewTool("browse", "failed to convert url parameter", err)
 	}
 
 	// Extract action (optional, default "text")
@@ -93,7 +93,7 @@ func handleBrowseURL(ctx context.Context, a *Agent, args map[string]interface{})
 	if rawSteps, ok := args["steps"].([]interface{}); ok {
 		steps, err := parseBrowseSteps(rawSteps)
 		if err != nil {
-			return "", fmt.Errorf("failed to parse browse steps: %w", err)
+			return "", agenterrors.NewTool("browse", "failed to parse browse steps", err)
 		}
 		opts.Steps = steps
 	}
@@ -104,7 +104,7 @@ func handleBrowseURL(ctx context.Context, a *Agent, args map[string]interface{})
 	}
 	if opts.ScreenshotPath != "" {
 		if _, err := filepath.Abs(opts.ScreenshotPath); err != nil {
-			return "", fmt.Errorf("invalid screenshot_path: %w", err)
+			return "", agenterrors.NewTool("browse", "invalid screenshot_path", err)
 		}
 	}
 
@@ -112,7 +112,7 @@ func handleBrowseURL(ctx context.Context, a *Agent, args map[string]interface{})
 
 	result, err := webcontent.BrowseURL(url, opts)
 	if err != nil {
-		return "", fmt.Errorf("failed to browse URL %s (action=%s): %w", url, action, err)
+		return "", agenterrors.Wrapf(err, "failed to browse URL %s (action=%s)", url, action)
 	}
 
 	return result, nil
@@ -127,11 +127,11 @@ func parseBrowseSteps(rawSteps []interface{}) ([]webcontent.BrowseStep, error) {
 		}
 		encoded, err := json.Marshal(stepMap)
 		if err != nil {
-			return nil, fmt.Errorf("browse_url steps[%d] marshal failed: %w", idx, err)
+			return nil, agenterrors.Wrapf(err, "browse_url steps[%d] marshal failed", idx)
 		}
 		var step webcontent.BrowseStep
 		if err := json.Unmarshal(encoded, &step); err != nil {
-			return nil, fmt.Errorf("browse_url steps[%d] parse failed: %w", idx, err)
+			return nil, agenterrors.Wrapf(err, "browse_url steps[%d] parse failed", idx)
 		}
 		if strings.TrimSpace(step.Action) == "" {
 			return nil, fmt.Errorf("browse_url steps[%d] requires action", idx)

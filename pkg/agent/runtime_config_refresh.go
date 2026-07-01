@@ -8,6 +8,8 @@ import (
 	"strings"
 	"sync"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
+
 	"github.com/sprout-foundry/sprout/pkg/mcp"
 )
 
@@ -37,10 +39,10 @@ func (a *Agent) RefreshRuntimeConfig(ctx context.Context) error {
 
 	// --- Step A: Reload config from disk ---
 	if a.configManager == nil {
-		return fmt.Errorf("config manager is not available")
+		return agenterrors.NewConfig("config manager is not available", nil)
 	}
 	if err := a.configManager.Reload(); err != nil {
-		return fmt.Errorf("reload config: %w", err)
+		return agenterrors.NewConfig("reload config", err)
 	}
 
 	// --- Step B: Reconcile MCP servers ---
@@ -76,7 +78,7 @@ func (a *Agent) RefreshRuntimeConfig(ctx context.Context) error {
 // installation.
 func (a *Agent) RefreshSkills() error {
 	if a.configManager == nil {
-		return fmt.Errorf("config manager is not available")
+		return agenterrors.NewConfig("config manager is not available", nil)
 	}
 	return a.configManager.Reload()
 }
@@ -106,7 +108,7 @@ func (a *Agent) reconcileMCPServers(ctx context.Context) error {
 				a.Logger().Info("Removing MCP server no longer in config: %s", name)
 			}
 			if err := mgr.RemoveServer(name); err != nil {
-				errs = append(errs, fmt.Errorf("remove server %s: %w", name, err))
+				errs = append(errs, agenterrors.NewConfig(fmt.Sprintf("remove server %s", name), err))
 				a.Logger().Warn("Failed to remove MCP server %s: %v", name, err)
 			}
 		}
@@ -122,7 +124,7 @@ func (a *Agent) reconcileMCPServers(ctx context.Context) error {
 			}
 			if err := mgr.AddServer(newCfg); err != nil {
 				if !isAlreadyExistsError(err) {
-					errs = append(errs, fmt.Errorf("add server %s: %w", name, err))
+					errs = append(errs, agenterrors.NewConfig(fmt.Sprintf("add server %s", name), err))
 					a.Logger().Warn("Failed to add MCP server %s: %v", name, err)
 				}
 			}
@@ -132,12 +134,12 @@ func (a *Agent) reconcileMCPServers(ctx context.Context) error {
 				a.Logger().Info("Restarting MCP server with changed config: %s", name)
 			}
 			if err := mgr.RemoveServer(name); err != nil {
-				errs = append(errs, fmt.Errorf("remove server %s for restart: %w", name, err))
+				errs = append(errs, agenterrors.NewConfig(fmt.Sprintf("remove server %s for restart", name), err))
 				a.Logger().Warn("Failed to remove MCP server %s for restart: %v", name, err)
 				continue
 			}
 			if addErr := mgr.AddServer(newCfg); addErr != nil {
-				errs = append(errs, fmt.Errorf("re-add server %s: %w", name, addErr))
+				errs = append(errs, agenterrors.NewConfig(fmt.Sprintf("re-add server %s", name), addErr))
 				a.Logger().Warn("Failed to re-add MCP server %s: %v", name, addErr)
 			}
 		}
@@ -145,13 +147,13 @@ func (a *Agent) reconcileMCPServers(ctx context.Context) error {
 
 	// 3. Start all servers that should be running
 	if startErr := mgr.StartAll(ctx); startErr != nil {
-		errs = append(errs, fmt.Errorf("start MCP servers: %w", startErr))
+		errs = append(errs, agenterrors.NewConfig("start MCP servers", startErr))
 		a.Logger().Warn("Failed to start some MCP servers: %v", startErr)
 	}
 
 	// Return aggregate error if any operation failed
 	if len(errs) > 0 {
-		return fmt.Errorf("mcp reconcile: %w", errors.Join(errs...))
+		return agenterrors.NewConfig("mcp reconcile", errors.Join(errs...))
 	}
 
 	return nil

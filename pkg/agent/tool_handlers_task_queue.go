@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
+
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 )
 
@@ -30,7 +32,7 @@ func handleTaskQueueRead(ctx context.Context, a *Agent, args map[string]interfac
 	// Read tasks (ReadTasks loads fresh from disk under a shared lock)
 	tasks, err := queue.ReadTasks(ctx, status, limit)
 	if err != nil {
-		return "", fmt.Errorf("failed to read tasks: %w", err)
+		return "", agenterrors.NewTool("task_queue", "failed to read tasks", err)
 	}
 
 	// Format output
@@ -74,12 +76,12 @@ func handleTaskQueuePublish(ctx context.Context, a *Agent, args map[string]inter
 	// Extract required parameters
 	taskID, err := getStringArg(args, "task_id")
 	if err != nil {
-		return "", fmt.Errorf("task_id is required: %w", err)
+		return "", agenterrors.Wrap(err, "task_id is required")
 	}
 
 	status, err := getStringArg(args, "status")
 	if err != nil {
-		return "", fmt.Errorf("status is required: %w", err)
+		return "", agenterrors.Wrap(err, "status is required")
 	}
 
 	// Extract optional result parameter
@@ -95,7 +97,7 @@ func handleTaskQueuePublish(ctx context.Context, a *Agent, args map[string]inter
 		for i, item := range st {
 			itemMap, ok := item.(map[string]interface{})
 			if !ok {
-				return "", fmt.Errorf("subtask at index %d must be an object", i)
+				return "", agenterrors.NewValidation(fmt.Sprintf("subtask at index %d must be an object", i), nil)
 			}
 
 			subtask := tools.SubtaskInput{}
@@ -113,7 +115,7 @@ func handleTaskQueuePublish(ctx context.Context, a *Agent, args map[string]inter
 			}
 
 			if subtask.Title == "" {
-				return "", fmt.Errorf("subtask at index %d is missing required 'title' field", i)
+				return "", agenterrors.NewValidation(fmt.Sprintf("subtask at index %d is missing required 'title' field", i), nil)
 			}
 			subtasks = append(subtasks, subtask)
 		}
@@ -126,13 +128,13 @@ func handleTaskQueuePublish(ctx context.Context, a *Agent, args map[string]inter
 	// Publish task update (PublishTask loads fresh from disk under an exclusive lock)
 	updatedTasks, err := queue.PublishTask(ctx, taskID, status, result, subtasks)
 	if err != nil {
-		return "", fmt.Errorf("failed to publish task update: %w", err)
+		return "", agenterrors.NewTool("task_queue", "failed to publish task update", err)
 	}
 
 	// Format output
 	var sb strings.Builder
 	if len(updatedTasks) == 0 {
-		return "", fmt.Errorf("no tasks returned from PublishTask")
+		return "", agenterrors.NewTool("task_queue", "no tasks returned from PublishTask", nil)
 	}
 
 	updatedTask := updatedTasks[0]
@@ -161,7 +163,7 @@ func handleTaskQueueAdd(ctx context.Context, a *Agent, args map[string]interface
 	// Extract required parameter
 	title, err := getStringArg(args, "title")
 	if err != nil {
-		return "", fmt.Errorf("title is required: %w", err)
+		return "", agenterrors.Wrap(err, "title is required")
 	}
 
 	// Extract optional parameters
@@ -192,7 +194,7 @@ func handleTaskQueueAdd(ctx context.Context, a *Agent, args map[string]interface
 	// Add task (AddTask loads fresh from disk under an exclusive lock)
 	task, err := queue.AddTask(ctx, title, description, priority, workingDir, persona)
 	if err != nil {
-		return "", fmt.Errorf("failed to add task: %w", err)
+		return "", agenterrors.NewTool("task_queue", "failed to add task", err)
 	}
 
 	// Format output

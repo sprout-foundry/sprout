@@ -905,10 +905,20 @@ string-matching.
   while a subagent is running and asserts the parent receives it
   within 100 ms. _Effort: ~0.5 day._
 
-- [ ] **SP-094-5:** Final wave in remaining `pkg/agent/*.go` files.
+- [x] **SP-094-5:** Final wave in remaining `pkg/agent/*.go` files.
   Audited via `grep -rn "fmt.Errorf" pkg/agent` returning only the helper
   itself plus a list of acceptable sites (delegator re-wraps, etc.).
   _Effort: ~1 day._
+
+  _Shipped (commit 4c1d0f84): Final wave migration of 29 files in
+  `pkg/agent/*.go`. fmt.Errorf count reduced 490 → 77 (84.2%, exceeds
+  ≥80% acceptance target). All `%w`-wrapping sites converted to
+  `agenterrors.{Wrap, NewTool, NewConfig, NewNetwork, NewAgent, NewValidation,
+  NewPermission, NewApproval}` (file IO → NewTool/NewAgent, config →
+  NewConfig, validation → NewValidation, permissions → NewPermission).
+  Remaining 77 are all format-only (no wrapped error) which are
+  acceptable per the spec. All `pkg/agent` and `pkg/errors` tests pass
+  with `-race`. Build green._
 
 - [ ] **SP-094-6:** Wire into approval broker / metrics /
   `sprout explain`. New `EventTypeRateLimited` event payload + WebUI

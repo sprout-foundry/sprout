@@ -946,9 +946,20 @@ string-matching.
   acceptable per the spec. All `pkg/agent` and `pkg/errors` tests pass
   with `-race`. Build green._
 
-- [ ] **SP-094-6:** Wire into approval broker / metrics /
+- [x] **SP-094-6:** Wire into approval broker / metrics /
   `sprout explain`. New `EventTypeRateLimited` event payload + WebUI
   consumer (~50 lines). _Effort: ~1 day._
+
+  _Shipped (commit d065be8f): Added `EventTypeRateLimited` constant
+  + `RateLimitedEvent` payload type in `pkg/events`. Approval broker
+  publishes the event when a tool/API call hits a rate-limit
+  response. Added `(Agent).RecordErrorCategory(err)` which classifies
+  the typed error and emits a `MetricsUpdateEventWithCategory` with
+  an `error_category` label so the cost/status footer can show
+  "rate-limited, retrying…" distinct from generic errors. WebUI WS
+  handler in `pkg/webui/rate_limited_handler.go` consumes the event.
+  8 tests added covering classification, event shape, handler
+  dispatch. All build + tests pass._
 
 ### Acceptance
 

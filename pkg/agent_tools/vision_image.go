@@ -84,21 +84,44 @@ func (vp *VisionProcessor) GetImageData(ctx context.Context, imagePath string) (
 // DownloadImage downloads an image from URL
 func (vp *VisionProcessor) DownloadImage(ctx context.Context, url string) ([]byte, error) {
 	client := &http.Client{Timeout: 30 * time.Second}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("create image download request: %w", err)
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("download image: %w", err)
-	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("download image: status %d", resp.StatusCode)
+	var data []byte
+	err := DoVisionRetry(ctx, func(ctx context.Context) error {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		if err != nil {
+			return fmt.Errorf("create image download request: %w", err)
+		}
+		resp, err := client.Do(req)
+		if err != nil {
+			return fmt.Errorf("download image: %w", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			// Surface Retry-After for 429/503 and other 5xx.
+			if resp.StatusCode == 429 || resp.StatusCode == 503 || resp.StatusCode >= 500 {
+				return &RetryableHTTPError{
+					StatusCode: resp.StatusCode,
+					Status:     resp.Status,
+					Method:     req.Method,
+					URL:        url,
+					RetryAfter: parseRetryAfter(resp.Header.Get("Retry-After")),
+				}
+			}
+			return fmt.Errorf("download image: status %d", resp.StatusCode)
+		}
+
+		data, err = io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("read image data: %w", err)
+		}
+		return nil
+	}, RetryOptions{OpName: "download_image"})
+	if err != nil {
+		return nil, err
 	}
 
-	return io.ReadAll(resp.Body)
+	return data, nil
 }
 
 func OptimizeImageData(imagePath string, data []byte) ([]byte, string, error) {

@@ -1367,8 +1367,25 @@ real tickets. This ticket scopes them.
   (via `TEST_RACE ?= -race`) and CI (`make test-coverage` hardcodes `-race`).
   No Makefile or workflow change was needed. Audit memo at `docs/sp-099-audit.md`._
 
-- [ ] **SP-099-2:** Locking strategy ADR + mutex rename pass.
+- [x] **SP-099-2:** Locking strategy ADR + mutex rename pass.
+  New `docs/adr-0007-locking-strategy.md` codifying: when to use
+  `sync.Mutex` vs `sync.RWMutex` vs channels vs atomic, with the 25
+  existing mutexes classified under one of these patterns. Per-spec
+  pattern: rename to `mu sync.Mutex` (drop the domain prefix)
+  everywhere except where the prefix encodes ownership semantics.
   ~1 day.
+
+  _Shipped (commit e2dd7276): New `docs/adr-0007-locking-strategy.md`
+  (89 lines) with decision tree + pattern catalog. All 208 existing
+  mutex fields classified into 7 buckets (StateGuard ~58%,
+  OwnerQualified ~14%, CacheLock ~12%, SingletonSwap ~7%,
+  PackageCache ~5%, ExternalSystem ~2%, IOLock ~2%). Targeted
+  renames: `pricingResolverMu` → `mu`
+  (`pkg/agent_api/pricing_resolver.go`), `tokenCacheMu` →
+  `cacheMu` (`pkg/agent_api/token_utils.go`, kept the 'cache'
+  disambiguating prefix), `chordWatcherMu` → `watcherMu`
+  (`pkg/agent_tools/computer_use/panic_key_chord.go`). All tests
+  pass; build green._
 
 - [ ] **SP-099-3:** Run `-race -count=3 ./...`, fix what surfaces.
   ~1.5 days.

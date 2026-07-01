@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -98,10 +99,11 @@ func runWorkflowByPath(path string) error {
 
 	name := filepath.Base(path)
 
-	// Show an overview of the workflow before running so the user understands
-	// what they are about to kick off (long-running, token-eating, background).
-	if err := printWorkflowOverview(path, name); err != nil {
-		// Failing to render an overview is not fatal — fall back to the basic display.
+	// Parse the workflow once so we can reuse the summary for the overview
+	// and for building subprocess args (max_iterations, subagent timeout).
+	summary, err := automate.Summarize(path)
+	if err != nil {
+		// Failing to parse is unusual — fall back to basic display.
 		desc, _ := automate.ExtractDescription(path)
 		fmt.Println()
 		console.GlyphAction.Printf("Running workflow: %s", name)
@@ -109,6 +111,19 @@ func runWorkflowByPath(path string) error {
 			fmt.Printf("  %s\n", desc)
 		}
 		fmt.Println()
+	} else {
+		// Show an overview of the workflow before running so the user understands
+		// what they are about to kick off (long-running, token-eating, background).
+		if printErr := printWorkflowOverviewFromSummary(summary, name); printErr != nil {
+			// Failing to render an overview is not fatal — fall back to the basic display.
+			desc, _ := automate.ExtractDescription(path)
+			fmt.Println()
+			console.GlyphAction.Printf("Running workflow: %s", name)
+			if desc != "" {
+				fmt.Printf("  %s\n", desc)
+			}
+			fmt.Println()
+		}
 	}
 
 	if !automateAssumeYes {
@@ -126,21 +141,17 @@ func runWorkflowByPath(path string) error {
 		return fmt.Errorf("failed to resolve sprout binary: %w", err)
 	}
 
-	args := []string{"agent", "--workflow-config", path, "--skip-prompt", "--no-web-ui"}
-	if automateBudgetUSD > 0 {
-		args = append(args, "--budget-usd", fmt.Sprintf("%g", automateBudgetUSD))
-	}
-	if strings.TrimSpace(automateBudgetWarn) != "" {
-		args = append(args, "--budget-warn", automateBudgetWarn)
-	}
-	if automateHeartbeatSeconds > 0 {
-		args = append(args, "--heartbeat", fmt.Sprintf("%d", automateHeartbeatSeconds))
-	}
+	args := buildAgentSubprocessArgs(path, summary)
 
 	cmd := exec.Command(execPath, args...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+
+	// Apply subagent timeout override if the workflow specifies one.
+	if summary != nil && summary.SubagentTimeoutSeconds != nil && *summary.SubagentTimeoutSeconds > 0 {
+		cmd.Env = append(os.Environ(), fmt.Sprintf("SPROUT_TOOL_TIMEOUT=%d", *summary.SubagentTimeoutSeconds))
+	}
 
 	// Generate a session ID for PID file tracking
 	randomHex := make([]byte, 8)
@@ -191,14 +202,35 @@ func runWorkflowByPath(path string) error {
 	return nil
 }
 
-// printWorkflowOverview renders a human-readable summary of the workflow so
-// the user can validate intent before kicking off a long-running automation run.
-func printWorkflowOverview(path, name string) error {
-	summary, err := automate.Summarize(path)
-	if err != nil {
-		return err
+// buildAgentSubprocessArgs constructs the argument list for the sprout agent
+// subprocess that executes the workflow. Extracted for testability.
+func buildAgentSubprocessArgs(path string, summary *automate.Summary) []string {
+	args := []string{"agent", "--workflow-config", path, "--skip-prompt", "--no-web-ui"}
+
+	// Plumb --max-iterations from the workflow JSON.
+	// Non-zero values are passed explicitly; 0 (unlimited) is the default so
+	// we don't pass the flag when it's 0 or nil.
+	if summary != nil && summary.Initial != nil && summary.Initial.MaxIterations > 0 {
+		args = append(args, "--max-iterations", strconv.Itoa(summary.Initial.MaxIterations))
 	}
 
+	if automateBudgetUSD > 0 {
+		args = append(args, "--budget-usd", fmt.Sprintf("%g", automateBudgetUSD))
+	}
+	if strings.TrimSpace(automateBudgetWarn) != "" {
+		args = append(args, "--budget-warn", automateBudgetWarn)
+	}
+	if automateHeartbeatSeconds > 0 {
+		args = append(args, "--heartbeat", fmt.Sprintf("%d", automateHeartbeatSeconds))
+	}
+
+	return args
+}
+
+// printWorkflowOverviewFromSummary renders a human-readable summary of the
+// workflow so the user can validate intent before kicking off a long-running
+// automation run. Takes a pre-parsed summary to avoid re-reading the file.
+func printWorkflowOverviewFromSummary(summary *automate.Summary, name string) error {
 	fmt.Println()
 	console.GlyphAction.Printf("Workflow: %s", name)
 	if summary.Description != "" {
@@ -216,6 +248,8 @@ func printWorkflowOverview(path, name string) error {
 		)
 		if init.MaxIterations > 0 {
 			fmt.Printf("    max_iterations=%d\n", init.MaxIterations)
+		} else {
+			fmt.Printf("    max_iterations=0 (unlimited)\n")
 		}
 		if init.RiskProfile != "" {
 			fmt.Printf("    risk_profile=%s\n", init.RiskProfile)
@@ -270,6 +304,12 @@ func printWorkflowOverview(path, name string) error {
 	if !summary.IsApprovalRequired() {
 		fmt.Println()
 		console.GlyphWarning.Printf("requires_approval: false — this workflow runs without a confirmation prompt when invoked by an agent.")
+	}
+
+	// Surface subagent timeout override if set.
+	if summary.SubagentTimeoutSeconds != nil && *summary.SubagentTimeoutSeconds > 0 {
+		fmt.Println()
+		fmt.Printf("Subagent timeout: %d seconds\n", *summary.SubagentTimeoutSeconds)
 	}
 
 	fmt.Println()

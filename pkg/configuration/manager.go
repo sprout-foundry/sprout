@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
@@ -324,6 +325,22 @@ func LoadConfigWithLayers(globalPath, workspacePath, sessionPath, globalDir stri
 	// Personas are catalog-fixed and never read from disk; hydrate from the
 	// embedded catalog so every layered-load path matches the regular Load().
 	result.SubagentTypes = defaultSubagentTypes()
+
+	// Merge missing default (built-in) skills so that a hot-reload via
+	// Manager.Reload() picks up new builtins added to the embedded library
+	// without requiring a process restart. Mirrors what Load() does.
+	if result.Skills == nil {
+		result.Skills = make(map[string]Skill)
+	}
+	mergeMissingDefaultSkills(result)
+
+	// Discover user-level and project-specific skills so that hot-reload
+	// paths (Manager.Reload -> LoadConfigWithLayers) pick up new SKILL.md
+	// files without requiring a process restart.
+	if discovered := result.discoverSkills(); len(discovered) > 0 {
+		log.Printf("[skills] Discovered %d skill(s): %s",
+			len(discovered), strings.Join(discovered, ", "))
+	}
 
 	return result, nil
 }

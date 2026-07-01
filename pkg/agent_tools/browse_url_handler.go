@@ -14,12 +14,12 @@ func (h *browseURLHandler) Name() string { return "browse_url" }
 func (h *browseURLHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "browse_url",
-		Description: "Open a URL in a headless browser. Use this directly for localhost app debugging, JS-rendered scraping, and web UI verification when you need rendered state or when Playwright/MCP is unavailable. Supports screenshots, rendered DOM/text capture, persistent browser sessions across tool calls, navigation and interaction steps, assertions, selector inspection, browser console/error capture, network request summaries including CORS signals, cookies/storage snapshots, and responsive testing via custom viewport sizes.",
+		Description: "Open a URL in a headless browser. Use this directly for localhost app debugging, JS-rendered scraping, and web UI verification when you need rendered state or when Playwright/MCP is unavailable. Supports screenshots, rendered DOM/text capture, persistent browser sessions across tool calls, navigation and interaction steps, assertions, selector inspection, browser console/error capture, network request summaries including CORS signals, cookies/storage snapshots, responsive testing via custom viewport sizes, pre-navigation cookie/header injection, and element-level screenshots.",
 		Required:    []string{"url"},
 		Parameters: []ParameterDef{
 			{Name: "url", Type: "string", Required: true, Description: "URL to browse — works with localhost URLs for testing local apps"},
 			{Name: "action", Type: "string", Description: "What to do: 'screenshot' (save PNG), 'dom' (return rendered HTML), 'text' (return visible text, default), or 'inspect' (return structured JSON with page state and diagnostics)"},
-			{Name: "steps", Type: "array", Description: "Optional interaction steps. Each step object supports action=wait_for|wait_for_text|assert_selector|assert_text|assert_title|assert_url|click|hover|type|fill|press|sleep|scroll_to|navigate|reload|back|forward|eval plus selector/value/key/millis/script/expect fields as needed"},
+			{Name: "steps", Type: "array", Description: "Optional interaction steps. Each step object supports action=wait_for|wait_for_text|wait_for_function|assert_selector|assert_text|assert_title|assert_url|click|hover|type|fill|press|sleep|scroll_to|navigate|reload|back|forward|eval|screenshot_selector plus selector/value/key/millis/script/expect/screenshot_path fields as needed"},
 			{Name: "viewport_width", Type: "integer", Description: "Browser viewport width in pixels (default: 1280)"},
 			{Name: "viewport_height", Type: "integer", Description: "Browser viewport height in pixels (default: 720)"},
 			{Name: "wait_for_selector", Type: "string", Description: "Optional CSS selector to wait for before capturing output or running steps"},
@@ -37,6 +37,9 @@ func (h *browseURLHandler) Definition() ToolDefinition {
 			{Name: "capture_selectors", Type: "array", Description: "Optional list of CSS selectors to capture after interactions (text/html/value/basic attrs)"},
 			{Name: "response_max_chars", Type: "integer", Description: "Optional per-field truncation limit for inspect output"},
 			{Name: "user_agent", Type: "string", Description: "Override the browser User-Agent string"},
+			{Name: "cookies", Type: "object", Description: "Pre-navigation cookies to set as name=value pairs. Domain defaults to the target URL host; path defaults to /."},
+			{Name: "headers", Type: "object", Description: "Custom HTTP headers to send with every request (e.g., Authorization: Bearer <token>). In persistent sessions, headers are replaced on each call — re-specify any you want to maintain."},
+			{Name: "allow_file_url", Type: "boolean", Description: "Enable file:// URL navigation (opt-in for security; requires explicit confirmation)."},
 		},
 	}
 }

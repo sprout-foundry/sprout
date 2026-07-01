@@ -125,6 +125,303 @@ should be added as SP-092+ rather than expanding this list.
 
 ---
 
+## SP-103: Vision Pipeline Reliability + Caching + Routing Fixes
+
+_Verified against actual code state (2026-06-30) and current LLM-vendor
+practice (Anthropic Vision + Prompt Caching docs, production IDP research
+from Edge Case Jan 2026)._ The original direction (route pasted images
+through `analyze_image_content` by default) was wrong for the common case;
+Anthropic's docs explicitly recommend inline image embedding with
+`cache_control` for repeat-turn cost reduction. This SP captures the actual
+gaps: prompt caching on image blocks, image resizing, dead-code
+reactivation for non-vision models, OCR-model carve-out, plus the
+reliability/perf/correctness fixes that were always valid.
+
+### Background (verified state)
+
+- `pkg/agent/conversation.go:230-242` (`processImagesAsMultimodal`) is the
+  *only* path that embeds pasted images as `api.ImageData` for the chat
+  model. Default behavior when `SupportsVision() == true`.
+- `processImagesViaOCR` (`conversation.go:376`) and
+  `buildNonVisionImageToolPrompt` (`conversation.go:268`) are defined but
+  **never called from production code**. The "non-vision path" is dead
+  code — pasted images on a non-vision model stay as raw
+  `Pasted image saved to disk: /tmp/foo.png` placeholders with no
+  system-prompt guidance to call `analyze_image_content`.
+- `analyze_image_content` calls `tools.AnalyzeImage` directly and is
+  available to all models regardless of `SupportsVision()`. It's the
+  right tool for specialized analysis (OCR of dense text, frontend
+  inspection, structured extraction), but **not** the right default for
+  simple "what color is this?" conversational vision.
+- `OllamaLocalClient.SupportsVision()`
+  (`pkg/agent_api/ollama_local.go:514-520`) returns true for `glm-ocr` and
+  similar OCR models, which then triggers direct multimodal embedding on a
+  model not designed for conversational vision. Needs a
+  `SupportsConversationalVision()` distinction.
+- `visionCache`, `lastVisionUsage`, `visionCacheUsage` are package-globals
+  with no mutex. Concurrent `AnalyzeImage` calls race.
+- `processOCRImages` (`vision_pdf.go:194-265`) is sequential with a
+  `failures >= 2` give-up. Up to 8 pages serially.
+- `DownloadImage` (`vision_image.go:91-100`) and `downloadRemotePDFToTemp`
+  (`vision_pdf.go:118`) read the full body before checking size.
+- `classifyPDFProcessingErrorCode` (`vision_utils.go:182-184`) and the
+  per-call `strings.Contains(errMsg, ...)` in `vision_image.go:418-440`
+  stringify typed errors to classify them back to `ErrCode*` constants.
+  Typed errors already exist in `pkg/errors/types.go::TypedError` with
+  `NewTool`, `NewNetwork`, etc.; the gap is at the response-builder
+  boundary, not the source.
+- `RateLimitExceededError` (`pkg/agent/api_client_types.go`) is used only
+  by test fixtures (`scripted_playback.go`). The legacy retry layer was
+  removed alongside `APIClient` in v0.16.12. Production has no
+  retry/backoff in `SendVisionRequest`.
+
+### Why these items, not "route to tools"
+
+Per Anthropic's vision docs
+(`https://platform.claude.com/docs/en/build-with-claude/vision`):
+
+- Inline image embedding is the recommended pattern. Anthropic explicitly
+  shows `image` content blocks as the primary use case.
+- Image-then-text structure gives the best results ("Claude works best
+  when images come before text").
+- Multi-image joint analysis is first-class ("useful for comparing
+  images, asking about differences").
+- Caching images is supported via `cache_control` — 1024-token minimum
+  for Sonnet 4.5+, cache hits cost 10% of base input.
+
+Per Anthropic's prompt caching docs:
+
+- Image blocks are cacheable content blocks. The biggest cost win is
+  caching the image prefix across turns, not routing through tools.
+
+Per Edge Case's production IDP research (Jan 2026), the canonical
+production pattern is **hybrid OCR → vision LLM**, not vision-LLM-only or
+OCR-only. For Sprout's case (a code agent with multimodal chat model),
+that means: inline images for chat, `analyze_image_content` for
+specialized analysis (OCR mode = "vision LLM called as a tool"), and
+caching for repeat-turn cost.
+
+### Reliability (SP-103-A) — high priority
+
+- [ ] **SP-103-A1:** Retry-with-backoff wrapper for `SendVisionRequest`. 3
+      attempts, exponential (200ms → 1.6s) ±20% jitter. Respect
+      `Retry-After` header on 429/503. Plumb through `AnalyzeImage`,
+      `processOCRImages`, and remote image/PDF downloads. Skip retries
+      for 4xx other than 408/429. Configurable via
+      `VISION_RETRY_ATTEMPTS` env var (default 3).
+
+      _~0.5 day. New `pkg/agent_tools/vision_retry.go` helper. Touches
+      `vision_image.go`, `vision_pdf.go`._
+
+- [ ] **SP-103-A2:** Parallelize `processOCRImages` and
+      `ProcessImagesInText` with `errgroup.Group` + bounded worker pool
+      (size 3 by default, env `VISION_PARALLEL_WORKERS`). Preserve
+      per-page ordering in the output (page N's text still appears
+      before page N+1's). Stream partial results via a
+      `progress.VisionProgress` callback so the agent can surface
+      "analyzed 2/6 pages" feedback.
+
+      _~1 day. New `pkg/agent_tools/vision_parallel.go`. Update
+      `vision_pdf.go:194-265` and `vision_analyze.go:33-72`._
+
+- [ ] **SP-103-A3:** Add mutex + LRU eviction to `visionCache`. Cache key
+      becomes `sha256(filepath + mtime_ns + analysisMode + analysisPrompt)`
+      so a modified file at the cached path automatically invalidates.
+      Bounded at 256 entries (`VISION_CACHE_SIZE`); evict
+      least-recently-used. Add `VisionCacheStats` reporting hits/misses/
+      evictions for observability.
+
+      _~0.5 day. Convert `map[string]string` to a hand-rolled
+      doubly-linked-list LRU (avoiding a new dependency). Test that
+      mutating a file at the cached path causes a miss._
+
+- [ ] **SP-103-A4:** Replace package-globals `lastVisionUsage`,
+      `visionCache`, `visionCacheUsage` with a `*VisionProcessor`-owned
+      struct returned alongside each call. Thread it through
+      `AnalyzeImage` and `processOCRImages`. Lets the agent accumulate
+      per-session usage for cost reporting without the race. The
+      package-level `GetLastVisionUsage()` keeps a "most recent across
+      all sessions" mirror for backward compat, guarded by
+      `sync.RWMutex`.
+
+      _~0.5 day. Touches `vision_types.go`, `vision_image.go`,
+      `vision_analyze.go`, `vision_pdf.go`. Verify with `go test -race`._
+
+- [ ] **SP-103-A5:** Pre-flight `Content-Length` HEAD on remote image and
+      PDF downloads. Bail before reading the body if the header exceeds
+      the size cap. Fall back to streaming + size-check on HEAD failure
+      (e.g. S3 signed URLs sometimes reject HEAD).
+
+      _~0.25 day. Add `checkRemoteSize(ctx, url, cap)` helper in
+      `vision_image.go` and call from `DownloadImage` and
+      `downloadRemotePDFToTemp`._
+
+- [ ] **SP-103-A6:** Translate typed errors at the response-builder
+      boundary. Currently `vision_image.go:418-440` does
+      `strings.Contains(errMsg, ...)` to classify errors into `ErrCode*`
+      strings for the JSON response. Replace with: if the error is a
+      `*TypedError` (already constructed via `agenterrors.NewTool`/`NewNetwork`),
+      extract its `Component` and `Details` to populate the response
+      fields directly. Falls back to the legacy classification only when
+      the error isn't a `*TypedError`.
+
+      _~0.5 day. Touches `vision_image.go`, `vision_pdf.go`. No changes
+      to `pkg/errors` needed — `TypedError` is already complete._
+
+- [ ] **SP-103-A7:** Race-detector test fixtures. Add
+      `vision_concurrency_test.go` that fires 10 concurrent
+      `AnalyzeImage` calls against a mock client and asserts no data
+      race (run with `-race`). Add parallel OCR test that drives 6 PDF
+      pages and asserts all 6 are processed even if 1 fails
+      transiently. Wire `make test-race` into a required CI check.
+
+      _~0.25 day._
+
+- [ ] **SP-103-A8:** Graceful degradation. If `SendVisionRequest` fails
+      twice on a non-OCR image, retry via the configured OCR model
+      (`PDFOCRModel` if set, else fallback Ollama OCR) with the OCR
+      prompt. If OCR also fails, return a structured
+      `ErrorCode = ErrCodeVisionRequestFailed` with a hint that the
+      user can describe the image manually. No silent fallback — every
+      transition is logged at INFO. Config flag
+      `VISION_FALLBACK_TO_OCR = true`.
+
+      _~1 day. Touches `vision_analyze.go`._
+
+### Prompt caching + image sizing (SP-103-B) — high priority
+
+This is the **highest-leverage change** in the SP. Anthropic prompt caching
+cuts repeat-turn image cost by 90% on cache hits.
+
+- [ ] **SP-103-B1:** Add `cache_control: {type: "ephemeral"}` to image
+      blocks in `processImagesAsMultimodal`. The image content block in
+      the user message gets the cache breakpoint so subsequent turns
+      reuse the cached image instead of re-encoding and re-sending
+      base64. For OpenAI's chat API, the equivalent is `image_url.detail`
+      + repeating the URL across turns (OpenAI doesn't have native
+      prompt caching on images yet — fall back to keeping the URL stable
+      and letting their caching layer do its thing).
+
+      _~0.5 day. Touches `conversation.go:286-360` and the Anthropic
+      provider in `pkg/agent_api/anthropic*.go` to emit the
+      `cache_control` field. Test that subsequent turns report
+      `cache_read_input_tokens > 0`._
+
+- [ ] **SP-103-B2:** Pre-resize images before embedding. Current code
+      caps at `visionMaxImageFileSizeBytes` but doesn't constrain
+      dimensions. A 4K screenshot costs 4784 visual tokens on
+      high-resolution-tier models vs. 1560 on standard tier — ~3× the
+      cost for most tasks. Default resize to ≤1568px long-edge
+      (standard tier), unless the user opts into
+      `analysis_mode: extract` which needs high resolution. Add
+      `VISION_MAX_IMAGE_EDGE` env var (default 1568, set to 0 to
+      disable).
+
+      _~0.5 day. Add `resizeForVisionBudget` helper in
+      `vision_image.go`. Hook from `processImagesAsMultimodal` before
+      the image goes into the message._
+
+- [ ] **SP-103-B3:** Image-then-text ordering. Anthropic docs:
+      "Claude works best when images come before text." Currently the
+      image blocks are appended after the text placeholder. Reorder
+      so the image blocks come first in the user message content
+      array, with the (cleaned) text query following.
+
+      _~0.25 day. Touches `conversation.go:286-360`._
+
+- [ ] **SP-103-B4:** Multiple-image label hints. Anthropic recommends
+      `Image 1:`, `Image 2:` text labels before each image so the
+      model can refer to them by name. Generate these labels
+      automatically when the user pastes 2+ images.
+
+      _~0.25 day. Touches `conversation.go`._
+
+### Dead code + carve-out (SP-103-C) — medium priority
+
+- [ ] **SP-103-C1:** Reactivate the non-vision path. Currently
+      `conversation.go:225-242::processImagesInQuery` falls through to
+      `return nil, query, nil` on the non-multimodal branch, leaving
+      pasted images as raw `Pasted image saved to disk: /tmp/foo.png`
+      placeholders. The function comment at line 227 even *claims* it
+      "falls back to the existing OCR pipeline" but the code doesn't.
+      Fix: replace the dead branch with a call to
+      `buildNonVisionImageToolPrompt` (already defined at
+      `conversation.go:268`) that appends the
+      "OCR Trigger Policy (MANDATORY)..." prompt to nudge the model to
+      call `analyze_image_content` per pasted image. Delete
+      `processImagesViaOCR` (line 376) — it's superseded by the tool
+      path. Update the function comment to match the actual behavior.
+
+      _~0.5 day. Touches `conversation.go:225-242, 268-280, 376-...`.
+      Tests in `conversation_test.go` already cover
+      `buildNonVisionImageToolPrompt`; add an integration test that
+      drives the full non-vision flow and asserts the prompt is
+      appended._
+
+- [ ] **SP-103-C2:** Add `SupportsConversationalVision()` to
+      `pkg/agent_api/interface.go` (separate from `SupportsVision()`).
+      Default `true` for providers that previously returned
+      `SupportsVision() == true`. `OllamaLocalClient` returns `true`
+      only for chat models (llama3.2 *without* "ocr"/"vision"
+      substring); `glm-ocr` returns `false`. `processImagesInQuery`
+      uses this for the OCR-model carve-out — forces the non-multimodal
+      path regardless of user setting, so OCR models never try inline
+      embedding.
+
+      _~0.5 day. Update all client implementations
+      (`base_provider.go`, `ollama.go`, `ollama_local.go`, etc.) to
+      provide a sensible default. Backward compat: callers that only
+      check `SupportsVision()` keep working._
+
+- [ ] **SP-103-C3:** Update `analyze_image_content` tool description to
+      advertise the new routing: "Pasted images are visible inline to
+      multimodal chat models by default. Use this tool when you need
+      specialized analysis (OCR of dense text, frontend UI inspection,
+      structured extraction via `extract` mode, or when the chat model
+      can't see images directly)."
+
+      _~0.25 day. Edit
+      `analyze_image_content_handler.go::Definition` and the
+      corresponding prompt string in
+      `pkg/agent/seed_tool_registry.go`._
+
+- [ ] **SP-103-C4:** Metrics + observability. Add `vision_image_tokens`
+      histogram (sampled per embedded image), `vision_cache_hit` counter
+      (tagged by mode), `vision_retry_attempt` counter, and
+      `vision_parallel_pages` gauge. Surface all in the `metrics`
+      JSON endpoint and the audit-event stream. Goal: a user can see
+      in their session log how many image tokens they spent, whether
+      images hit cache, and whether retries fired.
+
+      _~0.5 day. Touches `pkg/metrics/` and the existing
+      `EventTypeToolStart` payload._
+
+### Rollout
+
+SP-103-A1..A8 + B1..B4 + C1..C4 ship as one cohesive SP behind no flag
+(reliability + caching + sizing all benefit every user; the OCR carve-out
+fixes a real misrouting bug).
+
+Feature flag only needed for C3 (tool description text) — wait until
+B1's caching metric is verified before updating the user-facing
+description, so the message matches actual behavior.
+
+### Acceptance
+
+- `go test -race ./pkg/agent_tools/...` passes; new tests cover
+  parallel dispatch + cache eviction + retry + typed-error paths.
+- Subsequent turns with the same pasted image report
+  `cache_read_input_tokens > 0` (Anthropic) or `cached_tokens > 0`
+  (OpenAI) in the response usage.
+- A 4K pasted screenshot bills as ~1500 visual tokens, not ~4800.
+- An Ollama OCR-model session (`glm-ocr`) routes pasted images through
+  `analyze_image_content` tool call, never direct multimodal
+  embedding.
+- A non-vision chat model (e.g. GPT-3.5) on Sprout has the model call
+  `analyze_image_content` for each pasted image (currently it just
+  sees the placeholder text and does nothing).
+- `make test-race` is a required CI check.
+
 ## SP-092: Persistent Recall via `/recall` and Cross-Turn Hints
 
 _Surfacing past sessions on demand (~1–2 days)._ All the backend work is
@@ -776,8 +1073,10 @@ real tickets. This ticket scopes them.
 
 ### Phase order
 
-- [ ] **SP-099-1:** CI race detection by default (Makefile + workflow).
-  ~0.5 day.
+- [x] **SP-099-1:** CI race detection by default (Makefile + workflow).
+  ~0.5 day. _Shipped: race detection is already the default in `make test-unit`
+  (via `TEST_RACE ?= -race`) and CI (`make test-coverage` hardcodes `-race`).
+  No Makefile or workflow change was needed. Audit memo at `docs/sp-099-audit.md`._
 
 - [ ] **SP-099-2:** Locking strategy ADR + mutex rename pass.
   ~1 day.

@@ -1,39 +1,57 @@
 /**
- * NotificationCenter.test.tsx — Unit tests for the NotificationCenter component.
+ * NotificationCenter.test.tsx — Unit tests for the bus-driven toast stack.
  *
  * Covers:
- * - Rendering (open/closed states)
- * - Empty state display
- * - Notification list rendering (reverse order, icons, timestamps)
- * - Dismiss individual notification
- * - Dismiss all notifications
- * - Copy message to clipboard
- * - Escape key to close
- * - Outside click to close
- * - Relative time formatting
+ * - Renders nothing when bus is empty
+ * - Subscribes to notificationBus and renders notifications via NotificationStack
+ * - Auto-dismiss after 5s (when no explicit duration)
+ * - Respects explicit duration when set
+ * - Dismiss callback removes the notification
+ * - Cleans up timers + subscriptions on unmount
+ * - publishSystemNotification category → type mapping
  */
-
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
-import type { Notification } from '../contexts/NotificationContext';
-import NotificationCenter from './NotificationCenter';
+import { vi, describe, it, expect, beforeEach, afterEach, beforeAll } from 'vitest';
+import NotificationCenter, { publishSystemNotification } from './NotificationCenter';
+import { notificationBus, type NotificationEvent } from '@sprout/ui';
 
 // ---------------------------------------------------------------------------
-// Mocks — must come before the static import of the module under test
+// Mock @sprout/ui NotificationStack so we don't need the whole shared stack
 // ---------------------------------------------------------------------------
-
-const mockRemoveNotification = vi.fn();
-const mockClearNotifications = vi.fn();
-let mockNotifications: Notification[] = [];
-
-vi.mock('../contexts/NotificationContext', () => ({
-  useNotifications: () => ({
-    notifications: mockNotifications,
-    removeNotification: mockRemoveNotification,
-    clearNotifications: mockClearNotifications,
-  }),
-}));
+const mockOnDismiss = vi.fn();
+let lastReceivedNotifications: any[] = [];
+vi.mock('@sprout/ui', async () => {
+  const actual = await vi.importActual<any>('@sprout/ui');
+  return {
+    ...actual,
+    NotificationStack: (props: any) => {
+      lastReceivedNotifications = props.notifications;
+      mockOnDismiss.mockImplementation(props.onDismiss);
+      return (
+        <div data-testid="mock-notification-stack">
+          {props.notifications.map((n: any) => (
+            <article
+              key={n.id}
+              data-testid={`toast-${n.id}`}
+              data-type={n.type}
+            >
+              <h3 data-testid={`toast-title-${n.id}`}>{n.title}</h3>
+              <p data-testid={`toast-message-${n.id}`}>{n.message}</p>
+              <button
+                type="button"
+                data-testid={`dismiss-${n.id}`}
+                onClick={() => props.onDismiss(n.id)}
+              >
+                ×
+              </button>
+            </article>
+          ))}
+        </div>
+      );
+    },
+  };
+});
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -41,29 +59,20 @@ vi.mock('../contexts/NotificationContext', () => ({
 
 let container: HTMLDivElement;
 let root: Root;
-const mockPositionRef = { current: null as HTMLDivElement | null };
 
 beforeAll(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 });
 
 beforeEach(() => {
+  vi.useRealTimers();
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
-  mockNotifications = [];
-  mockRemoveNotification.mockReset();
-  mockClearNotifications.mockReset();
-  mockPositionRef.current = null;
-
-  // Mock navigator.clipboard
-  Object.defineProperty(navigator, 'clipboard', {
-    value: {
-      writeText: vi.fn().mockResolvedValue(undefined),
-    },
-    writable: true,
-    configurable: true,
-  });
+  lastReceivedNotifications = [];
+  mockOnDismiss.mockReset();
+  // Reset the singleton bus between tests so listener counts don't bleed.
+  notificationBus._resetForTesting();
 });
 
 afterEach(() => {
@@ -71,668 +80,269 @@ afterEach(() => {
     root.unmount();
   });
   container.remove();
+  vi.useRealTimers();
+  notificationBus._resetForTesting();
 });
 
-function makeNotification(overrides: Partial<Notification> = {}): Notification {
-  return {
-    id: 'test-1',
-    type: 'info',
-    title: 'Test Notification',
-    message: 'This is a test message',
-    createdAt: Date.now(),
-    ...overrides,
-  };
-}
-
-function renderNotificationCenter(
-  props: { isOpen?: boolean; onClose?: () => void; positionRef?: { current: HTMLDivElement | null } } = {},
-) {
-  const isOpen = props.isOpen ?? true;
-  const onClose = props.onClose ?? vi.fn();
-  const positionRef = props.positionRef ?? { current: null };
-
+function renderCenter() {
   act(() => {
-    root.render(createElement(NotificationCenter, { isOpen, onClose, positionRef }));
+    root.render(createElement(NotificationCenter));
   });
 }
 
+/** Count rendered toasts (excludes title/message children). */
+function toastCount(container: HTMLElement): number {
+  return container.querySelectorAll('[data-testid^="toast-"]:not([data-testid^="toast-title-"]):not([data-testid^="toast-message-"])').length;
+}
+
 // ---------------------------------------------------------------------------
-// Tests: Rendering (open/closed)
+// Tests: Rendering
 // ---------------------------------------------------------------------------
 
-describe('Rendering', () => {
-  it('returns null when isOpen is false', () => {
-    mockNotifications = [];
-    renderNotificationCenter({ isOpen: false });
+describe('NotificationCenter rendering', () => {
+  it('renders nothing when bus is empty', () => {
+    renderCenter();
     expect(container.innerHTML).toBe('');
   });
 
-  it('renders panel when isOpen is true', () => {
-    mockNotifications = [];
-    renderNotificationCenter({ isOpen: true });
-    expect(container.querySelector('.notification-center')).not.toBeNull();
-  });
-
-  it('has correct role and aria attributes', () => {
-    mockNotifications = [];
-    renderNotificationCenter({ isOpen: true });
-    const panel = container.querySelector('.notification-center');
-    expect(panel?.getAttribute('role')).toBe('dialog');
-    expect(panel?.getAttribute('aria-label')).toBe('Notification center');
-  });
-
-  it('renders the notifications header', () => {
-    mockNotifications = [];
-    renderNotificationCenter({ isOpen: true });
-    expect(container.querySelector('.notification-center-title')?.textContent).toBe('Notifications');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Tests: Empty state
-// ---------------------------------------------------------------------------
-
-describe('Empty state', () => {
-  it('shows "No notifications" when notifications array is empty', () => {
-    mockNotifications = [];
-    renderNotificationCenter({ isOpen: true });
-    expect(container.querySelector('.notification-center-empty')).not.toBeNull();
-    expect(container.querySelector('.notification-center-empty-text')?.textContent).toBe('No notifications');
-  });
-
-  it('does not show "Dismiss All" button when no notifications', () => {
-    mockNotifications = [];
-    renderNotificationCenter({ isOpen: true });
-    expect(container.querySelector('.notification-center-dismiss-all')).toBeNull();
-  });
-
-  it('does not render notification list when empty', () => {
-    mockNotifications = [];
-    renderNotificationCenter({ isOpen: true });
-    expect(container.querySelector('.notification-center-list')).toBeNull();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Tests: Notification list
-// ---------------------------------------------------------------------------
-
-describe('Notification list', () => {
-  it('shows notifications in reverse order (newest first)', () => {
-    const now = Date.now();
-    mockNotifications = [
-      makeNotification({ id: 'first', title: 'First', createdAt: now - 10000 }),
-      makeNotification({ id: 'second', title: 'Second', createdAt: now - 5000 }),
-      makeNotification({ id: 'third', title: 'Third', createdAt: now }),
-    ];
-    renderNotificationCenter({ isOpen: true });
-
-    const items = container.querySelectorAll('.notification-center-item-title');
-    expect(items).toHaveLength(3);
-    expect(items[0]?.textContent).toBe('Third');
-    expect(items[1]?.textContent).toBe('Second');
-    expect(items[2]?.textContent).toBe('First');
-  });
-
-  it('displays notification title', () => {
-    mockNotifications = [makeNotification({ title: 'My Title' })];
-    renderNotificationCenter({ isOpen: true });
-    const titleEl = container.querySelector('.notification-center-item-title');
-    expect(titleEl?.textContent?.trim()).toBe('My Title');
-  });
-
-  it('displays notification message', () => {
-    mockNotifications = [makeNotification({ message: 'My Message' })];
-    renderNotificationCenter({ isOpen: true });
-    const msgEl = container.querySelector('.notification-center-item-message');
-    expect(msgEl?.textContent?.trim()).toBe('My Message');
-  });
-
-  it('renders notification list with role="list"', () => {
-    mockNotifications = [makeNotification()];
-    renderNotificationCenter({ isOpen: true });
-    const list = container.querySelector('.notification-center-list');
-    expect(list?.getAttribute('role')).toBe('list');
-  });
-
-  it('shows "Dismiss All" button when notifications exist', () => {
-    mockNotifications = [makeNotification()];
-    renderNotificationCenter({ isOpen: true });
-    expect(container.querySelector('.notification-center-dismiss-all')).not.toBeNull();
-    expect(container.querySelector('.notification-center-dismiss-all')?.textContent).toBe('Dismiss All');
-  });
-
-  it('adds type-specific CSS class to notification items', () => {
-    mockNotifications = [
-      makeNotification({ id: 'info-1', type: 'info' }),
-      makeNotification({ id: 'success-1', type: 'success' }),
-      makeNotification({ id: 'warning-1', type: 'warning' }),
-      makeNotification({ id: 'error-1', type: 'error' }),
-    ];
-    renderNotificationCenter({ isOpen: true });
-    const items = container.querySelectorAll('.notification-center-item');
-    // Items are reversed, so last in mock is first in DOM
-    expect(items[0]?.classList.contains('type-error')).toBe(true);
-    expect(items[1]?.classList.contains('type-warning')).toBe(true);
-    expect(items[2]?.classList.contains('type-success')).toBe(true);
-    expect(items[3]?.classList.contains('type-info')).toBe(true);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Tests: Type icons
-// ---------------------------------------------------------------------------
-
-describe('Type icons', () => {
-  it('shows ℹ for info type', () => {
-    mockNotifications = [makeNotification({ type: 'info' })];
-    renderNotificationCenter({ isOpen: true });
-    expect(container.querySelector('.notification-center-item-icon')?.textContent).toBe('ℹ');
-  });
-
-  it('shows ✓ for success type', () => {
-    mockNotifications = [makeNotification({ type: 'success' })];
-    renderNotificationCenter({ isOpen: true });
-    expect(container.querySelector('.notification-center-item-icon')?.textContent).toBe('✓');
-  });
-
-  it('shows ⚠ for warning type', () => {
-    mockNotifications = [makeNotification({ type: 'warning' })];
-    renderNotificationCenter({ isOpen: true });
-    expect(container.querySelector('.notification-center-item-icon')?.textContent).toBe('⚠');
-  });
-
-  it('shows ✕ for error type', () => {
-    mockNotifications = [makeNotification({ type: 'error' })];
-    renderNotificationCenter({ isOpen: true });
-    expect(container.querySelector('.notification-center-item-icon')?.textContent).toBe('✕');
-  });
-
-  it('shows ℹ as fallback for unknown type', () => {
-    // @ts-expect-error — intentionally passing unknown type to test fallback
-    mockNotifications = [makeNotification({ type: 'unknown' })];
-    renderNotificationCenter({ isOpen: true });
-    expect(container.querySelector('.notification-center-item-icon')?.textContent).toBe('ℹ');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Tests: Dismiss individual
-// ---------------------------------------------------------------------------
-
-describe('Dismiss individual notification', () => {
-  it('calls removeNotification with correct id when dismiss button is clicked', () => {
-    mockNotifications = [makeNotification({ id: 'notif-1', title: 'A' })];
-    renderNotificationCenter({ isOpen: true });
-
-    const dismissBtn = container.querySelector('.notification-center-item-dismiss');
+  it('renders the NotificationStack after a bus notification arrives', () => {
+    renderCenter();
     act(() => {
-      dismissBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      notificationBus.notify('warning', 'Rate limit hit', 'Try again in 60s');
     });
-
-    expect(mockRemoveNotification).toHaveBeenCalledTimes(1);
-    expect(mockRemoveNotification).toHaveBeenCalledWith('notif-1');
+    expect(container.querySelector('[data-testid="mock-notification-stack"]')).not.toBeNull();
+    expect(toastCount(container)).toBe(1);
   });
 
-  it('calls removeNotification for the correct notification when multiple exist', () => {
-    const now = Date.now();
-    mockNotifications = [
-      makeNotification({ id: 'a', title: 'A', createdAt: now }),
-      makeNotification({ id: 'b', title: 'B', createdAt: now - 1000 }),
-    ];
-    renderNotificationCenter({ isOpen: true });
-
-    // Items are reversed: B first, A second in DOM
-    const dismissBtns = container.querySelectorAll('.notification-center-item-dismiss');
-    // The second button (A) should dismiss 'a'
+  it('passes the title and message through', () => {
+    renderCenter();
+    let eventId = '';
     act(() => {
-      dismissBtns[1]?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      eventId = notificationBus.notify('error', 'Auth failed', 'Invalid token');
     });
+    const titleEl = container.querySelector(`[data-testid="toast-title-${eventId}"]`);
+    const msgEl = container.querySelector(`[data-testid="toast-message-${eventId}"]`);
+    expect(titleEl?.textContent).toBe('Auth failed');
+    expect(msgEl?.textContent).toBe('Invalid token');
+  });
 
-    expect(mockRemoveNotification).toHaveBeenCalledWith('a');
+  it('passes the notification type through', () => {
+    renderCenter();
+    let eventId = '';
+    act(() => {
+      eventId = notificationBus.notify('error', 'Auth failed', 'Invalid token');
+    });
+    const toast = container.querySelector(`[data-testid="toast-${eventId}"]`);
+    expect(toast?.getAttribute('data-type')).toBe('error');
   });
 });
 
 // ---------------------------------------------------------------------------
-// Tests: Dismiss all
+// Tests: Auto-dismiss after 5s
 // ---------------------------------------------------------------------------
 
-describe('Dismiss all notifications', () => {
-  it('calls clearNotifications when Dismiss All button is clicked', () => {
-    mockNotifications = [makeNotification({ id: 'a', title: 'A' }), makeNotification({ id: 'b', title: 'B' })];
-    renderNotificationCenter({ isOpen: true });
-
-    const dismissAllBtn = container.querySelector('.notification-center-dismiss-all');
-    act(() => {
-      dismissAllBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-
-    expect(mockClearNotifications).toHaveBeenCalledTimes(1);
-  });
-
-  it('does not crash when clicking Dismiss All with single notification', () => {
-    mockNotifications = [makeNotification()];
-    renderNotificationCenter({ isOpen: true });
-
-    const dismissAllBtn = container.querySelector('.notification-center-dismiss-all');
-    act(() => {
-      dismissAllBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-
-    expect(mockClearNotifications).toHaveBeenCalledTimes(1);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Tests: Copy message
-// ---------------------------------------------------------------------------
-
-describe('Copy message to clipboard', () => {
-  it('calls navigator.clipboard.writeText when copy button is clicked', async () => {
-    mockNotifications = [makeNotification({ id: 'notif-1', message: 'Copy me' })];
-    renderNotificationCenter({ isOpen: true });
-
-    const copyBtn = container.querySelector('.notification-center-item-copy');
-    await act(async () => {
-      copyBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-
-    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('Copy me');
-  });
-
-  it('shows "Copied!" feedback after copying', async () => {
-    mockNotifications = [makeNotification({ id: 'notif-1', message: 'Copy me' })];
-    renderNotificationCenter({ isOpen: true });
-
-    const copyBtn = container.querySelector('.notification-center-item-copy');
-    await act(async () => {
-      copyBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-
-    expect(copyBtn?.textContent).toBe('Copied!');
-  });
-
-  it('resets copy button to emoji after timeout', async () => {
+describe('NotificationCenter auto-dismiss', () => {
+  it('auto-dismisses a notification after 5s when no duration was set', () => {
     vi.useFakeTimers();
-    mockNotifications = [makeNotification({ id: 'notif-1', message: 'Copy me' })];
-    renderNotificationCenter({ isOpen: true });
+    try {
+      renderCenter();
+      act(() => {
+        notificationBus.notify('warning', 'Rate limit', 'Wait 60s');
+      });
+      expect(toastCount(container)).toBe(1);
 
-    const copyBtn = container.querySelector('.notification-center-item-copy');
-    await act(async () => {
-      copyBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
+      // Advance just under 5s — still present
+      act(() => {
+        vi.advanceTimersByTime(4999);
+      });
+      expect(toastCount(container)).toBe(1);
 
-    expect(copyBtn?.textContent).toBe('Copied!');
-
-    // Advance timer past 2000ms
-    await act(async () => {
-      vi.advanceTimersByTime(2000);
-    });
-
-    expect(copyBtn?.textContent).toBe('📋');
-    vi.useRealTimers();
+      // Advance past 5s — gone
+      act(() => {
+        vi.advanceTimersByTime(2);
+      });
+      expect(toastCount(container)).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
-  it('does not crash when clipboard.writeText throws an error', async () => {
-    const originalClipboard = navigator.clipboard;
-    Object.defineProperty(navigator, 'clipboard', {
-      value: {
-        writeText: vi.fn().mockRejectedValue(new Error('Clipboard API unavailable')),
-      },
-      writable: true,
-      configurable: true,
-    });
+  it('respects an explicit duration from the bus (defers to NotificationItem)', () => {
+    vi.useFakeTimers();
+    try {
+      renderCenter();
+      // When an explicit duration is set, NotificationCenter must NOT set its
+      // own 5s auto-dismiss timer — the NotificationItem will handle dismissal
+      // on its own. So after 1s of the NotificationCenter's clock the toast
+      // must still be in the list (the item's internal timer hasn't fired
+      // because the mock doesn't call onDismiss).
+      act(() => {
+        notificationBus.notify('info', 'Quick', 'Bye', 1000);
+      });
+      expect(toastCount(container)).toBe(1);
 
-    // Suppress console.error for this test
-    const originalError = console.error;
-    console.error = vi.fn();
-
-    mockNotifications = [makeNotification({ id: 'notif-1', message: 'Copy me' })];
-    renderNotificationCenter({ isOpen: true });
-
-    const copyBtn = container.querySelector('.notification-center-item-copy');
-    await act(async () => {
-      copyBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-
-    // Should not throw; button should remain in original state (not show "Copied!")
-    expect(copyBtn?.textContent).toBe('📋');
-
-    console.error = originalError;
-    Object.defineProperty(navigator, 'clipboard', {
-      value: originalClipboard,
-      writable: true,
-      configurable: true,
-    });
+      // NotificationCenter's own 5s timer would fire at 5000ms. Advance
+      // past that — the toast must STILL be there because the parent
+      // deferred to NotificationItem (and the mock doesn't auto-dismiss).
+      act(() => {
+        vi.advanceTimersByTime(6000);
+      });
+      expect(toastCount(container)).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
-  it('only marks the clicked notification as copied, not others', async () => {
-    mockNotifications = [
-      makeNotification({ id: 'notif-1', message: 'First' }),
-      makeNotification({ id: 'notif-2', message: 'Second' }),
-    ];
-    renderNotificationCenter({ isOpen: true });
+  it('does not stack multiple auto-dismiss timers when many notifications arrive', () => {
+    vi.useFakeTimers();
+    try {
+      renderCenter();
+      act(() => {
+        notificationBus.notify('info', 'A', 'msgA');
+        notificationBus.notify('info', 'B', 'msgB');
+        notificationBus.notify('info', 'C', 'msgC');
+      });
+      expect(toastCount(container)).toBe(3);
 
-    const copyBtns = container.querySelectorAll('.notification-center-item-copy');
-    // Items are reversed: notif-2 first in DOM
-    await act(async () => {
-      copyBtns[0]?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    });
-
-    expect(copyBtns[0]?.textContent).toBe('Copied!');
-    expect(copyBtns[1]?.textContent).toBe('📋');
+      act(() => {
+        vi.advanceTimersByTime(5000);
+      });
+      expect(toastCount(container)).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
 // ---------------------------------------------------------------------------
-// Tests: Escape key
+// Tests: Manual dismiss via the close button
 // ---------------------------------------------------------------------------
 
-describe('Escape key closes panel', () => {
-  it('calls onClose when Escape key is pressed', () => {
-    const onClose = vi.fn();
-    mockNotifications = [];
-    renderNotificationCenter({ isOpen: true, onClose });
-
+describe('NotificationCenter manual dismiss', () => {
+  it('removes a notification when the dismiss button is clicked', () => {
+    renderCenter();
+    let eventId = '';
     act(() => {
-      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      eventId = notificationBus.notify('warning', 'Rate limit', 'Wait 60s');
     });
+    expect(toastCount(container)).toBe(1);
 
-    expect(onClose).toHaveBeenCalledTimes(1);
+    const dismissBtn = container.querySelector(`[data-testid="dismiss-${eventId}"]`) as HTMLElement;
+    act(() => {
+      dismissBtn.click();
+    });
+    expect(toastCount(container)).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: Cleanup on unmount
+// ---------------------------------------------------------------------------
+
+describe('NotificationCenter cleanup', () => {
+  it('clears all pending auto-dismiss timers on unmount (no late setState warnings)', () => {
+    vi.useFakeTimers();
+    try {
+      renderCenter();
+      act(() => {
+        notificationBus.notify('info', 'A', 'msgA');
+      });
+      act(() => {
+        root.unmount();
+      });
+
+      // Should not throw when the stale timer fires
+      expect(() => vi.advanceTimersByTime(10000)).not.toThrow();
+      expect(toastCount(container)).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
-  it('does not call onClose for other keys', () => {
-    const onClose = vi.fn();
-    mockNotifications = [];
-    renderNotificationCenter({ isOpen: true, onClose });
-
-    act(() => {
-      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
-    });
-
-    expect(onClose).not.toHaveBeenCalled();
-  });
-
-  it('does not set up keydown listener when not open', () => {
-    const onClose = vi.fn();
-    mockNotifications = [];
-    renderNotificationCenter({ isOpen: false, onClose });
-
-    act(() => {
-      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
-    });
-
-    expect(onClose).not.toHaveBeenCalled();
-  });
-
-  it('cleans up keydown listener when component unmounts', () => {
-    const onClose = vi.fn();
-    mockNotifications = [];
-    renderNotificationCenter({ isOpen: true, onClose });
-
+  it('no longer receives notifications after unmount', () => {
+    renderCenter();
     act(() => {
       root.unmount();
     });
-
-    // After unmount, pressing Escape should not trigger onClose
-    act(() => {
-      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
-    });
-
-    expect(onClose).not.toHaveBeenCalled();
+    // After unmount, the listener is removed. A new notify should not crash.
+    expect(() => {
+      act(() => {
+        notificationBus.notify('warning', 'late', 'msg');
+      });
+    }).not.toThrow();
+    // Container was removed in afterEach, so we just assert the call didn't throw.
   });
 });
 
 // ---------------------------------------------------------------------------
-// Tests: Outside click
+// Tests: publishSystemNotification helper
 // ---------------------------------------------------------------------------
 
-describe('Outside click closes panel', () => {
-  it('calls onClose when clicking outside the panel', () => {
-    const onClose = vi.fn();
-    mockNotifications = [];
-    renderNotificationCenter({ isOpen: true, onClose });
-
-    act(() => {
-      document.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-    });
-
-    expect(onClose).toHaveBeenCalledTimes(1);
+describe('publishSystemNotification helper', () => {
+  it('maps rate_limit → warning', () => {
+    const spy = vi.spyOn(notificationBus, 'notify');
+    publishSystemNotification('rate_limit', 'Rate limit', 'Wait');
+    expect(spy).toHaveBeenCalledWith('warning', 'Rate limit', 'Wait');
+    spy.mockRestore();
   });
 
-  it('does not call onClose when clicking inside the panel', () => {
-    const onClose = vi.fn();
-    mockNotifications = [];
-    renderNotificationCenter({ isOpen: true, onClose });
-
-    const panel = container.querySelector('.notification-center')!;
-    act(() => {
-      panel.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-    });
-
-    expect(onClose).not.toHaveBeenCalled();
+  it('maps auth_failure → error', () => {
+    const spy = vi.spyOn(notificationBus, 'notify');
+    publishSystemNotification('auth_failure', 'Auth failed', 'Token expired');
+    expect(spy).toHaveBeenCalledWith('error', 'Auth failed', 'Token expired');
+    spy.mockRestore();
   });
 
-  it('does not call onClose when clicking on positionRef element', () => {
-    const onClose = vi.fn();
-    const bellDiv = document.createElement('div');
-    bellDiv.className = 'bell-icon';
-    document.body.appendChild(bellDiv);
-    const positionRef = { current: bellDiv };
-
-    mockNotifications = [];
-    renderNotificationCenter({ isOpen: true, onClose, positionRef });
-
-    act(() => {
-      bellDiv.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-    });
-
-    expect(onClose).not.toHaveBeenCalled();
-    bellDiv.remove();
+  it('maps permission_required → warning', () => {
+    const spy = vi.spyOn(notificationBus, 'notify');
+    publishSystemNotification('permission_required', 'Allow?', 'Tool needs access');
+    expect(spy).toHaveBeenCalledWith('warning', 'Allow?', 'Tool needs access');
+    spy.mockRestore();
   });
 
-  it('does not set up mousedown listener when not open', () => {
-    const onClose = vi.fn();
-    mockNotifications = [];
-    renderNotificationCenter({ isOpen: false, onClose });
-
-    act(() => {
-      document.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-    });
-
-    expect(onClose).not.toHaveBeenCalled();
+  it('maps agent_blocked → error', () => {
+    const spy = vi.spyOn(notificationBus, 'notify');
+    publishSystemNotification('agent_blocked', 'Blocked', 'Permission denied');
+    expect(spy).toHaveBeenCalledWith('error', 'Blocked', 'Permission denied');
+    spy.mockRestore();
   });
 
-  it('cleans up mousedown listener when component unmounts', () => {
-    const onClose = vi.fn();
-    mockNotifications = [];
-    renderNotificationCenter({ isOpen: true, onClose });
-
-    act(() => {
-      root.unmount();
-    });
-
-    // After unmount, clicking outside should not trigger onClose
-    act(() => {
-      document.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-    });
-
-    expect(onClose).not.toHaveBeenCalled();
+  it('maps unknown categories to info (graceful default)', () => {
+    const spy = vi.spyOn(notificationBus, 'notify');
+    publishSystemNotification('something_weird', 'Hello', 'World');
+    expect(spy).toHaveBeenCalledWith('info', 'Hello', 'World');
+    spy.mockRestore();
   });
 });
 
 // ---------------------------------------------------------------------------
-// Tests: Relative timestamps
+// Tests: NotificationStack contract
 // ---------------------------------------------------------------------------
 
-describe('Relative timestamps', () => {
-  it('shows "just now" for notifications less than 10 seconds old', () => {
-    mockNotifications = [makeNotification({ createdAt: Date.now() - 5000 })];
-    renderNotificationCenter({ isOpen: true });
-    expect(container.querySelector('.notification-center-item-time')?.textContent).toBe('just now');
-  });
-
-  it('shows seconds for notifications between 10-59 seconds old', () => {
-    mockNotifications = [makeNotification({ createdAt: Date.now() - 30000 })];
-    renderNotificationCenter({ isOpen: true });
-    expect(container.querySelector('.notification-center-item-time')?.textContent).toBe('30s ago');
-  });
-
-  it('shows minutes for notifications between 1-59 minutes old', () => {
-    mockNotifications = [makeNotification({ createdAt: Date.now() - 15 * 60 * 1000 })];
-    renderNotificationCenter({ isOpen: true });
-    expect(container.querySelector('.notification-center-item-time')?.textContent).toBe('15m ago');
-  });
-
-  it('shows hours for notifications between 1-23 hours old', () => {
-    mockNotifications = [makeNotification({ createdAt: Date.now() - 3 * 60 * 60 * 1000 })];
-    renderNotificationCenter({ isOpen: true });
-    expect(container.querySelector('.notification-center-item-time')?.textContent).toBe('3h ago');
-  });
-
-  it('shows days for notifications 24+ hours old', () => {
-    mockNotifications = [makeNotification({ createdAt: Date.now() - 3 * 24 * 60 * 60 * 1000 })];
-    renderNotificationCenter({ isOpen: true });
-    expect(container.querySelector('.notification-center-item-time')?.textContent).toBe('3d ago');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Tests: Button attributes
-// ---------------------------------------------------------------------------
-
-describe('Button attributes', () => {
-  it('copy button has correct aria-label and title', () => {
-    mockNotifications = [makeNotification()];
-    renderNotificationCenter({ isOpen: true });
-    const copyBtn = container.querySelector('.notification-center-item-copy');
-    expect(copyBtn?.getAttribute('aria-label')).toBe('Copy message');
-    expect(copyBtn?.getAttribute('title')).toBe('Copy message');
-  });
-
-  it('copy button updates aria-label and title to "Copied" after clicking', async () => {
-    mockNotifications = [makeNotification({ id: 'notif-1', message: 'Copy me' })];
-    renderNotificationCenter({ isOpen: true });
-    const copyBtn = container.querySelector('.notification-center-item-copy');
-    await act(async () => {
-      copyBtn?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+describe('NotificationStack contract', () => {
+  it('passes a NotificationData[] with the bus event fields', () => {
+    renderCenter();
+    act(() => {
+      notificationBus.notify('error', 'Auth failed', 'Token expired');
     });
-    expect(copyBtn?.getAttribute('aria-label')).toBe('Copied');
-    expect(copyBtn?.getAttribute('title')).toBe('Copied');
+    expect(lastReceivedNotifications.length).toBe(1);
+    const n = lastReceivedNotifications[0];
+    expect(n.id).toBeTruthy();
+    expect(n.type).toBe('error');
+    expect(n.title).toBe('Auth failed');
+    expect(n.message).toBe('Token expired');
+    expect(typeof n.createdAt).toBe('number');
+    expect(n.read).toBe(false);
   });
 
-  it('dismiss button has correct aria-label and title', () => {
-    mockNotifications = [makeNotification()];
-    renderNotificationCenter({ isOpen: true });
-    const dismissBtn = container.querySelector('.notification-center-item-dismiss');
-    expect(dismissBtn?.getAttribute('aria-label')).toBe('Dismiss notification');
-    expect(dismissBtn?.getAttribute('title')).toBe('Dismiss');
-  });
-
-  it('all buttons have type="button" to prevent form submission', () => {
-    mockNotifications = [makeNotification({ id: 'a' })];
-    renderNotificationCenter({ isOpen: true });
-    const buttons = container.querySelectorAll('button');
-    buttons.forEach((btn) => {
-      expect(btn.getAttribute('type')).toBe('button');
+  it('queues multiple notifications in arrival order', () => {
+    renderCenter();
+    act(() => {
+      notificationBus.notify('info', 'A', 'msgA');
+      notificationBus.notify('info', 'B', 'msgB');
     });
-    expect(buttons.length).toBeGreaterThan(0);
+    expect(lastReceivedNotifications.length).toBe(2);
+    expect(lastReceivedNotifications[0].title).toBe('A');
+    expect(lastReceivedNotifications[1].title).toBe('B');
   });
 });
-
-// ---------------------------------------------------------------------------
-// Tests: Multiple notifications
-// ---------------------------------------------------------------------------
-
-describe('Multiple notifications', () => {
-  it('renders all notification items with correct content', () => {
-    const now = Date.now();
-    mockNotifications = [
-      makeNotification({ id: 'a', type: 'info', title: 'Info Title', message: 'Info message', createdAt: now }),
-      makeNotification({
-        id: 'b',
-        type: 'error',
-        title: 'Error Title',
-        message: 'Error message',
-        createdAt: now - 60000,
-      }),
-    ];
-    renderNotificationCenter({ isOpen: true });
-
-    const items = container.querySelectorAll('.notification-center-item');
-    expect(items).toHaveLength(2);
-
-    // Array is [...notifications].reverse(), so last in array = first in DOM
-    // mockNotifications = [a (newest), b (oldest)] → reversed = [b, a]
-    const firstItem = items[0];
-    expect(firstItem.querySelector('.notification-center-item-title')?.textContent).toBe('Error Title');
-    expect(firstItem.querySelector('.notification-center-item-message')?.textContent).toBe('Error message');
-    expect(firstItem.querySelector('.notification-center-item-icon')?.textContent).toBe('✕');
-
-    const secondItem = items[1];
-    expect(secondItem.querySelector('.notification-center-item-title')?.textContent).toBe('Info Title');
-    expect(secondItem.querySelector('.notification-center-item-message')?.textContent).toBe('Info message');
-    expect(secondItem.querySelector('.notification-center-item-icon')?.textContent).toBe('ℹ');
-  });
-
-  it('each notification item has its own copy and dismiss buttons', () => {
-    mockNotifications = [makeNotification({ id: 'a' }), makeNotification({ id: 'b' }), makeNotification({ id: 'c' })];
-    renderNotificationCenter({ isOpen: true });
-
-    const copyButtons = container.querySelectorAll('.notification-center-item-copy');
-    const dismissButtons = container.querySelectorAll('.notification-center-item-dismiss');
-    expect(copyButtons).toHaveLength(3);
-    expect(dismissButtons).toHaveLength(3);
-  });
-
-  it('each notification item has a timestamp', () => {
-    mockNotifications = [
-      makeNotification({ id: 'a', createdAt: Date.now() }),
-      makeNotification({ id: 'b', createdAt: Date.now() - 100000 }),
-    ];
-    renderNotificationCenter({ isOpen: true });
-
-    const times = container.querySelectorAll('.notification-center-item-time');
-    expect(times).toHaveLength(2);
-    expect(times[0]).not.toBeNull();
-    expect(times[1]).not.toBeNull();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Tests: Re-rendering
-// ---------------------------------------------------------------------------
-
-describe('Re-rendering', () => {
-  it('updates when notifications are added while open', () => {
-    mockNotifications = [];
-    renderNotificationCenter({ isOpen: true });
-
-    expect(container.querySelector('.notification-center-empty')).not.toBeNull();
-
-    // Simulate notifications being added
-    mockNotifications = [makeNotification({ id: 'new-1', title: 'New' })];
-    renderNotificationCenter({ isOpen: true });
-
-    expect(container.querySelector('.notification-center-empty')).toBeNull();
-    expect(container.querySelector('.notification-center-item-title')?.textContent).toBe('New');
-  });
-
-  it('updates when notifications are removed while open', () => {
-    mockNotifications = [makeNotification({ id: 'a' })];
-    renderNotificationCenter({ isOpen: true });
-
-    expect(container.querySelectorAll('.notification-center-item')).toHaveLength(1);
-
-    // Simulate all notifications being dismissed
-    mockNotifications = [];
-    renderNotificationCenter({ isOpen: true });
-
-    expect(container.querySelector('.notification-center-empty')).not.toBeNull();
-    expect(container.querySelector('.notification-center-list')).toBeNull();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// End of tests
-// ---------------------------------------------------------------------------

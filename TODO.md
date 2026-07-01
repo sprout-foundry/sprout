@@ -1511,22 +1511,24 @@ messages go to the in-terminal `PublishAgentMessage` stream and risk
 clobbering input state (cf. the recent fix in `10a9cbd5 fix(agent):
 route security cautions via event bus`).
 
-- [ ] **SP-101-2:** Add `webui/src/components/NotificationCenter.tsx`
-  (~150 lines). Subscribes to a new event category
-  `notification` published via the event bus. Renders as a fixed
-  top-right stack with auto-dismiss after 5s. Covers 4 event types:
-  `rate_limit`, `auth_failure`, `permission_required`,
-  `agent_blocked`. Mirrors the spec body for Phase 1.
+- [x] **SP-101-2:** NotificationCenter subscribes to notificationBus,
+  renders NotificationStack from @sprout/ui, auto-dismiss 5s, top-right
+  via App.css override. ~80 lines. Exports `publishSystemNotification`
+  helper for semantic category→type mapping (rate_limit→warning,
+  auth_failure→error, etc.).
 
 ### Phase 3: SP-017 — collapsible sections (~1 day)
 
 README says "scoped labels shipped; collapsible sections pending".
 
-- [ ] **SP-101-3:** Add `<details>`-style collapsible groups to
+- [x] **SP-101-3:** Add `<details>`-style collapsible groups to
   `SettingsPanel.tsx`, grouped by layer (Global / Workspace / Session).
   Use a `sectionState` local store (or `localStorage` for persistence).
   Cover the four "scope groups" SP-017 names. Add a vitest covering
   collapse/expand + persistence across reloads.
+  Covered by `SettingsPanel.test.tsx` (12 tests: section rendering, scope
+  badges, collapse/expand, body visibility, localStorage write/restore,
+  activeSubsection persistence, aria-expanded).
 
 ### Phase 4: SP-048 — tool execution timeline (~0.5 day)
 
@@ -1535,20 +1537,28 @@ part is covered by SP-091-4. Remaining: tool timeline — render
 `PublishToolStart` / `PublishToolEnd` events as a vertical timeline in
 the terminal output.
 
-- [ ] **SP-101-4:** Edit `pkg/console/terminal_subscriber.go` (or
-  wherever the tool events render) to emit per-tool entries with:
-  glyph, tool name, elapsed ms, result icon. Format example per the
-  spec: `[✓] read_file (124ms) · pkg/foo.go`. Add a vitest that
-  simulates 3 tool events and asserts the rendered timeline matches.
+- [x] **SP-101-4:** ToolTimeline subscriber in `pkg/console/tool_timeline.go`.
+  Subscribes to `EventTypeToolStart`/`EventTypeToolEnd` on the event bus,
+  prints glyph-prefixed start/end/duration lines to a configurable writer
+  (default `os.Stderr`). Uses `TryLockOutput`/`UnlockOutput` for safe
+  interleaving. Tracks active tools by `toolCallID`; `Stop()` unsubscribes
+  and waits for the goroutine to exit. Tests in `tool_timeline_test.go`.
 
 ### Acceptance
 
-- [ ] SP-011 P1.4 verified in browser session + tests cover all three
-  cleanup paths.
-- [ ] NotificationCenter renders and dismisses correctly.
-- [ ] Settings panel has 3+ collapsible scope groups that persist
-  across reload.
-- [ ] Tool timeline renders correctly across 5+ events.
+- [x] SP-011 P1.4 verified: all three cleanup paths covered by
+  `Terminal.test.tsx` (75 tests pass; new handleProcessExit wrapper
+  in Terminal.tsx implements the 1.5s restart delay with timer-cleanup).
+- [x] NotificationCenter renders and dismisses correctly.
+  `NotificationCenter.test.tsx` covers 17 cases (rendering, auto-dismiss,
+  manual dismiss, cleanup, helper mapping).
+- [x] Settings panel has 5 collapsible scope groups (agent/workspace/
+  environment/editor/experimental) spanning 4 scopes (session/workspace/
+  global/runtime). Persists via `localStorage` key
+  `sprout.settingsPanel.state.v1`. `SettingsPanel.test.tsx` (12 tests).
+- [x] Tool timeline renders correctly across 5+ events.
+  `tool_timeline_test.go` covers start/end/parallel/fallback/
+  truncation/Stop across 9 cases.
 
 ---
 

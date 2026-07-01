@@ -309,8 +309,9 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 		images = make([]api.ImageData, len(res.Images))
 		for i, img := range res.Images {
 			images[i] = api.ImageData{
-				URL:  img.URI,
-				Type: img.MIMEType,
+				URL:    img.URI,
+				Base64: img.Base64,
+				Type:   img.MIMEType,
 			}
 		}
 	}

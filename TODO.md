@@ -374,7 +374,7 @@ caching for repeat-turn cost.
       message enrichment, local-file refinement, default fallback
       message template. Full `pkg/agent_tools` suite passes. Build green._
 
-- [ ] **SP-103-A7:** Race-detector test fixtures. Add
+- [x] **SP-103-A7:** Race-detector test fixtures. Add
       `vision_concurrency_test.go` that fires 10 concurrent
       `AnalyzeImage` calls against a mock client and asserts no data
       race (run with `-race`). Add parallel OCR test that drives 6 PDF
@@ -382,6 +382,32 @@ caching for repeat-turn cost.
       transiently. Wire `make test-race` into a required CI check.
 
       _~0.25 day._
+
+      _Shipped (commit b15a4812): New
+      `pkg/agent_tools/vision_concurrency_test.go` (419 lines, 4 tests):
+      - `TestVisionConcurrent_AnalyzeImage` — 10 goroutines hitting
+        a stub `ClientInterface`; peak concurrency ≥ 2.
+      - `TestVisionConcurrent_ParallelOCR6Pages` — 6 PDF pages,
+        one transient failure recovered by the
+        `DoVisionRetry` wrapper from A1; all 6 page-section
+        results surface in the joined text.
+      - `TestVisionConcurrent_CacheThrash` — 100 goroutines
+        thrashing `visionLRU` with mixed Get/Put + a stats-reader
+        goroutine; 200 iterations, race-clean.
+      - `TestVisionConcurrent_PreflightUnderLoad` — 50 goroutines
+        hitting 50 httptest servers spanning every fallback
+        path (Content-Length OK, oversized, missing header, 405,
+        network error); race-clean.
+
+      `make test-race` target pre-existed in `Makefile` (with full
+      implementation at lines 111-125: `go test -race -tags "browser
+      grammar_blobs_external" ./pkg/... ./cmd/... -p 2 -parallel 4`),
+      but was missing from the `.PHONY` declaration and from the
+      `help` text. Both added per the spec. CI already calls
+      `make test-race` indirectly via `make test-coverage` (which
+      hard-codes `-race`). All 4 new tests pass under
+      `go test -race ./pkg/agent_tools/ -count=1 -timeout=120s`;
+      full `pkg/agent_tools` race run completes in ~44s. Build green._
 
 - [ ] **SP-103-A8:** Graceful degradation. If `SendVisionRequest` fails
       twice on a non-OCR image, retry via the configured OCR model

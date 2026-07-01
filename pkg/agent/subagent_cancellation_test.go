@@ -258,10 +258,12 @@ func TestSubagentMaxIterationsBounded(t *testing.T) {
 	}
 }
 
-// TestInjectInputIntoActiveRoutesToSubagent verifies that steering
-// messages are delivered to the deepest running subagent, not silently
-// dropped because the primary is blocked inside run_subagent.
-func TestInjectInputIntoActiveRoutesToSubagent(t *testing.T) {
+// TestInjectInputIntoActiveRoutesToPrimary verifies that steering
+// messages are delivered to the PRIMARY agent first, even when a
+// subagent is actively running. The primary is what reads steer
+// messages and decides whether to abort subagents, redirect them,
+// or fold the steer into its own plan (SP-094-8).
+func TestInjectInputIntoActiveRoutesToPrimary(t *testing.T) {
 	parent := newIsolatedTestAgent(t)
 	defer parent.Shutdown()
 
@@ -299,18 +301,24 @@ func TestInjectInputIntoActiveRoutesToSubagent(t *testing.T) {
 		t.Fatal("subagent did not register as active within 3s")
 	}
 
-	// Inject a steering message.
+	// Inject a steering message — should go to PRIMARY, not subagent.
 	targetID, ok := runner.InjectInputIntoActive("steer this way")
 	if !ok {
-		t.Fatal("InjectInputIntoActive should have delivered to the running subagent")
+		t.Fatal("InjectInputIntoActive should have delivered to the primary agent")
 	}
-	if targetID == "" {
-		t.Fatal("target ID should be non-empty")
+	if targetID != "primary" {
+		t.Fatalf("target ID should be 'primary', got %q", targetID)
 	}
 
-	// Verify the message reached the subagent's input channel.
-	ch := parent.GetInputInjectionContext()
-	_ = ch // The subagent shares the parent's injection mechanism via seed.InjectInput bridge.
+	// Verify the message reached the primary's input channel.
+	select {
+	case msg := <-parent.GetInputInjectionContext():
+		if msg != "steer this way" {
+			t.Fatalf("expected 'steer this way', got %q", msg)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("steer message did not arrive on primary's input channel within 100ms")
+	}
 
 	// Clean up.
 	parentCancel()

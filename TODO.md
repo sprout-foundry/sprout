@@ -203,7 +203,7 @@ caching for repeat-turn cost.
 
 ### Reliability (SP-103-A) — high priority
 
-- [ ] **SP-103-A1:** Retry-with-backoff wrapper for `SendVisionRequest`. 3
+- [x] **SP-103-A1:** Retry-with-backoff wrapper for `SendVisionRequest`. 3
       attempts, exponential (200ms → 1.6s) ±20% jitter. Respect
       `Retry-After` header on 429/503. Plumb through `AnalyzeImage`,
       `processOCRImages`, and remote image/PDF downloads. Skip retries
@@ -213,7 +213,24 @@ caching for repeat-turn cost.
       _~0.5 day. New `pkg/agent_tools/vision_retry.go` helper. Touches
       `vision_image.go`, `vision_pdf.go`._
 
-- [ ] **SP-103-A2:** Parallelize `processOCRImages` and
+      _Shipped (commit ab6a2655): New `pkg/agent_tools/vision_retry.go`
+      (418 lines) with `DoVisionRetry(ctx, op, opts)` plus
+      `RetryOptions`, `RetryableHTTPError`, `parseRetryAfter`, and
+      `isRetryableError` classifier (5xx, 408/429, network/EOF/conn-reset).
+      Plumbed through `AnalyzeImage` (`vision_analyze.go`),
+      `processOCRImages` (`vision_pdf.go`), `DownloadImage`
+      (`vision_image.go`), and `downloadRemotePDFToTemp`
+      (`vision_pdf.go`). Env vars: `VISION_RETRY_ATTEMPTS` (default 3,
+      1 disables), `VISION_RETRY_BASE_MS` (200),
+      `VISION_RETRY_MAX_MS` (1600), `VISION_RETRY_JITTER_PCT` (20).
+      Backoff is ctx-aware (select on ctx.Done() vs timer).
+      Tests cover success-first-try, transient-failure-recovery,
+      give-up-after-max-attempts, no-retry-on-non-retryable-4xx,
+      retryable-408/429, ctx-cancellation, env-var precedence, and
+      `Retry-After` header parsing (numeric + HTTP-date). All pass
+      (also with `-race -count=1`). Build green._
+
+- [x] **SP-103-A2:** Parallelize `processOCRImages` and
       `ProcessImagesInText` with `errgroup.Group` + bounded worker pool
       (size 3 by default, env `VISION_PARALLEL_WORKERS`). Preserve
       per-page ordering in the output (page N's text still appears
@@ -223,6 +240,26 @@ caching for repeat-turn cost.
 
       _~1 day. New `pkg/agent_tools/vision_parallel.go`. Update
       `vision_pdf.go:194-265` and `vision_analyze.go:33-72`._
+
+      _Shipped (commit 4a3f80c3): New `pkg/agent_tools/vision_parallel.go`
+      with `VisionProgressFunc`, `runOCROne` (per-image worker), and
+      `processOCRImagesParallel` (parallel orchestrator). `processOCRImages`
+      is now a thin wrapper. Worker pool sized by
+      `getVisionParallelWorkers()` reading `VISION_PARALLEL_WORKERS` (SPROUT_*
+      / LEDIT_* form per `configuration.GetEnvSimple`), default 3,
+      clamped to [1,32]. Indexed result slice preserves input ordering.
+      `errgroup.Group.SetLimit(N)` provides the bounded worker pool.
+      Failure counter threshold of 2 (matching the original sequential
+      behavior) cancels remaining work via `eg.WithContext`. Per-image
+      OCR still wraps `SendVisionRequest` in `DoVisionRetry`. Five new
+      tests: `TestProcessOCRImages_PreservesOrder` (4 images, section
+      headers in input order), `TestProcessOCRImages_ProgressCallback`
+      (final `(3, 3)` reported), `TestProcessOCRImages_FailureThreshold`
+      (alwaysFail → empty text + error), `TestGetVisionParallelWorkers_Defaults`
+      (default/5/0/-1/999/garbage), `TestProcessOCRImages_Parallelism`
+      (6 images × 10ms delay × 4 workers → peak ≥3). Pre-existing
+      `TestProcessOCRImages_CancelledContext` still passes. All
+      `pkg/agent_tools` tests green; race detector clean. Build green._
 
 - [ ] **SP-103-A3:** Add mutex + LRU eviction to `visionCache`. Cache key
       becomes `sha256(filepath + mtime_ns + analysisMode + analysisPrompt)`

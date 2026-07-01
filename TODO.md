@@ -1493,10 +1493,14 @@ the callback exists in TerminalPane but Terminal.tsx may not handle all
 the cases.
 
 **Verify and finish:**
-- [ ] **SP-101-1:** Read `webui/src/components/Terminal.tsx`, find the
-  `onProcessExit` handler. Test the three cleanup paths with a real
-  terminal session. Fix any that misbehave. Add vitest coverage if
-  missing.
+- [x] **SP-101-1:** Terminal exit-pane cleanup paths verified and fixed.
+  Path 1 (auto-close secondary split) — ✅ already correct.
+  Path 2 (auto-create fresh session after 1.5s) — ✅ fixed: `handleProcessExit`
+  wrapper in Terminal.tsx schedules `handlePaneExit` via `setTimeout(..., 1500)`
+  (timer handle held in `exitRestartTimerRef` to prevent stacked timers).
+  Path 3 (close tab + switch to next) — ✅ already correct.
+  4 vitest tests added covering all three paths (fake timers for Path 2).
+  Build green, all 75 tests pass.
 
 ### Phase 2: SP-012 — notification center (~1 day)
 

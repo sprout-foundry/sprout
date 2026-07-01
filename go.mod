@@ -10,12 +10,11 @@ require (
 	github.com/gofrs/flock v0.13.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
-	github.com/ollama/ollama v0.20.7
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
 	github.com/sergi/go-diff v1.3.1
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.11.1
-	golang.org/x/net v0.53.0
+	golang.org/x/net v0.55.0
 	golang.org/x/sync v0.21.0
 	golang.org/x/term v0.43.0
 	golang.org/x/text v0.38.0
@@ -121,8 +120,8 @@ require (
 	github.com/ysmood/gson v0.7.3 // indirect
 	github.com/ysmood/leakless v0.9.0 // indirect
 	github.com/zalando/go-keyring v0.2.8
-	golang.org/x/crypto v0.51.0 // indirect
-	golang.org/x/sys v0.44.0
+	golang.org/x/crypto v0.52.0 // indirect
+	golang.org/x/sys v0.45.0
 )
 
 // Vendored fork of coder/hnsw v0.6.1 with a Windows-compat patch for

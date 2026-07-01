@@ -88,6 +88,13 @@ func ResolvePDFInputPath(ctx context.Context, inputPath string) (string, func(),
 }
 
 func downloadRemotePDFToTemp(ctx context.Context, url string) (string, func(), error) {
+	// Pre-flight size check: bail before reading the body if Content-Length
+	// exceeds the 60MB PDF cap. Falls back to streaming + io.LimitReader
+	// when Content-Length is missing.
+	if preErr := preflightRemoteSize(ctx, url, visionMaxRemotePDFFileSizeBytes); preErr != nil {
+		return "", func() {}, preErr
+	}
+
 	client := &http.Client{Timeout: 30 * time.Second}
 
 	var data []byte

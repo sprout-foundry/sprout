@@ -3,6 +3,8 @@ package agent
 import (
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
+	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 const (
@@ -305,4 +307,32 @@ func (a *Agent) GetTPSStats() map[string]float64 {
 		return c.GetTPSStats()
 	}
 	return map[string]float64{}
+}
+
+// RecordErrorCategory emits a metrics event with the given error's
+// category label, so the cost/status footer can show "rate-limited,
+// retrying…" vs "provider error" vs generic.
+func (a *Agent) RecordErrorCategory(err error) {
+	if err == nil || a.eventBus == nil {
+		return
+	}
+
+	category := "unknown"
+	if te := agenterrors.AsTypedError(err); te != nil {
+		category = string(te.Code)
+	} else if cat, ok := agenterrors.GetCategory(err); ok {
+		category = cat.String()
+	}
+
+	a.publishEvent(
+		events.EventTypeMetricsUpdate,
+		events.MetricsUpdateEventWithCategory(
+			a.state.GetTotalTokens(),
+			a.state.GetCurrentContextTokens(),
+			a.getModelContextLimit(),
+			a.state.GetCurrentIteration(),
+			a.state.GetTotalCost(),
+			category,
+		),
+	)
 }

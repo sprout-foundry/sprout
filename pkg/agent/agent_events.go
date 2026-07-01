@@ -150,6 +150,14 @@ func (a *Agent) PublishRecallDiagnostic(diag recallRetrievalDiagnostic) {
 	)
 }
 
+// PublishRateLimited emits a rate_limited event so the WebUI can show
+// "rate-limited, retrying…" and gate the input until the backoff elapses.
+func (a *Agent) PublishRateLimited(ev *events.RateLimitedEvent) {
+	if ev != nil {
+		a.publishEvent(events.EventTypeRateLimited, ev)
+	}
+}
+
 // PublishBudgetUpdate publishes a budget update event for automate sessions.
 // This goes through decorateEventPayload to include client_id/chat_id metadata.
 func (a *Agent) PublishBudgetUpdate(eventType string, data interface{}) {

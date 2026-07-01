@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/redact"
 )
 
@@ -12,19 +13,19 @@ import (
 func handleAddMemory(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	name, err := getStringArg(args, "name")
 	if err != nil {
-		return "", fmt.Errorf("name is required: %w", err)
+		return "", agenterrors.NewTool("memory", "name is required", err)
 	}
 
 	content, err := getStringArg(args, "content")
 	if err != nil {
-		return "", fmt.Errorf("content is required: %w", err)
+		return "", agenterrors.NewTool("memory", "content is required", err)
 	}
 
 	// Redact secrets before persisting to memory files.
 	content = redact.String(content)
 
 	if err := SaveMemory(name, content); err != nil {
-		return "", fmt.Errorf("failed to save memory: %w", err)
+		return "", agenterrors.NewTool("memory", "failed to save memory", err)
 	}
 
 	// Embed the memory into the conversation store (best-effort)
@@ -40,12 +41,12 @@ func handleAddMemory(ctx context.Context, a *Agent, args map[string]interface{})
 func handleReadMemory(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	name, err := getStringArg(args, "name")
 	if err != nil {
-		return "", fmt.Errorf("name is required: %w", err)
+		return "", agenterrors.NewTool("memory", "name is required", err)
 	}
 
 	content, err := LoadMemoryContent(name)
 	if err != nil {
-		return "", fmt.Errorf("failed to read memory '%s': %w", name, err)
+		return "", agenterrors.Wrapf(err, "failed to read memory '%s'", name)
 	}
 
 	return fmt.Sprintf("## Memory: %s\n\n%s", name, content), nil
@@ -55,7 +56,7 @@ func handleReadMemory(ctx context.Context, a *Agent, args map[string]interface{}
 func handleListMemories(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	memories, err := ListMemories()
 	if err != nil {
-		return "", fmt.Errorf("failed to list memories: %w", err)
+		return "", agenterrors.NewTool("memory", "failed to list memories", err)
 	}
 
 	if len(memories) == 0 {
@@ -85,14 +86,14 @@ func handleListMemories(ctx context.Context, a *Agent, args map[string]interface
 func handleDeleteMemory(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	name, err := getStringArg(args, "name")
 	if err != nil {
-		return "", fmt.Errorf("name is required: %w", err)
+		return "", agenterrors.NewTool("memory", "name is required", err)
 	}
 
 	// Strip .md extension if provided
 	name = strings.TrimSuffix(name, ".md")
 
 	if err := DeleteMemory(name); err != nil {
-		return "", fmt.Errorf("failed to delete memory '%s': %w", name, err)
+		return "", agenterrors.Wrapf(err, "failed to delete memory '%s'", name)
 	}
 
 	// Remove embedding from conversation store (best-effort)

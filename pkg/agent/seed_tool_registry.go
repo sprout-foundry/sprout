@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -548,6 +549,28 @@ func handleToolError(agent *Agent, err error, toolName string) (string, error) {
 			switch {
 			case agenterrors.IsRateLimited(err):
 				label = "Tool '" + toolName + "' failed (rate limited): " + safeMsg
+				// SP-094-6: publish a rate-limited event so the WebUI can
+				// show "rate-limited, retrying…" and gate the input.
+				provider := agent.GetProvider()
+				if te := agenterrors.AsTypedError(err); te != nil {
+					if p, ok := te.Details["provider"].(string); ok && p != "" {
+						provider = p
+					}
+				}
+				// Also check legacy AgentError metadata.
+				if provider == "" {
+					var ae *agenterrors.AgentError
+					if errors.As(err, &ae) && ae != nil {
+						p := ae.GetMetadata("provider")
+						if p != "" {
+							provider = p
+						}
+					}
+				}
+				ev := events.RateLimitedEventFromError(provider, 1, 5, 0, agent.GetSessionID(), err)
+				if ev != nil {
+					agent.PublishRateLimited(ev)
+				}
 			case agenterrors.IsProviderError(err):
 				label = "Tool '" + toolName + "' failed (provider): " + safeMsg
 			default:

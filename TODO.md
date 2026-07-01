@@ -510,7 +510,7 @@ cuts repeat-turn image cost by 90% on cache hits.
 
       _~0.25 day. Touches `conversation.go:286-360`._
 
-- [ ] **SP-103-B4:** Multiple-image label hints. Anthropic recommends
+^- [x] **SP-103-B4:** Multiple-image label hints. Anthropic recommends
       `Image 1:`, `Image 2:` text labels before each image so the
       model can refer to them by name. Generate these labels
       automatically when the user pastes 2+ images.
@@ -519,7 +519,7 @@ cuts repeat-turn image cost by 90% on cache hits.
 
 ### Dead code + carve-out (SP-103-C) — medium priority
 
-- [ ] **SP-103-C1:** Reactivate the non-vision path. Currently
+^- [x] **SP-103-C1:** Reactivate the non-vision path. Currently
       `conversation.go:225-242::processImagesInQuery` falls through to
       `return nil, query, nil` on the non-multimodal branch, leaving
       pasted images as raw `Pasted image saved to disk: /tmp/foo.png`
@@ -539,7 +539,7 @@ cuts repeat-turn image cost by 90% on cache hits.
       drives the full non-vision flow and asserts the prompt is
       appended._
 
-- [ ] **SP-103-C2:** Add `SupportsConversationalVision()` to
+^- [x] **SP-103-C2:** Add `SupportsConversationalVision()` to
       `pkg/agent_api/interface.go` (separate from `SupportsVision()`).
       Default `true` for providers that previously returned
       `SupportsVision() == true`. `OllamaLocalClient` returns `true`
@@ -554,7 +554,7 @@ cuts repeat-turn image cost by 90% on cache hits.
       provide a sensible default. Backward compat: callers that only
       check `SupportsVision()` keep working._
 
-- [ ] **SP-103-C3:** Update `analyze_image_content` tool description to
+^- [x] **SP-103-C3:** Update `analyze_image_content` tool description to
       advertise the new routing: "Pasted images are visible inline to
       multimodal chat models by default. Use this tool when you need
       specialized analysis (OCR of dense text, frontend UI inspection,
@@ -566,7 +566,7 @@ cuts repeat-turn image cost by 90% on cache hits.
       corresponding prompt string in
       `pkg/agent/seed_tool_registry.go`._
 
-- [ ] **SP-103-C4:** Metrics + observability. Add `vision_image_tokens`
+^- [x] **SP-103-C4:** Metrics + observability. Add `vision_image_tokens`
       histogram (sampled per embedded image), `vision_cache_hit` counter
       (tagged by mode), `vision_retry_attempt` counter, and
       `vision_parallel_pages` gauge. Surface all in the `metrics`

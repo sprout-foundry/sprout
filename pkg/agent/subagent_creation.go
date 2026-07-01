@@ -2,10 +2,10 @@ package agent
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	agent_api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/factory"
 )
 
@@ -23,7 +23,7 @@ const defaultSubagentMaxIterations = 200
 // subagent's HTTP requests ignore cancellation and the goroutine leaks.
 func (r *SubagentRunner) createSubagent(opts SubagentOptions, parentCtx context.Context) (*Agent, error) {
 	if r.shared == nil || r.shared.ConfigManager == nil {
-		return nil, fmt.Errorf("shared state and config manager are required")
+		return nil, agenterrors.NewConfig("shared state and config manager are required", nil)
 	}
 
 	// Resolve provider/model: use opts overrides, then parent agent, then config defaults
@@ -46,7 +46,7 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions, parentCtx context.
 	// Resolve client type from config
 	clientType, finalModel, err := r.shared.ConfigManager.ResolveProviderModel(provider, model)
 	if err != nil {
-		return nil, fmt.Errorf("resolve provider/model: %w", err)
+		return nil, agenterrors.Wrap(err, "resolve provider/model")
 	}
 
 	// Create client via factory (or test hook for testing)
@@ -57,7 +57,7 @@ func (r *SubagentRunner) createSubagent(opts SubagentOptions, parentCtx context.
 		client, err = factory.CreateProviderClient(clientType, finalModel)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("create client: %w", err)
+		return nil, agenterrors.Wrap(err, "create client")
 	}
 
 	// Build system prompt

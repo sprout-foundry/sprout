@@ -1000,9 +1000,27 @@ two weeks, then decide what to keep.
 
 ### Phase order
 
-- [ ] **SP-095-1:** Add the instrumentation wrapper. Fire-and-forget;
+- [x] **SP-095-1:** Add the instrumentation wrapper. Fire-and-forget;
   no behavior change. New
   `pkg/agent/semantic_recall_instrumentation_test.go`. _Effort: ~1 day._
+
+  _Shipped (commit cac85e39): New
+  `pkg/agent/semantic_recall_instrumentation.go` (226 lines) with
+  `RecallMetricsRecord` (per-turn JSONL record: timestamp,
+  session_id, items_recalled, top_similarity, used_in_response,
+  cited_file_paths, cited_session_ids, recall_latency_ms,
+  recall_query truncated to 200 chars),
+  `recallMetricsSink` (buffered JSONL appender at
+  `~/.config/sprout/recall_metrics.jsonl`), and
+  `InstrumentedRecall` which wraps `InjectSemanticRecall` and
+  captures items_recalled, top_similarity, recall_latency_ms,
+  and the cited file paths/session IDs. `seed_query.go` call site
+  now goes through `InstrumentedRecall`. 13 tests cover sink
+  nil-safety, multi-append, auto-timestamp, agent integration.
+  All `pkg/agent` tests pass; build green. UsedInResponse
+  detection is left as a follow-up enhancement (the file paths /
+  session IDs are recorded so the SP-095-3 evaluation report can
+  post-process them against logged agent responses)._
 
 - [ ] **SP-095-2:** Wait 2 weeks of normal usage. (Manual calendar step,
   not a code step.)

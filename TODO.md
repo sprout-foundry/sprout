@@ -1511,12 +1511,11 @@ messages go to the in-terminal `PublishAgentMessage` stream and risk
 clobbering input state (cf. the recent fix in `10a9cbd5 fix(agent):
 route security cautions via event bus`).
 
-- [ ] **SP-101-2:** Add `webui/src/components/NotificationCenter.tsx`
-  (~150 lines). Subscribes to a new event category
-  `notification` published via the event bus. Renders as a fixed
-  top-right stack with auto-dismiss after 5s. Covers 4 event types:
-  `rate_limit`, `auth_failure`, `permission_required`,
-  `agent_blocked`. Mirrors the spec body for Phase 1.
+- [x] **SP-101-2:** NotificationCenter subscribes to notificationBus,
+  renders NotificationStack from @sprout/ui, auto-dismiss 5s, top-right
+  via App.css override. ~80 lines. Exports `publishSystemNotification`
+  helper for semantic category→type mapping (rate_limit→warning,
+  auth_failure→error, etc.).
 
 ### Phase 3: SP-017 — collapsible sections (~1 day)
 

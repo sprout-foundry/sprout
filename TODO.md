@@ -449,7 +449,7 @@ caching for repeat-turn cost.
 This is the **highest-leverage change** in the SP. Anthropic prompt caching
 cuts repeat-turn image cost by 90% on cache hits.
 
-- [ ] **SP-103-B1:** Add `cache_control: {type: "ephemeral"}` to image
+- [x] **SP-103-B1:** Add `cache_control: {type: "ephemeral"}` to image
       blocks in `processImagesAsMultimodal`. The image content block in
       the user message gets the cache breakpoint so subsequent turns
       reuse the cached image instead of re-encoding and re-sending
@@ -462,6 +462,31 @@ cuts repeat-turn image cost by 90% on cache hits.
       provider in `pkg/agent_api/anthropic*.go` to emit the
       `cache_control` field. Test that subsequent turns report
       `cache_read_input_tokens > 0`._
+
+      _Shipped (commit b657c409): New
+      `pkg/agent_providers/vision_cache_images.go` (29 lines) with
+      `visionCacheImagesEnabled()` reading `SPROUT_VISION_CACHE_IMAGES`
+      (with `LEDIT_` legacy fallback via direct `os.Getenv` to avoid
+      a circular import — `pkg/configuration` already imports this
+      package). Default **ON**. Wired into
+      `generic_provider_vision.go`'s `buildMultiModalContent`: each
+      `image_url` block now carries top-level
+      `cache_control: {type: "ephemeral"}` so the wire format is
+      compatible with both Anthropic prompt-caching semantics and
+      OpenAI's no-native-cache model. The key is placed at the part's
+      top level (not inside the `image_url` sub-map) per Anthropic's
+      spec. 12 new tests in
+      `generic_provider_vision_cache_test.go` cover: env-var default
+      ON, `false`/`0`/`no`/`off` disable, `true`/`1`/`yes`/`on` enable,
+      `LEDIT_VISION_CACHE_IMAGES` legacy-fallback path, cache_control
+      appears on images only (not on text-only parts), cache_control
+      placement at top-level (not inside `image_url`), invalid-image
+      skip preservation, mixed text+image handling. The OpenAI
+      equivalent (image URL stability) is naturally handled by the
+      existing `image_url` repetition in `processImagesAsMultimodal`.
+      Pre-existing `TestZAIProviderIsolated` failure (real-API 429
+      for insufficient balance) is unrelated to this change. Build
+      green; all non-ZAI unit tests pass._
 
 - [ ] **SP-103-B2:** Pre-resize images before embedding. Current code
       caps at `visionMaxImageFileSizeBytes` but doesn't constrain

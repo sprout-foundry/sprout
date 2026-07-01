@@ -1,12 +1,16 @@
 # Full Autonomous TODO Processor — Agent Instructions
 
-You are an autonomous Coordinator agent processing a TODO.md list. Your job is to complete each TODO item with full build/test/review rigor, commit the result, and move on.
+You are an autonomous Coordinator agent processing **the TODO.md file at the root of the sprout repository** — i.e. the `TODO.md` in your current working directory when this workflow was started via `make automate-run`. The runner is always launched from the sprout repo root, so `TODO.md` resolves correctly via your CWD.
 
-**Do NOT stop until one of these is true: (a) every `[ ]` item is marked `[x]`, or (b) you hit an unrecoverable error you cannot route around.** Running low on budget, hitting a subagent failure, or a build break are NOT reasons to stop — they are reasons to keep working (retry, fix, skip-and-continue). Only stop early on a hard error you genuinely cannot proceed past.
+> ⚠️ There may be other `TODO.md` files in ancestor directories (for example, a parent monorepo containing an integration checklist). Those are out of scope — **never walk up the directory tree looking for more `TODO.md` files, never use `find /` or similar broad searches, and never read any `TODO.md` outside your CWD**. If your first `read_file("TODO.md")` shows a file that is not the active sprint list (no unchecked `[ ]` items, all items dated more than a few days ago, content describing integration or deployment work rather than feature work), stop and report — do not silently conclude "nothing to do."
+
+Your job is to complete each TODO item with full build/test/review rigor, commit the result, and move on.
+
+**Do NOT stop until one of these is true: (a) every `[ ]` item in the sprout repo's `TODO.md` is marked `[x]`, or (b) you hit an unrecoverable error you cannot route around.** Running low on budget, hitting a subagent failure, or a build break are NOT reasons to stop — they are reasons to keep working (retry, fix, skip-and-continue). Only stop early on a hard error you genuinely cannot proceed past.
 
 ## Workflow for Each `[ ]` Item
 
-1. **Read TODO.md** and identify the first incomplete `[ ]` item
+1. **Read `TODO.md`** from your current working directory and identify the first incomplete `[ ]` item. Do not read any other `TODO.md` file.
 2. **Create a task_queue entry** for it (status=in_progress)
 3. **Delegate implementation** to orchestrator using run_subagent. Your prompt to the orchestrator MUST include the following instructions verbatim (this is critical — the orchestrator often skips delegation without explicit direction):
 

@@ -1,8 +1,11 @@
 package agent
 
 import (
+	"bytes"
 	"encoding/base64"
 	"fmt"
+	"image"
+	"image/jpeg"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -13,6 +16,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/console"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
+	"golang.org/x/image/draw"
 )
 
 // ProcessQuery handles the main conversation loop with the LLM
@@ -221,6 +225,61 @@ const maxTotalImagePayloadBytes = 20 * 1024 * 1024
 // when a user pastes an image.  ONLY this pattern is considered safe to load
 // and send as multimodal content — arbitrary file paths in user text are ignored.
 var pastedImagePlaceholderRe = regexp.MustCompile(`Pasted image saved to disk: (\S+)`)
+
+// visionEmbedMaxEdgePx caps the longest edge of embedded images for multimodal
+// LLM input.  Anthropic recommends ≤1568px for the best cost/quality trade-off.
+const visionEmbedMaxEdgePx = 1568
+
+// resizeImageForVisionEmbed caps the long edge of the decoded image at
+// visionEmbedMaxEdgePx using bilinear resampling, re-encoding as JPEG
+// at quality 85. Returns the input unchanged if the long edge is
+// already within the cap or the bytes cannot be decoded by stdlib.
+func resizeImageForVisionEmbed(data []byte) ([]byte, error) {
+	// Fast path: check config without full decode.
+	cfg, format, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		// Format not supported by stdlib (e.g., webp/avif) — pass through.
+		return data, nil
+	}
+	_ = format // format is already handled by OptimizeImageData upstream
+
+	longEdge := cfg.Width
+	if cfg.Height > longEdge {
+		longEdge = cfg.Height
+	}
+	if longEdge <= visionEmbedMaxEdgePx {
+		return data, nil
+	}
+
+	// Decode the full image.
+	img, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return data, nil
+	}
+
+	// Calculate new dimensions preserving aspect ratio.
+	scale := float64(visionEmbedMaxEdgePx) / float64(longEdge)
+	newW := int(float64(cfg.Width)*scale + 0.5)
+	newH := int(float64(cfg.Height)*scale + 0.5)
+	if newW < 1 {
+		newW = 1
+	}
+	if newH < 1 {
+		newH = 1
+	}
+
+	// Resize with bilinear interpolation.
+	dst := image.NewRGBA(image.Rect(0, 0, newW, newH))
+	resample := draw.BiLinear
+	resample.Scale(dst, dst.Rect, img, img.Bounds(), draw.Over, nil)
+
+	// Re-encode as JPEG at quality 85.
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, dst, &jpeg.Options{Quality: 85}); err != nil {
+		return data, fmt.Errorf("jpeg encode after resize: %w", err)
+	}
+	return buf.Bytes(), nil
+}
 
 // processImagesInQuery detects and processes images in user queries.
 // If the primary model supports vision it returns the image data as multimodal
@@ -434,6 +493,27 @@ func readImageAsImageData(filePath string) (api.ImageData, int, error) {
 	if optErr == nil && len(optimized) > 0 {
 		mimeType = optMime
 		data = optimized
+	}
+
+	// Pre-resize for vision embedding: cap long edge at 1568px using
+	// bilinear resampling for better visual quality. Runs after
+	// OptimizeImageData so we don't double-resize small images.
+	//
+	// NOTE: OptimizeImageData already performs a 4096px nearest-neighbor
+	// resize for oversized images. For very large inputs (>4096px on the
+	// long edge), the chained steps (nearest-neighbor at 4096px → bilinear
+	// at 1568px) may compound artifacts. This is a known limitation; future
+	// work could unify both passes into a single bilinear resize.
+	resized, resizeErr := resizeImageForVisionEmbed(data)
+	if resizeErr == nil && len(resized) > 0 {
+		// Check if the image was actually resized (different bytes).
+		// If the image was already small enough, resizeImageForVisionEmbed
+		// returns the original bytes; we detect this via byte comparison
+		// to preserve the original encoding for small images.
+		if !bytes.Equal(resized, data) {
+			data = resized
+			mimeType = "image/jpeg"
+		}
 	}
 
 	encoded := base64.StdEncoding.EncodeToString(data)

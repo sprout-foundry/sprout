@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/search"
 )
 
 // TestMain isolates session-state persistence for every test in this
@@ -66,9 +67,23 @@ func TestMain(m *testing.M) {
 	// into the test exit so CI fails.
 	realDir, beforeSnapshot := agent.SnapshotRealStateDir()
 
+	// The pkg/agent init() function wires the process-global search
+	// IndexUpdater to the real ~/.sprout/sessions/search-index.json
+	// before TestMain can intercept it. Subsequent MarkSessionDirty
+	// calls would write to that real path even though getStateDirFunc
+	// is now pointing at our temp sessions dir. Reset + reinitialize
+	// the global updater against the test temp dir, then restore the
+	// original on exit so the global reflects the test lifecycle.
+	oldUpdater := search.ResetGlobalUpdaterForTest()
+	search.InitGlobalUpdater(filepath.Join(sessionsDir, "search-index.json"), sessionsDir)
+
 	restore := agent.SetTestStateDirHook(sessionsDir)
 	code := m.Run()
 	restore()
+
+	// Stop the test updater and restore whatever was there before the
+	// test (typically the real-path updater from pkg/agent init()).
+	search.RestoreGlobalUpdater(oldUpdater)
 
 	leakCode := agent.AssertNoStateLeak(realDir, beforeSnapshot)
 	_ = os.RemoveAll(tmpDir)

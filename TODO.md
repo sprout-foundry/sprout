@@ -902,7 +902,7 @@ string-matching.
   `testing_state_isolation_test.go`. All `pkg/agent` + `cmd` tests
   pass; build green._
 
-- [ ] **SP-094-8: Route steer / queue messages to the primary agent.**
+- [x] **SP-094-8: Route steer / queue messages to the primary agent.**
   When a user is steering or queuing while a subagent is mid-execution
   (e.g. `run_subagent` returns), the message currently goes to the
   subagent's input queue instead of the parent's. Result: the
@@ -919,6 +919,17 @@ string-matching.
   `pkg/agent/subagent_steering_test.go` that fires a steer message
   while a subagent is running and asserts the parent receives it
   within 100 ms. _Effort: ~0.5 day._
+
+  _Shipped (commit d50a949d): Added `SteeringChannel()` accessor on
+  `Agent`. Fixed `SubagentRunner.InjectInputIntoActive` to prefer
+  primary first (the parent decides whether to abort subagents,
+  redirect them, or fold the steer into its own plan), falling back
+  to deepest subagent only when primary's channel is full. Updated
+  CLI label in `cmd/steer_coordinator.go` to show "steer queued" vs
+  "steer → subagent (id)". Fixed double-delivery bug in
+  `pkg/webui/api_query.go` (no fallback inject when runner delivers).
+  Added 8 regression tests in `subagent_steering_test.go`. All
+  tests pass; build green._
 
 - [x] **SP-094-5:** Final wave in remaining `pkg/agent/*.go` files.
   Audited via `grep -rn "fmt.Errorf" pkg/agent` returning only the helper

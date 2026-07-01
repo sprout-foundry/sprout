@@ -205,6 +205,8 @@ type SearchEngine interface {
 type ImageData struct {
 	// URI is the path or data URI of the image
 	URI string `json:"uri"`
+	// Base64 is the base64-encoded image data (for inline multimodal attachment)
+	Base64 string `json:"base64,omitempty"`
 	// MIMEType is the image MIME type (e.g., "image/png")
 	MIMEType string `json:"mime_type"`
 }

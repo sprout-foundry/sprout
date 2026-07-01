@@ -871,6 +871,40 @@ string-matching.
   remap `pkg/agent/seed_provider.go::ChatStream` retry/backoff to use
   `IsRetryable()`. _Effort: ~1.5 days._
 
+### Pre-SP-095 cleanup (test isolation + subagent routing)
+
+- [ ] **SP-094-7: Fix state-leak in `cmd/` tests.** Some test in
+  `cmd/*_test.go` builds an `Agent` without using
+  `SetTestStateDirHook(t)` or `NewTestStateDir(t)`, causing
+  `pkg/agent/persistence.go:31` to call
+  `search.InitGlobalUpdater` against the real
+  `~/.sprout/sessions/search-index.json`. Symptom: `[state-leak]
+  1 file(s) leaked into real state dir` failure on
+  `go test ./cmd/... -count=1` (verified pre-existing at HEAD~1
+  `4a1a54e0`, NOT introduced by `b6826a20`). _Effort: ~0.25 day._
+  Identify the offending test by running
+  `go test ./cmd/ -count=1 -v 2>&1 | grep -B 5 'leaked into real state'`
+  and add the appropriate hook. Document the pattern in
+  `pkg/agent/testing_isolation.go` so future test authors know.
+
+- [ ] **SP-094-8: Route steer / queue messages to the primary agent.**
+  When a user is steering or queuing while a subagent is mid-execution
+  (e.g. `run_subagent` returns), the message currently goes to the
+  subagent's input queue instead of the parent's. Result: the
+  primary agent never sees "yes, commit and push" until the subagent
+  finishes, by which time the subagent may have already taken
+  destructive action or the parent has lost context. Root cause:
+  the subagent's `SteeringQueue` / input channel is the closest
+  matching receive target when the message lands during a subagent
+  call. Fix: add a routing layer in `pkg/agent/subagent_runner.go`
+  (or wherever `RunSubagent` writes back to the parent) that
+  distinguishes "parent turn-end" from "subagent turn-end", and a
+  `SteeringChannel()` accessor on the parent `Agent` that the
+  subagent plumbing checks first. Add a regression test in
+  `pkg/agent/subagent_steering_test.go` that fires a steer message
+  while a subagent is running and asserts the parent receives it
+  within 100 ms. _Effort: ~0.5 day._
+
 - [ ] **SP-094-5:** Final wave in remaining `pkg/agent/*.go` files.
   Audited via `grep -rn "fmt.Errorf" pkg/agent` returning only the helper
   itself plus a list of acceptable sites (delegator re-wraps, etc.).

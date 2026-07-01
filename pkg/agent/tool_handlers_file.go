@@ -25,7 +25,7 @@ func handleReadFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 	// Get file path - supports both "path" (new) and "file_path" (legacy)
 	path, err := getFilePath(args)
 	if err != nil {
-		return "", fmt.Errorf("failed to get file path: %w", err)
+		return "", agenterrors.Wrap(err, "failed to get file path")
 	}
 
 	// Parse view_range (Claude Code style: [start, end])
@@ -65,7 +65,7 @@ func handleReadFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 		}
 
 		if err != nil {
-			return result, fmt.Errorf("read file %q: %w", path, err)
+			return result, agenterrors.NewTool("read_file", "read file", err).WithDetail("path", path)
 		}
 		// Inject semantic context if embedding is enabled
 		result = injectSemanticContext(ctx, a, path, result)
@@ -91,7 +91,7 @@ func handleReadFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 	}
 
 	if err != nil {
-		return "", fmt.Errorf("failed to read file %s: %w", path, err)
+		return "", agenterrors.NewTool("read_file", "failed to read file", err).WithDetail("path", path)
 	}
 	// Inject semantic context if embedding is enabled
 	result = injectSemanticContext(ctx, a, path, result)
@@ -185,21 +185,21 @@ func isPDFExtension(filePath string) bool {
 func handleReadFileWithImages(ctx context.Context, a *Agent, args map[string]interface{}) ([]api.ImageData, string, error) {
 	path, err := getFilePath(args)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to get file path: %w", err)
+		return nil, "", agenterrors.Wrap(err, "failed to get file path")
 	}
 
 	// Handle PDFs — either via multimodal pipeline or OCR text extraction
 	if isPDFExtension(path) {
 		cleanPath, resolveErr := filesystem.SafeResolvePathWithBypass(ctx, path)
 		if resolveErr != nil {
-			return nil, "", fmt.Errorf("failed to resolve PDF path %s: %w", path, resolveErr)
+			return nil, "", agenterrors.NewTool("read_file", "failed to resolve PDF path", resolveErr).WithDetail("path", path)
 		}
 
 		if a != nil {
 			if c := a.getClient(); c != nil && c.SupportsVision() {
 				images, text, err := handleReadPDFFileMultimodal(ctx, a, cleanPath)
 				if err != nil {
-					return nil, "", fmt.Errorf("failed to read PDF file %s: %w", path, err)
+					return nil, "", agenterrors.NewTool("read_file", "failed to read PDF file", err).WithDetail("path", path)
 				}
 				return images, text, nil
 			}
@@ -208,7 +208,7 @@ func handleReadFileWithImages(ctx context.Context, a *Agent, args map[string]int
 		// Non-multimodal: extract text via OCR
 		result, ocrErr := tools.ProcessPDFForTextOnly(ctx, cleanPath)
 		if ocrErr != nil {
-			return nil, "", fmt.Errorf("failed to read PDF %s: %w", path, ocrErr)
+			return nil, "", agenterrors.NewTool("read_file", "failed to read PDF", ocrErr).WithDetail("path", path)
 		}
 		return nil, preparePDFTextResult(path, result), nil
 	}
@@ -217,7 +217,7 @@ func handleReadFileWithImages(ctx context.Context, a *Agent, args map[string]int
 	if !isImageExtension(path) || a == nil || a.client == nil || !a.client.SupportsVision() {
 		result, err := handleReadFile(ctx, a, args)
 		if err != nil {
-			return nil, result, fmt.Errorf("handle read file for %q: %w", path, err)
+			return nil, result, agenterrors.NewTool("read_file", "handle read file", err).WithDetail("path", path)
 		}
 		return nil, result, nil
 	}
@@ -230,12 +230,12 @@ func handleReadImageFileMultimodal(ctx context.Context, a *Agent, filePath strin
 	// Resolve path securely
 	cleanPath, err := filesystem.SafeResolvePathWithBypass(ctx, filePath)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to resolve path: %w", err)
+		return nil, "", agenterrors.NewTool("read_file", "failed to resolve path", err)
 	}
 
 	info, err := os.Stat(cleanPath)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to access file %s: %w", cleanPath, err)
+		return nil, "", agenterrors.NewTool("read_file", "failed to access file", err).WithDetail("path", cleanPath)
 	}
 	if info.IsDir() {
 		return nil, "", fmt.Errorf("path is a directory, not a file: %s", cleanPath)
@@ -244,7 +244,7 @@ func handleReadImageFileMultimodal(ctx context.Context, a *Agent, filePath strin
 	// Read file data
 	data, err := os.ReadFile(cleanPath)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to read file %s: %w", cleanPath, err)
+		return nil, "", agenterrors.NewTool("read_file", "failed to read file", err).WithDetail("path", cleanPath)
 	}
 
 	// Validate it's actually an image via magic bytes
@@ -293,7 +293,7 @@ func handleReadPDFFileMultimodal(ctx context.Context, a *Agent, filePath string)
 
 	result, err := tools.ProcessPDFForMultimodal(ctx, filePath)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to process PDF %s: %w", filePath, err)
+		return nil, "", agenterrors.NewTool("read_file", "failed to process PDF", err).WithDetail("path", filePath)
 	}
 
 	if len(result.Images) > 0 {
@@ -314,19 +314,19 @@ func preparePDFTextResult(filePath, text string) string {
 func handleWriteFile(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	path, err := getFilePath(args)
 	if err != nil {
-		return "", fmt.Errorf("failed to get file path: %w", err)
+		return "", agenterrors.Wrap(err, "failed to get file path")
 	}
 
 	content, err := getRequiredString(args, "content")
 	if err != nil {
-		return "", fmt.Errorf("failed to get content parameter: %w", err)
+		return "", agenterrors.Wrap(err, "failed to get content parameter")
 	}
 
 	// JSON writes are transparently routed through structured serialization/validation.
 	if strings.EqualFold(filepath.Ext(path), ".json") {
 		parsed, parseErr := parseStructuredJSONContent(content, "write_file")
 		if parseErr != nil {
-			return "", fmt.Errorf("write_file JSON forwarding failed for %s: %w", path, parseErr)
+			return "", agenterrors.NewTool("write_file", "write_file JSON forwarding failed", parseErr).WithDetail("path", path)
 		}
 		return handleWriteStructuredFile(ctx, a, map[string]interface{}{
 			"path":   path,
@@ -367,16 +367,16 @@ func formatJSONParseError(content string, err error, callerTool string) error {
 	}
 
 	if offset <= 0 {
-		return fmt.Errorf("invalid JSON: %w; next_step=%s", err, sameToolJSONFixHint(callerTool))
+		return agenterrors.Wrapf(err, "invalid JSON; next_step=%s", sameToolJSONFixHint(callerTool))
 	}
 
 	line, col := lineColFromOffset(content, offset)
 	snippet := snippetAtLine(content, line)
 	if snippet == "" {
-		return fmt.Errorf("invalid JSON at line=%d col=%d: %w; next_step=%s", line, col, err, sameToolJSONFixHint(callerTool))
+		return agenterrors.Wrapf(err, "invalid JSON at line=%d col=%d; next_step=%s", line, col, sameToolJSONFixHint(callerTool))
 	}
 
-	return fmt.Errorf("invalid JSON at line=%d col=%d: %w; snippet=%q; next_step=%s", line, col, err, snippet, sameToolJSONFixHint(callerTool))
+	return agenterrors.Wrapf(err, "invalid JSON at line=%d col=%d; snippet=%q; next_step=%s", line, col, snippet, sameToolJSONFixHint(callerTool))
 }
 
 func sameToolJSONFixHint(callerTool string) string {
@@ -427,7 +427,7 @@ func snippetAtLine(content string, line int) string {
 func writeFileContent(ctx context.Context, a *Agent, path, content, toolName string, allowStructured bool) (string, error) {
 	if !allowStructured {
 		if err := disallowRawStructuredWrite(path, toolName); err != nil {
-			return "", fmt.Errorf("failed to validate structured write: %w", err)
+			return "", agenterrors.Wrap(err, "failed to validate structured write")
 		}
 	}
 
@@ -450,7 +450,7 @@ func writeFileContent(ctx context.Context, a *Agent, path, content, toolName str
 			}
 			approved, summary, appErr := a.RequestEditApproval(ctx, proposal)
 			if appErr != nil {
-				return "", fmt.Errorf("edit-approval failed for %s: %w", path, appErr)
+				return "", agenterrors.NewApproval("edit-approval failed", map[string]any{"path": path}).WithDetail("cause", appErr.Error())
 			}
 			content = approved
 			a.Logger().Debug("edit-approval: %s\n", summary)
@@ -509,7 +509,7 @@ func writeFileContent(ctx context.Context, a *Agent, path, content, toolName str
 	}
 
 	if err != nil {
-		return "", fmt.Errorf("failed to write file %s: %w", path, err)
+		return "", agenterrors.NewTool("write_file", "failed to write file", err).WithDetail("path", path)
 	}
 	return result, nil
 }
@@ -517,17 +517,17 @@ func writeFileContent(ctx context.Context, a *Agent, path, content, toolName str
 func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	path, err := getFilePath(args)
 	if err != nil {
-		return "", fmt.Errorf("failed to get file path: %w", err)
+		return "", agenterrors.Wrap(err, "failed to get file path")
 	}
 
 	oldStr, err := getRequiredString(args, "old_str")
 	if err != nil {
-		return "", fmt.Errorf("failed to get old_str parameter: %w", err)
+		return "", agenterrors.Wrap(err, "failed to get old_str parameter")
 	}
 
 	newStr, err := getRequiredString(args, "new_str")
 	if err != nil {
-		return "", fmt.Errorf("failed to get new_str parameter: %w", err)
+		return "", agenterrors.Wrap(err, "failed to get new_str parameter")
 	}
 
 	if warning := validateJSONContent(newStr, path); warning != "" {
@@ -543,7 +543,7 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 		}
 	}
 	if err != nil {
-		return "", fmt.Errorf("failed to read original file for diff: %w", err)
+		return "", agenterrors.NewTool("edit_file", "failed to read original file for diff", err).WithDetail("path", path)
 	}
 
 	a.Logger().Debug("Editing file: %s\n", path)
@@ -556,7 +556,7 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 		proposal := EditProposal{Path: path, Original: originalContent, Proposed: proposedContent}
 		approved, summary, appErr := a.RequestEditApproval(ctx, proposal)
 		if appErr != nil {
-			return "", fmt.Errorf("edit-approval failed for %s: %w", path, appErr)
+			return "", agenterrors.NewApproval("edit-approval failed", map[string]any{"path": path}).WithDetail("cause", appErr.Error())
 		}
 		if approved != proposedContent {
 			a.Logger().Debug("edit-approval modified content for %s: %s\n", path, summary)
@@ -565,7 +565,7 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 			}
 			writeResult, writeErr := tools.WriteFile(ctx, path, approved)
 			if writeErr != nil {
-				return "", fmt.Errorf("failed to write approved content to %s: %w", path, writeErr)
+				return "", agenterrors.NewTool("edit_file", "failed to write approved content", writeErr).WithDetail("path", path)
 			}
 			a.publishEvent(events.EventTypeFileChanged, events.FileChangedEvent(path, "edit", approved))
 			if a.state.GetOptimizer() != nil {
@@ -593,7 +593,7 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 			ctx = ctx2
 			originalContent, err = tools.ReadFile(ctx, path)
 			if err != nil {
-				return "", fmt.Errorf("failed to read original file for diff: %w", err)
+				return "", agenterrors.NewTool("edit_file", "failed to read original file for diff", err).WithDetail("path", path)
 			}
 			result, err = tools.EditFile(ctx, path, oldStr, newStr)
 		}
@@ -610,7 +610,7 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 	if err == nil && strings.EqualFold(filepath.Ext(path), ".json") {
 		editedContent, readErr := tools.ReadFile(ctx, path)
 		if readErr != nil {
-			return "", fmt.Errorf("json edit succeeded but failed to read edited file: %w", readErr)
+			return "", agenterrors.NewTool("edit_file", "json edit succeeded but failed to read edited file", readErr).WithDetail("path", path)
 		}
 		// Record the re-read so the staleness check in handleWriteStructuredFile
 		// sees an up-to-date readAt that is >= the edit's ModTime. Without this,
@@ -627,16 +627,16 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 			}()
 			if restoreErr != nil {
 				// Note: parseErr is included with %v for context but not wrapped - only restoreErr is the primary error
-				return "", fmt.Errorf("edit would produce invalid JSON in %s and restore failed: %w (original parse error: %v)", path, restoreErr, parseErr)
+				return "", agenterrors.NewTool("edit_file", "edit would produce invalid JSON and restore failed", restoreErr).WithDetail("path", path).WithDetail("parse_error", parseErr.Error())
 			}
-			return "", fmt.Errorf("edit would produce invalid JSON in %s: %w", path, parseErr)
+			return "", agenterrors.NewTool("edit_file", "edit would produce invalid JSON", parseErr).WithDetail("path", path)
 		}
 		if _, werr := handleWriteStructuredFile(ctx, a, map[string]interface{}{
 			"path":   path,
 			"format": "json",
 			"data":   parsed,
 		}); werr != nil {
-			return "", fmt.Errorf("json edit normalization failed: %w", werr)
+			return "", agenterrors.NewTool("edit_file", "json edit normalization failed", werr)
 		}
 	}
 
@@ -697,7 +697,7 @@ func handleEditFile(ctx context.Context, a *Agent, args map[string]interface{}) 
 	}
 
 	if err != nil {
-		return "", fmt.Errorf("failed to edit file %s: %w", path, err)
+		return "", agenterrors.NewTool("edit_file", "failed to edit file", err).WithDetail("path", path)
 	}
 	return result, nil
 }
@@ -719,7 +719,7 @@ func getFilePath(args map[string]interface{}) (string, error) {
 func getRequiredString(args map[string]interface{}, key string) (string, error) {
 	val, exists := args[key]
 	if !exists {
-		return "", fmt.Errorf("parameter '%s' is required", key)
+		return "", agenterrors.NewValidation("parameter '"+key+"' is required", nil)
 	}
 	return convertToString(val, key)
 }
@@ -756,7 +756,7 @@ func disallowRawStructuredWrite(path, toolName string) error {
 	ext := strings.ToLower(filepath.Ext(path))
 	switch ext {
 	case ".json", ".yaml", ".yml":
-		return fmt.Errorf("%s is not allowed for structured files (%s); use write_structured_file or patch_structured_file instead", toolName, ext)
+		return agenterrors.NewValidation(toolName+" is not allowed for structured files ("+ext+"); use write_structured_file or patch_structured_file instead", nil)
 	default:
 		return nil
 	}

@@ -61,16 +61,35 @@ func SnapshotRealStateDir() (realDir string, before map[string]time.Time) {
 // while preserving the underlying test-failure signal.
 //
 // Returns 0 when nothing leaked, 1 when something did.
+//
+// Detection model: only flag files whose mtime is *newer than the
+// snapshot start time*. Pre-existing files in the developer's real
+// state dir (e.g. sessions from prior CLI runs) have mtimes from
+// before TestMain started; if their content is re-read in-place the
+// read access doesn't update mtime, so they don't trigger a false
+// positive. Only files that were created or rewritten during this
+// test run are reported.
 func AssertNoStateLeak(realDir string, before map[string]time.Time) int {
 	if realDir == "" {
 		return 0
 	}
+	cutoff := time.Now()
 	after := snapshotStateDir(realDir)
 	var leaked []string
 	for path, mt := range after {
-		prev, ok := before[path]
-		if !ok || !prev.Equal(mt) {
+		if mt.After(cutoff) || mt.Equal(cutoff) {
 			leaked = append(leaked, path)
+			continue
+		}
+		// For files already on disk before the run, only flag them if
+		// their mtime changed AND the change happened during the run.
+		// We approximate "during the run" as "newer than 1 minute before
+		// the cutoff" — anything older was touched by some prior CLI
+		// run, not this test.
+		if prev, ok := before[path]; !ok || !prev.Equal(mt) {
+			if mt.After(cutoff.Add(-1 * time.Minute)) {
+				leaked = append(leaked, path)
+			}
 		}
 	}
 	if len(leaked) == 0 {

@@ -26,21 +26,21 @@ func (a *Agent) ClearActivePersona() {
 func (a *Agent) ApplyPersona(personaID string) error {
 	personaID = normalizeAgentPersonaID(personaID)
 	if a.configManager == nil {
-		return fmt.Errorf("agent configuration manager is not available for persona %q", personaID)
+		return agenterrors.NewConfig(fmt.Sprintf("agent configuration manager is not available for persona %q", personaID), nil)
 	}
 
 	config := a.configManager.GetConfig()
 	if config == nil {
-		return fmt.Errorf("agent configuration is not available for persona %q", personaID)
+		return agenterrors.NewConfig(fmt.Sprintf("agent configuration is not available for persona %q", personaID), nil)
 	}
 
 	persona := config.GetSubagentType(personaID)
 	if persona == nil {
 		available := a.GetAvailablePersonaIDs()
 		if len(available) == 0 {
-			return fmt.Errorf("persona not found or disabled: %s (no enabled personas configured)", personaID)
+			return agenterrors.NewNotFound(fmt.Sprintf("persona %s (no enabled personas configured)", personaID))
 		}
-		return fmt.Errorf("persona not found or disabled: %s (available personas: %s)", personaID, strings.Join(available, ", "))
+		return agenterrors.NewNotFound(fmt.Sprintf("persona %s (available personas: %s)", personaID, strings.Join(available, ", ")))
 	}
 	// Canonicalize the persona ID: an alias (e.g. legacy "repo_orchestrator")
 	// resolves to its primary ID (e.g. "orchestrator") via GetSubagentType, and
@@ -65,18 +65,18 @@ func (a *Agent) ApplyPersona(personaID string) error {
 	if strings.TrimSpace(persona.Provider) != "" {
 		providerType, err := a.configManager.MapStringToClientType(strings.TrimSpace(persona.Provider))
 		if err != nil {
-			return fmt.Errorf("invalid persona provider %q: %w", persona.Provider, err)
+			return agenterrors.NewConfig(fmt.Sprintf("invalid persona provider %q", persona.Provider), err)
 		}
 		if providerType != a.getClientType() {
 			if err := a.SetProvider(providerType); err != nil {
-				return fmt.Errorf("failed switching to persona provider %q: %w", persona.Provider, err)
+				return agenterrors.NewConfig(fmt.Sprintf("failed switching to persona provider %q", persona.Provider), err)
 			}
 		}
 	}
 
 	if model := strings.TrimSpace(persona.Model); model != "" {
 		if err := a.SetModel(model); err != nil {
-			return fmt.Errorf("failed setting persona model %q: %w", model, err)
+			return agenterrors.NewConfig(fmt.Sprintf("failed setting persona model %q", model), err)
 		}
 	}
 
@@ -88,7 +88,7 @@ func (a *Agent) ApplyPersona(personaID string) error {
 		a.SetSystemPrompt(promptText)
 	} else if promptPath := strings.TrimSpace(persona.SystemPrompt); promptPath != "" {
 		if err := a.SetSystemPromptFromFile(promptPath); err != nil {
-			return fmt.Errorf("failed loading persona system prompt %q: %w", promptPath, err)
+			return agenterrors.NewConfig(fmt.Sprintf("failed loading persona system prompt %q", promptPath), err)
 		}
 	}
 
@@ -232,7 +232,7 @@ func (a *Agent) GetPersonaProviderModel(personaID string) (string, string, error
 	}
 	persona := config.GetSubagentType(personaID)
 	if persona == nil {
-		return "", "", fmt.Errorf("persona not found or disabled: %s", personaID)
+		return "", "", agenterrors.NewNotFound(fmt.Sprintf("persona %s", personaID))
 	}
 
 	// Resolve provider and model independently against the same chain

@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/mcp"
 )
 
@@ -75,7 +76,7 @@ func handleMCPList(agent *Agent) (string, error) {
 
 func handleMCPRefreshConfig(ctx context.Context, agent *Agent) (string, error) {
 	if err := agent.RefreshRuntimeConfig(ctx); err != nil {
-		return "", fmt.Errorf("refresh MCP: %w", err)
+		return "", errors.NewTool("mcp", "refresh MCP", err)
 	}
 
 	result := map[string]interface{}{
@@ -145,12 +146,12 @@ func handleMCPAdd(ctx context.Context, agent *Agent, args map[string]interface{}
 		cfg.MCP.Enabled = true
 		return nil
 	}); err != nil {
-		return "", fmt.Errorf("update config: %w", err)
+		return "", errors.NewTool("mcp", "update config", err)
 	}
 
 	// Refresh runtime to start the new server
 	if err := agent.RefreshRuntimeConfig(ctx); err != nil {
-		return "", fmt.Errorf("refresh after add: %w", err)
+		return "", errors.NewTool("mcp", "refresh after add", err)
 	}
 
 	result := map[string]interface{}{
@@ -183,12 +184,12 @@ func handleMCPRemove(ctx context.Context, agent *Agent, args map[string]interfac
 		}
 		return nil
 	}); err != nil {
-		return "", fmt.Errorf("update config: %w", err)
+		return "", errors.NewTool("mcp", "update config", err)
 	}
 
 	// Refresh runtime to stop the removed server
 	if err := agent.RefreshRuntimeConfig(ctx); err != nil {
-		return "", fmt.Errorf("refresh after remove: %w", err)
+		return "", errors.NewTool("mcp", "refresh after remove", err)
 	}
 
 	result := map[string]interface{}{

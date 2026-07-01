@@ -3,6 +3,7 @@ package agent
 import (
 	"fmt"
 
+	"github.com/sprout-foundry/sprout/pkg/errors"
 	"gopkg.in/yaml.v3"
 )
 
@@ -16,18 +17,18 @@ import (
 func ParseYAMLOrdered(content string) (*OrderedMap, error) {
 	var doc yaml.Node
 	if err := yaml.Unmarshal([]byte(content), &doc); err != nil {
-		return nil, fmt.Errorf("failed to parse YAML: %w", err)
+		return nil, errors.NewTool("ordered", "failed to parse YAML", err)
 	}
 
 	// The top-level node is a DocumentNode; its first Content element is
 	// the root value node.
 	if doc.Kind != yaml.DocumentNode || len(doc.Content) == 0 {
-		return nil, fmt.Errorf("YAML content is empty or not a valid document")
+		return nil, errors.NewTool("ordered", "YAML content is empty or not a valid document", nil)
 	}
 
 	root := doc.Content[0]
 	if root.Kind != yaml.MappingNode {
-		return nil, fmt.Errorf("YAML content must be a mapping at the top level, got %s", yamlNodeKindName(root.Kind))
+		return nil, errors.NewTool("ordered", fmt.Sprintf("YAML content must be a mapping at the top level, got %s", yamlNodeKindName(root.Kind)), nil)
 	}
 
 	result, err := yamlMappingToOrderedMap(root)
@@ -49,7 +50,7 @@ func yamlMappingToOrderedMap(node *yaml.Node) (*OrderedMap, error) {
 		valNode := node.Content[i+1]
 		if keyNode.Value == "<<" {
 			if err := mergeMappingInto(om, valNode); err != nil {
-				return nil, fmt.Errorf("failed to resolve merge key: %w", err)
+				return nil, errors.NewTool("ordered", "failed to resolve merge key", err)
 			}
 		}
 	}
@@ -66,7 +67,7 @@ func yamlMappingToOrderedMap(node *yaml.Node) (*OrderedMap, error) {
 		key := keyNode.Value
 		value, err := yamlNodeToValue(valNode)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse value for key %q: %w", key, err)
+			return nil, errors.NewTool("ordered", fmt.Sprintf("failed to parse value for key %q", key), err)
 		}
 
 		om.Set(key, value)
@@ -127,7 +128,7 @@ func yamlNodeToValue(node *yaml.Node) (interface{}, error) {
 		for i, child := range node.Content {
 			val, err := yamlNodeToValue(child)
 			if err != nil {
-				return nil, fmt.Errorf("failed to parse sequence element %d: %w", i, err)
+				return nil, errors.NewTool("ordered", fmt.Sprintf("failed to parse sequence element %d", i), err)
 			}
 			result = append(result, val)
 		}
@@ -135,7 +136,7 @@ func yamlNodeToValue(node *yaml.Node) (interface{}, error) {
 	case yaml.ScalarNode:
 		return yamlScalarToValue(node)
 	default:
-		return nil, fmt.Errorf("unexpected YAML node kind: %s", yamlNodeKindName(node.Kind))
+		return nil, errors.NewTool("ordered", fmt.Sprintf("unexpected YAML node kind: %s", yamlNodeKindName(node.Kind)), nil)
 	}
 }
 
@@ -152,7 +153,7 @@ func yamlScalarToValue(node *yaml.Node) (interface{}, error) {
 	if node.Tag == "!!bool" {
 		var b bool
 		if err := node.Decode(&b); err != nil {
-			return nil, fmt.Errorf("failed to decode YAML bool: %w", err)
+			return nil, errors.NewTool("ordered", "failed to decode YAML bool", err)
 		}
 		return b, nil
 	}
@@ -164,7 +165,7 @@ func yamlScalarToValue(node *yaml.Node) (interface{}, error) {
 			// Try int64 for large values.
 			var n64 int64
 			if err2 := node.Decode(&n64); err2 != nil {
-				return nil, fmt.Errorf("failed to decode YAML int: %w", err)
+				return nil, errors.NewTool("ordered", "failed to decode YAML int", err)
 			}
 			return n64, nil
 		}
@@ -175,7 +176,7 @@ func yamlScalarToValue(node *yaml.Node) (interface{}, error) {
 	if node.Tag == "!!float" {
 		var f float64
 		if err := node.Decode(&f); err != nil {
-			return nil, fmt.Errorf("failed to decode YAML float: %w", err)
+			return nil, errors.NewTool("ordered", "failed to decode YAML float", err)
 		}
 		return f, nil
 	}

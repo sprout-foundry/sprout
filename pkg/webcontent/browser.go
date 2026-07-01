@@ -40,6 +40,8 @@ type BrowseStep struct {
 	Millis   int    `json:"millis,omitempty"`
 	Script   string `json:"script,omitempty"`
 	Expect   string `json:"expect,omitempty"`
+	// ScreenshotPath (for screenshot_selector action) — file path for the cropped element screenshot.
+	ScreenshotPath string `json:"screenshot_path,omitempty"`
 }
 
 type ElementBox struct {
@@ -144,6 +146,14 @@ type BrowseOptions struct {
 	CaptureCookies bool
 	// ResponseMaxChars bounds large string fields in structured inspect results (0 = defaults).
 	ResponseMaxChars int
+	// Cookies pre-set on the page before navigation. Each entry is a cookie name=value pair.
+	// Domain defaults to the navigated URL's host; path defaults to "/".
+	Cookies map[string]string
+	// Headers is a flat map of HTTP request headers to inject on every request.
+	// Use for Authorization: Bearer <token>, X-API-Key, etc.
+	Headers map[string]string
+	// AllowFileURL enables file:// URL navigation (opt-in for security).
+	AllowFileURL bool
 }
 
 // nopRenderer is a no-op implementation that always returns an error,

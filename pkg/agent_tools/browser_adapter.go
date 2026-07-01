@@ -102,6 +102,31 @@ func buildBrowseOptions(opts map[string]any) (webcontent.BrowseOptions, error) {
 		browseOpts.Steps = steps
 	}
 
+	// Extract cookies (map[string]interface{} → map[string]string)
+	if rawCookies, ok := opts["cookies"].(map[string]interface{}); ok && len(rawCookies) > 0 {
+		browseOpts.Cookies = make(map[string]string, len(rawCookies))
+		for k, v := range rawCookies {
+			if sv, ok := v.(string); ok {
+				browseOpts.Cookies[k] = sv
+			}
+		}
+	}
+
+	// Extract headers (map[string]interface{} → map[string]string)
+	if rawHeaders, ok := opts["headers"].(map[string]interface{}); ok && len(rawHeaders) > 0 {
+		browseOpts.Headers = make(map[string]string, len(rawHeaders))
+		for k, v := range rawHeaders {
+			if sv, ok := v.(string); ok {
+				browseOpts.Headers[k] = sv
+			}
+		}
+	}
+
+	// Extract allow_file_url
+	if v, ok := opts["allow_file_url"].(bool); ok {
+		browseOpts.AllowFileURL = v
+	}
+
 	return browseOpts, nil
 }
 

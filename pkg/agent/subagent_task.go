@@ -363,6 +363,57 @@ func (r *SubagentRunner) runTask(
 			copy(result.ProgressLog, progressLog)
 		}
 		progressMu.Unlock()
+
+		// Output quality signal: set OutputComplete so the orchestrator can
+		// distinguish "subagent did useful work" from "subagent ran but
+		// produced nothing actionable". The orchestrator LLM sees this as
+		// "output_complete" in the tool result envelope and can decide to
+		// retry or escalate.
+		result.OutputComplete = isOutputComplete(result)
+
+		// Diagnostic for "subagent completed without returning anything":
+		// when a subagent exits cleanly (no error, not cancelled, not
+		// budget-exceeded) but its output is empty or too brief to convey
+		// findings, the orchestrator gets nothing useful back. This Warn
+		// line is the ground truth for tuning Phase 2's substance
+		// thresholds — it tells us whether the issue is truly empty
+		// Output="" or just short Output like "I've reviewed the files."
+		// (which slips past the existing blank-retry check).
+		//
+		// 50 chars is deliberately aggressive for Phase 1: we want to catch
+		// ALL short outputs (including legitimate brief answers) so we can
+		// see the full distribution and tune Phase 2's threshold from real
+		// data. Some false positives are expected — this is observation only.
+		if result.Error == nil && !result.Cancelled && !result.BudgetExceeded && !result.Truncated {
+			// len() counts bytes, not runes — CJK/emoji outputs (3-4 bytes/char)
+			// hit the threshold faster, so non-ASCII brief responses are more
+			// likely to trigger. Acceptable bias for Phase 1 data collection.
+			trimmed := strings.TrimSpace(result.Output)
+			if len(trimmed) < 50 {
+				preview := trimmed
+				// Safety guard: cap preview length. Dead code at threshold=50
+				// (preview can't exceed 50 bytes here), but retained so Phase 2
+				// can raise the threshold without re-introducing a truncation risk.
+				if len(preview) > 200 {
+					preview = preview[:200] + "..."
+				}
+				// Collapse newlines so the line stays grep-friendly.
+				preview = strings.Map(func(r rune) rune {
+					if r == '\n' || r == '\r' {
+						return ' '
+					}
+					return r
+				}, preview)
+				if r.parentAgent != nil {
+					r.parentAgent.Logger().Warn(
+						"[subagent] %s task=%s completed with insufficient output: "+
+							"len=%d iters=%d tool_calls=%d tokens=%d preview=%q",
+						opts.Persona, taskID,
+						len(trimmed), iterations, toolCalls, tokensUsed, preview,
+					)
+				}
+			}
+		}
 	}
 
 	// Clean up tracking

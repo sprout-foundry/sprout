@@ -761,6 +761,76 @@ func TestBrowserAdapter_NilOpts(t *testing.T) {
 	}
 }
 
+func TestBuildBrowseOptions_Cookies(t *testing.T) {
+	t.Parallel()
+	opts := map[string]any{
+		"cookies": map[string]interface{}{
+			"session": "abc123",
+			"token":   "xyz",
+		},
+	}
+	got, err := buildBrowseOptions(opts)
+	requireNoError(t, err)
+	requireEqual(t, len(got.Cookies), 2, "Cookies length")
+	requireEqual(t, got.Cookies["session"], "abc123", "Cookies[session]")
+	requireEqual(t, got.Cookies["token"], "xyz", "Cookies[token]")
+}
+
+func TestBuildBrowseOptions_Headers(t *testing.T) {
+	t.Parallel()
+	opts := map[string]any{
+		"headers": map[string]interface{}{
+			"Authorization": "Bearer mytoken",
+			"X-API-Key":     "secret",
+		},
+	}
+	got, err := buildBrowseOptions(opts)
+	requireNoError(t, err)
+	requireEqual(t, len(got.Headers), 2, "Headers length")
+	requireEqual(t, got.Headers["Authorization"], "Bearer mytoken", "Headers[Authorization]")
+	requireEqual(t, got.Headers["X-API-Key"], "secret", "Headers[X-API-Key]")
+}
+
+func TestBuildBrowseOptions_AllowFileURL(t *testing.T) {
+	t.Parallel()
+	opts := map[string]any{
+		"allow_file_url": true,
+	}
+	got, err := buildBrowseOptions(opts)
+	requireNoError(t, err)
+	requireTrue(t, got.AllowFileURL, "AllowFileURL")
+
+	// Default should be false
+	got2, err := buildBrowseOptions(map[string]any{})
+	requireNoError(t, err)
+	requireFalse(t, got2.AllowFileURL, "AllowFileURL default")
+}
+
+func TestBuildBrowseOptions_StepsWithNewFields(t *testing.T) {
+	t.Parallel()
+	opts := map[string]any{
+		"steps": []interface{}{
+			map[string]interface{}{
+				"action":        "wait_for_function",
+				"script":        "() => document.readyState === 'complete'",
+			},
+			map[string]interface{}{
+				"action":         "screenshot_selector",
+				"selector":       "#chart",
+				"screenshot_path": "/tmp/chart.png",
+			},
+		},
+	}
+	got, err := buildBrowseOptions(opts)
+	requireNoError(t, err)
+	requireEqual(t, len(got.Steps), 2, "Steps length")
+	requireEqual(t, got.Steps[0].Action, "wait_for_function", "Steps[0].Action")
+	requireEqual(t, got.Steps[0].Script, "() => document.readyState === 'complete'", "Steps[0].Script")
+	requireEqual(t, got.Steps[1].Action, "screenshot_selector", "Steps[1].Action")
+	requireEqual(t, got.Steps[1].Selector, "#chart", "Steps[1].Selector")
+	requireEqual(t, got.Steps[1].ScreenshotPath, "/tmp/chart.png", "Steps[1].ScreenshotPath")
+}
+
 // ---------------------------------------------------------------------------
 // Minimal test helpers to avoid testify dependency.
 // ---------------------------------------------------------------------------

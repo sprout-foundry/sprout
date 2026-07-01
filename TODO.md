@@ -1461,8 +1461,10 @@ Phase 2: lazy-load the onnxruntime-web bundle.
   `StaticEmbed()` helpers. 4 tests cover mode round-trip, status
   defaults, errors. Build green; all tests pass._ _~1 day._
 
-- [ ] **SP-100-2:** Lazy-load `onnxruntime-web` from the WASM HTML
-  shell. _~2 days._
+- [x] **SP-100-2:** Lazy-load `onnxruntime-web` from the WASM HTML
+  shell. _Implemented: lazy loader at webui/src/services/onnxruntimeWebLoader.ts
+  (cached promise, single <script>); wired into onnxEmbeddingProvider and
+  wasmshell.embedding_funcs.go via __sproutLoadOnnxRuntime global._
 
 ### Acceptance
 

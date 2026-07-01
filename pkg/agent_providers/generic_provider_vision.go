@@ -34,6 +34,15 @@ func (p *GenericProvider) SupportsVision() bool {
 	return false
 }
 
+// SupportsConversationalVision returns whether the active model is suitable
+// for inline multimodal chat messages. Currently equivalent to
+// SupportsVision() because all GenericProvider entries that opt into vision
+// are chat-format models; OCR-only clients (like OllamaLocalClient) override
+// this method to return false for OCR-only tags.
+func (p *GenericProvider) SupportsConversationalVision() bool {
+	return p.SupportsVision()
+}
+
 // GetVisionModel returns the vision model
 func (p *GenericProvider) GetVisionModel() string {
 	if p.config.Models.VisionModel != "" {

@@ -162,7 +162,13 @@ func (vp *VisionProcessor) AnalyzeImage(ctx context.Context, imagePath string, o
 			TotalTokens:      response.Usage.TotalTokens,
 			EstimatedCost:    response.Usage.EstimatedCost,
 		})
+		// SP-103-C4: emit vision_image_tokens metric. Cached reads show
+		// up as input tokens too but cost less — we record the count
+		// (not the dollar value) so callers can compute costs separately.
+		IncVisionImageTokens(response.Usage.PromptTokens, response.Usage.CachedTokens)
 	}
+	// SP-103-C4: count this as an OCR call (analyze_image_content path).
+	IncVisionOCRCall()
 
 	// Extract response content
 	analysis, parseErr := parseVisionResponse(response, imagePath)

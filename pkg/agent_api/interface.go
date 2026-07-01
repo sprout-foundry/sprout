@@ -26,6 +26,12 @@ type ClientInterface interface {
 	GetModelContextLimit() (int, error)
 	ListModels(ctx context.Context) ([]ModelInfo, error)
 	SupportsVision() bool
+	// SupportsConversationalVision reports whether the model is suitable as
+	// the inline multimodal target for chat-format vision messages. Some
+	// models (OCR-only, e.g. glm-ocr) accept image input but produce
+	// extraction outputs unsuitable for free-form multimodal conversation.
+	// Defaults to true when SupportsVision() is true.
+	SupportsConversationalVision() bool
 	GetVisionModel() string
 	SendVisionRequest(ctx context.Context, messages []Message, tools []Tool, reasoning string, disableThinking bool) (*ChatResponse, error)
 	// TPS (Tokens Per Second) tracking methods

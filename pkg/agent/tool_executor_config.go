@@ -17,9 +17,11 @@ const defaultToolResultMaxChars = 50000 // Universal cap on tool result size (~1
 
 // getToolTimeout returns the timeout duration for tool execution
 // Subagents get 30 minutes (for large file operations), other tools get 5 minutes
-// Can be overridden via SPROUT_TOOL_TIMEOUT environment variable (in seconds)
+// Can be overridden via SPROUT_TOOL_TIMEOUT environment variable (in seconds).
+// When 0 or unset, the per-tool defaults apply.
 func getToolTimeout(toolName string) time.Duration {
-	// Check for environment variable override first
+	// Check for environment variable override first.
+	// GetEnvSimple("TOOL_TIMEOUT") checks SPROUT_TOOL_TIMEOUT, then LEDIT_TOOL_TIMEOUT.
 	if envTimeout := configuration.GetEnvSimple("TOOL_TIMEOUT"); envTimeout != "" {
 		if seconds, err := strconv.Atoi(envTimeout); err == nil && seconds > 0 {
 			return time.Duration(seconds) * time.Second

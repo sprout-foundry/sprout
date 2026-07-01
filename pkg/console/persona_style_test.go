@@ -66,7 +66,9 @@ func TestPersonaIndent(t *testing.T) {
 }
 
 func TestPersonaColor_KnownPersonas_ReturnDistinctColors(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
 	t.Setenv("FORCE_COLOR", "1")
+	t.Setenv("CLICOLOR_FORCE", "1")
 	seen := map[string]string{}
 	for _, p := range []string{"coder", "tester", "debugger", "researcher", "code_reviewer", "orchestrator"} {
 		c := PersonaColor(p)

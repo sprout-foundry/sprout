@@ -1,13 +1,33 @@
 package console
 
 import (
+	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 )
+
+// captureMu serializes all os.Stdout redirections in the package's
+// tests AND any test that prints to os.Stdout directly via fmt.Printf
+// or similar. Without this, running with `-count=3` (or any test
+// that internally uses `go test`-style parallelism) trips the race
+// detector because two goroutines swap os.Stdout and corrupt each
+// other's captured output. The lock is package-local and only held
+// across the brief critical section (swap → fn() → restore).
+var captureMu sync.Mutex
+
+// safePrintf is the package-private wrapper used by trace tests that
+// print to os.Stdout directly. It acquires captureMu so direct
+// fmt.Printf callers serialize with captureRendererStdout callers.
+func safePrintf(format string, args ...any) {
+	captureMu.Lock()
+	defer captureMu.Unlock()
+	fmt.Printf(format, args...)
+}
 
 // captureRendererStdout redirects os.Stdout for the duration of fn and returns
 // whatever was written. We can't intercept fmt.Print's destination
@@ -15,6 +35,8 @@ import (
 // matches what a real terminal would see.
 func captureRendererStdout(t *testing.T, fn func()) string {
 	t.Helper()
+	captureMu.Lock()
+	defer captureMu.Unlock()
 	old := os.Stdout
 	rd, wr, err := os.Pipe()
 	require.NoError(t, err)
@@ -112,6 +134,14 @@ func TestPhysicalRowsMath(t *testing.T) {
 }
 
 func TestShouldReformat(t *testing.T) {
+	// shouldReformat short-circuits to false when colors are disabled
+	// (re-rendering would just produce a duplicate). The NO_COLOR env
+	// var is honored in production; tests that depend on the format
+	// signal must force colors on. Same for CLICOLOR_FORCE which a
+	// developer shell sometimes exports to force terminal colors.
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("CLICOLOR_FORCE", "1")
+
 	// Plain prose — no.
 	require.False(t, shouldReformat("Hello world.\n", 80))
 	// Headings — yes.

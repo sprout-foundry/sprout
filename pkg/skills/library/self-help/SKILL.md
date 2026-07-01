@@ -185,6 +185,19 @@ description: <description — appears in /help and skill listings>
 User-level skills go in `~/.config/sprout/skills/<name>/SKILL.md`.
 Project-level skills go in `.sprout/skills/<name>/SKILL.md` (available to anyone in the repo).
 
+**Hot-reload:** Skills added through the webui or `/api/skills/install` appear in `list_skills` immediately — no restart. Skills dropped on disk are picked up on the next config reload (triggered by any settings change or `/mcp` command).
+
+### Set Up MCP Servers (External Tools)
+```
+activate_skill("mcp-setup")           # Load the full MCP setup guide
+```
+Or configure directly:
+- **Webui**: Settings → MCP → Add Server (hot-reloads instantly — no restart)
+- **Slash command**: `/mcp add` (interactive) or `/mcp list` (status)
+- **Config**: Edit `mcp.servers` in `~/.config/sprout/config.json`
+
+MCP servers added through the webui **start immediately**. The agent's available tools are refreshed automatically after add/update/delete. Common servers: GitHub, filesystem, PostgreSQL, browser automation.
+
 ### Onboard to a New Project
 ```
 1. activate_skill project-planning       # Load planning workflow
@@ -402,3 +415,18 @@ Works in both CLI and WebUI modes.
 | `~/.config/sprout/memories/` | Persistent cross-session memories |
 
 Config precedence: workspace config (`.sprout/config.json`) overrides user config (`~/.config/sprout/config.json`).
+
+### Hot-Reload (No Restart Needed)
+
+Most configuration changes take effect immediately without restarting sprout:
+
+| Change | Hot-Reloads? | How |
+|--------|-------------|-----|
+| Provider/model switch | ✅ Yes | `manage_settings` or webui settings |
+| MCP server add/update/remove | ✅ Yes | Webui settings or `/mcp` — server starts/stops live |
+| Skill install/uninstall | ✅ Yes | Webui skills panel or `/api/skills/install` |
+| Skill dropped on disk | ✅ On next reload | Picked up on next settings change or `/mcp` |
+| Reasoning effort / thinking | ✅ Yes | `manage_settings` |
+| Risk profile | ✅ Yes | `/risk-profile` |
+| Persona configuration | ✅ Yes | `/subagent-persona` |
+| Memory add/delete | ✅ Yes | `manage_memory` |

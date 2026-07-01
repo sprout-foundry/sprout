@@ -508,5 +508,23 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Handler:     handleListAutomateWorkflows,
 	})
 
+	// Register mcp_refresh tool — manages MCP servers at runtime.
+	registry.RegisterTool(ToolConfig{
+		Name: "mcp_refresh",
+		Description: "Manage MCP (Model Context Protocol) servers at runtime. Use 'list' to see current servers, 'refresh' to reload config and reconcile servers after config changes, 'add' to register a new MCP server, 'remove' to unregister a server. After adding a server via 'add', the server is started automatically. Use 'refresh' after manually editing config.json to pick up changes.",
+		Parameters: []ParameterConfig{
+			{"operation", "string", true, []string{}, "Operation: 'list' (list servers), 'refresh' (reload config and reconcile), 'add' (add server), 'remove' (remove server)"},
+			{"name", "string", false, []string{}, "Server name (required for add/remove)"},
+			{"type", "string", false, []string{}, "Server type: 'stdio' or 'http' (required for add)"},
+			{"command", "string", false, []string{}, "Server command (required for add)"},
+			{"args", "array", false, []string{}, "Command arguments (optional, for add)"},
+			{"env", "object", false, []string{}, "Environment variables as key-value object (optional, for add)"},
+			{"url", "string", false, []string{}, "Server URL (required for HTTP servers)"},
+			{"working_dir", "string", false, []string{}, "Working directory for the server (optional, for add)"},
+		},
+		Handler: handleMCPRefresh,
+		Timeout: 30 * time.Second,
+	})
+
 	return registry
 }

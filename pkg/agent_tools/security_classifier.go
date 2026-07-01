@@ -30,7 +30,10 @@
 package tools
 
 import (
+	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync/atomic"
@@ -236,6 +239,8 @@ func ClassifyToolCall(toolName string, args map[string]interface{}) SecurityResu
 		result = SecurityResult{Risk: SecuritySafe, Reasoning: "Directory creation in workspace", Category: RiskCategoryFileWrite}
 	case "fetch_url", "web_search":
 		result = SecurityResult{Risk: SecuritySafe, Reasoning: "Network access tool", Category: RiskCategoryNetwork}
+	case "browse_url":
+		result = classifyBrowseURL(args)
 	case "git":
 		result = classifyGitOperation(args)
 	case "run_automate":
@@ -682,4 +687,148 @@ func isCriticalSystemOperation(toolName string, args map[string]interface{}) boo
 	}
 
 	return configuration.IsCriticalOperation(cmdRaw)
+}
+
+// classifyBrowseURL classifies browse_url tool calls by inspecting URL targets,
+// screenshot paths, eval scripts, and authentication parameters.
+func classifyBrowseURL(args map[string]interface{}) SecurityResult {
+	urlRaw, _ := args["url"].(string)
+	urlLower := strings.ToLower(urlRaw)
+
+	// (a) Screenshot path outside allowed directories → Dangerous
+	if spRaw, ok := args["screenshot_path"].(string); ok && spRaw != "" {
+		sp := filepath.Clean(spRaw)
+		if !isScreenshotPathAllowed(sp) {
+			return SecurityResult{
+				Risk:         SecurityDangerous,
+				Reasoning:    fmt.Sprintf("screenshot_path %q is outside allowed directories (cwd, /tmp/sprout_examples, ~/Downloads)", spRaw),
+				ShouldBlock:  true,
+				ShouldPrompt: true,
+				Category:     RiskCategoryFileWrite,
+			}
+		}
+	}
+
+	// (b) file:// URL without allow_file_url opt-in → Caution
+	if strings.HasPrefix(urlLower, "file://") {
+		allowFile, _ := args["allow_file_url"].(bool)
+		if !allowFile {
+			return SecurityResult{
+				Risk:         SecurityCaution,
+				Reasoning:    "file:// URLs can read arbitrary local files — set allow_file_url=true to confirm intent",
+				ShouldPrompt: true,
+				Category:     RiskCategoryNetwork,
+			}
+		}
+	}
+
+	// (c) Eval step with network egress → Caution
+	if stepsRaw, ok := args["steps"].([]interface{}); ok {
+		for _, rawStep := range stepsRaw {
+			if stepMap, ok := rawStep.(map[string]interface{}); ok {
+				if action, ok := stepMap["action"].(string); ok && strings.ToLower(action) == "eval" {
+					if script, ok := stepMap["script"].(string); ok {
+						if primitive := detectNetworkEgress(script); primitive != "" {
+							return SecurityResult{
+								Risk:         SecurityCaution,
+								Reasoning:    fmt.Sprintf("eval step contains network egress (%s) — browser-side requests may bypass server CORS / fetch_url allowlists", primitive),
+								ShouldPrompt: true,
+								Category:     RiskCategoryNetwork,
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// (d) Pre-set cookies or headers → Caution
+	if cookiesRaw, ok := args["cookies"].(map[string]interface{}); ok && len(cookiesRaw) > 0 {
+		return SecurityResult{
+			Risk:         SecurityCaution,
+			Reasoning:    "Pre-navigation cookies/headers authenticate to a remote service. Review the target URL and credentials before proceeding",
+			ShouldPrompt: true,
+			Category:     RiskCategoryNetwork,
+		}
+	}
+	if headersRaw, ok := args["headers"].(map[string]interface{}); ok && len(headersRaw) > 0 {
+		return SecurityResult{
+			Risk:         SecurityCaution,
+			Reasoning:    "Pre-navigation cookies/headers authenticate to a remote service. Review the target URL and credentials before proceeding",
+			ShouldPrompt: true,
+			Category:     RiskCategoryNetwork,
+		}
+	}
+
+	// (e) Localhost URL → Caution
+	if isLocalhostURL(urlRaw) {
+		return SecurityResult{
+			Risk:         SecurityCaution,
+			Reasoning:    "localhost URL may reach private services on this machine",
+			ShouldPrompt: true,
+			Category:     RiskCategoryNetwork,
+		}
+	}
+
+	// (f) Default: safe network access
+	return SecurityResult{
+		Risk:      SecuritySafe,
+		Reasoning: "Network access tool with no auth or evaluation primitives",
+		Category:  RiskCategoryNetwork,
+	}
+}
+
+// isScreenshotPathAllowed checks if a cleaned screenshot path falls within
+// allowed directories (cwd, /tmp/sprout_examples, ~/Downloads).
+func isScreenshotPathAllowed(cleanedPath string) bool {
+	// Relative paths are always allowed (resolve within cwd)
+	if !filepath.IsAbs(cleanedPath) {
+		return true
+	}
+
+	// /tmp/sprout_examples is always allowed
+	if strings.HasPrefix(cleanedPath, "/tmp/sprout_examples") {
+		return true
+	}
+
+	// ~/Downloads is allowed
+	if homeDir, err := os.UserHomeDir(); err == nil {
+		downloads := filepath.Join(homeDir, "Downloads")
+		if strings.HasPrefix(cleanedPath, downloads) {
+			return true
+		}
+	}
+
+	// CWD is allowed
+	if cwd, err := os.Getwd(); err == nil {
+		if strings.HasPrefix(cleanedPath, cwd) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// detectNetworkEgress checks if a JS script contains network egress primitives.
+// Returns the matched primitive name, or empty string if none found.
+func detectNetworkEgress(script string) string {
+	lower := strings.ToLower(script)
+	primitives := []string{"fetch(", "xmlhttprequest", "navigator.sendbeacon", "websocket", "eventsource", "import(", "new image().src=", "<script src=", "<iframe src="}
+	for _, p := range primitives {
+		if strings.Contains(lower, p) {
+			return p
+		}
+	}
+	return ""
+}
+
+// isLocalhostURL reports whether url targets a local address.
+func isLocalhostURL(url string) bool {
+	lower := strings.ToLower(url)
+	return strings.HasPrefix(lower, "http://localhost") ||
+		strings.HasPrefix(lower, "http://127.0.0.1") ||
+		strings.HasPrefix(lower, "http://[::1]") ||
+		strings.HasPrefix(lower, "https://localhost") ||
+		strings.HasPrefix(lower, "https://127.0.0.1") ||
+		strings.HasPrefix(lower, "https://[::1]")
 }

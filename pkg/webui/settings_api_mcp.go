@@ -283,6 +283,15 @@ func (ws *ReactWebServer) handleAPISettingsMCPServersPost(w http.ResponseWriter,
 		return
 	}
 
+	// Hot-reload: start the new MCP server immediately without requiring a
+	// restart. RefreshRuntimeConfig reconciles the live manager with the
+	// updated config and refreshes the tool cache.
+	if ws.agent != nil {
+		if refreshErr := ws.agent.RefreshRuntimeConfig(r.Context()); refreshErr != nil {
+			log.Printf("[mcp] server %q saved to config but runtime refresh failed: %v", server.Name, refreshErr)
+		}
+	}
+
 	writeJSON(w, http.StatusCreated, map[string]interface{}{
 		"success": true,
 		"server":  newMCPServerResponse(server),
@@ -359,6 +368,13 @@ func (ws *ReactWebServer) handleAPISettingsMCPServersPut(w http.ResponseWriter, 
 		return
 	}
 
+	// Hot-reload: restart the updated MCP server if its config changed.
+	if ws.agent != nil {
+		if refreshErr := ws.agent.RefreshRuntimeConfig(r.Context()); refreshErr != nil {
+			log.Printf("[mcp] server %q updated in config but runtime refresh failed: %v", name, refreshErr)
+		}
+	}
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
 		"server":  newMCPServerResponse(server),
@@ -399,6 +415,13 @@ func (ws *ReactWebServer) handleAPISettingsMCPServersDelete(w http.ResponseWrite
 	if err != nil {
 		writeJSONError(w, http.StatusNotFound, err.Error())
 		return
+	}
+
+	// Hot-reload: stop and deregister the removed MCP server immediately.
+	if ws.agent != nil {
+		if refreshErr := ws.agent.RefreshRuntimeConfig(r.Context()); refreshErr != nil {
+			log.Printf("[mcp] server %q removed from config but runtime refresh failed: %v", name, refreshErr)
+		}
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{

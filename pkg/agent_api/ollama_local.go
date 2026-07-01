@@ -1,29 +1,231 @@
 package api
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/sprout-foundry/sprout/pkg/envutil"
-	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
+	"io"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
 	"time"
 
-	ollama "github.com/ollama/ollama/api"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
+// localOllamaListResponse is the JSON shape returned by Ollama's GET /api/tags.
+type localOllamaListResponse struct {
+	Models []localOllamaListModel `json:"models"`
+}
+
+// localOllamaListModel describes one entry in the local model list.
+type localOllamaListModel struct {
+	Name string `json:"name"`
+}
+
+// localOllamaChatRequest mirrors the JSON body POSTed to /api/chat.
+type localOllamaChatRequest struct {
+	Model    string                 `json:"model"`
+	Messages []localOllamaMessage   `json:"messages"`
+	Options  map[string]any         `json:"options,omitempty"`
+	Tools    []localOllamaTool      `json:"tools,omitempty"`
+	Stream   *bool                  `json:"stream,omitempty"`
+	Format   map[string]any         `json:"format,omitempty"`
+	KeepAlive string                `json:"keep_alive,omitempty"`
+}
+
+// localOllamaMessage is one entry in a chat request or response.
+type localOllamaMessage struct {
+	Role      string                 `json:"role"`
+	Content   string                 `json:"content"`
+	Images    [][]byte               `json:"images,omitempty"`
+	ToolCalls []localOllamaToolCall   `json:"tool_calls,omitempty"`
+}
+
+// localOllamaTool mirrors Ollama's tool schema.
+type localOllamaTool struct {
+	Type     string                  `json:"type"`
+	Function localOllamaToolFunction `json:"function"`
+}
+
+// localOllamaToolFunction is the callable portion of a tool.
+type localOllamaToolFunction struct {
+	Name        string          `json:"name"`
+	Description string          `json:"description,omitempty"`
+	Parameters  json.RawMessage `json:"parameters,omitempty"`
+}
+
+// localOllamaToolCall describes one tool invocation returned by the model.
+type localOllamaToolCall struct {
+	Function localOllamaToolCallFunction `json:"function"`
+}
+
+// localOllamaToolCallFunction carries the name + raw JSON arguments.
+type localOllamaToolCallFunction struct {
+	Index     int             `json:"index"`
+	Name      string          `json:"name"`
+	Arguments json.RawMessage `json:"arguments"`
+}
+
+// localOllamaChatResponse is one NDJSON line of /api/chat output.
+type localOllamaChatResponse struct {
+	Model     string               `json:"model"`
+	CreatedAt time.Time            `json:"created_at"`
+	Message   localOllamaMessage   `json:"message"`
+	Done      bool                 `json:"done"`
+	DoneReason string              `json:"done_reason"`
+	Metrics   localOllamaMetrics   `json:"metrics,omitempty"`
+}
+
+// localOllamaMetrics carries the model's reported token counts.
+type localOllamaMetrics struct {
+	PromptEvalCount int `json:"prompt_eval_count"`
+	EvalCount       int `json:"eval_count"`
+}
+
+// ollamaClient is the interface our OllamaLocalClient talks to.
 type ollamaClient interface {
-	List(ctx context.Context) (*ollama.ListResponse, error)
-	Chat(ctx context.Context, req *ollama.ChatRequest, fn ollama.ChatResponseFunc) error
+	List(ctx context.Context) (*localOllamaListResponse, error)
+	Chat(ctx context.Context, req *localOllamaChatRequest, fn func(*localOllamaChatResponse) error) error
 }
 
 type ollamaClientFactory func() (ollamaClient, error)
+
+// httpOllamaClient is a minimal net/http-backed implementation of ollamaClient.
+// It replaces the upstream github.com/ollama/ollama/api client (which
+// transitively pulls in 8 Dependabot-flagged CVEs).
+type httpOllamaClient struct {
+	baseURL string
+	http    *http.Client
+}
+
+func newHTTPClientFromEnv() *httpOllamaClient {
+	host := strings.TrimSpace(os.Getenv("OLLAMA_HOST"))
+	if host == "" {
+		host = "http://127.0.0.1:11434"
+	}
+	host = strings.TrimRight(host, "/")
+	if !strings.HasPrefix(host, "http://") && !strings.HasPrefix(host, "https://") {
+		host = "http://" + host
+	}
+	return &httpOllamaClient{
+		baseURL: host,
+		http:    &http.Client{},
+	}
+}
+
+func newHTTPClientAt(baseURL string) *httpOllamaClient {
+	return &httpOllamaClient{
+		baseURL: strings.TrimRight(baseURL, "/"),
+		http:    &http.Client{},
+	}
+}
+
+func (c *httpOllamaClient) List(ctx context.Context) (*localOllamaListResponse, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/api/tags", nil)
+	if err != nil {
+		return nil, fmt.Errorf("build list request: %w", err)
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("ollama list: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("ollama list read body: %w", err)
+	}
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("ollama list status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var out localOllamaListResponse
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, fmt.Errorf("ollama list decode: %w", err)
+	}
+	return &out, nil
+}
+
+func (c *httpOllamaClient) Chat(ctx context.Context, req *localOllamaChatRequest, fn func(*localOllamaChatResponse) error) error {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return fmt.Errorf("marshal chat request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/chat", bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("build chat request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Accept", "application/x-ndjson")
+
+	resp, err := c.http.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("ollama chat: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("ollama chat status %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	streaming := req.Stream != nil && *req.Stream
+
+	if streaming {
+		return readChatNDJSON(resp.Body, fn)
+	}
+
+	var single localOllamaChatResponse
+	if err := json.NewDecoder(resp.Body).Decode(&single); err != nil {
+		return fmt.Errorf("ollama chat decode: %w", err)
+	}
+	if fn != nil {
+		if err := fn(&single); err != nil {
+			return fmt.Errorf("chat response callback: %w", err)
+		}
+	}
+	return nil
+}
+
+// readChatNDJSON consumes the newline-delimited JSON streaming body from
+// Ollama, invoking fn for each parsed chunk.
+func readChatNDJSON(r io.Reader, fn func(*localOllamaChatResponse) error) error {
+	scanner := bufio.NewScanner(r)
+	// Allow large lines (vision responses can exceed 64K).
+	buf := make([]byte, 0, 64*1024)
+	scanner.Buffer(buf, 4*1024*1024)
+
+	for scanner.Scan() {
+		line := bytes.TrimSpace(scanner.Bytes())
+		if len(line) == 0 {
+			continue
+		}
+		var chunk localOllamaChatResponse
+		if err := json.Unmarshal(line, &chunk); err != nil {
+			return fmt.Errorf("ollama chat ndjson decode: %w", err)
+		}
+		if fn != nil {
+			if err := fn(&chunk); err != nil {
+				return fmt.Errorf("chat chunk callback: %w", err)
+			}
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("ollama chat read: %w", err)
+	}
+	return nil
+}
 
 // OllamaLocalClient handles local Ollama API requests
 type OllamaLocalClient struct {
@@ -50,7 +252,6 @@ func getWindowsHostIP() string {
 	}
 
 	cmd := exec.Command("ip", "route", "show")
-	cmd.Stdout = nil
 	output, err := cmd.Output()
 	if err != nil {
 		return ""
@@ -80,7 +281,7 @@ func init() {
 }
 
 func defaultOllamaClientFactory() (ollamaClient, error) {
-	return ollama.ClientFromEnvironment()
+	return newHTTPClientFromEnv(), nil
 }
 
 func ensureModelAvailable(ctx context.Context, client ollamaClient, model string) error {
@@ -105,13 +306,11 @@ func newOllamaLocalClientWithFactory(model string, factory ollamaClientFactory) 
 		factory = defaultOllamaClientFactory
 	}
 
-	// Verify Ollama is running locally
 	client, err := factory()
 	if err != nil {
 		return nil, agenterrors.NewConfig("could not create ollama client", err)
 	}
 
-	// Get list of available models first
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -120,19 +319,16 @@ func newOllamaLocalClientWithFactory(model string, factory ollamaClientFactory) 
 		return nil, agenterrors.NewNetwork("failed to list local models", err)
 	}
 
-	// If no models specified or empty, use first available model
 	if strings.TrimSpace(model) == "" {
 		if len(listResp.Models) == 0 {
 			return nil, errors.New("no models available locally. Please pull a model first using 'ollama pull <model>'")
 		}
 		model = listResp.Models[0].Name
 	} else {
-		// Check if requested model exists locally
 		availableModels := make([]string, 0, len(listResp.Models))
 		for _, m := range listResp.Models {
 			availableModels = append(availableModels, m.Name)
 			if m.Name == model {
-				// Model found, proceed with creation
 				return &OllamaLocalClient{
 					TPSBase:       NewTPSBase(),
 					model:         model,
@@ -142,7 +338,6 @@ func newOllamaLocalClientWithFactory(model string, factory ollamaClientFactory) 
 			}
 		}
 
-		// Model not found, fallback to first available model
 		if len(listResp.Models) > 0 {
 			fmt.Fprintf(os.Stderr, "[WARN] Model '%s' not found locally. Available models: %v\n", model, availableModels)
 			fmt.Fprintf(os.Stderr, "[~] Falling back to first available model: %s\n", listResp.Models[0].Name)
@@ -172,8 +367,8 @@ func (c *OllamaLocalClient) newClient() (ollamaClient, error) {
 	return c.clientFactory()
 }
 
-func (c *OllamaLocalClient) buildChatRequest(messages []Message, tools []Tool, reasoning string, stream bool) (*ollama.ChatRequest, int) {
-	ollamaMessages := make([]ollama.Message, 0, len(messages)+1)
+func (c *OllamaLocalClient) buildChatRequest(messages []Message, tools []Tool, reasoning string, stream bool) (*localOllamaChatRequest, int) {
+	ollamaMessages := make([]localOllamaMessage, 0, len(messages)+1)
 	ollamaTools := convertToolsToOllamaTools(tools)
 
 	// Optional: fold system content into first user message for templates that ignore system role
@@ -190,27 +385,25 @@ func (c *OllamaLocalClient) buildChatRequest(messages []Message, tools []Tool, r
 			}
 			if !injected && role == "user" && len(systemParts) > 0 {
 				combined := "System:\n" + strings.Join(systemParts, "\n\n") + "\n\n" + m.Content
-				ollamaMessages = append(ollamaMessages, ollama.Message{Role: m.Role, Content: combined})
+				ollamaMessages = append(ollamaMessages, localOllamaMessage{Role: m.Role, Content: combined})
 				injected = true
 				continue
 			}
-			ollamaMessages = append(ollamaMessages, ollama.Message{Role: m.Role, Content: m.Content})
+			ollamaMessages = append(ollamaMessages, localOllamaMessage{Role: m.Role, Content: m.Content})
 		}
 		if len(ollamaMessages) == 0 { // no user message existed
 			for _, m := range messages {
 				if strings.ToLower(m.Role) != "system" {
-					ollamaMessages = append(ollamaMessages, ollama.Message{Role: m.Role, Content: m.Content})
+					ollamaMessages = append(ollamaMessages, localOllamaMessage{Role: m.Role, Content: m.Content})
 				}
 			}
 		}
 	} else {
 		for _, msg := range messages {
-			ollamaMsg := ollama.Message{Role: msg.Role, Content: msg.Content}
-			// Handle images - convert ImageData to Ollama image format
+			ollamaMsg := localOllamaMessage{Role: msg.Role, Content: msg.Content}
 			if len(msg.Images) > 0 {
-				ollamaImages := []ollama.ImageData{}
+				ollamaImages := [][]byte{}
 				for _, img := range msg.Images {
-					// Images should be base64 encoded - decode and use as bytes
 					if img.Base64 != "" {
 						data, err := base64.StdEncoding.DecodeString(img.Base64)
 						if err == nil {
@@ -224,17 +417,13 @@ func (c *OllamaLocalClient) buildChatRequest(messages []Message, tools []Tool, r
 		}
 	}
 
-	// Use centralized token estimation for consistency with other providers
 	totalTokens := EstimateInputTokens(messages, tools)
 
-	// Derive conservative context/prediction sizing based on model limit
 	contextLimit, _ := c.GetModelContextLimit()
 	if contextLimit <= 0 {
 		contextLimit = 32000
 	}
 
-	// Calculate num_ctx: the context window to allocate
-	// Use 10% headroom for generation, bounded reasonably
 	headroom := contextLimit / 10
 	if headroom < 2048 {
 		headroom = 2048
@@ -253,10 +442,8 @@ func (c *OllamaLocalClient) buildChatRequest(messages []Message, tools []Tool, r
 		}
 	}
 
-	// Calculate safe prediction cap using centralized budget calculation
 	numPredict, ok := CalculateOutputBudget(contextLimit, totalTokens)
 	if !ok {
-		// Input exceeds context - use minimum and log warning
 		numPredict = MinOutputTokens
 	}
 	maxPredict := getOllamaMaxPredictCap(contextLimit)
@@ -264,7 +451,6 @@ func (c *OllamaLocalClient) buildChatRequest(messages []Message, tools []Tool, r
 		numPredict = maxPredict
 	}
 
-	// Keep sampling options minimal to align with provider defaults
 	options := map[string]any{
 		"num_ctx":     numCtx,
 		"num_predict": numPredict,
@@ -275,7 +461,7 @@ func (c *OllamaLocalClient) buildChatRequest(messages []Message, tools []Tool, r
 		options["reasoning_effort"] = reasoning
 	}
 
-	req := &ollama.ChatRequest{
+	req := &localOllamaChatRequest{
 		Model:    c.model,
 		Messages: ollamaMessages,
 		Options:  options,
@@ -290,7 +476,6 @@ func (c *OllamaLocalClient) buildChatRequest(messages []Message, tools []Tool, r
 }
 
 func getOllamaMaxPredictCap(contextLimit int) int {
-	// Keep a practical default, while allowing users to raise/lower as needed.
 	cap := 8192
 	raw := strings.TrimSpace(envutil.GetEnvSimple("OLLAMA_MAX_PREDICT"))
 	if raw != "" {
@@ -299,7 +484,6 @@ func getOllamaMaxPredictCap(contextLimit int) int {
 		}
 	}
 
-	// Also bound by model context so generation does not monopolize context.
 	maxByContext := contextLimit / 2
 	if maxByContext < 1024 {
 		maxByContext = 1024
@@ -325,8 +509,8 @@ func (c *OllamaLocalClient) SendChatRequest(ctx context.Context, messages []Mess
 	var responseContent strings.Builder
 	var toolCalls []ToolCall
 	var lastDoneReason string
-	var lastMetrics ollama.Metrics
-	respFunc := ollama.ChatResponseFunc(func(res ollama.ChatResponse) error {
+	var lastMetrics localOllamaMetrics
+	respFunc := func(res *localOllamaChatResponse) error {
 		if len(res.Message.ToolCalls) > 0 {
 			toolCalls = append(toolCalls, convertOllamaToolCalls(res.Message.ToolCalls)...)
 		} else if trimmed := strings.TrimSpace(res.Message.Content); trimmed != "" {
@@ -340,9 +524,8 @@ func (c *OllamaLocalClient) SendChatRequest(ctx context.Context, messages []Mess
 		lastMetrics = res.Metrics
 
 		return nil
-	})
+	}
 
-	// Track request timing
 	startTime := time.Now()
 
 	err = client.Chat(ctx, req, respFunc)
@@ -350,7 +533,6 @@ func (c *OllamaLocalClient) SendChatRequest(ctx context.Context, messages []Mess
 		return nil, agenterrors.NewProviderError("ollama chat failed", err, "ollama", c.model)
 	}
 
-	// Calculate request duration
 	duration := time.Since(startTime)
 
 	finishReason := lastDoneReason
@@ -392,7 +574,6 @@ func (c *OllamaLocalClient) SendChatRequest(ctx context.Context, messages []Mess
 		response.Choices[0].Message.ToolCalls = toolCalls
 	}
 
-	// Track TPS
 	if c.GetTracker() != nil && completionTokens > 0 {
 		c.GetTracker().RecordRequest(duration, completionTokens)
 	}
@@ -434,8 +615,6 @@ func (c *OllamaLocalClient) CheckConnection() error {
 
 // GetModelContextLimit returns the context limit for the model
 func (c *OllamaLocalClient) GetModelContextLimit() (int, error) {
-	// Most Ollama models support 4K-32K context
-	// This is a conservative default
 	if strings.Contains(c.model, "qwen3-coder") || strings.Contains(c.model, "gpt-oss") {
 		return 128000, nil
 	}
@@ -460,24 +639,20 @@ func (c *OllamaLocalClient) SetModel(model string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Get list of available models
 	listResp, err := client.List(ctx)
 	if err != nil {
 		return agenterrors.NewNetwork("failed to list local models", err)
 	}
 
-	// Check if requested model exists locally
 	availableModels := make([]string, 0, len(listResp.Models))
 	for _, m := range listResp.Models {
 		availableModels = append(availableModels, m.Name)
 		if m.Name == model {
-			// Model found, proceed with switch
 			c.model = model
 			return nil
 		}
 	}
 
-	// Model not found, fallback to first available model
 	if len(listResp.Models) > 0 {
 		fmt.Fprintf(os.Stderr, "[WARN] Model '%s' not found locally. Available models: %v\n", model, availableModels)
 		fmt.Fprintf(os.Stderr, "[~] Falling back to first available model: %s\n", listResp.Models[0].Name)
@@ -513,7 +688,6 @@ func (c *OllamaLocalClient) ListModels(ctx context.Context) ([]ModelInfo, error)
 
 // SupportsVision returns true for OCR-capable models
 func (c *OllamaLocalClient) SupportsVision() bool {
-	// glm-ocr and similar vision models support image input
 	modelLower := strings.ToLower(c.model)
 	return strings.Contains(modelLower, "ocr") ||
 		strings.Contains(modelLower, "vision") ||
@@ -527,11 +701,9 @@ func (c *OllamaLocalClient) SupportsVision() bool {
 // is only useful for chat models like llama3.2-vision.
 func (c *OllamaLocalClient) SupportsConversationalVision() bool {
 	modelLower := strings.ToLower(c.model)
-	// OCR-only models accept image input but are not conversational.
 	if strings.Contains(modelLower, "ocr") {
 		return false
 	}
-	// llama3.2 and "vision" tagged models handle inline multimodal chat.
 	return strings.Contains(modelLower, "vision") ||
 		strings.Contains(modelLower, "llama3.2")
 }
@@ -560,12 +732,12 @@ func (c *OllamaLocalClient) SendChatRequestStream(ctx context.Context, messages 
 	defer cancel()
 
 	builder := NewStreamingResponseBuilder(callback)
-	var lastMetrics ollama.Metrics
+	var lastMetrics localOllamaMetrics
 	var lastDoneReason string
 
 	startTime := time.Now()
 
-	err = client.Chat(ctx, req, func(res ollama.ChatResponse) error {
+	err = client.Chat(ctx, req, func(res *localOllamaChatResponse) error {
 		chunk := convertOllamaResponseToStreamingChunk(res)
 		if err := builder.ProcessChunk(chunk); err != nil {
 			return agenterrors.NewProviderError("failed to process ollama chat chunk", err, "ollama", c.model)
@@ -636,39 +808,30 @@ func (c *OllamaLocalClient) SendChatRequestStream(ctx context.Context, messages 
 	return response, nil
 }
 
-func convertToolsToOllamaTools(tools []Tool) ollama.Tools {
+func convertToolsToOllamaTools(tools []Tool) []localOllamaTool {
 	if len(tools) == 0 {
 		return nil
 	}
 
-	result := make(ollama.Tools, 0, len(tools))
+	result := make([]localOllamaTool, 0, len(tools))
 	for _, tool := range tools {
 		if strings.TrimSpace(tool.Type) == "" {
 			continue
 		}
 
-		ollamaTool := ollama.Tool{
+		ollamaTool := localOllamaTool{
 			Type: tool.Type,
-			Function: ollama.ToolFunction{
+			Function: localOllamaToolFunction{
 				Name:        tool.Function.Name,
 				Description: tool.Function.Description,
 			},
 		}
 
-		// ollama v0.17+ changed `Properties` from a plain map to a typed
-		// opaque struct (`*ToolPropertiesMap`) that preserves insertion
-		// order. Construct via the package helper rather than literal map.
-		params := ollama.ToolFunctionParameters{Type: "object", Properties: ollama.NewToolPropertiesMap()}
+		params := json.RawMessage(`{"type":"object"}`)
 		if tool.Function.Parameters != nil {
 			if raw, err := json.Marshal(tool.Function.Parameters); err == nil {
-				if err := json.Unmarshal(raw, &params); err != nil {
-					params = ollama.ToolFunctionParameters{Type: "object", Properties: ollama.NewToolPropertiesMap()}
-				}
+				params = raw
 			}
-		}
-
-		if params.Type == "" {
-			params.Type = "object"
 		}
 
 		ollamaTool.Function.Parameters = params
@@ -682,7 +845,7 @@ func convertToolsToOllamaTools(tools []Tool) ollama.Tools {
 	return result
 }
 
-func convertOllamaResponseToStreamingChunk(res ollama.ChatResponse) *StreamingChatResponse {
+func convertOllamaResponseToStreamingChunk(res *localOllamaChatResponse) *StreamingChatResponse {
 	chunk := &StreamingChatResponse{
 		ID:    res.Model,
 		Model: res.Model,
@@ -704,15 +867,9 @@ func convertOllamaResponseToStreamingChunk(res ollama.ChatResponse) *StreamingCh
 	if len(res.Message.ToolCalls) > 0 {
 		delta.ToolCalls = make([]StreamingToolCall, 0, len(res.Message.ToolCalls))
 		for _, call := range res.Message.ToolCalls {
-			var arguments string
-			// ollama v0.17+ changed Arguments from a nullable map to an
-			// opaque struct. Len() == 0 replaces the old nil-check.
-			if call.Function.Arguments.Len() > 0 {
-				if encoded, err := json.Marshal(call.Function.Arguments); err == nil {
-					arguments = string(encoded)
-				} else {
-					arguments = fmt.Sprintf("%v", call.Function.Arguments)
-				}
+			arguments := ""
+			if len(call.Function.Arguments) > 0 {
+				arguments = string(call.Function.Arguments)
 			}
 
 			delta.ToolCalls = append(delta.ToolCalls, StreamingToolCall{
@@ -742,24 +899,19 @@ func convertOllamaResponseToStreamingChunk(res ollama.ChatResponse) *StreamingCh
 	return chunk
 }
 
-func convertOllamaToolCalls(calls []ollama.ToolCall) []ToolCall {
+func convertOllamaToolCalls(calls []localOllamaToolCall) []ToolCall {
 	if len(calls) == 0 {
 		return nil
 	}
 
 	result := make([]ToolCall, 0, len(calls))
 	for _, call := range calls {
-		var arguments string
-		if call.Function.Arguments.Len() > 0 {
-			if encoded, err := json.Marshal(call.Function.Arguments); err == nil {
-				arguments = string(encoded)
-			} else {
-				arguments = fmt.Sprintf("%v", call.Function.Arguments)
-			}
+		arguments := ""
+		if len(call.Function.Arguments) > 0 {
+			arguments = string(call.Function.Arguments)
 		}
 
 		toolCall := ToolCall{Type: "function"}
-		// Some models append "<|channel|>xxx" suffix to tool names - strip it
 		toolCall.Function.Name = strings.Split(call.Function.Name, "<|channel|>")[0]
 		toolCall.Function.Arguments = arguments
 		result = append(result, toolCall)

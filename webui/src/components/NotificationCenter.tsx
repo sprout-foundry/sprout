@@ -1,217 +1,106 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useNotifications } from '../contexts/NotificationContext';
-import './NotificationCenter.css';
+import {
+  notificationBus,
+  NotificationStack,
+  type NotificationEvent,
+  type NotificationData,
+  type NotificationType,
+} from '@sprout/ui';
 
-interface NotificationCenterProps {
-  isOpen: boolean;
-  onClose: () => void;
+/**
+ * @deprecated Props kept for backward compatibility with StatusBar.tsx.
+ * The NotificationCenter is now a self-contained toast stack that
+ * subscribes to notificationBus directly; these props are ignored.
+ */
+interface NotificationCenterLegacyProps {
+  isOpen?: boolean;
+  onClose?: () => void;
   positionRef?: React.RefObject<HTMLDivElement>;
 }
 
-const NOTIFICATION_ICONS: Record<string, string> = {
-  info: 'ℹ',
-  success: '✓',
-  warning: '⚠',
-  error: '✕',
-};
-
-function getNotificationIcon(type: string): string {
-  return NOTIFICATION_ICONS[type] ?? 'ℹ';
-}
-
 /**
- * NotificationCenter component that displays notification history in a panel.
+ * NotificationCenter — top-right toast stack.
  *
- * Features:
- * - Shows all notifications with type icon, title, message, and timestamp
- * - Actions per notification: dismiss, copy message
- * - "Dismiss All" button to clear all notifications
- * - Relative timestamps (e.g., "2m ago", "1h ago")
- * - Close on Escape key and outside click
- * - Copied feedback state for copy button
+ * Subscribes to the singleton notificationBus and renders NotificationStack
+ * from @sprout/ui. Auto-dismisses notifications after 5 s when no explicit
+ * duration is provided. Positioned top-right via App.css override.
  */
-function NotificationCenter({ isOpen, onClose, positionRef }: NotificationCenterProps): JSX.Element | null {
-  const { notifications, removeNotification, clearNotifications } = useNotifications();
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
-  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+function NotificationCenter(_props: NotificationCenterLegacyProps = {}): JSX.Element | null {
+  const [notifications, setNotifications] = useState<NotificationData[]>([]);
+  const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
-  // Handle copy message to clipboard
-  const handleCopyMessage = useCallback(async (id: string, message: string) => {
-    try {
-      await navigator.clipboard.writeText(message);
-      setCopiedId(id);
-      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
-      copyTimerRef.current = setTimeout(() => setCopiedId(null), 2000);
-    } catch (error) {
-      console.error('Failed to copy notification message:', error);
+  const removeNotification = useCallback((id: string) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+    const timer = timersRef.current.get(id);
+    if (timer) {
+      clearTimeout(timer);
+      timersRef.current.delete(id);
     }
   }, []);
 
-  // Handle dismiss individual notification
-  const handleDismiss = useCallback(
-    (id: string) => {
-      removeNotification(id);
-    },
-    [removeNotification],
-  );
-
-  // Handle dismiss all notifications
-  const handleDismissAll = useCallback(() => {
-    clearNotifications();
-  }, [clearNotifications]);
-
-  // Refresh timestamps every minute while panel is open
-  const [, setTick] = useState(0);
   useEffect(() => {
-    if (!isOpen) return;
-    const timer = setInterval(() => setTick((t) => t + 1), 60000);
-    return () => clearInterval(timer);
-  }, [isOpen]);
+    const handleNotification = (event: NotificationEvent) => {
+      const notification: NotificationData = {
+        id: event.id,
+        type: event.type,
+        title: event.title,
+        message: event.message,
+        duration: event.duration,
+        createdAt: Date.now(),
+        read: false,
+      };
 
-  // Cleanup copy timer on unmount
-  useEffect(() => {
+      setNotifications((prev) => [...prev, notification]);
+
+      // Auto-dismiss after 5 s only when the bus did NOT provide an explicit duration.
+      if (!event.duration || event.duration === 0) {
+        const timer = setTimeout(() => {
+          setNotifications((prev) => prev.filter((n) => n.id !== event.id));
+          timersRef.current.delete(event.id);
+        }, 5000);
+        timersRef.current.set(event.id, timer);
+      }
+    };
+
+    const unsubscribe = notificationBus.onNotification(handleNotification);
+
     return () => {
-      if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+      unsubscribe();
+      timersRef.current.forEach((timer) => clearTimeout(timer));
+      timersRef.current.clear();
     };
   }, []);
 
-  // Format relative time — guard against negative (future) timestamps
-  const formatRelativeTime = useCallback((timestamp: number): string => {
-    const now = Date.now();
-    const diff = Math.max(0, now - timestamp);
-    const seconds = Math.floor(diff / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 24);
-
-    if (seconds < 10) return 'just now';
-    if (seconds < 60) return `${seconds}s ago`;
-    if (minutes < 60) return `${minutes}m ago`;
-    if (hours < 24) return `${hours}h ago`;
-    return `${days}d ago`;
-  }, []);
-
-  // Focus management: focus the panel when it opens
-  useEffect(() => {
-    if (isOpen) {
-      // Use requestAnimationFrame to ensure the DOM element is rendered
-      requestAnimationFrame(() => {
-        panelRef.current?.focus();
-      });
-    }
-  }, [isOpen]);
-
-  // Close on Escape key
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
-
-    document.addEventListener('keydown', handleEscape);
-    return () => document.removeEventListener('keydown', handleEscape);
-  }, [isOpen, onClose]);
-
-  // Close on outside click
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const handleClickOutside = (e: MouseEvent) => {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
-        // Check if clicked on the bell icon (if positionRef is provided)
-        if (positionRef?.current?.contains(e.target as Node)) {
-          return;
-        }
-        onClose();
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isOpen, onClose, positionRef]);
-
-  if (!isOpen) {
+  if (notifications.length === 0) {
     return null;
   }
 
-  return (
-    <div
-      ref={panelRef}
-      className="notification-center"
-      role="dialog"
-      aria-label="Notification center"
-      aria-modal="false"
-      tabIndex={-1}
-    >
-      {/* Header */}
-      <div className="notification-center-header">
-        <h2 className="notification-center-title">Notifications</h2>
-        {notifications.length > 0 && (
-          <button className="notification-center-dismiss-all" onClick={handleDismissAll} type="button">
-            Dismiss All
-          </button>
-        )}
-      </div>
+  return <NotificationStack notifications={notifications} onDismiss={removeNotification} />;
+}
 
-      {/* Content */}
-      <div className="notification-center-content" aria-live="polite">
-        {notifications.length === 0 ? (
-          <div className="notification-center-empty">
-            <div className="notification-center-empty-icon" aria-hidden="true">
-              🔔
-            </div>
-            <p className="notification-center-empty-text">No notifications</p>
-          </div>
-        ) : (
-          <ul className="notification-center-list" role="list">
-            {[...notifications].reverse().map((notification) => (
-              <li key={notification.id} className={`notification-center-item type-${notification.type}`}>
-                {/* Type icon */}
-                <span className="notification-center-item-icon" aria-hidden="true">
-                  {getNotificationIcon(notification.type)}
-                </span>
-
-                {/* Content */}
-                <div className="notification-center-item-content">
-                  <div className="notification-center-item-header">
-                    <span className="notification-center-item-title">{notification.title}</span>
-                    <span className="notification-center-item-time">{formatRelativeTime(notification.createdAt)}</span>
-                  </div>
-                  <p className="notification-center-item-message">{notification.message}</p>
-                </div>
-
-                {/* Actions */}
-                <div className="notification-center-item-actions">
-                  <button
-                    className="notification-center-item-copy"
-                    onClick={() => handleCopyMessage(notification.id, notification.message)}
-                    type="button"
-                    aria-label={copiedId === notification.id ? 'Copied' : 'Copy message'}
-                    title={copiedId === notification.id ? 'Copied' : 'Copy message'}
-                  >
-                    {copiedId === notification.id ? 'Copied!' : '📋'}
-                  </button>
-                  <button
-                    className="notification-center-item-dismiss"
-                    onClick={() => handleDismiss(notification.id)}
-                    type="button"
-                    aria-label="Dismiss notification"
-                    title="Dismiss"
-                  >
-                    ×
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    </div>
-  );
+/**
+ * Publish a system notification using semantic categories.
+ *
+ * Maps internal event categories to notification types:
+ *   rate_limit           → warning
+ *   auth_failure         → error
+ *   permission_required  → warning
+ *   agent_blocked        → error
+ *   (unrecognized)       → info
+ */
+export function publishSystemNotification(
+  category: string,
+  title: string,
+  message: string,
+): void {
+  const typeMap: Record<string, NotificationType> = {
+    rate_limit: 'warning',
+    auth_failure: 'error',
+    permission_required: 'warning',
+    agent_blocked: 'error',
+  };
+  const type = typeMap[category] ?? 'info';
+  notificationBus.notify(type, title, message);
 }
 
 export default NotificationCenter;

@@ -193,6 +193,9 @@ type Summary struct {
 	// was unset in JSON (defaults to true). Explicit false marks the
 	// workflow as agent-runnable without user confirmation.
 	RequiresApproval *bool
+	// SubagentTimeoutSeconds overrides the per-run_subagent tool timeout
+	// (default 1800 = 30 minutes). nil means use the default.
+	SubagentTimeoutSeconds *int
 }
 
 // IsApprovalRequired returns true unless the workflow JSON explicitly
@@ -286,23 +289,25 @@ func Summarize(path string) (*Summary, error) {
 	}
 
 	var raw struct {
-		Description      string      `json:"description,omitempty"`
-		ContinueOnError  bool        `json:"continue_on_error,omitempty"`
-		NoWebUI          bool        `json:"no_web_ui,omitempty"`
-		Initial          *initialRaw `json:"initial,omitempty"`
-		Steps            []stepRaw   `json:"steps,omitempty"`
-		Budget           *budgetRaw  `json:"budget,omitempty"`
-		RequiresApproval *bool       `json:"requires_approval,omitempty"`
+		Description              string      `json:"description,omitempty"`
+		ContinueOnError          bool        `json:"continue_on_error,omitempty"`
+		NoWebUI                  bool        `json:"no_web_ui,omitempty"`
+		Initial                  *initialRaw `json:"initial,omitempty"`
+		Steps                    []stepRaw   `json:"steps,omitempty"`
+		Budget                   *budgetRaw  `json:"budget,omitempty"`
+		RequiresApproval         *bool       `json:"requires_approval,omitempty"`
+		SubagentTimeoutSeconds   *int        `json:"subagent_timeout_seconds,omitempty"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, err
 	}
 
 	out := &Summary{
-		Description:      raw.Description,
-		ContinueOnError:  raw.ContinueOnError,
-		NoWebUI:          raw.NoWebUI,
-		RequiresApproval: raw.RequiresApproval,
+		Description:              raw.Description,
+		ContinueOnError:          raw.ContinueOnError,
+		NoWebUI:                  raw.NoWebUI,
+		RequiresApproval:         raw.RequiresApproval,
+		SubagentTimeoutSeconds:   raw.SubagentTimeoutSeconds,
 	}
 	if raw.Budget != nil && raw.Budget.USD > 0 {
 		out.Budget = &BudgetSummary{

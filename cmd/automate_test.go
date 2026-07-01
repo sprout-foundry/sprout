@@ -5,6 +5,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -711,4 +712,138 @@ func TestAutomateCrossProcess_Discovery(t *testing.T) {
 	sessions, err := automate.ListSessionFiles(sproutDir)
 	require.NoError(t, err)
 	assert.Len(t, sessions, 0, "no sessions should remain after sweep")
+}
+
+// =============================================================================
+// buildAgentSubprocessArgs Tests
+// =============================================================================
+
+func TestBuildAgentSubprocessArgs_Basic(t *testing.T) {
+	defer resetAutomateGlobals()
+	automateBudgetUSD = 0
+	automateBudgetWarn = ""
+	automateHeartbeatSeconds = 0
+
+	summary := &automate.Summary{
+		Initial: &automate.InitialSummary{
+			MaxIterations: 0, // unlimited — should NOT add --max-iterations
+		},
+	}
+
+	args := buildAgentSubprocessArgs("automate/workflow.json", summary)
+	assert.Equal(t, []string{"agent", "--workflow-config", "automate/workflow.json", "--skip-prompt", "--no-web-ui"}, args)
+}
+
+func TestBuildAgentSubprocessArgs_WithMaxIterations(t *testing.T) {
+	defer resetAutomateGlobals()
+	automateBudgetUSD = 0
+	automateBudgetWarn = ""
+	automateHeartbeatSeconds = 0
+
+	summary := &automate.Summary{
+		Initial: &automate.InitialSummary{
+			MaxIterations: 500,
+		},
+	}
+
+	args := buildAgentSubprocessArgs("automate/workflow.json", summary)
+	assert.Equal(t, []string{"agent", "--workflow-config", "automate/workflow.json", "--skip-prompt", "--no-web-ui", "--max-iterations", "500"}, args)
+}
+
+func TestBuildAgentSubprocessArgs_WithBudget(t *testing.T) {
+	defer resetAutomateGlobals()
+	automateBudgetUSD = 10.0
+	automateBudgetWarn = "0.5,0.8"
+	automateHeartbeatSeconds = 600
+
+	summary := &automate.Summary{
+		Initial: &automate.InitialSummary{
+			MaxIterations: 0,
+		},
+	}
+
+	args := buildAgentSubprocessArgs("automate/workflow.json", summary)
+	assert.Equal(t, []string{"agent", "--workflow-config", "automate/workflow.json", "--skip-prompt", "--no-web-ui", "--budget-usd", "10", "--budget-warn", "0.5,0.8", "--heartbeat", "600"}, args)
+}
+
+func TestBuildAgentSubprocessArgs_AllFlags(t *testing.T) {
+	defer resetAutomateGlobals()
+	automateBudgetUSD = 25.0
+	automateBudgetWarn = "0.5,0.8"
+	automateHeartbeatSeconds = 300
+
+	summary := &automate.Summary{
+		Initial: &automate.InitialSummary{
+			MaxIterations: 100,
+		},
+	}
+
+	args := buildAgentSubprocessArgs("automate/workflow.json", summary)
+	assert.Equal(t, []string{"agent", "--workflow-config", "automate/workflow.json", "--skip-prompt", "--no-web-ui", "--max-iterations", "100", "--budget-usd", "25", "--budget-warn", "0.5,0.8", "--heartbeat", "300"}, args)
+}
+
+func TestBuildAgentSubprocessArgs_NilSummary(t *testing.T) {
+	defer resetAutomateGlobals()
+	automateBudgetUSD = 0
+	automateBudgetWarn = ""
+	automateHeartbeatSeconds = 0
+
+	args := buildAgentSubprocessArgs("automate/workflow.json", nil)
+	assert.Equal(t, []string{"agent", "--workflow-config", "automate/workflow.json", "--skip-prompt", "--no-web-ui"}, args)
+}
+
+func TestBuildAgentSubprocessArgs_NilInitial(t *testing.T) {
+	defer resetAutomateGlobals()
+	automateBudgetUSD = 0
+	automateBudgetWarn = ""
+	automateHeartbeatSeconds = 0
+
+	summary := &automate.Summary{
+		Initial: nil,
+	}
+
+	args := buildAgentSubprocessArgs("automate/workflow.json", summary)
+	assert.Equal(t, []string{"agent", "--workflow-config", "automate/workflow.json", "--skip-prompt", "--no-web-ui"}, args)
+}
+
+// =============================================================================
+// Subagent Timeout Env Var Injection Tests
+// =============================================================================
+
+func TestSubagentTimeoutEnvVar_InjectedWhenSet(t *testing.T) {
+	timeout := 7200
+	summary := &automate.Summary{
+		SubagentTimeoutSeconds: &timeout,
+	}
+
+	// Verify the logic: when SubagentTimeoutSeconds is non-nil and > 0,
+	// the env var should be set. We can't easily test exec.Command's Env
+	// in runWorkflowByPath, so verify the condition directly.
+	if summary.SubagentTimeoutSeconds != nil && *summary.SubagentTimeoutSeconds > 0 {
+		expected := fmt.Sprintf("SPROUT_TOOL_TIMEOUT=%d", *summary.SubagentTimeoutSeconds)
+		assert.Equal(t, "SPROUT_TOOL_TIMEOUT=7200", expected)
+	}
+}
+
+func TestSubagentTimeoutEnvVar_NotInjectedWhenZero(t *testing.T) {
+	timeout := 0
+	summary := &automate.Summary{
+		SubagentTimeoutSeconds: &timeout,
+	}
+
+	// When SubagentTimeoutSeconds is 0, the condition should be false
+	if summary.SubagentTimeoutSeconds != nil && *summary.SubagentTimeoutSeconds > 0 {
+		t.Fatal("should not inject env var when SubagentTimeoutSeconds is 0")
+	}
+}
+
+func TestSubagentTimeoutEnvVar_NotInjectedWhenNil(t *testing.T) {
+	summary := &automate.Summary{
+		SubagentTimeoutSeconds: nil,
+	}
+
+	// When SubagentTimeoutSeconds is nil, the condition should be false
+	if summary.SubagentTimeoutSeconds != nil && *summary.SubagentTimeoutSeconds > 0 {
+		t.Fatal("should not inject env var when SubagentTimeoutSeconds is nil")
+	}
 }

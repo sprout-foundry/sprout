@@ -77,15 +77,11 @@ func (p *GenericProvider) buildMultiModalContent(text string, images []api.Image
 	parts := make([]map[string]interface{}, 0, len(images)+1)
 	cacheImages := visionCacheImagesEnabled()
 
-	// Add text part if present
-	if strings.TrimSpace(text) != "" {
-		parts = append(parts, map[string]interface{}{
-			"type": "text",
-			"text": text,
-		})
-	}
+	// Anthropic recommends placing all image blocks BEFORE any text blocks
+	// for best cost/quality. We preserve relative order within each type.
+	// (https://docs.anthropic.com/en/docs/build-with-claude/vision)
 
-	// Add image parts
+	// Add image parts first
 	for _, img := range images {
 		imageURL := p.buildImageURL(img)
 		if imageURL == "" {
@@ -102,6 +98,14 @@ func (p *GenericProvider) buildMultiModalContent(text string, images []api.Image
 			imageBlock["cache_control"] = map[string]string{"type": "ephemeral"}
 		}
 		parts = append(parts, imageBlock)
+	}
+
+	// Add text part after images
+	if strings.TrimSpace(text) != "" {
+		parts = append(parts, map[string]interface{}{
+			"type": "text",
+			"text": text,
+		})
 	}
 
 	if len(parts) == 0 {

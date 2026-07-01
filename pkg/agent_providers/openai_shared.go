@@ -47,13 +47,12 @@ func BuildOpenAIChatMessages(messages []api.Message, opts MessageConversionOptio
 
 		if len(msg.Images) > 0 {
 			contentArray := []map[string]interface{}{}
-			if strings.TrimSpace(content) != "" {
-				contentArray = append(contentArray, map[string]interface{}{
-					"type": "text",
-					"text": content,
-				})
-			}
 
+			// Anthropic recommends placing all image blocks BEFORE any text
+			// blocks for best cost/quality. We preserve relative order within
+			// each type. (https://docs.anthropic.com/en/docs/build-with-claude/vision)
+
+			// Add image parts first
 			for _, img := range msg.Images {
 				imagePayload := map[string]interface{}{}
 				switch {
@@ -71,6 +70,14 @@ func BuildOpenAIChatMessages(messages []api.Message, opts MessageConversionOptio
 				}
 				imagePayload["type"] = "image_url"
 				contentArray = append(contentArray, imagePayload)
+			}
+
+			// Add text part after images
+			if strings.TrimSpace(content) != "" {
+				contentArray = append(contentArray, map[string]interface{}{
+					"type": "text",
+					"text": content,
+				})
 			}
 
 			messageMap["content"] = contentArray

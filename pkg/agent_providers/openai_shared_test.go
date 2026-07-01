@@ -1,6 +1,7 @@
 package providers
 
 import (
+	"strings"
 	"testing"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
@@ -53,11 +54,118 @@ func TestBuildOpenAIChatMessages_Images(t *testing.T) {
 		t.Fatalf("expected multimodal content slice, got %#v", result[0]["content"])
 	}
 
-	if content[0]["type"] != "text" {
-		t.Fatalf("first element should be text, got %#v", content[0])
+	// images come first (Anthropic recommendation), then text
+	if content[0]["type"] != "image_url" {
+		t.Fatalf("first element should be image_url, got %#v", content[0])
 	}
+	if content[1]["type"] != "text" {
+		t.Fatalf("second element should be text, got %#v", content[1])
+	}
+}
+
+// SP-103-B3: A message with 2 images and text produces [image, image, text] order.
+func TestBuildOpenAIChatMessages_TwoImagesAndText_Order(t *testing.T) {
+	messages := []api.Message{
+		{
+			Role:    "user",
+			Content: "first paragraph\n\nsecond paragraph",
+			Images: []api.ImageData{
+				{Base64: "aW1nQQ==", Type: "image/png"},
+				{Base64: "aW1nQg==", Type: "image/png"},
+			},
+		},
+	}
+
+	result := BuildOpenAIChatMessages(messages, MessageConversionOptions{})
+	if len(result) != 1 {
+		t.Fatalf("expected 1 message, got %d", len(result))
+	}
+
+	content, ok := result[0]["content"].([]map[string]interface{})
+	if !ok {
+		t.Fatalf("expected content to be []map[string]interface{}, got %T", result[0]["content"])
+	}
+	if len(content) != 3 {
+		t.Fatalf("expected 3 blocks (2 images + 1 text), got %d", len(content))
+	}
+
+	// block[0] = first image
+	if content[0]["type"] != "image_url" {
+		t.Errorf("block[0] should be image_url, got %v", content[0]["type"])
+	}
+	img0URL, ok := content[0]["image_url"].(map[string]interface{})
+	if !ok || !strings.Contains(img0URL["url"].(string), "aW1nQQ==") {
+		t.Errorf("block[0] should contain first image (imgA), got %v", img0URL)
+	}
+
+	// block[1] = second image
 	if content[1]["type"] != "image_url" {
-		t.Fatalf("second element should be image_url, got %#v", content[1])
+		t.Errorf("block[1] should be image_url, got %v", content[1]["type"])
+	}
+	img1URL, ok := content[1]["image_url"].(map[string]interface{})
+	if !ok || !strings.Contains(img1URL["url"].(string), "aW1nQg==") {
+		t.Errorf("block[1] should contain second image (imgB), got %v", img1URL)
+	}
+
+	// block[2] = text
+	if content[2]["type"] != "text" {
+		t.Errorf("block[2] should be text, got %v", content[2]["type"])
+	}
+	if content[2]["text"] != "first paragraph\n\nsecond paragraph" {
+		t.Errorf("block[2] text should be original content, got %q", content[2]["text"])
+	}
+}
+
+// SP-103-B3: Images-only message (empty text) produces only image blocks.
+func TestBuildOpenAIChatMessages_ImagesOnly_NoText(t *testing.T) {
+	messages := []api.Message{
+		{
+			Role:    "user",
+			Content: "   ", // whitespace-only → treated as empty
+			Images: []api.ImageData{
+				{Base64: "aW1nQQ==", Type: "image/png"},
+			},
+		},
+	}
+
+	result := BuildOpenAIChatMessages(messages, MessageConversionOptions{})
+	if len(result) != 1 {
+		t.Fatalf("expected 1 message, got %d", len(result))
+	}
+
+	content, ok := result[0]["content"].([]map[string]interface{})
+	if !ok {
+		t.Fatalf("expected content to be []map[string]interface{}, got %T", result[0]["content"])
+	}
+	if len(content) != 1 {
+		t.Fatalf("expected 1 block (image only), got %d", len(content))
+	}
+	if content[0]["type"] != "image_url" {
+		t.Errorf("block[0] should be image_url, got %v", content[0]["type"])
+	}
+}
+
+// SP-103-B3: Text-only message (no images) produces plain string content.
+func TestBuildOpenAIChatMessages_TextOnly_NoImages(t *testing.T) {
+	messages := []api.Message{
+		{
+			Role:    "user",
+			Content: "just text",
+			Images:  nil,
+		},
+	}
+
+	result := BuildOpenAIChatMessages(messages, MessageConversionOptions{})
+	if len(result) != 1 {
+		t.Fatalf("expected 1 message, got %d", len(result))
+	}
+
+	content, ok := result[0]["content"].(string)
+	if !ok {
+		t.Fatalf("expected plain string content, got %T", result[0]["content"])
+	}
+	if content != "just text" {
+		t.Errorf("expected 'just text', got %q", content)
 	}
 }
 

@@ -146,7 +146,7 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	// Bounded by a tight timeout because this is on the user's critical
 	// path; recall is a nice-to-have and failure must degrade gracefully.
 	recallCtx, recallCancel := context.WithTimeout(context.Background(), 2*time.Second)
-	a.InjectSemanticRecall(recallCtx, processedQuery)
+	InstrumentedRecall(a, recallCtx, processedQuery)
 	recallCancel()
 
 	// Build the user message with processed (cleaned) query and images

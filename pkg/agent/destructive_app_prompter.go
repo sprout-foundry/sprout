@@ -1,6 +1,7 @@
 package agent
 
 import (
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"fmt"
 
 	"github.com/sprout-foundry/sprout/pkg/agent_tools/computer_use"
@@ -42,7 +43,7 @@ func (a *Agent) checkComputerUseDestructiveAppGate(action string, args map[strin
 	// Step 4: handle the decision.
 	switch decision {
 	case computer_use.DestructiveAppDeny:
-		return fmt.Errorf("destructive app blocked: %s (%s)", fg.AppName, cls.Reason)
+		return agenterrors.NewPermission("destructive app blocked: "+fg.AppName+" ("+cls.Reason+")", nil)
 
 	case computer_use.DestructiveAppAllowOnce:
 		return nil

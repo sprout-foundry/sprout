@@ -35,7 +35,7 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 	// SP-063: computer-use tools are restricted to the computer_user persona.
 	// Inert unless computer use is enabled (the restricted-name set is empty).
 	if isComputerUseToolBlocked(toolName, agent) {
-		return nil, "", fmt.Errorf("tool %q is only available to the computer_user persona", toolName)
+		return nil, "", agenterrors.NewPermission("tool "+toolName+" is only available to the computer_user persona", map[string]any{"tool": toolName})
 	}
 
 	// SP-063: per-session opt-in. Even after the persona-activation gates
@@ -296,7 +296,7 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 	}
 
 	if err := handler.Validate(args); err != nil {
-		return nil, "", fmt.Errorf("validation failed for tool %q: %w", toolName, err)
+		return nil, "", agenterrors.Wrapf(err, "validation failed for tool %q", toolName)
 	}
 	res, err := handler.Execute(ctx, env, args)
 	if err != nil {
@@ -324,7 +324,7 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 		if agent != nil && agent.debug {
 			agent.debugLog("[tool] tool dispatched via new registry (error): %s\n", toolName)
 		}
-		return images, "", fmt.Errorf("%s", errMsg)
+		return images, "", agenterrors.NewTool(toolName, errMsg, nil)
 	}
 
 	// After successful tool execution, run embedding duplicate check for write tools.

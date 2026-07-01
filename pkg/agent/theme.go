@@ -2,8 +2,9 @@ package agent
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
+
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // Theme represents a color theme configuration
@@ -70,13 +71,13 @@ func (tm *ThemeManager) LoadThemeFromFile(themePath string) error {
 	// Read the file
 	data, err := os.ReadFile(themePath)
 	if err != nil {
-		return fmt.Errorf("error reading theme file: %w", err)
+		return agenterrors.Wrap(err, "error reading theme file")
 	}
 
 	// Parse JSON
 	var theme Theme
 	if err := json.Unmarshal(data, &theme); err != nil {
-		return fmt.Errorf("error parsing theme JSON: %w", err)
+		return agenterrors.Wrap(err, "error parsing theme JSON")
 	}
 
 	tm.theme = theme

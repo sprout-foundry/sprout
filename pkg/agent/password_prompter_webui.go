@@ -8,6 +8,7 @@ import (
 	"log"
 	"time"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
@@ -67,14 +68,14 @@ func (wp *WebUIPasswordPrompter) Prompt(ctx context.Context, reason string) (str
 	select {
 	case password, ok := <-ch:
 		if !ok {
-			return "", fmt.Errorf("password channel closed without response")
+			return "", agenterrors.NewAgent("password_prompter", "password channel closed without response", nil)
 		}
 		return password, nil
 	case <-ctx.Done():
 		return "", ctx.Err()
 	case <-timer.C:
 		log.Printf("[password_prompt] request %s timed out after %v", requestID, passwordPromptTimeout)
-		return "", fmt.Errorf("password prompt timed out after %v", passwordPromptTimeout)
+		return "", agenterrors.NewTimeout(fmt.Sprintf("password prompt (%v)", passwordPromptTimeout), passwordPromptTimeout)
 	}
 }
 

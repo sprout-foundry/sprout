@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // handleSearchMemories searches memory files by semantic similarity.
@@ -13,7 +15,7 @@ import (
 func handleSearchMemories(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
 	query, ok := args["query"].(string)
 	if !ok || query == "" {
-		return "", fmt.Errorf("query is required: provide a natural language description of what you're looking for")
+		return "", agenterrors.NewValidation("query is required: provide a natural language description of what you're looking for", nil)
 	}
 
 	topK := 5
@@ -52,12 +54,12 @@ func handleSearchMemories(ctx context.Context, a *Agent, args map[string]interfa
 
 	store, err := em.GetConversationStore(ctx)
 	if err != nil {
-		return "", fmt.Errorf("failed to get conversation store: %w", err)
+		return "", agenterrors.Wrap(err, "failed to get conversation store")
 	}
 
 	results, err := store.QueryMemories(ctx, query, topK, threshold)
 	if err != nil {
-		return "", fmt.Errorf("memory search failed: %w", err)
+		return "", agenterrors.Wrap(err, "memory search failed")
 	}
 
 	if len(results) == 0 {

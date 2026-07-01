@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/embedding"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // ProactiveContextConfig holds configuration for proactive context retrieval.
@@ -405,7 +406,7 @@ func SweepExpiredEntries(retentionDays int, storePath string) (int, error) {
 
 	store, err := embedding.NewHNSWStore(storePath, "")
 	if err != nil {
-		return 0, fmt.Errorf("sweep: open store %s: %w", storePath, err)
+		return 0, agenterrors.NewConfig("sweep: open store "+storePath, err)
 	}
 	defer store.Close()
 
@@ -414,7 +415,7 @@ func SweepExpiredEntries(retentionDays int, storePath string) (int, error) {
 	// access) but should not be called during active embedding operations.
 	allRecords, err := store.LoadAll()
 	if err != nil {
-		return 0, fmt.Errorf("sweep: load records: %w", err)
+		return 0, agenterrors.Wrap(err, "sweep: load records")
 	}
 
 	if len(allRecords) == 0 {
@@ -432,7 +433,7 @@ func SweepExpiredEntries(retentionDays int, storePath string) (int, error) {
 	if swept > 0 {
 		err = store.ReplaceAll(kept)
 		if err != nil {
-			return 0, fmt.Errorf("sweep: write back records: %w", err)
+			return 0, agenterrors.Wrap(err, "sweep: write back records")
 		}
 	}
 

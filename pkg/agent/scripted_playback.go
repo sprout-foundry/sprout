@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/factory"
 )
@@ -529,7 +530,7 @@ func (c *ScriptedClient) SendChatRequestStream(ctx context.Context, messages []a
 				if streamConfig.StreamError != nil {
 					return nil, streamConfig.StreamError
 				}
-				return nil, fmt.Errorf("simulated stream error after %d chunks", streamConfig.ErrorAfterChunks)
+				return nil, agenterrors.NewAgent("scripted_playback", fmt.Sprintf("simulated stream error after %d chunks", streamConfig.ErrorAfterChunks), nil)
 			}
 
 			// Add delay between chunks if configured

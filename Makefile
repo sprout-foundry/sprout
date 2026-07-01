@@ -1,7 +1,7 @@
 # Ledit Testing and Build Makefile
 # Provides clear commands for different types of tests and builds
 
-.PHONY: help test test-unit test-unit-lowmem test-integration test-e2e test-smoke test-desktop-smoke test-all test-ci test-coverage \
+.PHONY: help test test-unit test-unit-lowmem test-race test-integration test-e2e test-smoke test-desktop-smoke test-all test-ci test-coverage \
        clean build build-all install build-version build-ui deploy-ui build-wasm \
        verify-ui-embedded test-webui lint lint-fix dev build-webui-dist build-webui-dist-local \
        verify-dist verify-dist-local automate-run
@@ -12,6 +12,7 @@ help:
 	@echo ""
 	@echo "  make test-unit        - Run unit tests (fast, no dependencies)"
 	@echo "  make test-unit-lowmem - Run unit tests in ~4GB RAM (no -race, low parallelism)"
+	@echo "  make test-race        - Run unit tests with race detector (required CI check)"
 	@echo "  make test-integration - Run integration tests (mocked AI)"  
 	@echo "  make test-e2e         - Run e2e tests (requires AI model)"
 	@echo "  make test-smoke       - Run smoke tests (basic functionality)"
@@ -103,6 +104,24 @@ test-unit: prepare-grammars
 # machines or when -race isn't needed; CI/`test-coverage` still run with -race.
 test-unit-lowmem:
 	@$(MAKE) test-unit TEST_RACE= TEST_P=4 TEST_PARALLEL=2
+
+# Race Detector Tests — explicit -race run for CI gating.
+# Uses tighter parallelism than test-unit to stay within memory limits
+# on CI runners (race detector inflates memory ~5-10x).
+test-race: prepare-grammars
+	@echo "Running tests with race detection (-race -p 2 -parallel 4)..."
+	@bash -lc 'set -o pipefail; \
+	go test -race -tags "browser grammar_blobs_external" ./pkg/... ./cmd/... -v -timeout=120s -p 2 -parallel 4 2>&1 | tee /tmp/sprout-test-race.log; \
+	status=$${PIPESTATUS[0]}; \
+	if [ $$status -ne 0 ]; then \
+		echo ""; \
+		echo "Race tests failed. Last 200 lines:"; \
+		tail -n 200 /tmp/sprout-test-race.log || true; \
+		echo ""; \
+		echo "Failing packages:"; \
+		grep -nE "^(FAIL|--- FAIL:|WARNING: DATA RACE|panic:)" /tmp/sprout-test-race.log || true; \
+		exit $$status; \
+	fi'
 
 # Integration Tests - Mocked AI, file operations
 test-integration:

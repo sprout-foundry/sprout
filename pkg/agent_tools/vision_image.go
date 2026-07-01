@@ -294,14 +294,14 @@ func detectImageMimeType(path string) string {
 // getCachedVisionResult checks the vision cache and returns the cached result if present.
 // Returns (result, true, nil) when a cache hit occurs, (result, false, nil) otherwise.
 func getCachedVisionResult(cacheKey, imagePath, analysisMode string) (string, bool, error) {
-	cachedResult, exists := visionCache[cacheKey]
-	if !exists {
+	cachedResult, cachedUsage, ok := visionLRU.Get(cacheKey)
+	if !ok {
 		return "", false, nil
 	}
 
 	fmt.Printf("[~] Using cached vision analysis for %s [%s]\n", GetBaseName(imagePath), analysisMode)
 
-	if cachedUsage, hasUsage := visionCacheUsage[cacheKey]; hasUsage {
+	if cachedUsage != nil {
 		lastVisionUsage = cachedUsage
 	}
 
@@ -390,7 +390,7 @@ func AnalyzeImage(ctx context.Context, imagePath string, analysisPrompt string, 
 		return string(respJSON), nil
 	}
 
-	cacheKey := fmt.Sprintf("%s|%s|%s", imagePath, analysisMode, analysisPrompt)
+	cacheKey := visionCacheKey(imagePath, analysisMode, analysisPrompt)
 
 	if cached, hit, _ := getCachedVisionResult(cacheKey, imagePath, analysisMode); hit {
 		return cached, nil
@@ -474,10 +474,7 @@ func AnalyzeImage(ctx context.Context, imagePath string, analysisPrompt string, 
 		return string(respJSON), nil
 	}
 
-	visionCache[cacheKey] = string(respJSON)
-	if lastVisionUsage != nil {
-		visionCacheUsage[cacheKey] = lastVisionUsage
-	}
+	visionLRU.Put(cacheKey, string(respJSON), lastVisionUsage)
 
 	return string(respJSON), nil
 }

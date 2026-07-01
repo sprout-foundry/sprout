@@ -83,8 +83,7 @@ func TestVisionUsage(t *testing.T) {
 // Note: This test cannot be parallel because it modifies global state.
 func TestVisionCacheStats(t *testing.T) {
 	// Clear global state at the start
-	visionCache = make(map[string]string)
-	visionCacheUsage = make(map[string]*VisionUsageInfo)
+	resetVisionCache()
 
 	t.Run("empty cache", func(t *testing.T) {
 		stats := GetVisionCacheStats()
@@ -98,11 +97,10 @@ func TestVisionCacheStats(t *testing.T) {
 	})
 
 	t.Run("single cached result", func(t *testing.T) {
-		visionCache["key1"] = "result1"
-		visionCacheUsage["key1"] = &VisionUsageInfo{
+		visionLRU.Put("key1", "result1", &VisionUsageInfo{
 			TotalTokens:   1000,
 			EstimatedCost: 0.01,
-		}
+		})
 
 		stats := GetVisionCacheStats()
 
@@ -115,16 +113,14 @@ func TestVisionCacheStats(t *testing.T) {
 	})
 
 	t.Run("multiple cached results", func(t *testing.T) {
-		visionCache["key2"] = "result2"
-		visionCache["key3"] = "result3"
-		visionCacheUsage["key2"] = &VisionUsageInfo{
+		visionLRU.Put("key2", "result2", &VisionUsageInfo{
 			TotalTokens:   2000,
 			EstimatedCost: 0.02,
-		}
-		visionCacheUsage["key3"] = &VisionUsageInfo{
+		})
+		visionLRU.Put("key3", "result3", &VisionUsageInfo{
 			TotalTokens:   1500,
 			EstimatedCost: 0.015,
-		}
+		})
 
 		stats := GetVisionCacheStats()
 
@@ -139,8 +135,7 @@ func TestVisionCacheStats(t *testing.T) {
 	})
 
 	// Clean up global state for other tests
-	visionCache = make(map[string]string)
-	visionCacheUsage = make(map[string]*VisionUsageInfo)
+	resetVisionCache()
 }
 
 // TestGetBaseName tests the GetBaseName function.

@@ -3,6 +3,8 @@ package providers
 import (
 	"fmt"
 	"net/http"
+
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // tryMaxCompletionTokensRetry retries the request with max_completion_tokens
@@ -16,7 +18,7 @@ func (p *GenericProvider) tryMaxCompletionTokensRetry(originalRequestBody []byte
 
 	retryBody, changed, err := rewriteMaxTokensToMaxCompletionTokens(originalRequestBody)
 	if err != nil {
-		return originalRequestBody, nil, true, fmt.Errorf("rewrite max tokens: %w", err)
+		return originalRequestBody, nil, true, agenterrors.NewValidation(fmt.Sprintf("rewrite max tokens: %v", err), nil)
 	}
 	if !changed {
 		return originalRequestBody, nil, false, nil
@@ -24,7 +26,7 @@ func (p *GenericProvider) tryMaxCompletionTokensRetry(originalRequestBody []byte
 
 	req, err := p.buildHTTPRequest(retryBody, streaming)
 	if err != nil {
-		return retryBody, nil, true, fmt.Errorf("build HTTP request: %w", err)
+		return retryBody, nil, true, agenterrors.NewNetwork("build HTTP request", err)
 	}
 
 	client := p.httpClient
@@ -33,7 +35,7 @@ func (p *GenericProvider) tryMaxCompletionTokensRetry(originalRequestBody []byte
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return retryBody, nil, true, fmt.Errorf("execute HTTP request: %w", err)
+		return retryBody, nil, true, agenterrors.NewNetwork("execute HTTP request", err)
 	}
 
 	return retryBody, resp, true, nil

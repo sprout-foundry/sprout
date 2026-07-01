@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // ProviderConfig defines the configuration for a generic provider
@@ -132,12 +134,12 @@ type ProviderRegistry struct {
 func LoadProviderConfig(configPath string) (*ProviderConfig, error) {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read provider config file %s: %w", configPath, err)
+		return nil, agenterrors.NewConfig(fmt.Sprintf("failed to read provider config file %s", configPath), err)
 	}
 
 	var config ProviderConfig
 	if err := json.Unmarshal(data, &config); err != nil {
-		return nil, fmt.Errorf("failed to parse provider config file %s: %w", configPath, err)
+		return nil, agenterrors.NewConfig(fmt.Sprintf("failed to parse provider config file %s", configPath), err)
 	}
 
 	return &config, nil
@@ -147,12 +149,12 @@ func LoadProviderConfig(configPath string) (*ProviderConfig, error) {
 func LoadProviderRegistry(registryPath string) (*ProviderRegistry, error) {
 	data, err := os.ReadFile(registryPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read provider registry file %s: %w", registryPath, err)
+		return nil, agenterrors.NewConfig(fmt.Sprintf("failed to read provider registry file %s", registryPath), err)
 	}
 
 	var registry ProviderRegistry
 	if err := json.Unmarshal(data, &registry); err != nil {
-		return nil, fmt.Errorf("failed to parse provider registry file %s: %w", registryPath, err)
+		return nil, agenterrors.NewConfig(fmt.Sprintf("failed to parse provider registry file %s", registryPath), err)
 	}
 
 	return &registry, nil
@@ -182,7 +184,7 @@ func (c *ProviderConfig) GetAuthToken() (string, error) {
 		if c.Auth.EnvVar != "" {
 			token := os.Getenv(c.Auth.EnvVar)
 			if token == "" {
-				return "", fmt.Errorf("environment variable %s is not set", c.Auth.EnvVar)
+				return "", agenterrors.NewValidation(fmt.Sprintf("environment variable %s is not set", c.Auth.EnvVar), nil)
 			}
 			return token, nil
 		}
@@ -194,7 +196,7 @@ func (c *ProviderConfig) GetAuthToken() (string, error) {
 		// OAuth would need flow implementation - not implemented yet
 		return "", errors.New("OAuth authentication not yet implemented")
 	default:
-		return "", fmt.Errorf("unsupported authentication type: %s", c.Auth.Type)
+		return "", agenterrors.NewValidation(fmt.Sprintf("unsupported authentication type: %s", c.Auth.Type), nil)
 	}
 }
 
@@ -227,54 +229,54 @@ func (c *ProviderConfig) validateModelConfig() error {
 	// Validate model overrides are positive
 	for modelName, contextLimit := range c.Models.ModelOverrides {
 		if contextLimit <= 0 {
-			return fmt.Errorf("model override for '%s' must have positive context limit", modelName)
+			return agenterrors.NewValidation(fmt.Sprintf("model override for '%s' must have positive context limit", modelName), nil)
 		}
 		if contextLimit > 2097152 { // 2M tokens is a practical upper bound
-			return fmt.Errorf("model override for '%s' has context limit %d which exceeds reasonable maximum (2M tokens)", modelName, contextLimit)
+			return agenterrors.NewValidation(fmt.Sprintf("model override for '%s' has context limit %d which exceeds reasonable maximum (2M tokens)", modelName, contextLimit), nil)
 		}
 	}
 
 	// Validate pattern overrides
 	for i, patternOverride := range c.Models.PatternOverrides {
 		if patternOverride.Pattern == "" {
-			return fmt.Errorf("pattern override at index %d has empty pattern", i)
+			return agenterrors.NewValidation(fmt.Sprintf("pattern override at index %d has empty pattern", i), nil)
 		}
 		if patternOverride.ContextLimit <= 0 {
-			return fmt.Errorf("pattern override '%s' must have positive context limit", patternOverride.Pattern)
+			return agenterrors.NewValidation(fmt.Sprintf("pattern override '%s' must have positive context limit", patternOverride.Pattern), nil)
 		}
 		if patternOverride.ContextLimit > 2097152 { // 2M tokens is a practical upper bound
-			return fmt.Errorf("pattern override '%s' has context limit %d which exceeds reasonable maximum (2M tokens)", patternOverride.Pattern, patternOverride.ContextLimit)
+			return agenterrors.NewValidation(fmt.Sprintf("pattern override '%s' has context limit %d which exceeds reasonable maximum (2M tokens)", patternOverride.Pattern, patternOverride.ContextLimit), nil)
 		}
 
 		// Test if pattern is valid regex
 		if _, err := regexp.Compile(patternOverride.Pattern); err != nil {
-			return fmt.Errorf("pattern override '%s' has invalid regex pattern: %w", patternOverride.Pattern, err)
+			return agenterrors.NewValidation(fmt.Sprintf("pattern override '%s' has invalid regex pattern: %v", patternOverride.Pattern, err), nil)
 		}
 	}
 
 	// Validate max completion overrides are positive
 	for modelName, maxCompletion := range c.Models.MaxCompletionOverrides {
 		if maxCompletion <= 0 {
-			return fmt.Errorf("max completion override for '%s' must have positive value", modelName)
+			return agenterrors.NewValidation(fmt.Sprintf("max completion override for '%s' must have positive value", modelName), nil)
 		}
 		if maxCompletion > 2097152 {
-			return fmt.Errorf("max completion override for '%s' has value %d which exceeds reasonable maximum (2M tokens)", modelName, maxCompletion)
+			return agenterrors.NewValidation(fmt.Sprintf("max completion override for '%s' has value %d which exceeds reasonable maximum (2M tokens)", modelName, maxCompletion), nil)
 		}
 	}
 
 	// Validate completion pattern overrides
 	for i, patternOverride := range c.Models.CompletionPatternOverrides {
 		if patternOverride.Pattern == "" {
-			return fmt.Errorf("completion pattern override at index %d has empty pattern", i)
+			return agenterrors.NewValidation(fmt.Sprintf("completion pattern override at index %d has empty pattern", i), nil)
 		}
 		if patternOverride.ContextLimit <= 0 {
-			return fmt.Errorf("completion pattern override '%s' must have positive limit", patternOverride.Pattern)
+			return agenterrors.NewValidation(fmt.Sprintf("completion pattern override '%s' must have positive limit", patternOverride.Pattern), nil)
 		}
 		if patternOverride.ContextLimit > 2097152 {
-			return fmt.Errorf("completion pattern override '%s' has limit %d which exceeds reasonable maximum (2M tokens)", patternOverride.Pattern, patternOverride.ContextLimit)
+			return agenterrors.NewValidation(fmt.Sprintf("completion pattern override '%s' has limit %d which exceeds reasonable maximum (2M tokens)", patternOverride.Pattern, patternOverride.ContextLimit), nil)
 		}
 		if _, err := regexp.Compile(patternOverride.Pattern); err != nil {
-			return fmt.Errorf("completion pattern override '%s' has invalid regex pattern: %w", patternOverride.Pattern, err)
+			return agenterrors.NewValidation(fmt.Sprintf("completion pattern override '%s' has invalid regex pattern: %v", patternOverride.Pattern, err), nil)
 		}
 	}
 

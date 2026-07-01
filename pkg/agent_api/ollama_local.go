@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/sprout-foundry/sprout/pkg/envutil"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"net"
 	"os"
 	"os/exec"
@@ -85,7 +86,7 @@ func defaultOllamaClientFactory() (ollamaClient, error) {
 func ensureModelAvailable(ctx context.Context, client ollamaClient, model string) error {
 	listResp, err := client.List(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to list local models: %w", err)
+		return agenterrors.NewNetwork("failed to list local models", err)
 	}
 
 	availableModels := make([]string, 0, len(listResp.Models))
@@ -96,7 +97,7 @@ func ensureModelAvailable(ctx context.Context, client ollamaClient, model string
 		}
 	}
 
-	return fmt.Errorf("model %s not found locally. Available models: %s", model, availableModels)
+	return agenterrors.NewProviderError(fmt.Sprintf("model '%s' not found locally. Available models: %s", model, availableModels), nil, "ollama", "")
 }
 
 func newOllamaLocalClientWithFactory(model string, factory ollamaClientFactory) (*OllamaLocalClient, error) {
@@ -107,7 +108,7 @@ func newOllamaLocalClientWithFactory(model string, factory ollamaClientFactory) 
 	// Verify Ollama is running locally
 	client, err := factory()
 	if err != nil {
-		return nil, fmt.Errorf("could not create ollama client: %w", err)
+		return nil, agenterrors.NewConfig("could not create ollama client", err)
 	}
 
 	// Get list of available models first
@@ -116,7 +117,7 @@ func newOllamaLocalClientWithFactory(model string, factory ollamaClientFactory) 
 
 	listResp, err := client.List(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list local models: %w", err)
+		return nil, agenterrors.NewNetwork("failed to list local models", err)
 	}
 
 	// If no models specified or empty, use first available model
@@ -147,7 +148,7 @@ func newOllamaLocalClientWithFactory(model string, factory ollamaClientFactory) 
 			fmt.Fprintf(os.Stderr, "[~] Falling back to first available model: %s\n", listResp.Models[0].Name)
 			model = listResp.Models[0].Name
 		} else {
-			return nil, fmt.Errorf("model %s not found locally and no other models available. Available models: %s", model, availableModels)
+			return nil, agenterrors.NewProviderError(fmt.Sprintf("model %s not found locally and no other models available. Available models: %s", model, availableModels), nil, "ollama", "")
 		}
 	}
 
@@ -313,7 +314,7 @@ func getOllamaMaxPredictCap(contextLimit int) int {
 func (c *OllamaLocalClient) SendChatRequest(ctx context.Context, messages []Message, tools []Tool, reasoning string, disableThinking bool) (*ChatResponse, error) {
 	client, err := c.newClient()
 	if err != nil {
-		return nil, fmt.Errorf("could not create ollama client: %w", err)
+		return nil, agenterrors.NewConfig("could not create ollama client", err)
 	}
 
 	req, totalTokens := c.buildChatRequest(messages, tools, reasoning, false)
@@ -346,7 +347,7 @@ func (c *OllamaLocalClient) SendChatRequest(ctx context.Context, messages []Mess
 
 	err = client.Chat(ctx, req, respFunc)
 	if err != nil {
-		return nil, fmt.Errorf("ollama chat failed: %w", err)
+		return nil, agenterrors.NewProviderError("ollama chat failed", err, "ollama", c.model)
 	}
 
 	// Calculate request duration
@@ -418,7 +419,7 @@ func (c *OllamaLocalClient) GetProvider() string {
 func (c *OllamaLocalClient) CheckConnection() error {
 	client, err := c.newClient()
 	if err != nil {
-		return fmt.Errorf("could not create ollama client: %w", err)
+		return agenterrors.NewConfig("could not create ollama client", err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -426,7 +427,7 @@ func (c *OllamaLocalClient) CheckConnection() error {
 
 	_, err = client.List(ctx)
 	if err != nil {
-		return fmt.Errorf("ollama connection check failed: %w", err)
+		return agenterrors.NewNetwork("ollama connection check failed", err)
 	}
 	return nil
 }
@@ -453,7 +454,7 @@ func (c *OllamaLocalClient) SetModel(model string) error {
 
 	client, err := c.newClient()
 	if err != nil {
-		return fmt.Errorf("could not create ollama client: %w", err)
+		return agenterrors.NewConfig("could not create ollama client", err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -462,7 +463,7 @@ func (c *OllamaLocalClient) SetModel(model string) error {
 	// Get list of available models
 	listResp, err := client.List(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to list local models: %w", err)
+		return agenterrors.NewNetwork("failed to list local models", err)
 	}
 
 	// Check if requested model exists locally
@@ -484,19 +485,19 @@ func (c *OllamaLocalClient) SetModel(model string) error {
 		return nil
 	}
 
-	return fmt.Errorf("model %s not found locally and no other models available. Available models: %s", model, availableModels)
+	return agenterrors.NewProviderError(fmt.Sprintf("model %s not found locally and no other models available. Available models: %s", model, availableModels), nil, "ollama", "")
 }
 
 // ListModels returns available local models
 func (c *OllamaLocalClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	client, err := c.newClient()
 	if err != nil {
-		return nil, fmt.Errorf("could not create ollama client: %w", err)
+		return nil, agenterrors.NewConfig("could not create ollama client", err)
 	}
 
 	listResp, err := client.List(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list local models: %w", err)
+		return nil, agenterrors.NewNetwork("failed to list local models", err)
 	}
 
 	models := make([]ModelInfo, 0, len(listResp.Models))
@@ -550,7 +551,7 @@ func (c *OllamaLocalClient) SendVisionRequest(ctx context.Context, messages []Me
 func (c *OllamaLocalClient) SendChatRequestStream(ctx context.Context, messages []Message, tools []Tool, reasoning string, disableThinking bool, callback StreamCallback) (*ChatResponse, error) {
 	client, err := c.newClient()
 	if err != nil {
-		return nil, fmt.Errorf("could not create ollama client: %w", err)
+		return nil, agenterrors.NewConfig("could not create ollama client", err)
 	}
 
 	req, totalTokens := c.buildChatRequest(messages, tools, reasoning, true)
@@ -567,7 +568,7 @@ func (c *OllamaLocalClient) SendChatRequestStream(ctx context.Context, messages 
 	err = client.Chat(ctx, req, func(res ollama.ChatResponse) error {
 		chunk := convertOllamaResponseToStreamingChunk(res)
 		if err := builder.ProcessChunk(chunk); err != nil {
-			return fmt.Errorf("failed to process ollama chat chunk: %w", err)
+			return agenterrors.NewProviderError("failed to process ollama chat chunk", err, "ollama", c.model)
 		}
 
 		if res.DoneReason != "" {
@@ -578,7 +579,7 @@ func (c *OllamaLocalClient) SendChatRequestStream(ctx context.Context, messages 
 		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("ollama chat failed: %w", err)
+		return nil, agenterrors.NewProviderError("ollama chat failed", err, "ollama", c.model)
 	}
 
 	response := builder.GetResponse()

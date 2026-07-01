@@ -260,3 +260,55 @@ func TestBrowseURL_InspectActionPreservesExtendedDebuggingOptions(t *testing.T) 
 	require.Len(t, result.NetworkRequests, 1)
 	assert.Equal(t, "/api/settings", result.NetworkRequests[0].URL)
 }
+
+func TestBrowseURL_ScreenshotWithCookiesRoutesToInteractiveRun(t *testing.T) {
+	fake := &fakeBrowserRenderer{
+		runResult: &BrowseResult{FinalURL: "http://example.com"},
+	}
+	withFakeGlobalBrowser(t, fake)
+
+	_, err := BrowseURL("http://example.com", BrowseOptions{
+		Action:         "screenshot",
+		ScreenshotPath: "/tmp/sprout_examples/auth.png",
+		Cookies:        map[string]string{"session": "secret"},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "session", firstKey(fake.lastRunOpts.Cookies), "cookies should route through Run, not the simple Screenshot() path")
+	assert.Equal(t, "secret", fake.lastRunOpts.Cookies["session"])
+}
+
+func TestBrowseURL_ScreenshotWithHeadersRoutesToInteractiveRun(t *testing.T) {
+	fake := &fakeBrowserRenderer{
+		runResult: &BrowseResult{FinalURL: "http://example.com"},
+	}
+	withFakeGlobalBrowser(t, fake)
+
+	_, err := BrowseURL("http://example.com", BrowseOptions{
+		Action:         "screenshot",
+		ScreenshotPath: "/tmp/sprout_examples/auth.png",
+		Headers:        map[string]string{"Authorization": "Bearer token"},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "Bearer token", fake.lastRunOpts.Headers["Authorization"])
+}
+
+func TestBrowseURL_TextWithAllowFileURLRoutesToInteractiveRun(t *testing.T) {
+	fake := &fakeBrowserRenderer{
+		runResult: &BrowseResult{FinalURL: "file:///tmp/test.html", VisibleText: "<p>hello</p>"},
+	}
+	withFakeGlobalBrowser(t, fake)
+
+	_, err := BrowseURL("file:///tmp/test.html", BrowseOptions{
+		Action:       "text",
+		AllowFileURL: true,
+	})
+	require.NoError(t, err)
+	assert.True(t, fake.lastRunOpts.AllowFileURL)
+}
+
+func firstKey(m map[string]string) string {
+	for k := range m {
+		return k
+	}
+	return ""
+}

@@ -341,7 +341,7 @@ caching for repeat-turn cost.
       cover all fallback / exceeded / boundary paths plus `Unwrap`
       chain detection. Full `pkg/agent_tools` suite passes. Build green._
 
-- [ ] **SP-103-A6:** Translate typed errors at the response-builder
+- [x] **SP-103-A6:** Translate typed errors at the response-builder
       boundary. Currently `vision_image.go:418-440` does
       `strings.Contains(errMsg, ...)` to classify errors into `ErrCode*`
       strings for the JSON response. Replace with: if the error is a
@@ -352,6 +352,27 @@ caching for repeat-turn cost.
 
       _~0.5 day. Touches `vision_image.go`, `vision_pdf.go`. No changes
       to `pkg/errors` needed — `TypedError` is already complete._
+
+      _Shipped (commit e47280c7): New `pkg/agent_tools/vision_typed_errors.go`
+      with `classifyVisionResponseError(err)` (prefers
+      `IsRemoteSizeExceededError` → REMOTE_FETCH, then
+      `errors.As(*TypedError)` → `typedErrorToVisionCode` mapping,
+      then the legacy strings.Contains classifier) and
+      `applyClassifiedError(resp, err, inputType, opName)` (writes
+      `resp.ErrorCode` + a `Component`-aware `ErrorMessage`).
+      `vision_image.go` analyze-image error block (~line 538) replaced
+      with `applyClassifiedError` call. Mapping table:
+      Network → REMOTE_FETCH, NotFound → LOCAL_FILE_NOT_FOUND,
+      Validation → INPUT_UNSUPPORTED, Timeout/Tool/Agent/Config/
+      Permission/Approval/Unknown → VISION_REQUEST_FAILED. Local-file
+      refinement: `"no such file"` / `"stat "` patterns always become
+      LOCAL_FILE_NOT_FOUND regardless of upstream code (since the
+      legacy classifier defaults to VISION_REQUEST_FAILED for
+      otherwise-untyped errors). 14 new tests: 10 per-code mapping
+      subtests, wrapped-typed, size-exceeded (incl. wrapped),
+      typed-beats-size-exceeded, legacy fallback (3 cases), Component
+      message enrichment, local-file refinement, default fallback
+      message template. Full `pkg/agent_tools` suite passes. Build green._
 
 - [ ] **SP-103-A7:** Race-detector test fixtures. Add
       `vision_concurrency_test.go` that fires 10 concurrent

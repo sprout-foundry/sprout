@@ -275,6 +275,14 @@ type Agent struct {
 	// *Agent values continue to work without a constructor change.
 	rollupOnce sync.Once
 	rollupW    *rollupWorker
+
+	// visionProbe caches the registry-sourced probe result for the current
+	// model+provider so the vision decision doesn't re-fetch on every
+	// message. Invalidated when the model or provider changes.
+	visionProbeMu       sync.RWMutex
+	visionProbeModel    string
+	visionProbeProvider string
+	visionProbeResult   *bool
 }
 
 // InjectWebUIManagers replaces the agent's internal approval and ask-user

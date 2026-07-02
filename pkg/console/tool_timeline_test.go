@@ -360,3 +360,128 @@ func TestToolTimeline_StopIdempotent(t *testing.T) {
 	tl.Stop()
 	tl.Stop() // Must not panic or block.
 }
+
+// ---------------------------------------------------------------------------
+// 10. ToolStart renders truncated arguments after the display name
+//     when the payload contains a non-empty `arguments` field.
+// ---------------------------------------------------------------------------
+
+func TestToolTimeline_ToolStartRendersArguments(t *testing.T) {
+	bus, tl, buf := newTimelineForTest(t)
+
+	waitFlush(t, tl, bus, events.EventTypeToolStart, events.ToolStartEvent(
+		"shell_cmd", "tc-1",
+		`"rm -rf node_modules && npm install"`, // arguments (JSON-encoded string)
+		"shell_cmd", "", false, "", 0,
+	))
+
+	out := buf.String()
+
+	// Truncated arguments should appear between the display name and "Started".
+	if !strings.Contains(out, "rm -rf node_modules") {
+		t.Fatalf("expected truncated arguments in output, got: %q", out)
+	}
+	if !strings.Contains(out, "Started") {
+		t.Fatalf("expected 'Started' suffix in output, got: %q", out)
+	}
+	// The arguments should sit AFTER the display name but BEFORE "Started"
+	// so the timeline reads "shell_cmd <args> · Started" not reversed.
+	argsIdx := strings.Index(out, "rm -rf node_modules")
+	startedIdx := strings.Index(out, "Started")
+	if argsIdx < 0 || startedIdx < 0 || argsIdx > startedIdx {
+		t.Fatalf("expected args before 'Started', got positions args=%d started=%d in: %q",
+			argsIdx, startedIdx, out)
+	}
+}
+
+func TestToolTimeline_ToolStartSkipsEmptyArguments(t *testing.T) {
+	bus, tl, buf := newTimelineForTest(t)
+
+	// Empty arguments → no inline-args section, just "displayName · Started".
+	waitFlush(t, tl, bus, events.EventTypeToolStart, events.ToolStartEvent(
+		"read_file", "tc-1", "", "read_file", "", false, "", 0,
+	))
+
+	out := buf.String()
+	if !strings.Contains(out, "read_file") {
+		t.Fatalf("expected display_name in output, got: %q", out)
+	}
+	if !strings.Contains(out, "Started") {
+		t.Fatalf("expected 'Started' in output, got: %q", out)
+	}
+	// No double-space pattern: "read_file · Started" not "read_file  · Started".
+	if strings.Contains(out, "read_file  ·") {
+		t.Fatalf("expected no extra gap when arguments empty, got: %q", out)
+	}
+}
+
+func TestToolTimeline_ToolStartTruncatesLongArguments(t *testing.T) {
+	bus, tl, buf := newTimelineForTest(t)
+
+	// Long single-line arguments → must be truncated to ≤60 cols with "…".
+	longArgs := `["` + strings.Repeat("a", 100) + `"]`
+
+	waitFlush(t, tl, bus, events.EventTypeToolStart, events.ToolStartEvent(
+		"shell_cmd", "tc-1", longArgs, "shell_cmd", "", false, "", 0,
+	))
+
+	out := buf.String()
+	if !strings.Contains(out, "…") {
+		t.Fatalf("expected '…' for truncated arguments, got: %q", out)
+	}
+	// The arguments section should not contain the full 100+ char payload.
+	if strings.Contains(out, strings.Repeat("a", 100)) {
+		t.Fatalf("arguments not truncated; full payload leaked: %q", out)
+	}
+}
+
+func TestToolTimeline_ToolStartCollapsesMultilineArguments(t *testing.T) {
+	bus, tl, buf := newTimelineForTest(t)
+
+	// Multi-line arguments (write_file body, etc.) — newlines collapse to
+	// single spaces so the timeline entry stays on one line.
+	multiLine := "line1\nline2\nline3 with\ttabs"
+
+	waitFlush(t, tl, bus, events.EventTypeToolStart, events.ToolStartEvent(
+		"write_file", "tc-1", multiLine, "write_file", "", false, "", 0,
+	))
+
+	out := buf.String()
+	// Newlines collapsed to single spaces — but tabs should also collapse
+	// (tab characters would break the timeline alignment).
+	if strings.Contains(out, "\nline1") || strings.Contains(out, "line1\nline2") {
+		t.Fatalf("multiline arguments not collapsed; got: %q", out)
+	}
+	// Tabs must be gone.
+	if strings.Contains(out, "\t") {
+		t.Fatalf("tabs in arguments not collapsed; got: %q", out)
+	}
+	// Content should still be present (just on one line).
+	if !strings.Contains(out, "line1") || !strings.Contains(out, "line2") || !strings.Contains(out, "line3") {
+		t.Fatalf("expected line1/line2/line3 in collapsed output, got: %q", out)
+	}
+}
+
+func TestCollapseArgsForDisplay(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "empty", in: "", want: ""},
+		{name: "only whitespace", in: "  \t\n ", want: ""},
+		{name: "simple", in: "rm -rf /tmp", want: "rm -rf /tmp"},
+		{name: "collapse internal newlines", in: "line1\nline2", want: "line1 line2"},
+		{name: "collapse tabs", in: "foo\tbar", want: "foo bar"},
+		{name: "collapse runs of whitespace", in: "foo   bar", want: "foo   bar"}, // single-space joined; multiple spaces preserved by non-replacement
+		{name: "trim surrounding", in: "  hello  ", want: "hello"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := collapseArgsForDisplay(tt.in)
+			if got != tt.want {
+				t.Errorf("mismatch:\n  got:  %q\n  want: %q", got, tt.want)
+			}
+		})
+	}
+}

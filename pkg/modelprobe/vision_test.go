@@ -63,6 +63,51 @@ func TestVision_TransportError(t *testing.T) {
 	}
 }
 
+// erroringWithMsgClient returns a fixed error message on the first request.
+type erroringWithMsgClient struct {
+	api.ClientInterface
+	msg string
+}
+
+func (c *erroringWithMsgClient) SendChatRequest(_ context.Context, _ []api.Message, _ []api.Tool, _ string, _ bool) (*api.ChatResponse, error) {
+	return nil, errors.New(c.msg)
+}
+
+func TestVision_UnsupportedImageInputIsDefinitiveFail(t *testing.T) {
+	cases := []struct {
+		name string
+		msg  string
+	}{
+		{"deepinfra style", "HTTP 405: Model MiniMaxAI/MiniMax-M2.7 does not accept image input"},
+		{"openrouter style", "HTTP 404: No endpoints found that support image input"},
+		{"tool unsupported but vision implied", "HTTP 404: No endpoints found that support tool use. Try disabling \"describe_image\"."},
+		{"generic 400", "HTTP 400: vision modality not supported for this model"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := &erroringWithMsgClient{msg: tc.msg}
+			o := runVision(context.Background(), c)
+			if o.stats.err != nil {
+				t.Fatalf("4xx image-unsupported should NOT be a transport error, got: %v", o.stats.err)
+			}
+			if o.passed {
+				t.Error("should be a definitive vision=false, not pass")
+			}
+			if !strings.Contains(o.reason, "rejected image input") {
+				t.Errorf("reason should mention rejected image input, got %q", o.reason)
+			}
+		})
+	}
+}
+
+func TestVision_5xxIsStillTransportError(t *testing.T) {
+	c := &erroringWithMsgClient{msg: "HTTP 500: internal server error"}
+	o := runVision(context.Background(), c)
+	if o.stats.err == nil {
+		t.Fatal("5xx without image keywords should remain a transport error")
+	}
+}
+
 func TestVisionImage_GeneratesValidPNG(t *testing.T) {
 	img, err := visionImage()
 	if err != nil {

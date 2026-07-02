@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 )
 
 // ---------------------------------------------------------------------------
@@ -255,8 +256,10 @@ func TestVisionCacheKey_MtimeChanges(t *testing.T) {
 
 	key1 := visionCacheKey(tmp, "general", "describe this")
 
-	// Modify the file to change its mtime
-	if err := os.WriteFile(tmp, []byte("fake image v2"), 0644); err != nil {
+	// Bump mtime by an explicit delta so the test is deterministic on
+	// filesystems where two back-to-back WriteFile calls can produce
+	// identical nanosecond mtimes (tmpfs, fast SSDs).
+	if err := os.Chtimes(tmp, time.Now().Add(time.Hour), time.Now().Add(time.Hour)); err != nil {
 		t.Fatal(err)
 	}
 

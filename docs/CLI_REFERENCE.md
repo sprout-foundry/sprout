@@ -440,12 +440,6 @@ Thumbs.db
 | `view_history` | View change history |
 | `rollback_changes` | Revert changes |
 
-### Validation & Review
-
-| Tool | Description |
-|------|-------------|
-| `self_review` | Review agent's work against canonical specification |
-
 ### Todo Management
 
 | Tool | Description |

@@ -916,7 +916,7 @@ func TestMigration_Idempotent_FullDefaults(t *testing.T) {
 // and leaving custom personas untouched.
 func TestMigration_V2_to_V3_SyncsDefaultPersonaTools(t *testing.T) {
 	// Simulate a stale v2 config where the orchestrator has only 6 tools
-	// (missing browse_url, view_history, rollback_changes, self_review, etc.)
+	// (missing browse_url, view_history, rollback_changes, etc.)
 	// but has a user-added custom tool that should be preserved.
 	staleOrchestratorTools := []interface{}{
 		"shell_command", "read_file", "write_file", "edit_file", "TodoWrite", "TodoRead",
@@ -969,7 +969,6 @@ func TestMigration_V2_to_V3_SyncsDefaultPersonaTools(t *testing.T) {
 	assert.True(t, toolSet["browse_url"], "orchestrator should have browse_url from defaults")
 	assert.True(t, toolSet["view_history"], "orchestrator should have view_history from defaults")
 	assert.True(t, toolSet["rollback_changes"], "orchestrator should have rollback_changes from defaults")
-	assert.True(t, toolSet["self_review"], "orchestrator should have self_review from defaults")
 	assert.True(t, toolSet["shell_command"], "orchestrator should have shell_command from defaults")
 
 	// User-added extras must be preserved

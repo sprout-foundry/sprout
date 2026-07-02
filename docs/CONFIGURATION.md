@@ -77,7 +77,6 @@ The configuration uses a flat structure focused on provider and model management
   "custom_providers": {},
   "resource_directory": "",
   "reasoning_effort": "",
-  "self_review_gate_mode": "off",
   "subagent_provider": "",
   "subagent_model": "",
   "pdf_ocr_enabled": true,

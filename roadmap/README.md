@@ -17,7 +17,6 @@ architectural area, its current state, and open work.
 | SP-018 | [Memory System](./SP-018-memory-system.md) | ✅ Implemented |
 | SP-019 | [Multi-Chat Sessions](./SP-019-multi-chat-sessions.md) | ✅ Implemented |
 | SP-020 | [Trace/Dataset Mode](./SP-020-trace-dataset-mode.md) | ✅ Implemented |
-| SP-021 | [Self-Review Tool](./SP-021-self-review-tool.md) | ✅ Implemented |
 | SP-022 | [Remote Provider Registry](./SP-022-remote-provider-registry.md) | ✅ Implemented |
 | SP-024 | [Context Management — File Read Optimization](./SP-024-context-management.md) | ✅ Implemented |
 | SP-055 | [CLI Pinned Input — Always-On Steering Panel](./SP-055-cli-pinned-input.md) | ✅ Shipped |

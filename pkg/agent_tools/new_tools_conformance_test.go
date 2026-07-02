@@ -750,62 +750,6 @@ func TestPatchStructuredFileHandlerConformance(t *testing.T) {
 	}
 }
 
-func TestSelfReviewHandlerConformance(t *testing.T) {
-	h := &selfReviewHandler{}
-
-	// Test Name
-	if h.Name() != "self_review" {
-		t.Errorf("Name() = %q, want %q", h.Name(), "self_review")
-	}
-
-	// Test Definition
-	d := h.Definition()
-	if d.Name != "self_review" {
-		t.Errorf("Definition().Name = %q, want %q", d.Name, "self_review")
-	}
-	if d.Description == "" {
-		t.Error("Definition().Description should not be empty")
-	}
-
-	hasParam := func(name string) bool {
-		for _, p := range d.Parameters {
-			if p.Name == name {
-				return true
-			}
-		}
-		return false
-	}
-	if !hasParam("revision_id") {
-		t.Error("Definition missing 'revision_id' parameter")
-	}
-
-	// Validate: nil returns error (actual implementation)
-	if err := h.Validate(nil); err == nil {
-		t.Error("Validate(nil) should return error")
-	}
-
-	// Validate: empty map returns error (actual implementation)
-	if err := h.Validate(map[string]any{}); err == nil {
-		t.Error("Validate(empty map) should return error")
-	}
-
-	// Validate: with revision_id passes
-	if err := h.Validate(map[string]any{"revision_id": "abc123"}); err != nil {
-		t.Errorf("Validate(revision_id) should return nil, got: %v", err)
-	}
-
-	// Execute: with valid args (no panic)
-	ctx := context.Background()
-	tmpDir := t.TempDir()
-	env := ToolEnv{WorkspaceRoot: tmpDir}
-	result, err := h.Execute(ctx, env, map[string]any{"revision_id": "abc123"})
-	if err != nil {
-		t.Logf("Execute returned error (expected in test env): %v", err)
-	}
-	if result.IsError {
-		t.Logf("Execute returned error result (expected - no revisions): %s", result.Output)
-	}
-}
 
 func TestBrowseURLHandlerConformance(t *testing.T) {
 	h := &browseURLHandler{}

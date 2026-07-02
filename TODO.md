@@ -384,6 +384,41 @@ two weeks, then decide what to keep.
 
 ---
 
+## CLI-A: Tool Timeline Arguments
+
+_Small UX polish (~30 min)._ The `ToolTimeline` subscriber at
+`pkg/console/tool_timeline.go` renders tool start lines as `→ read_file
+/foo/bar.go · Started` — but it ignores the `arguments` field that is
+already present in the `ToolStartEvent` payload
+(`pkg/events/events.go:425`, `PublishToolStart`). Showing the truncated
+arguments inline gives users a clear picture of what was just invoked
+without expanding the timeline into a verbose log.
+
+### Items
+
+- [ ] **CLI-A-1:** `ToolTimeline.handleToolStart` reads `data["arguments"]`
+  from the event payload, truncates to ~60 runes via the existing
+  `truncateToWidth` helper in `pkg/console/display_width.go`, and
+  appends it after the display name: `→ shell_cmd "rm -rf node_modules
+  && npm i" · Started`. Skip when arguments is empty or already short
+  enough that adding it would make the line wider than the terminal.
+- [ ] **CLI-A-2:** Add a test case to `pkg/console/tool_timeline_test.go`
+  covering: (a) long arguments get truncated with `…`, (b) empty
+  arguments leave the line unchanged, (c) JSON-stringified arguments
+  with embedded quotes survive the truncation (UTF-8 rune counting,
+  not byte counting).
+
+### Notes
+
+- The reviewer-audit suggested pairing args with diff stats
+  (`+12/-3`), but diff stats aren't in the event payload and adding
+  them is cross-cutting (event schema + publisher in
+  `pkg/agent/tool_executor_sequential.go`). Defer that to a follow-up
+  if/when a user actually asks for it.
+- Total: ~15 LOC plus 1 test file.
+
+---
+
 ## Things to consider after SP-091 → SP-095 ship
 
 - **WASM stub-tools** — running the WASM build against `pkg/agent_tools/`

@@ -115,6 +115,7 @@ export interface CustomProviderConfig {
   vision_model?: string;
   vision_fallback_provider?: string;
   vision_fallback_model?: string;
+  billing_type?: 'pay_per_token' | 'subscription' | 'free';
 }
 
 export interface CustomProvidersResponse {

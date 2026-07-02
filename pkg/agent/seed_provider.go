@@ -17,6 +17,7 @@ import (
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	providers "github.com/sprout-foundry/sprout/pkg/agent_providers"
 )
 
 // ---------------------------------------------------------------------------
@@ -159,13 +160,28 @@ func (sp *sproutProvider) accumulateResponseCost(resp *core.ChatResponse) {
 	if sp.agent == nil || sp.agent.state == nil || resp == nil {
 		return
 	}
-	cost := api.UsageCost(resp.Usage)
-	if cost == 0 && resp.Usage.TotalTokens > 0 {
-		cost = sp.estimateCostFromPricing(resp.Usage.PromptTokens, resp.Usage.CompletionTokens)
+	billingType := sp.resolveBillingType()
+	chargedCost := api.UsageCost(resp.Usage)
+	if chargedCost == 0 && billingType == BillingPayPerToken && resp.Usage.TotalTokens > 0 {
+		chargedCost = sp.estimateCostFromPricing(resp.Usage.PromptTokens, resp.Usage.CompletionTokens)
 	}
-	if cost > 0 {
-		sp.agent.state.AddCost(cost)
+	var tokenCost float64
+	if billingType != BillingPayPerToken {
+		tokenCost = sp.estimateCostFromPricing(resp.Usage.PromptTokens, resp.Usage.CompletionTokens)
 	}
+	entry := CostEntry{
+		BillingType:      billingType,
+		Provider:         sp.agent.GetProvider(),
+		Model:            sp.agent.GetModel(),
+		ChargedCost:      chargedCost,
+		TokenCost:        tokenCost,
+		PromptTokens:     resp.Usage.PromptTokens,
+		CompletionTokens: resp.Usage.CompletionTokens,
+		CachedTokens:     resp.Usage.CachedTokens,
+	}
+	sp.agent.state.AddCostEntry(entry)
+
+	// Keep existing cached token tracking
 	if n := resp.Usage.CachedTokens; n > 0 {
 		sp.agent.state.SetCachedTokens(sp.agent.state.GetCachedTokens() + n)
 	}
@@ -174,6 +190,26 @@ func (sp *sproutProvider) accumulateResponseCost(resp *core.ChatResponse) {
 			sp.agent.state.SetCacheWriteTokens(sp.agent.state.GetCacheWriteTokens() + n)
 		}
 	}
+}
+
+// resolveBillingType returns the billing model for the current provider.
+// It checks the embedded provider config for an explicit billing_type, then
+// falls back to heuristics (zai-coding → subscription, else pay_per_token).
+func (sp *sproutProvider) resolveBillingType() string {
+	if sp.agent == nil {
+		return BillingPayPerToken
+	}
+	provider := sp.agent.GetProvider()
+	// Check embedded provider configs for explicit billing_type
+	cfg, err := providers.GlobalFactory().GetProviderConfig(provider)
+	if err == nil && cfg != nil {
+		return cfg.BillingTypeResolved()
+	}
+	// Fallback heuristics for custom/dynamic providers
+	if provider == "zai-coding" {
+		return BillingSubscription
+	}
+	return BillingPayPerToken
 }
 
 // estimateCostFromPricing computes a cost estimate from token counts and the
@@ -186,7 +222,6 @@ func (sp *sproutProvider) estimateCostFromPricing(promptTokens, completionTokens
 		return 0
 	}
 	model := sp.agent.client.GetModel()
-	provider := string(sp.agent.getClientType())
 	if model == "" {
 		return 0
 	}
@@ -203,7 +238,6 @@ func (sp *sproutProvider) estimateCostFromPricing(promptTokens, completionTokens
 		}
 		return float64(promptTokens)/1e6*m.InputCost + float64(completionTokens)/1e6*m.OutputCost
 	}
-	_ = provider
 	return 0
 }
 

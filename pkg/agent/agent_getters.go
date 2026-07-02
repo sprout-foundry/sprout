@@ -193,6 +193,20 @@ func (a *Agent) GetTotalCost() float64 {
 	return a.state.GetTotalCost()
 }
 
+func (a *Agent) GetChargedCostTotal() float64 {
+	if a.state == nil {
+		return 0
+	}
+	return a.state.GetChargedCostTotal()
+}
+
+func (a *Agent) GetTokenCostTotal() float64 {
+	if a.state == nil {
+		return 0
+	}
+	return a.state.GetTokenCostTotal()
+}
+
 // GetTaskActions returns completed task actions
 func (a *Agent) GetTaskActions() []TaskAction {
 	mu := a.state.GetTaskActionsMutex()

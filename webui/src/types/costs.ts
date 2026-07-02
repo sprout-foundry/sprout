@@ -1,3 +1,8 @@
+export interface BillingTypeBreakdown {
+  cost: number;
+  tokens: number;
+}
+
 /** Extended cost summary type with provider-month breakdown fields.
  *  Used by ProviderTable and other cost components that need
  *  month-over-month delta calculations. */
@@ -12,6 +17,9 @@ export interface CostSummary {
   this_month?: number;
   last_month?: number;
   top_sessions?: SessionCostRow[];
+  by_billing_type?: Record<string, BillingTypeBreakdown>;
+  charged_cost?: number;
+  token_value?: number;
 }
 
 /** Single row of session-level cost data returned in CostSummary.top_sessions. */

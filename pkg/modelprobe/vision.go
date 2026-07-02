@@ -14,10 +14,10 @@ import (
 
 // visionImage generates a small solid-red PNG and returns it as base64-encoded ImageData.
 func visionImage() (api.ImageData, error) {
-	img := image.NewRGBA(image.Rect(0, 0, 4, 4))
+	img := image.NewRGBA(image.Rect(0, 0, 32, 32))
 	red := color.RGBA{255, 0, 0, 255}
-	for y := 0; y < 4; y++ {
-		for x := 0; x < 4; x++ {
+	for y := 0; y < 32; y++ {
+		for x := 0; x < 32; x++ {
 			img.Set(x, y, red)
 		}
 	}

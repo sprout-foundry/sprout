@@ -120,6 +120,18 @@ func TestGetVisionMetrics_StructSnapshot(t *testing.T) {
 		ResizeEvents           int64
 		CacheHits              int64
 		CacheMisses            int64
+		RetryCount             int64
+		OCRFallbackTotal       int64
+		OCRFallbackSuccess     int64
+		LatencyRequestMS       int64
+		LatencyRetrySleepMS    int64
+		LatencyFallbackMS      int64
+		LatencyParseMS         int64
+		FailuresByReason       map[string]int64
+		BatchAttempts          int64
+		BatchHits              int64
+		BatchMisses            int64
+		BatchPartialFailures   int64
 	}
 	_ = expected(snap) // compile-time shape check
 }

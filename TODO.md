@@ -677,7 +677,7 @@ phases).
 - [ ] **SP-075-4e:** `pkg/webcontent/client.go` 1060 lines — extract request building, response handling, session lifecycle.
 - [ ] **SP-075-4f:** `pkg/webcontent/client_context.go` 1011 lines — extract context propagation, header injection, timeout handling.
 - [ ] **SP-075-4g:** `pkg/agent_tools/tool_handlers_subagent_spawn.go` 999 lines — extract spawn lifecycle, worktree setup, cleanup hooks.
-- [ ] **SP-075-4h:** `webui/src/components/Terminal.tsx` 780 lines — extract xterm setup, event handlers, keybindings (continue Phase 3 work).
+- [x] **SP-075-4h:** `webui/src/components/Terminal.tsx` 780 lines — extract xterm setup, event handlers, keybindings (continue Phase 3 work). _(extracted three reusable hooks into `webui/src/hooks/usePersistedPref.ts`: `usePersistedNumber` (terminalHeight + fontSize), `usePersistedBoolean` (copyOnSelect), `useOutsideClickDismiss` (two menu-dismiss effects). Terminal.tsx 780→718 lines. TypeScript clean, 13 new hook tests passing, existing tests still green. Commit `701161b`.)_
 - [ ] **SP-075-4i:** `pkg/agent/agent_modes.go` 732 lines — extract mode registry, mode config validation, command dispatch.
 - [ ] **SP-075-4j:** `pkg/console/input_core.go` 715 lines — extract input parsing, history management, completion.
 - [ ] **SP-075-4k:** `pkg/agent_providers/generic_provider.go` 669 lines — finish the extraction started in Phase 3.

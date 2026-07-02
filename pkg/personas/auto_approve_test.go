@@ -24,7 +24,7 @@ var expectedDefaultAutoApproveRules = AutoApproveRules{
 	HighRiskNever: []string{
 		"force_flag", "rm_recursive", "git_reset_hard",
 		"git_clean", "docker_prune", "git_push_force",
-		"git_checkout", "git_switch", "git_restore", "git_branch_delete",
+		"git_branch_delete",
 	},
 }
 
@@ -95,7 +95,7 @@ func TestExecutiveAssistant_AutoApproveRules_RiskCategoryCounts(t *testing.T) {
 	}{
 		{"low_risk", len(ea.AutoApproveRules.LowRiskOps), 6},
 		{"medium_risk", len(ea.AutoApproveRules.MediumRiskOps), 11},
-		{"high_risk_never", len(ea.AutoApproveRules.HighRiskNever), 10},
+		{"high_risk_never", len(ea.AutoApproveRules.HighRiskNever), 7},
 	}
 
 	for _, tc := range tests {

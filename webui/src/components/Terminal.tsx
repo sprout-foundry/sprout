@@ -17,12 +17,17 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './Terminal.css';
 import { TerminalTabBar, type AttachableSession } from '@sprout/ui';
 import { useTerminalPanes } from '../hooks/useTerminalPanes';
+import {
+  usePersistedBoolean,
+  usePersistedNumber,
+  useOutsideClickDismiss,
+} from '../hooks/usePersistedPref';
 import { ApiService, type ShellInfo } from '../services/api';
 import { clientFetch } from '../services/clientSession';
 import { notificationBus } from '../services/notificationBus';
 import { debugLog } from '../utils/log';
 import BackgroundTasks from './BackgroundTasks';
-import { FONT_SIZE_DEFAULT, COPY_ON_SELECT_DEFAULT, COPY_ON_SELECT_STORAGE_KEY } from './terminalConstants';
+import { FONT_SIZE_DEFAULT, COPY_ON_SELECT_DEFAULT } from './terminalConstants';
 import TerminalPane from './TerminalPane';
 
 const TERMINAL_HEIGHT_MIN = 120;
@@ -34,14 +39,34 @@ const FONT_SIZE_MIN = 8;
 const FONT_SIZE_MAX = 32;
 const FONT_SIZE_STORAGE_KEY = 'sprout-terminal-font-size';
 
+const COPY_ON_SELECT_STORAGE_KEY = 'sprout-terminal-copy-on-select';
+
+const parseTerminalHeight = (raw: string | null): number => {
+  if (!raw) return TERMINAL_HEIGHT_DEFAULT;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : TERMINAL_HEIGHT_DEFAULT;
+};
+
 const clampTerminalHeight = (value: number): number => {
   if (!Number.isFinite(value)) return TERMINAL_HEIGHT_DEFAULT;
+  if (typeof window === 'undefined') return TERMINAL_HEIGHT_DEFAULT;
   return Math.max(TERMINAL_HEIGHT_MIN, Math.min(window.innerHeight - TERMINAL_HEIGHT_MAX_FACTOR, value));
+};
+
+const parseFontSize = (raw: string | null): number => {
+  if (!raw) return FONT_SIZE_DEFAULT;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : FONT_SIZE_DEFAULT;
 };
 
 const clampFontSize = (value: number): number => {
   if (!Number.isFinite(value)) return FONT_SIZE_DEFAULT;
   return Math.max(FONT_SIZE_MIN, Math.min(FONT_SIZE_MAX, value));
+};
+
+const parseCopyOnSelect = (raw: string | null, fallback: boolean): boolean => {
+  if (raw === null) return fallback;
+  return raw === 'true';
 };
 
 /** @deprecated Re-exported for backward compatibility with existing tests. */
@@ -65,16 +90,12 @@ function Terminal({
 
   const [isExpanded, setIsExpanded] = useState(externalIsExpanded);
   const [hasActivated, setHasActivated] = useState(externalIsExpanded);
-  const [terminalHeight, setTerminalHeight] = useState<number>(() => {
-    if (typeof window === 'undefined') return TERMINAL_HEIGHT_DEFAULT;
-    try {
-      const stored = localStorage.getItem(TERMINAL_HEIGHT_STORAGE_KEY);
-      return stored ? clampTerminalHeight(Number(stored)) : TERMINAL_HEIGHT_DEFAULT;
-    } catch (err) {
-      debugLog('[Terminal] failed to read terminal height from localStorage:', err);
-      return TERMINAL_HEIGHT_DEFAULT;
-    }
-  });
+  const [terminalHeight, setTerminalHeight] = usePersistedNumber(
+    TERMINAL_HEIGHT_STORAGE_KEY,
+    TERMINAL_HEIGHT_DEFAULT,
+    parseTerminalHeight,
+    clampTerminalHeight,
+  );
   const [isResizingVertical, setIsResizingVertical] = useState(false);
   const [collapsedHeight, setCollapsedHeight] = useState(getCollapsedHeight);
 
@@ -92,29 +113,19 @@ function Terminal({
   const isFetchingSessionsRef = useRef(false);
 
   // Font size
-  const [fontSize, setFontSize] = useState<number>(() => {
-    if (typeof window === 'undefined') return FONT_SIZE_DEFAULT;
-    try {
-      const stored = localStorage.getItem(FONT_SIZE_STORAGE_KEY);
-      const parsed = stored ? Number(stored) : FONT_SIZE_DEFAULT;
-      return clampFontSize(parsed);
-    } catch (err) {
-      debugLog('[Terminal] failed to read font size from localStorage:', err);
-      return FONT_SIZE_DEFAULT;
-    }
-  });
+  const [fontSize, setFontSize] = usePersistedNumber(
+    FONT_SIZE_STORAGE_KEY,
+    FONT_SIZE_DEFAULT,
+    parseFontSize,
+    clampFontSize,
+  );
 
   // Copy-on-select
-  const [copyOnSelect, setCopyOnSelect] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return COPY_ON_SELECT_DEFAULT;
-    try {
-      const stored = localStorage.getItem(COPY_ON_SELECT_STORAGE_KEY);
-      return stored !== null ? stored === 'true' : COPY_ON_SELECT_DEFAULT;
-    } catch (err) {
-      debugLog('[Terminal] failed to read copy-on-select from localStorage:', err);
-      return COPY_ON_SELECT_DEFAULT;
-    }
-  });
+  const [copyOnSelect, setCopyOnSelect] = usePersistedBoolean(
+    COPY_ON_SELECT_STORAGE_KEY,
+    COPY_ON_SELECT_DEFAULT,
+    parseCopyOnSelect,
+  );
 
   /* ---- Attachable session fetching (owns state the hook depends on) ---- */
   const fetchAttachableSessions = useCallback(async () => {
@@ -268,45 +279,8 @@ function Terminal({
   }, [fetchAttachableSessions]);
 
   // Close menus on outside click / Escape
-  useEffect(() => {
-    if (!showShellMenu) return;
-    const handleClick = (e: MouseEvent) => {
-      if (shellPickerRef.current && !shellPickerRef.current.contains(e.target as Node)) {
-        setShowShellMenu(false);
-      }
-    };
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setShowShellMenu(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClick);
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('mousedown', handleClick);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [showShellMenu]);
-
-  useEffect(() => {
-    if (!showOverflowMenu) return;
-    const handleClick = (e: MouseEvent) => {
-      if (overflowMenuRef.current && !overflowMenuRef.current.contains(e.target as Node)) {
-        setShowOverflowMenu(false);
-      }
-    };
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setShowOverflowMenu(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClick);
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('mousedown', handleClick);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [showOverflowMenu]);
+  useOutsideClickDismiss(showShellMenu, shellPickerRef, () => setShowShellMenu(false));
+  useOutsideClickDismiss(showOverflowMenu, overflowMenuRef, () => setShowOverflowMenu(false));
 
   /* ---- Actions ---- */
   const toggleExpanded = useCallback(() => {
@@ -321,49 +295,20 @@ function Terminal({
   }, [onToggleExpand]);
 
   const zoomIn = useCallback(() => {
-    setFontSize((prev) => {
-      const next = Math.min(FONT_SIZE_MAX, prev + 1);
-      try {
-        localStorage.setItem(FONT_SIZE_STORAGE_KEY, String(next));
-      } catch (err) {
-        debugLog('[Terminal] failed to persist font size:', err);
-      }
-      return next;
-    });
-  }, []);
+    setFontSize((prev) => Math.min(FONT_SIZE_MAX, prev + 1));
+  }, [setFontSize]);
 
   const zoomOut = useCallback(() => {
-    setFontSize((prev) => {
-      const next = Math.max(FONT_SIZE_MIN, prev - 1);
-      try {
-        localStorage.setItem(FONT_SIZE_STORAGE_KEY, String(next));
-      } catch (err) {
-        debugLog('[Terminal] failed to persist font size:', err);
-      }
-      return next;
-    });
-  }, []);
+    setFontSize((prev) => Math.max(FONT_SIZE_MIN, prev - 1));
+  }, [setFontSize]);
 
   const resetFontSize = useCallback(() => {
     setFontSize(FONT_SIZE_DEFAULT);
-    try {
-      localStorage.setItem(FONT_SIZE_STORAGE_KEY, String(FONT_SIZE_DEFAULT));
-    } catch (err) {
-      debugLog('[Terminal] failed to persist font size:', err);
-    }
-  }, []);
+  }, [setFontSize]);
 
   const toggleCopyOnSelect = useCallback(() => {
-    setCopyOnSelect((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem(COPY_ON_SELECT_STORAGE_KEY, String(next));
-      } catch (err) {
-        debugLog('[Terminal] failed to persist copy-on-select:', err);
-      }
-      return next;
-    });
-  }, []);
+    setCopyOnSelect((prev) => !prev);
+  }, [setCopyOnSelect]);
 
   /* ---- Terminal height resize ---- */
   const handleVerticalResizeStart = useCallback(
@@ -383,14 +328,7 @@ function Terminal({
         document.removeEventListener('mouseup', onUp);
         document.body.style.userSelect = '';
         document.body.style.cursor = '';
-        setTerminalHeight((prev) => {
-          try {
-            localStorage.setItem(TERMINAL_HEIGHT_STORAGE_KEY, String(Math.round(prev)));
-          } catch (err) {
-            debugLog('[Terminal] failed to persist terminal height:', err);
-          }
-          return prev;
-        });
+        setTerminalHeight((prev) => Math.round(prev));
       };
 
       document.addEventListener('mousemove', onMove);

@@ -44,6 +44,15 @@ func (m *mockStateManager) GetTaskActionsMutex() *sync.RWMutex            { retu
 func (m *mockStateManager) GetTotalCost() float64                         { return 0 }
 func (m *mockStateManager) SetTotalCost(float64)                          {}
 func (m *mockStateManager) AddCost(float64)                               {}
+func (m *mockStateManager) AddCostEntry(CostEntry)                        {}
+func (m *mockStateManager) GetChargedCostTotal() float64                  { return 0 }
+func (m *mockStateManager) GetTokenCostTotal() float64                    { return 0 }
+func (m *mockStateManager) GetSubscriptionTokens() int                    { return 0 }
+func (m *mockStateManager) GetFreeTokens() int                            { return 0 }
+func (m *mockStateManager) SetChargedCostTotal(float64)                   {}
+func (m *mockStateManager) SetTokenCostTotal(float64)                     {}
+func (m *mockStateManager) SetSubscriptionTokens(int)                     {}
+func (m *mockStateManager) SetFreeTokens(int)                             {}
 func (m *mockStateManager) GetTotalTokens() int                           { return 0 }
 func (m *mockStateManager) SetTotalTokens(int)                            {}
 func (m *mockStateManager) GetPromptTokens() int                          { return 0 }

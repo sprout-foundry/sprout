@@ -13,6 +13,9 @@ export interface CostSummary {
   this_month?: number;
   last_month?: number;
   top_sessions?: SessionCostRow[];
+  by_billing_type?: Record<string, { cost: number; tokens: number }>;
+  charged_cost?: number;
+  token_value?: number;
 }
 
 interface CostSummaryCardsProps {

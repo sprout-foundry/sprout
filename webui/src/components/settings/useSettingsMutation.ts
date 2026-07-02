@@ -71,6 +71,8 @@ interface MutationHookParams {
   setProviderSupportsVision: (v: boolean) => void;
   providerVisionModel: string;
   setProviderVisionModel: (v: string) => void;
+  providerBillingType: 'pay_per_token' | 'subscription' | 'free';
+  setProviderBillingType: (v: 'pay_per_token' | 'subscription' | 'free') => void;
   providerModelContextSizes: string;
   setProviderModelContextSizes: (v: string) => void;
   // Shared settings ref (kept up-to-date by useSettingsState)
@@ -134,6 +136,8 @@ export function useSettingsMutation(params: MutationHookParams) {
     setProviderSupportsVision,
     providerVisionModel,
     setProviderVisionModel,
+    providerBillingType,
+    setProviderBillingType,
     providerModelContextSizes,
     setProviderModelContextSizes,
     creatingWorkspaceConfig,
@@ -206,6 +210,8 @@ export function useSettingsMutation(params: MutationHookParams) {
     setProviderSupportsVision,
     providerVisionModel,
     setProviderVisionModel,
+    providerBillingType,
+    setProviderBillingType,
     providerModelContextSizes,
     setProviderModelContextSizes,
   });

@@ -144,6 +144,21 @@ export default defineConfig(({ mode }) => {
         'src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}',
         '../test/webui/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}',
       ],
+      // SP-104: Cap the worker pool. The default forks all CPU cores;
+      // each jsdom worker is ~1–4 GB RSS. Webui uses Vitest 2.x which
+      // uses poolOptions.forks.maxForks (Vitest 4 uses top-level
+      // maxWorkers). Both minForks and maxForks must be set — tinypool
+      // errors if maxForks is set without a matching minForks.
+      pool: 'forks',
+      poolOptions: {
+        forks: {
+          minForks: 1,
+          maxForks: process.env.VITEST_MAX_FORKS
+            ? parseInt(process.env.VITEST_MAX_FORKS, 10)
+            : 4,
+          singleFork: process.env.VITEST_MAX_FORKS === '1',
+        },
+      },
       coverage: {
         provider: 'v8',
         reporter: ['text', 'json', 'html'],

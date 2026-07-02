@@ -691,33 +691,33 @@ for improvement but never scoped into concrete items. The runner
 should pick them up here. Analyze the actual code before
 implementing; do not blindly follow these as TODOs.
 
-- [ ] **VISION-1:** `vision_types.go` is a god-type holding all
+- [x] **VISION-1:** `vision_types.go` is a god-type holding all
       multimodal-related structs. Split per-domain into
       `vision_pdf_types.go`, `vision_image_types.go`,
-      `vision_analyze_types.go`.
-- [ ] **VISION-2:** Extract a vision prompt builder from
+      `vision_analyze_types.go`. _(vision_types.go 201 → 12 lines; types split into 3 per-domain files; commit `be5536d0`)_
+- [x] **VISION-2:** Extract a vision prompt builder from
       `vision_analyze.go` (inline template strings). Centralize in
       `vision_prompt.go` so prompt iteration doesn't require touching
-      the call sites.
-- [ ] **VISION-3:** Add a vision-specific concurrency cap (currently
+      the call sites. _(vision_prompts.go already has GeneratePromptForMode + CreateVisionPrompt; no further extraction needed; verified by audit in commit `e2cfe2c1`)_
+- [x] **VISION-3:** Add a vision-specific concurrency cap (currently
       bound to the generic `request_parallelism` setting). Vision
       requests are heavyweight; separate cap configurable in
-      `config_domain.go::VisionConfig`.
-- [ ] **VISION-4:** Add a multimodal batching layer for
+      `config_domain.go::VisionConfig`. _(new VisionConfig in config_domain.go with parallel_workers + max_concurrent_global + batch_size; resolved via Config.Vision; commit `bf62d821`)_
+- [x] **VISION-4:** Add a multimodal batching layer for
       `ProcessImagesInText` — when a user message contains N images
       and N > 1, batch into one provider call instead of N serial
-      calls. Cache by content hash.
-- [ ] **VISION-5:** Add structured vision metrics (success/failure by
+      calls. Cache by content hash. _(new vision_batch.go with AnalyzeImagesBatched; content-hash cache; partial-failure fallback to single-image; commit `bc788380`)_
+- [x] **VISION-5:** Add structured vision metrics (success/failure by
       reason, retry count, OCR fallback rate, latency by phase) to
-      `pkg/agent/semantic_recall_instrumentation.go` pattern.
-- [ ] **VISION-6:** Add `vision_retry_test.go` regression cases for
+      `pkg/agent/semantic_recall_instrumentation.go` pattern. _(new VisionMetrics struct with atomic counters for all phases; hookable sink in vision_metrics_sink.go; commit `e2cfe2c1`)_
+- [x] **VISION-6:** Add `vision_retry_test.go` regression cases for
       every documented SP-103-A failure mode (typed errors, retry
-      with backoff, concurrent cap).
-- [ ] **VISION-7:** Audit the recently-added
+      with backoff, concurrent cap). _(vision_retry_test.go covers RetryableHTTPError, IsRetryable, ParseRetryAfter, RetryAfter honoring 429/date/cap; new vision_batch_test.go covers multimodal batching failure modes; commits `e2cfe2c1` and `bc788380`)_
+- [x] **VISION-7:** Audit the recently-added
       `vision_retry.go` wrapper — verify it doesn't double-wrap, that
       `processOCRImages` sequential path is preserved, and that
-      cancellation context propagates through to all provider calls.
-- [ ] **VISION-8:** Decide and document: does `vision_types.go` split
-      break type imports? Map the import graph before extracting.
+      cancellation context propagates through to all provider calls. _(audit complete: no double-wrap, sequential path preserved, ctx.Done() checked before each retry sleep and threaded into worker goroutines; commit `e2cfe2c1`)_
+- [x] **VISION-8:** Decide and document: does `vision_types.go` split
+      break type imports? Map the import graph before extracting. _(decided YES safe to split — types only depend on other vision_types and a small set of pkg/agent_api + pkg/configuration imports; verified during VISION-1 commit; commit `be5536d0`)_
 
 

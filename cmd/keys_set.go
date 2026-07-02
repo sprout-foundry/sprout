@@ -104,7 +104,7 @@ func runKeysSet(args []string) error {
 	}
 
 	// 6. Success.
-	fmt.Printf("✓ API key for %s validated and saved (%d models available).\n", displayName, modelCount)
+	console.GlyphSuccess.Fprintf(os.Stdout, "API key for %s validated and saved (%d models available).", displayName, modelCount)
 	fmt.Println("Run 'sprout agent' to start using it, or 'sprout keys encrypt' to encrypt it at rest.")
 	return nil
 }

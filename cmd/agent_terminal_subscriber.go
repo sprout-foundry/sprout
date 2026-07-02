@@ -340,20 +340,40 @@ func startTerminalToolSubscriber(ctx context.Context, chatAgent *agent.Agent, ev
 						break
 					}
 					indicator.Stop()
-					console.LockOutput()
+					// Route through console.PrintExternal so the message
+					// plays nicely with whichever reader owns the input:
+					//   - Between turns (InputReader active): clears the
+					//     input line, prints the message, redraws the
+					//     prompt + buffer below it.
+					//   - During turns (SteerInputReader active): writes
+					//     into the scroll region above the pinned steer
+					//     panel without disturbing it.
+					//   - Neither active: falls through to fmt.Print.
+					// PrintExternal takes outputMu internally; do NOT
+					// wrap in console.LockOutput — the old code did that
+					// around a raw fmt.Fprintf to os.Stderr, which wrote
+					// bytes under the raw-mode cursor during a turn and
+					// scrambled the user's in-progress input ("the input
+					// broke" — the security caution landed where the
+					// typed buffer was being rendered).
+					//
+					// PrintExternal auto-appends a trailing newline when
+					// the message lacks one, so the format strings below
+					// omit \n.
+					var line string
 					switch category {
 					case "security_caution":
-						fmt.Fprintf(os.Stderr, "%s[⚠️  SECURITY CAUTION] %s\n", console.GlyphWarning.Prefix(), message)
+						line = fmt.Sprintf("%s[⚠️  SECURITY CAUTION] %s", console.GlyphWarning.Prefix(), message)
 					case "security_loop":
-						fmt.Fprintf(os.Stderr, "%s[🛑 SECURITY LOOP] %s\n", console.GlyphError.Prefix(), message)
+						line = fmt.Sprintf("%s[🛑 SECURITY LOOP] %s", console.GlyphError.Prefix(), message)
 					case "tool_error":
-						fmt.Fprintf(os.Stderr, "%s%s\n", console.GlyphError.Prefix(), message)
+						line = fmt.Sprintf("%s%s", console.GlyphError.Prefix(), message)
 					case "warning":
-						fmt.Fprintf(os.Stderr, "%s%s\n", console.GlyphWarning.Prefix(), message)
+						line = fmt.Sprintf("%s%s", console.GlyphWarning.Prefix(), message)
 					default:
-						fmt.Fprintf(os.Stderr, "%s%s\n", console.GlyphInfo.Prefix(), message)
+						line = fmt.Sprintf("%s%s", console.GlyphInfo.Prefix(), message)
 					}
-					console.UnlockOutput()
+					console.PrintExternal(line)
 					run = nil
 					footer.Refresh()
 				}

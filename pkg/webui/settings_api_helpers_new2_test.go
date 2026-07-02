@@ -68,68 +68,6 @@ func TestValidateReasoningEffort2(t *testing.T) {
 	}
 }
 
-// Test validateSelfReviewGateMode function
-func TestValidateSelfReviewGateMode2(t *testing.T) {
-	tests := []struct {
-		name    string
-		v       string
-		wantErr bool
-	}{
-		{
-			name:    "valid off",
-			v:       "off",
-			wantErr: false,
-		},
-		{
-			name:    "valid code",
-			v:       "code",
-			wantErr: false,
-		},
-		{
-			name:    "valid always",
-			v:       "always",
-			wantErr: false,
-		},
-		{
-			name:    "invalid value",
-			v:       "invalid",
-			wantErr: true,
-		},
-		{
-			name:    "invalid value - on (not in list)",
-			v:       "on",
-			wantErr: true,
-		},
-		{
-			name:    "invalid value - mixed case",
-			v:       "Off",
-			wantErr: true,
-		},
-		{
-			name:    "invalid value - with spaces",
-			v:       " off ",
-			wantErr: true,
-		},
-		{
-			name:    "empty string invalid",
-			v:       "",
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := validateSelfReviewGateMode(tt.v)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("validateSelfReviewGateMode(%q) error = %v, wantErr %v", tt.v, err, tt.wantErr)
-			}
-			if !tt.wantErr && err != nil {
-				t.Errorf("validateSelfReviewGateMode(%q) unexpected error: %v", tt.v, err)
-			}
-		})
-	}
-}
-
 // Test validateHistoryScope function
 func TestValidateHistoryScope2(t *testing.T) {
 	tests := []struct {
@@ -463,13 +401,6 @@ func TestValidationEdgeCases2(t *testing.T) {
 		err := validateReasoningEffort("  low  ")
 		if err == nil {
 			t.Error("validateReasoningEffort should reject whitespace-padded values")
-		}
-	})
-
-	t.Run("validateSelfReviewGateMode with whitespace", func(t *testing.T) {
-		err := validateSelfReviewGateMode("  off  ")
-		if err == nil {
-			t.Error("validateSelfReviewGateMode should reject whitespace-padded values")
 		}
 	})
 

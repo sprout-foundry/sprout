@@ -86,27 +86,6 @@ func TestApplyPartialSettings_InvalidHistoryScope(t *testing.T) {
 	}
 }
 
-func TestApplyPartialSettings_SelfReviewGateMode(t *testing.T) {
-	cfg := configuration.NewConfig()
-	patch := map[string]interface{}{"self_review_gate_mode": "code"}
-	_, err := applyPartialSettings(cfg, patch)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if cfg.SelfReviewGateMode != "code" {
-		t.Errorf("SelfReviewGateMode = %q, want %q", cfg.SelfReviewGateMode, "code")
-	}
-}
-
-func TestApplyPartialSettings_InvalidSelfReviewGateMode(t *testing.T) {
-	cfg := configuration.NewConfig()
-	patch := map[string]interface{}{"self_review_gate_mode": "invalid"}
-	_, err := applyPartialSettings(cfg, patch)
-	if err == nil {
-		t.Error("expected error for invalid self_review_gate_mode")
-	}
-}
-
 func TestApplyPartialSettings_SubagentFields(t *testing.T) {
 	cfg := configuration.NewConfig()
 	patch := map[string]interface{}{

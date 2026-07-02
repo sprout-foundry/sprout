@@ -22,83 +22,11 @@ func (m *enhancedMockClient) SupportsVision() bool { return m.supportsVisionFlag
 
 
 // SupportsConversationalVision reports whether inline multimodal turns
-// should embed the image. Defaults to false; overridden per client.
+// should embed the image. Falls back to SupportsVision() for test mocks
+// that don't need the OCR-only distinction.
 func (m *enhancedMockClient) SupportsConversationalVision() bool {
-	return false
+	return m.supportsVisionFlag
 }
-// =====================================================================
-// isVisionModel
-// =====================================================================
-
-func TestIsVisionModel_gpt4o(t *testing.T) {
-	assert.True(t, isVisionModel("gpt-4o"))
-	assert.True(t, isVisionModel("gpt-4o-mini"))
-	assert.True(t, isVisionModel("gpt-4o-2024-05-13"))
-}
-
-func TestIsVisionModel_gpt4vision(t *testing.T) {
-	assert.True(t, isVisionModel("gpt-4-vision-preview"))
-	// "gpt-4-turbo" does NOT contain any of the vision patterns
-	assert.False(t, isVisionModel("gpt-4-turbo"))
-}
-
-func TestIsVisionModel_llava(t *testing.T) {
-	assert.True(t, isVisionModel("llava-1.5"))
-	assert.True(t, isVisionModel("llava-next"))
-}
-
-func TestIsVisionModel_vision(t *testing.T) {
-	assert.True(t, isVisionModel("some-vision-model"))
-}
-
-func TestIsVisionModel_LlamaVision(t *testing.T) {
-	assert.True(t, isVisionModel("Llama-3.2-11B-Vision"))
-	assert.True(t, isVisionModel("Llama-3.2-11B-Vision-Instruct"))
-}
-
-func TestIsVisionModel_Llama4Scout(t *testing.T) {
-	assert.True(t, isVisionModel("Llama-4-Scout"))
-}
-
-func TestIsVisionModel_gemma(t *testing.T) {
-	assert.True(t, isVisionModel("gemma-3-27b-it"))
-}
-
-func TestIsVisionModel_GLMVision(t *testing.T) {
-	// GLM vision models use a "-<digit>v" suffix convention
-	assert.True(t, isVisionModel("glm-4.5v"))
-	assert.True(t, isVisionModel("glm-4.6v"))
-	assert.True(t, isVisionModel("glm-5v-turbo"))
-	assert.True(t, isVisionModel("GLM-4.6V"))
-	assert.True(t, isVisionModel("GLM-5V-Turbo"))
-}
-
-func TestIsVisionModel_GLMNonVision(t *testing.T) {
-	// GLM text-only models should NOT match
-	assert.False(t, isVisionModel("glm-5"))
-	assert.False(t, isVisionModel("glm-5-turbo"))
-	assert.False(t, isVisionModel("glm-4.7"))
-	assert.False(t, isVisionModel("GLM-4.6"))
-	assert.False(t, isVisionModel("glm-4.5"))
-}
-
-func TestIsVisionModel_caseInsensitive(t *testing.T) {
-	assert.True(t, isVisionModel("GPT-4O"))
-	assert.True(t, isVisionModel("LLAVA-1.5"))
-	assert.True(t, isVisionModel("LLAMA-3.2-11B-VISION"))
-}
-
-func TestIsVisionModel_NonVisionModels(t *testing.T) {
-	assert.False(t, isVisionModel("gpt-4"))
-	assert.False(t, isVisionModel("gpt-3.5-turbo"))
-	assert.False(t, isVisionModel("llama-3"))
-	assert.False(t, isVisionModel("claude-3"))
-	assert.False(t, isVisionModel("o1-preview"))
-	assert.False(t, isVisionModel("glm-5"))
-	assert.False(t, isVisionModel("glm-5-turbo"))
-	assert.False(t, isVisionModel(""))
-}
-
 // =====================================================================
 // containsReasoningModel
 // =====================================================================

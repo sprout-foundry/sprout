@@ -14,7 +14,6 @@
 //   - seed_provider.go      — sproutProvider implements core.Provider
 //   - seed_conversions.go   — type-alias conversion helpers + error wrapping
 //   - seed_query.go         — processQueryWithSeed + state sync + post-hooks
-//   - seed_self_review.go   — self-review gate + UseSeedLoop
 //
 // This file keeps only the FleetBudgetExceededError sentinel.
 

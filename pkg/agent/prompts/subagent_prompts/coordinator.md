@@ -99,7 +99,7 @@ Use `run_subagent` with the following parameters:
 - Write tests → delegate to `orchestrator` which will spawn `tester` subagent
 - Debug issues → delegate to `orchestrator` which will spawn `debugger` subagent
 - Refactor code → delegate to `orchestrator` which will spawn `refactor` subagent
-- Review code → delegate to `orchestrator` which can use `self_review` or spawn `reviewer`
+- Review code → delegate to `orchestrator` which can spawn `reviewer`
 
 ### Parallel Execution
 

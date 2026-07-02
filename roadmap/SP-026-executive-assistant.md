@@ -622,4 +622,4 @@ A code review of the spec against the actual codebase identified these issues. T
 - SP-022: Workspace Management (workspace root, directory scoping)
 - SP-015: Cloud Platform Integration (cloud vs local detection)
 - SP-018: Memory System (cross-session knowledge persistence)
-- SP-021: Self-Review Tool (review patterns that the EA could trigger)
+- SP-021: ~~Self-Review Tool~~ (removed 2026-07-01 — did not add value in practice)

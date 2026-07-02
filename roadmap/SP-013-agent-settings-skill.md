@@ -59,7 +59,7 @@ manage_settings(operation="get")
   Model: gpt-4o
   Reasoning effort: medium (valid: low, medium, high, "" for auto)
   Disable thinking: false
-  Self-review gate: code (valid: off, code, always)
+  Self-review gate: removed 2026-07-01 (no value in practice)
   PDF OCR: enabled, provider=ollama, model=llama3.2-vision
   Subagents: parallel enabled, max 2, provider=openai, model=gpt-4o-mini
   Commit messages: provider=deepseek, model=deepseek-chat
@@ -99,7 +99,7 @@ manage_settings(operation="get", key="foo")
   provider_priority — provider fallback order (persisted, JSON array)
   reasoning_effort — low|medium|high|"" (persisted)
   disable_thinking — true|false (persisted)
-  self_review_gate_mode — off|code|always (persisted)
+  self_review_gate_mode — ~~off|code|always~~ (removed 2026-07-01; no value in practice)
   pdf_ocr_enabled, pdf_ocr_provider, pdf_ocr_model (persisted)
   subagent_max_parallel, subagent_parallel_enabled, subagent_provider, subagent_model (persisted)
   commit_provider, commit_model, review_provider, review_model (persisted)
@@ -214,7 +214,7 @@ The handler validates against this whitelist. Any key not listed returns the "Un
 | `provider_priority` | []string | JSON array of provider names | Global config |
 | `reasoning_effort` | string | `low` \| `medium` \| `high` \| `""` | Global config |
 | `disable_thinking` | bool | `true` \| `false` | Global config |
-| `self_review_gate_mode` | string | `off` \| `code` \| `always` | Global config |
+| `self_review_gate_mode` | ~~string~~ | ~~`off` \| `code` \| `always`~~ | ~~Global config~~ (removed 2026-07-01) |
 | `pdf_ocr_enabled` | bool | `true` \| `false` | Global config |
 | `pdf_ocr_provider` | string | Must be known provider | Global config |
 | `pdf_ocr_model` | string | Any non-empty string | Global config |

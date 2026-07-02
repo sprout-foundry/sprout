@@ -35,29 +35,6 @@ func TestValidateReasoningEffort(t *testing.T) {
 	}
 }
 
-func TestValidateSelfReviewGateMode(t *testing.T) {
-	tests := []struct {
-		name    string
-		v       string
-		wantErr bool
-	}{
-		{"off", "off", false},
-		{"code", "code", false},
-		{"always", "always", false},
-		{"invalid", "invalid", true},
-		{"empty", "", true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := validateSelfReviewGateMode(tt.v)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("validateSelfReviewGateMode(%q) error = %v, wantErr %v", tt.v, err, tt.wantErr)
-			}
-		})
-	}
-}
-
 func TestValidateHistoryScope(t *testing.T) {
 	tests := []struct {
 		name    string

@@ -8,7 +8,7 @@ package tools
 // edit_file, shell_command, save_memory, search_memories,
 // task_queue_add, task_queue_publish,
 // task_queue_read, todo_write, todo_read, ask_user, patch_structured_file,
-// self_review, commit, git, activate_skill,
+// commit, git, activate_skill,
 // browse_url, web_search, semantic_search, analyze_image_content,
 // and analyze_ui_screenshot.
 //
@@ -60,8 +60,6 @@ func AllTools() []ToolHandler {
 		&askUserHandler{},
 		// Structured file tools
 		&patchStructuredFileHandler{},
-		// Review tools
-		&selfReviewHandler{},
 		// Git tools
 		&commitHandler{},
 		&gitHandler{},

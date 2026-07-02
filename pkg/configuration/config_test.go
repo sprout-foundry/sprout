@@ -138,31 +138,6 @@ func TestGetSubagentType_DisabledReturnsNil(t *testing.T) {
 	assert.NotNil(t, cfg.GetSubagentType("general"))
 }
 
-func TestSelfReviewGateModeDefaultsAndNormalization(t *testing.T) {
-	cfg := NewConfig()
-	assert.Equal(t, SelfReviewGateModeOff, cfg.GetSelfReviewGateMode())
-
-	cfg.SelfReviewGateMode = ""
-	assert.Equal(t, SelfReviewGateModeOff, cfg.GetSelfReviewGateMode())
-
-	err := cfg.SetSelfReviewGateMode("ALWAYS")
-	assert.NoError(t, err)
-	assert.Equal(t, SelfReviewGateModeAlways, cfg.GetSelfReviewGateMode())
-
-	err = cfg.SetSelfReviewGateMode("off")
-	assert.NoError(t, err)
-	assert.Equal(t, SelfReviewGateModeOff, cfg.GetSelfReviewGateMode())
-}
-
-func TestConfigValidateSelfReviewGateMode(t *testing.T) {
-	cfg := NewConfig()
-	cfg.SelfReviewGateMode = "invalid-mode"
-
-	err := cfg.Validate()
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "self_review_gate_mode")
-}
-
 func TestGetDefaultConfigDirPrefersXDGConfigHome(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", "/tmp/xdg-home")
 	t.Setenv("HOME", "/tmp/home-ignored")

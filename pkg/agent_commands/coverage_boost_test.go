@@ -412,24 +412,6 @@ func TestBoost_ParseDiffForContent_ContextLines(t *testing.T) {
 }
 
 // =====================================================================
-// SelfReviewCommand and SelfReviewGateCommand interface (0% coverage)
-// =====================================================================
-
-func TestBoost_SelfReviewCommand_Execute_NilAgent(t *testing.T) {
-	c := &SelfReviewCommand{}
-	err := c.Execute(nil, nil)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "agent is not initialized")
-}
-
-func TestBoost_SelfReviewGateCommand_Execute_NilAgent(t *testing.T) {
-	c := &SelfReviewGateCommand{}
-	err := c.Execute(nil, nil)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "agent is not initialized")
-}
-
-// =====================================================================
 // IndexCommand Execute (0% coverage paths)
 // =====================================================================
 

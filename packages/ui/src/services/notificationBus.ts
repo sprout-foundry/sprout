@@ -10,10 +10,22 @@ export interface NotificationEvent {
   id: string;
 }
 
+/**
+ * Bus-level control events. These are separate from user-facing
+ * notifications so subscribers can react without rendering a toast.
+ * `kind: 'mark_all_read'` is the canonical event for "user wants to
+ * acknowledge every visible notification now"; consumers like
+ * NotificationCenter translate it into dismissing their toast stack.
+ */
+export type BusControlEvent =
+  | { kind: 'mark_all_read' };
+
 export type Listener = (event: NotificationEvent) => void;
+export type ControlListener = (event: BusControlEvent) => void;
 
 class NotificationBus {
   private listeners: Listener[] = [];
+  private controlListeners: ControlListener[] = [];
   private history: NotificationEvent[] = [];
   private nextId = 0;
 
@@ -53,6 +65,15 @@ class NotificationBus {
     return id;
   }
 
+  /**
+   * Broadcast a "mark all read" signal. Subscribers that manage their
+   * own notification UI (e.g. the NotificationCenter toast stack) use
+   * this to dismiss every visible notification in one shot.
+   */
+  markAllRead(): void {
+    this.controlListeners.forEach((listener) => listener({ kind: 'mark_all_read' }));
+  }
+
   onNotification(listener: Listener): () => void {
     this.listeners.push(listener);
     return () => this.removeNotificationListener(listener);
@@ -62,6 +83,15 @@ class NotificationBus {
     this.listeners = this.listeners.filter((l) => l !== listener);
   }
 
+  onControlEvent(listener: ControlListener): () => void {
+    this.controlListeners.push(listener);
+    return () => this.removeControlListener(listener);
+  }
+
+  removeControlListener(listener: ControlListener): void {
+    this.controlListeners = this.controlListeners.filter((l) => l !== listener);
+  }
+
   getNotificationHistory(): NotificationEvent[] {
     return [...this.history];
   }
@@ -69,6 +99,7 @@ class NotificationBus {
   /** @internal Resets all state. Only for use in tests. */
   _resetForTesting(): void {
     this.listeners = [];
+    this.controlListeners = [];
     this.history = [];
     this.nextId = 0;
   }

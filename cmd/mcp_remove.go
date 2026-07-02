@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/mcp"
 )
 
@@ -87,7 +88,7 @@ func runMCPRemove(serverName string) error {
 		return fmt.Errorf("failed to save MCP config: %w", err)
 	}
 
-	fmt.Printf("✓ Server '%s' removed successfully!\n", serverName)
+	console.GlyphSuccess.Fprintf(os.Stdout, "Server '%s' removed successfully!", serverName)
 
 	if len(mcpConfig.Servers) == 0 {
 		fmt.Println("MCP disabled (no servers remain).")

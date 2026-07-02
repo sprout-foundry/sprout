@@ -374,7 +374,7 @@ func (m *launchdManager) Diagnose() error {
 		// without it, the daemon falls back to $HOME (which launchd may have
 		// set wrong) and the workspace browser starts in the wrong directory.
 		if !strings.Contains(string(plistContent), "SPROUT_DAEMON_ROOT") {
-			fmt.Println("  ⚠️  STALE plist: missing SPROUT_DAEMON_ROOT — workspace browser may start in the wrong directory.")
+			console.GlyphWarning.Fprintln(os.Stdout, "  STALE plist: missing SPROUT_DAEMON_ROOT — workspace browser may start in the wrong directory.")
 			fmt.Println("      Reinstall to regenerate: sprout service uninstall && sprout service install")
 		}
 	}
@@ -410,7 +410,7 @@ func (m *launchdManager) Diagnose() error {
 		if info, err := os.Stat(binaryPath); err == nil {
 			fmt.Printf("     Size: %d bytes, Mode: %s\n", info.Size(), info.Mode())
 		} else {
-			fmt.Printf("  ⚠️  Cannot access binary: %v\n", err)
+			console.GlyphWarning.Fprintf(os.Stdout, "  Cannot access binary: %v", err)
 		}
 	}
 	fmt.Println()
@@ -429,7 +429,7 @@ func (m *launchdManager) Diagnose() error {
 			} else if os.IsNotExist(err) {
 				fmt.Printf("  ℹ️  %s does not exist\n", filepath.Base(logPath))
 			} else {
-				fmt.Printf("  ⚠️  %s error: %v\n", filepath.Base(logPath), err)
+				console.GlyphWarning.Fprintf(os.Stdout, "  %s error: %v", filepath.Base(logPath), err)
 			}
 		}
 		fmt.Println()
@@ -441,7 +441,7 @@ func (m *launchdManager) Diagnose() error {
 		envPath := serviceEnvPath(homeDir)
 		envVars, err := loadServiceEnvFile(homeDir)
 		if err != nil {
-			fmt.Printf("  ⚠️  Error loading service.env: %v\n", err)
+			console.GlyphWarning.Fprintf(os.Stdout, "  Error loading service.env: %v", err)
 		} else if len(envVars) == 0 {
 			fmt.Printf("  ℹ️  service.env exists but is empty: %s\n", envPath)
 		} else {

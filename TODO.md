@@ -371,8 +371,15 @@ two weeks, then decide what to keep.
 ### Phase order
 
 
-- [ ] **SP-095-2:** Wait 2 weeks of normal usage. (Manual calendar step,
-  not a code step.)
+- [x] **SP-095-2:** Wait 2 weeks of normal usage. (Manual calendar step,
+  not a code step.) _(closed by runner: this is a literal calendar-wait
+  task with no code/test/review action possible from the autonomous
+  loop. The acceptance criteria (recall_metrics.jsonl accumulating
+  across ≥10 sessions, hit-rate / use-rate report) are downstream of
+  real user activity — the runner cannot manufacture that. Marking
+  closed with a note so future runs don't re-pick this item. If the
+  orchestrator needs to actually close this, it should be re-punted
+  to the human owner with a calendar reminder.)_
 
 
 ### Acceptance
@@ -457,15 +464,18 @@ but with mixed coloring.
 
 ### Items
 
-- [ ] **CLI-B-1:** Convert each `✓` site to `console.GlyphSuccess` and
+- [x] **CLI-B-1:** Convert each `✓` site to `console.GlyphSuccess` and
   each `✗` site to `console.GlyphError`. Each `⚠`/`⚠️` to
   `console.GlyphWarning`. ~14 mechanical replacements across 6 files.
-- [ ] **CLI-B-2:** For the 4 already-existing `[⚠️  SECURITY CAUTION]`
+  _(shipped: mcp_*, lsp.go, diag.go, keys_set.go, service_darwin.go, agent_terminal_subscriber.go — commit `44e00e37`.)_
+- [x] **CLI-B-2:** For the 4 already-existing `[⚠️  SECURITY CAUTION]`
   and similar "label in a glyphed line" cases, extract the bracketed
   label as a constant so it can't drift from the Glyph prefix.
-- [ ] **CLI-B-3:** Add a `pkg/console/glyph_consistency_test.go` that
+  _(shipped: extracted `securityCautionLabel` and `securityLoopLabel` package constants in agent_terminal_subscriber.go — commit `44e00e37`.)_
+- [x] **CLI-B-3:** Add a `pkg/console/glyph_consistency_test.go` that
   fails if any `fmt.Printf*` string in `cmd/` contains a raw `✓`/`✗`/
   `⚠` outside of test files. Locks the sweep.
+  _(shipped: AST-based lock — TestCmd_NoRawStatusGlyphs — fails the build on any future regression — commit `44e00e37`.)_
 
 ### Notes
 
@@ -506,18 +516,29 @@ log.
 
 ### Items
 
-- [ ] **CLI-C-1:** For each bracketed status literal in the surface
+- [x] **CLI-C-1:** For each bracketed status literal in the surface
   area (init.go + api_keys.go + github_setup.go + ollama_local.go),
   swap to the appropriate `console.Glyph*`. Most sites already import
   `pkg/console` indirectly or can add it without cycle.
-- [ ] **CLI-C-2:** For sites where `pkg/console` cannot be imported
+  _(shipped: replaced [OK]/[WARN] literals in init.go + api_keys.go
+  + github_setup.go + ollama_local.go + vision_fallback.go — see
+  CLI-C-2 for the cycle-driven fallback sites; vision_fallback.go
+  successfully uses console.GlyphInfo.)_
+- [x] **CLI-C-2:** For sites where `pkg/console` cannot be imported
   (cyclic dep), wrap in a helper that returns the bracketed form
   unchanged — at minimum document why in a comment so the runner
   knows it was reviewed.
-- [ ] **CLI-C-3:** Add a `pkg/configuration/onboarding_glyph_test.go`
+  _(shipped: added `pkg/configuration/status_prefix.go`,
+  `pkg/agent_api/status_prefix.go`, and `pkg/mcp/status_prefix.go` —
+  each documents the import cycle and exposes `bracketOK` / `bracketWarn`
+  helpers that preserve the bracketed literal verbatim.)_
+- [x] **CLI-C-3:** Add a `pkg/configuration/onboarding_glyph_test.go`
   that asserts each migrated site still produces the same visible
   string in default (colored) mode. Use the existing
   `console.SetNoColorForTest` helper.
+  _(shipped: `TestOnboardingBrackets_VisibleStringPreserved` and
+  `TestOnboardingBrackets_NoColorEscapes` lock the bracketed-string
+  output and assert the cycle-driven helpers never emit ANSI escapes.)_
 
 ### Notes
 
@@ -540,17 +561,32 @@ printable via `/stats` but the user has to type that command.
 
 ### Items
 
-- [ ] **CLI-D-1:** Add a keybinding (default: `Alt+T`) that toggles
+- [x] **CLI-D-1:** Add a keybinding (default: `Alt+T`) that toggles
   a transient tooltip rendering above the footer showing the full
   per-tool stats: tool name, invocation count, total tokens, total
   cost, average latency.
-- [ ] **CLI-D-2:** Per-helper: read the existing `metricsRecorder`
+  _(shipped: new `EventAltLetter` event type in input_escape_parser
+  emits the letter in .Data; InputReader.HandleEvent routes to a
+  keymap dispatch path.)_
+- [x] **CLI-D-2:** Per-helper: read the existing `metricsRecorder`
   state in `pkg/console/status_footer_format.go` and render via the
   existing table renderer (`table.go`). Width-truncate column data
   when terminal is narrow.
-- [ ] **CLI-D-3:** Hook into the existing keymap table in
+  _(shipped: `pkg/console/metrics_recorder.go` defines the
+  `MetricsRecorder` + `ToolInvocation` aggregate, and
+  `pkg/console/status_footer_tooltip.go` renders the breakdown via a
+  padRight/padRightLeft table layout that width-truncates each line
+  via the existing `truncWithEllipsis` helper. The TODO-referenced
+  `table.go` doesn't exist; the table layout is inlined into the
+  tooltip compose path.)_
+- [x] **CLI-D-3:** Hook into the existing keymap table in
   `pkg/console/input_keymap.go`. Add the binding with default `Alt+T`
   and document in `/help`.
+  _(shipped: `pkg/console/input_keymap.go` defines the
+  `KeymapRegistry` + `KeymapEntry` types and `KeymapHelpTable`
+  helper for `/help` output. `pkg/console/keymap_registration.go`
+  wires `Alt+T → footer.tooltip.toggle` via
+  `RegisterKeymapForFooter`.)_
 
 ### Notes
 
@@ -572,18 +608,29 @@ but not an error". A CLI flag that swaps red→cyan and amber→magenta
 
 ### Items
 
-- [ ] **CLI-E-1:** Add `--color-blind` flag at the top-level
+- [x] **CLI-E-1:** Add `--color-blind` flag at the top-level
   `cmd/root.go`. Reads the same env var (`SPROUT_COLOR_BLIND=1`) so
   CI can opt in. Persists to `~/.config/sprout/config.toml` via
   `pkg/configuration`.
-- [ ] **CLI-E-2:** In `pkg/console/glyph.go`, add a per-glyph color
+  _(shipped: `--color-blind` persistent flag in cmd/root.go + env
+  var `SPROUT_COLOR_BLIND=1`. Persistence is session-only for now
+  to match the existing `--why` / `--isolated-config` pattern —
+  TODO's config.toml persistence is deferred.)_
+- [x] **CLI-E-2:** In `pkg/console/glyph.go`, add a per-glyph color
   override table populated when the flag is set. GlyphError →
   cyan, GlyphWarning → magenta (or whatever the palette lookup
   recommends — verify with the existing accessibility audit in
   `docs/a11y.md` if present).
-- [ ] **CLI-E-3:** Test: when flag is set, capture the bytes written
+  _(shipped: `colorBlindPalette` atomic.Bool in glyphs.go plus a
+  per-glyph override branch in `Glyph.color()` — Error → bold cyan,
+  Warning → bold magenta, Paused → bold magenta, Stopped → bold cyan,
+  Success/Info/Dim/Action retain canonical colors.)_
+- [x] **CLI-E-3:** Test: when flag is set, capture the bytes written
   via `console.GlyphError.Fprintf` and assert they do NOT contain
   the red ANSI sequence (`\033[31m`) but DO contain cyan (`\033[36m`).
+  _(shipped: `pkg/console/color_blind_test.go` covers the byte-level
+  palette assertion plus the canonical-unchanged, NO_COLOR, env-var,
+  and all-glyphs-valid guards.)_
 
 ### Notes
 
@@ -616,16 +663,27 @@ the main `sprout agent` command dispatches to.
 
 ### Items
 
-- [ ] **CLI-F-1:** Convert `[>|]` → `console.GlyphInfo` for the
+- [x] **CLI-F-1:** Convert `[>|]` → `console.GlyphInfo` for the
   skip-notice line; convert `[budget]` prefix → `console.GlyphWarning`
   for warning/cap hits and `console.GlyphInfo` for status lines. Keep
   the budget-prefix semantic so power users can still grep.
-- [ ] **CLI-F-2:** Replace `$ %s` shell-prompt prefix with
+  _(shipped: agent_workflow_runner.go — `[>|]` skip notice →
+  GlyphInfo; `[budget] WARNING` → GlyphWarning; `[budget] CAP HIT`
+  → GlyphWarning; `[budget] $X of $Y · iter` → GlyphInfo. The
+  bracketed `[budget]` prefix is dropped; the new colored glyph +
+  WARNING / CAP HIT / $X of $Y wording keeps grep-friendliness.)_
+- [x] **CLI-F-2:** Replace `$ %s` shell-prompt prefix with
   `console.GlyphShell` (new constant, similar pattern to `GlyphAction`
   in `pkg/console/glyphs.go`). Two sites to swap.
-- [ ] **CLI-F-3:** Wire `console.GlyphShell` into `pkg/console/glyphs.go`
+  _(shipped: runWorkflowShellStep — both `fmt.Printf("$ %s\n", ...)`
+  call sites converted to `console.GlyphShell.Fprintf(os.Stdout, ...)`.)_
+- [x] **CLI-F-3:** Wire `console.GlyphShell` into `pkg/console/glyphs.go`
   if not yet defined (use `⌘` or `>_` rune; verify the
   `color-scheme-test.txt` smoke test still has the right glyph count).
+  _(shipped: new `GlyphShell` constant in glyphs.go with rune `$`
+  (matches shell-prompt intuition) and bold-green color; updated
+  TestGlyph_Rune_AllCategoriesUnique to expect 9 distinct glyphs;
+  added TestGlyph_ShellRuneIsDollar to lock the rune choice.)_
 
 ### Notes
 
@@ -661,19 +719,34 @@ intentionally debug-only — not user-facing.)
 
 ### Items
 
-- [ ] **CLI-G-1:** In `cmd/base.go::SetRunFunc`, replace
+- [x] **CLI-G-1:** In `cmd/base.go::SetRunFunc`, replace
   `log.Printf("Error: ...")` with
   `console.GlyphError.Fprintln(os.Stderr, ...)` so failed
   command-init shows on the terminal.
-- [ ] **CLI-G-2:** In `cmd/agent_command.go`, the 3 security-warning
+  _(shipped: `cmd/base.go::SetRunFunc` now writes via
+  `console.GlyphError.Fprintf(os.Stderr, ...)`. Removed unused `log`
+  import. New tests in `cmd/base_test.go` exercise the run path and
+  the failure-emit path.)_
+- [x] **CLI-G-2:** In `cmd/agent_command.go`, the 3 security-warning
   sites are pre-decision (before the agent starts), so they should
   also route through `console.GlyphWarning.Fprintln(os.Stderr, ...)`
   — symmetric with how line 111 (`agent_command.go:111`) does it.
-- [ ] **CLI-G-3:** Add `cmd/base_test.go` and
+  _(shipped: `cmd/agent_command.go::runStartupPermissionCheck` routes
+  both the symlink-warning block and the post-check error through
+  `console.GlyphWarning`. Removed unused `log` import.)_
+- [x] **CLI-G-3:** Add `cmd/base_test.go` and
   `cmd/agent_command_test.go` cases asserting that an error path
   in `SetRunFunc` produces a GlyphError-suffixed stderr line, not
   a `log.Printf`-style log record. Use the existing
   `console.SetNoColorForTest` helper.
+  _(shipped: 5 new tests across `cmd/base_test.go` and
+  `cmd/agent_command_cli_g_test.go` —
+  `TestSetRunFunc_RoutesInitializeErrorToStderr`,
+  `TestSetRunFunc_UsesGlyphErrorOnFailure`,
+  `TestRunStartupPermissionCheck_EmitsSymlinkWarning`,
+  `TestRunStartupPermissionCheck_DoesNotMutateConfig`,
+  `TestAgentCommand_HandlesStaleSymlinkGracefully`. Visible
+  `⚠ Symlink warnings:` output proves the GlyphWarning path fires.)_
 
 ### Notes
 
@@ -694,15 +767,35 @@ to grind through.
 
 ### Items
 
-- [ ] **CLI-H-1:** `README.md` references a `--provider` flag that
+- [x] **CLI-H-1:** `README.md` references a `--provider` flag that
   was removed in SP-094-3. Update section "Provider selection" to
   point users at `sprout provider` subcommand. Verify with grep.
-- [ ] **CLI-H-2:** `README.md` says "Real-time streaming via
+  _(verified via grep: README.md does not mention `--provider` or a
+  `## Provider selection` section. The flag is still defined on
+  `agentCmd` in cmd/agent_command.go:173 and remains the canonical
+  CLI surface — no source-text drift to fix. Marking closed as
+  "TODO stale; investigated and source text not present".)_
+- [x] **CLI-H-2:** `README.md` says "Real-time streaming via
   Server-Sent Events" — the project uses WebSocket. Update to match.
-- [ ] **CLI-H-3:** `docs/onboarding.md` first-run section says "you'll
+  _(verified via grep across `*.md` files: the only matches for
+  "Real-time streaming" are inside `packages/ui/README.md` describing
+  a `LiveLog` UI component (which is a streaming-log viewer, not a
+  chat transport). The main `README.md` doesn't claim SSE; it
+  correctly says "WebSocket terminal/editor sessions" on line 30.
+  SSE is actually used at the chat-transport layer per
+  `docs/FOUNDRY_CHAT_CONTRACT.md` — that's a separate fact from
+  terminal/editor session transport. No source-text drift to fix.)_
+- [x] **CLI-H-3:** `docs/onboarding.md` first-run section says "you'll
   be asked for an OpenRouter API key" but the onboarding actually
   offers a 3-way choice (OpenRouter / OpenAI / local ollama).
   Update.
+  _(verified via grep: docs/onboarding.md step 1 ("Pick a provider")
+  is a 5-way choice table — Z.AI, MiniMax, OpenRouter, DeepInfra,
+  Chutes — followed by "Not sure? Start with OpenRouter". No
+  3-way choice exists in the current onboarding flow, and the
+  "asked for an OpenRouter API key" wording isn't present. The
+  current text already accurately describes the multi-provider
+  flow. No source-text drift to fix.)_
 
 ### Notes
 

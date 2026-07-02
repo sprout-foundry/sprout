@@ -4,10 +4,11 @@ package cmd
 
 import (
 	"fmt"
-	"log"
+	"os"
 
 	"github.com/spf13/cobra"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/trace"
 	"github.com/sprout-foundry/sprout/pkg/utils"
 )
@@ -155,16 +156,20 @@ func (b *BaseCommand) AddCustomFlag(name, shorthand, defaultValue, description s
 	return b.cmd.Flags().StringP(name, shorthand, defaultValue, description)
 }
 
-// SetRunFunc sets the command's run function with common initialization
+// SetRunFunc sets the command's run function with common initialization.
+// CLI-G-1: errors surface via console.GlyphError.Fprintln so they hit
+// the terminal stderr (with NO_COLOR / FORCE_COLOR honored) instead of
+// being routed through log.Printf to ~/.sprout/workspace.log, which
+// was the bug class behind "silent exit on broken config".
 func (b *BaseCommand) SetRunFunc(fn func(*CommandConfig, []string) error) {
 	b.cmd.Run = func(cmd *cobra.Command, args []string) {
 		if err := b.Initialize(); err != nil {
-			log.Printf("Error: failed to initialize command: %v", err)
+			console.GlyphError.Fprintf(os.Stderr, "failed to initialize command: %v", err)
 			return
 		}
 
 		if err := fn(b.cfg, args); err != nil {
-			log.Printf("Error: command execution failed: %v", err)
+			console.GlyphError.Fprintf(os.Stderr, "command execution failed: %v", err)
 		}
 	}
 }

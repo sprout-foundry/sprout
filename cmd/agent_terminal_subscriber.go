@@ -14,6 +14,16 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
+// Security-broadcast labels rendered as bracketed prefixes inside the
+// terminal subscriber. Kept as package constants so the glyph + label
+// pair can't drift: the GlyphWarning prefix (⚠) already conveys "this is
+// a warning", and the bracketed label carries the semantic category for
+// grep + a11y tooling. CLI-B-2 extraction.
+const (
+	securityCautionLabel = "⚠️  SECURITY CAUTION"
+	securityLoopLabel    = "🛑 SECURITY LOOP"
+)
+
 // startTerminalToolSubscriber subscribes a goroutine to the event bus that
 // translates PublishToolStart / PublishToolEnd events into terminal spinner
 // updates and ✓/✗ result lines. Runs until ctx is cancelled.
@@ -363,9 +373,9 @@ func startTerminalToolSubscriber(ctx context.Context, chatAgent *agent.Agent, ev
 					var line string
 					switch category {
 					case "security_caution":
-						line = fmt.Sprintf("%s[⚠️  SECURITY CAUTION] %s", console.GlyphWarning.Prefix(), message)
+						line = fmt.Sprintf("%s[%s] %s", console.GlyphWarning.Prefix(), securityCautionLabel, message)
 					case "security_loop":
-						line = fmt.Sprintf("%s[🛑 SECURITY LOOP] %s", console.GlyphError.Prefix(), message)
+						line = fmt.Sprintf("%s[%s] %s", console.GlyphError.Prefix(), securityLoopLabel, message)
 					case "tool_error":
 						line = fmt.Sprintf("%s%s", console.GlyphError.Prefix(), message)
 					case "warning":

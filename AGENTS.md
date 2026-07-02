@@ -143,7 +143,7 @@ The rules below are the ones agents trip over most often:
 
 ## Context Architecture (SP-066)
 
-Conversation context is managed by **three distinct operations**, plus an orthogonal embedding store. Conflating them is the recurring failure mode — the design depends on each operation staying in its lane. Full design: `roadmap/SP-066-never-ending-context.md`.
+Conversation context is managed by **three distinct operations**, plus an orthogonal embedding store. Conflating them is the recurring failure mode — the design depends on each operation staying in its lane. Full design: `roadmap/_completed/SP-066-never-ending-context.md`.
 
 1. **Substitute** (free, every prompt build) — `BuildCheckpointCompactedMessages` replaces ranges covered by a `TurnCheckpoint` with its summary. No LLM call.
 2. **Rollup** (one LLM call, amortized) — background worker folds oldest `Level`-N checkpoints into one `Level+1` once count exceeds `rollupTriggerCount` (protecting `recentTurnsToPreserve` at level 0).

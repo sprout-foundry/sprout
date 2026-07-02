@@ -619,3 +619,274 @@ func TestCostSummary_TopSessions_NoSessionID(t *testing.T) {
 		t.Errorf("expected 0 top sessions (no session IDs), got %d", len(summary.TopSessions))
 	}
 }
+
+// --- SP-080: Billing-type-aware cost tracking tests ---
+
+func TestCostSummaryBillingType_MixedBillingTypes(t *testing.T) {
+	cs := makeCostStore(t)
+	now := time.Now()
+
+	cs.records = []CostRecord{
+		{
+			Timestamp:    now,
+			Provider:     "openai",
+			Model:        "gpt-4",
+			PromptTokens: 1000,
+			OutputTokens: 500,
+			Cost:         0.10,
+			BillingType:  "pay_per_token",
+			ChargedCost:  0.10,
+			TokenCost:    0.10,
+		},
+		{
+			Timestamp:    now,
+			Provider:     "zai-coding",
+			Model:        "glm-4",
+			PromptTokens: 2000,
+			OutputTokens: 1000,
+			Cost:         0,
+			BillingType:  "subscription",
+			ChargedCost:  0,
+			TokenCost:    0.05,
+		},
+		{
+			Timestamp:    now,
+			Provider:     "local",
+			Model:        "llama-3",
+			PromptTokens: 500,
+			OutputTokens: 250,
+			Cost:         0,
+			BillingType:  "free",
+			ChargedCost:  0,
+			TokenCost:    0.02,
+		},
+	}
+
+	summary := cs.GetCostSummary(time.Time{}, time.Time{})
+
+	// ByBillingType should have 3 entries
+	if len(summary.ByBillingType) != 3 {
+		t.Fatalf("ByBillingType has %d entries, want 3", len(summary.ByBillingType))
+	}
+
+	// pay_per_token bucket
+	ppt, ok := summary.ByBillingType["pay_per_token"]
+	if !ok {
+		t.Fatal("missing pay_per_token in ByBillingType")
+	}
+	if !floatEq(ppt.Cost, 0.10, 0.0001) {
+		t.Errorf("pay_per_token cost = %f, want 0.10", ppt.Cost)
+	}
+	if ppt.Tokens != 1500 {
+		t.Errorf("pay_per_token tokens = %d, want 1500", ppt.Tokens)
+	}
+
+	// subscription bucket
+	sub, ok := summary.ByBillingType["subscription"]
+	if !ok {
+		t.Fatal("missing subscription in ByBillingType")
+	}
+	if !floatEq(sub.Cost, 0.0, 0.0001) {
+		t.Errorf("subscription cost = %f, want 0.0", sub.Cost)
+	}
+	if sub.Tokens != 3000 {
+		t.Errorf("subscription tokens = %d, want 3000", sub.Tokens)
+	}
+
+	// free bucket
+	free, ok := summary.ByBillingType["free"]
+	if !ok {
+		t.Fatal("missing free in ByBillingType")
+	}
+	if !floatEq(free.Cost, 0.0, 0.0001) {
+		t.Errorf("free cost = %f, want 0.0", free.Cost)
+	}
+	if free.Tokens != 750 {
+		t.Errorf("free tokens = %d, want 750", free.Tokens)
+	}
+}
+
+func TestCostSummaryBillingType_ChargedCostAndTokenValue(t *testing.T) {
+	cs := makeCostStore(t)
+	now := time.Now()
+
+	cs.records = []CostRecord{
+		{
+			Timestamp:    now,
+			Provider:     "openai",
+			Model:        "gpt-4",
+			PromptTokens: 1000,
+			OutputTokens: 500,
+			Cost:         0.10,
+			BillingType:  "pay_per_token",
+			ChargedCost:  0.10,
+			TokenCost:    0.12,
+		},
+		{
+			Timestamp:    now,
+			Provider:     "zai-coding",
+			Model:        "glm-4",
+			PromptTokens: 2000,
+			OutputTokens: 1000,
+			Cost:         0,
+			BillingType:  "subscription",
+			ChargedCost:  0,
+			TokenCost:    0.05,
+		},
+		{
+			Timestamp:    now,
+			Provider:     "local",
+			Model:        "llama-3",
+			PromptTokens: 500,
+			OutputTokens: 250,
+			Cost:         0,
+			BillingType:  "free",
+			ChargedCost:  0,
+			TokenCost:    0.02,
+		},
+	}
+
+	summary := cs.GetCostSummary(time.Time{}, time.Time{})
+
+	// ChargedCost should sum all ChargedCost fields (with fallback to Cost)
+	if !floatEq(summary.ChargedCost, 0.10, 0.0001) {
+		t.Errorf("ChargedCost = %f, want 0.10", summary.ChargedCost)
+	}
+
+	// TokenValue should sum all TokenCost fields
+	if !floatEq(summary.TokenValue, 0.19, 0.0001) {
+		t.Errorf("TokenValue = %f, want 0.19", summary.TokenValue)
+	}
+}
+
+func TestCostSummaryBillingType_OldRecordsDefaultToPayPerToken(t *testing.T) {
+	cs := makeCostStore(t)
+	now := time.Now()
+
+	// Old record with no BillingType and no ChargedCost — should default to pay_per_token
+	// and fall back to Cost field for charged cost.
+	cs.records = []CostRecord{
+		{
+			Timestamp:    now,
+			Provider:     "openai",
+			Model:        "gpt-4",
+			PromptTokens: 1000,
+			OutputTokens: 500,
+			Cost:         0.10,
+			BillingType:  "", // missing — should default to pay_per_token
+			ChargedCost:  0,  // missing — should fall back to Cost
+			TokenCost:    0,
+		},
+	}
+
+	summary := cs.GetCostSummary(time.Time{}, time.Time{})
+
+	// Should be categorized as pay_per_token
+	ppt, ok := summary.ByBillingType["pay_per_token"]
+	if !ok {
+		t.Fatal("missing pay_per_token in ByBillingType")
+	}
+	// ChargedCost falls back to Cost (0.10)
+	if !floatEq(ppt.Cost, 0.10, 0.0001) {
+		t.Errorf("pay_per_token cost = %f, want 0.10 (fallback to Cost field)", ppt.Cost)
+	}
+	if ppt.Tokens != 1500 {
+		t.Errorf("pay_per_token tokens = %d, want 1500", ppt.Tokens)
+	}
+
+	// ChargedCost total should use the fallback
+	if !floatEq(summary.ChargedCost, 0.10, 0.0001) {
+		t.Errorf("ChargedCost = %f, want 0.10", summary.ChargedCost)
+	}
+}
+
+func TestCostSummaryBillingType_MultipleRecordsPerType(t *testing.T) {
+	cs := makeCostStore(t)
+	now := time.Now()
+
+	cs.records = []CostRecord{
+		{
+			Timestamp:    now,
+			Provider:     "openai",
+			Model:        "gpt-4",
+			PromptTokens: 1000,
+			OutputTokens: 500,
+			Cost:         0.10,
+			BillingType:  "pay_per_token",
+			ChargedCost:  0.10,
+			TokenCost:    0.10,
+		},
+		{
+			Timestamp:    now,
+			Provider:     "anthropic",
+			Model:        "claude-3",
+			PromptTokens: 2000,
+			OutputTokens: 1000,
+			Cost:         0.20,
+			BillingType:  "pay_per_token",
+			ChargedCost:  0.20,
+			TokenCost:    0.20,
+		},
+		{
+			Timestamp:    now,
+			Provider:     "zai-coding",
+			Model:        "glm-4",
+			PromptTokens: 3000,
+			OutputTokens: 1500,
+			Cost:         0,
+			BillingType:  "subscription",
+			ChargedCost:  0,
+			TokenCost:    0.08,
+		},
+	}
+
+	summary := cs.GetCostSummary(time.Time{}, time.Time{})
+
+	// pay_per_token should aggregate both records
+	ppt, ok := summary.ByBillingType["pay_per_token"]
+	if !ok {
+		t.Fatal("missing pay_per_token in ByBillingType")
+	}
+	if !floatEq(ppt.Cost, 0.30, 0.0001) {
+		t.Errorf("pay_per_token cost = %f, want 0.30", ppt.Cost)
+	}
+	if ppt.Tokens != 4500 {
+		t.Errorf("pay_per_token tokens = %d, want 4500", ppt.Tokens)
+	}
+
+	// subscription should have its own totals
+	sub, ok := summary.ByBillingType["subscription"]
+	if !ok {
+		t.Fatal("missing subscription in ByBillingType")
+	}
+	if !floatEq(sub.Cost, 0.0, 0.0001) {
+		t.Errorf("subscription cost = %f, want 0.0", sub.Cost)
+	}
+	if sub.Tokens != 4500 {
+		t.Errorf("subscription tokens = %d, want 4500", sub.Tokens)
+	}
+
+	// Totals
+	if !floatEq(summary.ChargedCost, 0.30, 0.0001) {
+		t.Errorf("ChargedCost = %f, want 0.30", summary.ChargedCost)
+	}
+	if !floatEq(summary.TokenValue, 0.38, 0.0001) {
+		t.Errorf("TokenValue = %f, want 0.38", summary.TokenValue)
+	}
+}
+
+func TestCostSummaryBillingType_EmptyStore(t *testing.T) {
+	cs := makeCostStore(t)
+
+	summary := cs.GetCostSummary(time.Time{}, time.Time{})
+
+	if summary.ChargedCost != 0 {
+		t.Errorf("ChargedCost = %f, want 0", summary.ChargedCost)
+	}
+	if summary.TokenValue != 0 {
+		t.Errorf("TokenValue = %f, want 0", summary.TokenValue)
+	}
+	if len(summary.ByBillingType) != 0 {
+		t.Errorf("ByBillingType should be empty, got %v", summary.ByBillingType)
+	}
+}

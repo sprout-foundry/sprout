@@ -101,6 +101,11 @@ type AgentState struct {
 	CachedTokens            int     `json:"cached_tokens"`
 	CacheWriteTokens        int     `json:"cache_write_tokens,omitempty"`
 	CachedCostSavings       float64 `json:"cached_cost_savings"`
+	// Billing-model-aware cost tracking (SP-080)
+	ChargedCostTotal  float64 `json:"charged_cost_total,omitempty"`
+	TokenCostTotal    float64 `json:"token_cost_total,omitempty"`
+	SubscriptionTokens int    `json:"subscription_tokens,omitempty"`
+	FreeTokens         int    `json:"free_tokens,omitempty"`
 }
 
 // DiffChange represents a change region in the diff

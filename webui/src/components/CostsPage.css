@@ -73,8 +73,60 @@
 .costs-summary-total {
   font-size: var(--text-xl, 1.25rem);
   font-weight: 600;
-  margin-bottom: var(--space-4);
+  margin-bottom: var(--space-2);
   color: var(--text-primary);
+}
+
+.costs-token-value {
+  font-size: var(--text-sm, 0.875rem);
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
+.costs-billing-breakdown {
+  display: flex;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.costs-billing-pill {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  background: var(--bg-secondary);
+  min-width: 140px;
+}
+
+.costs-billing-pill-label {
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.costs-billing-pill-cost {
+  font-size: var(--text-lg, 1.125rem);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.costs-billing-pill-tokens {
+  font-size: var(--text-xs, 0.75rem);
+  color: var(--text-secondary);
+}
+
+.costs-billing-pill--subscription {
+  border-color: color-mix(in srgb, var(--accent-success) 30%, var(--border-default));
+  background: color-mix(in srgb, var(--accent-success) 6%, var(--bg-secondary));
+}
+
+.costs-billing-pill--free {
+  border-color: color-mix(in srgb, var(--accent-info, var(--accent-primary)) 30%, var(--border-default));
+  background: color-mix(in srgb, var(--accent-info, var(--accent-primary)) 6%, var(--bg-secondary));
 }
 
 [data-testid^="cost-"][data-testid$="-placeholder"] {

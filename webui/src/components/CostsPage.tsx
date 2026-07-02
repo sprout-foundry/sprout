@@ -133,7 +133,40 @@ export default function CostsPage({ onSessionClick }: CostsPageProps = {}) {
         <>
           <div className="costs-summary-total" data-testid="costs-summary-total">
             Total: ${summary!.total_cost.toFixed(4)}
+            {summary!.token_value != null && summary!.token_value > 0 && summary!.token_value !== summary!.total_cost && (
+              <span className="costs-token-value" data-testid="costs-token-value">
+                {' '}(Token value: ${summary!.token_value.toFixed(4)})
+              </span>
+            )}
           </div>
+          {summary!.by_billing_type && Object.keys(summary!.by_billing_type).length > 0 && (
+            <div className="costs-billing-breakdown" data-testid="costs-billing-breakdown">
+              {(['pay_per_token', 'subscription', 'free'] as const)
+                .filter((bt) => {
+                  const bd = summary!.by_billing_type![bt];
+                  return bd && (bd.cost > 0 || bd.tokens > 0);
+                })
+                .map((bt) => {
+                  const bd = summary!.by_billing_type![bt];
+                  const label = bt === 'pay_per_token'
+                    ? 'Pay-per-token'
+                    : bt === 'subscription'
+                      ? 'Subscription (included)'
+                      : 'Local/Free';
+                  return (
+                    <div key={bt} className={`costs-billing-pill costs-billing-pill--${bt}`} data-testid={`costs-billing-${bt}`}>
+                      <span className="costs-billing-pill-label">{label}</span>
+                      <span className="costs-billing-pill-cost">
+                        ${bd.cost.toFixed(4)}
+                      </span>
+                      <span className="costs-billing-pill-tokens">
+                        {(bd.tokens / 1000).toFixed(1)}K tok
+                      </span>
+                    </div>
+                  );
+                })}
+            </div>
+          )}
           {(() => {
             const today = new Date().toISOString().slice(0, 10);
             const todayCost = history?.daily_costs.find((d) => d.date === today)?.total_cost ?? 0;

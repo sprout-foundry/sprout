@@ -25,6 +25,8 @@ interface ProviderMutationParams {
   setProviderSupportsVision: (v: boolean) => void;
   providerVisionModel: string;
   setProviderVisionModel: (v: string) => void;
+  providerBillingType: 'pay_per_token' | 'subscription' | 'free';
+  setProviderBillingType: (v: 'pay_per_token' | 'subscription' | 'free') => void;
   providerModelContextSizes: string;
   setProviderModelContextSizes: (v: string) => void;
 }
@@ -66,6 +68,8 @@ export function useProviderMutations(params: ProviderMutationParams) {
     setProviderSupportsVision,
     providerVisionModel,
     setProviderVisionModel,
+    providerBillingType,
+    setProviderBillingType,
     providerModelContextSizes,
     setProviderModelContextSizes,
   } = params;
@@ -80,6 +84,7 @@ export function useProviderMutations(params: ProviderMutationParams) {
     setProviderApiKey('');
     setProviderSupportsVision(false);
     setProviderVisionModel('');
+    setProviderBillingType('pay_per_token');
     setProviderModelContextSizes('');
   }, [
     setEditingProvider,
@@ -91,6 +96,7 @@ export function useProviderMutations(params: ProviderMutationParams) {
     setProviderApiKey,
     setProviderSupportsVision,
     setProviderVisionModel,
+    setProviderBillingType,
     setProviderModelContextSizes,
   ]);
 
@@ -111,6 +117,7 @@ export function useProviderMutations(params: ProviderMutationParams) {
         env_var: providerEnvVar.trim() || undefined,
         supports_vision: providerSupportsVision || undefined,
         vision_model: providerVisionModel.trim() || undefined,
+        ...(providerBillingType !== 'pay_per_token' ? { billing_type: providerBillingType } : {}),
         ...(modelContextSizes ? { model_context_sizes: modelContextSizes } : {}),
       };
       await ctx.api.addCustomProvider(provider);
@@ -153,6 +160,7 @@ export function useProviderMutations(params: ProviderMutationParams) {
     providerApiKey,
     providerSupportsVision,
     providerVisionModel,
+    providerBillingType,
     providerModelContextSizes,
     resetProviderForm,
   ]);
@@ -171,6 +179,7 @@ export function useProviderMutations(params: ProviderMutationParams) {
         env_var: providerEnvVar.trim() || undefined,
         supports_vision: providerSupportsVision || undefined,
         vision_model: providerVisionModel.trim() || undefined,
+        ...(providerBillingType !== 'pay_per_token' ? { billing_type: providerBillingType } : {}),
         ...(modelContextSizes ? { model_context_sizes: modelContextSizes } : {}),
       };
       await ctx.api.updateCustomProvider(editingProvider.originalName, provider);
@@ -214,6 +223,7 @@ export function useProviderMutations(params: ProviderMutationParams) {
     providerApiKey,
     providerSupportsVision,
     providerVisionModel,
+    providerBillingType,
     providerModelContextSizes,
     resetProviderForm,
   ]);

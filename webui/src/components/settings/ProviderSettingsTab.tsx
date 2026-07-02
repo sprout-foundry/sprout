@@ -19,6 +19,7 @@ interface ProviderSettingsTabProps {
   providerApiKey: string;
   providerSupportsVision: boolean;
   providerVisionModel: string;
+  providerBillingType: 'pay_per_token' | 'subscription' | 'free';
   providerModelContextSizes: string;
   loadingProviderInfo: boolean;
   currentProviderInfo: { provider: string; model: string; hasCredential: boolean } | null;
@@ -43,6 +44,7 @@ interface ProviderSettingsTabProps {
   setProviderApiKey: (v: string) => void;
   setProviderSupportsVision: (v: boolean) => void;
   setProviderVisionModel: (v: string) => void;
+  setProviderBillingType: (v: 'pay_per_token' | 'subscription' | 'free') => void;
   setProviderModelContextSizes: (v: string) => void;
   resetProviderForm: () => void;
   handleAddProvider: () => Promise<void>;
@@ -62,6 +64,7 @@ export default function ProviderSettingsTab({
   providerApiKey,
   providerSupportsVision,
   providerVisionModel,
+  providerBillingType,
   providerModelContextSizes,
   loadingProviderInfo,
   currentProviderInfo,
@@ -77,6 +80,7 @@ export default function ProviderSettingsTab({
   setProviderApiKey,
   setProviderSupportsVision,
   setProviderVisionModel,
+  setProviderBillingType,
   setProviderModelContextSizes,
   resetProviderForm,
   handleAddProvider,
@@ -269,6 +273,7 @@ export default function ProviderSettingsTab({
                   setProviderApiKey('');
                   setProviderSupportsVision(!!cfg.supports_vision);
                   setProviderVisionModel(cfg.vision_model || '');
+                  setProviderBillingType(cfg.billing_type || 'pay_per_token');
                   const mcs = cfg.model_context_sizes;
                   if (mcs && typeof mcs === 'object') {
                     const pairs = Object.entries(mcs)
@@ -355,6 +360,21 @@ export default function ProviderSettingsTab({
                 placeholder="model1:8192,model2:131072,model3:2097152"
               />
               <small className="config-help">Format: model_name:context_size, separated by commas</small>
+            </div>
+            <div className="form-row">
+              <label>Billing Type</label>
+              <select
+                className="styled-input"
+                value={providerBillingType}
+                onChange={(e) => setProviderBillingType(e.target.value as 'pay_per_token' | 'subscription' | 'free')}
+              >
+                <option value="pay_per_token">Pay-per-token (API cost per call)</option>
+                <option value="subscription">Subscription (flat-rate, included)</option>
+                <option value="free">Free / Local (zero marginal cost)</option>
+              </select>
+              <small className="config-help">
+                Determines how costs are tracked. Auto-detected for localhost endpoints.
+              </small>
             </div>
             <div className="form-row">
               <label>API Key (optional)</label>

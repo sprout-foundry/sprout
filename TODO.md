@@ -671,10 +671,10 @@ file extraction (mechanical pattern, well-understood from earlier
 phases).
 
 - [x] **SP-075-4a:** `pkg/agent/steer_input.go` 1313 lines — extract input parsing, hint rendering, mode switching into separate files. _(file actually lives in `pkg/console/`; decomposed 1313 → 391 lines plus 7 new files; commit `dda9add3`)_
-- [ ] **SP-075-4b:** `pkg/adapters/go_adapter.go` 1188 lines — extract provider dispatch, response handling, error mapping.
-- [ ] **SP-075-4c:** `pkg/agent_providers/models.go` 1121 lines — extract model metadata, capability detection, request shaping.
+- [x] **SP-075-4b:** `pkg/adapters/go_adapter.go` 1188 lines — extract provider dispatch, response handling, error mapping. _(file actually lives at `pkg/lsp/semantic/go_adapter.go`; decomposed 1188 → 244 lines plus 7 concern files; commit `04ec0319`)_
+- [x] **SP-075-4c:** `pkg/agent_providers/models.go` 1121 lines — extract model metadata, capability detection, request shaping. _(file actually lives at `pkg/agent_api/models.go`; decomposed 1121 → 144 lines plus 4 concern files; commit `bf06ba24`)_
 - [x] **SP-075-4d:** `pkg/webui/settings_api_put.go` 1094 lines — extract per-setting update handlers, validation, conflict detection. _(extracted `applyPartialSettings` (the 540-line monolith) into per-domain helpers in a new `settings_api_partial_settings.go`. Original file 1094→578 lines, new file 652 lines. All 100+ existing `applyPartialSettings` tests pass. Commit `84f08de`.)_
-- [ ] **SP-075-4e:** `pkg/webcontent/client.go` 1060 lines — extract request building, response handling, session lifecycle.
+- [x] **SP-075-4e:** `pkg/webcontent/client.go` 1060 lines — extract request building, response handling, session lifecycle. _(file actually lives at `pkg/mcp/client.go`; decomposed 1060 → 680 lines plus 3 concern files; commit TBD)_
 - [ ] **SP-075-4f:** `pkg/webcontent/client_context.go` 1011 lines — extract context propagation, header injection, timeout handling.
 - [ ] **SP-075-4g:** `pkg/agent_tools/tool_handlers_subagent_spawn.go` 999 lines — extract spawn lifecycle, worktree setup, cleanup hooks.
 - [x] **SP-075-4h:** `webui/src/components/Terminal.tsx` 780 lines — extract xterm setup, event handlers, keybindings (continue Phase 3 work). _(extracted three reusable hooks into `webui/src/hooks/usePersistedPref.ts`: `usePersistedNumber` (terminalHeight + fontSize), `usePersistedBoolean` (copyOnSelect), `useOutsideClickDismiss` (two menu-dismiss effects). Terminal.tsx 780→718 lines. TypeScript clean, 13 new hook tests passing, existing tests still green. Commit `701161b`.)_

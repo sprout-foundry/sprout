@@ -98,13 +98,13 @@ func runMCPTest(serverName string) error {
 		server.Stop(context.Background())
 	}()
 
-	fmt.Println("✓ Server started successfully!")
+	console.GlyphSuccess.Fprintln(os.Stdout, "Server started successfully!")
 
 	fmt.Println("[~] Initializing server...")
 	if err := server.Initialize(ctx); err != nil {
 		return fmt.Errorf("failed to initialize server: %w", err)
 	}
-	fmt.Println("✓ Server initialized successfully!")
+	console.GlyphSuccess.Fprintln(os.Stdout, "Server initialized successfully!")
 
 	console.GlyphAction.Print("Listing available tools...")
 	tools, err := server.ListTools(ctx)
@@ -113,11 +113,11 @@ func runMCPTest(serverName string) error {
 	}
 
 	if len(tools) == 0 {
-		fmt.Println("⚠ No tools available from this server.")
+		console.GlyphWarning.Fprintln(os.Stdout, "No tools available from this server.")
 		return nil
 	}
 
-	fmt.Printf("✓ Found %d tools:\n", len(tools))
+	console.GlyphSuccess.Fprintf(os.Stdout, "Found %d tools:", len(tools))
 	fmt.Println()
 
 	for i, tool := range tools {

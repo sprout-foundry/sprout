@@ -12,9 +12,16 @@ import (
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
+const (
+	BillingPayPerToken  = "pay_per_token"  // default — real USD per token
+	BillingSubscription = "subscription"   // flat-rate, quota/rate-limited
+	BillingFree         = "free"           // self-hosted, zero marginal cost
+)
+
 // ProviderConfig defines the configuration for a generic provider
 type ProviderConfig struct {
-	Name string `json:"name"`
+	Name        string `json:"name"`
+	BillingType string `json:"billing_type,omitempty"`
 	// DisplayName is the user-facing label (e.g. "GLM Coding Plan").
 	// Carried in the JSON config so onboarding menus, the env-var
 	// credential sweep, and the model picker can label remote-only
@@ -203,6 +210,25 @@ func (c *ProviderConfig) GetAuthToken() (string, error) {
 	default:
 		return "", agenterrors.NewValidation(fmt.Sprintf("unsupported authentication type: %s", c.Auth.Type), nil)
 	}
+}
+
+// BillingTypeResolved returns the effective billing model for this provider.
+// Explicit config value takes priority; otherwise heuristics apply:
+//   - localhost / 127.0.0.1 endpoints → free
+//   - zai-coding → subscription
+//   - everything else → pay_per_token (default)
+func (c *ProviderConfig) BillingTypeResolved() string {
+	if c.BillingType != "" {
+		return c.BillingType
+	}
+	endpoint := strings.ToLower(c.Endpoint)
+	if strings.Contains(endpoint, "127.0.0.1") || strings.Contains(endpoint, "localhost") {
+		return BillingFree
+	}
+	if c.Name == "zai-coding" {
+		return BillingSubscription
+	}
+	return BillingPayPerToken
 }
 
 // Validate validates the provider configuration

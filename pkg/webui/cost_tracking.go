@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	providers "github.com/sprout-foundry/sprout/pkg/agent_providers"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
@@ -29,6 +30,10 @@ type CostRecord struct {
 	Title       string `json:"title,omitempty"`
 	WorkingDir  string `json:"working_dir,omitempty"`
 	LastUpdated string `json:"last_updated,omitempty"` // RFC3339 timestamp
+	// Billing-model-aware cost tracking (SP-080)
+	BillingType string  `json:"billing_type,omitempty"`
+	ChargedCost float64 `json:"charged_cost,omitempty"`
+	TokenCost   float64 `json:"token_cost,omitempty"`
 }
 
 // CostStore handles persisting and querying cost records
@@ -76,7 +81,7 @@ func (cs *CostStore) RecordCostWithSession(provider, model, sessionID, chatID, t
 	if cost <= 0 {
 		return
 	}
-	record := CostRecord{
+	cs.appendRecord(CostRecord{
 		Timestamp:    time.Now(),
 		Provider:     provider,
 		Model:        model,
@@ -88,12 +93,40 @@ func (cs *CostStore) RecordCostWithSession(provider, model, sessionID, chatID, t
 		Title:        title,
 		WorkingDir:   workingDir,
 		LastUpdated:  time.Now().Format(time.RFC3339),
-	}
+		BillingType:  "pay_per_token",
+		ChargedCost:  cost,
+	})
+}
 
+func (cs *CostStore) RecordCostWithBilling(provider, model, sessionID, chatID, title, workingDir, billingType string, promptTokens, outputTokens int, chargedCost, tokenCost float64) {
+	if chargedCost <= 0 && tokenCost <= 0 {
+		return
+	}
+	if billingType == "" {
+		billingType = "pay_per_token"
+	}
+	cs.appendRecord(CostRecord{
+		Timestamp:    time.Now(),
+		Provider:     provider,
+		Model:        model,
+		PromptTokens: promptTokens,
+		OutputTokens: outputTokens,
+		Cost:         chargedCost,
+		SessionID:    sessionID,
+		ChatID:       chatID,
+		Title:        title,
+		WorkingDir:   workingDir,
+		LastUpdated:  time.Now().Format(time.RFC3339),
+		BillingType:  billingType,
+		ChargedCost:  chargedCost,
+		TokenCost:    tokenCost,
+	})
+}
+
+func (cs *CostStore) appendRecord(record CostRecord) {
 	cs.mu.Lock()
 	cs.records = append(cs.records, record)
 
-	// Persist every 10 records or every 30 seconds
 	if len(cs.records)%10 == 0 || time.Since(cs.lastPersist) > 30*time.Second {
 		recordsCopy := make([]CostRecord, len(cs.records))
 		copy(recordsCopy, cs.records)
@@ -135,16 +168,20 @@ func (cs *CostStore) GetDailyCosts(days int) []DailyCost {
 
 	for _, r := range cs.records {
 		if r.Timestamp.After(startDate) {
+			dailyCost := r.Cost
+			if dailyCost == 0 && r.TokenCost > 0 {
+				dailyCost = r.TokenCost
+			}
 			dateKey := r.Timestamp.Format("2006-01-02")
 			if dc, ok := dailyMap[dateKey]; ok {
-				dc.TotalCost += r.Cost
-				dc.ByProvider[r.Provider] += r.Cost
+				dc.TotalCost += dailyCost
+				dc.ByProvider[r.Provider] += dailyCost
 				dailyMap[dateKey] = dc
 			} else {
 				dailyMap[dateKey] = DailyCost{
 					Date:       dateKey,
-					TotalCost:  r.Cost,
-					ByProvider: map[string]float64{r.Provider: r.Cost},
+					TotalCost:  dailyCost,
+					ByProvider: map[string]float64{r.Provider: dailyCost},
 				}
 			}
 		}
@@ -173,18 +210,27 @@ type SessionCostRow struct {
 	LastUpdated string  `json:"last_updated"` // RFC3339 timestamp
 }
 
+// BillingTypeBreakdown holds aggregated cost and token data for one billing model.
+type BillingTypeBreakdown struct {
+	Cost   float64 `json:"cost"`
+	Tokens int     `json:"tokens"`
+}
+
 // CostSummary represents aggregated cost data
 type CostSummary struct {
-	TotalCost            float64            `json:"total_cost"`
-	ByProvider           map[string]float64 `json:"by_provider"`
-	ByModel              map[string]float64 `json:"by_model"`
-	ByProviderThisMonth  map[string]float64 `json:"by_provider_this_month"`
-	ByProviderLastMonth  map[string]float64 `json:"by_provider_last_month"`
-	Last30Days           float64            `json:"last_30_days"`
-	Last7Days            float64            `json:"last_7_days"`
-	ThisMonth            float64            `json:"this_month"`
-	LastMonth            float64            `json:"last_month"`
-	TopSessions          []SessionCostRow   `json:"top_sessions"`
+	TotalCost            float64                       `json:"total_cost"`
+	ByProvider           map[string]float64            `json:"by_provider"`
+	ByModel              map[string]float64            `json:"by_model"`
+	ByProviderThisMonth  map[string]float64            `json:"by_provider_this_month"`
+	ByProviderLastMonth  map[string]float64            `json:"by_provider_last_month"`
+	Last30Days           float64                       `json:"last_30_days"`
+	Last7Days            float64                       `json:"last_7_days"`
+	ThisMonth            float64                       `json:"this_month"`
+	LastMonth            float64                       `json:"last_month"`
+	TopSessions          []SessionCostRow              `json:"top_sessions"`
+	ByBillingType        map[string]BillingTypeBreakdown `json:"by_billing_type,omitempty"`
+	ChargedCost          float64                       `json:"charged_cost,omitempty"`
+	TokenValue           float64                       `json:"token_value,omitempty"`
 }
 
 // GetCostSummary returns overall cost summary.
@@ -197,6 +243,7 @@ func (cs *CostStore) GetCostSummary(start, end time.Time) CostSummary {
 		ByModel:              make(map[string]float64),
 		ByProviderThisMonth:  make(map[string]float64),
 		ByProviderLastMonth:  make(map[string]float64),
+		ByBillingType:        make(map[string]BillingTypeBreakdown),
 	}
 
 	// Get last 30 days
@@ -273,6 +320,22 @@ func (cs *CostStore) GetCostSummary(start, end time.Time) CostSummary {
 			summary.LastMonth += r.Cost
 			summary.ByProviderLastMonth[r.Provider] += r.Cost
 		}
+
+		// Billing-type-aware aggregation (SP-080)
+		bt := r.BillingType
+		if bt == "" {
+			bt = "pay_per_token"
+		}
+		charged := r.ChargedCost
+		if charged == 0 {
+			charged = r.Cost
+		}
+		bd := summary.ByBillingType[bt]
+		bd.Cost += charged
+		bd.Tokens += r.PromptTokens + r.OutputTokens
+		summary.ByBillingType[bt] = bd
+		summary.ChargedCost += charged
+		summary.TokenValue += r.TokenCost
 	}
 
 	// Build TopSessions: sort by cost desc, take top 10
@@ -364,4 +427,14 @@ func (cs *CostStore) ForcePersist() error {
 	copy(recordsCopy, cs.records)
 	cs.mu.Unlock()
 	return cs.persistRecords(recordsCopy)
+}
+
+func resolveBillingTypeForProvider(providerName string) string {
+	if cfg, err := providers.GlobalFactory().GetProviderConfig(providerName); err == nil && cfg != nil {
+		return cfg.BillingTypeResolved()
+	}
+	if providerName == "zai-coding" {
+		return providers.BillingSubscription
+	}
+	return providers.BillingPayPerToken
 }

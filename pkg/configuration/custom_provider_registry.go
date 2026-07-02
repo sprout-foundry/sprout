@@ -335,6 +335,7 @@ func (c CustomProviderConfig) ToProviderConfig() (*providers.ProviderConfig, err
 			OutputTokenCost: 0.002,
 			Currency:        "USD",
 		},
+		BillingType: normalized.BillingType,
 	}, nil
 }
 

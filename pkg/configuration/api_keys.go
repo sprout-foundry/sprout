@@ -564,15 +564,15 @@ func PromptForAPIKey(provider string) (string, error) {
 	switch provider {
 	case "openai":
 		if !strings.HasPrefix(apiKey, "sk-") {
-			fmt.Println("[WARN] Warning: OpenAI API keys typically start with 'sk-'")
+			bracketWarn(os.Stdout, "Warning: OpenAI API keys typically start with 'sk-'")
 		}
 	case "openrouter":
 		if !strings.HasPrefix(apiKey, "sk-or-") {
-			fmt.Println("[WARN] Warning: OpenRouter API keys typically start with 'sk-or-'")
+			bracketWarn(os.Stdout, "Warning: OpenRouter API keys typically start with 'sk-or-'")
 		}
 	}
 
-	fmt.Printf("[OK] API key accepted (%d characters)\n", len(apiKey))
+	bracketOK(os.Stdout, fmt.Sprintf("API key accepted (%d characters)", len(apiKey)))
 	return apiKey, nil
 }
 

@@ -421,6 +421,179 @@ without expanding the timeline into a verbose log.
 
 ---
 
+## CLI-B: Sweep Stray Unicode Status Glyphs Through `console.Glyph*`
+
+_Low-risk consistency pass (~1–2 hours)._ The visual-CLI polish
+(commit `3c507918`) converted `[WARN]`/`[done]`/`[web]` brackets to
+`console.Glyph*` so the user-facing surface honors `NO_COLOR`/
+`FORCE_COLOR` consistently. **A second wave of raw-format sites
+remains** — the file surface uses Unicode glyphs (`✓`/`✗`/`⚠`) inside
+`fmt.Printf` strings directly, bypassing the Glyph wrappers. They
+keep the visual appearance but **don't honor color toggles**.
+
+### Sites identified
+
+**`cmd/mcp_*.go`** (5 sites): `mcp_remove.go:90`, `mcp_test_cmd.go:101`,
+`mcp_test_cmd.go:107`, `mcp_test_cmd.go:116`, `mcp_test_cmd.go:120`,
+`mcp_add.go:158`, `mcp_add.go:250`, `mcp_add.go:318`, `mcp_add.go:381`.
+Plus 1 in `mcp_add.go:250` ("Git MCP Server configured successfully!").
+
+**`cmd/lsp.go`** (2 sites): line 108 (`✓ %s is already installed`),
+line 110 (`✗ %s is not installed.`).
+
+**`cmd/diag.go`** (3 sites): lines 41, 43, 49 — diagnostic
+"EXISTS / Does not exist" lines using raw `✓`/`✗`.
+
+**`cmd/keys_set.go`** (1 site): line 107 — `✓ API key for %s validated
+and saved`.
+
+**`cmd/service_darwin.go`** (3 sites): lines 377, 413, 432 — plist
+diagnostics with `⚠️` for stale plist, binary-access, log-rotation
+errors.
+
+**`cmd/agent_terminal_subscriber.go`** (1 site): line 366 —
+`[⚠️  SECURITY CAUTION]` literal already inside a Glyph-aware path
+but with mixed coloring.
+
+### Items
+
+- [ ] **CLI-B-1:** Convert each `✓` site to `console.GlyphSuccess` and
+  each `✗` site to `console.GlyphError`. Each `⚠`/`⚠️` to
+  `console.GlyphWarning`. ~14 mechanical replacements across 6 files.
+- [ ] **CLI-B-2:** For the 4 already-existing `[⚠️  SECURITY CAUTION]`
+  and similar "label in a glyphed line" cases, extract the bracketed
+  label as a constant so it can't drift from the Glyph prefix.
+- [ ] **CLI-B-3:** Add a `pkg/console/glyph_consistency_test.go` that
+  fails if any `fmt.Printf*` string in `cmd/` contains a raw `✓`/`✗`/
+  `⚠` outside of test files. Locks the sweep.
+
+### Notes
+
+- All call sites already have `fmt.Printf` so the change is "swap
+  the writer, not the format". Tests don't need updating because
+  the visible character (`✓`/`✗`/`⚠`) is preserved in both modes.
+- Skip `pkg/mcp/manager.go` and other internal-package sites where
+  the `console` import would create cycles — those should use a
+  raw stderr logger instead (not in scope for this batch).
+- Skip sites in `pkg/prompts/` (those glyphs are sent to the LLM, not
+  the user).
+
+---
+
+## CLI-C: Sweep `[OK]`/`[FAIL]`/`[WARN]`/`[INFO]` Literals in `pkg/`
+
+_Runner-sized batch (~1 hour)._ Mirrors CLI-B for the bracket style.
+The `pkg/configuration/` and `pkg/mcp/` packages have a heavy
+`[OK]`/`[WARN]`/`[INFO]` convention that pre-dates the Glyph system
+and bypasses `NO_COLOR` the same way.
+
+### Sites identified
+
+**`pkg/configuration/init.go`** (~10 sites): lines 129, 144, 147,
+151, 152, 259, 282, 370, 372, 374, 396, 420, 574 — the entire
+onboarding key-status flow uses bracketed literals.
+
+**`pkg/configuration/api_keys.go`** (3 sites): lines 567, 571, 575 —
+key-format warnings.
+
+**`pkg/mcp/github_setup.go`** (2 sites): lines 218, 233.
+
+**`pkg/agent_api/ollama_local.go`** (2 sites): lines 342, 657 —
+local-ollama model-not-found warnings.
+
+**`pkg/agent_tools/vision_fallback.go`** (1 site): line 177 — debug
+log.
+
+### Items
+
+- [ ] **CLI-C-1:** For each bracketed status literal in the surface
+  area (init.go + api_keys.go + github_setup.go + ollama_local.go),
+  swap to the appropriate `console.Glyph*`. Most sites already import
+  `pkg/console` indirectly or can add it without cycle.
+- [ ] **CLI-C-2:** For sites where `pkg/console` cannot be imported
+  (cyclic dep), wrap in a helper that returns the bracketed form
+  unchanged — at minimum document why in a comment so the runner
+  knows it was reviewed.
+- [ ] **CLI-C-3:** Add a `pkg/configuration/onboarding_glyph_test.go`
+  that asserts each migrated site still produces the same visible
+  string in default (colored) mode. Use the existing
+  `console.SetNoColorForTest` helper.
+
+### Notes
+
+- `pkg/configuration/` is the first surface new users see. This is
+  the highest-value sub-batch — users running with `NO_COLOR=1`
+  (CI logs, accessibility, log files) currently get literal
+  `[WARN]` text that is harder to scan than a glyphed one.
+- `pkg/agent_api/ollama_local.go` is the local-ollama integration;
+  this aligns the new HTTP-only path (post-SP-094 rewrite) with
+  the rest of the surface.
+
+---
+
+## CLI-D: Status Footer Tooltip on Hover
+
+_Medium-size polish (~0.5–1 day)._ The status footer at the bottom of
+the REPL shows live metrics (`12.4k ctx · $0.03 · 3 iters`) but
+provides no way to drill into the breakdown. The full breakdown is
+printable via `/stats` but the user has to type that command.
+
+### Items
+
+- [ ] **CLI-D-1:** Add a keybinding (default: `Alt+T`) that toggles
+  a transient tooltip rendering above the footer showing the full
+  per-tool stats: tool name, invocation count, total tokens, total
+  cost, average latency.
+- [ ] **CLI-D-2:** Per-helper: read the existing `metricsRecorder`
+  state in `pkg/console/status_footer_format.go` and render via the
+  existing table renderer (`table.go`). Width-truncate column data
+  when terminal is narrow.
+- [ ] **CLI-D-3:** Hook into the existing keymap table in
+  `pkg/console/input_keymap.go`. Add the binding with default `Alt+T`
+  and document in `/help`.
+
+### Notes
+
+- This is a power-user feature. Most users will never press it; the
+  existing `/stats` slash command still works for explicit cases.
+- The tooltip disappears on any keypress or after 5 s — same
+  transient behavior as the existing autocomplete popup.
+
+---
+
+## CLI-E: Color-Blind Mode (`--color-blind` flag)
+
+_Accessibility flag (~2–3 hours)._ The default Glyph vocabulary uses
+green (`✓`) for success, red (`✗`) for error, amber (`⚠`) for
+warning. Users with deuteranopia or protanopia may find red/green
+ambiguous, especially when the warning is "this might be a problem
+but not an error". A CLI flag that swaps red→cyan and amber→magenta
+(or similar) covers the common cases.
+
+### Items
+
+- [ ] **CLI-E-1:** Add `--color-blind` flag at the top-level
+  `cmd/root.go`. Reads the same env var (`SPROUT_COLOR_BLIND=1`) so
+  CI can opt in. Persists to `~/.config/sprout/config.toml` via
+  `pkg/configuration`.
+- [ ] **CLI-E-2:** In `pkg/console/glyph.go`, add a per-glyph color
+  override table populated when the flag is set. GlyphError →
+  cyan, GlyphWarning → magenta (or whatever the palette lookup
+  recommends — verify with the existing accessibility audit in
+  `docs/a11y.md` if present).
+- [ ] **CLI-E-3:** Test: when flag is set, capture the bytes written
+  via `console.GlyphError.Fprintf` and assert they do NOT contain
+  the red ANSI sequence (`\033[31m`) but DO contain cyan (`\033[36m`).
+
+### Notes
+
+- WebUI is out of scope; the CSS palette already covers most cases
+  via design tokens.
+- This flag complements `NO_COLOR` (mutually exclusive) and
+  `FORCE_COLOR` (overrides NO_COLOR). Don't conflict with either.
+
+---
+
 ## Things to consider after SP-091 → SP-095 ship
 
 - **WASM stub-tools** — running the WASM build against `pkg/agent_tools/`

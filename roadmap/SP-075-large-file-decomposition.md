@@ -1,10 +1,25 @@
 # SP-075: Large-File Decomposition — Bring the Worst Offenders Toward 500 Lines
 
-**Status:** 📋 Proposed
-**Date:** 2026-06-15
-**Depends on:** none
-**Priority:** Low-Medium (maintainability; no user-facing behavior change)
-**Effort Estimate:** ~1 week (incremental, one file at a time)
+**Status:** ⚠️ In Progress — Phase 1 (config + cmd) and Phase 2 (agent core) substantially shipped 2026-06; Phase 3 (providers + web) shipped for several files. Original 2833-line `config.go` reduced to ~396 lines via 12 domain files; `agent_workflow.go` 1519→3 lines (fully extracted); `tool_handlers_subagent.go` 1568→41 lines; `seed_integration.go` 1124→29 lines. Remaining files still over 600-line target tracked below.
+
+**Current worst offenders (post-extraction):**
+
+| File | Lines | Notes |
+|---|---|---|
+| `pkg/agent/steer_input.go` | 1313 | NEW — wasn't in original spec |
+| `pkg/adapters/go_adapter.go` | 1188 | NEW — wasn't in original spec |
+| `pkg/agent_providers/models.go` | 1121 | NEW |
+| `pkg/webui/settings_api_put.go` | 1094 | NEW |
+| `pkg/webcontent/client.go` | 1060 | NEW |
+| `pkg/webcontent/client_context.go` | 1011 | NEW |
+| `pkg/agent_tools/tool_handlers_subagent_spawn.go` | 999 | irony: extraction result over target |
+| `webui/src/components/Terminal.tsx` | 780 | partially extracted to useTerminalPanes hook |
+| `pkg/agent/agent_modes.go` | 732 | split into 5 mode files, orchestrator still big |
+| `pkg/console/input_core.go` | 715 | partial — was 1264 |
+| `pkg/agent/change_tracking_shell.go` | 464 | UNDER 600 (was 1344) ✅ |
+| `pkg/agent_providers/generic_provider.go` | 669 | partial — was 1449 |
+
+Next phase: continue extracting these remaining offenders toward the 600-line target.
 
 ## Problem
 

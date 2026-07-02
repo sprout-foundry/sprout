@@ -3,14 +3,14 @@
 Roadmap specifications for the sprout project. Each spec describes
 a major architectural area, its current state, and open work.
 
-Specs ship to `./_completed/` once their core work lands. The root
-directory only contains specs still receiving active changes.
+Specs ship to [`./_completed/`](./_completed/) once their core work lands.
+The root directory only contains specs still receiving active changes.
 
-**Counts (as of 2026-06-30):** 64 shipped · 10 pending · 1 on hold.
+**Counts (as of 2026-06-30):** 72 shipped · 2 pending · 1 on hold.
 
 ## Shipped
 
-Full spec bodies in [`_completed/`](./_completed/) (64 files).
+Full spec bodies in [`_completed/`](./_completed/) (72 files).
 
 | Spec | Title | Status |
 |------|-------|--------|
@@ -19,12 +19,15 @@ Full spec bodies in [`_completed/`](./_completed/) (64 files).
 | SP-003 | [Webui & Frontend Architecture](./_completed/SP-003-webui.md) | ✅ Active (under active development) |
 | SP-004 | [Security, Validation & MCP](./_completed/SP-004-security.md) | ✅ Active |
 | SP-005 | [Supporting Systems & Infrastructure](./_completed/SP-005-infrastructure.md) | ✅ Active |
+| SP-008 | [Reliability Engineering — Concurrency & Observability](./_completed/SP-008-reliability-engineering.md) | ✅ Shipped (Tracks A + B complete 2026-06) |
 | SP-009 | [Component Library Maturation — Publish & Storybook](./_completed/SP-009-component-library-maturation.md) | ✅ Implemented (Storybook + MDX docs + Chromatic; webui imports @sprout/ui) |
 | SP-010 | [Editor Modernization](./_completed/SP-010-editor-modernization.md) | ✅ Implemented (EditorPane 2604→513 lines; EditorCore extracted; React.memo + 18 bug fixes) |
+| SP-011 | [Terminal Parity & Bug Fixes](./_completed/SP-011-terminal-parity.md) | ✅ Shipped (all 3 phases complete 2026-06) |
 | SP-013 | [Agent Settings Management Tool](./_completed/SP-013-agent-settings-skill.md) | ✅ Implemented (manage_settings tool registered; pkg/agent/settings_handler.go) |
 | SP-014 | [Agent Terminal Sessions — Hidden PTY Routing + Background Mode](./_completed/SP-014-agent-terminal-sessions.md) | ✅ Implemented (Hidden PTY routing + background mode shipped) |
 | SP-015 | [Cloud Platform Integration](./_completed/SP-015-cloud-platform.md) | ✅ Implemented (sprout-side; 2026-06-26) — R1–R7 complete in this repo. Cross-repo evolution lives in `../sprout-foundry` |
 | SP-016 | [Embedding Index — Duplicate Detection & Semantic Search](./_completed/SP-016-embedding-duplicate-detection.md) | ✅ Implemented (core infrastructure complete; expanded scope in SP-016b) |
+| SP-016b | [Expanded Embedding Index — Full Workspace Semantic Search](./_completed/SP-016b-expanded-embedding-index.md) | ✅ Shipped (backend complete 2026-06; minor SearchView.tsx UI gap) |
 | SP-017 | [Settings Panel Rework — Scoped Collapsible Sections](./_completed/SP-017-settings-panel-rework.md) | ✅ Partially Implemented (scoped labels shipped; collapsible sections pending → see SP-101) |
 | SP-018 | [Memory System](./_completed/SP-018-memory-system.md) | ✅ Implemented |
 | SP-019 | [Multi-Chat Sessions](./_completed/SP-019-multi-chat-sessions.md) | ✅ Implemented |
@@ -34,14 +37,19 @@ Full spec bodies in [`_completed/`](./_completed/) (64 files).
 | SP-022 | [Workspace Management & Project Detection](./_completed/SP-022-workspace-management.md) | ✅ Implemented (WorkspacePicker + WorkspacePane + LocationSwitcher + WorkspaceBar) |
 | SP-023 | [In-Process Subagent Execution](./_completed/SP-023-in-process-subagents.md) | ✅ Active |
 | SP-024 | [Context Management — File Read Optimization](./_completed/SP-024-context-management.md) | ✅ Phase 1-3, Phase 4 complete (Phase 2 deferred; tree-sitter in SP-025) |
+| SP-025 | [Tree-Sitter Integration — Real AST for Multi-Language Symbol Extraction](./_completed/SP-025-tree-sitter-integration.md) | ✅ Shipped (all 5 phases complete 2026-06) |
 | SP-026 | [Coordinator Persona (formerly "Executive Assistant")](./_completed/SP-026-executive-assistant.md) | ✅ Implemented (renamed 2026-06-03, see commit `516a9d41`) |
+| SP-027 | [Persistent Context & Conversational Memory](./_completed/SP-027-persistent-context.md) | ✅ Shipped (all 4 phases complete 2026-06) |
 | SP-039 | [SP-039 — UI Consolidation Decision](./_completed/SP-039-DECISION.md) | ✅ Decision made |
 | SP-039 | [Component Categorization](./_completed/SP-039-component-categorization.md) | (supporting doc — see linked spec) |
+| SP-045 | [WASM Build Feature Parity](./_completed/SP-045-wasm-feature-parity.md) | ✅ Shipped (Tiers 1-3 complete 2026-06) |
+| SP-046 | [Browser-Primary Workspace Sync Model](./_completed/SP-046-workspace-sync-model.md) | ✅ Shipped (all 5 numbered items complete 2026-06) |
 | SP-048 | [CLI Delight — Terminal UX Polish](./_completed/SP-048-cli-delight.md) | ✅ Partially Implemented (status footer + glyph vocabulary shipped; tool timeline + silence-fill pending → see SP-101) |
 | SP-049 | [Shell Permission Overhaul — User-Configurable Policy & Headless Hardening](./_completed/SP-049-shell-permission-overhaul.md) | ✅ Implemented (Phases 3a–3d complete) |
 | SP-050 | [Orchestrator Persona Collapse — One Persona, Configurable Git-Write](./_completed/SP-050-orchestrator-persona-collapse.md) | ✅ Implemented |
 | SP-051 | [Depth-Aware Subagent UI — Visible Nesting in the CLI](./_completed/SP-051-depth-aware-subagent-ui.md) | ✅ Implemented |
 | SP-053 | [WebUI CLI Parity — Persona/Depth, Live Tools, Cost Footer](./_completed/SP-053-webui-cli-parity.md) | ✅ Implemented |
+| SP-054 | [LSP Language Coverage Expansion](./_completed/SP-054-lsp-language-coverage.md) | ✅ Shipped (all 3 phases complete 2026-06) |
 | SP-055 | [CLI Pinned Input — Always-On Steering Panel](./_completed/SP-055-cli-pinned-input.md) | ✅ Shipped — Phases 1/2/3 + 3b (done-queue mode) + 3c (UTF-8) + OPOST fix. |
 | SP-056 | [CLI Reasoning Fold — Collapsed Thinking Indicator](./_completed/SP-056-cli-reasoning-fold.md) | ✅ Implemented (2026-06-30) |
 | SP-057 | [CLI Output Consistency — Glyph Migration & Unified Picker](./_completed/SP-057-cli-output-consistency.md) | ✅ Shipped (all 5 phases, 2026-05-25) |
@@ -81,21 +89,13 @@ Full spec bodies in [`_completed/`](./_completed/) (64 files).
 
 ## Pending
 
-Specs still in flight (10 files). When a spec's core work
+Specs still in flight (2 files). When a spec's core work
 ships, it moves to [`_completed/`](./_completed/).
 
 | Spec | Title | Status |
 |------|-------|--------|
-| SP-008 | [Reliability Engineering — Concurrency & Observability](./SP-008-reliability-engineering.md) | ⚠️ Partially Shipped — Track A concurrency tests, semantic-recall instrumentation, and vision metrics shipped (2026-06-2 |
-| SP-011 | [Terminal Parity & Bug Fixes](./SP-011-terminal-parity.md) | 📋 Proposed |
-| SP-012 | [UX Polish](./SP-012-ux-polish.md) | ⚠️ Partially Shipped — Status footer, glyph vocabulary, notification center (top-right stack with auto-dismiss), and red |
-| SP-016b | [Expanded Embedding Index — Full Workspace Semantic Search](./SP-016b-expanded-embedding-index.md) | 📋 Proposed |
-| SP-025 | [Tree-Sitter Integration — Real AST for Multi-Language Symbol Extraction](./SP-025-tree-sitter-integration.md) | 📋 Spec |
-| SP-027 | [Persistent Context & Conversational Memory](./SP-027-persistent-context.md) | 📋 Proposed |
-| SP-045 | [WASM Build Feature Parity](./SP-045-wasm-feature-parity.md) | ⚠️ Partially Shipped — wasmshell foundation, embedding mode switching, onnx lazy-load bridge, and `mcp_refresh` tool shi |
-| SP-046 | [Browser-Primary Workspace Sync Model](./SP-046-workspace-sync-model.md) | 📋 Proposed |
-| SP-054 | [LSP Language Coverage Expansion](./SP-054-lsp-language-coverage.md) | 📋 Proposed |
-| SP-075 | [Large-File Decomposition — Bring the Worst Offenders Toward 500 Lines](./SP-075-large-file-decomposition.md) | 📋 Proposed |
+| SP-012 | [UX Polish](./SP-012-ux-polish.md) | ⚠️ ~90% Shipped — Notification center, reduced-motion, inline tool badges, MAX_PANES, sidebar persistence, mobile responsive, loading skeletons, panel animations shipped; remaining: ARIA gaps in FileTree (role="treeitem"/aria-expanded) and ChatPanel (role="log"), global `:focus-visible` styles, `notificationBus.markAllRead()` |
+| SP-075 | [Large-File Decomposition](./SP-075-large-file-decomposition.md) | ⚠️ In Progress — Phase 1 (config + cmd) and Phase 2 (agent core) substantially shipped 2026-06; Phase 3 (providers + web) shipped for several files. Original 2833-line `config.go` reduced to ~396 lines; `agent_workflow.go` 1519→3 lines; `tool_handlers_subagent.go` 1568→41 lines. **Remaining files over 600-line target:** `steer_input.go` 1313, `go_adapter.go` 1188, `models.go` 1121, `settings_api_put.go` 1094, `client.go` 1060, `client_context.go` 1011, `tool_handlers_subagent_spawn.go` 999, `Terminal.tsx` 780, `agent_modes.go` 732, `input_core.go` 715, `generic_provider.go` 669. |
 
 ## Future / On Hold
 
@@ -104,4 +104,3 @@ Parked pending real demand — not scheduled. See [`future/`](./future/).
 | Spec | Title | Reason |
 |------|-------|--------|
 | SP-007 | [Extend Configuration — Role-Based Configs](./future/SP-007-extend-config.md) | 🧊 On hold (parked 2026-06-14) — speculative; revisit only with evidence of user demand. See roadmap/00-INDEX.md "Future  |
-

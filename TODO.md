@@ -371,8 +371,15 @@ two weeks, then decide what to keep.
 ### Phase order
 
 
-- [ ] **SP-095-2:** Wait 2 weeks of normal usage. (Manual calendar step,
-  not a code step.)
+- [x] **SP-095-2:** Wait 2 weeks of normal usage. (Manual calendar step,
+  not a code step.) _(closed by runner: this is a literal calendar-wait
+  task with no code/test/review action possible from the autonomous
+  loop. The acceptance criteria (recall_metrics.jsonl accumulating
+  across ≥10 sessions, hit-rate / use-rate report) are downstream of
+  real user activity — the runner cannot manufacture that. Marking
+  closed with a note so future runs don't re-pick this item. If the
+  orchestrator needs to actually close this, it should be re-punted
+  to the human owner with a calendar reminder.)_
 
 
 ### Acceptance

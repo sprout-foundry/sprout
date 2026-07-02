@@ -40,6 +40,18 @@ type RetryOptions struct {
 	JitterPct   int           // ± jitter percent (20 default)
 	IsRetryable func(error) bool // optional classifier; uses default if nil
 	OpName      string        // for logging
+	// Stats is an optional output pointer. If non-nil, DoVisionRetry
+	// populates it with per-call retry statistics (retry count, total
+	// sleep time, last error). Safe for use by callers that need per-call
+	// metrics for JSONL records.
+	Stats *RetryStats
+}
+
+// RetryStats captures per-call retry statistics populated by DoVisionRetry.
+type RetryStats struct {
+	RetryCount    int           // number of retry attempts (0 = first attempt succeeded)
+	SleepDuration time.Duration // total time spent sleeping between retries
+	LastError     error         // last error (nil on success)
 }
 
 // defaultRetryOptions returns the effective retry options after applying
@@ -189,6 +201,82 @@ func isRetryableError(err error) bool {
 }
 
 // ---------------------------------------------------------------------------
+// classifyVisionError — maps errors to failure reason buckets.
+// ---------------------------------------------------------------------------
+
+// classifyVisionError maps an error to a short, stable reason string for
+// structured metrics. The buckets mirror the retryability logic in
+// isRetryableError but are broader for observability:
+//
+//	"http_5xx"         — HTTP 5xx errors
+//	"http_429"         — HTTP 429 Too Many Requests
+//	"http_4xx"         — Other HTTP 4xx errors
+//	"context_cancel"   — context.Canceled or context.DeadlineExceeded
+//	"network"          — net.Error (timeout or temporary)
+//	"timeout"          — syscall.ETIMEDOUT
+//	"invalid_response" — empty or unparseable provider response
+//	"ocr_no_text"      — OCR fallback returned no text
+//	"unknown"          — everything else
+func classifyVisionError(err error) string {
+	if err == nil {
+		return "unknown"
+	}
+
+	// Context cancellation.
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return "context_cancel"
+	}
+
+	// HTTP status code from error message.
+	code := extractHTTPStatusCode(err)
+	if code > 0 {
+		if code >= 500 {
+			return "http_5xx"
+		}
+		if code == 429 {
+			return "http_429"
+		}
+		if code >= 400 {
+			return "http_4xx"
+		}
+	}
+
+	// Syscall-level timeout — check BEFORE net.Error because ETIMEDOUT
+	// also satisfies net.Error.Timeout().
+	if errors.Is(err, syscall.ETIMEDOUT) {
+		return "timeout"
+	}
+
+	// Connection reset.
+	if errors.Is(err, syscall.ECONNRESET) {
+		return "network"
+	}
+
+	// Network errors (net.Error).
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		if netErr.Timeout() {
+			return "timeout"
+		}
+		return "network"
+	}
+
+	// Unexpected EOF conditions.
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return "network"
+	}
+
+	// Check for common "no response" / parse error patterns.
+	msg := err.Error()
+	if strings.Contains(msg, "no response") || strings.Contains(msg, "no text") ||
+		strings.Contains(msg, "parse failed") || strings.Contains(msg, "invalid_response") {
+		return "invalid_response"
+	}
+
+	return "unknown"
+}
+
+// ---------------------------------------------------------------------------
 // Backoff computation with jitter and Retry-After support.
 // ---------------------------------------------------------------------------
 
@@ -243,6 +331,7 @@ func DoVisionRetry(ctx context.Context, op func(ctx context.Context) error, opts
 	baseDelay := opts.BaseDelay
 	maxDelay := opts.MaxDelay
 	jitterPct := opts.JitterPct
+	stats := opts.Stats
 
 	// Single-attempt mode: no retries.
 	if maxAttempts < 1 {
@@ -250,9 +339,17 @@ func DoVisionRetry(ctx context.Context, op func(ctx context.Context) error, opts
 	}
 
 	var lastErr error
+	retryCount := 0
+	var totalSleep time.Duration
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		lastErr = op(ctx)
 		if lastErr == nil {
+			// Populate stats on success.
+			if stats != nil {
+				stats.RetryCount = retryCount
+				stats.SleepDuration = totalSleep
+				stats.LastError = nil
+			}
 			return nil
 		}
 
@@ -265,6 +362,10 @@ func DoVisionRetry(ctx context.Context, op func(ctx context.Context) error, opts
 		if !retryable(lastErr) {
 			break
 		}
+
+		// This is a retry — increment counters.
+		retryCount++
+		IncVisionRetry()
 
 		// Compute backoff delay.
 		delay := computeBackoff(attempt, baseDelay, maxDelay, jitterPct)
@@ -280,7 +381,8 @@ func DoVisionRetry(ctx context.Context, op func(ctx context.Context) error, opts
 		// Check for context cancellation before sleeping.
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			lastErr = ctx.Err()
+			goto done
 		default:
 		}
 
@@ -290,10 +392,25 @@ func DoVisionRetry(ctx context.Context, op func(ctx context.Context) error, opts
 		// Sleep with context awareness.
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			lastErr = ctx.Err()
+			goto done
 		case <-time.After(delay):
+			totalSleep += delay
+			AddVisionLatencyRetrySleep(delay)
 		}
 	}
+
+done:
+	// Populate stats on failure.
+	if stats != nil {
+		stats.RetryCount = retryCount
+		stats.SleepDuration = totalSleep
+		stats.LastError = lastErr
+	}
+
+	// Classify and record the failure reason.
+	reason := classifyVisionError(lastErr)
+	IncVisionFailure(reason)
 
 	// Log give-up message.
 	logVisionGiveUp(opName, maxAttempts, lastErr)

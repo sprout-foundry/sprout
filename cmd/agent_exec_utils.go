@@ -190,6 +190,64 @@ func FormatDuration(d time.Duration) string {
 	return fmt.Sprintf("%.1fh", d.Hours())
 }
 
+// formatCompletionSummary returns a compact one-line summary of turn
+// metrics for the completion footer. Returns "" when the agent didn't
+// actually run a turn (no tokens, no cost) so slash commands and
+// direct-execution fast paths stay quiet.
+//
+// Format: "12.3k/128k ctx · $0.03 · 3 iters" — single segment so it
+// can be passed as a single argument to console.GlyphSuccess.Printf.
+//
+// Mirrors the cost/ctx formatters in pkg/console/status_footer_format.go
+// so the on-screen tokens/dollars match the in-footer figures byte-for-byte.
+// Reuses compactTokens from agent_turn_stats.go and adds formatCompactCost
+// (parallel to formatCost in pkg/console/status_footer_format.go) so the
+// on-screen dollars match the footer's, then and now.
+func formatCompletionSummary(chatAgent *agent.Agent) string {
+	ctx := chatAgent.GetCurrentContextTokens()
+	limit := chatAgent.GetMaxContextTokens()
+	cost := chatAgent.GetTotalCost()
+	iter := chatAgent.GetCurrentIteration()
+
+	// Skip when the agent didn't accrue any state — covers /help, /stats,
+	// direct-exec fast paths, and other slash commands that never reached
+	// the LLM.
+	if ctx == 0 && cost == 0 && iter == 0 {
+		return ""
+	}
+
+	parts := []string{}
+	if limit > 0 {
+		parts = append(parts, fmt.Sprintf("%s/%s ctx", compactTokens(ctx), compactTokens(limit)))
+	} else if ctx > 0 {
+		parts = append(parts, fmt.Sprintf("%s ctx", compactTokens(ctx)))
+	}
+	if cost > 0 {
+		parts = append(parts, formatCompactCost(cost))
+	}
+	if iter > 0 {
+		parts = append(parts, fmt.Sprintf("%d iters", iter))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return strings.Join(parts, " · ")
+}
+
+// formatCompactCost returns a short USD cost string. Mirrors the precision
+// ladder in pkg/console/status_footer_format.go's formatCost so the
+// on-screen dollars match the footer's, then and now.
+func formatCompactCost(c float64) string {
+	switch {
+	case c < 0.01:
+		return fmt.Sprintf("$%.4f", c)
+	case c < 1.0:
+		return fmt.Sprintf("$%.3f", c)
+	default:
+		return fmt.Sprintf("$%.2f", c)
+	}
+}
+
 // GetTerminalWidth attempts to get the terminal width for separators
 // Returns a conservative width to avoid wrapping
 func GetTerminalWidth() int {

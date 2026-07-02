@@ -217,6 +217,8 @@ func TestToolTimeline_FallbackToToolName(t *testing.T) {
 func TestToolTimeline_ErrorTruncation(t *testing.T) {
 	bus, tl, buf := newTimelineForTest(t)
 
+	// Long single-line error: head is capped at 40 runes, then " … ", then
+	// the tail fills the remaining budget up to 80 runes total.
 	longErr := strings.Repeat("a", 200)
 
 	waitFlush(t, tl, bus, events.EventTypeToolStart, events.ToolStartEvent(
@@ -228,9 +230,9 @@ func TestToolTimeline_ErrorTruncation(t *testing.T) {
 
 	out := buf.String()
 
-	// The output should contain the ellipsis character.
-	if !strings.Contains(out, "…") {
-		t.Fatalf("expected truncated error with '…' in output, got: %q", out)
+	// The output should contain the ellipsis separator.
+	if !strings.Contains(out, " … ") {
+		t.Fatalf("expected truncated error with ' … ' separator in output, got: %q", out)
 	}
 
 	// Find the error portion: everything after "0.05s: ".
@@ -239,19 +241,73 @@ func TestToolTimeline_ErrorTruncation(t *testing.T) {
 	if idx < 0 {
 		t.Fatalf("could not find duration separator %q in output: %q", sep, out)
 	}
-	// Take the line after the separator (strip trailing newline).
 	errorLine := strings.TrimSuffix(out[idx+len(sep):], "\n")
 
-	// The truncated error should be 77 runes + "…" = 78 runes.
-	// In bytes: 77 ASCII bytes + 3 bytes for "…" = 80 bytes.
-	if len(errorLine) > 80 {
-		t.Fatalf("truncated error too long: %d bytes (max 80), got: %q", len(errorLine), errorLine)
+	// Total must fit within the 80-rune budget (3 for " … " + head + tail).
+	if r := []rune(errorLine); len(r) > 80 {
+		t.Fatalf("truncated error too long: %d runes (max 80), got: %q", len(r), errorLine)
 	}
 
-	// Verify the exact truncation: first 77 runes of original + "…".
-	expectedTruncated := longErr[:77] + "…"
-	if errorLine != expectedTruncated {
-		t.Fatalf("truncated error mismatch:\n  got:  %q\n  want: %q", errorLine, expectedTruncated)
+	// Single-line long errors: head is the first 40 runes (all 'a'),
+	// separator, then tail that fills up to the 80-rune budget.
+	expected := strings.Repeat("a", 40) + " … " + strings.Repeat("a", 37)
+	if errorLine != expected {
+		t.Fatalf("truncated error mismatch:\n  got:  %q\n  want: %q", errorLine, expected)
+	}
+}
+
+func TestTruncateErrorForTimeline(t *testing.T) {
+	tests := []struct {
+		name         string
+		msg          string
+		max          int
+		want         string
+		wantHead     string
+		wantContains string
+	}{
+		{
+			name: "short error passes through",
+			msg:  "permission denied",
+			max:  80,
+			want: "permission denied",
+		},
+		{
+			name: "single-line long error: head cap + tail",
+			msg:  strings.Repeat("x", 200),
+			max:  80,
+			want: strings.Repeat("x", 40) + " … " + strings.Repeat("x", 37),
+		},
+		{
+			name:         "multi-line error: first line + tail",
+			msg:          "panic: index out of range\nfoo.go:42: panic occurred here\nmore context after this line that is very long and adds more runes",
+			max:          80,
+			wantHead:     "panic: index out of range",
+			wantContains: "very long and adds more runes",
+		},
+		{
+			name: "tight budget falls back to head-only",
+			msg:  strings.Repeat("y", 50),
+			max:  20,
+			want: strings.Repeat("y", 19) + "…",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := truncateErrorForTimeline(tt.msg, tt.max)
+			switch {
+			case tt.want != "":
+				if got != tt.want {
+					t.Errorf("mismatch:\n  got:  %q\n  want: %q", got, tt.want)
+				}
+			case tt.wantHead != "" || tt.wantContains != "":
+				if !strings.HasPrefix(got, tt.wantHead+" … ") {
+					t.Errorf("expected head %q followed by separator, got: %q", tt.wantHead, got)
+				}
+				if !strings.HasSuffix(got, tt.wantContains) {
+					t.Errorf("expected tail ending with %q, got: %q", tt.wantContains, got)
+				}
+			}
+		})
 	}
 }
 

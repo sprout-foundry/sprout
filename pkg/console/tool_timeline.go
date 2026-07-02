@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -194,12 +195,18 @@ func (tl *ToolTimeline) handleToolEnd(ev events.UIEvent) {
 	// Format duration as X.XXs.
 	durationStr := fmt.Sprintf("%.2fs", duration.Seconds())
 
-	// Truncate error message to 80 runes (not bytes) to avoid corrupting
-	// multi-byte UTF-8 characters.
-	runes := []rune(errorMsg)
-	if len(runes) > 80 {
-		errorMsg = string(runes[:77]) + "…"
-	}
+	// Truncate error message to fit a single timeline line while
+	// preserving both the error type (first line) and the actionable
+	// location (tail). For most errors the tail carries the file:line
+	// or response status that tells the user what actually went wrong;
+	// the head-only truncation dropped that.
+	//
+	// Format:
+	//   - ≤80 runes: emit as-is
+	//   - >80 runes: emit first line (≤40 runes), ellipsis, then last
+	//     37 runes. Keeps "panic: index out of range" plus the
+	//     "foo.go:42" tail that makes the error actionable.
+	errorMsg = truncateErrorForTimeline(errorMsg, 80)
 
 	// Pick the glyph and format based on status.
 	if !TryLockOutput() {
@@ -222,4 +229,66 @@ func (tl *ToolTimeline) handleToolEnd(ev events.UIEvent) {
 		// visually distinguish it from completed/failed results.
 		GlyphDim.Fprintln(tl.w, displayName+" · "+durationStr)
 	}
+}
+
+// truncateErrorForTimeline collapses error text to ≤max runes while
+// preserving the most diagnostic bits. The previous head-only truncation
+// kept the error preamble ("panic: runtime error: index out of range")
+// but dropped the tail where the file/line lives — exactly the part
+// the user needs to act on.
+//
+// Strategy when the message exceeds the budget:
+//
+//   1. Split on \n. The first line usually carries the error type
+//      ("panic:", "Error:", "Traceback (most recent call last):"…).
+//   2. Take the first line, capped at 40 runes.
+//   3. Append " … " separator.
+//   4. Append the tail: the last (max - firstLen - 3) runes of the
+//      full message, where the tail is itself truncated only if needed.
+//
+// Rune-safe (not byte-safe) so multi-byte UTF-8 isn't corrupted.
+func truncateErrorForTimeline(msg string, max int) string {
+	if max <= 0 {
+		return ""
+	}
+	runes := []rune(msg)
+	if len(runes) <= max {
+		return msg
+	}
+
+	const headCap = 40
+	if max <= headCap+4 {
+		// Budget too tight to fit head + " … " + tail. Fall back to
+		// the legacy head-only truncation so the user at least sees
+		// the error type.
+		return string(runes[:max-1]) + "…"
+	}
+
+	// Head: first newline, capped at headCap runes.
+	head := string(runes)
+	if nlIdx := strings.IndexRune(head, '\n'); nlIdx >= 0 {
+		headRunes := []rune(head[:nlIdx])
+		if len(headRunes) > headCap {
+			headRunes = headRunes[:headCap]
+		}
+		head = string(headRunes)
+	} else {
+		headRunes := []rune(head)
+		if len(headRunes) > headCap {
+			headRunes = headRunes[:headCap]
+		}
+		head = string(headRunes)
+	}
+
+	// Tail: last (max - len(head) - 3) runes, where the 3 is " … ".
+	tailBudget := max - len([]rune(head)) - 3
+	if tailBudget < 4 {
+		tailBudget = 4
+	}
+	if tailBudget > len(runes) {
+		tailBudget = len(runes)
+	}
+	tail := string(runes[len(runes)-tailBudget:])
+
+	return head + " … " + tail
 }

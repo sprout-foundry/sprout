@@ -128,7 +128,7 @@ func runMCPTest(serverName string) error {
 		fmt.Println()
 	}
 
-	fmt.Printf("\n[done] Test completed successfully! Server '%s' is working properly.\n", serverName)
+	console.GlyphSuccess.Printf("\nTest completed successfully! Server '%s' is working properly.\n", serverName)
 
 	return nil
 }

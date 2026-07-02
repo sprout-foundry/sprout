@@ -142,7 +142,30 @@ func (tl *ToolTimeline) handleToolStart(ev events.UIEvent) {
 	if !TryLockOutput() {
 		return
 	}
-	GlyphAction.Fprintln(tl.w, displayName+" · Started")
+	// Render truncated arguments inline so users can see "what just got
+	// invoked" without expanding the timeline. The `arguments` field is
+	// already on the event payload (pkg/events/events.go:425);
+	// ToolStartEvent receives it as a JSON string from the publisher.
+	//
+	// Skip when:
+	//   - arguments is empty,
+	//   - the field is missing/nil,
+	//   - the truncated form would still blow past the terminal
+	//     (GetTerminalWidth lives in cmd/, not console, so we cap at a
+	//     conservative 60 cols here — most terminals are wider).
+	header := displayName + " · Started"
+	if args, ok := data["arguments"].(string); ok && args != "" {
+		// Use a soft cap: 60 cols for arguments. Trim surrounding
+		// whitespace and collapse newlines so multi-line args (rare
+		// but possible for write_file with long content) stay on
+		// one line.
+		args = collapseArgsForDisplay(args)
+		if args != "" {
+			truncated := truncateToWidth(args, 60, "…")
+			header = displayName + "  " + truncated + " · Started"
+		}
+	}
+	GlyphAction.Fprintln(tl.w, header)
 	UnlockOutput()
 }
 
@@ -291,4 +314,19 @@ func truncateErrorForTimeline(msg string, max int) string {
 	tail := string(runes[len(runes)-tailBudget:])
 
 	return head + " … " + tail
+}
+
+// collapseArgsForDisplay flattens the arguments string for a single-line
+// tool timeline entry. The publisher encodes multi-line arguments
+// (write_file content blocks, raw shell scripts) with embedded \n and
+// excessive whitespace; both would break the timeline layout. Replace
+// newlines and runs of whitespace with a single space, then trim
+// surrounding whitespace. Returns "" if the result is empty.
+func collapseArgsForDisplay(args string) string {
+	if args == "" {
+		return ""
+	}
+	replacer := strings.NewReplacer("\n", " ", "\r", " ", "\t", " ")
+	collapsed := replacer.Replace(args)
+	return strings.TrimSpace(collapsed)
 }

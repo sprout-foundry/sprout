@@ -396,17 +396,19 @@ without expanding the timeline into a verbose log.
 
 ### Items
 
-- [ ] **CLI-A-1:** `ToolTimeline.handleToolStart` reads `data["arguments"]`
+- [x] **CLI-A-1:** `ToolTimeline.handleToolStart` reads `data["arguments"]`
   from the event payload, truncates to ~60 runes via the existing
   `truncateToWidth` helper in `pkg/console/display_width.go`, and
   appends it after the display name: `→ shell_cmd "rm -rf node_modules
   && npm i" · Started`. Skip when arguments is empty or already short
   enough that adding it would make the line wider than the terminal.
-- [ ] **CLI-A-2:** Add a test case to `pkg/console/tool_timeline_test.go`
+  _(shipped: commit landed alongside the test batch.)_
+- [x] **CLI-A-2:** Add a test case to `pkg/console/tool_timeline_test.go`
   covering: (a) long arguments get truncated with `…`, (b) empty
   arguments leave the line unchanged, (c) JSON-stringified arguments
   with embedded quotes survive the truncation (UTF-8 rune counting,
-  not byte counting).
+  not byte counting). _(shipped: 4 new tests in
+  TestToolTimeline_ToolStart* plus TestCollapseArgsForDisplay.)_
 
 ### Notes
 

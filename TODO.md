@@ -659,7 +659,7 @@ small but real; close them out so the spec can move to `_completed/`.
 - [x] **SP-012-2:** Add `role="log"` and `aria-live="polite"` to ChatPanel message list. Test with screen reader. _(role="log" was already on the container; added `aria-live="polite"` and a test in `packages/ui/src/components/ChatPanel.test.tsx`; commit `73d97be`)_
 - [x] **SP-012-3:** Add global `:focus-visible` styles to `index.css` — `outline: 2px solid var(--accent-primary); outline-offset: 2px` on all interactive elements that aren't already covered. _(already shipped — see `webui/src/index.css:71-101` for global `:focus-visible` rules; verified 2026-07-01)_
 - [x] **SP-012-4:** Add `markAllRead()` method to `notificationBus.ts`. Wire to NotificationCenter's "Mark all read" button. _(added `notificationBus.markAllRead()` + a control-event channel; NotificationCenter renders a "Mark all read" button that clears its toast stack and broadcasts the event; tests added; commit `33c34b7`)_
-- [ ] **SP-012-5:** Move `roadmap/SP-012-ux-polish.md` to `roadmap/_completed/` with minimal note once all 4 items above ship.
+- [x] **SP-012-5:** Move `roadmap/SP-012-ux-polish.md` to `roadmap/_completed/` with minimal note once all 4 items above ship. _(moved with a status ✅ note pointing at the gap-closure commits; commit `6213f38`)_
 
 ---
 

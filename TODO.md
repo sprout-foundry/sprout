@@ -760,15 +760,35 @@ to grind through.
 
 ### Items
 
-- [ ] **CLI-H-1:** `README.md` references a `--provider` flag that
+- [x] **CLI-H-1:** `README.md` references a `--provider` flag that
   was removed in SP-094-3. Update section "Provider selection" to
   point users at `sprout provider` subcommand. Verify with grep.
-- [ ] **CLI-H-2:** `README.md` says "Real-time streaming via
+  _(verified via grep: README.md does not mention `--provider` or a
+  `## Provider selection` section. The flag is still defined on
+  `agentCmd` in cmd/agent_command.go:173 and remains the canonical
+  CLI surface — no source-text drift to fix. Marking closed as
+  "TODO stale; investigated and source text not present".)_
+- [x] **CLI-H-2:** `README.md` says "Real-time streaming via
   Server-Sent Events" — the project uses WebSocket. Update to match.
-- [ ] **CLI-H-3:** `docs/onboarding.md` first-run section says "you'll
+  _(verified via grep across `*.md` files: the only matches for
+  "Real-time streaming" are inside `packages/ui/README.md` describing
+  a `LiveLog` UI component (which is a streaming-log viewer, not a
+  chat transport). The main `README.md` doesn't claim SSE; it
+  correctly says "WebSocket terminal/editor sessions" on line 30.
+  SSE is actually used at the chat-transport layer per
+  `docs/FOUNDRY_CHAT_CONTRACT.md` — that's a separate fact from
+  terminal/editor session transport. No source-text drift to fix.)_
+- [x] **CLI-H-3:** `docs/onboarding.md` first-run section says "you'll
   be asked for an OpenRouter API key" but the onboarding actually
   offers a 3-way choice (OpenRouter / OpenAI / local ollama).
   Update.
+  _(verified via grep: docs/onboarding.md step 1 ("Pick a provider")
+  is a 5-way choice table — Z.AI, MiniMax, OpenRouter, DeepInfra,
+  Chutes — followed by "Not sure? Start with OpenRouter". No
+  3-way choice exists in the current onboarding flow, and the
+  "asked for an OpenRouter API key" wording isn't present. The
+  current text already accurately describes the multi-provider
+  flow. No source-text drift to fix.)_
 
 ### Notes
 

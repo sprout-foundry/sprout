@@ -202,7 +202,10 @@ func TestRun_GateFailSkipsComplex(t *testing.T) {
 }
 
 func TestRun_FullPass(t *testing.T) {
-	turns := passingGateTurns()
+	turns := []api.Message{
+		turn(toolCall("v1", "describe_image", map[string]string{"color": "red"})), // vision pass
+	}
+	turns = append(turns, passingGateTurns()...)
 	turns = append(turns,
 		turn(toolCall("c1", "list_dir", map[string]string{"path": "."})),
 		turn(toolCall("c2", "read_file", map[string]string{"path": "internal/users/service.go"})),
@@ -216,6 +219,9 @@ func TestRun_FullPass(t *testing.T) {
 	}
 	if !r.Passed || !r.Complex {
 		t.Fatalf("expected pass+complex, got passed=%v complex=%v reason=%q", r.Passed, r.Complex, r.Reason)
+	}
+	if !r.Vision {
+		t.Error("vision should pass")
 	}
 	if r.Score <= 0.5 {
 		t.Errorf("a full pass should score > 0.5, got %.2f", r.Score)
@@ -260,8 +266,12 @@ func TestRun_GateTransportErrorIsInconclusive(t *testing.T) {
 }
 
 func TestRun_ComplexTransportErrorIsInconclusive(t *testing.T) {
-	// Gates all pass, then the complex stage's first request errors.
-	c := &erroringClient{gateTurns: passingGateTurns()}
+	// Vision pass + gates all pass, then the complex stage's first request errors.
+	turns := []api.Message{
+		turn(toolCall("v1", "describe_image", map[string]string{"color": "red"})), // vision pass
+	}
+	turns = append(turns, passingGateTurns()...) // 5 gates pass
+	c := &erroringClient{gateTurns: turns}
 	r, err := Run(context.Background(), c, "test", "m")
 	if err != nil {
 		t.Fatalf("gate result is valid, Run should not return an error: %v", err)
@@ -290,6 +300,9 @@ func TestWithinCostBudget(t *testing.T) {
 		{"premium over budget", 3, 15, true, 0.10, false},
 		{"unknown price with budget", 0, 0, false, 0.10, false},
 		{"unknown price no budget", 0, 0, false, 0, true},
+		{"negative input price rejected", -1000000, 1.5, true, 0.10, false},
+		{"negative output price rejected", 0.5, -1000000, true, 0.10, false},
+		{"negative price no budget still allowed", -1, -1, true, 0, true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

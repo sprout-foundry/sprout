@@ -38,7 +38,7 @@ import (
 
 // ProbeVersion identifies the probe scenario/scoring so results can be
 // invalidated when the probe changes.
-const ProbeVersion = "gates+todos+vision-v6"
+const ProbeVersion = "gates+todos+vision-v7"
 
 // complexMaxTurns bounds the multi-turn complex stage. Set generously: some
 // capable models explore one tool call per turn, so a tight cap fails them on
@@ -80,7 +80,7 @@ type Result struct {
 	// verbatim so a human can evaluate whether it actually makes sense.
 	Todos string `json:"todos,omitempty"`
 
-	Vision bool `json:"vision,omitempty"`
+	Vision bool `json:"vision"`
 
 	ToolCallOK       bool   `json:"tool_call_ok"`
 	Turns            int    `json:"turns"`

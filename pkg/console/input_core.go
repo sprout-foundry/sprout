@@ -51,6 +51,11 @@ const (
 	EventWordLeft
 	EventWordRight
 	EventDeleteWordBackward
+	// EventAltLetter is fired for Alt-modified letters not already
+	// claimed by a more specific event (Alt+B / Alt+F / Alt+Backspace).
+	// The letter is in .Data as a single byte (e.g. "T" for Alt+T).
+	// CLI-D uses this to drive the status-footer tooltip toggle.
+	EventAltLetter
 )
 
 // InputReader handles interactive input with proper escape sequence handling
@@ -132,6 +137,11 @@ type InputReader struct {
 	// emergency recovery if a prior mode transition left the terminal
 	// stuck in raw/cbreak mode. Set once by SetGroundTruth.
 	groundTruth *GroundTruthTermios
+
+	// footerTooltip, when non-nil, is shown/hidden by Alt+T.
+	// Initialized to a default that writes to os.Stderr; tests can
+	// override via SetFooterTooltip.
+	footerTooltip *FooterTooltip
 }
 
 type pasteSpan struct {
@@ -485,6 +495,12 @@ func (ir *InputReader) fallbackReadLine() (string, error) {
 
 // HandleEvent processes an input event
 func (ir *InputReader) HandleEvent(event *InputEvent) {
+	// CLI-D: any keypress while a tooltip is visible dismisses it.
+	// Suppress the dismiss for the toggle key itself — that path
+	// explicitly toggles visibility, handled in dispatchAltLetter.
+	if ir.tooltipVisible() {
+		ir.hideTooltip()
+	}
 	switch event.Type {
 	case EventChar:
 		ir.InsertChar(event.Data)
@@ -506,6 +522,8 @@ func (ir *InputReader) HandleEvent(event *InputEvent) {
 		ir.MoveWord(1)
 	case EventDeleteWordBackward:
 		ir.DeleteWordBackward()
+	case EventAltLetter:
+		ir.dispatchAltLetter(event.Data)
 	case EventUp:
 		// If context menu is visible, navigate it
 		if ir.contextMenu != nil && ir.contextMenu.Visible {
@@ -575,6 +593,78 @@ func (ir *InputReader) SetInitialContent(content string) {
 // before the first ReadLine.
 func (ir *InputReader) SetGroundTruth(gt *GroundTruthTermios) {
 	ir.groundTruth = gt
+}
+
+// SetFooterTooltip installs the tooltip controller invoked by Alt+T.
+// Pass nil to disable the keybinding entirely. The default
+// controller writes to os.Stderr.
+func (ir *InputReader) SetFooterTooltip(t *FooterTooltip) {
+	ir.footerTooltip = t
+}
+
+// tooltipVisible returns true if the footer tooltip is currently rendered.
+func (ir *InputReader) tooltipVisible() bool {
+	if ir.footerTooltip == nil {
+		return false
+	}
+	return ir.footerTooltip.Visible()
+}
+
+// hideTooltip dismisses the footer tooltip if visible. Safe to call
+// when the tooltip is nil or already hidden.
+func (ir *InputReader) hideTooltip() {
+	if ir.footerTooltip == nil {
+		return
+	}
+	ir.footerTooltip.Hide()
+}
+
+// dispatchAltLetter routes an Alt+<letter> event to the registered
+// keymap handler. The handler runs synchronously in the REPL
+// goroutine. Unhandled letters are silently ignored — same behavior
+// as web keybindings that don't have a match.
+func (ir *InputReader) dispatchAltLetter(letter string) {
+	// Suppress dismissal for the toggle key itself: HandleEvent hides
+	// the tooltip on every keystroke (so any key dismisses), but Alt+T
+	// is also how the user shows the tooltip in the first place.
+	// Re-show from a fresh toggle; if the tooltip was visible, the
+	// Hide already fired, so Toggle correctly transitions to "hidden".
+	if letter == "T" || letter == "t" {
+		if ir.footerTooltip != nil {
+			cols, rows := ir.footerSize()
+			ir.footerTooltip.Toggle(cols, rows)
+		}
+		return
+	}
+
+	// Generic keymap dispatch.
+	entry, ok := GlobalKeymap().MatchAltLetter(letter)
+	if !ok || entry.Handler == nil {
+		return
+	}
+	entry.Handler()
+}
+
+// footerSize returns the terminal size for the tooltip positioning.
+// Defaults to 80x24 if the footer is not attached to a TTY. Reads via
+// the global status footer when available, else falls back to a
+// conservative default.
+func (ir *InputReader) footerSize() (cols, rows int) {
+	if f := GetGlobalStatusFooter(); f != nil {
+		c, r := f.TerminalSize()
+		if c > 0 && r > 0 {
+			return c, r
+		}
+	}
+	// Fallback: try /dev/tty directly.
+	if w, err := openDevTtyForSize(); err == nil {
+		c, r := readTermSize(w)
+		closeDevTty(w)
+		if c > 0 && r > 0 {
+			return c, r
+		}
+	}
+	return 80, 24
 }
 
 // handleReadError classifies a stdin read error and decides whether the

@@ -2,30 +2,48 @@
 
 > Reusable React UI components for [Sprout IDE](https://github.com/sprout-foundry/sprout)
 
-[![npm version](https://img.shields.io/npm/v/@sprout/ui)](https://www.npmjs.com/package/@sprout/ui)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+> **Internal monorepo package — not published to npm.**
+> Consumed by the webui via the `file:` reference in `webui/package.json`.
+> Visual documentation lives in Storybook (`npm run storybook`).
 
 A comprehensive collection of IDE-style React components including a code editor, terminal, chat panel, file explorer, Git integration, notifications, and more. Built with CodeMirror 6, xterm.js, and react-virtuoso for performance.
 
-## Installation
+## Installation (Monorepo)
+
+This package is part of the [Sprout monorepo](https://github.com/sprout-foundry/sprout). The webui consumes it directly:
+
+```json
+// webui/package.json
+{
+  "dependencies": {
+    "@sprout/ui": "file:../packages/ui"
+  }
+}
+```
+
+No publish step is required. Build the package once after pulling:
 
 ```bash
-npm install @sprout/ui
+cd packages/ui && npm run build
 ```
+
+For external projects that want to consume `@sprout/ui` standalone, fork the package first — the public-API surface is stable, but no versioned releases are produced.
 
 ### Peer Dependencies
 
-Ensure the following peer dependencies are installed in your project:
+The webui provides these. External consumers must install them too:
 
 | Package | Version |
 |---------|---------|
 | `react` | `>=18.0.0` |
 | `react-dom` | `>=18.0.0` |
-| `@sprout/events` | `^0.1.0` |
+| `@sprout/events` | (sibling monorepo package) |
 
 ### CSS
 
-Don't forget to import the bundled styles:
+Import the bundled styles in your app entry:
 
 ```tsx
 import '@sprout/ui/dist/style.css';

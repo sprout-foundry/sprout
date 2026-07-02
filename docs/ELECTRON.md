@@ -124,4 +124,4 @@ For signed macOS builds, configure these CI secrets:
 
 ## Productization
 
-The desktop productization roadmap is tracked in [roadmap/SP-060-desktop-serve.md](../roadmap/SP-060-desktop-serve.md).
+The desktop productization roadmap is tracked in [roadmap/SP-060-desktop-serve.md → shipped](../roadmap/_completed/SP-060-desktop-serve.md).

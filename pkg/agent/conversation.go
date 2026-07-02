@@ -169,7 +169,10 @@ func filterToolsByName(tools []api.Tool, allowed map[string]struct{}) []api.Tool
 }
 
 func (a *Agent) shouldUseDirectMultimodalImageReasoning(messages []api.Message) bool {
-	if a == nil || a.client == nil || !a.client.SupportsVision() {
+	if a == nil || a.client == nil {
+		return false
+	}
+	if !a.effectiveVisionSupport() {
 		return false
 	}
 
@@ -295,7 +298,7 @@ func (a *Agent) processImagesInQuery(query string) ([]api.ImageData, string, err
 	// (chat models that handle inline image content), embed pasted images
 	// as multimodal content and strip the placeholder text. OCR-only models
 	// (glm-ocr etc.) flow through the tool path below.
-	if c := a.getClient(); c != nil && supportsConversationalVision(c) {
+	if c := a.getClient(); c != nil && a.effectiveConversationalVision(c) {
 		return a.processImagesAsMultimodal(query)
 	}
 
@@ -309,7 +312,7 @@ func (a *Agent) processImagesInQuery(query string) ([]api.ImageData, string, err
 		return nil, query, nil
 	}
 
-	if c := a.getClient(); c != nil && c.SupportsVision() {
+	if c := a.getClient(); c != nil && a.effectiveVisionSupport() {
 		// OCR-only model: keep placeholder text AND run the OCR tool inline
 		// so the chat model gets text descriptions of the images.
 		enhancedQuery, err := a.processImagesViaOCR(query)
@@ -323,6 +326,17 @@ func (a *Agent) processImagesInQuery(query string) ([]api.ImageData, string, err
 	// Plain non-vision model: hand it the OCR-tool prompt so it can call
 	// analyze_image_content to read images itself.
 	return nil, a.buildNonVisionImageToolPrompt(query, paths), nil
+}
+
+// effectiveConversationalVision reports whether the model is suitable for
+// inline multimodal chat messages, consulting probe ground truth when
+// available. If the probe says the model has no vision, we skip the
+// conversational path regardless of config flags.
+func (a *Agent) effectiveConversationalVision(c api.ClientInterface) bool {
+	if probe := a.probeVisionResult(); probe != nil && !*probe {
+		return false
+	}
+	return supportsConversationalVision(c)
 }
 
 // supportsConversationalVision reports whether the client's vision capability

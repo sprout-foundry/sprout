@@ -88,13 +88,15 @@ func canonicalAdapterModels(ctx context.Context, providerID string) ([]modelcont
 // Exported for the registry publisher (cmd/refresh_provider_catalog).
 func CanonicalToModelInfo(m modelcontract.CanonicalModel) ModelInfo {
 	mi := ModelInfo{
-		ID:            m.ID,
-		Name:          m.DisplayName,
-		Description:   m.Description,
-		Provider:      m.Provider,
-		ContextLength: m.ContextWindow,
-		EligibleRoles: m.EligibleRoles,
-		Tags:          modelcontract.CapabilityTags(m.Capabilities),
+		ID:               m.ID,
+		Name:             m.DisplayName,
+		Description:      m.Description,
+		Provider:         m.Provider,
+		ContextLength:    m.ContextWindow,
+		EligibleRoles:    m.EligibleRoles,
+		RecommendedRoles: m.RecommendedRoles,
+		Warnings:         m.Warnings,
+		Tags:             modelcontract.CapabilityTags(m.Capabilities),
 	}
 	if mi.Name == "" {
 		mi.Name = m.ID
@@ -106,6 +108,9 @@ func CanonicalToModelInfo(m modelcontract.CanonicalModel) ModelInfo {
 		if mi.InputCost > 0 || mi.OutputCost > 0 {
 			mi.Cost = (mi.InputCost + mi.OutputCost) / 2.0
 		}
+	}
+	if m.Probe != nil {
+		mi.VisionProbe = modelcontract.Bool(m.Probe.Vision)
 	}
 	return mi
 }
@@ -179,6 +184,7 @@ func convertRegistryModels(raw []modelregistry.RawModel) []ModelInfo {
 			EligibleRoles:    append([]string(nil), m.EligibleRoles...),
 			RecommendedRoles: append([]string(nil), m.RecommendedRoles...),
 			Warnings:         append([]string(nil), m.Warnings...),
+			VisionProbe:      m.VisionProbe,
 		}
 	}
 	return out

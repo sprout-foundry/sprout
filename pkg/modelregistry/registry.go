@@ -49,6 +49,7 @@ type ModelInfo struct {
 	EligibleRoles    []string `json:"eligible_roles,omitempty"`
 	RecommendedRoles []string `json:"recommended_roles,omitempty"`
 	Warnings         []string `json:"warnings,omitempty"`
+	VisionProbe      *bool    `json:"vision_probe,omitempty"`
 }
 
 // RawModel is a provider-agnostic model representation used for cache storage
@@ -68,6 +69,7 @@ type RawModel struct {
 	EligibleRoles    []string `json:"eligible_roles,omitempty"`
 	RecommendedRoles []string `json:"recommended_roles,omitempty"`
 	Warnings         []string `json:"warnings,omitempty"`
+	VisionProbe      *bool    `json:"vision_probe,omitempty"`
 }
 
 // providerResponse is the JSON schema for a per-provider model file.
@@ -365,6 +367,9 @@ func canonicalToLegacy(cm modelcontract.CanonicalModel) ModelInfo {
 			mi.Cost = (mi.InputCost + mi.OutputCost) / 2.0
 		}
 	}
+	if cm.Probe != nil {
+		mi.VisionProbe = modelcontract.Bool(cm.Probe.Vision)
+	}
 	return mi
 }
 
@@ -386,6 +391,7 @@ func convertToRaw(models []ModelInfo) []RawModel {
 			EligibleRoles:    append([]string(nil), m.EligibleRoles...),
 			RecommendedRoles: append([]string(nil), m.RecommendedRoles...),
 			Warnings:         append([]string(nil), m.Warnings...),
+			VisionProbe:      m.VisionProbe,
 		}
 	}
 	return out

@@ -98,6 +98,8 @@ interface UseSettingsStateReturn {
   setProviderSupportsVision: (v: boolean) => void;
   providerVisionModel: string;
   setProviderVisionModel: (v: string) => void;
+  providerBillingType: 'pay_per_token' | 'subscription' | 'free';
+  setProviderBillingType: (v: 'pay_per_token' | 'subscription' | 'free') => void;
   providerModelContextSizes: string;
   setProviderModelContextSizes: (v: string) => void;
   // Drafts
@@ -159,6 +161,7 @@ export function useSettingsState(
   const [providerApiKey, setProviderApiKey] = useState('');
   const [providerSupportsVision, setProviderSupportsVision] = useState(false);
   const [providerVisionModel, setProviderVisionModel] = useState('');
+  const [providerBillingType, setProviderBillingType] = useState<'pay_per_token' | 'subscription' | 'free'>('pay_per_token');
   const [providerModelContextSizes, setProviderModelContextSizes] = useState<string>('');
 
   // Provider catalog is shared across the whole app — the Subagents,
@@ -385,6 +388,8 @@ export function useSettingsState(
     setProviderSupportsVision,
     providerVisionModel,
     setProviderVisionModel,
+    providerBillingType,
+    setProviderBillingType,
     providerModelContextSizes,
     setProviderModelContextSizes,
     // Drafts

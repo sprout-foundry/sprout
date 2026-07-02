@@ -435,17 +435,22 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 		queryDuration := time.Since(queryStart)
 
 		// Record cost after query completes
-		if cost := clientAgent.GetTotalCost(); cost > 0 {
-			GetCostStore().RecordCostWithSession(
-				clientAgent.GetProvider(),
+		chargedCost := clientAgent.GetChargedCostTotal()
+		tokenCost := clientAgent.GetTokenCostTotal()
+		if chargedCost > 0 || tokenCost > 0 {
+			providerName := clientAgent.GetProvider()
+			GetCostStore().RecordCostWithBilling(
+				providerName,
 				clientAgent.GetModel(),
 				clientAgent.GetSessionID(),
 				chatID,
 				clientAgent.GetSessionName(),
 				clientAgent.GetWorkspaceRoot(),
+				resolveBillingTypeForProvider(providerName),
 				clientAgent.GetPromptTokens(),
 				clientAgent.GetCompletionTokens(),
-				cost,
+				chargedCost,
+				tokenCost,
 			)
 		}
 

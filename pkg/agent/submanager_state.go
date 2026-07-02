@@ -57,6 +57,15 @@ type StateManager interface {
 	GetTotalCost() float64
 	SetTotalCost(float64)
 	AddCost(float64)
+	AddCostEntry(CostEntry)
+	GetChargedCostTotal() float64
+	GetTokenCostTotal() float64
+	GetSubscriptionTokens() int
+	GetFreeTokens() int
+	SetChargedCostTotal(float64)
+	SetTokenCostTotal(float64)
+	SetSubscriptionTokens(int)
+	SetFreeTokens(int)
 
 	// Token counts
 	GetTotalTokens() int
@@ -182,6 +191,10 @@ type AgentStateManager struct {
 	taskActions                 []TaskAction
 	taskActionsMu               sync.RWMutex
 	totalCost                   float64
+	chargedCostTotal            float64 // sum of ChargedCost (pay-per-token only)
+	tokenCostTotal              float64 // sum of TokenCost (all providers, estimated value)
+	subscriptionTokens          int     // tokens consumed on subscription providers
+	freeTokens                  int     // tokens consumed on free providers
 	totalTokens                 int
 	promptTokens                int
 	completionTokens            int
@@ -389,6 +402,75 @@ func (s *AgentStateManager) AddCost(c float64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.totalCost += c
+}
+
+// AddCostEntry routes a billing-aware cost entry to the correct counters.
+// chargedCostTotal always mirrors totalCost for backward compatibility.
+func (s *AgentStateManager) AddCostEntry(entry CostEntry) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if entry.ChargedCost > 0 {
+		s.chargedCostTotal += entry.ChargedCost
+		s.totalCost += entry.ChargedCost // backward-compat: totalCost = sum of charged costs
+	}
+	if entry.TokenCost > 0 {
+		s.tokenCostTotal += entry.TokenCost
+	}
+	tokens := entry.PromptTokens + entry.CompletionTokens
+	switch entry.BillingType {
+	case BillingSubscription:
+		s.subscriptionTokens += tokens
+	case BillingFree:
+		s.freeTokens += tokens
+	}
+}
+
+func (s *AgentStateManager) GetChargedCostTotal() float64 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.chargedCostTotal
+}
+
+func (s *AgentStateManager) GetTokenCostTotal() float64 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.tokenCostTotal
+}
+
+func (s *AgentStateManager) GetSubscriptionTokens() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.subscriptionTokens
+}
+
+func (s *AgentStateManager) GetFreeTokens() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.freeTokens
+}
+
+func (s *AgentStateManager) SetChargedCostTotal(v float64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.chargedCostTotal = v
+}
+
+func (s *AgentStateManager) SetTokenCostTotal(v float64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.tokenCostTotal = v
+}
+
+func (s *AgentStateManager) SetSubscriptionTokens(v int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.subscriptionTokens = v
+}
+
+func (s *AgentStateManager) SetFreeTokens(v int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.freeTokens = v
 }
 
 // --- Token counts ---

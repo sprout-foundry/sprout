@@ -239,6 +239,8 @@ function SettingsPanel({
     setProviderSupportsVision: state.setProviderSupportsVision,
     providerVisionModel: state.providerVisionModel,
     setProviderVisionModel: state.setProviderVisionModel,
+    providerBillingType: state.providerBillingType,
+    setProviderBillingType: state.setProviderBillingType,
     providerModelContextSizes: state.providerModelContextSizes,
     setProviderModelContextSizes: state.setProviderModelContextSizes,
     // Refs and workspace
@@ -418,6 +420,7 @@ function SettingsPanel({
             providerApiKey={state.providerApiKey}
             providerSupportsVision={state.providerSupportsVision}
             providerVisionModel={state.providerVisionModel}
+            providerBillingType={state.providerBillingType}
             providerModelContextSizes={state.providerModelContextSizes}
             loadingProviderInfo={state.loadingProviderInfo}
             currentProviderInfo={state.currentProviderInfo}
@@ -430,6 +433,7 @@ function SettingsPanel({
             setProviderApiKey={state.setProviderApiKey}
             setProviderSupportsVision={state.setProviderSupportsVision}
             setProviderVisionModel={state.setProviderVisionModel}
+            setProviderBillingType={state.setProviderBillingType}
             setProviderModelContextSizes={state.setProviderModelContextSizes}
             resetProviderForm={mutations.resetProviderForm}
             handleAddProvider={mutations.handleAddProvider}

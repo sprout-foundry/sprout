@@ -6,10 +6,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
 // ============================================================================
@@ -174,5 +176,5 @@ func (vp *VisionProcessor) loggerInfo(msg string, keysAndValues ...interface{}) 
 		vp.logger.Logf("[INFO] vision_fallback: %s", formatted)
 		return
 	}
-	fmt.Println("[INFO] vision_fallback:", formatted)
+	console.GlyphInfo.Fprintln(os.Stdout, fmt.Sprintf("vision_fallback: %s", formatted))
 }

@@ -53,7 +53,6 @@ export default function SecuritySettingsTab({
     <div className="section">
       <h4>Security</h4>
       {renderNumberInput('security_validation.threshold', 'Validation threshold (0-2)', 0, 2)}
-      {renderSelect('self_review_gate_mode', 'Self-review gate', ['off', 'code', 'always'])}
       <div className="settings-section-spaced">
         <h4>Shell Command Detection</h4>
         {renderToggle(

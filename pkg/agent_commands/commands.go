@@ -95,8 +95,6 @@ func NewCommandRegistry() *CommandRegistry {
 	// Register code review command
 	registry.Register(&ReviewCommand{})
 	registry.Register(&ReviewDeepCommand{})
-	registry.Register(&SelfReviewCommand{})
-	registry.Register(&SelfReviewGateCommand{})
 
 	// Register compaction command
 	registry.Register(&CompactCommand{})
@@ -244,7 +242,7 @@ func (r *CommandRegistry) Execute(input string, chatAgent *agent.Agent) error {
 
 	// SP-073: Wire the agent's interrupt context into commands that support
 	// SetContext, so Stop/Ctrl+C can abort long-running LLM calls (shell
-	// script generation, self-review, commit review, etc.).
+	// script generation, commit review, etc.).
 	if contextSetter, ok := cmd.(interface{ SetContext(context.Context) }); ok && chatAgent != nil {
 		contextSetter.SetContext(chatAgent.InterruptCtx())
 	}

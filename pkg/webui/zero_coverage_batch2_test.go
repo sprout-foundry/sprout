@@ -39,33 +39,6 @@ func TestValidateReasoningEffort_ZC(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// settings_api_helpers.go — validateSelfReviewGateMode
-// ---------------------------------------------------------------------------
-
-func TestValidateSelfReviewGateMode_ZC(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		input string
-		err   bool
-	}{
-		{"off", false},
-		{"code", false},
-		{"always", false},
-		{"invalid", true},
-		{"", true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			t.Parallel()
-			got := validateSelfReviewGateMode(tt.input)
-			if (got != nil) != tt.err {
-				t.Errorf("validateSelfReviewGateMode(%q) error=%v, wantErr %v", tt.input, got, tt.err)
-			}
-		})
-	}
-}
-
-// ---------------------------------------------------------------------------
 // settings_api_helpers.go — validateHistoryScope
 // ---------------------------------------------------------------------------
 

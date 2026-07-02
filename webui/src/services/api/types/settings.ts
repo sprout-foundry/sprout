@@ -13,7 +13,6 @@ export interface SproutSettings {
   enable_zsh_command_detection: boolean;
   auto_execute_detected_commands: boolean;
   history_scope: string;
-  self_review_gate_mode: string;
   subagent_provider: string;
   subagent_model: string;
   subagent_max_depth?: number;

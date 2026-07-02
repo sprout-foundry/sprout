@@ -12,6 +12,7 @@ import (
 	"time"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/agent_providers"
 	"github.com/sprout-foundry/sprout/pkg/modelcontract"
 	"github.com/sprout-foundry/sprout/pkg/providercatalog"
 )
@@ -55,6 +56,8 @@ func main() {
 		if len(canon) == 0 {
 			continue
 		}
+
+		canon = enrichFromConfig(providerID, canon)
 
 		// Project to ModelInfo for the baked providers.json catalog; the full
 		// canonical models are published to the per-provider registry file.
@@ -217,4 +220,65 @@ func normalizeModels(models []api.ModelInfo) []providercatalog.Model {
 func failf(format string, args ...interface{}) {
 	fmt.Fprintf(os.Stderr, format+"\n", args...)
 	os.Exit(1)
+}
+
+// enrichFromConfig merges pricing, context window, capabilities, and display
+// metadata from the embedded provider config's model_info entries into the
+// canonical models returned by the provider's API. API-provided data takes
+// precedence — config values only fill gaps.
+func enrichFromConfig(providerID string, models []modelcontract.CanonicalModel) []modelcontract.CanonicalModel {
+	configPath := filepath.Join("pkg", "agent_providers", "configs", providerID+".json")
+	cfg, err := providers.LoadProviderConfig(configPath)
+	if err != nil || len(cfg.Models.ModelInfo) == 0 {
+		return models
+	}
+
+	lookup := make(map[string]providers.ModelInfo, len(cfg.Models.ModelInfo))
+	for _, mi := range cfg.Models.ModelInfo {
+		lookup[mi.ID] = mi
+	}
+
+	for i := range models {
+		mi, ok := lookup[models[i].ID]
+		if !ok {
+			continue
+		}
+
+		if models[i].Pricing == nil && (mi.InputCost > 0 || mi.OutputCost > 0) {
+			models[i].Pricing = &modelcontract.Pricing{
+				InputPerMTok:  mi.InputCost,
+				OutputPerMTok: mi.OutputCost,
+				CachedPerMTok: mi.CachedCost,
+				Currency:      "USD",
+				Source:        "embedded-config",
+			}
+		}
+		if models[i].ContextWindow == 0 && mi.ContextLength > 0 {
+			models[i].ContextWindow = mi.ContextLength
+		}
+		if models[i].DisplayName == "" && mi.Name != "" {
+			models[i].DisplayName = mi.Name
+		}
+		if models[i].Description == "" && mi.Description != "" {
+			models[i].Description = mi.Description
+		}
+		// Merge tags into capabilities without overwriting API-provided caps
+		if len(mi.Tags) > 0 {
+			caps := modelcontract.CapabilitiesFromTags(mi.Tags)
+			if models[i].Capabilities.Tools == nil {
+				models[i].Capabilities.Tools = caps.Tools
+			}
+			if models[i].Capabilities.Vision == nil {
+				models[i].Capabilities.Vision = caps.Vision
+			}
+			if models[i].Capabilities.Reasoning == nil {
+				models[i].Capabilities.Reasoning = caps.Reasoning
+			}
+			if models[i].Capabilities.StructuredOutput == nil {
+				models[i].Capabilities.StructuredOutput = caps.StructuredOutput
+			}
+		}
+	}
+
+	return models
 }

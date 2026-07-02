@@ -712,19 +712,34 @@ intentionally debug-only — not user-facing.)
 
 ### Items
 
-- [ ] **CLI-G-1:** In `cmd/base.go::SetRunFunc`, replace
+- [x] **CLI-G-1:** In `cmd/base.go::SetRunFunc`, replace
   `log.Printf("Error: ...")` with
   `console.GlyphError.Fprintln(os.Stderr, ...)` so failed
   command-init shows on the terminal.
-- [ ] **CLI-G-2:** In `cmd/agent_command.go`, the 3 security-warning
+  _(shipped: `cmd/base.go::SetRunFunc` now writes via
+  `console.GlyphError.Fprintf(os.Stderr, ...)`. Removed unused `log`
+  import. New tests in `cmd/base_test.go` exercise the run path and
+  the failure-emit path.)_
+- [x] **CLI-G-2:** In `cmd/agent_command.go`, the 3 security-warning
   sites are pre-decision (before the agent starts), so they should
   also route through `console.GlyphWarning.Fprintln(os.Stderr, ...)`
   — symmetric with how line 111 (`agent_command.go:111`) does it.
-- [ ] **CLI-G-3:** Add `cmd/base_test.go` and
+  _(shipped: `cmd/agent_command.go::runStartupPermissionCheck` routes
+  both the symlink-warning block and the post-check error through
+  `console.GlyphWarning`. Removed unused `log` import.)_
+- [x] **CLI-G-3:** Add `cmd/base_test.go` and
   `cmd/agent_command_test.go` cases asserting that an error path
   in `SetRunFunc` produces a GlyphError-suffixed stderr line, not
   a `log.Printf`-style log record. Use the existing
   `console.SetNoColorForTest` helper.
+  _(shipped: 5 new tests across `cmd/base_test.go` and
+  `cmd/agent_command_cli_g_test.go` —
+  `TestSetRunFunc_RoutesInitializeErrorToStderr`,
+  `TestSetRunFunc_UsesGlyphErrorOnFailure`,
+  `TestRunStartupPermissionCheck_EmitsSymlinkWarning`,
+  `TestRunStartupPermissionCheck_DoesNotMutateConfig`,
+  `TestAgentCommand_HandlesStaleSymlinkGracefully`. Visible
+  `⚠ Symlink warnings:` output proves the GlyphWarning path fires.)_
 
 ### Notes
 

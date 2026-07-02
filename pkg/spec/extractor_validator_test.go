@@ -2,7 +2,6 @@ package spec
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -1048,35 +1047,6 @@ func TestSpecReviewService_Getters(t *testing.T) {
 			t.Error("GetValidator should return the same validator instance")
 		}
 	})
-}
-
-// ---------------------------------------------------------------------------
-// ChangeReviewResult JSON roundtrip
-// ---------------------------------------------------------------------------
-
-func TestChangeReviewResult_JSON_NilResults(t *testing.T) {
-	result := ChangeReviewResult{
-		SpecResult:   nil,
-		ScopeResult:  nil,
-		FilesChanged: 0,
-		TotalChanges: 0,
-		RevisionID:   "rev-nil",
-		Summary:      "",
-	}
-
-	data, err := json.Marshal(result)
-	if err != nil {
-		t.Fatalf("marshal failed: %v", err)
-	}
-
-	var got ChangeReviewResult
-	if err := json.Unmarshal(data, &got); err != nil {
-		t.Fatalf("unmarshal failed: %v", err)
-	}
-
-	if got.RevisionID != "rev-nil" {
-		t.Errorf("expected RevisionID='rev-nil', got %q", got.RevisionID)
-	}
 }
 
 // ---------------------------------------------------------------------------

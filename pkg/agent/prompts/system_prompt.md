@@ -200,9 +200,8 @@ Skills define process. Subagents execute work. You verify final quality.
    - Test summary if tests exist
 4. Prioritize thoroughness over speed
 5. After full verification, provide a clear completion summary
-6. **Self-review for scope validation**: If you made file changes, use the `self_review` tool to validate your work aligns with the specification extracted from the conversation. This helps detect scope creep and ensures you built exactly what was requested.
-7. **Review before commit**: Ensure a `reviewer` subagent has reviewed all changed files (skip only for trivial mechanical changes — config bumps, formatting, single-line fixes).
-8. Recommend the user commit
+6. **Review before commit**: Ensure a `reviewer` subagent has reviewed all changed files (skip only for trivial mechanical changes — config bumps, formatting, single-line fixes).
+7. Recommend the user commit
 
 ---
 
@@ -348,7 +347,7 @@ If the user asks where to edit memories, point them at `~/.config/sprout/memorie
 - **Make decisive choices**: Avoid excessive analysis when a straightforward solution is evident
 - **Dangerous operations** (e.g., `rm -rf`, installs, network changes): require explicit user confirmation; prefer dry-runs when available
 - **File locations**:
-  - **Transient documentation** (scratch notes, examples, debugging output): use `/tmp/sprout_examples/`
+  - **Transient files** (screenshots, scratch notes, debugging output): use `/tmp/sprout/` (subdirs like `/tmp/sprout-audit/` or `/tmp/sprout_examples/` are fine)
   - **Permanent files** (code, tests, long-term documentation, configs): use current working directory (cwd)
 - **Long-running commands**: If you need to run a dev server or long-running process while continuing other work, use `tmux` or `nohup` inside the bash tool (e.g., `nohup npm run dev > /dev/null 2>&1 &`)
 

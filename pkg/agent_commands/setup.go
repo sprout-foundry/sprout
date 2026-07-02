@@ -61,7 +61,6 @@ func (s *SetupCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		{"Commit Model", s.nonEmpty(cfg.CommitModel, "(inherits provider default)")},
 		{"Review Provider", s.nonEmpty(cfg.ReviewProvider, "(inherits provider)")},
 		{"Review Model", s.nonEmpty(cfg.ReviewModel, "(inherits provider default)")},
-		{"Self-Review Gate", s.nonEmpty(cfg.SelfReviewGateMode, "off")},
 	})
 
 	// Security

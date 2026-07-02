@@ -26,8 +26,6 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { name: 'review deep', description: 'Request a deep code review' },
   { name: 'risk-profile', description: 'Set or view the risk profile' },
   { name: 'rollback', description: 'Revert tracked changes' },
-  { name: 'self-review', description: 'Self-review your own changes' },
-  { name: 'self-review-gate', description: 'Toggle self-review gate on/off' },
   { name: 'sessions', description: 'List or manage sessions' },
   { name: 'shell', description: 'Execute a shell command' },
   { name: 'setup', description: 'Show current configuration summary' },

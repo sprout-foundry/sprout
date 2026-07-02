@@ -701,7 +701,7 @@ func classifyBrowseURL(args map[string]interface{}) SecurityResult {
 		if !isScreenshotPathAllowed(sp) {
 			return SecurityResult{
 				Risk:         SecurityDangerous,
-				Reasoning:    fmt.Sprintf("screenshot_path %q is outside allowed directories (cwd, /tmp/sprout_examples, ~/Downloads)", spRaw),
+				Reasoning:    fmt.Sprintf("screenshot_path %q is outside allowed directories (cwd, /tmp/sprout/*, ~/Downloads)", spRaw),
 				ShouldBlock:  true,
 				ShouldPrompt: true,
 				Category:     RiskCategoryFileWrite,
@@ -779,15 +779,15 @@ func classifyBrowseURL(args map[string]interface{}) SecurityResult {
 }
 
 // isScreenshotPathAllowed checks if a cleaned screenshot path falls within
-// allowed directories (cwd, /tmp/sprout_examples, ~/Downloads).
+// allowed directories (cwd, /tmp/sprout/*, ~/Downloads).
 func isScreenshotPathAllowed(cleanedPath string) bool {
 	// Relative paths are always allowed (resolve within cwd)
 	if !filepath.IsAbs(cleanedPath) {
 		return true
 	}
 
-	// /tmp/sprout_examples is always allowed
-	if strings.HasPrefix(cleanedPath, "/tmp/sprout_examples") {
+	// /tmp/sprout/* is always allowed (agent scratch/audit/screenshot workspace)
+	if strings.HasPrefix(cleanedPath, "/tmp/sprout") {
 		return true
 	}
 

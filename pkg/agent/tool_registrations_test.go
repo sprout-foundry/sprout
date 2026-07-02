@@ -8,7 +8,7 @@ import (
 // the expected number of tools after the refactor.
 func TestNewDefaultToolRegistry_Count(t *testing.T) {
 	registry := newDefaultToolRegistry()
-	expectedCount := 37
+	expectedCount := 36
 	if len(registry.tools) != expectedCount {
 		t.Errorf("expected %d registered tools, got %d", expectedCount, len(registry.tools))
 	}
@@ -45,7 +45,6 @@ func TestNewDefaultToolRegistry_AllToolsRegistered(t *testing.T) {
 		"analyze_image_content",
 		"view_history",
 		"rollback_changes",
-		"self_review",
 		"list_skills",
 		"activate_skill",
 		"manage_memory",
@@ -113,7 +112,6 @@ func TestNewDefaultToolRegistry_ToolParameters(t *testing.T) {
 		"analyze_image_content":   {paramCount: 3, requiredCount: 1, requiredNames: []string{"image_path"}},
 		"view_history":            {paramCount: 4, requiredCount: 0, requiredNames: []string{}},
 		"rollback_changes":        {paramCount: 3, requiredCount: 0, requiredNames: []string{}},
-		"self_review":             {paramCount: 1, requiredCount: 0, requiredNames: []string{}},
 		"list_skills":             {paramCount: 0, requiredCount: 0, requiredNames: []string{}},
 		"activate_skill":          {paramCount: 1, requiredCount: 1, requiredNames: []string{"skill_id"}},
 		"manage_memory":           {paramCount: 6, requiredCount: 1, requiredNames: []string{"operation"}},
@@ -326,7 +324,6 @@ func TestNewDefaultToolRegistry_ParameterTypes(t *testing.T) {
 		{"rollback_changes", "revision_id", "string"},
 		{"rollback_changes", "file_path", "string"},
 		{"rollback_changes", "confirm", "boolean"},
-		{"self_review", "revision_id", "string"},
 		{"activate_skill", "skill_id", "string"},
 		{"manage_memory", "operation", "string"},
 		{"manage_memory", "name", "string"},

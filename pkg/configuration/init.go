@@ -126,7 +126,8 @@ func Initialize() (*Config, *APIKeys, error) {
 		if currentProvider != "editor" && RequiresAPIKey(currentProvider) && !HasProviderAuth(currentProvider) {
 			needsSetup = true
 			if !isCI {
-				fmt.Printf("\n[WARN] Current provider '%s' requires an API key but none is configured.\n", GetProviderDisplayName(currentProvider))
+				fmt.Println()
+				bracketWarn(os.Stdout, fmt.Sprintf("Current provider '%s' requires an API key but none is configured.", GetProviderDisplayName(currentProvider)))
 			}
 		}
 	}
@@ -141,15 +142,15 @@ func Initialize() (*Config, *APIKeys, error) {
 		// Set a default provider that works in CI
 		if HasProviderAuth("openrouter") {
 			config.LastUsedProvider = "openrouter"
-			fmt.Printf("[OK] Using OpenRouter provider from environment\n")
+			bracketOK(os.Stdout, "Using OpenRouter provider from environment")
 		} else if HasProviderAuth("openai") {
 			config.LastUsedProvider = "openai"
-			fmt.Printf("[OK] Using OpenAI provider from environment\n")
+			bracketOK(os.Stdout, "Using OpenAI provider from environment")
 		} else {
 			// Don't save test provider as default - it's for testing only
 			// Leave LastUsedProvider empty and let callers handle the test provider
-			fmt.Printf("[OK] No real provider available; using test provider for CI\n")
-			fmt.Printf("[WARN] Please configure a real provider (OPENROUTER_API_KEY or OPENAI_API_KEY)\n")
+			bracketOK(os.Stdout, "No real provider available; using test provider for CI")
+			bracketWarn(os.Stdout, "Please configure a real provider (OPENROUTER_API_KEY or OPENAI_API_KEY)")
 		}
 
 		if err := config.Save(); err != nil {
@@ -256,7 +257,7 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 		if choice > 0 && choice <= len(envProviders) {
 			selected = envProviders[choice-1]
 		}
-		fmt.Printf("[OK] Using %s (environment variable detected)\n", GetProviderDisplayName(selected))
+		bracketOK(os.Stdout, fmt.Sprintf("Using %s (environment variable detected)", GetProviderDisplayName(selected)))
 		return selected, nil
 	}
 
@@ -279,7 +280,7 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 
 	// If we have providers ready to use, show them first
 	if len(providersWithKeys) > 0 {
-		fmt.Println("[OK] Ready to use (configured or no API key needed):")
+		bracketOK(os.Stdout, "Ready to use (configured or no API key needed):")
 		for i, providerName := range providersWithKeys {
 			fmt.Printf("  %d. %s", i+1, GetProviderDisplayName(providerName))
 			if !RequiresAPIKey(providerName) {
@@ -367,11 +368,11 @@ func selectInitialProvider(apiKeys *APIKeys) (string, error) {
 			return "", fmt.Errorf("failed to validate and save API key: %w", err)
 		}
 
-		fmt.Printf("[OK] API key saved for %s (%d models available)\n", GetProviderDisplayName(selectedProvider), modelCount)
+		bracketOK(os.Stdout, fmt.Sprintf("API key saved for %s (%d models available)", GetProviderDisplayName(selectedProvider), modelCount))
 	} else if metadata.RequiresAPIKey {
-		fmt.Printf("[OK] Using existing API key for %s\n", GetProviderDisplayName(selectedProvider))
+		bracketOK(os.Stdout, fmt.Sprintf("Using existing API key for %s", GetProviderDisplayName(selectedProvider)))
 	} else {
-		fmt.Printf("[OK] Selected %s (no API key required)\n", GetProviderDisplayName(selectedProvider))
+		bracketOK(os.Stdout, fmt.Sprintf("Selected %s (no API key required)", GetProviderDisplayName(selectedProvider)))
 	}
 
 	return selectedProvider, nil
@@ -393,8 +394,8 @@ func EnsureProviderAPIKey(provider string, apiKeys *APIKeys) error {
 	}
 
 	fmt.Println()
-	fmt.Printf("[WARN] No API key found for %s\n", GetProviderDisplayName(provider))
-	fmt.Println()
+		bracketWarn(os.Stdout, fmt.Sprintf("No API key found for %s", GetProviderDisplayName(provider)))
+		fmt.Println()
 	fmt.Println("Options:")
 	fmt.Println("  1. Enter API key now")
 	fmt.Println("  2. Select a different provider")
@@ -417,7 +418,7 @@ func EnsureProviderAPIKey(provider string, apiKeys *APIKeys) error {
 			return fmt.Errorf("failed to validate and save API key: %w", err)
 		}
 
-		fmt.Printf("[OK] API key saved for %s (%d models available)\n", GetProviderDisplayName(provider), modelCount)
+		bracketOK(os.Stdout, fmt.Sprintf("API key saved for %s (%d models available)", GetProviderDisplayName(provider), modelCount))
 		return nil
 	}
 
@@ -571,7 +572,7 @@ func addNewProvider(apiKeys *APIKeys) (string, error) {
 		return "", fmt.Errorf("failed to validate and save API key: %w", err)
 	}
 
-	fmt.Printf("[OK] Added %s (%d models available)\n", GetProviderDisplayName(provider), modelCount)
+	bracketOK(os.Stdout, fmt.Sprintf("Added %s (%d models available)", GetProviderDisplayName(provider), modelCount))
 	return provider, nil
 }
 

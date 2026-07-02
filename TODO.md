@@ -457,15 +457,18 @@ but with mixed coloring.
 
 ### Items
 
-- [ ] **CLI-B-1:** Convert each `✓` site to `console.GlyphSuccess` and
+- [x] **CLI-B-1:** Convert each `✓` site to `console.GlyphSuccess` and
   each `✗` site to `console.GlyphError`. Each `⚠`/`⚠️` to
   `console.GlyphWarning`. ~14 mechanical replacements across 6 files.
-- [ ] **CLI-B-2:** For the 4 already-existing `[⚠️  SECURITY CAUTION]`
+  _(shipped: mcp_*, lsp.go, diag.go, keys_set.go, service_darwin.go, agent_terminal_subscriber.go — commit `44e00e37`.)_
+- [x] **CLI-B-2:** For the 4 already-existing `[⚠️  SECURITY CAUTION]`
   and similar "label in a glyphed line" cases, extract the bracketed
   label as a constant so it can't drift from the Glyph prefix.
-- [ ] **CLI-B-3:** Add a `pkg/console/glyph_consistency_test.go` that
+  _(shipped: extracted `securityCautionLabel` and `securityLoopLabel` package constants in agent_terminal_subscriber.go — commit `44e00e37`.)_
+- [x] **CLI-B-3:** Add a `pkg/console/glyph_consistency_test.go` that
   fails if any `fmt.Printf*` string in `cmd/` contains a raw `✓`/`✗`/
   `⚠` outside of test files. Locks the sweep.
+  _(shipped: AST-based lock — TestCmd_NoRawStatusGlyphs — fails the build on any future regression — commit `44e00e37`.)_
 
 ### Notes
 
@@ -506,18 +509,29 @@ log.
 
 ### Items
 
-- [ ] **CLI-C-1:** For each bracketed status literal in the surface
+- [x] **CLI-C-1:** For each bracketed status literal in the surface
   area (init.go + api_keys.go + github_setup.go + ollama_local.go),
   swap to the appropriate `console.Glyph*`. Most sites already import
   `pkg/console` indirectly or can add it without cycle.
-- [ ] **CLI-C-2:** For sites where `pkg/console` cannot be imported
+  _(shipped: replaced [OK]/[WARN] literals in init.go + api_keys.go
+  + github_setup.go + ollama_local.go + vision_fallback.go — see
+  CLI-C-2 for the cycle-driven fallback sites; vision_fallback.go
+  successfully uses console.GlyphInfo.)_
+- [x] **CLI-C-2:** For sites where `pkg/console` cannot be imported
   (cyclic dep), wrap in a helper that returns the bracketed form
   unchanged — at minimum document why in a comment so the runner
   knows it was reviewed.
-- [ ] **CLI-C-3:** Add a `pkg/configuration/onboarding_glyph_test.go`
+  _(shipped: added `pkg/configuration/status_prefix.go`,
+  `pkg/agent_api/status_prefix.go`, and `pkg/mcp/status_prefix.go` —
+  each documents the import cycle and exposes `bracketOK` / `bracketWarn`
+  helpers that preserve the bracketed literal verbatim.)_
+- [x] **CLI-C-3:** Add a `pkg/configuration/onboarding_glyph_test.go`
   that asserts each migrated site still produces the same visible
   string in default (colored) mode. Use the existing
   `console.SetNoColorForTest` helper.
+  _(shipped: `TestOnboardingBrackets_VisibleStringPreserved` and
+  `TestOnboardingBrackets_NoColorEscapes` lock the bracketed-string
+  output and assert the cycle-driven helpers never emit ANSI escapes.)_
 
 ### Notes
 

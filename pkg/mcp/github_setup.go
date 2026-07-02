@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -215,7 +216,7 @@ func RunGitHubMCPSetup(_ context.Context, repo *GitHubRepoInfo, reader *bufio.Re
 		return nil, fmt.Errorf("invalid choice: %s", choice)
 	}
 
-	fmt.Println("[OK] GitHub MCP server configured successfully!")
+	bracketOK(os.Stdout, "GitHub MCP server configured successfully!")
 	return server, nil
 }
 
@@ -230,7 +231,7 @@ func promptForGitHubPAT(reader *bufio.Reader) (string, error) {
 	fmt.Println()
 
 	if err := openBrowser(gitHubPATHelpURL); err != nil {
-		fmt.Printf("[WARN] Could not open browser: %v\n", err)
+		bracketWarn(os.Stdout, fmt.Sprintf("Could not open browser: %v", err))
 		fmt.Printf("   Please visit: %s\n", gitHubPATHelpURL)
 	}
 

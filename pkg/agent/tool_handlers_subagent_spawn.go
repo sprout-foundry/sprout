@@ -5,14 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
-	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
-	"github.com/sprout-foundry/sprout/pkg/personas"
-	"github.com/sprout-foundry/sprout/pkg/utils"
 )
 
 // ---------------------------------------------------------------------------
@@ -20,439 +15,46 @@ import (
 // ---------------------------------------------------------------------------
 
 func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
-	prompt, err := convertToString(args["prompt"], "prompt")
+	// Phase 1: Parse args, validate, resolve persona/model, build enhanced prompt
+	spec, err := prepareSubagentLaunch(ctx, a, args)
 	if err != nil {
-		return "", agenterrors.NewValidation(fmt.Sprintf("failed to convert prompt parameter: %v", err), nil)
-	}
-
-	a.Logger().Debug("Spawning subagent with task: %s\n", truncateString(prompt, 100))
-
-	// Parse optional context parameter
-	var context string
-	if ctxVal, ok := args["context"]; ok && ctxVal != nil {
-		if ctxStr, ok := ctxVal.(string); ok && ctxStr != "" {
-			context = ctxStr
-			a.Logger().Debug("Subagent context provided: %s\n", truncateString(context, 100))
-		}
-	}
-
-	// Parse optional files parameter (comma-separated list)
-	var files []string
-	var filesStr string
-	if filesVal, ok := args["files"]; ok && filesVal != nil {
-		if filesRaw, ok := filesVal.(string); ok && filesRaw != "" {
-			// Split by comma and trim spaces
-			rawFiles := strings.Split(filesRaw, ",")
-			for _, f := range rawFiles {
-				if f = strings.TrimSpace(f); f != "" {
-					files = append(files, f)
-				}
-			}
-			filesStr = strings.Join(files, ",")
-			a.Logger().Debug("Subagent files provided: %s\n", filesStr)
-		}
-	}
-
-	// Parse optional working_dir parameter
-	var workingDir string
-	if wdVal, ok := args["working_dir"]; ok && wdVal != nil {
-		if wdStr, ok := wdVal.(string); ok && wdStr != "" {
-			workingDir = wdStr
-			a.Logger().Debug("Subagent working_dir specified: %s\n", workingDir)
-		}
-	}
-
-	// Validate working_dir if provided
-	if workingDir != "" {
-		// Expand ~ to $HOME
-		if strings.HasPrefix(workingDir, "~/") {
-			homeDir, err := os.UserHomeDir()
-			if err != nil {
-				return "", agenterrors.NewConfig("failed to resolve home directory", err)
-			}
-			workingDir = filepath.Join(homeDir, workingDir[2:])
-		}
-
-		// Resolve to absolute path
-		absWorkingDir, err := filepath.Abs(workingDir)
-		if err != nil {
-			return "", agenterrors.NewValidation(fmt.Sprintf("failed to resolve working_dir: %v", err), nil)
-		}
-
-		// Resolve symlinks to prevent symlink escape attacks
-		resolvedWorkingDir, err := filepath.EvalSymlinks(absWorkingDir)
-		if err != nil {
-			return "", agenterrors.NewValidation(fmt.Sprintf("failed to resolve working_dir symlinks: %v", err), nil)
-		}
-
-		// Verify target exists and is a directory (use resolved path)
-		info, err := os.Stat(resolvedWorkingDir)
-		if err != nil {
-			return "", agenterrors.NewValidation(fmt.Sprintf("working_dir does not exist: %s", resolvedWorkingDir), nil)
-		}
-		if !info.IsDir() {
-			return "", agenterrors.NewValidation(fmt.Sprintf("working_dir is not a directory: %s", resolvedWorkingDir), nil)
-		}
-
-		// Verify resolved (symlink-target) path is within $HOME
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			return "", agenterrors.NewConfig("failed to resolve home directory", err)
-		}
-		// Also resolve $HOME itself in case it's a symlink
-		resolvedHome, err := filepath.EvalSymlinks(homeDir)
-		if err != nil {
-			return "", agenterrors.NewConfig("failed to resolve home directory symlinks", err)
-		}
-		if !isPathInWorkspace(resolvedWorkingDir, resolvedHome) {
-			return "", agenterrors.NewPermission(fmt.Sprintf("working_dir resolves outside $HOME via symlink: %s -> %s", absWorkingDir, resolvedWorkingDir), nil)
-		}
-
-		workingDir = resolvedWorkingDir
-	}
-
-	// Parse persona parameter (required, but default to "general" if not specified)
-	var persona string
-	var systemPromptPath string
-	var systemPromptText string
-	personaExplicitlyProvided := false
-	if personaVal, ok := args["persona"]; ok && personaVal != nil {
-		if personaStr, ok := personaVal.(string); ok && personaStr != "" {
-			persona = personaStr
-			personaExplicitlyProvided = true
-			a.Logger().Debug("Subagent persona specified: %s\n", persona)
-		}
-	}
-
-	// Default to the configured default persona if not specified, falling back
-	// to "general" if no default is set. This lets users redirect default
-	// spawns via config without editing the catalog.
-	if persona == "" {
-		if cfg := a.GetConfig(); cfg != nil && strings.TrimSpace(cfg.DefaultSubagentPersona) != "" {
-			persona = strings.TrimSpace(cfg.DefaultSubagentPersona)
-		} else {
-			persona = personas.IDGeneral
-		}
-		a.Logger().Debug("No persona specified, using default: %s\n", persona)
-	}
-	persona = strings.ReplaceAll(strings.ToLower(strings.TrimSpace(persona)), "-", "_")
-
-	// Resolve workspace root once for all file validations.
-	// In daemon mode the process cwd may differ from the workspace, so we use
-	// the agent's workspace root (set via SetWorkspaceRoot) rather than os.Getwd().
-	absWorkspaceDir, err := filepath.Abs(a.currentWorkspaceRoot())
-	if err != nil {
-		return "", agenterrors.NewConfig("failed to resolve absolute workspace path", err)
-	}
-
-	// Track absolute paths of all files for workspace root computation
-	var absFilePaths []string
-	var outsidePaths []string
-
-	// Validate each file path before proceeding
-	for _, filePath := range files {
-		// Clean the path to eliminate any . or redundant separators
-		cleanedPath := filepath.Clean(filePath)
-		var absPath string
-		if filepath.IsAbs(cleanedPath) {
-			absPath = cleanedPath
-		} else {
-			// Resolve relative paths against the workspace root, not the process cwd
-			absPath = filepath.Join(absWorkspaceDir, cleanedPath)
-		}
-
-		// Track absolute path for later workspace root computation
-		absFilePaths = append(absFilePaths, absPath)
-
-		// Check if file is outside workspace and not in /tmp
-		isOutsideWorkspace := !isPathInWorkspace(absPath, absWorkspaceDir)
-		isInTmp := isPathInTmp(absPath)
-
-		if isOutsideWorkspace && !isInTmp {
-			outsidePaths = append(outsidePaths, absPath)
-		}
-
-		// Verify the file exists (missing is OK - subagent can create it)
-		if _, err := os.Stat(absPath); err != nil && !os.IsNotExist(err) {
-			return "", agenterrors.NewConfig(fmt.Sprintf("failed to access file %s", filePath), err)
-		}
-
-		a.Logger().Debug("Validated file path: %s -> %s\n", filePath, absPath)
-	}
-
-	// If there are files outside the workspace, prompt for user approval
-	var subagentWorkspaceRoot string = absWorkspaceDir // Default to current workspace root
-
-	if len(outsidePaths) > 0 {
-		// Check for auto-approval conditions
-		// Unsafe mode bypasses filesystem security checks automatically
-		alreadyApproved := a.GetUnsafeMode()
-		if !alreadyApproved {
-			// Per-folder allowlist: only auto-approve if EVERY outside
-			// path is covered by a folder the user previously approved.
-			// The old global flag here was the safety bug — approving
-			// one path silently allowed all paths for the session.
-			alreadyApproved = true
-			for _, p := range outsidePaths {
-				if !a.IsFolderSessionAllowed(p) {
-					alreadyApproved = false
-					break
-				}
-			}
-		}
-
-		if !alreadyApproved {
-			// CRITICAL: When running as a subagent, we CANNOT prompt for user confirmation
-			// because stdin is /dev/null. Instead, we must reject the request.
-			if a.IsSubagent() {
-				a.Logger().Debug("Subagent encountered external workspace request, cannot prompt for approval (running as subagent)\n")
-				return "", agenterrors.NewPermission(fmt.Sprintf("file paths outside workspace require user approval: %v (cannot prompt from subagent context)", outsidePaths), nil)
-			}
-
-			// Build approval prompt
-			outsidePathsStr := strings.Join(outsidePaths, ", ")
-			prompt := fmt.Sprintf("Subagent requests access to files outside the working directory:\n  %s\n\nAllow? This will start the subagent in a directory that covers these files.", outsidePathsStr)
-
-			// Prefer webui approval path when a browser tab is connected
-			agentConfig := a.GetConfig()
-			logger := utils.GetLogger(agentConfig != nil && agentConfig.SkipPrompt)
-			canPrompt := logger != nil && logger.IsInteractive() && !a.IsSubagent()
-
-			if mgr := a.GetSecurityApprovalMgr(); mgr != nil && a.GetEventBus() != nil && !a.IsSubagent() && a.HasActiveWebUIClients() {
-				// WEBUI: request approval via event bus for the browser dialog
-				extras := map[string]string{
-					"risk_type": "Subagent External Workspace",
-					"target":    outsidePathsStr,
-				}
-				if !mgr.RequestToolApproval(a.GetEventBus(), a.GetEventClientID(), a.GetEventUserID(), "run_subagent", "CAUTION", prompt, extras) {
-					a.Logger().Debug("User rejected subagent access to external workspace\n")
-					return "", agenterrors.NewPermission(fmt.Sprintf("file paths outside workspace rejected by user: %v", outsidePaths), nil)
-				}
-				a.Logger().Debug("User approved subagent access to external workspace via webui\n")
-			} else if canPrompt {
-				// CLI: prompt user interactively via terminal stdin
-				cliPrompt := "[WARN] Subagent External Workspace\n\n" + prompt + "\n\nAllow? (yes/no): "
-				if !logger.AskForConfirmation(cliPrompt, false, false) {
-					a.Logger().Debug("User rejected subagent access to external workspace\n")
-					return "", agenterrors.NewPermission(fmt.Sprintf("file paths outside workspace rejected by user: %v", outsidePaths), nil)
-				}
-				a.Logger().Debug("User approved subagent access to external workspace via CLI\n")
-			} else {
-				// No prompting available (non-interactive): reject
-				a.Logger().Debug("Cannot prompt for subagent external workspace approval (non-interactive)\n")
-				return "", agenterrors.NewPermission(fmt.Sprintf("file paths outside workspace require approval but prompting is not available: %v", outsidePaths), nil)
-			}
-
-			// Mark each outside path's parent as session-allowed so
-			// the subagent doesn't re-prompt for the same files.
-			// Phase 3 will offer the user a "once vs folder" choice
-			// in the dialog itself; for now we widen to parents.
-			for _, p := range outsidePaths {
-				a.AddSessionAllowedFolder(filepath.Dir(p))
-			}
-		} else {
-			a.Logger().Debug("Auto-approving subagent external workspace (unsafe mode or session bypass)\n")
-		}
-
-		// Compute common parent directory of all files as the new workspace root
-		subagentWorkspaceRoot = commonParent(absFilePaths)
-		a.Logger().Debug("Computed subagent workspace root: %s (from %d file paths)\n", subagentWorkspaceRoot, len(absFilePaths))
-	}
-
-	// If working_dir is explicitly specified, override the subagent workspace root
-	if workingDir != "" {
-		// Warn if any referenced files fall outside the working_dir scope
-		for _, absPath := range absFilePaths {
-			if !isPathInWorkspace(absPath, workingDir) && !isPathInTmp(absPath) {
-				a.Logger().Debug("Warning: file %s is outside working_dir %s; subagent may not be able to access it\n", absPath, workingDir)
-			}
-		}
-		subagentWorkspaceRoot = workingDir
-		a.Logger().Debug("Overriding subagent workspace root with working_dir: %s\n", subagentWorkspaceRoot)
-	}
-
-	// Build enhanced prompt with context and files
-	enhancedPrompt := new(strings.Builder)
-
-	// Add previous work context section if provided
-	if context != "" {
-		enhancedPrompt.WriteString("# Previous Work Context\n\n")
-		enhancedPrompt.WriteString(context)
-		enhancedPrompt.WriteString("\n\n---\n\n")
-	}
-
-	// Add relevant files section if provided
-	if len(files) > 0 {
-		enhancedPrompt.WriteString("# Relevant Files\n\n")
-		for _, filePath := range files {
-			enhancedPrompt.WriteString(fmt.Sprintf("## File: %s\n\n", filePath))
-			content, err := tools.ReadFile(ctx, filePath)
-			if err != nil {
-				enhancedPrompt.WriteString(fmt.Sprintf("[Error reading file: %v]\n\n", err))
-				a.Logger().Debug("Failed to read file %s for subagent context: %v\n", filePath, err)
-			} else {
-				enhancedPrompt.WriteString(content)
-				enhancedPrompt.WriteString("\n\n")
-			}
-		}
-		enhancedPrompt.WriteString("---\n\n")
-	}
-
-	// Add task section
-	enhancedPrompt.WriteString("# Your Task\n\n")
-	enhancedPrompt.WriteString(prompt)
-
-	a.Logger().Debug("Spawning subagent with enhanced prompt (length: %d)\n", enhancedPrompt.Len())
-
-	// Validate enhanced prompt size
-	if enhancedPrompt.Len() > MAX_SUBAGENT_CONTEXT_SIZE {
-		return "", agenterrors.NewValidation(fmt.Sprintf("enhanced prompt exceeds maximum size of %d bytes", MAX_SUBAGENT_CONTEXT_SIZE), nil)
-	}
-
-	// Get subagent provider and model from configuration
-	// If persona is specified, use persona-specific provider/model
-	var provider string
-	var model string
-	explicitSubagentConfig := false
-
-	if a.configManager != nil {
-		config := a.configManager.GetConfig()
-
-		if persona != "" {
-			// Get persona-specific configuration
-			subagentType := config.GetSubagentType(persona)
-			if subagentType != nil {
-				// Check LocalOnly flag - reject in cloud mode
-				if subagentType.LocalOnly && !a.IsLocalMode() {
-					return "", agenterrors.NewValidation(fmt.Sprintf("persona '%s' is local-only and cannot be used as a subagent in cloud mode", persona), nil)
-				}
-				// Spawnability check: a Delegatable=false target may only be
-				// spawned when the active persona explicitly lists it in
-				// CanSpawnNonDelegatable. This replaces the previous
-				// hardcoded "EA can spawn anything" carve-out — the coordinator
-				// declares ["orchestrator"] so the canonical
-				// coordinator→orchestrator→specialist chain still works, and
-				// no additional Go special-cases (EA-can't-spawn-EA,
-				// orchestrator-can't-spawn-coordinator) are needed: the
-				// missing entries express the policy directly.
-				if !subagentType.Delegatable && !a.canSpawnNonDelegatable(persona) {
-					return "", agenterrors.NewValidation(fmt.Sprintf("persona '%s' is not spawnable from %q (delegatable=false and not listed in spawner's can_spawn_non_delegatable)", persona, a.GetActivePersona()), nil)
-				}
-				// No persona can spawn itself — orthogonal to spawn_policy.
-				currentPersona := a.GetActivePersona()
-				if currentPersona != "" && currentPersona == persona {
-					return "", agenterrors.NewValidation(fmt.Sprintf("persona '%s' cannot spawn itself (prevents self-recursion)", persona), nil)
-				}
-				provider = config.GetSubagentTypeProvider(persona)
-				model = config.GetSubagentTypeModel(persona)
-				systemPromptPath = subagentType.SystemPrompt
-				// Inline text takes precedence over file path
-				if subagentType.SystemPromptText != "" {
-					systemPromptText = subagentType.SystemPromptText
-				}
-				// Track if persona had explicit provider/model (not from global fallback)
-				if subagentType.Provider != "" || subagentType.Model != "" {
-					explicitSubagentConfig = true
-				}
-				a.Logger().Debug("Using persona '%s': provider=%s model=%s system_prompt=%s\n",
-					persona, provider, model, systemPromptPath)
-				a.warnSubagentFallback(fmt.Sprintf("persona '%s'", persona), strings.TrimSpace(subagentType.Provider), strings.TrimSpace(subagentType.Model), strings.TrimSpace(config.SubagentProvider), strings.TrimSpace(config.SubagentModel), provider, model)
-			} else {
-				a.Logger().Debug("Warning: Persona '%s' not found or disabled, using default subagent config\n", persona)
-				provider = config.GetSubagentProvider()
-				model = config.GetSubagentModel()
-				a.warnSubagentFallback("default subagent config", "", "", strings.TrimSpace(config.SubagentProvider), strings.TrimSpace(config.SubagentModel), provider, model)
-			}
-		} else {
-			// No persona specified, use default subagent config
-			provider = config.GetSubagentProvider()
-			model = config.GetSubagentModel()
-			a.Logger().Debug("Using subagent provider=%s model=%s from config\n", provider, model)
-			a.warnSubagentFallback("default subagent config", "", "", strings.TrimSpace(config.SubagentProvider), strings.TrimSpace(config.SubagentModel), provider, model)
-		}
-
-		// If no explicit subagent config is set (SubagentProvider and SubagentModel are empty
-		// and persona doesn't have explicit provider/model), inherit from parent agent.
-		// This ensures subagents use the model the user actually selected for the main agent.
-		if !explicitSubagentConfig && config.SubagentProvider == "" && config.SubagentModel == "" {
-			parentProvider := a.GetProvider()
-			parentModel := a.GetModel()
-			if parentProvider != "" && parentProvider != "unknown" {
-				provider = parentProvider
-			}
-			if parentModel != "" && parentModel != "unknown" {
-				model = parentModel
-			}
-			a.Logger().Debug("Inheriting parent agent provider/model: provider=%s model=%s\n", provider, model)
-		}
-
-		// Log no-persona spawn resolution for observability. persona is defaulted
-		// to "general" earlier in this function (or to cfg.DefaultSubagentPersona),
-		// so we check the explicit-provided flag rather than the empty string —
-		// without this, the log line would never fire.
-		if !personaExplicitlyProvided {
-			source := "global subagent default"
-			if config.SubagentProvider == "" && config.SubagentModel == "" {
-				source = "parent fallback"
-			}
-			a.Logger().Info("no-persona subagent spawn: provider=%s model=%s source=%s (resolved persona=%s)\n", provider, model, source, persona)
-		}
-	} else {
-		a.Logger().Debug("Warning: No config manager available, using parent agent defaults\n")
-		provider = a.GetProvider()
-		model = a.GetModel()
-		a.warnSubagentFallback("missing config manager", "", "", "", "", provider, model)
-	}
-
-	// Resolve system prompt: inline text takes precedence over file path.
-	// If systemPromptPath is set but systemPromptText is empty, load from file.
-	// Resolve relative to workspace root (not process cwd) for daemon mode safety.
-	if systemPromptText == "" && systemPromptPath != "" {
-		absPromptPath := systemPromptPath
-		if !filepath.IsAbs(absPromptPath) {
-			absPromptPath = filepath.Join(subagentWorkspaceRoot, systemPromptPath)
-		}
-		promptBytes, err := os.ReadFile(absPromptPath)
-		if err == nil {
-			systemPromptText = string(promptBytes)
-			a.Logger().Debug("Loaded system prompt from %s\n", absPromptPath)
-		} else {
-			a.Logger().Debug("Failed to load system prompt from %s: %v\n", absPromptPath, err)
-		}
+		return "", err
 	}
 
 	// Print the provider/model being used for this subagent
-	displayProvider := provider
+	displayProvider := spec.provider
 	if displayProvider == "" {
 		displayProvider = "default"
 	}
-	displayModel := model
+	displayModel := spec.model
 	if displayModel == "" {
 		displayModel = "default"
 	}
-	publishSubagentActivity(ctx, a, "spawn", fmt.Sprintf("Starting %s", persona), map[string]interface{}{
-		"persona":     persona,
+	publishSubagentActivity(ctx, a, "spawn", fmt.Sprintf("Starting %s", spec.persona), map[string]interface{}{
+		"persona":     spec.persona,
 		"provider":    displayProvider,
 		"model":       displayModel,
 		"is_parallel": false,
 	})
-	printSubagentStart(persona, displayProvider, displayModel)
+	printSubagentStart(spec.persona, displayProvider, displayModel)
 
+	// Phase 2: Run the subagent
 	runner := a.GetSubagentRunner()
-	result := runner.Run(ctx, enhancedPrompt.String(), SubagentOptions{
-		Persona:      persona,
-		Model:        model,
-		Provider:     provider,
-		SystemPrompt: systemPromptText,
-		WorkingDir:   workingDir,
+	result := runner.Run(ctx, spec.enhancedPrompt, SubagentOptions{
+		Persona:      spec.persona,
+		Model:        spec.model,
+		Provider:     spec.provider,
+		SystemPrompt: spec.systemPromptText,
+		WorkingDir:   spec.workingDir,
 	})
-	printSubagentDone(persona, result)
+	printSubagentDone(spec.persona, result)
 
 	// SP-059 Phase 2c (missing step): merge the subagent's tracked
 	// changes into the primary's ChangeTracker so list_changes,
 	// recover_file, and revert_my_changes see subagent edits.
-	a.MergeSubagentChanges(result.FileChanges, persona)
+	a.MergeSubagentChanges(result.FileChanges, spec.persona)
 
+	// Phase 3: Build resultMap from SubagentResult
 	// SP-059 Phase 2a: build the typed envelope. resultMap is preserved
 	// for the legacy code paths below that still mutate it via string
 	// keys (file change extraction, security re-prompt, etc.) — both
@@ -476,62 +78,30 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		a.Logger().Debug("Subagent error: %v\n", result.Error)
 	}
 
+	// Phase 4: Post-run processing
 	// Truncate output if it exceeds size limit
-	if stdout, ok := resultMap["stdout"]; ok {
-		if len(stdout) > MAX_SUBAGENT_OUTPUT_SIZE {
-			resultMap["stdout"] = stdout[:MAX_SUBAGENT_OUTPUT_SIZE] + "... (truncated, too large)"
-		}
-	}
-	if stderr, ok := resultMap["stderr"]; ok {
-		if len(stderr) > MAX_SUBAGENT_OUTPUT_SIZE {
-			resultMap["stderr"] = stderr[:MAX_SUBAGENT_OUTPUT_SIZE] + "... (truncated, too large)"
-		}
-	}
+	truncateSubagentOutput(resultMap)
 
-	// Extract summary from stdout (human-readable file changes, build/test
-	// status, etc.). SP-059 Phase 2b: token/cost tracking switched to the
-	// structured SubagentResult fields below, no longer regex-scraped from
-	// SUBAGENT_METRICS: lines (which silently regressed if a model dropped
-	// the line).
-	if stdout, ok := resultMap["stdout"]; ok {
-		summary := extractSubagentSummary(stdout)
-		summaryJSON, err := json.MarshalIndent(summary, "", "  ")
-		if err != nil {
-			a.Logger().Debug("Failed to marshal summary: %v\n", err)
-			resultMap["summary"] = fmt.Sprintf("Error creating summary: %v", err)
-		} else {
-			resultMap["summary"] = string(summaryJSON)
-			a.Logger().Debug("Extracted subagent summary: %s\n", string(summaryJSON))
-		}
-	}
-
-	// Roll the subagent's token/cost into the parent agent's totals from
-	// the structured SubagentResult — no stdout scraping. Prompt /
-	// completion / cached splits are not exposed by SubagentResult today,
-	// so they're left at zero; TrackMetricsFromResponse treats them as
-	// "unknown split" and still applies the totals correctly.
-	if result.TokensUsed > 0 || result.Cost > 0 {
-		a.TrackMetricsFromResponse(0, 0, int(result.TokensUsed), result.Cost, 0, 0)
-		a.Logger().Debug("Tracked subagent costs: %d tokens, $%.6f\n", result.TokensUsed, result.Cost)
-	}
+	// Extract summary and track costs
+	extractAndTrackSubagentSummary(a, resultMap, result)
 
 	// Add context_used field
-	if context != "" {
+	if spec.context != "" {
 		resultMap["context_used"] = "true"
 	} else {
 		resultMap["context_used"] = "false"
 	}
 
 	// Add files_used field
-	if filesStr != "" {
-		resultMap["files_used"] = filesStr
+	if spec.filesStr != "" {
+		resultMap["files_used"] = spec.filesStr
 	} else {
 		resultMap["files_used"] = ""
 	}
 
 	// Add working_dir field
-	if workingDir != "" {
-		resultMap["working_dir"] = workingDir
+	if spec.workingDir != "" {
+		resultMap["working_dir"] = spec.workingDir
 	} else {
 		resultMap["working_dir"] = ""
 	}
@@ -539,35 +109,11 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 	// Check if subagent failed with security-related errors
 	// When running as a subagent, we can't prompt the user
 	// So we need to delegate the security decision back to the primary agent
-	if a.IsSubagent() {
-		stderr := resultMap["stderr"]
-		exitCode := resultMap["exit_code"]
-
-		// Check for filesystem security errors
-		if strings.Contains(stderr, "outside working directory") ||
-			strings.Contains(stderr, "ErrOutsideWorkingDirectory") ||
-			strings.Contains(stderr, "ErrWriteOutsideWorkingDirectory") ||
-			strings.Contains(stderr, "security warning") ||
-			exitCode != "0" {
-
-			// Subagent encountered a security error or failed
-			// Return a special error format that tells the primary agent to stop retrying
-			errorMsg := fmt.Sprintf("SUBAGENT_SECURITY_ERROR: The subagent encountered a security-related error or requires user authorization.\n\n"+
-				"Exit code: %s\n"+
-				"Stderr: %s\n"+
-				"Stdout: %s\n\n"+
-				"IMPORTANT: This subagent task requires user authorization or encountered a blocking error. "+
-				"Do NOT retry this subagent call with the same parameters. "+
-				"Instead, inform the user about the error and ask for guidance on how to proceed.",
-				exitCode, stderr, resultMap["stdout"])
-
-			a.Logger().Debug("Subagent failed with security error, delegating to primary agent\n")
-			return errorMsg, nil
-		}
+	if securityMsg := handleSubagentSecurityError(a, resultMap); securityMsg != "" {
+		return securityMsg, nil
 	}
 
-	// For non-subagent context (primary agent), check if the subagent failed
-	// and add a clear message to prevent retry loops
+	// Publish completion event
 	exitCode := "0"
 	if ec, ok := resultMap["exit_code"]; ok {
 		exitCode = ec
@@ -577,7 +123,7 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 		completionMessage = fmt.Sprintf("Subagent failed (exit code %s)", exitCode)
 	}
 	publishSubagentActivity(ctx, a, "complete", completionMessage, map[string]interface{}{
-		"persona":     persona,
+		"persona":     spec.persona,
 		"exit_code":   exitCode,
 		"is_parallel": false,
 	})
@@ -586,92 +132,18 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 	flushAllSubagentBuffers(a)
 
 	// Check if subagent exceeded token budget
-	budgetExceeded := false
-	if be, ok := resultMap["budget_exceeded"]; ok {
-		budgetExceeded = be == "true"
+	if budgetMsg := handleSubagentBudgetExceeded(a, resultMap); budgetMsg != "" {
+		return budgetMsg, nil
 	}
 
-	if budgetExceeded {
-		// Subagent exceeded token budget - provide clear guidance to primary agent
-		stdout := resultMap["stdout"]
-
-		// Get token usage from summary if available
-		tokensUsed := "unknown"
-		if summary, ok := resultMap["summary"]; ok {
-			// Try to extract token count from summary
-			if strings.Contains(summary, "subagent_total_tokens") {
-				parts := strings.Split(summary, ":")
-				for i, part := range parts {
-					if strings.Contains(part, "subagent_total_tokens") && i+1 < len(parts) {
-						tokenStr := strings.TrimSpace(strings.Split(parts[i+1], ",")[0])
-						tokenStr = strings.TrimSuffix(tokenStr, "\"")
-						tokensUsed = tokenStr
-						break
-					}
-				}
-			}
-		}
-
-		errorMsg := fmt.Sprintf("SUBAGENT_TOKEN_BUDGET_EXCEEDED: The subagent consumed its entire token budget and was terminated to control costs.\n\n"+
-			"Tokens used: %s\n"+
-			"Budget limit: %d tokens\n\n"+
-			"The subagent has produced partial output and made progress on the task. "+
-			"IMPORTANT: Do NOT automatically retry the subagent with the same prompt. "+
-			"Instead, evaluate the partial output below and decide:\n"+
-			"1. Is the task complete enough to continue?\n"+
-			"2. Can you complete the remaining work yourself?\n"+
-			"3. Should you ask the user for guidance on how to proceed?\n\n"+
-			"Partial subagent output:\n%s",
-			tokensUsed, DefaultSubagentTokenBudget, stdout)
-
-		a.Logger().Debug("Subagent exceeded token budget, returning partial output to primary agent\n")
-		return errorMsg, nil
+	// For non-subagent context (primary agent), check if the subagent failed
+	// and add a clear message to prevent retry loops
+	if failMsg := handleSubagentNonSecurityFailure(a, resultMap); failMsg != "" {
+		return failMsg, nil
 	}
 
-	if exitCode != "0" {
-		// Subagent failed - add clear message to prevent infinite retry loops
-		stderr := resultMap["stderr"]
-		stdout := resultMap["stdout"]
-
-		// Check for specific error patterns that indicate we should stop retrying
-		if strings.Contains(stderr, "ErrOutsideWorkingDirectory") ||
-			strings.Contains(stderr, "ErrWriteOutsideWorkingDirectory") ||
-			strings.Contains(stderr, "security") ||
-			strings.Contains(stdout, "SUBAGENT_SECURITY_ERROR") {
-
-			// This is a security/authorization error - don't retry
-			errorMsg := fmt.Sprintf("SUBAGENT_FAILED: The subagent encountered a security or authorization error that prevents it from completing the task.\n\n"+
-				"Exit code: %s\n"+
-				"Error: %s\n\n"+
-				"This error requires user intervention. Do NOT retry the subagent call. "+
-				"Instead, report the error to the user and ask for guidance.",
-				exitCode, stderr)
-
-			a.Logger().Debug("Subagent failed with security error, stopping retry loop\n")
-			return errorMsg, nil
-		}
-
-		// For other errors, add a warning but don't prevent retries entirely
-		// The agent may still retry, but we add tracking to prevent infinite loops
-		a.Logger().Debug("Subagent failed with exit code %s\n", exitCode)
-		// Add error indicator to result map
-		resultMap["error"] = fmt.Sprintf("Subagent failed with exit code %s. Error output: %s", exitCode, stderr)
-	}
-
-	// SP-059 Phase 2a/2d: marshal the typed envelope (preserves all old
-	// JSON keys for LLM compat) plus the new status / metrics / manifest
-	// fields. The Status enum supersedes the SUBAGENT_* sentinel string
-	// prefixes for in-process callers — the sentinels themselves still
-	// appear in earlier returned error messages so model-side behavior is
-	// unchanged.
-	ret := buildSubagentReturn(resultMap, result, statusFromResult(result, resultMap))
-	jsonStr, jsonErr := ret.MarshalJSONIndent()
-	if jsonErr != nil {
-		return "", agenterrors.NewAgent("subagent.spawn", "failed to marshal subagent result", jsonErr)
-	}
-
-	a.Logger().Debug("Subagent spawn result: %s\n", jsonStr)
-	return jsonStr, nil
+	// Marshal and return the final result
+	return buildSubagentFinalResult(a, resultMap, result)
 }
 
 // ---------------------------------------------------------------------------

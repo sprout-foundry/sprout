@@ -1198,12 +1198,9 @@ testid/assertion updates — typical of fast ship-cycles.
 
 - [x] **WebUI-A-1:** Fix `testids.test.ts` — add the 10 static testids
   + 2 template-literal patterns to `test/webui/testids.ts`. _(shipped: commit `49744cf5`. Also fixed an underlying bug in `testids.test.ts`: the ternary regex `[^?]*` was greedy across newlines and falsely matched `Submit` and `Submitting…` (button text) as testids. Replaced with `[^\n?]*`. 8 shell-approval + 2 notification entries added to TESTIDS.)_
-- [ ] **WebUI-A-2:** Fix `Sidebar.sessionSearch.test.tsx` — the
+- [x] **WebUI-A-2:** Fix `Sidebar.sessionSearch.test.tsx` — the
   shared root cause is likely a missing API mock or a query-name
-  change. The runner should diff `Sidebar.tsx` against the test
-  expectations and patch either the component or the test fixture
-  (whichever is more recent). Add a regression test if the component
-  is being fixed.
+  change. _(shipped: commit `3b125b73`. Root cause: the test queried for `[data-testid="sidebar-session-search-result"]` and `[data-testid="sidebar-session-search-no-results"]`, but `Sidebar.tsx` actually renders these as `[data-testid="chat-item"]` and `[data-testid="chat-sessions-empty"]` respectively (the canonical testids already in `test/webui/testids.ts`). Updated 3 selectors in the test file to match the component. No component changes needed.)_
 - [ ] **WebUI-A-3:** Fix `ChatStatusBarItems.test.tsx` — the missing
   segment and undefined text suggest the component was refactored
   (likely the SP-101 work). Re-align the component output with what

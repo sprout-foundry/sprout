@@ -4,9 +4,47 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync/atomic"
 
 	"github.com/sprout-foundry/sprout/pkg/envutil"
 )
+
+// colorBlindPalette is the process-wide toggle for the CLI-E color-blind
+// palette swap. When true, Glyph.color() returns the swapped palette
+// (red→cyan, amber→magenta) so success / error / warning remain
+// distinguishable under deuteranopia / protanopia.
+//
+// CLI-E-1 wires the env-var / flag plumbing; CLI-E-2 lives here.
+//
+// Atomic so the palette can flip at runtime (e.g. on flag re-read after
+// PersistentPreRunE) without racing a concurrent render in the
+// REPL goroutine. Read in the hot path of color() — atomic.LoadUint32
+// is cheaper than sync.RWMutex.
+var colorBlindPalette atomic.Bool
+
+// SetColorBlind enables or disables the color-blind palette swap.
+// Returns the previous value so callers (tests) can restore it.
+func SetColorBlind(enabled bool) bool {
+	return colorBlindPalette.Swap(enabled)
+}
+
+// ColorBlindEnabled reports the current palette state. Mostly useful
+// in tests and /help output.
+func ColorBlindEnabled() bool {
+	return colorBlindPalette.Load()
+}
+
+// ApplyColorBlindFromEnv reads SPROUT_COLOR_BLIND and enables the
+// palette swap if set to a truthy value ("1", "true", "yes"). Called
+// from cmd/root.go after flag parsing so the CLI flag wins over the
+// env var (the flag sets the atomic directly via SetColorBlind).
+func ApplyColorBlindFromEnv() {
+	v := os.Getenv("SPROUT_COLOR_BLIND")
+	switch v {
+	case "1", "true", "TRUE", "yes", "YES", "on", "ON":
+		SetColorBlind(true)
+	}
+}
 
 // Glyph encodes a single semantic category for CLI status lines.
 // Every output line that announces a status (success, error, warning,
@@ -74,9 +112,44 @@ func (g Glyph) Rune() string {
 
 // color returns the ANSI prefix for this glyph's canonical color, or
 // empty string when color is disabled.
+//
+// CLI-E: when color-blind mode is active (via SPROUT_COLOR_BLIND env
+// var or the --color-blind flag), the canonical palette is swapped to
+// one that's distinguishable under deuteranopia / protanopia:
+//   - GlyphError    (red)    → bright cyan  (\033[1;36m)
+//   - GlyphWarning  (amber)  → magenta      (\033[1;35m)
+//   - GlyphStopped  (red)    → bright cyan
+//   - GlyphPaused   (amber)  → magenta
+//   - other glyphs retain their canonical color so the green/cyan axes
+//     that distinguish success/info from errors are unchanged.
+//
+// The swap is process-wide; tests stub colorBlindPalette via
+// SetColorBlindForTest.
 func (g Glyph) color() string {
 	if !envutil.ResolveColorPreference(true) {
 		return ""
+	}
+	if colorBlindPalette.Load() {
+		switch g {
+		case GlyphError:
+			return "\033[1;36m" // bold bright cyan
+		case GlyphStopped:
+			return "\033[1;36m"
+		case GlyphWarning:
+			return "\033[1;35m" // bold magenta
+		case GlyphPaused:
+			return "\033[1;35m"
+		case GlyphSuccess:
+			return "\033[32m" // green stays (vs cyan — distinguishable)
+		case GlyphInfo:
+			return "\033[36m"
+		case GlyphAction:
+			return "\033[1;96m"
+		case GlyphDim:
+			return "\033[2m"
+		default:
+			return ""
+		}
 	}
 	switch g {
 	case GlyphSuccess:

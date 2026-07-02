@@ -80,6 +80,13 @@ const (
 	// GlyphStopped marks a stopped / interrupted / aborted state.
 	// Replaces: [STOP], [!]
 	GlyphStopped
+	// GlyphShell marks a shell command being executed. Replaces the
+	// bare "$ " prompt prefix in agent_workflow_runner and similar
+	// sites. Distinct from GlyphAction (which uses →) so power users
+	// can grep / scroll for shell output specifically.
+	//
+	// CLI-F-3: explicit constant for the shell-prompt glyph.
+	GlyphShell
 	// GlyphDim marks secondary / continuation / metric lines that
 	// shouldn't draw the eye. Replaces: [skip] (some), [debug]
 	GlyphDim
@@ -103,6 +110,8 @@ func (g Glyph) Rune() string {
 		return "⏸"
 	case GlyphStopped:
 		return "⏹"
+	case GlyphShell:
+		return "$"
 	case GlyphDim:
 		return "·"
 	default:
@@ -145,6 +154,8 @@ func (g Glyph) color() string {
 			return "\033[36m"
 		case GlyphAction:
 			return "\033[1;96m"
+		case GlyphShell:
+			return "\033[1;32m" // bold green — "go" prompt feel
 		case GlyphDim:
 			return "\033[2m"
 		default:
@@ -166,6 +177,8 @@ func (g Glyph) color() string {
 		return "\033[33m" // amber
 	case GlyphStopped:
 		return "\033[31m" // red
+	case GlyphShell:
+		return "\033[1;32m" // bold green
 	case GlyphDim:
 		return "\033[2m" // dim
 	default:

@@ -96,7 +96,9 @@ func main() {
 			// that is in the baseline but has NO probe yet (newly added before,
 			// or a prior run that errored / was budget-skipped) falls through to
 			// be probed this run — that's how a transient failure gets retried.
-			if prev, ok := baseline[m.ID]; ok && prev.Probe != nil {
+			// A version mismatch also forces a re-probe so a ProbeVersion bump
+			// invalidates all prior results.
+			if prev, ok := baseline[m.ID]; ok && prev.Probe != nil && prev.Probe.ProbeVersion == modelprobe.ProbeVersion {
 				m.Probe = prev.Probe
 				m.RecommendedRoles = prev.RecommendedRoles
 				continue // already have a result; nothing to spend
@@ -162,6 +164,7 @@ func main() {
 			m.Probe = &modelcontract.ProbeResult{
 				Passed:       res.Passed,
 				Complex:      res.Complex,
+				Vision:       res.Vision,
 				Score:        res.Score,
 				LastProbedAt: res.ProbedAt,
 				ProbeVersion: res.ProbeVersion,
@@ -228,7 +231,7 @@ func main() {
 			for i := range embeddedModels {
 				m := &embeddedModels[i]
 
-				if prev, ok := baseline[m.ID]; ok && prev.Probe != nil {
+				if prev, ok := baseline[m.ID]; ok && prev.Probe != nil && prev.Probe.ProbeVersion == modelprobe.ProbeVersion {
 					m.Probe = prev.Probe
 					m.RecommendedRoles = prev.RecommendedRoles
 					continue
@@ -285,6 +288,7 @@ func main() {
 				m.Probe = &modelcontract.ProbeResult{
 					Passed:       res.Passed,
 					Complex:      res.Complex,
+					Vision:       res.Vision,
 					Score:        res.Score,
 					LastProbedAt: res.ProbedAt,
 					ProbeVersion: res.ProbeVersion,

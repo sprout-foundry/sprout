@@ -1140,4 +1140,246 @@ implementing; do not blindly follow these as TODOs.
 - [x] **VISION-8:** Decide and document: does `vision_types.go` split
       break type imports? Map the import graph before extracting. _(decided YES safe to split — types only depend on other vision_types and a small set of pkg/agent_api + pkg/configuration imports; verified during VISION-1 commit; commit `be5536d0`)_
 
+---
+
+## WebUI-A: Fix Currently-Failing Vitest Tests
+
+_Runner-friendly batch (~30 min)._ The webui test suite is at
+5449 passing / 9 failing / 36 skipped (5,496 total). The 9 failures
+all look like they stem from components that landed without their
+testid/assertion updates — typical of fast ship-cycles.
+
+### Failing test files (verified 2026-07-02)
+
+**`test/webui/testids.test.ts`** (2 failures):
+- "every observed static testid must be registered" — 10 new testids
+  in `ShellApprovalPanel.tsx` and `NotificationCenter.tsx` weren't
+  added to `test/webui/testids.ts`:
+  ```
+  Submit
+  Submitting…
+  notification-center
+  notification-center-mark-all-read
+  shell-approval-accept-all
+  shell-approval-command
+  shell-approval-reject-all
+  shell-approval-reset
+  shell-approval-risk-badge
+  shell-approval-submit
+  ```
+- "every observed template literal pattern must have at least one
+  matching registry value" — 2 patterns in `ShellApprovalPanel.tsx`:
+  ```
+  shell-approval-part-${part.id}
+  shell-approval-part-toggle-${part.id}
+  ```
+
+**`webui/src/components/Sidebar.sessionSearch.test.tsx`** (3 failures):
+- "renders search results with data-session-id on each item" — expected
+  2 results, got 0 (search filter or fetch failure).
+- "clicking a result calls onSessionSearchRestore with the session_id" —
+  result element is null (cascading from above).
+- "shows no-results message when API returns empty results" — null
+  again (same root cause).
+
+**`webui/src/components/chat/ChatStatusBarItems.test.tsx`** (3 failures):
+- "renders model, ctx, and cost when all fields are present" — expected
+  3, got 2 (one segment missing — likely `ctx` or `cost`).
+- "omits segments for missing fields, with no orphan separators" —
+  expected 2, got 1.
+- "renders the model as a button when onModelClick is provided" — text
+  was "claude-haiku-4-5" but `Received: undefined`.
+
+**`webui/src/hooks/useEventHandler.test.ts`** (1 failure):
+- "auto-classifies [FAIL] messages as error" — classifier not matching
+  the expected token.
+
+### Items
+
+- [ ] **WebUI-A-1:** Fix `testids.test.ts` — add the 10 static testids
+  + 2 template-literal patterns to `test/webui/testids.ts`. This is
+  the easiest fix (~5 min) and the test was specifically built as a
+  CI gate against this kind of drift.
+- [ ] **WebUI-A-2:** Fix `Sidebar.sessionSearch.test.tsx` — the
+  shared root cause is likely a missing API mock or a query-name
+  change. The runner should diff `Sidebar.tsx` against the test
+  expectations and patch either the component or the test fixture
+  (whichever is more recent). Add a regression test if the component
+  is being fixed.
+- [ ] **WebUI-A-3:** Fix `ChatStatusBarItems.test.tsx` — the missing
+  segment and undefined text suggest the component was refactored
+  (likely the SP-101 work). Re-align the component output with what
+  the test expects, or update the test if the new behavior is
+  intentional.
+- [ ] **WebUI-A-4:** Fix `useEventHandler.test.ts::auto-classifies
+  [FAIL] messages as error` — verify the classifier still matches
+  the `FAIL` token. May be a regex literal vs `strings.Contains` flip.
+
+### Notes
+
+- These 4 fixes are independent and can be shipped in any order.
+- After the fix batch: `cd webui && npx vitest --run` should report
+  5458 passing / 0 failing / 36 skipped (5,496 total).
+- **Do not** touch any of the 27 Playwright spec failures
+  (`test/webui/*.spec.ts`) — they require a running daemon, not a
+  unit test fix. They're tracked separately in the e2e harness.
+
+---
+
+## WebUI-B: Fix `pkg/webui` Go Test Failure
+
+_Bug fix (~10 min)._ `go test ./pkg/webui/` fails on
+`TestPartialSettingsAppliers_ComprehensiveEnums` because the negative
+"unknown key" set is missing a real key. Cheap fix.
+
+### Failing assertion
+
+```
+settings_api_partial_settings_test.go:88:
+  expected exactly [definitely_not_a_real_key] in unknown,
+  got [definitely_not_a_real_key self_review_gate_mode]
+```
+
+`self_review_gate_mode` is a real config key (set in line 33 of the
+same test file as a known key) — but it was added to the "known"
+set without being added to the "unknown" exclusion list. The test
+fails because the unknown-keys list now contains a real key.
+
+### Items
+
+- [ ] **WebUI-B-1:** Add `self_review_gate_mode` (and any other
+  known keys added in recent config-domain refactors) to the
+  "known keys" whitelist in
+  `pkg/webui/settings_api_partial_settings_test.go:88`. Verify
+  the test passes and `go test ./pkg/webui/` is clean.
+
+### Notes
+
+- This is a 1-line fix. The runner should:
+  1. Read `settings_api_partial_settings.go` to find the
+     `_ = PartialSettingsKeys` style allowlist.
+  2. Compare to the test's "known" + "unknown" sets.
+  3. Update the test's allowlist to include any recently-added
+     keys, or vice versa.
+- After the fix, the entire `pkg/webui` test suite must pass.
+
+---
+
+## Refactor-A: God-Function Split Candidates
+
+_File decomposition batch (~2-3 hours total, run as 1 item per
+function)._ The 2026-07-02 god-function scan surfaced several
+functions over 300 lines that haven't been touched by recent
+refactors. Runner can grind them one at a time using the
+SP-075-4j/4k pattern (existing tests stay green, extract into
+focused files).
+
+### Candidates (with line count)
+
+| Function | LOC | File | Comment |
+|---|---:|---|---|
+| `RunAgent` | 599 | `cmd/agent_modes.go` | Runner already touched this in past sprint; recheck |
+| `(r *SubagentRunner).runTask` | 531 | `pkg/agent/subagent_runner.go` | Splittable into `runTaskSetup` / `runTaskBody` / `runTaskTeardown` |
+| `newDefaultToolRegistry` | 517 | `pkg/agent/tool_registry.go` | Pure data assembly — could be table-driven |
+| `runBackendSet` | 443 | `cmd/model_registry_server/*.go` | Extract subcommands into helpers |
+| `(a *Agent).processQueryWithSeed` | 419 | `pkg/agent/conversation.go` | Extract prompt-prep / model-call / response-handle |
+| `startTerminalToolSubscriber` | 402 | `cmd/agent_modes.go` | Pure event-wiring; should split |
+| `runInteractiveMode` | 370 | `cmd/agent_modes.go` | Steer / render / error paths separable |
+| `(a *Agent).RequestApproval` | 344 | `pkg/agent/approval_broker.go` | Split by risk class |
+| `(*ToolRegistry).ExecuteTool` | 341 | `pkg/agent/tool_registry.go` | Pre-flight / execute / post-process |
+| `handleRunParallelSubagents` | 329 | `pkg/agent/tool_handlers_subagent.go` | Dispatch + per-task spawn + collect |
+| `runSeamlessPlanning` | 319 | `cmd/agent_modes.go` | Plan / execute / commit phases |
+
+### Items
+
+- [ ] **Refactor-A-1:** Split `pkg/agent/subagent_runner.go::runTask`
+  into 3 files: `runTaskSetup` (workspace, worktree, persona), 
+  `runTaskBody` (the model call loop), `runTaskTeardown` (cleanup,
+  metrics, results). Existing tests stay green; new file names
+  follow the `_lifecycle.go` / `_helpers.go` pattern from prior
+  SP-075 work.
+- [ ] **Refactor-A-2:** Split `pkg/agent/conversation.go::processQueryWithSeed`
+  into prompt-prep / model-call / response-handle files (similar
+  to the SP-098-1 split for `mcp.go`). The function is 419 lines
+  with 3 clear phases; keep `processQueryWithSeed` as a thin
+  orchestrator that calls the 3 extracted helpers.
+- [ ] **Refactor-A-3:** Split `cmd/agent_modes.go::startTerminalToolSubscriber`
+  (402 lines) into event-subscribe / event-render / cleanup files.
+  Pure wiring code, low risk.
+- [ ] **Refactor-A-4:** Split `pkg/agent/tool_handlers_subagent.go::handleRunParallelSubagents`
+  (329 lines) into dispatch / spawn / collect. Follows the existing
+  subagent-spawn-lifecycle.go pattern.
+
+### Notes
+
+- Each item is a 30-60 min refactor. Use the SP-075 pattern:
+  build → run existing tests → decompose → re-build → re-test →
+  re-review. Don't refactor on green until you have a baseline
+  test count.
+- After all 4 items, `cmd/agent_modes.go` and `pkg/agent/conversation.go`
+  should drop below 500 lines (currently 600+ and 400+).
+
+---
+
+## WebUI-C: Hex Color Token Audit
+
+_Token migration batch (~1 hour)._ The webui component scan found
+~30 hardcoded hex colors that should use design tokens. Per the
+design system rules in `AGENTS.md`, no raw hex in CSS or inline
+`style={{}}` is allowed.
+
+### Sites found (top offenders)
+
+```
+10 #6e7681    (status: gray-500-ish — diff dim text?)
+ 9 #22c55e    (status: green-500 — success?)
+ 6 #d2a8ff    (status: purple-300 — terminal keyword?)
+ 6 #58a6ff    (status: blue-400 — terminal keyword?)
+ 4 #f59e0b    (status: amber-500 — warning)
+ 4 #ef4444    (status: red-500 — error)
+ 3 #ff7b72    (terminal keyword red)
+ 3 #f0883e    (terminal keyword orange)
+ 3 #7ee787    (terminal keyword green)
+ 3 #79c0ff    (terminal keyword blue)
+```
+
+Most of these are GitHub-syntax-theme colors used in the editor's
+syntax highlighting. The first 4 (#6e7681, #22c55e, #f59e0b,
+#ef4444) are status colors that have direct token equivalents
+(`--text-muted`, `--accent-success`, `--accent-warning`,
+`--accent-error`).
+
+Also: `color: '#fff'` is hardcoded 4 times in
+`platform/BillingPage.tsx` (lines 243, 273, 305, 335) — should
+use `var(--accent-fg)`.
+
+### Items
+
+- [ ] **WebUI-C-1:** Replace `#6e7681` → `var(--text-muted)` in
+  webui components (10 sites).
+- [ ] **WebUI-C-2:** Replace `#22c55e` → `var(--accent-success)`
+  (9 sites).
+- [ ] **WebUI-C-3:** Replace `#f59e0b` → `var(--accent-warning)`
+  and `#ef4444` → `var(--accent-error)` (4 sites each).
+- [ ] **WebUI-C-4:** Replace `color: '#fff'` → `var(--accent-fg)`
+  in `platform/BillingPage.tsx` (4 sites).
+- [ ] **WebUI-C-5:** Leave the 6 github-syntax-theme colors
+  (#d2a8ff, #58a6ff, etc.) alone — they're intentional brand
+  identifiers for syntax highlighting and exempt per AGENTS.md.
+
+### Notes
+
+- Run the design system grep guard at the end to verify zero raw
+  hex leaks in non-syntax files.
+- The CI verification snippet from AGENTS.md:
+  ```
+  git diff origin/main -- 'webui/src/**/*.css' 'packages/ui/src/components/*.css' \
+    | grep -E '^\+.*(#[0-9a-fA-F]{3,6}|rgba\([0-9])' \
+    | grep -vE 'rgba\(0, 0, 0|var\(--'
+  ```
+
+---
+
+## Things to consider after SP-091 → SP-095 ship
+
 

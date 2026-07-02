@@ -197,38 +197,20 @@ func (ir *InputReader) ReadLine() (string, error) {
 	}
 	_ = setNonblock(ir.termFd, false)
 
-	// Save terminal state and set raw mode
+	// Save terminal state and set raw mode. setupInputTerm (called
+	// further down, after the line-state reset and prompt render)
+	// installs the bracketed paste + SGR mouse + modifyOtherKeys modes,
+	// registers this reader as the active one, sets up the SIGWINCH
+	// channel, and flips the fd into non-blocking for paste detection.
+	// teardownInputTerm (deferred inside setupInputTerm's call site)
+	// undoes those modes in LIFO order: clear the reader slot, disable
+	// the SGR sequences, then flip non-blocking off. The final cooked
+	// termios restore is this outer `defer term.Restore` which runs last.
 	oldState, err := term.MakeRaw(ir.termFd)
 	if err != nil {
 		return ir.fallbackReadLine()
 	}
 	defer term.Restore(ir.termFd, oldState)
-	fmt.Print(bracketedPasteEnable)
-	defer fmt.Print(bracketedPasteDisable)
-
-	// Enable mouse tracking (SGR mode for extended coordinates)
-	fmt.Print(MouseTrackingSGR)
-	defer fmt.Print(MouseTrackingDisable)
-
-	// Ask the terminal to report modified keystrokes (Shift+Enter etc.)
-	// as CSI u sequences. Terminals that don't recognize this just
-	// ignore the SGR; the new parser branch is a no-op when the
-	// sequence never arrives.
-	fmt.Print(modifyOtherKeysEnable)
-	defer fmt.Print(modifyOtherKeysDisable)
-
-	// Register as the active input reader so background goroutines
-	// (async output worker, tool handlers) can print messages via
-	// PrintExternal without corrupting the input line. Cleared on
-	// return. Must be under LockOutput to race with PrintExternal.
-	LockOutput()
-	setActiveInputReader(ir)
-	UnlockOutput()
-	defer func() {
-		LockOutput()
-		setActiveInputReader(nil)
-		UnlockOutput()
-	}()
 
 	// Initialize line state
 	ir.line = ""
@@ -275,20 +257,23 @@ func (ir *InputReader) ReadLine() (string, error) {
 
 	parser := NewEscapeParser()
 	buf := make([]byte, 32)
-	var resizeCh chan os.Signal
-	if sig := resizeSignal(); sig != nil {
-		resizeCh = make(chan os.Signal, 1)
-		signal.Notify(resizeCh, sig)
-		defer signal.Stop(resizeCh)
-	}
-
-	// Set stdin to non-blocking for paste detection
-	nonBlocking := true
-	if err := setNonblock(ir.termFd, true); err != nil {
-		// Some terminals/PTYs reject non-blocking mode. Keep raw mode enabled and
-		// continue with blocking reads so arrow keys/history still work.
-		nonBlocking = false
-	}
+	// setupInputTerm does (in order):
+	//   - enable bracketed paste, SGR mouse tracking, modifyOtherKeys
+	//   - register this reader as the active one (for PrintExternal)
+	//   - create the SIGWINCH channel (nil on platforms without resize)
+	//   - flip the fd to non-blocking (false on platforms that reject it)
+	// The matching teardownInputTerm (deferred below) undoes the SGR
+	// sequences and clears the active reader slot; the final
+	// `defer term.Restore` reverts cooked termios.
+	resizeCh, nonBlocking := ir.setupInputTerm()
+	defer signal.Stop(resizeCh)
+	// teardownInputTerm undoes the terminal modes that setupInputTerm
+	// enabled (bracketed paste, SGR mouse, modifyOtherKeys, active
+	// reader). It must run while the fd is still in raw mode, so it
+	// is the first defer installed and therefore the first to fire.
+	// The terminal is restored to cooked mode by the outer
+	// `defer term.Restore` below.
+	defer ir.teardownInputTerm()
 	if nonBlocking {
 		defer func() {
 			_ = setNonblock(ir.termFd, false)

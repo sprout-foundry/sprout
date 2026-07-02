@@ -225,6 +225,11 @@ type Config struct {
 	// available unless this is explicitly enabled.
 	ComputerUse *ComputerUseConfig `json:"computer_use,omitempty"`
 
+	// Vision Configuration (SP-103-C3) — controls vision-pipeline runtime
+	// behavior: parallel worker pool size, global concurrency cap, and
+	// multi-image batching. All fields have safe defaults via Resolve().
+	Vision *VisionConfig `json:"vision,omitempty"`
+
 	// Change Tracking Configuration — controls the shell-mutation
 	// snapshot pass. Direct file-tool hooks (write_file, edit_file,
 	// patch_structured_file) are always tracked; this struct only

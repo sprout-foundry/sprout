@@ -537,7 +537,7 @@ function Chat({
             </>
           </div>
         ) : (
-          <div role="log" aria-label="Chat messages" ref={chatContainerRef} style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+          <div role="log" aria-live="polite" aria-label="Chat messages" ref={chatContainerRef} style={{ flex: 1, minHeight: 0, position: 'relative' }}>
             <Virtuoso
               ref={virtuosoRef}
               data={visibleMessages}

@@ -353,6 +353,22 @@ describe('Chat', () => {
     expect(scrollBtn).toBeNull();
   });
 
+  // ── ARIA live region for screen-reader announcements ──
+
+  it('renders the chat message list as an aria-live polite log region', () => {
+    const messages = makeMessages(3, 'user');
+    act(() => {
+      root.render(createElement(Chat, {
+        ...baseProps,
+        messages,
+      }));
+    });
+    const log = container.querySelector('[role="log"]');
+    expect(log).not.toBeNull();
+    expect(log?.getAttribute('aria-live')).toBe('polite');
+    expect(log?.getAttribute('aria-label')).toBe('Chat messages');
+  });
+
   // ── Default placeholder ──
 
   it('uses default placeholder when providerAvailable is not false', () => {

@@ -347,7 +347,7 @@ If the user asks where to edit memories, point them at `~/.config/sprout/memorie
 - **Make decisive choices**: Avoid excessive analysis when a straightforward solution is evident
 - **Dangerous operations** (e.g., `rm -rf`, installs, network changes): require explicit user confirmation; prefer dry-runs when available
 - **File locations**:
-  - **Transient documentation** (scratch notes, examples, debugging output): use `/tmp/sprout_examples/`
+  - **Transient files** (screenshots, scratch notes, debugging output): use `/tmp/sprout/` (subdirs like `/tmp/sprout-audit/` or `/tmp/sprout_examples/` are fine)
   - **Permanent files** (code, tests, long-term documentation, configs): use current working directory (cwd)
 - **Long-running commands**: If you need to run a dev server or long-running process while continuing other work, use `tmux` or `nohup` inside the bash tool (e.g., `nohup npm run dev > /dev/null 2>&1 &`)
 

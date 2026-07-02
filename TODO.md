@@ -1196,10 +1196,8 @@ testid/assertion updates — typical of fast ship-cycles.
 
 ### Items
 
-- [ ] **WebUI-A-1:** Fix `testids.test.ts` — add the 10 static testids
-  + 2 template-literal patterns to `test/webui/testids.ts`. This is
-  the easiest fix (~5 min) and the test was specifically built as a
-  CI gate against this kind of drift.
+- [x] **WebUI-A-1:** Fix `testids.test.ts` — add the 10 static testids
+  + 2 template-literal patterns to `test/webui/testids.ts`. _(shipped: commit `49744cf5`. Also fixed an underlying bug in `testids.test.ts`: the ternary regex `[^?]*` was greedy across newlines and falsely matched `Submit` and `Submitting…` (button text) as testids. Replaced with `[^\n?]*`. 8 shell-approval + 2 notification entries added to TESTIDS.)_
 - [ ] **WebUI-A-2:** Fix `Sidebar.sessionSearch.test.tsx` — the
   shared root cause is likely a missing API mock or a query-name
   change. The runner should diff `Sidebar.tsx` against the test

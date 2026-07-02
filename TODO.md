@@ -594,6 +594,123 @@ but not an error". A CLI flag that swaps red→cyan and amber→magenta
 
 ---
 
+## CLI-F: Workflow-Runner Raw Format Sites
+
+_Wrapper for the CLI-B pattern (~30 min)._ `cmd/agent_workflow_runner.go`
+emits budget warnings and step decisions through raw `fmt.Printf`
+strings with bracket literals (`[>|]`, `[budget]`) — the same pattern
+CLI-B fixes for `cmd/`, but in the workflow-runner code path which
+the main `sprout agent` command dispatches to.
+
+### Sites identified
+
+**`cmd/agent_workflow_runner.go`** (6 sites):
+- Line 106: `[>|] Skipping workflow step %s: ...` — step-skip notice.
+- Line 316: `[budget] WARNING — crossed %.0f%% threshold ...` — budget warning.
+- Line 324: `[budget] CAP HIT — $%.2f of $%.2f spent ...` — budget cap notice.
+- Line 371: `[budget] $%.2f of $%.2f · iter %d · elapsed %s` — budget status.
+- Line 374: `[budget] $%.2f (no cap) · iter %d · elapsed %s` — no-cap budget status.
+- Line 402, 408: `$ %s` shell-prompt prefix (different pattern — bare `$`
+  instead of brackets, but should match `GlyphAction`/`GlyphShell`
+  for consistency).
+
+### Items
+
+- [ ] **CLI-F-1:** Convert `[>|]` → `console.GlyphInfo` for the
+  skip-notice line; convert `[budget]` prefix → `console.GlyphWarning`
+  for warning/cap hits and `console.GlyphInfo` for status lines. Keep
+  the budget-prefix semantic so power users can still grep.
+- [ ] **CLI-F-2:** Replace `$ %s` shell-prompt prefix with
+  `console.GlyphShell` (new constant, similar pattern to `GlyphAction`
+  in `pkg/console/glyphs.go`). Two sites to swap.
+- [ ] **CLI-F-3:** Wire `console.GlyphShell` into `pkg/console/glyphs.go`
+  if not yet defined (use `⌘` or `>_` rune; verify the
+  `color-scheme-test.txt` smoke test still has the right glyph count).
+
+### Notes
+
+- These lines fire from `sprout agent --workflow-config ...` and the
+  embedded runner, NOT from the interactive REPL. Most users never
+  see them, but when they do they look like 1990s shell scripts.
+  Aligns with the larger CLI-B/C/D/E sweep.
+
+---
+
+## CLI-G: Replace `log.Printf` for User-Facing Errors
+
+_Routing consistency fix (~30 min)._ `pkg/console/` defines the
+canonical user-facing error contract: `console.GlyphError.Fprintln`
+→ `os.Stderr`, which respects `NO_COLOR`/`FORCE_COLOR` and tints
+red. **Five `cmd/base.go` and `cmd/agent_command.go` sites use
+`log.Printf` for user-facing failures** — bypassing the contract
+and silently writing to `~/.sprout/workspace.log` (per
+`cmd/log_redirect.go:11`), not the terminal.
+
+### Sites identified
+
+**`cmd/base.go`** (2 sites):
+- Line 162: `log.Printf("Error: failed to initialize command: %v", err)`
+- Line 167: `log.Printf("Error: command execution failed: %v", err)`
+
+**`cmd/agent_command.go`** (3 sites):
+- Line 73, 75: `log.Printf("[security] Symlink warnings:")` + body
+- Line 125: `log.Printf("[security] %v", err)`
+
+(`cmd/webui_supervisor.go` and `cmd/instance_registry.go` are
+intentionally debug-only — not user-facing.)
+
+### Items
+
+- [ ] **CLI-G-1:** In `cmd/base.go::SetRunFunc`, replace
+  `log.Printf("Error: ...")` with
+  `console.GlyphError.Fprintln(os.Stderr, ...)` so failed
+  command-init shows on the terminal.
+- [ ] **CLI-G-2:** In `cmd/agent_command.go`, the 3 security-warning
+  sites are pre-decision (before the agent starts), so they should
+  also route through `console.GlyphWarning.Fprintln(os.Stderr, ...)`
+  — symmetric with how line 111 (`agent_command.go:111`) does it.
+- [ ] **CLI-G-3:** Add `cmd/base_test.go` and
+  `cmd/agent_command_test.go` cases asserting that an error path
+  in `SetRunFunc` produces a GlyphError-suffixed stderr line, not
+  a `log.Printf`-style log record. Use the existing
+  `console.SetNoColorForTest` helper.
+
+### Notes
+
+- Bug-class this fixes: user runs `sprout keys set foo bar`
+  with a broken config; today's `log.Printf` swallows the error
+  into `~/.sprout/workspace.log` (off-screen), and the user sees
+  a silent exit. GlyphError-to-stderr fixes this.
+- This is a 30-min, high-value correctness fix — the runner
+  will pick it up quickly.
+
+---
+
+## CLI-H: Cheap README Touch-Ups
+
+_Documentation polish (~1 hour)._ `README.md` has 3 places where
+old text disagrees with current reality. Quick wins for the runner
+to grind through.
+
+### Items
+
+- [ ] **CLI-H-1:** `README.md` references a `--provider` flag that
+  was removed in SP-094-3. Update section "Provider selection" to
+  point users at `sprout provider` subcommand. Verify with grep.
+- [ ] **CLI-H-2:** `README.md` says "Real-time streaming via
+  Server-Sent Events" — the project uses WebSocket. Update to match.
+- [ ] **CLI-H-3:** `docs/onboarding.md` first-run section says "you'll
+  be asked for an OpenRouter API key" but the onboarding actually
+  offers a 3-way choice (OpenRouter / OpenAI / local ollama).
+  Update.
+
+### Notes
+
+- These are content-only, no behavior change. Verify each with the
+  actual current behavior, don't paraphrase.
+
+---
+
 ## Things to consider after SP-091 → SP-095 ship
 
 - **WASM stub-tools** — running the WASM build against `pkg/agent_tools/`

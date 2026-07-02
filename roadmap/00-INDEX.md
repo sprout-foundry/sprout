@@ -20,7 +20,7 @@ Full spec bodies in [`_completed/`](./_completed/) (72 files).
 | SP-004 | [Security, Validation & MCP](./_completed/SP-004-security.md) | ✅ Active |
 | SP-005 | [Supporting Systems & Infrastructure](./_completed/SP-005-infrastructure.md) | ✅ Active |
 | SP-008 | [Reliability Engineering — Concurrency & Observability](./_completed/SP-008-reliability-engineering.md) | ✅ Shipped (Tracks A + B complete 2026-06) |
-| SP-009 | [Component Library Maturation — Publish & Storybook](./_completed/SP-009-component-library-maturation.md) | ✅ Implemented (Storybook + MDX docs + Chromatic; webui imports @sprout/ui) |
+| SP-009 | [Component Library Maturation — Storybook + @sprout/ui](./_completed/SP-009-component-library-maturation.md) | ✅ Implemented (Storybook + MDX docs + Chromatic visual regression; webui imports @sprout/ui as monorepo sibling) |
 | SP-010 | [Editor Modernization](./_completed/SP-010-editor-modernization.md) | ✅ Implemented (EditorPane 2604→513 lines; EditorCore extracted; React.memo + 18 bug fixes) |
 | SP-011 | [Terminal Parity & Bug Fixes](./_completed/SP-011-terminal-parity.md) | ✅ Shipped (all 3 phases complete 2026-06) |
 | SP-013 | [Agent Settings Management Tool](./_completed/SP-013-agent-settings-skill.md) | ✅ Implemented (manage_settings tool registered; pkg/agent/settings_handler.go) |

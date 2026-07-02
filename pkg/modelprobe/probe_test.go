@@ -300,6 +300,9 @@ func TestWithinCostBudget(t *testing.T) {
 		{"premium over budget", 3, 15, true, 0.10, false},
 		{"unknown price with budget", 0, 0, false, 0.10, false},
 		{"unknown price no budget", 0, 0, false, 0, true},
+		{"negative input price rejected", -1000000, 1.5, true, 0.10, false},
+		{"negative output price rejected", 0.5, -1000000, true, 0.10, false},
+		{"negative price no budget still allowed", -1, -1, true, 0, true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

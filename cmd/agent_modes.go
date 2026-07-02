@@ -195,11 +195,11 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 					port,
 					func(activePort int) {
 						setWebUIDisplayURL(fmt.Sprintf("http://%s:%d", webui.DisplayAddr(bindAddr), activePort))
-						fmt.Printf("\n[web] Web UI available at http://%s:%d\n", webui.DisplayAddr(bindAddr), activePort)
+						console.GlyphInfo.Printf("Web UI available at http://%s:%d\n", webui.DisplayAddr(bindAddr), activePort)
 					},
 					func(activePort int) {
 						setWebUIDisplayURL(fmt.Sprintf("http://%s:%d", webui.DisplayAddr(bindAddr), activePort))
-						fmt.Printf("\n[web] Reusing active Web UI at http://%s:%d\n", webui.DisplayAddr(bindAddr), activePort)
+						console.GlyphInfo.Printf("Reusing active Web UI at http://%s:%d\n", webui.DisplayAddr(bindAddr), activePort)
 					},
 				)
 				go webUISup.Run(ctx)
@@ -262,7 +262,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 				}
 
 				setWebUIDisplayURL(fmt.Sprintf("http://%s:%d", webui.DisplayAddr(bindAddr), webServer.GetPort()))
-				fmt.Printf("\n[web] Web UI available at http://%s:%d\n", webui.DisplayAddr(bindAddr), webServer.GetPort())
+				console.GlyphInfo.Printf("Web UI available at http://%s:%d\n", webui.DisplayAddr(bindAddr), webServer.GetPort())
 			}
 		}
 	}
@@ -392,7 +392,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 	// When agent is nil (provider not configured in daemon mode), skip to
 	// the daemon wait path. The web UI handles provider setup interactively.
 	if chatAgent == nil && daemonMode && webServer != nil && webServer.IsRunning() {
-		fmt.Printf("\n[web] Web UI running at http://%s:%d (no provider configured — configure via web UI)\n", webui.DisplayAddr(bindAddr), webServer.GetPort())
+		console.GlyphInfo.Printf("Web UI running at http://%s:%d (no provider configured — configure via web UI)\n", webui.DisplayAddr(bindAddr), webServer.GetPort())
 		if !isServiceMode() {
 			fmt.Println("Press Ctrl+C to stop the server.")
 		}
@@ -452,7 +452,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 			if daemonMode && webServer != nil && webServer.IsRunning() {
 				// Daemon mode: keep web UI running
 				setWebUIDisplayURL(fmt.Sprintf("http://%s:%d", webui.DisplayAddr(bindAddr), webServer.GetPort()))
-				fmt.Printf("\n[web] Web UI running at http://%s:%d\n", webui.DisplayAddr(bindAddr), webServer.GetPort())
+				console.GlyphInfo.Printf("Web UI running at http://%s:%d\n", webui.DisplayAddr(bindAddr), webServer.GetPort())
 				if !isServiceMode() {
 					fmt.Println("Press Ctrl+C to stop the server.")
 				}

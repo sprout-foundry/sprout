@@ -348,9 +348,18 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 			fmt.Println()
 			console.GlyphStopped.Printf("Stopped in %s", FormatDuration(duration))
 		default:
-			// Print completion message without automatic summary (use /stats to see summary)
+			// Print completion message with a compact inline summary so
+			// terminal users get the same transparency the WebUI footer
+			// already shows (CI output handler has PrintSummary; the
+			// interactive path didn't). Skip the inline summary when the
+			// agent didn't actually run (no tokens accumulated) so the
+			// slash-command / direct-execution paths stay quiet.
 			fmt.Println()
-			console.GlyphSuccess.Printf("Completed in %s", FormatDuration(duration))
+			if summary := formatCompletionSummary(chatAgent); summary != "" {
+				console.GlyphSuccess.Printf("Completed in %s · %s", FormatDuration(duration), summary)
+			} else {
+				console.GlyphSuccess.Printf("Completed in %s", FormatDuration(duration))
+			}
 		}
 
 		// SP-070: Fire completion notification (bell + OS notify) when the

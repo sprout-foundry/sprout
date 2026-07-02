@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/credentials"
 )
 
@@ -84,7 +85,7 @@ func runKeysSet(args []string) error {
 	// not "replaceable" from here, and the default HasProviderAuth returns true
 	// for unknown providers, so we gate it behind the known-provider check above.
 	if hasStoredKey(provider) {
-		fmt.Printf("[WARN] An API key for %s is already configured. This will replace it.\n", displayName)
+		console.GlyphWarning.Printf("An API key for %s is already configured. This will replace it.\n", displayName)
 		if !ConfirmPrompt("Continue?") {
 			return nil // user declined — exit silently
 		}

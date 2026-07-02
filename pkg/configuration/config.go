@@ -32,10 +32,6 @@ const (
 	ConfigFileName  = "config.json"
 	APIKeysFileName = "api_keys.json"
 
-	SelfReviewGateModeOff    = "off"
-	SelfReviewGateModeCode   = "code"
-	SelfReviewGateModeAlways = "always"
-
 	OutputVerbosityCompact = "compact"
 	OutputVerbosityDefault = "default"
 	OutputVerbosityVerbose = "verbose"
@@ -170,9 +166,6 @@ type Config struct {
 
 	// Change History Configuration
 	HistoryScope string `json:"history_scope,omitempty"` // "project" or "global"
-
-	// Self-Review Gate Configuration
-	SelfReviewGateMode string `json:"self_review_gate_mode,omitempty"` // "off", "code", or "always"
 
 	// Subagent Configuration
 	SubagentProvider string `json:"subagent_provider,omitempty"` // Provider for subagents (defaults to LastUsedProvider)
@@ -331,7 +324,6 @@ func NewConfig() *Config {
 			CommitMessageTimeoutSec: 300, // 5 minutes for commit message generation
 		},
 		HistoryScope:                "project", // Default to project-scoped history
-		SelfReviewGateMode:          SelfReviewGateModeOff,
 		EnableZshCommandDetection:   true, // Enable zsh command detection by default
 		AutoExecuteDetectedCommands: true, // Auto-execute detected commands without prompting
 		SubagentTypes:               defaultSubagentTypes(),
@@ -358,17 +350,6 @@ func (c *Config) GetEAMode() string {
 // Validate checks the configuration for consistency and returns an error
 // if any invalid settings are found. Returns the first error encountered.
 func (c *Config) Validate() error {
-	// Validate self-review gate mode
-	validModes := map[string]bool{
-		SelfReviewGateModeOff:    true,
-		SelfReviewGateModeCode:   true,
-		SelfReviewGateModeAlways: true,
-	}
-	if c.SelfReviewGateMode != "" && !validModes[c.SelfReviewGateMode] {
-		return fmt.Errorf("invalid self_review_gate_mode %q: must be one of %q, %q, %q",
-			c.SelfReviewGateMode, SelfReviewGateModeOff, SelfReviewGateModeCode, SelfReviewGateModeAlways)
-	}
-
 	// Validate output verbosity
 	switch c.OutputVerbosity {
 	case "", OutputVerbosityCompact, OutputVerbosityDefault, OutputVerbosityVerbose:

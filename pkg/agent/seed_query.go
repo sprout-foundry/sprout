@@ -466,15 +466,6 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 		}
 	}
 
-	// Run self-review gate if changes were tracked (primary only; a
-	// subagent's work is reviewed by its parent orchestrator).
-	if !a.IsSubagent() && a.IsChangeTrackingEnabled() && a.GetChangeCount() > 0 {
-		if err := a.runSelfReviewGate(); err != nil {
-			a.publishEvent(events.EventTypeError, events.ErrorEvent("Self-review gate failed", err))
-			return "", agenterrors.Wrap(err, "failed self-review gate")
-		}
-	}
-
 	// Finalize post-loop tasks
 	a.finalizeConversationPostHooks(result, processedQuery, preSeedMsgCount)
 

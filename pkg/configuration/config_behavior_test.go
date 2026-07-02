@@ -20,7 +20,6 @@ func TestNewConfigDefaults(t *testing.T) {
 	assert.Equal(t, ConfigVersion, cfg.Version)
 	assert.Equal(t, "project", cfg.HistoryScope, "HistoryScope should default to 'project'")
 	assert.Empty(t, cfg.LastUsedProvider, "LastUsedProvider should default to empty string")
-	assert.Equal(t, SelfReviewGateModeOff, cfg.SelfReviewGateMode, "SelfReviewGateMode should default to 'off'")
 	assert.NotNil(t, cfg.ProviderModels, "ProviderModels should be initialized")
 	assert.NotNil(t, cfg.ProviderPriority, "ProviderPriority should be initialized")
 	assert.NotNil(t, cfg.CustomProviders, "CustomProviders should be initialized")
@@ -56,7 +55,6 @@ func TestConfigSaveLoadRoundTrip(t *testing.T) {
 	original.ReasoningEffort = "high"
 	original.SystemPromptText = "custom prompt"
 	original.SkipPrompt = true
-	original.SelfReviewGateMode = SelfReviewGateModeCode
 
 	// Save
 	err := original.Save()
@@ -78,7 +76,6 @@ func TestConfigSaveLoadRoundTrip(t *testing.T) {
 	assert.Equal(t, "high", loaded.ReasoningEffort)
 	assert.Equal(t, "custom prompt", loaded.SystemPromptText)
 	assert.True(t, loaded.SkipPrompt)
-	assert.Equal(t, SelfReviewGateModeCode, loaded.GetSelfReviewGateMode())
 }
 
 // ---------------------------------------------------------------------------
@@ -88,7 +85,6 @@ func TestConfigSaveLoadRoundTrip(t *testing.T) {
 func TestConfigValidateMultipleErrors(t *testing.T) {
 	cfg := NewConfig()
 	// Set multiple invalid fields at once
-	cfg.SelfReviewGateMode = "totally-invalid"
 	cfg.PDFOCREnabled = true
 	cfg.PDFOCRProvider = ""
 	cfg.PDFOCRModel = ""
@@ -100,24 +96,11 @@ func TestConfigValidateMultipleErrors(t *testing.T) {
 	assert.Error(t, err, "Validate should return an error for invalid config")
 
 	// Confirm all conditions are independently invalid
-	singleErr := (&Config{SelfReviewGateMode: "totally-invalid"}).Validate()
-	assert.Error(t, singleErr)
-
-	singleErr = (&Config{PDFOCREnabled: true, PDFOCRProvider: ""}).Validate()
+	singleErr := (&Config{PDFOCREnabled: true, PDFOCRProvider: ""}).Validate()
 	assert.Error(t, singleErr)
 
 	singleErr = (&Config{PDFOCREnabled: true, PDFOCRModel: ""}).Validate()
 	assert.Error(t, singleErr)
-
-	// However, the original Validate call only returned the first error.
-	// Let's also test that a config with only the self-review issue errors.
-	cfg2 := NewConfig()
-	cfg2.SelfReviewGateMode = "bad"
-	cfg2.PDFOCREnabled = false // valid PDF OCR state
-
-	err = cfg2.Validate()
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "self_review_gate_mode")
 }
 
 // ---------------------------------------------------------------------------
@@ -156,64 +139,6 @@ func TestGetSubagentTypeReturnsCatalogAllowedTools(t *testing.T) {
 	persona := cfg.GetSubagentType("coder")
 	require.NotNil(t, persona)
 	assert.Equal(t, coderDefault.AllowedTools, persona.AllowedTools)
-}
-
-// ---------------------------------------------------------------------------
-// 6. SelfReviewGateMode set/get round-trip
-// ---------------------------------------------------------------------------
-
-func TestSelfReviewGateModeSetGetRoundTrip(t *testing.T) {
-	cfg := NewConfig()
-
-	modes := []string{"off", "code", "always"}
-	for _, mode := range modes {
-		t.Run(mode, func(t *testing.T) {
-			err := cfg.SetSelfReviewGateMode(mode)
-			require.NoError(t, err)
-			assert.Equal(t, mode, cfg.GetSelfReviewGateMode())
-		})
-	}
-
-	// Case-insensitive / mixed-case round-trip
-	t.Run("mixed case ALWAYS", func(t *testing.T) {
-		err := cfg.SetSelfReviewGateMode("ALWAYS")
-		require.NoError(t, err)
-		assert.Equal(t, "always", cfg.GetSelfReviewGateMode())
-	})
-
-	t.Run("empty string normalizes to off", func(t *testing.T) {
-		err := cfg.SetSelfReviewGateMode("")
-		require.NoError(t, err)
-		assert.Equal(t, SelfReviewGateModeOff, cfg.GetSelfReviewGateMode())
-	})
-}
-
-// ---------------------------------------------------------------------------
-// 7. SetSelfReviewGateMode rejects invalid modes
-// ---------------------------------------------------------------------------
-
-func TestSetSelfReviewGateModeRejectsInvalid(t *testing.T) {
-	cfg := NewConfig()
-
-	invalidModes := []string{
-		"invalid",
-		"ON",
-		"CodeReview",
-		"maybe",
-		"123",
-	}
-
-	for _, mode := range invalidModes {
-		t.Run(mode, func(t *testing.T) {
-			err := cfg.SetSelfReviewGateMode(mode)
-			assert.Error(t, err)
-			assert.Contains(t, err.Error(), "invalid self-review gate mode")
-		})
-	}
-
-	// Verify the mode did NOT change after rejected attempts
-	assert.Equal(t, SelfReviewGateModeOff, cfg.GetSelfReviewGateMode(),
-		"mode should remain unchanged after rejected SetSelfReviewGateMode calls")
 }
 
 // ---------------------------------------------------------------------------

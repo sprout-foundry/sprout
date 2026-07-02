@@ -655,9 +655,9 @@ ticket is a quick verification pass.
 The 2026-06-30 audit found SP-012 is ~90% shipped. Remaining gaps are
 small but real; close them out so the spec can move to `_completed/`.
 
-- [ ] **SP-012-1:** Add `role="treeitem"` and `aria-expanded` to FileTree rows. Use the pattern from `aria-label="Close"` precedent in EditorTabs.
+- [x] **SP-012-1:** Add `role="treeitem"` and `aria-expanded` to FileTree rows. Use the pattern from `aria-label="Close"` precedent in EditorTabs. _(already shipped — see `packages/ui/src/components/FileTree.tsx:1180` for `role="treeitem"` and `:1187` for `aria-expanded`; verified 2026-07-01)_
 - [ ] **SP-012-2:** Add `role="log"` and `aria-live="polite"` to ChatPanel message list. Test with screen reader.
-- [ ] **SP-012-3:** Add global `:focus-visible` styles to `index.css` — `outline: 2px solid var(--accent-primary); outline-offset: 2px` on all interactive elements that aren't already covered.
+- [x] **SP-012-3:** Add global `:focus-visible` styles to `index.css` — `outline: 2px solid var(--accent-primary); outline-offset: 2px` on all interactive elements that aren't already covered. _(already shipped — see `webui/src/index.css:71-101` for global `:focus-visible` rules; verified 2026-07-01)_
 - [ ] **SP-012-4:** Add `markAllRead()` method to `notificationBus.ts`. Wire to NotificationCenter's "Mark all read" button.
 - [ ] **SP-012-5:** Move `roadmap/SP-012-ux-polish.md` to `roadmap/_completed/` with minimal note once all 4 items above ship.
 

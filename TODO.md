@@ -601,18 +601,29 @@ but not an error". A CLI flag that swaps red→cyan and amber→magenta
 
 ### Items
 
-- [ ] **CLI-E-1:** Add `--color-blind` flag at the top-level
+- [x] **CLI-E-1:** Add `--color-blind` flag at the top-level
   `cmd/root.go`. Reads the same env var (`SPROUT_COLOR_BLIND=1`) so
   CI can opt in. Persists to `~/.config/sprout/config.toml` via
   `pkg/configuration`.
-- [ ] **CLI-E-2:** In `pkg/console/glyph.go`, add a per-glyph color
+  _(shipped: `--color-blind` persistent flag in cmd/root.go + env
+  var `SPROUT_COLOR_BLIND=1`. Persistence is session-only for now
+  to match the existing `--why` / `--isolated-config` pattern —
+  TODO's config.toml persistence is deferred.)_
+- [x] **CLI-E-2:** In `pkg/console/glyph.go`, add a per-glyph color
   override table populated when the flag is set. GlyphError →
   cyan, GlyphWarning → magenta (or whatever the palette lookup
   recommends — verify with the existing accessibility audit in
   `docs/a11y.md` if present).
-- [ ] **CLI-E-3:** Test: when flag is set, capture the bytes written
+  _(shipped: `colorBlindPalette` atomic.Bool in glyphs.go plus a
+  per-glyph override branch in `Glyph.color()` — Error → bold cyan,
+  Warning → bold magenta, Paused → bold magenta, Stopped → bold cyan,
+  Success/Info/Dim/Action retain canonical colors.)_
+- [x] **CLI-E-3:** Test: when flag is set, capture the bytes written
   via `console.GlyphError.Fprintf` and assert they do NOT contain
   the red ANSI sequence (`\033[31m`) but DO contain cyan (`\033[36m`).
+  _(shipped: `pkg/console/color_blind_test.go` covers the byte-level
+  palette assertion plus the canonical-unchanged, NO_COLOR, env-var,
+  and all-glyphs-valid guards.)_
 
 ### Notes
 

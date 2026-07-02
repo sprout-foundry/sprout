@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/pythonruntime"
 )
 
@@ -20,6 +21,7 @@ var startupChecksOnce sync.Once
 var isolatedConfig bool
 var debugPprofAddr string
 var whyFlag bool
+var colorBlindFlag bool
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -40,6 +42,14 @@ Running just 'sprout' without arguments starts enhanced agent mode with automati
 
 See "Available Commands" below for the full list.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		// CLI-E: color-blind palette swap. CLI flag wins over env var;
+		// ApplyColorBlindFromEnv only sets true (never false) so the
+		// flag's explicit `false` isn't clobbered by a stale env.
+		if colorBlindFlag {
+			console.SetColorBlind(true)
+		} else {
+			console.ApplyColorBlindFromEnv()
+		}
 		if debugPprofAddr != "" {
 			go func() {
 				fmt.Fprintf(os.Stderr, "pprof: listening on http://%s/debug/pprof/\n", debugPprofAddr)
@@ -143,6 +153,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&isolatedConfig, "isolated-config", false, "Use per-working-directory config at ./.sprout (clone from main config on first run)")
 	rootCmd.PersistentFlags().StringVar(&debugPprofAddr, "debug-pprof", "", "If set, start a pprof HTTP server on this address (e.g. localhost:6060) for live memory/CPU profiling")
 	rootCmd.PersistentFlags().BoolVar(&whyFlag, "why", false, "Print detailed risk assessment on security errors")
+	rootCmd.PersistentFlags().BoolVar(&colorBlindFlag, "color-blind", false, "Swap the success/error/warning palette to a deuteranopia / protanopia-friendly scheme (also honors SPROUT_COLOR_BLIND=1)")
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.

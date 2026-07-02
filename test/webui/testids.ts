@@ -268,6 +268,20 @@ const TESTIDS = {
   'workspace-picker-option': 'workspace-picker-option',
   'theme-toggle': 'theme-toggle',
   'disconnected-overlay': 'disconnected-overlay',
+
+  // Notifications
+  'notification-center': 'notification-center',
+  'notification-center-mark-all-read': 'notification-center-mark-all-read',
+
+  // Shell approval
+  'shell-approval-accept-all': 'shell-approval-accept-all',
+  'shell-approval-command': 'shell-approval-command',
+  'shell-approval-part-abc123': 'shell-approval-part-abc123',
+  'shell-approval-part-toggle-abc123': 'shell-approval-part-toggle-abc123',
+  'shell-approval-reject-all': 'shell-approval-reject-all',
+  'shell-approval-reset': 'shell-approval-reset',
+  'shell-approval-risk-badge': 'shell-approval-risk-badge',
+  'shell-approval-submit': 'shell-approval-submit',
 } as const;
 
 // Derived set for O(1) coverage lookups

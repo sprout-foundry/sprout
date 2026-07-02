@@ -37,6 +37,10 @@ type ModelInfo struct {
 	// Warnings are non-blocking caveats to surface in the picker (e.g. a small
 	// context window in the 64K–128K band). Populated from the published registry.
 	Warnings []string `json:"warnings,omitempty"`
+	// VisionProbe carries the probe-tested vision capability for this model.
+	// nil = never probed (fall back to config-based detection).
+	// Non-nil = probe ground truth (true = can see images, false = cannot).
+	VisionProbe *bool `json:"vision_probe,omitempty"`
 }
 
 // Agentic-coding eligibility thresholds. These set the *minimum* context

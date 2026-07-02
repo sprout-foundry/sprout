@@ -346,3 +346,110 @@ describe('NotificationStack contract', () => {
     expect(lastReceivedNotifications[1].title).toBe('B');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Tests: Mark-all-read affordance
+// ---------------------------------------------------------------------------
+
+describe('NotificationCenter mark-all-read', () => {
+  it('exposes a "Mark all read" button when there is at least one toast', () => {
+    renderCenter();
+    act(() => {
+      notificationBus.notify('info', 'A', 'msgA');
+    });
+    const btn = container.querySelector(
+      '[data-testid="notification-center-mark-all-read"]'
+    ) as HTMLButtonElement;
+    expect(btn).not.toBeNull();
+    expect(btn.textContent).toBe('Mark all read');
+    expect(btn.getAttribute('aria-label')).toBe('Mark all notifications read');
+  });
+
+  it('does not render the button when there are no toasts', () => {
+    renderCenter();
+    const btn = container.querySelector(
+      '[data-testid="notification-center-mark-all-read"]'
+    );
+    expect(btn).toBeNull();
+  });
+
+  it('clicking the button clears every visible toast', () => {
+    renderCenter();
+    act(() => {
+      notificationBus.notify('info', 'A', 'msgA');
+      notificationBus.notify('warning', 'B', 'msgB');
+      notificationBus.notify('error', 'C', 'msgC');
+    });
+    expect(toastCount(container)).toBe(3);
+
+    const btn = container.querySelector(
+      '[data-testid="notification-center-mark-all-read"]'
+    ) as HTMLButtonElement;
+    act(() => {
+      btn.click();
+    });
+
+    expect(toastCount(container)).toBe(0);
+  });
+
+  it('clicking the button broadcasts mark_all_read via the bus', () => {
+    renderCenter();
+    act(() => {
+      notificationBus.notify('info', 'A', 'msgA');
+    });
+
+    const controlListener = vi.fn();
+    notificationBus.onControlEvent(controlListener);
+
+    const btn = container.querySelector(
+      '[data-testid="notification-center-mark-all-read"]'
+    ) as HTMLButtonElement;
+    act(() => {
+      btn.click();
+    });
+
+    expect(controlListener).toHaveBeenCalledWith({ kind: 'mark_all_read' });
+  });
+
+  it('responds to an external mark_all_read bus event by clearing the stack', () => {
+    renderCenter();
+    act(() => {
+      notificationBus.notify('info', 'A', 'msgA');
+      notificationBus.notify('warning', 'B', 'msgB');
+    });
+    expect(toastCount(container)).toBe(2);
+
+    act(() => {
+      notificationBus.markAllRead();
+    });
+
+    expect(toastCount(container)).toBe(0);
+  });
+
+  it('cancels pending auto-dismiss timers when the user marks all read', () => {
+    vi.useFakeTimers();
+    try {
+      renderCenter();
+      act(() => {
+        notificationBus.notify('info', 'A', 'msgA');
+        notificationBus.notify('info', 'B', 'msgB');
+      });
+      // Both toasts have a pending 5s timer.
+
+      const btn = container.querySelector(
+        '[data-testid="notification-center-mark-all-read"]'
+      ) as HTMLButtonElement;
+      act(() => {
+        btn.click();
+      });
+
+      // Advance past the 5s mark — no stale setState warnings, no resurrection.
+      act(() => {
+        vi.advanceTimersByTime(6000);
+      });
+      expect(toastCount(container)).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

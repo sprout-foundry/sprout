@@ -96,6 +96,7 @@ type Capabilities struct {
 type ProbeResult struct {
 	Passed       bool    `json:"passed"`
 	Complex      bool    `json:"complex,omitempty"`
+	Vision       bool    `json:"vision,omitempty"`
 	Score        float64 `json:"score,omitempty"`
 	LastProbedAt string  `json:"last_probed_at,omitempty"`
 	ProbeVersion string  `json:"probe_version,omitempty"`

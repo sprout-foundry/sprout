@@ -31,7 +31,6 @@ Use `manage_settings` to get, set, and test settings. Values are persisted acros
 | `ea_mode` | enum | `interactive`, `queue` | Executive Assistant operating mode |
 | `subagent_provider` | string | Any provider name | Default provider for subagent tasks |
 | `subagent_model` | string | Any model ID | Default model for subagent tasks |
-| `self_review_gate_mode` | enum | `off`, `code`, `always` | When to auto-trigger self-review before commits |
 
 ### Provider-specific settings
 
@@ -86,8 +85,6 @@ manage_settings(operation="list_providers", provider="open")
 | `/commit` | — | Interactive commit workflow |
 | `/review` | — | AI code review on staged Git changes |
 | `/review-deep` | — | Deep evidence-based code review |
-| `/self-review` | — | Trigger self-review on current changes |
-| `/self-review-gate` | — | Configure automatic self-review gate mode |
 | `/stats` | — | Session statistics and usage info |
 | `/sessions` | — | List/manage chat sessions |
 | `/clear` | — | Clear conversation history |
@@ -147,10 +144,6 @@ manage_settings(operation="set", key="subagent_model", value="gpt-4o")
 # Set them via manage_settings for the review pipeline:
 # Note: these are configuration-level settings, not in supportedSettings for manage_settings
 # Use /review and /review-deep commands to trigger reviews on staged changes
-
-# Configure automatic self-review gate
-manage_settings(operation="set", key="self_review_gate_mode", value="code")  # auto-review code changes
-/self-review-gate                     # View/change gate configuration
 ```
 
 ### Adjust Risk Profile
@@ -360,7 +353,6 @@ task_queue_publish(
 ```
 → Explain the review pipeline settings
 → Explain /review and /review-deep commands
-→ Offer to configure self_review_gate_mode
 ```
 
 **User asks "what can Sprout do?"**

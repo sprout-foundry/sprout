@@ -72,7 +72,6 @@ KEY COMMANDS:
   /subagent-provider - Configure subagent provider
   /subagent-model - Configure subagent model
   /persona    - Apply/configure personas (provider/model/tools/prompt). Aliases: /subagent-persona, /subagent-personas
-  /self-review-gate - Configure automatic self-review gate mode
   /skill            - Install, update, remove, and list skills
 
 Type 'exit' or 'quit' to end the session.

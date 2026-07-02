@@ -231,12 +231,6 @@ func allSettings() []settingDetail {
 			},
 		},
 		{
-			key:         "self_review_gate_mode",
-			description: "Self-review gate mode",
-			validValues: "off, code, always",
-			getValue:    func(cfg *configuration.Config) string { return cfg.SelfReviewGateMode },
-		},
-		{
 			key:         "output_verbosity",
 			description: "How much inter-tool-call narration the UI shows",
 			validValues: "compact, default, verbose",
@@ -426,7 +420,6 @@ var supportedSettings = map[string]string{
 	"subagent_model":           "Model used for subagents",
 	"default_subagent_persona": "Persona used when run_subagent omits the persona argument",
 	"disabled_personas":        "Comma-separated persona IDs hidden from /persona list and spawning",
-	"self_review_gate_mode":    "Self-review gate mode (off/code/always)",
 	"output_verbosity":         "Output verbosity level (compact/default/verbose)",
 }
 
@@ -474,8 +467,6 @@ func getConfigValue(cfg *configuration.Config, key string) (string, error) {
 		return cfg.DefaultSubagentPersona, nil
 	case "disabled_personas":
 		return strings.Join(cfg.DisabledPersonas, ","), nil
-	case "self_review_gate_mode":
-		return cfg.SelfReviewGateMode, nil
 	case "output_verbosity":
 		return cfg.OutputVerbosity, nil
 	default:
@@ -552,13 +543,6 @@ func setConfigValue(cfg *configuration.Config, key, value string) error {
 			ids = append(ids, trimmed)
 		}
 		cfg.DisabledPersonas = ids
-	case "self_review_gate_mode":
-		switch strings.ToLower(value) {
-		case "off", "code", "always", "":
-			cfg.SelfReviewGateMode = strings.ToLower(value)
-		default:
-			return agenterrors.NewValidation(fmt.Sprintf("self_review_gate_mode must be off, code, or always, got %q", value), nil)
-		}
 	case "output_verbosity":
 		switch strings.ToLower(value) {
 		case "compact", "default", "verbose", "":

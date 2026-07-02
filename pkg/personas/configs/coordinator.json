@@ -26,7 +26,6 @@
         "mcp_tools",
         "view_history",
         "rollback_changes",
-        "self_review",
         "list_skills",
         "activate_skill",
         "TodoWrite",

@@ -159,15 +159,6 @@ func applyRiskAndSafetySettings(cfg *configuration.Config, patch map[string]inte
 			cfg.RiskProfiles = decoded
 		}
 	}
-	if v, ok := patch["self_review_gate_mode"]; ok {
-		knownKeys["self_review_gate_mode"] = true
-		s, _ := v.(string)
-		s = truncateString(s, maxSettingEnumLength)
-		if err := validateSelfReviewGateMode(s); err != nil {
-			return fmt.Errorf("validate self_review_gate_mode: %w", err)
-		}
-		cfg.SelfReviewGateMode = s
-	}
 	if v, ok := patch["approved_shell_commands"]; ok {
 		knownKeys["approved_shell_commands"] = true
 		if arr, ok := v.([]interface{}); ok {

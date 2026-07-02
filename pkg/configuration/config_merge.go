@@ -223,11 +223,6 @@ func MergeConfig(base, override *Config) *Config {
 		result.HistoryScope = override.HistoryScope
 	}
 
-	// Override SelfReviewGateMode
-	if override.SelfReviewGateMode != "" {
-		result.SelfReviewGateMode = override.SelfReviewGateMode
-	}
-
 	// Override subagent settings
 	if override.SubagentProvider != "" {
 		result.SubagentProvider = override.SubagentProvider

@@ -448,7 +448,6 @@ func TestClassifyToolCall(t *testing.T) {
 		{"list_directory", "list_directory", map[string]interface{}{"path": "."}, SecuritySafe},
 		{"get_file_info", "get_file_info", map[string]interface{}{"path": "file.txt"}, SecuritySafe},
 		{"list_processes", "list_processes", map[string]interface{}{}, SecuritySafe},
-		{"self_review", "self_review", map[string]interface{}{}, SecuritySafe},
 		{"write_file safe", "write_file", map[string]interface{}{"path": "src/main.go", "content": "test"}, SecuritySafe},
 		{"write_file dangerous", "write_file", map[string]interface{}{"path": "/etc/shadow", "content": "test"}, SecurityDangerous},
 		{"edit_file safe", "edit_file", map[string]interface{}{"path": "src/main.go", "old_str": "old", "new_str": "new"}, SecuritySafe},
@@ -789,6 +788,8 @@ func TestClassifyBrowseURL(t *testing.T) {
 
 		// Screenshot to allowed dirs → falls through to safe/caution based on URL
 		{"screenshot to /tmp/sprout_examples", map[string]interface{}{"url": "https://example.com", "screenshot_path": "/tmp/sprout_examples/screen.png"}, SecuritySafe, false},
+		{"screenshot to /tmp/sprout-audit", map[string]interface{}{"url": "https://example.com", "screenshot_path": "/tmp/sprout-audit/screen.png"}, SecuritySafe, false},
+		{"screenshot to /tmp/sprout/custom-subdir", map[string]interface{}{"url": "https://example.com", "screenshot_path": "/tmp/sprout/custom-subdir/screen.png"}, SecuritySafe, false},
 		{"screenshot relative path", map[string]interface{}{"url": "https://example.com", "screenshot_path": "screenshots/screen.png"}, SecuritySafe, false},
 	}
 

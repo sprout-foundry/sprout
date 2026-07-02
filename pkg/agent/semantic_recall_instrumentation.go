@@ -1,5 +1,3 @@
-//go:build !js
-
 // Package agent provides the semantic-recall instrumentation wrapper (SP-095-1).
 //
 // The wrapper observes InjectSemanticRecall calls, records per-turn metrics

@@ -38,7 +38,6 @@ func TestPersonaToolsCatalogIsAuthoritative(t *testing.T) {
 		"run_parallel_subagents",
 		"view_history",
 		"rollback_changes",
-		"self_review",
 		"list_skills",
 		"activate_skill",
 		"TodoWrite",

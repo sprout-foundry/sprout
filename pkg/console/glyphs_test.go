@@ -15,8 +15,8 @@ func TestGlyph_Rune_AllCategoriesUnique(t *testing.T) {
 		}
 		seen[r] = g
 	}
-	if len(seen) != 8 {
-		t.Fatalf("expected 8 distinct glyphs, got %d", len(seen))
+	if len(seen) != 9 {
+		t.Fatalf("expected 9 distinct glyphs, got %d", len(seen))
 	}
 }
 
@@ -82,5 +82,18 @@ func TestGlyph_AllPrefixesNonEmpty(t *testing.T) {
 		if p := g.Prefix(); p == "" || p == " " {
 			t.Errorf("glyph %d returned empty/blank prefix %q", g, p)
 		}
+	}
+}
+
+// TestGlyph_ShellRuneIsDollar asserts the CLI-F-3 contract: GlyphShell
+// renders the "$" rune (the canonical shell-prompt glyph) so the
+// workflow-runner prefix matches users' shell-prompt intuition.
+func TestGlyph_ShellRuneIsDollar(t *testing.T) {
+	if got := GlyphShell.Rune(); got != "$" {
+		t.Errorf("GlyphShell.Rune() = %q, want \"$\"", got)
+	}
+	t.Setenv("NO_COLOR", "1")
+	if got := GlyphShell.Prefix(); got != "$ " {
+		t.Errorf("GlyphShell.Prefix() with NO_COLOR = %q, want \"$ \"", got)
 	}
 }

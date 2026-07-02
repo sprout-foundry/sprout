@@ -103,7 +103,7 @@ func runAgentWorkflow(ctx context.Context, chatAgent *agent.Agent, eventBus *eve
 			continue
 		}
 		if !triggersSatisfied {
-			fmt.Printf("\n[>|] Skipping workflow step %s: file trigger conditions not met\n", stepName)
+			console.GlyphInfo.Fprintf(os.Stdout, "\nSkipping workflow step %s: file trigger conditions not met", stepName)
 			if err := emitWorkflowOrchestrationEvent(cfg, "workflow_step_skipped", map[string]interface{}{
 				"step_index": i,
 				"step_name":  stepName,
@@ -313,7 +313,7 @@ func attachWorkflowBudget(chatAgent *agent.Agent, cfg *AgentWorkflowConfig) (sto
 	chatAgent.SetFleetUsdBudget(budget)
 
 	chatAgent.SetBudgetWarningCallback(func(threshold, spent, limit float64) {
-		fmt.Printf("\n[budget] WARNING — crossed %.0f%% threshold: $%.2f of $%.2f spent\n",
+		console.GlyphWarning.Fprintf(os.Stdout, "\nWARNING — crossed %.0f%% threshold: $%.2f of $%.2f spent",
 			threshold*100, spent, limit)
 		// SP-065-2c: Publish budget_update event for automate sessions
 		chatAgent.PublishBudgetUpdate(events.EventTypeAutomateBudgetUpdate, events.AutomateBudgetUpdateEvent(
@@ -321,7 +321,7 @@ func attachWorkflowBudget(chatAgent *agent.Agent, cfg *AgentWorkflowConfig) (sto
 		))
 	})
 	chatAgent.SetBudgetExceededCallback(func(spent, limit float64) {
-		fmt.Printf("\n[budget] CAP HIT — $%.2f of $%.2f spent; workflow will truncate after the current LLM response.\n",
+		console.GlyphWarning.Fprintf(os.Stdout, "\nCAP HIT — $%.2f of $%.2f spent; workflow will truncate after the current LLM response.",
 			spent, limit)
 		// SP-065-2c: Publish budget_update event for automate sessions
 		chatAgent.PublishBudgetUpdate(events.EventTypeAutomateBudgetUpdate, events.AutomateBudgetUpdateEvent(
@@ -368,10 +368,10 @@ func startWorkflowHeartbeat(chatAgent *agent.Agent, interval time.Duration) func
 				iter := chatAgent.GetCurrentIteration()
 				elapsed := time.Since(started).Round(time.Second)
 				if limit > 0 {
-					fmt.Printf("\n[budget] $%.2f of $%.2f · iter %d · elapsed %s\n",
+					console.GlyphInfo.Fprintf(os.Stdout, "\n$%.2f of $%.2f · iter %d · elapsed %s",
 						spent, limit, iter, elapsed)
 				} else {
-					fmt.Printf("\n[budget] $%.2f (no cap) · iter %d · elapsed %s\n",
+					console.GlyphInfo.Fprintf(os.Stdout, "\n$%.2f (no cap) · iter %d · elapsed %s",
 						spent, iter, elapsed)
 				}
 			}
@@ -399,13 +399,13 @@ func runWorkflowShellStep(ctx context.Context, step AgentWorkflowStep) error {
 	var cmd *exec.Cmd
 	switch {
 	case command != "":
-		fmt.Printf("$ %s\n", singleLinePreview(command))
+		console.GlyphShell.Fprintf(os.Stdout, "%s", singleLinePreview(command))
 		cmd = exec.CommandContext(ctx, shell, "-c", command)
 	case commandFile != "":
 		if _, err := os.Stat(commandFile); err != nil {
 			return fmt.Errorf("command_file %q not accessible: %w", commandFile, err)
 		}
-		fmt.Printf("$ %s %s\n", shell, commandFile)
+		console.GlyphShell.Fprintf(os.Stdout, "%s %s", shell, commandFile)
 		cmd = exec.CommandContext(ctx, shell, commandFile)
 	default:
 		return errors.New("shell step has neither command nor command_file")

@@ -163,7 +163,7 @@ type ApprovalManager interface {
 // SP-079-1: Agent subsystem interfaces
 // ---------------------------------------------------------------------------
 
-// VisionProcessor is defined in vision_types.go as a concrete struct.
+// VisionProcessor is defined in vision_analyze_types.go as a concrete struct.
 // We use the pointer directly here — no separate interface needed since
 // the type already lives in this package.
 

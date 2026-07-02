@@ -104,9 +104,26 @@ func Run(configsDir, registryDir string, dryRun bool) error {
 		}
 
 		// Build new list from canonical models.
-		newList := make([]string, len(reg.Models))
-		for i, m := range reg.Models {
-			newList[i] = m.ID
+		newSet := make(map[string]bool, len(reg.Models))
+		newList := make([]string, 0, len(reg.Models))
+		for _, m := range reg.Models {
+			newList = append(newList, m.ID)
+			newSet[m.ID] = true
+		}
+
+		// Preserve model_info entries that aren't in the API response.
+		// These are manually-declared models (e.g. vision variants like
+		// glm-4.6v) with rich metadata that the provider's /models
+		// endpoint may not list. Dropping them silently loses vision tags
+		// and other per-model capabilities.
+		if miRaw, ok := modelsMap["model_info"].([]interface{}); ok {
+			for _, entry := range miRaw {
+				if m, ok := entry.(map[string]interface{}); ok {
+					if id, ok := m["id"].(string); ok && id != "" && !newSet[id] {
+						newList = append(newList, id)
+					}
+				}
+			}
 		}
 
 		// Compare lists.

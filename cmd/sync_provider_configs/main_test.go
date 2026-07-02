@@ -469,3 +469,47 @@ func TestSync_PreservesOriginalCase(t *testing.T) {
 		}
 	}
 }
+
+// TestSync_PreservesModelInfoNotInAPI verifies that model_info entries with no
+// corresponding API model are preserved in available_models. This prevents
+// manually-declared models (e.g. vision variants like glm-4.6v) from being
+// silently dropped when the provider's /models endpoint doesn't list them.
+func TestSync_PreservesModelInfoNotInAPI(t *testing.T) {
+	configsDir, registryDir, _ := setupTest(t)
+
+	cfg := makeBaseConfig("vision-test", "https://api.example.com/v1/chat", []string{"text-model", "vision-model"})
+	cfg["models"].(map[string]interface{})["model_info"] = []interface{}{
+		map[string]interface{}{"id": "text-model", "tags": []interface{}{"tools", "coding"}},
+		map[string]interface{}{"id": "vision-model", "tags": []interface{}{"vision", "coding"}},
+		map[string]interface{}{"id": "extra-vision", "tags": []interface{}{"vision"}},
+	}
+	writeConfig(t, configsDir, "vision-test", cfg)
+
+	writeRegistry(t, registryDir, "vision-test", []modelcontract.CanonicalModel{
+		{ID: "text-model", Provider: "vision-test"},
+		{ID: "vision-model", Provider: "vision-test"},
+	})
+
+	if err := Run(configsDir, registryDir, false); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	updated := readConfig(t, configsDir, "vision-test")
+	modelsMap := updated["models"].(map[string]interface{})
+	avail := modelsMap["available_models"].([]interface{})
+
+	gotIDs := make(map[string]bool)
+	for _, v := range avail {
+		gotIDs[v.(string)] = true
+	}
+
+	if !gotIDs["extra-vision"] {
+		t.Errorf("model_info-only entry 'extra-vision' was dropped from available_models; got %v", gotIDs)
+	}
+	if !gotIDs["text-model"] {
+		t.Errorf("API model 'text-model' missing; got %v", gotIDs)
+	}
+	if !gotIDs["vision-model"] {
+		t.Errorf("API model 'vision-model' missing; got %v", gotIDs)
+	}
+}

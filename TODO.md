@@ -1201,11 +1201,11 @@ testid/assertion updates — typical of fast ship-cycles.
 - [x] **WebUI-A-2:** Fix `Sidebar.sessionSearch.test.tsx` — the
   shared root cause is likely a missing API mock or a query-name
   change. _(shipped: commit `3b125b73`. Root cause: the test queried for `[data-testid="sidebar-session-search-result"]` and `[data-testid="sidebar-session-search-no-results"]`, but `Sidebar.tsx` actually renders these as `[data-testid="chat-item"]` and `[data-testid="chat-sessions-empty"]` respectively (the canonical testids already in `test/webui/testids.ts`). Updated 3 selectors in the test file to match the component. No component changes needed.)_
-- [ ] **WebUI-A-3:** Fix `ChatStatusBarItems.test.tsx` — the missing
-  segment and undefined text suggest the component was refactored
+- [x] **WebUI-A-3:** Fix `ChatStatusBarItems.test.tsx` — the
+  missing segment and undefined text suggest the component was refactored
   (likely the SP-101 work). Re-align the component output with what
   the test expects, or update the test if the new behavior is
-  intentional.
+  intentional. _(shipped: commit `219e6c83`. SP-101 intentionally gated the model segment on `isConnected === false` OR non-orchestrator persona (because the shared StatusBar middle section already shows provider+model when connected). Updated 4 tests to match the new intentional behavior, added 2 new tests covering the disconnected + persona-active code paths. No component changes needed.)_
 - [ ] **WebUI-A-4:** Fix `useEventHandler.test.ts::auto-classifies
   [FAIL] messages as error` — verify the classifier still matches
   the `FAIL` token. May be a regex literal vs `strings.Contains` flip.

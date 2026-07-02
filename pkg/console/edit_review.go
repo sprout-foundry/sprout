@@ -20,8 +20,14 @@ const (
 // ReviewHunk is a console-local view of a diff hunk, avoiding an import
 // cycle with pkg/agent. The agent's Hunk type is adapted to this struct
 // at the call site.
+//
+// FilePath is the path the hunk belongs to (relative to the repo root or
+// absolute, caller's convention). When set, RenderColoredDiff prefixes the
+// hunk header with a dim path so multi-file edit reviews are scannable;
+// when empty, the header falls back to the legacy format.
 type ReviewHunk struct {
 	ID       string
+	FilePath string // optional; "" → don't render a path prefix
 	OldStart int
 	OldLines int
 	Lines    []ReviewDiffLine
@@ -42,9 +48,19 @@ type EditReviewResult struct {
 
 // RenderColoredDiff renders a hunk's diff lines with ANSI colors:
 // green for additions, red for removals, dim for context.
+//
+// When the hunk has a FilePath, the header renders "<path> · hunk-ID ──
+// proposed (lines X-Y) ────" so multi-file edit reviews are scannable; an
+// empty FilePath falls back to the legacy "hunk-ID ── proposed ────" form.
 func RenderColoredDiff(w io.Writer, hunk ReviewHunk) {
-	fmt.Fprintf(w, "%s%s ── proposed (lines %d-%d) %s%s\n",
-		diffColorBold, hunk.ID, hunk.OldStart, hunk.OldStart+hunk.OldLines-1, strings.Repeat("─", 20), diffColorReset)
+	if hunk.FilePath != "" {
+		fmt.Fprintf(w, "%s%s%s · %s%s ── proposed (lines %d-%d) %s%s\n",
+			diffColorDim, hunk.FilePath, diffColorReset,
+			diffColorBold, hunk.ID, hunk.OldStart, hunk.OldStart+hunk.OldLines-1, strings.Repeat("─", 20), diffColorReset)
+	} else {
+		fmt.Fprintf(w, "%s%s%s ── proposed (lines %d-%d) %s%s\n",
+			diffColorBold, hunk.ID, diffColorReset, hunk.OldStart, hunk.OldStart+hunk.OldLines-1, strings.Repeat("─", 20), diffColorReset)
+	}
 
 	for _, line := range hunk.Lines {
 		switch line.Type {
@@ -106,7 +122,8 @@ func RenderEditReview(w io.Writer, hunks []ReviewHunk) EditReviewResult {
 }
 
 // FormatHunkSummary returns a compact one-line description of a hunk
-// for use in list views.
+// for use in list views. Includes FilePath when set so multi-file batches
+// stay readable.
 func FormatHunkSummary(hunk ReviewHunk) string {
 	var adds, removes int
 	for _, line := range hunk.Lines {
@@ -116,6 +133,9 @@ func FormatHunkSummary(hunk ReviewHunk) string {
 		case "remove":
 			removes++
 		}
+	}
+	if hunk.FilePath != "" {
+		return fmt.Sprintf("%s · %s: +%d/-%d (lines %d-%d)", hunk.FilePath, hunk.ID, adds, removes, hunk.OldStart, hunk.OldStart+hunk.OldLines-1)
 	}
 	return fmt.Sprintf("%s: +%d/-%d (lines %d-%d)", hunk.ID, adds, removes, hunk.OldStart, hunk.OldStart+hunk.OldLines-1)
 }

@@ -788,6 +788,8 @@ func TestClassifyBrowseURL(t *testing.T) {
 
 		// Screenshot to allowed dirs → falls through to safe/caution based on URL
 		{"screenshot to /tmp/sprout_examples", map[string]interface{}{"url": "https://example.com", "screenshot_path": "/tmp/sprout_examples/screen.png"}, SecuritySafe, false},
+		{"screenshot to /tmp/sprout-audit", map[string]interface{}{"url": "https://example.com", "screenshot_path": "/tmp/sprout-audit/screen.png"}, SecuritySafe, false},
+		{"screenshot to /tmp/sprout/custom-subdir", map[string]interface{}{"url": "https://example.com", "screenshot_path": "/tmp/sprout/custom-subdir/screen.png"}, SecuritySafe, false},
 		{"screenshot relative path", map[string]interface{}{"url": "https://example.com", "screenshot_path": "screenshots/screen.png"}, SecuritySafe, false},
 	}
 

@@ -673,7 +673,7 @@ phases).
 - [ ] **SP-075-4a:** `pkg/agent/steer_input.go` 1313 lines — extract input parsing, hint rendering, mode switching into separate files.
 - [ ] **SP-075-4b:** `pkg/adapters/go_adapter.go` 1188 lines — extract provider dispatch, response handling, error mapping.
 - [ ] **SP-075-4c:** `pkg/agent_providers/models.go` 1121 lines — extract model metadata, capability detection, request shaping.
-- [ ] **SP-075-4d:** `pkg/webui/settings_api_put.go` 1094 lines — extract per-setting update handlers, validation, conflict detection.
+- [x] **SP-075-4d:** `pkg/webui/settings_api_put.go` 1094 lines — extract per-setting update handlers, validation, conflict detection. _(extracted `applyPartialSettings` (the 540-line monolith) into per-domain helpers in a new `settings_api_partial_settings.go`. Original file 1094→578 lines, new file 652 lines. All 100+ existing `applyPartialSettings` tests pass. Commit `84f08de`.)_
 - [ ] **SP-075-4e:** `pkg/webcontent/client.go` 1060 lines — extract request building, response handling, session lifecycle.
 - [ ] **SP-075-4f:** `pkg/webcontent/client_context.go` 1011 lines — extract context propagation, header injection, timeout handling.
 - [ ] **SP-075-4g:** `pkg/agent_tools/tool_handlers_subagent_spawn.go` 999 lines — extract spawn lifecycle, worktree setup, cleanup hooks.

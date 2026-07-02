@@ -108,6 +108,92 @@ func (c *ComputerUseConfig) Resolve() ComputerUseConfig {
 	return result
 }
 
+// clampInt returns v clamped to [lo, hi]. Used by *Config.Resolve() helpers.
+func clampInt(v, lo, hi int) int {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
+}
+
+// VisionConfig controls vision-pipeline runtime behavior (SP-103-C3).
+//
+// All fields are zero-valued by default; Resolve() fills in safe defaults.
+// VisionConfig is consulted at runtime by the parallel OCR worker pool
+// (pkg/agent_tools/vision_parallel.go::getVisionParallelWorkers).
+type VisionConfig struct {
+	// ParallelWorkers caps concurrent in-flight vision requests per
+	// session. Vision requests are heavyweight (large payloads, slow
+	// provider round-trips) so this defaults to 3 — independent of the
+	// generic request_parallelism setting.
+	//
+	// Range: 1..32. Values outside this range are clamped in Resolve().
+	// Set to 0 to fall back to the default (3).
+	ParallelWorkers int `json:"parallel_workers,omitempty"`
+
+	// MaxParallelRequests caps the global number of in-flight vision
+	// API calls across the entire process. This is independent of
+	// ParallelWorkers (which is per-session). Default: 8.
+	MaxParallelRequests int `json:"max_parallel_requests,omitempty"`
+
+	// EnableBatchProcessing toggles the multi-image batching layer
+	// (VISION-4). Default: true.
+	EnableBatchProcessing bool `json:"enable_batch_processing,omitempty"`
+
+	// MaxBatchSize is the maximum number of images sent to the provider
+	// in a single batched call. Default: 4. Range: 1..8.
+	MaxBatchSize int `json:"max_batch_size,omitempty"`
+}
+
+// Resolve returns a copy with defaults filled in for zero-value fields.
+func (c *VisionConfig) Resolve() VisionConfig {
+	result := VisionConfig{
+		ParallelWorkers:       3,
+		MaxParallelRequests:   8,
+		EnableBatchProcessing: true,
+		MaxBatchSize:          4,
+	}
+	if c == nil {
+		return result
+	}
+	if c.ParallelWorkers > 0 {
+		result.ParallelWorkers = clampInt(c.ParallelWorkers, 1, 32)
+	}
+	if c.MaxParallelRequests > 0 {
+		result.MaxParallelRequests = clampInt(c.MaxParallelRequests, 1, 64)
+	}
+	if c.MaxBatchSize > 0 {
+		result.MaxBatchSize = clampInt(c.MaxBatchSize, 1, 8)
+	}
+	// EnableBatchProcessing defaults to true. Because it's a plain bool
+	// (not a pointer), we can't distinguish "not set" from "set to
+	// false" — so the default is always true. Users must explicitly
+	// set false via JSON to disable. This mirrors the
+	// ComputerUseConfig.DestructiveAppGate pattern.
+	result.EnableBatchProcessing = c.EnableBatchProcessing
+	return result
+}
+
+// GetVisionConfig returns the raw VisionConfig from the on-disk
+// configuration file. If the config file can't be loaded or the Vision
+// section is absent, returns a zero-valued VisionConfig (all fields are
+// zero). Callers should use Resolve() on the result to fill in defaults,
+// or check individual fields directly (zero means "not set") for
+// precedence-based lookups.
+//
+// This is a convenience accessor for callers that don't have a Manager
+// instance (e.g., vision_parallel.go::getVisionParallelWorkers).
+func GetVisionConfig() VisionConfig {
+	cfg, err := Load()
+	if err != nil || cfg == nil || cfg.Vision == nil {
+		return VisionConfig{}
+	}
+	return *cfg.Vision
+}
+
 // NotificationsConfig controls how the agent notifies the user when
 // long-running turns complete (SP-070).
 type NotificationsConfig struct {

@@ -6,6 +6,7 @@ import {
   type NotificationData,
   type NotificationType,
 } from '@sprout/ui';
+import './NotificationCenter.css';
 
 /**
  * @deprecated Props kept for backward compatibility with StatusBar.tsx.
@@ -24,6 +25,11 @@ interface NotificationCenterLegacyProps {
  * Subscribes to the singleton notificationBus and renders NotificationStack
  * from @sprout/ui. Auto-dismisses notifications after 5 s when no explicit
  * duration is provided. Positioned top-right via App.css override.
+ *
+ * Exposes a "Mark all read" affordance that:
+ *   1. Calls `notificationBus.markAllRead()` to broadcast the intent.
+ *   2. Locally clears every visible toast (with its pending auto-dismiss
+ *      timer) so the stack empties immediately.
  */
 function NotificationCenter(_props: NotificationCenterLegacyProps = {}): JSX.Element | null {
   const [notifications, setNotifications] = useState<NotificationData[]>([]);
@@ -36,6 +42,12 @@ function NotificationCenter(_props: NotificationCenterLegacyProps = {}): JSX.Ele
       clearTimeout(timer);
       timersRef.current.delete(id);
     }
+  }, []);
+
+  const clearAll = useCallback(() => {
+    setNotifications([]);
+    timersRef.current.forEach((timer) => clearTimeout(timer));
+    timersRef.current.clear();
   }, []);
 
   useEffect(() => {
@@ -62,20 +74,48 @@ function NotificationCenter(_props: NotificationCenterLegacyProps = {}): JSX.Ele
       }
     };
 
+    const handleControl = (event: { kind: string }) => {
+      if (event.kind === 'mark_all_read') {
+        clearAll();
+      }
+    };
+
     const unsubscribe = notificationBus.onNotification(handleNotification);
+    const unsubscribeControl = notificationBus.onControlEvent(handleControl);
 
     return () => {
       unsubscribe();
+      unsubscribeControl();
       timersRef.current.forEach((timer) => clearTimeout(timer));
       timersRef.current.clear();
     };
-  }, []);
+  }, [clearAll]);
+
+  const handleMarkAllRead = useCallback(() => {
+    notificationBus.markAllRead();
+    clearAll();
+  }, [clearAll]);
 
   if (notifications.length === 0) {
     return null;
   }
 
-  return <NotificationStack notifications={notifications} onDismiss={removeNotification} />;
+  return (
+    <div className="notification-center-wrapper" data-testid="notification-center">
+      <div className="notification-center-header">
+        <button
+          type="button"
+          className="notification-center-mark-all-read"
+          onClick={handleMarkAllRead}
+          aria-label="Mark all notifications read"
+          data-testid="notification-center-mark-all-read"
+        >
+          Mark all read
+        </button>
+      </div>
+      <NotificationStack notifications={notifications} onDismiss={removeNotification} />
+    </div>
+  );
 }
 
 /**

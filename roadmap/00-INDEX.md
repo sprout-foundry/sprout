@@ -6,7 +6,7 @@ a major architectural area, its current state, and open work.
 Specs ship to [`./_completed/`](./_completed/) once their core work lands.
 The root directory only contains specs still receiving active changes.
 
-**Counts (as of 2026-06-30):** 72 shipped · 2 pending · 1 on hold.
+**Counts (as of 2026-07-02):** 72 shipped · 3 pending · 1 on hold.
 
 ## Shipped
 
@@ -89,13 +89,14 @@ Full spec bodies in [`_completed/`](./_completed/) (72 files).
 
 ## Pending
 
-Specs still in flight (2 files). When a spec's core work
+Specs still in flight (3 files). When a spec's core work
 ships, it moves to [`_completed/`](./_completed/).
 
 | Spec | Title | Status |
 |------|-------|--------|
 | SP-012 | [UX Polish](./SP-012-ux-polish.md) | ⚠️ ~90% Shipped — Notification center, reduced-motion, inline tool badges, MAX_PANES, sidebar persistence, mobile responsive, loading skeletons, panel animations shipped; remaining: ARIA gaps in FileTree (role="treeitem"/aria-expanded) and ChatPanel (role="log"), global `:focus-visible` styles, `notificationBus.markAllRead()` |
 | SP-075 | [Large-File Decomposition](./SP-075-large-file-decomposition.md) | ⚠️ In Progress — Phase 1 (config + cmd) and Phase 2 (agent core) substantially shipped 2026-06; Phase 3 (providers + web) shipped for several files. Original 2833-line `config.go` reduced to ~396 lines; `agent_workflow.go` 1519→3 lines; `tool_handlers_subagent.go` 1568→41 lines. **Remaining files over 600-line target:** `steer_input.go` 1313, `go_adapter.go` 1188, `models.go` 1121, `settings_api_put.go` 1094, `client.go` 1060, `client_context.go` 1011, `tool_handlers_subagent_spawn.go` 999, `Terminal.tsx` 780, `agent_modes.go` 732, `input_core.go` 715, `generic_provider.go` 669. |
+| SP-080 | [Multi-Billing-Model Cost Tracking](./SP-080-multi-billing-cost-tracking.md) | 📋 Planned — Design complete. Three billing models (pay-per-token, subscription, free) with dual-cost tracking (charged vs token value). Fleet budget isolation, per-billing-type dashboard breakdown. 4 phases. |
 
 ## Future / On Hold
 

@@ -34,24 +34,6 @@ func TestValidReasoningEfforts_MapContents(t *testing.T) {
 	}
 }
 
-func TestValidSelfReviewGateModes_MapContents(t *testing.T) {
-	t.Parallel()
-	for v, want := range map[string]bool{
-		"off":    true,
-		"code":   true,
-		"always": true,
-		"on":     false,
-		"":       false,
-	} {
-		if got := validSelfReviewGateModes[v]; got != want {
-			t.Errorf("validSelfReviewGateModes[%q] = %v; want %v", v, got, want)
-		}
-	}
-	if len(validSelfReviewGateModes) != 3 {
-		t.Errorf("expected 3 entries, got %d", len(validSelfReviewGateModes))
-	}
-}
-
 func TestValidHistoryScopes_MapContents(t *testing.T) {
 	t.Parallel()
 	for v, want := range map[string]bool{

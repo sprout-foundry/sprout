@@ -652,7 +652,6 @@ func TestCollectEnvConfig_NoEnvVars(t *testing.T) {
 		"LEDIT_SEARCH_MAX_BYTES",
 		"LEDIT_FETCH_URL_MAX_CHARS",
 		"LEDIT_SUBAGENT_MAX_TOKENS",
-		"LEDIT_SELF_REVIEW_MODE",
 		"LEDIT_NO_SUBAGENT_MODE",
 		"LEDIT_ISOLATED_CONFIG",
 	} {
@@ -676,7 +675,6 @@ func TestCollectEnvConfig_WithEnvVars(t *testing.T) {
 	t.Setenv("LEDIT_SEARCH_MAX_BYTES", "100000")
 	t.Setenv("LEDIT_FETCH_URL_MAX_CHARS", "80000")
 	t.Setenv("LEDIT_SUBAGENT_MAX_TOKENS", "8000")
-	t.Setenv("LEDIT_SELF_REVIEW_MODE", "strict")
 	t.Setenv("LEDIT_NO_SUBAGENT_MODE", "true")
 	t.Setenv("LEDIT_ISOLATED_CONFIG", "isolated.toml")
 
@@ -693,7 +691,6 @@ func TestCollectEnvConfig_WithEnvVars(t *testing.T) {
 		"search_max_bytes":            "100000",
 		"fetch_url_max_chars":         "80000",
 		"subagent_max_tokens":         "8000",
-		"self_review_mode":            "strict",
 		"no_subagent_mode":            "true",
 		"isolated_config":             "isolated.toml",
 	}
@@ -718,19 +715,18 @@ func TestCollectEnvConfig_PartialEnvVars(t *testing.T) {
 	for _, key := range []string{
 		"LEDIT_INTERACTIVE_INPUT_MAX_CHARS",
 		"LEDIT_AUTOMATION_INPUT_MAX_CHARS",
-		"LEDIT_SELF_REVIEW_MODE",
 	} {
 		t.Setenv(key, "")
 	}
 
-	t.Setenv("LEDIT_SELF_REVIEW_MODE", "lax")
+	t.Setenv("LEDIT_NO_SUBAGENT_MODE", "lax")
 
 	config := collectEnvConfig()
 	if len(config) != 1 {
 		t.Errorf("expected exactly 1 config entry, got %d: %v", len(config), config)
 	}
-	if config["self_review_mode"] != "lax" {
-		t.Errorf("self_review_mode: got %q, want %q", config["self_review_mode"], "lax")
+	if config["no_subagent_mode"] != "lax" {
+		t.Errorf("no_subagent_mode: got %q, want %q", config["no_subagent_mode"], "lax")
 	}
 }
 

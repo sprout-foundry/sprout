@@ -334,9 +334,6 @@ func collectEnvConfig() map[string]string {
 	}
 
 	// Feature flags
-	if v := envutil.GetEnvSimple("SELF_REVIEW_MODE"); v != "" {
-		config["self_review_mode"] = v
-	}
 	if v := envutil.GetEnvSimple("NO_SUBAGENT_MODE"); v != "" {
 		config["no_subagent_mode"] = v
 	}

@@ -24,7 +24,7 @@ This creates three specific problems:
 | Tab | Fields | Actual Scope | Problems |
 |-----|--------|-------------|----------|
 | General | reasoning_effort, disable_thinking, skip_prompt, pre_write_validation, history_scope, system_prompt, editor prefs | Mixed: session + runtime | Editor prefs aren't config fields at all. Dumping ground. |
-| Security | allow_orchestrator_git_write, self_review_gate_mode | Session | 2 fields — too thin for a tab |
+| Security | allow_orchestrator_git_write | Session | 1 field — too thin for a tab |
 | Credentials | API keys (credential store) | Global | Correct, separate. Keep as-is. |
 | Perf | api_timeouts (5 sub-fields) | Global | 5 fields — too thin for a tab |
 | Subagents | provider/model, type catalog, parallel controls | Session overrides + global types | Complex enough to stay separate |
@@ -97,7 +97,7 @@ Everything that controls how the agent behaves in *this session*. Writes to the 
 | Subsection | Fields | Source |
 |-----------|--------|--------|
 | Provider & Model | `last_used_provider`, provider model override | New — currently only in chat input dropdown |
-| Behavior | `reasoning_effort`, `disable_thinking`, `skip_prompt`, `enable_pre_write_validation`, `history_scope`, `system_prompt_text`, `self_review_gate_mode`, `allow_orchestrator_git_write` | Merges General + Security tabs |
+| Behavior | `reasoning_effort`, `disable_thinking`, `skip_prompt`, `enable_pre_write_validation`, `history_scope`, `system_prompt_text`, `allow_orchestrator_git_write` | Merges General + Security tabs |
 | Subagents | `subagent_provider`, `subagent_model`, `subagent_types`, `subagent_max_parallel`, `subagent_parallel_enabled` | Keeps existing SubagentSettingsTab |
 | Skills | `skills` catalog | Keeps existing SkillsSettingsTab |
 

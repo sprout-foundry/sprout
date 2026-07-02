@@ -1,8 +1,6 @@
 package configuration
 
 import (
-	"fmt"
-	"strings"
 	"time"
 )
 
@@ -19,39 +17,6 @@ func (c *Config) GetModelForProvider(provider string) string {
 	}
 
 	return ""
-}
-
-// NormalizeSelfReviewGateMode validates and normalizes self-review gate mode.
-func NormalizeSelfReviewGateMode(mode string) (string, bool) {
-	switch strings.ToLower(strings.TrimSpace(mode)) {
-	case "", SelfReviewGateModeOff:
-		return SelfReviewGateModeOff, true
-	case SelfReviewGateModeCode:
-		return SelfReviewGateModeCode, true
-	case SelfReviewGateModeAlways:
-		return SelfReviewGateModeAlways, true
-	default:
-		return "", false
-	}
-}
-
-// GetSelfReviewGateMode returns the effective self-review gate mode.
-func (c *Config) GetSelfReviewGateMode() string {
-	mode, ok := NormalizeSelfReviewGateMode(c.SelfReviewGateMode)
-	if !ok {
-		return SelfReviewGateModeOff
-	}
-	return mode
-}
-
-// SetSelfReviewGateMode sets the self-review gate mode.
-func (c *Config) SetSelfReviewGateMode(mode string) error {
-	normalized, ok := NormalizeSelfReviewGateMode(mode)
-	if !ok {
-		return fmt.Errorf("invalid self-review gate mode %q (allowed: off, code, always)", mode)
-	}
-	c.SelfReviewGateMode = normalized
-	return nil
 }
 
 // SetModelForProvider sets the model for a specific provider.

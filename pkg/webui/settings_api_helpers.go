@@ -98,12 +98,6 @@ var validReasoningEfforts = map[string]bool{
 	"high":   true,
 }
 
-var validSelfReviewGateModes = map[string]bool{
-	configuration.SelfReviewGateModeOff:    true,
-	configuration.SelfReviewGateModeCode:   true,
-	configuration.SelfReviewGateModeAlways: true,
-}
-
 var validHistoryScopes = map[string]bool{
 	"project": true,
 	"global":  true,
@@ -129,7 +123,6 @@ func sanitizedConfig(cfg *configuration.Config) map[string]interface{} {
 		"api_timeouts":          cfg.APITimeouts,
 		"custom_providers":      sanitizedCustomProviders(cfg.CustomProviders),
 		"history_scope":         cfg.HistoryScope,
-		"self_review_gate_mode": cfg.SelfReviewGateMode,
 		"subagent_provider":     cfg.SubagentProvider,
 		"subagent_model":        cfg.SubagentModel,
 		// SubagentTypes is catalog-derived and never persisted — exposed via
@@ -309,13 +302,6 @@ func validateReasoningEffort(v string) error {
 	return nil
 }
 
-func validateSelfReviewGateMode(v string) error {
-	if !validSelfReviewGateModes[v] {
-		return fmt.Errorf("invalid self_review_gate_mode %q (allowed: off, code, always)", v)
-	}
-	return nil
-}
-
 func validateHistoryScope(v string) error {
 	if !validHistoryScopes[v] {
 		return fmt.Errorf("invalid history_scope %q (allowed: project, global)", v)
@@ -372,7 +358,6 @@ func truncateConfigStrings(cfg *configuration.Config) *configuration.Config {
 	// --- Top-level scalar strings ---
 	cfg.ReasoningEffort = truncateString(cfg.ReasoningEffort, maxSettingEnumLength)
 	cfg.HistoryScope = truncateString(cfg.HistoryScope, maxSettingEnumLength)
-	cfg.SelfReviewGateMode = truncateString(cfg.SelfReviewGateMode, maxSettingEnumLength)
 	cfg.OutputVerbosity = truncateString(cfg.OutputVerbosity, maxSettingEnumLength)
 	cfg.ResourceDirectory = truncateString(cfg.ResourceDirectory, maxSettingPathLength)
 	cfg.SystemPromptText = truncateString(cfg.SystemPromptText, maxSettingPromptLength)

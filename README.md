@@ -11,7 +11,7 @@ AI-powered coding agent and development environment. Sprout gives you a chat-fir
 - **11 specialized personas** that collaborate through structured delegation: `orchestrator` (top-level routing), `coordinator` (long-running workflow driver), `coder`, `refactor`, `tester`, `reviewer`, `debugger`, `researcher`, `web_scraper`, `general`, and `computer_user` (desktop automation)
 - **Mid-flight steering** — type while a subagent runs and the message is delivered to the active subagent, not buffered
 - **Cooperative cancellation** — Stop button (UI) or Ctrl-C (CLI) cancels the primary plus all running subagents
-- **34 slash commands** for in-session control — `/search`, `/compact`, `/clear`, `/rewind`, `/commit`, `/review`, `/risk-profile`, `/self-review`, `/persona`, `/models`, `/max-context`, and more
+- **34 slash commands** for in-session control — `/search`, `/compact`, `/clear`, `/rewind`, `/commit`, `/review`, `/risk-profile`, `/persona`, `/models`, `/max-context`, and more
 
 ### Editor, UI, and tools
 - **Web UI** with chat, file tree, code editor, integrated terminal, git UI, settings, command palette, sessions picker, cost dashboard, and notifications

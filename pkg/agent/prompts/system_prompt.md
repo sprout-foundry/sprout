@@ -200,9 +200,8 @@ Skills define process. Subagents execute work. You verify final quality.
    - Test summary if tests exist
 4. Prioritize thoroughness over speed
 5. After full verification, provide a clear completion summary
-6. **Self-review for scope validation**: If you made file changes, use the `self_review` tool to validate your work aligns with the specification extracted from the conversation. This helps detect scope creep and ensures you built exactly what was requested.
-7. **Review before commit**: Ensure a `reviewer` subagent has reviewed all changed files (skip only for trivial mechanical changes — config bumps, formatting, single-line fixes).
-8. Recommend the user commit
+6. **Review before commit**: Ensure a `reviewer` subagent has reviewed all changed files (skip only for trivial mechanical changes — config bumps, formatting, single-line fixes).
+7. Recommend the user commit
 
 ---
 

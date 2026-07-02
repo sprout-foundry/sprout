@@ -771,8 +771,8 @@ func TestAllToolsRegistration(t *testing.T) {
 	if tools == nil {
 		t.Fatal("AllTools() returned nil")
 	}
-	if len(tools) != 31 {
-		t.Fatalf("AllTools() returned %d tools, want 31", len(tools))
+	if len(tools) != 30 {
+		t.Fatalf("AllTools() returned %d tools, want 30", len(tools))
 	}
 
 	expectedNames := map[string]string{
@@ -798,7 +798,6 @@ func TestAllToolsRegistration(t *testing.T) {
 		"todo_read":               "todo_read",
 		"ask_user":                "ask_user",
 		"patch_structured_file":   "patch_structured_file",
-		"self_review":             "self_review",
 		"commit":                  "commit",
 		"git":                     "git",
 		"activate_skill":          "activate_skill",
@@ -928,10 +927,6 @@ func TestAllToolsRegistration(t *testing.T) {
 		case "patch_structured_file":
 			if len(def.Required) != 1 || def.Required[0] != "path" {
 				t.Errorf("patch_structured_file Required = %v, want [\"path\"]", def.Required)
-			}
-		case "self_review":
-			if len(def.Required) != 0 {
-				t.Errorf("self_review Required = %v, want nil/empty", def.Required)
 			}
 		case "commit":
 			if len(def.Required) != 0 {

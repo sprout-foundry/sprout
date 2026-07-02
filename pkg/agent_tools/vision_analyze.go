@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/console"
@@ -134,29 +135,85 @@ func (vp *VisionProcessor) AnalyzeImage(ctx context.Context, imagePath string, o
 		},
 	}
 
+	// VISION-5: per-call retry stats collector.
+	var retryStats RetryStats
+
 	// Get vision analysis using the vision-enabled method. The parent
 	// context is threaded through so the Stop button can abort in-flight
 	// vision calls (SP-034-1c).
 	var response *api.ChatResponse
+	reqStart := time.Now()
 	err = DoVisionRetry(ctx, func(ctx context.Context) error {
 		var innerErr error
 		response, innerErr = vp.visionClient.SendVisionRequest(ctx, messages, nil, "", false)
 		return innerErr
-	}, RetryOptions{OpName: "analyze_image"})
+	}, RetryOptions{OpName: "analyze_image", Stats: &retryStats})
+	reqDuration := time.Since(reqStart)
+	AddVisionLatencyRequest(reqDuration)
+
+	usedFallback := false
+	ocrFallbackSuccess := false
+	var fallbackDuration time.Duration
+
 	if err != nil {
 		// SP-103-A8: attempt OCR fallback when primary vision model fails
 		if shouldFallbackToOCR(err) {
+			usedFallback = true
+			IncVisionFallbackTotal()
+			fbStart := time.Now()
 			analysis, fbErr := vp.fallbackToOCR(ctx, imagePath, prompt, imageType, imageData, err)
+			fallbackDuration = time.Since(fbStart)
+			AddVisionLatencyFallback(fallbackDuration)
 			if fbErr == nil {
+				ocrFallbackSuccess = true
+				IncVisionFallbackSuccess()
+
+				// VISION-5: emit per-call record for successful fallback.
+				AppendVisionRecord(VisionMetricsRecord{
+					OpName:             "analyze_image",
+					ImageCount:         1,
+					Success:            true,
+					RetryCount:         retryStats.RetryCount,
+					UsedOCRFallback:    true,
+					OCRFallbackSuccess: true,
+					LatencyRequestMS:   reqDuration.Milliseconds(),
+					LatencyRetrySleepMS: retryStats.SleepDuration.Milliseconds(),
+					LatencyFallbackMS:  fallbackDuration.Milliseconds(),
+				})
+
 				return analysis, nil
 			}
 			// Fallback exhausted; return the composed error.
+			// VISION-5: emit per-call record for failed fallback.
+			AppendVisionRecord(VisionMetricsRecord{
+				OpName:             "analyze_image",
+				ImageCount:         1,
+				Success:            false,
+				FailureReason:      classifyVisionError(fbErr),
+				RetryCount:         retryStats.RetryCount,
+				UsedOCRFallback:    true,
+				OCRFallbackSuccess: false,
+				LatencyRequestMS:   reqDuration.Milliseconds(),
+				LatencyRetrySleepMS: retryStats.SleepDuration.Milliseconds(),
+				LatencyFallbackMS:  fallbackDuration.Milliseconds(),
+			})
 			return VisionAnalysis{}, fbErr
 		}
+		// VISION-5: emit per-call record for non-fallback failure.
+		AppendVisionRecord(VisionMetricsRecord{
+			OpName:             "analyze_image",
+			ImageCount:         1,
+			Success:            false,
+			FailureReason:      classifyVisionError(err),
+			RetryCount:         retryStats.RetryCount,
+			LatencyRequestMS:   reqDuration.Milliseconds(),
+			LatencyRetrySleepMS: retryStats.SleepDuration.Milliseconds(),
+		})
 		return VisionAnalysis{}, fmt.Errorf("vision request: %w", err)
 	}
 
 	// Store usage information for cost tracking (per-session + global mirror)
+	var imageTokens, imageTokensCached int
 	if response.Usage.TotalTokens > 0 {
 		recordVisionUsage(vp, &VisionUsageInfo{
 			PromptTokens:     response.Usage.PromptTokens,
@@ -167,16 +224,37 @@ func (vp *VisionProcessor) AnalyzeImage(ctx context.Context, imagePath string, o
 		// SP-103-C4: emit vision_image_tokens metric. Cached reads show
 		// up as input tokens too but cost less — we record the count
 		// (not the dollar value) so callers can compute costs separately.
-		IncVisionImageTokens(response.Usage.PromptTokens, response.Usage.CachedTokens)
+		imageTokens = response.Usage.PromptTokens
+		imageTokensCached = response.Usage.CachedTokens
+		IncVisionImageTokens(imageTokens, imageTokensCached)
 	}
 	// SP-103-C4: count this as an OCR call (analyze_image_content path).
 	IncVisionOCRCall()
 
 	// Extract response content
+	parseStart := time.Now()
 	analysis, parseErr := parseVisionResponse(response, imagePath)
+	parseDuration := time.Since(parseStart)
+	AddVisionLatencyParse(parseDuration)
 	if parseErr != nil {
 		return VisionAnalysis{}, parseErr
 	}
+
+	// VISION-5: emit per-call record for successful primary path.
+	AppendVisionRecord(VisionMetricsRecord{
+		OpName:             "analyze_image",
+		ImageCount:         1,
+		Success:            true,
+		RetryCount:         retryStats.RetryCount,
+		UsedOCRFallback:    usedFallback,
+		OCRFallbackSuccess: ocrFallbackSuccess,
+		LatencyRequestMS:   reqDuration.Milliseconds(),
+		LatencyRetrySleepMS: retryStats.SleepDuration.Milliseconds(),
+		LatencyFallbackMS:  fallbackDuration.Milliseconds(),
+		LatencyParseMS:     parseDuration.Milliseconds(),
+		ImageTokens:        imageTokens,
+		ImageTokensCached:  imageTokensCached,
+	})
 
 	return analysis, nil
 }

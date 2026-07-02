@@ -26,9 +26,20 @@ type VisionProgressFunc func(completed, total int)
 
 // getVisionParallelWorkers returns the number of parallel OCR workers.
 //
-// Reads VISION_PARALLEL_WORKERS from the environment. The value defaults to 3
-// when the env var is unset or invalid, and is clamped to the range [1, 32].
+// Precedence (highest → lowest):
+//  1. vision.parallel_workers from the persisted config file (config.json)
+//  2. VISION_PARALLEL_WORKERS environment variable
+//  3. Hard-coded default of 3
+//
+// The value is clamped to the range [1, 32].
 func getVisionParallelWorkers() int {
+	// 1. Check persisted config first.
+	cfg := configuration.GetVisionConfig()
+	if cfg.ParallelWorkers > 0 {
+		return cfg.ParallelWorkers
+	}
+
+	// 2. Fall back to environment variable.
 	n := 3 // default
 	if raw := configuration.GetEnvSimple("VISION_PARALLEL_WORKERS"); raw != "" {
 		if matched, err := fmt.Sscanf(raw, "%d", &n); err == nil && matched == 1 {

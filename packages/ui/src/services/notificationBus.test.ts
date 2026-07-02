@@ -338,4 +338,42 @@ describe('notificationBus', () => {
       expect(event.id).toMatch(/^notify_\d+_\d+$/);
     });
   });
+
+  describe('markAllRead', () => {
+    it('emits mark_all_read to all control listeners', () => {
+      const listener1 = vi.fn();
+      const listener2 = vi.fn();
+
+      notificationBus.onControlEvent(listener1);
+      notificationBus.onControlEvent(listener2);
+
+      notificationBus.markAllRead();
+
+      expect(listener1).toHaveBeenCalledWith({ kind: 'mark_all_read' });
+      expect(listener2).toHaveBeenCalledWith({ kind: 'mark_all_read' });
+    });
+
+    it('does not emit mark_all_read to notification listeners', () => {
+      const notificationListener = vi.fn();
+      notificationBus.onNotification(notificationListener);
+
+      notificationBus.markAllRead();
+
+      expect(notificationListener).not.toHaveBeenCalled();
+    });
+
+    it('returns unsubscribe from onControlEvent', () => {
+      const listener = vi.fn();
+      const unsubscribe = notificationBus.onControlEvent(listener);
+
+      expect(typeof unsubscribe).toBe('function');
+
+      notificationBus.markAllRead();
+      expect(listener).toHaveBeenCalledTimes(1);
+
+      unsubscribe();
+      notificationBus.markAllRead();
+      expect(listener).toHaveBeenCalledTimes(1);
+    });
+  });
 });

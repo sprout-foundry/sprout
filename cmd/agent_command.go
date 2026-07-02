@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"sort"
 	"strings"
@@ -70,9 +69,12 @@ func runStartupPermissionCheck() error {
 	// Check for symlinks pointing outside the config directory
 	symlinkWarnings := security.CheckAllSymlinks(configDir)
 	if len(symlinkWarnings) > 0 {
-		log.Printf("[security] Symlink warnings:")
+		// CLI-G-2: route pre-decision security warnings through the
+		// console.GlyphWarning path so they hit the terminal stderr
+		// instead of ~/.sprout/workspace.log.
+		console.GlyphWarning.Fprintln(os.Stderr, "Symlink warnings:")
 		for _, warn := range symlinkWarnings {
-			log.Printf("  %s", warn)
+			fmt.Fprintf(os.Stderr, "  %s\n", warn)
 		}
 	}
 
@@ -122,7 +124,9 @@ func createChatAgent() (*agent.Agent, error) {
 
 	// Run startup permission check
 	if err := runStartupPermissionCheck(); err != nil {
-		log.Printf("[security] %v", err)
+		// CLI-G-2: same channel as the symlink warning above — these
+		// are pre-decision signals and should hit the terminal.
+		console.GlyphWarning.Fprintf(os.Stderr, "%v", err)
 	}
 
 	if agentSystemPrompt != "" {

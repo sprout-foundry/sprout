@@ -9,7 +9,21 @@ import (
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
-// SupportsVision returns whether the provider supports vision
+// SupportsVision returns whether the current model can accept image input.
+//
+// Resolution:
+//  1. If the provider config sets supports_vision: false, vision is off for
+//     the entire provider — return false immediately.
+//  2. If the current model is listed in model_info, the tag list is
+//     authoritative: return true only when a "vision" tag is present.
+//     This lets configs grant or withhold vision on a per-model basis when
+//     the model catalogue is populated.
+//  3. When supports_vision: true but the current model is NOT in model_info
+//     (no per-model data), trust the provider-level flag and return true.
+//     This is the common case — most configs set supports_vision: true with
+//     an empty model_info, meaning "all models from this provider accept
+//     images". Returning false here would silently break image embedding for
+//     models like gpt-5-mini that do support vision.
 func (p *GenericProvider) SupportsVision() bool {
 	if !p.config.Models.SupportsVision {
 		return false
@@ -23,16 +37,14 @@ func (p *GenericProvider) SupportsVision() bool {
 		return false
 	}
 
-	if modelInfoHasVisionTag(p.config.GetModelInfo(currentModel)) {
-		return true
+	// Per-model override: if the model is in model_info, the tag list is
+	// authoritative.
+	if mi := p.config.GetModelInfo(currentModel); mi != nil {
+		return modelInfoHasVisionTag(mi)
 	}
 
-	visionModel := strings.TrimSpace(p.config.Models.VisionModel)
-	if visionModel != "" && strings.EqualFold(currentModel, visionModel) {
-		return true
-	}
-
-	return false
+	// No per-model info — trust the provider-level flag.
+	return true
 }
 
 // SupportsConversationalVision returns whether the active model is suitable

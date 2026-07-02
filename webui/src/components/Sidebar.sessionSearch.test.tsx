@@ -315,11 +315,11 @@ describe('Sidebar session-search', () => {
 
     // Wait for the debounce + async call to resolve
     await waitFor(() => {
-      const results = container.querySelectorAll('[data-testid="sidebar-session-search-result"]');
+      const results = container.querySelectorAll('[data-testid="chat-item"]');
       expect(results.length).toBe(2);
     }, { timeout: 2000 });
 
-    const results = container.querySelectorAll('[data-testid="sidebar-session-search-result"]');
+    const results = container.querySelectorAll('[data-testid="chat-item"]');
     expect(results[0].getAttribute('data-session-id')).toBe('sess-1');
     expect(results[1].getAttribute('data-session-id')).toBe('sess-2');
   });
@@ -345,7 +345,7 @@ describe('Sidebar session-search', () => {
     });
 
     await waitFor(() => {
-      const result = container.querySelector('[data-testid="sidebar-session-search-result"]');
+      const result = container.querySelector('[data-testid="chat-item"]');
       expect(result).not.toBeNull();
     }, { timeout: 2000 });
 
@@ -420,7 +420,7 @@ describe('Sidebar session-search', () => {
     });
 
     await waitFor(() => {
-      const noResults = container.querySelector('[data-testid="sidebar-session-search-no-results"]');
+      const noResults = container.querySelector('[data-testid="chat-sessions-empty"]');
       expect(noResults).not.toBeNull();
     }, { timeout: 2000 });
   });

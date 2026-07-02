@@ -109,6 +109,9 @@ func WithinCostBudget(inputPerMTok, outputPerMTok float64, costKnown bool, maxPe
 	if !costKnown {
 		return false, fmt.Sprintf("skipped: price unknown; cannot confirm est. probe cost is within $%.4f", maxPerProbe)
 	}
+	if inputPerMTok < 0 || outputPerMTok < 0 {
+		return false, fmt.Sprintf("skipped: price is negative (input $%.2f, output $%.2f/MTok) — likely a sentinel or non-purchasable meta-model", inputPerMTok, outputPerMTok)
+	}
 	if c := EstimatedCostUSD(inputPerMTok, outputPerMTok); c > maxPerProbe {
 		return false, fmt.Sprintf("skipped: est. probe cost $%.4f exceeds $%.4f budget", c, maxPerProbe)
 	}

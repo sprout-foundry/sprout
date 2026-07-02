@@ -166,8 +166,11 @@ func (m *BackgroundProcessManager) StartWithOptions(ctx context.Context, command
 		}
 	}
 
-	// Set process group so we can kill the entire group on stop
-	setProcessGroup(cmd)
+	// Detach from parent session so the process survives parent agent exit.
+	// This is the background spawn path (automate runners, background shells);
+	// interactive shells and password prompts use setProcessGroup directly
+	// via shell_native.go to preserve TTY access.
+	detachFromSession(cmd)
 
 	// Atomic cap check, session ID generation, output file creation,
 	// process start, and map insertion — all under a single lock to

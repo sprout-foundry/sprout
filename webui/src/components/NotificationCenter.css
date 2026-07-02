@@ -28,14 +28,37 @@
   }
 }
 
+/* Wrapper for the toast stack + header action button */
+.notification-center-wrapper {
+  position: fixed;
+  z-index: 1600;
+  bottom: 28px; /* Above the status bar (22px + 6px spacing) */
+  right: 16px;
+  width: 360px;
+  max-width: calc(100vw - 32px);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  pointer-events: none; /* The stack and button individually opt back in. */
+}
+
+.notification-center-wrapper > * {
+  pointer-events: auto;
+}
+
+.notification-center-wrapper .notification-container {
+  position: static; /* Override the fixed position baked into the stack itself. */
+  width: auto;
+  max-width: none;
+}
+
 /* Header */
 .notification-center-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--border-subtle, var(--border-default));
-  background: var(--bg-tertiary);
+  justify-content: flex-end;
+  padding: 4px 0;
   flex-shrink: 0;
 }
 
@@ -47,6 +70,7 @@
   line-height: 1;
 }
 
+.notification-center-mark-all-read,
 .notification-center-dismiss-all {
   font-size: 11px;
   font-weight: 500;
@@ -62,14 +86,17 @@
   line-height: 1;
 }
 
+.notification-center-mark-all-read:hover,
 .notification-center-dismiss-all:hover {
   background: color-mix(in srgb, var(--accent-primary, #3b82f6) 10%, transparent);
 }
 
+.notification-center-mark-all-read:focus,
 .notification-center-dismiss-all:focus {
   outline: none;
 }
 
+.notification-center-mark-all-read:focus-visible,
 .notification-center-dismiss-all:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px var(--accent-primary, rgba(59, 130, 246, 0.3));

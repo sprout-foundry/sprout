@@ -14,6 +14,10 @@ import (
 // golang.org/x/sys/windows so a kill propagates to the whole spawn tree.
 func setProcessGroup(_ *exec.Cmd) {}
 
+// detachFromSession is a no-op on Windows. Windows has no Unix session
+// concept, so there's no SIGHUP propagation to guard against.
+func detachFromSession(_ *exec.Cmd) {}
+
 // interruptProcessGroup terminates the process. Windows has no faithful
 // SIGINT analogue for arbitrary children, so this is a best-effort kill —
 // the same fallback path Unix takes when its group signal fails.

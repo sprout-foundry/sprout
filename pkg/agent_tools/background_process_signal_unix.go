@@ -30,6 +30,18 @@ func setProcessGroup(cmd *exec.Cmd) {
 	cmd.SysProcAttr.Setpgid = true
 }
 
+// detachFromSession starts the command in a new session (setsid), detaching
+// it from the parent's controlling terminal so SIGHUP doesn't propagate when
+// the parent exits. Used for long-running background processes (automate
+// runners) that must outlive the agent that spawned them.
+func detachFromSession(cmd *exec.Cmd) {
+	if cmd.SysProcAttr == nil {
+		cmd.SysProcAttr = &syscall.SysProcAttr{}
+	}
+	cmd.SysProcAttr.Setpgid = true
+	cmd.SysProcAttr.Setsid = true
+}
+
 // interruptProcessGroup sends SIGINT to the process group rooted at p,
 // falling back to a per-process SIGINT if the group signal fails for a
 // reason other than the process already being gone.

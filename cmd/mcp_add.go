@@ -155,7 +155,7 @@ func runMCPAdd() error {
 	}
 
 	fmt.Println()
-	fmt.Printf("✓ %s configured successfully!\n", serverConfig.Name)
+	console.GlyphSuccess.Fprintf(os.Stdout, "%s configured successfully!", serverConfig.Name)
 	fmt.Printf("Command: %s %v\n", serverConfig.Command, secretdetect.RedactOpaque(fmt.Sprintf("%v", serverConfig.Args)))
 	fmt.Println()
 	fmt.Printf("To test the configuration, run: sprout mcp test %s\n", serverName)
@@ -247,7 +247,7 @@ func setupGitMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error {
 	}
 
 	fmt.Println()
-	fmt.Println("✓ Git MCP Server configured successfully!")
+	console.GlyphSuccess.Fprintln(os.Stdout, "Git MCP Server configured successfully!")
 	fmt.Printf("Command: %s %v\n", serverConfig.Command, secretdetect.RedactOpaque(fmt.Sprintf("%v", serverConfig.Args)))
 	fmt.Println()
 	fmt.Println("To test the configuration, run: sprout mcp test git")
@@ -315,7 +315,7 @@ func setupGitHubMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error 
 		fmt.Println("   Authentication will happen automatically via OAuth")
 		fmt.Println("   when the agent first connects to the server.")
 		fmt.Println()
-		fmt.Println("   ⚠ This requires an active GitHub Copilot or Copilot Enterprise seat.")
+		console.GlyphWarning.Fprintln(os.Stdout, "This requires an active GitHub Copilot or Copilot Enterprise seat.")
 		fmt.Println("   If you don't have a Copilot seat, choose option 2 or 3 instead.")
 
 		serverConfig = mcp.MCPServerConfig{
@@ -378,7 +378,7 @@ func setupGitHubMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error 
 	}
 
 	fmt.Println()
-	fmt.Println("✓ GitHub MCP Server configured successfully!")
+	console.GlyphSuccess.Fprintln(os.Stdout, "GitHub MCP Server configured successfully!")
 	if serverConfig.Type == "http" {
 		fmt.Printf("   Type: Remote HTTP server (OAuth)\n")
 		fmt.Printf("   URL:  %s\n", secretdetect.RedactOpaque(serverConfig.URL))
@@ -393,7 +393,7 @@ func setupGitHubMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error 
 	if strings.ToLower(strings.TrimSpace(testChoice)) != "n" {
 		fmt.Println()
 		if err := runMCPTest("github"); err != nil {
-			fmt.Printf("⚠ Test failed: %v\n", err)
+			console.GlyphWarning.Fprintf(os.Stdout, "Test failed: %v", err)
 			fmt.Println("You can retry later with: sprout mcp test github")
 		}
 		return nil
@@ -526,7 +526,7 @@ func setupPlaywrightMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) er
 	}
 
 	fmt.Println()
-	fmt.Println("✓ Playwright MCP Server configured successfully!")
+	console.GlyphSuccess.Fprintln(os.Stdout, "Playwright MCP Server configured successfully!")
 	fmt.Printf("Command: %s %v\n", serverConfig.Command, secretdetect.RedactOpaque(fmt.Sprintf("%v", serverConfig.Args)))
 	fmt.Println()
 	fmt.Println("To test the configuration, run: sprout mcp test playwright")
@@ -607,7 +607,7 @@ func setupChromeDevToolsMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader
 	}
 
 	fmt.Println()
-	fmt.Println("✓ Chrome DevTools MCP Server configured successfully!")
+	console.GlyphSuccess.Fprintln(os.Stdout, "Chrome DevTools MCP Server configured successfully!")
 	fmt.Printf("Command: %s %v\n", serverConfig.Command, secretdetect.RedactOpaque(fmt.Sprintf("%v", serverConfig.Args)))
 	fmt.Println()
 	fmt.Println("To test the configuration, run: sprout mcp test chrome-devtools")
@@ -753,7 +753,7 @@ func setupCustomMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader, regist
 	}
 
 	fmt.Println()
-	fmt.Printf("✓ Custom MCP Server '%s' configured successfully!\n", serverName)
+	console.GlyphSuccess.Fprintf(os.Stdout, "Custom MCP Server '%s' configured successfully!", serverName)
 	fmt.Printf("Command: %s %v\n", serverConfig.Command, secretdetect.RedactOpaque(fmt.Sprintf("%v", serverConfig.Args)))
 	fmt.Println()
 	fmt.Printf("To test the configuration, run: sprout mcp test %s\n", serverName)

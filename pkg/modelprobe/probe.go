@@ -38,7 +38,7 @@ import (
 
 // ProbeVersion identifies the probe scenario/scoring so results can be
 // invalidated when the probe changes.
-const ProbeVersion = "gates+todos-v5"
+const ProbeVersion = "gates+todos+vision-v6"
 
 // complexMaxTurns bounds the multi-turn complex stage. Set generously: some
 // capable models explore one tool call per turn, so a tight cap fails them on
@@ -79,6 +79,8 @@ type Result struct {
 	// Todos is the model's submitted plan from the complex stage, captured
 	// verbatim so a human can evaluate whether it actually makes sense.
 	Todos string `json:"todos,omitempty"`
+
+	Vision bool `json:"vision,omitempty"`
 
 	ToolCallOK       bool   `json:"tool_call_ok"`
 	Turns            int    `json:"turns"`
@@ -145,23 +147,37 @@ func Run(ctx context.Context, client api.ClientInterface, provider, model string
 		return Result{Provider: provider, Model: model, ProbedAt: now(), ProbeVersion: ProbeVersion}
 	}
 
-	gates := runFastGates(ctx, client)
-	if gates.stats.err != nil {
+	vision := runVision(ctx, client)
+	if vision.stats.err != nil {
 		r := base()
 		r.Errored = true
+		r.Reason = "vision probe request failed: " + vision.stats.err.Error()
+		r.Turns = vision.stats.turns
+		r.LatencyMS = time.Since(start).Milliseconds()
+		return r, vision.stats.err
+	}
+
+	r := base()
+	r.Vision = vision.passed
+	r.Turns = vision.stats.turns
+	r.PromptTokens = vision.stats.prompt
+	r.CompletionTokens = vision.stats.compl
+
+	gates := runFastGates(ctx, client)
+	if gates.stats.err != nil {
+		r.Errored = true
 		r.Reason = "probe request failed: " + gates.stats.err.Error()
-		r.Turns = gates.stats.turns
+		r.Turns += gates.stats.turns
 		r.LatencyMS = time.Since(start).Milliseconds()
 		return r, gates.stats.err
 	}
 
-	r := base()
 	r.GateScore = gates.score
 	r.Passed = gates.passed
 	r.ToolCallOK = gates.stats.anyTool
-	r.Turns = gates.stats.turns
-	r.PromptTokens = gates.stats.prompt
-	r.CompletionTokens = gates.stats.compl
+	r.Turns += gates.stats.turns
+	r.PromptTokens += gates.stats.prompt
+	r.CompletionTokens += gates.stats.compl
 
 	if !gates.passed {
 		r.Score = 0.5 * gates.score

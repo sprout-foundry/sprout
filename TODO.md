@@ -680,7 +680,7 @@ phases).
 - [x] **SP-075-4h:** `webui/src/components/Terminal.tsx` 780 lines — extract xterm setup, event handlers, keybindings (continue Phase 3 work). _(extracted three reusable hooks into `webui/src/hooks/usePersistedPref.ts`: `usePersistedNumber` (terminalHeight + fontSize), `usePersistedBoolean` (copyOnSelect), `useOutsideClickDismiss` (two menu-dismiss effects). Terminal.tsx 780→718 lines. TypeScript clean, 13 new hook tests passing, existing tests still green. Commit `701161b`.)_
 - [x] **SP-075-4i:** `pkg/agent/agent_modes.go` 732 lines — extract mode registry, mode config validation, command dispatch. _(file actually lives at `cmd/agent_modes.go`; decomposed 732 → 613 lines plus 1 concern file (SetupAgentEvents + currentReasoningFold); commit TBD)_
 - [x] **SP-075-4j:** `pkg/console/input_core.go` 715 lines — extract input parsing, history management, completion. _(history + completion were already in their own files (`input_history.go`, `input_completion.go`); extracted the terminal-mode setup/teardown tangle from `ReadLine` into `setupInputTerm`/`teardownInputTerm` in `input_terminal.go` so the SGR sequence calls are no longer interleaved with prompt/line-state init. input_core.go 715→700. 3 new tests + 100+ existing console tests all pass. Commit `d8222ac`.)_
-- [ ] **SP-075-4k:** `pkg/agent_providers/generic_provider.go` 669 lines — finish the extraction started in Phase 3.
+- [x] **SP-075-4k:** `pkg/agent_providers/generic_provider.go` 669 lines — finish the extraction started in Phase 3. _(extracted 11 HTTP error formatting helpers + 1 const into a new `generic_provider_http_errors.go` (172 lines); original file now 521 lines; commit TBD)_
 
 ---
 

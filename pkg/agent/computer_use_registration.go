@@ -160,7 +160,7 @@ func (a *Agent) checkComputerUseActivation() error {
 	if support := computer_use.CheckPlatformSupport(); !support.Supported {
 		return errors.NewTool("computer_use", fmt.Sprintf("computer use is unavailable on this machine: %s", support.Reason), nil)
 	}
-	if a.client != nil && !a.client.SupportsVision() {
+	if a.client != nil && !a.effectiveVisionSupport() {
 		return errors.NewTool("computer_use", fmt.Sprintf("computer_user requires a vision-capable provider; %q has no vision support — switch to a model that accepts images", a.GetProvider()), nil)
 	}
 	return nil

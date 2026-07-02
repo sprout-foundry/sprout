@@ -670,7 +670,7 @@ the remaining offenders toward the 600-line target. Each item is one
 file extraction (mechanical pattern, well-understood from earlier
 phases).
 
-- [ ] **SP-075-4a:** `pkg/agent/steer_input.go` 1313 lines — extract input parsing, hint rendering, mode switching into separate files.
+- [x] **SP-075-4a:** `pkg/agent/steer_input.go` 1313 lines — extract input parsing, hint rendering, mode switching into separate files. _(file actually lives in `pkg/console/`; decomposed 1313 → 391 lines plus 7 new files; commit `dda9add3`)_
 - [ ] **SP-075-4b:** `pkg/adapters/go_adapter.go` 1188 lines — extract provider dispatch, response handling, error mapping.
 - [ ] **SP-075-4c:** `pkg/agent_providers/models.go` 1121 lines — extract model metadata, capability detection, request shaping.
 - [x] **SP-075-4d:** `pkg/webui/settings_api_put.go` 1094 lines — extract per-setting update handlers, validation, conflict detection. _(extracted `applyPartialSettings` (the 540-line monolith) into per-domain helpers in a new `settings_api_partial_settings.go`. Original file 1094→578 lines, new file 652 lines. All 100+ existing `applyPartialSettings` tests pass. Commit `84f08de`.)_

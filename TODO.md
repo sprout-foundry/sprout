@@ -554,17 +554,32 @@ printable via `/stats` but the user has to type that command.
 
 ### Items
 
-- [ ] **CLI-D-1:** Add a keybinding (default: `Alt+T`) that toggles
+- [x] **CLI-D-1:** Add a keybinding (default: `Alt+T`) that toggles
   a transient tooltip rendering above the footer showing the full
   per-tool stats: tool name, invocation count, total tokens, total
   cost, average latency.
-- [ ] **CLI-D-2:** Per-helper: read the existing `metricsRecorder`
+  _(shipped: new `EventAltLetter` event type in input_escape_parser
+  emits the letter in .Data; InputReader.HandleEvent routes to a
+  keymap dispatch path.)_
+- [x] **CLI-D-2:** Per-helper: read the existing `metricsRecorder`
   state in `pkg/console/status_footer_format.go` and render via the
   existing table renderer (`table.go`). Width-truncate column data
   when terminal is narrow.
-- [ ] **CLI-D-3:** Hook into the existing keymap table in
+  _(shipped: `pkg/console/metrics_recorder.go` defines the
+  `MetricsRecorder` + `ToolInvocation` aggregate, and
+  `pkg/console/status_footer_tooltip.go` renders the breakdown via a
+  padRight/padRightLeft table layout that width-truncates each line
+  via the existing `truncWithEllipsis` helper. The TODO-referenced
+  `table.go` doesn't exist; the table layout is inlined into the
+  tooltip compose path.)_
+- [x] **CLI-D-3:** Hook into the existing keymap table in
   `pkg/console/input_keymap.go`. Add the binding with default `Alt+T`
   and document in `/help`.
+  _(shipped: `pkg/console/input_keymap.go` defines the
+  `KeymapRegistry` + `KeymapEntry` types and `KeymapHelpTable`
+  helper for `/help` output. `pkg/console/keymap_registration.go`
+  wires `Alt+T → footer.tooltip.toggle` via
+  `RegisterKeymapForFooter`.)_
 
 ### Notes
 

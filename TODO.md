@@ -656,16 +656,27 @@ the main `sprout agent` command dispatches to.
 
 ### Items
 
-- [ ] **CLI-F-1:** Convert `[>|]` → `console.GlyphInfo` for the
+- [x] **CLI-F-1:** Convert `[>|]` → `console.GlyphInfo` for the
   skip-notice line; convert `[budget]` prefix → `console.GlyphWarning`
   for warning/cap hits and `console.GlyphInfo` for status lines. Keep
   the budget-prefix semantic so power users can still grep.
-- [ ] **CLI-F-2:** Replace `$ %s` shell-prompt prefix with
+  _(shipped: agent_workflow_runner.go — `[>|]` skip notice →
+  GlyphInfo; `[budget] WARNING` → GlyphWarning; `[budget] CAP HIT`
+  → GlyphWarning; `[budget] $X of $Y · iter` → GlyphInfo. The
+  bracketed `[budget]` prefix is dropped; the new colored glyph +
+  WARNING / CAP HIT / $X of $Y wording keeps grep-friendliness.)_
+- [x] **CLI-F-2:** Replace `$ %s` shell-prompt prefix with
   `console.GlyphShell` (new constant, similar pattern to `GlyphAction`
   in `pkg/console/glyphs.go`). Two sites to swap.
-- [ ] **CLI-F-3:** Wire `console.GlyphShell` into `pkg/console/glyphs.go`
+  _(shipped: runWorkflowShellStep — both `fmt.Printf("$ %s\n", ...)`
+  call sites converted to `console.GlyphShell.Fprintf(os.Stdout, ...)`.)_
+- [x] **CLI-F-3:** Wire `console.GlyphShell` into `pkg/console/glyphs.go`
   if not yet defined (use `⌘` or `>_` rune; verify the
   `color-scheme-test.txt` smoke test still has the right glyph count).
+  _(shipped: new `GlyphShell` constant in glyphs.go with rune `$`
+  (matches shell-prompt intuition) and bold-green color; updated
+  TestGlyph_Rune_AllCategoriesUnique to expect 9 distinct glyphs;
+  added TestGlyph_ShellRuneIsDollar to lock the rune choice.)_
 
 ### Notes
 

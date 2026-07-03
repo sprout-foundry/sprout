@@ -183,15 +183,15 @@
 }
 
 .notification-center-item.type-success .notification-center-item-icon {
-  color: var(--accent-success, #22c55e);
+  color: var(--accent-success);
 }
 
 .notification-center-item.type-warning .notification-center-item-icon {
-  color: var(--accent-warning, #f59e0b);
+  color: var(--accent-warning);
 }
 
 .notification-center-item.type-error .notification-center-item-icon {
-  color: var(--accent-error, #ef4444);
+  color: var(--accent-error);
 }
 
 /* Item Icon */

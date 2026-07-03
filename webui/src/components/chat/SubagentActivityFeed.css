@@ -59,7 +59,7 @@
   align-items: center;
   font-size: 10px;
   font-weight: 600;
-  color: #22c55e;
+  color: var(--accent-success);
   background: rgba(34, 197, 94, 0.12);
   padding: 2px 7px;
   border-radius: 10px;
@@ -154,7 +154,7 @@
 }
 
 .subagent-feed-status-dot--active {
-  color: #22c55e;
+  color: var(--accent-success);
   background: rgba(34, 197, 94, 0.12);
   animation: subagent-pulse 2s ease-in-out infinite;
 }
@@ -255,7 +255,7 @@
 }
 
 .subagent-feed-result--fail {
-  color: #ef4444;
+  color: var(--accent-error);
 }
 
 /* ── Depth-based left border colors ───────────────────────────────────── */

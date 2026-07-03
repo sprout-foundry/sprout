@@ -37,15 +37,15 @@
 }
 
 .notification-item.type-success {
-  border-left: 4px solid var(--accent-success, #22c55e);
+  border-left: 4px solid var(--accent-success);
 }
 
 .notification-item.type-warning {
-  border-left: 4px solid var(--accent-warning, #f59e0b);
+  border-left: 4px solid var(--accent-warning);
 }
 
 .notification-item.type-error {
-  border-left: 4px solid var(--accent-error, #ef4444);
+  border-left: 4px solid var(--accent-error);
 }
 
 /* Icon */
@@ -61,15 +61,15 @@
 }
 
 .type-success .notification-icon {
-  color: var(--accent-success, #22c55e);
+  color: var(--accent-success);
 }
 
 .type-warning .notification-icon {
-  color: var(--accent-warning, #f59e0b);
+  color: var(--accent-warning);
 }
 
 .type-error .notification-icon {
-  color: var(--accent-error, #ef4444);
+  color: var(--accent-error);
 }
 
 /* Content */

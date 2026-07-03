@@ -76,5 +76,5 @@
 }
 
 .media-viewer-error {
-  color: var(--text-error, #ef4444);
+  color: var(--accent-error);
 }

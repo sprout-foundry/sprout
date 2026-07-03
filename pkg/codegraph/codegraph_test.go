@@ -1349,3 +1349,73 @@ func TestIndexAll_RemoveDeletedAfterFullWalk(t *testing.T) {
 	assert.Equal(t, 1, stats.NodeCount, "only real() should remain")
 	assert.Equal(t, 0, stats.EdgeCount, "edges referencing deleted nodes should be removed")
 }
+
+// ============================================================================
+// QueryAllNodes Tests (SP-107-5)
+// ============================================================================
+
+func TestQueryAllNodes_EmptyStore(t *testing.T) {
+	store := newMemoryStore(t)
+	ctx := context.Background()
+
+	nodes, err := store.QueryAllNodes(ctx)
+	require.NoError(t, err)
+	assert.Empty(t, nodes)
+}
+
+func TestQueryAllNodes_ReturnsAllSymbols(t *testing.T) {
+	store := newMemoryStore(t)
+	ctx := context.Background()
+
+	// Index symbols from two different files.
+	err := store.IndexFile(ctx, "pkg/app/app.go", []Symbol{
+		{QualifiedName: "pkg/app.run", DisplayName: "run", FilePath: "pkg/app/app.go", Line: 10, Kind: "func", Language: "go"},
+		{QualifiedName: "pkg/app.Config", DisplayName: "Config", FilePath: "pkg/app/app.go", Line: 5, Kind: "type", Language: "go"},
+	}, nil)
+	require.NoError(t, err)
+
+	err = store.IndexFile(ctx, "pkg/api/handler.go", []Symbol{
+		{QualifiedName: "pkg/api.Handle", DisplayName: "Handle", FilePath: "pkg/api/handler.go", Line: 3, Kind: "func", Language: "go"},
+	}, nil)
+	require.NoError(t, err)
+
+	nodes, err := store.QueryAllNodes(ctx)
+	require.NoError(t, err)
+	require.Len(t, nodes, 3)
+
+	// Verify ordering: by file_path then line.
+	assert.Equal(t, "pkg/api/handler.go", nodes[0].FilePath)
+	assert.Equal(t, "Handle", nodes[0].DisplayName)
+
+	assert.Equal(t, "pkg/app/app.go", nodes[1].FilePath)
+	assert.Equal(t, "Config", nodes[1].DisplayName) // line 5, before run at line 10
+
+	assert.Equal(t, "pkg/app/app.go", nodes[2].FilePath)
+	assert.Equal(t, "run", nodes[2].DisplayName) // line 10
+}
+
+func TestQueryAllNodes_AfterReplacement(t *testing.T) {
+	store := newMemoryStore(t)
+	ctx := context.Background()
+
+	path := "pkg/app/app.go"
+
+	// First index: two symbols.
+	err := store.IndexFile(ctx, path, []Symbol{
+		{QualifiedName: "pkg/app.oldFunc", DisplayName: "oldFunc", FilePath: path, Line: 5, Kind: "func", Language: "go"},
+		{QualifiedName: "pkg/app.helper", DisplayName: "helper", FilePath: path, Line: 10, Kind: "func", Language: "go"},
+	}, nil)
+	require.NoError(t, err)
+
+	// Second index: re-index same file with different symbols.
+	err = store.IndexFile(ctx, path, []Symbol{
+		{QualifiedName: "pkg/app.newFunc", DisplayName: "newFunc", FilePath: path, Line: 5, Kind: "func", Language: "go"},
+	}, nil)
+	require.NoError(t, err)
+
+	// QueryAllNodes should return only the new symbol (old ones replaced).
+	nodes, err := store.QueryAllNodes(ctx)
+	require.NoError(t, err)
+	require.Len(t, nodes, 1)
+	assert.Equal(t, "newFunc", nodes[0].DisplayName)
+}

@@ -9,37 +9,15 @@
     ]
   },
   "continue_on_error": true,
-  "description": "Processes TODO.md items one at a time with full build/test/review cycle, then commits each. Coordinator + orchestrator (minimax:MiniMax-M3); implementation subagents (ai-worker:Qwen3.6-27B-FP8).",
+  "description": "Processes TODO.md items one at a time with full build/test/review cycle, then commits each. All roles use DeepSeek v4 Flash.",
   "initial": {
     "max_iterations": 0,
-    "model": "MiniMax-M3",
+    "model": "deepseek-v4-flash",
     "persona": "coordinator",
     "prompt_file": "automate/workflow_prompt.md",
-    "provider": "minimax",
+    "provider": "deepseek",
     "risk_profile": "permissive",
-    "skip_prompt": true,
-    "subagent_overrides": {
-      "coder": {
-        "model": "Qwen3.6-27B-FP8",
-        "provider": "ai-worker"
-      },
-      "debugger": {
-        "model": "Qwen3.6-27B-FP8",
-        "provider": "ai-worker"
-      },
-      "reviewer": {
-        "model": "Qwen3.6-27B-FP8",
-        "provider": "ai-worker"
-      },
-      "tester": {
-        "model": "Qwen3.6-27B-FP8",
-        "provider": "ai-worker"
-      },
-      "orchestrator": {
-        "model": "MiniMax-M3",
-        "provider": "minimax"
-      }
-    }
+    "skip_prompt": true
   },
   "no_web_ui": true,
   "persist_runtime_overrides": false,

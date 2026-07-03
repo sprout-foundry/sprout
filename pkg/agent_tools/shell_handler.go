@@ -30,7 +30,7 @@ func (h *shellCommandHandler) Name() string {
 func (h *shellCommandHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "shell_command",
-		Description: "Execute a shell command. Supports background execution (background=true), checking accumulated output of a background session (check_background=session_id, optionally with wait_seconds to block until exit), and stopping a background session (stop_background=session_id).",
+		Description: "Execute a shell command. Supports background execution (background=true), checking accumulated output of a background session (check_background=session_id, optionally with wait_seconds to block until exit), and stopping a background session (stop_background=session_id). Background operations work in CLI as well as WebUI; promoted sessions are discoverable via `sprout shell-bg list`.",
 		Parameters: []ParameterDef{
 			{
 				Name:        "command",

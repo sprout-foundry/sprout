@@ -1206,9 +1206,17 @@ testid/assertion updates — typical of fast ship-cycles.
   (likely the SP-101 work). Re-align the component output with what
   the test expects, or update the test if the new behavior is
   intentional. _(shipped: commit `219e6c83`. SP-101 intentionally gated the model segment on `isConnected === false` OR non-orchestrator persona (because the shared StatusBar middle section already shows provider+model when connected). Updated 4 tests to match the new intentional behavior, added 2 new tests covering the disconnected + persona-active code paths. No component changes needed.)_
-- [ ] **WebUI-A-4:** Fix `useEventHandler.test.ts::auto-classifies
-  [FAIL] messages as error` — verify the classifier still matches
-  the `FAIL` token. May be a regex literal vs `strings.Contains` flip.
+- [x] **WebUI-A-4:** Fix `useEventHandler.test.ts::auto-classifies
+  [FAIL] messages as error` — _(verified pass on 2026-07-03: the
+  test "auto-classifies [FAIL] messages as error" and its siblings
+  ("auto-classifies [WARN] messages as warning", "auto-classifies
+  [OK] messages as info_rendered") all pass under
+  `cd webui && npx vitest run src/hooks/useEventHandler.test.ts`.
+  The classifier at `webui/src/hooks/useEventHandler.ts:530-545`
+  still uses a regex literal (`/^\[FAIL\]|\[!!\]/.test(cleanedMsg)`)
+  not `strings.Contains`. No code change needed; reviewer-flagged
+  SHOULD_FIX (anchor the alternation so `[!!]` etc. only match at
+  the start of the string) tracked separately.)_
 
 ### Notes
 

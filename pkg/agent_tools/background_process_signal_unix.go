@@ -30,16 +30,22 @@ func setProcessGroup(cmd *exec.Cmd) {
 	cmd.SysProcAttr.Setpgid = true
 }
 
-// detachFromSession starts the command in a new session (setsid), detaching
-// it from the parent's controlling terminal so SIGHUP doesn't propagate when
-// the parent exits. Used for long-running background processes (automate
-// runners) that must outlive the agent that spawned them.
+// detachFromSession starts the command in a new process group, detaching it
+// from the parent's terminal session so SIGHUP doesn't propagate when the
+// parent exits. Used for long-running background processes (automate runners
+// and background shells) that must outlive the agent that spawned them.
+//
+// We intentionally use only Setpgid (not Setsid). Setpgid alone is sufficient:
+// SIGHUP is sent to the foreground process group of the controlling terminal,
+// and a child in its own process group is not the foreground group. Setsid
+// would be extra isolation, but Go 1.24+ loads a seccomp filter that blocks
+// the setsid(2) syscall from child processes, causing fork/exec to fail with
+// EPERM. See SP-107 automation runner investigation (2026-07-02).
 func detachFromSession(cmd *exec.Cmd) {
 	if cmd.SysProcAttr == nil {
 		cmd.SysProcAttr = &syscall.SysProcAttr{}
 	}
 	cmd.SysProcAttr.Setpgid = true
-	cmd.SysProcAttr.Setsid = true
 }
 
 // interruptProcessGroup sends SIGINT to the process group rooted at p,

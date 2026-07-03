@@ -148,6 +148,12 @@ func runWorkflowByPath(path string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
+	// Detach into a new process group so the workflow survives the
+	// parent shell/agent tool call exiting. Without Setpgid, the child
+	// receives SIGHUP when the tool call completes and the agent process
+	// tears down its process group.
+	setProcessGroup(cmd)
+
 	// Apply subagent timeout override if the workflow specifies one.
 	if summary != nil && summary.SubagentTimeoutSeconds != nil && *summary.SubagentTimeoutSeconds > 0 {
 		cmd.Env = append(os.Environ(), fmt.Sprintf("SPROUT_TOOL_TIMEOUT=%d", *summary.SubagentTimeoutSeconds))

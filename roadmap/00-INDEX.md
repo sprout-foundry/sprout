@@ -6,7 +6,7 @@ a major architectural area, its current state, and open work.
 Specs ship to [`./_completed/`](./_completed/) once their core work lands.
 The root directory only contains specs still receiving active changes.
 
-**Counts (as of 2026-07-02):** 72 shipped · 3 pending · 1 on hold.
+**Counts (as of 2026-07-02):** 72 shipped · 4 pending · 1 on hold.
 
 ## Shipped
 
@@ -99,6 +99,7 @@ ships, it moves to [`_completed/`](./_completed/).
 | SP-080 | [Multi-Billing-Model Cost Tracking](./SP-080-multi-billing-cost-tracking.md) | 📋 Planned — Design complete. Three billing models (pay-per-token, subscription, free) with dual-cost tracking (charged vs token value). Fleet budget isolation, per-billing-type dashboard breakdown. 4 phases. |
 | SP-105 | [CLI Interactive Panels — Settings Browser & Usage Dashboard](./SP-105-cli-interactive-panels.md) | 🔵 Proposed — `/settings` interactive browser + `/usage` visual dashboard |
 | SP-106 | [CLI Output Polish + SelectList Touch Scroll](./SP-106-cli-output-polish.md) | 🔵 Proposed — Markdown table rendering, nested list indent, SelectList mouse wheel scroll |
+| SP-107 | [Code Intelligence Graph](./SP-107-code-intelligence-graph.md) | 🔵 Proposed — Persistent call graph, dead-code detection, semantic code search. Leverages existing tree-sitter + LSP + embedding infrastructure. |
 
 ## Future / On Hold
 

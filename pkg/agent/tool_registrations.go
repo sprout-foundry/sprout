@@ -14,13 +14,13 @@ func newDefaultToolRegistry() *ToolRegistry {
 	// activity-indicator spinner would interleave with that output.
 	registry.RegisterTool(ToolConfig{
 		Name:        "shell_command",
-		Description: "Execute a shell command. Supports background execution (background=true) and checking accumulated output of a background session (check_background=session_id) and stopping a background session (stop_background=session_id). Background operations work in CLI as well as WebUI; promoted sessions are discoverable via `sprout shell-bg list`.",
+		Description: "Execute a shell command. Supports background execution (background=true), checking accumulated output of a background session (check_background=session_id, optionally with wait_seconds to block until exit), and stopping a background session (stop_background=session_id). Background operations work in CLI as well as WebUI; promoted sessions are discoverable via `sprout shell-bg list`.",
 		Parameters: []ParameterConfig{
 			{"command", "string", false, []string{"cmd"}, "The shell command to execute (required unless check_background or stop_background is provided)"},
 			{"background", "boolean", false, []string{}, "Run command in background and return immediately with session_id (default: false)"},
 			{"check_background", "string", false, []string{}, "Session ID of a background session to check (returns accumulated output)"},
+			{"wait_seconds", "number", false, []string{}, "Only valid with check_background. Block (up to this many seconds, max 600) until the session exits, then return the snapshot. Use this for long-running workflows to avoid burning tokens on rapid polling. 0 (default) returns immediately as before."},
 			{"stop_background", "string", false, []string{}, "Session ID of a background session to stop/terminate"},
-			{"wait_seconds", "number", false, []string{}, "When used with check_background, block up to this many seconds for the session to exit before returning (capped at 600). 0 or unset = return immediately."},
 		},
 		Handler:     handleShellCommand,
 		Timeout:     2 * time.Minute,

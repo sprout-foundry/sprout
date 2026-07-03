@@ -64,6 +64,18 @@ type ASTResult struct {
 
 	// Symbols is a list of top-level symbols extracted from the AST.
 	Symbols []Symbol
+
+	// Calls is a list of call edges extracted from the AST.
+	// Each edge represents a function/method call found within a function body.
+	Calls []CallEdge
+}
+
+// CallEdge represents a call from one function to another.
+type CallEdge struct {
+	CallerName string // name of the calling function
+	CalleeName string // name of the called function
+	Line       int    // line number of the call
+	CallerLine int    // line number of the caller function
 }
 
 // Release frees the parse tree and bound tree.  It is safe to call
@@ -222,6 +234,7 @@ func parse(langName, filePath string, content []byte) (*ASTResult, error) {
 	bound := gotreesitter.Bind(tree)
 
 	symbols := extractSymbols(root, bound, langName)
+	calls := extractCalls(root, bound, langName, symbols)
 
 	return &ASTResult{
 		Language: langName,
@@ -231,6 +244,7 @@ func parse(langName, filePath string, content []byte) (*ASTResult, error) {
 		Tree:     tree,
 		Bound:    bound,
 		Symbols:  symbols,
+		Calls:    calls,
 	}, nil
 }
 
@@ -484,6 +498,95 @@ func extractPythonSymbol(node *gotreesitter.Node, bt *gotreesitter.BoundTree, no
 	default:
 		return Symbol{}, false
 	}
+}
+
+// --- Helpers ------------------------------------------------------------------
+
+// extractCalls walks the AST to find call expressions within function/method
+// bodies and returns CallEdge values for each call found.
+//
+// It uses the symbols list to determine which function body each call falls
+// inside by checking byte-range containment.
+//
+// Calls that occur outside any function body (e.g., in package-level
+// variable initializers) are silently dropped since there is no enclosing
+// function symbol to attribute them to.
+func extractCalls(root *gotreesitter.Node, bt *gotreesitter.BoundTree, lang string, symbols []Symbol) []CallEdge {
+	lang = strings.ToLower(lang)
+
+	// Collect all function/method symbols that have a body (i.e., can contain calls).
+	var funcSymbols []Symbol
+	for _, sym := range symbols {
+		if sym.Body != "" {
+			funcSymbols = append(funcSymbols, sym)
+		}
+	}
+
+	if len(funcSymbols) == 0 {
+		return nil
+	}
+
+	// Determine the call node type for the language.
+	var callNodeType string
+	switch lang {
+	case "go":
+		callNodeType = "call_expression"
+	case "typescript", "tsx", "javascript":
+		callNodeType = "call_expression"
+	case "python":
+		callNodeType = "call"
+	default:
+		return nil
+	}
+
+	var edges []CallEdge
+
+	// Walk the entire tree looking for call nodes.
+	Walk(root, bt, func(node *gotreesitter.Node, nodeType string, depth int) bool {
+		if nodeType == callNodeType {
+			// Extract callee name from the call expression.
+			calleeName := extractCalleeName(node, bt)
+			if calleeName == "" {
+				return true
+			}
+
+			callByte := int(node.StartByte())
+			callLine := int(node.StartPoint().Row) + 1
+
+			// Find which function symbol contains this call.
+			for _, sym := range funcSymbols {
+				if callByte >= sym.StartByte && callByte <= sym.EndByte {
+					edges = append(edges, CallEdge{
+						CallerName: sym.Name,
+						CalleeName: calleeName,
+						Line:       callLine,
+						CallerLine: sym.StartLine,
+					})
+					break
+				}
+			}
+		}
+		return true
+	})
+
+	return edges
+}
+
+// extractCalleeName extracts the callee function name from a call expression node.
+func extractCalleeName(node *gotreesitter.Node, bt *gotreesitter.BoundTree) string {
+	// The "function" field of a call_expression contains the callee.
+	funcChild := bt.ChildByField(node, "function")
+	if funcChild == nil {
+		// Fallback: first named child.
+		for i := 0; i < node.ChildCount(); i++ {
+			child := node.Child(i)
+			if child != nil && child.IsNamed() {
+				return bt.NodeText(child)
+			}
+		}
+		return ""
+	}
+	return bt.NodeText(funcChild)
 }
 
 // --- Helpers ------------------------------------------------------------------

@@ -241,49 +241,47 @@ func TestRiskGates_GlobalClassifierBlocksEvenWithEmptyPersonaRules(t *testing.T)
 // SecurityError; after the fix it returns a TransientError (no real git
 // repo to operate on) or succeeds — either way, NOT a security block.
 
-// TestHandleGitOperation_HighRiskCanBeApproved proves that a High-risk git
-// operation (git checkout under the default risk profile) reaches the
-// approval path instead of being hard-rejected.
-func TestHandleGitOperation_HighRiskCanBeApproved(t *testing.T) {
+// TestHandleGitOperation_MediumRiskGitCheckout proves that git checkout
+// under the default risk profile evaluates to Medium (working-tree op,
+// ChangeTracker-recoverable per AGENTS.md) and is never a security block.
+func TestHandleGitOperation_MediumRiskGitCheckout(t *testing.T) {
 	agent := newTestAgent(t)
 	ctx := t.Context()
 
-	// git checkout is in HighRiskNever under the default profile, so
-	// EvaluateOperationRisk returns High. Verify that precondition.
+	// git checkout is a working-tree-mutating op that's ChangeTracker-
+	// recoverable. Under the default profile it evaluates to Medium
+	// (NOT High — that was the old behavior which caused false-positive
+	// security prompts for legitimate development commands).
 	risk := agent.EvaluateOperationRisk("git checkout HEAD -- file.go")
-	if risk != configuration.RiskLevelHigh {
-		t.Fatalf("precondition: expected RiskLevelHigh for git checkout under default profile, got %s", risk)
+	if risk != configuration.RiskLevelMedium {
+		t.Fatalf("expected RiskLevelMedium for git checkout under default profile, got %s", risk)
 	}
 
-	// Invoke the git tool handler with operation=checkout. With the fix,
-	// the High-risk verdict routes to highRiskApprovedForCommand, which
-	// (non-interactive test agent) returns true. Execution then proceeds
-	// and fails later (no git repo) — but crucially NOT as a SecurityError.
+	// Invoke the git tool handler with operation=checkout. Medium-risk
+	// ops proceed without a security prompt. Execution may fail later
+	// (no git repo) but crucially NOT as a SecurityError.
 	_, err := handleGitOperation(ctx, agent, map[string]interface{}{
 		"operation": "checkout",
 		"args":      "HEAD -- file.go",
 	})
 
-	// The key assertion: a High-risk git op must NOT be a security block.
-	// It may fail (TransientError: no repo) or succeed, but it must not
-	// carry the "rejected by persona risk cascade" SecurityError.
+	// The key assertion: a Medium-risk git op must NOT be a security block.
 	if err != nil && agenterrors.IsSecurity(err) {
-		t.Errorf("High-risk git op was hard-rejected instead of routed to approval: %v", err)
+		t.Errorf("Medium-risk git op was blocked as a security error: %v", err)
 	}
 }
 
-// TestHandleGitOperation_CriticalRiskStillBlocks proves that the fix only
-// opened the approval path for High, not for Critical — Critical-tier
-// operations remain unconditionally blocked (handled earlier in the
-// shell path by IsCriticalOperation).
+// TestHandleGitOperation_CriticalRiskStillBlocks proves that the fix
+// didn't open Critical-tier operations — those remain unconditionally
+// blocked (handled earlier in the shell path by IsCriticalOperation).
 func TestHandleGitOperation_CriticalRiskStillBlocks(t *testing.T) {
 	agent := newTestAgent(t)
 
-	// The default profile gates git checkout as High (promptable), NOT
-	// Critical (hard-blocked). This documents the boundary: the fix
-	// routes High to approval while Critical stays blocked.
-	if got := agent.EvaluateOperationRisk("git checkout main"); got != configuration.RiskLevelHigh {
-		t.Errorf("expected RiskLevelHigh for git checkout under default profile, got %s", got)
+	// git checkout is Medium under the default profile (ChangeTracker-
+	// recoverable). This documents the policy: checkout is NOT in
+	// HighRiskNever because the working-tree changes are recoverable.
+	if got := agent.EvaluateOperationRisk("git checkout main"); got != configuration.RiskLevelMedium {
+		t.Errorf("expected RiskLevelMedium for git checkout under default profile, got %s", got)
 	}
 
 	// Critical is always Critical regardless of persona/profile.

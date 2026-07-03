@@ -159,7 +159,11 @@ func (sp *sproutProvider) accumulateResponseCost(resp *core.ChatResponse) {
 	if sp.agent == nil || sp.agent.state == nil || resp == nil {
 		return
 	}
-	if cost := api.UsageCost(resp.Usage); cost > 0 {
+	cost := api.UsageCost(resp.Usage)
+	if cost == 0 && resp.Usage.TotalTokens > 0 {
+		cost = sp.estimateCostFromPricing(resp.Usage.PromptTokens, resp.Usage.CompletionTokens)
+	}
+	if cost > 0 {
 		sp.agent.state.AddCost(cost)
 	}
 	if n := resp.Usage.CachedTokens; n > 0 {
@@ -170,6 +174,37 @@ func (sp *sproutProvider) accumulateResponseCost(resp *core.ChatResponse) {
 			sp.agent.state.SetCacheWriteTokens(sp.agent.state.GetCacheWriteTokens() + n)
 		}
 	}
+}
+
+// estimateCostFromPricing computes a cost estimate from token counts and the
+// current model's per-million pricing, used when the provider doesn't report
+// cost in its API response. Looks up pricing from the published registry
+// (which carries per-model pricing from embedded configs). Returns 0 when no
+// pricing data is available.
+func (sp *sproutProvider) estimateCostFromPricing(promptTokens, completionTokens int) float64 {
+	if sp.agent == nil || sp.agent.client == nil {
+		return 0
+	}
+	model := sp.agent.client.GetModel()
+	provider := string(sp.agent.getClientType())
+	if model == "" {
+		return 0
+	}
+	models, err := api.GetModelsForProviderCtx(context.Background(), sp.agent.getClientType())
+	if err != nil {
+		return 0
+	}
+	for _, m := range models {
+		if m.ID != model {
+			continue
+		}
+		if m.InputCost <= 0 && m.OutputCost <= 0 {
+			return 0
+		}
+		return float64(promptTokens)/1e6*m.InputCost + float64(completionTokens)/1e6*m.OutputCost
+	}
+	_ = provider
+	return 0
 }
 
 // doChatNonStream performs a non-streaming chat request.

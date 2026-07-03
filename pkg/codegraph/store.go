@@ -68,6 +68,9 @@ type Store interface {
 	// Stats returns summary statistics about the graph.
 	Stats() GraphStats
 
+	// QueryAllNodes returns all nodes from the graph store.
+	QueryAllNodes(ctx context.Context) ([]Symbol, error)
+
 	// Close closes the underlying database.
 	Close() error
 }
@@ -80,8 +83,8 @@ type SQLiteStore struct {
 	mu      sync.RWMutex
 }
 
-// defaultDBPath returns the default database path resolved from git root.
-func defaultDBPath() (string, error) {
+// DefaultDBPath returns the default database path resolved from git root.
+func DefaultDBPath() (string, error) {
 	gitRoot, err := git.GetGitRootDir()
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve git root for default DB path: %w", err)
@@ -95,7 +98,7 @@ func defaultDBPath() (string, error) {
 func NewStore(dbPath string) (*SQLiteStore, error) {
 	if dbPath == "" {
 		var err error
-		dbPath, err = defaultDBPath()
+		dbPath, err = DefaultDBPath()
 		if err != nil {
 			return nil, err
 		}
@@ -452,6 +455,36 @@ func (s *SQLiteStore) GetStaleFiles(ctx context.Context) ([]string, error) {
 	}
 
 	return staleFiles, nil
+}
+
+// QueryAllNodes returns all nodes from the graph store.
+func (s *SQLiteStore) QueryAllNodes(ctx context.Context) ([]Symbol, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, qualified_name, display_name, file_path, line, kind, language, file_mtime
+		FROM nodes ORDER BY file_path, line
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query all nodes: %w", err)
+	}
+	defer rows.Close()
+
+	var symbols []Symbol
+	for rows.Next() {
+		var sym Symbol
+		if err := rows.Scan(&sym.ID, &sym.QualifiedName, &sym.DisplayName, &sym.FilePath,
+			&sym.Line, &sym.Kind, &sym.Language, &sym.FileMTime); err != nil {
+			return nil, fmt.Errorf("failed to scan node row: %w", err)
+		}
+		symbols = append(symbols, sym)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("row iteration error: %w", err)
+	}
+
+	return symbols, nil
 }
 
 // Stats returns summary statistics about the graph.

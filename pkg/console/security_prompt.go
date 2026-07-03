@@ -49,7 +49,9 @@ func askForSecurityApproval(prompt, command string) utils.ApprovalChoice {
 func askForSecurityApprovalWriter(w io.Writer, prompt, command string) utils.ApprovalChoice {
 	clihooks.SuspendIndicator()
 	clihooks.PauseSteer()
+	clihooks.SuspendStreaming()
 	defer clihooks.ResumeSteer()
+	defer clihooks.ResumeStreaming()
 
 	// SP-070-2: Ring bell to alert the user that a blocking approval is needed
 	fmt.Fprint(w, "\a")
@@ -104,7 +106,9 @@ func askForFilesystemSecurityApproval(prompt, path, folder string, tier utils.Fi
 func askForFilesystemSecurityApprovalWriter(w io.Writer, prompt, path, folder string, tier utils.FilesystemPromptTier) utils.ApprovalChoice {
 	clihooks.SuspendIndicator()
 	clihooks.PauseSteer()
+	clihooks.SuspendStreaming()
 	defer clihooks.ResumeSteer()
+	defer clihooks.ResumeStreaming()
 
 	// SP-070-2: Ring bell to alert the user that a blocking approval is needed
 	fmt.Fprint(w, "\a")

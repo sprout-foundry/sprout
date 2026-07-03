@@ -231,7 +231,11 @@ func (s *SelectList) runTTY(ctx context.Context) (string, bool, error) {
 	if err != nil {
 		return "", false, fmt.Errorf("select list: enter raw mode: %w", err)
 	}
+	// Enable SGR mouse tracking for wheel scroll support (SP-106 T3).
+	fmt.Fprint(os.Stderr, MouseTrackingSGR)
+	fmt.Fprint(os.Stderr, MouseTrackingVT200)
 	defer func() {
+		fmt.Fprint(os.Stderr, MouseTrackingDisable)
 		_ = exitSteerMode(s.fd, st)
 		s.clearRendered()
 	}()
@@ -288,10 +292,34 @@ func (s *SelectList) handleEscape(n int, buf []byte) (done bool, val string, ok 
 					// Not a CSI sequence — treat ESC as cancel.
 					return true, "", false
 				}
-				// Read the final byte of the CSI sequence (A/B/C/D for
-				// arrows). For longer sequences (Page Up/Down etc.) we
-				// drain until we see a final byte in 0x40..0x7E.
-				return false, "", s.consumeCSI()
+				// Check if the next byte after '[' is '<' (SGR mouse)
+				// or something else (CSI arrow key).
+				var next [1]byte
+				for time.Now().Before(deadline) {
+					k, _ := os.Stdin.Read(next[:])
+					if k == 1 {
+						if next[0] == '<' {
+							// SGR mouse event — consume until M/m.
+							s.consumeSGRMouse()
+							s.render()
+							return false, "", false
+						}
+						// Regular CSI — dispatch the final byte if it's
+						// in the valid range, otherwise keep reading.
+						if next[0] >= 0x40 && next[0] <= 0x7E {
+							s.dispatchCSI(next[0])
+							s.render()
+							return false, "", false
+						}
+						// Parameter/intermediate byte — fall through to
+						// consumeCSI to drain the rest.
+						return false, "", s.consumeCSI()
+					}
+					time.Sleep(1 * time.Millisecond)
+				}
+				// Timed out reading third byte — treat as CSI with no
+				// final byte (ignore).
+				return false, "", false
 			}
 			time.Sleep(2 * time.Millisecond)
 		}
@@ -300,6 +328,13 @@ func (s *SelectList) handleEscape(n int, buf []byte) (done bool, val string, ok 
 	}
 	// We got the whole sequence in one read.
 	if n >= 3 && buf[1] == '[' {
+		if buf[2] == '<' {
+			// SGR mouse event — the full sequence may span multiple
+			// reads; consume what we have and drain the rest.
+			s.consumeSGRMouseFromBuf(buf[2:])
+			s.render()
+			return false, "", false
+		}
 		s.dispatchCSI(buf[2])
 		s.render()
 		return false, "", false
@@ -329,6 +364,108 @@ func (s *SelectList) consumeCSI() bool {
 		// keep reading.
 	}
 	return false
+}
+
+// consumeSGRMouse reads bytes from stdin until it finds the SGR mouse
+// terminator ('M' for press/motion or 'm' for release), then parses
+// and dispatches the event.
+//
+// SGR format: ESC [ < button;col;row M
+// We've already consumed "ESC [<" by the time this is called.
+func (s *SelectList) consumeSGRMouse() {
+	var buf strings.Builder
+	deadline := time.Now().Add(100 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		var ch [1]byte
+		n, _ := os.Stdin.Read(ch[:])
+		if n == 0 {
+			time.Sleep(1 * time.Millisecond)
+			continue
+		}
+		b := ch[0]
+		buf.WriteByte(b)
+		if b == 'M' || b == 'm' {
+			// Normalize lowercase 'm' (release) to 'M' for parsing.
+			seq := buf.String()
+			seq = strings.TrimSuffix(seq, "m") + "M"
+			s.dispatchMouseEvent(seq)
+			return
+		}
+	}
+}
+
+// consumeSGRMouseFromBuf is like consumeSGRMouse but starts with
+// partial bytes already in buf (the bytes after "ESC [<").
+func (s *SelectList) consumeSGRMouseFromBuf(buf []byte) {
+	var b strings.Builder
+	b.Write(buf)
+	deadline := time.Now().Add(100 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		var ch [1]byte
+		n, _ := os.Stdin.Read(ch[:])
+		if n == 0 {
+			time.Sleep(1 * time.Millisecond)
+			continue
+		}
+		byteVal := ch[0]
+		b.WriteByte(byteVal)
+		if byteVal == 'M' || byteVal == 'm' {
+			seq := b.String()
+			seq = strings.TrimSuffix(seq, "m") + "M"
+			s.dispatchMouseEvent(seq)
+			return
+		}
+	}
+}
+
+// dispatchMouseEvent parses the SGR mouse payload (the part after
+// "ESC [<", e.g., "0;10;5M") and dispatches wheel events to scroll
+// the list. Non-wheel events are ignored (tap-to-select is out of
+// scope per SP-106).
+//
+// SGR button encoding: button_number | (modifiers << 2) | motion(32) | release(128)
+// Extract base button with: cb & 0x63 (strip modifier, motion, release bits).
+func (s *SelectList) dispatchMouseEvent(payload string) {
+	// Remove the trailing 'M' to get "button;col;row".
+	payload = strings.TrimSuffix(payload, "M")
+	parts := strings.Split(payload, ";")
+	if len(parts) != 3 {
+		return
+	}
+	cb, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return
+	}
+	// Extract base button number: strip modifiers (bits 2-4), motion (bit 5),
+	// release (bit 7).  0x63 = 0b01100011 preserves bits 0,1,5,6 which is
+	// the button number for regular (0-3) and wheel (64-67) buttons.
+	button := cb & 0x63
+	switch button {
+	case 64:
+		s.dispatchMouseWheel(MouseEventWheelUp)
+	case 65:
+		s.dispatchMouseWheel(MouseEventWheelDown)
+	case 66:
+		s.dispatchMouseWheel(MouseEventWheelLeft)
+	case 67:
+		s.dispatchMouseWheel(MouseEventWheelRight)
+	}
+}
+
+// dispatchMouseWheel handles a mouse wheel event by moving the cursor
+// and re-rendering. WheelUp/Down scroll the list; WheelLeft/Right are
+// no-ops (no horizontal scrolling).
+func (s *SelectList) dispatchMouseWheel(kind MouseEventKind) {
+	switch kind {
+	case MouseEventWheelUp:
+		s.mu.Lock()
+		s.moveCursor(-1)
+		s.mu.Unlock()
+	case MouseEventWheelDown:
+		s.mu.Lock()
+		s.moveCursor(1)
+		s.mu.Unlock()
+	}
 }
 
 // dispatchCSI maps a final CSI byte onto a navigation action.

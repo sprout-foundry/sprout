@@ -207,16 +207,12 @@ func (r *OutputRouter) RouteStreamChunk(chunk string, contentType string) {
 	}
 
 	// Terminal: write via streamingCallback if set (real-time character output)
-	callback, mu := r.getStreamingCallback()
+	callback, _ := r.getStreamingCallback()
 	if callback != nil {
-		// TryLock prevents self-deadlock if callback re-enters the output router
-		locked := false
-		if mu != nil {
-			locked = mu.TryLock()
-		}
-		if locked {
-			defer mu.Unlock()
-		}
+		// The callback (e.g., AssistantTurnRenderer.WriteChunk) acquires
+		// the output mutex itself via LockOutput(). Do NOT hold the
+		// shared mutex here — that would self-deadlock when the callback
+		// tries to acquire it.
 		callback(chunk)
 		return
 	}

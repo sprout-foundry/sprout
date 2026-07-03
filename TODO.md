@@ -1196,21 +1196,16 @@ testid/assertion updates — typical of fast ship-cycles.
 
 ### Items
 
-- [ ] **WebUI-A-1:** Fix `testids.test.ts` — add the 10 static testids
-  + 2 template-literal patterns to `test/webui/testids.ts`. This is
-  the easiest fix (~5 min) and the test was specifically built as a
-  CI gate against this kind of drift.
-- [ ] **WebUI-A-2:** Fix `Sidebar.sessionSearch.test.tsx` — the
+- [x] **WebUI-A-1:** Fix `testids.test.ts` — add the 10 static testids
+  + 2 template-literal patterns to `test/webui/testids.ts`. _(shipped: commit `49744cf5`. Also fixed an underlying bug in `testids.test.ts`: the ternary regex `[^?]*` was greedy across newlines and falsely matched `Submit` and `Submitting…` (button text) as testids. Replaced with `[^\n?]*`. 8 shell-approval + 2 notification entries added to TESTIDS.)_
+- [x] **WebUI-A-2:** Fix `Sidebar.sessionSearch.test.tsx` — the
   shared root cause is likely a missing API mock or a query-name
-  change. The runner should diff `Sidebar.tsx` against the test
-  expectations and patch either the component or the test fixture
-  (whichever is more recent). Add a regression test if the component
-  is being fixed.
-- [ ] **WebUI-A-3:** Fix `ChatStatusBarItems.test.tsx` — the missing
-  segment and undefined text suggest the component was refactored
+  change. _(shipped: commit `3b125b73`. Root cause: the test queried for `[data-testid="sidebar-session-search-result"]` and `[data-testid="sidebar-session-search-no-results"]`, but `Sidebar.tsx` actually renders these as `[data-testid="chat-item"]` and `[data-testid="chat-sessions-empty"]` respectively (the canonical testids already in `test/webui/testids.ts`). Updated 3 selectors in the test file to match the component. No component changes needed.)_
+- [x] **WebUI-A-3:** Fix `ChatStatusBarItems.test.tsx` — the
+  missing segment and undefined text suggest the component was refactored
   (likely the SP-101 work). Re-align the component output with what
   the test expects, or update the test if the new behavior is
-  intentional.
+  intentional. _(shipped: commit `219e6c83`. SP-101 intentionally gated the model segment on `isConnected === false` OR non-orchestrator persona (because the shared StatusBar middle section already shows provider+model when connected). Updated 4 tests to match the new intentional behavior, added 2 new tests covering the disconnected + persona-active code paths. No component changes needed.)_
 - [ ] **WebUI-A-4:** Fix `useEventHandler.test.ts::auto-classifies
   [FAIL] messages as error` — verify the classifier still matches
   the `FAIL` token. May be a regex literal vs `strings.Contains` flip.
@@ -1377,6 +1372,53 @@ use `var(--accent-fg)`.
     | grep -E '^\+.*(#[0-9a-fA-F]{3,6}|rgba\([0-9])' \
     | grep -vE 'rgba\(0, 0, 0|var\(--'
   ```
+
+---
+
+## SP-104: Vitest worker pool hardening
+
+_Vitest defaulted to forking one worker per CPU core (24 on this host).
+Each jsdom worker holds 1–4 GB RSS; the full 48-file suite consumed ~52 GB
+and triggered kernel OOM. The worker pool is now capped to 4._
+
+### Items
+
+- [x] **SP-104-1:** Cap vitest worker pool in
+      `packages/ui/vitest.config.ts` and `webui/vite.config.ts`.
+      packages/ui uses Vitest 4 (top-level `maxWorkers: 4`, `pool: 'forks'`);
+      webui uses Vitest 2 (`poolOptions.forks.maxForks: 4`, `minForks: 1`).
+      Both honor `VITEST_MAX_WORKERS` / `VITEST_MAX_FORKS` env overrides.
+      Verified: full 48-file packages/ui suite runs in 5.5s with ~1 GB
+      delta. _(shipped: vitest config changes + worker cap verification)_
+- [ ] **SP-104-2:** Update Sprout WebUI QA workflow (the WebUI-A-*
+      automation chain in `~/.config/sprout/task_queue.json`) so each
+      vitest invocation passes an explicit test file glob:
+      `vitest run src/path/to/Specific.test.tsx`. Forbid bare
+      `npm exec vitest` from the package root.
+- [ ] **SP-104-3:** Add a memory-aware gate to the QA subagent shell
+      scope: pre-check `MemAvailable` from `/proc/meminfo`, refuse to
+      launch if available < 8 GB, sleep + retry if 8–16 GB. This belongs
+      in the subagent persona's tool wrapper, not in vitest itself.
+- [x] **SP-104-4/5:** Systemd memory guardrails written to
+      `scripts/user.slice-memory-cap.conf` (MemoryMax=48G on user.slice).
+      Requires manual installation with sudo — see file header for
+      instructions. Defense-in-depth; the vitest worker cap (SP-104-1)
+      is the primary fix. _(shipped: config file + install instructions;
+      user applies with `sudo cp` + `systemctl daemon-reload`)_
+- [x] **SP-104-6:** Diagnostic helper at `scripts/diagnose-oom.sh` —
+      scans journald, /var/log/syslog, /var/log/kern.log, and dmesg for
+      OOM-killer traces. Supports `--boot N`, `--since`, and `--json`.
+- [ ] **SP-104-7:** Add a Prometheus-style probe to the Sprout daemon
+      that watches `node_count > 500 OR total_user_rss > 50G` and
+      triggers a notification before the OOM-killer fires.
+
+### Notes
+
+- If `SP-104-1` reveals that many tests genuinely need `jsdom` (e.g.
+  heavy Radix/Reach-UI work), consider splitting the suite into
+  `*.unit.test.tsx` (happy-dom / node) and `*.dom.test.tsx` (jsdom, run
+  serially) so the lightweight majority can parallelize and the heavy
+  minority gets memory headroom.
 
 ---
 

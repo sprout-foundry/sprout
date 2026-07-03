@@ -113,8 +113,34 @@ func (c *AgentWorkflowConfig) validate() error {
 
 	if len(c.Steps) == 0 {
 		hasInitialPrompt := c.Initial != nil && (c.Initial.Prompt != "" || c.Initial.PromptFile != "")
-		if !hasInitialPrompt {
+		hasLoop := c.Loop != nil
+		if !hasInitialPrompt && !hasLoop {
 			return errors.New("workflow requires at least one step or an initial prompt/prompt_file")
+		}
+	}
+
+	// Validate loop config
+	if c.Loop != nil {
+		c.Loop.TodoFile = strings.TrimSpace(c.Loop.TodoFile)
+		c.Loop.GatePromptFile = strings.TrimSpace(c.Loop.GatePromptFile)
+		c.Loop.GateModel = strings.TrimSpace(c.Loop.GateModel)
+		c.Loop.GateProvider = strings.TrimSpace(c.Loop.GateProvider)
+		c.Loop.BuildCommand = strings.TrimSpace(c.Loop.BuildCommand)
+
+		if c.Loop.GatePromptFile == "" {
+			return errors.New("loop.gate_prompt_file is required when loop is configured")
+		}
+		if c.Loop.TodoFile == "" {
+			c.Loop.TodoFile = "TODO.md"
+		}
+		if c.Loop.MaxRetries <= 0 {
+			c.Loop.MaxRetries = 2
+		}
+		if c.Loop.MaxIterations <= 0 {
+			c.Loop.MaxIterations = 50
+		}
+		if c.Loop.BuildCommand == "" {
+			c.Loop.BuildCommand = "go build ./..."
 		}
 	}
 

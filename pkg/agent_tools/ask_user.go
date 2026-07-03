@@ -219,7 +219,9 @@ func AskUser(req AskUserRequest) (string, error) {
 	// reader is consuming raw-mode stdin) and the tool would silently
 	// return an empty answer.
 	clihooks.PauseSteer()
+	clihooks.SuspendStreaming()
 	defer clihooks.ResumeSteer()
+	defer clihooks.ResumeStreaming()
 
 	renderCLIPrompt(os.Stdout, req)
 

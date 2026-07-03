@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/clihooks"
 	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
@@ -68,6 +69,12 @@ func SetupAgentEvents(chatAgent *agent.Agent, eventBus *events.EventBus, indicat
 		// and clobbering streaming text mid-sentence.
 		chatAgent.SetOutputMutex(console.GetOutputMutex())
 		chatAgent.EnableStreaming(func(chunk string) {
+			// Suppress streaming output while an interactive prompt
+			// (security approval, edit review) is on screen. Without
+			// this, prose chunks clobber the picker rendering.
+			if clihooks.IsStreamingSuspended() {
+				return
+			}
 			if chunk != "" {
 				// CompareAndSwap: only the FIRST non-empty chunk records
 				// the ttft. Subsequent chunks are a no-op so reading the

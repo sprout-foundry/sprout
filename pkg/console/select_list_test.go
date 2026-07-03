@@ -340,3 +340,130 @@ func TestSelectList_DismissKey_BackspaceNotRecorded(t *testing.T) {
 		t.Fatalf("DismissKey()=%q want \"\" (backspace should not be forwarded)", got)
 	}
 }
+
+// --- SP-106 Phase 3: Mouse wheel scroll tests ---
+
+func TestSelectList_DispatchMouseWheelUp(t *testing.T) {
+	s := NewSelectList(SelectListOptions{
+		Items: []SelectItem{
+			{Label: "a", Value: "a"},
+			{Label: "b", Value: "b"},
+			{Label: "c", Value: "c"},
+		},
+	})
+	s.cursor = 2 // start at bottom
+	s.dispatchMouseWheel(MouseEventWheelUp)
+	if s.cursor != 1 {
+		t.Fatalf("cursor=%d want 1 after wheel up", s.cursor)
+	}
+}
+
+func TestSelectList_DispatchMouseWheelDown(t *testing.T) {
+	s := NewSelectList(SelectListOptions{
+		Items: []SelectItem{
+			{Label: "a", Value: "a"},
+			{Label: "b", Value: "b"},
+			{Label: "c", Value: "c"},
+		},
+	})
+	s.cursor = 0 // start at top
+	s.dispatchMouseWheel(MouseEventWheelDown)
+	if s.cursor != 1 {
+		t.Fatalf("cursor=%d want 1 after wheel down", s.cursor)
+	}
+}
+
+func TestSelectList_DispatchMouseWheelUpClamped(t *testing.T) {
+	s := NewSelectList(SelectListOptions{
+		Items: []SelectItem{
+			{Label: "a", Value: "a"},
+			{Label: "b", Value: "b"},
+		},
+	})
+	s.cursor = 0
+	s.dispatchMouseWheel(MouseEventWheelUp)
+	if s.cursor != 0 {
+		t.Fatalf("cursor=%d want 0 (clamped at top)", s.cursor)
+	}
+}
+
+func TestSelectList_DispatchMouseWheelDownClamped(t *testing.T) {
+	s := NewSelectList(SelectListOptions{
+		Items: []SelectItem{
+			{Label: "a", Value: "a"},
+			{Label: "b", Value: "b"},
+		},
+	})
+	s.cursor = 1
+	s.dispatchMouseWheel(MouseEventWheelDown)
+	if s.cursor != 1 {
+		t.Fatalf("cursor=%d want 1 (clamped at bottom)", s.cursor)
+	}
+}
+
+func TestSelectList_DispatchMouseEvent_WheelUpPayload(t *testing.T) {
+	s := NewSelectList(SelectListOptions{
+		Items: []SelectItem{
+			{Label: "a", Value: "a"},
+			{Label: "b", Value: "b"},
+			{Label: "c", Value: "c"},
+		},
+	})
+	s.cursor = 2
+	// SGR payload: button=64 (wheel up), col=10, row=5 → "64;10;5M"
+	s.dispatchMouseEvent("64;10;5M")
+	if s.cursor != 1 {
+		t.Fatalf("cursor=%d want 1 after wheel-up payload", s.cursor)
+	}
+}
+
+func TestSelectList_DispatchMouseEvent_WheelDownPayload(t *testing.T) {
+	s := NewSelectList(SelectListOptions{
+		Items: []SelectItem{
+			{Label: "a", Value: "a"},
+			{Label: "b", Value: "b"},
+			{Label: "c", Value: "c"},
+		},
+	})
+	s.cursor = 0
+	// SGR payload: button=65 (wheel down), col=10, row=5 → "65;10;5M"
+	s.dispatchMouseEvent("65;10;5M")
+	if s.cursor != 1 {
+		t.Fatalf("cursor=%d want 1 after wheel-down payload", s.cursor)
+	}
+}
+
+func TestSelectList_DispatchMouseEvent_LeftRightNoOp(t *testing.T) {
+	s := NewSelectList(SelectListOptions{
+		Items: []SelectItem{
+			{Label: "a", Value: "a"},
+			{Label: "b", Value: "b"},
+		},
+	})
+	s.cursor = 1
+	// Wheel left (button=66) and wheel right (button=67) are no-ops.
+	s.dispatchMouseEvent("66;10;5M")
+	if s.cursor != 1 {
+		t.Fatalf("cursor=%d want 1 (wheel left should be no-op)", s.cursor)
+	}
+	s.dispatchMouseEvent("67;10;5M")
+	if s.cursor != 1 {
+		t.Fatalf("cursor=%d want 1 (wheel right should be no-op)", s.cursor)
+	}
+}
+
+func TestSelectList_DispatchMouseEvent_InvalidPayload(t *testing.T) {
+	s := NewSelectList(SelectListOptions{
+		Items: []SelectItem{
+			{Label: "a", Value: "a"},
+		},
+	})
+	s.cursor = 0
+	// Malformed payloads should not panic.
+	s.dispatchMouseEvent("garbage")
+	s.dispatchMouseEvent("abc;10;5M")
+	s.dispatchMouseEvent("")
+	if s.cursor != 0 {
+		t.Fatalf("cursor=%d want 0 (invalid payloads should be no-op)", s.cursor)
+	}
+}

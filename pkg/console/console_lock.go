@@ -54,6 +54,18 @@ func TryLockOutput() bool {
 	return outputMu.TryLock()
 }
 
+// GetOutputMutex returns a pointer to the console output mutex. Callers
+// (typically the CLI startup code) can register it as the agent's output
+// mutex via Agent.SetOutputMutex so that writeTerminalMessage (which
+// writes tool-completion chrome to stdout) and WriteChunk (which streams
+// assistant prose to stdout) serialize on the SAME lock. Without this
+// bridge, the two paths use independent mutexes and their stdout writes
+// interleave, clobbering streaming text with chrome (the "text was cut
+// off" symptom).
+func GetOutputMutex() *sync.Mutex {
+	return &outputMu
+}
+
 // WithOutput runs fn while holding the console output mutex. Use this
 // wrapper for short, self-contained ANSI render sequences.
 func WithOutput(fn func()) {

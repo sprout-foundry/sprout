@@ -61,6 +61,12 @@ func SetupAgentEvents(chatAgent *agent.Agent, eventBus *events.EventBus, indicat
 	// results don't reach this callback (they route via RouteAgentMessage
 	// / RouteTerminalOnly), so there's no blob-output risk on this path.
 	if !agentNoStreaming {
+		// Share the console output mutex with the agent's output router.
+		// This ensures writeTerminalMessage (tool-completion chrome) and
+		// WriteChunk (streaming assistant prose) serialize on the SAME
+		// lock, preventing the two from interleaving their stdout writes
+		// and clobbering streaming text mid-sentence.
+		chatAgent.SetOutputMutex(console.GetOutputMutex())
 		chatAgent.EnableStreaming(func(chunk string) {
 			if chunk != "" {
 				// CompareAndSwap: only the FIRST non-empty chunk records

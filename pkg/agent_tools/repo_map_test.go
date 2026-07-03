@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	codegraph "github.com/sprout-foundry/sprout/pkg/codegraph"
 )
 
 func createTestFiles(t *testing.T, dir string, files map[string]string) {
@@ -443,5 +445,137 @@ func TestGenerateRepoMapGoFullFileRead(t *testing.T) {
 
 	if !strings.Contains(result, "- func DeepFunction:") {
 		t.Errorf("missing 'func DeepFunction' from large file (AST needs full file):\n%s", result)
+	}
+}
+
+// ============================================================================
+// formatRepoMapFromNodes Tests (SP-107-5)
+// ============================================================================
+
+// TestFormatRepoMapFromNodes verifies the formatting of store-backed nodes
+// into the repo map output format.
+func TestFormatRepoMapFromNodes(t *testing.T) {
+	nodes := []codegraph.Symbol{
+		{DisplayName: "run", FilePath: "pkg/app/app.go", Line: 10, Kind: "func"},
+		{DisplayName: "fetchData", FilePath: "pkg/app/app.go", Line: 20, Kind: "func"},
+		{DisplayName: "Config", FilePath: "pkg/app/app.go", Line: 5, Kind: "type"},
+		{DisplayName: "handler", FilePath: "pkg/api/handler.go", Line: 3, Kind: "func"},
+	}
+
+	result := formatRepoMapFromNodes("/home/user/myproject", nodes)
+
+	for _, want := range []string{
+		"## repo_map: myproject",
+		"### pkg/app/app.go",
+		"### pkg/api/handler.go",
+		"- func run:10",
+		"- func fetchData:20",
+		"- type Config:5",
+		"- func handler:3",
+	} {
+		if !strings.Contains(result, want) {
+			t.Errorf("missing %q in output:\n%s", want, result)
+		}
+	}
+}
+
+// TestFormatRepoMapFromNodes_Empty verifies that nil and empty node slices
+// return an empty string (signals caller to fall through).
+func TestFormatRepoMapFromNodes_Empty(t *testing.T) {
+	result := formatRepoMapFromNodes("/tmp", nil)
+	if result != "" {
+		t.Errorf("expected empty string for nil nodes, got: %q", result)
+	}
+
+	result = formatRepoMapFromNodes("/tmp", []codegraph.Symbol{})
+	if result != "" {
+		t.Errorf("expected empty string for empty nodes, got: %q", result)
+	}
+}
+
+// TestFormatRepoMapFromNodes_Truncation verifies that output is truncated
+// when the character budget is exceeded.
+func TestFormatRepoMapFromNodes_Truncation(t *testing.T) {
+	var nodes []codegraph.Symbol
+	for i := 0; i < 100; i++ {
+		nodes = append(nodes, codegraph.Symbol{
+			DisplayName: fmt.Sprintf("longFunctionName_%d", i),
+			FilePath:    fmt.Sprintf("pkg/path/to/file_%d.go", i),
+			Line:        i + 1,
+			Kind:        "func",
+		})
+	}
+
+	result := formatRepoMapFromNodes("/project", nodes)
+
+	if !strings.Contains(result, "## repo_map: project") {
+		t.Error("missing repo_map header")
+	}
+	if strings.Contains(result, "No source files with symbols found") {
+		t.Error("should have found files, not 'No source files' message")
+	}
+	// With 100 files, the output should be truncated.
+	if !strings.Contains(result, "truncated") {
+		t.Error("expected truncation notice with 100 files")
+	}
+}
+
+// TestFormatRepoMapFromNodes_DeterministicOrder verifies that file paths
+// appear in sorted order.
+func TestFormatRepoMapFromNodes_DeterministicOrder(t *testing.T) {
+	nodes := []codegraph.Symbol{
+		{DisplayName: "zFunc", FilePath: "zzz.go", Line: 1, Kind: "func"},
+		{DisplayName: "aFunc", FilePath: "aaa.go", Line: 1, Kind: "func"},
+		{DisplayName: "mFunc", FilePath: "mmm.go", Line: 1, Kind: "func"},
+	}
+
+	result := formatRepoMapFromNodes("/project", nodes)
+
+	// aaa.go should appear before mmm.go which should appear before zzz.go.
+	aaaIdx := strings.Index(result, "### aaa.go")
+	mmmIdx := strings.Index(result, "### mmm.go")
+	zzzIdx := strings.Index(result, "### zzz.go")
+
+	if aaaIdx >= mmmIdx {
+		t.Errorf("aaa.go should appear before mmm.go")
+	}
+	if mmmIdx >= zzzIdx {
+		t.Errorf("mmm.go should appear before zzz.go")
+	}
+}
+
+// ============================================================================
+// GenerateRepoMap Store Fallback Tests (SP-107-5)
+// ============================================================================
+
+// TestGenerateRepoMap_FallbackWhenStoreUnavailable verifies that when no
+// .sprout/codegraph.db exists, GenerateRepoMap falls through to filesystem
+// walk and still produces correct output.
+func TestGenerateRepoMap_FallbackWhenStoreUnavailable(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a Go source file in the temp dir.
+	srcDir := filepath.Join(tmpDir, "pkg", "hello")
+	requireErr(t, os.MkdirAll(srcDir, 0755), "create dir")
+	requireErr(t, os.WriteFile(filepath.Join(srcDir, "hello.go"), []byte(`package hello
+
+func Greet() string {
+	return "hello"
+}
+
+type Greeter struct{}
+`), 0644), "write hello.go")
+
+	result, err := GenerateRepoMap(context.Background(), tmpDir)
+	requireErr(t, err, "generate repo map")
+
+	if !strings.Contains(result, "pkg/hello/hello.go") {
+		t.Errorf("missing file path in output:\n%s", result)
+	}
+	if !strings.Contains(result, "func Greet") {
+		t.Errorf("missing 'func Greet' in output:\n%s", result)
+	}
+	if !strings.Contains(result, "type Greeter") {
+		t.Errorf("missing 'type Greeter' in output:\n%s", result)
 	}
 }

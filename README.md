@@ -142,6 +142,25 @@ For the full architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). For how
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines. Run `make build-all` and `go test ./...` before PRs.
 
+## Recommended MCP Servers
+
+Sprout's [MCP integration](docs/MCP_INTEGRATION.md) lets you connect external tool servers. Here are some that pair well with sprout's built-in capabilities:
+
+| Server | What it adds |
+|---|---|
+| [codebase-memory-mcp](https://github.com/DeusData/codebase-memory-mcp) | Persistent codebase knowledge graph — call chains, dead-code detection, type-aware resolution, semantic code search across 158 languages. Extends sprout's native `repo_map` for very large or polyglot repos. |
+| [GitHub MCP](https://github.com/github/github-mcp-server) | Direct GitHub API access — issues, PRs, reviews, actions, search. Complements sprout's built-in `git` and `create_pull_request` tools. |
+| [Postgres MCP](https://github.com/modelcontextprotocol/servers/tree/main/src/postgres) | Read-only database queries and schema inspection. Useful when the agent needs to understand data shapes or debug data issues. |
+| [Filesystem MCP](https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem) | Sandboxed filesystem access with configurable allowlists. Useful for restricting agent file access to specific directories. |
+
+Add any of these with:
+
+```bash
+sprout mcp add
+```
+
+See `docs/MCP_INTEGRATION.md` for full setup, configuration, and troubleshooting.
+
 ## License
 
 [MIT License](LICENSE).

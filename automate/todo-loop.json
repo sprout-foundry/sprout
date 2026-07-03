@@ -1,0 +1,55 @@
+{
+  "budget": {
+    "on_exceed": "truncate",
+    "usd": 10,
+    "warn_at": [
+      0.5,
+      0.8
+    ]
+  },
+  "continue_on_error": true,
+  "description": "Lightweight TODO loop runner — stateless gate call parses each TODO item, orchestrator executes with context reset between items.",
+  "initial": {
+    "model": "deepseek-v4-flash",
+    "persona": "orchestrator",
+    "provider": "deepseek",
+    "risk_profile": "permissive",
+    "skip_prompt": true,
+    "subagent_overrides": {
+      "coder": {
+        "model": "Qwen3.6-27B-FP8",
+        "provider": "ai-worker"
+      },
+      "debugger": {
+        "model": "Qwen3.6-27B-FP8",
+        "provider": "ai-worker"
+      },
+      "orchestrator": {
+        "model": "deepseek-v4-flash",
+        "provider": "deepseek"
+      },
+      "reviewer": {
+        "model": "Qwen3.6-27B-FP8",
+        "provider": "ai-worker"
+      },
+      "tester": {
+        "model": "Qwen3.6-27B-FP8",
+        "provider": "ai-worker"
+      }
+    }
+  },
+  "loop": {
+    "build_command": "go build ./...",
+    "gate_model": "deepseek-v4-flash",
+    "gate_prompt_file": "automate/todo_loop_gate.md",
+    "gate_provider": "deepseek",
+    "max_iterations": 50,
+    "max_retries": 2,
+    "todo_file": "TODO.md"
+  },
+  "no_web_ui": true,
+  "persist_runtime_overrides": false,
+  "progress": {
+    "heartbeat_seconds": 300
+  }
+}

@@ -48,6 +48,11 @@ type AgentWorkflowConfig struct {
 	// always prompts unless --yes is passed, because a human at the
 	// keyboard might still fat-finger the wrong workflow.
 	RequiresApproval *bool `json:"requires_approval,omitempty"`
+
+	// Loop configures the workflow to iterate over a TODO file, processing
+	// each unchecked item independently with a fresh agent context.
+	// When Loop is set, Steps are ignored — the loop IS the execution plan.
+	Loop *AgentWorkflowLoopConfig `json:"loop,omitempty"`
 }
 
 // IsApprovalRequired reports whether the run_automate tool path should
@@ -176,6 +181,30 @@ type AgentWorkflowStep struct {
 	FileExists    []string `json:"file_exists,omitempty"`
 	FileNotExists []string `json:"file_not_exists,omitempty"`
 	AgentWorkflowRuntime
+}
+
+// AgentWorkflowLoopConfig configures the workflow to iterate over a TODO file,
+// processing each unchecked item independently with a fresh agent context.
+// When Loop is set, Steps are ignored — the loop IS the execution plan.
+type AgentWorkflowLoopConfig struct {
+	// TodoFile is the markdown file to scan for [ ] items. Default: TODO.md.
+	TodoFile string `json:"todo_file,omitempty"`
+	// GatePromptFile is the system prompt for the gate LLM call that
+	// parses each TODO section into a structured delegation prompt.
+	// Required.
+	GatePromptFile string `json:"gate_prompt_file,omitempty"`
+	// GateModel overrides the model used for the gate call. Defaults
+	// to the workflow's initial model.
+	GateModel string `json:"gate_model,omitempty"`
+	// GateProvider overrides the provider. Defaults to initial provider.
+	GateProvider string `json:"gate_provider,omitempty"`
+	// MaxRetries is the number of retry attempts on build failure
+	// before skipping an item. Default: 2.
+	MaxRetries int `json:"max_retries,omitempty"`
+	// MaxIterations caps the agent iterations per item. Default: 50.
+	MaxIterations int `json:"max_iterations,omitempty"`
+	// BuildCommand is run after each item to verify. Default: "go build ./...".
+	BuildCommand string `json:"build_command,omitempty"`
 }
 
 // IsShellStep reports whether the step is configured to run a shell command

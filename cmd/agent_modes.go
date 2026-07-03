@@ -456,7 +456,8 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		if err != nil {
 			return fmt.Errorf("failed to resolve workflow initial prompt: %w", err)
 		}
-		if query == "" && (workflowConfig == nil || len(workflowConfig.Steps) == 0) {
+		hasLoop := workflowConfig != nil && workflowConfig.Loop != nil
+		if query == "" && !hasLoop && (workflowConfig == nil || len(workflowConfig.Steps) == 0) {
 			// No query provided - check if we should keep running (daemon mode)
 			if daemonMode && webServer != nil && webServer.IsRunning() {
 				// Daemon mode: keep web UI running
@@ -542,6 +543,25 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		}
 
 		workflowState.HasError = workflowState.HasError || err != nil
+
+		// Loop mode: iterate over TODO items with stateless gate + context reset.
+		if workflowConfig.Loop != nil {
+			workflowYielded, workflowErr := runAgentWorkflowLoop(ctx, chatAgent, eventBus, workflowConfig, workflowState)
+			if workflowYielded {
+				return nil
+			}
+			if workflowErr != nil {
+				if err != nil {
+					return fmt.Errorf("%w (workflow loop failed: %w)", err, workflowErr)
+				}
+				return workflowErr
+			}
+			if outputFormatJSON {
+				emitJSONResult(query, directModeStart, nil, chatAgent)
+			}
+			return nil
+		}
+
 		workflowYielded, workflowErr := runAgentWorkflow(ctx, chatAgent, eventBus, workflowConfig, workflowState)
 		if workflowYielded {
 			return nil

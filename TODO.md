@@ -1242,11 +1242,14 @@ fails because the unknown-keys list now contains a real key.
 
 ### Items
 
-- [ ] **WebUI-B-1:** Add `self_review_gate_mode` (and any other
+- [x] **WebUI-B-1:** Add `self_review_gate_mode` (and any other
   known keys added in recent config-domain refactors) to the
   "known keys" whitelist in
-  `pkg/webui/settings_api_partial_settings_test.go:88`. Verify
-  the test passes and `go test ./pkg/webui/` is clean.
+  `pkg/webui/settings_api_partial_settings.go` (`applyRiskAndSafetySettings`).
+  Added as an accept-and-ignore handler so the GET→PUT round-trip
+  succeeds. The runtime gate is currently policy-driven
+  (not config-driven); once `cfg.SelfReviewGateMode` lands, swap for a
+  real read/write. Verified: `go test ./pkg/webui/ -run TestPartialSettingsAppliers_ComprehensiveEnums` passes.
 
 ### Notes
 

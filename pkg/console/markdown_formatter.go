@@ -119,6 +119,8 @@ func (f *MarkdownFormatter) Format(text string) string {
 
 	inCodeBlock := false
 	inCodeBlockLang := ""
+	// Table buffering state
+	var tableBuffer []string
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -151,9 +153,28 @@ func (f *MarkdownFormatter) Format(text string) string {
 			continue
 		}
 
+		// Table detection: lines starting with "|" are buffered until the
+		// table ends (a line not starting with "|" or a blank line).
+		if strings.HasPrefix(line, "|") {
+			tableBuffer = append(tableBuffer, line)
+			continue
+		}
+
+		// If we were buffering a table, flush it now.
+		if len(tableBuffer) > 0 {
+			result.WriteString(f.flushTable(tableBuffer))
+			tableBuffer = nil
+		}
+
 		// Process regular markdown line
 		formattedLine := f.formatMarkdownLine(line)
 		result.WriteString(formattedLine + "\n")
+	}
+
+	// Flush any remaining table buffer at end of input.
+	if len(tableBuffer) > 0 {
+		result.WriteString(f.flushTable(tableBuffer))
+		tableBuffer = nil
 	}
 
 	return strings.TrimSuffix(result.String(), "\n") // Remove trailing newline
@@ -178,11 +199,16 @@ func (f *MarkdownFormatter) formatMarkdownLine(line string) string {
 	// If it starts with "- " or "* " or "+ " with optional leading whitespace
 	if strings.HasPrefix(line, "- ") || strings.HasPrefix(line, "* ") || strings.HasPrefix(line, "+ ") ||
 		regexp.MustCompile(`^\s*[-*+]\s`).MatchString(line) {
-		// Simple list style: color the bullet
+		// Normalize leading whitespace into structured indent levels.
+		// CommonMark allows 2-4 spaces per nesting level; we normalize
+		// to 2 visible spaces per level for compact readability.
 		bulletPattern := `^(\s*)([-*+])(\s+)(.*)$`
 		re := regexp.MustCompile(bulletPattern)
 		if matches := re.FindStringSubmatch(line); len(matches) > 0 {
-			return fmt.Sprintf("%s%s%s%s%s", matches[1], ColorGreen+matches[2], ColorReset+matches[3], matches[4], ColorReset)
+			leadingSpaces := len(matches[1])
+			level := leadingSpaces / 2
+			indent := strings.Repeat("  ", level)
+			return fmt.Sprintf("%s%s%s%s%s", indent, ColorGreen+matches[2], ColorReset+matches[3], matches[4], ColorReset)
 		}
 	}
 
@@ -203,6 +229,302 @@ func (f *MarkdownFormatter) formatMarkdownLine(line string) string {
 	}
 
 	return line
+}
+
+// flushTable processes the buffered table lines and returns rendered output.
+// If the buffer doesn't form a valid table (needs ≥2 rows with a separator),
+// fall back to rendering each line as plain markdown.
+func (f *MarkdownFormatter) flushTable(buffer []string) string {
+	if len(buffer) < 2 {
+		// Not enough rows for a valid table — render as plain text.
+		var sb strings.Builder
+		for i, line := range buffer {
+			if i > 0 {
+				sb.WriteString("\n")
+			}
+			sb.WriteString(f.formatMarkdownLine(line))
+		}
+		return sb.String() + "\n"
+	}
+
+	// Check if there's a separator row (second row should be |---|---| pattern).
+	sepRow := -1
+	for i, line := range buffer {
+		if isSeparatorRow(line) {
+			sepRow = i
+			break
+		}
+	}
+
+	if sepRow < 0 || sepRow == 0 {
+		// No separator or separator is first row — not a valid table.
+		var sb strings.Builder
+		for i, line := range buffer {
+			if i > 0 {
+				sb.WriteString("\n")
+			}
+			sb.WriteString(f.formatMarkdownLine(line))
+		}
+		return sb.String() + "\n"
+	}
+
+	// Valid table: parse and render.
+	return f.renderTable(buffer, sepRow)
+}
+
+// isSeparatorRow returns true if the line matches the GFM separator pattern
+// like |---|---| or |:--|--:|:--:|
+func isSeparatorRow(line string) bool {
+	// Strip leading/trailing whitespace and pipes, then check each cell.
+	cells := parseTableRow(line)
+	if len(cells) < 2 {
+		return false
+	}
+	for _, cell := range cells {
+		trimmed := strings.TrimSpace(cell)
+		// Each cell should be a sequence of hyphens, optionally with colons.
+		if trimmed == "" {
+			return false
+		}
+		for _, r := range trimmed {
+			if r != '-' && r != ':' {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// parseTableRow splits a pipe-delimited row into cells, trimming whitespace.
+func parseTableRow(line string) []string {
+	// Strip leading/trailing pipe if present.
+	line = strings.TrimSpace(line)
+	if strings.HasPrefix(line, "|") {
+		line = line[1:]
+	}
+	if strings.HasSuffix(line, "|") {
+		line = strings.TrimSuffix(line, "|")
+	}
+
+	// Split on pipes.
+	parts := strings.Split(line, "|")
+	cells := make([]string, 0, len(parts))
+	for _, p := range parts {
+		cells = append(cells, strings.TrimSpace(p))
+	}
+	return cells
+}
+
+// tableAlignment represents the text alignment for a column.
+type tableAlignment int
+
+const (
+	alignLeft tableAlignment = iota
+	alignCenter
+	alignRight
+)
+
+// renderTable parses the table rows and renders aligned columns without pipe borders.
+func (f *MarkdownFormatter) renderTable(rows []string, sepIndex int) string {
+	// Parse all rows into cells.
+	allCells := make([][]string, len(rows))
+	for i, row := range rows {
+		allCells[i] = parseTableRow(row)
+	}
+
+	// Determine column count from the separator row (use the widest row).
+	colCount := len(allCells[sepIndex])
+	for _, row := range allCells {
+		if len(row) > colCount {
+			colCount = len(row)
+		}
+	}
+
+	// Determine alignment from separator row.
+	alignments := make([]tableAlignment, colCount)
+	sepCells := allCells[sepIndex]
+	for i := 0; i < colCount; i++ {
+		if i < len(sepCells) {
+			cell := strings.TrimSpace(sepCells[i])
+			if strings.HasPrefix(cell, ":") && strings.HasSuffix(cell, ":") {
+				alignments[i] = alignCenter
+			} else if strings.HasPrefix(cell, ":") {
+				alignments[i] = alignLeft
+			} else if strings.HasSuffix(cell, ":") {
+				alignments[i] = alignRight
+			} else {
+				alignments[i] = alignLeft
+			}
+		} else {
+			alignments[i] = alignLeft
+		}
+	}
+
+	// Calculate column widths: max display width (rune count) of any non-separator cell.
+	colWidths := make([]int, colCount)
+	for ri, row := range allCells {
+		if ri == sepIndex {
+			continue
+		}
+		for i, cell := range row {
+			if i >= colCount {
+				break
+			}
+			// Apply inline formatting to get the rendered version for width measurement.
+			rendered := f.formatInlineElements(cell)
+			// Measure display width (rune count, stripping ANSI codes).
+			w := displayWidth(rendered)
+			if w > colWidths[i] {
+				colWidths[i] = w
+			}
+		}
+	}
+
+	// Clamp column widths to fit within the formatter's width.
+	maxWidth := f.width
+	if maxWidth <= 0 {
+		maxWidth = 80
+	}
+	// Account for 2-space left margin + (colCount-1) single-space gaps.
+	available := maxWidth - 2 - (colCount - 1)
+	if available < colCount {
+		available = colCount // minimum: 1 char per column
+	}
+	clampColumnWidths(colWidths, available)
+
+	// Build output.
+	var sb strings.Builder
+	sb.WriteString("  ") // 2-space left margin
+
+	// Header row (bold).
+	sb.WriteString(ColorBold)
+	for i := 0; i < colCount; i++ {
+		if i > 0 {
+			sb.WriteString(" ")
+		}
+		cell := ""
+		if i < len(allCells[0]) {
+			cell = f.formatInlineElements(allCells[0][i])
+		}
+		sb.WriteString(padCell(cell, colWidths[i], alignments[i]))
+	}
+	sb.WriteString(ColorReset)
+	sb.WriteString("\n")
+
+	// Separator row (dim rule line).
+	sb.WriteString("  ")
+	sb.WriteString(ColorDim)
+	totalWidth := 0
+	for i := 0; i < colCount; i++ {
+		if i > 0 {
+			totalWidth++ // space gap
+		}
+		totalWidth += colWidths[i]
+	}
+	sb.WriteString(strings.Repeat("─", totalWidth))
+	sb.WriteString(ColorReset)
+	sb.WriteString("\n")
+
+	// Data rows (skip separator).
+	for ri, row := range allCells {
+		if ri == sepIndex {
+			continue
+		}
+		if ri == 0 {
+			continue // header already rendered
+		}
+		sb.WriteString("  ")
+		for i := 0; i < colCount; i++ {
+			if i > 0 {
+				sb.WriteString(" ")
+			}
+			cell := ""
+			if i < len(row) {
+				cell = f.formatInlineElements(row[i])
+			}
+			sb.WriteString(padCell(cell, colWidths[i], alignments[i]))
+		}
+		sb.WriteString("\n")
+	}
+
+	return sb.String()
+}
+
+// clampColumnWidths ensures the total width of all columns fits within maxTotal.
+// If the sum exceeds maxTotal, widths are reduced proportionally, with a
+// minimum of 1 character per column.
+func clampColumnWidths(widths []int, maxTotal int) {
+	sum := 0
+	for _, w := range widths {
+		sum += w
+	}
+	if sum <= maxTotal {
+		return
+	}
+
+	// Iterative clamping: reduce the widest columns first.
+	for sum > maxTotal && len(widths) > 0 {
+		// Find the widest column that's above minimum (1).
+		maxIdx := -1
+		maxW := 1
+		for i, w := range widths {
+			if w > maxW {
+				maxIdx = i
+				maxW = w
+			}
+		}
+		if maxIdx < 0 {
+			break // all columns at minimum
+		}
+		widths[maxIdx]--
+		sum--
+	}
+}
+
+// padCell pads (or truncates) a cell string to the given width with the
+// specified alignment. The width is in display characters (rune count minus
+// ANSI escape sequences).
+func padCell(cell string, width int, align tableAlignment) string {
+	dw := displayWidth(cell)
+	if dw >= width {
+		// Truncate if needed (by display width).
+		return truncateDisplay(cell, width)
+	}
+
+	padding := width - dw
+	var leftPad, rightPad int
+	switch align {
+	case alignLeft:
+		leftPad = 0
+		rightPad = padding
+	case alignCenter:
+		leftPad = padding / 2
+		rightPad = padding - leftPad
+	case alignRight:
+		leftPad = padding
+		rightPad = 0
+	default:
+		rightPad = padding
+	}
+
+	var sb strings.Builder
+	sb.WriteString(strings.Repeat(" ", leftPad))
+	sb.WriteString(cell)
+	sb.WriteString(strings.Repeat(" ", rightPad))
+	return sb.String()
+}
+
+// truncateDisplay truncates s to the given display width, cutting off ANSI
+// sequences safely. Uses the existing displayWidth and truncateToWidth helpers.
+func truncateDisplay(s string, maxWidth int) string {
+	// Strip ANSI, truncate, then re-apply ANSI from original.
+	plain := stripANSIEscapeCodes(s)
+	truncated := truncateToWidth(plain, maxWidth, "…")
+	// If the plain truncated text is shorter than the original, we need to
+	// rebuild with ANSI codes. Simple approach: just return the truncated
+	// plain text — the ANSI codes are formatting-only and the truncation
+	// is on the content.
+	return truncated
 }
 
 // formatInlineElements formats inline markdown elements
@@ -493,6 +815,9 @@ func (f *MarkdownFormatter) highlightGeneric(line string) string {
 
 // stripMarkdown removes markdown formatting when colors are disabled
 func (f *MarkdownFormatter) stripMarkdown(text string) string {
+	// Handle tables first — strip pipe delimiters and align columns.
+	text = f.stripTables(text)
+
 	// Remove code blocks
 	codeBlockRegex := regexp.MustCompile("```[\\s\\S]*?```")
 	text = codeBlockRegex.ReplaceAllString(text, "[CODE BLOCK]")
@@ -522,6 +847,195 @@ func (f *MarkdownFormatter) stripMarkdown(text string) string {
 	text = regexp.MustCompile("^---$|^---$").ReplaceAllString(text, "")
 
 	return text
+}
+
+// stripTables detects table blocks in the text and strips pipe delimiters
+// while preserving column alignment.
+func (f *MarkdownFormatter) stripTables(text string) string {
+	lines := strings.Split(text, "\n")
+	result := make([]string, 0, len(lines))
+
+	i := 0
+	for i < len(lines) {
+		line := lines[i]
+
+		// Check if this line starts a table.
+		if strings.HasPrefix(strings.TrimSpace(line), "|") {
+			// Buffer table lines.
+			var tableLines []string
+			for i < len(lines) && strings.TrimSpace(lines[i]) != "" && strings.HasPrefix(strings.TrimSpace(lines[i]), "|") {
+				tableLines = append(tableLines, lines[i])
+				i++
+			}
+			// Process the table.
+			result = append(result, strings.Split(f.stripTableBlock(tableLines), "\n")...)
+			continue
+		}
+
+		result = append(result, line)
+		i++
+	}
+
+	return strings.Join(result, "\n")
+}
+
+// stripTableBlock processes a table block and returns stripped text with
+// aligned columns (no pipes).
+func (f *MarkdownFormatter) stripTableBlock(rows []string) string {
+	if len(rows) < 2 {
+		// Not a valid table — just strip pipes.
+		var sb strings.Builder
+		for i, row := range rows {
+			if i > 0 {
+				sb.WriteString("\n")
+			}
+			sb.WriteString(stripPipes(row))
+		}
+		return sb.String()
+	}
+
+	// Check for separator row.
+	sepIdx := -1
+	for i, row := range rows {
+		if isSeparatorRow(row) {
+			sepIdx = i
+			break
+		}
+	}
+
+	if sepIdx < 0 || sepIdx == 0 {
+		// No valid separator — just strip pipes.
+		var sb strings.Builder
+		for i, row := range rows {
+			if i > 0 {
+				sb.WriteString("\n")
+			}
+			sb.WriteString(stripPipes(row))
+		}
+		return sb.String()
+	}
+
+	// Parse cells.
+	allCells := make([][]string, len(rows))
+	for i, row := range rows {
+		allCells[i] = parseTableRow(row)
+	}
+
+	colCount := len(allCells[sepIdx])
+	for _, row := range allCells {
+		if len(row) > colCount {
+			colCount = len(row)
+		}
+	}
+
+	// Calculate column widths (no ANSI, so just rune count).
+	colWidths := make([]int, colCount)
+	for ri, row := range allCells {
+		if ri == sepIdx {
+			continue
+		}
+		for i, cell := range row {
+			if i >= colCount {
+				break
+			}
+			w := len([]rune(cell))
+			if w > colWidths[i] {
+				colWidths[i] = w
+			}
+		}
+	}
+
+	// Clamp.
+	maxWidth := f.width
+	if maxWidth <= 0 {
+		maxWidth = 80
+	}
+	available := maxWidth - 2 - (colCount - 1)
+	if available < colCount {
+		available = colCount
+	}
+	clampColumnWidths(colWidths, available)
+
+	// Build output.
+	var sb strings.Builder
+	sb.WriteString("  ")
+
+	// Header row.
+	for i := 0; i < colCount; i++ {
+		if i > 0 {
+			sb.WriteString(" ")
+		}
+		cell := ""
+		if i < len(allCells[0]) {
+			cell = allCells[0][i]
+		}
+		sb.WriteString(padCellPlain(cell, colWidths[i]))
+	}
+	sb.WriteString("\n")
+
+	// Separator rule.
+	totalWidth := 0
+	for i := 0; i < colCount; i++ {
+		if i > 0 {
+			totalWidth++
+		}
+		totalWidth += colWidths[i]
+	}
+	sb.WriteString("  ")
+	sb.WriteString(strings.Repeat("─", totalWidth))
+	sb.WriteString("\n")
+
+	// Data rows.
+	for ri, row := range allCells {
+		if ri == sepIdx || ri == 0 {
+			continue
+		}
+		sb.WriteString("  ")
+		for i := 0; i < colCount; i++ {
+			if i > 0 {
+				sb.WriteString(" ")
+			}
+			cell := ""
+			if i < len(row) {
+				cell = row[i]
+			}
+			sb.WriteString(padCellPlain(cell, colWidths[i]))
+		}
+		sb.WriteString("\n")
+	}
+
+	return strings.TrimSuffix(sb.String(), "\n")
+}
+
+// stripPipes removes pipe delimiters from a table row.
+func stripPipes(line string) string {
+	line = strings.TrimSpace(line)
+	if strings.HasPrefix(line, "|") {
+		line = line[1:]
+	}
+	if strings.HasSuffix(line, "|") {
+		line = strings.TrimSuffix(line, "|")
+	}
+	parts := strings.Split(line, "|")
+	var cells []string
+	for _, p := range parts {
+		cells = append(cells, strings.TrimSpace(p))
+	}
+	return strings.Join(cells, "  ")
+}
+
+// padCellPlain pads a plain text cell to the given width (no ANSI codes).
+func padCellPlain(cell string, width int) string {
+	runeCount := len([]rune(cell))
+	if runeCount >= width {
+		runes := []rune(cell)
+		if len(runes) > width {
+			runes = runes[:width]
+		}
+		return string(runes)
+	}
+	padding := width - runeCount
+	return cell + strings.Repeat(" ", padding)
 }
 
 // IsLikelyMarkdown checks if text contains markdown patterns

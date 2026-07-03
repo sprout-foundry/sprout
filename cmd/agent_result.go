@@ -32,6 +32,7 @@ type AgentResultMetrics struct {
 	TokensIn       int     `json:"tokens_in"`  // Total prompt/input tokens
 	TokensOut      int     `json:"tokens_out"` // Total completion/output tokens
 	LLMCalls       int     `json:"llm_calls"`  // Number of LLM API calls made
+	Cost           float64 `json:"cost"`       // Total estimated USD cost
 	Provider       string  `json:"provider"`   // LLM provider name (e.g., "openai", "anthropic")
 	Model          string  `json:"model"`      // Model identifier (e.g., "gpt-4o")
 
@@ -73,6 +74,7 @@ func emitJSONResult(query string, startTime time.Time, runErr error, a *agent.Ag
 		result.Metrics.TokensIn = a.GetPromptTokens()
 		result.Metrics.TokensOut = a.GetCompletionTokens()
 		result.Metrics.LLMCalls = a.GetLLMCallCount()
+		result.Metrics.Cost = a.GetTotalCost()
 		result.Metrics.Provider = a.GetProvider()
 		result.Metrics.Model = a.GetModel()
 		// Security telemetry

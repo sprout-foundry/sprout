@@ -1,6 +1,148 @@
 package configuration
 
-import "strings"
+import (
+	"regexp"
+	"strings"
+)
+
+// heredocPattern matches heredoc syntax: `<<DELIM`, `<<-DELIM`, or `<<'DELIM'`.
+// We capture the delimiter so we can find the closing line.
+var heredocStartPattern = regexp.MustCompile(`<<-?['"]?(\w+)['"]?`)
+
+// stripHeredocAndQuotes replaces heredoc bodies and quoted string content
+// with spaces so the risk pattern matcher doesn't scan DATA content as if
+// it were a command. Without this, a heredoc writing a file whose source
+// code mentions "git checkout" (or "rm -rf") would falsely match risk
+// patterns.
+//
+// Heredoc: `cat > file <<'EOF' ... git checkout ... EOF` — everything
+// between the opening `<<DELIM` and the closing delimiter line is data.
+// Quoted strings: content inside '...' or "..." is replaced with spaces
+// (same approach as pkg/agent_tools.stripQuotedSections).
+func stripHeredocAndQuotes(cmd string) string {
+	// 1. Strip heredoc bodies first (they may contain quotes that would
+	//    confuse the quote-stripping pass below).
+	result := stripHeredocBodies(cmd)
+
+	// 2. Strip quoted string content.
+	return stripQuotedContent(result)
+}
+
+// stripHeredocBodies removes the content between heredoc delimiters,
+// replacing it with spaces (preserving newlines so line-based structure
+// is maintained for any downstream processing).
+func stripHeredocBodies(cmd string) string {
+	indices := heredocStartPattern.FindAllStringSubmatchIndex(cmd, -1)
+	if len(indices) == 0 {
+		return cmd
+	}
+
+	var b strings.Builder
+	prevEnd := 0
+	for _, match := range indices {
+		// match: [fullStart, fullEnd, group1Start, group1End]
+		delimStart := match[2]
+		delimEnd := match[3]
+		delim := cmd[delimStart:delimEnd]
+
+		// Write everything before this heredoc start marker.
+		b.WriteString(cmd[prevEnd:match[1]])
+		// Write the heredoc start marker itself (e.g. `<<'EOF'`).
+		b.WriteString(cmd[match[0]:match[1]])
+
+		// Find the closing delimiter on its own line. It must appear at
+		// the start of a line (after a newline or at the beginning).
+		bodyStart := match[1]
+		closeIdx := findHeredocClose(cmd[bodyStart:], delim)
+		if closeIdx == -1 {
+			// No closing delimiter found — treat rest as data, but we
+			// can't safely strip it. Leave as-is (best effort).
+			b.WriteString(cmd[bodyStart:])
+			prevEnd = len(cmd)
+			break
+		}
+		// Replace the heredoc body with spaces (preserving newlines).
+		body := cmd[bodyStart : bodyStart+closeIdx+len(delim)]
+		b.WriteString(replaceNonNewlinesWithSpaces(body))
+		prevEnd = bodyStart + closeIdx + len(delim)
+	}
+	if prevEnd < len(cmd) {
+		b.WriteString(cmd[prevEnd:])
+	}
+	return b.String()
+}
+
+// findHeredocClose finds the index of the closing delimiter line relative
+// to the start of s. The delimiter must be at the start of a line. Returns
+// the index of the delimiter start, or -1 if not found.
+func findHeredocClose(s string, delim string) int {
+	delimLine := "\n" + delim
+	// Check if delimiter is at the very start (heredoc on same line).
+	if strings.HasPrefix(s, delim) {
+		return 0
+	}
+	idx := strings.Index(s, delimLine)
+	if idx == -1 {
+		return -1
+	}
+	// Ensure the delimiter is followed by a newline or end of string.
+	afterDelim := idx + len(delimLine)
+	if afterDelim >= len(s) || s[afterDelim] == '\n' || s[afterDelim] == '\r' {
+		return idx + 1 // +1 to skip the newline we used for matching
+	}
+	// Partial match (e.g. delimiter is a prefix of another word) — search again.
+	next := findHeredocClose(s[afterDelim:], delim)
+	if next == -1 {
+		return -1
+	}
+	return afterDelim + next
+}
+
+// replaceNonNewlinesWithSpaces replaces every character that is not a
+// newline with a space. Used to blank out heredoc bodies while keeping
+// line structure.
+func replaceNonNewlinesWithSpaces(s string) string {
+	b := make([]byte, len(s))
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\n' {
+			b[i] = '\n'
+		} else {
+			b[i] = ' '
+		}
+	}
+	return string(b)
+}
+
+// stripQuotedContent replaces the content of quoted strings (single and
+// double quotes) with spaces, preserving the quote characters themselves.
+// This prevents risk patterns from matching command-like text inside
+// string literals (e.g. echo "git checkout main").
+func stripQuotedContent(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	inQuote := false
+	var quoteChar byte
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if !inQuote && (c == '\'' || c == '"') {
+			inQuote = true
+			quoteChar = c
+			b.WriteByte(c)
+			continue
+		}
+		if inQuote {
+			if c == quoteChar {
+				inQuote = false
+				b.WriteByte(c)
+			} else {
+				b.WriteByte(' ')
+			}
+			continue
+		}
+		b.WriteByte(c)
+	}
+	return b.String()
+}
 
 // RiskLevel represents the risk classification of an operation for the EA approval cascade.
 type RiskLevel string
@@ -177,6 +319,15 @@ func AutoApproveRulesForProfile(profile RiskProfile) AutoApproveRules {
 		// Backward-compatible default. DefaultRisk = Medium matches
 		// the historical behavior so existing personas with EA-style
 		// rules continue to behave exactly as before.
+		//
+		// git_checkout / git_switch / git_restore are intentionally
+		// NOT in HighRiskNever: these are working-tree-mutating ops
+		// fully recoverable via the ChangeTracker (recover_file /
+		// revert_my_changes). AGENTS.md classifies them as restorable
+		// local history ops. They fall through to categorizeGitCommand
+		// → DefaultRisk = Medium. Only genuinely destructive ops
+		// (force flags, recursive rm, hard reset, clean, force push,
+		// branch deletion) are gated as High.
 		return AutoApproveRules{
 			LowRiskOps: []string{
 				"git_add", "git_status", "git_log", "git_diff",
@@ -191,7 +342,7 @@ func AutoApproveRulesForProfile(profile RiskProfile) AutoApproveRules {
 			HighRiskNever: []string{
 				"force_flag", "rm_recursive", "git_reset_hard",
 				"git_clean", "docker_prune", "git_push_force",
-				"git_checkout", "git_switch", "git_restore", "git_branch_delete",
+				"git_branch_delete",
 			},
 			DefaultRisk: RiskLevelMedium,
 		}
@@ -227,6 +378,12 @@ func IsCriticalOperation(command string) bool {
 	if strings.Contains(cmdLower, ":()") && strings.Contains(cmdLower, ":|:") {
 		return true
 	}
+
+	// Strip heredoc bodies and quoted content before token-based matching
+	// so DATA content inside a heredoc or string literal doesn't trigger
+	// false-positive critical-pattern matches (e.g. a script that mentions
+	// "rm -rf /" in a comment or string).
+	cmdLower = stripHeredocAndQuotes(cmdLower)
 
 	fields := strings.Fields(cmdLower)
 
@@ -358,7 +515,12 @@ func (st *SubagentType) EvaluateOperationRisk(command string) RiskLevel {
 
 	rules := st.GetAutoApproveRules()
 
-	cmdLower := strings.ToLower(command)
+	// Strip heredoc bodies and quoted strings before pattern matching.
+	// Without this, a heredoc or string literal containing "git checkout"
+	// or "rm -rf" would falsely match risk patterns — the classic case
+	// is a script that embeds a command example as DATA (e.g. writing a
+	// Go test file whose source code mentions "git checkout").
+	cmdLower := strings.ToLower(stripHeredocAndQuotes(command))
 
 	// HighRiskNever patterns are gated. "force_flag" is one such
 	// pattern that lives in the list for all gated profiles; the
@@ -816,17 +978,19 @@ func invokesCommand(fields []string, name string) bool {
 }
 
 // invokesGitSubcommand reports whether the tokenized command line
-// invokes `git <subcmd>` — `git` must be invoked as a command (per
-// invokesCommand) AND immediately followed by the subcommand token.
-// Catches `cd /repo && git checkout main` but not `... grep 'git
-// checkout' file` or path/argument substrings that happen to spell
-// the same letters.
+// invokes `git <subcmd>` — `git` must be an actual command invocation
+// (at position 0, after a chain operator, or after sudo) AND immediately
+// followed by the subcommand token. Catches `cd /repo && git checkout main`
+// but not `timeout 110 git checkout -b x` (git is an argument to timeout)
+// or path/argument substrings that happen to spell the same letters.
 func invokesGitSubcommand(fields []string, subcmd string) bool {
 	for i, f := range fields {
 		if f != "git" {
 			continue
 		}
-		if !invokesCommand(fields[i:i+1], "git") && !(i > 0 && isChainOperator(fields[i-1])) && i != 0 {
+		// "git" must be an actual command invocation, not an argument
+		// to another command (e.g. `timeout 110 git checkout`).
+		if !isGitCommandAt(fields, i) {
 			continue
 		}
 		if i+1 < len(fields) && fields[i+1] == subcmd {
@@ -834,6 +998,19 @@ func invokesGitSubcommand(fields []string, subcmd string) bool {
 		}
 	}
 	return false
+}
+
+// isGitCommandAt reports whether the "git" token at index i is an
+// actual command invocation — at position 0, immediately after a chain
+// operator (;, &&, ||, |), or after sudo. This prevents false positives
+// where "git" appears as an argument to another command (e.g.
+// `timeout 110 git checkout` — "git" follows "110", not a chain operator).
+func isGitCommandAt(fields []string, i int) bool {
+	if i == 0 {
+		return true
+	}
+	prev := fields[i-1]
+	return isChainOperator(prev) || prev == "sudo"
 }
 
 // isChainOperator reports whether a token is a shell pipeline / chain

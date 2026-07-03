@@ -178,7 +178,7 @@ func newRichEventPublisher(bus *events.EventBus, agent *Agent) *richEventPublish
 // browser connection.  Tool events receive additional enrichment (display_name,
 // persona, is_subagent, subagent_type) and emit CLI tool_log output.
 func (r *richEventPublisher) Publish(eventType string, data any) {
-	// Decorate with agent event metadata for WebSocket routing.
+	// Decorate with agent metadata for WebSocket routing.
 	data = r.decorateWithMetadata(data)
 
 	switch eventType {
@@ -194,6 +194,21 @@ func (r *richEventPublisher) Publish(eventType string, data any) {
 		}
 		enriched := r.enrichEventData(data, eventType)
 		r.bus.Publish(eventType, enriched)
+	case "agent_message":
+		// The seed core's finalize() publishes the full final response as an
+		// agent_message event. When streaming is active, the response was
+		// already displayed to the terminal via the streaming callback, so
+		// forwarding this event to the bus causes a duplicate terminal print
+		// (the terminal subscriber renders agent_message events with a ⓘ
+		// glyph). Suppress the event when streaming content was produced.
+		if r.agent != nil && r.agent.output.IsStreamingEnabled() && r.agent.output.GetStreamingBuffer().Len() > 0 {
+			if payload, ok := data.(map[string]interface{}); ok {
+				if cat, _ := payload["category"].(string); cat == "info" {
+					return
+				}
+			}
+		}
+		r.bus.Publish(eventType, data)
 	default:
 		r.bus.Publish(eventType, data)
 	}

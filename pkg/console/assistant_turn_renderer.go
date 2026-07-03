@@ -7,38 +7,40 @@ import (
 	"sync"
 
 	"github.com/mattn/go-runewidth"
-	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"golang.org/x/term"
 )
 
 // AssistantTurnRenderer wraps the streaming-callback path for one assistant
-// turn. It does two things:
+// turn. It formats each line of assistant prose with markdown (ANSI colors,
+// syntax highlighting, tables, code blocks) AS IT STREAMS, before the text
+// reaches the terminal. This replaces the old clear-and-reprint approach
+// (which was disabled because the formatted output's row count never matched
+// the streamed text, causing cursor clobbering).
 //
-//  1. Indents every emitted line of assistant prose with a configurable
-//     prefix (default "  ") so the model's text visually separates from
-//     chrome (tool-log lines, agent messages, system info).
-//  2. Buffers the *current* prose segment so it can be re-rendered with
-//     markdown formatting at the end of the turn.
+// Lines are buffered until a newline arrives, then passed through the
+// StreamingMarkdownFormatter and emitted with the configured indent. This
+// gives ~1 line of latency (imperceptible) but eliminates all cursor
+// manipulation — clobbering is structurally impossible.
 //
 // A "segment" is a contiguous run of stream chunks with no interleaved
 // non-prose terminal output between them. Tool logs and any other
 // writeTerminalMessage call must notify the renderer via OnExternalWrite
-// to finalize the current segment (no re-render of older segments) and
-// start a fresh one. At turn end, FinalizeAtTurnEnd potentially re-renders
-// the final segment with markdown formatting — clearing the streamed
-// version via ANSI cursor manipulation and emitting the colorized version
-// in its place.
-//
-// The re-render only fires if (a) stdout is a TTY, (b) the segment
-// contains markdown features worth formatting, and (c) a usable terminal
-// width is available. Otherwise the streamed raw version stays — fail-safe
-// rather than risk a scrollback-destroying cursor glitch on non-TTY
-// targets.
+// to finalize the current segment and start a fresh one.
 type AssistantTurnRenderer struct {
 	mu sync.Mutex
 
-	// Current segment buffer. Reset on segment boundary.
+	// seg accumulates the raw text for the current segment. Used to detect
+	// empty segments and for the footer-streaming gate. Reset on segment
+	// boundary.
 	seg strings.Builder
+
+	// lineBuf buffers the current line until \n so it can be formatted as
+	// a unit. Cross-line state (code blocks, tables) lives in streamFmt.
+	lineBuf strings.Builder
+
+	// streamFmt applies per-line markdown formatting with cross-line state.
+	// nil when the formatter is nil or colors are disabled (raw emit fallback).
+	streamFmt *StreamingMarkdownFormatter
 
 	// Streaming state — tracked across chunks.
 	atLineStart   bool
@@ -57,11 +59,6 @@ type AssistantTurnRenderer struct {
 	reasoningBytes  int
 
 	terminalWidth int
-	// startRawWidth is the terminal's raw column count captured at construction
-	// (turn start). Compared against the live raw width at finalize to detect a
-	// resize that happened mid-turn (independent of terminalWidth, which is the
-	// adjusted/clamped value used for soft-wrap accounting).
-	startRawWidth int
 	formatter     *MarkdownFormatter
 	indent        string
 
@@ -83,16 +80,20 @@ func (r *AssistantTurnRenderer) SetFooter(f *StatusFooter) {
 }
 
 // NewAssistantTurnRenderer constructs a renderer with the given terminal
-// width snapshot and markdown formatter. width <= 0 disables soft-wrap
-// accounting and the post-stream re-render path (the indent still works).
+// width snapshot and markdown formatter. When the formatter has colors
+// enabled, a StreamingMarkdownFormatter is created for per-line formatting.
+// width <= 0 disables soft-wrap accounting; the indent still works.
 func NewAssistantTurnRenderer(width int, formatter *MarkdownFormatter) *AssistantTurnRenderer {
-	return &AssistantTurnRenderer{
+	r := &AssistantTurnRenderer{
 		atLineStart:   true,
 		terminalWidth: width,
-		startRawWidth: currentStdoutWidth(),
 		formatter:     formatter,
 		indent:        "  ",
 	}
+	if formatter != nil && formatter.enableColors {
+		r.streamFmt = NewStreamingMarkdownFormatter(formatter)
+	}
+	return r
 }
 
 // WriteReasoningChunk consumes one chunk of reasoning/thinking output
@@ -216,9 +217,13 @@ func (r *AssistantTurnRenderer) ReasoningActive() bool {
 	return r.reasoningActive
 }
 
-// WriteChunk emits a chunk of assistant text to stdout, prefixing each line
-// with the configured indent. The chunk is also appended to the current
-// segment buffer for potential post-segment re-render.
+// WriteChunk emits a chunk of assistant text to stdout, formatting each
+// complete line with markdown before it reaches the terminal. Text is
+// buffered until a newline arrives, then passed through the
+// StreamingMarkdownFormatter and emitted with the configured indent.
+//
+// When colors are disabled (streamFmt == nil), falls back to raw emit:
+// each line gets the indent but no formatting.
 func (r *AssistantTurnRenderer) WriteChunk(chunk string) {
 	if chunk == "" {
 		return
@@ -227,9 +232,8 @@ func (r *AssistantTurnRenderer) WriteChunk(chunk string) {
 	defer r.mu.Unlock()
 
 	// Serialize against the status footer / input renderer so a concurrent
-	// footer redraw (cursor save/move/clear/restore) can't interleave with this
-	// stream and displace the cursor / tear the line. (r.mu then outputMu — the
-	// footer only ever takes outputMu, so there's no lock-ordering cycle.)
+	// footer redraw can't interleave with this stream and displace the
+	// cursor.
 	LockOutput()
 	defer UnlockOutput()
 
@@ -246,25 +250,72 @@ func (r *AssistantTurnRenderer) WriteChunk(chunk string) {
 	}
 
 	r.seg.WriteString(chunk)
-	indentCols := displayWidth(r.indent)
+	r.lineBuf.WriteString(chunk)
 
-	for _, ch := range chunk {
-		if r.atLineStart {
-			fmt.Print(r.indent)
-			r.atLineStart = false
-			r.curLineRunes = indentCols
+	// Process complete lines from the buffer.
+	r.flushCompleteLines()
+}
+
+// flushCompleteLines extracts complete lines (terminated by \n) from
+// lineBuf, formats each through the streaming formatter, and emits the
+// result with the configured indent. Partial lines remain in the buffer.
+func (r *AssistantTurnRenderer) flushCompleteLines() {
+	for {
+		s := r.lineBuf.String()
+		idx := strings.IndexByte(s, '\n')
+		if idx < 0 {
+			if s == "" {
+				// All lines flushed — cursor is at the start of a fresh row.
+				r.atLineStart = true
+				r.curLineRunes = 0
+			} else {
+				// Partial line remains in buffer — cursor is mid-line.
+				r.curLineRunes = displayWidth(r.indent) + runewidth.StringWidth(s)
+				r.atLineStart = false
+			}
+			return
 		}
-		fmt.Print(string(ch))
-		if ch == '\n' {
-			r.physicalLines += physicalRows(r.curLineRunes, r.terminalWidth)
-			r.atLineStart = true
-			r.curLineRunes = 0
-		} else {
-			// Count terminal columns, not runes, so wide/CJK glyphs advance the
-			// soft-wrap accounting correctly.
-			r.curLineRunes += runewidth.RuneWidth(ch)
+
+		line := s[:idx]
+		rest := s[idx+1:]
+		r.lineBuf.Reset()
+		if rest != "" {
+			r.lineBuf.WriteString(rest)
 		}
+
+		emitted := r.emitFormattedLine(line)
+		r.physicalLines += emitted
+		r.atLineStart = true
+		r.curLineRunes = 0
 	}
+}
+
+// emitFormattedLine formats a single line and writes it to stdout with the
+// indent. When colors are enabled, the line passes through the
+// StreamingMarkdownFormatter. Otherwise it's emitted raw with indent.
+// The formatter output may span multiple lines (table flush); each output
+// line gets the indent. Returns the number of physical output lines emitted.
+func (r *AssistantTurnRenderer) emitFormattedLine(line string) int {
+	var formatted string
+	if r.streamFmt != nil {
+		formatted = r.streamFmt.ProcessLine(line)
+	} else {
+		formatted = line + "\n"
+	}
+	if formatted == "" {
+		return 0 // line was consumed (e.g. code fence boundary)
+	}
+	// Each output line gets the indent prefix.
+	lineCount := 0
+	for _, outLine := range strings.SplitAfter(formatted, "\n") {
+		if outLine == "" {
+			continue
+		}
+		fmt.Print(r.indent)
+		fmt.Print(outLine)
+		lineCount++
+	}
+	return lineCount
 }
 
 // OnExternalWrite finalizes the current segment without re-rendering it.
@@ -280,8 +331,8 @@ func (r *AssistantTurnRenderer) OnExternalWrite() {
 // OnExternalWriteRows finalizes the current segment and advances
 // physicalLines by `n` rows to account for external writes that
 // consumed terminal rows (e.g. a blank-line separator or a multi-line
-// todo block). This keeps the renderer's row math in sync so that
-// FinalizeAtTurnEnd walks back the correct number of rows.
+// todo block). This keeps the renderer's state in sync at segment
+// boundaries.
 //
 // When n == 0 the segment is still reset (same as OnExternalWrite).
 // When n > 0 the renderer treats the external write as if it had
@@ -295,13 +346,16 @@ func (r *AssistantTurnRenderer) OnExternalWriteRows(n int) {
 	r.atLineStart = true
 	r.curLineRunes = 0
 	r.seg.Reset()
+	r.lineBuf.Reset()
+	if r.streamFmt != nil {
+		r.streamFmt.Reset()
+	}
 }
 
 // FinalizeAtTurnEnd is called once the assistant's turn has completed (after
-// the spinner stops, after any post-turn book-keeping). If the current
-// segment has substantial markdown content and stdout is a TTY, the
-// streamed raw text is cleared and the markdown-formatted version is
-// emitted in its place. Otherwise the streamed text is left as-is.
+// the spinner stops, after any post-turn book-keeping). It flushes any
+// remaining partial line through the formatter and ensures a trailing newline
+// so the cursor lands on a fresh row for the next turn's output.
 func (r *AssistantTurnRenderer) FinalizeAtTurnEnd() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -315,55 +369,37 @@ func (r *AssistantTurnRenderer) FinalizeAtTurnEnd() {
 	// final byte/token count.
 	r.endReasoningLocked()
 
-	text := r.seg.String()
-	if text == "" {
-		r.resetSegment()
-		return
+	// Flush any remaining partial line through the formatter.
+	if r.lineBuf.Len() > 0 {
+		line := r.lineBuf.String()
+		r.lineBuf.Reset()
+		emitted := r.emitFormattedLine(line)
+		r.physicalLines += emitted
 	}
 
-	// The markdown re-render (clear streamed text + emit ANSI-formatted
-	// version) is DISABLED. It was the primary cause of CLI output
-	// clobbering: the formatter changes the line count (removes code
-	// fences, adds language headers, collapses blank lines), so the
-	// re-emitted text doesn't match the row count of what was cleared.
-	// The cursor ends up at the wrong position and the next turn's
-	// output clobbers the residue.
-	//
-	// The streamed text is already readable — it just lacks ANSI colors.
-	// The trade-off (no syntax highlighting in the CLI) is worth the
-	// reliability. If reformatting is re-enabled in the future, the
-	// formatter's output MUST have the exact same number of visible
-	// rows as the streamed segment, or the cursor math will break.
-	//
+	// Flush any pending formatter state (buffered table rows).
+	if r.streamFmt != nil {
+		flushed := r.streamFmt.Flush()
+		if flushed != "" {
+			for _, outLine := range strings.SplitAfter(flushed, "\n") {
+				if outLine == "" {
+					continue
+				}
+				fmt.Print(r.indent)
+				fmt.Print(outLine)
+				r.physicalLines++
+			}
+		}
+	}
+
 	// Ensure a trailing newline so the cursor is on a fresh row before
 	// the caller writes the turn summary / renders the next prompt.
 	// Streaming prose frequently ends without a trailing \n (the model's
-	// last chunk is mid-sentence or ends in a space). Before the
-	// indicator.Stop() fix, Stop() emitted \r\033[K on every call and
-	// acted as an implicit "cursor at column 0" guarantee at turn end.
-	// Now that Stop() is a true no-op when idle, FinalizeAtTurnEnd owns
-	// this responsibility — without it, the per-turn summary line glues
-	// onto the partial prose row and the prompt's \r\033[K clobbers it.
+	// last chunk is mid-sentence or ends in a space).
 	if !r.atLineStart {
 		fmt.Print("\n")
 	}
 	r.resetSegment()
-}
-
-// emitFormatted prints `text` line-by-line with the configured indent. Each
-// "physical line" (\n-terminated) gets one indent. The trailing newline is
-// preserved so the next output (turn footer) lands on a fresh row.
-func (r *AssistantTurnRenderer) emitFormatted(text string) {
-	for _, line := range strings.SplitAfter(text, "\n") {
-		if line == "" {
-			continue
-		}
-		fmt.Print(r.indent)
-		fmt.Print(line)
-	}
-	if !strings.HasSuffix(text, "\n") {
-		fmt.Println()
-	}
 }
 
 // formatBytesShort returns a compact human-readable size. Used in the
@@ -386,6 +422,10 @@ func (r *AssistantTurnRenderer) resetSegment() {
 		r.footer.SetProseStreaming(false)
 	}
 	r.seg.Reset()
+	r.lineBuf.Reset()
+	if r.streamFmt != nil {
+		r.streamFmt.Reset()
+	}
 	r.atLineStart = true
 	r.curLineRunes = 0
 	r.physicalLines = 0
@@ -402,50 +442,6 @@ func physicalRows(visualLen, width int) int {
 		return 1
 	}
 	return (visualLen + width - 1) / width
-}
-
-// shouldReformat decides whether the segment has enough markdown signal to
-// justify the cursor-clear + re-render dance. A plain one-line "Yes." has
-// nothing to gain; a multi-paragraph response with headings + code blocks
-// has plenty.
-func shouldReformat(text string, width int) bool {
-	if width <= 0 {
-		return false
-	}
-	if !envutil.ResolveColorPreference(true) {
-		// In no-color mode the formatter strips markers — re-rendering
-		// would just produce a duplicate (and the clear+reprint flash is
-		// a regression with no visual upside).
-		return false
-	}
-	// Look for any markdown feature worth styling.
-	markers := []string{
-		"\n# ", "\n## ", "\n### ", "\n#### ",
-		"\n- ", "\n* ", "\n+ ",
-		"\n> ",
-		"```", "**", "__",
-	}
-	for _, m := range markers {
-		if strings.Contains(text, m) {
-			return true
-		}
-	}
-	// Leading markers (start-of-buffer; the \n-prefixed checks above
-	// won't catch the very first line).
-	if strings.HasPrefix(text, "# ") || strings.HasPrefix(text, "## ") ||
-		strings.HasPrefix(text, "- ") || strings.HasPrefix(text, "* ") {
-		return true
-	}
-	// Inline code spans (single backticks) — only count if there are at
-	// least two so we know it's a real code span rather than a stray.
-	if strings.Count(text, "`") >= 2 {
-		return true
-	}
-	return false
-}
-
-func isStdoutTTY() bool {
-	return term.IsTerminal(int(os.Stdout.Fd()))
 }
 
 // currentStdoutWidth reads the terminal's current column count live, or 0 if it

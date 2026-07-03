@@ -18,6 +18,7 @@ import (
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	providers "github.com/sprout-foundry/sprout/pkg/agent_providers"
+	"github.com/sprout-foundry/sprout/pkg/providercatalog"
 )
 
 // ---------------------------------------------------------------------------
@@ -181,6 +182,30 @@ func (sp *sproutProvider) accumulateResponseCost(resp *core.ChatResponse) {
 	}
 	sp.agent.state.AddCostEntry(entry)
 
+	// Debit the fleet USD budget so the workflow runner's budget display
+	// ($X of $Y) reflects primary-agent LLM calls, not just subagents.
+	// Use chargedCost when available (pay_per_token), fall back to
+	// tokenCost for subscription/free providers.
+	costForBudget := chargedCost
+	if costForBudget == 0 {
+		costForBudget = tokenCost
+	}
+	if sp.agent.fleetUsdBudget != nil && costForBudget > 0 {
+		spent, crossed, justExceeded := sp.agent.fleetUsdBudget.Add(costForBudget)
+		_, limit := sp.agent.fleetUsdBudget.Snapshot()
+		for _, t := range crossed {
+			if cb, ok := sp.agent.budgetWarningCallback.Load().(func(threshold, spent, limit float64)); ok && cb != nil {
+				cb(t, spent, limit)
+			}
+		}
+		if justExceeded {
+			sp.agent.fleetBudgetTrunc.Store(true)
+			if cb, ok := sp.agent.budgetExceededCallback.Load().(func(spent, limit float64)); ok && cb != nil {
+				cb(spent, limit)
+			}
+		}
+	}
+
 	// Keep existing cached token tracking
 	if n := resp.Usage.CachedTokens; n > 0 {
 		sp.agent.state.SetCachedTokens(sp.agent.state.GetCachedTokens() + n)
@@ -214,9 +239,10 @@ func (sp *sproutProvider) resolveBillingType() string {
 
 // estimateCostFromPricing computes a cost estimate from token counts and the
 // current model's per-million pricing, used when the provider doesn't report
-// cost in its API response. Looks up pricing from the published registry
-// (which carries per-model pricing from embedded configs). Returns 0 when no
-// pricing data is available.
+// cost in its API response. Tries the live model registry first, then falls
+// back to the embedded provider catalog (which carries manually-curated
+// pricing for providers whose /v1/models endpoint omits cost fields, e.g.
+// DeepSeek). Returns 0 when no pricing data is available from either source.
 func (sp *sproutProvider) estimateCostFromPricing(promptTokens, completionTokens int) float64 {
 	if sp.agent == nil || sp.agent.client == nil {
 		return 0
@@ -225,19 +251,27 @@ func (sp *sproutProvider) estimateCostFromPricing(promptTokens, completionTokens
 	if model == "" {
 		return 0
 	}
-	models, err := api.GetModelsForProviderCtx(context.Background(), sp.agent.getClientType())
-	if err != nil {
-		return 0
-	}
-	for _, m := range models {
-		if m.ID != model {
-			continue
+
+	// Primary path: live model registry / canonical adapter.
+	if models, err := api.GetModelsForProviderCtx(context.Background(), sp.agent.getClientType()); err == nil {
+		for _, m := range models {
+			if m.ID != model {
+				continue
+			}
+			if m.InputCost > 0 || m.OutputCost > 0 {
+				return float64(promptTokens)/1e6*m.InputCost + float64(completionTokens)/1e6*m.OutputCost
+			}
+			break
 		}
-		if m.InputCost <= 0 && m.OutputCost <= 0 {
-			return 0
-		}
-		return float64(promptTokens)/1e6*m.InputCost + float64(completionTokens)/1e6*m.OutputCost
 	}
+
+	// Fallback: embedded provider catalog (curated pricing for providers
+	// whose live API doesn't report costs).
+	provider := sp.agent.GetProvider()
+	if inPerM, outPerM, _, ok := providercatalog.FindModelPricing(provider, model); ok {
+		return float64(promptTokens)/1e6*inPerM + float64(completionTokens)/1e6*outPerM
+	}
+
 	return 0
 }
 

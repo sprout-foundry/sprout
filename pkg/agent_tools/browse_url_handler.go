@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
@@ -110,3 +111,9 @@ func (h *browseURLHandler) Execute(ctx context.Context, env ToolEnv, args map[st
 
 	return toolResult, nil
 }
+
+func (h *browseURLHandler) Aliases() []string         { return nil }
+func (h *browseURLHandler) Timeout() time.Duration    { return 0 }
+func (h *browseURLHandler) MaxResultSize() int        { return 0 }
+func (h *browseURLHandler) SafeForParallel() bool     { return false }
+func (h *browseURLHandler) Interactive() bool         { return false }

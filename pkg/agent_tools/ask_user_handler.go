@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
@@ -69,6 +70,12 @@ func (h *askUserHandler) Execute(ctx context.Context, env ToolEnv, args map[stri
 	}
 	return ToolResult{Output: response}, nil
 }
+
+func (h *askUserHandler) Aliases() []string         { return nil }
+func (h *askUserHandler) Timeout() time.Duration    { return 0 }
+func (h *askUserHandler) MaxResultSize() int        { return 0 }
+func (h *askUserHandler) SafeForParallel() bool     { return false }
+func (h *askUserHandler) Interactive() bool         { return true }
 
 // parseAskUserArgs lifts a raw JSON-decoded args map into an AskUserRequest.
 // Tolerant of LLM imperfection: accepts options as either []map or []string.

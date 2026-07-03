@@ -188,6 +188,12 @@ func (h *takeScreenshotHandler) Execute(_ context.Context, _ tools.ToolEnv, args
 	}, nil
 }
 
+func (h *takeScreenshotHandler) Aliases() []string             { return nil }
+func (h *takeScreenshotHandler) Timeout() time.Duration        { return 0 }
+func (h *takeScreenshotHandler) MaxResultSize() int            { return 0 }
+func (h *takeScreenshotHandler) SafeForParallel() bool         { return false }
+func (h *takeScreenshotHandler) Interactive() bool             { return false }
+
 // ---------------------------------------------------------------------------
 // mouse_click
 // ---------------------------------------------------------------------------
@@ -250,6 +256,12 @@ func (h *mouseClickHandler) Execute(_ context.Context, _ tools.ToolEnv, args map
 		Output: fmt.Sprintf("Mouse %s clicked at (%d, %d) with button %s", clickType, x, y, button),
 	}, nil
 }
+
+func (h *mouseClickHandler) Aliases() []string             { return nil }
+func (h *mouseClickHandler) Timeout() time.Duration        { return 0 }
+func (h *mouseClickHandler) MaxResultSize() int            { return 0 }
+func (h *mouseClickHandler) SafeForParallel() bool         { return false }
+func (h *mouseClickHandler) Interactive() bool             { return false }
 
 // ---------------------------------------------------------------------------
 // mouse_drag
@@ -318,6 +330,12 @@ func (h *mouseDragHandler) Execute(_ context.Context, _ tools.ToolEnv, args map[
 	}, nil
 }
 
+func (h *mouseDragHandler) Aliases() []string             { return nil }
+func (h *mouseDragHandler) Timeout() time.Duration        { return 0 }
+func (h *mouseDragHandler) MaxResultSize() int            { return 0 }
+func (h *mouseDragHandler) SafeForParallel() bool         { return false }
+func (h *mouseDragHandler) Interactive() bool             { return false }
+
 // ---------------------------------------------------------------------------
 // keyboard_type
 // ---------------------------------------------------------------------------
@@ -362,6 +380,12 @@ func (h *keyboardTypeHandler) Execute(_ context.Context, _ tools.ToolEnv, args m
 	}, nil
 }
 
+func (h *keyboardTypeHandler) Aliases() []string             { return nil }
+func (h *keyboardTypeHandler) Timeout() time.Duration        { return 0 }
+func (h *keyboardTypeHandler) MaxResultSize() int            { return 0 }
+func (h *keyboardTypeHandler) SafeForParallel() bool         { return false }
+func (h *keyboardTypeHandler) Interactive() bool             { return false }
+
 // ---------------------------------------------------------------------------
 // keyboard_press
 // ---------------------------------------------------------------------------
@@ -405,6 +429,12 @@ func (h *keyboardPressHandler) Execute(_ context.Context, _ tools.ToolEnv, args 
 		Output: fmt.Sprintf("Pressed key: %s", key),
 	}, nil
 }
+
+func (h *keyboardPressHandler) Aliases() []string             { return nil }
+func (h *keyboardPressHandler) Timeout() time.Duration        { return 0 }
+func (h *keyboardPressHandler) MaxResultSize() int            { return 0 }
+func (h *keyboardPressHandler) SafeForParallel() bool         { return false }
+func (h *keyboardPressHandler) Interactive() bool             { return false }
 
 // ---------------------------------------------------------------------------
 // scroll
@@ -475,6 +505,12 @@ func (h *scrollHandler) Execute(_ context.Context, _ tools.ToolEnv, args map[str
 	}, nil
 }
 
+func (h *scrollHandler) Aliases() []string             { return nil }
+func (h *scrollHandler) Timeout() time.Duration        { return 0 }
+func (h *scrollHandler) MaxResultSize() int            { return 0 }
+func (h *scrollHandler) SafeForParallel() bool         { return false }
+func (h *scrollHandler) Interactive() bool             { return false }
+
 // ---------------------------------------------------------------------------
 // wait
 // ---------------------------------------------------------------------------
@@ -531,3 +567,9 @@ func (h *waitHandler) Execute(ctx context.Context, _ tools.ToolEnv, args map[str
 		}, ctx.Err()
 	}
 }
+
+func (h *waitHandler) Aliases() []string             { return nil }
+func (h *waitHandler) Timeout() time.Duration        { return 0 }
+func (h *waitHandler) MaxResultSize() int            { return 0 }
+func (h *waitHandler) SafeForParallel() bool         { return false }
+func (h *waitHandler) Interactive() bool             { return false }

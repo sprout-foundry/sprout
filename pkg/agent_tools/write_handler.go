@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
@@ -109,3 +110,9 @@ func (h *writeFileHandler) Execute(ctx context.Context, env ToolEnv, args map[st
 		TokenUsage: int64(estimateTokenUsage(result)),
 	}, nil
 }
+
+func (h *writeFileHandler) Aliases() []string         { return nil }
+func (h *writeFileHandler) Timeout() time.Duration    { return 0 }
+func (h *writeFileHandler) MaxResultSize() int        { return 0 }
+func (h *writeFileHandler) SafeForParallel() bool     { return false }
+func (h *writeFileHandler) Interactive() bool         { return false }

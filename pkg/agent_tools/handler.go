@@ -22,7 +22,8 @@
 // # Adding a new tool
 //
 // 1. Create a new file in this package (e.g., `my_tool_handler.go`).
-// 2. Define a struct and implement the four ToolHandler methods.
+// 2. Define a struct and implement all ToolHandler methods (Name, Definition,
+//    Validate, Execute, plus the 5 optional metadata methods).
 // 3. Register it in `AllTools()` in `all.go`.
 //
 // See AGENTS.md for tool documentation and conventions.
@@ -49,6 +50,7 @@ package tools
 import (
 	"context"
 	"io"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/embedding"
@@ -72,6 +74,15 @@ type ToolHandler interface {
 	Validate(args map[string]any) error
 	// Execute runs the tool with the given context, environment, and arguments.
 	Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error)
+
+	// Metadata — all optional with sensible defaults. When a metadata method
+	// returns its zero value, the ToolRegistry falls back to its own
+	// registry-wide defaults for timeout and max result size.
+	Aliases() []string           // default: nil (no aliases)
+	Timeout() time.Duration      // default: 0 (use registry default)
+	MaxResultSize() int          // default: 0 (use registry default)
+	SafeForParallel() bool       // default: false
+	Interactive() bool           // default: false
 }
 
 // ToolDefinition describes a tool's schema for LLM consumption.
@@ -139,6 +150,11 @@ type ToolEnv struct {
 	// write_structured_file) before Go's map iteration randomizes it.
 	RawArgsJSON string
 	Notifier    BackgroundNotifier
+	// Agent is the *pkg/agent.Agent instance. Only set for tools that explicitly
+	// need agent access (e.g., run_subagent, run_parallel_subagents).
+	// For all other tools this is nil. Use with care — it creates a tight
+	// coupling that should be avoided for new tools.
+	Agent interface{} `json:"-"`
 }
 
 // AskUserService is the interface ask_user-style tools use to drive an

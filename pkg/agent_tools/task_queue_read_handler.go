@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"time"
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
@@ -85,3 +86,9 @@ func (h *taskQueueReadHandler) Execute(ctx context.Context, env ToolEnv, args ma
 
 	return ToolResult{Output: output}, nil
 }
+
+func (h *taskQueueReadHandler) Aliases() []string         { return nil }
+func (h *taskQueueReadHandler) Timeout() time.Duration    { return 0 }
+func (h *taskQueueReadHandler) MaxResultSize() int        { return 0 }
+func (h *taskQueueReadHandler) SafeForParallel() bool     { return false }
+func (h *taskQueueReadHandler) Interactive() bool         { return false }

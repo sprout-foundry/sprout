@@ -16,7 +16,7 @@
 }
 
 .chat-statusbar-sep {
-  color: var(--text-tertiary, #6e7681);
+  color: var(--text-muted);
   font-size: 11px;
   padding: 0 2px;
 }

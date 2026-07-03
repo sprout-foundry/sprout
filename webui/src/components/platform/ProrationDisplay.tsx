@@ -52,7 +52,7 @@ export const ProrationDisplay: React.FC<ProrationDisplayProps> = ({ prorationRec
                   <span
                     style={{
                       fontWeight: '600',
-                      color: record.type === 'credit' ? '#22c55e' : '#ef4444',
+                      color: record.type === 'credit' ? 'var(--accent-success)' : 'var(--accent-error)',
                     }}
                   >
                     {record.type === 'credit' ? '✓ Credit' : '⚠ Charge'}
@@ -64,7 +64,7 @@ export const ProrationDisplay: React.FC<ProrationDisplayProps> = ({ prorationRec
                 <div
                   style={{
                     fontWeight: '600',
-                    color: record.type === 'credit' ? '#22c55e' : '#ef4444',
+                    color: record.type === 'credit' ? 'var(--accent-success)' : 'var(--accent-error)',
                   }}
                 >
                   {record.type === 'credit' ? '+' : '-'}

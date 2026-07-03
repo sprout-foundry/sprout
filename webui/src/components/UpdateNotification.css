@@ -40,7 +40,7 @@
 }
 
 .update-available-icon {
-  color: var(--accent-success, #22c55e);
+  color: var(--accent-success);
   flex-shrink: 0;
 }
 

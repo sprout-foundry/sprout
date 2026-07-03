@@ -81,12 +81,12 @@
 }
 
 .subagent-tree-status-ok {
-  color: #22c55e;
+  color: var(--accent-success);
   flex-shrink: 0;
 }
 
 .subagent-tree-status-error {
-  color: #ef4444;
+  color: var(--accent-error);
   flex-shrink: 0;
 }
 

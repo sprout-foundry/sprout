@@ -86,6 +86,17 @@ type Agent struct {
 	// Input handling
 	inputInjectionChan  chan string
 	inputInjectionMutex sync.Mutex
+
+	// Notification queue for background task completions (SP-108).
+	pendingNotifications []Notification
+	notifMu              sync.Mutex
+
+	// Wakeup budget tracking for auto-resume (SP-108).
+	wakeupTokensConsumed int
+	wakeupResumeCount    int
+	wakeupDisabled       bool
+	wakeupMu             sync.Mutex
+
 	interruptMu         sync.Mutex // protects interruptCtx + interruptCancel
 	interruptCtx        context.Context
 	interruptCancel     context.CancelFunc

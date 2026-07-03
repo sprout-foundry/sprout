@@ -89,7 +89,7 @@ func TestNewDefaultToolRegistry_ToolParameters(t *testing.T) {
 	}
 
 	expectations := map[string]toolParamExpectation{
-		"shell_command":           {paramCount: 5, requiredCount: 0, requiredNames: []string{}},
+		"shell_command":           {paramCount: 6, requiredCount: 0, requiredNames: []string{}},
 		"git":                     {paramCount: 2, requiredCount: 1, requiredNames: []string{"operation"}},
 		"commit":                  {paramCount: 2, requiredCount: 0, requiredNames: []string{}},
 		"create_pull_request":     {paramCount: 6, requiredCount: 1, requiredNames: []string{"title"}},

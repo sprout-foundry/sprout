@@ -55,6 +55,13 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
+// BackgroundNotifier is the interface tools use to queue a background
+// completion notification. The agent (pkg/agent) implements this so
+// tool handlers don't need *Agent access.
+type BackgroundNotifier interface {
+	NotifyCompletion(sessionID, kind, content string)
+}
+
 // ToolHandler defines the interface for a tool that can be invoked by the agent.
 type ToolHandler interface {
 	// Name returns the unique tool identifier (e.g., "read_file").
@@ -131,6 +138,7 @@ type ToolEnv struct {
 	// insertion order of nested maps (e.g., the "data" field in
 	// write_structured_file) before Go's map iteration randomizes it.
 	RawArgsJSON string
+	Notifier    BackgroundNotifier
 }
 
 // AskUserService is the interface ask_user-style tools use to drive an

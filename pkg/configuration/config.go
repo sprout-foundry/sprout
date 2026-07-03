@@ -275,6 +275,13 @@ type Config struct {
 	// Empty defaults to "default".
 	OutputVerbosity string `json:"output_verbosity,omitempty"`
 
+	// Wakeup controls auto-resume behavior for background task completions
+	// (SP-108). When enabled, the daemon automatically processes pending
+	// notifications by calling ProcessQueryWithContinuity so the agent can
+	// act on completed background tasks without the user sending a manual
+	// message. Budget controls prevent unattended token burn loops.
+	Wakeup WakeupConfig `json:"wakeup,omitempty"`
+
 	// Other flags
 	FromAgent bool `json:"-"` // Internal flag, not persisted
 
@@ -285,6 +292,23 @@ type Config struct {
 	// modified the file while this Config was in memory. NOT serialized.
 	loadedModTime time.Time
 	loadedSize    int64
+}
+
+// WakeupConfig controls auto-resume behavior for background task completions
+// (SP-108). Stored in config.json under the "wakeup" key.
+type WakeupConfig struct {
+	Enabled              bool `json:"enabled"`                 // Master switch; default false
+	MaxTokensPerSession  int  `json:"max_tokens_per_session"`  // Hard cap on auto-resume token spend; default 5000
+	MaxResumesPerSession int  `json:"max_resumes_per_session"` // Max auto-resumes before requiring user input; default 10
+}
+
+// DefaultWakeupConfig returns conservative defaults.
+func DefaultWakeupConfig() WakeupConfig {
+	return WakeupConfig{
+		Enabled:              false,
+		MaxTokensPerSession:  5000,
+		MaxResumesPerSession: 10,
+	}
 }
 
 // MCPConfig moved to pkg/mcp package for consolidation

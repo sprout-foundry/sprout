@@ -58,6 +58,12 @@ export interface SproutSettings {
     audit_log_dir: string;
     workspace_allowlist: string[];
   };
+  /** Wakeup / auto-resume configuration (SP-108). */
+  wakeup?: {
+    enabled: boolean;
+    max_tokens_per_session: number;
+    max_resumes_per_session: number;
+  };
 }
 
 export interface HotkeyEntry {

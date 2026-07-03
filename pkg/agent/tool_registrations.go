@@ -21,6 +21,7 @@ func newDefaultToolRegistry() *ToolRegistry {
 			{"check_background", "string", false, []string{}, "Session ID of a background session to check (returns accumulated output)"},
 			{"wait_seconds", "number", false, []string{}, "Only valid with check_background. Block (up to this many seconds, max 600) until the session exits, then return the snapshot. Use this for long-running workflows to avoid burning tokens on rapid polling. 0 (default) returns immediately as before."},
 			{"stop_background", "string", false, []string{}, "Session ID of a background session to stop/terminate"},
+			{"wakeup_timeout", "integer", false, []string{}, "Optional deadline in seconds for background commands. The agent is always notified on completion; this adds a timeout notification if the process hasn't finished by the deadline. 0 (default) means wait indefinitely."},
 		},
 		Handler:     handleShellCommand,
 		Timeout:     2 * time.Minute,
@@ -472,7 +473,7 @@ func newDefaultToolRegistry() *ToolRegistry {
 			"Use list_automate_workflows first to discover what's available. " +
 			"BEFORE calling this tool: (1) read the workflow JSON and its prompt_file/command_file (if any) so you understand what the workflow will actually do; (2) write a brief plain-language overview to the user describing what will happen (steps, providers/models, expected duration, side effects like commits); (3) ask the user to confirm starting. The first call in a session triggers an explicit user approval prompt; subsequent calls for the SAME workflow during the same chat session are auto-approved so you (the primary agent) can restart it after failure without re-asking. " +
 			"After invocation, the tool returns immediately with a session_id. The workflow keeps running in the background. " +
-			"When the workflow finishes, a self-contained completion message (including status, exit code, and output tail on failure) is injected back into your context automatically. You can act on this immediately — no polling required for simple cases. For long-running workflows where you want to provide progress updates to the user, continue using check_background polling; the completion injection will still fire when it exits. " +
+			"When the workflow finishes, a self-contained completion message is queued and delivered at the start of your next turn. If auto-resume is enabled (wakeup config), the completion triggers an automatic turn. For progress updates, use shell_command(check_background=<session_id>, wait_seconds=600). " +
 			"To monitor it efficiently while waiting, use shell_command(check_background=<session_id>, wait_seconds=600) — this blocks (up to 10 min) until the workflow exits or the wait elapses, returning the snapshot. " +
 			"Cadence guidance: first check ~60–90s after start (catches early failures), then use wait_seconds=600 in a loop while status stays 'running'. Surface meaningful updates to the user between waits — never poll silently for hours. If the user asks for status mid-run, do an immediate check with wait_seconds=0. " +
 			"When status is 'exited', read the captured output, decide if the run succeeded, and resume control to either report results, retry the workflow (no re-approval needed), or take corrective action. " +

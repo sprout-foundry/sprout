@@ -121,6 +121,7 @@ func handleRunAutomate(ctx context.Context, a *Agent, args map[string]interface{
 		wfDesc := desc
 
 		go func() {
+			bgCtx := context.Background()
 			select {
 			case <-proc.Done():
 				exitCode := proc.GetExitCode()
@@ -131,13 +132,13 @@ func handleRunAutomate(ctx context.Context, a *Agent, args map[string]interface{
 				a.publishEvent(events.EventTypeAutomateSessionEnded, events.AutomateSessionEndedEvent(
 					sessionID, wfName, status, 0,
 				))
-
-				// SP-067: Inject self-contained completion message back to the model
-				// so it can act autonomously (e.g., retry on failure) without polling.
 				injectMsg := buildAutomateCompletionMessage(wfName, wfDesc, sessionID, status, exitCode, proc.GetOutputPath())
-				_ = a.InjectInputContext(injectMsg)
-			case <-ctx.Done():
-				// Agent shutting down; skip injection.
+				a.QueueNotification(Notification{
+					Content:   injectMsg,
+					SessionID: sessionID,
+					Kind:      NotifAutomate,
+				})
+			case <-bgCtx.Done():
 			}
 		}()
 	}

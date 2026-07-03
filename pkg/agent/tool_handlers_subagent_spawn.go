@@ -151,6 +151,81 @@ func handleRunSubagent(ctx context.Context, a *Agent, args map[string]interface{
 // ---------------------------------------------------------------------------
 
 func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
+	// Phase 1: Parse tasks from arguments
+	parallelTasks, err := parseParallelTasks(args)
+	if err != nil {
+		return "", err
+	}
+
+	a.Logger().Debug("Spawning %d parallel subagents\n", len(parallelTasks))
+
+	// Resolve subagent provider/model configuration
+	subagentProvider, subagentModel := resolveParallelSubagentConfig(a)
+	applyParallelTaskConfig(parallelTasks, subagentProvider, subagentModel)
+
+	// Validate parallel subagent configuration
+	if err := validateParallelSubagentConfig(a, parallelTasks); err != nil {
+		return "", err
+	}
+
+	a.Logger().Debug("Spawning %d parallel subagents\n", len(parallelTasks))
+
+	// Print subagent info and notify event bus
+	publishParallelSubagentStart(ctx, a, subagentProvider, subagentModel, len(parallelTasks))
+
+	// Build task list and run
+	runner := a.GetSubagentRunner()
+	tasks := buildParallelSubagentTasks(parallelTasks)
+	opts := SubagentOptions{}
+	if a.configManager != nil {
+		maxParallel := a.configManager.GetConfig().GetSubagentMaxParallel()
+		if maxParallel > 16 {
+			maxParallel = 16
+		}
+		opts.MaxConcurrentSubagents = maxParallel
+	}
+	results := runner.RunParallel(ctx, tasks, opts)
+
+	// Phase 2: Collect and process results
+	resultMap, failedCount := collectParallelResults(results, tasks, a)
+	publishParallelSubagentComplete(ctx, a, resultMap, failedCount)
+
+	// Clean up any remaining batch buffers for all tasks
+	for taskID := range resultMap {
+		cleanupSubagentBatch(taskID, a, "", "")
+	}
+
+	// Phase 3: Security checks and failure handling
+	if handled, result := handleParallelSubagentSecurityResult(resultMap, a); handled {
+		return result, nil
+	}
+
+	// Flush any remaining buffered output for parallel subagents
+	flushAllSubagentBuffers(a)
+
+	// For non-subagent context, check if any subagent failed
+	if handled, result := handleParallelSubagentFailureResult(resultMap, a); handled {
+		return result, nil
+	}
+
+	// Marshal and return
+	jsonBytes, jsonErr := json.MarshalIndent(resultMap, "", "  ")
+	if jsonErr != nil {
+		return "", agenterrors.NewAgent("subagent.spawn", "failed to marshal parallel subagents result", jsonErr)
+	}
+
+	a.Logger().Debug("Parallel subagents spawn result: %s\n", string(jsonBytes))
+	return string(jsonBytes), nil
+}
+
+// ---------------------------------------------------------------------------
+// parseParallelTasks — parse the tasks/prompts/subagents argument from args
+// ---------------------------------------------------------------------------
+
+// parseParallelTasks extracts and parses the tasks array from the argument
+// map, supporting both string and object task formats. Returns the parsed
+// tasks or an error if the input is invalid.
+func parseParallelTasks(args map[string]interface{}) ([]SubagentTask, error) {
 	// Accept "tasks", "prompts", or "subagents" parameter names for LLM flexibility
 	var tasksRaw interface{}
 	var ok bool
@@ -161,16 +236,14 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 		}
 	}
 	if !ok {
-		return "", agenterrors.NewInvalidInputError("missing tasks, prompts, or subagents argument", nil)
+		return nil, agenterrors.NewInvalidInputError("missing tasks, prompts, or subagents argument", nil)
 	}
 
 	// Parse the tasks array
 	tasksSlice, ok := tasksRaw.([]interface{})
 	if !ok {
-		return "", agenterrors.NewInvalidInputError("tasks/prompts must be an array", nil)
+		return nil, agenterrors.NewInvalidInputError("tasks/prompts must be an array", nil)
 	}
-
-	a.Logger().Debug("Spawning %d parallel subagents\n", len(tasksSlice))
 
 	var parallelTasks []SubagentTask
 	for i, taskRaw := range tasksSlice {
@@ -194,103 +267,31 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 
 			prompt, err := convertToString(taskMap["prompt"], "prompt")
 			if err != nil {
-				return "", agenterrors.NewValidation(fmt.Sprintf("failed to convert prompt parameter: %v", err), nil)
+				return nil, agenterrors.NewValidation(fmt.Sprintf("failed to convert prompt parameter: %v", err), nil)
 			}
 			task.Prompt = prompt
 
 			// Note: model and provider are set from configuration, not from LLM parameters
 			// This ensures consistent subagent behavior configured by the user
 		} else {
-			return "", agenterrors.NewInvalidInputError("each task must be a string or an object", nil)
+			return nil, agenterrors.NewInvalidInputError("each task must be a string or an object", nil)
 		}
 
 		parallelTasks = append(parallelTasks, task)
 	}
 
-	// Get configured subagent model/provider and apply to all tasks
-	var subagentProvider, subagentModel string
-	if a.configManager != nil {
-		config := a.configManager.GetConfig()
-		subagentProvider = config.GetSubagentProvider()
-		subagentModel = config.GetSubagentModel()
-		a.warnSubagentFallback("parallel subagent defaults", "", "", strings.TrimSpace(config.SubagentProvider), strings.TrimSpace(config.SubagentModel), subagentProvider, subagentModel)
+	return parallelTasks, nil
+}
 
-		// If no explicit subagent config, inherit from parent agent's runtime values.
-		if config.SubagentProvider == "" && config.SubagentModel == "" {
-			if parentProvider := a.GetProvider(); parentProvider != "" && parentProvider != "unknown" {
-				subagentProvider = parentProvider
-			}
-			if parentModel := a.GetModel(); parentModel != "" && parentModel != "unknown" {
-				subagentModel = parentModel
-			}
-		}
-	} else {
-		subagentProvider = a.GetProvider()
-		subagentModel = a.GetModel()
-	}
+// ---------------------------------------------------------------------------
+// collectParallelResults — merge changes, build resultMap, and track costs
+// ---------------------------------------------------------------------------
 
-	// Apply configuration to all tasks (overriding any empty values)
-	for i := range parallelTasks {
-		if subagentProvider != "" && parallelTasks[i].Provider == "" {
-			parallelTasks[i].Provider = subagentProvider
-		}
-		if subagentModel != "" && parallelTasks[i].Model == "" {
-			parallelTasks[i].Model = subagentModel
-		}
-	}
-
-	// Check if parallel subagents are enabled
-	if a.configManager != nil && !a.configManager.GetConfig().GetSubagentParallelEnabled() {
-		return "", agenterrors.NewPermanentError("parallel subagents are disabled in configuration. Use run_subagent for sequential execution instead.", nil)
-	}
-
-	// Validate number of parallel tasks against configured max
-	if a.configManager != nil {
-		maxParallel := a.configManager.GetConfig().GetSubagentMaxParallel()
-		if len(parallelTasks) > maxParallel {
-			return "", agenterrors.NewInvalidInputError(fmt.Sprintf("too many parallel tasks: %d exceeds configured max of %d", len(parallelTasks), maxParallel), nil)
-		}
-	}
-
-	a.Logger().Debug("Spawning %d parallel subagents\n", len(parallelTasks))
-
-	// Print the provider/model being used for these parallel subagents
-	displayProvider := subagentProvider
-	if displayProvider == "" {
-		displayProvider = "default"
-	}
-	displayModel := subagentModel
-	if displayModel == "" {
-		displayModel = "default"
-	}
-	publishSubagentActivity(ctx, a, "spawn", fmt.Sprintf("Starting %d parallel subagents", len(parallelTasks)), map[string]interface{}{
-		"provider":    displayProvider,
-		"model":       displayModel,
-		"is_parallel": true,
-		"task_count":  len(parallelTasks),
-	})
-	printParallelSubagentStart(len(parallelTasks), displayProvider, displayModel)
-
-	runner := a.GetSubagentRunner()
-	var tasks []SubagentTask
-	for _, pt := range parallelTasks {
-		tasks = append(tasks, SubagentTask{
-			ID:       pt.ID,
-			Prompt:   pt.Prompt,
-			Model:    pt.Model,
-			Provider: pt.Provider,
-		})
-	}
-	opts := SubagentOptions{}
-	if a.configManager != nil {
-		maxParallel := a.configManager.GetConfig().GetSubagentMaxParallel()
-		if maxParallel > 16 {
-			maxParallel = 16
-		}
-		opts.MaxConcurrentSubagents = maxParallel
-	}
-	results := runner.RunParallel(ctx, tasks, opts)
-
+// collectParallelResults merges subagent file changes into the parent agent's
+// ChangeTracker, converts SubagentResult slices into the legacy resultMap
+// format, counts failures, and tracks LLM usage costs. Returns the resultMap
+// and the number of failed tasks.
+func collectParallelResults(results []*SubagentResult, tasks []SubagentTask, a *Agent) (map[string]map[string]string, int) {
 	// SP-059 Phase 2c (missing step): merge each subagent's tracked
 	// changes into the primary's ChangeTracker so list_changes,
 	// recover_file, and revert_my_changes see subagent edits. Build a
@@ -325,25 +326,13 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 			resultMap[r.ID]["stderr"] = r.Error.Error()
 		}
 	}
+
+	// Count failures
 	failedCount := 0
 	for _, result := range resultMap {
 		if result["exit_code"] != "0" {
 			failedCount++
 		}
-	}
-	completionMessage := fmt.Sprintf("Parallel subagents completed (%d tasks)", len(resultMap))
-	if failedCount > 0 {
-		completionMessage = fmt.Sprintf("Parallel subagents finished with %d failure(s)", failedCount)
-	}
-	publishSubagentActivity(ctx, a, "complete", completionMessage, map[string]interface{}{
-		"is_parallel": true,
-		"task_count":  len(resultMap),
-		"failures":    failedCount,
-	})
-
-	// Clean up any remaining batch buffers for all tasks
-	for taskID := range resultMap {
-		cleanupSubagentBatch(taskID, a, "", "")
 	}
 
 	// Track costs from all parallel subagents
@@ -375,44 +364,189 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 		}
 	}
 
-	// Check for security errors in any of the parallel subagents
-	// When running as a subagent, we need to delegate security decisions to the primary agent
-	if a.IsSubagent() {
-		for taskID, result := range resultMap {
-			exitCode := result["exit_code"]
-			stderr := result["stderr"]
+	return resultMap, failedCount
+}
 
-			// Check for filesystem security errors or failures
-			if strings.Contains(stderr, "outside working directory") ||
-				strings.Contains(stderr, "ErrOutsideWorkingDirectory") ||
-				strings.Contains(stderr, "ErrWriteOutsideWorkingDirectory") ||
-				strings.Contains(stderr, "security warning") ||
-				exitCode != "0" {
+// ---------------------------------------------------------------------------
+// resolveParallelSubagentConfig — resolve provider/model for parallel tasks
+// ---------------------------------------------------------------------------
 
-				// One of the parallel subagents encountered a security error or failed
-				// Return a special error format that tells the primary agent to stop retrying
-				errorMsg := fmt.Sprintf("SUBAGENT_SECURITY_ERROR: A parallel subagent encountered a security-related error or requires user authorization.\n\n"+
-					"Task ID: %s\n"+
-					"Exit code: %s\n"+
-					"Stderr: %s\n"+
-					"Stdout: %s\n\n"+
-					"IMPORTANT: This subagent task requires user authorization or encountered a blocking error. "+
-					"Do NOT retry this parallel subagent call with the same parameters. "+
-					"Instead, inform the user about the error and ask for guidance on how to proceed.",
-					taskID, exitCode, stderr, result["stdout"])
+// resolveParallelSubagentConfig resolves the effective provider and model for
+// parallel subagent tasks, checking config, fallback warnings, and parent
+// agent inheritance.
+func resolveParallelSubagentConfig(a *Agent) (string, string) {
+	var subagentProvider, subagentModel string
+	if a.configManager != nil {
+		config := a.configManager.GetConfig()
+		subagentProvider = config.GetSubagentProvider()
+		subagentModel = config.GetSubagentModel()
+		a.warnSubagentFallback("parallel subagent defaults", "", "", strings.TrimSpace(config.SubagentProvider), strings.TrimSpace(config.SubagentModel), subagentProvider, subagentModel)
 
-				a.Logger().Debug("Parallel subagent [%s] failed with security error, delegating to primary agent\n", taskID)
-				return errorMsg, nil
+		// If no explicit subagent config, inherit from parent agent's runtime values.
+		if config.SubagentProvider == "" && config.SubagentModel == "" {
+			if parentProvider := a.GetProvider(); parentProvider != "" && parentProvider != "unknown" {
+				subagentProvider = parentProvider
+			}
+			if parentModel := a.GetModel(); parentModel != "" && parentModel != "unknown" {
+				subagentModel = parentModel
 			}
 		}
+	} else {
+		subagentProvider = a.GetProvider()
+		subagentModel = a.GetModel()
+	}
+	return subagentProvider, subagentModel
+}
+
+// ---------------------------------------------------------------------------
+// applyParallelTaskConfig — apply provider/model to all tasks
+// ---------------------------------------------------------------------------
+
+// applyParallelTaskConfig applies the resolved provider/model configuration
+// to all parallel tasks, overriding any empty values.
+func applyParallelTaskConfig(tasks []SubagentTask, provider, model string) {
+	for i := range tasks {
+		if provider != "" && tasks[i].Provider == "" {
+			tasks[i].Provider = provider
+		}
+		if model != "" && tasks[i].Model == "" {
+			tasks[i].Model = model
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// validateParallelSubagentConfig — validate parallel subagent configuration
+// ---------------------------------------------------------------------------
+
+// validateParallelSubagentConfig checks whether parallel subagents are
+// enabled and whether the number of tasks is within the configured limit.
+func validateParallelSubagentConfig(a *Agent, tasks []SubagentTask) error {
+	if a.configManager != nil && !a.configManager.GetConfig().GetSubagentParallelEnabled() {
+		return agenterrors.NewPermanentError("parallel subagents are disabled in configuration. Use run_subagent for sequential execution instead.", nil)
 	}
 
-	// Flush any remaining buffered output for parallel subagents
-	flushAllSubagentBuffers(a)
+	if a.configManager != nil {
+		maxParallel := a.configManager.GetConfig().GetSubagentMaxParallel()
+		if len(tasks) > maxParallel {
+			return agenterrors.NewInvalidInputError(fmt.Sprintf("too many parallel tasks: %d exceeds configured max of %d", len(tasks), maxParallel), nil)
+		}
+	}
+	return nil
+}
 
-	// For non-subagent context (primary agent), check if any subagent failed
-	// and add a clear message to prevent retry loops
-	var failedTasks []string
+// ---------------------------------------------------------------------------
+// publishParallelSubagentStart — print and publish start event
+// ---------------------------------------------------------------------------
+
+// publishParallelSubagentStart publishes a spawn event and prints the
+// parallel subagent start message with provider/model info.
+func publishParallelSubagentStart(ctx context.Context, a *Agent, provider, model string, count int) {
+	displayProvider := provider
+	if displayProvider == "" {
+		displayProvider = "default"
+	}
+	displayModel := model
+	if displayModel == "" {
+		displayModel = "default"
+	}
+	publishSubagentActivity(ctx, a, "spawn", fmt.Sprintf("Starting %d parallel subagents", count), map[string]interface{}{
+		"provider":    displayProvider,
+		"model":       displayModel,
+		"is_parallel": true,
+		"task_count":  count,
+	})
+	printParallelSubagentStart(count, displayProvider, displayModel)
+}
+
+// ---------------------------------------------------------------------------
+// buildParallelSubagentTasks — build trimmed task list for runner
+// ---------------------------------------------------------------------------
+
+// buildParallelSubagentTasks creates a copy of the task list with only the
+// fields that the subagent runner needs (ID, Prompt, Model, Provider).
+// Persona and WorkingDir are intentionally excluded because the parallel
+// runner resolves them from SubagentOptions, not from individual task
+// struct fields. This matches the original pre-refactor behavior exactly.
+func buildParallelSubagentTasks(tasks []SubagentTask) []SubagentTask {
+	result := make([]SubagentTask, len(tasks))
+	for i, pt := range tasks {
+		result[i] = SubagentTask{
+			ID:       pt.ID,
+			Prompt:   pt.Prompt,
+			Model:    pt.Model,
+			Provider: pt.Provider,
+		}
+	}
+	return result
+}
+
+// ---------------------------------------------------------------------------
+// publishParallelSubagentComplete — publish completion event
+// ---------------------------------------------------------------------------
+
+// publishParallelSubagentComplete publishes a completion event for parallel
+// subagents with task count and failure information.
+func publishParallelSubagentComplete(ctx context.Context, a *Agent, resultMap map[string]map[string]string, failedCount int) {
+	completionMessage := fmt.Sprintf("Parallel subagents completed (%d tasks)", len(resultMap))
+	if failedCount > 0 {
+		completionMessage = fmt.Sprintf("Parallel subagents finished with %d failure(s)", failedCount)
+	}
+	publishSubagentActivity(ctx, a, "complete", completionMessage, map[string]interface{}{
+		"is_parallel": true,
+		"task_count":  len(resultMap),
+		"failures":    failedCount,
+	})
+}
+
+// ---------------------------------------------------------------------------
+// handleParallelSubagentSecurityResult — security error delegation
+// ---------------------------------------------------------------------------
+
+// handleParallelSubagentSecurityResult checks if any parallel subagent
+// encountered a security-related error when running as a subagent. Returns
+// true and an error message if a security error was found, and false if
+// execution should continue normally.
+func handleParallelSubagentSecurityResult(resultMap map[string]map[string]string, a *Agent) (bool, string) {
+	if !a.IsSubagent() {
+		return false, ""
+	}
+
+	for taskID, result := range resultMap {
+		exitCode := result["exit_code"]
+		stderr := result["stderr"]
+
+		if strings.Contains(stderr, "outside working directory") ||
+			strings.Contains(stderr, "ErrOutsideWorkingDirectory") ||
+			strings.Contains(stderr, "ErrWriteOutsideWorkingDirectory") ||
+			strings.Contains(stderr, "security warning") ||
+			exitCode != "0" {
+
+			errorMsg := fmt.Sprintf("SUBAGENT_SECURITY_ERROR: A parallel subagent encountered a security-related error or requires user authorization.\n\n"+
+				"Task ID: %s\n"+
+				"Exit code: %s\n"+
+				"Stderr: %s\n"+
+				"Stdout: %s\n\n"+
+				"IMPORTANT: This subagent task requires user authorization or encountered a blocking error. "+
+				"Do NOT retry this parallel subagent call with the same parameters. "+
+				"Instead, inform the user about the error and ask for guidance on how to proceed.",
+				taskID, exitCode, stderr, result["stdout"])
+
+			a.Logger().Debug("Parallel subagent [%s] failed with security error, delegating to primary agent\n", taskID)
+			return true, errorMsg
+		}
+	}
+	return false, ""
+}
+
+// ---------------------------------------------------------------------------
+// handleParallelSubagentFailureResult — non-subagent failure detection
+// ---------------------------------------------------------------------------
+
+// handleParallelSubagentFailureResult checks for failed or security-blocked
+// parallel subagents when running as the primary agent (not a subagent).
+// Returns true and an error message if failures should prevent retry loops.
+func handleParallelSubagentFailureResult(resultMap map[string]map[string]string, a *Agent) (bool, string) {
 	var securityErrors []string
 
 	for taskID, result := range resultMap {
@@ -421,25 +555,18 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 		stdout := result["stdout"]
 
 		if exitCode != "0" {
-			// Check for specific error patterns that indicate we should stop retrying
 			if strings.Contains(stderr, "ErrOutsideWorkingDirectory") ||
 				strings.Contains(stderr, "ErrWriteOutsideWorkingDirectory") ||
 				strings.Contains(stderr, "security") ||
 				strings.Contains(stdout, "SUBAGENT_SECURITY_ERROR") {
-
-				// This is a security/authorization error - don't retry
 				securityErrors = append(securityErrors, fmt.Sprintf(
 					"Task %s: exit code %s, error: %s", taskID, exitCode, stderr))
 			} else {
-				// Other failures - track but allow potential retry
-				failedTasks = append(failedTasks, fmt.Sprintf(
-					"Task %s: exit code %s", taskID, exitCode))
 				result["error"] = fmt.Sprintf("Subagent failed with exit code %s. Error output: %s", exitCode, stderr)
 			}
 		}
 	}
 
-	// If we have security errors, return a clear error message to prevent retry loops
 	if len(securityErrors) > 0 {
 		errorMsg := fmt.Sprintf("SUBAGENT_FAILED: One or more parallel subagents encountered security or authorization errors that prevent them from completing their tasks.\n\n"+
 			"%s\n\n"+
@@ -448,17 +575,8 @@ func handleRunParallelSubagents(ctx context.Context, a *Agent, args map[string]i
 			strings.Join(securityErrors, "\n"))
 
 		a.Logger().Debug("Parallel subagents failed with security errors, stopping retry loop\n")
-		return errorMsg, nil
+		return true, errorMsg
 	}
 
-	// Convert map result to JSON for return
-	jsonBytes, jsonErr := json.MarshalIndent(resultMap, "", "  ")
-	if jsonErr != nil {
-		return "", agenterrors.NewAgent("subagent.spawn", "failed to marshal parallel subagents result", jsonErr)
-	}
-
-	a.Logger().Debug("Parallel subagents spawn result: %s\n", string(jsonBytes))
-
-	return string(jsonBytes), nil
-
+	return false, ""
 }

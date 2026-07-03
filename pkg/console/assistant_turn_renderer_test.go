@@ -98,24 +98,30 @@ func TestRenderer_FinalizeNoOpWhenNoMarkdownFeatures(t *testing.T) {
 }
 
 func TestRenderer_OnExternalWriteResetsSegment(t *testing.T) {
-	// Even with markdown features, an external write between segments
-	// means FinalizeAtTurnEnd should not be able to re-render older
-	// content. We can't directly observe the buffer, but we can verify
-	// that after OnExternalWrite + a small final segment with NO
-	// markdown features, Finalize is a no-op (i.e., it considers only
-	// the post-external segment).
+	// With streaming formatting, markdown lines are formatted as they
+	// stream. An external write between segments resets the formatter
+	// state. After OnExternalWrite, the second segment starts fresh.
 	r := NewAssistantTurnRenderer(80, NewMarkdownFormatter(true, true))
 	out := captureRendererStdout(t, func() {
-		r.WriteChunk("# Heading\n- bullet\n") // would trigger re-render
-		r.OnExternalWrite()                   // breaks segment
-		r.WriteChunk("done.\n")               // plain prose
+		r.WriteChunk("# Heading\n- bullet\n") // formatted: header + bullet
+		r.OnExternalWrite()                   // breaks segment, resets formatter
+		r.WriteChunk("done.\n")               // plain prose, no formatting
 		r.FinalizeAtTurnEnd()
 	})
-	// First segment streamed with indent, then nothing (external write
-	// happened externally — the renderer doesn't emit anything for it),
-	// then the second segment streamed with indent.
-	require.Equal(t, "  # Heading\n  - bullet\n  done.\n", out)
-	require.NotContains(t, out, "\033[", "no re-render should fire — final segment has no markdown features")
+	// First segment is formatted (header with ███, bullet colored).
+	// Second segment is plain prose with indent only.
+	require.Contains(t, out, "Heading")
+	require.Contains(t, out, "bullet")
+	require.Contains(t, out, "  done.\n")
+	// The plain "done." line should NOT have ANSI formatting.
+	doneIdx := strings.Index(out, "done.")
+	require.NotEqual(t, -1, doneIdx)
+	// Find the line containing "done." and verify it has no ANSI codes.
+	rest := out[doneIdx:]
+	if nlIdx := strings.IndexByte(rest, '\n'); nlIdx >= 0 {
+		rest = rest[:nlIdx]
+	}
+	require.NotContains(t, rest, "\x1b[", "plain prose line should have no ANSI formatting")
 }
 
 func TestPhysicalRowsMath(t *testing.T) {
@@ -131,34 +137,6 @@ func TestPhysicalRowsMath(t *testing.T) {
 	require.Equal(t, 1, physicalRows(500, 0))
 	// len=0 → at least 1
 	require.Equal(t, 1, physicalRows(0, 80))
-}
-
-func TestShouldReformat(t *testing.T) {
-	// shouldReformat short-circuits to false when colors are disabled
-	// (re-rendering would just produce a duplicate). The NO_COLOR env
-	// var is honored in production; tests that depend on the format
-	// signal must force colors on. Same for CLICOLOR_FORCE which a
-	// developer shell sometimes exports to force terminal colors.
-	t.Setenv("NO_COLOR", "")
-	t.Setenv("CLICOLOR_FORCE", "1")
-
-	// Plain prose — no.
-	require.False(t, shouldReformat("Hello world.\n", 80))
-	// Headings — yes.
-	require.True(t, shouldReformat("# Big heading\nsome text\n", 80))
-	require.True(t, shouldReformat("intro\n## Sub heading\nbody\n", 80))
-	// Bullets — yes.
-	require.True(t, shouldReformat("intro\n- item one\n- item two\n", 80))
-	// Code block — yes.
-	require.True(t, shouldReformat("see this:\n```go\nx := 1\n```\n", 80))
-	// Bold — yes.
-	require.True(t, shouldReformat("this is **important** text\n", 80))
-	// Inline code (>=2 backticks) — yes.
-	require.True(t, shouldReformat("call `foo()` then `bar()`\n", 80))
-	// Single backtick (likely stray) — no.
-	require.False(t, shouldReformat("apostrophe ' that's it\n", 80))
-	// width=0 — no (post-stream re-render needs terminal width).
-	require.False(t, shouldReformat("# heading\n", 0))
 }
 
 func TestRenderer_ReasoningHeaderNoCursorSaveRestore(t *testing.T) {
@@ -437,54 +415,6 @@ func TestOnExternalWriteZeroArgResetsSegment(t *testing.T) {
 	require.True(t, r.atLineStart)
 	require.Equal(t, 0, r.curLineRunes)
 	require.Empty(t, r.seg.String())
-	r.mu.Unlock()
-}
-
-func TestFinalizeClearsAllRowsAfterExternalWrites(t *testing.T) {
-	// Simulate a multi-paragraph prose flow with external writes between
-	// paragraphs. After FinalizeAtTurnEnd, the formatter should walk back
-	// the correct total count of rows (prose + external).
-	//
-	// Flow:
-	//   WriteChunk("# Heading\n")        -> 1 row, physicalLines=1
-	//   OnExternalWriteRows(1)           -> external blank line, physicalLines=2
-	//   WriteChunk("Body paragraph.\n")  -> 1 row, physicalLines=3
-	//   OnExternalWriteRows(1)           -> external blank line, physicalLines=4
-	//   WriteChunk("Final.\n")           -> 1 row, physicalLines=5
-	//
-	// FinalizeAtTurnEnd should compute upRows=5 and walk back 5 rows.
-	// We can't easily test ANSI cursor movement in a pipe, but we can
-	// verify that physicalLines is correct throughout.
-	r := NewAssistantTurnRenderer(80, NewMarkdownFormatter(false, false))
-	captureRendererStdout(t, func() {
-		r.WriteChunk("# Heading\n")
-	})
-	r.mu.Lock()
-	require.Equal(t, 1, r.physicalLines)
-	r.mu.Unlock()
-
-	r.OnExternalWriteRows(1)
-	r.mu.Lock()
-	require.Equal(t, 2, r.physicalLines)
-	r.mu.Unlock()
-
-	captureRendererStdout(t, func() {
-		r.WriteChunk("Body paragraph.\n")
-	})
-	r.mu.Lock()
-	require.Equal(t, 3, r.physicalLines)
-	r.mu.Unlock()
-
-	r.OnExternalWriteRows(1)
-	r.mu.Lock()
-	require.Equal(t, 4, r.physicalLines)
-	r.mu.Unlock()
-
-	captureRendererStdout(t, func() {
-		r.WriteChunk("Final.\n")
-	})
-	r.mu.Lock()
-	require.Equal(t, 5, r.physicalLines)
 	r.mu.Unlock()
 }
 

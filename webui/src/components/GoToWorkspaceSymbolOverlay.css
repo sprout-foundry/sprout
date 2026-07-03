@@ -191,7 +191,7 @@
 
 .goto-workspace-symbol-kind-interface {
   background: rgba(34, 197, 94, 0.18);
-  color: #22c55e;
+  color: var(--accent-success);
 }
 
 .goto-workspace-symbol-kind-type {

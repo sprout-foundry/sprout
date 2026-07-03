@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -61,6 +62,12 @@ func (h *shellCommandHandler) Definition() ToolDefinition {
 				Type:        "string",
 				Required:    false,
 				Description: "Session ID of a background session to stop/terminate",
+			},
+			{
+				Name:        "wakeup_timeout",
+				Type:        "integer",
+				Required:    false,
+				Description: "Optional deadline in seconds for background commands. The agent is always notified on completion; this adds a timeout notification if the process hasn't finished.",
 			},
 		},
 	}
@@ -133,6 +140,20 @@ func (h *shellCommandHandler) Validate(args map[string]any) error {
 		}
 		if checkBackground == "" && wait > 0 {
 			return agenterrors.NewValidation("wait_seconds is only valid with check_background", nil)
+		}
+	}
+
+	// wakeup_timeout is only valid with background=true.
+	if wtRaw, ok := args["wakeup_timeout"]; ok && wtRaw != nil {
+		wt, err := extractInt(args, "wakeup_timeout")
+		if err != nil {
+			return err
+		}
+		if wt < 0 {
+			return agenterrors.NewValidation("parameter 'wakeup_timeout' must be >= 0", nil)
+		}
+		if !getBoolArg(args, "background") {
+			return agenterrors.NewValidation("wakeup_timeout is only valid with background=true", nil)
 		}
 	}
 
@@ -251,7 +272,12 @@ func (h *shellCommandHandler) Execute(ctx context.Context, env ToolEnv, args map
 
 	// background mode
 	if background {
-		return h.handleBackground(ctx, env, command)
+		wakeupTimeout, _ := extractInt(args, "wakeup_timeout")
+		result, err := h.handleBackground(ctx, env, command)
+		if err == nil && env.Notifier != nil {
+			h.startWakeupWatcher(ctx, env, result.Output, wakeupTimeout)
+		}
+		return result, err
 	}
 
 	// Normal synchronous execution
@@ -399,4 +425,77 @@ func truncateForEvent(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen-3] + "..."
+}
+
+type bgResult struct {
+	SessionID string `json:"session_id"`
+	Status    string `json:"status"`
+}
+
+func (h *shellCommandHandler) startWakeupWatcher(ctx context.Context, env ToolEnv, resultJSON string, timeoutSec int) {
+	var res bgResult
+	if err := json.Unmarshal([]byte(resultJSON), &res); err != nil || res.SessionID == "" {
+		return
+	}
+	sessionID := res.SessionID
+	var done <-chan struct{}
+	var getExitCode func() int
+
+	if tm := TerminalManagerFromContext(ctx); tm != nil {
+		doneCh := make(chan struct{})
+		done = doneCh
+		exitCh := make(chan int, 1)
+		go func() {
+			defer close(doneCh)
+			ticker := time.NewTicker(500 * time.Millisecond)
+			defer ticker.Stop()
+			var deadline time.Time
+			hasDeadline := timeoutSec > 0
+			if hasDeadline {
+				deadline = time.Now().Add(time.Duration(timeoutSec) * time.Second)
+			}
+			for {
+				if !tm.IsSessionActive(sessionID) {
+					exitCh <- 0
+					return
+				}
+				if hasDeadline && time.Now().After(deadline) {
+					exitCh <- -1
+					return
+				}
+				select {
+				case <-ticker.C:
+				case <-ctx.Done():
+					return
+				}
+			}
+		}()
+		getExitCode = func() int { return <-exitCh }
+	} else if bpm := BackgroundProcessManagerFromContext(ctx); bpm != nil {
+		if proc, exists := bpm.GetProcess(sessionID); exists {
+			done = proc.Done()
+			getExitCode = proc.GetExitCode
+		} else {
+			return
+		}
+	} else {
+		return
+	}
+
+	go func() {
+		select {
+		case <-done:
+			exitCode := getExitCode()
+			if exitCode == -1 {
+				env.Notifier.NotifyCompletion(sessionID, "shell_bg_timeout",
+					fmt.Sprintf("Timed out waiting for background session %s after %ds.\nUse shell_command(check_background=%q) to check status.",
+						sessionID, timeoutSec, sessionID))
+			} else {
+				env.Notifier.NotifyCompletion(sessionID, "shell_bg",
+					fmt.Sprintf("Background session %s completed with exit code %d.\nUse shell_command(check_background=%q) to see output.",
+						sessionID, exitCode, sessionID))
+			}
+		case <-ctx.Done():
+		}
+	}()
 }

@@ -19,6 +19,7 @@ func (a *Agent) snapshotInterrupt() (context.Context, context.CancelFunc) {
 
 // TriggerInterrupt manually triggers an interrupt for testing purposes
 func (a *Agent) TriggerInterrupt() {
+	a.DisableWakeup()
 	_, cancel := a.snapshotInterrupt()
 	if cancel != nil {
 		cancel()

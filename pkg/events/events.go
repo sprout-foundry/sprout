@@ -140,6 +140,10 @@ const (
 	// *RateLimitedEvent. WebUI consumes this to show "rate-limited,
 	// retrying…" and gate the input.
 	EventTypeRateLimited = "rate_limited"
+	// EventTypeOOMWatchdogAlert is published by the OOM watchdog when node
+	// process count or total RSS exceeds configured thresholds. The payload
+	// carries the current counts, thresholds, and which threshold(s) triggered.
+	EventTypeOOMWatchdogAlert = "oom_watchdog_alert"
 )
 
 // EventBus manages event distribution between CLI and Web UI
@@ -837,5 +841,17 @@ func AutomateSessionEndedEvent(sessionID, workflow, status string, totalCost flo
 		"status":     status,
 		"total_cost": totalCost,
 		"timestamp":  time.Now().UTC().Format(time.RFC3339),
+	}
+}
+
+// OOMWatchdogAlertEvent creates an oom_watchdog_alert event payload.
+func OOMWatchdogAlertEvent(nodeCount int, totalRSSBytes uint64, thresholdNodeCount int, thresholdRSSBytes uint64, triggerReason string) map[string]interface{} {
+	return map[string]interface{}{
+		"node_count":           nodeCount,
+		"total_rss_bytes":      totalRSSBytes,
+		"threshold_node_count": thresholdNodeCount,
+		"threshold_rss_bytes":  thresholdRSSBytes,
+		"trigger_reason":       triggerReason,
+		"timestamp":            time.Now().UTC().Format(time.RFC3339),
 	}
 }

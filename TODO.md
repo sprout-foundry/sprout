@@ -1544,9 +1544,11 @@ and triggered kernel OOM. The worker pool is now capped to 4._
 - [x] **SP-104-6:** Diagnostic helper at `scripts/diagnose-oom.sh` —
       scans journald, /var/log/syslog, /var/log/kern.log, and dmesg for
       OOM-killer traces. Supports `--boot N`, `--since`, and `--json`.
-- [ ] **SP-104-7:** Add a Prometheus-style probe to the Sprout daemon
+- [x] **SP-104-7:** Add a Prometheus-style probe to the Sprout daemon
       that watches `node_count > 500 OR total_user_rss > 50G` and
       triggers a notification before the OOM-killer fires.
+      _(shipped: pending commit — OOMWatchdog with /proc scanning,
+      event bus integration, cooldown state machine, 13 tests)_
 
 ### Notes
 

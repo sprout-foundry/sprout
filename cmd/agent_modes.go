@@ -94,6 +94,15 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Start OOM watchdog in daemon mode to monitor Node.js process count
+	// and total RSS. This alerts via the event bus (and WebUI) before
+	// the kernel OOM-killer fires.
+	if daemonMode && chatAgent != nil {
+		oomWatchdog := agent.NewOOMWatchdog(eventBus)
+		oomWatchdog.Start(ctx)
+		// Goroutine automatically exits when ctx is cancelled on shutdown.
+	}
+
 	// Create web server if enabled
 	var webServer *webui.ReactWebServer
 	var webUISup *webUISupervisor

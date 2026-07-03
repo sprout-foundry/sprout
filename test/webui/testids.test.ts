@@ -82,7 +82,7 @@ function extractTestIds(content: string) {
   }
 
   // Ternary: data-testid={cond ? 'A' : 'B'}
-  const ternaryRe = /data-testid=\{[^?]*\?\s*'([^']*)'\s*:\s*'([^']*)'\}/g;
+  const ternaryRe = /data-testid=\{[^\n?]*\?\s*'([^']*)'\s*:\s*'([^']*)'\}/g;
   while ((m = ternaryRe.exec(content)) !== null) {
     ternaryValues.add(m[1]);
     ternaryValues.add(m[2]);

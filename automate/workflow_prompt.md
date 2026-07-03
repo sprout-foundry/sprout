@@ -53,6 +53,25 @@ Your job is to complete each TODO item with full build/test/review rigor, commit
 - If a subagent fails or the build cannot be fixed after 2 attempts, mark the task_queue entry as **failed** with a description of the error, then continue to the next item. Do not stop — move on.
 - Do NOT use `git add .` or `git add -A` — only stage specific files you created or modified
 
+## Vitest / Testing Rules (CRITICAL — OOM Prevention)
+
+When running WebUI vitest tests, **NEVER** invoke vitest without an explicit test file glob:
+
+- **FORBIDDEN:** `npm exec vitest`, `npx vitest`, `vitest run`, `npm test` (any bare invocation that runs the full suite)
+- **ALLOWED (read-only):** `npx vitest list` — does not fork workers, safe to use for test discovery
+- **REQUIRED:** Always specify explicit test file paths/globs:
+  - `npx vitest run src/components/App.test.tsx`
+  - `npx vitest run src/components/{A,B,C}.test.tsx`
+  - `npx vitest run "src/**/*.test.tsx"` (scoped glob, not bare)
+
+**Why:** Vitest defaults to forking one worker per CPU core. Each jsdom worker holds 1–4 GB RSS. On a 24-core machine, running the full 48-test suite consumes ~52 GB and triggers kernel OOM. Even with `VITEST_MAX_WORKERS=4`, a full suite run can exhaust memory on constrained hosts.
+
+**What to do instead:**
+1. **Use the wrapper script (recommended):** `./scripts/vitest-safe.sh run src/path/to/Specific.test.tsx` — enforces worker caps and memory checks
+2. Always target specific test files: `npx vitest run src/path/to/Specific.test.tsx`
+3. Batch related files: `npx vitest run src/components/{A,B,C}.test.tsx`
+4. If you need to run many tests, split them into small batches (≤10 files per invocation)
+
 ## Git Safety Rules (CRITICAL — violation is a hard stop)
 
 These operations are FORBIDDEN under all circumstances. If you feel the need to do any of these, STOP immediately and mark the task as failed:

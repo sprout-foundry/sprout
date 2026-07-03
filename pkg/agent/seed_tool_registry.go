@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -63,20 +64,66 @@ func newSeedToolRegistryWithPublisher(agent *Agent, ep core.EventPublisher) *cor
 		PreExecuteHook: newPreExecuteHook(agent),
 	})
 
-	for _, cfg := range GetToolRegistry().GetAllToolConfigs() {
-		// Don't register subagent-spawning tools for agents at their depth
-		// limit. The PreExecuteHook blocks execution as a safety net, but
-		// if the tool is visible the LLM still wastes turns attempting the
-		// call before discovering it's blocked. Filtering at registration
-		// means the tool never appears in the API request at all.
-		if agent != nil && !agent.CanSpawnSubagents() && (cfg.Name == "run_subagent" || cfg.Name == "run_parallel_subagents") {
-			continue
+	// SP-109: Decide which source to use for tool definitions.
+	// When SP109_USE_HANDLER_TOOLS=true, use handler-derived definitions.
+	// Otherwise, keep the legacy path but still run verification comparison.
+	useHandlerSource := sp109UseHandlerTools()
+
+	// Build tool configs from both sources for verification.
+	legacyCfgs := GetToolRegistry().GetAllToolConfigs()
+	handlerCfgs := handlerToolConfigs()
+
+	if useHandlerSource {
+		// SP-109 active: use handler-derived tool definitions.
+		// Iterate handlers directly so convertHandlerToSeedToolConfig wires
+		// up the handler closures (Execute) — BuildToolConfigsFromHandlers
+		// returns legacy ToolConfig structs that don't carry Handler fields.
+		for _, h := range tools.GetNewToolRegistry().All() {
+			if agent != nil && !agent.CanSpawnSubagents() && (h.Name() == "run_subagent" || h.Name() == "run_parallel_subagents") {
+				continue
+			}
+			if err := registry.Register(convertHandlerToSeedToolConfig(h, agent)); err != nil {
+				panic(fmt.Sprintf("seed registry: failed to register %q: %v", h.Name(), err))
+			}
 		}
-		if err := registry.Register(convertToSeedToolConfig(cfg, agent)); err != nil {
-			// Local registry deduplicates by name, so Register should never
-			// fail with "already registered". Anything else is a programmer
-			// error worth surfacing loudly.
-			panic(fmt.Sprintf("seed registry: failed to register %q: %v", cfg.Name, err))
+		// Register legacy-only tools (e.g., create_pull_request, manage_memory)
+		// that don't have handler implementations yet.
+		for name, legacyCfg := range legacyCfgs {
+			if _, ok := handlerCfgs[name]; ok {
+				continue // already registered from handler source
+			}
+			if agent != nil && !agent.CanSpawnSubagents() && (name == "run_subagent" || name == "run_parallel_subagents") {
+				continue
+			}
+			if err := registry.Register(convertToSeedToolConfig(legacyCfg, agent)); err != nil {
+				panic(fmt.Sprintf("seed registry: failed to register %q: %v", name, err))
+			}
+		}
+	} else {
+		// Default: use legacy tool definitions.
+		for _, cfg := range legacyCfgs {
+			if agent != nil && !agent.CanSpawnSubagents() && (cfg.Name == "run_subagent" || cfg.Name == "run_parallel_subagents") {
+				continue
+			}
+			if err := registry.Register(convertToSeedToolConfig(cfg, agent)); err != nil {
+				panic(fmt.Sprintf("seed registry: failed to register %q: %v", cfg.Name, err))
+			}
+		}
+	}
+
+	// SP-109: Run parallel verification comparing both sources.
+	// This is always executed (regardless of which source is active) to
+	// continuously validate parity during the migration period.
+	if agent != nil {
+		compared, matched, differing := sp109VerifyAndLog(agent)
+		if compared > 0 {
+			fmt.Fprintf(os.Stderr, "SP-109 verify: %d compared, %d matched, %d differed (source=%s)\n",
+				compared, matched, differing, func() string {
+					if useHandlerSource {
+						return "handler"
+					}
+					return "legacy"
+				}())
 		}
 	}
 

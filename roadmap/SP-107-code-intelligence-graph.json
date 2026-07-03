@@ -8,7 +8,7 @@
     "Clone/similarity detection (MinHash/LSH) — niche; falls out of semantic search.",
     "Cross-service linking (gRPC/GraphQL/route detection) — narrow audience.",
     "3D graph visualization — could add a WebUI graph view later if there's demand.",
-    "158 language grammars — we support Go, TS, JS, Python well; add languages incrementally. Users needing exotic languages can add codebase-memory-mcp via our MCP integration."
+    "158 language grammars — we support Go, TS, JS, Python well; add languages incrementally."
   ],
   "owner": "unassigned",
   "status": "Proposed",

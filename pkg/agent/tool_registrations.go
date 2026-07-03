@@ -511,5 +511,34 @@ func newDefaultToolRegistry() *ToolRegistry {
 		Timeout: 30 * time.Second,
 	})
 
+	// Register codegraph tools — query the code intelligence graph for callers,
+	// callees, and dead code. The graph must be indexed first.
+	registry.RegisterTool(ToolConfig{
+		Name:        "get_callers",
+		Description: "Query the code intelligence graph to find which functions call the given qualified name. Returns a list of callers with file:line locations. The codegraph must be indexed first via the indexing system.",
+		Parameters: []ParameterConfig{
+			{"qualified_name", "string", true, []string{"name", "symbol"}, "The fully qualified name of the symbol (e.g. 'pkg/foo.Bar')"},
+		},
+		Handler: handleGetCallers,
+	})
+
+	registry.RegisterTool(ToolConfig{
+		Name:        "get_callees",
+		Description: "Query the code intelligence graph to find which functions are called by the given qualified name. Returns a list of callees with file:line locations. The codegraph must be indexed first.",
+		Parameters: []ParameterConfig{
+			{"qualified_name", "string", true, []string{"name", "symbol"}, "The fully qualified name of the symbol (e.g. 'pkg/foo.Bar')"},
+		},
+		Handler: handleGetCallees,
+	})
+
+	registry.RegisterTool(ToolConfig{
+		Name:        "find_dead_code",
+		Description: "Find functions with zero inbound call edges (dead code). Excludes entry points like main(), init(), exported functions, and test functions. Optionally filter by directory. The codegraph must be indexed first.",
+		Parameters: []ParameterConfig{
+			{"directory", "string", false, []string{"dir"}, "Optional directory to limit the search to"},
+		},
+		Handler: handleFindDeadCode,
+	})
+
 	return registry
 }

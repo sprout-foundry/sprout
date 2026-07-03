@@ -291,6 +291,8 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 		// insertion order from the LLM's original tool call.
 		env.RawArgsJSON = rawArgsJSON
 		env.Notifier = agent
+		// Propagate subagent depth for memory gate and other subagent-specific behaviors.
+		env.SubagentDepth = agent.subagentDepth
 	} else {
 		env.OutputWriter = os.Stdout
 		env.MaxTokensFunc = func() int { return 0 }
@@ -299,6 +301,21 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 	if err := handler.Validate(args); err != nil {
 		return nil, "", agenterrors.Wrapf(err, "validation failed for tool %q", toolName)
 	}
+
+	// SP-104-3: Memory gate for memory-intensive subagent shell commands.
+	// Only gate commands that are likely to consume significant memory
+	// (test runners, bundlers, compilers) to avoid blocking trivial
+	// commands like ls, cat, echo with 30-second sleeps.
+	if toolName == "shell_command" && agent.subagentDepth > 0 {
+		if cmd, ok := args["command"].(string); ok && IsMemoryIntensiveCommand(cmd) {
+			gate := DefaultMemoryGate()
+			if err := gate.Check(); err != nil {
+				return nil, "", agenterrors.NewPermission(
+					fmt.Sprintf("memory gate blocked shell_command: %v", err), nil)
+			}
+		}
+	}
+
 	res, err := handler.Execute(ctx, env, args)
 	if err != nil {
 		return nil, "", err

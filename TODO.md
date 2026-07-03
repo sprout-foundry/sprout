@@ -1523,15 +1523,18 @@ and triggered kernel OOM. The worker pool is now capped to 4._
       Both honor `VITEST_MAX_WORKERS` / `VITEST_MAX_FORKS` env overrides.
       Verified: full 48-file packages/ui suite runs in 5.5s with ~1 GB
       delta. _(shipped: vitest config changes + worker cap verification)_
-- [ ] **SP-104-2:** Update Sprout WebUI QA workflow (the WebUI-A-*
+- [x] **SP-104-2:** Update Sprout WebUI QA workflow (the WebUI-A-*
       automation chain in `~/.config/sprout/task_queue.json`) so each
       vitest invocation passes an explicit test file glob:
       `vitest run src/path/to/Specific.test.tsx`. Forbid bare
       `npm exec vitest` from the package root.
-- [ ] **SP-104-3:** Add a memory-aware gate to the QA subagent shell
+      _(shipped: 99c4577d — vitest-safe.sh wrapper + 28 tests + workflow_prompt.md rules)_
+- [x] **SP-104-3:** Add a memory-aware gate to the QA subagent shell
       scope: pre-check `MemAvailable` from `/proc/meminfo`, refuse to
       launch if available < 8 GB, sleep + retry if 8–16 GB. This belongs
       in the subagent persona's tool wrapper, not in vitest itself.
+      _(shipped: pending commit — memory_gate.go with 3-tier check,
+      Linux/macOS support, 48+ subtests)_
 - [x] **SP-104-4/5:** Systemd memory guardrails written to
       `scripts/user.slice-memory-cap.conf` (MemoryMax=48G on user.slice).
       Requires manual installation with sudo — see file header for

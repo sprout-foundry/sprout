@@ -144,6 +144,10 @@ type ToolEnv struct {
 	// SearchEngine performs Google Custom Search API queries.
 	// Nil means web search is not available.
 	SearchEngine SearchEngine
+	// SubagentDepth is the nesting depth of subagents (0 = primary agent, 1 = first-level
+	// subagent, 2 = second-level, etc.). Used by memory gate and other subagent-specific
+	// tool behaviors. Default 0 means not in subagent context.
+	SubagentDepth int
 	// RawArgsJSON is the raw JSON string of the tool arguments as sent by the
 	// LLM. When set, handlers can parse this to recover the original key
 	// insertion order of nested maps (e.g., the "data" field in

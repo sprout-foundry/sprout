@@ -1577,10 +1577,13 @@ handler dispatch. Full spec: `roadmap/SP-109-single-source-tool-definitions.md`.
       _(shipped: 82aa5229 — 5 metadata methods added to ToolHandler,
       37 handlers with no-op stubs; all tests pass)_
 
-- [ ] **SP-109-2:** Build canonical tool list from handlers. Add
+- [x] **SP-109-2:** Build canonical tool list from handlers. Add
       `BuildToolDefinitions()` that iterates `GetNewToolRegistry().All()`.
       Add `convertHandlerToSeedToolConfig()` for the seed path. Run old+new
       in parallel, assert identical output, then switch over. _(~1 day)_
+      _(shipped: pending commit — tool_definitions_handler.go with
+      BuildToolConfigsFromHandlers, convertHandlerToSeedToolConfig,
+      parallel verification, env-gated switch)_
 
 - [ ] **SP-109-3:** Migrate 16 legacy-only tools to handlers. Batch A (simple
       CRUD): `manage_memory`, `manage_settings`, `mcp_refresh`, `task_queue`,

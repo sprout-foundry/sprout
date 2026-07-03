@@ -1,0 +1,17 @@
+{
+  "created": "2026-07-02",
+  "effort_estimate": "3-4 days (Phase 1), 2-3 days (Phase 2), 1-2 days (Phase 3)",
+  "id": "SP-107",
+  "motivation": "Today the agent explores codebases by reading files one at a time — every structural question triggers a cascade of grep→read→grep that burns tens of thousands of tokens. A persistent call graph with type-aware resolution answers the same questions in ~200 tokens. The pieces already exist in sprout (tree-sitter symbol extraction, LSP integration, embedding store) but aren't wired into a queryable structural graph.",
+  "non_goals": [
+    "Cypher query engine — our agent queries via structured Go tools, not a query language.",
+    "Clone/similarity detection (MinHash/LSH) — niche; falls out of semantic search.",
+    "Cross-service linking (gRPC/GraphQL/route detection) — narrow audience.",
+    "3D graph visualization — could add a WebUI graph view later if there's demand.",
+    "158 language grammars — we support Go, TS, JS, Python well; add languages incrementally."
+  ],
+  "owner": "unassigned",
+  "status": "Proposed",
+  "summary": "Upgrade sprout's flat repo_map into a persistent, incrementally-indexed knowledge graph of symbols and call edges. Gives the agent structural query tools (get_callers, get_callees, find_dead_code) so code navigation becomes a sub-millisecond lookup instead of a grep→read→grep cycle. Leverages existing tree-sitter (pkg/ast), LSP (pkg/lsp), and embedding (pkg/embedding) infrastructure.",
+  "title": "Code Intelligence Graph — Persistent Call Graph, Dead-Code Detection, and Semantic Code Search"
+}

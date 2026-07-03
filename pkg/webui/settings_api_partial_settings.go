@@ -632,6 +632,26 @@ func applySkillsSettings(cfg *configuration.Config, patch map[string]interface{}
 	return nil
 }
 
+func applyWakeupSettings(cfg *configuration.Config, patch map[string]interface{}, knownKeys map[string]bool) error {
+	if v, ok := patch["wakeup"]; ok {
+		knownKeys["wakeup"] = true
+		if v == nil {
+			cfg.Wakeup = configuration.DefaultWakeupConfig()
+			return nil
+		}
+		raw, err := json.Marshal(v)
+		if err != nil {
+			return fmt.Errorf("invalid wakeup config: %w", err)
+		}
+		var wc configuration.WakeupConfig
+		if err := json.Unmarshal(raw, &wc); err != nil {
+			return fmt.Errorf("invalid wakeup config: %w", err)
+		}
+		cfg.Wakeup = wc
+	}
+	return nil
+}
+
 // partialSettingsApplier is the ordered list of per-domain helpers invoked by
 // applyPartialSettings. Order is not significant (each helper owns a disjoint
 // set of keys) but reading it top-to-bottom roughly tracks the settings UI.
@@ -652,4 +672,5 @@ var partialSettingsAppliers = []func(*configuration.Config, map[string]interface
 	applyLanguageServerSettings,
 	applyPersistentContextSettings,
 	applySkillsSettings,
+	applyWakeupSettings,
 }

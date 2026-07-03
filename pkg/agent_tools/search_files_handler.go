@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
@@ -157,6 +158,12 @@ func (h *searchFilesHandler) Execute(ctx context.Context, env ToolEnv, args map[
 		IsError: false,
 	}, nil
 }
+
+func (h *searchFilesHandler) Aliases() []string         { return nil }
+func (h *searchFilesHandler) Timeout() time.Duration    { return 0 }
+func (h *searchFilesHandler) MaxResultSize() int        { return 0 }
+func (h *searchFilesHandler) SafeForParallel() bool     { return false }
+func (h *searchFilesHandler) Interactive() bool         { return false }
 
 func compileSearchPattern(pattern string, caseSensitive bool) (*regexp.Regexp, error) {
 	var raw string

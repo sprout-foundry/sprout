@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
@@ -82,3 +83,9 @@ func (h *activateSkillHandler) Execute(ctx context.Context, env ToolEnv, args ma
 			skillInfo.Name, skillInfo.ID, skillInfo.Description),
 	}, nil
 }
+
+func (h *activateSkillHandler) Aliases() []string         { return nil }
+func (h *activateSkillHandler) Timeout() time.Duration    { return 0 }
+func (h *activateSkillHandler) MaxResultSize() int        { return 0 }
+func (h *activateSkillHandler) SafeForParallel() bool     { return false }
+func (h *activateSkillHandler) Interactive() bool         { return false }

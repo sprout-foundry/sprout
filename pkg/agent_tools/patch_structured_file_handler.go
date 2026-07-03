@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
@@ -138,3 +139,9 @@ func (h *patchStructuredFileHandler) Execute(ctx context.Context, env ToolEnv, a
 
 	return ToolResult{Output: fmt.Sprintf("Successfully patched %s with %d operation(s)", path, len(patchOps))}, nil
 }
+
+func (h *patchStructuredFileHandler) Aliases() []string         { return nil }
+func (h *patchStructuredFileHandler) Timeout() time.Duration    { return 0 }
+func (h *patchStructuredFileHandler) MaxResultSize() int        { return 0 }
+func (h *patchStructuredFileHandler) SafeForParallel() bool     { return false }
+func (h *patchStructuredFileHandler) Interactive() bool         { return false }

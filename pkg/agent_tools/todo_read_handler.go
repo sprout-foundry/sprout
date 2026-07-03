@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
@@ -59,3 +60,9 @@ func (h *todoReadHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 	}
 	return ToolResult{Output: sb.String()}, nil
 }
+
+func (h *todoReadHandler) Aliases() []string         { return nil }
+func (h *todoReadHandler) Timeout() time.Duration    { return 0 }
+func (h *todoReadHandler) MaxResultSize() int        { return 0 }
+func (h *todoReadHandler) SafeForParallel() bool     { return false }
+func (h *todoReadHandler) Interactive() bool         { return false }

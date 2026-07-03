@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
@@ -65,3 +66,9 @@ func (h *repoMapHandler) Execute(ctx context.Context, env ToolEnv, args map[stri
 		IsError: false,
 	}, nil
 }
+
+func (h *repoMapHandler) Aliases() []string         { return nil }
+func (h *repoMapHandler) Timeout() time.Duration    { return 0 }
+func (h *repoMapHandler) MaxResultSize() int        { return 0 }
+func (h *repoMapHandler) SafeForParallel() bool     { return false }
+func (h *repoMapHandler) Interactive() bool         { return false }

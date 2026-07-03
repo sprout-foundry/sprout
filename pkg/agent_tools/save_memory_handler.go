@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
@@ -115,6 +116,12 @@ func (h *saveMemoryHandler) Execute(ctx context.Context, env ToolEnv, args map[s
 		TokenUsage: int64(estimateTokenUsage(result)),
 	}, nil
 }
+
+func (h *saveMemoryHandler) Aliases() []string         { return nil }
+func (h *saveMemoryHandler) Timeout() time.Duration    { return 0 }
+func (h *saveMemoryHandler) MaxResultSize() int        { return 0 }
+func (h *saveMemoryHandler) SafeForParallel() bool     { return false }
+func (h *saveMemoryHandler) Interactive() bool         { return false }
 
 // saveMemoryToDisk writes a memory file to ~/.config/sprout/memories/<name>.md
 // This is a standalone implementation that doesn't depend on *Agent.

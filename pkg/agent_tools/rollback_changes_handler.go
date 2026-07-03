@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"time"
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
@@ -84,3 +85,9 @@ func (h *rollbackChangesHandler) Execute(ctx context.Context, env ToolEnv, args 
 		IsError: false,
 	}, nil
 }
+
+func (h *rollbackChangesHandler) Aliases() []string         { return nil }
+func (h *rollbackChangesHandler) Timeout() time.Duration    { return 0 }
+func (h *rollbackChangesHandler) MaxResultSize() int        { return 0 }
+func (h *rollbackChangesHandler) SafeForParallel() bool     { return false }
+func (h *rollbackChangesHandler) Interactive() bool         { return false }

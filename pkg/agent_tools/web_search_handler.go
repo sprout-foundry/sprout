@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
@@ -64,3 +65,9 @@ func (h *webSearchHandler) Execute(ctx context.Context, env ToolEnv, args map[st
 
 	return ToolResult{Output: result}, nil
 }
+
+func (h *webSearchHandler) Aliases() []string         { return nil }
+func (h *webSearchHandler) Timeout() time.Duration    { return 0 }
+func (h *webSearchHandler) MaxResultSize() int        { return 0 }
+func (h *webSearchHandler) SafeForParallel() bool     { return false }
+func (h *webSearchHandler) Interactive() bool         { return false }

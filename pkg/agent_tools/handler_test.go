@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -36,6 +37,12 @@ func (m *mockHandler) Validate(_ map[string]any) error {
 func (m *mockHandler) Execute(_ context.Context, _ ToolEnv, _ map[string]any) (ToolResult, error) {
 	return m.result, m.execErr
 }
+
+func (m *mockHandler) Aliases() []string         { return nil }
+func (m *mockHandler) Timeout() time.Duration    { return 0 }
+func (m *mockHandler) MaxResultSize() int        { return 0 }
+func (m *mockHandler) SafeForParallel() bool     { return false }
+func (m *mockHandler) Interactive() bool         { return false }
 
 // newMockHandler creates a mockHandler with sensible defaults.
 func newMockHandler(name string) *mockHandler {

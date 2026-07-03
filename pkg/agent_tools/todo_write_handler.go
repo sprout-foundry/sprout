@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"time"
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
@@ -110,3 +111,9 @@ func (h *todoWriteHandler) Execute(ctx context.Context, env ToolEnv, args map[st
 
 	return ToolResult{Output: result}, nil
 }
+
+func (h *todoWriteHandler) Aliases() []string         { return nil }
+func (h *todoWriteHandler) Timeout() time.Duration    { return 0 }
+func (h *todoWriteHandler) MaxResultSize() int        { return 0 }
+func (h *todoWriteHandler) SafeForParallel() bool     { return false }
+func (h *todoWriteHandler) Interactive() bool         { return false }

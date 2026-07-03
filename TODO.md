@@ -1425,3 +1425,46 @@ and triggered kernel OOM. The worker pool is now capped to 4._
 ## Things to consider after SP-091 → SP-095 ship
 
 
+---
+
+## SP-107: Code Intelligence Graph — Phase 1
+
+_Persistent call graph with incremental indexing and agent-queryable tools.
+See `roadmap/SP-107-code-intelligence-graph.md` for full design._
+
+### Items
+
+- [ ] **SP-107-1a:** Create `pkg/codegraph/` package with SQLite-backed
+      store at `.sprout/codegraph.db`. Schema: `nodes` (id,
+      qualified_name, display_name, file_path, line, kind, language,
+      file_mtime), `edges` (id, source_node_id, target_node_id,
+      edge_type, line), `files` (path, mtime, symbol_count,
+      last_indexed). API: `IndexFile`, `QueryCallers`, `QueryCallees`,
+      `FindDeadCode`, `GetStaleFiles`, `Stats`.
+- [ ] **SP-107-1b:** Extend call-edge extraction in `pkg/ast/` and
+      `pkg/agent_tools/repo_map.go` to extract `calls` edges from
+      `ast.CallExpr` (Go), tree-sitter `call_expression` (TS/JS),
+      and tree-sitter `call` (Python). Each call becomes an edge:
+      source (caller function) → target (callee function).
+- [ ] **SP-107-1c:** Add incremental indexing: compare file mtime vs
+      `files.last_indexed`, re-parse only changed files, delete old
+      nodes/edges for changed files, insert new ones. First call is
+      full walk; subsequent calls are near-instant.
+- [ ] **SP-107-1d:** Register three new agent tools in the tool
+      registry: `get_callers` (input: qualified_name → list of callers
+      with file:line), `get_callees` (input: qualified_name → list of
+      callees with file:line), `find_dead_code` (input: optional
+      directory → functions with zero inbound edges, excluding entry
+      points like main(), route handlers, exported API, init()).
+- [ ] **SP-107-1e:** Upgrade `repo_map` to read from the graph store
+      instead of walking the filesystem. Same output format (backward
+      compatible), but instant on warm cache.
+
+### Notes
+
+- Build with `make build-all` after each item.
+- Test with `go test ./pkg/codegraph/...` and `go test ./pkg/agent_tools/...`.
+- The `.sprout/codegraph.db` file should be gitignored.
+- Acceptance: `get_callers`/`get_callees` return correct results for
+  Go code in this repo; `find_dead_code` runs in < 100ms; `repo_map`
+  output is unchanged but returns in < 50ms on warm cache.

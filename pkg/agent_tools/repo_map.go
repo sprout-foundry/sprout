@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	astp "github.com/sprout-foundry/sprout/pkg/ast"
+	codegraph "github.com/sprout-foundry/sprout/pkg/codegraph"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -212,6 +213,12 @@ type symbolEntry struct {
 	Line int
 }
 
+// SymbolWithEdges holds symbols and call edges for a single file.
+type SymbolWithEdges struct {
+	Symbols []symbolEntry
+	Edges   []codegraph.Edge
+}
+
 // extractSymbolsForFile extracts symbols from a file using the appropriate
 // parser: go/ast for Go, tree-sitter via pkg/ast for TS/JS/Python.
 // Unsupported extensions return an error.
@@ -309,4 +316,142 @@ func goRecvType(expr ast.Expr) string {
 	default:
 		return "?"
 	}
+}
+
+// ExtractCallsAndSymbols returns both symbols and call edges for a given file.
+func ExtractCallsAndSymbols(path string, content []byte) (*SymbolWithEdges, error) {
+	ext := strings.ToLower(filepath.Ext(path))
+
+	switch ext {
+	case ".go":
+		return extractGoSymbolsASTWithEdges(path, content)
+	case ".ts", ".tsx", ".js", ".jsx", ".py":
+		return extractSymbolsAndEdgesViaTreeSitter(path, ext, content)
+	default:
+		return nil, fmt.Errorf("unsupported file extension: %s", ext)
+	}
+}
+
+// extractGoSymbolsASTWithEdges parses a Go source file and extracts both
+// symbols and call edges from function bodies.
+func extractGoSymbolsASTWithEdges(path string, content []byte) (*SymbolWithEdges, error) {
+	// Skip _test.go files entirely.
+	if strings.HasSuffix(filepath.Base(path), "_test.go") {
+		return &SymbolWithEdges{}, nil
+	}
+
+	fset := token.NewFileSet()
+	node, err := parser.ParseFile(fset, path, content, 0)
+	if err != nil {
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+
+	var symbols []symbolEntry
+	var edges []codegraph.Edge
+
+	for _, decl := range node.Decls {
+		fd, ok := decl.(*ast.FuncDecl)
+		if !ok {
+			// Handle type declarations for symbols.
+			if gd, ok2 := decl.(*ast.GenDecl); ok2 && gd.Tok == token.TYPE {
+				for _, spec := range gd.Specs {
+					if ts, ok3 := spec.(*ast.TypeSpec); ok3 {
+						line := fset.Position(ts.Pos()).Line
+						symbols = append(symbols, symbolEntry{
+							Name: "type " + ts.Name.Name,
+							Line: line,
+						})
+					}
+				}
+			}
+			continue
+		}
+
+		if shouldSkipGoFunc(fd) {
+			continue
+		}
+
+		funcName := goFuncName(fd)
+		line := fset.Position(fd.Pos()).Line
+		symbols = append(symbols, symbolEntry{Name: funcName, Line: line})
+
+		// Walk the function body to find call expressions.
+		if fd.Body == nil {
+			continue
+		}
+
+		ast.Inspect(fd.Body, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+
+			calleeName := exprToString(call.Fun)
+			callLine := fset.Position(call.Pos()).Line
+
+			edges = append(edges, codegraph.Edge{
+				SourceQualifiedName: funcName,
+				TargetQualifiedName: calleeName,
+				EdgeType:            "calls",
+				Line:                callLine,
+			})
+			return true
+		})
+	}
+
+	return &SymbolWithEdges{Symbols: symbols, Edges: edges}, nil
+}
+
+// exprToString converts a go/ast expression to a string representation.
+func exprToString(e ast.Expr) string {
+	switch v := e.(type) {
+	case *ast.Ident:
+		return v.Name
+	case *ast.SelectorExpr:
+		return exprToString(v.X) + "." + v.Sel.Name
+	case *ast.StarExpr:
+		return "*" + exprToString(v.X)
+	case *ast.ArrayType:
+		return exprToString(v.Elt)
+	case *ast.ParenExpr:
+		return "(" + exprToString(v.X) + ")"
+	case *ast.BasicLit:
+		return v.Value
+	case *ast.FuncLit:
+		return "func(...)"
+	default:
+		return fmt.Sprintf("?%T?", e)
+	}
+}
+
+// extractSymbolsAndEdgesViaTreeSitter uses the pkg/ast tree-sitter parser to
+// extract both symbols and call edges from TS/JS/Python files.
+func extractSymbolsAndEdgesViaTreeSitter(path string, ext string, content []byte) (*SymbolWithEdges, error) {
+	result, err := astp.ParseFile(path, content)
+	if err != nil {
+		return nil, err
+	}
+	defer result.Release()
+
+	var entries []symbolEntry
+	for _, sym := range result.Symbols {
+		prefix := symbolDisplayPrefix(sym.Kind, ext)
+		entries = append(entries, symbolEntry{
+			Name: prefix + " " + sym.Name,
+			Line: sym.StartLine,
+		})
+	}
+
+	// Convert CallEdge values to codegraph.Edge values.
+	var edges []codegraph.Edge
+	for _, ce := range result.Calls {
+		edges = append(edges, codegraph.Edge{
+			SourceQualifiedName: ce.CallerName,
+			TargetQualifiedName: ce.CalleeName,
+			EdgeType:            "calls",
+			Line:                ce.Line,
+		})
+	}
+
+	return &SymbolWithEdges{Symbols: entries, Edges: edges}, nil
 }

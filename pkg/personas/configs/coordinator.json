@@ -77,9 +77,6 @@
           "git_clean",
           "docker_prune",
           "git_push_force",
-          "git_checkout",
-          "git_switch",
-          "git_restore",
           "git_branch_delete"
         ]
       }

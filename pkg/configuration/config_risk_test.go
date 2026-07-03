@@ -59,10 +59,12 @@ func TestDefaultAutoApproveRules_ContainsExpectedCategories(t *testing.T) {
 		}
 	}
 
-	// High-risk never ops
+	// High-risk never ops — only genuinely destructive operations.
+	// git_checkout / git_switch / git_restore are NOT here: they're
+	// ChangeTracker-recoverable working-tree ops (Medium via DefaultRisk).
 	expectedHigh := []string{"force_flag", "rm_recursive", "git_reset_hard",
 		"git_clean", "docker_prune", "git_push_force",
-		"git_checkout", "git_switch", "git_restore", "git_branch_delete"}
+		"git_branch_delete"}
 	for _, op := range expectedHigh {
 		found := false
 		for _, h := range rules.HighRiskNever {
@@ -820,10 +822,11 @@ func TestNewConfig_EA_AutoApproveRules_LoadedFromJSON(t *testing.T) {
 		}
 	}
 
-	// Verify high_risk_never ops
+	// Verify high_risk_never ops — only genuinely destructive operations.
+	// git_checkout / git_switch / git_restore are ChangeTracker-recoverable.
 	expectedHighRisk := []string{"force_flag", "rm_recursive", "git_reset_hard",
 		"git_clean", "docker_prune", "git_push_force",
-		"git_checkout", "git_switch", "git_restore", "git_branch_delete"}
+		"git_branch_delete"}
 	if len(rules.HighRiskNever) != len(expectedHighRisk) {
 		t.Errorf("high_risk_never: expected %d items, got %d: %v", len(expectedHighRisk), len(rules.HighRiskNever), rules.HighRiskNever)
 	}
@@ -938,9 +941,9 @@ func TestNewConfig_EA_AutoApproveRules_EvaluateOperationRisk(t *testing.T) {
 		{"git clean is high risk", "git clean -fd", RiskLevelHigh},
 		{"rm -rf is high risk", "rm -rf /tmp/test", RiskLevelHigh},
 		{"git push --force is high risk", "git push --force", RiskLevelHigh},
-		{"git checkout is high risk", "git checkout main", RiskLevelHigh},
-		{"git switch is high risk", "git switch main", RiskLevelHigh},
-		{"git restore is high risk", "git restore file.txt", RiskLevelHigh},
+		{"git checkout is medium risk", "git checkout main", RiskLevelMedium},
+		{"git switch is medium risk", "git switch main", RiskLevelMedium},
+		{"git restore is medium risk", "git restore file.txt", RiskLevelMedium},
 		{"docker prune is high risk", "docker system prune", RiskLevelHigh},
 	}
 
@@ -1068,7 +1071,7 @@ func TestPersona_EA_RiskCascadeBaseline(t *testing.T) {
 		"subagent_spawn", "cross_directory"}
 	wantedHigh := []string{"force_flag", "rm_recursive", "git_reset_hard",
 		"git_clean", "docker_prune", "git_push_force",
-		"git_checkout", "git_switch", "git_restore", "git_branch_delete"}
+		"git_branch_delete"}
 
 	var failed bool
 
@@ -1215,4 +1218,177 @@ func TestContainsForceFlag_Property(t *testing.T) {
 	if err != nil {
 		t.Fatalf("property test error: %v", err)
 	}
+}
+
+// TestInvokesGitSubcommand_TimeoutWrapper is a regression test for the
+// bug where `invokesGitSubcommand` had a broken guard condition that
+// caused it to match "git checkout" even when "git" was an argument to
+// another command like `timeout`. The original command that triggered
+// the crash was:
+//
+//	cd /home/alanp/dev/inicion/OfferSpotter/platform &&
+//	timeout 110 git checkout -b fix/415-sidebar-super-admin-request-flood
+//
+// This was classified as High risk because the `git_checkout` pattern
+// matched (it was in HighRiskNever for the Default profile at the time),
+// and the security rejection corrupted the REPL's stdin state.
+func TestInvokesGitSubcommand_TimeoutWrapper(t *testing.T) {
+	// Direct pattern-matching tests: "git" inside a `timeout` wrapper
+	// is NOT a command invocation.
+	t.Run("pattern_timeout_wrapper_does_not_match", func(t *testing.T) {
+		cmd := "timeout 110 git checkout -b fix/415"
+		fields := strings.Fields(cmd)
+		if matchesRiskPattern(strings.ToLower(cmd), "git_checkout") {
+			t.Errorf("matchesRiskPattern matched git_checkout for %q — git is an argument to timeout, not a command", cmd)
+		}
+		// Also verify the helper directly
+		if invokesGitSubcommand(fields, "checkout") {
+			t.Errorf("invokesGitSubcommand returned true for %q — git at index 2 follows '110', not a chain operator", cmd)
+		}
+	})
+
+	// Full risk evaluation: timeout-wrapped git checkout should be
+	// Medium (shell_command falls through to DefaultRisk), NOT High.
+	t.Run("evaluate_timeout_wrapper_is_medium", func(t *testing.T) {
+		st := evalRiskHelper()
+		cmd := "timeout 110 git checkout -b fix/415"
+		got := st.EvaluateOperationRisk(cmd)
+		if got != RiskLevelMedium {
+			t.Errorf("EvaluateOperationRisk(%q) = %q, want %q (git wrapped in timeout should not match git_checkout HighRiskNever)", cmd, got, RiskLevelMedium)
+		}
+	})
+
+	// cd && timeout wrapper — the exact command from the bug report.
+	t.Run("evaluate_cd_and_timeout_wrapper_is_medium", func(t *testing.T) {
+		st := evalRiskHelper()
+		cmd := "cd /repo && timeout 110 git checkout -b fix/415 2>&1; echo \"exit=$?\""
+		got := st.EvaluateOperationRisk(cmd)
+		if got != RiskLevelMedium {
+			t.Errorf("EvaluateOperationRisk(%q) = %q, want %q", cmd, got, RiskLevelMedium)
+		}
+	})
+
+	// Positive: git checkout after a chain operator DOES match.
+	t.Run("git_after_chain_operator_matches", func(t *testing.T) {
+		cmd := "cd /repo && git checkout main"
+		// This should be Medium now (not High — git_checkout removed
+		// from HighRiskNever). But the pattern matching itself should
+		// still detect it so the Cautious profile can gate it.
+		fields := strings.Fields(cmd)
+		if !invokesGitSubcommand(fields, "checkout") {
+			t.Errorf("invokesGitSubcommand returned false for %q — git follows &&, should match", cmd)
+		}
+	})
+
+	// Positive: bare git checkout (index 0) matches.
+	t.Run("bare_git_checkout_matches", func(t *testing.T) {
+		fields := strings.Fields("git checkout main")
+		if !invokesGitSubcommand(fields, "checkout") {
+			t.Errorf("invokesGitSubcommand returned false for bare 'git checkout main'")
+		}
+	})
+
+	// git checkout is now Medium under Default profile (ChangeTracker-
+	// recoverable working-tree op, per AGENTS.md).
+	t.Run("git_checkout_is_medium_under_default", func(t *testing.T) {
+		st := evalRiskHelper()
+		for _, cmd := range []string{
+			"git checkout main",
+			"git checkout -b fix/415",
+			"git switch feature",
+			"git restore file.go",
+		} {
+			got := st.EvaluateOperationRisk(cmd)
+			if got != RiskLevelMedium {
+				t.Errorf("EvaluateOperationRisk(%q) = %q, want %q (working-tree op, ChangeTracker-recoverable)", cmd, got, RiskLevelMedium)
+			}
+		}
+	})
+
+	// git checkout is still High under the Cautious profile.
+	t.Run("git_checkout_is_high_under_cautious", func(t *testing.T) {
+		rules := AutoApproveRulesForProfile(RiskProfileCautious)
+		st := SubagentType{ID: "t", Name: "T", AutoApproveRules: &rules}
+		got := st.EvaluateOperationRisk("git checkout main")
+		if got != RiskLevelHigh {
+			t.Errorf("EvaluateOperationRisk('git checkout main') under Cautious = %q, want %q", got, RiskLevelHigh)
+		}
+	})
+}
+
+// TestEvaluateOperationRisk_HeredocContentNotScanned is a regression test
+// for the bug where heredoc bodies (and quoted strings) were scanned by
+// the risk pattern matcher as if they were commands. The original crash
+// was triggered by a heredoc writing a Go file whose source code mentioned
+// "git checkout" — the persona cascade matched git_checkout inside the
+// heredoc DATA content, classified the command as High, and the resulting
+// security prompt timed out after 30 minutes and corrupted the REPL.
+func TestEvaluateOperationRisk_HeredocContentNotScanned(t *testing.T) {
+	st := evalRiskHelper()
+
+	// The exact crash command: a heredoc whose body contains a Go
+	// source file that references "git checkout" in a string literal.
+	t.Run("heredoc_with_git_checkout_in_body", func(t *testing.T) {
+		cmd := "cat > /tmp/test.go << 'EOF'\n" +
+			"package main\n" +
+			"cmd := `cd /repo && timeout 110 git checkout -b fix/415`\n" +
+			"EOF\n" +
+			"go run /tmp/test.go"
+		got := st.EvaluateOperationRisk(cmd)
+		if got == RiskLevelHigh || got == RiskLevelCritical {
+			t.Errorf("EvaluateOperationRisk classified heredoc DATA content as %q — heredoc bodies must not be scanned as commands", got)
+		}
+	})
+
+	// Heredoc body containing a dangerous command as DATA should not trigger.
+	t.Run("heredoc_with_rm_rf_in_body", func(t *testing.T) {
+		cmd := "cat > script.sh << 'EOF'\n" +
+			"# Example: rm -rf /\n" +
+			"echo do not run this\n" +
+			"EOF"
+		got := st.EvaluateOperationRisk(cmd)
+		if got == RiskLevelCritical {
+			t.Errorf("EvaluateOperationRisk classified heredoc DATA as Critical — heredoc bodies must not be scanned")
+		}
+	})
+
+	// Heredoc body containing && git checkout — even with a chain operator
+	// inside the heredoc, it should NOT match because it's DATA not a command.
+	t.Run("heredoc_with_chain_op_and_git_in_body", func(t *testing.T) {
+		cmd := "cat > test.sh << 'EOF'\n" +
+			"cd /repo && git checkout main\n" +
+			"EOF"
+		got := st.EvaluateOperationRisk(cmd)
+		if got == RiskLevelHigh {
+			t.Errorf("EvaluateOperationRisk classified heredoc DATA as High — chain operators inside heredoc bodies must not trigger pattern matches")
+		}
+	})
+
+	// Quoted string containing "git checkout" should not trigger.
+	t.Run("quoted_string_with_git_checkout", func(t *testing.T) {
+		cmd := `echo "run git checkout main to switch branches"`
+		got := st.EvaluateOperationRisk(cmd)
+		if got == RiskLevelHigh {
+			t.Errorf("EvaluateOperationRisk classified quoted DATA as High: %q → %q", cmd, got)
+		}
+	})
+
+	// Actual command after heredoc should still be evaluated correctly.
+	t.Run("real_command_after_heredoc", func(t *testing.T) {
+		cmd := "cat > /tmp/x << 'EOF'\nsome data\nEOF\ngit push --force"
+		got := st.EvaluateOperationRisk(cmd)
+		if got != RiskLevelHigh {
+			t.Errorf("EvaluateOperationRisk should detect real --force after heredoc: got %q, want %q", got, RiskLevelHigh)
+		}
+	})
+
+	// Bare heredoc with no dangerous content — `cat` is categorized as
+	// read-only, so it's Low risk (not Medium).
+	t.Run("plain_heredoc", func(t *testing.T) {
+		cmd := "cat > /tmp/test.go << 'EOF'\npackage main\nfunc main() {}\nEOF"
+		got := st.EvaluateOperationRisk(cmd)
+		if got == RiskLevelHigh || got == RiskLevelCritical {
+			t.Errorf("plain heredoc should not be High/Critical: got %q", got)
+		}
+	})
 }

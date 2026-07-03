@@ -55,6 +55,7 @@ func TestAgentResultMetrics_Serialization_AllFields(t *testing.T) {
 		"tokens_in":                      true,
 		"tokens_out":                     true,
 		"llm_calls":                      true,
+		"cost":                           true,
 		"provider":                       true,
 		"model":                          true,
 		"security_cautions_issued":       true,

@@ -309,6 +309,7 @@ function SettingsPanel({
             renderToggle={fieldRenderers.renderToggle}
             renderSelect={fieldRenderers.renderSelect}
             renderTextareaInput={fieldRenderers.renderTextareaInput}
+            renderNumberInput={fieldRenderers.renderNumberInput}
           />
         );
 

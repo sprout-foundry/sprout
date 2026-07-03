@@ -6,6 +6,7 @@ interface AgentBehaviorSettingsTabProps {
   renderSelect: FieldRenderers['renderSelect'];
   renderToggle: FieldRenderers['renderToggle'];
   renderTextareaInput: FieldRenderers['renderTextareaInput'];
+  renderNumberInput?: FieldRenderers['renderNumberInput'];
 }
 
 const BUILT_IN_RISK_PROFILES = ['', 'readonly', 'cautious', 'default', 'permissive', 'unrestricted'];
@@ -19,6 +20,7 @@ export default function AgentBehaviorSettingsTab({
   renderSelect,
   renderToggle,
   renderTextareaInput,
+  renderNumberInput,
 }: AgentBehaviorSettingsTabProps) {
   const customProfiles =
     settings && (settings as unknown as { risk_profiles?: Record<string, unknown> }).risk_profiles
@@ -69,6 +71,14 @@ export default function AgentBehaviorSettingsTab({
         12,
         'Applies to the main agent. Leave blank to use the built-in default prompt.',
       )}
+      <hr className="config-divider" />
+      <h4>Auto-Resume (SP-108)</h4>
+      <p className="config-help" style={{ marginBottom: '12px' }}>
+        When enabled, Sprout automatically processes background task completions without waiting for your next message.
+      </p>
+      {renderToggle('wakeup.enabled', 'Enable auto-resume', 'Off by default. Requires the daemon (sprout serve).')}
+      {renderNumberInput && renderNumberInput('wakeup.max_tokens_per_session', 'Max tokens per session', 0, 100000, 500, 'Hard cap. 0 = unlimited.')}
+      {renderNumberInput && renderNumberInput('wakeup.max_resumes_per_session', 'Max resumes per session', 0, 100, 1, 'Max auto-resumes before requiring manual input. 0 = unlimited.')}
     </div>
   );
 }

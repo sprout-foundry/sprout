@@ -84,13 +84,14 @@ type Provider struct {
 }
 
 type Model struct {
-	ID            string   `json:"id"`
-	Name          string   `json:"name,omitempty"`
-	Description   string   `json:"description,omitempty"`
-	ContextLength int      `json:"context_length,omitempty"`
-	Tags          []string `json:"tags,omitempty"`
-	InputCost     float64  `json:"input_cost,omitempty"`
-	OutputCost    float64  `json:"output_cost,omitempty"`
+	ID             string   `json:"id"`
+	Name           string   `json:"name,omitempty"`
+	Description    string   `json:"description,omitempty"`
+	ContextLength  int      `json:"context_length,omitempty"`
+	Tags           []string `json:"tags,omitempty"`
+	InputCost      float64  `json:"input_cost,omitempty"`
+	OutputCost     float64  `json:"output_cost,omitempty"`
+	CachedInputCost float64 `json:"cached_input_cost,omitempty"`
 }
 
 var (
@@ -144,6 +145,28 @@ func FindProvider(id string) (Provider, bool) {
 		}
 	}
 	return Provider{}, false
+}
+
+// FindModelPricing returns the embedded-catalog pricing (per 1M tokens) for a
+// (providerID, modelID) pair. Returns ok=false when the provider or model is
+// unknown, or when the catalog entry carries no pricing. Used as a fallback
+// by the cost-estimation path when the live API / model registry don't report
+// pricing (common for providers like DeepSeek whose /v1/models endpoint omits
+// cost fields).
+func FindModelPricing(providerID, modelID string) (inputPerM, outputPerM, cachedPerM float64, ok bool) {
+	provider, found := FindProvider(providerID)
+	if !found {
+		return 0, 0, 0, false
+	}
+	for _, m := range provider.Models {
+		if strings.EqualFold(m.ID, modelID) {
+			if m.InputCost <= 0 && m.OutputCost <= 0 {
+				return 0, 0, 0, false
+			}
+			return m.InputCost, m.OutputCost, m.CachedInputCost, true
+		}
+	}
+	return 0, 0, 0, false
 }
 
 func RefreshFromRemote(ctx context.Context, url string) error {

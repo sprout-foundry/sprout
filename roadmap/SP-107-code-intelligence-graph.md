@@ -25,7 +25,7 @@ Upgrade `repo_map` into a persistent, incrementally-indexed knowledge graph of s
 - **Clone/similarity detection** (MinHash/LSH) — niche; falls out of semantic search anyway.
 - **Cross-service linking** (gRPC/GraphQL/route detection) — narrow audience.
 - **3D graph visualization** — could add a WebUI graph view later if there's demand.
-- **158 language grammars** — we support Go, TS, JS, Python well. Add languages incrementally. Users needing exotic languages can add `codebase-memory-mcp` via our MCP integration.
+- **158 language grammars** — we support Go, TS, JS, Python well. Add languages incrementally.
 
 ---
 
@@ -152,14 +152,14 @@ New tool:
 
 ---
 
-## What we deliberately skip (use MCP for these)
+## What we deliberately skip
 
 | Capability | Why skip |
 |---|---|
 | Cypher queries | Agent uses structured Go tools, not query languages |
 | Clone detection (MinHash/LSH) | Niche; semantic search covers most cases |
 | Cross-service linking | Narrow audience; complex to implement |
-| 158 languages | We support 4 well (Go, TS, JS, Python). Users needing more can add `codebase-memory-mcp` via `sprout mcp` |
+| 158 languages | We support 4 well (Go, TS, JS, Python); add incrementally |
 | 3D graph visualization | Could add WebUI view later |
 
 ## Dependencies

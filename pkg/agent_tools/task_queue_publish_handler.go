@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
@@ -120,3 +121,9 @@ func (h *taskQueuePublishHandler) Execute(ctx context.Context, env ToolEnv, args
 		StructuredOut: string(outJSON),
 	}, nil
 }
+
+func (h *taskQueuePublishHandler) Aliases() []string         { return nil }
+func (h *taskQueuePublishHandler) Timeout() time.Duration    { return 0 }
+func (h *taskQueuePublishHandler) MaxResultSize() int        { return 0 }
+func (h *taskQueuePublishHandler) SafeForParallel() bool     { return false }
+func (h *taskQueuePublishHandler) Interactive() bool         { return false }

@@ -2,7 +2,10 @@
 
 package tools
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // analyzeImageContentHandler — WASM stub.
 type analyzeImageContentHandler struct{}
@@ -31,6 +34,12 @@ func (h *analyzeImageContentHandler) Execute(ctx context.Context, env ToolEnv, a
 	return ToolResult{Output: "vision analysis is not available in WASM mode", IsError: true}, nil
 }
 
+func (h *analyzeImageContentHandler) Aliases() []string         { return nil }
+func (h *analyzeImageContentHandler) Timeout() time.Duration    { return 0 }
+func (h *analyzeImageContentHandler) MaxResultSize() int        { return 0 }
+func (h *analyzeImageContentHandler) SafeForParallel() bool     { return false }
+func (h *analyzeImageContentHandler) Interactive() bool         { return false }
+
 // analyzeUIScreenshotHandler — WASM stub.
 type analyzeUIScreenshotHandler struct{}
 
@@ -58,3 +67,9 @@ func (h *analyzeUIScreenshotHandler) Validate(args map[string]any) error {
 func (h *analyzeUIScreenshotHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
 	return ToolResult{Output: "UI screenshot analysis is not available in WASM mode", IsError: true}, nil
 }
+
+func (h *analyzeUIScreenshotHandler) Aliases() []string         { return nil }
+func (h *analyzeUIScreenshotHandler) Timeout() time.Duration    { return 0 }
+func (h *analyzeUIScreenshotHandler) MaxResultSize() int        { return 0 }
+func (h *analyzeUIScreenshotHandler) SafeForParallel() bool     { return false }
+func (h *analyzeUIScreenshotHandler) Interactive() bool         { return false }

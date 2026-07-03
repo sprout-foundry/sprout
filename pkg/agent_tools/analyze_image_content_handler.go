@@ -4,6 +4,7 @@ package tools
 
 import (
 	"context"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
@@ -69,3 +70,9 @@ func (h *analyzeImageContentHandler) Execute(ctx context.Context, env ToolEnv, a
 	succeeded = true
 	return ToolResult{Output: result}, nil
 }
+
+func (h *analyzeImageContentHandler) Aliases() []string         { return nil }
+func (h *analyzeImageContentHandler) Timeout() time.Duration    { return 0 }
+func (h *analyzeImageContentHandler) MaxResultSize() int        { return 0 }
+func (h *analyzeImageContentHandler) SafeForParallel() bool     { return false }
+func (h *analyzeImageContentHandler) Interactive() bool         { return false }

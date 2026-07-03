@@ -2,8 +2,10 @@ package codegraph
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -684,4 +686,666 @@ func TestFindDeadCode_ExcludesMethods(t *testing.T) {
 
 	require.Len(t, dead, 1)
 	assert.Equal(t, "pkg/app.standalone", dead[0].QualifiedName)
+}
+
+// ============================================================================
+// Incremental Indexing Tests (SP-107-3)
+// ============================================================================
+
+// mockParser creates a FileParser that returns symbols derived from file content.
+// It detects "func " lines and creates a symbol for each, with language inferred
+// from the file extension. Qualified names use "pkg.name" format (exactly one dot
+// after the last slash) so FindDeadCode does not treat them as methods.
+func mockParser(t *testing.T) FileParser {
+	t.Helper()
+	return func(path string, content []byte) ([]Symbol, []Edge, error) {
+		lang := "go"
+		if strings.HasSuffix(path, ".ts") || strings.HasSuffix(path, ".tsx") {
+			lang = "typescript"
+		} else if strings.HasSuffix(path, ".js") || strings.HasSuffix(path, ".jsx") {
+			lang = "javascript"
+		} else if strings.HasSuffix(path, ".py") {
+			lang = "python"
+		}
+
+		// Derive a short package-like prefix from the file path.
+		base := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+		prefix := "mock"
+
+		lines := strings.Split(string(content), "\n")
+		var symbols []Symbol
+		for i, line := range lines {
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "func ") {
+				parts := strings.Fields(trimmed)
+				if len(parts) >= 2 && parts[0] == "func" {
+					// Strip trailing "()" from the function name.
+					name := strings.TrimSuffix(parts[1], "()")
+					// Use "prefix.name" format — exactly one dot after last slash,
+					// so FindDeadCode does not treat it as a method.
+					qName := prefix + "." + name + "_" + base
+					symbols = append(symbols, Symbol{
+						QualifiedName: qName,
+						DisplayName:   name,
+						Line:          i + 1,
+						Kind:          "func",
+						Language:      lang,
+					})
+				}
+			}
+		}
+		return symbols, nil, nil
+	}
+}
+
+func TestIndexAll_FullWalk(t *testing.T) {
+	store := newMemoryStore(t)
+	ctx := context.Background()
+
+	tmpDir := t.TempDir()
+	store.baseDir = tmpDir
+
+	// Create a Go file with two functions.
+	goFile := filepath.Join(tmpDir, "main.go")
+	require.NoError(t, os.WriteFile(goFile, []byte("package main\n\nfunc hello() {}\nfunc world() {}\n"), 0644))
+
+	// Create a TS file — mockParser only detects "func " prefix so it yields 0 symbols,
+	// but the file should still be indexed (with 0 symbols).
+	tsFile := filepath.Join(tmpDir, "utils.ts")
+	require.NoError(t, os.WriteFile(tsFile, []byte("function greet(name: string) { return \"hi\"; }\n"), 0644))
+
+	// Create a Python file — also yields 0 symbols from mockParser.
+	pyFile := filepath.Join(tmpDir, "app.py")
+	require.NoError(t, os.WriteFile(pyFile, []byte("def run():\n    pass\n"), 0644))
+
+	parser := mockParser(t)
+	err := store.IndexAll(ctx, parser)
+	require.NoError(t, err)
+
+	stats := store.Stats()
+	assert.Equal(t, 3, stats.FileCount, "should have indexed 3 files")
+	assert.Equal(t, 2, stats.NodeCount, "should have indexed 2 symbols from main.go")
+}
+
+func TestIndexAll_ExcludesTestFiles(t *testing.T) {
+	store := newMemoryStore(t)
+	ctx := context.Background()
+
+	tmpDir := t.TempDir()
+	store.baseDir = tmpDir
+
+	// Write a regular Go file.
+	goFile := filepath.Join(tmpDir, "main.go")
+	require.NoError(t, os.WriteFile(goFile, []byte("package main\n\nfunc hello() {}\n"), 0644))
+
+	// Write a _test.go file (should be excluded).
+	testFile := filepath.Join(tmpDir, "main_test.go")
+	require.NoError(t, os.WriteFile(testFile, []byte("package main\n\nfunc TestHello() {}\n"), 0644))
+
+	parser := mockParser(t)
+	err := store.IndexAll(ctx, parser)
+	require.NoError(t, err)
+
+	stats := store.Stats()
+	assert.Equal(t, 1, stats.FileCount, "_test.go files should be excluded")
+	assert.Equal(t, 1, stats.NodeCount, "only main.go symbols should be indexed")
+}
+
+func TestIndexAll_ExcludesSproutDir(t *testing.T) {
+	store := newMemoryStore(t)
+	ctx := context.Background()
+
+	tmpDir := t.TempDir()
+	store.baseDir = tmpDir
+
+	goFile := filepath.Join(tmpDir, "main.go")
+	require.NoError(t, os.WriteFile(goFile, []byte("package main\n\nfunc hello() {}\n"), 0644))
+
+	// Create .sprout directory with a source file (should be excluded).
+	sproutDir := filepath.Join(tmpDir, ".sprout")
+	require.NoError(t, os.MkdirAll(sproutDir, 0755))
+	hiddenFile := filepath.Join(sproutDir, "secret.go")
+	require.NoError(t, os.WriteFile(hiddenFile, []byte("package secret\n\nfunc hidden() {}\n"), 0644))
+
+	parser := mockParser(t)
+	err := store.IndexAll(ctx, parser)
+	require.NoError(t, err)
+
+	stats := store.Stats()
+	assert.Equal(t, 1, stats.FileCount, ".sprout directory should be excluded")
+	assert.Equal(t, 1, stats.NodeCount, "only main.go symbols should be indexed")
+}
+
+func TestIndexAll_ExcludesIgnoredDirs(t *testing.T) {
+	store := newMemoryStore(t)
+	ctx := context.Background()
+
+	tmpDir := t.TempDir()
+	store.baseDir = tmpDir
+
+	goFile := filepath.Join(tmpDir, "main.go")
+	require.NoError(t, os.WriteFile(goFile, []byte("package main\n\nfunc hello() {}\n"), 0644))
+
+	// Create node_modules directory with a source file (should be excluded).
+	nmDir := filepath.Join(tmpDir, "node_modules", "pkg")
+	require.NoError(t, os.MkdirAll(nmDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(nmDir, "index.js"), []byte("module.exports = {};\n"), 0644))
+
+	// Create vendor directory with a Go file (should be excluded).
+	vendorDir := filepath.Join(tmpDir, "vendor", "lib")
+	require.NoError(t, os.MkdirAll(vendorDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(vendorDir, "lib.go"), []byte("package lib\n\nfunc vendor() {}\n"), 0644))
+
+	parser := mockParser(t)
+	err := store.IndexAll(ctx, parser)
+	require.NoError(t, err)
+
+	stats := store.Stats()
+	assert.Equal(t, 1, stats.FileCount, "ignored directories should be excluded")
+	assert.Equal(t, 1, stats.NodeCount, "only main.go symbols should be indexed")
+}
+
+func TestIndexAll_RemovesDeletedFiles(t *testing.T) {
+	store := newMemoryStore(t)
+	ctx := context.Background()
+
+	tmpDir := t.TempDir()
+	store.baseDir = tmpDir
+
+	// Pre-index a file manually (simulating a previous full index).
+	err := store.IndexFile(ctx, "old.go", []Symbol{
+		{QualifiedName: "oldFunc", DisplayName: "oldFunc", FilePath: "old.go", Line: 1, Kind: "func", Language: "go"},
+	}, nil)
+	require.NoError(t, err)
+
+	// Pre-index another file that still exists on disk.
+	stillHere := filepath.Join(tmpDir, "kept.go")
+	require.NoError(t, os.WriteFile(stillHere, []byte("package main\n\nfunc kept() {}\n"), 0644))
+	err = store.IndexFile(ctx, "kept.go", []Symbol{
+		{QualifiedName: "kept", DisplayName: "kept", FilePath: "kept.go", Line: 1, Kind: "func", Language: "go"},
+	}, nil)
+	require.NoError(t, err)
+
+	assert.Equal(t, 2, store.Stats().FileCount)
+	assert.Equal(t, 2, store.Stats().NodeCount)
+
+	// Now run IndexAll — it should walk tmpDir (which only has kept.go),
+	// and remove old.go since it's no longer on disk.
+	parser := mockParser(t)
+	err = store.IndexAll(ctx, parser)
+	require.NoError(t, err)
+
+	stats := store.Stats()
+	assert.Equal(t, 1, stats.FileCount, "old.go should be removed from index")
+	assert.Equal(t, 1, stats.NodeCount, "oldFunc should be removed")
+}
+
+func TestIndexAll_NestedDirectories(t *testing.T) {
+	store := newMemoryStore(t)
+	ctx := context.Background()
+
+	tmpDir := t.TempDir()
+	store.baseDir = tmpDir
+
+	// Create a nested directory structure.
+	pkgDir := filepath.Join(tmpDir, "pkg", "hello")
+	require.NoError(t, os.MkdirAll(pkgDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(pkgDir, "hello.go"),
+		[]byte("package hello\n\nfunc SayHello() {}\nfunc Greet() {}\n"), 0644))
+
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "main.go"),
+		[]byte("package main\n\nfunc main() {}\n"), 0644))
+
+	parser := mockParser(t)
+	err := store.IndexAll(ctx, parser)
+	require.NoError(t, err)
+
+	stats := store.Stats()
+	assert.Equal(t, 2, stats.FileCount, "should index files in nested directories")
+	assert.Equal(t, 3, stats.NodeCount, "should have 3 symbols total")
+}
+
+func TestIndexAll_ContextCancellation(t *testing.T) {
+	store := newMemoryStore(t)
+
+	tmpDir := t.TempDir()
+	store.baseDir = tmpDir
+
+	// Create many files to increase chance of cancellation mid-walk.
+	for i := 0; i < 50; i++ {
+		name := fmt.Sprintf("file_%d.go", i)
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, name),
+			[]byte("package main\n\nfunc f() {}\n"), 0644))
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel immediately
+
+	parser := mockParser(t)
+	err := store.IndexAll(ctx, parser)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "context canceled")
+}
+
+func TestIndexAll_EmptyDirectory(t *testing.T) {
+	store := newMemoryStore(t)
+	ctx := context.Background()
+
+	tmpDir := t.TempDir()
+	store.baseDir = tmpDir
+
+	parser := mockParser(t)
+	err := store.IndexAll(ctx, parser)
+	require.NoError(t, err)
+
+	stats := store.Stats()
+	assert.Equal(t, 0, stats.FileCount)
+	assert.Equal(t, 0, stats.NodeCount)
+}
+
+func TestIndexAll_SetsFileMTime(t *testing.T) {
+	store := newMemoryStore(t)
+	ctx := context.Background()
+
+	tmpDir := t.TempDir()
+	store.baseDir = tmpDir
+
+	goFile := filepath.Join(tmpDir, "main.go")
+	require.NoError(t, os.WriteFile(goFile, []byte("package main\n\nfunc hello() {}\n"), 0644))
+
+	// Set a known mtime so we can verify it was captured.
+	knownTime := time.Date(2025, 6, 15, 12, 0, 0, 0, time.UTC)
+	require.NoError(t, os.Chtimes(goFile, knownTime, knownTime))
+
+	parser := mockParser(t)
+	err := store.IndexAll(ctx, parser)
+	require.NoError(t, err)
+
+	// Verify the symbol's FileMTime was set.
+	stats := store.Stats()
+	assert.Equal(t, 1, stats.NodeCount)
+
+	// Query the node directly via QueryCallees (returns the node even with no edges).
+	// Use FindDeadCode since hello is lowercase (not exported) and has no callers.
+	dead, err := store.FindDeadCode(ctx)
+	require.NoError(t, err)
+	require.Len(t, dead, 1)
+	assert.Equal(t, knownTime.Format(time.RFC3339), dead[0].FileMTime)
+}
+
+func TestIndexChangedFiles_OnlyChanged(t *testing.T) {
+	store := newMemoryStore(t)
+	ctx := context.Background()
+
+	tmpDir := t.TempDir()
+	store.baseDir = tmpDir
+
+	// Create two files.
+	goFile := filepath.Join(tmpDir, "main.go")
+	require.NoError(t, os.WriteFile(goFile, []byte("package main\n\nfunc hello() {}\n"), 0644))
+
+	tsFile := filepath.Join(tmpDir, "utils.ts")
+	require.NoError(t, os.WriteFile(tsFile, []byte("// utils\n"), 0644))
+
+	parser := mockParser(t)
+
+	// Full index first.
+	err := store.IndexAll(ctx, parser)
+	require.NoError(t, err)
+	assert.Equal(t, 2, store.Stats().FileCount)
+	assert.Equal(t, 1, store.Stats().NodeCount)
+
+	// Sleep to ensure mtime differs.
+	time.Sleep(100 * time.Millisecond)
+
+	// Modify main.go to add a new function.
+	require.NoError(t, os.WriteFile(goFile, []byte("package main\n\nfunc hello() {}\nfunc world() {}\n"), 0644))
+
+	// Incremental index should only re-index main.go.
+	err = store.IndexChangedFiles(ctx, parser)
+	require.NoError(t, err)
+
+	stats := store.Stats()
+	assert.Equal(t, 2, stats.FileCount, "file count should stay the same")
+	assert.Equal(t, 2, stats.NodeCount, "should have hello + world from main.go")
+}
+
+func TestIndexChangedFiles_DeletedFile(t *testing.T) {
+	store := newMemoryStore(t)
+	ctx := context.Background()
+
+	tmpDir := t.TempDir()
+	store.baseDir = tmpDir
+
+	goFile := filepath.Join(tmpDir, "main.go")
+	require.NoError(t, os.WriteFile(goFile, []byte("package main\n\nfunc hello() {}\n"), 0644))
+
+	parser := mockParser(t)
+	err := store.IndexAll(ctx, parser)
+	require.NoError(t, err)
+	assert.Equal(t, 1, store.Stats().FileCount)
+	assert.Equal(t, 1, store.Stats().NodeCount)
+
+	// Delete the file.
+	require.NoError(t, os.Remove(goFile))
+
+	// Incremental index should detect deletion and remove from index.
+	err = store.IndexChangedFiles(ctx, parser)
+	require.NoError(t, err)
+
+	stats := store.Stats()
+	assert.Equal(t, 0, stats.FileCount, "deleted file should be removed from index")
+	assert.Equal(t, 0, stats.NodeCount, "nodes for deleted file should be removed")
+}
+
+func TestIndexChangedFiles_NoChanges(t *testing.T) {
+	store := newMemoryStore(t)
+	ctx := context.Background()
+
+	tmpDir := t.TempDir()
+	store.baseDir = tmpDir
+
+	goFile := filepath.Join(tmpDir, "main.go")
+	require.NoError(t, os.WriteFile(goFile, []byte("package main\n\nfunc hello() {}\n"), 0644))
+
+	parser := mockParser(t)
+	err := store.IndexAll(ctx, parser)
+	require.NoError(t, err)
+	assert.Equal(t, 1, store.Stats().FileCount)
+
+	// No changes — incremental index should be a no-op.
+	err = store.IndexChangedFiles(ctx, parser)
+	require.NoError(t, err)
+
+	stats := store.Stats()
+	assert.Equal(t, 1, stats.FileCount, "no changes should not affect index")
+	assert.Equal(t, 1, stats.NodeCount, "no changes should not affect nodes")
+}
+
+func TestIndexChangedFiles_MultipleChanges(t *testing.T) {
+	store := newMemoryStore(t)
+	ctx := context.Background()
+
+	tmpDir := t.TempDir()
+	store.baseDir = tmpDir
+
+	// Create three files.
+	aFile := filepath.Join(tmpDir, "a.go")
+	require.NoError(t, os.WriteFile(aFile, []byte("package main\n\nfunc a() {}\n"), 0644))
+
+	bFile := filepath.Join(tmpDir, "b.go")
+	require.NoError(t, os.WriteFile(bFile, []byte("package main\n\nfunc b() {}\n"), 0644))
+
+	cFile := filepath.Join(tmpDir, "c.go")
+	require.NoError(t, os.WriteFile(cFile, []byte("package main\n\nfunc c() {}\n"), 0644))
+
+	parser := mockParser(t)
+	err := store.IndexAll(ctx, parser)
+	require.NoError(t, err)
+	assert.Equal(t, 3, store.Stats().FileCount)
+	assert.Equal(t, 3, store.Stats().NodeCount)
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Modify a.go (add function), modify b.go (add function), delete c.go.
+	require.NoError(t, os.WriteFile(aFile, []byte("package main\n\nfunc a() {}\nfunc a2() {}\n"), 0644))
+	require.NoError(t, os.WriteFile(bFile, []byte("package main\n\nfunc b() {}\nfunc b2() {}\n"), 0644))
+	require.NoError(t, os.Remove(cFile))
+
+	err = store.IndexChangedFiles(ctx, parser)
+	require.NoError(t, err)
+
+	stats := store.Stats()
+	assert.Equal(t, 2, stats.FileCount, "c.go should be removed, a.go and b.go remain")
+	assert.Equal(t, 4, stats.NodeCount, "a + a2 + b + b2 = 4 symbols")
+}
+
+func TestIndexChangedFiles_ContextCancellation(t *testing.T) {
+	store := newMemoryStore(t)
+
+	tmpDir := t.TempDir()
+	store.baseDir = tmpDir
+
+	// Create many files and make them all stale.
+	for i := 0; i < 50; i++ {
+		name := fmt.Sprintf("file_%d.go", i)
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, name),
+			[]byte("package main\n\nfunc f() {}\n"), 0644))
+	}
+
+	parser := mockParser(t)
+
+	// Full index first.
+	err := store.IndexAll(context.Background(), parser)
+	require.NoError(t, err)
+
+	// Make all files stale by touching them.
+	time.Sleep(100 * time.Millisecond)
+	for i := 0; i < 50; i++ {
+		name := fmt.Sprintf("file_%d.go", i)
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, name),
+			[]byte("package main\n\nfunc f() {}\nfunc g() {}\n"), 0644))
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel immediately
+
+	err = store.IndexChangedFiles(ctx, parser)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "context canceled")
+}
+
+func TestDeleteFileFromIndex(t *testing.T) {
+	store := newMemoryStore(t)
+	ctx := context.Background()
+
+	// Index two files with an edge between them.
+	pathA := "pkg/lib/lib.go"
+	err := store.IndexFile(ctx, pathA, []Symbol{
+		{QualifiedName: "pkg/lib.DoWork", DisplayName: "DoWork", FilePath: pathA, Line: 5, Kind: "func", Language: "go"},
+	}, nil)
+	require.NoError(t, err)
+
+	pathB := "pkg/app/app.go"
+	err = store.IndexFile(ctx, pathB, []Symbol{
+		{QualifiedName: "pkg/app.runner", DisplayName: "runner", FilePath: pathB, Line: 10, Kind: "func", Language: "go"},
+	}, []Edge{
+		{SourceQualifiedName: "pkg/app.runner", TargetQualifiedName: "pkg/lib.DoWork", EdgeType: "calls", Line: 11},
+	})
+	require.NoError(t, err)
+
+	assert.Equal(t, 2, store.Stats().FileCount)
+	assert.Equal(t, 2, store.Stats().NodeCount)
+	assert.Equal(t, 1, store.Stats().EdgeCount)
+
+	// Delete file A from index.
+	err = store.deleteFileFromIndex(ctx, pathA)
+	require.NoError(t, err)
+
+	stats := store.Stats()
+	assert.Equal(t, 1, stats.FileCount, "only file B should remain")
+	assert.Equal(t, 1, stats.NodeCount, "only runner should remain")
+	assert.Equal(t, 0, stats.EdgeCount, "edge referencing DoWork should be removed")
+}
+
+func TestDeleteFileFromIndex_NonExistent(t *testing.T) {
+	store := newMemoryStore(t)
+	ctx := context.Background()
+
+	// Deleting a file that doesn't exist in the index should be a no-op.
+	err := store.deleteFileFromIndex(ctx, "nonexistent.go")
+	require.NoError(t, err)
+
+	stats := store.Stats()
+	assert.Equal(t, 0, stats.FileCount)
+	assert.Equal(t, 0, stats.NodeCount)
+}
+
+func TestIndexAll_HiddenDirectoriesExcluded(t *testing.T) {
+	store := newMemoryStore(t)
+	ctx := context.Background()
+
+	tmpDir := t.TempDir()
+	store.baseDir = tmpDir
+
+	goFile := filepath.Join(tmpDir, "main.go")
+	require.NoError(t, os.WriteFile(goFile, []byte("package main\n\nfunc hello() {}\n"), 0644))
+
+	// Create a hidden directory (not .sprout, not .git) with a source file.
+	hiddenDir := filepath.Join(tmpDir, ".hidden")
+	require.NoError(t, os.MkdirAll(hiddenDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(hiddenDir, "secret.go"),
+		[]byte("package secret\n\nfunc hidden() {}\n"), 0644))
+
+	parser := mockParser(t)
+	err := store.IndexAll(ctx, parser)
+	require.NoError(t, err)
+
+	stats := store.Stats()
+	assert.Equal(t, 1, stats.FileCount, "hidden directories should be excluded")
+	assert.Equal(t, 1, stats.NodeCount, "only main.go symbols should be indexed")
+}
+
+func TestIndexAll_UnsupportedExtensionsExcluded(t *testing.T) {
+	store := newMemoryStore(t)
+	ctx := context.Background()
+
+	tmpDir := t.TempDir()
+	store.baseDir = tmpDir
+
+	goFile := filepath.Join(tmpDir, "main.go")
+	require.NoError(t, os.WriteFile(goFile, []byte("package main\n\nfunc hello() {}\n"), 0644))
+
+	// Create files with unsupported extensions.
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "readme.md"), []byte("# Hello\n"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "config.yaml"), []byte("key: value\n"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "data.json"), []byte("{}\n"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "script.sh"), []byte("#!/bin/bash\n"), 0644))
+
+	parser := mockParser(t)
+	err := store.IndexAll(ctx, parser)
+	require.NoError(t, err)
+
+	stats := store.Stats()
+	assert.Equal(t, 1, stats.FileCount, "only supported extensions should be indexed")
+	assert.Equal(t, 1, stats.NodeCount, "only main.go symbols should be indexed")
+}
+
+func TestIndexAll_ParserError(t *testing.T) {
+	store := newMemoryStore(t)
+	ctx := context.Background()
+
+	tmpDir := t.TempDir()
+	store.baseDir = tmpDir
+
+	goFile := filepath.Join(tmpDir, "main.go")
+	require.NoError(t, os.WriteFile(goFile, []byte("package main\n\nfunc hello() {}\n"), 0644))
+
+	// Parser that always returns an error.
+	failingParser := func(path string, content []byte) ([]Symbol, []Edge, error) {
+		return nil, nil, fmt.Errorf("parse failed for %s", path)
+	}
+
+	err := store.IndexAll(ctx, failingParser)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "parse failed")
+}
+
+func TestIndexAll_SymlinksSkipped(t *testing.T) {
+	store := newMemoryStore(t)
+	ctx := context.Background()
+
+	tmpDir := t.TempDir()
+	store.baseDir = tmpDir
+
+	goFile := filepath.Join(tmpDir, "main.go")
+	require.NoError(t, os.WriteFile(goFile, []byte("package main\n\nfunc hello() {}\n"), 0644))
+
+	// Create a symlink to the Go file (should be skipped).
+	linkPath := filepath.Join(tmpDir, "link.go")
+	err := os.Symlink(goFile, linkPath)
+	if err != nil {
+		// Symlinks may not work on all platforms (e.g. Windows without admin).
+		// Skip the symlink-specific assertions but still verify the base file.
+		parser := mockParser(t)
+		err = store.IndexAll(ctx, parser)
+		require.NoError(t, err)
+
+		stats := store.Stats()
+		assert.GreaterOrEqual(t, stats.FileCount, 1, "at least main.go should be indexed")
+		return
+	}
+
+	parser := mockParser(t)
+	err = store.IndexAll(ctx, parser)
+	require.NoError(t, err)
+
+	stats := store.Stats()
+	assert.Equal(t, 1, stats.FileCount, "symlinks should be skipped")
+	assert.Equal(t, 1, stats.NodeCount, "only main.go symbols should be indexed")
+}
+
+func TestIndexAll_SubdirectoryWithGoFiles(t *testing.T) {
+	store := newMemoryStore(t)
+	ctx := context.Background()
+
+	tmpDir := t.TempDir()
+	store.baseDir = tmpDir
+
+	// Create a subdirectory with Go files.
+	subDir := filepath.Join(tmpDir, "internal", "handler")
+	require.NoError(t, os.MkdirAll(subDir, 0755))
+
+	require.NoError(t, os.WriteFile(filepath.Join(subDir, "handler.go"),
+		[]byte("package handler\n\nfunc HandleRequest() {}\nfunc HandleResponse() {}\n"), 0644))
+
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "main.go"),
+		[]byte("package main\n\nfunc main() {}\n"), 0644))
+
+	parser := mockParser(t)
+	err := store.IndexAll(ctx, parser)
+	require.NoError(t, err)
+
+	stats := store.Stats()
+	assert.Equal(t, 2, stats.FileCount, "should index files in subdirectories")
+	assert.Equal(t, 3, stats.NodeCount, "should have 3 symbols total")
+}
+
+func TestIndexAll_RemoveDeletedAfterFullWalk(t *testing.T) {
+	store := newMemoryStore(t)
+	ctx := context.Background()
+
+	tmpDir := t.TempDir()
+	store.baseDir = tmpDir
+
+	// Pre-index a file that doesn't exist on disk.
+	err := store.IndexFile(ctx, "ghost.go", []Symbol{
+		{QualifiedName: "ghost", DisplayName: "ghost", FilePath: "ghost.go", Line: 1, Kind: "func", Language: "go"},
+	}, nil)
+	require.NoError(t, err)
+
+	// Pre-index a file that also has edges pointing to ghost.
+	err = store.IndexFile(ctx, "caller.go", []Symbol{
+		{QualifiedName: "caller", DisplayName: "caller", FilePath: "caller.go", Line: 1, Kind: "func", Language: "go"},
+	}, []Edge{
+		{SourceQualifiedName: "caller", TargetQualifiedName: "ghost", EdgeType: "calls", Line: 2},
+	})
+	require.NoError(t, err)
+
+	assert.Equal(t, 2, store.Stats().FileCount)
+	assert.Equal(t, 2, store.Stats().NodeCount)
+	assert.Equal(t, 1, store.Stats().EdgeCount)
+
+	// Create a file that exists on disk.
+	existingFile := filepath.Join(tmpDir, "real.go")
+	require.NoError(t, os.WriteFile(existingFile, []byte("package main\n\nfunc real() {}\n"), 0644))
+
+	parser := mockParser(t)
+	err = store.IndexAll(ctx, parser)
+	require.NoError(t, err)
+
+	stats := store.Stats()
+	assert.Equal(t, 1, stats.FileCount, "ghost.go and caller.go should be removed (not on disk)")
+	assert.Equal(t, 1, stats.NodeCount, "only real() should remain")
+	assert.Equal(t, 0, stats.EdgeCount, "edges referencing deleted nodes should be removed")
 }

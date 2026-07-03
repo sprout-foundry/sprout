@@ -640,7 +640,7 @@ func (r *http.Request) Method() string {
 func TestSymbolWithEdges_StructFields(t *testing.T) {
 	// Verify the struct has the expected fields.
 	result := &SymbolWithEdges{
-		Symbols: []symbolEntry{{Name: "test", Line: 1}},
+		Symbols: []SymbolEntry{{Name: "test", Line: 1}},
 		Edges:   nil,
 	}
 	assert.Len(t, result.Symbols, 1)

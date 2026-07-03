@@ -42,6 +42,9 @@ var treeSitterExtensions = map[string]bool{
 // lightweight overview of the codebase showing file paths and top-level symbols.
 // For Go files it uses go/ast; for TS/JS/Python it uses tree-sitter via pkg/ast.
 // Output is truncated to ~1024 tokens.
+//
+// When the codegraph store is available and populated, it reads from the store
+// for near-instant results on warm cache, falling back to the filesystem walk.
 func GenerateRepoMap(ctx context.Context, rootDir string) (string, error) {
 	if rootDir == "" || rootDir == "." {
 		var err error
@@ -56,12 +59,39 @@ func GenerateRepoMap(ctx context.Context, rootDir string) (string, error) {
 		return "", fmt.Errorf("resolve root directory: %w", err)
 	}
 
+	// Try to use the codegraph store for instant results on warm cache.
+	store, storeErr := openGraphStore()
+	if storeErr == nil && store != nil {
+		defer store.Close()
+
+		stats := store.Stats()
+		if stats.FileCount > 0 {
+			nodes, queryErr := store.QueryAllNodes(ctx)
+			if queryErr == nil {
+				result := formatRepoMapFromNodes(absRoot, nodes)
+				if result != "" {
+					return result, nil
+				}
+			}
+		}
+	}
+
+	// Fall through to filesystem walk.
+	return generateRepoMapFromFS(ctx, absRoot)
+}
+
+// generateRepoMapFromFS walks the filesystem to produce the repo map.
+// It is the original GenerateRepoMap logic extracted into a separate function
+// so it can be used as a fallback when the codegraph store is unavailable.
+func generateRepoMapFromFS(ctx context.Context, absRoot string) (string, error) {
+
 	type fileEntry struct {
 		absPath, relPath, ext string
 	}
 
 	var files []fileEntry
-	err = filepath.WalkDir(absRoot, func(path string, d os.DirEntry, err error) error {
+	var walkErr error
+	walkErr = filepath.WalkDir(absRoot, func(path string, d os.DirEntry, err error) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -98,8 +128,8 @@ func GenerateRepoMap(ctx context.Context, rootDir string) (string, error) {
 		files = append(files, fileEntry{path, filepath.ToSlash(rel), ext})
 		return nil
 	})
-	if err != nil {
-		return "", fmt.Errorf("walk directory: %w", err)
+	if walkErr != nil {
+		return "", fmt.Errorf("walk directory: %w", walkErr)
 	}
 
 	sort.Slice(files, func(i, j int) bool { return files[i].relPath < files[j].relPath })
@@ -164,6 +194,103 @@ func GenerateRepoMap(ctx context.Context, rootDir string) (string, error) {
 		sb.WriteString("\n*No source files with symbols found.*\n")
 	}
 	return sb.String(), nil
+}
+
+// openGraphStore opens the codegraph store at the default path (.sprout/codegraph.db).
+// Returns nil, nil when the store is cleanly unavailable (file doesn't exist).
+// Returns an error if the store exists but can't be opened.
+func openGraphStore() (*codegraph.SQLiteStore, error) {
+	dbPath, err := codegraph.DefaultDBPath()
+	if err != nil {
+		return nil, nil // can't resolve path, silently fall through
+	}
+	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+		return nil, nil // no store yet, silently fall through
+	}
+
+	store, err := codegraph.NewStore(dbPath)
+	if err != nil {
+		return nil, fmt.Errorf("open codegraph store: %w", err)
+	}
+
+	return store, nil
+}
+
+// formatRepoMapFromNodes formats the store-backed node data into the same
+// output format as the filesystem-walk version.
+// The DisplayName field stores the bare name (e.g., "run", "MyType", "(*Handler).ServeHTTP")
+// without a kind prefix. We reconstruct the prefix from sym.Kind so the output
+// matches the filesystem-walk format (e.g., "- func run:10", "- type MyType:5").
+func formatRepoMapFromNodes(rootDir string, nodes []codegraph.Symbol) string {
+	if len(nodes) == 0 {
+		return ""
+	}
+
+	// Group nodes by file_path.
+	fileNodes := make(map[string][]codegraph.Symbol)
+	for _, n := range nodes {
+		fileNodes[n.FilePath] = append(fileNodes[n.FilePath], n)
+	}
+
+	// Sort file paths for deterministic output.
+	filePaths := make([]string, 0, len(fileNodes))
+	for p := range fileNodes {
+		filePaths = append(filePaths, p)
+	}
+	sort.Strings(filePaths)
+
+	var sb strings.Builder
+	sb.WriteString("## repo_map: ")
+	sb.WriteString(filepath.Base(rootDir))
+	sb.WriteString("\n")
+
+	charCount := sb.Len()
+	fileCount := 0
+	truncated := false
+
+	for _, fp := range filePaths {
+		syms := fileNodes[fp]
+
+		section := "\n### " + fp + "\n"
+		for _, sym := range syms {
+			prefix := kindToPrefix(sym.Kind)
+			section += fmt.Sprintf("- %s %s:%d\n", prefix, sym.DisplayName, sym.Line)
+		}
+		if charCount+len(section) > repoMapCharBudget && fileCount > 0 {
+			truncated = true
+			break
+		}
+		sb.WriteString(section)
+		charCount += len(section)
+		fileCount++
+	}
+
+	if truncated {
+		sb.WriteString("\n*... truncated (token budget reached)*\n")
+	}
+	if fileCount == 0 {
+		sb.WriteString("\n*No source files with symbols found.*\n")
+	}
+
+	return sb.String()
+}
+
+// kindToPrefix maps a codegraph symbol kind to the display prefix used in the
+// repo map output.  This matches the prefixes produced by the filesystem-walk
+// path (go/ast for Go, tree-sitter for TS/JS/Python).
+func kindToPrefix(kind string) string {
+	switch kind {
+	case "func":
+		return "func"
+	case "type":
+		return "type"
+	case "const":
+		return "const"
+	case "var":
+		return "var"
+	default:
+		return kind
+	}
 }
 
 // extractSymbolsViaTreeSitter uses the pkg/ast tree-sitter parser to extract

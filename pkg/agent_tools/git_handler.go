@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
@@ -201,7 +202,11 @@ func (h *gitHandler) Execute(ctx context.Context, env ToolEnv, args map[string]a
 	return ToolResult{Output: result}, nil
 }
 
-// normalizeGitArgs strips a leading duplicate of the git subcommand from args.
+func (h *gitHandler) Aliases() []string         { return nil }
+func (h *gitHandler) Timeout() time.Duration    { return 0 }
+func (h *gitHandler) MaxResultSize() int        { return 0 }
+func (h *gitHandler) SafeForParallel() bool     { return false }
+func (h *gitHandler) Interactive() bool         { return false }
 // LLMs commonly pass args like "push origin main" when operation is already
 // "push", producing "git push push origin main". Handles underscore→hyphen
 // conversion (cherry_pick → cherry-pick) and branch_delete → branch.

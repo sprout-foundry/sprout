@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
@@ -164,6 +165,12 @@ func (h *writeStructuredFileHandler) Execute(ctx context.Context, env ToolEnv, a
 		TokenUsage: int64(estimateTokenUsage(result)),
 	}, nil
 }
+
+func (h *writeStructuredFileHandler) Aliases() []string         { return nil }
+func (h *writeStructuredFileHandler) Timeout() time.Duration    { return 0 }
+func (h *writeStructuredFileHandler) MaxResultSize() int        { return 0 }
+func (h *writeStructuredFileHandler) SafeForParallel() bool     { return false }
+func (h *writeStructuredFileHandler) Interactive() bool         { return false }
 
 // getOptionalString extracts an optional string from args, returning "" if not present.
 func getOptionalString(args map[string]any, key string) string {

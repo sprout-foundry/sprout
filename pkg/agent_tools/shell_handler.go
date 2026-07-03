@@ -419,6 +419,12 @@ func (h *shellCommandHandler) handleSync(ctx context.Context, env ToolEnv, comma
 	}, nil
 }
 
+func (h *shellCommandHandler) Aliases() []string         { return nil }
+func (h *shellCommandHandler) Timeout() time.Duration    { return 0 }
+func (h *shellCommandHandler) MaxResultSize() int        { return 0 }
+func (h *shellCommandHandler) SafeForParallel() bool     { return false }
+func (h *shellCommandHandler) Interactive() bool         { return false }
+
 // truncateForEvent truncates a string for event logging.
 func truncateForEvent(s string, maxLen int) string {
 	if len(s) <= maxLen {

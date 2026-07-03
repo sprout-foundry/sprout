@@ -4,6 +4,7 @@ package tools
 
 import (
 	"context"
+	"time"
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
@@ -81,3 +82,9 @@ func (h *analyzeUIScreenshotHandler) Execute(ctx context.Context, env ToolEnv, a
 	succeeded = true
 	return ToolResult{Output: result}, nil
 }
+
+func (h *analyzeUIScreenshotHandler) Aliases() []string         { return nil }
+func (h *analyzeUIScreenshotHandler) Timeout() time.Duration    { return 0 }
+func (h *analyzeUIScreenshotHandler) MaxResultSize() int        { return 0 }
+func (h *analyzeUIScreenshotHandler) SafeForParallel() bool     { return false }
+func (h *analyzeUIScreenshotHandler) Interactive() bool         { return false }

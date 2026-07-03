@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"time"
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
@@ -78,6 +79,12 @@ func (h *commitHandler) Execute(ctx context.Context, env ToolEnv, args map[strin
 	}
 	return ToolResult{Output: output}, nil
 }
+
+func (h *commitHandler) Aliases() []string         { return nil }
+func (h *commitHandler) Timeout() time.Duration    { return 0 }
+func (h *commitHandler) MaxResultSize() int        { return 0 }
+func (h *commitHandler) SafeForParallel() bool     { return false }
+func (h *commitHandler) Interactive() bool         { return false }
 
 // execShellCmd runs a shell command and returns its output
 func execShellCmd(ctx context.Context, cmd string, workingDir string) (string, error) {

@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
@@ -152,6 +153,12 @@ func (h *readFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 		TokenUsage: int64(estimateTokenUsage(content)),
 	}, nil
 }
+
+func (h *readFileHandler) Aliases() []string         { return nil }
+func (h *readFileHandler) Timeout() time.Duration    { return 0 }
+func (h *readFileHandler) MaxResultSize() int        { return 0 }
+func (h *readFileHandler) SafeForParallel() bool     { return false }
+func (h *readFileHandler) Interactive() bool         { return false }
 
 // handlePDF processes a PDF file and returns it as base64 data URI for vision-capable models.
 func (h *readFileHandler) handlePDF(ctx context.Context, env ToolEnv, path string) (ToolResult, error) {

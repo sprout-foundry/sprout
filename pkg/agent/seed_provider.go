@@ -182,6 +182,13 @@ func (sp *sproutProvider) accumulateResponseCost(resp *core.ChatResponse) {
 	}
 	sp.agent.state.AddCostEntry(entry)
 
+	// Seed's conversation loop tracks total tokens but not prompt/completion
+	// breakdown or LLM call count. Populate them here so --output-json and
+	// the status footer report accurate per-call metrics.
+	sp.agent.state.SetPromptTokens(sp.agent.state.GetPromptTokens() + resp.Usage.PromptTokens)
+	sp.agent.state.SetCompletionTokens(sp.agent.state.GetCompletionTokens() + resp.Usage.CompletionTokens)
+	sp.agent.state.SetLLMCallCount(sp.agent.state.GetLLMCallCount() + 1)
+
 	// Debit the fleet USD budget so the workflow runner's budget display
 	// ($X of $Y) reflects primary-agent LLM calls, not just subagents.
 	// Use chargedCost when available (pay_per_token), fall back to

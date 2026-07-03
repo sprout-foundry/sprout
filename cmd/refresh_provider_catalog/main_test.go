@@ -1,7 +1,11 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -182,5 +186,152 @@ func TestCarryForwardProbeData_PreservesFreshFields(t *testing.T) {
 	}
 	if out[0].Probe == nil || !out[0].Probe.Passed {
 		t.Errorf("Probe from prior not stamped onto fresh: %+v", out[0].Probe)
+	}
+}
+
+// helperResetOpenRouterCache resets the OpenRouter cache and restores the URL
+// after the test. Call it at the start of each test; it registers cleanup on t.
+func helperResetOpenRouterCache(t *testing.T) {
+	openRouterModelsCache = nil
+	prevURL := openRouterModelsURL
+	openRouterModelsURL = "https://openrouter.ai/api/v1/models"
+	t.Cleanup(func() {
+		openRouterModelsURL = prevURL
+		openRouterModelsCache = nil
+	})
+}
+
+// TestEnrichFromOpenRouter_FillsPricingGaps verifies that a model with
+// Pricing == nil gets pricing filled from a matching OpenRouter entry.
+func TestEnrichFromOpenRouter_FillsPricingGaps(t *testing.T) {
+	helperResetOpenRouterCache(t)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{
+			"data": [{
+				"id": "deepseek/deepseek-v4-flash",
+				"pricing": {
+					"prompt": "0.00000009",
+					"completion": "0.00000018",
+					"input_cache_read": "0.000000018"
+				}
+			}]
+		}`)
+	}))
+	defer srv.Close()
+
+	openRouterModelsURL = srv.URL
+
+	models := []modelcontract.CanonicalModel{
+		{ID: "deepseek-v4-flash"},
+	}
+
+	out := enrichFromOpenRouter(context.Background(), models)
+
+	if out[0].Pricing == nil {
+		t.Fatalf("expected pricing to be filled, got nil")
+	}
+	if out[0].Pricing.Source != "openrouter-cross-ref" {
+		t.Errorf("Source = %q, want %q", out[0].Pricing.Source, "openrouter-cross-ref")
+	}
+	if out[0].Pricing.InputPerMTok != 0.09 {
+		t.Errorf("InputPerMTok = %f, want 0.09", out[0].Pricing.InputPerMTok)
+	}
+	if out[0].Pricing.OutputPerMTok != 0.18 {
+		t.Errorf("OutputPerMTok = %f, want 0.18", out[0].Pricing.OutputPerMTok)
+	}
+	if out[0].Pricing.CachedPerMTok != 0.018 {
+		t.Errorf("CachedPerMTok = %f, want 0.018", out[0].Pricing.CachedPerMTok)
+	}
+	if out[0].Pricing.Currency != "USD" {
+		t.Errorf("Currency = %q, want %q", out[0].Pricing.Currency, "USD")
+	}
+}
+
+// TestEnrichFromOpenRouter_DoesNotOverwriteExisting verifies that models
+// that already have Pricing are NOT overwritten.
+func TestEnrichFromOpenRouter_DoesNotOverwriteExisting(t *testing.T) {
+	helperResetOpenRouterCache(t)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{
+			"data": [{
+				"id": "deepseek/deepseek-v4-flash",
+				"pricing": {
+					"prompt": "0.00000099",
+					"completion": "0.00000099"
+				}
+			}]
+		}`)
+	}))
+	defer srv.Close()
+
+	openRouterModelsURL = srv.URL
+
+	existing := &modelcontract.Pricing{
+		InputPerMTok:  1.0,
+		OutputPerMTok: 2.0,
+		Currency:      "USD",
+		Source:        "native-api",
+	}
+	models := []modelcontract.CanonicalModel{
+		{ID: "deepseek-v4-flash", Pricing: existing},
+	}
+
+	out := enrichFromOpenRouter(context.Background(), models)
+
+	if out[0].Pricing != existing {
+		t.Errorf("existing pricing was replaced")
+	}
+	if out[0].Pricing.InputPerMTok != 1.0 {
+		t.Errorf("InputPerMTok = %f, want 1.0 (should not be overwritten)", out[0].Pricing.InputPerMTok)
+	}
+	if out[0].Pricing.Source != "native-api" {
+		t.Errorf("Source = %q, want %q", out[0].Pricing.Source, "native-api")
+	}
+}
+
+// TestEnrichFromOpenRouter_NoMatch verifies that a model with no OpenRouter
+// match stays at Pricing == nil.
+func TestEnrichFromOpenRouter_NoMatch(t *testing.T) {
+	helperResetOpenRouterCache(t)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"data": [{"id": "other/model", "pricing": {"prompt": "0.01", "completion": "0.02"}}]}`)
+	}))
+	defer srv.Close()
+
+	openRouterModelsURL = srv.URL
+
+	models := []modelcontract.CanonicalModel{
+		{ID: "unknown-model-xyz"},
+	}
+
+	out := enrichFromOpenRouter(context.Background(), models)
+
+	if out[0].Pricing != nil {
+		t.Errorf("expected no pricing (no match), got %+v", out[0].Pricing)
+	}
+}
+
+// TestEnrichFromOpenRouter_APIUnreachable verifies that when the OpenRouter
+// API is unreachable, models are returned unchanged (no panic).
+func TestEnrichFromOpenRouter_APIUnreachable(t *testing.T) {
+	helperResetOpenRouterCache(t)
+
+	// Point at an address that will refuse connections.
+	openRouterModelsURL = "http://127.0.0.1:1"
+
+	models := []modelcontract.CanonicalModel{
+		{ID: "some/model"},
+	}
+
+	out := enrichFromOpenRouter(context.Background(), models)
+
+	if out[0].Pricing != nil {
+		t.Errorf("expected no pricing when API is unreachable, got %+v", out[0].Pricing)
 	}
 }

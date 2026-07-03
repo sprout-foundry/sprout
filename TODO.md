@@ -13,6 +13,93 @@ The "Proposed" table is down to 15 entries that are genuinely still open.
 
 ---
 
+## SP-107: Code Intelligence Graph — Phase 1
+
+_Persistent call graph with incremental indexing and agent-queryable tools.
+See `roadmap/SP-107-code-intelligence-graph.md` for full design._
+
+### Items
+
+- [x] **SP-107-1:** Create `pkg/codegraph/` package with SQLite-backed
+      store at `.sprout/codegraph.db`. Schema: `nodes` (id,
+      qualified_name, display_name, file_path, line, kind, language,
+      file_mtime), `edges` (id, source_node_id, target_node_id,
+      edge_type, line), `files` (path, mtime, symbol_count,
+      last_indexed). API: `IndexFile`, `QueryCallers`, `QueryCallees`,
+      `FindDeadCode`, `GetStaleFiles`, `Stats`. _(shipped: 20a36756 —
+      pkg/codegraph/ with SQLite store, 28 tests, clean build)_
+- [x] **SP-107-2:** Extend call-edge extraction in `pkg/ast/` and
+      `pkg/agent_tools/repo_map.go` to extract `calls` edges from
+      `ast.CallExpr` (Go), tree-sitter `call_expression` (TS/JS),
+      and tree-sitter `call` (Python). Each call becomes an edge:
+      source (caller function) → target (callee function).
+      _(shipped: d674e3ae — call-edge extraction across 4 languages;
+      59 tests, clean build)_
+- [x] **SP-107-3:** Add incremental indexing: compare file mtime vs
+      `files.last_indexed`, re-parse only changed files, delete old
+      nodes/edges for changed files, insert new ones. First call is
+      full walk; subsequent calls are near-instant.
+      _(shipped: 04491526 — IndexAll/IndexChangedFiles with FileParser
+      callback; 39 tests, clean build)_
+- [x] **SP-107-4:** Register three new agent tools in the tool
+      registry: `get_callers` (input: qualified_name → list of callers
+      with file:line), `get_callees` (input: qualified_name → list of
+      callees with file:line), `find_dead_code` (input: optional
+      directory → functions with zero inbound edges, excluding entry
+      points like main(), route handlers, exported API, init()).
+      _(shipped: 19383093 — 3 new tools registered; 14 handler tests,
+      clean build)_
+- [x] **SP-107-5:** Upgrade `repo_map` to read from the graph store
+      instead of walking the filesystem. Same output format (backward
+      compatible), but instant on warm cache.
+      _(shipped: ecc6c8ba — store-backed repo_map with filesystem
+      fallback; 47 codegraph + 19 repo_map tests, clean build)_
+
+### Notes
+
+- Build with `make build-all` after each item.
+- Test with `go test ./pkg/codegraph/...` and `go test ./pkg/agent_tools/...`.
+- The `.sprout/codegraph.db` file should be gitignored.
+
+---
+
+## SP-110: OpenRouter Pricing Fallback for Catalog Refresh
+
+_Providers like DeepSeek expose model IDs in `/v1/models` but omit pricing.
+The daily `provider-catalog-refresh.yml` Action runs
+`cmd/refresh_provider_catalog`, which queries provider APIs. When the API
+returns no pricing, `enrichFromConfig` tries `pkg/agent_providers/configs/*.json`.
+When that also has no pricing, the model ships with zero costs — and the
+runtime budget tracker silently shows $0.00._
+
+_Solution: after `enrichFromConfig`, cross-reference OpenRouter's
+`/api/v1/models` endpoint, which aggregates and verifies pricing for 300+
+models. OpenRouter prices include a markup over the native provider's direct
+pricing, so stamp the source as `"openrouter-cross-ref"` and note the markup.
+This is deterministic, verifiable, and runs in the existing daily CI — no LLM
+extraction needed._
+
+### Items
+
+- [x] **SP-110-1:** Add `enrichFromOpenRouter` to
+      `cmd/refresh_provider_catalog/main.go`. After `enrichFromConfig`, if a
+      model still has `Pricing == nil`, fetch OpenRouter's model list
+      (`https://openrouter.ai/api/v1/models`), match by model ID (strip the
+      `provider/` prefix, e.g. `deepseek/deepseek-v4-flash` → `deepseek-v4-flash`),
+      and fill pricing from `pricing.prompt` / `pricing.completion` /
+      `pricing.input_cache_read`. Convert per-token to per-million (*1e6).
+      Stamp `Source: "openrouter-cross-ref"`.
+- [x] **SP-110-2:** Cache the OpenRouter model list response in the refresh
+      command (single HTTP fetch per run, not per-model). Add a 10s timeout.
+      If the fetch fails, skip enrichment silently (the existing
+      `enrichFromConfig` values stand).
+- [x] **SP-110-3:** Add a test in `main_test.go` that verifies: (a) a model
+      with no native pricing gets OpenRouter pricing filled, (b) a model that
+      already has pricing is NOT overwritten, (c) a model with no OpenRouter
+      match stays at zero.
+
+---
+
 ## SP-091: Close the next round of roadmap gaps
 
 _Tech-debt cleanup + finishing touches (~3–5 days)._ Each item below was
@@ -1298,23 +1385,32 @@ focused files).
 
 ### Items
 
-- [ ] **Refactor-A-1:** Split `pkg/agent/subagent_runner.go::runTask`
+- [x] **Refactor-A-1:** Split `pkg/agent/subagent_runner.go::runTask`
   into 3 files: `runTaskSetup` (workspace, worktree, persona), 
   `runTaskBody` (the model call loop), `runTaskTeardown` (cleanup,
   metrics, results). Existing tests stay green; new file names
   follow the `_lifecycle.go` / `_helpers.go` pattern from prior
   SP-075 work.
-- [ ] **Refactor-A-2:** Split `pkg/agent/conversation.go::processQueryWithSeed`
+  _(shipped: 5cfbfad2 — runTask reduced from 423→76 lines via
+  setupSubagentRun + finalizeSubagentResult helpers; all tests pass)_
+- [x] **Refactor-A-2:** Split `pkg/agent/conversation.go::processQueryWithSeed`
   into prompt-prep / model-call / response-handle files (similar
   to the SP-098-1 split for `mcp.go`). The function is 419 lines
   with 3 clear phases; keep `processQueryWithSeed` as a thin
   orchestrator that calls the 3 extracted helpers.
-- [ ] **Refactor-A-3:** Split `cmd/agent_modes.go::startTerminalToolSubscriber`
+  _(shipped: 2216f1f1 — processQueryWithSeed reduced from 417→13
+  lines via prepareQueryRun + handleQueryResult; all tests pass)_
+- [x] **Refactor-A-3:** Split `cmd/agent_modes.go::startTerminalToolSubscriber`
   (402 lines) into event-subscribe / event-render / cleanup files.
   Pure wiring code, low risk.
-- [ ] **Refactor-A-4:** Split `pkg/agent/tool_handlers_subagent.go::handleRunParallelSubagents`
+  _(shipped: 4fe532ce — startTerminalToolSubscriber reduced from
+  402→12 lines via extracted handler methods + runEventLoop;
+  all tests pass)_
+- [x] **Refactor-A-4:** Split `pkg/agent/tool_handlers_subagent.go::handleRunParallelSubagents`
   (329 lines) into dispatch / spawn / collect. Follows the existing
   subagent-spawn-lifecycle.go pattern.
+  _(shipped: 3002e0ab — handleRunParallelSubagents reduced from
+  311→67 lines via 10 focused helpers; all tests pass)_
 
 ### Notes
 
@@ -1459,27 +1555,29 @@ and triggered kernel OOM. The worker pool is now capped to 4._
 
 ---
 
-## SP-107: Single-Source Tool Definitions — Eliminate Dual Maintenance
+## SP-109: Single-Source Tool Definitions — Eliminate Dual Maintenance
 
 Every tool is defined twice: `ToolConfig` in `pkg/agent/tool_registrations.go`
 (LLM-facing) and `ToolHandler.Definition()` in `pkg/agent_tools/` (dual-dispatch).
 These drift. 10 handler-only tools (`embedding_index`, `semantic_search`,
 `list_directory`) are invisible to the LLM. 16 legacy-only tools have no
-handler dispatch. Full spec: `roadmap/SP-107-single-source-tool-definitions.md`.
+handler dispatch. Full spec: `roadmap/SP-109-single-source-tool-definitions.md`.
 
 ### Phases
 
-- [ ] **SP-107-1:** Extend `ToolHandler` interface with metadata methods
+- [x] **SP-109-1:** Extend `ToolHandler` interface with metadata methods
       (`Aliases`, `Timeout`, `MaxResultSize`, `SafeForParallel`, `Interactive`).
       Add `ToolEnv.Agent` for subagent-spawning tools. Add default no-op stubs
       to all 32 existing handlers. _(~1 day)_
+      _(shipped: 82aa5229 — 5 metadata methods added to ToolHandler,
+      37 handlers with no-op stubs; all tests pass)_
 
-- [ ] **SP-107-2:** Build canonical tool list from handlers. Add
+- [ ] **SP-109-2:** Build canonical tool list from handlers. Add
       `BuildToolDefinitions()` that iterates `GetNewToolRegistry().All()`.
       Add `convertHandlerToSeedToolConfig()` for the seed path. Run old+new
       in parallel, assert identical output, then switch over. _(~1 day)_
 
-- [ ] **SP-107-3:** Migrate 16 legacy-only tools to handlers. Batch A (simple
+- [ ] **SP-109-3:** Migrate 16 legacy-only tools to handlers. Batch A (simple
       CRUD): `manage_memory`, `manage_settings`, `mcp_refresh`, `task_queue`,
       `list_changes`, `revert_my_changes`, `recover_file`, `create_pull_request`,
       `list_automate_workflows`, `run_automate`. Batch B (needs `*Agent`):
@@ -1488,7 +1586,7 @@ handler dispatch. Full spec: `roadmap/SP-107-single-source-tool-definitions.md`.
       case mismatch. Remove dead individual tools (`save_memory`, `search_memories`,
       `task_queue_*`). _(~2 days)_
 
-- [ ] **SP-107-4:** Delete legacy `ToolConfig` registry. Remove all
+- [ ] **SP-109-4:** Delete legacy `ToolConfig` registry. Remove all
       `ToolConfig` registration calls. Delete `ToolRegistry`, `ToolConfig`,
       `ParameterConfig`, `ToolHandler` func types. Single source of truth
       achieved. _(~0.5 days)_
@@ -1501,48 +1599,6 @@ handler dispatch. Full spec: `roadmap/SP-107-single-source-tool-definitions.md`.
 ---
 
 ## Things to consider after SP-091 → SP-095 ship
-
-
----
-
-## SP-107: Code Intelligence Graph — Phase 1
-
-_Persistent call graph with incremental indexing and agent-queryable tools.
-See `roadmap/SP-107-code-intelligence-graph.md` for full design._
-
-### Items
-
-- [ ] **SP-107-1a:** Create `pkg/codegraph/` package with SQLite-backed
-      store at `.sprout/codegraph.db`. Schema: `nodes` (id,
-      qualified_name, display_name, file_path, line, kind, language,
-      file_mtime), `edges` (id, source_node_id, target_node_id,
-      edge_type, line), `files` (path, mtime, symbol_count,
-      last_indexed). API: `IndexFile`, `QueryCallers`, `QueryCallees`,
-      `FindDeadCode`, `GetStaleFiles`, `Stats`.
-- [ ] **SP-107-1b:** Extend call-edge extraction in `pkg/ast/` and
-      `pkg/agent_tools/repo_map.go` to extract `calls` edges from
-      `ast.CallExpr` (Go), tree-sitter `call_expression` (TS/JS),
-      and tree-sitter `call` (Python). Each call becomes an edge:
-      source (caller function) → target (callee function).
-- [ ] **SP-107-1c:** Add incremental indexing: compare file mtime vs
-      `files.last_indexed`, re-parse only changed files, delete old
-      nodes/edges for changed files, insert new ones. First call is
-      full walk; subsequent calls are near-instant.
-- [ ] **SP-107-1d:** Register three new agent tools in the tool
-      registry: `get_callers` (input: qualified_name → list of callers
-      with file:line), `get_callees` (input: qualified_name → list of
-      callees with file:line), `find_dead_code` (input: optional
-      directory → functions with zero inbound edges, excluding entry
-      points like main(), route handlers, exported API, init()).
-- [ ] **SP-107-1e:** Upgrade `repo_map` to read from the graph store
-      instead of walking the filesystem. Same output format (backward
-      compatible), but instant on warm cache.
-
-### Notes
-
-- Build with `make build-all` after each item.
-- Test with `go test ./pkg/codegraph/...` and `go test ./pkg/agent_tools/...`.
-- The `.sprout/codegraph.db` file should be gitignored.
 - Acceptance: `get_callers`/`get_callees` return correct results for
   Go code in this repo; `find_dead_code` runs in < 100ms; `repo_map`
   output is unchanged but returns in < 50ms on warm cache.

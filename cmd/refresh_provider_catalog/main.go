@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,6 +19,32 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/modelcontract"
 	"github.com/sprout-foundry/sprout/pkg/providercatalog"
 )
+
+// openRouterModelsURL is the public OpenRouter endpoint for fetching model
+// pricing data. Exposed as a package-level var so tests can override it.
+var openRouterModelsURL = "https://openrouter.ai/api/v1/models"
+
+// openRouterModelsCache holds the per-run OpenRouter model lookup. Populated
+// lazily on the first call to enrichFromOpenRouter and reused for every
+// provider in that run.
+var openRouterModelsCache map[string]openRouterModel
+
+// openRouterResponse mirrors the JSON shape from /api/v1/models.
+type openRouterResponse struct {
+	Data []openRouterModel `json:"data"`
+}
+
+// openRouterModel holds the subset of fields we need from OpenRouter.
+type openRouterModel struct {
+	ID      string              `json:"id"`
+	Pricing openRouterPricing   `json:"pricing"`
+}
+
+type openRouterPricing struct {
+	Prompt         string `json:"prompt"`
+	Completion     string `json:"completion"`
+	InputCacheRead string `json:"input_cache_read"`
+}
 
 func main() {
 	registryDir := flag.String("registry-dir", "", "output directory for per-provider JSON files (for model registry server)")
@@ -58,6 +87,12 @@ func main() {
 		}
 
 		canon = enrichFromConfig(providerID, canon)
+
+		// Final fallback: fill pricing gaps from OpenRouter's public model list.
+		// Uses a shared cache so OpenRouter is only queried once per run.
+		orCtx, orCancel := context.WithTimeout(context.Background(), 15*time.Second)
+		canon = enrichFromOpenRouter(orCtx, canon)
+		orCancel()
 
 		// Project to ModelInfo for the baked providers.json catalog; the full
 		// canonical models are published to the per-provider registry file.
@@ -278,6 +313,99 @@ func enrichFromConfig(providerID string, models []modelcontract.CanonicalModel) 
 				models[i].Capabilities.StructuredOutput = caps.StructuredOutput
 			}
 		}
+	}
+
+	return models
+}
+
+// fetchOpenRouterModels fetches OpenRouter's public model list and builds a
+// lookup map keyed by the model ID (with provider/ prefix stripped). The map
+// is cached in openRouterModelsCache so it's only fetched once per run.
+func fetchOpenRouterModels(ctx context.Context) map[string]openRouterModel {
+	if openRouterModelsCache != nil {
+		return openRouterModelsCache
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, openRouterModelsURL, nil)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warn: build OpenRouter request: %v\n", err)
+		return nil
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warn: fetch OpenRouter models: %v\n", err)
+		return nil
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warn: read OpenRouter response: %v\n", err)
+		return nil
+	}
+
+	var orResp openRouterResponse
+	if err := json.Unmarshal(body, &orResp); err != nil {
+		fmt.Fprintf(os.Stderr, "warn: parse OpenRouter response: %v\n", err)
+		return nil
+	}
+
+	cache := make(map[string]openRouterModel, len(orResp.Data))
+	for _, m := range orResp.Data {
+		// Strip the provider/ prefix (e.g. "deepseek/deepseek-v4-flash" → "deepseek-v4-flash")
+		id := strings.TrimPrefix(m.ID, strings.SplitN(m.ID, "/", 2)[0]+"/")
+		cache[id] = m
+	}
+
+	openRouterModelsCache = cache
+	return cache
+}
+
+// enrichFromOpenRouter fills pricing gaps by cross-referencing OpenRouter's
+// public model list. OpenRouter aggregates pricing for 300+ models across
+// providers. Prices include OpenRouter's markup over native provider pricing,
+// so the source is stamped as "openrouter-cross-ref". Runs after
+// enrichFromConfig; only fills models where Pricing is still nil.
+func enrichFromOpenRouter(ctx context.Context, models []modelcontract.CanonicalModel) []modelcontract.CanonicalModel {
+	cache := fetchOpenRouterModels(ctx)
+	if cache == nil {
+		return models
+	}
+
+	for i := range models {
+		if models[i].Pricing != nil {
+			continue
+		}
+
+		orModel, ok := cache[models[i].ID]
+		if !ok {
+			continue
+		}
+
+		pricing := &modelcontract.Pricing{
+			Currency: "USD",
+			Source:   "openrouter-cross-ref",
+		}
+
+		if orModel.Pricing.Prompt != "" {
+			if v, err := strconv.ParseFloat(orModel.Pricing.Prompt, 64); err == nil {
+				pricing.InputPerMTok = v * 1e6
+			}
+		}
+		if orModel.Pricing.Completion != "" {
+			if v, err := strconv.ParseFloat(orModel.Pricing.Completion, 64); err == nil {
+				pricing.OutputPerMTok = v * 1e6
+			}
+		}
+		if orModel.Pricing.InputCacheRead != "" {
+			if v, err := strconv.ParseFloat(orModel.Pricing.InputCacheRead, 64); err == nil {
+				pricing.CachedPerMTok = v * 1e6
+			}
+		}
+
+		models[i].Pricing = pricing
 	}
 
 	return models

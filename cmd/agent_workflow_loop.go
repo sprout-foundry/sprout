@@ -404,29 +404,27 @@ func runAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 			console.GlyphWarning.Printf("Agent processing failed: %v", processErr)
 		}
 
-		// Step 5: Build verification.
+		// Step 5: Build verification. Run the build regardless of whether
+		// the agent reported an error — the agent may have hit max iterations
+		// but still produced compiling partial work.
 		buildFailed := false
-		if processErr == nil {
-			buildCmd := strings.TrimSpace(loop.BuildCommand)
-			if buildCmd != "" {
-				console.GlyphShell.Printf("%s", buildCmd)
-				shell := os.Getenv("SHELL")
-				if shell == "" {
-					shell = "/bin/sh"
-				}
-				cmd := exec.CommandContext(ctx, shell, "-c", buildCmd)
-				cmd.Stdout = os.Stdout
-				cmd.Stderr = os.Stderr
-				if buildErr := cmd.Run(); buildErr != nil {
-					console.GlyphWarning.Printf("Build failed: %v", buildErr)
-					buildFailed = true
-				} else {
-					fmt.Println()
-					console.GlyphSuccess.Print("Build passed")
-				}
+		buildCmd := strings.TrimSpace(loop.BuildCommand)
+		if buildCmd != "" {
+			console.GlyphShell.Printf("%s", buildCmd)
+			shell := os.Getenv("SHELL")
+			if shell == "" {
+				shell = "/bin/sh"
 			}
-		} else {
-			buildFailed = true
+			cmd := exec.CommandContext(ctx, shell, "-c", buildCmd)
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			if buildErr := cmd.Run(); buildErr != nil {
+				console.GlyphWarning.Printf("Build failed: %v", buildErr)
+				buildFailed = true
+			} else {
+				fmt.Println()
+				console.GlyphSuccess.Print("Build passed")
+			}
 		}
 
 		// Step 6: Triage on failure — retry up to MaxRetries.
@@ -504,8 +502,8 @@ func runAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 		if buildFailed {
 			itemsFailed++
 			console.GlyphWarning.Printf("Item failed after retries: %s", gateRes.Title)
-		} else if processErr == nil && !gateRes.Skip {
-			// Mark done on success.
+		} else {
+			// Build passed (either first try or after retry). Mark done.
 			if markErr := markTodoDone(todoFile, lineNum); markErr != nil {
 				console.GlyphWarning.Printf("Failed to mark item done: %v", markErr)
 			} else {

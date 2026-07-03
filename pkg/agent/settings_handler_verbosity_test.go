@@ -59,23 +59,23 @@ func TestOutputVerbositySetting_RoundTrip(t *testing.T) {
 }
 
 // TestOutputVerbositySetting_ExposedInAllSettings verifies the setting appears
-// in allSettings() so the frontend can discover it.
+// in AllSettings() so the frontend can discover it.
 func TestOutputVerbositySetting_ExposedInAllSettings(t *testing.T) {
-	settings := allSettings()
+	settings := AllSettings()
 	var found bool
 	for _, s := range settings {
-		if s.key == "output_verbosity" {
+		if s.Key == "output_verbosity" {
 			found = true
-			if s.description == "" {
+			if s.Description == "" {
 				t.Error("output_verbosity has empty description")
 			}
-			if s.validValues == "" {
+			if s.ValidValues == "" {
 				t.Error("output_verbosity has empty validValues")
 			}
 			break
 		}
 	}
 	if !found {
-		t.Error("output_verbosity not found in allSettings()")
+		t.Error("output_verbosity not found in AllSettings()")
 	}
 }

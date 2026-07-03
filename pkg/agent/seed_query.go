@@ -62,16 +62,55 @@ type injectInputMsg struct {
 	content string
 }
 
+// queryRunContext holds all shared state between the preparation and execution
+// phases of processQueryWithSeed. It keeps the thin orchestrator clean and
+// avoids a long list of return values from prepareQueryRun.
+type queryRunContext struct {
+	seedAgent       *core.Agent
+	preSeedMsgCount int
+	processedQuery  string
+	runCtx          context.Context
+	runCancel       context.CancelFunc
+	steerDone       chan struct{}
+}
+
 // processQueryWithSeed runs the conversation loop through seed's core.Agent
 // instead of sprout's native ConversationHandler.
 func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
+	qc, err := a.prepareQueryRun(userQuery)
+	if err != nil {
+		return "", err
+	}
+	defer func() {
+		qc.runCancel()
+		<-qc.steerDone
+	}()
+
+	result, err := qc.seedAgent.Run(qc.runCtx, qc.processedQuery)
+	return a.handleQueryResult(qc, result, err)
+}
+
+// ---------------------------------------------------------------------------
+// Preparation phase
+// ---------------------------------------------------------------------------
+
+// prepareQueryRun sets up the seed agent, wires steering goroutines, and
+// returns everything needed for the execution phase. It handles:
+//
+// - State reset (termination reason, interrupt, streaming buffers, etc.)
+// - Image processing and proactive context injection
+// - Seed provider and tool registry construction
+// - core.Options assembly (compaction, callbacks, checkpoints)
+// - Seed agent creation
+// - Steer forwarder and injector goroutines
+func (a *Agent) prepareQueryRun(userQuery string) (*queryRunContext, error) {
 	a.initSubManagers()
 
 	// Guard against concurrent queries on the same Agent instance. In
 	// shared-agent mode (CLI + WebUI), the second caller gets
 	// ErrQueryInProgress instead of corrupting the message list.
 	if err := a.TryBeginQuery(); err != nil {
-		return "", err
+		return nil, err
 	}
 	defer a.EndQuery()
 
@@ -113,7 +152,7 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	images, processedQuery, err := a.processImagesInQuery(userQuery)
 	if err != nil {
 		a.publishEvent(events.EventTypeError, events.ErrorEvent("Image processing failed", err))
-		return "", agenterrors.NewAgent("seed-query", "failed to process images in query", err)
+		return nil, agenterrors.NewAgent("seed-query", "failed to process images in query", err)
 	}
 
 	// Set conversation start time for duration calculation
@@ -149,13 +188,6 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	InstrumentedRecall(a, recallCtx, processedQuery)
 	recallCancel()
 
-	// Build the user message with processed (cleaned) query and images
-	userMessage := api.Message{
-		Role:    "user",
-		Content: processedQuery,
-		Images:  images,
-	}
-
 	// Group extracted images for provider registration. All images from this
 	// query are attached to the first user message by attachPastedImages.
 	pastedImageMap := make(map[string][]api.ImageData)
@@ -163,9 +195,8 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 		pastedImageMap["_current"] = images
 	}
 
-	// Save pre-seed message count and user message for later merge
+	// Save pre-seed message count for later merge
 	preSeedMsgCount := len(a.state.GetMessages())
-	preSeedUserMsg := userMessage
 
 	// Create seed provider adapter wrapping sprout's ClientInterface.
 	// Capture a stable client reference under the read lock — the query
@@ -174,7 +205,7 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	clientSnap := a.getClient()
 	prov, err := NewSproutProvider(a, clientSnap)
 	if err != nil {
-		return "", agenterrors.NewAgent("seed-query", "failed to create seed provider adapter", err)
+		return nil, agenterrors.NewAgent("seed-query", "failed to create seed provider adapter", err)
 	}
 
 	// Register pasted images with the provider so attachPastedImages can
@@ -182,8 +213,6 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	// this call the provider's pastedImages map stays empty and images
 	// extracted by processImagesInQuery never reach the model.
 	registerPastedImagesWithProvider(a, prov, pastedImageMap)
-
-	_ = prov // provider ready for seed agent construction
 
 	// Use seed's ToolRegistry — registers all 30 sprout tools with
 	// PreExecuteHook (security classification + subagent nesting prevention)
@@ -332,7 +361,7 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	// Create seed Agent
 	seedAgent, err := core.NewAgent(opts)
 	if err != nil {
-		return "", agenterrors.NewAgent("seed-query", "failed to create seed agent", err)
+		return nil, agenterrors.NewAgent("seed-query", "failed to create seed agent", err)
 	}
 
 	// Run the query through seed's conversation loop.
@@ -397,17 +426,30 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 			}
 		}
 	}()
-	defer func() {
-		runCancel()
-		<-steerDone
-	}()
 
-	result, err := seedAgent.Run(ctx, processedQuery)
+	return &queryRunContext{
+		seedAgent:       seedAgent,
+		preSeedMsgCount: preSeedMsgCount,
+		processedQuery:  processedQuery,
+		runCtx:          runCtx,
+		runCancel:       runCancel,
+		steerDone:       steerDone,
+	}, nil
+}
+
+// ---------------------------------------------------------------------------
+// Execution result handling
+// ---------------------------------------------------------------------------
+
+// handleQueryResult processes the result from seedAgent.Run(), handling fleet
+// budget exceeded, general errors, and the success path. It syncs state back
+// to sprout, commits tracked changes, and runs post-loop hooks.
+func (a *Agent) handleQueryResult(qc *queryRunContext, result string, err error) (string, error) {
 	if err != nil {
 		// Check if the fleet budget was exceeded mid-run
 		if errors.Is(err, FleetBudgetExceededError) {
 			// Extract the last assistant response as the truncated result
-			a.syncSeedStateToSprout(seedAgent, preSeedUserMsg, preSeedMsgCount)
+			a.syncSeedStateToSprout(qc.seedAgent)
 
 			var truncatedResult string
 			messages := a.state.GetMessages()
@@ -422,7 +464,7 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 			}
 
 			a.state.SetLastRunTerminationReason(RunTerminationFleetBudgetExceeded)
-			a.finalizeConversationPostHooks(truncatedResult, processedQuery, preSeedMsgCount)
+			a.finalizeConversationPostHooks(truncatedResult, qc.processedQuery, qc.preSeedMsgCount)
 
 			return truncatedResult, nil
 		}
@@ -437,10 +479,8 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 		a.state.SetLastRunTerminationReason(RunTerminationCompleted)
 
 		// Sync whatever state we can before returning
-		a.syncSeedStateToSprout(seedAgent, preSeedUserMsg, preSeedMsgCount)
-
-		// Finalize — publish the user-friendly message as the response
-		a.finalizeConversationPostHooks(wrapped, processedQuery, preSeedMsgCount)
+		a.syncSeedStateToSprout(qc.seedAgent)
+		a.finalizeConversationPostHooks(wrapped, qc.processedQuery, qc.preSeedMsgCount)
 
 		// Return the classified error so CLI/webui display it properly.
 		// The wrapped message is published via events above for display.
@@ -448,7 +488,7 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	}
 
 	// Sync state back to sprout's agent manager
-	a.syncSeedStateToSprout(seedAgent, preSeedUserMsg, preSeedMsgCount)
+	a.syncSeedStateToSprout(qc.seedAgent)
 
 	// ---- Post-loop hooks (moved from old ConversationHandler.finalizeConversation) ----
 
@@ -467,7 +507,7 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 	}
 
 	// Finalize post-loop tasks
-	a.finalizeConversationPostHooks(result, processedQuery, preSeedMsgCount)
+	a.finalizeConversationPostHooks(result, qc.processedQuery, qc.preSeedMsgCount)
 
 	// If streaming was enabled and content was streamed, return empty string
 	// to avoid duplicate display in the top-level CLI console.
@@ -481,6 +521,10 @@ func (a *Agent) processQueryWithSeed(userQuery string) (string, error) {
 
 	return result, nil
 }
+
+// ---------------------------------------------------------------------------
+// Post-hooks and state sync
+// ---------------------------------------------------------------------------
 
 // finalizeConversationPostHooks runs post-loop hooks shared by success and error paths.
 func (a *Agent) finalizeConversationPostHooks(result string, processedQuery string, preSeedMsgCount int) {
@@ -551,7 +595,7 @@ func (a *Agent) maybeCheckpointCompletedTurn(processedQuery string, queryStartIn
 // conversation history), seed's final state contains the complete message
 // sequence: [historical msgs, new user msg, assistant msg, tool msgs, ...].
 // We simply replace sprout's messages with seed's messages and sync counters.
-func (a *Agent) syncSeedStateToSprout(seedAgent *core.Agent, userMsg api.Message, preSeedMsgCount int) {
+func (a *Agent) syncSeedStateToSprout(seedAgent *core.Agent) {
 	if a.state == nil {
 		return
 	}

@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"strings"
@@ -131,6 +132,31 @@ func (r *OutputRouter) Mode() OutputMode {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.mode
+}
+
+// Write implements io.Writer so OutputRouter can be used directly as the
+// OutputWriter in tools.ToolEnv. It buffers partial lines and flushes them
+// on newline boundaries via the agent's PrintLineAsync, avoiding the need
+// to allocate a separate outputRouter wrapper per tool call.
+func (r *OutputRouter) Write(p []byte) (int, error) {
+	if r == nil {
+		return os.Stdout.Write(p)
+	}
+	agent := r.agent
+	if agent == nil {
+		return os.Stdout.Write(p)
+	}
+	buf := bytes.NewBuffer(p)
+	for {
+		line, err := buf.ReadString('\n')
+		if err == nil {
+			agent.PrintLineAsync(strings.TrimRight(line, "\n"))
+		} else {
+			// Partial line remaining — discard; it'll arrive on the next Write
+			break
+		}
+	}
+	return len(p), nil
 }
 
 // hasEventBus returns true if the router has an active event bus for publishing.

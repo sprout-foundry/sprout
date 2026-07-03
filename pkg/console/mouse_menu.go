@@ -296,6 +296,9 @@ func ParseMouseEvent(data string) (*MouseEvent, error) {
 			return nil, fmt.Errorf("invalid SGR mouse event")
 		}
 		event = parseSGRMouseEvent(data)
+		if event == nil {
+			return nil, fmt.Errorf("failed to parse SGR mouse event")
+		}
 	}
 
 	return event, nil

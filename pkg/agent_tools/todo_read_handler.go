@@ -12,11 +12,11 @@ import (
 
 type todoReadHandler struct{}
 
-func (h *todoReadHandler) Name() string { return "todo_read" }
+func (h *todoReadHandler) Name() string { return "TodoRead" }
 
 func (h *todoReadHandler) Definition() ToolDefinition {
 	return ToolDefinition{
-		Name:        "todo_read",
+		Name:        "TodoRead",
 		Description: "Read the current to-do list for the session.",
 		Required:    []string{},
 		Parameters:  []ParameterDef{},

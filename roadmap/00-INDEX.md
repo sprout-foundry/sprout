@@ -6,7 +6,7 @@ a major architectural area, its current state, and open work.
 Specs ship to [`./_completed/`](./_completed/) once their core work lands.
 The root directory only contains specs still receiving active changes.
 
-**Counts (as of 2026-07-02):** 72 shipped · 3 pending · 1 on hold.
+**Counts (as of 2026-07-02):** 72 shipped · 4 pending · 1 on hold.
 
 ## Shipped
 
@@ -89,7 +89,7 @@ Full spec bodies in [`_completed/`](./_completed/) (72 files).
 
 ## Pending
 
-Specs still in flight (3 files). When a spec's core work
+Specs still in flight (4 files). When a spec's core work
 ships, it moves to [`_completed/`](./_completed/).
 
 | Spec | Title | Status |
@@ -99,6 +99,7 @@ ships, it moves to [`_completed/`](./_completed/).
 | SP-080 | [Multi-Billing-Model Cost Tracking](./SP-080-multi-billing-cost-tracking.md) | 📋 Planned — Design complete. Three billing models (pay-per-token, subscription, free) with dual-cost tracking (charged vs token value). Fleet budget isolation, per-billing-type dashboard breakdown. 4 phases. |
 | SP-105 | [CLI Interactive Panels — Settings Browser & Usage Dashboard](./SP-105-cli-interactive-panels.md) | 🔵 Proposed — `/settings` interactive browser + `/usage` visual dashboard |
 | SP-106 | [CLI Output Polish + SelectList Touch Scroll](./SP-106-cli-output-polish.md) | 🔵 Proposed — Markdown table rendering, nested list indent, SelectList mouse wheel scroll |
+| SP-107 | [Single-Source Tool Definitions — Eliminate Dual Maintenance](./SP-107-single-source-tool-definitions.md) | 🔵 Proposed — Design complete. 4 phases. Make `ToolHandler.Definition()` the single source of truth, delete legacy `ToolConfig` entries. Fixes 10 handler-only tools invisible to LLM (`embedding_index`, `semantic_search`, etc.). |
 
 ## Future / On Hold
 

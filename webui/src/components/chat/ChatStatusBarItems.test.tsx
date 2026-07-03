@@ -54,7 +54,7 @@ describe('ChatStatusBarItems', () => {
     expect(container.querySelectorAll('.chat-statusbar-item').length).toBe(0);
   });
 
-  it('renders model, ctx, and cost when all fields are present', () => {
+  it('renders ctx and cost when all fields are present (model hidden by default — shown in middle section)', () => {
     act(() => {
       root.render(
         createElement(ChatStatusBarItems, {
@@ -68,11 +68,53 @@ describe('ChatStatusBarItems', () => {
         }),
       );
     });
+    // Model segment is intentionally hidden in the right section when connected
+    // with no persona — the shared StatusBar middle section already shows
+    // provider + model. Right section shows ctx + cost only.
     const items = container.querySelectorAll('.chat-statusbar-item');
+    expect(items.length).toBe(2);
+    expect(items[0]?.textContent).toContain('14.2k/200.0k ctx');
+    expect(container.querySelector('.chat-statusbar-cost')?.textContent).toBe('$0.420');
+  });
+
+  it('renders model when disconnected (no middle-section context available)', () => {
+    act(() => {
+      root.render(
+        createElement(ChatStatusBarItems, {
+          stats: {
+            provider: 'anthropic',
+            model: 'claude-haiku-4-5',
+            current_context_tokens: 14200,
+            max_context_tokens: 200000,
+            total_cost: 0.42,
+          },
+          isConnected: false,
+        }),
+      );
+    });
+    const items = container.querySelectorAll('.chat-statusbar-item');
+    // conn pill + model + ctx + cost = 4
+    expect(items.length).toBe(4);
+    expect(container.querySelector('.chat-statusbar-model-name')?.textContent).toBe('claude-haiku-4-5');
+  });
+
+  it('renders model when a non-orchestrator persona is active (signals which subagent)', () => {
+    act(() => {
+      root.render(
+        createElement(ChatStatusBarItems, {
+          stats: {
+            provider: 'anthropic',
+            model: 'claude-haiku-4-5',
+            persona: 'coder',
+            total_cost: 0.42,
+          },
+        }),
+      );
+    });
+    const items = container.querySelectorAll('.chat-statusbar-item');
+    // persona + model + cost = 3
     expect(items.length).toBe(3);
     expect(container.querySelector('.chat-statusbar-model-name')?.textContent).toBe('claude-haiku-4-5');
-    expect(items[1]?.textContent).toContain('14.2k/200.0k ctx');
-    expect(container.querySelector('.chat-statusbar-cost')?.textContent).toBe('$0.420');
   });
 
   it('omits segments for missing fields, with no orphan separators', () => {
@@ -83,13 +125,14 @@ describe('ChatStatusBarItems', () => {
             model: 'gpt-5',
             total_cost: 0.01,
           },
+          // persona=undefined → model not surfaced → only cost visible
         }),
       );
     });
     const items = container.querySelectorAll('.chat-statusbar-item');
-    expect(items.length).toBe(2); // model + cost (no ctx)
+    expect(items.length).toBe(1); // cost only (no ctx, no model because no persona)
     const seps = container.querySelectorAll('.chat-statusbar-sep');
-    expect(seps.length).toBe(1); // exactly one separator between the two
+    expect(seps.length).toBe(0); // single segment → no separator
   });
 
   it('falls back to total_tokens when ctx fields are absent', () => {
@@ -201,7 +244,7 @@ describe('ChatStatusBarItems', () => {
     act(() => {
       root.render(
         createElement(ChatStatusBarItems, {
-          stats: { provider: 'anthropic', model: 'claude-haiku-4-5' },
+          stats: { provider: 'anthropic', model: 'claude-haiku-4-5', persona: 'coder' },
           onModelClick: onClick,
         }),
       );
@@ -214,11 +257,11 @@ describe('ChatStatusBarItems', () => {
     expect(onClick).toHaveBeenCalledWith('anthropic');
   });
 
-  it('renders the model as plain text when onModelClick is not provided', () => {
+  it('renders the model as plain text when onModelClick is not provided (but model is surfaced)', () => {
     act(() => {
       root.render(
         createElement(ChatStatusBarItems, {
-          stats: { provider: 'anthropic', model: 'claude-haiku-4-5' },
+          stats: { provider: 'anthropic', model: 'claude-haiku-4-5', persona: 'coder' },
         }),
       );
     });

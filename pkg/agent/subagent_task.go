@@ -10,23 +10,43 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/envutil"
+	"github.com/sprout-foundry/sprout/pkg/events"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
-// runTask executes a single subagent task.  When cumulativeTokens is non-nil
-// and fleetBudgetLimit > 0, the subagent will debit tokens to the shared
-// fleet tracker after each LLM call and truncate gracefully when the budget
-// is exceeded mid-run.
-func (r *SubagentRunner) runTask(
+// subagentRunContext holds all the state wired up during setupSubagentRun
+// so that runTask can remain a thin orchestrator. Closures (streaming
+// callback, terminal writer) capture fields from this struct.
+type subagentRunContext struct {
+	runCtx        context.Context
+	cancel        context.CancelFunc
+	subAgent      *Agent
+	prefix        string
+	dimGray       string
+	reset         string
+	eventBus      *events.EventBus
+	stopProgress  chan struct{}
+	progressSubName string
+	progressLog   []SubagentProgressEntry
+	progressMu    sync.Mutex
+	lineBuf       strings.Builder
+	outputMu      *sync.Mutex
+	running       *runningSubagent
+	budgetExceeded atomic.Bool
+}
+
+// setupSubagentRun creates and configures a subagent for execution.
+// It returns a populated subagentRunContext on success, or an early-error
+// *SubagentResult on failure (e.g., createSubagent error).
+func (r *SubagentRunner) setupSubagentRun(
 	ctx context.Context,
 	taskID string,
 	prompt string,
 	opts SubagentOptions,
 	cumulativeTokens *atomic.Int64,
 	fleetBudgetLimit int64,
-) *SubagentResult {
-	startTime := time.Now()
-
+	startTime time.Time,
+) (*subagentRunContext, *SubagentResult) {
 	// Create context with optional timeout
 	var runCtx context.Context
 	var cancel context.CancelFunc
@@ -35,13 +55,12 @@ func (r *SubagentRunner) runTask(
 	} else {
 		runCtx, cancel = context.WithCancel(ctx)
 	}
-	defer cancel()
 
 	// Create subagent, deriving its interrupt context from runCtx so
 	// cancellation propagates into the subagent's LLM calls.
 	subAgent, err := r.createSubagent(opts, runCtx)
 	if err != nil {
-		return &SubagentResult{
+		return nil, &SubagentResult{
 			ID:      taskID,
 			Error:   agenterrors.Wrap(err, "create subagent"),
 			Elapsed: time.Since(startTime),
@@ -61,7 +80,6 @@ func (r *SubagentRunner) runTask(
 	// status footer can show " · N sub" while subagents are running.
 	// Decremented on Run completion via the defer below.
 	IncrementActiveSubagents()
-	defer DecrementActiveSubagents()
 
 	// Wire up per-LLM-call fleet budget tracking (SP-037-2c).
 	// This enables the subagent to debit tokens after each LLM call and
@@ -147,18 +165,6 @@ func (r *SubagentRunner) runTask(
 				}
 			}
 		}()
-	}
-	// CRITICAL: order matters here. Unsubscribe BEFORE closing stopProgress
-	// so the bus stops trying to write to our channel before our consumer
-	// goroutine exits. The reverse order leaks the subscriber registration:
-	// stop the consumer, leave the channel in eb.subscribers, bus keeps
-	// writing, channel fills past cap=100, every subsequent publish on
-	// every event type spams "Dropped X event for slow subscriber". With
-	// long-running nested EA workflows that's many subscribers leaking, one
-	// per spawned subagent — minutes of log noise per session.
-	defer close(stopProgress)
-	if eventBus != nil && progressSubName != "" {
-		defer eventBus.Unsubscribe(progressSubName)
 	}
 
 	// Determine a mutex for thread-safe output across parallel subagents.
@@ -263,50 +269,39 @@ func (r *SubagentRunner) runTask(
 	// user sees already has meaningful numbers.
 	go r.monitorProgress(runCtx, subAgent, taskID, opts.Persona)
 
-	// Run the subagent in a goroutine with panic recovery
-	done := make(chan *SubagentResult, 1)
-	go func() {
-		defer func() {
-			if p := recover(); p != nil {
-				done <- &SubagentResult{
-					ID:      taskID,
-					Error:   agenterrors.NewAgent("subagent.Runner", fmt.Sprintf("subagent panic: %v", p), nil),
-					Elapsed: time.Since(startTime),
-				}
-			}
-		}()
-
-		output, err := subAgent.ProcessQuery(prompt)
-		done <- &SubagentResult{
-			ID:      taskID,
-			Output:  output,
-			Error:   err,
-			Elapsed: time.Since(startTime),
-		}
-	}()
-
-	// Wait for completion or cancellation
-	var result *SubagentResult
-	select {
-	case result = <-done:
-	case <-runCtx.Done():
-		// Cancelled or timed out
-		cancel()
-		// Wait for goroutine to finish (with timeout).
-		// If the grace expires, the goroutine has leaked — log it so the
-		// operator can see why the agent appeared to pause.
-		select {
-		case result = <-done:
-		case <-time.After(5 * time.Second):
-			packageLogWarnf("[subagent] %s did not honor cancellation within 5s — goroutine leaked", taskID)
-			result = &SubagentResult{
-				ID:      taskID,
-				Error:   agenterrors.NewAgent("subagent.Runner", "subagent did not respond to cancellation", nil),
-				Elapsed: time.Since(startTime),
-			}
-		}
+	rc := &subagentRunContext{
+		runCtx:          runCtx,
+		cancel:          cancel,
+		subAgent:        subAgent,
+		prefix:          prefix,
+		dimGray:         dimGray,
+		reset:           reset,
+		eventBus:        eventBus,
+		stopProgress:    stopProgress,
+		progressSubName: progressSubName,
+		progressLog:     progressLog,
+		lineBuf:         lineBuf,
+		outputMu:        outputMu,
+		running:         running,
 	}
+	// Copy budgetExceeded by value so the atomic.Bool field in rc
+	// is the same one the monitorBudget goroutine writes to.
+	rc.budgetExceeded = budgetExceeded
 
+	return rc, nil
+}
+
+// finalizeSubagentResult enriches the raw SubagentResult with metrics,
+// progress log, change tracker snapshot, and output-quality signals.
+// It also cleans up the active tracking map entry.
+func (r *SubagentRunner) finalizeSubagentResult(
+	rc *subagentRunContext,
+	result *SubagentResult,
+	subAgent *Agent,
+	taskID string,
+	startTime time.Time,
+	opts SubagentOptions,
+) *SubagentResult {
 	// Flush any remaining buffered output. Use TryLock instead of blocking
 	// Lock: if the goroutine leaked (the 5-second grace above expired),
 	// it may still be holding outputMu inside its streaming callback. A
@@ -314,19 +309,19 @@ func (r *SubagentRunner) runTask(
 	// DecrementActiveSubagents un-fired ("1 sub" badge stuck in the
 	// footer) and blocking the parent's tool result. Best-effort flush
 	// on cancellation is fine; any buffered bytes are cosmetic.
-	if outputMu.TryLock() {
-		if lineBuf.Len() > 0 {
-			remaining := strings.TrimSpace(lineBuf.String())
+	if rc.outputMu.TryLock() {
+		if rc.lineBuf.Len() > 0 {
+			remaining := strings.TrimSpace(rc.lineBuf.String())
 			if remaining != "" {
-				_, _ = os.Stderr.Write([]byte(dimGray + prefix + reset + " " + remaining + "\n"))
+				_, _ = os.Stderr.Write([]byte(rc.dimGray + rc.prefix + rc.reset + " " + remaining + "\n"))
 			}
-			lineBuf.Reset()
+			rc.lineBuf.Reset()
 		}
-		outputMu.Unlock()
+		rc.outputMu.Unlock()
 	}
 
 	// Mark as completed
-	running.Completed.Store(true)
+	rc.running.Completed.Store(true)
 
 	// Collect metrics from agent state
 	tokensUsed := subAgent.state.GetTotalTokens()
@@ -335,7 +330,7 @@ func (r *SubagentRunner) runTask(
 	iterations := subAgent.state.GetCurrentIteration()
 
 	// Determine cancellation status
-	cancelled := runCtx.Err() != nil && !budgetExceeded.Load()
+	cancelled := rc.runCtx.Err() != nil && !rc.budgetExceeded.Load()
 
 	// Merge metrics into result
 	if result != nil {
@@ -345,7 +340,7 @@ func (r *SubagentRunner) runTask(
 		result.ToolCalls = toolCalls
 		result.Iterations = iterations
 		result.Cancelled = cancelled
-		result.BudgetExceeded = budgetExceeded.Load()
+		result.BudgetExceeded = rc.budgetExceeded.Load()
 		result.Truncated = subAgent.FleetBudgetExceeded()
 		// SP-059 Phase 2c: snapshot the subagent's change tracker so
 		// the parent can surface a structured FilesModified manifest
@@ -357,12 +352,12 @@ func (r *SubagentRunner) runTask(
 		// SP-059 Phase 3a: copy the captured progress log into the
 		// result. Snapshot under the mutex so a late event arriving
 		// after subAgent.ProcessQuery returned can't race the read.
-		progressMu.Lock()
-		if len(progressLog) > 0 {
-			result.ProgressLog = make([]SubagentProgressEntry, len(progressLog))
-			copy(result.ProgressLog, progressLog)
+		rc.progressMu.Lock()
+		if len(rc.progressLog) > 0 {
+			result.ProgressLog = make([]SubagentProgressEntry, len(rc.progressLog))
+			copy(result.ProgressLog, rc.progressLog)
 		}
-		progressMu.Unlock()
+		rc.progressMu.Unlock()
 
 		// Output quality signal: set OutputComplete so the orchestrator can
 		// distinguish "subagent did useful work" from "subagent ran but
@@ -398,11 +393,11 @@ func (r *SubagentRunner) runTask(
 					preview = preview[:200] + "..."
 				}
 				// Collapse newlines so the line stays grep-friendly.
-				preview = strings.Map(func(r rune) rune {
-					if r == '\n' || r == '\r' {
+				preview = strings.Map(func(runeVal rune) rune {
+					if runeVal == '\n' || runeVal == '\r' {
 						return ' '
 					}
-					return r
+					return runeVal
 				}, preview)
 				if r.parentAgent != nil {
 					r.parentAgent.Logger().Warn(
@@ -420,4 +415,85 @@ func (r *SubagentRunner) runTask(
 	r.active.Delete(taskID)
 
 	return result
+}
+
+// runTask executes a single subagent task.  When cumulativeTokens is non-nil
+// and fleetBudgetLimit > 0, the subagent will debit tokens to the shared
+// fleet tracker after each LLM call and truncate gracefully when the budget
+// is exceeded mid-run.
+func (r *SubagentRunner) runTask(
+	ctx context.Context,
+	taskID string,
+	prompt string,
+	opts SubagentOptions,
+	cumulativeTokens *atomic.Int64,
+	fleetBudgetLimit int64,
+) *SubagentResult {
+	startTime := time.Now()
+
+	// Setup
+	rc, errResult := r.setupSubagentRun(ctx, taskID, prompt, opts, cumulativeTokens, fleetBudgetLimit, startTime)
+	if errResult != nil {
+		return errResult
+	}
+	subAgent := rc.subAgent
+
+	// Cleanup defers — order matches the original:
+	// 1. cancel the run context
+	// 2. decrement active-subagent counter
+	// 3. close stopProgress channel
+	// 4. unsubscribe from event bus
+	defer rc.cancel()
+	defer DecrementActiveSubagents()
+	defer close(rc.stopProgress)
+	if rc.eventBus != nil && rc.progressSubName != "" {
+		defer rc.eventBus.Unsubscribe(rc.progressSubName)
+	}
+
+	// Run the subagent in a goroutine with panic recovery
+	done := make(chan *SubagentResult, 1)
+	go func() {
+		defer func() {
+			if p := recover(); p != nil {
+				done <- &SubagentResult{
+					ID:      taskID,
+					Error:   agenterrors.NewAgent("subagent.Runner", fmt.Sprintf("subagent panic: %v", p), nil),
+					Elapsed: time.Since(startTime),
+				}
+			}
+		}()
+
+		output, err := subAgent.ProcessQuery(prompt)
+		done <- &SubagentResult{
+			ID:      taskID,
+			Output:  output,
+			Error:   err,
+			Elapsed: time.Since(startTime),
+		}
+	}()
+
+	// Wait for completion or cancellation
+	var result *SubagentResult
+	select {
+	case result = <-done:
+	case <-rc.runCtx.Done():
+		// Cancelled or timed out
+		rc.cancel()
+		// Wait for goroutine to finish (with timeout).
+		// If the grace expires, the goroutine has leaked — log it so the
+		// operator can see why the agent appeared to pause.
+		select {
+		case result = <-done:
+		case <-time.After(5 * time.Second):
+			packageLogWarnf("[subagent] %s did not honor cancellation within 5s — goroutine leaked", taskID)
+			result = &SubagentResult{
+				ID:      taskID,
+				Error:   agenterrors.NewAgent("subagent.Runner", "subagent did not respond to cancellation", nil),
+				Elapsed: time.Since(startTime),
+			}
+		}
+	}
+
+	// Finalize
+	return r.finalizeSubagentResult(rc, result, subAgent, taskID, startTime, opts)
 }

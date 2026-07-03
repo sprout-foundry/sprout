@@ -8,7 +8,7 @@ import (
 // the expected number of tools after the refactor.
 func TestNewDefaultToolRegistry_Count(t *testing.T) {
 	registry := newDefaultToolRegistry()
-	expectedCount := 36
+	expectedCount := 39
 	if len(registry.tools) != expectedCount {
 		t.Errorf("expected %d registered tools, got %d", expectedCount, len(registry.tools))
 	}
@@ -56,6 +56,9 @@ func TestNewDefaultToolRegistry_AllToolsRegistered(t *testing.T) {
 		"recover_file",
 		"revert_my_changes",
 		"mcp_refresh",
+		"get_callers",
+		"get_callees",
+		"find_dead_code",
 	}
 
 	for _, toolName := range expectedTools {

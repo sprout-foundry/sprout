@@ -1361,17 +1361,43 @@ use `var(--accent-fg)`.
 
 ### Items
 
-- [ ] **WebUI-C-1:** Replace `#6e7681` → `var(--text-muted)` in
-  webui components (10 sites).
-- [ ] **WebUI-C-2:** Replace `#22c55e` → `var(--accent-success)`
-  (9 sites).
-- [ ] **WebUI-C-3:** Replace `#f59e0b` → `var(--accent-warning)`
+- [x] **WebUI-C-1:** Replace `#6e7681` → `var(--text-muted)` in
+  webui components (10 sites). _Done — replaced 12 `var(--text-tertiary,
+  #6e7681)` and `var(--text-muted, #888)` fallback sites across 9 CSS
+  files (Chat.css, GoToSymbolOverlay.css, GoToWorkspaceSymbolOverlay.css,
+  MediaViewer.css, Notification.css, NotificationCenter.css, StatusBar.css,
+  UpdateNotification.css, chat/{ChatStatusBarItems,SubagentActivityFeed,
+  SubagentTree,ToolTimelineBar}.css). JS runtime-color-picker hex
+  strings tested by helpers.test.tsx / SubagentActivityFeed.test.tsx
+  are deliberately preserved (they validate `getPersonaColor()` output,
+  not CSS tokens)._
+- [x] **WebUI-C-2:** Replace `#22c55e` → `var(--accent-success)`
+  (9 sites). _Done — replaced 11 sites across Notification.css,
+  ProrationDisplay.tsx, CredentialsSettingsTab.tsx, MCPCredentialPanel.tsx
+  (had stale `--color-success` token name with hex fallback — renamed to
+  the defined `--accent-success`). The single remaining `#22c55e` site
+  is in editorTabIcons.tsx line 133 for the `.diff` extension —
+  classified as a brand-color file-type identifier (exempt per design
+  system rules in AGENTS.md) and preserved._
+- [x] **WebUI-C-3:** Replace `#f59e0b` → `var(--accent-warning)`
   and `#ef4444` → `var(--accent-error)` (4 sites each).
-- [ ] **WebUI-C-4:** Replace `color: '#fff'` → `var(--accent-fg)`
-  in `platform/BillingPage.tsx` (4 sites).
-- [ ] **WebUI-C-5:** Leave the 6 github-syntax-theme colors
+  _Done — replaced 4 `#f59e0b` sites and 5 `#ef4444` sites across
+  Notification.css, ProrationDisplay.tsx, CredentialsSettingsTab.tsx,
+  MCPCredentialPanel.tsx. Note: CredentialsSettingsTab had stale
+  `--color-warning`/`--color-error` token names with hex fallback —
+  renamed to the defined `--accent-warning`/`--accent-error`.
+  Remaining `#f59e0b`/`#ef4444` in editorTabIcons.tsx (file-extension
+  brand colors) are exempt._
+- [x] **WebUI-C-4:** Replace `color: '#fff'` → `var(--accent-fg)`
+  in `platform/BillingPage.tsx` (4 sites). _Done — all 4 sites
+  replaced._
+- [x] **WebUI-C-5:** Leave the 6 github-syntax-theme colors
   (#d2a8ff, #58a6ff, etc.) alone — they're intentional brand
   identifiers for syntax highlighting and exempt per AGENTS.md.
+  _Verified — only 6 hex constants remain in webui/src/ outside the
+  exempt categories (JS test fixtures for runtime color picker, plus
+  file-extension brand colors in editorTabIcons.tsx). GitHub syntax
+  theme colors are zero-modification as specified._
 
 ### Notes
 

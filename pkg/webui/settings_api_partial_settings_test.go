@@ -74,6 +74,8 @@ func TestPartialSettingsAppliers_ComprehensiveEnums(t *testing.T) {
 		"persistent_context": map[string]interface{}{},
 		// applySkillsSettings
 		"skills":      map[string]interface{}{},
+		// applyWakeupSettings
+		"wakeup": map[string]interface{}{},
 		// risk_profiles and security_policy live in applyRiskAndSafetySettings
 		"risk_profiles":    map[string]interface{}{},
 		"security_policy":  map[string]interface{}{},
@@ -112,6 +114,7 @@ func TestPartialSettingsAppliers_Ordered(t *testing.T) {
 		"applyLanguageServerSettings",
 		"applyPersistentContextSettings",
 		"applySkillsSettings",
+		"applyWakeupSettings",
 	}
 	if len(partialSettingsAppliers) != len(want) {
 		t.Fatalf("applier count = %d, want %d (refactor may have added/dropped one)",

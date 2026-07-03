@@ -145,6 +145,9 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 
 		// Start heartbeat monitor to detect and cancel stale connections with active queries
 		go ws.startHeartbeatMonitor(ctx)
+
+		// SP-108: Start wakeup poller for auto-resume on background completions.
+		go ws.startWakeupPoller(ctx, 2*time.Second)
 	})
 
 	// Evict idle language server sessions (gopls, TypeScript worker) every 5 minutes.

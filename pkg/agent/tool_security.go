@@ -290,6 +290,7 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 		// SP-082-1: Pass the raw JSON args so handlers can recover key
 		// insertion order from the LLM's original tool call.
 		env.RawArgsJSON = rawArgsJSON
+		env.Notifier = agent
 	} else {
 		env.OutputWriter = os.Stdout
 		env.MaxTokensFunc = func() int { return 0 }

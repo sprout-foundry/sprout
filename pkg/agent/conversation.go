@@ -26,6 +26,19 @@ func (a *Agent) ProcessQuery(userQuery string) (string, error) {
 
 // ProcessQueryWithContinuity processes a query with continuity from previous actions
 func (a *Agent) ProcessQueryWithContinuity(userQuery string) (string, error) {
+	// SP-108: Re-enable auto-resume when the user sends a manual message.
+	if userQuery != "" {
+		a.EnableWakeupIfDisabled()
+	}
+	// Drain pending background-task notifications and prepend them.
+	if notifications := a.DrainNotifications(); len(notifications) > 0 {
+		wakeupMsg := FormatWakeupBatch(notifications)
+		if userQuery != "" {
+			userQuery = wakeupMsg + "\n\n" + userQuery
+		} else {
+			userQuery = wakeupMsg
+		}
+	}
 	// Ensure changes are committed even if there are unexpected errors or early termination
 	defer func() {
 		// Only commit if we have changes and they haven't been committed yet

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
@@ -164,6 +165,12 @@ func (h *searchMemoriesHandler) Execute(ctx context.Context, env ToolEnv, args m
 		TokenUsage: int64(estimateTokenUsage(output)),
 	}, nil
 }
+
+func (h *searchMemoriesHandler) Aliases() []string         { return nil }
+func (h *searchMemoriesHandler) Timeout() time.Duration    { return 0 }
+func (h *searchMemoriesHandler) MaxResultSize() int        { return 0 }
+func (h *searchMemoriesHandler) SafeForParallel() bool     { return false }
+func (h *searchMemoriesHandler) Interactive() bool         { return false }
 
 // memorySearchResult holds a single result from a text-based memory search.
 type memorySearchResult struct {

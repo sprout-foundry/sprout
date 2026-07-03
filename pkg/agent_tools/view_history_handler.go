@@ -88,3 +88,9 @@ func (h *viewHistoryHandler) Execute(ctx context.Context, env ToolEnv, args map[
 		IsError: false,
 	}, nil
 }
+
+func (h *viewHistoryHandler) Aliases() []string         { return nil }
+func (h *viewHistoryHandler) Timeout() time.Duration    { return 0 }
+func (h *viewHistoryHandler) MaxResultSize() int        { return 0 }
+func (h *viewHistoryHandler) SafeForParallel() bool     { return false }
+func (h *viewHistoryHandler) Interactive() bool         { return false }

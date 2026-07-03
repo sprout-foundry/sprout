@@ -232,3 +232,9 @@ func (h *embeddingIndexHandler) handleUpdate(ctx context.Context, mgr *embedding
 		IsError: false,
 	}, nil
 }
+
+func (h *embeddingIndexHandler) Aliases() []string         { return nil }
+func (h *embeddingIndexHandler) Timeout() time.Duration    { return 0 }
+func (h *embeddingIndexHandler) MaxResultSize() int        { return 0 }
+func (h *embeddingIndexHandler) SafeForParallel() bool     { return false }
+func (h *embeddingIndexHandler) Interactive() bool         { return false }

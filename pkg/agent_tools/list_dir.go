@@ -7,6 +7,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
@@ -188,7 +189,11 @@ func (h *listDirHandler) Execute(ctx context.Context, env ToolEnv, args map[stri
 	}, nil
 }
 
-// formatSize formats a file size in bytes to a human-readable string.
+func (h *listDirHandler) Aliases() []string         { return nil }
+func (h *listDirHandler) Timeout() time.Duration    { return 0 }
+func (h *listDirHandler) MaxResultSize() int        { return 0 }
+func (h *listDirHandler) SafeForParallel() bool     { return false }
+func (h *listDirHandler) Interactive() bool         { return false }
 func formatSize(bytes int64) string {
 	switch {
 	case bytes >= 1024*1024*1024:

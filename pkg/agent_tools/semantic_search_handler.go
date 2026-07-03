@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/embedding"
@@ -162,6 +163,12 @@ func (h *semanticSearchHandler) Execute(ctx context.Context, env ToolEnv, args m
 		TokenUsage: int64(estimateTokenUsage(output)),
 	}, nil
 }
+
+func (h *semanticSearchHandler) Aliases() []string         { return nil }
+func (h *semanticSearchHandler) Timeout() time.Duration    { return 0 }
+func (h *semanticSearchHandler) MaxResultSize() int        { return 0 }
+func (h *semanticSearchHandler) SafeForParallel() bool     { return false }
+func (h *semanticSearchHandler) Interactive() bool         { return false }
 
 // formatEmbeddingSearchResults formats QueryResult entries into readable output.
 func formatEmbeddingSearchResults(query string, results []embedding.QueryResult, threshold float64) string {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/events"
@@ -75,6 +76,12 @@ func (h *listSkillsHandler) Execute(ctx context.Context, env ToolEnv, args map[s
 		IsError: false,
 	}, nil
 }
+
+func (h *listSkillsHandler) Aliases() []string         { return nil }
+func (h *listSkillsHandler) Timeout() time.Duration    { return 0 }
+func (h *listSkillsHandler) MaxResultSize() int        { return 0 }
+func (h *listSkillsHandler) SafeForParallel() bool     { return false }
+func (h *listSkillsHandler) Interactive() bool         { return false }
 
 func formatSkillList(skills []configuration.Skill) string {
 	if len(skills) == 0 {

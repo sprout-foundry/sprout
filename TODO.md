@@ -1422,6 +1422,47 @@ and triggered kernel OOM. The worker pool is now capped to 4._
 
 ---
 
+## SP-107: Single-Source Tool Definitions — Eliminate Dual Maintenance
+
+Every tool is defined twice: `ToolConfig` in `pkg/agent/tool_registrations.go`
+(LLM-facing) and `ToolHandler.Definition()` in `pkg/agent_tools/` (dual-dispatch).
+These drift. 10 handler-only tools (`embedding_index`, `semantic_search`,
+`list_directory`) are invisible to the LLM. 16 legacy-only tools have no
+handler dispatch. Full spec: `roadmap/SP-107-single-source-tool-definitions.md`.
+
+### Phases
+
+- [ ] **SP-107-1:** Extend `ToolHandler` interface with metadata methods
+      (`Aliases`, `Timeout`, `MaxResultSize`, `SafeForParallel`, `Interactive`).
+      Add `ToolEnv.Agent` for subagent-spawning tools. Add default no-op stubs
+      to all 32 existing handlers. _(~1 day)_
+
+- [ ] **SP-107-2:** Build canonical tool list from handlers. Add
+      `BuildToolDefinitions()` that iterates `GetNewToolRegistry().All()`.
+      Add `convertHandlerToSeedToolConfig()` for the seed path. Run old+new
+      in parallel, assert identical output, then switch over. _(~1 day)_
+
+- [ ] **SP-107-3:** Migrate 16 legacy-only tools to handlers. Batch A (simple
+      CRUD): `manage_memory`, `manage_settings`, `mcp_refresh`, `task_queue`,
+      `list_changes`, `revert_my_changes`, `recover_file`, `create_pull_request`,
+      `list_automate_workflows`, `run_automate`. Batch B (needs `*Agent`):
+      `run_subagent`, `run_parallel_subagents`. Batch C (clarification):
+      `request_clarification`, `respond_clarification`. Fix `TodoRead`/`todo_read`
+      case mismatch. Remove dead individual tools (`save_memory`, `search_memories`,
+      `task_queue_*`). _(~2 days)_
+
+- [ ] **SP-107-4:** Delete legacy `ToolConfig` registry. Remove all
+      `ToolConfig` registration calls. Delete `ToolRegistry`, `ToolConfig`,
+      `ParameterConfig`, `ToolHandler` func types. Single source of truth
+      achieved. _(~0.5 days)_
+
+### Side-effect fixes
+- `embedding_index`, `semantic_search`, `list_directory` become LLM-visible
+- `TodoRead`/`todo_read` case mismatch resolved
+- Dead individual memory/task-queue tools properly removed
+
+---
+
 ## Things to consider after SP-091 → SP-095 ship
 
 

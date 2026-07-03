@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/automate"
@@ -144,15 +145,14 @@ func runWorkflowByPath(path string) error {
 	args := buildAgentSubprocessArgs(path, summary)
 
 	cmd := exec.Command(execPath, args...)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	// Detach into a new process group so the workflow survives the
-	// parent shell/agent tool call exiting. Without Setpgid, the child
-	// receives SIGHUP when the tool call completes and the agent process
-	// tears down its process group.
-	setProcessGroup(cmd)
+	// Detach from the terminal: redirect std streams to /dev/null and
+	// start in a new session (setsid) so the process survives the parent
+	// shell/agent tool call exiting. Without this, the child receives
+	// SIGHUP when the tool call completes and the terminal tears down.
+	cmd.Stdin = nil
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 
 	// Apply subagent timeout override if the workflow specifies one.
 	if summary != nil && summary.SubagentTimeoutSeconds != nil && *summary.SubagentTimeoutSeconds > 0 {

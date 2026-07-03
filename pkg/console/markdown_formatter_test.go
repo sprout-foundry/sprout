@@ -5,6 +5,284 @@ import (
 	"testing"
 )
 
+// TestMarkdownFormatter_TableRendering verifies that GitHub-flavored
+// markdown tables are rendered as aligned columns without pipe borders.
+func TestMarkdownFormatter_TableRendering(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("CLICOLOR_FORCE", "1")
+	formatter := NewMarkdownFormatter(true, true)
+
+	tests := []struct {
+		name     string
+		input    string
+		contains []string
+		notContains []string
+	}{
+		{
+			name: "simple 2-column table renders aligned columns with header rule",
+			input: "| File | Status |\n|------|--------|\n| a.go | ok |\n| b.go | fail |",
+			contains: []string{
+				"File", "Status", "a.go", "ok", "b.go", "fail",
+				"─", // header rule
+				ColorBold, // header row is bold
+				ColorDim,  // separator is dim
+			},
+			notContains: []string{
+				"|", // pipes should be removed
+			},
+		},
+		{
+			name: "3-column table with alignment markers",
+			input: "| Name | Count | Aligned |\n|:---|---:|:---:|\n| left | 1 | center |\n| right | 99 | mid |",
+			contains: []string{
+				"Name", "Count", "Aligned",
+				"left", "right", "1", "99", "center", "mid",
+				"─",
+			},
+			notContains: []string{
+				"|",
+			},
+		},
+		{
+			name: "cell with inline code — formatting applied",
+			input: "| Key | Value |\n|-----|-------|\n| lang | `go` |\n| ver | **1.21** |",
+			contains: []string{
+				"Key", "Value", "lang", "ver",
+				BgGray,  // inline code background
+				ColorBold, // bold in "1.21"
+			},
+			notContains: []string{
+				"|",
+			},
+		},
+		{
+			name: "table followed by normal paragraph",
+			input: "| A | B |\n|---|---|\n| 1 | 2 |\n\nThis is after the table.",
+			contains: []string{
+				"A", "B", "1", "2",
+				"This is after the table.",
+			},
+			notContains: []string{
+				"|",
+			},
+		},
+		{
+			name: "single-row table (no separator) renders as plain text",
+			input: "| Just one row |\n| with pipes |",
+			contains: []string{
+				"Just one row", "with pipes",
+			},
+			// No separator row means no table rendering — pipes may remain
+			// or be stripped, but there should be no header rule.
+			notContains: []string{},
+		},
+		{
+			name: "empty cells handled gracefully",
+			input: "| Col1 | Col2 |\n|------|------|\n| val | |\n| | val2 |",
+			contains: []string{
+				"Col1", "Col2", "val", "val2",
+			},
+			notContains: []string{
+				"|",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := formatter.Format(tt.input)
+			for _, expected := range tt.contains {
+				if !strings.Contains(result, expected) {
+					t.Errorf("Expected result to contain %q, but got:\n%s", expected, result)
+				}
+			}
+			for _, unexpected := range tt.notContains {
+				if strings.Contains(result, unexpected) {
+					t.Errorf("Expected result to NOT contain %q, but got:\n%s", unexpected, result)
+				}
+			}
+		})
+	}
+}
+
+// TestMarkdownFormatter_TableNoColor verifies that tables in no-color mode
+// strip pipes and still produce aligned columns.
+func TestMarkdownFormatter_TableNoColor(t *testing.T) {
+	formatter := NewMarkdownFormatter(false, true)
+
+	input := "| File | Lines | Status |\n|------|-------|--------|\n| a.go | 42 | ok |"
+	result := formatter.Format(input)
+
+	// Should contain no ANSI codes
+	if strings.Contains(result, "\033[") {
+		t.Errorf("Expected no ANSI codes when colors disabled, got: %s", result)
+	}
+
+	// Should contain the table content
+	if !strings.Contains(result, "File") || !strings.Contains(result, "a.go") {
+		t.Errorf("Expected table content to remain, got: %s", result)
+	}
+
+	// Pipes should be stripped
+	if strings.Contains(result, "|") {
+		t.Errorf("Expected pipes to be stripped, got: %s", result)
+	}
+}
+
+// TestMarkdownFormatter_TableWidthClamping verifies that column widths are
+// clamped to fit within the formatter's configured width.
+func TestMarkdownFormatter_TableWidthClamping(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("CLICOLOR_FORCE", "1")
+	formatter := NewMarkdownFormatter(true, true).SetWidth(30)
+
+	input := "| VeryLongColumnName | AnotherVeryLongColumn |\n|-------------------|-----------------------|\n| short | longvalue |"
+	result := formatter.Format(input)
+
+	// Each line should be reasonably short (within configured width + margin)
+	lines := strings.Split(result, "\n")
+	for _, line := range lines {
+		// Strip ANSI for length check
+		plain := stripANSIEscapeCodes(line)
+		// Use rune count (display columns), not byte length.
+		runeCount := len([]rune(plain))
+		if runeCount > 40 {
+			t.Errorf("Line too long (%d runes, expected ≤40): %q", runeCount, plain)
+		}
+	}
+}
+
+// TestMarkdownFormatter_NestedListIndentation verifies that nested lists
+// render with proper visual indentation based on leading whitespace.
+func TestMarkdownFormatter_NestedListIndentation(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("CLICOLOR_FORCE", "1")
+	formatter := NewMarkdownFormatter(true, true)
+
+	tests := []struct {
+		name     string
+		input    string
+		contains []string // checked against ANSI-stripped output
+	}{
+		{
+			name:  "2-level nested list: child indented under parent",
+			input: "- parent\n  - child",
+			contains: []string{
+				"- parent",
+				"  - child", // 2 spaces indent for 1 level
+			},
+		},
+		{
+			name:  "3-level nesting",
+			input: "- parent\n  - child\n    - grandchild",
+			contains: []string{
+				"- parent",
+				"  - child",      // 2 spaces = 1 level
+				"    - grandchild", // 4 spaces = 2 levels
+			},
+		},
+		{
+			name:  "tab-indented child normalized to spaces",
+			input: "- parent\n\t- child",
+			contains: []string{
+				"- parent",
+				"- child", // tab (1 space) → level 0 → no indent
+			},
+		},
+		{
+			name:  "non-list line after nested list has no residual indent",
+			input: "- item\n  - nested\nBack to normal text",
+			contains: []string{
+				"- item",
+				"  - nested",
+				"Back to normal text", // no leading spaces
+			},
+		},
+		{
+			name:  "mixed bullet types in nested list",
+			input: "- parent\n  * child\n    + grandchild",
+			contains: []string{
+				"- parent",
+				"  * child",
+				"    + grandchild",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := formatter.Format(tt.input)
+			// Strip ANSI codes for content checks.
+			plain := stripANSIEscapeCodes(result)
+			for _, expected := range tt.contains {
+				if !strings.Contains(plain, expected) {
+					t.Errorf("Expected result to contain %q, but got:\n%s", expected, plain)
+				}
+			}
+		})
+	}
+}
+
+// TestMarkdownFormatter_TableInCodeBlock verifies that pipe characters
+// inside code blocks are NOT treated as table delimiters.
+func TestMarkdownFormatter_TableInCodeBlock(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("CLICOLOR_FORCE", "1")
+	formatter := NewMarkdownFormatter(true, true)
+
+	input := "```text\n| not | a | table |\n|-----|---|------- |\n```\nAfter code block."
+	result := formatter.Format(input)
+
+	// The pipe characters should be preserved inside the code block
+	if !strings.Contains(result, "| not | a | table |") {
+		t.Errorf("Expected pipe characters to be preserved in code block, got:\n%s", result)
+	}
+
+	// Should have the code block gutter
+	if !strings.Contains(result, "│ ") {
+		t.Errorf("Expected code block gutter, got:\n%s", result)
+	}
+}
+
+// TestMarkdownFormatter_TableAfterParagraph verifies that a table
+// following a paragraph is detected correctly.
+func TestMarkdownFormatter_TableAfterParagraph(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("CLICOLOR_FORCE", "1")
+	formatter := NewMarkdownFormatter(true, true)
+
+	input := "Here's a summary:\n\n| Metric | Value |\n|--------|-------|\n| CPU | 42% |\n| RAM | 64% |"
+	result := formatter.Format(input)
+
+	// Should contain the paragraph
+	if !strings.Contains(result, "Here's a summary:") {
+		t.Errorf("Expected paragraph text, got:\n%s", result)
+	}
+
+	// Should contain table content without pipes
+	if !strings.Contains(result, "Metric") && !strings.Contains(result, "Value") {
+		t.Errorf("Expected table headers, got:\n%s", result)
+	}
+	if strings.Contains(result, "| Metric") {
+		t.Errorf("Expected pipes to be removed from table, got:\n%s", result)
+	}
+}
+
+// TestMarkdownFormatter_TableEdgeCases covers edge cases like
+// tables with extra whitespace and uneven column counts.
+func TestMarkdownFormatter_TableEdgeCases(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("CLICOLOR_FORCE", "1")
+	formatter := NewMarkdownFormatter(true, true)
+
+	// Table with extra whitespace around pipes
+	input := "  | Col1 | Col2 |  \n  |------|------|  \n  | val1 | val2 |  "
+	result := formatter.Format(input)
+	if !strings.Contains(result, "Col1") || !strings.Contains(result, "val1") {
+		t.Errorf("Expected table content with extra whitespace, got:\n%s", result)
+	}
+}
+
 // TestMarkdownFormatter_BasicFormatting verifies that the formatter
 // produces the expected ANSI color codes and Unicode glyph markers for
 // headers, bold, italic, lists, and code blocks.

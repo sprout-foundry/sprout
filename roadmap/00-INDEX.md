@@ -98,6 +98,7 @@ ships, it moves to [`_completed/`](./_completed/).
 | SP-075 | [Large-File Decomposition](./SP-075-large-file-decomposition.md) | ⚠️ In Progress — Phase 1 (config + cmd) and Phase 2 (agent core) substantially shipped 2026-06; Phase 3 (providers + web) shipped for several files. Original 2833-line `config.go` reduced to ~396 lines; `agent_workflow.go` 1519→3 lines; `tool_handlers_subagent.go` 1568→41 lines. **Remaining files over 600-line target:** `steer_input.go` 1313, `go_adapter.go` 1188, `models.go` 1121, `settings_api_put.go` 1094, `client.go` 1060, `client_context.go` 1011, `tool_handlers_subagent_spawn.go` 999, `Terminal.tsx` 780, `agent_modes.go` 732, `input_core.go` 715, `generic_provider.go` 669. |
 | SP-080 | [Multi-Billing-Model Cost Tracking](./SP-080-multi-billing-cost-tracking.md) | 📋 Planned — Design complete. Three billing models (pay-per-token, subscription, free) with dual-cost tracking (charged vs token value). Fleet budget isolation, per-billing-type dashboard breakdown. 4 phases. |
 | SP-105 | [CLI Interactive Panels — Settings Browser & Usage Dashboard](./SP-105-cli-interactive-panels.md) | 🔵 Proposed — `/settings` interactive browser + `/usage` visual dashboard |
+| SP-106 | [CLI Output Polish + SelectList Touch Scroll](./SP-106-cli-output-polish.md) | 🔵 Proposed — Markdown table rendering, nested list indent, SelectList mouse wheel scroll |
 
 ## Future / On Hold
 

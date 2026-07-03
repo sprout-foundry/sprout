@@ -71,7 +71,6 @@ func NewCommandRegistry() *CommandRegistry {
 	registry.Register(&CommitCommand{})
 	registry.Register(&ExecCommand{})
 	registry.Register(&ShellCommand{})
-	registry.Register(&StatsCommand{})
 
 	// Register subagent configuration commands
 	registry.Register(&SubagentConfigCommand{configType: "provider"})
@@ -127,6 +126,12 @@ func NewCommandRegistry() *CommandRegistry {
 
 	registry.Register(&SetupCommand{})
 
+	// SP-105 Phase 2: interactive settings browser
+	registry.Register(&SettingsCommand{})
+
+	// SP-105 Phase 3: visual usage dashboard
+	registry.Register(&UsageCommand{})
+
 	// SP-048-2d: short aliases for the most-used commands. Aliases resolve
 	// to canonical names during dispatch and appear in tab completion.
 	registry.RegisterAlias("m", "model")
@@ -135,6 +140,7 @@ func NewCommandRegistry() *CommandRegistry {
 	registry.RegisterAlias("q", "exit")
 	registry.RegisterAlias("?", "help")
 	registry.RegisterAlias("h", "help")
+	registry.RegisterAlias("stats", "usage")
 
 	return registry
 }

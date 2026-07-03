@@ -168,17 +168,17 @@ func GenerateRepoMap(ctx context.Context, rootDir string) (string, error) {
 
 // extractSymbolsViaTreeSitter uses the pkg/ast tree-sitter parser to extract
 // symbols from TS/JS/Python files.
-func extractSymbolsViaTreeSitter(path string, ext string, content []byte) ([]symbolEntry, error) {
+func extractSymbolsViaTreeSitter(path string, ext string, content []byte) ([]SymbolEntry, error) {
 	result, err := astp.ParseFile(path, content)
 	if err != nil {
 		return nil, err
 	}
 	defer result.Release()
 
-	var entries []symbolEntry
+	var entries []SymbolEntry
 	for _, sym := range result.Symbols {
 		prefix := symbolDisplayPrefix(sym.Kind, ext)
-		entries = append(entries, symbolEntry{
+		entries = append(entries, SymbolEntry{
 			Name: prefix + " " + sym.Name,
 			Line: sym.StartLine,
 		})
@@ -207,22 +207,106 @@ func symbolDisplayPrefix(kind string, ext string) string {
 	}
 }
 
-// symbolEntry pairs a symbol name with its 1-based line number.
-type symbolEntry struct {
+// SymbolEntry pairs a symbol name with its 1-based line number.
+type SymbolEntry struct {
 	Name string
 	Line int
 }
 
 // SymbolWithEdges holds symbols and call edges for a single file.
 type SymbolWithEdges struct {
-	Symbols []symbolEntry
+	Symbols []SymbolEntry
 	Edges   []codegraph.Edge
+}
+
+// ToCodegraphSymbols converts the SymbolWithEdges to codegraph Symbol and Edge slices.
+// filePath is the relative path of the source file.
+func (s *SymbolWithEdges) ToCodegraphSymbols(filePath string) ([]codegraph.Symbol, []codegraph.Edge, error) {
+	// Infer language from file extension.
+	ext := strings.ToLower(filepath.Ext(filePath))
+
+	// Construct qualified name prefix from the file path.
+	// For a file like "pkg/app/app.go", prefix is "pkg/app"
+	// For "src/utils.ts", prefix is "src"
+	dir := filepath.Dir(filePath)
+	pkgPrefix := strings.ReplaceAll(dir, string(filepath.Separator), "/")
+
+	var symbols []codegraph.Symbol
+	for _, se := range s.Symbols {
+		// Parse kind and display name from the symbol entry name.
+		// Go symbols look like: "func run", "type User", "func (*Server).Start"
+		// TS/JS/Python symbols look like: "main", "function greet", "class App", "def helper"
+		kind := inferKind(se.Name)
+		displayName := cleanDisplayName(se.Name)
+
+		qualifiedName := pkgPrefix + "." + displayName
+
+		symbols = append(symbols, codegraph.Symbol{
+			QualifiedName: qualifiedName,
+			DisplayName:   displayName,
+			FilePath:      filePath,
+			Line:          se.Line,
+			Kind:          kind,
+			Language:      inferLanguage(ext),
+			FileMTime:     "", // filled in by indexFileByPath
+		})
+	}
+
+	// Edges are already codegraph.Edge type.
+	return symbols, s.Edges, nil
+}
+
+// inferKind extracts the symbol kind from the display name prefix.
+func inferKind(name string) string {
+	if strings.HasPrefix(name, "func ") || strings.HasPrefix(name, "function ") {
+		return "func"
+	}
+	if strings.HasPrefix(name, "type ") {
+		return "type"
+	}
+	if strings.HasPrefix(name, "def ") {
+		return "func"
+	}
+	if strings.HasPrefix(name, "class ") {
+		return "type"
+	}
+	if strings.HasPrefix(name, "const ") {
+		return "const"
+	}
+	return "func" // default
+}
+
+// cleanDisplayName removes the kind prefix from a symbol name.
+func cleanDisplayName(name string) string {
+	prefixes := []string{"func ", "function ", "type ", "def ", "class ", "const "}
+	for _, p := range prefixes {
+		if strings.HasPrefix(name, p) {
+			return strings.TrimSpace(name[len(p):])
+		}
+	}
+	return name
+}
+
+// inferLanguage returns the codegraph language string from a file extension.
+func inferLanguage(ext string) string {
+	switch ext {
+	case ".go":
+		return "go"
+	case ".ts", ".tsx":
+		return "typescript"
+	case ".js", ".jsx":
+		return "javascript"
+	case ".py":
+		return "python"
+	default:
+		return ""
+	}
 }
 
 // extractSymbolsForFile extracts symbols from a file using the appropriate
 // parser: go/ast for Go, tree-sitter via pkg/ast for TS/JS/Python.
 // Unsupported extensions return an error.
-func extractSymbolsForFile(path string, ext string, content []byte) ([]symbolEntry, error) {
+func extractSymbolsForFile(path string, ext string, content []byte) ([]SymbolEntry, error) {
 	if ext == ".go" {
 		return extractGoSymbolsAST(path, content)
 	}
@@ -233,9 +317,9 @@ func extractSymbolsForFile(path string, ext string, content []byte) ([]symbolEnt
 }
 
 // extractGoSymbolsAST parses a Go source file using go/ast and extracts
-// top-level functions, methods, and type declarations as symbolEntry values.
+// top-level functions, methods, and type declarations as SymbolEntry values.
 // Test functions (Test*, Benchmark*, Fuzz*) and _test.go files are excluded.
-func extractGoSymbolsAST(path string, content []byte) ([]symbolEntry, error) {
+func extractGoSymbolsAST(path string, content []byte) ([]SymbolEntry, error) {
 	// Skip _test.go files entirely.
 	if strings.HasSuffix(filepath.Base(path), "_test.go") {
 		return nil, nil
@@ -247,7 +331,7 @@ func extractGoSymbolsAST(path string, content []byte) ([]symbolEntry, error) {
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
 
-	var symbols []symbolEntry
+	var symbols []SymbolEntry
 
 	for _, decl := range node.Decls {
 		switch d := decl.(type) {
@@ -257,14 +341,14 @@ func extractGoSymbolsAST(path string, content []byte) ([]symbolEntry, error) {
 			}
 			name := goFuncName(d)
 			line := fset.Position(d.Pos()).Line
-			symbols = append(symbols, symbolEntry{Name: name, Line: line})
+			symbols = append(symbols, SymbolEntry{Name: name, Line: line})
 
 		case *ast.GenDecl:
 			if d.Tok == token.TYPE {
 				for _, spec := range d.Specs {
 					if ts, ok := spec.(*ast.TypeSpec); ok {
 						line := fset.Position(ts.Pos()).Line
-						symbols = append(symbols, symbolEntry{
+						symbols = append(symbols, SymbolEntry{
 							Name: "type " + ts.Name.Name,
 							Line: line,
 						})
@@ -346,7 +430,7 @@ func extractGoSymbolsASTWithEdges(path string, content []byte) (*SymbolWithEdges
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
 
-	var symbols []symbolEntry
+	var symbols []SymbolEntry
 	var edges []codegraph.Edge
 
 	for _, decl := range node.Decls {
@@ -357,7 +441,7 @@ func extractGoSymbolsASTWithEdges(path string, content []byte) (*SymbolWithEdges
 				for _, spec := range gd.Specs {
 					if ts, ok3 := spec.(*ast.TypeSpec); ok3 {
 						line := fset.Position(ts.Pos()).Line
-						symbols = append(symbols, symbolEntry{
+						symbols = append(symbols, SymbolEntry{
 							Name: "type " + ts.Name.Name,
 							Line: line,
 						})
@@ -373,7 +457,7 @@ func extractGoSymbolsASTWithEdges(path string, content []byte) (*SymbolWithEdges
 
 		funcName := goFuncName(fd)
 		line := fset.Position(fd.Pos()).Line
-		symbols = append(symbols, symbolEntry{Name: funcName, Line: line})
+		symbols = append(symbols, SymbolEntry{Name: funcName, Line: line})
 
 		// Walk the function body to find call expressions.
 		if fd.Body == nil {
@@ -433,10 +517,10 @@ func extractSymbolsAndEdgesViaTreeSitter(path string, ext string, content []byte
 	}
 	defer result.Release()
 
-	var entries []symbolEntry
+	var entries []SymbolEntry
 	for _, sym := range result.Symbols {
 		prefix := symbolDisplayPrefix(sym.Kind, ext)
-		entries = append(entries, symbolEntry{
+		entries = append(entries, SymbolEntry{
 			Name: prefix + " " + sym.Name,
 			Line: sym.StartLine,
 		})

@@ -59,12 +59,11 @@ type Store interface {
 	// It replaces existing data for this file path (delete old nodes/edges, insert new).
 	IndexFile(ctx context.Context, path string, symbols []Symbol, edges []Edge) error
 
-	// InsertEdges inserts call edges for a file, resolving source and target
-	// qualified names to node IDs from the database. All nodes must already
-	// exist in the database (call IndexFile or indexSymbolsOnly first).
-	// This enables cross-file edge resolution that IndexFile cannot handle
-	// when called file-by-file during a full index.
-	InsertEdges(ctx context.Context, path string, edges []Edge) error
+	// InsertAllEdges inserts all call edges in a single transaction.
+	// All nodes must already exist in the database (call IndexFile or
+	// indexSymbolsOnly first). Deletes ALL existing edges first, then
+	// inserts the new set — this is correct for a full rebuild via IndexAll.
+	InsertAllEdges(ctx context.Context, edges []Edge) error
 
 	// QueryCallers returns symbols that call the given qualified name.
 	QueryCallers(ctx context.Context, qualifiedName string) ([]Symbol, error)
@@ -294,12 +293,11 @@ func (s *SQLiteStore) IndexFile(ctx context.Context, path string, symbols []Symb
 	return nil
 }
 
-// InsertEdges inserts call edges for a file, resolving source and target
-// qualified names to node IDs from the database. All nodes must already
-// exist in the database (call IndexFile or indexSymbolsOnly first).
-// This enables cross-file edge resolution that IndexFile cannot handle
-// when called file-by-file during a full index.
-func (s *SQLiteStore) InsertEdges(ctx context.Context, path string, edges []Edge) error {
+// InsertAllEdges inserts all call edges in a single transaction.
+// All nodes must already exist in the database (call IndexFile or
+// indexSymbolsOnly first). Deletes ALL existing edges, then inserts
+// the new set. This is correct for a full rebuild via IndexAll.
+func (s *SQLiteStore) InsertAllEdges(ctx context.Context, edges []Edge) error {
 	if len(edges) == 0 {
 		return nil
 	}
@@ -317,13 +315,10 @@ func (s *SQLiteStore) InsertEdges(ctx context.Context, path string, edges []Edge
 		}
 	}()
 
-	// Delete existing edges referencing nodes from this file (clean slate).
-	_, err = tx.ExecContext(ctx, `
-		DELETE FROM edges WHERE source_node_id IN (SELECT id FROM nodes WHERE file_path = ?)
-		   OR target_node_id IN (SELECT id FROM nodes WHERE file_path = ?)
-	`, path, path)
+	// Delete ALL existing edges (clean slate for full rebuild).
+	_, err = tx.ExecContext(ctx, `DELETE FROM edges`)
 	if err != nil {
-		return fmt.Errorf("delete edges for %s: %w", path, err)
+		return fmt.Errorf("delete all edges: %w", err)
 	}
 
 	// Insert edges by resolving qualified names from the database.
@@ -354,12 +349,7 @@ func (s *SQLiteStore) InsertEdges(ctx context.Context, path string, edges []Edge
 		}
 	}
 
-	err = tx.Commit()
-	if err != nil {
-		return fmt.Errorf("commit: %w", err)
-	}
-
-	return nil
+	return tx.Commit()
 }
 
 // QueryCallers returns symbols that call the given qualified name.

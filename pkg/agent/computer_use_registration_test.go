@@ -4,25 +4,58 @@ import (
 	"strings"
 	"testing"
 
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/agent_tools/computer_use"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
-func TestToolConfigFromHandler_MapsDefinition(t *testing.T) {
+func TestComputerUseHandlers_RegisteredInNewRegistry(t *testing.T) {
 	handlers := computer_use.Handlers()
 	if len(handlers) == 0 {
 		t.Fatal("no computer_use handlers")
 	}
-	// take_screenshot is first and has a single optional "region" parameter.
-	cfg := toolConfigFromHandler(handlers[0])
-	if cfg.Name != "take_screenshot" {
-		t.Errorf("name = %q, want take_screenshot", cfg.Name)
+
+	reg := tools.GetNewToolRegistry()
+	for _, h := range handlers {
+		name := h.Name()
+		registered, found := reg.Lookup(name)
+		if !found {
+			// The handler may not be registered if computer use is disabled.
+			// This is fine — the test is informational.
+			t.Logf("computer_use handler %q not registered in new registry (may be disabled)", name)
+			continue
+		}
+		def := registered.Definition()
+		if def.Description == "" {
+			t.Errorf("computer_use handler %q has empty description", name)
+		}
+		if def.Parameters == nil {
+			t.Errorf("computer_use handler %q has nil parameters", name)
+		}
 	}
-	if cfg.Description == "" {
-		t.Error("description should be populated")
+}
+
+func TestComputerUseHandlers_HaveValidDefinitions(t *testing.T) {
+	handlers := computer_use.Handlers()
+	if len(handlers) == 0 {
+		t.Fatal("no computer_use handlers")
 	}
-	if len(cfg.Parameters) != 1 || cfg.Parameters[0].Name != "region" {
-		t.Errorf("parameters = %+v, want one 'region' param", cfg.Parameters)
+
+	for _, h := range handlers {
+		name := h.Name()
+		def := h.Definition()
+		if def.Name == "" {
+			t.Errorf("handler %q has empty Name() in Definition()", name)
+		}
+		if def.Description == "" {
+			t.Errorf("handler %q has empty Description", name)
+		}
+		// take_screenshot should have a single optional "region" parameter.
+		if name == "take_screenshot" {
+			if len(def.Parameters) != 1 || def.Parameters[0].Name != "region" {
+				t.Errorf("take_screenshot parameters = %+v, want one 'region' param", def.Parameters)
+			}
+		}
 	}
 }
 

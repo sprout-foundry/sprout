@@ -2,73 +2,11 @@ package agent
 
 import (
 	"context"
-	"fmt"
 	"os"
-	"slices"
-	"strconv"
 
 	core "github.com/sprout-foundry/seed/core"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 )
-
-// BuildToolConfigsFromHandlers produces a canonical list of ToolConfig entries
-// derived from the new handler registry (tools.GetNewToolRegistry().All()).
-// Each handler is converted to a ToolConfig via convertHandlerToToolConfig.
-// The result is sorted alphabetically by name for deterministic output.
-func BuildToolConfigsFromHandlers() []ToolConfig {
-	allHandlers := tools.GetNewToolRegistry().All()
-	result := make([]ToolConfig, 0, len(allHandlers))
-	for _, h := range allHandlers {
-		result = append(result, convertHandlerToToolConfig(h))
-	}
-	slices.SortFunc(result, func(a, b ToolConfig) int {
-		if a.Name < b.Name {
-			return -1
-		}
-		if a.Name > b.Name {
-			return 1
-		}
-		return 0
-	})
-	return result
-}
-
-// convertHandlerToToolConfig converts a single ToolHandler into a
-// ToolConfig (the LLM-facing tool definition used by the legacy registry).
-func convertHandlerToToolConfig(h tools.ToolHandler) ToolConfig {
-	def := h.Definition()
-
-	// Map parameters from ToolDefinition (which has a separate Required []string
-	// field) to ParameterConfig (which has Required bool per parameter).
-	params := make([]ParameterConfig, len(def.Parameters))
-	requiredSet := make(map[string]struct{}, len(def.Required))
-	for _, rn := range def.Required {
-		requiredSet[rn] = struct{}{}
-	}
-	for i, pd := range def.Parameters {
-		req := pd.Required
-		if !req {
-			_, req = requiredSet[pd.Name]
-		}
-		params[i] = ParameterConfig{
-			Name:        pd.Name,
-			Type:        pd.Type,
-			Required:    req,
-			Description: pd.Description,
-		}
-	}
-
-	return ToolConfig{
-		Name:            h.Name(),
-		Description:     def.Description,
-		Parameters:      params,
-		Aliases:         h.Aliases(),
-		Timeout:         h.Timeout(),
-		MaxResultSize:   h.MaxResultSize(),
-		SafeForParallel: h.SafeForParallel(),
-		Interactive:     h.Interactive(),
-	}
-}
 
 // convertHandlerToSeedToolConfig converts a ToolHandler into a seed
 // core.ToolConfig, dispatching through the new interface-based handler
@@ -122,8 +60,6 @@ func convertHandlerToSeedToolConfig(h tools.ToolHandler, agent *Agent) core.Tool
 		// Build ToolEnv from agent context.
 		env := buildToolEnvFromAgent(agent)
 
-		// Convert args from map[string]interface{} to map[string]any
-		// (they're the same type but be explicit for the call).
 		handlerArgs := make(map[string]any, len(args))
 		for k, v := range args {
 			handlerArgs[k] = v
@@ -188,11 +124,12 @@ func convertHandlerToSeedToolConfig(h tools.ToolHandler, agent *Agent) core.Tool
 		if len(res.Images) > 0 {
 			images = make([]core.ImageData, len(res.Images))
 			for i, img := range res.Images {
-							images[i] = core.ImageData{
-				URL:    img.URI,
-				Base64: img.Base64,
-				Type:   img.MIMEType,
-			}}
+				images[i] = core.ImageData{
+					URL:    img.URI,
+					Base64: img.Base64,
+					Type:   img.MIMEType,
+				}
+			}
 		}
 
 		return images, postProcessResult(ctx, agent, name, args, res.Output), nil
@@ -245,196 +182,3 @@ type handlerToolError struct {
 }
 
 func (e *handlerToolError) Error() string { return e.msg }
-
-// compareToolConfigFields compares two ToolConfig entries and returns a list
-// of fields that differ. Used by SP-109 verification to log diffs between
-// legacy and handler-derived tool definitions.
-func compareToolConfigFields(oldCfg, newCfg ToolConfig) []string {
-	var diffs []string
-
-	if oldCfg.Description != newCfg.Description {
-		diffs = append(diffs, "Description")
-	}
-	if oldCfg.Interactive != newCfg.Interactive {
-		diffs = append(diffs, "Interactive")
-	}
-	if oldCfg.SafeForParallel != newCfg.SafeForParallel {
-		diffs = append(diffs, "SafeForParallel")
-	}
-	if oldCfg.Timeout != newCfg.Timeout {
-		diffs = append(diffs, "Timeout")
-	}
-	if oldCfg.MaxResultSize != newCfg.MaxResultSize {
-		diffs = append(diffs, "MaxResultSize")
-	}
-
-	// Compare aliases
-	if !stringSliceEqual(oldCfg.Aliases, newCfg.Aliases) {
-		diffs = append(diffs, "Aliases")
-	}
-
-	// Compare parameters
-	if !parameterConfigsEqual(oldCfg.Parameters, newCfg.Parameters) {
-		diffs = append(diffs, "Parameters")
-	}
-
-	return diffs
-}
-
-// compareSeedToolConfigFields compares two core.ToolConfig entries and
-// returns a list of fields that differ.
-func compareSeedToolConfigFields(oldCfg, newCfg core.ToolConfig) []string {
-	var diffs []string
-
-	if oldCfg.Description != newCfg.Description {
-		diffs = append(diffs, "Description")
-	}
-	if oldCfg.SafeForParallel != newCfg.SafeForParallel {
-		diffs = append(diffs, "SafeForParallel")
-	}
-	if oldCfg.Timeout != newCfg.Timeout {
-		diffs = append(diffs, "Timeout")
-	}
-	if oldCfg.MaxResultSize != newCfg.MaxResultSize {
-		diffs = append(diffs, "MaxResultSize")
-	}
-
-	if !stringSliceEqual(oldCfg.Aliases, newCfg.Aliases) {
-		diffs = append(diffs, "Aliases")
-	}
-
-	if !seedParameterConfigsEqual(oldCfg.Parameters, newCfg.Parameters) {
-		diffs = append(diffs, "Parameters")
-	}
-
-	return diffs
-}
-
-func stringSliceEqual(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	// Aliases are semantically a set — order shouldn't matter.
-	// Sort copies so callers can reuse the original slices.
-	a = slices.Clone(a)
-	b = slices.Clone(b)
-	slices.Sort(a)
-	slices.Sort(b)
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
-}
-
-func parameterConfigsEqual(a, b []ParameterConfig) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i].Name != b[i].Name || a[i].Type != b[i].Type ||
-			a[i].Required != b[i].Required || a[i].Description != b[i].Description {
-			return false
-		}
-	}
-	return true
-}
-
-func seedParameterConfigsEqual(a, b []core.ParameterConfig) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i].Name != b[i].Name || a[i].Type != b[i].Type ||
-			a[i].Required != b[i].Required || a[i].Description != b[i].Description {
-			return false
-		}
-	}
-	return true
-}
-
-// handlerToolConfigs returns a map of ToolConfig entries derived from the
-// handler registry, keyed by tool name.
-func handlerToolConfigs() map[string]ToolConfig {
-	result := make(map[string]ToolConfig)
-	for _, cfg := range BuildToolConfigsFromHandlers() {
-		result[cfg.Name] = cfg
-	}
-	return result
-}
-
-// seedToolConfigsFromHandlers returns a map of seed core.ToolConfig entries
-// derived from the handler registry, keyed by tool name.
-func seedToolConfigsFromHandlers(agent *Agent) map[string]core.ToolConfig {
-	result := make(map[string]core.ToolConfig)
-	for _, h := range tools.GetNewToolRegistry().All() {
-		result[h.Name()] = convertHandlerToSeedToolConfig(h, agent)
-	}
-	return result
-}
-
-// seedToolConfigsFromLegacy returns a map of seed core.ToolConfig entries
-// derived from the legacy ToolConfig registry, keyed by tool name.
-func seedToolConfigsFromLegacy(agent *Agent) map[string]core.ToolConfig {
-	result := make(map[string]core.ToolConfig)
-	for _, cfg := range GetToolRegistry().GetAllToolConfigs() {
-		result[cfg.Name] = convertToSeedToolConfig(cfg, agent)
-	}
-	return result
-}
-
-// sp109UseHandlerTools reports whether the SP109_USE_HANDLER_TOOLS env var
-// is set to "true". When enabled, the seed tool registry uses handler-derived
-// tool definitions instead of the legacy ToolConfig registry.
-func sp109UseHandlerTools() bool {
-	return os.Getenv("SP109_USE_HANDLER_TOOLS") == "true"
-}
-
-// sp109VerifyAndLog compares seed tool configs from both sources (legacy and
-// handler-derived) and logs any differences to stderr. Returns the count of
-// tools compared, matched, and differing.
-func sp109VerifyAndLog(agent *Agent) (compared, matched, differing int) {
-	legacyCfgs := seedToolConfigsFromLegacy(agent)
-	handlerCfgs := seedToolConfigsFromHandlers(agent)
-
-	for name, legacyCfg := range legacyCfgs {
-		handlerCfg, ok := handlerCfgs[name]
-		if !ok {
-			continue // tool only in legacy, skip
-		}
-		compared++
-		diffs := compareSeedToolConfigFields(legacyCfg, handlerCfg)
-		if len(diffs) == 0 {
-			matched++
-		} else {
-			differing++
-			for _, field := range diffs {
-				var oldVal, newVal string
-				switch field {
-				case "Description":
-					oldVal = legacyCfg.Description
-					newVal = handlerCfg.Description
-				case "Timeout":
-					oldVal = legacyCfg.Timeout.String()
-					newVal = handlerCfg.Timeout.String()
-				case "MaxResultSize":
-					oldVal = strconv.Itoa(legacyCfg.MaxResultSize)
-					newVal = strconv.Itoa(handlerCfg.MaxResultSize)
-				case "SafeForParallel":
-					oldVal = strconv.FormatBool(legacyCfg.SafeForParallel)
-					newVal = strconv.FormatBool(handlerCfg.SafeForParallel)
-				case "Aliases":
-					oldVal = fmt.Sprintf("%v", legacyCfg.Aliases)
-					newVal = fmt.Sprintf("%v", handlerCfg.Aliases)
-				case "Parameters":
-					oldVal = fmt.Sprintf("%d params", len(legacyCfg.Parameters))
-					newVal = fmt.Sprintf("%d params", len(handlerCfg.Parameters))
-				}
-				fmt.Fprintf(os.Stderr, "SP-109 DIFF tool=%q field=%q: new=%q, old=%q\n",
-					name, field, newVal, oldVal)
-			}
-		}
-	}
-	return compared, matched, differing
-}

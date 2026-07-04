@@ -40,9 +40,7 @@
   },
   "loop": {
     "build_command": "go build ./...",
-    "gate_model": "deepseek-v4-flash",
     "gate_prompt_file": "automate/todo_loop_gate.md",
-    "gate_provider": "deepseek",
     "max_iterations": 50,
     "max_retries": 2,
     "todo_file": "TODO.md"

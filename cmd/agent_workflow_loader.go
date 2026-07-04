@@ -123,8 +123,6 @@ func (c *AgentWorkflowConfig) validate() error {
 	if c.Loop != nil {
 		c.Loop.TodoFile = strings.TrimSpace(c.Loop.TodoFile)
 		c.Loop.GatePromptFile = strings.TrimSpace(c.Loop.GatePromptFile)
-		c.Loop.GateModel = strings.TrimSpace(c.Loop.GateModel)
-		c.Loop.GateProvider = strings.TrimSpace(c.Loop.GateProvider)
 		c.Loop.BuildCommand = strings.TrimSpace(c.Loop.BuildCommand)
 
 		if c.Loop.GatePromptFile == "" {

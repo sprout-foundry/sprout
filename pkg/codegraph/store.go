@@ -62,7 +62,8 @@ type Store interface {
 
 	// FindDeadCode returns symbols with zero inbound call edges.
 	// Excludes known entry points: main(), init(), exported functions, and test functions.
-	FindDeadCode(ctx context.Context) ([]Symbol, error)
+	// If directory is non-empty, restricts results to files under that directory prefix.
+	FindDeadCode(ctx context.Context, directory string) ([]Symbol, error)
 
 	// GetStaleFiles returns file paths whose mtime differs from the last indexed time.
 	GetStaleFiles(ctx context.Context) ([]string, error)
@@ -353,19 +354,27 @@ func (s *SQLiteStore) QueryCallees(ctx context.Context, qualifiedName string) ([
 
 // FindDeadCode returns symbols with zero inbound call edges.
 // Excludes known entry points: main(), init(), exported functions, and test functions.
-func (s *SQLiteStore) FindDeadCode(ctx context.Context) ([]Symbol, error) {
+// If directory is non-empty, restricts results to files under that directory prefix.
+func (s *SQLiteStore) FindDeadCode(ctx context.Context, directory string) ([]Symbol, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	rows, err := s.db.QueryContext(ctx, `
+	query := `
 		SELECT n.id, n.qualified_name, n.display_name, n.file_path, n.line, n.kind, n.language, n.file_mtime
 		FROM nodes n
 		WHERE n.id NOT IN (
 			SELECT DISTINCT e.target_node_id FROM edges e WHERE e.edge_type = 'calls'
 		)
 		AND n.kind NOT IN ('type', 'var', 'const', 'iface')
-		ORDER BY n.qualified_name
-	`)
+	`
+	var args []interface{}
+	if directory != "" {
+		query += ` AND n.file_path LIKE ?`
+		args = append(args, directory+"/%")
+	}
+	query += ` ORDER BY n.qualified_name`
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query dead code: %w", err)
 	}

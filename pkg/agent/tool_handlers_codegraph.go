@@ -100,10 +100,9 @@ func handleGetCallees(ctx context.Context, a *Agent, args map[string]interface{}
 }
 
 // handleFindDeadCode queries the code intelligence graph for dead code.
+// The optional directory parameter restricts results to files under that prefix.
 func handleFindDeadCode(ctx context.Context, a *Agent, args map[string]interface{}) (string, error) {
-	// The directory parameter is captured for future filtering support.
-	// Currently the store-level query doesn't support directory filtering.
-	_ = args["directory"]
+	dir, _ := args["directory"].(string)
 
 	store, err := openCodegraphStore()
 	if err != nil {
@@ -114,7 +113,7 @@ func handleFindDeadCode(ctx context.Context, a *Agent, args map[string]interface
 	}
 	defer store.Close()
 
-	deadCode, err := store.FindDeadCode(ctx)
+	deadCode, err := store.FindDeadCode(ctx, dir)
 	if err != nil {
 		return "", agenterrors.NewTool("find_dead_code", "find dead code", err)
 	}

@@ -486,8 +486,12 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 		client.SetDebug(debug)
 
 		// Check connection (allow tests to skip by setting SPROUT_SKIP_CONNECTION_CHECK or legacy LEDIT_SKIP_CONNECTION_CHECK)
-		// Also skip for providers where a fast/reliable connectivity probe is not available (e.g., GLM Coding Plan).
-		skipConnectionCheck := configuration.GetEnvSimple("SKIP_CONNECTION_CHECK") != "" || clientType == api.ZAIClientType
+		// Also skip for providers where a fast/reliable connectivity probe is not
+		// available (Z.AI and GLM Coding Plan both use a slow subscription endpoint
+		// where the probe is unreliable). ZAICodingClientType is "zai-coding".
+		skipConnectionCheck := configuration.GetEnvSimple("SKIP_CONNECTION_CHECK") != "" ||
+			clientType == api.ZAIClientType ||
+			clientType == api.ZAICodingClientType
 		if !skipConnectionCheck {
 			if err := client.CheckConnection(); err != nil {
 				nextClientType, nextModel, recoverErr := recoverProviderStartup(configManager, clientType, model, err)

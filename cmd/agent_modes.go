@@ -545,7 +545,7 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 		workflowState.HasError = workflowState.HasError || err != nil
 
 		// Loop mode: iterate over TODO items with stateless gate + context reset.
-		if workflowConfig.Loop != nil {
+		if workflowConfig != nil && workflowConfig.Loop != nil {
 			workflowYielded, workflowErr := runAgentWorkflowLoop(ctx, chatAgent, eventBus, workflowConfig, workflowState)
 			if workflowYielded {
 				return nil

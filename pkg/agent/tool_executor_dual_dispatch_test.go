@@ -40,19 +40,17 @@ func (m mockDualDispatchHandler) MaxResultSize() int      { return 0 }
 func (m mockDualDispatchHandler) SafeForParallel() bool   { return false }
 func (m mockDualDispatchHandler) Interactive() bool       { return false }
 
-func TestDualDispatch_RegistryWins(t *testing.T) {
+func TestExecuteTool_NewRegistryUsed(t *testing.T) {
 	// Use a unique tool name to avoid race conditions with parallel tests
-	toolName := fmt.Sprintf("mock_dual_dispatch_tool_%d", time.Now().UnixNano())
+	toolName := fmt.Sprintf("mock_dispatch_tool_%d", time.Now().UnixNano())
 
-	// Register mock handler in the new registry (not in the legacy registry)
+	// Register mock handler in the new registry
 	handler := mockDualDispatchHandler{name: toolName}
 	tools.GetNewToolRegistry().Register(handler)
 	defer tools.GetNewToolRegistry().Unregister(toolName)
 
-	// Use the legacy registry — ExecuteTool will dual-dispatch via new registry first
-	legacyRegistry := newDefaultToolRegistry()
-
-	images, result, err := legacyRegistry.ExecuteTool(context.Background(), toolName, nil, nil, "")
+	// ExecuteTool should dispatch via the new registry
+	images, result, err := ExecuteTool(context.Background(), toolName, nil, nil, "")
 
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)

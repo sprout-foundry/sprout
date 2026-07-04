@@ -615,14 +615,18 @@ func extractGoSymbolsASTWithEdges(path string, content []byte) (*SymbolWithEdges
 	// Build import alias → import path map for cross-package call resolution.
 	// For `import "strings"` the alias is "strings" (the last path element).
 	// For `import foo "pkg/bar"` the alias is "foo".
-	importMap := make(map[string]string) // alias → full import path
+	// The import path is converted to a relative path matching the qualified
+	// name format used by nodes (e.g. "pkg/codegraph" not "github.com/mod/pkg/codegraph").
+	modulePath := detectGoModule(path)
+	importMap := make(map[string]string) // alias → relative package path
 	for _, imp := range node.Imports {
-		path := strings.Trim(imp.Path.Value, `"`)
-		alias := filepath.Base(path)
+		importPath := strings.Trim(imp.Path.Value, `"`)
+		alias := filepath.Base(importPath)
 		if imp.Name != nil {
 			alias = imp.Name.Name
 		}
-		importMap[alias] = path
+		relPath := stripModulePrefix(importPath, modulePath)
+		importMap[alias] = relPath
 	}
 
 	var symbols []SymbolEntry
@@ -758,4 +762,42 @@ func extractSymbolsAndEdgesViaTreeSitter(path string, ext string, content []byte
 	}
 
 	return &SymbolWithEdges{Symbols: entries, Edges: edges}, nil
+}
+
+// detectGoModule reads the module path from go.mod by walking up from the
+// given source file path. Returns the module path or empty string on failure.
+func detectGoModule(filePath string) string {
+	dir := filepath.Dir(filePath)
+	for {
+		gm := filepath.Join(dir, "go.mod")
+		data, err := os.ReadFile(gm)
+		if err == nil {
+			// Parse "module github.com/foo/bar" from first line
+			for _, line := range strings.SplitN(string(data), "\n", 2) {
+				line = strings.TrimSpace(line)
+				if strings.HasPrefix(line, "module ") {
+					return strings.TrimSpace(line[7:])
+				}
+			}
+			return ""
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return ""
+		}
+		dir = parent
+	}
+}
+
+// stripModulePrefix removes the module path prefix from an import path,
+// returning the relative package path used for node qualified names.
+// e.g. "github.com/foo/bar/pkg/util" with module "github.com/foo/bar" → "pkg/util"
+// If the import doesn't start with the module prefix, returns the last
+// path segment (for stdlib imports like "fmt" — these won't match nodes
+// anyway since nodes don't have qualified names for stdlib functions).
+func stripModulePrefix(importPath, modulePath string) string {
+	if modulePath != "" && strings.HasPrefix(importPath, modulePath+"/") {
+		return importPath[len(modulePath)+1:]
+	}
+	return filepath.Base(importPath)
 }

@@ -379,8 +379,43 @@ func (s *SymbolWithEdges) ToCodegraphSymbols(filePath string) ([]codegraph.Symbo
 		})
 	}
 
-	// Edges are already codegraph.Edge type.
-	return symbols, s.Edges, nil
+	// Build a map from bare names → qualified names so edge Source/Target
+	// names can be resolved to the same qualified form used for nodes.
+	// Go edges use goFuncName() output ("func run", "func (*Server).Start");
+	// TS/JS/Python edges use CallerName/CalleeName (the bare function name).
+	// Both the raw entry name (with prefix) and the cleaned display name are
+	// mapped so edges from either extractor path resolve correctly.
+	nameToQualified := make(map[string]string, len(s.Symbols)*2)
+	for _, se := range s.Symbols {
+		displayName := cleanDisplayName(se.Name)
+		qualifiedName := pkgPrefix + "." + displayName
+		nameToQualified[displayName] = qualifiedName
+		nameToQualified[se.Name] = qualifiedName // Go: "func run" → "pkg/app.run"
+	}
+
+	// Transform edge names to qualified form.
+	if s.Edges == nil {
+		return symbols, nil, nil
+	}
+	edges := make([]codegraph.Edge, 0, len(s.Edges))
+	for _, e := range s.Edges {
+		srcQual := e.SourceQualifiedName
+		if qn, ok := nameToQualified[srcQual]; ok {
+			srcQual = qn
+		}
+		tgtQual := e.TargetQualifiedName
+		if qn, ok := nameToQualified[tgtQual]; ok {
+			tgtQual = qn
+		}
+		edges = append(edges, codegraph.Edge{
+			SourceQualifiedName: srcQual,
+			TargetQualifiedName: tgtQual,
+			EdgeType:            e.EdgeType,
+			Line:                e.Line,
+		})
+	}
+
+	return symbols, edges, nil
 }
 
 // inferKind extracts the symbol kind from the display name prefix.

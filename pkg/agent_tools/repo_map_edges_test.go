@@ -123,9 +123,10 @@ func run() {
 	require.GreaterOrEqual(t, len(result.Edges), 2)
 
 	// Check that run is the source of all edges.
+	// Edge types: bare idents (NewUser) = "calls", selector with import alias
+	// (fmt.Println) = "resolved_calls", method selector (u.Greet) = "calls".
 	for _, e := range result.Edges {
 		assert.Equal(t, "func run", e.SourceQualifiedName)
-		assert.Equal(t, "calls", e.EdgeType)
 	}
 
 	// Verify specific callees exist.
@@ -221,6 +222,7 @@ func clean(s string) string {
 	require.Len(t, result.Edges, 1)
 	assert.Equal(t, "func clean", result.Edges[0].SourceQualifiedName)
 	assert.Equal(t, "strings.TrimSpace", result.Edges[0].TargetQualifiedName)
+	assert.Equal(t, "resolved_calls", result.Edges[0].EdgeType, "cross-package call should use resolved_calls edge type")
 }
 
 func TestExtractCallsAndSymbols_Go_MethodCalls(t *testing.T) {
@@ -633,6 +635,206 @@ func (r *http.Request) Method() string {
 		}
 	}
 	assert.True(t, found, "expected func (*http.Request).Method in symbols, got: %v", result.Symbols)
+}
+
+// =============================================================================
+// ExtractCallsAndSymbols — Go cross-package and same-package edge types
+// =============================================================================
+
+func TestExtractCallsAndSymbols_Go_CrossPackage(t *testing.T) {
+	// Cross-package calls via import alias should resolve to full import path
+	// and use EdgeType "resolved_calls".
+	dir := t.TempDir()
+	path := filepath.Join(dir, "main.go")
+	content := []byte(`package main
+
+import widget "github.com/example/widget"
+
+func run() {
+	widget.DoThing()
+}
+`)
+	result, err := ExtractCallsAndSymbols(path, content)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	require.Len(t, result.Edges, 1)
+	e := result.Edges[0]
+	assert.Equal(t, "func run", e.SourceQualifiedName)
+	assert.Equal(t, "github.com/example/widget.DoThing", e.TargetQualifiedName,
+		"cross-package call should resolve alias to full import path")
+	assert.Equal(t, "resolved_calls", e.EdgeType,
+		"cross-package call should use resolved_calls edge type")
+}
+
+func TestExtractCallsAndSymbols_Go_CrossPackage_DifferentAlias(t *testing.T) {
+	// Cross-package call where the local alias differs from the package name.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "main.go")
+	content := []byte(`package main
+
+import wdget "github.com/example/widget"
+
+func run() {
+	wdget.DoThing()
+}
+`)
+	result, err := ExtractCallsAndSymbols(path, content)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	require.Len(t, result.Edges, 1)
+	e := result.Edges[0]
+	assert.Equal(t, "func run", e.SourceQualifiedName)
+	assert.Equal(t, "github.com/example/widget.DoThing", e.TargetQualifiedName,
+		"should use import path, not alias")
+	assert.Equal(t, "resolved_calls", e.EdgeType)
+}
+
+func TestExtractCallsAndSymbols_Go_CrossPackage_MultipleImports(t *testing.T) {
+	// Multiple imports, all cross-package calls resolved.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "main.go")
+	content := []byte(`package main
+
+import (
+	"fmt"
+	"strings"
+)
+
+func run() {
+	fmt.Println("hello")
+	strings.TrimSpace(" world ")
+}
+`)
+	result, err := ExtractCallsAndSymbols(path, content)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	require.Len(t, result.Edges, 2)
+
+	// Both edges should be resolved_calls since both targets match import aliases.
+	for _, e := range result.Edges {
+		assert.Equal(t, "func run", e.SourceQualifiedName)
+		assert.Equal(t, "resolved_calls", e.EdgeType,
+			"standard library imports should use resolved_calls")
+	}
+
+	// Verify specific callees.
+	callees := make(map[string]string)
+	for _, e := range result.Edges {
+		callees[e.TargetQualifiedName] = e.EdgeType
+	}
+	assert.Equal(t, "resolved_calls", callees["fmt.Println"])
+	assert.Equal(t, "resolved_calls", callees["strings.TrimSpace"])
+}
+
+func TestExtractCallsAndSymbols_Go_SamePackage_Unresolved(t *testing.T) {
+	// Same-package function calls (bare identifiers) should use EdgeType "calls".
+	dir := t.TempDir()
+	path := filepath.Join(dir, "lib.go")
+	content := []byte(`package main
+
+func alpha() {
+	beta()
+}
+
+func beta() {
+	gamma()
+}
+
+func gamma() {
+}
+`)
+	result, err := ExtractCallsAndSymbols(path, content)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	require.Len(t, result.Edges, 2)
+	for _, e := range result.Edges {
+		assert.Equal(t, "calls", e.EdgeType,
+			"same-package bare identifier calls should use 'calls' edge type")
+	}
+}
+
+func TestExtractCallsAndSymbols_Go_SamePackage_MethodCall(t *testing.T) {
+	// Method calls on local variables (s.run()) should use EdgeType "calls".
+	dir := t.TempDir()
+	path := filepath.Join(dir, "server.go")
+	content := []byte(`package main
+
+type Server struct{}
+
+func (s *Server) Start() {
+	s.run()
+}
+
+func (s *Server) run() {
+}
+`)
+	result, err := ExtractCallsAndSymbols(path, content)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	require.Len(t, result.Edges, 1)
+	assert.Equal(t, "func (*Server).Start", result.Edges[0].SourceQualifiedName)
+	assert.Equal(t, "s.run", result.Edges[0].TargetQualifiedName)
+	assert.Equal(t, "calls", result.Edges[0].EdgeType,
+		"method calls on local variable should use 'calls' edge type")
+}
+
+func TestExtractCallsAndSymbols_Go_InterfaceType(t *testing.T) {
+	// Interface types should be extracted as symbols with kind "iface".
+	dir := t.TempDir()
+	path := filepath.Join(dir, "iface.go")
+	content := []byte(`package main
+
+type Runner interface {
+	Run() error
+}
+
+type Stopper interface {
+	Stop()
+}
+`)
+	result, err := ExtractCallsAndSymbols(path, content)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	// Should have 2 symbols: iface Runner, iface Stopper
+	require.Len(t, result.Symbols, 2)
+	assert.Equal(t, "iface Runner", result.Symbols[0].Name)
+	assert.Equal(t, "iface Stopper", result.Symbols[1].Name)
+	assert.Empty(t, result.Edges)
+}
+
+func TestExtractCallsAndSymbols_Go_InterfaceAndStructTypes(t *testing.T) {
+	// Mix of interface and struct types in the same file.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "types.go")
+	content := []byte(`package main
+
+type Runner interface {
+	Run() error
+}
+
+type Server struct {
+	addr string
+}
+
+type Handler interface {
+	Handle()
+}
+`)
+	result, err := ExtractCallsAndSymbols(path, content)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	// Should have: iface Runner, type Server, iface Handler
+	require.Len(t, result.Symbols, 3)
+	assert.Equal(t, "iface Runner", result.Symbols[0].Name)
+	assert.Equal(t, "type Server", result.Symbols[1].Name)
+	assert.Equal(t, "iface Handler", result.Symbols[2].Name)
 }
 
 // =============================================================================

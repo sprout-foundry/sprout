@@ -291,6 +291,8 @@ func kindToPrefix(kind string) string {
 		return "func"
 	case "type":
 		return "type"
+	case "iface":
+		return "iface"
 	case "const":
 		return "const"
 	case "var":
@@ -433,6 +435,9 @@ func inferKind(name string) string {
 	if strings.HasPrefix(name, "type ") {
 		return "type"
 	}
+	if strings.HasPrefix(name, "iface ") {
+		return "iface"
+	}
 	if strings.HasPrefix(name, "def ") {
 		return "func"
 	}
@@ -447,7 +452,7 @@ func inferKind(name string) string {
 
 // cleanDisplayName removes the kind prefix from a symbol name.
 func cleanDisplayName(name string) string {
-	prefixes := []string{"func ", "function ", "type ", "def ", "class ", "const "}
+	prefixes := []string{"func ", "function ", "type ", "iface ", "def ", "class ", "const "}
 	for _, p := range prefixes {
 		if strings.HasPrefix(name, p) {
 			return strings.TrimSpace(name[len(p):])
@@ -517,10 +522,18 @@ func extractGoSymbolsAST(path string, content []byte) ([]SymbolEntry, error) {
 				for _, spec := range d.Specs {
 					if ts, ok := spec.(*ast.TypeSpec); ok {
 						line := fset.Position(ts.Pos()).Line
-						symbols = append(symbols, SymbolEntry{
-							Name: "type " + ts.Name.Name,
-							Line: line,
-						})
+						// Check if this is an interface type.
+						if _, isIface := ts.Type.(*ast.InterfaceType); isIface {
+							symbols = append(symbols, SymbolEntry{
+								Name: "iface " + ts.Name.Name,
+								Line: line,
+							})
+						} else {
+							symbols = append(symbols, SymbolEntry{
+								Name: "type " + ts.Name.Name,
+								Line: line,
+							})
+						}
 					}
 				}
 			}
@@ -599,6 +612,19 @@ func extractGoSymbolsASTWithEdges(path string, content []byte) (*SymbolWithEdges
 		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
 
+	// Build import alias → import path map for cross-package call resolution.
+	// For `import "strings"` the alias is "strings" (the last path element).
+	// For `import foo "pkg/bar"` the alias is "foo".
+	importMap := make(map[string]string) // alias → full import path
+	for _, imp := range node.Imports {
+		path := strings.Trim(imp.Path.Value, `"`)
+		alias := filepath.Base(path)
+		if imp.Name != nil {
+			alias = imp.Name.Name
+		}
+		importMap[alias] = path
+	}
+
 	var symbols []SymbolEntry
 	var edges []codegraph.Edge
 
@@ -610,10 +636,18 @@ func extractGoSymbolsASTWithEdges(path string, content []byte) (*SymbolWithEdges
 				for _, spec := range gd.Specs {
 					if ts, ok3 := spec.(*ast.TypeSpec); ok3 {
 						line := fset.Position(ts.Pos()).Line
-						symbols = append(symbols, SymbolEntry{
-							Name: "type " + ts.Name.Name,
-							Line: line,
-						})
+						// Check if this is an interface type.
+						if _, isIface := ts.Type.(*ast.InterfaceType); isIface {
+							symbols = append(symbols, SymbolEntry{
+								Name: "iface " + ts.Name.Name,
+								Line: line,
+							})
+						} else {
+							symbols = append(symbols, SymbolEntry{
+								Name: "type " + ts.Name.Name,
+								Line: line,
+							})
+						}
 					}
 				}
 			}
@@ -642,10 +676,23 @@ func extractGoSymbolsASTWithEdges(path string, content []byte) (*SymbolWithEdges
 			calleeName := exprToString(call.Fun)
 			callLine := fset.Position(call.Pos()).Line
 
+			edgeType := "calls"
+
+			// For selector expressions (containing a dot), check if the prefix
+			// matches an import alias. If so, resolve the target to the full
+			// import path and mark the edge as "resolved_calls".
+			if dotIdx := strings.IndexByte(calleeName, '.'); dotIdx > 0 {
+				prefix := calleeName[:dotIdx]
+				if pkgPath, ok := importMap[prefix]; ok {
+					calleeName = pkgPath + calleeName[dotIdx:]
+					edgeType = "resolved_calls"
+				}
+			}
+
 			edges = append(edges, codegraph.Edge{
 				SourceQualifiedName: funcName,
 				TargetQualifiedName: calleeName,
-				EdgeType:            "calls",
+				EdgeType:            edgeType,
 				Line:                callLine,
 			})
 			return true
@@ -696,6 +743,10 @@ func extractSymbolsAndEdgesViaTreeSitter(path string, ext string, content []byte
 	}
 
 	// Convert CallEdge values to codegraph.Edge values.
+	// Note: TS/JS/Python edges use "calls" (unresolved) since full module
+	// resolution via tree-sitter is complex and remains a future task.
+	// TODO: Resolve import paths for TS/JS/Python module systems and mark
+	// resolved edges with EdgeType "resolved_calls".
 	var edges []codegraph.Edge
 	for _, ce := range result.Calls {
 		edges = append(edges, codegraph.Edge{

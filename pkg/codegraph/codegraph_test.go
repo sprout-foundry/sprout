@@ -1351,10 +1351,10 @@ func TestIndexAll_RemoveDeletedAfterFullWalk(t *testing.T) {
 }
 
 // ============================================================================
-// InsertEdges Tests (SP-107-5: two-phase indexing)
+// InsertAllEdges Tests (SP-107-5: two-phase indexing)
 // ============================================================================
 
-func TestInsertEdges_Basic(t *testing.T) {
+func TestInsertAllEdges_Basic(t *testing.T) {
 	store := newMemoryStore(t)
 	ctx := context.Background()
 
@@ -1374,7 +1374,7 @@ func TestInsertEdges_Basic(t *testing.T) {
 	edges := []Edge{
 		{SourceQualifiedName: "pkg/app.runner", TargetQualifiedName: "pkg/app.helper", EdgeType: "calls", Line: 11},
 	}
-	err = store.InsertEdges(ctx, path, edges)
+	err = store.InsertAllEdges(ctx, edges)
 	require.NoError(t, err)
 	assert.Equal(t, 1, store.Stats().EdgeCount)
 
@@ -1385,7 +1385,7 @@ func TestInsertEdges_Basic(t *testing.T) {
 	assert.Equal(t, "pkg/app.helper", callees[0].QualifiedName)
 }
 
-func TestInsertEdges_CrossFile(t *testing.T) {
+func TestInsertAllEdges_CrossFile(t *testing.T) {
 	store := newMemoryStore(t)
 	ctx := context.Background()
 
@@ -1409,7 +1409,7 @@ func TestInsertEdges_CrossFile(t *testing.T) {
 	edges := []Edge{
 		{SourceQualifiedName: "pkg/app.runner", TargetQualifiedName: "pkg/lib.DoWork", EdgeType: "calls", Line: 11},
 	}
-	err = store.InsertEdges(ctx, pathB, edges)
+	err = store.InsertAllEdges(ctx, edges)
 	require.NoError(t, err)
 	assert.Equal(t, 1, store.Stats().EdgeCount)
 
@@ -1425,7 +1425,7 @@ func TestInsertEdges_CrossFile(t *testing.T) {
 	assert.Equal(t, "pkg/app.runner", callers[0].QualifiedName)
 }
 
-func TestInsertEdges_SkipsUnresolvable(t *testing.T) {
+func TestInsertAllEdges_SkipsUnresolvable(t *testing.T) {
 	store := newMemoryStore(t)
 	ctx := context.Background()
 
@@ -1439,23 +1439,23 @@ func TestInsertEdges_SkipsUnresolvable(t *testing.T) {
 	edges := []Edge{
 		{SourceQualifiedName: "pkg/app.runner", TargetQualifiedName: "pkg/missing.nonexistent", EdgeType: "calls", Line: 11},
 	}
-	err = store.InsertEdges(ctx, path, edges)
+	err = store.InsertAllEdges(ctx, edges)
 	require.NoError(t, err)
 	assert.Equal(t, 0, store.Stats().EdgeCount)
 }
 
-func TestInsertEdges_EmptyEdges(t *testing.T) {
+func TestInsertAllEdges_EmptyEdges(t *testing.T) {
 	store := newMemoryStore(t)
 	ctx := context.Background()
 
-	err := store.InsertEdges(ctx, "pkg/empty/empty.go", nil)
+	err := store.InsertAllEdges(ctx, nil)
 	require.NoError(t, err)
 
-	err = store.InsertEdges(ctx, "pkg/empty/empty.go", []Edge{})
+	err = store.InsertAllEdges(ctx, []Edge{})
 	require.NoError(t, err)
 }
 
-func TestInsertEdges_ReplacesExistingEdges(t *testing.T) {
+func TestInsertAllEdges_ReplacesExistingEdges(t *testing.T) {
 	store := newMemoryStore(t)
 	ctx := context.Background()
 
@@ -1470,14 +1470,14 @@ func TestInsertEdges_ReplacesExistingEdges(t *testing.T) {
 	require.NoError(t, err)
 
 	// First set of edges.
-	err = store.InsertEdges(ctx, path, []Edge{
+	err = store.InsertAllEdges(ctx, []Edge{
 		{SourceQualifiedName: "pkg/app.runner", TargetQualifiedName: "pkg/app.helper", EdgeType: "calls", Line: 11},
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 1, store.Stats().EdgeCount)
 
 	// Replace with different edges — old edge should be removed.
-	err = store.InsertEdges(ctx, path, []Edge{
+	err = store.InsertAllEdges(ctx, []Edge{
 		{SourceQualifiedName: "pkg/app.runner", TargetQualifiedName: "pkg/app.worker", EdgeType: "calls", Line: 12},
 	})
 	require.NoError(t, err)

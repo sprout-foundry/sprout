@@ -35,7 +35,7 @@ type GraphStats struct {
 
 type Store interface {
 	IndexFile(ctx context.Context, path string, symbols []Symbol, edges []Edge) error
-	InsertEdges(ctx context.Context, path string, edges []Edge) error
+	InsertAllEdges(ctx context.Context, edges []Edge) error
 	QueryCallers(ctx context.Context, qualifiedName string) ([]Symbol, error)
 	QueryCallees(ctx context.Context, qualifiedName string) ([]Symbol, error)
 	FindDeadCode(ctx context.Context, directory string) ([]Symbol, error)
@@ -60,7 +60,7 @@ func errWASM() error { return fmt.Errorf("codegraph: not available on WASM") }
 func (s *SQLiteStore) IndexFile(ctx context.Context, path string, symbols []Symbol, edges []Edge) error {
 	return errWASM()
 }
-func (s *SQLiteStore) InsertEdges(ctx context.Context, path string, edges []Edge) error {
+func (s *SQLiteStore) InsertAllEdges(ctx context.Context, edges []Edge) error {
 	return errWASM()
 }
 func (s *SQLiteStore) QueryCallers(ctx context.Context, qualifiedName string) ([]Symbol, error) {

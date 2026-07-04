@@ -1620,12 +1620,12 @@ has known gaps. These are follow-ups, not blockers._
 
 ### Items
 
-- [ ] **SP-111-1:** Gate call cost tracking. `GenerateResponse` uses the
+- [x] **SP-111-1:** Gate call cost tracking. `GenerateResponse` uses the
       agent's client but bypasses `accumulateResponseCost`, so gate call
       costs (~$0.002/call) don't hit `fleetUsdBudget`. Either wire
       `GenerateResponse` through the seed provider cost path, or track
       gate costs separately in the loop runner.
-- [ ] **SP-111-2:** Integration test for `runAgentWorkflowLoop`. Use a
+- [x] **SP-111-2:** Integration test for `runAgentWorkflowLoop`. Use a
       `ScriptedClient` to simulate gate responses + ProcessQuery behavior.
       Cover: full success path, max-iterations incomplete, triage skip,
       build failure → retry → success.

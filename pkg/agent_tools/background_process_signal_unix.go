@@ -46,6 +46,10 @@ func detachFromSession(cmd *exec.Cmd) {
 		cmd.SysProcAttr = &syscall.SysProcAttr{}
 	}
 	cmd.SysProcAttr.Setpgid = true
+	// Setsid creates a new session, fully detaching from the controlling
+	// terminal. Required for processes that must survive parent exit —
+	// Setpgid alone doesn't prevent SIGHUP from terminal teardown.
+	cmd.SysProcAttr.Setsid = true
 }
 
 // interruptProcessGroup sends SIGINT to the process group rooted at p,

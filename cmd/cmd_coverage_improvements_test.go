@@ -1086,9 +1086,13 @@ func TestLoadWorkflowExecutionState_InvalidJSON(t *testing.T) {
 	}
 	cfg.validate()
 
-	_, err := loadWorkflowExecutionState(cfg)
-	if err == nil {
-		t.Fatal("expected error for invalid JSON state")
+	state, err := loadWorkflowExecutionState(cfg)
+	if err != nil {
+		t.Fatalf("unexpected error for corrupt JSON state: %v", err)
+	}
+	// Should return a fresh state (no error) when JSON is corrupt.
+	if state.Version != 1 || state.Complete {
+		t.Errorf("expected fresh state, got version=%d complete=%v", state.Version, state.Complete)
 	}
 }
 

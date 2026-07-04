@@ -34,11 +34,14 @@ type gateTriageResult struct {
 }
 
 // findNextTodoItem reads a markdown file and returns:
-// - lineNum: the 1-based line number of the first "[ ]" item found
+// - lineNum: the 1-based line number of the first "[ ]" item found after startAfterLine
 // - sectionText: the text of the enclosing ## section (from the ## header above
 //   the item to just before the next ## header or end of file)
 // - err: non-nil if the file can't be read or no unchecked items exist
-func findNextTodoItem(todoFile string) (lineNum int, sectionText string, err error) {
+//
+// startAfterLine is 0-based: lines before this index are skipped.
+// Pass 0 to scan from the beginning.
+func findNextTodoItem(todoFile string, startAfterLine int) (lineNum int, sectionText string, err error) {
 	data, err := os.ReadFile(filepath.Clean(todoFile))
 	if err != nil {
 		return 0, "", fmt.Errorf("failed to read %s: %w", todoFile, err)
@@ -47,16 +50,18 @@ func findNextTodoItem(todoFile string) (lineNum int, sectionText string, err err
 	lines := strings.Split(string(data), "\n")
 	uncheckedRe := regexp.MustCompile(`^\s*- \[ \]`)
 
-	// Find first unchecked item line (1-based).
-	var itemLine int // 0-based index
+	// Find first unchecked item at or after startAfterLine.
+	itemLine := -1
 	for i, line := range lines {
+		if i < startAfterLine {
+			continue
+		}
 		if uncheckedRe.MatchString(line) {
 			itemLine = i
 			break
 		}
 	}
-	if itemLine == 0 && !uncheckedRe.MatchString(lines[0]) {
-		// No unchecked items found (itemLine stayed at 0 but first line doesn't match).
+	if itemLine < 0 {
 		return 0, "", fmt.Errorf("no unchecked [ ] items found in %s", todoFile)
 	}
 
@@ -221,9 +226,40 @@ func runAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 	console.GlyphAction.Printf("TODO loop: provider=%s model=%s todo=%s",
 		chatAgent.GetProvider(), chatAgent.GetModel(), todoFile)
 
+	// Derive the work directory from the TODO file's location for checkpoint
+	// storage. Using filepath.Dir(todoFile) instead of os.Getwd() ensures
+	// correctness in both production (project root) and test (temp dir).
+	todoWorkDir := filepath.Dir(todoFile)
+
+	// Determine the start-after line for checkpoint/resume.
+	startAfter := 0
+	if state.CurrentTodoLineNum > 0 {
+		console.GlyphInfo.Printf("Resuming from TODO line %d (checkpoint)", state.CurrentTodoLineNum)
+		startAfter = state.CurrentTodoLineNum - 1 // 1-based → subtract 1 for 0-based skip
+	}
+
+	// Fallback: try loading the lightweight loop checkpoint file when
+	// orchestration checkpoint didn't provide a resume line.
+	if startAfter == 0 {
+		if fallbackLine, fbErr := loadLoopCheckpoint(todoWorkDir); fbErr == nil && fallbackLine > 0 {
+			console.GlyphInfo.Printf("Resuming from fallback TODO checkpoint: line %d", fallbackLine)
+			startAfter = fallbackLine - 1
+		}
+	}
+
 	for {
 		// Check for context cancellation.
 		if err := ctx.Err(); err != nil {
+			// Persist checkpoint so we can resume from this line.
+			if persistErr := persistWorkflowCheckpoint(cfg, state, chatAgent); persistErr != nil {
+				console.GlyphWarning.Printf("Failed to persist checkpoint: %v", persistErr)
+			}
+			// Also persist fallback checkpoint.
+			if state.CurrentTodoLineNum > 0 {
+				if fbErr := persistLoopCheckpoint(todoWorkDir, state.CurrentTodoLineNum); fbErr != nil {
+					console.GlyphWarning.Printf("Failed to persist fallback checkpoint: %v", fbErr)
+				}
+			}
 			return false, fmt.Errorf("loop cancelled: %w", err)
 		}
 
@@ -231,21 +267,45 @@ func runAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 		if chatAgent.FleetBudgetExceeded() {
 			fmt.Println()
 			console.GlyphWarning.Print("Budget exceeded — stopping TODO loop")
+			// Persist checkpoint so we can resume from the last item's line.
+			if persistErr := persistWorkflowCheckpoint(cfg, state, chatAgent); persistErr != nil {
+				console.GlyphWarning.Printf("Failed to persist checkpoint: %v", persistErr)
+			}
+			// Also persist fallback checkpoint.
+			if state.CurrentTodoLineNum > 0 {
+				if fbErr := persistLoopCheckpoint(todoWorkDir, state.CurrentTodoLineNum); fbErr != nil {
+					console.GlyphWarning.Printf("Failed to persist fallback checkpoint: %v", fbErr)
+				}
+			}
 			break
 		}
 
-		// Step 1: Find next unchecked item.
-		lineNum, sectionText, findErr := findNextTodoItem(todoFile)
+		// Step 1: Find next unchecked item, respecting checkpoint/resume.
+		lineNum, sectionText, findErr := findNextTodoItem(todoFile, startAfter)
+		// Reset startAfter so subsequent iterations scan from the beginning.
+		startAfter = 0
 		if findErr != nil {
 			// No more items or read error.
 			if strings.Contains(findErr.Error(), "no unchecked") {
 				fmt.Println()
 				console.GlyphSuccess.Printf("TODO loop complete: processed=%d skipped=%d failed=%d",
 					itemsProcessed, itemsSkipped, itemsFailed)
+				state.CurrentTodoLineNum = 0
 				state.Complete = true
+				if persistErr := persistWorkflowCheckpoint(cfg, state, chatAgent); persistErr != nil {
+					console.GlyphWarning.Printf("Failed to persist final state: %v", persistErr)
+				}
+				// Remove fallback checkpoint on successful completion.
+				removeLoopCheckpoint(todoWorkDir)
 				return false, nil
 			}
 			return false, fmt.Errorf("failed to find next TODO item: %w", findErr)
+		}
+
+		// Step 1b: Persist checkpoint before processing the item.
+		state.CurrentTodoLineNum = lineNum
+		if persistErr := persistWorkflowCheckpoint(cfg, state, chatAgent); persistErr != nil {
+			console.GlyphWarning.Printf("Failed to persist checkpoint: %v", persistErr)
 		}
 
 		fmt.Println()
@@ -330,7 +390,7 @@ func runAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 		chatAgent.SetMaxIterations(loop.MaxIterations)
 
 		// Run the agent with the gate-generated prompt.
-		processErr := ProcessQuery(ctx, chatAgent, eventBus, gateRes.Prompt)
+		processErr := processQueryFn(ctx, chatAgent, eventBus, gateRes.Prompt)
 
 		// Restore max iterations.
 		chatAgent.SetMaxIterations(prevMaxIter)
@@ -412,7 +472,7 @@ func runAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 			}
 			chatAgent.SetMaxIterations(retryMaxIter)
 
-			retryErr := ProcessQuery(ctx, chatAgent, eventBus, retryPrompt)
+			retryErr := processQueryFn(ctx, chatAgent, eventBus, retryPrompt)
 			chatAgent.SetMaxIterations(prevMaxIter)
 
 			if retryErr != nil {
@@ -489,12 +549,22 @@ func runAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 			}); err != nil {
 				console.GlyphWarning.Printf("Failed to emit event: %v", err)
 			}
+			// Persist fallback checkpoint with the NEXT line number so a
+			// crash after this item persists only the successfully completed
+			// work. The next run will resume with the unchecked item at
+			// lineNum+1 (or detect loop completion).
+			if fbErr := persistLoopCheckpoint(todoWorkDir, lineNum+1); fbErr != nil {
+				console.GlyphWarning.Printf("Failed to persist fallback checkpoint: %v", fbErr)
+			}
 		}
 
 		// Step 8: CRITICAL — clear conversation between items.
 		chatAgent.ClearConversationHistory()
 	}
 
-	state.Complete = true
+	// If we reach here, the loop exited via budget (break) or another
+	// non-completion reason. Don't set Complete=true or clear CurrentTodoLineNum —
+	// budget exceeded is an interruption, not completion. The checkpoint was
+	// saved before the break above, so the next run can resume.
 	return false, nil
 }

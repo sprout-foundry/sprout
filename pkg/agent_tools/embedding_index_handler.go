@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/codegraph"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/embedding"
 	"github.com/sprout-foundry/sprout/pkg/events"
@@ -201,6 +202,16 @@ func (h *embeddingIndexHandler) handleBuild(ctx context.Context, mgr *embedding.
 	sb.WriteString(fmt.Sprintf("  Units embedded: %d\n", stats.UnitsEmbedded))
 	sb.WriteString(fmt.Sprintf("  Duration: %s\n", stats.Duration))
 
+	// Also build the code intelligence graph (non-blocking — failure is reported but
+	// does not fail the overall operation).
+	cgStats, cgErr := buildCodegraphIndex(buildCtx)
+	sb.WriteString("\nCode Intelligence Graph:\n")
+	if cgErr != nil {
+		sb.WriteString(fmt.Sprintf("  %v\n", cgErr))
+	} else {
+		sb.WriteString(fmt.Sprintf("  %s\n", cgStats))
+	}
+
 	return ToolResult{
 		Output:  sb.String(),
 		IsError: false,
@@ -227,6 +238,15 @@ func (h *embeddingIndexHandler) handleUpdate(ctx context.Context, mgr *embedding
 	sb.WriteString(fmt.Sprintf("  Units embedded: %d\n", stats.UnitsEmbedded))
 	sb.WriteString(fmt.Sprintf("  Duration: %s\n", stats.Duration))
 
+	// Also update the code intelligence graph (non-blocking).
+	cgStats, cgErr := updateCodegraphIndex(updateCtx)
+	sb.WriteString("\nCode Intelligence Graph:\n")
+	if cgErr != nil {
+		sb.WriteString(fmt.Sprintf("  %v\n", cgErr))
+	} else {
+		sb.WriteString(fmt.Sprintf("  %s\n", cgStats))
+	}
+
 	return ToolResult{
 		Output:  sb.String(),
 		IsError: false,
@@ -238,3 +258,49 @@ func (h *embeddingIndexHandler) Timeout() time.Duration    { return 0 }
 func (h *embeddingIndexHandler) MaxResultSize() int        { return 0 }
 func (h *embeddingIndexHandler) SafeForParallel() bool     { return false }
 func (h *embeddingIndexHandler) Interactive() bool         { return false }
+
+// --- codegraph helpers ---
+
+// codegraphFileParser adapts ExtractCallsAndSymbols to the codegraph.FileParser
+// signature, converting raw extraction results to qualified symbols and edges.
+func codegraphFileParser(path string, content []byte) ([]codegraph.Symbol, []codegraph.Edge, error) {
+	sw, err := ExtractCallsAndSymbols(path, content)
+	if err != nil {
+		return nil, nil, err
+	}
+	return sw.ToCodegraphSymbols(path)
+}
+
+// buildCodegraphIndex performs a full code intelligence graph build.
+// Returns a human-readable stats string on success, or an error.
+func buildCodegraphIndex(ctx context.Context) (string, error) {
+	store, err := codegraph.NewStore("")
+	if err != nil {
+		return "", fmt.Errorf("failed to open codegraph store: %w", err)
+	}
+	defer store.Close()
+
+	if err := store.IndexAll(ctx, codegraphFileParser); err != nil {
+		return "", fmt.Errorf("indexing failed: %w", err)
+	}
+
+	stats := store.Stats()
+	return fmt.Sprintf("%d nodes, %d edges, %d files", stats.NodeCount, stats.EdgeCount, stats.FileCount), nil
+}
+
+// updateCodegraphIndex incrementally updates the code intelligence graph
+// by re-indexing only files that have changed since the last build.
+func updateCodegraphIndex(ctx context.Context) (string, error) {
+	store, err := codegraph.NewStore("")
+	if err != nil {
+		return "", fmt.Errorf("failed to open codegraph store: %w", err)
+	}
+	defer store.Close()
+
+	if err := store.IndexChangedFiles(ctx, codegraphFileParser); err != nil {
+		return "", fmt.Errorf("update failed: %w", err)
+	}
+
+	stats := store.Stats()
+	return fmt.Sprintf("%d nodes, %d edges, %d files", stats.NodeCount, stats.EdgeCount, stats.FileCount), nil
+}

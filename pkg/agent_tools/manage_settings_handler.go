@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	provider_factory "github.com/sprout-foundry/sprout/pkg/agent_providers"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
@@ -22,7 +23,8 @@ func (h *manageSettingsHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name: "manage_settings",
 		Description: "Manage application settings and provider credentials. " +
-			"Supports get, set, list_providers, test_credential, describe, describe_all, and preview.",
+			"Supports get, set, list_providers, test_credential, describe, describe_all, and preview. " +
+			"When list_providers is called with a provider filter, it also shows available models for that provider.",
 		Required: []string{"operation"},
 		Parameters: []ParameterDef{
 			{Name: "operation", Type: "string", Required: true,
@@ -32,7 +34,7 @@ func (h *manageSettingsHandler) Definition() ToolDefinition {
 			{Name: "value", Type: "string",
 				Description: "Setting value (required for set/preview)"},
 			{Name: "provider", Type: "string",
-				Description: "Provider name (required for test_credential, optional filter for list_providers)"},
+				Description: "Provider name (required for test_credential, optional filter for list_providers; when filter provided, also shows available models)"},
 		},
 	}
 }
@@ -158,8 +160,8 @@ func (h *manageSettingsHandler) handleSet(mgr *configuration.Manager, args map[s
 
 // handleListProviders lists available providers.
 func (h *manageSettingsHandler) handleListProviders(mgr *configuration.Manager, args map[string]any) (ToolResult, error) {
-	providers := mgr.GetAvailableProviders()
-	if len(providers) == 0 {
+	availableProviders := mgr.GetAvailableProviders()
+	if len(availableProviders) == 0 {
 		return ToolResult{Output: "No providers available"}, nil
 	}
 
@@ -167,7 +169,7 @@ func (h *manageSettingsHandler) handleListProviders(mgr *configuration.Manager, 
 	filter = strings.TrimSpace(strings.ToLower(filter))
 
 	var names []string
-	for _, p := range providers {
+	for _, p := range availableProviders {
 		name := string(p)
 		if filter != "" && !strings.Contains(strings.ToLower(name), filter) {
 			continue
@@ -181,6 +183,21 @@ func (h *manageSettingsHandler) handleListProviders(mgr *configuration.Manager, 
 	for _, n := range names {
 		sb.WriteString(fmt.Sprintf("  - %s\n", n))
 	}
+
+	// When a specific provider filter is given, also show its models.
+	if filter != "" && len(names) > 0 {
+		allModels := provider_factory.GlobalFactory().ListProvidersWithModels()
+		// Find the matching provider(s) in the model map
+		for _, name := range names {
+			if models, ok := allModels[name]; ok {
+				sb.WriteString(fmt.Sprintf("\nModels for %s (%d):\n", name, len(models)))
+				for _, m := range models {
+					sb.WriteString(fmt.Sprintf("  - %s\n", m))
+				}
+			}
+		}
+	}
+
 	return ToolResult{Output: sb.String()}, nil
 }
 

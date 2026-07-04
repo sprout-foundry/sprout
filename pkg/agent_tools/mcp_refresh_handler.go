@@ -36,18 +36,15 @@ func (h *mcpRefreshHandler) Name() string { return "mcp_refresh" }
 func (h *mcpRefreshHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name: "mcp_refresh",
-		Description: "Manage MCP (Model Context Protocol) servers at runtime. " +
-			"Use 'list' to see current servers, 'refresh' to reload config and reconcile servers after config changes, " +
-			"'add' to register a new MCP server, 'remove' to unregister a server. " +
-			"After adding a server via 'add', the server is started automatically. " +
-			"Use 'refresh' after manually editing config.json to pick up changes.",
+		Description: "Reload MCP server config and reconcile servers after config changes. " +
+			"Operations: list, refresh, add, remove.",
 		Required: []string{"operation"},
 		Parameters: []ParameterDef{
 			{
 				Name:        "operation",
 				Type:        "string",
 				Required:    true,
-				Description: "Operation: 'list' (list servers), 'refresh' (reload config and reconcile), 'add' (add server), 'remove' (remove server)",
+				Description: "Operation: list, refresh, add, or remove",
 			},
 			{
 				Name:        "name",
@@ -72,7 +69,7 @@ func (h *mcpRefreshHandler) Definition() ToolDefinition {
 			{
 				Name:        "env",
 				Type:        "object",
-				Description: "Environment variables as key-value object (optional, for add)",
+				Description: "Environment variables (optional, for add)",
 			},
 			{
 				Name:        "url",
@@ -82,7 +79,7 @@ func (h *mcpRefreshHandler) Definition() ToolDefinition {
 			{
 				Name:        "working_dir",
 				Type:        "string",
-				Description: "Working directory for the server (optional, for add)",
+				Description: "Working directory (optional, for add)",
 			},
 		},
 	}

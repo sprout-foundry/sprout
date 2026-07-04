@@ -36,20 +36,12 @@ func (h *recoverFileHandler) Name() string { return "recover_file" }
 func (h *recoverFileHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name: "recover_file",
-		Description: "Restore one file (or one bulk entry's worth of files) from the ChangeTracker's session buffer. " +
-			"Works for any tool's edits — write_file, edit_file, or shell_command (rm, sed -i, mv, `git checkout .`).\n\n" +
-			"**`scope`**:\n" +
-			"• `\"latest\"` (default) — restore to the state immediately before the most recent tracked change for `path`. Undoes one specific edit.\n" +
-			"• `\"session_start\"` — restore to the state before the agent first touched this file this session. Use when the file went through multiple edits.\n" +
-			"• `\"bulk\"` — treat `path` as the bulk entry's `path` from list_changes (e.g. \"git checkout .\"). Restores every packed file. Use to undo a high-volume destructive command.\n\n" +
-			"**Per-op (single-file scopes)**: edit/modified → write originals back; delete → un-delete; create → remove the file.\n\n" +
-			"When scope is `\"latest\"` or `\"session_start\"` and `path` was packed into a bulk entry, recover_file finds it inside the bulk and restores just that one file.\n\n" +
-			"**Returns**: single-file scopes → `{recovered, path, action, message}`. Bulk scope → `{found, bulk_path, restored, failed, summary, entries[]}`.\n\n" +
-			"**Safety**: only files the tracker recorded can be recovered — call list_changes first. Files with `recoverable: false` (binary, >1 MiB, outside workspace) cannot be restored. Bulk entries recorded as count-only (memory cap exceeded) cannot be bulk-recovered.",
+		Description: "Restore one file from the ChangeTracker's session buffer. " +
+			"Scopes: 'latest' (undo last edit), 'session_start' (pre-session state), 'bulk' (undo bulk ops like git checkout).",
 		Required: []string{"path"},
 		Parameters: []ParameterDef{
-			{Name: "path", Type: "string", Required: true, Description: "Absolute or relative path to the file to recover. For scope=\"bulk\", use the bulk entry's `path` field from list_changes."},
-			{Name: "scope", Type: "string", Description: "\"latest\" (default), \"session_start\", or \"bulk\". See description for semantics."},
+			{Name: "path", Type: "string", Required: true, Description: "Path to recover. For bulk scope, use the bulk entry path from list_changes"},
+			{Name: "scope", Type: "string", Description: "'latest' (default), 'session_start', or 'bulk'"},
 		},
 	}
 }

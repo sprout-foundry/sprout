@@ -16,14 +16,14 @@ func (h *patchStructuredFileHandler) Name() string { return "patch_structured_fi
 func (h *patchStructuredFileHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "patch_structured_file",
-		Description: "Apply JSON Patch operations (add/replace/remove/test) to existing JSON/YAML then write it back. Keys not touched by the patch retain their original on-disk order, so a single-field patch produces a minimal diff.",
+		Description: "Apply JSON Patch operations (add/replace/remove/test) to JSON/YAML then write it back. Single-field patches produce minimal diffs with key order preservation.",
 		Required:    []string{"path"},
 		Parameters: []ParameterDef{
-			{Name: "path", Type: "string", Required: true, Description: "Path to the structured file to patch"},
+			{Name: "path", Type: "string", Required: true, Description: "Path to the structured file"},
 			{Name: "patch_ops", Type: "array", Description: "JSON Patch operations array"},
-			{Name: "data", Type: "object", Description: "Optional full-document structured payload; if provided without patch_ops, this call is treated as write_structured_file"},
-			{Name: "format", Type: "string", Description: "Optional format override: json or yaml (otherwise inferred from extension)"},
-			{Name: "schema", Type: "object", Description: "Optional JSON Schema subset used to validate document after patch"},
+			{Name: "data", Type: "object", Description: "Full-document payload (treated as write if no patch_ops)"},
+			{Name: "format", Type: "string", Description: "Format override: json or yaml (inferred from extension)"},
+			{Name: "schema", Type: "object", Description: "JSON Schema subset for validation after patch"},
 		},
 	}
 }

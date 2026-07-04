@@ -16,12 +16,12 @@ func (h *analyzeImageContentHandler) Name() string { return "analyze_image_conte
 func (h *analyzeImageContentHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "analyze_image_content",
-		Description: "Analyze images/PDFs for text extraction (OCR), structured extraction, or general visual insights. Always available — works for both conversational-vision and OCR-only models (e.g. glm-ocr) and for non-vision chat models. Required for OCR-only models and dense-text/scanned pages; useful for specialized analysis (frontend inspection, structured extraction). Supports local file paths and remote HTTP(S) URLs.",
+		Description: "Analyze images/PDFs for text extraction (OCR), structured extraction, or general visual insights. Supports local paths and HTTP(S) URLs.",
 		Required:    []string{"image_path"},
 		Parameters: []ParameterDef{
-			{Name: "image_path", Type: "string", Required: true, Description: "Path or URL to an image or PDF to analyze (local path or HTTP(S) URL)"},
-			{Name: "analysis_prompt", Type: "string", Description: "Optional custom vision prompt"},
-			{Name: "analysis_mode", Type: "string", Description: "Optional analysis mode override: 'ocr' for text extraction (default for OCR-only models), 'general' for free-form description"},
+			{Name: "image_path", Type: "string", Required: true, Description: "Path or URL to image/PDF"},
+			{Name: "analysis_prompt", Type: "string", Description: "Custom vision prompt"},
+			{Name: "analysis_mode", Type: "string", Description: "Mode: 'ocr' for text extraction, 'general' for description"},
 		},
 	}
 }

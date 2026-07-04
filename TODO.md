@@ -1585,7 +1585,7 @@ handler dispatch. Full spec: `roadmap/SP-109-single-source-tool-definitions.md`.
       BuildToolConfigsFromHandlers, convertHandlerToSeedToolConfig,
       parallel verification, env-gated switch)_
 
-- [ ] **SP-109-3:** Migrate 16 legacy-only tools to handlers. Batch A (simple
+- [x] **SP-109-3:** Migrate 16 legacy-only tools to handlers. Batch A (simple
       CRUD): `manage_memory`, `manage_settings`, `mcp_refresh`, `task_queue`,
       `list_changes`, `revert_my_changes`, `recover_file`, `create_pull_request`,
       `list_automate_workflows`, `run_automate`. Batch B (needs `*Agent`):
@@ -1594,7 +1594,7 @@ handler dispatch. Full spec: `roadmap/SP-109-single-source-tool-definitions.md`.
       case mismatch. Remove dead individual tools (`save_memory`, `search_memories`,
       `task_queue_*`). _(~2 days)_
 
-- [ ] **SP-109-4:** Delete legacy `ToolConfig` registry. Remove all
+- [x] **SP-109-4:** Delete legacy `ToolConfig` registry. Remove all
       `ToolConfig` registration calls. Delete `ToolRegistry`, `ToolConfig`,
       `ParameterConfig`, `ToolHandler` func types. Single source of truth
       achieved. _(~0.5 days)_
@@ -1610,3 +1610,31 @@ handler dispatch. Full spec: `roadmap/SP-109-single-source-tool-definitions.md`.
 - Acceptance: `get_callers`/`get_callees` return correct results for
   Go code in this repo; `find_dead_code` runs in < 100ms; `repo_map`
   output is unchanged but returns in < 50ms on warm cache.
+
+---
+
+## SP-111: TODO Loop Workflow — Hardening
+
+_The native TODO loop workflow (`automate/todo-loop.json`) is functional but
+has known gaps. These are follow-ups, not blockers._
+
+### Items
+
+- [ ] **SP-111-1:** Gate call cost tracking. `GenerateResponse` uses the
+      agent's client but bypasses `accumulateResponseCost`, so gate call
+      costs (~$0.002/call) don't hit `fleetUsdBudget`. Either wire
+      `GenerateResponse` through the seed provider cost path, or track
+      gate costs separately in the loop runner.
+- [ ] **SP-111-2:** Integration test for `runAgentWorkflowLoop`. Use a
+      `ScriptedClient` to simulate gate responses + ProcessQuery behavior.
+      Cover: full success path, max-iterations incomplete, triage skip,
+      build failure → retry → success.
+- [ ] **SP-111-3:** Checkpoint/resume for crash recovery. The steps workflow
+      persists state via `persistWorkflowCheckpoint`. The loop should do
+      the same — save the current TODO line number so a restarted run
+      picks up where it left off instead of starting over.
+- [ ] **SP-111-4:** Fix `run_automate` BPM process detachment. The
+      `BackgroundProcessManager` uses `Setpgid` but processes still die
+      when the agent tool call completes. Investigate whether stdin
+      inheritance or session group teardown is the cause. `nohup` works
+      as a workaround.

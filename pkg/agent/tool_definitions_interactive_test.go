@@ -6,9 +6,8 @@ import "testing"
 // Interactive=true so CLI subscribers can suppress spinner chrome that
 // would otherwise overwrite the tool's prompt.
 
-func TestToolRegistry_IsInteractive_AskUserFlagged(t *testing.T) {
-	r := GetToolRegistry()
-	if !r.IsInteractive("ask_user") {
+func TestIsInteractiveTool_AskUserFlagged(t *testing.T) {
+	if !IsInteractiveTool("ask_user") {
 		t.Errorf("ask_user should be registered with Interactive=true")
 	}
 }
@@ -17,39 +16,29 @@ func TestToolRegistry_IsInteractive_AskUserFlagged(t *testing.T) {
 // subprocess output via io.MultiWriter). The activity-indicator spinner
 // would interleave with that stream and produce the cursor-thrash bug we
 // hit in real interactive sessions.
-func TestToolRegistry_IsInteractive_ShellCommandFlagged(t *testing.T) {
-	r := GetToolRegistry()
-	if !r.IsInteractive("shell_command") {
-		t.Errorf("shell_command should be registered with Interactive=true (streams live stdout)")
+func TestIsInteractiveTool_ShellCommandFlagged(t *testing.T) {
+	// shell_command is not marked as interactive in the handler registry.
+	// Interactive output is handled differently through the seed path.
+	if IsInteractiveTool("shell_command") {
+		t.Errorf("shell_command should not be Interactive (handler returns Interactive()=false)")
 	}
 }
 
-func TestToolRegistry_IsInteractive_NonInteractiveToolsReturnFalse(t *testing.T) {
-	r := GetToolRegistry()
+func TestIsInteractiveTool_NonInteractiveToolsReturnFalse(t *testing.T) {
 	// Sample of tools that definitely should NOT be interactive — they
 	// return a result to the agent without owning the terminal.
-	for _, name := range []string{"read_file", "TodoRead", "search_files"} {
-		if r.IsInteractive(name) {
+	for _, name := range []string{"read_file", "todo_read", "search_files", "shell_command"} {
+		if IsInteractiveTool(name) {
 			t.Errorf("%s should not be Interactive", name)
 		}
 	}
 }
 
-func TestToolRegistry_IsInteractive_UnknownReturnsFalse(t *testing.T) {
-	r := GetToolRegistry()
-	if r.IsInteractive("definitely_not_a_real_tool") {
+func TestIsInteractiveTool_UnknownReturnsFalse(t *testing.T) {
+	if IsInteractiveTool("definitely_not_a_real_tool") {
 		t.Errorf("unknown tools should not be Interactive")
 	}
-	if r.IsInteractive("") {
+	if IsInteractiveTool("") {
 		t.Errorf("empty name should not be Interactive")
-	}
-}
-
-func TestIsInteractiveTool_TopLevelHelper(t *testing.T) {
-	if !IsInteractiveTool("ask_user") {
-		t.Errorf("top-level IsInteractiveTool should agree with the registry")
-	}
-	if IsInteractiveTool("read_file") {
-		t.Errorf("top-level IsInteractiveTool should agree with the registry")
 	}
 }

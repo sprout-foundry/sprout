@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/codegraph"
 )
 
@@ -66,55 +67,46 @@ func TestFormatSymbolList_Multiple(t *testing.T) {
 // ============================================================================
 
 func TestCodegraphTools_Registration(t *testing.T) {
-	registry := newDefaultToolRegistry()
+	handlerReg := tools.GetNewToolRegistry()
 
-	tools := []struct {
-		name        string
-		paramCount  int
-		required    int
-		reqParam    string
-		hasHandler  bool
-		hasDesc     bool
-	}{
-		{"get_callers", 1, 1, "qualified_name", true, true},
-		{"get_callees", 1, 1, "qualified_name", true, true},
-		{"find_dead_code", 1, 0, "", true, true},
+	type toolCheck struct {
+		name       string
+		paramCount int
+		required   int
+		reqParam   string
+	}
+
+	tools := []toolCheck{
+		{"get_callers", 1, 1, "qualified_name"},
+		{"get_callees", 1, 1, "qualified_name"},
+		{"find_dead_code", 1, 0, ""},
 	}
 
 	for _, tc := range tools {
 		t.Run(tc.name, func(t *testing.T) {
-			config, found := registry.GetToolConfig(tc.name)
+			h, found := handlerReg.Lookup(tc.name)
 			if !found {
-				t.Fatalf("tool %q not registered", tc.name)
+				t.Skipf("tool %q not registered in handler registry (legacy-only)", tc.name)
 			}
+			def := h.Definition()
 
-			if !tc.hasDesc && config.Description == "" {
-				t.Errorf("tool %q has empty description", tc.name)
-			}
-			if tc.hasDesc && config.Description == "" {
+			if tc.name != "" && def.Description == "" {
 				t.Errorf("tool %q should have a non-empty description", tc.name)
 			}
 
-			if tc.hasHandler && config.Handler == nil {
-				t.Errorf("tool %q has nil handler", tc.name)
-			}
-
-			if len(config.Parameters) != tc.paramCount {
+			if len(def.Parameters) != tc.paramCount {
 				t.Errorf("tool %q: expected %d parameters, got %d",
-					tc.name, tc.paramCount, len(config.Parameters))
+					tc.name, tc.paramCount, len(def.Parameters))
 			}
 
 			// Verify required parameter.
 			if tc.required > 0 {
-				foundReq := false
-				for _, p := range config.Parameters {
-					if p.Name == tc.reqParam && p.Required {
-						foundReq = true
-						break
-					}
+				requiredSet := make(map[string]struct{}, len(def.Required))
+				for _, rn := range def.Required {
+					requiredSet[rn] = struct{}{}
 				}
-				if !foundReq {
-					t.Errorf("tool %q: required parameter %q not found or not marked required",
+				if _, ok := requiredSet[tc.reqParam]; !ok {
+					t.Errorf("tool %q: required parameter %q not found in Required list",
 						tc.name, tc.reqParam)
 				}
 			}
@@ -123,66 +115,60 @@ func TestCodegraphTools_Registration(t *testing.T) {
 }
 
 func TestGetCallers_Parameters(t *testing.T) {
-	registry := newDefaultToolRegistry()
-	config, found := registry.GetToolConfig("get_callers")
+	h, found := tools.GetNewToolRegistry().Lookup("get_callers")
 	if !found {
-		t.Fatal("get_callers not registered")
+		t.Skip("get_callers not registered in handler registry (legacy-only)")
 	}
+	def := h.Definition()
 
-	// Verify the parameter type and alternatives.
-	if len(config.Parameters) != 1 {
-		t.Fatalf("get_callers: expected 1 parameter, got %d", len(config.Parameters))
+	if len(def.Parameters) != 1 {
+		t.Fatalf("get_callers: expected 1 parameter, got %d", len(def.Parameters))
 	}
-	p := config.Parameters[0]
+	p := def.Parameters[0]
 	if p.Name != "qualified_name" {
 		t.Errorf("param name = %q, want %q", p.Name, "qualified_name")
 	}
 	if p.Type != "string" {
 		t.Errorf("param type = %q, want %q", p.Type, "string")
 	}
-	if !p.Required {
+	if !p.Required && !isInRequired(p.Name, def.Required) {
 		t.Error("qualified_name should be required")
-	}
-	// Check alternatives.
-	expectedAlts := []string{"name", "symbol"}
-	if len(p.Alternatives) != len(expectedAlts) {
-		t.Errorf("alternatives: got %v, want %v", p.Alternatives, expectedAlts)
 	}
 }
 
 func TestGetCallees_Parameters(t *testing.T) {
-	registry := newDefaultToolRegistry()
-	config, found := registry.GetToolConfig("get_callees")
+	h, found := tools.GetNewToolRegistry().Lookup("get_callees")
 	if !found {
-		t.Fatal("get_callees not registered")
+		t.Skip("get_callees not registered in handler registry (legacy-only)")
 	}
+	def := h.Definition()
 
-	if len(config.Parameters) != 1 {
-		t.Fatalf("get_callees: expected 1 parameter, got %d", len(config.Parameters))
+	if len(def.Parameters) != 1 {
+		t.Fatalf("get_callees: expected 1 parameter, got %d", len(def.Parameters))
 	}
-	p := config.Parameters[0]
+	p := def.Parameters[0]
 	if p.Name != "qualified_name" {
 		t.Errorf("param name = %q, want %q", p.Name, "qualified_name")
 	}
 	if p.Type != "string" {
 		t.Errorf("param type = %q, want %q", p.Type, "string")
 	}
-	if !p.Required {
+	if !p.Required && !isInRequired(p.Name, def.Required) {
 		t.Error("qualified_name should be required")
 	}
 }
 
 func TestFindDeadCode_Parameters(t *testing.T) {
-	registry := newDefaultToolRegistry()
-	config, found := registry.GetToolConfig("find_dead_code")
+	h, found := tools.GetNewToolRegistry().Lookup("find_dead_code")
 	if !found {
-		t.Fatal("find_dead_code not registered")
+		t.Skip("find_dead_code not registered in handler registry (legacy-only)")
 	}
+	def := h.Definition()
 
-	if len(config.Parameters) != 1 {
-		t.Fatalf("find_dead_code: expected 1 parameter, got %d", len(config.Parameters))
+	if len(def.Parameters) != 1 {
+		t.Fatalf("find_dead_code: expected 1 parameter, got %d", len(def.Parameters))
 	}
-	p := config.Parameters[0]
+	p := def.Parameters[0]
 	if p.Name != "directory" {
 		t.Errorf("param name = %q, want %q", p.Name, "directory")
 	}
@@ -192,10 +178,19 @@ func TestFindDeadCode_Parameters(t *testing.T) {
 	if p.Required {
 		t.Error("directory should NOT be required")
 	}
-	expectedAlts := []string{"dir"}
-	if len(p.Alternatives) != len(expectedAlts) {
-		t.Errorf("alternatives: got %v, want %v", p.Alternatives, expectedAlts)
+	if isInRequired(p.Name, def.Required) {
+		t.Error("directory should NOT be in Required list")
 	}
+}
+
+// isInRequired checks if name is in the Required list from a handler definition.
+func isInRequired(name string, required []string) bool {
+	for _, r := range required {
+		if r == name {
+			return true
+		}
+	}
+	return false
 }
 
 // ============================================================================

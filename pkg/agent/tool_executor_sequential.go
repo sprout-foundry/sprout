@@ -137,14 +137,10 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 
 	// Execute the tool in a goroutine
 	go func() {
-		// SP-074: Dual-dispatch shim collapsed. All migrated tools now
-		// dispatch through tool_security.go::ExecuteTool, which consults
-		// tools.GetNewToolRegistry() first and falls through to the legacy
-		// ToolConfig registry only for tools that genuinely require *Agent
-		// access (e.g. run_subagent, run_parallel_subagents — see
-		// pkg/agent_tools/all.go for the list of migrated handlers).
-		// tool_security.go::ExecuteTool uses effectiveCwd() for WorkspaceRoot.
-		te.agent.debugLog("[tool] legacy dispatch: %s\n", normalizedToolName)
+		// All tools dispatch through tool_security.go::ExecuteTool, which
+		// resolves via tools.GetNewToolRegistry().Lookup() — the single
+		// source of truth for all tool definitions and execution.
+		te.agent.debugLog("[tool] dispatch: %s\n", normalizedToolName)
 
 		if normalizedToolName == "mcp_tools" {
 			result, err := te.agent.handleMCPToolsCommand(args)
@@ -156,9 +152,8 @@ func (te *ToolExecutor) executeSingleToolWithIndex(toolCall api.ToolCall, toolIn
 			return
 		}
 
-		registry := GetToolRegistry()
 		execCtx := withToolExecutionMetadata(ctx, toolCallID, normalizedToolName, te.agent.effectiveCwd())
-		images, result, err := registry.ExecuteTool(execCtx, normalizedToolName, args, te.agent, toolCall.Function.Arguments)
+		images, result, err := ExecuteTool(execCtx, normalizedToolName, args, te.agent, toolCall.Function.Arguments)
 
 		// Unknown-tool detection uses typed error classification only.
 		// Tools return agenterrors.NewInvalidInputError("unknown tool: ..."),

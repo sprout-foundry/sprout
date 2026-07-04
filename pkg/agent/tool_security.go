@@ -22,7 +22,7 @@ import (
 )
 
 // ExecuteTool executes a tool with standardized parameter validation and error handling
-func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args map[string]interface{}, agent *Agent, rawArgsJSON string) ([]api.ImageData, string, error) {
+func ExecuteTool(ctx context.Context, toolName string, args map[string]interface{}, agent *Agent, rawArgsJSON string) ([]api.ImageData, string, error) {
 	handler, found := tools.GetNewToolRegistry().Lookup(toolName)
 	if !found {
 		return nil, "", agenterrors.NewInvalidInputError("unknown tool '"+toolName+"'", nil)
@@ -378,7 +378,7 @@ func (r *ToolRegistry) ExecuteTool(ctx context.Context, toolName string, args ma
 // auto-approved here — they fall through to the caller's block/prompt
 // handling regardless of elevation.
 //
-// Both Gate-1 entry points call this — ToolRegistry.ExecuteTool and the
+// Both Gate-1 entry points call this — ExecuteTool and the
 // live seed pre-execute hook (newPreExecuteHook) — so the bypass policy
 // lives in exactly one place and the two paths can't drift.
 func (a *Agent) staticGateAutoApprove(secResult tools.SecurityResult) bool {

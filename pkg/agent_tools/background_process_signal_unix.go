@@ -6,8 +6,46 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"syscall"
 )
+
+var (
+	setsidShellOnce sync.Once
+	setsidForShell  bool
+)
+
+// probeSetsidSupport checks whether setsid(2) is available for child
+// processes started through the user's shell. Go 1.24+ on some Linux
+// configurations applies a seccomp filter that blocks setsid(2) from
+// child processes, causing fork/exec to fail with EPERM. The filter
+// is per-binary in some profiles, so we probe with the actual shell
+// binary that background processes use.
+//
+// IMPORTANT: Setsid and Setpgid must NOT be used together. setsid(2)
+// creates a new session AND makes the calling process a process group
+// leader (pgid == pid). A subsequent setpgid(0, 0) on a session leader
+// fails with EPERM. When Setsid is available, use it alone.
+//
+// We probe once at first use and cache the result so every subsequent
+// background spawn skips the probe.
+func probeSetsidSupport() bool {
+	setsidShellOnce.Do(func() {
+		shell := resolveShell()
+		cmd := exec.Command(shell, "-c", "exit 0")
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+		setsidForShell = (cmd.Run() == nil)
+	})
+	return setsidForShell
+}
+
+// resolveShell returns the user's configured shell, falling back to /bin/sh.
+func resolveShell() string {
+	if s := os.Getenv("SHELL"); s != "" {
+		return s
+	}
+	return "/bin/sh"
+}
 
 // isProcessGone reports whether err indicates the target process no
 // longer exists. Used by interruptProcessGroup to avoid a redundant
@@ -30,22 +68,42 @@ func setProcessGroup(cmd *exec.Cmd) {
 	cmd.SysProcAttr.Setpgid = true
 }
 
-// detachFromSession starts the command in a new process group, detaching it
-// from the parent's terminal session so SIGHUP doesn't propagate when the
-// parent exits. Used for long-running background processes (automate runners
-// and background shells) that must outlive the agent that spawned them.
+// detachFromSession fully detaches the command from the parent's session
+// so it survives the parent's terminal teardown without needing `nohup`.
 //
-// We intentionally use only Setpgid (not Setsid). Setpgid alone is sufficient:
-// SIGHUP is sent to the foreground process group of the controlling terminal,
-// and a child in its own process group is not the foreground group. Setsid
-// would be extra isolation, but Go 1.24+ loads a seccomp filter that blocks
-// the setsid(2) syscall from child processes, causing fork/exec to fail with
-// EPERM. See SP-107 automation runner investigation (2026-07-02).
+// When the kernel allows it (most systems), we create a NEW session via
+// Setsid. This gives full session isolation: the child is in its own
+// session and process group, it has no controlling terminal, and SIGHUP
+// from the parent's terminal teardown or session leader exit never
+// reaches it. Setsid alone is sufficient — it already places the child
+// in a new process group (pgid == pid), so Setpgid is redundant and
+// would actually fail with EPERM when called after Setsid (you can't
+// change the process group ID of a session leader).
+//
+// On Go 1.24+ Linux configurations where seccomp blocks setsid(2) from
+// child processes (causing fork/exec to fail with EPERM), we fall back
+// to Setpgid only — the same isolation as earlier versions. The
+// fallback is safe because the caller also:
+//   1. Closes stdin (cmd.Stdin = nil → /dev/null in Go 1.20+)
+//   2. Redirects stdout/stderr to a file (not the parent's terminal)
+// See StartWithOptions in background_process.go.
 func detachFromSession(cmd *exec.Cmd) {
 	if cmd.SysProcAttr == nil {
 		cmd.SysProcAttr = &syscall.SysProcAttr{}
 	}
-	cmd.SysProcAttr.Setpgid = true
+	if probeSetsidSupport() {
+		// Setsid alone creates a new session AND a new process group
+		// (pgid == pid). Do NOT also set Setpgid — calling setpgid
+		// on a session leader returns EPERM.
+		cmd.SysProcAttr.Setsid = true
+	} else {
+		// Fall back to a new process group only. The child stays in
+		// the parent's session, so it can still receive SIGHUP from
+		// terminal teardown of the foreground process group. The
+		// caller mitigates this by closing stdin and redirecting
+		// stdout/stderr to a file.
+		cmd.SysProcAttr.Setpgid = true
+	}
 }
 
 // interruptProcessGroup sends SIGINT to the process group rooted at p,

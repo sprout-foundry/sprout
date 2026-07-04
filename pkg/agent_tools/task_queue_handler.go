@@ -29,28 +29,25 @@ func (h *taskQueueHandler) Name() string { return "task_queue" }
 func (h *taskQueueHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name: "task_queue",
-		Description: "Persistent cross-session task queue at ~/.config/sprout/task_queue.json. " +
-			"Processed by the Executive Assistant persona.\n\n" +
-			"• `read` — list tasks sorted by priority. Optional: `status` (pending|in_progress|completed|failed|blocked|all, default \"pending\"), `limit` (default 10).\n" +
-			"• `add` — create. Required: `title`. Optional: `description`, `priority` (high|medium|low, default medium), `working_dir`, `persona`.\n" +
-			"• `publish` — update existing (claim, progress, completion, failure). Required: `task_id`, `status` (in_progress|completed|failed|blocked). Optional: `result`, `subtasks` (array of `{title, working_dir?, persona?, priority?}`).\n\n" +
-			"Use `read` for \"what's on my queue?\". Use `add` when the user wants a task remembered beyond this session. Use `publish` (EA persona) to claim or complete queued tasks.",
+		Description: "Manage the persistent cross-session task queue. " +
+			"Operations: read (list tasks), add (create), publish (update status/result). " +
+			"Used by the Executive Assistant persona for cross-session work tracking.",
 		Required: []string{"operation"},
 		Parameters: []ParameterDef{
 			{Name: "operation", Type: "string", Required: true, Description: "One of: 'read', 'add', 'publish'."},
 			// Read filters
-			{Name: "status", Type: "string", Description: "Read: status filter (pending|in_progress|completed|failed|blocked|all). Publish: new status to set."},
-			{Name: "limit", Type: "integer", Description: "Read-only: maximum tasks to return (default 10)."},
+			{Name: "status", Type: "string", Description: "Read: filter by status. Publish: new status to set."},
+			{Name: "limit", Type: "integer", Description: "Read: max tasks to return (default 10)."},
 			// Add fields
-			{Name: "title", Type: "string", Description: "Add-only: task title."},
-			{Name: "description", Type: "string", Description: "Add-only: detailed description."},
-			{Name: "priority", Type: "string", Description: "Add-only: high|medium|low (default medium)."},
-			{Name: "working_dir", Type: "string", Description: "Add-only: working directory for the task."},
-			{Name: "persona", Type: "string", Description: "Add-only: persona to use when executing."},
+			{Name: "title", Type: "string", Description: "Add: task title (required)."},
+			{Name: "description", Type: "string", Description: "Add: detailed description."},
+			{Name: "priority", Type: "string", Description: "Add: high, medium (default), or low."},
+			{Name: "working_dir", Type: "string", Description: "Add: working directory for the task."},
+			{Name: "persona", Type: "string", Description: "Add: persona to execute the task."},
 			// Publish fields
-			{Name: "task_id", Type: "string", Description: "Publish-only: task ID to update."},
-			{Name: "result", Type: "string", Description: "Publish-only: summary of work done or error message."},
-			{Name: "subtasks", Type: "array", Description: "Publish-only: break the task down. Each item: {title, working_dir?, persona?, priority?}."},
+			{Name: "task_id", Type: "string", Description: "Publish: task ID to update (required)."},
+			{Name: "result", Type: "string", Description: "Publish: summary of work done or error."},
+			{Name: "subtasks", Type: "array", Description: "Publish: subtasks to create."},
 		},
 	}
 }

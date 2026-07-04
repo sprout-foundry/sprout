@@ -149,7 +149,8 @@ func (h *findDeadCodeHandler) Execute(ctx context.Context, env ToolEnv, args map
 	}
 	defer store.Close()
 
-	dead, err := store.FindDeadCode(ctx)
+	dir, _ := args["directory"].(string)
+	dead, err := store.FindDeadCode(ctx, dir)
 	if err != nil {
 		return ToolResult{Output: fmt.Sprintf("Query failed: %v", err), IsError: true}, nil
 	}

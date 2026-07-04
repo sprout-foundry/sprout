@@ -214,6 +214,10 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 		agent.autoActivateCoordinatorPersona()
 	}
 
+	// Wire tool function pointers so handlers in pkg/agent_tools can
+	// dispatch back into this agent's handler methods.
+	wireAgentToolFuncs(agent, params.isProduction)
+
 	return agent, nil
 }
 

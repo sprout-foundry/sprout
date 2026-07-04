@@ -379,7 +379,7 @@ func TestFindDeadCode_DetectsUncalledFunction(t *testing.T) {
 	err := store.IndexFile(ctx, path, symbols, edges)
 	require.NoError(t, err)
 
-	dead, err := store.FindDeadCode(ctx)
+	dead, err := store.FindDeadCode(ctx, "")
 	require.NoError(t, err)
 
 	// deadFunc has no inbound calls and is not exported/init/main/Test.
@@ -407,7 +407,7 @@ func TestFindDeadCode_ExcludesExported(t *testing.T) {
 	err := store.IndexFile(ctx, path, symbols, nil)
 	require.NoError(t, err)
 
-	dead, err := store.FindDeadCode(ctx)
+	dead, err := store.FindDeadCode(ctx, "")
 	require.NoError(t, err)
 
 	// PublicFunc is exported (starts with uppercase) — excluded.
@@ -430,7 +430,7 @@ func TestFindDeadCode_ExcludesInitAndMain(t *testing.T) {
 	err := store.IndexFile(ctx, path, symbols, nil)
 	require.NoError(t, err)
 
-	dead, err := store.FindDeadCode(ctx)
+	dead, err := store.FindDeadCode(ctx, "")
 	require.NoError(t, err)
 
 	require.Len(t, dead, 1)
@@ -450,7 +450,7 @@ func TestFindDeadCode_ExcludesTestFunctions(t *testing.T) {
 	err := store.IndexFile(ctx, path, symbols, nil)
 	require.NoError(t, err)
 
-	dead, err := store.FindDeadCode(ctx)
+	dead, err := store.FindDeadCode(ctx, "")
 	require.NoError(t, err)
 
 	// TestSomething starts with "Test" — excluded.
@@ -475,7 +475,7 @@ func TestFindDeadCode_ExcludesNonFuncKinds(t *testing.T) {
 	err := store.IndexFile(ctx, path, symbols, nil)
 	require.NoError(t, err)
 
-	dead, err := store.FindDeadCode(ctx)
+	dead, err := store.FindDeadCode(ctx, "")
 	require.NoError(t, err)
 
 	// Only orphan (func with no callers) should appear.
@@ -569,7 +569,7 @@ func TestFindDeadCode_EmptyStore(t *testing.T) {
 	store := newMemoryStore(t)
 	ctx := context.Background()
 
-	dead, err := store.FindDeadCode(ctx)
+	dead, err := store.FindDeadCode(ctx, "")
 	require.NoError(t, err)
 	assert.Empty(t, dead)
 }
@@ -681,7 +681,7 @@ func TestFindDeadCode_ExcludesMethods(t *testing.T) {
 	err := store.IndexFile(ctx, path, symbols, nil)
 	require.NoError(t, err)
 
-	dead, err := store.FindDeadCode(ctx)
+	dead, err := store.FindDeadCode(ctx, "")
 	require.NoError(t, err)
 
 	require.Len(t, dead, 1)
@@ -967,7 +967,7 @@ func TestIndexAll_SetsFileMTime(t *testing.T) {
 
 	// Query the node directly via QueryCallees (returns the node even with no edges).
 	// Use FindDeadCode since hello is lowercase (not exported) and has no callers.
-	dead, err := store.FindDeadCode(ctx)
+	dead, err := store.FindDeadCode(ctx, "")
 	require.NoError(t, err)
 	require.Len(t, dead, 1)
 	assert.Equal(t, knownTime.Format(time.RFC3339), dead[0].FileMTime)

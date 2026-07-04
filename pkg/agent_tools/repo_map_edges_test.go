@@ -8,6 +8,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/sprout-foundry/sprout/pkg/codegraph"
 )
 
 // =============================================================================
@@ -665,4 +667,122 @@ func foo() {
 
 	assert.Len(t, result.Symbols, 1)
 	assert.Empty(t, result.Edges)
+}
+
+// =============================================================================
+// ToCodegraphSymbols — edge name transformation tests
+// =============================================================================
+
+func TestToCodegraphSymbols_QualifiesEdgeNames_Go(t *testing.T) {
+	// Simulating a Go file with a function that calls another function.
+	// The raw edge SourceQualifiedName = "func foo" (goFuncName output),
+	// and the symbol name = "func foo".
+	// After ToCodegraphSymbols, edges should use qualified names matching symbols.
+	sw := &SymbolWithEdges{
+		Symbols: []SymbolEntry{
+			{Name: "func foo", Line: 5},
+			{Name: "func bar", Line: 10},
+		},
+		Edges: []codegraph.Edge{
+			{SourceQualifiedName: "func foo", TargetQualifiedName: "func bar", EdgeType: "calls", Line: 7},
+		},
+	}
+
+	symbols, edges, err := sw.ToCodegraphSymbols("pkg/app/app.go")
+	require.NoError(t, err)
+
+	// Symbols should have qualified names.
+	assert.Equal(t, "pkg/app.foo", symbols[0].QualifiedName)
+	assert.Equal(t, "pkg/app.bar", symbols[1].QualifiedName)
+
+	// Edges should use qualified names too.
+	require.Len(t, edges, 1)
+	assert.Equal(t, "pkg/app.foo", edges[0].SourceQualifiedName)
+	assert.Equal(t, "pkg/app.bar", edges[0].TargetQualifiedName)
+}
+
+func TestToCodegraphSymbols_QualifiesEdgeNames_TS(t *testing.T) {
+	// TS/JS/Python edges use bare function names (CallerName from tree-sitter).
+	sw := &SymbolWithEdges{
+		Symbols: []SymbolEntry{
+			{Name: "function greet", Line: 1},
+			{Name: "function helper", Line: 5},
+		},
+		Edges: []codegraph.Edge{
+			{SourceQualifiedName: "greet", TargetQualifiedName: "helper", EdgeType: "calls", Line: 2},
+		},
+	}
+
+	symbols, edges, err := sw.ToCodegraphSymbols("src/utils.ts")
+	require.NoError(t, err)
+
+	assert.Equal(t, "src.greet", symbols[0].QualifiedName)
+	assert.Equal(t, "src.helper", symbols[1].QualifiedName)
+
+	require.Len(t, edges, 1)
+	assert.Equal(t, "src.greet", edges[0].SourceQualifiedName)
+	assert.Equal(t, "src.helper", edges[0].TargetQualifiedName)
+}
+
+func TestToCodegraphSymbols_EdgeNamesNotInSymbols_KeptAsIs(t *testing.T) {
+	// External calls (e.g., fmt.Println) won't be in the symbols list.
+	// These should be kept as-is so they can resolve to nodes from other files.
+	sw := &SymbolWithEdges{
+		Symbols: []SymbolEntry{
+			{Name: "func foo", Line: 5},
+		},
+		Edges: []codegraph.Edge{
+			{SourceQualifiedName: "func foo", TargetQualifiedName: "fmt.Println", EdgeType: "calls", Line: 7},
+		},
+	}
+
+	_, edges, err := sw.ToCodegraphSymbols("pkg/app/app.go")
+	require.NoError(t, err)
+
+	require.Len(t, edges, 1)
+	assert.Equal(t, "pkg/app.foo", edges[0].SourceQualifiedName)
+	// fmt.Println should stay as-is (not in this file's symbols).
+	assert.Equal(t, "fmt.Println", edges[0].TargetQualifiedName)
+}
+
+func TestToCodegraphSymbols_GoMethodReceiverNames(t *testing.T) {
+	// Methods on types have parenthesized receiver syntax.
+	sw := &SymbolWithEdges{
+		Symbols: []SymbolEntry{
+			{Name: "func (*Server).Start", Line: 5},
+			{Name: "func (s *Server).handle", Line: 12},
+		},
+		Edges: []codegraph.Edge{
+			{SourceQualifiedName: "func (*Server).Start", TargetQualifiedName: "func (s *Server).handle", EdgeType: "calls", Line: 8},
+		},
+	}
+
+	_, edges, err := sw.ToCodegraphSymbols("pkg/server/server.go")
+	require.NoError(t, err)
+
+	require.Len(t, edges, 1)
+	assert.Equal(t, "pkg/server.(*Server).Start", edges[0].SourceQualifiedName)
+	assert.Equal(t, "pkg/server.(s *Server).handle", edges[0].TargetQualifiedName)
+}
+
+func TestToCodegraphSymbols_NoEdges(t *testing.T) {
+	sw := &SymbolWithEdges{
+		Symbols: []SymbolEntry{
+			{Name: "func foo", Line: 5},
+		},
+		Edges: nil,
+	}
+
+	_, edges, err := sw.ToCodegraphSymbols("pkg/app/app.go")
+	require.NoError(t, err)
+	assert.Nil(t, edges)
+}
+
+func TestToCodegraphSymbols_EmptyInput(t *testing.T) {
+	sw := &SymbolWithEdges{}
+
+	symbols, edges, err := sw.ToCodegraphSymbols("pkg/app/app.go")
+	require.NoError(t, err)
+	assert.Empty(t, symbols)
+	assert.Nil(t, edges)
 }

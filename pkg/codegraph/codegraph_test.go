@@ -556,6 +556,36 @@ func TestIndexFile_EmptySymbols(t *testing.T) {
 	assert.Equal(t, 1, stats.FileCount)
 }
 
+func TestIndexFile_DuplicateQualifiedName(t *testing.T) {
+	store := newMemoryStore(t)
+	ctx := context.Background()
+
+	// First file: defines "cmd.init"
+	err := store.IndexFile(ctx, "cmd/a.go", []Symbol{
+		{QualifiedName: "cmd.init", DisplayName: "init", FilePath: "cmd/a.go", Line: 5, Kind: "func", Language: "go"},
+	}, nil)
+	require.NoError(t, err)
+	assert.Equal(t, 1, store.Stats().NodeCount)
+
+	// Second file: also defines "cmd.init" (valid in Go — multiple init() per package).
+	// Should NOT error — INSERT OR IGNORE skips the duplicate.
+	err = store.IndexFile(ctx, "cmd/b.go", []Symbol{
+		{QualifiedName: "cmd.init", DisplayName: "init", FilePath: "cmd/b.go", Line: 7, Kind: "func", Language: "go"},
+	}, nil)
+	require.NoError(t, err) // Must not fail on UNIQUE constraint.
+
+	// Should still have exactly 1 node (first insert wins).
+	assert.Equal(t, 1, store.Stats().NodeCount)
+	assert.Equal(t, 2, store.Stats().FileCount)
+
+	// Verify the retained node is from the first file.
+	nodes, err := store.QueryAllNodes(ctx)
+	require.NoError(t, err)
+	require.Len(t, nodes, 1)
+	assert.Equal(t, "cmd/a.go", nodes[0].FilePath)
+	assert.Equal(t, 5, nodes[0].Line)
+}
+
 func TestQueryCallees_NonExistentQualifiedName(t *testing.T) {
 	store := newMemoryStore(t)
 	ctx := context.Background()
@@ -1488,6 +1518,123 @@ func TestInsertAllEdges_ReplacesExistingEdges(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, callees, 1)
 	assert.Equal(t, "pkg/app.worker", callees[0].QualifiedName)
+}
+
+func TestInsertAllEdges_SuffixMatchFallback(t *testing.T) {
+	store := newMemoryStore(t)
+	ctx := context.Background()
+
+	// Phase 1: insert symbols for two files (simulating cross-file same-package).
+	// The node for run() is in pkg/app/app.go, but DoWork is in pkg/lib/lib.go.
+	err := store.IndexFile(ctx, "pkg/lib/lib.go", []Symbol{
+		{QualifiedName: "pkg/lib.DoWork", DisplayName: "DoWork", FilePath: "pkg/lib/lib.go", Line: 5, Kind: "func", Language: "go"},
+	}, nil)
+	require.NoError(t, err)
+
+	err = store.IndexFile(ctx, "pkg/app/app.go", []Symbol{
+		{QualifiedName: "pkg/app.run", DisplayName: "run", FilePath: "pkg/app/app.go", Line: 10, Kind: "func", Language: "go"},
+	}, nil)
+	require.NoError(t, err)
+
+	// Phase 2: edges with bare-name target (simulating cross-file reference).
+	// run() calls DoWork(), but the edge only has the bare function name
+	// because DoWork is defined in a different file and couldn't be resolved
+	// during single-file parsing.
+	edges := []Edge{
+		{SourceQualifiedName: "pkg/app.run", TargetQualifiedName: "DoWork", EdgeType: "calls", Line: 11},
+	}
+	err = store.InsertAllEdges(ctx, edges)
+	require.NoError(t, err)
+	assert.Equal(t, 1, store.Stats().EdgeCount, "suffix-match should resolve bare name 'DoWork' to 'pkg/lib.DoWork'")
+
+	// Verify the edge was inserted correctly.
+	callees, err := store.QueryCallees(ctx, "pkg/app.run")
+	require.NoError(t, err)
+	require.Len(t, callees, 1)
+	assert.Equal(t, "pkg/lib.DoWork", callees[0].QualifiedName)
+}
+
+func TestInsertAllEdges_SuffixMatchAmbiguous(t *testing.T) {
+	store := newMemoryStore(t)
+	ctx := context.Background()
+
+	// Two different packages have a function with the same name.
+	err := store.IndexFile(ctx, "pkg/a/a.go", []Symbol{
+		{QualifiedName: "pkg/a.Helper", DisplayName: "Helper", FilePath: "pkg/a/a.go", Line: 5, Kind: "func", Language: "go"},
+	}, nil)
+	require.NoError(t, err)
+
+	err = store.IndexFile(ctx, "pkg/b/b.go", []Symbol{
+		{QualifiedName: "pkg/b.Helper", DisplayName: "Helper", FilePath: "pkg/b/b.go", Line: 5, Kind: "func", Language: "go"},
+	}, nil)
+	require.NoError(t, err)
+
+	err = store.IndexFile(ctx, "pkg/c/c.go", []Symbol{
+		{QualifiedName: "pkg/c.run", DisplayName: "run", FilePath: "pkg/c/c.go", Line: 10, Kind: "func", Language: "go"},
+	}, nil)
+	require.NoError(t, err)
+
+	// The bare name "Helper" matches TWO nodes — should be skipped (ambiguous).
+	edges := []Edge{
+		{SourceQualifiedName: "pkg/c.run", TargetQualifiedName: "Helper", EdgeType: "calls", Line: 11},
+	}
+	err = store.InsertAllEdges(ctx, edges)
+	require.NoError(t, err)
+	assert.Equal(t, 0, store.Stats().EdgeCount, "ambiguous suffix match should be skipped")
+}
+
+func TestInsertAllEdges_DottedNoParenSkipsSuffixMatch(t *testing.T) {
+	store := newMemoryStore(t)
+	ctx := context.Background()
+
+	// Insert nodes for two packages.
+	err := store.IndexFile(ctx, "pkg/x/x.go", []Symbol{
+		{QualifiedName: "pkg/x.caller", DisplayName: "caller", FilePath: "pkg/x/x.go", Line: 10, Kind: "func", Language: "go"},
+	}, nil)
+	require.NoError(t, err)
+
+	err = store.IndexFile(ctx, "pkg/y/y.go", []Symbol{
+		{QualifiedName: "pkg/y.GetOptimizer", DisplayName: "GetOptimizer", FilePath: "pkg/y/y.go", Line: 5, Kind: "func", Language: "go"},
+	}, nil)
+	require.NoError(t, err)
+
+	// "state.GetOptimizer" is a multi-level selector with dot but no parens.
+	// The suffix-match fallback should be SKIPPED — it's not a bare function
+	// name and won't resolve.  Skipping avoids a pointless full-table LIKE scan.
+	edges := []Edge{
+		{SourceQualifiedName: "pkg/x.caller", TargetQualifiedName: "state.GetOptimizer", EdgeType: "calls", Line: 11},
+	}
+	err = store.InsertAllEdges(ctx, edges)
+	require.NoError(t, err)
+	assert.Equal(t, 0, store.Stats().EdgeCount, "dotted-no-paren name should skip suffix match")
+}
+
+func TestInsertAllEdges_MethodNameWithParensUsesSuffixMatch(t *testing.T) {
+	store := newMemoryStore(t)
+	ctx := context.Background()
+
+	// "(*Agent).processQueryWithSeed" has both dots AND parens — this is method
+	// receiver notation and SHOULD get the suffix-match fallback.
+	err := store.IndexFile(ctx, "pkg/agent/conversation.go", []Symbol{
+		{QualifiedName: "pkg/agent.(*Agent).processQueryWithSeed", DisplayName: "processQueryWithSeed",
+			FilePath: "pkg/agent/conversation.go", Line: 79, Kind: "func", Language: "go"},
+	}, nil)
+	require.NoError(t, err)
+
+	err = store.IndexFile(ctx, "pkg/agent/agent.go", []Symbol{
+		{QualifiedName: "pkg/agent.(*Agent).ProcessQuery", DisplayName: "ProcessQuery",
+			FilePath: "pkg/agent/agent.go", Line: 23, Kind: "func", Language: "go"},
+	}, nil)
+	require.NoError(t, err)
+
+	// Method call with receiver-type notation — should resolve via suffix match.
+	edges := []Edge{
+		{SourceQualifiedName: "pkg/agent.(*Agent).ProcessQuery",
+			TargetQualifiedName: "(*Agent).processQueryWithSeed", EdgeType: "calls", Line: 24},
+	}
+	err = store.InsertAllEdges(ctx, edges)
+	require.NoError(t, err)
+	assert.Equal(t, 1, store.Stats().EdgeCount, "method name with parens should use suffix match")
 }
 
 func TestIndexAll_CrossFileEdges(t *testing.T) {

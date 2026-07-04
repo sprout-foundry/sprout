@@ -132,6 +132,12 @@ func NewCommandRegistry() *CommandRegistry {
 	// SP-105 Phase 3: visual usage dashboard
 	registry.Register(&UsageCommand{})
 
+	// Agent state overview
+	registry.Register(&InfoCommand{})
+
+	// Code intelligence graph management
+	registry.Register(&CodegraphCommand{})
+
 	// SP-048-2d: short aliases for the most-used commands. Aliases resolve
 	// to canonical names during dispatch and appear in tab completion.
 	registry.RegisterAlias("m", "model")
@@ -141,6 +147,11 @@ func NewCommandRegistry() *CommandRegistry {
 	registry.RegisterAlias("?", "help")
 	registry.RegisterAlias("h", "help")
 	registry.RegisterAlias("stats", "usage")
+	registry.RegisterAlias("c", "commit")
+	registry.RegisterAlias("s", "search")
+	registry.RegisterAlias("i", "index")
+	registry.RegisterAlias("e", "edit")
+	registry.RegisterAlias("r", "review")
 
 	return registry
 }

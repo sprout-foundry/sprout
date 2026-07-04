@@ -180,7 +180,7 @@ func (s *SQLiteStore) indexSymbolsOnly(ctx context.Context, path string, symbols
 	// Insert new symbols.
 	for _, sym := range symbols {
 		_, err = tx.ExecContext(ctx, `
-			INSERT INTO nodes (qualified_name, display_name, file_path, line, kind, language, file_mtime)
+			INSERT OR IGNORE INTO nodes (qualified_name, display_name, file_path, line, kind, language, file_mtime)
 			VALUES (?, ?, ?, ?, ?, ?, ?)
 		`, sym.QualifiedName, sym.DisplayName, path, sym.Line, sym.Kind, sym.Language, sym.FileMTime)
 		if err != nil {

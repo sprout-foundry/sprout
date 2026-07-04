@@ -54,6 +54,40 @@ func buildAutomateCompletionMessage(wfName, wfDesc, sessionID, status string, ex
 	)
 }
 
+// buildInProcessCompletionMessage builds the completion message for the
+// in-process workflow runner. It includes the item counts from the result
+// and any error information.
+func buildInProcessCompletionMessage(wfName, wfDesc, sessionID, status string, result *WorkflowResult) string {
+	if result == nil {
+		return fmt.Sprintf(
+			"[automate] In-process workflow completed:\n"+
+				"  Workflow: %s\n"+
+				"  Description: %s\n"+
+				"  Session: %s\n"+
+				"  Status: %s",
+			wfName, wfDesc, sessionID, status,
+		)
+	}
+
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf(
+		"[automate] In-process workflow completed:\n"+
+			"  Workflow: %s\n"+
+			"  Description: %s\n"+
+			"  Session: %s\n"+
+			"  Status: %s\n"+
+			"  Items: %d processed, %d skipped, %d failed",
+		wfName, wfDesc, sessionID, status,
+		result.ItemsProcessed, result.ItemsSkipped, result.ItemsFailed,
+	))
+
+	if result.Error != nil {
+		b.WriteString(fmt.Sprintf("\n  Error: %s", result.Error.Error()))
+	}
+
+	return b.String()
+}
+
 // handleRunAutomate runs a workflow from the automate/ directory as a background process.
 // Always requires user approval (enforced by the security classifier).
 // Background execution is enforced — foreground mode is disabled for safety.
@@ -74,6 +108,70 @@ func handleRunAutomate(ctx context.Context, a *Agent, args map[string]interface{
 
 	// Read description for user context
 	desc, _ := automate.ExtractDescription(wfPath)
+
+	// -----------------------------------------------------------------------
+	// In-process path: detect loop workflows and run them as a goroutine
+	// without spawning a subprocess. This eliminates the need for nohup
+	// and avoids process-group/session detachment issues.
+	// -----------------------------------------------------------------------
+	if wfCfg, parseErr := parseWorkflowFile(wfPath); parseErr == nil && wfCfg.Loop != nil {
+		sessionID := generateWorkflowSessionID()
+
+		// Publish session_started event immediately.
+		a.publishEvent(events.EventTypeAutomateSessionStarted, events.AutomateSessionStartedEvent(
+			sessionID, filepath.Base(wfPath), "automate",
+		))
+
+		// Capture variables for the goroutine closure.
+		wfName := filepath.Base(wfPath)
+		wfDesc := desc
+
+		// Launch the in-process workflow runner as a goroutine.
+		go func() {
+			// Use a background context so the goroutine survives the
+			// parent agent's current query. Cancellation propagation
+			// is handled internally by RunWorkflowLoopInProcess via
+			// the interrupt context derived from the parent.
+			result, runErr := RunWorkflowLoopInProcess(context.Background(), a, wfPath, a.eventBus)
+
+			status := "success"
+			if runErr != nil || (result != nil && result.Error != nil) {
+				status = "error"
+			}
+			var totalCost float64
+			if a.GetTotalCost() > 0 {
+				totalCost = a.GetTotalCost()
+			}
+
+			a.publishEvent(events.EventTypeAutomateSessionEnded, events.AutomateSessionEndedEvent(
+				sessionID, wfName, status, totalCost,
+			))
+
+			injectMsg := buildInProcessCompletionMessage(wfName, wfDesc, sessionID, status, result)
+			a.QueueNotification(Notification{
+				Content:   injectMsg,
+				SessionID: sessionID,
+				Kind:      NotifAutomate,
+			})
+		}()
+
+		result := map[string]interface{}{
+			"workflow":    filepath.Base(wfPath),
+			"description": desc,
+			"background":  true,
+			"mode":        "in-process",
+			"status":      "started",
+			"session_id":  sessionID,
+			"message":     fmt.Sprintf("Workflow started: session `%s` — view in [Automations panel](sprout://automations/session/%s)", sessionID, sessionID),
+		}
+
+		resultJSON, _ := json.MarshalIndent(result, "", "  ")
+		return string(resultJSON), nil
+	}
+
+	// -----------------------------------------------------------------------
+	// BPM subprocess path (fallback for steps-based workflows)
+	// -----------------------------------------------------------------------
 
 	// Resolve the sprout binary
 	execPath, err := os.Executable()

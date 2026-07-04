@@ -682,14 +682,22 @@ func extractGoSymbolsASTWithEdges(path string, content []byte) (*SymbolWithEdges
 
 			edgeType := "calls"
 
-			// For selector expressions (containing a dot), check if the prefix
-			// matches an import alias. If so, resolve the target to the full
-			// import path and mark the edge as "resolved_calls".
+			// For selector expressions (containing a dot), check whether any
+			// prefix matches an import alias. Multi-level selectors like
+			// "agent.state.GetOptimizer()" are receiver chains — strip all
+			// non-import prefixes until we either find an import match or
+			// reach the final method name.
 			if dotIdx := strings.IndexByte(calleeName, '.'); dotIdx > 0 {
-				prefix := calleeName[:dotIdx]
-				if pkgPath, ok := importMap[prefix]; ok {
-					calleeName = pkgPath + calleeName[dotIdx:]
-					edgeType = "resolved_calls"
+				for dotIdx > 0 {
+					prefix := calleeName[:dotIdx]
+					if pkgPath, ok := importMap[prefix]; ok {
+						calleeName = pkgPath + calleeName[dotIdx:]
+						edgeType = "resolved_calls"
+						break
+					}
+					// Not an import — strip this prefix and try next level.
+					calleeName = calleeName[dotIdx+1:]
+					dotIdx = strings.IndexByte(calleeName, '.')
 				}
 			}
 

@@ -172,6 +172,11 @@ func (m *BackgroundProcessManager) StartWithOptions(ctx context.Context, command
 	// via shell_native.go to preserve TTY access.
 	detachFromSession(cmd)
 
+	// Close stdin so the process doesn't inherit the parent's terminal pipe.
+	// Without this, the process can receive EOF or SIGPIPE when the parent
+	// exits, causing premature termination. nil means /dev/null on Unix.
+	cmd.Stdin = nil
+
 	// Atomic cap check, session ID generation, output file creation,
 	// process start, and map insertion — all under a single lock to
 	// prevent TOCTOU races under concurrent Start() calls.

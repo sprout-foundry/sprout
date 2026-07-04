@@ -144,14 +144,13 @@ func runWorkflowByPath(path string) error {
 	args := buildAgentSubprocessArgs(path, summary)
 
 	cmd := exec.Command(execPath, args...)
-	cmd.Stdin = os.Stdin
+	// Close stdin and detach into a new process group so the workflow
+	// survives the parent process exiting. Inherited std streams keep
+	// a reference to the parent's terminal pipe — when that closes,
+	// the child receives EOF/SIGPIPE and dies.
+	cmd.Stdin = nil
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-
-	// Detach into a new process group so the workflow survives the
-	// parent shell/agent tool call exiting. Without Setpgid, the child
-	// receives SIGHUP when the tool call completes and the agent process
-	// tears down its process group.
 	setProcessGroup(cmd)
 
 	// Apply subagent timeout override if the workflow specifies one.

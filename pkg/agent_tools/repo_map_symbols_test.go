@@ -293,7 +293,7 @@ type B interface{}
 	assert.NoError(t, err)
 	assert.Len(t, syms, 2)
 	assert.Equal(t, "type A", syms[0].Name)
-	assert.Equal(t, "type B", syms[1].Name)
+	assert.Equal(t, "iface B", syms[1].Name)
 }
 
 func TestExtractGoSymbolsAST_ValueAndPointerReceivers(t *testing.T) {

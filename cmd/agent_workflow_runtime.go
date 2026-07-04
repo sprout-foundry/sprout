@@ -3,6 +3,7 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -409,9 +410,18 @@ func loadWorkflowExecutionState(cfg *AgentWorkflowConfig) (*workflowExecutionSta
 		return nil, fmt.Errorf("failed to read orchestration state %q: %w", path, err)
 	}
 
+	// Gracefully handle empty or whitespace-only files.
+	if len(bytes.TrimSpace(data)) == 0 {
+		fmt.Fprintln(os.Stderr, "Warning: workflow state file is empty — starting fresh")
+		return newWorkflowExecutionState(), nil
+	}
+
 	var state workflowExecutionState
 	if err := json.Unmarshal(data, &state); err != nil {
-		return nil, fmt.Errorf("failed to parse orchestration state %q: %w", path, err)
+		// Corrupt JSON — log a warning and start fresh rather than failing
+		// the entire workflow.
+		fmt.Fprintf(os.Stderr, "Warning: workflow state file %q is corrupt (%v) — starting fresh\n", path, err)
+		return newWorkflowExecutionState(), nil
 	}
 	if state.Version == 0 {
 		state.Version = 1
@@ -423,6 +433,48 @@ func loadWorkflowExecutionState(cfg *AgentWorkflowConfig) (*workflowExecutionSta
 		return newWorkflowExecutionState(), nil
 	}
 	return &state, nil
+}
+
+// writeFileAtomic writes data to path atomically by writing to a temp file
+// in the same directory and then renaming. This prevents partial/corrupt
+// state files if the process crashes mid-write.
+func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("mkdir %q: %w", dir, err)
+	}
+	tmp, err := os.CreateTemp(dir, ".tmp_*.write")
+	if err != nil {
+		return fmt.Errorf("create temp file in %q: %w", dir, err)
+	}
+	tmpName := tmp.Name()
+
+	// Clean up temp file on any failure.
+	cleanup := true
+	defer func() {
+		if cleanup {
+			os.Remove(tmpName)
+		}
+	}()
+
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return fmt.Errorf("write temp file %q: %w", tmpName, err)
+	}
+	// Sync to ensure data is on disk before rename.
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return fmt.Errorf("sync temp file %q: %w", tmpName, err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close temp file %q: %w", tmpName, err)
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		return fmt.Errorf("rename %q → %q: %w", tmpName, path, err)
+	}
+	// After rename, the file at tmpName is gone, so don't try to remove it.
+	cleanup = false
+	return nil
 }
 
 func persistWorkflowExecutionState(cfg *AgentWorkflowConfig, state *workflowExecutionState) error {
@@ -439,10 +491,7 @@ func persistWorkflowExecutionState(cfg *AgentWorkflowConfig, state *workflowExec
 	if err != nil {
 		return fmt.Errorf("failed to serialize orchestration state: %w", err)
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return fmt.Errorf("failed to create orchestration state directory: %w", err)
-	}
-	if err := os.WriteFile(path, data, 0600); err != nil {
+	if err := writeFileAtomic(path, data, 0600); err != nil {
 		return fmt.Errorf("failed to write orchestration state %q: %w", path, err)
 	}
 	return nil
@@ -504,6 +553,60 @@ func persistWorkflowCheckpoint(cfg *AgentWorkflowConfig, state *workflowExecutio
 		return fmt.Errorf("failed to persist workflow checkpoint: %w", err)
 	}
 	return persistWorkflowConversationState(chatAgent, cfg)
+}
+
+// loopCheckpointFilePath returns the path to the lightweight fallback
+// checkpoint file that stores just the TODO line number.
+func loopCheckpointFilePath(workDir string) string {
+	return filepath.Join(workDir, ".sprout", "todo_loop_checkpoint.txt")
+}
+
+// persistLoopCheckpoint writes just the line number to the fallback
+// checkpoint file using an atomic write (temp file + rename).
+func persistLoopCheckpoint(workDir string, lineNum int) error {
+	path := loopCheckpointFilePath(workDir)
+	data := []byte(fmt.Sprintf("%d\n", lineNum))
+	if err := writeFileAtomic(path, data, 0600); err != nil {
+		return fmt.Errorf("failed to persist loop checkpoint: %w", err)
+	}
+	return nil
+}
+
+// removeLoopCheckpoint deletes the fallback checkpoint file, ignoring
+// not-found errors.
+func removeLoopCheckpoint(workDir string) {
+	path := loopCheckpointFilePath(workDir)
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		fmt.Fprintf(os.Stderr, "Warning: failed to remove loop checkpoint %q: %v\n", path, err)
+	}
+}
+
+// loadLoopCheckpoint reads the fallback checkpoint file and returns
+// the line number. Returns (0, nil) if the file doesn't exist.
+func loadLoopCheckpoint(workDir string) (int, error) {
+	path := loopCheckpointFilePath(workDir)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return 0, nil
+		}
+		return 0, fmt.Errorf("failed to read loop checkpoint %q: %w", path, err)
+	}
+
+	lineStr := strings.TrimSpace(string(data))
+	if lineStr == "" {
+		return 0, nil
+	}
+	var lineNum int
+	if _, err := fmt.Sscanf(lineStr, "%d", &lineNum); err != nil {
+		// Corrupt file — log warning and treat as missing.
+		fmt.Fprintf(os.Stderr, "Warning: loop checkpoint %q has invalid content %q — ignoring\n", path, lineStr)
+		return 0, nil
+	}
+	if lineNum <= 0 {
+		return 0, nil
+	}
+	return lineNum, nil
 }
 
 func emitWorkflowOrchestrationEvent(cfg *AgentWorkflowConfig, eventType string, payload map[string]interface{}) error {

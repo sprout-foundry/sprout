@@ -34,6 +34,11 @@ type Symbol struct {
 // SourceQualifiedName and TargetQualifiedName are the qualified names
 // of the caller and callee respectively. They are resolved to node IDs
 // during IndexFile.
+// EdgeType values:
+//   "calls"          - textual/unresolved call edge (same-package or unresolved cross-package)
+//   "resolved_calls" - resolved cross-package call edge (target qualified via import map)
+//   "defined_in"     - symbol defined in a file/package
+//   "imports"        - module-level import relationship
 type Edge struct {
 	SourceQualifiedName string // qualified name of the caller/owner
 	TargetQualifiedName string // qualified name of the callee/target
@@ -53,6 +58,13 @@ type Store interface {
 	// IndexFile stores all symbols and edges for a given file.
 	// It replaces existing data for this file path (delete old nodes/edges, insert new).
 	IndexFile(ctx context.Context, path string, symbols []Symbol, edges []Edge) error
+
+	// InsertEdges inserts call edges for a file, resolving source and target
+	// qualified names to node IDs from the database. All nodes must already
+	// exist in the database (call IndexFile or indexSymbolsOnly first).
+	// This enables cross-file edge resolution that IndexFile cannot handle
+	// when called file-by-file during a full index.
+	InsertEdges(ctx context.Context, path string, edges []Edge) error
 
 	// QueryCallers returns symbols that call the given qualified name.
 	QueryCallers(ctx context.Context, qualifiedName string) ([]Symbol, error)
@@ -282,18 +294,86 @@ func (s *SQLiteStore) IndexFile(ctx context.Context, path string, symbols []Symb
 	return nil
 }
 
+// InsertEdges inserts call edges for a file, resolving source and target
+// qualified names to node IDs from the database. All nodes must already
+// exist in the database (call IndexFile or indexSymbolsOnly first).
+// This enables cross-file edge resolution that IndexFile cannot handle
+// when called file-by-file during a full index.
+func (s *SQLiteStore) InsertEdges(ctx context.Context, path string, edges []Edge) error {
+	if len(edges) == 0 {
+		return nil
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	// Delete existing edges referencing nodes from this file (clean slate).
+	_, err = tx.ExecContext(ctx, `
+		DELETE FROM edges WHERE source_node_id IN (SELECT id FROM nodes WHERE file_path = ?)
+		   OR target_node_id IN (SELECT id FROM nodes WHERE file_path = ?)
+	`, path, path)
+	if err != nil {
+		return fmt.Errorf("delete edges for %s: %w", path, err)
+	}
+
+	// Insert edges by resolving qualified names from the database.
+	// All nodes must already exist in the DB for cross-file resolution to work.
+	for _, edge := range edges {
+		var sourceID, targetID int64
+
+		srcErr := tx.QueryRowContext(ctx,
+			`SELECT id FROM nodes WHERE qualified_name = ?`, edge.SourceQualifiedName).Scan(&sourceID)
+		if srcErr != nil {
+			// Skip edges where we can't resolve the source.
+			continue
+		}
+
+		tgtErr := tx.QueryRowContext(ctx,
+			`SELECT id FROM nodes WHERE qualified_name = ?`, edge.TargetQualifiedName).Scan(&targetID)
+		if tgtErr != nil {
+			// Skip edges where we can't resolve the target.
+			continue
+		}
+
+		_, err = tx.ExecContext(ctx, `
+			INSERT INTO edges (source_node_id, target_node_id, edge_type, line)
+			VALUES (?, ?, ?, ?)
+		`, sourceID, targetID, edge.EdgeType, edge.Line)
+		if err != nil {
+			return fmt.Errorf("insert edge: %w", err)
+		}
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return fmt.Errorf("commit: %w", err)
+	}
+
+	return nil
+}
+
 // QueryCallers returns symbols that call the given qualified name.
 func (s *SQLiteStore) QueryCallers(ctx context.Context, qualifiedName string) ([]Symbol, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT n.id, n.qualified_name, n.display_name, n.file_path, n.line, n.kind, n.language, n.file_mtime
+		SELECT DISTINCT n.id, n.qualified_name, n.display_name, n.file_path, n.line, n.kind, n.language, n.file_mtime
 		FROM nodes n
 		JOIN edges e ON e.source_node_id = n.id
 		JOIN nodes target ON e.target_node_id = target.id
 		WHERE target.qualified_name = ?
-		AND e.edge_type = 'calls'
+		AND (e.edge_type = 'resolved_calls' OR e.edge_type = 'calls')
 		ORDER BY n.qualified_name
 	`, qualifiedName)
 	if err != nil {
@@ -323,12 +403,12 @@ func (s *SQLiteStore) QueryCallees(ctx context.Context, qualifiedName string) ([
 	defer s.mu.RUnlock()
 
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT n.id, n.qualified_name, n.display_name, n.file_path, n.line, n.kind, n.language, n.file_mtime
+		SELECT DISTINCT n.id, n.qualified_name, n.display_name, n.file_path, n.line, n.kind, n.language, n.file_mtime
 		FROM nodes n
 		JOIN edges e ON e.target_node_id = n.id
 		JOIN nodes source ON e.source_node_id = source.id
 		WHERE source.qualified_name = ?
-		AND e.edge_type = 'calls'
+		AND (e.edge_type = 'resolved_calls' OR e.edge_type = 'calls')
 		ORDER BY n.qualified_name
 	`, qualifiedName)
 	if err != nil {
@@ -363,7 +443,7 @@ func (s *SQLiteStore) FindDeadCode(ctx context.Context, directory string) ([]Sym
 		SELECT n.id, n.qualified_name, n.display_name, n.file_path, n.line, n.kind, n.language, n.file_mtime
 		FROM nodes n
 		WHERE n.id NOT IN (
-			SELECT DISTINCT e.target_node_id FROM edges e WHERE e.edge_type = 'calls'
+			SELECT DISTINCT e.target_node_id FROM edges e WHERE e.edge_type IN ('resolved_calls', 'calls')
 		)
 		AND n.kind NOT IN ('type', 'var', 'const', 'iface')
 	`

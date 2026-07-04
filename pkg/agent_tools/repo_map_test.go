@@ -51,7 +51,7 @@ const MaxRetries = 3
 		"### main.go",
 		"- func NewUser:5",
 		"- type User:3",
-		"- type Handler:4",
+		"- iface Handler:4",
 	} {
 		if !strings.Contains(result, want) {
 			t.Errorf("missing %q in output:\n%s", want, result)

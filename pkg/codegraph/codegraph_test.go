@@ -1351,6 +1351,235 @@ func TestIndexAll_RemoveDeletedAfterFullWalk(t *testing.T) {
 }
 
 // ============================================================================
+// InsertEdges Tests (SP-107-5: two-phase indexing)
+// ============================================================================
+
+func TestInsertEdges_Basic(t *testing.T) {
+	store := newMemoryStore(t)
+	ctx := context.Background()
+
+	path := "pkg/app/app.go"
+	symbols := []Symbol{
+		{QualifiedName: "pkg/app.runner", DisplayName: "runner", FilePath: path, Line: 10, Kind: "func", Language: "go"},
+		{QualifiedName: "pkg/app.helper", DisplayName: "helper", FilePath: path, Line: 20, Kind: "func", Language: "go"},
+	}
+
+	// Phase 1: insert symbols only.
+	err := store.IndexFile(ctx, path, symbols, nil)
+	require.NoError(t, err)
+	assert.Equal(t, 2, store.Stats().NodeCount)
+	assert.Equal(t, 0, store.Stats().EdgeCount)
+
+	// Phase 2: insert edges.
+	edges := []Edge{
+		{SourceQualifiedName: "pkg/app.runner", TargetQualifiedName: "pkg/app.helper", EdgeType: "calls", Line: 11},
+	}
+	err = store.InsertEdges(ctx, path, edges)
+	require.NoError(t, err)
+	assert.Equal(t, 1, store.Stats().EdgeCount)
+
+	// Verify the edge.
+	callees, err := store.QueryCallees(ctx, "pkg/app.runner")
+	require.NoError(t, err)
+	require.Len(t, callees, 1)
+	assert.Equal(t, "pkg/app.helper", callees[0].QualifiedName)
+}
+
+func TestInsertEdges_CrossFile(t *testing.T) {
+	store := newMemoryStore(t)
+	ctx := context.Background()
+
+	// Insert symbols for two files (phase 1).
+	pathA := "pkg/lib/lib.go"
+	err := store.IndexFile(ctx, pathA, []Symbol{
+		{QualifiedName: "pkg/lib.DoWork", DisplayName: "DoWork", FilePath: pathA, Line: 5, Kind: "func", Language: "go"},
+	}, nil)
+	require.NoError(t, err)
+
+	pathB := "pkg/app/app.go"
+	err = store.IndexFile(ctx, pathB, []Symbol{
+		{QualifiedName: "pkg/app.runner", DisplayName: "runner", FilePath: pathB, Line: 10, Kind: "func", Language: "go"},
+	}, nil)
+	require.NoError(t, err)
+
+	assert.Equal(t, 2, store.Stats().NodeCount)
+	assert.Equal(t, 0, store.Stats().EdgeCount)
+
+	// Phase 2: insert edges (cross-file resolution should work since all nodes exist).
+	edges := []Edge{
+		{SourceQualifiedName: "pkg/app.runner", TargetQualifiedName: "pkg/lib.DoWork", EdgeType: "calls", Line: 11},
+	}
+	err = store.InsertEdges(ctx, pathB, edges)
+	require.NoError(t, err)
+	assert.Equal(t, 1, store.Stats().EdgeCount)
+
+	// Verify cross-file edge.
+	callees, err := store.QueryCallees(ctx, "pkg/app.runner")
+	require.NoError(t, err)
+	require.Len(t, callees, 1)
+	assert.Equal(t, "pkg/lib.DoWork", callees[0].QualifiedName)
+
+	callers, err := store.QueryCallers(ctx, "pkg/lib.DoWork")
+	require.NoError(t, err)
+	require.Len(t, callers, 1)
+	assert.Equal(t, "pkg/app.runner", callers[0].QualifiedName)
+}
+
+func TestInsertEdges_SkipsUnresolvable(t *testing.T) {
+	store := newMemoryStore(t)
+	ctx := context.Background()
+
+	path := "pkg/app/app.go"
+	err := store.IndexFile(ctx, path, []Symbol{
+		{QualifiedName: "pkg/app.runner", DisplayName: "runner", FilePath: path, Line: 10, Kind: "func", Language: "go"},
+	}, nil)
+	require.NoError(t, err)
+
+	// Edge references a target that doesn't exist — should be skipped silently.
+	edges := []Edge{
+		{SourceQualifiedName: "pkg/app.runner", TargetQualifiedName: "pkg/missing.nonexistent", EdgeType: "calls", Line: 11},
+	}
+	err = store.InsertEdges(ctx, path, edges)
+	require.NoError(t, err)
+	assert.Equal(t, 0, store.Stats().EdgeCount)
+}
+
+func TestInsertEdges_EmptyEdges(t *testing.T) {
+	store := newMemoryStore(t)
+	ctx := context.Background()
+
+	err := store.InsertEdges(ctx, "pkg/empty/empty.go", nil)
+	require.NoError(t, err)
+
+	err = store.InsertEdges(ctx, "pkg/empty/empty.go", []Edge{})
+	require.NoError(t, err)
+}
+
+func TestInsertEdges_ReplacesExistingEdges(t *testing.T) {
+	store := newMemoryStore(t)
+	ctx := context.Background()
+
+	path := "pkg/app/app.go"
+	symbols := []Symbol{
+		{QualifiedName: "pkg/app.runner", DisplayName: "runner", FilePath: path, Line: 10, Kind: "func", Language: "go"},
+		{QualifiedName: "pkg/app.helper", DisplayName: "helper", FilePath: path, Line: 20, Kind: "func", Language: "go"},
+		{QualifiedName: "pkg/app.worker", DisplayName: "worker", FilePath: path, Line: 30, Kind: "func", Language: "go"},
+	}
+
+	err := store.IndexFile(ctx, path, symbols, nil)
+	require.NoError(t, err)
+
+	// First set of edges.
+	err = store.InsertEdges(ctx, path, []Edge{
+		{SourceQualifiedName: "pkg/app.runner", TargetQualifiedName: "pkg/app.helper", EdgeType: "calls", Line: 11},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 1, store.Stats().EdgeCount)
+
+	// Replace with different edges — old edge should be removed.
+	err = store.InsertEdges(ctx, path, []Edge{
+		{SourceQualifiedName: "pkg/app.runner", TargetQualifiedName: "pkg/app.worker", EdgeType: "calls", Line: 12},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 1, store.Stats().EdgeCount)
+
+	// Verify the new edge.
+	callees, err := store.QueryCallees(ctx, "pkg/app.runner")
+	require.NoError(t, err)
+	require.Len(t, callees, 1)
+	assert.Equal(t, "pkg/app.worker", callees[0].QualifiedName)
+}
+
+func TestIndexAll_CrossFileEdges(t *testing.T) {
+	store := newMemoryStore(t)
+	ctx := context.Background()
+
+	tmpDir := t.TempDir()
+	store.baseDir = tmpDir
+
+	// Create two Go files that call each other via the parser's edge logic.
+	libFile := filepath.Join(tmpDir, "lib.go")
+	require.NoError(t, os.WriteFile(libFile, []byte(`package lib
+
+func DoWork() {}
+func Helper() {}
+`), 0644))
+
+	appFile := filepath.Join(tmpDir, "app.go")
+	require.NoError(t, os.WriteFile(appFile, []byte(`package main
+
+func run() {
+    DoWork()
+}
+`), 0644))
+
+	// Custom parser that generates cross-file edges.
+	parser := func(path string, content []byte) ([]Symbol, []Edge, error) {
+		base := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+		lines := strings.Split(string(content), "\n")
+		var symbols []Symbol
+		for i, line := range lines {
+			trimmed := strings.TrimSpace(line)
+			if strings.HasPrefix(trimmed, "func ") {
+				parts := strings.Fields(trimmed)
+				if len(parts) >= 2 && parts[0] == "func" {
+					name := strings.TrimSuffix(parts[1], "()")
+					qName := "pkg." + name
+					symbols = append(symbols, Symbol{
+						QualifiedName: qName,
+						DisplayName:   name,
+						Line:          i + 1,
+						Kind:          "func",
+						Language:      "go",
+					})
+				}
+			}
+		}
+
+		// Generate edges: if this is app.go, run() calls DoWork from lib.go.
+		var edges []Edge
+		if base == "app" {
+			for _, sym := range symbols {
+				if sym.DisplayName == "run" {
+					edges = append(edges, Edge{
+						SourceQualifiedName: "pkg.run",
+						TargetQualifiedName: "pkg.DoWork",
+						EdgeType:            "calls",
+						Line:                4,
+					})
+				}
+			}
+		}
+		return symbols, edges, nil
+	}
+
+	err := store.IndexAll(ctx, parser)
+	require.NoError(t, err)
+
+	// Should have indexed all files with proper cross-file edges.
+	stats := store.Stats()
+	assert.Equal(t, 2, stats.FileCount, "should index lib.go and app.go")
+	assert.Equal(t, 3, stats.NodeCount, "should have DoWork, Helper, run")
+	assert.Equal(t, 1, stats.EdgeCount, "should have one cross-file edge")
+
+	// Verify cross-file edge: run() calls DoWork().
+	callers, err := store.QueryCallers(ctx, "pkg.DoWork")
+	require.NoError(t, err)
+	require.Len(t, callers, 1, "DoWork should have one caller from app.go")
+	assert.Equal(t, "pkg.run", callers[0].QualifiedName)
+
+	callees, err := store.QueryCallees(ctx, "pkg.run")
+	require.NoError(t, err)
+	require.Len(t, callees, 1, "run should have one callee in lib.go")
+	assert.Equal(t, "pkg.DoWork", callees[0].QualifiedName)
+
+	// Helper should have no callers.
+	callers2, err := store.QueryCallers(ctx, "pkg.Helper")
+	require.NoError(t, err)
+	assert.Empty(t, callers2, "Helper should have no callers")
+}
+
+// ============================================================================
 // QueryAllNodes Tests (SP-107-5)
 // ============================================================================
 

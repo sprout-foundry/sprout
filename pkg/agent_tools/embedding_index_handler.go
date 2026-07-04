@@ -184,7 +184,7 @@ func (h *embeddingIndexHandler) handleStatus(cfg *configuration.EmbeddingIndexCo
 
 func (h *embeddingIndexHandler) handleBuild(ctx context.Context, mgr *embedding.EmbeddingManager) (ToolResult, error) {
 	// Use a timeout for the build
-	buildCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	buildCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 
 	stats, err := mgr.BuildIndex(buildCtx)
@@ -220,7 +220,7 @@ func (h *embeddingIndexHandler) handleBuild(ctx context.Context, mgr *embedding.
 
 func (h *embeddingIndexHandler) handleUpdate(ctx context.Context, mgr *embedding.EmbeddingManager) (ToolResult, error) {
 	// Use a timeout for the update
-	updateCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	updateCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 
 	stats, err := mgr.UpdateFromGitDiff(updateCtx)
@@ -274,13 +274,19 @@ func codegraphFileParser(path string, content []byte) ([]codegraph.Symbol, []cod
 // buildCodegraphIndex performs a full code intelligence graph build.
 // Returns a human-readable stats string on success, or an error.
 func buildCodegraphIndex(ctx context.Context) (string, error) {
+	// The codegraph build can take much longer than the embedding build
+	// because it parses each file, indexes symbols, then bulk-inserts edges.
+	// Use a generous timeout independent of the embedding build's context.
+	buildCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	defer cancel()
+
 	store, err := codegraph.NewStore("")
 	if err != nil {
 		return "", fmt.Errorf("failed to open codegraph store: %w", err)
 	}
 	defer store.Close()
 
-	if err := store.IndexAll(ctx, codegraphFileParser); err != nil {
+	if err := store.IndexAll(buildCtx, codegraphFileParser); err != nil {
 		return "", fmt.Errorf("indexing failed: %w", err)
 	}
 

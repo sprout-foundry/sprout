@@ -36,18 +36,13 @@ func (h *revertMyChangesHandler) Name() string { return "revert_my_changes" }
 func (h *revertMyChangesHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name: "revert_my_changes",
-		Description: "Bulk-undo YOUR session edits using ChangeTracker originals — does NOT touch git or other agents' / user's in-progress work.\n\n" +
-			"**Scope** (pick one):\n" +
-			"• `scope=\"all\"` (default) — every file the tracker recorded this session.\n" +
-			"• `since=<RFC3339 timestamp OR duration>` (e.g. \"30m\", \"2h\", \"2026-05-27T10:00:00Z\") — changes at/after that time.\n\n" +
-			"Per file: edits → write originals back; deletes → un-delete; creates → remove the file. " +
-			"Returns `{restored, failed, summary, entries: [{path, action, ok, message}]}`.\n\n" +
-			"For SINGLE-file recovery use `recover_file` (`scope=\"session_start\"` for pre-session, `scope=\"latest\"` for last edit).\n\n" +
-			"**Prefer this over `git checkout`/`git reset`** — git wipes EVERYTHING including the user's uncommitted work; this only touches files YOU edited.",
+		Description: "Bulk-undo your session edits via ChangeTracker. " +
+			"Scope: 'all' (default) or 'since' (timestamp/duration). " +
+			"Does NOT touch git or other agents' work.",
 		Required: []string{},
 		Parameters: []ParameterDef{
-			{Name: "scope", Type: "string", Description: "\"all\" to revert every change this session. Default when no other filter is provided."},
-			{Name: "since", Type: "string", Description: "RFC3339 timestamp or duration (30m, 2h, 2d) — revert all changes recorded at/after this moment."},
+			{Name: "scope", Type: "string", Description: "'all' to revert every change (default)"},
+			{Name: "since", Type: "string", Description: "RFC3339 timestamp or duration (30m, 2h) cutoff"},
 		},
 	}
 }

@@ -18,11 +18,11 @@ func (h *gitHandler) Name() string { return "git" }
 func (h *gitHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "git",
-		Description: "Execute git operations that modify repository state or require network access. All destructive operations require user approval. Commit operations should use the /commit slash command for the interactive commit flow. For read-only operations (status, log, diff, branch, show), use shell_command instead.",
+		Description: "Execute git operations that modify repo state or require network. Destructive ops require approval. For read-only (status, log, diff), use shell_command instead.",
 		Required:    []string{"operation"},
 		Parameters: []ParameterDef{
-			{Name: "operation", Type: "string", Required: true, Description: "Git operation type: commit, push, pull, fetch, add, rm, mv, reset, rebase, merge, checkout, branch_delete, tag, clean, stash, am, apply, cherry_pick, revert, restore"},
-			{Name: "args", Type: "string", Description: "Arguments to pass to the git command (optional). For pull: --rebase, --ff-only, remote/branch. For fetch: --all, --prune, remote."},
+			{Name: "operation", Type: "string", Required: true, Description: "Git operation: commit, push, pull, fetch, add, rm, mv, reset, rebase, merge, checkout, branch_delete, tag, clean, stash, am, apply, cherry_pick, revert, restore"},
+			{Name: "args", Type: "string", Description: "Args to pass to the git command"},
 		},
 	}
 }

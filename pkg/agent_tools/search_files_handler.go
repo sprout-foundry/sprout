@@ -25,10 +25,10 @@ func (h *searchFilesHandler) Definition() ToolDefinition {
 		Parameters: []ParameterDef{
 			{Name: "search_pattern", Type: "string", Description: "Text pattern or regex to search for", Required: true},
 			{Name: "directory", Type: "string", Description: "Directory to search (default: .)"},
-			{Name: "file_glob", Type: "string", Description: "Glob to limit files (e.g., *.go)"},
-			{Name: "case_sensitive", Type: "boolean", Description: "Case sensitive search (default: false)"},
-			{Name: "max_results", Type: "integer", Description: "Maximum results to return (default: 50)"},
-			{Name: "max_bytes", Type: "integer", Description: "Maximum total bytes of matches to return (default: 102400)"},
+			{Name: "file_glob", Type: "string", Description: "Glob filter (e.g. *.go)"},
+			{Name: "case_sensitive", Type: "boolean", Description: "Case sensitive (default false)"},
+			{Name: "max_results", Type: "integer", Description: "Max results (default 50)"},
+			{Name: "max_bytes", Type: "integer", Description: "Max bytes of matches (default 102400)"},
 		},
 		Required: []string{"search_pattern"},
 	}

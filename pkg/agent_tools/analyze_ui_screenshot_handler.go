@@ -20,13 +20,13 @@ func (h *analyzeUIScreenshotHandler) Name() string { return "analyze_ui_screensh
 func (h *analyzeUIScreenshotHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "analyze_ui_screenshot",
-		Description: "Analyze UI screenshots, mockups, or live HTML pages for implementation feedback. Accepts image files (PNG/JPG/WebP), remote image URLs, and local HTML files which are automatically rendered via a headless browser before analysis. Ideal for quick visual testing of dev builds and design reviews.",
+		Description: "Analyze UI screenshots, mockups, or live HTML pages for implementation feedback. Accepts images, URLs, and local HTML files (auto-rendered via browser).",
 		Required:    []string{"image_path"},
 		Parameters: []ParameterDef{
-			{Name: "image_path", Type: "string", Required: true, Description: "Path or URL to the UI screenshot or HTML file"},
-			{Name: "analysis_prompt", Type: "string", Description: "Optional custom vision prompt for analysis"},
-			{Name: "viewport_width", Type: "integer", Description: "Browser viewport width in pixels for HTML files (default: 1280)"},
-			{Name: "viewport_height", Type: "integer", Description: "Browser viewport height in pixels for HTML files (default: 720)"},
+			{Name: "image_path", Type: "string", Required: true, Description: "Path or URL to screenshot or HTML file"},
+			{Name: "analysis_prompt", Type: "string", Description: "Custom vision prompt for analysis"},
+			{Name: "viewport_width", Type: "integer", Description: "Browser width in px for HTML files (default 1280)"},
+			{Name: "viewport_height", Type: "integer", Description: "Browser height in px for HTML files (default 720)"},
 		},
 	}
 }

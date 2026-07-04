@@ -37,23 +37,17 @@ func (h *listChangesHandler) Name() string { return "list_changes" }
 func (h *listChangesHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name: "list_changes",
-		Description: "List files you've created, modified, or deleted this session. " +
-			"Returns `{revision_id, files: [{path, op, tool, timestamp, recoverable}]}`. " +
-			"`op` is \"create\"/\"edit\"/\"delete\"/\"bulk\". Bulk entries (rollups from `git checkout .` or build commands) carry `bulk_count` + `bulk_items` (path+op summaries).\n\n" +
-			"**Output-shape args** (all optional):\n" +
-			"• `include_diff` (bool) — adds a `diff` field with unified pre-session vs current diff per non-bulk entry. Use for \"what did you change in foo.go?\" without re-reading.\n" +
-			"• `group_by=\"block\"` — replaces `files` with `blocks: [{started_at, ended_at, tools, files}]` grouped by 30-second activity windows. Use for \"summarize what you've been doing\".\n" +
-			"• `include_persisted` (bool) — merges hot+warm persistent-history records so the timeline spans previous sessions. Items get `source`, `revision_id`, `tier`.\n\n" +
-			"**Use it**: before declaring a task complete, when drafting commit messages, when the user asks what changed, and for cross-session reasoning.\n\n" +
-			"Shell commands (sed, mv, rm, tee, …) are tracked via a workspace-walk diff around every `shell_command`. Files outside the workspace, binaries, and files >1 MiB are reported with `recoverable: false`.",
+		Description: "List files created, modified, or deleted this session. " +
+			"Use for commit messages, progress checks, and cross-session reasoning. " +
+			"Supports diffs, activity-block grouping, and persisted history merge.",
 		Required: []string{},
 		Parameters: []ParameterDef{
-			{Name: "since", Type: "string", Description: "Optional cutoff: RFC3339 timestamp or duration (2d, 12h, 30m). Only changes at/after this time."},
-			{Name: "tool", Type: "string", Description: "Optional tool name filter (e.g. write_file, edit_file, shell_command)."},
-			{Name: "path_pattern", Type: "string", Description: "Optional path glob filter (e.g. pkg/auth/*.go)."},
-			{Name: "include_diff", Type: "boolean", Description: "When true, populate a per-file unified diff in each entry's `diff` field."},
-			{Name: "group_by", Type: "string", Description: "Set to \"block\" to return an activity-block summary instead of the files array."},
-			{Name: "include_persisted", Type: "boolean", Description: "When true, merge in change records from the persistent history (hot+warm tiers)."},
+			{Name: "since", Type: "string", Description: "RFC3339 timestamp or duration (2d, 12h, 30m) cutoff"},
+			{Name: "tool", Type: "string", Description: "Tool name filter (e.g. write_file, edit_file)"},
+			{Name: "path_pattern", Type: "string", Description: "Path glob filter (e.g. pkg/auth/*.go)"},
+			{Name: "include_diff", Type: "boolean", Description: "Add per-file unified diff to results"},
+			{Name: "group_by", Type: "string", Description: "Set to 'block' for activity-block summary"},
+			{Name: "include_persisted", Type: "boolean", Description: "Merge in persistent history records"},
 		},
 	}
 }

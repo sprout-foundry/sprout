@@ -22,25 +22,17 @@ func (h *manageSettingsHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name: "manage_settings",
 		Description: "Manage application settings and provider credentials. " +
-			"Supports getting/setting configuration values, listing available providers, " +
-			"testing credential validity, describing settings (with valid values), " +
-			"and previewing changes before applying.",
+			"Supports get, set, list_providers, test_credential, describe, describe_all, and preview.",
 		Required: []string{"operation"},
 		Parameters: []ParameterDef{
 			{Name: "operation", Type: "string", Required: true,
-				Description: "Operation to perform: 'get' (retrieve a setting), 'set' (update a setting), " +
-					"'list_providers' (list available providers), 'test_credential' (test if a provider has valid " +
-					"credentials), 'describe' (describe a setting with valid values and current value), " +
-					"'describe_all' (describe all settings), or 'preview' (preview a setting change without applying it)"},
+				Description: "Operation: get, set, list_providers, test_credential, describe, describe_all, or preview"},
 			{Name: "key", Type: "string",
-				Description: "Setting key (required for get/set/describe/preview operations). " +
-					"Examples: 'provider', 'model', 'reasoning_effort', 'disable_thinking', " +
-					"'resource_directory', 'history_scope', 'ea_mode', 'subagent_provider', " +
-					"'subagent_model', 'commit_provider', 'commit_model', 'review_provider', 'review_model'"},
+				Description: "Setting key (required for get/set/describe/preview). Examples: provider, model, subagent_provider, commit_model"},
 			{Name: "value", Type: "string",
-				Description: "Setting value (required for set/preview operations)"},
+				Description: "Setting value (required for set/preview)"},
 			{Name: "provider", Type: "string",
-				Description: "Provider name (required for test_credential operation, optional for list_providers filter)"},
+				Description: "Provider name (required for test_credential, optional filter for list_providers)"},
 		},
 	}
 }

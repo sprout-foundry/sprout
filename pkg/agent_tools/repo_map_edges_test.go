@@ -245,7 +245,7 @@ func (s *Server) run() {
 
 	require.Len(t, result.Edges, 1)
 	assert.Equal(t, "func (*Server).Start", result.Edges[0].SourceQualifiedName)
-	assert.Equal(t, "s.run", result.Edges[0].TargetQualifiedName)
+	assert.Equal(t, "run", result.Edges[0].TargetQualifiedName)
 }
 
 func TestExtractCallsAndSymbols_Go_NestedCalls(t *testing.T) {
@@ -535,6 +535,11 @@ func TestExtractCallsAndSymbols_Go_ComplexCallee(t *testing.T) {
 	path := filepath.Join(dir, "main.go")
 	content := []byte(`package main
 
+import (
+	"fmt"
+	"strings"
+)
+
 func main() {
 	result := fmt.Sprintf("%d %s", len(data), strings.Join(items, ","))
 }
@@ -551,6 +556,49 @@ func main() {
 	assert.True(t, callees["fmt.Sprintf"], "expected fmt.Sprintf callee, got: %v", callees)
 	assert.True(t, callees["len"], "expected len callee, got: %v", callees)
 	assert.True(t, callees["strings.Join"], "expected strings.Join callee, got: %v", callees)
+}
+
+func TestExtractCallsAndSymbols_Go_MultiLevelSelector(t *testing.T) {
+	// Multi-level selectors like "agent.state.GetOptimizer()" should strip
+	// all non-import prefixes, yielding just the final method name.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "main.go")
+	content := []byte(`package main
+
+import "fmt"
+
+type Agent struct {
+	state *State
+}
+
+type State struct{}
+
+func (s *State) GetOptimizer() Optimizer { return Optimizer{} }
+
+type Optimizer struct{}
+
+func (o Optimizer) SetLLMClient(name string) {}
+
+func (a *Agent) Start() {
+	a.state.GetOptimizer().SetLLMClient("test")
+	fmt.Println("started")
+}
+`)
+	result, err := ExtractCallsAndSymbols(path, content)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	require.GreaterOrEqual(t, len(result.Edges), 2)
+	callees := make(map[string]bool)
+	for _, e := range result.Edges {
+		callees[e.TargetQualifiedName] = true
+	}
+	// "fmt.Println" should resolve as import match
+	assert.True(t, callees["fmt.Println"], "expected fmt.Println, got: %v", callees)
+	// "a.state.GetOptimizer" should strip both "a." and "state." → "GetOptimizer"
+	assert.True(t, callees["GetOptimizer"], "expected GetOptimizer from multi-level strip, got: %v", callees)
+	// "a.state.GetOptimizer().SetLLMClient" — the outer call should resolve to "SetLLMClient"
+	assert.True(t, callees["SetLLMClient"], "expected SetLLMClient from nested call, got: %v", callees)
 }
 
 func TestExtractCallsAndSymbols_Go_ValueReceiver(t *testing.T) {
@@ -573,7 +621,7 @@ func (c Counter) log() {
 
 	require.Len(t, result.Edges, 1)
 	assert.Equal(t, "func (Counter).Inc", result.Edges[0].SourceQualifiedName)
-	assert.Equal(t, "c.log", result.Edges[0].TargetQualifiedName)
+	assert.Equal(t, "log", result.Edges[0].TargetQualifiedName)
 }
 
 func TestExtractCallsAndSymbols_Go_ExcludesTestFunctions(t *testing.T) {
@@ -778,7 +826,8 @@ func (s *Server) run() {
 
 	require.Len(t, result.Edges, 1)
 	assert.Equal(t, "func (*Server).Start", result.Edges[0].SourceQualifiedName)
-	assert.Equal(t, "s.run", result.Edges[0].TargetQualifiedName)
+	assert.Equal(t, "run", result.Edges[0].TargetQualifiedName,
+		"variable-prefixed method calls should strip the prefix for suffix-match resolution")
 	assert.Equal(t, "calls", result.Edges[0].EdgeType,
 		"method calls on local variable should use 'calls' edge type")
 }

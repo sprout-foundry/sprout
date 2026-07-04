@@ -213,7 +213,7 @@ func (s *SQLiteStore) IndexFile(ctx context.Context, path string, symbols []Symb
 	for _, sym := range symbols {
 		var res sql.Result
 		res, err = tx.ExecContext(ctx, `
-			INSERT INTO nodes (qualified_name, display_name, file_path, line, kind, language, file_mtime)
+			INSERT OR IGNORE INTO nodes (qualified_name, display_name, file_path, line, kind, language, file_mtime)
 			VALUES (?, ?, ?, ?, ?, ?, ?)
 		`, sym.QualifiedName, sym.DisplayName, path, sym.Line, sym.Kind, sym.Language, sym.FileMTime)
 		if err != nil {
@@ -223,6 +223,16 @@ func (s *SQLiteStore) IndexFile(ctx context.Context, path string, symbols []Symb
 		id, err = res.LastInsertId()
 		if err != nil {
 			return fmt.Errorf("failed to get last insert ID for %s: %w", sym.QualifiedName, err)
+		}
+		if id == 0 {
+			// Duplicate qualified_name — IGNORE skipped the insert.
+			// Look up the existing ID so edges can still reference this symbol.
+			lookupErr := tx.QueryRowContext(ctx,
+				`SELECT id FROM nodes WHERE qualified_name = ?`, sym.QualifiedName).Scan(&id)
+			if lookupErr != nil {
+				// Can't find the existing node either — skip this symbol.
+				continue
+			}
 		}
 		results = append(results, insertResult{symbol: sym, id: id})
 	}
@@ -235,29 +245,21 @@ func (s *SQLiteStore) IndexFile(ctx context.Context, path string, symbols []Symb
 
 	// Insert edges using the captured node IDs.
 	for _, edge := range edges {
-		// Resolve source qualified name to node ID.
-		sourceID, ok := qnToID[edge.SourceQualifiedName]
-		if !ok {
-			// Source not in this batch — try querying the database within the transaction.
-			var srcErr error
-			srcErr = tx.QueryRowContext(ctx,
-				`SELECT id FROM nodes WHERE qualified_name = ?`, edge.SourceQualifiedName).Scan(&sourceID)
-			if srcErr != nil {
-				// Skip edges where we can't resolve the source.
-				continue
-			}
+		// Try batch-local map first, then resolve via database (with suffix fallback).
+		sourceID, srcFound := qnToID[edge.SourceQualifiedName]
+		if !srcFound {
+			sourceID, srcFound = resolveEdgeNode(ctx, tx, edge.SourceQualifiedName)
+		}
+		if !srcFound {
+			continue
 		}
 
-		// Resolve target qualified name to node ID.
-		targetID, ok := qnToID[edge.TargetQualifiedName]
-		if !ok {
-			var tgtErr error
-			tgtErr = tx.QueryRowContext(ctx,
-				`SELECT id FROM nodes WHERE qualified_name = ?`, edge.TargetQualifiedName).Scan(&targetID)
-			if tgtErr != nil {
-				// Skip edges where we can't resolve the target.
-				continue
-			}
+		targetID, tgtFound := qnToID[edge.TargetQualifiedName]
+		if !tgtFound {
+			targetID, tgtFound = resolveEdgeNode(ctx, tx, edge.TargetQualifiedName)
+		}
+		if !tgtFound {
+			continue
 		}
 
 		_, err = tx.ExecContext(ctx, `
@@ -324,19 +326,13 @@ func (s *SQLiteStore) InsertAllEdges(ctx context.Context, edges []Edge) error {
 	// Insert edges by resolving qualified names from the database.
 	// All nodes must already exist in the DB for cross-file resolution to work.
 	for _, edge := range edges {
-		var sourceID, targetID int64
-
-		srcErr := tx.QueryRowContext(ctx,
-			`SELECT id FROM nodes WHERE qualified_name = ?`, edge.SourceQualifiedName).Scan(&sourceID)
-		if srcErr != nil {
-			// Skip edges where we can't resolve the source.
+		sourceID, srcFound := resolveEdgeNode(ctx, tx, edge.SourceQualifiedName)
+		if !srcFound {
 			continue
 		}
 
-		tgtErr := tx.QueryRowContext(ctx,
-			`SELECT id FROM nodes WHERE qualified_name = ?`, edge.TargetQualifiedName).Scan(&targetID)
-		if tgtErr != nil {
-			// Skip edges where we can't resolve the target.
+		targetID, tgtFound := resolveEdgeNode(ctx, tx, edge.TargetQualifiedName)
+		if !tgtFound {
 			continue
 		}
 
@@ -350,6 +346,63 @@ func (s *SQLiteStore) InsertAllEdges(ctx context.Context, edges []Edge) error {
 	}
 
 	return tx.Commit()
+}
+
+// resolveEdgeNode resolves a qualified name to a node ID, with a suffix-match
+// fallback for cross-file same-package edges. When an edge references a function
+// by bare name (e.g. "NewChangeTracker" from a different file), the exact
+// qualified_name lookup fails because the node was stored with a fully-qualified
+// name (e.g. "pkg/agent.NewChangeTracker"). The suffix-match fallback handles
+// this by searching for nodes whose qualified_name ends with the given name,
+// returning the ID only when exactly one match is found to avoid ambiguity.
+func resolveEdgeNode(ctx context.Context, tx *sql.Tx, qualifiedName string) (int64, bool) {
+	// Try exact match first.
+	var id int64
+	err := tx.QueryRowContext(ctx,
+		`SELECT id FROM nodes WHERE qualified_name = ?`, qualifiedName).Scan(&id)
+	if err == nil {
+		return id, true
+	}
+
+	// Suffix-match fallback: for bare function names and method receiver
+	// notation, match "pkg/agent.Func".  Anchored on the "." package
+	// separator: "%.DoWork" matches "pkg/lib.DoWork" but NOT
+	// "pkg/lib.SuperDoWork".
+	//
+	// Skip the fallback when the name contains a dot but no parentheses —
+	// dotted names without parens are either multi-level selectors
+	// (e.g. "state.GetOptimizer" which was already stripped by the
+	// extractor) or unresolved external-package calls, neither of
+	// which can be resolved by suffix-match.  Method names like
+	// "(*Agent).processQueryWithSeed" contain both dots and parens
+	// (receiver-type notation) and ARE valid for the fallback.
+	if strings.Contains(qualifiedName, ".") && !strings.Contains(qualifiedName, "(") {
+		return 0, false
+	}
+
+	// Exclude exact matches (already tried above) to avoid redundant results.
+	rows, qErr := tx.QueryContext(ctx,
+		`SELECT id FROM nodes WHERE qualified_name LIKE '%.' || ? AND qualified_name != ?`,
+		qualifiedName, qualifiedName)
+	if qErr != nil {
+		return 0, false
+	}
+	defer rows.Close()
+
+	var ids []int64
+	for rows.Next() {
+		var nid int64
+		if scanErr := rows.Scan(&nid); scanErr == nil {
+			ids = append(ids, nid)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return 0, false
+	}
+	if len(ids) == 1 {
+		return ids[0], true
+	}
+	return 0, false
 }
 
 // QueryCallers returns symbols that call the given qualified name.

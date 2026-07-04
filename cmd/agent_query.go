@@ -199,6 +199,10 @@ func executeDirectCommand(command string) (bool, error) {
 	return true, nil
 }
 
+// processQueryFn is a package-level variable for testability. Tests can override
+// it to simulate ProcessQuery behavior without spinning up an LLM.
+var processQueryFn = ProcessQuery
+
 // ProcessQuery processes a single query
 func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.EventBus, query string) error {
 	setQueryInProgress(true)

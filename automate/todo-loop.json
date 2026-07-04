@@ -46,6 +46,10 @@
     "todo_file": "TODO.md"
   },
   "no_web_ui": true,
+  "orchestration": {
+    "enabled": true,
+    "resume": true
+  },
   "persist_runtime_overrides": false,
   "progress": {
     "heartbeat_seconds": 300

@@ -37,7 +37,7 @@ type Store interface {
 	IndexFile(ctx context.Context, path string, symbols []Symbol, edges []Edge) error
 	QueryCallers(ctx context.Context, qualifiedName string) ([]Symbol, error)
 	QueryCallees(ctx context.Context, qualifiedName string) ([]Symbol, error)
-	FindDeadCode(ctx context.Context) ([]Symbol, error)
+	FindDeadCode(ctx context.Context, directory string) ([]Symbol, error)
 	GetStaleFiles(ctx context.Context) ([]string, error)
 	Stats() GraphStats
 	Close() error
@@ -65,7 +65,7 @@ func (s *SQLiteStore) QueryCallers(ctx context.Context, qualifiedName string) ([
 func (s *SQLiteStore) QueryCallees(ctx context.Context, qualifiedName string) ([]Symbol, error) {
 	return nil, errWASM()
 }
-func (s *SQLiteStore) FindDeadCode(ctx context.Context) ([]Symbol, error) {
+func (s *SQLiteStore) FindDeadCode(ctx context.Context, directory string) ([]Symbol, error) {
 	return nil, errWASM()
 }
 func (s *SQLiteStore) GetStaleFiles(ctx context.Context) ([]string, error) {

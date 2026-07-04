@@ -16,7 +16,8 @@ func (h *commitHandler) Name() string { return "commit" }
 func (h *commitHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "commit",
-		Description: "Commit staged changes with an auto-generated or custom message. Use this instead of 'git commit' directly.",
+		Description: "Commit staged changes with an auto-generated or custom message. Use this instead of 'git commit' directly. " +
+			"For read-only git operations (status, log, diff), use shell_command.",
 		Required:    []string{},
 		Parameters: []ParameterDef{
 			{Name: "message", Type: "string", Description: "Commit message (auto-generated if omitted)"},

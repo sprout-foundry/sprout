@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
@@ -35,15 +36,17 @@ type terminalSubscriberState struct {
 	pendingArgs      map[string]string
 	progressMu       sync.Mutex
 	subagentProgress map[string]subagentProgressSnapshot
+	verbosity        string // compact | default | verbose
 }
 
 // newTerminalSubscriberState initializes a fresh subscriber state with
-// pre-allocated maps.
-func newTerminalSubscriberState() *terminalSubscriberState {
+// pre-allocated maps and the configured output verbosity.
+func newTerminalSubscriberState(verbosity string) *terminalSubscriberState {
 	return &terminalSubscriberState{
 		seenSpawn:        make(map[string]bool),
 		pendingArgs:      make(map[string]string),
 		subagentProgress: make(map[string]subagentProgressSnapshot),
+		verbosity:        verbosity,
 	}
 }
 
@@ -62,6 +65,9 @@ func (s *terminalSubscriberState) resetSpawnTurn() {
 // resolve any active reasoning fold, cache args for the matching ToolEnd,
 // announce subagent spawns once per (depth, persona) per turn, and start
 // the activity indicator with a context suffix when progress is available.
+//
+// In "compact" verbosity mode, the spinner and spawn announcements are
+// suppressed — only error results break the silence.
 func (s *terminalSubscriberState) handleToolStartEvent(data map[string]interface{}, chatAgent *agent.Agent, indicator *console.ActivityIndicator) {
 	name, _ := data["tool_name"].(string)
 	if agent.IsInteractiveTool(name) {
@@ -81,6 +87,14 @@ func (s *terminalSubscriberState) handleToolStartEvent(data map[string]interface
 	}
 	depth := readEventDepth(data)
 	persona := readEventPersona(data)
+
+	// Compact mode: suppress spinner start, blank line, and spawn
+	// announcements. Return early — the user only wants to see
+	// results (tool end lines) when something goes wrong.
+	if s.verbosity == configuration.OutputVerbosityCompact {
+		return
+	}
+
 	// SP-051-2c: announce subagent spawn once per (depth,
 	// persona) pair per turn, with provider/model so the user
 	// can see which cheaper/faster model is doing the work.
@@ -163,6 +177,14 @@ func (s *terminalSubscriberState) handleToolEndEvent(data map[string]interface{}
 	depth := readEventDepth(data)
 	persona := readEventPersona(data)
 	preview := formatToolPreview(chatAgent, name, args)
+
+	// Compact mode: suppress result lines for successful tools.
+	// Errors are always shown so the user sees what went wrong.
+	if s.verbosity == configuration.OutputVerbosityCompact && status == "completed" {
+		s.run = nil // prevent stale state from contaminating error tool collapse
+		footer.Refresh()
+		return
+	}
 
 	// Phase 3 collapse: if this end matches the prior run
 	// (same name/depth/persona) AND less than 30s elapsed,
@@ -264,6 +286,18 @@ func (s *terminalSubscriberState) handleSubagentActivityEvent(data map[string]in
 		elapsedMs := readEventInt64(data, "elapsed_ms")
 		cost, _ := data["cost"].(float64)
 		reason, _ := data["reason"].(string)
+
+		// Compact mode: suppress the subagent done line.
+		// Still clean up progress tracking and refresh footer.
+		if s.verbosity == configuration.OutputVerbosityCompact {
+			s.progressMu.Lock()
+			delete(s.subagentProgress, persona)
+			s.progressMu.Unlock()
+			s.run = nil
+			footer.Refresh()
+			return
+		}
+
 		// Subagents nest under the parent that spawned them.
 		// Depth on the activity event isn't carried today, so
 		// indent at the same level as the run_subagent tool
@@ -297,6 +331,12 @@ func (s *terminalSubscriberState) handleSecurityPromptEvent(indicator *console.A
 // handleTodoUpdateEvent renders the agent's todo list as a styled block
 // in the scroll region. Breaks the collapse run and refreshes the footer.
 func (s *terminalSubscriberState) handleTodoUpdateEvent(data map[string]interface{}, indicator *console.ActivityIndicator, footer *console.StatusFooter) {
+	// Compact mode: suppress todo block rendering — the user
+	// doesn't see tool chrome so there's nothing to annotate.
+	if s.verbosity == configuration.OutputVerbosityCompact {
+		return
+	}
+
 	// Render the agent's current todo list as a styled block
 	// in the scroll region so the user can see what's queued,
 	// active, and done at a glance. The block lands AFTER the
@@ -445,7 +485,20 @@ func startTerminalToolSubscriber(ctx context.Context, chatAgent *agent.Agent, ev
 	}
 	subName := fmt.Sprintf("cli_tool_indicator_%d", time.Now().UnixNano())
 	ch := eventBus.Subscribe(subName)
-	state := newTerminalSubscriberState()
+
+	// Read output verbosity from agent config. Default to "default" when
+	// the config manager or config is unavailable (non-agent callers like
+	// tests pass nil chatAgent).
+	verbosity := configuration.OutputVerbosityDefault
+	if chatAgent != nil {
+		if mgr := chatAgent.GetConfigManager(); mgr != nil {
+			if cfg := mgr.GetConfig(); cfg != nil && cfg.OutputVerbosity != "" {
+				verbosity = cfg.OutputVerbosity
+			}
+		}
+	}
+
+	state := newTerminalSubscriberState(verbosity)
 	go func() {
 		defer eventBus.Unsubscribe(subName)
 		state.runEventLoop(ctx, ch, chatAgent, indicator, footer)

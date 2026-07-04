@@ -60,7 +60,7 @@ type agentInitParams struct {
 	rootPersonaID string
 	// isProduction indicates this is a production agent, not a test agent.
 	// Production agents have additional initialization steps (context limits,
-	// todo clearing, session cleanup, tool registry initialization).
+	// todo clearing, session cleanup, computer-use tool registration).
 	isProduction bool
 }
 
@@ -178,15 +178,6 @@ func initAgentFromResolvedProvider(params agentInitParams) (*Agent, error) {
 					_, _ = os.Stderr.Write([]byte(fmt.Sprintf("Swept %d expired context entries\n", swept)))
 				}
 			}
-		}
-
-		// Pre-initialize tool registry to avoid first-use overhead (safe: sync.Once)
-		if agent.debug {
-			agent.Logger().Info("Pre-initializing tool registry...")
-		}
-		InitializeToolRegistry()
-		if agent.debug {
-			agent.Logger().Info("Tool registry initialized")
 		}
 
 		// SP-063: register computer_user desktop-control tools when explicitly

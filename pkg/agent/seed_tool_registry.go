@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -47,15 +46,11 @@ func NewSeedToolRegistry(agent *Agent) *core.ToolRegistry {
 // one shared publisher for both the registry and the seed core agent so that
 // all events carry the same client_id/chat_id/user_id metadata.
 //
-// The registry is built by iterating sprout's local ToolConfig declarations
-// (pkg/agent/tool_registrations.go) and converting each entry into a
-// core.ToolConfig — local is the single source of truth. Sprout-side
-// concerns are layered on per call:
-//   - PreExecuteHook (registry-wide): security classification + subagent
-//     nesting prevention
-//   - Per-tool handler closure: captures agent for sprout's
-//     (ctx, *Agent, args) signature and applies the standard pipeline
-//     (logToolExecution → handler → handleToolError → postProcessResult).
+// The registry is built from the handler-based tool registry in
+// pkg/agent_tools/ — the single source of truth for tool definitions.
+// Each handler is converted to a seed core.ToolConfig via
+// convertHandlerToSeedToolConfig, which wires up the handler closures
+// and post-processing pipeline.
 func newSeedToolRegistryWithPublisher(agent *Agent, ep core.EventPublisher) *core.ToolRegistry {
 	registry := core.NewToolRegistry(core.ToolRegistryOptions{
 		DefaultTimeout: 5 * time.Minute,
@@ -64,139 +59,17 @@ func newSeedToolRegistryWithPublisher(agent *Agent, ep core.EventPublisher) *cor
 		PreExecuteHook: newPreExecuteHook(agent),
 	})
 
-	// SP-109: Decide which source to use for tool definitions.
-	// When SP109_USE_HANDLER_TOOLS=true, use handler-derived definitions.
-	// Otherwise, keep the legacy path but still run verification comparison.
-	useHandlerSource := sp109UseHandlerTools()
-
-	// Build tool configs from both sources for verification.
-	legacyCfgs := GetToolRegistry().GetAllToolConfigs()
-	handlerCfgs := handlerToolConfigs()
-
-	if useHandlerSource {
-		// SP-109 active: use handler-derived tool definitions.
-		// Iterate handlers directly so convertHandlerToSeedToolConfig wires
-		// up the handler closures (Execute) — BuildToolConfigsFromHandlers
-		// returns legacy ToolConfig structs that don't carry Handler fields.
-		for _, h := range tools.GetNewToolRegistry().All() {
-			if agent != nil && !agent.CanSpawnSubagents() && (h.Name() == "run_subagent" || h.Name() == "run_parallel_subagents") {
-				continue
-			}
-			if err := registry.Register(convertHandlerToSeedToolConfig(h, agent)); err != nil {
-				panic(fmt.Sprintf("seed registry: failed to register %q: %v", h.Name(), err))
-			}
+	// Register all tools from the handler-based tool registry.
+	for _, h := range tools.GetNewToolRegistry().All() {
+		if agent != nil && !agent.CanSpawnSubagents() && (h.Name() == "run_subagent" || h.Name() == "run_parallel_subagents") {
+			continue
 		}
-		// Register legacy-only tools (e.g., create_pull_request, manage_memory)
-		// that don't have handler implementations yet.
-		for name, legacyCfg := range legacyCfgs {
-			if _, ok := handlerCfgs[name]; ok {
-				continue // already registered from handler source
-			}
-			if agent != nil && !agent.CanSpawnSubagents() && (name == "run_subagent" || name == "run_parallel_subagents") {
-				continue
-			}
-			if err := registry.Register(convertToSeedToolConfig(legacyCfg, agent)); err != nil {
-				panic(fmt.Sprintf("seed registry: failed to register %q: %v", name, err))
-			}
-		}
-	} else {
-		// Default: use legacy tool definitions.
-		for _, cfg := range legacyCfgs {
-			if agent != nil && !agent.CanSpawnSubagents() && (cfg.Name == "run_subagent" || cfg.Name == "run_parallel_subagents") {
-				continue
-			}
-			if err := registry.Register(convertToSeedToolConfig(cfg, agent)); err != nil {
-				panic(fmt.Sprintf("seed registry: failed to register %q: %v", cfg.Name, err))
-			}
-		}
-	}
-
-	// SP-109: Run parallel verification comparing both sources.
-	// This is always executed (regardless of which source is active) to
-	// continuously validate parity during the migration period.
-	if agent != nil {
-		compared, matched, differing := sp109VerifyAndLog(agent)
-		if compared > 0 {
-			fmt.Fprintf(os.Stderr, "SP-109 verify: %d compared, %d matched, %d differed (source=%s)\n",
-				compared, matched, differing, func() string {
-					if useHandlerSource {
-						return "handler"
-					}
-					return "legacy"
-				}())
+		if err := registry.Register(convertHandlerToSeedToolConfig(h, agent)); err != nil {
+			panic(fmt.Sprintf("seed registry: failed to register %q: %v", h.Name(), err))
 		}
 	}
 
 	return registry
-}
-
-// convertToSeedToolConfig maps a sprout-local ToolConfig to a seed
-// core.ToolConfig, wrapping the handler signature transition and applying
-// the standard sprout post-processing pipeline.
-func convertToSeedToolConfig(cfg ToolConfig, agent *Agent) core.ToolConfig {
-	name := cfg.Name
-	seed := core.ToolConfig{
-		Name:            name,
-		Description:     cfg.Description,
-		Parameters:      convertParametersToSeed(cfg.Parameters),
-		Aliases:         cfg.Aliases,
-		Timeout:         cfg.Timeout,
-		MaxResultSize:   cfg.MaxResultSize,
-		SafeForParallel: cfg.SafeForParallel,
-	}
-	if cfg.Handler != nil {
-		h := cfg.Handler // closure capture
-		seed.Handler = func(ctx context.Context, args map[string]interface{}) (string, error) {
-			logToolExecution(agent, name)
-			result, err := h(ctx, agent, args)
-			if err != nil {
-				return handleToolError(agent, err, name)
-			}
-			// Success — clear the security block counter for this tool+args
-			// so the circuit breaker only tracks *consecutive* failures.
-			if agent != nil {
-				agent.clearSecurityBlock(name, args)
-			}
-			return postProcessResult(ctx, agent, name, args, result), nil
-		}
-	}
-	if cfg.HandlerImages != nil {
-		h := cfg.HandlerImages // closure capture
-		seed.HandlerWithImages = func(ctx context.Context, args map[string]interface{}) ([]core.ImageData, string, error) {
-			logToolExecution(agent, name)
-			imgs, result, err := h(ctx, agent, args)
-			if err != nil {
-				msg, wrappedErr := handleToolError(agent, err, name)
-				return imgs, msg, wrappedErr
-			}
-			// Success — clear the security block counter for this tool+args
-			// so the circuit breaker only tracks *consecutive* failures.
-			if agent != nil {
-				agent.clearSecurityBlock(name, args)
-			}
-			return imgs, postProcessResult(ctx, agent, name, args, result), nil
-		}
-	}
-	return seed
-}
-
-// convertParametersToSeed translates sprout-local ParameterConfig into
-// seed core.ParameterConfig (same fields, different package).
-func convertParametersToSeed(local []ParameterConfig) []core.ParameterConfig {
-	if local == nil {
-		return nil
-	}
-	out := make([]core.ParameterConfig, len(local))
-	for i, p := range local {
-		out[i] = core.ParameterConfig{
-			Name:         p.Name,
-			Type:         p.Type,
-			Required:     p.Required,
-			Alternatives: p.Alternatives,
-			Description:  p.Description,
-		}
-	}
-	return out
 }
 
 // ---------------------------------------------------------------------------

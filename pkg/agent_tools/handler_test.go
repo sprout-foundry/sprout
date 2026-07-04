@@ -778,41 +778,56 @@ func TestAllToolsRegistration(t *testing.T) {
 	if tools == nil {
 		t.Fatal("AllTools() returned nil")
 	}
-	if len(tools) != 30 {
-		t.Fatalf("AllTools() returned %d tools, want 30", len(tools))
+	if len(tools) != 41 {
+		t.Fatalf("AllTools() returned %d tools, want 41", len(tools))
 	}
 
 	expectedNames := map[string]string{
-		"read_file":               "read_file",
-		"list_directory":          "list_directory",
-		"fetch_url":               "fetch_url",
-		"search_files":            "search_files",
-		"repo_map":                "repo_map",
-		"rollback_changes":        "rollback_changes",
-		"view_history":            "view_history",
-		"list_skills":             "list_skills",
-		"embedding_index":         "embedding_index",
-		"write_file":              "write_file",
-		"write_structured_file":   "write_structured_file",
-		"edit_file":               "edit_file",
-		"shell_command":           "shell_command",
-		"save_memory":             "save_memory",
-		"search_memories":         "search_memories",
-		"task_queue_add":          "task_queue_add",
-		"task_queue_publish":      "task_queue_publish",
-		"task_queue_read":         "task_queue_read",
-		"todo_write":              "todo_write",
-		"todo_read":               "todo_read",
-		"ask_user":                "ask_user",
-		"patch_structured_file":   "patch_structured_file",
-		"commit":                  "commit",
-		"git":                     "git",
-		"activate_skill":          "activate_skill",
-		"browse_url":              "browse_url",
-		"web_search":              "web_search",
-		"semantic_search":         "semantic_search",
-		"analyze_image_content":   "analyze_image_content",
-		"analyze_ui_screenshot":   "analyze_ui_screenshot",
+		"read_file":                 "read_file",
+		"list_directory":            "list_directory",
+		"fetch_url":                 "fetch_url",
+		"search_files":              "search_files",
+		"repo_map":                  "repo_map",
+		"rollback_changes":          "rollback_changes",
+		"view_history":              "view_history",
+		"list_skills":               "list_skills",
+		"embedding_index":           "embedding_index",
+		"write_file":                "write_file",
+		"write_structured_file":     "write_structured_file",
+		"edit_file":                 "edit_file",
+		"shell_command":             "shell_command",
+		"save_memory":               "save_memory",
+		"search_memories":           "search_memories",
+		"manage_memory":             "manage_memory",
+		"manage_settings":           "manage_settings",
+		"task_queue":                "task_queue",
+		"TodoWrite":                 "TodoWrite",
+		"TodoRead":                  "TodoRead",
+		"ask_user":                  "ask_user",
+		"patch_structured_file":     "patch_structured_file",
+		"commit":                    "commit",
+		"git":                       "git",
+		"activate_skill":            "activate_skill",
+		"browse_url":                "browse_url",
+		"web_search":                "web_search",
+		"semantic_search":           "semantic_search",
+		"analyze_image_content":     "analyze_image_content",
+		"analyze_ui_screenshot":     "analyze_ui_screenshot",
+		// SP-109 Phase 3 Batch A2
+		"list_automate_workflows":   "list_automate_workflows",
+		"list_changes":              "list_changes",
+		"revert_my_changes":         "revert_my_changes",
+		"recover_file":              "recover_file",
+		// SP-109 Phase 3 Batch A3 — agent-dependent function-pointer tools
+		"create_pull_request":       "create_pull_request",
+		"run_automate":              "run_automate",
+		"mcp_refresh":               "mcp_refresh",
+		// SP-109 Phase 3 Batch B — subagent function-pointer tools
+		"run_subagent":              "run_subagent",
+		"run_parallel_subagents":    "run_parallel_subagents",
+		// SP-109 Phase 3 Batch C — clarification function-pointer tools
+		"request_clarification":     "request_clarification",
+		"respond_clarification":    "respond_clarification",
 	}
 
 	var foundNames []string

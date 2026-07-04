@@ -80,14 +80,12 @@ func RegisterComputerUseTools(cfg *configuration.Config) error {
 
 	computerUseOnce.Do(func() {
 		newReg := tools.GetNewToolRegistry()
-		canon := GetToolRegistry()
 		for _, h := range computer_use.Handlers() {
 			if regErr := newReg.Register(h); regErr != nil {
 				// Already registered (e.g. a prior call) — definitions are
 				// global too, so skip re-adding.
 				continue
 			}
-			canon.RegisterTool(toolConfigFromHandler(h))
 		}
 		// Build the name set atomically so isComputerUseToolBlocked never
 		// sees a partially-populated map (avoids data race with concurrent
@@ -115,27 +113,6 @@ func RegisterComputerUseTools(cfg *configuration.Config) error {
 		}
 	})
 	return nil
-}
-
-// toolConfigFromHandler derives a canonical ToolConfig (used for LLM tool
-// definitions + per-persona allowlist filtering) from a new-interface handler's
-// self-described Definition.
-func toolConfigFromHandler(h tools.ToolHandler) ToolConfig {
-	def := h.Definition()
-	params := make([]ParameterConfig, 0, len(def.Parameters))
-	for _, p := range def.Parameters {
-		params = append(params, ParameterConfig{
-			Name:        p.Name,
-			Type:        p.Type,
-			Required:    p.Required,
-			Description: p.Description,
-		})
-	}
-	return ToolConfig{
-		Name:        def.Name,
-		Description: def.Description,
-		Parameters:  params,
-	}
 }
 
 // checkComputerUseActivation enforces the SP-063 gates required to switch into

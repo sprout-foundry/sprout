@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
@@ -30,10 +31,11 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 	a.Logger().Debug("[tool] Executing tool: %s with args: %v\n", toolName, args)
 
 	// Validate tool name and provide helpful error for common mistakes
-	registry := GetToolRegistry()
-	availableTools := registry.GetAvailableTools()
-	validTools := make([]string, 0, len(availableTools)+1)
-	validTools = append(validTools, availableTools...)
+	allHandlers := tools.GetNewToolRegistry().All()
+	validTools := make([]string, 0, len(allHandlers)+1)
+	for _, h := range allHandlers {
+		validTools = append(validTools, h.Name())
+	}
 	validTools = append(validTools, "mcp_tools")
 	sort.Strings(validTools)
 
@@ -64,9 +66,9 @@ func (a *Agent) executeTool(toolCall api.ToolCall) (string, error) {
 		return "", agenterrors.NewInvalidInputError(fmt.Sprintf("unknown tool '%s'. Valid tools are: %s", toolName, strings.Join(validTools, ", ")), nil)
 	}
 
-	// Use the tool registry for data-driven tool execution
+	// Execute the tool
 	ctx := filesystem.WithWorkspaceRoot(context.Background(), a.GetWorkspaceRoot())
-	_, result, err := registry.ExecuteTool(ctx, toolName, args, a, toolCall.Function.Arguments)
+	_, result, err := ExecuteTool(ctx, toolName, args, a, toolCall.Function.Arguments)
 
 	// Track tool call count
 	a.state.IncrementTotalToolCalls()

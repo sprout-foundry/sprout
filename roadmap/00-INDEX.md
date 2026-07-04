@@ -102,6 +102,7 @@ ships, it moves to [`_completed/`](./_completed/).
 | SP-107 | [Code Intelligence Graph](./SP-107-code-intelligence-graph.md) | 🔵 Proposed — Persistent call graph, dead-code detection, semantic code search. Leverages existing tree-sitter + LSP + embedding infrastructure. |
 | SP-109 | [Single-Source Tool Definitions — Eliminate Dual Maintenance](./SP-109-single-source-tool-definitions.md) | 🔵 Proposed — Design complete. 4 phases. Make `ToolHandler.Definition()` the single source of truth, delete legacy `ToolConfig` entries. Fixes 10 handler-only tools invisible to LLM. |
 | SP-110 | [Background Completion Injection & Auto-Resume](./SP-110-background-completion-auto-resume.md) | 🔵 Proposed — Design complete. 3 phases. Notification queue, shell bg completion, opt-in auto-resume with budget controls. |
+| SP-112 | [Platform Parity — Resolve Stubbed Feature Gaps](./SP-112-platform-parity.md) | 🔵 Proposed — 4 tiers. Windows process groups/signals, WASM tool exclusion, no-CGO embedding fallback, permanent limitation docs. Based on 2026-07-04 platform audit. |
 
 ## Future / On Hold
 

@@ -36,8 +36,9 @@ func (h *runAutomateHandler) Name() string { return "run_automate" }
 func (h *runAutomateHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name: "run_automate",
-		Description: "Start an automated workflow from automate/ as a background process. Returns immediately with session_id. " +
-			"Use list_automate_workflows first. For lifecycle details and monitoring, activate the 'workflow-automation' skill.",
+		Description: "Start an automated workflow from automate/ as a background process. " +
+			"BEFORE calling: read the workflow JSON and its prompt_file, write a brief overview for the user, and ask them to confirm. " +
+			"Returns immediately with session_id. For monitoring patterns, activate the 'workflow-automation' skill.",
 		Required: []string{"workflow"},
 		Parameters: []ParameterDef{
 			{

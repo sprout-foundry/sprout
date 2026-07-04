@@ -3,6 +3,7 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -350,5 +351,187 @@ func TestParseTriageResponse_Invalid(t *testing.T) {
 	_, err := parseTriageResponse(input)
 	if err == nil {
 		t.Fatal("expected error for invalid input")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// classifyLoopOutcome tests — the decision tree that was previously inline
+// and had a double-counting bug. These verify every path through the logic.
+// ---------------------------------------------------------------------------
+
+func TestClassifyLoopOutcome_Processed(t *testing.T) {
+	// build passes, no agent error → outcomeProcessed
+	outcome := classifyLoopOutcome(false, nil, false, false)
+	if outcome != outcomeProcessed {
+		t.Errorf("expected outcomeProcessed, got %d", outcome)
+	}
+}
+
+func TestClassifyLoopOutcome_Failed(t *testing.T) {
+	// build fails, no triage skip → outcomeFailed
+	outcome := classifyLoopOutcome(true, nil, false, false)
+	if outcome != outcomeFailed {
+		t.Errorf("expected outcomeFailed, got %d", outcome)
+	}
+}
+
+func TestClassifyLoopOutcome_Incomplete(t *testing.T) {
+	// build passes, but agent returned error (max iterations), no retry success
+	err := fmt.Errorf("max iterations reached")
+	outcome := classifyLoopOutcome(false, err, false, false)
+	if outcome != outcomeIncomplete {
+		t.Errorf("expected outcomeIncomplete, got %d", outcome)
+	}
+}
+
+func TestClassifyLoopOutcome_RetrySucceeded(t *testing.T) {
+	// build passes after retry, retry succeeded (no error), no triage skip
+	err := fmt.Errorf("original error")
+	outcome := classifyLoopOutcome(false, err, true, false)
+	if outcome != outcomeProcessed {
+		t.Errorf("expected outcomeProcessed (retry succeeded), got %d", outcome)
+	}
+}
+
+func TestClassifyLoopOutcome_RetryFailed(t *testing.T) {
+	// build passes after retry, but retry still returned an error, no triage skip
+	processErr := fmt.Errorf("original error")
+	outcome := classifyLoopOutcome(false, processErr, true, false)
+	if outcome != outcomeProcessed {
+		t.Errorf("expected outcomeProcessed (retry succeeded overrides processErr), got %d", outcome)
+	}
+}
+
+func TestClassifyLoopOutcome_Skipped(t *testing.T) {
+	// triage said skip → outcomeSkipped regardless of other signals
+	outcome := classifyLoopOutcome(false, nil, false, true)
+	if outcome != outcomeSkipped {
+		t.Errorf("expected outcomeSkipped, got %d", outcome)
+	}
+}
+
+func TestClassifyLoopOutcome_SkippedOverridesFailure(t *testing.T) {
+	// triage said skip AND build failed AND process error → outcomeSkipped
+	// This was the double-counting bug: triageSkipped sets itemsSkipped++,
+	// but then fallthrough would also set itemsFailed++.
+	processErr := fmt.Errorf("agent error")
+	outcome := classifyLoopOutcome(true, processErr, false, true)
+	if outcome != outcomeSkipped {
+		t.Errorf("expected outcomeSkipped (triage skip overrides everything), got %d", outcome)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Additional findNextTodoItem edge cases
+// ---------------------------------------------------------------------------
+
+func TestFindNextTodoItem_SecondItemChecked(t *testing.T) {
+	dir := t.TempDir()
+	todoFile := filepath.Join(dir, "TODO.md")
+
+	content := `## Section
+- [x] already done
+- [ ] second item
+- [ ] third item
+`
+	if err := os.WriteFile(todoFile, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	lineNum, sectionText, err := findNextTodoItem(todoFile)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Should find the second line (1-based line 3: "- [ ] second item")
+	if lineNum != 3 {
+		t.Errorf("expected line 3 (first unchecked), got %d", lineNum)
+	}
+	if !strings.Contains(sectionText, "- [ ] second item") {
+		t.Errorf("section text should contain '- [ ] second item', got: %s", sectionText)
+	}
+	if !strings.Contains(sectionText, "- [ ] third item") {
+		t.Errorf("section text should contain '- [ ] third item', got: %s", sectionText)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Additional markTodoDone edge cases
+// ---------------------------------------------------------------------------
+
+func TestMarkTodoDone_PreservesOtherLines(t *testing.T) {
+	dir := t.TempDir()
+	todoFile := filepath.Join(dir, "TODO.md")
+
+	content := `line 1
+line 2
+- [ ] target
+line 4
+line 5
+line 6
+line 7
+line 8
+line 9
+line 10
+`
+	if err := os.WriteFile(todoFile, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := markTodoDone(todoFile, 3); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	data, err := os.ReadFile(todoFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Only line 3 should change from "- [ ] target" to "- [x] target".
+	expected := `line 1
+line 2
+- [x] target
+line 4
+line 5
+line 6
+line 7
+line 8
+line 9
+line 10
+`
+	if string(data) != expected {
+		t.Errorf("expected:\n%s\ngot:\n%s", expected, string(data))
+	}
+}
+
+// ---------------------------------------------------------------------------
+// trimMarkdownFence tests
+// ---------------------------------------------------------------------------
+
+func TestTrimMarkdownFence_NoFence(t *testing.T) {
+	input := `{"title": "plain json", "skip": false}`
+	result := trimMarkdownFence(input)
+	if result != input {
+		t.Errorf("expected no change, got: %s", result)
+	}
+}
+
+func TestTrimMarkdownFence_Nested(t *testing.T) {
+	// Backticks inside fenced content (not at line start) must be preserved.
+	input := "```json\n{\n  \"code\": \"text with ``` inside\"\n}\n```"
+	result := trimMarkdownFence(input)
+	expected := "{\n  \"code\": \"text with ``` inside\"\n}"
+	if result != expected {
+		t.Errorf("expected:\n%s\ngot:\n%s", expected, result)
+	}
+}
+
+func TestTrimMarkdownFence_MultipleBlocks(t *testing.T) {
+	// Two fenced blocks — the function strips all fence delimiter lines,
+	// keeping content between and after them.
+	input := "```json\n{\"first\": true}\n```\nsome text\n```\n{\"second\": false}\n```"
+	result := trimMarkdownFence(input)
+	expected := "{\"first\": true}\nsome text\n{\"second\": false}"
+	if result != expected {
+		t.Errorf("expected:\n%s\ngot:\n%s", expected, result)
 	}
 }

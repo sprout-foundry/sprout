@@ -143,6 +143,33 @@ func parseTriageResponse(text string) (gateTriageResult, error) {
 	return result, nil
 }
 
+// loopOutcome classifies the outcome of a single TODO item after processing,
+// build verification, and optional retry/triage. This is the single source of
+// truth for the completion decision tree.
+type loopOutcome int
+
+const (
+	outcomeProcessed  loopOutcome = iota // agent completed + build passed → mark [x]
+	outcomeFailed                        // build failed after all retries
+	outcomeIncomplete                    // build passed but agent didn't complete (max iterations)
+	outcomeSkipped                       // triage gate said skip (fundamental blocker)
+)
+
+// classifyLoopOutcome is the pure decision logic for Step 7 of the TODO loop.
+// It maps the four boolean-like signals into a single classification.
+func classifyLoopOutcome(buildFailed bool, processErr error, retrySucceeded bool, triageSkipped bool) loopOutcome {
+	if triageSkipped {
+		return outcomeSkipped
+	}
+	if buildFailed {
+		return outcomeFailed
+	}
+	if processErr != nil && !retrySucceeded {
+		return outcomeIncomplete
+	}
+	return outcomeProcessed
+}
+
 // trimMarkdownFence strips opening and closing markdown code fences from text.
 // Handles fenced blocks like ```json ... ``` and plain ``` ... ```.
 func trimMarkdownFence(text string) string {
@@ -414,7 +441,9 @@ func runAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 		}
 
 		// Step 7: Mark completion based on actual outcome.
-		if triageSkipped {
+		// Use classifyLoopOutcome as the single source of truth for the decision tree.
+		switch classifyLoopOutcome(buildFailed, processErr, retrySucceeded, triageSkipped) {
+		case outcomeSkipped:
 			// Triage said skip — already counted in itemsSkipped.
 			if err := emitWorkflowOrchestrationEvent(cfg, "workflow_loop_item_skipped", map[string]interface{}{
 				"title":  gateRes.Title,
@@ -423,7 +452,7 @@ func runAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 			}); err != nil {
 				console.GlyphWarning.Printf("Failed to emit event: %v", err)
 			}
-		} else if buildFailed {
+		case outcomeFailed:
 			itemsFailed++
 			console.GlyphWarning.Printf("Item failed after retries: %s", gateRes.Title)
 			if err := emitWorkflowOrchestrationEvent(cfg, "workflow_loop_item_failed", map[string]interface{}{
@@ -433,7 +462,7 @@ func runAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 			}); err != nil {
 				console.GlyphWarning.Printf("Failed to emit event: %v", err)
 			}
-		} else if processErr != nil && !retrySucceeded {
+		case outcomeIncomplete:
 			// Build passes but agent didn't complete (e.g., max iterations).
 			// Don't mark done — the work may be incomplete.
 			itemsFailed++
@@ -445,7 +474,7 @@ func runAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 			}); err != nil {
 				console.GlyphWarning.Printf("Failed to emit event: %v", err)
 			}
-		} else {
+		case outcomeProcessed:
 			// Both agent completed AND build passes → mark done.
 			if markErr := markTodoDone(todoFile, lineNum); markErr != nil {
 				console.GlyphWarning.Printf("Failed to mark item done: %v", markErr)

@@ -661,8 +661,8 @@ func run() {
 	require.Len(t, result.Edges, 1)
 	e := result.Edges[0]
 	assert.Equal(t, "func run", e.SourceQualifiedName)
-	assert.Equal(t, "github.com/example/widget.DoThing", e.TargetQualifiedName,
-		"cross-package call should resolve alias to full import path")
+	assert.Equal(t, "widget.DoThing", e.TargetQualifiedName,
+		"cross-package call should resolve alias to relative package path")
 	assert.Equal(t, "resolved_calls", e.EdgeType,
 		"cross-package call should use resolved_calls edge type")
 }
@@ -686,8 +686,8 @@ func run() {
 	require.Len(t, result.Edges, 1)
 	e := result.Edges[0]
 	assert.Equal(t, "func run", e.SourceQualifiedName)
-	assert.Equal(t, "github.com/example/widget.DoThing", e.TargetQualifiedName,
-		"should use import path, not alias")
+	assert.Equal(t, "widget.DoThing", e.TargetQualifiedName,
+		"should use relative package path, not alias or full import path")
 	assert.Equal(t, "resolved_calls", e.EdgeType)
 }
 

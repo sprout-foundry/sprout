@@ -34,9 +34,13 @@ var ignoredDirs = map[string]bool{
 }
 
 // IndexAll performs a full walk of all source files in the repo and indexes
-// them. This is the first-time index.
+// them. Uses two-phase indexing: first inserts all symbols, then inserts all
+// edges. This ensures cross-file call edges resolve correctly since all nodes
+// exist in the database before edges are inserted.
 func (s *SQLiteStore) IndexAll(ctx context.Context, parseFile FileParser) error {
 	indexed := make(map[string]bool)
+	// Accumulate edges from all files for phase 2 (cross-file edge resolution).
+	allEdges := make(map[string][]Edge)
 
 	err := filepath.WalkDir(s.baseDir, func(path string, d os.DirEntry, err error) error {
 		select {
@@ -86,14 +90,37 @@ func (s *SQLiteStore) IndexAll(ctx context.Context, parseFile FileParser) error 
 		}
 		relPath := filepath.ToSlash(rel)
 
-		// Read and index file
+		// Read and parse file
 		content, err := os.ReadFile(path)
 		if err != nil {
 			return nil
 		}
 
-		if err := s.indexFileByPath(ctx, relPath, content, parseFile); err != nil {
+		symbols, edges, err := parseFile(relPath, content)
+		if err != nil {
+			return fmt.Errorf("parse file %s: %w", relPath, err)
+		}
+
+		// Get file mtime for the FileMTime field.
+		var mtime string
+		if info, err := os.Stat(path); err == nil {
+			mtime = info.ModTime().UTC().Format(time.RFC3339)
+		}
+
+		// Set FileMTime and FilePath on all symbols.
+		for i := range symbols {
+			symbols[i].FileMTime = mtime
+			symbols[i].FilePath = relPath
+		}
+
+		// Phase 1: insert symbols only (no edges).
+		if err := s.indexSymbolsOnly(ctx, relPath, symbols); err != nil {
 			return err
+		}
+
+		// Accumulate edges for phase 2.
+		if len(edges) > 0 {
+			allEdges[relPath] = edges
 		}
 		indexed[relPath] = true
 
@@ -103,11 +130,92 @@ func (s *SQLiteStore) IndexAll(ctx context.Context, parseFile FileParser) error 
 		return fmt.Errorf("index all: %w", err)
 	}
 
+	// Phase 2: insert all edges after all nodes exist in the DB.
+	// This enables cross-file qualified-name resolution.
+	for path, edges := range allEdges {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+		if err := s.InsertEdges(ctx, path, edges); err != nil {
+			return fmt.Errorf("insert edges for %s: %w", path, err)
+		}
+	}
+
 	// Only clean up orphaned file records on a successful full walk.
 	// If the walk failed partway through, removing "missing" files would
 	// delete entries for files that were never reached by the walker.
 	if err := s.removeDeletedFiles(ctx, indexed); err != nil {
 		return fmt.Errorf("remove deleted files: %w", err)
+	}
+
+	return nil
+}
+
+// indexSymbolsOnly inserts only symbols (nodes) and the file record for a file,
+// without inserting any edges. This is used by IndexAll's first phase to ensure
+// all nodes exist in the database before edges are inserted in the second phase,
+// enabling cross-file edge resolution.
+func (s *SQLiteStore) indexSymbolsOnly(ctx context.Context, path string, symbols []Symbol) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	// Delete existing edges referencing nodes from this file.
+	_, err = tx.ExecContext(ctx, `
+		DELETE FROM edges WHERE source_node_id IN (SELECT id FROM nodes WHERE file_path = ?)
+		   OR target_node_id IN (SELECT id FROM nodes WHERE file_path = ?)
+	`, path, path)
+	if err != nil {
+		return fmt.Errorf("delete edges for %s: %w", path, err)
+	}
+
+	// Delete existing nodes for this file.
+	_, err = tx.ExecContext(ctx, `DELETE FROM nodes WHERE file_path = ?`, path)
+	if err != nil {
+		return fmt.Errorf("delete nodes for %s: %w", path, err)
+	}
+
+	// Insert new symbols.
+	for _, sym := range symbols {
+		_, err = tx.ExecContext(ctx, `
+			INSERT INTO nodes (qualified_name, display_name, file_path, line, kind, language, file_mtime)
+			VALUES (?, ?, ?, ?, ?, ?, ?)
+		`, sym.QualifiedName, sym.DisplayName, path, sym.Line, sym.Kind, sym.Language, sym.FileMTime)
+		if err != nil {
+			return fmt.Errorf("insert node %s: %w", sym.QualifiedName, err)
+		}
+	}
+
+	// Determine language from symbols.
+	lang := ""
+	if len(symbols) > 0 {
+		lang = symbols[0].Language
+	}
+
+	// Upsert into files table.
+	now := time.Now().UTC().Format(time.RFC3339)
+	_, err = tx.ExecContext(ctx, `
+		INSERT OR REPLACE INTO files (path, mtype, symbol_count, last_indexed)
+		VALUES (?, ?, ?, ?)
+	`, path, lang, len(symbols), now)
+	if err != nil {
+		return fmt.Errorf("upsert file record: %w", err)
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return fmt.Errorf("commit: %w", err)
 	}
 
 	return nil

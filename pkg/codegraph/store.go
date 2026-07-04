@@ -75,6 +75,9 @@ type Store interface {
 
 	// Close closes the underlying database.
 	Close() error
+
+	// BaseDir returns the git root directory for resolving relative file paths.
+	BaseDir() string
 }
 
 // SQLiteStore implements Store using a SQLite database.
@@ -150,6 +153,11 @@ func NewStore(dbPath string) (*SQLiteStore, error) {
 		dbPath:  dbPath,
 		baseDir: baseDir,
 	}, nil
+}
+
+// BaseDir returns the git root directory used for resolving relative file paths.
+func (s *SQLiteStore) BaseDir() string {
+	return s.baseDir
 }
 
 // IndexFile stores all symbols and edges for a given file.

@@ -60,17 +60,24 @@ func GenerateRepoMap(ctx context.Context, rootDir string) (string, error) {
 	}
 
 	// Try to use the codegraph store for instant results on warm cache.
+	// Only use the store when the requested rootDir is the git root
+	// (store.baseDir); otherwise fall through to filesystem walk.
 	store, storeErr := openGraphStore()
 	if storeErr == nil && store != nil {
 		defer store.Close()
 
-		stats := store.Stats()
-		if stats.FileCount > 0 {
-			nodes, queryErr := store.QueryAllNodes(ctx)
-			if queryErr == nil {
-				result := formatRepoMapFromNodes(absRoot, nodes)
-				if result != "" {
-					return result, nil
+		// Check that absRoot matches the store's baseDir so we don't
+		// return project-wide data for a subdirectory query.
+		storeAbsBase, err := filepath.Abs(store.BaseDir())
+		if err == nil && storeAbsBase == absRoot {
+			stats := store.Stats()
+			if stats.FileCount > 0 {
+				nodes, queryErr := store.QueryAllNodes(ctx)
+				if queryErr == nil {
+					result := formatRepoMapFromNodes(absRoot, nodes)
+					if result != "" {
+						return result, nil
+					}
 				}
 			}
 		}

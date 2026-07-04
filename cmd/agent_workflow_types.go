@@ -191,13 +191,8 @@ type AgentWorkflowLoopConfig struct {
 	TodoFile string `json:"todo_file,omitempty"`
 	// GatePromptFile is the system prompt for the gate LLM call that
 	// parses each TODO section into a structured delegation prompt.
-	// Required.
+	// Required. The gate call uses the agent's existing client.
 	GatePromptFile string `json:"gate_prompt_file,omitempty"`
-	// GateModel overrides the model used for the gate call. Defaults
-	// to the workflow's initial model.
-	GateModel string `json:"gate_model,omitempty"`
-	// GateProvider overrides the provider. Defaults to initial provider.
-	GateProvider string `json:"gate_provider,omitempty"`
 	// MaxRetries is the number of retry attempts on build failure
 	// before skipping an item. Default: 2.
 	MaxRetries int `json:"max_retries,omitempty"`

@@ -7,18 +7,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/console"
-	"github.com/sprout-foundry/sprout/pkg/credentials"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
@@ -111,130 +108,22 @@ func markTodoDone(todoFile string, lineNum int) error {
 	return os.WriteFile(filepath.Clean(todoFile), bytes.Join(lines, []byte("\n")), 0644)
 }
 
-// providerBaseURL returns the OpenAI-compatible chat completions base URL
-// for the given provider name.
-func providerBaseURL(provider string) string {
-	p := strings.ToLower(strings.TrimSpace(provider))
-	switch p {
-	case "openai":
-		return "https://api.openai.com/v1"
-	case "deepseek":
-		return "https://api.deepseek.com/v1"
-	case "openrouter":
-		return "https://openrouter.ai/api/v1"
-	case "deepinfra":
-		return "https://api.deepinfra.com/v1/openai"
-	case "zai", "z.ai":
-		return "https://z.ai/v1"
-	case "mistral":
-		return "https://api.mistral.ai/v1"
-	case "minimax":
-		return "https://api.minimax.chat/v1"
-	case "chutes":
-		return "https://chutes.ai/v1"
-	case "cerebras":
-		return "https://api.cerebras.ai/v1"
-	case "ollama", "ollama-local":
-		return "http://localhost:11434/v1"
-	case "ollama-cloud":
-		return "https://turbo.ollama.ai/v1"
-	case "lmstudio":
-		return "http://localhost:1234/v1"
-	default:
-		// Generic fallback: try api.<provider>.com/v1
-		return fmt.Sprintf("https://api.%s.com/v1", p)
+// gateCall makes a stateless chat completion call using the agent's client.
+// This replaces the old raw-HTTP approach, getting retry logic, rate limiting,
+// cost tracking, and correct API routing for free.
+func gateCall(ctx context.Context, chatAgent *agent.Agent, gatePrompt, userContent string) (string, error) {
+	messages := []api.Message{
+		{Role: "system", Content: gatePrompt},
+		{Role: "user", Content: userContent},
 	}
-}
-
-// gateCall makes a stateless OpenAI-compatible chat completion API call.
-// It resolves the API key from the provider's credentials, constructs the
-// request, and returns the assistant's text response.
-func gateCall(ctx context.Context, apiKey, baseURL, model, systemPrompt, userContent string) (string, error) {
-	if apiKey == "" {
-		return "", fmt.Errorf("API key is empty")
-	}
-	if baseURL == "" {
-		return "", fmt.Errorf("base URL is empty")
-	}
-
-	payload := map[string]interface{}{
-		"model": model,
-		"messages": []map[string]string{
-			{"role": "system", "content": systemPrompt},
-			{"role": "user", "content": userContent},
-		},
-		"max_tokens":  2000,
-		"temperature": 0.1,
-	}
-
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal gate request: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "POST", baseURL+"/chat/completions", bytes.NewReader(body))
-	if err != nil {
-		return "", fmt.Errorf("failed to create gate request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+apiKey)
-
-	client := &http.Client{Timeout: 60 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("gate API call failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read gate response: %w", err)
-	}
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("gate API returned status %d: %s", resp.StatusCode, string(respBody))
-	}
-
-	// Parse the response to extract the assistant's content.
-	var result struct {
-		Choices []struct {
-			Message struct {
-				Content string `json:"content"`
-			} `json:"message"`
-		} `json:"choices"`
-	}
-	if err := json.Unmarshal(respBody, &result); err != nil {
-		return "", fmt.Errorf("failed to parse gate response JSON: %w (raw: %s)", err, string(respBody))
-	}
-	if len(result.Choices) == 0 {
-		return "", fmt.Errorf("gate API returned no choices")
-	}
-
-	content := strings.TrimSpace(result.Choices[0].Message.Content)
-	return content, nil
+	return chatAgent.GenerateResponse(messages)
 }
 
 // parseGateResponse extracts a gateResult from the LLM's text response,
 // stripping markdown fences if present.
 func parseGateResponse(text string) (gateResult, error) {
 	// Strip markdown code fences if present.
-	text = strings.TrimSpace(text)
-	if strings.HasPrefix(text, "```") {
-		// Find the closing fence.
-		lines := strings.Split(text, "\n")
-		var inner []string
-		skipping := true
-		for _, line := range lines {
-			if skipping {
-				if strings.HasPrefix(line, "```") {
-					skipping = false
-				}
-				continue
-			}
-			inner = append(inner, line)
-		}
-		text = strings.Join(inner, "\n")
-	}
+	text = trimMarkdownFence(text)
 
 	var result gateResult
 	if err := json.Unmarshal([]byte(strings.TrimSpace(text)), &result); err != nil {
@@ -245,28 +134,40 @@ func parseGateResponse(text string) (gateResult, error) {
 
 // parseTriageResponse extracts a gateTriageResult from the LLM's text response.
 func parseTriageResponse(text string) (gateTriageResult, error) {
-	text = strings.TrimSpace(text)
-	if strings.HasPrefix(text, "```") {
-		lines := strings.Split(text, "\n")
-		var inner []string
-		skipping := true
-		for _, line := range lines {
-			if skipping {
-				if strings.HasPrefix(line, "```") {
-					skipping = false
-				}
-				continue
-			}
-			inner = append(inner, line)
-		}
-		text = strings.Join(inner, "\n")
-	}
+	text = trimMarkdownFence(text)
 
 	var result gateTriageResult
 	if err := json.Unmarshal([]byte(strings.TrimSpace(text)), &result); err != nil {
 		return gateTriageResult{}, fmt.Errorf("failed to parse triage JSON: %w (text: %s)", err, text)
 	}
 	return result, nil
+}
+
+// trimMarkdownFence strips opening and closing markdown code fences from text.
+// Handles fenced blocks like ```json ... ``` and plain ``` ... ```.
+func trimMarkdownFence(text string) string {
+	text = strings.TrimSpace(text)
+	if !strings.HasPrefix(text, "```") {
+		return text
+	}
+
+	lines := strings.Split(text, "\n")
+	var inner []string
+	inFence := false
+	for _, line := range lines {
+		if !inFence {
+			if strings.HasPrefix(line, "```") {
+				inFence = true
+			}
+			continue
+		}
+		// Inside the fence: skip closing fence too.
+		if strings.HasPrefix(line, "```") {
+			continue
+		}
+		inner = append(inner, line)
+	}
+	return strings.Join(inner, "\n")
 }
 
 // runAgentWorkflowLoop iterates over unchecked TODO items, processing each
@@ -285,40 +186,13 @@ func runAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 		return false, fmt.Errorf("failed to resolve gate_prompt_file: %w", err)
 	}
 
-	// Resolve gate provider and model.
-	gateProvider := strings.TrimSpace(loop.GateProvider)
-	gateModel := strings.TrimSpace(loop.GateModel)
-	if gateProvider == "" {
-		if cfg.Initial != nil {
-			gateProvider = strings.TrimSpace(cfg.Initial.Provider)
-		}
-		if gateProvider == "" {
-			gateProvider = strings.TrimSpace(chatAgent.GetProvider())
-		}
-	}
-	if gateModel == "" {
-		if cfg.Initial != nil {
-			gateModel = strings.TrimSpace(cfg.Initial.Model)
-		}
-		if gateModel == "" {
-			gateModel = strings.TrimSpace(chatAgent.GetModel())
-		}
-	}
-
-	// Resolve the API key for the gate provider.
-	apiKey, err := credentials.ResolveProviderAPIKey(gateProvider, gateProvider)
-	if err != nil {
-		return false, fmt.Errorf("failed to resolve API key for gate provider %q: %w", gateProvider, err)
-	}
-	baseURL := providerBaseURL(gateProvider)
-
 	itemsProcessed := 0
 	itemsSkipped := 0
 	itemsFailed := 0
 
 	fmt.Println()
-	console.GlyphAction.Printf("TODO loop: provider=%s model=%s gate=%s/%s todo=%s",
-		chatAgent.GetProvider(), chatAgent.GetModel(), gateProvider, gateModel, todoFile)
+	console.GlyphAction.Printf("TODO loop: provider=%s model=%s todo=%s",
+		chatAgent.GetProvider(), chatAgent.GetModel(), todoFile)
 
 	for {
 		// Check for context cancellation.
@@ -351,10 +225,17 @@ func runAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 		console.GlyphAction.Printf("TODO item at line %d", lineNum)
 
 		// Step 2: Gate call — parse section into delegation prompt.
-		gateText, gateErr := gateCall(ctx, apiKey, baseURL, gateModel, gatePrompt, sectionText)
+		gateText, gateErr := gateCall(ctx, chatAgent, gatePrompt, sectionText)
 		if gateErr != nil {
 			console.GlyphWarning.Printf("Gate call failed: %v", gateErr)
 			itemsFailed++
+			if err := emitWorkflowOrchestrationEvent(cfg, "workflow_loop_item_failed", map[string]interface{}{
+				"title":  "unknown",
+				"line":   lineNum,
+				"reason": fmt.Sprintf("gate_call_failed: %v", gateErr),
+			}); err != nil {
+				console.GlyphWarning.Printf("Failed to emit event: %v", err)
+			}
 			continue
 		}
 
@@ -362,6 +243,13 @@ func runAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 		if parseErr != nil {
 			console.GlyphWarning.Printf("Gate parse failed: %v", parseErr)
 			itemsFailed++
+			if err := emitWorkflowOrchestrationEvent(cfg, "workflow_loop_item_failed", map[string]interface{}{
+				"title":  "unknown",
+				"line":   lineNum,
+				"reason": fmt.Sprintf("gate_parse_failed: %v", parseErr),
+			}); err != nil {
+				console.GlyphWarning.Printf("Failed to emit event: %v", err)
+			}
 			continue
 		}
 
@@ -378,17 +266,37 @@ func runAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 				console.GlyphWarning.Printf("Failed to mark item done: %v", markErr)
 			}
 			itemsSkipped++
+			if err := emitWorkflowOrchestrationEvent(cfg, "workflow_loop_item_skipped", map[string]interface{}{
+				"title":  gateRes.Title,
+				"line":   lineNum,
+				"reason": reason,
+			}); err != nil {
+				console.GlyphWarning.Printf("Failed to emit event: %v", err)
+			}
 			continue
 		}
 
 		if gateRes.Prompt == "" {
 			console.GlyphWarning.Printf("Gate returned empty prompt, skipping item")
 			itemsFailed++
+			if err := emitWorkflowOrchestrationEvent(cfg, "workflow_loop_item_failed", map[string]interface{}{
+				"title":  gateRes.Title,
+				"line":   lineNum,
+				"reason": "empty_prompt",
+			}); err != nil {
+				console.GlyphWarning.Printf("Failed to emit event: %v", err)
+			}
 			continue
 		}
 
 		// Step 4: Process the item with the agent.
 		console.GlyphAction.Printf("Processing: %s", gateRes.Title)
+		if err := emitWorkflowOrchestrationEvent(cfg, "workflow_loop_item_started", map[string]interface{}{
+			"title": gateRes.Title,
+			"line":  lineNum,
+		}); err != nil {
+			console.GlyphWarning.Printf("Failed to emit event: %v", err)
+		}
 
 		// Override max iterations for this item.
 		prevMaxIter := chatAgent.GetMaxIterations()
@@ -429,6 +337,7 @@ func runAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 
 		// Step 6: Triage on failure — retry up to MaxRetries.
 		retries := 0
+		retrySucceeded := false
 		for buildFailed && retries < loop.MaxRetries {
 			retries++
 			fmt.Println()
@@ -438,7 +347,7 @@ func runAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 				"Task: %s\n\nPrevious attempt failed. Decide whether to retry or skip.\nReturn JSON: {\"action\": \"retry\"|\"skip\", \"reason\": \"...\"}",
 				gateRes.Title)
 
-			triageText, triageErr := gateCall(ctx, apiKey, baseURL, gateModel,
+			triageText, triageErr := gateCall(ctx, chatAgent,
 				"You are a build error triage agent. Given a task title and context, decide: retry (transient/fixable) or skip (fundamental/blocking). Return ONLY JSON: {\"action\": \"retry\"|\"skip\", \"reason\": \"...\"}",
 				triagePrompt)
 			if triageErr != nil {
@@ -460,7 +369,9 @@ func runAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 				break
 			}
 
-			// Retry: re-run with error context.
+			// Retry: clear the failed attempt's context and re-run.
+			chatAgent.ClearConversationHistory()
+
 			retryPrompt := fmt.Sprintf(
 				"Previous attempt failed. Fix the issue and ensure the build passes.\n\nOriginal task:\n%s",
 				gateRes.Prompt)
@@ -493,17 +404,38 @@ func runAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 					console.GlyphWarning.Printf("Build still fails after retry: %v", buildErr)
 				} else {
 					buildFailed = false
+					retrySucceeded = retryErr == nil
 					fmt.Println()
 					console.GlyphSuccess.Print("Build passed after retry")
 				}
 			}
 		}
 
+		// Step 7: Mark completion based on actual outcome.
 		if buildFailed {
 			itemsFailed++
 			console.GlyphWarning.Printf("Item failed after retries: %s", gateRes.Title)
+			if err := emitWorkflowOrchestrationEvent(cfg, "workflow_loop_item_failed", map[string]interface{}{
+				"title":  gateRes.Title,
+				"line":   lineNum,
+				"reason": "build_failed_after_retries",
+			}); err != nil {
+				console.GlyphWarning.Printf("Failed to emit event: %v", err)
+			}
+		} else if processErr != nil && !retrySucceeded {
+			// Build passes but agent didn't complete (e.g., max iterations).
+			// Don't mark done — the work may be incomplete.
+			itemsFailed++
+			console.GlyphWarning.Printf("Build passes but agent didn't complete: %v", processErr)
+			if err := emitWorkflowOrchestrationEvent(cfg, "workflow_loop_item_failed", map[string]interface{}{
+				"title":  gateRes.Title,
+				"line":   lineNum,
+				"reason": fmt.Sprintf("agent_incomplete: %v", processErr),
+			}); err != nil {
+				console.GlyphWarning.Printf("Failed to emit event: %v", err)
+			}
 		} else {
-			// Build passed (either first try or after retry). Mark done.
+			// Both agent completed AND build passes → mark done.
 			if markErr := markTodoDone(todoFile, lineNum); markErr != nil {
 				console.GlyphWarning.Printf("Failed to mark item done: %v", markErr)
 			} else {
@@ -511,9 +443,15 @@ func runAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 				fmt.Println()
 				console.GlyphSuccess.Printf("Item complete: %s", gateRes.Title)
 			}
+			if err := emitWorkflowOrchestrationEvent(cfg, "workflow_loop_item_completed", map[string]interface{}{
+				"title": gateRes.Title,
+				"line":  lineNum,
+			}); err != nil {
+				console.GlyphWarning.Printf("Failed to emit event: %v", err)
+			}
 		}
 
-		// Step 7: CRITICAL — clear conversation between items.
+		// Step 8: CRITICAL — clear conversation between items.
 		chatAgent.ClearConversationHistory()
 	}
 

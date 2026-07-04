@@ -41,6 +41,7 @@ type Store interface {
 	GetStaleFiles(ctx context.Context) ([]string, error)
 	Stats() GraphStats
 	Close() error
+	BaseDir() string
 }
 
 type SQLiteStore struct{}
@@ -75,6 +76,7 @@ func (s *SQLiteStore) QueryAllNodes(ctx context.Context) ([]Symbol, error) {
 }
 func (s *SQLiteStore) Stats() GraphStats { return GraphStats{} }
 func (s *SQLiteStore) Close() error      { return nil }
+func (s *SQLiteStore) BaseDir() string   { return "" }
 
 // FileParser is a function that parses a source file at the given path and
 // returns extracted symbols and call edges.

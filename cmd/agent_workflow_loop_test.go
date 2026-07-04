@@ -33,7 +33,7 @@ func TestFindNextTodoItem(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	lineNum, sectionText, err := findNextTodoItem(todoFile)
+	lineNum, sectionText, err := findNextTodoItem(todoFile, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -69,7 +69,7 @@ func TestFindNextTodoItem_NoUnchecked(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, _, err := findNextTodoItem(todoFile)
+	_, _, err := findNextTodoItem(todoFile, 0)
 	if err == nil {
 		t.Fatal("expected error for no unchecked items")
 	}
@@ -87,7 +87,7 @@ func TestFindNextTodoItem_FirstLine(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	lineNum, sectionText, err := findNextTodoItem(todoFile)
+	lineNum, sectionText, err := findNextTodoItem(todoFile, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -107,7 +107,7 @@ func TestFindNextTodoItem_EmptyFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, _, err := findNextTodoItem(todoFile)
+	_, _, err := findNextTodoItem(todoFile, 0)
 	if err == nil {
 		t.Fatal("expected error for empty file")
 	}
@@ -124,7 +124,7 @@ func TestFindNextTodoItem_NoHeading(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	lineNum, sectionText, err := findNextTodoItem(todoFile)
+	lineNum, sectionText, err := findNextTodoItem(todoFile, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -438,7 +438,7 @@ func TestFindNextTodoItem_SecondItemChecked(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	lineNum, sectionText, err := findNextTodoItem(todoFile)
+	lineNum, sectionText, err := findNextTodoItem(todoFile, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

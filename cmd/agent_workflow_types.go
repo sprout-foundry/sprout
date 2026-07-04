@@ -118,14 +118,15 @@ type workflowSubagentOverride struct {
 type WorkflowSubagentOverrides map[string]workflowSubagentOverride
 
 type workflowExecutionState struct {
-	Version          int    `json:"version"`
-	InitialCompleted bool   `json:"initial_completed"`
-	NextStepIndex    int    `json:"next_step_index"`
-	HasError         bool   `json:"has_error"`
-	FirstError       string `json:"first_error,omitempty"`
-	LastProvider     string `json:"last_provider,omitempty"`
-	Complete         bool   `json:"complete"`
-	UpdatedAt        string `json:"updated_at,omitempty"`
+	Version            int    `json:"version"`
+	InitialCompleted   bool   `json:"initial_completed"`
+	NextStepIndex      int    `json:"next_step_index"`
+	CurrentTodoLineNum int    `json:"current_todo_line_num,omitempty"`
+	HasError           bool   `json:"has_error"`
+	FirstError         string `json:"first_error,omitempty"`
+	LastProvider       string `json:"last_provider,omitempty"`
+	Complete           bool   `json:"complete"`
+	UpdatedAt          string `json:"updated_at,omitempty"`
 }
 
 // AgentWorkflowRuntime contains runtime options aligned with agent CLI flags.

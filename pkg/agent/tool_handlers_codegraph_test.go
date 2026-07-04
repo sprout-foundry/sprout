@@ -367,10 +367,9 @@ func TestFindDeadCode_OutputFormat(t *testing.T) {
 	}
 }
 
-func TestFindDeadCode_DirectoryParameterIgnored(t *testing.T) {
-	// The handler captures the directory parameter but currently doesn't
-	// use it for filtering. Verify the handler doesn't error when a
-	// directory is passed.
+func TestFindDeadCode_DirectoryFilterPassthrough(t *testing.T) {
+	// Verify the handler passes the directory parameter through to the store
+	// and doesn't error when a directory is passed.
 	store, err := openCodegraphStore()
 	if err != nil {
 		t.Skipf("openCodegraphStore returned error: %v", err)

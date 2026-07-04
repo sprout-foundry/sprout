@@ -778,7 +778,7 @@ func TestAllToolsRegistration(t *testing.T) {
 	if tools == nil {
 		t.Fatal("AllTools() returned nil")
 	}
-	if len(tools) != 39 {
+	if len(tools) != 42 {
 		t.Fatalf("AllTools() returned %d tools, want 41", len(tools))
 	}
 
@@ -825,6 +825,9 @@ func TestAllToolsRegistration(t *testing.T) {
 		// SP-109 Phase 3 Batch C — clarification function-pointer tools
 		"request_clarification":     "request_clarification",
 		"respond_clarification":    "respond_clarification",
+	"get_callers":              "get_callers",
+	"get_callees":              "get_callees",
+	"find_dead_code":           "find_dead_code",
 	}
 
 	var foundNames []string

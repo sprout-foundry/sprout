@@ -89,5 +89,9 @@ func AllTools() []ToolHandler {
 		// SP-109 Phase 3 Batch C — clarification function-pointer tools
 		&requestClarificationHandler{},
 		&respondClarificationHandler{},
+		// Code intelligence graph (SP-107)
+		&getCallersHandler{},
+		&getCalleesHandler{},
+		&findDeadCodeHandler{},
 	}
 }

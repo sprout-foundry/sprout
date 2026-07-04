@@ -1,125 +1,16 @@
 package agent
 
-import (
-	"context"
-	"sync"
-	"time"
+import tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 
-	api "github.com/sprout-foundry/sprout/pkg/agent_api"
-)
-
-// ParameterConfig defines parameter validation rules for a tool
-type ParameterConfig struct {
-	Name         string   `json:"name"`
-	Type         string   `json:"type"` // "string", "integer", "number", "boolean"
-	Required     bool     `json:"required"`
-	Alternatives []string `json:"alternatives"` // Alternative parameter names for backward compatibility
-	Description  string   `json:"description"`
-}
-
-// ToolConfig holds configuration for a tool
-type ToolConfig struct {
-	Name          string                `json:"name"`
-	Description   string                `json:"description"`
-	Parameters    []ParameterConfig     `json:"parameters"`
-	Handler       ToolHandler           `json:"-"` // Function reference, not serialized
-	HandlerImages ToolHandlerWithImages `json:"-"` // Optional image-returning handler (takes precedence over Handler when set)
-
-	// Interactive declares that the tool owns the terminal during
-	// execution — either by reading from stdin (e.g. ask_user prompting
-	// for a response) OR by streaming output to stdout/stderr live (e.g.
-	// shell_command tee'ing subprocess output via io.MultiWriter). Either
-	// case is incompatible with the CLI activity-indicator spinner: the
-	// spinner's \r\033[K updates would clobber the tool's prompt or
-	// interleave with its output. When true, ToolStart subscribers must
-	// stop any active spinner and emit no result chrome on ToolEnd — the
-	// tool's natural output IS the feedback the user expects.
-	Interactive bool `json:"interactive,omitempty"`
-
-	// Per-tool execution config consumed by the seed core.ToolRegistry
-	// transformer in pkg/agent/seed_tool_registry.go. Zero values fall
-	// through to the seed registry's defaults (5min timeout, 50KB result
-	// cap, no aliases, not safe for parallel execution).
-	Aliases         []string      `json:"aliases,omitempty"`
-	Timeout         time.Duration `json:"timeout,omitempty"`
-	MaxResultSize   int           `json:"max_result_size,omitempty"`
-	SafeForParallel bool          `json:"safe_for_parallel,omitempty"`
-}
-
-// ToolHandler represents a function that can handle a tool execution
-type ToolHandler func(ctx context.Context, a *Agent, args map[string]interface{}) (string, error)
-
-// ToolHandlerWithImages is like ToolHandler but can also return image data
-// for multimodal (vision-capable) models. The []api.ImageData slice should be
-// nil when no images are produced; the string is always the text result.
-type ToolHandlerWithImages func(ctx context.Context, a *Agent, args map[string]interface{}) ([]api.ImageData, string, error)
-
-// ToolRegistry manages tool configurations in a data-driven way
-type ToolRegistry struct {
-	tools map[string]ToolConfig
-}
-
-var defaultToolRegistry *ToolRegistry
-var registryOnce sync.Once
-
-// GetToolRegistry returns the default tool registry, initializing it lazily if needed (thread-safe)
-func GetToolRegistry() *ToolRegistry {
-	registryOnce.Do(func() {
-		defaultToolRegistry = newDefaultToolRegistry()
-	})
-	return defaultToolRegistry
-}
-
-// InitializeToolRegistry pre-creates the tool registry to avoid first-use overhead
-// This should be called during agent initialization for better performance
-func InitializeToolRegistry() {
-	registryOnce.Do(func() {
-		defaultToolRegistry = newDefaultToolRegistry()
-	})
-}
-
-// RegisterTool adds a tool to the registry
-func (r *ToolRegistry) RegisterTool(config ToolConfig) {
-	r.tools[config.Name] = config
-}
-
-// GetAvailableTools returns a list of all registered tool names
-func (r *ToolRegistry) GetAvailableTools() []string {
-	tools := make([]string, 0, len(r.tools))
-	for toolName := range r.tools {
-		tools = append(tools, toolName)
-	}
-	return tools
-}
-
-// GetToolConfig returns the ToolConfig for the given tool name.
-// Returns the config and true if found, or zero-value and false if not.
-func (r *ToolRegistry) GetToolConfig(name string) (ToolConfig, bool) {
-	config, ok := r.tools[name]
-	return config, ok
-}
-
-// GetAllToolConfigs returns a copy of all registered tool configs keyed by name.
-func (r *ToolRegistry) GetAllToolConfigs() map[string]ToolConfig {
-	result := make(map[string]ToolConfig, len(r.tools))
-	for name, config := range r.tools {
-		result[name] = config
-	}
-	return result
-}
-
-// IsInteractive reports whether the named tool is registered with
-// Interactive=true. Unknown tools return false. Use this from CLI
-// subscribers (e.g. the activity-indicator goroutine) to decide whether
-// to suppress transient chrome that would clobber the tool's own prompt.
-func (r *ToolRegistry) IsInteractive(name string) bool {
-	cfg, ok := r.tools[name]
-	return ok && cfg.Interactive
-}
-
-// IsInteractiveTool is a top-level convenience wrapping
-// GetToolRegistry().IsInteractive(name). It exists so callers that just
-// need a name → bool lookup don't have to take a registry handle.
+// IsInteractiveTool reports whether the named tool is registered with
+// Interactive=true in the handler registry. Unknown tools return false.
+// Use this from CLI subscribers (e.g. the activity-indicator goroutine)
+// to decide whether to suppress transient chrome that would clobber the
+// tool's own prompt.
 func IsInteractiveTool(name string) bool {
-	return GetToolRegistry().IsInteractive(name)
+	h, ok := tools.GetNewToolRegistry().Lookup(name)
+	if !ok {
+		return false
+	}
+	return h.Interactive()
 }

@@ -338,6 +338,7 @@ func runAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 		// Step 6: Triage on failure — retry up to MaxRetries.
 		retries := 0
 		retrySucceeded := false
+		triageSkipped := false
 		for buildFailed && retries < loop.MaxRetries {
 			retries++
 			fmt.Println()
@@ -364,8 +365,9 @@ func runAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 			console.GlyphInfo.Printf("Triage: action=%s reason=%s", triageRes.Action, triageRes.Reason)
 
 			if strings.EqualFold(triageRes.Action, "skip") {
-				buildFailed = false
+				triageSkipped = true
 				itemsSkipped++
+				console.GlyphInfo.Printf("Triage skipped: %s", gateRes.Title)
 				break
 			}
 
@@ -412,7 +414,16 @@ func runAgentWorkflowLoop(ctx context.Context, chatAgent *agent.Agent, eventBus 
 		}
 
 		// Step 7: Mark completion based on actual outcome.
-		if buildFailed {
+		if triageSkipped {
+			// Triage said skip — already counted in itemsSkipped.
+			if err := emitWorkflowOrchestrationEvent(cfg, "workflow_loop_item_skipped", map[string]interface{}{
+				"title":  gateRes.Title,
+				"line":   lineNum,
+				"reason": "triage_skip",
+			}); err != nil {
+				console.GlyphWarning.Printf("Failed to emit event: %v", err)
+			}
+		} else if buildFailed {
 			itemsFailed++
 			console.GlyphWarning.Printf("Item failed after retries: %s", gateRes.Title)
 			if err := emitWorkflowOrchestrationEvent(cfg, "workflow_loop_item_failed", map[string]interface{}{

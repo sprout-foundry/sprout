@@ -40,7 +40,7 @@ var ignoredDirs = map[string]bool{
 func (s *SQLiteStore) IndexAll(ctx context.Context, parseFile FileParser) error {
 	indexed := make(map[string]bool)
 	// Accumulate edges from all files for phase 2 (cross-file edge resolution).
-	allEdges := make(map[string][]Edge)
+	var allEdges []Edge
 
 	err := filepath.WalkDir(s.baseDir, func(path string, d os.DirEntry, err error) error {
 		select {
@@ -119,9 +119,7 @@ func (s *SQLiteStore) IndexAll(ctx context.Context, parseFile FileParser) error 
 		}
 
 		// Accumulate edges for phase 2.
-		if len(edges) > 0 {
-			allEdges[relPath] = edges
-		}
+		allEdges = append(allEdges, edges...)
 		indexed[relPath] = true
 
 		return nil
@@ -130,17 +128,10 @@ func (s *SQLiteStore) IndexAll(ctx context.Context, parseFile FileParser) error 
 		return fmt.Errorf("index all: %w", err)
 	}
 
-	// Phase 2: insert all edges after all nodes exist in the DB.
-	// This enables cross-file qualified-name resolution.
-	for path, edges := range allEdges {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-		if err := s.InsertEdges(ctx, path, edges); err != nil {
-			return fmt.Errorf("insert edges for %s: %w", path, err)
-		}
+	// Phase 2: insert all edges in a single transaction, after all nodes
+	// exist in the DB. This enables cross-file qualified-name resolution.
+	if err := s.InsertAllEdges(ctx, allEdges); err != nil {
+		return fmt.Errorf("insert all edges: %w", err)
 	}
 
 	// Only clean up orphaned file records on a successful full walk.

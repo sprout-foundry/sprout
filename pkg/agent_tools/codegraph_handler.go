@@ -6,11 +6,55 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/codegraph"
 	"github.com/sprout-foundry/sprout/pkg/git"
 )
+
+// codegraphBuildOnce ensures the background codegraph index build
+// happens exactly once per process, triggered on first use of any
+// codegraph query tool (get_callers, get_callees, find_dead_code).
+var codegraphBuildOnce sync.Once
+
+// triggerCodegraphBuild kicks off a background goroutine that populates
+// the codegraph database. The first call to any codegraph query tool
+// returns "not indexed yet", but by the next call (typically seconds
+// later) the DB is populated and queries work. Already-populated DBs
+// are skipped (idempotent, safe for multiple agent instances).
+func triggerCodegraphBuild() {
+	go func() {
+		store, err := codegraph.NewStore("")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "codegraph auto-build: failed to open store: %v\n", err)
+			return
+		}
+		defer store.Close()
+
+		// Skip if already populated (another process/goroutine may have built it).
+		if store.Stats().FileCount > 0 {
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		defer cancel()
+
+		if err := store.IndexAll(ctx, codegraphFileParser); err != nil {
+			fmt.Fprintf(os.Stderr, "codegraph auto-build failed: %v (retrying on next query tool use)\n", err)
+			// Best-effort cleanup: remove the partially-built DB so the next
+			// codegraph tool call sees no DB and triggers a fresh build.
+			if dbPath, pathErr := codegraph.DefaultDBPath(); pathErr == nil {
+				_ = os.Remove(dbPath)
+			}
+			return
+		}
+
+		stats := store.Stats()
+		fmt.Fprintf(os.Stderr, "codegraph auto-build complete: %d nodes, %d edges, %d files\n",
+			stats.NodeCount, stats.EdgeCount, stats.FileCount)
+	}()
+}
 
 // --- get_callers ---
 
@@ -177,6 +221,8 @@ func openCodegraphStoreHandler() (*codegraph.SQLiteStore, error) {
 	}
 	dbPath := filepath.Join(gitRoot, ".sprout", "codegraph.db")
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
+		// Trigger a background build so that subsequent calls have data.
+		codegraphBuildOnce.Do(triggerCodegraphBuild)
 		return nil, nil
 	}
 	return codegraph.NewStore("")

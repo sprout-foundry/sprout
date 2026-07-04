@@ -26,15 +26,17 @@ func (h *manageMemoryHandler) Name() string { return "manage_memory" }
 func (h *manageMemoryHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "manage_memory",
-		Description: "Persistent markdown memories at ~/.config/sprout/memories/ that auto-load into the system prompt every future conversation. Operations:\n\n• `add` — create/overwrite. Required: `name` (slug, e.g. 'git-safety'), `content` (markdown).\n• `read` — full content of one memory. Required: `name`.\n• `list` — every saved memory with first-line title.\n• `delete` — remove a memory file. Required: `name`.\n• `search` — semantic search via embedding similarity. Required: `query`. Optional: `threshold` (0.0–1.0, default 0.75), `top_k` (default 5).\n\n**Use `add`** when the user shares a durable preference or convention. **Use `search`/`read`** to recall prior notes. **Use `delete`** when the user says to forget something specific. Memories auto-load — explicit reads are only for verification.",
+		Description: "Persistent cross-session memories that auto-load into the system prompt. " +
+			"Operations: add, read, list, delete, search. " +
+			"Use 'add' for durable preferences; 'search' to recall prior notes.",
 		Required:   []string{"operation"},
 		Parameters: []ParameterDef{
 			{Name: "operation", Type: "string", Required: true, Description: "One of: 'add', 'read', 'list', 'delete', 'search'."},
-			{Name: "name", Type: "string", Description: "Memory name (required for add/read/delete). Short descriptive slug, no .md extension."},
-			{Name: "content", Type: "string", Description: "Markdown content (required for add)."},
-			{Name: "query", Type: "string", Description: "Natural-language search query (required for search)."},
-			{Name: "threshold", Type: "number", Description: "Search-only: minimum similarity 0.0–1.0 (default 0.75)."},
-			{Name: "top_k", Type: "integer", Description: "Search-only: maximum results to return (default 5)."},
+			{Name: "name", Type: "string", Description: "Memory name slug (required for add/read/delete)"},
+			{Name: "content", Type: "string", Description: "Markdown content (required for add)"},
+			{Name: "query", Type: "string", Description: "Search query (required for search)"},
+			{Name: "threshold", Type: "number", Description: "Search: min similarity 0.0–1.0 (default 0.75)"},
+			{Name: "top_k", Type: "integer", Description: "Search: max results (default 5)"},
 		},
 	}
 }

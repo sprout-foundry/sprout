@@ -35,42 +35,40 @@ func (h *createPullRequestHandler) Name() string { return "create_pull_request" 
 func (h *createPullRequestHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name: "create_pull_request",
-		Description: "Create a pull request on GitHub. Call this tool after pushing a feature branch " +
-			"to open a PR for review. Provide a descriptive title and body summarizing the changes " +
-			"— do not use placeholders like \"TODO\" or \"fix\". The tool is gated as a git-write " +
-			"operation and requires the persona to have git_write capability.",
+		Description: "Create a pull request on GitHub after pushing a feature branch. " +
+			"Gated as a git-write operation — requires git_write capability.",
 		Required: []string{"title"},
 		Parameters: []ParameterDef{
 			{
 				Name:        "title",
 				Type:        "string",
 				Required:    true,
-				Description: "Title of the pull request (required)",
+				Description: "PR title (required)",
 			},
 			{
 				Name:        "body",
 				Type:        "string",
-				Description: "Body/description of the pull request. If omitted, the body is synthesized from commit messages.",
+				Description: "PR body; synthesized from commits if omitted",
 			},
 			{
 				Name:        "base",
 				Type:        "string",
-				Description: "Target branch (e.g. main, develop). If omitted, the repository's default branch is used.",
+				Description: "Target branch (default: repo default branch)",
 			},
 			{
 				Name:        "head",
 				Type:        "string",
-				Description: "Source branch containing the changes. If omitted, the current HEAD branch is used.",
+				Description: "Source branch (default: current HEAD)",
 			},
 			{
 				Name:        "draft",
 				Type:        "boolean",
-				Description: "Create as a draft PR (default: false)",
+				Description: "Create as draft PR (default false)",
 			},
 			{
 				Name:        "repo_dir",
 				Type:        "string",
-				Description: "Path to the repository root. If omitted, the agent's workspace root is used.",
+				Description: "Repository root path (default: workspace root)",
 			},
 		},
 	}

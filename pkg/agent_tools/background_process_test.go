@@ -884,3 +884,40 @@ func TestGetProcessFound(t *testing.T) {
 	assert.NotZero(t, proc.LastPolled, "Process LastPolled should be set")
 	assert.NotEmpty(t, proc.OutputPath, "Process OutputPath should be set")
 }
+
+// =============================================================================
+// TestBPM_ProcessGroupDetached — Verify child process is in its own process group,
+// isolated from the parent, so SIGHUP from terminal teardown doesn't reach it.
+// =============================================================================
+
+func TestBPM_ProcessGroupDetached(t *testing.T) {
+	t.Parallel()
+
+	bpm := NewBackgroundProcessManager()
+	defer bpm.Close()
+
+	// Start a process that stays alive long enough to query its PGID
+	sessionID, err := bpm.Start(context.Background(), "sleep 60", "")
+	require.NoError(t, err)
+
+	// Get the child PID
+	proc, found := bpm.GetProcess(sessionID)
+	require.True(t, found, "GetProcess should find the session")
+	childPID := proc.GetPID()
+	require.NotZero(t, childPID, "child PID should be set")
+
+	// Child's PGID should be different from parent's PGID
+	parentPGID, err := syscall.Getpgid(os.Getpid())
+	require.NoError(t, err)
+
+	childPGID, err := syscall.Getpgid(childPID)
+	require.NoError(t, err, "should be able to query child PGID")
+
+	assert.NotEqual(t, parentPGID, childPGID,
+		"child should be in a different process group from parent")
+	assert.Equal(t, childPID, childPGID,
+		"child should be its own process group leader")
+
+	// Clean up
+	require.NoError(t, bpm.Stop(sessionID, 50*time.Millisecond))
+}

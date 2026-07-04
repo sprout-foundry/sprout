@@ -11,11 +11,11 @@ import (
 
 type todoWriteHandler struct{}
 
-func (h *todoWriteHandler) Name() string { return "TodoWrite" }
+func (h *todoWriteHandler) Name() string { return "todo_write" }
 
 func (h *todoWriteHandler) Definition() ToolDefinition {
 	return ToolDefinition{
-		Name:        "TodoWrite",
+		Name:        "todo_write",
 		Description: "Create and manage a structured task list for the current coding session.",
 		Required:    []string{"todos"},
 		Parameters: []ParameterDef{

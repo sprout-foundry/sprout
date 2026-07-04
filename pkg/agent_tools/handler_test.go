@@ -778,7 +778,7 @@ func TestAllToolsRegistration(t *testing.T) {
 	if tools == nil {
 		t.Fatal("AllTools() returned nil")
 	}
-	if len(tools) != 41 {
+	if len(tools) != 39 {
 		t.Fatalf("AllTools() returned %d tools, want 41", len(tools))
 	}
 
@@ -792,28 +792,25 @@ func TestAllToolsRegistration(t *testing.T) {
 		"view_history":              "view_history",
 		"list_skills":               "list_skills",
 		"embedding_index":           "embedding_index",
-		"write_file":                "write_file",
-		"write_structured_file":     "write_structured_file",
-		"edit_file":                 "edit_file",
-		"shell_command":             "shell_command",
-		"save_memory":               "save_memory",
-		"search_memories":           "search_memories",
-		"manage_memory":             "manage_memory",
-		"manage_settings":           "manage_settings",
-		"task_queue":                "task_queue",
-		"TodoWrite":                 "TodoWrite",
-		"TodoRead":                  "TodoRead",
-		"ask_user":                  "ask_user",
-		"patch_structured_file":     "patch_structured_file",
-		"commit":                    "commit",
-		"git":                       "git",
-		"activate_skill":            "activate_skill",
-		"browse_url":                "browse_url",
-		"web_search":                "web_search",
-		"semantic_search":           "semantic_search",
-		"analyze_image_content":     "analyze_image_content",
-		"analyze_ui_screenshot":     "analyze_ui_screenshot",
-		// SP-109 Phase 3 Batch A2
+			"write_file":                "write_file",
+	"write_structured_file":     "write_structured_file",
+	"edit_file":                 "edit_file",
+	"shell_command":             "shell_command",
+	"manage_memory":             "manage_memory",
+	"manage_settings":           "manage_settings",
+	"task_queue":                "task_queue",
+	"todo_write":                "todo_write",
+	"todo_read":                 "todo_read",
+	"ask_user":                  "ask_user",
+	"patch_structured_file":     "patch_structured_file",
+	"commit":                    "commit",
+	"git":                       "git",
+	"activate_skill":            "activate_skill",
+	"browse_url":                "browse_url",
+	"web_search":                "web_search",
+	"semantic_search":           "semantic_search",
+	"analyze_image_content":     "analyze_image_content",
+	"analyze_ui_screenshot":     "analyze_ui_screenshot",// SP-109 Phase 3 Batch A2
 		"list_automate_workflows":   "list_automate_workflows",
 		"list_changes":              "list_changes",
 		"revert_my_changes":         "revert_my_changes",
@@ -910,20 +907,11 @@ func TestAllToolsRegistration(t *testing.T) {
 			if len(def.Required) != 3 || def.Required[0] != "path" || def.Required[1] != "old_str" || def.Required[2] != "new_str" {
 				t.Errorf("edit_file Required = %v, want [\"path\" \"old_str\" \"new_str\"]", def.Required)
 			}
-		case "shell_command":
-			if len(def.Required) != 0 {
-				t.Errorf("shell_command Required = %v, want nil/empty", def.Required)
-			}
-		case "save_memory":
-			if len(def.Required) != 2 || def.Required[0] != "name" || def.Required[1] != "content" {
-				t.Errorf("save_memory Required = %v, want [\"name\" \"content\"]", def.Required)
-			}
-		case "search_memories":
-			if len(def.Required) != 1 || def.Required[0] != "query" {
-				t.Errorf("search_memories Required = %v, want [\"query\"]", def.Required)
-			}
-		case "task_queue_add":
-			if len(def.Required) != 1 || def.Required[0] != "title" {
+			case "shell_command":
+		if len(def.Required) != 0 {
+			t.Errorf("shell_command Required = %v, want nil/empty", def.Required)
+		}
+	case "task_queue_add":if len(def.Required) != 1 || def.Required[0] != "title" {
 				t.Errorf("task_queue_add Required = %v, want [\"title\"]", def.Required)
 			}
 		case "task_queue_publish":

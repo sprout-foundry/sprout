@@ -10,6 +10,8 @@ import (
 // TestStreamingMarkdown_Headers verifies that markdown headers are
 // formatted with ANSI colors as they stream.
 func TestStreamingMarkdown_Headers(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("CLICOLOR_FORCE", "1")
 	r := NewAssistantTurnRenderer(80, NewMarkdownFormatter(true, true))
 	out := captureRendererStdout(t, func() {
 		r.WriteChunk("# Big Header\n")
@@ -29,6 +31,8 @@ func TestStreamingMarkdown_Headers(t *testing.T) {
 
 // TestStreamingMarkdown_BoldAndItalic verifies inline formatting.
 func TestStreamingMarkdown_BoldAndItalic(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("CLICOLOR_FORCE", "1")
 	r := NewAssistantTurnRenderer(80, NewMarkdownFormatter(true, true))
 	out := captureRendererStdout(t, func() {
 		r.WriteChunk("This is **bold** and *italic* text.\n")
@@ -44,6 +48,8 @@ func TestStreamingMarkdown_BoldAndItalic(t *testing.T) {
 
 // TestStreamingMarkdown_InlineCode verifies backtick code spans.
 func TestStreamingMarkdown_InlineCode(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("CLICOLOR_FORCE", "1")
 	r := NewAssistantTurnRenderer(80, NewMarkdownFormatter(true, true))
 	out := captureRendererStdout(t, func() {
 		r.WriteChunk("Run `npm install` to install.\n")
@@ -56,6 +62,8 @@ func TestStreamingMarkdown_InlineCode(t *testing.T) {
 // TestStreamingMarkdown_CodeBlock verifies multi-line code blocks with
 // language headers and syntax highlighting across chunk boundaries.
 func TestStreamingMarkdown_CodeBlock(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("CLICOLOR_FORCE", "1")
 	r := NewAssistantTurnRenderer(80, NewMarkdownFormatter(true, true))
 	out := captureRendererStdout(t, func() {
 		r.WriteChunk("Here's some code:\n```go\n")
@@ -83,6 +91,8 @@ func TestStreamingMarkdown_CodeBlock(t *testing.T) {
 // TestStreamingMarkdown_CodeBlockAcrossChunks verifies that code block
 // state is maintained when content arrives in small chunks.
 func TestStreamingMarkdown_CodeBlockAcrossChunks(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("CLICOLOR_FORCE", "1")
 	r := NewAssistantTurnRenderer(80, NewMarkdownFormatter(true, true))
 	out := captureRendererStdout(t, func() {
 		// Split every character into its own chunk to stress-test buffering.
@@ -121,6 +131,8 @@ func TestStreamingMarkdown_Table(t *testing.T) {
 
 // TestStreamingMarkdown_BulletList verifies list formatting.
 func TestStreamingMarkdown_BulletList(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("CLICOLOR_FORCE", "1")
 	r := NewAssistantTurnRenderer(80, NewMarkdownFormatter(true, true))
 	out := captureRendererStdout(t, func() {
 		r.WriteChunk("- First item\n")
@@ -183,6 +195,8 @@ func TestStreamingMarkdown_FinalizeFlushesPartialLine(t *testing.T) {
 
 // TestStreamingMarkdown_HorizontalRule verifies width-aware rendering.
 func TestStreamingMarkdown_HorizontalRule(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("CLICOLOR_FORCE", "1")
 	r := NewAssistantTurnRenderer(80, NewMarkdownFormatter(true, true))
 	r.formatter.SetWidth(80)
 	out := captureRendererStdout(t, func() {

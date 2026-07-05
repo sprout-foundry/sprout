@@ -296,6 +296,34 @@ func TestRouteAgentMessage_GoesToStdoutDirectly(t *testing.T) {
 	assert.Contains(t, out, "\n", "trailing newline")
 }
 
+// TestRouteAgentMessage_SkipsRawWriteWhenSubscriberActive verifies that when
+// a terminal subscriber owns rendering (interactive/queue mode), the raw
+// writeTerminalMessage fallback is skipped — the subscriber renders the
+// glyph-prefixed line itself. Without this guard, every agent_message would
+// double-print (raw stdout + subscriber's PrintExternal).
+func TestRouteAgentMessage_SkipsRawWriteWhenSubscriberActive(t *testing.T) {
+	agent := &Agent{
+		output: NewAgentOutputManager(),
+	}
+	agent.output.SetOutputMutex(&sync.Mutex{})
+	router := NewOutputRouter(agent, nil)
+	router.SetTerminalSubscriberActive(true)
+
+	orig := os.Stdout
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	os.Stdout = w
+	defer func() { os.Stdout = orig }()
+
+	router.RouteAgentMessage("info", "subscriber owns rendering", nil)
+	w.Close()
+
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+	out := buf.String()
+	assert.Empty(t, out, "raw stdout write must be skipped when subscriber is active")
+}
+
 // TestRouteToolLog_PublishesCorrectEvent verifies tool log event structure
 func TestRouteToolLog_PublishesCorrectEvent(t *testing.T) {
 	bus := events.NewEventBus()

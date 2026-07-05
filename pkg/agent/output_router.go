@@ -45,6 +45,16 @@ type OutputRouter struct {
 	// hook (renderer uses its own mutex).
 	externalWriteHook func()
 
+	// terminalSubscriberActive indicates that a terminal subscriber
+	// (cmd/agent_terminal_subscriber.go) owns rendering agent_message
+	// events to the terminal. When true, RouteAgentMessage publishes the
+	// event (for the subscriber + WebUI) but skips the raw writeTerminalMessage
+	// fallback — the subscriber renders the glyph-prefixed line itself, so
+	// the raw write would double-print. Direct mode (sprout agent "query")
+	// has no subscriber and leaves this false, so writeTerminalMessage
+	// remains its only output path.
+	terminalSubscriberActive bool
+
 	// reasoningCallback receives reasoning chunks separately from the
 	// regular streaming callback so the CLI can collapse the thinking
 	// stream into a one-line "▽ Thinking · N kB" header instead of
@@ -62,6 +72,17 @@ func (r *OutputRouter) SetExternalWriteHook(fn func()) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.externalWriteHook = fn
+}
+
+// SetTerminalSubscriberActive marks whether a terminal subscriber owns
+// rendering agent_message events. When true, RouteAgentMessage skips the
+// raw writeTerminalMessage fallback (the subscriber renders the line with
+// proper glyph prefixing). Called by startTerminalToolSubscriber in
+// interactive/queue modes; left false in direct mode.
+func (r *OutputRouter) SetTerminalSubscriberActive(active bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.terminalSubscriberActive = active
 }
 
 // SetReasoningCallback registers a dedicated sink for reasoning chunks
@@ -264,6 +285,17 @@ func (r *OutputRouter) RouteAgentMessage(category, message string, extra map[str
 		if r.agent != nil && !r.agent.IsSubagent() && r.agent.HasActiveWebUIClients() {
 			return
 		}
+	}
+
+	// When a terminal subscriber owns agent_message rendering (interactive/
+	// queue modes), the event published above is rendered by the subscriber
+	// with glyph prefixing. Skip the raw write to avoid double-printing.
+	// Direct mode has no subscriber and relies on this write.
+	r.mu.RLock()
+	subscriberActive := r.terminalSubscriberActive
+	r.mu.RUnlock()
+	if subscriberActive && category != "tool_log" {
+		return
 	}
 
 	// Terminal output: write to terminal

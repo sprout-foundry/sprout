@@ -318,25 +318,10 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 			return fmt.Errorf("agent processing failed: %w", res.err)
 		}
 
-		// Publish query completed event
-		completedEvent := events.QueryCompletedEvent(
-			query,
-			res.response,
-			chatAgent.GetCurrentContextTokens(),
-			chatAgent.GetTotalCost(),
-			duration,
-		)
-		if reason := chatAgent.GetLastRunTerminationReason(); reason != "" {
-			completedEvent["status"] = reason
-		}
-		// Decorate with agent metadata for event routing
-		if clientID := chatAgent.GetEventClientID(); clientID != "" {
-			completedEvent["client_id"] = clientID
-		}
-		if chatID := chatAgent.GetEventChatID(); chatID != "" {
-			completedEvent["chat_id"] = chatID
-		}
-		eventBus.Publish(events.EventTypeQueryCompleted, completedEvent)
+		// Note: EventTypeQueryCompleted is published by the agent itself in
+		// finalizeConversationPostHooks (seed_query.go), which fires on all
+		// paths (success, error, budget-exceeded) with routing metadata.
+		// Re-publishing here caused duplicate "turn complete" lines in the CLI.
 
 		// In shared-agent mode, sync the agent state back to the WebUI so
 		// the browser tab's conversation history stays current after CLI queries.

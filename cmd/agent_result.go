@@ -46,11 +46,18 @@ type AgentResultMetrics struct {
 // outputFormatJSON is the flag value for JSON output mode.
 var outputFormatJSON bool
 
+// outputPath, when set, redirects the structured JSON result to this file
+// instead of stdout. It only takes effect when outputFormatJSON is also
+// true. Keeping stdout free lets logs flow through the Fly machine log
+// fallback path without being interleaved with the JSON payload.
+var outputPath string
+
 // maxDiffBytes is the maximum size of git diff output to include.
 const maxDiffBytes = 1 << 20 // 1MB
 
 func init() {
 	agentCmd.Flags().BoolVar(&outputFormatJSON, "output-json", false, "Output structured JSON result to stdout after execution (for CI/SaaS integration)")
+	agentCmd.Flags().StringVar(&outputPath, "output-path", "", "Write the structured JSON result to this file instead of stdout (requires --output-json)")
 }
 
 // emitJSONResult writes the AgentResult as indented JSON to stdout.
@@ -195,9 +202,36 @@ func emitJSONResult(query string, startTime time.Time, runErr error, a *agent.Ag
 		}
 	}
 
-	enc := json.NewEncoder(os.Stdout)
+	// Determine the output destination. When --output-path is set, write the
+	// JSON to that file so stdout stays free for logs (important for the Fly
+	// machine log fallback path). On file-write failure, fall back to stdout
+	// so the structured result is never silently lost.
+	var out *os.File = os.Stdout
+	if outputPath != "" {
+		f, err := os.Create(outputPath)
+		if err != nil {
+			console.GlyphWarning.Fprintf(os.Stderr, "Failed to open output path %q for JSON result: %v; falling back to stdout", outputPath, err)
+		} else {
+			out = f
+			defer func() {
+				if cerr := out.Close(); cerr != nil {
+					console.GlyphWarning.Fprintf(os.Stderr, "Failed to close output path %q: %v", outputPath, cerr)
+				}
+			}()
+		}
+	}
+
+	enc := json.NewEncoder(out)
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(result); err != nil {
 		console.GlyphWarning.Fprintf(os.Stderr, "Failed to encode JSON result: %v", err)
+		// If we were writing to a file and the encode failed (disk full,
+		// broken pipe mid-write), the file is likely partial/empty. Fall
+		// back to stdout so the structured result is never silently lost.
+		if out != os.Stdout {
+			stdoutEnc := json.NewEncoder(os.Stdout)
+			stdoutEnc.SetIndent("", "  ")
+			_ = stdoutEnc.Encode(result) // best-effort; nothing more we can do
+		}
 	}
 }

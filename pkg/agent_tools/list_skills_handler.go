@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
-	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 type listSkillsHandler struct{}
@@ -31,57 +30,38 @@ func (h *listSkillsHandler) Validate(args map[string]any) error {
 }
 
 func (h *listSkillsHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	toolName := h.Name()
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool":   toolName,
-			"params": args,
-		})
-		defer func() {
-			env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-				"tool":  toolName,
-				"error": false,
-			})
-		}()
-
-		// Get config - use manager if available, otherwise create default
-		var config *configuration.Config
-		if env.ConfigManager != nil {
-			config = env.ConfigManager.GetConfig()
-		} else {
-			manager, err := configuration.NewManager()
-			if err != nil {
-				return ToolResult{
-					Output:  fmt.Sprintf("Error getting configuration: %v", err),
-					IsError: true,
-				}, nil
-			}
-			config = manager.GetConfig()
+	// Get config - use manager if available, otherwise create default
+	var config *configuration.Config
+	if env.ConfigManager != nil {
+		config = env.ConfigManager.GetConfig()
+	} else {
+		manager, err := configuration.NewManager()
+		if err != nil {
+			return ToolResult{
+				Output:  fmt.Sprintf("Error getting configuration: %v", err),
+				IsError: true,
+			}, nil
 		}
+		config = manager.GetConfig()
+	}
 
-		skillMap := config.GetAllEnabledSkills()
-		skills := make([]configuration.Skill, 0, len(skillMap))
-		for _, skill := range skillMap {
-			skills = append(skills, skill)
-		}
-
-		return ToolResult{
-			Output:  formatSkillList(skills),
-			IsError: false,
-		}, nil
+	skillMap := config.GetAllEnabledSkills()
+	skills := make([]configuration.Skill, 0, len(skillMap))
+	for _, skill := range skillMap {
+		skills = append(skills, skill)
 	}
 
 	return ToolResult{
-		Output:  "No results",
+		Output:  formatSkillList(skills),
 		IsError: false,
 	}, nil
 }
 
-func (h *listSkillsHandler) Aliases() []string         { return nil }
-func (h *listSkillsHandler) Timeout() time.Duration    { return 0 }
-func (h *listSkillsHandler) MaxResultSize() int        { return 0 }
-func (h *listSkillsHandler) SafeForParallel() bool     { return false }
-func (h *listSkillsHandler) Interactive() bool         { return false }
+func (h *listSkillsHandler) Aliases() []string      { return nil }
+func (h *listSkillsHandler) Timeout() time.Duration { return 0 }
+func (h *listSkillsHandler) MaxResultSize() int     { return 0 }
+func (h *listSkillsHandler) SafeForParallel() bool  { return false }
+func (h *listSkillsHandler) Interactive() bool      { return false }
 
 func formatSkillList(skills []configuration.Skill) string {
 	if len(skills) == 0 {

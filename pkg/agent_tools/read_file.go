@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
@@ -89,14 +88,6 @@ func (h *readFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 		endLine = toIntArg(arr[1])
 	}
 
-	// Publish tool start event
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool": "read_file",
-			"path": path,
-		})
-	}
-
 	// SP-046-2: Record the read for staleness tracking (all code paths, including PDF)
 	// Use a defer so this runs regardless of which branch handles the file.
 	if tracker := GetGlobalTurnReadTracker(); tracker != nil {
@@ -134,14 +125,6 @@ func (h *readFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 	}
 
 	// Publish tool end event
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-			"tool":   "read_file",
-			"path":   path,
-			"bytes":  len(content),
-			"tokens": estimateTokenUsage(content),
-		})
-	}
 
 	// Write to output writer if available
 	if env.OutputWriter != nil {
@@ -154,11 +137,11 @@ func (h *readFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 	}, nil
 }
 
-func (h *readFileHandler) Aliases() []string         { return nil }
-func (h *readFileHandler) Timeout() time.Duration    { return 0 }
-func (h *readFileHandler) MaxResultSize() int        { return 0 }
-func (h *readFileHandler) SafeForParallel() bool     { return false }
-func (h *readFileHandler) Interactive() bool         { return false }
+func (h *readFileHandler) Aliases() []string      { return nil }
+func (h *readFileHandler) Timeout() time.Duration { return 0 }
+func (h *readFileHandler) MaxResultSize() int     { return 0 }
+func (h *readFileHandler) SafeForParallel() bool  { return false }
+func (h *readFileHandler) Interactive() bool      { return false }
 
 // handlePDF processes a PDF file and returns it as base64 data URI for vision-capable models.
 func (h *readFileHandler) handlePDF(ctx context.Context, env ToolEnv, path string) (ToolResult, error) {
@@ -210,15 +193,6 @@ func (h *readFileHandler) handlePDF(ctx context.Context, env ToolEnv, path strin
 		textContent = fmt.Sprintf("[PDF file: %s (%d pages rendered as images for visual analysis)]", cleanPath, len(result.Images))
 	} else {
 		textContent = fmt.Sprintf("[PDF file: %s (%d bytes). Text extraction unavailable: %v. Base64 data URI provided for vision-capable models.]", cleanPath, len(data), pipelineErr)
-	}
-
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-			"tool":   "read_file",
-			"path":   path,
-			"bytes":  len(data),
-			"images": 1,
-		})
 	}
 
 	return ToolResult{

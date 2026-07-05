@@ -3,8 +3,6 @@ package tools
 import (
 	"context"
 	"time"
-
-	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 // ListChangesFunc is a function pointer set by pkg/agent at startup.
@@ -58,23 +56,8 @@ func (h *listChangesHandler) Validate(args map[string]any) error {
 }
 
 func (h *listChangesHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	toolName := h.Name()
-	var hadError bool
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool":   toolName,
-			"params": args,
-		})
-		defer func() {
-			env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-				"tool":  toolName,
-				"error": hadError,
-			})
-		}()
-	}
 
 	if ListChangesFunc == nil {
-		hadError = true
 		return ToolResult{
 			Output:  "list_changes is not available: agent integration not initialized (ListChangesFunc is nil)",
 			IsError: true,
@@ -83,14 +66,13 @@ func (h *listChangesHandler) Execute(ctx context.Context, env ToolEnv, args map[
 
 	result, err := ListChangesFunc(ctx, args)
 	if err != nil {
-		hadError = true
 		return ToolResult{Output: err.Error(), IsError: true}, nil
 	}
 	return ToolResult{Output: result}, nil
 }
 
-func (h *listChangesHandler) Aliases() []string         { return nil }
-func (h *listChangesHandler) Timeout() time.Duration    { return 0 }
-func (h *listChangesHandler) MaxResultSize() int        { return 0 }
-func (h *listChangesHandler) SafeForParallel() bool     { return false }
-func (h *listChangesHandler) Interactive() bool         { return false }
+func (h *listChangesHandler) Aliases() []string      { return nil }
+func (h *listChangesHandler) Timeout() time.Duration { return 0 }
+func (h *listChangesHandler) MaxResultSize() int     { return 0 }
+func (h *listChangesHandler) SafeForParallel() bool  { return false }
+func (h *listChangesHandler) Interactive() bool      { return false }

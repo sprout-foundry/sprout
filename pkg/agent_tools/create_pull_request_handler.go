@@ -3,8 +3,6 @@ package tools
 import (
 	"context"
 	"time"
-
-	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 // CreatePullRequestFunc is a function pointer set by pkg/agent at startup.
@@ -80,23 +78,7 @@ func (h *createPullRequestHandler) Validate(args map[string]any) error {
 }
 
 func (h *createPullRequestHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	toolName := h.Name()
-	var hadError bool
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool":   toolName,
-			"params": args,
-		})
-		defer func() {
-			env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-				"tool":  toolName,
-				"error": hadError,
-			})
-		}()
-	}
-
 	if CreatePullRequestFunc == nil {
-		hadError = true
 		return ToolResult{
 			Output:  "create_pull_request is not available: agent integration not initialized (CreatePullRequestFunc is nil)",
 			IsError: true,
@@ -105,14 +87,13 @@ func (h *createPullRequestHandler) Execute(ctx context.Context, env ToolEnv, arg
 
 	result, err := CreatePullRequestFunc(ctx, args)
 	if err != nil {
-		hadError = true
 		return ToolResult{Output: err.Error(), IsError: true}, nil
 	}
 	return ToolResult{Output: result}, nil
 }
 
-func (h *createPullRequestHandler) Aliases() []string         { return nil }
-func (h *createPullRequestHandler) Timeout() time.Duration    { return 0 }
-func (h *createPullRequestHandler) MaxResultSize() int        { return 0 }
-func (h *createPullRequestHandler) SafeForParallel() bool     { return false }
-func (h *createPullRequestHandler) Interactive() bool         { return false }
+func (h *createPullRequestHandler) Aliases() []string      { return nil }
+func (h *createPullRequestHandler) Timeout() time.Duration { return 0 }
+func (h *createPullRequestHandler) MaxResultSize() int     { return 0 }
+func (h *createPullRequestHandler) SafeForParallel() bool  { return false }
+func (h *createPullRequestHandler) Interactive() bool      { return false }

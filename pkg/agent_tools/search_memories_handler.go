@@ -10,7 +10,6 @@ import (
 	"time"
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
-	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 // searchMemoriesHandler implements ToolHandler for the search_memories tool.
@@ -125,15 +124,6 @@ func (h *searchMemoriesHandler) Execute(ctx context.Context, env ToolEnv, args m
 		threshold = 1
 	}
 
-	// Publish tool start event
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool":  "search_memories",
-			"query": query,
-			"top_k": topK,
-		})
-	}
-
 	// Perform text-based memory search
 	results, err := searchMemoriesByText(query, topK, threshold)
 	if err != nil {
@@ -146,14 +136,6 @@ func (h *searchMemoriesHandler) Execute(ctx context.Context, env ToolEnv, args m
 	output := formatMemorySearchResults(query, results, threshold)
 
 	// Publish tool end event
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-			"tool":          "search_memories",
-			"query":         query,
-			"results_found": len(results),
-			"tokens":        estimateTokenUsage(output),
-		})
-	}
 
 	// Write to output writer if available
 	if env.OutputWriter != nil {
@@ -166,11 +148,11 @@ func (h *searchMemoriesHandler) Execute(ctx context.Context, env ToolEnv, args m
 	}, nil
 }
 
-func (h *searchMemoriesHandler) Aliases() []string         { return nil }
-func (h *searchMemoriesHandler) Timeout() time.Duration    { return 0 }
-func (h *searchMemoriesHandler) MaxResultSize() int        { return 0 }
-func (h *searchMemoriesHandler) SafeForParallel() bool     { return false }
-func (h *searchMemoriesHandler) Interactive() bool         { return false }
+func (h *searchMemoriesHandler) Aliases() []string      { return nil }
+func (h *searchMemoriesHandler) Timeout() time.Duration { return 0 }
+func (h *searchMemoriesHandler) MaxResultSize() int     { return 0 }
+func (h *searchMemoriesHandler) SafeForParallel() bool  { return false }
+func (h *searchMemoriesHandler) Interactive() bool      { return false }
 
 // memorySearchResult holds a single result from a text-based memory search.
 type memorySearchResult struct {

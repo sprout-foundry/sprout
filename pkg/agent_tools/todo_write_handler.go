@@ -6,7 +6,6 @@ import (
 	"time"
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
-	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 type todoWriteHandler struct{}
@@ -62,19 +61,6 @@ func (h *todoWriteHandler) Validate(args map[string]any) error {
 }
 
 func (h *todoWriteHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	toolName := h.Name()
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool":   toolName,
-			"params": args,
-		})
-		defer func() {
-			env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-				"tool":  toolName,
-				"error": false,
-			})
-		}()
-	}
 
 	todosRaw := args["todos"].([]interface{})
 	todos := make([]TodoItem, 0, len(todosRaw))
@@ -112,8 +98,8 @@ func (h *todoWriteHandler) Execute(ctx context.Context, env ToolEnv, args map[st
 	return ToolResult{Output: result}, nil
 }
 
-func (h *todoWriteHandler) Aliases() []string         { return nil }
-func (h *todoWriteHandler) Timeout() time.Duration    { return 0 }
-func (h *todoWriteHandler) MaxResultSize() int        { return 0 }
-func (h *todoWriteHandler) SafeForParallel() bool     { return false }
-func (h *todoWriteHandler) Interactive() bool         { return false }
+func (h *todoWriteHandler) Aliases() []string      { return nil }
+func (h *todoWriteHandler) Timeout() time.Duration { return 0 }
+func (h *todoWriteHandler) MaxResultSize() int     { return 0 }
+func (h *todoWriteHandler) SafeForParallel() bool  { return false }
+func (h *todoWriteHandler) Interactive() bool      { return false }

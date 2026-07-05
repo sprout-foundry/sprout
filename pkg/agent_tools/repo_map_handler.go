@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"time"
-
-	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 type repoMapHandler struct{}
@@ -29,46 +27,27 @@ func (h *repoMapHandler) Validate(args map[string]any) error {
 }
 
 func (h *repoMapHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	toolName := h.Name()
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool":   toolName,
-			"params": args,
-		})
-		defer func() {
-			env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-				"tool":  toolName,
-				"error": false,
-			})
-		}()
+	directory, _ := extractString(args, "directory")
+	if directory == "" {
+		directory = "."
+	}
 
-		directory, _ := extractString(args, "directory")
-		if directory == "" {
-			directory = "."
-		}
-
-		output, err := GenerateRepoMap(ctx, directory)
-		if err != nil {
-			return ToolResult{
-				Output:  fmt.Sprintf("Error generating repo map: %v", err),
-				IsError: true,
-			}, nil
-		}
-
+	output, err := GenerateRepoMap(ctx, directory)
+	if err != nil {
 		return ToolResult{
-			Output:  output,
-			IsError: false,
+			Output:  fmt.Sprintf("Error generating repo map: %v", err),
+			IsError: true,
 		}, nil
 	}
 
 	return ToolResult{
-		Output:  "No results",
+		Output:  output,
 		IsError: false,
 	}, nil
 }
 
-func (h *repoMapHandler) Aliases() []string         { return nil }
-func (h *repoMapHandler) Timeout() time.Duration    { return 0 }
-func (h *repoMapHandler) MaxResultSize() int        { return 0 }
-func (h *repoMapHandler) SafeForParallel() bool     { return false }
-func (h *repoMapHandler) Interactive() bool         { return false }
+func (h *repoMapHandler) Aliases() []string      { return nil }
+func (h *repoMapHandler) Timeout() time.Duration { return 0 }
+func (h *repoMapHandler) MaxResultSize() int     { return 0 }
+func (h *repoMapHandler) SafeForParallel() bool  { return false }
+func (h *repoMapHandler) Interactive() bool      { return false }

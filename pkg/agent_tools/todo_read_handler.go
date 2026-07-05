@@ -7,7 +7,6 @@ import (
 	"time"
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
-	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 type todoReadHandler struct{}
@@ -31,19 +30,6 @@ func (h *todoReadHandler) Validate(args map[string]any) error {
 }
 
 func (h *todoReadHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	toolName := h.Name()
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool":   toolName,
-			"params": args,
-		})
-		defer func() {
-			env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-				"tool":  toolName,
-				"error": false,
-			})
-		}()
-	}
 
 	todos := TodoRead()
 	if len(todos) == 0 {
@@ -61,8 +47,8 @@ func (h *todoReadHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 	return ToolResult{Output: sb.String()}, nil
 }
 
-func (h *todoReadHandler) Aliases() []string         { return nil }
-func (h *todoReadHandler) Timeout() time.Duration    { return 0 }
-func (h *todoReadHandler) MaxResultSize() int        { return 0 }
-func (h *todoReadHandler) SafeForParallel() bool     { return false }
-func (h *todoReadHandler) Interactive() bool         { return false }
+func (h *todoReadHandler) Aliases() []string      { return nil }
+func (h *todoReadHandler) Timeout() time.Duration { return 0 }
+func (h *todoReadHandler) MaxResultSize() int     { return 0 }
+func (h *todoReadHandler) SafeForParallel() bool  { return false }
+func (h *todoReadHandler) Interactive() bool      { return false }

@@ -8,8 +8,6 @@ import (
 	"regexp"
 	"strings"
 	"time"
-
-	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 type searchFilesHandler struct{}
@@ -40,21 +38,8 @@ func (h *searchFilesHandler) Validate(args map[string]any) error {
 }
 
 func (h *searchFilesHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	toolName := h.Name()
 
 	// Event publishing (optional — runs only when EventBus is configured)
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool":   toolName,
-			"params": args,
-		})
-		defer func() {
-			env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-				"tool":  toolName,
-				"error": false,
-			})
-		}()
-	}
 
 	searchPattern, err := extractString(args, "search_pattern")
 	if err != nil {
@@ -159,11 +144,11 @@ func (h *searchFilesHandler) Execute(ctx context.Context, env ToolEnv, args map[
 	}, nil
 }
 
-func (h *searchFilesHandler) Aliases() []string         { return nil }
-func (h *searchFilesHandler) Timeout() time.Duration    { return 0 }
-func (h *searchFilesHandler) MaxResultSize() int        { return 0 }
-func (h *searchFilesHandler) SafeForParallel() bool     { return false }
-func (h *searchFilesHandler) Interactive() bool         { return false }
+func (h *searchFilesHandler) Aliases() []string      { return nil }
+func (h *searchFilesHandler) Timeout() time.Duration { return 0 }
+func (h *searchFilesHandler) MaxResultSize() int     { return 0 }
+func (h *searchFilesHandler) SafeForParallel() bool  { return false }
+func (h *searchFilesHandler) Interactive() bool      { return false }
 
 func compileSearchPattern(pattern string, caseSensitive bool) (*regexp.Regexp, error) {
 	var raw string

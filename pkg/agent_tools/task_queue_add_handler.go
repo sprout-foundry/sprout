@@ -6,7 +6,6 @@ import (
 	"time"
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
-	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 type taskQueueAddHandler struct{}
@@ -42,19 +41,6 @@ func (h *taskQueueAddHandler) Validate(args map[string]any) error {
 }
 
 func (h *taskQueueAddHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	toolName := h.Name()
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool":   toolName,
-			"params": args,
-		})
-		defer func() {
-			env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-				"tool":  toolName,
-				"error": false,
-			})
-		}()
-	}
 
 	title, _ := extractString(args, "title")
 	description, _ := extractString(args, "description")
@@ -77,8 +63,8 @@ func (h *taskQueueAddHandler) Execute(ctx context.Context, env ToolEnv, args map
 	return ToolResult{Output: result}, nil
 }
 
-func (h *taskQueueAddHandler) Aliases() []string         { return nil }
-func (h *taskQueueAddHandler) Timeout() time.Duration    { return 0 }
-func (h *taskQueueAddHandler) MaxResultSize() int        { return 0 }
-func (h *taskQueueAddHandler) SafeForParallel() bool     { return false }
-func (h *taskQueueAddHandler) Interactive() bool         { return false }
+func (h *taskQueueAddHandler) Aliases() []string      { return nil }
+func (h *taskQueueAddHandler) Timeout() time.Duration { return 0 }
+func (h *taskQueueAddHandler) MaxResultSize() int     { return 0 }
+func (h *taskQueueAddHandler) SafeForParallel() bool  { return false }
+func (h *taskQueueAddHandler) Interactive() bool      { return false }

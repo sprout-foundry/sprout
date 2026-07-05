@@ -81,12 +81,12 @@ When the configured model isn't in the provider's available list:
 ```
 Tier 1: Persona-specific config (persona's Provider / Model fields)
 Tier 2: Global subagent config (SubagentProvider / SubagentModel)
-Tier 3: Parent agent inheritance (parent's provider/model)
-        ── ONLY when BOTH SubagentProvider="" AND SubagentModel=""
-           AND persona has no explicit provider/model
+Tier 3: Parent agent inheritance (field-by-field)
+        ── Provider inherits if neither persona nor global config set it
+        ── Model inherits if neither persona nor global config set it
 ```
 
-**Footgun:** Setting _either_ `SubagentProvider` or `SubagentModel` (but not both) disables parent inheritance entirely. The unset field becomes empty instead of inheriting from the parent.
+**v0.17 fix:** Inheritance is now field-by-field. Setting only SubagentProvider no longer blocks model inheritance, and vice versa.
 
 ### `GetSubagentProvider`
 
@@ -146,13 +146,10 @@ Tier 3: Parent agent inheritance (parent's provider/model)
 1. Client's GetModelContextLimit() → model's reported context window
 2. Capped by user's MaxContextTokens setting (if set and lower)
 3. → 32000 (hardcoded fallback when client is nil or API call fails)
+   ⚠ A warning is logged via the agent logger when this fallback fires.
 ```
 
-**Implication:** If the client can't report a context window (nil client, API error, unknown model), the limit silently becomes 32K. A 1M-token model would be cut to 3% of its capacity with no user-visible warning.
-
-Also appears in:
-- `pkg/agent_api/token_utils.go:161` — `contextLimit = 32000 // Default fallback`
-- `pkg/agent_api/ollama_local.go:424` — `contextLimit = 32000`
+**Implication:** If the client can't report a context window (nil client, API error, unknown model), the limit falls back to 32K and a warning is emitted. A 1M-token model would run at 3% of capacity with a visible log warning.
 
 ---
 
@@ -247,9 +244,7 @@ CommitMessageTimeoutSec: 300  (5 min)
 
 | Risk | Chain | Impact |
 |---|---|---|
-| 🔴 High | Context limit → 32K | 1M-token model runs at 3% capacity, no warning |
 | 🟡 Medium | Model selection heuristics | Wrong model variant picked, especially on DeepInfra/OpenRouter |
-| 🟡 Medium | Subagent inherits parent only when ALL fields empty | Setting SubagentProvider breaks the entire inheritance chain |
 | 🔵 Low | Resolve() overrides zero-values | `0` might mean "unlimited" but gets overridden by positive default |
 | 🔵 Low | Vision silently falls back to OCR | Different model, different quality, only logged to stderr |
 
@@ -259,6 +254,8 @@ CommitMessageTimeoutSec: 300  (5 min)
 |---|---|
 | 🔴 Provider → ollama-local | Removed. Error surfaced, interactive picker offered. |
 | 🔴 Model → NewConfig() defaults | Removed. Live API model selection used instead. |
+| 🔴 Context limit → 32K silent | Warning logged when fallback fires. |
+| 🟡 Subagent partial inheritance | Field-by-field resolution. |
 | 🟡 3 copies of 4-level fallback | Removed. Direct field access only. |
 
 ---

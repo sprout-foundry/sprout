@@ -157,110 +157,24 @@ type SettingDetail struct {
 	Description string
 	ValidValues string
 	GetValue    func(cfg *configuration.Config) string
+	ListType    bool // true for comma-separated list settings (add/remove/set UI)
 }
 
-// AllSettings returns the complete list of setting definitions including extended settings.
+// AllSettings returns the complete list of setting definitions, derived from the
+// single settingDefs registry.
 func AllSettings() []SettingDetail {
-			return []SettingDetail{
-			{
-				Key:         "provider",
-				Description: "Current LLM provider",
-				ValidValues: "openai, anthropic, deepseek, openrouter, ollama, ollama-local, lmstudio, deepinfra, cerebras, chutes, minimax, mistral, zai, or custom provider names",
-				GetValue:    func(cfg *configuration.Config) string { return cfg.LastUsedProvider },
-			},
-			{
-				Key:         "model",
-				Description: "Current model for the active provider",
-				ValidValues: "provider-specific model name",
-				GetValue:    func(cfg *configuration.Config) string { m := cfg.GetModelForProvider(cfg.LastUsedProvider); return m },
-			},
-			{
-				Key:         "reasoning_effort",
-				Description: "Reasoning effort",
-				ValidValues: "low, medium, high",
-				GetValue:    func(cfg *configuration.Config) string { return cfg.ReasoningEffort },
-			},
-			{
-				Key:         "disable_thinking",
-				Description: "Disable thinking mode",
-				ValidValues: "true, false",
-				GetValue:    func(cfg *configuration.Config) string { return fmt.Sprintf("%v", cfg.DisableThinking) },
-			},
-			{
-				Key:         "resource_directory",
-				Description: "Directory for captured web/vision resources",
-				ValidValues: "any valid file path",
-				GetValue:    func(cfg *configuration.Config) string { return cfg.ResourceDirectory },
-			},
-			{
-				Key:         "history_scope",
-				Description: "Change history scope",
-				ValidValues: "project, global",
-				GetValue:    func(cfg *configuration.Config) string { return cfg.HistoryScope },
-			},
-			{
-				Key:         "ea_mode",
-				Description: "Executive Assistant mode",
-				ValidValues: "interactive, queue",
-				GetValue:    func(cfg *configuration.Config) string { return cfg.EAMode },
-			},
-			{
-				Key:         "subagent_provider",
-				Description: "Provider used for subagents",
-				ValidValues: "provider name or empty to inherit from provider",
-				GetValue:    func(cfg *configuration.Config) string { return cfg.SubagentProvider },
-			},
-			{
-				Key:         "subagent_model",
-				Description: "Model used for subagents",
-				ValidValues: "provider-specific model name or empty to use provider default",
-				GetValue:    func(cfg *configuration.Config) string { return cfg.SubagentModel },
-			},
-			{
-				Key:         "default_subagent_persona",
-				Description: "Persona used when run_subagent is invoked without a persona argument",
-				ValidValues: "persona ID (e.g. general, coder, reviewer) or empty to fall back to 'general'",
-				GetValue:    func(cfg *configuration.Config) string { return cfg.DefaultSubagentPersona },
-			},
-			{
-				Key:         "disabled_personas",
-				Description: "Comma-separated persona IDs hidden from /persona list and subagent spawning",
-				ValidValues: "comma-separated persona IDs (e.g. researcher,web_scraper) or empty to enable all",
-				GetValue: func(cfg *configuration.Config) string {
-					return strings.Join(cfg.DisabledPersonas, ",")
-				},
-			},
-			{
-				Key:         "output_verbosity",
-				Description: "How much inter-tool-call narration the UI shows",
-				ValidValues: "compact, default, verbose",
-				GetValue:    func(cfg *configuration.Config) string { return cfg.OutputVerbosity },
-			},
-			{
-				Key:         "commit_provider",
-				Description: "Provider for commit message generation",
-				ValidValues: "provider name or empty to inherit from provider",
-				GetValue:    func(cfg *configuration.Config) string { return cfg.CommitProvider },
-			},
-			{
-				Key:         "commit_model",
-				Description: "Model for commit message generation",
-				ValidValues: "provider-specific model name or empty to use provider default",
-				GetValue:    func(cfg *configuration.Config) string { return cfg.CommitModel },
-			},
-			{
-				Key:         "review_provider",
-				Description: "Provider for code review commands",
-				ValidValues: "provider name or empty to inherit from provider",
-				GetValue:    func(cfg *configuration.Config) string { return cfg.ReviewProvider },
-			},
-			{
-				Key:         "review_model",
-				Description: "Model for code review commands",
-				ValidValues: "provider-specific model name or empty to use provider default",
-				GetValue:    func(cfg *configuration.Config) string { return cfg.ReviewModel },
-			},
-		}}
+	result := make([]SettingDetail, len(settingDefs))
+	for i, d := range settingDefs {
+		result[i] = SettingDetail{
+			Key:         d.Key,
+			Description: d.Description,
+			ValidValues: d.ValidValues,
+			GetValue:    d.GetValue,
+			ListType:    d.ListType,
+		}
+	}
+	return result
+}
 
 // handleSettingsDescribe returns the description, valid values, and current value for a single setting.
 func handleSettingsDescribe(a *Agent, args map[string]interface{}) (string, error) {
@@ -370,7 +284,17 @@ func handleSettingsPreview(a *Agent, args map[string]interface{}) (string, error
 	// Validate the proposed value by dry-running setConfigValue on a shallow
 	// copy of the config. We must copy the full struct so persona validation
 	// (GetSubagentType / IsPersonaDisabled) has access to the real registries.
+	// Deep-copy pointer fields that setConfigValue mutates in-place so the
+	// preview never accidentally mutates the real config.
 	previewCfg := *cfg
+	if cfg.APITimeouts != nil {
+		copy := *cfg.APITimeouts
+		previewCfg.APITimeouts = &copy
+	}
+	if cfg.Notifications != nil {
+		copy := *cfg.Notifications
+		previewCfg.Notifications = &copy
+	}
 	setErr := setConfigValue(&previewCfg, key, value)
 
 	var notes []string
@@ -404,26 +328,6 @@ func handleSettingsPreview(a *Agent, args map[string]interface{}) (string, error
 	return result.String(), nil
 }
 
-// supportedSettings contains the list of valid setting keys.
-var supportedSettings = map[string]string{
-	"provider":                 "Current LLM provider",
-	"model":                    "Current model for the active provider",
-	"reasoning_effort":         "Reasoning effort (low/medium/high)",
-	"disable_thinking":         "Disable thinking mode (true/false)",
-	"resource_directory":       "Directory for captured web/vision resources",
-	"history_scope":            "Change history scope (project/global)",
-	"ea_mode":                  "Coordinator persona startup mode (interactive/queue). Legacy name retained for compatibility.",
-	"subagent_provider":        "Provider used for subagents",
-	"subagent_model":           "Model used for subagents",
-	"default_subagent_persona": "Persona used when run_subagent omits the persona argument",
-	"disabled_personas":        "Comma-separated persona IDs hidden from /persona list and spawning",
-	"output_verbosity":         "Output verbosity level (compact/default/verbose)",
-	"commit_provider":          "Provider for commit message generation",
-	"commit_model":             "Model for commit message generation",
-	"review_provider":          "Provider for code review commands",
-	"review_model":             "Model for code review commands",
-}
-
 // validateSettingKey checks that a key is a recognized setting.
 func validateSettingKey(key string) error {
 	normalized := strings.ToLower(key)
@@ -440,137 +344,20 @@ func validateSettingKey(key string) error {
 
 // getConfigValue returns the string representation of a config setting by key.
 func getConfigValue(cfg *configuration.Config, key string) (string, error) {
-	switch strings.ToLower(key) {
-	case "provider":
-		return cfg.LastUsedProvider, nil
-	case "model":
-		if cfg.LastUsedProvider != "" {
-			if m, ok := cfg.ProviderModels[cfg.LastUsedProvider]; ok {
-				return m, nil
-			}
-		}
-		return "", nil
-	case "reasoning_effort":
-		return cfg.ReasoningEffort, nil
-	case "disable_thinking":
-		return fmt.Sprintf("%v", cfg.DisableThinking), nil
-	case "resource_directory":
-		return cfg.ResourceDirectory, nil
-	case "history_scope":
-		return cfg.HistoryScope, nil
-	case "ea_mode":
-		return cfg.EAMode, nil
-	case "subagent_provider":
-		return cfg.SubagentProvider, nil
-	case "subagent_model":
-		return cfg.SubagentModel, nil
-	case "default_subagent_persona":
-		return cfg.DefaultSubagentPersona, nil
-	case "disabled_personas":
-		return strings.Join(cfg.DisabledPersonas, ","), nil
-	case "output_verbosity":
-		return cfg.OutputVerbosity, nil
-	case "commit_provider":
-		return cfg.CommitProvider, nil
-	case "commit_model":
-		return cfg.CommitModel, nil
-	case "review_provider":
-		return cfg.ReviewProvider, nil
-	case "review_model":
-		return cfg.ReviewModel, nil
-	default:
+	d := lookupSettingDef(key)
+	if d == nil {
 		return "", validateSettingKey(key)
 	}
+	return d.GetValue(cfg), nil
 }
 
 // setConfigValue updates a config setting by key and value string.
 func setConfigValue(cfg *configuration.Config, key, value string) error {
-	switch strings.ToLower(key) {
-	case "provider":
-		cfg.LastUsedProvider = value
-	case "model":
-		if cfg.LastUsedProvider == "" {
-			return agenterrors.NewValidation("cannot set model: no provider selected", nil)
-		}
-		if cfg.ProviderModels == nil {
-			cfg.ProviderModels = make(map[string]string)
-		}
-		cfg.ProviderModels[cfg.LastUsedProvider] = value
-	case "reasoning_effort":
-		switch strings.ToLower(value) {
-		case "low", "medium", "high", "":
-			cfg.ReasoningEffort = strings.ToLower(value)
-		default:
-			return agenterrors.NewValidation(fmt.Sprintf("reasoning_effort must be low, medium, or high, got %q", value), nil)
-		}
-	case "disable_thinking":
-		switch strings.ToLower(value) {
-		case "true":
-			cfg.DisableThinking = true
-		case "false":
-			cfg.DisableThinking = false
-		default:
-			return agenterrors.NewValidation(fmt.Sprintf("disable_thinking must be true or false, got %q", value), nil)
-		}
-	case "resource_directory":
-		cfg.ResourceDirectory = value
-	case "history_scope":
-		switch strings.ToLower(value) {
-		case "project", "global", "":
-			cfg.HistoryScope = strings.ToLower(value)
-		default:
-			return agenterrors.NewValidation(fmt.Sprintf("history_scope must be project or global, got %q", value), nil)
-		}
-	case "ea_mode":
-		switch strings.ToLower(value) {
-		case "interactive", "queue", "":
-			cfg.EAMode = strings.ToLower(value)
-		default:
-			return agenterrors.NewValidation(fmt.Sprintf("ea_mode must be interactive or queue, got %q", value), nil)
-		}
-	case "subagent_provider":
-		cfg.SubagentProvider = value
-	case "subagent_model":
-		cfg.SubagentModel = value
-	case "default_subagent_persona":
-		v := strings.TrimSpace(value)
-		if v != "" && cfg.GetSubagentType(v) == nil {
-			return agenterrors.NewValidation(fmt.Sprintf("default_subagent_persona %q is not a known persona ID or alias", v), nil)
-		}
-		cfg.DefaultSubagentPersona = v
-	case "disabled_personas":
-		// Comma-separated list. Empty value clears the list.
-		var ids []string
-		for _, raw := range strings.Split(value, ",") {
-			trimmed := strings.TrimSpace(raw)
-			if trimmed == "" {
-				continue
-			}
-			if cfg.GetSubagentType(trimmed) == nil && !cfg.IsPersonaDisabled(trimmed) {
-				return agenterrors.NewValidation(fmt.Sprintf("disabled_personas: %q is not a known persona ID or alias", trimmed), nil)
-			}
-			ids = append(ids, trimmed)
-		}
-		cfg.DisabledPersonas = ids
-	case "output_verbosity":
-		switch strings.ToLower(value) {
-		case "compact", "default", "verbose", "":
-			cfg.OutputVerbosity = strings.ToLower(value)
-		default:
-			return agenterrors.NewValidation(fmt.Sprintf("output_verbosity must be compact, default, or verbose, got %q", value), nil)
-		}
-	case "commit_provider":
-		cfg.CommitProvider = value
-	case "commit_model":
-		cfg.CommitModel = value
-	case "review_provider":
-		cfg.ReviewProvider = value
-	case "review_model":
-		cfg.ReviewModel = value
-	default:
+	d := lookupSettingDef(key)
+	if d == nil {
 		return validateSettingKey(key)
 	}
-	return nil
+	return d.SetValue(cfg, value)
 }
 
 // GetSettingValue returns the string representation of a config setting by key.

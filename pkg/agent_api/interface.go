@@ -103,8 +103,9 @@ func NewOpenRouterClientWrapper(model string) (ClientInterface, error) {
 // 1. Command-line flag (if provided)
 // 2. Environment variable (SPROUT_PROVIDER, with LEDIT_PROVIDER backward-compat)
 // 3. Config file (last_used_provider)
-// 4. First available provider based on API keys (uses priority order + dynamic discovery)
-// 5. Fallback to Ollama
+//
+// Returns an error if no available provider is found; callers should surface
+// this to the user and offer interactive provider selection.
 func DetermineProvider(explicitProvider string, lastUsedProvider ClientType) (ClientType, error) {
 	// 1. Command-line flag has highest priority
 	if explicitProvider != "" {
@@ -131,31 +132,7 @@ func DetermineProvider(explicitProvider string, lastUsedProvider ClientType) (Cl
 		return lastUsedProvider, nil
 	}
 
-	// 4. First available provider based on API keys
-	// Priority order for recommended providers (new providers can be added to the end)
-	priorityOrder := []ClientType{
-		ClientType("openrouter"),
-		ClientType("zai"),
-		ClientType("deepinfra"),
-		ClientType("deepseek"),
-		ClientType("minimax"),
-		ClientType("cerebras"),
-		ClientType("chutes"),
-		ClientType("openai"),
-		ClientType("mistral"),
-		ClientType("lmstudio"),
-		ClientType("ollama-cloud"),
-		OllamaLocalClientType,
-	}
-
-	for _, provider := range priorityOrder {
-		if IsProviderAvailable(provider) {
-			return provider, nil
-		}
-	}
-
-	// 5. Final fallback
-	return OllamaLocalClientType, nil
+	return "", fmt.Errorf("no provider available: no explicit provider, SPROUT_PROVIDER env var, or configured provider with valid credentials found")
 }
 
 // ParseProviderName converts a string provider name to ClientType

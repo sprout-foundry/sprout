@@ -51,6 +51,23 @@ func formatToolRunLine(depth int, persona, icon, toolName string, count int, arg
 		indent, icon, badge, toolName, count, preview, totalSec)
 }
 
+// formatResultSize renders a human-readable size string for the number
+// of characters in a tool result. Used by verbose mode to append a dim
+// "· 1.2KB" or "· 450 chars" suffix to tool-end lines. Returns "" for
+// zero-length results so we don't clutter the line with "· 0 chars".
+//
+// Threshold: >=1000 chars switches to kilobytes (base-1024) with one
+// decimal place; below that we show the raw char count.
+func formatResultSize(length int) string {
+	if length <= 0 {
+		return ""
+	}
+	if length >= 1000 {
+		return fmt.Sprintf("%.1fKB", float64(length)/1024)
+	}
+	return fmt.Sprintf("%d chars", length)
+}
+
 // toolRunState tracks a sequence of consecutive identical tool calls
 // so the subscriber can collapse them into a single in-place row
 // (Phase 3 of CLI ergonomics). A run is broken — set to nil — whenever
@@ -102,7 +119,11 @@ func (r *toolRunState) appendArg(preview string) {
 // provider/model so users can see which subagent — and which underlying
 // model, often a cheaper/faster one than the parent's — is doing the
 // work. For everything else it falls through to formatToolArgPreview.
-func formatToolPreview(chatAgent *agent.Agent, toolName, arguments string) string {
+//
+// maxArgLen overrides the per-tool truncation width when > 0 (verbose
+// mode passes a higher value so power users see more of the path/command).
+// Pass 0 to use the built-in per-tool defaults.
+func formatToolPreview(chatAgent *agent.Agent, toolName, arguments string, maxArgLen int) string {
 	switch toolName {
 	case "run_subagent":
 		return formatRunSubagentPreview(chatAgent, arguments)
@@ -111,7 +132,7 @@ func formatToolPreview(chatAgent *agent.Agent, toolName, arguments string) strin
 	case "TodoWrite", "todo_write":
 		return formatTodoWritePreview(arguments)
 	default:
-		return formatToolArgPreview(toolName, arguments)
+		return formatToolArgPreview(toolName, arguments, maxArgLen)
 	}
 }
 
@@ -307,7 +328,11 @@ func formatRunParallelSubagentsPreview(arguments string) string {
 // for the tool at hand. Returns an empty string (no parens) when nothing
 // useful is available. Best-effort — invalid JSON yields no preview.
 //
-// Per-tool max widths and truncation strategies:
+// maxArgLen overrides the per-tool truncation widths when > 0 (used by
+// verbose mode to show longer paths/commands). Pass 0 to use the built-in
+// per-tool defaults documented below.
+//
+// Per-tool max widths and truncation strategies (when maxArgLen == 0):
 //   - File paths use abbreviatePath so the filename always survives even
 //     when the directory prefix has to be dropped — "…/last/two/seg.go"
 //     reads better than "webui/src/components/sett…" where the actual
@@ -315,7 +340,7 @@ func formatRunParallelSubagentsPreview(arguments string) string {
 //   - shell_command / exec preserve more context (80 chars) because the
 //     suffix of a command is often the meaningful part (pipes, args).
 //   - Everything else gets the conservative 70-char tail truncation.
-func formatToolArgPreview(toolName, arguments string) string {
+func formatToolArgPreview(toolName, arguments string, maxArgLen int) string {
 	if arguments == "" {
 		return ""
 	}
@@ -359,6 +384,12 @@ func formatToolArgPreview(toolName, arguments string) string {
 			}
 		}
 		maxLen = 70
+	}
+
+	// Verbose override: bump the truncation width so power users see
+	// more of the path/command without the "…" cut.
+	if maxArgLen > 0 {
+		maxLen = maxArgLen
 	}
 
 	preview = sanitizeArgForPreview(preview)

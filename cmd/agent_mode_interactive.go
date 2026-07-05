@@ -431,6 +431,23 @@ func (s *agentFooterSource) SetTurnCostStart(cost float64) {
 	}
 }
 
+// TodoProgress returns (completed, total) from the agent's todo list.
+// Satisfies the optional todoProgressSource interface so the footer can
+// render a "3/7 done" badge during multi-step turns. CLI-UX-4.
+func (s *agentFooterSource) TodoProgress() (done, total int) {
+	if s == nil || s.agent == nil {
+		return 0, 0
+	}
+	todos := s.agent.GetTodoManager().Read()
+	for _, t := range todos {
+		total++
+		if t.Status == "completed" {
+			done++
+		}
+	}
+	return done, total
+}
+
 func (s *agentFooterSource) WorkingDir() string {
 	wd, _ := os.Getwd()
 	return wd

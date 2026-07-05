@@ -6,7 +6,7 @@ a major architectural area, its current state, and open work.
 Specs ship to [`./_completed/`](./_completed/) once their core work lands.
 The root directory only contains specs still receiving active changes.
 
-**Counts (as of 2026-07-05):** 74 shipped · 6 pending · 1 on hold.
+**Counts (as of 2026-07-05):** 75 shipped · 5 pending · 1 on hold.
 
 ## Shipped
 
@@ -86,10 +86,12 @@ Full spec bodies in [`_completed/`](./_completed/) (72 files).
 | SP-086 | [Skill Install — Pull Skills from Git, URLs, and Registries](./_completed/SP-086-skill-install-command.md) | ✅ Implemented (2026-06-30) |
 | SP-087 | [SP-087 Acceptance Report](./_completed/SP-087-acceptance.md) | (supporting doc — see linked spec) |
 | SP-087b | [Full Playwright Coverage of the WebUI](./_completed/SP-087b-full-playwright-webui-coverage.md) | ✅ Implemented (2026-06-30; acceptance criterion 3 partial — trace/video/screenshot config deferred, see SP-087-acceptanc |
+| SP-106 | [CLI Output Polish + SelectList Touch Scroll](./_completed/SP-106-cli-output-polish.md) | ✅ Implemented (all 3 features: markdown table rendering, nested list indentation + indented code blocks, SelectList mouse wheel scroll) |
+| SP-109 | [Single-Source Tool Definitions — Eliminate Dual Maintenance](./_completed/SP-109-single-source-tool-definitions.md) | ✅ Implemented (all 4 phases complete; legacy `ToolConfig` registry deleted; `ToolHandler.Definition()` is the single source of truth) |
 
 ## Pending
 
-Specs still in flight (6 files). When a spec's core work
+Specs still in flight (5 files). When a spec's core work
 ships, it moves to [`_completed/`](./_completed/).
 
 | Spec | Title | Status |
@@ -98,7 +100,6 @@ ships, it moves to [`_completed/`](./_completed/).
 | SP-075 | [Large-File Decomposition](./SP-075-large-file-decomposition.md) | ⚠️ In Progress — Phase 1 (config + cmd) and Phase 2 (agent core) substantially shipped 2026-06; Phase 3 (providers + web) shipped for several files. Original 2833-line `config.go` reduced to ~396 lines; `agent_workflow.go` 1519→3 lines; `tool_handlers_subagent.go` 1568→41 lines. **Remaining files over 600-line target:** `steer_input.go` 1313, `go_adapter.go` 1188, `models.go` 1121, `settings_api_put.go` 1094, `client.go` 1060, `client_context.go` 1011, `tool_handlers_subagent_spawn.go` 999, `Terminal.tsx` 780, `agent_modes.go` 732, `input_core.go` 715, `generic_provider.go` 669. |
 | SP-080 | [Multi-Billing-Model Cost Tracking](./SP-080-multi-billing-cost-tracking.md) | 📋 Planned — Design complete. Three billing models (pay-per-token, subscription, free) with dual-cost tracking (charged vs token value). Fleet budget isolation, per-billing-type dashboard breakdown. 4 phases. |
 | SP-105 | [CLI Interactive Panels — Settings Browser & Usage Dashboard](./SP-105-cli-interactive-panels.md) | 🔵 Proposed — `/settings` interactive browser + `/usage` visual dashboard |
-| SP-106 | [CLI Output Polish + SelectList Touch Scroll](./SP-106-cli-output-polish.md) | 🔵 Proposed — Markdown table rendering, nested list indent, SelectList mouse wheel scroll |
 | SP-107 | [Code Intelligence Graph](./SP-107-code-intelligence-graph.md) | 🔵 Proposed — Persistent call graph, dead-code detection, semantic code search. Leverages existing tree-sitter + LSP + embedding infrastructure. |
 | SP-110 | [Background Completion Injection & Auto-Resume](./SP-110-background-completion-auto-resume.md) | 🔵 Proposed — Design complete. 3 phases. Notification queue, shell bg completion, opt-in auto-resume with budget controls. |
 | SP-112 | [Platform Parity — Resolve Stubbed Feature Gaps](./SP-112-platform-parity.md) | 🔵 Proposed — 4 tiers. Windows process groups/signals, WASM tool exclusion, no-CGO embedding fallback, permanent limitation docs. Based on 2026-07-04 platform audit. |

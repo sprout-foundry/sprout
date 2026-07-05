@@ -246,7 +246,7 @@ func TestFormatToolArgPreview(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := formatToolArgPreview(c.tool, c.args)
+			got := formatToolArgPreview(c.tool, c.args, 0)
 			if got != c.want {
 				t.Errorf("formatToolArgPreview(%q, %q) = %q, want %q", c.tool, c.args, got, c.want)
 			}
@@ -293,7 +293,7 @@ func TestFormatToolPreview_DispatchToDefault(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.tool, func(t *testing.T) {
-			got := formatToolPreview(nil, c.tool, c.args)
+			got := formatToolPreview(nil, c.tool, c.args, 0)
 			if got != c.want {
 				t.Errorf("formatToolPreview(nil, %q, %q) = %q, want %q",
 					c.tool, c.args, got, c.want)

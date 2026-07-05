@@ -279,7 +279,7 @@ func TestFormatToolPreview_WithAgent_RunSubagent_Coverage(t *testing.T) {
 		t.Fatalf("NewAgent() error: %v", err)
 	}
 
-	got := formatToolPreview(a, "run_subagent", `{"persona":"coder"}`)
+	got := formatToolPreview(a, "run_subagent", `{"persona":"coder"}`, 0)
 	if !strings.Contains(got, "coder") {
 		t.Errorf("expected 'coder' in preview, got: %q", got)
 	}
@@ -291,7 +291,7 @@ func TestFormatToolPreview_WithAgent_RunParallelSubagents_Coverage(t *testing.T)
 		t.Fatalf("NewAgent() error: %v", err)
 	}
 
-	got := formatToolPreview(a, "run_parallel_subagents", `{"subagents":["a","b","c"]}`)
+	got := formatToolPreview(a, "run_parallel_subagents", `{"subagents":["a","b","c"]}`, 0)
 	if !strings.Contains(got, "3 tasks") {
 		t.Errorf("expected '3 tasks' in preview, got: %q", got)
 	}

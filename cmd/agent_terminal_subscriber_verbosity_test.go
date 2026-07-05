@@ -1,9 +1,14 @@
 package cmd
 
 import (
+	"bytes"
+	"io"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
 // TestTerminalSubscriber_VerbosityLiveRead is a regression test for the
@@ -62,5 +67,254 @@ func TestTerminalSubscriber_NilConfigManagerIsNonCompact(t *testing.T) {
 	state := newTerminalSubscriberState(nil)
 	if state.isCompact() {
 		t.Fatal("isCompact() = true with nil config manager; want false")
+	}
+}
+
+// TestTerminalSubscriber_VerboseLiveRead mirrors the compact live-read
+// test for the new isVerbose() helper. Verifying that a mid-session
+// /settings change to "verbose" is picked up without a restart, and
+// that verboseMaxArgLen() returns the bumped width.
+func TestTerminalSubscriber_VerboseLiveRead(t *testing.T) {
+	configDir := t.TempDir() + "/.sprout"
+	mgr, err := configuration.NewManagerWithDir(configDir)
+	if err != nil {
+		t.Fatalf("NewManagerWithDir: %v", err)
+	}
+
+	state := newTerminalSubscriberState(mgr)
+	if state.isVerbose() {
+		t.Fatal("isVerbose() = true with default config; want false")
+	}
+	if w := state.verboseMaxArgLen(); w != 0 {
+		t.Fatalf("verboseMaxArgLen() = %d in default mode; want 0", w)
+	}
+
+	// Flip to verbose mid-session.
+	if err := mgr.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		cfg.OutputVerbosity = configuration.OutputVerbosityVerbose
+		return nil
+	}); err != nil {
+		t.Fatalf("UpdateConfigNoSave: %v", err)
+	}
+
+	if !state.isVerbose() {
+		t.Fatal("isVerbose() = false after setting verbose; the subscriber did not pick up the live config change")
+	}
+	if w := state.verboseMaxArgLen(); w != verbosePreviewWidth {
+		t.Fatalf("verboseMaxArgLen() = %d in verbose mode; want %d", w, verbosePreviewWidth)
+	}
+
+	// Flip back to default.
+	if err := mgr.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		cfg.OutputVerbosity = configuration.OutputVerbosityDefault
+		return nil
+	}); err != nil {
+		t.Fatalf("UpdateConfigNoSave: %v", err)
+	}
+	if state.isVerbose() {
+		t.Fatal("isVerbose() = true after reverting to default; want false")
+	}
+	if w := state.verboseMaxArgLen(); w != 0 {
+		t.Fatalf("verboseMaxArgLen() = %d in default mode; want 0", w)
+	}
+}
+
+// TestTerminalSubscriber_NilConfigManagerIsNonVerbose verifies the nil
+// fallback for isVerbose: a nil config manager must return false rather
+// than panicking, so the subscriber renders in default detail.
+func TestTerminalSubscriber_NilConfigManagerIsNonVerbose(t *testing.T) {
+	state := newTerminalSubscriberState(nil)
+	if state.isVerbose() {
+		t.Fatal("isVerbose() = true with nil config manager; want false")
+	}
+	if w := state.verboseMaxArgLen(); w != 0 {
+		t.Fatalf("verboseMaxArgLen() = %d with nil manager; want 0", w)
+	}
+}
+
+// TestFormatResultSize verifies the human-readable result-size formatter
+// used by verbose mode to append a dim "· 1.2KB" / "· 450 chars" suffix
+// to tool-end lines.
+func TestFormatResultSize(t *testing.T) {
+	cases := []struct {
+		name string
+		len  int
+		want string
+	}{
+		{"zero", 0, ""},
+		{"negative", -5, ""},
+		{"small", 100, "100 chars"},
+		{"boundary 999", 999, "999 chars"},
+		{"boundary 1000", 1000, "1.0KB"},
+		{"1500 chars", 1500, "1.5KB"},
+		{"large", 12345, "12.1KB"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := formatResultSize(c.len)
+			if got != c.want {
+				t.Errorf("formatResultSize(%d) = %q; want %q", c.len, got, c.want)
+			}
+		})
+	}
+}
+
+// TestFormatCostSummary verifies the turn-summary cost formatter.
+func TestFormatCostSummary(t *testing.T) {
+	cases := []struct {
+		cost float64
+		want string
+	}{
+		{0.0421, "$0.0421"},
+		{0.999, "$0.9990"},
+		{1.0, "$1.00"},
+		{12.34, "$12.34"},
+		{0, "$0.0000"},
+	}
+	for _, c := range cases {
+		got := formatCostSummary(c.cost)
+		if got != c.want {
+			t.Errorf("formatCostSummary(%.4f) = %q; want %q", c.cost, got, c.want)
+		}
+	}
+}
+
+// TestHandleQueryCompletedEvent verifies the CLI-UX-7 turn-end summary:
+//   - In non-compact mode it writes a "turn complete" line to stderr.
+//   - In compact mode it produces no output (early return).
+//   - The summary includes duration and cost.
+func TestHandleQueryCompletedEvent(t *testing.T) {
+	configDir := t.TempDir() + "/.sprout"
+	mgr, err := configuration.NewManagerWithDir(configDir)
+	if err != nil {
+		t.Fatalf("NewManagerWithDir: %v", err)
+	}
+
+	state := newTerminalSubscriberState(mgr)
+
+	// --- Non-compact (default) mode: should produce output ---
+	var stderrBuf bytes.Buffer
+	oldStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stderr = w
+
+	indicator := console.NewActivityIndicator(&bytes.Buffer{})
+
+	state.handleQueryCompletedEvent(map[string]interface{}{
+		"duration_ms": int64(12300),
+		"cost":        float64(0.0421),
+	}, indicator)
+
+	os.Stderr = oldStderr
+	w.Close()
+	io.Copy(&stderrBuf, r)
+
+	output := stderrBuf.String()
+	if !strings.Contains(output, "turn complete") {
+		t.Errorf("non-compact mode: expected 'turn complete' in output, got: %q", output)
+	}
+	if !strings.Contains(output, "12.3s") {
+		t.Errorf("non-compact mode: expected '12.3s' in output, got: %q", output)
+	}
+	if !strings.Contains(output, "$0.0421") {
+		t.Errorf("non-compact mode: expected cost '$0.0421' in output, got: %q", output)
+	}
+
+	// --- Compact mode: should produce no output ---
+	if err := mgr.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		cfg.OutputVerbosity = configuration.OutputVerbosityCompact
+		return nil
+	}); err != nil {
+		t.Fatalf("UpdateConfigNoSave: %v", err)
+	}
+
+	var stderrBufCompact bytes.Buffer
+	oldStderr2 := os.Stderr
+	r2, w2, _ := os.Pipe()
+	os.Stderr = w2
+
+	state.handleQueryCompletedEvent(map[string]interface{}{
+		"duration_ms": int64(12300),
+		"cost":        float64(0.0421),
+	}, indicator)
+
+	os.Stderr = oldStderr2
+	w2.Close()
+	io.Copy(&stderrBufCompact, r2)
+
+	compactOutput := stderrBufCompact.String()
+	if compactOutput != "" {
+		t.Errorf("compact mode: expected no output, got: %q", compactOutput)
+	}
+}
+
+// TestHandleQueryStartedEvent verifies the CLI-UX-5 thinking indicator:
+//   - In non-compact mode with an inactive indicator, it starts the
+//     thinking spinner and sets thinkingActive.
+//   - In compact mode it does nothing.
+func TestHandleQueryStartedEvent(t *testing.T) {
+	configDir := t.TempDir() + "/.sprout"
+	mgr, err := configuration.NewManagerWithDir(configDir)
+	if err != nil {
+		t.Fatalf("NewManagerWithDir: %v", err)
+	}
+
+	state := newTerminalSubscriberState(mgr)
+	indicator := console.NewActivityIndicator(&bytes.Buffer{})
+
+	// Non-compact mode: indicator is inactive so thinking should start.
+	state.handleQueryStartedEvent(indicator)
+	if !state.thinkingActive {
+		t.Fatal("non-compact mode: thinkingActive should be true after query_started with inactive indicator")
+	}
+
+	// Compact mode: should not start thinking.
+	state.thinkingActive = false
+	if err := mgr.UpdateConfigNoSave(func(cfg *configuration.Config) error {
+		cfg.OutputVerbosity = configuration.OutputVerbosityCompact
+		return nil
+	}); err != nil {
+		t.Fatalf("UpdateConfigNoSave: %v", err)
+	}
+
+	state.handleQueryStartedEvent(indicator)
+	if state.thinkingActive {
+		t.Fatal("compact mode: thinkingActive should remain false")
+	}
+}
+
+// TestHandleStreamChunkEvent_StopsThinking verifies that a StreamChunk
+// with content_type clears the thinkingActive flag (CLI-UX-5). When
+// thinkingActive is true, the chunk handler stops the indicator.
+func TestHandleStreamChunkEvent_StopsThinking(t *testing.T) {
+	state := newTerminalSubscriberState(nil)
+	indicator := console.NewActivityIndicator(&bytes.Buffer{})
+	state.thinkingActive = true
+
+	state.handleStreamChunkEvent(map[string]interface{}{
+		"chunk":        "Hello",
+		"content_type": "text",
+	}, indicator)
+
+	if state.thinkingActive {
+		t.Fatal("thinkingActive should be false after StreamChunk with content_type")
+	}
+}
+
+// TestHandleStreamChunkEvent_NoContentTypeDoesNotClear verifies that a
+// StreamChunk WITHOUT content_type (e.g. a bare chunk) does not clear
+// thinkingActive — only chunks that carry assistant text/reasoning
+// should stop the thinking spinner.
+func TestHandleStreamChunkEvent_NoContentTypeDoesNotClear(t *testing.T) {
+	state := newTerminalSubscriberState(nil)
+	indicator := console.NewActivityIndicator(&bytes.Buffer{})
+	state.thinkingActive = true
+
+	state.handleStreamChunkEvent(map[string]interface{}{
+		"chunk": "bare chunk without content type",
+	}, indicator)
+
+	if !state.thinkingActive {
+		t.Fatal("thinkingActive should remain true for StreamChunk without content_type")
 	}
 }

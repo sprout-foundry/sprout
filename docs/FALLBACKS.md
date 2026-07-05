@@ -2,7 +2,7 @@
 
 Every place sprout substitutes a value with a default, inherits from a parent config, or silently falls back to a secondary option. Understanding these chains is essential for debugging unexpected behavior (wrong model, wrong provider, wrong context window).
 
-> **Policy:** Fallbacks are never errors — they keep sprout working when configuration is incomplete. But they should be visible. This document is the canonical reference; the goal is to surface every chain so users and agents can trace what actually resolved.
+> **Policy (v0.17+):** Provider selection is explicit — no implicit fallback to a default provider. If no provider is configured, sprout surfaces an error and offers interactive provider selection. Model and config defaults remain but are being made progressively more visible.
 
 ---
 
@@ -16,23 +16,19 @@ Every place sprout substitutes a value with a default, inherits from a parent co
 3. SPROUT_PROVIDER env var (LEDIT_PROVIDER backward-compat)
 4. SPROUT_MODEL env var (parsed for provider:model prefix)
 5. Config last_used_provider
-6. DetermineProvider() auto-detection (see §1a)
+6. If still empty: error returned. Caller surfaces interactive provider picker.
 ```
 
-### Auto-detection: `DetermineProvider` (`pkg/agent_api/interface.go`)
+### `DetermineProvider` (`pkg/agent_api/interface.go`)
 
 ```
 1. Explicit provider argument
 2. SPROUT_PROVIDER env var
 3. Config last_used_provider (if available — has API key)
-4. First available from priority list:
-   openrouter → zai → deepinfra → deepseek → minimax →
-   cerebras → chutes → openai → mistral → lmstudio →
-   ollama-cloud → ollama-local
-5. "ollama-local" (ultimate hardcoded fallback)
+4. Error: "no provider available"
 ```
 
-**Implication:** If your intended provider loses its API key (key file deleted, env var unset), sprout silently drops through the priority list and may land on ollama-local. There is no startup warning for this.
+**v0.17 change:** Steps 4 (priority scan) and 5 (ollama-local ultimate fallback) were removed. If steps 1-3 fail, the caller receives an error and can offer interactive provider selection via the existing `SelectNewProvider()` path.
 
 ---
 
@@ -67,18 +63,14 @@ When the configured model isn't in the provider's available list:
 4. First model in the provider's list
 ```
 
-### `GetModelForProvider` default chain
+### `GetModelForProvider`
 
 ```
 1. cfg.ProviderModels[provider] (user-set)
-2. NewConfig().ProviderModels[provider] (baked-in defaults:
-   openai→gpt-5-mini, zai→GLM-4.6, deepinfra→DeepSeek-V3.1-Terminus,
-   openrouter→openai/gpt-5, ollama-local→qwen3-coder:30b,
-   ollama-cloud→deepseek-v3.1:671b)
-3. "" (empty — caller must handle)
+2. "" (empty — caller must handle)
 ```
 
-**Implication:** If you've never explicitly set a model for a provider, you get whatever version is hardcoded in `NewConfig()`, which may be months out of date.
+**v0.17 change:** The `NewConfig()` baked-in defaults (gpt-5-mini, GLM-4.6, DeepSeek-V3.1-Terminus, etc.) were removed. If a user hasn't explicitly set a model, the caller uses the live provider API to select one.
 
 ---
 
@@ -94,58 +86,54 @@ Tier 3: Parent agent inheritance (parent's provider/model)
            AND persona has no explicit provider/model
 ```
 
-**Footgun:** Setting _either_ `SubagentProvider` or `SubagentModel` (but not both) disables parent inheritance entirely. The unset field falls back to its own chain instead of inheriting from the parent.
+**Footgun:** Setting _either_ `SubagentProvider` or `SubagentModel` (but not both) disables parent inheritance entirely. The unset field becomes empty instead of inheriting from the parent.
 
-### `GetSubagentProvider` chain
+### `GetSubagentProvider`
 
 ```
-1. cfg.SubagentProvider
-2. cfg.LastUsedProvider
-3. cfg.ProviderPriority[0]
-4. "ollama-local"
+1. cfg.SubagentProvider (direct field only — may be empty)
 ```
 
-### `GetSubagentModel` chain
+**v0.17 change:** The fallback chain (→ LastUsedProvider → ProviderPriority[0] → ollama-local) was removed. An empty field is simply empty; callers handle this by inheriting from the parent agent.
+
+### `GetSubagentModel`
 
 ```
 1. cfg.SubagentModel
-2. GetModelForProvider(GetSubagentProvider())
-   → user-set → NewConfig() defaults → ""
+2. GetModelForProvider(GetSubagentProvider())  — caller's provider's model or ""
+```
 
 ### `GetSubagentTypeProvider` (persona-specific)
 
 ```
 1. Persona's own Provider field
-2. GetSubagentProvider() (the 4-level chain above)
+2. GetSubagentProvider() (may be empty)
 ```
 
 ### `GetSubagentTypeModel` (persona-specific)
 
 ```
 1. Persona's own Model field
-2. GetSubagentModel() (inherits provider→model chain)
+2. GetSubagentModel() (may be empty)
 ```
 
 ---
 
 ## 4. Commit & Review Provider/Model
 
-Identical 4-level chain (duplicated 3 times — subagent, commit, review):
-
 ### `GetCommitProvider` / `GetReviewProvider`
 
 ```
-1. cfg.CommitProvider / cfg.ReviewProvider
-2. cfg.LastUsedProvider
-3. cfg.ProviderPriority[0]
-4. "ollama-local"
+1. cfg.CommitProvider / cfg.ReviewProvider (direct field only — may be empty)
 ```
+
+**v0.17 change:** The 4-level fallback chain (→ LastUsedProvider → ProviderPriority[0] → ollama-local) was removed. These now return only the explicitly configured value. Callers that need a provider fall back to the main agent's provider.
 
 ### `GetCommitModel` / `GetReviewModel`
 
 ```
 1. cfg.CommitModel / cfg.ReviewModel
-2. GetModelForProvider(GetCommitProvider() / GetReviewProvider())
+2. GetModelForProvider(GetCommitProvider() / GetReviewProvider())  — may be ""
 ```
 
 ---
@@ -165,7 +153,6 @@ Identical 4-level chain (duplicated 3 times — subagent, commit, review):
 Also appears in:
 - `pkg/agent_api/token_utils.go:161` — `contextLimit = 32000 // Default fallback`
 - `pkg/agent_api/ollama_local.go:424` — `contextLimit = 32000`
-- `pkg/agent_api/models.go:93` — `// Fallback to a reasonable default`
 
 ---
 
@@ -260,13 +247,19 @@ CommitMessageTimeoutSec: 300  (5 min)
 
 | Risk | Chain | Impact |
 |---|---|---|
-| 🔴 High | Provider resolution → ollama-local | User thinks they're on a paid provider, actually on local LLM |
 | 🔴 High | Context limit → 32K | 1M-token model runs at 3% capacity, no warning |
 | 🟡 Medium | Model selection heuristics | Wrong model variant picked, especially on DeepInfra/OpenRouter |
 | 🟡 Medium | Subagent inherits parent only when ALL fields empty | Setting SubagentProvider breaks the entire inheritance chain |
-| 🟡 Medium | 3 copies of same 4-level fallback | Risk of drift between subagent/commit/review chains |
 | 🔵 Low | Resolve() overrides zero-values | `0` might mean "unlimited" but gets overridden by positive default |
 | 🔵 Low | Vision silently falls back to OCR | Different model, different quality, only logged to stderr |
+
+### Resolved (v0.17)
+
+| Was | Fix |
+|---|---|
+| 🔴 Provider → ollama-local | Removed. Error surfaced, interactive picker offered. |
+| 🔴 Model → NewConfig() defaults | Removed. Live API model selection used instead. |
+| 🟡 3 copies of 4-level fallback | Removed. Direct field access only. |
 
 ---
 

@@ -238,65 +238,36 @@ func promptSettingValue(setting agent.SettingDetail, cfg *configuration.Config, 
 // getEnumOptions returns predefined options for enum-style settings.
 // Returns (nil, false) for freeform settings.
 func getEnumOptions(key string, cfg *configuration.Config) ([]tools.AskUserOption, bool) {
-	switch key {
-	case "reasoning_effort":
-		return []tools.AskUserOption{
-			{Label: "low", Value: "low"},
-			{Label: "medium", Value: "medium"},
-			{Label: "high", Value: "high"},
-		}, true
-
-	case "disable_thinking":
-		return []tools.AskUserOption{
-			{Label: "enabled", Value: "false"},
-			{Label: "disabled", Value: "true"},
-		}, true
-
-	case "history_scope":
-		return []tools.AskUserOption{
-			{Label: "project", Value: "project"},
-			{Label: "global", Value: "global"},
-		}, true
-
-	case "ea_mode":
-		return []tools.AskUserOption{
-			{Label: "interactive", Value: "interactive"},
-			{Label: "queue", Value: "queue"},
-		}, true
-
-	case "output_verbosity":
-		return []tools.AskUserOption{
-			{Label: "compact", Value: "compact"},
-			{Label: "default", Value: "default"},
-			{Label: "verbose", Value: "verbose"},
-		}, true
-
-	case "subagent_parallel_enabled":
-		return []tools.AskUserOption{
-			{Label: "enabled", Value: "true"},
-			{Label: "disabled", Value: "false"},
-		}, true
-
-	case "notifications.cli_bell":
-		return []tools.AskUserOption{
-			{Label: "enabled", Value: "true"},
-			{Label: "disabled", Value: "false"},
-		}, true
-
-	case "notifications.os_notify":
-		return []tools.AskUserOption{
-			{Label: "enabled", Value: "true"},
-			{Label: "disabled", Value: "false"},
-		}, true
-
-	case "enable_zsh_command_detection":
-		return []tools.AskUserOption{
-			{Label: "enabled", Value: "true"},
-			{Label: "disabled", Value: "false"},
-		}, true
-
-	default:
+	values := agent.SettingEnumValues(key)
+	if len(values) == 0 {
 		return nil, false
+	}
+	opts := make([]tools.AskUserOption, len(values))
+	for i, v := range values {
+		opts[i] = tools.AskUserOption{
+			Label: enumLabel(key, v),
+			Value: v,
+		}
+	}
+	return opts, true
+}
+
+// enumLabel returns a human-readable label for a setting enum value.
+func enumLabel(key, value string) string {
+	// disable_thinking has inverted semantics: "true" means thinking is disabled.
+	if key == "disable_thinking" {
+		if value == "true" {
+			return "disabled"
+		}
+		return "enabled"
+	}
+	switch value {
+	case "true":
+		return "enabled"
+	case "false":
+		return "disabled"
+	default:
+		return value
 	}
 }
 

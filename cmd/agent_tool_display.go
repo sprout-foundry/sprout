@@ -51,6 +51,77 @@ func formatToolRunLine(depth int, persona, icon, toolName string, count int, arg
 		indent, icon, badge, toolName, count, preview, totalSec)
 }
 
+// computeDiffStat produces a dim "+N -M" diffstat suffix for file-editing
+// tools. For edit_file it counts lines in old_str vs new_str; for write_file
+// it counts all lines as added (new file or full overwrite). Returns "" for
+// non-file tools or when no useful diff can be computed. CLI-UX-3.
+func computeDiffStat(toolName, arguments string) string {
+	if arguments == "" {
+		return ""
+	}
+	var args map[string]interface{}
+	if err := json.Unmarshal([]byte(arguments), &args); err != nil {
+		return ""
+	}
+	switch toolName {
+	case "edit_file":
+		oldStr, _ := args["old_str"].(string)
+		newStr, _ := args["new_str"].(string)
+		removed := countLines(oldStr)
+		added := countLines(newStr)
+		if added == 0 && removed == 0 {
+			return ""
+		}
+		return fmt.Sprintf("%s+%d -%d%s", console.ColorGreen, added, removed, console.ColorReset)
+	case "write_file":
+		content, _ := args["content"].(string)
+		added := countLines(content)
+		if added == 0 {
+			return ""
+		}
+		return fmt.Sprintf("%s+%d%s", console.ColorGreen, added, console.ColorReset)
+	case "write_structured_file":
+		// content is in "data" field as structured JSON — count lines in the
+		// serialized form for a rough size signal
+		if data, ok := args["data"]; ok {
+			jsonBytes, _ := json.Marshal(data)
+			added := countLines(string(jsonBytes))
+			if added > 0 {
+				return fmt.Sprintf("%s+%d%s", console.ColorGreen, added, console.ColorReset)
+			}
+		}
+	}
+	return ""
+}
+
+// formatCompactDiffLine renders the minimal one-liner shown in compact mode
+// for file edits: "edit_file (path.go) +12 -3". Extracts the path from args
+// for context so the user knows which file changed.
+func formatCompactDiffLine(toolName, arguments, diffStat string) string {
+	path := ""
+	if arguments != "" {
+		var args map[string]interface{}
+		if json.Unmarshal([]byte(arguments), &args) == nil {
+			if p, ok := args["path"].(string); ok {
+				path = abbreviatePath(p, 50)
+			}
+		}
+	}
+	if path != "" {
+		return fmt.Sprintf("%s (%s) %s", toolName, path, diffStat)
+	}
+	return fmt.Sprintf("%s %s", toolName, diffStat)
+}
+
+// countLines returns the number of newline-separated lines in s.
+// A non-empty string with no newlines counts as 1 line.
+func countLines(s string) int {
+	if s == "" {
+		return 0
+	}
+	return strings.Count(s, "\n") + 1
+}
+
 // formatResultSize renders a human-readable size string for the number
 // of characters in a tool result. Used by verbose mode to append a dim
 // "· 1.2KB" or "· 450 chars" suffix to tool-end lines. Returns "" for

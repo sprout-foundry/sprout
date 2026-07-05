@@ -122,6 +122,15 @@ type turnCostSource interface {
 	TurnCost() float64
 }
 
+// todoProgressSource is an optional addition to ContentSource for sources
+// that can report the agent's todo list progress. When the concrete source
+// implements it AND there are todos with some completed, the footer
+// renders a " · 3/7 done" badge so the user can gauge turn progress at a
+// glance. CLI-UX-4.
+type todoProgressSource interface {
+	TodoProgress() (done, total int)
+}
+
 // NewStatusFooter constructs a footer that writes to w. If w is nil
 // os.Stderr is used (the same channel the spinner uses). Non-TTY writers
 // produce a no-op footer.

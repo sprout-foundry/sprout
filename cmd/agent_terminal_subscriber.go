@@ -262,7 +262,12 @@ func (s *terminalSubscriberState) handleToolEndEvent(data map[string]interface{}
 
 	// Compact mode: suppress result lines for successful tools.
 	// Errors are always shown so the user sees what went wrong.
+	// CLI-UX-3 exception: file edits still show a compact +N -M diffstat
+	// so the user has minimal feedback in compact mode.
 	if s.isCompact() && status == "completed" {
+		if diffSuffix := computeDiffStat(name, args); diffSuffix != "" {
+			fmt.Fprintln(os.Stderr, fmt.Sprintf("%s%s%s", console.ColorDim, formatCompactDiffLine(name, args, diffSuffix), console.ColorReset))
+		}
 		s.run = nil // prevent stale state from contaminating error tool collapse
 		footer.Refresh()
 		return
@@ -279,6 +284,15 @@ func (s *terminalSubscriberState) handleToolEndEvent(data map[string]interface{}
 				resultSuffix = fmt.Sprintf(" %s· %s%s", console.ColorDim, sizeStr, console.ColorReset)
 			}
 		}
+	}
+
+	// CLI-UX-3: For file-editing tools, append a compact +N -M diffstat
+	// suffix so the user sees the change size at a glance. In compact
+	// mode this is the ONLY feedback for file edits (full diff and
+	// tool-end lines are suppressed). In default/verbose modes it
+	// complements the existing tool-end line.
+	if diffSuffix := computeDiffStat(name, args); diffSuffix != "" {
+		resultSuffix += " " + diffSuffix
 	}
 
 	// Phase 3 collapse: if this end matches the prior run

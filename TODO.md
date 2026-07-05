@@ -1702,14 +1702,13 @@ Gemini CLI, Aider, Cursor, gh, dagger). Findings prioritized by impact.
 - [ ] **CLI-UX-2:** Live elapsed-time on spinner for long-running tools.
       ALREADY IMPLEMENTED — spinner render() already shows elapsed seconds.
       Audit was wrong on this one.
-- [ ] **CLI-UX-3:** Diff preview for write_file/edit_file in timeline.
-      Currently shows `✓ edit_file (path.go) · 0.1s` with no indication of
-      what changed. Even compact `+12 -3` stat would add signal. Claude
-      Code shows 2-3 line hunk inline; Aider shows full git-style diff.
-- [ ] **CLI-UX-4:** Cumulative turn-progress indicator during long turns.
-      During 5+ tool-call turns, no sense of "where am I." Surface todo
-      `3/7 done` on footer or as dim line after each tool. Data already
-      published via EventTypeTodoUpdate.
+- [x] **CLI-UX-3:** Diff preview for write_file/edit_file in timeline.
+      Compact +N -M diffstat suffix on tool-end lines for edit_file and
+      write_file. In compact mode, emits a minimal stat line since the
+      full diff and tool-end lines are suppressed.
+- [x] **CLI-UX-4:** Cumulative turn-progress indicator during long turns.
+      Footer shows "3/7 done" badge from the agent's todo list, giving
+      turn-level progress signal during multi-step work.
 
 ### Tier 2 — Polish that differentiates
 

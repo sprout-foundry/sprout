@@ -33,6 +33,7 @@ const (
 	badgeColorCwd      = "\033[2;36m" // dim cyan — ambient, low priority
 	badgeColorSubagent = "\033[95m"   // bright magenta — persona-coded
 	badgeColorQueue    = "\033[33m"   // yellow — needs attention soon
+	badgeColorTodo     = "\033[1;96m" // bold bright-cyan — progress tracking
 )
 
 // ---------------------------------------------------------------------------
@@ -90,6 +91,14 @@ func (f *StatusFooter) composeLine(cols int) string {
 	if qms, ok := f.source.(queuedMessagesSource); ok {
 		if n := qms.QueuedMessages(); n > 0 {
 			parts = append(parts, styleSegment(badgeColorQueue, fmt.Sprintf("⏸ %d queued", n)))
+		}
+	}
+	// CLI-UX-4: append "N/M done" when the agent has a todo list with
+	// progress. Gives the user turn-level progress signal during
+	// multi-step agent work. Hidden when no todos exist.
+	if tps, ok := f.source.(todoProgressSource); ok {
+		if done, total := tps.TodoProgress(); total > 0 {
+			parts = append(parts, styleSegment(badgeColorTodo, fmt.Sprintf("%d/%d done", done, total)))
 		}
 	}
 	body := " " + strings.Join(parts, " · ") + " "

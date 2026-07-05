@@ -102,8 +102,10 @@ func ResolveProviderModel(cfg *Config, explicitProvider, explicitModel string) (
 
 	// Never use the test provider from persisted config — it's only for
 	// process-scoped testing (isRunningUnderTest) and must not leak into
-	// real sessions.
-	if providerName == "test" {
+	// real sessions. The explicitProvider == "test" path (from parent
+	// agent's GetProvider() during test) is allowed through so subagent
+	// creation works under test without the now-removed implicit fallbacks.
+	if providerName == "test" && explicitProvider != "test" {
 		providerName = ""
 	}
 

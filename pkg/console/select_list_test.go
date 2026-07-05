@@ -1,7 +1,10 @@
 package console
 
 import (
+	"bytes"
 	"context"
+	"io"
+	"os"
 	"strings"
 	"testing"
 )
@@ -465,5 +468,91 @@ func TestSelectList_DispatchMouseEvent_InvalidPayload(t *testing.T) {
 	s.dispatchMouseEvent("")
 	if s.cursor != 0 {
 		t.Fatalf("cursor=%d want 0 (invalid payloads should be no-op)", s.cursor)
+	}
+}
+
+// --- SP-106 Phase 3: mouse tracking enable/disable emission tests ---
+
+// TestSelectList_EnableMouseTrackingEmitsSequences verifies that in a
+// TTY context enabling mouse tracking emits the SGR sequence followed
+// by the VT200 sequence, byte-for-byte.
+func TestSelectList_EnableMouseTrackingEmitsSequences(t *testing.T) {
+	s := NewSelectList(SelectListOptions{
+		Items: []SelectItem{{Label: "a", Value: "a"}},
+	})
+	s.isTTY = true
+	var buf bytes.Buffer
+	s.testOut = &buf
+
+	s.enableMouseTracking()
+
+	want := MouseTrackingSGR + MouseTrackingVT200
+	if got := buf.String(); got != want {
+		t.Fatalf("emitted=%q want %q", got, want)
+	}
+}
+
+// TestSelectList_DisableMouseTrackingEmitsSequences verifies the
+// disable path emits exactly the inverse sequence.
+func TestSelectList_DisableMouseTrackingEmitsSequences(t *testing.T) {
+	s := NewSelectList(SelectListOptions{
+		Items: []SelectItem{{Label: "a", Value: "a"}},
+	})
+	s.isTTY = true
+	var buf bytes.Buffer
+	s.testOut = &buf
+
+	s.disableMouseTracking()
+
+	if got := buf.String(); got != MouseTrackingDisable {
+		t.Fatalf("emitted=%q want %q", got, MouseTrackingDisable)
+	}
+}
+
+// TestSelectList_MouseTrackingNoopOnNonTTY verifies that when stdin is
+// not a TTY neither enable nor disable emits anything.
+func TestSelectList_MouseTrackingNoopOnNonTTY(t *testing.T) {
+	s := NewSelectList(SelectListOptions{
+		Items: []SelectItem{{Label: "a", Value: "a"}},
+	})
+	// isTTY stays false (the real test environment is non-TTY).
+	var buf bytes.Buffer
+	s.testOut = &buf
+
+	s.enableMouseTracking()
+	s.disableMouseTracking()
+
+	if got := buf.String(); got != "" {
+		t.Fatalf("non-TTY should emit nothing, got %q", got)
+	}
+}
+
+// TestSelectList_MouseTrackingWritesToCustomWriter verifies the test
+// seam routes sequences to testOut rather than os.Stderr.
+func TestSelectList_MouseTrackingWritesToCustomWriter(t *testing.T) {
+	s := NewSelectList(SelectListOptions{
+		Items: []SelectItem{{Label: "a", Value: "a"}},
+	})
+	s.isTTY = true
+	var buf bytes.Buffer
+	s.testOut = &buf
+
+	s.enableMouseTracking()
+	s.disableMouseTracking()
+
+	// The seam should have captured both the enable and disable bytes.
+	want := MouseTrackingSGR + MouseTrackingVT200 + MouseTrackingDisable
+	if got := buf.String(); got != want {
+		t.Fatalf("captured=%q want %q", got, want)
+	}
+}
+
+// TestSelectList_MouseOutDefaultsToStderr verifies the production path:
+// when testOut is nil, mouse-tracking sequences go to os.Stderr (the
+// destination the interactive TTY run loop has always used).
+func TestSelectList_MouseOutDefaultsToStderr(t *testing.T) {
+	s := NewSelectList(SelectListOptions{Items: []SelectItem{{Label: "a", Value: "a"}}})
+	if got := s.mouseOut(); got != io.Writer(os.Stderr) {
+		t.Fatalf("mouseOut()=%v want os.Stderr when testOut is nil", got)
 	}
 }

@@ -308,7 +308,7 @@ func TestSemanticSearchHandler_EventBus_PublishesEvents(t *testing.T) {
 	h := &semanticSearchHandler{}
 
 	bus := events.NewEventBus()
-	ch := bus.Subscribe("test")
+	_ = bus.Subscribe("test") // subscribe to have a listener
 
 	env := ToolEnv{
 		EventBus:      bus,
@@ -319,23 +319,13 @@ func TestSemanticSearchHandler_EventBus_PublishesEvents(t *testing.T) {
 	// Execute with missing query — triggers error path
 	_, _ = h.Execute(context.Background(), env, map[string]any{})
 
-	// Check that tool_start was published
+	// Handlers no longer self-publish tool_start/tool_end — the core
+	// tool executor (pkg/agent/tool_executor.go) handles event publishing.
 	select {
-	case evt := <-ch:
-		require.Equal(t, "tool_start", evt.Type)
+	case ev := <-bus.Subscribe("check"):
+		t.Fatalf("expected 0 events from handler, got %+v", ev)
 	default:
-		t.Fatal("expected tool_start event")
-	}
-
-	// Check that tool_end was published (with error flag)
-	select {
-	case evt := <-ch:
-		require.Equal(t, "tool_end", evt.Type)
-		data, ok := evt.Data.(map[string]any)
-		require.True(t, ok, "event data should be a map")
-		require.Equal(t, true, data["error"])
-	default:
-		t.Fatal("expected tool_end event")
+		// good — no events published by the handler
 	}
 }
 
@@ -416,7 +406,7 @@ func TestEmbeddingIndexHandler_WithEventBus(t *testing.T) {
 	h := &embeddingIndexHandler{}
 
 	bus := events.NewEventBus()
-	ch := bus.Subscribe("test")
+	_ = bus.Subscribe("test") // subscribe to have a listener
 
 	env := ToolEnv{
 		EventBus:      bus,
@@ -431,23 +421,13 @@ func TestEmbeddingIndexHandler_WithEventBus(t *testing.T) {
 	require.False(t, res.IsError)
 	require.Contains(t, res.Output, "Embedding Index Status")
 
-	// Verify tool_start event was published
+	// Handlers no longer self-publish tool_start/tool_end — the core
+	// tool executor (pkg/agent/tool_executor.go) handles event publishing.
 	select {
-	case evt := <-ch:
-		require.Equal(t, "tool_start", evt.Type)
+	case ev := <-bus.Subscribe("check"):
+		t.Fatalf("expected 0 events from handler, got %+v", ev)
 	default:
-		t.Fatal("expected tool_start event")
-	}
-
-	// Verify tool_end event was published
-	select {
-	case evt := <-ch:
-		require.Equal(t, "tool_end", evt.Type)
-		data, ok := evt.Data.(map[string]any)
-		require.True(t, ok, "event data should be a map")
-		require.Equal(t, false, data["error"])
-	default:
-		t.Fatal("expected tool_end event")
+		// good — no events published by the handler
 	}
 }
 
@@ -456,7 +436,7 @@ func TestEmbeddingIndexHandler_WithEventBus_Error(t *testing.T) {
 	h := &embeddingIndexHandler{}
 
 	bus := events.NewEventBus()
-	ch := bus.Subscribe("test")
+	_ = bus.Subscribe("test") // subscribe to have a listener
 
 	env := ToolEnv{
 		EventBus:      bus,
@@ -464,28 +444,18 @@ func TestEmbeddingIndexHandler_WithEventBus_Error(t *testing.T) {
 		ConfigManager: newHermeticConfigManager(t),
 	}
 
-	// Invalid operation — should publish tool_end with error=true
+	// Invalid operation — handler should still execute without panicking
 	_, _ = h.Execute(context.Background(), env, map[string]any{
 		"operation": "bad",
 	})
 
-	// Check tool_start
+	// Handlers no longer self-publish tool_start/tool_end — the core
+	// tool executor (pkg/agent/tool_executor.go) handles event publishing.
 	select {
-	case evt := <-ch:
-		require.Equal(t, "tool_start", evt.Type)
+	case ev := <-bus.Subscribe("check"):
+		t.Fatalf("expected 0 events from handler, got %+v", ev)
 	default:
-		t.Fatal("expected tool_start event")
-	}
-
-	// Check tool_end with error
-	select {
-	case evt := <-ch:
-		require.Equal(t, "tool_end", evt.Type)
-		data, ok := evt.Data.(map[string]any)
-		require.True(t, ok, "event data should be a map")
-		require.Equal(t, true, data["error"])
-	default:
-		t.Fatal("expected tool_end event with error")
+		// good — no events published by the handler
 	}
 }
 
@@ -494,7 +464,7 @@ func TestEmbeddingIndexHandler_WithEventBus_MissingOperation(t *testing.T) {
 	h := &embeddingIndexHandler{}
 
 	bus := events.NewEventBus()
-	ch := bus.Subscribe("test")
+	_ = bus.Subscribe("test") // subscribe to have a listener
 
 	env := ToolEnv{
 		EventBus:      bus,
@@ -502,26 +472,16 @@ func TestEmbeddingIndexHandler_WithEventBus_MissingOperation(t *testing.T) {
 		ConfigManager: newHermeticConfigManager(t),
 	}
 
-	// Missing operation — should publish tool_end with error=true
+	// Missing operation — handler should still execute without panicking
 	_, _ = h.Execute(context.Background(), env, map[string]any{})
 
-	// Check tool_start
+	// Handlers no longer self-publish tool_start/tool_end — the core
+	// tool executor (pkg/agent/tool_executor.go) handles event publishing.
 	select {
-	case evt := <-ch:
-		require.Equal(t, "tool_start", evt.Type)
+	case ev := <-bus.Subscribe("check"):
+		t.Fatalf("expected 0 events from handler, got %+v", ev)
 	default:
-		t.Fatal("expected tool_start event")
-	}
-
-	// Check tool_end with error
-	select {
-	case evt := <-ch:
-		require.Equal(t, "tool_end", evt.Type)
-		data, ok := evt.Data.(map[string]any)
-		require.True(t, ok, "event data should be a map")
-		require.Equal(t, true, data["error"])
-	default:
-		t.Fatal("expected tool_end event with error")
+		// good — no events published by the handler
 	}
 }
 

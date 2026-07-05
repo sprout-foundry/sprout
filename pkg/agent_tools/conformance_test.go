@@ -259,27 +259,20 @@ func TestReadFileHandlerConformance_EventBusPublishes(t *testing.T) {
 	require.NoError(t, os.WriteFile(path, []byte("event test"), 0o644))
 
 	bus := events.NewEventBus()
-	ch := bus.Subscribe("test")
+	_ = bus.Subscribe("test") // subscribe to have a listener
 	env := newTestEnv(t, dir)
 	env.EventBus = bus
 
 	_, err := h.Execute(ctx, env, map[string]any{"path": path})
 	require.NoError(t, err)
 
-	// Verify tool_start event was published
+	// Handlers no longer self-publish tool_start/tool_end — the core
+	// tool executor (pkg/agent/tool_executor.go) handles event publishing.
 	select {
-	case evt := <-ch:
-		require.Equal(t, "tool_start", evt.Type)
+	case ev := <-bus.Subscribe("check"):
+		t.Fatalf("expected 0 events from handler, got %+v", ev)
 	default:
-		t.Fatal("expected tool_start event")
-	}
-
-	// Verify tool_end event was published
-	select {
-	case evt := <-ch:
-		require.Equal(t, "tool_end", evt.Type)
-	default:
-		t.Fatal("expected tool_end event")
+		// good — no events published by the handler
 	}
 }
 

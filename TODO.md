@@ -1743,3 +1743,26 @@ Gemini CLI, Aider, Cursor, gh, dagger). Findings prioritized by impact.
 ### Recommended starting points
 CLI-UX-2 (live elapsed) and CLI-UX-1 (verbose mode) — highest impact-per-effort,
 both build on existing infrastructure.
+
+## CLI Ghost Line Bug (found 2026-07-05)
+
+### CLI-GHOST-1: Remove self-published ToolStart/ToolEnd from 34 handlers
+Same bug class as 63a43421 (ask_user spinner). 34 ToolHandler implementations
+self-publish EventTypeToolStart/EventTypeToolEnd with "tool" key (not
+"tool_name") and missing fields. The core tool executor already publishes
+correct events. The self-publish produces phantom ✗ · 0.0s ghost lines in
+the CLI timeline.
+
+Affected handlers: activate_skill, analyze_image_content, analyze_ui_screenshot,
+browse_url, commit, create_pull_request, edit, embedding_index, git,
+list_automate_workflows, list_changes, list_dir, list_skills, manage_memory,
+manage_settings, mcp_refresh, patch_structured_file, read_file, recover_file,
+repo_map, respond_clarification, revert_my_changes, rollback_changes,
+run_automate, run_parallel_subagents, run_subagent, save_memory, search_files,
+search_memories, semantic_search, shell, task_queue(_add/_publish/_read),
+todo_read, todo_write, view_history, web_search, write, write_structured.
+
+### CLI-GHOST-2: Defensive guard in terminal subscriber
+Even after removing the self-publish, add a defensive guard: skip rendering
+ToolEnd events with empty tool_name in handleToolStartEvent and
+handleToolEndEvent. Prevents future phantom lines from any source.

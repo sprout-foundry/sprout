@@ -3,8 +3,6 @@ package tools
 import (
 	"context"
 	"time"
-
-	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 // RevertMyChangesFunc is a function pointer set by pkg/agent at startup.
@@ -53,23 +51,7 @@ func (h *revertMyChangesHandler) Validate(args map[string]any) error {
 }
 
 func (h *revertMyChangesHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	toolName := h.Name()
-	var hadError bool
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool":   toolName,
-			"params": args,
-		})
-		defer func() {
-			env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-				"tool":  toolName,
-				"error": hadError,
-			})
-		}()
-	}
-
 	if RevertMyChangesFunc == nil {
-		hadError = true
 		return ToolResult{
 			Output:  "revert_my_changes is not available: agent integration not initialized (RevertMyChangesFunc is nil)",
 			IsError: true,
@@ -78,14 +60,13 @@ func (h *revertMyChangesHandler) Execute(ctx context.Context, env ToolEnv, args 
 
 	result, err := RevertMyChangesFunc(ctx, args)
 	if err != nil {
-		hadError = true
 		return ToolResult{Output: err.Error(), IsError: true}, nil
 	}
 	return ToolResult{Output: result}, nil
 }
 
-func (h *revertMyChangesHandler) Aliases() []string         { return nil }
-func (h *revertMyChangesHandler) Timeout() time.Duration    { return 0 }
-func (h *revertMyChangesHandler) MaxResultSize() int        { return 0 }
-func (h *revertMyChangesHandler) SafeForParallel() bool     { return false }
-func (h *revertMyChangesHandler) Interactive() bool         { return false }
+func (h *revertMyChangesHandler) Aliases() []string      { return nil }
+func (h *revertMyChangesHandler) Timeout() time.Duration { return 0 }
+func (h *revertMyChangesHandler) MaxResultSize() int     { return 0 }
+func (h *revertMyChangesHandler) SafeForParallel() bool  { return false }
+func (h *revertMyChangesHandler) Interactive() bool      { return false }

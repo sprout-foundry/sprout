@@ -3,8 +3,6 @@ package tools
 import (
 	"context"
 	"time"
-
-	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 // RunSubagentFunc is a function pointer set by pkg/agent at startup.
@@ -99,23 +97,7 @@ func (h *runSubagentHandler) Validate(args map[string]any) error {
 }
 
 func (h *runSubagentHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	toolName := h.Name()
-	var hadError bool
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool":   toolName,
-			"params": args,
-		})
-		defer func() {
-			env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-				"tool":  toolName,
-				"error": hadError,
-			})
-		}()
-	}
-
 	if RunSubagentFunc == nil {
-		hadError = true
 		return ToolResult{
 			Output:  "subagent support not configured: agent integration not initialized (RunSubagentFunc is nil)",
 			IsError: true,
@@ -124,14 +106,13 @@ func (h *runSubagentHandler) Execute(ctx context.Context, env ToolEnv, args map[
 
 	result, err := RunSubagentFunc(ctx, args)
 	if err != nil {
-		hadError = true
 		return ToolResult{Output: err.Error(), IsError: true}, nil
 	}
 	return ToolResult{Output: result}, nil
 }
 
-func (h *runSubagentHandler) Aliases() []string         { return nil }
-func (h *runSubagentHandler) Timeout() time.Duration    { return 30 * time.Minute }
-func (h *runSubagentHandler) MaxResultSize() int        { return 0 }
-func (h *runSubagentHandler) SafeForParallel() bool     { return false }
-func (h *runSubagentHandler) Interactive() bool         { return false }
+func (h *runSubagentHandler) Aliases() []string      { return nil }
+func (h *runSubagentHandler) Timeout() time.Duration { return 30 * time.Minute }
+func (h *runSubagentHandler) MaxResultSize() int     { return 0 }
+func (h *runSubagentHandler) SafeForParallel() bool  { return false }
+func (h *runSubagentHandler) Interactive() bool      { return false }

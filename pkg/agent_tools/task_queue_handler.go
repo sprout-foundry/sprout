@@ -7,7 +7,6 @@ import (
 	"time"
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
-	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 // taskQueueHandler implements ToolHandler for the consolidated task_queue tool.
@@ -91,19 +90,6 @@ func (h *taskQueueHandler) Validate(args map[string]any) error {
 }
 
 func (h *taskQueueHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	toolName := h.Name()
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool":   toolName,
-			"params": args,
-		})
-		defer func() {
-			env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-				"tool":  toolName,
-				"error": false,
-			})
-		}()
-	}
 
 	op, _ := extractString(args, "operation")
 	op = strings.TrimSpace(strings.ToLower(op))
@@ -224,15 +210,16 @@ func (h *taskQueueHandler) executePublish(ctx context.Context, tq *TaskQueue, ar
 	}, nil
 }
 
-func (h *taskQueueHandler) Aliases() []string         { return nil }
-func (h *taskQueueHandler) Timeout() time.Duration    { return 0 }
-func (h *taskQueueHandler) MaxResultSize() int        { return 0 }
-func (h *taskQueueHandler) SafeForParallel() bool     { return false }
-func (h *taskQueueHandler) Interactive() bool         { return false }
+func (h *taskQueueHandler) Aliases() []string      { return nil }
+func (h *taskQueueHandler) Timeout() time.Duration { return 0 }
+func (h *taskQueueHandler) MaxResultSize() int     { return 0 }
+func (h *taskQueueHandler) SafeForParallel() bool  { return false }
+func (h *taskQueueHandler) Interactive() bool      { return false }
 
 // parseSubtaskInput extracts subtasks from the args map.
 // Accepts the "subtasks" arg as []any of map[string]any.
-func parseSubtaskInput(args map[string]any) []SubtaskInput {	raw, ok := args["subtasks"]
+func parseSubtaskInput(args map[string]any) []SubtaskInput {
+	raw, ok := args["subtasks"]
 	if !ok || raw == nil {
 		return nil
 	}

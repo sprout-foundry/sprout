@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"time"
-
-	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 type viewHistoryHandler struct{}
@@ -33,64 +31,45 @@ func (h *viewHistoryHandler) Validate(args map[string]any) error {
 }
 
 func (h *viewHistoryHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	toolName := h.Name()
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool":   toolName,
-			"params": args,
-		})
-		defer func() {
-			env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-				"tool":  toolName,
-				"error": false,
-			})
-		}()
+	limit, _ := extractInt(args, "limit")
+	if limit <= 0 {
+		limit = 10
+	} else if limit > 100 {
+		limit = 100
+	}
+	fileFilter, _ := extractString(args, "file_filter")
+	sinceStr, _ := extractString(args, "since")
+	showContent := getBoolArg(args, "show_content")
 
-		limit, _ := extractInt(args, "limit")
-		if limit <= 0 {
-			limit = 10
-		} else if limit > 100 {
-			limit = 100
-		}
-		fileFilter, _ := extractString(args, "file_filter")
-		sinceStr, _ := extractString(args, "since")
-		showContent := getBoolArg(args, "show_content")
-
-		var sinceTime *time.Time
-		if sinceStr != "" {
-			t, err := time.Parse(time.RFC3339, sinceStr)
-			if err != nil {
-				return ToolResult{
-					Output:  fmt.Sprintf("Error parsing 'since' timestamp: %v. Use ISO 8601 format (e.g., 2024-01-01T00:00:00Z)", err),
-					IsError: true,
-				}, nil
-			}
-			sinceTime = &t
-		}
-
-		result, err := ViewHistory(limit, fileFilter, sinceTime, showContent)
+	var sinceTime *time.Time
+	if sinceStr != "" {
+		t, err := time.Parse(time.RFC3339, sinceStr)
 		if err != nil {
 			return ToolResult{
-				Output:  fmt.Sprintf("Error viewing history: %v", err),
+				Output:  fmt.Sprintf("Error parsing 'since' timestamp: %v. Use ISO 8601 format (e.g., 2024-01-01T00:00:00Z)", err),
 				IsError: true,
 			}, nil
 		}
+		sinceTime = &t
+	}
 
+	result, err := ViewHistory(limit, fileFilter, sinceTime, showContent)
+	if err != nil {
 		return ToolResult{
-			Output:        result.Output,
-			IsError:       false,
-			StructuredOut: result.Metadata,
+			Output:  fmt.Sprintf("Error viewing history: %v", err),
+			IsError: true,
 		}, nil
 	}
 
 	return ToolResult{
-		Output:  "No results",
-		IsError: false,
+		Output:        result.Output,
+		IsError:       false,
+		StructuredOut: result.Metadata,
 	}, nil
 }
 
-func (h *viewHistoryHandler) Aliases() []string         { return nil }
-func (h *viewHistoryHandler) Timeout() time.Duration    { return 0 }
-func (h *viewHistoryHandler) MaxResultSize() int        { return 0 }
-func (h *viewHistoryHandler) SafeForParallel() bool     { return false }
-func (h *viewHistoryHandler) Interactive() bool         { return false }
+func (h *viewHistoryHandler) Aliases() []string      { return nil }
+func (h *viewHistoryHandler) Timeout() time.Duration { return 0 }
+func (h *viewHistoryHandler) MaxResultSize() int     { return 0 }
+func (h *viewHistoryHandler) SafeForParallel() bool  { return false }
+func (h *viewHistoryHandler) Interactive() bool      { return false }

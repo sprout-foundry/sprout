@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/automate"
-	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 // listAutomateWorkflowsHandler implements ToolHandler for the
@@ -37,21 +36,6 @@ func (h *listAutomateWorkflowsHandler) Validate(args map[string]any) error {
 }
 
 func (h *listAutomateWorkflowsHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	toolName := h.Name()
-	var hadError bool
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool":   toolName,
-			"params": args,
-		})
-		defer func() {
-			env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-				"tool":  toolName,
-				"error": hadError,
-			})
-		}()
-	}
-
 	dir := automate.Dir()
 
 	workflows, err := automate.Discover(dir)
@@ -61,7 +45,6 @@ func (h *listAutomateWorkflowsHandler) Execute(ctx context.Context, env ToolEnv,
 				Output: "No automate/ directory found. Activate the workflow-automation skill to create one.",
 			}, nil
 		}
-		hadError = true
 		return ToolResult{
 			Output:  fmt.Sprintf("failed to scan %s: %v", dir, err),
 			IsError: true,
@@ -95,15 +78,14 @@ func (h *listAutomateWorkflowsHandler) Execute(ctx context.Context, env ToolEnv,
 
 	resultJSON, err := json.MarshalIndent(result, "", "  ")
 	if err != nil {
-		hadError = true
 		return ToolResult{Output: fmt.Sprintf("failed to marshal result: %v", err), IsError: true}, nil
 	}
 
 	return ToolResult{Output: string(resultJSON)}, nil
 }
 
-func (h *listAutomateWorkflowsHandler) Aliases() []string         { return nil }
-func (h *listAutomateWorkflowsHandler) Timeout() time.Duration    { return 0 }
-func (h *listAutomateWorkflowsHandler) MaxResultSize() int        { return 0 }
-func (h *listAutomateWorkflowsHandler) SafeForParallel() bool     { return false }
-func (h *listAutomateWorkflowsHandler) Interactive() bool         { return false }
+func (h *listAutomateWorkflowsHandler) Aliases() []string      { return nil }
+func (h *listAutomateWorkflowsHandler) Timeout() time.Duration { return 0 }
+func (h *listAutomateWorkflowsHandler) MaxResultSize() int     { return 0 }
+func (h *listAutomateWorkflowsHandler) SafeForParallel() bool  { return false }
+func (h *listAutomateWorkflowsHandler) Interactive() bool      { return false }

@@ -6,7 +6,6 @@ import (
 	"time"
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
-	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 type rollbackChangesHandler struct{}
@@ -48,46 +47,27 @@ func (h *rollbackChangesHandler) Validate(args map[string]any) error {
 }
 
 func (h *rollbackChangesHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	toolName := h.Name()
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool":   toolName,
-			"params": args,
-		})
-		defer func() {
-			env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-				"tool":  toolName,
-				"error": false,
-			})
-		}()
+	revisionID, _ := extractString(args, "revision_id")
+	filePath, _ := extractString(args, "file_path")
+	confirm := getBoolArg(args, "confirm")
 
-		revisionID, _ := extractString(args, "revision_id")
-		filePath, _ := extractString(args, "file_path")
-		confirm := getBoolArg(args, "confirm")
-
-		result, err := RollbackChanges(revisionID, filePath, confirm)
-		if err != nil {
-			return ToolResult{
-				Output:  fmt.Sprintf("Error during rollback: %v", err),
-				IsError: true,
-			}, nil
-		}
-
+	result, err := RollbackChanges(revisionID, filePath, confirm)
+	if err != nil {
 		return ToolResult{
-			Output:        result.Output,
-			IsError:       false,
-			StructuredOut: result.Metadata,
+			Output:  fmt.Sprintf("Error during rollback: %v", err),
+			IsError: true,
 		}, nil
 	}
 
 	return ToolResult{
-		Output:  "No results",
-		IsError: false,
+		Output:        result.Output,
+		IsError:       false,
+		StructuredOut: result.Metadata,
 	}, nil
 }
 
-func (h *rollbackChangesHandler) Aliases() []string         { return nil }
-func (h *rollbackChangesHandler) Timeout() time.Duration    { return 0 }
-func (h *rollbackChangesHandler) MaxResultSize() int        { return 0 }
-func (h *rollbackChangesHandler) SafeForParallel() bool     { return false }
-func (h *rollbackChangesHandler) Interactive() bool         { return false }
+func (h *rollbackChangesHandler) Aliases() []string      { return nil }
+func (h *rollbackChangesHandler) Timeout() time.Duration { return 0 }
+func (h *rollbackChangesHandler) MaxResultSize() int     { return 0 }
+func (h *rollbackChangesHandler) SafeForParallel() bool  { return false }
+func (h *rollbackChangesHandler) Interactive() bool      { return false }

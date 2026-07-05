@@ -3,8 +3,6 @@ package tools
 import (
 	"context"
 	"time"
-
-	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 // RespondClarificationFunc is a function pointer set by pkg/agent at startup.
@@ -66,23 +64,7 @@ func (h *respondClarificationHandler) Validate(args map[string]any) error {
 }
 
 func (h *respondClarificationHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	toolName := h.Name()
-	var hadError bool
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool":   toolName,
-			"params": args,
-		})
-		defer func() {
-			env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-				"tool":  toolName,
-				"error": hadError,
-			})
-		}()
-	}
-
 	if RespondClarificationFunc == nil {
-		hadError = true
 		return ToolResult{
 			Output:  "respond_clarification is not available: agent integration not initialized (RespondClarificationFunc is nil)",
 			IsError: true,
@@ -91,14 +73,13 @@ func (h *respondClarificationHandler) Execute(ctx context.Context, env ToolEnv, 
 
 	result, err := RespondClarificationFunc(ctx, args)
 	if err != nil {
-		hadError = true
 		return ToolResult{Output: err.Error(), IsError: true}, nil
 	}
 	return ToolResult{Output: result}, nil
 }
 
-func (h *respondClarificationHandler) Aliases() []string         { return nil }
-func (h *respondClarificationHandler) Timeout() time.Duration    { return 0 }
-func (h *respondClarificationHandler) MaxResultSize() int        { return 0 }
-func (h *respondClarificationHandler) SafeForParallel() bool     { return false }
-func (h *respondClarificationHandler) Interactive() bool         { return false }
+func (h *respondClarificationHandler) Aliases() []string      { return nil }
+func (h *respondClarificationHandler) Timeout() time.Duration { return 0 }
+func (h *respondClarificationHandler) MaxResultSize() int     { return 0 }
+func (h *respondClarificationHandler) SafeForParallel() bool  { return false }
+func (h *respondClarificationHandler) Interactive() bool      { return false }

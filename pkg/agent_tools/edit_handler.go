@@ -8,7 +8,6 @@ import (
 	"time"
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
-	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 // editFileHandler implements ToolHandler for the edit_file tool.
@@ -93,29 +92,12 @@ func (h *editFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 		return ToolResult{Output: err.Error(), IsError: true}, err
 	}
 
-	// Publish tool start event
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool": "edit_file",
-			"path": path,
-		})
-	}
-
 	result, err := EditFile(ctx, path, oldStr, newStr)
 	if err != nil {
 		return ToolResult{
 			Output:  "",
 			IsError: true,
 		}, agenterrors.NewTool("edit_file", fmt.Sprintf("edit file %q: %v", path, err), err)
-	}
-
-	// Publish tool end event
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-			"tool":   "edit_file",
-			"path":   path,
-			"tokens": estimateTokenUsage(result),
-		})
 	}
 
 	// Write to output writer if available
@@ -129,8 +111,8 @@ func (h *editFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 	}, nil
 }
 
-func (h *editFileHandler) Aliases() []string         { return nil }
-func (h *editFileHandler) Timeout() time.Duration    { return 0 }
-func (h *editFileHandler) MaxResultSize() int        { return 0 }
-func (h *editFileHandler) SafeForParallel() bool     { return false }
-func (h *editFileHandler) Interactive() bool         { return false }
+func (h *editFileHandler) Aliases() []string      { return nil }
+func (h *editFileHandler) Timeout() time.Duration { return 0 }
+func (h *editFileHandler) MaxResultSize() int     { return 0 }
+func (h *editFileHandler) SafeForParallel() bool  { return false }
+func (h *editFileHandler) Interactive() bool      { return false }

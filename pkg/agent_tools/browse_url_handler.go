@@ -4,8 +4,6 @@ import (
 	"context"
 	"strings"
 	"time"
-
-	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 type browseURLHandler struct{}
@@ -51,30 +49,13 @@ func (h *browseURLHandler) Validate(args map[string]any) error {
 }
 
 func (h *browseURLHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	toolName := h.Name()
-	var hadError bool
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool":   toolName,
-			"params": args,
-		})
-		defer func() {
-			env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-				"tool":  toolName,
-				"error": hadError,
-			})
-		}()
-	}
-
 	url, err := extractString(args, "url")
 	if err != nil {
-		hadError = true
 		return ToolResult{Output: err.Error(), IsError: true}, nil
 	}
 
 	// Check if browser is available
 	if env.WebBrowser == nil {
-		hadError = true
 		errMsg := "browser not available: WebBrowser is not configured in this environment"
 		return ToolResult{Output: errMsg, IsError: true}, nil
 	}
@@ -82,7 +63,6 @@ func (h *browseURLHandler) Execute(ctx context.Context, env ToolEnv, args map[st
 	// Validate action-specific requirements (mirrors legacy handler)
 	if action, ok := args["action"].(string); ok && strings.ToLower(action) == "screenshot" {
 		if sp, ok := args["screenshot_path"].(string); !ok || sp == "" {
-			hadError = true
 			errMsg := "screenshot_path is required for action=screenshot"
 			return ToolResult{Output: errMsg, IsError: true}, nil
 		}
@@ -98,7 +78,6 @@ func (h *browseURLHandler) Execute(ctx context.Context, env ToolEnv, args map[st
 
 	result, err := env.WebBrowser.BrowseURL(ctx, url, opts)
 	if err != nil {
-		hadError = true
 		return ToolResult{Output: err.Error(), IsError: true}, nil
 	}
 
@@ -112,8 +91,8 @@ func (h *browseURLHandler) Execute(ctx context.Context, env ToolEnv, args map[st
 	return toolResult, nil
 }
 
-func (h *browseURLHandler) Aliases() []string         { return nil }
-func (h *browseURLHandler) Timeout() time.Duration    { return 0 }
-func (h *browseURLHandler) MaxResultSize() int        { return 0 }
-func (h *browseURLHandler) SafeForParallel() bool     { return false }
-func (h *browseURLHandler) Interactive() bool         { return false }
+func (h *browseURLHandler) Aliases() []string      { return nil }
+func (h *browseURLHandler) Timeout() time.Duration { return 0 }
+func (h *browseURLHandler) MaxResultSize() int     { return 0 }
+func (h *browseURLHandler) SafeForParallel() bool  { return false }
+func (h *browseURLHandler) Interactive() bool      { return false }

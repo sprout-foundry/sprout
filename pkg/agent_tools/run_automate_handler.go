@@ -3,8 +3,6 @@ package tools
 import (
 	"context"
 	"time"
-
-	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 // RunAutomateFunc is a function pointer set by pkg/agent at startup.
@@ -57,23 +55,7 @@ func (h *runAutomateHandler) Validate(args map[string]any) error {
 }
 
 func (h *runAutomateHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	toolName := h.Name()
-	var hadError bool
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool":   toolName,
-			"params": args,
-		})
-		defer func() {
-			env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-				"tool":  toolName,
-				"error": hadError,
-			})
-		}()
-	}
-
 	if RunAutomateFunc == nil {
-		hadError = true
 		return ToolResult{
 			Output:  "run_automate is not available: agent integration not initialized (RunAutomateFunc is nil)",
 			IsError: true,
@@ -82,14 +64,13 @@ func (h *runAutomateHandler) Execute(ctx context.Context, env ToolEnv, args map[
 
 	result, err := RunAutomateFunc(ctx, args)
 	if err != nil {
-		hadError = true
 		return ToolResult{Output: err.Error(), IsError: true}, nil
 	}
 	return ToolResult{Output: result}, nil
 }
 
-func (h *runAutomateHandler) Aliases() []string         { return nil }
-func (h *runAutomateHandler) Timeout() time.Duration    { return 0 }
-func (h *runAutomateHandler) MaxResultSize() int        { return 0 }
-func (h *runAutomateHandler) SafeForParallel() bool     { return false }
-func (h *runAutomateHandler) Interactive() bool         { return false }
+func (h *runAutomateHandler) Aliases() []string      { return nil }
+func (h *runAutomateHandler) Timeout() time.Duration { return 0 }
+func (h *runAutomateHandler) MaxResultSize() int     { return 0 }
+func (h *runAutomateHandler) SafeForParallel() bool  { return false }
+func (h *runAutomateHandler) Interactive() bool      { return false }

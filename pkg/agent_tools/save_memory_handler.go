@@ -12,7 +12,6 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
-	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/redact"
 )
 
@@ -97,14 +96,6 @@ func (h *saveMemoryHandler) Execute(ctx context.Context, env ToolEnv, args map[s
 	}
 
 	// Publish tool end event
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-			"tool":   "save_memory",
-			"name":   sanitized,
-			"bytes":  len(content),
-			"tokens": estimateTokenUsage(result),
-		})
-	}
 
 	// Write to output writer if available
 	if env.OutputWriter != nil {
@@ -117,11 +108,11 @@ func (h *saveMemoryHandler) Execute(ctx context.Context, env ToolEnv, args map[s
 	}, nil
 }
 
-func (h *saveMemoryHandler) Aliases() []string         { return nil }
-func (h *saveMemoryHandler) Timeout() time.Duration    { return 0 }
-func (h *saveMemoryHandler) MaxResultSize() int        { return 0 }
-func (h *saveMemoryHandler) SafeForParallel() bool     { return false }
-func (h *saveMemoryHandler) Interactive() bool         { return false }
+func (h *saveMemoryHandler) Aliases() []string      { return nil }
+func (h *saveMemoryHandler) Timeout() time.Duration { return 0 }
+func (h *saveMemoryHandler) MaxResultSize() int     { return 0 }
+func (h *saveMemoryHandler) SafeForParallel() bool  { return false }
+func (h *saveMemoryHandler) Interactive() bool      { return false }
 
 // saveMemoryToDisk writes a memory file to ~/.config/sprout/memories/<name>.md
 // This is a standalone implementation that doesn't depend on *Agent.

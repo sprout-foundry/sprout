@@ -3,8 +3,6 @@ package tools
 import (
 	"context"
 	"time"
-
-	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 // webSearchHandler performs web searches via the SearchEngine dependency.
@@ -31,43 +29,25 @@ func (h *webSearchHandler) Validate(args map[string]any) error {
 }
 
 func (h *webSearchHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	toolName := h.Name()
-	var hadError bool
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool":   toolName,
-			"params": args,
-		})
-		defer func() {
-			env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-				"tool":  toolName,
-				"error": hadError,
-			})
-		}()
-	}
-
 	query, err := extractString(args, "query")
 	if err != nil {
-		hadError = true
 		return ToolResult{Output: err.Error(), IsError: true}, nil
 	}
 
 	if env.SearchEngine == nil {
-		hadError = true
 		return ToolResult{Output: "search engine not available: SearchEngine is not configured", IsError: true}, nil
 	}
 
 	result, err := env.SearchEngine.Search(ctx, query)
 	if err != nil {
-		hadError = true
 		return ToolResult{Output: err.Error(), IsError: true}, nil
 	}
 
 	return ToolResult{Output: result}, nil
 }
 
-func (h *webSearchHandler) Aliases() []string         { return nil }
-func (h *webSearchHandler) Timeout() time.Duration    { return 0 }
-func (h *webSearchHandler) MaxResultSize() int        { return 0 }
-func (h *webSearchHandler) SafeForParallel() bool     { return false }
-func (h *webSearchHandler) Interactive() bool         { return false }
+func (h *webSearchHandler) Aliases() []string      { return nil }
+func (h *webSearchHandler) Timeout() time.Duration { return 0 }
+func (h *webSearchHandler) MaxResultSize() int     { return 0 }
+func (h *webSearchHandler) SafeForParallel() bool  { return false }
+func (h *webSearchHandler) Interactive() bool      { return false }

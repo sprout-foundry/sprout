@@ -32,6 +32,26 @@ func (m *MCPCommand) Description() string {
 	return "Manage MCP (Model Context Protocol) servers - add, remove, list, test"
 }
 
+// Usage returns the detailed help text shown by `/help mcp`.
+func (m *MCPCommand) Usage() string {
+	return strings.Join([]string{
+		"/mcp <subcommand>   Manage MCP (Model Context Protocol) servers.",
+		"",
+		"Subcommands:",
+		"  add              Add a new MCP server interactively",
+		"  remove [name]    Remove an MCP server",
+		"  list             List all configured MCP servers",
+		"  test [name]      Test an MCP server connection",
+		"  help             Show this usage message",
+		"",
+		"Examples:",
+		"  /mcp add",
+		"  /mcp list",
+		"  /mcp test git",
+		"  /mcp remove github",
+	}, "\n")
+}
+
 // Execute runs the MCP command
 func (m *MCPCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	if len(args) == 0 {

@@ -25,6 +25,21 @@ func (m *ModelsCommand) Description() string {
 	return "List available models and select which model to use"
 }
 
+// Usage returns the detailed help text shown by `/help model`.
+func (m *ModelsCommand) Usage() string {
+	return strings.Join([]string{
+		"/model              List all available models for the current provider.",
+		"/model select       Interactive model picker (searchable).",
+		"/model <model_id>   Set model directly by ID.",
+		"",
+		"Use /provider select to switch providers first.",
+		"Alias: /m",
+		"",
+		"Flags:",
+		"  --json   Output the model list as a JSON array",
+	}, "\n")
+}
+
 // Execute runs the models command
 func (m *ModelsCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	// If no arguments, list available models
@@ -43,6 +58,43 @@ func (m *ModelsCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	}
 
 	return errors.New("usage: /model [select|<model_id>]")
+}
+
+// modelsJSONPayload wraps the model list with provider context.
+type modelsJSONPayload struct {
+	Provider string          `json:"provider"`
+	Current  string          `json:"current_model"`
+	Models   []api.ModelInfo `json:"models"`
+}
+
+// ExecuteWithJSONOutput emits the available models for the current provider
+// as a JSON array. This mirrors the no-args /model list path. The
+// `select` and `<model_id>` subcommands are interactive/stateful and are
+// not meaningfully representable as JSON, so they fall through to the
+// text Execute.
+func (m *ModelsCommand) ExecuteWithJSONOutput(args []string, chatAgent *agent.Agent, ctx *CommandContext) error {
+	if chatAgent == nil {
+		return WriteJSONToOutput(modelsJSONPayload{})
+	}
+
+	clientType := chatAgent.GetProviderType()
+	models, err := api.GetModelsForProvider(clientType)
+	if err != nil {
+		return fmt.Errorf("failed to get available models: %w", err)
+	}
+	if models == nil {
+		models = []api.ModelInfo{}
+	}
+
+	sort.Slice(models, func(i, j int) bool {
+		return models[i].ID < models[j].ID
+	})
+
+	return WriteJSONToOutput(modelsJSONPayload{
+		Provider: api.GetProviderName(clientType),
+		Current:  chatAgent.GetModel(),
+		Models:   models,
+	})
 }
 
 // listModels displays all available models for the current provider

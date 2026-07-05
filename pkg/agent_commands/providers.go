@@ -35,6 +35,21 @@ func (p *ProvidersCommand) Description() string {
 	return "Show current provider status and switch providers"
 }
 
+// Usage returns the detailed help text shown by `/help provider`.
+func (p *ProvidersCommand) Usage() string {
+	return strings.Join([]string{
+		"/provider                Show current provider status and supported providers.",
+		"/provider list           List available providers only.",
+		"/provider select         Interactive provider picker.",
+		"/provider <name>         Switch to <name> directly.",
+		"",
+		"Alias: /p",
+		"",
+		"Flags:",
+		"  --json   Output the provider list as a JSON array",
+	}, "\n")
+}
+
 // Execute runs the providers command
 func (p *ProvidersCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	configManager := chatAgent.GetConfigManager()
@@ -56,6 +71,56 @@ func (p *ProvidersCommand) Execute(args []string, chatAgent *agent.Agent) error 
 		// Try to set provider directly by name
 		return p.setProvider(args[0], configManager, chatAgent)
 	}
+}
+
+// providerInfoJSON is a single provider entry in the JSON output.
+type providerInfoJSON struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Model       string `json:"model"`
+	Ready       bool   `json:"ready"`
+	Active      bool   `json:"active"`
+}
+
+// providersJSONPayload wraps the provider list with current selection context.
+type providersJSONPayload struct {
+	CurrentProvider string             `json:"current_provider"`
+	CurrentModel    string             `json:"current_model"`
+	Providers       []providerInfoJSON `json:"providers"`
+}
+
+// ExecuteWithJSONOutput emits the provider list as a JSON array. This
+// mirrors the /provider list path (the status, select, and setProvider
+// subcommands are interactive/stateful and fall through to text Execute).
+func (p *ProvidersCommand) ExecuteWithJSONOutput(args []string, chatAgent *agent.Agent, ctx *CommandContext) error {
+	if chatAgent == nil {
+		return WriteJSONToOutput(providersJSONPayload{})
+	}
+
+	configManager := chatAgent.GetConfigManager()
+	if configManager == nil {
+		return WriteJSONToOutput(providersJSONPayload{})
+	}
+
+	currentProvider := chatAgent.GetProviderType()
+	available := configManager.GetAvailableProviders()
+
+	providers := make([]providerInfoJSON, 0, len(available))
+	for _, provider := range available {
+		providers = append(providers, providerInfoJSON{
+			ID:     string(provider),
+			Name:   getProviderDisplayName(provider),
+			Model:  configManager.GetModelForProvider(provider),
+			Ready:  p.isProviderReady(configManager, provider),
+			Active: provider == currentProvider,
+		})
+	}
+
+	return WriteJSONToOutput(providersJSONPayload{
+		CurrentProvider: getProviderDisplayName(currentProvider),
+		CurrentModel:    chatAgent.GetModel(),
+		Providers:       providers,
+	})
 }
 
 // showProviderStatus displays current provider information

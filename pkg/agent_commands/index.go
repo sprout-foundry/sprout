@@ -21,6 +21,18 @@ func (c *IndexCommand) Description() string {
 	return "Toggle workspace indexing on/off for semantic search and duplicate detection"
 }
 
+// Usage returns the detailed help text shown by `/help index`.
+func (c *IndexCommand) Usage() string {
+	return strings.Join([]string{
+		"/index                Toggle workspace indexing on or off.",
+		"/index on|enable      Turn indexing on (builds in background).",
+		"/index off|disable    Turn indexing off (preserves existing data).",
+		"/index status         Show current indexing status and record count.",
+		"",
+		"Indexing powers semantic search (/search) and duplicate detection.",
+	}, "\n")
+}
+
 // Execute runs the index command
 func (c *IndexCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	if chatAgent == nil {

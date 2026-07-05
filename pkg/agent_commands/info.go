@@ -3,6 +3,7 @@ package commands
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/console"
@@ -20,7 +21,21 @@ func (c *InfoCommand) Name() string {
 
 // Description returns the command description
 func (c *InfoCommand) Description() string {
-	return "Show agent state overview — model, provider, context, persona, index status"
+	return "Quick overview of live agent state (model, context, cost, persona)"
+}
+
+// Usage returns the detailed help text shown by `/help info`.
+func (c *InfoCommand) Usage() string {
+	return strings.Join([]string{
+		"/info   Quick one-shot overview of live agent state.",
+		"",
+		"Shows model, provider, context tokens (used/limit/%), cost, workspace,",
+		"persona, embedding index status, and subagent provider/model.",
+		"Use /status for detailed runtime status or /setup for persisted config.",
+		"",
+		"Flags:",
+		"  --json   Output the same data as a JSON object",
+	}, "\n")
 }
 
 // Execute renders the agent state overview
@@ -93,4 +108,80 @@ func (c *InfoCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	fmt.Fprintln(os.Stdout)
 
 	return nil
+}
+
+// infoJSONPayload is the JSON representation produced by /info --json.
+type infoJSONPayload struct {
+	Model            string  `json:"model"`
+	Provider         string  `json:"provider"`
+	ContextUsed      int     `json:"context_used"`
+	ContextLimit     int     `json:"context_limit"`
+	ContextPct       float64 `json:"context_pct"`
+	Cost             float64 `json:"cost"`
+	Workspace        string  `json:"workspace"`
+	Persona          string  `json:"persona"`
+	EmbeddingEnabled bool    `json:"embedding_enabled"`
+	EmbeddingRecords int     `json:"embedding_records"`
+	SubagentProvider string  `json:"subagent_provider"`
+	SubagentModel    string  `json:"subagent_model"`
+}
+
+// ExecuteWithJSONOutput emits the agent state overview as JSON.
+func (c *InfoCommand) ExecuteWithJSONOutput(args []string, chatAgent *agent.Agent, ctx *CommandContext) error {
+	if chatAgent == nil {
+		return WriteJSONToOutput(infoJSONPayload{})
+	}
+
+	model := chatAgent.GetModel()
+	provider := chatAgent.GetProvider()
+	if model == "" {
+		model = "(unknown)"
+	}
+	if provider == "" {
+		provider = "(unknown)"
+	}
+
+	used, limit := chatAgent.GetContextTokens()
+	pct := 0.0
+	if limit > 0 {
+		pct = float64(used) / float64(limit) * 100
+	}
+
+	workspace := chatAgent.GetWorkspaceRoot()
+	if workspace == "" {
+		workspace = "(none)"
+	}
+
+	persona := chatAgent.GetActivePersona()
+	if persona == "" {
+		persona = "none"
+	}
+
+	embeddingEnabled := chatAgent.IsEmbeddingIndexEnabled()
+	embedCount := 0
+	if mgr := chatAgent.GetEmbeddingManager(); mgr != nil {
+		embedCount = mgr.IndexSize()
+	}
+
+	subagentProvider := "(unknown)"
+	subagentModel := "(unknown)"
+	if cfg := chatAgent.GetConfig(); cfg != nil {
+		subagentProvider = cfg.GetSubagentProvider()
+		subagentModel = cfg.GetSubagentModel()
+	}
+
+	return WriteJSONToOutput(infoJSONPayload{
+		Model:            model,
+		Provider:         provider,
+		ContextUsed:      used,
+		ContextLimit:     limit,
+		ContextPct:       pct,
+		Cost:             chatAgent.GetTotalCost(),
+		Workspace:        workspace,
+		Persona:          persona,
+		EmbeddingEnabled: embeddingEnabled,
+		EmbeddingRecords: embedCount,
+		SubagentProvider: subagentProvider,
+		SubagentModel:    subagentModel,
+	})
 }

@@ -4,7 +4,9 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -176,6 +178,14 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 					lastInterruptAt = now
 					fmt.Println("(press Ctrl+C again to exit)")
 					continue
+				}
+				// EOF and context cancellation are graceful exits, not
+				// errors. When the web server shuts down or the context
+				// is cancelled, ReadLine returns io.EOF — treating it as
+				// an error prints "✗ failed to run agent: EOF" on exit,
+				// which looks like a crash.
+				if err == io.EOF || errors.Is(err, context.Canceled) || errors.Is(err, io.ErrClosedPipe) {
+					return nil
 				}
 				return fmt.Errorf("failed to read input: %w", err)
 			}

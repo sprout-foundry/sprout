@@ -370,8 +370,13 @@ func (r *OutputRouter) RouteToolLog(action string, target string) {
 	}
 	iterInfo := fmt.Sprintf("[%d%s]", currentIter, contextPercent)
 
+	// Terminal output is handled entirely by the terminal subscriber
+	// (cmd/agent_terminal_subscriber.go) which renders the activity
+	// indicator spinner and tool-end lines with proper cursor management.
+	// The legacy writeTerminalMessage path here produced competing output
+	// that clobbered the spinner — see commit history for the fix.
+
 	// Always publish structured event for WebUI (even without agent, for robustness).
-	// WebUI keeps the full "[iter] action target" because it has the space.
 	extra := map[string]interface{}{
 		"action":    action,
 		"target":    target,
@@ -383,20 +388,6 @@ func (r *OutputRouter) RouteToolLog(action string, target string) {
 	} else {
 		r.publish(events.EventTypeAgentMessage, events.AgentMessageEvent("tool_log", fmt.Sprintf("%s %s", iterInfo, action), extra))
 	}
-
-	// Terminal output: dim arrow + target only (drop the iter/context prefix).
-	// `action` ("executing tool" / "executed") is implied by the arrow glyph
-	// and elided to keep the line scannable.
-	const dim = "\033[2m"
-	const reset = "\033[0m"
-
-	var message string
-	if target != "" {
-		message = fmt.Sprintf("%s→ %s%s", dim, target, reset)
-	} else {
-		message = fmt.Sprintf("%s→ %s%s", dim, action, reset)
-	}
-	r.writeTerminalMessage(message)
 }
 
 // RouteToolCompletion emits the inline duration / outcome chip that follows
@@ -407,27 +398,26 @@ func (r *OutputRouter) RouteToolLog(action string, target string) {
 // Format: `  ✓ 124ms` (indented under the prior tool-log line, dim green).
 // On failure: `  ✗ 124ms — <short error>`.
 func (r *OutputRouter) RouteToolCompletion(ok bool, duration time.Duration, errMsg string) {
-	const dim = "\033[2m"
-	const reset = "\033[0m"
-	const greenDim = "\033[2;32m"
-	const redDim = "\033[2;31m"
-
+	// Terminal output is handled entirely by the terminal subscriber.
+	// This method is kept for WebUI event publishing only.
+	// Publish a structured agent_message event so the WebUI activity
+	// feed can show tool completion status.
 	dur := formatToolDuration(duration)
-	var line string
+	var msg string
 	if ok {
-		line = fmt.Sprintf("%s  ✓ %s%s", greenDim, dur, reset)
+		msg = fmt.Sprintf("✓ %s", dur)
 	} else {
 		short := errMsg
 		if len(short) > 80 {
 			short = short[:77] + "..."
 		}
 		if short != "" {
-			line = fmt.Sprintf("%s  ✗ %s%s %s— %s%s", redDim, dur, reset, dim, short, reset)
+			msg = fmt.Sprintf("✗ %s — %s", dur, short)
 		} else {
-			line = fmt.Sprintf("%s  ✗ %s%s", redDim, dur, reset)
+			msg = fmt.Sprintf("✗ %s", dur)
 		}
 	}
-	r.writeTerminalMessage(line)
+	r.publish(events.EventTypeAgentMessage, events.AgentMessageEvent("tool_log", msg, nil))
 }
 
 // formatToolDuration picks a sensible unit for short tool runs: <1s → ms,

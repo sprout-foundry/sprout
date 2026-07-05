@@ -46,6 +46,20 @@ func (c *ShellCommand) getContext() context.Context {
 	return context.Background()
 }
 
+// Usage returns the detailed help text shown by `/help shell`.
+func (c *ShellCommand) Usage() string {
+	return strings.Join([]string{
+		"/shell <description>   Generate a shell script from a description.",
+		"",
+		"Collects environmental context (OS, shell, PATH, tools) and asks the",
+		"LLM to generate an executable command or script. Prompts to execute",
+		"after generation.",
+		"",
+		"Example:",
+		`  /shell "count all Go files in this repo"`,
+	}, "\n")
+}
+
 func (c *ShellCommand) Name() string {
 	return "shell"
 }

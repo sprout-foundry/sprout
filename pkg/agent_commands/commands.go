@@ -152,6 +152,14 @@ func NewCommandRegistry() *CommandRegistry {
 	registry.RegisterAlias("i", "index")
 	registry.RegisterAlias("e", "edit")
 	registry.RegisterAlias("r", "review")
+	// SC-7: aliases for remaining high-frequency commands.
+	registry.RegisterAlias("cl", "clear")
+	registry.RegisterAlias("cp", "compact")
+	registry.RegisterAlias("st", "status")
+	registry.RegisterAlias("rb", "rollback")
+	registry.RegisterAlias("rw", "rewind")
+	registry.RegisterAlias("ch", "changes")
+	registry.RegisterAlias("cg", "codegraph")
 
 	return registry
 }

@@ -37,6 +37,16 @@ func (c *ChangesCommand) Description() string {
 	return "Show file changes tracked in the current session"
 }
 
+// Usage returns the detailed help text shown by `/help changes`.
+func (c *ChangesCommand) Usage() string {
+	return strings.Join([]string{
+		"/changes          Show files modified in the current session.",
+		"",
+		"Displays each tracked file change along with the session revision ID.",
+		"Use /status for a broader view that includes tokens, tools, and cost.",
+	}, "\n")
+}
+
 // Execute shows the tracked changes for this session
 func (c *ChangesCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	if chatAgent == nil {
@@ -77,7 +87,22 @@ func (s *StatusCommand) Name() string {
 
 // Description returns the command description
 func (s *StatusCommand) Description() string {
-	return "Show session status, provider, model, token usage, and files modified"
+	return "Detailed runtime status (tools, tokens, vision, change tracking, file changes)"
+}
+
+// Usage returns the detailed help text shown by `/help status`.
+func (s *StatusCommand) Usage() string {
+	return strings.Join([]string{
+		"/status           Show detailed runtime status.",
+		"",
+		"Includes provider, model, persona, risk profile, vision capability,",
+		"available and last-request tools, token usage, cost, change tracking,",
+		"and the session ID.",
+		"Use /info for a lighter overview or /setup for persisted config.",
+		"",
+		"Flags:",
+		"  --json   Output the same data as a JSON object",
+	}, "\n")
 }
 
 // Execute shows the current status
@@ -157,6 +182,55 @@ func (s *StatusCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	return nil
 }
 
+// statusJSONPayload is the JSON representation produced by /status --json.
+type statusJSONPayload struct {
+	Provider              string   `json:"provider"`
+	Model                 string   `json:"model"`
+	Persona               string   `json:"persona"`
+	RiskProfile           string   `json:"risk_profile"`
+	VisionAvailable       bool     `json:"vision_available"`
+	ToolCount             int      `json:"tool_count"`
+	Tools                 []string `json:"tools"`
+	PromptTokens          int      `json:"prompt_tokens"`
+	CompletionTokens      int      `json:"completion_tokens"`
+	TotalTokens           int      `json:"total_tokens"`
+	CachedTokens          int      `json:"cached_tokens"`
+	Cost                  float64  `json:"cost"`
+	SessionID             string   `json:"session_id"`
+	ChangeTrackingEnabled bool     `json:"change_tracking_enabled"`
+	ChangeCount           int      `json:"change_count"`
+}
+
+// ExecuteWithJSONOutput emits the runtime status as JSON.
+func (s *StatusCommand) ExecuteWithJSONOutput(args []string, chatAgent *agent.Agent, ctx *CommandContext) error {
+	if chatAgent == nil {
+		return WriteJSONToOutput(statusJSONPayload{})
+	}
+
+	toolNames := chatAgent.GetAvailableToolNames()
+	if toolNames == nil {
+		toolNames = []string{}
+	}
+
+	return WriteJSONToOutput(statusJSONPayload{
+		Provider:              chatAgent.GetProvider(),
+		Model:                 chatAgent.GetModel(),
+		Persona:               chatAgent.GetActivePersona(),
+		RiskProfile:           string(chatAgent.GetActiveRiskProfile()),
+		VisionAvailable:       tools.HasVisionCapability(),
+		ToolCount:             len(toolNames),
+		Tools:                 toolNames,
+		PromptTokens:          chatAgent.GetPromptTokens(),
+		CompletionTokens:      chatAgent.GetCompletionTokens(),
+		TotalTokens:           chatAgent.GetTotalTokens(),
+		CachedTokens:          chatAgent.GetCachedTokens(),
+		Cost:                  chatAgent.GetTotalCost(),
+		SessionID:             chatAgent.GetSessionID(),
+		ChangeTrackingEnabled: chatAgent.IsChangeTrackingEnabled(),
+		ChangeCount:           chatAgent.GetChangeCount(),
+	})
+}
+
 // LogCommand shows the change history using the history package
 type LogCommand struct{}
 
@@ -168,6 +242,22 @@ func (l *LogCommand) Name() string {
 // Description returns the command description
 func (l *LogCommand) Description() string {
 	return "Show recent change history from all sessions"
+}
+
+// Usage returns the detailed help text shown by `/help log`.
+func (l *LogCommand) Usage() string {
+	return strings.Join([]string{
+		"/log              Show recent change history from all sessions.",
+		"",
+		"Options (interactive):",
+		"  1. View Change Log           Display complete change history",
+		"  2. Select Revision to Rollback  Choose from available revisions",
+		"  3. Current Session Changes   View changes in this session",
+		"  4. Change Statistics         Stats about file changes",
+		"  5. Export Change Log         Save change history to file",
+		"",
+		"Use /rollback <revision-id> to revert a specific revision.",
+	}, "\n")
 }
 
 // Execute shows the change log using enhanced flow
@@ -188,6 +278,17 @@ func (r *RollbackCommand) Name() string {
 // Description returns the command description
 func (r *RollbackCommand) Description() string {
 	return "Rollback changes by revision ID (use /log to see available revisions)"
+}
+
+// Usage returns the detailed help text shown by `/help rollback`.
+func (r *RollbackCommand) Usage() string {
+	return strings.Join([]string{
+		"/rollback <revision-id>   Rollback to the specified revision.",
+		"/rollback                 List available revisions.",
+		"",
+		"Use /log to see the full revision history, then pass the revision",
+		"ID to /rollback to revert.",
+	}, "\n")
 }
 
 // Execute performs a rollback

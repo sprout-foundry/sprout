@@ -19,7 +19,19 @@ func (s *SetupCommand) Name() string { return "setup" }
 
 // Description returns the command description.
 func (s *SetupCommand) Description() string {
-	return "Show current configuration summary with status and warnings"
+	return "Show persisted configuration (provider defaults, subagent config, skills, MCP, warnings)"
+}
+
+// Usage returns the detailed help text shown by `/help setup`.
+func (s *SetupCommand) Usage() string {
+	return strings.Join([]string{
+		"/setup   Show persisted configuration summary.",
+		"",
+		"Displays provider/model, subagent config, commit/review settings,",
+		"security risk profile, skills, MCP servers, embedding index, and",
+		"credential warnings.",
+		"Use /info for live agent state or /status for runtime status.",
+	}, "\n")
 }
 
 // Execute runs the /setup command.

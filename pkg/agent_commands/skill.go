@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/skills"
 )
 
@@ -27,6 +29,8 @@ Actions:
   update [skill-id]      Update an installed skill from its recorded origin
   remove <skill-id>      Uninstall a skill by ID
   list                   List installed skills
+  enable <skill-id>      Enable an installed skill
+  disable <skill-id>     Disable an installed skill
 
 <source> for install can be:
   - a local path (/abs/path or relative)
@@ -52,16 +56,22 @@ type SkillCommand struct{}
 func (c *SkillCommand) Name() string { return "skill" }
 
 func (c *SkillCommand) Description() string {
-	return "Install, update, remove, or list skills"
+	return "Install, update, remove, list, enable, or disable skills"
 }
 
 func (c *SkillCommand) Usage() string { return skillUsage }
 
 func (c *SkillCommand) Execute(args []string, chatAgent *agent.Agent) error {
+	if len(args) > 0 && (args[0] == "enable" || args[0] == "disable") {
+		return executeSkillToggle(args, chatAgent, os.Stdout)
+	}
 	return executeSkillCommand(args, os.Stdout, os.Stderr)
 }
 
 func (c *SkillCommand) ExecuteWithJSONOutput(args []string, chatAgent *agent.Agent, ctx *CommandContext) error {
+	if len(args) > 0 && (args[0] == "enable" || args[0] == "disable") {
+		return executeSkillToggleJSON(args, chatAgent, ctx)
+	}
 	return executeSkillCommandJSON(args, ctx)
 }
 
@@ -299,4 +309,77 @@ func executeSkillCommandJSON(args []string, ctx *CommandContext) error {
 		return err
 	}
 	return WriteJSONToOutput(map[string]string{"output": buf.String()})
+}
+
+// executeSkillToggle enables or disables an installed skill via the config.
+func executeSkillToggle(args []string, chatAgent *agent.Agent, stdout io.Writer) error {
+	action := args[0] // "enable" or "disable"
+	if len(args) < 2 {
+		return fmt.Errorf("%s requires a skill ID", action)
+	}
+	skillID := args[1]
+
+	if chatAgent == nil {
+		return fmt.Errorf("agent not available")
+	}
+	mgr := chatAgent.GetConfigManager()
+	if mgr == nil {
+		return fmt.Errorf("configuration manager not available")
+	}
+
+	enabled := action == "enable"
+
+	err := mgr.UpdateConfig(func(cfg *configuration.Config) error {
+		skill, ok := cfg.Skills[skillID]
+		if !ok {
+			return fmt.Errorf("skill %q not found in configuration", skillID)
+		}
+		skill.Enabled = enabled
+		cfg.Skills[skillID] = skill
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("%s: %w", action, err)
+	}
+
+	console.GlyphSuccess.Fprintf(stdout, "%sd %s", action, skillID)
+	return nil
+}
+
+// executeSkillToggleJSON is the JSON-output variant of executeSkillToggle.
+func executeSkillToggleJSON(args []string, chatAgent *agent.Agent, ctx *CommandContext) error {
+	action := args[0]
+	if len(args) < 2 {
+		return fmt.Errorf("%s requires a skill ID", action)
+	}
+	skillID := args[1]
+
+	if chatAgent == nil {
+		return fmt.Errorf("agent not available")
+	}
+	mgr := chatAgent.GetConfigManager()
+	if mgr == nil {
+		return fmt.Errorf("configuration manager not available")
+	}
+
+	enabled := action == "enable"
+
+	err := mgr.UpdateConfig(func(cfg *configuration.Config) error {
+		skill, ok := cfg.Skills[skillID]
+		if !ok {
+			return fmt.Errorf("skill %q not found in configuration", skillID)
+		}
+		skill.Enabled = enabled
+		cfg.Skills[skillID] = skill
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	return WriteJSONToOutput(map[string]string{
+		"action":  action,
+		"skill":   skillID,
+		"enabled": fmt.Sprintf("%v", enabled),
+	})
 }

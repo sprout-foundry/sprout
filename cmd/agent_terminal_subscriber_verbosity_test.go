@@ -387,3 +387,48 @@ func TestFormatSpawnLine_WithoutTaskDescription(t *testing.T) {
 		t.Errorf("should not have task suffix when empty, got %q", line)
 	}
 }
+
+// CLI-UX-3: diffstat for file-editing tools
+func TestComputeDiffStat_EditFile(t *testing.T) {
+	args := `{"path":"foo.go","old_str":"old line\nsecond","new_str":"new line"}`
+	got := computeDiffStat("edit_file", args)
+	if !strings.Contains(got, "+1") {
+		t.Errorf("expected +1 for 1-line new_str, got %q", got)
+	}
+	if !strings.Contains(got, "-2") {
+		t.Errorf("expected -2 for 2-line old_str, got %q", got)
+	}
+}
+
+func TestComputeDiffStat_WriteFile(t *testing.T) {
+	args := `{"path":"new.go","content":"line1\nline2\nline3"}`
+	got := computeDiffStat("write_file", args)
+	if !strings.Contains(got, "+3") {
+		t.Errorf("expected +3 for 3-line content, got %q", got)
+	}
+}
+
+func TestComputeDiffStat_NonFileTool(t *testing.T) {
+	got := computeDiffStat("shell_command", `{"command":"ls"}`)
+	if got != "" {
+		t.Errorf("expected empty for non-file tool, got %q", got)
+	}
+}
+
+func TestComputeDiffStat_EmptyArgs(t *testing.T) {
+	got := computeDiffStat("edit_file", "")
+	if got != "" {
+		t.Errorf("expected empty for empty args, got %q", got)
+	}
+}
+
+func TestFormatCompactDiffLine(t *testing.T) {
+	args := `{"path":"webui/src/components/Foo.tsx","old_str":"a","new_str":"b"}`
+	got := formatCompactDiffLine("edit_file", args, "+1 -1")
+	if !strings.Contains(got, "Foo.tsx") {
+		t.Errorf("expected filename in compact diff line, got %q", got)
+	}
+	if !strings.Contains(got, "+1 -1") {
+		t.Errorf("expected diffstat in compact diff line, got %q", got)
+	}
+}

@@ -297,7 +297,7 @@ func (te *ToolExecutor) applySecretElevation(originalResult string, redactResult
 		te.agent.debugLog("[security] user allowed %d secret(s) in %s\n", len(redactResult.Secrets), toolName)
 		return originalResult
 	case security.SecretBlock:
-		te.agent.PrintLine(fmt.Sprintf("[security] Blocked %s: %d secret(s) detected, user chose to block", source, len(redactResult.Secrets)))
+		te.agent.PrintLine(fmt.Sprintf("Blocked %s: %d secret(s) detected, user chose to block", source, len(redactResult.Secrets)))
 		return fmt.Sprintf("BLOCKED: detected secrets in output. Operation blocked. Found %d secret(s) — user chose to block.", len(redactResult.Secrets))
 	default:
 		te.agent.debugLog("[security] redacted %d secret(s) from %s\n", len(redactResult.Secrets), toolName)

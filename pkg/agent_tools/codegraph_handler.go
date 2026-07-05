@@ -13,21 +13,38 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/git"
 )
 
-// codegraphBuildOnce ensures the background codegraph index build
-// happens exactly once per process, triggered on first use of any
-// codegraph query tool (get_callers, get_callees, find_dead_code).
-var codegraphBuildOnce sync.Once
+// codegraphBuildMu guards codegraphBuildAttempted. Together they ensure only
+// one background build runs at a time while still allowing retry when a build
+// fails. This replaces sync.Once, which permanently blocked retries after a
+// single transient failure (e.g. file locked during a git operation).
+var (
+	codegraphBuildMu         sync.Mutex
+	codegraphBuildAttempted  bool
+)
 
 // triggerCodegraphBuild kicks off a background goroutine that populates
 // the codegraph database. The first call to any codegraph query tool
 // returns "not indexed yet", but by the next call (typically seconds
 // later) the DB is populated and queries work. Already-populated DBs
 // are skipped (idempotent, safe for multiple agent instances).
+//
+// Unlike sync.Once, a failed build clears the attempted flag so the next
+// query tool call retries instead of returning "not indexed" for the
+// entire process lifetime.
 func triggerCodegraphBuild() {
+	codegraphBuildMu.Lock()
+	if codegraphBuildAttempted {
+		codegraphBuildMu.Unlock()
+		return
+	}
+	codegraphBuildAttempted = true
+	codegraphBuildMu.Unlock()
+
 	go func() {
 		store, err := codegraph.NewStore("")
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "codegraph auto-build: failed to open store: %v\n", err)
+			allowCodegraphRetry()
 			return
 		}
 		defer store.Close()
@@ -41,12 +58,11 @@ func triggerCodegraphBuild() {
 		defer cancel()
 
 		if err := store.IndexAll(ctx, codegraphFileParser); err != nil {
-			fmt.Fprintf(os.Stderr, "codegraph auto-build failed: %v (retrying on next query tool use)\n", err)
-			// Best-effort cleanup: remove the partially-built DB so the next
-			// codegraph tool call sees no DB and triggers a fresh build.
+			fmt.Fprintf(os.Stderr, "codegraph auto-build failed: %v (will retry on next query tool use)\n", err)
 			if dbPath, pathErr := codegraph.DefaultDBPath(); pathErr == nil {
 				_ = os.Remove(dbPath)
 			}
+			allowCodegraphRetry()
 			return
 		}
 
@@ -54,6 +70,15 @@ func triggerCodegraphBuild() {
 		fmt.Fprintf(os.Stderr, "codegraph auto-build complete: %d nodes, %d edges, %d files\n",
 			stats.NodeCount, stats.EdgeCount, stats.FileCount)
 	}()
+}
+
+// allowCodegraphRetry clears the attempted flag so the next query tool call
+// can trigger a fresh background build. Called when a build fails to start
+// or completes with an error.
+func allowCodegraphRetry() {
+	codegraphBuildMu.Lock()
+	codegraphBuildAttempted = false
+	codegraphBuildMu.Unlock()
 }
 
 // --- get_callers ---
@@ -173,7 +198,7 @@ func (h *findDeadCodeHandler) Name() string { return "find_dead_code" }
 func (h *findDeadCodeHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "find_dead_code",
-		Description: "Find functions with zero inbound call edges (dead code). Excludes entry points like main(), init(), exported API, and test functions. Requires the code intelligence graph to be indexed.",
+		Description: "Find functions with zero inbound call edges (dead code candidates). Excludes entry points like main(), init(), exported API, and test functions. Requires the code intelligence graph to be indexed. Results are candidates for manual review, not authoritative dead code — static analysis cannot trace reflection, interface dispatch, or command-registration closures.",
 		Required:    []string{},
 		Parameters: []ParameterDef{
 			{Name: "directory", Type: "string", Description: "Optional: restrict search to a specific directory."},
@@ -222,7 +247,7 @@ func openCodegraphStoreHandler() (*codegraph.SQLiteStore, error) {
 	dbPath := filepath.Join(gitRoot, ".sprout", "codegraph.db")
 	if _, err := os.Stat(dbPath); os.IsNotExist(err) {
 		// Trigger a background build so that subsequent calls have data.
-		codegraphBuildOnce.Do(triggerCodegraphBuild)
+		triggerCodegraphBuild()
 		return nil, nil
 	}
 	return codegraph.NewStore("")

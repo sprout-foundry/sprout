@@ -1716,9 +1716,8 @@ Gemini CLI, Aider, Cursor, gh, dagger). Findings prioritized by impact.
 - [x] **CLI-UX-5:** Contextual thinking indicator during LLM think time.
       On `query_started`, starts `◐ thinking…` spinner when no tool is
       active. Cleared when prose streams, a tool starts, or turn completes.
-- [ ] **CLI-UX-6:** Session-vs-turn cost split in footer. composeLine shows
-      cumulative cost only. Show `$0.04 turn · $1.21 session` for pacing
-      signal. Key feature in Claude Code and Cursor.
+- [x] **CLI-UX-6:** Session-vs-turn cost split in footer. When turnCostSource
+      is implemented and turn cost > 0, shows "$0.04 turn · $1.21 session".
 - [x] **CLI-UX-7:** Compact turn summary at turn end. On `query_completed`,
       prints dim `✓ turn complete · 12.3s · $0.04` summary line. Suppressed
       in compact mode.
@@ -1733,9 +1732,9 @@ Gemini CLI, Aider, Cursor, gh, dagger). Findings prioritized by impact.
       strongest candidate.
 - [ ] **CLI-UX-10:** Keyboard shortcut affordances row. No visible hint that
       Ctrl+C interrupts, / opens steer. Dim toggleable help row above footer.
-- [ ] **CLI-UX-11:** Subagent progress shows task description, not just persona.
-      `→ coder: refactoring auth.go` instead of `→ coder`. subagentProgress
-      captures persona+elapsed only.
+- [x] **CLI-UX-11:** Subagent progress shows task description, not just persona.
+      Spawn line now shows "↳ coder: Refactor auth.go" via extractSubagentTask
+      extracting the first line of the run_subagent prompt.
 - [ ] **CLI-UX-12:** Expand-on-demand for truncated tool args. Long args
       truncate to 70-80 chars. Power-user keybind (e.g. `v` on tool row) or
       verbose mode to show full args.

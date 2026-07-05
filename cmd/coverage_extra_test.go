@@ -19,7 +19,7 @@ import (
 
 func TestFormatSpawnLine_NilAgent(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
-	got := formatSpawnLine(nil, 0, "coder", 0)
+	got := formatSpawnLine(nil, 0, "coder", 0, "")
 	if !strings.Contains(got, "spawned") {
 		t.Errorf("expected 'spawned' in output, got: %q", got)
 	}
@@ -36,7 +36,7 @@ func TestFormatSpawnLine_WithAgent(t *testing.T) {
 	}
 
 	t.Setenv("NO_COLOR", "1")
-	got := formatSpawnLine(a, 1, "coder", 0)
+	got := formatSpawnLine(a, 1, "coder", 0, "")
 	if !strings.Contains(got, "spawned") {
 		t.Errorf("expected 'spawned' in output, got: %q", got)
 	}
@@ -59,12 +59,12 @@ func TestFormatSpawnLine_IncludesMaxContext(t *testing.T) {
 	}
 	t.Setenv("NO_COLOR", "1")
 
-	withCtx := formatSpawnLine(a, 1, "coder", 128000)
+	withCtx := formatSpawnLine(a, 1, "coder", 128000, "")
 	if !strings.Contains(withCtx, "128.0k ctx") {
 		t.Errorf("expected '128.0k ctx' suffix when maxCtx is known, got: %q", withCtx)
 	}
 
-	withoutCtx := formatSpawnLine(a, 1, "coder", 0)
+	withoutCtx := formatSpawnLine(a, 1, "coder", 0, "")
 	if strings.Contains(withoutCtx, "ctx)") {
 		t.Errorf("should not have ctx suffix when maxCtx is 0, got: %q", withoutCtx)
 	}

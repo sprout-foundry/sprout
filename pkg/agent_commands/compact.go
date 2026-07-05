@@ -21,7 +21,33 @@ const compactSummaryHeader = "Compacted earlier conversation state:"
 // LLM-generated recap of the messages preceding the most recent user
 // turn, substitutes that recap for the recapped messages, and leaves
 // the latest user turn and everything after it intact.
-type CompactCommand struct{}
+type CompactCommand struct {
+	ctx context.Context // SP-073: cancellation context for LLM calls
+}
+
+// SetContext sets the cancellation context for the LLM summarization call.
+// When wired through the command registry, this receives the agent's
+// InterruptCtx so Stop/Ctrl+C can abort in-flight compaction.
+//
+// Note: in concurrent multi-chat daemon mode, the registry reuses the
+// same CompactCommand singleton, so c.ctx may be overwritten by a
+// concurrent call. The Execute method falls back to the agent's own
+// InterruptCtx() to avoid cross-chat interference.
+func (c *CompactCommand) SetContext(ctx context.Context) {
+	c.ctx = ctx
+}
+
+// getContext returns the stored context or the agent's interrupt context,
+// falling back to context.Background() as a last resort.
+func (c *CompactCommand) getContext(chatAgent *agent.Agent) context.Context {
+	if chatAgent != nil {
+		return chatAgent.InterruptCtx()
+	}
+	if c.ctx != nil {
+		return c.ctx
+	}
+	return context.Background()
+}
 
 // Name returns the command name
 func (c *CompactCommand) Name() string {
@@ -31,6 +57,18 @@ func (c *CompactCommand) Name() string {
 // Description returns the command description
 func (c *CompactCommand) Description() string {
 	return "Summarize prior conversation via the LLM and replace it with the recap, preserving the most recent user turn"
+}
+
+// Usage returns the detailed help text shown by `/help compact`.
+func (c *CompactCommand) Usage() string {
+	return strings.Join([]string{
+		"/compact          LLM-summarize the earlier conversation and replace",
+		"                  it with the recap, keeping the most recent user turn.",
+		"",
+		"Reduces context usage. The latest user message (and everything after)",
+		"is always preserved. System messages and the file-change manifest are",
+		"carried forward automatically.",
+	}, "\n")
 }
 
 // Execute runs the compact command
@@ -68,7 +106,7 @@ func (c *CompactCommand) Execute(args []string, chatAgent *agent.Agent) error {
 
 	fmt.Printf("\n[compact] Summarizing %d earlier messages via LLM...\n", len(head))
 
-	ctx := context.Background()
+	ctx := c.getContext(chatAgent)
 	hint := core.SummarizerHint{
 		DetailLevel: "detailed",
 		MaxWords:    600,

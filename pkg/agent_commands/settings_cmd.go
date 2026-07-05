@@ -26,6 +26,17 @@ func (s *SettingsCommand) Description() string {
 	return "Browse and change settings interactively"
 }
 
+// Usage returns the detailed help text shown by `/help settings`.
+func (s *SettingsCommand) Usage() string {
+	return strings.Join([]string{
+		"/settings   Interactive settings browser.",
+		"",
+		"Browse all configurable settings, view current values, and change",
+		"them in place. Changes persist to config.json.",
+		"Use /setup for a read-only configuration summary.",
+	}, "\n")
+}
+
 // Execute runs the settings command
 func (s *SettingsCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	if chatAgent == nil {

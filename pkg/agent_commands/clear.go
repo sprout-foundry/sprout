@@ -18,6 +18,11 @@ func (c *ClearCommand) Description() string {
 	return "Clears conversation history"
 }
 
+// Usage returns the detailed help text shown by `/help clear`.
+func (c *ClearCommand) Usage() string {
+	return "/clear   Erase all conversation messages, freeing context.\n"
+}
+
 func (c *ClearCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	if chatAgent == nil {
 		return errors.New("agent not available")

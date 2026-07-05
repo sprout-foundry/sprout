@@ -22,6 +22,17 @@ func (i *InitCommand) Description() string {
 	return "Generate or improve AGENTS.md with intelligent codebase analysis"
 }
 
+// Usage returns the detailed help text shown by `/help init`.
+func (i *InitCommand) Usage() string {
+	return strings.Join([]string{
+		"/init   Generate or improve AGENTS.md via LLM codebase analysis.",
+		"",
+		"The agent explores the project structure and writes a concise AGENTS.md",
+		"with build/test commands, architecture overview, and conventions.",
+		"If AGENTS.md already exists, it suggests improvements.",
+	}, "\n")
+}
+
 // Execute runs the init command using the LLM to analyze the codebase
 func (i *InitCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	console.GlyphAction.Print("Analyzing codebase and generating AGENTS.md...")

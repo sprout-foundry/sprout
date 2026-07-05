@@ -3,11 +3,14 @@
 package webui
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -404,19 +407,75 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 			ws.publishClientEventWithChat(clientID, chatID, events.EventTypeQueryStarted, queryEventData)
 
 			clientAgent.SetWorkspaceRoot(workspaceRoot)
+
+			// Capture stdout while the command runs: slash commands write to
+			// os.Stdout (fmt.Printf/fmt.Println), but in daemon mode that goes
+			// nowhere the browser can see. Redirect stdout to a pipe so we can
+			// forward the real command output as stream chunks.
+			//
+			// The mutex serializes capture across concurrent chats — os.Stdout
+			// is process-global, so two simultaneous redirects would race.
+			trimmed := strings.TrimSpace(query.Query)
+			ws.stdoutCaptureMu.Lock()
+			oldStdout := os.Stdout
+			r, w, pipeErr := os.Pipe()
+			if pipeErr != nil {
+				// If we can't create a pipe, fall back to executing without
+				// capture — the command still runs, we just can't show output.
+				log.Printf("handleAPIQuery: stdout pipe creation failed: %v", pipeErr)
+			} else {
+				os.Stdout = w
+			}
+
 			err := registry.Execute(query.Query, clientAgent)
+
+			// Restore stdout and drain the pipe before sending any events so the
+			// captured text is complete.
+			var capturedOutput string
+			if pipeErr == nil {
+				w.Close()
+				os.Stdout = oldStdout
+				var buf bytes.Buffer
+				if _, copyErr := io.Copy(&buf, r); copyErr != nil {
+					log.Printf("handleAPIQuery: stdout pipe read failed: %v", copyErr)
+				}
+				r.Close()
+				capturedOutput = buf.String()
+			}
+			ws.stdoutCaptureMu.Unlock()
+
 			_ = ws.syncAgentStateForClientWithChat(clientID, chatID)
+
+			// Send any captured output as a stream chunk before reporting
+			// success or error, so the user sees what the command printed.
+			if capturedOutput != "" {
+				ws.publishClientEventWithChat(clientID, chatID, events.EventTypeStreamChunk, events.StreamChunkEvent(
+					fmt.Sprintf("\n%s\n\n%s", trimmed, capturedOutput),
+					"assistant_text",
+				))
+			}
+
 			if err != nil {
 				log.Printf("handleAPIQuery: slash command error: %v", err)
+				// Fall back to the generic message only when nothing was captured.
+				if capturedOutput == "" {
+					ws.publishClientEventWithChat(clientID, chatID, events.EventTypeStreamChunk, events.StreamChunkEvent(
+						fmt.Sprintf("Executed command: `%s`\n", trimmed),
+						"assistant_text",
+					))
+				}
 				ws.publishClientEventWithChat(clientID, chatID, events.EventTypeError, events.ErrorEvent("Slash command failed", err))
 				return
 			}
 
-			trimmed := strings.TrimSpace(query.Query)
-			ws.publishClientEventWithChat(clientID, chatID, events.EventTypeStreamChunk, events.StreamChunkEvent(
-				fmt.Sprintf("Executed command: `%s`\n", trimmed),
-				"assistant_text",
-			))
+			// Success path: use the generic fallback message only if the
+			// command produced no stdout output.
+			if capturedOutput == "" {
+				ws.publishClientEventWithChat(clientID, chatID, events.EventTypeStreamChunk, events.StreamChunkEvent(
+					fmt.Sprintf("Executed command: `%s`\n", trimmed),
+					"assistant_text",
+				))
+			}
 			queryCompletedData := events.QueryCompletedEvent(
 				query.Query,
 				fmt.Sprintf("Executed command: %s", trimmed),

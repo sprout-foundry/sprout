@@ -25,6 +25,17 @@ func (h *HelpCommand) Description() string {
 	return "Show help information and available slash commands"
 }
 
+// Usage returns the detailed help text shown by `/help help`.
+func (h *HelpCommand) Usage() string {
+	return strings.Join([]string{
+		"/help              List all slash commands.",
+		"/help <command>    Show detailed help for a specific command.",
+		"/help <alias>      Resolves aliases (e.g. /help m → /help model).",
+		"",
+		"Aliases: /h, /?",
+	}, "\n")
+}
+
 // Execute runs the help command. With no args, prints the global help and
 // command list. With one arg, prints per-command help (SP-048-2c).
 func (h *HelpCommand) Execute(args []string, chatAgent *agent.Agent) error {
@@ -67,12 +78,15 @@ AVAILABLE TOOLS:
   • list_skills/activate_skill - Load skill instructions into context
 
 KEY COMMANDS:
-  /help       - Show this help message
-  /commit     - Interactive commit workflow
-  /subagent-provider - Configure subagent provider
-  /subagent-model - Configure subagent model
-  /persona    - Apply/configure personas (provider/model/tools/prompt). Aliases: /subagent-persona, /subagent-personas
-  /skill            - Install, update, remove, and list skills
+  /help       - Show this help message (aliases: /h, /?)
+  /commit     - Interactive commit workflow (alias: /c)
+  /model      - Switch model (alias: /m)
+  /provider   - Switch provider (alias: /p)
+  /persona    - Configure personas (provider/model/tools/prompt). Aliases: /subagent-persona, /subagent-personas
+  /search     - Semantic code search (alias: /s)
+  /review     - AI code review on staged changes (alias: /r)
+  /skill      - Install, update, remove, and list skills
+  /info       - Quick agent state overview (model, provider, context, cost)
 
 Type 'exit' or 'quit' to end the session.
 

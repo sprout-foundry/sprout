@@ -27,11 +27,30 @@ type PersonaCommand struct{}
 func (p *PersonaCommand) Name() string        { return "persona" }
 func (p *PersonaCommand) Description() string { return "List, activate, and enable/disable personas" }
 
+// Usage returns the detailed help text shown by `/help persona`.
+func (p *PersonaCommand) Usage() string {
+	return strings.Join([]string{
+		"/persona [list]              List all personas with active/disabled status.",
+		"/persona <name>              Activate <name> for the current session.",
+		"/persona <name> show         Show persona details (provider, model, tools).",
+		"/persona <name> enable       Re-enable a disabled persona.",
+		"/persona <name> disable      Disable a persona (it can't be spawned).",
+		"/persona clear               Clear the active persona.",
+		"",
+		"Personas are catalog-fixed; only enable/disable is mutable at runtime.",
+		"Aliases: /subagent-persona",
+	}, "\n")
+}
+
 // SubagentPersonaCommand is a backwards-compatible alias for /persona.
 type SubagentPersonaCommand struct{}
 
 func (s *SubagentPersonaCommand) Name() string        { return "subagent-persona" }
 func (s *SubagentPersonaCommand) Description() string { return "Alias for /persona" }
+
+// Usage returns the detailed help text shown by `/help subagent-persona`.
+func (s *SubagentPersonaCommand) Usage() string { return (&PersonaCommand{}).Usage() }
+
 func (s *SubagentPersonaCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	return (&PersonaCommand{}).Execute(args, chatAgent)
 }
@@ -41,6 +60,10 @@ type SubagentPersonasCommand struct{}
 
 func (s *SubagentPersonasCommand) Name() string        { return "subagent-personas" }
 func (s *SubagentPersonasCommand) Description() string { return "Alias for /persona list" }
+
+// Usage returns the detailed help text shown by `/help subagent-personas`.
+func (s *SubagentPersonasCommand) Usage() string { return (&PersonaCommand{}).Usage() }
+
 func (s *SubagentPersonasCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	return (&PersonaCommand{}).Execute(nil, chatAgent)
 }

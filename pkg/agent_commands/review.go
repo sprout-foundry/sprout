@@ -51,6 +51,18 @@ func (c *ReviewCommand) Description() string {
 	return "Perform AI-powered code review on staged Git changes"
 }
 
+// Usage returns the detailed help text shown by `/help review`.
+func (c *ReviewCommand) Usage() string {
+	return strings.Join([]string{
+		"/review   Perform AI-powered code review on staged Git changes.",
+		"",
+		"Uses the configured review provider/model. The review output is",
+		"added to conversation history so you can discuss it with the agent.",
+		"Use /review-deep for an evidence-focused deep pass.",
+		"Alias: /r",
+	}, "\n")
+}
+
 // Execute runs the code review command
 func (c *ReviewCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	return runReviewCommand("review", false, args, chatAgent, c.getContext())
@@ -82,6 +94,16 @@ func (c *ReviewDeepCommand) Name() string {
 // Description returns the command description
 func (c *ReviewDeepCommand) Description() string {
 	return "Perform deep evidence-based code review on staged Git changes"
+}
+
+// Usage returns the detailed help text shown by `/help review-deep`.
+func (c *ReviewDeepCommand) Usage() string {
+	return strings.Join([]string{
+		"/review-deep   Deep evidence-based code review on staged Git changes.",
+		"",
+		"Runs an agentic review that cross-references source code for each",
+		"finding. More thorough (and slower) than /review.",
+	}, "\n")
 }
 
 // Execute runs the deep code review command

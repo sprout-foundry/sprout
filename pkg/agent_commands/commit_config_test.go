@@ -54,7 +54,8 @@ func TestCommitCommandUsesConfiguredProvider(t *testing.T) {
 	}
 }
 
-// TestCommitCommandFallsBackToLastUsedProvider tests fallback behavior
+// TestCommitCommandFallsBackToLastUsedProvider tests that GetCommitProvider
+// returns empty when only LastUsedProvider is set (no implicit fallback).
 func TestCommitCommandFallsBackToLastUsedProvider(t *testing.T) {
 	homeDir := t.TempDir()
 	configDir := filepath.Join(homeDir, ".config", "sprout")
@@ -81,8 +82,8 @@ func TestCommitCommandFallsBackToLastUsedProvider(t *testing.T) {
 	}
 
 	config := cm.GetConfig()
-	if provider := config.GetCommitProvider(); provider != "openrouter" {
-		t.Errorf("GetCommitProvider() should fall back to LastUsedProvider, got %q", provider)
+	if provider := config.GetCommitProvider(); provider != "" {
+		t.Errorf("GetCommitProvider() should return empty when CommitProvider is not set, got %q", provider)
 	}
 }
 

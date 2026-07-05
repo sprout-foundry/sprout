@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
 // ExecCommand handles the /exec slash command
@@ -21,6 +23,20 @@ func (c *ExecCommand) Name() string {
 
 func (c *ExecCommand) Description() string {
 	return "Execute a shell command directly (also use !<command> as shortcut)"
+}
+
+// Usage returns the detailed help text shown by `/help exec`.
+func (c *ExecCommand) Usage() string {
+	return strings.Join([]string{
+		"/exec <command>    Run a shell command and show output.",
+		"!<command>         Shortcut alias.",
+		"",
+		"Example:",
+		"  /exec ls -la",
+		"  !git status",
+		"",
+		"Git checkout, switch, restore, and reset operations are blocked.",
+	}, "\n")
 }
 
 func (c *ExecCommand) Execute(args []string, chatAgent *agent.Agent) error {
@@ -41,7 +57,7 @@ func (c *ExecCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	}
 
 	// Execute the shell command using the same pattern as direct shell execution
-	fmt.Printf("\033[34m[shell]\033[0m Executing: %s\n", command)
+	console.GlyphShell.Fprintf(os.Stdout, "Executing: %s", command)
 	result, err := tools.ExecuteShellCommand(context.Background(), command)
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
@@ -56,74 +72,4 @@ func (c *ExecCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	fmt.Printf("----------------------------\n")
 
 	return nil
-}
-
-// IsShellCommand checks if a prompt starts with common shell tools
-func IsShellCommand(prompt string) bool {
-	trimmed := strings.TrimSpace(prompt)
-	if trimmed == "" {
-		return false
-	}
-
-	lower := strings.ToLower(trimmed)
-
-	// Common shell command prefixes
-	shellPrefixes := []string{
-		"ls", "ll", "la", "dir", "pwd", "cd", "cat", "less", "more", "head", "tail",
-		"grep", "find", "echo", "clear", "history", "man", "which", "whoami",
-		"ps", "top", "htop", "df", "du", "free", "uptime", "date", "cal",
-		"cp", "mv", "rm", "mkdir", "rmdir", "touch", "chmod", "chown",
-		"git", "go", "npm", "yarn", "python", "python3", "pip", "pip3",
-		"docker", "kubectl", "make", "cargo", "rustc", "node", "deno",
-		"vim", "vi", "nano", "emacs", "code", "subl", "tree", "wc",
-		"curl", "wget", "ping", "netstat", "ss", "ip", "ifconfig",
-		"brew", "apt", "apt-get", "yum", "snap", "flatpak",
-		"sed", "awk", "cut", "sort", "uniq", "tr", "tee", "xargs",
-		"kill", "killall", "pkill", "jobs", "fg", "bg", "nohup",
-		"export", "source", "alias", "unalias", "type", "env",
-		"tar", "gzip", "gunzip", "zip", "unzip", "bzip2", "bunzip2",
-		"sha1sum", "sha256sum", "md5sum", "openssl", "base64",
-		"systemctl", "service", "journalctl", "dmesg", "lsof", "strace",
-		"diff", "comm", "paste", "join", "split", "csplit",
-		"test", "true", "false", "yes", "seq", "expr", "bc",
-		"screen", "tmux", "watch", "time", "timeout", "sleep",
-		"mount", "umount", "fdisk", "mkfs", "fsck", "blkid",
-		"id", "groups", "users", "who", "w", "last", "su", "sudo",
-		"ssh", "scp", "rsync", "ftp", "sftp", "telnet", "nc", "nmap",
-		"iptables", "ufw", "firewall-cmd", "tcpdump", "wireshark",
-		"locate", "updatedb", "whereis", "file", "stat", "ln",
-		"crontab", "at", "batch", "nohup", "nice", "renice",
-		"patch", "diff", "git", "svn", "hg", "cvs",
-		"gcc", "g++", "clang", "javac", "rustc", "go",
-		"mysql", "psql", "sqlite3", "redis-cli", "mongo",
-		"jq", "yq", "xmllint", "tig", "ag", "rg", "fd",
-		"lspci", "lsusb", "lsblk", "lscpu", "lshw", "dmidecode",
-		"modprobe", "lsmod", "rmmod", "insmod", "depmod",
-		"hostnamectl", "timedatectl", "localectl", "loginctl",
-	}
-
-	for _, prefix := range shellPrefixes {
-		if strings.HasPrefix(lower, prefix+" ") || lower == prefix {
-			return true
-		}
-	}
-	return false
-}
-
-// ExecuteShellCommandDirectly executes a shell command directly and returns the result.
-// NOTE: This function includes security checks for git commands. For unprivileged
-// execution, callers should use tools.ExecuteShellCommand directly (but this is
-// generally not recommended for agent-initiated commands).
-func ExecuteShellCommandDirectly(command string) (string, error) {
-	// Security check: block git checkout/switch operations
-	if IsGitCheckoutSubcommand(command) {
-		return "", fmt.Errorf("git checkout/switch/restore operations are not allowed via ExecuteShellCommandDirectly. Use the git tool to require explicit user approval (command: '%s')", command)
-	}
-
-	// Security check: block git discard operations (reset, restore)
-	if IsGitDiscardCommand(command) {
-		return "", fmt.Errorf("git %s operations are not allowed via ExecuteShellCommandDirectly. Use the git tool with operation='restore' or operation='reset' to require explicit user approval (command: '%s')", ExtractGitSubcommand(command), command)
-	}
-
-	return tools.ExecuteShellCommand(context.Background(), command)
 }

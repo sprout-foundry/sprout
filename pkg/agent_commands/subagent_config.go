@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
@@ -27,6 +28,25 @@ func (s *SubagentConfigCommand) Description() string {
 		return "Set or show subagent provider configuration"
 	}
 	return "Set or show subagent model configuration"
+}
+
+// Usage returns the detailed help text shown by `/help subagent-provider`
+// or `/help subagent-model`.
+func (s *SubagentConfigCommand) Usage() string {
+	if s.configType == "provider" {
+		return strings.Join([]string{
+			"/subagent-provider                Show current subagent provider.",
+			"/subagent-provider <provider>     Set subagent provider.",
+			"",
+			"Leave empty to inherit the parent agent's provider.",
+		}, "\n")
+	}
+	return strings.Join([]string{
+		"/subagent-model             Show current subagent model.",
+		"/subagent-model <model>     Set subagent model.",
+		"",
+		"Leave empty to inherit the parent agent's model.",
+	}, "\n")
 }
 
 // Execute runs the subagent config command

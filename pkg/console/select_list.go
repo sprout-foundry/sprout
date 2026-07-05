@@ -68,6 +68,12 @@ type SelectList struct {
 	fd    int
 	isTTY bool
 
+	// testOut, when non-nil, overrides the destination for mouse-tracking
+	// escape sequences so tests can capture the emitted bytes. It is a
+	// test seam only; production code leaves it nil and sequences are
+	// written to os.Stderr.
+	testOut io.Writer
+
 	// dismissKey holds the printable text of the key that dismissed
 	// the picker under DismissOnAnyKey. Empty when the picker exited
 	// via Enter/Esc/Ctrl+C or when DismissOnAnyKey is off. Callers
@@ -232,10 +238,9 @@ func (s *SelectList) runTTY(ctx context.Context) (string, bool, error) {
 		return "", false, fmt.Errorf("select list: enter raw mode: %w", err)
 	}
 	// Enable SGR mouse tracking for wheel scroll support (SP-106 T3).
-	fmt.Fprint(os.Stderr, MouseTrackingSGR)
-	fmt.Fprint(os.Stderr, MouseTrackingVT200)
+	s.enableMouseTracking()
 	defer func() {
-		fmt.Fprint(os.Stderr, MouseTrackingDisable)
+		s.disableMouseTracking()
 		_ = exitSteerMode(s.fd, st)
 		s.clearRendered()
 	}()
@@ -280,6 +285,38 @@ func (s *SelectList) runTTY(ctx context.Context) (string, bool, error) {
 			return val, ok, nil
 		}
 	}
+}
+
+// mouseOut returns the writer used for mouse-tracking escape sequences.
+// It prefers the test seam (s.testOut) so tests can capture the bytes;
+// otherwise it falls back to os.Stderr, which is what the interactive
+// TTY path has always used.
+func (s *SelectList) mouseOut() io.Writer {
+	if s.testOut != nil {
+		return s.testOut
+	}
+	return os.Stderr
+}
+
+// enableMouseTracking writes the SGR + VT200 mouse-tracking enable
+// sequences. It is a no-op when stdin isn't a TTY, matching the
+// requirement that non-interactive runs never emit mouse escapes.
+func (s *SelectList) enableMouseTracking() {
+	if !s.isTTY {
+		return
+	}
+	fmt.Fprint(s.mouseOut(), MouseTrackingSGR)
+	fmt.Fprint(s.mouseOut(), MouseTrackingVT200)
+}
+
+// disableMouseTracking writes the disable sequence (which tears down
+// SGR, VT200, and X10 modes) to turn mouse tracking off on exit. Like
+// enableMouseTracking it is a no-op in non-TTY contexts.
+func (s *SelectList) disableMouseTracking() {
+	if !s.isTTY {
+		return
+	}
+	fmt.Fprint(s.mouseOut(), MouseTrackingDisable)
 }
 
 // handleEscape dispatches the bytes that follow ESC. Returns done=true

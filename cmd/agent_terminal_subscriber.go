@@ -33,6 +33,7 @@ const (
 type terminalSubscriberState struct {
 	spawnMu          sync.Mutex
 	seenSpawn        map[string]bool
+	spawnTasks       map[string]string // persona → short task description (CLI-UX-11)
 	run              *toolRunState
 	pendingArgs      map[string]string
 	progressMu       sync.Mutex
@@ -111,6 +112,7 @@ func newTerminalSubscriberState(configMgr *configuration.Manager) *terminalSubsc
 func (s *terminalSubscriberState) resetSpawnTurn() {
 	s.spawnMu.Lock()
 	s.seenSpawn = make(map[string]bool)
+	s.spawnTasks = make(map[string]string)
 	s.spawnMu.Unlock()
 }
 
@@ -150,6 +152,20 @@ func (s *terminalSubscriberState) handleToolStartEvent(data map[string]interface
 	depth := readEventDepth(data)
 	persona := readEventPersona(data)
 
+	// CLI-UX-11: When run_subagent starts at depth 0, capture the task
+	// description from the prompt field so the spawn announcement can
+	// show "→ coder: refactoring auth.go" instead of just "→ coder".
+	if name == "run_subagent" && depth == 0 && args != "" {
+		if taskDesc, subPersona := extractSubagentTask(args); taskDesc != "" && subPersona != "" {
+			s.spawnMu.Lock()
+			if s.spawnTasks == nil {
+				s.spawnTasks = make(map[string]string)
+			}
+			s.spawnTasks[subPersona] = taskDesc
+			s.spawnMu.Unlock()
+		}
+	}
+
 	// Compact mode: suppress spinner start, blank line, and spawn
 	// announcements. Return early — the user only wants to see
 	// results (tool end lines) when something goes wrong.
@@ -157,7 +173,7 @@ func (s *terminalSubscriberState) handleToolStartEvent(data map[string]interface
 		return
 	}
 
-	// SP-051-2c: announce subagent spawn once per (depth,
+// announce subagent spawn once per (depth,
 	// persona) pair per turn, with provider/model so the user
 	// can see which cheaper/faster model is doing the work.
 	if depth > 0 && persona != "" {
@@ -167,6 +183,7 @@ func (s *terminalSubscriberState) handleToolStartEvent(data map[string]interface
 		if announce {
 			s.seenSpawn[key] = true
 		}
+		taskDesc := s.spawnTasks[persona]
 		s.spawnMu.Unlock()
 		if announce {
 			indicator.Stop()
@@ -177,7 +194,7 @@ func (s *terminalSubscriberState) handleToolStartEvent(data map[string]interface
 			if hasSpawnSnap {
 				ctxMax = spawnSnap.ctxMax
 			}
-			fmt.Fprintln(os.Stderr, formatSpawnLine(chatAgent, depth, persona, ctxMax))
+			fmt.Fprintln(os.Stderr, formatSpawnLine(chatAgent, depth, persona, ctxMax, taskDesc))
 		}
 	}
 	// Ensure the spinner lands on a fresh line so it never

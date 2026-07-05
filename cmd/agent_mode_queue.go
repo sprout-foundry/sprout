@@ -28,7 +28,9 @@ func runQueueMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 
 	// Status footer: pinned bottom row with model/cost/context.
 	// Suppressed automatically on non-TTY.
-	footer := console.NewStatusFooter(os.Stderr, &agentFooterSource{agent: chatAgent})
+	queueFooterSource := &agentFooterSource{agent: chatAgent}
+	queueFooterSource.SetTurnCostStart(chatAgent.GetTotalCost())
+	footer := console.NewStatusFooter(os.Stderr, queueFooterSource)
 	console.RegisterGlobalStatusFooter(footer)
 	footer.Start()
 	defer footer.Stop()

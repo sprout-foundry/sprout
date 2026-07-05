@@ -3,6 +3,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -55,6 +56,38 @@ func formatTokensShort(n int) string {
 	}
 }
 
+// extractSubagentTask parses run_subagent tool arguments and returns
+// (taskDescription, persona). The task description is the first line of
+// the prompt, truncated to 60 chars so the spawn line stays scannable.
+// Returns ("", "") when the args don't contain a usable prompt/persona.
+func extractSubagentTask(argsJSON string) (taskDesc, persona string) {
+	if argsJSON == "" {
+		return "", ""
+	}
+	var args map[string]interface{}
+	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
+		return "", ""
+	}
+	persona, _ = args["persona"].(string)
+	persona = strings.TrimSpace(persona)
+	prompt, _ := args["prompt"].(string)
+	prompt = strings.TrimSpace(prompt)
+	if prompt == "" {
+		return "", persona
+	}
+	// Take the first line only — multi-line prompts would wrap and
+	// break the spawn line's single-row layout.
+	if idx := strings.IndexByte(prompt, '\n'); idx > 0 {
+		prompt = prompt[:idx]
+	}
+	prompt = strings.TrimSpace(prompt)
+	// Truncate with ellipsis at 60 chars so the task hint stays compact.
+	if len(prompt) > 60 {
+		prompt = prompt[:59] + "…"
+	}
+	return prompt, persona
+}
+
 // formatSpawnLine renders the one-shot "↳ persona spawned (provider · model · 128k ctx)"
 // line emitted the first time the CLI sees a new (depth, persona) pair in a
 // turn. Indent matches the corresponding tool-line depth so it visually
@@ -62,9 +95,17 @@ func formatTokensShort(n int) string {
 // the subagent's model context budget (from monitorProgress's initial
 // emit); 0 means "unknown" and the ctx suffix is dropped — the line
 // degrades to the original "(provider · model)" form.
-func formatSpawnLine(chatAgent *agent.Agent, depth int, persona string, maxCtx int) string {
+//
+// CLI-UX-11: when taskDesc is non-empty, it's appended after the persona
+// badge so the user sees what the subagent is doing: "↳ coder: refactor
+// auth.go" instead of just "↳ coder".
+func formatSpawnLine(chatAgent *agent.Agent, depth int, persona string, maxCtx int, taskDesc string) string {
 	indent := console.PersonaIndent(depth)
 	badge := console.PersonaBadge(depth, persona)
+	taskSuffix := ""
+	if taskDesc != "" {
+		taskSuffix = ": " + taskDesc
+	}
 	suffix := ""
 	if chatAgent != nil {
 		if provider, model, err := chatAgent.GetPersonaProviderModel(persona); err == nil && (provider != "" || model != "") {
@@ -75,7 +116,7 @@ func formatSpawnLine(chatAgent *agent.Agent, depth int, persona string, maxCtx i
 			}
 		}
 	}
-	return fmt.Sprintf("%s  ↳ %sspawned%s", indent, badge, suffix)
+	return fmt.Sprintf("%s  ↳ %sspawned%s%s", indent, badge, taskSuffix, suffix)
 }
 
 // formatSubagentDoneLine renders the per-subagent completion summary —

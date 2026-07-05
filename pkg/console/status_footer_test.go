@@ -406,6 +406,49 @@ func TestStatusFooter_StyleCost_RestoresBaseColorAfterAlert(t *testing.T) {
 	}
 }
 
+// CLI-UX-6: A ContentSource that also satisfies turnCostSource should
+// render "turn · session" cost split when the turn cost is non-zero.
+type turnCostSrc struct {
+	stubSource
+	turn float64
+}
+
+func (s *turnCostSrc) TurnCost() float64 { return s.turn }
+
+func TestStatusFooter_ComposeLine_ShowsTurnCostSplit_WhenNonZero(t *testing.T) {
+	f := NewStatusFooter(&nonTTYWriter{}, &turnCostSrc{
+		stubSource: stubSource{model: "m", workdir: "/x", cost: 1.21},
+		turn:       0.043,
+	})
+	line := f.composeLine(120)
+	if !strings.Contains(line, "turn") {
+		t.Errorf("composeLine with non-zero turn cost should contain 'turn', got %q", line)
+	}
+	if !strings.Contains(line, "session") {
+		t.Errorf("composeLine with non-zero turn cost should contain 'session', got %q", line)
+	}
+}
+
+func TestStatusFooter_ComposeLine_OmitsTurnSplit_WhenZero(t *testing.T) {
+	f := NewStatusFooter(&nonTTYWriter{}, &turnCostSrc{
+		stubSource: stubSource{model: "m", workdir: "/x", cost: 1.21},
+		turn:       0,
+	})
+	line := f.composeLine(120)
+	if strings.Contains(line, "turn") {
+		t.Errorf("composeLine with zero turn cost should not contain 'turn', got %q", line)
+	}
+}
+
+func TestStatusFooter_ComposeLine_BaselineSourceOmitsTurnSplit(t *testing.T) {
+	// stubSource doesn't implement turnCostSource — no turn split.
+	f := NewStatusFooter(&nonTTYWriter{}, &stubSource{model: "m", workdir: "/x", cost: 1.21})
+	line := f.composeLine(120)
+	if strings.Contains(line, "turn") {
+		t.Errorf("baseline ContentSource should not produce turn split, got %q", line)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Cursor-aware steer rendering (SetSteerLineWithCursor + steerRowTextWithCursor)
 // ---------------------------------------------------------------------------

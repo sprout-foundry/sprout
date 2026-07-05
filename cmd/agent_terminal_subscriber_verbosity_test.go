@@ -318,3 +318,72 @@ func TestHandleStreamChunkEvent_NoContentTypeDoesNotClear(t *testing.T) {
 		t.Fatal("thinkingActive should remain true for StreamChunk without content_type")
 	}
 }
+
+// CLI-UX-11: subagent task description in spawn line
+func TestExtractSubagentTask(t *testing.T) {
+	tests := []struct {
+		name     string
+		argsJSON string
+		wantDesc string
+		wantPsn  string
+	}{
+		{
+			name:     "simple prompt",
+			argsJSON: `{"persona":"coder","prompt":"Refactor the auth module"}`,
+			wantDesc: "Refactor the auth module",
+			wantPsn:  "coder",
+		},
+		{
+			name:     "multi-line prompt takes first line",
+			argsJSON: `{"persona":"tester","prompt":"Write tests for auth\nCover edge cases"}`,
+			wantDesc: "Write tests for auth",
+			wantPsn:  "tester",
+		},
+		{
+			name:     "long prompt truncated",
+			argsJSON: `{"persona":"coder","prompt":"This is a very long task description that exceeds the sixty character limit and should be truncated"}`,
+			wantDesc: "This is a very long task description that exceeds the sixty…",
+			wantPsn:  "coder",
+		},
+		{
+			name:     "empty prompt",
+			argsJSON: `{"persona":"coder","prompt":""}`,
+			wantDesc: "",
+			wantPsn:  "coder",
+		},
+		{
+			name:     "invalid json",
+			argsJSON: `{bad json}`,
+			wantDesc: "",
+			wantPsn:  "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			desc, psn := extractSubagentTask(tt.argsJSON)
+			if desc != tt.wantDesc {
+				t.Errorf("desc = %q, want %q", desc, tt.wantDesc)
+			}
+			if psn != tt.wantPsn {
+				t.Errorf("persona = %q, want %q", psn, tt.wantPsn)
+			}
+		})
+	}
+}
+
+func TestFormatSpawnLine_WithTaskDescription(t *testing.T) {
+	line := formatSpawnLine(nil, 1, "coder", 0, "Refactoring auth.go")
+	if !strings.Contains(line, "coder") {
+		t.Errorf("expected persona in line, got %q", line)
+	}
+	if !strings.Contains(line, "Refactoring auth.go") {
+		t.Errorf("expected task description in line, got %q", line)
+	}
+}
+
+func TestFormatSpawnLine_WithoutTaskDescription(t *testing.T) {
+	line := formatSpawnLine(nil, 1, "coder", 0, "")
+	if strings.Contains(line, ": ") {
+		t.Errorf("should not have task suffix when empty, got %q", line)
+	}
+}

@@ -689,6 +689,13 @@ func startTerminalToolSubscriber(ctx context.Context, chatAgent *agent.Agent, ev
 	if eventBus == nil || indicator == nil {
 		return func() {}
 	}
+	// Mark the OutputRouter: the subscriber owns agent_message rendering,
+	// so RouteAgentMessage should skip the raw writeTerminalMessage fallback.
+	if chatAgent != nil {
+		if router := chatAgent.OutputRouter(); router != nil {
+			router.SetTerminalSubscriberActive(true)
+		}
+	}
 	subName := fmt.Sprintf("cli_tool_indicator_%d", time.Now().UnixNano())
 	ch := eventBus.Subscribe(subName)
 

@@ -106,15 +106,31 @@ func formatTurnStatsLine(promptDelta, completionDelta int, costDelta float64, el
 		ttftSeg = fmt.Sprintf(" · ttft %s", styled)
 	}
 
-	return fmt.Sprintf("%s⎯ this turn: %s in / %s out · %s · %s%s ⎯%s\n",
+	costSeg := compactCost(costDelta)
+	if costDelta <= 0 {
+		costSeg = "" // omit "$0.0000" for models without pricing
+	}
+
+	return fmt.Sprintf("%s⎯ this turn: %s in / %s out%s%s · %s%s ⎯%s\n",
 		dim,
 		compactTokens(promptDelta),
 		compactTokens(completionDelta),
-		compactCost(costDelta),
+		costPrefix(costSeg),
+		costSeg,
 		compactDuration(elapsed),
 		ttftSeg,
 		reset,
 	)
+}
+
+// costPrefix returns " · " when cost is non-empty, "" when empty, so
+// the turn-summary line omits the cost segment cleanly for models
+// without pricing.
+func costPrefix(cost string) string {
+	if cost == "" {
+		return ""
+	}
+	return " · "
 }
 
 // turnFirstTokenAt is set (atomically) to the Unix nano time of the

@@ -261,11 +261,11 @@ func TestFormatTurnStatsLine_EdgeCases(t *testing.T) {
 		t.Errorf("expected zero stats in %q", out)
 	}
 
-	// Negative cost (shouldn't happen, but formatTurnStatsLine delegates
-	// to compactCost which clamps to $0.00).
+	// Negative cost (shouldn't happen) — omitted entirely since
+	// zero/negative cost means "no pricing for this model."
 	out = formatTurnStatsLine(100, 200, -0.5, 2*time.Second, 0)
-	if !strings.Contains(out, "$0.00") {
-		t.Errorf("expected clamped cost in %q", out)
+	if strings.Contains(out, "$") {
+		t.Errorf("expected no cost segment for negative cost, got %q", out)
 	}
 }
 
@@ -459,12 +459,12 @@ func TestFormatTurnStatsLine_LargeValues(t *testing.T) {
 			wants:      []string{"1500.0k in", "800.0k out", "$50.25", "2m0s"},
 		},
 		{
-			name:       "zero cost",
+			name:       "zero cost (omitted — no pricing)",
 			prompt:     100,
 			completion: 200,
 			cost:       0,
 			elapsed:    1 * time.Second,
-			wants:      []string{"100 in", "200 out", "$0.0000", "1.0s"},
+			wants:      []string{"100 in", "200 out", "1.0s"},
 		},
 		{
 			name:       "sub-millisecond (0ms)",

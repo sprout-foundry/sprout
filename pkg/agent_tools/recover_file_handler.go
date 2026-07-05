@@ -3,8 +3,6 @@ package tools
 import (
 	"context"
 	"time"
-
-	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 // RecoverFileFunc is a function pointer set by pkg/agent at startup.
@@ -52,23 +50,7 @@ func (h *recoverFileHandler) Validate(args map[string]any) error {
 }
 
 func (h *recoverFileHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	toolName := h.Name()
-	var hadError bool
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool":   toolName,
-			"params": args,
-		})
-		defer func() {
-			env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-				"tool":  toolName,
-				"error": hadError,
-			})
-		}()
-	}
-
 	if RecoverFileFunc == nil {
-		hadError = true
 		return ToolResult{
 			Output:  "recover_file is not available: agent integration not initialized (RecoverFileFunc is nil)",
 			IsError: true,
@@ -77,14 +59,13 @@ func (h *recoverFileHandler) Execute(ctx context.Context, env ToolEnv, args map[
 
 	result, err := RecoverFileFunc(ctx, args)
 	if err != nil {
-		hadError = true
 		return ToolResult{Output: err.Error(), IsError: true}, nil
 	}
 	return ToolResult{Output: result}, nil
 }
 
-func (h *recoverFileHandler) Aliases() []string         { return nil }
-func (h *recoverFileHandler) Timeout() time.Duration    { return 0 }
-func (h *recoverFileHandler) MaxResultSize() int        { return 0 }
-func (h *recoverFileHandler) SafeForParallel() bool     { return false }
-func (h *recoverFileHandler) Interactive() bool         { return false }
+func (h *recoverFileHandler) Aliases() []string      { return nil }
+func (h *recoverFileHandler) Timeout() time.Duration { return 0 }
+func (h *recoverFileHandler) MaxResultSize() int     { return 0 }
+func (h *recoverFileHandler) SafeForParallel() bool  { return false }
+func (h *recoverFileHandler) Interactive() bool      { return false }

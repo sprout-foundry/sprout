@@ -9,7 +9,6 @@ import (
 
 	provider_factory "github.com/sprout-foundry/sprout/pkg/agent_providers"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
-	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 // manageSettingsHandler implements ToolHandler for the manage_settings tool.
@@ -78,20 +77,6 @@ func (h *manageSettingsHandler) Validate(args map[string]any) error {
 }
 
 func (h *manageSettingsHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	toolName := h.Name()
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool":   toolName,
-			"params": args,
-		})
-		defer func() {
-			env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-				"tool":  toolName,
-				"error": false,
-			})
-		}()
-	}
-
 	op, _ := extractString(args, "operation")
 	op = strings.TrimSpace(strings.ToLower(op))
 
@@ -305,11 +290,11 @@ func (h *manageSettingsHandler) handlePreview(mgr *configuration.Manager, args m
 	return ToolResult{Output: sb.String()}, nil
 }
 
-func (h *manageSettingsHandler) Aliases() []string         { return nil }
-func (h *manageSettingsHandler) Timeout() time.Duration    { return 0 }
-func (h *manageSettingsHandler) MaxResultSize() int        { return 0 }
-func (h *manageSettingsHandler) SafeForParallel() bool     { return false }
-func (h *manageSettingsHandler) Interactive() bool         { return false }
+func (h *manageSettingsHandler) Aliases() []string      { return nil }
+func (h *manageSettingsHandler) Timeout() time.Duration { return 0 }
+func (h *manageSettingsHandler) MaxResultSize() int     { return 0 }
+func (h *manageSettingsHandler) SafeForParallel() bool  { return false }
+func (h *manageSettingsHandler) Interactive() bool      { return false }
 
 // ---------------------------------------------------------------------------
 // Config field helpers (adapted from pkg/agent/settings_handler.go to avoid

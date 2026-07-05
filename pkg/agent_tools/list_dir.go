@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
@@ -99,14 +98,6 @@ func (h *listDirHandler) Execute(ctx context.Context, env ToolEnv, args map[stri
 		}, fmt.Errorf("path is not a directory: %s", resolvedPath)
 	}
 
-	// Publish tool start event
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool": "list_directory",
-			"path": resolvedPath,
-		})
-	}
-
 	// Read directory contents
 	entries, err := os.ReadDir(resolvedPath)
 	if err != nil {
@@ -168,16 +159,6 @@ func (h *listDirHandler) Execute(ctx context.Context, env ToolEnv, args map[stri
 	sb.WriteString("\n")
 	sb.WriteString(fmt.Sprintf("%d entries found\n", totalEntries))
 
-	// Publish tool end event
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-			"tool":       "list_directory",
-			"path":       resolvedPath,
-			"total":      totalEntries,
-			"showHidden": showHidden,
-		})
-	}
-
 	// Write to output writer if available
 	if env.OutputWriter != nil {
 		io.WriteString(env.OutputWriter, sb.String())
@@ -189,11 +170,11 @@ func (h *listDirHandler) Execute(ctx context.Context, env ToolEnv, args map[stri
 	}, nil
 }
 
-func (h *listDirHandler) Aliases() []string         { return nil }
-func (h *listDirHandler) Timeout() time.Duration    { return 0 }
-func (h *listDirHandler) MaxResultSize() int        { return 0 }
-func (h *listDirHandler) SafeForParallel() bool     { return false }
-func (h *listDirHandler) Interactive() bool         { return false }
+func (h *listDirHandler) Aliases() []string      { return nil }
+func (h *listDirHandler) Timeout() time.Duration { return 0 }
+func (h *listDirHandler) MaxResultSize() int     { return 0 }
+func (h *listDirHandler) SafeForParallel() bool  { return false }
+func (h *listDirHandler) Interactive() bool      { return false }
 func formatSize(bytes int64) string {
 	switch {
 	case bytes >= 1024*1024*1024:

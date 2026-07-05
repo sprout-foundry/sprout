@@ -125,6 +125,9 @@ func (s *terminalSubscriberState) resetSpawnTurn() {
 // suppressed — only error results break the silence.
 func (s *terminalSubscriberState) handleToolStartEvent(data map[string]interface{}, chatAgent *agent.Agent, indicator *console.ActivityIndicator) {
 	name, _ := data["tool_name"].(string)
+	if name == "" {
+		return
+	}
 	if agent.IsInteractiveTool(name) {
 		// Tool renders its own prompt — make sure any active
 		// spinner is gone before the prompt lands.
@@ -205,6 +208,9 @@ func (s *terminalSubscriberState) handleToolStartEvent(data map[string]interface
 // in-place row (Phase 3), or emit a fresh end line. Refreshes the footer.
 func (s *terminalSubscriberState) handleToolEndEvent(data map[string]interface{}, chatAgent *agent.Agent, indicator *console.ActivityIndicator, footer *console.StatusFooter) {
 	name, _ := data["tool_name"].(string)
+	if name == "" {
+		return
+	}
 	if agent.IsInteractiveTool(name) {
 		// No spinner was started; emit no result chrome.
 		return

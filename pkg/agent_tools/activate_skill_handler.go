@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"time"
-
-	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 // activateSkillHandler activates a skill by loading its instructions via
@@ -36,45 +34,26 @@ func (h *activateSkillHandler) Validate(args map[string]any) error {
 }
 
 func (h *activateSkillHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	toolName := h.Name()
-	var hadError bool
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool":   toolName,
-			"params": args,
-		})
-		defer func() {
-			env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-				"tool":  toolName,
-				"error": hadError,
-			})
-		}()
-	}
-
 	// Extract skill_id with fallback to "skill" (matching legacy handleActivateSkill)
 	skillID, err := extractString(args, "skill_id")
 	if err != nil {
 		skillID, err = extractString(args, "skill")
 		if err != nil {
-			hadError = true
 			return ToolResult{Output: "skill_id is required", IsError: true}, nil
 		}
 	}
 
 	// Check if SkillLoader is available
 	if env.SkillLoader == nil {
-		hadError = true
 		return ToolResult{Output: "skill loading not available: SkillLoader is not configured", IsError: true}, nil
 	}
 
 	// Load the skill
 	skillInfo, err := env.SkillLoader.LoadSkill(skillID)
 	if err != nil {
-		hadError = true
 		return ToolResult{Output: err.Error(), IsError: true}, nil
 	}
 	if skillInfo == nil {
-		hadError = true
 		return ToolResult{Output: fmt.Sprintf("skill '%s' returned no data", skillID), IsError: true}, nil
 	}
 
@@ -84,8 +63,8 @@ func (h *activateSkillHandler) Execute(ctx context.Context, env ToolEnv, args ma
 	}, nil
 }
 
-func (h *activateSkillHandler) Aliases() []string         { return nil }
-func (h *activateSkillHandler) Timeout() time.Duration    { return 0 }
-func (h *activateSkillHandler) MaxResultSize() int        { return 0 }
-func (h *activateSkillHandler) SafeForParallel() bool     { return false }
-func (h *activateSkillHandler) Interactive() bool         { return false }
+func (h *activateSkillHandler) Aliases() []string      { return nil }
+func (h *activateSkillHandler) Timeout() time.Duration { return 0 }
+func (h *activateSkillHandler) MaxResultSize() int     { return 0 }
+func (h *activateSkillHandler) SafeForParallel() bool  { return false }
+func (h *activateSkillHandler) Interactive() bool      { return false }

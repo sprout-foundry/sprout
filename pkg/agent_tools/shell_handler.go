@@ -9,7 +9,6 @@ import (
 	"time"
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
-	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
@@ -380,14 +379,6 @@ func (h *shellCommandHandler) handleBackground(ctx context.Context, env ToolEnv,
 
 // handleSync runs a command synchronously.
 func (h *shellCommandHandler) handleSync(ctx context.Context, env ToolEnv, command string) (ToolResult, error) {
-	// Publish tool start event
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool":    "shell_command",
-			"command": truncateForEvent(command, 200),
-		})
-	}
-
 	// Execute with safety checks.
 	// interactiveMode=false, streamOutput=false for agent tool calls.
 	result, err := ExecuteShellCommandWithSafety(ctx, command, false, "", false)
@@ -396,16 +387,6 @@ func (h *shellCommandHandler) handleSync(ctx context.Context, env ToolEnv, comma
 			Output:  fmt.Sprintf("shell_command %q: %v", command, err),
 			IsError: true,
 		}, agenterrors.NewTool("shell_command", fmt.Sprintf("shell_command %q: %v", command, err), err)
-	}
-
-	// Publish tool end event
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-			"tool":    "shell_command",
-			"command": truncateForEvent(command, 200),
-			"bytes":   len(result),
-			"tokens":  estimateTokenUsage(result),
-		})
 	}
 
 	// Write to output writer if available
@@ -419,11 +400,11 @@ func (h *shellCommandHandler) handleSync(ctx context.Context, env ToolEnv, comma
 	}, nil
 }
 
-func (h *shellCommandHandler) Aliases() []string         { return nil }
-func (h *shellCommandHandler) Timeout() time.Duration    { return 0 }
-func (h *shellCommandHandler) MaxResultSize() int        { return 0 }
-func (h *shellCommandHandler) SafeForParallel() bool     { return false }
-func (h *shellCommandHandler) Interactive() bool         { return false }
+func (h *shellCommandHandler) Aliases() []string      { return nil }
+func (h *shellCommandHandler) Timeout() time.Duration { return 0 }
+func (h *shellCommandHandler) MaxResultSize() int     { return 0 }
+func (h *shellCommandHandler) SafeForParallel() bool  { return false }
+func (h *shellCommandHandler) Interactive() bool      { return false }
 
 // truncateForEvent truncates a string for event logging.
 func truncateForEvent(s string, maxLen int) string {

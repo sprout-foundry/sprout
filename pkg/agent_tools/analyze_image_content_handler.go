@@ -5,8 +5,6 @@ package tools
 import (
 	"context"
 	"time"
-
-	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 type analyzeImageContentHandler struct{}
@@ -32,21 +30,6 @@ func (h *analyzeImageContentHandler) Validate(args map[string]any) error {
 }
 
 func (h *analyzeImageContentHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	toolName := h.Name()
-	var succeeded bool
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool":   toolName,
-			"params": args,
-		})
-		defer func() {
-			env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-				"tool":  toolName,
-				"error": !succeeded,
-			})
-		}()
-	}
-
 	imagePath, err := extractString(args, "image_path")
 	if err != nil {
 		return ToolResult{Output: err.Error(), IsError: true}, err
@@ -67,12 +50,11 @@ func (h *analyzeImageContentHandler) Execute(ctx context.Context, env ToolEnv, a
 		return ToolResult{Output: result, IsError: true}, err
 	}
 
-	succeeded = true
 	return ToolResult{Output: result}, nil
 }
 
-func (h *analyzeImageContentHandler) Aliases() []string         { return nil }
-func (h *analyzeImageContentHandler) Timeout() time.Duration    { return 0 }
-func (h *analyzeImageContentHandler) MaxResultSize() int        { return 0 }
-func (h *analyzeImageContentHandler) SafeForParallel() bool     { return false }
-func (h *analyzeImageContentHandler) Interactive() bool         { return false }
+func (h *analyzeImageContentHandler) Aliases() []string      { return nil }
+func (h *analyzeImageContentHandler) Timeout() time.Duration { return 0 }
+func (h *analyzeImageContentHandler) MaxResultSize() int     { return 0 }
+func (h *analyzeImageContentHandler) SafeForParallel() bool  { return false }
+func (h *analyzeImageContentHandler) Interactive() bool      { return false }

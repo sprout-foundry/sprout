@@ -251,7 +251,7 @@ func TestWriteStructuredFileHandler_Execute_EventBus(t *testing.T) {
 	ctx := newTestCtx(dir)
 
 	bus := events.NewEventBus()
-	ch := bus.Subscribe("test")
+	_ = bus.Subscribe("test") // subscribe to have a listener
 	env := newTestEnv(t, dir)
 	env.EventBus = bus
 
@@ -264,20 +264,13 @@ func TestWriteStructuredFileHandler_Execute_EventBus(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Verify tool_start event
+	// Handlers no longer self-publish tool_start/tool_end — the core
+	// tool executor (pkg/agent/tool_executor.go) handles event publishing.
 	select {
-	case evt := <-ch:
-		require.Equal(t, "tool_start", evt.Type)
+	case ev := <-bus.Subscribe("check"):
+		t.Fatalf("expected 0 events from handler, got %+v", ev)
 	default:
-		t.Fatal("expected tool_start event")
-	}
-
-	// Verify tool_end event
-	select {
-	case evt := <-ch:
-		require.Equal(t, "tool_end", evt.Type)
-	default:
-		t.Fatal("expected tool_end event")
+		// good — no events published by the handler
 	}
 }
 

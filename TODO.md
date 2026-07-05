@@ -1687,3 +1687,59 @@ All 12 findings implemented and shipped._
       `/usage`, `/models`, `/providers` via `ExecuteWithJSONOutput`.
 - [x] **SC-12:** Deleted dead `SelectAndExecuteCommand`,
       `ShowCommandSelector`, and `CommandItem` from `command_selector.go`.
+
+## CLI Output UX Improvements (CLI-UX audit, 2026-07-05)
+
+Audited the CLI output layer against best-in-class tools (Claude Code,
+Gemini CLI, Aider, Cursor, gh, dagger). Findings prioritized by impact.
+
+### Tier 1 — High impact, directly visible
+
+- [x] **CLI-UX-1:** Implement `verbose` mode (defined but does nothing).
+      Only `compact` was branched on. Verbose now adds: extended tool arg
+      previews (200 chars vs 70), dim result-size suffix (· 1.2KB) on
+      tool-end lines. `isVerbose()` reads live from config.
+- [ ] **CLI-UX-2:** Live elapsed-time on spinner for long-running tools.
+      ALREADY IMPLEMENTED — spinner render() already shows elapsed seconds.
+      Audit was wrong on this one.
+- [ ] **CLI-UX-3:** Diff preview for write_file/edit_file in timeline.
+      Currently shows `✓ edit_file (path.go) · 0.1s` with no indication of
+      what changed. Even compact `+12 -3` stat would add signal. Claude
+      Code shows 2-3 line hunk inline; Aider shows full git-style diff.
+- [ ] **CLI-UX-4:** Cumulative turn-progress indicator during long turns.
+      During 5+ tool-call turns, no sense of "where am I." Surface todo
+      `3/7 done` on footer or as dim line after each tool. Data already
+      published via EventTypeTodoUpdate.
+
+### Tier 2 — Polish that differentiates
+
+- [x] **CLI-UX-5:** Contextual thinking indicator during LLM think time.
+      On `query_started`, starts `◐ thinking…` spinner when no tool is
+      active. Cleared when prose streams, a tool starts, or turn completes.
+- [ ] **CLI-UX-6:** Session-vs-turn cost split in footer. composeLine shows
+      cumulative cost only. Show `$0.04 turn · $1.21 session` for pacing
+      signal. Key feature in Claude Code and Cursor.
+- [x] **CLI-UX-7:** Compact turn summary at turn end. On `query_completed`,
+      prints dim `✓ turn complete · 12.3s · $0.04` summary line. Suppressed
+      in compact mode.
+- [ ] **CLI-UX-8:** Pre-highlight code blocks during streaming. Code blocks
+      flicker plain→colored when closing ``` arrives. StreamingMarkdownFormatter
+      should highlight per-line or show dim affordance until fence close.
+
+### Tier 3 — Nice to have
+
+- [ ] **CLI-UX-9:** Box-drawing for structured panels (todos, errors, tables).
+      gh/lazygit/dagger use `┌─┐│└┘` for scannable panels. Todo block is
+      strongest candidate.
+- [ ] **CLI-UX-10:** Keyboard shortcut affordances row. No visible hint that
+      Ctrl+C interrupts, / opens steer. Dim toggleable help row above footer.
+- [ ] **CLI-UX-11:** Subagent progress shows task description, not just persona.
+      `→ coder: refactoring auth.go` instead of `→ coder`. subagentProgress
+      captures persona+elapsed only.
+- [ ] **CLI-UX-12:** Expand-on-demand for truncated tool args. Long args
+      truncate to 70-80 chars. Power-user keybind (e.g. `v` on tool row) or
+      verbose mode to show full args.
+
+### Recommended starting points
+CLI-UX-2 (live elapsed) and CLI-UX-1 (verbose mode) — highest impact-per-effort,
+both build on existing infrastructure.

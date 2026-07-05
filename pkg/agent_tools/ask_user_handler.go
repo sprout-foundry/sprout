@@ -5,8 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"time"
-
-	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 type askUserHandler struct{}
@@ -34,20 +32,6 @@ func (h *askUserHandler) Validate(args map[string]any) error {
 }
 
 func (h *askUserHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	toolName := h.Name()
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool":   toolName,
-			"params": args,
-		})
-		defer func() {
-			env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-				"tool":  toolName,
-				"error": false,
-			})
-		}()
-	}
-
 	req, err := parseAskUserArgs(args)
 	if err != nil {
 		return ToolResult{Output: fmt.Sprintf("ask_user failed: %v", err), IsError: true}, nil

@@ -240,6 +240,14 @@ func (s *SelectList) runTTY(ctx context.Context) (string, bool, error) {
 		s.clearRendered()
 	}()
 
+	// Print the title once before entering the render loop. The title
+	// stays pinned above the list and is excluded from the render()
+	// row-clear math so subscriber output between keypresses doesn't
+	// misalign the walk-back count and stack duplicate titles.
+	if s.opts.Title != "" {
+		fmt.Fprintln(os.Stderr, GlyphInfo.Prefix()+s.opts.Title)
+	}
+
 	s.render()
 
 	var buf [8]byte
@@ -624,7 +632,6 @@ func (s *SelectList) confirm() (string, bool) {
 func (s *SelectList) render() {
 	s.mu.Lock()
 	prev := s.rendered
-	title := s.opts.Title
 	filter := s.filter
 	searchable := s.opts.Searchable
 	dismissOnAnyKey := s.opts.DismissOnAnyKey
@@ -673,10 +680,10 @@ func (s *SelectList) render() {
 	}
 
 	rendered := 0
-	if title != "" {
-		fmt.Fprintln(os.Stderr, GlyphInfo.Prefix()+title)
-		rendered++
-	}
+	// Title is printed once in runTTY/runFallback before the render
+	// loop starts — not re-rendered here. Reprinting it on every frame
+	// caused duplicate stacking when the terminal subscriber wrote
+	// output between keypresses, misaligning the row-clear math.
 	if searchable {
 		fmt.Fprintf(os.Stderr, "  filter: %s_  (%d/%d)\n", filter, filteredCount, totalCount)
 		rendered++
@@ -783,7 +790,12 @@ func (s *SelectList) clearRendered() {
 	s.mu.Lock()
 	n := s.rendered
 	s.rendered = 0
+	hasTitle := s.opts.Title != ""
 	s.mu.Unlock()
+	// +1 for the title row (printed once in runTTY, not tracked in rendered)
+	if hasTitle {
+		n++
+	}
 	for i := 0; i < n; i++ {
 		fmt.Fprint(os.Stderr, "\r\033[K\033[A")
 	}

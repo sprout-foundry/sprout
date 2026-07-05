@@ -16,6 +16,16 @@ type EditCommand struct{}
 func (c *EditCommand) Name() string        { return "edit" }
 func (c *EditCommand) Description() string { return "Open $EDITOR to compose or edit a query" }
 
+// Usage returns the detailed help text shown by `/help edit`.
+func (c *EditCommand) Usage() string {
+	return strings.Join([]string{
+		"/edit              Open $EDITOR (or $VISUAL) to compose a query.",
+		"/edit <text>       Pre-fill the editor with <text>.",
+		"",
+		"After saving and closing the editor, the buffer is sent as a message.",
+	}, "\n")
+}
+
 func (c *EditCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	if chatAgent == nil {
 		return fmt.Errorf("[edit] agent not available")

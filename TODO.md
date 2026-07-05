@@ -1726,9 +1726,11 @@ Gemini CLI, Aider, Cursor, gh, dagger). Findings prioritized by impact.
 
 ### Tier 3 — Nice to have
 
-- [ ] **CLI-UX-9:** Box-drawing for structured panels (todos, errors, tables).
-      gh/lazygit/dagger use `┌─┐│└┘` for scannable panels. Todo block is
-      strongest candidate.
+- [x] **CLI-UX-9:** Box-drawing for structured panels (todos, errors, tables).
+      Added `pkg/console/panel.go` with `Panel{Title, Content, Style}` and
+      `DefaultPanelStyle()` (cyan borders, bold-white title). Rendered the
+      todo list as a bordered panel with status counts in the title and
+      content rows wrapped to panel width. 7 panel tests.
 - [ ] **CLI-UX-10:** Keyboard shortcut affordances row. No visible hint that
       Ctrl+C interrupts, / opens steer. Dim toggleable help row above footer.
 - [x] **CLI-UX-11:** Subagent progress shows task description, not just persona.

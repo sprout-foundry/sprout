@@ -261,17 +261,17 @@ func handleAnalyzeImageContent(ctx context.Context, a *Agent, args map[string]in
 		}
 
 		a.PrintLine("")
-		a.PrintLine(console.GlyphAction.Prefix() + prompt)
+		a.PrintLine(prompt)
 
 		choice, promptErr := a.PromptChoice(prompt, choices)
 		if promptErr != nil {
-			a.PrintLine(fmt.Sprintf("%sCould not prompt for choice: %v", console.GlyphWarning.Prefix(), promptErr))
+			a.PrintLine(fmt.Sprintf("Could not prompt for choice: %v", promptErr))
 			return result, agenterrors.NewTool("analysis", "prompt choice failed", promptErr)
 		}
 
 		if choice == "yes" {
 			// The simplified PDF processing doesn't require model downloads
-			a.PrintLine(console.GlyphDim.Prefix() + "Processing PDF with simplified approach...")
+			a.PrintLine("Processing PDF with simplified approach...")
 			result, err = tools.AnalyzeImage(ctx, imagePath, analysisPrompt, analysisMode)
 		}
 	}

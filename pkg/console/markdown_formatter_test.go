@@ -528,3 +528,142 @@ func TestMarkdownFormatter_UnderscoreItalicCommonMarkBoundaries(t *testing.T) {
 		})
 	}
 }
+
+// TestMarkdownFormatter_CodeBlockInsideList verifies that a fenced code
+// block indented inside a list item is recognized as a code fence (not
+// leaked as raw backticks) and rendered with the standard gutter and
+// language header. This is valid CommonMark (e.g. "  ```go" inside a list).
+func TestMarkdownFormatter_CodeBlockInsideList(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("CLICOLOR_FORCE", "1")
+	formatter := NewMarkdownFormatter(true, true)
+
+	input := "- item\n  ```go\n  fmt.Println(\"hi\")\n  ```"
+	result := formatter.Format(input)
+
+	// The code-block gutter should be present on code rows.
+	if !strings.Contains(result, "│ ") {
+		t.Errorf("Expected code block gutter (│ ) for indented fence, got:\n%s", result)
+	}
+
+	// The language header should be rendered.
+	if !strings.Contains(result, "──── go ────") {
+		t.Errorf("Expected '──── go ────' header for indented fence, got:\n%s", result)
+	}
+
+	// Raw backticks must NOT leak into the output.
+	if strings.Contains(result, "```") {
+		t.Errorf("Expected no raw backticks for indented fence, got:\n%s", result)
+	}
+
+	// The code content should appear (Go keyword "func" is NOT in this
+	// snippet, but the code text should render). Check for the code text
+	// without backticks — strip ANSI to verify the literal content.
+	plain := stripANSIEscapeCodes(result)
+	if !strings.Contains(plain, "fmt.Println") {
+		t.Errorf("Expected code content 'fmt.Println' in output, got:\n%s", plain)
+	}
+}
+
+// TestMarkdownFormatter_IndentedFenceGoKeyword verifies that an indented
+// Go code fence renders highlighted Go keywords (e.g. "func").
+func TestMarkdownFormatter_IndentedFenceGoKeyword(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("CLICOLOR_FORCE", "1")
+	formatter := NewMarkdownFormatter(true, true)
+
+	input := "- parent\n  ```go\n  func main() {\n    println(\"hello\")\n  }\n  ```\n- next"
+	result := formatter.Format(input)
+
+	// The func keyword should be highlighted.
+	if !strings.Contains(result, ColorBlue+"func") {
+		t.Errorf("Expected highlighted 'func' keyword in indented code block, got:\n%s", result)
+	}
+
+	// Code block gutter present.
+	if !strings.Contains(result, "│ ") {
+		t.Errorf("Expected code block gutter for indented fence, got:\n%s", result)
+	}
+
+	// No raw backticks leaked.
+	if strings.Contains(result, "```") {
+		t.Errorf("Expected no raw backticks, got:\n%s", result)
+	}
+}
+
+// TestMarkdownFormatter_IndentedFenceCloserRules pins the CommonMark closing
+// fence rule: a closing fence may be preceded by up to three spaces of
+// indentation, independent of the opening fence's indentation.
+func TestMarkdownFormatter_IndentedFenceCloserRules(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("CLICOLOR_FORCE", "1")
+	formatter := NewMarkdownFormatter(true, true)
+
+	t.Run("under-indented closer closes block", func(t *testing.T) {
+		// Opener at 2 spaces, closer at 0 spaces: CommonMark closes.
+		input := "- item\n  ```go\n  code\n```\nafter"
+		result := formatter.Format(input)
+		plain := stripANSIEscapeCodes(result)
+		// "after" should render as plain text, not as a code row.
+		if !strings.Contains(plain, "after") {
+			t.Errorf("Expected 'after' to render as plain text after under-indented closer, got:\n%s", plain)
+		}
+		// No raw backticks should leak (the closer is honored).
+		if strings.Contains(plain, "```") {
+			t.Errorf("Expected no leaked backticks when closer is under-indented, got:\n%s", plain)
+		}
+	})
+
+	t.Run("over-indented fence line stays open", func(t *testing.T) {
+		// Opener at 2 spaces, fence-like line at 4 spaces: CommonMark
+		// treats it as code content (stays open), so subsequent text is
+		// also code until a valid closer appears.
+		input := "  ```go\n  code\n    ```\n  ```\nafter"
+		result := formatter.Format(input)
+		plain := stripANSIEscapeCodes(result)
+		// The over-indented "    ```" should render as a code row behind
+		// the gutter, not close the block. Check that it appears with the
+		// gutter (i.e. as code content).
+		if !strings.Contains(plain, "│") {
+			t.Errorf("Expected over-indented fence-like line to render as code content (gutter), got:\n%s", plain)
+		}
+	})
+
+	t.Run("closer indented up to 3 spaces closes", func(t *testing.T) {
+		// Opener at 1 space, closer at 3 spaces: CommonMark closes
+		// (≤ 3 spaces allowed on the closer).
+		input := " ```\n code\n   ```\nafter"
+		result := formatter.Format(input)
+		plain := stripANSIEscapeCodes(result)
+		if !strings.Contains(plain, "after") {
+			t.Errorf("Expected 'after' as plain text after 3-space closer, got:\n%s", plain)
+		}
+		if strings.Contains(plain, "```") {
+			t.Errorf("Expected no leaked backticks with 3-space closer, got:\n%s", plain)
+		}
+	})
+}
+
+// TestMarkdownFormatter_Column0FenceAfterIndented pins the codeBlockIndent
+// reset: a column-0 fence opened after an indented one must not inherit the
+// prior indent (byte-identical to a fresh column-0 fence).
+func TestMarkdownFormatter_Column0FenceAfterIndented(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("CLICOLOR_FORCE", "1")
+	formatter := NewMarkdownFormatter(true, true)
+
+	// Indented fence first, then a column-0 fence.
+	input := "- a\n  ```go\n  x\n  ```\n```go\nfunc main() {}\n```"
+	result := formatter.Format(input)
+	plain := stripANSIEscapeCodes(result)
+
+	// The column-0 fence's "func" keyword should render (highlighted, but we
+	// check plain content).
+	if !strings.Contains(plain, "func main()") {
+		t.Errorf("Expected column-0 fence content after indented fence, got:\n%s", plain)
+	}
+	// No leaked backticks.
+	if strings.Contains(plain, "```") {
+		t.Errorf("Expected no leaked backticks, got:\n%s", plain)
+	}
+}

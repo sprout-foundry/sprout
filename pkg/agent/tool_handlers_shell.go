@@ -194,10 +194,10 @@ func handleShellCommand(ctx context.Context, a *Agent, args map[string]interface
 			// of whether the agent used shell_command or the commit tool.
 			if isGitCommitSubcommand(command) {
 				a.PrintLine("")
-				a.PrintLine("[redirect] Redirecting git commit to 'commit' tool for proper message generation")
+				a.PrintLine("Redirecting git commit to 'commit' tool for proper message generation")
 				a.PrintLine(fmt.Sprintf("  Original command: %s", command))
 				if strings.Contains(command, "--amend") {
-					a.PrintLine("  [warning] --amend flag detected but commit tool does not support amending; creating a new commit")
+					a.PrintLine("  --amend flag detected but commit tool does not support amending; creating a new commit")
 				}
 				a.PrintLine("")
 				message := extractGitCommitArgs(command)

@@ -61,11 +61,16 @@ func (h *todoWriteHandler) Validate(args map[string]any) error {
 }
 
 func (h *todoWriteHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-
-	todosRaw := args["todos"].([]interface{})
+	todosRaw, ok := args["todos"].([]interface{})
+	if !ok {
+		return ToolResult{}, agenterrors.NewValidation("parameter 'todos' must be an array", nil)
+	}
 	todos := make([]TodoItem, 0, len(todosRaw))
 	for _, todoRaw := range todosRaw {
-		todoMap := todoRaw.(map[string]interface{})
+		todoMap, ok := todoRaw.(map[string]interface{})
+		if !ok {
+			continue
+		}
 		todo := TodoItem{}
 		if content, ok := todoMap["content"].(string); ok {
 			todo.Content = content

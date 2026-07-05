@@ -11,7 +11,6 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/codegraph"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/embedding"
-	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 type embeddingIndexHandler struct{}
@@ -37,29 +36,10 @@ func (h *embeddingIndexHandler) Validate(args map[string]any) error {
 }
 
 func (h *embeddingIndexHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	toolName := h.Name()
-
-	var hadError bool
-
-	// EventBus events are optional — best-effort side effect only, not a gate
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool":   toolName,
-			"params": args,
-		})
-		defer func() {
-			env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-				"tool":  toolName,
-				"error": hadError,
-			})
-		}()
-	}
-
 	// --- actual logic (always runs) ---
 
 	operation, err := extractString(args, "operation")
 	if err != nil {
-		hadError = true
 		return ToolResult{
 			Output:  err.Error(),
 			IsError: true,
@@ -73,7 +53,6 @@ func (h *embeddingIndexHandler) Execute(ctx context.Context, env ToolEnv, args m
 	} else {
 		manager, err := configuration.NewManager()
 		if err != nil {
-			hadError = true
 			return ToolResult{
 				Output:  fmt.Sprintf("Error getting configuration: %v", err),
 				IsError: true,
@@ -109,7 +88,6 @@ func (h *embeddingIndexHandler) Execute(ctx context.Context, env ToolEnv, args m
 		}
 		return h.handleUpdate(ctx, mgr)
 	default:
-		hadError = true
 		return ToolResult{
 			Output:  fmt.Sprintf("Unknown operation '%s'. Valid operations: build, update, status", operation),
 			IsError: true,
@@ -253,11 +231,11 @@ func (h *embeddingIndexHandler) handleUpdate(ctx context.Context, mgr *embedding
 	}, nil
 }
 
-func (h *embeddingIndexHandler) Aliases() []string         { return nil }
-func (h *embeddingIndexHandler) Timeout() time.Duration    { return 0 }
-func (h *embeddingIndexHandler) MaxResultSize() int        { return 0 }
-func (h *embeddingIndexHandler) SafeForParallel() bool     { return false }
-func (h *embeddingIndexHandler) Interactive() bool         { return false }
+func (h *embeddingIndexHandler) Aliases() []string      { return nil }
+func (h *embeddingIndexHandler) Timeout() time.Duration { return 0 }
+func (h *embeddingIndexHandler) MaxResultSize() int     { return 0 }
+func (h *embeddingIndexHandler) SafeForParallel() bool  { return false }
+func (h *embeddingIndexHandler) Interactive() bool      { return false }
 
 // --- codegraph helpers ---
 

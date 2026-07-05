@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
@@ -51,20 +50,6 @@ func (h *gitHandler) Execute(ctx context.Context, env ToolEnv, args map[string]a
 	// creating nested .git repos that corrupt the ChangeTracker.
 	if env.WorkspaceRoot != "" {
 		ctx = filesystem.WithWorkspaceRoot(ctx, env.WorkspaceRoot)
-	}
-
-	toolName := h.Name()
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool":   toolName,
-			"params": args,
-		})
-		defer func() {
-			env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-				"tool":  toolName,
-				"error": false,
-			})
-		}()
 	}
 
 	operation, _ := extractString(args, "operation")
@@ -202,11 +187,12 @@ func (h *gitHandler) Execute(ctx context.Context, env ToolEnv, args map[string]a
 	return ToolResult{Output: result}, nil
 }
 
-func (h *gitHandler) Aliases() []string         { return nil }
-func (h *gitHandler) Timeout() time.Duration    { return 0 }
-func (h *gitHandler) MaxResultSize() int        { return 0 }
-func (h *gitHandler) SafeForParallel() bool     { return false }
-func (h *gitHandler) Interactive() bool         { return false }
+func (h *gitHandler) Aliases() []string      { return nil }
+func (h *gitHandler) Timeout() time.Duration { return 0 }
+func (h *gitHandler) MaxResultSize() int     { return 0 }
+func (h *gitHandler) SafeForParallel() bool  { return false }
+func (h *gitHandler) Interactive() bool      { return false }
+
 // LLMs commonly pass args like "push origin main" when operation is already
 // "push", producing "git push push origin main". Handles underscore→hyphen
 // conversion (cherry_pick → cherry-pick) and branch_delete → branch.

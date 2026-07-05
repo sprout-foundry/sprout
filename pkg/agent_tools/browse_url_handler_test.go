@@ -83,8 +83,8 @@ func TestBrowseURLHandler_WithBrowser_EventBus(t *testing.T) {
 	bus := events.NewEventBus()
 	h := &browseURLHandler{}
 
-	// Subscribe to capture events (all subscribers get all events).
-	ch := bus.Subscribe("test-events")
+	// Subscribe to have a listener.
+	_ = bus.Subscribe("test-events")
 
 	ctx := context.Background()
 	env := ToolEnv{
@@ -97,33 +97,13 @@ func TestBrowseURLHandler_WithBrowser_EventBus(t *testing.T) {
 	requireNoError(t, err)
 	requireEqual(t, result.Output, "page", "Output")
 
-	// Collect up to 2 events from the channel (non-blocking drain).
-	var eventsReceived []events.UIEvent
-	for i := 0; i < 2; i++ {
-		select {
-		case ev := <-ch:
-			eventsReceived = append(eventsReceived, ev)
-		default:
-			break
-		}
-	}
-
-	if len(eventsReceived) < 2 {
-		t.Fatalf("expected 2 events (tool_start + tool_end), got %d", len(eventsReceived))
-	}
-	if eventsReceived[0].Type != events.EventTypeToolStart {
-		t.Errorf("first event type = %q, want %q", eventsReceived[0].Type, events.EventTypeToolStart)
-	}
-	if eventsReceived[1].Type != events.EventTypeToolEnd {
-		t.Errorf("second event type = %q, want %q", eventsReceived[1].Type, events.EventTypeToolEnd)
-	}
-	// Verify error field is false on success.
-	if data, ok := eventsReceived[1].Data.(map[string]any); ok {
-		if errVal, hasErr := data["error"]; hasErr {
-			if errVal != false {
-				t.Errorf("tool_end error field should be false on success, got %v", errVal)
-			}
-		}
+	// Handlers no longer self-publish tool_start/tool_end — the core
+	// tool executor (pkg/agent/tool_executor.go) handles event publishing.
+	select {
+	case ev := <-bus.Subscribe("check"):
+		t.Fatalf("expected 0 events from handler, got %+v", ev)
+	default:
+		// good — no events published by the handler
 	}
 }
 
@@ -136,7 +116,8 @@ func TestBrowseURLHandler_WithBrowser_EventBus_ErrorFlag(t *testing.T) {
 	bus := events.NewEventBus()
 	h := &browseURLHandler{}
 
-	ch := bus.Subscribe("test-events")
+	// Subscribe to have a listener.
+	_ = bus.Subscribe("test-events")
 
 	ctx := context.Background()
 	env := ToolEnv{
@@ -149,27 +130,14 @@ func TestBrowseURLHandler_WithBrowser_EventBus_ErrorFlag(t *testing.T) {
 	requireNoError(t, err)
 	requireTrue(t, result.IsError, "IsError")
 
-	// Collect events.
-	var eventsReceived []events.UIEvent
-	for i := 0; i < 2; i++ {
-		select {
-		case ev := <-ch:
-			eventsReceived = append(eventsReceived, ev)
-		default:
-			break
-		}
-	}
-
-	if len(eventsReceived) < 2 {
-		t.Fatalf("expected 2 events (tool_start + tool_end), got %d", len(eventsReceived))
-	}
-	// Verify error field is true on failure.
-	if data, ok := eventsReceived[1].Data.(map[string]any); ok {
-		if errVal, hasErr := data["error"]; hasErr {
-			if errVal != true {
-				t.Errorf("tool_end error field should be true on failure, got %v", errVal)
-			}
-		}
+	// Handlers no longer self-publish tool_start/tool_end — the core
+	// tool executor (pkg/agent/tool_executor.go) handles event publishing.
+	// The error is still verified via result.IsError above.
+	select {
+	case ev := <-bus.Subscribe("check"):
+		t.Fatalf("expected 0 events from handler, got %+v", ev)
+	default:
+		// good — no events published by the handler
 	}
 }
 
@@ -260,23 +228,23 @@ func TestBrowseURLHandler_EdgeCaseArgs(t *testing.T) {
 	// Construct args the way the LLM would: float64 for JSON numbers,
 	// bool for booleans, string for strings, []interface{} for arrays.
 	args := map[string]any{
-		"url":               "http://localhost:3000",
-		"action":            "DOM", // mixed case
-		"viewport_width":    float64(1280),   // JSON float64
-		"viewport_height":   float64(720),
-		"user_agent":        "Mozilla/5.0",
-		"screenshot_path":   "/tmp/screen.png",
-		"session_id":        "sess-123",
-		"persist_session":   true,
-		"close_session":     false,
-		"wait_for_selector": "#main-content",
-		"wait_timeout_ms":   float64(15000),
-		"capture_dom":       true,
-		"capture_text":      true,
-		"include_console":   true,
-		"capture_network":   true,
-		"capture_storage":   true,
-		"capture_cookies":   true,
+		"url":                "http://localhost:3000",
+		"action":             "DOM",         // mixed case
+		"viewport_width":     float64(1280), // JSON float64
+		"viewport_height":    float64(720),
+		"user_agent":         "Mozilla/5.0",
+		"screenshot_path":    "/tmp/screen.png",
+		"session_id":         "sess-123",
+		"persist_session":    true,
+		"close_session":      false,
+		"wait_for_selector":  "#main-content",
+		"wait_timeout_ms":    float64(15000),
+		"capture_dom":        true,
+		"capture_text":       true,
+		"include_console":    true,
+		"capture_network":    true,
+		"capture_storage":    true,
+		"capture_cookies":    true,
 		"response_max_chars": float64(5000),
 		"capture_selectors": []interface{}{
 			"#header",
@@ -395,7 +363,7 @@ func TestBuildBrowseOptions_WaitOptions(t *testing.T) {
 	t.Parallel()
 	opts := map[string]any{
 		"wait_for_selector": "#main-content",
-		"wait_timeout_ms":  float64(30000),
+		"wait_timeout_ms":   float64(30000),
 	}
 	got, err := buildBrowseOptions(opts)
 	requireNoError(t, err)
@@ -500,24 +468,24 @@ func TestBuildBrowseOptions_StepsMissing(t *testing.T) {
 func TestBuildBrowseOptions_AllFieldsCombined(t *testing.T) {
 	t.Parallel()
 	opts := map[string]any{
-		"action":            "INSPECT",
-		"viewport_width":    float64(1920),
-		"viewport_height":   float64(1080),
-		"user_agent":        "TestBot",
-		"screenshot_path":   "/tmp/inspect.png",
-		"session_id":        "sess-42",
-		"persist_session":   true,
-		"close_session":     false,
-		"wait_for_selector": "#content",
-		"wait_timeout_ms":   float64(20000),
-		"capture_dom":       true,
-		"capture_text":      true,
-		"include_console":   true,
-		"capture_network":   true,
-		"capture_storage":   true,
-		"capture_cookies":   true,
+		"action":             "INSPECT",
+		"viewport_width":     float64(1920),
+		"viewport_height":    float64(1080),
+		"user_agent":         "TestBot",
+		"screenshot_path":    "/tmp/inspect.png",
+		"session_id":         "sess-42",
+		"persist_session":    true,
+		"close_session":      false,
+		"wait_for_selector":  "#content",
+		"wait_timeout_ms":    float64(20000),
+		"capture_dom":        true,
+		"capture_text":       true,
+		"include_console":    true,
+		"capture_network":    true,
+		"capture_storage":    true,
+		"capture_cookies":    true,
 		"response_max_chars": float64(8000),
-		"capture_selectors": []interface{}{"#header", "#footer"},
+		"capture_selectors":  []interface{}{"#header", "#footer"},
 		"steps": []interface{}{
 			map[string]interface{}{"action": "click", "selector": "#start"},
 		},
@@ -814,12 +782,12 @@ func TestBuildBrowseOptions_StepsWithNewFields(t *testing.T) {
 	opts := map[string]any{
 		"steps": []interface{}{
 			map[string]interface{}{
-				"action":        "wait_for_function",
-				"script":        "() => document.readyState === 'complete'",
+				"action": "wait_for_function",
+				"script": "() => document.readyState === 'complete'",
 			},
 			map[string]interface{}{
-				"action":         "screenshot_selector",
-				"selector":       "#chart",
+				"action":          "screenshot_selector",
+				"selector":        "#chart",
 				"screenshot_path": "/tmp/chart.png",
 			},
 		},

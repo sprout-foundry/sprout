@@ -8,7 +8,6 @@ import (
 	"time"
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
-	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 // writeFileHandler implements ToolHandler for the write_file tool.
@@ -74,30 +73,12 @@ func (h *writeFileHandler) Execute(ctx context.Context, env ToolEnv, args map[st
 		return ToolResult{Output: err.Error(), IsError: true}, err
 	}
 
-	// Publish tool start event
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool": "write_file",
-			"path": path,
-		})
-	}
-
 	result, err := WriteFile(ctx, path, content)
 	if err != nil {
 		return ToolResult{
 			Output:  "",
 			IsError: true,
 		}, agenterrors.NewTool("write_file", fmt.Sprintf("write file %q: %v", path, err), err)
-	}
-
-	// Publish tool end event
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-			"tool":   "write_file",
-			"path":   path,
-			"bytes":  len(content),
-			"tokens": estimateTokenUsage(result),
-		})
 	}
 
 	// Write to output writer if available
@@ -111,8 +92,8 @@ func (h *writeFileHandler) Execute(ctx context.Context, env ToolEnv, args map[st
 	}, nil
 }
 
-func (h *writeFileHandler) Aliases() []string         { return nil }
-func (h *writeFileHandler) Timeout() time.Duration    { return 0 }
-func (h *writeFileHandler) MaxResultSize() int        { return 0 }
-func (h *writeFileHandler) SafeForParallel() bool     { return false }
-func (h *writeFileHandler) Interactive() bool         { return false }
+func (h *writeFileHandler) Aliases() []string      { return nil }
+func (h *writeFileHandler) Timeout() time.Duration { return 0 }
+func (h *writeFileHandler) MaxResultSize() int     { return 0 }
+func (h *writeFileHandler) SafeForParallel() bool  { return false }
+func (h *writeFileHandler) Interactive() bool      { return false }

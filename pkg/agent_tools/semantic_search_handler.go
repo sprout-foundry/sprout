@@ -9,7 +9,6 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/embedding"
-	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 type semanticSearchHandler struct{}
@@ -35,27 +34,10 @@ func (h *semanticSearchHandler) Validate(args map[string]any) error {
 }
 
 func (h *semanticSearchHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	toolName := h.Name()
-
-	var hadError bool
-
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool":   toolName,
-			"params": args,
-		})
-		defer func() {
-			env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-				"tool":  toolName,
-				"error": hadError,
-			})
-		}()
-	}
 
 	// Extract query (required)
 	query, err := extractString(args, "query")
 	if err != nil {
-		hadError = true
 		return ToolResult{
 			Output:  err.Error(),
 			IsError: true,
@@ -109,7 +91,6 @@ func (h *semanticSearchHandler) Execute(ctx context.Context, env ToolEnv, args m
 		} else {
 			cfgMgr, err := configuration.NewManager()
 			if err != nil {
-				hadError = true
 				return ToolResult{
 					Output:  fmt.Sprintf("Error getting configuration: %v", err),
 					IsError: true,
@@ -136,7 +117,6 @@ func (h *semanticSearchHandler) Execute(ctx context.Context, env ToolEnv, args m
 	}
 
 	if err := mgr.Init(ctx); err != nil {
-		hadError = true
 		return ToolResult{
 			Output:  fmt.Sprintf("Semantic search unavailable: %v\n\nThe embedding index could not be initialized. This is usually because the ONNX runtime is not available in this build, or the model has not been downloaded yet. Run `embedding_index operation=status` to check the current state.", err),
 			IsError: true,
@@ -145,7 +125,6 @@ func (h *semanticSearchHandler) Execute(ctx context.Context, env ToolEnv, args m
 
 	results, err := mgr.QuerySimilar(ctx, query, topK, float32(threshold))
 	if err != nil {
-		hadError = true
 		return ToolResult{
 			Output:  fmt.Sprintf("Error searching embeddings: %v", err),
 			IsError: true,
@@ -164,11 +143,11 @@ func (h *semanticSearchHandler) Execute(ctx context.Context, env ToolEnv, args m
 	}, nil
 }
 
-func (h *semanticSearchHandler) Aliases() []string         { return nil }
-func (h *semanticSearchHandler) Timeout() time.Duration    { return 0 }
-func (h *semanticSearchHandler) MaxResultSize() int        { return 0 }
-func (h *semanticSearchHandler) SafeForParallel() bool     { return false }
-func (h *semanticSearchHandler) Interactive() bool         { return false }
+func (h *semanticSearchHandler) Aliases() []string      { return nil }
+func (h *semanticSearchHandler) Timeout() time.Duration { return 0 }
+func (h *semanticSearchHandler) MaxResultSize() int     { return 0 }
+func (h *semanticSearchHandler) SafeForParallel() bool  { return false }
+func (h *semanticSearchHandler) Interactive() bool      { return false }
 
 // formatEmbeddingSearchResults formats QueryResult entries into readable output.
 func formatEmbeddingSearchResults(query string, results []embedding.QueryResult, threshold float64) string {

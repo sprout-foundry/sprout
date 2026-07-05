@@ -8,7 +8,6 @@ import (
 	"time"
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
-	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 // NOTE: This handler is part of the SP-038-4 migration. The old implementation
@@ -128,31 +127,12 @@ func (h *writeStructuredFileHandler) Execute(ctx context.Context, env ToolEnv, a
 		return ToolResult{Output: fmt.Sprintf("failed to serialize structured content: %v", err), IsError: true}, err
 	}
 
-	// Publish tool start event
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool":   "write_structured_file",
-			"path":   path,
-			"format": format,
-		})
-	}
-
 	result, err := WriteFile(ctx, path, content)
 	if err != nil {
 		return ToolResult{
 			Output:  "",
 			IsError: true,
 		}, agenterrors.NewTool("write_structured_file", fmt.Sprintf("write structured file %q: %v", path, err), err)
-	}
-
-	// Publish tool end event
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-			"tool":   "write_structured_file",
-			"path":   path,
-			"bytes":  len(content),
-			"tokens": estimateTokenUsage(result),
-		})
 	}
 
 	// Write to output writer if available
@@ -166,11 +146,11 @@ func (h *writeStructuredFileHandler) Execute(ctx context.Context, env ToolEnv, a
 	}, nil
 }
 
-func (h *writeStructuredFileHandler) Aliases() []string         { return nil }
-func (h *writeStructuredFileHandler) Timeout() time.Duration    { return 0 }
-func (h *writeStructuredFileHandler) MaxResultSize() int        { return 0 }
-func (h *writeStructuredFileHandler) SafeForParallel() bool     { return false }
-func (h *writeStructuredFileHandler) Interactive() bool         { return false }
+func (h *writeStructuredFileHandler) Aliases() []string      { return nil }
+func (h *writeStructuredFileHandler) Timeout() time.Duration { return 0 }
+func (h *writeStructuredFileHandler) MaxResultSize() int     { return 0 }
+func (h *writeStructuredFileHandler) SafeForParallel() bool  { return false }
+func (h *writeStructuredFileHandler) Interactive() bool      { return false }
 
 // getOptionalString extracts an optional string from args, returning "" if not present.
 func getOptionalString(args map[string]any, key string) string {

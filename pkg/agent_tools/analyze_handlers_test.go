@@ -92,7 +92,7 @@ func TestAnalyzeImageContent_EventBusPublished(t *testing.T) {
 	ctx := context.Background()
 
 	bus := events.NewEventBus()
-	ch := bus.Subscribe("test")
+	_ = bus.Subscribe("test") // subscribe to have a listener
 
 	env := ToolEnv{
 		EventBus: bus,
@@ -103,23 +103,13 @@ func TestAnalyzeImageContent_EventBusPublished(t *testing.T) {
 
 	_, _ = h.Execute(ctx, env, args)
 
-	// tool_start
+	// Handlers no longer self-publish tool_start/tool_end — the core
+	// tool executor (pkg/agent/tool_executor.go) handles event publishing.
 	select {
-	case evt := <-ch:
-		require.Equal(t, "tool_start", evt.Type)
+	case ev := <-bus.Subscribe("check"):
+		t.Fatalf("expected 0 events from handler, got %+v", ev)
 	default:
-		t.Fatal("expected tool_start event")
-	}
-
-	// tool_end with error = false (AnalyzeImage returns nil error).
-	select {
-	case evt := <-ch:
-		require.Equal(t, "tool_end", evt.Type)
-		data, ok := evt.Data.(map[string]any)
-		require.True(t, ok, "event data should be a map")
-		require.Equal(t, false, data["error"])
-	default:
-		t.Fatal("expected tool_end event")
+		// good — no events published by the handler
 	}
 }
 
@@ -129,35 +119,25 @@ func TestAnalyzeImageContent_EventBusSuccessPath(t *testing.T) {
 	ctx := context.Background()
 
 	bus := events.NewEventBus()
-	ch := bus.Subscribe("test")
+	_ = bus.Subscribe("test") // subscribe to have a listener
 
 	env := ToolEnv{
 		EventBus:        bus,
 		VisionProcessor: NewVisionProcessor(nil, nil, false),
 	}
 	// Non-HTML path — reaches AnalyzeImage which returns (json, nil).
-	// Handler sees no Go error → succeeded = true → tool_end error = false.
+	// Handler sees no Go error → succeeded = true.
 	args := map[string]any{"image_path": "/tmp/test.png"}
 
 	_, _ = h.Execute(ctx, env, args)
 
-	// tool_start
+	// Handlers no longer self-publish tool_start/tool_end — the core
+	// tool executor (pkg/agent/tool_executor.go) handles event publishing.
 	select {
-	case evt := <-ch:
-		require.Equal(t, "tool_start", evt.Type)
+	case ev := <-bus.Subscribe("check"):
+		t.Fatalf("expected 0 events from handler, got %+v", ev)
 	default:
-		t.Fatal("expected tool_start event")
-	}
-
-	// tool_end with error = false.
-	select {
-	case evt := <-ch:
-		require.Equal(t, "tool_end", evt.Type)
-		data, ok := evt.Data.(map[string]any)
-		require.True(t, ok, "event data should be a map")
-		require.Equal(t, false, data["error"])
-	default:
-		t.Fatal("expected tool_end event")
+		// good — no events published by the handler
 	}
 }
 
@@ -292,7 +272,7 @@ func TestAnalyzeUIScreenshot_EventBusPublished(t *testing.T) {
 	ctx := context.Background()
 
 	bus := events.NewEventBus()
-	ch := bus.Subscribe("test")
+	_ = bus.Subscribe("test") // subscribe to have a listener
 
 	env := ToolEnv{
 		EventBus: bus,
@@ -303,23 +283,13 @@ func TestAnalyzeUIScreenshot_EventBusPublished(t *testing.T) {
 
 	_, _ = h.Execute(ctx, env, args)
 
-	// tool_start
+	// Handlers no longer self-publish tool_start/tool_end — the core
+	// tool executor (pkg/agent/tool_executor.go) handles event publishing.
 	select {
-	case evt := <-ch:
-		require.Equal(t, "tool_start", evt.Type)
+	case ev := <-bus.Subscribe("check"):
+		t.Fatalf("expected 0 events from handler, got %+v", ev)
 	default:
-		t.Fatal("expected tool_start event")
-	}
-
-	// tool_end with error = false (AnalyzeImage returns nil error).
-	select {
-	case evt := <-ch:
-		require.Equal(t, "tool_end", evt.Type)
-		data, ok := evt.Data.(map[string]any)
-		require.True(t, ok, "event data should be a map")
-		require.Equal(t, false, data["error"])
-	default:
-		t.Fatal("expected tool_end event")
+		// good — no events published by the handler
 	}
 }
 
@@ -329,7 +299,7 @@ func TestAnalyzeUIScreenshot_EventBusSuccessPath(t *testing.T) {
 	ctx := context.Background()
 
 	bus := events.NewEventBus()
-	ch := bus.Subscribe("test")
+	_ = bus.Subscribe("test") // subscribe to have a listener
 
 	env := ToolEnv{
 		EventBus:        bus,
@@ -339,23 +309,13 @@ func TestAnalyzeUIScreenshot_EventBusSuccessPath(t *testing.T) {
 
 	_, _ = h.Execute(ctx, env, args)
 
-	// tool_start
+	// Handlers no longer self-publish tool_start/tool_end — the core
+	// tool executor (pkg/agent/tool_executor.go) handles event publishing.
 	select {
-	case evt := <-ch:
-		require.Equal(t, "tool_start", evt.Type)
+	case ev := <-bus.Subscribe("check"):
+		t.Fatalf("expected 0 events from handler, got %+v", ev)
 	default:
-		t.Fatal("expected tool_start event")
-	}
-
-	// tool_end with error = false (no Go error from AnalyzeImage).
-	select {
-	case evt := <-ch:
-		require.Equal(t, "tool_end", evt.Type)
-		data, ok := evt.Data.(map[string]any)
-		require.True(t, ok, "event data should be a map")
-		require.Equal(t, false, data["error"])
-	default:
-		t.Fatal("expected tool_end event")
+		// good — no events published by the handler
 	}
 }
 
@@ -379,7 +339,7 @@ func TestAnalyzeUIScreenshot_HTMLInputViaEventBus(t *testing.T) {
 	ctx := context.Background()
 
 	bus := events.NewEventBus()
-	ch := bus.Subscribe("test")
+	_ = bus.Subscribe("test") // subscribe to have a listener
 
 	env := ToolEnv{
 		EventBus:        bus,
@@ -388,22 +348,12 @@ func TestAnalyzeUIScreenshot_HTMLInputViaEventBus(t *testing.T) {
 	// HTML path triggers browser-required error before AnalyzeImage is called.
 	_, _ = h.Execute(ctx, env, map[string]any{"image_path": "/tmp/page.html"})
 
-	// tool_start
+	// Handlers no longer self-publish tool_start/tool_end — the core
+	// tool executor (pkg/agent/tool_executor.go) handles event publishing.
 	select {
-	case evt := <-ch:
-		require.Equal(t, "tool_start", evt.Type)
+	case ev := <-bus.Subscribe("check"):
+		t.Fatalf("expected 0 events from handler, got %+v", ev)
 	default:
-		t.Fatal("expected tool_start event")
-	}
-
-	// tool_end with error = true (HTML → browser error).
-	select {
-	case evt := <-ch:
-		require.Equal(t, "tool_end", evt.Type)
-		data, ok := evt.Data.(map[string]any)
-		require.True(t, ok, "event data should be a map")
-		require.Equal(t, true, data["error"])
-	default:
-		t.Fatal("expected tool_end event")
+		// good — no events published by the handler
 	}
 }

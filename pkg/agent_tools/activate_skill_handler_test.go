@@ -209,10 +209,9 @@ func TestActivateSkillHandler_EventBus_Success(t *testing.T) {
 	t.Parallel()
 	h := &activateSkillHandler{}
 	bus := events.NewEventBus()
+	_ = bus.Subscribe("test-events") // subscribe to have a listener
 	env := newTestEnvWithSkill("browse-debugging", "Browse Debugging", "Debug web UIs")
 	env.EventBus = bus
-
-	ch := bus.Subscribe("test-events")
 
 	result, err := h.Execute(
 		context.Background(),
@@ -222,35 +221,13 @@ func TestActivateSkillHandler_EventBus_Success(t *testing.T) {
 	requireNoError(t, err)
 	requireFalse(t, result.IsError, "IsError")
 
-	// Collect up to 2 events.
-	var received []events.UIEvent
-	for i := 0; i < 2; i++ {
-		select {
-		case ev := <-ch:
-			received = append(received, ev)
-		default:
-			break
-		}
-	}
-
-	if len(received) < 2 {
-		t.Fatalf("expected 2 events (tool_start + tool_end), got %d", len(received))
-	}
-
-	if received[0].Type != events.EventTypeToolStart {
-		t.Errorf("first event type = %q, want %q", received[0].Type, events.EventTypeToolStart)
-	}
-	if received[1].Type != events.EventTypeToolEnd {
-		t.Errorf("second event type = %q, want %q", received[1].Type, events.EventTypeToolEnd)
-	}
-
-	// Verify error flag is false on success.
-	if data, ok := received[1].Data.(map[string]any); ok {
-		if errVal, hasErr := data["error"]; hasErr {
-			if errVal != false {
-				t.Errorf("tool_end error field should be false on success, got %v", errVal)
-			}
-		}
+	// Handlers no longer self-publish tool_start/tool_end — the core
+	// tool executor (pkg/agent/tool_executor.go) handles event publishing.
+	select {
+	case ev := <-bus.Subscribe("check"):
+		t.Fatalf("expected 0 events from handler, got %+v", ev)
+	default:
+		// good — no events published by the handler
 	}
 }
 
@@ -258,9 +235,8 @@ func TestActivateSkillHandler_EventBus_ErrorFlag(t *testing.T) {
 	t.Parallel()
 	h := &activateSkillHandler{}
 	bus := events.NewEventBus()
+	_ = bus.Subscribe("test-events") // subscribe to have a listener
 	env := ToolEnv{EventBus: bus} // No SkillLoader — will produce an error path
-
-	ch := bus.Subscribe("test-events")
 
 	result, err := h.Execute(
 		context.Background(),
@@ -270,28 +246,14 @@ func TestActivateSkillHandler_EventBus_ErrorFlag(t *testing.T) {
 	requireNoError(t, err)
 	requireTrue(t, result.IsError, "IsError")
 
-	// Collect up to 2 events.
-	var received []events.UIEvent
-	for i := 0; i < 2; i++ {
-		select {
-		case ev := <-ch:
-			received = append(received, ev)
-		default:
-			break
-		}
-	}
-
-	if len(received) < 2 {
-		t.Fatalf("expected 2 events (tool_start + tool_end), got %d", len(received))
-	}
-
-	// Verify error flag is true on failure.
-	if data, ok := received[1].Data.(map[string]any); ok {
-		if errVal, hasErr := data["error"]; hasErr {
-			if errVal != true {
-				t.Errorf("tool_end error field should be true on failure, got %v", errVal)
-			}
-		}
+	// Handlers no longer self-publish tool_start/tool_end — the core
+	// tool executor (pkg/agent/tool_executor.go) handles event publishing.
+	// The error is still verified via result.IsError above.
+	select {
+	case ev := <-bus.Subscribe("check"):
+		t.Fatalf("expected 0 events from handler, got %+v", ev)
+	default:
+		// good — no events published by the handler
 	}
 }
 

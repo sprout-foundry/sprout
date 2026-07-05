@@ -10,7 +10,6 @@ import (
 	"time"
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
-	"github.com/sprout-foundry/sprout/pkg/events"
 	"github.com/sprout-foundry/sprout/pkg/redact"
 )
 
@@ -25,11 +24,11 @@ func (h *manageMemoryHandler) Name() string { return "manage_memory" }
 
 func (h *manageMemoryHandler) Definition() ToolDefinition {
 	return ToolDefinition{
-		Name:        "manage_memory",
+		Name: "manage_memory",
 		Description: "Persistent cross-session memories that auto-load into the system prompt. " +
 			"Operations: add, read, list, delete, search. " +
 			"Use 'add' for durable preferences; 'search' to recall prior notes.",
-		Required:   []string{"operation"},
+		Required: []string{"operation"},
 		Parameters: []ParameterDef{
 			{Name: "operation", Type: "string", Required: true, Description: "One of: 'add', 'read', 'list', 'delete', 'search'."},
 			{Name: "name", Type: "string", Description: "Memory name slug (required for add/read/delete)"},
@@ -77,21 +76,6 @@ func (h *manageMemoryHandler) Validate(args map[string]any) error {
 }
 
 func (h *manageMemoryHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	toolName := h.Name()
-	var hadError bool
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool":   toolName,
-			"params": args,
-		})
-		defer func() {
-			env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-				"tool":  toolName,
-				"error": hadError,
-			})
-		}()
-	}
-
 	op, _ := extractString(args, "operation")
 	op = strings.TrimSpace(strings.ToLower(op))
 
@@ -107,7 +91,6 @@ func (h *manageMemoryHandler) Execute(ctx context.Context, env ToolEnv, args map
 	case "search":
 		return h.executeSearch(env, args)
 	default:
-		hadError = true
 		return ToolResult{
 			Output:  fmt.Sprintf("manage_memory: unknown operation %q", op),
 			IsError: true,
@@ -115,11 +98,11 @@ func (h *manageMemoryHandler) Execute(ctx context.Context, env ToolEnv, args map
 	}
 }
 
-func (h *manageMemoryHandler) Aliases() []string         { return nil }
-func (h *manageMemoryHandler) Timeout() time.Duration    { return 0 }
-func (h *manageMemoryHandler) MaxResultSize() int        { return 0 }
-func (h *manageMemoryHandler) SafeForParallel() bool     { return false }
-func (h *manageMemoryHandler) Interactive() bool         { return false }
+func (h *manageMemoryHandler) Aliases() []string      { return nil }
+func (h *manageMemoryHandler) Timeout() time.Duration { return 0 }
+func (h *manageMemoryHandler) MaxResultSize() int     { return 0 }
+func (h *manageMemoryHandler) SafeForParallel() bool  { return false }
+func (h *manageMemoryHandler) Interactive() bool      { return false }
 
 // executeAdd handles the "add" operation: create/overwrite a memory file.
 func (h *manageMemoryHandler) executeAdd(env ToolEnv, args map[string]any) (ToolResult, error) {

@@ -384,7 +384,7 @@ func (s *SymbolWithEdges) ToCodegraphSymbols(filePath string) ([]codegraph.Symbo
 			Line:          se.Line,
 			Kind:          kind,
 			Language:      inferLanguage(ext),
-			FileMTime:     "", // filled in by indexFileByPath
+			FileMTime:     "", // filled in by parseAndEnrich
 		})
 	}
 
@@ -754,20 +754,10 @@ func extractSymbolsAndEdgesViaTreeSitter(path string, ext string, content []byte
 		})
 	}
 
-	// Convert CallEdge values to codegraph.Edge values.
-	// Note: TS/JS/Python edges use "calls" (unresolved) since full module
-	// resolution via tree-sitter is complex and remains a future task.
-	// TODO: Resolve import paths for TS/JS/Python module systems and mark
-	// resolved edges with EdgeType "resolved_calls".
-	var edges []codegraph.Edge
-	for _, ce := range result.Calls {
-		edges = append(edges, codegraph.Edge{
-			SourceQualifiedName: ce.CallerName,
-			TargetQualifiedName: ce.CalleeName,
-			EdgeType:            "calls",
-			Line:                ce.Line,
-		})
-	}
+	// Resolve call edges using the import map built from source content.
+	// This handles cross-file module resolution for TS/JS/Python so that
+	// get_callers / get_callees / find_dead_code work correctly.
+	edges := resolveEdgesForTS(result.Calls, buildTSImportMap(path, content))
 
 	return &SymbolWithEdges{Symbols: entries, Edges: edges}, nil
 }

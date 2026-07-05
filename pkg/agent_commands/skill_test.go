@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sprout-foundry/sprout/pkg/agent"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/skills"
 	"github.com/sprout-foundry/sprout/pkg/testutil"
 )
@@ -348,5 +350,95 @@ func TestSkillCommand_Update_All_PartialFailure(t *testing.T) {
 	}
 	if !strings.Contains(stderr, "path-origin-skill") {
 		t.Errorf("expected per-skill error in stderr, got: %q", stderr)
+	}
+}
+
+// ── /skill enable / disable ─────────────────────────────────
+
+func newSkillToggleTestAgent(t *testing.T) *agent.Agent {
+	t.Helper()
+	mgr, cleanup := configuration.NewTestManager(t)
+	t.Cleanup(cleanup)
+	// Initialize with empty skills map
+	if err := mgr.UpdateConfig(func(cfg *configuration.Config) error {
+		if cfg.Skills == nil {
+			cfg.Skills = make(map[string]configuration.Skill)
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("init config: %v", err)
+	}
+	chatAgent, err := agent.NewAgentWithModel("")
+	if err != nil {
+		t.Fatalf("NewAgentWithModel: %v", err)
+	}
+	return chatAgent
+}
+
+func TestSkillCommand_Enable_Disable(t *testing.T) {
+	chatAgent := newSkillToggleTestAgent(t)
+
+	// Add a skill to the config
+	mgr := chatAgent.GetConfigManager()
+	if err := mgr.UpdateConfig(func(cfg *configuration.Config) error {
+		cfg.Skills["test-skill"] = configuration.Skill{ID: "test-skill", Name: "Test Skill", Enabled: false}
+		return nil
+	}); err != nil {
+		t.Fatalf("add skill: %v", err)
+	}
+
+	cmd := &SkillCommand{}
+
+	// Enable
+	if err := cmd.Execute([]string{"enable", "test-skill"}, chatAgent); err != nil {
+		t.Fatalf("enable: %v", err)
+	}
+	cfg := chatAgent.GetConfig()
+	if !cfg.Skills["test-skill"].Enabled {
+		t.Error("skill should be enabled")
+	}
+
+	// Disable
+	if err := cmd.Execute([]string{"disable", "test-skill"}, chatAgent); err != nil {
+		t.Fatalf("disable: %v", err)
+	}
+	cfg = chatAgent.GetConfig()
+	if cfg.Skills["test-skill"].Enabled {
+		t.Error("skill should be disabled")
+	}
+}
+
+func TestSkillCommand_Enable_MissingSkill(t *testing.T) {
+	chatAgent := newSkillToggleTestAgent(t)
+	cmd := &SkillCommand{}
+	err := cmd.Execute([]string{"enable", "nonexistent"}, chatAgent)
+	if err == nil {
+		t.Error("expected error for nonexistent skill")
+	}
+}
+
+func TestSkillCommand_Enable_MissingSkillID(t *testing.T) {
+	chatAgent := newSkillToggleTestAgent(t)
+	cmd := &SkillCommand{}
+	err := cmd.Execute([]string{"enable"}, chatAgent)
+	if err == nil {
+		t.Error("expected error for missing skill ID")
+	}
+}
+
+func TestSkillCommand_Disable_MissingSkillID(t *testing.T) {
+	chatAgent := newSkillToggleTestAgent(t)
+	cmd := &SkillCommand{}
+	err := cmd.Execute([]string{"disable"}, chatAgent)
+	if err == nil {
+		t.Error("expected error for missing skill ID")
+	}
+}
+
+func TestSkillCommand_Enable_NilAgent(t *testing.T) {
+	cmd := &SkillCommand{}
+	err := cmd.Execute([]string{"enable", "test-skill"}, nil)
+	if err == nil {
+		t.Error("expected error for nil agent")
 	}
 }

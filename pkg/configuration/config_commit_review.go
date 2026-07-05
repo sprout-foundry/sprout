@@ -4,18 +4,13 @@ import (
 	"time"
 )
 
-// GetModelForProvider returns the configured model for a provider
+// GetModelForProvider returns the configured model for a provider.
+// Returns an empty string if no model is configured for the provider; callers
+// handle this by running model selection against the live provider API.
 func (c *Config) GetModelForProvider(provider string) string {
 	if model, exists := c.ProviderModels[provider]; exists && model != "" {
 		return model
 	}
-
-	// Return default from NewConfig if not set
-	defaults := NewConfig()
-	if defaultModel, exists := defaults.ProviderModels[provider]; exists {
-		return defaultModel
-	}
-
 	return ""
 }
 
@@ -54,21 +49,11 @@ func (c *Config) GetCommitModel() string {
 	return c.GetModelForProvider(provider)
 }
 
-// GetCommitProvider returns the configured provider for commit message generation
-// If not explicitly set, falls back to the last used provider
+// GetCommitProvider returns the configured provider for commit message generation.
+// Returns an empty string if no explicit commit provider is set; callers
+// should surface this and offer interactive provider selection.
 func (c *Config) GetCommitProvider() string {
-	if c.CommitProvider != "" {
-		return c.CommitProvider
-	}
-	// Fall back to last used provider
-	if c.LastUsedProvider != "" {
-		return c.LastUsedProvider
-	}
-	// Fall back to first priority provider
-	if len(c.ProviderPriority) > 0 {
-		return c.ProviderPriority[0]
-	}
-	return "ollama-local" // Ultimate fallback
+	return c.CommitProvider
 }
 
 // SetCommitProvider sets the provider for commit message generation
@@ -81,21 +66,11 @@ func (c *Config) SetCommitModel(model string) {
 	c.CommitModel = model
 }
 
-// GetReviewProvider returns the configured provider for review commands
-// If not explicitly set, falls back to the last used provider
+// GetReviewProvider returns the configured provider for review commands.
+// Returns an empty string if no explicit review provider is set; callers
+// should surface this and offer interactive provider selection.
 func (c *Config) GetReviewProvider() string {
-	if c.ReviewProvider != "" {
-		return c.ReviewProvider
-	}
-	// Fall back to last used provider
-	if c.LastUsedProvider != "" {
-		return c.LastUsedProvider
-	}
-	// Fall back to first priority provider
-	if len(c.ProviderPriority) > 0 {
-		return c.ProviderPriority[0]
-	}
-	return "ollama-local" // Ultimate fallback
+	return c.ReviewProvider
 }
 
 // GetReviewModel returns the configured model for review commands

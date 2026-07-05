@@ -42,13 +42,12 @@ func (a *Agent) debugLog(format string, args ...interface{}) {
 func (a *Agent) getModelContextLimit() int {
 	c := a.getClient()
 	if c == nil {
+		a.Logger().Warn("No client available; using fallback context limit of 32K. Model context window could not be determined.")
 		return 32000
 	}
 	limit, err := c.GetModelContextLimit()
 	if err != nil {
-		if a.debug {
-			a.Logger().Debug("[WARN] Failed to get model context limit: %v, using default\n", err)
-		}
+		a.Logger().Warn("Failed to get model context limit: %v; using fallback of 32K. The model may support a larger context window.", err)
 		return 32000
 	}
 	if a.configManager != nil {

@@ -119,6 +119,13 @@ func (f *MarkdownFormatter) Format(text string) string {
 
 	inCodeBlock := false
 	inCodeBlockLang := ""
+	// codeBlockIndent records the leading-whitespace depth of the opening
+	// fence line. Fences indented inside a list item (e.g. "  ```go") are
+	// valid CommonMark: their content and the closing fence are indented
+	// to the same depth. We dedent content lines by this amount so the
+	// gutter isn't double-indented. 0 means a column-0 fence, which keeps
+	// byte-identical output with the original behavior.
+	codeBlockIndent := 0
 	// Table buffering state
 	var tableBuffer []string
 
@@ -132,24 +139,44 @@ func (f *MarkdownFormatter) Format(text string) string {
 		// `│`, `└─ End Code Block`), which more than doubled the size
 		// of short snippets and crowded the scroll buffer on responses
 		// with several blocks.
-		if strings.HasPrefix(line, "```") {
+		//
+		// Fence detection uses the left-trimmed line so that fences
+		// indented inside a list item (e.g. "  ```go") are still
+		// recognized as fences rather than leaking raw backticks into
+		// the rendered output.
+		trimmedLine := strings.TrimLeft(line, " \t")
+		if strings.HasPrefix(trimmedLine, "```") {
+			indent := len(line) - len(trimmedLine)
 			if !inCodeBlock {
+				// Opening fence.
 				inCodeBlock = true
-				lang := strings.TrimSpace(line[3:])
+				lang := strings.TrimSpace(trimmedLine[3:])
 				inCodeBlockLang = lang
+				codeBlockIndent = indent
 				if lang != "" {
 					result.WriteString(fmt.Sprintf("%s──── %s ────%s\n", ColorDim, lang, ColorReset))
 				}
-			} else {
+				continue
+			} else if indent <= 3 {
+				// Closing fence. CommonMark: a closing fence may be
+				// preceded by up to three spaces of indentation,
+				// independent of the opening fence's indentation.
 				inCodeBlock = false
-				// No closing line — the next non-code row reads as the
-				// natural boundary. Saves a row per block.
+				codeBlockIndent = 0
+				continue
 			}
-			continue
+			// else: inside a code block but this fence-like line is
+			// indented more than three spaces → treat it as regular code
+			// content (the inCodeBlock branch below renders it).
 		}
 
 		if inCodeBlock {
-			result.WriteString(fmt.Sprintf("%s│ %s%s\n", ColorDim, f.formatCodeLine(line, inCodeBlockLang), ColorReset))
+			// Dedent content lines by the opening fence's indentation so
+			// nested code blocks don't appear double-indented behind the
+			// gutter. For column-0 fences (codeBlockIndent == 0) this is
+			// a no-op, preserving byte-identical output.
+			codeLine := dedentLine(line, codeBlockIndent)
+			result.WriteString(fmt.Sprintf("%s│ %s%s\n", ColorDim, f.formatCodeLine(codeLine, inCodeBlockLang), ColorReset))
 			continue
 		}
 
@@ -178,6 +205,28 @@ func (f *MarkdownFormatter) Format(text string) string {
 	}
 
 	return strings.TrimSuffix(result.String(), "\n") // Remove trailing newline
+}
+
+// dedentLine removes up to n leading space characters from line. If the line
+// has fewer than n leading spaces, they are all removed. Tabs are treated as
+// a single character and are not counted as spaces. Used to strip the
+// indentation of an opening code fence from its content lines so nested code
+// blocks (indented inside a list item) render behind the gutter without being
+// double-indented.
+func dedentLine(line string, n int) string {
+	if n <= 0 {
+		return line
+	}
+	removed := 0
+	for i := 0; i < len(line) && removed < n; i++ {
+		if line[i] == ' ' {
+			removed++
+		} else {
+			// First non-space byte (or tab) ends the dedent region.
+			break
+		}
+	}
+	return line[removed:]
 }
 
 // formatMarkdownLine formats a single markdown line

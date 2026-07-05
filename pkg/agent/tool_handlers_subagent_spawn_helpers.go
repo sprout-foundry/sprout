@@ -235,5 +235,5 @@ func (a *Agent) warnSubagentFallback(scope, personaProvider, personaModel, confi
 		model = "<provider default>"
 	}
 
-	a.PrintLineAsync(fmt.Sprintf("[WARN] Subagent fallback active (%s): provider=%s model=%s", scope, provider, model))
+	a.PrintLineAsync(fmt.Sprintf("Subagent fallback active (%s): provider=%s model=%s", scope, provider, model))
 }

@@ -114,6 +114,14 @@ type queuedMessagesSource interface {
 	QueuedMessages() int
 }
 
+// turnCostSource is an optional addition to ContentSource for sources
+// that can report the per-turn cost delta. When the concrete source
+// implements it AND the turn cost is non-zero, the footer renders
+// " · $0.04 turn" alongside the cumulative session cost. CLI-UX-6.
+type turnCostSource interface {
+	TurnCost() float64
+}
+
 // NewStatusFooter constructs a footer that writes to w. If w is nil
 // os.Stderr is used (the same channel the spinner uses). Non-TTY writers
 // produce a no-op footer.

@@ -262,68 +262,156 @@ func (s *SQLiteStore) removeDeletedFiles(ctx context.Context, indexed map[string
 
 // IndexChangedFiles indexes only files whose on-disk mtime differs from
 // last_indexed. Uses GetStaleFiles internally.
+//
+// Uses a scoped two-phase approach mirroring IndexAll to preserve cross-file
+// edges correctly: (1) compute the closure of affected files (stale files +
+// files whose edges point into them) BEFORE any deletion, (2) re-index symbols
+// for stale files, (3) re-parse and bulk-insert edges for the entire closure.
+//
+// Referrer files (those with edges into stale files) only have their OUTGOING
+// edges deleted and re-resolved; their incoming edges are preserved. This
+// prevents progressive edge loss in multi-level call chains (X→A→B where only
+// B changes must not lose X→A).
 func (s *SQLiteStore) IndexChangedFiles(ctx context.Context, parseFile FileParser) error {
 	staleFiles, err := s.GetStaleFiles(ctx)
 	if err != nil {
 		return fmt.Errorf("get stale files: %w", err)
 	}
+	if len(staleFiles) == 0 {
+		return nil
+	}
 
+	// Phase 0: Partition stale files into deletions vs re-indexes.
+	var toReindex []string
+	var deletedFiles []string
 	for _, path := range staleFiles {
+		absPath := path
+		if !filepath.IsAbs(path) {
+			absPath = filepath.Join(s.baseDir, path)
+		}
+		if _, err := os.Stat(absPath); os.IsNotExist(err) {
+			deletedFiles = append(deletedFiles, path)
+		} else {
+			toReindex = append(toReindex, path)
+		}
+	}
+
+	// Compute referrer closure BEFORE any mutation. Files whose edges point
+	// INTO stale files must have their outgoing edges re-resolved against
+	// the new symbols. This must happen before indexSymbolsOnly deletes anything.
+	referrers, err := s.FindReferrerFiles(ctx, toReindex)
+	if err != nil {
+		return fmt.Errorf("find referrer files: %w", err)
+	}
+	referrerSet := make(map[string]bool, len(referrers))
+	for _, fp := range referrers {
+		referrerSet[fp] = true
+	}
+
+	// Handle deletions.
+	for _, path := range deletedFiles {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
 		}
+		if err := s.deleteFileFromIndex(ctx, path); err != nil {
+			return fmt.Errorf("delete file %s from index: %w", path, err)
+		}
+	}
 
+	// Phase 1: re-index symbols for stale files. Cache parse results to avoid
+	// double-parsing in Phase 2 (stale files parsed once here, referrers parsed
+	// once in Phase 2).
+	type parseCache struct {
+		symbols []Symbol
+		edges   []Edge
+	}
+	staleCache := make(map[string]parseCache, len(toReindex))
+	for _, path := range toReindex {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
 		absPath := path
 		if !filepath.IsAbs(path) {
 			absPath = filepath.Join(s.baseDir, path)
 		}
-
 		content, err := os.ReadFile(absPath)
-		if os.IsNotExist(err) {
-			// File was deleted — remove from index.
-			if err := s.deleteFileFromIndex(ctx, path); err != nil {
-				return fmt.Errorf("delete file %s from index: %w", path, err)
-			}
+		if err != nil {
 			continue
 		}
+		syms, edges, err := parseAndEnrich(ctx, s.baseDir, path, content, parseFile)
 		if err != nil {
-			continue // skip files we can't read
+			return fmt.Errorf("parse file %s: %w", path, err)
 		}
+		staleCache[path] = parseCache{syms, edges}
+		if err := s.indexSymbolsOnly(ctx, path, syms); err != nil {
+			return fmt.Errorf("index symbols for %s: %w", path, err)
+		}
+	}
 
-		if err := s.indexFileByPath(ctx, path, content, parseFile); err != nil {
-			return fmt.Errorf("index file %s: %w", path, err)
+	if len(toReindex) == 0 && len(referrerSet) == 0 {
+		return nil
+	}
+
+	// Phase 2: collect edges from stale files (cached) + referrer files (parsed).
+	var allEdges []Edge
+	for _, path := range toReindex {
+		allEdges = append(allEdges, staleCache[path].edges...)
+	}
+	for fp := range referrerSet {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
 		}
+		absPath := fp
+		if !filepath.IsAbs(fp) {
+			absPath = filepath.Join(s.baseDir, fp)
+		}
+		content, err := os.ReadFile(absPath)
+		if err != nil {
+			continue
+		}
+		_, edges, err := parseAndEnrich(ctx, s.baseDir, fp, content, parseFile)
+		if err != nil {
+			continue
+		}
+		allEdges = append(allEdges, edges...)
+	}
+
+	referrerList := make([]string, 0, len(referrerSet))
+	for fp := range referrerSet {
+		referrerList = append(referrerList, fp)
+	}
+	if err := s.InsertEdgesForFiles(ctx, toReindex, referrerList, allEdges); err != nil {
+		return fmt.Errorf("reinsert edges for affected files: %w", err)
 	}
 
 	return nil
 }
 
-// indexFileByPath is a helper that parses a single file and indexes it.
-func (s *SQLiteStore) indexFileByPath(ctx context.Context, path string, content []byte, parseFile FileParser) error {
+// parseAndEnrich parses a file and enriches symbols with file path and mtime.
+func parseAndEnrich(ctx context.Context, baseDir, path string, content []byte, parseFile FileParser) ([]Symbol, []Edge, error) {
 	symbols, edges, err := parseFile(path, content)
 	if err != nil {
-		return fmt.Errorf("parse file %s: %w", path, err)
+		return nil, nil, err
 	}
-
-	// Get file mtime for the FileMTime field.
 	absPath := path
 	if !filepath.IsAbs(path) {
-		absPath = filepath.Join(s.baseDir, path)
+		absPath = filepath.Join(baseDir, path)
 	}
 	var mtime string
 	if info, err := os.Stat(absPath); err == nil {
 		mtime = info.ModTime().UTC().Format(time.RFC3339)
 	}
-
-	// Set FileMTime on all symbols.
 	for i := range symbols {
 		symbols[i].FileMTime = mtime
 		symbols[i].FilePath = path
 	}
-
-	return s.IndexFile(ctx, path, symbols, edges)
+	return symbols, edges, nil
 }
 
 // deleteFileRecords removes all traces of a file from the graph database

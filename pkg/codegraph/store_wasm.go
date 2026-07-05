@@ -36,11 +36,14 @@ type GraphStats struct {
 type Store interface {
 	IndexFile(ctx context.Context, path string, symbols []Symbol, edges []Edge) error
 	InsertAllEdges(ctx context.Context, edges []Edge) error
+	InsertEdgesForFiles(ctx context.Context, stalePaths, referrerPaths []string, edges []Edge) error
+	FindReferrerFiles(ctx context.Context, filePaths []string) ([]string, error)
 	QueryCallers(ctx context.Context, qualifiedName string) ([]Symbol, error)
 	QueryCallees(ctx context.Context, qualifiedName string) ([]Symbol, error)
 	FindDeadCode(ctx context.Context, directory string) ([]Symbol, error)
 	GetStaleFiles(ctx context.Context) ([]string, error)
 	Stats() GraphStats
+	QueryAllNodes(ctx context.Context) ([]Symbol, error)
 	Close() error
 	BaseDir() string
 }
@@ -62,6 +65,12 @@ func (s *SQLiteStore) IndexFile(ctx context.Context, path string, symbols []Symb
 }
 func (s *SQLiteStore) InsertAllEdges(ctx context.Context, edges []Edge) error {
 	return errWASM()
+}
+func (s *SQLiteStore) InsertEdgesForFiles(ctx context.Context, stalePaths, referrerPaths []string, edges []Edge) error {
+	return errWASM()
+}
+func (s *SQLiteStore) FindReferrerFiles(ctx context.Context, filePaths []string) ([]string, error) {
+	return nil, errWASM()
 }
 func (s *SQLiteStore) QueryCallers(ctx context.Context, qualifiedName string) ([]Symbol, error) {
 	return nil, errWASM()

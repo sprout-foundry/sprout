@@ -568,6 +568,14 @@ func (s *terminalSubscriberState) handleAgentMessageEvent(data map[string]interf
 	if message == "" {
 		return
 	}
+	// Suppress tool_log messages — tool execution is displayed via the
+	// dedicated tool_start/tool_end event handlers (spinner + end lines).
+	// The tool_log agent_message event is kept for WebUI consumers but
+	// must not produce terminal output or it clobbers the spinner with
+	// duplicate "ⓘ executing tool" lines.
+	if category == "tool_log" {
+		return
+	}
 	indicator.Stop()
 	s.thinkingActive = false
 	// Route through console.PrintExternal so the message

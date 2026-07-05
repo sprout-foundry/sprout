@@ -23,7 +23,8 @@ import (
 // Loads the system prompt from file if needed.
 func resolveSubagentProviderModel(a *Agent, persona string, personaExplicitlyProvided bool, subagentWorkspaceRoot string) (provider, model, systemPromptText string, _ error) {
 	var systemPromptPath string
-	explicitSubagentConfig := false
+	personaProviderExplicit := false
+	personaModelExplicit := false
 
 	if a.configManager != nil {
 		config := a.configManager.GetConfig()
@@ -60,9 +61,12 @@ func resolveSubagentProviderModel(a *Agent, persona string, personaExplicitlyPro
 				if subagentType.SystemPromptText != "" {
 					systemPromptText = subagentType.SystemPromptText
 				}
-				// Track if persona had explicit provider/model (not from global fallback)
-				if subagentType.Provider != "" || subagentType.Model != "" {
-					explicitSubagentConfig = true
+				// Track if persona explicitly set provider or model (field-by-field)
+				if subagentType.Provider != "" {
+					personaProviderExplicit = true
+				}
+				if subagentType.Model != "" {
+					personaModelExplicit = true
 				}
 				a.Logger().Debug("Using persona '%s': provider=%s model=%s system_prompt=%s\n",
 					persona, provider, model, systemPromptPath)
@@ -81,18 +85,22 @@ func resolveSubagentProviderModel(a *Agent, persona string, personaExplicitlyPro
 			a.warnSubagentFallback("default subagent config", "", "", strings.TrimSpace(config.SubagentProvider), strings.TrimSpace(config.SubagentModel), provider, model)
 		}
 
-		// If no explicit subagent config is set (SubagentProvider and SubagentModel are empty
-		// and persona doesn't have explicit provider/model), inherit from parent agent.
-		// This ensures subagents use the model the user actually selected for the main agent.
-		if !explicitSubagentConfig && config.SubagentProvider == "" && config.SubagentModel == "" {
-			parentProvider := a.GetProvider()
-			parentModel := a.GetModel()
+		// Inherit from parent agent for each field not explicitly set by persona
+		// or global subagent config. Field-by-field: setting SubagentProvider
+		// doesn't block model inheritance, and vice versa.
+		parentProvider := a.GetProvider()
+		parentModel := a.GetModel()
+		if !personaProviderExplicit && config.SubagentProvider == "" {
 			if parentProvider != "" && parentProvider != "unknown" {
 				provider = parentProvider
 			}
+		}
+		if !personaModelExplicit && config.SubagentModel == "" {
 			if parentModel != "" && parentModel != "unknown" {
 				model = parentModel
 			}
+		}
+		if provider != "" || model != "" {
 			a.Logger().Debug("Inheriting parent agent provider/model: provider=%s model=%s\n", provider, model)
 		}
 

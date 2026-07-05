@@ -252,6 +252,30 @@ func getEnumOptions(key string, cfg *configuration.Config) ([]tools.AskUserOptio
 			{Label: "verbose", Value: "verbose"},
 		}, true
 
+	case "subagent_parallel_enabled":
+		return []tools.AskUserOption{
+			{Label: "enabled", Value: "true"},
+			{Label: "disabled", Value: "false"},
+		}, true
+
+	case "notifications.cli_bell":
+		return []tools.AskUserOption{
+			{Label: "enabled", Value: "true"},
+			{Label: "disabled", Value: "false"},
+		}, true
+
+	case "notifications.os_notify":
+		return []tools.AskUserOption{
+			{Label: "enabled", Value: "true"},
+			{Label: "disabled", Value: "false"},
+		}, true
+
+	case "enable_zsh_command_detection":
+		return []tools.AskUserOption{
+			{Label: "enabled", Value: "true"},
+			{Label: "disabled", Value: "false"},
+		}, true
+
 	default:
 		return nil, false
 	}

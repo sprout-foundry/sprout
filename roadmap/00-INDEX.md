@@ -6,7 +6,7 @@ a major architectural area, its current state, and open work.
 Specs ship to [`./_completed/`](./_completed/) once their core work lands.
 The root directory only contains specs still receiving active changes.
 
-**Counts (as of 2026-07-03):** 73 shipped · 7 pending · 1 on hold.
+**Counts (as of 2026-07-05):** 74 shipped · 6 pending · 1 on hold.
 
 ## Shipped
 
@@ -89,7 +89,7 @@ Full spec bodies in [`_completed/`](./_completed/) (72 files).
 
 ## Pending
 
-Specs still in flight (7 files). When a spec's core work
+Specs still in flight (6 files). When a spec's core work
 ships, it moves to [`_completed/`](./_completed/).
 
 | Spec | Title | Status |
@@ -100,7 +100,6 @@ ships, it moves to [`_completed/`](./_completed/).
 | SP-105 | [CLI Interactive Panels — Settings Browser & Usage Dashboard](./SP-105-cli-interactive-panels.md) | 🔵 Proposed — `/settings` interactive browser + `/usage` visual dashboard |
 | SP-106 | [CLI Output Polish + SelectList Touch Scroll](./SP-106-cli-output-polish.md) | 🔵 Proposed — Markdown table rendering, nested list indent, SelectList mouse wheel scroll |
 | SP-107 | [Code Intelligence Graph](./SP-107-code-intelligence-graph.md) | 🔵 Proposed — Persistent call graph, dead-code detection, semantic code search. Leverages existing tree-sitter + LSP + embedding infrastructure. |
-| SP-109 | [Single-Source Tool Definitions — Eliminate Dual Maintenance](./SP-109-single-source-tool-definitions.md) | 🔵 Proposed — Design complete. 4 phases. Make `ToolHandler.Definition()` the single source of truth, delete legacy `ToolConfig` entries. Fixes 10 handler-only tools invisible to LLM. |
 | SP-110 | [Background Completion Injection & Auto-Resume](./SP-110-background-completion-auto-resume.md) | 🔵 Proposed — Design complete. 3 phases. Notification queue, shell bg completion, opt-in auto-resume with budget controls. |
 | SP-112 | [Platform Parity — Resolve Stubbed Feature Gaps](./SP-112-platform-parity.md) | 🔵 Proposed — 4 tiers. Windows process groups/signals, WASM tool exclusion, no-CGO embedding fallback, permanent limitation docs. Based on 2026-07-04 platform audit. |
 

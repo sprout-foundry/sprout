@@ -765,3 +765,44 @@ func TestStatusFooter_LegacyCursorByteToCol_CJK(t *testing.T) {
 		t.Fatalf("expected visibleRuneWidth(%q)=2, got %d", text[:rawByteCol], got)
 	}
 }
+
+// CLI-UX-4: todo progress badge
+type todoProgSrc struct {
+	stubSource
+	done  int
+	total int
+}
+
+func (s *todoProgSrc) TodoProgress() (int, int) { return s.done, s.total }
+
+func TestStatusFooter_ComposeLine_ShowsTodoProgress_WhenTodosExist(t *testing.T) {
+	f := NewStatusFooter(&nonTTYWriter{}, &todoProgSrc{
+		stubSource: stubSource{model: "m", workdir: "/x"},
+		done:       3,
+		total:      7,
+	})
+	line := f.composeLine(120)
+	if !strings.Contains(line, "3/7 done") {
+		t.Errorf("composeLine with 3/7 todos should contain '3/7 done', got %q", line)
+	}
+}
+
+func TestStatusFooter_ComposeLine_OmitsTodoProgress_WhenZero(t *testing.T) {
+	f := NewStatusFooter(&nonTTYWriter{}, &todoProgSrc{
+		stubSource: stubSource{model: "m", workdir: "/x"},
+		done:       0,
+		total:      0,
+	})
+	line := f.composeLine(120)
+	if strings.Contains(line, "done") {
+		t.Errorf("composeLine with 0 todos should not contain 'done', got %q", line)
+	}
+}
+
+func TestStatusFooter_ComposeLine_BaselineSourceOmitsTodoProgress(t *testing.T) {
+	f := NewStatusFooter(&nonTTYWriter{}, &stubSource{model: "m", workdir: "/x"})
+	line := f.composeLine(120)
+	if strings.Contains(line, "/") && strings.Contains(line, "done") {
+		t.Errorf("baseline source should not produce todo badge, got %q", line)
+	}
+}

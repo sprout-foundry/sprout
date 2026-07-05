@@ -3,8 +3,6 @@ package tools
 import (
 	"context"
 	"time"
-
-	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 // RequestClarificationFunc is a function pointer set by pkg/agent at startup.
@@ -58,23 +56,7 @@ func (h *requestClarificationHandler) Validate(args map[string]any) error {
 }
 
 func (h *requestClarificationHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-	toolName := h.Name()
-	var hadError bool
-	if env.EventBus != nil {
-		env.EventBus.Publish(events.EventTypeToolStart, map[string]any{
-			"tool":   toolName,
-			"params": args,
-		})
-		defer func() {
-			env.EventBus.Publish(events.EventTypeToolEnd, map[string]any{
-				"tool":  toolName,
-				"error": hadError,
-			})
-		}()
-	}
-
 	if RequestClarificationFunc == nil {
-		hadError = true
 		return ToolResult{
 			Output:  "request_clarification is not available: agent integration not initialized (RequestClarificationFunc is nil)",
 			IsError: true,
@@ -83,7 +65,6 @@ func (h *requestClarificationHandler) Execute(ctx context.Context, env ToolEnv, 
 
 	result, err := RequestClarificationFunc(ctx, args)
 	if err != nil {
-		hadError = true
 		return ToolResult{Output: err.Error(), IsError: true}, nil
 	}
 	return ToolResult{Output: result}, nil

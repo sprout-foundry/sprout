@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS nodes (
     language TEXT NOT NULL DEFAULT '',
     file_mtime TEXT NOT NULL DEFAULT ''
 );
+CREATE INDEX IF NOT EXISTS idx_nodes_display_name ON nodes(display_name);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_nodes_qualified_name ON nodes(qualified_name);
 CREATE INDEX IF NOT EXISTS idx_nodes_file_path ON nodes(file_path);
 

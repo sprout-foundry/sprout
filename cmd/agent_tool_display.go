@@ -216,6 +216,106 @@ func formatTodoListBlock(todosRaw []interface{}) string {
 	return formatTodoListBlockLocked(todosRaw)
 }
 
+// formatTodoListPanel renders the todo list inside a box-drawing panel
+// for stronger visual structure (CLI-UX-9). The panel header includes
+// the status counts; the body is the same per-row content as
+// formatTodoListBlock but wrapped in light-vertical borders.
+func formatTodoListPanel(todosRaw []interface{}) string {
+	items, counts := collectTodos(todosRaw)
+	content := buildTodoPanelContent(items, counts)
+	style := console.DefaultPanelStyle()
+	style.MinWidth = 40
+	style.MaxWidth = 100
+	return console.Panel{
+		Title:   buildTodoPanelTitle(counts),
+		Content: content,
+		Style:   style,
+	}.Render()
+}
+
+// todoEntry mirrors the internal struct used by both the inline block
+// and the panel renderer so they stay in sync. Kept package-local.
+type todoEntry struct {
+	content string
+	status  string
+}
+
+// collectTodos parses the raw todo event payload into typed items and
+// counts by status. Shared by formatTodoListBlock and formatTodoListPanel.
+func collectTodos(todosRaw []interface{}) ([]todoEntry, map[string]int) {
+	items := make([]todoEntry, 0, len(todosRaw))
+	counts := map[string]int{
+		"pending":     0,
+		"in_progress": 0,
+		"completed":   0,
+		"cancelled":   0,
+	}
+	for _, t := range todosRaw {
+		m, ok := t.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		content, _ := m["content"].(string)
+		status, _ := m["status"].(string)
+		items = append(items, todoEntry{content: content, status: status})
+		if _, tracked := counts[status]; tracked {
+			counts[status]++
+		} else {
+			counts["pending"]++
+		}
+	}
+	return items, counts
+}
+
+// buildTodoPanelTitle assembles the header line shown in the panel's
+// top border: "Todos · 8 total · 3 done · 1 active · 4 pending".
+func buildTodoPanelTitle(counts map[string]int) string {
+	total := 0
+	for _, n := range counts {
+		total += n
+	}
+	parts := []string{fmt.Sprintf("%d total", total)}
+	if counts["completed"] > 0 {
+		parts = append(parts, fmt.Sprintf("%d done", counts["completed"]))
+	}
+	if counts["in_progress"] > 0 {
+		parts = append(parts, fmt.Sprintf("%d active", counts["in_progress"]))
+	}
+	if counts["pending"] > 0 {
+		parts = append(parts, fmt.Sprintf("%d pending", counts["pending"]))
+	}
+	if counts["cancelled"] > 0 {
+		parts = append(parts, fmt.Sprintf("%d cancelled", counts["cancelled"]))
+	}
+	return "Todos · " + strings.Join(parts, " · ")
+}
+
+// buildTodoPanelContent renders the per-row body of the todo panel.
+// Each row is "✓ content" with a status-coded glyph. Truncates long
+// lists to keep the terminal scannable.
+func buildTodoPanelContent(items []todoEntry, _ map[string]int) []string {
+	const maxLines = 20
+	const maxContentLen = 80
+	rows := make([]string, 0, len(items))
+	shown := 0
+	for _, it := range items {
+		if shown >= maxLines {
+			rows = append(rows, fmt.Sprintf("%s…and %d more", console.GlyphDim.Prefix(), len(items)-shown))
+			break
+		}
+		content := strings.TrimSpace(it.content)
+		if content == "" {
+			content = "<untitled>"
+		}
+		if len(content) > maxContentLen {
+			content = content[:maxContentLen-1] + "…"
+		}
+		rows = append(rows, fmt.Sprintf("%s %s", todoStatusGlyph(it.status), content))
+		shown++
+	}
+	return rows
+}
+
 // todoBlockRowCount returns the number of terminal rows that
 // fmt.Fprintln(os.Stdout, formatTodoListBlock(todosRaw)) will consume.
 // The block string has a header row plus one row per item (each item

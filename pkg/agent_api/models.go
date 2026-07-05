@@ -85,13 +85,13 @@ type ModelsListInterface interface {
 	IsModelAvailable(modelID string) bool
 }
 
-// GetAvailableModels returns available models for the current provider
+// GetAvailableModels returns available models for the current provider.
+// Returns an error if no provider can be determined; callers should surface
+// this to the user and offer interactive provider selection.
 func GetAvailableModels() ([]ModelInfo, error) {
-	// Use unified provider detection
 	clientType, err := DetermineProvider("", "")
 	if err != nil {
-		// Fallback to a reasonable default
-		clientType = OllamaLocalClientType
+		return nil, err
 	}
 	return GetModelsForProvider(clientType)
 }

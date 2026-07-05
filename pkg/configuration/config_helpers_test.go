@@ -223,24 +223,24 @@ func TestGetSubagentProvider(t *testing.T) {
 			expected: "openai",
 		},
 		{
-			name:     "falls back to LastUsedProvider when SubagentProvider empty",
+			name:     "returns empty when SubagentProvider empty (no fallback)",
 			config:   &Config{LastUsedProvider: "deepinfra"},
-			expected: "deepinfra",
+			expected: "",
 		},
 		{
-			name:     "falls back to ProviderPriority[0] when both empty",
+			name:     "returns empty with only ProviderPriority set (no fallback)",
 			config:   &Config{ProviderPriority: []string{"zai", "openai"}},
-			expected: "zai",
+			expected: "",
 		},
 		{
-			name:     "ultimate fallback to ollama-local",
+			name:     "returns empty for bare config (no fallback)",
 			config:   &Config{},
-			expected: "ollama-local",
+			expected: "",
 		},
 		{
-			name:     "ultimate fallback with empty ProviderPriority",
+			name:     "returns empty with empty ProviderPriority (no fallback)",
 			config:   &Config{ProviderPriority: []string{}},
-			expected: "ollama-local",
+			expected: "",
 		},
 	}
 
@@ -268,12 +268,12 @@ func TestGetSubagentModel(t *testing.T) {
 		assert.Equal(t, "gpt-5-mini", cfg.GetSubagentModel())
 	})
 
-	t.Run("falls back to provider default model when SubagentModel empty", func(t *testing.T) {
+	t.Run("empty model with LastUsedProvider returns empty (no fallback)", func(t *testing.T) {
 		cfg := &Config{
 			LastUsedProvider: "openai",
 			ProviderModels:   map[string]string{"openai": "gpt-5"},
 		}
-		assert.Equal(t, "gpt-5", cfg.GetSubagentModel())
+		assert.Equal(t, "", cfg.GetSubagentModel())
 	})
 
 	t.Run("falls back through GetSubagentProvider chain", func(t *testing.T) {

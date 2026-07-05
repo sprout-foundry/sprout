@@ -348,34 +348,26 @@ func TestRouteToolLog_HandlesNilAgent(t *testing.T) {
 	}
 }
 
-// TestRouteToolLog_FormatsTerminalOutput verifies ANSI formatting
-func TestRouteToolLog_FormatsTerminalOutput(t *testing.T) {
-	// Capture stdout using pipe
-	old := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-
-	// Create router without callback to test terminal fallback path
-	router := NewOutputRouter(nil, nil)
+// TestRouteToolLog_PublishesEvent verifies event publishing (terminal
+// output is now handled by the terminal subscriber, not RouteToolLog).
+func TestRouteToolLog_PublishesEvent(t *testing.T) {
+	bus := events.NewEventBus()
+	ch := bus.Subscribe("test")
+	router := NewOutputRouter(nil, bus)
 
 	router.RouteToolLog("read_file", "/path/to/file.go")
 
-	// Restore stdout
-	w.Close()
-	os.Stdout = old
-
-	var buf bytes.Buffer
-	io.Copy(&buf, r)
-	output := buf.String()
-
-	// Should contain ANSI codes: RouteToolLog renders the line dim
-	// (\033[2m … \033[0m), not the dark/lighter-gray scheme this test
-	// originally asserted.
-	assert.Contains(t, output, "\033[2m", "should contain dim ANSI code")
-	assert.Contains(t, output, "\033[0m", "should contain reset ANSI code")
-	// Terminal output now only shows target, not action
-	assert.NotContains(t, output, "read_file", "should not contain tool name in terminal output")
-	assert.Contains(t, output, "/path/to/file.go", "should contain target")
+	select {
+	case ev := <-ch:
+		assert.Equal(t, events.EventTypeAgentMessage, ev.Type)
+		data, ok := ev.Data.(map[string]interface{})
+		assert.True(t, ok)
+		assert.Equal(t, "tool_log", data["category"])
+		assert.Contains(t, data["message"], "read_file")
+		assert.Contains(t, data["message"], "/path/to/file.go")
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("expected event to be published")
+	}
 }
 
 // TestRouteToolLog_MultipleSubscribers verifies multiple subscribers receive events

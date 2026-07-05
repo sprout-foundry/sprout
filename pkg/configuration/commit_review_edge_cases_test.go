@@ -44,15 +44,15 @@ func TestCommitProviderEdgeCases(t *testing.T) {
 			expectedModel:    "", // Empty when provider not found
 		},
 		{
-			name: "all fallback levels exhausted returns default",
+			name: "all fallback levels exhausted returns empty",
 			config: &Config{
 				CommitProvider:   "",
 				LastUsedProvider: "",
 				ProviderPriority: []string{},
-				ProviderModels:   map[string]string{"ollama-local": "qwen3-coder:30b"}, // Ultimate default has this model
+				ProviderModels:   map[string]string{"ollama-local": "qwen3-coder:30b"},
 			},
-			expectedProvider: "ollama-local",    // Ultimate default
-			expectedModel:    "qwen3-coder:30b", // Model from the default provider
+			expectedProvider: "", // No fallback
+			expectedModel:    "", // No provider → no model
 		},
 		{
 			name: "provider priority first is empty string",
@@ -61,19 +61,19 @@ func TestCommitProviderEdgeCases(t *testing.T) {
 				LastUsedProvider: "",
 				ProviderPriority: []string{"", "openai"},
 			},
-			expectedProvider: "", // Empty string is first in priority
+			expectedProvider: "", // Empty string is first in priority (but no fallback)
 			expectedModel:    "",
 		},
 		{
-			name: "multiple fallback levels",
+			name: "multiple fallback levels returns empty",
 			config: &Config{
 				CommitProvider:   "",
 				LastUsedProvider: "",
 				ProviderPriority: []string{"deepinfra", "zai", "openai"},
 				ProviderModels:   map[string]string{"deepinfra": "deepseek-ai/DeepSeek-V3.1-Terminus"},
 			},
-			expectedProvider: "deepinfra",
-			expectedModel:    "deepseek-ai/DeepSeek-V3.1-Terminus", // Model from ProviderModels
+			expectedProvider: "", // No fallback
+			expectedModel:    "", // No provider → no model
 		},
 	}
 
@@ -126,26 +126,26 @@ func TestReviewProviderEdgeCases(t *testing.T) {
 			expectedModel:    "",
 		},
 		{
-			name: "all fallback levels exhausted returns default",
+			name: "all fallback levels exhausted returns empty",
 			config: &Config{
 				ReviewProvider:   "",
 				LastUsedProvider: "",
 				ProviderPriority: []string{},
-				ProviderModels:   map[string]string{"ollama-local": "qwen3-coder:30b"}, // Ultimate default has this model
+				ProviderModels:   map[string]string{"ollama-local": "qwen3-coder:30b"},
 			},
-			expectedProvider: "ollama-local",    // Ultimate default
-			expectedModel:    "qwen3-coder:30b", // Model from the default provider
+			expectedProvider: "", // No fallback
+			expectedModel:    "", // No provider → no model
 		},
 		{
-			name: "provider priority with special characters - model fetched from map",
+			name: "provider priority with special characters - returns empty",
 			config: &Config{
 				ReviewProvider:   "",
 				LastUsedProvider: "",
 				ProviderPriority: []string{"ollama-cloud", "openrouter"},
 				ProviderModels:   map[string]string{"ollama-cloud": "deepseek-v3.1:671b", "openrouter": "openai/gpt-5"},
 			},
-			expectedProvider: "ollama-cloud",
-			expectedModel:    "deepseek-v3.1:671b", // Model is fetched from ProviderModels
+			expectedProvider: "", // No fallback
+			expectedModel:    "", // No provider → no model
 		},
 	}
 
@@ -231,11 +231,11 @@ func TestCommitReviewConfigEmptyStringHandling(t *testing.T) {
 		},
 	}
 
-	// Should fall back to LastUsedProvider
-	assert.Equal(t, "openrouter", cfg.GetCommitProvider())
-	assert.Equal(t, "openrouter", cfg.GetReviewProvider())
-	assert.Equal(t, "openai/gpt-5", cfg.GetCommitModel())
-	assert.Equal(t, "openai/gpt-5", cfg.GetReviewModel())
+	// All return empty — no fallback
+	assert.Equal(t, "", cfg.GetCommitProvider())
+	assert.Equal(t, "", cfg.GetReviewProvider())
+	assert.Equal(t, "", cfg.GetCommitModel())
+	assert.Equal(t, "", cfg.GetReviewModel())
 }
 
 // TestCommitReviewConfigModelProviderMismatch tests when model doesn't match provider

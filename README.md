@@ -113,6 +113,7 @@ Full reference, profile table, and custom overrides: [docs/SECURITY.md#risk-prof
 | [CLI Reference](docs/CLI_REFERENCE.md) | All commands, flags, slash commands, personas, tools |
 | [Onboarding](docs/onboarding.md) | Guided first-run setup (provider → API key → first chat) |
 | [Configuration](docs/CONFIGURATION.md) | Config files, environment variables, Zsh detection, CI/CD |
+| [Fallbacks](docs/FALLBACKS.md) | Every default, inheritance, and fallback resolution chain |
 | [Architecture](docs/ARCHITECTURE.md) | Package layout, data flow, workspace files |
 | [Security](docs/SECURITY.md) | Risk profiles, tool call classification, security model |
 | [Personas](docs/PERSONAS.md) | Persona system, risk model, and custom persona guide |

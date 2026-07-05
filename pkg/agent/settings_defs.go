@@ -19,6 +19,7 @@ type settingDef struct {
 	GetValue    func(cfg *configuration.Config) string
 	SetValue    func(cfg *configuration.Config, value string) error
 	EnumValues  []string // empty = not an enum
+	ListType    bool     // true for comma-separated list settings (add/remove/set UI)
 }
 
 // settingDefs is the single registry of all configurable settings.
@@ -498,6 +499,57 @@ var settingDefs = []settingDef{
 		},
 		EnumValues: []string{"true", "false"},
 	},
+	// --- Shell Command Allowlists ---
+	{
+		Key:         "approved_shell_commands",
+		Description: "Always-approved shell commands (exact match)",
+		ValidValues: "comma-separated list of shell command strings",
+		GetValue: func(cfg *configuration.Config) string {
+			return strings.Join(cfg.ApprovedShellCommands, ",")
+		},
+		SetValue: func(cfg *configuration.Config, value string) error {
+			if value == "" {
+				cfg.ApprovedShellCommands = nil
+				return nil
+			}
+			var cmds []string
+			for _, raw := range strings.Split(value, ",") {
+				trimmed := strings.TrimSpace(raw)
+				if trimmed == "" {
+					continue
+				}
+				cmds = append(cmds, trimmed)
+			}
+			cfg.ApprovedShellCommands = cmds
+			return nil
+		},
+		ListType: true,
+	},
+	{
+		Key:         "approved_shell_command_patterns",
+		Description: "Always-approved shell command glob patterns",
+		ValidValues: "comma-separated list of glob patterns",
+		GetValue: func(cfg *configuration.Config) string {
+			return strings.Join(cfg.ApprovedShellCommandPatterns, ",")
+		},
+		SetValue: func(cfg *configuration.Config, value string) error {
+			if value == "" {
+				cfg.ApprovedShellCommandPatterns = nil
+				return nil
+			}
+			var patterns []string
+			for _, raw := range strings.Split(value, ",") {
+				trimmed := strings.TrimSpace(raw)
+				if trimmed == "" {
+					continue
+				}
+				patterns = append(patterns, trimmed)
+			}
+			cfg.ApprovedShellCommandPatterns = patterns
+			return nil
+		},
+		ListType: true,
+	},
 }
 
 // supportedSettings is built from settingDefs at init time.
@@ -533,4 +585,11 @@ func SettingEnumValues(key string) []string {
 		return nil
 	}
 	return d.EnumValues
+}
+
+// SettingIsListType returns true if the setting key is a list-type setting
+// that should get an add/remove/set sub-menu in the interactive browser.
+func SettingIsListType(key string) bool {
+	d := lookupSettingDef(key)
+	return d != nil && d.ListType
 }

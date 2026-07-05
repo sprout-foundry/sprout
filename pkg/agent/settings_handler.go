@@ -157,6 +157,7 @@ type SettingDetail struct {
 	Description string
 	ValidValues string
 	GetValue    func(cfg *configuration.Config) string
+	ListType    bool // true for comma-separated list settings (add/remove/set UI)
 }
 
 // AllSettings returns the complete list of setting definitions, derived from the
@@ -169,6 +170,7 @@ func AllSettings() []SettingDetail {
 			Description: d.Description,
 			ValidValues: d.ValidValues,
 			GetValue:    d.GetValue,
+			ListType:    d.ListType,
 		}
 	}
 	return result

@@ -36,6 +36,20 @@ func wireAgentToolFuncs(agent *Agent, isProduction bool) {
 		return handleRespondClarification(ctx, agent, args)
 	}
 
+	// Change-tracking tools — these delegate to the agent's ChangeTracker.
+	tools.ListChangesFunc = func(ctx context.Context, args map[string]any) (string, error) {
+		return handleListChanges(ctx, agent, args)
+	}
+	tools.RecoverFileFunc = func(ctx context.Context, args map[string]any) (string, error) {
+		return handleRecoverFile(ctx, agent, args)
+	}
+	tools.RevertMyChangesFunc = func(ctx context.Context, args map[string]any) (string, error) {
+		return handleRevertMyChanges(ctx, agent, args)
+	}
+	tools.MCPRefreshFunc = func(ctx context.Context, args map[string]any) (string, error) {
+		return handleMCPRefresh(ctx, agent, args)
+	}
+
 	// Production-only: PR creation and automate workflows require a live
 	// agent with full infrastructure (git, filesystem, workspace).
 	if isProduction {

@@ -483,6 +483,56 @@ func TestFindDeadCode_ExcludesNonFuncKinds(t *testing.T) {
 	assert.Equal(t, "orphan", dead[0].QualifiedName)
 }
 
+func TestFindDeadCode_ExcludesBenchmarkAndFuzz(t *testing.T) {
+	store := newMemoryStore(t)
+	ctx := context.Background()
+
+	path := "pkg/app/app_test.go"
+	symbols := []Symbol{
+		{QualifiedName: "BenchmarkSomething", DisplayName: "BenchmarkSomething", FilePath: path, Line: 1, Kind: "func", Language: "go"},
+		{QualifiedName: "FuzzSomething", DisplayName: "FuzzSomething", FilePath: path, Line: 10, Kind: "func", Language: "go"},
+		{QualifiedName: "testHelper", DisplayName: "testHelper", FilePath: path, Line: 20, Kind: "func", Language: "go"},
+	}
+
+	err := store.IndexFile(ctx, path, symbols, nil)
+	require.NoError(t, err)
+
+	dead, err := store.FindDeadCode(ctx, "")
+	require.NoError(t, err)
+
+	require.Len(t, dead, 1)
+	assert.Equal(t, "testHelper", dead[0].QualifiedName)
+}
+
+func TestFindDeadCode_DirectoryEscapesLIKEWildcards(t *testing.T) {
+	store := newMemoryStore(t)
+	ctx := context.Background()
+
+	// A directory whose name contains LIKE wildcard characters.
+	// Without escaping, "_" would match any single char and "%" any sequence.
+	dirPath := "pkg/app_test/unit.go"
+	symbols := []Symbol{
+		{QualifiedName: "pkg/app_test.helper", DisplayName: "helper", FilePath: dirPath, Line: 5, Kind: "func", Language: "go"},
+	}
+	err := store.IndexFile(ctx, dirPath, symbols, nil)
+	require.NoError(t, err)
+
+	// Also add a file in a directory that differs by one char (appXtest),
+	// which the unescaped "_" would incorrectly match.
+	otherPath := "pkg/appXtest/unit.go"
+	err = store.IndexFile(ctx, otherPath, []Symbol{
+		{QualifiedName: "pkg/appXtest.other", DisplayName: "other", FilePath: otherPath, Line: 5, Kind: "func", Language: "go"},
+	}, nil)
+	require.NoError(t, err)
+
+	// Query with the exact directory "pkg/app_test" — should match only
+	// pkg/app_test/unit.go, NOT pkg/appXtest/unit.go.
+	dead, err := store.FindDeadCode(ctx, "pkg/app_test")
+	require.NoError(t, err)
+	require.Len(t, dead, 1, "escaped LIKE should match exact directory only")
+	assert.Equal(t, "pkg/app_test.helper", dead[0].QualifiedName)
+}
+
 func TestIndexFile_CrossFileEdges(t *testing.T) {
 	store := newMemoryStore(t)
 	ctx := context.Background()
@@ -1583,7 +1633,7 @@ func TestInsertAllEdges_SuffixMatchAmbiguous(t *testing.T) {
 	assert.Equal(t, 0, store.Stats().EdgeCount, "ambiguous suffix match should be skipped")
 }
 
-func TestInsertAllEdges_DottedNoParenSkipsSuffixMatch(t *testing.T) {
+func TestInsertAllEdges_DottedNoParenResolvesViaDisplayName(t *testing.T) {
 	store := newMemoryStore(t)
 	ctx := context.Background()
 
@@ -1598,15 +1648,16 @@ func TestInsertAllEdges_DottedNoParenSkipsSuffixMatch(t *testing.T) {
 	}, nil)
 	require.NoError(t, err)
 
-	// "state.GetOptimizer" is a multi-level selector with dot but no parens.
-	// The suffix-match fallback should be SKIPPED — it's not a bare function
-	// name and won't resolve.  Skipping avoids a pointless full-table LIKE scan.
+	// "state.GetOptimizer" is a receiver-qualified call where the receiver
+	// variable ("state") is not an import alias. The extractor strips import
+	// prefixes but leaves receiver variables intact. The resolver extracts the
+	// leaf name "GetOptimizer" and resolves via display_name when unambiguous.
 	edges := []Edge{
 		{SourceQualifiedName: "pkg/x.caller", TargetQualifiedName: "state.GetOptimizer", EdgeType: "calls", Line: 11},
 	}
 	err = store.InsertAllEdges(ctx, edges)
 	require.NoError(t, err)
-	assert.Equal(t, 0, store.Stats().EdgeCount, "dotted-no-paren name should skip suffix match")
+	assert.Equal(t, 1, store.Stats().EdgeCount, "receiver-qualified name should resolve via display_name fallback")
 }
 
 func TestInsertAllEdges_MethodNameWithParensUsesSuffixMatch(t *testing.T) {

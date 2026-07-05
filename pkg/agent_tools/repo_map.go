@@ -384,7 +384,7 @@ func (s *SymbolWithEdges) ToCodegraphSymbols(filePath string) ([]codegraph.Symbo
 			Line:          se.Line,
 			Kind:          kind,
 			Language:      inferLanguage(ext),
-			FileMTime:     "", // filled in by indexFileByPath
+			FileMTime:     "", // filled in by parseAndEnrich
 		})
 	}
 

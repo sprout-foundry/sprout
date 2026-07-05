@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -37,6 +38,13 @@ type terminalSubscriberState struct {
 	progressMu       sync.Mutex
 	subagentProgress map[string]subagentProgressSnapshot
 	configMgr        *configuration.Manager // read live for output_verbosity
+	// thinkingActive tracks whether the "thinking…" spinner was started
+	// by a query_started event and is still showing. It lets
+	// handleStreamChunkEvent know to stop the spinner when assistant
+	// prose begins streaming, and handleToolStartEvent know to stop it
+	// when a tool fires before any prose (query_started → ToolStart with
+	// no StreamChunk in between).
+	thinkingActive bool
 }
 
 // isCompact reports whether the subscriber should suppress tool chrome
@@ -54,6 +62,36 @@ func (s *terminalSubscriberState) isCompact() bool {
 		return false
 	}
 	return cfg.OutputVerbosity == configuration.OutputVerbosityCompact
+}
+
+// isVerbose reports whether the subscriber should show extended detail
+// (full tool arguments, result size suffixes). Read live from the config
+// manager — mirrors isCompact() — so a mid-session /settings change to
+// "verbose" takes effect immediately without a restart. Falls back to
+// false when the manager is nil (non-agent callers, tests).
+func (s *terminalSubscriberState) isVerbose() bool {
+	if s.configMgr == nil {
+		return false
+	}
+	cfg := s.configMgr.GetConfig()
+	if cfg == nil {
+		return false
+	}
+	return cfg.OutputVerbosity == configuration.OutputVerbosityVerbose
+}
+
+// verboseMaxArgLen returns the argument-preview truncation width to pass
+// to formatToolPreview/formatToolArgPreview. In verbose mode the width is
+// bumped so power users see more of the path or command. In default or
+// compact mode it returns 0, which tells the preview functions to use
+// their built-in per-tool defaults.
+const verbosePreviewWidth = 200
+
+func (s *terminalSubscriberState) verboseMaxArgLen() int {
+	if s.isVerbose() {
+		return verbosePreviewWidth
+	}
+	return 0
 }
 
 // newTerminalSubscriberState initializes a fresh subscriber state with
@@ -91,8 +129,12 @@ func (s *terminalSubscriberState) handleToolStartEvent(data map[string]interface
 		// Tool renders its own prompt — make sure any active
 		// spinner is gone before the prompt lands.
 		indicator.Stop()
+		s.thinkingActive = false
 		return
 	}
+	// CLI-UX-5: A tool is starting — clear the thinking spinner if it
+	// was active. The tool spinner (started below) replaces it.
+	s.thinkingActive = false
 	// SP-056-6a: Resolve any active reasoning fold on the first tool event
 	// when reasoning ended but no assistant text arrived to trigger resolution.
 	if fold := currentReasoningFold; fold != nil && fold.IsActive() {
@@ -153,7 +195,7 @@ func (s *terminalSubscriberState) handleToolStartEvent(data map[string]interface
 	if hasSnap && depth > 0 {
 		ctxSuffix = formatSubagentCtxSuffix(snap)
 	}
-	indicator.Start(formatToolStartLine(depth, persona, name, formatToolPreview(chatAgent, name, args)) + ctxSuffix)
+	indicator.Start(formatToolStartLine(depth, persona, name, formatToolPreview(chatAgent, name, args, s.verboseMaxArgLen())) + ctxSuffix)
 }
 
 // handleToolEndEvent processes a ToolEnd event.
@@ -193,7 +235,7 @@ func (s *terminalSubscriberState) handleToolEndEvent(data map[string]interface{}
 	}
 	depth := readEventDepth(data)
 	persona := readEventPersona(data)
-	preview := formatToolPreview(chatAgent, name, args)
+	preview := formatToolPreview(chatAgent, name, args, s.verboseMaxArgLen())
 
 	// Compact mode: suppress result lines for successful tools.
 	// Errors are always shown so the user sees what went wrong.
@@ -201,6 +243,19 @@ func (s *terminalSubscriberState) handleToolEndEvent(data map[string]interface{}
 		s.run = nil // prevent stale state from contaminating error tool collapse
 		footer.Refresh()
 		return
+	}
+
+	// Verbose mode: append a dim result-size suffix (e.g. "· 1.2KB")
+	// to the tool-end line when the ToolEnd event carries result data.
+	// Computed once here and spliced into both the collapse and fresh
+	// line paths below.
+	resultSuffix := ""
+	if s.isVerbose() {
+		if resultLen := readEventInt(data, "result_length"); resultLen > 0 {
+			if sizeStr := formatResultSize(resultLen); sizeStr != "" {
+				resultSuffix = fmt.Sprintf(" %s· %s%s", console.ColorDim, sizeStr, console.ColorReset)
+			}
+		}
 	}
 
 	// Phase 3 collapse: if this end matches the prior run
@@ -226,10 +281,10 @@ func (s *terminalSubscriberState) handleToolEndEvent(data map[string]interface{}
 			s.run.depth, s.run.persona, s.run.lastIcon, s.run.name,
 			s.run.count, s.run.argsTrail,
 			float64(s.run.totalMs)/1000.0,
-		), 2)
+		)+resultSuffix, 2)
 	} else {
 		indicator.Replace(formatToolEndLine(depth, persona, icon, name,
-			preview, float64(durationMs)/1000.0))
+			preview, float64(durationMs)/1000.0) + resultSuffix)
 		s.run = &toolRunState{
 			name:      name,
 			depth:     depth,
@@ -244,18 +299,88 @@ func (s *terminalSubscriberState) handleToolEndEvent(data map[string]interface{}
 	footer.Refresh()
 }
 
+// handleQueryStartedEvent processes a QueryStarted event (CLI-UX-5).
+//
+// When the LLM begins "thinking" — the gap between query submission and
+// the first tool or streamed token — we show a contextual "thinking…"
+// spinner so the terminal never looks frozen. The spinner is only started
+// when no tool spinner is already active (the tool line is more
+// informative) and suppressed entirely in compact mode.
+//
+// The spinner stops naturally when either:
+//   - A StreamChunk with content_type arrives (assistant prose starts) →
+//     handleStreamChunkEvent clears it.
+//   - A ToolStart fires → handleToolStartEvent clears it and starts the
+//     tool spinner.
+func (s *terminalSubscriberState) handleQueryStartedEvent(indicator *console.ActivityIndicator) {
+	if s.isCompact() {
+		return
+	}
+	// Don't clobber an active tool spinner — it's more informative.
+	if indicator.IsActive() {
+		return
+	}
+	indicator.Start("◐ thinking…")
+	s.thinkingActive = true
+}
+
+// handleQueryCompletedEvent processes a QueryCompleted event (CLI-UX-7).
+//
+// Prints a dim one-line turn summary so the user sees how long the turn
+// took and how much it cost, without the clutter of a full metrics dump.
+// Format:
+//
+//	✓ turn complete · 12.3s · $0.04
+//
+// Suppressed entirely in compact mode.
+func (s *terminalSubscriberState) handleQueryCompletedEvent(data map[string]interface{}, indicator *console.ActivityIndicator) {
+	if s.isCompact() {
+		return
+	}
+	// Clear any lingering spinner (thinking indicator left over from a
+	// turn that ended without streaming prose — e.g. the model called
+	// only tools then stopped).
+	indicator.Stop()
+	s.thinkingActive = false
+
+	durationMs := readEventInt64(data, "duration_ms")
+	cost, _ := data["cost"].(float64)
+
+	parts := []string{
+		fmt.Sprintf("%.1fs", float64(durationMs)/1000.0),
+	}
+	if cost > 0 {
+		parts = append(parts, formatCostSummary(cost))
+	}
+
+	line := fmt.Sprintf("%s %sturn complete · %s%s",
+		console.GlyphSuccess.Prefix(),
+		console.ColorDim,
+		strings.Join(parts, " · "),
+		console.ColorReset)
+	fmt.Fprintln(os.Stderr, line)
+}
+
 // handleStreamChunkEvent processes a StreamChunk event.
 //
 // If the chunk carries a content_type (assistant text), it breaks any
 // pending tool-collapse run so the next ToolEnd prints a fresh row.
-func (s *terminalSubscriberState) handleStreamChunkEvent(data map[string]interface{}) {
-	// Assistant text or reasoning chunk landed in the
-	// scroll region — any future tool-end can no longer
-	// safely use ReplaceLastN to collapse onto the prior
-	// row (the rows in between now hold model text).
-	// Break the run; the next ToolEnd will print a fresh
-	// row.
+func (s *terminalSubscriberState) handleStreamChunkEvent(data map[string]interface{}, indicator *console.ActivityIndicator) {
+	// CLI-UX-5: If the thinking spinner is active and assistant prose
+	// begins streaming, stop the spinner so the prose renders cleanly.
+	// Only chunks with content_type are assistant text/reasoning — those
+	// that would land in the scroll region and overwrite the spinner row.
 	if _, isText := data["content_type"].(string); isText {
+		if s.thinkingActive {
+			indicator.Stop()
+			s.thinkingActive = false
+		}
+		// Assistant text or reasoning chunk landed in the
+		// scroll region — any future tool-end can no longer
+		// safely use ReplaceLastN to collapse onto the prior
+		// row (the rows in between now hold model text).
+		// Break the run; the next ToolEnd will print a fresh
+		// row.
 		s.run = nil
 	}
 }
@@ -322,6 +447,7 @@ func (s *terminalSubscriberState) handleSubagentActivityEvent(data map[string]in
 		// nests fall back to a single indent rather than
 		// guessing wrong.
 		indicator.Stop()
+		s.thinkingActive = false
 		fmt.Fprintln(os.Stderr, formatSubagentDoneLine(persona, status, reason, tokens, cost, float64(elapsedMs)/1000.0))
 		// Drop the cached progress for this persona once
 		// it's done — the next spawn starts fresh.
@@ -341,6 +467,7 @@ func (s *terminalSubscriberState) handleSecurityPromptEvent(indicator *console.A
 	// doesn't overwrite the prompt text. Subsequent activity
 	// (next tool event, stream chunks) re-starts naturally.
 	indicator.Stop()
+	s.thinkingActive = false
 	// Same row-layout invalidation as above.
 	s.run = nil
 }
@@ -367,6 +494,7 @@ func (s *terminalSubscriberState) handleTodoUpdateEvent(data map[string]interfac
 	//      · Fix stdin reading with raw mode
 	todosRaw, _ := data["todos"].([]interface{})
 	indicator.Stop()
+	s.thinkingActive = false
 	if len(todosRaw) == 0 {
 		console.LockOutput()
 		fmt.Fprintln(os.Stdout, console.GlyphInfo.Prefix()+"Todo list cleared")
@@ -404,6 +532,7 @@ func (s *terminalSubscriberState) handleAgentMessageEvent(data map[string]interf
 		return
 	}
 	indicator.Stop()
+	s.thinkingActive = false
 	// Route through console.PrintExternal so the message
 	// plays nicely with whichever reader owns the input:
 	//   - Between turns (InputReader active): clears the
@@ -442,6 +571,17 @@ func (s *terminalSubscriberState) handleAgentMessageEvent(data map[string]interf
 	footer.Refresh()
 }
 
+// formatCostSummary renders a cost value for the turn-end summary line.
+// Uses 4 decimal places for small amounts (common case), 2 for amounts
+// >= $1. Kept as a local helper to avoid exporting the console package's
+// internal cost formatter.
+func formatCostSummary(cost float64) string {
+	if cost >= 1.0 {
+		return fmt.Sprintf("$%.2f", cost)
+	}
+	return fmt.Sprintf("$%.4f", cost)
+}
+
 // runEventLoop is the goroutine body for the terminal tool subscriber.
 // It selects on ctx cancellation and incoming events, dispatching each
 // event type to the corresponding handler method.
@@ -458,12 +598,14 @@ func (s *terminalSubscriberState) runEventLoop(ctx context.Context, ch <-chan ev
 			}
 			data, _ := evt.Data.(map[string]interface{})
 			switch evt.Type {
+			case events.EventTypeQueryStarted:
+				s.handleQueryStartedEvent(indicator)
 			case events.EventTypeToolStart:
 				s.handleToolStartEvent(data, chatAgent, indicator)
 			case events.EventTypeToolEnd:
 				s.handleToolEndEvent(data, chatAgent, indicator, footer)
 			case events.EventTypeStreamChunk:
-				s.handleStreamChunkEvent(data)
+				s.handleStreamChunkEvent(data, indicator)
 			case events.EventTypeSubagentActivity:
 				s.handleSubagentActivityEvent(data, indicator, footer)
 			case events.EventTypeSecurityApprovalRequest,
@@ -474,6 +616,8 @@ func (s *terminalSubscriberState) runEventLoop(ctx context.Context, ch <-chan ev
 				s.handleTodoUpdateEvent(data, indicator, footer)
 			case events.EventTypeAgentMessage:
 				s.handleAgentMessageEvent(data, indicator, footer)
+			case events.EventTypeQueryCompleted:
+				s.handleQueryCompletedEvent(data, indicator)
 			}
 		}
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
@@ -161,106 +162,202 @@ type SettingDetail struct {
 
 // AllSettings returns the complete list of setting definitions including extended settings.
 func AllSettings() []SettingDetail {
-			return []SettingDetail{
-			{
-				Key:         "provider",
-				Description: "Current LLM provider",
-				ValidValues: "openai, anthropic, deepseek, openrouter, ollama, ollama-local, lmstudio, deepinfra, cerebras, chutes, minimax, mistral, zai, or custom provider names",
-				GetValue:    func(cfg *configuration.Config) string { return cfg.LastUsedProvider },
+	return []SettingDetail{
+		{
+			Key:         "provider",
+			Description: "Current LLM provider",
+			ValidValues: "openai, anthropic, deepseek, openrouter, ollama, ollama-local, lmstudio, deepinfra, cerebras, chutes, minimax, mistral, zai, or custom provider names",
+			GetValue:    func(cfg *configuration.Config) string { return cfg.LastUsedProvider },
+		},
+		{
+			Key:         "model",
+			Description: "Current model for the active provider",
+			ValidValues: "provider-specific model name",
+			GetValue:    func(cfg *configuration.Config) string { m := cfg.GetModelForProvider(cfg.LastUsedProvider); return m },
+		},
+		{
+			Key:         "reasoning_effort",
+			Description: "Reasoning effort",
+			ValidValues: "low, medium, high",
+			GetValue:    func(cfg *configuration.Config) string { return cfg.ReasoningEffort },
+		},
+		{
+			Key:         "disable_thinking",
+			Description: "Disable thinking mode",
+			ValidValues: "true, false",
+			GetValue:    func(cfg *configuration.Config) string { return fmt.Sprintf("%v", cfg.DisableThinking) },
+		},
+		{
+			Key:         "resource_directory",
+			Description: "Directory for captured web/vision resources",
+			ValidValues: "any valid file path",
+			GetValue:    func(cfg *configuration.Config) string { return cfg.ResourceDirectory },
+		},
+		{
+			Key:         "history_scope",
+			Description: "Change history scope",
+			ValidValues: "project, global",
+			GetValue:    func(cfg *configuration.Config) string { return cfg.HistoryScope },
+		},
+		{
+			Key:         "ea_mode",
+			Description: "Executive Assistant mode",
+			ValidValues: "interactive, queue",
+			GetValue:    func(cfg *configuration.Config) string { return cfg.EAMode },
+		},
+		{
+			Key:         "subagent_provider",
+			Description: "Provider used for subagents",
+			ValidValues: "provider name or empty to inherit from provider",
+			GetValue:    func(cfg *configuration.Config) string { return cfg.SubagentProvider },
+		},
+		{
+			Key:         "subagent_model",
+			Description: "Model used for subagents",
+			ValidValues: "provider-specific model name or empty to use provider default",
+			GetValue:    func(cfg *configuration.Config) string { return cfg.SubagentModel },
+		},
+		{
+			Key:         "default_subagent_persona",
+			Description: "Persona used when run_subagent is invoked without a persona argument",
+			ValidValues: "persona ID (e.g. general, coder, reviewer) or empty to fall back to 'general'",
+			GetValue:    func(cfg *configuration.Config) string { return cfg.DefaultSubagentPersona },
+		},
+		{
+			Key:         "disabled_personas",
+			Description: "Comma-separated persona IDs hidden from /persona list and subagent spawning",
+			ValidValues: "comma-separated persona IDs (e.g. researcher,web_scraper) or empty to enable all",
+			GetValue: func(cfg *configuration.Config) string {
+				return strings.Join(cfg.DisabledPersonas, ",")
 			},
-			{
-				Key:         "model",
-				Description: "Current model for the active provider",
-				ValidValues: "provider-specific model name",
-				GetValue:    func(cfg *configuration.Config) string { m := cfg.GetModelForProvider(cfg.LastUsedProvider); return m },
+		},
+		{
+			Key:         "output_verbosity",
+			Description: "How much inter-tool-call narration the UI shows",
+			ValidValues: "compact, default, verbose",
+			GetValue:    func(cfg *configuration.Config) string { return cfg.OutputVerbosity },
+		},
+		{
+			Key:         "commit_provider",
+			Description: "Provider for commit message generation",
+			ValidValues: "provider name or empty to inherit from provider",
+			GetValue:    func(cfg *configuration.Config) string { return cfg.CommitProvider },
+		},
+		{
+			Key:         "commit_model",
+			Description: "Model for commit message generation",
+			ValidValues: "provider-specific model name or empty to use provider default",
+			GetValue:    func(cfg *configuration.Config) string { return cfg.CommitModel },
+		},
+		{
+			Key:         "review_provider",
+			Description: "Provider for code review commands",
+			ValidValues: "provider name or empty to inherit from provider",
+			GetValue:    func(cfg *configuration.Config) string { return cfg.ReviewProvider },
+		},
+		{
+			Key:         "review_model",
+			Description: "Model for code review commands",
+			ValidValues: "provider-specific model name or empty to use provider default",
+			GetValue:    func(cfg *configuration.Config) string { return cfg.ReviewModel },
+		},
+		{
+			Key:         "subagent_max_parallel",
+			Description: "Maximum number of parallel subagents",
+			ValidValues: "1-8",
+			GetValue:    func(cfg *configuration.Config) string { return strconv.Itoa(cfg.SubagentMaxParallel) },
+		},
+		{
+			Key:         "subagent_parallel_enabled",
+			Description: "Enable parallel subagent execution",
+			ValidValues: "true, false",
+			GetValue: func(cfg *configuration.Config) string {
+				if cfg.SubagentParallelEnabled != nil {
+					return fmt.Sprintf("%v", *cfg.SubagentParallelEnabled)
+				}
+				return "false"
 			},
-			{
-				Key:         "reasoning_effort",
-				Description: "Reasoning effort",
-				ValidValues: "low, medium, high",
-				GetValue:    func(cfg *configuration.Config) string { return cfg.ReasoningEffort },
+		},
+		{
+			Key:         "subagent_max_depth",
+			Description: "Maximum subagent nesting depth",
+			ValidValues: "1-4",
+			GetValue:    func(cfg *configuration.Config) string { return strconv.Itoa(cfg.SubagentMaxDepth) },
+		},
+		{
+			Key:         "notifications.cli_bell",
+			Description: "Terminal bell on completion",
+			ValidValues: "true, false",
+			GetValue: func(cfg *configuration.Config) string {
+				if cfg.Notifications != nil {
+					return fmt.Sprintf("%v", cfg.Notifications.CLIBell)
+				}
+				return "false"
 			},
-			{
-				Key:         "disable_thinking",
-				Description: "Disable thinking mode",
-				ValidValues: "true, false",
-				GetValue:    func(cfg *configuration.Config) string { return fmt.Sprintf("%v", cfg.DisableThinking) },
+		},
+		{
+			Key:         "notifications.os_notify",
+			Description: "OS desktop notification on completion",
+			ValidValues: "true, false",
+			GetValue: func(cfg *configuration.Config) string {
+				if cfg.Notifications != nil {
+					return fmt.Sprintf("%v", cfg.Notifications.OSNotify)
+				}
+				return "false"
 			},
-			{
-				Key:         "resource_directory",
-				Description: "Directory for captured web/vision resources",
-				ValidValues: "any valid file path",
-				GetValue:    func(cfg *configuration.Config) string { return cfg.ResourceDirectory },
+		},
+		{
+			Key:         "notifications.min_seconds",
+			Description: "Min turn duration before notification (seconds)",
+			ValidValues: "0-300 (supports fractional seconds)",
+			GetValue: func(cfg *configuration.Config) string {
+				if cfg.Notifications != nil {
+					return fmt.Sprintf("%v", cfg.Notifications.MinSeconds)
+				}
+				return ""
 			},
-			{
-				Key:         "history_scope",
-				Description: "Change history scope",
-				ValidValues: "project, global",
-				GetValue:    func(cfg *configuration.Config) string { return cfg.HistoryScope },
+		},
+		{
+			Key:         "api_timeouts.overall_timeout_sec",
+			Description: "Overall API timeout (seconds)",
+			ValidValues: "60-3600",
+			GetValue: func(cfg *configuration.Config) string {
+				if cfg.APITimeouts != nil {
+					return strconv.Itoa(cfg.APITimeouts.OverallTimeoutSec)
+				}
+				return ""
 			},
-			{
-				Key:         "ea_mode",
-				Description: "Executive Assistant mode",
-				ValidValues: "interactive, queue",
-				GetValue:    func(cfg *configuration.Config) string { return cfg.EAMode },
+		},
+		{
+			Key:         "api_timeouts.connection_timeout_sec",
+			Description: "Connection timeout (seconds)",
+			ValidValues: "10-600",
+			GetValue: func(cfg *configuration.Config) string {
+				if cfg.APITimeouts != nil {
+					return strconv.Itoa(cfg.APITimeouts.ConnectionTimeoutSec)
+				}
+				return ""
 			},
-			{
-				Key:         "subagent_provider",
-				Description: "Provider used for subagents",
-				ValidValues: "provider name or empty to inherit from provider",
-				GetValue:    func(cfg *configuration.Config) string { return cfg.SubagentProvider },
+		},
+		{
+			Key:         "api_timeouts.first_chunk_timeout_sec",
+			Description: "First chunk timeout (seconds)",
+			ValidValues: "30-1200",
+			GetValue: func(cfg *configuration.Config) string {
+				if cfg.APITimeouts != nil {
+					return strconv.Itoa(cfg.APITimeouts.FirstChunkTimeoutSec)
+				}
+				return ""
 			},
-			{
-				Key:         "subagent_model",
-				Description: "Model used for subagents",
-				ValidValues: "provider-specific model name or empty to use provider default",
-				GetValue:    func(cfg *configuration.Config) string { return cfg.SubagentModel },
-			},
-			{
-				Key:         "default_subagent_persona",
-				Description: "Persona used when run_subagent is invoked without a persona argument",
-				ValidValues: "persona ID (e.g. general, coder, reviewer) or empty to fall back to 'general'",
-				GetValue:    func(cfg *configuration.Config) string { return cfg.DefaultSubagentPersona },
-			},
-			{
-				Key:         "disabled_personas",
-				Description: "Comma-separated persona IDs hidden from /persona list and subagent spawning",
-				ValidValues: "comma-separated persona IDs (e.g. researcher,web_scraper) or empty to enable all",
-				GetValue: func(cfg *configuration.Config) string {
-					return strings.Join(cfg.DisabledPersonas, ",")
-				},
-			},
-			{
-				Key:         "output_verbosity",
-				Description: "How much inter-tool-call narration the UI shows",
-				ValidValues: "compact, default, verbose",
-				GetValue:    func(cfg *configuration.Config) string { return cfg.OutputVerbosity },
-			},
-			{
-				Key:         "commit_provider",
-				Description: "Provider for commit message generation",
-				ValidValues: "provider name or empty to inherit from provider",
-				GetValue:    func(cfg *configuration.Config) string { return cfg.CommitProvider },
-			},
-			{
-				Key:         "commit_model",
-				Description: "Model for commit message generation",
-				ValidValues: "provider-specific model name or empty to use provider default",
-				GetValue:    func(cfg *configuration.Config) string { return cfg.CommitModel },
-			},
-			{
-				Key:         "review_provider",
-				Description: "Provider for code review commands",
-				ValidValues: "provider name or empty to inherit from provider",
-				GetValue:    func(cfg *configuration.Config) string { return cfg.ReviewProvider },
-			},
-			{
-				Key:         "review_model",
-				Description: "Model for code review commands",
-				ValidValues: "provider-specific model name or empty to use provider default",
-				GetValue:    func(cfg *configuration.Config) string { return cfg.ReviewModel },
-			},
-		}}
+		},
+		{
+			Key:         "enable_zsh_command_detection",
+			Description: "Enable zsh-aware command detection",
+			ValidValues: "true, false",
+			GetValue:    func(cfg *configuration.Config) string { return fmt.Sprintf("%v", cfg.EnableZshCommandDetection) },
+		},
+	}
+}
 
 // handleSettingsDescribe returns the description, valid values, and current value for a single setting.
 func handleSettingsDescribe(a *Agent, args map[string]interface{}) (string, error) {
@@ -370,7 +467,17 @@ func handleSettingsPreview(a *Agent, args map[string]interface{}) (string, error
 	// Validate the proposed value by dry-running setConfigValue on a shallow
 	// copy of the config. We must copy the full struct so persona validation
 	// (GetSubagentType / IsPersonaDisabled) has access to the real registries.
+	// Deep-copy pointer fields that setConfigValue mutates in-place so the
+	// preview never accidentally mutates the real config.
 	previewCfg := *cfg
+	if cfg.APITimeouts != nil {
+		copy := *cfg.APITimeouts
+		previewCfg.APITimeouts = &copy
+	}
+	if cfg.Notifications != nil {
+		copy := *cfg.Notifications
+		previewCfg.Notifications = &copy
+	}
 	setErr := setConfigValue(&previewCfg, key, value)
 
 	var notes []string
@@ -406,22 +513,32 @@ func handleSettingsPreview(a *Agent, args map[string]interface{}) (string, error
 
 // supportedSettings contains the list of valid setting keys.
 var supportedSettings = map[string]string{
-	"provider":                 "Current LLM provider",
-	"model":                    "Current model for the active provider",
-	"reasoning_effort":         "Reasoning effort (low/medium/high)",
-	"disable_thinking":         "Disable thinking mode (true/false)",
-	"resource_directory":       "Directory for captured web/vision resources",
-	"history_scope":            "Change history scope (project/global)",
-	"ea_mode":                  "Coordinator persona startup mode (interactive/queue). Legacy name retained for compatibility.",
-	"subagent_provider":        "Provider used for subagents",
-	"subagent_model":           "Model used for subagents",
-	"default_subagent_persona": "Persona used when run_subagent omits the persona argument",
-	"disabled_personas":        "Comma-separated persona IDs hidden from /persona list and spawning",
-	"output_verbosity":         "Output verbosity level (compact/default/verbose)",
-	"commit_provider":          "Provider for commit message generation",
-	"commit_model":             "Model for commit message generation",
-	"review_provider":          "Provider for code review commands",
-	"review_model":             "Model for code review commands",
+	"provider":                             "Current LLM provider",
+	"model":                                "Current model for the active provider",
+	"reasoning_effort":                     "Reasoning effort (low/medium/high)",
+	"disable_thinking":                     "Disable thinking mode (true/false)",
+	"resource_directory":                   "Directory for captured web/vision resources",
+	"history_scope":                        "Change history scope (project/global)",
+	"ea_mode":                              "Coordinator persona startup mode (interactive/queue). Legacy name retained for compatibility.",
+	"subagent_provider":                    "Provider used for subagents",
+	"subagent_model":                       "Model used for subagents",
+	"default_subagent_persona":             "Persona used when run_subagent omits the persona argument",
+	"disabled_personas":                    "Comma-separated persona IDs hidden from /persona list and spawning",
+	"output_verbosity":                     "Output verbosity level (compact/default/verbose)",
+	"commit_provider":                      "Provider for commit message generation",
+	"commit_model":                         "Model for commit message generation",
+	"review_provider":                      "Provider for code review commands",
+	"review_model":                         "Model for code review commands",
+	"subagent_max_parallel":                "Maximum number of parallel subagents",
+	"subagent_parallel_enabled":            "Enable parallel subagent execution",
+	"subagent_max_depth":                   "Maximum subagent nesting depth",
+	"notifications.cli_bell":               "Terminal bell on completion",
+	"notifications.os_notify":              "OS desktop notification on completion",
+	"notifications.min_seconds":            "Min turn duration before notification (seconds)",
+	"api_timeouts.overall_timeout_sec":     "Overall API timeout (seconds)",
+	"api_timeouts.connection_timeout_sec":  "Connection timeout (seconds)",
+	"api_timeouts.first_chunk_timeout_sec": "First chunk timeout (seconds)",
+	"enable_zsh_command_detection":         "Enable zsh-aware command detection",
 }
 
 // validateSettingKey checks that a key is a recognized setting.
@@ -478,6 +595,47 @@ func getConfigValue(cfg *configuration.Config, key string) (string, error) {
 		return cfg.ReviewProvider, nil
 	case "review_model":
 		return cfg.ReviewModel, nil
+	case "subagent_max_parallel":
+		return strconv.Itoa(cfg.SubagentMaxParallel), nil
+	case "subagent_parallel_enabled":
+		if cfg.SubagentParallelEnabled != nil {
+			return fmt.Sprintf("%v", *cfg.SubagentParallelEnabled), nil
+		}
+		return "false", nil
+	case "subagent_max_depth":
+		return strconv.Itoa(cfg.SubagentMaxDepth), nil
+	case "notifications.cli_bell":
+		if cfg.Notifications != nil {
+			return fmt.Sprintf("%v", cfg.Notifications.CLIBell), nil
+		}
+		return "false", nil
+	case "notifications.os_notify":
+		if cfg.Notifications != nil {
+			return fmt.Sprintf("%v", cfg.Notifications.OSNotify), nil
+		}
+		return "false", nil
+	case "notifications.min_seconds":
+		if cfg.Notifications != nil {
+			return fmt.Sprintf("%v", cfg.Notifications.MinSeconds), nil
+		}
+		return "", nil
+	case "api_timeouts.overall_timeout_sec":
+		if cfg.APITimeouts != nil {
+			return strconv.Itoa(cfg.APITimeouts.OverallTimeoutSec), nil
+		}
+		return "", nil
+	case "api_timeouts.connection_timeout_sec":
+		if cfg.APITimeouts != nil {
+			return strconv.Itoa(cfg.APITimeouts.ConnectionTimeoutSec), nil
+		}
+		return "", nil
+	case "api_timeouts.first_chunk_timeout_sec":
+		if cfg.APITimeouts != nil {
+			return strconv.Itoa(cfg.APITimeouts.FirstChunkTimeoutSec), nil
+		}
+		return "", nil
+	case "enable_zsh_command_detection":
+		return fmt.Sprintf("%v", cfg.EnableZshCommandDetection), nil
 	default:
 		return "", validateSettingKey(key)
 	}
@@ -567,6 +725,122 @@ func setConfigValue(cfg *configuration.Config, key, value string) error {
 		cfg.ReviewProvider = value
 	case "review_model":
 		cfg.ReviewModel = value
+	case "subagent_max_parallel":
+		val, err := strconv.Atoi(value)
+		if err != nil {
+			return agenterrors.NewValidation(fmt.Sprintf("subagent_max_parallel must be an integer, got %q", value), nil)
+		}
+		if val < 1 || val > 8 {
+			return agenterrors.NewValidation(fmt.Sprintf("subagent_max_parallel must be between 1 and 8, got %d", val), nil)
+		}
+		cfg.SubagentMaxParallel = val
+	case "subagent_parallel_enabled":
+		switch strings.ToLower(value) {
+		case "true":
+			t := true
+			cfg.SubagentParallelEnabled = &t
+		case "false":
+			f := false
+			cfg.SubagentParallelEnabled = &f
+		default:
+			return agenterrors.NewValidation(fmt.Sprintf("subagent_parallel_enabled must be true or false, got %q", value), nil)
+		}
+	case "subagent_max_depth":
+		val, err := strconv.Atoi(value)
+		if err != nil {
+			return agenterrors.NewValidation(fmt.Sprintf("subagent_max_depth must be an integer, got %q", value), nil)
+		}
+		if val < 1 || val > 4 {
+			return agenterrors.NewValidation(fmt.Sprintf("subagent_max_depth must be between 1 and 4, got %d", val), nil)
+		}
+		cfg.SubagentMaxDepth = val
+	case "notifications.cli_bell":
+		switch strings.ToLower(value) {
+		case "true":
+			if cfg.Notifications == nil {
+				cfg.Notifications = &configuration.NotificationsConfig{}
+			}
+			cfg.Notifications.CLIBell = true
+		case "false":
+			if cfg.Notifications == nil {
+				cfg.Notifications = &configuration.NotificationsConfig{}
+			}
+			cfg.Notifications.CLIBell = false
+		default:
+			return agenterrors.NewValidation(fmt.Sprintf("notifications.cli_bell must be true or false, got %q", value), nil)
+		}
+	case "notifications.os_notify":
+		switch strings.ToLower(value) {
+		case "true":
+			if cfg.Notifications == nil {
+				cfg.Notifications = &configuration.NotificationsConfig{}
+			}
+			cfg.Notifications.OSNotify = true
+		case "false":
+			if cfg.Notifications == nil {
+				cfg.Notifications = &configuration.NotificationsConfig{}
+			}
+			cfg.Notifications.OSNotify = false
+		default:
+			return agenterrors.NewValidation(fmt.Sprintf("notifications.os_notify must be true or false, got %q", value), nil)
+		}
+	case "notifications.min_seconds":
+		val, err := strconv.ParseFloat(value, 64)
+		if err != nil {
+			return agenterrors.NewValidation(fmt.Sprintf("notifications.min_seconds must be a number, got %q", value), nil)
+		}
+		if val < 0 || val > 300 {
+			return agenterrors.NewValidation(fmt.Sprintf("notifications.min_seconds must be between 0 and 300, got %v", val), nil)
+		}
+		if cfg.Notifications == nil {
+			cfg.Notifications = &configuration.NotificationsConfig{}
+		}
+		cfg.Notifications.MinSeconds = val
+	case "api_timeouts.overall_timeout_sec":
+		val, err := strconv.Atoi(value)
+		if err != nil {
+			return agenterrors.NewValidation(fmt.Sprintf("api_timeouts.overall_timeout_sec must be an integer, got %q", value), nil)
+		}
+		if val < 60 || val > 3600 {
+			return agenterrors.NewValidation(fmt.Sprintf("api_timeouts.overall_timeout_sec must be between 60 and 3600, got %d", val), nil)
+		}
+		if cfg.APITimeouts == nil {
+			cfg.APITimeouts = &configuration.APITimeoutConfig{}
+		}
+		cfg.APITimeouts.OverallTimeoutSec = val
+	case "api_timeouts.connection_timeout_sec":
+		val, err := strconv.Atoi(value)
+		if err != nil {
+			return agenterrors.NewValidation(fmt.Sprintf("api_timeouts.connection_timeout_sec must be an integer, got %q", value), nil)
+		}
+		if val < 10 || val > 600 {
+			return agenterrors.NewValidation(fmt.Sprintf("api_timeouts.connection_timeout_sec must be between 10 and 600, got %d", val), nil)
+		}
+		if cfg.APITimeouts == nil {
+			cfg.APITimeouts = &configuration.APITimeoutConfig{}
+		}
+		cfg.APITimeouts.ConnectionTimeoutSec = val
+	case "api_timeouts.first_chunk_timeout_sec":
+		val, err := strconv.Atoi(value)
+		if err != nil {
+			return agenterrors.NewValidation(fmt.Sprintf("api_timeouts.first_chunk_timeout_sec must be an integer, got %q", value), nil)
+		}
+		if val < 30 || val > 1200 {
+			return agenterrors.NewValidation(fmt.Sprintf("api_timeouts.first_chunk_timeout_sec must be between 30 and 1200, got %d", val), nil)
+		}
+		if cfg.APITimeouts == nil {
+			cfg.APITimeouts = &configuration.APITimeoutConfig{}
+		}
+		cfg.APITimeouts.FirstChunkTimeoutSec = val
+	case "enable_zsh_command_detection":
+		switch strings.ToLower(value) {
+		case "true":
+			cfg.EnableZshCommandDetection = true
+		case "false":
+			cfg.EnableZshCommandDetection = false
+		default:
+			return agenterrors.NewValidation(fmt.Sprintf("enable_zsh_command_detection must be true or false, got %q", value), nil)
+		}
 	default:
 		return validateSettingKey(key)
 	}

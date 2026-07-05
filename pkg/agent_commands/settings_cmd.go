@@ -29,7 +29,8 @@ func (s *SettingsCommand) Description() string {
 // Usage returns the detailed help text shown by `/help settings`.
 func (s *SettingsCommand) Usage() string {
 	return strings.Join([]string{
-		"/settings   Interactive settings browser.",
+		"/settings                  Interactive settings browser.",
+		"/settings set <key> <val>  Set a setting directly (non-interactive).",
 		"",
 		"Browse all configurable settings, view current values, and change",
 		"them in place. Changes persist to config.json.",
@@ -46,6 +47,24 @@ func (s *SettingsCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	mgr := chatAgent.GetConfigManager()
 	if mgr == nil {
 		return fmt.Errorf("configuration manager not available")
+	}
+
+	// Fast path: /settings set <key> <value>
+	if len(args) > 0 && args[0] == "set" {
+		if len(args) < 3 {
+			return fmt.Errorf("usage: /settings set <key> <value>")
+		}
+		key := args[1]
+		value := strings.Join(args[2:], " ")
+
+		if err := mgr.UpdateConfig(func(cfgCopy *configuration.Config) error {
+			return agent.SetSettingValue(cfgCopy, key, value)
+		}); err != nil {
+			return err
+		}
+
+		console.GlyphSuccess.Fprintf(os.Stdout, "Updated %s to %q", key, value)
+		return nil
 	}
 
 	cfg := mgr.GetConfig()

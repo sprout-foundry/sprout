@@ -255,3 +255,68 @@ func TestSettingsCommand_NonTTYFallback(t *testing.T) {
 		t.Logf("AskUser returned: %v (expected ErrAskUserNoChannel in non-TTY)", err)
 	}
 }
+
+func TestSettingsCommand_SetFastPath(t *testing.T) {
+	// Create an isolated test config manager (sets SPROUT_CONFIG/LEDIT_CONFIG env).
+	mgr, cleanup := configuration.NewTestManager(t)
+	defer cleanup()
+
+	// Set up initial state: output_verbosity defaults to "default".
+	if err := mgr.UpdateConfig(func(cfg *configuration.Config) error {
+		cfg.OutputVerbosity = "default"
+		return nil
+	}); err != nil {
+		t.Fatalf("failed to set initial config: %v", err)
+	}
+
+	// Create agent — NewAgentWithModel picks up the isolated config via SPROUT_CONFIG.
+	chatAgent, err := agent.NewAgentWithModel("")
+	if err != nil {
+		t.Fatalf("NewAgentWithModel failed: %v", err)
+	}
+
+	cmd := &SettingsCommand{}
+	// Fast path: /settings set output_verbosity compact
+	err = cmd.Execute([]string{"set", "output_verbosity", "compact"}, chatAgent)
+	if err != nil {
+		t.Fatalf("Execute() returned unexpected error: %v", err)
+	}
+
+	// Verify the config was updated.
+	cfg := chatAgent.GetConfigManager().GetConfig()
+	if cfg.OutputVerbosity != "compact" {
+		t.Errorf("expected OutputVerbosity to be 'compact', got %q", cfg.OutputVerbosity)
+	}
+}
+
+func TestSettingsCommand_SetInvalidKey(t *testing.T) {
+	_, cleanup := configuration.NewTestManager(t)
+	defer cleanup()
+
+	chatAgent, err := agent.NewAgentWithModel("")
+	if err != nil {
+		t.Fatalf("NewAgentWithModel failed: %v", err)
+	}
+
+	cmd := &SettingsCommand{}
+	err = cmd.Execute([]string{"set", "unknown_key", "someval"}, chatAgent)
+	if err == nil {
+		t.Error("expected error for unknown setting key, got nil")
+	}
+}
+
+func TestSettingsCommand_SetInvalidValue(t *testing.T) {
+	_, cleanup := configuration.NewTestManager(t)
+	defer cleanup()
+
+	chatAgent, err := agent.NewAgentWithModel("")
+	if err != nil {
+		t.Fatalf("NewAgentWithModel failed: %v", err)
+	}
+
+	cmd := &SettingsCommand{}
+	err = cmd.Execute([]string{"set", "output_verbosity", "bad_value"}, chatAgent)
+	if err == nil {
+		t.Error("expected error for invalid output_verbosity value, got nil")
+	}
+}

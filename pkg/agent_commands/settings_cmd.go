@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
@@ -29,7 +30,8 @@ func (s *SettingsCommand) Description() string {
 // Usage returns the detailed help text shown by `/help settings`.
 func (s *SettingsCommand) Usage() string {
 	return strings.Join([]string{
-		"/settings   Interactive settings browser.",
+		"/settings                  Interactive settings browser.",
+		"/settings set <key> <val>  Set a setting directly (non-interactive).",
 		"",
 		"Browse all configurable settings, view current values, and change",
 		"them in place. Changes persist to config.json.",
@@ -46,6 +48,24 @@ func (s *SettingsCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	mgr := chatAgent.GetConfigManager()
 	if mgr == nil {
 		return fmt.Errorf("configuration manager not available")
+	}
+
+	// Fast path: /settings set <key> <value>
+	if len(args) > 0 && args[0] == "set" {
+		if len(args) < 3 {
+			return fmt.Errorf("usage: /settings set <key> <value>")
+		}
+		key := args[1]
+		value := strings.Join(args[2:], " ")
+
+		if err := mgr.UpdateConfig(func(cfgCopy *configuration.Config) error {
+			return agent.SetSettingValue(cfgCopy, key, value)
+		}); err != nil {
+			return err
+		}
+
+		console.GlyphSuccess.Fprintf(os.Stdout, "Updated %s to %q", key, value)
+		return nil
 	}
 
 	cfg := mgr.GetConfig()
@@ -103,6 +123,17 @@ func (s *SettingsCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		}
 		if selected.Key == "" {
 			fmt.Fprintln(os.Stdout, "Unknown setting selected")
+			continue
+		}
+
+		// List-type settings get a dedicated add/remove/set sub-menu
+		if selected.ListType {
+			if err := promptListSettingValue(selected, cfg, mgr); err != nil {
+				if err == tools.ErrAskUserNoChannel {
+					return nil
+				}
+				fmt.Fprintf(os.Stdout, "  %s\n", err.Error())
+			}
 			continue
 		}
 
@@ -219,41 +250,36 @@ func promptSettingValue(setting agent.SettingDetail, cfg *configuration.Config, 
 // getEnumOptions returns predefined options for enum-style settings.
 // Returns (nil, false) for freeform settings.
 func getEnumOptions(key string, cfg *configuration.Config) ([]tools.AskUserOption, bool) {
-	switch key {
-	case "reasoning_effort":
-		return []tools.AskUserOption{
-			{Label: "low", Value: "low"},
-			{Label: "medium", Value: "medium"},
-			{Label: "high", Value: "high"},
-		}, true
-
-	case "disable_thinking":
-		return []tools.AskUserOption{
-			{Label: "enabled", Value: "false"},
-			{Label: "disabled", Value: "true"},
-		}, true
-
-	case "history_scope":
-		return []tools.AskUserOption{
-			{Label: "project", Value: "project"},
-			{Label: "global", Value: "global"},
-		}, true
-
-	case "ea_mode":
-		return []tools.AskUserOption{
-			{Label: "interactive", Value: "interactive"},
-			{Label: "queue", Value: "queue"},
-		}, true
-
-	case "output_verbosity":
-		return []tools.AskUserOption{
-			{Label: "compact", Value: "compact"},
-			{Label: "default", Value: "default"},
-			{Label: "verbose", Value: "verbose"},
-		}, true
-
-	default:
+	values := agent.SettingEnumValues(key)
+	if len(values) == 0 {
 		return nil, false
+	}
+	opts := make([]tools.AskUserOption, len(values))
+	for i, v := range values {
+		opts[i] = tools.AskUserOption{
+			Label: enumLabel(key, v),
+			Value: v,
+		}
+	}
+	return opts, true
+}
+
+// enumLabel returns a human-readable label for a setting enum value.
+func enumLabel(key, value string) string {
+	// disable_thinking has inverted semantics: "true" means thinking is disabled.
+	if key == "disable_thinking" {
+		if value == "true" {
+			return "disabled"
+		}
+		return "enabled"
+	}
+	switch value {
+	case "true":
+		return "enabled"
+	case "false":
+		return "disabled"
+	default:
+		return value
 	}
 }
 
@@ -290,4 +316,148 @@ func getProviderOptions(mgr *configuration.Manager) ([]tools.AskUserOption, bool
 func isQuit(resp string) bool {
 	resp = strings.TrimSpace(strings.ToLower(resp))
 	return resp == "q" || resp == "quit" || resp == "exit"
+}
+
+// promptListSettingValue handles add/remove/set operations for list-type
+// settings (e.g. approved_shell_commands). It shows the current list items
+// numbered, then accepts commands: add <item>, remove <number>, set
+// <comma,separated,list>, or q to cancel. Any other input is treated as a
+// comma-separated replacement (equivalent to set).
+func promptListSettingValue(setting agent.SettingDetail, cfg *configuration.Config, mgr *configuration.Manager) error {
+	currentValue := setting.GetValue(cfg)
+	var items []string
+	if currentValue != "" {
+		items = splitCSV(currentValue)
+	}
+
+	for {
+		// Show current list state
+		fmt.Fprintln(os.Stdout)
+		fmt.Fprintf(os.Stdout, "  %s (%s)\n", setting.Key, setting.Description)
+		if len(items) == 0 {
+			fmt.Fprintln(os.Stdout, "  (empty list)")
+		} else {
+			for i, item := range items {
+				fmt.Fprintf(os.Stdout, "  %d. %s\n", i+1, item)
+			}
+		}
+		fmt.Fprintln(os.Stdout)
+		fmt.Fprintln(os.Stdout, "  Commands: add <item>, remove <number>, set <comma,list>, or q to finish")
+
+		// Prompt
+		defaultVal := setting.GetValue(cfg)
+		resp, err := tools.AskUser(tools.AskUserRequest{
+			Header:   fmt.Sprintf("Manage %s", setting.Key),
+			Question: fmt.Sprintf("Action for %s", setting.Key),
+			Default:  defaultVal,
+		})
+		if err != nil {
+			return err
+		}
+		resp = strings.TrimSpace(resp)
+
+		if isQuit(resp) {
+			return nil
+		}
+
+		// Parse the command
+		newValue, err := applyListCommand(resp, items)
+		if err != nil {
+			fmt.Fprintf(os.Stdout, "  ERROR: %s\n", err.Error())
+			continue
+		}
+
+		// Apply the change
+		err = mgr.UpdateConfig(func(cfgCopy *configuration.Config) error {
+			return agent.SetSettingValue(cfgCopy, setting.Key, newValue)
+		})
+		if err != nil {
+			fmt.Fprintf(os.Stdout, "  ERROR: %s\n", err.Error())
+			continue
+		}
+
+		// Refresh items from the updated config
+		cfg = mgr.GetConfig()
+		currentValue = setting.GetValue(cfg)
+		if currentValue != "" {
+			items = splitCSV(currentValue)
+		} else {
+			items = nil
+		}
+
+		console.GlyphSuccess.Fprintf(os.Stdout, "Updated %s", setting.Key)
+	}
+}
+
+// applyListCommand parses a list management command and returns the new
+// comma-separated value to persist.
+func applyListCommand(input string, current []string) (string, error) {
+	input = strings.TrimSpace(input)
+	if input == "" {
+		return "", fmt.Errorf("empty command")
+	}
+
+	lower := strings.ToLower(input)
+
+	// "add <item>"
+	if strings.HasPrefix(lower, "add ") {
+		item := strings.TrimSpace(input[4:])
+		if item == "" {
+			return "", fmt.Errorf("add requires an item: add <item>")
+		}
+		newItems := make([]string, len(current)+1)
+		copy(newItems, current)
+		newItems[len(current)] = item
+		return strings.Join(newItems, ","), nil
+	}
+
+	// "remove <number>"
+	if strings.HasPrefix(lower, "remove ") {
+		numStr := strings.TrimSpace(input[7:])
+		n, err := strconv.Atoi(numStr)
+		if err != nil {
+			return "", fmt.Errorf("remove requires a number: remove <number>")
+		}
+		if n < 1 || n > len(current) {
+			return "", fmt.Errorf("invalid index %d: must be between 1 and %d", n, len(current))
+		}
+		idx := n - 1
+		newItems := make([]string, 0, len(current)-1)
+		newItems = append(newItems, current[:idx]...)
+		newItems = append(newItems, current[idx+1:]...)
+		return strings.Join(newItems, ","), nil
+	}
+
+	// "set <comma,separated,list>"
+	if strings.HasPrefix(lower, "set ") {
+		rest := strings.TrimSpace(input[4:])
+		// Validate that the comma-separated list is non-empty after trimming
+		items := splitCSV(rest)
+		if len(items) == 0 && rest != "" {
+			return "", fmt.Errorf("set requires at least one item")
+		}
+		return rest, nil
+	}
+
+	// Default: treat as comma-separated replacement
+	items := splitCSV(input)
+	if len(items) == 0 {
+		return "", fmt.Errorf("unrecognized command %q — use add <item>, remove <number>, or set <comma,list>", input)
+	}
+	return input, nil
+}
+
+// splitCSV splits a comma-separated string into trimmed, non-empty parts.
+func splitCSV(s string) []string {
+	if s == "" {
+		return nil
+	}
+	var out []string
+	for _, raw := range strings.Split(s, ",") {
+		trimmed := strings.TrimSpace(raw)
+		if trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	return out
 }

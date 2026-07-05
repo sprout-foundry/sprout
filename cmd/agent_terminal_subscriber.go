@@ -542,13 +542,13 @@ func (s *terminalSubscriberState) handleTodoUpdateEvent(data map[string]interfac
 			r.OnExternalWriteRows(1)
 		}
 	} else {
-		rowCount := todoBlockRowCount(todosRaw)
 		console.LockOutput()
-		fmt.Fprintln(os.Stdout, formatTodoListBlock(todosRaw))
+		fmt.Fprintln(os.Stdout, formatTodoListPanel(todosRaw))
 		console.UnlockOutput()
-		// Notify the renderer that the multi-line todo block
-		// consumed rowCount terminal rows so physicalLines
-		// stays in sync for FinalizeAtTurnEnd.
+		// Notify the renderer that the multi-line todo block consumed
+		// panel + rows so physicalLines stays in sync for
+		// FinalizeAtTurnEnd.
+		rowCount := todoBlockRowCount(todosRaw) + 2 // +2 for top/bottom panel borders
 		if r := currentTurnRenderer.Load(); r != nil {
 			r.OnExternalWriteRows(rowCount)
 		}

@@ -157,14 +157,6 @@ func runShellCommand(ctx context.Context, command string, streamOutput bool) (st
 	// Get the exit code for status reporting
 	exitCode := extractExitCode(err)
 
-	// For LLM tool calls, truncate output to 2 lines
-	truncatedOutput := truncateOutput(string(output), 2)
-
-	// Print truncated output to terminal unless we're in tests/CI.
-	if truncatedOutput != "" && shouldPrintCapturedShellPreview() {
-		fmt.Printf("%s\n", truncatedOutput)
-	}
-
 	// Build the final output with status header
 	finalOutput := buildShellOutputWithStatus(string(output), command, exitCode, err)
 
@@ -226,12 +218,6 @@ func runShellCommandAdoptable(ctx context.Context, command string, bpm *Backgrou
 		os.Remove(outputPath) // clean up temp file
 
 		exitCode := extractExitCode(waitErr)
-
-		// For LLM tool calls, truncate output to 2 lines
-		truncatedOutput := truncateOutput(outputBuf.String(), 2)
-		if truncatedOutput != "" && shouldPrintCapturedShellPreview() {
-			fmt.Printf("%s\n", truncatedOutput)
-		}
 
 		finalOutput := buildShellOutputWithStatus(outputBuf.String(), command, exitCode, waitErr)
 		return finalOutput, nil

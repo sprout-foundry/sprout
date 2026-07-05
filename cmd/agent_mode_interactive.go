@@ -40,7 +40,8 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	// as the session grows. Reverse order (prints first, then footer)
 	// leaves the cursor inside already-printed content at row N-2, and
 	// the input prompt then renders on top of it.
-	footer := console.NewStatusFooter(os.Stderr, &agentFooterSource{agent: chatAgent})
+	footerSource := &agentFooterSource{agent: chatAgent}
+	footer := console.NewStatusFooter(os.Stderr, footerSource)
 	console.RegisterGlobalStatusFooter(footer)
 	footer.Start()
 	defer footer.Stop()
@@ -260,6 +261,7 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 			turnPromptStart := chatAgent.GetPromptTokens()
 			turnCompletionStart := chatAgent.GetCompletionTokens()
 			turnCostStart := chatAgent.GetTotalCost()
+			footerSource.SetTurnCostStart(turnCostStart)
 			// Clear the ttft tracker so the next stream chunk sets a
 			// fresh "time to first token" measurement for this turn.
 			resetTurnFirstToken()
@@ -384,7 +386,10 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 // agentFooterSource adapts *agent.Agent to the console.ContentSource
 // interface, exposing model / context tokens / cost / cwd to the status
 // footer renderer.
-type agentFooterSource struct{ agent *agent.Agent }
+type agentFooterSource struct {
+	agent        *agent.Agent
+	turnCostStart float64
+}
 
 func (s *agentFooterSource) Model() string {
 	if s == nil || s.agent == nil {
@@ -405,6 +410,25 @@ func (s *agentFooterSource) TotalCost() float64 {
 		return 0
 	}
 	return s.agent.GetTotalCost()
+}
+
+// TurnCost returns the cost spent in the current turn (since the last
+// SetTurnCostStart). Satisfies the optional turnCostSource interface so
+// the footer can render a per-turn cost delta alongside the cumulative
+// session cost. CLI-UX-6.
+func (s *agentFooterSource) TurnCost() float64 {
+	if s == nil || s.agent == nil {
+		return 0
+	}
+	return s.agent.GetTotalCost() - s.turnCostStart
+}
+
+// SetTurnCostStart snapshots the cumulative cost at the start of a turn
+// so TurnCost can compute the per-turn delta.
+func (s *agentFooterSource) SetTurnCostStart(cost float64) {
+	if s != nil {
+		s.turnCostStart = cost
+	}
 }
 
 func (s *agentFooterSource) WorkingDir() string {

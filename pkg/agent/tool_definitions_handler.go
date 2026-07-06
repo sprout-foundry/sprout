@@ -6,6 +6,7 @@ import (
 
 	core "github.com/sprout-foundry/seed/core"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 // convertHandlerToSeedToolConfig converts a ToolHandler into a seed
@@ -152,7 +153,12 @@ func buildToolEnvFromAgent(agent *Agent) tools.ToolEnv {
 
 	env.EventBus = agent.GetEventBus()
 	env.WorkspaceRoot = agent.effectiveCwd()
-	env.OutputWriter = agent.OutputRouter()
+	// Gate on verbose mode — mirrors the gate in tool_security.go:ExecuteTool.
+	// In default/compact mode, raw tool output is suppressed so the user
+	// doesn't see read_file contents or full shell stdout dumped to terminal.
+	if cfg := agent.GetConfig(); cfg != nil && cfg.OutputVerbosity == configuration.OutputVerbosityVerbose {
+		env.OutputWriter = agent.OutputRouter()
+	}
 	env.Agent = agent
 	env.MaxTokensFunc = func() int { return agent.GetMaxContextTokens() }
 	env.ConfigManager = agent.GetConfigManager()

@@ -139,7 +139,7 @@ headers updated, but no new code work is required:
       vision_types.go, status_footer.go are all gone from the
       list).
 
-- [ ] **AUDIT-GAP-4:** SP-099 + SP-100 still genuinely open. The
+- [x] **AUDIT-GAP-4:** SP-099 + SP-100 still genuinely open. The
       audit confirms neither has shipped:
       - SP-099 (concurrency hardening, ~2 weeks, 3 phases)
       - SP-100 (WASM Tier 2a onnxruntime-web bridge, ~3 days)
@@ -638,10 +638,14 @@ has known gaps. These are follow-ups, not blockers._
 
 ### Items
 
-- [ ] **SP-111-3:** Checkpoint/resume for crash recovery. The steps workflow
+- [x] **SP-111-3:** Checkpoint/resume for crash recovery. The steps workflow
       persists state via `persistWorkflowCheckpoint`. The loop should do
       the same — save the current TODO line number so a restarted run
       picks up where it left off instead of starting over.
+      **SHIPPED 2026-07-05.** `persistLoopCheckpoint`/`loadLoopCheckpoint`/
+      `removeLoopCheckpoint` in `cmd/agent_workflow_runtime.go` already
+      wired into `runAgentWorkflowLoop` for checkpoint/resume across
+      budget interrupts, context cancellation, and item completion.
 - [ ] **SP-111-4:** Fix `run_automate` BPM process detachment. The
       `BackgroundProcessManager` uses `Setpgid` but processes still die
       when the agent tool call completes. Investigate whether stdin

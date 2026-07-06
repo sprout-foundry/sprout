@@ -646,11 +646,22 @@ has known gaps. These are follow-ups, not blockers._
       `removeLoopCheckpoint` in `cmd/agent_workflow_runtime.go` already
       wired into `runAgentWorkflowLoop` for checkpoint/resume across
       budget interrupts, context cancellation, and item completion.
-- [ ] **SP-111-4:** Fix `run_automate` BPM process detachment. The
+- [x] **SP-111-4:** Fix `run_automate` BPM process detachment. The
       `BackgroundProcessManager` uses `Setpgid` but processes still die
       when the agent tool call completes. Investigate whether stdin
       inheritance or session group teardown is the cause. `nohup` works
       as a workaround.
+      **SHIPPED 2026-07-05 at commit `fe885faa`.** Root cause: Go
+      1.24+ Linux seccomp blocks `setsid(2)` from child processes,
+      forcing the BPM fallback to Setpgid-only. Children stayed in
+      the parent's session and received SIGHUP from terminal
+      teardown. Fix: `signal.Ignore(syscall.SIGHUP)` in the parent
+      guarded by `sync.Once`, called only on the Setpgid fallback
+      path. Children inherit the SIG_IGN disposition at fork time
+      (same mechanism as `nohup`). The Setsid path is unchanged
+      because a new session already isolates the child.
+      Implementation in `pkg/agent_tools/background_process_signal_unix.go`;
+      6 new tests in `background_process_signal_unix_test.go`.
 
 ---
 

@@ -124,8 +124,6 @@ func (h *readFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 		}, fmt.Errorf("read file %q: %w", path, err)
 	}
 
-	// Publish tool end event
-
 	// Write to output writer if available
 	if env.OutputWriter != nil {
 		io.WriteString(env.OutputWriter, content)

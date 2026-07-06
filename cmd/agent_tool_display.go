@@ -619,3 +619,104 @@ func sanitizeArgForPreview(s string) string {
 	}
 	return strings.TrimSpace(string(out))
 }
+
+// editDiffMaxLines is the default number of diff lines to show in
+// non-verbose mode. Keep it tight — the user wants a glance, not a wall.
+const editDiffMaxLines = 8
+
+// computeEditDiff generates a compact unified diff from the old and new
+// strings for display in the terminal after an edit_file operation.
+//
+// Shows removed lines in red (-) and added lines in green (+), with up to
+// one context line before and after the changed block. Truncates to
+// maxLines when > 0; pass 0 for unlimited (verbose mode).
+func computeEditDiff(oldStr, newStr string, maxLines int) string {
+	oldLines := strings.Split(oldStr, "\n")
+	newLines := strings.Split(newStr, "\n")
+
+	// Compute common prefix and suffix to isolate the changed block
+	pre := 0
+	for pre < len(oldLines) && pre < len(newLines) && oldLines[pre] == newLines[pre] {
+		pre++
+	}
+	suf := 0
+	for suf < len(oldLines)-pre && suf < len(newLines)-pre &&
+		oldLines[len(oldLines)-1-suf] == newLines[len(newLines)-1-suf] {
+		suf++
+	}
+
+	oldMid := oldLines[pre : len(oldLines)-suf]
+	newMid := newLines[pre : len(newLines)-suf]
+
+	// Show 1 line of context before and after when available
+	ctxBefore := 0
+	if pre > 0 {
+		ctxBefore = 1
+	}
+	ctxAfter := 0
+	if suf > 0 && len(oldLines)-suf < len(oldLines) {
+		ctxAfter = 1
+	}
+
+	var b strings.Builder
+
+	// Context before
+	if ctxBefore > 0 {
+		b.WriteString(fmt.Sprintf("  %s%s%s\n", console.ColorDim, oldLines[pre-1], console.ColorReset))
+	}
+
+	// Removed lines
+	for _, l := range oldMid {
+		b.WriteString(fmt.Sprintf("%s- %s%s\n", console.ColorRed, l, console.ColorReset))
+	}
+
+	// Added lines
+	for _, l := range newMid {
+		b.WriteString(fmt.Sprintf("%s+ %s%s\n", console.ColorGreen, l, console.ColorReset))
+	}
+
+	// Context after
+	if ctxAfter > 0 {
+		b.WriteString(fmt.Sprintf("  %s%s%s\n", console.ColorDim, oldLines[len(oldLines)-suf], console.ColorReset))
+	}
+
+	result := b.String()
+	if result == "" {
+		return ""
+	}
+
+	// Truncate if needed
+	if maxLines > 0 {
+		lines := strings.Split(strings.TrimSuffix(result, "\n"), "\n")
+		if len(lines) > maxLines {
+			visible := strings.Join(lines[:maxLines], "\n")
+			return visible + fmt.Sprintf("\n  %s… %d more lines (use verbose mode for full diff)%s",
+				console.ColorDim, len(lines)-maxLines, console.ColorReset)
+		}
+	}
+
+	return result
+}
+
+// computeWriteFileDiff generates a preview of new file content written
+// via write_file. Shows the first few lines with green (+) markers,
+// truncated per maxLines (0 = unlimited, for verbose mode).
+func computeWriteFileDiff(content string, maxLines int) string {
+	lines := strings.Split(content, "\n")
+	if len(lines) == 0 || (len(lines) == 1 && lines[0] == "") {
+		return ""
+	}
+	if maxLines <= 0 {
+		maxLines = len(lines)
+	}
+	var b strings.Builder
+	for i, l := range lines {
+		if i >= maxLines {
+			b.WriteString(fmt.Sprintf("  %s… %d more lines (use verbose mode for full output)%s\n",
+				console.ColorDim, len(lines)-maxLines, console.ColorReset))
+			break
+		}
+		b.WriteString(fmt.Sprintf("%s+ %s%s\n", console.ColorGreen, l, console.ColorReset))
+	}
+	return b.String()
+}

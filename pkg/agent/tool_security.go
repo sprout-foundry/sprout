@@ -270,7 +270,12 @@ func ExecuteTool(ctx context.Context, toolName string, args map[string]interface
 		env.WorkspaceRoot = agent.effectiveCwd()
 		// SP-074-2: Route tool output through the agent's output system
 		// (PrintLineAsync → OutputRouter) instead of os.Stdout.
-		env.OutputWriter = newOutputRouter(agent)
+		// Gate on verbose mode: in default/compact, tool output is
+		// suppressed — the user doesn't need to see raw read_file
+		// contents or full shell stdout dumped to their terminal.
+		if cfg := agent.GetConfig(); cfg != nil && cfg.OutputVerbosity == configuration.OutputVerbosityVerbose {
+			env.OutputWriter = newOutputRouter(agent)
+		}
 		env.MaxTokensFunc = func() int { return agent.GetMaxContextTokens() }
 		env.ConfigManager = agent.GetConfigManager()
 		env.AskUser = newAgentAskUserService(agent)

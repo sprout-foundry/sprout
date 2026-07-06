@@ -38,9 +38,6 @@ func (h *searchFilesHandler) Validate(args map[string]any) error {
 }
 
 func (h *searchFilesHandler) Execute(ctx context.Context, env ToolEnv, args map[string]any) (ToolResult, error) {
-
-	// Event publishing (optional — runs only when EventBus is configured)
-
 	searchPattern, err := extractString(args, "search_pattern")
 	if err != nil {
 		return ToolResult{

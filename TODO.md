@@ -306,56 +306,6 @@ other items whose backing spec is now flipped.
 
 ---
 
-## SP-097: SP-062 CLI Background Shell — Remaining Surface Work
-
-_~1.5 days, 2 phases._ After merge, SP-062 is mostly done: BPM is
-wired, `pkg/agent_tools/shell.go` already handles
-`COMMAND_PROMOTED_TO_BACKGROUND`, the error message at line 198 already
-mentions BPM as an alternative. What's left is the **human-facing CLI
-surface** and the **LLM-facing tool schema** polish.
-
-### Phase 1: Standalone CLI monitor commands (~1 day)
-
-**New `cmd/shell_bg.go`:** mirrors the existing `cmd/automate.go`
-status/stop pattern but for the BackgroundProcessManager directly.
-
-- `sprout shell-bg list [--json]` — table of active BPM sessions with
-  ID, owner, command preview, runtime.
-- `sprout shell-bg status <id>` — full accumulated output (head +
-  tail), runtime, current status.
-- `sprout shell-bg stop <id> [--grace=10s]` — graceful stop with the
-  same SIGINT→SIGTERM→SIGKILL cascade as `cmd/automate.go::runAutomateStop`.
-- `sprout shell-bg stop-all` — same as above, all sessions.
-
-**Wire into `cmd/root.go` as `RootCmd.AddCommand(...)` so they appear
-in `--help` output and tab-complete.**
-
-Phase 2: Tool-schema update (~0.5 day)
-
-**Edit `pkg/agent/tool_registrations.go`:**
-- Find the `shell_command` tool description. Currently it warns that
-  `background`/`check_background`/`stop_background` may fail in CLI
-  mode. Replace that with: "All background operations work in CLI as
-  well as WebUI; promoted sessions are discoverable via
-  `sprout shell-bg list`."
-- Update the `description` field of the schema to mention the new CLI
-  commands so the LLM can suggest them.
-
-**Edit `pkg/skills/library/self-help/SKILL.md`:**
-- Remove the caveat about background mode being WebUI-only.
-
-### Phase order
-
-
-### Acceptance
-
-- `sprout shell-bg --help` lists the four commands.
-- A user running `sprout agent --no-web-ui "start dev server"` then
-  `sprout shell-bg status <id>` in another shell sees live output.
-- The string "background mode requires WebUI terminal manager" no
-  longer appears anywhere in the binary's strings table.
-
----
 
 ## SP-098: SP-075 Large-File Decomposition — Second Pass
 

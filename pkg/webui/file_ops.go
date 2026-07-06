@@ -134,10 +134,11 @@ func (ws *ReactWebServer) handleAPICreateFile(w http.ResponseWriter, r *http.Req
 	})
 }
 
-// handleAPIDeleteItem handles API requests for deleting files or directories
+// handleAPIDeleteItem handles API requests for deleting files or directories.
+// Accepts both POST (browser fetch default) and DELETE.
 func (ws *ReactWebServer) handleAPIDeleteItem(w http.ResponseWriter, r *http.Request) {
 	workspaceRoot := ws.getWorkspaceRootForRequest(r)
-	if r.Method != http.MethodDelete {
+	if r.Method != http.MethodPost && r.Method != http.MethodDelete {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{

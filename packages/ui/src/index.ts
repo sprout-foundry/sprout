@@ -104,8 +104,12 @@ export { default as MenuBar } from './components/MenuBar';
 export { default as Sidebar } from './components/Sidebar';
 export { default as CommandPalette } from './components/CommandPalette';
 export { default as Editor } from './components/Editor';
-export { Skeleton, SkeletonText } from './components/Skeleton';
+export { default as Skeleton, SkeletonText } from './components/Skeleton';
 export type { SkeletonProps, SkeletonTextProps } from './components/Skeleton';
+
+// ── Collapsible (SP-101-Phase 3, AUDIT-GAP-1) ──────────────────
+export { default as Collapsible } from './components/Collapsible';
+export type { CollapsibleProps } from './components/Collapsible';
 
 // ── Dialogs ───────────────────────────────────────────────────────────
 export { showThemedAlert, showThemedConfirm, showThemedPrompt } from './components/ThemedDialog';

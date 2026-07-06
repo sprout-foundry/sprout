@@ -1942,64 +1942,28 @@
 }
 
 /* ── Reasoning/Thinking Content ───────────────────────────────── */
+/*
+ * The reasoning toggle now uses the shared <Collapsible> primitive
+ * (see packages/ui/src/components/Collapsible.tsx). Summary, icon,
+ * chevron, and body styling are owned by `.collapsible__*` rules —
+ * we keep only `.reasoning-block` here because that classname is
+ * passed through onto Collapsible's outer <details> by MessageItem
+ * for visual continuity (bordered card) and so consumers can keep
+ * targeting `.reasoning-block` for layout hooks (margin-bottom).
+ *
+ * Note: the un-migrated deferred sites (ChatPanel stories,
+ * ReviewWorkspaceTab) still render raw <details>/<summary> markup
+ * with the legacy classes. Those sites are slated for migration in
+ * their own tickets — when they switch to Collapsible, their styling
+ * will be supplied by `.collapsible` defaults. Until then, this file
+ * no longer provides their visual rules.
+ */
 .reasoning-block {
   margin-bottom: 12px;
   border: 1px solid var(--border-color-light, #e2e8f0);
   border-radius: 8px;
   overflow: hidden;
   background: var(--bg-secondary, #f8fafc);
-}
-
-.reasoning-summary {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-secondary, #64748b);
-  user-select: none;
-  transition: background-color 0.15s ease;
-}
-
-.reasoning-summary:hover {
-  background: var(--bg-hover, #f1f5f9);
-}
-
-.reasoning-icon {
-  display: inline-flex;
-  align-items: center;
-  color: var(--text-tertiary);
-  flex-shrink: 0;
-}
-
-.reasoning-toggle {
-  margin-left: auto;
-  font-size: 10px;
-  transition: transform 0.2s ease;
-}
-
-.reasoning-block[open] .reasoning-toggle {
-  transform: rotate(90deg);
-}
-
-.reasoning-content {
-  padding: 0 12px 12px 12px;
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--text-tertiary, #94a3b8);
-  border-top: 1px solid var(--border-color-light, #e2e8f0);
-  margin-top: 0;
-  padding-top: 12px;
-}
-
-.reasoning-content pre {
-  background: var(--bg-tertiary, #f1f5f9);
-  padding: 8px;
-  border-radius: 6px;
-  overflow-x: auto;
-  font-size: 12px;
 }
 
 /* ── Virtual Scrolling (Virtuoso) ─────────────────────────────── */

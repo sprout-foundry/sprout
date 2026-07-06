@@ -19,6 +19,7 @@ import {
   CloudOff,
 } from 'lucide-react';
 import CommandInput from './CommandInput';
+import Collapsible from './Collapsible';
 import MessageSegments from './MessageSegments';
 import MessageContent from './MessageContent';
 import MessageBubble from './MessageBubble';
@@ -208,16 +209,17 @@ const MessageItem = memo(function MessageItem({
       {message.type === 'assistant' ? (
         <>
           {message.reasoning && message.reasoning.trim() && (
-            <details className="reasoning-block" open={false}>
-              <summary className="reasoning-summary">
-                <BrainCircuit size={13} className="reasoning-icon" />
-                <span>Reasoning</span>
-                <span className="reasoning-toggle">▶</span>
-              </summary>
-              <div className="reasoning-content">
-                <MessageContent content={message.reasoning} />
-              </div>
-            </details>
+            <Collapsible
+              className="reasoning-block"
+              title={
+                <>
+                  <BrainCircuit size={13} />
+                  <span>Reasoning</span>
+                </>
+              }
+            >
+              <MessageContent content={message.reasoning} />
+            </Collapsible>
           )}
           <MessageSegments
             content={message.content}

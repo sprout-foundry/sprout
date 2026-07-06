@@ -89,17 +89,21 @@
   background: var(--bg-code);
 }
 
-/* Raw unified diff toggle */
+/* Raw unified diff toggle
+ *
+ * SP-101-Phase 3 (AUDIT-GAP-1): the unified-diff toggle is now a
+ * <Collapsible variant="flush">, so `.edit-approval-raw-diff` is the
+ * outer <details> and the inner <summary> is provided by Collapsible
+ * (`.collapsible__summary`). The previous rule that styled a bare
+ * <summary> inside `.edit-approval-raw-diff` was removed: Collapsible
+ * owns summary styling (font-weight 600, 10/12px padding, text-primary
+ * color) and the consuming rule was overriding equal-specificity
+ * defaults with the old tertiary look.
+ */
 .edit-approval-raw-diff {
   margin-bottom: 12px;
   font-size: var(--text-xs);
   color: var(--text-tertiary);
-}
-
-.edit-approval-raw-diff summary {
-  cursor: pointer;
-  padding: 4px 0;
-  color: var(--text-secondary);
 }
 
 .edit-approval-raw-diff-pre {

@@ -19,7 +19,6 @@ export interface UseChatSessionManagerParams {
   activeRequestsRef: React.MutableRefObject<number>;
   activeChatIdRef: React.MutableRefObject<string | null>;
   queuedMessagesRef: React.MutableRefObject<string[]>;
-  setInputValue: React.Dispatch<React.SetStateAction<string>>;
   isProcessing: boolean;
 }
 
@@ -45,7 +44,6 @@ export function useChatSessionManager({
   activeRequestsRef,
   activeChatIdRef,
   queuedMessagesRef,
-  setInputValue,
   isProcessing,
 }: UseChatSessionManagerParams): UseChatSessionManagerReturn {
   const [queuedMessagesCount, setQueuedMessagesCount] = useState(0);
@@ -238,12 +236,12 @@ export function useChatSessionManager({
           ...prev,
           modelSelectionRequest: { provider: prev.provider },
         }));
-        setInputValue('');
+        setState((prev) => ({ inputValue: '' }));
         return;
       }
       if (lc === '/provider' || lc.startsWith('/provider ')) {
         window.dispatchEvent(new CustomEvent('sprout:open-settings-focus', { detail: { focus: 'provider' } }));
-        setInputValue('');
+        setState((prev) => ({ inputValue: '' }));
         return;
       }
 
@@ -287,7 +285,7 @@ export function useChatSessionManager({
           }));
         }
 
-        setInputValue('');
+        setState((prev) => ({ inputValue: '' }));
         return;
       }
 
@@ -305,7 +303,7 @@ export function useChatSessionManager({
           ]),
         }));
         await apiService.steerQuery(trimmedMessage, activeChatIdRef.current ?? undefined);
-        setInputValue('');
+        setState((prev) => ({ inputValue: '' }));
         return;
       }
 
@@ -319,7 +317,7 @@ export function useChatSessionManager({
       try {
         debugLog('[>>] Sending message:', trimmedMessage);
         await apiService.sendQuery(trimmedMessage, activeChatIdRef.current ?? undefined);
-        setInputValue('');
+        setState((prev) => ({ inputValue: '' }));
         debugLog('[OK] Message sent successfully');
       } catch (error) {
         console.error('[FAIL] Failed to send message:', error);
@@ -342,7 +340,7 @@ export function useChatSessionManager({
         }));
       }
     },
-    [apiService, activeRequestsRef, activeChatIdRef, queuedMessagesRef, setInputValue, setQueuedMessagesCount],
+    [apiService, activeRequestsRef, activeChatIdRef, queuedMessagesRef, setQueuedMessagesCount],
   );
 
   const handleQueueMessage = useCallback((message: string) => {

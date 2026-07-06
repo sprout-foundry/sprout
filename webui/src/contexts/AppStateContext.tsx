@@ -50,6 +50,7 @@ const DEFAULT_APP_STATE: AppState = {
   modelSelectionRequest: null,
   driftNotification: null,
   outputVerbosity: 'default' as const,
+  inputValue: '',
 };
 
 /**

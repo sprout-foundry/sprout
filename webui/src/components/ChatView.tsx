@@ -177,6 +177,43 @@ function Chat(props: ChatProps): JSX.Element {
   const showExpiredSessionRecovery =
     supportsSSH && !!lastError && lastError.toLowerCase().includes('ssh session not found or expired');
 
+  // Stable Footer/Header component references — prevents Virtuoso from
+  // unmounting/remounting Footer (ChatFooter → ToolTimelineBar) on every
+  // keystroke. Without useCallback, the inline arrow functions change
+  // reference on every render (e.g. during typing), causing ToolTimelineBar
+  // to lose internal state (shouldRender, completedAtRef) and its badges
+  // to flash in/out.
+  const VirtuosoHeader = useCallback(
+    () => <ChatHeader worktreePath={worktreePath} />,
+    [worktreePath],
+  );
+  const VirtuosoFooter = useCallback(
+    () => (
+      <ChatFooter
+        hasSubagentActivity={hasSubagentActivity}
+        subagentActivities={subagentActivities}
+        queryProgress={queryProgress as QueryProgress | null}
+        isProcessing={isProcessing}
+        filteredToolExecutions={filteredToolExecutions}
+        lastError={lastError}
+        showExpiredSessionRecovery={showExpiredSessionRecovery}
+        handleReloadWithoutSSHPath={handleReloadWithoutSSHPath}
+        currentTodos={currentTodos}
+      />
+    ),
+    [
+      hasSubagentActivity,
+      subagentActivities,
+      queryProgress,
+      isProcessing,
+      filteredToolExecutions,
+      lastError,
+      showExpiredSessionRecovery,
+      handleReloadWithoutSSHPath,
+      currentTodos,
+    ],
+  );
+
   const handleInsertAtCursor = useCallback(
     (text: string) => {
       const separator = inputValueRef.current ? '\n' : '';
@@ -285,24 +322,7 @@ function Chat(props: ChatProps): JSX.Element {
               increaseViewportBy={{ top: 400, bottom: 400 }}
               atBottomStateChange={setIsAtBottom}
               itemContent={renderMessageItem}
-              components={{
-                Header: () => <ChatHeader worktreePath={worktreePath} />,
-                Footer: () => (
-                  <ChatFooter
-                    hasSubagentActivity={hasSubagentActivity}
-                    subagentActivities={subagentActivities}
-                    queryProgress={
-                      queryProgress as QueryProgress | null /* ChatProps.queryProgress is `unknown` in shared pkg */
-                    }
-                    isProcessing={isProcessing}
-                    filteredToolExecutions={filteredToolExecutions}
-                    lastError={lastError}
-                    showExpiredSessionRecovery={showExpiredSessionRecovery}
-                    handleReloadWithoutSSHPath={handleReloadWithoutSSHPath}
-                    currentTodos={currentTodos}
-                  />
-                ),
-              }}
+              components={{ Header: VirtuosoHeader, Footer: VirtuosoFooter }}
               className="chat-virtuoso"
               style={{ height: '100%' }}
             />

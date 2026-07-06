@@ -48,6 +48,16 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	footer.Start()
 	defer footer.Stop()
 
+	// CLI-UX-12: register Alt+T (footer tooltip toggle) and Alt+V
+	// (output verbosity toggle) in the global keymap so power users
+	// can switch verbosity live without /settings + restart. The
+	// verbosity toggle reads cfg.OutputVerbosity on each press; the
+	// terminal subscriber's isVerbose()/isCompact() helpers pick up
+	// the change on the next tool event (live-read). Idempotent — the
+	// registry uses sync.Once, so multiple mode-bootstrap calls
+	// (interactive + queue) only register once.
+	console.RegisterKeymapForFooter(footer, chatAgent.GetConfigManager())
+
 	// Compact startup chrome: a single greeting line with the active
 	// provider/model so the first impression is "who am I talking to"
 	// rather than four rows of welcome / provider / model / blank.

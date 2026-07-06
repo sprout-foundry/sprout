@@ -6,12 +6,19 @@ package console
 //
 // The handler reads the footer size via the global StatusFooter when
 // available, falls back to a sane default, and toggles the tooltip.
+//
+// CLI-UX-12: register Alt+V → output_verbosity.toggle so power users
+// can switch between default and verbose output with a single shortcut.
+//
 // Initialization is idempotent — multiple RegisterKeymapForFooter calls
 // during startup are safe.
 
 import (
+	"fmt"
 	"os"
 	"sync"
+
+	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
 var (
@@ -19,12 +26,16 @@ var (
 	keymapDisabled bool
 )
 
-// RegisterKeymapForFooter wires Alt+T → footer-tooltip toggle into the
-// global keymap. Call from your REPL bootstrap (or wherever the agent
-// shell starts). Idempotent — calling twice doesn't double-register
-// because the keymap replaces by Action name.
-func RegisterKeymapForFooter(footer *StatusFooter) {
+// RegisterKeymapForFooter wires Alt+T → footer-tooltip toggle and
+// Alt+V → output-verbosity toggle into the global keymap. Call from
+// your REPL bootstrap (or wherever the agent shell starts).
+//
+// The cfg parameter is optional (nil falls through to a no-op handler
+// for the verbosity toggle). Idempotent — calling twice doesn't double-
+// register because the keymap replaces by Action name.
+func RegisterKeymapForFooter(footer *StatusFooter, cfg *configuration.Manager) {
 	keymapOnce.Do(func() {
+		// Alt+T: footer tooltip toggle (CLI-D-3)
 		GlobalKeymap().Register(KeymapEntry{
 			Key:         "Alt+T",
 			Action:      "footer.tooltip.toggle",
@@ -35,7 +46,56 @@ func RegisterKeymapForFooter(footer *StatusFooter) {
 				t.Toggle(cols, rows)
 			},
 		})
+
+		// Alt+V: output verbosity toggle (CLI-UX-12)
+		GlobalKeymap().Register(KeymapEntry{
+			Key:         "Alt+V",
+			Action:      "output_verbosity.toggle",
+			Description: "Cycle output verbosity: default ↔ verbose (more tool detail)",
+			Handler: func() {
+				if cfg == nil {
+					return
+				}
+				current := cfg.GetConfig()
+				if current == nil {
+					return
+				}
+				newValue := computeVerbosityToggle(current.OutputVerbosity)
+				if err := cfg.UpdateConfigNoSave(func(c *configuration.Config) error {
+					c.OutputVerbosity = newValue
+					return nil
+				}); err != nil {
+					return
+				}
+				label := verbosityToggleLabel(newValue)
+				fmt.Fprintln(os.Stderr, GlyphInfo.Prefix()+label)
+			},
+		})
 	})
+}
+
+// computeVerbosityToggle returns the next verbosity value for an Alt+V
+// press. The cycle is narrow: verbose ↔ default. Compact jumps to
+// verbose (not default) so power users always get more detail.
+func computeVerbosityToggle(current string) string {
+	switch current {
+	case configuration.OutputVerbosityVerbose:
+		return configuration.OutputVerbosityDefault
+	default:
+		// "default", "", "compact", or anything else → verbose
+		return configuration.OutputVerbosityVerbose
+	}
+}
+
+// verbosityToggleLabel returns the one-line confirmation message for
+// the given verbosity mode, matching the existing badge style.
+func verbosityToggleLabel(verbosity string) string {
+	switch verbosity {
+	case configuration.OutputVerbosityVerbose:
+		return "output verbosity: verbose (wider tool-arg previews · Alt+V to toggle)"
+	default:
+		return "output verbosity: default (Alt+V to toggle)"
+	}
 }
 
 var (

@@ -18,7 +18,7 @@ import { ApiService } from '../services/api';
 import { getWorkspaceSymbols } from '../services/api/editorApi';
 import type { ChatSession } from '../services/chatSessions';
 import type { AppState, PerChatState } from '../types/app';
-import { useAppStoreSetState } from '../contexts/AppStore';
+import { useAppStateField, useAppStoreSetState } from '../contexts/AppStore';
 import { useHotkeys } from '../contexts/HotkeyContext';
 import { fuzzyFilter } from '../utils/fuzzyMatch';
 import { useLog } from '../utils/log';
@@ -38,8 +38,6 @@ import Terminal from './Terminal';
 
 interface AppContentProps {
   state: AppState;
-  inputValue: string;
-  onInputChange: React.Dispatch<React.SetStateAction<string>>;
   isMobile: boolean;
   isTablet: boolean;
   isSidebarOpen: boolean;
@@ -90,8 +88,6 @@ interface AppContentProps {
 
 const AppContent: React.FC<AppContentProps> = ({
   state,
-  inputValue,
-  onInputChange,
   isMobile,
   isTablet,
   isSidebarOpen,
@@ -160,6 +156,20 @@ const AppContent: React.FC<AppContentProps> = ({
   const [commandPaletteMode, setCommandPaletteMode] = useState<PaletteMode>('all');
 
   const setAppState = useAppStoreSetState();
+
+  // Read inputValue from the store (not via props) so typing doesn't
+  // re-render AppInner and cascade prop-references to children.
+  const inputValue = useAppStateField('inputValue');
+  const setInputValue = useCallback(
+    (updater: React.SetStateAction<string>) => {
+      setAppState((prev) => {
+        const nextValue = typeof updater === 'function' ? updater(prev.inputValue) : updater;
+        return { inputValue: nextValue };
+      });
+    },
+    [setAppState],
+  );
+
   // Opens the ModelSelectionModal for the currently active provider when
   // the user clicks the model name in the status bar. The modal handles
   // the actual swap via the existing handleModelSelectionResponse path.
@@ -566,7 +576,7 @@ const AppContent: React.FC<AppContentProps> = ({
       onQueueMessage,
       queuedMessagesCount,
       inputValue,
-      onInputChange,
+      onInputChange: setInputValue,
       isProcessing: state.isProcessing,
       lastError: state.lastError,
       toolExecutions: state.toolExecutions,
@@ -587,7 +597,7 @@ const AppContent: React.FC<AppContentProps> = ({
       onQueueMessage,
       queuedMessagesCount,
       inputValue,
-      onInputChange,
+      setInputValue,
       state.isProcessing,
       state.lastError,
       state.toolExecutions,

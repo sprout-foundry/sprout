@@ -34,6 +34,13 @@ type ClientInterface interface {
 	// extraction outputs unsuitable for free-form multimodal conversation.
 	// Defaults to true when SupportsVision() is true.
 	SupportsConversationalVision() bool
+	// VisionCapabilities returns the per-provider vision limits (max bytes
+	// per image, max images per request, max dimension, supported detail
+	// tiers). Zero-valued fields mean "unknown — use default". Concrete
+	// implementations populate this with provider-specific data; callers
+	// should pass the result through VisionCapabilitiesOrDefault() before
+	// reading individual fields. SP-103-D3 / AUDIT-GAP-2.
+	VisionCapabilities() VisionCapabilities
 	GetVisionModel() string
 	SendVisionRequest(ctx context.Context, messages []Message, tools []Tool, reasoning string, disableThinking bool) (*ChatResponse, error)
 	// TPS (Tokens Per Second) tracking methods

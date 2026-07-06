@@ -100,6 +100,13 @@ func (m *ctxVisionMockClient) GetAverageTPS() float64          { return 0 }
 func (m *ctxVisionMockClient) GetTPSStats() map[string]float64 { return nil }
 func (m *ctxVisionMockClient) ResetTPSStats()                  {}
 
+// VisionCapabilities returns the safe defaults — this ctx-propagation mock
+// is not vision-tuning-aware. Method exists to satisfy api.ClientInterface
+// after SP-103-D3 / AUDIT-GAP-2.
+func (m *ctxVisionMockClient) VisionCapabilities() api.VisionCapabilities {
+	return api.VisionCapabilitiesDefault()
+}
+
 // --- helpers ---
 
 // writeTempPNG creates a minimal valid PNG file and returns its path.

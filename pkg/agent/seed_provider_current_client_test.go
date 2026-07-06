@@ -196,3 +196,10 @@ func (m *MockClient) GetTPSStats() map[string]float64 {
 func (m *MockClient) ResetTPSStats() {
 	// No-op for mock
 }
+
+// VisionCapabilities returns the safe defaults — this mock is a minimal
+// stand-in for sprout-provider tests, not a vision-tuning exercise.
+// SP-103-D3 / AUDIT-GAP-2.
+func (m *MockClient) VisionCapabilities() api.VisionCapabilities {
+	return api.VisionCapabilitiesDefault()
+}

@@ -72,6 +72,13 @@ func (m *streamingTestClient) ResetTPSStats()                                  {
 func (m *streamingTestClient) RegisterPastedImages(map[string][]api.ImageData) {}
 func (m *streamingTestClient) ClearPastedImages()                              {}
 
+// VisionCapabilities returns the safe defaults — this streaming-test mock
+// focuses on callback wiring, not capability tuning. Method exists to
+// satisfy api.ClientInterface after SP-103-D3 / AUDIT-GAP-2.
+func (m *streamingTestClient) VisionCapabilities() api.VisionCapabilities {
+	return api.VisionCapabilitiesDefault()
+}
+
 // TestDoChatStream_PublishesStreamChunkEvents verifies that doChatStream
 // routes streaming chunks through OutputRouter.RouteStreamChunk so they
 // appear on the EventBus as stream_chunk events.

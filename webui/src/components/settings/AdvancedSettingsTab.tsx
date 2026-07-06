@@ -2,11 +2,13 @@
  * AdvancedSettingsTab — collapsible Advanced section combining the thin
  * Performance / Commit & Review / OCR tabs into one (per SP-017).
  *
- * Each subsection is wrapped in a native `<details>` element so users
+ * Each subsection is wrapped in <Collapsible variant="flush"> so users
  * expand what they need. The same renderer hooks and config keys are
  * used as the original tabs, so all field writes go to the exact same
- * config paths and no behavior changes.
+ * config paths and no behavior changes. AUDIT-GAP-1: replaced the
+ * native <details> elements with the shared Collapsible primitive.
  */
+import { Collapsible } from '@sprout/ui';
 import type { SproutSettings, ProviderOption } from '../../services/api';
 import { getNestedValue } from './settingsHelpers';
 import type { FieldRenderers } from './useSettingsFieldRenderers';
@@ -47,8 +49,7 @@ export default function AdvancedSettingsTab({
       </div>
 
       {/* Performance */}
-      <details className="advanced-collapsible">
-        <summary>Performance</summary>
+      <Collapsible title="Performance" variant="flush">
         <div className="settings-section-spaced">
           <h4>API Timeouts</h4>
           {renderNumberInput('api_timeouts.connection_timeout_sec', 'Connection timeout (s)', 1, 300)}
@@ -84,11 +85,10 @@ export default function AdvancedSettingsTab({
             )}
           </div>
         </div>
-      </details>
+      </Collapsible>
 
       {/* Commit & Review */}
-      <details className="advanced-collapsible">
-        <summary>Commit &amp; Review</summary>
+      <Collapsible title="Commit & Review" variant="flush">
         <div className="settings-section-spaced">
           <h4>Commit Message Generation</h4>
           <div className="config-help settings-help-spaced">
@@ -172,18 +172,17 @@ export default function AdvancedSettingsTab({
             </div>
           </div>
         </div>
-      </details>
+      </Collapsible>
 
       {/* PDF OCR */}
-      <details className="advanced-collapsible">
-        <summary>PDF OCR</summary>
+      <Collapsible title="PDF OCR" variant="flush">
         <div className="settings-section-spaced">
           <h4>PDF OCR</h4>
           {renderToggle('pdf_ocr_enabled', 'Enable PDF OCR')}
           {renderTextInput('pdf_ocr_provider', 'Provider', 'zai, minimax, openrouter…')}
           {renderTextInput('pdf_ocr_model', 'Model', 'GLM-4.6V, MiniMax-VL, qwen-vl…')}
         </div>
-      </details>
+      </Collapsible>
     </div>
   );
 }

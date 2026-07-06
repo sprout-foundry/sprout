@@ -306,9 +306,9 @@ func TestRegisterKeymapForFooter_Idempotent(t *testing.T) {
 		}
 	})
 
-	RegisterKeymapForFooter(nil)
-	RegisterKeymapForFooter(nil)
-	RegisterKeymapForFooter(nil)
+	RegisterKeymapForFooter(nil, nil)
+	RegisterKeymapForFooter(nil, nil)
+	RegisterKeymapForFooter(nil, nil)
 
 	// Count entries with action footer.tooltip.toggle.
 	count := 0

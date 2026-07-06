@@ -4,6 +4,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -93,6 +94,56 @@ func (s *terminalSubscriberState) verboseMaxArgLen() int {
 		return verbosePreviewWidth
 	}
 	return 0
+}
+
+// maybeDisplayEditDiff shows a compact diff for file-editing tools
+// (edit_file, write_file). In verbose mode the full diff is shown; in
+// default mode it's truncated to editDiffMaxLines. Compact mode reaches
+// this only for errors — successes return early with just the diffstat.
+func (s *terminalSubscriberState) maybeDisplayEditDiff(toolName, argsJSON string) {
+	switch toolName {
+	case "edit_file":
+		oldStr := extractStrArg(argsJSON, "old_str")
+		newStr := extractStrArg(argsJSON, "new_str")
+		if oldStr == "" && newStr == "" {
+			return
+		}
+		maxLines := editDiffMaxLines
+		if s.isVerbose() {
+			maxLines = 0 // unlimited
+		}
+		diff := computeEditDiff(oldStr, newStr, maxLines)
+		if diff != "" {
+			fmt.Fprint(os.Stderr, diff)
+		}
+	case "write_file":
+		content := extractStrArg(argsJSON, "content")
+		if content == "" {
+			return
+		}
+		maxLines := editDiffMaxLines
+		if s.isVerbose() {
+			maxLines = 0
+		}
+		diff := computeWriteFileDiff(content, maxLines)
+		if diff != "" {
+			fmt.Fprint(os.Stderr, diff)
+		}
+	}
+}
+
+// extractStrArg extracts a string field from a JSON argument blob.
+// Returns "" if the field is missing or parsing fails.
+func extractStrArg(argsJSON, key string) string {
+	if argsJSON == "" {
+		return ""
+	}
+	var args map[string]interface{}
+	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
+		return ""
+	}
+	s, _ := args[key].(string)
+	return s
 }
 
 // newTerminalSubscriberState initializes a fresh subscriber state with
@@ -334,6 +385,12 @@ func (s *terminalSubscriberState) handleToolEndEvent(data map[string]interface{}
 		}
 	}
 	footer.Refresh()
+
+	// Display edit diff for file-editing tools in default/verbose mode.
+	// Compact mode already showed just the diffstat and returned early.
+	if status == "completed" && args != "" {
+		s.maybeDisplayEditDiff(name, args)
+	}
 }
 
 // handleQueryStartedEvent processes a QueryStarted event (CLI-UX-5).

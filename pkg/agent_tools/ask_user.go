@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/clihooks"
+	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/events"
 
 	"golang.org/x/term"
@@ -200,6 +201,13 @@ func stdinIsTTY() bool {
 // Renders options as a numbered list when present and accepts either an
 // index, the option label, or the option value as the response.
 //
+// On a TTY with single-select options (MultiSelect == false), the
+// options are rendered as an arrow-key picker (console.SelectList)
+// with a trailing "Type your own answer…" item that falls through to
+// the legacy freeform input reader. Multi-select prompts and prompts
+// on a non-TTY stdin fall back to the numbered list + freeform text
+// path so the tool remains scriptable.
+//
 // Returns ErrAskUserNoChannel if stdin is not a TTY (background daemon,
 // closed stdin, piped) so callers can distinguish "no input channel"
 // from a transient I/O error.
@@ -222,6 +230,15 @@ func AskUser(req AskUserRequest) (string, error) {
 	clihooks.SuspendStreaming()
 	defer clihooks.ResumeSteer()
 	defer clihooks.ResumeStreaming()
+
+	// TTY single-select path: use the arrow-key picker instead of the
+	// numbered list. We only branch here when the input channel is a
+	// real TTY AND we're not in multi-select mode (SelectList doesn't
+	// support multi-select, and the legacy "1,3" comma-list text input
+	// remains the canonical path for that case).
+	if len(req.Options) > 0 && !req.MultiSelect {
+		return runAskUserSelectList(context.Background(), req)
+	}
 
 	renderCLIPrompt(os.Stdout, req)
 
@@ -337,6 +354,111 @@ func renderCLIPrompt(w io.Writer, req AskUserRequest) {
 	} else {
 		fmt.Fprint(w, "> ")
 	}
+}
+
+// renderCLIFraming writes the question chrome (divider / optional header /
+// question / closing divider) to w WITHOUT the option list. The TTY
+// single-select path uses this to print the question before launching
+// the arrow-key picker, which renders its own options pane.
+//
+// Kept visually consistent with renderCLIPrompt so users perceive the
+// two prompts as the same surface — only the input mechanism differs.
+func renderCLIFraming(w io.Writer, req AskUserRequest) {
+	const bar = "────────────────────────────────────────────────"
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, bar)
+	if h := strings.TrimSpace(req.Header); h != "" {
+		fmt.Fprintf(w, "  %s\n", h)
+		fmt.Fprintln(w, bar)
+	}
+	fmt.Fprintf(w, "  %s\n", req.Question)
+	fmt.Fprintln(w, bar)
+}
+
+// askUserCustomAnswerSentinel is the SelectItem.Value we attach to the
+// "Type your own answer…" item in the single-select picker. When the
+// user picks that item, we fall through to the legacy freeform input
+// path so the LLM's structured options don't trap the human into a
+// canned response. The value is intentionally a magic string (not a
+// valid label match) so a real option can never collide with it.
+const askUserCustomAnswerSentinel = "__custom__"
+
+// runAskUserSelectList drives the TTY single-select picker. It prints
+// the question framing, runs console.SelectList over the options, and
+// returns the selected option's Value on confirm. On Esc/Ctrl+C it
+// returns a "user cancelled selection" error matching the spirit of
+// the legacy prompt (Esc cancels; the default is not auto-applied).
+//
+// Free-text fallback: the picker gets a trailing "Type your own
+// answer…" item. Picking it falls through to the legacy bufio reader
+// so the user can still write arbitrary text — the LLM might have
+// given options but the human wants to answer differently.
+//
+// This path is only used when stdin is a TTY and MultiSelect is false;
+// callers (AskUser) gate on those conditions before invoking.
+func runAskUserSelectList(ctx context.Context, req AskUserRequest) (string, error) {
+	items := make([]console.SelectItem, 0, len(req.Options)+1)
+	for _, opt := range req.Options {
+		items = append(items, console.SelectItem{
+			Label:  opt.Label,
+			Detail: opt.Description,
+			Value:  optionValue(opt),
+		})
+	}
+	// Always offer a free-text escape hatch. The item isn't a real
+	// option, so we detect it via the sentinel value below and route
+	// the user to the legacy freeform input path.
+	items = append(items, console.SelectItem{
+		Label:  "Type your own answer…",
+		Detail: "write a custom response",
+		Value:  askUserCustomAnswerSentinel,
+	})
+
+	renderCLIFraming(os.Stdout, req)
+
+	sl := console.NewSelectList(console.SelectListOptions{
+		// Title is intentionally empty — renderCLIFraming already shows
+		// the question/header above the picker, and SelectList would just
+		// duplicate it.
+		Title:      "",
+		Items:      items,
+		Searchable: len(items) > 5,
+		PageSize:   10,
+	})
+
+	value, ok, err := sl.Run(ctx)
+	if err != nil {
+		return "", err
+	}
+	if !ok {
+		// Esc / Ctrl+C: treat as cancellation. Note this differs from the
+		// legacy "Enter on empty → default" behavior — the picker has no
+		// notion of "submit blank", so Esc is the only way out without
+		// picking. Returning an error surfaces the cancel to the caller
+		// (the LLM), which is the right semantic.
+		return "", fmt.Errorf("user cancelled selection")
+	}
+
+	// Free-text fallback: drop into the legacy reader so the user can
+	// write whatever they want. The framing is already on screen; we
+	// just append a "> " prompt below the (now-cleared) picker rows.
+	if value == askUserCustomAnswerSentinel {
+		fmt.Fprint(os.Stdout, "> ")
+		reader := bufio.NewReader(os.Stdin)
+		answer, err := readFreeformInput(reader)
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return "", ErrAskUserNoChannel
+			}
+			return "", fmt.Errorf("read user input: %w", err)
+		}
+		if answer == "" && req.Default != "" {
+			return req.Default, nil
+		}
+		return answer, nil
+	}
+
+	return value, nil
 }
 
 func toEventRequest(req AskUserRequest) events.AskUserRequest {

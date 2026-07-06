@@ -4,9 +4,10 @@ package cmd
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
-	"strconv"
+	"sort"
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
@@ -35,27 +36,42 @@ func runMCPRemove(serverName string) error {
 			return nil
 		}
 
-		fmt.Println("Available servers:")
-		i := 1
+		// Build a stable, alphabetically-ordered list so the picker is
+		// deterministic across runs (the map iteration order is not).
 		serverNames := make([]string, 0, len(mcpConfig.Servers))
 		for name := range mcpConfig.Servers {
-			fmt.Printf("%d. %s\n", i, name)
 			serverNames = append(serverNames, name)
-			i++
+		}
+		sort.Strings(serverNames)
+
+		items := make([]console.SelectItem, 0, len(serverNames))
+		for _, name := range serverNames {
+			srv := mcpConfig.Servers[name]
+			items = append(items, console.SelectItem{
+				Label:  name,
+				Detail: srv.Type,
+				Value:  name,
+			})
 		}
 
-		fmt.Print("Select server to remove (1-" + strconv.Itoa(len(serverNames)) + "): ")
-		choice, err := reader.ReadString('\n')
+		sl := console.NewSelectList(console.SelectListOptions{
+			Title:      "Pick a server to remove",
+			Items:      items,
+			Searchable: true,
+			PageSize:   10,
+		})
+
+		ctx := context.Background()
+		value, ok, err := sl.Run(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to read input: %w", err)
+			return err
 		}
-
-		choiceNum, err := strconv.Atoi(strings.TrimSpace(choice))
-		if err != nil || choiceNum < 1 || choiceNum > len(serverNames) {
-			return fmt.Errorf("invalid choice: %s", choice)
+		if !ok {
+			fmt.Println()
+			console.GlyphInfo.Print("Removal cancelled.")
+			return nil
 		}
-
-		serverName = serverNames[choiceNum-1]
+		serverName = value
 	}
 
 	// Check if server exists

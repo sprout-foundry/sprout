@@ -4,6 +4,7 @@ package cmd
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -52,30 +53,54 @@ func runMCPAdd() error {
 		visibleTemplates = append(visibleTemplates, t)
 	}
 
-	fmt.Println("Select server type:")
-	for i, t := range visibleTemplates {
-		fmt.Printf("%d. %s\n    %s\n", i+1, t.Name, t.Description)
+	items := make([]console.SelectItem, 0, len(visibleTemplates)+1)
+	for _, t := range visibleTemplates {
+		items = append(items, console.SelectItem{
+			Label:  t.Name,
+			Detail: t.Description,
+			Value:  t.ID,
+		})
 	}
-	fmt.Printf("%d. Custom MCP Server (stdio or http)\n", len(visibleTemplates)+1)
-	fmt.Print("Choice: ")
+	items = append(items, console.SelectItem{
+		Label:  "Custom MCP Server (stdio or http)",
+		Detail: "configure manually",
+		Value:  "__custom__",
+	})
 
-	choice, err := reader.ReadString('\n')
+	sl := console.NewSelectList(console.SelectListOptions{
+		Title:      "Pick a server type",
+		Items:      items,
+		Searchable: true,
+		PageSize:   10,
+	})
+
+	ctx := context.Background()
+	value, ok, err := sl.Run(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to read input: %w", err)
+		return err
 	}
-	choice = strings.TrimSpace(choice)
-
-	choiceNum, err := strconv.Atoi(choice)
-	if err != nil || choiceNum < 1 || choiceNum > len(visibleTemplates)+1 {
-		return fmt.Errorf("invalid choice: %s", choice)
+	if !ok {
+		fmt.Println()
+		console.GlyphInfo.Print("Setup cancelled.")
+		return nil
 	}
 
 	// Handle custom server option
-	if choiceNum == len(visibleTemplates)+1 {
+	if value == "__custom__" {
 		return setupCustomMCPServer(&mcpConfig, reader, registry)
 	}
 
-	selectedTemplate := visibleTemplates[choiceNum-1]
+	// Find the matching template by ID (picker returns the template's ID).
+	var selectedTemplate mcp.MCPServerTemplate
+	for _, t := range visibleTemplates {
+		if t.ID == value {
+			selectedTemplate = t
+			break
+		}
+	}
+	if selectedTemplate.ID == "" {
+		return fmt.Errorf("unknown template: %s", value)
+	}
 
 	// Prompt for server name (with default from template)
 	serverName := selectedTemplate.ID

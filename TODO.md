@@ -603,9 +603,17 @@ Gemini CLI, Aider, Cursor, gh, dagger). Findings prioritized by impact.
 
 - [ ] **CLI-UX-10:** Keyboard shortcut affordances row. No visible hint that
       Ctrl+C interrupts, / opens steer. Dim toggleable help row above footer.
-- [ ] **CLI-UX-12:** Expand-on-demand for truncated tool args. Long args
-      truncate to 70-80 chars. Power-user keybind (e.g. `v` on tool row) or
-      verbose mode to show full args.
+- [x] **CLI-UX-12:** Expand-on-demand for truncated tool args. ALREADY
+      IMPLEMENTED as `Alt+V` live toggle between `default` and `verbose`
+      verbosity. Subscribed via `RegisterKeymapForFooter` in
+      `pkg/console/keymap_registration.go` (handler at line 50) and wired
+      into both interactive and queue REPL bootstraps
+      (`cmd/agent_mode_interactive.go:54`, `cmd/agent_mode_queue.go:39`).
+      Verbosity is already live-read by `isVerbose()` /
+      `isVerbose()` (`cmd/agent_terminal_subscriber.go:82`), so the next
+      tool event after the toggle uses the bumped 200-char preview width.
+      4 tests in `pkg/console/keymap_registration_test.go` lock the
+      cycle logic + 200-char preview width in. See SP-116.
 
 ### Recommended starting points
 CLI-UX-2 (live elapsed) and CLI-UX-1 (verbose mode) — highest impact-per-effort,

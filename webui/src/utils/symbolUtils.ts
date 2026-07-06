@@ -6,7 +6,7 @@ export interface SymbolInfo {
   kind: SymbolKind;
 }
 
-export type SymbolKind = 'function' | 'method' | 'class' | 'variable' | 'type' | 'constant' | 'interface';
+export type SymbolKind = 'function' | 'method' | 'class' | 'variable' | 'type' | 'constant' | 'interface' | 'heading';
 
 // ── Constants ────────────────────────────────────────────────────────────
 
@@ -20,6 +20,7 @@ export const KIND_ICONS: Record<SymbolKind, string> = {
   type: 'T',
   constant: 'K',
   interface: 'I',
+  heading: '#',
 };
 
 /** Kinds that can act as scope containers for the breadcrumb. */
@@ -28,6 +29,7 @@ export const CONTAINER_KINDS: ReadonlySet<SymbolKind> = new Set<SymbolKind>([
   'method',
   'class',
   'interface',
+  'heading',
 ]);
 
 // ── Language-specific patterns ───────────────────────────────────────────
@@ -184,6 +186,26 @@ const GENERIC_PATTERNS: PatternEntry[] = [
   ],
 ];
 
+/**
+ * Markdown heading patterns: # through ######.
+ * Headings are treated as container symbols — their scope extends to the next
+ * heading of equal or shallower level (or end of file).
+ */
+const MARKDOWN_PATTERNS: PatternEntry[] = [
+  // ATX headings: # Title through ###### Title
+  // Capture group 1 = heading text (without leading/trailing # markers)
+  [/^#{1,6}\s+(.+?)(?:\s+#+\s*)?$/, 'heading'],
+];
+
+/**
+ * Detect the heading level for a markdown line already matched by the pattern.
+ * Returns 1–6 for # through ######, 0 if the line is not a heading.
+ */
+function markdownHeadingLevel(line: string): number {
+  const m = /^(#{1,6})\s/.exec(line);
+  return m ? m[1].length : 0;
+}
+
 // ── WASM-backed extraction (tree-sitter) ─────────────────────────────────
 
 /** Symbol kinds returned by pkg/ast/symbols.go's guessKind. Anything outside
@@ -337,6 +359,8 @@ export function extractSymbols(content: string, languageId?: string): SymbolInfo
     patterns = TYPESCRIPT_PATTERNS;
   } else if (ext === '.js' || ext === '.jsx' || ext === '.mjs') {
     patterns = JAVASCRIPT_PATTERNS;
+  } else if (ext === '.md' || ext === '.mdx') {
+    patterns = MARKDOWN_PATTERNS;
   } else {
     patterns = GENERIC_PATTERNS;
   }
@@ -428,6 +452,9 @@ function rememberSymbols(key: string, symbols: SymbolInfo[]): void {
 export function findSymbolScopeEnd(lines: string[], startLineIndex: number, languageId?: string): number {
   if (languageId === '.py') {
     return findPythonScopeEnd(lines, startLineIndex);
+  }
+  if (languageId === '.md' || languageId === '.mdx') {
+    return findMarkdownScopeEnd(lines, startLineIndex);
   }
   let braceCount = 0;
   let foundFirstBrace = false;
@@ -546,6 +573,37 @@ function findPythonScopeEnd(lines: string[], startLineIndex: number): number {
     // Line at or less than declaration indentation → scope ends
     if (lineIndent <= declIndent) {
       return i;
+    }
+  }
+
+  return lines.length;
+}
+
+/**
+ * Find markdown heading scope end using heading levels.
+ * A heading's scope extends from its line to the next line that has a heading
+ * of equal or shallower level (or end of file).
+ *
+ * Example:
+ *   # H1            ← level 1, scope: lines 1–7
+ *   text
+ *   ## H2           ← level 2, scope: lines 3–4
+ *   more text
+ *   ### H3          ← level 3, scope: line 5
+ *   ## Another H2   ← level 2, scope: lines 6–7
+ *   text
+ *
+ * For non-heading lines or when the scope is unbounded, returns lines.length.
+ */
+function findMarkdownScopeEnd(lines: string[], startLineIndex: number): number {
+  const declLine = lines[startLineIndex] || '';
+  const level = markdownHeadingLevel(declLine);
+  if (level === 0) return lines.length; // not actually a heading
+
+  for (let i = startLineIndex + 1; i < lines.length; i++) {
+    const lineLevel = markdownHeadingLevel(lines[i]);
+    if (lineLevel > 0 && lineLevel <= level) {
+      return i; // 1-based inclusive end (the scope ends before this line)
     }
   }
 

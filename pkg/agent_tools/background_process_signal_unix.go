@@ -5,6 +5,7 @@ package tools
 import (
 	"os"
 	"os/exec"
+	"os/signal"
 	"strings"
 	"sync"
 	"syscall"
@@ -14,6 +15,13 @@ var (
 	setsidShellOnce sync.Once
 	setsidForShell  bool
 )
+
+// sighupIgnored is a sync.Once that ignores SIGHUP for the parent process
+// when the Setpgid fallback path is used. The ignore disposition is inherited
+// by child processes at fork time, so children also ignore SIGHUP (same
+// effect as nohup). Once called, the disposition persists for the lifetime
+// of the process.
+var sighupIgnored sync.Once
 
 // probeSetsidSupport checks whether setsid(2) is available for child
 // processes started through the user's shell. Go 1.24+ on some Linux
@@ -86,7 +94,10 @@ func setProcessGroup(cmd *exec.Cmd) {
 // fallback is safe because the caller also:
 //   1. Closes stdin (cmd.Stdin = nil → /dev/null in Go 1.20+)
 //   2. Redirects stdout/stderr to a file (not the parent's terminal)
-// See StartWithOptions in background_process.go.
+//   3. Ignores SIGHUP in the parent before fork so the child inherits
+//      the ignore disposition (same effect as nohup). The ignore is
+//      applied once via sync.Once; once set, all future children also
+//      inherit SIG_IGN.
 func detachFromSession(cmd *exec.Cmd) {
 	if cmd.SysProcAttr == nil {
 		cmd.SysProcAttr = &syscall.SysProcAttr{}
@@ -99,10 +110,15 @@ func detachFromSession(cmd *exec.Cmd) {
 	} else {
 		// Fall back to a new process group only. The child stays in
 		// the parent's session, so it can still receive SIGHUP from
-		// terminal teardown of the foreground process group. The
-		// caller mitigates this by closing stdin and redirecting
-		// stdout/stderr to a file.
+		// terminal teardown. Mitigate by ignoring SIGHUP in the parent
+		// before fork — the child inherits the SIG_IGN disposition
+		// (same mechanism as nohup). Use sync.Once so the ignore is
+		// applied only once; the disposition persists for all future
+		// children.
 		cmd.SysProcAttr.Setpgid = true
+		sighupIgnored.Do(func() {
+			signal.Ignore(syscall.SIGHUP)
+		})
 	}
 }
 

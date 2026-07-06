@@ -80,18 +80,26 @@ headers updated, but no new code work is required:
       .detail` accepted values), Ollama local (from model
       manifest)._ **SHIPPED 2026-07-05 at commit `368f6dd0`.**
 
-- [ ] **AUDIT-GAP-3:** SP-098 stale audit table. The 2026-06-30
+- [x] **AUDIT-GAP-3:** SP-098 stale audit table. The 2026-06-30
       file-over-800-lines table is stale — 11 of 13 originally
       listed files (`pkg/console/steer_input.go`, `pkg/lsp/semantic
       /go_adapter.go`, `pkg/agent_tools/structured_helpers.go`,
       etc.) have been split/renamed/removed since. Today's
-      offenders (27 files >800 lines: `pkg/console/markdown_
+      offenders (29 files >800 lines: `pkg/console/markdown_
       formatter.go` 1217, `pkg/configuration/config_risk_subagent
       .go` 1035, `pkg/webui/websocket_handler.go` 1008, etc.) are
       a different set. Refresh the SP-098 audit table to current
       state. _~0.25 day. Re-run `wc -l pkg/**/*.go` excluding
       tests, sort descending, take top 25, write the new table
       into TODO.md SP-098 section._
+      **SHIPPED 2026-07-05.** Refreshed the SP-098 "Current
+      state" table with the actual current top-25 ≥800-line
+      files (29 total at or above 800), each with a concrete
+      split recommendation. Most pre-2026-06-30 worst offenders
+      have been split since the original spec was written
+      (steer_input.go, structured_helpers.go, go_adapter.go,
+      vision_types.go, status_footer.go are all gone from the
+      list).
 
 - [ ] **AUDIT-GAP-4:** SP-099 + SP-100 still genuinely open. The
       audit confirms neither has shipped:
@@ -400,24 +408,43 @@ already split since the spec was written (2026-06-15): `cmd/agent_modes.go`
 new batch of files has grown large. The runner should split these in
 priority order.
 
-### Current state (2026-06-30 audit)
+### Current state (2026-07-05 audit — refresh)
 
 | File | Lines | Recommendation |
 |---|---|---|
-| `pkg/console/steer_input.go` | 1536 | Extract `streak.go` (typed streak + persistence) and `autocomplete.go` (tab completion + ghost text) — keep core loop in place. |
-| `pkg/agent_tools/structured_helpers.go` | 1190 | Split JSON / YAML / TOML helpers into `structured_json.go` etc. by format. |
-| `pkg/lsp/semantic/go_adapter.go` | 1188 | Extract per-symbol-kind scanners (struct, interface, func) into separate files. |
-| `pkg/agent_tools/vision_types.go` | 1188 | Split type defs vs. prompt-builder helpers. |
-| `pkg/console/status_footer.go` | 1132 | Extract token / cost / model-status into focused files. |
-| `cmd/mcp.go` | 1105 | Extract per-tool MCP command surfaces. |
-| `cmd/automate.go` | 1070 | Extract status / stop / list sub-commands. |
-| `pkg/mcp/client.go` | 1060 | Extract transport / protocol / resource-readers. |
-| `pkg/ast/symbols.go` | 1040 | Split per-language scanners. |
-| `pkg/agent/tool_handlers_subagent_spawn.go` | 990 | Per-spec: spawn vs. build vs. run. |
-| `pkg/agent/seed_tool_registry.go` | 982 | Group tool descriptions by domain. |
-| `webui/src/components/Sidebar.tsx` | 851 | Extract section components. |
-| `webui/src/components/AppContent.tsx` | 843 | Extract chat vs. editor vs. terminal layouts. |
-| `webui/src/components/PaneLayoutManager.tsx` | 732 | Extract per-pane logic. |
+| `pkg/console/markdown_formatter.go` | 1217 | Split: `markdown_table.go` (table rendering, ~400 lines: formatMarkdownLine / flushTable / parseTableRow / renderTable / clampColumnWidths / padCell / truncateDisplay) + `markdown_highlight.go` (syntax highlighting, ~200 lines: highlightGo / Python / Bash / JSON / YAML / JavaScript / TypeScript / Generic). Keep core Format() loop in place. |
+| `pkg/configuration/config_risk_subagent.go` | 1035 | Split into `risk_heredoc.go` (Heredoc/quote stripping, lines 22-170), `risk_profile.go` (DefaultAutoApproveRules / IsValidRiskProfile / ResolveRiskProfileRules, lines 171-371), `risk_classify.go` (critical-operation detection + categorizeCommand / isReadOnlyCmd / isBuildTestCmd, lines 372-1000). |
+| `pkg/webui/websocket_handler.go` | 1008 | Split: `websocket_conn.go` (handleWebSocket + connection lifecycle: waitForTakeover / evictExistingConnection / cleanupAfterPanic, lines 34-830) + `websocket_message.go` (handleWebSocketMessage + handleSyncRecoverMessage + shouldForwardEventToConnection, lines 427-980). |
+| `pkg/configuration/manager.go` | 949 | Split: `manager_load.go` (loadConfigSilently / NewManager* constructors / LoadConfigWithLayers, lines 28-348) + `manager_save.go` (saveConfigLocked / saveConfigDirectLocked / SaveConfig / SaveAPIKeys / Reload, lines 375-600) + `manager_provider.go` (GetProvider / SetProvider / GetModelForProvider, lines 601+). |
+| `pkg/agent_api/ollama_local.go` | 940 | Split per-feature: `ollama_models.go` (model listing / pulling / manifest parsing), `ollama_chat.go` (ChatCompletion streaming), `ollama_embed.go` (embeddings endpoint). |
+| `pkg/agent/seed_tool_registry.go` | 926 | Per SP-109-2/3 split: tool descriptions by domain (file / shell / subagent / search / vision / network) into separate `tool_registry_*.go` files. |
+| `pkg/webui/chat_sessions_api.go` | 920 | Split: `chat_sessions_api.go` (CRUD: list / get / create / delete / patch) + `chat_sessions_messages.go` (message pagination / append / search) + `chat_sessions_search.go` (full-text search / filter). |
+| `pkg/filediscovery/filediscovery.go` | 897 | Split by phase: `filediscovery_walk.go` (filesystem walker), `filediscovery_filter.go` (gitignore / extension / size filters), `filediscovery_index.go` (in-memory index + query). |
+| `pkg/agent/agent_getters.go` | 886 | Split: most getters are simple field accesses (~400 lines), but the heavy ones (currentSession / state snapshot / persona lookup) deserve their own files: `agent_session_getters.go` + `agent_state_getters.go`. |
+| `pkg/agent/tool_security.go` | 873 | Split: `tool_security_policy.go` (policy evaluation: IsAllowed / IsRestricted / RiskClassification) + `tool_security_paths.go` (path normalization + sandbox checks) + `tool_security_audit.go` (audit log emission). |
+| `pkg/webui/ssh_launch.go` | 867 | Split: `ssh_launch_config.go` (config struct + validation) + `ssh_launch_exec.go` (subprocess spawn + connection tracking) + `ssh_launch_api.go` (HTTP handlers / status). |
+| `pkg/providerregistry/registry.go` | 865 | Split: `registry_models.go` (model metadata + capabilities) + `registry_providers.go` (provider registration + lookup) + `registry_aliases.go` (alias resolution). |
+| `pkg/credentials/encrypt.go` | 861 | Split: `encrypt_aes.go` (AES-GCM encrypt / decrypt) + `encrypt_keyring.go` (keyring backend integration) + `encrypt_migrate.go` (legacy plaintext → encrypted migration). |
+| `pkg/events/events.go` | 857 | Split: `events_types.go` (event type / payload definitions) + `events_bus.go` (publish / subscribe / once) + `events_filter.go` (filter / throttle / dedupe). |
+| `pkg/embedding/manager.go` | 853 | Split: `embedding_models.go` (model registry + capability lookup) + `embedding_batch.go` (batch embedding + queue) + `embedding_cache.go` (LRU + persistence). |
+| `pkg/agent/change_tracking.go` | 850 | Per SP-077 split: `change_tracking_record.go` (record change) + `change_tracking_revert.go` (revert / recover) + `change_tracking_persist.go` (disk persistence + snapshot management). |
+| `pkg/agent_tools/background_process.go` | 848 | Split: `background_process.go` (lifecycle: start / stop / status) + `background_process_log.go` (log streaming + truncation) + `background_process_pty.go` (PTY allocation + signal forwarding). |
+| `pkg/agent/submanager_state.go` | 848 | Split: `submanager_state.go` (state machine + transitions) + `submanager_persist.go` (snapshot / restore) + `submanager_query.go` (status queries). |
+| `cmd/mcp_add.go` | 847 | Split per-tool: `mcp_add.go` (add command) + `mcp_list.go` (list) + `mcp_remove.go` (remove) — already partially split, this file may consolidate; check. |
+| `pkg/history/changetracker.go` | 843 | Already split some helpers; remaining bulk is per-action methods. Split: `changetracker_record.go` (Record*) + `changetracker_revert.go` (Revert / handleRevisionRollback + staleness guard per SP-077) + `changetracker_persist.go` (disk write / sweepCommittedSnapshots). |
+| `pkg/agent/persistence.go` | 843 | Split: `persistence_session.go` (session save / load) + `persistence_message.go` (message append / truncate) + `persistence_index.go` (full-text index). |
+| `pkg/webui/settings_api_mcp.go` | 841 | Split: `settings_api_mcp.go` (list / get / set MCP servers) + `settings_api_mcp_test.go` (connection test endpoint) + `settings_api_mcp_oauth.go` (OAuth flow if present). |
+| `pkg/console/select_list.go` | 840 | Already partially split; remaining bulk is per-prompt-mode logic. Split: `select_list.go` (core SelectList type + Render) + `select_list_filter.go` (filter / search / fuzzy match) + `select_list_keymap.go` (keybindings — already exists as `input_keymap.go`). |
+| `pkg/agent_tools/security_classifier.go` | 834 | Split: `security_classifier.go` (command classification: shell patterns) + `security_classifier_path.go` (path traversal / sensitive dir checks) + `security_classifier_shell_patterns.go` (pattern table — may already exist; verify). |
+| `pkg/agent/scripted_playback.go` | 832 | Split: `scripted_playback.go` (test playback engine) + `scripted_record.go` (record session to script) + `scripted_assert.go` (assertion framework). |
+
+Total: 25 files ≥800 lines. Additional files 800-797 lines are borderline
+(`pkg/agent_tools/repo_map.go` 801, `pkg/agent/workspace_sync.go` 797);
+these can be folded into the same phase work but are not strictly above
+the 800-line threshold. The pre-2026-06-30 worst offenders from the
+original SP-075 list (`steer_input.go` 1536, `go_adapter.go` 1188,
+`structured_helpers.go` 1190, etc.) are no longer in the top 25 — most
+have been split by SP-075 / Refactor-A work.
 
 ### Phase order (each ~0.5 day)
 

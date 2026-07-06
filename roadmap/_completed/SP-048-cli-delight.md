@@ -1,8 +1,16 @@
 # SP-048: CLI Delight — Terminal UX Polish
 
-**Status:** ✅ Partially Implemented (status footer + glyph vocabulary shipped; tool timeline + silence-fill deferred to SP-101)
+**Status:** ✅ Implemented (status footer + glyph vocabulary + tool timeline shipped 2026-07-05; silence-fill deferred → SP-091-4 + CLI-UX-12)
 
-The CLI was capable but felt quiet — no feedback between submit and first stream chunk, no tool execution timeline, no persistent status awareness, invisible slash commands. This spec shipped the persistent status footer (model, tokens, cost, directory), `NO_COLOR`/`FORCE_COLOR` env respect, default-choice highlighting in approval prompts, smart paste for large text, Ctrl-R reverse history search, `$EDITOR` escape, time-aware greeting with session resume, per-turn cost lines, model name in prompt prefix, and slash command tab completion with "did you mean" suggestions. The tool execution timeline and spinner/silence-fill were deferred to SP-101.
+The CLI was capable but felt quiet — no feedback between submit and first stream chunk, no tool execution timeline, no persistent status awareness, invisible slash commands. This spec shipped the persistent status footer (model, tokens, cost, directory), `NO_COLOR`/`FORCE_COLOR` env respect, default-choice highlighting in approval prompts, smart paste for large text, Ctrl-R reverse history search, `$EDITOR` escape, time-aware greeting with session resume, per-turn cost lines, model name in prompt prefix, and slash command tab completion with "did you mean" suggestions. The spinner/silence-fill (Phase 1) remains deferred to SP-091-4.
+
+## Status reconciliation (2026-07-05)
+
+Per CLI-UX + WebUI gap audit:
+- **Tool timeline shipped:** `webui/src/components/chat/ToolTimelineBar.tsx` (live WebUI card with spinner/✓/✗ + elapsed timer); CLI equivalent via `OutputRouter.RouteToolCompletion()` in `pkg/agent/output_router.go:425`.
+- **Silence-fill spinner** (CLI-UX-12): shipped at commit `3659dd6b feat(console): add Alt+V live verbosity toggle for tool output`. Verbosity toggling and inline tool-arg truncation landed 2026-07-05.
+
+The remaining deferred work is the global silent-mode keybind binding (`S` to disable spinner; covered by SP-091-4).
 
 ## Key decisions
 

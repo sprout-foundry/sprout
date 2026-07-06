@@ -73,7 +73,7 @@ headers updated, but no new code work is required:
       `pkg/agent_api/interface.go`; populate from model metadata
       for Anthropic (hard-coded table), OpenAI (from `image_url
       .detail` accepted values), Ollama local (from model
-      manifest)._
+      manifest)._ **SHIPPED 2026-07-05 at commit `368f6dd0`.**
 
 - [ ] **AUDIT-GAP-3:** SP-098 stale audit table. The 2026-06-30
       file-over-800-lines table is stale — 11 of 13 originally

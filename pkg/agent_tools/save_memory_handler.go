@@ -95,8 +95,6 @@ func (h *saveMemoryHandler) Execute(ctx context.Context, env ToolEnv, args map[s
 		}, agenterrors.NewTool("save_memory", fmt.Sprintf("save memory %q: %v", name, err), err)
 	}
 
-	// Publish tool end event
-
 	// Write to output writer if available
 	if env.OutputWriter != nil {
 		io.WriteString(env.OutputWriter, result)

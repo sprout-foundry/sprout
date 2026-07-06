@@ -3,7 +3,7 @@
 package cmd
 
 import (
-	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -53,15 +53,20 @@ func runKeysSet(args []string) error {
 		if !StdinIsTerminal() {
 			return fmt.Errorf("provider is required (run 'sprout keys set <provider>')")
 		}
-		selected, err := promptProviderSelection()
+		selected, ok, err := promptProviderSelection()
 		if err != nil {
 			return err
+		}
+		if !ok {
+			fmt.Println()
+			console.GlyphInfo.Printf("Run 'sprout keys set <provider>' to configure later.")
+			return nil
 		}
 		provider = selected
 	}
 
 	// 2. Validate the provider against known auth metadata.
-	if !isKnownProvider(provider) {
+	if !isKnownProvider(provider, nil) {
 		printValidProviders()
 		return fmt.Errorf("unknown provider %q — not a built-in provider", provider)
 	}
@@ -109,9 +114,11 @@ func runKeysSet(args []string) error {
 	return nil
 }
 
-// promptProviderSelection lists providers that require an API key and reads a
-// numeric selection from stdin. Returns the chosen provider name.
-func promptProviderSelection() (string, error) {
+// promptProviderSelection lists providers that require an API key using an
+// interactive SelectList. Returns the chosen provider name plus ok=true on
+// confirm, or ("", false, nil) on Esc/Ctrl+C cancellation. Returns an error
+// only on transport / IO failures.
+func promptProviderSelection() (string, bool, error) {
 	var keyProviders []string
 	for _, name := range configuration.KnownProviderNames() {
 		meta, err := configuration.GetProviderAuthMetadata(name)
@@ -121,27 +128,33 @@ func promptProviderSelection() (string, error) {
 		keyProviders = append(keyProviders, name)
 	}
 	if len(keyProviders) == 0 {
-		return "", fmt.Errorf("no providers require an API key")
+		return "", false, fmt.Errorf("no providers require an API key")
 	}
 
-	fmt.Println("Providers that require an API key:")
-	for i, name := range keyProviders {
-		fmt.Printf("  %d. %s\n", i+1, configuration.GetProviderDisplayName(name))
+	items := make([]console.SelectItem, 0, len(keyProviders))
+	for _, name := range keyProviders {
+		items = append(items, console.SelectItem{
+			Label: configuration.GetProviderDisplayName(name),
+			Value: name,
+		})
 	}
-	fmt.Println()
 
-	reader := bufio.NewReader(os.Stdin)
-	prompt := fmt.Sprintf("Select a provider (1-%d): ", len(keyProviders))
-	answer, err := promptLine(reader, prompt)
+	sl := console.NewSelectList(console.SelectListOptions{
+		Title:      "Pick a provider to configure",
+		Items:      items,
+		Searchable: true,
+		PageSize:   10,
+	})
+
+	ctx := context.Background()
+	value, ok, err := sl.Run(ctx)
 	if err != nil {
-		return "", fmt.Errorf("failed to read selection: %w", err)
+		return "", false, err
 	}
-
-	idx, convErr := parseIntInRange(answer, 1, len(keyProviders))
-	if convErr != nil {
-		return "", convErr
+	if !ok {
+		return "", false, nil
 	}
-	return keyProviders[idx-1], nil
+	return value, true, nil
 }
 
 // printValidProviders lists every built-in provider that requires an API key,
@@ -167,13 +180,32 @@ func printValidProviders() {
 // isKnownProvider reports whether name matches a built-in provider or a
 // user-defined custom provider. This gates the "set" flow so a typo (e.g.
 // "bogus") is rejected before we attempt to read or validate a key.
-func isKnownProvider(name string) bool {
+//
+// If cfg is non-nil, the caller-supplied config is consulted for custom
+// providers (avoids a second disk load). When cfg is nil, isKnownProvider
+// falls back to configuration.Load() — used by callers that don't already
+// have a config in hand.
+//
+// The name argument is normalized to lowercase + trim so callers don't have
+// to remember the contract; KnownProviderNames always returns lowercase.
+func isKnownProvider(name string, cfg *configuration.Config) bool {
+	name = strings.ToLower(strings.TrimSpace(name))
+	if name == "" {
+		return false
+	}
 	for _, p := range configuration.KnownProviderNames() {
 		if p == name {
 			return true
 		}
 	}
-	if cfg, err := configuration.Load(); err == nil {
+	if cfg == nil {
+		var err error
+		cfg, err = configuration.Load()
+		if err != nil {
+			return false
+		}
+	}
+	if cfg != nil {
 		if _, exists := cfg.CustomProviders[name]; exists {
 			return true
 		}
@@ -188,21 +220,4 @@ func isKnownProvider(name string) bool {
 func hasStoredKey(provider string) bool {
 	value, _, err := credentials.GetFromActiveBackend(provider)
 	return err == nil && strings.TrimSpace(value) != ""
-}
-
-// parseIntInRange parses a 1-based selection string and returns the index
-// clamped to [min, max]. Returns an error for empty or out-of-range input.
-func parseIntInRange(s string, min, max int) (int, error) {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return 0, fmt.Errorf("no selection entered")
-	}
-	var n int
-	if _, err := fmt.Sscanf(s, "%d", &n); err != nil {
-		return 0, fmt.Errorf("invalid number %q", s)
-	}
-	if n < min || n > max {
-		return 0, fmt.Errorf("selection %d is out of range (1-%d)", n, max)
-	}
-	return n, nil
 }

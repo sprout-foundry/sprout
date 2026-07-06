@@ -35,6 +35,13 @@ func runQueueMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 	footer.Start()
 	defer footer.Stop()
 
+	// CLI-UX-12: register Alt+T (footer tooltip) and Alt+V (verbosity
+	// toggle) keybindings. The registry is Once-protected, so this
+	// call is a no-op when interactive mode already ran in the same
+	// process (shared-agent mode). In queue mode the verbosity toggle
+	// is still useful for power users tailing the session log.
+	console.RegisterKeymapForFooter(footer, chatAgent.GetConfigManager())
+
 	// Wire event-driven output routing (streaming, tool timeline,
 	// footer refresh) — same as interactive mode. SetupAgentEvents
 	// registers a streaming callback that respects the per-turn

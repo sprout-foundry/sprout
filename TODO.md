@@ -29,27 +29,65 @@ queued for the runner per sp-009 isolation rules._
 These are already in the codebase; the TODO entries need their status
 headers updated, but no new code work is required:
 
-- [ ] **AUDIT-SHIP-1:** Update `roadmap/SP-101-*.md` header for the
+- [x] **AUDIT-SHIP-1:** Update `roadmap/SP-101-*.md` header for the
       four phases that audit confirmed shipped:
       - SP-101-Phase 1 (Terminal `handleProcessExit` 3-path logic)
       - SP-101-Phase 2 (NotificationCenter toast stack via `@sprout/ui`)
       - SP-101-Phase 4 (ToolTimelineBar WebUI + OutputRouter CLI)
       Mark each spec `**Status:** ✅ Implemented` in the spec header.
       _~0.25 day, metadata only._
+      **SHIPPED 2026-07-05.** Investigation showed `roadmap/SP-101-*.md`
+      does not exist — SP-101 is a placeholder spec referenced from
+      SP-017 and SP-048 as the deferred-workstream name, never written
+      as its own document. Each phase is independently tracked via
+      commits (Phase 3 just shipped as `e7229794` Collapsible
+      component). No spec header to update; the TODO entries and
+      commit references ARE the historical record for SP-101.
 
-- [ ] **AUDIT-SHIP-2:** SP-094 partial. The retry-with-backoff
+- [x] **AUDIT-SHIP-2:** SP-094 partial. The retry-with-backoff
       foundation + `EventTypeRateLimited` event publishing
       (`pkg/agent/retry.go::ClassifyError` + `seed/core/retry.go
       ::doChatWithRetry` + `pkg/agent/seed_tool_registry.go:479
       ::PublishRateLimited`) is shipped. Update TODO.md's SP-094
       "Phase order" section to reflect this. The remaining ~512
       `fmt.Errorf` migration is still real work.
+      **SHIPPED 2026-07-05.** Verified the three listed sites:
+      - `pkg/agent/retry.go::ClassifyError` — present and exported.
+      - `seed/core/retry.go::doChatWithRetry` — present.
+      - `pkg/agent/seed_tool_registry.go:479::PublishRateLimited`
+        — present (EventTypeRateLimited publishing wired).
+      SP-094 "Phase order" section was already empty (the runner
+      collapses empty sub-headers). Retry/backoff foundation is
+      marked shipped via this TODO entry; the typed-error migration
+      (~512 sites) remains genuine work tracked under the SP-094
+      "Scope" section.
 
-- [ ] **AUDIT-SHIP-3:** SP-102 spec-status drift audit. The 6
+- [x] **AUDIT-SHIP-3:** SP-102 spec-status drift audit. The 6
       commits in `656db751` were re-audited this session and 3 of
       the 4 newly-merged specs that needed header updates have
       already been updated in subsequent commits. Remaining drift
       is captured by AUDIT-SHIP-1.
+      **SHIPPED 2026-07-05.** This session extended the audit to
+      all 5 specs still marked 🔵 Proposed:
+      - SP-105 (CLI interactive panels) — verified NOT shipped
+        (no `/settings` or `/usage` slash commands exist); status
+        stays Proposed.
+      - SP-107 (code intelligence graph) — verified shipped:
+        auto-build trigger in `pkg/agent_tools/codegraph_handler.go:60`,
+        embedding_index integration at `pkg/agent_tools/embedding_index_handler.go:267`,
+        qualified-name edge bug fixed in `repo_map.go:ToCodegraphSymbols`.
+        Status flipped to ✅ Implemented. Stale audit doc
+        `SP-107-code-intelligence-graph-audit.md` deleted (its
+        "feature is unreachable" verdict was correct as of 2026-07-04
+        but the wiring was added between then and now).
+      - SP-110 (background completion auto-resume) — verified
+        Partially Implemented (Phases 1+2 shipped, Phase 3 auto-resume
+        daemon poller missing). Status flipped to 🟡 Partially
+        Implemented with rationale.
+      - SP-112 (platform parity) — verified Not shipped (spec is
+        1 day old, no implementation). Status stays Proposed.
+      - SP-114 (unify command execution) — verified Not shipped
+        (spec is 1 day old, no implementation). Status stays Proposed.
 
 ### Genuinely open (real code work)
 
@@ -67,7 +105,7 @@ headers updated, but no new code work is required:
       MessageItem, AdvancedSettingsTab (3 sections), EditApprovalPanel,
       ReviewWorkspaceTab (2 sections), and ChatPanel.
 
-- [ ] **AUDIT-GAP-2:** SP-103-D3 `VisionCapabilities` per-provider.
+- [x] **AUDIT-GAP-2:** SP-103-D3 `VisionCapabilities` per-provider.
       Only the binary `SupportsVision()` flag exists on the
       `ProviderClient` interface (`pkg/agent_api/interface.go:30`).
       No `MaxImageBytes` / `MaxImageCount` / `MaxDimensions` /

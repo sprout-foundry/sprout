@@ -35,6 +35,15 @@ var (
 // register because the keymap replaces by Action name.
 func RegisterKeymapForFooter(footer *StatusFooter, cfg *configuration.Manager) {
 	keymapOnce.Do(func() {
+		// SP-115 Phase 4: set the initial hint visibility based on verbosity.
+		// Compact verbosity hides the hint; default and verbose show it.
+		if footer != nil && cfg != nil {
+			current := cfg.GetConfig()
+			if current != nil {
+				footer.SetShowKeymapHint(current.OutputVerbosity != "compact")
+			}
+		}
+
 		// Alt+T: footer tooltip toggle (CLI-D-3)
 		GlobalKeymap().Register(KeymapEntry{
 			Key:         "Alt+T",
@@ -66,6 +75,11 @@ func RegisterKeymapForFooter(footer *StatusFooter, cfg *configuration.Manager) {
 					return nil
 				}); err != nil {
 					return
+				}
+				// SP-115: update hint visibility when verbosity changes.
+				// Compact hides the hint; default and verbose show it.
+				if footer != nil {
+					footer.SetShowKeymapHint(newValue != "compact")
 				}
 				label := verbosityToggleLabel(newValue)
 				fmt.Fprintln(os.Stderr, GlyphInfo.Prefix()+label)

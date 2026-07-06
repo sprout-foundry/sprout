@@ -9,8 +9,8 @@ import (
 // off-by-one in ClearSteerLine that left stale steer text on screen
 // above the next idle prompt.
 //
-// The steer panel renders text at steerRowFor(rows, steerRows, i) =
-// rows-1-steerRows+i. ClearSteerLine must blank that SAME row so the
+// The steer panel renders text at steerRowFor(rows, steerRows, hintRows, i) =
+// rows-1-hintRows-steerRows+i. ClearSteerLine must blank that SAME row so the
 // text is actually erased. A prior version of ClearSteerLine computed
 // `rows-1-prevRows+i+1` (note the trailing +1), which cleared the rule
 // row (rows-1) instead of the steer text row — the rule is repainted
@@ -25,8 +25,8 @@ func TestClearSteerLine_BlanksRenderedRow(t *testing.T) {
 	// steerRowFor and via the bytes ClearSteerLine emits.
 	const rows = 24
 
-	// 1) Pin steerRowFor's row for a single-line panel (steerRows=1, i=0).
-	renderedRow := steerRowFor(rows, 1, 0) // want 22
+	// 1) Pin steerRowFor's row for a single-line panel (steerRows=1, hintRows=0, i=0).
+	renderedRow := steerRowFor(rows, 1, 0, 0) // want 22
 
 	// Build a footer in the same state the steer reader leaves it: a
 	// 1-row steer panel just drawn. lastSteerRows must be set so
@@ -50,12 +50,12 @@ func TestClearSteerLine_BlanksRenderedRow(t *testing.T) {
 	// verify the row it computes matches steerRowFor.
 	for steerRows := 1; steerRows <= 3; steerRows++ {
 		for i := 0; i < steerRows; i++ {
-			rendered := steerRowFor(rows, steerRows, i)
+			rendered := steerRowFor(rows, steerRows, 0, i)
 			// This is the formula ClearSteerLine used BEFORE the fix
 			// (with the stray +1). It must NOT match the rendered row.
 			buggyCleared := rows - 1 - steerRows + i + 1
-			// This is the formula AFTER the fix (matches steerRowFor).
-			fixedCleared := rows - 1 - steerRows + i
+			// This is the formula AFTER the fix (matches steerRowFor with hintRows=0).
+			fixedCleared := rows - 1 - 0 - steerRows + i
 
 			if fixedCleared != rendered {
 				t.Errorf("steerRows=%d i=%d: fix clears row %d but render drew row %d",

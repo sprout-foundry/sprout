@@ -53,7 +53,7 @@ headers updated, but no new code work is required:
 
 ### Genuinely open (real code work)
 
-- [ ] **AUDIT-GAP-1:** SP-101-Phase 3 collapsible sections. Only the
+- [x] **AUDIT-GAP-1:** SP-101-Phase 3 collapsible sections. Only the
       reasoning-block `<details>` in `ChatPanel.tsx:211` exists.
       No general-purpose `Collapsible` component in
       `packages/ui/src/components/`. Spec calls for collapsible
@@ -61,6 +61,11 @@ headers updated, but no new code work is required:
       blocks. _~1 day. Build a `Collapsible` component in
       `@sprout/ui`, then wire into the 2-3 most-used surfaces
       (Sidebar, Agent detail panel, ChatPanel tool output)._
+      **SHIPPED 2026-07-05 at commit `e7229794`.** New
+      `Collapsible` component at `packages/ui/src/components/
+      Collapsible.tsx` (22 tests, 8 stories); migrated
+      MessageItem, AdvancedSettingsTab (3 sections), EditApprovalPanel,
+      ReviewWorkspaceTab (2 sections), and ChatPanel.
 
 - [ ] **AUDIT-GAP-2:** SP-103-D3 `VisionCapabilities` per-provider.
       Only the binary `SupportsVision()` flag exists on the

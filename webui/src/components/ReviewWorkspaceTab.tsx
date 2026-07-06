@@ -1,4 +1,4 @@
-import { MessageSegments, MessageBubble, MessageContent } from '@sprout/ui';
+import { Collapsible, MessageSegments, MessageBubble, MessageContent } from '@sprout/ui';
 import { ShieldCheck, Loader2, Wrench } from 'lucide-react';
 import { useMemo, useCallback, useState, useEffect, useRef } from 'react';
 import { stripAnsiCodes } from '../utils/ansi';
@@ -478,21 +478,23 @@ function ReviewWorkspaceTab({
                     ]}
                     className="review-pill-row"
                   />
-                  <details className="reasoning-block review-disclosure">
-                    <summary className="reasoning-summary review-details-summary">
-                      <span>Fix workflow logs</span>
-                      <span>{reviewFixLogs.length} entries</span>
-                    </summary>
-                    <div className="reasoning-content review-details-content">
-                      <div className="review-fix-log-list">
-                        {formattedFixLogs.map((log, index) => (
-                          <div key={`${index}-${log.slice(0, 24)}`} className="review-fix-log-item">
-                            {log}
-                          </div>
-                        ))}
-                      </div>
+                  <Collapsible
+                    className="reasoning-block review-disclosure"
+                    title={
+                      <>
+                        <span>Fix workflow logs</span>
+                        <span>{reviewFixLogs.length} entries</span>
+                      </>
+                    }
+                  >
+                    <div className="review-fix-log-list">
+                      {formattedFixLogs.map((log, index) => (
+                        <div key={`${index}-${log.slice(0, 24)}`} className="review-fix-log-item">
+                          {log}
+                        </div>
+                      ))}
                     </div>
-                  </details>
+                  </Collapsible>
                   <div className="review-fix-preview">
                     <div className="review-fix-log-list review-fix-log-preview">
                       {fixLogPreview.map((log, index) => (
@@ -507,14 +509,13 @@ function ReviewWorkspaceTab({
 
               {reviewFixResult ? (
                 <MessageBubble type="assistant" ariaLabel="Review fix result" copyText={reviewFixResult}>
-                  <details className="reasoning-block review-disclosure" open>
-                    <summary className="reasoning-summary review-details-summary">
-                      <span>Fix result</span>
-                    </summary>
-                    <div className="reasoning-content review-details-content">
-                      <MessageSegments content={reviewFixResult} />
-                    </div>
-                  </details>
+                  <Collapsible
+                    className="reasoning-block review-disclosure"
+                    defaultOpen
+                    title={<span>Fix result</span>}
+                  >
+                    <MessageSegments content={reviewFixResult} />
+                  </Collapsible>
                 </MessageBubble>
               ) : null}
             </>

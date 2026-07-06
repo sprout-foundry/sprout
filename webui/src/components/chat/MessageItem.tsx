@@ -1,4 +1,4 @@
-import { MessageBubble, MessageSegments, MessageContent } from '@sprout/ui';
+import { MessageBubble, MessageSegments, MessageContent, Collapsible } from '@sprout/ui';
 import { BrainCircuit } from 'lucide-react';
 import { memo } from 'react';
 import type { Message, ToolExecution } from './types';
@@ -93,17 +93,26 @@ export const MessageItem = memo(function MessageItem({
         <>
           {message.reasoning && message.reasoning.trim() && (
             // SP-076: verbose mode expands reasoning inline instead of
-            // hiding it behind a <details> toggle.
-            <details className="reasoning-block" open={outputVerbosity === 'verbose'}>
-              <summary className="reasoning-summary">
-                <BrainCircuit size={13} className="reasoning-icon" />
-                <span>Reasoning</span>
-                <span className="reasoning-toggle">▶</span>
-              </summary>
+            // hiding it behind a <details> toggle. AUDIT-GAP-1: migrated
+            // to the shared <Collapsible> primitive. The legacy
+            // `reasoning-block` class is preserved on the rendered
+            // <details> so existing tests (MessageItem.test.tsx,
+            // ChatPanel.test.tsx) keep matching the same DOM node. The
+            // match is structural — the legacy summary/icon/content CSS
+            // rules were retired; visual styling is now driven by
+            // `.collapsible` defaults (bordered card), which is roughly
+            // equivalent to the old look.
+            <Collapsible
+              title="Reasoning"
+              icon={<BrainCircuit size={13} />}
+              open={outputVerbosity === 'verbose'}
+              ariaLabel="Reasoning"
+              className="reasoning-block"
+            >
               <div className="reasoning-content">
                 <MessageContent content={message.reasoning} />
               </div>
-            </details>
+            </Collapsible>
           )}
           <MessageSegments
             content={message.content}

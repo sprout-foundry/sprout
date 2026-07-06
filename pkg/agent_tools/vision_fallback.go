@@ -94,7 +94,7 @@ func (vp *VisionProcessor) fallbackToOCR(
 	ocrModel := getOCRModel()
 	if ocrModel == "" {
 		vp.loggerInfo("OCR fallback skipped: VISION_FALLBACK_TO_OCR=true but PDFOCRModel not set")
-		return VisionAnalysis{}, lastErr
+		return VisionAnalysis{}, fmt.Errorf("vision request: %w (OCR fallback skipped: PDFOCRModel not set)", lastErr)
 	}
 
 	vp.loggerInfo("vision primary failed; falling back to OCR model",

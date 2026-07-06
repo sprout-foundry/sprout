@@ -135,8 +135,6 @@ func (h *searchMemoriesHandler) Execute(ctx context.Context, env ToolEnv, args m
 
 	output := formatMemorySearchResults(query, results, threshold)
 
-	// Publish tool end event
-
 	// Write to output writer if available
 	if env.OutputWriter != nil {
 		io.WriteString(env.OutputWriter, output)

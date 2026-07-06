@@ -2,6 +2,10 @@
 
 All notable changes to Sprout will be documented in this file.
 
+## [v0.16.23] - 2026-07-06
+
+- fix(test): correct non-deterministic progress callback assertion\n\nTestProcessOCRImages_ProgressCallback asserted that progress.completed\nvalues were strictly monotonically increasing in callback order. But\nprocessOCRImagesParallel processes images concurrently — the completion\norder is non-deterministic, so callback N can fire with completed=2\nbefore callback N-1 fires with completed=1. Under -race this ordering\ninversion becomes common (race detector slows execution).\n\nReplaced the monotonic-order assertion with a set-membership check:\nthe completed values must be a permutation of {1,2,3} (each image\nincrements the counter exactly once) and the max must be 3 (all\nprocessed). This is the correct invariant for a parallel\nimplementation.\n\ngo test -race -run TestProcessOCRImages_ProgressCallback -count=10: pass (d2bba696)
+
 ## [v0.16.17] - 2026-06-24
 
 - chore: embed UI assets and sync package versions for v0.16.17 (7d7a68a5)

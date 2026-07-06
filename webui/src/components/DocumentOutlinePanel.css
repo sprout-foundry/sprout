@@ -211,6 +211,11 @@
   background: color-mix(in srgb, var(--accent-success) 15%, transparent);
 }
 
+.outline-kind-icon.heading {
+  color: var(--brand-teal);
+  background: color-mix(in srgb, var(--brand-teal) 15%, transparent);
+}
+
 /* Symbol name */
 .outline-node-name {
   font-size: 12px;

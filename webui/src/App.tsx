@@ -76,6 +76,7 @@ function App() {
       modelSelectionRequest: null,
       driftNotification: null,
       outputVerbosity: 'default' as const,
+      inputValue: '',
     };
   }, []);
 
@@ -104,7 +105,6 @@ function AppInner() {
   // hooks-consolidation refactor; restored here.)
   usePageVisibility();
 
-  const [inputValue, setInputValue] = useState('');
   const [recentFiles, setRecentFiles] = useState<Array<{ path: string; modified: boolean }>>([]);
   const [gitRefreshToken, setGitRefreshToken] = useState(0);
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
@@ -221,7 +221,6 @@ function AppInner() {
     activeRequestsRef,
     activeChatIdRef,
     queuedMessagesRef,
-    setInputValue,
     isProcessing: state.isProcessing,
   });
 
@@ -333,8 +332,6 @@ function AppInner() {
                     <NotificationCenter />
                     <AppContent
                       state={state}
-                      inputValue={inputValue}
-                      onInputChange={setInputValue}
                       isMobile={isMobile}
                       isTablet={isTablet}
                       isSidebarOpen={isSidebarOpen}
@@ -377,7 +374,6 @@ function AppInner() {
                       onRenameChat={chatManager.handleRenameChat}
                       perChatCache={state.perChatCache}
                     />
-                    <Notification />
                     <UpdateNotification />
                     <DisconnectedOverlay isConnected={state.isConnected} />
                     {state.securityApprovalRequest && (

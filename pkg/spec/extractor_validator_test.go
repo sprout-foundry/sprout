@@ -61,6 +61,13 @@ func (m *mockAgentClient) GetAverageTPS() float64          { return 0 }
 func (m *mockAgentClient) GetTPSStats() map[string]float64 { return nil }
 func (m *mockAgentClient) ResetTPSStats()                  {}
 
+// VisionCapabilities returns the safe defaults — this mock focuses on
+// spec/extract wiring, not capability tuning. Method exists to satisfy
+// api.ClientInterface after SP-103-D3 / AUDIT-GAP-2.
+func (m *mockAgentClient) VisionCapabilities() api.VisionCapabilities {
+	return api.VisionCapabilitiesDefault()
+}
+
 // newTestExtractor creates a SpecExtractor with a mock client for testing.
 func newTestExtractor(mockFn func(messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error)) *SpecExtractor {
 	return &SpecExtractor{

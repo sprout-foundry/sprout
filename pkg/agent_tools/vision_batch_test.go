@@ -61,6 +61,14 @@ func (m *countingMock) GetAverageTPS() float64             { return 0 }
 func (m *countingMock) GetTPSStats() map[string]float64    { return nil }
 func (m *countingMock) ResetTPSStats()                     {}
 
+// VisionCapabilities returns the safe defaults — countingMock is a
+// stand-in for batch-vision tests; the actual capability values are not
+// the focus of these tests, but the method is required by
+// api.ClientInterface after SP-103-D3 / AUDIT-GAP-2.
+func (m *countingMock) VisionCapabilities() api.VisionCapabilities {
+	return api.VisionCapabilitiesDefault()
+}
+
 func makeTestImages(n int) [][]byte {
 	images := make([][]byte, n)
 	for i := range images {

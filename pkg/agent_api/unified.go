@@ -190,6 +190,21 @@ func (w *UnifiedProviderWrapper) SupportsConversationalVision() bool {
 	}
 	return w.provider.SupportsVision()
 }
+
+// VisionCapabilities returns the per-provider vision limits by delegating
+// to the wrapped provider. If the provider does not implement
+// VisionCapabilities() (e.g. legacy third-party providers), returns the
+// zero value; callers should run the result through
+// VisionCapabilitiesOrDefault() to fill in safe defaults. SP-103-D3 /
+// AUDIT-GAP-2.
+func (w *UnifiedProviderWrapper) VisionCapabilities() VisionCapabilities {
+	if typed, ok := w.provider.(interface {
+		VisionCapabilities() VisionCapabilities
+	}); ok {
+		return typed.VisionCapabilities()
+	}
+	return VisionCapabilities{}
+}
 func (w *UnifiedProviderWrapper) GetVisionModel() string {
 	// Delegate to the underlying provider if it supports vision model
 	if visionProvider, ok := w.provider.(interface{ GetVisionModel() string }); ok {

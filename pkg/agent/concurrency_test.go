@@ -397,6 +397,13 @@ func (c *testRaceMockClient) GetAverageTPS() float64          { return 0 }
 func (c *testRaceMockClient) GetTPSStats() map[string]float64 { return nil }
 func (c *testRaceMockClient) ResetTPSStats()                  {}
 
+// VisionCapabilities returns the safe defaults — this race-test mock
+// focuses on concurrency, not capability tuning. Method exists to satisfy
+// api.ClientInterface after SP-103-D3 / AUDIT-GAP-2.
+func (c *testRaceMockClient) VisionCapabilities() api.VisionCapabilities {
+	return api.VisionCapabilitiesDefault()
+}
+
 // testRaceError is a minimal error type used in the initErr race test.
 type testRaceError struct {
 	msg string

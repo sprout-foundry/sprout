@@ -263,8 +263,15 @@ func executeBrowseStep(page *rod.Page, step BrowseStep, timeoutMs int, result *B
 		}
 		if _, err := el.Eval(`value => {
 			this.focus();
-			this.value = value;
-			this.dispatchEvent(new Event('input', { bubbles: true }));
+			const nativeInputValueProperty = Object.getOwnPropertyDescriptor(
+				HTMLInputElement.prototype, 'value'
+			).set;
+			if (nativeInputValueProperty) {
+				nativeInputValueProperty.call(this, value);
+			} else {
+				this.value = value;
+			}
+			this.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: value }));
 			this.dispatchEvent(new Event('change', { bubbles: true }));
 			return true;
 		}`, step.Value); err != nil {

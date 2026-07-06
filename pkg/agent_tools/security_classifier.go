@@ -722,27 +722,7 @@ func classifyBrowseURL(args map[string]interface{}) SecurityResult {
 		}
 	}
 
-	// (c) Eval step with network egress → Caution
-	if stepsRaw, ok := args["steps"].([]interface{}); ok {
-		for _, rawStep := range stepsRaw {
-			if stepMap, ok := rawStep.(map[string]interface{}); ok {
-				if action, ok := stepMap["action"].(string); ok && strings.ToLower(action) == "eval" {
-					if script, ok := stepMap["script"].(string); ok {
-						if primitive := detectNetworkEgress(script); primitive != "" {
-							return SecurityResult{
-								Risk:         SecurityCaution,
-								Reasoning:    fmt.Sprintf("eval step contains network egress (%s) — browser-side requests may bypass server CORS / fetch_url allowlists", primitive),
-								ShouldPrompt: true,
-								Category:     RiskCategoryNetwork,
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	// (d) Pre-set cookies or headers → Caution
+	// (c) Pre-set cookies or headers → Caution
 	if cookiesRaw, ok := args["cookies"].(map[string]interface{}); ok && len(cookiesRaw) > 0 {
 		return SecurityResult{
 			Risk:         SecurityCaution,
@@ -799,17 +779,6 @@ func isScreenshotPathAllowed(cleanedPath string) bool {
 	return false
 }
 
-// detectNetworkEgress checks if a JS script contains network egress primitives.
-// Returns the matched primitive name, or empty string if none found.
-func detectNetworkEgress(script string) string {
-	lower := strings.ToLower(script)
-	primitives := []string{"fetch(", "xmlhttprequest", "navigator.sendbeacon", "websocket", "eventsource", "import(", "new image().src=", "<script src=", "<iframe src="}
-	for _, p := range primitives {
-		if strings.Contains(lower, p) {
-			return p
-		}
-	}
-	return ""
-}
+
 
 

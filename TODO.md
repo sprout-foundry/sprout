@@ -4,13 +4,6 @@ Active work tracked here. Completed items are removed once their parent spec is
 done — the spec file (`roadmap/SP-###.md`) plus git history are the historical
 record.
 
-**Roadmap drift fixed 2026-06-30:** `roadmap/00-INDEX.md` was carrying 15 stale
-"Proposed" markers for shipped specs. Audit found: SP-006 (superseded by
-SP-059), SP-009, SP-010, SP-013, SP-022-workspace-management, SP-023, SP-062,
-SP-064, SP-065, SP-068, SP-073, and SP-066 (superseded by SP-082) are all
-implemented. They now appear in the "Implemented" table with status notes.
-The "Proposed" table is down to 15 entries that are genuinely still open.
-
 ---
 
 ## SP-091: Close the next round of roadmap gaps
@@ -20,22 +13,7 @@ identified during the 2026-06-30 roadmap audit. They are the highest-value
 remaining work in the existing spec set; new specs that emerge from usage
 should be added as SP-092+ rather than expanding this list.
 
-### Phase 1 — Embedding consolidation (1 day, ~5% binary shrink)
-
-
-### Phase 2 — Terminal + CLI regression bugs (~1 day)
-
-
-### Phase 3 — Reliability + observability (~1 day)
-
-
-### Phase 4 — File-size decomposition (~1–2 days)
-
-
-### Phase 5 — UX polish (~0.5 day)
-
-
-### Phase 6 — Spec retirement
+_Phases to be filled in as the runner picks them up._
 
 
 ---
@@ -43,15 +21,6 @@ should be added as SP-092+ rather than expanding this list.
 ## SP-103: Vision Pipeline Reliability + Caching + Routing Fixes
 
 _Most items completed by subsequent work. Verified against code state 2026-07-05._
-
-### Completed (shipped in later changes)
-
-- **✅ `SupportsConversationalVision()` distinction** — Implemented as an interface method with fallback to `SupportsVision()`; `conversation.go` uses `effectiveConversationalVision()` with probe check. OCR models like `glm-ocr` correctly skip inline embedding.
-- **✅ Prompt caching** (`cache_control: ephemeral`) — `generic_provider_vision.go` adds `cache_control` to image blocks when `visionCacheImagesEnabled()` is true.
-- **✅ Parallel OCR** — `processOCRImages` replaced by `processOCRImagesParallel` (`vision_parallel.go`) with configurable worker pool.
-- **✅ Preflight size check** — `preflightRemoteSize` in `vision_preflight.go` checks Content-Length before downloading; used in `DownloadImage` and PDF download.
-- **✅ Non-vision model paths** — `processImagesViaOCR` and `buildNonVisionImageToolPrompt` are actively called (not dead code). Non-vision models get OCR pre-processing or a tool-call prompt.
-- **✅ Race-condition globals** — `visionCache`, `lastVisionUsage`, `visionCacheUsage` package globals are gone.
 
 ### Remaining Work
 
@@ -581,78 +550,3 @@ has known gaps. These are follow-ups, not blockers._
 
 ---
 
-## CLI Output UX Improvements (CLI-UX audit, 2026-07-05)
-
-Audited the CLI output layer against best-in-class tools (Claude Code,
-Gemini CLI, Aider, Cursor, gh, dagger). Findings prioritized by impact.
-
-### Tier 1 — High impact, directly visible
-
-- [x] **CLI-UX-2:** Live elapsed-time on spinner for long-running tools.
-      ALREADY IMPLEMENTED — spinner render() already shows elapsed seconds.
-      Audit was wrong on this one. Marking shipped based on re-verification
-      (pkg/console/activity_indicator.go render path already includes elapsed).
-- [x] **CLI-UX-8:** Pre-highlight code blocks during streaming. The
-      streaming_markdown.go path already routes every line inside a fence
-      through formatCodeLine (per-line syntax highlighting). No flicker;
-      the TODO claim is incorrect. Tests in
-      pkg/console/streaming_markdown_test.go::TestStreamingMarkdown_CodeBlock
-      and _AcrossChunks lock the per-line behavior in.
-
-### Tier 3 — Nice to have
-
-- [x] **CLI-UX-10:** Keyboard shortcut affordances row. Dim toggleable help
-      row above the rule showing registered keybindings (e.g.
-      "Alt+T breakdown · Alt+V verbose"). SHIPPED at `2ebf42b7`.
-      SP-115 (`roadmap/SP-115-cli-ux-10-keyboard-affordances.md`):
-      `KeymapHintRow()` formatter, `StatusFooter.SetShowKeymapHint()`,
-      scroll-region math extended (`reservedRows() = 2 + steerRowCount() +
-      hintRowCount()`), `steerRowFor` signature extended with `hintRows`
-      parameter, live-tracks verbosity via the Alt+V handler
-      (`pkg/console/keymap_registration.go`). Hidden in compact mode.
-      Hidden rows correctly cleared on Resize/Stop. 18 new tests in
-      `pkg/console/keymap_hint_row_test.go` and
-      `pkg/console/status_footer_hint_test.go`. `go test -race
-      ./pkg/console/...` clean.
-- [x] **CLI-UX-12:** Expand-on-demand for truncated tool args. ALREADY
-      IMPLEMENTED as `Alt+V` live toggle between `default` and `verbose`
-      verbosity. Subscribed via `RegisterKeymapForFooter` in
-      `pkg/console/keymap_registration.go` (handler at line 50) and wired
-      into both interactive and queue REPL bootstraps
-      (`cmd/agent_mode_interactive.go:54`, `cmd/agent_mode_queue.go:39`).
-      Verbosity is already live-read by `isVerbose()` /
-      `isVerbose()` (`cmd/agent_terminal_subscriber.go:82`), so the next
-      tool event after the toggle uses the bumped 200-char preview width.
-      4 tests in `pkg/console/keymap_registration_test.go` lock the
-      cycle logic + 200-char preview width in. See SP-116.
-
-### Recommended starting points
-CLI-UX-2 (live elapsed) and CLI-UX-1 (verbose mode) — highest impact-per-effort,
-both build on existing infrastructure.
-
-## CLI Ghost Line Bug (found 2026-07-05, shipped 04a4d53b)
-
-Both halves shipped on 2026-07-05 in commit `04a4d53b` *before* this TODO entry
-was last updated. The TODO entries below are kept only as a historical
-reference — see the commit for the actual fix.
-
-### CLI-GHOST-1: Remove self-published ToolStart/ToolEnd from 34 handlers ✅ shipped
-Same bug class as 63a43421 (ask_user spinner). 34 ToolHandler implementations
-self-publish EventTypeToolStart/EventTypeToolEnd with "tool" key (not
-"tool_name") and missing fields. The core tool executor already publishes
-correct events. The self-publish produces phantom ✗ · 0.0s ghost lines in
-the CLI timeline.
-
-Affected handlers: activate_skill, analyze_image_content, analyze_ui_screenshot,
-browse_url, commit, create_pull_request, edit, embedding_index, git,
-list_automate_workflows, list_changes, list_dir, list_skills, manage_memory,
-manage_settings, mcp_refresh, patch_structured_file, read_file, recover_file,
-repo_map, respond_clarification, revert_my_changes, rollback_changes,
-run_automate, run_parallel_subagents, run_subagent, save_memory, search_files,
-search_memories, semantic_search, shell, task_queue(_add/_publish/_read),
-todo_read, todo_write, view_history, web_search, write, write_structured.
-
-### CLI-GHOST-2: Defensive guard in terminal subscriber ✅ shipped
-Even after removing the self-publish, add a defensive guard: skip rendering
-ToolEnd events with empty tool_name in handleToolStartEvent and
-handleToolEndEvent. Prevents future phantom lines from any source.

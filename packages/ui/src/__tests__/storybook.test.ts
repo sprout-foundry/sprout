@@ -233,6 +233,7 @@ describe('Storybook 8 Configuration', () => {
     it('should have all CSS files referenced in preview.tsx', () => {
       const referencedCssFiles = [
         'ChatPanel.css',
+        'Collapsible.css',
         'CommandInput.css',
         'CommandPalette.css',
         'ContextMenu.css',

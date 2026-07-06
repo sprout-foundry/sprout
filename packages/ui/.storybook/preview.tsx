@@ -9,6 +9,7 @@ import './tokens.css';
 
 // Import all component CSS files for proper styling
 import '../src/components/ChatPanel.css';
+import '../src/components/Collapsible.css';
 import '../src/components/CommandInput.css';
 import '../src/components/CommandPalette.css';
 import '../src/components/ContextMenu.css';

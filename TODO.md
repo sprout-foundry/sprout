@@ -588,12 +588,16 @@ Gemini CLI, Aider, Cursor, gh, dagger). Findings prioritized by impact.
 
 ### Tier 1 — High impact, directly visible
 
-- [ ] **CLI-UX-2:** Live elapsed-time on spinner for long-running tools.
+- [x] **CLI-UX-2:** Live elapsed-time on spinner for long-running tools.
       ALREADY IMPLEMENTED — spinner render() already shows elapsed seconds.
-      Audit was wrong on this one.
-- [ ] **CLI-UX-8:** Pre-highlight code blocks during streaming. Code blocks
-      flicker plain→colored when closing ``` arrives. StreamingMarkdownFormatter
-      should highlight per-line or show dim affordance until fence close.
+      Audit was wrong on this one. Marking shipped based on re-verification
+      (pkg/console/activity_indicator.go render path already includes elapsed).
+- [x] **CLI-UX-8:** Pre-highlight code blocks during streaming. The
+      streaming_markdown.go path already routes every line inside a fence
+      through formatCodeLine (per-line syntax highlighting). No flicker;
+      the TODO claim is incorrect. Tests in
+      pkg/console/streaming_markdown_test.go::TestStreamingMarkdown_CodeBlock
+      and _AcrossChunks lock the per-line behavior in.
 
 ### Tier 3 — Nice to have
 

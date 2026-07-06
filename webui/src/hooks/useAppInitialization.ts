@@ -20,6 +20,9 @@ import { registerServiceWorker } from '../services/serviceWorkerRegistration';
 import type { AppState } from '../types/app';
 import type { SproutEvent } from '../types/events';
 import { debugLog, useLog } from '../utils/log';
+import { isCloud } from '../config/mode';
+import { getAdapter } from '../services/apiAdapter';
+import type { CloudAdapter } from '../services/cloudAdapter';
 
 interface RecentFile {
   path: string;
@@ -61,6 +64,26 @@ export function useAppInitialization({
     eventsProvider.connect();
     eventsProvider.onEvent(handleEvent);
     eventsProvider.onReconnect(handleReconnect);
+
+    // ── Cloud mode: eagerly preload the WASM shell ──────────────
+    // In cloud mode the WASM shell (44 MB) must be compiled and
+    // instantiated before any wasm-local endpoint (files, terminal,
+    // search) is reachable.  Starting the load here, before stats
+    // and file requests fire, eliminates the init-race window where
+    // the first /api/files call falls through to the backend (which
+    // may return 401 or empty data).
+    const wasmPreloadPromise: Promise<boolean> = isCloud
+      ? (getAdapter() as CloudAdapter | null)?.preloadWasmShell() ?? Promise.resolve(false)
+      : Promise.resolve(false);
+
+    wasmPreloadPromise.then((ready) => {
+      if (ready) {
+        debugLog('[startup] WASM shell preloaded successfully');
+        setState((prev) => ({ ...prev, wasmReady: true }));
+      } else if (isCloud) {
+        console.warn('[startup] WASM shell preload failed — falling through to server safety-net');
+      }
+    });
 
     // Load initial stats
     const loadStats = () => {

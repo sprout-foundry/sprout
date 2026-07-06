@@ -56,6 +56,22 @@ export class CloudAdapter implements APIAdapter {
   }
 
   /**
+   * Eagerly preload the WASM shell before any wasm-local request.
+   * Called from useAppInitialization on mount in cloud mode so the
+   * shell is ready when file/terminal/search requests fire.  The
+   * promise resolves to true on success, false on failure (failure
+   * is cached so subsequent ensureWasmShell calls short-circuit).
+   */
+  preloadWasmShell(): Promise<boolean> {
+    return this.ensureWasmShell()
+      .then(() => true)
+      .catch((err) => {
+        console.warn('[CloudAdapter] WASM shell preload failed:', err);
+        return false;
+      });
+  }
+
+  /**
    * Lazily initialize the WASM shell on first wasm-local request.
    * Returns a singleton promise so concurrent requests don't race.
    * On failure, caches the failure so future calls short-circuit (avoiding

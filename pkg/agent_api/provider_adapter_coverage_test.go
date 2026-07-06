@@ -15,6 +15,10 @@ type enhancedMockClient struct {
 	mockClient
 	supportsVisionFlag bool
 	modelFlag          string
+	// visionCaps is returned by VisionCapabilities() in delegation tests.
+	// Left zero-valued by default; set it to a populated struct to test
+	// adapter pass-through. SP-103-D3 / AUDIT-GAP-2.
+	visionCaps VisionCapabilities
 }
 
 func (m *enhancedMockClient) GetModel() string     { return m.modelFlag }
@@ -26,6 +30,14 @@ func (m *enhancedMockClient) SupportsVision() bool { return m.supportsVisionFlag
 // that don't need the OCR-only distinction.
 func (m *enhancedMockClient) SupportsConversationalVision() bool {
 	return m.supportsVisionFlag
+}
+
+// VisionCapabilities returns a configurable value so per-provider delegation
+// tests can verify the provider adapter forwards the underlying table
+// intact. Zero value (default) means "no override — fall through to the
+// embedded mockClient's empty caps". SP-103-D3 / AUDIT-GAP-2.
+func (m *enhancedMockClient) VisionCapabilities() VisionCapabilities {
+	return m.visionCaps
 }
 // =====================================================================
 // containsReasoningModel

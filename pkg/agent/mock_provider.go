@@ -217,6 +217,14 @@ func (m *MockLLMProvider) SupportsConversationalVision() bool {
 	return false
 }
 
+// VisionCapabilities returns the safe defaults. MockLLMProvider never
+// participates in real vision requests, but the method is required by
+// api.ClientInterface — the defaults keep mock-routed requests harmless.
+// SP-103-D3 / AUDIT-GAP-2.
+func (m *MockLLMProvider) VisionCapabilities() api.VisionCapabilities {
+	return api.VisionCapabilitiesDefault()
+}
+
 // GetVisionModel returns empty string.
 func (m *MockLLMProvider) GetVisionModel() string {
 	return ""

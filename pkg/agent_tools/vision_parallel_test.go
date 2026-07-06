@@ -95,6 +95,13 @@ func (m *indexedMock) GetAverageTPS() float64          { return 0 }
 func (m *indexedMock) GetTPSStats() map[string]float64 { return nil }
 func (m *indexedMock) ResetTPSStats()                  {}
 
+// VisionCapabilities returns the safe defaults — these mocks focus on
+// parallel-pool mechanics, not capability tuning. Method exists to
+// satisfy api.ClientInterface after SP-103-D3 / AUDIT-GAP-2.
+func (m *indexedMock) VisionCapabilities() api.VisionCapabilities {
+	return api.VisionCapabilitiesDefault()
+}
+
 // failingMock fails the configured call numbers (1-indexed) and otherwise
 // succeeds. If alwaysFail is true, every call (including retries) fails.
 // Tracks peak active concurrency.
@@ -165,6 +172,13 @@ func (m *failingMock) GetLastTPS() float64             { return 0 }
 func (m *failingMock) GetAverageTPS() float64          { return 0 }
 func (m *failingMock) GetTPSStats() map[string]float64 { return nil }
 func (m *failingMock) ResetTPSStats()                  {}
+
+// VisionCapabilities returns the safe defaults — this mock focuses on
+// failure-retry semantics, not capability tuning. Method exists to
+// satisfy api.ClientInterface after SP-103-D3 / AUDIT-GAP-2.
+func (m *failingMock) VisionCapabilities() api.VisionCapabilities {
+	return api.VisionCapabilitiesDefault()
+}
 
 // =============================================================================
 // Helpers

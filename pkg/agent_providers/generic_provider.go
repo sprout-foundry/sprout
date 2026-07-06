@@ -475,6 +475,38 @@ func (p *GenericProvider) fallbackToConfigOrCurrent() ([]api.ModelInfo, error) {
 
 // SupportsVision is defined in generic_provider_vision.go
 
+// VisionCapabilities returns the per-provider vision limits for this
+// GenericProvider (OpenAI-compatible). When p.config is nil (a defensive
+// guard for unit tests that construct a bare struct), returns the safe
+// defaults via VisionCapabilitiesDefault(). Otherwise returns the OpenAI
+// tier:
+//
+//	20MB per image, 500 images per request, 2048px longest side,
+//	detail tiers {low, high, auto}.
+//
+// The OpenAI tier is the conservative pick for all GenericProvider
+// backends (Anthropic, OpenRouter, Chutes, etc.). Per-provider override
+// (e.g. tighter Anthropic caps) can land later by switching on
+// p.config.Name; keeping a single safe value here avoids silent
+// variation while the SP-103-B2 / SP-103-D2 wiring stabilises.
+// SP-103-D3 / AUDIT-GAP-2.
+func (p *GenericProvider) VisionCapabilities() api.VisionCapabilities {
+	if p.config == nil {
+		return api.VisionCapabilitiesDefault()
+	}
+	// OpenAI-compatible tier is the conservative pick for all GenericProvider
+	// backends (Anthropic, OpenRouter, Chutes, etc.). Per-provider override
+	// (e.g. tighter Anthropic caps) can land later by switching on
+	// p.config.Name; keeping a single safe value here avoids silent
+	// variation while the SP-103-B2 / SP-103-D2 wiring stabilises.
+	return api.VisionCapabilities{
+		MaxImageBytes:     20_000_000,
+		MaxImageCount:     500,
+		MaxImageDimension: 2048,
+		DetailTiers:       []string{"low", "high", "auto"},
+	}
+}
+
 // TPS tracking methods - simplified for now
 func (p *GenericProvider) GetLastTPS() float64 {
 	return 0.0

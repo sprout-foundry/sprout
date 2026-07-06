@@ -18,6 +18,86 @@ _Phases to be filled in as the runner picks them up._
 
 ---
 
+## CLI-UX + WebUI Gap Audit (2026-07-05)
+
+_Verified against code state on disk. Items below are concrete gaps
+discovered during the audit. NO inline shipping from the audit pass —
+queued for the runner per sp-009 isolation rules._
+
+### Already-shipped-but-listed (cleanup)
+
+These are already in the codebase; the TODO entries need their status
+headers updated, but no new code work is required:
+
+- [ ] **AUDIT-SHIP-1:** Update `roadmap/SP-101-*.md` header for the
+      four phases that audit confirmed shipped:
+      - SP-101-Phase 1 (Terminal `handleProcessExit` 3-path logic)
+      - SP-101-Phase 2 (NotificationCenter toast stack via `@sprout/ui`)
+      - SP-101-Phase 4 (ToolTimelineBar WebUI + OutputRouter CLI)
+      Mark each spec `**Status:** ✅ Implemented` in the spec header.
+      _~0.25 day, metadata only._
+
+- [ ] **AUDIT-SHIP-2:** SP-094 partial. The retry-with-backoff
+      foundation + `EventTypeRateLimited` event publishing
+      (`pkg/agent/retry.go::ClassifyError` + `seed/core/retry.go
+      ::doChatWithRetry` + `pkg/agent/seed_tool_registry.go:479
+      ::PublishRateLimited`) is shipped. Update TODO.md's SP-094
+      "Phase order" section to reflect this. The remaining ~512
+      `fmt.Errorf` migration is still real work.
+
+- [ ] **AUDIT-SHIP-3:** SP-102 spec-status drift audit. The 6
+      commits in `656db751` were re-audited this session and 3 of
+      the 4 newly-merged specs that needed header updates have
+      already been updated in subsequent commits. Remaining drift
+      is captured by AUDIT-SHIP-1.
+
+### Genuinely open (real code work)
+
+- [ ] **AUDIT-GAP-1:** SP-101-Phase 3 collapsible sections. Only the
+      reasoning-block `<details>` in `ChatPanel.tsx:211` exists.
+      No general-purpose `Collapsible` component in
+      `packages/ui/src/components/`. Spec calls for collapsible
+      sidebar sections, agent detail panels, terminal output
+      blocks. _~1 day. Build a `Collapsible` component in
+      `@sprout/ui`, then wire into the 2-3 most-used surfaces
+      (Sidebar, Agent detail panel, ChatPanel tool output)._
+
+- [ ] **AUDIT-GAP-2:** SP-103-D3 `VisionCapabilities` per-provider.
+      Only the binary `SupportsVision()` flag exists on the
+      `ProviderClient` interface (`pkg/agent_api/interface.go:30`).
+      No `MaxImageBytes` / `MaxImageCount` / `MaxDimensions` /
+      `DetailTiers` struct. Required to drive SP-103-B2 resize
+      (currently picks a single 1536px cap regardless of provider)
+      and SP-103-D2 batch splitting (needs to know each provider's
+      image-count limit). _~0.5 day. Define struct in
+      `pkg/agent_api/interface.go`; populate from model metadata
+      for Anthropic (hard-coded table), OpenAI (from `image_url
+      .detail` accepted values), Ollama local (from model
+      manifest)._
+
+- [ ] **AUDIT-GAP-3:** SP-098 stale audit table. The 2026-06-30
+      file-over-800-lines table is stale — 11 of 13 originally
+      listed files (`pkg/console/steer_input.go`, `pkg/lsp/semantic
+      /go_adapter.go`, `pkg/agent_tools/structured_helpers.go`,
+      etc.) have been split/renamed/removed since. Today's
+      offenders (27 files >800 lines: `pkg/console/markdown_
+      formatter.go` 1217, `pkg/configuration/config_risk_subagent
+      .go` 1035, `pkg/webui/websocket_handler.go` 1008, etc.) are
+      a different set. Refresh the SP-098 audit table to current
+      state. _~0.25 day. Re-run `wc -l pkg/**/*.go` excluding
+      tests, sort descending, take top 25, write the new table
+      into TODO.md SP-098 section._
+
+- [ ] **AUDIT-GAP-4:** SP-099 + SP-100 still genuinely open. The
+      audit confirms neither has shipped:
+      - SP-099 (concurrency hardening, ~2 weeks, 3 phases)
+      - SP-100 (WASM Tier 2a onnxruntime-web bridge, ~3 days)
+      No code action from this audit; they remain properly
+      queued at their existing TODO entries.
+
+
+---
+
 ## SP-103: Vision Pipeline Reliability + Caching + Routing Fixes
 
 _Most items completed by subsequent work. Verified against code state 2026-07-05._

@@ -601,8 +601,19 @@ Gemini CLI, Aider, Cursor, gh, dagger). Findings prioritized by impact.
 
 ### Tier 3 — Nice to have
 
-- [ ] **CLI-UX-10:** Keyboard shortcut affordances row. No visible hint that
-      Ctrl+C interrupts, / opens steer. Dim toggleable help row above footer.
+- [x] **CLI-UX-10:** Keyboard shortcut affordances row. Dim toggleable help
+      row above the rule showing registered keybindings (e.g.
+      "Alt+T breakdown · Alt+V verbose"). SHIPPED at `2ebf42b7`.
+      SP-115 (`roadmap/SP-115-cli-ux-10-keyboard-affordances.md`):
+      `KeymapHintRow()` formatter, `StatusFooter.SetShowKeymapHint()`,
+      scroll-region math extended (`reservedRows() = 2 + steerRowCount() +
+      hintRowCount()`), `steerRowFor` signature extended with `hintRows`
+      parameter, live-tracks verbosity via the Alt+V handler
+      (`pkg/console/keymap_registration.go`). Hidden in compact mode.
+      Hidden rows correctly cleared on Resize/Stop. 18 new tests in
+      `pkg/console/keymap_hint_row_test.go` and
+      `pkg/console/status_footer_hint_test.go`. `go test -race
+      ./pkg/console/...` clean.
 - [x] **CLI-UX-12:** Expand-on-demand for truncated tool args. ALREADY
       IMPLEMENTED as `Alt+V` live toggle between `default` and `verbose`
       verbosity. Subscribed via `RegisterKeymapForFooter` in

@@ -8,6 +8,7 @@ import (
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/clihooks"
 	"golang.org/x/term"
 )
 
@@ -29,6 +30,14 @@ func NewCLIPasswordPrompter() *CLIPasswordPrompter {
 // If stdin is not a TTY it returns ErrNoInteractiveSurface immediately.
 // The reason string is printed to stderr as a prompt label.
 // Terminal state is always restored via defer even when an error occurs.
+//
+// The clihooks.WithCookedStdin wrapper ensures the active CLI activity
+// indicator (spinner) is suspended and the SP-055 SteerInputReader (which
+// holds stdin in raw mode during a turn) is paused for the duration of
+// the read. Without this, the spinner would clobber the prompt text on
+// stderr, and a mid-turn call would hit EOF immediately because the steer
+// reader is consuming raw-mode stdin. WithCookedStdin is a no-op when
+// no hook is registered (non-interactive runs).
 func (cli *CLIPasswordPrompter) Prompt(ctx context.Context, reason string) (string, error) {
 	if ctx.Err() != nil {
 		return "", ctx.Err()
@@ -45,6 +54,21 @@ func (cli *CLIPasswordPrompter) Prompt(ctx context.Context, reason string) (stri
 	// Restore terminal state even if ReadPassword encounters an error or
 	// context is cancelled while the goroutine is blocked on the read.
 	defer term.Restore(fd, oldState)
+
+	// Suspend the CLI spinner and pause the SP-055 SteerInputReader so the
+	// prompt text isn't clobbered by an in-flight indicator and so stdin
+	// isn't held in raw mode by the steer reader (which would cause
+	// term.ReadPassword to see odd input on a mid-turn call). Also
+	// suspend the streaming callback's prose output so a mid-turn call
+	// (e.g. NativeShellPassword) isn't trampled by a concurrent chunk
+	// write. All three hooks no-op when no implementation is registered
+	// (non-interactive).
+	clihooks.SuspendIndicator()
+	clihooks.PauseSteer()
+	clihooks.SuspendStreaming()
+	defer clihooks.ResumeIndicator()
+	defer clihooks.ResumeSteer()
+	defer clihooks.ResumeStreaming()
 
 	// Write the prompt to stderr so it doesn't interfere with stdout piping.
 	fmt.Fprintf(os.Stderr, "%s: ", reason)

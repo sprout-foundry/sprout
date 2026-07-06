@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"log"
@@ -9,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/clihooks"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/pmezard/go-difflib/difflib"
 	"github.com/sprout-foundry/sprout/pkg/events"
@@ -444,26 +446,66 @@ func (a *Agent) requestWebUIEditApproval(ctx context.Context, p EditProposal) (E
 // requestCLIEditApproval renders the diff to stderr and prompts the user
 // to accept or reject each hunk via stdin. Each hunk is shown with its
 // line range and a y/n prompt. Defaults to accept (y) on empty input.
+//
+// Suspends the CLI activity indicator (spinner) and pauses the SP-055
+// SteerInputReader so the per-hunk prompts aren't clobbered by an
+// in-flight spinner and so stdin isn't held in raw mode by the steer
+// reader (which would cause fmt.Fscanln to read garbage on a mid-turn
+// call). Both hooks no-op cleanly when no implementation is registered.
 func (a *Agent) requestCLIEditApproval(p EditProposal) EditDecision {
 	unifiedDiff, _ := GenerateUnifiedDiff(p.Path, p.Original, p.Proposed)
 
-	fmt.Fprintf(os.Stderr, "\n%sEdit approval required for %s%s\n", "\x1b[1m", p.Path, "\x1b[0m")
-	fmt.Fprintf(os.Stderr, "%s\n", unifiedDiff)
-	fmt.Fprintf(os.Stderr, "\n%sReview each hunk:%s\n", "\x1b[1m", "\x1b[0m")
+	var accepted []string
+	// Suspend streaming prose so a mid-turn fall-through (after the WebUI
+	// path times out) isn't trampled by a concurrent chunk write. The
+	// streaming flag is process-global — defer the resume so a panic in
+	// the closure doesn't leak a permanently-suspended stream for the
+	// rest of the process lifetime. WithCookedStdin already pairs
+	// SuspendIndicator + PauseSteer with their resumes.
+	clihooks.SuspendStreaming()
+	defer clihooks.ResumeStreaming()
+	err := clihooks.WithCookedStdin(func() error {
+		fmt.Fprintf(os.Stderr, "\n%sEdit approval required for %s%s\n", "\x1b[1m", p.Path, "\x1b[0m")
+		fmt.Fprintf(os.Stderr, "%s\n", unifiedDiff)
+		fmt.Fprintf(os.Stderr, "\n%sReview each hunk:%s\n", "\x1b[1m", "\x1b[0m")
 
-	accepted := make([]string, 0, len(p.Hunks))
-	for _, hunk := range p.Hunks {
-		fmt.Fprintf(os.Stderr, "  %s (lines %d-%d, +%d/-%d) [Y/n]: ",
-			hunk.ID, hunk.OldStart, hunk.OldStart+hunk.OldLines-1,
-			countLinesByType(hunk.Lines, DiffLineAdd), countLinesByType(hunk.Lines, DiffLineRemove))
+		scanner := bufio.NewScanner(os.Stdin)
+		// Default 64KiB cap on bufio.Scanner is plenty for a y/n answer;
+		// bumping is unnecessary here.
+		accepted = make([]string, 0, len(p.Hunks))
+		for _, hunk := range p.Hunks {
+			fmt.Fprintf(os.Stderr, "  %s (lines %d-%d, +%d/-%d) [Y/n]: ",
+				hunk.ID, hunk.OldStart, hunk.OldStart+hunk.OldLines-1,
+				countLinesByType(hunk.Lines, DiffLineAdd), countLinesByType(hunk.Lines, DiffLineRemove))
 
-		var answer string
-		fmt.Fscanln(os.Stdin, &answer)
+			var answer string
+			if scanner.Scan() {
+				answer = scanner.Text()
+			} else if err := scanner.Err(); err != nil {
+				// I/O error (not just EOF). Surface it; the caller treats
+				// any nil/empty AcceptedHunks list as "reject all" via the
+				// branch after WithCookedStdin returns.
+				return err
+			}
+			// EOF (clean shutdown, Ctrl+D) — fall through with answer=""
+			// so the user-default "y" applies, matching the prior
+			// fmt.Fscanln behavior where mid-hunk EOF silently accepted
+			// remaining hunks.
 
-		answer = strings.ToLower(strings.TrimSpace(answer))
-		if answer == "" || answer == "y" || answer == "yes" {
-			accepted = append(accepted, hunk.ID)
+			answer = strings.ToLower(strings.TrimSpace(answer))
+			if answer == "" || answer == "y" || answer == "yes" {
+				accepted = append(accepted, hunk.ID)
+			}
 		}
+		return nil
+	})
+
+	// EOF (Ctrl+D / pipe closed) → treat the trailing request as cancelled
+	// by returning a deny decision. Other errors propagate as well — both
+	// are safe to fold into "no hunks approved" since the spec accepts an
+	// empty AcceptedHunks as reject-all.
+	if err != nil {
+		return EditDecision{Approved: false, AcceptedHunks: nil}
 	}
 
 	return EditDecision{

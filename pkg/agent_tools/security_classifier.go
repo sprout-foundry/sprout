@@ -760,17 +760,7 @@ func classifyBrowseURL(args map[string]interface{}) SecurityResult {
 		}
 	}
 
-	// (e) Localhost URL → Caution
-	if isLocalhostURL(urlRaw) {
-		return SecurityResult{
-			Risk:         SecurityCaution,
-			Reasoning:    "localhost URL may reach private services on this machine",
-			ShouldPrompt: true,
-			Category:     RiskCategoryNetwork,
-		}
-	}
-
-	// (f) Default: safe network access
+	// (e) Default: safe network access
 	return SecurityResult{
 		Risk:      SecuritySafe,
 		Reasoning: "Network access tool with no auth or evaluation primitives",
@@ -822,13 +812,4 @@ func detectNetworkEgress(script string) string {
 	return ""
 }
 
-// isLocalhostURL reports whether url targets a local address.
-func isLocalhostURL(url string) bool {
-	lower := strings.ToLower(url)
-	return strings.HasPrefix(lower, "http://localhost") ||
-		strings.HasPrefix(lower, "http://127.0.0.1") ||
-		strings.HasPrefix(lower, "http://[::1]") ||
-		strings.HasPrefix(lower, "https://localhost") ||
-		strings.HasPrefix(lower, "https://127.0.0.1") ||
-		strings.HasPrefix(lower, "https://[::1]")
-}
+

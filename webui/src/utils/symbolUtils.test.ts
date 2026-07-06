@@ -20,8 +20,8 @@ describe('MAX_SYMBOLS constant', () => {
 });
 
 describe('KIND_ICONS constant', () => {
-  it('has all 7 symbol kinds', () => {
-    expect(Object.keys(KIND_ICONS)).toHaveLength(7);
+  it('has all 8 symbol kinds', () => {
+    expect(Object.keys(KIND_ICONS)).toHaveLength(8);
   });
 
   it('maps function and method to ƒ', () => {

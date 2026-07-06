@@ -4,9 +4,9 @@ package cmd
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
@@ -19,22 +19,25 @@ import (
 // normal agent-creation path.
 const maxAPIKeyRetries = 3
 
-// descTruncateLen is the maximum width for a provider description line in
-// the selection menu. Keeps the list scannable on narrow terminals.
-const descTruncateLen = 80
-
 // needsOnboarding reports whether the user has a working provider configured.
 // Returns true when LastUsedProvider is empty, a non-AI sentinel ("test" /
 // "editor"), or points at a provider whose credentials are missing.
 func needsOnboarding() bool {
 	cfg, err := configuration.Load()
 	if err != nil || cfg == nil {
-		return false // let the normal error path surface the failure
+		return true // unreadable config: surface onboarding so user can reconfigure
 	}
 	provider := strings.TrimSpace(cfg.LastUsedProvider)
 	switch provider {
 	case "", "test", "editor":
 		return true
+	}
+	// If the provider is a known built-in OR a configured custom provider,
+	// don't second-guess the credential check — let agent creation surface
+	// the real auth error. HasProviderAuth can false-negative on transient
+	// keyring failures or empty env-var metadata for custom providers.
+	if isKnownProvider(provider, cfg) {
+		return false
 	}
 	return !configuration.HasProviderAuth(provider)
 }
@@ -121,112 +124,100 @@ func runGuidedOnboarding() bool {
 	return true
 }
 
-// selectProviderInteractive presents the recommended providers, an
-// "Other providers" expander, and a skip option. Returns (providerID, true)
-// on selection or ("", false) when the user skips.
+// selectProviderInteractive presents a searchable provider menu and a skip
+// option. Returns (providerID, true) on selection or ("", false) when the
+// user skips. Uses console.SelectList for arrow-key navigation and
+// type-to-filter; it has a built-in non-TTY fallback so no extra bufio is
+// needed.
+//
+// Empty-catalog fallback: if the catalog has no providers, we still show a
+// SelectList with a "Type provider ID" item and the skip option. The typed
+// value is treated as the provider ID so the user can still manually pick
+// (e.g. "openrouter") when the embedded catalog hasn't been loaded yet.
 func selectProviderInteractive() (string, bool) {
-	reader := bufio.NewReader(os.Stdin)
+	catalog := providercatalog.Current()
 
-	for {
-		catalog := providercatalog.Current()
+	var items []console.SelectItem
 
-		var recommended, others []providercatalog.Provider
+	if len(catalog.Providers) == 0 {
+		// Catalog load failed or is empty — give the user a manual entry
+		// option plus skip. The manual entry item's value is a sentinel we
+		// detect below.
+		items = []console.SelectItem{
+			{Label: "Type provider ID manually", Detail: "e.g. openrouter, zai", Value: "__type__"},
+			{Label: "Skip (editor-only mode)", Detail: "set up AI later", Value: "skip"},
+		}
+	} else {
+		// Recommended first, then the rest.
 		for _, p := range catalog.Providers {
 			if p.Recommended {
-				recommended = append(recommended, p)
-			} else {
-				others = append(others, p)
+				models := ""
+				if p.DefaultModel != "" {
+					models = p.DefaultModel
+				} else if len(p.Models) > 0 {
+					models = p.Models[0].ID
+				}
+				items = append(items, console.SelectItem{
+					Label:  p.Name,
+					Detail: "recommended · " + models,
+					Value:  p.ID,
+				})
 			}
 		}
-
-		// No catalog data — fall back to the known-providers list so the
-		// user can still type a name manually.
-		if len(catalog.Providers) == 0 {
-			fmt.Println("Enter a provider ID (e.g. openrouter, zai, openai):")
-			input, err := promptLine(reader, "Provider: ")
-			if err != nil {
-				return "", false
+		for _, p := range catalog.Providers {
+			if p.Recommended {
+				continue
 			}
-			input = strings.ToLower(strings.TrimSpace(input))
-			if input == "skip" {
-				return "", false
+			models := ""
+			if p.DefaultModel != "" {
+				models = p.DefaultModel
+			} else if len(p.Models) > 0 {
+				models = p.Models[0].ID
 			}
-			return input, true
+			items = append(items, console.SelectItem{
+				Label:  p.Name,
+				Detail: models,
+				Value:  p.ID,
+			})
 		}
+		// Skip option at the end.
+		items = append(items, console.SelectItem{
+			Label:  "Skip (editor-only mode)",
+			Detail: "set up AI later",
+			Value:  "skip",
+		})
+	}
 
-		fmt.Println("Recommended providers:")
-		printProviderList(recommended, 1)
+	sl := console.NewSelectList(console.SelectListOptions{
+		Title:     "Pick a provider",
+		Items:     items,
+		Searchable: true,
+		PageSize:   10,
+	})
 
-		otherOptionNum := len(recommended) + 1
-		skipOptionNum := otherOptionNum + 1
-		if len(others) > 0 {
-			fmt.Printf("  %d. Other providers\n", otherOptionNum)
-		} else {
-			skipOptionNum = otherOptionNum // collapse when there are no others
-		}
-		fmt.Printf("  %d. Skip (editor-only mode)\n", skipOptionNum)
-		fmt.Println()
-
-		prompt := fmt.Sprintf("Select a provider (1-%d, or type a name): ", skipOptionNum)
-		input, err := promptLine(reader, prompt)
+	ctx := context.Background()
+	value, ok, err := sl.Run(ctx)
+	if err != nil || !ok {
+		return "", false
+	}
+	if value == "skip" {
+		return "", false
+	}
+	// Manual type-in sentinel: fall back to a simple prompt.
+	if value == "__type__" {
+		fmt.Print("Enter provider ID (e.g. openrouter, zai): ")
+		reader := bufio.NewReader(os.Stdin)
+		input, err := reader.ReadString('\n')
 		if err != nil {
 			return "", false
 		}
-
-		input = strings.TrimSpace(input)
-		if strings.EqualFold(input, "skip") {
+		input = strings.ToLower(strings.TrimSpace(input))
+		if input == "" || strings.EqualFold(input, "skip") {
 			return "", false
 		}
-
-		// Numeric selection?
-		if n, convErr := strconv.Atoi(input); convErr == nil {
-			if n >= 1 && n <= len(recommended) {
-				return recommended[n-1].ID, true
-			}
-			if n == otherOptionNum && len(others) > 0 {
-				// Expand the full list and re-prompt.
-				fmt.Println()
-				fmt.Println("All providers:")
-				printProviderList(others, 1)
-				fmt.Printf("  %d. Back to recommended\n", len(others)+1)
-				fmt.Println()
-				subInput, subErr := promptLine(reader, "Select a provider: ")
-				if subErr != nil {
-					return "", false
-				}
-				subInput = strings.TrimSpace(subInput)
-				if strings.EqualFold(subInput, "skip") {
-					return "", false
-				}
-				if sn, e := strconv.Atoi(subInput); e == nil {
-					if sn >= 1 && sn <= len(others) {
-						return others[sn-1].ID, true
-					}
-				}
-				// Non-numeric or out of range — treat as a typed provider name.
-				if isKnownProvider(strings.ToLower(subInput)) {
-					return strings.ToLower(subInput), true
-				}
-				fmt.Println()
-				console.GlyphWarning.Printf("Unknown provider %q — please choose from the list.", subInput)
-				continue
-			}
-			if n == skipOptionNum {
-				return "", false
-			}
-			fmt.Println()
-			console.GlyphWarning.Printf("Selection %d is out of range.", n)
-			continue
-		}
-
-		// Typed provider name.
-		normalizedName := strings.ToLower(input)
-		if isKnownProvider(normalizedName) {
-			return normalizedName, true
-		}
-		fmt.Println()
-		console.GlyphWarning.Printf("Unknown provider %q — please choose from the list or type 'skip'.", input)
+		return input, true
 	}
+	return value, true
 }
 
 // collectAndValidateAPIKey handles the API key prompt → validate → retry
@@ -324,28 +315,3 @@ func persistProviderAndModel(providerID, modelName string) error {
 	return mgr.SaveConfig()
 }
 
-// printProviderList prints a numbered list of providers with name and a
-// truncated description. The starting index controls the first number
-// displayed (1-based).
-func printProviderList(providers []providercatalog.Provider, startIndex int) {
-	for i, p := range providers {
-		desc := truncate(strings.TrimSpace(p.Description), descTruncateLen)
-		if desc != "" {
-			fmt.Printf("  %d. %s — %s\n", startIndex+i, p.Name, desc)
-		} else {
-			fmt.Printf("  %d. %s\n", startIndex+i, p.Name)
-		}
-	}
-}
-
-// truncate clips s to at most maxLen characters, appending an ellipsis when
-// truncation occurs.
-func truncate(s string, maxLen int) string {
-	if maxLen <= 0 || len(s) <= maxLen {
-		return s
-	}
-	if maxLen <= 1 {
-		return "…"
-	}
-	return s[:maxLen-1] + "…"
-}

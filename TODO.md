@@ -42,116 +42,63 @@ should be added as SP-092+ rather than expanding this list.
 
 ## SP-103: Vision Pipeline Reliability + Caching + Routing Fixes
 
-_Verified against actual code state (2026-06-30) and current LLM-vendor
-practice (Anthropic Vision + Prompt Caching docs, production IDP research
-from Edge Case Jan 2026)._ The original direction (route pasted images
-through `analyze_image_content` by default) was wrong for the common case;
-Anthropic's docs explicitly recommend inline image embedding with
-`cache_control` for repeat-turn cost reduction. This SP captures the actual
-gaps: prompt caching on image blocks, image resizing, dead-code
-reactivation for non-vision models, OCR-model carve-out, plus the
-reliability/perf/correctness fixes that were always valid.
+_Most items completed by subsequent work. Verified against code state 2026-07-05._
 
-### Background (verified state)
+### Completed (shipped in later changes)
 
-- `pkg/agent/conversation.go:230-242` (`processImagesAsMultimodal`) is the
-  *only* path that embeds pasted images as `api.ImageData` for the chat
-  model. Default behavior when `SupportsVision() == true`.
-- `processImagesViaOCR` (`conversation.go:376`) and
-  `buildNonVisionImageToolPrompt` (`conversation.go:268`) are defined but
-  **never called from production code**. The "non-vision path" is dead
-  code — pasted images on a non-vision model stay as raw
-  `Pasted image saved to disk: /tmp/foo.png` placeholders with no
-  system-prompt guidance to call `analyze_image_content`.
-- `analyze_image_content` calls `tools.AnalyzeImage` directly and is
-  available to all models regardless of `SupportsVision()`. It's the
-  right tool for specialized analysis (OCR of dense text, frontend
-  inspection, structured extraction), but **not** the right default for
-  simple "what color is this?" conversational vision.
-- `OllamaLocalClient.SupportsVision()`
-  (`pkg/agent_api/ollama_local.go:514-520`) returns true for `glm-ocr` and
-  similar OCR models, which then triggers direct multimodal embedding on a
-  model not designed for conversational vision. Needs a
-  `SupportsConversationalVision()` distinction.
-- `visionCache`, `lastVisionUsage`, `visionCacheUsage` are package-globals
-  with no mutex. Concurrent `AnalyzeImage` calls race.
-- `processOCRImages` (`vision_pdf.go:194-265`) is sequential with a
-  `failures >= 2` give-up. Up to 8 pages serially.
-- `DownloadImage` (`vision_image.go:91-100`) and `downloadRemotePDFToTemp`
-  (`vision_pdf.go:118`) read the full body before checking size.
-- `classifyPDFProcessingErrorCode` (`vision_utils.go:182-184`) and the
-  per-call `strings.Contains(errMsg, ...)` in `vision_image.go:418-440`
-  stringify typed errors to classify them back to `ErrCode*` constants.
-  Typed errors already exist in `pkg/errors/types.go::TypedError` with
-  `NewTool`, `NewNetwork`, etc.; the gap is at the response-builder
-  boundary, not the source.
-- `RateLimitExceededError` (`pkg/agent/api_client_types.go`) is used only
-  by test fixtures (`scripted_playback.go`). The legacy retry layer was
-  removed alongside `APIClient` in v0.16.12. Production has no
-  retry/backoff in `SendVisionRequest`.
+- **✅ `SupportsConversationalVision()` distinction** — Implemented as an interface method with fallback to `SupportsVision()`; `conversation.go` uses `effectiveConversationalVision()` with probe check. OCR models like `glm-ocr` correctly skip inline embedding.
+- **✅ Prompt caching** (`cache_control: ephemeral`) — `generic_provider_vision.go` adds `cache_control` to image blocks when `visionCacheImagesEnabled()` is true.
+- **✅ Parallel OCR** — `processOCRImages` replaced by `processOCRImagesParallel` (`vision_parallel.go`) with configurable worker pool.
+- **✅ Preflight size check** — `preflightRemoteSize` in `vision_preflight.go` checks Content-Length before downloading; used in `DownloadImage` and PDF download.
+- **✅ Non-vision model paths** — `processImagesViaOCR` and `buildNonVisionImageToolPrompt` are actively called (not dead code). Non-vision models get OCR pre-processing or a tool-call prompt.
+- **✅ Race-condition globals** — `visionCache`, `lastVisionUsage`, `visionCacheUsage` package globals are gone.
 
-### Why these items, not "route to tools"
+### Remaining Work
 
-Per Anthropic's vision docs
-(`https://platform.claude.com/docs/en/build-with-claude/vision`):
+#### SP-103-B2: Image Resizing
 
-- Inline image embedding is the recommended pattern. Anthropic explicitly
-  shows `image` content blocks as the primary use case.
-- Image-then-text structure gives the best results ("Claude works best
-  when images come before text").
-- Multi-image joint analysis is first-class ("useful for comparing
-  images, asking about differences").
-- Caching images is supported via `cache_control` — 1024-token minimum
-  for Sonnet 4.5+, cache hits cost 10% of base input.
+4K screenshots bill as ~4800 visual tokens. No resize logic exists. Providers have `max_image_width`/`max_image_height` or detail-tier settings (`low`/`high`/`auto` on OpenAI, `low`/`high` on Anthropic). Resize oversized images before embedding to cap token cost.
 
-Per Anthropic's prompt caching docs:
+**What to build:**
+- Add `resizeImageToMax(dim image.Dimensions, maxW, maxH int) []byte` using an existing image library (or a minimal Go implementation)
+- Call it in `DownloadImage` and when preparing `ImageData` for `processImagesAsMultimodal`
+- Cap at 1536px on the longest side (Anthropic's default for "auto" detail)
 
-- Image blocks are cacheable content blocks. The biggest cost win is
-  caching the image prefix across turns, not routing through tools.
+**Effort:** ~0.5 day. New helper in `vision_image.go` or `vision_utils.go`.
 
-Per Edge Case's production IDP research (Jan 2026), the canonical
-production pattern is **hybrid OCR → vision LLM**, not vision-LLM-only or
-OCR-only. For Sprout's case (a code agent with multimodal chat model),
-that means: inline images for chat, `analyze_image_content` for
-specialized analysis (OCR mode = "vision LLM called as a tool"), and
-caching for repeat-turn cost.
+#### SP-103-A9: Typed Errors in Vision
 
-### Reliability (SP-103-A) — high priority
+`classifyPDFProcessingErrorCode` and `strings.Contains(errMsg, ...)` in `vision_image.go:418-440` stringify typed errors to classify them. `pkg/errors/types.go::TypedError` exists with `CodeVision*` constants. Migrate to typed error wrapping at the source.
 
+**Effort:** ~0.5 day. Replace string-matching with `errors.As` checks against `TypedError`.
 
-### Prompt caching + image sizing (SP-103-B) — high priority
+#### SP-103-D1: Inline-Image Cost into Budget Tracker
 
-This is the **highest-leverage change** in the SP. Anthropic prompt caching
-cuts repeat-turn image cost by 90% on cache hits.
+When `processImagesAsMultimodal` embeds images into the chat message, per-image `image_tokens` / `cache_read_input_tokens` come back in the provider's chat response but are dropped before reaching `BudgetTracker.Deduct`. Bridge them so users see actual vision cost.
 
+**Effort:** ~1.5 days. Touches `conversation.go`, provider response structs (`Anthropic`/`OpenAI`), and `pkg/budget/budget.go`.
 
-### Dead code + carve-out (SP-103-C) — medium priority
+#### SP-103-D2: Batch Splitting with Fallback
 
+When a user pastes N images and the provider's vision context window is exceeded, the inline path fails with 400. Add automatic batch splitting: try inline; on vision-context overflow, split — keep first K images inline, call `analyze_image_content` for the rest.
+
+**Effort:** ~1 day. New `vision_batch_split.go` helper.
+
+#### SP-103-D3: Provider Vision-Capability Tables
+
+`SupportsVision()` is a binary flag. Add a `VisionCapabilities` struct per provider (max image bytes, max image count, max dimensions, detail tiers). Use it to drive resize (B2) and batch splitting (D2).
+
+**Effort:** ~0.5 day. New types in `pkg/agent_api/interface.go`, populated from model metadata.
 
 ### Rollout
 
-SP-103-A1..A8 + B1..B4 + C1..C4 ship as one cohesive SP behind no flag
-(reliability + caching + sizing all benefit every user; the OCR carve-out
-fixes a real misrouting bug).
-
-Feature flag only needed for C3 (tool description text) — wait until
-B1's caching metric is verified before updating the user-facing
-description, so the message matches actual behavior.
+B2 and A9 are quick wins (1 day combined). D1, D2, D3 are follow-ups that add value but aren't blocking.
 
 ### Acceptance
 
-- `go test -race ./pkg/agent_tools/...` passes; new tests cover
-  parallel dispatch + cache eviction + retry + typed-error paths.
-- Subsequent turns with the same pasted image report
-  `cache_read_input_tokens > 0` (Anthropic) or `cached_tokens > 0`
-  (OpenAI) in the response usage.
-- A 4K pasted screenshot bills as ~1500 visual tokens, not ~4800.
-- An Ollama OCR-model session (`glm-ocr`) routes pasted images through
-  `analyze_image_content` tool call, never direct multimodal
-  embedding.
-- A non-vision chat model (e.g. GPT-3.5) on Sprout has the model call
-  `analyze_image_content` for each pasted image (currently it just
-  sees the placeholder text and does nothing).
+- `go test -race ./pkg/agent_tools/...` passes.
+- A 4K pasted screenshot bills as ~1500 visual tokens (not ~4800).
+- `classifyPDFProcessingErrorCode` uses `errors.As(*TypedError)` instead of `strings.Contains`.
 - `make test-race` is a required CI check.
 
 ## SP-092: Persistent Recall via `/recall` and Cross-Turn Hints
@@ -641,12 +588,16 @@ Gemini CLI, Aider, Cursor, gh, dagger). Findings prioritized by impact.
 
 ### Tier 1 — High impact, directly visible
 
-- [ ] **CLI-UX-2:** Live elapsed-time on spinner for long-running tools.
+- [x] **CLI-UX-2:** Live elapsed-time on spinner for long-running tools.
       ALREADY IMPLEMENTED — spinner render() already shows elapsed seconds.
-      Audit was wrong on this one.
-- [ ] **CLI-UX-8:** Pre-highlight code blocks during streaming. Code blocks
-      flicker plain→colored when closing ``` arrives. StreamingMarkdownFormatter
-      should highlight per-line or show dim affordance until fence close.
+      Audit was wrong on this one. Marking shipped based on re-verification
+      (pkg/console/activity_indicator.go render path already includes elapsed).
+- [x] **CLI-UX-8:** Pre-highlight code blocks during streaming. The
+      streaming_markdown.go path already routes every line inside a fence
+      through formatCodeLine (per-line syntax highlighting). No flicker;
+      the TODO claim is incorrect. Tests in
+      pkg/console/streaming_markdown_test.go::TestStreamingMarkdown_CodeBlock
+      and _AcrossChunks lock the per-line behavior in.
 
 ### Tier 3 — Nice to have
 
@@ -660,9 +611,13 @@ Gemini CLI, Aider, Cursor, gh, dagger). Findings prioritized by impact.
 CLI-UX-2 (live elapsed) and CLI-UX-1 (verbose mode) — highest impact-per-effort,
 both build on existing infrastructure.
 
-## CLI Ghost Line Bug (found 2026-07-05)
+## CLI Ghost Line Bug (found 2026-07-05, shipped 04a4d53b)
 
-### CLI-GHOST-1: Remove self-published ToolStart/ToolEnd from 34 handlers
+Both halves shipped on 2026-07-05 in commit `04a4d53b` *before* this TODO entry
+was last updated. The TODO entries below are kept only as a historical
+reference — see the commit for the actual fix.
+
+### CLI-GHOST-1: Remove self-published ToolStart/ToolEnd from 34 handlers ✅ shipped
 Same bug class as 63a43421 (ask_user spinner). 34 ToolHandler implementations
 self-publish EventTypeToolStart/EventTypeToolEnd with "tool" key (not
 "tool_name") and missing fields. The core tool executor already publishes
@@ -678,7 +633,7 @@ run_automate, run_parallel_subagents, run_subagent, save_memory, search_files,
 search_memories, semantic_search, shell, task_queue(_add/_publish/_read),
 todo_read, todo_write, view_history, web_search, write, write_structured.
 
-### CLI-GHOST-2: Defensive guard in terminal subscriber
+### CLI-GHOST-2: Defensive guard in terminal subscriber ✅ shipped
 Even after removing the self-publish, add a defensive guard: skip rendering
 ToolEnd events with empty tool_name in handleToolStartEvent and
 handleToolEndEvent. Prevents future phantom lines from any source.

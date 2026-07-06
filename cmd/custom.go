@@ -4,6 +4,7 @@ package cmd
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"sort"
@@ -124,20 +125,43 @@ func runCustomModelAdd() error {
 			fmt.Printf("  ... and %d more\n", len(models)-maxShow)
 		}
 
-		for {
-			preferred, err := promptLine(reader, "Preferred default model (name or number, leave empty for first discovered): ")
-			if err != nil {
-				return fmt.Errorf("failed to prompt for preferred model: %w", err)
+		preferredItems := make([]console.SelectItem, 0, len(models))
+		for _, m := range models {
+			detail := ""
+			if m.ContextLength > 0 {
+				detail = fmt.Sprintf("%dK context", m.ContextLength/1000)
 			}
-			selectedModel, err := resolvePreferredCustomProviderModel(preferred, models)
-			if err != nil {
-				fmt.Println()
-				console.GlyphWarning.Printf("%v", err)
-				continue
-			}
-			provider.ModelName = selectedModel
-			break
+			preferredItems = append(preferredItems, console.SelectItem{
+				Label:  m.ID,
+				Detail: detail,
+				Value:  m.ID,
+			})
 		}
+		preferredSL := console.NewSelectList(console.SelectListOptions{
+			Title:      "Pick a preferred default model",
+			Items:      preferredItems,
+			Searchable: true,
+			PageSize:   10,
+		})
+		preferredValue, ok, err := preferredSL.Run(context.Background())
+		if err != nil {
+			return fmt.Errorf("failed to prompt for preferred model: %w", err)
+		}
+		if !ok {
+			fmt.Println()
+			console.GlyphInfo.Print("Setup cancelled.")
+			return nil
+		}
+		// The picker only returns discovered model IDs, so the resolve
+		// call is effectively a typed assertion that the ID matches.
+		// (We keep the call rather than a direct assignment so any
+		// future case-folding/normalization in resolvePreferred is
+		// applied here too.)
+		selectedModel, err := resolvePreferredCustomProviderModel(preferredValue, models)
+		if err != nil {
+			return fmt.Errorf("failed to resolve preferred model: %w", err)
+		}
+		provider.ModelName = selectedModel
 
 		// Auto-populate per-model context sizes from discovery data
 		if provider.ModelContextSizes == nil {
@@ -180,28 +204,48 @@ func runCustomModelAdd() error {
 	}
 	if isYes(visionAnswer) {
 		provider.SupportsVision = true
-		for {
-			visionModelInput, err := promptLine(reader, "Vision model (name or number, leave empty to reuse default model): ")
+		visionItems := []console.SelectItem{
+			{
+				Label:  "Use default model",
+				Detail: fmt.Sprintf("reuse %s", provider.ModelName),
+				Value:  "",
+			},
+		}
+		for _, m := range models {
+			detail := ""
+			if m.ContextLength > 0 {
+				detail = fmt.Sprintf("%dK context", m.ContextLength/1000)
+			}
+			visionItems = append(visionItems, console.SelectItem{
+				Label:  m.ID,
+				Detail: detail,
+				Value:  m.ID,
+			})
+		}
+		visionSL := console.NewSelectList(console.SelectListOptions{
+			Title:      "Pick a vision model",
+			Items:      visionItems,
+			Searchable: true,
+			PageSize:   10,
+		})
+		visionValue, ok, err := visionSL.Run(context.Background())
+		if err != nil {
+			return fmt.Errorf("failed to prompt for vision model: %w", err)
+		}
+		if !ok {
+			fmt.Println()
+			console.GlyphInfo.Print("Setup cancelled.")
+			return nil
+		}
+		// Empty value = "use default model" option picked.
+		if visionValue == "" {
+			provider.VisionModel = provider.ModelName
+		} else {
+			selectedVisionModel, err := resolvePreferredCustomProviderModel(visionValue, models)
 			if err != nil {
-				return fmt.Errorf("failed to prompt for vision model: %w", err)
+				return fmt.Errorf("failed to resolve vision model: %w", err)
 			}
-			trimmed := strings.TrimSpace(visionModelInput)
-			if trimmed == "" {
-				provider.VisionModel = provider.ModelName
-				break
-			}
-			if len(models) > 0 {
-				selectedVisionModel, err := resolvePreferredCustomProviderModel(trimmed, models)
-				if err != nil {
-					fmt.Println()
-					console.GlyphWarning.Printf("%v", err)
-					continue
-				}
-				provider.VisionModel = selectedVisionModel
-				break
-			}
-			provider.VisionModel = trimmed
-			break
+			provider.VisionModel = selectedVisionModel
 		}
 	}
 

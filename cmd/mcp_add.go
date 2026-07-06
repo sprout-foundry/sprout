@@ -217,17 +217,19 @@ func setupGitMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error {
 	}
 	repoPath := strings.TrimSpace(repoInput)
 
-	// Installation method selection
-	fmt.Println("Select installation method:")
-	fmt.Println("1. uvx (recommended)")
-	fmt.Println("2. pip/pipx")
-	fmt.Print("Choice (1-2): ")
-
-	installChoice, err := reader.ReadString('\n')
+	// Installation method picker
+	installChoice, ok, err := promptInstallMethod(reader, []console.SelectItem{
+		{Label: "uvx (recommended)", Value: "1"},
+		{Label: "pip/pipx", Value: "2"},
+	})
 	if err != nil {
-		return fmt.Errorf("failed to read input: %w", err)
+		return fmt.Errorf("failed to read installation method: %w", err)
 	}
-	installChoice = strings.TrimSpace(installChoice)
+	if !ok {
+		fmt.Println()
+		console.GlyphInfo.Print("Setup cancelled.")
+		return nil
+	}
 
 	var serverConfig mcp.MCPServerConfig
 
@@ -279,7 +281,7 @@ func setupGitMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error {
 	fmt.Println()
 
 	// Installation instructions
-	if installChoice == "1" || installChoice == "" {
+	if installChoice == "1" {
 		console.GlyphInfo.Print("Installation (if not already installed):")
 		fmt.Println("No installation needed - uvx will install automatically")
 	} else {
@@ -306,34 +308,38 @@ func setupGitHubMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error 
 		}
 	}
 
-	// Installation method selection
-	fmt.Println("Select installation method:")
-	fmt.Println()
-	fmt.Println("  1. GitHub Remote MCP (OAuth) — recommended")
-	fmt.Println("     • GitHub's hosted endpoint: https://api.githubcopilot.com/mcp/")
-	fmt.Println("     • OAuth authentication (no token management needed)")
-	fmt.Println("     • Requires a GitHub Copilot or Copilot Enterprise seat")
-	fmt.Println()
-	fmt.Println("  2. GitHub Local MCP (Docker + PAT)")
-	fmt.Println("     • Runs via Docker locally")
-	fmt.Println("     • Requires a Personal Access Token (PAT)")
-	fmt.Println()
-	fmt.Println("  3. GitHub Local MCP (npx + PAT)")
-	fmt.Println("     • Runs via npx locally")
-	fmt.Println("     • Requires a Personal Access Token (PAT)")
-	fmt.Println()
-	fmt.Print("Choice (1-3): ")
-
-	installChoice, err := reader.ReadString('\n')
-	if err != nil {
-		return fmt.Errorf("failed to read input: %w", err)
+	// Installation method picker
+	installItems := []console.SelectItem{
+		{
+			Label:  "GitHub Remote MCP (OAuth) — recommended",
+			Detail: "Hosted endpoint · OAuth auth · requires Copilot seat",
+			Value:  "1",
+		},
+		{
+			Label:  "GitHub Local MCP (Docker + PAT)",
+			Detail: "Runs via Docker locally · requires Personal Access Token",
+			Value:  "2",
+		},
+		{
+			Label:  "GitHub Local MCP (npx + PAT)",
+			Detail: "Runs via npx locally · requires Personal Access Token",
+			Value:  "3",
+		},
 	}
-	installChoice = strings.TrimSpace(installChoice)
+	installChoice, ok, err := promptInstallMethod(reader, installItems)
+	if err != nil {
+		return fmt.Errorf("failed to read installation method: %w", err)
+	}
+	if !ok {
+		fmt.Println()
+		console.GlyphInfo.Print("Setup cancelled.")
+		return nil
+	}
 
 	var serverConfig mcp.MCPServerConfig
 
 	switch installChoice {
-	case "1", "":
+	case "1":
 		// Remote OAuth server — no token needed
 		fmt.Println()
 		fmt.Println("[info] Remote OAuth server selected.")
@@ -475,6 +481,54 @@ func promptForGitHubToken(reader *bufio.Reader) (string, error) {
 	return githubToken, nil
 }
 
+// promptInstallMethod shows the install-method picker used by the setup*MCPServer
+// helpers. On a TTY it delegates to console.SelectList for a slick interactive UI;
+// in non-TTY contexts (e.g. piped stdin in tests) it falls back to a direct
+// bufio.Reader numeric read so EOF surfaces as a wrapped error rather than being
+// silently absorbed by the picker's runFallback path.
+//
+// Returns:
+//   - (value, true, nil) on confirm
+//   - ("", false, nil) on Esc/Ctrl+C cancellation, or empty input in non-TTY
+//   - ("", false, err) on read failure (typically io.EOF or parse failure)
+//
+// Callers treat ("", false, nil) as a graceful cancel that returns nil to the
+// user, and any non-nil error as a setup failure.
+func promptInstallMethod(reader *bufio.Reader, items []console.SelectItem) (string, bool, error) {
+	if StdinIsTerminal() {
+		sl := console.NewSelectList(console.SelectListOptions{
+			Title:      "Pick an installation method",
+			Items:      items,
+			Searchable: false,
+		})
+		return sl.Run(context.Background())
+	}
+
+	fmt.Println("Pick an installation method:")
+	for i, item := range items {
+		label := item.Label
+		if item.Detail != "" {
+			label = fmt.Sprintf("%s  —  %s", label, item.Detail)
+		}
+		fmt.Printf("  %d. %s\n", i+1, label)
+	}
+	fmt.Printf("Choice (1-%d): ", len(items))
+
+	raw, err := reader.ReadString('\n')
+	if err != nil {
+		return "", false, err
+	}
+	choice := strings.TrimSpace(raw)
+	if choice == "" {
+		return "", false, nil
+	}
+	n, err := strconv.Atoi(choice)
+	if err != nil || n < 1 || n > len(items) {
+		return "", false, fmt.Errorf("invalid choice: %s", choice)
+	}
+	return items[n-1].Value, true, nil
+}
+
 func setupPlaywrightMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error {
 	fmt.Println()
 	console.GlyphInfo.Print("Playwright MCP Server Setup")
@@ -491,23 +545,26 @@ func setupPlaywrightMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) er
 		}
 	}
 
-	// Installation method selection
-	fmt.Println("Select installation method:")
-	fmt.Println("1. Official Playwright MCP Server (recommended)")
-	fmt.Println("2. Automata Labs Playwright MCP Server")
-	fmt.Println("3. Execute Automation Playwright MCP Server")
-	fmt.Print("Choice (1-3): ")
-
-	installChoice, err := reader.ReadString('\n')
-	if err != nil {
-		return fmt.Errorf("failed to read input: %w", err)
+	// Installation method picker
+	installItems := []console.SelectItem{
+		{Label: "Official Playwright MCP Server (recommended)", Value: "1"},
+		{Label: "Automata Labs Playwright MCP Server", Value: "2"},
+		{Label: "Execute Automation Playwright MCP Server", Value: "3"},
 	}
-	installChoice = strings.TrimSpace(installChoice)
+	installChoice, ok, err := promptInstallMethod(reader, installItems)
+	if err != nil {
+		return fmt.Errorf("failed to read installation method: %w", err)
+	}
+	if !ok {
+		fmt.Println()
+		console.GlyphInfo.Print("Setup cancelled.")
+		return nil
+	}
 
 	var serverConfig mcp.MCPServerConfig
 
 	switch installChoice {
-	case "1", "":
+	case "1":
 		// Official Playwright MCP Server
 		serverConfig = mcp.MCPServerConfig{
 			Name:        "playwright",
@@ -595,18 +652,21 @@ func setupChromeDevToolsMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader
 		Timeout:     60 * time.Second, // Longer timeout for browser operations
 	}
 
-	// Optional: Ask about additional options
-	fmt.Println("Optional configuration:")
-	fmt.Println("1. Default settings (recommended)")
-	fmt.Println("2. Headless mode (no visible browser window)")
-	fmt.Println("3. Custom Chrome channel (stable/beta/dev/canary)")
-	fmt.Print("Choice (1-3): ")
-
-	configChoice, err := reader.ReadString('\n')
-	if err != nil {
-		return fmt.Errorf("failed to read input: %w", err)
+	// Optional configuration picker
+	configItems := []console.SelectItem{
+		{Label: "Default settings (recommended)", Value: "1"},
+		{Label: "Headless mode (no visible browser window)", Value: "2"},
+		{Label: "Custom Chrome channel (stable/beta/dev/canary)", Value: "3"},
 	}
-	configChoice = strings.TrimSpace(configChoice)
+	configChoice, ok, err := promptInstallMethod(reader, configItems)
+	if err != nil {
+		return fmt.Errorf("failed to read configuration choice: %w", err)
+	}
+	if !ok {
+		fmt.Println()
+		console.GlyphInfo.Print("Setup cancelled.")
+		return nil
+	}
 
 	switch configChoice {
 	case "2":

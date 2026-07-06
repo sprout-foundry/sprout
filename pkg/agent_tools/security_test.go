@@ -756,12 +756,12 @@ func TestClassifyBrowseURL(t *testing.T) {
 		{"remote url safe", map[string]interface{}{"url": "https://example.com"}, SecuritySafe, false},
 		{"remote http url safe", map[string]interface{}{"url": "http://example.com"}, SecuritySafe, false},
 
-		// Rule (e): localhost URLs are caution
-		{"localhost http", map[string]interface{}{"url": "http://localhost:3000"}, SecurityCaution, true},
-		{"localhost https", map[string]interface{}{"url": "https://localhost:8443"}, SecurityCaution, true},
-		{"127.0.0.1 http", map[string]interface{}{"url": "http://127.0.0.1:8080"}, SecurityCaution, true},
-		{"127.0.0.1 https", map[string]interface{}{"url": "https://127.0.0.1:443"}, SecurityCaution, true},
-		{"ipv6 localhost", map[string]interface{}{"url": "http://[::1]:3000"}, SecurityCaution, true},
+		// Rule (e): localhost URLs are safe (local by definition)
+		{"localhost http", map[string]interface{}{"url": "http://localhost:3000"}, SecuritySafe, false},
+		{"localhost https", map[string]interface{}{"url": "https://localhost:8443"}, SecuritySafe, false},
+		{"127.0.0.1 http", map[string]interface{}{"url": "http://127.0.0.1:8080"}, SecuritySafe, false},
+		{"127.0.0.1 https", map[string]interface{}{"url": "https://127.0.0.1:443"}, SecuritySafe, false},
+		{"ipv6 localhost", map[string]interface{}{"url": "http://[::1]:3000"}, SecuritySafe, false},
 
 		// Rule (d): cookies → caution
 		{"cookies set", map[string]interface{}{"url": "https://example.com", "cookies": map[string]interface{}{"session": "abc"}}, SecurityCaution, true},

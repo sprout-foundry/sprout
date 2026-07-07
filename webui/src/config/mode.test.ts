@@ -341,7 +341,7 @@ describe('with CloudAdapter installed', () => {
     expect(modeModule.supportsExport).toBe(false);
     expect(modeModule.supportsInstances).toBe(true);
     expect(modeModule.supportsLocalTerminal).toBe(false);
-    expect(modeModule.supportsSettings).toBe(false);
+    expect(modeModule.supportsSettings).toBe(true);
   });
   it('mode and isCloud remain based on env var, not adapter', async () => {
     const { installAdapter } = await import('../services/apiAdapter');

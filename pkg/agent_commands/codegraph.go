@@ -158,3 +158,25 @@ func (c *CodegraphCommand) runStats() error {
 	fmt.Fprintln(os.Stdout)
 	return nil
 }
+
+
+// Complete returns completions for the /codegraph command.
+func (c *CodegraphCommand) Complete(args []string, chatAgent *agent.Agent) []string {
+	subcommands := []string{"build", "help", "stats", "update"}
+	if len(args) == 0 {
+		return subcommands
+	}
+
+	prefix := args[len(args)-1]
+	if prefix == "" {
+		return subcommands
+	}
+
+	var matches []string
+	for _, sub := range subcommands {
+		if strings.HasPrefix(strings.ToLower(sub), strings.ToLower(prefix)) {
+			matches = append(matches, sub)
+		}
+	}
+	return matches
+}

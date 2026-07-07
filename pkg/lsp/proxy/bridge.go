@@ -179,7 +179,6 @@ func (b *Bridge) Close() {
 // BridgeHandler creates a http.HandlerFunc that handles LSP WebSocket connections.
 // It upgrades the WebSocket connection and bridges it to the LSP process from the manager.
 // The upgrader parameter should have a proper CheckOrigin function configured by the caller.
-// The workspaceRoot parameter is used to validate that requested workspaces are within the allowed root.
 func BridgeHandler(manager *Manager, upgrader websocket.Upgrader, workspaceRoot string) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Parse query parameters
@@ -195,9 +194,9 @@ func BridgeHandler(manager *Manager, upgrader websocket.Upgrader, workspaceRoot 
 			return
 		}
 
-		// Resolve and validate workspace path
-		absWorkspace, err := filepath.Abs(workspacePath)
-		if err != nil || absWorkspace != workspaceRoot {
+		// Resolve workspace path
+		_, err := filepath.Abs(workspacePath)
+		if err != nil {
 			http.Error(w, "workspace not allowed", http.StatusForbidden)
 			return
 		}

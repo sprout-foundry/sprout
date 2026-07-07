@@ -712,7 +712,7 @@ func (ws *ReactWebServer) handleWebSocketMessage(safeConn *SafeConn, sessionID s
 		// SP-046: client requests cold-hydrate of workspace files.
 		// Runs in a goroutine so the read loop stays responsive.
 		ws.safeHandleGoroutine(safeConn, sessionID, clientID, func() {
-			ws.handleColdHydrateRequest(safeConn, ws.workspaceRoot)
+			ws.handleColdHydrateRequest(safeConn, ws.getWorkspaceRootForClient(clientID))
 		})
 
 	case AllowedMessageTypeSyncRecover:

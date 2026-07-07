@@ -239,7 +239,7 @@ func TestBridgeHandlerParameterValidation(t *testing.T) {
 		assert.Contains(t, w.Body.String(), "workspace parameter is required")
 	})
 
-	t.Run("workspace not matching root returns 403", func(t *testing.T) {
+	t.Run("non-existent workspace path proceeds to LSP startup which fails with 500", func(t *testing.T) {
 		ctx := context.Background()
 		manager := NewManager(ctx)
 		defer manager.Close()
@@ -255,8 +255,11 @@ func TestBridgeHandlerParameterValidation(t *testing.T) {
 
 		handler(w, req)
 
-		assert.Equal(t, http.StatusForbidden, w.Code)
-		assert.Contains(t, w.Body.String(), "workspace not allowed")
+		// Workspace check no longer enforces strict equality against the
+		// handler-level root — the frontend is trusted. The request proceeds
+		// to LSP startup, which fails because /forbidden doesn't exist.
+		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		assert.Contains(t, w.Body.String(), "Failed to start language server")
 	})
 
 	t.Run("unknown language returns 500", func(t *testing.T) {
@@ -358,31 +361,6 @@ func TestBridgeRunWithNilWebSocket(t *testing.T) {
 			_ = bridge.Run(ctx)
 		})
 	})
-}
-
-func TestBridgeHandlerRejectsNonMatchingWorkspace(t *testing.T) {
-	t.Run("exact match required for workspace", func(t *testing.T) {
-		ctx := context.Background()
-		manager := NewManager(ctx)
-		defer manager.Close()
-
-		upgrader := websocket.Upgrader{
-			CheckOrigin: func(r *http.Request) bool { return true },
-		}
-
-		// Use /tmp/other as allowed root
-		handler := BridgeHandler(manager, upgrader, "/tmp/other")
-
-		req := httptest.NewRequest("GET", "/?language=go&workspace=/tmp", nil)
-		w := httptest.NewRecorder()
-
-		handler(w, req)
-
-		// Should get 403 because /tmp != /tmp/other
-		assert.Equal(t, http.StatusForbidden, w.Code)
-		assert.Contains(t, w.Body.String(), "workspace not allowed")
-	})
-
 }
 
 // NOTE: There is a known race condition in bridge.go between runWSToLSP (which

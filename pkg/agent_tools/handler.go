@@ -21,10 +21,10 @@
 //
 // # Adding a new tool
 //
-// 1. Create a new file in this package (e.g., `my_tool_handler.go`).
-// 2. Define a struct and implement all ToolHandler methods (Name, Definition,
-//    Validate, Execute, plus the 5 optional metadata methods).
-// 3. Register it in `AllTools()` in `all.go`.
+//  1. Create a new file in this package (e.g., `my_tool_handler.go`).
+//  2. Define a struct and implement all ToolHandler methods (Name, Definition,
+//     Validate, Execute, plus the 5 optional metadata methods).
+//  3. Register it in `AllTools()` in `all.go`.
 //
 // See AGENTS.md for tool documentation and conventions.
 //
@@ -78,11 +78,11 @@ type ToolHandler interface {
 	// Metadata — all optional with sensible defaults. When a metadata method
 	// returns its zero value, the ToolRegistry falls back to its own
 	// registry-wide defaults for timeout and max result size.
-	Aliases() []string           // default: nil (no aliases)
-	Timeout() time.Duration      // default: 0 (use registry default)
-	MaxResultSize() int          // default: 0 (use registry default)
-	SafeForParallel() bool       // default: false
-	Interactive() bool           // default: false
+	Aliases() []string      // default: nil (no aliases)
+	Timeout() time.Duration // default: 0 (use registry default)
+	MaxResultSize() int     // default: 0 (use registry default)
+	SafeForParallel() bool  // default: false
+	Interactive() bool      // default: false
 }
 
 // ToolDefinition describes a tool's schema for LLM consumption.

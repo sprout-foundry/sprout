@@ -1,4 +1,3 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   notificationBus,
   NotificationStack,
@@ -6,6 +5,7 @@ import {
   type NotificationData,
   type NotificationType,
 } from '@sprout/ui';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import './NotificationCenter.css';
 
 /**
@@ -128,11 +128,7 @@ function NotificationCenter(_props: NotificationCenterLegacyProps = {}): JSX.Ele
  *   agent_blocked        → error
  *   (unrecognized)       → info
  */
-export function publishSystemNotification(
-  category: string,
-  title: string,
-  message: string,
-): void {
+export function publishSystemNotification(category: string, title: string, message: string): void {
   const typeMap: Record<string, NotificationType> = {
     rate_limit: 'warning',
     auth_failure: 'error',

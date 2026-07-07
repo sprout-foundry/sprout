@@ -3,11 +3,11 @@ import { Skeleton } from '@sprout/ui';
 import { AlertTriangle } from 'lucide-react';
 import React, { useRef } from 'react';
 import { useEditorViewInit } from '../hooks/useEditorViewInit';
+import type { UseEditorViewInitOptions } from '../hooks/useEditorViewInit';
 import MarkdownPreview from './MarkdownPreview';
 import { useEditorReconfigure } from './useEditorReconfigure';
 
 // Import the options types
-import type { UseEditorViewInitOptions } from '../hooks/useEditorViewInit';
 import type { UseEditorReconfigureOptions } from './useEditorReconfigure';
 
 export interface EditorCoreProps {

@@ -36,7 +36,7 @@ type InstallOptions struct {
 
 // Origin records how a skill was installed so Update knows where to refresh from.
 type Origin struct {
-	Type        string    `json:"type"`         // "git", "url", "path", "registry"
+	Type        string    `json:"type"` // "git", "url", "path", "registry"
 	URL         string    `json:"url,omitempty"`
 	Path        string    `json:"path,omitempty"`
 	RegistryID  string    `json:"registry_id,omitempty"`

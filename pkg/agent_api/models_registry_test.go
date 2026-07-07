@@ -34,17 +34,17 @@ func TestConvertRegistryModels(t *testing.T) {
 	t.Run("full field mapping", func(t *testing.T) {
 		input := []modelregistry.RawModel{
 			{
-				ID:             "anthropic/claude-3",
-				Name:           "Claude 3",
-				Description:    "A large language model",
-				Provider:       "openrouter",
-				Size:           "70B",
-				Cost:           5.0,
-				InputCost:      3.0,
-				OutputCost:     7.0,
+				ID:              "anthropic/claude-3",
+				Name:            "Claude 3",
+				Description:     "A large language model",
+				Provider:        "openrouter",
+				Size:            "70B",
+				Cost:            5.0,
+				InputCost:       3.0,
+				OutputCost:      7.0,
 				CachedInputCost: 0.3,
-				ContextLength:  200000,
-				Tags:           []string{"coding", "tools"},
+				ContextLength:   200000,
+				Tags:            []string{"coding", "tools"},
 			},
 		}
 

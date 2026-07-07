@@ -8,8 +8,8 @@ import (
 	"strings"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
-	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	providers "github.com/sprout-foundry/sprout/pkg/agent_providers"
+	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/embedding"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"

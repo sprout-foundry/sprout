@@ -135,12 +135,12 @@ func makeBaseConfig(id, endpoint string, models []string) map[string]interface{}
 		"endpoint": endpoint,
 		"auth":     map[string]interface{}{"type": "bearer", "env_var": id + "_API_KEY"},
 		"models": map[string]interface{}{
-			"available_models":    models,
+			"available_models":      models,
 			"default_context_limit": 128000,
 		},
 		"retry": map[string]interface{}{
-			"max_attempts":    3,
-			"base_delay_ms":   1000,
+			"max_attempts":       3,
+			"base_delay_ms":      1000,
 			"backoff_multiplier": 2,
 		},
 		"cost": map[string]interface{}{
@@ -323,10 +323,10 @@ func TestSync_PreservesAllOtherFields(t *testing.T) {
 		"X-Custom-Header": "custom-value",
 	}
 	cfg["retry"] = map[string]interface{}{
-		"max_attempts":    5,
-		"base_delay_ms":   2000,
+		"max_attempts":       5,
+		"base_delay_ms":      2000,
 		"backoff_multiplier": 3,
-		"max_delay_ms":    60000,
+		"max_delay_ms":       60000,
 	}
 	cfg["cost"] = map[string]interface{}{
 		"input_token_cost":  0.5,

@@ -11,11 +11,12 @@ import { useCallback } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { AppStoreSetState } from '../contexts/AppStore';
 import { useNotifications } from '../contexts/NotificationContext';
+import { emitAutomate } from '../services/automateEvents';
+import type { ChatSession } from '../services/chatSessions';
 import { getWebUIClientId } from '../services/clientSession';
+import { getServerErrorCode } from '../services/errorCodes';
 import { LSPClientService } from '../services/lspClientService';
 import type { AppState, Message, ToolExecution, LogEntry, SubagentActivity } from '../types/app';
-import type { ChatSession } from '../services/chatSessions';
-import { getServerErrorCode } from '../services/errorCodes';
 import { toQueryProgress } from '../types/app';
 import {
   shouldSuppressAgentMessageInChat,
@@ -25,7 +26,6 @@ import {
 import { ensureCompletedAssistantMessage } from '../utils/chatCompletion';
 import { debugLog, error as logError } from '../utils/log';
 import { appendCappedLog } from '../utils/logCap';
-import { emitAutomate } from '../services/automateEvents';
 
 const MAX_TOOL_EXECUTIONS = 200;
 

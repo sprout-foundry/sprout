@@ -350,3 +350,21 @@ func runReviewCommand(commandName string, deepReview bool, args []string, chatAg
 
 	return nil
 }
+
+// Complete returns file path completions for /review arguments.
+func (c *ReviewCommand) Complete(args []string, chatAgent *agent.Agent) []string {
+	prefix := "."
+	if len(args) > 0 {
+		prefix = args[len(args)-1]
+	}
+	return PathCompleter(prefix)
+}
+
+// Complete returns file path completions for /review-deep arguments.
+func (c *ReviewDeepCommand) Complete(args []string, chatAgent *agent.Agent) []string {
+	prefix := "."
+	if len(args) > 0 {
+		prefix = args[len(args)-1]
+	}
+	return PathCompleter(prefix)
+}

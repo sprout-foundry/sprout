@@ -87,13 +87,13 @@ type CheckpointFileChange struct {
 
 // AgentState represents the state of an agent that can be persisted
 type AgentState struct {
-	Messages            []api.Message    `json:"messages"`
-	MessageTimestamps   []time.Time      `json:"message_timestamps,omitempty"`
-	TurnCheckpoints     []TurnCheckpoint `json:"turn_checkpoints,omitempty"`
-	PreviousSummary string           `json:"previous_summary"`
-	CompactSummary  string           `json:"compact_summary"` // New: 5K limit summary for continuity
-	TaskActions     []TaskAction     `json:"task_actions"`
-	SessionID       string           `json:"session_id"`
+	Messages          []api.Message    `json:"messages"`
+	MessageTimestamps []time.Time      `json:"message_timestamps,omitempty"`
+	TurnCheckpoints   []TurnCheckpoint `json:"turn_checkpoints,omitempty"`
+	PreviousSummary   string           `json:"previous_summary"`
+	CompactSummary    string           `json:"compact_summary"` // New: 5K limit summary for continuity
+	TaskActions       []TaskAction     `json:"task_actions"`
+	SessionID         string           `json:"session_id"`
 	// Token and cost metrics
 	TotalTokens             int     `json:"total_tokens"`
 	TotalCost               float64 `json:"total_cost"`
@@ -104,10 +104,10 @@ type AgentState struct {
 	CacheWriteTokens        int     `json:"cache_write_tokens,omitempty"`
 	CachedCostSavings       float64 `json:"cached_cost_savings"`
 	// Billing-model-aware cost tracking (SP-080)
-	ChargedCostTotal  float64 `json:"charged_cost_total,omitempty"`
-	TokenCostTotal    float64 `json:"token_cost_total,omitempty"`
-	SubscriptionTokens int    `json:"subscription_tokens,omitempty"`
-	FreeTokens         int    `json:"free_tokens,omitempty"`
+	ChargedCostTotal   float64 `json:"charged_cost_total,omitempty"`
+	TokenCostTotal     float64 `json:"token_cost_total,omitempty"`
+	SubscriptionTokens int     `json:"subscription_tokens,omitempty"`
+	FreeTokens         int     `json:"free_tokens,omitempty"`
 }
 
 // DiffChange represents a change region in the diff

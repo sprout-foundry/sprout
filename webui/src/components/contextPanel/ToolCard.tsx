@@ -1,16 +1,3 @@
-import { stripAnsiCodes } from '../../utils/ansi';
-import { formatToolDetail } from '../../utils/resultSummary';
-import { subagentDepthLabel } from '../chat/SubagentActivityFeed';
-import type { ToolExecution } from './types';
-import {
-  isSubagentTool,
-  getSubagentPrompt,
-  getToolIcon,
-  getPersonaColor,
-  getStatusIcon,
-  formatDuration,
-} from './helpers';
-import { FilePathPre } from './FilePathPre';
 import {
   Bot,
   ChevronDown,
@@ -21,6 +8,19 @@ import {
   FileText,
   AlertTriangle,
 } from 'lucide-react';
+import { stripAnsiCodes } from '../../utils/ansi';
+import { formatToolDetail } from '../../utils/resultSummary';
+import { subagentDepthLabel } from '../chat/SubagentActivityFeed';
+import { FilePathPre } from './FilePathPre';
+import {
+  isSubagentTool,
+  getSubagentPrompt,
+  getToolIcon,
+  getPersonaColor,
+  getStatusIcon,
+  formatDuration,
+} from './helpers';
+import type { ToolExecution } from './types';
 
 /** Shape of tool execution details when result truncation info is present. */
 interface TruncationDetails {

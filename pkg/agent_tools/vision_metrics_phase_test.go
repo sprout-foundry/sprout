@@ -3,8 +3,8 @@
 package tools
 
 import (
-	"bytes"
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -155,16 +155,16 @@ func TestAppendVisionRecord_WritesToSink(t *testing.T) {
 	}()
 
 	rec := VisionMetricsRecord{
-		Timestamp:         "2025-01-01T00:00:00Z",
-		OpName:            "analyze_image",
-		ImageCount:        1,
-		Success:           true,
-		RetryCount:        0,
-		LatencyRequestMS:  150,
+		Timestamp:           "2025-01-01T00:00:00Z",
+		OpName:              "analyze_image",
+		ImageCount:          1,
+		Success:             true,
+		RetryCount:          0,
+		LatencyRequestMS:    150,
 		LatencyRetrySleepMS: 0,
-		LatencyParseMS:    5,
-		ImageTokens:       256,
-		ImageTokensCached: 128,
+		LatencyParseMS:      5,
+		ImageTokens:         256,
+		ImageTokensCached:   128,
 	}
 	AppendVisionRecord(rec)
 
@@ -211,21 +211,21 @@ func TestAppendVisionRecord_NilSink(t *testing.T) {
 
 func TestVisionMetricsRecord_JSONFields(t *testing.T) {
 	rec := VisionMetricsRecord{
-		Timestamp:          "2025-01-01T00:00:00Z",
-		SessionID:          "sess-123",
-		OpName:             "analyze_image",
-		ImageCount:         2,
-		Success:            false,
-		FailureReason:      "http_5xx",
-		RetryCount:         2,
-		UsedOCRFallback:    true,
-		OCRFallbackSuccess: false,
-		LatencyRequestMS:   500,
+		Timestamp:           "2025-01-01T00:00:00Z",
+		SessionID:           "sess-123",
+		OpName:              "analyze_image",
+		ImageCount:          2,
+		Success:             false,
+		FailureReason:       "http_5xx",
+		RetryCount:          2,
+		UsedOCRFallback:     true,
+		OCRFallbackSuccess:  false,
+		LatencyRequestMS:    500,
 		LatencyRetrySleepMS: 300,
-		LatencyFallbackMS:  150,
-		LatencyParseMS:     10,
-		ImageTokens:        1024,
-		ImageTokensCached:  512,
+		LatencyFallbackMS:   150,
+		LatencyParseMS:      10,
+		ImageTokens:         1024,
+		ImageTokensCached:   512,
 	}
 
 	data, err := json.Marshal(rec)
@@ -260,7 +260,7 @@ func TestVisionMetricsRecord_JSONFields(t *testing.T) {
 	if raw["latency_request_ms"] != float64(500) {
 		t.Errorf("latency_request_ms = %v, want 500", raw["latency_request_ms"])
 	}
-}// ---------------------------------------------------------------------------
+} // ---------------------------------------------------------------------------
 // classifyVisionError — error classification tests
 // ---------------------------------------------------------------------------
 
@@ -538,19 +538,19 @@ func TestInstrumentedVisionCall_Synthetic(t *testing.T) {
 
 	// Simulate a successful call with 1 retry and no fallback.
 	rec := VisionMetricsRecord{
-		Timestamp:          "2025-01-01T00:00:00Z",
-		OpName:             "analyze_image",
-		ImageCount:         1,
-		Success:            true,
-		RetryCount:         1,
-		UsedOCRFallback:    false,
-		OCRFallbackSuccess: false,
-		LatencyRequestMS:   250,
+		Timestamp:           "2025-01-01T00:00:00Z",
+		OpName:              "analyze_image",
+		ImageCount:          1,
+		Success:             true,
+		RetryCount:          1,
+		UsedOCRFallback:     false,
+		OCRFallbackSuccess:  false,
+		LatencyRequestMS:    250,
 		LatencyRetrySleepMS: 200,
-		LatencyFallbackMS:  0,
-		LatencyParseMS:     8,
-		ImageTokens:        512,
-		ImageTokensCached:  256,
+		LatencyFallbackMS:   0,
+		LatencyParseMS:      8,
+		ImageTokens:         512,
+		ImageTokensCached:   256,
 	}
 	AppendVisionRecord(rec)
 
@@ -583,18 +583,18 @@ func TestInstrumentedVisionCall_FallbackSuccess(t *testing.T) {
 	defer cleanup()
 
 	rec := VisionMetricsRecord{
-		Timestamp:          "2025-01-01T00:00:00Z",
-		OpName:             "analyze_image",
-		ImageCount:         1,
-		Success:            true,
-		FailureReason:      "",
-		RetryCount:         2,
-		UsedOCRFallback:    true,
-		OCRFallbackSuccess: true,
-		LatencyRequestMS:   800,
+		Timestamp:           "2025-01-01T00:00:00Z",
+		OpName:              "analyze_image",
+		ImageCount:          1,
+		Success:             true,
+		FailureReason:       "",
+		RetryCount:          2,
+		UsedOCRFallback:     true,
+		OCRFallbackSuccess:  true,
+		LatencyRequestMS:    800,
 		LatencyRetrySleepMS: 400,
-		LatencyFallbackMS:  150,
-		LatencyParseMS:     5,
+		LatencyFallbackMS:   150,
+		LatencyParseMS:      5,
 	}
 	AppendVisionRecord(rec)
 
@@ -618,17 +618,17 @@ func TestInstrumentedVisionCall_FailureWithFallback(t *testing.T) {
 	defer cleanup()
 
 	rec := VisionMetricsRecord{
-		Timestamp:          "2025-01-01T00:00:00Z",
-		OpName:             "analyze_image",
-		ImageCount:         1,
-		Success:            false,
-		FailureReason:      "http_5xx",
-		RetryCount:         2,
-		UsedOCRFallback:    true,
-		OCRFallbackSuccess: false,
-		LatencyRequestMS:   900,
+		Timestamp:           "2025-01-01T00:00:00Z",
+		OpName:              "analyze_image",
+		ImageCount:          1,
+		Success:             false,
+		FailureReason:       "http_5xx",
+		RetryCount:          2,
+		UsedOCRFallback:     true,
+		OCRFallbackSuccess:  false,
+		LatencyRequestMS:    900,
 		LatencyRetrySleepMS: 500,
-		LatencyFallbackMS:  200,
+		LatencyFallbackMS:   200,
 	}
 	AppendVisionRecord(rec)
 

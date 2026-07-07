@@ -15,9 +15,9 @@ import (
 
 	core "github.com/sprout-foundry/seed/core"
 
-	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	providers "github.com/sprout-foundry/sprout/pkg/agent_providers"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/providercatalog"
 )
 

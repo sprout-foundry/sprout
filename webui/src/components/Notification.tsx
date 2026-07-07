@@ -1,5 +1,5 @@
-import { useNotifications } from '../contexts/NotificationContext';
 import { NotificationItem } from '@sprout/ui';
+import { useNotifications } from '../contexts/NotificationContext';
 import './Notification.css';
 
 /**

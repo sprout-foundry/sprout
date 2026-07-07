@@ -10,11 +10,11 @@
  * - Cleans up timers + subscriptions on unmount
  * - publishSystemNotification category → type mapping
  */
+import { notificationBus, type NotificationEvent } from '@sprout/ui';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { vi, describe, it, expect, beforeEach, afterEach, beforeAll } from 'vitest';
 import NotificationCenter, { publishSystemNotification } from './NotificationCenter';
-import { notificationBus, type NotificationEvent } from '@sprout/ui';
 
 // ---------------------------------------------------------------------------
 // Mock @sprout/ui NotificationStack so we don't need the whole shared stack
@@ -31,18 +31,10 @@ vi.mock('@sprout/ui', async () => {
       return (
         <div data-testid="mock-notification-stack">
           {props.notifications.map((n: any) => (
-            <article
-              key={n.id}
-              data-testid={`toast-${n.id}`}
-              data-type={n.type}
-            >
+            <article key={n.id} data-testid={`toast-${n.id}`} data-type={n.type}>
               <h3 data-testid={`toast-title-${n.id}`}>{n.title}</h3>
               <p data-testid={`toast-message-${n.id}`}>{n.message}</p>
-              <button
-                type="button"
-                data-testid={`dismiss-${n.id}`}
-                onClick={() => props.onDismiss(n.id)}
-              >
+              <button type="button" data-testid={`dismiss-${n.id}`} onClick={() => props.onDismiss(n.id)}>
                 ×
               </button>
             </article>
@@ -92,7 +84,9 @@ function renderCenter() {
 
 /** Count rendered toasts (excludes title/message children). */
 function toastCount(container: HTMLElement): number {
-  return container.querySelectorAll('[data-testid^="toast-"]:not([data-testid^="toast-title-"]):not([data-testid^="toast-message-"])').length;
+  return container.querySelectorAll(
+    '[data-testid^="toast-"]:not([data-testid^="toast-title-"]):not([data-testid^="toast-message-"])',
+  ).length;
 }
 
 // ---------------------------------------------------------------------------
@@ -357,9 +351,7 @@ describe('NotificationCenter mark-all-read', () => {
     act(() => {
       notificationBus.notify('info', 'A', 'msgA');
     });
-    const btn = container.querySelector(
-      '[data-testid="notification-center-mark-all-read"]'
-    ) as HTMLButtonElement;
+    const btn = container.querySelector('[data-testid="notification-center-mark-all-read"]') as HTMLButtonElement;
     expect(btn).not.toBeNull();
     expect(btn.textContent).toBe('Mark all read');
     expect(btn.getAttribute('aria-label')).toBe('Mark all notifications read');
@@ -367,9 +359,7 @@ describe('NotificationCenter mark-all-read', () => {
 
   it('does not render the button when there are no toasts', () => {
     renderCenter();
-    const btn = container.querySelector(
-      '[data-testid="notification-center-mark-all-read"]'
-    );
+    const btn = container.querySelector('[data-testid="notification-center-mark-all-read"]');
     expect(btn).toBeNull();
   });
 
@@ -382,9 +372,7 @@ describe('NotificationCenter mark-all-read', () => {
     });
     expect(toastCount(container)).toBe(3);
 
-    const btn = container.querySelector(
-      '[data-testid="notification-center-mark-all-read"]'
-    ) as HTMLButtonElement;
+    const btn = container.querySelector('[data-testid="notification-center-mark-all-read"]') as HTMLButtonElement;
     act(() => {
       btn.click();
     });
@@ -401,9 +389,7 @@ describe('NotificationCenter mark-all-read', () => {
     const controlListener = vi.fn();
     notificationBus.onControlEvent(controlListener);
 
-    const btn = container.querySelector(
-      '[data-testid="notification-center-mark-all-read"]'
-    ) as HTMLButtonElement;
+    const btn = container.querySelector('[data-testid="notification-center-mark-all-read"]') as HTMLButtonElement;
     act(() => {
       btn.click();
     });
@@ -436,9 +422,7 @@ describe('NotificationCenter mark-all-read', () => {
       });
       // Both toasts have a pending 5s timer.
 
-      const btn = container.querySelector(
-        '[data-testid="notification-center-mark-all-read"]'
-      ) as HTMLButtonElement;
+      const btn = container.querySelector('[data-testid="notification-center-mark-all-read"]') as HTMLButtonElement;
       act(() => {
         btn.click();
       });

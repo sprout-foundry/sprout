@@ -10,29 +10,29 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/envutil"
-	"github.com/sprout-foundry/sprout/pkg/events"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
+	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 // subagentRunContext holds all the state wired up during setupSubagentRun
 // so that runTask can remain a thin orchestrator. Closures (streaming
 // callback, terminal writer) capture fields from this struct.
 type subagentRunContext struct {
-	runCtx        context.Context
-	cancel        context.CancelFunc
-	subAgent      *Agent
-	prefix        string
-	dimGray       string
-	reset         string
-	eventBus      *events.EventBus
-	stopProgress  chan struct{}
+	runCtx          context.Context
+	cancel          context.CancelFunc
+	subAgent        *Agent
+	prefix          string
+	dimGray         string
+	reset           string
+	eventBus        *events.EventBus
+	stopProgress    chan struct{}
 	progressSubName string
-	progressLog   *[]SubagentProgressEntry
-	progressMu    *sync.Mutex
-	lineBuf       *strings.Builder
-	outputMu      *sync.Mutex
-	running       *runningSubagent
-	budgetExceeded *atomic.Bool
+	progressLog     *[]SubagentProgressEntry
+	progressMu      *sync.Mutex
+	lineBuf         *strings.Builder
+	outputMu        *sync.Mutex
+	running         *runningSubagent
+	budgetExceeded  *atomic.Bool
 }
 
 // setupSubagentRun creates and configures a subagent for execution.

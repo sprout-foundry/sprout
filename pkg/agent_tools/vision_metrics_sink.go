@@ -19,21 +19,21 @@ import (
 // ~/.config/sprout/vision_metrics.jsonl. Fire-and-forget — the
 // instrumentation never blocks the agent loop on file IO.
 type VisionMetricsRecord struct {
-	Timestamp          string `json:"timestamp"`                // RFC3339
-	SessionID          string `json:"session_id,omitempty"`
-	OpName             string `json:"op_name"`                  // e.g. "analyze_image"
-	ImageCount         int    `json:"image_count"`              // number of images in this call
-	Success            bool   `json:"success"`
-	FailureReason      string `json:"failure_reason,omitempty"` // classified reason (empty if success)
-	RetryCount         int    `json:"retry_count"`              // number of retry attempts (0 = first attempt succeeded)
-	UsedOCRFallback    bool   `json:"used_ocr_fallback"`
-	OCRFallbackSuccess bool   `json:"ocr_fallback_success"`
-	LatencyRequestMS   int64  `json:"latency_request_ms"`       // total provider call wall time (all attempts)
-	LatencyRetrySleepMS int64 `json:"latency_retry_sleep_ms"`   // time spent sleeping between retries
-	LatencyFallbackMS  int64  `json:"latency_fallback_ms"`      // OCR fallback wall time (0 if not used)
-	LatencyParseMS     int64  `json:"latency_parse_ms"`         // response parsing wall time
-	ImageTokens        int    `json:"image_tokens"`             // prompt image tokens (including cached)
-	ImageTokensCached  int    `json:"image_tokens_cached"`      // cached image tokens
+	Timestamp           string `json:"timestamp"` // RFC3339
+	SessionID           string `json:"session_id,omitempty"`
+	OpName              string `json:"op_name"`     // e.g. "analyze_image"
+	ImageCount          int    `json:"image_count"` // number of images in this call
+	Success             bool   `json:"success"`
+	FailureReason       string `json:"failure_reason,omitempty"` // classified reason (empty if success)
+	RetryCount          int    `json:"retry_count"`              // number of retry attempts (0 = first attempt succeeded)
+	UsedOCRFallback     bool   `json:"used_ocr_fallback"`
+	OCRFallbackSuccess  bool   `json:"ocr_fallback_success"`
+	LatencyRequestMS    int64  `json:"latency_request_ms"`     // total provider call wall time (all attempts)
+	LatencyRetrySleepMS int64  `json:"latency_retry_sleep_ms"` // time spent sleeping between retries
+	LatencyFallbackMS   int64  `json:"latency_fallback_ms"`    // OCR fallback wall time (0 if not used)
+	LatencyParseMS      int64  `json:"latency_parse_ms"`       // response parsing wall time
+	ImageTokens         int    `json:"image_tokens"`           // prompt image tokens (including cached)
+	ImageTokensCached   int    `json:"image_tokens_cached"`    // cached image tokens
 }
 
 // ---------------------------------------------------------------------------

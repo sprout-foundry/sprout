@@ -220,3 +220,55 @@ func normalizePersonaKey(raw string) string {
 	value = strings.ReplaceAll(value, "-", "_")
 	return value
 }
+
+// Complete returns completions for the /persona command.
+func (p *PersonaCommand) Complete(args []string, chatAgent *agent.Agent) []string {
+	baseCommands := []string{"clear", "list"}
+
+	if len(args) == 0 {
+		// Combine base commands with available persona names from config.
+		if chatAgent == nil {
+			return baseCommands
+		}
+		mgr := chatAgent.GetConfigManager()
+		if mgr == nil {
+			return baseCommands
+		}
+		cfg := mgr.GetConfig()
+		if cfg == nil || cfg.SubagentTypes == nil || len(cfg.SubagentTypes) == 0 {
+			return baseCommands
+		}
+		all := make([]string, 0, len(baseCommands)+len(cfg.SubagentTypes))
+		all = append(all, baseCommands...)
+		for id := range cfg.SubagentTypes {
+			all = append(all, id)
+		}
+		sort.Strings(all)
+		return all
+	}
+
+	// Build candidate list: base commands + persona names.
+	candidates := make([]string, 0, len(baseCommands))
+	candidates = append(candidates, baseCommands...)
+	if chatAgent != nil {
+		mgr := chatAgent.GetConfigManager()
+		if mgr != nil {
+			cfg := mgr.GetConfig()
+			if cfg != nil && cfg.SubagentTypes != nil {
+				for id := range cfg.SubagentTypes {
+					candidates = append(candidates, id)
+				}
+			}
+		}
+	}
+
+	prefix := args[len(args)-1]
+	var matches []string
+	for _, candidate := range candidates {
+		if strings.HasPrefix(strings.ToLower(candidate), strings.ToLower(prefix)) {
+			matches = append(matches, candidate)
+		}
+	}
+	sort.Strings(matches)
+	return matches
+}

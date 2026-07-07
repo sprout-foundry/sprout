@@ -417,12 +417,12 @@ func TestParseSearchFlags(t *testing.T) {
 			wantUntilStr: "2025-06-01",
 		},
 		{
-			name:        "all flags combined",
-			args:        []string{"--reindex", "--cwd", "/tmp", "--limit", "10", "--since", "2025-01-01", "query"},
-			wantQuery:   "query",
-			wantReindex: true,
-			wantCWD:     "/tmp",
-			wantLimit:   10,
+			name:         "all flags combined",
+			args:         []string{"--reindex", "--cwd", "/tmp", "--limit", "10", "--since", "2025-01-01", "query"},
+			wantQuery:    "query",
+			wantReindex:  true,
+			wantCWD:      "/tmp",
+			wantLimit:    10,
 			wantSinceStr: "2025-01-01",
 		},
 		{

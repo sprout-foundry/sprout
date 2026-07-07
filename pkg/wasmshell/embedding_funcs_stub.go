@@ -36,7 +36,7 @@ func NewJSEmbeddingAPI() {}
 // serializeEmbeddingStatus is a no-op on native builds.
 func serializeEmbeddingStatus(s EmbeddingStatus) map[string]interface{} {
 	return map[string]interface{}{
-		"mode":            string(s.Mode),
-		"onnx_available":  s.ONNXAvailable,
+		"mode":           string(s.Mode),
+		"onnx_available": s.ONNXAvailable,
 	}
 }

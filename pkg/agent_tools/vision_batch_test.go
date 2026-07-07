@@ -44,22 +44,26 @@ func (m *countingMock) SendVisionRequest(ctx context.Context, messages []api.Mes
 	return &api.ChatResponse{Choices: []api.Choice{{Message: api.Message{Content: "single image analysis"}}}, Usage: api.ChatUsage{TotalTokens: 50, PromptTokens: 25, CompletionTokens: 25}}, nil
 }
 
-func (m *countingMock) SendChatRequest(context.Context, []api.Message, []api.Tool, string, bool) (*api.ChatResponse, error) { return &api.ChatResponse{}, nil }
-func (m *countingMock) SendChatRequestStream(context.Context, []api.Message, []api.Tool, string, bool, api.StreamCallback) (*api.ChatResponse, error) { return &api.ChatResponse{}, nil }
-func (m *countingMock) CheckConnection() error             { return nil }
-func (m *countingMock) SetDebug(bool)                      {}
-func (m *countingMock) SetModel(string) error              { return nil }
-func (m *countingMock) GetModel() string                   { return "mock" }
-func (m *countingMock) GetProvider() string                { return "mock" }
-func (m *countingMock) GetModelContextLimit() (int, error) { return 128000, nil }
+func (m *countingMock) SendChatRequest(context.Context, []api.Message, []api.Tool, string, bool) (*api.ChatResponse, error) {
+	return &api.ChatResponse{}, nil
+}
+func (m *countingMock) SendChatRequestStream(context.Context, []api.Message, []api.Tool, string, bool, api.StreamCallback) (*api.ChatResponse, error) {
+	return &api.ChatResponse{}, nil
+}
+func (m *countingMock) CheckConnection() error                              { return nil }
+func (m *countingMock) SetDebug(bool)                                       {}
+func (m *countingMock) SetModel(string) error                               { return nil }
+func (m *countingMock) GetModel() string                                    { return "mock" }
+func (m *countingMock) GetProvider() string                                 { return "mock" }
+func (m *countingMock) GetModelContextLimit() (int, error)                  { return 128000, nil }
 func (m *countingMock) ListModels(context.Context) ([]api.ModelInfo, error) { return nil, nil }
-func (m *countingMock) SupportsVision() bool               { return true }
-func (m *countingMock) SupportsConversationalVision() bool { return true }
-func (m *countingMock) GetVisionModel() string             { return "mock-vision" }
-func (m *countingMock) GetLastTPS() float64                { return 0 }
-func (m *countingMock) GetAverageTPS() float64             { return 0 }
-func (m *countingMock) GetTPSStats() map[string]float64    { return nil }
-func (m *countingMock) ResetTPSStats()                     {}
+func (m *countingMock) SupportsVision() bool                                { return true }
+func (m *countingMock) SupportsConversationalVision() bool                  { return true }
+func (m *countingMock) GetVisionModel() string                              { return "mock-vision" }
+func (m *countingMock) GetLastTPS() float64                                 { return 0 }
+func (m *countingMock) GetAverageTPS() float64                              { return 0 }
+func (m *countingMock) GetTPSStats() map[string]float64                     { return nil }
+func (m *countingMock) ResetTPSStats()                                      {}
 
 // VisionCapabilities returns the safe defaults — countingMock is a
 // stand-in for batch-vision tests; the actual capability values are not

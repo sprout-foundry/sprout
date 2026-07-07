@@ -2,7 +2,7 @@
 
 import { act, forwardRef, useImperativeHandle } from 'react';
 import { createRoot } from 'react-dom/client';
-import Terminal from './Terminal';
+import Terminal, { nextActiveAfterClose } from './Terminal';
 
 // ---------------------------------------------------------------------------
 // Mock TerminalPane — forwardRef component with imperative handle { clear, focus }
@@ -1521,8 +1521,6 @@ describe('Terminal flat N-pane splits', () => {
 // ---------------------------------------------------------------------------
 // Tests: nextActiveAfterClose helper
 // ---------------------------------------------------------------------------
-
-import { nextActiveAfterClose } from './Terminal';
 
 describe('nextActiveAfterClose', () => {
   // No pinning — display order matches insertion order.

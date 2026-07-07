@@ -64,11 +64,7 @@ function GitPRDialog({ isOpen, onClose, onPullRequest }: GitPRDialogProps) {
         if (!isCreatingPr) onClose();
       }}
     >
-      <div
-        className="themed-dialog-card"
-        style={{ width: 'min(500px, 100%)' }}
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="themed-dialog-card" style={{ width: 'min(500px, 100%)' }} onClick={(e) => e.stopPropagation()}>
         <div className="themed-dialog-accent-bar themed-dialog-accent-bar--info" />
         <div className="themed-dialog-header">
           <span className="themed-dialog-icon themed-dialog-icon--info">
@@ -93,11 +89,7 @@ function GitPRDialog({ isOpen, onClose, onPullRequest }: GitPRDialogProps) {
               </a>
             </div>
             <div className="themed-dialog-footer">
-              <button
-                type="button"
-                className="themed-dialog-btn themed-dialog-btn--primary"
-                onClick={() => onClose()}
-              >
+              <button type="button" className="themed-dialog-btn themed-dialog-btn--primary" onClick={() => onClose()}>
                 Done
               </button>
             </div>
@@ -207,12 +199,7 @@ function GitPRDialog({ isOpen, onClose, onPullRequest }: GitPRDialogProps) {
             )}
 
             <div className="themed-dialog-footer">
-              <button
-                type="button"
-                className="themed-dialog-btn"
-                onClick={() => onClose()}
-                disabled={isCreatingPr}
-              >
+              <button type="button" className="themed-dialog-btn" onClick={() => onClose()} disabled={isCreatingPr}>
                 Cancel
               </button>
               <button

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { showThemedConfirm } from '../components/ThemedDialog';
 import { useEvents } from '../contexts/EventsContext';
 import * as gitApi from '../services/api/gitApi';
 import * as miscApi from '../services/api/miscApi';
@@ -14,7 +15,6 @@ import type {
 } from '../types/git-types';
 import { selectionKey, parseSelectionKey } from '../types/git-types';
 import { useLog, debugLog, warn } from '../utils/log';
-import { showThemedConfirm } from '../components/ThemedDialog';
 
 export interface GitDiffResponse {
   message: string;

@@ -179,6 +179,20 @@ func (a *ProviderAdapter) SupportsReasoning() bool {
 	return containsReasoningModel(model) || a.clientType == OpenAIClientType
 }
 
+// VisionCapabilities returns the per-provider vision limits by delegating
+// to the wrapped client. If the client does not implement
+// VisionCapabilities() (e.g. legacy / mock clients), returns the zero
+// value; callers should pass that through VisionCapabilitiesOrDefault()
+// to get a safe usable configuration. SP-103-D3 / AUDIT-GAP-2.
+func (a *ProviderAdapter) VisionCapabilities() VisionCapabilities {
+	if typed, ok := a.client.(interface {
+		VisionCapabilities() VisionCapabilities
+	}); ok {
+		return typed.VisionCapabilities()
+	}
+	return VisionCapabilities{}
+}
+
 // SetDebug enables or disables debug mode
 func (a *ProviderAdapter) SetDebug(debug bool) {
 	a.client.SetDebug(debug)

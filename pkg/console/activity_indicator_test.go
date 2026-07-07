@@ -283,3 +283,119 @@ func TestInputReader_TabCompletion_NoCompleter(t *testing.T) {
 		t.Errorf("Tab without completer should leave line unchanged, got %q", ir.line)
 	}
 }
+
+// TestIndicator_RenderTruncatesLongMessage is the regression for the
+// spinner line-wrap bug. When msg + elapsed suffix would exceed the terminal
+// width, render() must truncate the message so the whole line fits on one row
+// — otherwise the line wraps to a second physical row and \r on the next tick
+// only clears the bottom row, leaving stale frames frozen above.
+//
+// We invoke render() directly (with a forced isTTY and a widthOverride) so we
+// can assert against the exact output without racing the background goroutine.
+func TestIndicator_RenderTruncatesLongMessage(t *testing.T) {
+	w := &nonTTYWriter{}
+	a := &ActivityIndicator{
+		w:             w,
+		isTTY:         true,
+		widthOverride: 20, // narrow terminal
+	}
+	// Simulate an active spinner.
+	a.active = true
+	a.msg = "shell_command (go test ./... 2>&1 | tail -80) very long preview"
+	a.startedAt = time.Now()
+
+	a.render(0)
+	out := w.String()
+
+	// The rendered line must contain the ellipsis (truncation happened).
+	if !strings.Contains(out, "…") {
+		t.Errorf("long message should be truncated with …; got %q", out)
+	}
+	// And the visible width must not exceed the terminal width.
+	visible := displayWidth(out)
+	if visible > 20 {
+		t.Errorf("rendered line visible width %d > terminal width 20; got %q", visible, out)
+	}
+}
+
+// TestIndicator_RenderPreservesANSIBadge verifies that an ANSI-colored persona
+// badge in the message survives truncation — the color escape bytes must be
+// present in the rendered output.
+func TestIndicator_RenderPreservesANSIBadge(t *testing.T) {
+	// PersonaBadge's output depends on NO_COLOR/FORCE_COLOR env. Clear NO_COLOR
+	// (which always wins per no-color.org) so the test asserts ANSI preservation
+	// regardless of the caller's environment.
+	t.Setenv("NO_COLOR", "")
+
+	w := &nonTTYWriter{}
+	a := &ActivityIndicator{
+		w:             w,
+		isTTY:         true,
+		widthOverride: 16,
+	}
+	a.active = true
+	badge := PersonaBadge(1, "coder") // "\033[36m[coder]\033[0m "
+	a.msg = badge + "running a really long command that overflows"
+	a.startedAt = time.Now()
+
+	a.render(0)
+	out := w.String()
+
+	// The cyan color escape must still be present.
+	if !strings.Contains(out, personaColorCoder) {
+		t.Errorf("rendered line should preserve the persona cyan ANSI code; got %q", out)
+	}
+	// Visible width must respect the budget.
+	if visible := displayWidth(out); visible > 16 {
+		t.Errorf("rendered line visible width %d > 16; got %q", visible, out)
+	}
+}
+
+// TestIndicator_RenderDoesNotTruncateShortMessage ensures the fix doesn't add
+// a spurious ellipsis to messages that already fit.
+func TestIndicator_RenderDoesNotTruncateShortMessage(t *testing.T) {
+	w := &nonTTYWriter{}
+	a := &ActivityIndicator{
+		w:             w,
+		isTTY:         true,
+		widthOverride: 80,
+	}
+	a.active = true
+	a.msg = "Thinking"
+	a.startedAt = time.Now()
+
+	a.render(0)
+	out := w.String()
+	if strings.Contains(out, "…") {
+		t.Errorf("short message should not be truncated; got %q", out)
+	}
+	if !strings.Contains(out, "Thinking") {
+		t.Errorf("short message text should be intact; got %q", out)
+	}
+}
+
+// TestIndicator_SetStaticTruncatesLongLine mirrors the render() regression for
+// SetStatic(): a long static line must be truncated to terminal width.
+func TestIndicator_SetStaticTruncatesLongLine(t *testing.T) {
+	w := &nonTTYWriter{}
+	a := &ActivityIndicator{
+		w:             w,
+		isTTY:         true,
+		widthOverride: 15,
+	}
+	a.SetStatic("this is a very long static line that should be truncated to fit")
+
+	out := w.String()
+	if !strings.Contains(out, "…") {
+		t.Errorf("long static line should be truncated with …; got %q", out)
+	}
+	if visible := displayWidth(stripClearCodes(out)); visible > 15 {
+		t.Errorf("static line visible width %d > 15; got %q", visible, out)
+	}
+}
+
+// stripClearCodes removes the leading "\r\033[K" clear sequence so displayWidth
+// measures only the visible content SetStatic wrote.
+func stripClearCodes(s string) string {
+	return strings.TrimPrefix(strings.TrimPrefix(s, "\r"), "\033[K")
+}

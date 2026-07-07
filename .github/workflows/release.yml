@@ -204,7 +204,7 @@ jobs:
         git config --local user.name "GitHub Action"
         git add CHANGELOG.md
         git commit -m "docs: Update changelog for $VERSION" || echo "No changes to commit"
-        git push origin HEAD:main
+        git push origin HEAD:main || echo "Changelog push skipped (non-fast-forward; CHANGELOG.md stays in release commit only)"
 
     - name: Update README with version
       shell: bash

@@ -129,7 +129,7 @@ export default function useWebSocketEvents({
     listChatSessions()
       .then((response) => {
         setState((prev) => ({
-          chatSessions: response.chat_sessions,
+          chatSessions: response.chat_sessions ?? [],
         }));
       })
       .catch((err) => {

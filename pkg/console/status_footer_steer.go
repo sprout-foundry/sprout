@@ -10,16 +10,22 @@ import (
 
 // steerRowFor returns the absolute terminal row (1-based) where the
 // i-th rendered steer line should be drawn. The rule sits at `rows-1`
-// and the footer at `rows`; steer lines stack above the rule, so with
-// steerRows=1 a single line lands at `rows-2`, with steerRows=2 the
-// pair lands at `rows-3` and `rows-2`, etc.
+// and the footer at `rows`. When a hint row is active (hintRows=1),
+// it sits at `rows-2`; steer lines stack above the hint. When no hint
+// is active (hintRows=0), steer lines stack directly above the rule.
+//
+// Examples (rows=24):
+//   hintRows=0, steerRows=1, i=0  → row 22  (rows-1-0-1+0)
+//   hintRows=1, steerRows=1, i=0  → row 21  (rows-1-1-1+0)
+//   hintRows=1, steerRows=2, i=0  → row 20  (rows-1-1-2+0)
+//   hintRows=1, steerRows=2, i=1  → row 21  (rows-1-1-2+1)
 //
 // A previous version of this calculation wrote to `rows-1-steerRows+i+1`
 // (one row lower), placing the steer panel on the rule's row. The rule
 // repainted on the same draw call and the panel vanished entirely from
 // the terminal. SP-055.
-func steerRowFor(rows, steerRows, i int) int {
-	return rows - 1 - steerRows + i
+func steerRowFor(rows, steerRows, hintRows, i int) int {
+	return rows - 1 - hintRows - steerRows + i
 }
 
 // splitSteerLines breaks the steer buffer into at most `cap` lines.

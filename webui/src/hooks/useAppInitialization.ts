@@ -57,6 +57,23 @@ export function useAppInitialization({
   const apiService = ApiService.getInstance();
 
   useEffect(() => {
+    // ── Cloud mode: check auth BEFORE anything else ─────────────
+    // In cloud mode, redirect to login if not authenticated.
+    // All other initialization (WebSocket, data loading, WASM) is
+    // gated behind this check to avoid 401 error spam.
+    if (isCloud) {
+      fetch('/user/me', { credentials: 'include' }).then((authRes) => {
+        if (!authRes.ok) {
+          window.location.href = '/webui/auth/login';
+          return;
+        }
+        initApp();
+      }).catch(() => initApp());
+    } else {
+      initApp();
+    }
+
+    function initApp() {
     // Register Service Worker for PWA functionality
     registerServiceWorker();
 
@@ -227,6 +244,8 @@ export function useAppInitialization({
       window.removeEventListener('resize', checkBreakpoints);
       clearInterval(statsInterval);
     };
+    } // end startDataLoading
+
     // eslint-disable-next-line react-hooks/exhaustive-deps -- setState, setRecentFiles, setIsMobile, setIsTablet are stable useState setters; connectionTimeoutRef is a stable ref; eventsProvider/apiService are stable from hooks/singletons; loadChatSessions is stable (empty useCallback deps); handleReconnect is stable (useCallback with empty deps)
   }, [handleEvent, loadChatSessions, eventsProvider]);
 }

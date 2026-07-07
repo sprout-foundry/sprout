@@ -85,6 +85,17 @@ func (r *OutputRouter) SetTerminalSubscriberActive(active bool) {
 	r.terminalSubscriberActive = active
 }
 
+// TerminalSubscriberActive reports whether a terminal subscriber owns
+// terminal rendering. Callers that render their own completion / summary
+// lines (e.g. cmd/agent_query.go ProcessQuery) use this to suppress their
+// duplicate output when the subscriber will render it instead — the same
+// gate that protects RouteAgentMessage from double-printing.
+func (r *OutputRouter) TerminalSubscriberActive() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.terminalSubscriberActive
+}
+
 // SetReasoningCallback registers a dedicated sink for reasoning chunks
 // so the CLI can render thinking-stream output as a collapsed header
 // instead of mixing it into the prose stream. When unset (the default),

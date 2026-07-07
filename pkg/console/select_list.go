@@ -249,9 +249,13 @@ func (s *SelectList) runTTY(ctx context.Context) (string, bool, error) {
 	// stays pinned above the list and is excluded from the render()
 	// row-clear math so subscriber output between keypresses doesn't
 	// misalign the walk-back count and stack duplicate titles.
+	// Hold the output lock across the title + first render so a
+	// background PrintExternal can't insert a line between them.
+	LockOutput()
 	if s.opts.Title != "" {
 		fmt.Fprintln(os.Stderr, GlyphInfo.Prefix()+s.opts.Title)
 	}
+	UnlockOutput()
 
 	s.render()
 
@@ -703,6 +707,12 @@ func (s *SelectList) render() {
 	}
 	s.mu.Unlock()
 
+	// Serialize against PrintExternal and other console chrome so
+	// background messages can't interleave with the row-clear/write
+	// sequence and leave duplicate rows on screen.
+	LockOutput()
+	defer UnlockOutput()
+
 	// Walk up over the previously-rendered rows and clear them so the
 	// new frame overwrites the old without leaving residue.
 	for i := 0; i < prev; i++ {
@@ -829,6 +839,8 @@ func (s *SelectList) clearRendered() {
 	s.rendered = 0
 	hasTitle := s.opts.Title != ""
 	s.mu.Unlock()
+	LockOutput()
+	defer UnlockOutput()
 	// +1 for the title row (printed once in runTTY, not tracked in rendered)
 	if hasTitle {
 		n++

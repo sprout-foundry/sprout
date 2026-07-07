@@ -58,6 +58,14 @@ type StatusFooter struct {
 	// when the row count changed (user added/removed a newline) so we
 	// can reapply the scroll region and blank any orphaned rows.
 	lastSteerRows int
+	// lastHintRows is the hint row count we drew last time (0 or 1).
+	// Used by Resize/Stop to clear the old hint row when it was present.
+	lastHintRows int
+
+	// SP-115: keyboard shortcut hint row. When showKeymapHint is true
+	// the footer reserves an extra pinned row above the rule to display
+	// registered keybindings (e.g. "Alt+T breakdown · Alt+V verbose").
+	showKeymapHint bool
 
 	// SP-078 Phase 1: when steerCursorRow >= 0, drawLocked uses the
 	// width-aware WrapSteerLayout path instead of the legacy
@@ -225,6 +233,18 @@ func (f *StatusFooter) SetProseStreaming(active bool) {
 	f.mu.Unlock()
 }
 
+// SetShowKeymapHint enables/disables the keyboard shortcut hint row
+// above the rule. When true, drawLocked reserves an extra row.
+// SP-115.
+func (f *StatusFooter) SetShowKeymapHint(show bool) {
+	if f == nil {
+		return
+	}
+	f.mu.Lock()
+	f.showKeymapHint = show
+	f.mu.Unlock()
+}
+
 // Resize handles a terminal-size change (SIGWINCH). The OLD footer rows
 // (tracked via lastRows) are cleared first so a grow doesn't leave the
 // previous footer stranded mid-screen, then the scroll region is
@@ -245,7 +265,8 @@ func (f *StatusFooter) Resize() {
 	// Reset the scroll region temporarily so we can address rows by
 	// absolute number without the terminal clamping us inside the OLD
 	// (now-stale) scroll area. Then clear the previous footer rows —
-	// 2 rows by default (rule + content), 3 when steer was active.
+	// 2 rows by default (rule + content), 3 when steer was active,
+	// 4 when steer + hint were active.
 	if oldRows > 1 {
 		fmt.Fprint(f.w, "\033[r")
 		fmt.Fprint(f.w, "\0337")
@@ -253,9 +274,25 @@ func (f *StatusFooter) Resize() {
 		fmt.Fprintf(f.w, "\033[%d;1H\033[K", oldRows-1)
 		f.mu.Lock()
 		steerWasActive := f.steerActive
+		lastHint := f.lastHintRows
+		lastSteer := f.lastSteerRows
 		f.mu.Unlock()
-		if steerWasActive && oldRows > 2 {
+		// SP-115: clear hint row if it was present.
+		if lastHint > 0 && oldRows > 2 {
 			fmt.Fprintf(f.w, "\033[%d;1H\033[K", oldRows-2)
+		}
+		if steerWasActive && oldRows > 2 {
+			// Clear every row the old steer panel occupied. Use the
+			// recorded lastSteerRows rather than the live steerRows
+			// because the live value reflects CURRENT state, not what
+			// was drawn the last time Resize fired. Loop bottom-up so
+			// the cursor ends at the top of the panel.
+			for i := lastSteer - 1; i >= 0; i-- {
+				row := steerRowFor(oldRows, lastSteer, lastHint, i)
+				if row >= 1 && row < oldRows {
+					fmt.Fprintf(f.w, "\033[%d;1H\033[K", row)
+				}
+			}
 		}
 		fmt.Fprint(f.w, "\0338")
 	}
@@ -291,16 +328,28 @@ func (f *StatusFooter) Stop() {
 
 	_, rows := f.terminalSize()
 	if rows > 1 {
-		// Clear all pinned rows (N + N-1, plus N-2 if steer was active)
-		// before resetting the scroll region so we don't leave residual
-		// chrome in the scrollback. Order matters: bottom-up so the
-		// cursor ends near the top of where the footer was, which is
-		// more useful for the outgoing rendering context than the
-		// absolute bottom.
+		// Clear all pinned rows (N + N-1, plus N-2 if hint was active,
+		// plus N-3..N-3-lastSteer+1 if steer was active) before resetting
+		// the scroll region so we don't leave residual chrome in the
+		// scrollback. Order matters: bottom-up so the cursor ends near
+		// the top of where the footer was.
+		f.mu.Lock()
+		hintWasActive := f.lastHintRows > 0
+		steerWasActive := f.steerActive
+		lastSteer := f.lastSteerRows
+		f.mu.Unlock()
 		fmt.Fprintf(f.w, "\033[%d;1H\033[K", rows)
 		fmt.Fprintf(f.w, "\033[%d;1H\033[K", rows-1)
-		if f.steerActive && rows > 2 {
+		if hintWasActive && rows > 2 {
 			fmt.Fprintf(f.w, "\033[%d;1H\033[K", rows-2)
+		}
+		if steerWasActive && rows > 2 {
+			for i := lastSteer - 1; i >= 0; i-- {
+				row := steerRowFor(rows, lastSteer, f.lastHintRows, i)
+				if row >= 1 && row < rows {
+					fmt.Fprintf(f.w, "\033[%d;1H\033[K", row)
+				}
+			}
 		}
 	}
 	// Reset scroll region to full screen.
@@ -308,14 +357,23 @@ func (f *StatusFooter) Stop() {
 	// Restore cursor to a sensible position (where the topmost pinned
 	// row used to be) so subsequent output lands somewhere sensible.
 	if rows > 1 {
+		f.mu.Lock()
+		hintWasActive := f.lastHintRows > 0
+		steerWasActive := f.steerActive
+		lastSteer := f.lastSteerRows
+		f.mu.Unlock()
 		topPinned := rows - 1
-		if f.steerActive {
+		if steerWasActive && lastSteer > 0 {
+			topPinned = steerRowFor(rows, lastSteer, f.lastHintRows, 0)
+		} else if hintWasActive {
 			topPinned = rows - 2
 		}
 		fmt.Fprintf(f.w, "\033[%d;1H", topPinned)
 	}
+	f.mu.Lock()
 	f.steerActive = false
 	f.steerLine = ""
+	f.mu.Unlock()
 }
 
 // watchResize listens for SIGWINCH (or the platform equivalent) and
@@ -476,15 +534,19 @@ func (f *StatusFooter) clearOrphanedSteerRows(prevRows, newRows int) {
 	if rows < 3 {
 		return
 	}
-	// Steer panel occupies rows (rows-1-prevRows) .. (rows-2). After
-	// shrinking, it occupies (rows-1-newRows) .. (rows-2). Blank the
-	// rows in the top of the old panel that the new one doesn't cover.
+	// SP-115: hint row pushes steer panel up by hintRows.
+	f.mu.Lock()
+	hintRows := f.hintRowCount()
+	f.mu.Unlock()
+	// Steer panel occupies rows (rows-1-hintRows-prevRows) .. (rows-2-hintRows).
+	// After shrinking, it occupies (rows-1-hintRows-newRows) .. (rows-2-hintRows).
+	// Blank the rows in the top of the old panel that the new one doesn't cover.
 	fmt.Fprint(f.w, "\0337")
 	// Temporarily drop the region so we can address the soon-to-be-
 	// scrollable rows directly; applyScrollRegion will re-clamp it.
 	fmt.Fprint(f.w, "\033[r")
 	for i := 0; i < prevRows-newRows; i++ {
-		row := rows - 1 - prevRows + i
+		row := rows - 1 - hintRows - prevRows + i
 		if row < 1 {
 			continue
 		}
@@ -522,14 +584,18 @@ func (f *StatusFooter) ClearSteerLine() {
 	if rows > 2 && prevRows > 0 {
 		fmt.Fprint(f.w, "\033[r")
 		fmt.Fprint(f.w, "\0337")
+		// SP-115: hint row pushes steer panel up by hintRows.
+		f.mu.Lock()
+		hintRows := f.lastHintRows
+		f.mu.Unlock()
 		for i := 0; i < prevRows; i++ {
-			// Match steerRowFor(rows, prevRows, i): the steer panel is
-			// drawn at `rows-1-steerRows+i`, so we blank that same row.
-			// A prior version used `+1` here, which cleared the rule
-			// row (repainted immediately by draw()) instead of the
-			// steer text row — leaving stale steer text on screen after
-			// EndTurn (visible above the next idle prompt).
-			row := rows - 1 - prevRows + i
+			// Match steerRowFor(rows, prevRows, hintRows, i): the steer
+			// panel is drawn at `rows-1-hintRows-steerRows+i`, so we
+			// blank that same row. A prior version used `+1` here, which
+			// cleared the rule row (repainted immediately by draw())
+			// instead of the steer text row — leaving stale steer text
+			// on screen after EndTurn (visible above the next idle prompt).
+			row := rows - 1 - hintRows - prevRows + i
 			if row < 1 {
 				continue
 			}
@@ -575,6 +641,7 @@ func (f *StatusFooter) drawLocked() {
 	steerLine := f.steerLine
 	steerCursor := f.steerCursor
 	steerRows := f.steerRowCount()
+	hintRows := f.hintRowCount()
 	f.mu.Unlock()
 
 	// \0337 save cursor; draw chrome rows from top-to-bottom; \0338
@@ -642,7 +709,17 @@ func (f *StatusFooter) drawLocked() {
 				withCursor = i == len(lines)-1
 			}
 			rendered := steerRowTextWithCursor(lineText, cols, withCursor, col)
-			fmt.Fprintf(f.w, "\033[%d;1H\033[K%s%s%s", steerRowFor(rows, steerRows, i), steerColor, rendered, footerResetAll)
+			fmt.Fprintf(f.w, "\033[%d;1H\033[K%s%s%s", steerRowFor(rows, steerRows, hintRows, i), steerColor, rendered, footerResetAll)
+		}
+	}
+	// SP-115: keyboard shortcut hint row. Sits at rows-2 when hintRows=1
+	// (above the rule at rows-1, below the steer panel when active).
+	if hintRows > 0 {
+		hintLine := KeymapHintRow()
+		if hintLine != "" {
+			hintRow := rows - 1 - hintRows // hintRows is always 1 → rows-2
+			rendered := padToWidth(truncateToWidth(hintLine, cols, "…"), cols)
+			fmt.Fprintf(f.w, "\033[%d;1H\033[K%s%s%s", hintRow, footerBaseColor, rendered, footerResetAll)
 		}
 	}
 	fmt.Fprintf(f.w, "\033[%d;1H\033[K%s%s%s", rows-1, footerBaseColor, rule, footerResetAll)
@@ -654,6 +731,7 @@ func (f *StatusFooter) drawLocked() {
 	f.mu.Lock()
 	f.lastRows = rows
 	f.lastSteerRows = steerRows
+	f.lastHintRows = hintRows
 	f.mu.Unlock()
 }
 

@@ -178,6 +178,26 @@ func KeymapHelpTable() string {
 	return b.String()
 }
 
+// KeymapHintRow renders a single-line hint of registered keybindings
+// suitable for embedding in a footer or status bar.
+// Format: "Alt+T label1 · Alt+V label2 · ..."
+// The label is the Description truncated to ~30 display columns.
+// Returns empty string when no bindings are registered.
+func KeymapHintRow() string {
+	entries := GlobalKeymap().Entries()
+	if len(entries) == 0 {
+		return ""
+	}
+
+	const maxLabel = 30
+	var parts []string
+	for _, e := range entries {
+		label := truncateToWidth(e.Description, maxLabel, "…")
+		parts = append(parts, e.Key+" "+label)
+	}
+	return strings.Join(parts, " · ")
+}
+
 func padRight(s string, n int) string {
 	if len(s) >= n {
 		return s

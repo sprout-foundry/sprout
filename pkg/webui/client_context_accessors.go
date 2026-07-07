@@ -80,3 +80,18 @@ func (ws *ReactWebServer) getActiveAgentForRequest(r *http.Request) *agent.Agent
 func (ws *ReactWebServer) getCurrentSessionIDForRequest(r *http.Request) string {
 	return ws.getClientContextForRequest(r).CurrentSessionID
 }
+
+// getWorkspaceRootForClient returns the per-client workspace root for the given client ID.
+// Falls back to the server-level workspace root if the client context doesn't exist.
+func (ws *ReactWebServer) getWorkspaceRootForClient(clientID string) string {
+	ws.mutex.RLock()
+	defer ws.mutex.RUnlock()
+	if ctx := ws.clientContexts[clientID]; ctx != nil {
+		root := ctx.WorkspaceRoot
+		if evaled, err := filepath.EvalSymlinks(root); err == nil {
+			return evaled
+		}
+		return root
+	}
+	return ws.workspaceRoot
+}

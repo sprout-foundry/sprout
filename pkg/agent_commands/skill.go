@@ -129,9 +129,17 @@ func (c *SkillCommand) Complete(args []string, chatAgent *agent.Agent) []string 
 		}
 		sort.Strings(matches)
 		return matches
+	default:
+		prefix := strings.ToLower(args[0])
+		var matches []string
+		for _, sub := range staticSubcommands {
+			if strings.HasPrefix(strings.ToLower(sub), prefix) {
+				matches = append(matches, sub)
+			}
+		}
+		sort.Strings(matches)
+		return matches
 	}
-
-	return nil
 }
 
 // executeSkillCommand is the testable dispatcher.

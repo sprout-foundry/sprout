@@ -47,16 +47,27 @@ func buildSlashCommandCompleter(chatAgent *agent.Agent) console.CompletionProvid
 
 		// Space typed → try argument completion via CompletableCommand.
 		parts := strings.Fields(line)
-		if len(parts) < 2 {
-			return nil
-		}
 		cmdName := strings.TrimPrefix(strings.ToLower(parts[0]), "/")
-		args := parts[1:]
 		cmd, exists := registry.GetCommand(cmdName)
 		if !exists {
 			return nil
 		}
-					if completable, ok := cmd.(agent_commands.CompletableCommand); ok {
+
+		var args []string
+		if len(parts) > 1 {
+			args = parts[1:]
+		}
+		// else: user typed a space after the command name but nothing yet
+		// (e.g., "/skill ") — args stays empty so Complete shows its
+		// first-argument candidates (subcommands, setting keys, etc.)
+
+		// Preserve trailing-space semantics: subcommand + space + Tab should
+		// show all next-argument candidates, not filter by the subcommand name.
+		if strings.HasSuffix(line, " ") {
+			args = append(args, "")
+		}
+
+		if completable, ok := cmd.(agent_commands.CompletableCommand); ok {
 			candidates := completable.Complete(args, chatAgent)
 			if len(candidates) == 0 {
 				return nil
@@ -64,7 +75,19 @@ func buildSlashCommandCompleter(chatAgent *agent.Agent) console.CompletionProvid
 			// Reconstruct the full-line prefix (everything before the word
 			// being completed) so the CompletionProvider contract — which
 			// expects full-line replacements — is satisfied.
-			prefix := strings.Join(parts[:len(parts)-1], " ") + " "
+			//
+			// When len(parts) > 1, the last element of parts is the word
+			// being completed; everything before it (including the command
+			// name) is the prefix.
+			//
+			// When len(parts) == 1, the user typed a bare "/cmd " with no
+			// argument text yet — the prefix is the command name + space.
+			var prefix string
+			if len(parts) > 1 {
+				prefix = strings.Join(parts[:len(parts)-1], " ") + " "
+			} else {
+				prefix = parts[0] + " "
+			}
 			result := make([]string, len(candidates))
 			for i, c := range candidates {
 				result[i] = prefix + c

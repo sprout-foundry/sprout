@@ -174,9 +174,9 @@ func TestProvidersCommand_Complete_PrefixMatchNil(t *testing.T) {
 func TestProvidersCommand_Complete_AgentNil(t *testing.T) {
 	cmd := &ProvidersCommand{}
 
-	// nil agent everywhere returns nil gracefully
-	assert.Nil(t, cmd.Complete([]string{"list"}, nil), "nil agent with args should not panic")
-	assert.Nil(t, cmd.Complete([]string{"op"}, nil), "nil agent with prefix should not panic")
+	// nil agent: 'list' matches subcommand name, 'op' matches nothing
+	assert.Equal(t, []string{"list"}, cmd.Complete([]string{"list"}, nil), "'list' should match 'list' subcommand")
+	assert.Nil(t, cmd.Complete([]string{"op"}, nil), "'op' should not match any subcommand or provider")
 	assert.NotNil(t, cmd.Complete(nil, nil), "nil agent with no args should return subcommands")
 }
 
@@ -251,8 +251,9 @@ func TestSkillCommand_Complete_AgentNil(t *testing.T) {
 	assert.Nil(t, cmd.Complete([]string{"disable"}, nil), "disable with nil agent should return nil")
 	assert.Nil(t, cmd.Complete([]string{"remove"}, nil), "remove with nil agent should return nil")
 	assert.Nil(t, cmd.Complete([]string{"update"}, nil), "update with nil agent should return nil")
-	assert.Nil(t, cmd.Complete([]string{"install"}, nil), "install with nil agent should return nil")
-	assert.Nil(t, cmd.Complete([]string{"list"}, nil), "list with nil agent should return nil")
+	// install and list now match via default branch prefix-matching
+	assert.Equal(t, []string{"install"}, cmd.Complete([]string{"install"}, nil), "install should match via prefix")
+	assert.Equal(t, []string{"list"}, cmd.Complete([]string{"list"}, nil), "list should match via prefix")
 	assert.Nil(t, cmd.Complete([]string{"unknown"}, nil), "unknown subcommand should return nil")
 }
 

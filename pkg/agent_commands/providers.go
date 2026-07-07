@@ -97,23 +97,32 @@ func (p *ProvidersCommand) Complete(args []string, chatAgent *agent.Agent) []str
 		return all
 	}
 
-	// Suggest provider names matching the last argument.
-	prefix := args[len(args)-1]
-	if chatAgent == nil {
-		return nil
-	}
-	mgr := chatAgent.GetConfigManager()
-	if mgr == nil {
-		return nil
-	}
-	providers := mgr.GetAvailableProviders()
+	// Filter against both subcommands and provider names.
+	prefix := strings.ToLower(args[len(args)-1])
 	var matches []string
-	for _, prov := range providers {
-		id := string(prov)
-		if prefix == "" || strings.HasPrefix(strings.ToLower(id), strings.ToLower(prefix)) {
-			matches = append(matches, id)
+
+	// Check subcommands
+	subcommands := []string{"list", "select", "status"}
+	for _, sub := range subcommands {
+		if strings.HasPrefix(strings.ToLower(sub), prefix) {
+			matches = append(matches, sub)
 		}
 	}
+
+	// Check provider names (if agent available)
+	if chatAgent != nil {
+		mgr := chatAgent.GetConfigManager()
+		if mgr != nil {
+			providers := mgr.GetAvailableProviders()
+			for _, p := range providers {
+				id := string(p)
+				if strings.HasPrefix(strings.ToLower(id), prefix) {
+					matches = append(matches, id)
+				}
+			}
+		}
+	}
+
 	sort.Strings(matches)
 	return matches
 }

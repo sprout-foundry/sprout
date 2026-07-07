@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 )
 
@@ -797,3 +798,41 @@ type stringsSlice []string
 func (s stringsSlice) Len() int           { return len(s) }
 func (s stringsSlice) Less(i, j int) bool { return s[i] < s[j] }
 func (s stringsSlice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
+
+// TestBuildSymbols_RefusesHomeDir guards against accidental indexing of the
+// user's home directory. The home dir may contain SSH keys, AWS credentials,
+// GPG keys, browser caches, email, and other private data — walking it would
+// build an embedding/symbol index over that content.
+func TestBuildSymbols_RefusesHomeDir(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skipf("no home dir available: %v", err)
+	}
+	idx, err := BuildSymbols(home)
+	if err == nil {
+		t.Fatal("BuildSymbols(home) returned no error — expected refusal")
+	}
+	if idx != nil {
+		t.Errorf("BuildSymbols(home) returned non-nil index alongside error: %+v", idx)
+	}
+	if !strings.Contains(err.Error(), "home directory") {
+		t.Errorf("expected error to mention home directory, got: %v", err)
+	}
+}
+
+// TestBuildSymbols_NonHomeDirAllowed is the positive control: BuildSymbols must
+// still work normally for a project directory.
+func TestBuildSymbols_NonHomeDirAllowed(t *testing.T) {
+	dir := t.TempDir()
+	src := "package main\nfunc Hello() {}\n"
+	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	idx, err := BuildSymbols(dir)
+	if err != nil {
+		t.Fatalf("BuildSymbols(%s): %v", dir, err)
+	}
+	if idx == nil || len(idx.Files) == 0 {
+		t.Fatal("expected symbols for main.go in non-home dir")
+	}
+}

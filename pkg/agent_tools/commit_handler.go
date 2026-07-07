@@ -39,32 +39,13 @@ func (h *commitHandler) Execute(ctx context.Context, env ToolEnv, args map[strin
 	notes, _ := extractString(args, "notes")
 
 	if message != "" {
-		// Write message to a temp file to avoid shell expansion of
-		// backticks, $(), ", and other special characters. The file
-		// path passed to git commit -F is safe in any shell context.
-		msgFile, err := os.CreateTemp("", "sprout-commit-msg-*")
-		if err != nil {
-			return ToolResult{Output: fmt.Sprintf("Commit failed: %v", err), IsError: true}, nil
-		}
-		defer os.Remove(msgFile.Name())
-		if _, err := msgFile.WriteString(message); err != nil {
-			msgFile.Close()
-			return ToolResult{Output: fmt.Sprintf("Commit failed: %v", err), IsError: true}, nil
-		}
-		msgFile.Close()
-
-		cmd := fmt.Sprintf("git commit -F %s", msgFile.Name())
-		result, err := execShellCmd(ctx, cmd, env.WorkspaceRoot)
-		if err != nil {
-			return ToolResult{Output: fmt.Sprintf("Commit failed: %v", err), IsError: true}, nil
-		}
-		return ToolResult{Output: result}, nil
+		return commitMessage(ctx, message, env.WorkspaceRoot)
 	}
 
 	// Auto-generate from diff + notes
-	result, err := execShellCmd(ctx, "git diff --cached --stat", env.WorkspaceRoot)
+	stagedResult, err := execShellCmd(ctx, "git diff --cached --stat", env.WorkspaceRoot)
 	if err != nil {
-		return ToolResult{Output: fmt.Sprintf("Failed to read staged changes: %v", err), IsError: true}, nil
+		stagedResult = "(could not read staged changes)"
 	}
 
 	// Build a simple auto-generated message
@@ -73,23 +54,11 @@ func (h *commitHandler) Execute(ctx context.Context, env ToolEnv, args map[strin
 		msg = notes
 	}
 
-	msgFile, err := os.CreateTemp("", "sprout-commit-msg-*")
+	result, err := commitMessage(ctx, msg, env.WorkspaceRoot)
 	if err != nil {
-		return ToolResult{Output: fmt.Sprintf("Commit failed: %v", err), IsError: true}, nil
+		return ToolResult{Output: fmt.Sprintf("Commit failed: %v\n\nStaged changes were:\n%s", err, stagedResult), IsError: true}, nil
 	}
-	defer os.Remove(msgFile.Name())
-	if _, err := msgFile.WriteString(msg); err != nil {
-		msgFile.Close()
-		return ToolResult{Output: fmt.Sprintf("Commit failed: %v", err), IsError: true}, nil
-	}
-	msgFile.Close()
-
-	cmd := fmt.Sprintf("git commit -F %s", msgFile.Name())
-	output, err := execShellCmd(ctx, cmd, env.WorkspaceRoot)
-	if err != nil {
-		return ToolResult{Output: fmt.Sprintf("Commit failed: %v\n\nStaged changes were:\n%s", err, result), IsError: true}, nil
-	}
-	return ToolResult{Output: output}, nil
+	return result, nil
 }
 
 func (h *commitHandler) Aliases() []string      { return nil }
@@ -97,6 +66,33 @@ func (h *commitHandler) Timeout() time.Duration { return 0 }
 func (h *commitHandler) MaxResultSize() int     { return 0 }
 func (h *commitHandler) SafeForParallel() bool  { return false }
 func (h *commitHandler) Interactive() bool      { return false }
+
+// commitMessage writes a message to a temp file and runs git commit -F.
+// Using a temp file avoids shell expansion of backticks, $(), and other
+// special characters that would be interpreted passing -m through the shell.
+//
+// This is shared by both the commit tool and the git tool's commit operation.
+func commitMessage(ctx context.Context, message, workingDir string) (ToolResult, error) {
+	msgFile, err := os.CreateTemp("", "sprout-commit-msg-*")
+	if err != nil {
+		return ToolResult{Output: fmt.Sprintf("Commit failed: %v", err), IsError: true}, nil
+	}
+	// Clean up temp file after the shell command completes.
+	// On success git deletes its reference; on failure the file is harmless.
+	defer os.Remove(msgFile.Name())
+	if _, err := msgFile.WriteString(message); err != nil {
+		msgFile.Close()
+		return ToolResult{Output: fmt.Sprintf("Commit failed: %v", err), IsError: true}, nil
+	}
+	msgFile.Close()
+
+	cmd := fmt.Sprintf("git commit -F %s", msgFile.Name())
+	output, err := execShellCmd(ctx, cmd, workingDir)
+	if err != nil {
+		return ToolResult{Output: fmt.Sprintf("Commit failed: %v", err), IsError: true}, nil
+	}
+	return ToolResult{Output: output}, nil
+}
 
 // execShellCmd runs a shell command and returns its output
 func execShellCmd(ctx context.Context, cmd string, workingDir string) (string, error) {

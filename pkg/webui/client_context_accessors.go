@@ -5,6 +5,7 @@ package webui
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
 
 	"github.com/sprout-foundry/sprout/pkg/agent"
@@ -94,4 +95,19 @@ func (ws *ReactWebServer) getWorkspaceRootForClient(clientID string) string {
 		return root
 	}
 	return ws.workspaceRoot
+}
+
+// getAutomateDir returns the workspace-local automate/ directory for the
+// current client's workspace. Falls back to the CWD when no workspace root
+// is set (e.g., standalone daemon or pre-chat initialization).
+func (ws *ReactWebServer) getAutomateDir(r *http.Request) string {
+	workspaceRoot := ws.getWorkspaceRootForRequest(r)
+	if workspaceRoot == "" {
+		wd, err := os.Getwd()
+		if err != nil {
+			return "."
+		}
+		workspaceRoot = wd
+	}
+	return filepath.Join(workspaceRoot, "automate")
 }

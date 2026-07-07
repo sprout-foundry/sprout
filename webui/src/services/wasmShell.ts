@@ -161,8 +161,8 @@ async function idbListFiles(): Promise<string> {
 
 // ── WASM loader ─────────────────────────────────────────────────────────────
 
-const DEFAULT_WASM_URL = '/wasm/sprout.wasm';
-const DEFAULT_WASM_EXEC_URL = '/wasm/wasm_exec.js';
+const DEFAULT_WASM_URL = '/webui/wasm/sprout.wasm';
+const DEFAULT_WASM_EXEC_URL = '/webui/wasm/wasm_exec.js';
 
 /** Interface of the Go→WASM SproutWasm global exposed by the compiled binary. */
 export interface SproutWasmAPI {
@@ -210,7 +210,7 @@ let sharedInstance: WasmShell | null = null;
  */
 export async function initWasmShell(config?: {
   home?: string;
-  wasmUrl?: string; // default: '/wasm/sprout.wasm'
+  wasmUrl?: string; // default: '/webui/wasm/sprout.wasm'
   wasmExecUrl?: string; // default: '/wasm/wasm_exec.js'
 }): Promise<WasmShell> {
   if (sharedInstance) {

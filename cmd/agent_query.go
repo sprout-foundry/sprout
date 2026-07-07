@@ -337,6 +337,14 @@ func ProcessQuery(ctx context.Context, chatAgent *agent.Agent, eventBus *events.
 			fmt.Println()
 			console.GlyphStopped.Printf("Stopped in %s", FormatDuration(duration))
 		default:
+			// The terminal subscriber (interactive + queue modes) prints its
+			// own "✓ turn complete" line from the QueryCompleted event. When
+			// it's active, skip the direct print here to avoid a duplicate
+			// completion line. Direct mode (sprout agent "query" with no
+			// subscriber) keeps this as its only completion path.
+			if router := chatAgent.OutputRouter(); router != nil && router.TerminalSubscriberActive() {
+				break
+			}
 			// Print completion message with a compact inline summary so
 			// terminal users get the same transparency the WebUI footer
 			// already shows (CI output handler has PrintSummary; the

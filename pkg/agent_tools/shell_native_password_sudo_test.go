@@ -30,6 +30,17 @@ func TestRunShellCommandWithPasswordSupport_RealSudo(t *testing.T) {
 		t.Skip("sudo not available; skipping real-sudo integration test")
 	}
 
+	// CI runners (GitHub Actions, etc.) configure passwordless sudo
+	// (NOPASSWD), so `sudo -k -S true` authenticates without ever
+	// writing a password prompt. This test exists to exercise the
+	// prompt-detection path, which never fires when sudo doesn't
+	// prompt — so skip on environments where sudo is passwordless.
+	// `sudo -n` fails immediately if a password would be required,
+	// making it a reliable passwordless-sudo probe.
+	if err := exec.Command("sudo", "-n", "true").Run(); err == nil {
+		t.Skip("sudo is passwordless on this host (typical for CI runners); skipping prompt-detection test")
+	}
+
 	prompter := &countingPrompter{password: "definitely-wrong-pw"}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()

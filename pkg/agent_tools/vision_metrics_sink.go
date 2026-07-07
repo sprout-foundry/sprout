@@ -118,11 +118,10 @@ var defaultVisionSinkOnce sync.Once
 // Returns nil if the sink could not be initialized (file open failed).
 // If setVisionMetricsSinkForTesting was called first, returns the test sink.
 func getVisionMetricsSink() *visionMetricsSink {
-	if defaultVisionSink != nil {
-		return defaultVisionSink
-	}
 	defaultVisionSinkOnce.Do(func() {
-		defaultVisionSink = newVisionMetricsSink()
+		if defaultVisionSink == nil {
+			defaultVisionSink = newVisionMetricsSink()
+		}
 	})
 	return defaultVisionSink
 }

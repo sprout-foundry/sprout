@@ -781,7 +781,27 @@ func (cs *chatSession) chatSessionWithMessages() map[string]interface{} {
 	if len(cs.AgentState) > 0 {
 		var state agent.AgentState
 		if err := json.Unmarshal(cs.AgentState, &state); err == nil {
-			summary["messages"] = state.Messages
+			// Build enriched messages with per-message timestamps.
+			// The core.Message type (seed dependency) doesn't carry a
+			// timestamp field, so we build a parallel array here so the
+			// frontend can display accurate per-message times.
+			timestamps := state.MessageTimestamps
+			rawMsgs := state.Messages
+			enriched := make([]map[string]interface{}, 0, len(rawMsgs))
+			for i, msg := range rawMsgs {
+				m := map[string]interface{}{
+					"role":    msg.Role,
+					"content": msg.Content,
+				}
+				if msg.ReasoningContent != "" {
+					m["reasoning_content"] = msg.ReasoningContent
+				}
+				if i < len(timestamps) {
+					m["timestamp"] = timestamps[i].Format(time.RFC3339)
+				}
+				enriched = append(enriched, m)
+			}
+			summary["messages"] = enriched
 			summary["total_tokens"] = state.TotalTokens
 			summary["total_cost"] = state.TotalCost
 			summary["session_id"] = state.SessionID

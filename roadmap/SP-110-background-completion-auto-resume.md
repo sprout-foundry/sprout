@@ -1,6 +1,6 @@
 # SP-110: Background Completion Injection & Auto-Resume
 
-**Status:** 🔵 Proposed — Design complete. 3 phases.
+**Status:** 🟡 Partially Implemented (Phases 1+2 shipped: NotificationQueue + `pkg/agent/notifications.go`, `WakeupConfig`, completion-callback wiring. Phase 3 auto-resume daemon poller NOT shipped — `pkg/agent/wakeup_poller.go` does not exist.)
 
 When the agent starts a background task (`shell_command --bg` or `run_automate`),
 it must actively poll to discover the result. Each poll burns a full LLM

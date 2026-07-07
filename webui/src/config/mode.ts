@@ -57,16 +57,16 @@ export const supportsExport: boolean = isCloud ? false : (getAdapter()?.supports
  * Instance management support - available in cloud mode only.
  * When an adapter is installed, consults the adapter's capability.
  */
-export const supportsInstances: boolean = getAdapter()?.supportsInstances ?? isCloud;
+export const supportsInstances: boolean = isCloud ? false : (getAdapter()?.supportsInstances ?? true);
 
 /**
  * Local PTY terminal support - available in local mode only.
  * When an adapter is installed, consults the adapter's capability.
  */
-export const supportsLocalTerminal: boolean = getAdapter()?.supportsLocalTerminal ?? !isCloud;
+export const supportsLocalTerminal: boolean = isCloud ? false : (getAdapter()?.supportsLocalTerminal ?? true);
 
 /**
  * Local settings management support - available in local mode only.
  * When an adapter is installed, consults the adapter's capability.
  */
-export const supportsSettings: boolean = getAdapter()?.supportsSettings ?? !isCloud;
+export const supportsSettings: boolean = isCloud ? true : (getAdapter()?.supportsSettings ?? true);

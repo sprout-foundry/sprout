@@ -80,12 +80,14 @@ func (h *readFileHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 		return ToolResult{Output: err.Error(), IsError: true}, err
 	}
 
-	// Parse view_range
+	// Parse view_range (defensive — Validate() should have been called,
+	// but we guard against panic if it wasn't or input is malformed)
 	var startLine, endLine int
 	if vr, exists := args["view_range"]; exists && vr != nil {
-		arr := vr.([]any)
-		startLine = toIntArg(arr[0])
-		endLine = toIntArg(arr[1])
+		if arr, ok := vr.([]any); ok && len(arr) == 2 {
+			startLine = toIntArg(arr[0])
+			endLine = toIntArg(arr[1])
+		}
 	}
 
 	// SP-046-2: Record the read for staleness tracking (all code paths, including PDF)

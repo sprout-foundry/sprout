@@ -64,17 +64,17 @@ func (p *GenericProvider) SendChatRequest(ctx context.Context, messages []api.Me
 		return nil, agenterrors.Wrap(err, "failed to build chat request")
 	}
 
-	req, err := p.buildHTTPRequestCtx(ctx, requestBody, false)
+	req, sentBody, err := p.buildHTTPRequestCtx(ctx, requestBody, false)
 	if err != nil {
-		// Log request on build error
-		logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, false, "build_http_request", err)
+		// Log request on build error — use the actual sent body (post-redaction)
+		logging.LogRequestPayloadOnError(sentBody, p.config.Name, p.model, false, "build_http_request", err)
 		return nil, agenterrors.Wrap(err, "failed to build HTTP request")
 	}
 
 	resp, err := p.httpClient.Do(req)
 	if err != nil {
 		// Log request on HTTP error
-		logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, false, "http_request_failed", err)
+		logging.LogRequestPayloadOnError(sentBody, p.config.Name, p.model, false, "http_request_failed", err)
 		return nil, agenterrors.NewNetwork("HTTP request failed", err)
 	}
 
@@ -84,7 +84,7 @@ func (p *GenericProvider) SendChatRequest(ctx context.Context, messages []api.Me
 
 		// Compatibility fallback for OpenAI-compatible backends that require
 		// max_completion_tokens instead of max_tokens for certain models.
-		retryBody, retryResp, retried, retryErr := p.tryMaxCompletionTokensRetry(requestBody, false, body)
+		retryBody, retryResp, retried, retryErr := p.tryMaxCompletionTokensRetry(sentBody, false, body)
 		if retried {
 			requestBody = retryBody
 			if retryErr != nil {
@@ -109,9 +109,9 @@ func (p *GenericProvider) SendChatRequest(ctx context.Context, messages []api.Me
 			return retryResponse, nil
 		}
 
-		// Log request on API error
+		// Log request on API error — use the actual sent body (post-redaction)
 		formattedErr := formatProviderHTTPError(resp.StatusCode, resp.Header, body)
-		logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, false,
+		logging.LogRequestPayloadOnError(sentBody, p.config.Name, p.model, false,
 			fmt.Sprintf("api_error_%d", resp.StatusCode), formattedErr)
 		return nil, formattedErr
 	}

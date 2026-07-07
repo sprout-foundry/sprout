@@ -83,6 +83,8 @@ jobs:
   # workflow (six-platform matrix with signing + prebuilt backends), which
   # also fires on `v*` tags. A second desktop pipeline here would only
   # duplicate that work.
+  #
+  # NOTE: desktop-release.yml is currently disabled (SP-080).
 
   build:
     name: Build and Release
@@ -333,10 +335,8 @@ jobs:
         body: |
           ## Release ${{ steps.get_version.outputs.VERSION }}
 
-          Multi-platform CLI binaries and Electron desktop installers, plus a
-          cloud-mode web bundle for sprout-foundry vendoring. See the Assets
-          section below for the full list of artifacts uploaded by this and
-          the desktop-release workflow.
+          Multi-platform CLI binaries, plus a
+          cloud-mode web bundle for sprout-foundry vendoring.
 
           ### Version Information
           Each binary includes:

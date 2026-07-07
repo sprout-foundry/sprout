@@ -358,6 +358,123 @@ func TestSettingsCommand_Complete_AgentNil(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// SettingsCommand.Complete — Value completion
+// ---------------------------------------------------------------------------
+
+func TestSettingsCommand_Complete_ValueEnum(t *testing.T) {
+	cmd := &SettingsCommand{}
+
+	// args=["set", "reasoning_effort"] -> returns all enum values sorted
+	results := cmd.Complete([]string{"set", "reasoning_effort"}, nil)
+	assert.Equal(t, []string{"high", "low", "medium"}, results,
+		"should return enum values for reasoning_effort")
+	assert.True(t, sort.StringsAreSorted(results), "results should be sorted")
+}
+
+func TestSettingsCommand_Complete_ValuePrefix(t *testing.T) {
+	cmd := &SettingsCommand{}
+
+	// args=["set", "reasoning_effort", "m"] -> returns ["medium"]
+	results := cmd.Complete([]string{"set", "reasoning_effort", "m"}, nil)
+	assert.Equal(t, []string{"medium"}, results,
+		"prefix 'm' should match 'medium'")
+
+	// Case insensitive: "M" should match "medium"
+	resultsUpper := cmd.Complete([]string{"set", "reasoning_effort", "M"}, nil)
+	assert.Equal(t, []string{"medium"}, resultsUpper,
+		"case-insensitive prefix 'M' should match 'medium'")
+}
+
+func TestSettingsCommand_Complete_ValueNoMatch(t *testing.T) {
+	cmd := &SettingsCommand{}
+
+	// args=["set", "reasoning_effort", "x"] -> returns empty
+	results := cmd.Complete([]string{"set", "reasoning_effort", "x"}, nil)
+	assert.Empty(t, results, "prefix 'x' should not match any enum value")
+}
+
+func TestSettingsCommand_Complete_ValueDisableThinking(t *testing.T) {
+	cmd := &SettingsCommand{}
+
+	// args=["set", "disable_thinking"] -> returns ["false", "true"]
+	results := cmd.Complete([]string{"set", "disable_thinking"}, nil)
+	assert.Equal(t, []string{"false", "true"}, results,
+		"should return enum values for disable_thinking")
+	assert.True(t, sort.StringsAreSorted(results), "results should be sorted")
+}
+
+func TestSettingsCommand_Complete_ValueToggle(t *testing.T) {
+	cmd := &SettingsCommand{}
+
+	// args=["set", "disable_thinking", "t"] -> returns ["true"]
+	results := cmd.Complete([]string{"set", "disable_thinking", "t"}, nil)
+	assert.Equal(t, []string{"true"}, results,
+		"prefix 't' should match 'true' for disable_thinking")
+
+	// args=["set", "enable_zsh_command_detection", "f"] -> returns ["false"]
+	results = cmd.Complete([]string{"set", "enable_zsh_command_detection", "f"}, nil)
+	assert.Equal(t, []string{"false"}, results,
+		"prefix 'f' should match 'false' for enable_zsh_command_detection")
+}
+
+func TestSettingsCommand_Complete_ValueNonEnumFallsBackToKeyCompletion(t *testing.T) {
+	cmd := &SettingsCommand{}
+
+	// args=["set", "resource_directory"] -> no enum, falls back to key match
+	results := cmd.Complete([]string{"set", "resource_directory"}, nil)
+	assert.Equal(t, []string{"resource_directory"}, results,
+		"non-enum setting should fall back to key completion")
+
+	// args=["set", "subagent_max_parallel"] -> numeric, no enum
+	results = cmd.Complete([]string{"set", "subagent_max_parallel"}, nil)
+	assert.Equal(t, []string{"subagent_max_parallel"}, results,
+		"numeric setting should fall back to key completion")
+}
+
+func TestSettingsCommand_Complete_ValueCaseInsensitiveKey(t *testing.T) {
+	cmd := &SettingsCommand{}
+
+	// Uppercase key should still match enum values
+	results := cmd.Complete([]string{"set", "REASONING_EFFORT"}, nil)
+	assert.Equal(t, []string{"high", "low", "medium"}, results,
+		"case-insensitive key should match reasoning_effort enum values")
+
+	// Mixed case
+	results = cmd.Complete([]string{"set", "Disable_Thinking", "t"}, nil)
+	assert.Equal(t, []string{"true"}, results,
+		"case-insensitive key with value prefix should match")
+}
+
+func TestSettingsCommand_Complete_ValuePartialKeyWithEnums(t *testing.T) {
+	cmd := &SettingsCommand{}
+
+	// args=["set", "output_verb"] -> partial key, should do key completion
+	results := cmd.Complete([]string{"set", "output_verb"}, nil)
+	assert.Contains(t, results, "output_verbosity")
+	assert.NotContains(t, results, "provider")
+
+	// args=["set", "history"] -> partial key, should match "history_scope"
+	results = cmd.Complete([]string{"set", "history"}, nil)
+	assert.Equal(t, []string{"history_scope"}, results,
+		"partial key 'history' should match 'history_scope'")
+}
+
+func TestSettingsCommand_Complete_ValueWithAgent(t *testing.T) {
+	cmd := &SettingsCommand{}
+
+	// Value completion with a test agent (doesn't use agent for enum values)
+	a := agent.NewTestAgent()
+
+	results := cmd.Complete([]string{"set", "disable_thinking"}, a)
+	assert.Equal(t, []string{"false", "true"}, results,
+		"value completion should work with test agent")
+
+	results = cmd.Complete([]string{"set", "reasoning_effort", "h"}, a)
+	assert.Equal(t, []string{"high"}, results,
+		"value prefix completion should work with test agent")
+}
+
+// ---------------------------------------------------------------------------
 // CodegraphCommand.Complete
 // ---------------------------------------------------------------------------
 

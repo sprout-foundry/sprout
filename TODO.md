@@ -166,11 +166,47 @@ _Most items completed by subsequent work. Verified against code state 2026-07-05
 
 **Effort:** ~0.5 day. New helper in `vision_image.go` or `vision_utils.go`.
 
+**SHIPPED 2026-07-06.** Verified against `pkg/agent/conversation.go:253
+::resizeImageForVisionEmbed` (committed as `abf3f6ba feat(agent):
+pre-resize images to 1568px for vision embedding` + `2326cd85 docs:
+mark shipped`). Bilinear resample via `golang.org/x/image/draw`,
+re-encoded as JPEG q85, called from `processImagesAsMultimodal` at
+`conversation.go:577`. 5 integration tests in
+`pkg/agent/conversation_embed_resize_integration_test.go` cover
+2400×1800 PNG, 2000×1500 JPEG, extreme aspect ratios, and small-image
+no-op paths. TODO's "1536px" cap is stale — actual cap is 1568px
+(Anthropic "high" tier), better than the spec. `DownloadImage` keeps
+its own `OptimizeImageData` path (`vision_image.go:137-238`) which
+pre-dates this work; not regressed. **Outstanding follow-up**: wire
+`VisionCapabilities()` into the cap so per-provider tuning replaces the
+single 1568px ceiling. Tracked under D2 below.
+
 #### SP-103-A9: Typed Errors in Vision
 
 `classifyPDFProcessingErrorCode` and `strings.Contains(errMsg, ...)` in `vision_image.go:418-440` stringify typed errors to classify them. `pkg/errors/types.go::TypedError` exists with `CodeVision*` constants. Migrate to typed error wrapping at the source.
 
 **Effort:** ~0.5 day. Replace string-matching with `errors.As` checks against `TypedError`.
+
+**SHIPPED (image path) 2026-07-06.** `pkg/agent_tools/vision_typed_errors.go`
+(committed as `e47280c7 feat(agent_tools): translate typed errors to
+vision error codes`) introduces `classifyVisionResponseError` which
+walks the error chain: `IsRemoteSizeExceededError` first, then
+`errors.As(err, &te)` against `*agenterrors.TypedError` mapped through
+`typedErrorToVisionCode`, then legacy `strings.Contains` fallback for
+untyped errors. `applyClassifiedError` at the response-builder boundary
+emits a richer message using `TypedError.Component + .Message` when
+present. `vision_typed_errors_test.go` covers the typed→code mapping,
+the remote-size sentinel, the legacy fallback, and the local-file
+refinement branch.
+
+**NOT shipped (PDF path).** `classifyPDFProcessingErrorCode` in
+`pkg/agent_tools/vision_utils.go:160-196` still uses 6 `strings.Contains`
+groups to map "download pdf / status 404 / stat pdf file / ocr request /
+missing %pdf header / not a valid pdf" patterns. **Genuine follow-up**:
+migrate the PDF classifier to typed errors too — narrow scope (~0.25
+day) since `IsRemoteSizeExceededError` already covers the size-cap case
+and most callers of PDF processing already wrap with typed errors. No
+spec change; just mechanical migration.
 
 #### SP-103-D1: Inline-Image Cost into Budget Tracker
 

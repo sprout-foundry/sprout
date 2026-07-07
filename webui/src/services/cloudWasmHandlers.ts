@@ -1,12 +1,19 @@
 /**
  * WASM-local endpoint handlers for CloudAdapter.
  *
- * In cloud mode, file operations are handled client-side by the WASM shell
- * rather than being proxied to a backend. This module contains all the
- * request handlers for wasm-local endpoints and their supporting utilities.
+ * In cloud mode, file operations AND agent queries are handled client-side
+ * by the WASM shell rather than being proxied to a backend.
  */
 
 import type { WasmShell } from './wasmShell';
+
+// Global event dispatcher — set by the webui's event system so WASM
+// agent events flow into the same React state as WebSocket events.
+let agentEventDispatcher: ((event: unknown) => void) | null = null;
+
+export function setAgentEventDispatcher(fn: ((event: unknown) => void) | null): void {
+  agentEventDispatcher = fn;
+}
 
 /**
  * Shell-escape an argument for use in a command string.
@@ -64,9 +71,12 @@ export function handleWasmLocal(
       case '/api/files/prettier-config':
         return jsonOk({ prettier: null });
 
+      // ── Agent query (runs full agent loop in WASM) ──────────
+      case '/api/query':
+        return handleWasmAgentQuery(shell, bodyStr);
+
       // ── Terminal stubs ──────────────────────────────────────
-      case '/api/terminal/sessions':
-        return jsonOk({ active_count: 0, count: 0 });
+      case '/api/terminal/sessions':        return jsonOk({ active_count: 0, count: 0 });
       case '/api/terminal/shells':
         return jsonOk({ shells: [{ name: 'wasm', path: '/bin/wasm', default: true }] });
       case '/api/terminal/history':
@@ -529,4 +539,93 @@ export function jsonError(message: string, status: number): Response {
     status,
     headers: { 'Content-Type': 'application/json' },
   });
+}
+
+/**
+ * Handle POST /api/query — runs the full agent loop in the WASM shell.
+ *
+ * Returns 200 OK immediately (fire-and-forget). The agent runs
+ * asynchronously and dispatches events via agentEventDispatcher.
+ * The webui's event system picks up these events and renders them
+ * (chat chunks, tool calls, file edits, etc.).
+ *
+ * The WASM agent calls the LLM via the platform proxy (/proxy/chat)
+ * which handles authentication and key management.
+ */
+function handleWasmAgentQuery(shell: WasmShell, bodyStr?: string): Response {
+  if (!bodyStr) {
+    return jsonError('Missing request body', 400);
+  }
+
+  let parsed: { query?: string; provider?: string; model?: string };
+  try {
+    parsed = JSON.parse(bodyStr);
+  } catch {
+    return jsonError('Invalid JSON body', 400);
+  }
+
+  const query = parsed.query || '';
+
+  if (!query) {
+    return jsonError('Query is required', 400);
+  }
+
+  // Write a sprout config with a "platform" custom provider that routes
+  // to the platform proxy (/proxy/chat). The WASM agent reads this config
+  // to know where to send LLM requests.
+  const platformProviderConfig = {
+    name: 'platform',
+    endpoint: '/proxy/chat',
+    model_name: 'managed',
+    context_size: 131072,
+    requires_api_key: false,
+    message_conversion: {
+      include_tool_call_id: true,
+      convert_tool_role_to_user: false,
+    },
+  };
+
+  // Write the provider config to the virtual filesystem
+  try {
+    shell.writeFile('.sprout/providers/platform.json', JSON.stringify(platformProviderConfig));
+  } catch {
+    // May already exist — ignore
+  }
+
+  // Fire the agent loop asynchronously — events stream via the dispatcher.
+  shell
+    .runAgent('platform', '', query, (eventJson: string) => {
+      if (agentEventDispatcher) {
+        try {
+          const event = JSON.parse(eventJson);
+          agentEventDispatcher(event);
+        } catch {
+          console.warn('[wasm-agent] Failed to parse event:', eventJson.substring(0, 100));
+        }
+      }
+    })
+    .then((result) => {
+      // Dispatch the final completion event
+      if (agentEventDispatcher) {
+        agentEventDispatcher({
+          type: 'query_completed',
+          response: result.response,
+          provider: result.provider,
+          model: result.model,
+        });
+      }
+    })
+    .catch((err) => {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error('[wasm-agent] Agent loop failed:', message);
+      if (agentEventDispatcher) {
+        agentEventDispatcher({
+          type: 'error',
+          message: `Agent error: ${message}`,
+        });
+      }
+    });
+
+  // Return immediately — the webui picks up events via the dispatcher
+  return jsonOk({ status: 'processing', message: 'Agent query started' });
 }

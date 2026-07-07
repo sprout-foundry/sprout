@@ -16,7 +16,7 @@ type IndexUpdater struct {
 	sessionsDir string
 	pending     map[string]bool // sessionIDs needing update
 	lastSaveAt  time.Time
-	debounce    time.Duration   // default 5s
+	debounce    time.Duration // default 5s
 	timer       *time.Timer
 	stopCh      chan struct{}
 }

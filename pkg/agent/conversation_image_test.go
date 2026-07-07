@@ -209,7 +209,6 @@ type visionSupportingClient struct {
 
 func (v *visionSupportingClient) SupportsVision() bool { return v.supportsVision }
 
-
 // SupportsConversationalVision reports whether inline multimodal turns
 // should embed the image. Tracks supportsVision for test parity with prod
 // clients — most clients gate both methods on the same model capabilities.

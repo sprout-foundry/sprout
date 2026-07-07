@@ -2,10 +2,10 @@
 // to @sprout/ui. This test verifies the import from @sprout/ui works correctly
 // and the component renders without crashing.
 
-import { vi } from 'vitest';
+import { SelectionActionBar } from '@sprout/ui';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { SelectionActionBar } from '@sprout/ui';
+import { vi } from 'vitest';
 
 // ---------------------------------------------------------------------------
 // Helpers

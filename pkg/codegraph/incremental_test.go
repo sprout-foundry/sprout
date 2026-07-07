@@ -252,8 +252,8 @@ func TestIncrementalIdempotentWhenNothingStale(t *testing.T) {
 
 	parser := func(path string, content []byte) ([]Symbol, []Edge, error) {
 		return []Symbol{
-				{QualifiedName: "pkg.DoWork", DisplayName: "DoWork", Line: 5, Kind: "func", Language: "go"},
-			}, nil, nil
+			{QualifiedName: "pkg.DoWork", DisplayName: "DoWork", Line: 5, Kind: "func", Language: "go"},
+		}, nil, nil
 	}
 
 	require.NoError(t, store.IndexAll(ctx, parser))

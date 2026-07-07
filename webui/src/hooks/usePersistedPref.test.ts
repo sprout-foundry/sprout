@@ -2,15 +2,11 @@
  * usePersistedPref — tests for the localStorage-backed preference hooks
  * extracted from Terminal.tsx during SP-075-4h.
  */
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act, createElement } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
 import { useRef } from 'react';
-import {
-  usePersistedNumber,
-  usePersistedBoolean,
-  useOutsideClickDismiss,
-} from './usePersistedPref';
+import { createRoot, type Root } from 'react-dom/client';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { usePersistedNumber, usePersistedBoolean, useOutsideClickDismiss } from './usePersistedPref';
 
 // ---------------------------------------------------------------------------
 // Harness component — lets us call hooks from tests.
@@ -44,10 +40,8 @@ function BooleanHarness({
   parse?: (raw: string | null, fallback: boolean) => boolean;
   onChange?: (value: boolean, set: (next: boolean | ((p: boolean) => boolean)) => void) => void;
 }) {
-  const [value, setValue] = usePersistedBoolean(
-    storageKey,
-    fallback,
-    (raw, fb) => (raw === null ? fb : raw === 'true'),
+  const [value, setValue] = usePersistedBoolean(storageKey, fallback, (raw, fb) =>
+    raw === null ? fb : raw === 'true',
   );
   onChange?.(value, setValue);
   return null;
@@ -191,11 +185,9 @@ describe('usePersistedNumber', () => {
   });
 
   it('survives a localStorage quota error (does not throw)', () => {
-    const setItemSpy = vi
-      .spyOn(Storage.prototype, 'setItem')
-      .mockImplementation(() => {
-        throw new Error('quota');
-      });
+    const setItemSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('quota');
+    });
     let setValueRef: ((next: number | ((p: number) => number)) => void) | null = null;
     act(() => {
       root.render(

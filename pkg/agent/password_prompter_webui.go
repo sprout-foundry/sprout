@@ -8,8 +8,8 @@ import (
 	"log"
 	"time"
 
-	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 

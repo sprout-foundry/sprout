@@ -77,8 +77,24 @@ export default function AgentBehaviorSettingsTab({
         When enabled, Sprout automatically processes background task completions without waiting for your next message.
       </p>
       {renderToggle('wakeup.enabled', 'Enable auto-resume', 'Off by default. Requires the daemon (sprout serve).')}
-      {renderNumberInput && renderNumberInput('wakeup.max_tokens_per_session', 'Max tokens per session', 0, 100000, 500, 'Hard cap. 0 = unlimited.')}
-      {renderNumberInput && renderNumberInput('wakeup.max_resumes_per_session', 'Max resumes per session', 0, 100, 1, 'Max auto-resumes before requiring manual input. 0 = unlimited.')}
+      {renderNumberInput &&
+        renderNumberInput(
+          'wakeup.max_tokens_per_session',
+          'Max tokens per session',
+          0,
+          100000,
+          500,
+          'Hard cap. 0 = unlimited.',
+        )}
+      {renderNumberInput &&
+        renderNumberInput(
+          'wakeup.max_resumes_per_session',
+          'Max resumes per session',
+          0,
+          100,
+          1,
+          'Max auto-resumes before requiring manual input. 0 = unlimited.',
+        )}
     </div>
   );
 }

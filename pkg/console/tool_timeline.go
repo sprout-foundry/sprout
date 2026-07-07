@@ -262,12 +262,12 @@ func (tl *ToolTimeline) handleToolEnd(ev events.UIEvent) {
 //
 // Strategy when the message exceeds the budget:
 //
-//   1. Split on \n. The first line usually carries the error type
-//      ("panic:", "Error:", "Traceback (most recent call last):"…).
-//   2. Take the first line, capped at 40 runes.
-//   3. Append " … " separator.
-//   4. Append the tail: the last (max - firstLen - 3) runes of the
-//      full message, where the tail is itself truncated only if needed.
+//  1. Split on \n. The first line usually carries the error type
+//     ("panic:", "Error:", "Traceback (most recent call last):"…).
+//  2. Take the first line, capped at 40 runes.
+//  3. Append " … " separator.
+//  4. Append the tail: the last (max - firstLen - 3) runes of the
+//     full message, where the tail is itself truncated only if needed.
 //
 // Rune-safe (not byte-safe) so multi-byte UTF-8 isn't corrupted.
 func truncateErrorForTimeline(msg string, max int) string {

@@ -1,5 +1,5 @@
-import { useState } from 'react';
 import { SkeletonText } from '@sprout/ui';
+import { useState } from 'react';
 import type { ProviderOption } from '../../services/api';
 
 export type SettingsScope = 'session' | 'workspace' | 'global';

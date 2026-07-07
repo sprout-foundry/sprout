@@ -75,6 +75,73 @@ func (c *SkillCommand) ExecuteWithJSONOutput(args []string, chatAgent *agent.Age
 	return executeSkillCommandJSON(args, ctx)
 }
 
+// Complete provides argument completions for /skill. Static subcommands
+// first, then skill IDs for enable/disable/remove/update.
+func (c *SkillCommand) Complete(args []string, chatAgent *agent.Agent) []string {
+	staticSubcommands := []string{"install", "update", "remove", "list", "enable", "disable"}
+
+	if len(args) == 0 {
+		return staticSubcommands
+	}
+
+	// Determine the prefix for filtering: the last arg if it looks like a
+	// partial word (not a known subcommand), otherwise empty.
+	prefix := args[len(args)-1]
+
+	// Completing after a subcommand
+	switch args[0] {
+	case "enable", "disable":
+		// For enable/disable, suggest skill IDs from config
+		if chatAgent == nil {
+			return nil
+		}
+		mgr := chatAgent.GetConfigManager()
+		if mgr == nil {
+			return nil
+		}
+		cfg := mgr.GetConfig()
+		var matches []string
+		for id := range cfg.Skills {
+			if prefix == "" || strings.HasPrefix(strings.ToLower(id), strings.ToLower(prefix)) {
+				matches = append(matches, id)
+			}
+		}
+		sort.Strings(matches)
+		return matches
+	case "remove", "update":
+		// List installed skills from disk
+		dir, err := skills.DefaultSkillsDir()
+		if err != nil {
+			return nil
+		}
+		entries, eerr := os.ReadDir(dir)
+		if eerr != nil {
+			return nil
+		}
+		var matches []string
+		for _, e := range entries {
+			if !e.IsDir() {
+				continue
+			}
+			if prefix == "" || strings.HasPrefix(strings.ToLower(e.Name()), strings.ToLower(prefix)) {
+				matches = append(matches, e.Name())
+			}
+		}
+		sort.Strings(matches)
+		return matches
+	default:
+		prefix := strings.ToLower(args[0])
+		var matches []string
+		for _, sub := range staticSubcommands {
+			if strings.HasPrefix(strings.ToLower(sub), prefix) {
+				matches = append(matches, sub)
+			}
+		}
+		sort.Strings(matches)
+		return matches
+	}
+}
+
 // executeSkillCommand is the testable dispatcher.
 func executeSkillCommand(args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {

@@ -17,7 +17,7 @@ type BrokerDecision struct {
 	Approved   bool
 	Decision   security.ApprovalDecision
 	Outcome    security.ApprovalOutcome
-	Surface    string // "webui" or "cli" — which surface answered
+	Surface    string         // "webui" or "cli" — which surface answered
 	Assessment RiskAssessment // echoed for caller diagnostics
 }
 
@@ -30,12 +30,12 @@ type BrokerDecision struct {
 // consulting any approval surface (hard-blocks are unconditional).
 //
 // For Medium/High/IntentConfirmation assessments:
-//   1. Checks fast-bypass paths (persistent allowlist, unsafe-mode, session
-//      elevation, unsafe-shell)
-//   2. Tries WebUI first if available
-//   3. Falls back to CLI (using AskForApprovalWithOptions for shell_command
-//      with 4-option cascade, or AskForConfirmation for other tools)
-//   4. For non-interactive with no surface: permissive auto-approve
+//  1. Checks fast-bypass paths (persistent allowlist, unsafe-mode, session
+//     elevation, unsafe-shell)
+//  2. Tries WebUI first if available
+//  3. Falls back to CLI (using AskForApprovalWithOptions for shell_command
+//     with 4-option cascade, or AskForConfirmation for other tools)
+//  4. For non-interactive with no surface: permissive auto-approve
 //
 // It returns (BrokerDecision, error) — non-nil error means deny/hard-block,
 // nil means approved (or auto-approved).
@@ -52,13 +52,13 @@ func (a *Agent) RequestApproval(assessment RiskAssessment, toolName string, args
 	if assessment.IsHardBlock || assessment.Level == configuration.RiskLevelCritical {
 		a.logSecurityDecision(toolName, args, assessment, "blocked")
 		return BrokerDecision{
-			Approved:   false,
-			Decision:   security.ApprovalDeny,
-			Surface:    "none",
-			Assessment: assessment,
-		}, agenterrors.NewSecurityErrorWithAssessment(
-			fmt.Sprintf("security hard block: %s — %s. This operation cannot be approved by any profile or flag.", toolName, assessment.Reason), assessment.Explain(), nil,
-		)
+				Approved:   false,
+				Decision:   security.ApprovalDeny,
+				Surface:    "none",
+				Assessment: assessment,
+			}, agenterrors.NewSecurityErrorWithAssessment(
+				fmt.Sprintf("security hard block: %s — %s. This operation cannot be approved by any profile or flag.", toolName, assessment.Reason), assessment.Explain(), nil,
+			)
 	}
 
 	// --- Fast bypass paths ---
@@ -176,14 +176,14 @@ func (a *Agent) RequestApproval(assessment RiskAssessment, toolName string, args
 			if !decision.Approved() {
 				a.logSecurityDecision(toolName, args, assessment, "blocked")
 				return BrokerDecision{
-					Approved:   false,
-					Decision:   decision,
-					Outcome:    outcome,
-					Surface:    "webui",
-					Assessment: assessment,
-				}, agenterrors.NewSecurityErrorWithAssessment(
-					fmt.Sprintf("security rejected: %s — %s. The user declined approval.", toolName, assessment.Reason), assessment.Explain(), nil,
-				)
+						Approved:   false,
+						Decision:   decision,
+						Outcome:    outcome,
+						Surface:    "webui",
+						Assessment: assessment,
+					}, agenterrors.NewSecurityErrorWithAssessment(
+						fmt.Sprintf("security rejected: %s — %s. The user declined approval.", toolName, assessment.Reason), assessment.Explain(), nil,
+					)
 			}
 			a.logSecurityDecision(toolName, args, assessment, "approved")
 			if toolName == "run_automate" {
@@ -224,12 +224,12 @@ func (a *Agent) RequestApproval(assessment RiskAssessment, toolName string, args
 					if pickErr != nil {
 						a.logSecurityDecision(toolName, args, assessment, "blocked")
 						return BrokerDecision{
-							Approved: false, Decision: security.ApprovalDeny,
-							Surface: "cli", Assessment: assessment,
-						}, agenterrors.NewSecurityErrorWithAssessment(
-							fmt.Sprintf("security rejected: %s — picker error: %v", toolName, pickErr),
-							assessment.Explain(), nil,
-						)
+								Approved: false, Decision: security.ApprovalDeny,
+								Surface: "cli", Assessment: assessment,
+							}, agenterrors.NewSecurityErrorWithAssessment(
+								fmt.Sprintf("security rejected: %s — picker error: %v", toolName, pickErr),
+								assessment.Explain(), nil,
+							)
 					}
 					// Per-part decision: any rejection -> deny whole command.
 					allApproved := true
@@ -242,13 +242,13 @@ func (a *Agent) RequestApproval(assessment RiskAssessment, toolName string, args
 					if !allApproved {
 						a.logSecurityDecision(toolName, args, assessment, "blocked")
 						return BrokerDecision{
-							Approved: false, Decision: security.ApprovalDeny,
-							Outcome: security.ApprovalOutcomeResponded, Surface: "cli",
-							Assessment: assessment,
-						}, agenterrors.NewSecurityErrorWithAssessment(
-							fmt.Sprintf("security rejected: %s — one or more parts denied.", toolName),
-							assessment.Explain(), nil,
-						)
+								Approved: false, Decision: security.ApprovalDeny,
+								Outcome: security.ApprovalOutcomeResponded, Surface: "cli",
+								Assessment: assessment,
+							}, agenterrors.NewSecurityErrorWithAssessment(
+								fmt.Sprintf("security rejected: %s — one or more parts denied.", toolName),
+								assessment.Explain(), nil,
+							)
 					}
 					// All approved — persist decisions map and return.
 					a.applyApprovalDecision(security.ApprovalApproveOnce, cmd)
@@ -272,14 +272,14 @@ func (a *Agent) RequestApproval(assessment RiskAssessment, toolName string, args
 				if !decision.Approved() {
 					a.logSecurityDecision(toolName, args, assessment, "blocked")
 					return BrokerDecision{
-						Approved:   false,
-						Decision:   decision,
-						Outcome:    security.ApprovalOutcomeResponded,
-						Surface:    "cli",
-						Assessment: assessment,
-					}, agenterrors.NewSecurityErrorWithAssessment(
-						fmt.Sprintf("security rejected: %s — %s. The user declined approval.", toolName, assessment.Reason), assessment.Explain(), nil,
-					)
+							Approved:   false,
+							Decision:   decision,
+							Outcome:    security.ApprovalOutcomeResponded,
+							Surface:    "cli",
+							Assessment: assessment,
+						}, agenterrors.NewSecurityErrorWithAssessment(
+							fmt.Sprintf("security rejected: %s — %s. The user declined approval.", toolName, assessment.Reason), assessment.Explain(), nil,
+						)
 				}
 				a.logSecurityDecision(toolName, args, assessment, "approved")
 				if toolName == "run_automate" {
@@ -303,14 +303,14 @@ func (a *Agent) RequestApproval(assessment RiskAssessment, toolName string, args
 		if !logger.AskForConfirmation(prompt, false, false) {
 			a.logSecurityDecision(toolName, args, assessment, "blocked")
 			return BrokerDecision{
-				Approved:   false,
-				Decision:   security.ApprovalDeny,
-				Outcome:    security.ApprovalOutcomeResponded,
-				Surface:    "cli",
-				Assessment: assessment,
-			}, agenterrors.NewSecurityErrorWithAssessment(
-				fmt.Sprintf("security rejected: %s — %s. The user declined approval.", toolName, assessment.Reason), assessment.Explain(), nil,
-			)
+					Approved:   false,
+					Decision:   security.ApprovalDeny,
+					Outcome:    security.ApprovalOutcomeResponded,
+					Surface:    "cli",
+					Assessment: assessment,
+				}, agenterrors.NewSecurityErrorWithAssessment(
+					fmt.Sprintf("security rejected: %s — %s. The user declined approval.", toolName, assessment.Reason), assessment.Explain(), nil,
+				)
 		}
 		a.logSecurityDecision(toolName, args, assessment, "approved")
 		if toolName == "run_automate" {
@@ -344,13 +344,13 @@ func (a *Agent) RequestApproval(assessment RiskAssessment, toolName string, args
 	// No interactive surface at all — fail safe
 	a.logSecurityDecision(toolName, args, assessment, "blocked")
 	return BrokerDecision{
-		Approved:   false,
-		Decision:   security.ApprovalDeny,
-		Outcome:    security.ApprovalOutcomeNoChannel,
-		Surface:    "none",
-		Assessment: assessment,
-	}, agenterrors.NewSecurityErrorWithAssessment(
-		fmt.Sprintf("security confirmation required: %s — %s. Re-run interactively, use --risk-profile=permissive, or use ask_user to confirm.",
-			toolName, assessment.Reason), assessment.Explain(), nil,
-	)
+			Approved:   false,
+			Decision:   security.ApprovalDeny,
+			Outcome:    security.ApprovalOutcomeNoChannel,
+			Surface:    "none",
+			Assessment: assessment,
+		}, agenterrors.NewSecurityErrorWithAssessment(
+			fmt.Sprintf("security confirmation required: %s — %s. Re-run interactively, use --risk-profile=permissive, or use ask_user to confirm.",
+				toolName, assessment.Reason), assessment.Explain(), nil,
+		)
 }

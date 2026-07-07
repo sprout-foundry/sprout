@@ -2,10 +2,10 @@
 // to @sprout/ui. This test verifies the import from @sprout/ui works correctly
 // and the component renders without crashing.
 
-import { act, createElement } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
 import { LiveLog } from '@sprout/ui';
 import type { LiveLogLine } from '@sprout/ui';
+import { act, createElement } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
 
 // ---------------------------------------------------------------------------
 // Helpers

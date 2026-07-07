@@ -463,15 +463,15 @@ const (
 // attribution. Call sites should prefer TypedError for new code; migration
 // of the legacy AgentError call sites is tracked separately.
 type TypedError struct {
-	Code      ErrorCode         // stable wire-level identifier
-	Severity  Severity          // operational severity
-	Message   string            // human-readable message
-	Cause     error             // wrapped cause (may be nil)
-	Component string            // source attribution, e.g. "agent.Runner", "tool.shell_command"
-	Retryable bool              // whether the operation may be retried
-	Status    int               // HTTP status code (0 if not applicable)
-	Time      time.Time         // when the error was created
-	Details   map[string]any    // structured context (operation IDs, attempt counts, etc.)
+	Code      ErrorCode      // stable wire-level identifier
+	Severity  Severity       // operational severity
+	Message   string         // human-readable message
+	Cause     error          // wrapped cause (may be nil)
+	Component string         // source attribution, e.g. "agent.Runner", "tool.shell_command"
+	Retryable bool           // whether the operation may be retried
+	Status    int            // HTTP status code (0 if not applicable)
+	Time      time.Time      // when the error was created
+	Details   map[string]any // structured context (operation IDs, attempt counts, etc.)
 }
 
 // Error implements the error interface. Format:

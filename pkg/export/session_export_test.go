@@ -90,7 +90,6 @@ func fakeOpenAIKey() string {
 	return "sk-" + "aB3dEfGhIjKlMnOpQrSt" + "T3BlbkFJ" + "UvWxYz1234567890aBcD"
 }
 
-
 func sampleSessionWithSecret() SessionSource {
 	s := sampleSession()
 	// gitleaks requires a keyword prefix (e.g. "api_key=") before the

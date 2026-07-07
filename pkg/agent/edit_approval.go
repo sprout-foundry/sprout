@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pmezard/go-difflib/difflib"
 	"github.com/sprout-foundry/sprout/pkg/clihooks"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
-	"github.com/pmezard/go-difflib/difflib"
 	"github.com/sprout-foundry/sprout/pkg/events"
 	"golang.org/x/term"
 )

@@ -7,7 +7,7 @@ describe('ByModelChart', () => {
   it('renders rows sorted by cost descending', () => {
     const byModel = {
       'openai:gpt-3.5': 0.05,
-      'anthropic:claude': 0.20,
+      'anthropic:claude': 0.2,
       'openai:gpt-4': 0.15,
     };
     render(<ByModelChart byModel={byModel} />);

@@ -87,7 +87,7 @@ func (m *ctxVisionMockClient) GetModelContextLimit() (int, error) { return 12800
 func (m *ctxVisionMockClient) ListModels(ctx context.Context) ([]api.ModelInfo, error) {
 	return nil, nil
 }
-func (m *ctxVisionMockClient) SupportsVision() bool            { return true }
+func (m *ctxVisionMockClient) SupportsVision() bool { return true }
 
 // SupportsConversationalVision reports whether inline multimodal turns
 // should embed the image. Defaults to false; overridden per client.

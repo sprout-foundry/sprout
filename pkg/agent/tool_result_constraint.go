@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
-	"github.com/sprout-foundry/sprout/pkg/envutil"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/envutil"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 func constrainToolResultForModel(toolName string, args map[string]interface{}, result string) string {

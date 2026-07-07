@@ -114,7 +114,7 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 	// SP-048-2a: slash command tab completion. Re-builds a fresh registry
 	// per call so newly-installed MCP commands (which can be added mid-
 	// session) are reflected in completion.
-	completer := buildSlashCommandCompleter()
+	completer := buildSlashCommandCompleter(chatAgent)
 	inputReader.SetCompleter(completer)
 
 	// SP-055: steer coordinator owns the pinned steer-input panel for
@@ -407,7 +407,7 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 // interface, exposing model / context tokens / cost / cwd to the status
 // footer renderer.
 type agentFooterSource struct {
-	agent        *agent.Agent
+	agent         *agent.Agent
 	turnCostStart float64
 }
 

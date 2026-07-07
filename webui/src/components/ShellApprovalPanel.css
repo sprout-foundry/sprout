@@ -75,7 +75,9 @@
   padding: 2px 6px;
   border-radius: var(--radius-sm);
   line-height: 1;
-  transition: color 0.15s, background 0.15s;
+  transition:
+    color 0.15s,
+    background 0.15s;
 }
 
 .shell-approval-close-btn:hover:not(:disabled) {
@@ -153,7 +155,9 @@
   padding: 8px 12px;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
-  transition: border-color 0.15s, opacity 0.15s;
+  transition:
+    border-color 0.15s,
+    opacity 0.15s;
 }
 
 .shell-approval-part--approved {
@@ -269,7 +273,10 @@
   padding: 2px 10px;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 
 .shell-approval-part-toggle:hover:not(:disabled) {
@@ -344,7 +351,9 @@
   font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.15s, opacity 0.15s;
+  transition:
+    background 0.15s,
+    opacity 0.15s;
   border: 1px solid transparent;
 }
 

@@ -36,7 +36,7 @@ var (
 	newReaderFromStdin      = func(in *os.File) *bufio.Reader {
 		return bufio.NewReader(in)
 	}
-	setCredentialStore      = credentials.SetToActiveBackend
+	setCredentialStore = credentials.SetToActiveBackend
 )
 
 // promptGitHubMCPSetupIfNeeded checks whether we should offer GitHub MCP

@@ -18,14 +18,14 @@ import (
 
 // Symbol represents a code symbol (function, type, variable, etc.)
 type Symbol struct {
-	ID              int64  // database node ID (populated by queries)
-	QualifiedName   string // e.g. "pkg/codegraph.Store.IndexFile"
-	DisplayName     string // e.g. "IndexFile"
-	FilePath        string // relative path from git root
-	Line            int    // line where symbol is declared
-	Kind            string // "func", "type", "var", "const", "iface", "method"
-	Language        string // "go", "typescript", "javascript", "python"
-	FileMTime       string // file modification time as RFC3339 string
+	ID            int64  // database node ID (populated by queries)
+	QualifiedName string // e.g. "pkg/codegraph.Store.IndexFile"
+	DisplayName   string // e.g. "IndexFile"
+	FilePath      string // relative path from git root
+	Line          int    // line where symbol is declared
+	Kind          string // "func", "type", "var", "const", "iface", "method"
+	Language      string // "go", "typescript", "javascript", "python"
+	FileMTime     string // file modification time as RFC3339 string
 }
 
 // Edge represents a relationship between two symbols.
@@ -33,10 +33,11 @@ type Symbol struct {
 // of the caller and callee respectively. They are resolved to node IDs
 // during IndexFile.
 // EdgeType values:
-//   "calls"          - textual/unresolved call edge (same-package or unresolved cross-package)
-//   "resolved_calls" - resolved cross-package call edge (target qualified via import map)
-//   "defined_in"     - symbol defined in a file/package
-//   "imports"        - module-level import relationship
+//
+//	"calls"          - textual/unresolved call edge (same-package or unresolved cross-package)
+//	"resolved_calls" - resolved cross-package call edge (target qualified via import map)
+//	"defined_in"     - symbol defined in a file/package
+//	"imports"        - module-level import relationship
 type Edge struct {
 	SourceQualifiedName string // qualified name of the caller/owner
 	TargetQualifiedName string // qualified name of the callee/target

@@ -4,9 +4,9 @@ import { FitAddon } from '@xterm/addon-fit';
 import { Terminal } from '@xterm/xterm';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
+import { useTheme } from '../contexts/ThemeContext';
 import { TerminalWebSocketService } from '../services/terminalWebSocket';
 import { copyToClipboard } from '../utils/clipboard';
-import { useTheme } from '../contexts/ThemeContext';
 import TerminalPane from './TerminalPane';
 
 // ---------------------------------------------------------------------------

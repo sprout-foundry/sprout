@@ -172,7 +172,11 @@ export default function WorktreePanel({ onClose: _onClose }: WorktreePanelProps)
   return (
     <div className="worktree-panel embedded" data-testid="worktree-panel">
       <div className="worktree-panel-toolbar">
-        <button className="worktree-btn-secondary" onClick={() => setIsCreateDialogOpen(true)} data-testid="worktree-create-button">
+        <button
+          className="worktree-btn-secondary"
+          onClick={() => setIsCreateDialogOpen(true)}
+          data-testid="worktree-create-button"
+        >
           <Plus size={16} />
           New Worktree
         </button>

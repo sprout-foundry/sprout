@@ -34,7 +34,13 @@ export function DisconnectedOverlay({ isConnected }: DisconnectedOverlayProps): 
   if (!show) return null;
 
   return (
-    <div className="disconnected-overlay" role="alertdialog" aria-modal="true" aria-label="Disconnected from sprout" data-testid="disconnected-overlay">
+    <div
+      className="disconnected-overlay"
+      role="alertdialog"
+      aria-modal="true"
+      aria-label="Disconnected from sprout"
+      data-testid="disconnected-overlay"
+    >
       <div className="disconnected-overlay__card">
         <div className="disconnected-overlay__icon" aria-hidden="true">
           ⚠

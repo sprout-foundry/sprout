@@ -190,7 +190,7 @@ func TestRequestCLIEditApproval_SuspendsAllHooks(t *testing.T) {
 	//    write. Streaming is a process-global atomic.Bool so we sampled
 	//    IsStreamingSuspended from inside the suspend hooks themselves.
 	if !sawStreaming {
-		t.Errorf("regression: requestCLIEditApproval did not call clihooks.SuspendStreaming "+
+		t.Errorf("regression: requestCLIEditApproval did not call clihooks.SuspendStreaming " +
 			"before SuspendIndicator/PauseSteer — streaming prose could clobber the prompt")
 	}
 

@@ -778,7 +778,3 @@ func isScreenshotPathAllowed(cleanedPath string) bool {
 
 	return false
 }
-
-
-
-

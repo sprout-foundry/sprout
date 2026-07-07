@@ -197,4 +197,3 @@ func TestPasswordRequestEventPayload(t *testing.T) {
 		t.Error("payload should have timestamp field")
 	}
 }
-

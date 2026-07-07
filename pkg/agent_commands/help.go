@@ -119,6 +119,24 @@ Type 'exit' or 'quit' to end the session.
 	return nil
 }
 
+// Complete provides argument completions for /help. Suggests command
+// names (canonical and aliases) from the registry.
+func (h *HelpCommand) Complete(args []string, chatAgent *agent.Agent) []string {
+	prefix := ""
+	if len(args) > 0 {
+		prefix = args[len(args)-1]
+	}
+	candidates := h.registry.CompletionCandidates()
+	var matches []string
+	for _, name := range candidates {
+		if prefix == "" || strings.HasPrefix(strings.ToLower(name), strings.ToLower(prefix)) {
+			matches = append(matches, name)
+		}
+	}
+	sort.Strings(matches)
+	return matches
+}
+
 // printCommandHelp emits a single command's detailed help. Commands that
 // implement UsageProvider supply their own multi-line usage text; others
 // fall back to Description.

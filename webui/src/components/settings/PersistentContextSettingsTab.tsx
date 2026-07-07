@@ -1,5 +1,5 @@
-import { useState } from 'react';
 import { Search, Loader2 } from 'lucide-react';
+import { useState } from 'react';
 import type { SproutSettings } from '../../services/api';
 
 interface PersistentContextSettings {

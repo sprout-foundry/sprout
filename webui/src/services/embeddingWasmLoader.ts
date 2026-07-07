@@ -71,7 +71,7 @@ declare global {
 
 // ── Lazy loader ─────────────────────────────────────────────────────────────
 
-const DEFAULT_EMBEDDING_WASM_URL = '/wasm/embedding.wasm';
+const DEFAULT_EMBEDDING_WASM_URL = '/webui/wasm/embedding.wasm';
 
 let embeddingPromise: Promise<SproutEmbedWasmAPI> | null = null;
 
@@ -81,7 +81,7 @@ let embeddingPromise: Promise<SproutEmbedWasmAPI> | null = null;
  * Returns a cached promise — once the module is loaded, all subsequent
  * calls reuse the same instance.
  *
- * @param opts.wasmUrl - Override the WASM URL (default: '/wasm/embedding.wasm')
+ * @param opts.wasmUrl - Override the WASM URL (default: '/webui/wasm/embedding.wasm')
  */
 export async function loadEmbeddingWasm(opts?: { wasmUrl?: string }): Promise<SproutEmbedWasmAPI> {
   if (embeddingPromise) {

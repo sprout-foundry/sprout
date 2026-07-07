@@ -237,7 +237,7 @@ export function HotkeyProvider({ children }: HotkeyProviderProps): JSX.Element {
       const mac = isMac();
 
       let matchingHotkey: HotkeyEntry | undefined;
-      if (hotkeys) {
+      if (hotkeys && Array.isArray(hotkeys)) {
         matchingHotkey = hotkeys.find((entry) => {
           let storedKey = entry.key;
           if (mac) {
@@ -327,7 +327,7 @@ export function HotkeyProvider({ children }: HotkeyProviderProps): JSX.Element {
 
   const hotkeyForCommand = useCallback(
     (commandId: string): string | null => {
-      if (!hotkeys) return null;
+      if (!hotkeys || !Array.isArray(hotkeys)) return null;
       const entry = hotkeys.find((h) => h.command_id === commandId);
       if (!entry) return null;
       let displayKey = entry.key;

@@ -73,7 +73,7 @@ export function useChatSessions({
               id: `chat-${activeChatId}-${i}`,
               type: m.role as 'user' | 'assistant',
               content: typeof m.content === 'string' ? m.content : '',
-              timestamp: new Date(),
+              timestamp: new Date(switchResp.chat_session.created_at || Date.now()),
               ...(m.reasoning_content ? { reasoning: m.reasoning_content } : {}),
             }));
           // Eagerly update the ref in case this is the initial load
@@ -160,7 +160,7 @@ export function useChatSessions({
           id: `chat-${id}-${i}`,
           type: m.role as 'user' | 'assistant',
           content: typeof m.content === 'string' ? m.content : '',
-          timestamp: new Date(),
+          timestamp: new Date(response.chat_session.created_at || Date.now()),
           ...(m.reasoning_content ? { reasoning: m.reasoning_content } : {}),
         }));
 
@@ -307,7 +307,7 @@ export function useChatSessions({
             id: `chat-${chatId}-${i}`,
             type: m.role as 'user' | 'assistant',
             content: typeof m.content === 'string' ? m.content : '',
-            timestamp: new Date(),
+            timestamp: new Date(response.chat_session.created_at || Date.now()),
             ...(m.reasoning_content ? { reasoning: m.reasoning_content } : {}),
           }));
         const backendIsActive = response.chat_session.active_query;

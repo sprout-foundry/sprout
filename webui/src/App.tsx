@@ -318,8 +318,10 @@ function AppInner() {
   return (
     <ErrorBoundary
       onError={(error, errorInfo) => {
-        console.error('Application error:', error, errorInfo);
-        // You could send this to an error reporting service here
+        console.error('=== ERROR BOUNDARY CAUGHT ===');
+        console.error('Error:', error.message);
+        console.error('Stack:', error.stack);
+        console.error('Component Stack:', errorInfo.componentStack);
       }}
     >
       <SproutAdapterProvider>

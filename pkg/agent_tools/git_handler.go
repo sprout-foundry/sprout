@@ -75,9 +75,27 @@ func (h *gitHandler) Execute(ctx context.Context, env ToolEnv, args map[string]a
 
 	// Map operation to git command
 	var gitCmd string
+	useCommitMessage := false
+	commitMsg := ""
 	switch operation {
 	case "commit":
-		gitCmd = "git commit"
+		// Check if args contain -m with a message. If so, extract the message
+		// and use the temp-file approach to avoid shell expansion.
+		if argsStr != "" {
+			remainingArgs, extractedMsg, found := extractCommitMessage(argsStr)
+			if found {
+				useCommitMessage = true
+				commitMsg = extractedMsg
+				gitCmd = "git commit -F %s"
+				if remainingArgs != "" {
+					gitCmd += " " + remainingArgs
+				}
+			} else {
+				gitCmd = "git commit"
+			}
+		} else {
+			gitCmd = "git commit"
+		}
 	case "push":
 		gitCmd = "git push"
 	case "pull":
@@ -120,7 +138,17 @@ func (h *gitHandler) Execute(ctx context.Context, env ToolEnv, args map[string]a
 		return ToolResult{Output: fmt.Sprintf("Unsupported git operation: %s", operation), IsError: true}, nil
 	}
 
-	if argsStr != "" {
+	// For commit with -m message, use the temp-file approach shared with
+	// the commit tool. This prevents shell expansion of backticks, $(), etc.
+	if useCommitMessage && commitMsg != "" {
+		result, err := commitMessage(ctx, commitMsg, env.WorkspaceRoot)
+		if err != nil {
+			return result, err
+		}
+		return result, nil
+	}
+
+	if argsStr != "" && !useCommitMessage {
 		gitCmd += " " + argsStr
 	}
 
@@ -192,6 +220,107 @@ func (h *gitHandler) Timeout() time.Duration { return 0 }
 func (h *gitHandler) MaxResultSize() int     { return 0 }
 func (h *gitHandler) SafeForParallel() bool  { return false }
 func (h *gitHandler) Interactive() bool      { return false }
+
+// extractCommitMessage extracts -m <message> from git commit args, handling
+// double-quoted, single-quoted, and unquoted message values. Returns the
+// remaining args (with -m and its value removed) and the extracted message.
+//
+// Handles these forms:
+//
+//	-m "double quoted message"    (multi-word, double-quoted)
+//	-m 'single quoted message'    (multi-word, single-quoted)
+//	-m unquotedword               (single unquoted word)
+//	-m"double quoted"             (compact flag+quote)
+//	-m'single quoted'             (compact flag+quote)
+//	-munquotedword                (compact flag+unquoted)
+func extractCommitMessage(args string) (remainingArgs string, message string, found bool) {
+	fields := strings.Fields(args)
+	var result []string
+	i := 0
+	for i < len(fields) {
+		f := fields[i]
+		if f == "-m" || f == "-M" {
+			// -m followed by the message in the next field
+			i++
+			if i >= len(fields) {
+				// -m without a value — leave it as-is
+				result = append(result, fields[i-1])
+				break
+			}
+			msg, consumed := extractQuotedValue(fields[i:])
+			message = msg
+			found = true
+			i += consumed
+		} else if strings.HasPrefix(f, "-m") || strings.HasPrefix(f, "-M") {
+			// Compact form: -m"message" or -m'message' or -munquoted
+			rest := f[2:]
+			if rest != "" {
+				msg, _ := stripQuotes(rest)
+				message = msg
+				found = true
+				i++
+			} else {
+				// -m followed by nothing (edge case)
+				result = append(result, f)
+				i++
+			}
+		} else {
+			result = append(result, f)
+			i++
+		}
+	}
+	return strings.Join(result, " "), message, found
+}
+
+// extractQuotedValue extracts a potentially multi-word quoted value from the
+// beginning of tokens. Handles double-quoted ("), single-quoted ('), and
+// unquoted single-word values. Returns the extracted value and the number of
+// tokens consumed.
+func extractQuotedValue(tokens []string) (value string, consumed int) {
+	if len(tokens) == 0 {
+		return "", 0
+	}
+	first := tokens[0]
+
+	// Single-word unquoted value
+	if !strings.HasPrefix(first, "\"") && !strings.HasPrefix(first, "'") {
+		return first, 1
+	}
+
+	// Quoted value — may span multiple tokens
+	quote := first[0]
+	var parts []string
+	for j, tok := range tokens {
+		if j == 0 {
+			// First token — strip leading quote
+			rest := tok[1:]
+			if strings.HasSuffix(rest, string(quote)) {
+				// Complete in one token: "message"
+				return rest[:len(rest)-1], 1
+			}
+			parts = append(parts, rest)
+		} else {
+			if strings.HasSuffix(tok, string(quote)) {
+				// Closing quote found
+				parts = append(parts, tok[:len(tok)-1])
+				return strings.Join(parts, " "), j + 1
+			}
+			parts = append(parts, tok)
+		}
+	}
+	// No closing quote found — return everything as-is
+	return strings.Join(parts, " "), len(tokens)
+}
+
+// stripQuotes removes matching surrounding quotes from a string.
+func stripQuotes(s string) (string, bool) {
+	if len(s) >= 2 {
+		if (s[0] == '"' && s[len(s)-1] == '"') || (s[0] == '\'' && s[len(s)-1] == '\'') {
+			return s[1 : len(s)-1], true
+		}
+	}
+	return s, false
+}
 
 // LLMs commonly pass args like "push origin main" when operation is already
 // "push", producing "git push push origin main". Handles underscore→hyphen

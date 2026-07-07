@@ -812,22 +812,22 @@ const AppContent: React.FC<AppContentProps> = ({
           isConnected={state.isConnected}
           onModelClick={handleStatusBarModelClick}
         />
+        {!supportsLocalTerminal && (
+          <div className="terminal-notice" data-testid="terminal-notice">
+            <div className="terminal-notice-content">
+              <span className="terminal-notice-icon">$</span>
+              <span className="terminal-notice-text">
+                Terminal is limited in browser mode. Some commands may not be available.
+              </span>
+            </div>
+          </div>
+        )}
       </main>
-      {supportsLocalTerminal && (
+      {supportsLocalTerminal ? (
         <ErrorBoundary panelName="Terminal">
           <Terminal isExpanded={isTerminalExpanded} onToggleExpand={onTerminalExpandedChange} />
         </ErrorBoundary>
-      )}
-      {!supportsLocalTerminal && (
-        <div className="terminal-notice" data-testid="terminal-notice">
-          <div className="terminal-notice-content">
-            <span className="terminal-notice-icon">$</span>
-            <span className="terminal-notice-text">
-              Terminal is limited in browser mode. Some commands may not be available.
-            </span>
-          </div>
-        </div>
-      )}
+      ) : null}
       <CommandPalette
         isOpen={isCommandPaletteOpen}
         onClose={() => setIsCommandPaletteOpen(false)}

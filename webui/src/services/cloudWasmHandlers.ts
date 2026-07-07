@@ -32,7 +32,7 @@ export function handleWasmLocal(
     switch (urlPath) {
       // ── File listing ──────────────────────────────────────────
       case '/api/files':
-        return handleWasmFileList(shell);
+        return handleWasmFileList(shell, fullUrl);
       case '/api/browse':
       case '/api/workspace/browse':
         return handleWasmBrowse(shell, fullUrl);
@@ -92,10 +92,11 @@ export function handleWasmLocal(
 
 /**
  * GET /api/files — Returns all files in the workspace.
+ * Supports optional ?path= query parameter for browsing subdirectories.
  * The webui expects { message: string, files: Array<{path, modified}> }
  */
-function handleWasmFileList(shell: WasmShell): Response {
-  const cwd = shell.getCwd();
+function handleWasmFileList(shell: WasmShell, fullUrl?: string): Response {
+  const cwd = fullUrl ? getQueryParam(fullUrl, 'path') || shell.getCwd() : shell.getCwd();
   const result = shell.listDir(cwd);
   if (result.error) {
     return jsonError(result.error, 500);
@@ -103,14 +104,15 @@ function handleWasmFileList(shell: WasmShell): Response {
   // Build a flat recursive file list from the WASM directory tree.
   // The webui getFiles() expects { message, files: [{path, modified}] }
   const files = flattenEntries(shell, cwd);
-  return jsonOk({ message: 'ok', files });
+  return jsonOk({ message: 'success', files });
 }
 
 /**
  * Recursively flatten WASM directory entries into a flat file list.
+ * Each entry includes name (extracted from path) for the FileTree component.
  */
-function flattenEntries(shell: WasmShell, dir: string): Array<{ path: string; modified: boolean }> {
-  const result: Array<{ path: string; modified: boolean }> = [];
+function flattenEntries(shell: WasmShell, dir: string): Array<{ path: string; modified: boolean; name: string }> {
+  const result: Array<{ path: string; modified: boolean; name: string }> = [];
   const listResult = shell.listDir(dir);
   if (listResult.error) return result;
 
@@ -119,7 +121,7 @@ function flattenEntries(shell: WasmShell, dir: string): Array<{ path: string; mo
     if (entry.type === 'dir') {
       result.push(...flattenEntries(shell, fullPath));
     } else {
-      result.push({ path: fullPath, modified: false });
+      result.push({ path: fullPath, modified: false, name: entry.name });
     }
   }
   return result;

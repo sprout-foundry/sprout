@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	providers "github.com/sprout-foundry/sprout/pkg/agent_providers"
 	"github.com/sprout-foundry/sprout/pkg/credentials"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -561,4 +562,138 @@ func TestMigrateEmbeddedAPIKeys_SkipsEmptyAPIKey(t *testing.T) {
 	storedKey, _, err := credentials.GetFromActiveBackend("my-provider")
 	require.NoError(t, err)
 	assert.Equal(t, "", storedKey)
+}
+
+// TestToProviderConfig_DefaultsEmptyBillingTypeToSubscription is a regression
+// test for the bug where custom providers (e.g. `ai-worker`) added via
+// ~/.config/sprout/providers/*.json had no embedded catalog entry, so
+// BillingTypeResolved() fell through to its pay_per_token default. That
+// caused the cost tracker to estimate a fake "charged cost" from the live
+// pricing catalog even though the user pays nothing per token (subscription
+// gateway with flat monthly fee). The fix in ToProviderConfig() defaults an
+// empty BillingType on a custom provider to providers.BillingSubscription,
+// so the cost-tracker gate at seed_provider.go:165-171 (which only fills
+// chargedCost via the pricing fallback when billingType == BillingPayPerToken)
+// correctly produces a $0 charged cost for these providers.
+//
+// Localhost/127.0.0.1 endpoints default to BillingFree instead — those are
+// self-hosted (e.g., Ollama) and zero-marginal-cost regardless of plan intent.
+func TestToProviderConfig_DefaultsEmptyBillingTypeToSubscription(t *testing.T) {
+	t.Run("empty BillingType defaults to subscription", func(t *testing.T) {
+		cfg := CustomProviderConfig{
+			Name:     "ai-worker",
+			Endpoint: "https://ai-worker.example.com/v1",
+			EnvVar:   "AI_WORKER_API_KEY",
+		}
+		// Sanity: the input really has no billing_type set.
+		require.Equal(t, "", cfg.BillingType)
+
+		pc, err := cfg.ToProviderConfig()
+		require.NoError(t, err)
+		require.NotNil(t, pc)
+
+		// Explicit subscription, so BillingTypeResolved() won't fall through
+		// to its pay_per_token heuristic.
+		assert.Equal(t, providers.BillingSubscription, pc.BillingType)
+		assert.Equal(t, "subscription", pc.BillingType)
+
+		// And critically: BillingTypeResolved() agrees with the explicit value,
+		// which means the cost tracker won't fill a fake charged cost via the
+		// pricing fallback for this provider.
+		assert.Equal(t, providers.BillingSubscription, pc.BillingTypeResolved())
+	})
+
+	t.Run("localhost endpoint defaults to free (self-hosted)", func(t *testing.T) {
+		cases := []string{
+			"http://localhost:11434/v1",
+			"http://127.0.0.1:11434/v1",
+			"http://LOCALHOST:11434/v1", // case-insensitive match
+		}
+		for _, ep := range cases {
+			t.Run(ep, func(t *testing.T) {
+				cfg := CustomProviderConfig{
+					Name:     "ollama-local",
+					Endpoint: ep,
+					EnvVar:   "",
+				}
+				require.Equal(t, "", cfg.BillingType)
+
+				pc, err := cfg.ToProviderConfig()
+				require.NoError(t, err)
+				assert.Equal(t, providers.BillingFree, pc.BillingType,
+					"localhost endpoint %q should default to free", ep)
+			})
+		}
+	})
+
+	t.Run("explicit subscription BillingType is preserved", func(t *testing.T) {
+		cfg := CustomProviderConfig{
+			Name:        "ai-worker",
+			Endpoint:    "https://ai-worker.example.com/v1",
+			EnvVar:      "AI_WORKER_API_KEY",
+			BillingType: providers.BillingSubscription,
+		}
+
+		pc, err := cfg.ToProviderConfig()
+		require.NoError(t, err)
+		assert.Equal(t, providers.BillingSubscription, pc.BillingType)
+	})
+
+	t.Run("explicit pay_per_token BillingType is preserved", func(t *testing.T) {
+		cfg := CustomProviderConfig{
+			Name:        "pay-as-you-go",
+			Endpoint:    "https://pay.example.com/v1",
+			EnvVar:      "PAY_API_KEY",
+			BillingType: providers.BillingPayPerToken,
+		}
+
+		pc, err := cfg.ToProviderConfig()
+		require.NoError(t, err)
+		assert.Equal(t, providers.BillingPayPerToken, pc.BillingType)
+	})
+
+	t.Run("explicit free BillingType is preserved", func(t *testing.T) {
+		cfg := CustomProviderConfig{
+			Name:        "self-hosted",
+			Endpoint:    "https://selfhosted.example.com/v1",
+			EnvVar:      "SELF_HOSTED_API_KEY",
+			BillingType: providers.BillingFree,
+		}
+
+		pc, err := cfg.ToProviderConfig()
+		require.NoError(t, err)
+		assert.Equal(t, providers.BillingFree, pc.BillingType)
+	})
+
+	t.Run("explicit free on localhost endpoint still resolves to free", func(t *testing.T) {
+		cfg := CustomProviderConfig{
+			Name:        "ollama-local-explicit",
+			Endpoint:    "http://localhost:11434/v1",
+			EnvVar:      "",
+			BillingType: providers.BillingFree,
+		}
+		pc, err := cfg.ToProviderConfig()
+		require.NoError(t, err)
+		assert.Equal(t, providers.BillingFree, pc.BillingType)
+	})
+
+	t.Run("default helper returns subscription for empty + non-localhost", func(t *testing.T) {
+		assert.Equal(t, providers.BillingSubscription, defaultCustomProviderBillingType("", "https://example.com/v1"))
+		assert.Equal(t, providers.BillingSubscription, defaultCustomProviderBillingType("subscription", "https://example.com/v1"))
+		assert.Equal(t, providers.BillingPayPerToken, defaultCustomProviderBillingType("pay_per_token", "https://example.com/v1"))
+		assert.Equal(t, providers.BillingFree, defaultCustomProviderBillingType("free", "https://example.com/v1"))
+	})
+
+	t.Run("default helper returns free for empty + localhost", func(t *testing.T) {
+		assert.Equal(t, providers.BillingFree, defaultCustomProviderBillingType("", "http://localhost:11434/v1"))
+		assert.Equal(t, providers.BillingFree, defaultCustomProviderBillingType("", "http://127.0.0.1:11434/v1"))
+	})
+
+	t.Run("explicit values win over localhost heuristic", func(t *testing.T) {
+		// User explicitly said pay_per_token on a localhost endpoint? Honor it.
+		assert.Equal(t, providers.BillingPayPerToken,
+			defaultCustomProviderBillingType("pay_per_token", "http://localhost:11434/v1"))
+		assert.Equal(t, providers.BillingSubscription,
+			defaultCustomProviderBillingType("subscription", "http://127.0.0.1:11434/v1"))
+	})
 }

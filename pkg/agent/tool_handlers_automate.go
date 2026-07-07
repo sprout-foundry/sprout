@@ -20,6 +20,31 @@ import (
 // the BackgroundProcessManager to prevent data races.
 var backgroundProcessManagerOnce sync.Once
 
+// automateSproutDirKey is a context key for the workspace-aware sprout
+// directory. The WebUI API layer sets this before calling RunAutomateWorkflow
+// so that writeAutomatePIDFile writes session files to the correct .sprout/
+// directory instead of the process CWD.
+type automateSproutDirKey struct{}
+
+// SproutDirFromContext returns the workspace-aware sprout directory from ctx,
+// or falls back to os.Getwd() (matching the legacy behavior for CLI-triggered
+// workflows where CWD is the workspace root).
+func SproutDirFromContext(ctx context.Context) string {
+	if dir, ok := ctx.Value(automateSproutDirKey{}).(string); ok && dir != "" {
+		return dir
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		return "."
+	}
+	return wd
+}
+
+// ContextWithSproutDir returns a context that carries the sprout directory.
+func ContextWithSproutDir(ctx context.Context, dir string) context.Context {
+	return context.WithValue(ctx, automateSproutDirKey{}, dir)
+}
+
 // completionMessageTailLimit is the maximum number of output bytes included
 // in an automate completion injection message when the workflow fails.
 const completionMessageTailLimit = 2048
@@ -203,7 +228,8 @@ func handleRunAutomate(ctx context.Context, a *Agent, args map[string]interface{
 
 	// Write PID file for cross-process discoverability.
 	// The error is non-fatal — the session is still tracked by BPM.
-	if err := writeAutomatePIDFile(sessionID, bpm, wfPath); err != nil {
+	sproutDir := filepath.Join(SproutDirFromContext(ctx), ".sprout")
+	if err := writeAutomatePIDFile(sessionID, bpm, wfPath, sproutDir); err != nil {
 		// Log warning but don't fail the workflow.
 	}
 
@@ -257,11 +283,29 @@ func (a *Agent) RunAutomateWorkflow(ctx context.Context, workflow string) (strin
 	return handleRunAutomate(ctx, a, args)
 }
 
+// WorkflowRequiresApprovalIn reports whether the named workflow needs
+// user confirmation before launching, using the specified directory
+// instead of the CWD-based automate.Dir().
+//
+// FAIL-SAFE: any error resolving or parsing the workflow returns true so a
+// missing file or malformed JSON can't be used to slip past the prompt.
+func WorkflowRequiresApprovalIn(dir, workflowName string) bool {
+	path, err := automate.ResolvePath(dir, workflowName)
+	if err != nil {
+		return true
+	}
+	summary, err := automate.Summarize(path)
+	if err != nil {
+		return true
+	}
+	return summary.IsApprovalRequired()
+}
+
 // WorkflowRequiresApproval reports whether the named workflow needs user
-// confirmation before launching. This wraps the unexported workflowRequiresApproval
-// so the WebUI layer can enforce the same policy as the CLI tool path.
+// confirmation before launching. This wraps WorkflowRequiresApprovalIn with
+// the CWD-based automate.Dir() so the CLI tool path works correctly.
 func WorkflowRequiresApproval(workflowName string) bool {
-	return workflowRequiresApproval(workflowName)
+	return WorkflowRequiresApprovalIn(automate.Dir(), workflowName)
 }
 
 // handleListAutomateWorkflows lists available workflows from the automate/ directory.
@@ -317,20 +361,8 @@ func (a *Agent) getOrCreateBackgroundProcessManager() *tools.BackgroundProcessMa
 // workflowRequiresApproval returns true unless the named workflow's JSON
 // declares requires_approval: false. Used by the security gate to decide
 // whether to bypass the intent-confirmation prompt for run_automate calls.
-//
-// FAIL-SAFE: any error resolving or parsing the workflow returns true so a
-// missing file or malformed JSON can't be used to slip past the prompt.
 func workflowRequiresApproval(workflowName string) bool {
-	dir := automate.Dir()
-	path, err := automate.ResolvePath(dir, workflowName)
-	if err != nil {
-		return true
-	}
-	summary, err := automate.Summarize(path)
-	if err != nil {
-		return true
-	}
-	return summary.IsApprovalRequired()
+	return WorkflowRequiresApprovalIn(automate.Dir(), workflowName)
 }
 
 // normalizeWorkflowKey produces a stable cache key for the in-session approval
@@ -389,7 +421,7 @@ func (a *Agent) MarkWorkflowApprovedInSession(workflow string) {
 
 // writeAutomatePIDFile creates a PID file in .sprout/automate/ for cross-process
 // discoverability of agent-launched automate workflows.
-func writeAutomatePIDFile(sessionID string, bpm *tools.BackgroundProcessManager, wfPath string) error {
+func writeAutomatePIDFile(sessionID string, bpm *tools.BackgroundProcessManager, wfPath string, sproutDir string) error {
 	// Get the process info from BPM using public accessors
 	proc, exists := bpm.GetProcess(sessionID)
 	if !exists {
@@ -397,13 +429,6 @@ func writeAutomatePIDFile(sessionID string, bpm *tools.BackgroundProcessManager,
 	}
 	pid := proc.GetPID()
 	outputPath := proc.GetOutputPath()
-
-	// Resolve sprout directory
-	wd, err := os.Getwd()
-	if err != nil {
-		return agenterrors.NewTool("automate", "get working directory", err)
-	}
-	sproutDir := filepath.Join(wd, ".sprout")
 
 	info := &automate.AutomateSessionInfo{
 		Workflow:       filepath.Base(wfPath),

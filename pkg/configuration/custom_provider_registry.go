@@ -335,8 +335,33 @@ func (c CustomProviderConfig) ToProviderConfig() (*providers.ProviderConfig, err
 			OutputTokenCost: 0.002,
 			Currency:        "USD",
 		},
-		BillingType: normalized.BillingType,
+		// Custom providers are typically subscription gateways (flat monthly
+		// fee, no marginal per-token cost). Default to subscription when the
+		// user's JSON omits billing_type, otherwise BillingTypeResolved()
+		// falls through to its pay_per_token heuristic and the cost tracker
+		// estimates a fake "charged cost" from the live pricing catalog.
+		// An explicit billing_type in the user JSON is preserved as-is.
+		BillingType: defaultCustomProviderBillingType(normalized.BillingType, normalized.Endpoint),
 	}, nil
+}
+
+// defaultCustomProviderBillingType returns the effective BillingType for a
+// custom provider. Custom providers added at runtime are typically
+// subscription gateways (flat monthly fee, no marginal per-token cost), so
+// an empty BillingType defaults to subscription to avoid the cost tracker
+// estimating a fake "charged cost" from the live pricing catalog. Explicit
+// values (subscription, pay_per_token, free) are preserved. Endpoints on
+// localhost / 127.0.0.1 (e.g., self-hosted Ollama) default to free instead
+// — those are zero-marginal-cost regardless of the user's plan intent.
+func defaultCustomProviderBillingType(explicit, endpoint string) string {
+	if explicit != "" {
+		return explicit
+	}
+	e := strings.ToLower(strings.TrimSpace(endpoint))
+	if strings.Contains(e, "127.0.0.1") || strings.Contains(e, "localhost") {
+		return providers.BillingFree
+	}
+	return providers.BillingSubscription
 }
 
 func CanonicalizeCustomProviderName(name string) (string, error) {

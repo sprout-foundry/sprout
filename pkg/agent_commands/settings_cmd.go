@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -463,6 +464,13 @@ func splitCSV(s string) []string {
 }
 
 // Complete returns completions for the /settings command.
+//
+// Completion stages:
+//  1. No args → return ["set"] (subcommand).
+//  2. args=["set"] → return all setting keys.
+//  3. args=["set", key, ...] where key exactly matches a setting with enum
+//     values → return matching enum values.
+//  4. args=["set", partialKey] → return setting keys with matching prefix.
 func (s *SettingsCommand) Complete(args []string, chatAgent *agent.Agent) []string {
 	if len(args) == 0 {
 		return []string{"set"}
@@ -471,20 +479,37 @@ func (s *SettingsCommand) Complete(args []string, chatAgent *agent.Agent) []stri
 		return nil
 	}
 
-	prefix := ""
-	if len(args) > 1 {
-		prefix = args[len(args)-1]
+	// Stage 2: just "set" — show all setting keys (already sorted).
+	if len(args) == 1 {
+		return agent.SupportedSettingKeys()
 	}
 
+	// Stage 3+4: we have args[1] — a (possibly partial) setting key.
+	key := args[1]
+
+	// Stage 3: exact known key with enum values → value completion.
+	enumVals := agent.SettingEnumValues(key)
+	if len(enumVals) > 0 {
+		prefix := ""
+		if len(args) > 2 {
+			prefix = args[2]
+		}
+		var matches []string
+		for _, v := range enumVals {
+			if prefix == "" || strings.HasPrefix(strings.ToLower(v), strings.ToLower(prefix)) {
+				matches = append(matches, v)
+			}
+		}
+		sort.Strings(matches)
+		return matches
+	}
+
+	// Stage 4: key prefix matching (partial keys or keys without enums).
 	keys := agent.SupportedSettingKeys()
-	if prefix == "" {
-		return keys
-	}
-
 	var matches []string
-	for _, key := range keys {
-		if strings.HasPrefix(strings.ToLower(key), strings.ToLower(prefix)) {
-			matches = append(matches, key)
+	for _, sk := range keys {
+		if strings.HasPrefix(strings.ToLower(sk), strings.ToLower(key)) {
+			matches = append(matches, sk)
 		}
 	}
 	return matches

@@ -2,6 +2,7 @@ package agent
 
 import (
 	"sync"
+	"time"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 )
@@ -86,8 +87,9 @@ type CheckpointFileChange struct {
 
 // AgentState represents the state of an agent that can be persisted
 type AgentState struct {
-	Messages        []api.Message    `json:"messages"`
-	TurnCheckpoints []TurnCheckpoint `json:"turn_checkpoints,omitempty"`
+	Messages            []api.Message    `json:"messages"`
+	MessageTimestamps   []time.Time      `json:"message_timestamps,omitempty"`
+	TurnCheckpoints     []TurnCheckpoint `json:"turn_checkpoints,omitempty"`
 	PreviousSummary string           `json:"previous_summary"`
 	CompactSummary  string           `json:"compact_summary"` // New: 5K limit summary for continuity
 	TaskActions     []TaskAction     `json:"task_actions"`

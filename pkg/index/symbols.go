@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/sprout-foundry/sprout/pkg/ast"
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
 const maxFileSize = 1 << 20 // 1MB — skip larger files during indexing
@@ -63,6 +64,11 @@ func LoadSymbols(root string) (*SymbolIndex, error) {
 // with regex fallback for others. Results are sorted by file path and then by
 // line number within each file.
 func BuildSymbols(root string) (*SymbolIndex, error) {
+	// Safety: refuse to index a user's home directory.
+	if filesystem.IsHomeDir(root) {
+		return nil, fmt.Errorf("index: refusing to build symbols for home directory %q — pass a project directory instead", root)
+	}
+
 	var files []string
 	if err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {

@@ -16,10 +16,11 @@ func (h *commitHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name: "commit",
 		Description: "Commit staged changes with an auto-generated or custom message. Use this instead of 'git commit' directly. " +
+			"The message body is shell-safe (backticks, $(), and special chars in the message are not expanded). " +
 			"For read-only git operations (status, log, diff), use shell_command.",
 		Required: []string{},
 		Parameters: []ParameterDef{
-			{Name: "message", Type: "string", Description: "Commit message (auto-generated if omitted)"},
+			{Name: "message", Type: "string", Description: "Commit message (auto-generated if omitted). Shell-safe: backticks, $(), and other special characters are not expanded."},
 			{Name: "notes", Type: "string", Description: "Context for auto-generated message (ignored if message is provided)"},
 		},
 	}
@@ -37,8 +38,9 @@ func (h *commitHandler) Execute(ctx context.Context, env ToolEnv, args map[strin
 	notes, _ := extractString(args, "notes")
 
 	if message != "" {
-		// Use the provided message
-		cmd := fmt.Sprintf("git commit -m %q", message)
+		// Use a quoted heredoc to prevent shell expansion of backticks, $(), etc.
+		// <<'EOF' (quoted delimiter) passes the message verbatim through the shell.
+		cmd := fmt.Sprintf("git commit -F - <<'SPROUTCOMMITEOF'\n%s\nSPROUTCOMMITEOF", message)
 		result, err := execShellCmd(ctx, cmd, env.WorkspaceRoot)
 		if err != nil {
 			return ToolResult{Output: fmt.Sprintf("Commit failed: %v", err), IsError: true}, nil
@@ -58,7 +60,7 @@ func (h *commitHandler) Execute(ctx context.Context, env ToolEnv, args map[strin
 		msg = notes
 	}
 
-	cmd := fmt.Sprintf("git commit -m %q", msg)
+	cmd := fmt.Sprintf("git commit -F - <<'SPROUTCOMMITEOF'\n%s\nSPROUTCOMMITEOF", msg)
 	output, err := execShellCmd(ctx, cmd, env.WorkspaceRoot)
 	if err != nil {
 		return ToolResult{Output: fmt.Sprintf("Commit failed: %v\n\nStaged changes were:\n%s", err, result), IsError: true}, nil

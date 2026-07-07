@@ -116,6 +116,7 @@ func (p *GenericProvider) convertMessages(messages []api.Message, reasoning stri
 	// tolerate dropped tool results as long as the conversation stays
 	// coherent.
 	if p.requiresStrictToolCallSyntax() {
+		converted = stripUnansweredToolCalls(converted)
 		converted = dropOrphanToolResults(converted)
 	}
 
@@ -364,4 +365,107 @@ func dropOrphanToolResults(converted []map[string]interface{}) []map[string]inte
 		out = append(out, entry)
 	}
 	return out
+}
+
+// stripUnansweredToolCalls removes tool_calls from assistant messages whose
+// tool_call IDs have no corresponding tool result in the immediately
+// following messages. Strict-syntax providers (MiniMax, DeepSeek) reject
+// requests where an assistant message declares tool_calls but no tool
+// results follow — HTTP 400 error 2013 "tool call result does not follow
+// tool call". This happens when checkpoint compaction or structural
+// compaction consumes tool results but leaves their parent assistant
+// messages in the history.
+//
+// The function walks forward from each assistant+tool_calls message,
+// collecting following tool results (contiguous block). If not every
+// tool_call ID has a result, the tool_calls are stripped so the provider
+// doesn't reject the message. The assistant content is preserved so the
+// model retains the assistant's text contribution. Must run BEFORE
+// dropOrphanToolResults — stripping tool_calls from a partial-parallel
+// block can leave previously-matched tool results orphaned, and the
+// dropOrphanToolResults pass cleans those up.
+func stripUnansweredToolCalls(converted []map[string]interface{}) []map[string]interface{} {
+	if len(converted) == 0 {
+		return converted
+	}
+
+	result := make([]map[string]interface{}, 0, len(converted))
+
+	for i := 0; i < len(converted); i++ {
+		entry := converted[i]
+		role, _ := entry["role"].(string)
+		if role != "assistant" {
+			result = append(result, entry)
+			continue
+		}
+
+		tcs, hasTCs := entry["tool_calls"].([]map[string]interface{})
+		if !hasTCs || len(tcs) == 0 {
+			result = append(result, entry)
+			continue
+		}
+
+		// Collect tool_call IDs declared by this assistant message.
+		declaredIDs := make(map[string]bool, len(tcs))
+		for _, tc := range tcs {
+			if id, _ := tc["id"].(string); id != "" {
+				declaredIDs[id] = false // false = no result found yet
+			}
+		}
+		if len(declaredIDs) == 0 {
+			result = append(result, entry)
+			continue
+		}
+
+		// Scan forward through the contiguous tool-result block. Providers
+		// with ConvertToolRoleToUser emit tool results as role "user" with
+		// a tool_call_id field, so check both roles.
+		for j := i + 1; j < len(converted); j++ {
+			nextRole, _ := converted[j]["role"].(string)
+			if nextRole == "tool" {
+				// Standard tool role — always part of the result block.
+			} else if nextRole == "user" {
+				// ConvertToolRoleToUser case — only treat as a result if
+				// it carries a tool_call_id. A plain user message ends the block.
+				if _, hasTCID := converted[j]["tool_call_id"]; !hasTCID {
+					break
+				}
+			} else {
+				break
+			}
+			if tid, _ := converted[j]["tool_call_id"].(string); tid != "" {
+				if _, ok := declaredIDs[tid]; ok {
+					declaredIDs[tid] = true
+				}
+			}
+		}
+
+		// Check if all declared IDs have results.
+		allAnswered := true
+		for _, answered := range declaredIDs {
+			if !answered {
+				allAnswered = false
+				break
+			}
+		}
+
+		if allAnswered {
+			result = append(result, entry)
+			continue
+		}
+
+		// Some tool_calls are unanswered. Strip the tool_calls field
+		// so the provider doesn't reject the message. Keep the content
+		// so the assistant's text contribution survives.
+		stripped := make(map[string]interface{}, len(entry))
+		for k, v := range entry {
+			if k == "tool_calls" {
+				continue
+			}
+			stripped[k] = v
+		}
+		result = append(result, stripped)
+	}
+
+	return result
 }

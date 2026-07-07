@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
@@ -38,9 +39,21 @@ func (h *commitHandler) Execute(ctx context.Context, env ToolEnv, args map[strin
 	notes, _ := extractString(args, "notes")
 
 	if message != "" {
-		// Use a quoted heredoc to prevent shell expansion of backticks, $(), etc.
-		// <<'EOF' (quoted delimiter) passes the message verbatim through the shell.
-		cmd := fmt.Sprintf("git commit -F - <<'SPROUTCOMMITEOF'\n%s\nSPROUTCOMMITEOF", message)
+		// Write message to a temp file to avoid shell expansion of
+		// backticks, $(), ", and other special characters. The file
+		// path passed to git commit -F is safe in any shell context.
+		msgFile, err := os.CreateTemp("", "sprout-commit-msg-*")
+		if err != nil {
+			return ToolResult{Output: fmt.Sprintf("Commit failed: %v", err), IsError: true}, nil
+		}
+		defer os.Remove(msgFile.Name())
+		if _, err := msgFile.WriteString(message); err != nil {
+			msgFile.Close()
+			return ToolResult{Output: fmt.Sprintf("Commit failed: %v", err), IsError: true}, nil
+		}
+		msgFile.Close()
+
+		cmd := fmt.Sprintf("git commit -F %s", msgFile.Name())
 		result, err := execShellCmd(ctx, cmd, env.WorkspaceRoot)
 		if err != nil {
 			return ToolResult{Output: fmt.Sprintf("Commit failed: %v", err), IsError: true}, nil
@@ -60,7 +73,18 @@ func (h *commitHandler) Execute(ctx context.Context, env ToolEnv, args map[strin
 		msg = notes
 	}
 
-	cmd := fmt.Sprintf("git commit -F - <<'SPROUTCOMMITEOF'\n%s\nSPROUTCOMMITEOF", msg)
+	msgFile, err := os.CreateTemp("", "sprout-commit-msg-*")
+	if err != nil {
+		return ToolResult{Output: fmt.Sprintf("Commit failed: %v", err), IsError: true}, nil
+	}
+	defer os.Remove(msgFile.Name())
+	if _, err := msgFile.WriteString(msg); err != nil {
+		msgFile.Close()
+		return ToolResult{Output: fmt.Sprintf("Commit failed: %v", err), IsError: true}, nil
+	}
+	msgFile.Close()
+
+	cmd := fmt.Sprintf("git commit -F %s", msgFile.Name())
 	output, err := execShellCmd(ctx, cmd, env.WorkspaceRoot)
 	if err != nil {
 		return ToolResult{Output: fmt.Sprintf("Commit failed: %v\n\nStaged changes were:\n%s", err, result), IsError: true}, nil

@@ -479,4 +479,154 @@ describe('CostsPage', () => {
     // Should render without crashing; we don't need to assert on every row
     expect(screen.getByTestId('daily-spend-chart')).toBeInTheDocument();
   });
+
+  describe('stale data banner', () => {
+    it('renders the banner when total > 0 but no activity in last 30 days', async () => {
+      mockBoth(
+        {
+          total_cost: 70.36,
+          by_provider: { aiworker: 70.36 },
+          by_model: { 'ai-worker:qwen3.6-27b': 70.36 },
+          last_30_days: 0,
+          last_7_days: 0,
+          this_month: 0,
+          first_activity: '2025-06-01T12:00:00Z',
+          last_activity: '2025-06-15T18:30:00Z',
+        },
+        { daily_costs: [], days: 30 },
+      );
+      render(<CostsPage />);
+      await waitFor(() => {
+        const banner = screen.getByTestId('costs-stale-banner');
+        expect(banner).toBeInTheDocument();
+      });
+      const banner = screen.getByTestId('costs-stale-banner');
+      expect(banner.textContent).toContain('2025-06-01');
+      expect(banner.textContent).toContain('2025-06-15');
+      expect(banner.textContent).toContain('$70.36');
+    });
+
+    it('does NOT render the banner when last_30_days > 0 (recent activity exists)', async () => {
+      mockBoth(
+        {
+          total_cost: 5.0,
+          by_provider: { openai: 5.0 },
+          by_model: {},
+          last_30_days: 5.0,
+          last_7_days: 2.0,
+          this_month: 5.0,
+          first_activity: '2026-06-30T12:00:00Z',
+          last_activity: '2026-07-05T18:30:00Z',
+        },
+        { daily_costs: [{ date: '2026-07-05', total_cost: 5.0 }], days: 30 },
+      );
+      render(<CostsPage />);
+      await waitFor(() => {
+        expect(screen.getByTestId('costs-page')).toBeInTheDocument();
+      });
+      expect(screen.queryByTestId('costs-stale-banner')).not.toBeInTheDocument();
+    });
+
+    it('does NOT render the banner when activity bounds are missing (older API)', async () => {
+      mockBoth(
+        {
+          total_cost: 1.0,
+          by_provider: {},
+          by_model: {},
+          last_30_days: 0,
+          last_7_days: 0,
+          this_month: 0,
+          // first_activity / last_activity intentionally absent — simulate an
+          // older API response that doesn't emit the new fields yet.
+        },
+        { daily_costs: [], days: 30 },
+      );
+      render(<CostsPage />);
+      await waitFor(() => {
+        expect(screen.getByTestId('costs-page')).toBeInTheDocument();
+      });
+      expect(screen.queryByTestId('costs-stale-banner')).not.toBeInTheDocument();
+    });
+
+    it('does NOT render the banner when total_cost is 0', async () => {
+      mockBoth(
+        {
+          total_cost: 0,
+          by_provider: {},
+          by_model: {},
+          last_30_days: 0,
+          first_activity: '2025-06-01T12:00:00Z',
+          last_activity: '2025-06-15T18:30:00Z',
+        },
+        { daily_costs: [], days: 30 },
+      );
+      render(<CostsPage />);
+      await waitFor(() => {
+        expect(screen.getByTestId('costs-empty')).toBeInTheDocument();
+      });
+      expect(screen.queryByTestId('costs-stale-banner')).not.toBeInTheDocument();
+    });
+
+    it('renders the banner when last_30_days field is missing entirely', async () => {
+      // Defensive: backend might omit last_30_days; banner should still
+      // surface so the user understands the $0 month cards.
+      mockBoth(
+        {
+          total_cost: 1.5,
+          by_provider: { openai: 1.5 },
+          by_model: {},
+          // last_30_days intentionally absent
+          first_activity: '2025-01-01T00:00:00Z',
+          last_activity: '2025-01-31T00:00:00Z',
+        },
+        { daily_costs: [], days: 30 },
+      );
+      render(<CostsPage />);
+      await waitFor(() => {
+        expect(screen.getByTestId('costs-stale-banner')).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Back button', () => {
+    it('does NOT render the Back button when onBack is omitted', async () => {
+      mockBoth(
+        { total_cost: 1.0, by_provider: {}, by_model: {} },
+        { daily_costs: [{ date: '2025-01-01', total_cost: 1.0 }], days: 30 },
+      );
+      render(<CostsPage />);
+      await waitFor(() => {
+        expect(screen.getByTestId('costs-page')).toBeInTheDocument();
+      });
+      expect(screen.queryByTestId('costs-back-btn')).not.toBeInTheDocument();
+    });
+
+    it('renders the Back button when onBack is provided', async () => {
+      mockBoth(
+        { total_cost: 1.0, by_provider: {}, by_model: {} },
+        { daily_costs: [{ date: '2025-01-01', total_cost: 1.0 }], days: 30 },
+      );
+      const onBack = vi.fn();
+      render(<CostsPage onBack={onBack} />);
+      await waitFor(() => {
+        expect(screen.getByTestId('costs-back-btn')).toBeInTheDocument();
+      });
+    });
+
+    it('invokes onBack when the Back button is clicked', async () => {
+      mockBoth(
+        { total_cost: 1.0, by_provider: {}, by_model: {} },
+        { daily_costs: [{ date: '2025-01-01', total_cost: 1.0 }], days: 30 },
+      );
+      const onBack = vi.fn();
+      render(<CostsPage onBack={onBack} />);
+      await waitFor(() => {
+        expect(screen.getByTestId('costs-back-btn')).toBeInTheDocument();
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('costs-back-btn'));
+      });
+      expect(onBack).toHaveBeenCalledTimes(1);
+    });
+  });
 });

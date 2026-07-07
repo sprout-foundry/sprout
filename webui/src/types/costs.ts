@@ -20,6 +20,10 @@ export interface CostSummary {
   by_billing_type?: Record<string, BillingTypeBreakdown>;
   charged_cost?: number;
   token_value?: number;
+  /** All-time earliest recorded activity (ISO 8601 / RFC 3339 UTC). Optional; omitted when the store is empty. */
+  first_activity?: string;
+  /** All-time most recent recorded activity (ISO 8601 / RFC 3339 UTC). Optional; omitted when the store is empty. */
+  last_activity?: string;
 }
 
 /** Single row of session-level cost data returned in CostSummary.top_sessions. */

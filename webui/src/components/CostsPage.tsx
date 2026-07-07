@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ArrowLeft } from 'lucide-react';
 import { clientFetch } from '../services/clientSession';
 import ByModelChart from './ByModelChart';
 import CostSummaryCards, { type CostSummary } from './CostSummaryCards';
@@ -26,9 +27,27 @@ interface CostHistory {
 
 interface CostsPageProps {
   onSessionClick?: (sessionId: string) => void;
+  /** Called when the user clicks the Back button. When omitted, the button is hidden. */
+  onBack?: () => void;
 }
 
-export default function CostsPage({ onSessionClick }: CostsPageProps = {}) {
+interface StalenessInfo {
+  total: number;
+  earliest: string;
+  latest: string;
+}
+
+function computeStaleness(summary: CostSummary | null): StalenessInfo | null {
+  if (!summary || summary.total_cost <= 0) return null;
+  if ((summary.last_30_days ?? 0) > 0) return null;
+  const toDate = (iso?: string) => iso?.slice(0, 10);
+  const earliest = toDate(summary.first_activity);
+  const latest = toDate(summary.last_activity);
+  if (!earliest || !latest) return null;
+  return { total: summary.total_cost, earliest, latest };
+}
+
+export default function CostsPage({ onSessionClick, onBack }: CostsPageProps = {}) {
   const [timeRange, setTimeRange] = useState<TimeRange>('30d');
   const [summary, setSummary] = useState<CostSummary | null>(null);
   const [history, setHistory] = useState<CostHistory | null>(null);
@@ -87,9 +106,34 @@ export default function CostsPage({ onSessionClick }: CostsPageProps = {}) {
     history !== null &&
     (summary.total_cost > 0 || (history.daily_costs && history.daily_costs.length > 0));
 
+  // Detect "stale" data: total cost > 0 but nothing in the last 30 days.
+  // Without this banner the dashboard shows $0 for today/week/month cards
+  // next to non-zero all-time totals, which makes the page look like fake
+  // stub data. Surfacing the gap explains the discrepancy.
+  //
+  // We use first_activity/last_activity from the summary (all-time bounds,
+  // independent of the selected range filter) so the message stays correct
+  // when the user picks 7d/30d/90d.
+  const staleness = !loading && !error ? computeStaleness(summary) : null;
+
   return (
     <div className="costs-page" data-testid="costs-page">
-      <h1 className="costs-title">Costs</h1>
+      <div className="costs-header">
+        {onBack && (
+          <button
+            type="button"
+            className="costs-back-btn"
+            onClick={onBack}
+            aria-label="Back to chat"
+            title="Back to chat"
+            data-testid="costs-back-btn"
+          >
+            <ArrowLeft size={16} strokeWidth={1.5} aria-hidden="true" />
+            <span>Back</span>
+          </button>
+        )}
+        <h1 className="costs-title">Costs</h1>
+      </div>
 
       <div className="costs-time-range" role="group" aria-label="Time range">
         {TIME_RANGES.map((range) => {
@@ -126,6 +170,13 @@ export default function CostsPage({ onSessionClick }: CostsPageProps = {}) {
       {!loading && !error && !hasData && (
         <div className="costs-empty" data-testid="costs-empty">
           No cost data yet — costs will appear here after your first chat.
+        </div>
+      )}
+
+      {!loading && !error && staleness && (
+        <div className="costs-stale-banner" data-testid="costs-stale-banner" role="status">
+          No activity in the last 30 days. All ${staleness.total.toFixed(2)} of recorded
+          spend is from {staleness.earliest} to {staleness.latest}.
         </div>
       )}
 

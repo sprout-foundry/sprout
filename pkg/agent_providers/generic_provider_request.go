@@ -319,11 +319,12 @@ func rewriteMaxTokensToMaxCompletionTokens(requestBody []byte) ([]byte, bool, er
 // New callers should use buildHTTPRequestCtx so the user's Stop button
 // can abort in-flight LLM requests — see SP-034.
 func (p *GenericProvider) buildHTTPRequest(body []byte, streaming bool) (*http.Request, error) {
-	return p.buildHTTPRequestCtx(context.Background(), body, streaming)
+	req, _, err := p.buildHTTPRequestCtx(context.Background(), body, streaming)
+	return req, err
 }
 
 // buildHTTPRequestCtx builds the HTTP request bound to ctx.
-func (p *GenericProvider) buildHTTPRequestCtx(ctx context.Context, body []byte, streaming bool) (*http.Request, error) {
+func (p *GenericProvider) buildHTTPRequestCtx(ctx context.Context, body []byte, streaming bool) (*http.Request, []byte, error) {
 	// For local instances like LM Studio, skip auth check entirely if it would fail
 	isLocalInstance := strings.Contains(p.config.Endpoint, "127.0.0.1") || strings.Contains(p.config.Endpoint, "localhost")
 
@@ -340,7 +341,7 @@ func (p *GenericProvider) buildHTTPRequestCtx(ctx context.Context, body []byte, 
 
 	req, err := http.NewRequestWithContext(ctx, "POST", p.config.Endpoint, bytes.NewReader(body))
 	if err != nil {
-		return nil, agenterrors.NewNetwork("failed to build HTTP request", err)
+		return nil, body, agenterrors.NewNetwork("failed to build HTTP request", err)
 	}
 
 	// Check if authentication is needed
@@ -355,7 +356,7 @@ func (p *GenericProvider) buildHTTPRequestCtx(ctx context.Context, body []byte, 
 		var authErr error
 		token, authErr = p.config.GetAuthToken()
 		if authErr != nil {
-			return nil, agenterrors.Wrap(authErr, "authentication failed")
+			return nil, body, agenterrors.Wrap(authErr, "authentication failed")
 		}
 	}
 
@@ -388,5 +389,5 @@ func (p *GenericProvider) buildHTTPRequestCtx(ctx context.Context, body []byte, 
 		}
 	}
 
-	return req, nil
+	return req, body, nil
 }

@@ -31,6 +31,14 @@ export interface APIAdapter {
   readonly showOnboarding: boolean;
   /** Whether SSH connections are supported */
   readonly supportsSSH: boolean;
+  /** Whether git clone/status/commit operations are available */
+  readonly supportsGit: boolean;
+  /** Whether AI chat with LLM proxy is available */
+  readonly supportsChat: boolean;
+  /** Whether workspace switcher/selection is available */
+  readonly supportsWorkspaceSwitching: boolean;
+  /** Whether "Export all" button should be shown */
+  readonly supportsExport: boolean;
   /** Whether instance management is supported */
   readonly supportsInstances: boolean;
   /** Whether local PTY terminal is supported */

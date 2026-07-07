@@ -32,6 +32,26 @@ export const isCloud: boolean = mode === 'cloud';
 export const supportsSSH: boolean = getAdapter()?.supportsSSH ?? true;
 
 /**
+ * Git support - available when the adapter or local backend supports it.
+ */
+export const supportsGit: boolean = getAdapter()?.supportsGit ?? true;
+
+/**
+ * Chat support - available when the adapter or local backend supports it.
+ */
+export const supportsChat: boolean = getAdapter()?.supportsChat ?? true;
+
+/**
+ * Workspace switching support - available when the adapter or local backend supports it.
+ */
+export const supportsWorkspaceSwitching: boolean = getAdapter()?.supportsWorkspaceSwitching ?? true;
+
+/**
+ * Export support - available when the adapter or local backend supports it.
+ */
+export const supportsExport: boolean = getAdapter()?.supportsExport ?? true;
+
+/**
  * Instance management support - available in cloud mode only.
  * When an adapter is installed, consults the adapter's capability.
  */

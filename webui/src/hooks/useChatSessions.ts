@@ -85,7 +85,7 @@ export function useChatSessions({
         }
       }
       setState((prev) => ({
-        chatSessions: response.chat_sessions,
+        chatSessions: response.chat_sessions ?? [],
         activeChatId: prev.activeChatId || activeChatId,
         // Only set initial messages if we have none yet (don't clobber live messages)
         messages: prev.messages.length === 0 && initialMessages.length > 0 ? initialMessages : prev.messages,
@@ -190,7 +190,7 @@ export function useChatSessions({
 
       // Refresh session list to reflect updated active state
       const sessionsResp = await listChatSessions();
-      setState((prev) => ({ chatSessions: sessionsResp.chat_sessions }));
+      setState((prev) => ({ chatSessions: sessionsResp.chat_sessions ?? [] }));
     } catch (error) {
       // Rollback the eagerly-updated ref so subsequent switches aren't confused
       activeChatIdRef.current = currentId;
@@ -204,7 +204,7 @@ export function useChatSessions({
       const response = await createChatSession();
       const newId = response.chat_session.id;
       const sessionsResp = await listChatSessions();
-      setState((prev) => ({ chatSessions: sessionsResp.chat_sessions }));
+      setState((prev) => ({ chatSessions: sessionsResp.chat_sessions ?? [] }));
       return newId;
     } catch (error) {
       debugLog('[chat] Failed to create chat session:', error);
@@ -230,7 +230,7 @@ export function useChatSessions({
           }
         } else {
           const sessionsResp = await listChatSessions();
-          setState((prev) => ({ chatSessions: sessionsResp.chat_sessions }));
+          setState((prev) => ({ chatSessions: sessionsResp.chat_sessions ?? [] }));
         }
       } catch (error) {
         debugLog('[chat] Failed to delete chat session:', error);
@@ -244,7 +244,7 @@ export function useChatSessions({
     try {
       await renameChatSession(id, name);
       const sessionsResp = await listChatSessions();
-      setState((prev) => ({ chatSessions: sessionsResp.chat_sessions }));
+      setState((prev) => ({ chatSessions: sessionsResp.chat_sessions ?? [] }));
     } catch (error) {
       debugLog('[chat] Failed to rename chat session:', error);
     }
@@ -256,7 +256,7 @@ export function useChatSessions({
       const response = await deleteAllChatSessions();
       // Reload chat sessions after deletion
       const sessionsResp = await listChatSessions();
-      setState((prev) => ({ chatSessions: sessionsResp.chat_sessions }));
+      setState((prev) => ({ chatSessions: sessionsResp.chat_sessions ?? [] }));
       // Switch to the active/default session returned by the API
       await handleActiveChatChange(response.active_chat_id);
     } catch (error) {
@@ -283,7 +283,7 @@ export function useChatSessions({
       await setChatSessionWorktree(chatId, worktreePath);
       // Refresh session list to reflect updated worktree
       const sessionsResp = await listChatSessions();
-      setState((prev) => ({ chatSessions: sessionsResp.chat_sessions }));
+      setState((prev) => ({ chatSessions: sessionsResp.chat_sessions ?? [] }));
     } catch (error) {
       debugLog('[worktree] Failed to set chat session worktree:', error);
       const message = error instanceof Error ? error.message : 'Failed to set worktree';
@@ -298,7 +298,7 @@ export function useChatSessions({
       const response = await switchChatSessionWorktree(chatId, worktreePath);
       // Refresh session list to reflect updated worktree
       const sessionsResp = await listChatSessions();
-      setState((prev) => ({ chatSessions: sessionsResp.chat_sessions }));
+      setState((prev) => ({ chatSessions: sessionsResp.chat_sessions ?? [] }));
       // Also update the active chat ID if this is the active chat
       if (chatId === activeChatIdRef.current) {
         const backendMessages: Message[] = (response.chat_session.messages ?? [])
@@ -368,7 +368,7 @@ export function useChatSessions({
         });
         const newId = response.chat_session.id;
         const sessionsResp = await listChatSessions();
-        setState((prev) => ({ chatSessions: sessionsResp.chat_sessions }));
+        setState((prev) => ({ chatSessions: sessionsResp.chat_sessions ?? [] }));
 
         // If auto-switch was requested, switch to the new chat
         if (autoSwitch && newId) {

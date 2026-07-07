@@ -20,7 +20,7 @@ import { registerServiceWorker } from '../services/serviceWorkerRegistration';
 import type { AppState } from '../types/app';
 import type { SproutEvent } from '../types/events';
 import { debugLog, useLog } from '../utils/log';
-import { isCloud } from '../config/mode';
+import { isCloud, supportsWorkspaceSwitching } from '../config/mode';
 import { getAdapter } from '../services/apiAdapter';
 import type { CloudAdapter } from '../services/cloudAdapter';
 
@@ -170,7 +170,8 @@ export function useAppInitialization({
           // Only prompt when there is genuinely no prior choice. If savedWorkspace
           // equals workspaceRoot the user intentionally set their workspace to the
           // daemon root (e.g. home dir) — don't interrupt them with the picker.
-          if (!savedWorkspace) {
+          // In cloud mode, workspace switching is disabled.
+          if (!savedWorkspace && supportsWorkspaceSwitching) {
             window.dispatchEvent(new CustomEvent('sprout:open-workspace-switcher'));
           }
         }

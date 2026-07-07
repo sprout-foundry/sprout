@@ -68,7 +68,7 @@ func (ws *ReactWebServer) handleAPIAutomateWorkflows(w http.ResponseWriter, r *h
 		FilePath    string `json:"file_path"`
 	}
 
-	workflows, err := automate.Discover(automate.Dir())
+	workflows, err := automate.Discover(ws.getAutomateDir(r))
 	if err != nil {
 		if automate.IsNotExists(err) {
 			writeJSON(w, http.StatusOK, map[string]any{"workflows": []workflowItem{}})
@@ -370,15 +370,16 @@ func (ws *ReactWebServer) handleAPIAutomateRun(w http.ResponseWriter, r *http.Re
 	}
 
 	// Validate the workflow file exists (path traversal protection is in ResolvePath).
-	dir := automate.Dir()
+	dir := ws.getAutomateDir(r)
 	if _, err := automate.ResolvePath(dir, req.Workflow); err != nil {
 		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("invalid workflow: %v", err))
 		return
 	}
 
-	// Check approval requirement. If approval is required, return a JSON
-	// response (not an error) so the frontend can show a confirmation prompt.
-	if agent.WorkflowRequiresApproval(req.Workflow) {
+	// Check approval requirement using the workspace-aware directory.
+	// If approval is required, return a JSON response (not an error) so the
+	// frontend can show a confirmation prompt.
+	if agent.WorkflowRequiresApprovalIn(dir, req.Workflow) {
 		writeJSON(w, http.StatusOK, map[string]interface{}{
 			"requires_approval": true,
 			"workflow":          req.Workflow,
@@ -394,7 +395,10 @@ func (ws *ReactWebServer) handleAPIAutomateRun(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	result, err := agentInst.RunAutomateWorkflow(r.Context(), req.Workflow)
+	// Wrap context with the workspace-aware sprout dir so that
+	// writeAutomatePIDFile writes session files to the correct location.
+	ctx := agent.ContextWithSproutDir(r.Context(), ws.getSproutDir(r))
+	result, err := agentInst.RunAutomateWorkflow(ctx, req.Workflow)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return

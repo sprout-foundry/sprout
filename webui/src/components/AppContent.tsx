@@ -763,17 +763,17 @@ const AppContent: React.FC<AppContentProps> = ({
             )}
             <ErrorBoundary panelName="Editor">
               <EditorWorkspace
-                currentView={state.currentView}
-                perChatCache={perChatCache}
-                activeChatId={activeChatId}
-                onCreateChat={onCreateChat}
-                chatProps={chatProps}
-                reviewProps={reviewProps}
-                diffState={diffState}
-                handleOutlineNavigateToSymbol={handleOutlineNavigateToSymbol}
-                onSessionRestore={handleSessionSearchRestore}
-              />
-            </ErrorBoundary>
+              currentView={state.currentView}
+              perChatCache={perChatCache}
+              activeChatId={activeChatId}
+              onCreateChat={onCreateChat}
+              chatProps={chatProps}
+              reviewProps={reviewProps}
+              diffState={diffState}
+              handleOutlineNavigateToSymbol={handleOutlineNavigateToSymbol}
+              onSessionRestore={handleSessionSearchRestore}
+              onViewChange={onViewChange}
+            /></ErrorBoundary>
           </div>
           <ContextSidebar
             isMobile={isMobile}

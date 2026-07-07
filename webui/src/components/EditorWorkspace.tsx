@@ -34,6 +34,8 @@ export interface EditorWorkspaceProps {
   handleOutlineNavigateToSymbol: (line: number) => void;
   /** Called when a cost session row is clicked to restore that session */
   onSessionRestore?: (sessionId: string) => void;
+  /** Called when the user clicks Back from a non-chat view (e.g. costs). */
+  onViewChange?: (view: 'chat' | 'editor' | 'git' | 'tasks' | 'billing' | 'team' | 'costs') => void;
 }
 
 // Cache pane flex styles by weight. Bounded so that drag-resizing (which
@@ -117,6 +119,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
   diffState,
   handleOutlineNavigateToSymbol,
   onSessionRestore,
+  onViewChange,
 }) => {
   const {
     panes,
@@ -576,7 +579,10 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
     return (
       <ErrorBoundary>
         <Suspense fallback={<RouteFallback />}>
-          <CostsPage onSessionClick={onSessionRestore} />
+          <CostsPage
+            onSessionClick={onSessionRestore}
+            onBack={onViewChange ? () => onViewChange('chat') : undefined}
+          />
         </Suspense>
       </ErrorBoundary>
     );

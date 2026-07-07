@@ -239,13 +239,33 @@ B2 and A9 are quick wins (1 day combined). D1, D2, D3 are follow-ups that add va
 
 ## SP-092: Persistent Recall via `/recall` and Cross-Turn Hints
 
-_Surfacing past sessions on demand (~1–2 days)._ All the backend work is
-already shipped: `pkg/agent/semantic_recall.go` exposes
-`Agent.InjectSemanticRecall(ctx, query)`, `pkg/agent/memory_embedding.go` and
-`pkg/embedding/conversation_store.go` persist per-checkpoint summaries, and
-`seed_query.go::InjectSemanticRecall` is already wired into the conversation
-loop. What's missing is the proactive surface — a CLI command and a webUI
-"past-session hints" panel for when the user is *not* in a turn.
+_Surfacing past sessions on demand (~1–2 days)._
+
+**SHIPPED 2026-07-06.** All three phases landed at `cd528da3`
+(SP-092-1: extract `Agent.Recall`), `e461c546` (SP-092-2: `/recall`
+CLI command), `c22f2fc1` (SP-092-3: `/api/recall` endpoint +
+`PastSessionsHint` sidebar). Verified on disk:
+
+- `pkg/agent/semantic_recall.go:295` — `Agent.Recall(ctx, query,
+  limit) ([]RecalledItem, error)` extracted; `InjectSemanticRecall`
+  (line 325) now wraps `Recall` + `FormatSemanticRecall`.
+- `pkg/agent_commands/recall_command.go` (4KB) — `RecallCommand`
+  registered in `pkg/agent_commands/commands.go:111` alongside
+  `/sessions`, `/rewind`. Accepts `<query>` + `--limit N` (default 5)
+  + `--json`; empty-query → usage; zero-result → explicit message.
+- `pkg/agent_commands/recall_command_test.go` (7.7KB) covers the
+  flag matrix.
+- `webui/src/components/PastSessionsHint.tsx` (3.3KB) — debounced
+  300 ms input, mounted via the sidebar slot, dispatches
+  `sprout:session-restored` on click.
+- `webui/src/components/PastSessionsHint.test.tsx` (5.3KB) covers
+  the search → click → restore flow.
+- `pkg/webui/recall_api.go` (2.6KB) — `GET /api/recall?query=&limit=`
+  endpoint, with `pkg/webui/recall_api_test.go` (6KB) integration
+  coverage.
+
+No genuine follow-ups remain. The spec body below is preserved
+verbatim per sp-009 isolation rules (metadata-only update).
 
 ### Scope
 
@@ -297,14 +317,31 @@ loop. What's missing is the proactive surface — a CLI command and a webUI
 ## SP-093: Edit Approval for Destructive Shell Commands
 
 _Per-command approval for `rm -rf`, `git push --force`, `kubectl delete`
-(~2–3 days)._ SP-072 covers per-hunk diff approval for file edits, but
-shell approval is monolithic: the user gets one prompt with four options
-(`Deny`, `Approve once`, `Approve always`, `Elevate`) and can only choose
-binary outcomes. A multi-command pipeline like
-`rm -rf foo && git push --force` either runs entirely or not at all.
+(~2–3 days)._
 
-The pattern already exists: `pkg/agent/edit_approval.go` (624 lines) does
-this for files. We mirror it for shell commands.
+**SHIPPED 2026-07-06.** All three phases landed at `003b0a26`
+(SP-093-1: `shell_approval.go` with `ShellProposal` + 9 classifiers),
+`be521b02` (SP-093-2: `Agent.RequestShellApproval` + CLI per-part
+picker), `1a6c0e12` (SP-093-3: `ShellApprovalRequestPayload` event +
+`ShellApprovalPanel`). Verified on disk:
+
+- `pkg/agent/shell_approval.go` (14KB) — `ShellProposal`,
+  `SplitShellIntoParts`, 9-command classifier table
+  (`rm | git_push | git_reset | kubectl | docker | chmod | chown |
+  write_redirect | http_post | unknown`).
+- `pkg/agent/shell_approval_test.go` (18KB) covers classification +
+  approval broker flows.
+- `pkg/agent/approval_broker.go:215-222` — broker diverts
+  `shell_command` with multi-part high-risk to
+  `RequestShellApproval`; single-part retains the existing 4-option
+  prompt.
+- `pkg/events/shell_approval.go` (3.6KB) —
+  `EventTypeShellApprovalRequest` + `ShellApprovalRequestPayload`.
+- `webui/src/components/ShellApprovalPanel.tsx` (9.4KB) — per-part
+  checkboxes mirroring `EditApprovalPanel.tsx` shape.
+
+No genuine follow-ups remain. The spec body below is preserved
+verbatim per sp-009 isolation rules.
 
 ### Scope
 
@@ -366,10 +403,26 @@ this for files. We mirror it for shell commands.
 ## SP-094: Typed Error Hierarchy in `pkg/agent`
 
 _Full migration of ~512 `fmt.Errorf` sites to typed errors (~1 week)._
-SP-091-5 covers the foundation (define types, migrate top-10 sites). SP-094
-finishes the job: every tool handler and provider client returns a typed
-error; the broker / metrics layer can classify retry vs. fail-fast without
-string-matching.
+
+**Foundation + retry-with-backoff SHIPPED 2026-07-05 (per AUDIT-SHIP-2).**
+Verified on disk:
+
+- `pkg/agent/retry.go::ClassifyError` — exported and present.
+- `seed/core/retry.go::doChatWithRetry` — present.
+- `pkg/agent/seed_tool_registry.go:479::PublishRateLimited` —
+  `EventTypeRateLimited` wired.
+
+**Full tree NOT shipped.** `pkg/agent/errors.go` is 392 bytes with
+just one sentinel (`errProviderStartupClosed`) — the ~250-line tree
+called for by the spec (`RetryableError`, `RateLimitError`,
+`AuthError`, `ContextCancelledError`, `InvalidInputError`,
+`ToolError`, `ProviderError`, `FileSystemError`, `NetworkError`,
+`WorkspaceError`, plus `Wrap()` helper) has not landed. The
+`fmt.Errorf`-migration work (~512 sites across `pkg/agent_tools/*_handler.go`,
+`pkg/agent/api_client*.go`, `pkg/agent/subagent_*.go`, etc.) is
+genuine remaining work.
+
+Spec body preserved verbatim per sp-009 isolation rules.
 
 ### Scope
 
@@ -439,12 +492,33 @@ string-matching.
 
 ## SP-096: Roadmap status sync (full audit + 14 spec-header fixes)
 
-_Status reconciliation (~1.5 days)._ After merging origin/main (commit
-`656db751`), the README is authoritative and shows many more specs as
-✅ Implemented than the spec headers themselves admit. The 2026-06-30
-TODO audit fixed 12; this ticket finishes the remaining **14 spec
-headers** so the automate runner knows what's actually open. No code
-work — pure metadata.
+_Status reconciliation (~1.5 days)._
+
+**SHIPPED 2026-07-06 at commit `81ec1f87 chore(todo): mark SP-096-1
+through SP-096-14 as complete`.** All 14 spec-header fixes landed in
+that single batch commit (per the `chore(roadmap): reconcile …`
+series: `205fb580` SP-017 + SP-048; `55c997e1` SP-107 + SP-110 +
+AUDIT-SHIP; plus the 12 headers fixed by the 2026-06-30 TODO
+audit). Verified on disk:
+
+```
+$ grep -lE "Status.*Proposed" roadmap/SP-*.md
+roadmap/SP-105-cli-interactive-panels.md
+roadmap/SP-112-platform-parity.md
+roadmap/SP-114-unify-command-execution.md
+```
+
+3 specs still show `Status: 📋 Proposed` — all three verified
+genuinely open (no implementation on disk):
+
+- **SP-105** (CLI interactive panels) — `SettingsCommand` /
+  `UsageCommand` are registered (commands.go:153, 156) but the
+  full panel UX called for by the spec is not built. Per the
+  SP-105 → AUDIT-SHIP-3 audit, the spec is partial.
+- **SP-112** (platform parity) — 1-day-old spec; no code.
+- **SP-114** (unify command execution) — 1-day-old spec; no code.
+
+Spec body preserved verbatim per sp-009 isolation rules.
 
 ### How to do each item
 
@@ -534,9 +608,30 @@ have been split by SP-075 / Refactor-A work.
 
 ## SP-099: SP-008 Track A — Concurrency Hardening
 
-_~2 weeks, 3 phases._ Track B (typed errors) is fully covered by SP-094.
-Track A has 4 open phases from SP-008 that have never been scoped into
-real tickets. This ticket scopes them.
+_~2 weeks, 3 phases._
+
+**SHIPPED 2026-07-06.** All three phases landed at `e2dd7276`
+(SP-099-2: ADR-0007 + mutex rename), `5339d2dc` (mark SP-099-2),
+`076c0ecf` (mark SP-099-3 race fixes); SP-099-1 (CI race by default)
+predates that commit trail but is verified on disk:
+
+- **Phase 1 (CI race default)** — `Makefile:82` defines
+  `TEST_RACE ?= -race`; `test-unit` (line 88) consumes `$(TEST_RACE)`;
+  the `test` target (line 168) is `test: test-unit` and so runs
+  with `-race` by default. `.github/workflows/build.yml:85` runs
+  `make test-coverage` which hardcodes `go test -race …`. The
+  opt-out `test-unit-lowmem` target is documented as a CI-bypass
+  only.
+- **Phase 2 (Locking ADR)** — `docs/adr-0007-locking-strategy.md`
+  (5.3KB) codifies `sync.Mutex` vs `sync.RWMutex` vs channels vs
+  atomic with the existing mutexes classified. Mutex rename to
+  `mu sync.Mutex` applied (per `e2dd7276` commit body).
+- **Phase 3 (`-race` clean)** — Marked shipped at `076c0ecf`. The
+  `go test -race ./...` runner is green on CI; specific race fixes
+  are captured in the SP-099 history / `docs/sp-099-audit.md`.
+
+No genuine follow-ups remain. Spec body preserved verbatim per
+sp-009 isolation rules.
 
 ### Scope
 
@@ -566,10 +661,23 @@ real tickets. This ticket scopes them.
 
 ## SP-100: SP-045 WASM Parity — Tier 2a (onnxruntime-web bridge)
 
-_~3 days, 2 phases._ Tier 1 and Tier 2 are done per SP-045 §6.
-Tier 2a (onnxruntime-web bridge in the browser) is the next concrete
-unblocking piece. Currently WASM users only get the static-provider
-embeddings; this brings ONNX quality to the browser.
+_~3 days, 2 phases._
+
+**NOT shipped (verified open 2026-07-06).** The two artifacts called
+for by the spec do not exist:
+
+- `cmd/wasm/embedding_funcs.go` — **missing**. `cmd/wasm/` contains
+  `embedding_support.go`, `chat_funcs.go`, `llm_funcs.go`, etc.,
+  but no `embedding_funcs.go`. There is no
+  `switchEmbeddingBackend` / `embeddingBackendStatus` /
+  `embeddingModel = "gemma-300m"` symbol on disk.
+- `webui/public/wasm/onnxruntime-web-loader.js` — **missing**.
+  Only `webui/public/wasm/sprout.wasm` exists in that directory.
+
+This is genuine remaining work — Tier 1 + Tier 2 (per SP-045 §6) are
+shipped; Tier 2a (the onnxruntime-web bridge surfaced into the
+WASM JS API) is still open. Spec body preserved verbatim per
+sp-009 isolation rules.
 
 ### Scope
 
@@ -606,10 +714,36 @@ Phase 2: lazy-load the onnxruntime-web bundle.
 
 ## SP-101: Partial-spec gap fills (SP-011, SP-012, SP-017, SP-048)
 
-_~3 days, 4 phases._ After merging origin/main, the README reports
-several specs as `Partially Implemented` — the foundational pieces are
-shipped but specific pending phases remain. The automate runner can
-close the gaps as a single batch.
+_~3 days, 4 phases._
+
+**SHIPPED 2026-07-06.** All four phases landed:
+
+- **Phase 1 (SP-011 P1.4 terminal exit-pane)** — `2882f4db
+  fix(terminal): delay last-session restart by 1.5s and cover exit
+  paths`. `webui/src/components/Terminal.tsx:372 ::handleProcessExit`
+  implements the 3-path logic (paths 1 & 3 immediate; path 2 — only
+  pane AND only session — defers via `exitRestartTimerRef` 1500ms
+  before `handlePaneExit`).
+- **Phase 2 (SP-012 notification center)** — `efc46320 feat(webui):
+  add notification center with top-right stack and auto-dismiss`
+  and `33c34b70 feat(notifications): add markAllRead control event`.
+  `webui/src/components/NotificationCenter.tsx` mounted in
+  `webui/src/components/StatusBar.tsx:8`; `packages/ui/src/
+  services/notificationBus.ts` decouples publishers from the toast
+  stack.
+- **Phase 3 (SP-017 collapsible)** — `e7229794 feat(ui): add
+  Collapsible component and migrate 5 sites` (also captured in
+  AUDIT-GAP-1 above).
+- **Phase 4 (SP-048 tool timeline)** — `webui/src/components/chat/
+  ToolTimelineBar.tsx` + `ToolTimelineBar.css` + test file; CLI side
+  is `pkg/agent/seed_tool_registry.go`'s `OutputRouter
+  .RouteToolCompletion` (also confirmed by reconciliation commit
+  `205fb580`).
+
+Per the cleanup commit `6018cf3c chore(todo): mark sp-101 acceptance
+items complete`, the acceptance list has been verified against
+current code state. Spec body preserved verbatim per sp-009
+isolation rules.
 
 ### Phase 1: SP-011 — terminal exit-pane handling polish (~0.5 day)
 
@@ -653,10 +787,27 @@ the terminal output.
 
 ## SP-102: Drift audit for newly-merged specs (post-merge verification)
 
-_~0.5 day._ The `656db751` merge brought in 6 new commits and a
-re-sync of the README. There may be additional specs that flipped from
-Proposed to Implemented whose spec headers were not updated. This
-ticket is a quick verification pass.
+_~0.5 day._
+
+**SHIPPED 2026-07-06 (per AUDIT-SHIP-3).** The audit pass expanded
+beyond the original `656db751` re-sync and re-audited all 5 specs
+that were still marked 🔵 Proposed:
+
+- SP-105 — verified NOT shipped (partial: SettingsCommand +
+  UsageCommand are registered but the full panel UX is not built).
+  Stays Proposed.
+- SP-107 — verified shipped; status flipped to ✅ Implemented
+  (`codegraph_handler.go:60` auto-build trigger,
+  `embedding_index_handler.go:267` integration,
+  `repo_map.go:ToCodegraphSymbols` edge fix). Stale audit doc
+  `SP-107-code-intelligence-graph-audit.md` deleted.
+- SP-110 — verified Partially Implemented (Phases 1+2 shipped,
+  Phase 3 auto-resume daemon poller missing).
+- SP-112 — verified NOT shipped (1-day-old spec). Stays Proposed.
+- SP-114 — verified NOT shipped (1-day-old spec). Stays Proposed.
+
+No further drift to fix. The remaining "Proposed" set (SP-105,
+SP-112, SP-114) is the genuinely-open backlog.
 
 ---
 
@@ -671,6 +822,12 @@ ticket is a quick verification pass.
 
 _The native TODO loop workflow (`automate/todo-loop.json`) is functional but
 has known gaps. These are follow-ups, not blockers._
+
+**SHIPPED 2026-07-06.** Both listed items were already marked
+`[x]` (AUDIT-GAP-4 commit `7acc5b7e` for SP-111-3; commit `ed9c3260`
+for SP-111-4). No further items exist in the section — items 1 + 2
+were retired by the original scope. Spec body preserved for git
+history continuity per sp-009 isolation rules.
 
 ### Items
 

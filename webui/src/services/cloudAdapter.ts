@@ -129,7 +129,25 @@ export class CloudAdapter implements APIAdapter {
     const clientIdHeader = WEBUI_CLIENT_ID_HEADER;
     const clientIdValue = getWebUIClientId();
 
-    // ── Chat endpoint translation ──────────────────────────────────
+    // ── Agent query: route through WASM shell (not proxy) ─────────
+    // The full agent loop runs in-browser via the WASM binary's runAgent.
+    // Events stream back through the agentEventDispatcher.
+    if (urlPath === '/api/query' && method === 'POST') {
+      const requestBody = await this.extractRequestBody(input);
+      const bodyStr = this.extractBody(init) ?? requestBody ?? undefined;
+      try {
+        const shell = await this.ensureWasmShell();
+        return handleWasmLocal(shell, urlPath, method, url, bodyStr);
+      } catch (err) {
+        console.warn(
+          `[CloudAdapter] WASM shell unavailable for agent query, falling through to proxy:`,
+          err,
+        );
+        // Fall through to standard chat proxy below
+      }
+    }
+
+    // ── Chat endpoint translation (steer, stop, status) ───────────
     // NOTE: Chat endpoint mapping takes priority over the synthetic response
     // registry. No chat-mapped path should be added to the synthetic registry.
     const foundryPath = CHAT_ENDPOINT_MAP[urlPath];

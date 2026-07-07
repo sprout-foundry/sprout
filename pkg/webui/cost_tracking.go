@@ -231,6 +231,11 @@ type CostSummary struct {
 	ByBillingType        map[string]BillingTypeBreakdown `json:"by_billing_type,omitempty"`
 	ChargedCost          float64                       `json:"charged_cost,omitempty"`
 	TokenValue           float64                       `json:"token_value,omitempty"`
+	// FirstActivity / LastActivity span all recorded records (not the
+	// requested time range), so the WebUI can show a "data is older than
+	// the current period" banner without re-fetching the raw history.
+	FirstActivity        *time.Time                    `json:"first_activity,omitempty"`
+	LastActivity         *time.Time                    `json:"last_activity,omitempty"`
 }
 
 // GetCostSummary returns overall cost summary.
@@ -267,6 +272,11 @@ func (cs *CostStore) GetCostSummary(start, end time.Time) CostSummary {
 	}
 	sessionMap := make(map[string]*sessionAccum)
 
+	// Track the bounds of all recorded activity so the WebUI can show a
+	// "data is older than the current period" banner with the right
+	// earliest/latest dates — independent of any date-range filter.
+	var firstT, lastT time.Time
+
 	for _, r := range cs.records {
 		// Skip records outside the requested range for TopSessions
 		inRange := true
@@ -294,6 +304,14 @@ func (cs *CostStore) GetCostSummary(start, end time.Time) CostSummary {
 			} else if acc.lastUpdate == "" {
 				acc.lastUpdate = r.Timestamp.Format(time.RFC3339)
 			}
+		}
+
+		// All-time bounds — independent of inRange.
+		if firstT.IsZero() || r.Timestamp.Before(firstT) {
+			firstT = r.Timestamp
+		}
+		if lastT.IsZero() || r.Timestamp.After(lastT) {
+			lastT = r.Timestamp
 		}
 
 		// Always add to totals (all-time)
@@ -356,6 +374,15 @@ func (cs *CostStore) GetCostSummary(start, end time.Time) CostSummary {
 	// Cap at 10
 	if len(summary.TopSessions) > 10 {
 		summary.TopSessions = summary.TopSessions[:10]
+	}
+
+	if !firstT.IsZero() {
+		firstT = firstT.UTC()
+		summary.FirstActivity = &firstT
+	}
+	if !lastT.IsZero() {
+		lastT = lastT.UTC()
+		summary.LastActivity = &lastT
 	}
 
 	return summary

@@ -79,6 +79,7 @@ func (a *ActivityIndicator) Start(msg string) {
 	msg = sanitizeLine(msg)
 	if a.active {
 		a.msg = msg
+		a.startedAt = time.Now()
 		a.mu.Unlock()
 		return
 	}

@@ -1,0 +1,126 @@
+# DISABLED: Desktop smoke tests suspended pending security hardening (SP-080).
+# See roadmap/SP-080-desktop-release-security.md for the complete hardening spec.
+#
+name: Desktop Smoke Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  module-syntax:
+    name: Desktop Module Syntax
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Syntax-check all desktop modules
+        run: npm run test:desktop-smoke:modules
+
+  electron-smoke:
+    name: Electron App Smoke Tests
+    runs-on: ubuntu-latest
+    needs: module-syntax
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install Go dependencies
+        run: go mod download
+
+      - name: Install Playwright and Electron dependencies
+        run: |
+          npx playwright install-deps chromium
+          # Electron uses its own bundled Chromium, no browser download needed
+
+      - name: Install system dependencies for Electron
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y \
+            xvfb \
+            x11-utils \
+            libgtk-3-0 \
+            libnotify-dev \
+            libnss3 \
+            libxss1 \
+            libasound2t64 \
+            libxtst6 \
+            xauth \
+            libgbm1
+
+      - name: Build shared workspace packages
+        # Root `npm ci` above already installed every workspace.
+        # webui consumes @sprout/events and @sprout/ui from their `dist/`
+        # outputs (no `prepare` script — removed in 61ba3f17).
+        run: |
+          npm run build -w @sprout/events
+          npm run build -w @sprout/ui
+
+      - name: Build Go backend binary for E2E tests
+        run: npm run build:desktop:backend
+
+      - name: Build embedded webui for E2E tests
+        run: npm run build:webui:embed
+
+      - name: Verify backend binary exists
+        run: |
+          ls -lh desktop/dist/backend/linux-amd64/sprout
+
+      - name: Run Electron smoke tests (with virtual display)
+        env:
+          ELECTRON_DISABLE_SECURITY_WARNINGS: 'true'
+          CI: 'true'
+        run: |
+          xvfb-run -a -s "-screen 0 1280x720x24" bash -lc '
+            xdpyinfo >/tmp/desktop-smoke-xdpyinfo.txt
+            head -n 5 /tmp/desktop-smoke-xdpyinfo.txt
+            npm run test:desktop-smoke -- --reporter=list | tee /tmp/desktop-smoke-run.log
+          '
+        timeout-minutes: 10
+
+      - name: Upload desktop smoke diagnostics (failure only)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-smoke-diagnostics
+          path: |
+            /tmp/desktop-smoke-xdpyinfo.txt
+            /tmp/desktop-smoke-run.log
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-smoke-results
+          path: test-results-html/
+          retention-days: 7

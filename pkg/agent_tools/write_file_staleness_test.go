@@ -15,8 +15,8 @@ func TestStalenessChecker_StaleBySequence(t *testing.T) {
 	// browser_seq is 5, but the agent read it when seq was 4.
 	syncState := NewSyncState()
 	syncState.files["test.txt"] = &FileMetadata{
-		BrowserSeq:  5,
-		ModifiedAt:  time.Now().Add(-1 * time.Minute), // old enough to pass mtime check
+		BrowserSeq: 5,
+		ModifiedAt: time.Now().Add(-1 * time.Minute), // old enough to pass mtime check
 	}
 
 	tracker := NewTurnReadTracker()
@@ -38,8 +38,8 @@ func TestStalenessChecker_StaleByRecentMtime(t *testing.T) {
 	// browser_seq matches, but the file was modified right now (within 30s).
 	syncState := NewSyncState()
 	syncState.files["test.txt"] = &FileMetadata{
-		BrowserSeq:  5,
-		ModifiedAt:  time.Now(), // just now — definitely within 30s window
+		BrowserSeq: 5,
+		ModifiedAt: time.Now(), // just now — definitely within 30s window
 	}
 
 	tracker := NewTurnReadTracker()
@@ -61,8 +61,8 @@ func TestStalenessChecker_StaleByNoReadThisTurn(t *testing.T) {
 	// Agent never called read_file on this path this turn.
 	syncState := NewSyncState()
 	syncState.files["test.txt"] = &FileMetadata{
-		BrowserSeq:  3,
-		ModifiedAt:  time.Now().Add(-1 * time.Minute),
+		BrowserSeq: 3,
+		ModifiedAt: time.Now().Add(-1 * time.Minute),
 	}
 
 	tracker := NewTurnReadTracker()
@@ -84,8 +84,8 @@ func TestStalenessChecker_HappyPath(t *testing.T) {
 	// All three conditions satisfied: read happened, seq matches, mtime is old.
 	syncState := NewSyncState()
 	syncState.files["test.txt"] = &FileMetadata{
-		BrowserSeq:  5,
-		ModifiedAt:  time.Now().Add(-1 * time.Minute), // > 30s ago
+		BrowserSeq: 5,
+		ModifiedAt: time.Now().Add(-1 * time.Minute), // > 30s ago
 	}
 
 	tracker := NewTurnReadTracker()

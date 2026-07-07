@@ -1,5 +1,6 @@
 import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import React from 'react';
+import { clientFetch } from '../services/clientSession';
 import CostsPage from './CostsPage';
 
 vi.mock('../services/clientSession', () => ({
@@ -12,8 +13,6 @@ vi.mock('./DailySpendChart.css', () => ({}));
 vi.mock('./ByModelChart.css', () => ({}));
 vi.mock('./ProviderTable.css', () => ({}));
 vi.mock('./TopSessionsTable.css', () => ({}));
-
-import { clientFetch } from '../services/clientSession';
 
 interface MockResponseInit {
   ok?: boolean;
@@ -48,10 +47,7 @@ beforeEach(() => {
 
 describe('CostsPage', () => {
   it('renders with all 4 time-range options', () => {
-    mockBoth(
-      { total_cost: 0, by_provider: {}, by_model: {} },
-      { daily_costs: [], days: 30 },
-    );
+    mockBoth({ total_cost: 0, by_provider: {}, by_model: {} }, { daily_costs: [], days: 30 });
     render(<CostsPage />);
     expect(screen.getByTestId('costs-page')).toBeInTheDocument();
     expect(screen.getByTestId('costs-time-range-7d')).toBeInTheDocument();
@@ -61,10 +57,7 @@ describe('CostsPage', () => {
   });
 
   it('defaults to the 30d time range', async () => {
-    mockBoth(
-      { total_cost: 0, by_provider: {}, by_model: {} },
-      { daily_costs: [], days: 30 },
-    );
+    mockBoth({ total_cost: 0, by_provider: {}, by_model: {} }, { daily_costs: [], days: 30 });
     render(<CostsPage />);
     await waitFor(() => {
       expect(screen.getByTestId('costs-time-range-30d')).toHaveAttribute('aria-pressed', 'true');
@@ -80,17 +73,13 @@ describe('CostsPage', () => {
       { daily_costs: [{ date: '2025-01-01', total_cost: 1.5 }], days: 30 },
     );
     render(<CostsPage />);
-    await waitFor(() =>
-      expect(screen.getByTestId('costs-time-range-30d')).toHaveAttribute('aria-pressed', 'true'),
-    );
+    await waitFor(() => expect(screen.getByTestId('costs-time-range-30d')).toHaveAttribute('aria-pressed', 'true'));
 
     await act(async () => {
       fireEvent.click(screen.getByTestId('costs-time-range-7d'));
     });
 
-    await waitFor(() =>
-      expect(screen.getByTestId('costs-time-range-7d')).toHaveAttribute('aria-pressed', 'true'),
-    );
+    await waitFor(() => expect(screen.getByTestId('costs-time-range-7d')).toHaveAttribute('aria-pressed', 'true'));
     expect(screen.getByTestId('costs-time-range-30d')).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getByTestId('costs-time-range-90d')).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getByTestId('costs-time-range-all')).toHaveAttribute('aria-pressed', 'false');
@@ -118,8 +107,12 @@ describe('CostsPage', () => {
       const calls = vi.mocked(clientFetch).mock.calls;
       const historyCall = calls.find((c) => String(c[0]).includes('/api/costs/history'));
       expect(historyCall).toBeDefined();
-      expect(String(historyCall![0])).toContain('days=7');
     });
+    {
+      const calls = vi.mocked(clientFetch).mock.calls;
+      const historyCall = calls.find((c) => String(c[0]).includes('/api/costs/history'));
+      expect(String(historyCall![0])).toContain('days=7');
+    }
   });
 
   it('clicking 90d triggers a refetch with days=90', async () => {
@@ -144,8 +137,12 @@ describe('CostsPage', () => {
       const calls = vi.mocked(clientFetch).mock.calls;
       const historyCall = calls.find((c) => String(c[0]).includes('/api/costs/history'));
       expect(historyCall).toBeDefined();
-      expect(String(historyCall![0])).toContain('days=90');
     });
+    {
+      const calls = vi.mocked(clientFetch).mock.calls;
+      const historyCall = calls.find((c) => String(c[0]).includes('/api/costs/history'));
+      expect(String(historyCall![0])).toContain('days=90');
+    }
   });
 
   it('clicking all triggers a refetch with days=365', async () => {
@@ -170,14 +167,16 @@ describe('CostsPage', () => {
       const calls = vi.mocked(clientFetch).mock.calls;
       const historyCall = calls.find((c) => String(c[0]).includes('/api/costs/history'));
       expect(historyCall).toBeDefined();
-      expect(String(historyCall![0])).toContain('days=365');
     });
+    {
+      const calls = vi.mocked(clientFetch).mock.calls;
+      const historyCall = calls.find((c) => String(c[0]).includes('/api/costs/history'));
+      expect(String(historyCall![0])).toContain('days=365');
+    }
   });
 
   it('shows the loading state initially', () => {
-    vi.mocked(clientFetch).mockImplementation(
-      () => new Promise(() => {}) as unknown as Promise<Response>,
-    );
+    vi.mocked(clientFetch).mockImplementation(() => new Promise(() => {}) as unknown as Promise<Response>);
     render(<CostsPage />);
     expect(screen.getByTestId('costs-loading')).toBeInTheDocument();
   });
@@ -192,10 +191,7 @@ describe('CostsPage', () => {
   });
 
   it('shows the empty state when there is no data', async () => {
-    mockBoth(
-      { total_cost: 0, by_provider: {}, by_model: {} },
-      { daily_costs: [], days: 30 },
-    );
+    mockBoth({ total_cost: 0, by_provider: {}, by_model: {} }, { daily_costs: [], days: 30 });
     render(<CostsPage />);
     await waitFor(() => {
       expect(screen.getByTestId('costs-empty')).toBeInTheDocument();
@@ -204,7 +200,13 @@ describe('CostsPage', () => {
 
   it('renders placeholders and summary when data is present', async () => {
     mockBoth(
-      { total_cost: 1.2345, by_provider: { openai: 1.2345 }, by_model: { 'gpt-4o': 1.2345 }, by_provider_this_month: {}, by_provider_last_month: {} },
+      {
+        total_cost: 1.2345,
+        by_provider: { openai: 1.2345 },
+        by_model: { 'gpt-4o': 1.2345 },
+        by_provider_this_month: {},
+        by_provider_last_month: {},
+      },
       { daily_costs: [{ date: '2025-01-01', total_cost: 1.2345 }], days: 30 },
     );
     render(<CostsPage />);
@@ -403,10 +405,7 @@ describe('CostsPage', () => {
   // ---------------------------------------------------------------------------
 
   it('shows the updated empty state copy', async () => {
-    mockBoth(
-      { total_cost: 0, by_provider: {}, by_model: {} },
-      { daily_costs: [], days: 30 },
-    );
+    mockBoth({ total_cost: 0, by_provider: {}, by_model: {} }, { daily_costs: [], days: 30 });
     render(<CostsPage />);
     await waitFor(() => {
       expect(screen.getByTestId('costs-empty')).toBeInTheDocument();
@@ -446,7 +445,7 @@ describe('CostsPage', () => {
       { daily_costs: [{ date: '2025-01-01', total_cost: 5.0 }], days: 30 },
     );
     render(<CostsPage onSessionClick={onSessionClick} />);
-    await waitFor(() => expect(screen.getByTestId('row-sess-1')).toBeInTheDocument());
+    await screen.findByTestId('row-sess-1');
     await act(async () => {
       fireEvent.click(screen.getByTestId('row-sess-1'));
     });
@@ -475,7 +474,7 @@ describe('CostsPage', () => {
       { daily_costs, days: 365 },
     );
     render(<CostsPage />);
-    await waitFor(() => expect(screen.getByTestId('daily-spend-chart')).toBeInTheDocument());
+    await screen.findByTestId('daily-spend-chart');
     // Should render without crashing; we don't need to assert on every row
     expect(screen.getByTestId('daily-spend-chart')).toBeInTheDocument();
   });

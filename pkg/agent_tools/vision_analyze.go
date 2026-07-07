@@ -170,15 +170,15 @@ func (vp *VisionProcessor) AnalyzeImage(ctx context.Context, imagePath string, o
 
 				// VISION-5: emit per-call record for successful fallback.
 				AppendVisionRecord(VisionMetricsRecord{
-					OpName:             "analyze_image",
-					ImageCount:         1,
-					Success:            true,
-					RetryCount:         retryStats.RetryCount,
-					UsedOCRFallback:    true,
-					OCRFallbackSuccess: true,
-					LatencyRequestMS:   reqDuration.Milliseconds(),
+					OpName:              "analyze_image",
+					ImageCount:          1,
+					Success:             true,
+					RetryCount:          retryStats.RetryCount,
+					UsedOCRFallback:     true,
+					OCRFallbackSuccess:  true,
+					LatencyRequestMS:    reqDuration.Milliseconds(),
 					LatencyRetrySleepMS: retryStats.SleepDuration.Milliseconds(),
-					LatencyFallbackMS:  fallbackDuration.Milliseconds(),
+					LatencyFallbackMS:   fallbackDuration.Milliseconds(),
 				})
 
 				return analysis, nil
@@ -186,27 +186,27 @@ func (vp *VisionProcessor) AnalyzeImage(ctx context.Context, imagePath string, o
 			// Fallback exhausted; return the composed error.
 			// VISION-5: emit per-call record for failed fallback.
 			AppendVisionRecord(VisionMetricsRecord{
-				OpName:             "analyze_image",
-				ImageCount:         1,
-				Success:            false,
-				FailureReason:      classifyVisionError(fbErr),
-				RetryCount:         retryStats.RetryCount,
-				UsedOCRFallback:    true,
-				OCRFallbackSuccess: false,
-				LatencyRequestMS:   reqDuration.Milliseconds(),
+				OpName:              "analyze_image",
+				ImageCount:          1,
+				Success:             false,
+				FailureReason:       classifyVisionError(fbErr),
+				RetryCount:          retryStats.RetryCount,
+				UsedOCRFallback:     true,
+				OCRFallbackSuccess:  false,
+				LatencyRequestMS:    reqDuration.Milliseconds(),
 				LatencyRetrySleepMS: retryStats.SleepDuration.Milliseconds(),
-				LatencyFallbackMS:  fallbackDuration.Milliseconds(),
+				LatencyFallbackMS:   fallbackDuration.Milliseconds(),
 			})
 			return VisionAnalysis{}, fbErr
 		}
 		// VISION-5: emit per-call record for non-fallback failure.
 		AppendVisionRecord(VisionMetricsRecord{
-			OpName:             "analyze_image",
-			ImageCount:         1,
-			Success:            false,
-			FailureReason:      classifyVisionError(err),
-			RetryCount:         retryStats.RetryCount,
-			LatencyRequestMS:   reqDuration.Milliseconds(),
+			OpName:              "analyze_image",
+			ImageCount:          1,
+			Success:             false,
+			FailureReason:       classifyVisionError(err),
+			RetryCount:          retryStats.RetryCount,
+			LatencyRequestMS:    reqDuration.Milliseconds(),
 			LatencyRetrySleepMS: retryStats.SleepDuration.Milliseconds(),
 		})
 		return VisionAnalysis{}, fmt.Errorf("vision request: %w", err)
@@ -242,18 +242,18 @@ func (vp *VisionProcessor) AnalyzeImage(ctx context.Context, imagePath string, o
 
 	// VISION-5: emit per-call record for successful primary path.
 	AppendVisionRecord(VisionMetricsRecord{
-		OpName:             "analyze_image",
-		ImageCount:         1,
-		Success:            true,
-		RetryCount:         retryStats.RetryCount,
-		UsedOCRFallback:    usedFallback,
-		OCRFallbackSuccess: ocrFallbackSuccess,
-		LatencyRequestMS:   reqDuration.Milliseconds(),
+		OpName:              "analyze_image",
+		ImageCount:          1,
+		Success:             true,
+		RetryCount:          retryStats.RetryCount,
+		UsedOCRFallback:     usedFallback,
+		OCRFallbackSuccess:  ocrFallbackSuccess,
+		LatencyRequestMS:    reqDuration.Milliseconds(),
 		LatencyRetrySleepMS: retryStats.SleepDuration.Milliseconds(),
-		LatencyFallbackMS:  fallbackDuration.Milliseconds(),
-		LatencyParseMS:     parseDuration.Milliseconds(),
-		ImageTokens:        imageTokens,
-		ImageTokensCached:  imageTokensCached,
+		LatencyFallbackMS:   fallbackDuration.Milliseconds(),
+		LatencyParseMS:      parseDuration.Milliseconds(),
+		ImageTokens:         imageTokens,
+		ImageTokensCached:   imageTokensCached,
 	})
 
 	return analysis, nil

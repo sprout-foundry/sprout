@@ -96,7 +96,8 @@ const ExportDialog: React.FC<ExportDialogProps> = ({ isOpen, onClose, sessionId,
       // Validate the endpoint exists with a HEAD request first
       const headResponse = await fetch(url, { method: 'HEAD' });
       if (!headResponse.ok) {
-        const statusText = headResponse.status === 404 ? 'Session not found' : `Server error (HTTP ${headResponse.status})`;
+        const statusText =
+          headResponse.status === 404 ? 'Session not found' : `Server error (HTTP ${headResponse.status})`;
         setDownloadError(`Download failed: ${statusText}`);
         setIsDownloading(false);
         return;
@@ -144,9 +145,7 @@ const ExportDialog: React.FC<ExportDialogProps> = ({ isOpen, onClose, sessionId,
           <h2 id="export-dialog-title">
             <Download className="export-dialog-icon" size={18} />
             Export Session
-            {sessionName && (
-              <span className="export-dialog-session-name">{sessionName}</span>
-            )}
+            {sessionName && <span className="export-dialog-session-name">{sessionName}</span>}
           </h2>
           <button
             className="export-dialog-close"

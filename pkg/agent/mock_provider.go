@@ -8,8 +8,8 @@ import (
 	"strings"
 	"sync"
 
-	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // UseMockLLM, when true, causes the agent creation path to return a
@@ -20,12 +20,12 @@ var UseMockLLM bool
 // MockLLMProvider implements api.ClientInterface with canned responses.
 // Thread-safe: all mutable state is protected by mu.
 type MockLLMProvider struct {
-	mu                    sync.Mutex
-	ResponsesByPrompt     map[string]string // substring match (case-insensitive) on last user message
-	DefaultResponse       string
-	CallCount             int
-	model                 string
-	debug                 bool
+	mu                sync.Mutex
+	ResponsesByPrompt map[string]string // substring match (case-insensitive) on last user message
+	DefaultResponse   string
+	CallCount         int
+	model             string
+	debug             bool
 }
 
 // NewMockLLMProvider creates a new mock LLM provider with sensible defaults.

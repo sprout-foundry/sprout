@@ -161,7 +161,9 @@ export function useSettingsState(
   const [providerApiKey, setProviderApiKey] = useState('');
   const [providerSupportsVision, setProviderSupportsVision] = useState(false);
   const [providerVisionModel, setProviderVisionModel] = useState('');
-  const [providerBillingType, setProviderBillingType] = useState<'pay_per_token' | 'subscription' | 'free'>('pay_per_token');
+  const [providerBillingType, setProviderBillingType] = useState<'pay_per_token' | 'subscription' | 'free'>(
+    'pay_per_token',
+  );
   const [providerModelContextSizes, setProviderModelContextSizes] = useState<string>('');
 
   // Provider catalog is shared across the whole app — the Subagents,

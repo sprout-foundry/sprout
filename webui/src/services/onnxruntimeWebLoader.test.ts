@@ -112,16 +112,12 @@ describe('loadOnnxRuntimeWeb', () => {
     script!.onerror!(new ErrorEvent('error'));
 
     // Assert: promise rejects with a descriptive error.
-    await expect(loadPromise).rejects.toThrow(
-      '[onnxruntime-web-loader] Failed to load onnxruntime-web script'
-    );
+    await expect(loadPromise).rejects.toThrow('[onnxruntime-web-loader] Failed to load onnxruntime-web script');
 
     // console.debug was called (loader's internal signal; global wrapper
     // uses console.warn for user-visible noise).
     expect(debugSpy).toHaveBeenCalledTimes(1);
-    expect(debugSpy.mock.calls[0][0]).toBe(
-      '[onnxruntime-web-loader] failed to load onnxruntime-web'
-    );
+    expect(debugSpy.mock.calls[0][0]).toBe('[onnxruntime-web-loader] failed to load onnxruntime-web');
 
     // The cache should be cleared automatically (loadPromise = null in onerror).
     // Verify by calling again — it should create a NEW script tag.
@@ -150,9 +146,7 @@ describe('loadOnnxRuntimeWeb', () => {
     script!.onload!();
 
     // Assert: promise rejects because ort is missing.
-    await expect(loadPromise).rejects.toThrow(
-      '[onnxruntime-web-loader] window.ort is undefined after script load'
-    );
+    await expect(loadPromise).rejects.toThrow('[onnxruntime-web-loader] window.ort is undefined after script load');
 
     // Cache should be cleared so retry is possible.
     const retryPromise = loadOnnxRuntimeWeb({ url: fakeUrl });

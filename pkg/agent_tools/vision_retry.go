@@ -34,12 +34,12 @@ import (
 
 // RetryOptions configures DoVisionRetry.
 type RetryOptions struct {
-	MaxAttempts int           // total attempts (including first); 1 disables; 0 falls back to default
-	BaseDelay   time.Duration // base for exponential backoff (200ms default)
-	MaxDelay    time.Duration // cap on backoff (1600ms default)
-	JitterPct   int           // ± jitter percent (20 default)
+	MaxAttempts int              // total attempts (including first); 1 disables; 0 falls back to default
+	BaseDelay   time.Duration    // base for exponential backoff (200ms default)
+	MaxDelay    time.Duration    // cap on backoff (1600ms default)
+	JitterPct   int              // ± jitter percent (20 default)
 	IsRetryable func(error) bool // optional classifier; uses default if nil
-	OpName      string        // for logging
+	OpName      string           // for logging
 	// Stats is an optional output pointer. If non-nil, DoVisionRetry
 	// populates it with per-call retry statistics (retry count, total
 	// sleep time, last error). Safe for use by callers that need per-call

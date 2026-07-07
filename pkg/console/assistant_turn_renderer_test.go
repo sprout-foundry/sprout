@@ -440,37 +440,37 @@ func TestUpRowsFormulaCorrectness(t *testing.T) {
 		wantUpRows    int
 	}{
 		{
-			name: "at-line-start-no-in-progress",
+			name:          "at-line-start-no-in-progress",
 			physicalLines: 3, atLineStart: true, curLineRunes: 0, terminalWidth: 80,
 			wantUpRows: 3, // 3 + 0 = 3
 		},
 		{
-			name: "in-progress-40-chars-fits-one-row",
+			name:          "in-progress-40-chars-fits-one-row",
 			physicalLines: 3, atLineStart: false, curLineRunes: 42, terminalWidth: 80,
 			wantUpRows: 4, // 3 + physicalRows(42, 80)=1 → 4
 		},
 		{
-			name: "in-progress-80-chars-exact-fit",
+			name:          "in-progress-80-chars-exact-fit",
 			physicalLines: 3, atLineStart: false, curLineRunes: 80, terminalWidth: 80,
 			wantUpRows: 4, // 3 + physicalRows(80, 80)=1 → 4
 		},
 		{
-			name: "in-progress-81-chars-wraps-to-two-rows",
+			name:          "in-progress-81-chars-wraps-to-two-rows",
 			physicalLines: 3, atLineStart: false, curLineRunes: 81, terminalWidth: 80,
 			wantUpRows: 5, // 3 + physicalRows(81, 80)=2 → 5
 		},
 		{
-			name: "in-progress-200-chars-wraps-to-three-rows",
+			name:          "in-progress-200-chars-wraps-to-three-rows",
 			physicalLines: 3, atLineStart: false, curLineRunes: 200, terminalWidth: 80,
 			wantUpRows: 6, // 3 + physicalRows(200, 80)=3 → 6
 		},
 		{
-			name: "zero-physical-lines-with-in-progress",
+			name:          "zero-physical-lines-with-in-progress",
 			physicalLines: 0, atLineStart: false, curLineRunes: 50, terminalWidth: 80,
 			wantUpRows: 1, // 0 + physicalRows(50, 80)=1 → 1
 		},
 		{
-			name: "empty-segment",
+			name:          "empty-segment",
 			physicalLines: 0, atLineStart: true, curLineRunes: 0, terminalWidth: 80,
 			wantUpRows: 0, // 0 + 0 = 0
 		},
@@ -518,34 +518,34 @@ func TestRenderer_InProgressLineRowAccounting(t *testing.T) {
 		wantUpRows   int
 	}{
 		{
-			name:       "three-completed-lines-no-in-progress",
-			chunks:     []string{"line1\n", "line2\n", "line3\n"},
-			wantLines:  3, wantAtStart: true, wantCurRunes: 0, wantUpRows: 3,
+			name:      "three-completed-lines-no-in-progress",
+			chunks:    []string{"line1\n", "line2\n", "line3\n"},
+			wantLines: 3, wantAtStart: true, wantCurRunes: 0, wantUpRows: 3,
 		},
 		{
-			name:       "three-lines-plus-40-char-in-progress",
-			chunks:     []string{"line1\n", "line2\n", "line3\n", strings.Repeat("x", 40)},
-			wantLines:  3, wantAtStart: false, wantCurRunes: 42, wantUpRows: 4,
+			name:      "three-lines-plus-40-char-in-progress",
+			chunks:    []string{"line1\n", "line2\n", "line3\n", strings.Repeat("x", 40)},
+			wantLines: 3, wantAtStart: false, wantCurRunes: 42, wantUpRows: 4,
 		},
 		{
-			name:       "three-lines-plus-78-char-in-progress-exact-fit",
-			chunks:     []string{"line1\n", "line2\n", "line3\n", strings.Repeat("x", 78)},
-			wantLines:  3, wantAtStart: false, wantCurRunes: 80, wantUpRows: 4,
+			name:      "three-lines-plus-78-char-in-progress-exact-fit",
+			chunks:    []string{"line1\n", "line2\n", "line3\n", strings.Repeat("x", 78)},
+			wantLines: 3, wantAtStart: false, wantCurRunes: 80, wantUpRows: 4,
 		},
 		{
-			name:       "three-lines-plus-79-char-in-progress-wraps",
-			chunks:     []string{"line1\n", "line2\n", "line3\n", strings.Repeat("x", 79)},
-			wantLines:  3, wantAtStart: false, wantCurRunes: 81, wantUpRows: 5,
+			name:      "three-lines-plus-79-char-in-progress-wraps",
+			chunks:    []string{"line1\n", "line2\n", "line3\n", strings.Repeat("x", 79)},
+			wantLines: 3, wantAtStart: false, wantCurRunes: 81, wantUpRows: 5,
 		},
 		{
-			name:       "three-lines-plus-198-char-in-progress-multi-wrap",
-			chunks:     []string{"line1\n", "line2\n", "line3\n", strings.Repeat("x", 198)},
-			wantLines:  3, wantAtStart: false, wantCurRunes: 200, wantUpRows: 6,
+			name:      "three-lines-plus-198-char-in-progress-multi-wrap",
+			chunks:    []string{"line1\n", "line2\n", "line3\n", strings.Repeat("x", 198)},
+			wantLines: 3, wantAtStart: false, wantCurRunes: 200, wantUpRows: 6,
 		},
 		{
-			name:       "single-chunk-no-newline",
-			chunks:     []string{strings.Repeat("a", 50)},
-			wantLines:  0, wantAtStart: false, wantCurRunes: 52, wantUpRows: 1,
+			name:      "single-chunk-no-newline",
+			chunks:    []string{strings.Repeat("a", 50)},
+			wantLines: 0, wantAtStart: false, wantCurRunes: 52, wantUpRows: 1,
 		},
 	}
 
@@ -575,8 +575,6 @@ func TestRenderer_InProgressLineRowAccounting(t *testing.T) {
 		})
 	}
 }
-
-
 
 func TestSubscriberStdoutInterleaveDoesNotEraseRenderedProse(t *testing.T) {
 	// Regression test for the streaming word-erasure bug.

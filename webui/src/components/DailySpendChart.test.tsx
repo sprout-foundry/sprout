@@ -111,12 +111,7 @@ describe('DailySpendChart', () => {
   });
 
   it('renders y-axis labels with dollar amounts', () => {
-    const { container } = render(
-      <DailySpendChart
-        dailyCosts={[{ date: '2025-01-01', total_cost: 5 }]}
-        days={1}
-      />,
-    );
+    const { container } = render(<DailySpendChart dailyCosts={[{ date: '2025-01-01', total_cost: 5 }]} days={1} />);
     const text = container.textContent || '';
     expect(text).toContain('$5.0000');
     expect(text).toContain('$0.0000');

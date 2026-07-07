@@ -563,13 +563,13 @@ func TestCostSummary_TopSessions_Populated(t *testing.T) {
 	for i := 0; i < 12; i++ {
 		cost := float64(12-i) * 0.01
 		cs.records = append(cs.records, CostRecord{
-			Timestamp:  now.Add(-time.Duration(i) * time.Hour),
-			Provider:   "openai",
-			Model:      "gpt-4",
-			Cost:       cost,
-			SessionID:  fmt.Sprintf("sess-%d", i),
-			Title:      fmt.Sprintf("Session %d", i),
-			WorkingDir: fmt.Sprintf("/workspace/%d", i),
+			Timestamp:   now.Add(-time.Duration(i) * time.Hour),
+			Provider:    "openai",
+			Model:       "gpt-4",
+			Cost:        cost,
+			SessionID:   fmt.Sprintf("sess-%d", i),
+			Title:       fmt.Sprintf("Session %d", i),
+			WorkingDir:  fmt.Sprintf("/workspace/%d", i),
 			LastUpdated: now.Format(time.RFC3339),
 		})
 	}
@@ -604,25 +604,25 @@ func TestCostSummary_TopSessions_FilteredByTimeRange(t *testing.T) {
 
 	// Old session (outside range)
 	cs.records = append(cs.records, CostRecord{
-		Timestamp:  now.AddDate(0, 0, -60),
-		Provider:   "openai",
-		Model:      "gpt-4",
-		Cost:       1.00,
-		SessionID:  "old-sess",
-		Title:      "Old Session",
-		WorkingDir: "/old",
+		Timestamp:   now.AddDate(0, 0, -60),
+		Provider:    "openai",
+		Model:       "gpt-4",
+		Cost:        1.00,
+		SessionID:   "old-sess",
+		Title:       "Old Session",
+		WorkingDir:  "/old",
 		LastUpdated: now.AddDate(0, 0, -60).Format(time.RFC3339),
 	})
 
 	// Recent session (inside range)
 	cs.records = append(cs.records, CostRecord{
-		Timestamp:  now.Add(-1 * time.Hour),
-		Provider:   "openai",
-		Model:      "gpt-4",
-		Cost:       0.05,
-		SessionID:  "new-sess",
-		Title:      "New Session",
-		WorkingDir: "/new",
+		Timestamp:   now.Add(-1 * time.Hour),
+		Provider:    "openai",
+		Model:       "gpt-4",
+		Cost:        0.05,
+		SessionID:   "new-sess",
+		Title:       "New Session",
+		WorkingDir:  "/new",
 		LastUpdated: now.Format(time.RFC3339),
 	})
 
@@ -660,23 +660,23 @@ func TestCostSummary_TopSessions_MultipleRecordsPerSession(t *testing.T) {
 	// Two records for the same session
 	cs.records = append(cs.records,
 		CostRecord{
-			Timestamp:  now.Add(-2 * time.Hour),
-			Provider:   "openai",
-			Model:      "gpt-4",
-			Cost:       0.05,
-			SessionID:  "sess-multi",
-			Title:      "Multi-record Session",
-			WorkingDir: "/workspace",
+			Timestamp:   now.Add(-2 * time.Hour),
+			Provider:    "openai",
+			Model:       "gpt-4",
+			Cost:        0.05,
+			SessionID:   "sess-multi",
+			Title:       "Multi-record Session",
+			WorkingDir:  "/workspace",
 			LastUpdated: now.Add(-2 * time.Hour).Format(time.RFC3339),
 		},
 		CostRecord{
-			Timestamp:  now.Add(-1 * time.Hour),
-			Provider:   "anthropic",
-			Model:      "claude",
-			Cost:       0.10,
-			SessionID:  "sess-multi",
-			Title:      "Multi-record Session",
-			WorkingDir: "/workspace",
+			Timestamp:   now.Add(-1 * time.Hour),
+			Provider:    "anthropic",
+			Model:       "claude",
+			Cost:        0.10,
+			SessionID:   "sess-multi",
+			Title:       "Multi-record Session",
+			WorkingDir:  "/workspace",
 			LastUpdated: now.Format(time.RFC3339),
 		},
 	)

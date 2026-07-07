@@ -36,8 +36,8 @@ type openRouterResponse struct {
 
 // openRouterModel holds the subset of fields we need from OpenRouter.
 type openRouterModel struct {
-	ID      string              `json:"id"`
-	Pricing openRouterPricing   `json:"pricing"`
+	ID      string            `json:"id"`
+	Pricing openRouterPricing `json:"pricing"`
 }
 
 type openRouterPricing struct {

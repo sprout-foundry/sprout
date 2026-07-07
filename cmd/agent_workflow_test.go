@@ -1005,7 +1005,7 @@ func TestPickSubagentDefault(t *testing.T) {
 
 	t.Run("alphabetical tiebreak", func(t *testing.T) {
 		overrides := WorkflowSubagentOverrides{
-			"tester":      {Provider: "anthropic", Model: "claude-haiku"},
+			"tester":        {Provider: "anthropic", Model: "claude-haiku"},
 			"code_reviewer": {Provider: "openrouter", Model: "gemini-2.5-pro"},
 		}
 		pick := pickSubagentDefault(overrides)

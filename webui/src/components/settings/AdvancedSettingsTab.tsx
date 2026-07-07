@@ -44,8 +44,8 @@ export default function AdvancedSettingsTab({
   return (
     <div className="section">
       <div className="config-help settings-help-spaced">
-        Low-touch settings: performance knobs, commit/review provider selection, and PDF OCR. Open what
-        you need; the rest stays collapsed.
+        Low-touch settings: performance knobs, commit/review provider selection, and PDF OCR. Open what you need; the
+        rest stays collapsed.
       </div>
 
       {/* Performance */}
@@ -92,8 +92,8 @@ export default function AdvancedSettingsTab({
         <div className="settings-section-spaced">
           <h4>Commit Message Generation</h4>
           <div className="config-help settings-help-spaced">
-            Configure which provider and model to use for generating commit messages. Leave empty to use
-            the default (LastUsedProvider).
+            Configure which provider and model to use for generating commit messages. Leave empty to use the default
+            (LastUsedProvider).
           </div>
 
           <div className="config-item">
@@ -133,8 +133,8 @@ export default function AdvancedSettingsTab({
           <div className="settings-section-spaced-bordered">
             <h4>Code Review</h4>
             <div className="config-help settings-help-spaced">
-              Configure which provider and model to use for code review commands (/review, /review-deep).
-              Leave empty to use the default (LastUsedProvider).
+              Configure which provider and model to use for code review commands (/review, /review-deep). Leave empty to
+              use the default (LastUsedProvider).
             </div>
 
             <div className="config-item">

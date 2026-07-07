@@ -236,7 +236,7 @@ func TestActivateSkillHandler_EventBus_ErrorFlag(t *testing.T) {
 	h := &activateSkillHandler{}
 	bus := events.NewEventBus()
 	_ = bus.Subscribe("test-events") // subscribe to have a listener
-	env := ToolEnv{EventBus: bus} // No SkillLoader — will produce an error path
+	env := ToolEnv{EventBus: bus}    // No SkillLoader — will produce an error path
 
 	result, err := h.Execute(
 		context.Background(),

@@ -3,9 +3,9 @@ package agent
 import (
 	"testing"
 
+	core "github.com/sprout-foundry/seed/core"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
-	core "github.com/sprout-foundry/seed/core"
 )
 
 // visionMockClient wraps MockClient to report vision support, which is
@@ -16,12 +16,12 @@ type visionMockClient struct {
 
 func (v *visionMockClient) SupportsVision() bool { return true }
 
-
 // SupportsConversationalVision reports whether inline multimodal turns
 // should embed the image. Defaults to false; overridden per client.
 func (v *visionMockClient) SupportsConversationalVision() bool {
 	return false
 }
+
 // TestAttachPastedImages_AttachesToFirstUserMessage is the core regression
 // test for the webui image-paste bug. The sproutProvider must attach images
 // registered via RegisterPastedImages to the first user message in every

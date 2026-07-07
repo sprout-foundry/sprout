@@ -33,21 +33,21 @@ type localOllamaListModel struct {
 
 // localOllamaChatRequest mirrors the JSON body POSTed to /api/chat.
 type localOllamaChatRequest struct {
-	Model    string                 `json:"model"`
-	Messages []localOllamaMessage   `json:"messages"`
-	Options  map[string]any         `json:"options,omitempty"`
-	Tools    []localOllamaTool      `json:"tools,omitempty"`
-	Stream   *bool                  `json:"stream,omitempty"`
-	Format   map[string]any         `json:"format,omitempty"`
-	KeepAlive string                `json:"keep_alive,omitempty"`
+	Model     string               `json:"model"`
+	Messages  []localOllamaMessage `json:"messages"`
+	Options   map[string]any       `json:"options,omitempty"`
+	Tools     []localOllamaTool    `json:"tools,omitempty"`
+	Stream    *bool                `json:"stream,omitempty"`
+	Format    map[string]any       `json:"format,omitempty"`
+	KeepAlive string               `json:"keep_alive,omitempty"`
 }
 
 // localOllamaMessage is one entry in a chat request or response.
 type localOllamaMessage struct {
-	Role      string                 `json:"role"`
-	Content   string                 `json:"content"`
-	Images    [][]byte               `json:"images,omitempty"`
-	ToolCalls []localOllamaToolCall   `json:"tool_calls,omitempty"`
+	Role      string                `json:"role"`
+	Content   string                `json:"content"`
+	Images    [][]byte              `json:"images,omitempty"`
+	ToolCalls []localOllamaToolCall `json:"tool_calls,omitempty"`
 }
 
 // localOllamaTool mirrors Ollama's tool schema.
@@ -77,12 +77,12 @@ type localOllamaToolCallFunction struct {
 
 // localOllamaChatResponse is one NDJSON line of /api/chat output.
 type localOllamaChatResponse struct {
-	Model     string               `json:"model"`
-	CreatedAt time.Time            `json:"created_at"`
-	Message   localOllamaMessage   `json:"message"`
-	Done      bool                 `json:"done"`
-	DoneReason string              `json:"done_reason"`
-	Metrics   localOllamaMetrics   `json:"metrics,omitempty"`
+	Model      string             `json:"model"`
+	CreatedAt  time.Time          `json:"created_at"`
+	Message    localOllamaMessage `json:"message"`
+	Done       bool               `json:"done"`
+	DoneReason string             `json:"done_reason"`
+	Metrics    localOllamaMetrics `json:"metrics,omitempty"`
 }
 
 // localOllamaMetrics carries the model's reported token counts.

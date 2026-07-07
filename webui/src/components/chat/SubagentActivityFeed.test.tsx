@@ -17,7 +17,7 @@
  *   - Feed returns null when no activities
  */
 
-import { createElement } from 'react';
+import { createElement, act } from 'react';
 
 // ── Mock lucide-react icons ──────────────────────────────────────────
 
@@ -161,7 +161,6 @@ vi.mock('@sprout/ui', () => {
   };
 });
 
-import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SubagentActivityFeed } from './SubagentActivityFeed';

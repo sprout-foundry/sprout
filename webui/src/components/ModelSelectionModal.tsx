@@ -236,7 +236,11 @@ function ModelSelectionModal({
                                 ⚠
                               </span>
                             )}
-                            {selectedModel === model.id && <span className="model-selection-item-check" data-testid="model-picker-current">✓</span>}
+                            {selectedModel === model.id && (
+                              <span className="model-selection-item-check" data-testid="model-picker-current">
+                                ✓
+                              </span>
+                            )}
                           </button>
                         </li>
                       );

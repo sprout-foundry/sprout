@@ -39,7 +39,7 @@ func captureStderr(t *testing.T) *stderrCapture {
 // os.Stderr, then copies everything that was written into a *bytes.Buffer
 // which it returns.
 func (c *stderrCapture) Close() *bytes.Buffer {
-	c.w.Close()  // signal EOF to the reader
+	c.w.Close() // signal EOF to the reader
 	os.Stderr = c.oldStderr
 	buf := &bytes.Buffer{}
 	_, _ = io.Copy(buf, c.r)
@@ -60,8 +60,8 @@ func TestReasoningFold_NilIndicator_DegradedMode(t *testing.T) {
 	}
 
 	// Chunks should accumulate tokens
-	fold.Chunk("hello world")                       // 11 bytes / 4 = 2 tokens
-	fold.Chunk("some more reasoning text here")     // 28 bytes / 4 = 7 tokens
+	fold.Chunk("hello world")                   // 11 bytes / 4 = 2 tokens
+	fold.Chunk("some more reasoning text here") // 28 bytes / 4 = 7 tokens
 
 	// Resolve should print summary
 	fold.Resolve()

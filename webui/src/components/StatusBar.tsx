@@ -2,6 +2,7 @@
 import { StatusBar as SproutStatusBar, detectLineEnding } from '@sprout/ui';
 import { FolderOpen } from 'lucide-react';
 import { useMemo, useRef, useState, useCallback } from 'react';
+import { supportsGit } from '../config/mode';
 import { allLanguageEntries, resolveLanguageId } from '../extensions/languageRegistry';
 import { useNotifications } from '../contexts/NotificationContext';
 import { ChatStatusBarItems } from './chat/ChatStatusBarItems';
@@ -176,7 +177,7 @@ function StatusBar({
         </div>
       )}
       <SproutStatusBar
-        branch={branch}
+        branch={supportsGit ? branch : 'Browser IDE'}
         cursorPosition={buffer?.cursorPosition}
         language={language}
         encoding={encoding}

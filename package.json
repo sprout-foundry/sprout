@@ -3,101 +3,8 @@
   "bugs": {
     "url": "https://github.com/sprout-foundry/sprout/issues"
   },
-  "build": {
-    "afterSign": "scripts/electron-after-sign.cjs",
-    "appId": "dev.sprout-foundry.sprout",
-    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
-    "asar": true,
-    "beforePack": "scripts/electron-before-pack.cjs",
-    "directories": {
-      "buildResources": "desktop/resources",
-      "output": "desktop/dist/releases"
-    },
-    "executableName": "sprout",
-    "extraResources": [
-      {
-        "filter": [
-          "**/*"
-        ],
-        "from": "desktop/dist/backend/",
-        "to": "backend/"
-      }
-    ],
-    "files": [
-      "**/*",
-      "!packages/${/*}",
-      "!webui/${/*}",
-      "!test/${/*}",
-      "!cmd/${/*}",
-      "!pkg/${/*}",
-      "!scripts/${/*}",
-      "!roadmap/${/*}",
-      "!docs/${/*}",
-      "!desktop/dist/${/*}",
-      "!sprout",
-      "!Makefile"
-    ],
-    "linux": {
-      "category": "Development",
-      "desktop": {
-        "entry": {
-          "Comment": "AI-powered code editing desktop application",
-          "GenericName": "AI Code Editor",
-          "Name": "Sprout",
-          "StartupWMClass": "Sprout"
-        }
-      },
-      "icon": "desktop/resources/icons/png",
-      "target": [
-        "AppImage",
-        "deb",
-        "rpm"
-      ]
-    },
-    "mac": {
-      "category": "public.app-category.developer-tools",
-      "entitlements": "desktop/resources/entitlements.mac.plist",
-      "entitlementsInherit": "desktop/resources/entitlements.mac.inherit.plist",
-      "gatekeeperAssess": false,
-      "hardenedRuntime": true,
-      "icon": "desktop/resources/icon.png",
-      "target": [
-        "dmg",
-        "zip"
-      ]
-    },
-    "nsis": {
-      "allowToChangeInstallationDirectory": true,
-      "oneClick": false,
-      "perMachine": false,
-      "shortcutName": "Sprout"
-    },
-    "productName": "Sprout",
-    "protocols": [
-      {
-        "name": "Sprout Workspace",
-        "schemes": [
-          "sprout"
-        ]
-      }
-    ],
-    "publish": {
-      "owner": "sprout-foundry",
-      "provider": "github",
-      "releaseType": "release",
-      "repo": "sprout"
-    },
-    "win": {
-      "icon": "desktop/resources/icon.ico",
-      "target": [
-        "nsis",
-        "zip"
-      ]
-    }
-  },
   "dependencies": {
     "@playwright/test": "^1.57.0",
-    "electron-updater": "^6.8.3",
     "ws": "^8.18.3"
   },
   "description": "`sprout` is an AI-powered code editing and assistance tool designed to streamline software development by leveraging Large Language Models (LLMs) to understand your entire workspace, generate code, and orchestrate complex features.",
@@ -105,14 +12,11 @@
     "@storybook/addon-essentials": "^8.6.14",
     "@storybook/addon-links": "^8.6.18",
     "@storybook/react-vite": "^8.6.18",
-    "electron": "^39.8.5",
-    "electron-builder": "^26.8.1",
     "tsx": "^4.22.4"
   },
   "homepage": "https://github.com/sprout-foundry/sprout#readme",
   "keywords": [],
   "license": "ISC",
-  "main": "desktop/main.js",
   "name": "sprout",
   "overrides": {
     "react": "^18.3.1",
@@ -123,23 +27,12 @@
     "uuid": "^11.1.1"
   },
   "private": true,
-  "productName": "Sprout",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/sprout-foundry/sprout.git"
   },
   "scripts": {
-    "build:desktop": "npm run build:webui:embed && npm run build:desktop:backend",
-    "build:desktop:backend": "node scripts/build-electron-backend.mjs",
-    "build:webui:embed": "node scripts/build-webui-embed.mjs",
-    "desktop:dev": "npm run build:webui:embed && npm run build:desktop:backend && electron .",
-    "desktop:dir": "electron-builder --dir",
-    "desktop:dist": "electron-builder --publish never",
-    "desktop:release": "electron-builder --publish onTagOrDraft",
-    "desktop:verify": "node scripts/verify-electron-package.mjs",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "test:desktop-smoke": "SPROUT_SKIP_WEBSERVER=1 playwright test --config=playwright.config.js --project=desktop",
-    "test:desktop-smoke:modules": "node -e \"const {spawnSync}=require('child_process'),path=require('path'),fs=require('fs'),d='desktop';for(const m of fs.readdirSync(d).filter(f=>f.endsWith('.js')&&!f.includes('.bak'))){const r=spawnSync(process.execPath,['--check',path.join(d,m)],{encoding:'utf8'});if(r.status!==0){console.error(m,r.stderr);process.exit(1);}console.log('OK',m);}\"",
     "test:webui-e2e": "playwright test --project=webui",
     "test:webui-e2e:headed": "playwright test --project=webui --headed"
   },

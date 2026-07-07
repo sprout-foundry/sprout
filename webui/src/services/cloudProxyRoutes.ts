@@ -131,6 +131,14 @@ export function translateRequestBody(webuiPath: string, parsed: Record<string, u
     stream: true,
   };
 
+  // In cloud mode, default to platform-managed LLM (routes to the
+  // platform's local inference server) unless the user has configured
+  // their own provider key (BYOK), in which case the provider field
+  // is already set by the chat input.
+  if (!parsed.provider) {
+    translated.provider = 'platform';
+  }
+
   // Warn if we're overwriting an existing messages field
   if (parsed.messages) {
     console.warn('[CloudAdapter] Overwriting existing messages field in chat request body');

@@ -73,11 +73,6 @@ func findGitRoot(dir string) string {
 	return dir
 }
 
-// getGitStatus parses git status output for the default workspace
-func (ws *ReactWebServer) getGitStatus() (*GitStatus, error) {
-	return ws.getGitStatusForWorkspace(ws.workspaceRoot)
-}
-
 func (ws *ReactWebServer) getGitStatusForWorkspace(workspaceRoot string) (*GitStatus, error) {
 	// Walk up the directory tree to find the nearest git repo, matching git's
 	// own behavior. The workspace root may be the user's home dir or a parent

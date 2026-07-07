@@ -312,6 +312,15 @@ export function useChatSessionManager({
       setState((prev) => ({
         isProcessing: true,
         lastError: null,
+        messages: trimMessages([
+          ...prev.messages,
+          {
+            id: generateMessageId(),
+            type: 'user',
+            content: trimmedMessage,
+            timestamp: new Date(),
+          },
+        ]),
       }));
 
       try {

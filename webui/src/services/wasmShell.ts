@@ -67,6 +67,14 @@ export interface WasmShell {
   listDir(path: string): WasmListDirResult;
   /** Delete a file. */
   deleteFile(path: string): string; // error or ""
+  /** Run the full agent loop (ProcessQuery) in-browser.
+   *  Returns the agent's response and dispatches events via the callback. */
+  runAgent(
+    provider: string,
+    model: string,
+    query: string,
+    onEvent?: (eventJson: string) => void,
+  ): Promise<{ response: string; provider: string; model: string }>;
   /** Get the fully initialized Go global. */
   readonly wasm: typeof globalThis & { SproutWasm: unknown };
 }
@@ -177,10 +185,17 @@ export interface SproutWasmAPI {
   deleteFile(path: string): string;
   getHistory(): string;
   getEnv(): string;
+  // ── Agent loop (cmd/wasm/agent_funcs.go) ──
+  // Runs the full sprout agent loop (ProcessQuery) in-browser.
+  // Returns a Promise resolving to { response, provider, model }.
+  // The onEvent callback receives JSON-stringified UI events.
+  runAgent?(
+    provider: string,
+    model: string,
+    query: string,
+    onEvent?: (eventJson: string) => void,
+  ): Promise<{ response: string; provider: string; model: string }>;
   // ── AST / symbol extraction (cmd/wasm/ast_funcs.go) ──
-  // Inputs are JSON-encoded payloads from the Go side; consumers should
-  // JSON.parse() the return value. Content bytes accept Uint8Array or
-  // ArrayBuffer. On error the result includes an "error" field.
   parseFile?(filePath: string, content: Uint8Array | ArrayBuffer): string;
   extractSymbols?(filePath: string, content: Uint8Array | ArrayBuffer): string;
   supportedLanguages?(): string;
@@ -337,6 +352,19 @@ export async function initWasmShell(config?: {
 
     deleteFile(path: string): string {
       return wasm.deleteFile(path);
+    },
+
+    runAgent(
+      provider: string,
+      model: string,
+      query: string,
+      onEvent?: (eventJson: string) => void,
+    ): Promise<{ response: string; provider: string; model: string }> {
+      const api = wasm as SproutWasmAPI;
+      if (!api.runAgent) {
+        return Promise.reject(new Error('WASM binary does not expose runAgent'));
+      }
+      return api.runAgent(provider, model, query, onEvent);
     },
 
     get wasm() {

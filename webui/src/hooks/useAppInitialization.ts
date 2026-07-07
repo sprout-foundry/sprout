@@ -104,6 +104,19 @@ export function useAppInitialization({
         }
       });
 
+      // ── Cloud mode: wire agent events to the webui ──────────────
+      // In cloud mode, the agent loop runs in the WASM binary. Events
+      // from the agent are dispatched via the agentEventDispatcher,
+      // which feeds them into the same handleEvent that WebSocket
+      // events use. This makes agent responses render in the chat UI.
+      if (isCloud) {
+        import('../services/cloudWasmHandlers').then(({ setAgentEventDispatcher }) => {
+          setAgentEventDispatcher((event) => {
+            handleEvent(event as SproutEvent);
+          });
+        });
+      }
+
       // Load initial stats
       const loadStats = () => {
         apiService

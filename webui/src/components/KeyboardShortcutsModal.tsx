@@ -1,5 +1,5 @@
-import { useEffect, useMemo } from 'react';
 import { X } from 'lucide-react';
+import { useEffect, useMemo } from 'react';
 import { useHotkeys } from '../contexts/HotkeyContext';
 import './KeyboardShortcutsModal.css';
 

@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sprout-foundry/sprout/pkg/search"
 	"github.com/spf13/cobra"
+	"github.com/sprout-foundry/sprout/pkg/search"
 )
 
 var searchCmd = &cobra.Command{

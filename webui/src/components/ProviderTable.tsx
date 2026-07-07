@@ -35,11 +35,7 @@ function computeDelta(thisMonth: number, lastMonth: number): DeltaInfo {
   return { value: delta, direction, label: `${arrow} ${Math.abs(pct).toFixed(1)}%` };
 }
 
-export default function ProviderTable({
-  summary,
-  loading = false,
-  error = null,
-}: ProviderTableProps) {
+export default function ProviderTable({ summary, loading = false, error = null }: ProviderTableProps) {
   const rows = useMemo(() => {
     if (!summary || !summary.by_provider) return [];
 
@@ -71,10 +67,18 @@ export default function ProviderTable({
         <table>
           <thead>
             <tr>
-              <th scope="col" className="provider-table-col--provider">Provider</th>
-              <th scope="col" className="provider-table-col--this-month">This Month</th>
-              <th scope="col" className="provider-table-col--last-month">Last Month</th>
-              <th scope="col" className="provider-table-col--delta">Delta</th>
+              <th scope="col" className="provider-table-col--provider">
+                Provider
+              </th>
+              <th scope="col" className="provider-table-col--this-month">
+                This Month
+              </th>
+              <th scope="col" className="provider-table-col--last-month">
+                Last Month
+              </th>
+              <th scope="col" className="provider-table-col--delta">
+                Delta
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -103,10 +107,18 @@ export default function ProviderTable({
         <table>
           <thead>
             <tr>
-              <th scope="col" className="provider-table-col--provider">Provider</th>
-              <th scope="col" className="provider-table-col--this-month">This Month</th>
-              <th scope="col" className="provider-table-col--last-month">Last Month</th>
-              <th scope="col" className="provider-table-col--delta">Delta</th>
+              <th scope="col" className="provider-table-col--provider">
+                Provider
+              </th>
+              <th scope="col" className="provider-table-col--this-month">
+                This Month
+              </th>
+              <th scope="col" className="provider-table-col--last-month">
+                Last Month
+              </th>
+              <th scope="col" className="provider-table-col--delta">
+                Delta
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -126,28 +138,26 @@ export default function ProviderTable({
       <table>
         <thead>
           <tr>
-            <th scope="col" className="provider-table-col--provider">Provider</th>
-            <th scope="col" className="provider-table-col--this-month">This Month</th>
-            <th scope="col" className="provider-table-col--last-month">Last Month</th>
-            <th scope="col" className="provider-table-col--delta">Delta</th>
+            <th scope="col" className="provider-table-col--provider">
+              Provider
+            </th>
+            <th scope="col" className="provider-table-col--this-month">
+              This Month
+            </th>
+            <th scope="col" className="provider-table-col--last-month">
+              Last Month
+            </th>
+            <th scope="col" className="provider-table-col--delta">
+              Delta
+            </th>
           </tr>
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr
-              key={row.provider}
-              className="provider-table-row"
-              data-testid={`provider-row-${row.provider}`}
-            >
-              <td className="provider-table-cell provider-table-cell--provider">
-                {row.provider}
-              </td>
-              <td className="provider-table-cell">
-                {formatDollar(row.thisMonth)}
-              </td>
-              <td className="provider-table-cell">
-                {formatDollar(row.lastMonth)}
-              </td>
+            <tr key={row.provider} className="provider-table-row" data-testid={`provider-row-${row.provider}`}>
+              <td className="provider-table-cell provider-table-cell--provider">{row.provider}</td>
+              <td className="provider-table-cell">{formatDollar(row.thisMonth)}</td>
+              <td className="provider-table-cell">{formatDollar(row.lastMonth)}</td>
               <td
                 className={`provider-table-cell provider-table-cell--delta provider-table-cell--delta-${row.delta.direction}`}
                 data-testid={`provider-delta-${row.provider}-${row.delta.direction}`}

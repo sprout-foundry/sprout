@@ -9,16 +9,16 @@ import (
 // Regression: SP-078-4 — wraps the steer panel rendering path to prevent regressions.
 func TestStatusFooter_SteerPanel_Wrap(t *testing.T) {
 	tests := []struct {
-		name            string
-		text            string
-		cursorByte      int
-		cols            int
-		maxRows         int
-		wantMinLines    int
-		wantRow         int
-		wantCol         int
-		wantEllipsis    bool
-		wantVisibleW    int // >0: assert visibleRuneWidth == this; 0: assert >= 0
+		name         string
+		text         string
+		cursorByte   int
+		cols         int
+		maxRows      int
+		wantMinLines int
+		wantRow      int
+		wantCol      int
+		wantEllipsis bool
+		wantVisibleW int // >0: assert visibleRuneWidth == this; 0: assert >= 0
 	}{
 		{
 			name:         "narrow_ascii",
@@ -26,16 +26,16 @@ func TestStatusFooter_SteerPanel_Wrap(t *testing.T) {
 			cursorByte:   100,
 			cols:         80,
 			maxRows:      6,
-			wantMinLines: 3, // 200 / 80 = 2.5 → 3 visual rows (80+80+40)
-			wantRow:      1, // byte 100 falls in row 1 (bytes 80–159)
+			wantMinLines: 3,  // 200 / 80 = 2.5 → 3 visual rows (80+80+40)
+			wantRow:      1,  // byte 100 falls in row 1 (bytes 80–159)
 			wantCol:      20, // 100 - 80
 			wantEllipsis: false,
 		},
 		{
 			name:         "wide_cjk",
 			text:         "你好世界你好世界你好世界你好", // 14 CJK chars, 42 bytes
-			cursorByte:   16, // inside char 5 (row 1, col 1) — byte 15 is row 0's inclusive end
-			cols:         10, // 5 CJK chars per row (2 cols each = 10)
+			cursorByte:   16,               // inside char 5 (row 1, col 1) — byte 15 is row 0's inclusive end
+			cols:         10,               // 5 CJK chars per row (2 cols each = 10)
 			maxRows:      6,
 			wantMinLines: 3, // 14 chars / 5 per row = 3 rows (5+5+4)
 			wantRow:      1, // byte 16 falls in row 1
@@ -43,32 +43,32 @@ func TestStatusFooter_SteerPanel_Wrap(t *testing.T) {
 			wantEllipsis: false,
 		},
 		{
-			name:          "combining_chars",
-			text:          "cafe\u0301", // e + combining acute accent = café
-			cursorByte:    5, // inside the 2-byte combining acute (bytes 4–5)
-			cols:          80,
-			maxRows:       6,
-			wantMinLines:  1, // single line, combining char has zero display width
-			wantRow:       0,
-			wantCol:       5, // byte offset within the single line
-			wantEllipsis:  false,
-			wantVisibleW:  4, // "cafe" = 4 visible; combining acute = 0
+			name:         "combining_chars",
+			text:         "cafe\u0301", // e + combining acute accent = café
+			cursorByte:   5,            // inside the 2-byte combining acute (bytes 4–5)
+			cols:         80,
+			maxRows:      6,
+			wantMinLines: 1, // single line, combining char has zero display width
+			wantRow:      0,
+			wantCol:      5, // byte offset within the single line
+			wantEllipsis: false,
+			wantVisibleW: 4, // "cafe" = 4 visible; combining acute = 0
 		},
 		{
 			name:         "cursor_at_wrap_boundary",
 			text:         strings.Repeat("a", 80) + "X", // 81 bytes: 80-char row 0 + 1-char row 1
-			cursorByte:   80, // exactly at the soft-wrap boundary
+			cursorByte:   80,                            // exactly at the soft-wrap boundary
 			cols:         80,
 			maxRows:      6,
-			wantMinLines: 2, // 81 bytes → 2 rows (80+1)
-			wantRow:      0, // byte 80 is inclusive-end of row 0's byte range [0,80]
+			wantMinLines: 2,  // 81 bytes → 2 rows (80+1)
+			wantRow:      0,  // byte 80 is inclusive-end of row 0's byte range [0,80]
 			wantCol:      80, // at end of row 0's text
 			wantEllipsis: false,
 		},
 		{
 			name:         "overflow_dropped_rows",
 			text:         strings.Repeat("a", 500), // 500 chars → 7 visual rows at 80 cols
-			cursorByte:   5, // in first (dropped) row
+			cursorByte:   5,                        // in first (dropped) row
 			cols:         80,
 			maxRows:      6,
 			wantMinLines: 6, // capped at maxRows
@@ -123,8 +123,8 @@ func TestStatusFooter_SteerPanel_Wrap(t *testing.T) {
 		{
 			name:         "very_narrow_terminal",
 			text:         "你好世界", // 4 CJK chars, each 2 display cols; 12 bytes
-			cursorByte:   3, // first char '你' starts at byte 0
-			cols:         5, // very narrow: 2 CJK chars per row (2+2=4 cols ≤ 5)
+			cursorByte:   3,      // first char '你' starts at byte 0
+			cols:         5,      // very narrow: 2 CJK chars per row (2+2=4 cols ≤ 5)
 			maxRows:      6,
 			wantMinLines: 2, // "你好" → row 0 (4 cols), "世界" → row 1 (4 cols)
 			wantRow:      0, // byte 3 falls in "你好" (bytes 0–5)

@@ -72,9 +72,9 @@ type WorkflowProgressConfig struct {
 // workflowFileConfig is the top-level structure parsed from the workflow JSON
 // file. It mirrors only the fields the in-process runner cares about.
 type workflowFileConfig struct {
-	Description string                 `json:"description,omitempty"`
-	Loop        *WorkflowLoopConfig    `json:"loop,omitempty"`
-	Budget      *WorkflowBudgetConfig  `json:"budget,omitempty"`
+	Description string                  `json:"description,omitempty"`
+	Loop        *WorkflowLoopConfig     `json:"loop,omitempty"`
+	Budget      *WorkflowBudgetConfig   `json:"budget,omitempty"`
 	Progress    *WorkflowProgressConfig `json:"progress,omitempty"`
 }
 

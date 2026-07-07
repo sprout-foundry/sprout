@@ -8,8 +8,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/factory"
 )
 
@@ -776,12 +776,12 @@ func (c *ScriptedClient) SupportsVision() bool {
 	return c.supportsVision
 }
 
-
 // SupportsConversationalVision reports whether inline multimodal turns
 // should embed the image. Defaults to false; overridden per client.
 func (c *ScriptedClient) SupportsConversationalVision() bool {
 	return false
 }
+
 // GetVisionModel returns the vision model name
 func (c *ScriptedClient) GetVisionModel() string {
 	c.mu.Lock()

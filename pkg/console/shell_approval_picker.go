@@ -14,11 +14,11 @@ import (
 // import (pkg/agent imports pkg/console for the picker; pkg/console
 // cannot import pkg/agent).
 type ShellPartInfo struct {
-	ID         string // stable ID (e.g. "part-0")
-	Text       string // raw text of this part
-	Kind       string // CommandKind string value
-	Semantic   string // human-readable description
-	RiskLabel  string // short risk-tier label: CRITICAL, HIGH, MEDIUM, LOW
+	ID        string // stable ID (e.g. "part-0")
+	Text      string // raw text of this part
+	Kind      string // CommandKind string value
+	Semantic  string // human-readable description
+	RiskLabel string // short risk-tier label: CRITICAL, HIGH, MEDIUM, LOW
 }
 
 // PromptShellApprovalParts shows the user one line per part of the shell

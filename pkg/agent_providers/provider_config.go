@@ -13,9 +13,9 @@ import (
 )
 
 const (
-	BillingPayPerToken  = "pay_per_token"  // default — real USD per token
-	BillingSubscription = "subscription"   // flat-rate, quota/rate-limited
-	BillingFree         = "free"           // self-hosted, zero marginal cost
+	BillingPayPerToken  = "pay_per_token" // default — real USD per token
+	BillingSubscription = "subscription"  // flat-rate, quota/rate-limited
+	BillingFree         = "free"          // self-hosted, zero marginal cost
 )
 
 // ProviderConfig defines the configuration for a generic provider
@@ -96,9 +96,9 @@ type ModelInfo struct {
 	Tags          []string `json:"tags,omitempty"`
 	// Pricing (USD per million tokens) — optional, used by enrich_registry
 	// to estimate probe cost for models sourced from embedded configs.
-	InputCost    float64 `json:"input_cost,omitempty"`
-	OutputCost   float64 `json:"output_cost,omitempty"`
-	CachedCost   float64 `json:"cached_input_cost,omitempty"`
+	InputCost  float64 `json:"input_cost,omitempty"`
+	OutputCost float64 `json:"output_cost,omitempty"`
+	CachedCost float64 `json:"cached_input_cost,omitempty"`
 }
 
 // ModelConfig defines model-related configuration

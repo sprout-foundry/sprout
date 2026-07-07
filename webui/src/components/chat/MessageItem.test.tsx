@@ -14,11 +14,11 @@
  *     `default` and `compact` keep the collapsed toggle.
  */
 
+import type { Message } from '@sprout/ui';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { MessageItem } from './MessageItem';
-import type { Message } from '@sprout/ui';
 
 let container: HTMLDivElement;
 let root: Root;

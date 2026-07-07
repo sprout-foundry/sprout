@@ -86,132 +86,85 @@ if (!isNodeEnv) {
     const range = originalCreateRange.call(document);
     return {
       ...range,
-    getClientRects: vi.fn(() => ({
-      length: 0,
-      item: vi.fn(() => null),
-      [Symbol.iterator]: vi.fn(function* () {}),
-    })),
-    getBoundingClientRect: vi.fn(() => ({
-      left: 0,
-      top: 0,
-      right: 0,
-      bottom: 0,
-      width: 0,
-      height: 0,
-      x: 0,
-      y: 0,
-      toJSON: vi.fn(() => ({})),
-    })),
-    startContainer: null,
-    endContainer: null,
-    startOffset: 0,
-    endOffset: 0,
-    commonAncestorContainer: null,
-    setStart: vi.fn(),
-    setEnd: vi.fn(),
-    setStartBefore: vi.fn(),
-    setEndBefore: vi.fn(),
-    setStartAfter: vi.fn(),
-    setEndAfter: vi.fn(),
-    collapse: vi.fn(),
-    selectNode: vi.fn(),
-    selectNodeContents: vi.fn(),
-    deleteContents: vi.fn(),
-    extractContents: vi.fn(),
-    cloneContents: vi.fn(),
-    insertNode: vi.fn(),
-    surroundContents: vi.fn(),
-    cloneRange: vi.fn(() => ({})),
-    toString: vi.fn(() => ''),
-    createContextualFragment: vi.fn(() => ({})),
-  };
-}) as () => Range;
+      getClientRects: vi.fn(() => ({
+        length: 0,
+        item: vi.fn(() => null),
+        [Symbol.iterator]: vi.fn(function* () {}),
+      })),
+      getBoundingClientRect: vi.fn(() => ({
+        left: 0,
+        top: 0,
+        right: 0,
+        bottom: 0,
+        width: 0,
+        height: 0,
+        x: 0,
+        y: 0,
+        toJSON: vi.fn(() => ({})),
+      })),
+      startContainer: null,
+      endContainer: null,
+      startOffset: 0,
+      endOffset: 0,
+      commonAncestorContainer: null,
+      setStart: vi.fn(),
+      setEnd: vi.fn(),
+      setStartBefore: vi.fn(),
+      setEndBefore: vi.fn(),
+      setStartAfter: vi.fn(),
+      setEndAfter: vi.fn(),
+      collapse: vi.fn(),
+      selectNode: vi.fn(),
+      selectNodeContents: vi.fn(),
+      deleteContents: vi.fn(),
+      extractContents: vi.fn(),
+      cloneContents: vi.fn(),
+      insertNode: vi.fn(),
+      surroundContents: vi.fn(),
+      cloneRange: vi.fn(() => ({})),
+      toString: vi.fn(() => ''),
+      createContextualFragment: vi.fn(() => ({})),
+    };
+  }) as () => Range;
 
-// Mock Element.getClientRects
+  // Mock Element.getClientRects
   originalGetClientRects = Element.prototype.getClientRects;
-Element.prototype.getClientRects = vi.fn(function () {
-  // For text nodes, return empty list
-  if (this.nodeType === Node.TEXT_NODE) {
-    return {
-      length: 0,
-      item: vi.fn(() => null),
-      [Symbol.iterator]: vi.fn(function* () {}),
-    };
-  }
-  return originalGetClientRects.call(this);
-});
+  Element.prototype.getClientRects = vi.fn(function () {
+    // For text nodes, return empty list
+    if (this.nodeType === Node.TEXT_NODE) {
+      return {
+        length: 0,
+        item: vi.fn(() => null),
+        [Symbol.iterator]: vi.fn(function* () {}),
+      };
+    }
+    return originalGetClientRects.call(this);
+  });
 
-// Mock Element.getBoundingClientRect
+  // Mock Element.getBoundingClientRect
   originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
-Element.prototype.getBoundingClientRect = vi.fn(function () {
-  if (this.nodeType === Node.TEXT_NODE) {
-    return {
-      left: 0,
-      top: 0,
-      right: 0,
-      bottom: 0,
-      width: 0,
-      height: 0,
-      x: 0,
-      y: 0,
-      toJSON: vi.fn(() => ({})),
-    };
-  }
-  return originalGetBoundingClientRect.call(this);
-});
+  Element.prototype.getBoundingClientRect = vi.fn(function () {
+    if (this.nodeType === Node.TEXT_NODE) {
+      return {
+        left: 0,
+        top: 0,
+        right: 0,
+        bottom: 0,
+        width: 0,
+        height: 0,
+        x: 0,
+        y: 0,
+        toJSON: vi.fn(() => ({})),
+      };
+    }
+    return originalGetBoundingClientRect.call(this);
+  });
 
-// Mock canvas.getContext (used by @sprout/ui for icon rendering)
-// jsdom doesn't implement canvas; without this mock, any component that
-// calls canvas.getContext() throws and silently kills the React render.
+  // Mock canvas.getContext (used by @sprout/ui for icon rendering)
+  // jsdom doesn't implement canvas; without this mock, any component that
+  // calls canvas.getContext() throws and silently kills the React render.
   originalGetContext = HTMLCanvasElement.prototype.getContext;
-HTMLCanvasElement.prototype.getContext = vi.fn(function (contextId: string) {
-  if (contextId === '2d') {
-    return {
-      fillRect: vi.fn(),
-      strokeRect: vi.fn(),
-      clearRect: vi.fn(),
-      fillText: vi.fn(),
-      strokeText: vi.fn(),
-      drawImage: vi.fn(),
-      getImageData: vi.fn(() => ({ data: new Uint8ClampedArray(4) })),
-      putImageData: vi.fn(),
-      createImageData: vi.fn(() => ({ data: new Uint8ClampedArray(4), width: 0, height: 0 })),
-      setTransform: vi.fn(),
-      getTransform: vi.fn(() => ({ m11: 1, m12: 0, m21: 0, m22: 1, m41: 0, m42: 0, toString: () => '' })),
-      save: vi.fn(),
-      restore: vi.fn(),
-      scale: vi.fn(),
-      rotate: vi.fn(),
-      translate: vi.fn(),
-      transform: vi.fn(),
-      beginPath: vi.fn(),
-      moveTo: vi.fn(),
-      lineTo: vi.fn(),
-      arc: vi.fn(),
-      closePath: vi.fn(),
-      fill: vi.fn(),
-      stroke: vi.fn(),
-      clip: vi.fn(),
-      measureText: vi.fn(() => ({ width: 0 })),
-      createLinearGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
-      createRadialGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
-      rect: vi.fn(),
-      lineWidth: 0,
-      font: '',
-      fillStyle: '',
-      strokeStyle: '',
-    };
-  }
-  return null;
-}) as typeof originalGetContext;
-
-// Mock OffscreenCanvas (used by @replit/codemirror-minimap for rendering)
-// jsdom doesn't implement OffscreenCanvas; without this mock, minimap
-// initialization throws and can crash vitest workers under memory pressure.
-global.OffscreenCanvas = vi.fn().mockImplementation((width: number, height: number) => ({
-  width,
-  height,
-  getContext: vi.fn((contextId: string) => {
+  HTMLCanvasElement.prototype.getContext = vi.fn(function (contextId: string) {
     if (contextId === '2d') {
       return {
         fillRect: vi.fn(),
@@ -220,7 +173,7 @@ global.OffscreenCanvas = vi.fn().mockImplementation((width: number, height: numb
         fillText: vi.fn(),
         strokeText: vi.fn(),
         drawImage: vi.fn(),
-        getImageData: vi.fn(() => ({ data: new Uint8ClampedArray(4), width: 0, height: 0 })),
+        getImageData: vi.fn(() => ({ data: new Uint8ClampedArray(4) })),
         putImageData: vi.fn(),
         createImageData: vi.fn(() => ({ data: new Uint8ClampedArray(4), width: 0, height: 0 })),
         setTransform: vi.fn(),
@@ -250,31 +203,78 @@ global.OffscreenCanvas = vi.fn().mockImplementation((width: number, height: numb
       };
     }
     return null;
-  }),
-  transferToImageBitmap: vi.fn(),
-})) as unknown as typeof OffscreenCanvas;
+  }) as typeof originalGetContext;
 
-// Mock requestAnimationFrame
-global.requestAnimationFrame = vi.fn((callback) => {
-  return setTimeout(callback, 0);
-});
+  // Mock OffscreenCanvas (used by @replit/codemirror-minimap for rendering)
+  // jsdom doesn't implement OffscreenCanvas; without this mock, minimap
+  // initialization throws and can crash vitest workers under memory pressure.
+  global.OffscreenCanvas = vi.fn().mockImplementation((width: number, height: number) => ({
+    width,
+    height,
+    getContext: vi.fn((contextId: string) => {
+      if (contextId === '2d') {
+        return {
+          fillRect: vi.fn(),
+          strokeRect: vi.fn(),
+          clearRect: vi.fn(),
+          fillText: vi.fn(),
+          strokeText: vi.fn(),
+          drawImage: vi.fn(),
+          getImageData: vi.fn(() => ({ data: new Uint8ClampedArray(4), width: 0, height: 0 })),
+          putImageData: vi.fn(),
+          createImageData: vi.fn(() => ({ data: new Uint8ClampedArray(4), width: 0, height: 0 })),
+          setTransform: vi.fn(),
+          getTransform: vi.fn(() => ({ m11: 1, m12: 0, m21: 0, m22: 1, m41: 0, m42: 0, toString: () => '' })),
+          save: vi.fn(),
+          restore: vi.fn(),
+          scale: vi.fn(),
+          rotate: vi.fn(),
+          translate: vi.fn(),
+          transform: vi.fn(),
+          beginPath: vi.fn(),
+          moveTo: vi.fn(),
+          lineTo: vi.fn(),
+          arc: vi.fn(),
+          closePath: vi.fn(),
+          fill: vi.fn(),
+          stroke: vi.fn(),
+          clip: vi.fn(),
+          measureText: vi.fn(() => ({ width: 0 })),
+          createLinearGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
+          createRadialGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
+          rect: vi.fn(),
+          lineWidth: 0,
+          font: '',
+          fillStyle: '',
+          strokeStyle: '',
+        };
+      }
+      return null;
+    }),
+    transferToImageBitmap: vi.fn(),
+  })) as unknown as typeof OffscreenCanvas;
 
-// Mock cancelAnimationFrame
-global.cancelAnimationFrame = vi.fn((id) => {
-  clearTimeout(id);
-});
+  // Mock requestAnimationFrame
+  global.requestAnimationFrame = vi.fn((callback) => {
+    return setTimeout(callback, 0);
+  });
 
-// Mock scrollIntoView
-Element.prototype.scrollIntoView = vi.fn();
+  // Mock cancelAnimationFrame
+  global.cancelAnimationFrame = vi.fn((id) => {
+    clearTimeout(id);
+  });
 
-// Mock focus
-Element.prototype.focus = vi.fn();
+  // Mock scrollIntoView
+  Element.prototype.scrollIntoView = vi.fn();
 
-// Mock blur
-Element.prototype.blur = vi.fn();
+  // Mock focus
+  Element.prototype.focus = vi.fn();
 
-// Mock click
-Element.prototype.click = vi.fn();
+  // Mock blur
+  Element.prototype.blur = vi.fn();
+
+  // Mock click
+  Element.prototype.click = vi.fn();
 } // end if (!isNodeEnv)
 
 // Reset all mocks before each test

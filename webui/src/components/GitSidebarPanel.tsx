@@ -1,10 +1,4 @@
-import {
-  AlertTriangle,
-  CheckSquare,
-  MinusSquare,
-  PlusSquare,
-  Trash2,
-} from 'lucide-react';
+import { AlertTriangle, CheckSquare, MinusSquare, PlusSquare, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { MAX_FILES_INITIAL, LOAD_MORE_INCREMENT } from '../constants/git-constants';
 import type { FileSection, GitBranchesState, GitFile, GitStatusData } from '../types/git-types';

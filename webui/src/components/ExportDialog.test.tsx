@@ -4,8 +4,8 @@
  * HEAD-then-anchor download flow.
  */
 
-import { createElement } from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { createElement } from 'react';
 import ExportDialog from './ExportDialog';
 
 // ---------------------------------------------------------------------------
@@ -101,15 +101,15 @@ describe('ExportDialog', () => {
 
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringMatching(/\/api\/sessions\/abc\/export\?format=markdown&include_tool_calls=false&include_cost=true$/),
+        expect.stringMatching(
+          /\/api\/sessions\/abc\/export\?format=markdown&include_tool_calls=false&include_cost=true$/,
+        ),
         { method: 'HEAD' },
       );
     });
 
     // Verify an <a> element was appended to the body (download flow)
-    const anchorAppends = appendSpy.mock.calls.filter(
-      (c) => c[0] instanceof HTMLAnchorElement,
-    );
+    const anchorAppends = appendSpy.mock.calls.filter((c) => c[0] instanceof HTMLAnchorElement);
     expect(anchorAppends.length).toBeGreaterThan(0);
 
     appendSpy.mockRestore();
@@ -273,10 +273,7 @@ describe('ExportDialog', () => {
     fireEvent.click(screen.getByTestId('export-download'));
 
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('sess%2Fabc%3Fdef%26xyz'),
-        { method: 'HEAD' },
-      );
+      expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('sess%2Fabc%3Fdef%26xyz'), { method: 'HEAD' });
     });
   });
 });

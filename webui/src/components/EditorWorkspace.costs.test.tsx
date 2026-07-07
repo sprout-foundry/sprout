@@ -73,10 +73,7 @@ vi.mock('./ErrorBoundary', () => {
 // Mock CostsPage — returns a div with data-testid="costs-page" so we can assert it renders
 vi.mock('./CostsPage', () => {
   const CostsPage = ({ onSessionClick }) => (
-    <div
-      data-testid="costs-page"
-      data-on-session-click={onSessionClick ? 'yes' : 'no'}
-    >
+    <div data-testid="costs-page" data-on-session-click={onSessionClick ? 'yes' : 'no'}>
       CostsPage
     </div>
   );
@@ -116,26 +113,19 @@ const minimalProps = {
 
 describe('EditorWorkspace costs view routing', () => {
   it('renders CostsPage when currentView is "costs"', async () => {
-    render(
-      <EditorWorkspace
-        {...minimalProps}
-        currentView="costs"
-      />
-    );
+    render(<EditorWorkspace {...minimalProps} currentView="costs" />);
 
     // CostsPage is lazy-loaded via React.lazy(), so we wait for it to resolve
-    await waitFor(() => {
-      expect(screen.getByTestId('costs-page')).toBeInTheDocument();
-    }, { timeout: 3000 });
+    await waitFor(
+      () => {
+        expect(screen.getByTestId('costs-page')).toBeInTheDocument();
+      },
+      { timeout: 3000 },
+    );
   });
 
   it('does NOT render CostsPage when currentView is "chat"', async () => {
-    render(
-      <EditorWorkspace
-        {...minimalProps}
-        currentView="chat"
-      />
-    );
+    render(<EditorWorkspace {...minimalProps} currentView="chat" />);
 
     // CostsPage should not be in the DOM for chat view
     expect(() => screen.getByTestId('costs-page')).toThrow();
@@ -144,33 +134,38 @@ describe('EditorWorkspace costs view routing', () => {
   it('threads onSessionRestore to CostsPage as onSessionClick', async () => {
     const onSessionRestore = vi.fn();
 
-    render(
-      <EditorWorkspace
-        {...minimalProps}
-        currentView="costs"
-        onSessionRestore={onSessionRestore}
-      />
-    );
+    render(<EditorWorkspace {...minimalProps} currentView="costs" onSessionRestore={onSessionRestore} />);
 
-    await waitFor(() => {
-      const costsPage = screen.getByTestId('costs-page');
-      expect(costsPage).toBeInTheDocument();
-      expect(costsPage).toHaveAttribute('data-on-session-click', 'yes');
-    }, { timeout: 3000 });
+    await waitFor(
+      () => {
+        expect(screen.getByTestId('costs-page')).toBeInTheDocument();
+      },
+      { timeout: 3000 },
+    );
+    await waitFor(
+      () => {
+        const costsPage = screen.getByTestId('costs-page');
+        expect(costsPage).toHaveAttribute('data-on-session-click', 'yes');
+      },
+      { timeout: 3000 },
+    );
   });
 
   it('renders CostsPage without onSessionRestore when not provided', async () => {
-    render(
-      <EditorWorkspace
-        {...minimalProps}
-        currentView="costs"
-      />
-    );
+    render(<EditorWorkspace {...minimalProps} currentView="costs" />);
 
-    await waitFor(() => {
-      const costsPage = screen.getByTestId('costs-page');
-      expect(costsPage).toBeInTheDocument();
-      expect(costsPage).toHaveAttribute('data-on-session-click', 'no');
-    }, { timeout: 3000 });
+    await waitFor(
+      () => {
+        expect(screen.getByTestId('costs-page')).toBeInTheDocument();
+      },
+      { timeout: 3000 },
+    );
+    await waitFor(
+      () => {
+        const costsPage = screen.getByTestId('costs-page');
+        expect(costsPage).toHaveAttribute('data-on-session-click', 'no');
+      },
+      { timeout: 3000 },
+    );
   });
 });

@@ -13,6 +13,7 @@ import (
 // distinct enough to read at a glance without being noisy.
 //
 // We use the same codepoints as those tools so muscle memory transfers:
+//
 //	┌ ─ ┐  top corners + horizontal rule
 //	│      vertical side
 //	└ ─ ┘  bottom corners

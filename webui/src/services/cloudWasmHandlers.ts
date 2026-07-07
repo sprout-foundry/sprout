@@ -98,8 +98,10 @@ export function handleWasmLocal(
 function handleWasmFileList(shell: WasmShell, fullUrl?: string): Response {
   const cwd = fullUrl ? getQueryParam(fullUrl, 'path') || shell.getCwd() : shell.getCwd();
   const result = shell.listDir(cwd);
+  // Empty workspace or directory doesn't exist yet — return empty list
+  // instead of erroring. The user hasn't created any files yet.
   if (result.error) {
-    return jsonError(result.error, 500);
+    return jsonOk({ message: 'success', files: [] });
   }
   // Build a flat recursive file list from the WASM directory tree.
   // The webui getFiles() expects { message, files: [{path, modified}] }

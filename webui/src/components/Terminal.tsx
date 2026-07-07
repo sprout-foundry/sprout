@@ -232,8 +232,9 @@ function Terminal({
       .getAvailableShells()
       .then((res) => {
         if (cancelled) return;
-        setAvailableShells(res.shells || []);
-        const defaultShell = res.shells.find((s) => s.default) || res.shells[0];
+        const shells = res.shells || [];
+        setAvailableShells(shells);
+        const defaultShell = shells.find((s) => s.default) || shells[0];
         if (defaultShell) {
           setSelectedShell(defaultShell.name);
         }

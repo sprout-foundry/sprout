@@ -275,6 +275,11 @@ type Config struct {
 	// Empty defaults to "default".
 	OutputVerbosity string `json:"output_verbosity,omitempty"`
 
+	// ShowToolInvocations controls whether the UI expands per-tool
+	// invocation details in the conversation output. When false, tool
+	// calls are collapsed/hidden. Defaults to true.
+	ShowToolInvocations bool `json:"show_tool_invocations,omitempty"`
+
 	// Wakeup controls auto-resume behavior for background task completions
 	// (SP-108). When enabled, the daemon automatically processes pending
 	// notifications by calling ProcessQueryWithContinuity so the agent can

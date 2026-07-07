@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import './Sidebar.css';
-import { supportsSettings } from '../config/mode';
+import { supportsSettings, supportsGit, supportsExport, supportsWorkspaceSwitching } from '../config/mode';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useHotkeys } from '../contexts/HotkeyContext';
 import { usePlatformNav } from '../contexts/PlatformNavContext';
@@ -25,6 +25,7 @@ import ResizeHandle from './ResizeHandle';
 import {
   ScrollText,
   FolderCog,
+  FolderOpen,
   Settings,
   Search,
   GitBranch,
@@ -133,11 +134,9 @@ interface SidebarProps {
 }
 
 /**
- * Section tabs rendered in the icon rail. Main section tabs (git, files, search)
- * are rendered first, followed by platform nav items, then settings (conditional)
- * and logs.
+ * Section tabs rendered in the icon rail. Filtered to only show supported tabs.
  */
-const MAIN_SECTION_TABS: { id: SectionTab; icon: LucideIcon; label: string }[] = [
+const ALL_SECTION_TABS: { id: SectionTab; icon: LucideIcon; label: string }[] = [
   { id: 'git', icon: GitBranch, label: 'Git' },
   { id: 'files', icon: FolderCog, label: 'Files' },
   { id: 'search', icon: Search, label: 'Search' },
@@ -510,6 +509,13 @@ function Sidebar({
   const renderContentPane = () => {
     switch (effectiveSelectedSection) {
       case 'git':
+        if (!supportsGit) {
+          return (
+            <div className="git-sidebar-panel">
+              <div className="empty">No git in browser mode — use repo import instead.</div>
+            </div>
+          );
+        }
         return <SidebarGitSection gitPanel={gitPanel} currentView={currentView} onSectionChange={onSectionChange} />;
       case 'logs':
         return <SidebarLogsPane logs={normalizedRecentLogs} />;
@@ -602,14 +608,21 @@ function Sidebar({
           </button>
           {!effectiveSidebarCollapsed ? (
             <>
-              <LocationSwitcher
-                isConnected={isConnected}
-                instances={instances}
-                selectedInstancePID={selectedInstancePID}
-                isSwitchingInstance={isSwitchingInstance}
-                onInstanceChange={onInstanceChange}
-                sidebarCollapsed={effectiveSidebarCollapsed}
-              />
+              {supportsWorkspaceSwitching ? (
+                <LocationSwitcher
+                  isConnected={isConnected}
+                  instances={instances}
+                  selectedInstancePID={selectedInstancePID}
+                  isSwitchingInstance={isSwitchingInstance}
+                  onInstanceChange={onInstanceChange}
+                  sidebarCollapsed={effectiveSidebarCollapsed}
+                />
+              ) : (
+                <div className="sidebar-static-workspace" title="Browser Workspace">
+                  <FolderOpen size={14} className="sidebar-static-workspace-icon" />
+                  <span className="sidebar-static-workspace-label">Browser Workspace</span>
+                </div>
+              )}
               {/* Session search input */}
               <div className="sidebar-session-search">
                 <Search size={14} className="sidebar-session-search-icon" strokeWidth={2} />
@@ -637,7 +650,8 @@ function Sidebar({
                 )}
               </div>
 
-              {/* Export all sessions button */}
+              {/* Export all sessions button — hidden in cloud mode */}
+              {supportsExport && (
               <div className="sidebar-export-all-wrapper">
                 <button
                   type="button"
@@ -666,6 +680,7 @@ function Sidebar({
                   </div>
                 )}
               </div>
+              )}
 
               {/* Past sessions semantic search (SP-092-3) */}
               <PastSessionsHint />
@@ -732,9 +747,9 @@ function Sidebar({
             aria-label="Sidebar navigation"
             data-testid="sidebar-icon-rail"
           >
-            {/* Main section tabs: git, files, search */}
+            {/* Main section tabs: filtered by capability flags */}
             <div role="tablist" aria-orientation="vertical">
-              {MAIN_SECTION_TABS.map((tab) => (
+              {ALL_SECTION_TABS.filter((tab) => tab.id !== 'git' || supportsGit).map((tab) => (
                 <button
                   key={tab.id}
                   role="tab"

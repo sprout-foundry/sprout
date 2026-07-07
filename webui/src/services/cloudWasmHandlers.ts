@@ -553,7 +553,9 @@ export function jsonError(message: string, status: number): Response {
  * which handles authentication and key management.
  */
 function handleWasmAgentQuery(shell: WasmShell, bodyStr?: string): Response {
+  console.log('[wasm-agent] handleWasmAgentQuery called, bodyStr present:', !!bodyStr);
   if (!bodyStr) {
+    console.warn('[wasm-agent] No body');
     return jsonError('Missing request body', 400);
   }
 
@@ -561,14 +563,18 @@ function handleWasmAgentQuery(shell: WasmShell, bodyStr?: string): Response {
   try {
     parsed = JSON.parse(bodyStr);
   } catch {
+    console.warn('[wasm-agent] Invalid JSON:', bodyStr.substring(0, 100));
     return jsonError('Invalid JSON body', 400);
   }
 
   const query = parsed.query || '';
 
   if (!query) {
+    console.warn('[wasm-agent] Empty query');
     return jsonError('Query is required', 400);
   }
+
+  console.log('[wasm-agent] Starting agent loop for query:', query.substring(0, 50));
 
   // Write a sprout config with a "platform" custom provider that routes
   // to the platform proxy (/proxy/chat). The WASM agent reads this config

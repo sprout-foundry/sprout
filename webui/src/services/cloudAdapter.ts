@@ -133,6 +133,7 @@ export class CloudAdapter implements APIAdapter {
     // The full agent loop runs in-browser via the WASM binary's runAgent.
     // Events stream back through the agentEventDispatcher.
     if (urlPath === '/api/query' && method === 'POST') {
+      console.log('[CloudAdapter] /api/query POST intercepted — routing to WASM agent');
       const requestBody = await this.extractRequestBody(input);
       const bodyStr = this.extractBody(init) ?? requestBody ?? undefined;
       try {

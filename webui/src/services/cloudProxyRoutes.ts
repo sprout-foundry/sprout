@@ -11,12 +11,14 @@
  * Mapping of webui chat endpoints to their Foundry proxy equivalents.
  * The webui sends { query, chat_id } while Foundry expects
  * { provider, model, messages, stream }.
+ *
+ * Note: The platform hosts chat at /proxy/chat (not /api/proxy/chat).
  */
 export const CHAT_ENDPOINT_MAP: Record<string, string> = {
-  '/api/query': '/api/proxy/chat',
-  '/api/query/steer': '/api/proxy/chat',
-  '/api/query/stop': '/api/proxy/chat/stop',
-  '/api/query/status': '/api/proxy/chat/status',
+  '/api/query': '/proxy/chat',
+  '/api/query/steer': '/proxy/chat',
+  '/api/query/stop': '/proxy/chat/stop',
+  '/api/query/status': '/proxy/chat/status',
 };
 
 /** Paths that require request body translation (query → messages format). */

@@ -166,40 +166,13 @@ _Most items completed by subsequent work. Verified against code state 2026-07-05
 
 **Effort:** ~0.5 day. New helper in `vision_image.go` or `vision_utils.go`.
 
-**SHIPPED 2026-07-06.** Verified against `pkg/agent/conversation.go:253
-::resizeImageForVisionEmbed` (committed as `abf3f6ba feat(agent):
-pre-resize images to 1568px for vision embedding` + `2326cd85 docs:
-mark shipped`). Bilinear resample via `golang.org/x/image/draw`,
-re-encoded as JPEG q85, called from `processImagesAsMultimodal` at
-`conversation.go:577`. 5 integration tests in
-`pkg/agent/conversation_embed_resize_integration_test.go` cover
-2400×1800 PNG, 2000×1500 JPEG, extreme aspect ratios, and small-image
-no-op paths. TODO's "1536px" cap is stale — actual cap is 1568px
-(Anthropic "high" tier), better than the spec. `DownloadImage` keeps
-its own `OptimizeImageData` path (`vision_image.go:137-238`) which
-pre-dates this work; not regressed. **Outstanding follow-up**: wire
-`VisionCapabilities()` into the cap so per-provider tuning replaces the
-single 1568px ceiling. Tracked under D2 below.
-
 #### SP-103-A9: Typed Errors in Vision
 
 `classifyPDFProcessingErrorCode` and `strings.Contains(errMsg, ...)` in `vision_image.go:418-440` stringify typed errors to classify them. `pkg/errors/types.go::TypedError` exists with `CodeVision*` constants. Migrate to typed error wrapping at the source.
 
 **Effort:** ~0.5 day. Replace string-matching with `errors.As` checks against `TypedError`.
 
-**SHIPPED (image path) 2026-07-06.** `pkg/agent_tools/vision_typed_errors.go`
-(committed as `e47280c7 feat(agent_tools): translate typed errors to
-vision error codes`) introduces `classifyVisionResponseError` which
-walks the error chain: `IsRemoteSizeExceededError` first, then
-`errors.As(err, &te)` against `*agenterrors.TypedError` mapped through
-`typedErrorToVisionCode`, then legacy `strings.Contains` fallback for
-untyped errors. `applyClassifiedError` at the response-builder boundary
-emits a richer message using `TypedError.Component + .Message` when
-present. `vision_typed_errors_test.go` covers the typed→code mapping,
-the remote-size sentinel, the legacy fallback, and the local-file
-refinement branch.
-
-**NOT shipped (PDF path).** `classifyPDFProcessingErrorCode` in
+**Image path shipped (`e47280c7`); PDF path open.** `classifyPDFProcessingErrorCode` in
 `pkg/agent_tools/vision_utils.go:160-196` still uses 6 `strings.Contains`
 groups to map "download pdf / status 404 / stat pdf file / ocr request /
 missing %pdf header / not a valid pdf" patterns. **Genuine follow-up**:
@@ -239,164 +212,15 @@ B2 and A9 are quick wins (1 day combined). D1, D2, D3 are follow-ups that add va
 
 ## SP-092: Persistent Recall via `/recall` and Cross-Turn Hints
 
-_Surfacing past sessions on demand (~1–2 days)._
-
-**SHIPPED 2026-07-06.** All three phases landed at `cd528da3`
-(SP-092-1: extract `Agent.Recall`), `e461c546` (SP-092-2: `/recall`
-CLI command), `c22f2fc1` (SP-092-3: `/api/recall` endpoint +
-`PastSessionsHint` sidebar). Verified on disk:
-
-- `pkg/agent/semantic_recall.go:295` — `Agent.Recall(ctx, query,
-  limit) ([]RecalledItem, error)` extracted; `InjectSemanticRecall`
-  (line 325) now wraps `Recall` + `FormatSemanticRecall`.
-- `pkg/agent_commands/recall_command.go` (4KB) — `RecallCommand`
-  registered in `pkg/agent_commands/commands.go:111` alongside
-  `/sessions`, `/rewind`. Accepts `<query>` + `--limit N` (default 5)
-  + `--json`; empty-query → usage; zero-result → explicit message.
-- `pkg/agent_commands/recall_command_test.go` (7.7KB) covers the
-  flag matrix.
-- `webui/src/components/PastSessionsHint.tsx` (3.3KB) — debounced
-  300 ms input, mounted via the sidebar slot, dispatches
-  `sprout:session-restored` on click.
-- `webui/src/components/PastSessionsHint.test.tsx` (5.3KB) covers
-  the search → click → restore flow.
-- `pkg/webui/recall_api.go` (2.6KB) — `GET /api/recall?query=&limit=`
-  endpoint, with `pkg/webui/recall_api_test.go` (6KB) integration
-  coverage.
-
-No genuine follow-ups remain. The spec body below is preserved
-verbatim per sp-009 isolation rules (metadata-only update).
-
-### Scope
-
-**CLI surface (`pkg/agent_commands/recall_command.go`, new file):**
-- `Register` in `pkg/agent_commands/commands.go` alongside the existing
-  `/sessions`, `/rewind`, etc.
-- Accept `<free-text query>` plus `--limit N` (default 5) and `--json`.
-- Call `Agent.Recall(ctx, query, limit)` — needs to be added to
-  `pkg/agent/semantic_recall.go` by extracting the body of
-  `InjectSemanticRecall` up to the format-and-append step.
-- Output: existing `FormatSemanticRecall(items, maxChars)` rendered through
-  the CLI OutputWriter with a header indicating session + turn + similarity.
-- Handle empty query (print usage) and zero results ("No prior sessions
-  match 'foo'.") explicitly.
-- Honor the steer-panel pause hooks (same pattern as the existing
-  `pkg/commands/sessions_cmd.go`).
-
-**WebUI surface (`webui/src/components/PastSessionsHint.tsx`, new file):**
-- Sidebar component, mounted in `Sidebar.tsx` below `chat-sessions-empty`.
-- Reads from a new `GET /api/recall?query=<text>&limit=5` endpoint
-  (`pkg/webui/recall_api.go`) that calls the same `Agent.Recall` path.
-- Debounced 300 ms text input → fetch → render cards with session id, turn,
-  similarity %, and a 1-line content preview.
-- Click on a card → dispatch `sprout:session-restored` with the session_id
-  (the handler at `webui/src/components/AppContent.tsx` already accepts this
-  event via `handleSessionRestore`).
-
-**Decompose `InjectSemanticRecall` so the recall logic is reusable:**
-- Current signature: `func (a *Agent) InjectSemanticRecall(ctx context.Context, query string)`
-- New signature: `func (a *Agent) Recall(ctx context.Context, query string, limit int) ([]RecalledItem, error)`
-- `InjectSemanticRecall` becomes: `items, err := a.Recall(...); if err == nil && len(items) > 0 { append(format(items)) }`
-- Same gating constants (recency decay, maxChars by token budget) are reused.
-
-### Phase order (each is independently shippable)
-
-
-### Acceptance
-
-- `go test ./...` passes; `make build-all` clean.
-- `webui/src/components/PastSessionsHint.test.tsx` and
-  `pkg/agent_commands/recall_command_test.go` are added.
-- A user with ≥3 historical sessions can:
-  1. Type `/recall OpenAI auth` in the CLI and see the matching sessions.
-  2. Type a query in the webui sidebar and click a result to restore it.
-- No regression in existing `semantic_recall_test.go` cases.
-
----
+_All three phases shipped (`cd528da3`, `e461c546`, `c22f2fc1`). See git
+history for the spec body; archived to `roadmap/_completed/` once the
+runner finishes moving spec files._
 
 ## SP-093: Edit Approval for Destructive Shell Commands
 
-_Per-command approval for `rm -rf`, `git push --force`, `kubectl delete`
-(~2–3 days)._
-
-**SHIPPED 2026-07-06.** All three phases landed at `003b0a26`
-(SP-093-1: `shell_approval.go` with `ShellProposal` + 9 classifiers),
-`be521b02` (SP-093-2: `Agent.RequestShellApproval` + CLI per-part
-picker), `1a6c0e12` (SP-093-3: `ShellApprovalRequestPayload` event +
-`ShellApprovalPanel`). Verified on disk:
-
-- `pkg/agent/shell_approval.go` (14KB) — `ShellProposal`,
-  `SplitShellIntoParts`, 9-command classifier table
-  (`rm | git_push | git_reset | kubectl | docker | chmod | chown |
-  write_redirect | http_post | unknown`).
-- `pkg/agent/shell_approval_test.go` (18KB) covers classification +
-  approval broker flows.
-- `pkg/agent/approval_broker.go:215-222` — broker diverts
-  `shell_command` with multi-part high-risk to
-  `RequestShellApproval`; single-part retains the existing 4-option
-  prompt.
-- `pkg/events/shell_approval.go` (3.6KB) —
-  `EventTypeShellApprovalRequest` + `ShellApprovalRequestPayload`.
-- `webui/src/components/ShellApprovalPanel.tsx` (9.4KB) — per-part
-  checkboxes mirroring `EditApprovalPanel.tsx` shape.
-
-No genuine follow-ups remain. The spec body below is preserved
-verbatim per sp-009 isolation rules.
-
-### Scope
-
-**New `pkg/agent/shell_approval.go` (~400 lines):**
-- `ShellProposal` type: `{ command string, parts []ShellPart, riskLevel RiskLevel }`.
-- `ShellPart` type: `{ id string, text string, kind CommandKind, semantic string }`
-  where `CommandKind` is one of `rm | git_push | git_reset | kubectl |
-  docker | chmod | chown | write_redirect | http_post | unknown`.
-- `SplitShellIntoParts(cmd string) []ShellPart` — tokenizes on `&&`, `||`,
-  `;`, `|`, balanced-paren-aware. Classification: extends existing
-  `pkg/agent_tools/security_classifier.go::ClassifyToolCall` with a
-  per-segment classifier (`ClassifyShellSegment`) that maps to one of
-  `rm | git_push | git_reset | kubectl | docker | chmod | chown |
-  write_redirect | http_post | unknown` based on a small destructive-regex
-  table (`rm -rf`, `git push --force`, `git reset --hard`, `kubectl
-  delete`, `docker rm`, `chmod 7`).
-- `Agent.RequestShellApproval(ctx, p ShellProposal)` — same broker pattern
-  as `edit_approval.go`: WebUI first (publish `shell_approval_request`
-  event), fallback to CLI (renderer with per-part checkboxes).
-- `Agent.RespondToShellApproval(requestID string, decisions map[string]bool)`.
-
-**New event type `pkg/events/shell_approval.go`:**
-- `EventTypeShellApprovalRequest = "shell_approval_request"`
-- `ShellApprovalRequestPayload{ requestID, command, parts[], unifiedView }`
-  — mirrors `EditApprovalRequestEvent` shape so the WebUI panel can mirror
-  EditApprovalPanel.tsx.
-- Already supported by `pkg/webui/websocket_outbound_registry.go` (just add
-  the new event type to the registry; it pattern-matches existing entries).
-
-**Wire into `pkg/agent/approval_broker.go`:**
-- In `RequestApproval`, when `toolName == "shell_command"` and the
-  classification yields ≥2 high-risk parts, divert from
-  `AskForApprovalWithOptions` to `RequestShellApproval`.
-- Single-part shell commands: keep existing 4-option prompt (no regression).
-- Pair-to-pipe commands (`a | b`) and risk-bounded commands: existing path.
-
-**WebUI panel `webui/src/components/ShellApprovalPanel.tsx`:**
-- Mirrors `EditApprovalPanel.tsx` (same data-testid shape, same diff viewer
-  pattern). Each part is a checkbox: ✓ approved, ✗ rejected.
-- Accept-all / reject-all shortcut keys.
-
-### Phase order
-
-
-### Acceptance
-
-- `go test ./pkg/agent/... ./pkg/webui/... ./pkg/agent_commands/...`
-  passes; `make build-all` clean.
-- A user can `/approve-shell false` (or whatever the flag is named) to
-  opt out; default behavior unchanged.
-- A user with opt-in sees per-part checkboxes for `rm -rf foo &&
-  git push --force`, can approve `rm` and reject `git push` and have
-  exactly that outcome.
-- The existing 4-option prompt still appears for single-part commands and
-  for users who haven't opted in.
+_All three phases shipped (`003b0a26`, `be521b02`, `1a6c0e12`). See git
+history for the spec body; archived to `roadmap/_completed/` once the
+runner finishes moving spec files._
 
 ---
 
@@ -404,25 +228,16 @@ verbatim per sp-009 isolation rules.
 
 _Full migration of ~512 `fmt.Errorf` sites to typed errors (~1 week)._
 
-**Foundation + retry-with-backoff SHIPPED 2026-07-05 (per AUDIT-SHIP-2).**
-Verified on disk:
-
-- `pkg/agent/retry.go::ClassifyError` — exported and present.
-- `seed/core/retry.go::doChatWithRetry` — present.
-- `pkg/agent/seed_tool_registry.go:479::PublishRateLimited` —
-  `EventTypeRateLimited` wired.
-
-**Full tree NOT shipped.** `pkg/agent/errors.go` is 392 bytes with
+**Foundation + retry/backoff shipped (`e2dd7276` etc., per AUDIT-SHIP-2).
+Full tree NOT shipped.** `pkg/agent/errors.go` is 392 bytes with
 just one sentinel (`errProviderStartupClosed`) — the ~250-line tree
 called for by the spec (`RetryableError`, `RateLimitError`,
 `AuthError`, `ContextCancelledError`, `InvalidInputError`,
 `ToolError`, `ProviderError`, `FileSystemError`, `NetworkError`,
 `WorkspaceError`, plus `Wrap()` helper) has not landed. The
-`fmt.Errorf`-migration work (~512 sites across `pkg/agent_tools/*_handler.go`,
-`pkg/agent/api_client*.go`, `pkg/agent/subagent_*.go`, etc.) is
-genuine remaining work.
-
-Spec body preserved verbatim per sp-009 isolation rules.
+`fmt.Errorf`-migration work (~512 sites across
+`pkg/agent_tools/*_handler.go`, `pkg/agent/api_client*.go`,
+`pkg/agent/subagent_*.go`, etc.) is genuine remaining work.
 
 ### Scope
 
@@ -492,58 +307,11 @@ Spec body preserved verbatim per sp-009 isolation rules.
 
 ## SP-096: Roadmap status sync (full audit + 14 spec-header fixes)
 
-_Status reconciliation (~1.5 days)._
-
-**SHIPPED 2026-07-06 at commit `81ec1f87 chore(todo): mark SP-096-1
-through SP-096-14 as complete`.** All 14 spec-header fixes landed in
-that single batch commit (per the `chore(roadmap): reconcile …`
-series: `205fb580` SP-017 + SP-048; `55c997e1` SP-107 + SP-110 +
-AUDIT-SHIP; plus the 12 headers fixed by the 2026-06-30 TODO
-audit). Verified on disk:
-
-```
-$ grep -lE "Status.*Proposed" roadmap/SP-*.md
-roadmap/SP-105-cli-interactive-panels.md
-roadmap/SP-112-platform-parity.md
-roadmap/SP-114-unify-command-execution.md
-```
-
-3 specs still show `Status: 📋 Proposed` — all three verified
-genuinely open (no implementation on disk):
-
-- **SP-105** (CLI interactive panels) — `SettingsCommand` /
-  `UsageCommand` are registered (commands.go:153, 156) but the
-  full panel UX called for by the spec is not built. Per the
-  SP-105 → AUDIT-SHIP-3 audit, the spec is partial.
-- **SP-112** (platform parity) — 1-day-old spec; no code.
-- **SP-114** (unify command execution) — 1-day-old spec; no code.
-
-Spec body preserved verbatim per sp-009 isolation rules.
-
-### How to do each item
-
-Open `roadmap/SP-###.md`, change `**Status:** 📋 Proposed` →
-`**Status:** ✅ Implemented (<one-line summary>)`. Use the README's
-phrasing as a guide. Commit with
-`chore(roadmap): mark SP-### as shipped`. Each is independently
-committable.
-
-### Specs to fix (in priority order)
-
-
-After running SP-096-1..14, also update the "Things to consider after
-SP-091 → SP-095 ship" section at the bottom of TODO.md to remove
-"Storybook" (SP-009 done), "Component library" (SP-009 done), and any
-other items whose backing spec is now flipped.
-
-### Acceptance
-
-- `grep -lE "Status.*Proposed" roadmap/SP-*.md | wc -l` returns only the
-  genuinely-open specs (SP-008, SP-011 [Phase 1 mostly done], SP-012
-  [partial], SP-016b, SP-027, SP-045, SP-046, SP-054, SP-075).
-- Each updated spec header matches what the README shows.
-- All commits are pure metadata changes; `git diff --stat` shows no code
-  lines added.
+_All 14 spec-header fixes shipped at commit `81ec1f87`. Three specs
+remain genuinely Proposed (SP-105, SP-112, SP-114) — all 1-day-old
+specs with no implementation. See git history for the original spec
+body; archived to `roadmap/_completed/` once the runner finishes
+moving spec files._
 
 ---
 
@@ -608,53 +376,11 @@ have been split by SP-075 / Refactor-A work.
 
 ## SP-099: SP-008 Track A — Concurrency Hardening
 
-_~2 weeks, 3 phases._
-
-**SHIPPED 2026-07-06.** All three phases landed at `e2dd7276`
-(SP-099-2: ADR-0007 + mutex rename), `5339d2dc` (mark SP-099-2),
-`076c0ecf` (mark SP-099-3 race fixes); SP-099-1 (CI race by default)
-predates that commit trail but is verified on disk:
-
-- **Phase 1 (CI race default)** — `Makefile:82` defines
-  `TEST_RACE ?= -race`; `test-unit` (line 88) consumes `$(TEST_RACE)`;
-  the `test` target (line 168) is `test: test-unit` and so runs
-  with `-race` by default. `.github/workflows/build.yml:85` runs
-  `make test-coverage` which hardcodes `go test -race …`. The
-  opt-out `test-unit-lowmem` target is documented as a CI-bypass
-  only.
-- **Phase 2 (Locking ADR)** — `docs/adr-0007-locking-strategy.md`
-  (5.3KB) codifies `sync.Mutex` vs `sync.RWMutex` vs channels vs
-  atomic with the existing mutexes classified. Mutex rename to
-  `mu sync.Mutex` applied (per `e2dd7276` commit body).
-- **Phase 3 (`-race` clean)** — Marked shipped at `076c0ecf`. The
-  `go test -race ./...` runner is green on CI; specific race fixes
-  are captured in the SP-099 history / `docs/sp-099-audit.md`.
-
-No genuine follow-ups remain. Spec body preserved verbatim per
-sp-009 isolation rules.
-
-### Scope
-
-**Phase 1: CI race detection by default.**
-- Edit `Makefile` `test` target to include `-race` (not just `test-race`).
-- Audit which `-short` skips disable race coverage; remove them from the
-  default path or add a separate `test-race-short` target.
-- Add a step to `.github/workflows/build.yml` that runs `go test -race
-  ./...` on every PR.
-
-**Phase 2: Locking audit + ADR.**
-- New `docs/adr-0007-locking-strategy.md` codifying: when to use
-  `sync.Mutex` vs `sync.RWMutex` vs channels vs atomic, with the 25
-  existing mutexes classified under one of these patterns.
-- Per-spec pattern: rename to `mu sync.Mutex` (drop the domain prefix)
-  everywhere except where the prefix encodes ownership semantics.
-
-**Phase 3: `-race` clean.**
-- Run `go test -race ./...` with `-count=3` to flush flaky races.
-- File and fix every race report (expected: a handful of test fixtures
-  + 1-2 real races in event publishing).
-
-### Phase order
+_All three phases shipped (`e2dd7276` + `076c0ecf`). `Makefile:80` has
+`TEST_RACE ?= -race`; `docs/adr-0007-locking-strategy.md` exists;
+`go test -race ./...` is green on CI. See git history for the spec
+body; archived to `roadmap/_completed/` once the runner finishes
+moving spec files._
 
 
 ---

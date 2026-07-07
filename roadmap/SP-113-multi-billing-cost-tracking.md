@@ -1,6 +1,9 @@
-# SP-080: Multi-Billing-Model Cost Tracking
+# SP-113: Multi-Billing-Model Cost Tracking
 
 **Status:** 📋 Planned — not yet started. Design complete, implementation phased.
+
+> **Note:** Renumbered from SP-080 (2026-07-05) to resolve a number collision with
+> the completed SP-080 "Type the Unknown-Tool Error" spec in `_completed/`.
 
 ## Problem
 

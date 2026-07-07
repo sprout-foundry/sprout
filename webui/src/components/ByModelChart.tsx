@@ -23,11 +23,7 @@ function truncateLabel(label: string, maxLen: number): string {
   return label.slice(0, maxLen - 1) + '\u2026';
 }
 
-export default function ByModelChart({
-  byModel,
-  loading = false,
-  error = null,
-}: ByModelChartProps) {
+export default function ByModelChart({ byModel, loading = false, error = null }: ByModelChartProps) {
   const rows = useMemo(() => {
     const entries = Object.entries(byModel).sort((a, b) => b[1] - a[1]);
     if (entries.length === 0) return [];
@@ -57,11 +53,7 @@ export default function ByModelChart({
       <div className="by-model-chart" data-testid="by-model-chart" role="region" aria-label="Cost by Model chart">
         <div className="by-model-chart-title">Cost by Model</div>
         {Array.from({ length: 5 }).map((_, i) => (
-          <div
-            key={`skeleton-${i}`}
-            className="by-model-row by-model-row--skeleton"
-            data-testid={`by-model-row-${i}`}
-          >
+          <div key={`skeleton-${i}`} className="by-model-row by-model-row--skeleton" data-testid={`by-model-row-${i}`}>
             <div className="by-model-label by-model-label--skeleton" />
             <div className="by-model-bar-track">
               <div className="by-model-bar by-model-bar--skeleton" />
@@ -89,11 +81,7 @@ export default function ByModelChart({
     <div className="by-model-chart" data-testid="by-model-chart" role="region" aria-label="Cost by Model chart">
       <div className="by-model-chart-title">Cost by Model</div>
       {rows.map((row) => (
-        <div
-          key={row.model}
-          className="by-model-row"
-          data-testid={`by-model-row-${row.index}`}
-        >
+        <div key={row.model} className="by-model-row" data-testid={`by-model-row-${row.index}`}>
           <div className="by-model-label" title={row.model}>
             {truncateLabel(row.model, 24)}
           </div>

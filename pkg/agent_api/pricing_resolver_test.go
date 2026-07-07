@@ -14,10 +14,10 @@ func TestResolveModelPricing_EmptyInputs(t *testing.T) {
 	ResetPricingResolver()
 
 	cases := []struct {
-		name    string
-		prov    string
-		model   string
-		wantOK  bool
+		name   string
+		prov   string
+		model  string
+		wantOK bool
 	}{
 		{"empty provider", "", "gpt-4o", false},
 		{"whitespace provider", "  ", "gpt-4o", false},

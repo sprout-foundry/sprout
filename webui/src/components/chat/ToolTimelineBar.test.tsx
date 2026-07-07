@@ -10,11 +10,11 @@
  *   - Persona badge appears in the expected color when persona is set.
  */
 
+import type { ToolExecution } from '@sprout/ui';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { vi } from 'vitest';
 import { ToolTimelineBar } from './ToolTimelineBar';
-import type { ToolExecution } from '@sprout/ui';
 
 let container: HTMLDivElement;
 let root: Root;

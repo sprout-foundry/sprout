@@ -45,9 +45,9 @@ func TestWorkspace_UpdateContainerPatch_Conflict_BrowserUnsynced(t *testing.T) {
 	// Simulate the browser having unsynced edits.
 	ss.mu.Lock()
 	ss.files["pkg/foo/bar.go"] = &FileMetadata{
-		BrowserSeq:        10,
-		ContainerSeq:      3,
-		LastSyncedBrowser: 5,
+		BrowserSeq:          10,
+		ContainerSeq:        3,
+		LastSyncedBrowser:   5,
 		LastSyncedContainer: 3,
 	}
 	ss.mu.Unlock()

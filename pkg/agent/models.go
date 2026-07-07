@@ -7,9 +7,9 @@ import (
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/agent_providers"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/factory"
 	"github.com/sprout-foundry/sprout/pkg/modelcontract"
-	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // GetModel gets the current model being used by the agent

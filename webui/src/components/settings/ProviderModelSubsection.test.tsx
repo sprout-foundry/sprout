@@ -1,9 +1,8 @@
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { vi } from 'vitest';
-import ProviderModelSubsection from './ProviderModelSubsection';
-
 import type { ProviderOption } from '../../services/api';
+import ProviderModelSubsection from './ProviderModelSubsection';
 
 vi.mock('@sprout/ui', () => ({
   SkeletonText: () => createElement('div', { 'data-testid': 'skeleton' }),

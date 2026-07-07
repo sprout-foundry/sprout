@@ -47,9 +47,9 @@ func clearEnvVar(t *testing.T, key string) {
 
 type tempNetError struct{ msg string }
 
-func (e *tempNetError) Error() string     { return e.msg }
-func (e *tempNetError) Timeout() bool     { return false }
-func (e *tempNetError) Temporary() bool   { return true }
+func (e *tempNetError) Error() string   { return e.msg }
+func (e *tempNetError) Timeout() bool   { return false }
+func (e *tempNetError) Temporary() bool { return true }
 
 // ---------------------------------------------------------------------------
 // 1. Success on first try
@@ -262,10 +262,10 @@ func TestAcceptance_EnvVarAttempts_Default3(t *testing.T) {
 		calls++
 		return &RetryableHTTPError{StatusCode: 503, Status: "Service Unavailable"}
 	}, RetryOptions{
-		OpName:      "test",
-		BaseDelay:   10 * time.Millisecond,
-		MaxDelay:    100 * time.Millisecond,
-		JitterPct:   0,
+		OpName:    "test",
+		BaseDelay: 10 * time.Millisecond,
+		MaxDelay:  100 * time.Millisecond,
+		JitterPct: 0,
 	})
 	if err == nil {
 		t.Fatal("expected error, got nil")
@@ -287,10 +287,10 @@ func TestAcceptance_EnvVarAttempts_SetTo1(t *testing.T) {
 		calls++
 		return &RetryableHTTPError{StatusCode: 503, Status: "Service Unavailable"}
 	}, RetryOptions{
-		OpName:      "test",
-		BaseDelay:   10 * time.Millisecond,
-		MaxDelay:    100 * time.Millisecond,
-		JitterPct:   0,
+		OpName:    "test",
+		BaseDelay: 10 * time.Millisecond,
+		MaxDelay:  100 * time.Millisecond,
+		JitterPct: 0,
 	})
 	if err == nil {
 		t.Fatal("expected error, got nil")
@@ -312,10 +312,10 @@ func TestAcceptance_EnvVarAttempts_ZeroFallsBackTo3(t *testing.T) {
 		calls++
 		return &RetryableHTTPError{StatusCode: 503, Status: "Service Unavailable"}
 	}, RetryOptions{
-		OpName:      "test",
-		BaseDelay:   10 * time.Millisecond,
-		MaxDelay:    100 * time.Millisecond,
-		JitterPct:   0,
+		OpName:    "test",
+		BaseDelay: 10 * time.Millisecond,
+		MaxDelay:  100 * time.Millisecond,
+		JitterPct: 0,
 	})
 	if err == nil {
 		t.Fatal("expected error, got nil")

@@ -106,8 +106,8 @@ func TestRunAgentWorkflowLoop(t *testing.T) {
 		contextTimeout string // Go duration string like "500ms"
 	}{
 		{
-			name:     "full_success_path",
-			items:    []string{"Implement feature X"},
+			name:  "full_success_path",
+			items: []string{"Implement feature X"},
 			responses: []*agent.ScriptedResponse{
 				gateResponse("Implement X", "Do the implementation", false),
 			},
@@ -119,8 +119,8 @@ func TestRunAgentWorkflowLoop(t *testing.T) {
 			wantProcessed:  1,
 		},
 		{
-			name:     "max_iterations_incomplete",
-			items:    []string{"Refactor module Y"},
+			name:  "max_iterations_incomplete",
+			items: []string{"Refactor module Y"},
 			responses: []*agent.ScriptedResponse{
 				gateResponse("Refactor Y", "Refactor the module", false),
 			},
@@ -136,8 +136,8 @@ func TestRunAgentWorkflowLoop(t *testing.T) {
 			contextTimeout: "500ms",
 		},
 		{
-			name:     "triage_skip",
-			items:    []string{"Fix critical bug Z"},
+			name:  "triage_skip",
+			items: []string{"Fix critical bug Z"},
 			responses: []*agent.ScriptedResponse{
 				gateResponse("Fix bug Z", "Fix the bug", false),
 				triageResponse("skip", "blocking issue requires manual intervention"),
@@ -157,8 +157,8 @@ func TestRunAgentWorkflowLoop(t *testing.T) {
 			wantSkipped:    1,
 		},
 		{
-			name:     "build_failure_then_retry_then_success",
-			items:    []string{"Add new API endpoint W"},
+			name:  "build_failure_then_retry_then_success",
+			items: []string{"Add new API endpoint W"},
 			responses: []*agent.ScriptedResponse{
 				gateResponse("Add API W", "Add the endpoint", false),
 				triageResponse("retry", "transient build error, likely fixable"),
@@ -189,9 +189,9 @@ func TestRunAgentWorkflowLoop(t *testing.T) {
 			},
 			processResults: []error{nil, nil},
 			buildCmd:       "true",
-			wantComplete:   true,   // loop processes all items and completes
+			wantComplete:   true, // loop processes all items and completes
 			wantError:      false,
-			wantChecked:    3,     // Item 1 was pre-marked [x]; Items 2,3 get marked
+			wantChecked:    3, // Item 1 was pre-marked [x]; Items 2,3 get marked
 			wantProcessed:  2,
 		},
 		{
@@ -226,7 +226,7 @@ func TestRunAgentWorkflowLoop(t *testing.T) {
 			buildCmd:       "true",
 			wantComplete:   true,
 			wantError:      false,
-			wantChecked:    3,  // Item 1 pre-marked [x]; Items 2,3 get marked
+			wantChecked:    3, // Item 1 pre-marked [x]; Items 2,3 get marked
 			wantProcessed:  2,
 		},
 	}
@@ -237,26 +237,26 @@ func TestRunAgentWorkflowLoop(t *testing.T) {
 			// Clean up stateful files used by some test scenarios.
 			os.Remove("/tmp/test_sprout_retry_count")
 
-					dir := t.TempDir()
-		todoPath := writeTempTodoFile(t, dir, tt.items)
-		// For the resume test, Item 1 was already processed before the
-		// interruption — mark it [x] so the loop doesn't re-find it.
-		if tt.name == "resume_from_checkpoint" || tt.name == "resume_from_checkpoint_file" {
-			content := `## Test Items
+			dir := t.TempDir()
+			todoPath := writeTempTodoFile(t, dir, tt.items)
+			// For the resume test, Item 1 was already processed before the
+			// interruption — mark it [x] so the loop doesn't re-find it.
+			if tt.name == "resume_from_checkpoint" || tt.name == "resume_from_checkpoint_file" {
+				content := `## Test Items
 - [x] Item 1
 - [ ] Item 2
 - [ ] Item 3
 `
-			if err := os.WriteFile(todoPath, []byte(content), 0644); err != nil {
-				t.Fatalf("write resume TODO.md: %v", err)
+				if err := os.WriteFile(todoPath, []byte(content), 0644); err != nil {
+					t.Fatalf("write resume TODO.md: %v", err)
+				}
 			}
-		}
-		gatePromptPath := writeGatePromptFile(t, dir)
-		client := agent.NewScriptedClient(tt.responses...)
-		client.SetModel("test:test")
+			gatePromptPath := writeGatePromptFile(t, dir)
+			client := agent.NewScriptedClient(tt.responses...)
+			client.SetModel("test:test")
 
-		chatAgent := newTestLoopAgent(t, client)
-		eventBus := events.NewEventBus()
+			chatAgent := newTestLoopAgent(t, client)
+			eventBus := events.NewEventBus()
 
 			// Override processQueryFn for this test.
 			oldProcessFn := processQueryFn

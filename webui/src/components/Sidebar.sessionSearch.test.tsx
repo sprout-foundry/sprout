@@ -7,9 +7,9 @@
  * in only what is needed for the search-input → API-call → result-dropdown flow.
  */
 
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
 
 // ---------------------------------------------------------------------------
 // Mocks — MUST be set up BEFORE importing Sidebar or any of its deps
@@ -299,8 +299,24 @@ describe('Sidebar session-search', () => {
       query: 'test',
       total: 2,
       results: [
-        { session_id: 'sess-1', name: 'Session One', working_directory: '/a', last_updated: '2025-01-01T00:00:00Z', total_cost: 0.1, excerpt: 'first [result]', match_score: 2 },
-        { session_id: 'sess-2', name: 'Session Two', working_directory: '/b', last_updated: '2025-01-02T00:00:00Z', total_cost: 0.2, excerpt: 'second [result]', match_score: 1 },
+        {
+          session_id: 'sess-1',
+          name: 'Session One',
+          working_directory: '/a',
+          last_updated: '2025-01-01T00:00:00Z',
+          total_cost: 0.1,
+          excerpt: 'first [result]',
+          match_score: 2,
+        },
+        {
+          session_id: 'sess-2',
+          name: 'Session Two',
+          working_directory: '/b',
+          last_updated: '2025-01-02T00:00:00Z',
+          total_cost: 0.2,
+          excerpt: 'second [result]',
+          match_score: 1,
+        },
       ],
     });
 
@@ -314,10 +330,13 @@ describe('Sidebar session-search', () => {
     });
 
     // Wait for the debounce + async call to resolve
-    await waitFor(() => {
-      const results = container.querySelectorAll('[data-testid="chat-item"]');
-      expect(results.length).toBe(2);
-    }, { timeout: 2000 });
+    await waitFor(
+      () => {
+        const results = container.querySelectorAll('[data-testid="chat-item"]');
+        expect(results.length).toBe(2);
+      },
+      { timeout: 2000 },
+    );
 
     const results = container.querySelectorAll('[data-testid="chat-item"]');
     expect(results[0].getAttribute('data-session-id')).toBe('sess-1');
@@ -332,7 +351,15 @@ describe('Sidebar session-search', () => {
       query: 'click',
       total: 1,
       results: [
-        { session_id: 'sess-click', name: 'Click Me', working_directory: '/c', last_updated: '2025-01-01T00:00:00Z', total_cost: 0.05, excerpt: 'click [test]', match_score: 1 },
+        {
+          session_id: 'sess-click',
+          name: 'Click Me',
+          working_directory: '/c',
+          last_updated: '2025-01-01T00:00:00Z',
+          total_cost: 0.05,
+          excerpt: 'click [test]',
+          match_score: 1,
+        },
       ],
     });
 
@@ -344,10 +371,13 @@ describe('Sidebar session-search', () => {
       fireEvent.change(input, { target: { value: 'click' } });
     });
 
-    await waitFor(() => {
-      const result = container.querySelector('[data-testid="chat-item"]');
-      expect(result).not.toBeNull();
-    }, { timeout: 2000 });
+    await waitFor(
+      () => {
+        const result = container.querySelector('[data-testid="chat-item"]');
+        expect(result).not.toBeNull();
+      },
+      { timeout: 2000 },
+    );
 
     const resultBtn = container.querySelector('[data-session-id="sess-click"]');
     act(() => {
@@ -369,10 +399,13 @@ describe('Sidebar session-search', () => {
       fireEvent.change(input, { target: { value: 'err' } });
     });
 
-    await waitFor(() => {
-      const error = container.querySelector('[data-testid="sidebar-session-search-error"]');
-      expect(error).not.toBeNull();
-    }, { timeout: 2000 });
+    await waitFor(
+      () => {
+        const error = container.querySelector('[data-testid="sidebar-session-search-error"]');
+        expect(error).not.toBeNull();
+      },
+      { timeout: 2000 },
+    );
 
     const errorEl = container.querySelector('[data-testid="sidebar-session-search-error"]');
     expect(errorEl!.textContent).toContain('network failure');
@@ -383,7 +416,7 @@ describe('Sidebar session-search', () => {
     vi.useFakeTimers();
     // Delay the resolution so loading state is visible
     searchSessionsMock.mockImplementation(
-      () => new Promise((resolve) => setTimeout(() => resolve({ query: 'loading', total: 0, results: [] }), 500))
+      () => new Promise((resolve) => setTimeout(() => resolve({ query: 'loading', total: 0, results: [] }), 500)),
     );
 
     renderSidebar();
@@ -419,9 +452,12 @@ describe('Sidebar session-search', () => {
       fireEvent.change(input, { target: { value: 'nothing' } });
     });
 
-    await waitFor(() => {
-      const noResults = container.querySelector('[data-testid="chat-sessions-empty"]');
-      expect(noResults).not.toBeNull();
-    }, { timeout: 2000 });
+    await waitFor(
+      () => {
+        const noResults = container.querySelector('[data-testid="chat-sessions-empty"]');
+        expect(noResults).not.toBeNull();
+      },
+      { timeout: 2000 },
+    );
   });
 });

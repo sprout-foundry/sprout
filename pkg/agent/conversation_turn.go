@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/embedding"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // ConversationTurn represents a completed conversation turn stored for

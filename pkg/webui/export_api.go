@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/export"
 )
 
@@ -58,7 +58,6 @@ func (ws *ReactWebServer) handleAPISessionExport(w http.ResponseWriter, r *http.
 	includeToolCalls := r.URL.Query().Get("include_tool_calls") == "true"
 	includeCost := r.URL.Query().Get("include_cost") != "false" // default true
 	noSecretRedaction := r.URL.Query().Get("no_secret_redaction") == "true"
-
 
 	format := export.ExportFormat(formatStr)
 	switch format {

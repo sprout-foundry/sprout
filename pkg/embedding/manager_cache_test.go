@@ -225,7 +225,7 @@ func TestCachedProvider_FIFOEviction(t *testing.T) {
 
 	// Fill exactly capacity entries.
 	for i := 0; i < maxEmbedCacheEntries; i++ {
-		text := string(rune('a' + i%26)) + string(rune('0'+i/26))
+		text := string(rune('a'+i%26)) + string(rune('0'+i/26))
 		if _, err := c.Embed(context.Background(), text); err != nil {
 			t.Fatalf("embed %d failed: %v", i, err)
 		}

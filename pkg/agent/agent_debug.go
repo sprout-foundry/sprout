@@ -1,8 +1,8 @@
 package agent
 
 import (
-	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"fmt"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"os"
 	"time"
 )

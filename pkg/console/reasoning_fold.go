@@ -21,10 +21,10 @@ type ReasoningFold struct {
 	indicator *ActivityIndicator
 	mu        sync.Mutex
 
-	startedAt    time.Time
+	startedAt     time.Time
 	tokenEstimate int
-	active       bool
-	resolved     bool // track if Resolve() has been called for current burst
+	active        bool
+	resolved      bool // track if Resolve() has been called for current burst
 
 	// Update goroutine control (TTY mode only).
 	updateStopCh chan struct{}

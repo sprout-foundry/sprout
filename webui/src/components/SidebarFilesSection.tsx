@@ -1,9 +1,9 @@
+import { FileTree, type FileInfo } from '@sprout/ui';
 import { forwardRef, useImperativeHandle, useRef } from 'react';
+import { isCloud } from '../config/mode';
 import { ApiService } from '../services/api';
 import { clientFetch } from '../services/clientSession';
-import { FileTree, type FileInfo } from '@sprout/ui';
 import { debugLog } from '../utils/log';
-import { isCloud } from '../config/mode';
 
 export interface FileTreeHandle {
   refresh: () => void;

@@ -106,7 +106,13 @@ export function ChatFooter({
 
   if (isProcessing && !hasToolsToShow && !queryProgress && !hasSubagentActivity) {
     elements.push(
-      <div key="processing" className="processing-indicator" role="status" aria-label="Processing request" data-testid="chat-processing">
+      <div
+        key="processing"
+        className="processing-indicator"
+        role="status"
+        aria-label="Processing request"
+        data-testid="chat-processing"
+      >
         <div className="processing-content">
           {activeTodoLabel ? (
             <div className="processing-active-task" aria-live="polite">

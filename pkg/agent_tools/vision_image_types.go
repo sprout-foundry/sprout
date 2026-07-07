@@ -7,9 +7,9 @@ const (
 	visionMaxOptimizedJPEGQuality  = 85
 	visionMinOptimizedJPEGQuality  = 35
 	visionOptimizedJPEGQualityStep = 10
-	visionResizeStepPercent        = 0.8   // Resize to 80% of original dimensions each iteration
-	visionMinDimension             = 256   // Minimum dimension in pixels
-	visionMaxDimension             = 4096  // Maximum pixels on longest edge for vision models
+	visionResizeStepPercent        = 0.8  // Resize to 80% of original dimensions each iteration
+	visionMinDimension             = 256  // Minimum dimension in pixels
+	visionMaxDimension             = 4096 // Maximum pixels on longest edge for vision models
 )
 
 // Error codes for input and file handling

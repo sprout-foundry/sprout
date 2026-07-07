@@ -19,23 +19,23 @@
  * CDN URL: pinned to v1.17.1 (not floating).
  */
 
-const ONNXRUNTIME_WEB_URL =
-  'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.1/dist/ort.min.js';
+const ONNXRUNTIME_WEB_URL = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.17.1/dist/ort.min.js';
 
 /** SRI hash for onnxruntime-web@1.17.1 (jsdelivr CDN).
  *  Computed via: curl <url> | openssl dgst -sha384 -binary | openssl base64 -A */
-const ONNXRUNTIME_WEB_INTEGRITY =
-  'sha384-61k9ikq77C7O/r49eqY0GLZKj5nlqD2OZ2g4Q3sk/wFuPY67SrKsqC2qMc1uuz4N';
+const ONNXRUNTIME_WEB_INTEGRITY = 'sha384-61k9ikq77C7O/r49eqY0GLZKj5nlqD2OZ2g4Q3sk/wFuPY67SrKsqC2qMc1uuz4N';
 
 /** Short timeout for jsdom test runners; longer for real browsers. */
 const SCRIPT_LOAD_TIMEOUT_MS = import.meta.env.MODE === 'test' ? 100 : 1500;
 
 declare global {
   interface Window {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- onnxruntime-web is a complex Emscripten module; using any is the standard pattern for third-party globals
     ort?: any;
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- The resolved ort module type is a complex Emscripten binding; using any avoids coupling to onnxruntime-web's internal shape
 let loadPromise: Promise<any> | null = null;
 
 /**
@@ -47,6 +47,7 @@ let loadPromise: Promise<any> | null = null;
  *
  * @param opts.url - Override the CDN URL (useful for offline dev or testing).
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- The resolved ort module type is a complex Emscripten binding; using any avoids coupling to onnxruntime-web's internal shape
 export async function loadOnnxRuntimeWeb(opts?: { url?: string }): Promise<any> {
   // Fast path: already loaded.
   if (typeof window !== 'undefined' && window.ort) {
@@ -94,6 +95,7 @@ export async function loadOnnxRuntimeWeb(opts?: { url?: string }): Promise<any> 
     script.onerror = (e) => {
       trySettle(() => {
         loadPromise = null;
+        // eslint-disable-next-line no-console
         console.debug('[onnxruntime-web-loader] failed to load onnxruntime-web', e);
         reject(new Error('[onnxruntime-web-loader] Failed to load onnxruntime-web script'));
       });
@@ -115,8 +117,14 @@ export async function loadOnnxRuntimeWeb(opts?: { url?: string }): Promise<any> 
     // Clear the timeout when onload/onerror settle the promise first.
     const _onload = script.onload as (() => void) | undefined;
     const _onerror = script.onerror as ((e: unknown) => void) | undefined;
-    script.onload = () => { clearTimeout(tid); _onload?.(); };
-    script.onerror = (e: unknown) => { clearTimeout(tid); _onerror?.(e); };
+    script.onload = () => {
+      clearTimeout(tid);
+      _onload?.();
+    };
+    script.onerror = (e: unknown) => {
+      clearTimeout(tid);
+      _onerror?.(e);
+    };
 
     document.head.appendChild(script);
   });
@@ -148,11 +156,10 @@ export function resetOnnxRuntimeWebLoaderForTesting(): void {
  */
 export function installOnnxRuntimeWebGlobal(): void {
   if (typeof globalThis === 'undefined') return;
-  (globalThis as { __sproutLoadOnnxRuntime?: () => Promise<void> }).__sproutLoadOnnxRuntime =
-    () =>
-      loadOnnxRuntimeWeb()
-        .then(() => undefined)
-        .catch((e) => {
-          console.warn('[onnxruntime-web-loader] lazy load failed', e);
-        });
+  (globalThis as { __sproutLoadOnnxRuntime?: () => Promise<void> }).__sproutLoadOnnxRuntime = () =>
+    loadOnnxRuntimeWeb()
+      .then(() => undefined)
+      .catch((e) => {
+        console.warn('[onnxruntime-web-loader] lazy load failed', e);
+      });
 }

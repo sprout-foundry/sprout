@@ -36,11 +36,7 @@ const MARGIN_BOTTOM = 30;
 const CHART_WIDTH = SVG_WIDTH - MARGIN_LEFT - MARGIN_RIGHT;
 const CHART_HEIGHT = SVG_HEIGHT - MARGIN_TOP - MARGIN_BOTTOM;
 
-export default function DailySpendChart({
-  dailyCosts,
-  loading = false,
-  error = null,
-}: DailySpendChartProps) {
+export default function DailySpendChart({ dailyCosts, loading = false, error = null }: DailySpendChartProps) {
   // Error state
   if (error) {
     return (
@@ -68,11 +64,7 @@ export default function DailySpendChart({
     }
     return (
       <div className="daily-spend-chart" data-testid="daily-spend-chart">
-        <svg
-          viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
-          role="img"
-          aria-label="Daily spend chart loading"
-        >
+        <svg viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`} role="img" aria-label="Daily spend chart loading">
           {placeholderBars}
         </svg>
       </div>
@@ -130,11 +122,7 @@ export default function DailySpendChart({
 
   return (
     <div className="daily-spend-chart" data-testid="daily-spend-chart">
-      <svg
-        viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
-        role="img"
-        aria-label="Daily spend chart"
-      >
+      <svg viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`} role="img" aria-label="Daily spend chart">
         {/* Y-axis labels */}
         {yLabels.map((label) => (
           <text

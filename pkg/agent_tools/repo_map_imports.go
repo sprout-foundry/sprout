@@ -78,10 +78,10 @@ func buildJSImportMap(filePath string, content []byte, impMap map[string]string)
 		if len(m) < 6 {
 			continue
 		}
-		defaultImport := m[1]       // "Thing" from "import Thing from '...'"
-		namespaceImport := m[3]     // "utils" from "import * as utils from '...'"
-		namedBlock := m[4]          // "foo, bar" from "import { foo, bar } from '...'"
-		modulePath := m[5]          // './utils'
+		defaultImport := m[1]   // "Thing" from "import Thing from '...'"
+		namespaceImport := m[3] // "utils" from "import * as utils from '...'"
+		namedBlock := m[4]      // "foo, bar" from "import { foo, bar } from '...'"
+		modulePath := m[5]      // './utils'
 
 		// Skip node_modules and bare specifiers (external packages).
 		if !strings.HasPrefix(modulePath, ".") {

@@ -494,7 +494,7 @@ func TestSessionIndex_DefaultIndexPath(t *testing.T) {
 func TestSessionIndex_TokenOffsets(t *testing.T) {
 	tmp := t.TempDir()
 	s := sessionJSON{
-		Name:  "Token Test",
+		Name: "Token Test",
 		Messages: []messageRef{
 			{Role: "user", Content: "Hello world"},
 			{Role: "assistant", Content: "Hi there"},

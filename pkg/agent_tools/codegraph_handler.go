@@ -18,8 +18,8 @@ import (
 // fails. This replaces sync.Once, which permanently blocked retries after a
 // single transient failure (e.g. file locked during a git operation).
 var (
-	codegraphBuildMu         sync.Mutex
-	codegraphBuildAttempted  bool
+	codegraphBuildMu        sync.Mutex
+	codegraphBuildAttempted bool
 )
 
 // triggerCodegraphBuild kicks off a background goroutine that populates

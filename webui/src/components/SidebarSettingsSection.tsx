@@ -2,12 +2,12 @@ import { SkeletonText } from '@sprout/ui';
 import { Keyboard, Upload, Trash2 } from 'lucide-react';
 import { Suspense, lazy, useRef, useState, useCallback } from 'react';
 import type { ChangeEvent } from 'react';
+import { isCloud } from '../config/mode';
 import type { WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
 import type { SproutSettings } from '../services/api';
-import type { AgentConfigProps } from './settings/types';
 import { useLog } from '../utils/log';
-import { isCloud } from '../config/mode';
 import CredentialsSettingsTab from './CredentialsSettingsTab';
+import type { AgentConfigProps } from './settings/types';
 
 // SettingsPanel pulls in CredentialsSettingsTab, ProviderSettingsTab,
 // onnxEmbeddingProvider, and a few other heavy dependencies. It only
@@ -225,8 +225,8 @@ export default function SidebarSettingsSection({
         <div className="section">
           <h4>API Key</h4>
           <p className="settings-section-desc">
-            Add your LLM provider API key to enable AI chat in the browser.
-            Your key is encrypted and stored securely on the server.
+            Add your LLM provider API key to enable AI chat in the browser. Your key is encrypted and stored securely on
+            the server.
           </p>
           <CredentialsSettingsTab />
         </div>

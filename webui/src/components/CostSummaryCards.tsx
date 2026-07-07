@@ -43,17 +43,8 @@ function currentMonthName(): string {
 
 const ERROR_ICON = (
   <span className="cost-card-error-icon" role="img" aria-label="error">
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <path
-        d="M8 1L15 14H1L8 1Z"
-        fill="currentColor"
-      />
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M8 1L15 14H1L8 1Z" fill="currentColor" />
     </svg>
   </span>
 );
@@ -107,11 +98,7 @@ export default function CostSummaryCards({
           .join(' ');
 
         return (
-          <div
-            key={card.period}
-            className={cardClasses}
-            data-testid={`cost-card-${card.period}`}
-          >
+          <div key={card.period} className={cardClasses} data-testid={`cost-card-${card.period}`}>
             <div className="cost-card-label">{card.label}</div>
             <div className="cost-card-value" data-testid={`cost-card-${card.period}-value`}>
               {card.value !== undefined ? formatDollar(card.value) : '\u2014'}

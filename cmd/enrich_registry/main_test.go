@@ -16,60 +16,60 @@ import (
 
 func TestAllocateProbeBudget(t *testing.T) {
 	tests := []struct {
-		name           string
-		numProviders   int
-		maxProbes      int
+		name            string
+		numProviders    int
+		maxProbes       int
 		wantPerProvider int
-		wantTotal      int
+		wantTotal       int
 	}{
 		{
-			name:           "6 providers, 50 probes → cap 8 each",
-			numProviders:   6,
-			maxProbes:      50,
+			name:            "6 providers, 50 probes → cap 8 each",
+			numProviders:    6,
+			maxProbes:       50,
 			wantPerProvider: 8, // 50/6 = 8
-			wantTotal:      50,
+			wantTotal:       50,
 		},
 		{
-			name:           "3 providers, 15 probes → cap 5 each",
-			numProviders:   3,
-			maxProbes:      15,
+			name:            "3 providers, 15 probes → cap 5 each",
+			numProviders:    3,
+			maxProbes:       15,
 			wantPerProvider: 5, // 15/3 = 5
-			wantTotal:      15,
+			wantTotal:       15,
 		},
 		{
-			name:           "3 providers, 10 probes → cap 5 each (min floor)",
-			numProviders:   3,
-			maxProbes:      10,
+			name:            "3 providers, 10 probes → cap 5 each (min floor)",
+			numProviders:    3,
+			maxProbes:       10,
 			wantPerProvider: 5, // 10/3 = 3, but min is 5
-			wantTotal:      10,
+			wantTotal:       10,
 		},
 		{
-			name:           "1 provider, 50 probes → cap 50",
-			numProviders:   1,
-			maxProbes:      50,
+			name:            "1 provider, 50 probes → cap 50",
+			numProviders:    1,
+			maxProbes:       50,
 			wantPerProvider: 50, // 50/1 = 50
-			wantTotal:      50,
+			wantTotal:       50,
 		},
 		{
-			name:           "0 providers → cap 0",
-			numProviders:   0,
-			maxProbes:      50,
+			name:            "0 providers → cap 0",
+			numProviders:    0,
+			maxProbes:       50,
 			wantPerProvider: 0,
-			wantTotal:      50,
+			wantTotal:       50,
 		},
 		{
-			name:           "11 providers, 50 probes → cap 5 each (min floor)",
-			numProviders:   11,
-			maxProbes:      50,
+			name:            "11 providers, 50 probes → cap 5 each (min floor)",
+			numProviders:    11,
+			maxProbes:       50,
 			wantPerProvider: 5, // 50/11 = 4, but min is 5
-			wantTotal:      50,
+			wantTotal:       50,
 		},
 		{
-			name:           "2 providers, 50 probes → cap 25 each",
-			numProviders:   2,
-			maxProbes:      50,
+			name:            "2 providers, 50 probes → cap 25 each",
+			numProviders:    2,
+			maxProbes:       50,
 			wantPerProvider: 25,
-			wantTotal:      50,
+			wantTotal:       50,
 		},
 	}
 

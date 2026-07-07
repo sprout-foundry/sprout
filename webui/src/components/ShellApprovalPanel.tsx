@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ShellApprovalPartData, ShellApprovalRequestData } from '@sprout/events';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import './ShellApprovalPanel.css';
 
 type PartDecision = 'pending' | 'approved' | 'rejected';
@@ -49,11 +49,7 @@ function decisionLabel(status: PartDecision): string {
  * Driven by the `shell_approval_request` WebSocket event. On decision,
  * the parent POSTs to /api/shell-approvals/{id}/decision.
  */
-function ShellApprovalPanel({
-  request,
-  onSubmit,
-  onCancel,
-}: ShellApprovalPanelProps): JSX.Element {
+function ShellApprovalPanel({ request, onSubmit, onCancel }: ShellApprovalPanelProps): JSX.Element {
   const { request_id, command, parts, unified_view, risk_level } = request;
 
   // Per-part decisions keyed by part id.
@@ -82,15 +78,11 @@ function ShellApprovalPanel({
   }, []);
 
   const acceptAll = useCallback(() => {
-    setDecisions((prev) =>
-      Object.fromEntries(Object.keys(prev).map((k) => [k, 'approved'] as [string, PartDecision])),
-    );
+    setDecisions((prev) => Object.fromEntries(Object.keys(prev).map((k) => [k, 'approved'] as [string, PartDecision])));
   }, []);
 
   const rejectAll = useCallback(() => {
-    setDecisions((prev) =>
-      Object.fromEntries(Object.keys(prev).map((k) => [k, 'rejected'] as [string, PartDecision])),
-    );
+    setDecisions((prev) => Object.fromEntries(Object.keys(prev).map((k) => [k, 'rejected'] as [string, PartDecision])));
   }, []);
 
   const resetToDefaults = useCallback(() => {
@@ -115,10 +107,7 @@ function ShellApprovalPanel({
     }
   }, [decisions, onSubmit]);
 
-  const approvedCount = useMemo(
-    () => Object.values(decisions).filter((d) => d === 'approved').length,
-    [decisions],
-  );
+  const approvedCount = useMemo(() => Object.values(decisions).filter((d) => d === 'approved').length, [decisions]);
 
   return (
     <div className="themed-dialog-overlay shell-approval-overlay" role="dialog" aria-modal="true">
@@ -207,9 +196,7 @@ function ShellApprovalPanel({
                   <span className="shell-approval-part-caption">
                     {part.kind} — {part.semantic}
                   </span>
-                  <span
-                    className={`shell-approval-part-risk shell-approval-part-risk--${part.risk.toLowerCase()}`}
-                  >
+                  <span className={`shell-approval-part-risk shell-approval-part-risk--${part.risk.toLowerCase()}`}>
                     {part.risk}
                   </span>
                 </div>
@@ -230,7 +217,11 @@ function ShellApprovalPanel({
 
         {/* Unified view (collapsible) */}
         {unified_view && (
-          <details className="shell-approval-unified" open={showUnified} onToggle={(e) => setShowUnified(e.currentTarget.open)}>
+          <details
+            className="shell-approval-unified"
+            open={showUnified}
+            onToggle={(e) => setShowUnified(e.currentTarget.open)}
+          >
             <summary>Unified view</summary>
             <pre className="shell-approval-unified-pre">{unified_view}</pre>
           </details>

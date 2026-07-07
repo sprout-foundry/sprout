@@ -4,11 +4,11 @@ import "testing"
 
 func TestBillingTypeResolved_Explicit(t *testing.T) {
 	tests := []struct {
-		name        string
-		billingType string
-		endpoint    string
+		name         string
+		billingType  string
+		endpoint     string
 		providerName string
-		want        string
+		want         string
 	}{
 		{
 			name:         "explicit pay_per_token",

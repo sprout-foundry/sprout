@@ -73,19 +73,71 @@ vi.mock('../../contexts/ProviderCatalogContext', () => ({
 
 // Mock all settings tabs so we don't render their full logic.
 // Each factory is inlined to avoid hoisting issues.
-vi.mock('./settings/AgentBehaviorSettingsTab', () => ({ default: function TabMock({ settings }) { return createElement('div', { 'data-testid': 'settings-tab-mock', 'data-has-settings': !!settings }); } }));
-vi.mock('./settings/SubagentSettingsTab', () => ({ default: function TabMock({ settings }) { return createElement('div', { 'data-testid': 'settings-tab-mock', 'data-has-settings': !!settings }); } }));
-vi.mock('./settings/SkillsSettingsTab', () => ({ default: function TabMock({ settings }) { return createElement('div', { 'data-testid': 'settings-tab-mock', 'data-has-settings': !!settings }); } }));
-vi.mock('./settings/PersistentContextSettingsTab', () => ({ default: function TabMock({ settings }) { return createElement('div', { 'data-testid': 'settings-tab-mock', 'data-has-settings': !!settings }); } }));
-vi.mock('./settings/EmbeddingSettingsTab', () => ({ default: function TabMock({ settings }) { return createElement('div', { 'data-testid': 'settings-tab-mock', 'data-has-settings': !!settings }); } }));
-vi.mock('./settings/LanguageServersSettingsTab', () => ({ default: function TabMock({ settings }) { return createElement('div', { 'data-testid': 'settings-tab-mock', 'data-has-settings': !!settings }); } }));
-vi.mock('./settings/MCPSettingsTab', () => ({ default: function TabMock({ settings }) { return createElement('div', { 'data-testid': 'settings-tab-mock', 'data-has-settings': !!settings }); } }));
-vi.mock('./settings/ProviderSettingsTab', () => ({ default: function TabMock({ settings }) { return createElement('div', { 'data-testid': 'settings-tab-mock', 'data-has-settings': !!settings }); } }));
-vi.mock('./settings/AdvancedSettingsTab', () => ({ default: function TabMock({ settings }) { return createElement('div', { 'data-testid': 'settings-tab-mock', 'data-has-settings': !!settings }); } }));
-vi.mock('./settings/GeneralSettingsTab', () => ({ default: function TabMock({ settings }) { return createElement('div', { 'data-testid': 'settings-tab-mock', 'data-has-settings': !!settings }); } }));
-vi.mock('./settings/NotificationsSettingsTab', () => ({ default: function TabMock({ settings }) { return createElement('div', { 'data-testid': 'settings-tab-mock', 'data-has-settings': !!settings }); } }));
-vi.mock('./settings/ComputerUseSettingsTab', () => ({ default: function TabMock({ settings }) { return createElement('div', { 'data-testid': 'settings-tab-mock', 'data-has-settings': !!settings }); } }));
-vi.mock('./CredentialsSettingsTab', () => ({ default: function TabMock({ settings }) { return createElement('div', { 'data-testid': 'settings-tab-mock', 'data-has-settings': !!settings }); } }));
+vi.mock('./settings/AgentBehaviorSettingsTab', () => ({
+  default: function TabMock({ settings }) {
+    return createElement('div', { 'data-testid': 'settings-tab-mock', 'data-has-settings': !!settings });
+  },
+}));
+vi.mock('./settings/SubagentSettingsTab', () => ({
+  default: function TabMock({ settings }) {
+    return createElement('div', { 'data-testid': 'settings-tab-mock', 'data-has-settings': !!settings });
+  },
+}));
+vi.mock('./settings/SkillsSettingsTab', () => ({
+  default: function TabMock({ settings }) {
+    return createElement('div', { 'data-testid': 'settings-tab-mock', 'data-has-settings': !!settings });
+  },
+}));
+vi.mock('./settings/PersistentContextSettingsTab', () => ({
+  default: function TabMock({ settings }) {
+    return createElement('div', { 'data-testid': 'settings-tab-mock', 'data-has-settings': !!settings });
+  },
+}));
+vi.mock('./settings/EmbeddingSettingsTab', () => ({
+  default: function TabMock({ settings }) {
+    return createElement('div', { 'data-testid': 'settings-tab-mock', 'data-has-settings': !!settings });
+  },
+}));
+vi.mock('./settings/LanguageServersSettingsTab', () => ({
+  default: function TabMock({ settings }) {
+    return createElement('div', { 'data-testid': 'settings-tab-mock', 'data-has-settings': !!settings });
+  },
+}));
+vi.mock('./settings/MCPSettingsTab', () => ({
+  default: function TabMock({ settings }) {
+    return createElement('div', { 'data-testid': 'settings-tab-mock', 'data-has-settings': !!settings });
+  },
+}));
+vi.mock('./settings/ProviderSettingsTab', () => ({
+  default: function TabMock({ settings }) {
+    return createElement('div', { 'data-testid': 'settings-tab-mock', 'data-has-settings': !!settings });
+  },
+}));
+vi.mock('./settings/AdvancedSettingsTab', () => ({
+  default: function TabMock({ settings }) {
+    return createElement('div', { 'data-testid': 'settings-tab-mock', 'data-has-settings': !!settings });
+  },
+}));
+vi.mock('./settings/GeneralSettingsTab', () => ({
+  default: function TabMock({ settings }) {
+    return createElement('div', { 'data-testid': 'settings-tab-mock', 'data-has-settings': !!settings });
+  },
+}));
+vi.mock('./settings/NotificationsSettingsTab', () => ({
+  default: function TabMock({ settings }) {
+    return createElement('div', { 'data-testid': 'settings-tab-mock', 'data-has-settings': !!settings });
+  },
+}));
+vi.mock('./settings/ComputerUseSettingsTab', () => ({
+  default: function TabMock({ settings }) {
+    return createElement('div', { 'data-testid': 'settings-tab-mock', 'data-has-settings': !!settings });
+  },
+}));
+vi.mock('./CredentialsSettingsTab', () => ({
+  default: function TabMock({ settings }) {
+    return createElement('div', { 'data-testid': 'settings-tab-mock', 'data-has-settings': !!settings });
+  },
+}));
 
 // Mock desktopNotify (used by NotificationsSettingsTab)
 vi.mock('../../services/desktopNotify', () => ({
@@ -190,8 +242,8 @@ describe('SECTION_GROUPS rendering', () => {
   it('renders all 5 section labels (Agent, Workspace, Environment, Editor, Experimental)', () => {
     renderPanel();
 
-    const labels = Array.from(container.querySelectorAll('.settings-section-label')).map(
-      (el) => el.textContent?.trim(),
+    const labels = Array.from(container.querySelectorAll('.settings-section-label')).map((el) =>
+      el.textContent?.trim(),
     );
 
     expect(labels).toContain('Agent');

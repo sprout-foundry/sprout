@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { clientFetch } from '../services/clientSession';
+import type { SessionCostRow } from '../types/costs';
 import ByModelChart from './ByModelChart';
 import CostSummaryCards, { type CostSummary } from './CostSummaryCards';
 import DailySpendChart, { type DailyCost } from './DailySpendChart';
 import ProviderTable from './ProviderTable';
 import TopSessionsTable from './TopSessionsTable';
-import type { SessionCostRow } from '../types/costs';
 import './CostsPage.css';
 
 type TimeRange = '7d' | '30d' | '90d' | 'all';
@@ -142,9 +142,7 @@ export default function CostsPage({ onSessionClick, onBack }: CostsPageProps = {
             <button
               key={range}
               type="button"
-              className={
-                'costs-time-range-btn' + (isActive ? ' costs-time-range-btn--active' : '')
-              }
+              className={'costs-time-range-btn' + (isActive ? ' costs-time-range-btn--active' : '')}
               data-testid={`costs-time-range-${range}`}
               aria-pressed={isActive}
               onClick={() => setTimeRange(range)}
@@ -184,11 +182,14 @@ export default function CostsPage({ onSessionClick, onBack }: CostsPageProps = {
         <>
           <div className="costs-summary-total" data-testid="costs-summary-total">
             Total: ${summary!.total_cost.toFixed(4)}
-            {summary!.token_value != null && summary!.token_value > 0 && summary!.token_value !== summary!.total_cost && (
-              <span className="costs-token-value" data-testid="costs-token-value">
-                {' '}(Token value: ${summary!.token_value.toFixed(4)})
-              </span>
-            )}
+            {summary!.token_value != null &&
+              summary!.token_value > 0 &&
+              summary!.token_value !== summary!.total_cost && (
+                <span className="costs-token-value" data-testid="costs-token-value">
+                  {' '}
+                  (Token value: ${summary!.token_value.toFixed(4)})
+                </span>
+              )}
           </div>
           {summary!.by_billing_type && Object.keys(summary!.by_billing_type).length > 0 && (
             <div className="costs-billing-breakdown" data-testid="costs-billing-breakdown">
@@ -199,20 +200,21 @@ export default function CostsPage({ onSessionClick, onBack }: CostsPageProps = {
                 })
                 .map((bt) => {
                   const bd = summary!.by_billing_type![bt];
-                  const label = bt === 'pay_per_token'
-                    ? 'Pay-per-token'
-                    : bt === 'subscription'
-                      ? 'Subscription (included)'
-                      : 'Local/Free';
+                  const label =
+                    bt === 'pay_per_token'
+                      ? 'Pay-per-token'
+                      : bt === 'subscription'
+                        ? 'Subscription (included)'
+                        : 'Local/Free';
                   return (
-                    <div key={bt} className={`costs-billing-pill costs-billing-pill--${bt}`} data-testid={`costs-billing-${bt}`}>
+                    <div
+                      key={bt}
+                      className={`costs-billing-pill costs-billing-pill--${bt}`}
+                      data-testid={`costs-billing-${bt}`}
+                    >
                       <span className="costs-billing-pill-label">{label}</span>
-                      <span className="costs-billing-pill-cost">
-                        ${bd.cost.toFixed(4)}
-                      </span>
-                      <span className="costs-billing-pill-tokens">
-                        {(bd.tokens / 1000).toFixed(1)}K tok
-                      </span>
+                      <span className="costs-billing-pill-cost">${bd.cost.toFixed(4)}</span>
+                      <span className="costs-billing-pill-tokens">{(bd.tokens / 1000).toFixed(1)}K tok</span>
                     </div>
                   );
                 })}
@@ -224,13 +226,14 @@ export default function CostsPage({ onSessionClick, onBack }: CostsPageProps = {
             return (
               <>
                 <CostSummaryCards summary={summary} todayCost={todayCost} />
-                <DailySpendChart
-                  dailyCosts={history?.daily_costs ?? []}
-                  days={history?.days ?? 30}
-                />
+                <DailySpendChart dailyCosts={history?.daily_costs ?? []} days={history?.days ?? 30} />
                 <ByModelChart byModel={summary.by_model ?? {}} />
                 <ProviderTable summary={summary} />
-                <TopSessionsTable sessions={summary.top_sessions ?? []} loading={loading} onSessionClick={onSessionClick} />
+                <TopSessionsTable
+                  sessions={summary.top_sessions ?? []}
+                  loading={loading}
+                  onSessionClick={onSessionClick}
+                />
               </>
             );
           })()}

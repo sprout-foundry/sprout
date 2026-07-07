@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
 // EmbeddingManager manages the embedding index lifecycle.
@@ -452,6 +453,13 @@ func (m *EmbeddingManager) BuildIndex(ctx context.Context) (*IndexStats, error) 
 func (m *EmbeddingManager) buildIndexLocked(ctx context.Context) (*IndexStats, error) {
 	if err := m.Init(ctx); err != nil {
 		return nil, err
+	}
+
+	// Safety: refuse to index a user's home directory.
+	// In daemon/service mode workspaceRoot may be set to the home dir,
+	// and walking it would index private keys, credentials, media, etc.
+	if filesystem.IsHomeDir(m.workspaceRoot) {
+		return nil, fmt.Errorf("embedding: refusing to index home directory %q — set workspace_root to a project directory instead", m.workspaceRoot)
 	}
 
 	// Safety: skip if workspace is too large for auto-build.

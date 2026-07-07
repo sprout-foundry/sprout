@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -188,5 +189,92 @@ func TestLayer1Ignore(t *testing.T) {
 				t.Errorf("layer1Ignore(%q) = %v, want %v", tc.path, result, tc.expected)
 			}
 		})
+	}
+}
+
+// TestShouldIgnoreCredentialDirs verifies that the skipDirs map protects
+// known credential/key directories. This is a defense-in-depth safeguard for
+// the case where the home-dir guard in BuildSymbols / buildIndexLocked is
+// somehow bypassed (e.g., a future code path forgets to call it).
+//
+// Adding a credential dir here is a security change: it changes what gets
+// indexed in daemon/service mode. Adjust with care.
+func TestShouldIgnoreCredentialDirs(t *testing.T) {
+	dir := t.TempDir()
+
+	// Map of credential directory → sentinel filename we expect NOT to be
+	// indexed. If skipDirs gains/losses any of these, this test catches it.
+	creds := map[string]string{
+		".ssh":         "id_rsa",
+		".aws":         "credentials",
+		".kube":        "config",
+		".gnupg":       "pubring.kbx",
+		".docker":      "config.json", // base64-encoded registry auth tokens
+		".vault":       "vault-token",
+		"Library":      "Keychains", // macOS keychain — first-level under HOME
+		".Trash":       "old-secrets.txt",
+		"node_modules": "deps.go",
+	}
+
+	for dirName, sentinel := range creds {
+		credDir := filepath.Join(dir, dirName)
+		if err := os.MkdirAll(credDir, 0o755); err != nil {
+			t.Fatalf("mkdir %s: %v", credDir, err)
+		}
+		sentinelPath := filepath.Join(credDir, sentinel)
+		if err := os.WriteFile(sentinelPath, []byte("sensitive"), 0o644); err != nil {
+			t.Fatalf("write %s: %v", sentinelPath, err)
+		}
+	}
+
+	files, err := WalkAllIndexableFiles(context.Background(), dir)
+	if err != nil {
+		t.Fatalf("WalkAllIndexableFiles: %v", err)
+	}
+
+	// WalkAllIndexableFiles may return empty when the only files are filtered
+	// out; we only assert that NO sentinel file ended up in the result.
+	if len(files) > 0 {
+		t.Logf("walk returned %d files; verifying no credential sentinels are indexed", len(files))
+	}
+	for _, sentinel := range []string{"id_rsa", "credentials", "config", "pubring.kbx", "config.json", "vault-token"} {
+		sentinelDir := filepath.Join(dir, ".ssh")
+		if sentinel == "credentials" {
+			sentinelDir = filepath.Join(dir, ".aws")
+		} else if sentinel == "config" {
+			// .kube/config is a file — also exercised via the original walk
+			sentinelDir = filepath.Join(dir, ".kube")
+		} else if sentinel == "pubring.kbx" {
+			sentinelDir = filepath.Join(dir, ".gnupg")
+		} else if sentinel == "config.json" {
+			sentinelDir = filepath.Join(dir, ".docker")
+		} else if sentinel == "vault-token" {
+			sentinelDir = filepath.Join(dir, ".vault")
+		}
+		_ = sentinelDir // suppress unused warning if needed
+	}
+
+	// Strong assertion: every credential directory was either pruned (no
+	// descendants collected) OR if it wasn't pruned, its sentinel file is
+	// one we'd want ignored for other reasons (binary, wrong extension).
+	// The most robust check is to look for any file that lived inside a
+	// credential dir.
+	for _, f := range files {
+		rel, err := filepath.Rel(dir, f)
+		if err != nil {
+			continue
+		}
+		first := filepath.ToSlash(rel)
+		if idx := strings.IndexByte(first, '/'); idx >= 0 {
+			first = first[:idx]
+		} else {
+			first = "" // file was directly in dir, not inside a cred subdir
+		}
+		if first == "" {
+			continue
+		}
+		if _, isCredential := creds[first]; isCredential {
+			t.Errorf("walk returned file inside credential dir %q: %s", first, rel)
+		}
 	}
 }

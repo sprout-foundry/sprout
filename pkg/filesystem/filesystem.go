@@ -302,6 +302,30 @@ func isInTmpPath(path string) bool {
 	return false
 }
 
+// IsHomeDir reports whether path is the current user's home directory.
+// Both paths are resolved through symlinks so that, e.g., /var/folders/...
+// and /Users/alanp compare correctly on macOS.
+//
+// Symlink resolution is bounded by symlinkTimeout so a hanging network mount
+// (NFS, SMB) cannot stall index builds indefinitely.
+func IsHomeDir(path string) bool {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), symlinkTimeout)
+	defer cancel()
+	resolved, err := evalSymlinksWithTimeout(ctx, filepath.Clean(path))
+	if err != nil {
+		resolved = filepath.Clean(path)
+	}
+	homeResolved, err := evalSymlinksWithTimeout(ctx, home)
+	if err != nil {
+		homeResolved = home
+	}
+	return resolved == homeResolved
+}
+
 // SafeResolvePathForWrite validates a file path for writing, checking that the
 // parent directory is safe to access. This allows writing to new files that don't
 // exist yet while still preventing path traversal attacks.

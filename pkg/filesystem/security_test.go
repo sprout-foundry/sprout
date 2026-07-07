@@ -598,3 +598,45 @@ func TestSaveFile(t *testing.T) {
 		t.Errorf("SaveFile() on non-existent file should not error, got: %v", err)
 	}
 }
+
+// TestIsHomeDir verifies the home-directory guard used by the embedding and
+// symbol indexers. Both paths are resolved through symlinks so macOS paths
+// like /var/folders/.../T/foo compare equal to /Users/foo.
+func TestIsHomeDir(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skipf("no home dir available: %v", err)
+	}
+
+	t.Run("home directory itself", func(t *testing.T) {
+		if !IsHomeDir(home) {
+			t.Errorf("IsHomeDir(%q) = false, want true", home)
+		}
+	})
+
+	t.Run("non-home temp directory", func(t *testing.T) {
+		dir := t.TempDir()
+		if IsHomeDir(dir) {
+			t.Errorf("IsHomeDir(%q) = true, want false", dir)
+		}
+	})
+
+	t.Run("symlink to non-home directory", func(t *testing.T) {
+		target := t.TempDir()
+		link := filepath.Join(os.TempDir(), "sprout-ishomedir-symlink-test")
+		os.Remove(link) // clean up any leftover from a previous run
+		if err := os.Symlink(target, link); err != nil {
+			t.Skipf("symlink not supported on this filesystem: %v", err)
+		}
+		defer os.Remove(link)
+		if IsHomeDir(link) {
+			t.Errorf("IsHomeDir(symlink-to-tempdir) = true, want false")
+		}
+	})
+
+	t.Run("empty path", func(t *testing.T) {
+		if IsHomeDir("") {
+			t.Errorf("IsHomeDir(\"\") = true, want false")
+		}
+	})
+}

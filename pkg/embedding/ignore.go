@@ -11,22 +11,35 @@ import (
 )
 
 // skipDirs holds directory component names that should never be indexed.
+// This includes build artifacts, package managers, AND security-sensitive
+// or user-data directories. When the embedding index walks from a home
+// directory (daemon/service mode), these entries prevent it from touching
+// private keys, credentials, media libraries, and other non-project data.
 var skipDirs = map[string]bool{
 	// Package managers
 	"node_modules": true,
 	"vendor":       true,
 	// Version control
-	".git": true,
+	".git":  true,
+	".hg":   true,
+	".svn":  true,
+	".npm":  true,
+	".yarn": true,
+	".pnp":  true,
 	// Python
 	"__pycache__": true,
 	".tox":        true,
 	".venv":       true,
 	"venv":        true,
+	"env":         true,
+	".env":        true,
+	".direnv":     true,
 	// JavaScript/Node
-	".next":    true,
-	".nuxt":    true,
+	".next":   true,
+	".nuxt":   true,
+	".turbo":  true,
 	"coverage": true,
-	".cache":   true,
+	".cache":  true,
 	// Java/Kotlin
 	".gradle": true,
 	".mvn":    true,
@@ -46,6 +59,35 @@ var skipDirs = map[string]bool{
 	".ledit":   true, // Agent revision history / session data
 	".agent-i": true, // Agent session data
 	".sprout":  true, // Sprout runtime data (run/embeddings)
+	// Security-sensitive: credentials, keys, auth tokens
+	".ssh":    true, // SSH private keys, known hosts
+	".aws":    true, // AWS credentials and config
+	".kube":   true, // Kubernetes configs and tokens
+	".gnupg":  true, // GPG keys
+	".gpg":    true, // GPG keys (alternate)
+	".pki":    true, // Public key infrastructure
+	".vault":  true, // HashiCorp Vault
+	".docker": true, // Docker credentials (config.json with auth tokens)
+	// User data directories (macOS / Linux home)
+	"Library":      true, // macOS app data, keychains, caches
+	"Applications": true, // macOS apps
+	"Desktop":      true, // User desktop files
+	"Downloads":    true, // User downloads
+	"Documents":    true, // User documents
+	"Music":        true, // User media
+	"Pictures":     true, // User media
+	"Videos":       true, // User media
+	"Public":       true, // macOS shared folder
+	// Email
+	".maildir": true,
+	"Maildir":  true,
+	// E-readers / books
+	"calibre": true,
+	// Trash
+	".Trash": true,
+	// Config and local data (may contain sensitive app configs)
+	".config": true,
+	".local":  true,
 }
 
 // ShouldIgnorePath reports whether the given path should be excluded from

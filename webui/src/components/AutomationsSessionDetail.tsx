@@ -1,8 +1,8 @@
 import { X } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { subscribeAutomate } from '../services/automateEvents';
 import { clientFetch } from '../services/clientSession';
 import { debugLog } from '../utils/log';
-import { subscribeAutomate } from '../services/automateEvents';
 import './AutomationsSessionDetail.css';
 
 /* ── Type Interfaces ───────────────────────────────────────── */
@@ -254,7 +254,7 @@ function AutomationsSessionDetail({ sessionId, onClose }: AutomationsSessionDeta
             state (when each step ran, cost, output) requires backend changes
             tracked under SP-065. */}
         <div className="automations-detail-placeholder">
-          Step-level events aren't tracked yet. The workflow &quot;{session?.workflow ?? ''}&quot; is currently{' '}
+          Step-level events aren&apos;t tracked yet. The workflow &quot;{session?.workflow ?? ''}&quot; is currently{' '}
           {session?.status ?? 'unknown'}.
         </div>
       </div>

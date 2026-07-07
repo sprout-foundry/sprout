@@ -91,8 +91,8 @@ func TestModelPricingPerMillion_Variants(t *testing.T) {
 
 func TestModelCachedPricingPerMillion(t *testing.T) {
 	cases := []struct {
-		name     string
-		entry    map[string]any
+		name       string
+		entry      map[string]any
 		wantCached float64
 	}{
 		{

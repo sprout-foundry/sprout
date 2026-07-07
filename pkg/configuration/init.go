@@ -394,8 +394,8 @@ func EnsureProviderAPIKey(provider string, apiKeys *APIKeys) error {
 	}
 
 	fmt.Println()
-		bracketWarn(os.Stdout, fmt.Sprintf("No API key found for %s", GetProviderDisplayName(provider)))
-		fmt.Println()
+	bracketWarn(os.Stdout, fmt.Sprintf("No API key found for %s", GetProviderDisplayName(provider)))
+	fmt.Println()
 	fmt.Println("Options:")
 	fmt.Println("  1. Enter API key now")
 	fmt.Println("  2. Select a different provider")

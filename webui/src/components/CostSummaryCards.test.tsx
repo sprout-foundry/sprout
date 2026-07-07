@@ -5,12 +5,7 @@ vi.mock('./CostSummaryCards.css', () => ({}));
 
 describe('CostSummaryCards', () => {
   it('renders 4 cards with correct labels', () => {
-    render(
-      <CostSummaryCards
-        summary={{ total_cost: 10, last_7_days: 5, this_month: 8 }}
-        todayCost={1}
-      />,
-    );
+    render(<CostSummaryCards summary={{ total_cost: 10, last_7_days: 5, this_month: 8 }} todayCost={1} />);
 
     expect(screen.getByTestId('cost-card-today')).toBeInTheDocument();
     expect(screen.getByTestId('cost-card-today')).toHaveTextContent('Today');
@@ -41,12 +36,7 @@ describe('CostSummaryCards', () => {
   });
 
   it('loading state shows skeleton', () => {
-    render(
-      <CostSummaryCards
-        summary={null}
-        loading={true}
-      />,
-    );
+    render(<CostSummaryCards summary={null} loading={true} />);
 
     const cards = document.querySelectorAll('.cost-card--loading');
     expect(cards).toHaveLength(4);
@@ -58,12 +48,7 @@ describe('CostSummaryCards', () => {
   });
 
   it('error state shows error icon', () => {
-    render(
-      <CostSummaryCards
-        summary={{ total_cost: 10 }}
-        error="boom"
-      />,
-    );
+    render(<CostSummaryCards summary={{ total_cost: 10 }} error="boom" />);
 
     const errorIcons = document.querySelectorAll('.cost-card-error-icon');
     expect(errorIcons).toHaveLength(4);
@@ -88,12 +73,7 @@ describe('CostSummaryCards', () => {
   });
 
   it('zero values render as $0.0000', () => {
-    render(
-      <CostSummaryCards
-        summary={{ total_cost: 0, last_7_days: 0, this_month: 0 }}
-        todayCost={0}
-      />,
-    );
+    render(<CostSummaryCards summary={{ total_cost: 0, last_7_days: 0, this_month: 0 }} todayCost={0} />);
 
     expect(screen.getByTestId('cost-card-total-value')).toHaveTextContent('$0.0000');
     expect(screen.getByTestId('cost-card-week-value')).toHaveTextContent('$0.0000');
@@ -102,12 +82,7 @@ describe('CostSummaryCards', () => {
   });
 
   it('missing optional fields default to $0.0000', () => {
-    render(
-      <CostSummaryCards
-        summary={{ total_cost: 5 }}
-        todayCost={0}
-      />,
-    );
+    render(<CostSummaryCards summary={{ total_cost: 5 }} todayCost={0} />);
 
     expect(screen.getByTestId('cost-card-total-value')).toHaveTextContent('$5.0000');
     expect(screen.getByTestId('cost-card-week-value')).toHaveTextContent('$0.0000');

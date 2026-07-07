@@ -12,8 +12,8 @@ import (
 // lookup more than once per model. A miss populates the cache; subsequent calls
 // return the cached entry until the process ends.
 var (
-	mu                sync.Mutex
-	pricingResolver   = map[string]resolvedPricing{}
+	mu              sync.Mutex
+	pricingResolver = map[string]resolvedPricing{}
 )
 
 type resolvedPricing struct {

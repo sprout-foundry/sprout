@@ -35,10 +35,10 @@ func (m mockDualDispatchHandler) Execute(ctx context.Context, env tools.ToolEnv,
 }
 
 func (m mockDualDispatchHandler) Aliases() []string      { return nil }
-func (m mockDualDispatchHandler) Timeout() time.Duration  { return 0 }
-func (m mockDualDispatchHandler) MaxResultSize() int      { return 0 }
-func (m mockDualDispatchHandler) SafeForParallel() bool   { return false }
-func (m mockDualDispatchHandler) Interactive() bool       { return false }
+func (m mockDualDispatchHandler) Timeout() time.Duration { return 0 }
+func (m mockDualDispatchHandler) MaxResultSize() int     { return 0 }
+func (m mockDualDispatchHandler) SafeForParallel() bool  { return false }
+func (m mockDualDispatchHandler) Interactive() bool      { return false }
 
 func TestExecuteTool_NewRegistryUsed(t *testing.T) {
 	// Use a unique tool name to avoid race conditions with parallel tests

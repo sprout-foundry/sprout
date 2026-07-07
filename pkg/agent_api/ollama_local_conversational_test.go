@@ -12,14 +12,14 @@ func TestOllamaLocalClient_SupportsConversationalVision(t *testing.T) {
 		model string
 		want  bool
 	}{
-		{"glm-ocr", false},                   // OCR-only
-		{"GLM-OCR", false},                   // case-insensitive
-		{"vision-model", true},               // matches "vision" tag
-		{"llama3.2-vision", true},            // multimodal chat
-		{"Llama-3.2-11B-Vision", true},       // multimodal chat
-		{"llama3.2", true},                   // multimodal chat
-		{"gpt-oss:20b", false},               // plain text
-		{"qwen2.5-coder:7b", false},          // plain text
+		{"glm-ocr", false},             // OCR-only
+		{"GLM-OCR", false},             // case-insensitive
+		{"vision-model", true},         // matches "vision" tag
+		{"llama3.2-vision", true},      // multimodal chat
+		{"Llama-3.2-11B-Vision", true}, // multimodal chat
+		{"llama3.2", true},             // multimodal chat
+		{"gpt-oss:20b", false},         // plain text
+		{"qwen2.5-coder:7b", false},    // plain text
 	}
 
 	for _, tc := range cases {

@@ -11,8 +11,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/sprout-foundry/sprout/pkg/console"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
+	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
 // ---------------------------------------------------------------------------
@@ -400,11 +400,11 @@ func (p ShellProposal) HighRiskParts() []ShellPart {
 // the shell command individually. Returns a map from part ID to approved bool.
 //
 // Flow:
-//   1. If no parts, returns empty map and nil error.
-//   2. If the WebUI has an active surface, dispatch via the security
-//      approval manager (for now, return a "all approved" map — SP-093-3
-//      implements the real WebUI per-part dialog).
-//   3. Otherwise, call console.PromptShellApprovalParts (the CLI picker).
+//  1. If no parts, returns empty map and nil error.
+//  2. If the WebUI has an active surface, dispatch via the security
+//     approval manager (for now, return a "all approved" map — SP-093-3
+//     implements the real WebUI per-part dialog).
+//  3. Otherwise, call console.PromptShellApprovalParts (the CLI picker).
 //
 // Errors come from the picker (e.g. context cancelled); a per-part
 // rejection does NOT return an error — it's encoded in the decisions map.

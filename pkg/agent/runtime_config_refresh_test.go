@@ -56,7 +56,7 @@ func TestServerConfigChanged(t *testing.T) {
 	cases := []struct {
 		name string
 		mut  func(*mcp.MCPServerConfig) // apply to a copy of base
-		want bool                        // expected "changed"
+		want bool                       // expected "changed"
 	}{
 		// --- unchanged: every field equal ---
 		{"identical", func(c *mcp.MCPServerConfig) {}, false},
@@ -179,11 +179,11 @@ type fakeServer struct {
 	cfg  mcp.MCPServerConfig
 }
 
-func (f *fakeServer) Start(_ context.Context) error   { return nil }
-func (f *fakeServer) Stop(_ context.Context) error    { return nil }
-func (f *fakeServer) IsRunning() bool                 { return true }
-func (f *fakeServer) GetName() string                 { return f.name }
-func (f *fakeServer) GetConfig() mcp.MCPServerConfig  { return f.cfg }
+func (f *fakeServer) Start(_ context.Context) error      { return nil }
+func (f *fakeServer) Stop(_ context.Context) error       { return nil }
+func (f *fakeServer) IsRunning() bool                    { return true }
+func (f *fakeServer) GetName() string                    { return f.name }
+func (f *fakeServer) GetConfig() mcp.MCPServerConfig     { return f.cfg }
 func (f *fakeServer) Initialize(_ context.Context) error { return nil }
 func (f *fakeServer) ListTools(_ context.Context) ([]mcp.MCPTool, error) {
 	return nil, nil

@@ -34,10 +34,10 @@ type gateTriageResult struct {
 }
 
 // findNextTodoItem reads a markdown file and returns:
-// - lineNum: the 1-based line number of the first "[ ]" item found after startAfterLine
-// - sectionText: the text of the enclosing ## section (from the ## header above
-//   the item to just before the next ## header or end of file)
-// - err: non-nil if the file can't be read or no unchecked items exist
+//   - lineNum: the 1-based line number of the first "[ ]" item found after startAfterLine
+//   - sectionText: the text of the enclosing ## section (from the ## header above
+//     the item to just before the next ## header or end of file)
+//   - err: non-nil if the file can't be read or no unchecked items exist
 //
 // startAfterLine is 0-based: lines before this index are skipped.
 // Pass 0 to scan from the beginning.

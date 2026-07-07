@@ -226,7 +226,9 @@ function OnboardingDialog({
           </div>
         )}
 
-        <div className="onboarding-step-title" data-testid="onboarding-step">1. Choose an inference provider</div>
+        <div className="onboarding-step-title" data-testid="onboarding-step">
+          1. Choose an inference provider
+        </div>
         <div className="onboarding-provider-grid" data-testid="onboarding-provider-grid">
           {recommendedProviders.map((providerOption) => (
             <button
@@ -329,7 +331,9 @@ function OnboardingDialog({
             </div>
           )}
 
-        <div className="onboarding-step-title" data-testid="onboarding-step">2. Choose a model</div>
+        <div className="onboarding-step-title" data-testid="onboarding-step">
+          2. Choose a model
+        </div>
         <label htmlFor="onboarding-model">Model</label>
         <div className="onboarding-model-combobox" ref={comboboxRef}>
           <input
@@ -426,7 +430,12 @@ function OnboardingDialog({
               Skip — use as editor
             </button>
           )}
-          <button type="button" onClick={onRefresh} disabled={onboarding.submitting || onboarding.validationSuccess} data-testid="onboarding-refresh">
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={onboarding.submitting || onboarding.validationSuccess}
+            data-testid="onboarding-refresh"
+          >
             Refresh
           </button>
           <button

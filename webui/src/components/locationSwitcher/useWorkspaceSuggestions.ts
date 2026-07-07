@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { clientFetch } from '../../services/clientSession';
 import { supportsWorkspaceSwitching } from '../../config/mode';
+import { clientFetch } from '../../services/clientSession';
 import { normalizePath } from './pathUtils';
 import type { WorkspaceDirectory, SwitchingState, SSHFailureState, RemoteWorkspaceContext } from './types';
 import { MAX_RECENT_WORKSPACES, MAX_SUGGESTIONS } from './types';

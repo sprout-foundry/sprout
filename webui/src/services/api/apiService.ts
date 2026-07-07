@@ -832,9 +832,7 @@ class ApiService {
     return settingsApi.listInstalledSkills(clientFetch);
   }
 
-  async listSkillRegistry(): Promise<
-    import('./types/settings').SkillRegistryEntry[]
-  > {
+  async listSkillRegistry(): Promise<import('./types/settings').SkillRegistryEntry[]> {
     return settingsApi.listSkillRegistry(clientFetch);
   }
 

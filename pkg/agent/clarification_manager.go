@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sprout-foundry/sprout/pkg/events"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
+	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
 // DefaultClarificationTimeout is the default timeout for clarification requests.

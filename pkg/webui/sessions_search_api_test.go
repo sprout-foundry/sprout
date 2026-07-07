@@ -406,8 +406,8 @@ func TestHandleAPISessionsSearch_EmptyQuery(t *testing.T) {
 	}
 
 	var resp struct {
-		Total   int                      `json:"total"`
-		Results []search.SearchResult    `json:"results"`
+		Total   int                   `json:"total"`
+		Results []search.SearchResult `json:"results"`
 	}
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode: %v", err)

@@ -283,11 +283,7 @@ describe('AutomationsSessionDetail', () => {
     vi.useFakeTimers();
 
     // Initial: session + output("part1")
-    mockFetchSequence(
-      sessionResp('s1', 'running'),
-      outputResp('part1', 5, 5),
-      outputResp('part2', 10, 10),
-    );
+    mockFetchSequence(sessionResp('s1', 'running'), outputResp('part1', 5, 5), outputResp('part2', 10, 10));
 
     render(<AutomationsSessionDetail sessionId="s1" onClose={() => {}} />);
 
@@ -316,10 +312,7 @@ describe('AutomationsSessionDetail', () => {
   it('ignores output_chunk event for non-matching session_id', async () => {
     vi.useFakeTimers();
 
-    mockFetchSequence(
-      sessionResp('s1', 'running'),
-      outputResp('part1', 5, 5),
-    );
+    mockFetchSequence(sessionResp('s1', 'running'), outputResp('part1', 5, 5));
 
     render(<AutomationsSessionDetail sessionId="s1" onClose={() => {}} />);
 
@@ -346,11 +339,7 @@ describe('AutomationsSessionDetail', () => {
   it('refetches session metadata when session_ended event arrives', async () => {
     vi.useFakeTimers();
 
-    mockFetchSequence(
-      sessionResp('s1', 'running'),
-      outputResp('', 0, 0),
-      sessionResp('s1', 'exited'),
-    );
+    mockFetchSequence(sessionResp('s1', 'running'), outputResp('', 0, 0), sessionResp('s1', 'exited'));
 
     render(<AutomationsSessionDetail sessionId="s1" onClose={() => {}} />);
 
@@ -389,11 +378,7 @@ describe('AutomationsSessionDetail', () => {
 
     // Initial: session(running) + output("part1")
     // Event triggers output fetch("part2")
-    mockFetchSequence(
-      sessionResp('s1', 'running'),
-      outputResp('part1', 5, 5),
-      outputResp('part2', 10, 10),
-    );
+    mockFetchSequence(sessionResp('s1', 'running'), outputResp('part1', 5, 5), outputResp('part2', 10, 10));
 
     render(<AutomationsSessionDetail sessionId="s1" onClose={() => {}} />);
 
@@ -422,10 +407,7 @@ describe('AutomationsSessionDetail', () => {
   it('does not fetch output after unmount when debounce is pending', async () => {
     vi.useFakeTimers();
 
-    mockFetchSequence(
-      sessionResp('s1', 'running'),
-      outputResp('part1', 5, 5),
-    );
+    mockFetchSequence(sessionResp('s1', 'running'), outputResp('part1', 5, 5));
 
     const { unmount } = render(<AutomationsSessionDetail sessionId="s1" onClose={() => {}} />);
 

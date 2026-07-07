@@ -68,8 +68,8 @@ func IsChordDisabled(chord string) bool {
 // chordWatcherMu protects a package-level "currently active" watcher so
 // re-registration doesn't leak goroutines.
 var (
-	watcherMu  sync.Mutex
-	chordWatcher   ChordWatcher
+	watcherMu    sync.Mutex
+	chordWatcher ChordWatcher
 )
 
 // SetActiveChordWatcher swaps the active watcher, stopping any previous

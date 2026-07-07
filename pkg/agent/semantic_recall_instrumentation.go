@@ -27,7 +27,7 @@ import (
 // ~/.config/sprout/recall_metrics.jsonl. Fire-and-forget — the
 // instrumentation never blocks the agent loop on file IO.
 type RecallMetricsRecord struct {
-	Timestamp       string   `json:"timestamp"`              // RFC3339
+	Timestamp       string   `json:"timestamp"` // RFC3339
 	SessionID       string   `json:"session_id,omitempty"`
 	ItemsRecalled   int      `json:"items_recalled"`
 	TopSimilarity   float64  `json:"top_similarity"`

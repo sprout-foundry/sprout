@@ -1,5 +1,5 @@
-import { Cloud, Server, Cpu } from 'lucide-react';
 import { getPersonaColor } from '@sprout/ui';
+import { Cloud, Server, Cpu } from 'lucide-react';
 import { useProviderCatalog } from '../../contexts/ProviderCatalogContext';
 import './ChatStatusBarItems.css';
 

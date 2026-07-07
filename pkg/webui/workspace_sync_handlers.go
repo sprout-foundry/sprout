@@ -100,7 +100,7 @@ func (ws *ReactWebServer) handleAPIWorkspaceSync(w http.ResponseWriter, r *http.
 		// On conflict, suggest a .theirs path for the browser to surface.
 		theirsPath := req.Path + ".theirs"
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"error":      err.Error(),
+			"error":       err.Error(),
 			"theirs_path": theirsPath,
 		})
 		return
@@ -161,14 +161,14 @@ func (ws *ReactWebServer) handleAPIWorkspaceTakeover(w http.ResponseWriter, r *h
 	if oldDevice != "" {
 		// Publish session_moved event so the displaced browser can show the overlay.
 		ws.eventBus.Publish(events.EventTypeWorkspaceSessionMoved, map[string]interface{}{
-			"session_id":     req.SessionID,
+			"session_id":      req.SessionID,
 			"previous_device": oldDevice,
-			"new_device":     req.DeviceID,
+			"new_device":      req.DeviceID,
 		})
 
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"taken_over":       true,
+			"taken_over":      true,
 			"previous_device": oldDevice,
 		})
 	} else {

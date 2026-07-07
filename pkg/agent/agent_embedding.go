@@ -5,9 +5,9 @@ import (
 	"os"
 	"path/filepath"
 
-	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 	"github.com/sprout-foundry/sprout/pkg/embedding"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // EnableEmbeddingIndex initializes the embedding manager and starts building

@@ -66,20 +66,20 @@ func newTestGitRepoWithBranch(t *testing.T, branch string, commitMessages []stri
 
 // saveHooks stores the current overridable hooks so tests can restore them.
 type savedHooks struct {
-	runGhCommand          func(ctx context.Context, dir string, args ...string) ([]byte, error)
-	prHTTPClient          *http.Client
-	getDefaultBranch      func(ctx context.Context, repoDir string) (string, error)
-	GitHubAPIBaseURL      string
-	resolveGitHubCred     func() (string, error)
+	runGhCommand      func(ctx context.Context, dir string, args ...string) ([]byte, error)
+	prHTTPClient      *http.Client
+	getDefaultBranch  func(ctx context.Context, repoDir string) (string, error)
+	GitHubAPIBaseURL  string
+	resolveGitHubCred func() (string, error)
 }
 
 func saveHooks() savedHooks {
 	return savedHooks{
-		runGhCommand:        RunGhCommand,
-		prHTTPClient:        prHTTPClient,
-		getDefaultBranch:    GetDefaultBranch,
-		GitHubAPIBaseURL:    GitHubAPIBaseURL,
-		resolveGitHubCred:   resolveGitHubCredential,
+		runGhCommand:      RunGhCommand,
+		prHTTPClient:      prHTTPClient,
+		getDefaultBranch:  GetDefaultBranch,
+		GitHubAPIBaseURL:  GitHubAPIBaseURL,
+		resolveGitHubCred: resolveGitHubCredential,
 	}
 }
 

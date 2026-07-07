@@ -36,6 +36,11 @@ type Provider interface {
 	SupportsTools() bool
 	SupportsStreaming() bool
 	SupportsReasoning() bool
+	// VisionCapabilities returns the per-provider vision limits (max bytes
+	// per image, max images per request, max dimension, supported detail
+	// tiers). Zero-valued fields mean "unknown" and should be filled from
+	// VisionCapabilitiesDefault() at the call site. SP-103-D3 / AUDIT-GAP-2.
+	VisionCapabilities() VisionCapabilities
 
 	// Configuration
 	SetDebug(debug bool)
@@ -88,6 +93,20 @@ type BaseProvider struct {
 	supportsTools     bool
 	supportsStreaming bool
 	supportsReasoning bool
+
+	// visionCaps is the extension point for providers that embed
+	// BaseProvider and want to set their vision caps at construction.
+	// Today no production provider in pkg/agent_providers/ embeds
+	// BaseProvider — GenericProvider supplies its own VisionCapabilities()
+	// override. This field remains as the documented hook for future
+	// providers that DO embed BaseProvider (likely a thin Anthropic-only
+	// client). The zero value is the "unknown, fall back to defaults"
+	// sentinel; callers reading p.VisionCapabilities() through the
+	// BaseProvider method do not need to wrap through OrDefault because
+	// the BaseProvider method itself returns whatever was set.
+	//
+	// SP-103-D3 / AUDIT-GAP-2.
+	visionCaps VisionCapabilities
 
 	// HTTP client with reasonable defaults
 	httpClient HTTPClient
@@ -173,6 +192,15 @@ func (p *BaseProvider) SupportsStreaming() bool {
 // SupportsReasoning returns whether the provider supports reasoning
 func (p *BaseProvider) SupportsReasoning() bool {
 	return p.supportsReasoning
+}
+
+// VisionCapabilities returns the per-provider vision limits configured on
+// this BaseProvider. The zero value means "unknown — caller should fall
+// back to VisionCapabilitiesOrDefault()". Concrete providers (Anthropic,
+// OpenAI, etc.) populate p.visionCaps at construction; this method just
+// exposes it. SP-103-D3 / AUDIT-GAP-2.
+func (p *BaseProvider) VisionCapabilities() VisionCapabilities {
+	return p.visionCaps
 }
 
 // Helper methods for derived providers

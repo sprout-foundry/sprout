@@ -2,6 +2,7 @@ package agent
 
 import (
 	"sync"
+	"time"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/personas"
@@ -14,6 +15,10 @@ type StateManager interface {
 	GetMessages() []api.Message
 	SetMessages([]api.Message)
 	AddMessage(api.Message)
+
+	// Message timestamps
+	GetMessageTimestamps() []time.Time
+	SetMessageTimestamps([]time.Time)
 
 	// Session
 	GetSessionID() string
@@ -180,6 +185,7 @@ type AgentStateManager struct {
 	mu sync.RWMutex
 
 	messages                    []api.Message
+	messageTimestamps           []time.Time
 	sessionID                   string
 	turnCheckpoints             []TurnCheckpoint
 	checkpointMu                sync.RWMutex
@@ -254,12 +260,38 @@ func (s *AgentStateManager) SetMessages(msgs []api.Message) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.messages = msgs
+	// Rebuild timestamps to match the new message count. Existing
+	// timestamps are preserved for messages that remain; new messages
+	// (if the slice grew) get the current time.
+	if len(s.messageTimestamps) < len(msgs) {
+		now := time.Now()
+		for i := len(s.messageTimestamps); i < len(msgs); i++ {
+			s.messageTimestamps = append(s.messageTimestamps, now)
+		}
+	} else if len(s.messageTimestamps) > len(msgs) {
+		s.messageTimestamps = s.messageTimestamps[:len(msgs)]
+	}
+}
+
+// GetMessageTimestamps returns the creation timestamps for each message.
+func (s *AgentStateManager) GetMessageTimestamps() []time.Time {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.messageTimestamps
+}
+
+// SetMessageTimestamps sets the creation timestamps for each message.
+func (s *AgentStateManager) SetMessageTimestamps(ts []time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.messageTimestamps = ts
 }
 
 func (s *AgentStateManager) AddMessage(msg api.Message) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.messages = append(s.messages, msg)
+	s.messageTimestamps = append(s.messageTimestamps, time.Now())
 }
 
 // --- Session ---

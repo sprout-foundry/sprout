@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
@@ -21,6 +22,8 @@ type mockStateManager struct{}
 func (m *mockStateManager) GetMessages() []api.Message                    { return nil }
 func (m *mockStateManager) SetMessages([]api.Message)                     {}
 func (m *mockStateManager) AddMessage(api.Message)                        {}
+func (m *mockStateManager) GetMessageTimestamps() []time.Time             { return nil }
+func (m *mockStateManager) SetMessageTimestamps([]time.Time)              {}
 func (m *mockStateManager) GetSessionID() string                          { return "" }
 func (m *mockStateManager) SetSessionID(string)                           {}
 func (m *mockStateManager) GetTurnCheckpoints() []TurnCheckpoint          { return nil }

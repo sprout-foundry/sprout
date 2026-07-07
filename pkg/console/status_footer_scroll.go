@@ -16,9 +16,10 @@ import (
 //     buffer in an 80-col terminal reserves 3 rows even without any
 //     embedded \n.
 //   - legacy mode: 1 + (number of \n in the buffer), clamped to
-//     [1, maxSteerRows].
+//     [1, maxSteerRows]. Nil-safe so callers can use it on optional
+//     footer pointers without guarding.
 func (f *StatusFooter) steerRowCount() int {
-	if !f.steerActive {
+	if f == nil || !f.steerActive {
 		return 0
 	}
 	if f.steerWrappedActive {
@@ -49,12 +50,26 @@ func (f *StatusFooter) steerRowCount() int {
 	return lines
 }
 
+// hintRowCount returns 1 when the keyboard shortcut hint row is active,
+// 0 otherwise. SP-115. Nil-safe so callers can use it on optional
+// footer pointers without guarding.
+func (f *StatusFooter) hintRowCount() int {
+	if f == nil {
+		return 0
+	}
+	if f.showKeymapHint {
+		return 1
+	}
+	return 0
+}
+
 // reservedRows returns the number of bottom-pinned rows the footer is
 // holding. Always at least 2 (rule + content). When the steer input is
 // active, additional rows are reserved above the rule — one row per
-// visual line of the steer buffer.
+// visual line of the steer buffer. When the keymap hint is active,
+// one extra row is reserved above the rule for the shortcut hint.
 func (f *StatusFooter) reservedRows() int {
-	return 2 + f.steerRowCount()
+	return 2 + f.steerRowCount() + f.hintRowCount()
 }
 
 // applyScrollRegion sets the scroll region to rows 1..(rows-reserved) so the

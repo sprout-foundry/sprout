@@ -21,6 +21,7 @@ func (a *Agent) ExportState() ([]byte, error) {
 
 	state := AgentState{
 		Messages:                a.state.GetMessages(),
+		MessageTimestamps:       a.state.GetMessageTimestamps(),
 		TurnCheckpoints:         a.copyTurnCheckpoints(),
 		PreviousSummary:         a.state.GetPreviousSummary(),
 		CompactSummary:          compactSummary, // Store 5K-limited summary for continuity
@@ -49,6 +50,7 @@ func (a *Agent) ImportState(data []byte) error {
 		return agenterrors.NewAgent("state", "failed to import state", err)
 	}
 	a.state.SetMessages(state.Messages)
+	a.state.SetMessageTimestamps(state.MessageTimestamps)
 	a.ReplaceTurnCheckpoints(state.TurnCheckpoints)
 	// Prefer compact summary for continuity, fallback to legacy summary
 	if state.CompactSummary != "" {

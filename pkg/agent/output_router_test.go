@@ -324,6 +324,22 @@ func TestRouteAgentMessage_SkipsRawWriteWhenSubscriberActive(t *testing.T) {
 	assert.Empty(t, out, "raw stdout write must be skipped when subscriber is active")
 }
 
+// TestTerminalSubscriberActive_Getter verifies the getter reflects the setter
+// state. This is the contract that cmd/agent_query.go relies on to suppress
+// its duplicate "Completed in" print when the subscriber owns rendering.
+func TestTerminalSubscriberActive_Getter(t *testing.T) {
+	agent := &Agent{output: NewAgentOutputManager()}
+	router := NewOutputRouter(agent, nil)
+
+	assert.False(t, router.TerminalSubscriberActive(), "default must be false (direct mode)")
+
+	router.SetTerminalSubscriberActive(true)
+	assert.True(t, router.TerminalSubscriberActive(), "after SetTerminalSubscriberActive(true)")
+
+	router.SetTerminalSubscriberActive(false)
+	assert.False(t, router.TerminalSubscriberActive(), "after SetTerminalSubscriberActive(false)")
+}
+
 // TestRouteToolLog_PublishesCorrectEvent verifies tool log event structure
 func TestRouteToolLog_PublishesCorrectEvent(t *testing.T) {
 	bus := events.NewEventBus()

@@ -74,7 +74,7 @@ export function useChatSessionManager({
         }
       }
       setState((prev) => ({
-        chatSessions: response.chat_sessions,
+        chatSessions: response.chat_sessions ?? [],
         activeChatId: prev.activeChatId || activeChatId,
         messages:
           prev.messages.length === 0 && initialMessages.length > 0 ? trimMessages(initialMessages) : prev.messages,
@@ -157,7 +157,7 @@ export function useChatSessionManager({
 
         const sessionsResp = await listChatSessions();
         if (activeChatIdRef.current !== switchId) return;
-        setState((prev) => ({ chatSessions: sessionsResp.chat_sessions }));
+        setState((prev) => ({ chatSessions: sessionsResp.chat_sessions ?? [] }));
       } catch (error) {
         if (activeChatIdRef.current !== switchId) return;
         activeChatIdRef.current = currentId;
@@ -172,7 +172,7 @@ export function useChatSessionManager({
       const response = await createChatSession();
       const newId = response.chat_session.id;
       const sessionsResp = await listChatSessions();
-      setState((prev) => ({ chatSessions: sessionsResp.chat_sessions }));
+      setState((prev) => ({ chatSessions: sessionsResp.chat_sessions ?? [] }));
       return newId;
     } catch (error) {
       debugLog('[chat] Failed to create chat session:', error);
@@ -195,7 +195,7 @@ export function useChatSessionManager({
           }
         } else {
           const sessionsResp = await listChatSessions();
-          setState((prev) => ({ chatSessions: sessionsResp.chat_sessions }));
+          setState((prev) => ({ chatSessions: sessionsResp.chat_sessions ?? [] }));
         }
       } catch (error) {
         debugLog('[chat] Failed to delete chat session:', error);
@@ -209,7 +209,7 @@ export function useChatSessionManager({
       try {
         await renameChatSession(id, name);
         const sessionsResp = await listChatSessions();
-        setState((prev) => ({ chatSessions: sessionsResp.chat_sessions }));
+        setState((prev) => ({ chatSessions: sessionsResp.chat_sessions ?? [] }));
       } catch (error) {
         debugLog('[chat] Failed to rename chat session:', error);
       }

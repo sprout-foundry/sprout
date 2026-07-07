@@ -2,7 +2,6 @@ package console
 
 import (
 	"os"
-	"syscall"
 
 	"golang.org/x/term"
 )
@@ -34,6 +33,6 @@ func closeDevTty(f *os.File) {
 	if f == nil {
 		return
 	}
+	_ = f.Sync() // best-effort flush
 	_ = f.Close()
-	_ = syscall.Fsync(int(f.Fd())) // best-effort
 }

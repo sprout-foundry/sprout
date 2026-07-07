@@ -1298,3 +1298,10 @@ func (m *mockAPIClient) GetLastTPS() float64             { return 0 }
 func (m *mockAPIClient) GetAverageTPS() float64          { return 0 }
 func (m *mockAPIClient) GetTPSStats() map[string]float64 { return nil }
 func (m *mockAPIClient) ResetTPSStats()                  {}
+
+// VisionCapabilities returns the safe defaults — these mocks focus on
+// commit-message wiring, not capability tuning. Method exists to satisfy
+// api.ClientInterface after SP-103-D3 / AUDIT-GAP-2.
+func (m *mockAPIClient) VisionCapabilities() api.VisionCapabilities {
+	return api.VisionCapabilitiesDefault()
+}

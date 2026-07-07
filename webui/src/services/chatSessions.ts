@@ -30,7 +30,7 @@ export interface ChatSessionsResponse {
 export interface ChatSessionSwitchResponseChatSession {
   id: string;
   name: string;
-  messages?: Array<{ role: string; content: string; reasoning_content?: string }>;
+  messages?: Array<{ role: string; content: string; reasoning_content?: string; timestamp?: string }>;
   total_tokens?: number;
   total_cost?: number;
   session_id?: string;

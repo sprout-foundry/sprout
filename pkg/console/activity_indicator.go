@@ -42,6 +42,10 @@ type ActivityIndicator struct {
 	// into this mode; ClearStatic() returns to normal.
 	isStatic  bool
 	staticMsg string
+
+	// widthOverride forces a terminal width for testing (0 = auto-detect via
+	// term.GetSize on the underlying *os.File, falling back to 80).
+	widthOverride int
 }
 
 // NewActivityIndicator constructs an indicator that writes to w. If w is
@@ -299,8 +303,11 @@ func (a *ActivityIndicator) SetStatic(line string) {
 	a.mu.Unlock()
 
 	// Render static line (same pattern as render, but no spinner/elapsed).
+	// Truncate to terminal width so a long static line doesn't wrap to a
+	// second physical row (same wrap bug as the spinner).
 	if TryLockOutput() {
-		fmt.Fprint(a.w, "\r\033[K"+sanitizeLine(line))
+		width := a.terminalWidth()
+		fmt.Fprint(a.w, "\r\033[K"+truncateLinePreservingANSI(sanitizeLine(line), width))
 		UnlockOutput()
 	}
 }
@@ -372,8 +379,48 @@ func (a *ActivityIndicator) render(frame int) {
 	if !TryLockOutput() {
 		return
 	}
-	fmt.Fprintf(a.w, "\r\033[K%s %s (%.1fs)", spinnerFrames[frame], msg, elapsed.Seconds())
+	// Truncate msg so the full rendered line (spinner + space + msg + elapsed
+	// suffix) fits within one terminal row. Without this, a long message wraps
+	// to a second physical line; on the next tick \r only returns the cursor to
+	// column 0 of the BOTTOM (wrapped) line, leaving stale frames frozen above.
+	width := a.terminalWidth()
+	suffix := fmt.Sprintf(" (%.1fs)", elapsed.Seconds())
+	// Fixed overhead: spinner frame (1 col) + space (1 col).
+	const overhead = 2
+	// Progressive degradation so the rendered line never exceeds width:
+	//   width >= overhead + suffix + 1  → spinner + msg + elapsed
+	//   width >= overhead + 1           → spinner + msg (drop elapsed)
+	//   width >= 1                      → spinner only
+	// Each branch emits exactly one row so \r on the next tick clears it.
+	switch {
+	case width >= overhead+displayWidth(suffix)+1:
+		msgBudget := width - overhead - displayWidth(suffix)
+		msg = truncateLinePreservingANSI(msg, msgBudget)
+		fmt.Fprintf(a.w, "\r\033[K%s %s%s", spinnerFrames[frame], msg, suffix)
+	case width >= overhead+1:
+		msgBudget := width - overhead
+		msg = truncateLinePreservingANSI(msg, msgBudget)
+		fmt.Fprintf(a.w, "\r\033[K%s %s", spinnerFrames[frame], msg)
+	default:
+		fmt.Fprintf(a.w, "\r\033[K%s", spinnerFrames[frame])
+	}
 	UnlockOutput()
+}
+
+// terminalWidth returns the column count to budget the rendered line against.
+// It uses widthOverride when set (mainly for tests), otherwise queries the
+// underlying *os.File's fd via term.GetSize, falling back to 80 when the
+// writer isn't a *os.File or the size can't be determined.
+func (a *ActivityIndicator) terminalWidth() int {
+	if a.widthOverride > 0 {
+		return a.widthOverride
+	}
+	if f, ok := a.w.(*os.File); ok {
+		if w, _, err := term.GetSize(int(f.Fd())); err == nil && w > 0 {
+			return w
+		}
+	}
+	return 80
 }
 
 // sanitizeLine strips newlines and carriage returns so the spinner always

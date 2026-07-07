@@ -694,6 +694,26 @@ func (c *OllamaLocalClient) SupportsVision() bool {
 		strings.Contains(modelLower, "llama3.2")
 }
 
+// VisionCapabilities returns the local-Ollama vision limits used by
+// llama3.2-vision / glm-ocr family models.
+//
+// Conservative defaults reflect the documented Ollama API constraints:
+// the older base64 payload cap is ~3.5MB (we use 5MB), llama3.2-vision
+// works best at 1024px on the longest side, and we cap to a handful of
+// images per request since local context windows are tight. Detail tiers
+// are intentionally left nil — Ollama picks automatically. The returned
+// values are static (don't depend on c.model) so the table is safe to
+// share across clients; per-model overrides can be added later.
+// SP-103-D3 / AUDIT-GAP-2.
+func (c *OllamaLocalClient) VisionCapabilities() VisionCapabilities {
+	return VisionCapabilities{
+		MaxImageBytes:     5_000_000,
+		MaxImageCount:     5,
+		MaxImageDimension: 1024,
+		DetailTiers:       nil,
+	}
+}
+
 // SupportsConversationalVision returns true only for multimodal chat models.
 // OCR-only models (e.g. glm-ocr) accept images but produce extraction output
 // that doesn't help free-form conversational turns — the tool path

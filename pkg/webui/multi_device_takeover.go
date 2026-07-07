@@ -14,7 +14,7 @@ import "sync"
 // for a given user/session. Only one device may be active at a time; connecting
 // from a second device triggers a takeover prompt.
 type ActiveSessionRegistry struct {
-	mu      sync.RWMutex
+	mu       sync.RWMutex
 	sessions map[string]string // sessionID → active deviceID
 }
 

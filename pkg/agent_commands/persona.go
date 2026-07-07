@@ -221,7 +221,6 @@ func normalizePersonaKey(raw string) string {
 	return value
 }
 
-
 // Complete returns completions for the /persona command.
 func (p *PersonaCommand) Complete(args []string, chatAgent *agent.Agent) []string {
 	baseCommands := []string{"clear", "list"}

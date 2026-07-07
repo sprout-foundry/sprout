@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
@@ -92,7 +92,6 @@ func init() {
 }
 
 var fakeAPIKey string
-
 
 func setupExportTest(t *testing.T) (*ReactWebServer, string) {
 	t.Helper()

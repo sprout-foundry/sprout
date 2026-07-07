@@ -1,9 +1,9 @@
+import type { TerminalSession, AttachableSession } from '@sprout/ui';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
-import type { TerminalSession, AttachableSession } from '@sprout/ui';
 import type { TerminalPaneHandle } from '../components/TerminalPane';
-import { notificationBus } from '../services/notificationBus';
 import { clientFetch } from '../services/clientSession';
+import { notificationBus } from '../services/notificationBus';
 import { debugLog } from '../utils/log';
 
 /* ------------------------------------------------------------------ */

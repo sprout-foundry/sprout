@@ -1,5 +1,5 @@
-import { useState } from 'react';
 import { ChevronDown, ChevronRight, Trash2 } from 'lucide-react';
+import { useState } from 'react';
 import type { SproutSettings } from '../../services/api';
 import { showThemedConfirm } from '../ThemedDialog';
 import { getNestedValue } from './settingsHelpers';

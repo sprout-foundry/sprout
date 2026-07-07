@@ -2,11 +2,7 @@
  * Session domain API — adapter-aware session operations.
  */
 
-import type {
-  SessionRestoreResponse,
-  SessionSearchResponse,
-  SessionsResponse,
-} from './types';
+import type { SessionRestoreResponse, SessionSearchResponse, SessionsResponse } from './types';
 
 export async function getSessions(fetchFn: typeof fetch, scope?: string): Promise<SessionsResponse> {
   const url = scope ? `/api/sessions?scope=${encodeURIComponent(scope)}` : '/api/sessions';

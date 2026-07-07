@@ -52,8 +52,7 @@ export default function LanguageServersSettingsTab({ settings, updateSetting }: 
   const filteredServers = normalizedFilter
     ? servers.filter(
         (s) =>
-          s.id.toLowerCase().includes(normalizedFilter) ||
-          (s.binary || '').toLowerCase().includes(normalizedFilter),
+          s.id.toLowerCase().includes(normalizedFilter) || (s.binary || '').toLowerCase().includes(normalizedFilter),
       )
     : servers;
 
@@ -138,7 +137,7 @@ export default function LanguageServersSettingsTab({ settings, updateSetting }: 
       )}
 
       {normalizedFilter && filteredServers.length === 0 && (
-        <div className="settings-empty">No servers match "{serverFilter}"</div>
+        <div className="settings-empty">No servers match &quot;{serverFilter}&quot;</div>
       )}
 
       {filteredServers.length > 0 && (

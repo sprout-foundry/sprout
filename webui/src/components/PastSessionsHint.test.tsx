@@ -72,9 +72,7 @@ describe('PastSessionsHint', () => {
     // Advance past debounce
     await vi.advanceTimersByTimeAsync(350);
 
-    expect(globalThis.fetch).toHaveBeenCalledWith(
-      '/api/recall?query=test%20query&limit=5',
-    );
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/recall?query=test%20query&limit=5');
   });
 
   test('mock fetch with empty items shows "No matching sessions."', async () => {
@@ -105,10 +103,10 @@ describe('PastSessionsHint', () => {
     await vi.advanceTimersByTimeAsync(350);
 
     await waitFor(() => {
-      const cardAbc = screen.getByTestId('past-sessions-hint-card-session-abc');
-      const cardDef = screen.getByTestId('past-sessions-hint-card-session-def');
-      expect(cardAbc).toBeInTheDocument();
-      expect(cardDef).toBeInTheDocument();
+      expect(screen.getByTestId('past-sessions-hint-card-session-abc')).toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('past-sessions-hint-card-session-def')).toBeInTheDocument();
     });
 
     // Verify session IDs are visible
@@ -117,9 +115,7 @@ describe('PastSessionsHint', () => {
   });
 
   test('click on a card dispatches sprout:session-restored CustomEvent', async () => {
-    const items = [
-      { session_id: 'clicked-session', content_preview: 'Clicked this one', similarity: 0.9 },
-    ];
+    const items = [{ session_id: 'clicked-session', content_preview: 'Clicked this one', similarity: 0.9 }];
     setupFetchMock(items);
     render(<PastSessionsHint />);
 

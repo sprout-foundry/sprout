@@ -84,14 +84,14 @@ type Provider struct {
 }
 
 type Model struct {
-	ID             string   `json:"id"`
-	Name           string   `json:"name,omitempty"`
-	Description    string   `json:"description,omitempty"`
-	ContextLength  int      `json:"context_length,omitempty"`
-	Tags           []string `json:"tags,omitempty"`
-	InputCost      float64  `json:"input_cost,omitempty"`
-	OutputCost     float64  `json:"output_cost,omitempty"`
-	CachedInputCost float64 `json:"cached_input_cost,omitempty"`
+	ID              string   `json:"id"`
+	Name            string   `json:"name,omitempty"`
+	Description     string   `json:"description,omitempty"`
+	ContextLength   int      `json:"context_length,omitempty"`
+	Tags            []string `json:"tags,omitempty"`
+	InputCost       float64  `json:"input_cost,omitempty"`
+	OutputCost      float64  `json:"output_cost,omitempty"`
+	CachedInputCost float64  `json:"cached_input_cost,omitempty"`
 }
 
 var (

@@ -189,8 +189,8 @@ func selectProviderInteractive() (string, bool) {
 	}
 
 	sl := console.NewSelectList(console.SelectListOptions{
-		Title:     "Pick a provider",
-		Items:     items,
+		Title:      "Pick a provider",
+		Items:      items,
 		Searchable: true,
 		PageSize:   10,
 	})
@@ -314,4 +314,3 @@ func persistProviderAndModel(providerID, modelName string) error {
 	}
 	return mgr.SaveConfig()
 }
-

@@ -6,10 +6,10 @@
  * Target: ~80 lines
  */
 
-import React from 'react';
-import { Copy, Navigation, Eye, FolderOpen, ClipboardCopy } from 'lucide-react';
-import type { FC } from 'react';
 import { ContextMenu } from '@sprout/ui';
+import { Copy, Navigation, Eye, FolderOpen, ClipboardCopy } from 'lucide-react';
+import React from 'react';
+import type { FC } from 'react';
 
 // ---------------------------------------------------------------------------
 // Types

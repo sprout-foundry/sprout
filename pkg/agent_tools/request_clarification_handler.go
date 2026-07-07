@@ -70,8 +70,8 @@ func (h *requestClarificationHandler) Execute(ctx context.Context, env ToolEnv, 
 	return ToolResult{Output: result}, nil
 }
 
-func (h *requestClarificationHandler) Aliases() []string         { return nil }
-func (h *requestClarificationHandler) Timeout() time.Duration    { return 65 * time.Second }
-func (h *requestClarificationHandler) MaxResultSize() int        { return 0 }
-func (h *requestClarificationHandler) SafeForParallel() bool     { return false }
-func (h *requestClarificationHandler) Interactive() bool         { return true }
+func (h *requestClarificationHandler) Aliases() []string      { return nil }
+func (h *requestClarificationHandler) Timeout() time.Duration { return 65 * time.Second }
+func (h *requestClarificationHandler) MaxResultSize() int     { return 0 }
+func (h *requestClarificationHandler) SafeForParallel() bool  { return false }
+func (h *requestClarificationHandler) Interactive() bool      { return true }

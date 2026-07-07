@@ -44,13 +44,13 @@ type SearchOptions struct {
 
 // SearchResult is a single matched session with a formatted excerpt.
 type SearchResult struct {
-	SessionID  string    `json:"session_id"`
-	Name       string    `json:"name"`
-	WorkingDir string    `json:"working_directory"`
+	SessionID   string    `json:"session_id"`
+	Name        string    `json:"name"`
+	WorkingDir  string    `json:"working_directory"`
 	LastUpdated time.Time `json:"last_updated"`
-	TotalCost  float64   `json:"total_cost"`
-	Excerpt   string    `json:"excerpt"`
-	MatchScore int      `json:"match_score"` // 1 (any term), 2 (all terms), 3 (exact phrase)
+	TotalCost   float64   `json:"total_cost"`
+	Excerpt     string    `json:"excerpt"`
+	MatchScore  int       `json:"match_score"` // 1 (any term), 2 (all terms), 3 (exact phrase)
 }
 
 // ---------------------------------------------------------------------------
@@ -129,13 +129,13 @@ func Search(idx *SessionIndex, opts SearchOptions) []SearchResult {
 		c := candidates[i]
 		excerpt := buildExcerpt(c.entry, terms, queryLower)
 		results = append(results, SearchResult{
-			SessionID:  c.entry.SessionID,
-			Name:       c.entry.Name,
-			WorkingDir: c.entry.WorkingDir,
+			SessionID:   c.entry.SessionID,
+			Name:        c.entry.Name,
+			WorkingDir:  c.entry.WorkingDir,
 			LastUpdated: c.entry.LastUpdated,
-			TotalCost:  c.entry.TotalCost,
-			Excerpt:    excerpt,
-			MatchScore: c.score,
+			TotalCost:   c.entry.TotalCost,
+			Excerpt:     excerpt,
+			MatchScore:  c.score,
 		})
 	}
 

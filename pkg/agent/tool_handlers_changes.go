@@ -29,8 +29,8 @@ import (
 	"strings"
 	"time"
 
-	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/pmezard/go-difflib/difflib"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/history"
 )
 

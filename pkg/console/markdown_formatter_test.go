@@ -13,17 +13,17 @@ func TestMarkdownFormatter_TableRendering(t *testing.T) {
 	formatter := NewMarkdownFormatter(true, true)
 
 	tests := []struct {
-		name     string
-		input    string
-		contains []string
+		name        string
+		input       string
+		contains    []string
 		notContains []string
 	}{
 		{
-			name: "simple 2-column table renders aligned columns with header rule",
+			name:  "simple 2-column table renders aligned columns with header rule",
 			input: "| File | Status |\n|------|--------|\n| a.go | ok |\n| b.go | fail |",
 			contains: []string{
 				"File", "Status", "a.go", "ok", "b.go", "fail",
-				"─", // header rule
+				"─",       // header rule
 				ColorBold, // header row is bold
 				ColorDim,  // separator is dim
 			},
@@ -32,7 +32,7 @@ func TestMarkdownFormatter_TableRendering(t *testing.T) {
 			},
 		},
 		{
-			name: "3-column table with alignment markers",
+			name:  "3-column table with alignment markers",
 			input: "| Name | Count | Aligned |\n|:---|---:|:---:|\n| left | 1 | center |\n| right | 99 | mid |",
 			contains: []string{
 				"Name", "Count", "Aligned",
@@ -44,11 +44,11 @@ func TestMarkdownFormatter_TableRendering(t *testing.T) {
 			},
 		},
 		{
-			name: "cell with inline code — formatting applied",
+			name:  "cell with inline code — formatting applied",
 			input: "| Key | Value |\n|-----|-------|\n| lang | `go` |\n| ver | **1.21** |",
 			contains: []string{
 				"Key", "Value", "lang", "ver",
-				BgGray,  // inline code background
+				BgGray,    // inline code background
 				ColorBold, // bold in "1.21"
 			},
 			notContains: []string{
@@ -56,7 +56,7 @@ func TestMarkdownFormatter_TableRendering(t *testing.T) {
 			},
 		},
 		{
-			name: "table followed by normal paragraph",
+			name:  "table followed by normal paragraph",
 			input: "| A | B |\n|---|---|\n| 1 | 2 |\n\nThis is after the table.",
 			contains: []string{
 				"A", "B", "1", "2",
@@ -67,7 +67,7 @@ func TestMarkdownFormatter_TableRendering(t *testing.T) {
 			},
 		},
 		{
-			name: "single-row table (no separator) renders as plain text",
+			name:  "single-row table (no separator) renders as plain text",
 			input: "| Just one row |\n| with pipes |",
 			contains: []string{
 				"Just one row", "with pipes",
@@ -77,7 +77,7 @@ func TestMarkdownFormatter_TableRendering(t *testing.T) {
 			notContains: []string{},
 		},
 		{
-			name: "empty cells handled gracefully",
+			name:  "empty cells handled gracefully",
 			input: "| Col1 | Col2 |\n|------|------|\n| val | |\n| | val2 |",
 			contains: []string{
 				"Col1", "Col2", "val", "val2",
@@ -177,7 +177,7 @@ func TestMarkdownFormatter_NestedListIndentation(t *testing.T) {
 			input: "- parent\n  - child\n    - grandchild",
 			contains: []string{
 				"- parent",
-				"  - child",      // 2 spaces = 1 level
+				"  - child",        // 2 spaces = 1 level
 				"    - grandchild", // 4 spaces = 2 levels
 			},
 		},

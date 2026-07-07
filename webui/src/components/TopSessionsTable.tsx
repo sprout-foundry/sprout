@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import { formatDollar } from '../utils/format';
 import type { SessionCostRow } from '../types/costs';
+import { formatDollar } from '../utils/format';
 import './TopSessionsTable.css';
 
 type SortKey = 'title' | 'working_dir' | 'total_cost' | 'last_updated';
@@ -37,11 +37,7 @@ function formatRelativeTime(dateStr: string): string {
   }
 }
 
-function sortSessions(
-  sessions: SessionCostRow[],
-  key: SortKey,
-  direction: SortDirection,
-): SessionCostRow[] {
+function sortSessions(sessions: SessionCostRow[], key: SortKey, direction: SortDirection): SessionCostRow[] {
   const sorted = [...sessions];
   sorted.sort((a, b) => {
     let cmp = 0;
@@ -98,6 +94,7 @@ export default function TopSessionsTable({
     if (onSessionClick) {
       onSessionClick(sessionId);
     } else {
+      // eslint-disable-next-line no-console
       console.log(`TopSessionsTable: session clicked but no handler provided: ${sessionId}`);
     }
   };
@@ -115,11 +112,7 @@ export default function TopSessionsTable({
   // Error state
   if (error) {
     return (
-      <div
-        className="top-sessions-table top-sessions-table--error"
-        data-testid="top-sessions-table"
-        role="alert"
-      >
+      <div className="top-sessions-table top-sessions-table--error" data-testid="top-sessions-table" role="alert">
         Error loading sessions: {error}
       </div>
     );
@@ -249,9 +242,7 @@ export default function TopSessionsTable({
               <td className="top-sessions-cell top-sessions-cell--working-dir" title={row.working_dir}>
                 {row.working_dir || '—'}
               </td>
-              <td className="top-sessions-cell top-sessions-cell--cost">
-                {formatDollar(row.total_cost)}
-              </td>
+              <td className="top-sessions-cell top-sessions-cell--cost">{formatDollar(row.total_cost)}</td>
               <td className="top-sessions-cell top-sessions-cell--last-updated">
                 {formatRelativeTime(row.last_updated)}
               </td>

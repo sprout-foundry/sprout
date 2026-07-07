@@ -1,6 +1,6 @@
 import { Terminal, GitBranch, MessageSquare, Zap, BookOpen, Settings, Command, X } from 'lucide-react';
-import { useWorkspace } from '../hooks/useWorkspace';
 import { supportsWorkspaceSwitching } from '../config/mode';
+import { useWorkspace } from '../hooks/useWorkspace';
 import WorkspacePicker from './WorkspacePicker';
 import './WelcomeTab.css';
 

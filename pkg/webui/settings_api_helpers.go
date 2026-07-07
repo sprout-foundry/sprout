@@ -111,20 +111,20 @@ var validHistoryScopes = map[string]bool{
 // sensitive fields stripped so they are never sent to the browser.
 func sanitizedConfig(cfg *configuration.Config) map[string]interface{} {
 	out := map[string]interface{}{
-		"version":               cfg.Version,
-		"last_used_provider":    cfg.LastUsedProvider,
-		"provider_models":       cfg.ProviderModels,
-		"provider_priority":     cfg.ProviderPriority,
-		"mcp":                   mcp.RedactMCPConfig(cfg.MCP),
-		"resource_directory":    cfg.ResourceDirectory,
-		"reasoning_effort":      cfg.ReasoningEffort,
-		"system_prompt_text":    cfg.SystemPromptText,
-		"skip_prompt":           cfg.SkipPrompt,
-		"api_timeouts":          cfg.APITimeouts,
-		"custom_providers":      sanitizedCustomProviders(cfg.CustomProviders),
-		"history_scope":         cfg.HistoryScope,
-		"subagent_provider":     cfg.SubagentProvider,
-		"subagent_model":        cfg.SubagentModel,
+		"version":            cfg.Version,
+		"last_used_provider": cfg.LastUsedProvider,
+		"provider_models":    cfg.ProviderModels,
+		"provider_priority":  cfg.ProviderPriority,
+		"mcp":                mcp.RedactMCPConfig(cfg.MCP),
+		"resource_directory": cfg.ResourceDirectory,
+		"reasoning_effort":   cfg.ReasoningEffort,
+		"system_prompt_text": cfg.SystemPromptText,
+		"skip_prompt":        cfg.SkipPrompt,
+		"api_timeouts":       cfg.APITimeouts,
+		"custom_providers":   sanitizedCustomProviders(cfg.CustomProviders),
+		"history_scope":      cfg.HistoryScope,
+		"subagent_provider":  cfg.SubagentProvider,
+		"subagent_model":     cfg.SubagentModel,
 		// SubagentTypes is catalog-derived and never persisted — exposed via
 		// GET /api/settings/subagent-types for the persona list view. Keeping
 		// it out of the generic settings payload prevents round-trip PUTs

@@ -24,7 +24,6 @@ type enhancedMockClient struct {
 func (m *enhancedMockClient) GetModel() string     { return m.modelFlag }
 func (m *enhancedMockClient) SupportsVision() bool { return m.supportsVisionFlag }
 
-
 // SupportsConversationalVision reports whether inline multimodal turns
 // should embed the image. Falls back to SupportsVision() for test mocks
 // that don't need the OCR-only distinction.
@@ -39,6 +38,7 @@ func (m *enhancedMockClient) SupportsConversationalVision() bool {
 func (m *enhancedMockClient) VisionCapabilities() VisionCapabilities {
 	return m.visionCaps
 }
+
 // =====================================================================
 // containsReasoningModel
 // =====================================================================

@@ -26,8 +26,8 @@ const (
 )
 
 var (
-	tokenCache   = make(map[string]int)
-	cacheMu      sync.RWMutex
+	tokenCache = make(map[string]int)
+	cacheMu    sync.RWMutex
 )
 
 // EstimateTokens provides a token estimation based on OpenAI's tiktoken approach.

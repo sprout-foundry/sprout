@@ -83,7 +83,7 @@ func (m *concurrentMock) GetModelContextLimit() (int, error) { return 128000, ni
 func (m *concurrentMock) ListModels(context.Context) ([]api.ModelInfo, error) {
 	return nil, nil
 }
-func (m *concurrentMock) SupportsVision() bool            { return true }
+func (m *concurrentMock) SupportsVision() bool { return true }
 
 // SupportsConversationalVision reports whether inline multimodal turns
 // should embed the image. Defaults to false; overridden per client.
@@ -204,7 +204,7 @@ func TestVisionConcurrent_AnalyzeImage(t *testing.T) {
 
 func TestVisionConcurrent_ParallelOCR6Pages(t *testing.T) {
 	mock := &failingMock{
-		delay: 5 * time.Millisecond,
+		delay:   5 * time.Millisecond,
 		failFor: map[int]bool{1: true, 2: true},
 	}
 

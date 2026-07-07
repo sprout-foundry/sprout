@@ -15,11 +15,11 @@ import (
 )
 
 var (
-	mu                sync.RWMutex
-	suspendFunc       func()
-	resumeFunc        func()
-	steerPause        func()
-	steerResume       func()
+	mu                 sync.RWMutex
+	suspendFunc        func()
+	resumeFunc         func()
+	steerPause         func()
+	steerResume        func()
 	streamingSuspended atomic.Bool
 )
 

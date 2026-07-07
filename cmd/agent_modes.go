@@ -327,14 +327,15 @@ func RunAgent(chatAgent *agent.Agent, isInteractive bool, args []string) (err er
 					fmt.Println()
 					console.GlyphPaused.Printf("Received signal %v, interrupting active task...", sig)
 					console.GlyphDim.Printf("  (Press Ctrl+C again quickly to force quit)")
-									if chatAgent != nil {
-					chatAgent.TriggerInterrupt()
+					if chatAgent != nil {
+						chatAgent.TriggerInterrupt()
+					}
+					// SP-056-6d: Resolve any active reasoning fold on interrupt.
+					if fold := currentReasoningFold; fold != nil && fold.IsActive() {
+						fold.Interrupt()
+					}
+					continue
 				}
-				// SP-056-6d: Resolve any active reasoning fold on interrupt.
-				if fold := currentReasoningFold; fold != nil && fold.IsActive() {
-					fold.Interrupt()
-				}
-				continue}
 
 				fmt.Println()
 				console.GlyphStopped.Printf("Received signal %v, shutting down gracefully...", sig)

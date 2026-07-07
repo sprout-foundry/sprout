@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/agent"
+	api "github.com/sprout-foundry/sprout/pkg/agent_api"
 	"github.com/sprout-foundry/sprout/pkg/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -25,13 +25,13 @@ import (
 func makeTestSession1() agent.ConversationState {
 	now := time.Now()
 	return agent.ConversationState{
-		SessionID:      "test-export-1",
-		Name:           "Test Export Session One",
+		SessionID:        "test-export-1",
+		Name:             "Test Export Session One",
 		WorkingDirectory: "/home/testuser/project",
-		TotalCost:      0.05,
-		PromptTokens:   100,
+		TotalCost:        0.05,
+		PromptTokens:     100,
 		CompletionTokens: 200,
-		LastUpdated:  now,
+		LastUpdated:      now,
 		Messages: []api.Message{
 			{Role: "user", Content: "Help me with the embedding index"},
 			{Role: "assistant", Content: "I can help with the embedding index issue"},
@@ -42,13 +42,13 @@ func makeTestSession1() agent.ConversationState {
 func makeTestSession2() agent.ConversationState {
 	now := time.Now().Add(-time.Hour) // older than session 1
 	return agent.ConversationState{
-		SessionID:      "test-export-2",
-		Name:           "Test Export Session Two",
+		SessionID:        "test-export-2",
+		Name:             "Test Export Session Two",
 		WorkingDirectory: "/home/testuser/other-project",
-		TotalCost:      0.03,
-		PromptTokens:   50,
+		TotalCost:        0.03,
+		PromptTokens:     50,
 		CompletionTokens: 80,
-		LastUpdated:  now,
+		LastUpdated:      now,
 		Messages: []api.Message{
 			{Role: "user", Content: "Debug this auth error"},
 			{Role: "assistant", Content: "checking the auth error in the config"},
@@ -59,13 +59,13 @@ func makeTestSession2() agent.ConversationState {
 func makeTestSessionWithToolCalls() agent.ConversationState {
 	now := time.Now()
 	return agent.ConversationState{
-		SessionID:      "test-tool-calls",
-		Name:           "Session With Tool Calls",
+		SessionID:        "test-tool-calls",
+		Name:             "Session With Tool Calls",
 		WorkingDirectory: "/home/testuser/project",
-		TotalCost:      0.10,
-		PromptTokens:   150,
+		TotalCost:        0.10,
+		PromptTokens:     150,
 		CompletionTokens: 300,
-		LastUpdated:  now,
+		LastUpdated:      now,
 		Messages: []api.Message{
 			{Role: "user", Content: "Read the file config.yaml"},
 			{

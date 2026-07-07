@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strconv"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -599,7 +599,6 @@ func (m *MCPCommand) testServer(serverName string, chatAgent *agent.Agent) error
 
 	return nil
 }
-
 
 // Complete returns completions for the /mcp command.
 func (m *MCPCommand) Complete(args []string, chatAgent *agent.Agent) []string {

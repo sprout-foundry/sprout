@@ -224,7 +224,7 @@ func (s *terminalSubscriberState) handleToolStartEvent(data map[string]interface
 		return
 	}
 
-// announce subagent spawn once per (depth,
+	// announce subagent spawn once per (depth,
 	// persona) pair per turn, with provider/model so the user
 	// can see which cheaper/faster model is doing the work.
 	if depth > 0 && persona != "" {

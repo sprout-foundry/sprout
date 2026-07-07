@@ -32,7 +32,7 @@ type AgentWorkflowConfig struct {
 
 	// SubagentTimeoutSeconds overrides the per-run_subagent tool timeout
 	// (default 1800 = 30 minutes). Set higher for very large refactors.
-	SubagentTimeoutSeconds  *int                              `json:"subagent_timeout_seconds,omitempty"`
+	SubagentTimeoutSeconds *int `json:"subagent_timeout_seconds,omitempty"`
 
 	// RequiresApproval controls whether the run_automate agent tool must
 	// surface an intent-confirmation prompt to the user before launching

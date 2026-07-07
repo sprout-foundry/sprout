@@ -14,7 +14,7 @@
  *   - data-depth attribute
  */
 
-import { createElement } from 'react';
+import { createElement, act } from 'react';
 
 // Mock lucide-react icons — return SVGs with data-testid for selection in jsdom
 vi.mock('lucide-react', () => {
@@ -37,7 +37,6 @@ vi.mock('@sprout/ui', () => ({
   },
 }));
 
-import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SubagentTree, buildTree, type TreeNode } from './SubagentTree';

@@ -122,7 +122,7 @@ func TestCompletionCycle_EditResetsCycle(t *testing.T) {
 
 func newTestReaderWithCompleter(c CompletionProvider) *SteerInputReader {
 	return &SteerInputReader{
-		fd: -1,
+		fd:          -1,
 		submitFn:    func(string) {},
 		queueFn:     func(string) {},
 		interruptFn: func() {},
@@ -181,7 +181,7 @@ func TestSteerInputReader_Completion_EditResetsCycle(t *testing.T) {
 	}
 	// User edits: insert another character → cycle must reset.
 	r.insertAtCursor([]byte("d")) // buffer is now "/modeld"
-	r.handleSteerCompletion()      // fresh cycle: applies /model again
+	r.handleSteerCompletion()     // fresh cycle: applies /model again
 	if got := string(r.buffer); got != "/model" {
 		t.Fatalf("after edit + completion: expected /model, got %q", got)
 	}

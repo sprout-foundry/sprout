@@ -313,7 +313,6 @@ func (r *RollbackCommand) Execute(args []string, chatAgent *agent.Agent) error {
 	return nil
 }
 
-
 // Complete returns completions for the /rollback command.
 func (r *RollbackCommand) Complete(args []string, chatAgent *agent.Agent) []string {
 	if len(args) == 0 {

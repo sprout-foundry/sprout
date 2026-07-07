@@ -6,9 +6,9 @@
  * act pattern, vi.mock for all dependencies).
  */
 
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
 
 // ---------------------------------------------------------------------------
 // Mocks — MUST be set up BEFORE importing Sidebar or any of its deps
@@ -292,9 +292,30 @@ describe('Sidebar export-all', () => {
       getSessionsMock.mockResolvedValue({
         message: 'ok',
         sessions: [
-          { session_id: 's1', name: 'Active 1', working_directory: '/a', last_updated: '2025-01-01T00:00:00Z', message_count: 5, total_tokens: 100 },
-          { session_id: 's2', name: 'Empty', working_directory: '/b', last_updated: '2025-01-01T00:00:00Z', message_count: 0, total_tokens: 0 },
-          { session_id: 's3', name: 'Active 2', working_directory: '/c', last_updated: '2025-01-01T00:00:00Z', message_count: 10, total_tokens: 200 },
+          {
+            session_id: 's1',
+            name: 'Active 1',
+            working_directory: '/a',
+            last_updated: '2025-01-01T00:00:00Z',
+            message_count: 5,
+            total_tokens: 100,
+          },
+          {
+            session_id: 's2',
+            name: 'Empty',
+            working_directory: '/b',
+            last_updated: '2025-01-01T00:00:00Z',
+            message_count: 0,
+            total_tokens: 0,
+          },
+          {
+            session_id: 's3',
+            name: 'Active 2',
+            working_directory: '/c',
+            last_updated: '2025-01-01T00:00:00Z',
+            message_count: 10,
+            total_tokens: 200,
+          },
         ],
         current_session_id: 's1',
       });
@@ -351,7 +372,14 @@ describe('Sidebar export-all', () => {
       getSessionsMock.mockResolvedValue({
         message: 'ok',
         sessions: [
-          { session_id: 'sess-abc', name: 'Test', working_directory: '/d', last_updated: '2025-01-01T00:00:00Z', message_count: 3, total_tokens: 50 },
+          {
+            session_id: 'sess-abc',
+            name: 'Test',
+            working_directory: '/d',
+            last_updated: '2025-01-01T00:00:00Z',
+            message_count: 3,
+            total_tokens: 50,
+          },
         ],
         current_session_id: 'sess-abc',
       });
@@ -411,10 +439,13 @@ describe('Sidebar export-all', () => {
       fireEvent.click(btn);
     });
 
-    await waitFor(() => {
-      const errorEl = container.querySelector('.sidebar-export-all-error');
-      expect(errorEl).not.toBeNull();
-    }, { timeout: 2000 });
+    await waitFor(
+      () => {
+        const errorEl = container.querySelector('.sidebar-export-all-error');
+        expect(errorEl).not.toBeNull();
+      },
+      { timeout: 2000 },
+    );
 
     const errorEl = container.querySelector('.sidebar-export-all-error');
     expect(errorEl!.textContent).toContain('connection refused');
@@ -427,13 +458,24 @@ describe('Sidebar export-all', () => {
     // Delayed promise that doesn't resolve immediately
     let resolvePromise: () => void;
     getSessionsMock.mockImplementation(
-      () => new Promise((resolve) => { resolvePromise = () => resolve({
-        message: 'ok',
-        sessions: [
-          { session_id: 's1', name: 'Test', working_directory: '/a', last_updated: '2025-01-01T00:00:00Z', message_count: 1, total_tokens: 10 },
-        ],
-        current_session_id: 's1',
-      }); }),
+      () =>
+        new Promise((resolve) => {
+          resolvePromise = () =>
+            resolve({
+              message: 'ok',
+              sessions: [
+                {
+                  session_id: 's1',
+                  name: 'Test',
+                  working_directory: '/a',
+                  last_updated: '2025-01-01T00:00:00Z',
+                  message_count: 1,
+                  total_tokens: 10,
+                },
+              ],
+              current_session_id: 's1',
+            });
+        }),
     );
 
     renderSidebar();

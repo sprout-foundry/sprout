@@ -462,7 +462,6 @@ func splitCSV(s string) []string {
 	return out
 }
 
-
 // Complete returns completions for the /settings command.
 func (s *SettingsCommand) Complete(args []string, chatAgent *agent.Agent) []string {
 	if len(args) == 0 {

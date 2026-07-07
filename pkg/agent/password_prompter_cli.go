@@ -6,9 +6,9 @@ import (
 	"os"
 	"strings"
 
-	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
 	"github.com/sprout-foundry/sprout/pkg/clihooks"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"golang.org/x/term"
 )
 

@@ -104,7 +104,6 @@ func (c *IndexCommand) showStatus(chatAgent *agent.Agent) error {
 	return nil
 }
 
-
 // Complete returns completions for the /index command.
 func (c *IndexCommand) Complete(args []string, chatAgent *agent.Agent) []string {
 	subcommands := []string{"disable", "enable", "off", "on", "status", "toggle"}

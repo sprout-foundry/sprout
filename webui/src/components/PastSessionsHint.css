@@ -71,7 +71,9 @@
   border-radius: var(--radius-sm);
   background: var(--bg-secondary);
   cursor: pointer;
-  transition: background 120ms ease, border-color 120ms ease;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
 }
 
 .past-sessions-hint-card:hover {

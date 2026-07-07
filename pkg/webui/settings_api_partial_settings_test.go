@@ -33,20 +33,20 @@ func TestPartialSettingsAppliers_ComprehensiveEnums(t *testing.T) {
 		"self_review_gate_mode":   "code",
 		"approved_shell_commands": []interface{}{"ls"},
 		// applySubagentSettings
-		"subagent_provider":   "anthropic",
-		"subagent_model":      "claude-3",
-		"subagent_max_depth":  float64(2),
-		"disabled_personas":   []interface{}{},
-		"subagent_types":      []interface{}{}, // accept-and-ignore
+		"subagent_provider":        "anthropic",
+		"subagent_model":           "claude-3",
+		"subagent_max_depth":       float64(2),
+		"disabled_personas":        []interface{}{},
+		"subagent_types":           []interface{}{}, // accept-and-ignore
 		"default_subagent_persona": "",
 		// applyProviderRoutingSettings
-		"commit_provider":     "openai",
-		"commit_model":        "gpt-4",
-		"review_provider":     "openai",
-		"review_model":        "gpt-4",
-		"provider_models":     map[string]interface{}{"openai": "gpt-4"},
-		"provider_priority":   []interface{}{"openai"},
-		"last_used_provider":  "openai",
+		"commit_provider":    "openai",
+		"commit_model":       "gpt-4",
+		"review_provider":    "openai",
+		"review_model":       "gpt-4",
+		"provider_models":    map[string]interface{}{"openai": "gpt-4"},
+		"provider_priority":  []interface{}{"openai"},
+		"last_used_provider": "openai",
 		// applyPDFOCRSettings
 		"pdf_ocr_enabled":  true,
 		"pdf_ocr_provider": "openai",
@@ -73,12 +73,12 @@ func TestPartialSettingsAppliers_ComprehensiveEnums(t *testing.T) {
 		// applyPersistentContextSettings
 		"persistent_context": map[string]interface{}{},
 		// applySkillsSettings
-		"skills":      map[string]interface{}{},
+		"skills": map[string]interface{}{},
 		// applyWakeupSettings
 		"wakeup": map[string]interface{}{},
 		// risk_profiles and security_policy live in applyRiskAndSafetySettings
-		"risk_profiles":    map[string]interface{}{},
-		"security_policy":  map[string]interface{}{},
+		"risk_profiles":   map[string]interface{}{},
+		"security_policy": map[string]interface{}{},
 		// unknown — should be reported back
 		"definitely_not_a_real_key": "x",
 	}

@@ -97,9 +97,9 @@ type Agent struct {
 	wakeupDisabled       bool
 	wakeupMu             sync.Mutex
 
-	interruptMu         sync.Mutex // protects interruptCtx + interruptCancel
-	interruptCtx        context.Context
-	interruptCancel     context.CancelFunc
+	interruptMu     sync.Mutex // protects interruptCtx + interruptCancel
+	interruptCtx    context.Context
+	interruptCancel context.CancelFunc
 	// parentInterruptCtx is the base context the subagent's interrupt
 	// context should always derive from. For the primary agent this is
 	// nil (equivalent to context.Background()). For subagents it is the

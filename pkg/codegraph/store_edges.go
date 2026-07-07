@@ -150,10 +150,13 @@ func resolveEdgeNode(ctx context.Context, tx *sql.Tx, qualifiedName string) (int
 // the affected files.
 //
 // stalePaths: files whose symbols were just re-indexed (nodes deleted + recreated).
-//   All edges touching these files (incoming AND outgoing) are deleted.
+//
+//	All edges touching these files (incoming AND outgoing) are deleted.
+//
 // referrerPaths: files whose symbols are unchanged but whose outgoing edges
-//   may reference changed/removed nodes in stale files. Only their OUTGOING
-//   edges are deleted and re-resolved; incoming edges are preserved.
+//
+//	may reference changed/removed nodes in stale files. Only their OUTGOING
+//	edges are deleted and re-resolved; incoming edges are preserved.
 //
 // All nodes referenced by the edges must already exist in the database.
 func (s *SQLiteStore) InsertEdgesForFiles(ctx context.Context, stalePaths, referrerPaths []string, edges []Edge) error {

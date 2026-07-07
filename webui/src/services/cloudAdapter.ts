@@ -46,7 +46,7 @@ export class CloudAdapter implements APIAdapter {
   readonly supportsExport = false;
   readonly supportsInstances = true;
   readonly supportsLocalTerminal = false;
-  readonly supportsSettings = false;
+  readonly supportsSettings = true;
   readonly platformNavItems?: PlatformNavItem[];
 
   private config: CloudAdapterConfig;
@@ -164,7 +164,26 @@ export class CloudAdapter implements APIAdapter {
     }
 
     // ── Settings endpoint translation ───────────────────────────────
-    // Rewrite /api/settings and /api/settings/* paths to /api/proxy/settings/*
+    // For cloud mode, intercept GET /api/settings to return a synthetic
+    // response with minimal fields. Credentials endpoints are proxied.
+    if (urlPath === '/api/settings' && method === 'GET') {
+      // Return minimal settings — the full object isn't available on the
+      // platform backend, and cloud mode only needs credentials.
+      return new Response(
+        JSON.stringify({
+          subagent_provider: '',
+          subagent_model: '',
+          custom_providers: {},
+          mcp: { enabled: false },
+          skills: {},
+          output_verbosity: 'default',
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      );
+    }
     if (urlPath === '/api/settings' || urlPath.startsWith('/api/settings/')) {
       const requestBody = await this.extractRequestBody(input);
       return proxySettingsRequest(this.config.apiBase, url, method, clientIdHeader, clientIdValue, init, requestBody);

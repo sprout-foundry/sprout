@@ -97,6 +97,40 @@ func (m *ModelsCommand) ExecuteWithJSONOutput(args []string, chatAgent *agent.Ag
 	})
 }
 
+// Complete provides argument completions for /model. Suggests the
+// "select" subcommand, and when a partial model name is typed, lists
+// matching models from the current provider.
+func (m *ModelsCommand) Complete(args []string, chatAgent *agent.Agent) []string {
+	if len(args) == 0 {
+		return []string{"select"}
+	}
+
+	// If the last arg looks like it could be a model prefix, try listing
+	// models from the provider.
+	if chatAgent == nil {
+		return nil
+	}
+	clientType := chatAgent.GetProviderType()
+	models, err := api.GetModelsForProvider(clientType)
+	if err != nil || len(models) == 0 {
+		return nil
+	}
+
+	prefix := args[len(args)-1]
+	var matches []string
+	for _, model := range models {
+		if prefix == "" || strings.HasPrefix(strings.ToLower(model.ID), strings.ToLower(prefix)) {
+			matches = append(matches, model.ID)
+		}
+	}
+	sort.Strings(matches)
+	// Cap at a reasonable limit to avoid overwhelming the completion cycle.
+	if len(matches) > 20 {
+		matches = matches[:20]
+	}
+	return matches
+}
+
 // listModels displays all available models for the current provider
 func (m *ModelsCommand) listModels(chatAgent *agent.Agent) error {
 	// Get current provider from agent, not environment

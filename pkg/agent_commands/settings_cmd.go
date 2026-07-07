@@ -461,3 +461,32 @@ func splitCSV(s string) []string {
 	}
 	return out
 }
+
+
+// Complete returns completions for the /settings command.
+func (s *SettingsCommand) Complete(args []string, chatAgent *agent.Agent) []string {
+	if len(args) == 0 {
+		return []string{"set"}
+	}
+	if args[0] != "set" {
+		return nil
+	}
+
+	prefix := ""
+	if len(args) > 1 {
+		prefix = args[len(args)-1]
+	}
+
+	keys := agent.SupportedSettingKeys()
+	if prefix == "" {
+		return keys
+	}
+
+	var matches []string
+	for _, key := range keys {
+		if strings.HasPrefix(strings.ToLower(key), strings.ToLower(prefix)) {
+			matches = append(matches, key)
+		}
+	}
+	return matches
+}

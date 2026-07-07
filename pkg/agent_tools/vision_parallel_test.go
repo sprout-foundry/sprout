@@ -95,6 +95,13 @@ func (m *indexedMock) GetAverageTPS() float64          { return 0 }
 func (m *indexedMock) GetTPSStats() map[string]float64 { return nil }
 func (m *indexedMock) ResetTPSStats()                  {}
 
+// VisionCapabilities returns the safe defaults — these mocks focus on
+// parallel-pool mechanics, not capability tuning. Method exists to
+// satisfy api.ClientInterface after SP-103-D3 / AUDIT-GAP-2.
+func (m *indexedMock) VisionCapabilities() api.VisionCapabilities {
+	return api.VisionCapabilitiesDefault()
+}
+
 // failingMock fails the configured call numbers (1-indexed) and otherwise
 // succeeds. If alwaysFail is true, every call (including retries) fails.
 // Tracks peak active concurrency.
@@ -165,6 +172,13 @@ func (m *failingMock) GetLastTPS() float64             { return 0 }
 func (m *failingMock) GetAverageTPS() float64          { return 0 }
 func (m *failingMock) GetTPSStats() map[string]float64 { return nil }
 func (m *failingMock) ResetTPSStats()                  {}
+
+// VisionCapabilities returns the safe defaults — this mock focuses on
+// failure-retry semantics, not capability tuning. Method exists to
+// satisfy api.ClientInterface after SP-103-D3 / AUDIT-GAP-2.
+func (m *failingMock) VisionCapabilities() api.VisionCapabilities {
+	return api.VisionCapabilitiesDefault()
+}
 
 // =============================================================================
 // Helpers
@@ -268,20 +282,29 @@ func TestProcessOCRImages_ProgressCallback(t *testing.T) {
 	if len(progress) != 3 {
 		t.Fatalf("expected 3 progress calls (one per image), got %d", len(progress))
 	}
-	last := progress[len(progress)-1]
-	if last.completed != 3 || last.total != 3 {
-		t.Errorf("expected (3, 3) in final progress call, got (%d, %d)", last.completed, last.total)
-	}
-	for i := 1; i < len(progress); i++ {
-		if progress[i].completed <= progress[i-1].completed {
-			t.Errorf("progress.completed not monotonic: %d after %d",
-				progress[i].completed, progress[i-1].completed)
-		}
-	}
+	// Progress callbacks fire in completion order, which is non-deterministic
+	// under parallel processing. Verify the set of completed values is exactly
+	// {1, 2, 3} (each image increments the counter exactly once) and that
+	// the maximum is 3 (all images processed).
+	seen := map[int]bool{}
+	var maxCompleted int
 	for _, p := range progress {
 		if p.total != 3 {
 			t.Errorf("progress.total wrong: %d", p.total)
 		}
+		if p.completed < 1 || p.completed > 3 {
+			t.Errorf("progress.completed out of range [1,3]: %d", p.completed)
+		}
+		seen[p.completed] = true
+		if p.completed > maxCompleted {
+			maxCompleted = p.completed
+		}
+	}
+	if maxCompleted != 3 {
+		t.Errorf("expected max progress.completed to be 3 (all done), got %d", maxCompleted)
+	}
+	if len(seen) != 3 {
+		t.Errorf("expected progress.completed values to be a permutation of {1,2,3}, got %v", seen)
 	}
 }
 

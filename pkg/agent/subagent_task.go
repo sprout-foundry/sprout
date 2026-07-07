@@ -27,12 +27,12 @@ type subagentRunContext struct {
 	eventBus      *events.EventBus
 	stopProgress  chan struct{}
 	progressSubName string
-	progressLog   []SubagentProgressEntry
-	progressMu    sync.Mutex
-	lineBuf       strings.Builder
+	progressLog   *[]SubagentProgressEntry
+	progressMu    *sync.Mutex
+	lineBuf       *strings.Builder
 	outputMu      *sync.Mutex
 	running       *runningSubagent
-	budgetExceeded atomic.Bool
+	budgetExceeded *atomic.Bool
 }
 
 // setupSubagentRun creates and configures a subagent for execution.
@@ -60,6 +60,7 @@ func (r *SubagentRunner) setupSubagentRun(
 	// cancellation propagates into the subagent's LLM calls.
 	subAgent, err := r.createSubagent(opts, runCtx)
 	if err != nil {
+		cancel()
 		return nil, &SubagentResult{
 			ID:      taskID,
 			Error:   agenterrors.Wrap(err, "create subagent"),
@@ -279,14 +280,15 @@ func (r *SubagentRunner) setupSubagentRun(
 		eventBus:        eventBus,
 		stopProgress:    stopProgress,
 		progressSubName: progressSubName,
-		progressLog:     progressLog,
-		lineBuf:         lineBuf,
+		progressLog:     &progressLog,
+		progressMu:      &progressMu,
+		lineBuf:         &lineBuf,
 		outputMu:        outputMu,
 		running:         running,
 	}
-	// Copy budgetExceeded by value so the atomic.Bool field in rc
-	// is the same one the monitorBudget goroutine writes to.
-	rc.budgetExceeded = budgetExceeded
+	// Same pointer as the one monitorBudget writes to, so
+	// finalizeSubagentResult sees the real Store() value.
+	rc.budgetExceeded = &budgetExceeded
 
 	return rc, nil
 }
@@ -353,9 +355,9 @@ func (r *SubagentRunner) finalizeSubagentResult(
 		// result. Snapshot under the mutex so a late event arriving
 		// after subAgent.ProcessQuery returned can't race the read.
 		rc.progressMu.Lock()
-		if len(rc.progressLog) > 0 {
-			result.ProgressLog = make([]SubagentProgressEntry, len(rc.progressLog))
-			copy(result.ProgressLog, rc.progressLog)
+		if len(*rc.progressLog) > 0 {
+			result.ProgressLog = make([]SubagentProgressEntry, len(*rc.progressLog))
+			copy(result.ProgressLog, *rc.progressLog)
 		}
 		rc.progressMu.Unlock()
 

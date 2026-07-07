@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Collapsible } from '@sprout/ui';
 import { clientFetch } from '../services/clientSession';
 import './EditApprovalPanel.css';
 
@@ -145,10 +146,20 @@ function EditApprovalPanel({
 
         <div className="edit-approval-diff-body">
           {unifiedDiff && (
-            <details className="edit-approval-raw-diff">
-              <summary>Unified diff</summary>
+            // SP-101-Phase 3 (AUDIT-GAP-1): the unified-diff toggle is
+            // now a <Collapsible variant="flush">. The legacy
+            // `edit-approval-raw-diff` class is preserved on the
+            // container so the existing typography (smaller font,
+            // tertiary color) stays consistent with the surrounding
+            // diff body.
+            <Collapsible
+              title="Unified diff"
+              variant="flush"
+              className="edit-approval-raw-diff"
+              ariaLabel="Unified diff"
+            >
               <pre className="edit-approval-raw-diff-pre">{unifiedDiff}</pre>
-            </details>
+            </Collapsible>
           )}
           {hunks.map((hunk) => {
             const accepted = acceptedIds.has(hunk.id);

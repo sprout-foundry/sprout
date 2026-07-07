@@ -64,6 +64,15 @@ func (m *mockClient) GetAverageTPS() float64          { return 0 }
 func (m *mockClient) GetTPSStats() map[string]float64 { return nil }
 func (m *mockClient) ResetTPSStats()                  {}
 
+// VisionCapabilities returns an empty struct; mockClient is the minimal
+// stand-in used by provider adapter tests and intentionally does not
+// implement per-provider vision tuning. Tests that exercise capability
+// delegation use enhancedMockClient / dedicated fixtures.
+// SP-103-D3 / AUDIT-GAP-2.
+func (m *mockClient) VisionCapabilities() VisionCapabilities {
+	return VisionCapabilities{}
+}
+
 func TestProviderAdapterRateLimiter_AcquiresToken(t *testing.T) {
 	provider := "test-rate-limit-provider"
 	utils.RemoveProviderRateLimiter(provider)

@@ -99,6 +99,14 @@ func (t *TestClient) SupportsConversationalVision() bool {
 	return false
 }
 
+// VisionCapabilities returns the test client's vision limits — the safe
+// defaults. TestClient never participates in real vision requests, but
+// the method is required to satisfy api.ClientInterface.
+// SP-103-D3 / AUDIT-GAP-2.
+func (t *TestClient) VisionCapabilities() api.VisionCapabilities {
+	return api.VisionCapabilitiesDefault()
+}
+
 func (t *TestClient) GetVisionModel() string {
 	return ""
 }

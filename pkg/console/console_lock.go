@@ -88,6 +88,15 @@ func setActiveSteerReader(sr *SteerInputReader) {
 // without cursor management — displacing the cursor from the input
 // line and making subsequent keystrokes appear at the wrong position.
 func PrintExternal(msg string) {
+	// Suspend the activity indicator before writing. Without this, the
+	// spinner's render goroutine keeps writing \r\033[K<glyph> to the
+	// current cursor row every 80ms — clobbering the message mid-write
+	// and leaving ghost glyphs on rows the cursor has since moved away
+	// from. The subscriber restarts the indicator on the next ToolStart
+	// / QueryStarted event, so suspending here only blanks the spinner
+	// for the brief window between this message and the next event.
+	SuspendIndicator()
+
 	outputMu.Lock()
 	defer outputMu.Unlock()
 	// Check steer reader first (active during turns), then input reader

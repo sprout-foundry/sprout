@@ -1,8 +1,6 @@
 # SP-107 — Code Intelligence Graph
 
-**Status:** 🔵 Proposed
-**Created:** 2026-07-02
-**Effort:** Phase 1 (~3-4 days), Phase 2 (~2-3 days), Phase 3 (~1-2 days)
+**Status:** ✅ Implemented (auto-build on first query + embedding_index integration; qualified-name edge bug fixed in `repo_map.go:ToCodegraphSymbols`)
 
 ## Problem
 

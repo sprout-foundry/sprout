@@ -62,9 +62,9 @@ func TestAgentStateManager_SessionModel(t *testing.T) {
 // value just written — the Go memory model does not guarantee that
 // when multiple writers exist (a concurrent writer can land between
 // our Set and our Get on this goroutine). What we DO assert is:
-//   1. No race detector reports.
-//   2. The value read back is always one of the providers we wrote
-//      (the providers slice is the only source of truth).
+//  1. No race detector reports.
+//  2. The value read back is always one of the providers we wrote
+//     (the providers slice is the only source of truth).
 func TestAgentStateManager_SessionProviderRace(t *testing.T) {
 	sm := NewAgentStateManager(false)
 

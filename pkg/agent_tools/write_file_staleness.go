@@ -15,9 +15,9 @@ import (
 
 // TurnReadTracker tracks per-turn read state for staleness enforcement.
 type TurnReadTracker struct {
-	mu          sync.Mutex
-	readPaths   map[string]int64  // path → browser_seq at time of read
-	readTimes   map[string]time.Time // path → time when read_file was called
+	mu        sync.Mutex
+	readPaths map[string]int64     // path → browser_seq at time of read
+	readTimes map[string]time.Time // path → time when read_file was called
 }
 
 // NewTurnReadTracker creates a fresh tracker ready for a new turn.

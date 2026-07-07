@@ -156,7 +156,7 @@ func TestCarryForwardProbeData_PreservesFreshFields(t *testing.T) {
 		Provider:      "openrouter",
 		Models: []modelcontract.CanonicalModel{
 			{
-				ID: "openai/gpt-4o",
+				ID:               "openai/gpt-4o",
 				Probe:            &modelcontract.ProbeResult{Passed: true, Complex: true},
 				RecommendedRoles: []string{"primary", "subagent"},
 				// ContextWindow left zero in the prior — should NOT overwrite the
@@ -171,9 +171,9 @@ func TestCarryForwardProbeData_PreservesFreshFields(t *testing.T) {
 
 	fresh := []modelcontract.CanonicalModel{
 		{
-			ID:           "openai/gpt-4o",
+			ID:            "openai/gpt-4o",
 			ContextWindow: 128000, // fresh, must be preserved
-			Capabilities: modelcontract.Capabilities{Tools: modelcontract.Bool(true)},
+			Capabilities:  modelcontract.Capabilities{Tools: modelcontract.Bool(true)},
 		},
 	}
 	out := carryForwardProbeData(dir, "openrouter", fresh)

@@ -129,11 +129,11 @@ func (p *ProvidersCommand) Complete(args []string, chatAgent *agent.Agent) []str
 
 // providerInfoJSON is a single provider entry in the JSON output.
 type providerInfoJSON struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Model       string `json:"model"`
-	Ready       bool   `json:"ready"`
-	Active      bool   `json:"active"`
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Model  string `json:"model"`
+	Ready  bool   `json:"ready"`
+	Active bool   `json:"active"`
 }
 
 // providersJSONPayload wraps the provider list with current selection context.

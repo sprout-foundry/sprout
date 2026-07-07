@@ -18,8 +18,8 @@ import (
 func TestMemoryGate_AllowWhenSufficientMemory(t *testing.T) {
 	gb := int64(1024 * 1024 * 1024)
 	tests := []struct {
-		name  string
-		mem   int64
+		name string
+		mem  int64
 	}{
 		{"20 GB", 20 * gb},
 		{"exactly 16 GB", 16 * gb},
@@ -41,11 +41,11 @@ func TestMemoryGate_AllowWhenSufficientMemory(t *testing.T) {
 func TestMemoryGate_RefuseWhenBelowMinimum(t *testing.T) {
 	gb := int64(1024 * 1024 * 1024)
 	tests := []struct {
-		name  string
-		mem   int64
+		name string
+		mem  int64
 	}{
 		{"4 GB", 4 * gb},
-		{"exactly 7.9 GB", 7 * gb + 900*1024*1024},
+		{"exactly 7.9 GB", 7*gb + 900*1024*1024},
 		{"0 bytes", 0},
 	}
 	for _, tt := range tests {
@@ -717,10 +717,10 @@ func TestReadMemLinux_TempFile(t *testing.T) {
 	// with realistic meminfo content parsed the same way.
 	tmpDir := t.TempDir()
 	testCases := []struct {
-		name     string
-		content  string
-		wantKB   int64
-		wantErr  bool
+		name    string
+		content string
+		wantKB  int64
+		wantErr bool
 	}{
 		{
 			name:    "realistic meminfo",

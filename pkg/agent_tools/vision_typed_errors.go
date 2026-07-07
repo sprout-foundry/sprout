@@ -54,9 +54,9 @@ func typedErrorToVisionCode(te *agenterrors.TypedError) string {
 // classifyVisionResponseError inspects the error chain and returns the
 // best-fit ErrorCode for the response. Order of preference:
 //
-//   1. *remoteSizeExceededError (cap exceeded before GET) → REMOTE_FETCH.
-//   2. *agenterrors.TypedError → typedErrorToVisionCode mapping.
-//   3. Legacy strings.Contains classifier (legacyStringClassifyError).
+//  1. *remoteSizeExceededError (cap exceeded before GET) → REMOTE_FETCH.
+//  2. *agenterrors.TypedError → typedErrorToVisionCode mapping.
+//  3. Legacy strings.Contains classifier (legacyStringClassifyError).
 //
 // The legacy classifier preserves the previous behavior when neither typed
 // error is present, so callers don't get a worse experience for untyped

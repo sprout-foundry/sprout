@@ -353,8 +353,8 @@ func NewConfig() *Config {
 			CommitMessageTimeoutSec: 300, // 5 minutes for commit message generation
 		},
 		HistoryScope:                "project", // Default to project-scoped history
-		EnableZshCommandDetection:   true, // Enable zsh command detection by default
-		AutoExecuteDetectedCommands: true, // Auto-execute detected commands without prompting
+		EnableZshCommandDetection:   true,      // Enable zsh command detection by default
+		AutoExecuteDetectedCommands: true,      // Auto-execute detected commands without prompting
 		SubagentTypes:               defaultSubagentTypes(),
 		Skills:                      defaultSkills(),
 		PDFOCREnabled:               true,

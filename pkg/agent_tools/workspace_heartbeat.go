@@ -35,9 +35,9 @@ type SessionHeartbeat struct {
 // The monitor runs a background goroutine (started via StartMonitor) that
 // periodically checks all registered sessions. When a session's last
 // heartbeat exceeds the threshold, the monitor:
-//   1. Publishes an EventTypeWorkspaceHeartbeatLost event (if publisher is set)
-//   2. Calls the session's JobTerminated callback (if registered)
-//   3. Removes the session from the map
+//  1. Publishes an EventTypeWorkspaceHeartbeatLost event (if publisher is set)
+//  2. Calls the session's JobTerminated callback (if registered)
+//  3. Removes the session from the map
 type HeartbeatMonitor struct {
 	mu         sync.Mutex
 	sessions   map[string]*SessionHeartbeat

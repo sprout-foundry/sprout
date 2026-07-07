@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
@@ -36,8 +36,9 @@ func handleRepoMap(ctx context.Context, a *Agent, args map[string]interface{}) (
 	if workspaceRoot == "" {
 		workspaceRoot, err = os.Getwd()
 		if err != nil {
-					return "", agenterrors.NewTool("repo_map", "get working directory", err)
-	}}
+			return "", agenterrors.NewTool("repo_map", "get working directory", err)
+		}
+	}
 	absWorkspace, err := filepath.Abs(workspaceRoot)
 	if err != nil {
 		return "", agenterrors.NewTool("repo_map", "resolve workspace root", err)

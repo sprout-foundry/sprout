@@ -16,8 +16,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sprout-foundry/sprout/pkg/automate"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/automate"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -81,7 +81,7 @@ func setupShellBgTestDir(t *testing.T) string {
 	return tmpDir
 }
 
-	// Removed — writeTestPIDFileInt is the correct version below
+// Removed — writeTestPIDFileInt is the correct version below
 
 // writeTestPIDFileInt writes a .pid file with proper integer formatting.
 func writeTestPIDFileInt(t *testing.T, baseDir, sessionID string, pid int) {
@@ -515,7 +515,6 @@ func TestShellBgStatus_FromBPM(t *testing.T) {
 	assert.Contains(t, got, "sleep 30")
 	assert.Contains(t, got, "running")
 }
-
 
 // =============================================================================
 // isStdinTTY

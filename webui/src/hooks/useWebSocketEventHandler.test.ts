@@ -7,7 +7,8 @@
  */
 // @ts-nocheck — mock objects don't fully implement all interfaces
 
-import { act, createElement, useState, MutableRefObject, MutableRefObject as Ref } from 'react';
+import type { MutableRefObject } from 'react';
+import { act, createElement, useState, MutableRefObject as Ref } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 

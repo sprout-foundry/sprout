@@ -1,10 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { SproutSettings } from '../../services/api';
 import { ApiService } from '../../services/api';
-import type {
-  SkillInstallResult,
-  SkillRegistryEntry,
-} from '../../services/api/types/settings';
+import type { SkillInstallResult, SkillRegistryEntry } from '../../services/api/types/settings';
 import ListFilter from './ListFilter';
 
 const SKILL_FILTER_THRESHOLD = 6;
@@ -47,10 +44,7 @@ export default function SkillsSettingsTab({ settings, toggleSkill }: SkillsSetti
     setLoading(true);
     setError(null);
     try {
-      const [list, reg] = await Promise.all([
-        api.listInstalledSkills(),
-        api.listSkillRegistry(),
-      ]);
+      const [list, reg] = await Promise.all([api.listInstalledSkills(), api.listSkillRegistry()]);
       setInstalled(list);
       setRegistry(reg);
     } catch (e: unknown) {
@@ -181,11 +175,7 @@ export default function SkillsSettingsTab({ settings, toggleSkill }: SkillsSetti
               </select>
             </label>
           )}
-          <button
-            type="submit"
-            data-testid="skills-install-button"
-            disabled={busy || !installSource.trim()}
-          >
+          <button type="submit" data-testid="skills-install-button" disabled={busy || !installSource.trim()}>
             Install
           </button>
         </form>
@@ -208,14 +198,10 @@ export default function SkillsSettingsTab({ settings, toggleSkill }: SkillsSetti
                   ? `path: ${origin.path ?? ''}`
                   : origin.type === 'registry'
                     ? `registry: ${origin.registry_id ?? ''}`
-                    : origin.type ?? 'unknown'
+                    : (origin.type ?? 'unknown')
               : '';
             return (
-              <div
-                key={s.id}
-                className="skill-installed-row"
-                data-testid={`skills-list-item-${s.id}`}
-              >
+              <div key={s.id} className="skill-installed-row" data-testid={`skills-list-item-${s.id}`}>
                 <div className="skill-installed-meta">
                   <strong>{s.id}</strong>
                   {summary && <span className="skill-installed-origin"> — {summary}</span>}
@@ -259,7 +245,7 @@ export default function SkillsSettingsTab({ settings, toggleSkill }: SkillsSetti
       {skillEntries.length === 0 ? (
         <div className="settings-empty">No skills configured</div>
       ) : normalizedSkillFilter && filteredEntries.length === 0 ? (
-        <div className="settings-empty">No skills match "{skillFilter}"</div>
+        <div className="settings-empty">No skills match &quot;{skillFilter}&quot;</div>
       ) : (
         <div className="skills-list">
           {filteredEntries.map(([name, cfg]) => {
@@ -268,11 +254,7 @@ export default function SkillsSettingsTab({ settings, toggleSkill }: SkillsSetti
               <div key={name} className="skill-item">
                 <span className="skill-item-name">{name}</span>
                 <label className="styled-toggle">
-                  <input
-                    type="checkbox"
-                    checked={enabled}
-                    onChange={() => toggleSkill(name, !enabled)}
-                  />
+                  <input type="checkbox" checked={enabled} onChange={() => toggleSkill(name, !enabled)} />
                   <span className="toggle-track" />
                 </label>
               </div>

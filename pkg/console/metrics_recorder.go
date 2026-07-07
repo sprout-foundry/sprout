@@ -36,10 +36,10 @@ func (t ToolInvocation) AvgLatency() float64 {
 // instance is exposed via GlobalMetricsRecorder; tests can build their
 // own with NewMetricsRecorder for isolation.
 type MetricsRecorder struct {
-	mu       sync.RWMutex
-	rows     map[string]*ToolInvocation
-	started  time.Time
-	totals   ToolInvocation // sum across all rows, denormalized for cheap reads
+	mu      sync.RWMutex
+	rows    map[string]*ToolInvocation
+	started time.Time
+	totals  ToolInvocation // sum across all rows, denormalized for cheap reads
 }
 
 // NewMetricsRecorder constructs an empty recorder with started=now.

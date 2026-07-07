@@ -7,11 +7,11 @@
  * active/queued/completed/failed/cancelled counts.
  */
 
+import type { SubagentActivity, ToolExecution } from '@sprout/ui';
 import { renderHook } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { useSubagentRuns } from './useSubagentRuns';
 import type { ChatContextPanelProps } from './types';
-import type { SubagentActivity, ToolExecution } from '@sprout/ui';
+import { useSubagentRuns } from './useSubagentRuns';
 
 // ── Helpers ─────────────────────────────────────────────────────────
 

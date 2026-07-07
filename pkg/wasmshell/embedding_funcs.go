@@ -65,8 +65,8 @@ func NewJSEmbeddingAPI() {
 // serializeEmbeddingStatus returns the status as a JS object.
 func serializeEmbeddingStatus(s EmbeddingStatus) map[string]interface{} {
 	out := map[string]interface{}{
-		"mode":            string(s.Mode),
-		"onnx_available":  s.ONNXAvailable,
+		"mode":           string(s.Mode),
+		"onnx_available": s.ONNXAvailable,
 	}
 	if s.ONNXModelName != "" {
 		out["onnx_model_name"] = s.ONNXModelName

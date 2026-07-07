@@ -95,7 +95,7 @@ func (ss *SyncState) getOrCreate(path string) *FileMetadata {
 			// LastSyncedContainer starts at 0 — meaning the browser has seen
 			// nothing from the container yet.
 			LastSyncedContainer: 0,
-			ModifiedAt: time.Now(),
+			ModifiedAt:          time.Now(),
 		}
 		ss.files[path] = m
 	}

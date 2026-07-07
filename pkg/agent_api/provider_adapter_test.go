@@ -49,7 +49,7 @@ func (m *mockClient) SupportsVision() bool                                { retu
 func (m *mockClient) SupportsConversationalVision() bool {
 	return false
 }
-func (m *mockClient) GetVisionModel() string                              { return "" }
+func (m *mockClient) GetVisionModel() string { return "" }
 func (m *mockClient) SendVisionRequest(ctx context.Context, messages []Message, tools []Tool, reasoning string, disableThinking bool) (*ChatResponse, error) {
 	return &ChatResponse{
 		Choices: []Choice{{

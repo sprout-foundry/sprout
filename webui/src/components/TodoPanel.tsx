@@ -1,6 +1,6 @@
-import { useState, useCallback } from 'react';
 import type { TodoItem } from '@sprout/ui';
 import { Check, Circle, Loader2, Minus, ChevronDown, ChevronRight } from 'lucide-react';
+import { useState, useCallback } from 'react';
 import './TodoPanel.css';
 
 interface TodoPanelProps {

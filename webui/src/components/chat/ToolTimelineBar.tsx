@@ -1,6 +1,6 @@
+import { getPersonaColor, type ToolExecution } from '@sprout/ui';
 import { CheckCircle2, Loader2, XCircle } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { getPersonaColor, type ToolExecution } from '@sprout/ui';
 
 /**
  * SP-053-2a: live tool timeline rendered above the chat input. Mirrors

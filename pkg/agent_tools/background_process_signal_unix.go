@@ -92,12 +92,12 @@ func setProcessGroup(cmd *exec.Cmd) {
 // child processes (causing fork/exec to fail with EPERM), we fall back
 // to Setpgid only — the same isolation as earlier versions. The
 // fallback is safe because the caller also:
-//   1. Closes stdin (cmd.Stdin = nil → /dev/null in Go 1.20+)
-//   2. Redirects stdout/stderr to a file (not the parent's terminal)
-//   3. Ignores SIGHUP in the parent before fork so the child inherits
-//      the ignore disposition (same effect as nohup). The ignore is
-//      applied once via sync.Once; once set, all future children also
-//      inherit SIG_IGN.
+//  1. Closes stdin (cmd.Stdin = nil → /dev/null in Go 1.20+)
+//  2. Redirects stdout/stderr to a file (not the parent's terminal)
+//  3. Ignores SIGHUP in the parent before fork so the child inherits
+//     the ignore disposition (same effect as nohup). The ignore is
+//     applied once via sync.Once; once set, all future children also
+//     inherit SIG_IGN.
 func detachFromSession(cmd *exec.Cmd) {
 	if cmd.SysProcAttr == nil {
 		cmd.SysProcAttr = &syscall.SysProcAttr{}

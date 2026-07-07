@@ -73,6 +73,6 @@ type visionProbeTestClient struct {
 	supportsVision bool
 }
 
-func (c *visionProbeTestClient) GetModel() string                  { return c.model }
-func (c *visionProbeTestClient) SupportsVision() bool              { return c.supportsVision }
+func (c *visionProbeTestClient) GetModel() string                   { return c.model }
+func (c *visionProbeTestClient) SupportsVision() bool               { return c.supportsVision }
 func (c *visionProbeTestClient) SupportsConversationalVision() bool { return c.supportsVision }

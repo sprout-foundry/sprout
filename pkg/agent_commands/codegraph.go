@@ -159,7 +159,6 @@ func (c *CodegraphCommand) runStats() error {
 	return nil
 }
 
-
 // Complete returns completions for the /codegraph command.
 func (c *CodegraphCommand) Complete(args []string, chatAgent *agent.Agent) []string {
 	subcommands := []string{"build", "help", "stats", "update"}

@@ -1,10 +1,10 @@
+import type { WsEvent } from '@sprout/events';
 import { Play, Square, Zap, X, AlertCircle } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { WsEvent } from '@sprout/events';
-import { clientFetch } from '../services/clientSession';
-import { debugLog } from '../utils/log';
-import { WebSocketService } from '../services/websocket';
 import { subscribeAutomate } from '../services/automateEvents';
+import { clientFetch } from '../services/clientSession';
+import { WebSocketService } from '../services/websocket';
+import { debugLog } from '../utils/log';
 import AutomationsSessionDetail from './AutomationsSessionDetail';
 import './AutomationsPanel.css';
 

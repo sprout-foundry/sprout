@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react';
 import { Bell, BellOff, CheckCircle, XCircle } from 'lucide-react';
+import { useState, useCallback } from 'react';
 import * as desktopNotify from '../../services/desktopNotify';
 
 interface NotificationsSettingsTabProps {

@@ -54,8 +54,7 @@ export default function MCPCredentialPanel({
                       width: '8px',
                       height: '8px',
                       borderRadius: '50%',
-                      backgroundColor:
-                        entry.status === 'set' ? 'var(--accent-success)' : 'var(--text-muted, #888)',
+                      backgroundColor: entry.status === 'set' ? 'var(--accent-success)' : 'var(--text-muted, #888)',
                       flexShrink: 0,
                     }}
                   />

@@ -4,8 +4,8 @@ import (
 	"context"
 	"sync"
 
-	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/embedding"
+	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 )
 
 // migrationOnce ensures the one-time memory migration runs at most once per process.

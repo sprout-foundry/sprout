@@ -82,7 +82,7 @@ func (m *indexedMock) GetModelContextLimit() (int, error) { return 128000, nil }
 func (m *indexedMock) ListModels(context.Context) ([]api.ModelInfo, error) {
 	return nil, nil
 }
-func (m *indexedMock) SupportsVision() bool            { return true }
+func (m *indexedMock) SupportsVision() bool { return true }
 
 // SupportsConversationalVision reports whether inline multimodal turns
 // should embed the image. Defaults to false; overridden per client.
@@ -160,7 +160,7 @@ func (m *failingMock) GetModelContextLimit() (int, error) { return 128000, nil }
 func (m *failingMock) ListModels(context.Context) ([]api.ModelInfo, error) {
 	return nil, nil
 }
-func (m *failingMock) SupportsVision() bool            { return true }
+func (m *failingMock) SupportsVision() bool { return true }
 
 // SupportsConversationalVision reports whether inline multimodal turns
 // should embed the image. Defaults to false; overridden per client.

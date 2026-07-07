@@ -22,14 +22,14 @@ type SessionIndex struct {
 
 // SessionIndexEntry holds indexed data for a single session.
 type SessionIndexEntry struct {
-	SessionID    string              `json:"session_id"`
-	Name         string              `json:"name"`
-	WorkingDir   string              `json:"working_directory"`
-	LastUpdated  time.Time           `json:"last_updated"`
-	TotalCost    float64             `json:"total_cost"`
-	MessageCount int                 `json:"message_count"`
-	Tokens       map[string][]int    `json:"tokens"` // [start, end] byte offsets in Text
-	Text         string              `json:"text"`   // Concatenated user/assistant messages, lowercased
+	SessionID    string           `json:"session_id"`
+	Name         string           `json:"name"`
+	WorkingDir   string           `json:"working_directory"`
+	LastUpdated  time.Time        `json:"last_updated"`
+	TotalCost    float64          `json:"total_cost"`
+	MessageCount int              `json:"message_count"`
+	Tokens       map[string][]int `json:"tokens"` // [start, end] byte offsets in Text
+	Text         string           `json:"text"`   // Concatenated user/assistant messages, lowercased
 }
 
 // ---------------------------------------------------------------------------

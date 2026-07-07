@@ -52,7 +52,7 @@ func (m *mockAgentClient) SupportsVision() bool                                 
 func (m *mockAgentClient) SupportsConversationalVision() bool {
 	return false
 }
-func (m *mockAgentClient) GetVisionModel() string                                  { return "" }
+func (m *mockAgentClient) GetVisionModel() string { return "" }
 func (m *mockAgentClient) SendVisionRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	return nil, nil
 }

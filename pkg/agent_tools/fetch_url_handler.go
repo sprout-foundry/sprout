@@ -84,11 +84,12 @@ func (h *fetchURLHandler) Execute(ctx context.Context, env ToolEnv, args map[str
 	return result, nil
 }
 
-func (h *fetchURLHandler) Aliases() []string         { return nil }
-func (h *fetchURLHandler) Timeout() time.Duration    { return 0 }
-func (h *fetchURLHandler) MaxResultSize() int        { return 0 }
-func (h *fetchURLHandler) SafeForParallel() bool     { return false }
-func (h *fetchURLHandler) Interactive() bool         { return false }
+func (h *fetchURLHandler) Aliases() []string      { return nil }
+func (h *fetchURLHandler) Timeout() time.Duration { return 0 }
+func (h *fetchURLHandler) MaxResultSize() int     { return 0 }
+func (h *fetchURLHandler) SafeForParallel() bool  { return false }
+func (h *fetchURLHandler) Interactive() bool      { return false }
+
 // so, returns a populated ImageData.  Returns nil for non-media URLs.
 func classifyURL(rawURL string) *ImageData {
 	_, path := splitURLScheme(rawURL)

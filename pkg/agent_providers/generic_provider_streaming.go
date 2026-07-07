@@ -21,17 +21,17 @@ func (p *GenericProvider) SendChatRequestStream(ctx context.Context, messages []
 		return nil, agenterrors.Wrap(err, "failed to build chat request")
 	}
 
-	req, err := p.buildHTTPRequestCtx(ctx, requestBody, true)
+	req, sentBody, err := p.buildHTTPRequestCtx(ctx, requestBody, true)
 	if err != nil {
-		// Log request on build error
-		logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, true, "build_http_request", err)
+		// Log request on build error — use the actual sent body (post-redaction)
+		logging.LogRequestPayloadOnError(sentBody, p.config.Name, p.model, true, "build_http_request", err)
 		return nil, agenterrors.Wrap(err, "failed to build HTTP request")
 	}
 
 	resp, err := p.streamingClient.Do(req)
 	if err != nil {
-		// Log request on HTTP error
-		logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, true, "http_request_failed", err)
+		// Log request on HTTP error — use the actual sent body (post-redaction)
+		logging.LogRequestPayloadOnError(sentBody, p.config.Name, p.model, true, "http_request_failed", err)
 		return nil, agenterrors.NewNetwork("HTTP request failed", err)
 	}
 
@@ -43,7 +43,7 @@ func (p *GenericProvider) SendChatRequestStream(ctx context.Context, messages []
 		// provider-specific errors (e.g. ZAI returning empty-body 400s).
 		_ = body // already logged by formatProviderHTTPError below
 
-		retryBody, retryResp, retried, retryErr := p.tryMaxCompletionTokensRetry(requestBody, true, body)
+		retryBody, retryResp, retried, retryErr := p.tryMaxCompletionTokensRetry(sentBody, true, body)
 		if retried {
 			requestBody = retryBody
 			if retryErr != nil {
@@ -68,9 +68,9 @@ func (p *GenericProvider) SendChatRequestStream(ctx context.Context, messages []
 			return response, nil
 		}
 
-		// Log request on API error
+		// Log request on API error — use the actual sent body (post-redaction)
 		formattedErr := formatProviderHTTPError(resp.StatusCode, resp.Header, body)
-		logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, true,
+		logging.LogRequestPayloadOnError(sentBody, p.config.Name, p.model, true,
 			fmt.Sprintf("api_error_%d", resp.StatusCode), formattedErr)
 		return nil, formattedErr
 	}
@@ -78,8 +78,8 @@ func (p *GenericProvider) SendChatRequestStream(ctx context.Context, messages []
 
 	response, err := p.handleStreamingResponse(ctx, resp, callback)
 	if err != nil {
-		// Log request on streaming error
-		logging.LogRequestPayloadOnError(requestBody, p.config.Name, p.model, true, "streaming_response", err)
+		// Log request on streaming error — use the actual sent body (post-redaction)
+		logging.LogRequestPayloadOnError(sentBody, p.config.Name, p.model, true, "streaming_response", err)
 		return nil, agenterrors.NewNetwork("chat request failed (streaming)", err)
 	}
 

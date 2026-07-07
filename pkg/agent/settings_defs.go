@@ -550,6 +550,73 @@ var settingDefs = []settingDef{
 		},
 		ListType: true,
 	},
+	// --- Risk Profile ---
+	{
+		Key:         "risk_profile",
+		Description: "Shell-command risk cascade profile",
+		ValidValues: "readonly, cautious, default, permissive, unrestricted",
+		GetValue:    func(cfg *configuration.Config) string { return cfg.RiskProfile },
+		SetValue: func(cfg *configuration.Config, value string) error {
+			switch strings.ToLower(value) {
+			case "readonly", "cautious", "default", "permissive", "unrestricted", "":
+				cfg.RiskProfile = strings.ToLower(value)
+				return nil
+			default:
+				return agenterrors.NewValidation(fmt.Sprintf("risk_profile must be readonly, cautious, default, permissive, or unrestricted, got %q", value), nil)
+			}
+		},
+		EnumValues: []string{"readonly", "cautious", "default", "permissive", "unrestricted"},
+	},
+	// --- Max Context ---
+	{
+		Key:         "max_context_tokens",
+		Description: "Max context token cap for cost control (0 = no cap)",
+		ValidValues: "0 or integer >= 1024",
+		GetValue: func(cfg *configuration.Config) string {
+			if cfg.MaxContextTokens != nil {
+				return strconv.Itoa(*cfg.MaxContextTokens)
+			}
+			return "0"
+		},
+		SetValue: func(cfg *configuration.Config, value string) error {
+			val, err := strconv.Atoi(value)
+			if err != nil {
+				return agenterrors.NewValidation(fmt.Sprintf("max_context_tokens must be an integer, got %q", value), nil)
+			}
+			if val < 0 {
+				return agenterrors.NewValidation(fmt.Sprintf("max_context_tokens must be >= 0, got %d", val), nil)
+			}
+			if val > 0 && val < 1024 {
+				return agenterrors.NewValidation(fmt.Sprintf("max_context_tokens must be at least 1024 when setting a cap, got %d", val), nil)
+			}
+			if val == 0 {
+				cfg.MaxContextTokens = nil
+			} else {
+				cfg.MaxContextTokens = &val
+			}
+			return nil
+		},
+	},
+	// --- Tool Invocation Display ---
+	{
+		Key:         "show_tool_invocations",
+		Description: "Show/hide per-tool invocation details in the UI",
+		ValidValues: "true, false",
+		GetValue:    func(cfg *configuration.Config) string { return fmt.Sprintf("%v", cfg.ShowToolInvocations) },
+		SetValue: func(cfg *configuration.Config, value string) error {
+			switch strings.ToLower(value) {
+			case "true":
+				cfg.ShowToolInvocations = true
+				return nil
+			case "false":
+				cfg.ShowToolInvocations = false
+				return nil
+			default:
+				return agenterrors.NewValidation(fmt.Sprintf("show_tool_invocations must be true or false, got %q", value), nil)
+			}
+		},
+		EnumValues: []string{"true", "false"},
+	},
 }
 
 // supportedSettings is built from settingDefs at init time.

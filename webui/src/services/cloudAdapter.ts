@@ -40,6 +40,10 @@ export class CloudAdapter implements APIAdapter {
   readonly fileOpsViaAPI = false; // WASM handles files locally
   readonly showOnboarding = false; // Cloud is pre-configured
   readonly supportsSSH = false;
+  readonly supportsGit = false;
+  readonly supportsChat = true;
+  readonly supportsWorkspaceSwitching = false;
+  readonly supportsExport = false;
   readonly supportsInstances = true;
   readonly supportsLocalTerminal = false;
   readonly supportsSettings = false;

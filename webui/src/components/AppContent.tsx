@@ -813,12 +813,25 @@ const AppContent: React.FC<AppContentProps> = ({
           onModelClick={handleStatusBarModelClick}
         />
         {!supportsLocalTerminal && (
-          <div className="terminal-notice" data-testid="terminal-notice">
-            <div className="terminal-notice-content">
-              <span className="terminal-notice-icon">$</span>
-              <span className="terminal-notice-text">
-                Terminal is limited in browser mode. Some commands may not be available.
+          <div className="terminal-bar terminal-bar--cloud" data-testid="terminal-notice">
+            <div className="terminal-tabs">
+              <div className="terminal-tab terminal-tab--active">
+                <span className="terminal-tab-icon">$</span>
+                <span className="terminal-tab-label">Shell</span>
+              </div>
+            </div>
+            <div className="terminal-bar-actions">
+              <span className="terminal-cloud-text">
+                Terminal is limited in browser mode.
               </span>
+              <a
+                className="terminal-upgrade-link"
+                href="https://sproutfoundry.dev/upgrade"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Upgrade for full access
+              </a>
             </div>
           </div>
         )}

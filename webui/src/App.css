@@ -1781,6 +1781,97 @@ button.primary.success {
 }
 
 /* Terminal notice for cloud mode */
+/* ── Cloud-mode terminal bar ──────────────────────────────── */
+/* Matches the real terminal bar's visual structure with a "Shell"
+   tab on the left and upgrade CTA on the right. */
+
+.terminal-bar--cloud {
+  flex-shrink: 0;
+  height: 28px;
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  background: transparent;
+  border-top: 1px solid var(--border-subtle);
+  padding: 0 12px;
+  gap: 2px;
+  -webkit-app-region: drag;
+}
+
+.terminal-bar--cloud .terminal-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  height: 26px;
+}
+
+.terminal-bar--cloud .terminal-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  min-width: 0;
+  max-width: 180px;
+  padding: 0 12px 0 10px;
+  border-radius: 6px 6px 0 0;
+  cursor: default;
+  position: relative;
+  user-select: none;
+  -webkit-app-region: no-drag;
+}
+
+.terminal-bar--cloud .terminal-tab--active {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--bg-primary);
+}
+
+.terminal-bar--cloud .terminal-tab-icon {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  opacity: 0.5;
+}
+
+.terminal-bar--cloud .terminal-tab-label {
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.terminal-bar--cloud .terminal-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+  -webkit-app-region: no-drag;
+}
+
+.terminal-bar--cloud .terminal-cloud-text {
+  font-size: 11px;
+  color: var(--text-secondary);
+  opacity: 0.8;
+}
+
+.terminal-bar--cloud .terminal-upgrade-link {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--accent);
+  text-decoration: none;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--accent);
+  transition: background 0.15s ease;
+}
+
+.terminal-bar--cloud .terminal-upgrade-link:hover {
+  background: rgba(14, 165, 233, 0.1);
+}
+
+/* ── Legacy terminal notice (kept for other consumers) ───── */
+
 .terminal-notice {
   flex-shrink: 0;
   height: 42px;

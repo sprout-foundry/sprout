@@ -7,9 +7,9 @@
  * Sidebar.sessionSearch.test.tsx (createRoot + act + heavy vi.mock).
  */
 
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
 
 // ---------------------------------------------------------------------------
 // Mocks — MUST be set up BEFORE importing ChatView or any of its deps

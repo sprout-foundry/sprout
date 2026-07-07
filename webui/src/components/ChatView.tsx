@@ -4,16 +4,16 @@ import { useRef, useCallback, useState, useMemo, useLayoutEffect } from 'react';
 import type { CSSProperties } from 'react';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import { supportsSSH } from '../config/mode';
-import { requiresBackendHealthCheck } from '../services/apiAdapter';
 import { rewindQuery } from '../services/api/chatApi';
+import { requiresBackendHealthCheck } from '../services/apiAdapter';
 import { clientFetch } from '../services/clientSession';
-import { showThemedAlert, showThemedConfirm } from './ThemedDialog';
 import type { QueryProgress } from '../types/app';
 import { ChatFooter, ChatHeader, EmptyChatPanel, MessageItem } from './chat';
 import type { ChatProps, Message, ToolExecution } from './chat/types';
 import CommandInput from './CommandInput';
-import InlineTodoSummary from './InlineTodoSummary';
 import ExportDialog from './ExportDialog';
+import InlineTodoSummary from './InlineTodoSummary';
+import { showThemedAlert, showThemedConfirm } from './ThemedDialog';
 import './Chat.css';
 
 function Chat(props: ChatProps): JSX.Element {
@@ -183,10 +183,7 @@ function Chat(props: ChatProps): JSX.Element {
   // reference on every render (e.g. during typing), causing ToolTimelineBar
   // to lose internal state (shouldRender, completedAtRef) and its badges
   // to flash in/out.
-  const VirtuosoHeader = useCallback(
-    () => <ChatHeader worktreePath={worktreePath} />,
-    [worktreePath],
-  );
+  const VirtuosoHeader = useCallback(() => <ChatHeader worktreePath={worktreePath} />, [worktreePath]);
   const VirtuosoFooter = useCallback(
     () => (
       <ChatFooter
@@ -396,11 +393,7 @@ function Chat(props: ChatProps): JSX.Element {
         onRewindAndResend={isRewinding ? undefined : handleRewindAndResend}
       />
 
-      <ExportDialog
-        isOpen={isExportDialogOpen}
-        onClose={() => setIsExportDialogOpen(false)}
-        sessionId={sessionId}
-      />
+      <ExportDialog isOpen={isExportDialogOpen} onClose={() => setIsExportDialogOpen(false)} sessionId={sessionId} />
     </div>
   );
 }

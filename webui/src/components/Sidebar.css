@@ -2501,8 +2501,7 @@
   font-family: var(--font-sans);
   text-align: left;
   cursor: pointer;
-  transition:
-    background 0.1s var(--ease-out);
+  transition: background 0.1s var(--ease-out);
   border-bottom: 1px solid var(--border-subtle);
 }
 

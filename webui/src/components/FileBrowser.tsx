@@ -169,7 +169,8 @@ function FileBrowser({
     selectedIds.size === 0 ||
     Array.from(selectedIds)
       .map((id) => findNodeById(id))
-      .filter((node): node is FileNode => node !== undefined && node.type === 'directory' && !allowDirectories).length > 0;
+      .filter((node): node is FileNode => node !== undefined && node.type === 'directory' && !allowDirectories).length >
+      0;
 
   return (
     <div className="filebrowser-overlay" onClick={onCancel}>
@@ -177,9 +178,7 @@ function FileBrowser({
         <div className="filebrowser-header">
           <h3>
             <FolderOpen size={16} style={{ marginRight: 6, verticalAlign: 'middle' }} /> File Browser
-            {selectedIds.size > 0 && (
-              <span className="filebrowser-selection-count">{selectedIds.size} selected</span>
-            )}
+            {selectedIds.size > 0 && <span className="filebrowser-selection-count">{selectedIds.size} selected</span>}
           </h3>
           <button className="filebrowser-close" onClick={onCancel}>
             <X size={16} />

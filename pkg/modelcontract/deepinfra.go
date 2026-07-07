@@ -59,9 +59,9 @@ type deepInfraModel struct {
 	Tags       []string `json:"tags"`
 	ReplacedBy string   `json:"replaced_by"`
 	Pricing    struct {
-		Type                    string  `json:"type"`
-		CentsPerInputToken      float64 `json:"cents_per_input_token"`
-		CentsPerOutputToken     float64 `json:"cents_per_output_token"`
+		Type                     string  `json:"type"`
+		CentsPerInputToken       float64 `json:"cents_per_input_token"`
+		CentsPerOutputToken      float64 `json:"cents_per_output_token"`
 		CentsPerCachedInputToken float64 `json:"cents_per_cached_input_token"`
 	} `json:"pricing"`
 }

@@ -1,3 +1,4 @@
+import { ContextMenu } from '@sprout/ui';
 import {
   X,
   FolderOpen,
@@ -16,10 +17,9 @@ import type { MouseEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useTabDragReorder } from '../hooks/useTabDragReorder';
 import { type EditorBuffer } from '../types/editor';
-import { ContextMenu } from '@sprout/ui';
-import { showThemedConfirm } from './ThemedDialog';
-import { catchIfAsync, getBufferIcon, getChatId, getFileIcon, getFileIconColor } from './editorTabIcons';
 import { isSharedMode } from '../utils/sharedMode';
+import { catchIfAsync, getBufferIcon, getChatId, getFileIcon, getFileIconColor } from './editorTabIcons';
+import { showThemedConfirm } from './ThemedDialog';
 import './EditorTabs.css';
 
 interface EditorTabsProps {

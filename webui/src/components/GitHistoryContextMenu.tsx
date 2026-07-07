@@ -1,8 +1,8 @@
+import { ContextMenu } from '@sprout/ui';
 import { Copy, GitBranch, RotateCcw } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { copyToClipboard } from '../utils/clipboard';
 import { debugLog } from '../utils/log';
-import { ContextMenu } from '@sprout/ui';
 import { showThemedConfirm } from './ThemedDialog';
 import './GitHistoryPanel.css';
 

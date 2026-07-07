@@ -453,9 +453,7 @@ function CredentialsSettingsTab(): JSX.Element {
                       display: 'flex',
                       alignItems: 'center',
                       gap: '4px',
-                      color: testResults[provider.provider].success
-                        ? 'var(--accent-success)'
-                        : 'var(--accent-error)',
+                      color: testResults[provider.provider].success ? 'var(--accent-success)' : 'var(--accent-error)',
                       maxWidth: '420px',
                       wordBreak: 'break-word',
                     }}

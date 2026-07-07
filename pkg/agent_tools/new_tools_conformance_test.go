@@ -750,7 +750,6 @@ func TestPatchStructuredFileHandlerConformance(t *testing.T) {
 	}
 }
 
-
 func TestBrowseURLHandlerConformance(t *testing.T) {
 	h := &browseURLHandler{}
 
@@ -891,7 +890,7 @@ func TestWebSearchHandlerConformance(t *testing.T) {
 	// Execute: error path
 	// ---------------------------------------------------------------------------
 	fakeErr := &fakeSearchEngine{
-		fail:   true,
+		fail:    true,
 		failErr: errors.New("search API unavailable"),
 	}
 	envErr := ToolEnv{SearchEngine: fakeErr}

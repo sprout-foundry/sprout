@@ -38,9 +38,9 @@ type OOMWatchdog struct {
 	rssThresholdBytes  uint64
 	cooldownDuration   time.Duration
 	probeFn            func() (*OOMProbeResult, error)
-	mu           sync.Mutex
-	lastAlertState string // "none", "node_count", "rss", "both"
-	lastAlertTime  time.Time
+	mu                 sync.Mutex
+	lastAlertState     string // "none", "node_count", "rss", "both"
+	lastAlertTime      time.Time
 }
 
 // NewOOMWatchdog creates a watchdog with sensible defaults.

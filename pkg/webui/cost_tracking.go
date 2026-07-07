@@ -218,19 +218,19 @@ type BillingTypeBreakdown struct {
 
 // CostSummary represents aggregated cost data
 type CostSummary struct {
-	TotalCost            float64                       `json:"total_cost"`
-	ByProvider           map[string]float64            `json:"by_provider"`
-	ByModel              map[string]float64            `json:"by_model"`
-	ByProviderThisMonth  map[string]float64            `json:"by_provider_this_month"`
-	ByProviderLastMonth  map[string]float64            `json:"by_provider_last_month"`
-	Last30Days           float64                       `json:"last_30_days"`
-	Last7Days            float64                       `json:"last_7_days"`
-	ThisMonth            float64                       `json:"this_month"`
-	LastMonth            float64                       `json:"last_month"`
-	TopSessions          []SessionCostRow              `json:"top_sessions"`
-	ByBillingType        map[string]BillingTypeBreakdown `json:"by_billing_type,omitempty"`
-	ChargedCost          float64                       `json:"charged_cost,omitempty"`
-	TokenValue           float64                       `json:"token_value,omitempty"`
+	TotalCost           float64                         `json:"total_cost"`
+	ByProvider          map[string]float64              `json:"by_provider"`
+	ByModel             map[string]float64              `json:"by_model"`
+	ByProviderThisMonth map[string]float64              `json:"by_provider_this_month"`
+	ByProviderLastMonth map[string]float64              `json:"by_provider_last_month"`
+	Last30Days          float64                         `json:"last_30_days"`
+	Last7Days           float64                         `json:"last_7_days"`
+	ThisMonth           float64                         `json:"this_month"`
+	LastMonth           float64                         `json:"last_month"`
+	TopSessions         []SessionCostRow                `json:"top_sessions"`
+	ByBillingType       map[string]BillingTypeBreakdown `json:"by_billing_type,omitempty"`
+	ChargedCost         float64                         `json:"charged_cost,omitempty"`
+	TokenValue          float64                         `json:"token_value,omitempty"`
 }
 
 // GetCostSummary returns overall cost summary.
@@ -239,11 +239,11 @@ type CostSummary struct {
 func (cs *CostStore) GetCostSummary(start, end time.Time) CostSummary {
 	now := time.Now()
 	summary := CostSummary{
-		ByProvider:           make(map[string]float64),
-		ByModel:              make(map[string]float64),
-		ByProviderThisMonth:  make(map[string]float64),
-		ByProviderLastMonth:  make(map[string]float64),
-		ByBillingType:        make(map[string]BillingTypeBreakdown),
+		ByProvider:          make(map[string]float64),
+		ByModel:             make(map[string]float64),
+		ByProviderThisMonth: make(map[string]float64),
+		ByProviderLastMonth: make(map[string]float64),
+		ByBillingType:       make(map[string]BillingTypeBreakdown),
 	}
 
 	// Get last 30 days
@@ -271,7 +271,7 @@ func (cs *CostStore) GetCostSummary(start, end time.Time) CostSummary {
 		// Skip records outside the requested range for TopSessions
 		inRange := true
 		if hasRange {
-			if !r.Timestamp.After(start) || !r.Timestamp.Before(end.Add(24 * time.Hour)) {
+			if !r.Timestamp.After(start) || !r.Timestamp.Before(end.Add(24*time.Hour)) {
 				inRange = false
 			}
 		}

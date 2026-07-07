@@ -1,8 +1,8 @@
-import { useState, useMemo, useCallback } from 'react';
-import { ChevronRight, ChevronDown, Loader2, CheckCircle2, XCircle, Bot } from 'lucide-react';
-import type { SubagentRun } from './types';
 import { getPersonaColor, formatCost, formatTokens } from '@sprout/ui';
+import { ChevronRight, ChevronDown, Loader2, CheckCircle2, XCircle, Bot } from 'lucide-react';
+import { useState, useMemo, useCallback } from 'react';
 import { subagentDepthLabel } from './SubagentActivityFeed';
+import type { SubagentRun } from './types';
 import './SubagentTree.css';
 
 // ── Duration Formatting ──────────────────────────────────────────────

@@ -407,7 +407,7 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 // interface, exposing model / context tokens / cost / cwd to the status
 // footer renderer.
 type agentFooterSource struct {
-	agent        *agent.Agent
+	agent         *agent.Agent
 	turnCostStart float64
 }
 

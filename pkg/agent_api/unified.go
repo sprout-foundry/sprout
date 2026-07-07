@@ -180,7 +180,6 @@ func (w *UnifiedProviderWrapper) SupportsVision() bool {
 	return w.provider.SupportsVision()
 }
 
-
 // SupportsConversationalVision reports whether inline multimodal turns
 // should embed the image. Delegates to the underlying provider if it
 // implements the method; otherwise falls back to SupportsVision().

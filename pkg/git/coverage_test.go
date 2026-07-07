@@ -1290,7 +1290,7 @@ func (m *mockAPIClient) SupportsVision() bool                                   
 func (m *mockAPIClient) SupportsConversationalVision() bool {
 	return false
 }
-func (m *mockAPIClient) GetVisionModel() string                                  { return "" }
+func (m *mockAPIClient) GetVisionModel() string { return "" }
 func (m *mockAPIClient) SendVisionRequest(ctx context.Context, messages []api.Message, tools []api.Tool, reasoning string, disableThinking bool) (*api.ChatResponse, error) {
 	return nil, fmt.Errorf("not implemented")
 }

@@ -1,7 +1,7 @@
 import { act, render, screen, fireEvent } from '@testing-library/react';
 import React from 'react';
-import TopSessionsTable from './TopSessionsTable';
 import type { SessionCostRow } from '../types/costs';
+import TopSessionsTable from './TopSessionsTable';
 
 vi.mock('./TopSessionsTable.css', () => ({}));
 
@@ -25,9 +25,7 @@ describe('TopSessionsTable', () => {
     render(<TopSessionsTable sessions={sessions} />);
 
     // Should render all 12 rows (component doesn't cap — backend does)
-    const rows = screen.getAllByRole('row').filter(
-      (r) => !r.querySelector('th'),
-    );
+    const rows = screen.getAllByRole('row').filter((r) => !r.querySelector('th'));
     expect(rows).toHaveLength(12);
   });
 
@@ -35,13 +33,11 @@ describe('TopSessionsTable', () => {
     const sessions = [
       { session_id: 'a', title: 'A', working_dir: '/a', total_cost: 0.05, last_updated: '2025-01-01T00:00:00Z' },
       { session_id: 'b', title: 'B', working_dir: '/b', total_cost: 0.15, last_updated: '2025-01-01T00:00:00Z' },
-      { session_id: 'c', title: 'C', working_dir: '/c', total_cost: 0.10, last_updated: '2025-01-01T00:00:00Z' },
+      { session_id: 'c', title: 'C', working_dir: '/c', total_cost: 0.1, last_updated: '2025-01-01T00:00:00Z' },
     ];
     render(<TopSessionsTable sessions={sessions} />);
 
-    const bodyRows = screen.getAllByRole('row').filter(
-      (r) => !r.querySelector('th'),
-    );
+    const bodyRows = screen.getAllByRole('row').filter((r) => !r.querySelector('th'));
     // First data row should be B (highest cost)
     expect(bodyRows[0]).toHaveTextContent('B');
     expect(bodyRows[1]).toHaveTextContent('C');
@@ -148,9 +144,7 @@ describe('TopSessionsTable', () => {
     render(<TopSessionsTable sessions={sessions} />);
 
     fireEvent.click(screen.getByTestId('row-sess-0'));
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining('no handler provided'),
-    );
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('no handler provided'));
     consoleSpy.mockRestore();
   });
 });

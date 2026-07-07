@@ -16,12 +16,8 @@ import {
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './Terminal.css';
 import { TerminalTabBar, type AttachableSession } from '@sprout/ui';
+import { usePersistedBoolean, usePersistedNumber, useOutsideClickDismiss } from '../hooks/usePersistedPref';
 import { useTerminalPanes } from '../hooks/useTerminalPanes';
-import {
-  usePersistedBoolean,
-  usePersistedNumber,
-  useOutsideClickDismiss,
-} from '../hooks/usePersistedPref';
 import { ApiService, type ShellInfo } from '../services/api';
 import { clientFetch } from '../services/clientSession';
 import { notificationBus } from '../services/notificationBus';

@@ -1,9 +1,8 @@
 import { ChevronRight, Search, X } from 'lucide-react';
 import { useRef, useEffect, useMemo, useState } from 'react';
 import './SettingsPanel.css';
-import type { SproutSettings } from '../services/api';
-import type { AgentConfigProps } from './settings/types';
 import { Skeleton } from '@sprout/ui';
+import type { SproutSettings } from '../services/api';
 import CredentialsSettingsTab from './CredentialsSettingsTab';
 
 // Import from settings/ subdirectory
@@ -14,22 +13,20 @@ import EmbeddingSettingsTab from './settings/EmbeddingSettingsTab';
 import GeneralSettingsTab from './settings/GeneralSettingsTab';
 import LanguageServersSettingsTab from './settings/LanguageServersSettingsTab';
 import MCPSettingsTab from './settings/MCPSettingsTab';
+import NotificationsSettingsTab from './settings/NotificationsSettingsTab';
 import PersistentContextSettingsTab from './settings/PersistentContextSettingsTab';
 import ProviderSettingsTab from './settings/ProviderSettingsTab';
 import SecuritySettingsTab from './settings/SecuritySettingsTab';
 import SkillsSettingsTab from './settings/SkillsSettingsTab';
 import SubagentSettingsTab from './settings/SubagentSettingsTab';
-import NotificationsSettingsTab from './settings/NotificationsSettingsTab';
-import {
-  SECTION_GROUPS,
-  getSectionForSubsection,
-  scopeToLayer,
-  subsectionToLegacyTab,
-  type SectionDef,
-  type SettingsSubsection,
-  type SettingsSection,
-  type SettingsPanelProps,
+import type {
+  AgentConfigProps,
+  SectionDef,
+  SettingsSubsection,
+  SettingsSection,
+  SettingsPanelProps,
 } from './settings/types';
+import { SECTION_GROUPS, getSectionForSubsection, scopeToLayer, subsectionToLegacyTab } from './settings/types';
 import { useSettingsFieldRenderers } from './settings/useSettingsFieldRenderers';
 import { useSettingsMutation } from './settings/useSettingsMutation';
 import { useSettingsState } from './settings/useSettingsState';
@@ -533,7 +530,11 @@ function SettingsPanel({
       ) : null}
 
       {filteredSections.map((section) => (
-        <div key={section.id} className={`settings-section ${expandedSections.has(section.id) ? 'expanded' : ''}`} data-testid="settings-section">
+        <div
+          key={section.id}
+          className={`settings-section ${expandedSections.has(section.id) ? 'expanded' : ''}`}
+          data-testid="settings-section"
+        >
           {/* Section header (clickable to toggle) */}
           <button
             type="button"

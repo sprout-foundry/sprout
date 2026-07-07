@@ -34,19 +34,19 @@ func setEnvSuffix(t *testing.T, suffix, value string) {
 		os.Unsetenv("SPROUT_" + suffix)
 		os.Unsetenv("LEDIT_" + suffix)
 	} else {
-		os.Setenv("SPROUT_" + suffix, value)
-		os.Setenv("LEDIT_" + suffix, value)
+		os.Setenv("SPROUT_"+suffix, value)
+		os.Setenv("LEDIT_"+suffix, value)
 	}
 	t.Cleanup(func() {
 		if oldSPROUT == "" {
 			os.Unsetenv("SPROUT_" + suffix)
 		} else {
-			os.Setenv("SPROUT_" + suffix, oldSPROUT)
+			os.Setenv("SPROUT_"+suffix, oldSPROUT)
 		}
 		if oldLEDIT == "" {
 			os.Unsetenv("LEDIT_" + suffix)
 		} else {
-			os.Setenv("LEDIT_" + suffix, oldLEDIT)
+			os.Setenv("LEDIT_"+suffix, oldLEDIT)
 		}
 	})
 }

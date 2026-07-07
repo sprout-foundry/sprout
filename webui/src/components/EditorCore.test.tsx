@@ -1,7 +1,8 @@
-import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
-import { act, createElement, RefObject, MutableRefObject } from 'react';
-import { createRoot } from 'react-dom/client';
 import type { EditorView as CMEditorView } from '@codemirror/view';
+import type { RefObject, MutableRefObject } from 'react';
+import { act, createElement } from 'react';
+import { createRoot } from 'react-dom/client';
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
 
 beforeAll(() => {
   // @ts-expect-error — assigning to undeclared globalThis property for React act() mode
@@ -38,9 +39,9 @@ vi.mock('lucide-react', () => ({
 
 // ── Imports after mocks ──────────────────────────────────────────
 import { useEditorViewInit } from '../hooks/useEditorViewInit';
-import { useEditorReconfigure } from './useEditorReconfigure';
 import EditorCore, { areEditorCorePropsEqual } from './EditorCore';
 import type { EditorCoreProps } from './EditorCore';
+import { useEditorReconfigure } from './useEditorReconfigure';
 
 // ── Helpers ──────────────────────────────────────────────────────
 function createBaseProps(overrides?: Partial<EditorCoreProps>): EditorCoreProps {

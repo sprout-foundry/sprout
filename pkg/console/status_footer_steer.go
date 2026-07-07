@@ -15,10 +15,11 @@ import (
 // is active (hintRows=0), steer lines stack directly above the rule.
 //
 // Examples (rows=24):
-//   hintRows=0, steerRows=1, i=0  → row 22  (rows-1-0-1+0)
-//   hintRows=1, steerRows=1, i=0  → row 21  (rows-1-1-1+0)
-//   hintRows=1, steerRows=2, i=0  → row 20  (rows-1-1-2+0)
-//   hintRows=1, steerRows=2, i=1  → row 21  (rows-1-1-2+1)
+//
+//	hintRows=0, steerRows=1, i=0  → row 22  (rows-1-0-1+0)
+//	hintRows=1, steerRows=1, i=0  → row 21  (rows-1-1-1+0)
+//	hintRows=1, steerRows=2, i=0  → row 20  (rows-1-1-2+0)
+//	hintRows=1, steerRows=2, i=1  → row 21  (rows-1-1-2+1)
 //
 // A previous version of this calculation wrote to `rows-1-steerRows+i+1`
 // (one row lower), placing the steer panel on the rule's row. The rule

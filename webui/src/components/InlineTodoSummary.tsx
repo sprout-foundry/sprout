@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
 import type { TodoItem } from '@sprout/ui';
 import { ChevronDown, ChevronRight, ListTodo } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import TodoPanel from './TodoPanel';
 import './InlineTodoSummary.css';
 

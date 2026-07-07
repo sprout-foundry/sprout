@@ -54,7 +54,7 @@ func (m *streamingTestClient) GetModelContextLimit() (int, error) { return 12800
 func (m *streamingTestClient) ListModels(context.Context) ([]api.ModelInfo, error) {
 	return nil, nil
 }
-func (m *streamingTestClient) SupportsVision() bool   { return m.supportsVison }
+func (m *streamingTestClient) SupportsVision() bool { return m.supportsVison }
 
 // SupportsConversationalVision reports whether inline multimodal turns
 // should embed the image. Defaults to false; overridden per client.

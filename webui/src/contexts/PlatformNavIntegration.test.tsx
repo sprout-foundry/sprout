@@ -46,8 +46,8 @@ vi.mock('../services/apiAdapter', () => ({
 }));
 
 // Now import — PlatformNavContext will use the mocked getAdapter()
-import { PlatformNavProvider, usePlatformNav } from './PlatformNavContext';
 import { getAdapter } from '../services/apiAdapter';
+import { PlatformNavProvider, usePlatformNav } from './PlatformNavContext';
 
 // ---------------------------------------------------------------------------
 // Helpers

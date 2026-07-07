@@ -636,7 +636,6 @@ func TestRollbackCommand_Complete_WithArgs(t *testing.T) {
 	assert.Nil(t, results, "non-empty args with test agent should return nil")
 }
 
-
 // ---------------------------------------------------------------------------
 // PathCompleter
 // ---------------------------------------------------------------------------

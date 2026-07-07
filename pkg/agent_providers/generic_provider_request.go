@@ -253,10 +253,10 @@ func (p *GenericProvider) ensureModel() error {
 		return agenterrors.NewNetwork(fmt.Sprintf("failed to discover models for provider %s", p.config.Name), err)
 	}
 	if len(models) == 0 || strings.TrimSpace(models[0].ID) == "" {
-	// NOTE: Kept as fmt.Errorf — test TestGenericProviderErrorsWhenNoModelConfiguredOrDiscoverable
-	// asserts strings.Contains(err.Error(), "did not return any models") which would break
-	// with NewNotFound's auto-appended " not found" suffix
-	return fmt.Errorf("provider %s did not return any models", p.config.Name)
+		// NOTE: Kept as fmt.Errorf — test TestGenericProviderErrorsWhenNoModelConfiguredOrDiscoverable
+		// asserts strings.Contains(err.Error(), "did not return any models") which would break
+		// with NewNotFound's auto-appended " not found" suffix
+		return fmt.Errorf("provider %s did not return any models", p.config.Name)
 	}
 
 	p.model = strings.TrimSpace(models[0].ID)

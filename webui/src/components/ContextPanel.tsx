@@ -2,6 +2,7 @@ import { Bot, Wrench, History, ListTodo, Clock, Activity, PanelRightOpen, PanelR
 import { useState, useEffect, useMemo, useImperativeHandle, forwardRef } from 'react';
 import './ContextPanel.css';
 
+import AgentChangesPanel from './AgentChangesPanel';
 import { SessionsTab } from './contextPanel/SessionsTab';
 import { StatusTab } from './contextPanel/StatusTab';
 import { SubagentsTab } from './contextPanel/SubagentsTab';
@@ -19,7 +20,6 @@ import { useContextPanelState } from './contextPanel/useContextPanelState';
 import { useSessionManager } from './contextPanel/useSessionManager';
 import { useStatusMetrics } from './contextPanel/useStatusMetrics';
 import { useSubagentRuns } from './contextPanel/useSubagentRuns';
-import AgentChangesPanel from './AgentChangesPanel';
 import TodoPanel from './TodoPanel';
 
 const TAB_IDS = ['subagents', 'tools', 'changes', 'tasks', 'status', 'sessions'] as const;

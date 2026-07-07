@@ -63,10 +63,10 @@ type MemoryGate struct {
 
 // Default thresholds.
 const (
-	DefaultMinMemoryBytes  = 8 * 1024 * 1024 * 1024  // 8 GB
-	DefaultRetryMinBytes   = 16 * 1024 * 1024 * 1024 // 16 GB
-	DefaultRetrySleep      = 30 * time.Second
-	DefaultMaxRetries      = 5
+	DefaultMinMemoryBytes = 8 * 1024 * 1024 * 1024  // 8 GB
+	DefaultRetryMinBytes  = 16 * 1024 * 1024 * 1024 // 16 GB
+	DefaultRetrySleep     = 30 * time.Second
+	DefaultMaxRetries     = 5
 )
 
 // Check verifies that sufficient memory is available for the operation.

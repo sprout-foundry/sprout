@@ -76,8 +76,8 @@ func NewPatchInEnvelope(content, path string, browserSeq int64) *SyncEnvelope {
 	return &SyncEnvelope{
 		Type: EnvelopeTypePatchIn,
 		Payload: PatchInPayload{
-			Path:      path,
-			Content:   content,
+			Path:       path,
+			Content:    content,
 			BrowserSeq: browserSeq,
 		},
 	}

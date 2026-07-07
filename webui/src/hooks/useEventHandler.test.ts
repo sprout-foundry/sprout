@@ -81,10 +81,10 @@ vi.mock('../services/automateEvents', () => ({
 }));
 
 // Static import — Vitest hoists vi.mock above all imports automatically
+import { emitAutomate } from '../services/automateEvents';
 import type { AppState } from '../types/app';
 import { useEventHandler } from './useEventHandler';
 import type { UseEventHandlerOptions, UseEventHandlerReturn } from './useEventHandler';
-import { emitAutomate } from '../services/automateEvents';
 
 // ---------------------------------------------------------------------------
 // Helpers

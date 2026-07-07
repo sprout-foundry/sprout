@@ -222,14 +222,14 @@ export interface SkillInstallOptions {
   force?: boolean;
 }
 
-export async function listInstalledSkills(
-  fetchFn: typeof fetch,
-): Promise<Array<{
-  id: string;
-  origin: { type: string; installed_at?: string };
-  installed_at?: string;
-  updated_at?: string;
-}>> {
+export async function listInstalledSkills(fetchFn: typeof fetch): Promise<
+  Array<{
+    id: string;
+    origin: { type: string; installed_at?: string };
+    installed_at?: string;
+    updated_at?: string;
+  }>
+> {
   const response = await fetchFn('/api/skills');
   if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
   return response.json();
@@ -273,10 +273,7 @@ export async function updateSkill(
   return response.json();
 }
 
-export async function removeSkill(
-  fetchFn: typeof fetch,
-  id: string,
-): Promise<{ status: string; id: string }> {
+export async function removeSkill(fetchFn: typeof fetch, id: string): Promise<{ status: string; id: string }> {
   const response = await fetchFn('/api/skills/remove', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

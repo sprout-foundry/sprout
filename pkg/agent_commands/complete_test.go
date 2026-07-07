@@ -3,6 +3,8 @@
 package commands
 
 import (
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
@@ -631,4 +633,186 @@ func TestRollbackCommand_Complete_WithArgs(t *testing.T) {
 	a := agent.NewTestAgent()
 	results = cmd.Complete([]string{"some-revision"}, a)
 	assert.Nil(t, results, "non-empty args with test agent should return nil")
+}
+
+
+// ---------------------------------------------------------------------------
+// PathCompleter
+// ---------------------------------------------------------------------------
+
+func TestPathCompleter_EmptyPrefix(t *testing.T) {
+	// prefix="" becomes "." -> filepath.Base(".")="." -> matches dotfiles
+	results := PathCompleter("")
+	assert.NotEmpty(t, results, "empty prefix should return entries")
+	assert.True(t, sort.StringsAreSorted(results), "results should be sorted")
+	// The only dotfile in the package dir is .sprout/ (a directory)
+	assert.Contains(t, results, ".sprout/")
+	// Must not panic
+	assert.NotPanics(t, func() { PathCompleter("") })
+}
+
+func TestPathCompleter_SpecificPrefix(t *testing.T) {
+	// "changes" matches files starting with "changes" in the current dir
+	results := PathCompleter("changes")
+	assert.NotEmpty(t, results, "should return entries matching 'changes' prefix")
+	assert.True(t, sort.StringsAreSorted(results), "results should be sorted")
+	assert.Contains(t, results, "changes.go")
+	assert.Contains(t, results, "changes_test.go")
+	// Should not return unrelated entries
+	assert.NotContains(t, results, "clear.go")
+}
+
+func TestPathCompleter_NoMatch(t *testing.T) {
+	results := PathCompleter("zzzz_nonexistent_zzzz")
+	assert.Nil(t, results, "no matching files should return nil")
+}
+
+func TestPathCompleter_NonExistentDir(t *testing.T) {
+	results := PathCompleter("/nonexistent_dir_xyz/")
+	assert.Nil(t, results, "non-existent directory should return nil")
+}
+
+func TestPathCompleter_HiddenFilesSkipped(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create regular files with names starting with "file"
+	assert.NoError(t, os.WriteFile(filepath.Join(tmpDir, "file1.txt"), []byte("a"), 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(tmpDir, "file2.txt"), []byte("b"), 0644))
+
+	// Create hidden files (dotfiles)
+	assert.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".hidden1"), []byte("c"), 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".hidden2"), []byte("d"), 0644))
+
+	// Create a subdirectory
+	assert.NoError(t, os.Mkdir(filepath.Join(tmpDir, "subdir"), 0755))
+
+	// Create a hidden directory
+	assert.NoError(t, os.Mkdir(filepath.Join(tmpDir, ".hiddendir"), 0755))
+
+	// Use prefix = tmpDir + "/file" -> dir=tmpDir, base="file"
+	// Matches entries starting with "file", skips hidden ones since base doesn't start with "."
+	prefix := filepath.Join(tmpDir, "file")
+	results := PathCompleter(prefix)
+	assert.NotEmpty(t, results, "should return entries from temp dir matching 'file'")
+
+	// Should contain regular files
+	assert.Contains(t, results, filepath.Join(tmpDir, "file1.txt"))
+	assert.Contains(t, results, filepath.Join(tmpDir, "file2.txt"))
+
+	// "subdir" doesn't start with "file" so it shouldn't be included
+	assert.NotContains(t, results, filepath.Join(tmpDir, "subdir"))
+
+	// Should NOT contain hidden files or hidden directories
+	assert.NotContains(t, results, filepath.Join(tmpDir, ".hidden1"))
+	assert.NotContains(t, results, filepath.Join(tmpDir, ".hidden2"))
+	assert.NotContains(t, results, filepath.Join(tmpDir, ".hiddendir"))
+}
+
+func TestPathCompleter_HiddenFilesIncludedWhenPrefixStartsWithDot(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create regular and hidden files
+	assert.NoError(t, os.WriteFile(filepath.Join(tmpDir, "visible.txt"), []byte("a"), 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".hidden1"), []byte("c"), 0644))
+	assert.NoError(t, os.Mkdir(filepath.Join(tmpDir, ".hiddendir"), 0755))
+
+	// prefix starting with "." should include hidden files
+	// prefix = tmpDir + "/.h" -> dir=tmpDir, base=".h"
+	prefix := filepath.Join(tmpDir, ".h")
+	results := PathCompleter(prefix)
+	assert.NotEmpty(t, results, "should return entries matching '.h'")
+
+	// Should include hidden files
+	assert.Contains(t, results, filepath.Join(tmpDir, ".hidden1"))
+	assert.Contains(t, results, filepath.Join(tmpDir, ".hiddendir")+"/")
+	// visible.txt doesn't start with ".h"
+	assert.NotContains(t, results, filepath.Join(tmpDir, "visible.txt"))
+}
+
+func TestPathCompleter_CaseInsensitive(t *testing.T) {
+	// "CHANGES" should match "changes.go" etc. case-insensitively
+	results := PathCompleter("CHANGES")
+	assert.NotEmpty(t, results, "case-insensitive prefix should match 'changes' entries")
+	assert.Contains(t, results, "changes.go")
+	assert.True(t, sort.StringsAreSorted(results), "results should be sorted")
+}
+
+func TestPathCompleter_DirectoriesTrailingSlash(t *testing.T) {
+	// Use a temp dir with known files and directories
+	tmpDir := t.TempDir()
+	assert.NoError(t, os.WriteFile(filepath.Join(tmpDir, "afile.txt"), []byte("a"), 0644))
+	assert.NoError(t, os.Mkdir(filepath.Join(tmpDir, "adir"), 0755))
+	assert.NoError(t, os.WriteFile(filepath.Join(tmpDir, "another.txt"), []byte("b"), 0644))
+	assert.NoError(t, os.Mkdir(filepath.Join(tmpDir, "adir2"), 0755))
+
+	// prefix = tmpDir + "/a" -> dir=tmpDir, base="a"
+	prefix := filepath.Join(tmpDir, "a")
+	results := PathCompleter(prefix)
+	assert.NotEmpty(t, results, "should return entries matching 'a'")
+
+	// Directories should have trailing "/"
+	assert.Contains(t, results, filepath.Join(tmpDir, "adir")+"/")
+	assert.Contains(t, results, filepath.Join(tmpDir, "adir2")+"/")
+
+	// Files should NOT have trailing "/"
+	assert.Contains(t, results, filepath.Join(tmpDir, "afile.txt"))
+	assert.NotContains(t, results, filepath.Join(tmpDir, "afile.txt")+"/")
+
+	// "another.txt" also matches "a" prefix without trailing slash
+	assert.Contains(t, results, filepath.Join(tmpDir, "another.txt"))
+}
+
+// ---------------------------------------------------------------------------
+// ReviewCommand.Complete (delegates to PathCompleter)
+// ---------------------------------------------------------------------------
+
+func TestReviewCommand_Complete_FilePaths(t *testing.T) {
+	cmd := &ReviewCommand{}
+	results := cmd.Complete([]string{"changes"}, nil)
+	assert.NotEmpty(t, results, "delegates to PathCompleter for file paths")
+	assert.Contains(t, results, "changes.go")
+
+	// nil agent must not panic
+	assert.NotPanics(t, func() {
+		cmd.Complete([]string{"changes"}, nil)
+	})
+}
+
+func TestReviewCommand_Complete_EmptyArgs(t *testing.T) {
+	cmd := &ReviewCommand{}
+	results := cmd.Complete(nil, nil)
+	// Empty args -> prefix="." -> dotfiles
+	assert.NotEmpty(t, results, "empty args should return entries (dotfiles via '.' prefix)")
+	assert.True(t, sort.StringsAreSorted(results), "results should be sorted")
+}
+
+func TestReviewCommand_Complete_NoMatch(t *testing.T) {
+	cmd := &ReviewCommand{}
+	results := cmd.Complete([]string{"zzzz_nonexistent_zzzz"}, nil)
+	assert.Nil(t, results, "no matching files should return nil")
+}
+
+func TestReviewDeepCommand_Complete_FilePaths(t *testing.T) {
+	cmd := &ReviewDeepCommand{}
+	results := cmd.Complete([]string{"changes"}, nil)
+	assert.NotEmpty(t, results, "delegates to PathCompleter for file paths")
+	assert.Contains(t, results, "changes.go")
+
+	// nil agent must not panic
+	assert.NotPanics(t, func() {
+		cmd.Complete([]string{"changes"}, nil)
+	})
+}
+
+func TestReviewDeepCommand_Complete_EmptyArgs(t *testing.T) {
+	cmd := &ReviewDeepCommand{}
+	results := cmd.Complete(nil, nil)
+	assert.NotEmpty(t, results, "empty args should return entries")
+	assert.True(t, sort.StringsAreSorted(results), "results should be sorted")
+}
+
+func TestReviewDeepCommand_Complete_NoMatch(t *testing.T) {
+	cmd := &ReviewDeepCommand{}
+	results := cmd.Complete([]string{"zzzz_nonexistent_zzzz"}, nil)
+	assert.Nil(t, results, "no matching files should return nil")
 }

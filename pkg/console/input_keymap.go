@@ -184,18 +184,7 @@ func KeymapHelpTable() string {
 // The label is the Description truncated to ~30 display columns.
 // Returns empty string when no bindings are registered.
 func KeymapHintRow() string {
-	entries := GlobalKeymap().Entries()
-	if len(entries) == 0 {
-		return ""
-	}
-
-	const maxLabel = 30
-	var parts []string
-	for _, e := range entries {
-		label := truncateToWidth(e.Description, maxLabel, "…")
-		parts = append(parts, e.Key+" "+label)
-	}
-	return strings.Join(parts, " · ")
+	return "Type /help for available slash commands"
 }
 
 func padRight(s string, n int) string {

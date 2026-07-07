@@ -393,6 +393,109 @@ func TestGetCostSummary_Empty(t *testing.T) {
 	if len(summary.ByProviderLastMonth) != 0 {
 		t.Errorf("ByProviderLastMonth should be empty, got %v", summary.ByProviderLastMonth)
 	}
+	if summary.FirstActivity != nil {
+		t.Errorf("FirstActivity should be nil for empty store, got %v", summary.FirstActivity)
+	}
+	if summary.LastActivity != nil {
+		t.Errorf("LastActivity should be nil for empty store, got %v", summary.LastActivity)
+	}
+}
+
+// --- SP-080: All-time activity bounds for stale-data banner ---
+
+func TestCostSummary_ActivityBounds_Populated(t *testing.T) {
+	cs := makeCostStore(t)
+	now := time.Now()
+
+	// Records in non-sorted order so the min/max has to scan, not just
+	// grab the first/last slice element.
+	cs.records = []CostRecord{
+		{Timestamp: now.Add(-10 * 24 * time.Hour), Provider: "openai", Model: "gpt-4", Cost: 0.05},
+		{Timestamp: now.Add(-90 * 24 * time.Hour), Provider: "anthropic", Model: "claude", Cost: 0.10},
+		{Timestamp: now.Add(-45 * 24 * time.Hour), Provider: "openai", Model: "gpt-3.5", Cost: 0.03},
+		{Timestamp: now.Add(-1 * time.Hour), Provider: "openai", Model: "gpt-4", Cost: 0.02},
+	}
+
+	summary := cs.GetCostSummary(time.Time{}, time.Time{})
+
+	if summary.FirstActivity == nil {
+		t.Fatal("FirstActivity should not be nil for populated store")
+	}
+	if summary.LastActivity == nil {
+		t.Fatal("LastActivity should not be nil for populated store")
+	}
+
+	wantFirst := now.Add(-90 * 24 * time.Hour)
+	wantLast := now.Add(-1 * time.Hour)
+
+	// Allow 1s slack because the recorded timestamps are derived from
+	// `now` at test start; comparing with millisecond precision would
+	// be flaky on slower machines.
+	if diff := summary.FirstActivity.Sub(wantFirst); diff > time.Second || diff < -time.Second {
+		t.Errorf("FirstActivity = %v, want ~%v (diff %v)", summary.FirstActivity, wantFirst, diff)
+	}
+	if diff := summary.LastActivity.Sub(wantLast); diff > time.Second || diff < -time.Second {
+		t.Errorf("LastActivity = %v, want ~%v (diff %v)", summary.LastActivity, wantLast, diff)
+	}
+
+	// Bounds are emitted in UTC.
+	if summary.FirstActivity.Location() != time.UTC {
+		t.Errorf("FirstActivity location = %v, want UTC", summary.FirstActivity.Location())
+	}
+	if summary.LastActivity.Location() != time.UTC {
+		t.Errorf("LastActivity location = %v, want UTC", summary.LastActivity.Location())
+	}
+}
+
+func TestCostSummary_ActivityBounds_IndependentOfRangeFilter(t *testing.T) {
+	cs := makeCostStore(t)
+	now := time.Now()
+
+	// All records are older than the 7-day range we'll filter by, but
+	// the all-time bounds must still reflect min/max across ALL records.
+	old := now.AddDate(0, 0, -60)
+	older := now.AddDate(0, 0, -90)
+	oldest := now.AddDate(0, 0, -120)
+
+	cs.records = []CostRecord{
+		{Timestamp: old, Provider: "openai", Model: "gpt-4", Cost: 0.05},
+		{Timestamp: older, Provider: "openai", Model: "gpt-4", Cost: 0.05},
+		{Timestamp: oldest, Provider: "openai", Model: "gpt-4", Cost: 0.05},
+	}
+
+	startDate := now.AddDate(0, 0, -7)
+	endDate := now
+	summary := cs.GetCostSummary(startDate, endDate)
+
+	if summary.FirstActivity == nil || summary.LastActivity == nil {
+		t.Fatal("activity bounds should be populated regardless of range filter")
+	}
+	if diff := summary.FirstActivity.Sub(oldest); diff > time.Second || diff < -time.Second {
+		t.Errorf("FirstActivity = %v, want ~%v", summary.FirstActivity, oldest)
+	}
+	if diff := summary.LastActivity.Sub(old); diff > time.Second || diff < -time.Second {
+		t.Errorf("LastActivity = %v, want ~%v", summary.LastActivity, old)
+	}
+}
+
+func TestCostSummary_ActivityBounds_SingleRecord(t *testing.T) {
+	cs := makeCostStore(t)
+	now := time.Now()
+
+	cs.records = []CostRecord{
+		{Timestamp: now.Add(-2 * time.Hour), Provider: "openai", Model: "gpt-4", Cost: 0.05},
+	}
+
+	summary := cs.GetCostSummary(time.Time{}, time.Time{})
+
+	if summary.FirstActivity == nil || summary.LastActivity == nil {
+		t.Fatal("single record should produce non-nil bounds")
+	}
+	// For one record, first and last should be the same instant.
+	if !summary.FirstActivity.Equal(*summary.LastActivity) {
+		t.Errorf("single-record bounds should be equal: first=%v last=%v",
+			summary.FirstActivity, summary.LastActivity)
+	}
 }
 
 func TestForcePersist(t *testing.T) {

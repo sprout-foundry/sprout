@@ -16,6 +16,10 @@ export interface CostSummary {
   by_billing_type?: Record<string, { cost: number; tokens: number }>;
   charged_cost?: number;
   token_value?: number;
+  /** All-time earliest recorded activity (ISO 8601 / RFC 3339 UTC). */
+  first_activity?: string;
+  /** All-time most recent recorded activity (ISO 8601 / RFC 3339 UTC). */
+  last_activity?: string;
 }
 
 interface CostSummaryCardsProps {

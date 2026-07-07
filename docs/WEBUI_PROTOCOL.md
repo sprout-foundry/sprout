@@ -142,7 +142,7 @@ All REST endpoints are prefixed with `/api/`. Every endpoint accepts the `?clien
 | `GET` | `/api/stats` | Server statistics and agent status | — | `{ "provider": string, "version": string, "uptime": string, "model": string, "active_chat_id": string, "chat_session_count": number, ... }` |
 | `GET` | `/api/embedding-index` | Embedding index status | — | `{ "enabled": bool, "index_size": number, "initialized": bool, "building": bool }` |
 | `POST` | `/api/embedding-index` | Toggle embedding index | `{ "enabled": bool }` | Same as GET response |
-| `GET` | `/api/costs/summary` | Cost summary | — | Cost summary object |
+| `GET` | `/api/costs/summary` | Cost summary | — | Cost summary object (incl. `total_cost`, `by_provider`, `by_model`, `last_30_days`, `by_billing_type`, `first_activity`, `last_activity`) |
 | `GET` | `/api/costs/history` | Daily cost history | Query: `?days=N` (default 30) | `{ "daily_costs": [...], "days": number }` |
 | `GET` | `/api/costs/detail` | Detailed cost breakdown | Query: `?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD` | `{ "total_cost": number, "by_provider": {...}, "by_model": {...}, "start_date": string, "end_date": string }` |
 | `GET` | `/api/providers` | Available LLM providers | — | `{ "providers": [...] }` |
@@ -154,7 +154,7 @@ All REST endpoints are prefixed with `/api/`. Every endpoint accepts the `?clien
 **Details:**
 - `GET /api/stats` (handler: `handleAPIStats` in `api_workspace.go`): Returns comprehensive server stats including provider info, version, uptime, model, active chat session, and agent statistics.
 - `GET/POST /api/embedding-index` (handler: `handleAPIEmbeddingIndex` in `api_embedding_index.go`): GET returns index status. POST toggles indexing with `{ "enabled": bool }`.
-- Cost tracking endpoints (`cost_tracking_api.go`): `/api/costs/history` defaults to last 30 days but accepts `?days=N`. `/api/costs/detail` accepts `?start_date` and `?end_date` in `YYYY-MM-DD` format.
+- Cost tracking endpoints (`cost_tracking_api.go`): `/api/costs/history` defaults to last 30 days but accepts `?days=N`. `/api/costs/detail` accepts `?start_date` and `?end_date` in `YYYY-MM-DD` format. `/api/costs/summary` response includes `first_activity` and `last_activity` (RFC 3339 UTC strings, omitted when the store is empty) covering all recorded records independent of any date-range filter; the WebUI uses these to surface a "no activity in the last 30 days" banner when `total_cost > 0` but `last_30_days == 0`.
 - `GET /api/support-bundle`: Returns a ZIP file with logs, config, and diagnostics via `Content-Disposition: attachment`.
 
 ### Files

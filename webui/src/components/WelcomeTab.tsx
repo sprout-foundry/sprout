@@ -1,5 +1,6 @@
 import { Terminal, GitBranch, MessageSquare, Zap, BookOpen, Settings, Command, X } from 'lucide-react';
 import { useWorkspace } from '../hooks/useWorkspace';
+import { supportsWorkspaceSwitching } from '../config/mode';
 import WorkspacePicker from './WorkspacePicker';
 import './WelcomeTab.css';
 
@@ -33,6 +34,17 @@ function WorkspacePickerView({
   const handleBrowse = () => {
     window.dispatchEvent(new CustomEvent('sprout:open-workspace-switcher'));
   };
+
+  if (!supportsWorkspaceSwitching) {
+    return (
+      <div className="welcome-tab">
+        <div className="welcome-header">
+          <h1>Welcome to Sprout!</h1>
+          <p>Ask the AI to create files, or use the Files tab to get started.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <WorkspacePicker

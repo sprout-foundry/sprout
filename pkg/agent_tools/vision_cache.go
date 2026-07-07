@@ -42,9 +42,9 @@ type VisionCacheStats struct {
 // ---------------------------------------------------------------------------
 
 type visionCacheEntry struct {
-	key   string
-	result string
-	usage  *VisionUsageInfo
+	key        string
+	result     string
+	usage      *VisionUsageInfo
 	prev, next *visionCacheEntry
 }
 

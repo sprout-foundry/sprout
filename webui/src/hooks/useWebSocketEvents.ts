@@ -14,10 +14,10 @@ import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { AppStoreSetState } from '../contexts/AppStore';
 import { ApiService } from '../services/api';
 import { switchChatSession, listChatSessions } from '../services/chatSessions';
+import { WebSocketService } from '../services/websocket';
 import type { AppState } from '../types/app';
 import { debugLog } from '../utils/log';
 import { trimMessages } from '../utils/messageWindow';
-import { WebSocketService } from '../services/websocket';
 import { useEventHandler } from './useEventHandler';
 
 export interface UseWebSocketEventsOptions {

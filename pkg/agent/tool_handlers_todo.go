@@ -24,10 +24,10 @@ var statusNormalizationMap = map[string]string{
 	"new":        "pending",
 	"pending":    "pending",
 	// → in_progress
-	"inprogress": "in_progress",
-	"started":    "in_progress",
-	"active":     "in_progress",
-	"doing":      "in_progress",
+	"inprogress":  "in_progress",
+	"started":     "in_progress",
+	"active":      "in_progress",
+	"doing":       "in_progress",
 	"in progress": "in_progress",
 	// → completed
 	"done":      "completed",
@@ -44,14 +44,14 @@ var statusNormalizationMap = map[string]string{
 // priorityNormalizationMap maps canonical lookup keys to canonical priority
 // values. Same key normalization as statusNormalizationMap.
 var priorityNormalizationMap = map[string]string{
-	"high":     "high",
-	"hi":       "high",
-	"medium":   "medium",
-	"med":      "medium",
-	"normal":   "medium",
-	"default":  "medium",
-	"low":      "low",
-	"lo":       "low",
+	"high":    "high",
+	"hi":      "high",
+	"medium":  "medium",
+	"med":     "medium",
+	"normal":  "medium",
+	"default": "medium",
+	"low":     "low",
+	"lo":      "low",
 }
 
 // normalizeStatus converts common status variants to canonical values.
@@ -198,21 +198,21 @@ func coerceTodoItem(raw interface{}) (tools.TodoItem, error) {
 //
 // Two layers of fallback cover the realistic MiniMax failure modes:
 //
-//   1. Top-level key fallback. Seed core's resolveAlternativeNames (seed/core/
-//      tool_registry_args.go:97) already remaps args["tasks"] / args["items"] /
-//      args["task_list"] / args["todo_list"] → args["todos"] before the handler
-//      runs — so the primary-key lookup below catches everything that layer
-//      missed plus the canonical name. The explicit alternatives here are a
-//      belt-and-suspenders second line of defense if the schema alternatives
-//      are ever stripped.
+//  1. Top-level key fallback. Seed core's resolveAlternativeNames (seed/core/
+//     tool_registry_args.go:97) already remaps args["tasks"] / args["items"] /
+//     args["task_list"] / args["todo_list"] → args["todos"] before the handler
+//     runs — so the primary-key lookup below catches everything that layer
+//     missed plus the canonical name. The explicit alternatives here are a
+//     belt-and-suspenders second line of defense if the schema alternatives
+//     are ever stripped.
 //
-//   2. Per-item coercion. seed core does NOT remap field names inside array
-//      items — it only looks at top-level keys. So when MiniMax sends
-//      {"todos": [{"text": "...", "state": "done"}]} we still need to coerce
-//      the item fields ourselves (see coerceTodoItem).
+//  2. Per-item coercion. seed core does NOT remap field names inside array
+//     items — it only looks at top-level keys. So when MiniMax sends
+//     {"todos": [{"text": "...", "state": "done"}]} we still need to coerce
+//     the item fields ourselves (see coerceTodoItem).
 //
-//   3. String-encoded JSON. If the model JSON-encodes the value of "todos"
-//      as a string instead of an inline array, we decode it back to an array.
+//  3. String-encoded JSON. If the model JSON-encodes the value of "todos"
+//     as a string instead of an inline array, we decode it back to an array.
 func coerceTodosFromArgs(args map[string]interface{}) ([]tools.TodoItem, error) {
 	todosRaw, ok := args["todos"]
 	if !ok {

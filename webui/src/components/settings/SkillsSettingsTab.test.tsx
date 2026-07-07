@@ -12,10 +12,10 @@
  * - API errors surface as a visible error message.
  */
 
-import { act, createElement } from 'react';
-import { createRoot, type Root } from 'react-dom/client';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { act, createElement } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 // ---------------------------------------------------------------------------
@@ -34,8 +34,7 @@ vi.mock('../../services/api', () => {
       getInstance: () => ({
         listInstalledSkills: () => mockListInstalledSkills(),
         listSkillRegistry: () => mockListSkillRegistry(),
-        installSkill: (source: string, opts?: { ref?: string; force?: boolean }) =>
-          mockInstallSkill(source, opts),
+        installSkill: (source: string, opts?: { ref?: string; force?: boolean }) => mockInstallSkill(source, opts),
         updateSkill: (id: string) => mockUpdateSkill(id),
         removeSkill: (id: string) => mockRemoveSkill(id),
       }),
@@ -111,7 +110,14 @@ describe('render', () => {
   it('renders all install form inputs', async () => {
     mockListInstalledSkills.mockResolvedValue([]);
     mockListSkillRegistry.mockResolvedValue([
-      { id: 'security-review', name: 'Security Review', description: 'desc', git_url: 'x', git_ref: 'main', path_in_repo: 'a' },
+      {
+        id: 'security-review',
+        name: 'Security Review',
+        description: 'desc',
+        git_url: 'x',
+        git_ref: 'main',
+        path_in_repo: 'a',
+      },
     ]);
     renderTab();
     await waitFor(() => {
@@ -129,10 +135,17 @@ describe('registry dropdown', () => {
     const user = userEvent.setup();
     mockListInstalledSkills.mockResolvedValue([]);
     mockListSkillRegistry.mockResolvedValue([
-      { id: 'security-review', name: 'Security Review', description: 'desc', git_url: 'x', git_ref: 'main', path_in_repo: 'a' },
+      {
+        id: 'security-review',
+        name: 'Security Review',
+        description: 'desc',
+        git_url: 'x',
+        git_ref: 'main',
+        path_in_repo: 'a',
+      },
     ]);
     renderTab();
-    const select = await waitFor(() => screen.getByTestId('skills-registry-dropdown'));
+    const select = await screen.findByTestId('skills-registry-dropdown');
     await user.selectOptions(select, 'security-review');
     const sourceInput = screen.getByTestId('skills-install-source') as HTMLInputElement;
     expect(sourceInput.value).toBe('security-review');
@@ -149,7 +162,7 @@ describe('install form', () => {
     mockInstallSkill.mockResolvedValue([{ skill_id: 'demo', install_dir: '/x/demo', origin: { type: 'path' } }]);
 
     renderTab();
-    const sourceInput = await waitFor(() => screen.getByTestId('skills-install-source'));
+    const sourceInput = await screen.findByTestId('skills-install-source');
     await user.type(sourceInput, './my-skill');
     const installBtn = screen.getByTestId('skills-install-button');
     await user.click(installBtn);
@@ -169,7 +182,7 @@ describe('install form', () => {
     mockInstallSkill.mockResolvedValue([{ skill_id: 'x', install_dir: '/x', origin: { type: 'path' } }]);
 
     renderTab();
-    const sourceInput = await waitFor(() => screen.getByTestId('skills-install-source'));
+    const sourceInput = await screen.findByTestId('skills-install-source');
     await user.type(sourceInput, '/some/path');
     const force = screen.getByTestId('skills-install-force') as HTMLInputElement;
     await user.click(force);
@@ -209,7 +222,7 @@ describe('installed skills list', () => {
     mockUpdateSkill.mockResolvedValue([{ skill_id: 'alpha', install_dir: '/x', origin: { type: 'git' } }]);
 
     renderTab();
-    const updateBtn = await waitFor(() => screen.getByTestId('skills-update-button-alpha'));
+    const updateBtn = await screen.findByTestId('skills-update-button-alpha');
     await user.click(updateBtn);
 
     await waitFor(() => {
@@ -225,7 +238,7 @@ describe('installed skills list', () => {
     mockListSkillRegistry.mockResolvedValue([]);
 
     renderTab();
-    const removeBtn = await waitFor(() => screen.getByTestId('skills-remove-button-alpha'));
+    const removeBtn = await screen.findByTestId('skills-remove-button-alpha');
     await user.click(removeBtn);
 
     await waitFor(() => {
@@ -249,7 +262,7 @@ describe('toggle enabled (preserved original UI)', () => {
   it('renders the toggle section when settings has skills', async () => {
     const settingsWithSkills = {
       skills: {
-        'demo': { id: 'demo', name: 'Demo', description: '', path: '', enabled: true },
+        demo: { id: 'demo', name: 'Demo', description: '', path: '', enabled: true },
       },
     } as any;
     act(() => {
@@ -269,7 +282,7 @@ describe('toggle enabled (preserved original UI)', () => {
     const user = userEvent.setup();
     const settingsWithSkills = {
       skills: {
-        'demo': { id: 'demo', name: 'Demo', description: '', path: '', enabled: true },
+        demo: { id: 'demo', name: 'Demo', description: '', path: '', enabled: true },
       },
     } as any;
     act(() => {

@@ -289,25 +289,25 @@ func Summarize(path string) (*Summary, error) {
 	}
 
 	var raw struct {
-		Description              string      `json:"description,omitempty"`
-		ContinueOnError          bool        `json:"continue_on_error,omitempty"`
-		NoWebUI                  bool        `json:"no_web_ui,omitempty"`
-		Initial                  *initialRaw `json:"initial,omitempty"`
-		Steps                    []stepRaw   `json:"steps,omitempty"`
-		Budget                   *budgetRaw  `json:"budget,omitempty"`
-		RequiresApproval         *bool       `json:"requires_approval,omitempty"`
-		SubagentTimeoutSeconds   *int        `json:"subagent_timeout_seconds,omitempty"`
+		Description            string      `json:"description,omitempty"`
+		ContinueOnError        bool        `json:"continue_on_error,omitempty"`
+		NoWebUI                bool        `json:"no_web_ui,omitempty"`
+		Initial                *initialRaw `json:"initial,omitempty"`
+		Steps                  []stepRaw   `json:"steps,omitempty"`
+		Budget                 *budgetRaw  `json:"budget,omitempty"`
+		RequiresApproval       *bool       `json:"requires_approval,omitempty"`
+		SubagentTimeoutSeconds *int        `json:"subagent_timeout_seconds,omitempty"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, err
 	}
 
 	out := &Summary{
-		Description:              raw.Description,
-		ContinueOnError:          raw.ContinueOnError,
-		NoWebUI:                  raw.NoWebUI,
-		RequiresApproval:         raw.RequiresApproval,
-		SubagentTimeoutSeconds:   raw.SubagentTimeoutSeconds,
+		Description:            raw.Description,
+		ContinueOnError:        raw.ContinueOnError,
+		NoWebUI:                raw.NoWebUI,
+		RequiresApproval:       raw.RequiresApproval,
+		SubagentTimeoutSeconds: raw.SubagentTimeoutSeconds,
 	}
 	if raw.Budget != nil && raw.Budget.USD > 0 {
 		out.Budget = &BudgetSummary{

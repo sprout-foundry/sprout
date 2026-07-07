@@ -38,11 +38,11 @@ func (m *mockHandler) Execute(_ context.Context, _ ToolEnv, _ map[string]any) (T
 	return m.result, m.execErr
 }
 
-func (m *mockHandler) Aliases() []string         { return nil }
-func (m *mockHandler) Timeout() time.Duration    { return 0 }
-func (m *mockHandler) MaxResultSize() int        { return 0 }
-func (m *mockHandler) SafeForParallel() bool     { return false }
-func (m *mockHandler) Interactive() bool         { return false }
+func (m *mockHandler) Aliases() []string      { return nil }
+func (m *mockHandler) Timeout() time.Duration { return 0 }
+func (m *mockHandler) MaxResultSize() int     { return 0 }
+func (m *mockHandler) SafeForParallel() bool  { return false }
+func (m *mockHandler) Interactive() bool      { return false }
 
 // newMockHandler creates a mockHandler with sensible defaults.
 func newMockHandler(name string) *mockHandler {
@@ -462,8 +462,8 @@ func TestToolResultWithStructuredOut(t *testing.T) {
 	t.Parallel()
 	data := map[string]int{"key": 42}
 	r := ToolResult{
-		Output:          "structured",
-		StructuredOut:   data,
+		Output:        "structured",
+		StructuredOut: data,
 	}
 	got, ok := r.StructuredOut.(map[string]int)
 	if !ok {
@@ -573,11 +573,11 @@ func TestToolEnvFields(t *testing.T) {
 	am := &mockApprovalManager{approved: true}
 
 	env := ToolEnv{
-		EventBus:      nil, // hard to construct without events package internals
-		WorkspaceRoot: "/home/user/project",
-		OutputWriter:  sw,
+		EventBus:        nil, // hard to construct without events package internals
+		WorkspaceRoot:   "/home/user/project",
+		OutputWriter:    sw,
 		ApprovalManager: am,
-		MaxTokensFunc: func() int { return 4096 },
+		MaxTokensFunc:   func() int { return 4096 },
 	}
 
 	if env.WorkspaceRoot != "/home/user/project" {
@@ -783,51 +783,51 @@ func TestAllToolsRegistration(t *testing.T) {
 	}
 
 	expectedNames := map[string]string{
-		"read_file":                 "read_file",
-		"list_directory":            "list_directory",
-		"fetch_url":                 "fetch_url",
-		"search_files":              "search_files",
-		"repo_map":                  "repo_map",
-		"rollback_changes":          "rollback_changes",
-		"view_history":              "view_history",
-		"list_skills":               "list_skills",
-		"embedding_index":           "embedding_index",
-			"write_file":                "write_file",
-	"write_structured_file":     "write_structured_file",
-	"edit_file":                 "edit_file",
-	"shell_command":             "shell_command",
-	"manage_memory":             "manage_memory",
-	"manage_settings":           "manage_settings",
-	"task_queue":                "task_queue",
-	"todo_write":                "todo_write",
-	"todo_read":                 "todo_read",
-	"ask_user":                  "ask_user",
-	"patch_structured_file":     "patch_structured_file",
-	"commit":                    "commit",
-	"git":                       "git",
-	"activate_skill":            "activate_skill",
-	"browse_url":                "browse_url",
-	"web_search":                "web_search",
-	"semantic_search":           "semantic_search",
-	"analyze_image_content":     "analyze_image_content",
-	"analyze_ui_screenshot":     "analyze_ui_screenshot",// SP-109 Phase 3 Batch A2
-		"list_automate_workflows":   "list_automate_workflows",
-		"list_changes":              "list_changes",
-		"revert_my_changes":         "revert_my_changes",
-		"recover_file":              "recover_file",
+		"read_file":               "read_file",
+		"list_directory":          "list_directory",
+		"fetch_url":               "fetch_url",
+		"search_files":            "search_files",
+		"repo_map":                "repo_map",
+		"rollback_changes":        "rollback_changes",
+		"view_history":            "view_history",
+		"list_skills":             "list_skills",
+		"embedding_index":         "embedding_index",
+		"write_file":              "write_file",
+		"write_structured_file":   "write_structured_file",
+		"edit_file":               "edit_file",
+		"shell_command":           "shell_command",
+		"manage_memory":           "manage_memory",
+		"manage_settings":         "manage_settings",
+		"task_queue":              "task_queue",
+		"todo_write":              "todo_write",
+		"todo_read":               "todo_read",
+		"ask_user":                "ask_user",
+		"patch_structured_file":   "patch_structured_file",
+		"commit":                  "commit",
+		"git":                     "git",
+		"activate_skill":          "activate_skill",
+		"browse_url":              "browse_url",
+		"web_search":              "web_search",
+		"semantic_search":         "semantic_search",
+		"analyze_image_content":   "analyze_image_content",
+		"analyze_ui_screenshot":   "analyze_ui_screenshot", // SP-109 Phase 3 Batch A2
+		"list_automate_workflows": "list_automate_workflows",
+		"list_changes":            "list_changes",
+		"revert_my_changes":       "revert_my_changes",
+		"recover_file":            "recover_file",
 		// SP-109 Phase 3 Batch A3 — agent-dependent function-pointer tools
-		"create_pull_request":       "create_pull_request",
-		"run_automate":              "run_automate",
-		"mcp_refresh":               "mcp_refresh",
+		"create_pull_request": "create_pull_request",
+		"run_automate":        "run_automate",
+		"mcp_refresh":         "mcp_refresh",
 		// SP-109 Phase 3 Batch B — subagent function-pointer tools
-		"run_subagent":              "run_subagent",
-		"run_parallel_subagents":    "run_parallel_subagents",
+		"run_subagent":           "run_subagent",
+		"run_parallel_subagents": "run_parallel_subagents",
 		// SP-109 Phase 3 Batch C — clarification function-pointer tools
-		"request_clarification":     "request_clarification",
-		"respond_clarification":    "respond_clarification",
-	"get_callers":              "get_callers",
-	"get_callees":              "get_callees",
-	"find_dead_code":           "find_dead_code",
+		"request_clarification": "request_clarification",
+		"respond_clarification": "respond_clarification",
+		"get_callers":           "get_callers",
+		"get_callees":           "get_callees",
+		"find_dead_code":        "find_dead_code",
 	}
 
 	var foundNames []string
@@ -858,7 +858,7 @@ func TestAllToolsRegistration(t *testing.T) {
 		}
 	}
 
-			// Verify required parameters for each handler
+	// Verify required parameters for each handler
 	for _, h := range tools {
 		def := h.Definition()
 		switch def.Name {
@@ -910,11 +910,12 @@ func TestAllToolsRegistration(t *testing.T) {
 			if len(def.Required) != 3 || def.Required[0] != "path" || def.Required[1] != "old_str" || def.Required[2] != "new_str" {
 				t.Errorf("edit_file Required = %v, want [\"path\" \"old_str\" \"new_str\"]", def.Required)
 			}
-			case "shell_command":
-		if len(def.Required) != 0 {
-			t.Errorf("shell_command Required = %v, want nil/empty", def.Required)
-		}
-	case "task_queue_add":if len(def.Required) != 1 || def.Required[0] != "title" {
+		case "shell_command":
+			if len(def.Required) != 0 {
+				t.Errorf("shell_command Required = %v, want nil/empty", def.Required)
+			}
+		case "task_queue_add":
+			if len(def.Required) != 1 || def.Required[0] != "title" {
 				t.Errorf("task_queue_add Required = %v, want [\"title\"]", def.Required)
 			}
 		case "task_queue_publish":
@@ -975,7 +976,7 @@ func TestAllToolsRegistration(t *testing.T) {
 			}
 		}
 	}
-}// ---------------------------------------------------------------------------
+} // ---------------------------------------------------------------------------
 // Unregister Tests
 // ---------------------------------------------------------------------------
 

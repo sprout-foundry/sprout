@@ -1248,7 +1248,7 @@ func (c *trackingClient) GetModelContextLimit() (int, error) { return 4096, nil 
 func (c *trackingClient) ListModels(ctx context.Context) ([]api.ModelInfo, error) {
 	return []api.ModelInfo{{Name: "test-model", ContextLength: 4096}}, nil
 }
-func (c *trackingClient) SupportsVision() bool   { return false }
+func (c *trackingClient) SupportsVision() bool { return false }
 
 // SupportsConversationalVision reports whether inline multimodal turns
 // should embed the image. Defaults to false; overridden per client.

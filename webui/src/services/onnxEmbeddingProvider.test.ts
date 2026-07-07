@@ -10,10 +10,10 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { TokenizerJSON } from './onnxEmbeddingProvider';
 import {
   BrowserONNXProvider,
   GemmaBpeTokenizer,
-  TokenizerJSON,
   createEmbeddingProvider,
   hasWebGpuSupport,
   hasWasmSimdSupport,

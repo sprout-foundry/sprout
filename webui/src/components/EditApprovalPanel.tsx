@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Collapsible } from '@sprout/ui';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { clientFetch } from '../services/clientSession';
 import './EditApprovalPanel.css';
 

@@ -231,13 +231,13 @@ func IncVisionBatchPartialFailure() {
 
 // VisionMetricsSnapshot is a stable-by-value snapshot of the metrics state.
 type VisionMetricsSnapshot struct {
-	ImageTokensTotal       int64            `json:"vision_image_tokens_total"`
-	ImageTokensCachedTotal int64            `json:"vision_image_tokens_cached_total"`
-	EmbedCallsTotal        int64            `json:"vision_embed_calls_total"`
-	OCRCallsTotal          int64            `json:"vision_ocr_calls_total"`
-	ResizeEvents           int64            `json:"vision_resize_events"`
-	CacheHits              int64            `json:"vision_cache_hits"`
-	CacheMisses            int64            `json:"vision_cache_misses"`
+	ImageTokensTotal       int64 `json:"vision_image_tokens_total"`
+	ImageTokensCachedTotal int64 `json:"vision_image_tokens_cached_total"`
+	EmbedCallsTotal        int64 `json:"vision_embed_calls_total"`
+	OCRCallsTotal          int64 `json:"vision_ocr_calls_total"`
+	ResizeEvents           int64 `json:"vision_resize_events"`
+	CacheHits              int64 `json:"vision_cache_hits"`
+	CacheMisses            int64 `json:"vision_cache_misses"`
 	// VISION-5: structured metrics
 	RetryCount          int64            `json:"vision_retry_count"`
 	OCRFallbackTotal    int64            `json:"vision_ocr_fallback_total"`

@@ -8,9 +8,9 @@ import (
 	"os"
 	"strings"
 
+	"github.com/sprout-foundry/sprout/pkg/console"
 	agenterrors "github.com/sprout-foundry/sprout/pkg/errors"
 	"github.com/sprout-foundry/sprout/pkg/noninteractive"
-	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
 // errReported marks an error whose user-facing message has already been

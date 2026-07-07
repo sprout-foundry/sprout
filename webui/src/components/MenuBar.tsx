@@ -8,10 +8,10 @@
  * @sprout/ui MenuBar handles keyboard navigation, mnemonics, and
  * portal-based dropdown rendering.
  */
-import { useMemo, useCallback } from 'react';
 import { MenuBar, type MenuDefinition, type MenuBarItem } from '@sprout/ui';
-import { useHotkeys } from '../contexts/HotkeyContext';
+import { useMemo, useCallback } from 'react';
 import { supportsLocalTerminal } from '../config/mode';
+import { useHotkeys } from '../contexts/HotkeyContext';
 
 /* ------------------------------------------------------------------ */
 /*  Menu definitions (identical to the original component)             */

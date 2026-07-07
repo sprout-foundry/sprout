@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/sprout-foundry/sprout/pkg/automate"
 	tools "github.com/sprout-foundry/sprout/pkg/agent_tools"
+	"github.com/sprout-foundry/sprout/pkg/automate"
 	"github.com/sprout-foundry/sprout/pkg/console"
 )
 
@@ -631,5 +631,3 @@ func getShellBgBaseDir() string {
 	}
 	return tools.GetBackgroundOutputBaseDir()
 }
-
-

@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
 import { Search } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import './PastSessionsHint.css';
 
 export interface RecalledItem {
@@ -37,9 +37,7 @@ export function PastSessionsHint() {
     const timer = setTimeout(async () => {
       setLoading(true);
       try {
-        const res = await fetch(
-          `/api/recall?query=${encodeURIComponent(trimmed)}&limit=${DEFAULT_LIMIT}`,
-        );
+        const res = await fetch(`/api/recall?query=${encodeURIComponent(trimmed)}&limit=${DEFAULT_LIMIT}`);
         if (!res.ok) {
           setResults([]);
         } else {
@@ -57,9 +55,7 @@ export function PastSessionsHint() {
   }, [query]);
 
   const handleClick = (sessionId: string) => {
-    window.dispatchEvent(
-      new CustomEvent('sprout:session-restored', { detail: { session_id: sessionId } }),
-    );
+    window.dispatchEvent(new CustomEvent('sprout:session-restored', { detail: { session_id: sessionId } }));
   };
 
   const trimmed = query.trim();
@@ -99,14 +95,10 @@ export function PastSessionsHint() {
           <div className="past-sessions-hint-card-header">
             <span className="past-sessions-hint-card-session-id">{item.session_id}</span>
             {Number.isFinite(item.similarity) && (
-              <span className="past-sessions-hint-card-similarity">
-                {(item.similarity * 100).toFixed(0)}%
-              </span>
+              <span className="past-sessions-hint-card-similarity">{(item.similarity * 100).toFixed(0)}%</span>
             )}
           </div>
-          {item.content_preview && (
-            <div className="past-sessions-hint-card-preview">{item.content_preview}</div>
-          )}
+          {item.content_preview && <div className="past-sessions-hint-card-preview">{item.content_preview}</div>}
         </button>
       ))}
     </div>

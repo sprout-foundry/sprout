@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"sort"
 	"strings"
 	"time"
 
@@ -597,4 +598,47 @@ func (m *MCPCommand) testServer(serverName string, chatAgent *agent.Agent) error
 	fmt.Printf("[done] Test completed successfully! Server '%s' is working properly.\n", serverName)
 
 	return nil
+}
+
+
+// Complete returns completions for the /mcp command.
+func (m *MCPCommand) Complete(args []string, chatAgent *agent.Agent) []string {
+	subcommands := []string{"add", "help", "list", "remove", "test"}
+	if len(args) == 0 {
+		return subcommands
+	}
+
+	switch args[0] {
+	case "add":
+		// Suggest MCP server types: stdio (local process) and http (remote).
+		return []string{"stdio", "http"}
+	case "remove", "test":
+		// List configured MCP server names from the config file.
+		mcpConfig, err := mcp.LoadMCPConfig()
+		if err != nil {
+			return nil
+		}
+		prefix := ""
+		if len(args) > 1 {
+			prefix = args[len(args)-1]
+		}
+		var names []string
+		for name := range mcpConfig.Servers {
+			if prefix == "" || strings.HasPrefix(strings.ToLower(name), strings.ToLower(prefix)) {
+				names = append(names, name)
+			}
+		}
+		sort.Strings(names)
+		return names
+	default:
+		// Prefix-match against known subcommands.
+		prefix := args[0]
+		var matches []string
+		for _, sub := range subcommands {
+			if strings.HasPrefix(strings.ToLower(sub), strings.ToLower(prefix)) {
+				matches = append(matches, sub)
+			}
+		}
+		return matches
+	}
 }

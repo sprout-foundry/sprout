@@ -148,6 +148,10 @@ func NewCommandRegistry() *CommandRegistry {
 	// SP-105 Phase 3: visual usage dashboard
 	registry.Register(&UsageCommand{})
 
+	// SP-117A: output verbosity and tool invocation display
+	registry.Register(&VerboseCommand{})
+	registry.Register(&ToolsCommand{})
+
 	// Agent state overview
 	registry.Register(&InfoCommand{})
 

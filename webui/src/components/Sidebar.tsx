@@ -6,8 +6,6 @@ import { useHotkeys } from '../contexts/HotkeyContext';
 import { usePlatformNav } from '../contexts/PlatformNavContext';
 import { useTheme } from '../contexts/ThemeContext';
 import type { WhitespaceRenderingMode } from '../extensions/whitespaceRendering';
-import { debugLog } from '../utils/log';
-import { ApiService, type SessionSearchResult } from '../services/api';
 import { useSidebarEventHandlers } from '../hooks/useSidebarEventHandlers';
 import { useSidebarModel } from '../hooks/useSidebarModel';
 import {
@@ -17,10 +15,14 @@ import {
   clampSidebarWidth,
 } from '../hooks/useSidebarState';
 import type { ProviderLogEntry } from '../providers/types';
-import type { SproutInstance } from '../services/api';
+import type { SproutInstance, SessionSearchResult } from '../services/api';
+import { ApiService } from '../services/api';
 import type { GitCommitSummary, GitCommitDetail } from '../types/git-types';
+import { debugLog } from '../utils/log';
+import AutomationsPanel from './AutomationsPanel';
 import type { GitSidebarPanelProps } from './GitSidebarPanel';
 import LocationSwitcher from './LocationSwitcher';
+import PastSessionsHint from './PastSessionsHint';
 import ResizeHandle from './ResizeHandle';
 import {
   ScrollText,
@@ -42,8 +44,6 @@ import {
   Download,
   CircleDollarSign,
 } from 'lucide-react';
-import AutomationsPanel from './AutomationsPanel';
-import PastSessionsHint from './PastSessionsHint';
 import SearchView from './SearchView';
 import SidebarFilesSection, { type FileTreeHandle } from './SidebarFilesSection';
 import SidebarGitSection from './SidebarGitSection';
@@ -320,27 +320,24 @@ function Sidebar({
   // Debounced search execution
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const executeSessionSearch = useCallback(
-    async (q: string) => {
-      if (!q.trim()) {
-        setSessionSearchResults([]);
-        setSessionSearchError(null);
-        return;
-      }
-      setSessionSearchLoading(true);
+  const executeSessionSearch = useCallback(async (q: string) => {
+    if (!q.trim()) {
+      setSessionSearchResults([]);
       setSessionSearchError(null);
-      try {
-        const resp = await ApiService.getInstance().searchSessions(q.trim(), { limit: 20 });
-        setSessionSearchResults(resp.results || []);
-      } catch (err) {
-        setSessionSearchError(err instanceof Error ? err.message : 'Search failed');
-        setSessionSearchResults([]);
-      } finally {
-        setSessionSearchLoading(false);
-      }
-    },
-    [],
-  );
+      return;
+    }
+    setSessionSearchLoading(true);
+    setSessionSearchError(null);
+    try {
+      const resp = await ApiService.getInstance().searchSessions(q.trim(), { limit: 20 });
+      setSessionSearchResults(resp.results || []);
+    } catch (err) {
+      setSessionSearchError(err instanceof Error ? err.message : 'Search failed');
+      setSessionSearchResults([]);
+    } finally {
+      setSessionSearchLoading(false);
+    }
+  }, []);
 
   const handleSessionSearchChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -450,7 +447,10 @@ function Sidebar({
   const showSessionSearchDropdown =
     !effectiveSidebarCollapsed &&
     sessionSearchFocused &&
-    (sessionSearchQuery.trim().length > 0 || sessionSearchLoading || sessionSearchResults.length > 0 || sessionSearchError !== null);
+    (sessionSearchQuery.trim().length > 0 ||
+      sessionSearchLoading ||
+      sessionSearchResults.length > 0 ||
+      sessionSearchError !== null);
 
   // Clean up timer on unmount
   useEffect(() => {
@@ -652,34 +652,34 @@ function Sidebar({
 
               {/* Export all sessions button — hidden in cloud mode */}
               {supportsExport && (
-              <div className="sidebar-export-all-wrapper">
-                <button
-                  type="button"
-                  className="sidebar-export-all-btn"
-                  onClick={handleExportAllSessions}
-                  disabled={isExportingAll}
-                  data-testid="sidebar-export-all"
-                  aria-label="Export all sessions"
-                  title="Export all sessions"
-                >
-                  {isExportingAll ? (
-                    <>
-                      <Loader2 size={14} className="sidebar-export-all-spinner" strokeWidth={2} />
-                      Exporting...
-                    </>
-                  ) : (
-                    <>
-                      <Download size={14} strokeWidth={2} />
-                      Export all
-                    </>
+                <div className="sidebar-export-all-wrapper">
+                  <button
+                    type="button"
+                    className="sidebar-export-all-btn"
+                    onClick={handleExportAllSessions}
+                    disabled={isExportingAll}
+                    data-testid="sidebar-export-all"
+                    aria-label="Export all sessions"
+                    title="Export all sessions"
+                  >
+                    {isExportingAll ? (
+                      <>
+                        <Loader2 size={14} className="sidebar-export-all-spinner" strokeWidth={2} />
+                        Exporting...
+                      </>
+                    ) : (
+                      <>
+                        <Download size={14} strokeWidth={2} />
+                        Export all
+                      </>
+                    )}
+                  </button>
+                  {exportAllError && (
+                    <div className="sidebar-export-all-error" role="alert">
+                      {exportAllError}
+                    </div>
                   )}
-                </button>
-                {exportAllError && (
-                  <div className="sidebar-export-all-error" role="alert">
-                    {exportAllError}
-                  </div>
-                )}
-              </div>
+                </div>
               )}
 
               {/* Past sessions semantic search (SP-092-3) */}
@@ -723,9 +723,7 @@ function Sidebar({
                     </span>
                   </div>
                   {result.excerpt && (
-                    <div className="sidebar-session-search-result-excerpt">
-                      {renderSessionExcerpt(result.excerpt)}
-                    </div>
+                    <div className="sidebar-session-search-result-excerpt">{renderSessionExcerpt(result.excerpt)}</div>
                   )}
                   {result.match_score >= 2 && (
                     <span className="sidebar-session-search-result-score" title={`Match score: ${result.match_score}`}>

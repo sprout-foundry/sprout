@@ -38,6 +38,7 @@ Tests must never leak side effects into the codebase, git state, or config:
 - **`orchestrator` git-write**: this persona can stage, commit (via the commit tool), and push without interactive approval, governed by `CapabilityGitWrite`.
 - **Local history ops** (`git checkout`, `restore`, `reset`, `stash`, `rebase`) are restorable via ChangeTracker (`list_changes`, `recover_file`, `revert_my_changes`) and may run via `shell_command`. Prefer scoped ops over whole-tree resets; use `recover_file` for agent edits (touches only files the agent changed).
 - **Active change set isolation**: focus only on your assigned task. Don't revert other agents' / user's in-progress work. If a build fails due to *unrelated* in-tree changes, pause briefly and retry; if it keeps failing, escalate.
+- **Commit messages with code samples must avoid shell expansion.** When the `commit` tool is invoked with a `message` containing backticks (e.g., `min-height: 100%`), `$()` substitutions, or `!` history references, the message will be expanded by the shell *before* it reaches `git commit` — producing a mangled message where code samples become empty strings or worse. **Safe pattern:** write the message to a temp file (e.g., `/tmp/sprout/commit-msg.txt`) via `write_file`, then run `git commit -F /tmp/sprout/commit-msg.txt` via `shell_command`. Alternative: escape every backtick as `` \` `` and every `$` as `\$`, but the file approach is more reliable. Always `git log -1 --format='%H%n%s%n%b'` to verify the message after committing.
 
 ### Pre-Push Safety Check
 

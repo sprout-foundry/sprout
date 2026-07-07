@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -71,6 +72,50 @@ func (p *ProvidersCommand) Execute(args []string, chatAgent *agent.Agent) error 
 		// Try to set provider directly by name
 		return p.setProvider(args[0], configManager, chatAgent)
 	}
+}
+
+// Complete provides argument completions for /provider. Suggests
+// subcommands and provider names from the configuration manager.
+func (p *ProvidersCommand) Complete(args []string, chatAgent *agent.Agent) []string {
+	if len(args) == 0 {
+		// First argument: suggest subcommands plus available provider names.
+		basic := []string{"list", "select", "status"}
+		if chatAgent == nil {
+			return basic
+		}
+		mgr := chatAgent.GetConfigManager()
+		if mgr == nil {
+			return basic
+		}
+		providers := mgr.GetAvailableProviders()
+		all := make([]string, 0, len(basic)+len(providers))
+		all = append(all, basic...)
+		for _, p := range providers {
+			all = append(all, string(p))
+		}
+		sort.Strings(all)
+		return all
+	}
+
+	// Suggest provider names matching the last argument.
+	prefix := args[len(args)-1]
+	if chatAgent == nil {
+		return nil
+	}
+	mgr := chatAgent.GetConfigManager()
+	if mgr == nil {
+		return nil
+	}
+	providers := mgr.GetAvailableProviders()
+	var matches []string
+	for _, prov := range providers {
+		id := string(prov)
+		if prefix == "" || strings.HasPrefix(strings.ToLower(id), strings.ToLower(prefix)) {
+			matches = append(matches, id)
+		}
+	}
+	sort.Strings(matches)
+	return matches
 }
 
 // providerInfoJSON is a single provider entry in the JSON output.

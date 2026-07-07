@@ -47,6 +47,18 @@ type UsageProvider interface {
 	Usage() string
 }
 
+// CompletableCommand is implemented by commands that support argument
+// completion beyond the command name itself. args does NOT include the
+// command name — it's already been parsed off. chatAgent may be nil
+// for commands that only need their static argument lists.
+//
+// Returns candidate completions for the last positional argument in
+// args. If args is empty, returns completions for the first argument.
+type CompletableCommand interface {
+	Command
+	Complete(args []string, chatAgent *agent.Agent) []string
+}
+
 // CommandRegistry manages all available slash commands
 type CommandRegistry struct {
 	commands map[string]Command

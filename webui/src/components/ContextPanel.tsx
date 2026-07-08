@@ -259,6 +259,19 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
             sessionRestoreError={sessionManager.sessionRestoreError}
             loadSessions={sessionManager.loadSessions}
             handleRestoreSession={sessionManager.handleRestoreSession}
+            sessionSearchQuery={sessionManager.sessionSearchQuery}
+            sessionSearchResults={sessionManager.sessionSearchResults}
+            sessionSearchLoading={sessionManager.sessionSearchLoading}
+            sessionSearchError={sessionManager.sessionSearchError}
+            showSessionSearchDropdown={sessionManager.showSessionSearchDropdown}
+            handleSessionSearchChange={sessionManager.handleSessionSearchChange}
+            handleSessionSearchClear={sessionManager.handleSessionSearchClear}
+            handleSessionSearchBlur={sessionManager.handleSessionSearchBlur}
+            handleSessionSearchFocus={sessionManager.handleSessionSearchFocus}
+            handleSessionSearchResultClick={sessionManager.handleSessionSearchResultClick}
+            isExportingAll={sessionManager.isExportingAll}
+            exportAllError={sessionManager.exportAllError}
+            handleExportAllSessions={sessionManager.handleExportAllSessions}
           />
         );
       case 'status':

@@ -1781,6 +1781,8 @@ button.primary.success {
 }
 
 /* Terminal notice for cloud mode */
+/* ── Legacy terminal notice (kept for loading state) ───── */
+
 .terminal-notice {
   flex-shrink: 0;
   height: 42px;

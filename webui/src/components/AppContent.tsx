@@ -2,8 +2,6 @@ import type { TodoItem, LogEntry } from '@sprout/ui';
 import { Menu, PanelRightClose } from 'lucide-react';
 import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { supportsLocalTerminal } from '../config/mode';
-import { getWasmShell } from '../services/wasmShell';
-import WasmTerminal from './WasmTerminal';
 import { useAppStateField, useAppStoreSetState } from '../contexts/AppStore';
 import { useEditorManager } from '../contexts/EditorManagerContext';
 import { useHotkeys } from '../contexts/HotkeyContext';
@@ -156,16 +154,6 @@ const AppContent: React.FC<AppContentProps> = ({
   });
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [commandPaletteMode, setCommandPaletteMode] = useState<PaletteMode>('all');
-
-  // WASM shell loads asynchronously — poll until ready for WasmTerminal
-  const [wasmShellReady, setWasmShellReady] = useState(false);
-  useEffect(() => {
-    const check = setInterval(() => {
-      if (getWasmShell()) { setWasmShellReady(true); clearInterval(check); }
-    }, 200);
-    const timeout = setTimeout(() => clearInterval(check), 15000);
-    return () => { clearInterval(check); clearTimeout(timeout); };
-  }, []);
 
   const setAppState = useAppStoreSetState();
 
@@ -825,27 +813,9 @@ const AppContent: React.FC<AppContentProps> = ({
           onModelClick={handleStatusBarModelClick}
         />
         {!supportsLocalTerminal && (
-          wasmShellReady ? (
-            <WasmTerminal
-              shell={getWasmShell()}
-              isExpanded={isTerminalExpanded}
-              onToggleExpand={onTerminalExpandedChange}
-            />
-          ) : (
-            <div className="terminal-bar terminal-bar--cloud" data-testid="terminal-notice">
-              <div className="terminal-tabs">
-                <div className="terminal-tab terminal-tab--active">
-                  <span className="terminal-tab-icon">$</span>
-                  <span className="terminal-tab-label">Shell</span>
-                </div>
-              </div>
-              <div className="terminal-bar-actions">
-                <span className="terminal-cloud-text">
-                  Loading WASM shell...
-                </span>
-              </div>
-            </div>
-          )
+          <ErrorBoundary panelName="Terminal">
+            <Terminal isExpanded={isTerminalExpanded} onToggleExpand={onTerminalExpandedChange} isConnected={false} />
+          </ErrorBoundary>
         )}
       </main>
       {supportsLocalTerminal ? (

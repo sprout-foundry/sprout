@@ -107,10 +107,10 @@ export default defineConfig(({ mode }) => {
       },
     },
 
-    // esbuild config — strip console + debugger from production bundles
-    // only. Dev keeps them so live debugging still works.
+    // esbuild config — strip debugger from production bundles.
+    // Console temporarily KEPT for cloud-mode WASM debugging.
     esbuild: isProd
-      ? { drop: ['console', 'debugger'] }
+      ? { drop: ['debugger'] }
       : undefined,
 
     // Development server

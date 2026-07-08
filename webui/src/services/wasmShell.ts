@@ -227,7 +227,7 @@ let initPromise: Promise<WasmShell> | null = null;
 export async function initWasmShell(config?: {
   home?: string;
   wasmUrl?: string; // default: '/webui/wasm/sprout.wasm'
-  wasmExecUrl?: string; // default: '/wasm/wasm_exec.js'
+  wasmExecUrl?: string; // default: '/webui/wasm/wasm_exec.js'
 }): Promise<WasmShell> {
   console.log('[sprout-wasm] initWasmShell called');
   if (sharedInstance) {

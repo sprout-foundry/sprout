@@ -41,7 +41,7 @@ func (r *SteerInputReader) runExternalEditor() {
 	// Exit steer mode so the editor has a clean terminal (cooked mode,
 	// no bracketed paste / modifyOtherKeys reporting).
 	fmt.Fprint(os.Stderr, bracketedPasteDisable)
-	fmt.Fprint(os.Stderr, modifyOtherKeysDisable)
+	writeModifyOtherKeysDisable(os.Stderr)
 	r.mu.Lock()
 	oldState := r.oldState
 	gt := r.groundTruth
@@ -72,7 +72,7 @@ func (r *SteerInputReader) runExternalEditor() {
 	r.oldState = st
 	r.mu.Unlock()
 	fmt.Fprint(os.Stderr, bracketedPasteEnable)
-	fmt.Fprint(os.Stderr, modifyOtherKeysEnable)
+	writeModifyOtherKeysEnable(os.Stderr)
 
 	if runErr != nil {
 		fmt.Fprint(os.Stderr, "\r\n")

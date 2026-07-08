@@ -268,7 +268,10 @@ func (r *SteerInputReader) Start() {
 	// etc.) as CSI u sequences so the steer panel can distinguish
 	// "submit" from "insert newline" instead of both arriving as
 	// indistinguishable CR.
-	fmt.Fprint(os.Stderr, modifyOtherKeysEnable)
+	//
+	// Skipped in the sprout webui terminal: see the matching comment
+	// in pkg/console/input_core.go writeModifyOtherKeysEnable.
+	writeModifyOtherKeysEnable(os.Stderr)
 
 	r.renderLine()
 
@@ -317,7 +320,7 @@ func (r *SteerInputReader) Stop() {
 	// without bracketed paste enabled). Same for the modifyOtherKeys
 	// reporting we enabled in Start.
 	fmt.Fprint(os.Stderr, bracketedPasteDisable)
-	fmt.Fprint(os.Stderr, modifyOtherKeysDisable)
+	writeModifyOtherKeysDisable(os.Stderr)
 
 	// Restore terminal to ground-truth state if available (preferred
 	// over oldState). Ground truth is the REPL's original cooked-mode

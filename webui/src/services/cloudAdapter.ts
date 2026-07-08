@@ -24,6 +24,7 @@ import {
 } from './cloudProxyRoutes';
 import { handleWasmLocal } from './cloudWasmHandlers';
 import { initWasmShell, type WasmShell } from './wasmShell';
+import { installToolExecutionHook } from './gitProxyHook';
 
 export interface CloudAdapterConfig {
   /** Base URL for the Foundry API (e.g., 'https://api.sprout.dev') */
@@ -90,6 +91,11 @@ export class CloudAdapter implements APIAdapter {
       this.wasmInitPromise = initWasmShell()
         .then((shell) => {
           this.wasmShell = shell;
+          // Install the tool execution hook so agent shell commands
+          // are routed correctly: git → proxied, built-ins → WASM, others → blocked
+          try { installToolExecutionHook(shell); } catch (err) {
+            console.warn('[CloudAdapter] Tool execution hook install failed:', err);
+          }
           return shell;
         })
         .catch((err) => {

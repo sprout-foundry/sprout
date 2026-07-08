@@ -680,7 +680,6 @@ const AppContent: React.FC<AppContentProps> = ({
           onSidebarWidthPersist={onSidebarWidthPersist}
           onSidebarWidthReset={onSidebarWidthReset}
           onProviderChange={onProviderChange}
-          onSessionSearchRestore={handleSessionSearchRestore}
           gitPanel={{
             gitStatus,
             gitBranches,

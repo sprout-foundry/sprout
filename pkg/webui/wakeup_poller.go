@@ -50,6 +50,11 @@ func (ws *ReactWebServer) checkAndResume() {
 	msg := agent.FormatWakeupBatch(notifications)
 	log.Printf("[wakeup] Auto-resuming with %d notification(s)", len(notifications))
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("[wakeup] panic in auto-resume goroutine: %v", r)
+			}
+		}()
 		tokensBefore := a.GetTotalTokens()
 		result, err := a.ProcessQueryWithContinuity(msg)
 		if err != nil {

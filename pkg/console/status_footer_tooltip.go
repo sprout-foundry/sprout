@@ -121,6 +121,14 @@ func (t *FooterTooltip) Show(cols, rows int) {
 		var once sync.Once
 		closeStop := func() { once.Do(func() { close(stop) }) }
 		t.mu.Lock()
+		// Signal the previous auto-dismiss goroutine (if any) to exit before
+		// installing the new cancel. Without this, rapid re-show calls would
+		// orphan the prior goroutine — its stop channel is dropped on the floor
+		// and the goroutine runs until its timer fires, leaking one goroutine
+		// per rapid re-show.
+		if prev := t.Cancel; prev != nil {
+			prev()
+		}
 		t.Cancel = closeStop
 		t.mu.Unlock()
 		go func() {

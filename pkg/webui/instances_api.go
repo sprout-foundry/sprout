@@ -5,13 +5,15 @@ package webui
 import (
 	"bufio"
 	"encoding/json"
-	"github.com/sprout-foundry/sprout/pkg/envutil"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 )
 
 type instanceInfoDTO struct {
@@ -274,6 +276,11 @@ func (ws *ReactWebServer) handleAPISSHOpen(w http.ResponseWriter, r *http.Reques
 	// Fire-and-forget: the launch runs in the background.  The caller polls
 	// /api/instances/ssh-launch-status for progress and the final proxy URL.
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("[instances] panic in fire-and-forget SSH launch: %v", r)
+			}
+		}()
 		_, _ = ws.launchSSHWorkspace(req)
 	}()
 

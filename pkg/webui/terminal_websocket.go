@@ -74,19 +74,30 @@ func (ws *ReactWebServer) handleTerminalWebSocket(w http.ResponseWriter, r *http
 			// Fall through to create new session
 		} else {
 			sessionID = reattachID
-			session, _ = terminalManager.GetSession(sessionID)
-
-			// Send session_restored message with scrollback
-			if err := safeConn.WriteJSON(map[string]interface{}{
-				"type": "session_restored",
-				"data": map[string]interface{}{
-					"session_id": sessionID,
-					"scrollback": scrollback,
-				},
-			}); err != nil {
-				log.Printf("Terminal %s FAILED to send session_restored: %v", sessionID, err)
+			// GetSession's bool return is load-bearing: between a successful
+			// ReattachSession and this call, the session can be torn down by
+			// its background timeout goroutine. Discarding the bool would leave
+			// `session` nil and crash on the subscribe() call below.
+			var exists bool
+			session, exists = terminalManager.GetSession(sessionID)
+			if !exists || session == nil {
+				log.Printf("Terminal %s session disappeared between reattach and subscribe, creating new session", sessionID)
+				session = nil
+				sessionID = ""
+				// Fall through to create new session
 			} else {
-				log.Printf("Terminal %s reattached successfully (scrollback: %d bytes)", sessionID, len(scrollback))
+				// Send session_restored message with scrollback
+				if err := safeConn.WriteJSON(map[string]interface{}{
+					"type": "session_restored",
+					"data": map[string]interface{}{
+						"session_id": sessionID,
+						"scrollback": scrollback,
+					},
+				}); err != nil {
+					log.Printf("Terminal %s FAILED to send session_restored: %v", sessionID, err)
+				} else {
+					log.Printf("Terminal %s reattached successfully (scrollback: %d bytes)", sessionID, len(scrollback))
+				}
 			}
 		}
 	}

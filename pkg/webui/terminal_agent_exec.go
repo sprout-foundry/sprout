@@ -22,6 +22,24 @@ var (
 	newlineRegex = regexp.MustCompile(`\r?\n`)
 )
 
+// closeSessionAfterGracePeriod runs tm.CloseSession in a goroutine after a
+// 100ms grace window. Without a recover here, a panic inside CloseSession
+// would crash the daemon and leave the PTY reader goroutine and shell process
+// alive (the cleanup that CloseSession performs is what stops both).
+func closeSessionAfterGracePeriod(tm *TerminalManager, sid, reason string) {
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("PTY session %s: panic in deferred close (%s): %v", sid, reason, r)
+			}
+		}()
+		time.Sleep(100 * time.Millisecond)
+		if err := tm.CloseSession(sid); err != nil {
+			log.Printf("PTY session %s: failed to close after %s: %v", sid, reason, err)
+		}
+	}()
+}
+
 // ExecuteCommandAndWait executes a command synchronously on a hidden PTY session,
 // waiting for command completion and returning the output and exit code.
 // This function is designed for agent use on hidden sessions only.
@@ -191,12 +209,7 @@ func (tm *TerminalManager) ExecuteCommandAndWait(ctx context.Context, session *T
 					session.mutex.RUnlock()
 					log.Printf("PTY session %s: tool deadline exceeded but background cap reached for chat %q, killing", session.ID, chatID)
 					sid := session.ID
-					go func() {
-						time.Sleep(100 * time.Millisecond)
-						if err := tm.CloseSession(sid); err != nil {
-							log.Printf("PTY session %s: failed to close after cap hit: %v", sid, err)
-						}
-					}()
+					closeSessionAfterGracePeriod(tm, sid, "cap hit")
 					return stripANSI(buf.String()), -1, tm.errBackgroundCapReached(chatID)
 				}
 
@@ -222,12 +235,7 @@ func (tm *TerminalManager) ExecuteCommandAndWait(ctx context.Context, session *T
 			session.mutex.RUnlock()
 			log.Printf("PTY session %s: user cancelled, closing session for recreation", session.ID)
 			sid := session.ID
-			go func() {
-				time.Sleep(100 * time.Millisecond)
-				if err := tm.CloseSession(sid); err != nil {
-					log.Printf("PTY session %s: failed to close after user cancel: %v", sid, err)
-				}
-			}()
+			closeSessionAfterGracePeriod(tm, sid, "user cancel")
 			return stripANSI(buf.String()), -1, callerErr
 
 		case <-inactivityTimer.C:
@@ -243,12 +251,7 @@ func (tm *TerminalManager) ExecuteCommandAndWait(ctx context.Context, session *T
 			session.mutex.RUnlock()
 			log.Printf("PTY session %s: no output for %s, closing as stuck", session.ID, inactivityTimeout)
 			sid := session.ID
-			go func() {
-				time.Sleep(100 * time.Millisecond)
-				if err := tm.CloseSession(sid); err != nil {
-					log.Printf("PTY session %s: failed to close after stuck timeout: %v", sid, err)
-				}
-			}()
+			closeSessionAfterGracePeriod(tm, sid, "stuck timeout")
 			return stripANSI(buf.String()), -1, fmt.Errorf("PTY session %s stuck (no output for %s)", session.ID, inactivityTimeout)
 
 		case chunk, ok := <-sub.ch:

@@ -210,8 +210,16 @@ func (ws *ReactWebServer) handleAPIProxyChatQuery(w http.ResponseWriter, r *http
 	ws.mutex.Unlock()
 
 	// Run the query asynchronously. The web UI consumes progress and completion via WebSocket.
+	//
+	// Defer-recover: ProcessQueryWithContinuity can panic on malformed LLM
+	// output. Without a recover, a panic would skip the activeQueries
+	// decrement + chatQueryActive reset, leaving the client permanently
+	// stuck in "running" and leaking the gate counter.
 	go func() {
 		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("handleAPIProxyChat: panic in query goroutine chat_id=%s: %v", chatID, r)
+			}
 			ws.mutex.Lock()
 			if ws.activeQueries > 0 {
 				ws.activeQueries--

@@ -576,12 +576,16 @@ function handleWasmAgentQuery(shell: WasmShell, bodyStr?: string): Response {
 
   console.log('[wasm-agent] Starting agent loop for query:', query.substring(0, 50));
 
-  // Write a sprout config with a "platform" custom provider that routes
-  // to the platform proxy (/proxy/chat). The WASM agent reads this config
-  // to know where to send LLM requests.
+  // Write a sprout config with an OpenAI-compatible custom provider that
+  // routes to the platform proxy. Must be an absolute URL because the
+  // provider config normalizer rejects relative URLs.
+  //
+  // We use window.location.origin as the base so this works in both local
+  // dev (http://localhost:8080) and production (https://api.sproutfoundry.dev).
+  const apiOrigin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:8080';
   const platformProviderConfig = {
     name: 'platform',
-    endpoint: '/proxy/chat',
+    endpoint: `${apiOrigin}/proxy/chat`,
     model_name: 'managed',
     context_size: 131072,
     requires_api_key: false,
@@ -593,7 +597,7 @@ function handleWasmAgentQuery(shell: WasmShell, bodyStr?: string): Response {
 
   // Write the provider config to the virtual filesystem
   try {
-    shell.writeFile('.sprout/providers/platform.json', JSON.stringify(platformProviderConfig));
+    shell.writeFile('.config/sprout/providers/platform.json', JSON.stringify(platformProviderConfig));
   } catch {
     // May already exist — ignore
   }

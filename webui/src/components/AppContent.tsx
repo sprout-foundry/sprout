@@ -813,14 +813,9 @@ const AppContent: React.FC<AppContentProps> = ({
           onModelClick={handleStatusBarModelClick}
         />
         {!supportsLocalTerminal && (
-          <div className="terminal-notice" data-testid="terminal-notice">
-            <div className="terminal-notice-content">
-              <span className="terminal-notice-icon">$</span>
-              <span className="terminal-notice-text">
-                Terminal is limited in browser mode. Some commands may not be available.
-              </span>
-            </div>
-          </div>
+          <ErrorBoundary panelName="Terminal">
+            <Terminal isExpanded={true} onToggleExpand={onTerminalExpandedChange} isConnected={false} />
+          </ErrorBoundary>
         )}
       </main>
       {supportsLocalTerminal ? (

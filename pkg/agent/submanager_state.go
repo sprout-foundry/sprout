@@ -10,173 +10,36 @@ import (
 
 // StateManager defines the interface for managing conversation state
 // previously held directly in the Agent struct.
+// It is composed of focused sub-interfaces defined in state_interfaces.go.
 type StateManager interface {
-	// Messages
-	GetMessages() []api.Message
-	SetMessages([]api.Message)
-	AddMessage(api.Message)
-
-	// Message timestamps
-	GetMessageTimestamps() []time.Time
-	SetMessageTimestamps([]time.Time)
-
-	// Session
-	GetSessionID() string
-	SetSessionID(string)
-
-	// Turn checkpoints
-	GetTurnCheckpoints() []TurnCheckpoint
-	SetTurnCheckpoints([]TurnCheckpoint)
-	AddTurnCheckpoint(TurnCheckpoint)
-
-	// Checkpoint mutex
-	GetCheckpointMutex() *sync.RWMutex
-
-	// Summary
-	GetPreviousSummary() string
-	SetPreviousSummary(string)
-
-	// Optimizer
-	GetOptimizer() *ConversationOptimizer
-	SetOptimizer(*ConversationOptimizer)
-
-	// Context tokens
-	GetCurrentContextTokens() int
-	SetCurrentContextTokens(int)
-	GetMaxContextTokens() int
-	SetMaxContextTokens(int)
-
-	// Context warning
-	IsContextWarningIssued() bool
-	SetContextWarningIssued(bool)
-
-	// Task actions
-	GetTaskActions() []TaskAction
-	SetTaskActions([]TaskAction)
-	AddTaskAction(TaskAction)
-
-	// Task actions mutex
-	GetTaskActionsMutex() *sync.RWMutex
-
-	// Cost
-	GetTotalCost() float64
-	SetTotalCost(float64)
-	AddCost(float64)
-	AddCostEntry(CostEntry)
-	GetChargedCostTotal() float64
-	GetTokenCostTotal() float64
-	GetSubscriptionTokens() int
-	GetFreeTokens() int
-	SetChargedCostTotal(float64)
-	SetTokenCostTotal(float64)
-	SetSubscriptionTokens(int)
-	SetFreeTokens(int)
-
-	// Token counts
-	GetTotalTokens() int
-	SetTotalTokens(int)
-	GetPromptTokens() int
-	SetPromptTokens(int)
-	GetCompletionTokens() int
-	SetCompletionTokens(int)
-
-	// LLM call tracking
-	GetLLMCallCount() int
-	SetLLMCallCount(int)
-	IncrementLLMCallCount()
-
-	// Tool call tracking
-	GetTotalToolCalls() int
-	SetTotalToolCalls(int)
-	IncrementTotalToolCalls()
-
-	// Estimated token responses
-	GetEstimatedTokenResponses() int
-	SetEstimatedTokenResponses(int)
-
-	// Cache stats
-	GetCachedTokens() int
-	SetCachedTokens(int)
-	GetCacheWriteTokens() int
-	SetCacheWriteTokens(int)
-	GetCachedCostSavings() float64
-	SetCachedCostSavings(float64)
-
-	// Skills and persona
-	GetActiveSkills() []string
-	SetActiveSkills([]string)
-	GetActivePersona() string
-	SetActivePersona(string)
-
-	// Circuit breaker
-	GetCircuitBreaker() *CircuitBreakerState
-	SetCircuitBreaker(*CircuitBreakerState)
-
-	// Tool call guidance
-	IsToolCallGuidanceAdded() bool
-	SetToolCallGuidanceAdded(bool)
-
-	// Pending state
-	GetPendingSwitchContextRefresh() string
-	SetPendingSwitchContextRefresh(string)
-	GetPendingStrictSwitchNotice() string
-	SetPendingStrictSwitchNotice(string)
-	GetPendingSystemSupplement() string
-	SetPendingSystemSupplement(string)
-
-	// False stop detection
-	IsFalseStopDetectionEnabled() bool
-	SetFalseStopDetectionEnabled(bool)
-
-	// Termination
-	GetLastRunTerminationReason() string
-	SetLastRunTerminationReason(string)
-
-	// Conversation pruner
-	GetConversationPruner() *ConversationPruner
-	SetConversationPruner(*ConversationPruner)
-
-	// Command history
-	GetCommandHistory() []string
-	SetCommandHistory([]string)
-	GetHistoryIndex() int
-	SetHistoryIndex(int)
-	GetHistoryMutex() *sync.Mutex
-
-	// Pause
-	GetPauseState() *PauseState
-	SetPauseState(*PauseState)
-	GetPauseMutex() *sync.Mutex
-
-	// Tracing
-	GetTraceSession() interface{}
-	SetTraceSession(interface{})
-
-	// Session config
-	GetSessionProvider() api.ClientType
-	SetSessionProvider(api.ClientType)
-	GetSessionModel() string
-	SetSessionModel(string)
-
-	// Config overrides
-	GetConfigOverrides() map[string]interface{}
-	SetConfigOverrides(map[string]interface{})
-
-	// Current iteration
-	GetCurrentIteration() int
-	SetCurrentIteration(int)
-
-	// Session intent embedding
-	GetSessionIntentEmbedding() []float32
-	SetSessionIntentEmbedding([]float32)
-	// SetSessionIntentEmbeddingIfNil atomically sets the embedding only if it is
-	// currently nil. Returns true if the embedding was set, false if it already
-	// had a value. Used to capture the first-turn intent without TOCTOU races.
-	SetSessionIntentEmbeddingIfNil(emb []float32) bool
-
-	// Last provider error
-	GetLastProviderError() *ProviderErrorInfo
-	SetLastProviderError(*ProviderErrorInfo)
+	MessageStore
+	SessionStore
+	CheckpointStore
+	SummaryStore
+	OptimizerStore
+	ContextBudgetStore
+	TaskActionStore
+	CostTracker
+	TokenCounter
+	LLMCallTracker
+	ToolCallTracker
+	CacheStats
+	PersonaStore
+	CircuitBreakerStore
+	PendingStateStore
+	TerminationStore
+	ConversationPrunerStore
+	CommandHistoryStore
+	PauseStore
+	TraceStore
+	SessionConfigStore
+	ConfigOverrideStore
+	IterationStore
+	SessionIntentStore
+	ProviderErrorStore
+	EstimatedTokenStore
+	ToolGuidanceStore
+	FalseStopStore
 }
 
 // AgentStateManager implements StateManager with simple field-backed getters/setters.

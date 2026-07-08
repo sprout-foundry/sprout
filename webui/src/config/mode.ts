@@ -5,7 +5,7 @@
  * Controlled via VITE_SPROUT_MODE environment variable at build time.
  */
 
-import { getAdapter } from '../services/apiAdapter';
+import { getAdapter, type APIAdapter } from '../services/apiAdapter';
 
 export type SproutMode = 'local' | 'cloud';
 
@@ -26,47 +26,71 @@ export const mode: SproutMode = (import.meta.env.VITE_SPROUT_MODE as SproutMode)
 export const isCloud: boolean = mode === 'cloud';
 
 /**
- * SSH access support - available in cloud mode only.
- * When an adapter is installed, consults the adapter's capability.
- * NOTE: isCloud short-circuits because the adapter is installed async
- * (after /api/bootstrap fetch), so getAdapter() is null at module load.
+ * capability resolves a feature flag from the adapter when one is installed,
+ * falling back to a mode-aware default.
+ *
+ * The adapter is installed asynchronously (after /api/bootstrap fetch),
+ * so getAdapter() is null at module load time. Because capability exports
+ * are `const` (frozen once evaluated), the fallback default must be correct
+ * for BOTH modes during that async-installation window. The localDefault
+ * is used in local mode; the cloudDefault is used in cloud mode.
+ *
+ * Once the adapter is installed, its capability value takes precedence.
+ * In local mode, the adapter is typically null (local mode IS the "no
+ * adapter installed" state), so the localDefault is what sticks.
+ *
+ * This helper replaces the previous inline `isCloud ? X : (getAdapter()?.Y ?? Z)`
+ * pattern that was duplicated across every export — the logic is identical,
+ * now centralized and documented once.
  */
-export const supportsSSH: boolean = isCloud ? false : (getAdapter()?.supportsSSH ?? true);
+function capability<K extends keyof APIAdapter>(
+	key: K,
+	localDefault: NonNullable<APIAdapter[K]>,
+	cloudDefault: NonNullable<APIAdapter[K]>,
+): NonNullable<APIAdapter[K]> {
+	const adapter = getAdapter();
+	if (adapter && adapter[key] !== undefined) {
+		return adapter[key] as NonNullable<APIAdapter[K]>;
+	}
+	return isCloud ? cloudDefault : localDefault;
+}
 
 /**
- * Git support - available when the adapter or local backend supports it.
+ * SSH access support - available in local mode only (requires host access).
  */
-export const supportsGit: boolean = isCloud ? false : (getAdapter()?.supportsGit ?? true);
+export const supportsSSH: boolean = capability('supportsSSH', true, false);
 
 /**
- * Chat support - available when the adapter or local backend supports it.
+ * Git support - available in local mode; WASM shell handles git differently in cloud.
  */
-export const supportsChat: boolean = isCloud ? true : (getAdapter()?.supportsChat ?? true);
+export const supportsGit: boolean = capability('supportsGit', true, false);
 
 /**
- * Workspace switching support - available when the adapter or local backend supports it.
+ * Chat support - available in both modes (BYOK proxy in cloud, local LLM in desktop).
  */
-export const supportsWorkspaceSwitching: boolean = isCloud ? false : (getAdapter()?.supportsWorkspaceSwitching ?? true);
+export const supportsChat: boolean = capability('supportsChat', true, true);
 
 /**
- * Export support - available when the adapter or local backend supports it.
+ * Workspace switching support - local mode only (single virtual FS in cloud).
  */
-export const supportsExport: boolean = isCloud ? false : (getAdapter()?.supportsExport ?? true);
+export const supportsWorkspaceSwitching: boolean = capability('supportsWorkspaceSwitching', true, false);
 
 /**
- * Instance management support - available in cloud mode only.
- * When an adapter is installed, consults the adapter's capability.
+ * Export support - local mode only (no local filesystem to export to in cloud).
  */
-export const supportsInstances: boolean = isCloud ? false : (getAdapter()?.supportsInstances ?? true);
+export const supportsExport: boolean = capability('supportsExport', true, false);
 
 /**
- * Local PTY terminal support - available in local mode only.
- * When an adapter is installed, consults the adapter's capability.
+ * Instance management support - cloud mode only (platform instances API).
  */
-export const supportsLocalTerminal: boolean = isCloud ? false : (getAdapter()?.supportsLocalTerminal ?? true);
+export const supportsInstances: boolean = capability('supportsInstances', false, true);
 
 /**
- * Local settings management support - available in local mode only.
- * When an adapter is installed, consults the adapter's capability.
+ * Local PTY terminal support - local mode only (WASM terminal in cloud).
  */
-export const supportsSettings: boolean = isCloud ? true : (getAdapter()?.supportsSettings ?? true);
+export const supportsLocalTerminal: boolean = capability('supportsLocalTerminal', true, false);
+
+/**
+ * Settings panel support - available in both modes (BYOK settings in cloud).
+ */
+export const supportsSettings: boolean = capability('supportsSettings', true, true);

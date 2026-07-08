@@ -213,12 +213,13 @@ declare global {
 }
 
 let sharedInstance: WasmShell | null = null;
+let initPromise: Promise<WasmShell> | null = null;
 
 /**
  * Initialize the sprout WASM shell.
  *
- * Must be called before any shell operations. Sets up IndexedDB bridge,
- * loads the WASM binary, and calls SproutWasm.init().
+ * Must be called before any shell operations. Safe for concurrent calls —
+ * only one initialization runs; subsequent callers receive the same promise.
  *
  * @param config.home - Override the virtual home directory (default: /home/user)
  * @returns The WasmShell interface
@@ -231,8 +232,11 @@ export async function initWasmShell(config?: {
   if (sharedInstance) {
     return sharedInstance;
   }
+  if (initPromise) {
+    return initPromise;
+  }
 
-  // 1. Set up the IndexedDB store bridge on window so Go can call it.
+  initPromise = (async () => {
   const store: SproutStore = {
     saveFile: (path, content) => {
       idbSaveFile(path, content).catch((err) =>
@@ -374,6 +378,9 @@ export async function initWasmShell(config?: {
 
   sharedInstance = shell;
   return shell;
+})();
+
+  return initPromise;
 }
 
 // ── Synchronous cache for IndexedDB (used during WASM init) ──────────────
@@ -398,4 +405,5 @@ function idbListFilesSync(): string {
  */
 export function resetWasmShell(): void {
   sharedInstance = null;
+  initPromise = null;
 }

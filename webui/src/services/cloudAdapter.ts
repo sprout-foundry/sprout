@@ -67,6 +67,7 @@ export class CloudAdapter implements APIAdapter {
    * is cached so subsequent ensureWasmShell calls short-circuit).
    */
   preloadWasmShell(): Promise<boolean> {
+    console.log('[CloudAdapter] preloadWasmShell called');
     return this.ensureWasmShell()
       .then(() => true)
       .catch((err) => {

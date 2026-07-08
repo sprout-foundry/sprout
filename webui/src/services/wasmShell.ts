@@ -229,12 +229,17 @@ export async function initWasmShell(config?: {
   wasmUrl?: string; // default: '/webui/wasm/sprout.wasm'
   wasmExecUrl?: string; // default: '/wasm/wasm_exec.js'
 }): Promise<WasmShell> {
+  console.log('[sprout-wasm] initWasmShell called');
   if (sharedInstance) {
+    console.log('[sprout-wasm] returning existing instance');
     return sharedInstance;
   }
   if (initPromise) {
+    console.log('[sprout-wasm] returning existing init promise');
     return initPromise;
   }
+
+  console.log('[sprout-wasm] starting new init');
 
   initPromise = (async () => {
   const store: SproutStore = {
@@ -268,49 +273,55 @@ export async function initWasmShell(config?: {
   window.__sproutStore = store;
 
   // Install the ONNX bridge so the Go-WASM build's embedding manager can
-  // delegate inference to onnxruntime-web running in this page. The bridge
-  // is lazy under the hood — BrowserONNXProvider.initialize() (which
-  // downloads the ~80 MB EmbeddingGemma model) only fires on the first
-  // .embed() call from the Go side. Installing here is just registering a
-  // global, so there's no startup cost for users who never trigger
-  // semantic search. See pkg/embedding/onnx_wasm.go and docs/WASM_API.md
-  // for the contract.
+  // delegate inference to onnxruntime-web running in this page.
   installSproutONNXBridge();
 
   // 2. Load wasm_exec.js.
+  console.log('[sprout-wasm] Step 1: Loading wasm_exec.js...');
   const script = document.createElement('script');
   const execUrl = config?.wasmExecUrl ?? DEFAULT_WASM_EXEC_URL;
   script.src = execUrl;
   document.head.appendChild(script);
   await new Promise<void>((resolve, reject) => {
-    script.onload = () => resolve();
+    script.onload = () => { console.log('[sprout-wasm] wasm_exec.js loaded'); resolve(); };
     script.onerror = () => reject(new Error(`Failed to load wasm_exec.js from ${execUrl}`));
   });
 
   // 3. Fetch and instantiate the WASM binary.
+  console.log('[sprout-wasm] Step 2: Creating Go instance...');
   const go = new window.Go();
   const wasmUrl = config?.wasmUrl ?? DEFAULT_WASM_URL;
+  console.log('[sprout-wasm] Step 3: Fetching sprout.wasm from', wasmUrl);
   const wasmResponse = await fetch(wasmUrl);
   if (!wasmResponse.ok) {
     throw new Error(`Failed to fetch ${wasmUrl}: ${wasmResponse.status}`);
   }
 
+  console.log('[sprout-wasm] Step 4: Reading arrayBuffer...');
   const wasmBuffer = await wasmResponse.arrayBuffer();
+  console.log('[sprout-wasm] ArrayBuffer size:', wasmBuffer.byteLength);
+  console.log('[sprout-wasm] Step 5: WebAssembly.instantiate...');
   const { instance } = await WebAssembly.instantiate(wasmBuffer, go.importObject);
+  console.log('[sprout-wasm] Step 5: Instantiated');
 
   // 4. Run the Go instance (this blocks until main() hits the channel wait).
+  console.log('[sprout-wasm] Step 6: go.run(instance)...');
   go.run(instance);
+  console.log('[sprout-wasm] Step 6: go.run returned');
 
   // At this point window.SproutWasm should be defined by Go's main().
   const wasm = window.SproutWasm;
+  console.log('[sprout-wasm] Step 7: SproutWasm =', typeof wasm);
 
   if (!wasm || typeof wasm.init !== 'function') {
     throw new Error('SproutWasm global not found after WASM init');
   }
 
   // 5. Initialize the Go side (restores files from IndexedDB cache).
+  console.log('[sprout-wasm] Step 8: Calling wasm.init()...');
   const configStr = config ? JSON.stringify(config) : undefined;
   const initError = wasm.init(configStr);
+  console.log('[sprout-wasm] Step 8: init returned:', initError || 'ok');
   if (initError) {
     console.warn('[sprout-wasm] Init warning:', initError);
   }

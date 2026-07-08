@@ -55,6 +55,16 @@ func (h *gitHandler) Execute(ctx context.Context, env ToolEnv, args map[string]a
 	operation, _ := extractString(args, "operation")
 	argsStr, _ := extractString(args, "args")
 
+	// Validate args against the dangerous-args blocklist before any further
+	// processing. This is the same blocklist the legacy ExecuteGitOperation
+	// path uses; without it here, the new tool handler accepts flags like
+	// --upload-pack=evil.sh or -c core.hooksPath=/tmp/hooks, which are then
+	// concatenated into a shell command and executed. Skipping this is a
+	// direct command-injection path through LLM-supplied args.
+	if err := ValidateGitArgs(argsStr); err != nil {
+		return ToolResult{Output: fmt.Sprintf("Blocked git args: %v", err), IsError: true}, nil
+	}
+
 	// Normalize args: strip a leading duplicate of the git subcommand.
 	// LLMs commonly pass args like "push origin main" when operation is already
 	// "push", resulting in "git push push origin main" — a confusing error.

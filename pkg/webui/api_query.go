@@ -383,8 +383,17 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Run the query asynchronously. The web UI consumes progress and completion via WebSocket.
+	//
+	// Defer-recover: ProcessQueryWithContinuity can panic on malformed LLM
+	// output or upstream provider failures. Without a recover here, a panic
+	// would skip the deferred activeQueries decrement and chatQueryActive
+	// reset, leaving the client permanently stuck in a "running" state and
+	// leaking the activeQueries counter (which gates future requests).
 	go func() {
 		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("handleAPIQuery: panic in query goroutine chat_id=%s: %v", chatID, r)
+			}
 			ws.mutex.Lock()
 			if ws.activeQueries > 0 {
 				ws.activeQueries--
@@ -415,34 +424,46 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 			//
 			// The mutex serializes capture across concurrent chats — os.Stdout
 			// is process-global, so two simultaneous redirects would race.
+			//
+			// All three teardown steps (close write end, restore os.Stdout,
+			// close read end, unlock) live in a single defer so a panic in
+			// registry.Execute (or in the output copy) releases the mutex
+			// and frees the pipe FDs atomically. Splitting them across
+			// multiple defers would put Unlock before stdout-restore in
+			// LIFO order, briefly exposing a stale pipe FD to whichever
+			// chat grabs stdoutCaptureMu next.
 			trimmed := strings.TrimSpace(query.Query)
 			ws.stdoutCaptureMu.Lock()
 			oldStdout := os.Stdout
-			r, w, pipeErr := os.Pipe()
+			pipeR, pipeW, pipeErr := os.Pipe()
 			if pipeErr != nil {
 				// If we can't create a pipe, fall back to executing without
 				// capture — the command still runs, we just can't show output.
 				log.Printf("handleAPIQuery: stdout pipe creation failed: %v", pipeErr)
+				ws.stdoutCaptureMu.Unlock()
 			} else {
-				os.Stdout = w
+				os.Stdout = pipeW
+				defer func() {
+					pipeW.Close()
+					os.Stdout = oldStdout
+					pipeR.Close()
+					ws.stdoutCaptureMu.Unlock()
+				}()
 			}
 
 			err := registry.Execute(query.Query, clientAgent)
 
-			// Restore stdout and drain the pipe before sending any events so the
-			// captured text is complete.
+			// Drain the pipe before sending any events so the captured text
+			// is complete. Read end is still open here — the defer above
+			// closes it on goroutine exit, after we've drained.
 			var capturedOutput string
 			if pipeErr == nil {
-				w.Close()
-				os.Stdout = oldStdout
 				var buf bytes.Buffer
-				if _, copyErr := io.Copy(&buf, r); copyErr != nil {
+				if _, copyErr := io.Copy(&buf, pipeR); copyErr != nil {
 					log.Printf("handleAPIQuery: stdout pipe read failed: %v", copyErr)
 				}
-				r.Close()
 				capturedOutput = buf.String()
 			}
-			ws.stdoutCaptureMu.Unlock()
 
 			_ = ws.syncAgentStateForClientWithChat(clientID, chatID)
 

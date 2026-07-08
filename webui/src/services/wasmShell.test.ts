@@ -199,23 +199,23 @@ afterEach(() => {
 
 describe('initWasmShell — configurable paths', () => {
   describe('default paths', () => {
-    it('uses /wasm/wasm_exec.js as script src when no config is provided', async () => {
+    it('uses /webui/wasm/wasm_exec.js as script src when no config is provided', async () => {
       await initWasmShell();
 
-      expect(getScriptSrc()).toBe('/wasm/wasm_exec.js');
+      expect(getScriptSrc()).toBe('/webui/wasm/wasm_exec.js');
     });
 
-    it('fetches /wasm/sprout.wasm when no config is provided', async () => {
+    it('fetches /webui/wasm/sprout.wasm when no config is provided', async () => {
       await initWasmShell();
 
-      expect(capturedFetchUrls).toContain('/wasm/sprout.wasm');
+      expect(capturedFetchUrls).toContain('/webui/wasm/sprout.wasm');
     });
 
     it('uses default paths when an empty config object is passed', async () => {
       await initWasmShell({});
 
-      expect(getScriptSrc()).toBe('/wasm/wasm_exec.js');
-      expect(capturedFetchUrls).toContain('/wasm/sprout.wasm');
+      expect(getScriptSrc()).toBe('/webui/wasm/wasm_exec.js');
+      expect(capturedFetchUrls).toContain('/webui/wasm/sprout.wasm');
     });
   });
 
@@ -248,8 +248,8 @@ describe('initWasmShell — configurable paths', () => {
         wasmExecUrl: '/custom/wasm_exec.js',
       });
 
-      expect(capturedFetchUrls).not.toContain('/wasm/sprout.wasm');
-      expect(getScriptSrc()).not.toBe('/wasm/wasm_exec.js');
+      expect(capturedFetchUrls).not.toContain('/webui/wasm/sprout.wasm');
+      expect(getScriptSrc()).not.toBe('/webui/wasm/wasm_exec.js');
     });
   });
 
@@ -257,7 +257,7 @@ describe('initWasmShell — configurable paths', () => {
     it('uses default wasmExecUrl when only wasmUrl is provided', async () => {
       await initWasmShell({ wasmUrl: '/custom/sprout.wasm' });
 
-      expect(getScriptSrc()).toBe('/wasm/wasm_exec.js'); // default
+      expect(getScriptSrc()).toBe('/webui/wasm/wasm_exec.js'); // default
       expect(capturedFetchUrls).toContain('/custom/sprout.wasm'); // overridden
     });
 
@@ -265,7 +265,7 @@ describe('initWasmShell — configurable paths', () => {
       await initWasmShell({ wasmExecUrl: '/custom/wasm_exec.js' });
 
       expect(getScriptSrc()).toBe('/custom/wasm_exec.js'); // overridden
-      expect(capturedFetchUrls).toContain('/wasm/sprout.wasm'); // default
+      expect(capturedFetchUrls).toContain('/webui/wasm/sprout.wasm'); // default
     });
   });
 
@@ -293,7 +293,7 @@ describe('initWasmShell — configurable paths', () => {
       (window as unknown as Record<string, unknown>).fetch = createMockFetch(
         new Map([
           [
-            '/wasm/sprout.wasm',
+            '/webui/wasm/sprout.wasm',
             {
               ok: false,
               status: 500,
@@ -303,14 +303,14 @@ describe('initWasmShell — configurable paths', () => {
         ]),
       );
 
-      await expect(initWasmShell()).rejects.toThrow('/wasm/sprout.wasm');
+      await expect(initWasmShell()).rejects.toThrow('/webui/wasm/sprout.wasm');
     });
 
     it('includes the HTTP status code in the error message', async () => {
       (window as unknown as Record<string, unknown>).fetch = createMockFetch(
         new Map([
           [
-            '/wasm/sprout.wasm',
+            '/webui/wasm/sprout.wasm',
             {
               ok: false,
               status: 403,
@@ -345,7 +345,7 @@ describe('initWasmShell — configurable paths', () => {
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         expect(message).toContain(customUrl);
-        expect(message).not.toContain('/wasm/sprout.wasm');
+        expect(message).not.toContain('/webui/wasm/sprout.wasm');
       }
     });
   });
@@ -362,7 +362,7 @@ describe('initWasmShell — configurable paths', () => {
         return node;
       });
 
-      await expect(initWasmShell()).rejects.toThrow('Failed to load wasm_exec.js from /wasm/wasm_exec.js');
+      await expect(initWasmShell()).rejects.toThrow('Failed to load wasm_exec.js from /webui/wasm/wasm_exec.js');
     });
 
     it('includes custom wasmExecUrl in the error when script load fails', async () => {

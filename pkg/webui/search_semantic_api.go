@@ -226,6 +226,11 @@ func (ws *ReactWebServer) handleAPISemanticBuild(w http.ResponseWriter, r *http.
 
 	// Start build in background goroutine
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Printf("[embedding] panic in background build: %v", r)
+			}
+		}()
 		ctx := context.Background()
 		stats, err := em.BuildIndex(ctx)
 		if err != nil {

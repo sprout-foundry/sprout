@@ -104,10 +104,11 @@ describe('mode config (cloud mode)', () => {
     expect(modeModule.isCloud).toBe(true);
   });
 
-  // In cloud build mode without an adapter installed, supportsSSH uses
-  // the local default (true) because there's no adapter to say otherwise.
-  it('exports supportsSSH as true in cloud build without adapter (local default applies)', () => {
-    expect(modeModule.supportsSSH).toBe(true);
+  // In cloud build mode without an adapter installed, capabilities use
+  // cloud-mode defaults. supportsSSH is false because cloud mode doesn't
+  // have host SSH access — the WASM shell doesn't support it.
+  it('exports supportsSSH as false in cloud build without adapter (cloud default)', () => {
+    expect(modeModule.supportsSSH).toBe(false);
   });
 
   it('exports supportsInstances as true in cloud mode', () => {
@@ -118,24 +119,25 @@ describe('mode config (cloud mode)', () => {
     expect(modeModule.supportsLocalTerminal).toBe(false);
   });
 
-  it('exports supportsSettings as false in cloud mode', () => {
-    expect(modeModule.supportsSettings).toBe(false);
+  // supportsSettings is true in cloud mode — BYOK settings are available.
+  it('exports supportsSettings as true in cloud mode (BYOK settings)', () => {
+    expect(modeModule.supportsSettings).toBe(true);
   });
 
-  it('exports supportsGit as true in cloud mode without adapter (local default applies)', () => {
-    expect(modeModule.supportsGit).toBe(true);
+  it('exports supportsGit as false in cloud mode without adapter (cloud default)', () => {
+    expect(modeModule.supportsGit).toBe(false);
   });
 
-  it('exports supportsChat as true in cloud mode without adapter (local default applies)', () => {
+  it('exports supportsChat as true in cloud mode (BYOK proxy)', () => {
     expect(modeModule.supportsChat).toBe(true);
   });
 
-  it('exports supportsWorkspaceSwitching as true in cloud mode without adapter (local default applies)', () => {
-    expect(modeModule.supportsWorkspaceSwitching).toBe(true);
+  it('exports supportsWorkspaceSwitching as false in cloud mode (single virtual FS)', () => {
+    expect(modeModule.supportsWorkspaceSwitching).toBe(false);
   });
 
-  it('exports supportsExport as true in cloud mode without adapter (local default applies)', () => {
-    expect(modeModule.supportsExport).toBe(true);
+  it('exports supportsExport as false in cloud mode (no local filesystem)', () => {
+    expect(modeModule.supportsExport).toBe(false);
   });
 
   it('mode is a valid SproutMode value', () => {
@@ -245,8 +247,8 @@ describe('mode config flag invariants', () => {
       expect(modeModule.supportsLocalTerminal).toBe(!modeModule.isCloud);
     });
 
-    it('supportsSettings is the negation of isCloud', () => {
-      expect(modeModule.supportsSettings).toBe(!modeModule.isCloud);
+    it('supportsSettings is true in local mode', () => {
+      expect(modeModule.supportsSettings).toBe(true);
     });
 
     it('supportsGit is true without an adapter (local default)', () => {
@@ -282,11 +284,9 @@ describe('mode config flag invariants', () => {
       vi.resetModules();
     });
 
-    // Without an adapter installed, the local default (true) applies even
-    // in cloud build mode. The "with CloudAdapter installed" test suite
-    // covers the case where supportsSSH is explicitly false.
-    it('supportsSSH is true without an adapter (local default applies)', () => {
-      expect(modeModule.supportsSSH).toBe(true);
+    // In cloud mode without adapter, cloud defaults apply (supportsSSH = false).
+    it('supportsSSH is false in cloud mode without adapter (cloud default)', () => {
+      expect(modeModule.supportsSSH).toBe(false);
     });
 
     it('supportsInstances equals isCloud', () => {
@@ -297,8 +297,9 @@ describe('mode config flag invariants', () => {
       expect(modeModule.supportsLocalTerminal).toBe(!modeModule.isCloud);
     });
 
-    it('supportsSettings is the negation of isCloud', () => {
-      expect(modeModule.supportsSettings).toBe(!modeModule.isCloud);
+    // supportsSettings is true in both modes (BYOK settings in cloud).
+    it('supportsSettings is true in cloud mode (BYOK settings)', () => {
+      expect(modeModule.supportsSettings).toBe(true);
     });
   });
 });

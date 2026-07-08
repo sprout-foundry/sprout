@@ -215,6 +215,14 @@ declare global {
 let sharedInstance: WasmShell | null = null;
 
 /**
+ * Get the current WASM shell instance, or null if not yet initialized.
+ * Used by components that need shell access (e.g., WasmTerminal).
+ */
+export function getWasmShell(): WasmShell | null {
+  return sharedInstance;
+}
+
+/**
  * Initialize the sprout WASM shell.
  *
  * Must be called before any shell operations. Sets up IndexedDB bridge,

@@ -479,6 +479,61 @@ func TestGitHandler_Restore_NoApproval(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// ValidateGitArgs integration — guards against CVE-class RCE via git args
+// (--upload-pack, -c core.hooksPath, etc.) reaching shell construction.
+// ---------------------------------------------------------------------------
+
+func TestGitHandler_BlocksDangerousArgs_UploadPack(t *testing.T) {
+	ctx, ws := t.Context(), t.TempDir()
+	initGitRepo(t, ws)
+	am := &capturingApprovalManager{approved: true}
+	result, err := runGit(t, ctx, ws, am, "fetch", "--upload-pack=evil-command")
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	if !result.IsError {
+		t.Fatalf("expected --upload-pack= to be blocked, got success: %s", result.Output)
+	}
+	if !strings.Contains(result.Output, "Blocked git args") {
+		t.Errorf("expected 'Blocked git args' message, got: %s", result.Output)
+	}
+	if len(am.calls) != 0 {
+		t.Errorf("blocked args should NOT trigger approval, got %d calls", len(am.calls))
+	}
+}
+
+func TestGitHandler_BlocksDangerousArgs_HooksPath(t *testing.T) {
+	ctx, ws := t.Context(), t.TempDir()
+	initGitRepo(t, ws)
+	am := &capturingApprovalManager{approved: true}
+	result, err := runGit(t, ctx, ws, am, "fetch", "-c core.hooksPath=/tmp/evil.git/hooks")
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	if !result.IsError {
+		t.Fatalf("expected -c core.hooksPath= to be blocked, got success: %s", result.Output)
+	}
+	if !strings.Contains(result.Output, "Blocked git args") {
+		t.Errorf("expected 'Blocked git args' message, got: %s", result.Output)
+	}
+}
+
+func TestGitHandler_AllowsSafeArgs(t *testing.T) {
+	ctx, ws := t.Context(), t.TempDir()
+	initGitRepo(t, ws)
+	am := &capturingApprovalManager{approved: true}
+	// A safe --upload-pack is still allowed (validate is for *dangerous* values
+	// of these flags; legitimate use is not the audit's concern).
+	result, err := runGit(t, ctx, ws, am, "fetch", "")
+	if err != nil {
+		t.Fatalf("Execute error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("fetch with no args should not error, got: %s", result.Output)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Invalid operation
 // ---------------------------------------------------------------------------
 

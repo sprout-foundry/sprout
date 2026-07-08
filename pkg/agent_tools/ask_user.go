@@ -52,7 +52,7 @@ type AskUserManager struct {
 	timeout time.Duration
 }
 
-const DefaultAskUserTimeout = 10 * time.Minute
+const DefaultAskUserTimeout = 30 * time.Minute
 
 var (
 	globalAskUserManager   *AskUserManager

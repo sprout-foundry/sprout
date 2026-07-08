@@ -23,7 +23,6 @@ import type { AppState, PerChatState } from '../types/app';
 import { fuzzyFilter } from '../utils/fuzzyMatch';
 import { useLog } from '../utils/log';
 import { extractSymbols } from '../utils/symbolUtils';
-import CloudTerminal from './CloudTerminal';
 import CommandPalette, { type PaletteMode } from './CommandPalette';
 import { VISIBLE_COMMANDS } from './CommandPalette/constants';
 import useFileIndex from './CommandPalette/useFileIndex';
@@ -813,7 +812,11 @@ const AppContent: React.FC<AppContentProps> = ({
           isConnected={state.isConnected}
           onModelClick={handleStatusBarModelClick}
         />
-        {!supportsLocalTerminal && <CloudTerminal />}
+        {!supportsLocalTerminal && (
+          <ErrorBoundary panelName="Terminal">
+            <Terminal isExpanded={true} onToggleExpand={onTerminalExpandedChange} isConnected={false} />
+          </ErrorBoundary>
+        )}
       </main>
       {supportsLocalTerminal ? (
         <ErrorBoundary panelName="Terminal">

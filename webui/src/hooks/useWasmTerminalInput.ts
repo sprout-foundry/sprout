@@ -505,9 +505,14 @@ export function useWasmTerminalInput(options: UseWasmTerminalInputOptions): UseW
   // ── WASM shell lifecycle ──────────────────────────────────────────
 
   useEffect(() => {
-    if (!isActive) return;
+    console.log('[TerminalPane] WASM effect fired, isActive=' + isActive + ' isConnected=' + isConnected);
+    if (!isActive) {
+      console.log('[TerminalPane] WASM effect: not active, skipping');
+      return;
+    }
 
     if (isConnected) {
+      console.log('[TerminalPane] WASM effect: isConnected=true, using PTY not WASM');
       const term = xtermRef.current;
       if (wasmActiveRef.current && term) {
         debugLog('[TerminalPane] Backend connected — switching to remote PTY');

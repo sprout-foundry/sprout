@@ -41,13 +41,13 @@ export default function WasmTerminal({ shell, isExpanded, onToggleExpand }: Wasm
     inputRef.current?.focus();
   }, []);
 
-  const handleKeyDown = useCallback((e: KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = useCallback(async (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
       const cmd = inputValue.trim();
       setInputValue('');
       if (cmd) {
-        executeCommand(cmd);
+        await executeCommand(cmd);
       }
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();

@@ -90,7 +90,14 @@ func (ir *InputReader) setupInputTerm() (resizeCh chan os.Signal, nonBlocking bo
 	// as CSI u sequences. Terminals that don't recognize this just
 	// ignore the SGR; the new parser branch is a no-op when the
 	// sequence never arrives.
-	fmt.Print(modifyOtherKeysEnable)
+	//
+	// Skipped in the sprout webui terminal: xterm.js (which backs it)
+	// does not implement CSI u / modifyOtherKeys, and silently dropping
+	// the enable would also drop the modified-keystroke reports. The
+	// legacy xterm parser still decodes Shift+Enter + modified arrows
+	// via the conventional ESC[1;Nm encodings, so the net effect is
+	// that those keys keep working in the webui REPL.
+	writeModifyOtherKeysEnable(os.Stdout)
 
 	// Register as the active input reader so background goroutines
 	// (async output worker, tool handlers) can print messages via
@@ -128,6 +135,6 @@ func (ir *InputReader) teardownInputTerm() {
 	UnlockOutput()
 	fmt.Print(bracketedPasteDisable)
 	fmt.Print(MouseTrackingDisable)
-	fmt.Print(modifyOtherKeysDisable)
+	writeModifyOtherKeysDisable(os.Stdout)
 	_ = setNonblock(ir.termFd, false)
 }

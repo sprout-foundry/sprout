@@ -814,7 +814,7 @@ const AppContent: React.FC<AppContentProps> = ({
         />
         {!supportsLocalTerminal && (
           <ErrorBoundary panelName="Terminal">
-            <Terminal isExpanded={isTerminalExpanded} onToggleExpand={onTerminalExpandedChange} isConnected={false} />
+            <Terminal isExpanded={true} onToggleExpand={onTerminalExpandedChange} isConnected={false} />
           </ErrorBoundary>
         )}
       </main>

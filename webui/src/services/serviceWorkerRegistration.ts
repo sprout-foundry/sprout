@@ -6,12 +6,15 @@
  */
 
 import { debugLog } from '../utils/log';
-import { getAdapter } from './apiAdapter';
+import { isCloud } from '../config/mode';
 
 export const registerServiceWorker = async (): Promise<ServiceWorkerRegistration | null> => {
-  // Skip SW registration when adapter is installed (cloud mode doesn't have sw.js)
-  if (getAdapter()) {
-    debugLog('SW registration skipped: adapter installed (cloud mode)');
+  // Skip SW registration in cloud mode (no sw.js served by the platform).
+  // Use the build-time isCloud flag instead of adapter presence — the
+  // adapter installs asynchronously, so getAdapter() may be null during
+  // initial module load even in cloud mode.
+  if (isCloud) {
+    debugLog('SW registration skipped: cloud mode');
     return null;
   }
 

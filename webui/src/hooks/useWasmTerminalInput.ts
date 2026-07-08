@@ -35,6 +35,7 @@ export function useWasmTerminalInput(options: UseWasmTerminalInputOptions): UseW
   const wasmActiveRef = useRef(false);
   const [wasmLoading, setWasmLoading] = useState(false);
   const [wasmError, setWasmError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
   const wasmLineRef = useRef('');
   const wasmCursorRef = useRef(0);
   const wasmHistoryRef = useRef<string[]>([]);
@@ -533,7 +534,14 @@ export function useWasmTerminalInput(options: UseWasmTerminalInputOptions): UseW
 
     const activateWasm = async () => {
       const term = xtermRef.current;
-      if (!term) return;
+      if (!term) {
+        // xterm hasn't been mounted yet — increment retry counter to
+        // trigger a re-render/retry. Stops after 30 retries (~15s).
+        if (!cancelled && retryCount < 30) {
+          setTimeout(() => setRetryCount(c => c + 1), 300);
+        }
+        return;
+      }
 
       if (!wasmShellRef.current && !wasmInitializedRef.current) {
         setWasmLoading(true);
@@ -586,7 +594,7 @@ export function useWasmTerminalInput(options: UseWasmTerminalInputOptions): UseW
     return () => {
       cancelled = true;
     };
-  }, [isActive, isConnected, wasmLoading, xtermRef, writeWasmPrompt]);
+  }, [isActive, isConnected, wasmLoading, xtermRef, writeWasmPrompt, retryCount]);
 
   return {
     wasmActive,

@@ -408,17 +408,46 @@ func startRemoteSSHBackend(ctx context.Context, hostAlias, sessionKey, launcherU
 		// available to the daemon.  SSH non-interactive sessions skip these
 		// files, but daemon startup depends on the keys they define.
 		//
-		// Use "set -i" to force interactive mode so that the common non-
-		// interactive guard ([[ $- != *i* ]] && return) in .bashrc does
-		// not cause an early exit before API keys are exported.
-		`_src_rc() { if [ -f "$1" ]; then set +e; set -i; . "$1" >/dev/null 2>&1; set +i; set -e; fi; }`,
+		// Most rc files short-circuit under non-interactive shells via a
+		// guard like `[[ $- != *i* ]] && return` or `case $- in *i*) ;;
+		// *) return;; esac`.  An earlier revision tried to bypass that
+		// guard with `set -i`, but `i` is not a valid bash option (it's
+		// a zsh-ism) — bash returns exit 2, which under `set -e` aborts
+		// the script before the daemon is ever launched.
+		//
+		// Instead, we spawn an interactive subshell that sources the rc
+		// file as if it were the user's login rc, then export any env
+		// variables it set.  `bash --rcfile FILE -ic 'env -0'` (and the
+		// zsh/sh equivalents) guarantees `$-` includes `i` so the rc
+		// file's non-interactive guard passes, and NUL-delimited output
+		// lets us re-import the environment safely even if a value
+		// contains a newline.
+		`_src_rc() {`,
+		`  _file="$1"; _kind="$2"`,
+		`  [ -f "$_file" ] || return 0`,
+		`  set +e`,
+		`  case "$_kind" in`,
+		`    zsh) _env=$(zsh -ic '. "$1" >/dev/null 2>&1 && env -0' -- "$_file" 2>/dev/null) ;;`,
+		`    bash) _env=$(bash --rcfile "$_file" -ic 'env -0' 2>/dev/null) ;;`,
+		`    sh) _env=$(sh -ic '. "$1" >/dev/null 2>&1 && env -0' -- "$_file" 2>/dev/null) ;;`,
+		`    *) return 0 ;;`,
+		`  esac`,
+		`  if [ -n "$_env" ]; then`,
+		`    while IFS= read -r -d '' _line; do`,
+		`      case "$_line" in`,
+		`        *=*) export "$_line" ;;`,
+		`      esac`,
+		`    done <<< "$_env"`,
+		`  fi`,
+		`  unset _file _kind _env _line`,
+		`  set -e`,
+		`}`,
 		`case "$(basename "${SHELL:-sh}")" in`,
-		`  zsh) _src_rc "$HOME/.zshenv"; _src_rc "$HOME/.zprofile"; _src_rc "$HOME/.zshrc" ;;`,
-		`  bash) _src_rc "$HOME/.bash_profile"; _src_rc "$HOME/.bashrc" ;;`,
+		`  zsh) _src_rc "$HOME/.zshenv" zsh; _src_rc "$HOME/.zprofile" zsh; _src_rc "$HOME/.zshrc" zsh ;;`,
+		`  bash) _src_rc "$HOME/.bash_profile" bash; _src_rc "$HOME/.bashrc" bash ;;`,
 		`  fish) ;;`,
-		`  *)   _src_rc "$HOME/.profile" ;;`,
+		`  *)   _src_rc "$HOME/.profile" sh ;;`,
 		`esac`,
-		`set +i`,
 		`unset -f _src_rc`,
 		`DAEMON_PORT=` + fmt.Sprintf("%d", DaemonPort),
 		`FORCE_RESTART=` + map[bool]string{true: "1", false: "0"}[forceRestart],

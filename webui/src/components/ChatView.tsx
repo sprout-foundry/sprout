@@ -68,14 +68,10 @@ function Chat(props: ChatProps): JSX.Element {
   const needsHealthCheck = requiresBackendHealthCheck();
 
   const currentQueryCount = typeof stats?.queryCount === 'number' ? stats.queryCount : undefined;
-  const filteredToolExecutions = useMemo(() => {
-    if (!currentQueryCount) {
-      return toolExecutions;
-    }
-    return toolExecutions.filter(
-      (tool: ToolExecution) => tool.queryId === undefined || tool.queryId === currentQueryCount,
-    );
-  }, [toolExecutions, currentQueryCount]);
+  // Show all tool executions — don't filter by queryId. The queryId filter
+  // caused tools from the previous query to vanish when a new query started,
+  // making the badges show and hide at random intervals.
+  const filteredToolExecutions = toolExecutions;
 
   // Map of toolId → status across ALL queries (not filtered).
   // MessageSegments uses this to decide pill-vs-footnote rendering. Filtering
@@ -196,6 +192,7 @@ function Chat(props: ChatProps): JSX.Element {
         showExpiredSessionRecovery={showExpiredSessionRecovery}
         handleReloadWithoutSSHPath={handleReloadWithoutSSHPath}
         currentTodos={currentTodos}
+        onToolPillClick={onToolPillClick}
       />
     ),
     [
@@ -208,6 +205,7 @@ function Chat(props: ChatProps): JSX.Element {
       showExpiredSessionRecovery,
       handleReloadWithoutSSHPath,
       currentTodos,
+      onToolPillClick,
     ],
   );
 

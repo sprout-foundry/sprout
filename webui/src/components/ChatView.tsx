@@ -13,6 +13,7 @@ import type { ChatProps, Message, ToolExecution } from './chat/types';
 import CommandInput from './CommandInput';
 import ExportDialog from './ExportDialog';
 import InlineTodoSummary from './InlineTodoSummary';
+import { ToolTimelineBar } from './chat/ToolTimelineBar';
 import { showThemedAlert, showThemedConfirm } from './ThemedDialog';
 import './Chat.css';
 
@@ -192,7 +193,6 @@ function Chat(props: ChatProps): JSX.Element {
         showExpiredSessionRecovery={showExpiredSessionRecovery}
         handleReloadWithoutSSHPath={handleReloadWithoutSSHPath}
         currentTodos={currentTodos}
-        onToolPillClick={onToolPillClick}
       />
     ),
     [
@@ -205,7 +205,6 @@ function Chat(props: ChatProps): JSX.Element {
       showExpiredSessionRecovery,
       handleReloadWithoutSSHPath,
       currentTodos,
-      onToolPillClick,
     ],
   );
 
@@ -337,24 +336,7 @@ function Chat(props: ChatProps): JSX.Element {
       </div>
 
       <div className="input-container" ref={inputContainerRef}>
-        {(() => {
-          // SP-053 follow-up: small hint near the input mirroring the CLI's
-          // `model ▸ ` prompt prefix (`cmd/agent_modes.go:1005`). Reads at
-          // the point of action so users don't have to glance at the status
-          // bar to check which model receives this turn.
-          const hintModel = typeof stats?.model === 'string' ? stats.model : '';
-          const hintPersona = typeof stats?.persona === 'string' ? stats.persona : '';
-          if (!hintModel) return null;
-          return (
-            <div className="input-model-hint" aria-hidden="true">
-              {hintPersona && hintPersona !== 'orchestrator' ? (
-                <span className="input-model-hint-persona">{hintPersona}</span>
-              ) : null}
-              <span className="input-model-hint-name">{hintModel}</span>
-              <span className="input-model-hint-arrow">▸</span>
-            </div>
-          );
-        })()}
+        <ToolTimelineBar toolExecutions={filteredToolExecutions} />
         <CommandInput
           value={inputValue}
           onChange={onInputChange}

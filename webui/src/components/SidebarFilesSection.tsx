@@ -1,5 +1,5 @@
 import { FileTree, type FileInfo } from '@sprout/ui';
-import { forwardRef, useImperativeHandle, useRef } from 'react';
+import { forwardRef, useImperativeHandle, useRef, useEffect } from 'react';
 import { isCloud } from '../config/mode';
 import { ApiService } from '../services/api';
 import { clientFetch } from '../services/clientSession';
@@ -43,6 +43,20 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
     }));
 
     const api = ApiService.getInstance();
+
+    // ── Refresh file tree when a repo is imported (?repo= param) ──
+    useEffect(() => {
+      const handleImported = () => {
+        // Small delay to ensure WASM VFS writes have settled.
+        setTimeout(() => fileTreeRef.current?.refresh(), 300);
+      };
+      window.addEventListener('sprout:repo-imported', handleImported);
+      // Also check if import already completed before mount.
+      if ((window as unknown as Record<string, unknown>).__repoImported) {
+        setTimeout(() => fileTreeRef.current?.refresh(), 500);
+      }
+      return () => window.removeEventListener('sprout:repo-imported', handleImported);
+    }, []);
 
     // ── Clone repository handler ────────────────────────────────
     const handleCloneRepo = async () => {

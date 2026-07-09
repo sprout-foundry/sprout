@@ -22,7 +22,7 @@ import {
   proxyStatsRequest,
   proxySettingsRequest,
 } from './cloudProxyRoutes';
-import { handleWasmLocal } from './cloudWasmHandlers';
+import { handleWasmLocal, trackFileWrite } from './cloudWasmHandlers';
 import { initWasmShell, type WasmShell } from './wasmShell';
 
 export interface CloudAdapterConfig {
@@ -105,6 +105,68 @@ export class CloudAdapter implements APIAdapter {
     return this.wasmInitPromise;
   }
 
+  /**
+   * Auto-import a repo from a URL. Calls the platform's /api/repo/import
+   * endpoint to clone and fetch the file tree, then writes each file to
+   * the WASM VFS directly via the shell (not through fetch interception).
+   */
+  async importRepo(repoURL: string): Promise<{ success: boolean; repo?: string; error?: string }> {
+    try {
+      // The repo/import endpoint is a real platform endpoint (not wasm-local).
+      // It clones the repo server-side and returns the file tree as JSON.
+      const response = await fetch(`${this.config.apiBase}/api/repo/import`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          [WEBUI_CLIENT_ID_HEADER]: getWebUIClientId(),
+        },
+        body: JSON.stringify({ url: repoURL }),
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+        return { success: false, error: errData.error || `HTTP ${response.status}` };
+      }
+
+      const data = await response.json();
+      const files: Array<{ path: string; content: string }> = data.files || [];
+
+      if (files.length === 0) {
+        return { success: true, repo: data.repo, error: 'No files found in repository' };
+      }
+
+      // Write files to the WASM VFS via the shell directly, not through
+      // fetch(). The CloudAdapter's own fetch() interception would route
+      // /api/create and /api/file back to this adapter's handleWasmLocal(),
+      // creating a circular dependency. Going through the shell avoids that.
+      const shell = await this.ensureWasmShell();
+      for (const file of files) {
+        try {
+          shell.writeFile(file.path, file.content);
+          // Track in the manifest so the file browser can list it
+          // (the old WASM binary has a broken listDir).
+          trackFileWrite(file.path);
+        } catch (writeErr) {
+          console.warn(`[CloudAdapter] failed to write file ${file.path}:`, writeErr);
+        }
+      }
+
+      return { success: true, repo: data.repo };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
+  /**
+   * Returns the repo URL from the ?repo= query param if present, or null.
+   */
+  static getRepoFromQuery(): string | null {
+    if (typeof window === 'undefined') return null;
+    const params = new URLSearchParams(window.location.search);
+    return params.get('repo');
+  }
+
   async fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
     let url: string;
     let method: string = 'GET';
@@ -130,28 +192,12 @@ export class CloudAdapter implements APIAdapter {
     const clientIdHeader = WEBUI_CLIENT_ID_HEADER;
     const clientIdValue = getWebUIClientId();
 
-    // ── Agent query: route through WASM shell (not proxy) ─────────
-    // The full agent loop runs in-browser via the WASM binary's runAgent.
-    // Events stream back through the agentEventDispatcher.
-    if (urlPath === '/api/query' && method === 'POST') {
-      console.log('[CloudAdapter] /api/query POST intercepted — routing to WASM agent');
-      const requestBody = await this.extractRequestBody(input);
-      const bodyStr = this.extractBody(init) ?? requestBody ?? undefined;
-      try {
-        const shell = await this.ensureWasmShell();
-        return handleWasmLocal(shell, urlPath, method, url, bodyStr);
-      } catch (err) {
-        console.warn(
-          `[CloudAdapter] WASM shell unavailable for agent query, falling through to proxy:`,
-          err,
-        );
-        // Fall through to standard chat proxy below
-      }
-    }
-
     // ── Chat endpoint translation (steer, stop, status) ───────────
     // NOTE: Chat endpoint mapping takes priority over the synthetic response
     // registry. No chat-mapped path should be added to the synthetic registry.
+    // /api/query POST is handled as wasm-local via the registry below — the
+    // WASM shell runs the full agent loop in-browser; steering/stop/status
+    // remain proxied because they need platform chat state.
     const foundryPath = CHAT_ENDPOINT_MAP[urlPath];
     if (foundryPath) {
       // When input is a Request object, pre-read the body for translation
@@ -184,11 +230,16 @@ export class CloudAdapter implements APIAdapter {
     }
 
     // ── Settings endpoint translation ───────────────────────────────
-    // Proxy all settings requests to the platform backend.
-    // The platform serves /api/settings with user-specific config.
-    // CloudAdapter no longer overrides GET /api/settings with a synthetic
-    // response — the platform backend is the canonical source.
-    if (urlPath === '/api/settings' || urlPath.startsWith('/api/settings/')) {
+    // Only proxy CORE settings (user prefs, credentials, providers) to the
+    // platform backend. Subagent-types, MCP, skills, hotkeys are intercepted
+    // as synthetic below — those endpoints are not available in browser mode
+    // and returning a safe default is better than triggering a 401/404 error
+    // toast from the platform backend.
+    const isProxiedSettings =
+      urlPath === '/api/settings' ||
+      urlPath.startsWith('/api/settings/credentials') ||
+      urlPath.startsWith('/api/settings/providers');
+    if (isProxiedSettings) {
       const requestBody = await this.extractRequestBody(input);
       return proxySettingsRequest(this.config.apiBase, url, method, clientIdHeader, clientIdValue, init, requestBody);
     }

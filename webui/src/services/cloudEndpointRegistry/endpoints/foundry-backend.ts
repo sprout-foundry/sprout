@@ -6,12 +6,10 @@ import { gitEndpoints } from './foundry-backend-git';
  */
 // --- Chat & Query ---
 const chatAndQueryEndpoints: CloudEndpoint[] = [
-  {
-    path: '/api/query',
-    methods: ['POST'],
-    category: 'foundry-backend',
-    description: 'Main chat/query endpoint (needs Foundry proxy)',
-  },
+  // /api/query is intentionally NOT here — it routes through the WASM shell's
+  // in-browser agent loop (see cloudEndpointRegistry/endpoints/wasm-local.ts).
+  // The platform proxy only handles steering/stop/status which need
+  // server-side chat session state.
   {
     path: '/api/query/steer',
     methods: ['POST'],
@@ -30,53 +28,14 @@ const chatAndQueryEndpoints: CloudEndpoint[] = [
     category: 'foundry-backend',
     description: 'Query execution status',
   },
-  {
-    path: '/api/upload/image',
-    methods: ['POST'],
-    category: 'foundry-backend',
-    description: 'Image upload for vision',
-  },
 ];
 
 // --- Embedding & Semantic Search ---
-const embeddingEndpoints: CloudEndpoint[] = [
-  {
-    path: '/api/embedding-index',
-    methods: ['GET'],
-    category: 'foundry-backend',
-    description: 'Embedding index status (needs backend vector DB)',
-  },
-  {
-    path: '/api/providers/models',
-    methods: ['GET'],
-    category: 'foundry-backend',
-    description: 'List available models for providers',
-  },
-  {
-    path: '/api/search/semantic/status',
-    methods: ['GET'],
-    category: 'foundry-backend',
-    description: 'Semantic search index status (needs backend)',
-  },
-  {
-    path: '/api/search/semantic/build',
-    methods: ['POST'],
-    category: 'foundry-backend',
-    description: 'Build semantic search index (needs backend)',
-  },
-  {
-    path: '/api/search/semantic/preview',
-    methods: ['POST'],
-    category: 'foundry-backend',
-    description: 'Preview semantic search index (needs backend)',
-  },
-  {
-    path: '/api/search/semantic',
-    methods: ['POST'],
-    category: 'foundry-backend',
-    description: 'Semantic/vector search (needs backend AI infrastructure)',
-  },
-];
+// Intentionally empty: these endpoints are not available in browser mode and
+// return synthetic safe-default responses (see synthetic.ts). The earlier
+// foundry-backend duplicates were removed because they caused 401/404 errors
+// in cloud mode and triggered error toasts in the UI.
+const embeddingEndpoints: CloudEndpoint[] = [];
 
 // --- Agent Terminal Sessions ---
 const terminalEndpoints: CloudEndpoint[] = [
@@ -96,34 +55,16 @@ const terminalEndpoints: CloudEndpoint[] = [
 ];
 
 // --- Diagnostics & LSP ---
-const diagnosticsEndpoints: CloudEndpoint[] = [
-  {
-    path: '/api/diagnostics',
-    methods: ['POST'],
-    category: 'foundry-backend',
-    description: 'Language diagnostics',
-  },
-  {
-    path: '/api/semantic',
-    methods: ['POST'],
-    category: 'foundry-backend',
-    description: 'Semantic operations (go-to-def, hover, references, rename, completion)',
-  },
-  {
-    path: '/api/lsp/status',
-    methods: ['GET'],
-    category: 'foundry-backend',
-    description: 'LSP server status',
-  },
-  {
-    path: '/api/lsp/ws',
-    methods: ['GET'],
-    category: 'foundry-backend',
-    description: 'LSP WebSocket bridge',
-  },
-];
+// Intentionally empty: these endpoints are not available in browser mode and
+// return synthetic safe-default responses (see synthetic.ts).
+const diagnosticsEndpoints: CloudEndpoint[] = [];
 
 // --- Chat Sessions ---
+// The worktree-only chat-session sub-endpoints (create-in-worktree, compact,
+// pin, unpin, worktree-mappings, delete-all, chat-session/ prefix) are
+// intercepted as synthetic in browser mode (see synthetic.ts). The core CRUD
+// operations remain foundry-backend so the platform can manage session
+// lifecycle.
 const chatSessionEndpoints: CloudEndpoint[] = [
   {
     path: '/api/chat-sessions',
@@ -144,12 +85,6 @@ const chatSessionEndpoints: CloudEndpoint[] = [
     description: 'Delete chat session',
   },
   {
-    path: '/api/chat-sessions/delete-all',
-    methods: ['POST'],
-    category: 'foundry-backend',
-    description: 'Delete all chat sessions',
-  },
-  {
     path: '/api/chat-sessions/rename',
     methods: ['POST'],
     category: 'foundry-backend',
@@ -161,125 +96,39 @@ const chatSessionEndpoints: CloudEndpoint[] = [
     category: 'foundry-backend',
     description: 'Switch chat session',
   },
-  {
-    path: '/api/chat-sessions/create-in-worktree',
-    methods: ['POST'],
-    category: 'foundry-backend',
-    description: 'Create session in worktree',
-  },
-  {
-    path: '/api/chat-sessions/compact',
-    methods: ['POST'],
-    category: 'foundry-backend',
-    description: 'Compact chat session',
-  },
-  {
-    path: '/api/chat-sessions/pin',
-    methods: ['POST'],
-    category: 'foundry-backend',
-    description: 'Pin chat session',
-  },
-  {
-    path: '/api/chat-sessions/unpin',
-    methods: ['POST'],
-    category: 'foundry-backend',
-    description: 'Unpin chat session',
-  },
-  {
-    path: '/api/chat-sessions/worktree-mappings',
-    methods: ['GET'],
-    category: 'foundry-backend',
-    description: 'List worktree mappings',
-  },
-  {
-    path: '/api/chat-session/',
-    methods: ['GET', 'POST'],
-    category: 'foundry-backend',
-    isPrefix: true,
-    description: 'Worktree sub-endpoints',
-  },
 ];
 
 // --- History ---
-const historyEndpoints: CloudEndpoint[] = [
-  {
-    path: '/api/history/changelog',
-    methods: ['GET'],
-    category: 'foundry-backend',
-    description: 'History changelog',
-  },
-  {
-    path: '/api/history/revision',
-    methods: ['POST'],
-    category: 'foundry-backend',
-    description: 'History revision',
-  },
-  {
-    path: '/api/history/changes',
-    methods: ['GET'],
-    category: 'foundry-backend',
-    description: 'History changes',
-  },
-  {
-    path: '/api/history/rollback',
-    methods: ['POST'],
-    category: 'foundry-backend',
-    description: 'Rollback conversation history',
-  },
-];
+// Intentionally empty: these endpoints are not available in browser mode and
+// return synthetic safe-default responses (see synthetic.ts).
+const historyEndpoints: CloudEndpoint[] = [];
 
 // --- Sessions ---
-const sessionEndpoints: CloudEndpoint[] = [
-  {
-    path: '/api/sessions/restore',
-    methods: ['POST'],
-    category: 'foundry-backend',
-    description: 'Restore session state',
-  },
-  {
-    path: '/api/sessions',
-    methods: ['GET'],
-    category: 'foundry-backend',
-    description: 'List sessions',
-  },
-];
+// Intentionally empty: these endpoints are not available in browser mode and
+// return synthetic safe-default responses (see synthetic.ts).
+const sessionEndpoints: CloudEndpoint[] = [];
 
 // --- Tasks ---
 const taskEndpoints: CloudEndpoint[] = [
   {
     path: '/api/tasks',
-    methods: ['GET'],
+    methods: ['GET', 'POST'],
     category: 'foundry-backend',
-    description: 'List user tasks (webui compatibility)',
-  },
-  {
-    path: '/api/tasks',
-    methods: ['POST'],
-    category: 'foundry-backend',
-    description: 'Create a new agent task (webui compatibility)',
+    description: 'List/create user tasks (webui compatibility)',
   },
 ];
 
 // --- Settings & Configuration ---
+// The worktree/availability-flag subagent-types, MCP-related, skills, and
+// hotkey endpoints are intercepted as synthetic in browser mode (see
+// synthetic.ts). The core user settings, credentials, and provider CRUD
+// operations remain foundry-backend so the platform owns them.
 const settingsEndpoints: CloudEndpoint[] = [
   {
     path: '/api/settings',
     methods: ['GET', 'PUT'],
     category: 'foundry-backend',
     description: 'User settings (Foundry manages)',
-  },
-  {
-    path: '/api/settings/mcp',
-    methods: ['GET', 'PUT'],
-    category: 'foundry-backend',
-    description: 'MCP settings',
-  },
-  {
-    path: '/api/settings/mcp/servers/',
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    category: 'foundry-backend',
-    isPrefix: true,
-    description: 'MCP server CRUD',
   },
   {
     path: '/api/settings/credentials',
@@ -307,66 +156,12 @@ const settingsEndpoints: CloudEndpoint[] = [
     isPrefix: true,
     description: 'Provider CRUD',
   },
-  {
-    path: '/api/settings/skills',
-    methods: ['GET', 'PUT'],
-    category: 'foundry-backend',
-    description: 'Skill settings',
-  },
-  {
-    path: '/api/settings/subagent-types',
-    methods: ['GET'],
-    category: 'foundry-backend',
-    description: 'Subagent type configs',
-  },
-  {
-    path: '/api/settings/subagent-types/',
-    methods: ['GET'],
-    category: 'foundry-backend',
-    isPrefix: true,
-    description: 'Subagent type read-only access (catalog is fixed; PUT/DELETE removed)',
-  },
-  {
-    path: '/api/hotkeys',
-    methods: ['GET', 'PUT'],
-    category: 'foundry-backend',
-    description: 'Hotkey configuration',
-  },
-  {
-    path: '/api/hotkeys/validate',
-    methods: ['POST'],
-    category: 'foundry-backend',
-    description: 'Validate hotkey binding',
-  },
-  {
-    path: '/api/hotkeys/preset',
-    methods: ['POST'],
-    category: 'foundry-backend',
-    description: 'Apply hotkey preset',
-  },
 ];
 
 // --- Costs ---
-const costEndpoints: CloudEndpoint[] = [
-  {
-    path: '/api/costs/summary',
-    methods: ['GET'],
-    category: 'foundry-backend',
-    description: 'Cost summary',
-  },
-  {
-    path: '/api/costs/history',
-    methods: ['GET'],
-    category: 'foundry-backend',
-    description: 'Cost history',
-  },
-  {
-    path: '/api/costs/detail',
-    methods: ['GET'],
-    category: 'foundry-backend',
-    description: 'Cost detail',
-  },
-];
+// Intentionally empty: these endpoints are not available in browser mode and
+// return synthetic safe-default responses (see synthetic.ts).
+const costEndpoints: CloudEndpoint[] = [];
 
 // --- Providers ---
 const providerEndpoints: CloudEndpoint[] = [
@@ -389,14 +184,9 @@ const statsEndpoints: CloudEndpoint[] = [
 ];
 
 // --- Workspace ---
-const workspaceEndpoints: CloudEndpoint[] = [
-  {
-    path: '/api/workspace/symbols',
-    methods: ['GET'],
-    category: 'foundry-backend',
-    description: 'Workspace symbols (LSP)',
-  },
-];
+// Intentionally empty: /api/workspace/symbols is not available in browser
+// mode and returns a synthetic safe-default response (see synthetic.ts).
+const workspaceEndpoints: CloudEndpoint[] = [];
 
 /**
  * All foundry-backend endpoints combined (non-git + git from separate module).

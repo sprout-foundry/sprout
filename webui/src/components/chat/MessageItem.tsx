@@ -1,5 +1,5 @@
 import { MessageBubble, MessageSegments, MessageContent, Collapsible } from '@sprout/ui';
-import { BrainCircuit } from 'lucide-react';
+import { BrainCircuit, Bot } from 'lucide-react';
 import { memo } from 'react';
 import type { Message, ToolExecution } from './types';
 
@@ -59,7 +59,11 @@ export const MessageItem = memo(function MessageItem({
   const hasContent = !!message.content && message.content.trim().length > 0;
   const hasReasoning = !!message.reasoning && message.reasoning.trim().length > 0;
   const hasToolRefs = !!message.toolRefs && message.toolRefs.length > 0;
-  if (!hasContent && !hasReasoning && !hasToolRefs) {
+  // Subagent-run messages start with empty content/reasoning on spawn
+  // and accumulate output over time. Don't suppress them — the Collapsible
+  // header (persona name) always renders even before the first output line.
+  const isSubagentRun = !!message.isSubagentRun;
+  if (!hasContent && !hasReasoning && !hasToolRefs && !isSubagentRun) {
     return null;
   }
 
@@ -91,7 +95,25 @@ export const MessageItem = memo(function MessageItem({
     >
       {message.type === 'assistant' ? (
         <>
-          {message.reasoning && message.reasoning.trim() && (
+          {isSubagentRun && (
+            // Inline subagent run: rendered as a collapsible section in
+            // the chat flow. The subagent's streaming output lines
+            // accumulate in the `reasoning` field. Running (incomplete)
+            // runs default to open so the user sees live progress;
+            // completed runs default to collapsed.
+            <Collapsible
+              title={message.subagentPersona ? `${message.subagentPersona} (subagent)` : 'Subagent'}
+              icon={<Bot size={13} />}
+              defaultOpen={!message.subagentRunComplete}
+              ariaLabel={message.subagentPersona ? `${message.subagentPersona} subagent output` : 'Subagent output'}
+              className="reasoning-block subagent-run-block"
+            >
+              <div className="reasoning-content">
+                <MessageContent content={message.reasoning || ''} />
+              </div>
+            </Collapsible>
+          )}
+          {!isSubagentRun && message.reasoning && message.reasoning.trim() && (
             // SP-076: verbose mode expands reasoning inline instead of
             // hiding it behind a <details> toggle. AUDIT-GAP-1: migrated
             // to the shared <Collapsible> primitive. The legacy

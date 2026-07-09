@@ -1764,8 +1764,7 @@
 }
 
 .segment-text {
-  /* prose markdown rendered normally */
-  display: block;
+  display: inline;
 }
 
 .segment-tool-call {

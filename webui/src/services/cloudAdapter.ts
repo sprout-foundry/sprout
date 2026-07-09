@@ -106,12 +106,14 @@ export class CloudAdapter implements APIAdapter {
   }
 
   /**
-   * Auto-import a repo from a URL. Returns true on success, false on failure.
-   * Called when the ?repo= query param is present on page load.
-   * Writes imported files to the WASM VFS via standard file write endpoints.
+   * Auto-import a repo from a URL. Calls the platform's /api/repo/import
+   * endpoint to clone and fetch the file tree, then writes each file to
+   * the WASM VFS directly via the shell (not through fetch interception).
    */
   async importRepo(repoURL: string): Promise<{ success: boolean; repo?: string; error?: string }> {
     try {
+      // The repo/import endpoint is a real platform endpoint (not wasm-local).
+      // It clones the repo server-side and returns the file tree as JSON.
       const response = await fetch(`${this.config.apiBase}/api/repo/import`, {
         method: 'POST',
         headers: {
@@ -134,30 +136,14 @@ export class CloudAdapter implements APIAdapter {
         return { success: true, repo: data.repo, error: 'No files found in repository' };
       }
 
-      // Write each file to the WASM VFS via the standard file API.
+      // Write files to the WASM VFS via the shell directly, not through
+      // fetch(). The CloudAdapter's own fetch() interception would route
+      // /api/create and /api/file back to this adapter's handleWasmLocal(),
+      // creating a circular dependency. Going through the shell avoids that.
+      const shell = await this.ensureWasmShell();
       for (const file of files) {
         try {
-          // Create the file first.
-          await fetch(`${this.config.apiBase}/api/create`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              [WEBUI_CLIENT_ID_HEADER]: getWebUIClientId(),
-            },
-            body: JSON.stringify({ path: file.path, directory: false }),
-            credentials: 'include',
-          });
-
-          // Write content.
-          await fetch(`${this.config.apiBase}/api/file?path=${encodeURIComponent(file.path)}`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              [WEBUI_CLIENT_ID_HEADER]: getWebUIClientId(),
-            },
-            body: JSON.stringify({ content: file.content }),
-            credentials: 'include',
-          });
+          shell.writeFile(file.path, file.content);
         } catch (writeErr) {
           console.warn(`[CloudAdapter] failed to write file ${file.path}:`, writeErr);
         }

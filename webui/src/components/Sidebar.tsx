@@ -204,7 +204,7 @@ function Sidebar({
   const fileTreeRef = useRef<FileTreeHandle | null>(null);
 
   const effectiveSidebarCollapsed = !isMobile && !!sidebarCollapsed;
-  const effectiveSelectedSection = selectedSection || 'git';
+  const effectiveSelectedSection = selectedSection || (supportsGit ? 'git' : 'files');
   // Use props for width or fall back to default
   const effectiveSidebarWidth = sidebarWidth ?? SIDEBAR_DEFAULT_WIDTH;
   // Plain object fallback avoids calling useRef when the prop is not provided

@@ -7,6 +7,7 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
+import { supportsGit } from '../config/mode';
 import { debugLog } from '../utils/log';
 
 export type SectionTab = 'git' | 'logs' | 'files' | 'settings' | 'search' | 'automations';
@@ -87,9 +88,12 @@ export function useSidebarState(): UseSidebarStateReturn {
     loadPersistedBoolean('sprout-terminal-expanded', false),
   );
 
-  const [selectedSection, setSelectedSectionRaw] = useState<SectionTab>(() =>
-    loadPersistedString('sprout-sidebar-active-tab', 'git' as SectionTab, VALID_SECTION_TABS),
-  );
+  const [selectedSection, setSelectedSectionRaw] = useState<SectionTab>(() => {
+    const persisted = loadPersistedString('sprout-sidebar-active-tab', 'git' as SectionTab, VALID_SECTION_TABS);
+    // In cloud mode where git isn't supported, default to files instead.
+    if (persisted === 'git' && !supportsGit) return 'files';
+    return persisted;
+  });
 
   const [sidebarWidth, setSidebarWidthRaw] = useState(() => {
     try {

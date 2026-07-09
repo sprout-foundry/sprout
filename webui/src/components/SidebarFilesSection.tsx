@@ -1,5 +1,5 @@
 import { FileTree, type FileInfo } from '@sprout/ui';
-import { forwardRef, useImperativeHandle, useRef, useEffect } from 'react';
+import { forwardRef, useImperativeHandle, useRef, useEffect, useState } from 'react';
 import { isCloud } from '../config/mode';
 import { ApiService } from '../services/api';
 import { clientFetch } from '../services/clientSession';
@@ -56,6 +56,69 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
         setTimeout(() => fileTreeRef.current?.refresh(), 500);
       }
       return () => window.removeEventListener('sprout:repo-imported', handleImported);
+    }, []);
+
+    // ── Repo import status (shows loading banner during import) ──
+    const [importStatus, setImportStatus] = useState<'idle' | 'loading' | 'importing' | 'done' | 'error'>('idle');
+    const [importRepoName, setImportRepoName] = useState<string>('');
+    const [importError, setImportError] = useState<string>('');
+
+    useEffect(() => {
+      // Check if we have a ?repo= param or a pending import
+      const params = new URLSearchParams(window.location.search);
+      const repoParam = params.get('repo');
+      const importing = (window as unknown as Record<string, unknown>).__repoImporting as string | undefined;
+      const alreadyImported = (window as unknown as Record<string, unknown>).__repoImported as string | undefined;
+      const importFailed = (window as unknown as Record<string, unknown>).__repoImportFailed as string | undefined;
+
+      // Determine repo name for display
+      const repoUrl = repoParam || importing || alreadyImported || '';
+      if (repoUrl) {
+        try {
+          const slug = repoUrl.replace(/\.git$/, '').replace(/\/$/, '').split('/').slice(-2).join('/');
+          setImportRepoName(slug);
+        } catch {
+          setImportRepoName(repoUrl);
+        }
+      }
+
+      if (alreadyImported) {
+        setImportStatus('done');
+        const t = setTimeout(() => setImportStatus('idle'), 3000);
+        return () => clearTimeout(t);
+      }
+
+      if (importFailed) {
+        setImportStatus('error');
+        setImportError(importFailed);
+        return;
+      }
+
+      if (repoParam || importing) {
+        setImportStatus(importing ? 'loading' : 'loading');
+
+        // Listen for completion
+        const handleDone = (e: Event) => {
+          const detail = (e as CustomEvent).detail;
+          setImportRepoName(detail?.repo ?? '');
+          setImportStatus('done');
+          const t = setTimeout(() => setImportStatus('idle'), 3000);
+          // Cleanup stored in closure
+          (window as unknown as Record<string, unknown>).__cleanupTimeout = t;
+        };
+        const handleFailed = (e: Event) => {
+          const detail = (e as CustomEvent).detail;
+          setImportError(detail?.error ?? 'Unknown error');
+          setImportStatus('error');
+        };
+        window.addEventListener('sprout:repo-imported', handleDone);
+        window.addEventListener('sprout:repo-import-failed', handleFailed);
+
+        return () => {
+          window.removeEventListener('sprout:repo-imported', handleDone);
+          window.removeEventListener('sprout:repo-import-failed', handleFailed);
+        };
+      }
     }, []);
 
     // ── Clone repository handler ────────────────────────────────
@@ -133,10 +196,43 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
     };
 
     return (
-      <FileTree
-        ref={fileTreeRef}
-        rootPath="."
-        workspaceRoot={workspaceRoot}
+      <>
+        {importStatus !== 'idle' && (
+          <div className={`repo-import-banner repo-import-banner--${importStatus}`}>
+            {importStatus === 'loading' && (
+              <>
+                <span className="repo-import-spinner" />
+                <div className="repo-import-text">
+                  <strong>Loading {importRepoName}…</strong>
+                  <span>Cloning repo and initializing browser shell</span>
+                </div>
+              </>
+            )}
+            {importStatus === 'done' && (
+              <>
+                <span className="repo-import-icon repo-import-icon--success">✓</span>
+                <div className="repo-import-text">
+                  <strong>{importRepoName} ready</strong>
+                  <span>Files loaded into browser workspace</span>
+                </div>
+              </>
+            )}
+            {importStatus === 'error' && (
+              <>
+                <span className="repo-import-icon repo-import-icon--error">⚠</span>
+                <div className="repo-import-text">
+                  <strong>Import failed</strong>
+                  <span>{importError}</span>
+                </div>
+                <button className="repo-import-dismiss" onClick={() => setImportStatus('idle')}>×</button>
+              </>
+            )}
+          </div>
+        )}
+        <FileTree
+          ref={fileTreeRef}
+          rootPath="."
+          workspaceRoot={workspaceRoot}
         onFileSelect={(file) => onFileClick?.(file.path)}
         onItemCreated={() => {
           fileTreeRef.current?.refresh();
@@ -207,6 +303,7 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
         }}
         cloneRepoButton={isCloud ? handleCloneRepo : undefined}
       />
+      </>
     );
   },
 );

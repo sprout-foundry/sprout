@@ -599,7 +599,14 @@ export function useWasmTerminalInput(options: UseWasmTerminalInputOptions): UseW
     return () => {
       cancelled = true;
     };
-  }, [isActive, isConnected, wasmLoading, xtermRef, writeWasmPrompt, retryCount]);
+    // NOTE: wasmLoading is intentionally excluded from deps. It is an
+    // internal progress indicator set within the async activateWasm().
+    // If included, setWasmLoading(true) triggers a re-render that fires
+    // the cleanup (cancelled=true) before initWasmShell() resolves,
+    // leaving the terminal stuck on "Initializing browser shell..."
+    // forever.  isActive/isConnected are the real external triggers.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive, isConnected, xtermRef, writeWasmPrompt, retryCount]);
 
   return {
     wasmActive,

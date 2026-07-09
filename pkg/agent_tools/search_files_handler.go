@@ -96,6 +96,13 @@ func (h *searchFilesHandler) Execute(ctx context.Context, env ToolEnv, args map[
 			return nil
 		}
 
+		// Early exit: stop walking entirely when limits are reached.
+		// Checking BEFORE isTextFile/searchFile avoids I/O and regex work for
+		// every remaining file in the tree once the result cap is hit.
+		if matchCount >= maxResults || totalBytes >= maxBytes {
+			return filepath.SkipAll
+		}
+
 		if info.Type()&os.ModeSymlink != 0 {
 			return nil
 		}
@@ -105,10 +112,6 @@ func (h *searchFilesHandler) Execute(ctx context.Context, env ToolEnv, args map[
 		}
 
 		if matcher != nil && !matcher.Match(path) {
-			return nil
-		}
-
-		if matchCount >= maxResults || totalBytes >= maxBytes {
 			return nil
 		}
 
@@ -163,9 +166,31 @@ func compileSearchPattern(pattern string, caseSensitive bool) (*regexp.Regexp, e
 	return regexp.Compile(raw)
 }
 
+// shouldSkipDir returns true for well-known directories that should never be
+// searched. The list covers VCS directories, language package managers, build
+// outputs, cache directories, CI artifacts, and framework-specific caches.
 func shouldSkipDir(path string) bool {
 	name := filepath.Base(path)
-	skipDirs := []string{".git", "node_modules", ".sprout", ".idea", ".vscode", "vendor", "__pycache__"}
+	skipDirs := []string{
+		// VCS
+		".git", ".hg", ".svn",
+		// package managers & dependency directories
+		"node_modules", "vendor", "Pods", "Carthage",
+		// Python
+		"__pycache__", ".venv", "venv", ".tox", "eggs", ".eggs",
+		// build & distribution artifacts
+		"build", "dist", "target", "out", ".build",
+		// caches & generated code
+		".cache", ".parcel-cache", ".turbo", ".next", ".nuxt", ".expo",
+		// IDE & tooling
+		".idea", ".vscode", ".vs", ".fleet", ".sprout",
+		// CI / test / coverage
+		"coverage", ".nyc_output", "test-results",
+		// Java / Kotlin
+		".gradle", ".kotlin",
+		// Rust
+		".cargo",
+	}
 	for _, skip := range skipDirs {
 		if name == skip {
 			return true
@@ -174,7 +199,51 @@ func shouldSkipDir(path string) bool {
 	return false
 }
 
+// binaryExtensions lists file extensions known to be binary or non-text formats.
+// Checking the extension before opening the file avoids unnecessary I/O for the
+// ~30%+ of project files that are images, fonts, archives, or compiled artifacts.
+var binaryExtensions = map[string]bool{
+	// images
+	".png": true, ".jpg": true, ".jpeg": true, ".gif": true, ".ico": true,
+	".bmp": true, ".tiff": true, ".tif": true, ".webp": true, ".svgz": true,
+	// fonts
+	".ttf": true, ".otf": true, ".woff": true, ".woff2": true, ".eot": true,
+	// archives & packages
+	".zip": true, ".tar": true, ".gz": true, ".bz2": true, ".xz": true,
+	".7z": true, ".rar": true, ".jar": true, ".war": true, ".aar": true,
+	".apk": true, ".ipa": true, ".dmg": true, ".pkg": true, ".deb": true, ".rpm": true,
+	// compiled binaries & libraries
+	".exe": true, ".dll": true, ".so": true, ".dylib": true, ".a": true,
+	".o": true, ".obj": true, ".class": true, ".wasm": true, ".bin": true,
+	// media
+	".mp3": true, ".mp4": true, ".mov": true, ".avi": true, ".mkv": true,
+	".wav": true, ".flac": true, ".ogg": true, ".m4a": true, ".webm": true,
+	// documents (binary formats)
+	".pdf": true, ".doc": true, ".docx": true, ".xls": true, ".xlsx": true,
+	".ppt": true, ".pptx": true, ".pages": true, ".numbers": true, ".key": true,
+	// database & data formats
+	".db": true, ".sqlite": true, ".sqlite3": true, ".dat": true,
+	".ldb": true, ".sst": true,
+	// compiled / serialized
+	".tsbuildinfo": true, ".map": true,
+	// certificates & keys
+	".p12": true, ".pfx": true, ".der": true, ".cer": true, ".crt": true,
+	".jks": true, ".keystore": true, ".keychain": true,
+	// iOS / macOS bundles
+	".xcworkspace": true, ".xcuserstate": true,
+	".nib": true, ".car": true, ".mom": true, ".momd": true,
+	".storyboardc": true, ".xcdatamodeld": true,
+	// Android
+	".dex": true, ".ap_": true,
+}
+
 func isTextFile(path string) bool {
+	// Fast path: skip known binary extensions without opening the file.
+	ext := strings.ToLower(filepath.Ext(path))
+	if binaryExtensions[ext] {
+		return false
+	}
+
 	f, err := os.Open(path)
 	if err != nil {
 		return false

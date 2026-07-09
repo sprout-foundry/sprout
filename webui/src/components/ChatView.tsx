@@ -332,7 +332,7 @@ function Chat(props: ChatProps): JSX.Element {
 
       <div className="input-container" ref={inputContainerRef}>
         <ToolTimelineBar toolExecutions={filteredToolExecutions} />
-        {isProcessing && filteredToolExecutions.length === 0 && (
+        {isProcessing && filteredToolExecutions.filter((t) => t.queryId === currentQueryCount).length === 0 && (
           <div className="thinking-indicator" role="status" aria-live="polite">
             <span className="thinking-indicator-dots">
               <span className="thinking-dot" />

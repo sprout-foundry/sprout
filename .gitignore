@@ -170,3 +170,4 @@ docs/embed.md
 
 # Compiled WASM binary build artifact (produced by make build-wasm/build-all)
 /wasm
+.scratch

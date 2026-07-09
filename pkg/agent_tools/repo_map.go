@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/sprout-foundry/sprout/pkg/filesystem"
 )
 
 const (
@@ -47,10 +49,17 @@ var treeSitterExtensions = map[string]bool{
 // for near-instant results on warm cache, falling back to the filesystem walk.
 func GenerateRepoMap(ctx context.Context, rootDir string) (string, error) {
 	if rootDir == "" || rootDir == "." {
-		var err error
-		rootDir, err = os.Getwd()
-		if err != nil {
-			return "", fmt.Errorf("get working directory: %w", err)
+		// Use the workspace root from context (set by withToolExecutionMetadata)
+		// instead of os.Getwd(), which returns the daemon's CWD, not the
+		// workspace the agent is operating in.
+		if wsRoot := filesystem.WorkspaceRootFromContext(ctx); wsRoot != "" {
+			rootDir = wsRoot
+		} else {
+			var err error
+			rootDir, err = os.Getwd()
+			if err != nil {
+				return "", fmt.Errorf("get working directory: %w", err)
+			}
 		}
 	}
 

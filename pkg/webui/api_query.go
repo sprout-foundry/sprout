@@ -424,50 +424,47 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 			//
 			// The mutex serializes capture across concurrent chats — os.Stdout
 			// is process-global, so two simultaneous redirects would race.
-			//
-			// All three teardown steps (close write end, restore os.Stdout,
-			// close read end, unlock) live in a single defer so a panic in
-			// registry.Execute (or in the output copy) releases the mutex
-			// and frees the pipe FDs atomically. Splitting them across
-			// multiple defers would put Unlock before stdout-restore in
-			// LIFO order, briefly exposing a stale pipe FD to whichever
-			// chat grabs stdoutCaptureMu next.
 			trimmed := strings.TrimSpace(query.Query)
 			ws.stdoutCaptureMu.Lock()
 			oldStdout := os.Stdout
 			pipeR, pipeW, pipeErr := os.Pipe()
 			if pipeErr != nil {
-				// If we can't create a pipe, fall back to executing without
-				// capture — the command still runs, we just can't show output.
 				log.Printf("handleAPIQuery: stdout pipe creation failed: %v", pipeErr)
 				ws.stdoutCaptureMu.Unlock()
 			} else {
 				os.Stdout = pipeW
-				defer func() {
-					pipeW.Close()
-					os.Stdout = oldStdout
-					pipeR.Close()
-					ws.stdoutCaptureMu.Unlock()
-				}()
 			}
 
 			err := registry.Execute(query.Query, clientAgent)
 
-			// Drain the pipe before sending any events so the captured text
-			// is complete. Read end is still open here — the defer above
-			// closes it on goroutine exit, after we've drained.
+			// Drain the pipe. Close the write end BEFORE reading so io.Copy
+			// sees EOF and returns — otherwise it blocks forever (classic
+			// pipe deadlock). See SC-2.
 			var capturedOutput string
 			if pipeErr == nil {
+				pipeW.Close()
+				os.Stdout = oldStdout
 				var buf bytes.Buffer
 				if _, copyErr := io.Copy(&buf, pipeR); copyErr != nil {
 					log.Printf("handleAPIQuery: stdout pipe read failed: %v", copyErr)
 				}
+				pipeR.Close()
+				ws.stdoutCaptureMu.Unlock()
 				capturedOutput = buf.String()
 			}
 
-			_ = ws.syncAgentStateForClientWithChat(clientID, chatID)
-
-			// Send any captured output as a stream chunk before reporting
+					// Sync state asynchronously so the query goroutine can proceed
+		// to publish events without waiting for the state export.
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("handleAPIQuery: panic in slash-command state sync chat_id=%s: %v", chatID, r)
+				}
+			}()
+			if err := ws.syncAgentStateForClientWithChat(clientID, chatID); err != nil {
+				log.Printf("handleAPIQuery: async state sync failed chat_id=%s: %v", chatID, err)
+			}
+		}()// Send any captured output as a stream chunk before reporting
 			// success or error, so the user sees what the command printed.
 			if capturedOutput != "" {
 				ws.publishClientEventWithChat(clientID, chatID, events.EventTypeStreamChunk, events.StreamChunkEvent(
@@ -478,7 +475,6 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 
 			if err != nil {
 				log.Printf("handleAPIQuery: slash command error: %v", err)
-				// Fall back to the generic message only when nothing was captured.
 				if capturedOutput == "" {
 					ws.publishClientEventWithChat(clientID, chatID, events.EventTypeStreamChunk, events.StreamChunkEvent(
 						fmt.Sprintf("Executed command: `%s`\n", trimmed),
@@ -489,8 +485,6 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 				return
 			}
 
-			// Success path: use the generic fallback message only if the
-			// command produced no stdout output.
 			if capturedOutput == "" {
 				ws.publishClientEventWithChat(clientID, chatID, events.EventTypeStreamChunk, events.StreamChunkEvent(
 					fmt.Sprintf("Executed command: `%s`\n", trimmed),
@@ -534,7 +528,20 @@ func (ws *ReactWebServer) handleAPIQuery(w http.ResponseWriter, r *http.Request)
 			)
 		}
 
-		_ = ws.syncAgentStateForClientWithChat(clientID, chatID)
+		// Sync state asynchronously so the query goroutine returns
+		// immediately. ExportState can take seconds for large conversations,
+		// and the deferred active-query cleanup must not wait for it.
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("handleAPIQuery: panic in state sync chat_id=%s: %v", chatID, r)
+				}
+			}()
+			if err := ws.syncAgentStateForClientWithChat(clientID, chatID); err != nil {
+				log.Printf("handleAPIQuery: async state sync failed chat_id=%s: %v", chatID, err)
+			}
+		}()
+
 		if err != nil {
 			log.Printf("handleAPIQuery: ProcessQueryWithContinuity error chat_id=%s duration=%s err=%v", chatID, queryDuration, err)
 			ws.publishClientEventWithChat(clientID, chatID, events.EventTypeError, events.ErrorEvent("Query failed", err))

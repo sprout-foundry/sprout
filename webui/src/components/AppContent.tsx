@@ -19,6 +19,7 @@ import { useSwipeGesture } from '../hooks/useSwipeGesture';
 import { ApiService } from '../services/api';
 import { getWorkspaceSymbols } from '../services/api/editorApi';
 import type { ChatSession } from '../services/chatSessions';
+import { forkChatSession } from '../services/chatSessions';
 import type { AppState, PerChatState } from '../types/app';
 import { fuzzyFilter } from '../utils/fuzzyMatch';
 import { useLog } from '../utils/log';
@@ -154,6 +155,7 @@ const AppContent: React.FC<AppContentProps> = ({
   });
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [commandPaletteMode, setCommandPaletteMode] = useState<PaletteMode>('all');
+  const [isForking, setIsForking] = useState(false);
 
   const setAppState = useAppStoreSetState();
 
@@ -569,6 +571,25 @@ const AppContent: React.FC<AppContentProps> = ({
 
   const handleToolPillClick = useCallback((toolId: string) => contextPanelRef.current?.highlightTool(toolId), []);
 
+  const handleForkAtBreakpoint = useCallback(
+    async (breakpointIndex: number) => {
+      if (!activeChatId || isForking) return;
+      setIsForking(true);
+      try {
+        const result = await forkChatSession(activeChatId, breakpointIndex);
+        console.log('[fork] Forked session:', result.session_id);
+        window.dispatchEvent(
+          new CustomEvent('sprout:chat-gap-reload', { detail: { chatId: activeChatId } }),
+        );
+      } catch (e) {
+        console.error('[fork] Failed to fork:', e);
+      } finally {
+        setIsForking(false);
+      }
+    },
+    [activeChatId, isForking],
+  );
+
   const chatProps = useMemo(
     () => ({
       messages: state.messages,
@@ -590,6 +611,8 @@ const AppContent: React.FC<AppContentProps> = ({
       onRetryConnection,
       subagentActivities: state.subagentActivities,
       outputVerbosity: state.outputVerbosity,
+      onForkAtBreakpoint: handleForkAtBreakpoint,
+      isForking,
     }),
     [
       state.messages,
@@ -611,6 +634,8 @@ const AppContent: React.FC<AppContentProps> = ({
       onRetryConnection,
       state.subagentActivities,
       state.outputVerbosity,
+      handleForkAtBreakpoint,
+      isForking,
     ],
   );
   const reviewProps = useMemo(

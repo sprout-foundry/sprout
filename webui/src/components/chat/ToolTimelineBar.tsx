@@ -3,43 +3,25 @@ import { CheckCircle2, Loader2, XCircle } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 /**
- * SP-053-2a: live tool timeline rendered above the chat input. Mirrors
- * the CLI's per-tool spinner / [OK] timeline (SP-048-1c) so users get
- * immediate feedback as each tool runs instead of waiting for the
- * sidebar `ToolsTab` to populate after completion.
- *
- * Rendering rules:
- *   - in-flight tools (status: started/running) → spinner + elapsed time ticking
- *   - completed tools                            → green check + final duration, fades after FADE_MS
- *   - error tools                                → red X + final duration, sticks until the next tool starts
- *
- * The bar is capped at MAX_VISIBLE concurrent cards so a parallel
- * fan-out (e.g. 8-way `run_parallel_subagents`) collapses to the most
- * recent activity rather than overflowing the layout.
+ * Live tool timeline rendered above the chat input as a single-row
+ * horizontal strip. Shows tools as they run with spinners, then fades
+ * them out after completion. Not clickable — this is a status display
+ * only. For clickable tool details, see the inline MessageSegments badges.
  */
 
 interface ToolTimelineBarProps {
   toolExecutions: ToolExecution[];
   maxVisible?: number;
-  onToolClick?: (toolId: string) => void;
 }
 
 const FADE_MS = 3000;
-const DEFAULT_MAX_VISIBLE = 4;
-// Time the bar stays mounted after `visible` empties. Without this the
-// bar unmounts the instant the last visible tool ages out, then
-// remounts on the next tool_start — which the user sees as the bar
-// flickering on and off. 4s comfortably bridges the gap between
-// consecutive tools while still letting the bar disappear on true idle.
+const DEFAULT_MAX_VISIBLE = 8;
 const HIDE_GRACE_MS = 4000;
 
 export function ToolTimelineBar({
   toolExecutions,
   maxVisible = DEFAULT_MAX_VISIBLE,
-  onToolClick,
 }: ToolTimelineBarProps): JSX.Element | null {
-  // Live tick so in-flight elapsed times update without parent re-renders.
-  // 250ms is fine-grained enough to feel live without being wasteful.
   const [, forceTick] = useState(0);
   useEffect(() => {
     const hasRunning = toolExecutions.some((t) => t.status === 'started' || t.status === 'running');
@@ -48,18 +30,9 @@ export function ToolTimelineBar({
     return () => window.clearInterval(id);
   }, [toolExecutions]);
 
-  // Track when each completed tool was first seen so we can fade it out
-  // FADE_MS later. Populate synchronously during render so the card is
-  // visible immediately on the first frame it transitions to completed
-  // (useEffect-based population produced a 1-frame gap where the card
-  // would briefly disappear). The ref is render-side state but reading
-  // it is idempotent across re-renders for the same tool.
   const completedAtRef = useRef<Map<string, number>>(new Map());
   const [now, setNow] = useState(() => Date.now());
 
-  // Synchronously stamp first-seen time for any newly-completed tools,
-  // and trim ids no longer in the input. Safe to do during render: each
-  // tool id is only stamped once, so repeat renders are no-ops.
   {
     const map = completedAtRef.current;
     const nowSync = Date.now();
@@ -75,8 +48,6 @@ export function ToolTimelineBar({
     }
   }
 
-  // Re-render every 500ms while any completed tool is within its fade
-  // window, so it actually disappears. Stops the timer once nothing is fading.
   useEffect(() => {
     if (completedAtRef.current.size === 0) return;
     const tick = window.setInterval(() => setNow(Date.now()), 500);
@@ -84,13 +55,19 @@ export function ToolTimelineBar({
   }, [toolExecutions]);
 
   const visible = useMemo(() => {
-    return toolExecutions.slice(-maxVisible);
-  }, [toolExecutions, maxVisible]);
+    const map = completedAtRef.current;
+    const filtered = toolExecutions.filter((t) => {
+      if (t.status === 'error') return true;
+      if (t.status === 'completed') {
+        const seen = map.get(t.id);
+        if (seen == null) return true;
+        return now - seen < FADE_MS;
+      }
+      return true;
+    });
+    return filtered.slice(-maxVisible);
+  }, [toolExecutions, now, maxVisible]);
 
-  // Hide-grace gate. Stays true for HIDE_GRACE_MS after `visible`
-  // last had entries, so a brief gap between consecutive tools doesn't
-  // unmount the bar (DOM mount/unmount is what the user reads as
-  // flicker). On true idle the timer fires and the bar disappears.
   const [shouldRender, setShouldRender] = useState(false);
   useEffect(() => {
     if (visible.length > 0) {
@@ -106,7 +83,7 @@ export function ToolTimelineBar({
   return (
     <div className="tool-timeline-bar" role="status" aria-label="Active tools" data-testid="chat-tool-timeline">
       {visible.map((tool) => (
-        <ToolTimelineCard key={tool.id} tool={tool} now={now} onToolClick={onToolClick} />
+        <ToolTimelineCard key={tool.id} tool={tool} now={now} />
       ))}
     </div>
   );
@@ -115,10 +92,9 @@ export function ToolTimelineBar({
 interface ToolTimelineCardProps {
   tool: ToolExecution;
   now: number;
-  onToolClick?: (toolId: string) => void;
 }
 
-function ToolTimelineCard({ tool, now, onToolClick }: ToolTimelineCardProps): JSX.Element {
+function ToolTimelineCard({ tool, now }: ToolTimelineCardProps): JSX.Element {
   const isRunning = tool.status === 'started' || tool.status === 'running';
   const isError = tool.status === 'error';
 
@@ -128,32 +104,10 @@ function ToolTimelineCard({ tool, now, onToolClick }: ToolTimelineCardProps): JS
 
   const personaColor = tool.persona ? getPersonaColor(tool.persona) : undefined;
 
-  const handleClick = onToolClick
-    ? (e: React.MouseEvent) => {
-        e.stopPropagation();
-        onToolClick(tool.id);
-      }
-    : undefined;
-  const handleKeyDown = onToolClick
-    ? (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          e.stopPropagation();
-          onToolClick(tool.id);
-        }
-      }
-    : undefined;
-
   return (
     <div
-      className={`tool-timeline-card tool-timeline-card--${tool.status}${onToolClick ? ' tool-timeline-card--clickable' : ''}`}
+      className={`tool-timeline-card tool-timeline-card--${tool.status}`}
       data-tool-name={tool.tool}
-      data-persona={tool.persona || ''}
-      role={onToolClick ? 'button' : undefined}
-      tabIndex={onToolClick ? 0 : undefined}
-      onClick={handleClick}
-      onKeyDown={handleKeyDown}
-      title={onToolClick ? `Click to view details: ${tool.tool}` : undefined}
     >
       <span className="tool-timeline-status" aria-hidden="true">
         {isRunning ? (
@@ -180,9 +134,6 @@ function ToolTimelineCard({ tool, now, onToolClick }: ToolTimelineCardProps): JS
   );
 }
 
-/** Compact, single-line preview for a tool's args. Mirrors the CLI's
- * `formatToolArgPreview` in `cmd/agent_modes.go` so both surfaces show
- * the same hint for the same tool call. */
 function formatArgPreview(toolName: string, argsJson: string): string {
   let parsed: Record<string, unknown> = {};
   try {
@@ -217,7 +168,6 @@ function formatArgPreview(toolName: string, argsJson: string): string {
       preview = pickStr('url');
       break;
     default:
-      // Generic fallback: first short string field
       for (const v of Object.values(parsed)) {
         if (typeof v === 'string' && v.length > 0 && v.length < 120) {
           preview = v;

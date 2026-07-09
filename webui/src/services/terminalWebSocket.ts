@@ -336,6 +336,9 @@ class TerminalWebSocketService {
 
   sendRawInput(input: string) {
     if (!this.isConnected || !this.sessionId) {
+      debugLog(
+        `sendRawInput dropped (not connected=${!this.isConnected}, no session=${!this.sessionId}), input=${reprInput(input)}`,
+      );
       return false;
     }
 
@@ -348,8 +351,11 @@ class TerminalWebSocketService {
         },
       };
       this.ws.send(JSON.stringify(message));
+      debugLog(`sendRawInput sent, session=${this.sessionId}, input=${reprInput(input)}`);
       return true;
     }
+    const state = this.ws ? this.ws.readyState : 'null';
+    debugLog(`sendRawInput dropped (ws not open, state=${state}), input=${reprInput(input)}`);
     return false;
   }
 
@@ -565,4 +571,46 @@ class TerminalWebSocketService {
   }
 }
 
-export { TerminalWebSocketService };
+/**
+ * Produce a short, human-readable repr of raw PTY input for diagnostic logs.
+ *
+ *  - Printable ASCII / Unicode chars are kept as-is.
+ *  - ESC becomes `\x1b`, `\n`/`\r`/`\t` use their backslash forms, and other
+ *    control chars become `^X` (e.g. `\x03` → `^C`).
+ *  - Pastes / large payloads (more than 60 chars) collapse into a length tag.
+ *
+ * Examples:
+ *   reprInput('a')            → 'a'
+ *   reprInput('\x1b[A')       → '\\x1b[A'
+ *   reprInput('hello\n')      → 'hello\\n'
+ *   reprInput('x'.repeat(1000)) → '<paste 1000 chars>'
+ */
+function reprInput(input: string): string {
+  const MAX = 60;
+  if (input.length > MAX) {
+    return `<paste ${input.length} chars>`;
+  }
+  let out = '';
+  for (const ch of input) {
+    const code = ch.codePointAt(0) ?? 0;
+    if (code === 0x1b) {
+      out += '\\x1b';
+    } else if (code === 0x09) {
+      out += '\\t';
+    } else if (code === 0x0a) {
+      out += '\\n';
+    } else if (code === 0x0d) {
+      out += '\\r';
+    } else if (code < 0x20) {
+      // Other control char → ^X (e.g. '\x03' -> '^C')
+      out += '^' + String.fromCharCode(0x40 + code);
+    } else if (code === 0x7f) {
+      out += '^?';
+    } else {
+      out += ch;
+    }
+  }
+  return out;
+}
+
+export { TerminalWebSocketService, reprInput };

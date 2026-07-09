@@ -37,6 +37,79 @@ func validateSessionID(id string) error {
 	return nil
 }
 
+// envVarsToStripFromUserShell lists environment variables sprout strips from
+// the env it hands to user-interactive shells in the webui embedded terminal.
+//
+// NO_COLOR and FORCE_COLOR are filtered out because sprout's process-wide
+// color policy (see cmd/agent_modes.go RunAgent, which auto-sets NO_COLOR=1
+// when stdout is not a TTY to keep ANSI out of rotated daemon logs) is
+// sprout's own writer concern. The webui embedded terminal has its own real
+// PTY and its own xterm.js frontend, so the user's color preferences there
+// must come from the user's shell rc files, not from sprout's log-rotation
+// policy. Allowing these vars to leak produces spurious Node.js warnings
+// ("NO_COLOR env is ignored due to FORCE_COLOR env being set") when JS tools
+// with internal FORCE_COLOR=1 run inside the user's shell.
+var envVarsToStripFromUserShell = []string{"NO_COLOR", "FORCE_COLOR"}
+
+// buildTerminalEnv constructs the environment slice handed to the user's
+// interactive shell in the webui embedded terminal. It starts from a sanitized
+// copy of os.Environ() with sprout-internal color vars stripped (see
+// envVarsToStripFromUserShell), then layers in the terminal-specific vars
+// (TERM, COLORTERM, SHELL, the SPROUT/LEDIT marker vars, and COLUMNS/LINES).
+//
+// This is the single source of truth for the terminal env block, shared by
+// createUnixSession, createFallbackUnixSession, and createWindowsSession.
+func buildTerminalEnv(shell string, size *pty.Winsize) []string {
+	// envOverrides lists the names that buildTerminalEnv sets explicitly on
+	// the appended entries below. Any pre-existing entries with the same
+	// name from os.Environ() are stripped, otherwise the child would end up
+	// with a duplicate (e.g. two SHELL entries) and behavior would depend on
+	// whether exec(2) prefers the first or last. Stripping them forces a
+	// single, well-defined final value.
+	envOverrides := []string{"TERM", "COLORTERM", "SHELL", "SPROUT_WEB_TERMINAL", "LEDIT_WEB_TERMINAL", "COLUMNS", "LINES"}
+	filtered := os.Environ()
+	filtered = stripEnvVars(filtered, envVarsToStripFromUserShell)
+	filtered = stripEnvVars(filtered, envOverrides)
+
+	return append(filtered,
+		"TERM=xterm-256color",
+		"COLORTERM=truecolor",
+		"SHELL="+shell,
+		"SPROUT_WEB_TERMINAL=1", "LEDIT_WEB_TERMINAL=1",
+		fmt.Sprintf("COLUMNS=%d", size.Cols),
+		fmt.Sprintf("LINES=%d", size.Rows),
+	)
+}
+
+// stripEnvVars returns a new []string with every entry whose name (the part
+// before the first '=') matches one of the names in toStrip (case-sensitive,
+// per the unix env(7) convention). Order and content of remaining entries
+// are preserved.
+func stripEnvVars(env, toStrip []string) []string {
+	if len(env) == 0 || len(toStrip) == 0 {
+		return env
+	}
+	strip := make(map[string]struct{}, len(toStrip))
+	for _, name := range toStrip {
+		strip[name] = struct{}{}
+	}
+	out := env[:0:0] // independent backing array so we don't alias the input slice
+	for _, entry := range env {
+		idx := strings.IndexByte(entry, '=')
+		var name string
+		if idx < 0 {
+			name = entry // malformed entry; keep it but match against full string
+		} else {
+			name = entry[:idx]
+		}
+		if _, drop := strip[name]; drop {
+			continue
+		}
+		out = append(out, entry)
+	}
+	return out
+}
+
 // CreateSession creates a new terminal session with PTY support.
 // The shell process runs for the lifetime of the session and persists across
 // WebSocket disconnections. On reconnect, the ring buffer replays recent output.
@@ -96,14 +169,7 @@ func (tm *TerminalManager) createUnixSession(sessionID, shellOverride string) (*
 	// COLUMNS and LINES are set to the default PTY size so tools that read them
 	// at startup (e.g. Node.js packages) get a valid value. Shells update
 	// $COLUMNS dynamically in response to SIGWINCH when the frontend resizes.
-	cmd.Env = append(os.Environ(),
-		"TERM=xterm-256color",
-		"COLORTERM=truecolor",
-		"SHELL="+shell,
-		"SPROUT_WEB_TERMINAL=1", "LEDIT_WEB_TERMINAL=1",
-		fmt.Sprintf("COLUMNS=%d", defaultSize.Cols),
-		fmt.Sprintf("LINES=%d", defaultSize.Rows),
-	)
+	cmd.Env = buildTerminalEnv(shell, defaultSize)
 
 	ptyFile, err := pty.StartWithSize(cmd, defaultSize)
 	if err != nil {
@@ -215,14 +281,7 @@ func (tm *TerminalManager) createFallbackUnixSession(sessionID, shellOverride st
 
 	defaultSize := &pty.Winsize{Rows: 24, Cols: 80}
 
-	cmd.Env = append(os.Environ(),
-		"TERM=xterm-256color",
-		"COLORTERM=truecolor",
-		"SHELL="+shell,
-		"SPROUT_WEB_TERMINAL=1", "LEDIT_WEB_TERMINAL=1",
-		fmt.Sprintf("COLUMNS=%d", defaultSize.Cols),
-		fmt.Sprintf("LINES=%d", defaultSize.Rows),
-	)
+	cmd.Env = buildTerminalEnv(shell, defaultSize)
 
 	// Create stdin pipe — stored in session.Pty for write compatibility.
 	stdin, err := cmd.StdinPipe()
@@ -333,6 +392,14 @@ func (tm *TerminalManager) createWindowsSession(sessionID string) (*TerminalSess
 	if strings.TrimSpace(tm.workspaceRoot) != "" {
 		cmd.Dir = tm.workspaceRoot
 	}
+
+	defaultSize := &pty.Winsize{Rows: 24, Cols: 80}
+
+	// Run cmd.exe under the same sanitized env as the Unix shells so the
+	// user-interactive terminal on Windows does not inherit sprout's
+	// log-suppression NO_COLOR / FORCE_COLOR (same leak fix as the Unix
+	// paths — see buildTerminalEnv).
+	cmd.Env = buildTerminalEnv("cmd", defaultSize)
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {

@@ -1,6 +1,7 @@
 import { getPersonaColor, type ToolExecution } from '@sprout/ui';
 import { CheckCircle2, Loader2, XCircle } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import './ToolTimelineBar.css';
 
 /**
  * Live tool timeline rendered above the chat input as a single-row

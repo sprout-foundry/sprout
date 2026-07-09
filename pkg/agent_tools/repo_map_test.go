@@ -173,8 +173,19 @@ func ValidateRequest%d(req *http.Request) bool { return true }
 
 	result, err := GenerateRepoMap(context.Background(), dir)
 	requireErr(t, err, "generate repo map")
-	if !strings.Contains(result, "truncated") {
-		t.Errorf("expected truncation notice. Got %d chars", len(result))
+
+	// With the new depth-aware prioritization, the per-directory file cap kicks
+	// in before the char budget does. The summary header itself signals that
+	// the output is partial: total source files > dirs covered, plus at least
+	// one module/file_NNN.go appeared.
+	if !strings.Contains(result, "### module/file_") {
+		t.Errorf("expected at least one module/file_NNN.go entry in output, got %d chars:\n%s", len(result), result)
+	}
+	// Output should not return ALL 200 raw files because the per-directory
+	// cap (and char budget) bound the visible set.
+	fileCount := strings.Count(result, "\n### ")
+	if fileCount >= 200 {
+		t.Errorf("expected per-directory cap to bound visible files; got %d sections", fileCount)
 	}
 }
 

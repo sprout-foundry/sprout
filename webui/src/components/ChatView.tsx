@@ -337,6 +337,18 @@ function Chat(props: ChatProps): JSX.Element {
 
       <div className="input-container" ref={inputContainerRef}>
         <ToolTimelineBar toolExecutions={filteredToolExecutions} />
+        {isProcessing && filteredToolExecutions.length === 0 && (
+          <div className="thinking-indicator" role="status" aria-live="polite">
+            <span className="thinking-indicator-dots">
+              <span className="thinking-dot" />
+              <span className="thinking-dot" />
+              <span className="thinking-dot" />
+            </span>
+            <span className="thinking-indicator-text">
+              {isProcessing ? 'Thinking' : 'Sending…'}
+            </span>
+          </div>
+        )}
         <CommandInput
           value={inputValue}
           onChange={onInputChange}

@@ -83,37 +83,31 @@ const EditorCoreImpl = (props: EditorCoreProps): JSX.Element => {
 
   return (
     <>
-      {loading ? (
-        <>
-          <div className="editor-skeleton" role="status" aria-label="Loading file">
-            <div className="editor-skeleton-line-numbers">
-              {Array.from({ length: 25 }, (_, i) => (
-                <Skeleton key={i} width="32px" height="14px" />
-              ))}
-            </div>
-            <div className="editor-skeleton-content">
-              {Array.from({ length: 25 }, (_, i) => (
-                <Skeleton key={i} width={`${40 + Math.floor((i * 53) % 60)}%`} height="14px" />
-              ))}
-            </div>
-            <span className="sr-only">Loading file...</span>
+      {loading && (
+        <div className="editor-skeleton" role="status" aria-label="Loading file">
+          <div className="editor-skeleton-line-numbers">
+            {Array.from({ length: 25 }, (_, i) => (
+              <Skeleton key={i} width="32px" height="14px" />
+            ))}
           </div>
-          {error && (
-            <div className="error-message">
-              <AlertTriangle size={16} className="error-icon" />
-              <span className="error-text">{error}</span>
-            </div>
-          )}
-        </>
-      ) : (
-        <>
-          {error && (
-            <div className="error-message">
-              <AlertTriangle size={16} className="error-icon" />
-              <span className="error-text">{error}</span>
-            </div>
-          )}
-          <div className={`pane-content-wrapper${markdownPreviewMode === 'split' ? ' pane-content-wrapper-md-split' : ''}`}>
+          <div className="editor-skeleton-content">
+            {Array.from({ length: 25 }, (_, i) => (
+              <Skeleton key={i} width={`${40 + Math.floor((i * 53) % 60)}%`} height="14px" />
+            ))}
+          </div>
+          <span className="sr-only">Loading file...</span>
+        </div>
+      )}
+      {error && (
+        <div className="error-message">
+          <AlertTriangle size={16} className="error-icon" />
+          <span className="error-text">{error}</span>
+        </div>
+      )}
+      <div
+        className={`pane-content-wrapper${markdownPreviewMode === 'split' ? ' pane-content-wrapper-md-split' : ''}`}
+        style={loading ? { display: 'none' } : undefined}
+      >
         {isMarkdownFile && markdownPreviewMode === 'preview' ? (
           <div className="pane-content pane-content-md-preview-full">
             <MarkdownPreview
@@ -140,8 +134,6 @@ const EditorCoreImpl = (props: EditorCoreProps): JSX.Element => {
           </>
         )}
       </div>
-      </>
-    )}
     </>
   );
 };

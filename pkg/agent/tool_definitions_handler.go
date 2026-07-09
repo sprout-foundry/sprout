@@ -63,6 +63,10 @@ func convertHandlerToSeedToolConfig(h tools.ToolHandler, agent *Agent) core.Tool
 		// agent's workspace root instead of the process-global cwd.
 		if agent != nil {
 			ctx = withToolExecutionMetadata(ctx, "", name, agent.effectiveCwd())
+			// Wire TerminalManager (WebUI) or BackgroundProcessManager (CLI)
+			// into the context so shell_command handlers can run background
+			// commands. Mirrors pkg/agent/shell.go's executeShellCommandBackground.
+			injectShellManagersIntoContext(agent, &ctx)
 		}
 
 		// Build ToolEnv from agent context.
@@ -104,6 +108,7 @@ func convertHandlerToSeedToolConfig(h tools.ToolHandler, agent *Agent) core.Tool
 		// Inject workspace root into context (same as Handler above).
 		if agent != nil {
 			ctx = withToolExecutionMetadata(ctx, "", name, agent.effectiveCwd())
+			injectShellManagersIntoContext(agent, &ctx)
 		}
 
 		env := buildToolEnvFromAgent(agent)
@@ -200,3 +205,27 @@ type handlerToolError struct {
 }
 
 func (e *handlerToolError) Error() string { return e.msg }
+
+// injectShellManagersIntoContext wires the agent's TerminalManager (WebUI)
+// or BackgroundProcessManager (CLI) into the context, mirroring the logic
+// in pkg/agent/shell.go. Without this, the handler-based dispatch path
+// (convertHandlerToSeedToolConfig) cannot run shell_command with
+// background=true / check_background / stop_background because
+// ExecuteShellCommandBackground checks the context for these managers and
+// the handler path never injects them.
+func injectShellManagersIntoContext(agent *Agent, ctx *context.Context) {
+	if agent == nil {
+		return
+	}
+	if tm := agent.GetTerminalManager(); tm != nil {
+		*ctx = tools.WithTerminalManager(*ctx, tm)
+		return
+	}
+	// CLI mode: lazily create and wire BackgroundProcessManager.
+	bpm := agent.GetBackgroundProcessManager()
+	if bpm == nil {
+		bpm = tools.NewBackgroundProcessManager()
+		agent.SetBackgroundProcessManager(bpm)
+	}
+	*ctx = tools.WithBackgroundProcessManager(*ctx, bpm)
+}

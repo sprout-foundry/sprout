@@ -1944,26 +1944,17 @@
 /* ── Reasoning/Thinking Content ───────────────────────────────── */
 /*
  * The reasoning toggle now uses the shared <Collapsible> primitive
- * (see packages/ui/src/components/Collapsible.tsx). Summary, icon,
- * chevron, and body styling are owned by `.collapsible__*` rules —
- * we keep only `.reasoning-block` here because that classname is
+ * (see packages/ui/src/components/Collapsible.tsx). Border, radius,
+ * background, overflow, and the chevron are owned by `.collapsible`
+ * and `.collapsible__*` rules. The `.reasoning-block` classname is
  * passed through onto Collapsible's outer <details> by MessageItem
- * for visual continuity (bordered card) and so consumers can keep
- * targeting `.reasoning-block` for layout hooks (margin-bottom).
- *
- * Note: the un-migrated deferred sites (ChatPanel stories,
- * ReviewWorkspaceTab) still render raw <details>/<summary> markup
- * with the legacy classes. Those sites are slated for migration in
- * their own tickets — when they switch to Collapsible, their styling
- * will be supplied by `.collapsible` defaults. Until then, this file
- * no longer provides their visual rules.
+ * so consumers can keep targeting it for layout hooks — we keep only
+ * margin-bottom here since the Collapsible already handles the
+ * token-driven visual chrome (--border-default, --radius-md, and
+ * --bg-secondary with the canonical Atom-One dark fallback).
  */
 .reasoning-block {
   margin-bottom: 12px;
-  border: 1px solid var(--border-color-light, #e2e8f0);
-  border-radius: 8px;
-  overflow: hidden;
-  background: var(--bg-secondary, #f8fafc);
 }
 
 /* ── Virtual Scrolling (Virtuoso) ─────────────────────────────── */

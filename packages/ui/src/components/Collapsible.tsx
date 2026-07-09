@@ -97,20 +97,19 @@ function Collapsible(props: CollapsibleProps): JSX.Element {
 
   const handleSummaryClick = useCallback(
     (event: ReactMouseEvent<HTMLElement>) => {
-      if (disabled || isControlled) {
-        // Suppress the native `<details>` toggle so the DOM stays in
-        // sync with React's source of truth (controlled) or the
-        // disabled invariant (no toggle allowed).
-        event.preventDefault();
-        if (disabled) return;
-      }
+      // Always prevent the native <details> toggle so the DOM never
+      // drifts out of sync with React's `open` prop. In uncontrolled
+      // mode the browser would toggle the attribute AFTER React
+      // updates it — resulting in a race where the user sees the body
+      // flash open then immediately close. PreventDefault() + React
+      // state is the canonical pattern for details/summary in React.
+      event.preventDefault();
+      if (disabled) return;
       const next = !isOpen;
-      if (!isControlled && !disabled) {
+      if (!isControlled) {
         setInternalOpen(next);
       }
-      if (!disabled) {
-        onOpenChange?.(next);
-      }
+      onOpenChange?.(next);
     },
     [disabled, isControlled, isOpen, onOpenChange],
   );
@@ -127,15 +126,13 @@ function Collapsible(props: CollapsibleProps): JSX.Element {
    */
   const handleSummaryKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLElement>) => {
-      if (disabled) return;
       if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar') {
         return;
       }
-      // Suppress the native details toggle when controlled so the DOM
-      // stays in sync with the parent's open prop, mirroring onClick.
-      if (isControlled) {
-        event.preventDefault();
-      }
+      // Prevent the native <details> toggle on keyboard activation
+      // (same race as onClick — browser toggles after React updates).
+      event.preventDefault();
+      if (disabled) return;
       const next = !isOpen;
       if (!isControlled) {
         setInternalOpen(next);

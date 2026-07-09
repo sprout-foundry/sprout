@@ -48,7 +48,7 @@ func cmdLs(args []string, stdin string) CmdResult {
 
 	for _, p := range paths {
 		target := ResolvePath(p)
-		entries, err := os.ReadDir(target)
+		entries, err := ReadDirCompat(target)
 		if err != nil {
 			if len(paths) == 1 {
 				return CmdResult{"", fmt.Sprintf("ls: cannot access '%s': %s\n", p, err.Error()), 1}
@@ -359,7 +359,7 @@ func copyPath(src, dst string, recursive bool) error {
 	}
 
 	if srcInfo.IsDir() {
-		return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
+		return WalkCompat(src, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return err
 			}

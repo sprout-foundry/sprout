@@ -22,7 +22,7 @@ import {
   proxyStatsRequest,
   proxySettingsRequest,
 } from './cloudProxyRoutes';
-import { handleWasmLocal } from './cloudWasmHandlers';
+import { handleWasmLocal, trackFileWrite } from './cloudWasmHandlers';
 import { initWasmShell, type WasmShell } from './wasmShell';
 
 export interface CloudAdapterConfig {
@@ -144,6 +144,9 @@ export class CloudAdapter implements APIAdapter {
       for (const file of files) {
         try {
           shell.writeFile(file.path, file.content);
+          // Track in the manifest so the file browser can list it
+          // (the old WASM binary has a broken listDir).
+          trackFileWrite(file.path);
         } catch (writeErr) {
           console.warn(`[CloudAdapter] failed to write file ${file.path}:`, writeErr);
         }

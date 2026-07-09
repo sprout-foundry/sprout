@@ -778,8 +778,8 @@ func TestAllToolsRegistration(t *testing.T) {
 	if tools == nil {
 		t.Fatal("AllTools() returned nil")
 	}
-	if len(tools) != 42 {
-		t.Fatalf("AllTools() returned %d tools, want 41", len(tools))
+	if len(tools) != 43 {
+		t.Fatalf("AllTools() returned %d tools, want 43", len(tools))
 	}
 
 	expectedNames := map[string]string{

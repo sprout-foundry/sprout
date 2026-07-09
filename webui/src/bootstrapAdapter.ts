@@ -172,6 +172,14 @@ function installAdapterForConfig(config: RuntimeConfig): void {
       adapter.importRepo(repoParam).then((result) => {
         if (result.success) {
           console.log(`bootstrap: repo import succeeded: ${result.repo ?? repoParam}`);
+          // Set a global flag so useAppInitialization knows to re-fetch files
+          // on mount. We can't dispatch an event because the listener may not
+          // be registered yet (React hasn't mounted when this runs).
+          (window as unknown as Record<string, unknown>).__repoImported = result.repo ?? repoParam;
+          // Also dispatch the event for late listeners.
+          window.dispatchEvent(new CustomEvent('sprout:repo-imported', {
+            detail: { repo: result.repo ?? repoParam },
+          }));
         } else {
           console.warn(`bootstrap: repo import failed: ${result.error}`);
         }

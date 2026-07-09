@@ -6,6 +6,53 @@ record.
 
 ---
 
+## SP-116: Multi-Instance Isolation
+
+_Spec: `roadmap/SP-116-multi-instance-isolation.md`. 🔵 Proposed — not yet started._
+
+### Phase 1: Auto-isolate config per workspace (~0.5 day)
+
+Auto-detect when `sprout agent` is run in a git repo (`.git` in cwd or
+ancestors) and auto-bootstrap `.sprout/config.json` by cloning from the
+global config on first run. This makes `--isolated-config` the default
+for all repo-backed directories.
+
+**Files:** `cmd/root.go` (~50 lines in `PersistentPreRunE`) + maybe
+`pkg/configuration/isolated_config.go` (handle empty source gracefully).
+
+### Phase 2: Per-instance background processes (~0.5 day)
+
+Scope `/tmp/sprout-bg/` to `<configDir>/bg-processes/` so `sprout
+shell-bg list` only shows sessions from the current workspace.
+
+**Files:** `pkg/agent_tools/background_process_manager.go`,
+`cmd/shell_bg.go`.
+
+### Phase 3: Workspace config overrides (~1-2 days, stretch)
+
+Allow `.sprout/config.json` to override specific settings (model
+preference, subagent provider, persona) while inheriting
+providers/credentials from the global config.
+
+**Files:** `pkg/configuration/config_load_save.go`,
+`pkg/configuration/config_paths.go`.
+
+### Phase 4: Daemon service scoping (stretch)
+
+The `sprout service` command manages a single daemon. Consider explicit
+multi-instance support via named profiles or workspace-scoped daemons.
+
+### Acceptance
+
+- Start two sprout instances in different git repos; each gets its own
+  `.sprout/config.json`, `instances.json`, and port.
+- `sprout shell-bg list` only shows sessions from the current workspace.
+- `sprout agent` in a non-git directory still uses `~/.config/sprout/`
+  (backward compat).
+- Desktop app multi-workspace remains fully functional.
+
+---
+
 ## SP-091: Close the next round of roadmap gaps
 
 _Tech-debt cleanup + finishing touches (~3–5 days)._ Each item below was

@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/sprout-foundry/sprout/pkg/search"
 )
 
 // SetTestStateDirHook overrides the session state dir to the given
@@ -103,9 +105,16 @@ func AssertNoStateLeak(realDir string, before map[string]time.Time) int {
 	return 1
 }
 
-// NewTestStateDir redirects pkg/agent's session-persistence path to an
-// isolated t.TempDir so that tests creating real Agents don't leak state
-// JSONs into the caller's ~/.sprout/sessions/.
+// NewTestStateDir redirects pkg/agent's session-persistence path AND the
+// global search-index updater to an isolated t.TempDir so that tests
+// creating real Agents don't leak state JSONs or search-index.json into
+// the caller's ~/.sprout/sessions/.
+//
+// The search-index redirect is load-bearing: SaveStateScoped triggers
+// search.MarkSessionDirty, which schedules a debounced BuildIndex. Without
+// isolation that BuildIndex walks the entire real sessions corpus (~250 MB
+// including 93 MB session JSONs), building an HNSW index with 30+ GB peak
+// allocation.
 //
 // Backstory: tests in cmd/ build real Agent instances to exercise the
 // chat/plan loop. Each Agent runs autoSaveState() on a timer, which
@@ -152,7 +161,18 @@ func NewTestStateDir(t *testing.T) func() {
 	orig := getStateDirFunc
 	getStateDirFunc = func() (string, error) { return stateDir, nil }
 
+	// Redirect the search index updater into the same temp dir so
+	// SaveStateScoped → search.MarkSessionDirty writes to the temp
+	// dir instead of the developer's real ~/.sprout/sessions/.
+	// Without this, the debounced BuildIndex would walk the entire
+	// real sessions corpus (~250 MB), building an HNSW index with
+	// 30+ GB peak allocation.
+	oldUpdater := search.ResetGlobalUpdaterForTest()
+	indexPath := filepath.Join(stateDir, "search-index.json")
+	search.GlobalUpdater = search.NewIndexUpdater(indexPath, stateDir)
+
 	return func() {
+		search.RestoreGlobalUpdater(oldUpdater)
 		getStateDirFunc = orig
 
 		// Layer 5: did anything new appear under the real

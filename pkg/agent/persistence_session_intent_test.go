@@ -14,12 +14,9 @@ import (
 // TestSessionIntentEmbedding verifies that SessionIntentEmbedding is correctly
 // persisted and restored across save/load cycles.
 func TestSessionIntentEmbedding(t *testing.T) {
-	// Create a temporary state directory for this test
-	tmpDir := t.TempDir()
-	restore := SetGetStateDirForTest(tmpDir)
-	defer restore()
+	defer NewTestStateDir(t)()
+	wd := t.TempDir()
 
-	// Create an agent and add some messages
 	agent := &Agent{
 		state: NewAgentStateManager(false),
 	}
@@ -31,11 +28,11 @@ func TestSessionIntentEmbedding(t *testing.T) {
 	agent.state.SetSessionIntentEmbedding(expectedEmbedding)
 
 	// Save the state
-	err := agent.SaveStateScoped("test-embedding-session", tmpDir)
+	err := agent.SaveStateScoped("test-embedding-session", wd)
 	require.NoError(t, err)
 
 	// Load the state
-	loadedState, err := LoadStateWithoutAgentScoped("test-embedding-session", tmpDir)
+	loadedState, err := LoadStateWithoutAgentScoped("test-embedding-session", wd)
 	require.NoError(t, err)
 
 	// Verify the embedding was saved correctly
@@ -44,7 +41,8 @@ func TestSessionIntentEmbedding(t *testing.T) {
 
 	// Verify the embedding can be loaded by ConversationState directly (without agent)
 	var state ConversationState
-	stateFile, _ := resolveSessionStateFile(tmpDir, "test-embedding-session", tmpDir)
+	stateDir, _ := GetStateDir()
+	stateFile, _ := resolveSessionStateFile(stateDir, "test-embedding-session", wd)
 	data, _ := os.ReadFile(stateFile)
 	err = json.Unmarshal(data, &state)
 	require.NoError(t, err)
@@ -56,9 +54,8 @@ func TestSessionIntentEmbedding(t *testing.T) {
 
 // TestSessionIntentEmbeddingNil verifies that nil embeddings are handled correctly.
 func TestSessionIntentEmbeddingNil(t *testing.T) {
-	tmpDir := t.TempDir()
-	restore := SetGetStateDirForTest(tmpDir)
-	defer restore()
+	defer NewTestStateDir(t)()
+	wd := t.TempDir()
 
 	agent := &Agent{
 		state: NewAgentStateManager(false),
@@ -69,24 +66,24 @@ func TestSessionIntentEmbeddingNil(t *testing.T) {
 	assert.Nil(t, agent.state.GetSessionIntentEmbedding(), "SessionIntentEmbedding should be nil when not set")
 
 	// Save state with nil embedding
-	err := agent.SaveStateScoped("test-nil-embedding-session", tmpDir)
+	err := agent.SaveStateScoped("test-nil-embedding-session", wd)
 	require.NoError(t, err)
 
 	// Load the state
-	loadedState, err := LoadStateWithoutAgentScoped("test-nil-embedding-session", tmpDir)
+	loadedState, err := LoadStateWithoutAgentScoped("test-nil-embedding-session", wd)
 	require.NoError(t, err)
 
 	// Verify the embedding is nil after loading
 	assert.Nil(t, loadedState.SessionIntentEmbedding, "SessionIntentEmbedding should be nil after load when not originally set")
 
-	// Verify the JSON file doesn't contain a session_intent_embedding field when nil
 	// Verify the JSON file doesn't contain a session_intent_embedding field when nil.
 	// Normalize to match the symlink-resolved path used by SaveStateScoped.
-	normalizedTmpDir, evalErr := filepath.EvalSymlinks(tmpDir)
+	stateDir, _ := GetStateDir()
+	normalizedWd, evalErr := normalizeWorkingDirectory(wd)
 	if evalErr != nil {
-		t.Fatalf("eval symlinks: %v", evalErr)
+		t.Fatalf("normalize working dir: %v", evalErr)
 	}
-	stateFile := filepath.Join(tmpDir, "scoped", workingDirectoryScopeHash(normalizedTmpDir), "session_test-nil-embedding-session.json")
+	stateFile := filepath.Join(stateDir, "scoped", workingDirectoryScopeHash(normalizedWd), "session_test-nil-embedding-session.json")
 	data, err := os.ReadFile(stateFile)
 	require.NoError(t, err)
 	assert.NotContains(t, string(data), "session_intent_embedding", "JSON should not contain session_intent_embedding field when nil")
@@ -94,10 +91,6 @@ func TestSessionIntentEmbeddingNil(t *testing.T) {
 
 // TestSessionIntentEmbeddingEmptySlice verifies that empty slices are handled correctly.
 func TestSessionIntentEmbeddingEmptySlice(t *testing.T) {
-	tmpDir := t.TempDir()
-	restore := SetGetStateDirForTest(tmpDir)
-	defer restore()
-
 	agent := &Agent{
 		state: NewAgentStateManager(false),
 	}
@@ -142,22 +135,26 @@ func TestSetSessionIntentEmbeddingIfNil(t *testing.T) {
 // TestSessionIntentEmbeddingLegacyJSON verifies backward compatibility with
 // session files that do not contain session_intent_embedding.
 func TestSessionIntentEmbeddingLegacyJSON(t *testing.T) {
-	tmpDir := t.TempDir()
-	restore := SetGetStateDirForTest(tmpDir)
-	defer restore()
+	defer NewTestStateDir(t)()
+	wd := t.TempDir()
+
+	normalizedWd, err := normalizeWorkingDirectory(wd)
+	require.NoError(t, err)
+
+	stateDir, _ := GetStateDir()
 
 	// Write a legacy JSON file without session_intent_embedding
 	legacyJSON := `{
 		"messages": [{"role": "user", "content": "hello"}],
 		"session_id": "legacy-session",
-		"working_directory": "` + filepath.ToSlash(tmpDir) + `"
+		"working_directory": "` + filepath.ToSlash(normalizedWd) + `"
 	}`
-	stateFile := filepath.Join(tmpDir, "scoped", workingDirectoryScopeHash(tmpDir), "session_legacy-session.json")
+	stateFile := filepath.Join(stateDir, "scoped", workingDirectoryScopeHash(normalizedWd), "session_legacy-session.json")
 	require.NoError(t, os.MkdirAll(filepath.Dir(stateFile), 0700))
 	require.NoError(t, os.WriteFile(stateFile, []byte(legacyJSON), 0600))
 
 	// Load should succeed with nil embedding
-	loadedState, err := LoadStateWithoutAgentScoped("legacy-session", tmpDir)
+	loadedState, err := LoadStateWithoutAgentScoped("legacy-session", wd)
 	require.NoError(t, err)
 	assert.Nil(t, loadedState.SessionIntentEmbedding, "Legacy sessions should have nil SessionIntentEmbedding")
 }

@@ -1,6 +1,8 @@
 package agent
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -309,6 +311,48 @@ func (a *Agent) autoSaveState() {
 	if a.debug {
 		a.Logger().Debug("[save] Auto-saved scoped conversation state for session %s\n", a.state.GetSessionID())
 	}
+}
+
+// newSessionID returns a session identifier for a freshly rotated session.
+// Format: session_<unix-nano>_<6 random hex bytes> — collision-resistant
+// across rapid rotations within the same nanosecond, distinct from
+// autoSaveState's session_<unix-seconds> shape so rotated sessions are
+// trivially distinguishable from auto-assigned ones.
+func newSessionID() string {
+	token := make([]byte, 6)
+	if _, err := rand.Read(token); err != nil {
+		// crypto/rand should not fail on a healthy system; fall back to a
+		// timestamp-only ID so we never block rotation on entropy errors.
+		return fmt.Sprintf("session_%d", time.Now().UnixNano())
+	}
+	return fmt.Sprintf("session_%d_%s", time.Now().UnixNano(), hex.EncodeToString(token))
+}
+
+// RotateSession closes the current session as a complete, restorable unit
+// (writing its final state to disk under the current SessionID), then assigns
+// a new SessionID and clears in-memory conversation state. The previous
+// session file remains loadable via LoadStateScoped. Returns the new session ID.
+//
+// If the prior session's SaveStateScoped fails (e.g. invalid session ID or
+// unwritable working directory), RotateSession returns that error WITHOUT
+// rotating — the prior session must remain intact so the caller can retry.
+func (a *Agent) RotateSession() (string, error) {
+	if a.state == nil {
+		a.state = NewAgentStateManager(false)
+	}
+
+	currentID := a.state.GetSessionID()
+	if currentID != "" {
+		if err := a.SaveStateScoped(currentID, a.currentWorkspaceRoot()); err != nil {
+			return "", agenterrors.Wrap(err, "rotate: failed to snapshot prior session")
+		}
+	}
+
+	a.ClearConversationHistory()
+
+	newID := newSessionID()
+	a.SetSessionID(newID)
+	return newID, nil
 }
 
 // generateSessionName generates a readable session name from first user message

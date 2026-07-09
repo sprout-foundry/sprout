@@ -25,6 +25,16 @@ const (
 	repoMapRootFileAllowance = 64            // number of root-level files/dirs to keep before L1 takes over
 	repoMapPerDirCap       = 60              // max files shown per directory (prevents pkg/foo/ from hogging the whole output)
 	repoMapPerDirChars     = 8 * 1024        // max chars spent per directory in the formatted output
+
+	// Depth levels for the repo map.
+	depthDirTreeOnly = 1 // directory tree with file counts, no symbols
+	depthTopSymbols  = 2 // tree + symbols for root-level and top-level files only (max 15 symbols/file)
+	depthFullSymbols = 3 // full symbol listing (current behavior)
+
+	// For depth=2, maximum symbols extracted per file.
+	depth2MaxSymbolsPerFile = 15
+	// For depth=2, only extract symbols from files at depth <= 1 (root + first level).
+	depth2MaxFileDepth = 1
 )
 
 var sourceExtensions = map[string]bool{
@@ -47,11 +57,22 @@ var treeSitterExtensions = map[string]bool{
 // GenerateRepoMap walks the directory tree rooted at rootDir and produces a
 // lightweight overview of the codebase showing file paths and top-level symbols.
 // For Go files it uses go/ast; for TS/JS/Python it uses tree-sitter via pkg/ast.
-// Output is truncated to ~1024 tokens.
+//
+// depth controls the detail level:
+//   - 1: directory tree with file counts per dir, no symbols
+//   - 2: directory tree + symbols in root-level and top-level files only (max 15 symbols per file)
+//   - 3 (default): full symbol listing
+//
+// query, when non-empty, filters files to only those whose path or symbol
+// names contain the query string (case-insensitive).
 //
 // When the codegraph store is available and populated, it reads from the store
 // for near-instant results on warm cache, falling back to the filesystem walk.
-func GenerateRepoMap(ctx context.Context, rootDir string) (string, error) {
+func GenerateRepoMap(ctx context.Context, rootDir string, depth int, query string) (string, error) {
+	if depth <= 0 {
+		depth = depthFullSymbols
+	}
+	query = strings.TrimSpace(query)
 	if rootDir == "" || rootDir == "." {
 		// Use the workspace root from context (set by withToolExecutionMetadata)
 		// instead of os.Getwd(), which returns the daemon's CWD, not the
@@ -75,21 +96,25 @@ func GenerateRepoMap(ctx context.Context, rootDir string) (string, error) {
 	// Try to use the codegraph store for instant results on warm cache.
 	// Only use the store when the requested rootDir is the git root
 	// (store.baseDir); otherwise fall through to filesystem walk.
-	store, storeErr := openGraphStore()
-	if storeErr == nil && store != nil {
-		defer store.Close()
+	// The store path does not support depth filtering, so it is only used
+	// for depth=3 with no query filter.
+	if depth == depthFullSymbols && query == "" {
+		store, storeErr := openGraphStore()
+		if storeErr == nil && store != nil {
+			defer store.Close()
 
-		// Check that absRoot matches the store's baseDir so we don't
-		// return project-wide data for a subdirectory query.
-		storeAbsBase, err := filepath.Abs(store.BaseDir())
-		if err == nil && storeAbsBase == absRoot {
-			stats := store.Stats()
-			if stats.FileCount > 0 {
-				nodes, queryErr := store.QueryAllNodes(ctx)
-				if queryErr == nil {
-					result := formatRepoMapFromNodes(absRoot, nodes)
-					if result != "" {
-						return result, nil
+			// Check that absRoot matches the store's baseDir so we don't
+			// return project-wide data for a subdirectory query.
+			storeAbsBase, err := filepath.Abs(store.BaseDir())
+			if err == nil && storeAbsBase == absRoot {
+				stats := store.Stats()
+				if stats.FileCount > 0 {
+					nodes, queryErr := store.QueryAllNodes(ctx)
+					if queryErr == nil {
+						result := formatRepoMapFromNodes(absRoot, nodes)
+						if result != "" {
+							return result, nil
+						}
 					}
 				}
 			}
@@ -97,7 +122,7 @@ func GenerateRepoMap(ctx context.Context, rootDir string) (string, error) {
 	}
 
 	// Fall through to filesystem walk.
-	return generateRepoMapFromFS(ctx, absRoot)
+	return generateRepoMapFromFS(ctx, absRoot, depth, query)
 }
 
 // generateRepoMapFromFS walks the filesystem to produce the repo map.
@@ -125,7 +150,7 @@ type fileEntry struct {
 	depth                 int
 }
 
-func generateRepoMapFromFS(ctx context.Context, absRoot string) (string, error) {
+func generateRepoMapFromFS(ctx context.Context, absRoot string, depth int, query string) (string, error) {
 
 	allFiles := make([]fileEntry, 0, 4096)
 	walkErr := filepath.WalkDir(absRoot, func(path string, d os.DirEntry, err error) error {
@@ -163,11 +188,11 @@ func generateRepoMapFromFS(ctx context.Context, absRoot string) (string, error) 
 			return nil
 		}
 		relSlash := filepath.ToSlash(rel)
-		depth := strings.Count(relSlash, "/")
+		fdepth := strings.Count(relSlash, "/")
 		if path == absRoot {
-			depth = -1 // sentinel: never occurs (the walker doesn't call us for the root path itself)
+			fdepth = -1 // sentinel: never occurs (the walker doesn't call us for the root path itself)
 		}
-		allFiles = append(allFiles, fileEntry{path, relSlash, ext, depth})
+		allFiles = append(allFiles, fileEntry{path, relSlash, ext, fdepth})
 		return nil
 	})
 	if walkErr != nil {
@@ -179,6 +204,29 @@ func generateRepoMapFromFS(ctx context.Context, absRoot string) (string, error) 
 	byExt := make(map[string]int)
 	for _, f := range allFiles {
 		byExt[f.ext]++
+	}
+
+	// Build concept summary and entry points from the full file list before
+	// any depth-based truncation, so all depth levels get this information.
+	conceptSummary := formatConceptSummary(allFiles)
+
+	// --- Depth 1: directory tree only, no symbols ---
+	if depth == depthDirTreeOnly {
+		// Apply query filter to the file list for the tree.
+		treeFiles := allFiles
+		if query != "" {
+			treeFiles = filterByQuery(allFiles, query)
+		}
+		var sb strings.Builder
+		writeRepoMapHeader(&sb, absRoot, len(treeFiles), byExt, 0, 0)
+		if conceptSummary != "" {
+			sb.WriteString(conceptSummary)
+		}
+		sb.WriteString(formatDirectoryTree(absRoot, treeFiles))
+		if len(treeFiles) == 0 {
+			sb.WriteString("\n*No source files found.*\n")
+		}
+		return sb.String(), nil
 	}
 
 	// Build the inclusion order: root, then round-robin across L1 dirs, then
@@ -217,10 +265,22 @@ func generateRepoMapFromFS(ctx context.Context, absRoot string) (string, error) 
 				fmt.Fprintf(&sb, "- dirs omitted (file cap reached before they could be sampled): %d\n", dirsOmitted)
 			}
 		}
+		// Add concept summary and entry points for all depth levels >= 2.
+		if conceptSummary != "" {
+			sb.WriteString(conceptSummary)
+		}
 		charCount = sb.Len()
 	}
 
 	writeHeader()
+
+	// Track which top-level dirs had files emitted into the output.
+	emittedDirs := make(map[string]bool)
+	// Track all top-level dirs that have files (for better truncation messages).
+	allTopDirs := make(map[string]bool)
+	for _, f := range ordered {
+		allTopDirs[topDir(f.relPath)] = true
+	}
 
 	perDirChars := make(map[string]int)
 	emittedPerDir := make(map[string]int)
@@ -243,6 +303,11 @@ func generateRepoMapFromFS(ctx context.Context, absRoot string) (string, error) 
 			continue
 		}
 
+		// Depth-2: skip files deeper than depth2MaxFileDepth.
+		if depth == depthTopSymbols && f.depth > depth2MaxFileDepth {
+			continue
+		}
+
 		content, readErr := os.ReadFile(f.absPath)
 		if readErr != nil {
 			continue
@@ -258,6 +323,22 @@ func generateRepoMapFromFS(ctx context.Context, absRoot string) (string, error) 
 		if err != nil {
 			continue
 		}
+
+		// Depth-2: cap symbols per file.
+		if depth == depthTopSymbols && len(symbols) > depth2MaxSymbolsPerFile {
+			symbols = symbols[:depth2MaxSymbolsPerFile]
+		}
+
+		// Query filter: a file is included if its path matches the query
+		// (in which case all symbols are shown) or if any of its symbols
+		// match the query (in which case only matching symbols are shown).
+		if query != "" {
+			if !strings.Contains(strings.ToLower(f.relPath), strings.ToLower(query)) {
+				// Path doesn't match — filter at symbol level.
+				symbols = filterSymbolsByQuery(symbols, query)
+			}
+		}
+
 		if len(symbols) == 0 {
 			continue
 		}
@@ -285,15 +366,38 @@ func generateRepoMapFromFS(ctx context.Context, absRoot string) (string, error) 
 		fileCount++
 		emittedPerDir[dir]++
 		perDirChars[dir] += len(section)
+		emittedDirs[dir] = true
 	}
 
 	if truncated {
-		fmt.Fprintf(&sb, "\n*... truncated (%s); output covers %d of %d files (%.0f%%), %d dirs*\n",
+		// Build improved truncation message listing omitted top-level dirs.
+		var omittedDirNames []string
+		for d := range allTopDirs {
+			if !emittedDirs[d] {
+				omittedDirNames = append(omittedDirNames, d)
+			}
+		}
+		sort.Strings(omittedDirNames)
+		if len(omittedDirNames) > 5 {
+			omittedDirNames = omittedDirNames[:5]
+		}
+
+		omittedStr := ""
+		if len(omittedDirNames) > 0 {
+			omittedStr = fmt.Sprintf(" Omitted: %s.", strings.Join(omittedDirNames, ", "))
+		}
+		suggestion := ""
+		if len(omittedDirNames) > 0 {
+			suggestion = fmt.Sprintf(" Try: repo_map directory=%s to drill into specific areas.", omittedDirNames[0])
+		}
+		fmt.Fprintf(&sb, "\n*... truncated (%s); output covers %d of %d files (%.0f%%), %d dirs.%s%s*\n",
 			truncationReason,
 			fileCount,
 			totalSourceFileCount,
 			pct(fileCount, totalSourceFileCount),
-			dirsCovered)
+			dirsCovered,
+			omittedStr,
+			suggestion)
 	}
 	if fileCount == 0 {
 		sb.WriteString("\n*No source files with symbols found.*\n")
@@ -372,6 +476,347 @@ func pct(num, denom int) float64 {
 		return 0
 	}
 	return float64(num) / float64(denom) * 100
+}
+
+// writeRepoMapHeader writes the standard repo map header (title + file stats +
+// dir coverage) into the provided string builder.
+func writeRepoMapHeader(sb *strings.Builder, absRoot string, totalFiles int, byExt map[string]int, dirsCovered, dirsOmitted int) {
+	sb.WriteString("## repo_map: ")
+	sb.WriteString(filepath.Base(absRoot))
+	sb.WriteString("\n")
+	exts := make([]string, 0, len(byExt))
+	for e := range byExt {
+		exts = append(exts, e)
+	}
+	sort.Strings(exts)
+	extParts := make([]string, 0, len(exts))
+	for _, e := range exts {
+		extParts = append(extParts, fmt.Sprintf("%s: %d", e, byExt[e]))
+	}
+	fmt.Fprintf(sb, "- total source files: %d (%s)\n", totalFiles, strings.Join(extParts, ", "))
+	if totalFiles > 0 && dirsCovered > 0 {
+		fmt.Fprintf(sb, "- dirs covered: %d\n", dirsCovered)
+		if dirsOmitted > 0 {
+			fmt.Fprintf(sb, "- dirs omitted (file cap reached before they could be sampled): %d\n", dirsOmitted)
+		}
+	}
+}
+
+// formatDirectoryTree produces a compact directory tree showing file counts
+// per top-level directory. Used for depth=1 output.
+func formatDirectoryTree(absRoot string, allFiles []fileEntry) string {
+	if len(allFiles) == 0 {
+		return ""
+	}
+
+	// Count files per top-level directory.
+	rootFileCount := 0
+	dirCounts := make(map[string]int)
+	for _, f := range allFiles {
+		td := topDir(f.relPath)
+		if td == "" {
+			rootFileCount++
+		} else {
+			dirCounts[td]++
+		}
+	}
+
+	var sb strings.Builder
+	sb.WriteString("\n### Directory Tree\n")
+
+	if rootFileCount > 0 {
+		fmt.Fprintf(&sb, "- / (%d files)\n", rootFileCount)
+	}
+
+	// Sort dirs alphabetically.
+	dirNames := make([]string, 0, len(dirCounts))
+	for d := range dirCounts {
+		dirNames = append(dirNames, d)
+	}
+	sort.Strings(dirNames)
+
+	for _, d := range dirNames {
+		fmt.Fprintf(&sb, "- %s/ (%d files)\n", d, dirCounts[d])
+	}
+
+	return sb.String()
+}
+
+// formatConceptSummary builds the "Structure" and "Entry points" sections
+// from the full file list. It groups directories by concept and identifies
+// entry-point files.
+func formatConceptSummary(allFiles []fileEntry) string {
+	if len(allFiles) == 0 {
+		return ""
+	}
+
+	// Count files per top-level directory.
+	dirCounts := make(map[string]int)
+	for _, f := range allFiles {
+		td := topDir(f.relPath)
+		if td != "" {
+			dirCounts[td]++
+		}
+	}
+
+	// Group directories by concept.
+	conceptDirs := make(map[string][]string) // concept -> sorted dir names
+	for dir, count := range dirCounts {
+		_ = count
+		concept := getConceptForDir(dir)
+		conceptDirs[concept] = append(conceptDirs[concept], dir)
+	}
+
+	var sb strings.Builder
+
+	// Structure section.
+	if len(conceptDirs) > 0 {
+		// Build concept parts in a deterministic order.
+		conceptOrder := []string{"UI", "Services", "Utilities", "Tests", "Config", "Core", "Other"}
+		seen := make(map[string]bool)
+		var parts []string
+		for _, concept := range conceptOrder {
+			dirs, ok := conceptDirs[concept]
+			if !ok {
+				continue
+			}
+			seen[concept] = true
+			sort.Strings(dirs)
+			// Sum file counts across dirs for this concept.
+			totalCount := 0
+			testCount := 0
+			var testExamples []string
+			for _, d := range dirs {
+				totalCount += dirCounts[d]
+				// Check if this is a test dir.
+				if isTestDirName(d) {
+					testCount += dirCounts[d]
+					if len(testExamples) < 3 {
+						testExamples = append(testExamples, d)
+					}
+				}
+			}
+			if concept == "Tests" {
+				if len(testExamples) > 0 {
+					parts = append(parts, fmt.Sprintf("Tests (%d files: %s/)", totalCount, strings.Join(testExamples, "/, ")+"/"))
+				} else {
+					parts = append(parts, fmt.Sprintf("Tests (%d files)", totalCount))
+				}
+			} else {
+				parts = append(parts, fmt.Sprintf("%s (%d files in %s/)", concept, totalCount, strings.Join(dirs, "/, ")+"/"))
+			}
+		}
+		// Handle any concepts not in conceptOrder.
+		for concept, dirs := range conceptDirs {
+			if seen[concept] {
+				continue
+			}
+			sort.Strings(dirs)
+			totalCount := 0
+			for _, d := range dirs {
+				totalCount += dirCounts[d]
+			}
+			parts = append(parts, fmt.Sprintf("%s (%d files in %s/)", concept, totalCount, strings.Join(dirs, "/, ")+"/"))
+		}
+		if len(parts) > 0 {
+			fmt.Fprintf(&sb, "- Structure: %s\n", strings.Join(parts, ", "))
+		}
+	}
+
+	// Entry points section.
+	var entryPoints []string
+	for _, f := range allFiles {
+		if isEntryPoint(f.relPath) {
+			entryPoints = append(entryPoints, f.relPath)
+		}
+	}
+	if len(entryPoints) > 0 {
+		// Deduplicate and sort.
+		entryPoints = dedupStrings(entryPoints)
+		// Limit to a reasonable number.
+		if len(entryPoints) > 10 {
+			entryPoints = entryPoints[:10]
+		}
+		fmt.Fprintf(&sb, "- Entry points: %s\n", strings.Join(entryPoints, ", "))
+	}
+
+	return sb.String()
+}
+
+// filterByQuery filters the file list to only those whose path contains the
+// query string (case-insensitive). Symbol-level filtering is applied
+// separately during extraction.
+func filterByQuery(files []fileEntry, query string) []fileEntry {
+	q := strings.ToLower(query)
+	var result []fileEntry
+	for _, f := range files {
+		if strings.Contains(strings.ToLower(f.relPath), q) {
+			result = append(result, f)
+		}
+	}
+	return result
+}
+
+// filterSymbolsByQuery keeps only symbols whose name contains the query
+// string (case-insensitive).
+func filterSymbolsByQuery(symbols []SymbolEntry, query string) []SymbolEntry {
+	q := strings.ToLower(query)
+	var result []SymbolEntry
+	for _, s := range symbols {
+		if strings.Contains(strings.ToLower(s.Name), q) {
+			result = append(result, s)
+		}
+	}
+	return result
+}
+
+// isTestFile returns true if the given relative path matches common test
+// file patterns: *_test.go, *.spec.*, *.test.*, and files in test directories.
+func isTestFile(relPath string) bool {
+	name := filepath.Base(relPath)
+	// Go test files.
+	if strings.HasSuffix(name, "_test.go") {
+		return true
+	}
+	// JS/TS spec/test files: *.spec.ts, *.test.tsx, etc.
+	lower := strings.ToLower(name)
+	if strings.Contains(lower, ".spec.") || strings.Contains(lower, ".test.") {
+		return true
+	}
+	// Python test files: test_*.py, *_test.py
+	if strings.HasPrefix(lower, "test_") && strings.HasSuffix(lower, ".py") {
+		return true
+	}
+	if strings.HasSuffix(lower, "_test.py") {
+		return true
+	}
+	// In a test directory.
+	return isInTestDir(relPath)
+}
+
+// isInTestDir returns true if any path component is a recognized test directory.
+func isInTestDir(relPath string) bool {
+	parts := strings.Split(relPath, "/")
+	for _, p := range parts {
+		if isTestDirName(p) {
+			return true
+		}
+	}
+	return false
+}
+
+// isTestDirName returns true if the directory name is a recognized test directory.
+func isTestDirName(dirName string) bool {
+	lower := strings.ToLower(dirName)
+	if lower == "e2e" || lower == "__tests__" || lower == "spec" || lower == "specs" {
+		return true
+	}
+	if strings.HasPrefix(lower, "test") || strings.HasPrefix(lower, "__test") {
+		return true
+	}
+	return false
+}
+
+// isEntryPoint returns true if the file is a recognized entry point or config
+// file at the root or top level (depth <= 1).
+func isEntryPoint(relPath string) bool {
+	// Only consider root-level and top-level files.
+	depth := strings.Count(relPath, "/")
+	if depth > 1 {
+		return false
+	}
+
+	name := filepath.Base(relPath)
+	lower := strings.ToLower(name)
+
+	// Entry-point source files: main.*, index.*, App.*, app.*
+	// Check stem (name without extension).
+	stem := strings.TrimSuffix(lower, filepath.Ext(lower))
+	switch stem {
+	case "main", "index", "app":
+		return true
+	}
+	// App.tsx, App.jsx etc. (case-insensitive stem "app" already covered above)
+
+	// Config files.
+	switch lower {
+	case "package.json", "cargo.toml", "go.mod", "tsconfig.json",
+		"metro.config.js", "metro.config.ts", "webpack.config.js",
+		"vite.config.ts", "vite.config.js", "rollup.config.js",
+		"babel.config.js", "jest.config.js", "vitest.config.ts",
+		"next.config.js", "next.config.ts", "nuxt.config.ts",
+		"pom.xml", "build.gradle", "build.gradle.kts", "settings.gradle",
+		"dockerfile", "makefile", "cmakelists.txt":
+		return true
+	}
+
+	// metro.config.* pattern.
+	if strings.HasPrefix(lower, "metro.config.") {
+		return true
+	}
+
+	return false
+}
+
+// getConceptForDir maps a directory name to a concept label used in the
+// structure summary.
+func getConceptForDir(dirName string) string {
+	lower := strings.ToLower(dirName)
+
+	// Tests.
+	if isTestDirName(lower) {
+		return "Tests"
+	}
+
+	// UI / Frontend.
+	if lower == "components" || lower == "ui" || lower == "views" ||
+		lower == "screens" || lower == "pages" || lower == "widgets" ||
+		lower == "public" || lower == "assets" || lower == "styles" ||
+		lower == "scss" || lower == "css" {
+		return "UI"
+	}
+
+	// Services / API.
+	if lower == "services" || lower == "api" || lower == "controllers" ||
+		lower == "handlers" || lower == "routes" || lower == "endpoints" ||
+		lower == "server" || lower == "graphql" || lower == "middleware" {
+		return "Services"
+	}
+
+	// Utilities / Helpers.
+	if lower == "utils" || lower == "helpers" || lower == "lib" ||
+		lower == "common" || lower == "shared" || lower == "tools" {
+		return "Utilities"
+	}
+
+	// Config.
+	if lower == "config" || lower == "configurations" || lower == "settings" ||
+		lower == "env" || lower == "scripts" || lower == "ci" || lower == ".github" {
+		return "Config"
+	}
+
+	// Core / domain.
+	if lower == "src" || lower == "pkg" || lower == "cmd" || lower == "app" ||
+		lower == "internal" || lower == "core" || lower == "domain" ||
+		lower == "models" || lower == "types" || lower == "store" ||
+		lower == "db" || lower == "entities" {
+		return "Core"
+	}
+
+	return "Other"
+}
+
+// dedupStrings returns a new slice with duplicates removed, preserving order.
+func dedupStrings(s []string) []string {
+	seen := make(map[string]bool)
+	var result []string
+	for _, v := range s {
+		if !seen[v] {
+			seen[v] = true
+			result = append(result, v)
+		}
+	}
+	return result
 }
 
 

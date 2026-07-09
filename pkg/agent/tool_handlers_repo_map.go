@@ -18,6 +18,23 @@ func handleRepoMap(ctx context.Context, a *Agent, args map[string]interface{}) (
 		rootDir = v
 	}
 
+	depth := 3 // default: full symbols
+	if v, ok := args["depth"]; ok {
+		switch d := v.(type) {
+		case int:
+			depth = d
+		case int64:
+			depth = int(d)
+		case float64:
+			depth = int(d)
+		}
+	}
+
+	query := ""
+	if v, ok := args["query"].(string); ok {
+		query = v
+	}
+
 	// Resolve relative paths against the agent's workspace root.
 	if !filepath.IsAbs(rootDir) {
 		if wd := filesystem.WorkspaceRootFromContext(ctx); wd != "" {
@@ -50,7 +67,7 @@ func handleRepoMap(ctx context.Context, a *Agent, args map[string]interface{}) (
 
 	a.Logger().Debug("Generating repo map for directory: %s\n", rootDir)
 
-	result, err := tools.GenerateRepoMap(ctx, rootDir)
+	result, err := tools.GenerateRepoMap(ctx, rootDir, depth, query)
 	if err != nil {
 		return "", agenterrors.NewTool("repo_map", "generate repo map", err)
 	}

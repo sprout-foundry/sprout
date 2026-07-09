@@ -463,3 +463,14 @@ func (s *SQLiteStore) deleteFileFromIndex(ctx context.Context, path string) erro
 
 	return tx.Commit()
 }
+
+// isTestFile returns true if the filename indicates it's a test file.
+func isTestFile(name string) bool {
+	return strings.HasSuffix(name, "_test.go") ||
+		strings.HasSuffix(name, ".test.ts") ||
+		strings.HasSuffix(name, ".test.tsx") ||
+		strings.HasSuffix(name, ".test.js") ||
+		strings.HasSuffix(name, ".test.jsx") ||
+		strings.HasSuffix(name, "_test.py") ||
+		strings.HasPrefix(name, "test_") // Python
+}

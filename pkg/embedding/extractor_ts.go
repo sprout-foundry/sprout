@@ -217,27 +217,4 @@ func langFromPath(path string) string {
 	}
 }
 
-// isTSFile returns true if the file extension is handled by the TS/JS extractor.
-func isTSFile(path string) bool {
-	return tsSupportedExtensions[filepath.Ext(path)]
-}
 
-// --------------------------------------------------------------------------
-// Shared helpers used by extractor_py.go
-// --------------------------------------------------------------------------
-
-// lineRange represents a start/end line pair (1-based, inclusive).
-type lineRange struct {
-	start int
-	end   int
-}
-
-// isWithinConsumedRange returns true if line falls within any consumed range.
-func isWithinConsumedRange(line int, ranges []lineRange) bool {
-	for _, r := range ranges {
-		if line >= r.start && line <= r.end {
-			return true
-		}
-	}
-	return false
-}

@@ -522,6 +522,27 @@ func extractCalls(root *gotreesitter.Node, bt *gotreesitter.BoundTree, lang stri
 		}
 	}
 
+	// Synthesize a file-level <init> symbol that spans the whole file so calls
+	// in package-level variable initializers (var x = fn()) get attributed to
+	// something other than dropped. The codegraph's FindDeadCode excludes
+	// anything with an inbound edge, so emitting from <init> keeps init-time
+	// callees alive in the graph.
+	startByte := 0
+	endByte := 0
+	if root != nil {
+		endByte = int(root.EndByte())
+	}
+	initSymbol := Symbol{
+		Name:      "<init>",
+		StartLine: 1,
+		EndLine:   1,
+		StartByte: startByte,
+		EndByte:   endByte,
+		Kind:      "function",
+		Body:      "file-scope init",
+	}
+	funcSymbols = append(funcSymbols, initSymbol)
+
 	if len(funcSymbols) == 0 {
 		return nil
 	}

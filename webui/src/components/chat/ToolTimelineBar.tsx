@@ -16,7 +16,6 @@ interface ToolTimelineBarProps {
 
 const FADE_MS = 3000;
 const DEFAULT_MAX_VISIBLE = 8;
-const HIDE_GRACE_MS = 4000;
 
 export function ToolTimelineBar({
   toolExecutions,
@@ -68,18 +67,8 @@ export function ToolTimelineBar({
     return filtered.slice(-maxVisible);
   }, [toolExecutions, now, maxVisible]);
 
-  const [shouldRender, setShouldRender] = useState(false);
-  useEffect(() => {
-    if (visible.length > 0) {
-      setShouldRender(true);
-      return undefined;
-    }
-    const id = window.setTimeout(() => setShouldRender(false), HIDE_GRACE_MS);
-    return () => window.clearTimeout(id);
-  }, [visible.length]);
-
-  if (!shouldRender) return null;
-
+  // Always render the bar — CSS handles empty state via :empty selector
+  // with smooth min-height transition so the space collapses gracefully.
   return (
     <div className="tool-timeline-bar" role="status" aria-label="Active tools" data-testid="chat-tool-timeline">
       {visible.map((tool) => (

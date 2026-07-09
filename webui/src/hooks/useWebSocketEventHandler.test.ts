@@ -49,6 +49,12 @@ vi.mock('../services/errorCodes', () => ({
   getServerErrorCode: vi.fn(() => null),
 }));
 
+vi.mock('../services/lspClientService', () => ({
+  LSPClientService: {
+    getInstance: vi.fn(() => ({ cleanup: vi.fn() })),
+  },
+}));
+
 import type { AppStoreSetState } from '../contexts/AppStore';
 import { useWebSocketEventHandler, type UseWebSocketEventHandlerRefs } from './useWebSocketEventHandler';
 import type { WsEvent } from '@sprout/events';
@@ -624,5 +630,133 @@ describe('handleReconnect', () => {
     // a guard but a smoke test that the unconditional clear does not flip
     // an already-clean value to a non-null sentinel.
     expect(getStatsMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: workspace_changed handler — in-place refresh, NOT page reload
+//
+// Bug: the old handler called window.location.reload() unconditionally,
+// which in service mode caused the user to land in the home directory
+// because per-client server state was re-initialised from ws.workspaceRoot
+// (home) after the reload destroyed in-memory React state.
+//
+// Fix: the handler now does an in-place refresh — LSP teardown, cache
+// clearing, and a `sprout:workspace-changed` DOM event dispatch — instead
+// of a hard reload.
+// ---------------------------------------------------------------------------
+
+describe('workspace_changed', () => {
+  function setup(clientId?: string) {
+    const stateHolder = { current: createDefaultState() };
+    // Seed caches that should be cleared on workspace change.
+    stateHolder.current.recentFiles = ['/old/file1.ts'];
+    stateHolder.current.recentLogs = ['old log entry'];
+
+    const setStateMock = vi.fn((updater: unknown) => {
+      if (typeof updater === 'function') {
+        const prev = stateHolder.current;
+        stateHolder.current = { ...prev, ...(updater(prev) as object) };
+      } else {
+        stateHolder.current = updater as typeof stateHolder.current;
+      }
+    });
+    const activeChatIdRef: MutableRefObject<string | null> = { current: 'chat-1' };
+    act(() => {
+      root.render(createElement(HookWrapper, { stateHolder, setStateMock, activeChatIdRef }));
+    });
+
+    // Track sprout:workspace-changed DOM events.
+    const events: Array<{ workspaceRoot: string; daemonRoot: string }> = [];
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      events.push({ workspaceRoot: detail?.workspaceRoot, daemonRoot: detail?.daemonRoot });
+    };
+    window.addEventListener('sprout:workspace-changed', handler);
+
+    return { stateHolder, events, cleanup: () => window.removeEventListener('sprout:workspace-changed', handler) };
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('does NOT call window.location.reload on workspace_changed', () => {
+    const reloadSpy = vi.fn();
+    Object.defineProperty(window, 'location', {
+      value: { reload: reloadSpy },
+      writable: true,
+    });
+
+    setup();
+    act(() => {
+      hookHandleEvent!({
+        id: 'e',
+        type: 'workspace_changed',
+        data: { workspace_root: '/new/path', daemon_root: '/home', client_id: 'test-client-id' },
+      });
+    });
+
+    expect(reloadSpy).not.toHaveBeenCalled();
+  });
+
+  it('dispatches sprout:workspace-changed DOM event with the new workspace root', () => {
+    const { events, cleanup } = setup();
+    act(() => {
+      hookHandleEvent!({
+        id: 'e',
+        type: 'workspace_changed',
+        data: { workspace_root: '/new/worktree', daemon_root: '/home/user', client_id: 'test-client-id' },
+      });
+    });
+
+    expect(events).toHaveLength(1);
+    expect(events[0].workspaceRoot).toBe('/new/worktree');
+    expect(events[0].daemonRoot).toBe('/home/user');
+    cleanup();
+  });
+
+  it('clears recentFiles and recentLogs caches', () => {
+    const { stateHolder, cleanup } = setup();
+    act(() => {
+      hookHandleEvent!({
+        id: 'e',
+        type: 'workspace_changed',
+        data: { workspace_root: '/new/path', daemon_root: '/home', client_id: 'test-client-id' },
+      });
+    });
+
+    expect(stateHolder.current.recentFiles).toEqual([]);
+    expect(stateHolder.current.recentLogs).toEqual([]);
+    cleanup();
+  });
+
+  it('ignores workspace_changed events for a different client_id', () => {
+    const { events, cleanup } = setup();
+    act(() => {
+      hookHandleEvent!({
+        id: 'e',
+        type: 'workspace_changed',
+        data: { workspace_root: '/other/path', daemon_root: '/home', client_id: 'different-client-id' },
+      });
+    });
+
+    expect(events).toHaveLength(0);
+    cleanup();
+  });
+
+  it('processes broadcast events (no client_id)', () => {
+    const { events, cleanup } = setup();
+    act(() => {
+      hookHandleEvent!({
+        id: 'e',
+        type: 'workspace_changed',
+        data: { workspace_root: '/broadcast/path', daemon_root: '/home' },
+      });
+    });
+
+    expect(events).toHaveLength(1);
+    expect(events[0].workspaceRoot).toBe('/broadcast/path');
+    cleanup();
   });
 });

@@ -27,6 +27,7 @@ import type { AppStoreSetState } from '../contexts/AppStore';
 import { getWebUIClientId } from '../services/clientSession';
 import { notifyIfHidden } from '../services/desktopNotify';
 import { getServerErrorCode } from '../services/errorCodes';
+import { LSPClientService } from '../services/lspClientService';
 import { toQueryProgress } from '../types/app';
 import { ensureCompletedAssistantMessage } from '../utils/chatCompletion';
 import { debugLog } from '../utils/log';
@@ -773,13 +774,63 @@ const handleMetricsUpdate = (ctx: EventHandlerContext): void => {
 };
 
 // Handle workspace_changed event
+//
+// When the workspace root changes (e.g. switching to a git worktree via the
+// Worktrees panel), we refresh workspace-dependent UI in place instead of
+// doing a hard page reload.  A reload destroys all in-memory React state
+// (chat messages, open files, terminal sessions) and in service mode the
+// per-client server context is re-initialised from ws.workspaceRoot — which,
+// combined with the old unconditional reload, caused the "lands in home
+// directory" bug.
+//
+// The in-place refresh does three things:
+//   1. Tears down cached LSP clients (their WebSocket URLs are keyed by the
+//      old workspace root).
+//   2. Clears recentFiles / recentLogs caches in React state so stale data
+//      from the previous workspace doesn't linger.
+//   3. Dispatches a `sprout:workspace-changed` DOM event so other components
+//      (WorkspaceBar, FileBrowser, editor tabs, etc.) can re-fetch fresh data
+//      from the server's new workspace root.
 const handleWorkspaceChanged = (ctx: EventHandlerContext): void => {
-  const { event } = ctx;
+  const { event, setState } = ctx;
   const data = (event.data ?? {}) as WorkspaceChangedData;
   debugLog('[workspace] Workspace changed:', data);
-  if (!data.client_id || String(data.client_id) === getWebUIClientId()) {
-    window.location.reload();
+
+  // Only react to events targeting this client (or broadcasts without a
+  // client_id).
+  if (data.client_id && String(data.client_id) !== getWebUIClientId()) {
+    return;
   }
+
+  const logEntry = createLogEntry(event);
+  logEntry.category = 'system';
+  logEntry.level = 'info';
+
+  // Tear down cached LSP clients whose connections reference the old workspace.
+  try {
+    LSPClientService.getInstance().cleanup();
+  } catch (err) {
+    debugLog('[workspace] LSP cleanup failed:', err);
+  }
+
+  // Clear workspace-derived caches so they re-fetch from the new root.
+  setState((prev) => ({
+    recentFiles: [],
+    recentLogs: [],
+    logs: appendCappedLog(prev.logs, logEntry),
+  }));
+
+  // Notify other components to refresh their workspace-dependent data.
+  const workspaceRoot = (data as Record<string, unknown>).workspace_root;
+  const daemonRoot = (data as Record<string, unknown>).daemon_root;
+  window.dispatchEvent(
+    new CustomEvent('sprout:workspace-changed', {
+      detail: {
+        workspaceRoot: typeof workspaceRoot === 'string' ? workspaceRoot : '',
+        daemonRoot: typeof daemonRoot === 'string' ? daemonRoot : '',
+      },
+    }),
+  );
 };
 
 // Handle security_approval_request event

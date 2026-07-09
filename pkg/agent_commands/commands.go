@@ -82,6 +82,7 @@ func NewCommandRegistry() *CommandRegistry {
 	registry.Register(&ProvidersCommand{})
 	registry.Register(&SessionsCommand{})
 	registry.Register(&ClearCommand{})
+	registry.Register(&ForkCommand{})
 	registry.Register(&InitCommand{})
 	registry.Register(&ExitCommand{})
 	registry.Register(&CommitCommand{})

@@ -355,6 +355,85 @@ func (a *Agent) RotateSession() (string, error) {
 	return newID, nil
 }
 
+// Breakpoint represents a user message that can be forked from.
+type Breakpoint struct {
+	Index   int    // 1-based user-facing index
+	Content string // First ~80 chars for display
+}
+
+// Breakpoints returns all user messages as forkable breakpoints.
+func (a *Agent) Breakpoints() []Breakpoint {
+	messages := a.state.GetMessages()
+	var bps []Breakpoint
+	userIdx := 1
+	for _, msg := range messages {
+		if msg.Role == "user" {
+			content := msg.Content
+			if len(content) > 80 {
+				content = content[:80] + "..."
+			}
+			bps = append(bps, Breakpoint{Index: userIdx, Content: content})
+			userIdx++
+		}
+	}
+	return bps
+}
+
+// ForkAtBreakpoint saves the current session, then truncates the
+// conversation to messages [0..breakpointIndex] (where breakpointIndex
+// is 1-based, matching the Breakpoints list). Returns the new session ID.
+// The original session is preserved on disk.
+func (a *Agent) ForkAtBreakpoint(breakpointIndex int) (string, error) {
+	if a.state == nil {
+		a.state = NewAgentStateManager(false)
+	}
+
+	messages := a.state.GetMessages()
+	timestamps := a.state.GetMessageTimestamps()
+
+	// Find the Nth user message (1-based).
+	userCount := 0
+	cutoffIdx := -1
+	for i, msg := range messages {
+		if msg.Role == "user" {
+			userCount++
+			if userCount == breakpointIndex {
+				cutoffIdx = i
+				break
+			}
+		}
+	}
+	if cutoffIdx == -1 {
+		if userCount == 0 {
+			return "", fmt.Errorf("no user messages in conversation (requested breakpoint %d)", breakpointIndex)
+		}
+		return "", fmt.Errorf("breakpoint %d out of range (%d user message(s) available)", breakpointIndex, userCount)
+	}
+
+	// Save current session to disk before truncating.
+	currentID := a.state.GetSessionID()
+	if currentID != "" {
+		if err := a.SaveStateScoped(currentID, a.currentWorkspaceRoot()); err != nil {
+			return "", agenterrors.Wrap(err, "fork: failed to save current session")
+		}
+	}
+
+	truncated := messages[:cutoffIdx+1]
+	truncatedTimestamps := timestamps[:cutoffIdx+1]
+
+	a.ClearConversationHistory()
+
+	for _, msg := range truncated {
+		a.state.AddMessage(msg)
+	}
+	// Restore original timestamps for the truncated messages.
+	a.state.SetMessageTimestamps(truncatedTimestamps)
+
+	newID := newSessionID()
+	a.SetSessionID(newID)
+	return newID, nil
+}
+
 // generateSessionName generates a readable session name from first user message
 func (a *Agent) generateSessionName() string {
 	// First check if a custom session name is set via SetSessionName

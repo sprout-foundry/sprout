@@ -58,6 +58,13 @@ func convertHandlerToSeedToolConfig(h tools.ToolHandler, agent *Agent) core.Tool
 	seed.Handler = func(ctx context.Context, args map[string]interface{}) (string, error) {
 		logToolExecution(agent, name)
 
+		// Inject workspace root into context so filesystem path resolution
+		// (SafeResolvePathWithBypass) resolves relative paths against the
+		// agent's workspace root instead of the process-global cwd.
+		if agent != nil {
+			ctx = withToolExecutionMetadata(ctx, "", name, agent.effectiveCwd())
+		}
+
 		// Build ToolEnv from agent context.
 		env := buildToolEnvFromAgent(agent)
 
@@ -93,6 +100,11 @@ func convertHandlerToSeedToolConfig(h tools.ToolHandler, agent *Agent) core.Tool
 	// Handle image-capable tools (like read_file for PDFs).
 	seed.HandlerWithImages = func(ctx context.Context, args map[string]interface{}) ([]core.ImageData, string, error) {
 		logToolExecution(agent, name)
+
+		// Inject workspace root into context (same as Handler above).
+		if agent != nil {
+			ctx = withToolExecutionMetadata(ctx, "", name, agent.effectiveCwd())
+		}
 
 		env := buildToolEnvFromAgent(agent)
 

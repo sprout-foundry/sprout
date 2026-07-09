@@ -162,6 +162,17 @@ const handleStreamChunk = (ctx: EventHandlerContext): void => {
   const chunkContent = String(data.chunk || '');
   const chunkType = String(data.content_type || 'assistant_text');
 
+  // Subagent stream_chunk events are decorated with subagent_depth > 0.
+  // Without this guard, the subagent's LLM output gets appended to the
+  // primary agent's last assistant message — the subagent's prose shows
+  // up mixed into the main chat response. Subagent output is surfaced
+  // through the SubagentActivityFeed and the run_subagent tool result.
+  const streamRaw = event.data as Record<string, unknown> | undefined;
+  const streamDepth = Number(streamRaw?.subagent_depth ?? 0);
+  if (Number.isFinite(streamDepth) && streamDepth > 0) {
+    return;
+  }
+
   setState((prev) => {
     const newMessages = [...prev.messages];
     const lastMessage = newMessages[newMessages.length - 1];
@@ -471,6 +482,17 @@ const handleAgentMessage = (ctx: EventHandlerContext): void => {
   const { event, setState } = ctx;
   const logEntry = createLogEntry(event);
   const data = (event.data ?? {}) as AgentMessageData;
+
+  // Subagent agent_message events (tool logs, warnings, etc.) should not
+  // be appended to the primary chat's assistant message — they belong in
+  // the SubagentActivityFeed. Only log them.
+  const msgRaw = event.data as Record<string, unknown> | undefined;
+  const msgDepth = Number(msgRaw?.subagent_depth ?? 0);
+  if (Number.isFinite(msgDepth) && msgDepth > 0) {
+    setState((prev) => ({ logs: appendCappedLog(prev.logs, logEntry) }));
+    return;
+  }
+
   let category = String(data.category || 'info');
   const message = String(data.message || '');
   const cleanedMsg = message.replace(new RegExp(String.fromCharCode(27) + '\\[[0-9;]*[mGKHJABCD]', 'g'), '').trim();

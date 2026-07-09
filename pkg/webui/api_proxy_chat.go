@@ -256,7 +256,18 @@ func (ws *ReactWebServer) handleAPIProxyChatQuery(w http.ResponseWriter, r *http
 			)
 		}
 
-		_ = ws.syncAgentStateForClientWithChat(clientID, chatID)
+		// Sync state asynchronously so the query goroutine returns
+		// immediately. ExportState can take seconds for large conversations.
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("handleAPIProxyChat: panic in state sync chat_id=%s: %v", chatID, r)
+				}
+			}()
+			if err := ws.syncAgentStateForClientWithChat(clientID, chatID); err != nil {
+				log.Printf("handleAPIProxyChat: async state sync failed chat_id=%s: %v", chatID, err)
+			}
+		}()
 		if err != nil {
 			log.Printf("handleAPIProxyChat: ProcessQueryWithContinuity error chat_id=%s duration=%s err=%v", chatID, queryDuration, err)
 			ws.publishClientEvent(clientID, events.EventTypeError, events.ErrorEvent("Query failed", err))

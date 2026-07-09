@@ -768,15 +768,40 @@ func (ws *ReactWebServer) handleAPIChatSessionClearHistory(w http.ResponseWriter
 		return
 	}
 
-	// Clear conversation history but keep config overrides
-	if agentInst, err := ws.getChatAgent(clientID, chatID); err == nil {
-		agentInst.ClearConversationHistory()
+	// Close the current session as a complete, restorable unit and start a new
+	// one. This mirrors the CLI's /clear behaviour: the prior session file stays
+	// loadable via LoadStateScoped, and the agent moves to a fresh SessionID so
+	// the next auto-save does not overwrite the previous history.
+	//
+	// We must also update cs.CurrentSessionID (chat-session level) and
+	// ctx.CurrentSessionID (client level) so /api/chat-sessions, the WS
+	// session-restored event flow, and getCurrentSessionIDForRequest publish
+	// the rotated ID — not the stale pre-rotation one. The switch handler
+	// (handleAPIChatSessionsSwitch) maintains the same invariant.
+	var newSessionID string
+	if agentInst, err := ws.getChatAgent(clientID, chatID); err == nil && agentInst != nil {
+		rotatedID, rotateErr := agentInst.RotateSession()
+		if rotateErr != nil {
+			log.Printf("handleAPIChatSessionClearHistory: rotate failed for chat %s client %s: %v", chatID, clientID, rotateErr)
+			writeJSONErr(w, http.StatusInternalServerError, "rotate_failed", "failed to rotate session")
+			return
+		}
+		newSessionID = rotatedID
+
+		cs.mu.Lock()
+		cs.CurrentSessionID = rotatedID
+		cs.mu.Unlock()
+
+		ws.mutex.Lock()
+		ctx.CurrentSessionID = rotatedID
+		ws.mutex.Unlock()
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"success":  true,
-		"chat_id":  chatID,
-		"messages": fmt.Sprintf("Conversation history cleared for chat session %s", chatID),
+		"success":    true,
+		"chat_id":    chatID,
+		"session_id": newSessionID,
+		"messages":   fmt.Sprintf("New session started for chat %s (previous session preserved)", chatID),
 	})
 }
 

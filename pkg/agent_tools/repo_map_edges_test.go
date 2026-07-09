@@ -349,9 +349,13 @@ func TestExtractCallsAndSymbols_TS_Class(t *testing.T) {
 	require.NotNil(t, result)
 
 	// TS classes are extracted as "class" symbols (no body), so calls inside
-	// methods are not attributed to any function. This is expected because
-	// extractSymbols treats classes as non-function symbols without body text.
-	assert.Empty(t, result.Edges)
+	// methods used to be dropped. With the synthetic <init> symbol covering
+	// the whole file, those calls are now attributed to <init> — they no
+	// longer silently vanish from the call graph.
+	assert.NotEmpty(t, result.Edges, "expected edges from <init> for class method calls")
+	for _, e := range result.Edges {
+		assert.Equal(t, "<init>", e.SourceQualifiedName, "expected all edges attributed to <init>")
+	}
 }
 
 func TestExtractCallsAndSymbols_TS_NoCalls(t *testing.T) {
@@ -1076,4 +1080,46 @@ func doWork() {}
 	}
 	assert.True(t, foundCatalogs, "should have edge init -> loadCatalogs via loadOnce.Do")
 	assert.True(t, foundWork, "should have edge init -> doWork via workOnce.Do")
+}
+
+// TestExtractCallsAndSymbols_Go_VarInitializer verifies that package-level
+// var initializers (var x = fn()) produce call edges in the static call graph.
+// Without this, init-time callees would be flagged as false-positive dead
+// code because they have no enclosing function symbol.
+func TestExtractCallsAndSymbols_Go_VarInitializer(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "init.go")
+	content := []byte(`package app
+
+var supportedSettings = buildSettings()
+var counters = newCounters()
+
+func buildSettings() map[string]string { return nil }
+func newCounters() map[string]int { return nil }
+`)
+	result, err := ExtractCallsAndSymbols(path, content)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	// Expect: 2 var-initialization edges (buildSettings, newCounters)
+	// plus the synthetic "func init" node itself.
+	hasInit := false
+	hasBuild := false
+	hasCounters := false
+	for _, se := range result.Symbols {
+		if se.Name == "func init" {
+			hasInit = true
+		}
+	}
+	for _, e := range result.Edges {
+		if e.TargetQualifiedName == "buildSettings" {
+			hasBuild = true
+		}
+		if e.TargetQualifiedName == "newCounters" {
+			hasCounters = true
+		}
+	}
+	assert.True(t, hasInit, "should emit synthetic 'func init' node")
+	assert.True(t, hasBuild, "should emit init -> buildSettings edge from var initializer")
+	assert.True(t, hasCounters, "should emit init -> newCounters edge from var initializer")
 }

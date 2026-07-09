@@ -39,7 +39,6 @@ interface ChatFooterProps {
   showExpiredSessionRecovery: boolean;
   handleReloadWithoutSSHPath: () => void;
   currentTodos?: TodoItem[];
-  onToolPillClick?: (toolId: string) => void;
 }
 
 export function ChatFooter({
@@ -52,7 +51,6 @@ export function ChatFooter({
   showExpiredSessionRecovery,
   handleReloadWithoutSSHPath,
   currentTodos,
-  onToolPillClick,
 }: ChatFooterProps): JSX.Element {
   const activeTodo = isProcessing && currentTodos?.find((t) => t.status === 'in_progress');
   const activeTodoLabel = activeTodo ? activeTodo.activeForm || activeTodo.content : null;
@@ -61,14 +59,6 @@ export function ChatFooter({
   // execution is present so it doesn't render a skeleton alongside the bar.
   const hasToolsToShow = filteredToolExecutions.length > 0;
   const elements: JSX.Element[] = [];
-
-  // SP-053-2b: live tool timeline above subagent feed / query progress.
-  // Always mount; ToolTimelineBar owns its own visibility (including a
-  // hide-grace window) so rapid back-to-back tools don't churn the DOM.
-  // An outer length-gate here would unmount the bar between consecutive
-  // tools whose lifetimes don't quite overlap, which the user perceives
-  // as the live bar flickering on and off.
-  elements.push(<ToolTimelineBar key="tool-timeline" toolExecutions={filteredToolExecutions} onToolClick={onToolPillClick} />);
 
   if (hasSubagentActivity) {
     // SP-059 Phase 1c: when a subagent is currently running, show a pill

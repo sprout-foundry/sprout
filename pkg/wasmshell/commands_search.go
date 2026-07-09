@@ -183,7 +183,7 @@ func cmdFind(args []string, stdin string) CmdResult {
 	}
 
 	var out strings.Builder
-	err := filepath.Walk(startDir, func(path string, info os.FileInfo, err error) error {
+	err := WalkCompat(startDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
 		}
@@ -248,7 +248,7 @@ func cmdTree(args []string, stdin string) CmdResult {
 
 	counts := []int{0, 0} // [dirs, files]
 
-	err := filepath.Walk(root, func(p string, info os.FileInfo, err error) error {
+	err := WalkCompat(root, func(p string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
 		}

@@ -1,5 +1,6 @@
 /* Tool timeline: single-row horizontal strip above the chat input.
-   Reserved space so the input doesn't shift when tools appear/disappear. */
+   Always reserves min-height so the input doesn't shift when tools
+   appear/disappear. Transitions smoothly between empty and populated. */
 
 .tool-timeline-bar {
   display: flex;
@@ -7,13 +8,13 @@
   overflow-x: auto;
   overflow-y: hidden;
   gap: 6px;
-  min-height: 28px;
-  max-height: 28px;
-  padding: 3px 0;
+  min-height: 24px;
+  padding: 2px 0;
   font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 11px;
   line-height: 1;
   scrollbar-width: none;
+  transition: min-height 0.2s ease, padding 0.2s ease;
 }
 
 .tool-timeline-bar::-webkit-scrollbar {
@@ -22,7 +23,6 @@
 
 .tool-timeline-bar:empty {
   min-height: 0;
-  max-height: 0;
   padding: 0;
 }
 
@@ -30,24 +30,32 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 8px;
+  padding: 3px 8px;
   border-radius: var(--radius-sm, 4px);
-  background: var(--bg-elevated, var(--inset-highlight-4));
-  border: 1px solid var(--border-subtle, var(--inset-highlight-8));
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
   flex-shrink: 0;
   white-space: nowrap;
   transition:
     opacity 0.6s ease,
-    transform 0.3s ease;
+    transform 0.3s ease,
+    border-color 0.15s ease;
+}
+
+.tool-timeline-card--started,
+.tool-timeline-card--running {
+  border-color: color-mix(in srgb, var(--accent-primary) 40%, var(--border-subtle));
+  background: color-mix(in srgb, var(--accent-primary) 6%, var(--bg-elevated));
 }
 
 .tool-timeline-card--completed {
   opacity: 0.5;
+  border-color: color-mix(in srgb, var(--accent-success) 30%, var(--border-subtle));
 }
 
 .tool-timeline-card--error {
-  background: color-mix(in srgb, var(--accent-error, #e06c75) 12%, var(--bg-elevated, transparent));
-  border-color: color-mix(in srgb, var(--accent-error, #e06c75) 35%, var(--border-subtle, transparent));
+  background: color-mix(in srgb, var(--accent-error) 12%, var(--bg-elevated));
+  border-color: color-mix(in srgb, var(--accent-error) 35%, var(--border-subtle));
   opacity: 0.7;
 }
 

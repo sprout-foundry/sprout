@@ -1,6 +1,5 @@
 /* Tool timeline: single-row horizontal strip above the chat input.
-   Always reserves min-height so the input doesn't shift when tools
-   appear/disappear. Transitions smoothly between empty and populated. */
+   Always reserves fixed height so the input never shifts. */
 
 .tool-timeline-bar {
   display: flex;
@@ -8,22 +7,16 @@
   overflow-x: auto;
   overflow-y: hidden;
   gap: 6px;
-  min-height: 24px;
-  padding: 2px 0;
+  height: 28px;
+  padding: 3px 0;
   font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 11px;
   line-height: 1;
   scrollbar-width: none;
-  transition: min-height 0.2s ease, padding 0.2s ease;
 }
 
 .tool-timeline-bar::-webkit-scrollbar {
   display: none;
-}
-
-.tool-timeline-bar:empty {
-  min-height: 0;
-  padding: 0;
 }
 
 .tool-timeline-card {

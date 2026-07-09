@@ -105,7 +105,7 @@ export const MessageItem = memo(function MessageItem({
             <Collapsible
               title="Reasoning"
               icon={<BrainCircuit size={13} />}
-              open={outputVerbosity === 'verbose'}
+              defaultOpen={outputVerbosity === 'verbose'}
               ariaLabel="Reasoning"
               className="reasoning-block"
             >

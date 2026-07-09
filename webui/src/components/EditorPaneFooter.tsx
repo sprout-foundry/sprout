@@ -222,7 +222,16 @@ const EditorPaneFooterImpl: FC<EditorPaneFooterProps> = ({
           WS: {whitespaceRenderingMode === 'none' ? 'off' : whitespaceRenderingMode}
         </span>
         {lsp.lspLanguage && (
-          <span className={`cm-footer-lsp cm-footer-lsp--${lsp.lspState}`} title={`LSP: ${lsp.lspState}`}>
+          <span
+            className={`cm-footer-lsp cm-footer-lsp--${lsp.lspState}`}
+            title={
+              lsp.lspState === 'connected'
+                ? `LSP connected — ${lsp.lspLanguage} language server is running`
+                : lsp.lspState === 'connecting' || lsp.lspState === 'reconnecting'
+                  ? `LSP connecting — starting ${lsp.lspLanguage} language server...`
+                  : `LSP disconnected — ${lsp.lspLanguage} language server is not running. Check that the language tool is installed and available on PATH.`
+            }
+          >
             <span>LSP</span>
             {lsp.lspState === 'connected' ? (
               <Check size={11} aria-hidden="true" />

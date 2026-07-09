@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -515,6 +516,18 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 	var workspaceDir string
 	if workspaceRoot != "" {
 		workspaceDir = filepath.Join(workspaceRoot, configuration.ConfigDirName)
+		// Auto-bootstrap workspace config when opening a git repo that
+		// doesn't have .sprout/config.json yet. Same logic as
+		// PersistentPreRunE auto-detection, applied at workspace-switch time.
+		gitPath := filepath.Join(workspaceRoot, ".git")
+		if info, statErr := os.Stat(gitPath); statErr == nil && info.IsDir() {
+			configPath := filepath.Join(workspaceDir, "config.json")
+			if _, statErr := os.Stat(configPath); os.IsNotExist(statErr) {
+				if err := configuration.BootstrapIsolatedConfig(workspaceDir); err != nil {
+					log.Printf("[debug] daemon workspace: failed to bootstrap isolated config for %s: %v", workspaceRoot, err)
+				}
+			}
+		}
 	}
 
 	created, createErr = agent.NewAgentWithLayersInWorkspace(configBase, workspaceDir, workspaceRoot, "")

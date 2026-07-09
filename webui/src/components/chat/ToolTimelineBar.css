@@ -111,3 +111,18 @@
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;
 }
+
+/* Clickable card — opens tool details in sidebar */
+.tool-timeline-card--clickable {
+  cursor: pointer;
+}
+
+.tool-timeline-card--clickable:hover {
+  background: var(--bg-hover, var(--bg-secondary));
+  border-color: var(--border-focus, var(--accent-primary, #61afef));
+}
+
+.tool-timeline-card--clickable:focus-visible {
+  outline: 2px solid var(--accent-primary, #61afef);
+  outline-offset: 1px;
+}

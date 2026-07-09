@@ -185,8 +185,19 @@ func (r *SubagentRunner) setupSubagentRun(
 	// slow/full stderr pipe can't stall siblings holding lineBuf access.
 	// Per-line writes stay below PIPE_BUF, so byte-level interleaving is safe.
 	var lineBuf strings.Builder
+
+	// Capture task metadata for publishing subagent_activity events from the
+	// streaming callback. The subagent's LLM prose output normally goes to
+	// stream_chunk events which are depth-suppressed in the WebUI — publishing
+	// subagent_activity events alongside stderr writes ensures the
+	// SubagentActivityFeed shows the subagent's actual responses.
+	subPersona := opts.Persona
+	subTaskID := taskID
+	subEventBus := eventBus
+	subIsParallel := !strings.HasPrefix(taskID, "subagent-")
 	subAgent.EnableStreaming(func(chunk string) {
 		var pending []string
+		var rawLines []string // mirror of pending without ANSI/prefix formatting
 		// RouteStreamChunk holds outputMu (via TryLock) before calling this
 		// callback. Using TryLock here avoids re-entrancy deadlock: if the lock
 		// is already held by the router, proceed without it — the router
@@ -202,6 +213,7 @@ func (r *SubagentRunner) setupSubagentRun(
 			line := content[:idx]
 			if strings.TrimSpace(line) != "" {
 				pending = append(pending, dimGray+prefix+reset+" "+line+"\n")
+				rawLines = append(rawLines, line)
 			}
 			lineBuf.Reset()
 			if idx+1 < len(content) {
@@ -214,6 +226,23 @@ func (r *SubagentRunner) setupSubagentRun(
 
 		for _, line := range pending {
 			_, _ = os.Stderr.Write([]byte(line))
+		}
+		// Publish each complete line as a subagent_activity event so the
+		// SubagentActivityFeed in the WebUI shows the subagent's LLM prose
+		// output. The stream_chunk events are depth-suppressed for subagents
+		// (see handleStreamChunk in useWebSocketEventHandler.ts), so this is
+		// the only path that surfaces the subagent's actual response text.
+		if subEventBus != nil {
+			for _, raw := range rawLines {
+				subEventBus.Publish(events.EventTypeSubagentActivity, events.SubagentActivityEvent(
+					subTaskID, "llm_output", "output", raw,
+					map[string]interface{}{
+						"task_id":     subTaskID,
+						"persona":     subPersona,
+						"is_parallel": subIsParallel,
+					},
+				))
+			}
 		}
 	})
 

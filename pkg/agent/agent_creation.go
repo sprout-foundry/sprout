@@ -311,6 +311,38 @@ func NewAgentWithLayers(globalDir, workspaceDir, model string) (*Agent, error) {
 	return newAgentWithConfigManager(configManager, model)
 }
 
+// NewAgentWithLayersInWorkspace creates a new agent using layered configuration
+// with an explicit workspace root, avoiding the need for os.Chdir in daemon mode.
+// globalDir contains global config (~/.config/sprout/), workspaceDir contains workspace config.
+// workspaceRoot is the absolute path to the workspace directory.
+func NewAgentWithLayersInWorkspace(globalDir, workspaceDir, workspaceRoot, model string) (*Agent, error) {
+	configManager, err := configuration.NewManagerWithLayers(globalDir, workspaceDir)
+	if err != nil {
+		return nil, agenterrors.NewPermanentError("failed to initialize layered configuration", err)
+	}
+
+	return newAgentWithConfigManagerAndWorkspace(configManager, workspaceRoot, model)
+}
+
+// newAgentWithConfigManagerAndWorkspace is like newAgentWithConfigManager
+// but accepts an explicit workspace root instead of reading os.Getwd().
+// This eliminates the need for os.Chdir in daemon mode, which was a
+// process-global serialization point (workspaceExecMu).
+func newAgentWithConfigManagerAndWorkspace(configManager *configuration.Manager, workspaceRoot, model string) (*Agent, error) {
+	if workspaceRoot == "" {
+		var err error
+		workspaceRoot, err = os.Getwd()
+		if err != nil {
+			workspaceRoot = "."
+		}
+	}
+	if absWorkspaceRoot, absErr := filepath.Abs(workspaceRoot); absErr == nil {
+		workspaceRoot = absWorkspaceRoot
+	}
+
+	return newAgentWithConfigManagerInner(configManager, workspaceRoot, model)
+}
+
 // newAgentWithConfigManager is the internal implementation that creates an agent
 // with a pre-configured configuration manager.
 func newAgentWithConfigManager(configManager *configuration.Manager, model string) (*Agent, error) {
@@ -321,6 +353,15 @@ func newAgentWithConfigManager(configManager *configuration.Manager, model strin
 	if absWorkspaceRoot, absErr := filepath.Abs(workspaceRoot); absErr == nil {
 		workspaceRoot = absWorkspaceRoot
 	}
+
+	return newAgentWithConfigManagerInner(configManager, workspaceRoot, model)
+}
+
+// newAgentWithConfigManagerInner is the core implementation that accepts an
+// explicit workspace root, shared by both the CWD-based and workspace-explicit
+// agent creation paths.
+func newAgentWithConfigManagerInner(configManager *configuration.Manager, workspaceRoot, model string) (*Agent, error) {
+	var err error
 
 	var clientType api.ClientType
 	var finalModel string

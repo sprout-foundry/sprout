@@ -878,6 +878,9 @@ func (ws *ReactWebServer) syncAgentStateForClientWithChat(clientID, chatID strin
 	// Try to get the chat-specific agent first.
 	chatAgent, err := ws.getChatAgent(clientID, chatID)
 	if err == nil && chatAgent != nil {
+		// ExportState can be slow for large conversations (JSON marshal of
+		// the full message history). Do it OUTSIDE ws.mutex so other HTTP
+		// requests and WebSocket read goroutines aren't blocked.
 		snapshot, exportErr := chatAgent.ExportState()
 		if exportErr != nil {
 			return fmt.Errorf("export chat state: %w", exportErr)
@@ -903,6 +906,7 @@ func (ws *ReactWebServer) syncAgentStateForClientWithChat(clientID, chatID strin
 		return fmt.Errorf("get client agent for chat state sync: %w", err)
 	}
 
+	// Same pattern: export outside the lock, store inside.
 	snapshot, err := agentInst.ExportState()
 	if err != nil {
 		return fmt.Errorf("export agent state for chat: %w", err)

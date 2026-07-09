@@ -401,7 +401,7 @@ priority order.
 | `pkg/embedding/manager.go` | 853 | Split: `embedding_models.go` (model registry + capability lookup) + `embedding_batch.go` (batch embedding + queue) + `embedding_cache.go` (LRU + persistence). |
 | `pkg/agent/change_tracking.go` | 850 | Per SP-077 split: `change_tracking_record.go` (record change) + `change_tracking_revert.go` (revert / recover) + `change_tracking_persist.go` (disk persistence + snapshot management). |
 | `pkg/agent_tools/background_process.go` | 848 | Split: `background_process.go` (lifecycle: start / stop / status) + `background_process_log.go` (log streaming + truncation) + `background_process_pty.go` (PTY allocation + signal forwarding). |
-| `pkg/agent/submanager_state.go` | 848 | Split: `submanager_state.go` (state machine + transitions) + `submanager_persist.go` (snapshot / restore) + `submanager_query.go` (status queries). |
+| `pkg/agent/submanager_state.go` | 848 | Split: `submanager_state.go` (state machine + transitions) + `submanager_persist.go` (snapshot / restore) + `submanager_query.go` (status queries). NOTE: also listed in **StateManager interface refactor** below — the file is large AND the StateManager interface (28 sub-interfaces) and concrete `AgentStateManager` (all-in-one struct) need to be split into focused sub-managers (security / output / mcp) that wrap smaller interfaces. That refactor is a separate, ~2-week effort. |
 | `cmd/mcp_add.go` | 847 | Split per-tool: `mcp_add.go` (add command) + `mcp_list.go` (list) + `mcp_remove.go` (remove) — already partially split, this file may consolidate; check. |
 | `pkg/history/changetracker.go` | 843 | Already split some helpers; remaining bulk is per-action methods. Split: `changetracker_record.go` (Record*) + `changetracker_revert.go` (Revert / handleRevisionRollback + staleness guard per SP-077) + `changetracker_persist.go` (disk write / sweepCommittedSnapshots). |
 | `pkg/agent/persistence.go` | 843 | Split: `persistence_session.go` (session save / load) + `persistence_message.go` (message append / truncate) + `persistence_index.go` (full-text index). |
@@ -639,4 +639,105 @@ history continuity per sp-009 isolation rules.
       6 new tests in `background_process_signal_unix_test.go`.
 
 ---
+
+## SP-115: StateManager interface refactor (28 sub-interfaces → focused sub-managers)
+
+_Surfaced from the 2026-07-08 audit (not from the agent's "what's next?" prompt — the audit passed). Surface-only per `audit-surface-vs-implement` memory: do not ship inline from the audit pass; the runner owns the implementation surface._
+
+_~2 weeks, 3 phases. Big refactor — see "Why" below._
+
+### Why
+
+The `StateManager` interface in `pkg/agent/submanager_state.go:14` already
+decomposes into **28 sub-interfaces** (e.g. `SecurityStateProvider`,
+`MCPSubManagerState`, `OutputManagerState`, `PlanStateManager`, etc.) —
+good surface design. But the concrete `AgentStateManager` struct
+(`submanager_state.go:46`, ~700 lines) **implements all 28 in one
+monolithic struct**. The mismatch means:
+
+- Every field on `AgentStateManager` is reachable from any of the 28
+  interfaces, defeating interface-based separation of concerns.
+- ~625 callsites across 64 files depend on `*StateManager` (or one of
+  the sub-interfaces, which is satisfied by the same struct). Changing
+  the struct's internal layout ripples through the entire call graph.
+- Tests like `submanager_state_new_test.go` (541 lines) and
+  `submanager_state_session_test.go` (166 lines) all build the whole
+  struct, even when only one sub-interface is exercised.
+
+### What to build
+
+Split `AgentStateManager` into **focused sub-managers** that each own
+one logical domain and **wrap** smaller sub-interfaces. Each
+sub-manager is a struct with only the fields it actually needs.
+
+**Phase 1: extract sub-manager structs (~1 week)**
+- `SecuritySubManager` — wraps `SecurityStateProvider`. Owns the
+  security/circuit-breaker/policy state. Includes the security tool
+  approval/denial state.
+- `OutputSubManager` — wraps `OutputManagerState`. Owns the agent
+  output stream, the silence-fill timer, the message-routing table.
+- `MCPSubManager` — wraps `MCPSubManagerState`. Owns the MCP server
+  registry, the per-server tool index, the transport-failure counter.
+- `PlanSubManager` — wraps `PlanStateManager`. Owns the plan steps,
+  the todo list, the plan approval state.
+- `SessionSubManager` — wraps session/conversation state. Owns the
+  message buffer, the turn counter, the persistence scope.
+- `AgentStateManager` — becomes a **facade** holding the
+  sub-managers and forwarding calls. Existing 28 interfaces continue
+  to work; the facade just routes to the right sub-manager.
+
+**Phase 2: migrate callsites (~0.5 week)**
+- Audit each of the 64 callers. For each one:
+  - If it only needs ONE sub-interface (e.g. only security state), change
+    its `*StateManager` field to the specific sub-manager type.
+  - If it needs multiple sub-interfaces, keep `*StateManager` (the
+    facade satisfies them all).
+- For tests that only exercise one sub-interface, change the test's
+  setup to build only the relevant sub-manager.
+- Estimated breakdown: ~250 callsites need to switch to a focused
+  sub-manager; ~375 keep the facade. Migration is mechanical
+  (`s.state.X` → `s.security.X` etc.).
+
+**Phase 3: document and verify (~0.5 week)**
+- Update `submanager_state.go` docstring to list the sub-managers and
+  which interface each implements.
+- Add an `AgentStateManager` godoc that says "facade; prefer the
+  focused sub-manager if you only need one domain."
+- Run `go test -race ./...` and `go test -count=1 ./pkg/agent/...`.
+  No regressions; the existing 28 sub-interfaces all still work.
+
+### Sub-managers to keep on the facade (do NOT extract)
+
+A few state domains are tightly coupled and would be artificial to
+split:
+- The agent's `Status` (idle / running / blocked) and the security
+  circuit-breaker's status need to flip together (a "blocked on
+  security" status is one combined state, not two). Keep on facade.
+- The persistence scope (which user/session this state belongs to) is
+  read by every sub-manager. Keep on facade.
+
+### Phase order
+
+- [ ] **SP-115-1:** Extract `SecuritySubManager`, `OutputSubManager`,
+      `MCPSubManager`, `PlanSubManager`, `SessionSubManager`. Make
+      `AgentStateManager` a facade that holds them and delegates.
+      `go build ./...` and `go test ./pkg/agent/...` clean. ~1 week.
+- [ ] **SP-115-2:** Migrate callsites. Grep
+      `*StateManager`/`s.state.` and rewrite each to use the focused
+      sub-manager where the callsite only needs one domain. ~0.5 week.
+- [ ] **SP-115-3:** Update docstrings, run `go test -race`, verify no
+      regressions in 28-interface callers. ~0.5 week.
+
+### Acceptance
+
+- `AgentStateManager` is a thin facade: contains only the 5
+  sub-manager fields + the 2 "keep on facade" fields (status,
+  persistence scope). Total < 100 lines.
+- Each sub-manager is its own struct in `submanager_state_*.go` with
+  focused tests (`submanager_state_<name>_test.go`).
+- 28 sub-interfaces in `submanager_state.go` unchanged — the
+  refactor is internal.
+- All existing tests pass; the runner can ship a focused
+  sub-manager change in 1 file instead of touching the 700-line
+  monolith.
 

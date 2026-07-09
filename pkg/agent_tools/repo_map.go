@@ -18,9 +18,13 @@ import (
 
 const (
 	repoMapMaxFullFileSize = 2 * 1024 * 1024 // 2MB max file size
-	repoMapTokenBudget     = 1024            // target ~1024 tokens
-	repoMapMaxFiles        = 200             // max files to include
+	repoMapTokenBudget     = 4096            // target ~4096 tokens (~16k chars) — raised from 1024 to cover repos with thousands of source files
+	repoMapMaxFiles        = 2000            // cap on files to surface — raised from 200; together with the depth-aware prioritization this prevents one mega-directory from starving the rest
 	repoMapCharBudget      = repoMapTokenBudget * 4
+	repoMapMaxDepth        = 8               // cap walking depth so deeply-nested vendored trees don't dominate the budget
+	repoMapRootFileAllowance = 64            // number of root-level files/dirs to keep before L1 takes over
+	repoMapPerDirCap       = 60              // max files shown per directory (prevents pkg/foo/ from hogging the whole output)
+	repoMapPerDirChars     = 8 * 1024        // max chars spent per directory in the formatted output
 )
 
 var sourceExtensions = map[string]bool{
@@ -99,15 +103,32 @@ func GenerateRepoMap(ctx context.Context, rootDir string) (string, error) {
 // generateRepoMapFromFS walks the filesystem to produce the repo map.
 // It is the original GenerateRepoMap logic extracted into a separate function
 // so it can be used as a fallback when the codegraph store is unavailable.
+//
+// Improvements over the original flat alphabet+sliced implementation:
+//
+//   - Walks the entire tree (no early cut at repoMapMaxFiles) and only stops
+//     emitting once the char budget is exhausted; this guarantees every
+//     top-level directory has a chance to be represented instead of letting
+//     alphabetically-first files dominate.
+//   - Depth-aware prioritization: root-level files come first, then a
+//     round-robin across L1 directories with per-directory caps so no
+//     single mega-directory (e.g. a fat pkg/foo/) can starve the rest.
+//   - Per-directory character caps to bound output even for directories with
+//     many large symbol lists.
+//   - Summary header exposes total file count, dirs covered, char usage,
+//     and the reason for any truncation — callers can tell at a glance
+//     when they're seeing partial output.
+// fileEntry is the per-file record produced by the repo-map walk. Hoisted to
+// package scope so buildInclusionOrder can reuse the type.
+type fileEntry struct {
+	absPath, relPath, ext string
+	depth                 int
+}
+
 func generateRepoMapFromFS(ctx context.Context, absRoot string) (string, error) {
 
-	type fileEntry struct {
-		absPath, relPath, ext string
-	}
-
-	var files []fileEntry
-	var walkErr error
-	walkErr = filepath.WalkDir(absRoot, func(path string, d os.DirEntry, err error) error {
+	allFiles := make([]fileEntry, 0, 4096)
+	walkErr := filepath.WalkDir(absRoot, func(path string, d os.DirEntry, err error) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -141,41 +162,93 @@ func generateRepoMapFromFS(ctx context.Context, absRoot string) (string, error) 
 		if err != nil {
 			return nil
 		}
-		files = append(files, fileEntry{path, filepath.ToSlash(rel), ext})
+		relSlash := filepath.ToSlash(rel)
+		depth := strings.Count(relSlash, "/")
+		if path == absRoot {
+			depth = -1 // sentinel: never occurs (the walker doesn't call us for the root path itself)
+		}
+		allFiles = append(allFiles, fileEntry{path, relSlash, ext, depth})
 		return nil
 	})
 	if walkErr != nil {
 		return "", fmt.Errorf("walk directory: %w", walkErr)
 	}
 
-	sort.Slice(files, func(i, j int) bool { return files[i].relPath < files[j].relPath })
-	if len(files) > repoMapMaxFiles {
-		files = files[:repoMapMaxFiles]
+	// Pre-compute stats for the summary header.
+	totalSourceFileCount := len(allFiles)
+	byExt := make(map[string]int)
+	for _, f := range allFiles {
+		byExt[f.ext]++
+	}
+
+	// Build the inclusion order: root, then round-robin across L1 dirs, then
+	// round-robin across deeper levels with caps applied per-directory.
+	ordered, dirsCovered, dirsOmitted := buildInclusionOrder(allFiles)
+
+	// Apply the file-count cap as a safety net.
+	if len(ordered) > repoMapMaxFiles {
+		ordered = ordered[:repoMapMaxFiles]
 	}
 
 	var sb strings.Builder
-	sb.WriteString("## repo_map: ")
-	sb.WriteString(filepath.Base(absRoot))
-	sb.WriteString("\n")
-
-	charCount := sb.Len()
+	charCount := 0
 	fileCount := 0
 	truncated := false
+	truncationReason := ""
 
-	for _, f := range files {
+	writeHeader := func() {
+		sb.WriteString("## repo_map: ")
+		sb.WriteString(filepath.Base(absRoot))
+		sb.WriteString("\n")
+		// Build a sorted ext list for deterministic output.
+		exts := make([]string, 0, len(byExt))
+		for e := range byExt {
+			exts = append(exts, e)
+		}
+		sort.Strings(exts)
+		extParts := make([]string, 0, len(exts))
+		for _, e := range exts {
+			extParts = append(extParts, fmt.Sprintf("%s: %d", e, byExt[e]))
+		}
+		fmt.Fprintf(&sb, "- total source files: %d (%s)\n", totalSourceFileCount, strings.Join(extParts, ", "))
+		if totalSourceFileCount > 0 {
+			fmt.Fprintf(&sb, "- dirs covered: %d\n", dirsCovered)
+			if dirsOmitted > 0 {
+				fmt.Fprintf(&sb, "- dirs omitted (file cap reached before they could be sampled): %d\n", dirsOmitted)
+			}
+		}
+		charCount = sb.Len()
+	}
+
+	writeHeader()
+
+	perDirChars := make(map[string]int)
+	emittedPerDir := make(map[string]int)
+
+	for _, f := range ordered {
 		select {
 		case <-ctx.Done():
-			return sb.String(), nil
+			truncated = true
+			truncationReason = "context cancelled"
+			break
 		default:
 		}
 
-		// Read file content with size limit.
+		dir := topDir(f.relPath)
+		// Per-directory caps.
+		if emittedPerDir[dir] >= repoMapPerDirCap {
+			continue
+		}
+		if perDirChars[dir] >= repoMapPerDirChars {
+			continue
+		}
+
 		content, readErr := os.ReadFile(f.absPath)
 		if readErr != nil {
 			continue
 		}
 		if len(content) > repoMapMaxFullFileSize {
-			continue // skip oversized files silently
+			continue
 		}
 		if isBinaryContent(content) {
 			continue
@@ -183,34 +256,124 @@ func generateRepoMapFromFS(ctx context.Context, absRoot string) (string, error) 
 
 		symbols, err := extractSymbolsForFile(f.absPath, f.ext, content)
 		if err != nil {
-			// If extraction fails (e.g., AST parse error), skip the file.
 			continue
 		}
 		if len(symbols) == 0 {
 			continue
 		}
 
-		section := "\n### " + f.relPath + "\n"
+		// Render symbols with one per line, prefix and line separated by a
+		// space-then-colon. Same shape as before, just consistent.
+		var sectionSB strings.Builder
+		sectionSB.WriteString("\n### ")
+		sectionSB.WriteString(f.relPath)
+		sectionSB.WriteString("\n")
 		for _, sym := range symbols {
-			section += fmt.Sprintf("- %s:%d\n", sym.Name, sym.Line)
+			fmt.Fprintf(&sectionSB, "- %s:%d\n", sym.Name, sym.Line)
 		}
+		section := sectionSB.String()
+
+		// Honor the global char budget, but always include the first file
+		// we see so we never return an empty map.
 		if charCount+len(section) > repoMapCharBudget && fileCount > 0 {
 			truncated = true
+			truncationReason = "char budget reached"
 			break
 		}
 		sb.WriteString(section)
 		charCount += len(section)
 		fileCount++
+		emittedPerDir[dir]++
+		perDirChars[dir] += len(section)
 	}
 
 	if truncated {
-		sb.WriteString("\n*... truncated (token budget reached)*\n")
+		fmt.Fprintf(&sb, "\n*... truncated (%s); output covers %d of %d files (%.0f%%), %d dirs*\n",
+			truncationReason,
+			fileCount,
+			totalSourceFileCount,
+			pct(fileCount, totalSourceFileCount),
+			dirsCovered)
 	}
 	if fileCount == 0 {
 		sb.WriteString("\n*No source files with symbols found.*\n")
 	}
 	return sb.String(), nil
 }
+
+// buildInclusionOrder groups source files by their top-level directory and
+// emits them in a priority order designed to give every top-level area some
+// representation: root files first (up to repoMapRootFileAllowance), then a
+// round-robin across the L1 directories, with each directory capped at
+// repoMapPerDirCap files. Within a directory, files are sorted alphabetically
+// for deterministic output.
+//
+// Returns the ordered list, the number of distinct directories represented,
+// and the number of directories that were entirely omitted (had files but
+// were beyond the cap).
+func buildInclusionOrder(files []fileEntry) (ordered []fileEntry, dirsRepresented int, dirsOmitted int) {
+
+	// Root files: relPath has no slash.
+	root := make([]fileEntry, 0, 16)
+	// L1 dir -> sorted file list.
+	byDir := make(map[string][]fileEntry)
+	for _, f := range files {
+		if !strings.Contains(f.relPath, "/") {
+			root = append(root, f)
+			continue
+		}
+		dir := topDir(f.relPath)
+		byDir[dir] = append(byDir[dir], f)
+	}
+
+	// Sort root alphabetically and apply cap.
+	sort.Slice(root, func(i, j int) bool { return root[i].relPath < root[j].relPath })
+	if len(root) > repoMapRootFileAllowance {
+		root = root[:repoMapRootFileAllowance]
+	}
+	ordered = append(ordered, root...)
+
+	// Sort per-dir lists alphabetically; track which dirs are represented vs. omitted.
+	dirNames := make([]string, 0, len(byDir))
+	for d := range byDir {
+		dirNames = append(dirNames, d)
+	}
+	sort.Strings(dirNames)
+
+	// Cap how many files we pull per dir before bailing on per-dir cycle.
+	perDirLimit := repoMapPerDirCap
+
+	for _, d := range dirNames {
+		entries := byDir[d]
+		sort.Slice(entries, func(i, j int) bool { return entries[i].relPath < entries[j].relPath })
+		take := len(entries)
+		if take > perDirLimit {
+			take = perDirLimit
+			dirsOmitted++ // the dir had files beyond the cap; flag it as partly omitted
+		}
+		ordered = append(ordered, entries[:take]...)
+		dirsRepresented++
+	}
+
+	return ordered, dirsRepresented, dirsOmitted
+}
+
+// topDir returns the first path component of a slash-separated relative path,
+// or "" if the path has no slash (i.e. it's a root-level file).
+func topDir(relPath string) string {
+	if idx := strings.IndexByte(relPath, '/'); idx >= 0 {
+		return relPath[:idx]
+	}
+	return ""
+}
+
+func pct(num, denom int) float64 {
+	if denom == 0 {
+		return 0
+	}
+	return float64(num) / float64(denom) * 100
+}
+
 
 // openGraphStore opens the codegraph store at the default path (.sprout/codegraph.db).
 // Returns nil, nil when the store is cleanly unavailable (file doesn't exist).

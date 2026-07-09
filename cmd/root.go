@@ -58,6 +58,19 @@ See "Available Commands" below for the full list.`,
 				}
 			}()
 		}
+		// Auto-detect workspace config when running inside a git repo.
+		// Walk up from cwd looking for .git; if found, bootstrap .sprout/
+		// on first run and use isolated config. This makes --isolated-config
+		// the default for repo-backed directories.
+		if !isolatedConfig {
+			if cwd, err := os.Getwd(); err == nil {
+				if isolatedDir, found := detectGitRepo(cwd); found {
+					if err := configuration.BootstrapIsolatedConfig(isolatedDir); err == nil {
+						isolatedConfig = true
+					}
+				}
+			}
+		}
 		if isolatedConfig {
 			cwd, err := os.Getwd()
 			if err != nil {
@@ -142,6 +155,20 @@ func runStartupChecks() {
 			fmt.Fprintf(os.Stderr, "Warning: PDF extraction features are unavailable: %v\n", err)
 		}
 	})
+}
+
+// detectGitRepo walks up from cwd looking for a .git directory.
+// Returns the path to the .sprout directory and true if a git repo is found.
+// .git files (e.g. submodule references) are not considered directories and
+// will not trigger detection.
+func detectGitRepo(cwd string) (string, bool) {
+	for dir := cwd; dir != "/" && dir != "."; dir = filepath.Dir(dir) {
+		gitPath := filepath.Join(dir, ".git")
+		if info, err := os.Stat(gitPath); err == nil && info.IsDir() {
+			return filepath.Join(dir, ".sprout"), true
+		}
+	}
+	return "", false
 }
 
 func init() {

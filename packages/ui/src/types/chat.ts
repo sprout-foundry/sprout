@@ -215,6 +215,10 @@ export interface ChatProps {
   onRetryConnection?: () => void;
   // SP-076: display verbosity for inter-tool narration filtering
   outputVerbosity?: 'compact' | 'default' | 'verbose';
+  // Fork support: callback when user clicks fork icon on a user message
+  onForkAtBreakpoint?: (breakpointIndex: number) => void;
+  // Fork support: true while a fork operation is in-flight (disables button)
+  isForking?: boolean;
 }
 
 // ── Constants ──────────────────────────────────────────────────────────

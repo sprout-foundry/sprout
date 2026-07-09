@@ -233,3 +233,43 @@ export async function createChatSessionInWorktree(req: {
   }
   return res.json();
 }
+
+/**
+ * Fork a chat session at a given user-message breakpoint (1-based).
+ * Saves the current session and creates a new one from truncated history.
+ */
+export async function forkChatSession(chatId: string, breakpointIndex: number): Promise<{
+  success: boolean;
+  chat_id: string;
+  session_id: string;
+  message: string;
+}> {
+  const res = await clientFetch('/api/chat-sessions/fork', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId, breakpoint_index: breakpointIndex }),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => 'Unknown error');
+    throw new Error(text || 'Failed to fork chat session');
+  }
+  return res.json();
+}
+
+/**
+ * Get the list of forkable breakpoints (user messages) for a chat session.
+ */
+export async function getChatSessionBreakpoints(chatId: string): Promise<{
+  breakpoints: Array<{ index: number; content: string }>;
+}> {
+  const res = await clientFetch('/api/chat-sessions/breakpoints', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId }),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => 'Unknown error');
+    throw new Error(text || 'Failed to get chat session breakpoints');
+  }
+  return res.json();
+}

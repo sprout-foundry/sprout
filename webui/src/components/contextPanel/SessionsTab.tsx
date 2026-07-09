@@ -1,5 +1,5 @@
 import { Skeleton } from '@sprout/ui';
-import { Download, Loader2, RotateCcw, Search, X } from 'lucide-react';
+import { Download, GitFork, Loader2, RotateCcw, Search, X } from 'lucide-react';
 import PastSessionsHint from '../PastSessionsHint';
 import { supportsExport } from '../../config/mode';
 import { formatRelativeTime } from './helpers';
@@ -29,6 +29,11 @@ interface SessionsTabProps {
   isExportingAll: boolean;
   exportAllError: string | null;
   handleExportAllSessions: () => Promise<void>;
+  /**
+   * Fork support: callback when user clicks "Fork" on a saved session.
+   * The parent should fetch breakpoints and initiate the fork flow.
+   */
+  onForkSession?: (sessionId: string) => void;
 }
 
 export function SessionsTab({
@@ -51,6 +56,7 @@ export function SessionsTab({
   isExportingAll,
   exportAllError,
   handleExportAllSessions,
+  onForkSession,
 }: SessionsTabProps) {
   return (
     <div className="context-panel-tools-list context-panel-sessions" data-testid="context-panel-sessions">
@@ -228,13 +234,26 @@ export function SessionsTab({
                 {isCurrent ? (
                   <span className="session-current-badge">Current</span>
                 ) : (
-                  <button
-                    className="history-rollback-btn"
-                    onClick={() => handleRestoreSession(session.session_id)}
-                    disabled={isLoadingSessions}
-                  >
-                    Restore
-                  </button>
+                  <>
+                    <button
+                      className="history-rollback-btn"
+                      onClick={() => handleRestoreSession(session.session_id)}
+                      disabled={isLoadingSessions}
+                    >
+                      Restore
+                    </button>
+                    {onForkSession && (
+                      <button
+                        className="history-fork-btn"
+                        onClick={() => onForkSession(session.session_id)}
+                        disabled={isLoadingSessions}
+                        title="Fork this session"
+                        aria-label={`Fork session ${session.name || session.session_id}`}
+                      >
+                        <GitFork size={12} />
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             </div>

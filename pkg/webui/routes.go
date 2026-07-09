@@ -217,6 +217,8 @@ func (ws *ReactWebServer) registerSessionRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/chat-sessions/switch", ws.handleAPIChatSessionsSwitch)
 	mux.HandleFunc("/api/chat-sessions/compact", ws.handleAPIChatSessionsCompact)
 	mux.HandleFunc("/api/chat-sessions/history", ws.handleAPIChatSessionClearHistory)
+	mux.HandleFunc("/api/chat-sessions/fork", ws.handleAPIChatSessionFork)
+	mux.HandleFunc("/api/chat-sessions/breakpoints", ws.handleAPIChatSessionBreakpoints)
 	mux.HandleFunc("/api/chat-sessions/worktree-mappings", ws.handleAPIChatSessionWorktreeList)
 	mux.HandleFunc("/api/chat-session/", ws.handleAPIChatSessionWorktree)
 }

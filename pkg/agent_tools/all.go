@@ -93,5 +93,7 @@ func AllTools() []ToolHandler {
 		&getCallersHandler{},
 		&getCalleesHandler{},
 		&findDeadCodeHandler{},
+		// Preview port registration (platform workspaces)
+		&registerPreviewPortHandler{},
 	}
 }

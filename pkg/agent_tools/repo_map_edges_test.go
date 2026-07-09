@@ -1037,3 +1037,43 @@ func TestToCodegraphSymbols_EmptyInput(t *testing.T) {
 	assert.Empty(t, symbols)
 	assert.Nil(t, edges)
 }
+
+func TestExtractCallsAndSymbols_Go_SyncOnceDo(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "init.go")
+	content := []byte(`package app
+
+import "sync"
+
+var loadOnce sync.Once
+var workOnce sync.Once
+
+func init() {
+	loadOnce.Do(loadCatalogs)
+	workOnce.Do(doWork)
+}
+
+func loadCatalogs() {}
+func doWork() {}
+`)
+	result, err := ExtractCallsAndSymbols(path, content)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	// The .Do(fn) calls produce both a normal edge (init -> Do) and
+	// a synthetic edge (init -> fn). Expect 4 total: 2 per .Do call.
+	require.Len(t, result.Edges, 4)
+
+	foundCatalogs := false
+	foundWork := false
+	for _, e := range result.Edges {
+		if e.TargetQualifiedName == "loadCatalogs" {
+			foundCatalogs = true
+		}
+		if e.TargetQualifiedName == "doWork" {
+			foundWork = true
+		}
+	}
+	assert.True(t, foundCatalogs, "should have edge init -> loadCatalogs via loadOnce.Do")
+	assert.True(t, foundWork, "should have edge init -> doWork via workOnce.Do")
+}

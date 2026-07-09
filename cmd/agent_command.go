@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -84,6 +85,23 @@ func runStartupPermissionCheck() error {
 	return nil
 }
 
+// resolveGlobalConfigDir returns the global config directory regardless of
+// SPROUT_CONFIG override. This is used when layering workspace config
+// on top of the global config so API keys are always resolved from the
+// user's home directory.
+func resolveGlobalConfigDir() string {
+	homeDir, _ := os.UserHomeDir()
+	if homeDir == "" {
+		if h := os.Getenv("HOME"); h != "" {
+			homeDir = h
+		}
+	}
+	if homeDir == "" {
+		return ""
+	}
+	return filepath.Join(homeDir, ".config", "sprout")
+}
+
 func createChatAgent() (*agent.Agent, error) {
 	// Proactive CLI onboarding: if no provider is configured and we're in
 	// an interactive terminal, guide the user through setup before trying
@@ -94,15 +112,33 @@ func createChatAgent() (*agent.Agent, error) {
 	var chatAgent *agent.Agent
 	var err error
 
-	if agentProvider != "" && agentModel != "" {
-		modelWithProvider := fmt.Sprintf("%s:%s", agentProvider, agentModel)
-		chatAgent, err = agent.NewAgentWithModel(modelWithProvider)
-	} else if agentProvider != "" {
-		chatAgent, err = agent.NewAgentWithModel(agentProvider)
-	} else if agentModel != "" {
-		chatAgent, err = agent.NewAgentWithModel(agentModel)
-	} else {
-		chatAgent, err = agent.NewAgent()
+	// Use layered config when workspace config was auto-detected, so the agent
+	// inherits API keys from global config while using workspace overrides.
+	if autoDetectedWorkspaceDir != "" {
+		globalDir := resolveGlobalConfigDir()
+		if globalDir != "" {
+			if agentProvider != "" && agentModel != "" {
+				chatAgent, err = agent.NewAgentWithLayers(globalDir, autoDetectedWorkspaceDir, fmt.Sprintf("%s:%s", agentProvider, agentModel))
+			} else if agentProvider != "" {
+				chatAgent, err = agent.NewAgentWithLayers(globalDir, autoDetectedWorkspaceDir, agentProvider)
+			} else if agentModel != "" {
+				chatAgent, err = agent.NewAgentWithLayers(globalDir, autoDetectedWorkspaceDir, agentModel)
+			} else {
+				chatAgent, err = agent.NewAgentWithLayers(globalDir, autoDetectedWorkspaceDir, "")
+			}
+		}
+	}
+	if chatAgent == nil {
+		if agentProvider != "" && agentModel != "" {
+			modelWithProvider := fmt.Sprintf("%s:%s", agentProvider, agentModel)
+			chatAgent, err = agent.NewAgentWithModel(modelWithProvider)
+		} else if agentProvider != "" {
+			chatAgent, err = agent.NewAgentWithModel(agentProvider)
+		} else if agentModel != "" {
+			chatAgent, err = agent.NewAgentWithModel(agentModel)
+		} else {
+			chatAgent, err = agent.NewAgent()
+		}
 	}
 
 	if err != nil {

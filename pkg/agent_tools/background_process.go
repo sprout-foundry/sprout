@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/envutil"
+
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 

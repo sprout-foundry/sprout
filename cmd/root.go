@@ -22,6 +22,7 @@ var isolatedConfig bool
 var debugPprofAddr string
 var whyFlag bool
 var colorBlindFlag bool
+var autoDetectedWorkspaceDir string // set when auto-detection finds a git repo
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -62,11 +63,18 @@ See "Available Commands" below for the full list.`,
 		// Walk up from cwd looking for .git; if found, bootstrap .sprout/
 		// on first run and use isolated config. This makes --isolated-config
 		// the default for repo-backed directories.
-		if !isolatedConfig {
+		//
+		// Only auto-detect when --isolated-config was not explicitly set
+		// (including --isolated-config=false) so users can opt out.
+		isolatedFlagExplicit := cmd.Flags().Changed("isolated-config")
+		autoDetected := false
+		if !isolatedConfig && !isolatedFlagExplicit {
 			if cwd, err := os.Getwd(); err == nil {
 				if isolatedDir, found := detectGitRepo(cwd); found {
 					if err := configuration.BootstrapIsolatedConfig(isolatedDir); err == nil {
 						isolatedConfig = true
+						autoDetected = true
+						autoDetectedWorkspaceDir = isolatedDir // for layered config
 					}
 				}
 			}
@@ -81,7 +89,12 @@ See "Available Commands" below for the full list.`,
 				return fmt.Errorf("failed to set SPROUT_CONFIG for --isolated-config: %w", err)
 			}
 			if err := configuration.BootstrapIsolatedConfig(isolatedDir); err != nil {
-				return fmt.Errorf("failed to bootstrap isolated config: %w", err)
+				if autoDetected {
+					fmt.Fprintf(os.Stderr, "Warning: auto-detected git repo but failed to bootstrap config: %v\n", err)
+					isolatedConfig = false
+				} else {
+					return fmt.Errorf("failed to bootstrap isolated config: %w", err)
+				}
 			}
 		}
 		// Initialize API keys and configuration
@@ -157,16 +170,30 @@ func runStartupChecks() {
 	})
 }
 
+const maxGitWalkDepth = 100
+
 // detectGitRepo walks up from cwd looking for a .git directory.
 // Returns the path to the .sprout directory and true if a git repo is found.
 // .git files (e.g. submodule references) are not considered directories and
 // will not trigger detection.
+// Skips detection in CI environments and enforces a depth limit to avoid
+// infinite loops on filesystem edge cases.
 func detectGitRepo(cwd string) (string, bool) {
-	for dir := cwd; dir != "/" && dir != "."; dir = filepath.Dir(dir) {
+	if os.Getenv("CI") != "" || os.Getenv("GITHUB_ACTIONS") != "" {
+		return "", false
+	}
+	dir := cwd
+	for depth := 0; depth < maxGitWalkDepth; depth++ {
 		gitPath := filepath.Join(dir, ".git")
-		if info, err := os.Stat(gitPath); err == nil && info.IsDir() {
+		info, err := os.Stat(gitPath)
+		if err == nil && info.IsDir() {
 			return filepath.Join(dir, ".sprout"), true
 		}
+		parent := filepath.Dir(dir)
+		if parent == dir { // reached filesystem root
+			break
+		}
+		dir = parent
 	}
 	return "", false
 }

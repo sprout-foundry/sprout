@@ -8,7 +8,7 @@
  */
 
 import type { WsEvent } from '@sprout/events';
-import type { Message } from '@sprout/ui';
+import type { Message, ToolRef } from '@sprout/ui';
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { AppStoreSetState } from '../contexts/AppStore';
@@ -18,6 +18,18 @@ import { WebSocketService } from '../services/websocket';
 import type { AppState } from '../types/app';
 import { debugLog } from '../utils/log';
 import { trimMessages } from '../utils/messageWindow';
+
+const TOOL_MARKER_RE = /\[executing tool \[([^\]]+)\]/;
+function extractToolRefsFromContent(content: string): ToolRef[] {
+  const refs: ToolRef[] = [];
+  for (const line of content.split('\n')) {
+    const match = line.match(TOOL_MARKER_RE);
+    if (!match) continue;
+    const toolName = match[1].split(' ')[0] || match[1];
+    refs.push({ toolId: `recovered-tool-${refs.length}-${Date.now()}`, toolName, label: toolName });
+  }
+  return refs;
+}
 import { useEventHandler } from './useEventHandler';
 
 export interface UseWebSocketEventsOptions {
@@ -93,13 +105,18 @@ export default function useWebSocketEvents({
 
         const backendMessages: Message[] = (response.chat_session.messages ?? [])
           .filter((m) => m.role === 'user' || m.role === 'assistant')
-          .map((m, i) => ({
-            id: `chat-${chatId}-${i}`,
-            type: m.role as 'user' | 'assistant',
-            content: typeof m.content === 'string' ? m.content : '',
-            timestamp: new Date(),
-            ...(m.reasoning_content ? { reasoning: m.reasoning_content } : {}),
-          }));
+          .map((m, i) => {
+            const content = typeof m.content === 'string' ? m.content : '';
+            const toolRefs = m.role === 'assistant' ? extractToolRefsFromContent(content) : undefined;
+            return {
+              id: `chat-${chatId}-${i}`,
+              type: m.role as 'user' | 'assistant',
+              content,
+              timestamp: new Date(),
+              ...(m.reasoning_content ? { reasoning: m.reasoning_content } : {}),
+              ...(toolRefs && toolRefs.length > 0 ? { toolRefs } : {}),
+            };
+          });
 
         setState((prev) => {
           // Only update if the server has more messages than the frontend

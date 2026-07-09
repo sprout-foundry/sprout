@@ -49,6 +49,8 @@ function Chat(props: ChatProps): JSX.Element {
     backendReachable,
     onRetryConnection,
     outputVerbosity = 'default',
+    onForkAtBreakpoint,
+    isForking = false,
   } = props;
 
   const chatShellRef = useRef<HTMLDivElement>(null);
@@ -133,6 +135,12 @@ function Chat(props: ChatProps): JSX.Element {
   const messagesRef = useRef<Message[]>(messages);
   messagesRef.current = messages;
 
+  // Stable ref for onForkAtBreakpoint so renderMessageItem doesn't need to
+  // add it to the useCallback deps (which would recreate the callback and
+  // break MessageItem memo).
+  const onForkAtBreakpointRef = useRef(onForkAtBreakpoint);
+  onForkAtBreakpointRef.current = onForkAtBreakpoint;
+
   // Stable Virtuoso itemContent — see the `formatTime` comment above.
   // An inline arrow recreates the function on every parent render,
   // and Virtuoso then treats every row as new and re-runs all the
@@ -145,6 +153,19 @@ function Chat(props: ChatProps): JSX.Element {
       // MessageItem stays a pure presentational component.
       const nextMessage = index + 1 < messagesRef.current.length ? messagesRef.current[index + 1] : null;
       const hasNextAssistantMessage = nextMessage?.type === 'assistant';
+
+      // Compute 1-based breakpoint index for user messages: count how many
+      // user messages appear up to and including this one. The backend's
+      // ForkAtBreakpoint expects the Nth user message (1-based).
+      let breakpointIndex: number | undefined;
+      if (message.type === 'user' && onForkAtBreakpointRef.current) {
+        let userCount = 0;
+        for (let i = 0; i <= index; i++) {
+          if (messagesRef.current[i]?.type === 'user') userCount++;
+        }
+        breakpointIndex = userCount;
+      }
+
       return (
         <MessageItem
           message={message}
@@ -155,6 +176,9 @@ function Chat(props: ChatProps): JSX.Element {
           messageIndex={index}
           outputVerbosity={outputVerbosity}
           hasNextAssistantMessage={hasNextAssistantMessage}
+          breakpointIndex={breakpointIndex}
+          onForkAtBreakpoint={onForkAtBreakpointRef.current}
+          isForking={isForking}
         />
       );
     },

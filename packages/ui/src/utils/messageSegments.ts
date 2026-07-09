@@ -15,6 +15,16 @@ import type {
   MessageSegment,
 } from '../types/message-segments';
 
+// Re-export so consumers can import from the parser module.
+export { extractToolSummary };
+
+// Re-export for consumers that want the raw tool name from a marker line.
+export function extractToolNameFromLine(line: string): string | null {
+  const match = line.match(TOOL_EXEC_PATTERN);
+  if (!match) return null;
+  return match[1].split(' ')[0] || match[1];
+}
+
 // ============================================================================
 // Pattern Regexes
 // ============================================================================

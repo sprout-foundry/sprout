@@ -15,6 +15,7 @@ package wasmshell
 
 import (
 	"os"
+	"path/filepath"
 	"sort"
 )
 

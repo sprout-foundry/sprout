@@ -2,61 +2,598 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+// This is a browser-compatible version of Go's wasm_exec.js (js/wasm target).
+//
+// It is derived from the upstream $(go env GOROOT)/lib/wasm/wasm_exec.js but
+// replaces the no-op globalThis.fs shim with a real in-memory filesystem so
+// that Go's syscall layer (syscall/fs_js.go) can read, write, stat and list
+// files when compiled with GOOS=js GOARCH=wasm and executed in the browser.
+//
+// The rest of the Go runtime support (the globalThis.Go class, importObject,
+// run(), and the wasm import trampolines) is copied verbatim from the
+// standard library.
+
 "use strict";
 
 (() => {
-	const enosys = () => {
-		const err = new Error("not implemented");
-		err.code = "ENOSYS";
-		return err;
-	};
+	// ---------------------------------------------------------------------------
+	// In-memory filesystem
+	// ---------------------------------------------------------------------------
+	//
+	// Files are stored as a flat Map<string, Uint8Array> keyed by absolute path.
+	// Directories are implicit: a path is considered a directory if it is the
+	// prefix of any stored file (e.g. "/foo" is a dir while "/foo/bar.txt" exists)
+	// or if it has been explicitly created with mkdir.
+	//
+	// The API mirrors the subset of Node.js's fs module that Go's
+	// syscall/fs_js.go actually calls: open/read/write/close/fstat/stat/lstat/
+	// readdir/mkdir/unlink/rmdir/rename plus writeSync for console output. All
+	// methods use the Node.js (err, value) callback convention so they slot
+	// directly into Go's fsCall wrapper.
 
 	if (!globalThis.fs) {
-		let outputBuf = "";
-		globalThis.fs = {
-			constants: { O_WRONLY: -1, O_RDWR: -1, O_CREAT: -1, O_TRUNC: -1, O_APPEND: -1, O_EXCL: -1, O_DIRECTORY: -1 }, // unused
-			writeSync(fd, buf) {
-				outputBuf += decoder.decode(buf);
-				const nl = outputBuf.lastIndexOf("\n");
-				if (nl != -1) {
-					console.log(outputBuf.substring(0, nl));
-					outputBuf = outputBuf.substring(nl + 1);
+		const encoder = new TextEncoder(); // utf-8 by default
+		const decoder = new TextDecoder(); // utf-8 by default
+
+		// --- filesystem state --------------------------------------------------
+
+		// path -> Uint8Array for regular files.
+		const files = new Map();
+
+		// Set of paths that are explicitly directories (created via mkdir). This
+		// lets empty directories exist even when no files live beneath them.
+		const dirs = new Set();
+		dirs.add("/");
+
+		// path -> mtime (ms since epoch) for every entry (file or dir).
+		const mtimes = new Map();
+
+		// file descriptors: number -> { path, pos }
+		// fds 0/1/2 are reserved for stdin/stdout/stderr and are never stored here.
+		const openFiles = new Map();
+		let nextFD = 3;
+
+		// --- helpers -----------------------------------------------------------
+
+		const now = () => Date.now();
+
+		const normalize = (p) => {
+			// Collapse "."/".." segments and repeated slashes. Every path is treated
+			// as absolute (relative to "/"); a leading slash is added if missing.
+			const isAbs = p.length > 0 && p[0] === "/";
+			const parts = p.split("/");
+			const stack = [];
+			for (const part of parts) {
+				if (part === "" || part === ".") {
+					continue;
 				}
+				if (part === "..") {
+					if (stack.length > 0) {
+						stack.pop();
+					}
+					continue;
+				}
+				stack.push(part);
+			}
+			let result = stack.join("/");
+			if (isAbs || result === "") {
+				result = "/" + result;
+			}
+			return result;
+		};
+
+		// A path is an "implicit directory" if some stored file lives beneath it.
+		const isImplicitDir = (p) => {
+			p = normalize(p);
+			const prefix = p === "/" ? "/" : p + "/";
+			for (const key of files.keys()) {
+				if (key.startsWith(prefix)) {
+					return true;
+				}
+			}
+			return false;
+		};
+
+		// A directory "has children" if any file or explicit subdirectory lives
+		// directly beneath it. Used to decide whether rmdir should fail with
+		// ENOTEMPTY. (isImplicitDir only considers files, so a dir that contains
+		// nothing but empty subdirectories would otherwise look empty.)
+		const hasChildren = (p) => {
+			p = normalize(p);
+			const prefix = p === "/" ? "/" : p + "/";
+			for (const key of files.keys()) {
+				if (key.startsWith(prefix)) {
+					return true;
+				}
+			}
+			for (const d of dirs) {
+				if (d.startsWith(prefix)) {
+					return true;
+				}
+			}
+			return false;
+		};
+
+		const isDir = (p) => {
+			p = normalize(p);
+			if (p === "/" || dirs.has(p)) {
+				return true;
+			}
+			return isImplicitDir(p);
+		};
+
+		// Generate a unique, stable-ish inode number for a path. Two calls with the
+		// same path produce the same number, which is helpful for callers (e.g.
+		// os.SameFile) that compare inodes.
+		const inodeFor = (p) => {
+			let h = 5381;
+			for (let i = 0; i < p.length; i++) {
+				h = ((h << 5) + h + p.charCodeAt(i)) | 0;
+			}
+			// Keep it positive and non-zero.
+			return (h >>> 0) || 1;
+		};
+
+		// Build a Node.js-compatible stats object. The shape must satisfy Go's
+		// syscall.setStat (syscall/fs_js.go), which reads dev, ino, mode, nlink,
+		// uid, gid, rdev, size, blksize, blocks, atimeMs, mtimeMs and ctimeMs.
+		// os.Open also calls stat.isDirectory() to decide whether to read entries.
+		const S_IFREG = 0o100000; // regular file
+		const S_IFDIR = 0o040000; // directory
+
+		const makeStats = (pathStr, isDirectory, size) => {
+			const mode = isDirectory ? (S_IFDIR | 0o777) : (S_IFREG | 0o666);
+			const mtimeMs = mtimes.get(normalize(pathStr)) || now();
+			// Record mtime so subsequent stats are stable.
+			mtimes.set(normalize(pathStr), mtimeMs);
+			const blocks = Math.max(1, Math.ceil(size / 512));
+			return {
+				dev: 0,
+				ino: inodeFor(normalize(pathStr)),
+				mode: mode,
+				nlink: 1,
+				uid: 0,
+				gid: 0,
+				rdev: 0,
+				size: size,
+				blksize: 4096,
+				blocks: blocks,
+				atimeMs: mtimeMs,
+				mtimeMs: mtimeMs,
+				ctimeMs: mtimeMs,
+				birthtimeMs: mtimeMs,
+				isDirectory: () => isDirectory,
+				isFile: () => !isDirectory,
+				isBlockDevice: () => false,
+				isCharacterDevice: () => false,
+				isFIFO: () => false,
+				isSymbolicLink: () => false,
+				isSocket: () => false,
+			};
+		};
+
+		// Create an Error carrying a Node.js-style error code. Go's mapJSError
+		// (syscall/fs_js.go) looks up err.code in its errnoByCode table.
+		const errWithCode = (code, message) => {
+			const err = new Error(message || code);
+			err.code = code;
+			return err;
+		};
+
+		const ENOENT = (p) => errWithCode("ENOENT", p === undefined ? "no such file or directory" : `no such file or directory, ${p}`);
+		const EISDIR = () => errWithCode("EISDIR", "illegal operation on a directory, read");
+		const ENOTDIR = () => errWithCode("ENOTDIR", "not a directory");
+		const EEXIST = () => errWithCode("EEXIST", "file already exists");
+		const EBADF = () => errWithCode("EBADF", "bad file descriptor");
+		const ENOTEMPTY = () => errWithCode("ENOTEMPTY", "directory not empty");
+
+		// Console output buffering for stdout/stderr so partial lines are held
+		// until a newline is written (matches upstream behaviour).
+		const outputBufs = { 1: "", 2: "" };
+		const consoleFor = (fd) => (fd === 2 ? console.error : console.log);
+
+		const flushLine = (fd) => {
+			const nl = outputBufs[fd].lastIndexOf("\n");
+			if (nl !== -1) {
+				consoleFor(fd)(outputBufs[fd].substring(0, nl));
+				outputBufs[fd] = outputBufs[fd].substring(nl + 1);
+			}
+		};
+
+		// --- fd table ---------------------------------------------------------
+
+		const fdForPath = (pathStr) => {
+			const fd = nextFD++;
+			openFiles.set(fd, { path: normalize(pathStr), pos: 0 });
+			return fd;
+		};
+
+		// --- fs implementation ------------------------------------------------
+
+		globalThis.fs = {
+			// O_* constants. Go's fs_js.go reads these at init time. O_DIRECTORY is
+			// intentionally OMITTED: when it is missing (undefined) Go leaves
+			// nodeDIRECTORY = -1 and refuses O_DIRECTORY opens instead of failing
+			// to start. Including it would make Go set nodeDIRECTORY and require
+			// every open() to honour the flag.
+			constants: {
+				O_RDONLY: 0,
+				O_WRONLY: 1,
+				O_RDWR: 2,
+				O_CREAT: 0x40,
+				O_EXCL: 0x80,
+				O_TRUNC: 0x200,
+				O_APPEND: 0x400,
+			},
+
+			writeSync(fd, buf) {
+				if (fd === 1 || fd === 2) {
+					outputBufs[fd] += decoder.decode(buf);
+					flushLine(fd);
+					return buf.length;
+				}
+				// Synchronous write to a file descriptor. Best-effort: perform the
+				// write and return the number of bytes written.
+				const of = openFiles.get(fd);
+				if (!of) {
+					throw EBADF();
+				}
+				const data = files.get(of.path);
+				if (!data) {
+					throw ENOENT(of.path);
+				}
+				const merged = new Uint8Array(of.pos + buf.length);
+				merged.set(data.subarray(0, of.pos), 0);
+				merged.set(buf, of.pos);
+				files.set(of.path, merged);
+				of.pos += buf.length;
+				mtimes.set(of.path, now());
 				return buf.length;
 			},
+
 			write(fd, buf, offset, length, position, callback) {
-				if (offset !== 0 || length !== buf.length || position !== null) {
-					callback(enosys());
+				// fds 1/2 are the console (stdout/stderr). Go's syscall.Write builds
+				// a fresh Uint8Array and calls write(fd, buf, 0, len, null), so route
+				// those straight to the console.
+				if (fd === 1 || fd === 2) {
+					try {
+						const n = this.writeSync(fd, buf.subarray(offset, offset + length));
+						callback(null, n);
+					} catch (err) {
+						callback(err);
+					}
 					return;
 				}
-				const n = this.writeSync(fd, buf);
-				callback(null, n);
+
+				const of = openFiles.get(fd);
+				if (!of) {
+					callback(EBADF());
+					return;
+				}
+				const pathStr = of.path;
+
+				// Position null means "use the fd's current position".
+				let pos = position === null ? of.pos : position;
+
+				if (isDir(pathStr)) {
+					callback(EISDIR());
+					return;
+				}
+
+				try {
+					let data = files.get(pathStr);
+					if (!data) {
+						callback(ENOENT(pathStr));
+						return;
+					}
+					const slice = buf.subarray(offset, offset + length);
+
+					if (pos + length > data.length) {
+						// Grow the file to accommodate the write.
+						const grown = new Uint8Array(pos + length);
+						grown.set(data, 0);
+						data = grown;
+					}
+					data.set(slice, pos);
+
+					files.set(pathStr, data);
+					mtimes.set(pathStr, now());
+
+					if (position === null) {
+						of.pos = pos + length;
+					}
+					callback(null, length);
+				} catch (err) {
+					callback(err);
+				}
 			},
-			chmod(path, mode, callback) { callback(enosys()); },
-			chown(path, uid, gid, callback) { callback(enosys()); },
-			close(fd, callback) { callback(enosys()); },
-			fchmod(fd, mode, callback) { callback(enosys()); },
-			fchown(fd, uid, gid, callback) { callback(enosys()); },
-			fstat(fd, callback) { callback(enosys()); },
+
+			read(fd, buffer, offset, length, position, callback) {
+				// stdin (fd 0) is never readable here.
+				if (fd === 0) {
+					callback(null, 0, buffer);
+					return;
+				}
+
+				const of = openFiles.get(fd);
+				if (!of) {
+					callback(EBADF());
+					return;
+				}
+				const pathStr = of.path;
+
+				if (isDir(pathStr)) {
+					callback(EISDIR());
+					return;
+				}
+
+				try {
+					const data = files.get(pathStr);
+					if (!data) {
+						callback(ENOENT(pathStr));
+						return;
+					}
+					// position null => current offset of the open file description.
+					const pos = position === null ? of.pos : position;
+					if (pos >= data.length) {
+						// EOF
+						callback(null, 0, buffer);
+						return;
+					}
+					const avail = data.length - pos;
+					const n = Math.min(length, avail);
+					buffer.set(data.subarray(pos, pos + n), offset);
+					if (position === null) {
+						of.pos = pos + n;
+					}
+					callback(null, n, buffer);
+				} catch (err) {
+					callback(err);
+				}
+			},
+
+			open(pathStr, flags, mode, callback) {
+				try {
+					const p = normalize(pathStr);
+					const exists = files.has(p) || isDir(p);
+
+					// O_CREAT | O_EXCL: fail if the file already exists.
+					if ((flags & 0x40) !== 0 && (flags & 0x80) !== 0 && exists) {
+						callback(EEXIST());
+						return;
+					}
+
+					// Opening a non-existent path without O_CREAT is an error.
+					if (!exists && (flags & 0x40) === 0) {
+						callback(ENOENT(p));
+						return;
+					}
+
+					if ((flags & 0x40) !== 0 && !exists) {
+						// Create an empty regular file.
+						files.set(p, new Uint8Array(0));
+						mtimes.set(p, now());
+					} else if ((flags & 0x200) !== 0) {
+						// O_TRUNC: truncate an existing regular file to zero length.
+						if (files.has(p)) {
+							files.set(p, new Uint8Array(0));
+							mtimes.set(p, now());
+						}
+					}
+
+					// For O_APPEND, start the cursor at end-of-file.
+					const fd = fdForPath(p);
+					if ((flags & 0x400) !== 0) {
+						const of = openFiles.get(fd);
+						const data = files.get(p);
+						of.pos = data ? data.length : 0;
+					}
+
+					callback(null, fd);
+				} catch (err) {
+					callback(err);
+				}
+			},
+
+			close(fd, callback) {
+				// fds 0/1/2 are the standard streams; nothing to close.
+				if (fd === 0 || fd === 1 || fd === 2) {
+					callback(null);
+					return;
+				}
+				openFiles.delete(fd);
+				callback(null);
+			},
+
+			fstat(fd, callback) {
+				const of = openFiles.get(fd);
+				if (!of) {
+					callback(EBADF());
+					return;
+				}
+				const p = of.path;
+				const data = files.get(p);
+				const size = data ? data.length : 0;
+				callback(null, makeStats(p, isDir(p), size));
+			},
+
+			stat(pathStr, callback) {
+				const p = normalize(pathStr);
+				if (files.has(p)) {
+					const data = files.get(p);
+					callback(null, makeStats(p, false, data.length));
+					return;
+				}
+				if (isDir(p)) {
+					callback(null, makeStats(p, true, 0));
+					return;
+				}
+				callback(ENOENT(p));
+			},
+
+			lstat(pathStr, callback) {
+				// There are no symlinks in this filesystem, so lstat == stat.
+				return this.stat(pathStr, callback);
+			},
+
+			readdir(pathStr, callback) {
+				const p = normalize(pathStr);
+				if (files.has(p)) {
+					callback(ENOTDIR());
+					return;
+				}
+				if (!isDir(p)) {
+					callback(ENOENT(p));
+					return;
+				}
+				const prefix = p === "/" ? "/" : p + "/";
+				const entries = new Set();
+				// Collect the immediate child names of both files and explicit dirs.
+				for (const key of files.keys()) {
+					if (key.startsWith(prefix)) {
+						const rest = key.substring(prefix.length);
+						const slash = rest.indexOf("/");
+						if (slash === -1) {
+							entries.add(rest);
+						} else {
+							entries.add(rest.substring(0, slash));
+						}
+					}
+				}
+				for (const d of dirs) {
+					if (d.startsWith(prefix)) {
+						const rest = d.substring(prefix.length);
+						const slash = rest.indexOf("/");
+						if (slash === -1 && rest !== "") {
+							entries.add(rest);
+						}
+					}
+				}
+				callback(null, Array.from(entries));
+			},
+
+			mkdir(pathStr, perm, callback) {
+				const p = normalize(pathStr);
+				if (files.has(p) || dirs.has(p) || isImplicitDir(p)) {
+					callback(EEXIST());
+					return;
+				}
+				dirs.add(p);
+				mtimes.set(p, now());
+				callback(null);
+			},
+
+			unlink(pathStr, callback) {
+				const p = normalize(pathStr);
+				if (files.has(p)) {
+					files.delete(p);
+					mtimes.delete(p);
+					callback(null);
+					return;
+				}
+				// Cannot unlink a directory.
+				callback(isDir(p) ? EISDIR() : ENOENT(p));
+			},
+
+			rmdir(pathStr, callback) {
+				const p = normalize(pathStr);
+				if (files.has(p)) {
+					callback(ENOTDIR());
+					return;
+				}
+				if (!isDir(p)) {
+					callback(ENOENT(p));
+					return;
+				}
+				if (hasChildren(p)) {
+					// The directory still contains files/dirs beneath it.
+					callback(ENOTEMPTY());
+					return;
+				}
+				dirs.delete(p);
+				mtimes.delete(p);
+				callback(null);
+			},
+
+			rename(from, to, callback) {
+				const src = normalize(from);
+				const dst = normalize(to);
+				try {
+					if (files.has(src)) {
+						if (isDir(dst)) {
+							callback(EISDIR());
+							return;
+						}
+						files.set(dst, files.get(src));
+						files.delete(src);
+						mtimes.set(dst, now());
+						mtimes.delete(src);
+						callback(null);
+						return;
+					}
+					if (dirs.has(src)) {
+						// Renaming an explicitly-created directory. Move the dir entry
+						// and any files beneath it.
+						if (files.has(dst)) {
+							callback(ENOTDIR());
+							return;
+						}
+						const srcPrefix = src + "/";
+						const dstPrefix = dst + "/";
+						for (const key of Array.from(files.keys())) {
+							if (key.startsWith(srcPrefix)) {
+								files.set(dstPrefix + key.substring(srcPrefix.length), files.get(key));
+								files.delete(key);
+							}
+						}
+						dirs.delete(src);
+						dirs.add(dst);
+						mtimes.set(dst, now());
+						mtimes.delete(src);
+						callback(null);
+						return;
+					}
+					callback(ENOENT(src));
+				} catch (err) {
+					callback(err);
+				}
+			},
+
+			// --- operations Go may call but that we stub out ----------------------
+			// These all succeed as no-ops or return ENOSYS so the syscall layer is
+			// happy. fsync in particular is expected to succeed.
+
 			fsync(fd, callback) { callback(null); },
-			ftruncate(fd, length, callback) { callback(enosys()); },
-			lchown(path, uid, gid, callback) { callback(enosys()); },
-			link(path, link, callback) { callback(enosys()); },
-			lstat(path, callback) { callback(enosys()); },
-			mkdir(path, perm, callback) { callback(enosys()); },
-			open(path, flags, mode, callback) { callback(enosys()); },
-			read(fd, buffer, offset, length, position, callback) { callback(enosys()); },
-			readdir(path, callback) { callback(enosys()); },
-			readlink(path, callback) { callback(enosys()); },
-			rename(from, to, callback) { callback(enosys()); },
-			rmdir(path, callback) { callback(enosys()); },
-			stat(path, callback) { callback(enosys()); },
-			symlink(path, link, callback) { callback(enosys()); },
-			truncate(path, length, callback) { callback(enosys()); },
-			unlink(path, callback) { callback(enosys()); },
-			utimes(path, atime, mtime, callback) { callback(enosys()); },
+			chmod(path, mode, callback) { callback(null); },
+			fchmod(fd, mode, callback) { callback(null); },
+			chown(path, uid, gid, callback) { callback(null); },
+			fchown(fd, uid, gid, callback) { callback(null); },
+			lchown(path, uid, gid, callback) { callback(null); },
+			utimes(path, atime, mtime, callback) { callback(null); },
+			truncate(pathStr, length, callback) {
+				const p = normalize(pathStr);
+				if (!files.has(p)) { callback(ENOENT(p)); return; }
+				const data = files.get(p);
+				if (length < data.length) {
+					files.set(p, data.subarray(0, length));
+				} else if (length > data.length) {
+					const grown = new Uint8Array(length);
+					grown.set(data, 0);
+					files.set(p, grown);
+				}
+				mtimes.set(p, now());
+				callback(null);
+			},
+			ftruncate(fd, length, callback) { callback(null); },
+			readlink(path, callback) { callback(ENOENT(path)); },
+			symlink(target, path, callback) { callback(null); },
+			link(existingPath, newPath, callback) { callback(null); },
 		};
 	}
+
+	// ---------------------------------------------------------------------------
+	// globalThis.process / globalThis.path shims
+	// ---------------------------------------------------------------------------
 
 	if (!globalThis.process) {
 		globalThis.process = {
@@ -64,20 +601,64 @@
 			getgid() { return -1; },
 			geteuid() { return -1; },
 			getegid() { return -1; },
-			getgroups() { throw enosys(); },
+			getgroups() { return []; },
 			pid: -1,
 			ppid: -1,
-			umask() { throw enosys(); },
-			cwd() { throw enosys(); },
-			chdir() { throw enosys(); },
+			umask() { return 0; },
+			cwd() { return "/"; },
+			chdir() { },
+			platform: "browser",
 		}
 	}
 
 	if (!globalThis.path) {
+		const normalizePath = (p) => {
+			const isAbs = p.length > 0 && p[0] === "/";
+			const parts = p.split("/");
+			const stack = [];
+			for (const part of parts) {
+				if (part === "" || part === ".") {
+					continue;
+				}
+				if (part === "..") {
+					if (stack.length > 0) {
+						stack.pop();
+					}
+					continue;
+				}
+				stack.push(part);
+			}
+			let result = stack.join("/");
+			if (isAbs || result === "") {
+				result = "/" + result;
+			}
+			return result;
+		};
+
 		globalThis.path = {
 			resolve(...pathSegments) {
-				return pathSegments.join("/");
-			}
+				if (pathSegments.length === 0) {
+					return "/";
+				}
+				// Resolve right-to-left, prepending segments until an absolute path
+				// is found (Node.js path.resolve semantics). Always returns absolute.
+				let combined = "";
+				for (let i = pathSegments.length - 1; i >= 0; i--) {
+					const seg = pathSegments[i];
+					combined = seg + "/" + combined;
+					if (seg.length > 0 && seg[0] === "/") {
+						break;
+					}
+				}
+				if (combined.length === 0 || combined[0] !== "/") {
+					combined = "/" + combined;
+				}
+				return normalizePath(combined);
+			},
+			join(...paths) {
+				return normalizePath(paths.join("/"));
+			},
+			normalize: normalizePath,
 		}
 	}
 

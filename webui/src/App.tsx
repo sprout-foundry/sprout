@@ -22,6 +22,7 @@ import { EditorManagerProvider } from './contexts/EditorManagerContext';
 import { HotkeyProvider } from './contexts/HotkeyContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { LocalEventsProvider } from './services/localEventsProvider';
+import { notificationBus } from './services/notificationBus';
 import { PlatformNavProvider } from './contexts/PlatformNavContext';
 import { ProviderCatalogProvider } from './contexts/ProviderCatalogContext';
 import { SproutAdapterProvider } from './contexts/SproutAdapterContext';
@@ -277,13 +278,10 @@ function AppInner() {
   useEscalationTriggers({
     repoURL,
     onBlockingTrigger: (evt) => {
-      // Show a browser alert as fallback when a blocking trigger fires.
-      // In production this would use the app's toast system.
-      alert(evt.message);
+      notificationBus.notify('warning', 'Browser limitation', evt.message);
     },
     onInfoTrigger: (evt) => {
-      // Info triggers are non-blocking; log them for the toast system.
-      console.info('[escalation]', evt.message);
+      notificationBus.notify('info', 'Heads up', evt.message);
     },
   });
 

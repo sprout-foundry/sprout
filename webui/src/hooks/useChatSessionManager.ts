@@ -257,13 +257,7 @@ export function useChatSessionManager({
         return;
       }
       if (lc === '/provider' || lc.startsWith('/provider ')) {
-<<<<<<< Updated upstream
         window.dispatchEvent(new CustomEvent('sprout:open-settings-focus', { detail: { focus: 'provider' } }));
-=======
-        window.dispatchEvent(
-          new CustomEvent('sprout:open-settings-focus', { detail: { focus: 'provider' } }),
-        );
->>>>>>> Stashed changes
         setState((prev) => ({ inputValue: '' }));
         return;
       }

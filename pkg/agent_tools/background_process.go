@@ -20,6 +20,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/sprout-foundry/sprout/pkg/envutil"
 	"github.com/sprout-foundry/sprout/pkg/events"
 )
 
@@ -90,7 +91,12 @@ type BackgroundProcessManager struct {
 
 // NewBackgroundProcessManager creates a new BackgroundProcessManager and starts the cleanup goroutine.
 func NewBackgroundProcessManager() *BackgroundProcessManager {
-	baseDir := filepath.Join(os.TempDir(), "sprout-bg")
+	baseDir, err := envutil.GetConfigDir()
+	if err != nil {
+		baseDir = filepath.Join(os.TempDir(), "sprout-bg")
+	} else {
+		baseDir = filepath.Join(baseDir, "bg-processes")
+	}
 	if err := os.MkdirAll(baseDir, 0o700); err != nil {
 		log.Printf("warn: failed to create background output directory %s: %v", baseDir, err)
 	}
@@ -613,7 +619,11 @@ func generateRandomHexCLI(n int) (string, error) {
 // tools package (e.g., agent startup code) can use this to locate the
 // directory for orphan cleanup without knowing BPM internals.
 func GetBackgroundOutputBaseDir() string {
-	return filepath.Join(os.TempDir(), "sprout-bg")
+	configDir, err := envutil.GetConfigDir()
+	if err != nil {
+		return filepath.Join(os.TempDir(), "sprout-bg")
+	}
+	return filepath.Join(configDir, "bg-processes")
 }
 
 // orphanCleanupItem holds parsed info from a .pid file for batch processing.
@@ -661,7 +671,7 @@ func CleanupOrphanedBackgroundProcessesWithContext(ctx context.Context, baseDir 
 	// Also scan for orphaned .output files (no matching .pid) — these are
 	// stale leftovers from sessions whose .pid was cleaned up by a previous
 	// run or whose process was never tracked by the BPM. Without this
-	// pass they accumulate in /tmp/sprout-bg/ forever.
+	// pass they accumulate in the bg-processes directory forever.
 	outputPattern := filepath.Join(baseDir, "*.output")
 	outputFiles, _ := filepath.Glob(outputPattern)
 	if outputFiles == nil {
@@ -699,7 +709,7 @@ func CleanupOrphanedBackgroundProcessesWithContext(ctx context.Context, baseDir 
 			log.Printf("warn: failed to parse PID from %s: %v", pidFile, err)
 			// Stale/unparseable file — remove both the .pid and its
 			// (likely-stale) .output companion. Without removing the
-			// output, it sits in /tmp/sprout-bg/ forever.
+			// output, it sits in the bg-processes directory forever.
 			_ = os.Remove(pidFile)
 			sid := strings.TrimSuffix(filepath.Base(pidFile), ".pid")
 			_ = os.Remove(filepath.Join(baseDir, sid+".output"))

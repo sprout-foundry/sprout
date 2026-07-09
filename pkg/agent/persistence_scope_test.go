@@ -10,13 +10,31 @@ import (
 	"time"
 
 	api "github.com/sprout-foundry/sprout/pkg/agent_api"
+	"github.com/sprout-foundry/sprout/pkg/search"
 )
+
+// Tests in this file manually manage getStateDirFunc instead of using
+// NewTestStateDir(t) because they need getStateDirFunc to return the
+// raw t.TempDir() — not the .sprout/sessions subdirectory that
+// NewTestStateDir creates. This lets assertions below verify paths
+// built with buildScopedSessionFilePath against the root stateDir.
+// To still get the search-index isolation that NewTestStateDir
+// provides, each test function redirects search.GlobalUpdater
+// independently.
 
 func TestLoadStateWithoutAgentScoped_ResolvesByWorkingDirectory(t *testing.T) {
 	stateDir := t.TempDir()
 	orig := getStateDirFunc
 	getStateDirFunc = func() (string, error) { return stateDir, nil }
 	t.Cleanup(func() { getStateDirFunc = orig })
+
+	// Redirect the search index updater into the test temp dir so
+	// MarkSessionDirty (triggered by SaveStateScoped in other tests)
+	// doesn't walk the developer's real ~/.sprout/sessions/.
+	oldUpdater := search.ResetGlobalUpdaterForTest()
+	search.GlobalUpdater = search.NewIndexUpdater(
+		filepath.Join(stateDir, "search-index.json"), stateDir)
+	t.Cleanup(func() { search.RestoreGlobalUpdater(oldUpdater) })
 
 	wd1 := filepath.Join(stateDir, "w1")
 	wd2 := filepath.Join(stateDir, "w2")
@@ -83,6 +101,13 @@ func TestSaveStateScoped_WritesScopedPath(t *testing.T) {
 	getStateDirFunc = func() (string, error) { return stateDir, nil }
 	t.Cleanup(func() { getStateDirFunc = orig })
 
+	// Redirect the search index updater — SaveStateScoped triggers
+	// search.MarkSessionDirty which would otherwise hit the real dir.
+	oldUpdater := search.ResetGlobalUpdaterForTest()
+	search.GlobalUpdater = search.NewIndexUpdater(
+		filepath.Join(stateDir, "search-index.json"), stateDir)
+	t.Cleanup(func() { search.RestoreGlobalUpdater(oldUpdater) })
+
 	workingDir := filepath.Join(stateDir, "project")
 	if err := os.MkdirAll(workingDir, 0o755); err != nil {
 		t.Fatalf("mkdir working dir: %v", err)
@@ -126,6 +151,12 @@ func TestListSessionsWithTimestampsScoped_OnlyReturnsCurrentDirectorySessions(t 
 	orig := getStateDirFunc
 	getStateDirFunc = func() (string, error) { return stateDir, nil }
 	t.Cleanup(func() { getStateDirFunc = orig })
+
+	// Redirect the search index updater into the test temp dir.
+	oldUpdater := search.ResetGlobalUpdaterForTest()
+	search.GlobalUpdater = search.NewIndexUpdater(
+		filepath.Join(stateDir, "search-index.json"), stateDir)
+	t.Cleanup(func() { search.RestoreGlobalUpdater(oldUpdater) })
 
 	wd1 := filepath.Join(stateDir, "project-a")
 	wd2 := filepath.Join(stateDir, "project-b")
@@ -177,6 +208,12 @@ func TestCleanupMemorySessions_PrunesOnlyCurrentDirectoryScope(t *testing.T) {
 	orig := getStateDirFunc
 	getStateDirFunc = func() (string, error) { return stateDir, nil }
 	t.Cleanup(func() { getStateDirFunc = orig })
+
+	// Redirect the search index updater into the test temp dir.
+	oldUpdater := search.ResetGlobalUpdaterForTest()
+	search.GlobalUpdater = search.NewIndexUpdater(
+		filepath.Join(stateDir, "search-index.json"), stateDir)
+	t.Cleanup(func() { search.RestoreGlobalUpdater(oldUpdater) })
 
 	wd1 := filepath.Join(stateDir, "project-a")
 	wd2 := filepath.Join(stateDir, "project-b")

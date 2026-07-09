@@ -1,5 +1,5 @@
 import { MessageBubble, MessageSegments, MessageContent, Collapsible } from '@sprout/ui';
-import { BrainCircuit, Bot } from 'lucide-react';
+import { BrainCircuit, Bot, GitFork } from 'lucide-react';
 import { memo } from 'react';
 import type { Message, ToolExecution } from './types';
 
@@ -34,6 +34,18 @@ interface MessageItemProps {
    * answer. Used by `compact` mode to hide inter-tool narration.
    */
   hasNextAssistantMessage?: boolean;
+  /**
+   * Fork support: 1-based index of this user message for session forking.
+   * Only set for user messages that can be forked from.
+   */
+  breakpointIndex?: number;
+  /**
+   * Fork support: callback invoked when the fork button is clicked.
+   * Receives the 1-based breakpoint index.
+   */
+  onForkAtBreakpoint?: (breakpointIndex: number) => void;
+  /** Fork support: true while a fork is in-flight to disable the button. */
+  isForking?: boolean;
 }
 
 export const MessageItem = memo(function MessageItem({
@@ -45,6 +57,9 @@ export const MessageItem = memo(function MessageItem({
   messageIndex,
   outputVerbosity = 'default',
   hasNextAssistantMessage = false,
+  breakpointIndex,
+  onForkAtBreakpoint,
+  isForking = false,
 }: MessageItemProps) {
   // Suppress empty bubbles. Session restore replays the assistant turn
   // boundaries verbatim, including tool-only turns whose persisted
@@ -93,6 +108,20 @@ export const MessageItem = memo(function MessageItem({
       depth={message.subagentDepth}
       dataMessageIndex={messageIndex}
     >
+      {message.type === 'user' && breakpointIndex != null && onForkAtBreakpoint && (
+        <button
+          className="message-fork-btn"
+          onClick={(e) => {
+            e.stopPropagation();
+            onForkAtBreakpoint(breakpointIndex);
+          }}
+          title={isForking ? 'Forking...' : 'Fork from here'}
+          aria-label={`Fork session at breakpoint ${breakpointIndex}`}
+          disabled={isForking}
+        >
+          <GitFork size={14} />
+        </button>
+      )}
       {message.type === 'assistant' ? (
         <>
           {isSubagentRun && (

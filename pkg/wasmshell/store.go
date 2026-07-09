@@ -54,7 +54,7 @@ func SyncDeleteFile(path string) error {
 // RecursiveSync removes deleted files from the store by walking the filesystem.
 // This is a best-effort reconciliation after operations like rm -rf.
 func RecursiveSync(dir string) {
-	filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+	WalkCompat(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
 		}

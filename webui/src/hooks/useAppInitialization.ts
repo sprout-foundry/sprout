@@ -162,6 +162,23 @@ export function useAppInitialization({
       loadStats();
       loadFiles();
 
+      // In cloud mode, listen for repo import completion to refresh files.
+      // The import runs async in bootstrapAdapter.ts and may complete after
+      // the initial loadFiles() call returned empty.
+      const handleRepoImported = () => {
+        debugLog('[startup] repo import completed — refreshing file list');
+        loadFiles();
+      };
+      window.addEventListener('sprout:repo-imported', handleRepoImported);
+
+      // Check if import already completed before we mounted (race condition).
+      const importedRepo = (window as unknown as Record<string, unknown>).__repoImported;
+      if (importedRepo) {
+        debugLog('[startup] repo was already imported before mount — loading files');
+        // Small delay to ensure WASM shell writes have settled.
+        setTimeout(() => loadFiles(), 500);
+      }
+
       // Load initial chat sessions
       loadChatSessions();
 

@@ -95,4 +95,10 @@ export const wasmLocalEndpoints: CloudEndpoint[] = [
     category: 'wasm-local',
     description: 'Search files (WASM handles locally)',
   },
+  {
+    path: '/api/query',
+    methods: ['POST'],
+    category: 'wasm-local',
+    description: 'Agent query (WASM shell runs the full agent loop in-browser)',
+  },
 ];

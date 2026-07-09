@@ -157,13 +157,39 @@ function installAdapterForConfig(config: RuntimeConfig): void {
   if (config.appMode === 'cloud') {
     // eslint-disable-next-line no-console
     console.log('bootstrap: active mode = cloud, installing CloudAdapter');
-    installAdapter(
-      new CloudAdapter({
-        apiBase: config.apiBaseURL,
-        wsUrl: config.wsURL,
-        navItems: CLOUD_NAV_ITEMS,
-      }),
-    );
+    const adapter = new CloudAdapter({
+      apiBase: config.apiBaseURL,
+      wsUrl: config.wsURL,
+      navItems: CLOUD_NAV_ITEMS,
+    });
+    installAdapter(adapter);
+
+    // Auto-import repo from ?repo= query param if present.
+    const repoParam = CloudAdapter.getRepoFromQuery();
+    if (repoParam) {
+      console.log(`bootstrap: ?repo= detected — importing ${repoParam}`);
+      // Fire-and-forget: import runs after adapter is installed.
+      adapter.importRepo(repoParam).then((result) => {
+        if (result.success) {
+          console.log(`bootstrap: repo import succeeded: ${result.repo ?? repoParam}`);
+          // Set a global flag so useAppInitialization knows to re-fetch files
+          // on mount. We can't dispatch an event because the listener may not
+          // be registered yet (React hasn't mounted when this runs).
+          (window as unknown as Record<string, unknown>).__repoImported = result.repo ?? repoParam;
+          // Also dispatch the event for late listeners.
+          window.dispatchEvent(new CustomEvent('sprout:repo-imported', {
+            detail: { repo: result.repo ?? repoParam },
+          }));
+        } else {
+          console.warn(`bootstrap: repo import failed: ${result.error}`);
+        }
+        // Clean the URL after import to prevent re-import on refresh.
+        if (typeof window !== 'undefined' && window.history.replaceState) {
+          const cleanURL = window.location.pathname + window.location.hash;
+          window.history.replaceState({}, '', cleanURL);
+        }
+      });
+    }
   } else {
     // eslint-disable-next-line no-console
     console.log('bootstrap: active mode = local, no adapter installed');

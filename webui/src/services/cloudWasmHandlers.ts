@@ -98,6 +98,99 @@ export function handleWasmLocal(
   }
 }
 
+// ── File manifest (fallback for broken listDir on old WASM binaries) ────────
+
+/**
+ * The deployed WASM binary (v0.15.4) has a broken os.ReadDir due to an
+ * O_DIRECTORY syscall bug on js/wasm. writeFile/readFile work fine, but
+ * listDir returns an error. This manifest tracks every file path written
+ * to the VFS so handleWasmFileList/handleWasmBrowse can fall back to it.
+ *
+ * When the WASM binary is updated to include the O_DIRECTORY fix, listDir
+ * will work and the manifest becomes a no-op supplement.
+ */
+const vfsManifest = new Set<string>();
+
+/** Normalize a path to absolute form. Uses the WASM shell's CWD as base
+ *  for relative paths — NOT a hardcoded /home/user, because the actual
+ *  CWD depends on the WASM binary's init (can be / or /home/user). */
+function normalizePath(p: string): string {
+  if (!p.startsWith('/')) {
+    const cwd = typeof window !== 'undefined' && window.SproutWasm?.getCwd
+      ? window.SproutWasm.getCwd()
+      : '/home/user';
+    p = p === '.' ? cwd : `${cwd}/${p}`;
+  }
+  // Collapse ./ and resolve ../
+  const parts = p.split('/');
+  const resolved: string[] = [];
+  for (const part of parts) {
+    if (part === '' || part === '.') continue;
+    if (part === '..') { resolved.pop(); continue; }
+    resolved.push(part);
+  }
+  return '/' + resolved.join('/');
+}
+
+/** Track a file write in the manifest. */
+export function trackFileWrite(rawPath: string): void {
+  vfsManifest.add(normalizePath(rawPath));
+}
+
+/**
+ * Get all known files from the manifest that are descendants of dir.
+ * Tries listDir first; falls back to manifest on error.
+ * When dir listing fails and the manifest has entries under a different
+ * base (e.g. /home/user while CWD is /), returns ALL manifest entries.
+ */
+function listFilesTracked(shell: WasmShell, dir: string): string[] {
+  // Try the WASM binary's listDir first — works on newer binaries.
+  try {
+    const result = shell.listDir(dir);
+    if (!result.error && result.entries && result.entries.length > 0) {
+      // listDir works — return entries as full paths.
+      return result.entries
+        .filter((e) => e.type === 'file')
+        .map((e) => {
+          const base = dir === '/' ? '' : dir;
+          return `${base}/${e.name}`.replace(/\/+/g, '/');
+        });
+    }
+  } catch {
+    // listDir broken — fall through to manifest.
+  }
+
+  // Fall back to the manifest.
+  const normalizedDir = normalizePath(dir);
+  let files = Array.from(vfsManifest).filter((path) => {
+    if (normalizedDir === '/') return path.startsWith('/'); // root: match everything
+    return path.startsWith(normalizedDir + '/') || path === normalizedDir;
+  });
+
+  // If nothing matched under the requested dir, and the dir is / or /home/user,
+  // return the entire manifest — the WASM binary's CWD may not match
+  // where files were written (importRepo writes to /home/user/... but
+  // getCwd() may return /).
+  if (files.length === 0 && vfsManifest.size > 0) {
+    files = Array.from(vfsManifest);
+  }
+
+  return files.sort();
+}
+
+/**
+ * Recursively list all files in a directory using listDir with manifest
+ * fallback. Returns absolute paths.
+ */
+function listAllFilesTracked(shell: WasmShell, dir: string): string[] {
+  // Try recursive listDir first.
+  const result = flattenEntries(shell, dir);
+  if (result.length > 0) return result.map((f) => f.path);
+
+  // Fall back to manifest.
+  return listFilesTracked(shell, dir);
+}
+
 // ── Individual wasm-local route handlers ─────────────────────────
 
 /**
@@ -107,15 +200,30 @@ export function handleWasmLocal(
  */
 function handleWasmFileList(shell: WasmShell, fullUrl?: string): Response {
   const cwd = fullUrl ? getQueryParam(fullUrl, 'path') || shell.getCwd() : shell.getCwd();
-  const result = shell.listDir(cwd);
-  // Empty workspace or directory doesn't exist yet — return empty list
-  // instead of erroring. The user hasn't created any files yet.
-  if (result.error) {
-    return jsonOk({ message: 'success', files: [] });
+
+  // Try listDir first; fall back to manifest.
+  const dirResult = shell.listDir(cwd);
+  if (!dirResult.error && dirResult.entries && dirResult.entries.length > 0) {
+    const files = flattenEntries(shell, cwd);
+    return jsonOk({ message: 'success', files });
   }
-  // Build a flat recursive file list from the WASM directory tree.
-  // The webui getFiles() expects { message, files: [{path, modified}] }
-  const files = flattenEntries(shell, cwd);
+
+  // listDir failed or empty — use the manifest.
+  const trackedFiles = listFilesTracked(shell, cwd);
+  const baseDir = normalizePath(cwd);
+  const files = trackedFiles.map((absPath) => {
+    const name = absPath.split('/').pop() || absPath;
+    // Return path relative to the requested directory so the FileTree
+    // can match it against its rootPath. For root "/" the relative path
+    // is the absolute path minus the leading /.
+    let relPath = absPath;
+    if (baseDir !== '/' && absPath.startsWith(baseDir + '/')) {
+      relPath = absPath.slice(baseDir.length + 1);
+    } else if (baseDir === '/') {
+      relPath = absPath; // keep absolute for root
+    }
+    return { path: relPath, modified: false, name };
+  });
   return jsonOk({ message: 'success', files });
 }
 
@@ -147,16 +255,23 @@ function handleWasmBrowse(shell: WasmShell, fullUrl: string): Response {
   const path = getQueryParam(fullUrl, 'path') || '/';
   const safePath = sanitizePath(path);
   const result = shell.listDir(safePath);
-  if (result.error) {
-    return jsonError(result.error, 500);
+  if (!result.error && result.entries && result.entries.length > 0) {
+    const files = result.entries.map((entry) => ({
+      name: entry.name,
+      path: safePath === '/' ? `/${entry.name}` : `${safePath}/${entry.name}`,
+      type: entry.type === 'dir' ? 'directory' : 'file',
+      size: entry.size,
+      modified: 0,
+    }));
+    return jsonOk({ files });
   }
-  const files = result.entries.map((entry) => ({
-    name: entry.name,
-    path: safePath === '/' ? `/${entry.name}` : `${safePath}/${entry.name}`,
-    type: entry.type === 'dir' ? 'directory' : 'file',
-    size: entry.size,
-    modified: 0,
-  }));
+
+  // listDir failed — fall back to manifest.
+  const tracked = listFilesTracked(shell, safePath);
+  const files = tracked.map((filePath) => {
+    const name = filePath.split('/').pop() || filePath;
+    return { name, path: filePath, type: 'file', size: 0, modified: 0 };
+  });
   return jsonOk({ files });
 }
 
@@ -198,6 +313,7 @@ function handleWasmFile(shell: WasmShell, method: string, fullUrl: string, bodyS
   if (err) {
     return jsonError(err, 500);
   }
+  trackFileWrite(safePath);
   return jsonOk({ message: 'ok' });
 }
 
@@ -225,6 +341,7 @@ function handleWasmCreate(shell: WasmShell, bodyStr?: string): Response {
     if (err) {
       return jsonError(err, 500);
     }
+    trackFileWrite(safePath);
   }
   return jsonOk({ message: 'ok', path: safePath });
 }

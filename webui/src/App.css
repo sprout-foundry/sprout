@@ -380,6 +380,29 @@ body {
   outline-offset: 1px;
 }
 
+/* ── Start Building CTA (cloud mode header) ─────── */
+.start-building-btn {
+  font-size: 11px;
+  height: 24px;
+  padding: 0 10px;
+  margin-right: 8px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-accent, #c8a415);
+  background: transparent;
+  color: var(--text-accent, #d4b02a);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background 0.15s var(--ease-out),
+    color 0.15s var(--ease-out);
+}
+
+.start-building-btn:hover {
+  background: var(--border-accent, #c8a415);
+  color: #fff;
+}
+
 /* Standalone workspace bar (mobile) */
 .workspace-bar {
   display: flex;

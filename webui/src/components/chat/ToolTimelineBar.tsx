@@ -84,21 +84,8 @@ export function ToolTimelineBar({
   }, [toolExecutions]);
 
   const visible = useMemo(() => {
-    const map = completedAtRef.current;
-    const filtered = toolExecutions.filter((t) => {
-      if (t.status === 'error') return true; // errors stick
-      if (t.status === 'completed') {
-        const seen = map.get(t.id);
-        // First render that sees a completed tool: map is already populated
-        // synchronously above, so seen is non-null here in steady state.
-        if (seen == null) return true;
-        return now - seen < FADE_MS;
-      }
-      return true; // started/running always visible
-    });
-    // Show the most recent N — newer items go to the right (visual reading order).
-    return filtered.slice(-maxVisible);
-  }, [toolExecutions, now, maxVisible]);
+    return toolExecutions.slice(-maxVisible);
+  }, [toolExecutions, maxVisible]);
 
   // Hide-grace gate. Stays true for HIDE_GRACE_MS after `visible`
   // last had entries, so a brief gap between consecutive tools doesn't

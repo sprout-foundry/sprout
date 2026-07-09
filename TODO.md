@@ -37,10 +37,19 @@ providers/credentials from the global config.
 **Files:** `pkg/configuration/config_load_save.go`,
 `pkg/configuration/config_paths.go`.
 
-### Phase 4: Daemon service scoping (stretch)
+### Phase 4: Daemon service hardening (launch priority)
 
-The `sprout service` command manages a single daemon. Consider explicit
-multi-instance support via named profiles or workspace-scoped daemons.
+The `sprout service` daemon on port 56000 is the primary launch target (desktop
+is deferred). The daemon must serve multiple workspaces through a single WebUI.
+Already implemented:
+- `NewAgentWithLayersInWorkspace` creates per-workspace agents
+- `WorkspacePicker` UI for switching workspaces
+- `RecentWorkspace` tracking (`~/.sprout/recent_workspaces.json`)
+- `SPROUT_SERVICE=1` guard to skip auto-isolation for system daemon
+- Graceful startup without provider (WebUI onboarding)
+
+**Remaining**: Service manager robustness testing on macOS (launchd) and Linux
+(systemd). Verify `sprout service install/start/stop/status` end-to-end.
 
 ### Acceptance
 

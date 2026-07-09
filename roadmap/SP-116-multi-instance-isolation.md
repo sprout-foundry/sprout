@@ -20,11 +20,13 @@ Sprout needs to support two distinct multi-instance modes:
 |---|---|---|
 | `--isolated-config` | ✅ Exists | Sets `SPROUT_CONFIG` to `.sprout/` in cwd. Clones main config on first use. Desktop app uses this for every workspace. |
 | Per-instance port assignment | ✅ Exists | Interactive mode scans from 56001 for free ports. Daemon mode uses 56000 or explicit `--web-port`. |
-| Desktop multi-workspace | ✅ Exists | Each workspace spawns its own sprout backend with `--isolated-config --daemon --bind-socket <socket>`. Unix sockets avoid port conflicts. |
 | Instance heartbeat registry | ✅ Exists | `instances.json` in config dir. Uses `flock` for concurrent writes. Tracks PID, port, cwd, session. |
 | CLI↔WebUI session sharing | ✅ Exists | `sharedWebServer` + `SetEventMetadata(client_id:"default")` in non-daemon mode. `showWebUIHandoffOnce` suppresses CLI output when browser connected. |
 | Workspace config path | ✅ Defined | `GetWorkspaceConfigPath()` returns `.sprout/config.json`. Only `IsWorkspaceConfigPresent()` consumes it. |
 | Background process manager | ✅ Exists | `/tmp/sprout-bg/` with session tracking. CLI `sprout shell-bg` commands. |
+| Multi-workspace daemon | ✅ Exists | `NewAgentWithLayersInWorkspace` creates per-workspace agents in daemon WebUI. `WorkspacePicker` for switching. |
+| Recent workspace tracking | ✅ Exists | `~/.sprout/recent_workspaces.json` tracks last 10 workspaces with markers. |
+| macOS/Linux service manager | ✅ Exists | `sprout service install/start/stop/status` via launchd (macOS) and systemd (Linux).
 
 ### What's broken for multi-instance
 
@@ -142,13 +144,20 @@ Merge strategy: workspace config values take precedence, falling back to global
 config values. Providers are always resolved from the global config (API keys
 are personal, not per-project).
 
-### Phase 4: Daemon service scoping (stretch)
+### Phase 4: Daemon service hardening (launch priority)
 
-The `sprout service` command currently manages a single daemon on port 56000.
-For multi-instance, consider:
-- Service mode stays single-instance (system-level daemon).
-- Desktop mode spawns per-workspace backends (already works).
-- CLI mode creates per-cwd instances (what we're fixing).
+The `sprout service` daemon on port 56000 is the primary way users interact with
+sprout (desktop app is deferred). The daemon must:
+
+- **Skip auto-isolation**: System daemon should always use global config
+  (`~/.config/sprout/`). Done — `SPROUT_SERVICE=1` guard in `PersistentPreRunE`.
+- **Multi-workspace via WebUI**: The daemon WebUI already supports per-workspace
+  agents via `NewAgentWithLayersInWorkspace` + `WorkspacePicker`. Each workspace
+  gets its own layered config (global providers + workspace overrides).
+- **Service manager robustness**: `sprout service install/start/stop/status`
+  works correctly on macOS (launchd) and Linux (systemd).
+- **Graceful startup without provider**: When no LLM provider is configured,
+  the daemon keeps the WebUI running for onboarding (already implemented).
 
 ## Files to change
 
@@ -179,10 +188,8 @@ For multi-instance, consider:
 
 ## What intentionally does NOT change
 
-- **Desktop app backend spawning**: Already correct. Uses `--isolated-config` +
-  Unix sockets per workspace. No changes needed.
 - **Provider credential storage**: Stays in global config. API keys are
-  personal, not per-project. (Phase 3 could layer workspace overrides on top.)
+  personal, not per-project. (Phase 3 layers workspace overrides on top.)
 - **Web UI supervisor**: Works correctly with isolated config. No changes
   needed to the leader-election logic itself.
 - **Port assignment logic**: Works correctly. Dynamic ports for interactive,

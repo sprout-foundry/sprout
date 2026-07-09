@@ -517,16 +517,7 @@ func (ws *ReactWebServer) getClientAgent(clientID string) (*agent.Agent, error) 
 		workspaceDir = filepath.Join(workspaceRoot, configuration.ConfigDirName)
 	}
 
-	err = ws.withAgentWorkspace(workspaceRoot, func() error {
-		created, createErr = agent.NewAgentWithLayers(configBase, workspaceDir, "")
-		return createErr
-	})
-	if err != nil {
-		if errors.Is(err, agent.ErrModelNotAvailable) || errors.Is(err, agent.ErrProviderNotConfigured) {
-			return nil, err
-		}
-		return nil, fmt.Errorf("create agent in workspace: %w", err)
-	}
+	created, createErr = agent.NewAgentWithLayersInWorkspace(configBase, workspaceDir, workspaceRoot, "")
 	if createErr != nil {
 		if errors.Is(createErr, agent.ErrModelNotAvailable) || errors.Is(createErr, agent.ErrProviderNotConfigured) {
 			return nil, createErr

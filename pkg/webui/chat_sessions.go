@@ -215,19 +215,7 @@ func (cs *chatSession) getOrCreateAgent(workspaceRoot string, configBase string,
 	snapshot := append([]byte(nil), cs.AgentState...)
 	var created *agent.Agent
 	var createErr error
-	if workspaceChdir != nil {
-		if err := workspaceChdir(agentWorkspace, func() error {
-			created, createErr = agent.NewAgentWithLayers(configBase, workspaceDir, "")
-			return createErr
-		}); err != nil {
-			if errors.Is(err, agent.ErrModelNotAvailable) || errors.Is(err, agent.ErrProviderNotConfigured) {
-				return nil, err
-			}
-			return nil, fmt.Errorf("create chat agent in workspace: %w", err)
-		}
-	} else {
-		created, createErr = agent.NewAgentWithLayers(configBase, workspaceDir, "")
-	}
+	created, createErr = agent.NewAgentWithLayersInWorkspace(configBase, workspaceDir, agentWorkspace, "")
 	if createErr != nil {
 		if errors.Is(createErr, agent.ErrModelNotAvailable) || errors.Is(createErr, agent.ErrProviderNotConfigured) {
 			return nil, createErr

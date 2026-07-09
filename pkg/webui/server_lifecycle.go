@@ -146,6 +146,10 @@ func (ws *ReactWebServer) Start(ctx context.Context) error {
 		// Start heartbeat monitor to detect and cancel stale connections with active queries
 		go ws.startHeartbeatMonitor(ctx)
 
+		// Start run-buffer subscriber so agent-published events (which bypass
+		// publishClientEventWithChat) are captured for WebSocket reattach replay.
+		ws.startRunBufferSubscriber()
+
 		// SP-108: Start wakeup poller for auto-resume on background completions.
 		go ws.startWakeupPoller(ctx, 2*time.Second)
 	})

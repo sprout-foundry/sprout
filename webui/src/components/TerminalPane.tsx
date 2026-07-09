@@ -14,6 +14,8 @@ import { useTerminalSession } from '../hooks/useTerminalSession';
 import { useTerminalXTerm } from '../hooks/useTerminalXTerm';
 import { useWasmTerminalInput } from '../hooks/useWasmTerminalInput';
 import type { TerminalWebSocketService } from '../services/terminalWebSocket';
+import { reprInput } from '../services/terminalWebSocket';
+import { debugLog } from '../utils/log';
 import ReverseSearchOverlay from './ReverseSearchOverlay';
 import TerminalContextMenu from './TerminalContextMenu';
 import TerminalSearchBar from './TerminalSearchBar';
@@ -141,6 +143,9 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     // ═══════════════════════════════════════════════════════════════════
     const onData = useCallback(
       (data: string) => {
+        debugLog(
+          `[TerminalPane] onData: data=${reprInput(data)}, isExited=${isExitedRef.current}, wasm=${wasmActiveRef.current}`,
+        );
         if (isExitedRef.current) return;
         if (wasmActiveRef.current) {
           handleWasmInput(data);
@@ -268,6 +273,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(
     // Reset isExited when the pane connects (new session or reconnection)
     useEffect(() => {
       if (paneConnected) {
+        debugLog('[TerminalPane] paneConnected=true, resetting isExited');
         setIsExited(false);
       }
     }, [paneConnected]);

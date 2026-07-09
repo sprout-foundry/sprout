@@ -2,7 +2,6 @@ package configuration
 
 import (
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -12,19 +11,6 @@ import (
 // personaDefaultsWarningOnce guards the warning output when embedded persona
 // definitions fail to load during defaultSubagentTypes initialization.
 var personaDefaultsWarningOnce sync.Once
-
-func isDebugEnabled() bool {
-	value := strings.TrimSpace(GetEnvSimple("DEBUG"))
-	if value == "" {
-		return false
-	}
-	switch strings.ToLower(value) {
-	case "0", "false", "no", "off":
-		return false
-	default:
-		return true
-	}
-}
 
 const (
 	ConfigVersion   = "2.0"

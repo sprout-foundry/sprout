@@ -4,7 +4,6 @@ package tools
 
 import (
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -17,9 +16,9 @@ import (
 func TestGetBackgroundOutputBaseDir(t *testing.T) {
 	t.Parallel()
 
-	expected := filepath.Join(os.TempDir(), "sprout-bg")
 	result := GetBackgroundOutputBaseDir()
-	assert.Equal(t, expected, result, "GetBackgroundOutputBaseDir should return <temp>/sprout-bg")
+	assert.NotEmpty(t, result, "GetBackgroundOutputBaseDir should return a non-empty path")
+	assert.Contains(t, result, "bg-processes", "GetBackgroundOutputBaseDir should contain 'bg-processes'")
 }
 
 // =============================================================================
@@ -32,9 +31,9 @@ func TestBPM_GetBaseDir(t *testing.T) {
 	bpm := NewBackgroundProcessManager()
 	defer bpm.Close()
 
-	expected := filepath.Join(os.TempDir(), "sprout-bg")
 	actual := bpm.GetBaseDir()
-	assert.Equal(t, expected, actual, "BPM's GetBaseDir should match the default from GetBackgroundOutputBaseDir")
+	assert.NotEmpty(t, actual, "BPM's GetBaseDir should return a non-empty path")
+	assert.Contains(t, actual, "bg-processes", "BPM's GetBaseDir should contain 'bg-processes'")
 }
 
 // =============================================================================

@@ -194,6 +194,44 @@ const MessageSegments: React.FC<MessageSegmentsProps> = ({ content, toolRefs = [
             return null;
         }
       })}
+
+      {/* Render any toolRefs that weren't matched to text segments as inline
+       * badges after the text. This ensures all tool calls appear inline
+       * even when the LLM's prose doesn't contain "executing tool" lines
+     * (which is the common case — tool execution messages come via
+     * agent_message events, not stream_chunk text). */}
+      {unclaimedRefs.map((ref) => {
+        const baseName = ref.toolName.split('(')[0].trim();
+        const status = getToolStatus?.(ref.toolId);
+        const isDone = status === 'completed' || status === 'error' || status === undefined;
+        const Icon = status === 'error' ? XCircle : status === 'completed' ? CheckCircle : Loader2;
+        const className = isDone
+          ? `segment-tool-footnote${status === 'error' ? ' segment-tool-footnote--error' : ''}`
+          : 'segment-tool-call';
+        return (
+          <span
+            key={`ref-${ref.toolId}`}
+            className={className}
+            role={onToolRefClick ? 'button' : undefined}
+            tabIndex={onToolRefClick ? 0 : undefined}
+            onClick={() => onToolRefClick?.(ref.toolId)}
+            onKeyDown={(e) => {
+              if (onToolRefClick && (e.key === 'Enter' || e.key === ' ')) {
+                e.preventDefault();
+                onToolRefClick?.(ref.toolId);
+              }
+            }}
+            title={ref.label}
+            aria-label={`View tool: ${ref.label}`}
+          >
+            {!isDone && <span className="tool-pill-icon">{getToolIcon(baseName)}</span>}
+            <Icon size={12} className={isDone ? 'tool-footnote-icon' : 'tool-pill-icon'} />
+            <span className={isDone ? 'tool-footnote-name' : 'tool-pill-name'}>
+              {getShortToolName(baseName)}
+            </span>
+          </span>
+        );
+      })}
     </div >
   );
 };

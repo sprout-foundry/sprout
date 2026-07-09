@@ -32,6 +32,12 @@ CREATE TABLE IF NOT EXISTS files (
     path TEXT PRIMARY KEY,
     mtype TEXT NOT NULL DEFAULT '',
     symbol_count INTEGER NOT NULL DEFAULT 0,
-    last_indexed TEXT NOT NULL
+    last_indexed TEXT NOT NULL,
+    is_test INTEGER NOT NULL DEFAULT 0
 );
+
+-- Migration: add is_test column to existing databases that lack it.
+-- SQLite 3.35+ ignores ALTER TABLE ADD COLUMN if the column already exists
+-- in a 'strict' table, but for non-strict tables it returns an error.
+-- We catch and ignore "duplicate column" errors.
 `

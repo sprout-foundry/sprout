@@ -62,6 +62,14 @@ func (h *searchFilesHandler) Execute(ctx context.Context, env ToolEnv, args map[
 		directory = "."
 	}
 
+	// Resolve "." against the workspace root (from ToolEnv), not the process CWD.
+	// Since os.Chdir was eliminated (see agent_creation.go), the daemon CWD is
+	// the home directory — walking "." from there would traverse ~/Pictures,
+	// ~/Library, etc., triggering macOS permission dialogs and taking minutes.
+	if directory == "." && env.WorkspaceRoot != "" {
+		directory = env.WorkspaceRoot
+	}
+
 	if directory != "." {
 		if strings.Contains(directory, "..") {
 			return ToolResult{

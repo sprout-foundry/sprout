@@ -7,7 +7,7 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/agent"
 )
 
-// ClearCommand handles clearing of conversation history
+// ClearCommand handles closing the current session and starting a fresh one
 type ClearCommand struct{}
 
 func (c *ClearCommand) Name() string {
@@ -15,12 +15,12 @@ func (c *ClearCommand) Name() string {
 }
 
 func (c *ClearCommand) Description() string {
-	return "Clears conversation history"
+	return "Close the current session and start a new one"
 }
 
 // Usage returns the detailed help text shown by `/help clear`.
 func (c *ClearCommand) Usage() string {
-	return "/clear   Erase all conversation messages, freeing context.\n"
+	return "/clear   Close the current session and start a new one. The previous session stays available in /sessions.\n"
 }
 
 func (c *ClearCommand) Execute(args []string, chatAgent *agent.Agent) error {
@@ -28,7 +28,11 @@ func (c *ClearCommand) Execute(args []string, chatAgent *agent.Agent) error {
 		return errors.New("agent not available")
 	}
 
-	chatAgent.ClearConversationHistory()
-	fmt.Println("[clean] Conversation history cleared.")
+	newID, err := chatAgent.RotateSession()
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("[clean] New session started: %s\n", newID)
 	return nil
 }

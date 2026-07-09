@@ -547,13 +547,17 @@
 }
 
 .terminal-status-inline {
-  margin: 0 10px 10px 10px;
+  margin: 0 10px 6px 10px;
   background: color-mix(in srgb, var(--accent-error) 12%, transparent);
   border: 1px solid var(--accent-error);
   border-radius: 8px;
-  padding: 8px 10px;
+  padding: 4px 8px;
   color: var(--accent-error);
-  font-size: 12px;
+  font-size: 11px;
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .terminal-status-inline--error {

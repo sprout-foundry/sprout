@@ -21,6 +21,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 interface ToolTimelineBarProps {
   toolExecutions: ToolExecution[];
   maxVisible?: number;
+  onToolClick?: (toolId: string) => void;
 }
 
 const FADE_MS = 3000;
@@ -35,6 +36,7 @@ const HIDE_GRACE_MS = 4000;
 export function ToolTimelineBar({
   toolExecutions,
   maxVisible = DEFAULT_MAX_VISIBLE,
+  onToolClick,
 }: ToolTimelineBarProps): JSX.Element | null {
   // Live tick so in-flight elapsed times update without parent re-renders.
   // 250ms is fine-grained enough to feel live without being wasteful.
@@ -117,7 +119,7 @@ export function ToolTimelineBar({
   return (
     <div className="tool-timeline-bar" role="status" aria-label="Active tools" data-testid="chat-tool-timeline">
       {visible.map((tool) => (
-        <ToolTimelineCard key={tool.id} tool={tool} now={now} />
+        <ToolTimelineCard key={tool.id} tool={tool} now={now} onToolClick={onToolClick} />
       ))}
     </div>
   );
@@ -126,9 +128,10 @@ export function ToolTimelineBar({
 interface ToolTimelineCardProps {
   tool: ToolExecution;
   now: number;
+  onToolClick?: (toolId: string) => void;
 }
 
-function ToolTimelineCard({ tool, now }: ToolTimelineCardProps): JSX.Element {
+function ToolTimelineCard({ tool, now, onToolClick }: ToolTimelineCardProps): JSX.Element {
   const isRunning = tool.status === 'started' || tool.status === 'running';
   const isError = tool.status === 'error';
 
@@ -138,11 +141,32 @@ function ToolTimelineCard({ tool, now }: ToolTimelineCardProps): JSX.Element {
 
   const personaColor = tool.persona ? getPersonaColor(tool.persona) : undefined;
 
+  const handleClick = onToolClick
+    ? (e: React.MouseEvent) => {
+        e.stopPropagation();
+        onToolClick(tool.id);
+      }
+    : undefined;
+  const handleKeyDown = onToolClick
+    ? (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          e.stopPropagation();
+          onToolClick(tool.id);
+        }
+      }
+    : undefined;
+
   return (
     <div
-      className={`tool-timeline-card tool-timeline-card--${tool.status}`}
+      className={`tool-timeline-card tool-timeline-card--${tool.status}${onToolClick ? ' tool-timeline-card--clickable' : ''}`}
       data-tool-name={tool.tool}
       data-persona={tool.persona || ''}
+      role={onToolClick ? 'button' : undefined}
+      tabIndex={onToolClick ? 0 : undefined}
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
+      title={onToolClick ? `Click to view details: ${tool.tool}` : undefined}
     >
       <span className="tool-timeline-status" aria-hidden="true">
         {isRunning ? (

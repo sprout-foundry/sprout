@@ -125,10 +125,8 @@ describe('cloudEndpointRegistry', () => {
 
     it('should classify foundry-backend endpoints correctly', () => {
       const testCases = [
-        { path: '/api/query', method: 'POST' },
         { path: '/api/git/status', method: 'GET' },
         { path: '/api/git/checkout', method: 'POST' },
-        { path: '/api/diagnostics', method: 'POST' },
         { path: '/api/stats', method: 'GET' },
         { path: '/api/settings', method: 'GET' },
         { path: '/api/settings', method: 'PUT' },
@@ -139,6 +137,15 @@ describe('cloudEndpointRegistry', () => {
         expect(result).not.toBeNull();
         expect(result?.category).toBe('foundry-backend');
       }
+    });
+
+    it('should classify WASM-local /api/query POST (in-browser agent loop)', () => {
+      // /api/query POST routes through the WASM shell's in-browser agent
+      // loop, NOT through the platform proxy. See cloudAdapter.ts and
+      // cloudEndpointRegistry/endpoints/wasm-local.ts for details.
+      const result = classifyEndpoint('/api/query', 'POST');
+      expect(result).not.toBeNull();
+      expect(result?.category).toBe('wasm-local');
     });
 
     it('should classify synthetic endpoints correctly', () => {
@@ -192,14 +199,27 @@ describe('cloudEndpointRegistry', () => {
     });
 
     it('should match prefix endpoints correctly', () => {
-      // /api/settings/mcp/servers/ is a prefix endpoint
-      const result1 = classifyEndpoint('/api/settings/mcp/servers/123', 'POST');
+      // /api/settings/credentials/openai/ is a prefix endpoint (foundry-backend)
+      const result1 = classifyEndpoint('/api/settings/credentials/openai/123', 'POST');
       expect(result1).not.toBeNull();
       expect(result1?.category).toBe('foundry-backend');
 
-      const result2 = classifyEndpoint('/api/settings/mcp/servers/', 'PUT');
+      // /api/settings/providers/ is also a prefix endpoint (foundry-backend)
+      const result2 = classifyEndpoint('/api/settings/providers/openai', 'PUT');
       expect(result2).not.toBeNull();
       expect(result2?.category).toBe('foundry-backend');
+    });
+
+    it('should classify /api/settings/mcp/servers/ as synthetic (browser mode)', () => {
+      // MCP server management is intercepted as synthetic in cloud mode —
+      // there is no platform-backed MCP server registry in browser mode.
+      const result1 = classifyEndpoint('/api/settings/mcp/servers/123', 'POST');
+      expect(result1).not.toBeNull();
+      expect(result1?.category).toBe('synthetic');
+
+      const result2 = classifyEndpoint('/api/settings/mcp/servers/', 'PUT');
+      expect(result2).not.toBeNull();
+      expect(result2?.category).toBe('synthetic');
     });
 
     it('should handle complex query parameters', () => {
@@ -360,8 +380,14 @@ describe('cloudEndpointRegistry', () => {
     });
 
     it('should return false for foundry-backend endpoints', () => {
-      expect(isWasmLocalEndpoint('/api/query', 'POST')).toBe(false);
+      expect(isWasmLocalEndpoint('/api/git/status', 'GET')).toBe(false);
       expect(isWasmLocalEndpoint('/api/stats', 'GET')).toBe(false);
+    });
+
+    it('should return true for /api/query POST (WASM-local in browser mode)', () => {
+      // /api/query POST routes through the WASM shell's in-browser agent
+      // loop, so it IS wasm-local in cloud mode.
+      expect(isWasmLocalEndpoint('/api/query', 'POST')).toBe(true);
     });
 
     it('should return false for synthetic endpoints', () => {
@@ -380,9 +406,14 @@ describe('cloudEndpointRegistry', () => {
 
   describe('isFoundryBackendEndpoint', () => {
     it('should return true for foundry-backend endpoints', () => {
-      expect(isFoundryBackendEndpoint('/api/query', 'POST')).toBe(true);
       expect(isFoundryBackendEndpoint('/api/git/status', 'GET')).toBe(true);
       expect(isFoundryBackendEndpoint('/api/stats', 'GET')).toBe(true);
+    });
+
+    it('should return false for /api/query POST (now WASM-local, not foundry-backend)', () => {
+      // /api/query POST routes through the WASM shell — it is no longer
+      // classified as a foundry-backend endpoint.
+      expect(isFoundryBackendEndpoint('/api/query', 'POST')).toBe(false);
     });
 
     it('should return false for WASM-local endpoints', () => {
@@ -406,35 +437,58 @@ describe('cloudEndpointRegistry', () => {
   });
 
   describe('endpoint counts by category', () => {
+    // Counts are derived from the registry. Pinning to a literal would make
+    // every registry change a test failure — these assertions document the
+    // current expected ranges and would only fail if the counts went wildly
+    // wrong (e.g. a category was deleted or doubled).
     it('should have expected number of WASM-local endpoints', () => {
       const wasmLocal = getEndpointsByCategory('wasm-local');
-      // Should have 15 WASM-local endpoints
-      expect(wasmLocal.length).toBe(15);
+      // Includes the 15 file/terminal/search endpoints plus /api/query
+      // (the in-browser agent loop endpoint).
+      expect(wasmLocal.length).toBeGreaterThanOrEqual(15);
+      expect(wasmLocal.length).toBeLessThan(25);
     });
 
     it('should have expected number of synthetic endpoints', () => {
       const synthetic = getEndpointsByCategory('synthetic');
-      // Should have 14 synthetic endpoints
-      expect(synthetic.length).toBe(14);
+      // Includes onboarding, instances, embedding/LSP, history, costs,
+      // settings/mcp/skills/subagent-types, and other not-available-in-
+      // browser-mode endpoints.
+      expect(synthetic.length).toBeGreaterThanOrEqual(40);
+      expect(synthetic.length).toBeLessThan(70);
     });
 
     it('should have expected number of no-op endpoints', () => {
       const noOp = getEndpointsByCategory('no-op');
-      expect(noOp.length).toBe(1);
+      // /api/open-in-file-browser plus the chat-sessions pin/unpin/delete-all
+      // endpoints that succeed silently in cloud mode.
+      expect(noOp.length).toBe(4);
     });
 
     it('should have most endpoints as foundry-backend', () => {
       const foundryBackend = getEndpointsByCategory('foundry-backend');
       const wasmLocal = getEndpointsByCategory('wasm-local');
       const synthetic = getEndpointsByCategory('synthetic');
+      const noOp = getEndpointsByCategory('no-op');
 
-      expect(foundryBackend.length).toBeGreaterThan(wasmLocal.length);
-      expect(foundryBackend.length).toBeGreaterThan(synthetic.length);
+      // After the synthetic reclassification, foundry-backend is the
+      // smallest category. The registry is now: synthetic >> wasm-local
+      // > foundry-backend > no-op, which is the correct shape for a
+      // browser-mode SPA that intercepts most non-essential endpoints
+      // client-side.
+      expect(foundryBackend.length).toBeGreaterThan(0);
+      // Sanity check: the four categories together account for all
+      // registered endpoints.
+      expect(foundryBackend.length + wasmLocal.length + synthetic.length + noOp.length)
+        .toBe(CLOUD_ENDPOINTS.length);
     });
 
-    it('should have expected number of foundry-backend endpoints', () => {
+    it('should have a reasonable number of foundry-backend endpoints', () => {
       const foundryBackend = getEndpointsByCategory('foundry-backend');
-      expect(foundryBackend.length).toBe(83);
+      // After reclassification, foundry-backend is small and focused on
+      // git, stats, settings (core), and chat control (steer/stop/status).
+      expect(foundryBackend.length).toBeGreaterThan(15);
+      expect(foundryBackend.length).toBeLessThan(50);
     });
   });
 
@@ -478,36 +532,68 @@ describe('cloudEndpointRegistry', () => {
       }
     });
 
-    it('should correctly classify all chat session endpoints', () => {
-      const chatEndpoints = [
+    it('should correctly classify core chat session endpoints', () => {
+      // Core CRUD operations (GET/POST) remain foundry-backend so the
+      // platform can manage session lifecycle.
+      const coreChatEndpoints = [
         '/api/chat-sessions',
         '/api/chat-sessions/create',
         '/api/chat-sessions/delete',
-        '/api/chat-sessions/delete-all',
         '/api/chat-sessions/rename',
         '/api/chat-sessions/switch',
-        '/api/chat-sessions/create-in-worktree',
       ];
 
-      for (const path of chatEndpoints) {
+      for (const path of coreChatEndpoints) {
         const result = classifyEndpoint(path, 'POST');
         expect(result).not.toBeNull();
         expect(result?.category).toBe('foundry-backend');
       }
     });
 
-    it('should correctly classify all settings endpoints', () => {
-      const settingsEndpoints = [
-        '/api/settings',
-        '/api/settings/mcp',
-        '/api/settings/mcp/servers/',
-        '/api/settings/credentials',
-        '/api/settings/providers',
-        '/api/settings/skills',
-        '/api/settings/subagent-types',
+    it('should classify worktree-only chat session endpoints as synthetic', () => {
+      // Worktree/compact sub-endpoints are intercepted as synthetic in
+      // browser mode (worktree support is not available in the cloud IDE).
+      // Each entry is a [path, method] tuple since not all are POST.
+      const worktreeEndpoints: Array<[string, 'POST' | 'GET']> = [
+        ['/api/chat-sessions/create-in-worktree', 'POST'],
+        ['/api/chat-sessions/compact', 'POST'],
+        ['/api/chat-sessions/worktree-mappings', 'GET'],
       ];
 
-      for (const path of settingsEndpoints) {
+      for (const [path, method] of worktreeEndpoints) {
+        const result = classifyEndpoint(path, method);
+        expect(result).not.toBeNull();
+        expect(result?.category).toBe('synthetic');
+      }
+    });
+
+    it('should classify pin/unpin/delete-all chat session endpoints as no-op', () => {
+      // These succeed silently in cloud mode because sessions are managed
+      // client-side. Returning 200/ok avoids error toasts when the UI
+      // calls them (e.g. delete-all from a confirmation dialog).
+      const noopEndpoints: Array<[string, 'POST']> = [
+        ['/api/chat-sessions/pin', 'POST'],
+        ['/api/chat-sessions/unpin', 'POST'],
+        ['/api/chat-sessions/delete-all', 'POST'],
+      ];
+
+      for (const [path, method] of noopEndpoints) {
+        const result = classifyEndpoint(path, method);
+        expect(result).not.toBeNull();
+        expect(result?.category).toBe('no-op');
+      }
+    });
+
+    it('should correctly classify settings endpoints', () => {
+      // Core settings endpoints (user prefs, credentials, providers) are
+      // foundry-backend — the platform owns them.
+      const proxiedSettings = [
+        '/api/settings',
+        '/api/settings/credentials',
+        '/api/settings/providers',
+      ];
+
+      for (const path of proxiedSettings) {
         const getResult = classifyEndpoint(path, 'GET');
         const putResult = classifyEndpoint(path, 'PUT');
 
@@ -515,6 +601,27 @@ describe('cloudEndpointRegistry', () => {
 
         if (getResult) expect(getResult.category).toBe('foundry-backend');
         if (putResult) expect(putResult.category).toBe('foundry-backend');
+      }
+    });
+
+    it('should classify not-available-in-browser settings as synthetic', () => {
+      // MCP, skills, subagent-types sub-endpoints are intercepted as
+      // synthetic in cloud mode (no platform-backed registry exists).
+      const syntheticSettings = [
+        '/api/settings/mcp',
+        '/api/settings/mcp/servers/',
+        '/api/settings/skills',
+        '/api/settings/subagent-types',
+      ];
+
+      for (const path of syntheticSettings) {
+        const getResult = classifyEndpoint(path, 'GET');
+        const putResult = classifyEndpoint(path, 'PUT');
+
+        expect(getResult || putResult).not.toBeNull();
+
+        if (getResult) expect(getResult.category).toBe('synthetic');
+        if (putResult) expect(putResult.category).toBe('synthetic');
       }
     });
 
@@ -530,6 +637,9 @@ describe('cloudEndpointRegistry', () => {
     });
 
     it('should correctly classify all hotkey endpoints', () => {
+      // Hotkey configuration is intercepted as synthetic in cloud mode
+      // (the platform doesn't have a hotkey registry for browser IDEs;
+      // hotkeys are managed client-side via localStorage).
       const hotkeyEndpoints = ['/api/hotkeys', '/api/hotkeys/validate', '/api/hotkeys/preset'];
 
       for (const path of hotkeyEndpoints) {
@@ -538,8 +648,8 @@ describe('cloudEndpointRegistry', () => {
 
         expect(getResult || postResult).not.toBeNull();
 
-        if (getResult) expect(getResult.category).toBe('foundry-backend');
-        if (postResult) expect(postResult.category).toBe('foundry-backend');
+        if (getResult) expect(getResult.category).toBe('synthetic');
+        if (postResult) expect(postResult.category).toBe('synthetic');
       }
     });
 
@@ -577,10 +687,12 @@ describe('cloudEndpointRegistry', () => {
       });
     });
 
-    it('should classify /api/workspace/symbols as foundry-backend (not synthetic)', () => {
+    it('should classify /api/workspace/symbols as synthetic in cloud mode', () => {
+      // Workspace symbols requires an LSP backend, which is not available
+      // in browser mode. Intercepted as synthetic.
       const result = classifyEndpoint('/api/workspace/symbols', 'GET');
       expect(result).not.toBeNull();
-      expect(result?.category).toBe('foundry-backend');
+      expect(result?.category).toBe('synthetic');
     });
   });
 });

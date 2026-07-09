@@ -284,23 +284,6 @@ func defaultOllamaClientFactory() (ollamaClient, error) {
 	return newHTTPClientFromEnv(), nil
 }
 
-func ensureModelAvailable(ctx context.Context, client ollamaClient, model string) error {
-	listResp, err := client.List(ctx)
-	if err != nil {
-		return agenterrors.NewNetwork("failed to list local models", err)
-	}
-
-	availableModels := make([]string, 0, len(listResp.Models))
-	for _, m := range listResp.Models {
-		availableModels = append(availableModels, m.Name)
-		if m.Name == model {
-			return nil
-		}
-	}
-
-	return agenterrors.NewProviderError(fmt.Sprintf("model '%s' not found locally. Available models: %s", model, availableModels), nil, "ollama", "")
-}
-
 func newOllamaLocalClientWithFactory(model string, factory ollamaClientFactory) (*OllamaLocalClient, error) {
 	if factory == nil {
 		factory = defaultOllamaClientFactory

@@ -96,15 +96,23 @@ let container: HTMLDivElement;
 let root: Root;
 
 let hookHandleEvent: ((event: WsEvent) => void) | null = null;
+let hookHandleReconnect: (() => void) | null = null;
 
 const HookWrapper = ({
   stateHolder,
   setStateMock,
   activeChatIdRef,
+  getStatsMock,
 }: {
   stateHolder: { current: Record<string, unknown> };
   setStateMock: ReturnType<typeof vi.fn>;
   activeChatIdRef: MutableRefObject<string | null>;
+  /**
+   * Optional override for apiService.getStats(). Resolves by default with
+   * a minimal stats object. Pass a rejecting mock to exercise the
+   * handleReconnect .catch branch.
+   */
+  getStatsMock?: () => Promise<unknown>;
 }) => {
   const activeRequestsRef: MutableRefObject<number> = { current: 0 };
   const pendingProviderRef: MutableRefObject<string> = { current: 'openai' };
@@ -124,16 +132,17 @@ const HookWrapper = ({
   };
 
   const apiService = {
-    getStats: vi.fn().mockResolvedValue({ provider: 'openai', model: 'gpt-4' }),
+    getStats: getStatsMock ?? vi.fn().mockResolvedValue({ provider: 'openai', model: 'gpt-4' }),
   };
 
-  const { handleEvent } = useWebSocketEventHandler({
+  const { handleEvent, handleReconnect } = useWebSocketEventHandler({
     setState: setStateMock as AppStoreSetState,
     refs,
     apiService,
   });
 
   hookHandleEvent = handleEvent;
+  hookHandleReconnect = handleReconnect;
 
   return createElement('div', null, 'hook host');
 };
@@ -143,6 +152,7 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
   hookHandleEvent = null;
+  hookHandleReconnect = null;
   vi.clearAllMocks();
 });
 
@@ -459,5 +469,160 @@ describe('chat_run_restored', () => {
     });
     expect(reloads).toHaveLength(0);
     cleanup();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tests: handleReconnect clears lastError unconditionally (bug fix)
+//
+// Symptom: after a WebSocket reconnect, the "chat failed" red banner in
+// ChatFooter (driven by lastError) used to stick around if the getStats()
+// request following reconnect was slow or failed. The reconnect itself is
+// the recovery signal — handleReconnect must clear lastError regardless of
+// the getStats() outcome.
+// ---------------------------------------------------------------------------
+
+describe('handleReconnect', () => {
+  // Helper: install the wrapper with a controllable getStats mock and seed
+  // the starting state. Returns the live stateHolder and the setState spy
+  // so the test can assert on call ordering and final values.
+  function setup(opts: {
+    initialLastError: string | null;
+    getStatsImpl: () => Promise<unknown>;
+  }) {
+    const stateHolder = {
+      current: { ...createDefaultState(), lastError: opts.initialLastError },
+    };
+    const setStateMock = vi.fn((updater: unknown) => {
+      if (typeof updater === 'function') {
+        const prev = stateHolder.current;
+        stateHolder.current = { ...prev, ...(updater(prev) as object) };
+      } else {
+        stateHolder.current = updater as typeof stateHolder.current;
+      }
+    });
+    const activeChatIdRef: MutableRefObject<string | null> = { current: null };
+    const getStatsMock = vi.fn().mockImplementation(opts.getStatsImpl);
+
+    act(() => {
+      root.render(
+        createElement(HookWrapper, {
+          stateHolder,
+          setStateMock,
+          activeChatIdRef,
+          getStatsMock,
+        }),
+      );
+    });
+
+    return { stateHolder, setStateMock, getStatsMock };
+  }
+
+  it('clears lastError when getStats() rejects (regression for sticky banner)', async () => {
+    const { stateHolder, setStateMock, getStatsMock } = setup({
+      initialLastError: 'chat failed: connection lost',
+      // Never resolves within the test window — the .then branch will not
+      // run, so only the up-front + .catch clears can save the banner.
+      getStatsImpl: () => new Promise(() => {}),
+    });
+
+    // Reset call-history so we can inspect only the handleReconnect calls.
+    setStateMock.mockClear();
+    getStatsMock.mockClear();
+
+    await act(async () => {
+      hookHandleReconnect!();
+      // Flush microtasks so the synchronous up-front setState is recorded,
+      // then await the never-resolving promise so .then stays pending.
+      await Promise.resolve();
+    });
+
+    // The unconditional up-front clear must have run with lastError: null
+    // before getStats() was called. Find the first setState call's payload.
+    const firstSetStateCall = setStateMock.mock.calls[0];
+    expect(firstSetStateCall).toBeDefined();
+    const firstUpdater = firstSetStateCall[0] as (prev: unknown) => unknown;
+    const firstResult = firstUpdater(stateHolder.current);
+    expect(firstResult).toMatchObject({ lastError: null });
+
+    // The applied state must reflect the clear.
+    expect(stateHolder.current.lastError).toBeNull();
+    // getStats must have been invoked.
+    expect(getStatsMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears lastError in the .catch branch when getStats() rejects', async () => {
+    const getStatsImpl = vi.fn().mockRejectedValue(new Error('network down'));
+    const { stateHolder, setStateMock } = setup({
+      initialLastError: 'chat failed: send error',
+      getStatsImpl,
+    });
+
+    setStateMock.mockClear();
+    getStatsImpl.mockClear();
+
+    await act(async () => {
+      hookHandleReconnect!();
+      // Allow the rejected promise's .catch to run.
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // After both the up-front and the .catch clears run, lastError must
+    // be null in the applied state.
+    expect(stateHolder.current.lastError).toBeNull();
+
+    // Sanity: at least one setState update with lastError: null was issued
+    // (covers both the up-front clear and the defensive .catch clear).
+    const clearingCalls = setStateMock.mock.calls.filter((call) => {
+      const updater = call[0];
+      if (typeof updater !== 'function') return false;
+      try {
+        const result = updater(stateHolder.current) as { lastError?: unknown };
+        return result?.lastError === null;
+      } catch {
+        return false;
+      }
+    });
+    expect(clearingCalls.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('clears lastError when getStats() resolves successfully', async () => {
+    const { stateHolder } = setup({
+      initialLastError: 'chat failed: send timeout',
+      getStatsImpl: () => Promise.resolve({ provider: 'openai', model: 'gpt-4', is_processing: false }),
+    });
+
+    await act(async () => {
+      hookHandleReconnect!();
+      // Let the resolved .then run.
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(stateHolder.current.lastError).toBeNull();
+  });
+
+  it('is a no-op on lastError when called with lastError already null', async () => {
+    const { stateHolder, setStateMock, getStatsMock } = setup({
+      initialLastError: null,
+      getStatsImpl: () => Promise.resolve({ provider: 'openai', model: 'gpt-4', is_processing: false }),
+    });
+
+    setStateMock.mockClear();
+    getStatsMock.mockClear();
+
+    await act(async () => {
+      hookHandleReconnect!();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // lastError stays null — no exception thrown, no spurious non-null value.
+    expect(stateHolder.current.lastError).toBeNull();
+    // getStats is still called (it does real recovery work), so this is not
+    // a guard but a smoke test that the unconditional clear does not flip
+    // an already-clean value to a non-null sentinel.
+    expect(getStatsMock).toHaveBeenCalledTimes(1);
   });
 });

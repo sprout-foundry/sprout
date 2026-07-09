@@ -103,7 +103,8 @@
 
 .tool-depth-badge {
   display: inline-block;
-  margin-left: 6px;
+  margin-left: 4px;
+  vertical-align: middle;
   padding: 1px 6px;
   border-radius: var(--radius-sm, 4px);
   font-size: 10px;
@@ -124,6 +125,43 @@
 .tool-depth-badge[data-depth-tier='deep'] {
   background: var(--accent-warning);
   color: var(--accent-warning-fg);
+}
+
+/* ── Nesting depth visual cues (Change 3) ──────────────────────
+ * Uses a ::before pseudo-element for the depth indicator instead of
+ * border-left, so it doesn't conflict with the existing status-based
+ * left border. Only applies to depth > 0 tools (nested subagents and
+ * their children). Depth-0 tools keep their status border only. */
+.tool-execution[data-depth='1'],
+.tool-execution[data-depth='2'] {
+  position: relative;
+}
+
+.tool-execution[data-depth='1'] {
+  margin-left: 8px;
+}
+
+.tool-execution[data-depth='2'] {
+  margin-left: 16px;
+}
+
+.tool-execution[data-depth='1']::before,
+.tool-execution[data-depth='2']::before {
+  content: '';
+  position: absolute;
+  left: -1px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  border-radius: 1px;
+}
+
+.tool-execution[data-depth='1']::before {
+  background: color-mix(in srgb, var(--accent-primary) 50%, transparent);
+}
+
+.tool-execution[data-depth='2']::before {
+  background: color-mix(in srgb, var(--accent-warning) 50%, transparent);
 }
 
 .tool-query-tools {

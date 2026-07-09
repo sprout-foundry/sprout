@@ -163,6 +163,13 @@ export default function useWebSocketEvents({
   // state so the user regains control of the UI.
   const handleReconnect = useCallback(() => {
     debugLog('[reconnect] Checking backend processing state for stuck-query recovery');
+    // The reconnect itself is the recovery signal — clear lastError up front
+    // so the "chat failed" red banner in ChatFooter dismisses immediately. If
+    // getStats() is slow/fails (very common — same network/daemon hiccup that
+    // caused the send failure is still resolving), the .then branch that also
+    // sets lastError: null will not run, and without this unconditional clear
+    // the banner sticks until the user sends a new message or reloads.
+    setState((prev) => ({ ...prev, lastError: null }));
     ApiService.getInstance()
       .getStats()
       .then((stats) => {
@@ -206,6 +213,10 @@ export default function useWebSocketEvents({
       })
       .catch((err) => {
         debugLog('[reconnect] Failed to fetch stats for recovery:', err);
+        // Defensive: the up-front clear above already covers the no-flash
+        // case, but re-clear here so any error path that re-sets lastError
+        // (or a stale closure) still ends with a clean banner.
+        setState((prev) => ({ ...prev, lastError: null }));
       });
   }, [recoverChatMessages]); // eslint-disable-line react-hooks/exhaustive-deps -- activeRequestsRef is a stable ref; setState is stable
 

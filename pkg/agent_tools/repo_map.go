@@ -707,6 +707,24 @@ func extractGoSymbolsASTWithEdges(path string, content []byte) (*SymbolWithEdges
 				EdgeType:            edgeType,
 				Line:                callLine,
 			})
+
+			// sync.Once.Do heuristic: when we see x.Do(fn) where fn is a simple
+			// identifier, emit a synthetic call edge from the enclosing function
+			// to fn. This catches loadOnce.Do(loadCatalogs) and similar patterns
+			// where the call graph is otherwise invisible to static analysis.
+			if sel, ok := call.Fun.(*ast.SelectorExpr); ok && sel.Sel.Name == "Do" {
+				if len(call.Args) == 1 {
+					if ident, ok := call.Args[0].(*ast.Ident); ok {
+						edges = append(edges, codegraph.Edge{
+							SourceQualifiedName: funcName,
+							TargetQualifiedName: ident.Name,
+							EdgeType:            "calls",
+							Line:                callLine,
+						})
+					}
+				}
+			}
+
 			return true
 		})
 	}

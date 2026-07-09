@@ -198,7 +198,7 @@ func (h *findDeadCodeHandler) Name() string { return "find_dead_code" }
 func (h *findDeadCodeHandler) Definition() ToolDefinition {
 	return ToolDefinition{
 		Name:        "find_dead_code",
-		Description: "Find functions with zero inbound call edges (dead code candidates). Excludes entry points like main(), init(), exported API, and test functions. Requires the code intelligence graph to be indexed. Results are candidates for manual review, not authoritative dead code — static analysis cannot trace reflection, interface dispatch, or command-registration closures.",
+		Description: "Find functions with zero inbound call edges (dead code candidates). Results are grouped by confidence tier: high (likely dead), medium (possibly dead), low (probably alive via dynamic dispatch). Excludes entry points like main(), init(), exported API, and test functions. Requires the code intelligence graph to be indexed. Results are candidates for manual review, not authoritative dead code — static analysis cannot trace reflection, interface dispatch, or command-registration closures.",
 		Required:    []string{},
 		Parameters: []ParameterDef{
 			{Name: "directory", Type: "string", Description: "Optional: restrict search to a specific directory."},
@@ -219,16 +219,16 @@ func (h *findDeadCodeHandler) Execute(ctx context.Context, env ToolEnv, args map
 	defer store.Close()
 
 	dir, _ := args["directory"].(string)
-	dead, err := store.FindDeadCode(ctx, dir)
+	candidates, err := store.FindDeadCodeWithMeta(ctx, dir)
 	if err != nil {
 		return ToolResult{Output: fmt.Sprintf("Query failed: %v", err), IsError: true}, nil
 	}
 
-	if len(dead) == 0 {
+	if len(candidates) == 0 {
 		return ToolResult{Output: "No dead code found."}, nil
 	}
 
-	return ToolResult{Output: formatSymbolListHandler(fmt.Sprintf("Dead code found (%d)", len(dead)), dead)}, nil
+	return ToolResult{Output: formatDeadCodeWithConfidence(candidates)}, nil
 }
 
 func (h *findDeadCodeHandler) Aliases() []string      { return nil }
@@ -260,6 +260,67 @@ func formatSymbolListHandler(title string, symbols []codegraph.Symbol) string {
 		fmt.Fprintf(&b, "  - %s %s (%s:%d)\n", sym.Kind, sym.QualifiedName, sym.FilePath, sym.Line)
 	}
 	return b.String()
+}
+
+// formatDeadCodeWithConfidence groups candidates by confidence tier and formats
+// them with per-tier summaries and test-only annotations.
+func formatDeadCodeWithConfidence(candidates []codegraph.DeadCodeCandidate) string {
+	groups := map[codegraph.ConfidenceLevel][]codegraph.DeadCodeCandidate{
+		codegraph.ConfidenceHigh:   {},
+		codegraph.ConfidenceMedium: {},
+		codegraph.ConfidenceLow:    {},
+	}
+
+	for _, c := range candidates {
+		groups[c.Confidence] = append(groups[c.Confidence], c)
+	}
+
+	var b strings.Builder
+	totalHigh := len(groups[codegraph.ConfidenceHigh])
+	totalMedium := len(groups[codegraph.ConfidenceMedium])
+	totalLow := len(groups[codegraph.ConfidenceLow])
+	fmt.Fprintf(&b, "Dead code candidates (%d total)\n\n", len(candidates))
+
+	b.WriteString("══════════════════════════════════════════════\n")
+	fmt.Fprintf(&b, "HIGH confidence (%d) — very likely dead\n", totalHigh)
+	b.WriteString("══════════════════════════════════════════════\n")
+	appendConfidenceGroup(&b, groups[codegraph.ConfidenceHigh])
+
+	fmt.Fprintf(&b, "══════════════════════════════════════════════\n")
+	fmt.Fprintf(&b, "MEDIUM confidence (%d) — possibly dead\n", totalMedium)
+	b.WriteString("══════════════════════════════════════════════\n")
+	if totalMedium > 0 {
+		fmt.Fprintf(&b, "  In handler/registration files or names. Verify before deleting.\n")
+		appendConfidenceGroup(&b, groups[codegraph.ConfidenceMedium])
+	} else {
+		b.WriteString("  (none)\n")
+	}
+
+	fmt.Fprintf(&b, "══════════════════════════════════════════════\n")
+	fmt.Fprintf(&b, "LOW confidence (%d) — probably alive via dynamic dispatch\n", totalLow)
+	b.WriteString("══════════════════════════════════════════════\n")
+	fmt.Fprintf(&b, "  Likely false positives: wired via closures, maps, JSX, or reflection.\n")
+	if totalLow == 0 {
+		b.WriteString("  (none)\n")
+	} else if totalLow <= 20 {
+		appendConfidenceGroup(&b, groups[codegraph.ConfidenceLow])
+	} else {
+		fmt.Fprintf(&b, "  (%d candidates — suppressed; use --directory to narrow scope)\n", totalLow)
+	}
+
+	b.WriteString("\nTip: Use get_callers to verify a HIGH-confidence candidate before deleting.\n")
+	return b.String()
+}
+
+func appendConfidenceGroup(b *strings.Builder, candidates []codegraph.DeadCodeCandidate) {
+	for _, c := range candidates {
+		annotation := ""
+		if c.TestCallers > 0 {
+			annotation = fmt.Sprintf(" [test-only: %d caller(s)]", c.TestCallers)
+		}
+		fmt.Fprintf(b, "  - %s %s (%s:%d)%s\n",
+			c.Symbol.Kind, c.Symbol.QualifiedName, c.Symbol.FilePath, c.Symbol.Line, annotation)
+	}
 }
 
 // requireArgs validates that the given required args are present.

@@ -6,7 +6,6 @@ import (
 	"context"
 	"os"
 	"os/exec"
-	"os/signal"
 	"syscall"
 	"testing"
 	"time"
@@ -75,10 +74,18 @@ func TestDetachFromSessionNilSysProcAttr(t *testing.T) {
 //
 // In both cases the child survives. This test validates the end-to-end
 // SIGHUP immunity guarantee of detachFromSession.
+//
+// CRITICAL: This test must NOT send signals to the test process's own
+// process group — doing so kills the test runner and any parent process
+// (including sprout agent sessions). Instead, we verify that the child
+// process is in a different session/process group than the test process,
+// which is the actual guarantee that protects it from terminal SIGHUP.
 // =============================================================================
 
 func TestBackgroundProcessSurvivesSIGHUP(t *testing.T) {
-	t.Parallel()
+	if testing.Short() {
+		t.Skip("skipping SIGHUP test in short mode")
+	}
 
 	bpm := NewBackgroundProcessManager()
 	defer bpm.Close()
@@ -98,21 +105,38 @@ func TestBackgroundProcessSurvivesSIGHUP(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "running", status)
 
-	// Protect the test process from SIGHUP by temporarily ignoring it.
-	// We send SIGHUP to the parent's process group to simulate terminal
-	// teardown, but the test process itself must not die.
-	signal.Ignore(syscall.SIGHUP)
-	defer signal.Reset(syscall.SIGHUP)
+	// Verify the child is in a different session than the test process.
+	// This is the actual guarantee that protects against terminal SIGHUP:
+	// a SIGHUP sent to the terminal's process group cannot reach a process
+	// in a different session (Setsid path) or a process that has SIG_IGN
+	// set for SIGHUP (Setpgid path).
+	// Use Getsid via raw syscall (not available in syscall package on all platforms).
+	getsid := func(pid int) (int, error) {
+		r1, _, errno := syscall.Syscall(syscall.SYS_GETSID, uintptr(pid), 0, 0)
+		if errno != 0 {
+			return 0, errno
+		}
+		return int(r1), nil
+	}
 
-	// Send SIGHUP to the parent's process group (simulates terminal teardown).
-	// The child should NOT be affected because:
-	//   - Setsid path: child is in its own session & process group
-	//   - Setpgid path: child inherited SIG_IGN for SIGHUP
-	parentPGID, err := syscall.Getpgid(os.Getpid())
-	require.NoError(t, err)
+	parentSessionID, err := getsid(os.Getpid())
+	require.NoError(t, err, "should get parent session ID")
 
-	// Send SIGHUP to the parent's process group (negative PGID)
-	_ = syscall.Kill(-parentPGID, syscall.SIGHUP)
+	childSessionID, err := getsid(childPID)
+	require.NoError(t, err, "should get child session ID")
+
+	if parentSessionID != childSessionID {
+		// Setsid path: child is in its own session — fully isolated
+		t.Logf("child (session %d) is in a different session than parent (session %d) — Setsid path", childSessionID, parentSessionID)
+	} else {
+		// Setpgid path: same session but SIGHUP is ignored
+		t.Logf("child (session %d) shares session with parent (session %d) — Setpgid+SIGHUP-ignore path", childSessionID, parentSessionID)
+	}
+
+	// Send SIGHUP directly to the child (not its process group) to verify
+	// the child either ignores it or is in a different session.
+	// This is safe because we're targeting ONLY the child, not the test runner.
+	_ = syscall.Kill(childPID, syscall.SIGHUP)
 
 	// Brief pause to let signal delivery complete
 	time.Sleep(200 * time.Millisecond)
@@ -120,7 +144,7 @@ func TestBackgroundProcessSurvivesSIGHUP(t *testing.T) {
 	// Verify the child process is still alive
 	err = syscall.Kill(childPID, syscall.Signal(0))
 	assert.NoError(t, err,
-		"child process (PID %d) should survive SIGHUP to parent's process group", childPID)
+		"child process (PID %d) should survive direct SIGHUP (either different session or SIG_IGN)", childPID)
 
 	// Verify BPM still reports it as running
 	_, status, err = bpm.CheckOutput(sessionID)

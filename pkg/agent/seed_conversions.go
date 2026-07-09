@@ -26,50 +26,7 @@ func seedRequestToSprout(req *core.ChatRequest) *core.ChatRequest {
 	return req
 }
 
-// seedMessagesToSprout returns messages unchanged.
-func seedMessagesToSprout(msgs []core.Message) []core.Message {
-	return msgs
-}
 
-// sproutMessagesToSeed returns messages unchanged.
-func sproutMessagesToSeed(msgs []api.Message) []core.Message {
-	return msgs
-}
-
-// seedToolCallsToSprout returns tool calls unchanged.
-func seedToolCallsToSprout(calls []core.ToolCall) []core.ToolCall {
-	return calls
-}
-
-// coreToolCallToSprout returns the tool call unchanged.
-func coreToolCallToSprout(tc core.ToolCall) api.ToolCall {
-	return tc
-}
-
-// sproutToolCallsToSeed returns tool calls unchanged.
-func sproutToolCallsToSeed(calls []api.ToolCall) []core.ToolCall {
-	return calls
-}
-
-// seedToolsToSprout returns tools unchanged.
-func seedToolsToSprout(tools []core.Tool) []core.Tool {
-	return tools
-}
-
-// sproutToolsToSeed returns tools unchanged.
-func sproutToolsToSeed(tools []api.Tool) []core.Tool {
-	return tools
-}
-
-// seedMessageToSprout returns the message unchanged.
-func seedMessageToSprout(m core.Message) api.Message {
-	return m
-}
-
-// sproutMessageToSeed returns the message unchanged.
-func sproutMessageToSeed(m api.Message) core.Message {
-	return m
-}
 
 // sproutResponseToSeed returns the response unchanged since
 // api.ChatResponse and core.ChatResponse are the same type.

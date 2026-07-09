@@ -363,26 +363,38 @@ func (ws *ReactWebServer) handleAPIGitWorktreeCheckout(w http.ResponseWriter, r 
 		return
 	}
 
-	// Validate the resolved path stays within daemon root
-	ws.mutex.RLock()
-	daemonRoot := ws.daemonRoot
-	ws.mutex.RUnlock()
-	if !isWithinWorkspace(absPath, daemonRoot) && absPath != daemonRoot {
-		http.Error(w, "Worktree path must stay within workspace boundary", http.StatusBadRequest)
-		return
-	}
-
 	// Switch workspace root directly — do NOT call setClientWorkspaceRoot
 	// because it nukes all chat sessions. We preserve chat sessions but
 	// clear transient state (agent, terminals) like setClientWorkspaceRoot does.
+	//
+	// The worktree was already validated via git worktree list --porcelain
+	// above, so we trust git as the source of truth and do not reject
+	// sibling worktrees with an isWithinWorkspace(daemonRoot) check.
 	clientID := ws.resolveClientID(r)
 	ws.mutex.Lock()
 	ctx := ws.getOrCreateClientContextLocked(clientID)
 	ctx.WorkspaceRoot = absPath
-	if clientID == defaultWebClientID {
-		ws.workspaceRoot = absPath
+	// Update ws.workspaceRoot unconditionally — a worktree switch is an
+	// explicit user action and should always update the server-level root
+	// so that post-reload re-initialization picks up the correct workspace.
+	ws.workspaceRoot = absPath
+
+	// Update chat session worktree paths: follow the switch for all sessions
+	// whose WorktreePath is empty or matches the previous workspace root.
+	// Do NOT clobber a chat explicitly bound to a different worktree.
+	for _, cs := range ctx.ChatSessions {
+		cs.mu.Lock()
+		if cs.WorktreePath == "" || cs.WorktreePath == workspaceRoot {
+			cs.WorktreePath = absPath
+		}
+		cs.mu.Unlock()
 	}
-	// Clear transient state like setClientWorkspaceRoot does
+
+	// Close terminal sessions before clearing the reference, so active PTY
+	// processes in the old workspace are cleaned up rather than leaked.
+	if ctx.Terminal != nil {
+		ctx.Terminal.CloseAllSessions()
+	}
 	ctx.Agent = nil
 	ctx.Terminal = nil
 	ws.mutex.Unlock()

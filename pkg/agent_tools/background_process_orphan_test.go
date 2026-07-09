@@ -191,7 +191,7 @@ func TestCleanupOrphanedBackgroundProcesses_MultipleOrphans(t *testing.T) {
 // an .output file exists without a corresponding .pid file (e.g., the PID
 // file was already removed by a previous run, or the process was started
 // outside the BPM). Without the stray-output sweep these accumulate forever
-// in /tmp/sprout-bg/.
+// in the bg-processes directory.
 func TestCleanupOrphanedBackgroundProcesses_StrayOutput(t *testing.T) {
 	t.Parallel()
 

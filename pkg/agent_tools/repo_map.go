@@ -655,6 +655,70 @@ func extractGoSymbolsASTWithEdges(path string, content []byte) (*SymbolWithEdges
 					}
 				}
 			}
+
+			// Handle package-level variable initializers: var x = fn().
+			// Static call-graph extraction otherwise misses these because the
+			// call expression has no enclosing function symbol. Emit a
+			// synthetic edge from "func init" to each callee so init-time
+			// callees don't show up as false-positive dead code. The matching
+			// "func init" node is added to the symbol list so resolveEdgeNode
+			// can find it during edge insertion.
+			if gd, ok2 := decl.(*ast.GenDecl); ok2 && (gd.Tok == token.VAR || gd.Tok == token.CONST) {
+				const initCaller = "func init"
+				symbols = append(symbols, SymbolEntry{Name: initCaller, Line: fset.Position(gd.Pos()).Line})
+				for _, spec := range gd.Specs {
+					vs, ok := spec.(*ast.ValueSpec)
+					if !ok {
+						continue
+					}
+					for _, val := range vs.Values {
+						ast.Inspect(val, func(n ast.Node) bool {
+							call, ok := n.(*ast.CallExpr)
+							if !ok {
+								return true
+							}
+							calleeName := exprToString(call.Fun)
+							callLine := fset.Position(call.Pos()).Line
+
+							edgeType := "calls"
+							if dotIdx := strings.IndexByte(calleeName, '.'); dotIdx > 0 {
+								for dotIdx > 0 {
+									prefix := calleeName[:dotIdx]
+									if pkgPath, ok := importMap[prefix]; ok {
+										calleeName = pkgPath + calleeName[dotIdx:]
+										edgeType = "resolved_calls"
+										break
+									}
+									calleeName = calleeName[dotIdx+1:]
+									dotIdx = strings.IndexByte(calleeName, '.')
+								}
+							}
+
+							edges = append(edges, codegraph.Edge{
+								SourceQualifiedName: initCaller,
+								TargetQualifiedName: calleeName,
+								EdgeType:            edgeType,
+								Line:                callLine,
+							})
+
+							// sync.Once.Do heuristic at file scope.
+							if sel, ok := call.Fun.(*ast.SelectorExpr); ok && sel.Sel.Name == "Do" {
+								if len(call.Args) == 1 {
+									if ident, ok := call.Args[0].(*ast.Ident); ok {
+										edges = append(edges, codegraph.Edge{
+											SourceQualifiedName: initCaller,
+											TargetQualifiedName: ident.Name,
+											EdgeType:            "calls",
+											Line:                callLine,
+										})
+									}
+								}
+							}
+							return true
+						})
+					}
+				}
+			}
 			continue
 		}
 

@@ -42,7 +42,7 @@ const MaxRetries = 3
 `,
 	})
 
-	result, err := GenerateRepoMap(context.Background(), dir)
+	result, err := GenerateRepoMap(context.Background(), dir, 3, "")
 	requireErr(t, err, "generate repo map")
 
 	// AST extracts: types and functions (not var/const).
@@ -87,7 +87,7 @@ async def fetch_data(url): pass
 `,
 	})
 
-	result, err := GenerateRepoMap(context.Background(), dir)
+	result, err := GenerateRepoMap(context.Background(), dir, 3, "")
 	requireErr(t, err, "generate repo map")
 
 	// Go: AST extraction (types without "struct"/"interface" suffix)
@@ -128,7 +128,7 @@ async def fetch_data(url): pass
 // TestGenerateRepoMapEmptyDirectory verifies that an empty directory returns a header.
 func TestGenerateRepoMapEmptyDirectory(t *testing.T) {
 	dir := t.TempDir()
-	result, err := GenerateRepoMap(context.Background(), dir)
+	result, err := GenerateRepoMap(context.Background(), dir, 3, "")
 	requireErr(t, err, "generate repo map")
 	if !strings.Contains(result, "## repo_map:") {
 		t.Error("missing repo_map header")
@@ -147,7 +147,7 @@ func TestGenerateRepoMapBinaryFileSkipped(t *testing.T) {
 func Hello() {}
 `})
 
-	result, err := GenerateRepoMap(context.Background(), dir)
+	result, err := GenerateRepoMap(context.Background(), dir, 3, "")
 	requireErr(t, err, "generate repo map")
 	if !strings.Contains(result, "- func Hello:3") {
 		t.Errorf("missing func Hello with line number:\n%s", result)
@@ -171,7 +171,7 @@ func ValidateRequest%d(req *http.Request) bool { return true }
 		requireErr(t, os.WriteFile(path, []byte(content), 0o644), "write file")
 	}
 
-	result, err := GenerateRepoMap(context.Background(), dir)
+	result, err := GenerateRepoMap(context.Background(), dir, 3, "")
 	requireErr(t, err, "generate repo map")
 
 	// With the new depth-aware prioritization, the per-directory file cap kicks
@@ -206,7 +206,7 @@ func HiddenFunc() {}
 func MainFunc() {}
 `})
 
-	result, err := GenerateRepoMap(context.Background(), dir)
+	result, err := GenerateRepoMap(context.Background(), dir, 3, "")
 	requireErr(t, err, "generate repo map")
 	if !strings.Contains(result, "- func MainFunc:3") {
 		t.Errorf("missing func MainFunc:\n%s", result)
@@ -223,7 +223,7 @@ func TestGenerateRepoMapFileLimit(t *testing.T) {
 		content := fmt.Sprintf("package main\n\nfunc Func%d() {}\n", i)
 		requireErr(t, os.WriteFile(filepath.Join(dir, fmt.Sprintf("file_%03d.go", i)), []byte(content), 0o644), "write")
 	}
-	result, err := GenerateRepoMap(context.Background(), dir)
+	result, err := GenerateRepoMap(context.Background(), dir, 3, "")
 	requireErr(t, err, "generate repo map")
 	if strings.Count(result, "### file_") > repoMapMaxFiles {
 		t.Errorf("expected at most %d file sections", repoMapMaxFiles)
@@ -239,7 +239,7 @@ func TestGenerateRepoMapNonSourceFiles(t *testing.T) {
 		"config.json": `{"key": "value"}`,
 		"style.css":   `body { margin: 0; }`,
 	})
-	result, err := GenerateRepoMap(context.Background(), dir)
+	result, err := GenerateRepoMap(context.Background(), dir, 3, "")
 	requireErr(t, err, "generate repo map")
 	if !strings.Contains(result, "### main.go") {
 		t.Error("missing main.go")
@@ -258,7 +258,7 @@ func TestGenerateRepoMapContextCancellation(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	_, err := GenerateRepoMap(ctx, dir)
+	_, err := GenerateRepoMap(ctx, dir, 3, "")
 	if err != nil && !errors.Is(err, context.Canceled) {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -277,7 +277,7 @@ func World() {}
 func World() {}
 `,
 	})
-	result, err := GenerateRepoMap(context.Background(), dir)
+	result, err := GenerateRepoMap(context.Background(), dir, 3, "")
 	requireErr(t, err, "generate repo map")
 	if strings.Count(result, "- func Hello:2") != 1 {
 		t.Errorf("expected 1 'func Hello:2', got %d:\n%s", strings.Count(result, "- func Hello:2"), result)
@@ -322,7 +322,7 @@ async def fetch(url): pass
 `,
 	})
 
-	result, err := GenerateRepoMap(context.Background(), dir)
+	result, err := GenerateRepoMap(context.Background(), dir, 3, "")
 	requireErr(t, err, "generate repo map")
 
 	// Go: AST extraction — Config on line 4, NewConfig on line 8, (*Config).Start on line 9
@@ -376,7 +376,7 @@ func NewHandler(name string) *Handler { return nil }
 `,
 	})
 
-	result, err := GenerateRepoMap(context.Background(), dir)
+	result, err := GenerateRepoMap(context.Background(), dir, 3, "")
 	requireErr(t, err, "generate repo map")
 
 	if !strings.Contains(result, "- func (*Handler).ServeHTTP:7") {
@@ -408,7 +408,7 @@ func HelperForTest() {}
 `,
 	})
 
-	result, err := GenerateRepoMap(context.Background(), dir)
+	result, err := GenerateRepoMap(context.Background(), dir, 3, "")
 	requireErr(t, err, "generate repo map")
 
 	// PublicAPI should appear.
@@ -451,7 +451,7 @@ func TestGenerateRepoMapGoFullFileRead(t *testing.T) {
 
 	requireErr(t, os.WriteFile(filepath.Join(dir, "large.go"), []byte(content), 0o644), "write large file")
 
-	result, err := GenerateRepoMap(context.Background(), dir)
+	result, err := GenerateRepoMap(context.Background(), dir, 3, "")
 	requireErr(t, err, "generate repo map")
 
 	if !strings.Contains(result, "- func DeepFunction:") {
@@ -508,7 +508,7 @@ func TestFormatRepoMapFromNodes_Empty(t *testing.T) {
 // when the character budget is exceeded.
 func TestFormatRepoMapFromNodes_Truncation(t *testing.T) {
 	var nodes []codegraph.Symbol
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 400; i++ {
 		nodes = append(nodes, codegraph.Symbol{
 			DisplayName: fmt.Sprintf("longFunctionName_%d", i),
 			FilePath:    fmt.Sprintf("pkg/path/to/file_%d.go", i),
@@ -577,7 +577,7 @@ func Greet() string {
 type Greeter struct{}
 `), 0644), "write hello.go")
 
-	result, err := GenerateRepoMap(context.Background(), tmpDir)
+	result, err := GenerateRepoMap(context.Background(), tmpDir, 3, "")
 	requireErr(t, err, "generate repo map")
 
 	if !strings.Contains(result, "pkg/hello/hello.go") {
@@ -588,5 +588,430 @@ type Greeter struct{}
 	}
 	if !strings.Contains(result, "type Greeter") {
 		t.Errorf("missing 'type Greeter' in output:\n%s", result)
+	}
+}
+
+// ============================================================================
+// Depth Parameter Tests
+// ============================================================================
+
+// TestGenerateRepoMapDepth1 verifies that depth=1 produces a directory tree
+// with file counts and no symbol listings.
+func TestGenerateRepoMapDepth1(t *testing.T) {
+	dir := t.TempDir()
+	createTestFiles(t, dir, map[string]string{
+		"main.go": `package main
+
+func MainFunc() {}
+`,
+		"src/server.go": `package main
+
+func StartServer() {}
+`,
+		"src/handlers/api.go": `package handlers
+
+func HandleAPI() {}
+`,
+	})
+
+	result, err := GenerateRepoMap(context.Background(), dir, 1, "")
+	requireErr(t, err, "generate repo map depth=1")
+
+	// Should contain the directory tree header.
+	if !strings.Contains(result, "### Directory Tree") {
+		t.Errorf("expected 'Directory Tree' section in depth=1 output:\n%s", result)
+	}
+
+	// Should NOT contain symbol listings.
+	if strings.Contains(result, "### src/server.go") {
+		t.Errorf("depth=1 should not include file sections with symbols:\n%s", result)
+	}
+	if strings.Contains(result, "- func MainFunc:") {
+		t.Errorf("depth=1 should not include symbols:\n%s", result)
+	}
+
+	// Should include file counts per directory.
+	if !strings.Contains(result, "src/ (") {
+		t.Errorf("expected directory with file count in depth=1 output:\n%s", result)
+	}
+}
+
+// TestGenerateRepoMapDepth2 verifies that depth=2 includes symbols for
+// root-level and top-level files only, with a max of 15 symbols per file.
+func TestGenerateRepoMapDepth2(t *testing.T) {
+	dir := t.TempDir()
+	createTestFiles(t, dir, map[string]string{
+		"main.go": `package main
+
+func RootFunc() {}
+`,
+		"src/server.go": `package main
+
+func TopLevelFunc() {}
+`,
+		"src/deep/nested.go": `package deep
+
+func DeepFunc() {}
+`,
+	})
+
+	result, err := GenerateRepoMap(context.Background(), dir, 2, "")
+	requireErr(t, err, "generate repo map depth=2")
+
+	// Root-level files should have symbols.
+	if !strings.Contains(result, "- func RootFunc:") {
+		t.Errorf("depth=2 should include root-level symbols:\n%s", result)
+	}
+
+	// Top-level files (depth <= 1) should have symbols.
+	if !strings.Contains(result, "- func TopLevelFunc:") {
+		t.Errorf("depth=2 should include top-level file symbols:\n%s", result)
+	}
+
+	// Deeper files (depth > 1) should NOT have symbols.
+	if strings.Contains(result, "### src/deep/nested.go") {
+		t.Errorf("depth=2 should not include symbols from depth > 1:\n%s", result)
+	}
+	if strings.Contains(result, "- func DeepFunc:") {
+		t.Errorf("depth=2 should not include deep symbols:\n%s", result)
+	}
+}
+
+// TestGenerateRepoMapDepth2SymbolCap verifies that depth=2 caps at 15 symbols.
+func TestGenerateRepoMapDepth2SymbolCap(t *testing.T) {
+	dir := t.TempDir()
+	// Create a Go file with 20 functions.
+	var sb strings.Builder
+	sb.WriteString("package main\n\n")
+	for i := 0; i < 20; i++ {
+		fmt.Fprintf(&sb, "func Func%d() {}\n", i)
+	}
+	createTestFiles(t, dir, map[string]string{
+		"main.go": sb.String(),
+	})
+
+	result, err := GenerateRepoMap(context.Background(), dir, 2, "")
+	requireErr(t, err, "generate repo map depth=2")
+
+	// Count the number of symbol lines (should be at most 15).
+	symbolCount := strings.Count(result, "- func Func")
+	if symbolCount > 15 {
+		t.Errorf("depth=2 should cap at 15 symbols, got %d:\n%s", symbolCount, result)
+	}
+}
+
+// TestGenerateRepoMapDepth3 verifies that depth=3 (default) uses full extraction.
+func TestGenerateRepoMapDepth3(t *testing.T) {
+	dir := t.TempDir()
+	createTestFiles(t, dir, map[string]string{
+		"src/deep/nested.go": `package deep
+
+func DeepFunc() {}
+`,
+	})
+
+	result, err := GenerateRepoMap(context.Background(), dir, 3, "")
+	requireErr(t, err, "generate repo map depth=3")
+
+	// depth=3 should include symbols from deep files.
+	if !strings.Contains(result, "- func DeepFunc:") {
+		t.Errorf("depth=3 should include deep symbols:\n%s", result)
+	}
+}
+
+// TestGenerateRepoMapDepthDefault verifies that depth=0 defaults to depth=3.
+func TestGenerateRepoMapDepthDefault(t *testing.T) {
+	dir := t.TempDir()
+	createTestFiles(t, dir, map[string]string{
+		"main.go": `package main
+
+func MainFunc() {}
+`,
+	})
+
+	result, err := GenerateRepoMap(context.Background(), dir, 0, "")
+	requireErr(t, err, "generate repo map depth=0")
+
+	if !strings.Contains(result, "- func MainFunc:") {
+		t.Errorf("depth=0 should default to depth=3 with full symbols:\n%s", result)
+	}
+}
+
+// ============================================================================
+// Query Parameter Tests
+// ============================================================================
+
+// TestGenerateRepoMapQueryPathFilter verifies that the query parameter filters
+// files by path (case-insensitive).
+func TestGenerateRepoMapQueryPathFilter(t *testing.T) {
+	dir := t.TempDir()
+	createTestFiles(t, dir, map[string]string{
+		"server.go": `package main
+
+func ServerFunc() {}
+`,
+		"client.go": `package main
+
+func ClientFunc() {}
+`,
+	})
+
+	// Query for "server" should only return server.go.
+	result, err := GenerateRepoMap(context.Background(), dir, 3, "server")
+	requireErr(t, err, "generate repo map with query")
+
+	if !strings.Contains(result, "### server.go") {
+		t.Errorf("query 'server' should include server.go:\n%s", result)
+	}
+	if strings.Contains(result, "### client.go") {
+		t.Errorf("query 'server' should exclude client.go:\n%s", result)
+	}
+}
+
+// TestGenerateRepoMapQuerySymbolFilter verifies that the query parameter also
+// filters at the symbol level.
+func TestGenerateRepoMapQuerySymbolFilter(t *testing.T) {
+	dir := t.TempDir()
+	createTestFiles(t, dir, map[string]string{
+		"main.go": `package main
+
+func ProcessData() {}
+func ValidateInput() {}
+`,
+	})
+
+	// Query for "process" should match the ProcessData function but not ValidateInput.
+	result, err := GenerateRepoMap(context.Background(), dir, 3, "process")
+	requireErr(t, err, "generate repo map with symbol query")
+
+	if !strings.Contains(result, "- func ProcessData:") {
+		t.Errorf("query 'process' should include ProcessData:\n%s", result)
+	}
+	if strings.Contains(result, "ValidateInput") {
+		t.Errorf("query 'process' should exclude ValidateInput:\n%s", result)
+	}
+}
+
+// TestGenerateRepoMapQueryCaseInsensitive verifies that the query is case-insensitive.
+func TestGenerateRepoMapQueryCaseInsensitive(t *testing.T) {
+	dir := t.TempDir()
+	createTestFiles(t, dir, map[string]string{
+		"MyModule.go": `package main
+
+func MyFunction() {}
+`,
+	})
+
+	result, err := GenerateRepoMap(context.Background(), dir, 3, "mymodule")
+	requireErr(t, err, "generate repo map with lowercase query")
+
+	if !strings.Contains(result, "### MyModule.go") {
+		t.Errorf("case-insensitive query should match MyModule.go:\n%s", result)
+	}
+}
+
+// ============================================================================
+// Concept Grouping and Entry Points Tests
+// ============================================================================
+
+// TestGenerateRepoMapConceptSummary verifies that the Structure section appears
+// in output for repos with organized directories.
+func TestGenerateRepoMapConceptSummary(t *testing.T) {
+	dir := t.TempDir()
+	createTestFiles(t, dir, map[string]string{
+		"src/components/Button.tsx": `export function Button() {}`,
+		"src/components/Input.tsx":  `export function Input() {}`,
+		"src/api/server.ts":         `export function serve() {}`,
+		"src/utils/helpers.ts":      `export function help() {}`,
+	})
+
+	result, err := GenerateRepoMap(context.Background(), dir, 3, "")
+	requireErr(t, err, "generate repo map")
+
+	// Should contain a Structure line.
+	if !strings.Contains(result, "- Structure:") {
+		t.Errorf("expected 'Structure' line in output:\n%s", result)
+	}
+}
+
+// TestGenerateRepoMapEntryPoints verifies that entry-point files are detected.
+func TestGenerateRepoMapEntryPoints(t *testing.T) {
+	dir := t.TempDir()
+	createTestFiles(t, dir, map[string]string{
+		"index.ts": `export function main() {}`,
+		"src/server.go": `package main
+
+func Start() {}
+`,
+	})
+
+	result, err := GenerateRepoMap(context.Background(), dir, 3, "")
+	requireErr(t, err, "generate repo map")
+
+	// Should contain an Entry points line mentioning index.ts.
+	if !strings.Contains(result, "- Entry points:") {
+		t.Errorf("expected 'Entry points' line in output:\n%s", result)
+	}
+	if !strings.Contains(result, "index.ts") {
+		t.Errorf("expected index.ts in entry points:\n%s", result)
+	}
+}
+
+// TestGenerateRepoMapTestFileConcept verifies that test directories are
+// categorized as Tests in the concept summary.
+func TestGenerateRepoMapTestFileConcept(t *testing.T) {
+	dir := t.TempDir()
+	createTestFiles(t, dir, map[string]string{
+		"src/App.tsx":       `export function App() {}`,
+		"e2e/test_auth.ts":  `export function testAuth() {}`,
+		"e2e/test_utils.ts": `export function testUtils() {}`,
+	})
+
+	result, err := GenerateRepoMap(context.Background(), dir, 3, "")
+	requireErr(t, err, "generate repo map")
+
+	if !strings.Contains(result, "Tests") {
+		t.Errorf("expected 'Tests' concept for e2e/ directory:\n%s", result)
+	}
+}
+
+// ============================================================================
+// Helper Function Tests
+// ============================================================================
+
+// TestIsTestFile verifies the isTestFile helper function.
+func TestIsTestFile(t *testing.T) {
+	tests := []struct {
+		path string
+		want bool
+	}{
+		{"main_test.go", true},
+		{"pkg/foo/foo_test.go", true},
+		{"button.spec.ts", true},
+		{"button.test.tsx", true},
+		{"test_helper.py", true},
+		{"helper_test.py", true},
+		{"e2e/auth.ts", true},
+		{"__tests__/unit.ts", true},
+		{"spec/models.ts", true},
+		{"main.go", false},
+		{"server.ts", false},
+		{"utils.py", false},
+		{"src/components/Button.tsx", false},
+	}
+	for _, tt := range tests {
+		got := isTestFile(tt.path)
+		if got != tt.want {
+			t.Errorf("isTestFile(%q) = %v, want %v", tt.path, got, tt.want)
+		}
+	}
+}
+
+// TestIsEntryPoint verifies the isEntryPoint helper function.
+func TestIsEntryPoint(t *testing.T) {
+	tests := []struct {
+		path string
+		want bool
+	}{
+		{"main.go", true},
+		{"index.ts", true},
+		{"App.tsx", true},
+		{"app.ts", true},
+		{"package.json", true},
+		{"go.mod", true},
+		{"tsconfig.json", true},
+		{"metro.config.js", true},
+		{"Cargo.toml", true},
+		{"Dockerfile", true},
+		{"Makefile", true},
+		// Not at root/top level.
+		{"src/deep/main.go", false},
+		// Not an entry point.
+		{"server.go", false},
+		{"helper.ts", false},
+		{"random.json", false},
+	}
+	for _, tt := range tests {
+		got := isEntryPoint(tt.path)
+		if got != tt.want {
+			t.Errorf("isEntryPoint(%q) = %v, want %v", tt.path, got, tt.want)
+		}
+	}
+}
+
+// TestGetConceptForDir verifies the getConceptForDir helper function.
+func TestGetConceptForDir(t *testing.T) {
+	tests := []struct {
+		dir  string
+		want string
+	}{
+		{"components", "UI"},
+		{"ui", "UI"},
+		{"views", "UI"},
+		{"screens", "UI"},
+		{"pages", "UI"},
+		{"services", "Services"},
+		{"api", "Services"},
+		{"controllers", "Services"},
+		{"handlers", "Services"},
+		{"utils", "Utilities"},
+		{"helpers", "Utilities"},
+		{"lib", "Utilities"},
+		{"config", "Config"},
+		{"scripts", "Config"},
+		{"src", "Core"},
+		{"pkg", "Core"},
+		{"cmd", "Core"},
+		{"internal", "Core"},
+		{"models", "Core"},
+		{"e2e", "Tests"},
+		{"__tests__", "Tests"},
+		{"tests", "Tests"},
+		{"random_dir", "Other"},
+	}
+	for _, tt := range tests {
+		got := getConceptForDir(tt.dir)
+		if got != tt.want {
+			t.Errorf("getConceptForDir(%q) = %v, want %v", tt.dir, got, tt.want)
+		}
+	}
+}
+
+// TestFilterByQuery verifies the filterByQuery helper function.
+func TestFilterByQuery(t *testing.T) {
+	files := []fileEntry{
+		{relPath: "src/server.go"},
+		{relPath: "src/client.go"},
+		{relPath: "pkg/api/handler.go"},
+		{relPath: "main.go"},
+	}
+
+	result := filterByQuery(files, "server")
+	if len(result) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(result))
+	}
+	if result[0].relPath != "src/server.go" {
+		t.Errorf("expected src/server.go, got %s", result[0].relPath)
+	}
+
+	// Case-insensitive.
+	result = filterByQuery(files, "SERVER")
+	if len(result) != 1 {
+		t.Fatalf("expected 1 case-insensitive result, got %d", len(result))
+	}
+
+	// Match in path.
+	result = filterByQuery(files, "api")
+	if len(result) != 1 {
+		t.Fatalf("expected 1 result for 'api', got %d", len(result))
+	}
+	if result[0].relPath != "pkg/api/handler.go" {
+		t.Errorf("expected pkg/api/handler.go, got %s", result[0].relPath)
+	}
+
+	// No match.
+	result = filterByQuery(files, "nonexistent")
+	if len(result) != 0 {
+		t.Errorf("expected 0 results for nonexistent query, got %d", len(result))
 	}
 }

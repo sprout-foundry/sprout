@@ -1696,9 +1696,7 @@
 
 /* ── Message Segments ────────────────────────────────────────── */
 .message-segments {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  display: block;
 }
 
 .message-tool-links {
@@ -1767,6 +1765,7 @@
 
 .segment-text {
   /* prose markdown rendered normally */
+  display: block;
 }
 
 .segment-tool-call {
@@ -1781,9 +1780,8 @@
   font-size: 11px;
   color: var(--text-secondary);
   transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
-  max-width: max-content;
   user-select: none;
-  margin-right: 10px;
+  margin: 0 2px;
   vertical-align: middle;
 }
 
@@ -1834,25 +1832,33 @@
   opacity: 1;
 }
 
-/* ── Completed tool footnote link ────────────────────────────── */
+/* ── Completed tool badge (compact inline, same layout as running) ──
+ * Previously this was a superscript footnote [tool] that flickered
+ * when transitioning from the running pill. Now it's the same inline
+ * pill as a running tool, just with a muted style and no icon change.
+ * The badge never changes shape or position, eliminating flicker. */
 .segment-tool-footnote {
-  display: inline;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--bg-tertiary) 50%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 60%, transparent);
   font-family: var(--font-mono);
   font-size: 10.5px;
-  color: var(--accent-primary);
+  color: var(--text-tertiary);
   cursor: pointer;
   user-select: none;
-  vertical-align: super;
-  line-height: 1;
-  padding: 0 1px;
-  border-radius: 2px;
-  transition: color 0.12s ease, background 0.12s ease;
-  white-space: nowrap;
+  vertical-align: middle;
+  margin: 0 2px;
+  transition: color 0.12s ease, background 0.12s ease, border-color 0.12s ease;
 }
 
 .segment-tool-footnote:hover {
-  color: var(--accent-hover, var(--accent-primary));
-  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+  border-color: var(--border-focus);
 }
 
 .segment-tool-footnote:focus-visible {
@@ -1861,7 +1867,19 @@
 }
 
 .segment-tool-footnote--error {
-  color: var(--status-error, #e5534b);
+  color: var(--accent-error);
+  border-color: color-mix(in srgb, var(--accent-error) 30%, var(--border-subtle));
+}
+
+.tool-footnote-icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.tool-footnote-name {
+  font-family: var(--font-mono);
+  font-weight: 500;
 }
 
 /* ── Inline Todo Summary ──────────────────────────────────────── */

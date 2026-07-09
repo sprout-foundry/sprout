@@ -31,6 +31,7 @@ import './components/UpdateNotification.css';
 import { useAppInitialization } from './hooks/useAppInitialization';
 import { useAppStatePersistence } from './hooks/useAppStatePersistence';
 import { useChatSessionManager } from './hooks/useChatSessionManager';
+import { useEscalationTriggers } from './hooks/useEscalationTriggers';
 import { useGitHandlers } from './hooks/useGitHandlers';
 import { useModelProviderHandlers } from './hooks/useModelProviderHandlers';
 import useOnboarding from './hooks/useOnboarding';
@@ -263,6 +264,27 @@ function AppInner() {
     setIsTablet,
     setState,
     handleReconnect,
+  });
+
+  // ── Escalation Triggers (cloud mode) ────────────────────────────
+
+  const repoURL = useMemo(() => {
+    if (typeof window === 'undefined') return undefined;
+    const params = new URLSearchParams(window.location.search);
+    return params.get('repo') ?? undefined;
+  }, []);
+
+  useEscalationTriggers({
+    repoURL,
+    onBlockingTrigger: (evt) => {
+      // Show a browser alert as fallback when a blocking trigger fires.
+      // In production this would use the app's toast system.
+      alert(evt.message);
+    },
+    onInfoTrigger: (evt) => {
+      // Info triggers are non-blocking; log them for the toast system.
+      console.info('[escalation]', evt.message);
+    },
   });
 
   // ── Onboarding ───────────────────────────────────────────────────

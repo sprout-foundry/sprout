@@ -181,11 +181,8 @@ export interface AppState {
     sessionId: string;
     options: string[];
   } | null;
-<<<<<<< Updated upstream
   /** Controls how much inter-tool-call narration and streaming detail is shown. */
   outputVerbosity: 'compact' | 'default' | 'verbose';
-=======
->>>>>>> Stashed changes
   /** Value of the command input. Lives in the store (not local useState) so
    * typing in the chat input doesn't re-render AppInner and cascade to the
    * entire component tree via new prop references. */

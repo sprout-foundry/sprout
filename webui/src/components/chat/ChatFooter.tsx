@@ -1,37 +1,9 @@
 import { SkeletonText, type TodoItem } from '@sprout/ui';
-import { Zap, AlertTriangle, Bot, ListTodo } from 'lucide-react';
+import { Zap, AlertTriangle, ListTodo } from 'lucide-react';
 import type { QueryProgress } from '../../types/app';
-import { SubagentActivityFeed } from './SubagentActivityFeed';
-import { ToolTimelineBar } from './ToolTimelineBar';
-import './ToolTimelineBar.css';
-import type { ToolExecution, SubagentActivity } from './types';
-
-// SP-059 Phase 1c: derive whether a subagent is *currently running* (not
-// just present in the recent feed). The activity stream carries lifecycle
-// `status` and a `phase` field — a subagent is live if any recent activity
-// is `started`/`running` without a matching `completed`/`cancelled`.
-function hasLiveSubagent(activities: SubagentActivity[]): boolean {
-  if (activities.length === 0) return false;
-  // Walk recent activities and track per-tool-call liveness. The feed is
-  // small (capped at 500), so the linear scan is fine here.
-  const live = new Map<string, boolean>();
-  for (const a of activities) {
-    const key = a.toolCallId || a.taskId || 'unknown';
-    if (a.phase === 'spawn' || a.status === 'queued' || a.status === 'started') {
-      live.set(key, true);
-    } else if (a.phase === 'complete' || a.status === 'completed' || a.status === 'cancelled') {
-      live.set(key, false);
-    }
-  }
-  for (const v of live.values()) {
-    if (v) return true;
-  }
-  return false;
-}
+import type { ToolExecution } from './types';
 
 interface ChatFooterProps {
-  hasSubagentActivity: boolean;
-  subagentActivities: SubagentActivity[];
   queryProgress: QueryProgress | null;
   isProcessing: boolean;
   filteredToolExecutions: ToolExecution[];
@@ -42,8 +14,6 @@ interface ChatFooterProps {
 }
 
 export function ChatFooter({
-  hasSubagentActivity,
-  subagentActivities,
   queryProgress,
   isProcessing,
   filteredToolExecutions,
@@ -59,22 +29,6 @@ export function ChatFooter({
   // execution is present so it doesn't render a skeleton alongside the bar.
   const hasToolsToShow = filteredToolExecutions.length > 0;
   const elements: JSX.Element[] = [];
-
-  if (hasSubagentActivity) {
-    // SP-059 Phase 1c: when a subagent is currently running, show a pill
-    // above the activity feed so the user knows the next thing they type
-    // will steer the subagent (not queue against the primary).
-    const subagentLive = hasLiveSubagent(subagentActivities);
-    if (subagentLive) {
-      elements.push(
-        <div key="subagent-routing" className="subagent-routing-pill" role="status" aria-live="polite">
-          <Bot size={12} className="subagent-routing-icon" />
-          <span>Subagent running — your next message will steer it</span>
-        </div>,
-      );
-    }
-    elements.push(<SubagentActivityFeed key="subagent" activities={subagentActivities} />);
-  }
 
   if (queryProgress) {
     elements.push(
@@ -96,7 +50,7 @@ export function ChatFooter({
     );
   }
 
-  if (isProcessing && !hasToolsToShow && !queryProgress && !hasSubagentActivity) {
+  if (isProcessing && !hasToolsToShow && !queryProgress) {
     elements.push(
       <div
         key="processing"

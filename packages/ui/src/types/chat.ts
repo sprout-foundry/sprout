@@ -52,6 +52,18 @@ export interface Message {
    * Populated from query_completed or metrics_update event.
    */
   model?: string;
+  /**
+   * Inline subagent run marker — when true, this message represents
+   * a subagent activity rendered inline in the chat flow as a
+   * collapsible section (rather than the old footer feed). The
+   * subagent's streaming output lines accumulate in the `reasoning`
+   * field and render via a Collapsible in MessageItem.
+   */
+  isSubagentRun?: boolean;
+  /** Whether the inline subagent run has completed. */
+  subagentRunComplete?: boolean;
+  /** Persona name for the inline subagent run (e.g. "coder", "tester"). */
+  subagentPersona?: string;
 }
 
 export interface ToolExecution {

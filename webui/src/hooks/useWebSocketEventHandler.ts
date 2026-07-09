@@ -472,12 +472,89 @@ const handleSubagentActivity = (ctx: EventHandlerContext): void => {
 
   if (!activity.message) {
     setState((prev) => ({ logs: appendCappedLog(prev.logs, logEntry) }));
-  } else {
-    setState((prev) => ({
-      subagentActivities: [...prev.subagentActivities, activity].slice(-500),
-      logs: appendCappedLog(prev.logs, logEntry),
-    }));
+    return;
   }
+
+  // Inline subagent rendering: instead of (or in addition to) the footer
+  // activity feed, render subagent output as collapsible sections inline
+  // in the chat message flow — similar to reasoning blocks. The subagent
+  // message ID is derived from the toolCallId so spawn/output/complete
+  // events all target the same message row. Output lines accumulate in
+  // the `reasoning` field (rendered as a Collapsible by MessageItem).
+  const subagentMsgId = `subagent-${activity.toolCallId || activity.persona || activity.id}`;
+
+  setState((prev) => {
+    const newSubagentActivities = [...prev.subagentActivities, activity].slice(-500);
+
+    if (activity.phase === 'spawn') {
+      // Spawn: create a new assistant-type message for the subagent run.
+      // If one already exists (e.g. re-spawn after reconnect), don't
+      // duplicate — just log.
+      const existing = prev.messages.find(
+        (m) => m.id === subagentMsgId,
+      );
+      if (existing) {
+        return { subagentActivities: newSubagentActivities, logs: appendCappedLog(prev.logs, logEntry) };
+      }
+      const newMsg: Message = {
+        id: subagentMsgId,
+        type: 'assistant',
+        content: '',
+        reasoning: '',
+        timestamp: new Date(),
+        persona: activity.persona,
+        subagentDepth: 1,
+        isSubagentRun: true,
+        subagentRunComplete: false,
+        subagentPersona: activity.persona,
+      };
+      return {
+        messages: [...prev.messages, newMsg],
+        subagentActivities: newSubagentActivities,
+        logs: appendCappedLog(prev.logs, logEntry),
+      };
+    }
+
+    if (activity.phase === 'output') {
+      // Output: append the message text to the matching subagent message's
+      // reasoning field (which renders as collapsible content).
+      const msgIdx = prev.messages.findIndex((m) => m.id === subagentMsgId);
+      if (msgIdx < 0) {
+        // No matching message yet (e.g. output arrived before spawn, or
+        // was evicted by trimMessages). Still track the activity for the
+        // Subagents tab.
+        return { subagentActivities: newSubagentActivities, logs: appendCappedLog(prev.logs, logEntry) };
+      }
+      const newMessages = [...prev.messages];
+      const existingReasoning = newMessages[msgIdx].reasoning || '';
+      newMessages[msgIdx] = {
+        ...newMessages[msgIdx],
+        reasoning: existingReasoning + activity.message + '\n',
+      };
+      return { messages: newMessages, subagentActivities: newSubagentActivities, logs: appendCappedLog(prev.logs, logEntry) };
+    }
+
+    if (activity.phase === 'complete') {
+      // Complete: mark the subagent message as done. Optionally append
+      // the completion message (e.g. "Done. Modified 2 files.") to the
+      // reasoning content so it's visible in the collapsible.
+      const msgIdx = prev.messages.findIndex((m) => m.id === subagentMsgId);
+      if (msgIdx < 0) {
+        return { subagentActivities: newSubagentActivities, logs: appendCappedLog(prev.logs, logEntry) };
+      }
+      const newMessages = [...prev.messages];
+      const existingReasoning = newMessages[msgIdx].reasoning || '';
+      newMessages[msgIdx] = {
+        ...newMessages[msgIdx],
+        subagentRunComplete: true,
+        reasoning: existingReasoning + activity.message + '\n',
+      };
+      return { messages: newMessages, subagentActivities: newSubagentActivities, logs: appendCappedLog(prev.logs, logEntry) };
+    }
+
+    // step or unknown phase — just track the activity
+    return { subagentActivities: newSubagentActivities, logs: appendCappedLog(prev.logs, logEntry) };
+  });
 };
 
 // Handle agent_message event
@@ -1052,6 +1129,13 @@ export function useWebSocketEventHandler({
 
   const handleReconnect = useCallback(() => {
     debugLog('[reconnect] syncing state after websocket reconnect');
+    // The reconnect itself is the recovery signal — clear lastError up front
+    // so the "chat failed" red banner in ChatFooter dismisses immediately. If
+    // getStats() is slow/fails (very common — same network/daemon hiccup that
+    // caused the send failure is still resolving), the .then branch that also
+    // sets lastError: null will not run, and without this unconditional clear
+    // the banner sticks until the user sends a new message or reloads.
+    setState((prev) => ({ ...prev, lastError: null }));
     apiService
       .getStats()
       .then((stats: unknown) => {
@@ -1084,6 +1168,10 @@ export function useWebSocketEventHandler({
       })
       .catch((error: unknown) => {
         debugLog('[reconnect] failed to sync backend state:', error);
+        // Defensive: the up-front clear above already covers the no-flash
+        // case, but re-clear here so any error path that re-sets lastError
+        // (or a stale closure) still ends with a clean banner.
+        setState((prev) => ({ ...prev, lastError: null }));
       });
   }, [apiService, activeRequestsRef, setState]);
 

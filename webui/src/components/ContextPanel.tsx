@@ -87,19 +87,6 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
     };
   }, [isProcessing, messageCount, firstMessageTs]);
 
-  // ── Auto-expand latest query group ────────────────────────────────
-
-  useEffect(() => {
-    if (maxQueryId > 0) {
-      state.setExpandedQueries((prev) => {
-        if (prev.size === 1 && prev.has(maxQueryId)) return prev;
-        const next = new Set<number>();
-        next.add(maxQueryId);
-        return next;
-      });
-    }
-  }, [maxQueryId, state]);
-
   // ── Imperative handle ─────────────────────────────────────────────
 
   const handleTabClick = (tabId: string) => {

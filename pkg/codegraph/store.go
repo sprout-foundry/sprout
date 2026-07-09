@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -162,6 +163,16 @@ func NewStore(dbPath string) (*SQLiteStore, error) {
 	if _, err := db.Exec(schemaSQL); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to create schema: %w", err)
+	}
+
+	// Migration: add is_test column if upgrading from pre-confidence-tier schema.
+	// SQLite returns "duplicate column name" if the column already exists; we
+	// ignore that error since it means migration already ran.
+	if _, err := db.Exec(`ALTER TABLE files ADD COLUMN is_test INTEGER NOT NULL DEFAULT 0`); err != nil {
+		if !strings.Contains(err.Error(), "duplicate column name") {
+			db.Close()
+			return nil, fmt.Errorf("failed to migrate schema: %w", err)
+		}
 	}
 
 	// Resolve the git root (base directory) for resolving relative file paths.

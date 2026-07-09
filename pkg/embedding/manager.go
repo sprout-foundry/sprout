@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -844,18 +843,4 @@ func removeFilesSilently(files []string) (int, error) {
 		}
 	}
 	return deleted, nil
-}
-
-func isDebugEnabled() bool {
-	value := configuration.GetEnvSimple("DEBUG")
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return false
-	}
-	switch strings.ToLower(value) {
-	case "0", "false", "no", "off":
-		return false
-	default:
-		return true
-	}
 }

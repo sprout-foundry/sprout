@@ -105,6 +105,79 @@ export class CloudAdapter implements APIAdapter {
     return this.wasmInitPromise;
   }
 
+  /**
+   * Auto-import a repo from a URL. Returns true on success, false on failure.
+   * Called when the ?repo= query param is present on page load.
+   * Writes imported files to the WASM VFS via standard file write endpoints.
+   */
+  async importRepo(repoURL: string): Promise<{ success: boolean; repo?: string; error?: string }> {
+    try {
+      const response = await fetch(`${this.config.apiBase}/api/repo/import`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          [WEBUI_CLIENT_ID_HEADER]: getWebUIClientId(),
+        },
+        body: JSON.stringify({ url: repoURL }),
+        credentials: 'include',
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+        return { success: false, error: errData.error || `HTTP ${response.status}` };
+      }
+
+      const data = await response.json();
+      const files: Array<{ path: string; content: string }> = data.files || [];
+
+      if (files.length === 0) {
+        return { success: true, repo: data.repo, error: 'No files found in repository' };
+      }
+
+      // Write each file to the WASM VFS via the standard file API.
+      for (const file of files) {
+        try {
+          // Create the file first.
+          await fetch(`${this.config.apiBase}/api/create`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              [WEBUI_CLIENT_ID_HEADER]: getWebUIClientId(),
+            },
+            body: JSON.stringify({ path: file.path, directory: false }),
+            credentials: 'include',
+          });
+
+          // Write content.
+          await fetch(`${this.config.apiBase}/api/file?path=${encodeURIComponent(file.path)}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              [WEBUI_CLIENT_ID_HEADER]: getWebUIClientId(),
+            },
+            body: JSON.stringify({ content: file.content }),
+            credentials: 'include',
+          });
+        } catch (writeErr) {
+          console.warn(`[CloudAdapter] failed to write file ${file.path}:`, writeErr);
+        }
+      }
+
+      return { success: true, repo: data.repo };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
+  /**
+   * Returns the repo URL from the ?repo= query param if present, or null.
+   */
+  static getRepoFromQuery(): string | null {
+    if (typeof window === 'undefined') return null;
+    const params = new URLSearchParams(window.location.search);
+    return params.get('repo');
+  }
+
   async fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
     let url: string;
     let method: string = 'GET';

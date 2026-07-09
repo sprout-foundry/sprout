@@ -84,6 +84,20 @@ vi.mock('../services/terminalWebSocket', () => ({
   TerminalWebSocketService: {
     createInstance: vi.fn(() => mockService),
   },
+  reprInput: (input: string) => {
+    // Test-mode repr passthrough: escape control chars only so debugLog
+    // calls in TerminalPane don't blow up under the mocked module.
+    let out = '';
+    for (const ch of input) {
+      const code = ch.codePointAt(0) ?? 0;
+      if (code < 0x20) {
+        out += '^' + String.fromCharCode(0x40 + code);
+      } else {
+        out += ch;
+      }
+    }
+    return out;
+  },
 }));
 
 // ── lucide-react mock ────────────────────────────────────────────────

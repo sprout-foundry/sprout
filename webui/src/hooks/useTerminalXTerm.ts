@@ -174,6 +174,7 @@ export function useTerminalXTerm(options: UseTerminalXTermOptions): UseTerminalX
     }
 
     xtermRef.current = term;
+    debugLog('[useTerminalXTerm] xterm initialized, version:', (term as unknown as { version?: string }).version);
 
     // Ctrl+Shift+C/V/F handler
     term.attachCustomKeyEventHandler((event: KeyboardEvent) => {
@@ -233,6 +234,7 @@ export function useTerminalXTerm(options: UseTerminalXTermOptions): UseTerminalX
     term.onData((data) => {
       onDataRef.current(data);
     });
+    debugLog('[useTerminalXTerm] onData handler wired');
 
     // Copy-on-select handler
     const selectionChangeDisposable = term.onSelectionChange(() => {

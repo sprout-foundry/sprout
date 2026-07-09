@@ -151,7 +151,7 @@
   right: 28px;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease;
+  transition: opacity 0.15s var(--ease-out), color 0.15s var(--ease-out), background 0.15s var(--ease-out);
   background: var(--bg-elevated);
   border: 1px solid var(--border-default);
   color: var(--text-muted);
@@ -169,8 +169,8 @@
   pointer-events: auto;
 }
 
-.message-fork-btn:hover {
-  opacity: 1 !important;
+.message-bubble:hover .message-fork-btn:hover {
+  opacity: 1;
   color: var(--accent-primary);
   background: var(--bg-hover);
   border-color: color-mix(in srgb, var(--accent-primary) 30%, transparent);

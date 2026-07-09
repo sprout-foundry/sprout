@@ -32,16 +32,22 @@ export function ToolsTab({
       ) : (
         Array.from(groupedByQuery.entries()).map(([queryId, tools]) => {
           const isCurrentTurn = queryId === maxQueryId;
-          const isExpanded = isCurrentTurn || expandedQueries.has(queryId);
+          // expandedQueries tracks user overrides from the default behavior.
+          // Default: current turn expanded, past turns collapsed.
+          // toggleQueryGroup flips the override state.
+          const isInSet = expandedQueries.has(queryId);
+          const isExpanded = isCurrentTurn ? !isInSet : isInSet;
           const groupLabel = isCurrentTurn ? 'Current turn' : queryId === 0 ? 'Earlier' : `Turn ${queryId}`;
           return (
-            <div key={queryId} className="tool-query-group">
+            <div key={queryId} className={`tool-query-group${isCurrentTurn ? ' tool-query-group--current' : ''}`}>
               <div className="tool-query-header" onClick={() => toggleQueryGroup(queryId)}>
+                <span className="tool-query-chevron">
+                  {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                </span>
                 <span className="tool-query-label">{groupLabel}</span>
                 <span className="tool-query-count">
                   {tools.length} {tools.length === 1 ? 'tool' : 'tools'}
                 </span>
-                {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
               </div>
               {isExpanded && (
                 <div className="tool-query-tools">

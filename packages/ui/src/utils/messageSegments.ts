@@ -191,32 +191,21 @@ export function parseMessageSegments(rawContent: string): MessageSegment[] {
       continue;
     }
 
-    // Check for tool execution lines (group consecutive ones)
+    // Check for tool execution lines — emit one segment per line so
+    // parallel tool calls each get their own inline badge.
     if (isToolExecutionLine(line)) {
-      const toolLines: string[] = [line];
-      i++;
-
-      // Group consecutive tool execution lines
-      while (i < lines.length && isToolExecutionLine(lines[i])) {
-        toolLines.push(lines[i]);
-        i++;
-      }
-
-      // Also include progress lines that are part of the tool execution block
-      while (i < lines.length && isProgressPercentLine(lines[i])) {
-        toolLines.push(lines[i]);
-        i++;
-      }
-
-      // Extract the main tool name from the first line
-      const toolName = extractToolSummary(toolLines[0]);
-
       segments.push({
         type: 'tool_call',
-        toolId: `tool-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        toolName,
-        summary: toolName,
+        toolId: `tool-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 9)}`,
+        toolName: extractToolSummary(line),
+        summary: extractToolSummary(line),
       });
+      i++;
+
+      // Also skip any progress lines that follow
+      while (i < lines.length && isProgressPercentLine(lines[i])) {
+        i++;
+      }
       continue;
     }
 

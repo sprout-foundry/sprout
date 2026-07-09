@@ -130,28 +130,12 @@ export class CloudAdapter implements APIAdapter {
     const clientIdHeader = WEBUI_CLIENT_ID_HEADER;
     const clientIdValue = getWebUIClientId();
 
-    // ── Agent query: route through WASM shell (not proxy) ─────────
-    // The full agent loop runs in-browser via the WASM binary's runAgent.
-    // Events stream back through the agentEventDispatcher.
-    if (urlPath === '/api/query' && method === 'POST') {
-      console.log('[CloudAdapter] /api/query POST intercepted — routing to WASM agent');
-      const requestBody = await this.extractRequestBody(input);
-      const bodyStr = this.extractBody(init) ?? requestBody ?? undefined;
-      try {
-        const shell = await this.ensureWasmShell();
-        return handleWasmLocal(shell, urlPath, method, url, bodyStr);
-      } catch (err) {
-        console.warn(
-          `[CloudAdapter] WASM shell unavailable for agent query, falling through to proxy:`,
-          err,
-        );
-        // Fall through to standard chat proxy below
-      }
-    }
-
     // ── Chat endpoint translation (steer, stop, status) ───────────
     // NOTE: Chat endpoint mapping takes priority over the synthetic response
     // registry. No chat-mapped path should be added to the synthetic registry.
+    // /api/query POST is handled as wasm-local via the registry below — the
+    // WASM shell runs the full agent loop in-browser; steering/stop/status
+    // remain proxied because they need platform chat state.
     const foundryPath = CHAT_ENDPOINT_MAP[urlPath];
     if (foundryPath) {
       // When input is a Request object, pre-read the body for translation
@@ -184,11 +168,16 @@ export class CloudAdapter implements APIAdapter {
     }
 
     // ── Settings endpoint translation ───────────────────────────────
-    // Proxy all settings requests to the platform backend.
-    // The platform serves /api/settings with user-specific config.
-    // CloudAdapter no longer overrides GET /api/settings with a synthetic
-    // response — the platform backend is the canonical source.
-    if (urlPath === '/api/settings' || urlPath.startsWith('/api/settings/')) {
+    // Only proxy CORE settings (user prefs, credentials, providers) to the
+    // platform backend. Subagent-types, MCP, skills, hotkeys are intercepted
+    // as synthetic below — those endpoints are not available in browser mode
+    // and returning a safe default is better than triggering a 401/404 error
+    // toast from the platform backend.
+    const isProxiedSettings =
+      urlPath === '/api/settings' ||
+      urlPath.startsWith('/api/settings/credentials') ||
+      urlPath.startsWith('/api/settings/providers');
+    if (isProxiedSettings) {
       const requestBody = await this.extractRequestBody(input);
       return proxySettingsRequest(this.config.apiBase, url, method, clientIdHeader, clientIdValue, init, requestBody);
     }

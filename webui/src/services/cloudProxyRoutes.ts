@@ -15,7 +15,10 @@
  * Note: The platform hosts chat at /proxy/chat (not /api/proxy/chat).
  */
 export const CHAT_ENDPOINT_MAP: Record<string, string> = {
-  '/api/query': '/proxy/chat',
+  // /api/query is NOT here — it routes through the WASM shell's in-browser
+  // agent loop (see cloudEndpointRegistry/endpoints/wasm-local.ts).
+  // The platform proxy only handles steering/stop/status which need
+  // server-side chat session state.
   '/api/query/steer': '/proxy/chat',
   '/api/query/stop': '/proxy/chat/stop',
   '/api/query/status': '/proxy/chat/status',

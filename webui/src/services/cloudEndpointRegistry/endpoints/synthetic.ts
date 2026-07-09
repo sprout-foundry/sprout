@@ -344,27 +344,6 @@ export const syntheticEndpoints: CloudEndpoint[] = [
     description: 'Worktree mappings (not available in browser mode)',
   },
   {
-    path: '/api/chat-sessions/pin',
-    methods: ['POST'],
-    category: 'synthetic',
-    syntheticResponse: { message: 'ok' },
-    description: 'Pin session (WASM-local — no-op in browser mode)',
-  },
-  {
-    path: '/api/chat-sessions/unpin',
-    methods: ['POST'],
-    category: 'synthetic',
-    syntheticResponse: { message: 'ok' },
-    description: 'Unpin session (WASM-local — no-op in browser mode)',
-  },
-  {
-    path: '/api/chat-sessions/delete-all',
-    methods: ['POST'],
-    category: 'synthetic',
-    syntheticResponse: { message: 'ok', deleted: 0 },
-    description: 'Delete all sessions (WASM-local — no-op in browser mode)',
-  },
-  {
     path: '/api/chat-session/',
     methods: ['GET', 'POST'],
     category: 'synthetic',

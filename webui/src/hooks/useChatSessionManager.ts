@@ -1,4 +1,4 @@
-import type { Message } from '@sprout/ui';
+import type { Message, ToolRef } from '@sprout/ui';
 import { useCallback, useEffect, useState } from 'react';
 import type { AppStoreSetState } from '../contexts/AppStore';
 import { ApiService } from '../services/api';
@@ -13,6 +13,23 @@ import type { AppState } from '../types/app';
 import { debugLog } from '../utils/log';
 import { generateMessageId } from '../utils/messageId';
 import { trimMessages } from '../utils/messageWindow';
+
+const TOOL_MARKER = /\[executing tool \[([^\]]+)\]/;
+function extractToolRefsFromContent(content: string): ToolRef[] {
+  const refs: ToolRef[] = [];
+  const lines = content.split('\n');
+  for (const line of lines) {
+    const match = line.match(TOOL_MARKER);
+    if (!match) continue;
+    const toolName = match[1].split(' ')[0] || match[1];
+    refs.push({
+      toolId: `restored-tool-${refs.length}-${Date.now()}`,
+      toolName,
+      label: toolName,
+    });
+  }
+  return refs;
+}
 
 export interface UseChatSessionManagerParams {
   setState: AppStoreSetState;
@@ -401,12 +418,17 @@ export function useChatSessionManager({
 
       const restoredMessages: Message[] = rawMessages
         .filter((m) => m.role === 'user' || m.role === 'assistant')
-        .map((m, i) => ({
-          id: `restored-${i}`,
-          type: m.role as 'user' | 'assistant',
-          content: typeof m.content === 'string' ? m.content : '',
-          timestamp: new Date(),
-        }));
+        .map((m, i) => {
+          const content = typeof m.content === 'string' ? m.content : '';
+          const toolRefs = m.role === 'assistant' ? extractToolRefsFromContent(content) : undefined;
+          return {
+            id: `restored-${i}`,
+            type: m.role as 'user' | 'assistant',
+            content,
+            timestamp: new Date(),
+            ...(toolRefs && toolRefs.length > 0 ? { toolRefs } : {}),
+          };
+        });
 
       if (restoredMessages.length > 0) {
         setState((prev) => ({

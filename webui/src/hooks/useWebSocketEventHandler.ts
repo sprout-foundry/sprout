@@ -310,9 +310,15 @@ const handleToolStart = (ctx: EventHandlerContext): void => {
   const depth = Number((event.data as Record<string, unknown>)?.subagent_depth ?? 0);
 
   setState((prev) => {
-    const messagesWithNewline = prev.messages.map((msg, idx) => {
-      if (idx === prev.messages.length - 1 && msg.type === 'assistant' && msg.content && !msg.content.endsWith('\n')) {
-        return { ...msg, content: msg.content + '\n' };
+    // When a tool starts, insert a marker into the assistant message content
+    // so parseMessageSegments can interleave the tool badge at the correct
+    // position in the text flow. Without this, all tool badges pile up at the
+    // end of the message because there's no positional information linking
+    // them to where in the text the tool was called.
+    const messagesWithToolMarker = prev.messages.map((msg, idx) => {
+      if (idx === prev.messages.length - 1 && msg.type === 'assistant') {
+        const trimmed = msg.content.replace(/\n+$/, '');
+        return { ...msg, content: trimmed + '\n[executing tool [' + toolName + ']]\n' };
       }
       return msg;
     });
@@ -345,7 +351,7 @@ const handleToolStart = (ctx: EventHandlerContext): void => {
         subagentType: updated[existingIdx].subagentType || subagentType,
         depth: updated[existingIdx].depth ?? (depth > 0 ? depth : undefined),
       };
-      const messages = [...messagesWithNewline];
+      const messages = [...messagesWithToolMarker];
       addToolRefToMessage(messages, updated[existingIdx].id);
       return { messages, toolExecutions: updated, logs: appendCappedLog(prev.logs, logEntry) };
     }
@@ -361,12 +367,9 @@ const handleToolStart = (ctx: EventHandlerContext): void => {
       persona,
       subagentType,
       depth: depth > 0 ? depth : undefined,
-      // Tag with the current turn so ToolsTab can group historical
-      // tools by turn and ChatView's filteredToolExecutions can show
-      // only the current turn in the live timeline bar above the input.
       queryId: prev.queryCount,
     };
-    const messages = [...messagesWithNewline];
+    const messages = [...messagesWithToolMarker];
     addToolRefToMessage(messages, newTool.id);
     return { messages, toolExecutions: [...prev.toolExecutions, newTool], logs: appendCappedLog(prev.logs, logEntry) };
   });

@@ -22,6 +22,7 @@ import { EditorManagerProvider } from './contexts/EditorManagerContext';
 import { HotkeyProvider } from './contexts/HotkeyContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { LocalEventsProvider } from './services/localEventsProvider';
+import { notificationBus } from './services/notificationBus';
 import { PlatformNavProvider } from './contexts/PlatformNavContext';
 import { ProviderCatalogProvider } from './contexts/ProviderCatalogContext';
 import { SproutAdapterProvider } from './contexts/SproutAdapterContext';
@@ -31,6 +32,7 @@ import './components/UpdateNotification.css';
 import { useAppInitialization } from './hooks/useAppInitialization';
 import { useAppStatePersistence } from './hooks/useAppStatePersistence';
 import { useChatSessionManager } from './hooks/useChatSessionManager';
+import { useEscalationTriggers } from './hooks/useEscalationTriggers';
 import { useGitHandlers } from './hooks/useGitHandlers';
 import { useModelProviderHandlers } from './hooks/useModelProviderHandlers';
 import useOnboarding from './hooks/useOnboarding';
@@ -263,6 +265,24 @@ function AppInner() {
     setIsTablet,
     setState,
     handleReconnect,
+  });
+
+  // ── Escalation Triggers (cloud mode) ────────────────────────────
+
+  const repoURL = useMemo(() => {
+    if (typeof window === 'undefined') return undefined;
+    const params = new URLSearchParams(window.location.search);
+    return params.get('repo') ?? undefined;
+  }, []);
+
+  useEscalationTriggers({
+    repoURL,
+    onBlockingTrigger: (evt) => {
+      notificationBus.notify('warning', 'Browser limitation', evt.message);
+    },
+    onInfoTrigger: (evt) => {
+      notificationBus.notify('info', 'Heads up', evt.message);
+    },
   });
 
   // ── Onboarding ───────────────────────────────────────────────────

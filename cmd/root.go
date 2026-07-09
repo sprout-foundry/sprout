@@ -66,9 +66,12 @@ See "Available Commands" below for the full list.`,
 		//
 		// Only auto-detect when --isolated-config was not explicitly set
 		// (including --isolated-config=false) so users can opt out.
+		// Also skip for the system service daemon (SPROUT_SERVICE=1) —
+		// the daemon is a system-wide service, not workspace-scoped.
 		isolatedFlagExplicit := cmd.Flags().Changed("isolated-config")
+		isServiceDaemon := os.Getenv("SPROUT_SERVICE") == "1"
 		autoDetected := false
-		if !isolatedConfig && !isolatedFlagExplicit {
+		if !isolatedConfig && !isolatedFlagExplicit && !isServiceDaemon {
 			if cwd, err := os.Getwd(); err == nil {
 				if isolatedDir, found := detectGitRepo(cwd); found {
 					if err := configuration.BootstrapIsolatedConfig(isolatedDir); err == nil {

@@ -11,6 +11,174 @@ import (
 	"time"
 )
 
+// ConfidenceLevel indicates how likely a dead code candidate is to be genuinely dead.
+type ConfidenceLevel string
+
+const (
+	ConfidenceHigh   ConfidenceLevel = "high"   // Very likely dead: unexported, no registration patterns
+	ConfidenceMedium ConfidenceLevel = "medium" // Possibly dead: name or path has minor false-positive hints
+	ConfidenceLow    ConfidenceLevel = "low"    // Probably alive: in handler/registration files, name matches known patterns
+)
+
+// DeadCodeCandidate is a symbol with zero inbound call edges, plus metadata
+// about confidence and whether it has test-only callers.
+type DeadCodeCandidate struct {
+	Symbol       Symbol
+	Confidence   ConfidenceLevel
+	TestCallers  int // number of callers found in test files (0 = no test callers)
+}
+
+// isRegistrationFile returns true if the file path suggests the file registers
+// handlers, hooks, or commands via closure/map dispatch.
+func isRegistrationFile(path string) bool {
+	lower := strings.ToLower(path)
+	indicators := []string{
+		"handler", "registration", "register", "command", "hook",
+		"callback", "middleware", "tool_handlers", "tool_regist",
+	}
+	for _, ind := range indicators {
+		if strings.Contains(lower, ind) {
+			return true
+		}
+	}
+	return false
+}
+
+// isRegistrationName returns true if the function name suggests it's wired via
+// closure, map, or function pointer rather than a direct call.
+func isRegistrationName(name string) bool {
+	suffixes := []string{
+		"Handler", "Hook", "Func", "Fn", "Middleware",
+		"Callback", "Factory", "Provider", "Adapter",
+	}
+	for _, s := range suffixes {
+		if strings.HasSuffix(name, s) {
+			return true
+		}
+	}
+	prefixes := []string{
+		"handle", "Handle", "apply", "Apply", "register", "Register",
+	}
+	for _, p := range prefixes {
+		if strings.HasPrefix(name, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// classifyConfidence assigns a confidence tier to a dead code candidate based
+// on heuristics about file paths and function names.
+func classifyConfidence(sym Symbol) ConfidenceLevel {
+	// TypeScript/JS: almost always false positives (JSX, closures, dynamic dispatch).
+	if sym.Language == "typescript" || sym.Language == "javascript" {
+		return ConfidenceLow
+	}
+
+	// Python: dynamic dispatch is common, default to medium.
+	if sym.Language == "python" {
+		return ConfidenceMedium
+	}
+
+	// WASM bindings: exported to JavaScript via syscall/js or promise wrappers.
+	if isWASMPath(sym.FilePath) {
+		return ConfidenceLow
+	}
+
+	// CLI command handlers in cmd/: wired via cobra.Command.RunE, not direct calls.
+	if strings.HasPrefix(sym.FilePath, "cmd/") {
+		// runXxx functions are cobra RunE callbacks — definitely alive.
+		if strings.HasPrefix(sym.DisplayName, "run") && len(sym.DisplayName) > 3 &&
+			sym.DisplayName[3] >= 'A' && sym.DisplayName[3] <= 'Z' {
+			return ConfidenceLow
+		}
+		// completeXxx functions are cobra completion callbacks.
+		if strings.HasPrefix(sym.DisplayName, "complete") && len(sym.DisplayName) > 8 &&
+			sym.DisplayName[8] >= 'A' && sym.DisplayName[8] <= 'Z' {
+			return ConfidenceLow
+		}
+		// Other cmd/ functions: hard to verify without running cobra wiring.
+		return ConfidenceMedium
+	}
+
+	// WASM shell commands: registered via command map in pkg/wasmshell/.
+	if strings.HasPrefix(sym.FilePath, "pkg/wasmshell/") {
+		return ConfidenceLow
+	}
+
+	// In a registration file AND has a registration name → low confidence.
+	if isRegistrationFile(sym.FilePath) && isRegistrationName(sym.DisplayName) {
+		return ConfidenceLow
+	}
+
+	// In a registration file OR has a registration name → medium confidence.
+	if isRegistrationFile(sym.FilePath) || isRegistrationName(sym.DisplayName) {
+		return ConfidenceMedium
+	}
+
+	// Unexported Go function in a non-registration file → high confidence.
+	return ConfidenceHigh
+}
+
+// isWASMPath returns true if the file path is in a WASM/JS-export directory.
+func isWASMPath(path string) bool {
+	return strings.HasPrefix(path, "cmd/wasm/") ||
+		strings.HasPrefix(path, "cmd/embedding-wasm/") ||
+		strings.HasPrefix(path, "cmd/model_registry_server/")
+}
+
+// FindDeadCodeWithMeta returns dead code candidates with confidence scoring
+// and test-only caller detection. Test-only detection requires test files to
+// be indexed in the graph; if they're not, TestCallers will always be 0.
+//
+// Use HasTestCallers() to do a filesystem-based check for test references
+// on candidates where TestCallers is 0 but the graph may not include tests.
+func (s *SQLiteStore) FindDeadCodeWithMeta(ctx context.Context, directory string) ([]DeadCodeCandidate, error) {
+	symbols, err := s.FindDeadCode(ctx, directory)
+	if err != nil {
+		return nil, err
+	}
+
+	candidates := make([]DeadCodeCandidate, len(symbols))
+	for i, sym := range symbols {
+		// Check for test-file callers in the graph (if test files were indexed).
+		testCallers, err := s.countTestCallers(ctx, sym.QualifiedName)
+		if err != nil {
+			testCallers = 0 // best-effort
+		}
+
+		candidates[i] = DeadCodeCandidate{
+			Symbol:      sym,
+			Confidence:  classifyConfidence(sym),
+			TestCallers: testCallers,
+		}
+	}
+
+	return candidates, nil
+}
+
+// countTestCallers returns the number of test-file callers for a symbol.
+// Test files must be indexed in the graph for this to return non-zero.
+func (s *SQLiteStore) countTestCallers(ctx context.Context, qualifiedName string) (int, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var count int
+	err := s.db.QueryRowContext(ctx, `
+		SELECT COUNT(DISTINCT n.id)
+		FROM nodes n
+		JOIN edges e ON e.source_node_id = n.id
+		JOIN nodes target ON e.target_node_id = target.id
+		WHERE target.qualified_name = ?
+		AND (e.edge_type = 'resolved_calls' OR e.edge_type = 'calls')
+		AND (n.file_path LIKE '%_test.go' OR n.file_path LIKE '%.test.ts' OR n.file_path LIKE '%.test.tsx')
+	`, qualifiedName).Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
 // QueryCallers returns symbols that call the given qualified name.
 func (s *SQLiteStore) QueryCallers(ctx context.Context, qualifiedName string) ([]Symbol, error) {
 	s.mu.RLock()

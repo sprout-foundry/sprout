@@ -213,7 +213,8 @@ export function useTerminalSession(options: UseTerminalSessionOptions): UseTermi
         onConnectionChangeRef.current?.(true);
         requestAnimationFrame(() => {
           sendResize();
-          xtermRef.current?.focus();
+          // Do NOT auto-focus on session restore — this steals focus from
+          // the editor/tabs that the user is actively typing in.
         });
       } else if (event.type === 'pty_exit') {
         xtermRef.current?.writeln('\r\n\x1b[90m[Process exited]\x1b[0m');

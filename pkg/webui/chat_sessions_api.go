@@ -778,6 +778,12 @@ func (ws *ReactWebServer) handleAPIChatSessionClearHistory(w http.ResponseWriter
 	// session-restored event flow, and getCurrentSessionIDForRequest publish
 	// the rotated ID — not the stale pre-rotation one. The switch handler
 	// (handleAPIChatSessionsSwitch) maintains the same invariant.
+	//
+	// Both fields are updated under a single ws.mutex.Lock() with a fresh
+	// re-read of ws.clientContexts[clientID] — not the ctx pointer captured
+	// from the early nil-check above (which may be stale if the client context
+	// was removed between the RLock and this write). The fork handler uses
+	// the same pattern.
 	var newSessionID string
 	if agentInst, err := ws.getChatAgent(clientID, chatID); err == nil && agentInst != nil {
 		rotatedID, rotateErr := agentInst.RotateSession()
@@ -788,12 +794,16 @@ func (ws *ReactWebServer) handleAPIChatSessionClearHistory(w http.ResponseWriter
 		}
 		newSessionID = rotatedID
 
-		cs.mu.Lock()
-		cs.CurrentSessionID = rotatedID
-		cs.mu.Unlock()
-
 		ws.mutex.Lock()
-		ctx.CurrentSessionID = rotatedID
+		ctx2 := ws.clientContexts[clientID]
+		if ctx2 != nil {
+			if cs2 := ctx2.getChatSession(chatID); cs2 != nil {
+				cs2.mu.Lock()
+				cs2.CurrentSessionID = rotatedID
+				cs2.mu.Unlock()
+			}
+			ctx2.CurrentSessionID = rotatedID
+		}
 		ws.mutex.Unlock()
 	}
 

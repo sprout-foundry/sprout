@@ -103,7 +103,9 @@ Skills define process. Subagents execute work. You verify final quality.
 ## Implementation Process
 
 ### Phase 1: DISCOVER
-- Use `repo_map` to get a high-level overview of the codebase before diving into specific files. It shows file paths and top-level symbols (functions, types, methods) with line numbers.
+- **Start with `repo_map` at `depth=1`** for a fast directory tree + concept grouping. This shows the repo's shape (UI vs Services vs Tests vs Config), entry points (main.*, App.*, config files), and file counts per directory — all without extracting symbols.
+- **Then `repo_map` at `depth=3`** (default) for the full symbol listing. Use `depth=2` for a lighter view if the repo is large.
+- Use `repo_map` with a `query` parameter to filter to files/symbols matching a string (e.g., `query="auth"` shows only auth-related files and symbols).
 - After reviewing the map, use `read_file` with `view_range` to read only the sections you need — target specific functions or types by their line numbers.
 - Perform searches only if needed to locate task-specific files
 

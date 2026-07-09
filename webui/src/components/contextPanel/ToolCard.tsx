@@ -51,6 +51,7 @@ export function ToolCard({ tool, expandedTools, activeToolId, toolRef, onToggleE
   return (
     <div
       key={tool.id}
+      data-depth={tool.depth || 0}
       ref={(el) => {
         toolRef.current[tool.id] = el;
       }}
@@ -58,7 +59,7 @@ export function ToolCard({ tool, expandedTools, activeToolId, toolRef, onToggleE
       onClick={() => onToggleExpansion(tool.id)}
     >
       <>
-        <div className="tool-summary" style={{ paddingLeft: tool.depth ? `${(tool.depth - 1) * 16}px` : undefined }}>
+        <div className="tool-summary">
           <span className="tool-icon">
             {isSub ? (
               <span className="subagent-icon" style={{ color: getPersonaColor(tool.persona) }}>
@@ -77,17 +78,17 @@ export function ToolCard({ tool, expandedTools, activeToolId, toolRef, onToggleE
                   : 'subagent'
               : tool.tool}
             {isSub && tool.subagentType === 'parallel' && ' (parallel)'}
+            {tool.depth && tool.depth > 0 && (
+              <span
+                className="tool-depth-badge"
+                data-depth-tier={getDepthBadgeTier(tool.depth)}
+                title={subagentDepthLabel(tool.depth)}
+                aria-label={subagentDepthLabel(tool.depth)}
+              >
+                D{tool.depth}
+              </span>
+            )}
           </span>
-          {tool.depth && tool.depth > 0 && (
-            <span
-              className="tool-depth-badge"
-              data-depth-tier={getDepthBadgeTier(tool.depth)}
-              title={subagentDepthLabel(tool.depth)}
-              aria-label={subagentDepthLabel(tool.depth)}
-            >
-              D{tool.depth}
-            </span>
-          )}
           <span className="tool-status">{getStatusIcon(tool.status)}</span>
           <span className="tool-duration">{formatDuration(tool.startTime, tool.endTime)}</span>
           <span className="tool-expand">

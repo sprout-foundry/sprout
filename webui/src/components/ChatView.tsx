@@ -35,7 +35,7 @@ function Chat(props: ChatProps): JSX.Element {
     toolExecutions = [],
     queryProgress = null,
     currentTodos = [],
-    subagentActivities = [],
+    subagentActivities: _subagentActivities = [],
     onToolPillClick,
     onStopProcessing,
     chatId,
@@ -65,7 +65,6 @@ function Chat(props: ChatProps): JSX.Element {
   const inputValueRef = useRef(inputValue);
   inputValueRef.current = inputValue;
 
-  const hasSubagentActivity = subagentActivities.length > 0;
   const needsHealthCheck = requiresBackendHealthCheck();
 
   const currentQueryCount = typeof stats?.queryCount === 'number' ? stats.queryCount : undefined;
@@ -184,8 +183,6 @@ function Chat(props: ChatProps): JSX.Element {
   const VirtuosoFooter = useCallback(
     () => (
       <ChatFooter
-        hasSubagentActivity={hasSubagentActivity}
-        subagentActivities={subagentActivities}
         queryProgress={queryProgress as QueryProgress | null}
         isProcessing={isProcessing}
         filteredToolExecutions={filteredToolExecutions}
@@ -196,8 +193,6 @@ function Chat(props: ChatProps): JSX.Element {
       />
     ),
     [
-      hasSubagentActivity,
-      subagentActivities,
       queryProgress,
       isProcessing,
       filteredToolExecutions,

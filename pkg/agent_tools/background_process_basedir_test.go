@@ -18,11 +18,12 @@ func TestGetBackgroundOutputBaseDir(t *testing.T) {
 
 	result := GetBackgroundOutputBaseDir()
 	assert.NotEmpty(t, result, "GetBackgroundOutputBaseDir should return a non-empty path")
-	assert.Contains(t, result, "bg-processes", "GetBackgroundOutputBaseDir should contain 'bg-processes'")
+	assert.True(t, len(result) > len("bg-processes"), "path should be longer than just 'bg-processes'")
+	assert.Contains(t, result, "bg-processes", "path should contain 'bg-processes'")
 }
 
 // =============================================================================
-// TestBPM_GetBaseDir — matches the default
+// TestBPM_GetBaseDir — matches GetBackgroundOutputBaseDir
 // =============================================================================
 
 func TestBPM_GetBaseDir(t *testing.T) {
@@ -33,7 +34,8 @@ func TestBPM_GetBaseDir(t *testing.T) {
 
 	actual := bpm.GetBaseDir()
 	assert.NotEmpty(t, actual, "BPM's GetBaseDir should return a non-empty path")
-	assert.Contains(t, actual, "bg-processes", "BPM's GetBaseDir should contain 'bg-processes'")
+	assert.Equal(t, GetBackgroundOutputBaseDir(), actual,
+		"BPM's GetBaseDir should match GetBackgroundOutputBaseDir")
 }
 
 // =============================================================================

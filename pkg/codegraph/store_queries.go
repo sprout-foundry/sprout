@@ -169,9 +169,10 @@ func (s *SQLiteStore) countTestCallers(ctx context.Context, qualifiedName string
 		FROM nodes n
 		JOIN edges e ON e.source_node_id = n.id
 		JOIN nodes target ON e.target_node_id = target.id
+		JOIN files f ON f.path = n.file_path
 		WHERE target.qualified_name = ?
 		AND (e.edge_type = 'resolved_calls' OR e.edge_type = 'calls')
-		AND (n.file_path LIKE '%_test.go' OR n.file_path LIKE '%.test.ts' OR n.file_path LIKE '%.test.tsx')
+		AND f.is_test = 1
 	`, qualifiedName).Scan(&count)
 	if err != nil {
 		return 0, err

@@ -16,6 +16,8 @@ import SecurityPromptDialog from './components/SecurityPromptDialog';
 import ShellApprovalPanel from './components/ShellApprovalPanel';
 import UIManager from './components/UIManager';
 import UpdateNotification from './components/UpdateNotification';
+import { WasmLoadingOverlay } from './components/WasmLoadingOverlay';
+import { EscalationListener } from './components/EscalationListener';
 import { MAX_PERSISTED_LOGS } from './constants/app';
 import { AppStoreProvider, useAppStoreSetState, useAppStoreState } from './contexts/AppStore';
 import { EditorManagerProvider } from './contexts/EditorManagerContext';
@@ -344,6 +346,7 @@ function AppInner() {
         console.error('Component Stack:', errorInfo.componentStack);
       }}
     >
+      <WasmLoadingOverlay isLoading={!!state.wasmLoading} error={state.wasmError} />
       <SproutAdapterProvider>
         <PlatformNavProvider>
           <ThemeProvider>
@@ -397,6 +400,7 @@ function AppInner() {
                       perChatCache={state.perChatCache}
                     />
                     <UpdateNotification />
+                    <EscalationListener />
                     <DisconnectedOverlay isConnected={state.isConnected} />
                     {state.securityApprovalRequest && (
                       <SecurityApprovalDialog

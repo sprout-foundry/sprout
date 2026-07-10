@@ -93,6 +93,10 @@ export interface AppState {
   subagentActivities: SubagentActivity[];
   activeChatId: string | null;
   chatSessions: ChatSession[];
+  // WASM shell loading state (cloud mode only)
+  wasmLoading?: boolean;
+  wasmReady?: boolean;
+  wasmError?: string | null;
   // Snapshot of per-chat state, saved on switch-away and restored on switch-back
   perChatCache: Record<string, PerChatState>;
   securityApprovalRequest: {

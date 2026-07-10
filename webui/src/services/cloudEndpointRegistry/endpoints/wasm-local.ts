@@ -101,4 +101,10 @@ export const wasmLocalEndpoints: CloudEndpoint[] = [
     category: 'wasm-local',
     description: 'Agent query (WASM shell runs the full agent loop in-browser)',
   },
+  {
+    path: '/api/query/stop',
+    methods: ['POST'],
+    category: 'wasm-local',
+    description: 'Stop agent execution (WASM shell interrupts in-browser agent)',
+  },
 ];

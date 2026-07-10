@@ -1,0 +1,55 @@
+.wasm-loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-primary, #1a1a2e);
+  color: var(--text-primary, #e0e0e0);
+}
+
+.wasm-loading-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  max-width: 400px;
+  text-align: center;
+  padding: 32px;
+}
+
+.wasm-loading-spinner {
+  width: 48px;
+  height: 48px;
+  border: 3px solid var(--border-default, #333);
+  border-top-color: var(--accent-primary, #6366f1);
+  border-radius: 50%;
+  animation: wasm-spin 0.8s linear infinite;
+}
+
+@keyframes wasm-spin {
+  to { transform: rotate(360deg); }
+}
+
+.wasm-loading-error-icon {
+  color: var(--accent-error, #ef4444);
+}
+
+.wasm-loading-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.wasm-loading-message {
+  font-size: 0.875rem;
+  color: var(--text-secondary, #999);
+  margin: 0;
+}
+
+.wasm-loading-hint {
+  font-size: 0.75rem;
+  color: var(--text-tertiary, #666);
+  margin: 0;
+}

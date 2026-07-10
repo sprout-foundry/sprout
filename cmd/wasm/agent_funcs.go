@@ -59,6 +59,7 @@ func agentJSFuncs() map[string]interface{} {
 		"runAgent":          js.FuncOf(runAgentFunc),
 		"runPlan":           js.FuncOf(runPlanFunc),
 		"clearConversation": js.FuncOf(clearConversationFunc),
+		"stopAgent":         js.FuncOf(stopAgentFunc),
 	}
 }
 
@@ -67,6 +68,20 @@ func agentJSFuncs() map[string]interface{} {
 // the user starts a new chat session or clears the conversation.
 func clearConversationFunc(_ js.Value, _ []js.Value) interface{} {
 	resetPersistentAgent()
+	return nil
+}
+
+// stopAgentFunc interrupts the currently running agent loop (if any).
+// This is the cloud-mode equivalent of the stop button — it cancels the
+// agent's interrupt context so any in-flight HTTP requests and tool
+// executions abort promptly.
+func stopAgentFunc(_ js.Value, _ []js.Value) interface{} {
+	persistentAgentMu.Lock()
+	ag := persistentAgent
+	persistentAgentMu.Unlock()
+	if ag != nil {
+		ag.TriggerInterrupt()
+	}
 	return nil
 }
 

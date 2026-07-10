@@ -98,11 +98,15 @@ export function useAppInitialization({
       wasmPreloadPromise.then((ready) => {
         if (ready) {
           debugLog('[startup] WASM shell preloaded successfully');
-          setState((prev) => ({ ...prev, wasmReady: true }));
+          setState((prev) => ({ ...prev, wasmReady: true, wasmLoading: false }));
         } else if (isCloud) {
           console.warn('[startup] WASM shell preload failed — falling through to server safety-net');
+          setState((prev) => ({ ...prev, wasmLoading: false, wasmError: 'Failed to load browser runtime' }));
         }
       });
+      if (isCloud) {
+        setState((prev) => ({ ...prev, wasmLoading: true }));
+      }
 
       // ── Cloud mode: wire agent events to the webui ──────────────
       // In cloud mode, the agent loop runs in the WASM binary. Events

@@ -41,19 +41,23 @@ func TestSteerCoordinator_SubmitWithNilAgentNoPanic(t *testing.T) {
 }
 
 func TestSteerCoordinator_RejectsCommandIntents(t *testing.T) {
-	// Slash, bang, and direct fast-path inputs must NOT reach the
-	// agent's injection / queue channels — the main-prompt dispatch
-	// is the only correct path for them, and silently routing them
-	// here would either echo the command to the LLM (steer) or wrap
-	// it as blockquote text on the next turn (queue), both of which
-	// drop the user's command semantics.
+	// Slash and bang inputs must NOT reach the agent's injection / queue
+	// channels — the main-prompt dispatch is the only correct path for
+	// them, and silently routing them here would either echo the command
+	// to the LLM (steer) or wrap it as blockquote text on the next turn
+	// (queue), both of which drop the user's command semantics.
+	//
+	// Note: shell shortcuts like "pwd" and "git status" are no longer
+	// intercepted statically (the directCommands table was removed).
+	// They only get rejected when zsh detection catches them, which is
+	// disabled in the test agent. See TestSteerCoordinator_AllowsFreeformText.
 	a := newTestAgentForIntent(t)
 	c := NewSteerCoordinator(a, nil)
 	// Drain any pre-existing queue state so we can assert "zero"
 	// after the rejection paths run.
 	_ = a.DrainDeferredMessages()
 
-	for _, in := range []string{"/commit", "!ls", "pwd", "git status"} {
+	for _, in := range []string{"/commit", "!ls"} {
 		c.handleSteerSubmit(in)
 		c.handleQueueSubmit(in)
 	}

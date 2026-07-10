@@ -179,3 +179,111 @@ func TestSaveProducesValidJSON(t *testing.T) {
 	require.NoError(t, err, "saved config should be valid JSON")
 	assert.Equal(t, ConfigVersion, parsed["version"])
 }
+
+// ---------------------------------------------------------------------------
+// Load() merges defaults for omitempty bool fields (SP-fix)
+// ---------------------------------------------------------------------------
+
+// TestLoadDefaultsAppliedForOmittedZshFields verifies that when a config
+// file omits the zsh detection fields, Load() applies the NewConfig()
+// defaults (both true) instead of leaving them as the Go zero value (false).
+func TestLoadDefaultsAppliedForOmittedZshFields(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
+
+	// Write a config that has NO zsh-related keys.
+	configPath := filepath.Join(tmpDir, ConfigFileName)
+	minimalConfig := `{
+		"version": "2.0",
+		"last_used_provider": "ollama-local"
+	}`
+	require.NoError(t, os.WriteFile(configPath, []byte(minimalConfig), 0600))
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.NotNil(t, cfg)
+
+	// With the defaults-merge fix, omitted bool fields should pick up
+	// NewConfig() defaults rather than the Go zero value.
+	assert.True(t, cfg.EnableZshCommandDetection,
+		"EnableZshCommandDetection should default to true when absent from file")
+	assert.True(t, cfg.AutoExecuteDetectedCommands,
+		"AutoExecuteDetectedCommands should default to true when absent from file")
+}
+
+// TestLoadRespectsExplicitFalseZshFields verifies that a config file with
+// explicit false values for the zsh fields is respected after Load().
+func TestLoadRespectsExplicitFalseZshFields(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
+
+	// Write a config that explicitly disables zsh detection.
+	configPath := filepath.Join(tmpDir, ConfigFileName)
+	explicitFalseConfig := `{
+		"version": "2.0",
+		"enable_zsh_command_detection": false,
+		"auto_execute_detected_commands": false
+	}`
+	require.NoError(t, os.WriteFile(configPath, []byte(explicitFalseConfig), 0600))
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.NotNil(t, cfg)
+
+	assert.False(t, cfg.EnableZshCommandDetection,
+		"EnableZshCommandDetection should be false when explicitly set in file")
+	assert.False(t, cfg.AutoExecuteDetectedCommands,
+		"AutoExecuteDetectedCommands should be false when explicitly set in file")
+}
+
+// TestSavePersistsExplicitFalseZshFields verifies that setting a bool
+// field to false and saving results in the false value being persisted
+// to disk (i.e. omitempty was removed from the JSON tag).
+func TestSavePersistsExplicitFalseZshFields(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
+
+	cfg := NewConfig()
+	cfg.EnableZshCommandDetection = false
+	cfg.AutoExecuteDetectedCommands = false
+
+	require.NoError(t, cfg.Save())
+
+	configPath := filepath.Join(tmpDir, ConfigFileName)
+	raw, err := os.ReadFile(configPath)
+	require.NoError(t, err)
+
+	var parsed map[string]interface{}
+	require.NoError(t, json.Unmarshal(raw, &parsed))
+
+	// With omitempty removed, the false values should appear in the JSON.
+	assert.Contains(t, string(raw), `"enable_zsh_command_detection": false`,
+		"enable_zsh_command_detection should be persisted as false")
+	assert.Contains(t, string(raw), `"auto_execute_detected_commands": false`,
+		"auto_execute_detected_commands should be persisted as false")
+}
+
+// TestSaveLoadRoundTripExplicitFalseZshFields verifies the full round-trip:
+// set false, save, reload, and confirm the loaded value is still false.
+func TestSaveLoadRoundTripExplicitFalseZshFields(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("LEDIT_CONFIG", tmpDir)
+	t.Setenv("SPROUT_CONFIG", tmpDir)
+
+	original := NewConfig()
+	original.EnableZshCommandDetection = false
+	original.AutoExecuteDetectedCommands = false
+	require.NoError(t, original.Save())
+
+	loaded, err := Load()
+	require.NoError(t, err)
+	require.NotNil(t, loaded)
+
+	assert.False(t, loaded.EnableZshCommandDetection,
+		"EnableZshCommandDetection should survive save/load round-trip as false")
+	assert.False(t, loaded.AutoExecuteDetectedCommands,
+		"AutoExecuteDetectedCommands should survive save/load round-trip as false")
+}

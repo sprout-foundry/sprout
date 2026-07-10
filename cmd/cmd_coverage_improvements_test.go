@@ -3,7 +3,6 @@
 package cmd
 
 import (
-	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -12,112 +11,6 @@ import (
 
 	"github.com/sprout-foundry/sprout/pkg/testutil"
 )
-
-// =============================================================================
-// TryDirectExecution (agent_query.go)
-// =============================================================================
-
-func TestTryDirectExecution_EmptyQuery(t *testing.T) {
-	executed, err := TryDirectExecution(context.Background(), nil, "")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if executed {
-		t.Error("expected false for empty query")
-	}
-}
-
-func TestTryDirectExecution_WhitespaceOnly(t *testing.T) {
-	executed, err := TryDirectExecution(context.Background(), nil, "   ")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if executed {
-		t.Error("expected false for whitespace-only query")
-	}
-}
-
-func TestTryDirectExecution_ExactMatches(t *testing.T) {
-	commands := []string{
-		"pwd", "ls", "ll", "la", "date", "whoami", "id",
-		"uname", "hostname", "uptime",
-		"git status", "git st", "git log", "git branch",
-		"git diff", "git remote", "git stash", "git tag",
-		"free", "df", "du", "ps", "env",
-	}
-	for _, cmd := range commands {
-		t.Run("exact_"+cmd, func(t *testing.T) {
-			executed, err := TryDirectExecution(context.Background(), nil, cmd)
-			if err != nil {
-				t.Fatalf("unexpected error for %q: %v", cmd, err)
-			}
-			if !executed {
-				t.Errorf("expected true (executed) for %q", cmd)
-			}
-		})
-	}
-}
-
-func TestTryDirectExecution_ExactMatchCaseSensitivity(t *testing.T) {
-	executed, err := TryDirectExecution(context.Background(), nil, "PWD")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if executed {
-		t.Error("expected false for uppercase 'PWD'")
-	}
-
-	executed, err = TryDirectExecution(context.Background(), nil, "Ls")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if executed {
-		t.Error("expected false for mixed-case 'Ls'")
-	}
-}
-
-func TestTryDirectExecution_PrefixMatches_WhichAndWhereis(t *testing.T) {
-	tests := []struct {
-		name  string
-		query string
-	}{
-		{"which ls", "which ls"},
-		{"which go", "which go"},
-		{"whereis bash", "whereis bash"},
-		{"whereis python3", "whereis python3"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			executed, err := TryDirectExecution(context.Background(), nil, tt.query)
-			if err != nil {
-				t.Fatalf("unexpected error for %q: %v", tt.query, err)
-			}
-			if !executed {
-				t.Errorf("expected true (executed) for %q", tt.query)
-			}
-		})
-	}
-}
-
-func TestTryDirectExecution_BareWhichAndWhereis(t *testing.T) {
-	executed, err := TryDirectExecution(context.Background(), nil, "which")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if executed {
-		t.Error("expected false for bare 'which' (no argument)")
-	}
-}
-
-func TestTryDirectExecution_NonMatchingQuery(t *testing.T) {
-	executed, err := TryDirectExecution(context.Background(), nil, "explain quantum physics to me")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if executed {
-		t.Error("expected false for non-matching query")
-	}
-}
 
 // =============================================================================
 // normalizeReasoningEffort (agent_workflow.go)

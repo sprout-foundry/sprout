@@ -98,8 +98,8 @@ func (h *listDirHandler) Execute(ctx context.Context, env ToolEnv, args map[stri
 		}, fmt.Errorf("path is not a directory: %s", resolvedPath)
 	}
 
-	// Read directory contents
-	entries, err := os.ReadDir(resolvedPath)
+	// Read directory contents (readDirCompat works on js/wasm too).
+	entries, err := readDirCompat(resolvedPath)
 	if err != nil {
 		return ToolResult{
 			Output:  "",

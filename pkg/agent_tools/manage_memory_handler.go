@@ -170,7 +170,7 @@ func (h *manageMemoryHandler) executeList() (ToolResult, error) {
 		return ToolResult{Output: "No memories directory found."}, nil
 	}
 
-	entries, err := os.ReadDir(memoryDir)
+	entries, err := readDirCompat(memoryDir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return ToolResult{Output: "No memories found."}, nil

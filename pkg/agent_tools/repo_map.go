@@ -153,7 +153,7 @@ type fileEntry struct {
 func generateRepoMapFromFS(ctx context.Context, absRoot string, depth int, query string) (string, error) {
 
 	allFiles := make([]fileEntry, 0, 4096)
-	walkErr := filepath.WalkDir(absRoot, func(path string, d os.DirEntry, err error) error {
+	walkErr := walkDirCompat(absRoot, func(path string, d os.DirEntry, err error) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()

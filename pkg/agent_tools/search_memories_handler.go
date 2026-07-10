@@ -168,7 +168,7 @@ func searchMemoriesByText(query string, topK int, threshold float64) ([]memorySe
 		return nil, nil // No memory directory = no results, not an error
 	}
 
-	entries, err := os.ReadDir(memoryDir)
+	entries, err := readDirCompat(memoryDir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, nil

@@ -99,6 +99,31 @@ export function useAppInitialization({
         if (ready) {
           debugLog('[startup] WASM shell preloaded successfully');
           setState((prev) => ({ ...prev, wasmReady: true, wasmLoading: false }));
+
+          // Configure browser-native git with VFS access callbacks.
+          // isomorphic-git needs to read/write files from the same
+          // virtual filesystem the agent uses.
+          if (isCloud) {
+            import('../services/cloudWasmHandlers').then(({ listAllVfsFiles }) => {
+              import('../services/browserGit').then(({ configureBrowserGit }) => {
+                const shell = (getAdapter() as CloudAdapter | null)?.getWasmShell?.();
+                if (shell) {
+                  configureBrowserGit({
+                    name: 'Browser IDE',
+                    email: 'browser-ide@sprout.dev',
+                    readVfsFiles: async () => {
+                      return listAllVfsFiles(shell);
+                    },
+                    writeVfsFiles: async (files) => {
+                      for (const f of files) {
+                        shell.writeFile(f.path, f.content);
+                      }
+                    },
+                  });
+                }
+              });
+            });
+          }
         } else if (isCloud) {
           console.warn('[startup] WASM shell preload failed — falling through to server safety-net');
           setState((prev) => ({ ...prev, wasmLoading: false, wasmError: 'Failed to load browser runtime' }));

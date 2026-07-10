@@ -8,19 +8,15 @@ import { gitEndpoints } from './foundry-backend-git';
 const chatAndQueryEndpoints: CloudEndpoint[] = [
   // /api/query is intentionally NOT here — it routes through the WASM shell's
   // in-browser agent loop (see cloudEndpointRegistry/endpoints/wasm-local.ts).
-  // The platform proxy only handles steering/stop/status which need
-  // server-side chat session state.
+  // /api/query/stop is also wasm-local — it interrupts the in-browser agent
+  // directly rather than going through the platform backend.
+  // The platform proxy only handles steering/status which need server-side
+  // chat session state.
   {
     path: '/api/query/steer',
     methods: ['POST'],
     category: 'foundry-backend',
     description: 'Steer agent mid-conversation',
-  },
-  {
-    path: '/api/query/stop',
-    methods: ['POST'],
-    category: 'foundry-backend',
-    description: 'Stop agent execution',
   },
   {
     path: '/api/query/status',

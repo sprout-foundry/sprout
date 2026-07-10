@@ -77,6 +77,8 @@ export interface WasmShell {
   ): Promise<{ response: string; provider: string; model: string }>;
   /** Clear the WASM agent's conversation history (start fresh chat). */
   clearConversation(): void;
+  /** Interrupt the currently running agent loop. */
+  stopAgent(): void;
   /** Get the fully initialized Go global. */
   readonly wasm: typeof globalThis & { SproutWasm: unknown };
 }
@@ -198,6 +200,7 @@ export interface SproutWasmAPI {
     onEvent?: (eventJson: string) => void,
   ): Promise<{ response: string; provider: string; model: string }>;
   clearConversation?(): void;
+  stopAgent?(): void;
   // ── AST / symbol extraction (cmd/wasm/ast_funcs.go) ──
   parseFile?(filePath: string, content: Uint8Array | ArrayBuffer): string;
   extractSymbols?(filePath: string, content: Uint8Array | ArrayBuffer): string;
@@ -389,6 +392,13 @@ export async function initWasmShell(config?: {
       const api = wasm as SproutWasmAPI;
       if (api.clearConversation) {
         api.clearConversation();
+      }
+    },
+
+    stopAgent(): void {
+      const api = wasm as SproutWasmAPI;
+      if (api.stopAgent) {
+        api.stopAgent();
       }
     },
 

@@ -1,4 +1,4 @@
-import { X } from 'lucide-react';
+import { Check, Star, X } from 'lucide-react';
 import { useState, useRef, useEffect, useCallback, type ReactElement } from 'react';
 import type { WindowsOnboardingGuidance } from '../hooks/useOnboarding';
 import type { OnboardingProviderOption } from '../services/api';
@@ -246,7 +246,7 @@ function OnboardingDialog({
                   title="Credentials already configured"
                   aria-label="Credentials already configured"
                 >
-                  ✓ Configured
+                  <Check size={12} /> Configured
                 </span>
               )}
             </button>
@@ -364,7 +364,7 @@ function OnboardingDialog({
                     onClick={() => selectModel(modelName)}
                   >
                     <span className="model-name">{modelName}</span>
-                    {isRecommended && <span className="recommended-badge">★ Recommended</span>}
+                    {isRecommended && <span className="recommended-badge"><Star size={10} fill="currentColor" /> Recommended</span>}
                   </li>
                 );
               })}
@@ -403,7 +403,7 @@ function OnboardingDialog({
 
         {onboarding.validationSuccess && (
           <div className="onboarding-success">
-            ✓ API key validated —{' '}
+            <Check size={14} /> API key validated —{' '}
             {onboarding.validationModelCount > 0
               ? `${onboarding.validationModelCount} models available`
               : 'connection successful'}
@@ -446,7 +446,7 @@ function OnboardingDialog({
             data-testid="onboarding-done"
           >
             {onboarding.validationSuccess
-              ? 'Done ✓'
+              ? <><Check size={14} /> Done</>
               : onboarding.submitting
                 ? 'Validating…'
                 : onboarding.isReonboarding

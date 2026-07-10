@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { TriangleAlert } from 'lucide-react';
 import './DisconnectedOverlay.css';
 
 // Grace before the blocking overlay appears. Ordinary reconnects (a brief
@@ -43,7 +44,7 @@ export function DisconnectedOverlay({ isConnected }: DisconnectedOverlayProps): 
     >
       <div className="disconnected-overlay__card">
         <div className="disconnected-overlay__icon" aria-hidden="true">
-          ⚠
+          <TriangleAlert size={32} />
         </div>
         <h2 className="disconnected-overlay__title">Disconnected from sprout</h2>
         <p className="disconnected-overlay__body">

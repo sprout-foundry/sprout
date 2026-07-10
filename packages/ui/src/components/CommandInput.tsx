@@ -873,7 +873,14 @@ function CommandInput({
     isComposingRef.current = false;
   };
 
-  const canSend = !!draftValue.trim() && !attachedImages.some((img) => !img.uploadedPath && !img.error);
+  const hasUploadingImage = attachedImages.some((img) => !img.uploadedPath && !img.error);
+  const hasFailedImage = attachedImages.some((img) => !!img.error);
+  const uploadingCount = attachedImages.filter(
+    (img) => !img.uploadedPath && !img.error,
+  ).length;
+  const failedCount = attachedImages.filter((img) => !!img.error).length;
+
+  const canSend = !!draftValue.trim() && !hasUploadingImage;
 
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -1051,6 +1058,12 @@ function CommandInput({
         </div>
       )}
 
+      {hasUploadingImage && (
+        <div className="uploading-status" role="status" aria-live="polite">
+          Uploading {uploadingCount} image{uploadingCount !== 1 ? 's' : ''}…
+        </div>
+      )}
+
       {previewImage ? (
         <div
           className="image-preview-modal-overlay"
@@ -1112,8 +1125,20 @@ function CommandInput({
           disabled={disabled || !canSend || !isConnected}
           className="send-button"
           data-testid="chat-send"
-          data-tooltip={!isConnected ? 'Reconnecting...' : isProcessing ? 'Steer running request' : 'Send message'}
-          aria-label="Send message"
+          data-tooltip={
+            hasUploadingImage
+              ? 'Uploading image…'
+              : !isConnected
+                ? 'Reconnecting...'
+                : isProcessing
+                  ? 'Steer running request'
+                  : 'Send message'
+          }
+          aria-label={
+            hasFailedImage
+              ? `Send message (${failedCount} image${failedCount !== 1 ? 's' : ''} failed to upload)`
+              : 'Send message'
+          }
         >
           <Send size={16} />
         </button>

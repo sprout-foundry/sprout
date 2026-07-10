@@ -142,7 +142,7 @@ func (h *embeddingIndexHandler) handleStatus(cfg *configuration.EmbeddingIndexCo
 			sb.WriteString(fmt.Sprintf("  State: Error checking index: %v\n", err))
 		}
 	} else if info.IsDir() {
-		files, readErr := os.ReadDir(indexDir)
+		files, readErr := readDirCompat(indexDir)
 		if readErr != nil {
 			sb.WriteString(fmt.Sprintf("  State: Error reading index directory: %v\n", readErr))
 		} else {

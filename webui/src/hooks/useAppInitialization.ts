@@ -65,7 +65,9 @@ export function useAppInitialization({
       fetch('/user/me', { credentials: 'include' })
         .then((authRes) => {
           if (!authRes.ok) {
-            window.location.href = '/webui/auth/login';
+            // Redirect to platform login with return_to so the user comes back
+            // to the browser IDE after authenticating, not stranded on the dashboard.
+            window.location.href = '/login?return_to=' + encodeURIComponent('/webui/');
             return;
           }
           initApp();

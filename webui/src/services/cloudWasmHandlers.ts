@@ -75,6 +75,11 @@ export function handleWasmLocal(
       case '/api/query':
         return handleWasmAgentQuery(shell, bodyStr);
 
+      // ── Agent stop (interrupts in-browser agent loop) ───────
+      case '/api/query/stop':
+        shell.stopAgent();
+        return jsonOk({ status: 'ok', stopped: true });
+
       // ── Terminal stubs ──────────────────────────────────────
       case '/api/terminal/sessions':        return jsonOk({ active_count: 0, count: 0 });
       case '/api/terminal/shells':

@@ -43,7 +43,13 @@ var (
 	persistentAgentMu sync.Mutex
 	persistentAgent   *agent.Agent
 	persistentAgentPv string // provider name the cached agent was built for
+	persistentErrCnt  int    // consecutive ProcessQuery errors; reset on success
 )
+
+// maxConsecutiveErrors is the threshold at which the cached agent is
+// invalidated. Transient errors (network, rate-limit) are fine to retry
+// on the same agent, but repeated failures suggest state corruption.
+const maxConsecutiveErrors = 3
 
 // resetPersistentAgent clears the cached agent. Called when the JS side
 // wants to start a fresh conversation (new chat session).
@@ -176,8 +182,24 @@ func runAgentFunc(_ js.Value, args []js.Value) interface{} {
 
 		response, err := ag.ProcessQuery(query)
 		if err != nil {
+			// Track consecutive errors. After maxConsecutiveErrors,
+			// invalidate the cached agent so the next call starts fresh
+			// instead of looping on a potentially corrupted state.
+			persistentAgentMu.Lock()
+			persistentErrCnt++
+			if persistentErrCnt >= maxConsecutiveErrors {
+				persistentAgent = nil
+				persistentAgentPv = ""
+				persistentErrCnt = 0
+			}
+			persistentAgentMu.Unlock()
 			return nil, fmt.Errorf("process query: %w", err)
 		}
+
+		// Success — reset error counter.
+		persistentAgentMu.Lock()
+		persistentErrCnt = 0
+		persistentAgentMu.Unlock()
 
 		return map[string]interface{}{
 			"response": response,

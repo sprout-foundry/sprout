@@ -626,6 +626,20 @@ export function useEventHandler({
       case 'file_changed':
         logEntry.category = 'file';
         logEntry.level = 'info';
+
+        // Track agent-written files in the VFS manifest so browserGit
+        // sync sees them. The agent writes via os.WriteFile (Go MEMFS)
+        // which bypasses the JS-side file handlers. Without this, git
+        // operations would silently miss agent-created/edited files.
+        {
+          const changedPath = String(eventData.path || eventData.file_path || '');
+          if (changedPath) {
+            import('../services/cloudWasmHandlers').then(({ trackFileWrite }) => {
+              trackFileWrite(changedPath);
+            }).catch(() => {});
+          }
+        }
+
         setState((prev) => {
           // Track file edits
           const newFileEdit = {

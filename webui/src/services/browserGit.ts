@@ -10,7 +10,7 @@
 
 import FS from '@isomorphic-git/lightning-fs';
 import * as git from 'isomorphic-git';
-import http from 'isomorphic-git/http/web/index.js';
+import http from 'isomorphic-git/http/web';
 
 const FS_NAME = 'sprout-git';
 const REPO_DIR = '/repo';

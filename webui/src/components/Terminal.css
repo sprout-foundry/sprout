@@ -175,26 +175,17 @@
   color: var(--accent-secondary);
 }
 
-.split-btn-active {
-  color: var(--accent-secondary) !important;
-  opacity: 1 !important;
-}
-
 .copy-on-select-btn:hover {
   color: var(--accent-secondary);
-}
-
-.copy-on-select-btn-active {
-  color: var(--accent-secondary) !important;
-  opacity: 1 !important;
 }
 
 .terminal-btn.font-btn:hover {
   color: var(--accent-secondary);
 }
 
-.terminal-btn.add-pane-btn:hover:not(:disabled) {
-  color: var(--accent-secondary);
+/* Per-pane close button — matches terminal-btn base, red hover on demand */
+.pane-close-btn:hover {
+  color: var(--accent-error);
 }
 
 .terminal-btn:disabled {
@@ -523,8 +514,7 @@
   /* On narrow screens, the actions cluster gets cramped fast.
    * Collapse the split toggles into the overflow by hiding them inline;
    * users can still split via the keyboard shortcuts. */
-  .terminal-tab-bar-actions .split-btn,
-  .terminal-tab-bar-actions .add-pane-btn {
+  .terminal-tab-bar-actions .split-btn {
     display: none;
   }
 }

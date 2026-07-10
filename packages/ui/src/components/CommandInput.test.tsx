@@ -1,6 +1,7 @@
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { vi } from 'vitest';
+import { waitFor } from '@testing-library/react';
 import CommandInput from './CommandInput';
 import type { CommandInputProps } from './CommandInput';
 
@@ -720,4 +721,152 @@ describe('CommandInput', () => {
     expect(container.querySelector('.length-indicator')).toBeNull();
   });
 
+  // ── Image upload state tests ───────────────────────────────────────
+
+  it('disables send button while an image is uploading', () => {
+    // Use a never-resolving promise to simulate an in-flight upload.
+    const onUploadImage = vi.fn(() => new Promise(() => {}));
+
+    act(() => {
+      root.render(createElement(CommandInput, {
+        ...baseProps,
+        value: 'test',
+        onUploadImage,
+      }));
+    });
+
+    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    const file = new File(['test'], 'test.png', { type: 'image/png' });
+    const dataTransfer = new DataTransfer();
+    dataTransfer.items.push(new DataTransferItem(file, 'image/png'));
+    dataTransfer.files.push(file);
+    dataTransfer.types.push('Files');
+
+    // Dispatch synchronously inside act() so React commits the attachedImages
+    // update before the assertion runs. We do NOT await the auto-upload
+    // effect — a never-resolving upload would block act() forever.
+    act(() => {
+      const pasteEvent = new Event('paste', { bubbles: true }) as unknown as {
+        clipboardData: DataTransfer;
+      };
+      Object.defineProperty(pasteEvent, 'clipboardData', {
+        value: dataTransfer,
+        writable: false,
+      });
+      textarea!.dispatchEvent(pasteEvent as unknown as ClipboardEvent);
+    });
+
+    const sendBtn = container.querySelector('.send-button') as HTMLButtonElement;
+    expect(sendBtn?.disabled).toBe(true);
+  });
+
+  it('shows uploading status and tooltip while image is uploading', () => {
+    const onUploadImage = vi.fn(() => new Promise(() => {}));
+
+    act(() => {
+      root.render(createElement(CommandInput, {
+        ...baseProps,
+        value: 'test',
+        onUploadImage,
+      }));
+    });
+
+    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    const file = new File(['test'], 'test.png', { type: 'image/png' });
+    const dataTransfer = new DataTransfer();
+    dataTransfer.items.push(new DataTransferItem(file, 'image/png'));
+    dataTransfer.files.push(file);
+    dataTransfer.types.push('Files');
+
+    act(() => {
+      const pasteEvent = new Event('paste', { bubbles: true }) as unknown as {
+        clipboardData: DataTransfer;
+      };
+      Object.defineProperty(pasteEvent, 'clipboardData', {
+        value: dataTransfer,
+        writable: false,
+      });
+      textarea!.dispatchEvent(pasteEvent as unknown as ClipboardEvent);
+    });
+
+    const sendBtn = container.querySelector('.send-button') as HTMLButtonElement;
+    expect(sendBtn?.getAttribute('data-tooltip')).toBe('Uploading image…');
+    expect(container.querySelector('.uploading-status')).not.toBeNull();
+  });
+
+  it('re-enables send button after image upload completes', async () => {
+    const onUploadImage = vi.fn().mockResolvedValue({ path: '/tmp/test.png' });
+
+    act(() => {
+      root.render(createElement(CommandInput, {
+        ...baseProps,
+        value: 'test',
+        onUploadImage,
+      }));
+    });
+
+    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    const file = new File(['test'], 'test.png', { type: 'image/png' });
+    const dataTransfer = new DataTransfer();
+    dataTransfer.items.push(new DataTransferItem(file, 'image/png'));
+    dataTransfer.files.push(file);
+    dataTransfer.types.push('Files');
+
+    // Dispatch synchronously, then poll for the auto-upload to land.
+    // The useEffect fires uploadImageAsync without awaiting, so the
+    // resolved promise resolves outside React's act; waitFor handles
+    // the resulting re-renders.
+    act(() => {
+      const pasteEvent = new Event('paste', { bubbles: true }) as unknown as {
+        clipboardData: DataTransfer;
+      };
+      Object.defineProperty(pasteEvent, 'clipboardData', {
+        value: dataTransfer,
+        writable: false,
+      });
+      textarea!.dispatchEvent(pasteEvent as unknown as ClipboardEvent);
+    });
+
+    const sendBtn = container.querySelector('.send-button') as HTMLButtonElement;
+    await waitFor(() => {
+      expect(onUploadImage).toHaveBeenCalled();
+      expect(sendBtn.disabled).toBe(false);
+    });
+  });
+
+  it('enables send button when only failed images are attached', async () => {
+    const onUploadImage = vi.fn().mockRejectedValue(new Error('Upload failed'));
+
+    act(() => {
+      root.render(createElement(CommandInput, {
+        ...baseProps,
+        value: 'test',
+        onUploadImage,
+      }));
+    });
+
+    const textarea = container.querySelector('textarea') as HTMLTextAreaElement;
+    const file = new File(['test'], 'test.png', { type: 'image/png' });
+    const dataTransfer = new DataTransfer();
+    dataTransfer.items.push(new DataTransferItem(file, 'image/png'));
+    dataTransfer.files.push(file);
+    dataTransfer.types.push('Files');
+
+    act(() => {
+      const pasteEvent = new Event('paste', { bubbles: true }) as unknown as {
+        clipboardData: DataTransfer;
+      };
+      Object.defineProperty(pasteEvent, 'clipboardData', {
+        value: dataTransfer,
+        writable: false,
+      });
+      textarea!.dispatchEvent(pasteEvent as unknown as ClipboardEvent);
+    });
+
+    const sendBtn = container.querySelector('.send-button') as HTMLButtonElement;
+    await waitFor(() => {
+      expect(sendBtn.disabled).toBe(false);
+      expect(sendBtn.getAttribute('aria-label')).toContain('failed to upload');
+    });
+  });
 });

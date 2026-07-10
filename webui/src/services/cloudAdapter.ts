@@ -18,7 +18,6 @@ import { getSyntheticResponse, isWasmLocalEndpoint } from './cloudEndpointRegist
 import {
   CHAT_ENDPOINT_MAP,
   translateAndProxyChat,
-  proxyGitRequest,
   proxyStatsRequest,
   proxySettingsRequest,
 } from './cloudProxyRoutes';
@@ -74,6 +73,11 @@ export class CloudAdapter implements APIAdapter {
         console.warn('[CloudAdapter] WASM shell preload failed:', err);
         return false;
       });
+  }
+
+  /** Return the cached WASM shell if initialized, or null. */
+  getWasmShell(): WasmShell | null {
+    return this.wasmShell;
   }
 
   /**
@@ -215,11 +219,13 @@ export class CloudAdapter implements APIAdapter {
       );
     }
 
-    // ── Git endpoint translation ────────────────────────────────────
-    // Rewrite /api/git/* paths to /api/proxy/git/*
+    // ── Git operations (in-browser via isomorphic-git) ──────────────
+    // In cloud mode, git runs entirely in the browser using isomorphic-git
+    // + lightning-fs (IndexedDB). No server-side state required.
     if (urlPath.startsWith('/api/git/')) {
       const requestBody = await this.extractRequestBody(input);
-      return proxyGitRequest(this.config.apiBase, url, method, clientIdHeader, clientIdValue, init, requestBody);
+      const { handleBrowserGitRequest } = await import('./browserGitHandler');
+      return handleBrowserGitRequest(urlPath, method, url, requestBody ?? undefined);
     }
 
     // ── Stats endpoint translation ────────────────────────────────────

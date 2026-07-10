@@ -143,6 +143,54 @@ export function trackFileWrite(rawPath: string): void {
 }
 
 /**
+ * Read-only snapshot of the VFS write manifest. Used by browserGit's VFS
+ * bridge to enumerate files when the deployed WASM binary's listDir is
+ * broken (O_DIRECTORY bug). Returns a copy so callers can't mutate state.
+ */
+export function getVfsManifestSnapshot(): Set<string> {
+  return new Set(vfsManifest);
+}
+
+/**
+ * Read all files from the WASM VFS, returning {path, content} pairs.
+ * Used by browserGit to sync the working tree before git operations.
+ */
+export async function listAllVfsFiles(shell: WasmShell): Promise<Array<{ path: string; content: string }>> {
+  const cwd = shell.getCwd();
+  // Try to get all file paths via the flattenEntries/listFilesTracked logic
+  const files: Array<{ path: string; content: string }> = [];
+
+  // Get paths from the manifest + listDir
+  let paths: string[] = [];
+  try {
+    paths = listFilesTracked(shell, cwd);
+  } catch {
+    // Fall back to manifest
+    paths = Array.from(vfsManifest);
+  }
+
+  for (const absPath of paths) {
+    try {
+      const result = shell.readFile(absPath);
+      if (!result.error) {
+        // Make path relative to CWD
+        let relPath = absPath;
+        const normalizedCwd = cwd.endsWith('/') ? cwd : cwd + '/';
+        if (absPath.startsWith(normalizedCwd)) {
+          relPath = absPath.slice(normalizedCwd.length);
+        } else if (absPath.startsWith('/home/user/')) {
+          relPath = absPath.slice('/home/user/'.length);
+        }
+        files.push({ path: relPath, content: result.content });
+      }
+    } catch {
+      // skip unreadable
+    }
+  }
+  return files;
+}
+
+/**
  * Get all known files from the manifest that are descendants of dir.
  * Tries listDir first; falls back to manifest on error.
  * When dir listing fails and the manifest has entries under a different

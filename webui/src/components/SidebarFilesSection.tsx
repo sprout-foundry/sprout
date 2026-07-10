@@ -1,4 +1,5 @@
 import { FileTree, type FileInfo } from '@sprout/ui';
+import { Check, TriangleAlert, X } from 'lucide-react';
 import { forwardRef, useImperativeHandle, useRef, useEffect, useState } from 'react';
 import { isCloud } from '../config/mode';
 import { ApiService } from '../services/api';
@@ -210,7 +211,7 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
             )}
             {importStatus === 'done' && (
               <>
-                <span className="repo-import-icon repo-import-icon--success">✓</span>
+                <span className="repo-import-icon repo-import-icon--success"><Check size={16} /></span>
                 <div className="repo-import-text">
                   <strong>{importRepoName} ready</strong>
                   <span>Files loaded into browser workspace</span>
@@ -219,12 +220,12 @@ const SidebarFilesSection = forwardRef<FileTreeHandle, SidebarFilesSectionProps>
             )}
             {importStatus === 'error' && (
               <>
-                <span className="repo-import-icon repo-import-icon--error">⚠</span>
+                <span className="repo-import-icon repo-import-icon--error"><TriangleAlert size={16} /></span>
                 <div className="repo-import-text">
                   <strong>Import failed</strong>
                   <span>{importError}</span>
                 </div>
-                <button className="repo-import-dismiss" onClick={() => setImportStatus('idle')}>×</button>
+                <button className="repo-import-dismiss" onClick={() => setImportStatus('idle')}><X size={14} /></button>
               </>
             )}
           </div>

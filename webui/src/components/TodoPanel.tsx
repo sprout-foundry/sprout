@@ -1,5 +1,5 @@
 import type { TodoItem } from '@sprout/ui';
-import { Check, Circle, Loader2, Minus, ChevronDown, ChevronRight } from 'lucide-react';
+import { Check, Circle, ClipboardList, Loader2, Minus, ChevronDown, ChevronRight } from 'lucide-react';
 import { useState, useCallback } from 'react';
 import './TodoPanel.css';
 
@@ -59,7 +59,7 @@ function TodoPanel({ todos, isLoading = false }: TodoPanelProps): JSX.Element {
     return (
       <div className="todo-panel" data-testid="context-panel-tasks">
         <div className="todo-header">
-          <span className="todo-title">📋 Tasks</span>
+          <span className="todo-title"><ClipboardList size={14} /> Tasks</span>
           <span className="todo-count-summary">Loading...</span>
         </div>
         <div className="todo-progress-bar">
@@ -81,7 +81,7 @@ function TodoPanel({ todos, isLoading = false }: TodoPanelProps): JSX.Element {
     return (
       <div className="todo-panel" data-testid="context-panel-tasks">
         <div className="todo-header">
-          <span className="todo-title">📋 Tasks</span>
+          <span className="todo-title"><ClipboardList size={14} /> Tasks</span>
           <span className="todo-count-summary">Idle</span>
         </div>
         <div className="todo-progress-bar">
@@ -99,7 +99,10 @@ function TodoPanel({ todos, isLoading = false }: TodoPanelProps): JSX.Element {
   return (
     <div className="todo-panel" data-testid="context-panel-tasks">
       <div className="todo-header">
-        <span className="todo-title">📋 Tasks</span>
+        <span className="todo-title">
+          <ClipboardList size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
+          Tasks
+        </span>
         <span className="todo-count-summary">
           {total} tasks · {active} active · {completed} done
           {isLoading ? ' · updating…' : ''}

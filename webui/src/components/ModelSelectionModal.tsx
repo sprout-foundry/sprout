@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { AlertTriangle, Check, Star } from 'lucide-react';
 import { ApiService } from '../services/api';
 import type { ProviderModel } from '../services/api/types';
 import { debugLog } from '../utils/log';
@@ -55,7 +56,6 @@ function ModelSelectionModal({
   // Copy + intent vary by why the modal opened.
   const isWarning = reason !== 'switch';
   const title = isWarning ? 'Model Not Available' : 'Choose a model';
-  const icon = isWarning ? '⚠' : '✱';
   const description = isWarning ? (
     <>
       The configured model is not available for provider <strong>{provider}</strong>. Please select a different model to
@@ -154,7 +154,7 @@ function ModelSelectionModal({
 
         {/* Header */}
         <div className="model-selection-header">
-          <span className="model-selection-icon">{icon}</span>
+          <span className="model-selection-icon">{isWarning ? <AlertTriangle size={16} /> : <Star size={16} />}</span>
           <h2 className="model-selection-title">{title}</h2>
         </div>
 
@@ -216,7 +216,7 @@ function ModelSelectionModal({
                                 className="model-selection-badge model-selection-badge--recommended"
                                 title={`Recommended for ${recommended.join(', ')} — passed the capability probe`}
                               >
-                                ★ {recommendedRole}
+                                <Star size={10} fill="currentColor" /> {recommendedRole}
                               </span>
                             )}
                             {!recommendedRole && eligible.length > 0 && (
@@ -233,12 +233,12 @@ function ModelSelectionModal({
                                 title={warnings.join('; ')}
                                 aria-label={`Warning: ${warnings.join('; ')}`}
                               >
-                                ⚠
+                                <AlertTriangle size={10} />
                               </span>
                             )}
                             {selectedModel === model.id && (
                               <span className="model-selection-item-check" data-testid="model-picker-current">
-                                ✓
+                                <Check size={12} />
                               </span>
                             )}
                           </button>

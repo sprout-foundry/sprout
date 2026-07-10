@@ -1,5 +1,5 @@
 import { Skeleton } from '@sprout/ui';
-import { Pencil, Plus, Trash2, Lock, RefreshCw, ChevronDown, ChevronRight, Key } from 'lucide-react';
+import { Check, Pencil, Plus, Trash2, Lock, RefreshCw, ChevronDown, ChevronRight, Key, X } from 'lucide-react';
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useNotifications } from '../contexts/NotificationContext';
 import { ApiService } from '../services/api';
@@ -458,7 +458,7 @@ function CredentialsSettingsTab(): JSX.Element {
                       wordBreak: 'break-word',
                     }}
                   >
-                    {testResults[provider.provider].success ? '✓' : '✗'}
+                    {testResults[provider.provider].success ? <Check size={12} /> : <X size={12} />}
                     {testResults[provider.provider]?.success
                       ? `Connected — ${testResults[provider.provider].model_count ?? 0} models available`
                       : truncateError(testResults[provider.provider]?.error || 'Unknown error')}

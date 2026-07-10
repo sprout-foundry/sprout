@@ -10,7 +10,7 @@ import {
   Copy,
   ChevronUp,
   ChevronDown,
-  SquarePlus,
+  X,
   MoreHorizontal,
 } from 'lucide-react';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -174,6 +174,7 @@ function Terminal({
     handleSplitDividerDragStart,
     addSessionToPane,
     closeSessionInPane,
+    removePane,
     renameSessionInPane,
     togglePinInPane,
     switchSessionInPane,
@@ -181,9 +182,8 @@ function Terminal({
     handleSessionActivity,
     handlePaneExit,
     handleAttachAgentSession,
-    toggleSplit,
-    addPaneInDirection,
-    canAddPane,
+    addSplitPane,
+    canAddPaneForDirection,
     activitySessionIds,
     paneHandlesRef,
     sessionShellsRef,
@@ -523,50 +523,42 @@ function Terminal({
                           </div>
                         )}
                       </div>
+                      {panes.length > 1 && (
+                        <button
+                          className="terminal-btn pane-close-btn"
+                          onClick={() => removePane(pane.id)}
+                          title="Close pane"
+                          aria-label="Close pane"
+                          type="button"
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
                       {isActionsPane && (
                         <>
                           <div className="terminal-tab-bar-divider" aria-hidden="true" />
                           <div className="terminal-tab-bar-actions">
                             <BackgroundTasks />
                             <button
-                              className={`terminal-btn split-btn ${splitDirection === 'vertical' ? 'split-btn-active' : ''}`}
-                              onClick={() => toggleSplit('vertical')}
-                              title={splitDirection === 'vertical' ? 'Unsplit terminal' : 'Split terminal vertically'}
-                              aria-label={
-                                splitDirection === 'vertical' ? 'Unsplit terminal' : 'Split terminal vertically'
-                              }
-                              aria-pressed={splitDirection === 'vertical'}
+                              className="terminal-btn split-btn"
+                              onClick={() => addSplitPane('vertical')}
+                              disabled={!canAddPaneForDirection('vertical')}
+                              title="Split terminal vertically"
+                              aria-label="Split terminal vertically"
+                              type="button"
                             >
                               <Columns2 size={16} />
                             </button>
                             <button
-                              className={`terminal-btn split-btn ${splitDirection === 'horizontal' ? 'split-btn-active' : ''}`}
-                              onClick={() => toggleSplit('horizontal')}
-                              title={
-                                splitDirection === 'horizontal' ? 'Unsplit terminal' : 'Split terminal horizontally'
-                              }
-                              aria-label={
-                                splitDirection === 'horizontal' ? 'Unsplit terminal' : 'Split terminal horizontally'
-                              }
-                              aria-pressed={splitDirection === 'horizontal'}
+                              className="terminal-btn split-btn"
+                              onClick={() => addSplitPane('horizontal')}
+                              disabled={!canAddPaneForDirection('horizontal')}
+                              title="Split terminal horizontally"
+                              aria-label="Split terminal horizontally"
+                              type="button"
                             >
                               <Rows2 size={16} />
                             </button>
-                            {isSplitActive && (
-                              <button
-                                className="terminal-btn add-pane-btn"
-                                onClick={addPaneInDirection}
-                                disabled={!canAddPane}
-                                title={
-                                  canAddPane
-                                    ? `Add ${splitDirection === 'vertical' ? 'vertical' : 'horizontal'} pane`
-                                    : 'No room for another pane — resize terminal or close one first'
-                                }
-                                aria-label="Add terminal pane"
-                              >
-                                <SquarePlus size={16} />
-                              </button>
-                            )}
                             <button
                               className="terminal-btn clear-btn"
                               onClick={() => {
@@ -578,6 +570,7 @@ function Terminal({
                               }}
                               title="Clear terminal"
                               aria-label="Clear terminal"
+                              type="button"
                             >
                               <Trash2 size={16} />
                             </button>
@@ -589,6 +582,7 @@ function Terminal({
                                 aria-label="More options"
                                 aria-haspopup="menu"
                                 aria-expanded={showOverflowMenu}
+                                type="button"
                               >
                                 <MoreHorizontal size={16} />
                               </button>

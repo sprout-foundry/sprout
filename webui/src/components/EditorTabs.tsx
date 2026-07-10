@@ -434,7 +434,7 @@ function EditorTabs({
                     )}
                     {buffer.isModified && (
                       <span className="tab-modified" aria-label="Unsaved changes">
-                        ●
+                        <span className="tab-modified-dot" />
                       </span>
                     )}
                     {buffer.externallyModified && (

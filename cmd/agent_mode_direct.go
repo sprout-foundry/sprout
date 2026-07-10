@@ -33,14 +33,6 @@ func runDirectMode(ctx context.Context, chatAgent *agent.Agent, eventBus *events
 		return nil
 	}
 
-	// Try LLM-based fast path: direct command execution
-	if executed, err := TryDirectExecution(ctx, chatAgent, query); err != nil {
-		return fmt.Errorf("direct command execution failed: %w", err)
-	} else if executed {
-		// Command was executed directly, skip normal agent flow
-		return nil
-	}
-
 	// Proceed with normal agent flow
 	return ProcessQuery(ctx, chatAgent, eventBus, query)
 }

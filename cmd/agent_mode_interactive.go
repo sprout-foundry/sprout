@@ -331,13 +331,6 @@ func runInteractiveMode(ctx context.Context, chatAgent *agent.Agent, eventBus *e
 				fmt.Fprint(os.Stderr, console.FormatErrorBlock(console.GlyphError.Prefix()+"Error", err))
 			} else if executed {
 				fastPathExecuted = true
-			} else {
-				// Zsh detection didn't trigger, try LLM-based detection
-				if executed, err := TryDirectExecution(ctx, chatAgent, query); err != nil {
-					fmt.Fprint(os.Stderr, console.FormatErrorBlock(console.GlyphError.Prefix()+"Error", err))
-				} else if executed {
-					fastPathExecuted = true
-				}
 			}
 
 			// Only start the spinner (and the full agent turn) when no fast

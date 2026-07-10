@@ -64,8 +64,8 @@ func Load() (*Config, error) {
 		}
 	}
 
-	var config Config
-	if err := json.Unmarshal(data, &config); err != nil {
+	config := NewConfig()
+	if err := json.Unmarshal(data, config); err != nil {
 		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
@@ -96,10 +96,10 @@ func Load() (*Config, error) {
 
 	// Merge missing default skills so that skills added to embedded defaults
 	// after the user's config was already at v2.0 are still available.
-	mergeMissingDefaultSkills(&config)
+	mergeMissingDefaultSkills(config)
 
 	// Post-unmarshal operations that truly need struct-level access
-	fileCustomProviders, err := MigrateLegacyCustomProviders(&config)
+	fileCustomProviders, err := MigrateLegacyCustomProviders(config)
 	if err != nil {
 		return nil, fmt.Errorf("get config path: %w", err)
 	}
@@ -126,9 +126,9 @@ func Load() (*Config, error) {
 	// the Save-time guard existed). On the next CLI start the value
 	// gets cleared and the user is prompted normally instead of
 	// /commit silently routing to a no-op mock.
-	sanitizeTestProvider(&config)
+	sanitizeTestProvider(config)
 
-	return &config, nil
+	return config, nil
 }
 
 // Save saves the configuration to file

@@ -20,11 +20,10 @@ import (
 type PromptIntent string
 
 const (
-	IntentNone        PromptIntent = ""
-	IntentSlash       PromptIntent = "slash command"
-	IntentBangShell   PromptIntent = "shell command (! prefix)"
-	IntentDetectedSh  PromptIntent = "shell command"
-	IntentDirectShort PromptIntent = "shell shortcut"
+	IntentNone       PromptIntent = ""
+	IntentSlash      PromptIntent = "slash command"
+	IntentBangShell  PromptIntent = "shell command (! prefix)"
+	IntentDetectedSh PromptIntent = "shell command"
 )
 
 // ClassifyPromptIntent mirrors the dispatch decisions the main REPL
@@ -34,16 +33,15 @@ const (
 //
 //  1. Slash / bang prefix → registry.IsSlashCommand
 //  2. Zsh-detected command (config-gated) → zsh.IsCommand
-//  3. Static shortcut table → isDirectFastPathCommand
 //
 // Returns IntentNone for plain text. The chatAgent argument may be nil
 // in tests; in that case the config-gated checks are skipped.
 //
 // Keep this in lockstep with cmd/agent_modes.go's main-prompt dispatch
-// (the IsSlashCommand check ~line 1053 and the TryZshCommandExecution /
-// TryDirectExecution fast-path block ~line 1109). If a new
-// pre-LLM interception lands at the prompt, add it here too — otherwise
-// the steer/queue panels will diverge from the prompt's behavior.
+// (the IsSlashCommand check and the TryZshCommandExecution fast-path
+// block). If a new pre-LLM interception lands at the prompt, add it
+// here too — otherwise the steer/queue panels will diverge from the
+// prompt's behavior.
 func ClassifyPromptIntent(chatAgent *agent.Agent, text string) PromptIntent {
 	text = strings.TrimSpace(text)
 	if text == "" {
@@ -67,10 +65,6 @@ func ClassifyPromptIntent(chatAgent *agent.Agent, text string) PromptIntent {
 				return IntentDetectedSh
 			}
 		}
-	}
-
-	if isDirectFastPathCommand(text) {
-		return IntentDirectShort
 	}
 
 	return IntentNone

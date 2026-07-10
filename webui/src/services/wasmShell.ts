@@ -75,6 +75,8 @@ export interface WasmShell {
     query: string,
     onEvent?: (eventJson: string) => void,
   ): Promise<{ response: string; provider: string; model: string }>;
+  /** Clear the WASM agent's conversation history (start fresh chat). */
+  clearConversation(): void;
   /** Get the fully initialized Go global. */
   readonly wasm: typeof globalThis & { SproutWasm: unknown };
 }
@@ -195,6 +197,7 @@ export interface SproutWasmAPI {
     query: string,
     onEvent?: (eventJson: string) => void,
   ): Promise<{ response: string; provider: string; model: string }>;
+  clearConversation?(): void;
   // ── AST / symbol extraction (cmd/wasm/ast_funcs.go) ──
   parseFile?(filePath: string, content: Uint8Array | ArrayBuffer): string;
   extractSymbols?(filePath: string, content: Uint8Array | ArrayBuffer): string;
@@ -380,6 +383,13 @@ export async function initWasmShell(config?: {
         return Promise.reject(new Error('WASM binary does not expose runAgent'));
       }
       return api.runAgent(provider, model, query, onEvent);
+    },
+
+    clearConversation(): void {
+      const api = wasm as SproutWasmAPI;
+      if (api.clearConversation) {
+        api.clearConversation();
+      }
     },
 
     get wasm() {

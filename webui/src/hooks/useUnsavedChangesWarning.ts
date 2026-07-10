@@ -56,7 +56,7 @@ export function useUnsavedChangesWarning({
       return;
     }
 
-    const indicator = activeBuffer.isModified ? '● ' : '';
+    const indicator = activeBuffer.isModified ? '* ' : '';
     document.title = `${indicator}${activeBuffer.file.name} — sprout`;
   }, [activeBufferId, buffersRef]);
 }

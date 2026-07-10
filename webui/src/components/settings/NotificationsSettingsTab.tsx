@@ -145,9 +145,9 @@ export default function NotificationsSettingsTab({ renderLocalToggle }: Notifica
           {requesting ? (
             'Requesting...'
           ) : testStatus === 'sent' ? (
-            '✓ Sent!'
+            'Sent'
           ) : testStatus === 'blocked' ? (
-            '✗ Blocked'
+            'Blocked'
           ) : (
             <>
               <Bell size={14} style={{ marginRight: '6px' }} />

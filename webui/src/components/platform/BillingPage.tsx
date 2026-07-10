@@ -249,7 +249,7 @@ const BillingPage: React.FC = () => {
                         1
                       </span>
                       <div>
-                        <strong style={{ color: 'var(--accent-success)' }}>Welcome Back! 🎉</strong>
+                        <strong style={{ color: 'var(--accent-success)' }}>Welcome Back!</strong>
                         <p style={{ margin: '0.25rem 0 0 0', color: 'var(--accent-success)', fontSize: '0.875rem' }}>
                           Your account has been reactivated successfully.
                         </p>

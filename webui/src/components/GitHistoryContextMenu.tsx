@@ -1,5 +1,5 @@
 import { ContextMenu } from '@sprout/ui';
-import { Copy, GitBranch, RotateCcw } from 'lucide-react';
+import { Check, Copy, GitBranch, RotateCcw } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { copyToClipboard } from '../utils/clipboard';
 import { debugLog } from '../utils/log';
@@ -219,7 +219,7 @@ function GitHistoryContextMenu({
           {isLoading
             ? 'Checking out…'
             : actionStatus === 'Checked out!'
-              ? '✓ Checked out'
+              ? <><Check size={13} /> Checked out</>
               : `Checkout this commit (${short})`}
         </span>
       </button>
@@ -232,7 +232,7 @@ function GitHistoryContextMenu({
       >
         <RotateCcw size={13} />
         <span className="menu-item-label">
-          {isLoading ? 'Reverting…' : actionStatus === 'Reverted!' ? '✓ Reverted' : `Revert commit (${short})`}
+          {isLoading ? 'Reverting…' : actionStatus === 'Reverted!' ? <><Check size={13} /> Reverted</> : `Revert commit (${short})`}
         </span>
       </button>
     </ContextMenu>

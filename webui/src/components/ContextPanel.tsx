@@ -113,8 +113,24 @@ const ContextPanel = forwardRef<ContextPanelHandle, ContextPanelProps>((props, r
       const tool = chatProps.toolExecutions.find((t) => t.id === toolId);
       if (tool) {
         const qid = tool.queryId ?? 0;
+        const maxQid = chatProps.toolExecutions.reduce(
+          (max, t) => Math.max(max, t.queryId ?? 0),
+          0,
+        );
         state.setExpandedQueries((prev) => {
-          if (prev.has(qid)) return prev;
+          // expandedQueries has inverted semantics for the current turn:
+          //   current turn: isExpanded = !isInSet (in-set = collapsed)
+          //   past turns:   isExpanded = isInSet  (in-set = expanded)
+          // To guarantee the target group is visible, we need:
+          //   - current turn: REMOVE qid from the set (so it defaults to expanded)
+          //   - past turn:    ADD qid to the set (so it expands)
+          if (qid === maxQid) {
+            if (!prev.has(qid)) return prev; // already expanded
+            const next = new Set(prev);
+            next.delete(qid);
+            return next;
+          }
+          if (prev.has(qid)) return prev; // already expanded
           const next = new Set(prev);
           next.add(qid);
           return next;

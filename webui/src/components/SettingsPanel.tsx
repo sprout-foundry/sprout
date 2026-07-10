@@ -27,6 +27,7 @@ import type {
   SettingsPanelProps,
 } from './settings/types';
 import { SECTION_GROUPS, getSectionForSubsection, scopeToLayer, subsectionToLegacyTab } from './settings/types';
+import { isCloud } from '../config/mode';
 import { useSettingsFieldRenderers } from './settings/useSettingsFieldRenderers';
 import { useSettingsMutation } from './settings/useSettingsMutation';
 import { useSettingsState } from './settings/useSettingsState';
@@ -131,8 +132,28 @@ function SettingsPanel({
   // When filtering, matched sections auto-expand so results are visible.
   const normalizedQuery = filterQuery.trim().toLowerCase();
   const filteredSections = useMemo(() => {
-    if (!normalizedQuery) return SECTION_GROUPS;
-    return SECTION_GROUPS.map((section) => {
+    // In cloud mode, hide sections that require a local backend.
+    // MCP, LSP, Computer Use, Skills, and Subagents all depend on
+    // process spawning or server-side state that doesn't exist in
+    // the browser IDE.
+    const cloudHiddenSubsections = new Set<SettingsSubsection>([
+      'workspace-mcp',
+      'workspace-lsp',
+      'experimental-computer-use',
+      'agent-skills',
+      'agent-subagents',
+    ]);
+
+    let groups = SECTION_GROUPS;
+    if (isCloud) {
+      groups = SECTION_GROUPS.map((section) => ({
+        ...section,
+        subsections: section.subsections.filter((sub) => !cloudHiddenSubsections.has(sub.id)),
+      })).filter((section) => section.subsections.length > 0);
+    }
+
+    if (!normalizedQuery) return groups;
+    return groups.map((section) => {
       const sectionMatches =
         section.label.toLowerCase().includes(normalizedQuery) ||
         section.description.toLowerCase().includes(normalizedQuery) ||

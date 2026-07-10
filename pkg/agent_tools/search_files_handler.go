@@ -92,7 +92,7 @@ func (h *searchFilesHandler) Execute(ctx context.Context, env ToolEnv, args map[
 	totalBytes := 0
 	matchCount := 0
 
-	err = filepath.WalkDir(directory, func(path string, info os.DirEntry, err error) error {
+	err = walkDirCompat(directory, func(path string, info os.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}

@@ -1,5 +1,5 @@
 import { Skeleton } from '@sprout/ui';
-import { Download, GitFork, Loader2, RotateCcw, Search, X } from 'lucide-react';
+import { Download, GitFork, Loader2, RotateCcw, Search, Star, X } from 'lucide-react';
 import PastSessionsHint from '../PastSessionsHint';
 import { supportsExport } from '../../config/mode';
 import { formatRelativeTime } from './helpers';
@@ -131,7 +131,7 @@ export function SessionsTab({
                     className="sidebar-session-search-result-score"
                     title={`Match score: ${result.match_score}`}
                   >
-                    {result.match_score === 3 ? '★' : '☆'}
+                    {result.match_score === 3 ? <Star size={12} fill="currentColor" /> : <Star size={12} />}
                   </span>
                 )}
               </button>

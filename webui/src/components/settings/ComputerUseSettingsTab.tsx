@@ -1,4 +1,4 @@
-import { AlertTriangle, Loader2, Camera, FolderOpen } from 'lucide-react';
+import { AlertTriangle, Check, Loader2, Camera, FolderOpen, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SproutSettings } from '../../services/api';
 import { clientFetch } from '../../services/clientSession';
@@ -276,11 +276,11 @@ export default function ComputerUseSettingsTab({
           {testPhase === 'testing'
             ? 'Testing...'
             : testPhase === 'ok'
-              ? '✓ Backend ready'
+              ? <><Check size={14} /> Backend ready</>
               : testPhase === 'disabled'
-                ? '✗ Disabled'
+                ? <><X size={14} /> Disabled</>
                 : testPhase === 'error'
-                  ? '✗ Failed'
+                  ? <><X size={14} /> Failed</>
                   : 'Test connection'}
         </button>
         {testMessage && (

@@ -1,5 +1,6 @@
 import type { ShellApprovalPartData, ShellApprovalRequestData } from '@sprout/events';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Check, X } from 'lucide-react';
 import './ShellApprovalPanel.css';
 
 type PartDecision = 'pending' | 'approved' | 'rejected';
@@ -30,10 +31,10 @@ function defaultDecisionForRisk(risk: string): PartDecision {
 /** Cycle: pending → approved → rejected → pending */
 const DECISION_CYCLE: PartDecision[] = ['pending', 'approved', 'rejected'];
 
-function decisionIcon(status: PartDecision): string {
-  if (status === 'approved') return '✓';
-  if (status === 'rejected') return '✗';
-  return '?';
+function decisionIcon(status: PartDecision): JSX.Element {
+  if (status === 'approved') return <Check size={14} />;
+  if (status === 'rejected') return <X size={14} />;
+  return <span style={{ color: 'var(--text-muted)' }}>?</span>;
 }
 
 function decisionLabel(status: PartDecision): string {
@@ -131,7 +132,7 @@ function ShellApprovalPanel({ request, onSubmit, onCancel }: ShellApprovalPanelP
               aria-label="Close"
               disabled={submitting}
             >
-              ✕
+              <X size={14} />
             </button>
           )}
         </div>

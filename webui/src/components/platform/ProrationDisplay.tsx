@@ -55,7 +55,7 @@ export const ProrationDisplay: React.FC<ProrationDisplayProps> = ({ prorationRec
                       color: record.type === 'credit' ? 'var(--accent-success)' : 'var(--accent-error)',
                     }}
                   >
-                    {record.type === 'credit' ? '✓ Credit' : '⚠ Charge'}
+                    {record.type === 'credit' ? 'Credit' : 'Charge'}
                   </span>
                   <span style={{ marginLeft: '8px', color: 'var(--text-secondary)' }}>
                     {formatDate(record.created_at)}

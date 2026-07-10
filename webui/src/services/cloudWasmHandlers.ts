@@ -668,37 +668,60 @@ export function jsonError(message: string, status: number): Response {
  *
  * The WASM agent calls the LLM via the platform proxy (/proxy/chat)
  * which handles authentication and key management.
+ *
+ * Events are dispatched in the WsEvent shape: { type, data: {...} }
+ * This matches what useEventHandler expects (it reads event.data).
  */
 function handleWasmAgentQuery(shell: WasmShell, bodyStr?: string): Response {
-  console.log('[wasm-agent] handleWasmAgentQuery called, bodyStr present:', !!bodyStr);
   if (!bodyStr) {
-    console.warn('[wasm-agent] No body');
     return jsonError('Missing request body', 400);
   }
 
-  let parsed: { query?: string; provider?: string; model?: string };
+  let parsed: { query?: string; provider?: string; model?: string; chat_id?: string };
   try {
     parsed = JSON.parse(bodyStr);
   } catch {
-    console.warn('[wasm-agent] Invalid JSON:', bodyStr.substring(0, 100));
     return jsonError('Invalid JSON body', 400);
   }
 
   const query = parsed.query || '';
+  const chatId = parsed.chat_id || '';
 
   if (!query) {
-    console.warn('[wasm-agent] Empty query');
     return jsonError('Query is required', 400);
   }
 
-  console.log('[wasm-agent] Starting agent loop for query:', query.substring(0, 50));
+  // Dispatch helper: wraps events in the { type, data } envelope that
+  // useEventHandler expects, and stamps chat_id into data for multi-chat filtering.
+  const dispatch = (type: string, data: Record<string, unknown> = {}) => {
+    if (!agentEventDispatcher) return;
+    if (chatId) {
+      data.chat_id = chatId;
+    }
+    agentEventDispatcher({ type, data });
+  };
+
+  // Intercept /clear to reset the persistent agent's conversation history.
+  // In local mode the backend handles this; in cloud mode we reset the
+  // WASM agent so the next query starts fresh.
+  if (query.trim().toLowerCase() === '/clear') {
+    shell.clearConversation();
+    dispatch('query_completed', { query: '/clear', response: '' });
+    return jsonOk({ status: 'ok', message: 'Conversation cleared' });
+  }
+
+  // Dispatch query_started immediately so the user's message appears in
+  // the chat and isProcessing flips on. Without this, the first visible
+  // UI update is the first stream_chunk (assistant text), and the user's
+  // own message never renders.
+  dispatch('query_started', { query });
 
   // Write a sprout config with an OpenAI-compatible custom provider that
   // routes to the platform proxy. Must be an absolute URL because the
   // provider config normalizer rejects relative URLs.
   //
   // We use window.location.origin as the base so this works in both local
-  // dev (http://localhost:8080) and production (https://api.sproutfoundry.dev).
+  // dev (http://localhost:808) and production (https://api.sproutfoundry.dev).
   const apiOrigin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:8080';
   const platformProviderConfig = {
     name: 'platform',
@@ -722,35 +745,31 @@ function handleWasmAgentQuery(shell: WasmShell, bodyStr?: string): Response {
   // Fire the agent loop asynchronously — events stream via the dispatcher.
   shell
     .runAgent('platform', '', query, (eventJson: string) => {
-      if (agentEventDispatcher) {
-        try {
-          const event = JSON.parse(eventJson);
-          agentEventDispatcher(event);
-        } catch {
-          console.warn('[wasm-agent] Failed to parse event:', eventJson.substring(0, 100));
+      try {
+        const event = JSON.parse(eventJson);
+        // Events from Go's wireAgentEventForwarding are already in
+        // { type, data } shape (UIEvent serializes to this format).
+        // Just stamp chat_id if missing.
+        if (event.data && chatId && !event.data.chat_id) {
+          event.data.chat_id = chatId;
         }
+        if (agentEventDispatcher) {
+          agentEventDispatcher(event);
+        }
+      } catch {
+        // Ignore unparseable events
       }
     })
     .then((result) => {
-      // Dispatch the final completion event
-      if (agentEventDispatcher) {
-        agentEventDispatcher({
-          type: 'query_completed',
-          response: result.response,
-          provider: result.provider,
-          model: result.model,
-        });
-      }
+      dispatch('query_completed', {
+        response: result.response,
+        provider: result.provider,
+        model: result.model,
+      });
     })
     .catch((err) => {
       const message = err instanceof Error ? err.message : String(err);
-      console.error('[wasm-agent] Agent loop failed:', message);
-      if (agentEventDispatcher) {
-        agentEventDispatcher({
-          type: 'error',
-          message: `Agent error: ${message}`,
-        });
-      }
+      dispatch('error', { message: `Agent error: ${message}` });
     });
 
   // Return immediately — the webui picks up events via the dispatcher

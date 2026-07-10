@@ -1,5 +1,5 @@
 import { Collapsible, MessageSegments, MessageBubble, MessageContent } from '@sprout/ui';
-import { ShieldCheck, Loader2, Wrench } from 'lucide-react';
+import { ChevronDown, ChevronRight, ShieldCheck, Loader2, Wrench } from 'lucide-react';
 import { useMemo, useCallback, useState, useEffect, useRef } from 'react';
 import { stripAnsiCodes } from '../utils/ansi';
 import { debugLog } from '../utils/log';
@@ -531,7 +531,7 @@ function ReviewWorkspaceTab({
             disabled={isReviewFixing}
             aria-expanded={fixPromptExpanded}
           >
-            <span>{fixPromptExpanded ? '▼' : '▶'}</span>
+            <span>{fixPromptExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}</span>
             <span>Add fix instructions (optional)</span>
             {selectedCount > 0 && (
               <span className="review-fix-prompt-hint">

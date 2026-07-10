@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { X } from 'lucide-react';
 import { getAdapter } from '../../services/apiAdapter';
 import type { RefundRequest, Refund, Charge, DunningReport } from '../../services/billingService';
 import { processRefund, getRefunds, getDunningReport, getCharges } from '../../services/billingService';
@@ -291,13 +292,12 @@ const AdminBillingPage: React.FC = () => {
                   <button
                     onClick={closeRefundModal}
                     style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px' }}
-                  >
-                    ✕
+                                      >
+                    <X size={18} />
                   </button>
                 </div>
                 <div className="platform-card-body">
-                  {refundSuccess ? (
-                    <div
+                  {refundSuccess ? (<div
                       data-testid="success-message"
                       style={{ padding: '16px', textAlign: 'center', color: 'var(--accent-success)' }}
                     >
@@ -498,7 +498,7 @@ const AdminBillingPage: React.FC = () => {
                     onClick={() => setSelectedRefund(null)}
                     style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '18px' }}
                   >
-                    ✕
+                    <X size={18} />
                   </button>
                 </div>
                 <div className="platform-card-body">

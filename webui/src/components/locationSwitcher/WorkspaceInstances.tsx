@@ -52,7 +52,7 @@ export const WorkspaceInstances: React.FC<WorkspaceInstancesProps> = ({
             disabled={isSwitching || isSwitchingInstance || !onInstanceChange || instance.is_host}
           >
             <span className="location-switcher-item-text">{label}</span>
-            {instance.pid === selectedInstancePID ? <span className="location-switcher-item-indicator">●</span> : null}
+            {instance.pid === selectedInstancePID ? <span className="location-switcher-item-indicator"><span className="location-switcher-item-dot" /></span> : null}
           </button>
         );
       })}

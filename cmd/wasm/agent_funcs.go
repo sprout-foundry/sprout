@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"syscall/js"
 	"time"
 
@@ -28,14 +29,48 @@ import (
 // to route shell-like tools through SproutWasm.executeCommand so the
 // agent can edit files and run a curated set of commands inside MEMFS.
 
+// persistentAgent caches a single Agent instance across runAgent calls so
+// that conversation history accumulates between turns (multi-turn chat).
+// Without this, every call to runAgentFunc creates a fresh Agent and the
+// model has no memory of previous messages in the conversation.
+//
+// The cache key is the provider name — if the caller switches providers,
+// a new agent is created and the old one is replaced.
+//
+// Access is guarded by persistentAgentMu to prevent races when multiple
+// runAgent calls arrive concurrently (rapid user messages, steer, etc.).
+var (
+	persistentAgentMu sync.Mutex
+	persistentAgent   *agent.Agent
+	persistentAgentPv string // provider name the cached agent was built for
+)
+
+// resetPersistentAgent clears the cached agent. Called when the JS side
+// wants to start a fresh conversation (new chat session).
+func resetPersistentAgent() {
+	persistentAgentMu.Lock()
+	defer persistentAgentMu.Unlock()
+	persistentAgent = nil
+	persistentAgentPv = ""
+}
+
 func agentJSFuncs() map[string]interface{} {
 	return map[string]interface{}{
-		"runAgent": js.FuncOf(runAgentFunc),
-		"runPlan":  js.FuncOf(runPlanFunc),
+		"runAgent":          js.FuncOf(runAgentFunc),
+		"runPlan":           js.FuncOf(runPlanFunc),
+		"clearConversation": js.FuncOf(clearConversationFunc),
 	}
 }
 
-// runAgentFunc invokes one ProcessQuery turn through a freshly-built
+// clearConversationFunc resets the persistent agent so the next runAgent
+// call starts a fresh conversation with no history. Called from JS when
+// the user starts a new chat session or clears the conversation.
+func clearConversationFunc(_ js.Value, _ []js.Value) interface{} {
+	resetPersistentAgent()
+	return nil
+}
+
+// runAgentFunc invokes one ProcessQuery turn through a persistent
 // Agent. Inputs:
 //
 //	args[0] (string)  — provider name (matches runChat's argument 0)
@@ -59,6 +94,9 @@ func agentJSFuncs() map[string]interface{} {
 // no extra plumbing is needed, but heavy work should be deferred to a
 // microtask on the JS side.
 //
+// The agent is cached across calls (keyed by provider) so conversation
+// history accumulates between turns. Call clearConversation() to reset.
+//
 // Timeout: 10 minutes per call. Long agent loops with many tool calls
 // will hit this — open an issue if it bites and we'll make it
 // configurable.
@@ -80,20 +118,36 @@ func runAgentFunc(_ js.Value, args []js.Value) interface{} {
 			return nil, fmt.Errorf("query is required (third arg)")
 		}
 
-		client, err := factory.CreateProviderClient(api.ClientType(provider), model)
-		if err != nil {
-			return nil, fmt.Errorf("create client: %w", err)
-		}
-		injectWasmStreamingClient(client)
+		// Reuse the cached agent when the provider matches, so the
+		// conversation history carries over turn-to-turn. A provider
+		// change (or nil cache) forces a rebuild.
+		persistentAgentMu.Lock()
+		ag := persistentAgent
+		needsRebuild := ag == nil || persistentAgentPv != provider
+		persistentAgentMu.Unlock()
 
-		configMgr, err := configuration.NewManagerSilent()
-		if err != nil {
-			return nil, fmt.Errorf("init configuration: %w", err)
-		}
+		if needsRebuild {
+			var err error
+			client, err := factory.CreateProviderClient(api.ClientType(provider), model)
+			if err != nil {
+				return nil, fmt.Errorf("create client: %w", err)
+			}
+			injectWasmStreamingClient(client)
 
-		ag, err := agent.NewAgentWithClient(client, api.ClientType(provider), configMgr)
-		if err != nil {
-			return nil, fmt.Errorf("init agent: %w", err)
+			configMgr, err := configuration.NewManagerSilent()
+			if err != nil {
+				return nil, fmt.Errorf("init configuration: %w", err)
+			}
+
+			ag, err = agent.NewAgentWithClient(client, api.ClientType(provider), configMgr)
+			if err != nil {
+				return nil, fmt.Errorf("init agent: %w", err)
+			}
+
+			persistentAgentMu.Lock()
+			persistentAgent = ag
+			persistentAgentPv = provider
+			persistentAgentMu.Unlock()
 		}
 
 		// Wire the event bus only when JS provided a sink — saves the

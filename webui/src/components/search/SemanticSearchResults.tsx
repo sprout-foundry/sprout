@@ -1,4 +1,5 @@
 import type { MouseEvent } from 'react';
+import { TriangleAlert } from 'lucide-react';
 import type { SemanticSearchResult, SemanticResultCallbacks } from './types';
 import { getRelativePath } from './useSearchState';
 
@@ -79,7 +80,7 @@ function ClusterGroup({ clusterId, results, onFileClick, onMouseEnter, onMouseLe
   return (
     <>
       <div className="search-duplicate-hint">
-        <span className="search-duplicate-hint-icon">⚠️</span>
+        <span className="search-duplicate-hint-icon"><TriangleAlert size={14} /></span>
         {results.length} result{results.length > 1 ? 's' : ''} share similar patterns (cluster {clusterId})
       </div>
       {results.map((result) => {

@@ -1,4 +1,5 @@
 import { useEffect, useCallback, useRef } from 'react';
+import { ShieldAlert } from 'lucide-react';
 import './ThemedDialog.css';
 
 export interface SecurityPromptDialogProps {
@@ -64,7 +65,7 @@ function SecurityPromptDialog({
 
         {/* Header */}
         <div className="security-prompt-header">
-          <span className="security-prompt-shield">⚠</span>
+          <span className="security-prompt-shield"><ShieldAlert size={16} /></span>
           <h2 className="security-prompt-title">Security Concern Detected</h2>
         </div>
 

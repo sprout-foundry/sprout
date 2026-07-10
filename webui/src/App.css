@@ -1835,3 +1835,89 @@ button.primary.success {
 .terminal-notice-text {
   opacity: 0.8;
 }
+
+/* ── Repo import loading banner ────────────────────────────────── */
+
+.repo-import-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-2);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  animation: repo-import-fade-in 0.2s ease;
+}
+
+.repo-import-banner--loading {
+  background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-primary) 30%, transparent);
+}
+
+.repo-import-banner--done {
+  background: color-mix(in srgb, var(--success-green) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--success-green) 30%, transparent);
+}
+
+.repo-import-banner--error {
+  background: color-mix(in srgb, var(--error-red) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--error-red) 30%, transparent);
+}
+
+.repo-import-spinner {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  border: 2px solid color-mix(in srgb, var(--accent-primary) 30%, transparent);
+  border-top-color: var(--accent-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.repo-import-icon {
+  flex-shrink: 0;
+  font-size: 16px;
+  font-weight: bold;
+}
+.repo-import-icon--success { color: var(--success-green); }
+.repo-import-icon--error { color: var(--error-red); }
+
+.repo-import-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.repo-import-text strong {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.repo-import-text span {
+  font-size: var(--font-size-xs);
+  opacity: 0.7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.repo-import-dismiss {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: inherit;
+  opacity: 0.5;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  padding: 0;
+  margin-left: auto;
+}
+.repo-import-dismiss:hover { opacity: 1; }
+
+@keyframes repo-import-fade-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}

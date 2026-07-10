@@ -517,14 +517,14 @@ export function findUnusedGoImports(doc: Doc, filePath: string): CodeAction[] {
   return actions;
 }
 
-// ─── Emoji Mapping ────────────────────────────────────────────────
+// ─── Icon Mapping ──────────────────────────────────────────────
 
-/** Get an emoji icon for a code action based on its kind. */
+/** Get an icon label for a code action based on its kind. */
 export function kindEmoji(kind: string): string {
-  if (kind.includes('organizeImports') || kind.includes('import')) return '📦';
-  if (kind.includes('quickfix') || kind.includes('fix')) return '🔧';
-  if (kind.includes('remove') || kind.includes('delete')) return '🗑️';
-  if (kind.includes('refactor') || kind.includes('sort')) return '♻️';
-  if (kind.includes('source') || kind.includes('removeTrailingWhitespace')) return '🧹';
-  return '⚡';
+  if (kind.includes('organizeImports') || kind.includes('import')) return '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5M8 3H3v5"/><path d="M21 8v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8"/><path d="M8 12h8"/><path d="M10 16h4"/></svg>';
+  if (kind.includes('quickfix') || kind.includes('fix')) return '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>';
+  if (kind.includes('remove') || kind.includes('delete')) return '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>';
+  if (kind.includes('refactor') || kind.includes('sort')) return '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 3 21 3 21 8"/><line x1="4" x2="21" y1="20" y2="20"/><polyline points="21 16 21 21 16 21"/><line x1="15" x2="21" y1="4" y2="10"/><line x1="4" x2="9" y1="20" y2="14"/></svg>';
+  if (kind.includes('source') || kind.includes('removeTrailingWhitespace')) return '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4v7"/><path d="M4 20h8"/><path d="M20 11h-7"/><path d="M7 7l5 5-5 5"/><circle cx="18" cy="17" r="3"/><path d="M21 14v3h-3"/></svg>';
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>';
 }

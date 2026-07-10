@@ -260,7 +260,7 @@ export function useEditorExtensions(): UseEditorExtensionsReturn {
       // valid Extension values; the difference is the @uiw package pre-bakes the extension.
       compartments.relativeLineNumbers.of(settings.relativeLineNumbersEnabled ? lineNumbersRelative : lineNumbers()),
       scrollPastEnd(),
-      foldGutter({ openText: '▼', closedText: '▶' }),
+      foldGutter({ openText: 'v', closedText: '>' }),
       codeFolding(),
       compartments.minimap.of(settings.minimapEnabled ? minimapExtension() : []),
       compartments.inlayHints.of(

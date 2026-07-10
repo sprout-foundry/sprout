@@ -1,4 +1,5 @@
 import { useEffect, useCallback, useRef } from 'react';
+import { Check, TriangleAlert, X } from 'lucide-react';
 import type { SecurityApprovalAction } from '../hooks/useSecurityApproval';
 import './ThemedDialog.css';
 
@@ -27,10 +28,10 @@ export interface SecurityApprovalDialogProps {
 
 type RiskKey = 'safe' | 'caution' | 'dangerous';
 
-const RISK_ICON: Record<RiskKey, string> = {
-  safe: '✓',
-  caution: '⚠',
-  dangerous: '✕',
+const RISK_ICON: Record<RiskKey, JSX.Element> = {
+  safe: <Check size={16} />,
+  caution: <TriangleAlert size={16} />,
+  dangerous: <X size={16} />,
 };
 
 const RISK_LABEL: Record<RiskKey, string> = {

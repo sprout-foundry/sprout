@@ -51,7 +51,7 @@ export default function SidebarLogsPane({ logs }: SidebarLogsPaneProps): JSX.Ele
         const summary = todos
           .map((t: Record<string, unknown>) => {
             const status = String(t.status);
-            const icon = status === 'completed' ? '✓' : status === 'in_progress' ? '→' : '○';
+            const icon = status === 'completed' ? '[done]' : status === 'in_progress' ? '[->]' : '[ ]';
             return `${icon} ${String(t.content)}`;
           })
           .join('\n  ');

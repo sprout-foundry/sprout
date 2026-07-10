@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Check } from 'lucide-react';
 import './Progress.css';
 
 export interface ProgressItem {
@@ -69,7 +70,7 @@ function Progress({ items }: ProgressProps): JSX.Element | null {
             <div className="progress-message">{item.message}</div>
             <div className="progress-time">
               {!item.done && elapsed[item.id] && formatTime(elapsed[item.id])}
-              {item.done && '✓ Done'}
+              {item.done && <><Check size={12} /> Done</>}
             </div>
           </div>
 

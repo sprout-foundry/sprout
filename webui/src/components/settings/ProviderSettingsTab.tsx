@@ -1,5 +1,5 @@
 import { SkeletonText } from '@sprout/ui';
-import { ArrowDown, ArrowUp, Pencil, Plus, Trash2, Cog } from 'lucide-react';
+import { ArrowDown, ArrowUp, Check, Pencil, Plus, Trash2, Cog } from 'lucide-react';
 import { useState } from 'react';
 import { ApiService, type SproutSettings, type ProviderOption } from '../../services/api';
 import { showThemedConfirm } from '../ThemedDialog';
@@ -185,7 +185,7 @@ export default function ProviderSettingsTab({
                 <div className="current-provider-detail">
                   <span className="label">Credential:</span>
                   <span className={`value ${currentProviderInfo.hasCredential ? 'configured' : 'missing'}`}>
-                    {currentProviderInfo.hasCredential ? '✓ Configured' : 'Missing'}
+                    {currentProviderInfo.hasCredential ? <><Check size={12} /> Configured</> : 'Missing'}
                   </span>
                 </div>
               </>
@@ -202,7 +202,7 @@ export default function ProviderSettingsTab({
                 <div className="current-provider-detail">
                   <span className="label">Credential:</span>
                   <span className={`value ${currentProviderInfo.hasCredential ? 'configured' : 'missing'}`}>
-                    {currentProviderInfo.hasCredential ? '✓ Configured' : 'Missing'}
+                    {currentProviderInfo.hasCredential ? <><Check size={12} /> Configured</> : 'Missing'}
                   </span>
                 </div>
               </>

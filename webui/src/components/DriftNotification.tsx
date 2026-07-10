@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+import { TriangleAlert } from 'lucide-react';
 import './DriftNotification.css';
 
 export interface DriftNotificationProps {
@@ -38,7 +39,7 @@ function DriftNotification({ similarity, threshold, onContinue, onNewChat }: Dri
 
         {/* Header */}
         <div className="drift-header">
-          <span className="drift-icon">⚠</span>
+          <span className="drift-icon"><TriangleAlert size={16} /></span>
           <h2 className="drift-title">Conversation Drift Detected</h2>
         </div>
 

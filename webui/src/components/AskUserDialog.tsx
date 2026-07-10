@@ -1,4 +1,5 @@
 import { useEffect, useCallback, useMemo, useRef, useState } from 'react';
+import { CheckSquare, Square, Circle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
@@ -208,7 +209,7 @@ function AskUserDialog({
                     {...ariaProps}
                   >
                     <span className="ask-user-option-marker" aria-hidden="true">
-                      {isMulti ? (isSelected ? '☑' : '☐') : isSelected ? '●' : '○'}
+                      {isMulti ? (isSelected ? <CheckSquare size={16} /> : <Square size={16} />) : isSelected ? <Circle size={16} fill="currentColor" /> : <Circle size={16} />}
                     </span>
                     <span className="ask-user-option-body">
                       <span className="ask-user-option-label">{opt.label}</span>

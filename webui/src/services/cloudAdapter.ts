@@ -66,7 +66,10 @@ export class CloudAdapter implements APIAdapter {
    * is cached so subsequent ensureWasmShell calls short-circuit).
    */
   preloadWasmShell(): Promise<boolean> {
-    console.log('[CloudAdapter] preloadWasmShell called');
+    // Debug: set localStorage.setItem('sprout-debug-wasm', '1') to see logs
+    if (typeof localStorage !== 'undefined' && localStorage.getItem('sprout-debug-wasm')) {
+      console.log('[CloudAdapter] preloadWasmShell called');
+    }
     return this.ensureWasmShell()
       .then(() => true)
       .catch((err) => {

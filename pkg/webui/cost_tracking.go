@@ -234,8 +234,8 @@ type CostSummary struct {
 	// FirstActivity / LastActivity span all recorded records (not the
 	// requested time range), so the WebUI can show a "data is older than
 	// the current period" banner without re-fetching the raw history.
-	FirstActivity       *time.Time                      `json:"first_activity,omitempty"`
-	LastActivity        *time.Time                      `json:"last_activity,omitempty"`
+	FirstActivity *time.Time `json:"first_activity,omitempty"`
+	LastActivity  *time.Time `json:"last_activity,omitempty"`
 }
 
 // GetCostSummary returns overall cost summary.

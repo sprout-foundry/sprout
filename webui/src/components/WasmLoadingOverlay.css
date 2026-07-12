@@ -29,7 +29,9 @@
 }
 
 @keyframes wasm-spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .wasm-loading-error-icon {

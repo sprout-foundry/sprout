@@ -126,25 +126,28 @@ func TestBackgroundProcessSurvivesSIGHUP(t *testing.T) {
 	require.NoError(t, err, "should get child session ID")
 
 	if parentSessionID != childSessionID {
-		// Setsid path: child is in its own session — fully isolated
+		// Setsid path: child is in its own session — fully isolated from
+		// terminal teardown SIGHUP (which targets the process group, not
+		// individual processes). This IS the guarantee; no need to send a
+		// direct SIGHUP since Setsid doesn't change signal disposition.
 		t.Logf("child (session %d) is in a different session than parent (session %d) — Setsid path", childSessionID, parentSessionID)
 	} else {
-		// Setpgid path: same session but SIGHUP is ignored
+		// Setpgid path: same session but SIGHUP is ignored. The parent
+		// called signal.Ignore(SIGHUP) before fork, so the child inherited
+		// SIG_IGN. Verify this by sending a direct SIGHUP.
 		t.Logf("child (session %d) shares session with parent (session %d) — Setpgid+SIGHUP-ignore path", childSessionID, parentSessionID)
+
+		_ = syscall.Kill(childPID, syscall.SIGHUP)
+		time.Sleep(200 * time.Millisecond)
 	}
 
-	// Send SIGHUP directly to the child (not its process group) to verify
-	// the child either ignores it or is in a different session.
-	// This is safe because we're targeting ONLY the child, not the test runner.
-	_ = syscall.Kill(childPID, syscall.SIGHUP)
-
-	// Brief pause to let signal delivery complete
-	time.Sleep(200 * time.Millisecond)
-
-	// Verify the child process is still alive
+	// On the Setpgid path we sent a direct SIGHUP above. On the Setsid
+	// path we didn't — the child has default SIGHUP disposition and would
+	// die from a direct signal (that's fine; Setsid's guarantee is session
+	// isolation, not signal ignoring). Either way, verify the child is alive.
 	err = syscall.Kill(childPID, syscall.Signal(0))
 	assert.NoError(t, err,
-		"child process (PID %d) should survive direct SIGHUP (either different session or SIG_IGN)", childPID)
+		"child process (PID %d) should still be alive", childPID)
 
 	// Verify BPM still reports it as running
 	_, status, err = bpm.CheckOutput(sessionID)

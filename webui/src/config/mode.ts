@@ -44,15 +44,15 @@ export const isCloud: boolean = mode === 'cloud';
  * now centralized and documented once.
  */
 function capability<K extends keyof APIAdapter>(
-	key: K,
-	localDefault: NonNullable<APIAdapter[K]>,
-	cloudDefault: NonNullable<APIAdapter[K]>,
+  key: K,
+  localDefault: NonNullable<APIAdapter[K]>,
+  cloudDefault: NonNullable<APIAdapter[K]>,
 ): NonNullable<APIAdapter[K]> {
-	const adapter = getAdapter();
-	if (adapter && adapter[key] !== undefined) {
-		return adapter[key] as NonNullable<APIAdapter[K]>;
-	}
-	return isCloud ? cloudDefault : localDefault;
+  const adapter = getAdapter();
+  if (adapter && adapter[key] !== undefined) {
+    return adapter[key] as NonNullable<APIAdapter[K]>;
+  }
+  return isCloud ? cloudDefault : localDefault;
 }
 
 /**

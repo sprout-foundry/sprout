@@ -122,15 +122,10 @@ export function SessionsTab({
                   </span>
                 </div>
                 {result.excerpt && (
-                  <div className="sidebar-session-search-result-excerpt">
-                    {renderSessionExcerpt(result.excerpt)}
-                  </div>
+                  <div className="sidebar-session-search-result-excerpt">{renderSessionExcerpt(result.excerpt)}</div>
                 )}
                 {result.match_score >= 2 && (
-                  <span
-                    className="sidebar-session-search-result-score"
-                    title={`Match score: ${result.match_score}`}
-                  >
+                  <span className="sidebar-session-search-result-score" title={`Match score: ${result.match_score}`}>
                     {result.match_score === 3 ? <Star size={12} fill="currentColor" /> : <Star size={12} />}
                   </span>
                 )}

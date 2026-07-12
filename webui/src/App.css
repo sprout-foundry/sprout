@@ -1879,8 +1879,12 @@ button.primary.success {
   font-size: 16px;
   font-weight: bold;
 }
-.repo-import-icon--success { color: var(--success-green); }
-.repo-import-icon--error { color: var(--error-red); }
+.repo-import-icon--success {
+  color: var(--success-green);
+}
+.repo-import-icon--error {
+  color: var(--error-red);
+}
 
 .repo-import-text {
   display: flex;
@@ -1915,9 +1919,17 @@ button.primary.success {
   padding: 0;
   margin-left: auto;
 }
-.repo-import-dismiss:hover { opacity: 1; }
+.repo-import-dismiss:hover {
+  opacity: 1;
+}
 
 @keyframes repo-import-fade-in {
-  from { opacity: 0; transform: translateY(-4px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

@@ -168,32 +168,37 @@ function installAdapterForConfig(config: RuntimeConfig): void {
       const cacheKey = `sprout:repo-import:${repoParam}`;
 
       // Check if this repo was already imported (cached)
-      const cached = typeof window !== 'undefined'
-        ? (window as unknown as Record<string, unknown>).__repoImported === repoParam
-        : false;
+      const cached =
+        typeof window !== 'undefined'
+          ? (window as unknown as Record<string, unknown>).__repoImported === repoParam
+          : false;
 
       if (cached) {
-        console.log(`bootstrap: repo ${repoParam} already imported — skipping`);
+        console.warn(`bootstrap: repo ${repoParam} already imported — skipping`);
       } else {
-        console.log(`bootstrap: ?repo= detected — importing ${repoParam}`);
+        console.warn(`bootstrap: ?repo= detected — importing ${repoParam}`);
         // Signal that an import is in progress (before WASM shell is ready).
         (window as unknown as Record<string, unknown>).__repoImporting = repoParam;
         // Fire-and-forget: import runs after adapter is installed and WASM is ready.
         adapter.importRepo(repoParam).then((result) => {
           if (result.success) {
-            console.log(`bootstrap: repo import succeeded: ${result.repo ?? repoParam}`);
+            console.warn(`bootstrap: repo import succeeded: ${result.repo ?? repoParam}`);
             (window as unknown as Record<string, unknown>).__repoImported = result.repo ?? repoParam;
             delete (window as unknown as Record<string, unknown>).__repoImporting;
-            window.dispatchEvent(new CustomEvent('sprout:repo-imported', {
-              detail: { repo: result.repo ?? repoParam },
-            }));
+            window.dispatchEvent(
+              new CustomEvent('sprout:repo-imported', {
+                detail: { repo: result.repo ?? repoParam },
+              }),
+            );
           } else {
             console.warn(`bootstrap: repo import failed: ${result.error}`);
             delete (window as unknown as Record<string, unknown>).__repoImporting;
             (window as unknown as Record<string, unknown>).__repoImportFailed = result.error;
-            window.dispatchEvent(new CustomEvent('sprout:repo-import-failed', {
-              detail: { error: result.error ?? 'Unknown error' },
-            }));
+            window.dispatchEvent(
+              new CustomEvent('sprout:repo-import-failed', {
+                detail: { error: result.error ?? 'Unknown error' },
+              }),
+            );
           }
           // Clean the URL after import to prevent re-import on refresh.
           if (typeof window !== 'undefined' && window.history.replaceState) {

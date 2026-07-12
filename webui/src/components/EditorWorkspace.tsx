@@ -579,10 +579,7 @@ const EditorWorkspace: React.FC<EditorWorkspaceProps> = ({
     return (
       <ErrorBoundary>
         <Suspense fallback={<RouteFallback />}>
-          <CostsPage
-            onSessionClick={onSessionRestore}
-            onBack={onViewChange ? () => onViewChange('chat') : undefined}
-          />
+          <CostsPage onSessionClick={onSessionRestore} onBack={onViewChange ? () => onViewChange('chat') : undefined} />
         </Suspense>
       </ErrorBoundary>
     );

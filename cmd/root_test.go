@@ -10,6 +10,15 @@ import (
 	"github.com/sprout-foundry/sprout/pkg/configuration"
 )
 
+// disableCISkip unsets CI/GITHUB_ACTIONS so detectGitRepo doesn't bail early.
+// detectGitRepo intentionally skips auto-detection in CI, but unit tests still
+// need to exercise the detection logic.
+func disableCISkip(t *testing.T) {
+	t.Helper()
+	t.Setenv("CI", "")
+	t.Setenv("GITHUB_ACTIONS", "")
+}
+
 // =============================================================================
 // detectGitRepo
 // =============================================================================
@@ -17,6 +26,7 @@ import (
 // TestGitRepoDetect_RepoFound verifies that a directory containing .git/
 // is detected as a git repo and returns the correct .sprout path.
 func TestGitRepoDetect_RepoFound(t *testing.T) {
+	disableCISkip(t)
 	dir := t.TempDir()
 	gitDir := filepath.Join(dir, ".git")
 	if err := os.MkdirAll(gitDir, 0755); err != nil {
@@ -37,6 +47,7 @@ func TestGitRepoDetect_RepoFound(t *testing.T) {
 // subdirectory still finds .git via ancestor walk, and returns .sprout
 // at the repo root, not the subdirectory.
 func TestGitRepoDetect_DeepSubdirectory(t *testing.T) {
+	disableCISkip(t)
 	dir := t.TempDir()
 
 	// Create the git repo at the root of the temp dir
@@ -64,6 +75,7 @@ func TestGitRepoDetect_DeepSubdirectory(t *testing.T) {
 // TestGitRepoDetect_MultipleLevels verifies that ancestor walk stops at
 // the first .git/ found (closest ancestor).
 func TestGitRepoDetect_MultipleLevels(t *testing.T) {
+	disableCISkip(t)
 	dir := t.TempDir()
 
 	// Create .git at root
@@ -157,6 +169,7 @@ func TestGitRepoDetect_RootPath(t *testing.T) {
 // TestGitRepoDetect_AbsolutePathOnly verifies that detectGitRepo works
 // correctly with absolute paths (the only kind it receives from os.Getwd).
 func TestGitRepoDetect_AbsolutePathOnly(t *testing.T) {
+	disableCISkip(t)
 	dir := t.TempDir()
 	gitDir := filepath.Join(dir, ".git")
 	if err := os.MkdirAll(gitDir, 0755); err != nil {
@@ -221,6 +234,7 @@ func TestGitRepoAutoDetect_AlreadyIsolated(t *testing.T) {
 // is found, .sprout/config.json is bootstrapped, and isolatedConfig
 // becomes true.
 func TestGitRepoAutoDetect_GitRepoFound(t *testing.T) {
+	disableCISkip(t)
 	dir := t.TempDir()
 	gitDir := filepath.Join(dir, ".git")
 	if err := os.MkdirAll(gitDir, 0755); err != nil {

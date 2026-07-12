@@ -15,12 +15,7 @@
 import type { APIAdapter, PlatformNavItem } from './apiAdapter';
 import { WEBUI_CLIENT_ID_HEADER, getWebUIClientId } from './clientSession';
 import { getSyntheticResponse, isWasmLocalEndpoint } from './cloudEndpointRegistry';
-import {
-  CHAT_ENDPOINT_MAP,
-  translateAndProxyChat,
-  proxyStatsRequest,
-  proxySettingsRequest,
-} from './cloudProxyRoutes';
+import { CHAT_ENDPOINT_MAP, translateAndProxyChat, proxyStatsRequest, proxySettingsRequest } from './cloudProxyRoutes';
 import { handleWasmLocal, trackFileWrite } from './cloudWasmHandlers';
 import { initWasmShell, type WasmShell } from './wasmShell';
 
@@ -68,7 +63,7 @@ export class CloudAdapter implements APIAdapter {
   preloadWasmShell(): Promise<boolean> {
     // Debug: set localStorage.setItem('sprout-debug-wasm', '1') to see logs
     if (typeof localStorage !== 'undefined' && localStorage.getItem('sprout-debug-wasm')) {
-      console.log('[CloudAdapter] preloadWasmShell called');
+      console.warn('[CloudAdapter] preloadWasmShell called');
     }
     return this.ensureWasmShell()
       .then(() => true)

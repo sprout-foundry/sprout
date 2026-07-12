@@ -79,11 +79,7 @@ const HeaderBar: React.FC<HeaderBarProps> = ({
         notificationBus.notify('info', 'Workspace status', data.status || 'Unknown');
       }
     } catch (e) {
-      notificationBus.notify(
-        'error',
-        'Error starting workspace',
-        e instanceof Error ? e.message : String(e),
-      );
+      notificationBus.notify('error', 'Error starting workspace', e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }

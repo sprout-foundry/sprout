@@ -79,6 +79,8 @@ export interface WasmShell {
   clearConversation(): void;
   /** Interrupt the currently running agent loop. */
   stopAgent(): void;
+  /** Steer the running agent (inject a follow-up message). */
+  steerAgent?(message: string): Record<string, unknown>;
   /** Get the fully initialized Go global. */
   readonly wasm: typeof globalThis & { SproutWasm: unknown };
 }
@@ -208,6 +210,7 @@ export interface SproutWasmAPI {
   ): Promise<{ response: string; provider: string; model: string }>;
   clearConversation?(): void;
   stopAgent?(): void;
+  steerAgent?(message: string): Record<string, unknown>;
   // ── AST / symbol extraction (cmd/wasm/ast_funcs.go) ──
   parseFile?(filePath: string, content: Uint8Array | ArrayBuffer): string;
   extractSymbols?(filePath: string, content: Uint8Array | ArrayBuffer): string;
@@ -407,6 +410,14 @@ export async function initWasmShell(config?: {
       if (api.stopAgent) {
         api.stopAgent();
       }
+    },
+
+    steerAgent(message: string): Record<string, unknown> {
+      const api = wasm as SproutWasmAPI;
+      if (api.steerAgent) {
+        return api.steerAgent(message);
+      }
+      return { steered: false, error: 'steerAgent not available' };
     },
 
     get wasm() {

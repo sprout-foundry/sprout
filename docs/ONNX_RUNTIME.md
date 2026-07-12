@@ -107,31 +107,48 @@ static vs. 75% ONNX hit rate on the curated test queries).
 
 ## Termux / Android
 
-Android (via Termux or a native NDK build) is treated as a first-class
-supported platform by the resolver, but the underlying Bionic-libc CGO
-chain has not been end-to-end verified from a CI environment. Treat the
-following as best-effort:
+Android (via Termux or a native NDK build) is a supported resolver target.
+End-to-end verified on Termux (`GOOS=android GOARCH=arm64`, Termux's
+`clang 21.1.8` targeting `aarch64-unknown-linux-android24`, Go 1.24,
+yalue/onnxruntime_go v1.30.1, ONNX Runtime Android 1.25.1):
 
 - The resolver looks for `libonnxruntime.so` (no `_arm64` suffix — the
   Android AAR layout puts per-arch variants in different directories, not
   different filenames).
-- **Auto-download is NOT available for Android.** Microsoft distributes
-  the Android ONNX Runtime as a Maven AAR
-  (`com.microsoft.onnxruntime:onnxruntime-android:1.25.1`), not as an
-  asset on the GitHub releases page. sprout's release map therefore has
-  no Android entry — `resolveSharedLibraryPath` falls through to the
-  environment override / staged-file steps only. To use ONNX on Android,
-  manually extract `libonnxruntime.so` from the Android AAR (it lives at
-  `jni/arm64-v8a/libonnxruntime.so` inside the .aar) and either:
-  - place it at `~/.config/sprout/models/onnxruntime/libonnxruntime.so`,
-    or
-  - set `SPROUT_ONNX_RUNTIME_LIB=/path/to/libonnxruntime.so` in the
-    process environment.
-- CGO linking against Bionic requires Termux's `clang` toolchain; build
-  with `CGO_ENABLED=1 CC=clang CXX=clang++`. Static glibc-linked Go
-  binaries will not load the Bionic `.so` even when the resolver finds
-  it. If `dlopen` still fails after staging, that's a Bionic/glibc
-  mismatch, not a resolver bug.
+- **No GitHub-releases auto-download.** Microsoft distributes the Android
+  ONNX Runtime exclusively as a Maven AAR
+  (`com.microsoft.onnxruntime:onnxruntime-android`), not as an asset on
+  the GitHub releases page. sprout's release map has no Android entry by
+  design — `resolveSharedLibraryPath` falls through to the environment
+  override / staged-file steps only.
+- To use ONNX on Android, download the AAR from Maven Central and extract
+  the Bionic-linked `.so`:
+
+  ```sh
+  # Pick the version that matches pkg/embedding/onnx_runtime_install.go:onnxRuntimeVersion (currently 1.25.1).
+  curl -fsSL -o onnxruntime-android.aar \
+    "https://repo1.maven.org/maven2/com/microsoft/onnxruntime/onnxruntime-android/1.25.1/onnxruntime-android-1.25.1.aar"
+  python3 -c "
+  import zipfile, shutil, sys
+  with zipfile.ZipFile('onnxruntime-android.aar') as z:
+      z.extract('jni/arm64-v8a/libonnxruntime.so', '.')
+  shutil.copy2('jni/arm64-v8a/libonnxruntime.so', '/data/data/com.termux/files/home/sprout-models/onnxruntime/libonnxruntime.so')
+  "  # or any directory your SPROUT_MODELS_DIR/onnxruntime resolves to
+  ```
+
+  Then either export `SPROUT_ONNX_RUNTIME_LIB=$PWD/libonnxruntime.so`,
+  or stage it at `$SPROUT_MODELS_DIR/onnxruntime/libonnxruntime.so` so
+  step 2 of the resolver order picks it up automatically.
+- Bionic CGO is already enabled in this build — `CGO_ENABLED=1`, Termux's
+  `clang` links against Bionic as the C library. A statically-linked,
+  glibc-targeting Go binary would NOT load the Bionic `.so`; this is
+  not a sprout bug, it's an ELF ABI mismatch. Verify with
+  `file libonnxruntime.so`: a working Termux-loaded build should report
+  `ELF 64-bit LSB shared object, ARM aarch64, ... for Android NN`.
+- If `dlopen` still fails after a correctly-named Bionic `.so` is on
+  disk, the most likely cause is **the wrong architecture** (the AAR
+  contains all of `arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64`; you want
+  `arm64-v8a` for Termux on a typical phone).
 - When in doubt, use **Option D** (skip ONNX) on Termux — the static
   embedding provider works there without any external dependencies.
 

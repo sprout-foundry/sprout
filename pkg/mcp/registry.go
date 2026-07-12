@@ -161,6 +161,21 @@ func (r *MCPServerRegistry) loadBuiltinTemplates() {
 		Docs:        "https://github.com/ChromeDevTools/chrome-devtools-mcp",
 	}
 
+	// Playwright MCP Server (npx)
+	r.templates["playwright"] = MCPServerTemplate{
+		ID:          "playwright",
+		Name:        "Playwright MCP Server",
+		Description: "Browser automation, web scraping, UI testing, and screenshot capture via Playwright",
+		Type:        "stdio",
+		Command:     "npx",
+		Args:        []string{"-y", "@playwright/mcp"},
+		EnvVars:     []EnvVarTemplate{}, // No required env vars
+		Timeout:     60 * time.Second,   // Longer timeout for browser operations
+		Features:    []string{"Browser automation", "Web scraping", "UI testing", "Screenshots", "Form filling"},
+		AuthType:    "none",
+		Docs:        "https://github.com/microsoft/playwright-mcp",
+	}
+
 	// Generic HTTP Server Template
 	r.templates["http-generic"] = MCPServerTemplate{
 		ID:          "http-generic",

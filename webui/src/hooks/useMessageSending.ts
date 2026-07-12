@@ -79,10 +79,6 @@ export function useMessageSending({
         setInputValue('');
         debugLog('[OK] Message sent successfully');
       } catch (error) {
-        if (activeRequestsRef.current > 0) {
-          activeRequestsRef.current -= 1;
-        }
-
         // Detect no-provider errors and trigger onboarding reopen.
         const errorCode =
           error instanceof Error && 'code' in error ? String((error as Error & { code: string }).code) : undefined;
@@ -112,6 +108,14 @@ export function useMessageSending({
             },
           ],
         }));
+      } finally {
+        // Decrement on both success and error paths. The success path
+        // normally relies on WebSocket completion events to reset the
+        // counter, but those may not fire under flaky conditions —
+        // decrementing here guarantees the counter returns to zero.
+        if (activeRequestsRef.current > 0) {
+          activeRequestsRef.current -= 1;
+        }
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -102,6 +102,14 @@ func runMCPAdd() error {
 		return fmt.Errorf("unknown template: %s", value)
 	}
 
+	// Dispatch to a rich guided setup flow when one is available for the
+	// selected template. These guided flows (Git, GitHub, Playwright, Chrome
+	// DevTools) collect richer input than the generic template path and offer
+	// installation-method pickers, so they take precedence when matched.
+	if guided, ok := guidedSetupFor(selectedTemplate.ID); ok {
+		return guided(&mcpConfig, reader)
+	}
+
 	// Prompt for server name (with default from template)
 	serverName := selectedTemplate.ID
 	if selectedTemplate.Type == "stdio" || selectedTemplate.Type == "http" {
@@ -191,6 +199,31 @@ func runMCPAdd() error {
 	}
 
 	return nil
+}
+
+// mcpSetupFunc is the signature shared by the guided per-server setup flows.
+type mcpSetupFunc func(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error
+
+// guidedSetupFor returns the rich guided setup function for a template ID, if
+// one exists. Templates with a guided flow (Git, GitHub, Playwright, Chrome
+// DevTools) install-method pickers and richer prompts than the generic
+// template-driven path, so runMCPAdd dispatches to them when matched.
+//
+// Mapping multiple template IDs to the same flow (e.g. both "git" and the
+// registry's "git-uvx" entry route to setupGitMCPServer) keeps the picker
+// resilient to renamed/aliased template IDs.
+func guidedSetupFor(templateID string) (mcpSetupFunc, bool) {
+	guidedSetups := map[string]mcpSetupFunc{
+		"git":             setupGitMCPServer,
+		"git-uvx":         setupGitMCPServer,
+		"github":          setupGitHubMCPServer,
+		"github-remote":   setupGitHubMCPServer,
+		"github-docker":   setupGitHubMCPServer,
+		"playwright":      setupPlaywrightMCPServer,
+		"chrome-devtools": setupChromeDevToolsMCPServer,
+	}
+	fn, ok := guidedSetups[templateID]
+	return fn, ok
 }
 
 func setupGitMCPServer(mcpConfig *mcp.MCPConfig, reader *bufio.Reader) error {

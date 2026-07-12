@@ -5,17 +5,152 @@ package cmd
 import (
 	"bufio"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/sprout-foundry/sprout/pkg/console"
+	"github.com/sprout-foundry/sprout/pkg/webui"
 )
 
+// isPortInUse checks if a TCP port is already in use by attempting to bind to it.
+func isPortInUse(port int) bool {
+	listener, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+	if err != nil {
+		return true
+	}
+	listener.Close()
+	return false
+}
+
+// findPIDOnPort returns the PID of a process listening on the given port.
+// Tries 'fuser' first (works on most Linux); falls back to /proc/net/tcp;
+// then pgrep for the known sprout daemon process name.
+func findPIDOnPort(port int) int {
+	if pid := findPIDViaFuser(port); pid > 0 {
+		return pid
+	}
+	if pid := findPIDViaProcNet(port); pid > 0 {
+		return pid
+	}
+	return findPIDViaPgrep()
+}
+
+// findPIDViaFuser runs 'fuser <port>/tcp' to find the PID holding a port.
+func findPIDViaFuser(port int) int {
+	cmd := exec.Command("fuser", fmt.Sprintf("%d/tcp", port))
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return 0
+	}
+	fields := strings.Fields(string(out))
+	for _, f := range fields {
+		// fuser outputs PIDs with a '+' for listening sockets; strip it
+		pidStr := strings.TrimRight(f, "+")
+		if pid, err := strconv.Atoi(pidStr); err == nil && pid > 0 {
+			return pid
+		}
+	}
+	return 0
+}
+
+// findPIDViaPgrep runs 'pgrep -f "sprout agent"' as a last resort for
+// environments where fuser and /proc/net/tcp are both inaccessible (e.g.
+// Termux sandbox). Returns the first matching PID or 0.
+func findPIDViaPgrep() int {
+	cmd := exec.Command("pgrep", "-f", "sprout agent")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return 0
+	}
+	for _, line := range strings.Fields(string(out)) {
+		if pid, err := strconv.Atoi(line); err == nil && pid > 0 {
+			return pid
+		}
+	}
+	return 0
+}
+
+// findPIDViaProcNet scans /proc/net/tcp for a listening socket on the port,
+// then finds the owning PID via /proc/[pid]/fd inode matching.
+func findPIDViaProcNet(port int) int {
+	data, err := os.ReadFile("/proc/net/tcp")
+	if err != nil {
+		return 0
+	}
+	hexPort := fmt.Sprintf("%04X", port)
+	target := fmt.Sprintf("0100007F:%s", hexPort)
+	for _, line := range strings.Split(string(data), "\n") {
+		if !strings.HasPrefix(line, " sl ") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 10 {
+			continue
+		}
+		if fields[1] == target && strings.TrimSpace(fields[3]) == "0A" {
+			inode := strings.TrimSpace(fields[9])
+			return findPIDByInode(inode)
+		}
+	}
+	return 0
+}
+
+// findPIDByInode scans /proc/[pid]/fd for a socket with the given inode.
+// Only matches processes owned by the current user.
+func findPIDByInode(inode string) int {
+	myUID := os.Getuid()
+	entries, err := os.ReadDir("/proc")
+	if err != nil {
+		return 0
+	}
+	for _, e := range entries {
+		pid, err := strconv.Atoi(e.Name())
+		if err != nil || pid <= 0 {
+			continue
+		}
+		// Skip processes not owned by us
+		status, _ := os.ReadFile(fmt.Sprintf("/proc/%d/status", pid))
+		if !strings.Contains(string(status), fmt.Sprintf("Uid:\t%d", myUID)) {
+			continue
+		}
+		fds, _ := os.ReadDir(fmt.Sprintf("/proc/%d/fd", pid))
+		for _, fd := range fds {
+			link, _ := os.Readlink(fmt.Sprintf("/proc/%d/fd/%s", pid, fd.Name()))
+			if strings.Contains(link, "socket:"+inode) {
+				return pid
+			}
+		}
+	}
+	return 0
+}
+
 func init() {
-	newServiceManager = func() serviceManager { return &systemdManager{} }
+	if systemdAvailable() {
+		newServiceManager = func() serviceManager { return &systemdManager{} }
+	} else {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			homeDir = ""
+		}
+		newServiceManager = func() serviceManager { return &pidFileManager{homeDir: homeDir} }
+	}
+}
+
+// systemdAvailable checks if systemctl --user can communicate with a running systemd instance.
+func systemdAvailable() bool {
+	cmd := exec.Command("systemctl", "--user", "is-system-running")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return false
+	}
+	s := strings.TrimSpace(string(out))
+	return s == "running" || s == "degraded"
 }
 
 type systemdManager struct{}
@@ -235,4 +370,226 @@ func runSystemctl(args ...string) (string, error) {
 		return string(out), fmt.Errorf("systemctl %s: %s", strings.Join(userArgs, " "), strings.TrimSpace(string(out)))
 	}
 	return string(out), nil
+}
+
+// -----------------------------------------------------------------------
+// PID-file based service manager (non-systemd environments)
+// -----------------------------------------------------------------------
+
+// pidFileManager manages the daemon via a PID file (~/.sprout/daemon.pid).
+// It implements the same serviceManager interface as systemdManager.
+type pidFileManager struct {
+	homeDir string
+}
+
+func (m *pidFileManager) pidPath() string {
+	return filepath.Join(m.homeDir, ".sprout", "daemon.pid")
+}
+
+func (m *pidFileManager) readPID() (int, error) {
+	data, err := os.ReadFile(m.pidPath())
+	if err != nil {
+		return 0, err
+	}
+	return strconv.Atoi(strings.TrimSpace(string(data)))
+}
+
+func (m *pidFileManager) writePID(pid int) error {
+	sproutDir := filepath.Join(m.homeDir, ".sprout")
+	if err := os.MkdirAll(sproutDir, 0755); err != nil {
+		return err
+	}
+	tmpFile := m.pidPath() + ".tmp"
+	if err := os.WriteFile(tmpFile, []byte(strconv.Itoa(pid)), 0644); err != nil {
+		os.Remove(tmpFile)
+		return err
+	}
+	return os.Rename(tmpFile, m.pidPath())
+}
+
+func (m *pidFileManager) Install() error {
+	fmt.Println("No systemd detected — no service installation needed.")
+	fmt.Println("Use 'sprout service start' to run the daemon directly.")
+	fmt.Println("The daemon will persist via PID file at ~/.sprout/daemon.pid")
+	return nil
+}
+
+func (m *pidFileManager) Uninstall() error {
+	pidPath := m.pidPath()
+	if err := os.Remove(pidPath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to remove PID file: %w", err)
+	}
+	fmt.Println("Daemon PID file cleaned up.")
+	return nil
+}
+
+func (m *pidFileManager) Start() error {
+	binaryPath, err := getBinaryPath()
+	if err != nil {
+		return fmt.Errorf("failed to get binary path: %w", err)
+	}
+
+	// Check if already running via PID file
+	if pid, err := m.readPID(); err == nil && isPIDAlive(pid) {
+		fmt.Printf("Daemon already running (PID %d)\n", pid)
+		return nil
+	}
+
+	// Check if port is already in use (e.g. pre-existing nohup daemon or
+	// another sprout instance). This prevents spawning a second daemon that
+	// will immediately fail on port binding.
+	if isPortInUse(webui.DaemonPort) {
+		fmt.Printf("Port %d is already in use — a daemon may already be running\n", webui.DaemonPort)
+		return nil
+	}
+
+	// Clean up stale PID file if process is dead
+	if _, err := m.readPID(); err == nil {
+		os.Remove(m.pidPath())
+	}
+
+	// Load service.env into env vars
+	envMap, err := loadServiceEnvFile(m.homeDir)
+	if err != nil {
+		fmt.Printf("Warning: failed to load service.env: %v\n", err)
+		envMap = make(map[string]string)
+	}
+
+	// Build environment for child process
+	childEnv := os.Environ()
+	// Add/override env vars from service.env
+	envMap["SPROUT_SERVICE"] = "1"
+	for k, v := range envMap {
+		// Remove any existing var with same prefix
+		childEnv = removeEnvPrefix(childEnv, k+"=")
+		childEnv = append(childEnv, k+"="+v)
+	}
+
+	// Redirect stdout/stderr to log files
+	logDir := filepath.Join(m.homeDir, ".sprout", "logs")
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		return fmt.Errorf("failed to create log directory: %w", err)
+	}
+	stdoutFile, err := os.OpenFile(filepath.Join(logDir, "daemon.stdout.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to open stdout log: %w", err)
+	}
+	stderrFile, err := os.OpenFile(filepath.Join(logDir, "daemon.stderr.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		stdoutFile.Close()
+		return fmt.Errorf("failed to open stderr log: %w", err)
+	}
+
+	cmd := exec.Command(binaryPath, "agent", "-d", "--no-connection-check")
+	cmd.Env = childEnv
+	cmd.Dir = m.homeDir
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true} // New session (daemonize)
+	cmd.Stdout = stdoutFile
+	cmd.Stderr = stderrFile
+
+	if err := cmd.Start(); err != nil {
+		stdoutFile.Close()
+		stderrFile.Close()
+		return fmt.Errorf("failed to start daemon: %w", err)
+	}
+
+	// Write PID file
+	if err := m.writePID(cmd.Process.Pid); err != nil {
+		// Failed to write PID — kill the process to avoid orphan
+		cmd.Process.Kill()
+		cmd.Process.Wait() // reap the zombie
+		stdoutFile.Close()
+		stderrFile.Close()
+		return fmt.Errorf("failed to write PID file: %w", err)
+	}
+
+	// Close file descriptors in parent (child inherits them)
+	stdoutFile.Close()
+	stderrFile.Close()
+
+	// Brief wait to check if it exited immediately
+	time.Sleep(200 * time.Millisecond)
+	if !isPIDAlive(cmd.Process.Pid) {
+		os.Remove(m.pidPath())
+		return fmt.Errorf("daemon exited immediately; check ~/.sprout/logs/daemon.stderr.log")
+	}
+
+	fmt.Printf("Daemon started (PID %d)\n", cmd.Process.Pid)
+	fmt.Printf("Logs: ~/.sprout/logs/daemon.stdout.log\n")
+	return nil
+}
+
+func (m *pidFileManager) Stop() error {
+	pid, err := m.readPID()
+	if err == nil && isPIDAlive(pid) {
+		// We have a known PID — stop it
+		if err := m.stopProcess(pid); err != nil {
+			return err
+		}
+		os.Remove(m.pidPath())
+		fmt.Println("Daemon stopped.")
+		return nil
+	}
+
+	// No known PID or process is dead. Clean up stale PID file.
+	if err == nil {
+		os.Remove(m.pidPath())
+	}
+
+	// Check if something is still holding the port (e.g. pre-existing nohup daemon)
+	if isPortInUse(webui.DaemonPort) {
+		portPID := findPIDOnPort(webui.DaemonPort)
+		if portPID > 0 {
+			fmt.Printf("No PID file, but port %d is in use (PID %d). Stopping...\n", webui.DaemonPort, portPID)
+			if err := m.stopProcess(portPID); err != nil {
+				return err
+			}
+			fmt.Println("Daemon stopped.")
+			return nil
+		}
+	}
+
+	fmt.Println("Daemon is not running (no PID file).")
+	return nil
+}
+
+// stopProcess sends SIGTERM, waits up to 15s, then SIGKILL.
+func (m *pidFileManager) stopProcess(pid int) error {
+	if err := syscall.Kill(pid, syscall.SIGTERM); err != nil {
+		return fmt.Errorf("failed to send SIGTERM to daemon (PID %d): %w", pid, err)
+	}
+	for i := 0; i < 150; i++ {
+		time.Sleep(100 * time.Millisecond)
+		if !isPIDAlive(pid) {
+			break
+		}
+	}
+	if isPIDAlive(pid) {
+		syscall.Kill(pid, syscall.SIGKILL)
+		time.Sleep(200 * time.Millisecond)
+	}
+	return nil
+}
+
+func (m *pidFileManager) Status() (bool, error) {
+	pid, err := m.readPID()
+	if err == nil && isPIDAlive(pid) {
+		return true, nil
+	}
+	// No PID file or stale PID — check if port is in use (e.g. pre-existing daemon)
+	if isPortInUse(webui.DaemonPort) {
+		return true, nil
+	}
+	return false, nil
+}
+
+// removeEnvPrefix removes all entries from env that start with the given prefix.
+func removeEnvPrefix(env []string, prefix string) []string {
+	result := make([]string, 0, len(env))
+	for _, e := range env {
+		if !strings.HasPrefix(e, prefix) {
+			result = append(result, e)
+		}
+	}
+	return result
 }

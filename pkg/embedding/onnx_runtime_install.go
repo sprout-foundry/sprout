@@ -88,15 +88,23 @@ func onnxRuntimeReleaseFor(goos, goarch string) (onnxRuntimeReleaseConfig, bool)
 				Format:         "tgz",
 			}, true
 		}
-	case "windows":
-		if goarch == "amd64" {
-			return onnxRuntimeReleaseConfig{
-				URL:            base + "/onnxruntime-win-x64-" + onnxRuntimeVersion + ".zip",
-				InnerLibSuffix: "/lib/onnxruntime.dll",
-				Format:         "zip",
-			}, true
-		}
+		case "windows":
+			if goarch == "amd64" {
+				return onnxRuntimeReleaseConfig{
+					URL:            base + "/onnxruntime-win-x64-" + onnxRuntimeVersion + ".zip",
+					InnerLibSuffix: "/lib/onnxruntime.dll",
+					Format:         "zip",
+				}, true
+			}
 	}
+	// Note: Android has no entry here because Microsoft does not publish a
+	// standalone Android artifact on the GitHub releases page. Android ONNX
+	// Runtime builds ship via Maven Central as
+	// `com.microsoft.onnxruntime:onnxruntime-android:<ver>` (AAR format).
+	// Auto-download from Maven is a separate implementation — for now,
+	// Android users must stage the library manually and point sprout at it
+	// via SPROUT_ONNX_RUNTIME_LIB. See docs/ONNX_RUNTIME.md ("Termux /
+	// Android").
 	return onnxRuntimeReleaseConfig{}, false
 }
 

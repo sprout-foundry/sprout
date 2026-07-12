@@ -74,7 +74,11 @@ type AgentSecurityManager struct {
 	ignoredSecurityMu       sync.RWMutex
 	outputRedactor          *security.OutputRedactor
 	elevationGate           *security.ElevationGate
-	hasActiveWebUIClients   func() bool
+	// webuiClientsMu protects hasActiveWebUIClients, which is written by
+	// every getChatAgent call (potentially concurrently across chat
+	// sessions) and read by security prompt routing during tool execution.
+	webuiClientsMu        sync.RWMutex
+	hasActiveWebUIClients func() bool
 }
 
 // NewAgentSecurityManager creates a new AgentSecurityManager with all fields initialized.
@@ -214,12 +218,17 @@ func (m *AgentSecurityManager) SetElevationGate(gate *security.ElevationGate) {
 }
 
 func (m *AgentSecurityManager) SetHasActiveWebUIClients(fn func() bool) {
+	m.webuiClientsMu.Lock()
+	defer m.webuiClientsMu.Unlock()
 	m.hasActiveWebUIClients = fn
 }
 
 func (m *AgentSecurityManager) HasActiveWebUIClients() bool {
-	if m.hasActiveWebUIClients != nil {
-		return m.hasActiveWebUIClients()
+	m.webuiClientsMu.RLock()
+	fn := m.hasActiveWebUIClients
+	m.webuiClientsMu.RUnlock()
+	if fn != nil {
+		return fn()
 	}
 	return false
 }

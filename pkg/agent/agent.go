@@ -144,6 +144,12 @@ type Agent struct {
 
 	// TerminalManager provides access to hidden PTY sessions for WebUI mode.
 	// When nil (CLI mode), shell commands use os/exec unchanged.
+	//
+	// webuiMu protects terminalManager from concurrent access: the webui
+	// server calls SetTerminalManager from getChatAgent on every query path,
+	// potentially from multiple goroutines (one per chat session), while the
+	// shell tool reads it via GetTerminalManager during tool execution.
+	webuiMu         sync.RWMutex
 	terminalManager tools.TerminalAccess
 
 	// BackgroundProcessManager provides background shell execution for CLI mode.

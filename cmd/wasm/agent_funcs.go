@@ -6,6 +6,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"strconv"
 	"sync"
 	"syscall/js"
 	"time"
@@ -51,6 +53,18 @@ var (
 // on the same agent, but repeated failures suggest state corruption.
 const maxConsecutiveErrors = 3
 
+// agentTimeout is the maximum duration for a single runAgent call.
+// The default is 20 minutes for complex multi-tool-call workflows.
+// Can be overridden via SPROUT_WASM_AGENT_TIMEOUT env var (in minutes).
+var agentTimeout = func() time.Duration {
+	if m := os.Getenv("SPROUT_WASM_AGENT_TIMEOUT"); m != "" {
+		if n, err := strconv.Atoi(m); err == nil && n > 0 {
+			return time.Duration(n) * time.Minute
+		}
+	}
+	return 20 * time.Minute
+}()
+
 // resetPersistentAgent clears the cached agent. Called when the JS side
 // wants to start a fresh conversation (new chat session).
 func resetPersistentAgent() {
@@ -66,6 +80,7 @@ func agentJSFuncs() map[string]interface{} {
 		"runPlan":           js.FuncOf(runPlanFunc),
 		"clearConversation": js.FuncOf(clearConversationFunc),
 		"stopAgent":         js.FuncOf(stopAgentFunc),
+		"steerAgent":        js.FuncOf(steerAgentFunc),
 	}
 }
 
@@ -89,6 +104,25 @@ func stopAgentFunc(_ js.Value, _ []js.Value) interface{} {
 		ag.TriggerInterrupt()
 	}
 	return nil
+}
+
+// steerAgentFunc injects a steering message into the persistent agent's
+// steering channel. If the agent is mid-turn, the message is queued and
+// delivered as a follow-up prompt after the current turn completes.
+// This is the cloud-mode equivalent of the steer input field.
+func steerAgentFunc(_ js.Value, args []js.Value) interface{} {
+	message := argString(args, 0, "")
+	if message == "" {
+		return map[string]interface{}{"steered": false, "error": "message is required"}
+	}
+	persistentAgentMu.Lock()
+	ag := persistentAgent
+	persistentAgentMu.Unlock()
+	if ag == nil {
+		return map[string]interface{}{"steered": false, "error": "no active agent"}
+	}
+	ag.InjectInputContext(message)
+	return map[string]interface{}{"steered": true}
 }
 
 // runAgentFunc invokes one ProcessQuery turn through a persistent
@@ -131,7 +165,7 @@ func runAgentFunc(_ js.Value, args []js.Value) interface{} {
 		onEvent = args[3]
 	}
 
-	return asPromiseWithTimeout(10*time.Minute, func(ctx context.Context) (interface{}, error) {
+	return asPromiseWithTimeout(agentTimeout, func(ctx context.Context) (interface{}, error) {
 		if provider == "" {
 			return nil, fmt.Errorf("provider is required (first arg)")
 		}
@@ -236,7 +270,7 @@ func runPlanFunc(_ js.Value, args []js.Value) interface{} {
 		onEvent = args[3]
 	}
 
-	return asPromiseWithTimeout(10*time.Minute, func(ctx context.Context) (interface{}, error) {
+	return asPromiseWithTimeout(agentTimeout, func(ctx context.Context) (interface{}, error) {
 		if provider == "" {
 			return nil, fmt.Errorf("provider is required (first arg)")
 		}

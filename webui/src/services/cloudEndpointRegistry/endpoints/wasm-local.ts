@@ -107,4 +107,10 @@ export const wasmLocalEndpoints: CloudEndpoint[] = [
     category: 'wasm-local',
     description: 'Stop agent execution (WASM shell interrupts in-browser agent)',
   },
+  {
+    path: '/api/query/steer',
+    methods: ['POST'],
+    category: 'wasm-local',
+    description: 'Steer agent mid-conversation (WASM shell injects into steering channel)',
+  },
 ];

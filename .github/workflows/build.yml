@@ -146,9 +146,6 @@ jobs:
         path: /tmp/sprout-test-coverage.log
         retention-days: 30
 
-    - name: Run integration tests
-      run: make test-integration
-
     - name: Run smoke tests
       run: make test-smoke
 

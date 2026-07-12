@@ -115,7 +115,6 @@ export async function fetchRuntimeConfig(): Promise<RuntimeConfig> {
       };
       lastConfig = config;
       // eslint-disable-next-line no-console
-      console.log('bootstrap: fetched config from /api/bootstrap');
       installAdapterForConfig(config);
       return config;
     }
@@ -137,7 +136,6 @@ export async function fetchRuntimeConfig(): Promise<RuntimeConfig> {
   // — Tier 3: localhost defaults —
   lastConfig = LOCALHOST_DEFAULTS;
   // eslint-disable-next-line no-console
-  console.log('bootstrap: using localhost defaults');
   installAdapterForConfig(LOCALHOST_DEFAULTS);
   return LOCALHOST_DEFAULTS;
 }
@@ -156,7 +154,6 @@ export function getBootstrapConfig(): RuntimeConfig {
 function installAdapterForConfig(config: RuntimeConfig): void {
   if (config.appMode === 'cloud') {
     // eslint-disable-next-line no-console
-    console.log('bootstrap: active mode = cloud, installing CloudAdapter');
     const adapter = new CloudAdapter({
       apiBase: config.apiBaseURL,
       wsUrl: config.wsURL,
@@ -208,7 +205,6 @@ function installAdapterForConfig(config: RuntimeConfig): void {
     }
   } else {
     // eslint-disable-next-line no-console
-    console.log('bootstrap: active mode = local, no adapter installed');
   }
 }
 

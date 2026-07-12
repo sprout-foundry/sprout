@@ -79,6 +79,8 @@ export interface WasmShell {
   clearConversation(): void;
   /** Interrupt the currently running agent loop. */
   stopAgent(): void;
+  /** Steer the running agent (inject a follow-up message). */
+  steerAgent?(message: string): Record<string, unknown>;
   /** Get the fully initialized Go global. */
   readonly wasm: typeof globalThis & { SproutWasm: unknown };
 }
@@ -176,6 +178,13 @@ async function idbListFiles(): Promise<string> {
 const DEFAULT_WASM_URL = '/webui/wasm/sprout.wasm';
 const DEFAULT_WASM_EXEC_URL = '/webui/wasm/wasm_exec.js';
 
+/** Debug logger — only logs when localStorage flag is set or VITE_DEBUG is enabled. */
+const debug = (...args: unknown[]) => {
+  if (typeof localStorage !== 'undefined' && localStorage.getItem('sprout-debug-wasm')) {
+    debug('', ...args);
+  }
+};
+
 /** Interface of the Go→WASM SproutWasm global exposed by the compiled binary. */
 export interface SproutWasmAPI {
   init(config?: string): string;
@@ -201,6 +210,7 @@ export interface SproutWasmAPI {
   ): Promise<{ response: string; provider: string; model: string }>;
   clearConversation?(): void;
   stopAgent?(): void;
+  steerAgent?(message: string): Record<string, unknown>;
   // ── AST / symbol extraction (cmd/wasm/ast_funcs.go) ──
   parseFile?(filePath: string, content: Uint8Array | ArrayBuffer): string;
   extractSymbols?(filePath: string, content: Uint8Array | ArrayBuffer): string;
@@ -235,17 +245,17 @@ export async function initWasmShell(config?: {
   wasmUrl?: string; // default: '/webui/wasm/sprout.wasm'
   wasmExecUrl?: string; // default: '/webui/wasm/wasm_exec.js'
 }): Promise<WasmShell> {
-  console.log('[sprout-wasm] initWasmShell called');
+  debug(' initWasmShell called');
   if (sharedInstance) {
-    console.log('[sprout-wasm] returning existing instance');
+    debug(' returning existing instance');
     return sharedInstance;
   }
   if (initPromise) {
-    console.log('[sprout-wasm] returning existing init promise');
+    debug(' returning existing init promise');
     return initPromise;
   }
 
-  console.log('[sprout-wasm] starting new init');
+  debug(' starting new init');
 
   initPromise = (async () => {
   const store: SproutStore = {
@@ -283,51 +293,51 @@ export async function initWasmShell(config?: {
   installSproutONNXBridge();
 
   // 2. Load wasm_exec.js.
-  console.log('[sprout-wasm] Step 1: Loading wasm_exec.js...');
+  debug(' Step 1: Loading wasm_exec.js...');
   const script = document.createElement('script');
   const execUrl = config?.wasmExecUrl ?? DEFAULT_WASM_EXEC_URL;
   script.src = execUrl;
   document.head.appendChild(script);
   await new Promise<void>((resolve, reject) => {
-    script.onload = () => { console.log('[sprout-wasm] wasm_exec.js loaded'); resolve(); };
+    script.onload = () => { debug(' wasm_exec.js loaded'); resolve(); };
     script.onerror = () => reject(new Error(`Failed to load wasm_exec.js from ${execUrl}`));
   });
 
   // 3. Fetch and instantiate the WASM binary.
-  console.log('[sprout-wasm] Step 2: Creating Go instance...');
+  debug(' Step 2: Creating Go instance...');
   const go = new window.Go();
   const wasmUrl = config?.wasmUrl ?? DEFAULT_WASM_URL;
-  console.log('[sprout-wasm] Step 3: Fetching sprout.wasm from', wasmUrl);
+  debug(' Step 3: Fetching sprout.wasm from', wasmUrl);
   const wasmResponse = await fetch(wasmUrl);
   if (!wasmResponse.ok) {
     throw new Error(`Failed to fetch ${wasmUrl}: ${wasmResponse.status}`);
   }
 
-  console.log('[sprout-wasm] Step 4: Reading arrayBuffer...');
+  debug(' Step 4: Reading arrayBuffer...');
   const wasmBuffer = await wasmResponse.arrayBuffer();
-  console.log('[sprout-wasm] ArrayBuffer size:', wasmBuffer.byteLength);
-  console.log('[sprout-wasm] Step 5: WebAssembly.instantiate...');
+  debug(' ArrayBuffer size:', wasmBuffer.byteLength);
+  debug(' Step 5: WebAssembly.instantiate...');
   const { instance } = await WebAssembly.instantiate(wasmBuffer, go.importObject);
-  console.log('[sprout-wasm] Step 5: Instantiated');
+  debug(' Step 5: Instantiated');
 
   // 4. Run the Go instance (this blocks until main() hits the channel wait).
-  console.log('[sprout-wasm] Step 6: go.run(instance)...');
+  debug(' Step 6: go.run(instance)...');
   go.run(instance);
-  console.log('[sprout-wasm] Step 6: go.run returned');
+  debug(' Step 6: go.run returned');
 
   // At this point window.SproutWasm should be defined by Go's main().
   const wasm = window.SproutWasm;
-  console.log('[sprout-wasm] Step 7: SproutWasm =', typeof wasm);
+  debug(' Step 7: SproutWasm =', typeof wasm);
 
   if (!wasm || typeof wasm.init !== 'function') {
     throw new Error('SproutWasm global not found after WASM init');
   }
 
   // 5. Initialize the Go side (restores files from IndexedDB cache).
-  console.log('[sprout-wasm] Step 8: Calling wasm.init()...');
+  debug(' Step 8: Calling wasm.init()...');
   const configStr = config ? JSON.stringify(config) : undefined;
   const initError = wasm.init(configStr);
-  console.log('[sprout-wasm] Step 8: init returned:', initError || 'ok');
+  debug(' Step 8: init returned:', initError || 'ok');
   if (initError) {
     console.warn('[sprout-wasm] Init warning:', initError);
   }
@@ -400,6 +410,14 @@ export async function initWasmShell(config?: {
       if (api.stopAgent) {
         api.stopAgent();
       }
+    },
+
+    steerAgent(message: string): Record<string, unknown> {
+      const api = wasm as SproutWasmAPI;
+      if (api.steerAgent) {
+        return api.steerAgent(message);
+      }
+      return { steered: false, error: 'steerAgent not available' };
     },
 
     get wasm() {

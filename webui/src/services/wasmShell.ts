@@ -258,176 +258,179 @@ export async function initWasmShell(config?: {
   debug(' starting new init');
 
   initPromise = (async () => {
-  const store: SproutStore = {
-    saveFile: (path, content) => {
-      idbSaveFile(path, content).catch((err) =>
-        console.warn('[sprout-wasm] Failed to save file to IndexedDB:', path, err),
-      );
-    },
-    loadFile: (_path) => {
-      // Synchronous not possible with IndexedDB — the store.listFiles restores all
-      // files on init instead. loadFile is provided for completeness but returns null.
-      return null;
-    },
-    deleteFile: (path) => {
-      idbDeleteFile(path).catch((err) =>
-        console.warn('[sprout-wasm] Failed to delete file from IndexedDB:', path, err),
-      );
-    },
-    listFiles: () => {
-      // listFiles is called synchronously from Go init. Since IndexedDB is async,
-      // we return a cached JSON string. The store updates the cache lazily.
-      // For the initial load, we return empty — this is fine because the
-      // JS side will call listFiles before WASM init and cache the result.
-      return idbListFilesSync();
-    },
-  };
+    const store: SproutStore = {
+      saveFile: (path, content) => {
+        idbSaveFile(path, content).catch((err) =>
+          console.warn('[sprout-wasm] Failed to save file to IndexedDB:', path, err),
+        );
+      },
+      loadFile: (_path) => {
+        // Synchronous not possible with IndexedDB — the store.listFiles restores all
+        // files on init instead. loadFile is provided for completeness but returns null.
+        return null;
+      },
+      deleteFile: (path) => {
+        idbDeleteFile(path).catch((err) =>
+          console.warn('[sprout-wasm] Failed to delete file from IndexedDB:', path, err),
+        );
+      },
+      listFiles: () => {
+        // listFiles is called synchronously from Go init. Since IndexedDB is async,
+        // we return a cached JSON string. The store updates the cache lazily.
+        // For the initial load, we return empty — this is fine because the
+        // JS side will call listFiles before WASM init and cache the result.
+        return idbListFilesSync();
+      },
+    };
 
-  // Warm up the cache by loading all files before WASM init.
-  await warmIdbCache();
+    // Warm up the cache by loading all files before WASM init.
+    await warmIdbCache();
 
-  window.__sproutStore = store;
+    window.__sproutStore = store;
 
-  // Install the ONNX bridge so the Go-WASM build's embedding manager can
-  // delegate inference to onnxruntime-web running in this page.
-  installSproutONNXBridge();
+    // Install the ONNX bridge so the Go-WASM build's embedding manager can
+    // delegate inference to onnxruntime-web running in this page.
+    installSproutONNXBridge();
 
-  // 2. Load wasm_exec.js.
-  debug(' Step 1: Loading wasm_exec.js...');
-  const script = document.createElement('script');
-  const execUrl = config?.wasmExecUrl ?? DEFAULT_WASM_EXEC_URL;
-  script.src = execUrl;
-  document.head.appendChild(script);
-  await new Promise<void>((resolve, reject) => {
-    script.onload = () => { debug(' wasm_exec.js loaded'); resolve(); };
-    script.onerror = () => reject(new Error(`Failed to load wasm_exec.js from ${execUrl}`));
-  });
+    // 2. Load wasm_exec.js.
+    debug(' Step 1: Loading wasm_exec.js...');
+    const script = document.createElement('script');
+    const execUrl = config?.wasmExecUrl ?? DEFAULT_WASM_EXEC_URL;
+    script.src = execUrl;
+    document.head.appendChild(script);
+    await new Promise<void>((resolve, reject) => {
+      script.onload = () => {
+        debug(' wasm_exec.js loaded');
+        resolve();
+      };
+      script.onerror = () => reject(new Error(`Failed to load wasm_exec.js from ${execUrl}`));
+    });
 
-  // 3. Fetch and instantiate the WASM binary.
-  debug(' Step 2: Creating Go instance...');
-  const go = new window.Go();
-  const wasmUrl = config?.wasmUrl ?? DEFAULT_WASM_URL;
-  debug(' Step 3: Fetching sprout.wasm from', wasmUrl);
-  const wasmResponse = await fetch(wasmUrl);
-  if (!wasmResponse.ok) {
-    throw new Error(`Failed to fetch ${wasmUrl}: ${wasmResponse.status}`);
-  }
+    // 3. Fetch and instantiate the WASM binary.
+    debug(' Step 2: Creating Go instance...');
+    const go = new window.Go();
+    const wasmUrl = config?.wasmUrl ?? DEFAULT_WASM_URL;
+    debug(' Step 3: Fetching sprout.wasm from', wasmUrl);
+    const wasmResponse = await fetch(wasmUrl);
+    if (!wasmResponse.ok) {
+      throw new Error(`Failed to fetch ${wasmUrl}: ${wasmResponse.status}`);
+    }
 
-  debug(' Step 4: Reading arrayBuffer...');
-  const wasmBuffer = await wasmResponse.arrayBuffer();
-  debug(' ArrayBuffer size:', wasmBuffer.byteLength);
-  debug(' Step 5: WebAssembly.instantiate...');
-  const { instance } = await WebAssembly.instantiate(wasmBuffer, go.importObject);
-  debug(' Step 5: Instantiated');
+    debug(' Step 4: Reading arrayBuffer...');
+    const wasmBuffer = await wasmResponse.arrayBuffer();
+    debug(' ArrayBuffer size:', wasmBuffer.byteLength);
+    debug(' Step 5: WebAssembly.instantiate...');
+    const { instance } = await WebAssembly.instantiate(wasmBuffer, go.importObject);
+    debug(' Step 5: Instantiated');
 
-  // 4. Run the Go instance (this blocks until main() hits the channel wait).
-  debug(' Step 6: go.run(instance)...');
-  go.run(instance);
-  debug(' Step 6: go.run returned');
+    // 4. Run the Go instance (this blocks until main() hits the channel wait).
+    debug(' Step 6: go.run(instance)...');
+    go.run(instance);
+    debug(' Step 6: go.run returned');
 
-  // At this point window.SproutWasm should be defined by Go's main().
-  const wasm = window.SproutWasm;
-  debug(' Step 7: SproutWasm =', typeof wasm);
+    // At this point window.SproutWasm should be defined by Go's main().
+    const wasm = window.SproutWasm;
+    debug(' Step 7: SproutWasm =', typeof wasm);
 
-  if (!wasm || typeof wasm.init !== 'function') {
-    throw new Error('SproutWasm global not found after WASM init');
-  }
+    if (!wasm || typeof wasm.init !== 'function') {
+      throw new Error('SproutWasm global not found after WASM init');
+    }
 
-  // 5. Initialize the Go side (restores files from IndexedDB cache).
-  debug(' Step 8: Calling wasm.init()...');
-  const configStr = config ? JSON.stringify(config) : undefined;
-  const initError = wasm.init(configStr);
-  debug(' Step 8: init returned:', initError || 'ok');
-  if (initError) {
-    console.warn('[sprout-wasm] Init warning:', initError);
-  }
+    // 5. Initialize the Go side (restores files from IndexedDB cache).
+    debug(' Step 8: Calling wasm.init()...');
+    const configStr = config ? JSON.stringify(config) : undefined;
+    const initError = wasm.init(configStr);
+    debug(' Step 8: init returned:', initError || 'ok');
+    if (initError) {
+      console.warn('[sprout-wasm] Init warning:', initError);
+    }
 
-  // 6. Create the shell interface.
-  const shell: WasmShell = {
-    executeCommand(input: string): WasmShellResult {
-      const json = wasm.executeCommand(input);
-      return JSON.parse(json);
-    },
-
-    autoComplete(input: string): WasmCompletionResult {
-      const json = wasm.autoComplete(input);
-      return JSON.parse(json);
-    },
-
-    getCwd(): string {
-      return wasm.getCwd();
-    },
-
-    changeDir(dir: string): WasmChangeDirResult {
-      const json = wasm.changeDir(dir);
-      return JSON.parse(json);
-    },
-
-    writeFile(path: string, content: string): string {
-      return wasm.writeFile(path, content);
-    },
-
-    readFile(path: string): WasmReadFileResult {
-      const json = wasm.readFile(path);
-      return JSON.parse(json);
-    },
-
-    listDir(path: string): WasmListDirResult {
-      const json = wasm.listDir(path);
-      try {
+    // 6. Create the shell interface.
+    const shell: WasmShell = {
+      executeCommand(input: string): WasmShellResult {
+        const json = wasm.executeCommand(input);
         return JSON.parse(json);
-      } catch {
-        return { entries: [], error: json };
-      }
-    },
+      },
 
-    deleteFile(path: string): string {
-      return wasm.deleteFile(path);
-    },
+      autoComplete(input: string): WasmCompletionResult {
+        const json = wasm.autoComplete(input);
+        return JSON.parse(json);
+      },
 
-    runAgent(
-      provider: string,
-      model: string,
-      query: string,
-      onEvent?: (eventJson: string) => void,
-    ): Promise<{ response: string; provider: string; model: string }> {
-      const api = wasm as SproutWasmAPI;
-      if (!api.runAgent) {
-        return Promise.reject(new Error('WASM binary does not expose runAgent'));
-      }
-      return api.runAgent(provider, model, query, onEvent);
-    },
+      getCwd(): string {
+        return wasm.getCwd();
+      },
 
-    clearConversation(): void {
-      const api = wasm as SproutWasmAPI;
-      if (api.clearConversation) {
-        api.clearConversation();
-      }
-    },
+      changeDir(dir: string): WasmChangeDirResult {
+        const json = wasm.changeDir(dir);
+        return JSON.parse(json);
+      },
 
-    stopAgent(): void {
-      const api = wasm as SproutWasmAPI;
-      if (api.stopAgent) {
-        api.stopAgent();
-      }
-    },
+      writeFile(path: string, content: string): string {
+        return wasm.writeFile(path, content);
+      },
 
-    steerAgent(message: string): Record<string, unknown> {
-      const api = wasm as SproutWasmAPI;
-      if (api.steerAgent) {
-        return api.steerAgent(message);
-      }
-      return { steered: false, error: 'steerAgent not available' };
-    },
+      readFile(path: string): WasmReadFileResult {
+        const json = wasm.readFile(path);
+        return JSON.parse(json);
+      },
 
-    get wasm() {
-      return window as typeof globalThis & { SproutWasm: unknown };
-    },
-  };
+      listDir(path: string): WasmListDirResult {
+        const json = wasm.listDir(path);
+        try {
+          return JSON.parse(json);
+        } catch {
+          return { entries: [], error: json };
+        }
+      },
 
-  sharedInstance = shell;
-  return shell;
-})();
+      deleteFile(path: string): string {
+        return wasm.deleteFile(path);
+      },
+
+      runAgent(
+        provider: string,
+        model: string,
+        query: string,
+        onEvent?: (eventJson: string) => void,
+      ): Promise<{ response: string; provider: string; model: string }> {
+        const api = wasm as SproutWasmAPI;
+        if (!api.runAgent) {
+          return Promise.reject(new Error('WASM binary does not expose runAgent'));
+        }
+        return api.runAgent(provider, model, query, onEvent);
+      },
+
+      clearConversation(): void {
+        const api = wasm as SproutWasmAPI;
+        if (api.clearConversation) {
+          api.clearConversation();
+        }
+      },
+
+      stopAgent(): void {
+        const api = wasm as SproutWasmAPI;
+        if (api.stopAgent) {
+          api.stopAgent();
+        }
+      },
+
+      steerAgent(message: string): Record<string, unknown> {
+        const api = wasm as SproutWasmAPI;
+        if (api.steerAgent) {
+          return api.steerAgent(message);
+        }
+        return { steered: false, error: 'steerAgent not available' };
+      },
+
+      get wasm() {
+        return window as typeof globalThis & { SproutWasm: unknown };
+      },
+    };
+
+    sharedInstance = shell;
+    return shell;
+  })();
 
   return initPromise;
 }

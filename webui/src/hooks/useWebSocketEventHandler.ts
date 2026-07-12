@@ -491,9 +491,7 @@ const handleSubagentActivity = (ctx: EventHandlerContext): void => {
       // Spawn: create a new assistant-type message for the subagent run.
       // If one already exists (e.g. re-spawn after reconnect), don't
       // duplicate — just log.
-      const existing = prev.messages.find(
-        (m) => m.id === subagentMsgId,
-      );
+      const existing = prev.messages.find((m) => m.id === subagentMsgId);
       if (existing) {
         return { subagentActivities: newSubagentActivities, logs: appendCappedLog(prev.logs, logEntry) };
       }
@@ -532,7 +530,11 @@ const handleSubagentActivity = (ctx: EventHandlerContext): void => {
         ...newMessages[msgIdx],
         reasoning: existingReasoning + activity.message + '\n',
       };
-      return { messages: newMessages, subagentActivities: newSubagentActivities, logs: appendCappedLog(prev.logs, logEntry) };
+      return {
+        messages: newMessages,
+        subagentActivities: newSubagentActivities,
+        logs: appendCappedLog(prev.logs, logEntry),
+      };
     }
 
     if (activity.phase === 'complete') {
@@ -550,7 +552,11 @@ const handleSubagentActivity = (ctx: EventHandlerContext): void => {
         subagentRunComplete: true,
         reasoning: existingReasoning + activity.message + '\n',
       };
-      return { messages: newMessages, subagentActivities: newSubagentActivities, logs: appendCappedLog(prev.logs, logEntry) };
+      return {
+        messages: newMessages,
+        subagentActivities: newSubagentActivities,
+        logs: appendCappedLog(prev.logs, logEntry),
+      };
     }
 
     // step or unknown phase — just track the activity

@@ -170,6 +170,21 @@ func (a *Agent) getDefaultModelFromFactory(provider api.ClientType) string {
 	return ""
 }
 
+// getModelFromCustomProviderConfig returns the ModelName from the custom
+// provider configuration if the provider is registered as a custom provider.
+// This handles user-defined providers (e.g. ai-worker) that may not expose
+// a models list endpoint.
+func (a *Agent) getModelFromCustomProviderConfig(provider api.ClientType) string {
+	cfg := a.configManager.GetConfig()
+	if cfg.CustomProviders == nil {
+		return ""
+	}
+	if cp, exists := cfg.CustomProviders[string(provider)]; exists && cp.ModelName != "" {
+		return cp.ModelName
+	}
+	return ""
+}
+
 // SetProvider switches to a specific provider with its default or current model.
 // Session-scoped: changes are not written to config. Use SetProviderPersisted
 // when the user explicitly chose the provider (e.g. CLI /provider command).
@@ -187,6 +202,11 @@ func (a *Agent) SetProvider(provider api.ClientType) error {
 			if a.debug {
 				a.Logger().Debug("[search] Using default model %s from factory for provider %s\n", model, api.GetProviderName(provider))
 			}
+		} else if customModel := a.getModelFromCustomProviderConfig(provider); customModel != "" {
+			model = customModel
+			if a.debug {
+				a.Logger().Debug("[search] Using model %s from custom provider config for provider %s\n", model, api.GetProviderName(provider))
+			}
 		} else {
 			// If no factory default, try to get the first available model from the provider API
 			if len(availableModels) > 0 {
@@ -197,7 +217,7 @@ func (a *Agent) SetProvider(provider api.ClientType) error {
 				}
 			} else {
 				// No models available from API and no model specified
-				return fmt.Errorf("no models available from provider %s; please specify a model explicitly", api.GetProviderName(provider))
+				return fmt.Errorf("no models available from provider %s; please specify a model explicitly (e.g. /provider %s:<model-name>)", api.GetProviderName(provider), api.GetProviderName(provider))
 			}
 		}
 	} else if resolvedModel, ok := resolveModelIDForProvider(model, availableModels); ok {
@@ -272,6 +292,11 @@ func (a *Agent) SetProviderPersisted(provider api.ClientType) error {
 			if a.debug {
 				a.Logger().Debug("[search] Using default model %s from factory for provider %s\n", model, api.GetProviderName(provider))
 			}
+		} else if customModel := a.getModelFromCustomProviderConfig(provider); customModel != "" {
+			model = customModel
+			if a.debug {
+				a.Logger().Debug("[search] Using model %s from custom provider config for provider %s\n", model, api.GetProviderName(provider))
+			}
 		} else {
 			// If no factory default, try to get the first available model from the provider API
 			if len(availableModels) > 0 {
@@ -282,7 +307,7 @@ func (a *Agent) SetProviderPersisted(provider api.ClientType) error {
 				}
 			} else {
 				// No models available from API and no model specified
-				return fmt.Errorf("no models available from provider %s; please specify a model explicitly", api.GetProviderName(provider))
+				return fmt.Errorf("no models available from provider %s; please specify a model explicitly (e.g. /provider %s:<model-name>)", api.GetProviderName(provider), api.GetProviderName(provider))
 			}
 		}
 	} else if resolvedModel, ok := resolveModelIDForProvider(model, availableModels); ok {

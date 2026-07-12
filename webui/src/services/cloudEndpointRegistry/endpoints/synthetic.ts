@@ -133,7 +133,7 @@ export const syntheticEndpoints: CloudEndpoint[] = [
     path: '/api/search/semantic',
     methods: ['POST'],
     category: 'synthetic',
-    syntheticResponse: { results: [] },
+    syntheticResponse: { results: [], note: 'Semantic search is not available in browser mode' },
     description: 'Semantic search (not available in browser mode)',
   },
   {
@@ -163,6 +163,13 @@ export const syntheticEndpoints: CloudEndpoint[] = [
     category: 'synthetic',
     syntheticResponse: { indexed: false, error: 'Embedding index not available in browser mode' },
     description: 'Embedding index status (not available in browser mode)',
+  },
+  {
+    path: '/api/embedding-index',
+    methods: ['POST'],
+    category: 'synthetic',
+    syntheticResponse: { success: true, note: 'Indexing is not available in browser mode' },
+    description: 'Build embedding index (not available in browser mode)',
   },
   {
     path: '/api/diagnostics',

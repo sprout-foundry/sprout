@@ -50,14 +50,11 @@ func wireAgentToolFuncs(agent *Agent, isProduction bool) {
 		return handleMCPRefresh(ctx, agent, args)
 	}
 
-	// Production-only: PR creation and automate workflows require a live
-	// agent with full infrastructure (git, filesystem, workspace).
-	if isProduction {
-		tools.RunAutomateFunc = func(ctx context.Context, args map[string]any) (string, error) {
-			return handleRunAutomate(ctx, agent, args)
-		}
-		tools.CreatePullRequestFunc = func(ctx context.Context, args map[string]any) (string, error) {
-			return handleCreatePullRequest(ctx, agent, args)
-		}
-	}
+	// Host-only tools (PR creation, automate workflows) require live
+	// infrastructure (git, filesystem, subprocess spawning) and are gated
+	// by both isProduction and the build target. The build-tagged
+	// wireHostOnlyToolFuncs function wires the real handlers on native
+	// builds (when isProduction) and clear-error stubs on WASM. See
+	// agent_tool_wiring_nonjs.go and agent_tool_wiring_js.go.
+	wireHostOnlyToolFuncs(agent, isProduction)
 }

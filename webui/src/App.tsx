@@ -34,6 +34,7 @@ import './components/UpdateNotification.css';
 import { useAppInitialization } from './hooks/useAppInitialization';
 import { useAppStatePersistence } from './hooks/useAppStatePersistence';
 import { useChatSessionManager } from './hooks/useChatSessionManager';
+import { useCloudSessionPersistence } from './hooks/useCloudSessionPersistence';
 import { useEscalationTriggers } from './hooks/useEscalationTriggers';
 import { useGitHandlers } from './hooks/useGitHandlers';
 import { useModelProviderHandlers } from './hooks/useModelProviderHandlers';
@@ -231,6 +232,10 @@ function AppInner() {
   // ── Persistence ───────────────────────────────────────────────────
 
   useAppStatePersistence({ state });
+
+  // Cloud mode: mirror the conversation to localStorage so it survives
+  // page reloads and appears in the session picker. No-op in local mode.
+  useCloudSessionPersistence({ state });
 
   // ── Handlers ─────────────────────────────────────────────────────
 

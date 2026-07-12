@@ -333,6 +333,17 @@ export async function gitStageAll() {
 
 /**
  * Execute a git operation by name (maps to the proxy API shape).
+ *
+ * Capability matrix for browser mode:
+ *   ✓ status, add/stage, stage-all, commit, log, branch/branches, checkout,
+ *     diff, push, clone, init
+ *   ✗ unstage, unstage-all, reset, pull, discard, revert, commit-message,
+ *     pull-request, show
+ *
+ * Unimplemented ops throw an Error with an honest "not yet supported in
+ * browser mode" message rather than faking success. The handler in
+ * browserGitHandler.ts surfaces that as an HTTP 500 error response, so the UI
+ * shows a real failure instead of silently doing nothing.
  */
 export async function executeGitOp(
   op: string,
@@ -366,13 +377,30 @@ export async function executeGitOp(
       return gitClone(body?.url as string);
     case 'init':
       return gitInit();
+    // `show` is used to render a single commit's detail. Browser git can only
+    // return the bare log entry, not the full file-diff detail the UI expects,
+    // so report it as unsupported rather than returning a half-shape object.
     case 'show':
-      return gitLog(1);
-    case 'reset':
+      throw new Error('show is not yet supported in browser mode');
+    // The following operations require index/working-tree manipulation that
+    // isomorphic-git does not expose in the way this app needs. They are
+    // intentionally NOT faked — returning success would silently corrupt the
+    // user's mental model of repo state.
     case 'unstage':
     case 'unstage-all':
-      return { message: 'ok', note: 'unstage requires isomorphic-git index reset (not yet implemented)' };
+    case 'reset':
+      throw new Error('unstage/reset is not yet supported in browser mode');
+    case 'discard':
+      throw new Error('discard is not yet supported in browser mode');
+    case 'pull':
+      throw new Error('pull is not yet supported in browser mode');
+    case 'revert':
+      throw new Error('revert is not yet supported in browser mode');
+    case 'commit-message':
+      throw new Error('commit-message generation is not yet supported in browser mode');
+    case 'pull-request':
+      throw new Error('pull requests are not yet supported in browser mode');
     default:
-      return { error: `Unsupported git operation: ${op}` };
+      throw new Error(`Unsupported git operation: ${op}`);
   }
 }

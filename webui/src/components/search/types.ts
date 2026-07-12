@@ -77,6 +77,8 @@ export interface SearchState {
   filteredResults: SearchResult[] | null;
   semanticResults: SemanticSearchResult[] | null;
   semanticDuration: string | null;
+  /** Optional informational note returned by semantic search (e.g. unavailable in browser mode). */
+  semanticNote: string | null;
   duplicateClusters: DuplicateCluster[] | null;
   totalMatches: number;
   totalFiles: number;

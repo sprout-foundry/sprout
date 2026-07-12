@@ -321,7 +321,7 @@ build-ui:
 		echo "Error: webui directory not found"; \
 		exit 1; \
 	fi
-	@if [ ! -d node_modules ]; then npm ci; fi
+	@if [ ! -d node_modules/vite ] || [ ! -d node_modules/isomorphic-git ]; then npm ci; fi
 	@npm run build -w @sprout/events
 	@npm run build -w @sprout/ui
 	@npm run build -w sprout-webui
@@ -333,7 +333,7 @@ deploy-ui:
 	@echo "Checking if React UI needs rebuild..."
 	@if bash scripts/check-needs-react-rebuild.sh; then \
 		echo "Building React web UI with Vite..."; \
-		if [ ! -d node_modules ]; then npm ci; fi; \
+		if [ ! -d node_modules/vite ] || [ ! -d node_modules/isomorphic-git ]; then npm ci; fi; \
 		npm run build -w @sprout/events; \
 		npm run build -w @sprout/ui; \
 		npm run build -w sprout-webui; \

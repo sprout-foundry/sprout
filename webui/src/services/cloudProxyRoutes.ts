@@ -15,17 +15,14 @@
  * Note: The platform hosts chat at /proxy/chat (not /api/proxy/chat).
  */
 export const CHAT_ENDPOINT_MAP: Record<string, string> = {
-  // /api/query and /api/query/stop are NOT here — they route through the
-  // WASM shell's in-browser agent loop (see cloudEndpointRegistry/endpoints/
-  // wasm-local.ts). Stop interrupts the WASM agent directly.
-  // The platform proxy only handles steering/status which need server-side
-  // chat session state.
-  '/api/query/steer': '/proxy/chat',
+  // /api/query, /api/query/stop, and /api/query/steer are NOT here — they
+  // route through the WASM shell's in-browser agent loop (see wasm-local.ts).
+  // The platform proxy only handles status.
   '/api/query/status': '/proxy/chat/status',
 };
 
-/** Paths that require request body translation (query → messages format). */
-export const TRANSLATE_BODY_PATHS = new Set(['/api/query', '/api/query/steer']);
+/** Paths that require request body translation (query -> messages format). */
+export const TRANSLATE_BODY_PATHS = new Set(['/api/query']);
 
 /**
  * Proxy a request to the Foundry backend with a pre-rewritten path.

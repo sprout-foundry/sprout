@@ -216,11 +216,15 @@ function GitHistoryContextMenu({
       >
         <GitBranch size={13} />
         <span className="menu-item-label">
-          {isLoading
-            ? 'Checking out…'
-            : actionStatus === 'Checked out!'
-              ? <><Check size={13} /> Checked out</>
-              : `Checkout this commit (${short})`}
+          {isLoading ? (
+            'Checking out…'
+          ) : actionStatus === 'Checked out!' ? (
+            <>
+              <Check size={13} /> Checked out
+            </>
+          ) : (
+            `Checkout this commit (${short})`
+          )}
         </span>
       </button>
 
@@ -232,7 +236,15 @@ function GitHistoryContextMenu({
       >
         <RotateCcw size={13} />
         <span className="menu-item-label">
-          {isLoading ? 'Reverting…' : actionStatus === 'Reverted!' ? <><Check size={13} /> Reverted</> : `Revert commit (${short})`}
+          {isLoading ? (
+            'Reverting…'
+          ) : actionStatus === 'Reverted!' ? (
+            <>
+              <Check size={13} /> Reverted
+            </>
+          ) : (
+            `Revert commit (${short})`
+          )}
         </span>
       </button>
     </ContextMenu>

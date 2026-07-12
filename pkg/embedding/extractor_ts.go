@@ -216,5 +216,3 @@ func langFromPath(path string) string {
 		return "javascript"
 	}
 }
-
-

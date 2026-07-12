@@ -173,8 +173,8 @@ export default function CostsPage({ onSessionClick, onBack }: CostsPageProps = {
 
       {!loading && !error && staleness && (
         <div className="costs-stale-banner" data-testid="costs-stale-banner" role="status">
-          No activity in the last 30 days. All ${staleness.total.toFixed(2)} of recorded
-          spend is from {staleness.earliest} to {staleness.latest}.
+          No activity in the last 30 days. All ${staleness.total.toFixed(2)} of recorded spend is from{' '}
+          {staleness.earliest} to {staleness.latest}.
         </div>
       )}
 

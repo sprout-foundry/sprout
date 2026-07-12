@@ -340,7 +340,9 @@ describe('SessionsTab export-all', () => {
     const expectedUrl = `/api/sessions/${encodeURIComponent(sessionId)}/export?format=markdown&include_tool_calls=false&include_cost=true`;
 
     // Verify the URL pattern matches what the handler constructs
-    expect(expectedUrl).toBe('/api/sessions/sess-abc/export?format=markdown&include_tool_calls=false&include_cost=true');
+    expect(expectedUrl).toBe(
+      '/api/sessions/sess-abc/export?format=markdown&include_tool_calls=false&include_cost=true',
+    );
   });
 
   /* ---- 13. Loading state ---- */

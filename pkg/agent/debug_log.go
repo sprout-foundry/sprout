@@ -63,8 +63,6 @@ func debugLogf(format string, args ...any) {
 	log.Printf(format, args...)
 }
 
-
-
 // packageLogWarnf logs a warning-level message through the package logger when
 // available, otherwise falls back to log.Printf. Use this for warning messages
 // from package-level functions.

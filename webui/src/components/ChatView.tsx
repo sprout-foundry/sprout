@@ -60,6 +60,7 @@ function Chat(props: ChatProps): JSX.Element {
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [inputContainerHeight, setInputContainerHeight] = useState(0);
   const [isRewinding, setIsRewinding] = useState(false);
+  const [indexingError, setIndexingError] = useState<string | null>(null);
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
 
   const sessionId = chatId ?? '';
@@ -279,9 +280,14 @@ function Chat(props: ChatProps): JSX.Element {
       if (!response.ok) {
         const text = await response.text();
         console.error('Failed to toggle indexing:', response.status, text);
+        // Surface failure to the user instead of silent console-only log
+        setIndexingError(response.ok ? null : `Indexing toggle failed (${response.status})`);
+      } else {
+        setIndexingError(null);
       }
     } catch (e) {
       console.error('Failed to toggle indexing:', e);
+      setIndexingError('Failed to toggle indexing — see console for details');
     }
   }, []);
 
@@ -394,6 +400,11 @@ function Chat(props: ChatProps): JSX.Element {
           isIndexBuilding={!!stats?.embedding_index_building}
           onToggleIndex={handleToggleIndex}
         />
+        {indexingError && (
+          <div className="indexing-error-banner" role="alert" style={{ color: 'var(--text-error, #e53e3e)', fontSize: '0.85em', padding: '4px 8px' }}>
+            {indexingError}
+          </div>
+        )}
       </div>
 
       <ChatMessageContextMenu

@@ -30,6 +30,7 @@ locations in order, stopping at the first hit:
    | macOS, arm64       | `onnxruntime_arm64.dylib` |
    | macOS, amd64       | `onnxruntime.dylib`       |
    | Windows, any       | `onnxruntime.dll`         |
+   | Android, arm64     | `libonnxruntime.so`       |
 
 3. **Auto-download from the official `microsoft/onnxruntime` release** —
    when step 2 is empty, sprout fetches the platform-appropriate archive
@@ -103,6 +104,36 @@ when ONNX is unavailable. All workspace search, duplicate detection, and
 memory retrieval continue to function with reduced retrieval precision (see
 `pkg/embedding/retrieval_eval.go` for measured deltas on this codebase: 42%
 static vs. 75% ONNX hit rate on the curated test queries).
+
+## Termux / Android
+
+Android (via Termux or a native NDK build) is treated as a first-class
+supported platform by the resolver, but the underlying Bionic-libc CGO
+chain has not been end-to-end verified from a CI environment. Treat the
+following as best-effort:
+
+- The resolver looks for `libonnxruntime.so` (no `_arm64` suffix — the
+  Android AAR layout puts per-arch variants in different directories, not
+  different filenames).
+- **Auto-download is NOT available for Android.** Microsoft distributes
+  the Android ONNX Runtime as a Maven AAR
+  (`com.microsoft.onnxruntime:onnxruntime-android:1.25.1`), not as an
+  asset on the GitHub releases page. sprout's release map therefore has
+  no Android entry — `resolveSharedLibraryPath` falls through to the
+  environment override / staged-file steps only. To use ONNX on Android,
+  manually extract `libonnxruntime.so` from the Android AAR (it lives at
+  `jni/arm64-v8a/libonnxruntime.so` inside the .aar) and either:
+  - place it at `~/.config/sprout/models/onnxruntime/libonnxruntime.so`,
+    or
+  - set `SPROUT_ONNX_RUNTIME_LIB=/path/to/libonnxruntime.so` in the
+    process environment.
+- CGO linking against Bionic requires Termux's `clang` toolchain; build
+  with `CGO_ENABLED=1 CC=clang CXX=clang++`. Static glibc-linked Go
+  binaries will not load the Bionic `.so` even when the resolver finds
+  it. If `dlopen` still fails after staging, that's a Bionic/glibc
+  mismatch, not a resolver bug.
+- When in doubt, use **Option D** (skip ONNX) on Termux — the static
+  embedding provider works there without any external dependencies.
 
 ## Where ONNX Runtime binaries come from
 

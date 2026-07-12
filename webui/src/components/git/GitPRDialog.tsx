@@ -17,6 +17,7 @@ function GitPRDialog({ isOpen, onClose, onPullRequest }: GitPRDialogProps) {
   const [prTitle, setPrTitle] = useState('');
   const [prBody, setPrBody] = useState('');
   const [prBase, setPrBase] = useState('');
+  const [prHead, setPrHead] = useState('');
   const [prDraft, setPrDraft] = useState(false);
   const [isCreatingPr, setIsCreatingPr] = useState(false);
   const [prSuccessUrl, setPrSuccessUrl] = useState<string | null>(null);
@@ -28,6 +29,7 @@ function GitPRDialog({ isOpen, onClose, onPullRequest }: GitPRDialogProps) {
       setPrTitle('');
       setPrBody('');
       setPrBase('');
+      setPrHead('');
       setPrDraft(false);
       setIsCreatingPr(false);
       setPrSuccessUrl(null);
@@ -45,6 +47,7 @@ function GitPRDialog({ isOpen, onClose, onPullRequest }: GitPRDialogProps) {
         title: prTitle.trim(),
         body: prBody || undefined,
         base: prBase || undefined,
+        head: prHead || undefined,
         draft: prDraft,
       });
       setPrSuccessUrl(result.url);
@@ -150,27 +153,51 @@ function GitPRDialog({ isOpen, onClose, onPullRequest }: GitPRDialogProps) {
                     style={{ resize: 'vertical', minHeight: 80, lineHeight: 1.55 }}
                   />
                 </div>
-                <div>
-                  <label
-                    style={{
-                      display: 'block',
-                      fontSize: 11,
-                      fontWeight: 600,
-                      color: 'var(--text-tertiary)',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.06em',
-                      marginBottom: 4,
-                    }}
-                  >
-                    Base branch
-                  </label>
-                  <input
-                    type="text"
-                    className="themed-dialog-input"
-                    value={prBase}
-                    onChange={(e) => setPrBase(e.target.value)}
-                    placeholder="main"
-                  />
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <div style={{ flex: 1 }}>
+                    <label
+                      style={{
+                        display: 'block',
+                        fontSize: 11,
+                        fontWeight: 600,
+                        color: 'var(--text-tertiary)',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.06em',
+                        marginBottom: 4,
+                      }}
+                    >
+                      Base branch
+                    </label>
+                    <input
+                      type="text"
+                      className="themed-dialog-input"
+                      value={prBase}
+                      onChange={(e) => setPrBase(e.target.value)}
+                      placeholder="main"
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label
+                      style={{
+                        display: 'block',
+                        fontSize: 11,
+                        fontWeight: 600,
+                        color: 'var(--text-tertiary)',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.06em',
+                        marginBottom: 4,
+                      }}
+                    >
+                      Head branch
+                    </label>
+                    <input
+                      type="text"
+                      className="themed-dialog-input"
+                      value={prHead}
+                      onChange={(e) => setPrHead(e.target.value)}
+                      placeholder="Current branch"
+                    />
+                  </div>
                 </div>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
                   <input

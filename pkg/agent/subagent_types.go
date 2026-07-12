@@ -161,7 +161,7 @@ type SubagentOptions struct {
 	Provider               string        // optional provider override
 	SystemPrompt           string        // optional system prompt override
 	MaxTokens              int           // token budget (0 = unlimited)
-	Timeout                time.Duration // execution timeout (0 = unlimited)
+	Timeout                time.Duration // execution timeout; <=0 defaults to 10 minutes (see runTask)
 	WorkingDir             string        // optional: override workspace root (must be within $HOME)
 	MaxConcurrentSubagents int           // max parallel subagents (0 = unlimited, default unlimited)
 	FleetTokenBudget       int           // shared token budget across all parallel subagents (0 = unlimited)

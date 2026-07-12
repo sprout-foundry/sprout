@@ -40,6 +40,12 @@ func (ws *ReactWebServer) handleAPISettingsMCPServers(w http.ResponseWriter, r *
 		return
 	}
 
+	// If the path ends with /test, delegate to the connection test handler
+	if strings.HasSuffix(r.URL.Path, "/test") {
+		ws.handleAPISettingsMCPServersTest(w, r)
+		return
+	}
+
 	switch r.Method {
 	case http.MethodPost:
 		// POST without a name in URL means list-level create

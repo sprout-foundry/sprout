@@ -250,7 +250,23 @@ export function useAppInitialization({
             (item: SessionEntry) => String(item?.session_id || '') === currentSessionId,
           );
           const currentHasMessages = Number(currentSession?.message_count || 0) > 0;
-          if (!currentHasMessages) {
+
+          // Cloud mode: the "current" session id points at the most recently
+          // active localStorage-backed conversation, but its transcript is
+          // not loaded into React state on a fresh page load. When that
+          // session has messages, restore it directly so the conversation
+          // reappears after a refresh. (In local mode the backend pre-loads
+          // the current session, so this branch is a no-op.)
+          if (isCloud && currentHasMessages && currentSessionId) {
+            const restored = await apiService.restoreSession(currentSessionId);
+            if (Array.isArray(restored?.messages) && restored.messages.length > 0) {
+              window.dispatchEvent(
+                new CustomEvent('sprout:session-restored', {
+                  detail: { messages: restored.messages },
+                }),
+              );
+            }
+          } else if (!currentHasMessages) {
             const restorable = sessions.find(
               (item: SessionEntry) =>
                 String(item?.session_id || '') !== currentSessionId && Number(item?.message_count || 0) > 0,

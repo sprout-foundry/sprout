@@ -61,9 +61,16 @@ function capability<K extends keyof APIAdapter>(
 export const supportsSSH: boolean = capability('supportsSSH', true, false);
 
 /**
- * Git support - available in local mode; WASM shell handles git differently in cloud.
+ * Git support - available in both modes.
+ *
+ * In local mode, git runs on the host. In cloud mode, git runs in-browser via
+ * isomorphic-git + lightning-fs (IndexedDB). Not every git operation is
+ * implemented in browser mode yet — browserGit.ts returns an honest error for
+ * unimplemented ops (unstage, reset, pull, discard, revert, etc.) rather than
+ * faking success — but the core flow (status, add, commit, push, clone, diff)
+ * is functional. See webui/src/services/browserGit.ts for the capability matrix.
  */
-export const supportsGit: boolean = capability('supportsGit', true, false);
+export const supportsGit: boolean = capability('supportsGit', true, true);
 
 /**
  * Chat support - available in both modes (BYOK proxy in cloud, local LLM in desktop).

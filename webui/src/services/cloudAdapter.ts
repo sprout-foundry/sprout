@@ -16,6 +16,7 @@ import type { APIAdapter, PlatformNavItem } from './apiAdapter';
 import { WEBUI_CLIENT_ID_HEADER, getWebUIClientId } from './clientSession';
 import { getSyntheticResponse, isWasmLocalEndpoint } from './cloudEndpointRegistry';
 import { CHAT_ENDPOINT_MAP, translateAndProxyChat, proxyStatsRequest, proxySettingsRequest } from './cloudProxyRoutes';
+import { handleCloudSessionsEndpoint } from './cloudSessionHandlers';
 import { handleWasmLocal, trackFileWrite } from './cloudWasmHandlers';
 import { initWasmShell, type WasmShell } from './wasmShell';
 
@@ -34,7 +35,7 @@ export class CloudAdapter implements APIAdapter {
   readonly fileOpsViaAPI = false; // WASM handles files locally
   readonly showOnboarding = false; // Cloud is pre-configured
   readonly supportsSSH = false;
-  readonly supportsGit = false;
+  readonly supportsGit = true;
   readonly supportsChat = true;
   readonly supportsWorkspaceSwitching = false;
   readonly supportsExport = false;
@@ -246,6 +247,19 @@ export class CloudAdapter implements APIAdapter {
     if (isProxiedSettings) {
       const requestBody = await this.extractRequestBody(input);
       return proxySettingsRequest(this.config.apiBase, url, method, clientIdHeader, clientIdValue, init, requestBody);
+    }
+
+    // ── Cloud session persistence (localStorage-backed) ───────────
+    // In cloud mode the platform has no per-client session store, so GET
+    // /api/sessions would otherwise return an empty synthetic list and
+    // POST /api/sessions/restore would 400. Intercept these BEFORE the
+    // generic synthetic fallback and route them to the browser-local
+    // cloudSessionStore so conversations survive page reloads.
+    if (urlPath === '/api/sessions' || urlPath.startsWith('/api/sessions/')) {
+      const bodyStr = await this.extractRequestBody(input);
+      const handled = handleCloudSessionsEndpoint(urlPath, method, url, bodyStr ?? undefined);
+      if (handled) return handled;
+      // Unknown sub-path — fall through to synthetic / standard proxy below.
     }
 
     // ── Synthetic response interception ────────────────────────────

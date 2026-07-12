@@ -423,7 +423,7 @@ func applyParallelTaskConfig(tasks []SubagentTask, provider, model string) {
 // enabled and whether the number of tasks is within the configured limit.
 func validateParallelSubagentConfig(a *Agent, tasks []SubagentTask) error {
 	if a.configManager != nil && !a.configManager.GetConfig().GetSubagentParallelEnabled() {
-		return agenterrors.NewPermanentError("parallel subagents are disabled in configuration. Use run_subagent for sequential execution instead.", nil)
+		return agenterrors.NewPermanentError("Parallel subagents are disabled. Enable them in Settings or use `run_subagent` for sequential execution.", nil)
 	}
 
 	if a.configManager != nil {

@@ -80,6 +80,10 @@ export function handleWasmLocal(
         shell.stopAgent();
         return jsonOk({ status: 'ok', stopped: true });
 
+      // ── Agent steer (injects into persistent agent) ─────────
+      case '/api/query/steer':
+        return handleWasmAgentSteer(shell, bodyStr);
+
       // ── Terminal stubs ──────────────────────────────────────
       case '/api/terminal/sessions':        return jsonOk({ active_count: 0, count: 0 });
       case '/api/terminal/shells':
@@ -725,6 +729,33 @@ export function jsonError(message: string, status: number): Response {
  * Events are dispatched in the WsEvent shape: { type, data: {...} }
  * This matches what useEventHandler expects (it reads event.data).
  */
+/**
+ * Handle POST /api/query/steer — injects a steering message into the
+ * persistent WASM agent. If the agent is mid-turn, the message is
+ * queued for the next turn. This replaces the platform-backend steer
+ * path which had no control over the in-browser agent.
+ */
+function handleWasmAgentSteer(shell: WasmShell, bodyStr?: string): Response {
+  if (!bodyStr) return jsonError('Missing request body', 400);
+  let parsed: { query?: string };
+  try {
+    parsed = JSON.parse(bodyStr);
+  } catch {
+    return jsonError('Invalid JSON body', 400);
+  }
+  const query = parsed.query || '';
+  if (!query) return jsonError('Query is required', 400);
+
+  // Call the WASM steerAgent function which injects into the
+  // persistent agent's steering channel.
+  const api = (shell as unknown as { steerAgent?: (msg: string) => Record<string, unknown> });
+  if (api.steerAgent) {
+    const result = api.steerAgent(query);
+    return jsonOk(result);
+  }
+  return jsonOk({ steered: false, error: 'steerAgent not available' });
+}
+
 function handleWasmAgentQuery(shell: WasmShell, bodyStr?: string): Response {
   if (!bodyStr) {
     return jsonError('Missing request body', 400);

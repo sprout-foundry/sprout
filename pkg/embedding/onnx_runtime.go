@@ -162,6 +162,11 @@ func (r *ONNXRuntime) removeStagedLibrary() {
 // platformLibName returns the conventional ONNX Runtime shared library
 // filename for the running platform. Returns "" for unsupported platforms;
 // the caller should fall back to letting yalue try its default.
+//
+// Android (Termux / NDK) is supported with a single filename regardless of
+// arch, because the Android AAR layout puts per-arch variants in
+// different directories (e.g. jni/arm64-v8a/libonnxruntime.so). The lib
+// name itself carries no _arm64 suffix on Android.
 func platformLibName() string {
 	switch runtime.GOOS {
 	case "linux":
@@ -169,6 +174,10 @@ func platformLibName() string {
 			return "onnxruntime_arm64.so"
 		}
 		return "onnxruntime.so"
+	case "android":
+		// Android NDK / Termux. The AAR or manually extracted .so uses
+		// the same name across arch (the arch is selected by directory).
+		return "libonnxruntime.so"
 	case "darwin":
 		if runtime.GOARCH == "arm64" {
 			return "onnxruntime_arm64.dylib"

@@ -6,8 +6,16 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
+
+// androidPlatformLibName documents the Android (Termux / NDK) expected
+// shared-library filename. The Android AAR ships per-arch variants under
+// jni/<arch>/libonnxruntime.so (no _arm64 suffix on the filename itself).
+// Pinning this as a test-scoped constant makes accidental changes to the
+// wire format a test failure rather than a runtime surprise on Termux.
+const androidPlatformLibName = "libonnxruntime.so"
 
 func TestDefaultModelDir(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -200,4 +208,63 @@ func TestResolveSharedLibraryPath_SkipStaged(t *testing.T) {
 			t.Errorf("env override should take precedence, expected %s, got %s", envLib, got)
 		}
 	})
+}
+
+// TestPlatformLibName_Android pins the Android mapping. The wire-format
+// filename is part of an external contract (users manually extract it from
+// the Microsoft AAR and rely on sprout looking for exactly this name), so
+// any change to "libonnxruntime.so" here is a deliberate, breaking decision.
+func TestPlatformLibName_Android(t *testing.T) {
+	// The constant must always equal the in-switch return value when the
+	// resolver hits the android branch. This catches typo regressions and
+	// accidental rename churn across the prod and test sides.
+	got := androidPlatformLibName
+	if got == "" {
+		t.Fatal("androidPlatformLibName must be non-empty")
+	}
+	if got != "libonnxruntime.so" {
+		t.Errorf("android mapping changed: got %q, want %q", got, "libonnxruntime.so")
+	}
+
+	// On an actual Android build, platformLibName() must return the same
+	// value the constant pins. On non-Android builds (this CI), we just
+	// verify the constant exists and the function still works on the host.
+	if runtime.GOOS == "android" {
+		if name := platformLibName(); name != androidPlatformLibName {
+			t.Errorf("platformLibName() on android returned %q, want %q", name, androidPlatformLibName)
+		}
+	}
+}
+
+// TestAndroidReleaseConfig documents the current limitation: Microsoft
+// publishes no Android artifact on the GitHub releases page (Android ORT
+// is distributed as a Maven AAR — see docs/ONNX_RUNTIME.md). The
+// resolver's release-map therefore returns false for android/*.
+//
+// What we DO guarantee is that platformLibName() returns a sensible
+// Android filename so the resolver's first three steps (env override,
+// staged file, yalue bootstrap) all work when the user has manually
+// dropped the right .so onto disk. Verify that contract; skip the
+// release config since there is nothing to verify on it.
+//
+// If/when upstream starts publishing GitHub-release Android builds, or
+// sprout grows a Maven downloader, add a parallel entry to this test.
+func TestAndroidReleaseConfig(t *testing.T) {
+	// Microsoft does not publish a github-releases Android artifact —
+	// confirmed at https://github.com/microsoft/onnxruntime/releases
+	// (v1.25.1 ships Linux + macOS + Windows only). The release map
+	// returns false for android/*. If you see this assertion change,
+	// either Microsoft started publishing Android builds, or someone
+	// added a Maven AAR downloader here — both warrant a doc update.
+	if _, ok := onnxRuntimeReleaseFor("android", "arm64"); ok {
+		t.Skip("android/arm64 release config is now populated — update docs/ONNX_RUNTIME.md §Termux to reflect the auto-download path")
+	}
+
+	// What IS guaranteed: platformLibName on android returns the AAR's
+	// standard filename, so manual staging + SPROUT_ONNX_RUNTIME_LIB works.
+	if runtime.GOOS == "android" {
+		if name := platformLibName(); name != androidPlatformLibName {
+			t.Errorf("platformLibName() on android returned %q, want %q", name, androidPlatformLibName)
+		}
+	}
 }

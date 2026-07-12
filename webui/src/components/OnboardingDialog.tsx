@@ -364,7 +364,11 @@ function OnboardingDialog({
                     onClick={() => selectModel(modelName)}
                   >
                     <span className="model-name">{modelName}</span>
-                    {isRecommended && <span className="recommended-badge"><Star size={10} fill="currentColor" /> Recommended</span>}
+                    {isRecommended && (
+                      <span className="recommended-badge">
+                        <Star size={10} fill="currentColor" /> Recommended
+                      </span>
+                    )}
                   </li>
                 );
               })}
@@ -445,13 +449,17 @@ function OnboardingDialog({
             disabled={onboarding.submitting || onboarding.checking || onboarding.validationSuccess}
             data-testid="onboarding-done"
           >
-            {onboarding.validationSuccess
-              ? <><Check size={14} /> Done</>
-              : onboarding.submitting
-                ? 'Validating…'
-                : onboarding.isReonboarding
-                  ? 'Save Changes'
-                  : 'Complete Setup'}
+            {onboarding.validationSuccess ? (
+              <>
+                <Check size={14} /> Done
+              </>
+            ) : onboarding.submitting ? (
+              'Validating…'
+            ) : onboarding.isReonboarding ? (
+              'Save Changes'
+            ) : (
+              'Complete Setup'
+            )}
           </button>
         </div>
       </div>

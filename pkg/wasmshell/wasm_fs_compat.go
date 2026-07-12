@@ -102,6 +102,6 @@ type compatDirEntry struct {
 }
 
 func (e *compatDirEntry) Name() string               { return e.name }
-func (e *compatDirEntry) IsDir() bool                 { return e.info.IsDir() }
-func (e *compatDirEntry) Type() os.FileMode           { return e.info.Mode().Type() }
-func (e *compatDirEntry) Info() (os.FileInfo, error)  { return e.info, nil }
+func (e *compatDirEntry) IsDir() bool                { return e.info.IsDir() }
+func (e *compatDirEntry) Type() os.FileMode          { return e.info.Mode().Type() }
+func (e *compatDirEntry) Info() (os.FileInfo, error) { return e.info, nil }

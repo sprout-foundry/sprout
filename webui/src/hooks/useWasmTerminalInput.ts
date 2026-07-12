@@ -505,14 +505,14 @@ export function useWasmTerminalInput(options: UseWasmTerminalInputOptions): UseW
   // ── WASM shell lifecycle ──────────────────────────────────────────
 
   useEffect(() => {
-    console.log('[TerminalPane] WASM effect fired, isActive=' + isActive + ' isConnected=' + isConnected);
+    debugLog('[TerminalPane] WASM effect fired, isActive=' + isActive + ' isConnected=' + isConnected);
     if (!isActive) {
-      console.log('[TerminalPane] WASM effect: not active, skipping');
+      debugLog('[TerminalPane] WASM effect: not active, skipping');
       return;
     }
 
     if (isConnected) {
-      console.log('[TerminalPane] WASM effect: isConnected=true, using PTY not WASM');
+      debugLog('[TerminalPane] WASM effect: isConnected=true, using PTY not WASM');
       const term = xtermRef.current;
       if (wasmActiveRef.current && term) {
         debugLog('[TerminalPane] Backend connected — switching to remote PTY');
@@ -543,7 +543,7 @@ export function useWasmTerminalInput(options: UseWasmTerminalInputOptions): UseW
         // xterm hasn't been mounted yet — increment retry counter to
         // trigger a re-render/retry. Stops after 30 retries (~15s).
         if (!cancelled && retryCount < 30) {
-          setTimeout(() => setRetryCount(c => c + 1), 300);
+          setTimeout(() => setRetryCount((c) => c + 1), 300);
         }
         return;
       }

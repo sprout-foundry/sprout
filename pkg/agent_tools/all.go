@@ -35,7 +35,7 @@ package tools
 //	    registry.Register(h)
 //	}
 func AllTools() []ToolHandler {
-	return []ToolHandler{
+	tools := []ToolHandler{
 		&readFileHandler{},
 		&listDirHandler{},
 		&fetchURLHandler{},
@@ -92,4 +92,7 @@ func AllTools() []ToolHandler {
 		// Preview port registration (platform workspaces)
 		&registerPreviewPortHandler{},
 	}
+	// Code intelligence graph tools — platform-specific (nil on WASM via
+	// build-tagged stub).
+	return append(tools, registerCodegraphTools()...)
 }

@@ -26,8 +26,6 @@ func seedRequestToSprout(req *core.ChatRequest) *core.ChatRequest {
 	return req
 }
 
-
-
 // sproutResponseToSeed returns the response unchanged since
 // api.ChatResponse and core.ChatResponse are the same type.
 func sproutResponseToSeed(resp *api.ChatResponse) *core.ChatResponse {

@@ -134,13 +134,17 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
     extensions.push(keymap.of(historyKeymap));
     // Add save keybinding
     if (onSave) {
-      extensions.push(keymap.of([{
-        key: 'Mod-s',
-        run: (view) => {
-          onSave(view.state.doc.toString());
-          return true;
-        },
-      }]));
+      extensions.push(
+        keymap.of([
+          {
+            key: 'Mod-s',
+            run: (view) => {
+              onSave(view.state.doc.toString());
+              return true;
+            },
+          },
+        ]),
+      );
     }
     return extensions;
   }, [buildBaseExtensions, onSave]);
@@ -381,13 +385,17 @@ export const MergeViewWrapper: React.FC<MergeViewWrapperProps> = ({
     extensions.push(keymap.of(historyKeymap));
     // Add save keybinding
     if (onSave) {
-      extensions.push(keymap.of([{
-        key: 'Mod-s',
-        run: (view) => {
-          onSave(view.state.doc.toString());
-          return true;
-        },
-      }]));
+      extensions.push(
+        keymap.of([
+          {
+            key: 'Mod-s',
+            run: (view) => {
+              onSave(view.state.doc.toString());
+              return true;
+            },
+          },
+        ]),
+      );
     }
 
     const state = EditorState.create({

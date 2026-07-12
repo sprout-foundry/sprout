@@ -577,10 +577,8 @@ const AppContent: React.FC<AppContentProps> = ({
       setIsForking(true);
       try {
         const result = await forkChatSession(activeChatId, breakpointIndex);
-        console.log('[fork] Forked session:', result.session_id);
-        window.dispatchEvent(
-          new CustomEvent('sprout:chat-gap-reload', { detail: { chatId: activeChatId } }),
-        );
+        console.warn('[fork] Forked session:', result.session_id);
+        window.dispatchEvent(new CustomEvent('sprout:chat-gap-reload', { detail: { chatId: activeChatId } }));
       } catch (e) {
         console.error('[fork] Failed to fork:', e);
       } finally {
@@ -787,17 +785,18 @@ const AppContent: React.FC<AppContentProps> = ({
             )}
             <ErrorBoundary panelName="Editor">
               <EditorWorkspace
-              currentView={state.currentView}
-              perChatCache={perChatCache}
-              activeChatId={activeChatId}
-              onCreateChat={onCreateChat}
-              chatProps={chatProps}
-              reviewProps={reviewProps}
-              diffState={diffState}
-              handleOutlineNavigateToSymbol={handleOutlineNavigateToSymbol}
-              onSessionRestore={handleSessionSearchRestore}
-              onViewChange={onViewChange}
-            /></ErrorBoundary>
+                currentView={state.currentView}
+                perChatCache={perChatCache}
+                activeChatId={activeChatId}
+                onCreateChat={onCreateChat}
+                chatProps={chatProps}
+                reviewProps={reviewProps}
+                diffState={diffState}
+                handleOutlineNavigateToSymbol={handleOutlineNavigateToSymbol}
+                onSessionRestore={handleSessionSearchRestore}
+                onViewChange={onViewChange}
+              />
+            </ErrorBoundary>
           </div>
           <ContextSidebar
             isMobile={isMobile}

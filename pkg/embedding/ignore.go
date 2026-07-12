@@ -35,11 +35,11 @@ var skipDirs = map[string]bool{
 	".env":        true,
 	".direnv":     true,
 	// JavaScript/Node
-	".next":   true,
-	".nuxt":   true,
-	".turbo":  true,
+	".next":    true,
+	".nuxt":    true,
+	".turbo":   true,
 	"coverage": true,
-	".cache":  true,
+	".cache":   true,
 	// Java/Kotlin
 	".gradle": true,
 	".mvn":    true,

@@ -194,6 +194,7 @@ func (cs *chatSession) getOrCreateAgent(workspaceRoot string, configBase string,
 	sessionModel := cs.Model
 	sessionWorktree := cs.WorktreePath
 	sessionHandoff := cs.HandoffContext
+	sessionSnapshot := append([]byte(nil), cs.AgentState...)
 	cs.mu.Unlock()
 
 	// Use chat's worktree path if set, otherwise use provided workspaceRoot
@@ -212,7 +213,7 @@ func (cs *chatSession) getOrCreateAgent(workspaceRoot string, configBase string,
 	}
 
 	// Create agent outside the lock.
-	snapshot := append([]byte(nil), cs.AgentState...)
+	snapshot := sessionSnapshot
 	var created *agent.Agent
 	var createErr error
 	created, createErr = agent.NewAgentWithLayersInWorkspace(configBase, workspaceDir, agentWorkspace, "")

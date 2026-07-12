@@ -363,9 +363,7 @@ function Chat(props: ChatProps): JSX.Element {
               <span className="thinking-dot" />
               <span className="thinking-dot" />
             </span>
-            <span className="thinking-indicator-text">
-              {isProcessing ? 'Thinking' : 'Sending…'}
-            </span>
+            <span className="thinking-indicator-text">{isProcessing ? 'Thinking' : 'Sending…'}</span>
           </div>
         )}
         <CommandInput

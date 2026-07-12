@@ -85,7 +85,8 @@ export function handleWasmLocal(
         return handleWasmAgentSteer(shell, bodyStr);
 
       // ── Terminal stubs ──────────────────────────────────────
-      case '/api/terminal/sessions':        return jsonOk({ active_count: 0, count: 0 });
+      case '/api/terminal/sessions':
+        return jsonOk({ active_count: 0, count: 0 });
       case '/api/terminal/shells':
         return jsonOk({ shells: [{ name: 'wasm', path: '/bin/wasm', default: true }] });
       case '/api/terminal/history':
@@ -125,9 +126,7 @@ const vfsManifest = new Set<string>();
  *  CWD depends on the WASM binary's init (can be / or /home/user). */
 function normalizePath(p: string): string {
   if (!p.startsWith('/')) {
-    const cwd = typeof window !== 'undefined' && window.SproutWasm?.getCwd
-      ? window.SproutWasm.getCwd()
-      : '/home/user';
+    const cwd = typeof window !== 'undefined' && window.SproutWasm?.getCwd ? window.SproutWasm.getCwd() : '/home/user';
     p = p === '.' ? cwd : `${cwd}/${p}`;
   }
   // Collapse ./ and resolve ../
@@ -135,7 +134,10 @@ function normalizePath(p: string): string {
   const resolved: string[] = [];
   for (const part of parts) {
     if (part === '' || part === '.') continue;
-    if (part === '..') { resolved.pop(); continue; }
+    if (part === '..') {
+      resolved.pop();
+      continue;
+    }
     resolved.push(part);
   }
   return '/' + resolved.join('/');
@@ -748,7 +750,7 @@ function handleWasmAgentSteer(shell: WasmShell, bodyStr?: string): Response {
 
   // Call the WASM steerAgent function which injects into the
   // persistent agent's steering channel.
-  const api = (shell as unknown as { steerAgent?: (msg: string) => Record<string, unknown> });
+  const api = shell as unknown as { steerAgent?: (msg: string) => Record<string, unknown> };
   if (api.steerAgent) {
     const result = api.steerAgent(query);
     return jsonOk(result);

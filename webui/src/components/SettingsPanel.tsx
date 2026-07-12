@@ -153,20 +153,22 @@ function SettingsPanel({
     }
 
     if (!normalizedQuery) return groups;
-    return groups.map((section) => {
-      const sectionMatches =
-        section.label.toLowerCase().includes(normalizedQuery) ||
-        section.description.toLowerCase().includes(normalizedQuery) ||
-        section.scope.toLowerCase().includes(normalizedQuery);
-      const matchingSubs = section.subsections.filter((sub) => sub.label.toLowerCase().includes(normalizedQuery));
-      if (sectionMatches || matchingSubs.length > 0) {
-        return {
-          ...section,
-          subsections: matchingSubs.length > 0 ? matchingSubs : section.subsections,
-        };
-      }
-      return null;
-    }).filter((s): s is (typeof SECTION_GROUPS)[number] => s !== null);
+    return groups
+      .map((section) => {
+        const sectionMatches =
+          section.label.toLowerCase().includes(normalizedQuery) ||
+          section.description.toLowerCase().includes(normalizedQuery) ||
+          section.scope.toLowerCase().includes(normalizedQuery);
+        const matchingSubs = section.subsections.filter((sub) => sub.label.toLowerCase().includes(normalizedQuery));
+        if (sectionMatches || matchingSubs.length > 0) {
+          return {
+            ...section,
+            subsections: matchingSubs.length > 0 ? matchingSubs : section.subsections,
+          };
+        }
+        return null;
+      })
+      .filter((s): s is (typeof SECTION_GROUPS)[number] => s !== null);
   }, [normalizedQuery]);
 
   // Auto-expand any section that has matches while filtering.

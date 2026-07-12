@@ -185,7 +185,13 @@ export default function ProviderSettingsTab({
                 <div className="current-provider-detail">
                   <span className="label">Credential:</span>
                   <span className={`value ${currentProviderInfo.hasCredential ? 'configured' : 'missing'}`}>
-                    {currentProviderInfo.hasCredential ? <><Check size={12} /> Configured</> : 'Missing'}
+                    {currentProviderInfo.hasCredential ? (
+                      <>
+                        <Check size={12} /> Configured
+                      </>
+                    ) : (
+                      'Missing'
+                    )}
                   </span>
                 </div>
               </>
@@ -202,7 +208,13 @@ export default function ProviderSettingsTab({
                 <div className="current-provider-detail">
                   <span className="label">Credential:</span>
                   <span className={`value ${currentProviderInfo.hasCredential ? 'configured' : 'missing'}`}>
-                    {currentProviderInfo.hasCredential ? <><Check size={12} /> Configured</> : 'Missing'}
+                    {currentProviderInfo.hasCredential ? (
+                      <>
+                        <Check size={12} /> Configured
+                      </>
+                    ) : (
+                      'Missing'
+                    )}
                   </span>
                 </div>
               </>

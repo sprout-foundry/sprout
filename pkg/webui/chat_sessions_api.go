@@ -1029,10 +1029,10 @@ func (ws *ReactWebServer) handleAPIChatSessionFork(w http.ResponseWriter, r *htt
 		chatID, req.BreakpointIndex, newSessionID, clientID)
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"success":   true,
-		"chat_id":   chatID,
+		"success":    true,
+		"chat_id":    chatID,
 		"session_id": newSessionID,
-		"message":   fmt.Sprintf("Forked session: %s", newSessionID),
+		"message":    fmt.Sprintf("Forked session: %s", newSessionID),
 	})
 }
 

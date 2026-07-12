@@ -89,7 +89,7 @@ async function readdirRecursive(dir: string, prefix = ''): Promise<string[]> {
     try {
       const stat = await fs.stat(fullPath);
       if (stat.isDirectory()) {
-        results.push(...await readdirRecursive(fullPath, relPath));
+        results.push(...(await readdirRecursive(fullPath, relPath)));
       } else {
         results.push(relPath);
       }
@@ -110,7 +110,11 @@ async function syncVfsToGitFs() {
     const existing = await readdirRecursive(REPO_DIR);
     for (const relPath of existing) {
       if (!relPath.startsWith('.git/') && !relPath.startsWith('.git')) {
-        try { await fs.unlink(`${REPO_DIR}/${relPath}`); } catch { /* gone */ }
+        try {
+          await fs.unlink(`${REPO_DIR}/${relPath}`);
+        } catch {
+          /* gone */
+        }
       }
     }
   } catch {
@@ -175,7 +179,7 @@ export async function gitStatus() {
     }
   }
 
-  return { staged, unstaged, untracked: unstaged.filter(f => f.status === 'new') };
+  return { staged, unstaged, untracked: unstaged.filter((f) => f.status === 'new') };
 }
 
 export async function gitAdd(filepaths: string[]) {
@@ -270,9 +274,15 @@ export async function gitClone(url: string) {
   try {
     const existing = await readdirRecursive(REPO_DIR);
     for (const relPath of existing) {
-      try { await fs.unlink(`${REPO_DIR}/${relPath}`); } catch { /* gone */ }
+      try {
+        await fs.unlink(`${REPO_DIR}/${relPath}`);
+      } catch {
+        /* gone */
+      }
     }
-  } catch { /* fresh */ }
+  } catch {
+    /* fresh */
+  }
 
   await ensureDir(REPO_DIR);
   await git.clone({
@@ -330,23 +340,34 @@ export async function executeGitOp(
   query?: Record<string, string>,
 ): Promise<unknown> {
   switch (op) {
-    case 'status': return gitStatus();
+    case 'status':
+      return gitStatus();
     case 'add':
     case 'stage': {
       const files = (body?.files as string[]) || (body?.path ? [body.path as string] : []);
       return gitAdd(files);
     }
-    case 'stage-all': return gitStageAll();
-    case 'commit': return gitCommit((body?.message as string) || 'commit');
-    case 'log': return gitLog(Number(body?.count ?? 50));
+    case 'stage-all':
+      return gitStageAll();
+    case 'commit':
+      return gitCommit((body?.message as string) || 'commit');
+    case 'log':
+      return gitLog(Number(body?.count ?? 50));
     case 'branch':
-    case 'branches': return gitBranch();
-    case 'checkout': return gitCheckout((body?.branch as string) || (body?.name as string));
-    case 'diff': return gitDiff({ path: query?.path, cached: query?.cached === 'true' });
-    case 'push': return gitPush(body?.remote as string, body?.branch as string);
-    case 'clone': return gitClone(body?.url as string);
-    case 'init': return gitInit();
-    case 'show': return gitLog(1);
+    case 'branches':
+      return gitBranch();
+    case 'checkout':
+      return gitCheckout((body?.branch as string) || (body?.name as string));
+    case 'diff':
+      return gitDiff({ path: query?.path, cached: query?.cached === 'true' });
+    case 'push':
+      return gitPush(body?.remote as string, body?.branch as string);
+    case 'clone':
+      return gitClone(body?.url as string);
+    case 'init':
+      return gitInit();
+    case 'show':
+      return gitLog(1);
     case 'reset':
     case 'unstage':
     case 'unstage-all':
